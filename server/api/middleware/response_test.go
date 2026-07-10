@@ -43,7 +43,7 @@ func TestResponseSuccess(t *testing.T) {
 	if code != http.StatusOK {
 		t.Errorf("status = %d, want 200", code)
 	}
-	if !resp.Success || resp.Message != "success" {
+	if resp.Code != "ok" || !resp.Success || resp.Message != "success" {
 		t.Errorf("unexpected envelope: %+v", resp)
 	}
 	if m, ok := resp.Data.(map[string]any); !ok || m["k"] != "v" {
