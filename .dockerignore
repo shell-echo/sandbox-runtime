@@ -1,0 +1,10 @@
+.git
+.gitignore
+.vscode
+
+config.toml
+logs/
+*.log
+
+Dockerfile
+.dockerignore

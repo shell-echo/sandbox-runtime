@@ -1,0 +1,14 @@
+{
+    "editor.formatOnSave": true,
+    "editor.rulers": [
+        128
+    ],
+    "go.useLanguageServer": true,
+    "go.toolsManagement.checkForUpdates": "proxy",
+    "go.toolsManagement.autoUpdate": true,
+    "[go]": {
+        "editor.codeActionsOnSave": {
+            "source.organizeImports": "explicit"
+        }
+    }
+}
