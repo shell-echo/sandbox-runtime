@@ -10,15 +10,15 @@ name = 'CST'
 offset = 28800 # 8 * 60 * 60
 
 [logger]
-level = 'error'   # debug | info | warn | error
-add_source = true # include caller file:line in each log record
+level = 'info'       # debug | info | warn | error
+add_source = false   # include caller file:line in each log record
 
 [logger.file]
-name = './logs/app.log' # path to log file; empty disables file output
-max_size = 100          # megabytes per file before rotation
-max_backups = 7         # rotated files to retain
-max_age = 30            # days to retain rotated files
-compress = true         # gzip rotated files
+name = ''             # path to log file; empty disables file output
+max_size = 100        # megabytes per file before rotation
+max_backups = 7       # rotated files to retain
+max_age = 30          # days to retain rotated files
+compress = true       # gzip rotated files
 
 [server.api]
 host = '0.0.0.0'
