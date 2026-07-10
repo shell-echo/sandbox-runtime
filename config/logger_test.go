@@ -6,7 +6,7 @@ import "testing"
 // and pass validation (which delegates to logger.Options.Validate).
 func TestDefaultLoggerConfig(t *testing.T) {
 	lg := defaultLoggerConfig()
-	if lg.Level == "" || lg.File.Name == "" || lg.File.MaxSize <= 0 {
+	if lg.Level != "info" || lg.AddSource || lg.File.Name != "" {
 		t.Errorf("unexpected default logger config: %+v", lg)
 	}
 	if err := lg.Validate(); err != nil {

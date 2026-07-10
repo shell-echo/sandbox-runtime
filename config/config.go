@@ -5,8 +5,8 @@
 // built-in defaults, an optional TOML file, and environment variables. The file
 // is optional — if no path is given and the default file is absent, the
 // defaults (plus any environment overrides) are used. Environment variables use
-// the SANDBOX_ prefix with "_" replacing ".", e.g. SANDBOX_LOGGER_LEVEL sets
-// logger.level and SANDBOX_LOGGER_FILE_MAX_SIZE sets logger.file.max_size.
+// the SANDBOX_RUNTIME_ prefix with "_" replacing ".", e.g. SANDBOX_RUNTIME_LOGGER_LEVEL sets
+// logger.level and SANDBOX_RUNTIME_LOGGER_FILE_MAX_SIZE sets logger.file.max_size.
 //
 // Each config section registers a loader via register (from its init). Load
 // reads the sources once, runs every loader to parse and validate its section,
@@ -24,8 +24,8 @@ import (
 	"github.com/spf13/viper"
 )
 
-// envPrefix is prepended to every environment variable, e.g. SANDBOX_LOGGER_LEVEL.
-const envPrefix = "SANDBOX"
+// envPrefix is prepended to every environment variable, e.g. SANDBOX_RUNTIME_LOGGER_LEVEL.
+const envPrefix = "SANDBOX_RUNTIME"
 
 // commit applies a validated config section to its package global. It runs only
 // after every loader has validated and may return an error. Commits run in
@@ -49,7 +49,7 @@ func register(l loader) {
 	loaders = append(loaders, l)
 }
 
-// newViper returns a viper whose environment mapping uses the SANDBOX_ prefix
+// newViper returns a viper whose environment mapping uses the SANDBOX_RUNTIME_ prefix
 // with "." replaced by "_". Environment values reach the config through the
 // explicit per-key BindEnv calls in bindEnvDefaults (AutomaticEnv is not used
 // because Unmarshal does not consult it).
@@ -107,7 +107,7 @@ func Load(path string) error {
 // default struct), both the default value and an environment-variable binding
 // on v. This is required because viper's Unmarshal does not read environment
 // variables on its own: SetDefault makes the key known so it has a value
-// without a file, and BindEnv ties it to the SANDBOX_-prefixed variable so it
+// without a file, and BindEnv ties it to the SANDBOX_RUNTIME_-prefixed variable so it
 // can override the default and file values.
 func bindEnvDefaults(v *viper.Viper, section string, defaults any) error {
 	var nested map[string]any

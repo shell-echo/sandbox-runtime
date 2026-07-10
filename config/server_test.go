@@ -27,14 +27,14 @@ func TestLoadServerDefaults(t *testing.T) {
 	}
 }
 
-// TestLoadServerEnvOverride confirms SANDBOX_SERVER_API_* environment variables
+// TestLoadServerEnvOverride confirms SANDBOX_RUNTIME_SERVER_API_* environment variables
 // override the server config, including string->int for the port.
 func TestLoadServerEnvOverride(t *testing.T) {
 	snapshotGlobals(t)
 	chdirTemp(t)
 
-	t.Setenv("SANDBOX_SERVER_API_HOST", "127.0.0.1")
-	t.Setenv("SANDBOX_SERVER_API_PORT", "9090")
+	t.Setenv("SANDBOX_RUNTIME_SERVER_API_HOST", "127.0.0.1")
+	t.Setenv("SANDBOX_RUNTIME_SERVER_API_PORT", "9090")
 
 	if err := Load(""); err != nil {
 		t.Fatalf("Load: %v", err)

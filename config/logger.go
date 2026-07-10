@@ -43,10 +43,10 @@ func (c *LoggerConfig) load(v *viper.Viper) error {
 func defaultLoggerConfig() *LoggerConfig {
 	config := &LoggerConfig{
 		Options: logger.Options{
-			Level:     logger.ErrorLevel,
-			AddSource: true,
+			Level:     logger.InfoLevel,
+			AddSource: false,
 			File: logger.File{
-				Name:       defaultLoggerFileName,
+				Name:       "",
 				MaxSize:    defaultLoggerFileMaxSize,
 				MaxBackups: defaultLoggerFileMaxBackups,
 				MaxAge:     defaultLoggerFileMaxAge,
