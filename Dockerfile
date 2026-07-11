@@ -16,7 +16,7 @@ FROM alpine:3
 
 WORKDIR /app
 
-RUN apk add --no-cache ca-certificates tzdata
+RUN apk add --no-cache ca-certificates
 
 ARG USERNAME=sandbox
 ARG USER_UID=1000

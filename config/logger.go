@@ -9,7 +9,6 @@ import (
 
 // Defaults for the logger section, used when the config omits values.
 const (
-	defaultLoggerFileName       = "./logs/app.log"
 	defaultLoggerFileMaxSize    = 100
 	defaultLoggerFileMaxBackups = 7
 	defaultLoggerFileMaxAge     = 30
