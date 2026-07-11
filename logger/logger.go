@@ -2,8 +2,8 @@
 //
 // It exposes leveled logging (Debug through Fatal, plus formatted -f variants),
 // structured fields, and a process-wide logger configured once via Init. Output
-// is JSON, written to stderr and optionally to a size-rotated file. Every log
-// record carries the source location of the calling application code.
+// is JSON, written to stderr and optionally to a size-rotated file. Log records
+// can include the source location of the calling application code.
 //
 // The package-level functions (Debug, Info, With, Sync, ...) operate on a
 // global logger; before Init they safely fall back to a no-op logger.

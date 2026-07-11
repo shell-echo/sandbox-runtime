@@ -135,11 +135,11 @@ func TestLoadEnvOverridesDefaults(t *testing.T) {
 	snapshotGlobals(t)
 	chdirTemp(t)
 
-	t.Setenv("SANDBOX_LOGGER_LEVEL", "debug")
-	t.Setenv("SANDBOX_LOGGER_FILE_MAX_SIZE", "250")
-	t.Setenv("SANDBOX_LOGGER_FILE_COMPRESS", "false")
-	t.Setenv("SANDBOX_LOGGER_ADD_SOURCE", "false")
-	t.Setenv("SANDBOX_APPLICATION_NAME", "envapp")
+	t.Setenv("SANDBOX_RUNTIME_LOGGER_LEVEL", "debug")
+	t.Setenv("SANDBOX_RUNTIME_LOGGER_FILE_MAX_SIZE", "250")
+	t.Setenv("SANDBOX_RUNTIME_LOGGER_FILE_COMPRESS", "false")
+	t.Setenv("SANDBOX_RUNTIME_LOGGER_ADD_SOURCE", "false")
+	t.Setenv("SANDBOX_RUNTIME_APPLICATION_NAME", "envapp")
 
 	if err := Load(""); err != nil {
 		t.Fatalf("Load: %v", err)
@@ -167,7 +167,7 @@ func TestLoadEnvOverridesFile(t *testing.T) {
 	snapshotGlobals(t)
 
 	path := writeConfig(t, "[application]\nname = 'fileapp'\nmode = 'production'\n\n[logger]\nlevel = 'info'\n")
-	t.Setenv("SANDBOX_LOGGER_LEVEL", "warn")
+	t.Setenv("SANDBOX_RUNTIME_LOGGER_LEVEL", "warn")
 
 	if err := Load(path); err != nil {
 		t.Fatalf("Load: %v", err)
@@ -188,8 +188,8 @@ func TestLoadEnvDeepNestedKey(t *testing.T) {
 	snapshotGlobals(t)
 	chdirTemp(t)
 
-	t.Setenv("SANDBOX_APPLICATION_TIMEZONE_FIXED_ZONE_NAME", "UTC")
-	t.Setenv("SANDBOX_APPLICATION_TIMEZONE_FIXED_ZONE_OFFSET", "3600")
+	t.Setenv("SANDBOX_RUNTIME_APPLICATION_TIMEZONE_FIXED_ZONE_NAME", "UTC")
+	t.Setenv("SANDBOX_RUNTIME_APPLICATION_TIMEZONE_FIXED_ZONE_OFFSET", "3600")
 
 	if err := Load(""); err != nil {
 		t.Fatalf("Load: %v", err)

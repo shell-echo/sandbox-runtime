@@ -51,6 +51,7 @@ func Response(debug bool) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, ResponseJSON{
+			Code:    "ok",
 			Message: "success",
 			Success: true,
 			Data:    data,

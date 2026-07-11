@@ -9,7 +9,6 @@ import (
 
 // Defaults for the logger section, used when the config omits values.
 const (
-	defaultLoggerFileName       = "./logs/app.log"
 	defaultLoggerFileMaxSize    = 100
 	defaultLoggerFileMaxBackups = 7
 	defaultLoggerFileMaxAge     = 30
@@ -43,10 +42,10 @@ func (c *LoggerConfig) load(v *viper.Viper) error {
 func defaultLoggerConfig() *LoggerConfig {
 	config := &LoggerConfig{
 		Options: logger.Options{
-			Level:     logger.ErrorLevel,
-			AddSource: true,
+			Level:     logger.InfoLevel,
+			AddSource: false,
 			File: logger.File{
-				Name:       defaultLoggerFileName,
+				Name:       "",
 				MaxSize:    defaultLoggerFileMaxSize,
 				MaxBackups: defaultLoggerFileMaxBackups,
 				MaxAge:     defaultLoggerFileMaxAge,
