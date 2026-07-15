@@ -12,6 +12,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/shell-echo/sandbox-runtime/instance"
 	"github.com/shell-echo/sandbox-runtime/option"
 	"github.com/shell-echo/sandbox-runtime/server/api/gonic"
 	"github.com/shell-echo/sandbox-runtime/server/api/middleware"
@@ -22,10 +23,11 @@ import (
 // or streamed responses are not cut off; set a bound here if every response is
 // expected to be small.
 const (
-	readHeaderTimeout = 10 * time.Second
-	readTimeout       = 30 * time.Second
-	idleTimeout       = 120 * time.Second
-	writeTimeout      = 0 * time.Second
+	readHeaderTimeout   = 10 * time.Second
+	readTimeout         = 30 * time.Second
+	idleTimeout         = 120 * time.Second
+	writeTimeout        = 0 * time.Second
+	maxRequestBodyBytes = 64 << 10
 )
 
 // Server is the HTTP API server. It wraps a net/http.Server and satisfies
@@ -34,10 +36,14 @@ type Server struct {
 	http *http.Server
 }
 
-// NewServer builds the API server for the given listener options. When debug is
-// true the gin engine runs in debug mode with verbose output. It returns an
-// error if the trusted-proxy configuration is rejected by gin.
-func NewServer(debug bool, opts option.HTTP) (*Server, error) {
+// NewServer builds the API server with its process-scoped dependencies. The
+// composition root owns dependency construction; the API layer never chooses a
+// runtime backend.
+func NewServer(debug bool, opts option.HTTP, instances instance.Service) (*Server, error) {
+	if instances == nil {
+		return nil, errors.New("instance service is required")
+	}
+
 	if debug {
 		gin.SetMode(gin.DebugMode)
 	} else {
@@ -48,6 +54,7 @@ func NewServer(debug bool, opts option.HTTP) (*Server, error) {
 	engine.HandleMethodNotAllowed = true // enable 405 (NoMethod) handling
 	engine.Use(middleware.Recovery(debug))
 	engine.Use(middleware.RequestID())
+	engine.Use(middleware.BodyLimit(maxRequestBodyBytes))
 	engine.Use(middleware.AccessLog())
 	engine.Use(middleware.Response(debug))
 
@@ -57,7 +64,7 @@ func NewServer(debug bool, opts option.HTTP) (*Server, error) {
 		return nil, fmt.Errorf("set trusted proxies: %w", err)
 	}
 
-	router.Init(engine)
+	router.Init(engine, instances)
 
 	return &Server{
 		http: &http.Server{

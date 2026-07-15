@@ -14,9 +14,9 @@ import (
 )
 
 // TestHealth drives the /health route through the server's full handler chain
-// (including the body-limit wrapper) without opening a socket.
+// without opening a socket.
 func TestHealth(t *testing.T) {
-	srv, err := NewServer(false, option.HTTP{Host: "127.0.0.1", Port: 8080})
+	srv, err := NewServer(false, option.HTTP{Host: "127.0.0.1", Port: 8080}, newInstanceService(t))
 	if err != nil {
 		t.Fatalf("NewServer: %v", err)
 	}
@@ -37,7 +37,7 @@ func TestHealth(t *testing.T) {
 // TestNotFound confirms unknown routes return a bare 404 with no body, so the
 // browser renders its own default page.
 func TestNotFound(t *testing.T) {
-	srv, err := NewServer(false, option.HTTP{Host: "127.0.0.1", Port: 8080})
+	srv, err := NewServer(false, option.HTTP{Host: "127.0.0.1", Port: 8080}, newInstanceService(t))
 	if err != nil {
 		t.Fatalf("NewServer: %v", err)
 	}
@@ -58,7 +58,7 @@ func TestNotFound(t *testing.T) {
 // serves /healthz, and shuts down cleanly.
 func TestStartupShutdown(t *testing.T) {
 	port := freePort(t)
-	srv, err := NewServer(false, option.HTTP{Host: "127.0.0.1", Port: port})
+	srv, err := NewServer(false, option.HTTP{Host: "127.0.0.1", Port: port}, newInstanceService(t))
 	if err != nil {
 		t.Fatalf("NewServer: %v", err)
 	}
