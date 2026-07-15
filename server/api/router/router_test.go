@@ -7,6 +7,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/shell-echo/sandbox-runtime/driver/fake"
+	"github.com/shell-echo/sandbox-runtime/instance"
+	"github.com/shell-echo/sandbox-runtime/instance/memory"
 	"github.com/shell-echo/sandbox-runtime/server/api/gonic"
 )
 
@@ -16,7 +19,11 @@ func TestInit(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	e := gonic.New()
 	e.HandleMethodNotAllowed = true
-	Init(e)
+	service, err := instance.NewService(memory.NewRepository(), fake.NewDriver())
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	Init(e, service)
 	h := e.Handler()
 
 	// /health is registered (its handler stores a payload via Resp; without the

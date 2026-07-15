@@ -1,8 +1,8 @@
 # sandbox-runtime
 
-Composable Linux sandbox runtime for cloud browsers, desktops, and remote GUI applications.
+Composable Linux sandbox runtime for remote shells, desktops, browsers, and applications.
 
-`sandbox-runtime` is an early-stage runtime project for launching, accessing, and controlling GUI applications inside isolated Linux sandbox instances. It is designed to become a reusable foundation for products such as cloud browsers, remote desktops, browser automation workers, AI-operated GUI sandboxes, and embedded remote application environments.
+`sandbox-runtime` is an early-stage runtime project for launching, accessing, and controlling remote workloads inside isolated Linux sandbox instances. It is designed to become a reusable foundation for products such as remote shells, cloud browsers, remote desktops, browser automation workers, AI-operated sandboxes, and embedded remote application environments.
 
 The project is intentionally **runtime-first**. It is not just a cloud browser UI, a room/session collaboration product, or a single-purpose remote desktop application. The goal is to define a composable runtime layer where display, audio, input, streaming, clipboard, storage, networking, automation, and application blocks can be combined according to the needs of the product built on top.
 
@@ -22,13 +22,14 @@ Currently implemented:
 - `/health` endpoint
 - graceful multi-server lifecycle management
 - Dockerfile for packaging the control-plane binary
+- backend-independent instance model and lifecycle state machine
+- concurrency-safe fake driver for lifecycle validation
+- instance lifecycle HTTP API backed by the fake driver
 
 Planned but not yet implemented:
 
 - Block manifest loader
 - Block registry
-- instance manager
-- fake driver for lifecycle validation
 - Docker driver
 - runtime images for browser and desktop workloads
 - display, audio, input, streaming, clipboard, and file-transfer modules
@@ -42,6 +43,7 @@ Planned but not yet implemented:
 
 Example use cases:
 
+- remote shell and terminal environments
 - cloud browser infrastructure
 - remote desktop environments
 - isolated browser sessions for automation
@@ -60,7 +62,11 @@ The Go service is the control plane. It owns configuration, APIs, runtime orches
 
 ### Runtime instance
 
-A runtime instance is a running sandbox environment. In later stages, an instance may represent a browser, a desktop, or a GUI application running inside a container or another isolation backend.
+A runtime instance is a sandbox environment with a backend-independent lifecycle. An instance may host a shell, browser, desktop, or application using a container or another isolation backend.
+
+### Workload
+
+A workload identifies what an instance hosts. The core model currently supports shell workloads without coupling them to a concrete driver or access protocol. Desktop and browser workloads will be added when their runtime behavior is implemented.
 
 ### Block
 
@@ -72,7 +78,11 @@ A module represents a runtime capability used by one or more blocks, such as dis
 
 ### Driver
 
-A driver is responsible for creating, starting, inspecting, and stopping runtime instances. The first real driver is expected to be Docker. A fake driver should be introduced first to validate lifecycle behavior without requiring containers.
+A driver is responsible only for creating, inspecting, starting, stopping, and removing the underlying runtime resource. Instance identity, lifecycle policy, and metadata persistence remain in the control plane. Driver removal is idempotent so interrupted cleanup can be retried safely. The first real driver is expected to be Docker; the current fake driver validates runtime behavior without requiring containers.
+
+### Instance service and repository
+
+The instance service owns IDs, validation, lifecycle transitions, and coordination with runtime drivers. Transitional states are reconciled against the driver's observed runtime state after ambiguous failures and when an interrupted instance is inspected again. Instance metadata is stored through a repository interface; the current in-memory repository can later be replaced by persistent storage without changing API handlers or drivers.
 
 ### Connector
 
@@ -94,6 +104,8 @@ sandbox-runtime/
 ├── server/         # HTTP API server and lifecycle management
 ├── internal/       # internal error types and shared internals
 ├── option/         # reusable option/value objects
+├── instance/       # instance model, service, repository contract and memory store
+├── driver/         # runtime backends (fake now, Docker later)
 │
 ├── blocks/         # future block manifests
 ├── runtime/        # future runtime images and guest scripts
@@ -141,6 +153,41 @@ All normal API handlers are expected to return the same response envelope:
 ```
 
 Typed errors are mapped to structured failure envelopes. Unexpected errors are hidden in production mode and only exposed in development mode.
+
+### Instance lifecycle
+
+The current instance API uses the in-memory fake driver. It validates the
+control-plane contract but does not yet start real containers or shells.
+
+```http
+POST   /instances
+GET    /instances
+GET    /instances/:id
+POST   /instances/:id/start
+POST   /instances/:id/stop
+DELETE /instances/:id
+```
+
+List instances:
+
+```http
+GET /instances
+```
+
+The response is an array sorted by instance ID. The service-level instance
+quota bounds the size of this response.
+
+Create a shell instance:
+
+```json
+{
+  "name": "my-shell",
+  "workload": "shell"
+}
+```
+
+Instance names are limited to 128 characters. Request bodies are limited to
+64 KiB, and the in-process service allows at most 1,000 instances by default.
 
 ## Quick start
 
@@ -312,10 +359,10 @@ Future commands may include:
 
 ### Instance lifecycle
 
-- [ ] define instance model
-- [ ] define lifecycle state machine
-- [ ] add fake driver
-- [ ] expose instance CRUD APIs
+- [x] define instance model
+- [x] define lifecycle state machine
+- [x] add fake driver
+- [x] expose instance CRUD APIs
 - [ ] add instance event model
 
 ### Docker runtime
