@@ -34,3 +34,4 @@ go.work.sum
 # Runtime config (commit config.tpl.toml instead) and log output
 /config.toml
 /logs/
+/data/

@@ -9,7 +9,7 @@ import (
 
 // Defaults for the server section, used when the config omits values.
 const (
-	defaultServerAPIHost = "0.0.0.0"
+	defaultServerAPIHost = "127.0.0.1"
 	defaultServerAPIPort = 8080
 )
 

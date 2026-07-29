@@ -33,6 +33,22 @@ func TestSpecValidate(t *testing.T) {
 	}
 }
 
+func TestValidateID(t *testing.T) {
+	for _, tc := range []struct {
+		id      string
+		wantErr bool
+	}{
+		{"instance-01", false},
+		{"", true},
+		{"has/slash", true},
+		{strings.Repeat("a", MaxIDLength+1), true},
+	} {
+		if err := ValidateID(tc.id); (err != nil) != tc.wantErr {
+			t.Errorf("ValidateID(%q) = %v, wantErr %v", tc.id, err, tc.wantErr)
+		}
+	}
+}
+
 func TestStateTransitions(t *testing.T) {
 	valid := map[State][]State{
 		StateCreating: {StateStopped, StateFailed},
@@ -40,7 +56,7 @@ func TestStateTransitions(t *testing.T) {
 		StateStarting: {StateRunning, StateStopped, StateFailed},
 		StateRunning:  {StateStopping, StateFailed},
 		StateStopping: {StateStopped, StateRunning, StateFailed},
-		StateFailed:   {StateRemoving},
+		StateFailed:   {StateStarting, StateRemoving},
 	}
 	states := []State{StateCreating, StateStopped, StateStarting, StateRunning, StateStopping, StateRemoving, StateFailed}
 

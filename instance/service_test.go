@@ -58,6 +58,333 @@ func TestServiceLifecycle(t *testing.T) {
 	}
 }
 
+func TestServiceReconcilesStableRuntimeDrift(t *testing.T) {
+	runtime := fake.NewDriver()
+	service, err := instance.NewService(
+		memory.NewRepository(), runtime,
+		instance.WithIDGenerator(func() (string, error) { return "instance-test", nil }),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	created, err := service.Create(context.Background(), instance.Spec{Name: "terminal", Workload: instance.WorkloadShell})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := runtime.Start(context.Background(), created.ID); err != nil {
+		t.Fatal(err)
+	}
+	listed, err := service.List(context.Background())
+	if err != nil || len(listed) != 1 || listed[0].State != instance.StateRunning {
+		t.Fatalf("List after external start = %+v, %v", listed, err)
+	}
+	if err := runtime.Stop(context.Background(), created.ID); err != nil {
+		t.Fatal(err)
+	}
+	failed, err := service.Inspect(context.Background(), created.ID)
+	if err != nil || failed.State != instance.StateFailed || failed.Failure == "" {
+		t.Fatalf("Inspect after unexpected stop = %+v, %v", failed, err)
+	}
+	restarted, err := service.Start(context.Background(), created.ID)
+	if err != nil || restarted.State != instance.StateRunning || restarted.Failure != "" {
+		t.Fatalf("Start failed instance = %+v, %v", restarted, err)
+	}
+}
+
+func TestServiceRejectsSuccessfulStartThatImmediatelyExits(t *testing.T) {
+	runtime := &exitAfterStartDriver{Driver: fake.NewDriver()}
+	repository := memory.NewRepository()
+	service, err := instance.NewService(
+		repository, runtime,
+		instance.WithIDGenerator(func() (string, error) { return "instance-test", nil }),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	created, err := service.Create(context.Background(), instance.Spec{Name: "terminal", Workload: instance.WorkloadShell})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Start(context.Background(), created.ID); err == nil {
+		t.Fatal("expected post-start confirmation error")
+	}
+	stored, err := repository.Get(context.Background(), created.ID)
+	if err != nil || stored.State != instance.StateFailed {
+		t.Fatalf("stored immediately-exited runtime = %+v, %v", stored, err)
+	}
+}
+
+func TestServiceMarksMissingStableRuntimeFailed(t *testing.T) {
+	runtime := fake.NewDriver()
+	service, err := instance.NewService(
+		memory.NewRepository(), runtime,
+		instance.WithIDGenerator(func() (string, error) { return "instance-test", nil }),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	created, err := service.Create(context.Background(), instance.Spec{Name: "terminal", Workload: instance.WorkloadShell})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := runtime.Remove(context.Background(), created.ID); err != nil {
+		t.Fatal(err)
+	}
+	failed, err := service.Inspect(context.Background(), created.ID)
+	if err != nil || failed.State != instance.StateFailed {
+		t.Fatalf("Inspect missing runtime = %+v, %v", failed, err)
+	}
+}
+
+func TestServicePersistsOnlyBackendIndependentRuntimeFailures(t *testing.T) {
+	tests := []struct {
+		name        string
+		observation instance.RuntimeObservation
+		wantFailure string
+	}{
+		{
+			name: "out of memory",
+			observation: instance.RuntimeObservation{
+				State: instance.RuntimeStopped, ExitCode: 137, StopReason: instance.RuntimeStopReasonOOMKilled,
+			},
+			wantFailure: "runtime stopped unexpectedly: out of memory (exit code 137)",
+		},
+		{
+			name: "runtime error",
+			observation: instance.RuntimeObservation{
+				State: instance.RuntimeStopped, ExitCode: 125, StopReason: instance.RuntimeStopReasonRuntimeError,
+			},
+			wantFailure: "runtime stopped unexpectedly: runtime failure (exit code 125)",
+		},
+		{
+			name:        "non-zero exit",
+			observation: instance.RuntimeObservation{State: instance.RuntimeStopped, ExitCode: 1},
+			wantFailure: "runtime stopped unexpectedly: exit code 1",
+		},
+		{
+			name:        "clean exit",
+			observation: instance.RuntimeObservation{State: instance.RuntimeStopped},
+			wantFailure: "runtime stopped unexpectedly",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			runtime := &observationDriver{Driver: fake.NewDriver()}
+			service, err := instance.NewService(
+				memory.NewRepository(), runtime,
+				instance.WithIDGenerator(func() (string, error) { return "instance-test", nil }),
+			)
+			if err != nil {
+				t.Fatal(err)
+			}
+			created, err := service.Create(context.Background(), instance.Spec{Name: "terminal", Workload: instance.WorkloadShell})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := service.Start(context.Background(), created.ID); err != nil {
+				t.Fatal(err)
+			}
+			runtime.observation = &tc.observation
+
+			failed, err := service.Inspect(context.Background(), created.ID)
+			if err != nil || failed.State != instance.StateFailed || failed.Failure != tc.wantFailure {
+				t.Fatalf("Inspect unexpected stop = %+v, %v; want failure %q", failed, err, tc.wantFailure)
+			}
+		})
+	}
+}
+
+func TestServiceRejectsInvalidRuntimeStopReasons(t *testing.T) {
+	tests := []instance.RuntimeObservation{
+		{State: instance.RuntimeStopped, StopReason: "backend-secret"},
+		{State: instance.RuntimeRunning, StopReason: instance.RuntimeStopReasonRuntimeError},
+	}
+	for _, observation := range tests {
+		runtime := &observationDriver{Driver: fake.NewDriver()}
+		service, err := instance.NewService(
+			memory.NewRepository(), runtime,
+			instance.WithIDGenerator(func() (string, error) { return "instance-test", nil }),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		created, err := service.Create(context.Background(), instance.Spec{Name: "terminal", Workload: instance.WorkloadShell})
+		if err != nil {
+			t.Fatal(err)
+		}
+		runtime.observation = &observation
+		if _, err := service.Inspect(context.Background(), created.ID); !errors.Is(err, instance.ErrInvalidRuntime) {
+			t.Fatalf("Inspect observation %+v = %v, want ErrInvalidRuntime", observation, err)
+		}
+	}
+}
+
+func TestServiceRecoversInterruptedRemoval(t *testing.T) {
+	repository := memory.NewRepository()
+	runtime := fake.NewDriver()
+	service, err := instance.NewService(
+		repository, runtime,
+		instance.WithIDGenerator(func() (string, error) { return "instance-test", nil }),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	created, err := service.Create(context.Background(), instance.Spec{Name: "terminal", Workload: instance.WorkloadShell})
+	if err != nil {
+		t.Fatal(err)
+	}
+	created.State = instance.StateRemoving
+	if err := repository.Update(context.Background(), created); err != nil {
+		t.Fatal(err)
+	}
+	restarted, err := instance.NewService(repository, runtime)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := restarted.Recover(context.Background()); err != nil {
+		t.Fatalf("Recover: %v", err)
+	}
+	if count, err := repository.Count(context.Background()); err != nil || count != 0 {
+		t.Fatalf("Count after recovery = %d, %v", count, err)
+	}
+}
+
+func TestServiceAdoptsManagedRuntimeWithoutMetadata(t *testing.T) {
+	runtime := fake.NewDriver()
+	spec := instance.Spec{Name: "orphaned-shell", Workload: instance.WorkloadShell}
+	if err := runtime.Create(context.Background(), "instance-orphan", spec); err != nil {
+		t.Fatal(err)
+	}
+	repository := memory.NewRepository()
+	service, err := instance.NewService(repository, runtime)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := service.Recover(context.Background()); err != nil {
+		t.Fatalf("Recover: %v", err)
+	}
+	adopted, err := repository.Get(context.Background(), "instance-orphan")
+	if err != nil || adopted.Name != spec.Name || adopted.State != instance.StateStopped {
+		t.Fatalf("adopted instance = %+v, %v", adopted, err)
+	}
+}
+
+func TestServiceRecoverEnforcesAdoptionLimit(t *testing.T) {
+	runtime := fake.NewDriver()
+	spec := instance.Spec{Name: "orphaned-shell", Workload: instance.WorkloadShell}
+	for _, id := range []string{"instance-one", "instance-two"} {
+		if err := runtime.Create(context.Background(), id, spec); err != nil {
+			t.Fatal(err)
+		}
+	}
+	repository := memory.NewRepository()
+	service, err := instance.NewService(repository, runtime, instance.WithMaxInstances(1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := service.Recover(context.Background()); !errors.Is(err, instance.ErrLimitExceeded) {
+		t.Fatalf("Recover = %v, want ErrLimitExceeded", err)
+	}
+	if count, err := repository.Count(context.Background()); err != nil || count != 1 {
+		t.Fatalf("adopted count = %d, %v", count, err)
+	}
+}
+
+func TestServiceRecoverRejectsInvalidRuntimeID(t *testing.T) {
+	driver := &resourceListDriver{Driver: fake.NewDriver(), resources: []instance.RuntimeResource{{
+		ID: "invalid/id", Spec: instance.Spec{Name: "shell", Workload: instance.WorkloadShell},
+	}}}
+	repository := memory.NewRepository()
+	service, err := instance.NewService(repository, driver)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := service.Recover(context.Background()); !errors.Is(err, instance.ErrInvalidSpec) {
+		t.Fatalf("Recover = %v, want ErrInvalidSpec", err)
+	}
+	if count, _ := repository.Count(context.Background()); count != 0 {
+		t.Fatalf("invalid resource was adopted, count=%d", count)
+	}
+}
+
+func TestServiceListToleratesConcurrentRemovalAndInspectFailure(t *testing.T) {
+	now := time.Now()
+	stored := &instance.Instance{ID: "instance-one", Name: "shell", Workload: instance.WorkloadShell, State: instance.StateStopped, CreatedAt: now, UpdatedAt: now}
+	base := memory.NewRepository()
+	if err := base.Create(context.Background(), stored); err != nil {
+		t.Fatal(err)
+	}
+	repository := &disappearingRepository{Repository: base}
+	service, err := instance.NewService(repository, fake.NewDriver())
+	if err != nil {
+		t.Fatal(err)
+	}
+	listed, err := service.List(context.Background())
+	if err != nil || len(listed) != 0 {
+		t.Fatalf("List during concurrent removal = %+v, %v", listed, err)
+	}
+
+	base = memory.NewRepository()
+	if err := base.Create(context.Background(), stored); err != nil {
+		t.Fatal(err)
+	}
+	driver := &inspectErrorDriver{Driver: fake.NewDriver(), err: errors.New("runtime temporarily unavailable")}
+	service, err = instance.NewService(base, driver)
+	if err != nil {
+		t.Fatal(err)
+	}
+	listed, err = service.List(context.Background())
+	if err != nil || len(listed) != 1 || listed[0].State != instance.StateStopped {
+		t.Fatalf("List with transient inspect failure = %+v, %v", listed, err)
+	}
+}
+
+func TestServiceClampsLifecycleTimestampAfterClockRollback(t *testing.T) {
+	current := time.Now().UTC()
+	repository := memory.NewRepository()
+	service, err := instance.NewService(repository, fake.NewDriver(),
+		instance.WithIDGenerator(func() (string, error) { return "instance-one", nil }),
+		instance.WithClock(func() time.Time { return current }),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	created, err := service.Create(context.Background(), instance.Spec{Name: "shell", Workload: instance.WorkloadShell})
+	if err != nil {
+		t.Fatal(err)
+	}
+	current = current.Add(-time.Hour)
+	running, err := service.Start(context.Background(), created.ID)
+	if err != nil {
+		t.Fatalf("Start after clock rollback: %v", err)
+	}
+	if running.UpdatedAt.Before(created.UpdatedAt) || running.UpdatedAt.Before(running.CreatedAt) {
+		t.Fatalf("timestamps moved backward: created=%s running=%s", created.UpdatedAt, running.UpdatedAt)
+	}
+}
+
+func TestServiceRejectsRuntimeMetadataConflict(t *testing.T) {
+	runtime := fake.NewDriver()
+	if err := runtime.Create(context.Background(), "instance-one", instance.Spec{Name: "runtime-name", Workload: instance.WorkloadShell}); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	repository := memory.NewRepository()
+	if err := repository.Create(context.Background(), &instance.Instance{
+		ID: "instance-one", Name: "repository-name", Workload: instance.WorkloadShell,
+		State: instance.StateStopped, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	service, err := instance.NewService(repository, runtime)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := service.Recover(context.Background()); err == nil {
+		t.Fatal("expected runtime metadata conflict")
+	}
+}
+
 func TestServiceSerializesLifecycleOperations(t *testing.T) {
 	service, err := instance.NewService(
 		memory.NewRepository(),
@@ -310,8 +637,8 @@ func TestServiceTreatsConfirmedRuntimeStateAsSuccess(t *testing.T) {
 	}
 }
 
-func TestServiceKeepsTransitionAfterTransientInspectFailure(t *testing.T) {
-	driver := &transientInspectDriver{Driver: fake.NewDriver(), inspectFailures: 1}
+func TestServiceDoesNotMutateAfterTransientPreflightInspectFailure(t *testing.T) {
+	driver := &transientInspectDriver{Driver: fake.NewDriver()}
 	repository := memory.NewRepository()
 	service, err := instance.NewService(
 		repository,
@@ -324,18 +651,19 @@ func TestServiceKeepsTransitionAfterTransientInspectFailure(t *testing.T) {
 	if _, err := service.Create(context.Background(), instance.Spec{Name: "terminal", Workload: instance.WorkloadShell}); err != nil {
 		t.Fatalf("Create: %v", err)
 	}
+	driver.inspectFailures = 1
 
 	if _, err := service.Start(context.Background(), "instance-test"); !errors.Is(err, errInspect) {
 		t.Fatalf("Start = %v, want transient inspect error", err)
 	}
 	stored, err := repository.Get(context.Background(), "instance-test")
-	if err != nil || stored.State != instance.StateStarting {
+	if err != nil || stored.State != instance.StateStopped {
 		t.Fatalf("stored state after inspect failure = %+v, %v", stored, err)
 	}
 
-	reconciled, err := service.Inspect(context.Background(), "instance-test")
-	if err != nil || reconciled.State != instance.StateRunning {
-		t.Fatalf("Inspect after transient failure = %+v, %v", reconciled, err)
+	running, err := service.Start(context.Background(), "instance-test")
+	if err != nil || running.State != instance.StateRunning {
+		t.Fatalf("Start after transient failure = %+v, %v", running, err)
 	}
 }
 
@@ -372,18 +700,86 @@ func TestServiceRetriesInterruptedRemoval(t *testing.T) {
 type blockingDriver struct {
 	started chan struct{}
 	release chan struct{}
+	mu      sync.Mutex
+	running bool
 }
 
+type observationDriver struct {
+	instance.Driver
+	observation *instance.RuntimeObservation
+}
+
+type resourceListDriver struct {
+	instance.Driver
+	resources []instance.RuntimeResource
+}
+
+func (d *resourceListDriver) List(context.Context) ([]instance.RuntimeResource, error) {
+	return d.resources, nil
+}
+
+type inspectErrorDriver struct {
+	instance.Driver
+	err error
+}
+
+type disappearingRepository struct {
+	instance.Repository
+}
+
+func (r *disappearingRepository) List(ctx context.Context) ([]*instance.Instance, error) {
+	instances, err := r.Repository.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, inst := range instances {
+		if err := r.Repository.Delete(ctx, inst.ID); err != nil {
+			return nil, err
+		}
+	}
+	return instances, nil
+}
+
+func (d *inspectErrorDriver) Inspect(context.Context, string) (instance.RuntimeObservation, error) {
+	return instance.RuntimeObservation{}, d.err
+}
+
+func (d *observationDriver) Inspect(ctx context.Context, id string) (instance.RuntimeObservation, error) {
+	if d.observation != nil {
+		return *d.observation, nil
+	}
+	return d.Driver.Inspect(ctx, id)
+}
+
+var _ instance.Driver = (*observationDriver)(nil)
+
 func (d *blockingDriver) Create(context.Context, string, instance.Spec) error { return nil }
-func (d *blockingDriver) Inspect(context.Context, string) (instance.RuntimeState, error) {
-	return instance.RuntimeStopped, nil
+func (d *blockingDriver) List(context.Context) ([]instance.RuntimeResource, error) {
+	return nil, nil
+}
+func (d *blockingDriver) Inspect(context.Context, string) (instance.RuntimeObservation, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	state := instance.RuntimeStopped
+	if d.running {
+		state = instance.RuntimeRunning
+	}
+	return instance.RuntimeObservation{State: state}, nil
 }
 func (d *blockingDriver) Start(context.Context, string) error {
 	close(d.started)
 	<-d.release
+	d.mu.Lock()
+	d.running = true
+	d.mu.Unlock()
 	return nil
 }
-func (d *blockingDriver) Stop(context.Context, string) error   { return nil }
+func (d *blockingDriver) Stop(context.Context, string) error {
+	d.mu.Lock()
+	d.running = false
+	d.mu.Unlock()
+	return nil
+}
 func (d *blockingDriver) Remove(context.Context, string) error { return nil }
 
 var _ instance.Driver = (*blockingDriver)(nil)
@@ -393,8 +789,11 @@ type errorDriver struct {
 }
 
 func (d *errorDriver) Create(context.Context, string, instance.Spec) error { return d.createErr }
-func (d *errorDriver) Inspect(context.Context, string) (instance.RuntimeState, error) {
-	return "", instance.ErrNotFound
+func (d *errorDriver) List(context.Context) ([]instance.RuntimeResource, error) {
+	return nil, nil
+}
+func (d *errorDriver) Inspect(context.Context, string) (instance.RuntimeObservation, error) {
+	return instance.RuntimeObservation{}, instance.ErrNotFound
 }
 func (d *errorDriver) Start(context.Context, string) error  { return nil }
 func (d *errorDriver) Stop(context.Context, string) error   { return nil }
@@ -457,6 +856,19 @@ type lostReplyDriver struct {
 	instance.Driver
 }
 
+type exitAfterStartDriver struct {
+	instance.Driver
+}
+
+func (d *exitAfterStartDriver) Start(ctx context.Context, id string) error {
+	if err := d.Driver.Start(ctx, id); err != nil {
+		return err
+	}
+	return d.Driver.Stop(ctx, id)
+}
+
+var _ instance.Driver = (*exitAfterStartDriver)(nil)
+
 func (d *lostReplyDriver) Create(ctx context.Context, id string, spec instance.Spec) error {
 	if err := d.Driver.Create(ctx, id, spec); err != nil {
 		return err
@@ -494,12 +906,12 @@ func (d *transientInspectDriver) Start(ctx context.Context, id string) error {
 	return errInjected
 }
 
-func (d *transientInspectDriver) Inspect(ctx context.Context, id string) (instance.RuntimeState, error) {
+func (d *transientInspectDriver) Inspect(ctx context.Context, id string) (instance.RuntimeObservation, error) {
 	d.mu.Lock()
 	if d.inspectFailures > 0 {
 		d.inspectFailures--
 		d.mu.Unlock()
-		return "", errInspect
+		return instance.RuntimeObservation{}, errInspect
 	}
 	d.mu.Unlock()
 	return d.Driver.Inspect(ctx, id)

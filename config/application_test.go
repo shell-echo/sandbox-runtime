@@ -73,7 +73,7 @@ func TestIsDevelopment(t *testing.T) {
 // consistent and pass validation.
 func TestDefaultApplicationConfig(t *testing.T) {
 	app := defaultApplicationConfig()
-	if app.Name == "" || app.Mode != ApplicationProductionMode || app.TimeLocation == nil {
+	if app.Name == "" || app.Mode != ApplicationDevelopmentMode || app.TimeLocation == nil {
 		t.Errorf("unexpected default application config: %+v", app)
 	}
 	if err := app.validate(); err != nil {

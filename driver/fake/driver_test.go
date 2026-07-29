@@ -15,14 +15,14 @@ func TestDriverLifecycle(t *testing.T) {
 	if err := driver.Create(ctx, "one", spec); err != nil {
 		t.Fatalf("Create: %v", err)
 	}
-	if state, err := driver.Inspect(ctx, "one"); err != nil || state != instance.RuntimeStopped {
-		t.Fatalf("Inspect after create = %q, %v", state, err)
+	if state, err := driver.Inspect(ctx, "one"); err != nil || state.State != instance.RuntimeStopped {
+		t.Fatalf("Inspect after create = %+v, %v", state, err)
 	}
 	if err := driver.Start(ctx, "one"); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	if state, err := driver.Inspect(ctx, "one"); err != nil || state != instance.RuntimeRunning {
-		t.Fatalf("Inspect after start = %q, %v", state, err)
+	if state, err := driver.Inspect(ctx, "one"); err != nil || state.State != instance.RuntimeRunning {
+		t.Fatalf("Inspect after start = %+v, %v", state, err)
 	}
 	if err := driver.Stop(ctx, "one"); err != nil {
 		t.Fatalf("Stop: %v", err)

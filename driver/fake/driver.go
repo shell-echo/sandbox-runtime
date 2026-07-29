@@ -4,7 +4,10 @@ package fake
 import (
 	"context"
 	"fmt"
+	"slices"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/shell-echo/sandbox-runtime/instance"
 )
@@ -12,8 +15,10 @@ import (
 // Driver simulates only backend runtime resources. Instance metadata and
 // control-plane state are owned by instance.Service and its Repository.
 type Driver struct {
-	mu     sync.Mutex
-	states map[string]runtimeState
+	mu      sync.Mutex
+	states  map[string]runtimeState
+	specs   map[string]instance.Spec
+	created map[string]time.Time
 }
 
 type runtimeState uint8
@@ -24,10 +29,13 @@ const (
 )
 
 func NewDriver() *Driver {
-	return &Driver{states: make(map[string]runtimeState)}
+	return &Driver{
+		states: make(map[string]runtimeState), specs: make(map[string]instance.Spec),
+		created: make(map[string]time.Time),
+	}
 }
 
-func (d *Driver) Create(ctx context.Context, id string, _ instance.Spec) error {
+func (d *Driver) Create(ctx context.Context, id string, spec instance.Spec) error {
 	if err := contextError(ctx); err != nil {
 		return err
 	}
@@ -40,30 +48,46 @@ func (d *Driver) Create(ctx context.Context, id string, _ instance.Spec) error {
 		return fmt.Errorf("%w: %s", instance.ErrAlreadyExists, id)
 	}
 	d.states[id] = runtimeStopped
+	d.specs[id] = spec
+	d.created[id] = time.Now()
 	return nil
+}
+
+func (d *Driver) List(ctx context.Context) ([]instance.RuntimeResource, error) {
+	if err := contextError(ctx); err != nil {
+		return nil, err
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	resources := make([]instance.RuntimeResource, 0, len(d.states))
+	for id := range d.states {
+		resources = append(resources, instance.RuntimeResource{ID: id, Spec: d.specs[id], CreatedAt: d.created[id]})
+	}
+	slices.SortFunc(resources, func(a, b instance.RuntimeResource) int { return strings.Compare(a.ID, b.ID) })
+	return resources, nil
 }
 
 func (d *Driver) Start(ctx context.Context, id string) error {
 	return d.changeState(ctx, id, runtimeStopped, runtimeRunning)
 }
 
-func (d *Driver) Inspect(ctx context.Context, id string) (instance.RuntimeState, error) {
+func (d *Driver) Inspect(ctx context.Context, id string) (instance.RuntimeObservation, error) {
 	if err := contextError(ctx); err != nil {
-		return "", err
+		return instance.RuntimeObservation{}, err
 	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if err := contextError(ctx); err != nil {
-		return "", err
+		return instance.RuntimeObservation{}, err
 	}
 	state, exists := d.states[id]
 	if !exists {
-		return "", fmt.Errorf("%w: %s", instance.ErrNotFound, id)
+		return instance.RuntimeObservation{}, fmt.Errorf("%w: %s", instance.ErrNotFound, id)
 	}
 	if state == runtimeRunning {
-		return instance.RuntimeRunning, nil
+		return instance.RuntimeObservation{State: instance.RuntimeRunning}, nil
 	}
-	return instance.RuntimeStopped, nil
+	return instance.RuntimeObservation{State: instance.RuntimeStopped}, nil
 }
 
 func (d *Driver) Stop(ctx context.Context, id string) error {
@@ -83,6 +107,8 @@ func (d *Driver) Remove(ctx context.Context, id string) error {
 		return nil // backend removal is idempotent
 	}
 	delete(d.states, id)
+	delete(d.specs, id)
+	delete(d.created, id)
 	return nil
 }
 

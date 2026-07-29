@@ -12,8 +12,26 @@ import (
 
 const (
 	MaxNameLength       = 128
+	MaxIDLength         = 128
+	MaxFailureLength    = 4096
 	DefaultMaxInstances = 1000
 )
+
+// ValidateID rejects identifiers that cannot safely cross repository, label,
+// and runtime-name boundaries.
+func ValidateID(id string) error {
+	if id == "" || len(id) > MaxIDLength {
+		return fmt.Errorf("%w: ID must contain 1-%d characters", ErrInvalidSpec, MaxIDLength)
+	}
+	for _, char := range id {
+		if (char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') ||
+			(char >= '0' && char <= '9') || char == '.' || char == '_' || char == '-' {
+			continue
+		}
+		return fmt.Errorf("%w: ID contains an unsupported character", ErrInvalidSpec)
+	}
+	return nil
+}
 
 // WorkloadType identifies the kind of remote workload hosted by an instance.
 type WorkloadType string
@@ -60,7 +78,7 @@ func (s State) CanTransition(next State) bool {
 	case StateStopping:
 		return next == StateStopped || next == StateRunning || next == StateFailed
 	case StateFailed:
-		return next == StateRemoving
+		return next == StateStarting || next == StateRemoving
 	default:
 		return false
 	}
@@ -74,6 +92,7 @@ type Instance struct {
 	State     State        `json:"state"`
 	CreatedAt time.Time    `json:"created_at"`
 	UpdatedAt time.Time    `json:"updated_at"`
+	Failure   string       `json:"failure,omitempty"`
 }
 
 // Spec contains the backend-independent inputs used to create an instance.
