@@ -32,7 +32,7 @@ jobs:
         run: go run ./cmd/verify-agent-contract -source-root .agent-contract-source
       - name: Validate Provider v1 DTO projection and fixtures
         env:
-          AGENT_CONTRACT_SOURCE_ROOT: .agent-contract-source
+          AGENT_CONTRACT_SOURCE_ROOT: ${{ github.workspace }}/.agent-contract-source
         run: go test -count=1 ./providerapi/v1 -run '^TestLockedContractProjection$'
 
   test:
