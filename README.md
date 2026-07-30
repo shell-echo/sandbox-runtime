@@ -24,13 +24,13 @@ Currently implemented:
 - Dockerfile for packaging the control-plane binary
 - backend-independent instance model and lifecycle state machine
 - concurrency-safe fake driver for lifecycle validation
-- instance lifecycle HTTP API backed by the fake driver
+- configurable fake and Docker runtime drivers
+- instance lifecycle HTTP API backed by the selected driver
 
 Planned but not yet implemented:
 
 - Block manifest loader
 - Block registry
-- Docker driver
 - runtime images for browser and desktop workloads
 - display, audio, input, streaming, clipboard, and file-transfer modules
 - WebRTC / VNC / WebSocket connectors
@@ -78,11 +78,16 @@ A module represents a runtime capability used by one or more blocks, such as dis
 
 ### Driver
 
-A driver is responsible only for creating, inspecting, starting, stopping, and removing the underlying runtime resource. Instance identity, lifecycle policy, and metadata persistence remain in the control plane. Driver removal is idempotent so interrupted cleanup can be retried safely. The first real driver is expected to be Docker; the current fake driver validates runtime behavior without requiring containers.
+A driver is responsible only for creating, inspecting, starting, stopping, and removing the underlying runtime resource. Instance identity, lifecycle policy, and metadata persistence remain in the control plane. Driver removal is idempotent so interrupted cleanup can be retried safely. The Docker driver uses the official Moby Engine client with API-version negotiation, resource limits, restricted networking and capabilities, ownership labels, and retry-safe removal. The fake driver remains available for local control-plane development without a container engine.
 
 ### Instance service and repository
 
-The instance service owns IDs, validation, lifecycle transitions, and coordination with runtime drivers. Transitional states are reconciled against the driver's observed runtime state after ambiguous failures and when an interrupted instance is inspected again. Instance metadata is stored through a repository interface; the current in-memory repository can later be replaced by persistent storage without changing API handlers or drivers.
+The instance service owns IDs, validation, lifecycle transitions, and coordination
+with runtime drivers. API reads reconcile stable and transitional states against
+the runtime; successful mutations are confirmed before their terminal state is
+persisted. Repository implementations remain replaceable: fake development uses
+memory, while Docker uses an atomically replaced, versioned state file and runs
+startup recovery before accepting requests.
 
 ### Connector
 
@@ -93,6 +98,12 @@ A connector exposes access to a running instance. Examples include HTTP, WebRTC,
 Policy defines what an instance is allowed to do: resource limits, network access, filesystem mounts, clipboard permissions, automation access, and other runtime constraints.
 
 ## Architecture direction
+
+The provider boundary, compatibility requirements for the Agent Platform,
+security baseline, and authoritative phased delivery plan are defined in
+[the architecture document](docs/architecture.md). The independent-provider
+ownership decision is recorded in
+[ADR 0001](docs/adr/0001-agent-platform-provider-boundary.md).
 
 The intended long-term architecture is:
 
@@ -105,7 +116,7 @@ sandbox-runtime/
 ├── internal/       # internal error types and shared internals
 ├── option/         # reusable option/value objects
 ├── instance/       # instance model, service, repository contract and memory store
-├── driver/         # runtime backends (fake now, Docker later)
+├── driver/         # runtime backends (fake and Docker)
 │
 ├── blocks/         # future block manifests
 ├── runtime/        # future runtime images and guest scripts
@@ -156,8 +167,10 @@ Typed errors are mapped to structured failure envelopes. Unexpected errors are h
 
 ### Instance lifecycle
 
-The current instance API uses the in-memory fake driver. It validates the
-control-plane contract but does not yet start real containers or shells.
+The instance API uses the configured runtime driver. The default fake driver
+validates the control-plane contract without creating containers. Selecting the
+Docker driver creates real stopped containers that can be controlled through
+the lifecycle API; interactive shell sessions are a later milestone.
 
 ```http
 POST   /instances
@@ -189,6 +202,72 @@ Create a shell instance:
 Instance names are limited to 128 characters. Request bodies are limited to
 64 KiB, and the in-process service allows at most 1,000 instances by default.
 
+### Docker runtime
+
+The safe development default is the in-memory `fake` driver. Production mode
+rejects that driver; to use Docker Engine, configure:
+
+```toml
+[runtime]
+driver = "docker"
+
+[repository]
+driver = "file"
+
+[repository.file]
+path = "data/instances.json"
+
+[runtime.docker]
+host = ""                       # DOCKER_HOST or the default Docker socket
+image = "alpine:3.23"
+pull_policy = "if_not_present"  # never | if_not_present | always
+memory_bytes = 536870912
+nano_cpus = 1000000000
+pids_limit = 256
+operation_timeout_seconds = 30
+pull_timeout_seconds = 300
+stop_timeout_seconds = 10
+user = "65532:65532"
+namespace = "default"
+controller_id = "runtime-dev-01"
+command = ["/bin/sh", "-c", "trap 'exit 0' TERM INT; while :; do sleep 3600 & wait $!; done"]
+```
+
+The server checks Docker connectivity at startup when this backend is selected.
+Containers have networking disabled, all Linux capabilities dropped,
+`no-new-privileges` enabled, a read-only root filesystem, a bounded `/tmp`
+tmpfs, bounded logs, a numeric non-root user, and CPU, memory, and PID limits.
+Driver operations verify ownership labels before mutating a container. The
+configured image must contain the configured command and allow it to run as the
+configured user; override both values together for custom images. Give each
+control-plane deployment a stable, unique controller ID when sharing a Docker
+daemon. Namespace groups related resources, while controller ID establishes
+ownership and must remain unchanged across restarts.
+`controller_id` is required whenever the Docker driver is selected and is never
+generated automatically. Changing it makes existing containers invisible to the
+new controller; containers without the controller label are deliberately not
+adopted.
+
+Until an authentication layer is implemented, production mode accepts only a
+loopback API listener. It also requires an image pinned by `@sha256:...` and
+rejects plaintext remote Docker endpoints. Explicit Docker hosts continue to
+honor the standard `DOCKER_TLS_VERIFY` and `DOCKER_CERT_PATH` settings.
+
+Instance metadata is atomically persisted at `repository.file.path`. On startup
+the service reconciles every persisted record with Docker, adopts correctly
+labelled resources missing from the repository, rejects ownership metadata
+conflicts, and finishes interrupted removals. Mount the parent directory on
+durable storage when running the control plane itself in a container.
+Only one process may open a repository path at a time; a stable `.lock`
+companion file prevents two controllers from overwriting each other's snapshot.
+The locked file repository currently supports Darwin and Linux.
+
+The live Docker integration test is opt-in:
+
+```bash
+SANDBOX_RUNTIME_DOCKER_INTEGRATION=1 go test -tags=integration ./driver/docker
+```
+
 ## Quick start
 
 ### Requirements
@@ -206,7 +285,10 @@ go test ./...
 go run . serve
 ```
 
-The API server listens on `0.0.0.0:8080` by default.
+The API server listens on `127.0.0.1:8080` by default. There is no application
+authentication in v1. Production mode therefore rejects non-loopback listeners;
+development deployments that override the bind address must provide their own
+authenticated network boundary.
 
 Test the health endpoint:
 
@@ -249,7 +331,10 @@ docker build -t sandbox-runtime .
 Run it:
 
 ```bash
-docker run --rm -p 8080:8080 sandbox-runtime
+docker run --rm \
+  -p 127.0.0.1:8080:8080 \
+  -v sandbox-runtime-data:/app/data \
+  sandbox-runtime
 ```
 
 Then check:
@@ -291,7 +376,7 @@ Example config:
 ```toml
 [application]
 name = 'sandbox-runtime'
-mode = 'production'
+mode = 'development'
 
 [application.timezone]
 name = 'Asia/Shanghai'
@@ -308,7 +393,7 @@ max_age = 30
 compress = true
 
 [server.api]
-host = '0.0.0.0'
+host = '127.0.0.1'
 port = 8080
 ```
 
@@ -340,6 +425,11 @@ Future commands may include:
 
 ## Roadmap
 
+The delivery phases and their release gates in
+[the architecture document](docs/architecture.md#delivery-plan-and-release-gates)
+are authoritative. Items below are ordered by dependency, not by product
+visibility.
+
 ### Foundation
 
 - [x] CLI skeleton
@@ -348,6 +438,23 @@ Future commands may include:
 - [x] HTTP API server
 - [x] health endpoint
 - [x] Docker packaging for the control plane
+
+### Agent Platform contract intake
+
+- [x] define the independent Sandbox Provider ownership boundary
+- [x] lock the upstream revision, Contract tree, manifest, OpenAPI, and Sandbox Suite
+- [x] add read-only Contract lock verification
+- [ ] define Provider DTOs separately from local instance and driver models
+- [ ] validate Provider DTOs and fixtures against the locked Contract
+- [ ] implement mTLS-only capability discovery
+- [ ] implement per-operation JWS and request/descriptor digest admission
+
+### Provider lifecycle
+
+- [ ] add durable Provider sandbox, operation, lease, and event models
+- [ ] add idempotency, generation, fencing, deadlines, and reconciliation
+- [ ] expose the asynchronous Provider API v1 lifecycle subset
+- [ ] pass the applicable `sandbox-core-v1` lifecycle and security tests
 
 ### Manifest and blocks
 
@@ -363,15 +470,15 @@ Future commands may include:
 - [x] define lifecycle state machine
 - [x] add fake driver
 - [x] expose instance CRUD APIs
-- [ ] add instance event model
 
 ### Docker runtime
 
-- [ ] implement Docker driver
+- [x] implement Docker driver
 - [ ] create base runtime image
 - [ ] create browser runtime image
-- [ ] support container start/stop/inspect/logs
-- [ ] define runtime resource limits
+- [x] support container create/start/stop/inspect/remove
+- [ ] support container logs
+- [x] define runtime resource limits
 
 ### Remote GUI capabilities
 
@@ -408,9 +515,18 @@ Those can be built on top later, but they should not shape the core runtime prem
 
 ## Security note
 
-`sandbox-runtime` is not yet a hardened security boundary. Treat the current implementation as an early runtime prototype. Do not run untrusted workloads in production until the driver, isolation, filesystem, network, and policy layers have been explicitly designed and reviewed.
+`sandbox-runtime` applies conservative Docker defaults, but Docker Engine access
+and container isolation alone are not a hardened multi-tenant security boundary.
+The v1 API also has no built-in authentication. Keep it on loopback or behind an
+authenticated trusted proxy in development; production mode currently enforces
+loopback. Do not run hostile workloads in production
+until the threat model, filesystem policy, seccomp/AppArmor profile, user
+namespaces, secrets handling, and host isolation have been explicitly reviewed.
 
 ## Development
+
+See [the development standards](docs/development.md) for package boundaries,
+security rules, required gates, and Contract change discipline.
 
 Run tests:
 

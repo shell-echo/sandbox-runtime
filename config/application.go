@@ -124,7 +124,7 @@ func defaultApplicationConfig() *ApplicationConfig {
 	}
 	config := &ApplicationConfig{
 		Name:         defaultApplicationName,
-		Mode:         ApplicationProductionMode,
+		Mode:         ApplicationDevelopmentMode,
 		TimeZone:     tz,
 		TimeLocation: loc,
 	}

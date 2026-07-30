@@ -10,7 +10,10 @@ import (
 	"time"
 )
 
-const recoveryTimeout = 5 * time.Second
+const (
+	recoveryTimeout        = 5 * time.Second
+	startupRecoveryTimeout = 5 * time.Minute
+)
 
 // Service is the application boundary shared by HTTP, CLI, and future control
 // surfaces.
@@ -18,6 +21,7 @@ type Service interface {
 	Create(context.Context, Spec) (*Instance, error)
 	List(context.Context) ([]*Instance, error)
 	Inspect(context.Context, string) (*Instance, error)
+	Recover(context.Context) error
 	Start(context.Context, string) (*Instance, error)
 	Stop(context.Context, string) (*Instance, error)
 	Remove(context.Context, string) error
@@ -109,7 +113,7 @@ func (s *service) Create(ctx context.Context, spec Spec) (*Instance, error) {
 		}
 		return clone(inst), nil
 	}
-	if err := s.completeOperation(ctx, inst, StateStopped); err != nil {
+	if err := s.finishOperation(ctx, inst, RuntimeStopped, StateStopped, "create"); err != nil {
 		return nil, err
 	}
 	return clone(inst), nil
@@ -132,6 +136,9 @@ func (s *service) reserve(ctx context.Context, spec Spec) (*Instance, func(), er
 	if err != nil {
 		return nil, nil, fmt.Errorf("generate instance id: %w", err)
 	}
+	if err := ValidateID(id); err != nil {
+		return nil, nil, fmt.Errorf("generate instance id: %w", err)
+	}
 	release, err := s.acquire(ctx, id)
 	if err != nil {
 		return nil, nil, err
@@ -146,7 +153,125 @@ func (s *service) reserve(ctx context.Context, spec Spec) (*Instance, func(), er
 }
 
 func (s *service) List(ctx context.Context) ([]*Instance, error) {
-	return s.repository.List(ctx)
+	snapshots, err := s.repository.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	instances := make([]*Instance, 0, len(snapshots))
+	for _, snapshot := range snapshots {
+		inst, err := s.Inspect(ctx, snapshot.ID)
+		if err != nil {
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+			if errors.Is(err, ErrNotFound) {
+				continue
+			}
+			// Listing is best effort: preserve the durable last-known state when
+			// a single runtime inspection fails. Inspect remains the strict API.
+			instances = append(instances, clone(snapshot))
+			continue
+		}
+		instances = append(instances, inst)
+	}
+	return instances, nil
+}
+
+// Recover reconciles persisted instances after process startup and completes
+// interrupted removals. It continues through all records and returns every
+// recovery error so one damaged resource cannot hide the state of the others.
+func (s *service) Recover(ctx context.Context) error {
+	recoveryCtx, cancel := context.WithTimeout(ctx, startupRecoveryTimeout)
+	defer cancel()
+	ctx = recoveryCtx
+	snapshots, err := s.repository.List(ctx)
+	if err != nil {
+		return err
+	}
+	known := make(map[string]*Instance, len(snapshots))
+	if len(snapshots) > s.maxInstances {
+		return fmt.Errorf("%w: repository contains %d instances, maximum %d", ErrLimitExceeded, len(snapshots), s.maxInstances)
+	}
+	for _, snapshot := range snapshots {
+		known[snapshot.ID] = snapshot
+	}
+	resources, err := s.driver.List(ctx)
+	if err != nil {
+		return fmt.Errorf("list runtime resources: %w", err)
+	}
+	var recoveryErrors []error
+	for _, resource := range resources {
+		if persisted, exists := known[resource.ID]; exists {
+			if persisted.Name != resource.Spec.Name || persisted.Workload != resource.Spec.Workload {
+				recoveryErrors = append(recoveryErrors, fmt.Errorf(
+					"runtime instance %s metadata conflicts with its repository record", resource.ID,
+				))
+			}
+			continue
+		}
+		if len(known) >= s.maxInstances {
+			recoveryErrors = append(recoveryErrors, fmt.Errorf("adopt runtime instance %s: %w: maximum %d", resource.ID, ErrLimitExceeded, s.maxInstances))
+			continue
+		}
+		if err := s.adopt(ctx, resource); err != nil {
+			recoveryErrors = append(recoveryErrors, fmt.Errorf("adopt runtime instance %s: %w", resource.ID, err))
+			continue
+		}
+		known[resource.ID] = &Instance{ID: resource.ID, Name: resource.Spec.Name, Workload: resource.Spec.Workload}
+		snapshots = append(snapshots, &Instance{ID: resource.ID})
+	}
+	for _, snapshot := range snapshots {
+		if err := s.recoverInstance(ctx, snapshot.ID); err != nil {
+			recoveryErrors = append(recoveryErrors, fmt.Errorf("recover instance %s: %w", snapshot.ID, err))
+		}
+	}
+	return errors.Join(recoveryErrors...)
+}
+
+func (s *service) adopt(ctx context.Context, resource RuntimeResource) error {
+	if err := ValidateID(resource.ID); err != nil {
+		return err
+	}
+	if err := resource.Spec.Validate(); err != nil {
+		return err
+	}
+	release, err := s.acquire(ctx, resource.ID)
+	if err != nil {
+		return err
+	}
+	defer release()
+	createdAt := resource.CreatedAt
+	if createdAt.IsZero() {
+		createdAt = s.now()
+	}
+	inst := &Instance{
+		ID: resource.ID, Name: resource.Spec.Name, Workload: resource.Spec.Workload,
+		State: StateStarting, CreatedAt: createdAt, UpdatedAt: createdAt,
+	}
+	if err := s.repository.Create(ctx, inst); err != nil {
+		return err
+	}
+	return s.reconcile(ctx, inst)
+}
+
+func (s *service) recoverInstance(ctx context.Context, id string) error {
+	release, err := s.acquire(ctx, id)
+	if err != nil {
+		return err
+	}
+	defer release()
+	inst, err := s.repository.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+	if inst.State != StateRemoving {
+		_, err = s.load(ctx, id)
+		return err
+	}
+	if err := s.driver.Remove(ctx, id); err != nil {
+		return fmt.Errorf("finish runtime removal: %w", err)
+	}
+	return s.repository.Delete(ctx, id)
 }
 
 func (s *service) Inspect(ctx context.Context, id string) (*Instance, error) {
@@ -178,7 +303,7 @@ func (s *service) Start(ctx context.Context, id string) (*Instance, error) {
 		}
 		return clone(inst), nil
 	}
-	if err := s.completeOperation(ctx, inst, StateRunning); err != nil {
+	if err := s.finishOperation(ctx, inst, RuntimeRunning, StateRunning, "start"); err != nil {
 		return nil, err
 	}
 	return clone(inst), nil
@@ -204,7 +329,7 @@ func (s *service) Stop(ctx context.Context, id string) (*Instance, error) {
 		}
 		return clone(inst), nil
 	}
-	if err := s.completeOperation(ctx, inst, StateStopped); err != nil {
+	if err := s.finishOperation(ctx, inst, RuntimeStopped, StateStopped, "stop"); err != nil {
 		return nil, err
 	}
 	return clone(inst), nil
@@ -241,25 +366,17 @@ func (s *service) move(ctx context.Context, inst *Instance, next State) error {
 	if !inst.State.CanTransition(next) {
 		return fmt.Errorf("%w: %s -> %s", ErrInvalidTransition, inst.State, next)
 	}
-	candidate := clone(inst)
-	candidate.State = next
-	candidate.UpdatedAt = s.now()
-	if err := s.repository.Update(ctx, candidate); err != nil {
-		return err
-	}
-	*inst = *candidate
-	return nil
+	return s.persistState(ctx, inst, next, "")
 }
 
-// load returns an instance after lazily reconciling an interrupted transition
-// with the runtime. Per-instance locking must be held by the caller.
+// load returns the runtime-reconciled instance. Per-instance locking must be
+// held by the caller.
 func (s *service) load(ctx context.Context, id string) (*Instance, error) {
 	inst, err := s.repository.Get(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-	switch inst.State {
-	case StateCreating, StateStarting, StateStopping:
+	if inst.State != StateRemoving && inst.State != StateFailed {
 		if err := s.reconcile(ctx, inst); err != nil {
 			return nil, err
 		}
@@ -267,28 +384,53 @@ func (s *service) load(ctx context.Context, id string) (*Instance, error) {
 	return inst, nil
 }
 
-// completeOperation persists a successful driver's terminal state. If that
-// write fails, runtime inspection provides a second, bounded reconciliation
-// attempt. A transient persistence failure is therefore transparent once the
-// repository and runtime agree again.
-func (s *service) completeOperation(ctx context.Context, inst *Instance, target State) error {
+// finishOperation confirms that a successful driver call reached its expected
+// runtime state before committing the control-plane state.
+func (s *service) finishOperation(ctx context.Context, inst *Instance, runtimeTarget RuntimeState, target State, operation string) error {
 	recoveryCtx, cancel := s.recoveryContext(ctx)
-	err := s.move(recoveryCtx, inst, target)
+	observation, err := s.driver.Inspect(recoveryCtx, inst.ID)
 	cancel()
-	if err == nil {
-		return nil
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			failure := fmt.Sprintf("%s succeeded but runtime resource is missing", operation)
+			persistCtx, persistCancel := s.recoveryContext(ctx)
+			persistErr := s.fail(persistCtx, inst, failure)
+			persistCancel()
+			if persistErr != nil {
+				return errors.Join(fmt.Errorf("confirm %s runtime: %w", operation, err), persistErr)
+			}
+		}
+		return fmt.Errorf("confirm %s runtime: %w", operation, err)
 	}
-
-	recoveryCtx, cancel = s.recoveryContext(ctx)
-	reconcileErr := s.reconcile(recoveryCtx, inst)
-	cancel()
-	if reconcileErr == nil && inst.State == target {
-		return nil
+	if err := validateObservation(observation); err != nil {
+		return err
 	}
-	if reconcileErr == nil {
-		reconcileErr = fmt.Errorf("runtime reconciled to %s, want %s", inst.State, target)
+	if observation.State != runtimeTarget {
+		failure := fmt.Sprintf("%s completed but runtime is %s", operation, observation.State)
+		if detail := observationFailure(observation); detail != "" {
+			failure += ": " + detail
+		}
+		persistCtx, persistCancel := s.recoveryContext(ctx)
+		persistErr := s.fail(persistCtx, inst, failure)
+		persistCancel()
+		if persistErr != nil {
+			return errors.Join(errors.New(failure), persistErr)
+		}
+		return errors.New(failure)
 	}
-	return errors.Join(fmt.Errorf("persist %s state: %w", target, err), reconcileErr)
+	if err := s.move(ctx, inst, target); err != nil {
+		recoveryCtx, cancel := s.recoveryContext(ctx)
+		reconcileErr := s.reconcile(recoveryCtx, inst)
+		cancel()
+		if reconcileErr == nil && inst.State == target {
+			return nil
+		}
+		if reconcileErr == nil {
+			reconcileErr = fmt.Errorf("runtime reconciled to %s, want %s", inst.State, target)
+		}
+		return errors.Join(fmt.Errorf("persist %s state: %w", target, err), reconcileErr)
+	}
+	return nil
 }
 
 // recoverOperation reconciles the actual runtime after a driver reports an
@@ -308,35 +450,101 @@ func (s *service) recoverOperation(ctx context.Context, inst *Instance, target S
 }
 
 func (s *service) reconcile(ctx context.Context, inst *Instance) error {
-	runtimeState, inspectErr := s.driver.Inspect(ctx, inst.ID)
+	observation, inspectErr := s.driver.Inspect(ctx, inst.ID)
 	if inspectErr != nil {
 		if !errors.Is(inspectErr, ErrNotFound) {
 			return fmt.Errorf("inspect runtime: %w", inspectErr)
 		}
-		return s.move(ctx, inst, StateFailed)
+		return s.fail(ctx, inst, "runtime resource is missing")
+	}
+	if err := validateObservation(observation); err != nil {
+		return err
 	}
 
-	var target State
 	switch inst.State {
 	case StateCreating:
-		if runtimeState == RuntimeStopped {
-			target = StateStopped
-		} else {
-			target = StateFailed
+		if observation.State == RuntimeStopped {
+			return s.move(ctx, inst, StateStopped)
 		}
+		return s.fail(ctx, inst, "runtime was running while creation was incomplete")
 	case StateStarting, StateStopping:
-		switch runtimeState {
+		switch observation.State {
 		case RuntimeStopped:
-			target = StateStopped
+			return s.move(ctx, inst, StateStopped)
 		case RuntimeRunning:
-			target = StateRunning
-		default:
-			return fmt.Errorf("%w: %q", ErrInvalidRuntime, runtimeState)
+			return s.move(ctx, inst, StateRunning)
+		}
+	case StateStopped:
+		if observation.State == RuntimeRunning {
+			return s.persistState(ctx, inst, StateRunning, "")
+		}
+	case StateRunning:
+		if observation.State == RuntimeStopped {
+			failure := "runtime stopped unexpectedly"
+			if detail := observationFailure(observation); detail != "" {
+				failure += ": " + detail
+			}
+			return s.fail(ctx, inst, failure)
 		}
 	default:
 		return nil
 	}
-	return s.move(ctx, inst, target)
+	return nil
+}
+
+func (s *service) fail(ctx context.Context, inst *Instance, failure string) error {
+	if inst.State == StateFailed {
+		return nil
+	}
+	return s.persistState(ctx, inst, StateFailed, failure)
+}
+
+func (s *service) persistState(ctx context.Context, inst *Instance, state State, failure string) error {
+	candidate := clone(inst)
+	candidate.State = state
+	candidate.Failure = failure
+	candidate.UpdatedAt = s.now()
+	if candidate.UpdatedAt.Before(candidate.CreatedAt) {
+		candidate.UpdatedAt = candidate.CreatedAt
+	}
+	if candidate.UpdatedAt.Before(inst.UpdatedAt) {
+		candidate.UpdatedAt = inst.UpdatedAt
+	}
+	if err := s.repository.Update(ctx, candidate); err != nil {
+		return err
+	}
+	*inst = *candidate
+	return nil
+}
+
+func validateObservation(observation RuntimeObservation) error {
+	switch observation.State {
+	case RuntimeStopped, RuntimeRunning:
+	default:
+		return fmt.Errorf("%w: %q", ErrInvalidRuntime, observation.State)
+	}
+	switch observation.StopReason {
+	case RuntimeStopReasonNone, RuntimeStopReasonOOMKilled, RuntimeStopReasonRuntimeError:
+	default:
+		return fmt.Errorf("%w: unknown stop reason %q", ErrInvalidRuntime, observation.StopReason)
+	}
+	if observation.State == RuntimeRunning && observation.StopReason != RuntimeStopReasonNone {
+		return fmt.Errorf("%w: running runtime has stop reason %q", ErrInvalidRuntime, observation.StopReason)
+	}
+	return nil
+}
+
+func observationFailure(observation RuntimeObservation) string {
+	switch {
+	case observation.StopReason == RuntimeStopReasonOOMKilled:
+		return fmt.Sprintf("out of memory (exit code %d)", observation.ExitCode)
+	case observation.StopReason == RuntimeStopReasonRuntimeError:
+		return fmt.Sprintf("runtime failure (exit code %d)", observation.ExitCode)
+	case observation.ExitCode != 0:
+		return fmt.Sprintf("exit code %d", observation.ExitCode)
+	default:
+		return ""
+	}
 }
 
 func (s *service) recoveryContext(parent context.Context) (context.Context, context.CancelFunc) {

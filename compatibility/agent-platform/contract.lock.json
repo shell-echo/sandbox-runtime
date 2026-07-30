@@ -1,0 +1,24 @@
+{
+  "format_version": 1,
+  "source": {
+    "repository": "https://github.com/CelestialsGroup/agent-blueprints.git",
+    "revision": "0c91871fa469e951b8a508fe735a2a9a5797a67e",
+    "contract_tree": "87e560f9b38eb291c77e036e6690233570afdf01"
+  },
+  "contract": {
+    "root": "contract",
+    "license": "LicenseRef-Proprietary",
+    "consumption": "read-only-checkout",
+    "manifest_path": "contract/compatibility/contract-manifest.json",
+    "manifest_digest": "sha256:fac0299efcf04471f58f1f0668818a5148526371bd413deb5993c5aacb2762ce",
+    "openapi_path": "contract/openapi/sandbox-provider-v1.yaml",
+    "openapi_sha256": "sha256:173feeb61f47696778f1c457f275677fc8e5d287088094d0a3c7129c359cbe95"
+  },
+  "sandbox_suite": {
+    "path": "contract/conformance/sandbox/v1/suite.json",
+    "suite_id": "sandbox-provider",
+    "suite_version": "1.0.0",
+    "suite_digest": "sha256:bdebf6fba1cd41072a46b47de451bf039485047e9a9478fad2d6c69ee8ff38b7",
+    "required_profile": "sandbox-core-v1"
+  }
+}

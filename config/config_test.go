@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -15,11 +16,15 @@ func snapshotGlobals(t *testing.T) {
 	app := Application
 	lg := Logger
 	srv := Server
+	runtimeConfig := Runtime
+	repository := Repository
 	loc := time.Local
 	t.Cleanup(func() {
 		Application = app
 		Logger = lg
 		Server = srv
+		Runtime = runtimeConfig
+		Repository = repository
 		time.Local = loc
 	})
 }
@@ -126,6 +131,12 @@ func TestLoadNoFileUsesDefaults(t *testing.T) {
 	}
 	if Application.Mode != defaultApplicationConfig().Mode {
 		t.Errorf("Application.Mode = %q, want default", Application.Mode)
+	}
+	if wantRuntime := defaultRuntimeConfig(); !reflect.DeepEqual(Runtime, wantRuntime) {
+		t.Errorf("Runtime = %+v, want defaults %+v", *Runtime, *wantRuntime)
+	}
+	if wantRepository := defaultRepositoryConfig(); !reflect.DeepEqual(Repository, wantRepository) {
+		t.Errorf("Repository = %+v, want defaults %+v", *Repository, *wantRepository)
 	}
 }
 
