@@ -18,6 +18,7 @@ func snapshotGlobals(t *testing.T) {
 	srv := Server
 	runtimeConfig := Runtime
 	repository := Repository
+	providerConfig := Provider
 	loc := time.Local
 	t.Cleanup(func() {
 		Application = app
@@ -25,6 +26,7 @@ func snapshotGlobals(t *testing.T) {
 		Server = srv
 		Runtime = runtimeConfig
 		Repository = repository
+		Provider = providerConfig
 		time.Local = loc
 	})
 }
@@ -137,6 +139,9 @@ func TestLoadNoFileUsesDefaults(t *testing.T) {
 	}
 	if wantRepository := defaultRepositoryConfig(); !reflect.DeepEqual(Repository, wantRepository) {
 		t.Errorf("Repository = %+v, want defaults %+v", *Repository, *wantRepository)
+	}
+	if wantProvider := defaultProviderConfig(); !reflect.DeepEqual(Provider, wantProvider) {
+		t.Errorf("Provider = %+v, want defaults %+v", *Provider, *wantProvider)
 	}
 }
 

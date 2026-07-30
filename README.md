@@ -27,6 +27,7 @@ Currently implemented:
 - configurable fake and Docker runtime drivers
 - instance lifecycle HTTP API backed by the selected driver
 - separate Provider API v1 wire DTOs and locked Contract projection validation
+- opt-in, TLS 1.3 mTLS-only Provider capability discovery on a separate listener
 
 Planned but not yet implemented:
 
@@ -165,6 +166,28 @@ All normal API handlers are expected to return the same response envelope:
 ```
 
 Typed errors are mapped to structured failure envelopes. Unexpected errors are hidden in production mode and only exposed in development mode.
+
+### Provider capability discovery
+
+The Provider API is an opt-in listener that is independent of the local
+management API above. When enabled, it exposes only the raw Provider v1
+capability document:
+
+```http
+GET /v1/capabilities
+```
+
+The listener has no plaintext mode. It requires a server certificate, private
+key, client CA, and an allowlist of exact SPIFFE URI identities. The verified
+client leaf certificate must contain exactly one URI SAN, and TLS 1.3 is the
+minimum protocol version. Discovery requires no `Authorization` bearer token;
+presenting one does not replace or broaden the admitted mTLS identity.
+
+P1.1b intentionally advertises empty capability and runtime-profile arrays
+because their Provider behaviors are not implemented. The required locked
+snapshot-profile metadata is compatibility metadata only and does not authorize
+snapshot or restore. This component endpoint is not a claim of
+`sandbox-core-v1` conformance or Agent Platform end-to-end compatibility.
 
 ### Instance lifecycle
 
@@ -396,9 +419,26 @@ compress = true
 [server.api]
 host = '127.0.0.1'
 port = 8080
+
+[provider]
+revision_id = ''
+
+[server.provider]
+enabled = false
+host = '127.0.0.1'
+port = 8443
+
+[server.provider.tls]
+certificate_file = ''
+private_key_file = ''
+client_ca_file = ''
+allowed_client_spiffe_ids = []
 ```
 
 By default, file logging is disabled. Set `logger.file.name` to a non-empty path to enable rotated file output.
+The Provider listener remains disabled by default. Enabling it requires a
+non-empty `provider.revision_id` and complete mTLS configuration; invalid or
+unreadable TLS material fails process startup before the listener accepts work.
 
 ## CLI
 
@@ -447,7 +487,7 @@ visibility.
 - [x] add read-only Contract lock verification
 - [x] define Provider DTOs separately from local instance and driver models
 - [x] validate Provider DTOs and fixtures against the locked Contract
-- [ ] implement mTLS-only capability discovery
+- [x] implement mTLS-only capability discovery
 - [ ] implement per-operation JWS and request/descriptor digest admission
 
 ### Provider lifecycle
@@ -518,9 +558,12 @@ Those can be built on top later, but they should not shape the core runtime prem
 
 `sandbox-runtime` applies conservative Docker defaults, but Docker Engine access
 and container isolation alone are not a hardened multi-tenant security boundary.
-The v1 API also has no built-in authentication. Keep it on loopback or behind an
-authenticated trusted proxy in development; production mode currently enforces
-loopback. Do not run hostile workloads in production
+The local `/health` and `/instances` management API has no built-in
+authentication. Keep that listener on loopback or behind an authenticated
+trusted proxy in development; production mode currently enforces loopback. The
+separate Provider listener is mTLS-only, but its configured local SPIFFE
+allowlist does not prove Platform PKI registration, rotation, revocation, or
+multi-tenant authorization. Do not run hostile workloads in production
 until the threat model, filesystem policy, seccomp/AppArmor profile, user
 namespaces, secrets handling, and host isolation have been explicitly reviewed.
 

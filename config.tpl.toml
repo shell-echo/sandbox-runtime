@@ -24,6 +24,27 @@ compress = true         # gzip rotated files
 host = '127.0.0.1' # explicitly change only behind a trusted network boundary
 port = 8080
 
+[provider]
+revision_id = '' # required when server.provider.enabled is true
+
+[provider.limits]
+max_cpu_millis = 1000
+max_memory_bytes = 536870912
+max_ephemeral_storage_bytes = 67108864
+max_lease_seconds = 3600
+max_exec_seconds = 30
+
+[server.provider]
+enabled = false
+host = '127.0.0.1'
+port = 8443
+
+[server.provider.tls]
+certificate_file = ''
+private_key_file = ''
+client_ca_file = ''
+allowed_client_spiffe_ids = []
+
 [runtime]
 driver = 'fake' # fake | docker
 

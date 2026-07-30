@@ -11,6 +11,25 @@ func TestDefaultServerConfig(t *testing.T) {
 	if err := s.API.Validate(); err != nil {
 		t.Errorf("default server config should be valid: %v", err)
 	}
+	if s.Provider.Enabled || s.Provider.Host != defaultServerProviderHost || s.Provider.Port != defaultServerProviderPort {
+		t.Errorf("unexpected default Provider server config: %+v", s.Provider)
+	}
+}
+
+func TestProviderServerConfigRequiresCompleteMTLS(t *testing.T) {
+	config := defaultServerConfig().Provider
+	config.Enabled = true
+	if err := config.validate(); err == nil {
+		t.Fatal("expected missing mTLS configuration error")
+	}
+	config.TLS = ProviderTLSConfig{
+		CertificateFile: "server.pem", PrivateKeyFile: "server-key.pem",
+		ClientCAFile:           "client-ca.pem",
+		AllowedClientSPIFFEIDs: []string{"spiffe://agent-platform/control-plane/sandbox"},
+	}
+	if err := config.validate(); err != nil {
+		t.Fatalf("complete mTLS configuration: %v", err)
+	}
 }
 
 // TestLoadServerDefaults confirms Load applies the server defaults when no file

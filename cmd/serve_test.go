@@ -85,15 +85,16 @@ func TestValidateServeConfigurationRejectsFakeProduction(t *testing.T) {
 	serverConfig := &config.ServerConfig{API: option.HTTP{Host: "127.0.0.1", Port: 8080}}
 	runtimeConfig := &config.RuntimeConfig{Driver: config.RuntimeFakeDriver}
 	repositoryConfig := &config.RepositoryConfig{Driver: config.RepositoryMemoryDriver}
-	if err := validateServeConfiguration(application, serverConfig, runtimeConfig, repositoryConfig); err == nil {
+	providerConfig := &config.ProviderConfig{}
+	if err := validateServeConfiguration(application, serverConfig, providerConfig, runtimeConfig, repositoryConfig); err == nil {
 		t.Fatal("expected fake production configuration error")
 	}
 	application.Mode = config.ApplicationDevelopmentMode
-	if err := validateServeConfiguration(application, serverConfig, runtimeConfig, repositoryConfig); err != nil {
+	if err := validateServeConfiguration(application, serverConfig, providerConfig, runtimeConfig, repositoryConfig); err != nil {
 		t.Fatalf("development fake configuration: %v", err)
 	}
 	runtimeConfig.Driver = config.RuntimeDockerDriver
-	if err := validateServeConfiguration(application, serverConfig, runtimeConfig, repositoryConfig); err == nil {
+	if err := validateServeConfiguration(application, serverConfig, providerConfig, runtimeConfig, repositoryConfig); err == nil {
 		t.Fatal("expected Docker memory repository error")
 	}
 }
@@ -106,27 +107,54 @@ func TestValidateServeConfigurationProductionBoundaries(t *testing.T) {
 		Image: "example/shell@sha256:" + strings.Repeat("a", 64),
 	}}
 	repositoryConfig := &config.RepositoryConfig{Driver: config.RepositoryFileDriver, File: config.RepositoryFileConfig{Path: "state.json"}}
-	if err := validateServeConfiguration(application, serverConfig, runtimeConfig, repositoryConfig); err != nil {
+	providerConfig := &config.ProviderConfig{}
+	if err := validateServeConfiguration(application, serverConfig, providerConfig, runtimeConfig, repositoryConfig); err != nil {
 		t.Fatalf("secure production config: %v", err)
 	}
 	serverConfig.API.Host = "0.0.0.0"
-	if err := validateServeConfiguration(application, serverConfig, runtimeConfig, repositoryConfig); err == nil {
+	if err := validateServeConfiguration(application, serverConfig, providerConfig, runtimeConfig, repositoryConfig); err == nil {
 		t.Fatal("expected public unauthenticated listener rejection")
 	}
 	serverConfig.API.Host = "127.0.0.1"
 	runtimeConfig.Docker.Image = "example/shell:latest"
-	if err := validateServeConfiguration(application, serverConfig, runtimeConfig, repositoryConfig); err == nil {
+	if err := validateServeConfiguration(application, serverConfig, providerConfig, runtimeConfig, repositoryConfig); err == nil {
 		t.Fatal("expected mutable image rejection")
 	}
 	runtimeConfig.Docker.Image = "example/shell@sha256:" + strings.Repeat("a", 64)
 	runtimeConfig.Docker.Host = "tcp://docker.example:2375"
-	if err := validateServeConfiguration(application, serverConfig, runtimeConfig, repositoryConfig); err == nil {
+	if err := validateServeConfiguration(application, serverConfig, providerConfig, runtimeConfig, repositoryConfig); err == nil {
 		t.Fatal("expected plaintext remote Docker rejection")
 	}
 	t.Setenv("DOCKER_TLS_VERIFY", "1")
 	t.Setenv("DOCKER_CERT_PATH", "/run/secrets/docker")
-	if err := validateServeConfiguration(application, serverConfig, runtimeConfig, repositoryConfig); err != nil {
+	if err := validateServeConfiguration(application, serverConfig, providerConfig, runtimeConfig, repositoryConfig); err != nil {
 		t.Fatalf("TLS-protected Docker host: %v", err)
+	}
+}
+
+func TestValidateServeConfigurationProviderListener(t *testing.T) {
+	application := &config.ApplicationConfig{Mode: config.ApplicationDevelopmentMode}
+	serverConfig := &config.ServerConfig{
+		API: option.HTTP{Host: "127.0.0.1", Port: 8080},
+		Provider: config.ProviderServerConfig{
+			Enabled: true, Host: "127.0.0.1", Port: 8443,
+		},
+	}
+	providerConfig := &config.ProviderConfig{}
+	runtimeConfig := &config.RuntimeConfig{Driver: config.RuntimeFakeDriver}
+	repositoryConfig := &config.RepositoryConfig{Driver: config.RepositoryMemoryDriver}
+
+	if err := validateServeConfiguration(application, serverConfig, providerConfig, runtimeConfig, repositoryConfig); err == nil {
+		t.Fatal("expected missing Provider revision error")
+	}
+	providerConfig.RevisionID = "spr_test"
+	serverConfig.Provider.Port = serverConfig.API.Port
+	if err := validateServeConfiguration(application, serverConfig, providerConfig, runtimeConfig, repositoryConfig); err == nil {
+		t.Fatal("expected Provider and management API address collision error")
+	}
+	serverConfig.Provider.Port = 8443
+	if err := validateServeConfiguration(application, serverConfig, providerConfig, runtimeConfig, repositoryConfig); err != nil {
+		t.Fatalf("valid Provider listener: %v", err)
 	}
 }
 
