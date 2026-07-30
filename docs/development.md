@@ -1,0 +1,71 @@
+# Development Standards
+
+## Toolchain and commands
+
+Use the Go version declared in `go.mod`. Docker is optional for ordinary unit
+tests and required for the tagged Docker integration test.
+
+```bash
+go test -race -shuffle=on -count=1 ./...
+go vet ./...
+SANDBOX_RUNTIME_DOCKER_INTEGRATION=1 go test -tags=integration -count=1 ./driver/docker
+go run ./cmd/verify-agent-contract -source-root /path/to/agent-blueprints
+```
+
+Format changed Go files with `gofmt`. Do not weaken or skip a gate to make a
+change pass. Record an unavailable integration environment separately from a
+code failure.
+
+## Package boundaries
+
+- `server` and future `providerapi` packages own transport only.
+- application services own lifecycle and coordination, without Gin or Docker
+  types.
+- repository and driver interfaces are ports; concrete implementations stay in
+  their adapter packages.
+- `driver/*` owns backend actions and observations, not public policy or durable
+  platform truth.
+- Provider wire DTOs must remain separate from `instance` models and backend
+  engine types.
+- optional capabilities such as exec, terminal, and snapshot use focused ports;
+  do not grow one mandatory driver interface for unsupported features.
+
+Dependencies point inward. Export the minimum surface and keep cross-package
+calls on public contracts rather than implementation structs.
+
+## Go and API rules
+
+- accept `context.Context` on blocking or external operations and preserve
+  cancellation and deadlines;
+- wrap errors with operation context and map them to stable public codes only at
+  the transport boundary;
+- reject unknown JSON fields, multiple JSON values, oversized bodies, invalid
+  identifiers, and unsafe defaults;
+- return caller-safe snapshots from repositories and services;
+- protect shared state explicitly and test races and cancellation paths;
+- use injected clocks, ID generators, engines, and repositories where
+  deterministic fault tests need them.
+
+Never expose container IDs, host paths, daemon errors, raw endpoints, secrets,
+or credentials through a stable API. Production configuration must fail closed
+when authentication, persistence, image pinning, or transport safety is absent.
+
+## Agent Contract discipline
+
+The upstream Blueprint explains intent; its locked OpenAPI, Schemas, semantic
+rules, fixtures, and Conformance Suite define wire behavior. Do not edit or copy
+the proprietary upstream Contract into this MIT repository. Update
+`compatibility/agent-platform/contract.lock.json` only as a reviewed compatibility
+change, then update generated DTOs, mappings, fixtures, tests, and documentation
+together.
+
+Contract lock verification proves only the identity of consumed inputs. Unit
+tests prove components. Conformance, multi-controller reliability, security,
+deployment, and production readiness remain separate evidence tiers.
+
+## Change and review discipline
+
+Keep changes scoped to one delivery slice and state its non-goals. New behavior
+requires success, rejection, cancellation, and recovery tests proportional to
+its failure modes. Changes to ownership, public protocol, reliability semantics,
+or security boundaries require an ADR and coordinated compatibility review.

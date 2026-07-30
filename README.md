@@ -99,9 +99,11 @@ Policy defines what an instance is allowed to do: resource limits, network acces
 
 ## Architecture direction
 
-The provider boundary, compatibility requirements for replacing DeerFlow's
-built-in sandbox in `agent-blueprints`, security baseline, and phased delivery
-plan are defined in [the architecture document](docs/architecture.md).
+The provider boundary, compatibility requirements for the Agent Platform,
+security baseline, and authoritative phased delivery plan are defined in
+[the architecture document](docs/architecture.md). The independent-provider
+ownership decision is recorded in
+[ADR 0001](docs/adr/0001-agent-platform-provider-boundary.md).
 
 The intended long-term architecture is:
 
@@ -423,6 +425,11 @@ Future commands may include:
 
 ## Roadmap
 
+The delivery phases and their release gates in
+[the architecture document](docs/architecture.md#delivery-plan-and-release-gates)
+are authoritative. Items below are ordered by dependency, not by product
+visibility.
+
 ### Foundation
 
 - [x] CLI skeleton
@@ -431,6 +438,23 @@ Future commands may include:
 - [x] HTTP API server
 - [x] health endpoint
 - [x] Docker packaging for the control plane
+
+### Agent Platform contract intake
+
+- [x] define the independent Sandbox Provider ownership boundary
+- [x] lock the upstream revision, Contract tree, manifest, OpenAPI, and Sandbox Suite
+- [x] add read-only Contract lock verification
+- [ ] define Provider DTOs separately from local instance and driver models
+- [ ] validate Provider DTOs and fixtures against the locked Contract
+- [ ] implement mTLS-only capability discovery
+- [ ] implement per-operation JWS and request/descriptor digest admission
+
+### Provider lifecycle
+
+- [ ] add durable Provider sandbox, operation, lease, and event models
+- [ ] add idempotency, generation, fencing, deadlines, and reconciliation
+- [ ] expose the asynchronous Provider API v1 lifecycle subset
+- [ ] pass the applicable `sandbox-core-v1` lifecycle and security tests
 
 ### Manifest and blocks
 
@@ -446,7 +470,6 @@ Future commands may include:
 - [x] define lifecycle state machine
 - [x] add fake driver
 - [x] expose instance CRUD APIs
-- [ ] add instance event model
 
 ### Docker runtime
 
@@ -501,6 +524,9 @@ until the threat model, filesystem policy, seccomp/AppArmor profile, user
 namespaces, secrets handling, and host isolation have been explicitly reviewed.
 
 ## Development
+
+See [the development standards](docs/development.md) for package boundaries,
+security rules, required gates, and Contract change discipline.
 
 Run tests:
 

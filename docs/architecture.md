@@ -9,15 +9,16 @@ provider-facing control protocol.
 
 One explicit compatibility target is
 [`CelestialsGroup/agent-blueprints`](https://github.com/CelestialsGroup/agent-blueprints).
-That platform currently uses DeerFlow's built-in sandbox, but its architecture
-defines a stable Sandbox Provider boundary so a run can instead bind to this
-project. DeerFlow is therefore a reference adapter, not a dependency or a data
-model that this repository should copy.
+That platform defines its own native Sandbox Provider plan and a stable provider
+boundary. This project is a candidate independent implementation of that
+boundary. DeerFlow and other third-party sandboxes are research references, not
+current adapters, dependencies, or data models that this repository should copy.
 
-This document summarizes the upstream contract reviewed on 2026-07-18. The
-normative sources remain the versioned upstream OpenAPI and JSON Schemas; when
-this document disagrees with a pinned upstream contract revision, the pinned
-contract wins.
+This document summarizes the upstream contract locked by
+[`compatibility/agent-platform/contract.lock.json`](../compatibility/agent-platform/contract.lock.json).
+The normative sources remain the locked OpenAPI, JSON Schemas, semantic rules,
+fixtures, and Conformance Suite. When this document disagrees with those
+resources, the locked contract wins.
 
 ## Compatibility boundary
 
@@ -45,9 +46,9 @@ IDs, host paths, or any other provider implementation detail.
 
 ```mermaid
 flowchart LR
-    AP["Agent Platform stable kernel"] -->|"Sandbox Provider API v1"| PA["Provider API adapter"]
+    AP["Agent Platform stable kernel and SandboxOperation ledger"] -->|"Sandbox Provider API v1"| PA["sandbox-runtime provider API"]
     AP --> RG["Runtime Gateway"]
-    PA --> OS["Operation coordinator and reconciliation"]
+    PA --> OS["Provider-local operations and reconciliation"]
     OS --> SS["Sandbox application service"]
     SS --> DR["Runtime driver port"]
     DR --> DO["Docker"]
@@ -62,17 +63,28 @@ Sandbox Provider API. The current `instance.Service` may remain the internal
 application boundary and `instance.Driver` the backend port, but neither model
 should be serialized directly as the cross-project protocol.
 
+The accepted ownership decision is recorded in
+[`docs/adr/0001-agent-platform-provider-boundary.md`](adr/0001-agent-platform-provider-boundary.md).
+The Agent Platform owns its durable aggregate operation ledger and authorization
+decisions. This service owns only provider-local operation progress and backend
+evidence required to answer the Provider API safely.
+
 ## Contract source and versioning
 
-The compatibility implementation must be generated or validated against a
-pinned, immutable upstream contract revision. The reviewed contract identifies
+The compatibility implementation must be generated or validated against the
+immutable upstream revision in the contract lock. The locked contract identifies
 itself as Sandbox Provider API `1.0.0`, protocol `v1`:
 
-- [Sandbox Provider contract](https://github.com/CelestialsGroup/agent-blueprints/blob/main/agent-application-platform-starter/docs/33_SANDBOX_PROVIDER_CONTRACT.md)
-- [Sandbox security and isolation](https://github.com/CelestialsGroup/agent-blueprints/blob/main/agent-application-platform-starter/docs/34_SANDBOX_SECURITY_AND_ISOLATION.md)
-- [Conformance and migration](https://github.com/CelestialsGroup/agent-blueprints/blob/main/agent-application-platform-starter/docs/36_SANDBOX_CONFORMANCE_AND_MIGRATION.md)
-- [OpenAPI v1](https://github.com/CelestialsGroup/agent-blueprints/blob/main/agent-application-platform-starter/contracts/openapi/sandbox-provider-v1.yaml)
-- [JSON Schemas](https://github.com/CelestialsGroup/agent-blueprints/tree/main/agent-application-platform-starter/contracts/schemas)
+- [Sandbox Provider contract](https://github.com/CelestialsGroup/agent-blueprints/blob/0c91871fa469e951b8a508fe735a2a9a5797a67e/blueprint/docs/33_SANDBOX_PROVIDER_CONTRACT.md)
+- [Sandbox security and isolation](https://github.com/CelestialsGroup/agent-blueprints/blob/0c91871fa469e951b8a508fe735a2a9a5797a67e/blueprint/docs/34_SANDBOX_SECURITY_AND_ISOLATION.md)
+- [Conformance and migration](https://github.com/CelestialsGroup/agent-blueprints/blob/0c91871fa469e951b8a508fe735a2a9a5797a67e/blueprint/docs/36_SANDBOX_CONFORMANCE_AND_MIGRATION.md)
+- [OpenAPI v1](https://github.com/CelestialsGroup/agent-blueprints/blob/0c91871fa469e951b8a508fe735a2a9a5797a67e/contract/openapi/sandbox-provider-v1.yaml)
+- [JSON Schemas](https://github.com/CelestialsGroup/agent-blueprints/tree/0c91871fa469e951b8a508fe735a2a9a5797a67e/contract/schemas)
+- [Sandbox Conformance Suite](https://github.com/CelestialsGroup/agent-blueprints/blob/0c91871fa469e951b8a508fe735a2a9a5797a67e/contract/conformance/sandbox/v1/suite.json)
+
+The upstream Contract is marked `LicenseRef-Proprietary`, while this repository
+is MIT licensed. Contract resources are therefore consumed from a read-only
+checkout and verified by digest; they are not copied into this repository.
 
 Compatibility rules:
 
@@ -318,8 +330,10 @@ driver/*     --------------------------------> backend engines
   limits, validation, and stable error mapping.
 - the sandbox application service owns lifecycle policy, generations, leases,
   capability validation, and coordination; it has no HTTP or Docker knowledge.
-- the operation coordinator owns durable idempotency, attempts, fencing,
-  deadlines, cancellation intent, retry state, and reconciliation.
+- the provider-local operation coordinator owns the idempotency, attempts,
+  fencing, deadlines, cancellation evidence, and reconciliation needed to
+  execute and report one Provider API request safely. It does not replace the
+  Agent Platform's authoritative SandboxOperation ledger.
 - repositories persist sandboxes, operations, events, leases, and retained
   results through explicit interfaces. A file repository remains suitable for
   single-process development, not multi-controller production.
@@ -357,12 +371,34 @@ Agent Platform-compatible provider:
 
 ### Phase 1: stable provider core
 
-- pin the upstream OpenAPI/Schema revision and add contract fixture validation;
+#### P1.0: contract intake and ownership freeze
+
+- record the independent Provider ownership decision;
+- pin the upstream revision, Contract tree, manifest, OpenAPI, and Sandbox Suite;
+- verify the lock against a read-only upstream checkout in CI;
+- keep upstream proprietary resources outside this MIT repository;
+- define development and compatibility change rules.
+
+Release gate: the lock verifier passes and this repository contains no copied
+upstream Contract resources. This gate proves input identity only, not protocol
+conformance.
+
+#### P1.1: Provider API admission
+
 - define provider DTOs separately from `instance` and driver models;
-- implement capability discovery and the base lifecycle profile;
+- generate or validate them against the locked Schemas and fixtures;
+- implement mTLS-only capability discovery;
+- implement the closed JWS header, claims, operation, descriptor, and request
+  digest admission boundary for all protected operations.
+
+Release gate: Schema/fixture compatibility, mTLS discovery, token binding,
+digest substitution, expiry, replay, and stale-fencing admission tests pass.
+
+#### P1.2: asynchronous lifecycle
+
 - add durable sandbox/operation/event records, idempotency, generation, fencing,
   deadlines, leases, and restart reconciliation;
-- expose Provider API v1 with standard errors and production transport hooks.
+- expose the lifecycle subset of Provider API v1 with standard errors.
 
 Release gate: lifecycle, duplicate request, restart, stale fencing, generation
 conflict, create/terminate race, lease expiry, orphan cleanup, and security-base
@@ -380,7 +416,8 @@ without DeerFlow-specific fields, endpoint leakage, or cross-tenant access.
 
 ### Phase 3: migration readiness
 
-- run DeerFlow and `sandbox-runtime` adapters against the same conformance suite;
+- run the Agent Platform native provider and `sandbox-runtime` against the same
+  locked Conformance Suite;
 - shadow-validate capabilities and requests without serving production traffic;
 - canary only new runs and lock each run to its selected ProviderRevision;
 - prove rollback changes only new bindings and old-provider runs can drain;
