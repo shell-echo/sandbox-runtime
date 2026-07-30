@@ -385,6 +385,9 @@ conformance.
 
 #### P1.1: Provider API admission
 
+Implementation slices and evidence boundaries are tracked in the
+[P1.1 Provider API admission plan](plan/p1.1-provider-api-admission.md).
+
 - define provider DTOs separately from `instance` and driver models;
 - generate or validate them against the locked Schemas and fixtures;
 - implement mTLS-only capability discovery;

@@ -26,6 +26,7 @@ Currently implemented:
 - concurrency-safe fake driver for lifecycle validation
 - configurable fake and Docker runtime drivers
 - instance lifecycle HTTP API backed by the selected driver
+- separate Provider API v1 wire DTOs and locked Contract projection validation
 
 Planned but not yet implemented:
 
@@ -444,8 +445,8 @@ visibility.
 - [x] define the independent Sandbox Provider ownership boundary
 - [x] lock the upstream revision, Contract tree, manifest, OpenAPI, and Sandbox Suite
 - [x] add read-only Contract lock verification
-- [ ] define Provider DTOs separately from local instance and driver models
-- [ ] validate Provider DTOs and fixtures against the locked Contract
+- [x] define Provider DTOs separately from local instance and driver models
+- [x] validate Provider DTOs and fixtures against the locked Contract
 - [ ] implement mTLS-only capability discovery
 - [ ] implement per-operation JWS and request/descriptor digest admission
 
