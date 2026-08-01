@@ -15,11 +15,11 @@ reports progress against those authorities.
 ## Current snapshot
 
 - Baseline branch: `main`
-- Baseline revision: `255c927`
+- Baseline revision: `493d7c2`
 - Current phase: P1.1, Provider API admission
-- Next planned slice: P1.1b, mTLS-only capability discovery
+- Current slice: P1.1b, mTLS-only capability discovery
 - P1.1 release gate: open
-- Slice in progress: none recorded
+- Slice in progress: P1.1b unit 1 implemented and locally validated; review and commit pending
 
 ## Delivery status
 
@@ -27,7 +27,7 @@ reports progress against those authorities.
 | --- | --- | --- |
 | P1.0: contract intake and ownership freeze | Closed | Contract identity and ownership-boundary evidence only. |
 | P1.1a: wire DTO and Contract validation harness | Implemented and merged into `main` | Component and locked Contract projection evidence only. |
-| P1.1b: mTLS-only capability discovery | Planned; not started | No implementation or validation evidence yet. |
+| P1.1b: mTLS-only capability discovery | In progress; unit 1 locally validated | Application model and immutable-source evidence only; HTTP, mTLS, mapping, and emitted-response evidence remain open. |
 | P1.1c: protected-operation admission | Not started | No implementation or validation evidence yet. |
 | P1.1d: admission release gate | Not started | P1.1 remains open. |
 
@@ -51,6 +51,19 @@ The tagged Docker integration test was not required because P1.1a did not
 change driver or lifecycle behavior. The authoritative command details and
 evidence counts remain in the
 [P1.1 implementation plan](plan/p1.1-provider-api-admission.md#p11a-validation-record).
+
+P1.1b unit 1 was validated on 2026-08-01 with Go 1.26 in Apple Container:
+
+- focused and full-repository race-enabled, shuffled Go tests;
+- focused and full-repository `go vet`;
+- Agent Contract lock verification against the locked read-only checkout;
+- the existing P1.1a Provider projection regression;
+- `git diff --check`.
+
+This evidence covers only the application-owned capability model, strict
+construction rules, caller-safe copies, and concurrent reads. It does not cover
+Provider HTTP, mTLS identity admission, v1 response mapping, configuration, or
+the P1.1b emitted-response projection gate.
 
 ## Open gate and unproven claims
 
