@@ -16,6 +16,8 @@ import (
 	"github.com/shell-echo/sandbox-runtime/instance"
 	instancefile "github.com/shell-echo/sandbox-runtime/instance/file"
 	"github.com/shell-echo/sandbox-runtime/instance/memory"
+	"github.com/shell-echo/sandbox-runtime/provider"
+	"github.com/shell-echo/sandbox-runtime/providerapi"
 	"github.com/shell-echo/sandbox-runtime/server"
 	"github.com/shell-echo/sandbox-runtime/server/api"
 	"github.com/spf13/cobra"
@@ -32,6 +34,10 @@ var serveCmd = &cobra.Command{
 
 func runServe(cmd *cobra.Command, _ []string) (result error) {
 	if err := validateServeConfiguration(config.Application, config.Server, config.Runtime, config.Repository); err != nil {
+		return err
+	}
+	providerServer, err := newProviderServer(cmd.Context(), config.Server.Provider)
+	if err != nil {
 		return err
 	}
 	runtimeDriver, closeRuntime, err := newRuntimeDriver(cmd.Context(), config.Runtime)
@@ -58,7 +64,79 @@ func runServe(cmd *cobra.Command, _ []string) (result error) {
 	if err != nil {
 		return err
 	}
-	return server.RunE(map[string]server.Server{"api": apiServer})
+	return server.RunE(enabledServers(apiServer, providerServer))
+}
+
+func enabledServers(apiServer, providerServer server.Server) map[string]server.Server {
+	servers := map[string]server.Server{"api": apiServer}
+	if providerServer != nil {
+		servers["provider"] = providerServer
+	}
+	return servers
+}
+
+func newProviderServer(ctx context.Context, providerConfig config.ProviderConfig) (server.Server, error) {
+	if !providerConfig.Transport.Enabled {
+		return nil, nil
+	}
+	if err := providerConfig.Validate(); err != nil {
+		return nil, fmt.Errorf("validate Provider configuration: %w", err)
+	}
+
+	source, err := newProviderCapabilitySource(providerConfig.Capability)
+	if err != nil {
+		return nil, err
+	}
+	transport := providerConfig.Transport
+	providerServer, err := providerapi.NewServer(ctx, providerapi.TransportOptions{
+		Address:                    transport.Address,
+		ServerCertificateFile:      transport.ServerCertificateFile,
+		ServerPrivateKeyFile:       transport.ServerPrivateKeyFile,
+		ClientCABundleFile:         transport.ClientCABundleFile,
+		AllowedClientURIIdentities: append([]string(nil), transport.AllowedClientURIIdentities...),
+	}, source)
+	if err != nil {
+		return nil, fmt.Errorf("construct Provider API server: %w", err)
+	}
+	return providerServer, nil
+}
+
+func newProviderCapabilitySource(capability config.ProviderCapabilityConfig) (*provider.StaticCapabilitySource, error) {
+	profiles := make([]provider.SnapshotRestoreProfile, len(capability.SnapshotRestoreProfiles))
+	for index, profile := range capability.SnapshotRestoreProfiles {
+		profiles[index] = provider.SnapshotRestoreProfile{
+			ProfileID:    profile.ProfileID,
+			Level:        provider.SnapshotLevel(profile.Level),
+			SuiteID:      provider.CompatibilitySuiteID(profile.SuiteID),
+			SuiteVersion: profile.SuiteVersion,
+			SuiteDigest:  provider.SHA256Digest(profile.SuiteDigest),
+		}
+	}
+	snapshot, err := provider.NewCapabilitySnapshot(capability.ProviderRevisionID, provider.Limits{
+		MaxCPUMillis:             capability.Limits.MaxCPUMillis,
+		MaxMemoryBytes:           capability.Limits.MaxMemoryBytes,
+		MaxEphemeralStorageBytes: capability.Limits.MaxEphemeralStorageBytes,
+		MaxWorkspaceBytes:        cloneOptionalInt64(capability.Limits.MaxWorkspaceBytes),
+		MaxGPUCount:              cloneOptionalInt64(capability.Limits.MaxGPUCount),
+		MaxLeaseSeconds:          capability.Limits.MaxLeaseSeconds,
+		MaxExecSeconds:           capability.Limits.MaxExecSeconds,
+	}, profiles)
+	if err != nil {
+		return nil, fmt.Errorf("construct Provider capability snapshot: %w", err)
+	}
+	source, err := provider.NewStaticCapabilitySource(snapshot)
+	if err != nil {
+		return nil, fmt.Errorf("construct Provider capability source: %w", err)
+	}
+	return source, nil
+}
+
+func cloneOptionalInt64(value *int64) *int64 {
+	if value == nil {
+		return nil
+	}
+	copy := *value
+	return &copy
 }
 
 func validateServeConfiguration(application *config.ApplicationConfig, serverConfig *config.ServerConfig, runtimeConfig *config.RuntimeConfig, repositoryConfig *config.RepositoryConfig) error {

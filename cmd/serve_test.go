@@ -9,6 +9,7 @@ import (
 
 	"github.com/shell-echo/sandbox-runtime/config"
 	"github.com/shell-echo/sandbox-runtime/option"
+	"github.com/shell-echo/sandbox-runtime/provider"
 )
 
 // TestServeCmdRegistered confirms the serve subcommand is wired onto the root
@@ -146,3 +147,87 @@ func TestNewInstanceRepository(t *testing.T) {
 		t.Fatalf("new file repository = %T, %v", repository, err)
 	}
 }
+
+func TestNewProviderServerDisabledIsInert(t *testing.T) {
+	providerServer, err := newProviderServer(context.Background(), config.ProviderConfig{})
+	if err != nil || providerServer != nil {
+		t.Fatalf("newProviderServer() = %T, %v; want nil, nil", providerServer, err)
+	}
+}
+
+func TestEnabledServersKeepsProviderSeparate(t *testing.T) {
+	apiServer := &testLifecycleServer{}
+	withoutProvider := enabledServers(apiServer, nil)
+	if len(withoutProvider) != 1 || withoutProvider["api"] != apiServer {
+		t.Fatalf("disabled server set = %#v", withoutProvider)
+	}
+
+	providerServer := &testLifecycleServer{}
+	withProvider := enabledServers(apiServer, providerServer)
+	if len(withProvider) != 2 || withProvider["api"] != apiServer || withProvider["provider"] != providerServer {
+		t.Fatalf("enabled server set = %#v", withProvider)
+	}
+}
+
+func TestNewProviderCapabilitySourceMapsAndFreezesConfiguration(t *testing.T) {
+	workspace := int64(4096)
+	gpu := int64(0)
+	capability := validProviderCapabilityConfig(&workspace, &gpu)
+	source, err := newProviderCapabilitySource(capability)
+	if err != nil {
+		t.Fatalf("newProviderCapabilitySource: %v", err)
+	}
+
+	workspace = 1
+	gpu = 2
+	capability.SnapshotRestoreProfiles[0].ProfileID = "mutated"
+	snapshot, err := source.CapabilitySnapshot(context.Background())
+	if err != nil {
+		t.Fatalf("CapabilitySnapshot: %v", err)
+	}
+	if snapshot.ProviderRevisionID != "revision-1" || snapshot.APIVersion != provider.APIVersionV1 {
+		t.Fatalf("snapshot identity = %#v", snapshot)
+	}
+	if snapshot.Limits.MaxWorkspaceBytes == nil || *snapshot.Limits.MaxWorkspaceBytes != 4096 ||
+		snapshot.Limits.MaxGPUCount == nil || *snapshot.Limits.MaxGPUCount != 0 {
+		t.Fatalf("snapshot optional limits = %#v", snapshot.Limits)
+	}
+	if len(snapshot.SnapshotRestoreProfiles) != 1 || snapshot.SnapshotRestoreProfiles[0].ProfileID != "profile-1" {
+		t.Fatalf("snapshot profiles = %#v", snapshot.SnapshotRestoreProfiles)
+	}
+}
+
+func TestNewProviderCapabilitySourceRejectsInvalidModel(t *testing.T) {
+	capability := validProviderCapabilityConfig(nil, nil)
+	capability.ProviderRevisionID = ""
+	if _, err := newProviderCapabilitySource(capability); err == nil {
+		t.Fatal("newProviderCapabilitySource() error = nil")
+	}
+}
+
+func validProviderCapabilityConfig(workspace, gpu *int64) config.ProviderCapabilityConfig {
+	return config.ProviderCapabilityConfig{
+		ProviderRevisionID: "revision-1",
+		Limits: config.ProviderLimitsConfig{
+			MaxCPUMillis:             1000,
+			MaxMemoryBytes:           1 << 30,
+			MaxEphemeralStorageBytes: 1 << 30,
+			MaxWorkspaceBytes:        workspace,
+			MaxGPUCount:              gpu,
+			MaxLeaseSeconds:          3600,
+			MaxExecSeconds:           300,
+		},
+		SnapshotRestoreProfiles: []config.ProviderCompatibilityProfile{{
+			ProfileID:    "profile-1",
+			Level:        "workspace",
+			SuiteID:      "sandbox-provider",
+			SuiteVersion: "1.0.0",
+			SuiteDigest:  "sha256:" + strings.Repeat("a", 64),
+		}},
+	}
+}
+
+type testLifecycleServer struct{}
+
+func (*testLifecycleServer) Startup(context.Context) error  { return nil }
+func (*testLifecycleServer) Shutdown(context.Context) error { return nil }
