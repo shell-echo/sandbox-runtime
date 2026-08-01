@@ -24,6 +24,41 @@ compress = true         # gzip rotated files
 host = '127.0.0.1' # explicitly change only behind a trusted network boundary
 port = 8080
 
+# The Provider API is a separate, default-disabled mTLS listener. Enabling it
+# requires replacing every placeholder below. Compatibility profiles are
+# descriptive metadata only; they do not advertise runtime capabilities.
+[server.provider.transport]
+enabled = false
+server_certificate_file = ''
+server_private_key_file = ''
+client_ca_bundle_file = ''
+allowed_client_uri_identities = [] # exact absolute URI SAN identities
+
+[server.provider.transport.address]
+host = '127.0.0.1'
+port = 8443
+
+[server.provider.capability]
+provider_revision_id = ''
+
+[server.provider.capability.limits]
+max_cpu_millis = 0
+max_memory_bytes = 0
+max_ephemeral_storage_bytes = 0
+# max_workspace_bytes is optional and must be positive when set.
+# max_gpu_count is optional; zero explicitly declares no GPU capacity.
+max_lease_seconds = 0
+max_exec_seconds = 0
+
+# Enabling the listener requires 1..32 entries supplied through TOML. Do not
+# treat this metadata as evidence that snapshot or restore is implemented.
+#[[server.provider.capability.snapshot_restore_profiles]]
+#profile_id = 'sandbox-snapshot-workspace-v1'
+#level = 'workspace'             # workspace | filesystem | process
+#suite_id = 'sandbox-provider'
+#suite_version = '0.0.0'
+#suite_digest = 'sha256:<64 lowercase hexadecimal characters>'
+
 [runtime]
 driver = 'fake' # fake | docker
 

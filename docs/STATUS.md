@@ -15,11 +15,11 @@ reports progress against those authorities.
 ## Current snapshot
 
 - Baseline branch: `main`
-- Baseline revision: `493d7c2`
+- Baseline revision: `fa0265e`
 - Current phase: P1.1, Provider API admission
 - Current slice: P1.1b, mTLS-only capability discovery
 - P1.1 release gate: open
-- Slice in progress: P1.1b unit 1 implemented and locally validated; review and commit pending
+- Slices in progress: P1.1b composition and fail-together lifecycle integration
 
 ## Delivery status
 
@@ -27,7 +27,7 @@ reports progress against those authorities.
 | --- | --- | --- |
 | P1.0: contract intake and ownership freeze | Closed | Contract identity and ownership-boundary evidence only. |
 | P1.1a: wire DTO and Contract validation harness | Implemented and merged into `main` | Component and locked Contract projection evidence only. |
-| P1.1b: mTLS-only capability discovery | In progress; unit 1 locally validated | Application model and immutable-source evidence only; HTTP, mTLS, mapping, and emitted-response evidence remain open. |
+| P1.1b: mTLS-only capability discovery | In progress; unit 1 committed, units 2-4 implemented and locally validated | Application model, immutable source, response mapping, exact GET-only routing, mTLS identity admission, default-disabled configuration, and emitted-response projection have component evidence. Composition, enabled-listener end-to-end behavior, and fail-together lifecycle evidence remain open. |
 | P1.1c: protected-operation admission | Not started | No implementation or validation evidence yet. |
 | P1.1d: admission release gate | Not started | P1.1 remains open. |
 
@@ -60,10 +60,23 @@ P1.1b unit 1 was validated on 2026-08-01 with Go 1.26 in Apple Container:
 - the existing P1.1a Provider projection regression;
 - `git diff --check`.
 
-This evidence covers only the application-owned capability model, strict
-construction rules, caller-safe copies, and concurrent reads. It does not cover
-Provider HTTP, mTLS identity admission, v1 response mapping, configuration, or
-the P1.1b emitted-response projection gate.
+P1.1b units 2-4 were then implemented and validated on 2026-08-01 with the
+same toolchain and locked Contract checkout:
+
+- full-repository race-enabled, shuffled Go tests;
+- full-repository `go vet`;
+- Agent Contract lock verification;
+- the existing P1.1a Provider projection regression;
+- validation of the actual emitted capability response against the locked
+  capability Schema;
+- `git diff --check`.
+
+This evidence covers the application-owned capability model and immutable
+source, explicit v1 mapping, exact GET-only router behavior, mTLS chain and URI
+SAN identity admission primitives, default-disabled fail-closed Provider
+configuration, and the emitted-response projection. These component
+implementations do not yet cover composition-root wiring, an enabled Provider
+HTTPS listener, or the process-level fail-together lifecycle.
 
 ## Open gate and unproven claims
 
@@ -73,7 +86,8 @@ expiry, replay, and stale-fencing admission tests to pass.
 
 The current revision does not prove or claim:
 
-- HTTP Provider routing or mTLS capability discovery;
+- composition-root wiring or an enabled Provider HTTPS listener;
+- process-level fail-together behavior for the local and Provider listeners;
 - JWS verification, digest binding, replay protection, or fencing admission;
 - P1.2 lifecycle, durable operations, leases, events, or reconciliation;
 - the aggregate `sandbox-core-v1` conformance profile;
