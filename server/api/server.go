@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"time"
 
@@ -80,8 +81,18 @@ func NewServer(debug bool, opts option.HTTP, instances instance.Service) (*Serve
 
 // Startup runs the HTTP server until it is shut down. http.ErrServerClosed is
 // the expected error after Shutdown and is not reported.
-func (s *Server) Startup() error {
-	if err := s.http.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+func (s *Server) Startup(ctx context.Context) error {
+	listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", s.http.Addr)
+	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			return nil
+		}
+		return fmt.Errorf("bind api server: %w", err)
+	}
+	stopClosingListener := context.AfterFunc(ctx, func() { _ = listener.Close() })
+	defer stopClosingListener()
+
+	if err := s.http.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) && !(ctx.Err() != nil && errors.Is(err, net.ErrClosed)) {
 		return fmt.Errorf("start api server: %w", err)
 	}
 	return nil

@@ -64,7 +64,9 @@ func TestStartupShutdown(t *testing.T) {
 	}
 
 	errc := make(chan error, 1)
-	go func() { errc <- srv.Startup() }()
+	startupContext, cancelStartup := context.WithCancel(context.Background())
+	defer cancelStartup()
+	go func() { errc <- srv.Startup(startupContext) }()
 
 	url := fmt.Sprintf("http://127.0.0.1:%d/health", port)
 	resp := getWithRetry(t, url)
