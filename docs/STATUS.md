@@ -15,11 +15,11 @@ reports progress against those authorities.
 ## Current snapshot
 
 - Baseline branch: `main`
-- Baseline revision: `fa0265e`
+- Baseline revision: `55f9f02`
 - Current phase: P1.1, Provider API admission
 - Current slice: P1.1b, mTLS-only capability discovery
 - P1.1 release gate: open
-- Slices in progress: P1.1b composition and fail-together lifecycle integration
+- Slices in progress: P1.1b acceptance; tagged Docker integration environment required
 
 ## Delivery status
 
@@ -27,7 +27,7 @@ reports progress against those authorities.
 | --- | --- | --- |
 | P1.0: contract intake and ownership freeze | Closed | Contract identity and ownership-boundary evidence only. |
 | P1.1a: wire DTO and Contract validation harness | Implemented and merged into `main` | Component and locked Contract projection evidence only. |
-| P1.1b: mTLS-only capability discovery | In progress; unit 1 committed, units 2-4 implemented and locally validated | Application model, immutable source, response mapping, exact GET-only routing, mTLS identity admission, default-disabled configuration, and emitted-response projection have component evidence. Composition, enabled-listener end-to-end behavior, and fail-together lifecycle evidence remain open. |
+| P1.1b: mTLS-only capability discovery | Implementation complete locally; acceptance blocked on required tagged Docker integration environment | Application model, immutable source, response mapping, exact GET-only routing, mTLS identity admission, default-disabled configuration, composition, enabled-listener behavior, emitted-response projection, and fail-together lifecycle have local evidence. The lifecycle change requires the tagged Docker integration gate, which Apple Container cannot provide. |
 | P1.1c: protected-operation admission | Not started | No implementation or validation evidence yet. |
 | P1.1d: admission release gate | Not started | P1.1 remains open. |
 
@@ -71,12 +71,31 @@ same toolchain and locked Contract checkout:
   capability Schema;
 - `git diff --check`.
 
-This evidence covers the application-owned capability model and immutable
-source, explicit v1 mapping, exact GET-only router behavior, mTLS chain and URI
-SAN identity admission primitives, default-disabled fail-closed Provider
-configuration, and the emitted-response projection. These component
-implementations do not yet cover composition-root wiring, an enabled Provider
-HTTPS listener, or the process-level fail-together lifecycle.
+The final composition unit was implemented and validated on 2026-08-01. It
+adds the separately named Provider HTTPS server at the composition root,
+explicit configuration-to-application mapping, real mTLS listener evidence,
+plaintext rejection, and cancellation-safe fail-together startup. Cross-review
+identified and the implementation fixed an existing shutdown-before-bind race,
+late signal registration, cancellation error misclassification, and test
+listener TOCTOU.
+
+The complete local validation passed:
+
+- full-repository race-enabled, shuffled Go tests;
+- full-repository `go vet`;
+- Agent Contract lock verification at revision
+  `0c91871fa469e951b8a508fe735a2a9a5797a67e`;
+- the P1.1a locked Provider projection regression;
+- the P1.1b emitted capability response Schema projection;
+- `git diff --check`.
+
+Because the composition unit hardens the shared server lifecycle, the tagged
+Docker integration command became mandatory. It was executed in Apple
+Container with `SANDBOX_RUNTIME_DOCKER_INTEGRATION=1`, but both integration
+tests stopped before exercising the driver because no Docker Engine socket
+exists at `/var/run/docker.sock`. This is recorded as an unavailable required
+environment, not as a passing gate or a code failure. Apple Container is the Go
+toolchain host here; it is not a Docker Engine API endpoint.
 
 ## Open gate and unproven claims
 
@@ -86,8 +105,8 @@ expiry, replay, and stale-fencing admission tests to pass.
 
 The current revision does not prove or claim:
 
-- composition-root wiring or an enabled Provider HTTPS listener;
-- process-level fail-together behavior for the local and Provider listeners;
+- a completed P1.1b acceptance gate until the tagged Docker integration passes
+  in an environment with Docker Engine;
 - JWS verification, digest binding, replay protection, or fencing admission;
 - P1.2 lifecycle, durable operations, leases, events, or reconciliation;
 - the aggregate `sandbox-core-v1` conformance profile;
@@ -97,14 +116,14 @@ The current revision does not prove or claim:
 
 ## Next implementation slice
 
-P1.1b is the only next planned slice. Its scope is limited to a separate
-Provider router and `GET /v1/capabilities`, with an admitted control-plane
-client certificate, an immutable capability document supplied through an
-application port, and response projection enforcement.
+The immediate next action is evidence-only: rerun
+`SANDBOX_RUNTIME_DOCKER_INTEGRATION=1 go test -tags=integration -count=1
+./driver/docker` against a real Docker Engine. If it passes, record the result,
+close P1.1b, and plan P1.1c protected-operation admission.
 
 Mutation routes, operation bearer tokens, JWS admission, lifecycle dispatch,
-and P1.2 work remain outside this slice. Completion requires the P1.1 plan's
-P1.1b acceptance evidence; landing code alone does not close P1.1.
+and P1.2 work remain outside the current slice. Landing code alone does not
+close P1.1.
 
 ## Maintenance rule
 
