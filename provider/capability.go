@@ -121,8 +121,8 @@ func (s *StaticCapabilitySource) CapabilitySnapshot(ctx context.Context) (Capabi
 }
 
 func validateCapabilitySnapshot(snapshot CapabilitySnapshot) error {
-	if strings.TrimSpace(snapshot.ProviderRevisionID) == "" {
-		return errors.New("provider revision ID must not be empty")
+	if !utf8.ValidString(snapshot.ProviderRevisionID) || strings.TrimSpace(snapshot.ProviderRevisionID) == "" {
+		return errors.New("provider revision ID must be valid UTF-8 and not empty")
 	}
 	if snapshot.APIVersion != APIVersionV1 {
 		return fmt.Errorf("unsupported API version %q", snapshot.APIVersion)
@@ -179,8 +179,8 @@ func validateLimits(limits Limits) error {
 }
 
 func validateSnapshotRestoreProfile(profile SnapshotRestoreProfile) error {
-	if strings.TrimSpace(profile.ProfileID) == "" {
-		return errors.New("profile ID must not be empty")
+	if !utf8.ValidString(profile.ProfileID) || strings.TrimSpace(profile.ProfileID) == "" {
+		return errors.New("profile ID must be valid UTF-8 and not empty")
 	}
 	if utf8.RuneCountInString(profile.ProfileID) > 200 {
 		return errors.New("profile ID must not exceed 200 characters")

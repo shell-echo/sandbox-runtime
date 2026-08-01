@@ -26,7 +26,7 @@ func TestNewCapabilitySnapshotAcceptsHonestZeroCapabilityModel(t *testing.T) {
 }
 
 func TestNewCapabilitySnapshotRejectsInvalidRevision(t *testing.T) {
-	for _, revision := range []string{"", " ", "\t\n"} {
+	for _, revision := range []string{"", " ", "\t\n", string([]byte{0xff})} {
 		t.Run(strings.ReplaceAll(revision, " ", "space"), func(t *testing.T) {
 			if _, err := NewCapabilitySnapshot(revision, validLimits(nil, nil), validProfiles()); err == nil {
 				t.Fatal("NewCapabilitySnapshot() error = nil, want revision rejection")
@@ -88,6 +88,7 @@ func TestNewCapabilitySnapshotRejectsInvalidProfiles(t *testing.T) {
 	tests := map[string]func(*SnapshotRestoreProfile){
 		"empty profile ID": func(p *SnapshotRestoreProfile) { p.ProfileID = "" },
 		"blank profile ID": func(p *SnapshotRestoreProfile) { p.ProfileID = " " },
+		"invalid UTF-8 ID": func(p *SnapshotRestoreProfile) { p.ProfileID = string([]byte{0xff}) },
 		"long profile ID":  func(p *SnapshotRestoreProfile) { p.ProfileID = strings.Repeat("a", 201) },
 		"invalid level":    func(p *SnapshotRestoreProfile) { p.Level = "memory" },
 		"invalid suite ID": func(p *SnapshotRestoreProfile) { p.SuiteID = "another-suite" },

@@ -34,6 +34,10 @@ jobs:
         env:
           AGENT_CONTRACT_SOURCE_ROOT: ${{ github.workspace }}/.agent-contract-source
         run: go test -count=1 ./providerapi/v1 -run '^TestLockedContractProjection$'
+      - name: Validate Provider capability response projection
+        env:
+          AGENT_CONTRACT_SOURCE_ROOT: ${{ github.workspace }}/.agent-contract-source
+        run: go test -count=1 ./providerapi -run '^TestLockedCapabilityResponseSchema$'
 
   test:
     runs-on: ubuntu-latest
