@@ -15,11 +15,11 @@ reports progress against those authorities.
 ## Current snapshot
 
 - Baseline branch: `main`
-- Baseline revision: `55f9f02`
+- Baseline revision: `78bc9e2`
 - Current phase: P1.1, Provider API admission
-- Current slice: P1.1b, mTLS-only capability discovery
+- Current slice: P1.1c planning, protected-operation admission
 - P1.1 release gate: open
-- Slices in progress: P1.1b acceptance; tagged Docker integration environment required
+- Slices in progress: none; P1.1c planning is next
 
 ## Delivery status
 
@@ -27,7 +27,7 @@ reports progress against those authorities.
 | --- | --- | --- |
 | P1.0: contract intake and ownership freeze | Closed | Contract identity and ownership-boundary evidence only. |
 | P1.1a: wire DTO and Contract validation harness | Implemented and merged into `main` | Component and locked Contract projection evidence only. |
-| P1.1b: mTLS-only capability discovery | Implementation complete locally; acceptance blocked on required tagged Docker integration environment | Application model, immutable source, response mapping, exact GET-only routing, mTLS identity admission, default-disabled configuration, composition, enabled-listener behavior, emitted-response projection, and fail-together lifecycle have local evidence. The lifecycle change requires the tagged Docker integration gate, which Apple Container cannot provide. |
+| P1.1b: mTLS-only capability discovery | Implemented and verified on `main` | Application model, immutable source, response mapping, exact GET-only routing, mTLS identity admission, default-disabled configuration, composition, enabled-listener behavior, emitted-response projection, fail-together lifecycle, and tagged Docker integration evidence passed. |
 | P1.1c: protected-operation admission | Not started | No implementation or validation evidence yet. |
 | P1.1d: admission release gate | Not started | P1.1 remains open. |
 
@@ -97,6 +97,18 @@ exists at `/var/run/docker.sock`. This is recorded as an unavailable required
 environment, not as a passing gate or a code failure. Apple Container is the Go
 toolchain host here; it is not a Docker Engine API endpoint.
 
+GitHub Actions CI run
+[`30690971538`](https://github.com/shell-echo/sandbox-runtime/actions/runs/30690971538)
+then validated revision `78bc9e27d1edbf39a982758c0c9b0f44a00477ba`
+on 2026-08-01. All three jobs passed:
+
+- `agent-contract-lock`, including both locked Provider projections;
+- `test`, including full-repository race-enabled shuffled tests and `go vet`;
+- `docker-integration`, including the required tagged Docker integration tests
+  against the GitHub-hosted Docker Engine.
+
+This closes P1.1b only. It does not close the P1.1 admission release gate.
+
 ## Open gate and unproven claims
 
 P1.1 is not complete. Its architecture release gate still requires Schema and
@@ -105,8 +117,6 @@ expiry, replay, and stale-fencing admission tests to pass.
 
 The current revision does not prove or claim:
 
-- a completed P1.1b acceptance gate until the tagged Docker integration passes
-  in an environment with Docker Engine;
 - JWS verification, digest binding, replay protection, or fencing admission;
 - P1.2 lifecycle, durable operations, leases, events, or reconciliation;
 - the aggregate `sandbox-core-v1` conformance profile;
@@ -116,10 +126,11 @@ The current revision does not prove or claim:
 
 ## Next implementation slice
 
-The immediate next action is evidence-only: rerun
-`SANDBOX_RUNTIME_DOCKER_INTEGRATION=1 go test -tags=integration -count=1
-./driver/docker` against a real Docker Engine. If it passes, record the result,
-close P1.1b, and plan P1.1c protected-operation admission.
+The next action is to plan P1.1c protected-operation admission against the
+locked Contract before changing behavior. That plan must decompose token
+verification, request-digest substitution, expiry, replay protection, and
+stale-fencing admission into independently reviewable units with explicit
+Contract and security evidence.
 
 Mutation routes, operation bearer tokens, JWS admission, lifecycle dispatch,
 and P1.2 work remain outside the current slice. Landing code alone does not
