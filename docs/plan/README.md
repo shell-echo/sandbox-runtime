@@ -10,5 +10,5 @@ in [`docs/STATUS.md`](../STATUS.md).
 
 | Phase | Plan | Status |
 | --- | --- | --- |
-| P1.1 | [Provider API admission](p1.1-provider-api-admission.md) | P1.1a merged; P1.1b next; release gate open |
-| P1.1b | [mTLS capability discovery](p1.1b-capability-discovery.md) | Planned; not started |
+| P1.1 | [Provider API admission](p1.1-provider-api-admission.md) | P1.1a-b implemented and verified; P1.1c planning next; release gate open |
+| P1.1b | [mTLS capability discovery](p1.1b-capability-discovery.md) | Implemented and verified on `main`; CI acceptance closed |

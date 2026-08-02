@@ -29,6 +29,8 @@ Currently implemented:
 - configurable fake and Docker runtime drivers
 - instance lifecycle HTTP API backed by the selected driver
 - separate Provider API v1 wire DTOs and locked Contract projection validation
+- default-disabled Provider capability discovery on a separate mTLS-only HTTPS
+  listener
 
 Planned but not yet implemented:
 
@@ -132,6 +134,27 @@ The current repository starts with the Go control-plane foundation. Runtime imag
 
 ## Current HTTP API
 
+The local management API and Provider API use separate listeners and wire
+formats. Provider capability discovery is default-disabled. When explicitly
+configured, its dedicated listener requires TLS 1.2 or newer, normal client
+certificate chain verification, and an exact URI SAN match from an
+operator-supplied allowlist of fragment-free absolute URI identities. No URI
+scheme is hard-coded, and clients that fail certificate or URI identity
+admission are rejected during the TLS handshake before HTTP routing.
+
+The admitted Provider surface currently contains only:
+
+```http
+GET /v1/capabilities
+```
+
+It returns a raw Provider API v1 document rather than the local management API
+envelope. The immutable startup document intentionally advertises empty
+`capabilities` and `runtime_profiles` arrays, plus at least one required,
+content-addressed snapshot/restore compatibility profile. That compatibility
+metadata does not advertise or authorize snapshot, restore, or another runtime
+capability. All Provider mutation and lifecycle routes remain absent.
+
 ### Health check
 
 ```http
@@ -153,7 +176,8 @@ Example response:
 }
 ```
 
-All normal API handlers are expected to return the same response envelope:
+All local management API handlers are expected to return the same response
+envelope:
 
 ```json
 {

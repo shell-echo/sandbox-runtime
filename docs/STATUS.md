@@ -1,6 +1,6 @@
 # Project Execution Status
 
-Last updated: 2026-08-01
+Last updated: 2026-08-02
 
 This document is the single local source of truth for current execution status:
 what has landed, which release gates remain open, and which implementation
@@ -15,11 +15,23 @@ reports progress against those authorities.
 ## Current snapshot
 
 - Baseline branch: `main`
-- Baseline revision: `78bc9e2`
+- Baseline revision: `6863429`
 - Current phase: P1.1, Provider API admission
 - Current slice: P1.1c planning, protected-operation admission
 - P1.1 release gate: open
 - Slices in progress: none; P1.1c planning is next
+
+The implemented Provider discovery listener is separate from the local
+management API and remains disabled by default. When enabled, it accepts TLS
+1.2 or newer and requires both normal client certificate verification and an
+exact URI SAN match from an operator-configured allowlist of fragment-free
+absolute URI identities. No URI scheme is hard-coded. Failed certificate or
+URI identity admission is rejected during the TLS handshake before HTTP routing.
+The only registered Provider operation is `GET /v1/capabilities`; its immutable
+raw v1 response contains empty `capabilities` and `runtime_profiles` arrays and
+at least one required content-addressed compatibility profile. The profile is
+descriptive metadata and does not advertise snapshot, restore, or another
+runtime capability.
 
 ## Delivery status
 
