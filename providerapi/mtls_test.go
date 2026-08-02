@@ -1,6 +1,7 @@
 package providerapi
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -8,11 +9,13 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"fmt"
 	"math/big"
 	"net"
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -247,8 +250,12 @@ func TestLoadMTLSConfigRejectsInvalidAllowlist(t *testing.T) {
 		{name: "empty", identities: []string{}},
 		{name: "empty entry", identities: []string{""}},
 		{name: "relative URI", identities: []string{"provider/client"}},
+		{name: "fragment URI", identities: []string{"urn:provider:client#fragment"}},
 		{name: "malformed URI", identities: []string{"https://example.test/%zz"}},
 		{name: "noncanonical URI", identities: []string{"https://example.test/a b"}},
+		{name: "invalid UTF-8", identities: []string{string([]byte{0xff})}},
+		{name: "oversized identity", identities: []string{"urn:" + strings.Repeat("a", 2045)}},
+		{name: "oversized list", identities: testAllowedURIIdentities(33)},
 		{name: "duplicate", identities: []string{testAllowedIdentity, testAllowedIdentity}},
 	}
 
@@ -280,32 +287,98 @@ func TestLoadMTLSConfigRejectsInvalidFiles(t *testing.T) {
 	nonCAPath := filepath.Join(material.directory, "not-a-ca.crt")
 	writeTestFile(t, nonCAPath, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: material.client.Certificate[0]}))
 	missingPath := filepath.Join(material.directory, "missing.pem")
+	oversizedCertificatePath := filepath.Join(material.directory, "oversized-certificate.pem")
+	writeTestFile(t, oversizedCertificatePath, padPEMToSize(t, readTestFile(t, material.serverCert), maxServerCertificateBytes+1))
+	oversizedKeyPath := filepath.Join(material.directory, "oversized-key.pem")
+	writeTestFile(t, oversizedKeyPath, padPEMToSize(t, readTestFile(t, material.serverKey), maxServerPrivateKeyBytes+1))
+	oversizedCAPath := filepath.Join(material.directory, "oversized-ca.pem")
+	writeTestFile(t, oversizedCAPath, padPEMToSize(t, readTestFile(t, material.clientCA), maxClientCABundleBytes+1))
+	nonRegularPath := filepath.Join(material.directory, "non-regular")
+	if err := os.Mkdir(nonRegularPath, 0o700); err != nil {
+		t.Fatalf("create non-regular TLS path: %v", err)
+	}
 
 	tests := []struct {
 		name     string
 		certPath string
 		keyPath  string
 		caPath   string
+		wantText string
 	}{
 		{name: "empty path", certPath: "", keyPath: material.serverKey, caPath: material.clientCA},
 		{name: "missing certificate", certPath: missingPath, keyPath: material.serverKey, caPath: material.clientCA},
 		{name: "empty certificate", certPath: emptyPath, keyPath: material.serverKey, caPath: material.clientCA},
 		{name: "malformed certificate", certPath: malformedPath, keyPath: material.serverKey, caPath: material.clientCA},
+		{name: "oversized certificate", certPath: oversizedCertificatePath, keyPath: material.serverKey, caPath: material.clientCA, wantText: "file exceeds 65536 bytes"},
 		{name: "missing key", certPath: material.serverCert, keyPath: missingPath, caPath: material.clientCA},
+		{name: "oversized key", certPath: material.serverCert, keyPath: oversizedKeyPath, caPath: material.clientCA, wantText: "file exceeds 65536 bytes"},
 		{name: "mismatched key pair", certPath: material.serverCert, keyPath: otherKeyPath, caPath: material.clientCA},
 		{name: "missing client CA", certPath: material.serverCert, keyPath: material.serverKey, caPath: missingPath},
 		{name: "empty client CA", certPath: material.serverCert, keyPath: material.serverKey, caPath: emptyPath},
 		{name: "malformed client CA", certPath: material.serverCert, keyPath: material.serverKey, caPath: malformedPath},
 		{name: "non-certificate client CA", certPath: material.serverCert, keyPath: material.serverKey, caPath: nonCertificatePath},
 		{name: "non-CA client certificate", certPath: material.serverCert, keyPath: material.serverKey, caPath: nonCAPath},
+		{name: "oversized client CA", certPath: material.serverCert, keyPath: material.serverKey, caPath: oversizedCAPath, wantText: "file exceeds 262144 bytes"},
+		{name: "non-regular certificate", certPath: nonRegularPath, keyPath: material.serverKey, caPath: material.clientCA, wantText: "file must be a regular file"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if _, err := loadMTLSConfig(tt.certPath, tt.keyPath, tt.caPath, []string{testAllowedIdentity}); err == nil {
+			_, err := loadMTLSConfig(tt.certPath, tt.keyPath, tt.caPath, []string{testAllowedIdentity})
+			if err == nil {
 				t.Fatal("LoadMTLSConfig unexpectedly succeeded")
 			}
+			if tt.wantText != "" && !strings.Contains(err.Error(), tt.wantText) {
+				t.Fatalf("LoadMTLSConfig error = %q, want text %q", err, tt.wantText)
+			}
 		})
+	}
+}
+
+func TestLoadMTLSConfigAcceptsTLSMaterialAtSizeLimits(t *testing.T) {
+	material := newTestMTLSMaterial(t, []string{testAllowedIdentity})
+	certificatePEM := readTestFile(t, material.serverCert)
+	privateKeyPEM := readTestFile(t, material.serverKey)
+	clientCAPEM := readTestFile(t, material.clientCA)
+
+	certificatePath := filepath.Join(material.directory, "maximum-certificate.pem")
+	writeTestFile(t, certificatePath, padPEMToSize(t, certificatePEM, maxServerCertificateBytes))
+	privateKeyPath := filepath.Join(material.directory, "maximum-key.pem")
+	writeTestFile(t, privateKeyPath, padPEMToSize(t, privateKeyPEM, maxServerPrivateKeyBytes))
+	clientCAPath := filepath.Join(material.directory, "maximum-ca.pem")
+	writeTestFile(t, clientCAPath, padPEMToSize(t, clientCAPEM, maxClientCABundleBytes))
+
+	if _, err := loadMTLSConfig(certificatePath, privateKeyPath, clientCAPath, []string{testAllowedIdentity}); err != nil {
+		t.Fatalf("loadMTLSConfig rejected TLS material at documented size limits: %v", err)
+	}
+}
+
+func TestLoadCertPoolCertificateCountBoundary(t *testing.T) {
+	material := newTestMTLSMaterial(t, []string{testAllowedIdentity})
+	clientCAPEM := readTestFile(t, material.clientCA)
+	maximumPath := filepath.Join(material.directory, "maximum-ca-count.pem")
+	writeTestFile(t, maximumPath, bytes.Repeat(clientCAPEM, maxClientCACertificates))
+	if _, err := loadCertPool(maximumPath); err != nil {
+		t.Fatalf("loadCertPool rejected maximum certificate count: %v", err)
+	}
+
+	overflowPath := filepath.Join(material.directory, "overflow-ca-count.pem")
+	writeTestFile(t, overflowPath, bytes.Repeat(clientCAPEM, maxClientCACertificates+1))
+	if _, err := loadCertPool(overflowPath); err == nil {
+		t.Fatal("loadCertPool accepted too many certificates")
+	}
+
+	malformedPath := filepath.Join(material.directory, "maximum-ca-count-malformed-tail.pem")
+	writeTestFile(t, malformedPath, append(bytes.Repeat(clientCAPEM, maxClientCACertificates), []byte("not PEM")...))
+	if _, err := loadCertPool(malformedPath); err == nil || !strings.Contains(err.Error(), "malformed PEM data") {
+		t.Fatalf("loadCertPool malformed tail error = %v", err)
+	}
+
+	nonCertificatePath := filepath.Join(material.directory, "maximum-ca-count-key-tail.pem")
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: marshalECPrivateKey(t, material.ca.key)})
+	writeTestFile(t, nonCertificatePath, append(bytes.Repeat(clientCAPEM, maxClientCACertificates), keyPEM...))
+	if _, err := loadCertPool(nonCertificatePath); err == nil || !strings.Contains(err.Error(), "non-certificate PEM block") {
+		t.Fatalf("loadCertPool non-certificate tail error = %v", err)
 	}
 }
 
@@ -540,6 +613,32 @@ func writeTestFile(t *testing.T, path string, contents []byte) {
 	if err := os.WriteFile(path, contents, 0o600); err != nil {
 		t.Fatalf("write test file: %v", err)
 	}
+}
+
+func readTestFile(t *testing.T, path string) []byte {
+	t.Helper()
+	contents, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read test file: %v", err)
+	}
+	return contents
+}
+
+func padPEMToSize(t *testing.T, contents []byte, size int) []byte {
+	t.Helper()
+	if len(contents) > size {
+		t.Fatalf("PEM material length %d exceeds test boundary %d", len(contents), size)
+	}
+	padded := append([]byte(nil), contents...)
+	return append(padded, bytes.Repeat([]byte(" "), size-len(padded))...)
+}
+
+func testAllowedURIIdentities(count int) []string {
+	identities := make([]string, count)
+	for index := range identities {
+		identities[index] = fmt.Sprintf("urn:test:provider-client:%d", index)
+	}
+	return identities
 }
 
 func clientTLSConfig(material testMTLSMaterial, clientCertificate *tls.Certificate) *tls.Config {

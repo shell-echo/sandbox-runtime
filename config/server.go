@@ -3,11 +3,11 @@ package config
 import (
 	"errors"
 	"fmt"
-	"net/url"
 	"regexp"
 	"strings"
 	"unicode/utf8"
 
+	"github.com/shell-echo/sandbox-runtime/internal/provideridentity"
 	"github.com/shell-echo/sandbox-runtime/option"
 	"github.com/spf13/viper"
 )
@@ -100,6 +100,9 @@ func (c *ServerConfig) load(v *viper.Viper) error {
 	if err := c.Provider.Validate(); err != nil {
 		return fmt.Errorf("server.provider %w", err)
 	}
+	if c.Provider.Transport.Enabled && c.API.Port == c.Provider.Transport.Address.Port {
+		return errors.New("server.api and server.provider transport must use different ports")
+	}
 	return nil
 }
 
@@ -138,34 +141,7 @@ func (c *ProviderTransportConfig) validateEnabled() error {
 			return fmt.Errorf("%s must not be empty", path.name)
 		}
 	}
-	if len(c.AllowedClientURIIdentities) == 0 {
-		return errors.New("at least one allowed client URI identity is required")
-	}
-	seen := make(map[string]struct{}, len(c.AllowedClientURIIdentities))
-	for index, identity := range c.AllowedClientURIIdentities {
-		if err := validateExactAbsoluteURI(identity); err != nil {
-			return fmt.Errorf("allowed client URI identity %d: %w", index, err)
-		}
-		if _, exists := seen[identity]; exists {
-			return fmt.Errorf("duplicate allowed client URI identity %q", identity)
-		}
-		seen[identity] = struct{}{}
-	}
-	return nil
-}
-
-func validateExactAbsoluteURI(identity string) error {
-	if identity == "" || strings.TrimSpace(identity) != identity {
-		return errors.New("must be a nonempty exact URI without surrounding whitespace")
-	}
-	parsed, err := url.Parse(identity)
-	if err != nil {
-		return fmt.Errorf("must be an absolute URI: %w", err)
-	}
-	if !parsed.IsAbs() || parsed.Scheme == "" || parsed.String() != identity {
-		return errors.New("must be an exact absolute URI")
-	}
-	return nil
+	return provideridentity.ValidateAllowlist(c.AllowedClientURIIdentities)
 }
 
 func (c *ProviderCapabilityConfig) validateEnabled() error {

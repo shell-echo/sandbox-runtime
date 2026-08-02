@@ -25,14 +25,20 @@ host = '127.0.0.1' # explicitly change only behind a trusted network boundary
 port = 8080
 
 # The Provider API is a separate, default-disabled mTLS listener. Enabling it
-# requires replacing every placeholder below. Compatibility profiles are
-# descriptive metadata only; they do not advertise runtime capabilities.
+# requires replacing every placeholder below. Its port must differ from
+# server.api.port. TLS files are bounded to 64 KiB for the certificate, 64 KiB
+# for the private key, and 256 KiB for the client CA bundle; the bundle may
+# contain at most 32 CA certificates. All TLS paths must resolve to regular
+# files. Compatibility profiles are descriptive metadata only; they do not
+# advertise runtime capabilities.
 [server.provider.transport]
 enabled = false
 server_certificate_file = ''
 server_private_key_file = ''
 client_ca_bundle_file = ''
-allowed_client_uri_identities = [] # exact absolute URI SAN identities
+# 1..32 exact fragment-free absolute URI SAN identities, each 1..2048 valid
+# UTF-8 bytes.
+allowed_client_uri_identities = []
 
 [server.provider.transport.address]
 host = '127.0.0.1'

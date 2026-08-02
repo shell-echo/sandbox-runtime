@@ -81,6 +81,23 @@ func TestLoadProviderRejectsEmptyHost(t *testing.T) {
 	}
 }
 
+func TestLoadProviderRejectsLocalAPIPortCollision(t *testing.T) {
+	t.Run("TOML", func(t *testing.T) {
+		snapshotGlobals(t)
+		body := strings.Replace(validEnabledProviderTOML(), "port = 9443", "port = 8080", 1)
+		if err := Load(writeConfig(t, body)); err == nil {
+			t.Fatal("Load accepted enabled Provider on the local API port")
+		}
+	})
+	t.Run("environment", func(t *testing.T) {
+		snapshotGlobals(t)
+		t.Setenv("SANDBOX_RUNTIME_SERVER_PROVIDER_TRANSPORT_ADDRESS_PORT", "8080")
+		if err := Load(writeConfig(t, validEnabledProviderTOML())); err == nil {
+			t.Fatal("Load accepted Provider environment override on the local API port")
+		}
+	})
+}
+
 func TestDisabledProviderAcceptsPlaceholders(t *testing.T) {
 	config := ProviderConfig{
 		Transport: ProviderTransportConfig{
@@ -137,14 +154,26 @@ max_exec_seconds = 0
 
 func TestEnabledProviderRejectsMissingAndInvalidTransport(t *testing.T) {
 	tests := map[string]func(*ProviderConfig){
-		"empty host":             func(c *ProviderConfig) { c.Transport.Address.Host = "" },
-		"address":                func(c *ProviderConfig) { c.Transport.Address.Port = 0 },
-		"server certificate":     func(c *ProviderConfig) { c.Transport.ServerCertificateFile = " " },
-		"server private key":     func(c *ProviderConfig) { c.Transport.ServerPrivateKeyFile = "" },
-		"client CA":              func(c *ProviderConfig) { c.Transport.ClientCABundleFile = "" },
-		"empty identity list":    func(c *ProviderConfig) { c.Transport.AllowedClientURIIdentities = nil },
-		"relative identity":      func(c *ProviderConfig) { c.Transport.AllowedClientURIIdentities = []string{"agent/client"} },
+		"empty host":          func(c *ProviderConfig) { c.Transport.Address.Host = "" },
+		"address":             func(c *ProviderConfig) { c.Transport.Address.Port = 0 },
+		"server certificate":  func(c *ProviderConfig) { c.Transport.ServerCertificateFile = " " },
+		"server private key":  func(c *ProviderConfig) { c.Transport.ServerPrivateKeyFile = "" },
+		"client CA":           func(c *ProviderConfig) { c.Transport.ClientCABundleFile = "" },
+		"empty identity list": func(c *ProviderConfig) { c.Transport.AllowedClientURIIdentities = nil },
+		"relative identity":   func(c *ProviderConfig) { c.Transport.AllowedClientURIIdentities = []string{"agent/client"} },
+		"fragment identity": func(c *ProviderConfig) {
+			c.Transport.AllowedClientURIIdentities = []string{"urn:agent:client#fragment"}
+		},
 		"surrounding whitespace": func(c *ProviderConfig) { c.Transport.AllowedClientURIIdentities = []string{" spiffe://agent/client"} },
+		"invalid UTF-8 identity": func(c *ProviderConfig) {
+			c.Transport.AllowedClientURIIdentities = []string{string([]byte{0xff})}
+		},
+		"oversized identity": func(c *ProviderConfig) {
+			c.Transport.AllowedClientURIIdentities = []string{"urn:" + strings.Repeat("a", 2045)}
+		},
+		"oversized identity list": func(c *ProviderConfig) {
+			c.Transport.AllowedClientURIIdentities = testURIIdentities(33)
+		},
 		"duplicate identity": func(c *ProviderConfig) {
 			c.Transport.AllowedClientURIIdentities = []string{"spiffe://agent/client", "spiffe://agent/client"}
 		},
@@ -158,6 +187,14 @@ func TestEnabledProviderRejectsMissingAndInvalidTransport(t *testing.T) {
 			}
 		})
 	}
+}
+
+func testURIIdentities(count int) []string {
+	identities := make([]string, count)
+	for index := range identities {
+		identities[index] = fmt.Sprintf("urn:test:client:%d", index)
+	}
+	return identities
 }
 
 func TestEnabledProviderRejectsRequiredLimitBoundaries(t *testing.T) {

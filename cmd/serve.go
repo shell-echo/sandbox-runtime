@@ -143,6 +143,9 @@ func validateServeConfiguration(application *config.ApplicationConfig, serverCon
 	if application == nil || serverConfig == nil || runtimeConfig == nil || repositoryConfig == nil {
 		return errors.New("application, server, runtime, and repository configuration are required")
 	}
+	if serverConfig.Provider.Transport.Enabled && serverConfig.API.Port == serverConfig.Provider.Transport.Address.Port {
+		return errors.New("server.api and server.provider transport must use different ports")
+	}
 	if application.Mode == config.ApplicationProductionMode && runtimeConfig.Driver == config.RuntimeFakeDriver {
 		return errors.New("production mode requires a real runtime driver")
 	}

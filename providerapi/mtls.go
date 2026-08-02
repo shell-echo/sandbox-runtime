@@ -6,10 +6,18 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"net/url"
-	"os"
+	"io"
 	"strings"
 	"time"
+
+	"github.com/shell-echo/sandbox-runtime/internal/provideridentity"
+)
+
+const (
+	maxServerCertificateBytes = 64 << 10
+	maxServerPrivateKeyBytes  = 64 << 10
+	maxClientCABundleBytes    = 256 << 10
+	maxClientCACertificates   = 32
 )
 
 // loadMTLSConfig loads and freezes the Provider listener's mTLS material.
@@ -23,7 +31,15 @@ func loadMTLSConfig(certPath, keyPath, clientCAPath string, allowedURIIdentities
 		return nil, errors.New("provider mTLS certificate, key, and client CA paths are required")
 	}
 
-	certificate, err := tls.LoadX509KeyPair(certPath, keyPath)
+	certificatePEM, err := readBoundedTLSMaterial(certPath, maxServerCertificateBytes)
+	if err != nil {
+		return nil, fmt.Errorf("read provider mTLS server certificate: %w", err)
+	}
+	privateKeyPEM, err := readBoundedTLSMaterial(keyPath, maxServerPrivateKeyBytes)
+	if err != nil {
+		return nil, fmt.Errorf("read provider mTLS server private key: %w", err)
+	}
+	certificate, err := tls.X509KeyPair(certificatePEM, privateKeyPEM)
 	if err != nil {
 		return nil, fmt.Errorf("load provider mTLS server key pair: %w", err)
 	}
@@ -110,7 +126,7 @@ func hasExplicitExtKeyUsage(certificate *x509.Certificate, required x509.ExtKeyU
 }
 
 func loadCertPool(path string) (*x509.CertPool, error) {
-	contents, err := os.ReadFile(path)
+	contents, err := readBoundedTLSMaterial(path, maxClientCABundleBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -140,6 +156,9 @@ func loadCertPool(path string) (*x509.CertPool, error) {
 		if now.Before(certificate.NotBefore) || now.After(certificate.NotAfter) {
 			return nil, errors.New("client CA bundle contains a certificate outside its validity period")
 		}
+		if certificates >= maxClientCACertificates {
+			return nil, fmt.Errorf("client CA bundle contains more than %d certificates", maxClientCACertificates)
+		}
 		pool.AddCert(certificate)
 		certificates++
 		remaining = rest
@@ -152,24 +171,36 @@ func loadCertPool(path string) (*x509.CertPool, error) {
 }
 
 func freezeAllowedURIIdentities(identities []string) (map[string]struct{}, error) {
-	if len(identities) == 0 {
-		return nil, errors.New("provider mTLS client URI identity allowlist is required")
+	if err := provideridentity.ValidateAllowlist(identities); err != nil {
+		return nil, fmt.Errorf("provider mTLS client URI identity allowlist: %w", err)
 	}
 
 	allowed := make(map[string]struct{}, len(identities))
 	for _, identity := range identities {
-		if identity == "" {
-			return nil, errors.New("provider mTLS client URI identity must not be empty")
-		}
-		parsed, err := url.Parse(identity)
-		if err != nil || !parsed.IsAbs() || parsed.Scheme == "" || parsed.String() != identity {
-			return nil, errors.New("provider mTLS client URI identity must be an absolute canonical URI")
-		}
-		if _, duplicate := allowed[identity]; duplicate {
-			return nil, errors.New("provider mTLS client URI identity allowlist contains a duplicate")
-		}
 		allowed[identity] = struct{}{}
 	}
 
 	return allowed, nil
+}
+
+func readBoundedTLSMaterial(path string, maxBytes int) ([]byte, error) {
+	if path == "" {
+		return nil, errors.New("file path is required")
+	}
+	if maxBytes < 1 {
+		return nil, errors.New("positive file size limit is required")
+	}
+	file, err := openRegularTLSFile(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	contents, err := io.ReadAll(io.LimitReader(file, int64(maxBytes)+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(contents) > maxBytes {
+		return nil, fmt.Errorf("file exceeds %d bytes", maxBytes)
+	}
+	return contents, nil
 }

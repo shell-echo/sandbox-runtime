@@ -131,6 +131,33 @@ func TestValidateServeConfigurationProductionBoundaries(t *testing.T) {
 	}
 }
 
+func TestValidateServeConfigurationRejectsProviderPortCollision(t *testing.T) {
+	application := &config.ApplicationConfig{Mode: config.ApplicationDevelopmentMode}
+	serverConfig := &config.ServerConfig{
+		API: option.HTTP{Host: "127.0.0.1", Port: 8080},
+		Provider: config.ProviderConfig{Transport: config.ProviderTransportConfig{
+			Enabled: true,
+			Address: option.HTTP{Host: "127.0.0.2", Port: 8080},
+		}},
+	}
+	runtimeConfig := &config.RuntimeConfig{Driver: config.RuntimeFakeDriver}
+	repositoryConfig := &config.RepositoryConfig{Driver: config.RepositoryMemoryDriver}
+	if err := validateServeConfiguration(application, serverConfig, runtimeConfig, repositoryConfig); err == nil {
+		t.Fatal("same local and Provider port accepted")
+	}
+
+	serverConfig.Provider.Transport.Address.Port = 8443
+	if err := validateServeConfiguration(application, serverConfig, runtimeConfig, repositoryConfig); err != nil {
+		t.Fatalf("distinct listener ports rejected: %v", err)
+	}
+
+	serverConfig.Provider.Transport.Enabled = false
+	serverConfig.Provider.Transport.Address.Port = serverConfig.API.Port
+	if err := validateServeConfiguration(application, serverConfig, runtimeConfig, repositoryConfig); err != nil {
+		t.Fatalf("disabled Provider port placeholder rejected: %v", err)
+	}
+}
+
 func TestNewInstanceRepository(t *testing.T) {
 	if _, err := newInstanceRepository(nil); err == nil {
 		t.Fatal("expected nil repository config error")
