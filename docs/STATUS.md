@@ -15,11 +15,12 @@ reports progress against those authorities.
 ## Current snapshot
 
 - Baseline branch: `main`
-- Baseline revision: `6863429`
+- Baseline revision: `e85d2c2`
 - Current phase: P1.1, Provider API admission
 - Current slice: P1.1c planning, protected-operation admission
 - P1.1 release gate: open
-- Slices in progress: none; P1.1c planning is next
+- Slices in progress: none; post-closure P1.1b hardening awaits CI evidence,
+  and P1.1c planning is next
 
 The implemented Provider discovery listener is separate from the local
 management API and remains disabled by default. When enabled, it accepts TLS
@@ -120,6 +121,17 @@ on 2026-08-01. All three jobs passed:
   against the GitHub-hosted Docker Engine.
 
 This closes P1.1b only. It does not close the P1.1 admission release gate.
+
+Post-closure input-boundary hardening landed at revision `e85d2c2` on
+2026-08-02. It rejects local API/Provider port reuse before startup, bounds TLS
+material and CA count, rejects non-regular TLS material without blocking on a
+FIFO, and centralizes bounded fragment-free URI identity validation. Apple
+Container validation passed the full race-enabled shuffled test suite,
+`go vet`, the locked Agent Contract verifier, and both mandatory Provider
+projections. The tagged Docker integration test was not required because this
+hardening changes neither a runtime driver nor lifecycle behavior. GitHub CI
+evidence for this revision has not yet been recorded; the earlier P1.1b CI run
+does not substitute for it.
 
 ## Open gate and unproven claims
 
