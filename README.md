@@ -155,13 +155,18 @@ content-addressed snapshot/restore compatibility profile. That compatibility
 metadata does not advertise or authorize snapshot, restore, or another runtime
 capability. All Provider mutation and lifecycle routes remain absent.
 
-Capability discovery has no query parameters or request document. It accepts
-only an empty request with no transfer encoding; a query string, nonzero or
-unknown `Content-Length`, or any transfer encoding is rejected at the HTTP
-boundary without reading the body or invoking application, repository, or
-driver work. Rejections use an empty `400` response. The locked operation does
-not enumerate `400` on this path, so the P1.1b plan records that response-status
-authority gap and this behavior is not a full Contract error-wire claim.
+Capability discovery has no query parameters or request document. For request
+metadata visible to the handler, a query string (including a bare trailing
+`?`), nonzero or unknown `Content-Length`, and `chunked` transfer encoding are
+rejected with an empty `400` before capability, application, repository, or
+driver dispatch. The handler does not read or probe `Body`; this does not claim
+that the Go server lifecycle never reads or drains request framing. Unsupported
+transfer codings can instead be rejected by the Go `net/http` parser before the
+handler with its standard-library `501` response. Neither `400` nor `501` is
+listed for this operation in the locked OpenAPI response list, and the generic
+malformed-request component cannot supply operation-level wire authority. The
+P1.1b plan records this clarification gap; neither response is a full Contract
+error-wire claim.
 
 ### Health check
 
