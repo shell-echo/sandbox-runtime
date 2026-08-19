@@ -15,7 +15,7 @@ reports progress against those authorities.
 ## Current snapshot
 
 - Baseline branch: `main`
-- Baseline revision: `c9cb48240fdcff472d6e594b70e6c36cb5147a6a`
+- Baseline revision: `c107912fe0b7e4930bbd5a666650043d1c41b1ab`
 - Current phase: P1.1, Provider API admission
 - Current slice: P1.1c.4b.2b.3 protected transport composition
 - P1.1 release gate: open
@@ -44,7 +44,7 @@ runtime capability.
 | P1.0: contract intake and ownership freeze | Closed | Contract identity and ownership-boundary evidence only. |
 | P1.1a: wire DTO and Contract validation harness | Implemented and merged into `main` | Component and locked Contract projection evidence only. |
 | P1.1b: mTLS-only capability discovery | Implemented and verified on `main`; transport reconciliation merged through PR #9 | Application model, immutable source, response mapping, exact GET-only routing, mTLS identity admission, default-disabled configuration, composition, enabled-listener behavior, emitted-response projection, fail-together lifecycle, tagged Docker integration, strict query/body input evidence, and transport reconciliation CI passed. The `400`/`501` operation-level error-wire authority gap remains separately pending. |
-| P1.1c: protected-operation admission | Blocked at protected transport composition; local components implemented | ADR 0002 defines local trust, caller binding, guard, response precedence, and the admitted-operation-context precondition. The pure key, clock, and mutation-guard ports, frozen static and bounded-file trusted public-key sources, bounded compact-JWS verification, strict bounded RFC 8785 request/descriptor digest verification, application gate, shared TLS/request identity extractor, and atomically persisted guard exist as component evidence. The locked route inputs do not independently supply the complete admitted operation context for post-create mutations and reads; P1.2 owns the durable state that would do so. No protected route, repository/driver dispatch, or P1.2 state has been implemented. |
+| P1.1c: protected-operation admission | Blocked at protected transport composition; component implementation merged through PR #10 | ADR 0002 defines local trust, caller binding, guard, response precedence, and the admitted-operation-context precondition. The pure key, clock, and mutation-guard ports, frozen static and bounded-file trusted public-key sources, bounded compact-JWS verification, strict bounded RFC 8785 request/descriptor digest verification, application gate, shared TLS/request identity extractor, and atomically persisted guard exist as component evidence. The locked route inputs do not independently supply the complete admitted operation context for post-create mutations and reads; P1.2 owns the durable state that would do so. No protected route, repository/driver dispatch, or P1.2 state has been implemented. |
 | P1.1d: admission release gate | Not started | P1.1 remains open. |
 
 P1.0 closed at revision `102f36a6240a4c33892b0ebc25232859b63e334c`.
@@ -176,6 +176,16 @@ and post-merge main CI run
 both passed `agent-contract-lock`, `test`, and `docker-integration`. This
 closes only the transport-reconciliation evidence; it does not resolve the
 separate discovery error-wire authority gap or close P1.1.
+
+PR #10 merged the P1.1c admission components at
+`c107912fe0b7e4930bbd5a666650043d1c41b1ab`. Its pull-request CI run
+[`32242490402`](https://github.com/shell-echo/sandbox-runtime/actions/runs/32242490402)
+and post-merge main CI run
+[`32242739010`](https://github.com/shell-echo/sandbox-runtime/actions/runs/32242739010)
+both passed `agent-contract-lock`, `test`, and `docker-integration`. This
+proves only the merged component and projection evidence; it does not supply
+the missing admitted-operation context, expose a protected route, or close
+P1.1.
 
 ## Open gate and unproven claims
 
