@@ -10,7 +10,7 @@ import (
 	"math/big"
 )
 
-const maxStaticTrustedKeys = 32
+const MaxStaticTrustedKeys = 32
 
 // StaticTrustedKey is one immutable, operator-selected public verification
 // key. Loading a deployment format belongs to an outer adapter; this value
@@ -35,7 +35,7 @@ type staticTrustedKeySource struct {
 // type does not match its declared algorithm fail construction rather than
 // leaving an ambiguous runtime fallback.
 func NewStaticTrustedKeySource(keys []StaticTrustedKey) (TrustedKeySource, error) {
-	if len(keys) == 0 || len(keys) > maxStaticTrustedKeys {
+	if len(keys) == 0 || len(keys) > MaxStaticTrustedKeys {
 		return nil, errors.New("trusted verification key count is outside the allowed range")
 	}
 

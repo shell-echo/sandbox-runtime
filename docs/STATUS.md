@@ -17,14 +17,13 @@ reports progress against those authorities.
 - Baseline branch: `main`
 - Baseline revision: `c9cb48240fdcff472d6e594b70e6c36cb5147a6a`
 - Current phase: P1.1, Provider API admission
-- Current slice: P1.1c.4b.2b.1 frozen trusted public keys
+- Current slice: P1.1c.4b.2b.2 operator public-key file adapter
 - P1.1 release gate: open
-- Slices in progress: P1.1c.4b.2b.1 adds a bounded immutable static public-key
-  source for the locked algorithms, with exact `kid` selection and no mutable
-  lookup state. It does not read an operator bundle, load configuration, or
-  enable a protected listener. No served protected route passes mTLS/request
-  facts to the application gate yet. Protected routes and P1.2 lifecycle remain
-  unimplemented.
+- Slices in progress: P1.1c.4b.2b.2 reads one bounded SPKI PEM public key per
+  supplied source entry and freezes it in the static key source. It adds no
+  configuration field, listener, key refresh, or route. No served protected
+  route passes mTLS/request facts to the application gate yet. Protected routes
+  and P1.2 lifecycle remain unimplemented.
 
 The implemented Provider discovery listener is separate from the local
 management API and remains disabled by default. When enabled, it accepts TLS
@@ -45,7 +44,7 @@ runtime capability.
 | P1.0: contract intake and ownership freeze | Closed | Contract identity and ownership-boundary evidence only. |
 | P1.1a: wire DTO and Contract validation harness | Implemented and merged into `main` | Component and locked Contract projection evidence only. |
 | P1.1b: mTLS-only capability discovery | Implemented and verified on `main`; transport reconciliation merged through PR #9 | Application model, immutable source, response mapping, exact GET-only routing, mTLS identity admission, default-disabled configuration, composition, enabled-listener behavior, emitted-response projection, fail-together lifecycle, tagged Docker integration, strict query/body input evidence, and transport reconciliation CI passed. The `400`/`501` operation-level error-wire authority gap remains separately pending. |
-| P1.1c: protected-operation admission | Token verification, application binding/gate, static trusted-key source, shared mTLS request facts, and durable single-controller guard implemented locally | ADR 0002 defines local trust, caller binding, guard, and response-precedence policy. The pure key, clock, and mutation-guard ports, frozen static trusted public-key source, bounded compact-JWS verification, strict bounded RFC 8785 request/descriptor digest verification, exact caller/Provider revision/request/policy/clock binding, a pure gate that orders those checks, a shared TLS/request identity extractor, and an atomically persisted guard with JTI/scope fingerprints and fencing high-water observations exist. No served protected route supplies its mTLS facts to the application gate; repository and driver dispatch remain unimplemented. |
+| P1.1c: protected-operation admission | Token verification, application binding/gate, static/file trusted-key sources, shared mTLS request facts, and durable single-controller guard implemented locally | ADR 0002 defines local trust, caller binding, guard, and response-precedence policy. The pure key, clock, and mutation-guard ports, frozen static and bounded-file trusted public-key sources, bounded compact-JWS verification, strict bounded RFC 8785 request/descriptor digest verification, exact caller/Provider revision/request/policy/clock binding, a pure gate that orders those checks, a shared TLS/request identity extractor, and an atomically persisted guard with JTI/scope fingerprints and fencing high-water observations exist. No served protected route supplies its mTLS facts to the application gate; repository and driver dispatch remain unimplemented. |
 | P1.1d: admission release gate | Not started | P1.1 remains open. |
 
 P1.0 closed at revision `102f36a6240a4c33892b0ebc25232859b63e334c`.
@@ -200,11 +199,11 @@ P1.1c now has the accepted local trust and admission-state decision in
 [ADR 0002](adr/0002-provider-operation-admission.md), a bounded compact-JWS
 parser/verifier, strict canonical request/descriptor digest verification,
 application-level context/time binding, a pure protected-operation gate, a
-static trusted-key source, a shared TLS/request identity extractor, and a
-durable single-controller guard. The next unit is operator bundle loading and
-protected transport composition, proving every rejection occurs before any
-repository or driver dispatch. The detailed scope, acceptance evidence, and
-stop conditions are in
+static/file trusted-key source, a shared TLS/request identity extractor, and a
+durable single-controller guard. The next unit is configuration and protected
+transport composition, proving every rejection occurs before any repository or
+driver dispatch. The detailed scope, acceptance evidence, and stop conditions
+are in
 [the P1.1c admission plan](plan/p1.1c-protected-operation-admission.md).
 
 Mutation routes, full operation admission, lifecycle dispatch, and P1.2 work
