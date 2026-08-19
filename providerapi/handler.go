@@ -53,8 +53,18 @@ func (h *capabilitiesHandler) ServeHTTP(response http.ResponseWriter, request *h
 		response.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
+	if request.URL.RawQuery != "" || request.URL.ForceQuery || requestHasBodyMetadata(request) {
+		// Discovery has no request document. Do not read Body: an unknown-length
+		// or transfer-encoded request could otherwise block or consume unbounded input.
+		response.WriteHeader(http.StatusBadRequest)
+		return
+	}
 
 	response.Header().Set("Content-Type", "application/json")
 	response.WriteHeader(http.StatusOK)
 	_, _ = response.Write(h.encoded)
+}
+
+func requestHasBodyMetadata(request *http.Request) bool {
+	return request.ContentLength != 0 || len(request.TransferEncoding) != 0
 }

@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -103,6 +105,62 @@ func TestCapabilitiesHandlerRejectsMethodsAndAbsentRoutesWithoutSourceReads(t *t
 	}
 }
 
+func TestCapabilitiesHandlerRejectsRequestsWithoutADocumentBeforeDispatch(t *testing.T) {
+	source := &capabilityReaderSpy{snapshot: validSnapshot(t, nil, nil)}
+	handler, err := newCapabilitiesHandler(context.Background(), source)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name       string
+		path       string
+		contentLen int64
+		transfer   []string
+		body       io.ReadCloser
+		forceQuery bool
+	}{
+		{name: "unknown query", path: capabilitiesPath + "?unexpected=value", contentLen: 0, body: http.NoBody},
+		{name: "bare trailing question mark", path: capabilitiesPath + "?", contentLen: 0, body: blockingReadCloser{}, forceQuery: true},
+		{name: "one byte content length", path: capabilitiesPath, contentLen: 1, body: http.NoBody},
+		{name: "maximum content length", path: capabilitiesPath, contentLen: math.MaxInt64, body: http.NoBody},
+		{name: "chunked body", path: capabilitiesPath, contentLen: -1, transfer: []string{"chunked"}, body: blockingReadCloser{}},
+		{name: "unknown length body", path: capabilitiesPath, contentLen: -1, body: blockingReadCloser{}},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodGet, test.path, nil)
+			request.ContentLength = test.contentLen
+			request.TransferEncoding = test.transfer
+			request.Body = test.body
+			if request.URL.ForceQuery != test.forceQuery {
+				t.Fatalf("ForceQuery = %t, want %t", request.URL.ForceQuery, test.forceQuery)
+			}
+
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+			if response.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want 400", response.Code)
+			}
+			if response.Body.Len() != 0 {
+				t.Fatalf("rejection body = %q, want empty", response.Body.String())
+			}
+			if contentType := response.Header().Get("Content-Type"); contentType != "" {
+				t.Fatalf("rejection Content-Type = %q, want empty", contentType)
+			}
+		})
+	}
+
+	response := serve(handler, http.MethodGet, capabilitiesPath, "")
+	if response.Code != http.StatusOK {
+		t.Fatalf("empty request status = %d, want 200", response.Code)
+	}
+	if source.callCount() != 1 {
+		t.Fatalf("source calls after rejected requests = %d, want construction read only", source.callCount())
+	}
+}
+
 func TestNewCapabilitiesHandlerFailsBeforeServing(t *testing.T) {
 	sourceError := errors.New("source unavailable")
 	tests := []struct {
@@ -141,6 +199,14 @@ type capabilityReaderSpy struct {
 	snapshot provider.CapabilitySnapshot
 	err      error
 }
+
+type blockingReadCloser struct{}
+
+func (blockingReadCloser) Read([]byte) (int, error) {
+	panic("request body must not be read")
+}
+
+func (blockingReadCloser) Close() error { return nil }
 
 func (s *capabilityReaderSpy) CapabilitySnapshot(context.Context) (provider.CapabilitySnapshot, error) {
 	s.mu.Lock()
