@@ -15,12 +15,12 @@ reports progress against those authorities.
 ## Current snapshot
 
 - Baseline branch: `main`
-- Baseline revision: `fae94fd49a82d4a84092e3397d2b0a19f611d61c`
+- Baseline revision: `7b0bd13803a1720859ad0c167627db5aca496261`
 - Current phase: P1.1, Provider API admission
-- Current slice: P1.1b strict capability-discovery HTTP input boundary
+- Current slice: P1.1b strict capability-discovery transport reconciliation
 - P1.1 release gate: open
-- Slices in progress: strict HTTP input-boundary PR evidence pending; P1.1c has
-  not started
+- Slices in progress: strict capability-discovery transport reconciliation;
+  P1.1c has not started
 
 The implemented Provider discovery listener is separate from the local
 management API and remains disabled by default. When enabled, it accepts TLS
@@ -40,7 +40,7 @@ runtime capability.
 | --- | --- | --- |
 | P1.0: contract intake and ownership freeze | Closed | Contract identity and ownership-boundary evidence only. |
 | P1.1a: wire DTO and Contract validation harness | Implemented and merged into `main` | Component and locked Contract projection evidence only. |
-| P1.1b: mTLS-only capability discovery | Implemented and verified on `main`; strict HTTP input-boundary PR pending CI | Application model, immutable source, response mapping, exact GET-only routing, mTLS identity admission, default-disabled configuration, composition, enabled-listener behavior, emitted-response projection, fail-together lifecycle, and tagged Docker integration evidence passed on `fae94fd`; strict query/body rejection is separate PR evidence. |
+| P1.1b: mTLS-only capability discovery | Implemented and verified on `main`; strict HTTP input boundary merged through PR #8 | Application model, immutable source, response mapping, exact GET-only routing, mTLS identity admission, default-disabled configuration, composition, enabled-listener behavior, emitted-response projection, fail-together lifecycle, tagged Docker integration, and PR #8 strict query/body input evidence passed. Transport reconciliation remains a separate narrow follow-on. |
 | P1.1c: protected-operation admission | Not started | No implementation or validation evidence yet. |
 | P1.1d: admission release gate | Not started | P1.1 remains open. |
 
@@ -140,15 +140,30 @@ passed its Agent Contract lock/projections, race-enabled shuffled tests and
 vet, and tagged Docker integration jobs. That CI proves only the tested main
 revision, not the P1.1 release gate.
 
-The follow-on strict capability-discovery HTTP input boundary rejects a query
-string, any nonzero or unknown `Content-Length`, and any transfer encoding
-before it can read a body or reach application, repository, or driver work. It
-uses an empty `400` response with no sensitive detail. The locked operation
-declares no query or request document, but it does not enumerate `400` in its
-operation-level response list despite a generic Contract malformed-request
-component. This authority gap is recorded for upstream clarification; this
-local fail-closed transport behavior is not a claim of fully path-authorized
-Contract error-wire compatibility. Its dedicated PR CI is new evidence only.
+PR #8 merged strict capability-discovery input handling at
+`7b0bd13803a1720859ad0c167627db5aca496261`. Its pull-request CI run
+[`32209203243`](https://github.com/shell-echo/sandbox-runtime/actions/runs/32209203243)
+passed for `87ed45c0b94c2ca6c7c10e22ed1b4eec182fc6a9`, and the post-merge main
+CI run
+[`32210577595`](https://github.com/shell-echo/sandbox-runtime/actions/runs/32210577595)
+passed for that merge commit. Those runs close the previously pending PR/CI
+evidence for strict query/body input handling. They do not close the P1.1
+release gate or prove `sandbox-core-v1`, Agent Platform end-to-end behavior,
+multi-controller or multi-tenant properties, deployment, or production
+readiness.
+
+For request metadata visible to the handler, the follow-on transport
+reconciliation keeps query strings (including a bare trailing `?`), nonzero or
+unknown `Content-Length`, and `chunked` transfer encoding fail closed with an
+empty `400` before capability, application, repository, or driver dispatch.
+The handler does not read or probe `Body`; this does not claim that the Go
+server lifecycle never reads or drains framing. A real mTLS HTTP/1.1 test also
+records that unsupported `Transfer-Encoding: gzip` is rejected by the Go parser
+with its standard-library `501` before the handler. The test makes no claim for
+HTTP/2 or other Go versions. The locked operation lists neither `400` nor `501`
+in its response list, and its generic malformed-request component does not
+grant operation-level wire authority. Upstream clarification remains pending;
+no new error status or body is introduced here.
 
 ## Open gate and unproven claims
 
@@ -167,9 +182,9 @@ The current revision does not prove or claim:
 
 ## Next implementation slice
 
-After the strict input-boundary PR and its CI complete, the next action is to
-plan P1.1c protected-operation admission against the locked Contract before
-changing behavior. That plan must decompose token verification, request-digest
+After transport reconciliation is accepted, the next action is to plan P1.1c
+protected-operation admission against the locked Contract before changing
+behavior. That plan must decompose token verification, request-digest
 substitution, expiry, replay protection, and stale-fencing admission into
 independently reviewable units with explicit Contract and security evidence.
 
