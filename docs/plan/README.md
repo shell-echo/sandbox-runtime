@@ -10,5 +10,6 @@ in [`docs/STATUS.md`](../STATUS.md).
 
 | Phase | Plan | Status |
 | --- | --- | --- |
-| P1.1 | [Provider API admission](p1.1-provider-api-admission.md) | P1.1a-b implemented and verified; P1.1c planning next; release gate open |
+| P1.1 | [Provider API admission](p1.1-provider-api-admission.md) | P1.1a-b implemented and verified; P1.1c local admission components implemented, protected transport blocked on authoritative admitted-operation context; release gate open |
 | P1.1b | [mTLS capability discovery](p1.1b-capability-discovery.md) | Implemented and verified on `main`; CI acceptance closed |
+| P1.1c | [Protected-operation admission](p1.1c-protected-operation-admission.md) | Local key, token/digest, application-gate, and guard components implemented; protected transport blocked, no protected route |

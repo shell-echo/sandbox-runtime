@@ -15,12 +15,15 @@ reports progress against those authorities.
 ## Current snapshot
 
 - Baseline branch: `main`
-- Baseline revision: `7b0bd13803a1720859ad0c167627db5aca496261`
+- Baseline revision: `c9cb48240fdcff472d6e594b70e6c36cb5147a6a`
 - Current phase: P1.1, Provider API admission
-- Current slice: P1.1b strict capability-discovery transport reconciliation
+- Current slice: P1.1c.4b.2b.3 protected transport composition
 - P1.1 release gate: open
-- Slices in progress: strict capability-discovery transport reconciliation;
-  P1.1c has not started
+- Slices in progress: the P1.1c protected transport is blocked. The locked
+  request/descriptor input cannot independently supply complete admitted
+  operation context for post-create mutation or read binding, and P1.2 is the
+  phase that owns durable SandboxOperation state. No route, listener setting,
+  local context cache, or token-claim echo is permitted as a workaround.
 
 The implemented Provider discovery listener is separate from the local
 management API and remains disabled by default. When enabled, it accepts TLS
@@ -40,8 +43,8 @@ runtime capability.
 | --- | --- | --- |
 | P1.0: contract intake and ownership freeze | Closed | Contract identity and ownership-boundary evidence only. |
 | P1.1a: wire DTO and Contract validation harness | Implemented and merged into `main` | Component and locked Contract projection evidence only. |
-| P1.1b: mTLS-only capability discovery | Implemented and verified on `main`; strict HTTP input boundary merged through PR #8 | Application model, immutable source, response mapping, exact GET-only routing, mTLS identity admission, default-disabled configuration, composition, enabled-listener behavior, emitted-response projection, fail-together lifecycle, tagged Docker integration, and PR #8 strict query/body input evidence passed. Transport reconciliation remains a separate narrow follow-on. |
-| P1.1c: protected-operation admission | Not started | No implementation or validation evidence yet. |
+| P1.1b: mTLS-only capability discovery | Implemented and verified on `main`; transport reconciliation merged through PR #9 | Application model, immutable source, response mapping, exact GET-only routing, mTLS identity admission, default-disabled configuration, composition, enabled-listener behavior, emitted-response projection, fail-together lifecycle, tagged Docker integration, strict query/body input evidence, and transport reconciliation CI passed. The `400`/`501` operation-level error-wire authority gap remains separately pending. |
+| P1.1c: protected-operation admission | Blocked at protected transport composition; local components implemented | ADR 0002 defines local trust, caller binding, guard, response precedence, and the admitted-operation-context precondition. The pure key, clock, and mutation-guard ports, frozen static and bounded-file trusted public-key sources, bounded compact-JWS verification, strict bounded RFC 8785 request/descriptor digest verification, application gate, shared TLS/request identity extractor, and atomically persisted guard exist as component evidence. The locked route inputs do not independently supply the complete admitted operation context for post-create mutations and reads; P1.2 owns the durable state that would do so. No protected route, repository/driver dispatch, or P1.2 state has been implemented. |
 | P1.1d: admission release gate | Not started | P1.1 remains open. |
 
 P1.0 closed at revision `102f36a6240a4c33892b0ebc25232859b63e334c`.
@@ -165,6 +168,15 @@ in its response list, and its generic malformed-request component does not
 grant operation-level wire authority. Upstream clarification remains pending;
 no new error status or body is introduced here.
 
+PR #9 merged that transport reconciliation at
+`c9cb48240fdcff472d6e594b70e6c36cb5147a6a`. Its pull-request CI run
+[`32228848484`](https://github.com/shell-echo/sandbox-runtime/actions/runs/32228848484)
+and post-merge main CI run
+[`32229889627`](https://github.com/shell-echo/sandbox-runtime/actions/runs/32229889627)
+both passed `agent-contract-lock`, `test`, and `docker-integration`. This
+closes only the transport-reconciliation evidence; it does not resolve the
+separate discovery error-wire authority gap or close P1.1.
+
 ## Open gate and unproven claims
 
 P1.1 is not complete. Its architecture release gate still requires Schema and
@@ -173,7 +185,8 @@ expiry, replay, and stale-fencing admission tests to pass.
 
 The current revision does not prove or claim:
 
-- JWS verification, digest binding, replay protection, or fencing admission;
+- transport-wired mTLS caller admission, replay/fencing rejection before an
+  actual Provider dispatch, or protected-route behavior;
 - P1.2 lifecycle, durable operations, leases, events, or reconciliation;
 - the aggregate `sandbox-core-v1` conformance profile;
 - Agent Platform end-to-end compatibility or cross-provider interchangeability;
@@ -182,14 +195,19 @@ The current revision does not prove or claim:
 
 ## Next implementation slice
 
-After transport reconciliation is accepted, the next action is to plan P1.1c
-protected-operation admission against the locked Contract before changing
-behavior. That plan must decompose token verification, request-digest
-substitution, expiry, replay protection, and stale-fencing admission into
-independently reviewable units with explicit Contract and security evidence.
+P1.1c now has the accepted local trust and admission-state decision in
+[ADR 0002](adr/0002-provider-operation-admission.md), a bounded compact-JWS
+parser/verifier, strict canonical request/descriptor digest verification,
+application-level context/time binding, a pure protected-operation gate, a
+static/file trusted-key source, a shared TLS/request identity extractor, and a
+durable single-controller guard. Protected transport composition is blocked on
+an authoritative admitted-operation context that is not provided by the locked
+route inputs and cannot be replaced by P1.2 state early. The detailed scope,
+acceptance evidence, and stop conditions are in
+[the P1.1c admission plan](plan/p1.1c-protected-operation-admission.md).
 
-Mutation routes, operation bearer tokens, JWS admission, lifecycle dispatch,
-and P1.2 work remain outside the current slice. Landing code alone does not
+Mutation routes, full operation admission, lifecycle dispatch, and P1.2 work
+remain outside the current planning unit. Landing future code alone does not
 close P1.1.
 
 ## Maintenance rule

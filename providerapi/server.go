@@ -36,8 +36,9 @@ type TransportOptions struct {
 // and freezes both TLS material and the capability response before Startup can
 // accept traffic.
 type Server struct {
-	http   *http.Server
-	listen func(context.Context, string, string) (net.Listener, error)
+	http              *http.Server
+	identityAdmission *clientIdentityAdmission
+	listen            func(context.Context, string, string) (net.Listener, error)
 }
 
 // NewServer constructs the complete Provider transport boundary. It is the
@@ -58,7 +59,7 @@ func NewServer(ctx context.Context, options TransportOptions, source provider.Ca
 	if err != nil {
 		return nil, err
 	}
-	tlsConfig, err := loadMTLSConfig(
+	tlsConfig, identityAdmission, err := loadMTLSConfigWithIdentity(
 		options.ServerCertificateFile,
 		options.ServerPrivateKeyFile,
 		options.ClientCABundleFile,
@@ -70,6 +71,7 @@ func NewServer(ctx context.Context, options TransportOptions, source provider.Ca
 
 	listenConfig := &net.ListenConfig{}
 	return &Server{
+		identityAdmission: identityAdmission,
 		http: &http.Server{
 			Addr:              options.Address.Addr(),
 			Handler:           handler,
