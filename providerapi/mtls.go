@@ -27,64 +27,48 @@ const (
 // change it. Admission compares that string byte-for-byte with URI SANs in the
 // verified client leaf. Callers must treat the returned tls.Config as immutable.
 func loadMTLSConfig(certPath, keyPath, clientCAPath string, allowedURIIdentities []string) (*tls.Config, error) {
+	tlsConfig, _, err := loadMTLSConfigWithIdentity(certPath, keyPath, clientCAPath, allowedURIIdentities)
+	return tlsConfig, err
+}
+
+func loadMTLSConfigWithIdentity(certPath, keyPath, clientCAPath string, allowedURIIdentities []string) (*tls.Config, *clientIdentityAdmission, error) {
 	if certPath == "" || keyPath == "" || clientCAPath == "" {
-		return nil, errors.New("provider mTLS certificate, key, and client CA paths are required")
+		return nil, nil, errors.New("provider mTLS certificate, key, and client CA paths are required")
 	}
 
 	certificatePEM, err := readBoundedTLSMaterial(certPath, maxServerCertificateBytes)
 	if err != nil {
-		return nil, fmt.Errorf("read provider mTLS server certificate: %w", err)
+		return nil, nil, fmt.Errorf("read provider mTLS server certificate: %w", err)
 	}
 	privateKeyPEM, err := readBoundedTLSMaterial(keyPath, maxServerPrivateKeyBytes)
 	if err != nil {
-		return nil, fmt.Errorf("read provider mTLS server private key: %w", err)
+		return nil, nil, fmt.Errorf("read provider mTLS server private key: %w", err)
 	}
 	certificate, err := tls.X509KeyPair(certificatePEM, privateKeyPEM)
 	if err != nil {
-		return nil, fmt.Errorf("load provider mTLS server key pair: %w", err)
+		return nil, nil, fmt.Errorf("load provider mTLS server key pair: %w", err)
 	}
 	if err := validateServerCertificate(certificate, time.Now()); err != nil {
-		return nil, fmt.Errorf("validate provider mTLS server certificate: %w", err)
+		return nil, nil, fmt.Errorf("validate provider mTLS server certificate: %w", err)
 	}
 
 	clientCAs, err := loadCertPool(clientCAPath)
 	if err != nil {
-		return nil, fmt.Errorf("load provider mTLS client CA bundle: %w", err)
+		return nil, nil, fmt.Errorf("load provider mTLS client CA bundle: %w", err)
 	}
 
-	allowed, err := freezeAllowedURIIdentities(allowedURIIdentities)
+	identityAdmission, err := newClientIdentityAdmission(allowedURIIdentities)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	return &tls.Config{
-		MinVersion:   tls.VersionTLS12,
-		Certificates: []tls.Certificate{certificate},
-		ClientAuth:   tls.RequireAndVerifyClientCert,
-		ClientCAs:    clientCAs,
-		VerifyConnection: func(state tls.ConnectionState) error {
-			if len(state.VerifiedChains) == 0 || len(state.VerifiedChains[0]) == 0 {
-				return errors.New("provider mTLS client has no verified certificate chain")
-			}
-
-			leaf := state.VerifiedChains[0][0]
-			if leaf == nil {
-				return errors.New("provider mTLS client has no verified leaf certificate")
-			}
-			if !hasExplicitExtKeyUsage(leaf, x509.ExtKeyUsageClientAuth) {
-				return errors.New("provider mTLS client certificate lacks explicit client-auth usage")
-			}
-			for _, identity := range leaf.URIs {
-				if identity != nil {
-					if _, ok := allowed[identity.String()]; ok {
-						return nil
-					}
-				}
-			}
-
-			return errors.New("provider mTLS client URI identity is not allowed")
-		},
-	}, nil
+		MinVersion:       tls.VersionTLS12,
+		Certificates:     []tls.Certificate{certificate},
+		ClientAuth:       tls.RequireAndVerifyClientCert,
+		ClientCAs:        clientCAs,
+		VerifyConnection: identityAdmission.VerifyConnection,
+	}, identityAdmission, nil
 }
 
 func validateServerCertificate(certificate tls.Certificate, now time.Time) error {
@@ -170,7 +154,7 @@ func loadCertPool(path string) (*x509.CertPool, error) {
 	return pool, nil
 }
 
-func freezeAllowedURIIdentities(identities []string) (map[string]struct{}, error) {
+func newClientIdentityAdmission(identities []string) (*clientIdentityAdmission, error) {
 	if err := provideridentity.ValidateAllowlist(identities); err != nil {
 		return nil, fmt.Errorf("provider mTLS client URI identity allowlist: %w", err)
 	}
@@ -180,7 +164,7 @@ func freezeAllowedURIIdentities(identities []string) (map[string]struct{}, error
 		allowed[identity] = struct{}{}
 	}
 
-	return allowed, nil
+	return &clientIdentityAdmission{allowed: allowed}, nil
 }
 
 func readBoundedTLSMaterial(path string, maxBytes int) ([]byte, error) {

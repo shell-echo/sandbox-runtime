@@ -227,6 +227,20 @@ func TestLoadMTLSConfigAdmitsOneExactURIAmongMultiple(t *testing.T) {
 	}
 }
 
+func TestLoadMTLSConfigRejectsMultipleAllowedURIIdentities(t *testing.T) {
+	otherIdentity := "spiffe://agent-platform/other-client"
+	material := newTestMTLSMaterial(t, []string{testAllowedIdentity, otherIdentity})
+	certificate := issueTestCertificate(t, material.ca, testCertificateOptions{
+		uriStrings:  []string{testAllowedIdentity, otherIdentity},
+		extKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+	})
+
+	clientErr, serverErr := runTLSHandshake(material.serverConfig, clientTLSConfig(material, &certificate))
+	if clientErr == nil && serverErr == nil {
+		t.Fatal("mTLS handshake accepted multiple allowed URI identities")
+	}
+}
+
 func TestLoadMTLSConfigDoesNotNormalizeIdentityForAdmission(t *testing.T) {
 	material := newTestMTLSMaterial(t, []string{"https://EXAMPLE.test/%7Eclient"})
 	certificate := issueTestCertificate(t, material.ca, testCertificateOptions{
