@@ -62,6 +62,25 @@ RFC 8785 JCS profile for that operation; neither a caller-supplied profile nor
 the same digest under a different Contract ID is interchangeable. Any parsing,
 canonicalization, clock, or comparison uncertainty fails closed.
 
+### Admitted operation context
+
+For every protected route, transport must obtain an independently trusted
+admitted-operation context before it can call the gate. That context supplies
+the active ProviderRevision and audience plus the tenant, WorkOrder, policy
+digest, policy-decision time, attempt, and fencing facts that the locked token
+must bind. Path and request-document values may supplement it, but transport
+must never derive a missing context field by copying it from the bearer being
+verified.
+
+The current Provider request surface supplies a mutation envelope and a few
+path values, but it does not itself carry the complete admitted-operation
+context for post-create mutations or reads. The architecture assigns durable
+SandboxOperation records and their reconciliation to P1.2. Until an
+authoritative, non-P1.2 context source is specified and locked, protected
+transport composition remains blocked: registering a route, accepting a
+configured admission listener, or introducing a local context cache would
+either trust the bearer circularly or advance P1.2 early.
+
 ### Replay and fencing guard
 
 Mutation admission uses a bounded, atomically persisted local guard. It stores
@@ -107,6 +126,9 @@ separate from this decision.
   it cannot silently fetch trust material at request time.
 - Protected mutation admission has durable single-controller replay/fencing
   protection without claiming an asynchronous Provider operation ledger.
+- A protected transport cannot safely be exposed until it receives an
+  independently trusted admitted-operation context. The P1.1c application
+  components remain local evidence while this source is unresolved.
 - A future multi-controller deployment must replace the local guard with a
   coordination mechanism that proves equivalent atomic semantics before any
   multi-controller claim.
@@ -126,11 +148,15 @@ separate from this decision.
 - Using the local `/instances` state or repository as the guard: it would mix
   Provider admission with the management API and prematurely create lifecycle
   authority.
+- Constructing route context from bearer claims: this would compare a signed
+  value with itself and cannot establish its relation to the admitted
+  SandboxOperation Attempt.
 
 ## Evidence boundary
 
 This ADR is a local provider security decision. It does not modify the locked
-Contract, prove a JWS implementation, register a protected route, establish
+Contract, prove a JWS implementation, resolve the admitted-operation-context
+gap, register a protected route, establish
 `sandbox-core-v1` conformance, or prove platform interoperability,
 multi-controller reliability, multi-tenant safety, deployment readiness, or
 production readiness.
