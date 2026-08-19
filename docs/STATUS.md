@@ -15,7 +15,7 @@ reports progress against those authorities.
 ## Current snapshot
 
 - Baseline branch: `main`
-- Baseline revision: `fae94fd49a82d4a84092e3397d2b0a19f611d61c`
+- Baseline revision: `7b0bd13803a1720859ad0c167627db5aca496261`
 - Current phase: P1.1, Provider API admission
 - Current slice: P1.1b strict capability-discovery transport reconciliation
 - P1.1 release gate: open
