@@ -10,6 +10,6 @@ in [`docs/STATUS.md`](../STATUS.md).
 
 | Phase | Plan | Status |
 | --- | --- | --- |
-| P1.1 | [Provider API admission](p1.1-provider-api-admission.md) | P1.1a-b implemented and verified; P1.1c security ADR accepted; release gate open |
+| P1.1 | [Provider API admission](p1.1-provider-api-admission.md) | P1.1a-b implemented and verified; P1.1c admission interfaces implemented; release gate open |
 | P1.1b | [mTLS capability discovery](p1.1b-capability-discovery.md) | Implemented and verified on `main`; CI acceptance closed |
-| P1.1c | [Protected-operation admission](p1.1c-protected-operation-admission.md) | Security ADR accepted; no admission implementation or protected route |
+| P1.1c | [Protected-operation admission](p1.1c-protected-operation-admission.md) | Admission interfaces implemented; no JWS validation or protected route |

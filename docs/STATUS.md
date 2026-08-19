@@ -17,10 +17,10 @@ reports progress against those authorities.
 - Baseline branch: `main`
 - Baseline revision: `c9cb48240fdcff472d6e594b70e6c36cb5147a6a`
 - Current phase: P1.1, Provider API admission
-- Current slice: P1.1c protected-operation admission security ADR
+- Current slice: P1.1c protected-operation admission interfaces
 - P1.1 release gate: open
-- Slices in progress: P1.1c security ADR accepted; no protected-operation
-  admission, Provider mutation route, or P1.2 lifecycle behavior has started
+- Slices in progress: P1.1c admission interfaces implemented; no JWS
+  verification, Provider mutation route, or P1.2 lifecycle behavior has started
 
 The implemented Provider discovery listener is separate from the local
 management API and remains disabled by default. When enabled, it accepts TLS
@@ -41,7 +41,7 @@ runtime capability.
 | P1.0: contract intake and ownership freeze | Closed | Contract identity and ownership-boundary evidence only. |
 | P1.1a: wire DTO and Contract validation harness | Implemented and merged into `main` | Component and locked Contract projection evidence only. |
 | P1.1b: mTLS-only capability discovery | Implemented and verified on `main`; transport reconciliation merged through PR #9 | Application model, immutable source, response mapping, exact GET-only routing, mTLS identity admission, default-disabled configuration, composition, enabled-listener behavior, emitted-response projection, fail-together lifecycle, tagged Docker integration, strict query/body input evidence, and transport reconciliation CI passed. The `400`/`501` operation-level error-wire authority gap remains separately pending. |
-| P1.1c: protected-operation admission | Security ADR accepted | ADR 0002 defines local trust, caller binding, guard, and response-precedence policy. No JWS verification, digest binding, replay/fencing state, protected route, repository dispatch, or driver dispatch exists yet. |
+| P1.1c: protected-operation admission | Admission interfaces implemented | ADR 0002 defines local trust, caller binding, guard, and response-precedence policy. The pure key, clock, and mutation-guard ports exist without JWS verification, digest binding, state persistence, protected route, repository dispatch, or driver dispatch. |
 | P1.1d: admission release gate | Not started | P1.1 remains open. |
 
 P1.0 closed at revision `102f36a6240a4c33892b0ebc25232859b63e334c`.
@@ -192,9 +192,10 @@ The current revision does not prove or claim:
 ## Next implementation slice
 
 P1.1c now has the accepted local trust and admission-state decision in
-[ADR 0002](adr/0002-provider-operation-admission.md). The next unit adds only
-the pure admission interfaces; it does not register a protected route. The
-detailed scope, acceptance evidence, and stop conditions are in
+[ADR 0002](adr/0002-provider-operation-admission.md), plus pure key, clock,
+and mutation-guard interfaces. The next unit implements closed JWS and claim
+validation without registering a protected route. The detailed scope,
+acceptance evidence, and stop conditions are in
 [the P1.1c admission plan](plan/p1.1c-protected-operation-admission.md).
 
 Mutation routes, operation bearer tokens, JWS admission, lifecycle dispatch,
