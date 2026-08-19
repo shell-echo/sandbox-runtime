@@ -1,6 +1,6 @@
 # Project Execution Status
 
-Last updated: 2026-08-02
+Last updated: 2026-08-19
 
 This document is the single local source of truth for current execution status:
 what has landed, which release gates remain open, and which implementation
@@ -15,12 +15,12 @@ reports progress against those authorities.
 ## Current snapshot
 
 - Baseline branch: `main`
-- Baseline revision: `e85d2c2`
+- Baseline revision: `fae94fd49a82d4a84092e3397d2b0a19f611d61c`
 - Current phase: P1.1, Provider API admission
-- Current slice: P1.1c planning, protected-operation admission
+- Current slice: P1.1b strict capability-discovery HTTP input boundary
 - P1.1 release gate: open
-- Slices in progress: none; post-closure P1.1b hardening awaits CI evidence,
-  and P1.1c planning is next
+- Slices in progress: strict HTTP input-boundary PR evidence pending; P1.1c has
+  not started
 
 The implemented Provider discovery listener is separate from the local
 management API and remains disabled by default. When enabled, it accepts TLS
@@ -40,7 +40,7 @@ runtime capability.
 | --- | --- | --- |
 | P1.0: contract intake and ownership freeze | Closed | Contract identity and ownership-boundary evidence only. |
 | P1.1a: wire DTO and Contract validation harness | Implemented and merged into `main` | Component and locked Contract projection evidence only. |
-| P1.1b: mTLS-only capability discovery | Implemented and verified on `main` | Application model, immutable source, response mapping, exact GET-only routing, mTLS identity admission, default-disabled configuration, composition, enabled-listener behavior, emitted-response projection, fail-together lifecycle, and tagged Docker integration evidence passed. |
+| P1.1b: mTLS-only capability discovery | Implemented and verified on `main`; strict HTTP input-boundary PR pending CI | Application model, immutable source, response mapping, exact GET-only routing, mTLS identity admission, default-disabled configuration, composition, enabled-listener behavior, emitted-response projection, fail-together lifecycle, and tagged Docker integration evidence passed on `fae94fd`; strict query/body rejection is separate PR evidence. |
 | P1.1c: protected-operation admission | Not started | No implementation or validation evidence yet. |
 | P1.1d: admission release gate | Not started | P1.1 remains open. |
 
@@ -133,6 +133,23 @@ hardening changes neither a runtime driver nor lifecycle behavior. GitHub CI
 evidence for this revision has not yet been recorded; the earlier P1.1b CI run
 does not substitute for it.
 
+Revision `fae94fd49a82d4a84092e3397d2b0a19f611d61c` records the resulting
+Provider hardening evidence, and GitHub Actions run
+[`30754320465`](https://github.com/shell-echo/sandbox-runtime/actions/runs/30754320465)
+passed its Agent Contract lock/projections, race-enabled shuffled tests and
+vet, and tagged Docker integration jobs. That CI proves only the tested main
+revision, not the P1.1 release gate.
+
+The follow-on strict capability-discovery HTTP input boundary rejects a query
+string, any nonzero or unknown `Content-Length`, and any transfer encoding
+before it can read a body or reach application, repository, or driver work. It
+uses an empty `400` response with no sensitive detail. The locked operation
+declares no query or request document, but it does not enumerate `400` in its
+operation-level response list despite a generic Contract malformed-request
+component. This authority gap is recorded for upstream clarification; this
+local fail-closed transport behavior is not a claim of fully path-authorized
+Contract error-wire compatibility. Its dedicated PR CI is new evidence only.
+
 ## Open gate and unproven claims
 
 P1.1 is not complete. Its architecture release gate still requires Schema and
@@ -150,11 +167,11 @@ The current revision does not prove or claim:
 
 ## Next implementation slice
 
-The next action is to plan P1.1c protected-operation admission against the
-locked Contract before changing behavior. That plan must decompose token
-verification, request-digest substitution, expiry, replay protection, and
-stale-fencing admission into independently reviewable units with explicit
-Contract and security evidence.
+After the strict input-boundary PR and its CI complete, the next action is to
+plan P1.1c protected-operation admission against the locked Contract before
+changing behavior. That plan must decompose token verification, request-digest
+substitution, expiry, replay protection, and stale-fencing admission into
+independently reviewable units with explicit Contract and security evidence.
 
 Mutation routes, operation bearer tokens, JWS admission, lifecycle dispatch,
 and P1.2 work remain outside the current slice. Landing code alone does not
