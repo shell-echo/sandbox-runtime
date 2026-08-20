@@ -12,8 +12,8 @@ production readiness.
 
 | Item | Evidence | Status |
 | --- | --- | --- |
-| Checkout | `codex/p1.2-lifecycle-domain` from `c5a4a65` | P1.2.1 in progress |
-| Review | PR [#17](https://github.com/shell-echo/sandbox-runtime/pull/17) merged as `43ff3d7`; PR [#18](https://github.com/shell-echo/sandbox-runtime/pull/18) merged as `4774c3a`; PR [#19](https://github.com/shell-echo/sandbox-runtime/pull/19) merged as `e2755f5`; PR [#21](https://github.com/shell-echo/sandbox-runtime/pull/21) merged as `c5a4a65` | P1.2.0 passed; P1.2.1 in progress |
+| Checkout | `codex/p1.2-lifecycle-repository` from `44f39ec` | P1.2.2 in progress |
+| Review | PR [#17](https://github.com/shell-echo/sandbox-runtime/pull/17) merged as `43ff3d7`; PR [#18](https://github.com/shell-echo/sandbox-runtime/pull/18) merged as `4774c3a`; PR [#19](https://github.com/shell-echo/sandbox-runtime/pull/19) merged as `e2755f5`; PR [#21](https://github.com/shell-echo/sandbox-runtime/pull/21) merged as `c5a4a65`; PR [#22](https://github.com/shell-echo/sandbox-runtime/pull/22) merged as `44f39ec` | P1.2.1 passed; P1.2.2 in progress |
 | Worktree | clean | Verified |
 | Contract namespace | `urn:shell-echo:sandbox-runtime:provider-v1` | Locked |
 | Contract version/license | `1.0.0` / MIT | Locked |
@@ -38,8 +38,9 @@ It does not clone, mount, or read an external source repository.
 | P1.1c | Protected-operation admission primitives and transport composition | Passed under local Contract through PR #18; post-merge run `32363581638` passed | P1.1d release-gate review |
 | P1.1d | Admission release gate | Passed; Suite runner, race/shuffle matrix, PR CI, and post-merge CI all passed | Retain gate evidence; do not expand claim beyond P1.1 |
 | P1.2.0 | Lifecycle Contract and authority inventory | Passed; PR #21 and post-merge CI run `32368734877` passed | Retain Contract lock and projection regression |
-| P1.2.1 | Pure lifecycle domain | In progress; backend-neutral values and transitions only | Domain race tests, vet, review and CI |
-| P1.2 | Async lifecycle, operation ledger, reconciliation, events | P1.2.1 in progress; no HTTP, persistence, or driver behavior changed | P1.2.1 closure before repository ports |
+| P1.2.1 | Pure lifecycle domain | Passed; PR #22 and post-merge CI run `32370133083` passed | Retain domain transition regression |
+| P1.2.2 | Atomic repository ports and development adapters | In progress; memory/file adapters only, single-controller file boundary explicit | Repository race tests, corruption/restart/fencing evidence, review and CI |
+| P1.2 | Async lifecycle, operation ledger, reconciliation, events | P1.2.2 in progress; no coordinator or Provider route behavior changed | P1.2.2 closure before coordinator |
 | P2 | Coding/remote-shell profile | Not started | P1.2 completion and profile-specific Conformance |
 | P3 | Migration readiness and external-caller integration | Not started | External caller E2E, rollback and canary evidence |
 | P4 | Production hardening | Not started | Deployment, multi-controller, multi-tenant, and production gates |
@@ -86,7 +87,7 @@ Passed locally (authorized test environment):
 
 Pending:
 
-- P1.2.1 domain review and PR/post-merge CI;
+- P1.2.2 repository review and PR/post-merge CI;
 - optional content-derived Suite digest enhancement;
 - aggregate lifecycle conformance, external-caller E2E, reliability, tenancy,
   deployment, and production gates.
@@ -95,7 +96,8 @@ Pending:
 
 P1.1d is explicitly closed by the local Suite/security matrix, PR #19 CI, and
 post-merge run `32365284283`. P1.2.0 is closed by PR #21, its three successful
-PR checks, and post-merge run `32368734877`. P1.2.1 is now limited to pure
-domain values and deterministic transitions; repository, transport, driver,
-aggregate, reliability, tenancy, deployment, and production claims remain
-unproven.
+PR checks, and post-merge run `32368734877`. P1.2.1 is closed by PR #22, its
+three successful PR checks, and post-merge run `32370133083`. P1.2.2 is limited
+to provider-local persistence; the file adapter is single-controller
+development evidence only, and coordinator, transport, aggregate,
+multi-controller, tenancy, deployment, and production claims remain unproven.

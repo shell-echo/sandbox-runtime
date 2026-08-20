@@ -121,20 +121,73 @@ const (
 func (o FailureOutcome) valid() bool { return o == FailureKnown || o == FailureUnknown }
 
 type Failure struct {
-	Code      string
-	Retryable bool
-	Outcome   FailureOutcome
+	Code      string         `json:"code"`
+	Retryable bool           `json:"retryable"`
+	Outcome   FailureOutcome `json:"outcome"`
+}
+
+type Lease struct {
+	SandboxID    string    `json:"sandbox_id"`
+	ExpiresAt    time.Time `json:"expires_at"`
+	Generation   uint64    `json:"generation"`
+	FencingToken uint64    `json:"fencing_token"`
+}
+
+func (l Lease) Validate() error {
+	if err := ValidateIdentifier(l.SandboxID); err != nil {
+		return err
+	}
+	if l.ExpiresAt.IsZero() || l.Generation == 0 || l.FencingToken == 0 {
+		return ErrInvalidLease
+	}
+	return nil
+}
+
+type Event struct {
+	ID           string    `json:"id"`
+	SandboxID    string    `json:"sandbox_id"`
+	OperationID  string    `json:"operation_id"`
+	Sequence     uint64    `json:"sequence"`
+	Generation   uint64    `json:"generation"`
+	FencingToken uint64    `json:"fencing_token"`
+	Kind         string    `json:"kind"`
+	DataDigest   string    `json:"data_digest,omitempty"`
+	OccurredAt   time.Time `json:"occurred_at"`
+}
+
+func (e Event) Validate() error {
+	if err := ValidateIdentifier(e.ID); err != nil {
+		return err
+	}
+	if err := ValidateIdentifier(e.SandboxID); err != nil {
+		return err
+	}
+	if err := ValidateIdentifier(e.OperationID); err != nil {
+		return err
+	}
+	if err := ValidateIdentifier(e.Kind); err != nil {
+		return err
+	}
+	if e.Generation == 0 || e.FencingToken == 0 || e.OccurredAt.IsZero() {
+		return ErrInvalidSpec
+	}
+	if e.DataDigest != "" {
+		if err := ValidateDigest(e.DataDigest); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 type SandboxSpec struct {
-	SandboxID          string
-	TenantID           string
-	WorkOrderID        string
-	WorkspaceID        string
-	ProviderRevisionID string
-	RuntimeProfile     string
-	SandboxSlotKey     string
-	LeaseExpiresAt     time.Time
+	SandboxID          string    `json:"sandbox_id"`
+	TenantID           string    `json:"tenant_id"`
+	WorkOrderID        string    `json:"work_order_id"`
+	WorkspaceID        string    `json:"workspace_id"`
+	ProviderRevisionID string    `json:"provider_revision_id"`
+	RuntimeProfile     string    `json:"runtime_profile"`
+	SandboxSlotKey     string    `json:"sandbox_slot_key"`
+	LeaseExpiresAt     time.Time `json:"lease_expires_at"`
 }
 
 func (s SandboxSpec) Validate(now time.Time) error {
@@ -163,13 +216,13 @@ func (s SandboxSpec) Validate(now time.Time) error {
 }
 
 type CreateRequest struct {
-	OperationID    string
-	AttemptID      string
-	FencingToken   uint64
-	IdempotencyKey string
-	RequestDigest  string
-	Deadline       time.Time
-	Spec           SandboxSpec
+	OperationID    string      `json:"operation_id"`
+	AttemptID      string      `json:"attempt_id"`
+	FencingToken   uint64      `json:"fencing_token"`
+	IdempotencyKey string      `json:"idempotency_key"`
+	RequestDigest  string      `json:"request_digest"`
+	Deadline       time.Time   `json:"deadline"`
+	Spec           SandboxSpec `json:"spec"`
 }
 
 func (r CreateRequest) Validate(now time.Time) error {
@@ -195,20 +248,20 @@ func (r CreateRequest) Validate(now time.Time) error {
 }
 
 type Sandbox struct {
-	ID                 string
-	TenantID           string
-	WorkOrderID        string
-	WorkspaceID        string
-	ProviderRevisionID string
-	RuntimeProfile     string
-	SandboxSlotKey     string
-	DesiredState       DesiredState
-	ObservedState      ObservedState
-	Generation         uint64
-	ObservedGeneration uint64
-	LeaseExpiresAt     time.Time
-	CreatedAt          time.Time
-	UpdatedAt          time.Time
+	ID                 string        `json:"sandbox_id"`
+	TenantID           string        `json:"tenant_id"`
+	WorkOrderID        string        `json:"work_order_id"`
+	WorkspaceID        string        `json:"workspace_id"`
+	ProviderRevisionID string        `json:"provider_revision_id"`
+	RuntimeProfile     string        `json:"runtime_profile"`
+	SandboxSlotKey     string        `json:"sandbox_slot_key"`
+	DesiredState       DesiredState  `json:"desired_state"`
+	ObservedState      ObservedState `json:"observed_state"`
+	Generation         uint64        `json:"generation"`
+	ObservedGeneration uint64        `json:"observed_generation"`
+	LeaseExpiresAt     time.Time     `json:"lease_expires_at"`
+	CreatedAt          time.Time     `json:"created_at"`
+	UpdatedAt          time.Time     `json:"updated_at"`
 }
 
 func (s Sandbox) Validate() error {
@@ -243,16 +296,16 @@ func (s Sandbox) Validate() error {
 }
 
 type Operation struct {
-	ID              string
-	AttemptID       string
-	FencingToken    uint64
-	SandboxID       string
-	Type            OperationType
-	State           OperationState
-	Deadline        time.Time
-	ObservedAt      time.Time
-	CancelRequested bool
-	Failure         *Failure
+	ID              string         `json:"operation_id"`
+	AttemptID       string         `json:"attempt_id"`
+	FencingToken    uint64         `json:"fencing_token"`
+	SandboxID       string         `json:"sandbox_id"`
+	Type            OperationType  `json:"type"`
+	State           OperationState `json:"state"`
+	Deadline        time.Time      `json:"deadline"`
+	ObservedAt      time.Time      `json:"observed_at"`
+	CancelRequested bool           `json:"cancel_requested"`
+	Failure         *Failure       `json:"failure,omitempty"`
 }
 
 func (o Operation) Validate() error {
