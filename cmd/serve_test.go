@@ -2,14 +2,23 @@ package cmd
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/x509"
+	"encoding/pem"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/shell-echo/sandbox-runtime/config"
 	"github.com/shell-echo/sandbox-runtime/option"
 	"github.com/shell-echo/sandbox-runtime/provider"
+	"github.com/shell-echo/sandbox-runtime/provider/admission"
+	admissionfile "github.com/shell-echo/sandbox-runtime/provider/admission/file"
 )
 
 // TestServeCmdRegistered confirms the serve subcommand is wired onto the root
@@ -134,12 +143,10 @@ func TestValidateServeConfigurationProductionBoundaries(t *testing.T) {
 func TestValidateServeConfigurationRejectsProviderPortCollision(t *testing.T) {
 	application := &config.ApplicationConfig{Mode: config.ApplicationDevelopmentMode}
 	serverConfig := &config.ServerConfig{
-		API: option.HTTP{Host: "127.0.0.1", Port: 8080},
-		Provider: config.ProviderConfig{Transport: config.ProviderTransportConfig{
-			Enabled: true,
-			Address: option.HTTP{Host: "127.0.0.2", Port: 8080},
-		}},
+		API:      option.HTTP{Host: "127.0.0.1", Port: 8080},
+		Provider: validProviderConfigForServeTest(),
 	}
+	serverConfig.Provider.Transport.Address = option.HTTP{Host: "127.0.0.2", Port: 8080}
 	runtimeConfig := &config.RuntimeConfig{Driver: config.RuntimeFakeDriver}
 	repositoryConfig := &config.RepositoryConfig{Driver: config.RepositoryMemoryDriver}
 	if err := validateServeConfiguration(application, serverConfig, runtimeConfig, repositoryConfig); err == nil {
@@ -176,9 +183,89 @@ func TestNewInstanceRepository(t *testing.T) {
 }
 
 func TestNewProviderServerDisabledIsInert(t *testing.T) {
-	providerServer, err := newProviderServer(context.Background(), config.ProviderConfig{})
-	if err != nil || providerServer != nil {
-		t.Fatalf("newProviderServer() = %T, %v; want nil, nil", providerServer, err)
+	providerServer, closeProvider, err := newProviderServer(context.Background(), config.ProviderConfig{})
+	if err != nil || providerServer != nil || closeProvider == nil {
+		t.Fatalf("newProviderServer() = %T, closer present %t, %v; want nil, non-nil closer, nil", providerServer, closeProvider != nil, err)
+	}
+	if err := closeProvider(); err != nil {
+		t.Fatalf("close disabled Provider server: %v", err)
+	}
+}
+
+func TestValidateServeConfigurationFailsClosedForInvalidProtectedAdmission(t *testing.T) {
+	application := &config.ApplicationConfig{Mode: config.ApplicationProductionMode}
+	serverConfig := &config.ServerConfig{API: option.HTTP{Host: "127.0.0.1", Port: 8080}, Provider: validProviderConfigForServeTest()}
+	serverConfig.Provider.ProtectedAdmission = config.ProviderProtectedAdmissionConfig{Enabled: true}
+	runtimeConfig := &config.RuntimeConfig{Driver: config.RuntimeDockerDriver, Docker: config.RuntimeDockerConfig{
+		Image: "example/shell@sha256:" + strings.Repeat("a", 64),
+	}}
+	repositoryConfig := &config.RepositoryConfig{Driver: config.RepositoryFileDriver, File: config.RepositoryFileConfig{Path: "instances.json"}}
+	if err := validateServeConfiguration(application, serverConfig, runtimeConfig, repositoryConfig); err == nil {
+		t.Fatal("validateServeConfiguration accepted incomplete protected admission")
+	}
+}
+
+func TestNewProviderProtectedTransportOptionsIsOptInAndReleasesGuard(t *testing.T) {
+	clock := fixedAdmissionClock{now: time.Unix(1_000, 0).UTC()}
+	disabled, closeDisabled, err := newProviderProtectedTransportOptions(config.ProviderProtectedAdmissionConfig{}, clock)
+	if err != nil || disabled != nil {
+		t.Fatalf("disabled protected transport = %#v, %v", disabled, err)
+	}
+	if err := closeDisabled(); err != nil {
+		t.Fatalf("close disabled protected transport: %v", err)
+	}
+
+	directory := t.TempDir()
+	keyPath := writeTrustedPublicKeyForServeTest(t, directory)
+	statePath := filepath.Join(directory, "guard", "admission.json")
+	protected := config.ProviderProtectedAdmissionConfig{
+		Enabled:        true,
+		GuardStateFile: statePath,
+		TrustedVerificationKeys: []config.ProviderTrustedVerificationKeyConfig{{
+			ID: "agent-platform-ed25519", Algorithm: "EdDSA", PublicKeyFile: keyPath,
+		}},
+	}
+	options, closeProtected, err := newProviderProtectedTransportOptions(protected, clock)
+	if err != nil || options == nil || options.Gate == nil || closeProtected == nil {
+		t.Fatalf("newProviderProtectedTransportOptions() = %#v, closer present %t, %v", options, closeProtected != nil, err)
+	}
+	if _, err := admissionfile.NewGuard(statePath, clock); err == nil {
+		t.Fatal("protected transport did not retain the single-controller guard lock")
+	}
+	if err := closeProtected(); err != nil {
+		t.Fatalf("close protected transport: %v", err)
+	}
+	reopened, err := admissionfile.NewGuard(statePath, clock)
+	if err != nil {
+		t.Fatalf("reopen released guard: %v", err)
+	}
+	if err := reopened.Close(); err != nil {
+		t.Fatalf("close reopened guard: %v", err)
+	}
+}
+
+func TestNewProviderProtectedTransportOptionsFailsClosed(t *testing.T) {
+	clock := fixedAdmissionClock{now: time.Unix(1_000, 0).UTC()}
+	protected := config.ProviderProtectedAdmissionConfig{
+		Enabled:        true,
+		GuardStateFile: filepath.Join(t.TempDir(), "admission.json"),
+		TrustedVerificationKeys: []config.ProviderTrustedVerificationKeyConfig{{
+			ID: "agent-platform-ed25519", Algorithm: "EdDSA", PublicKeyFile: "missing.pem",
+		}},
+	}
+	if options, closeProtected, err := newProviderProtectedTransportOptions(protected, clock); err == nil || options != nil {
+		t.Fatalf("missing trusted key = %#v, %v", options, err)
+	} else if closeErr := closeProtected(); closeErr != nil {
+		t.Fatalf("close failed protected transport: %v", closeErr)
+	}
+
+	directory := t.TempDir()
+	protected.TrustedVerificationKeys[0].PublicKeyFile = writeTrustedPublicKeyForServeTest(t, directory)
+	protected.GuardStateFile = directory
+	if options, closeProtected, err := newProviderProtectedTransportOptions(protected, clock); err == nil || options != nil {
+		t.Fatalf("invalid guard state = %#v, %v", options, err)
+	} else if closeErr := closeProtected(); closeErr != nil {
+		t.Fatalf("close failed protected transport: %v", closeErr)
 	}
 }
 
@@ -258,3 +345,50 @@ type testLifecycleServer struct{}
 
 func (*testLifecycleServer) Startup(context.Context) error  { return nil }
 func (*testLifecycleServer) Shutdown(context.Context) error { return nil }
+
+type fixedAdmissionClock struct{ now time.Time }
+
+func (clock fixedAdmissionClock) Now() time.Time { return clock.now }
+
+func validProviderConfigForServeTest() config.ProviderConfig {
+	return config.ProviderConfig{
+		Transport: config.ProviderTransportConfig{
+			Enabled:                    true,
+			Address:                    option.HTTP{Host: "127.0.0.1", Port: 8443},
+			ServerCertificateFile:      "provider.crt",
+			ServerPrivateKeyFile:       "provider.key",
+			ClientCABundleFile:         "client-ca.pem",
+			AllowedClientURIIdentities: []string{"spiffe://agent-platform/provider-client"},
+		},
+		Capability: config.ProviderCapabilityConfig{
+			ProviderRevisionID: "provider-revision-1",
+			Limits: config.ProviderLimitsConfig{
+				MaxCPUMillis: 1000, MaxMemoryBytes: 1 << 30, MaxEphemeralStorageBytes: 1 << 30,
+				MaxLeaseSeconds: 3600, MaxExecSeconds: 300,
+			},
+			SnapshotRestoreProfiles: []config.ProviderCompatibilityProfile{{
+				ProfileID: "sandbox-snapshot-workspace-v1", Level: "workspace", SuiteID: "sandbox-provider", SuiteVersion: "1.0.0",
+				SuiteDigest: "sha256:" + strings.Repeat("a", 64),
+			}},
+		},
+	}
+}
+
+func writeTrustedPublicKeyForServeTest(t *testing.T, directory string) string {
+	t.Helper()
+	publicKey, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := x509.MarshalPKIXPublicKey(publicKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(directory, "trusted-key.pem")
+	if err := os.WriteFile(path, pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: encoded}), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+var _ admission.Clock = fixedAdmissionClock{}
