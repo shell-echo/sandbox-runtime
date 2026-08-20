@@ -12,11 +12,19 @@
     {"path": "schemas/standard-error.schema.json", "kind": "json-schema", "id": "urn:shell-echo:sandbox-runtime:contract:standard-error:v1"},
     {"path": "schemas/admission-context.schema.json", "kind": "json-schema", "id": "urn:shell-echo:sandbox-runtime:contract:admission-context:v1"},
     {"path": "schemas/admission-target.schema.json", "kind": "json-schema", "id": "urn:shell-echo:sandbox-runtime:contract:admission-target:v1"},
+    {"path": "schemas/create-sandbox-request.schema.json", "kind": "json-schema", "id": "urn:shell-echo:sandbox-runtime:contract:create-sandbox-request:v1"},
+    {"path": "schemas/provider-operation.schema.json", "kind": "json-schema", "id": "urn:shell-echo:sandbox-runtime:contract:provider-operation:v1"},
+    {"path": "schemas/provider-error.schema.json", "kind": "json-schema", "id": "urn:shell-echo:sandbox-runtime:contract:provider-error:v1"},
+    {"path": "schemas/sandbox-status.schema.json", "kind": "json-schema", "id": "urn:shell-echo:sandbox-runtime:contract:sandbox-status:v1"},
     {"path": "semantic-rules/provider-v1.json", "kind": "semantic-rules", "id": "urn:shell-echo:sandbox-runtime:semantic-rules:provider-v1"},
     {"path": "fixtures/capabilities.json", "kind": "fixture", "id": "urn:shell-echo:sandbox-runtime:fixture:capabilities:v1"},
     {"path": "fixtures/standard-error.json", "kind": "fixture", "id": "urn:shell-echo:sandbox-runtime:fixture:standard-error:v1"},
     {"path": "fixtures/admission-context.json", "kind": "fixture", "id": "urn:shell-echo:sandbox-runtime:fixture:admission-context:v1"},
     {"path": "fixtures/admission-target.json", "kind": "fixture", "id": "urn:shell-echo:sandbox-runtime:fixture:admission-target:v1"},
+    {"path": "fixtures/create-sandbox-request.json", "kind": "fixture", "id": "urn:shell-echo:sandbox-runtime:fixture:create-sandbox-request:v1"},
+    {"path": "fixtures/provider-operation.json", "kind": "fixture", "id": "urn:shell-echo:sandbox-runtime:fixture:provider-operation:v1"},
+    {"path": "fixtures/provider-error.json", "kind": "fixture", "id": "urn:shell-echo:sandbox-runtime:fixture:provider-error:v1"},
+    {"path": "fixtures/sandbox-status.json", "kind": "fixture", "id": "urn:shell-echo:sandbox-runtime:fixture:sandbox-status:v1"},
     {"path": "conformance/provider-v1/suite.json", "kind": "conformance-suite", "id": "urn:shell-echo:sandbox-runtime:conformance:provider-v1"}
   ]
 }

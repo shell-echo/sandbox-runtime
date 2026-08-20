@@ -1,0 +1,8 @@
+{
+  "code": "SANDBOX_PROVISIONING_FAILED",
+  "message": "sandbox provisioning failed",
+  "retryable": true,
+  "outcome": "known_failed",
+  "provider_code": "RUNTIME_UNAVAILABLE",
+  "details": {"reason": "capacity"}
+}

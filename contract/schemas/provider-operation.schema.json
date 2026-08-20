@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:shell-echo:sandbox-runtime:contract:provider-operation:v1",
+  "title": "Sandbox Runtime Provider Operation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["operation_id", "attempt_id", "fencing_token", "sandbox_id", "type", "status", "observed_at"],
+  "properties": {
+    "operation_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$"},
+    "attempt_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$"},
+    "fencing_token": {"type": "integer", "minimum": 1},
+    "sandbox_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$"},
+    "type": {"const": "create"},
+    "status": {"enum": ["accepted", "running", "succeeded", "failed", "cancelled", "outcome_unknown"]},
+    "provider_operation_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$"},
+    "result_reference": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,399}$"},
+    "error": {"$ref": "urn:shell-echo:sandbox-runtime:contract:provider-error:v1"},
+    "observed_at": {"type": "string", "format": "date-time"}
+  }
+}

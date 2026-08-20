@@ -91,6 +91,22 @@ var testCases = map[string]testCase{
 		Package: "./providerapi",
 		Run:     `^TestProtectedHandlerRejectsReplayAndStaleFencingAcrossAllMutations$`,
 	},
+	"lifecycle-create-request-schema": {
+		Package: "./providerapi/v1",
+		Run:     `^TestLockedContractProjection$`,
+	},
+	"lifecycle-operation-state-schema": {
+		Package: "./providerapi/v1",
+		Run:     `^TestLockedContractProjection$`,
+	},
+	"lifecycle-idempotency-generation-fencing": {
+		Package: "./providerapi/v1",
+		Run:     `^TestLocalContractLifecycleSemanticRules$`,
+	},
+	"lifecycle-deadline-outcome": {
+		Package: "./providerapi/v1",
+		Run:     `^TestLocalContractLifecycleSemanticRules$`,
+	},
 }
 
 // Run verifies the locked local Contract and executes every case in its

@@ -36,6 +36,10 @@ func TestLocalSuiteCasesHaveRunnerMappings(t *testing.T) {
 		"protected-admission-digest-substitution",
 		"protected-admission-expiry",
 		"protected-admission-replay-and-fencing",
+		"lifecycle-create-request-schema",
+		"lifecycle-operation-state-schema",
+		"lifecycle-idempotency-generation-fencing",
+		"lifecycle-deadline-outcome",
 	}
 	if err := validateCases(ids); err != nil {
 		t.Fatal(err)

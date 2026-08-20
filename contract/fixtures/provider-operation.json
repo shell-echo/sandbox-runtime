@@ -1,0 +1,9 @@
+{
+  "operation_id": "operation-create-1",
+  "attempt_id": "attempt-create-1",
+  "fencing_token": 1,
+  "sandbox_id": "sandbox-1",
+  "type": "create",
+  "status": "accepted",
+  "observed_at": "2026-08-20T00:00:01Z"
+}

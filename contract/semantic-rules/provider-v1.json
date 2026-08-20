@@ -25,6 +25,11 @@
       {"operation": "read_result", "contract_id": "urn:shell-echo:sandbox-runtime:descriptor:exec-result:v1", "digest_profile": "rfc8785-full-document-v1"},
       {"operation": "read_snapshot_manifest", "contract_id": "urn:shell-echo:sandbox-runtime:descriptor:snapshot-manifest:v1", "digest_profile": "rfc8785-full-document-v1"},
       {"operation": "read_events", "contract_id": "urn:shell-echo:sandbox-runtime:descriptor:events:v1", "digest_profile": "rfc8785-full-document-v1"}
-    ]}
+    ]},
+    {"id": "lifecycle-create-request", "method": "POST", "path": "/v1/sandboxes", "requires": ["protected-admission", "strict-create-request-schema", "provider-revision-bound-spec", "pinned-image-digest", "safe-security-policy"], "request": {"body_schema": "create-sandbox-request.schema.json", "max_encoded_bytes": 1048576, "unknown_fields": "forbidden"}, "response": {"accepted_status": 202, "operation_schema": "provider-operation.schema.json"}},
+    {"id": "lifecycle-create-idempotency", "method": "POST", "path": "/v1/sandboxes", "requires": ["idempotency-key-and-request-digest", "same-key-same-digest-same-operation", "same-key-different-digest-conflict"], "conflicts": {"status": 409, "code": "SANDBOX_IDEMPOTENCY_CONFLICT"}},
+    {"id": "lifecycle-generation-fencing", "scope": "lifecycle-mutations", "requires": ["positive-fencing-token", "create-generation-is-one", "stale-attempt-fails-before-dispatch", "newer-generation-cannot-be-overwritten"], "conflicts": {"generation_status": 409, "generation_code": "SANDBOX_GENERATION_CONFLICT", "fencing_status": 409, "fencing_code": "SANDBOX_STALE_FENCING_TOKEN"}},
+    {"id": "lifecycle-deadline-and-outcome", "scope": "lifecycle-mutations", "requires": ["deadline-required", "deadline-checked-before-dispatch", "cancellation-is-intent", "lost-response-may-be-outcome-unknown"], "outcomes": {"states": ["accepted", "running", "succeeded", "failed", "cancelled", "outcome_unknown"], "known_failure": "failed", "unknown_failure": "outcome_unknown"}},
+    {"id": "lifecycle-read-is-bounded", "scope": "lifecycle-reads", "requires": ["protected-admission", "opaque-identifiers-only", "no-repository-or-driver-mutation-dispatch", "bounded-retention-errors"], "routes": ["GET /v1/sandboxes/{sandbox_id}", "GET /v1/operations/{operation_id}"], "forbids": ["container-id", "host-path", "raw-endpoint", "secret", "credential"]}
   ]
 }

@@ -14,7 +14,11 @@
         "protected-admission-token-binding",
         "protected-admission-digest-substitution",
         "protected-admission-expiry",
-        "protected-admission-replay-and-fencing"
+        "protected-admission-replay-and-fencing",
+        "lifecycle-create-request-schema",
+        "lifecycle-operation-state-schema",
+        "lifecycle-idempotency-generation-fencing",
+        "lifecycle-deadline-outcome"
       ]
     }
   ],

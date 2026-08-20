@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:shell-echo:sandbox-runtime:contract:provider-error:v1",
+  "title": "Sandbox Runtime Provider Operation Error",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["code", "message", "retryable", "outcome"],
+  "properties": {
+    "code": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{2,63}$"},
+    "message": {"type": "string", "minLength": 1, "maxLength": 512},
+    "retryable": {"type": "boolean"},
+    "outcome": {"enum": ["known_failed", "outcome_unknown"]},
+    "provider_code": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{2,63}$"},
+    "details": {
+      "type": "object",
+      "maxProperties": 16,
+      "additionalProperties": {"type": "string", "maxLength": 256}
+    }
+  }
+}

@@ -88,6 +88,12 @@ Compatibility rules:
 
 The versioned provider surface contains these operation families:
 
+The table is the target architecture inventory. In the current repository-owned
+Contract revision, only `POST /v1/sandboxes`, `GET /v1/sandboxes/{sandbox_id}`,
+and `GET /v1/operations/{operation_id}` are authorized by ADR 0004. The other
+lifecycle families remain reserved and must stay absent from the Provider
+router until an additive Contract revision, fixtures, and release gate exist.
+
 | Method and path | Responsibility |
 | --- | --- |
 | `GET /v1/capabilities` | Return provider revision, runtime profiles, limits, and supported capability versions. |
