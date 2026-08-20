@@ -17,27 +17,39 @@ import (
 
 	"github.com/gowebpki/jcs"
 	"github.com/shell-echo/sandbox-runtime/provider/admission"
+	providerv1 "github.com/shell-echo/sandbox-runtime/providerapi/v1"
 )
 
-func TestProtectedHandlerRejectsMissingContextBeforeGuard(t *testing.T) {
+func TestProtectedHandlerRejectsUnverifiedBearerBeforeContext(t *testing.T) {
 	material := newTestMTLSMaterial(t, []string{testAllowedIdentity})
 	identity, err := newClientIdentityAdmission([]string{testAllowedIdentity})
 	if err != nil {
 		t.Fatal(err)
 	}
 	guard := &testAdmissionGuard{}
-	handler, err := newProtectedHandler(identity, ProtectedTransportOptions{Gate: newTestProtectedGate(t, guard)})
+	trustedPublicKey, _, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatal(err)
 	}
+	gate := newTestProtectedGateWithPublicKey(t, trustedPublicKey, guard)
+	handler, err := newProtectedHandler(identity, ProtectedTransportOptions{Gate: gate})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, untrustedPrivateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	contextValue := validProtectedContextForTest(t, admission.OperationExec, "/v1/sandboxes/sandbox-1/exec", "sandbox-1")
+	token := signTestAdmissionToken(t, untrustedPrivateKey, admissionTokenClaimsForTest(contextValue))
 	request := httptest.NewRequest(http.MethodPost, "https://provider.test/v1/sandboxes/sandbox-1/exec", strings.NewReader(`{}`))
 	state := verifiedState(t, material.client)
 	request.TLS = &state
-	request.Header.Set("Authorization", "Bearer invalid")
+	request.Header.Set("Authorization", "Bearer "+token)
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
-	if response.Code != http.StatusBadRequest || guard.Calls() != 0 {
-		t.Fatalf("missing context response=%d guard_calls=%d body=%s", response.Code, guard.Calls(), response.Body.String())
+	if response.Code != http.StatusUnauthorized || guard.Calls() != 0 {
+		t.Fatalf("unverified bearer response=%d guard_calls=%d body=%s", response.Code, guard.Calls(), response.Body.String())
 	}
 }
 
@@ -84,17 +96,7 @@ func TestProtectedHandlerAdmitsV2ContextThenStopsBeforeLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	claims := map[string]any{
-		"jti": "jti-000000000000", "iss": "agent-platform", "sub": testAllowedIdentity,
-		"aud": contextValue.ProviderInstanceAudience, "iat": time.Date(2026, 8, 20, 0, 0, 30, 0, time.UTC).Unix(), "nbf": time.Date(2026, 8, 20, 0, 0, 30, 0, time.UTC).Unix(), "exp": time.Date(2026, 8, 20, 0, 4, 0, 0, time.UTC).Unix(),
-		"operation": "exec", "provider_revision_id": contextValue.ProviderRevisionID,
-		"sandbox_id": contextValue.SandboxID, "operation_id": contextValue.OperationID, "attempt_id": contextValue.AttemptID,
-		"fencing_token": 1, "tenant_id": contextValue.TenantID, "work_order_id": contextValue.WorkOrderID,
-		"policy_digest": contextValue.PolicyDigest, "policy_decided_at": contextValue.PolicyDecidedAt,
-		"request_contract_id": contextValue.RequestContractID, "request_digest_profile": string(contextValue.RequestDigestProfile), "request_digest": requestDigest,
-		"deadline_at": contextValue.DeadlineAt, "admission_context_contract_id": contextValue.ContextContractID,
-		"admission_context_digest_profile": contextValue.ContextDigestProfile, "admission_context_digest": contextValue.ContextDigest,
-	}
+	claims := admissionTokenClaimsForTest(contextValue)
 	token := signTestAdmissionToken(t, privateKey, claims)
 	verified, err := admission.VerifyCompactJWS(context.Background(), token, keys)
 	if err != nil {
@@ -119,6 +121,7 @@ func TestProtectedHandlerAdmitsV2ContextThenStopsBeforeLifecycle(t *testing.T) {
 	if response.Code != http.StatusServiceUnavailable || guard.Calls() != 1 {
 		t.Fatalf("admitted response=%d guard_calls=%d body=%s", response.Code, guard.Calls(), response.Body.String())
 	}
+	assertAdmissionErrorHeaders(t, response, true)
 }
 
 func TestProtectedHandlerRejectsContextSubjectMismatchBeforeGuard(t *testing.T) {
@@ -128,7 +131,11 @@ func TestProtectedHandlerRejectsContextSubjectMismatchBeforeGuard(t *testing.T) 
 		t.Fatal(err)
 	}
 	guard := &testAdmissionGuard{}
-	gate := newTestProtectedGate(t, guard)
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gate := newTestProtectedGateWithPublicKey(t, publicKey, guard)
 	handler, err := newProtectedHandler(identity, ProtectedTransportOptions{Gate: gate})
 	if err != nil {
 		t.Fatal(err)
@@ -144,12 +151,47 @@ func TestProtectedHandlerRejectsContextSubjectMismatchBeforeGuard(t *testing.T) 
 	request := httptest.NewRequest(http.MethodPost, "https://provider.test/v1/sandboxes/sandbox-1/exec", strings.NewReader(`{"operation":"exec","request_digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}`))
 	state := verifiedState(t, material.client)
 	request.TLS = &state
-	request.Header.Set("Authorization", "Bearer invalid")
+	request.Header.Set("Authorization", "Bearer "+signTestAdmissionToken(t, privateKey, admissionTokenClaimsForTest(contextValue)))
 	request.Header.Set(admission.AdmissionContextHeader, encodeTestAdmissionContext(t, contextValue))
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
 	if response.Code != http.StatusForbidden || guard.Calls() != 0 {
 		t.Fatalf("mismatched context response=%d guard_calls=%d body=%s", response.Code, guard.Calls(), response.Body.String())
+	}
+}
+
+func TestWriteAdmissionErrorUsesTraceAndRetryHeaders(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		status    int
+		retryable bool
+	}{
+		{name: "nonretryable", status: http.StatusBadRequest},
+		{name: "unavailable", status: http.StatusServiceUnavailable, retryable: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			response := httptest.NewRecorder()
+			writeAdmissionError(response, test.status, "SANDBOX_INVALID_REQUEST", test.retryable)
+			assertAdmissionErrorHeaders(t, response, test.retryable)
+		})
+	}
+}
+
+func assertAdmissionErrorHeaders(t *testing.T, response *httptest.ResponseRecorder, retryable bool) {
+	t.Helper()
+	var document providerv1.StandardError
+	if err := json.Unmarshal(response.Body.Bytes(), &document); err != nil {
+		t.Fatalf("decode standard error: %v", err)
+	}
+	if document.TraceID == "" || response.Header().Get("X-Request-ID") != document.TraceID {
+		t.Fatalf("trace correlation body=%q header=%q", document.TraceID, response.Header().Get("X-Request-ID"))
+	}
+	if retryable {
+		if got := response.Header().Get("Retry-After"); got != "1" {
+			t.Fatalf("Retry-After = %q, want 1", got)
+		}
+	} else if got := response.Header().Get("Retry-After"); got != "" {
+		t.Fatalf("Retry-After = %q, want empty", got)
 	}
 }
 
@@ -201,6 +243,11 @@ func newTestProtectedGate(t *testing.T, guard *testAdmissionGuard) *admission.Pr
 	if err != nil {
 		t.Fatal(err)
 	}
+	return newTestProtectedGateWithPublicKey(t, publicKey, guard)
+}
+
+func newTestProtectedGateWithPublicKey(t *testing.T, publicKey ed25519.PublicKey, guard *testAdmissionGuard) *admission.ProtectedOperationGate {
+	t.Helper()
 	keys, err := admission.NewStaticTrustedKeySource([]admission.StaticTrustedKey{{ID: "test", Algorithm: admission.AlgorithmEdDSA, PublicKey: publicKey}})
 	if err != nil {
 		t.Fatal(err)
@@ -210,6 +257,20 @@ func newTestProtectedGate(t *testing.T, guard *testAdmissionGuard) *admission.Pr
 		t.Fatal(err)
 	}
 	return gate
+}
+
+func admissionTokenClaimsForTest(contextValue admission.AdmissionContext) map[string]any {
+	return map[string]any{
+		"jti": "jti-000000000000", "iss": "agent-platform", "sub": testAllowedIdentity,
+		"aud": contextValue.ProviderInstanceAudience, "iat": time.Date(2026, 8, 20, 0, 0, 30, 0, time.UTC).Unix(), "nbf": time.Date(2026, 8, 20, 0, 0, 30, 0, time.UTC).Unix(), "exp": time.Date(2026, 8, 20, 0, 4, 0, 0, time.UTC).Unix(),
+		"operation": string(contextValue.Operation), "provider_revision_id": contextValue.ProviderRevisionID,
+		"sandbox_id": contextValue.SandboxID, "operation_id": contextValue.OperationID, "attempt_id": contextValue.AttemptID,
+		"fencing_token": contextValue.FencingToken, "tenant_id": contextValue.TenantID, "work_order_id": contextValue.WorkOrderID,
+		"policy_digest": contextValue.PolicyDigest, "policy_decided_at": contextValue.PolicyDecidedAt,
+		"request_contract_id": contextValue.RequestContractID, "request_digest_profile": string(contextValue.RequestDigestProfile), "request_digest": contextValue.RequestDigest,
+		"deadline_at": contextValue.DeadlineAt, "admission_context_contract_id": contextValue.ContextContractID,
+		"admission_context_digest_profile": contextValue.ContextDigestProfile, "admission_context_digest": contextValue.ContextDigest,
+	}
 }
 
 func testRequestDocument(t *testing.T) ([]byte, string) {

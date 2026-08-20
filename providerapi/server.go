@@ -11,14 +11,17 @@ import (
 
 	"github.com/shell-echo/sandbox-runtime/option"
 	"github.com/shell-echo/sandbox-runtime/provider"
+	"github.com/shell-echo/sandbox-runtime/provider/admission"
 )
 
 const (
-	providerReadHeaderTimeout = 10 * time.Second
-	providerReadTimeout       = 30 * time.Second
-	providerWriteTimeout      = 30 * time.Second
-	providerIdleTimeout       = 120 * time.Second
-	providerMaxHeaderBytes    = 8 << 10
+	providerReadHeaderTimeout       = 10 * time.Second
+	providerReadTimeout             = 30 * time.Second
+	providerWriteTimeout            = 30 * time.Second
+	providerIdleTimeout             = 120 * time.Second
+	providerMaxHeaderBytes          = 8 << 10
+	providerProtectedHeaderReserve  = 8 << 10
+	providerProtectedMaxHeaderBytes = admission.MaxAdmissionContextBytes + maxCompactBearerBytes + providerProtectedHeaderReserve
 )
 
 // TransportOptions contains only the process-local inputs needed to construct
@@ -70,12 +73,14 @@ func NewServer(ctx context.Context, options TransportOptions, source provider.Ca
 		return nil, err
 	}
 	rootHandler := handler
+	maxHeaderBytes := providerMaxHeaderBytes
 	if options.Protected != nil {
 		protected, protectedErr := newProtectedHandler(identityAdmission, *options.Protected)
 		if protectedErr != nil {
 			return nil, protectedErr
 		}
 		rootHandler = &providerHandler{capabilities: handler, protected: protected}
+		maxHeaderBytes = providerProtectedMaxHeaderBytes
 	}
 
 	listenConfig := &net.ListenConfig{}
@@ -89,7 +94,7 @@ func NewServer(ctx context.Context, options TransportOptions, source provider.Ca
 			ReadTimeout:       providerReadTimeout,
 			WriteTimeout:      providerWriteTimeout,
 			IdleTimeout:       providerIdleTimeout,
-			MaxHeaderBytes:    providerMaxHeaderBytes,
+			MaxHeaderBytes:    maxHeaderBytes,
 		},
 		listen: listenConfig.Listen,
 	}, nil

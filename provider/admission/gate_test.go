@@ -66,6 +66,27 @@ func TestProtectedOperationGateRejectsBeforeGuardReservation(t *testing.T) {
 	}
 }
 
+func TestProtectedOperationGateAuthenticatesBearerBeforeBindings(t *testing.T) {
+	fixture := newEdDSAFixture(t)
+	token, _, _, clock := gateTokenAndBinding()
+	gate, err := NewProtectedOperationGate(fixture.keys, &clock, &recordingMutationGuard{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	compact := fixture.token(t, JWSHeader{Algorithm: fixture.algorithm, KeyID: fixture.keyID, Type: expectedJWSType}, token.Claims)
+	if err := gate.AuthenticateBearer(context.Background(), compact); err != nil {
+		t.Fatalf("AuthenticateBearer(valid) error = %v", err)
+	}
+	if err := gate.AuthenticateBearer(context.Background(), compact+"x"); !errors.Is(err, ErrUnauthenticated) {
+		t.Fatalf("AuthenticateBearer(invalid) error = %v, want %v", err, ErrUnauthenticated)
+	}
+	canceled, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := gate.AuthenticateBearer(canceled, compact); !errors.Is(err, context.Canceled) {
+		t.Fatalf("AuthenticateBearer(canceled) error = %v, want %v", err, context.Canceled)
+	}
+}
+
 func TestProtectedOperationGateDoesNotConsumeReadJTI(t *testing.T) {
 	fixture := newEdDSAFixture(t)
 	token, binding, _, clock := gateTokenAndBinding()

@@ -13,6 +13,7 @@ import (
 
 	"github.com/shell-echo/sandbox-runtime/option"
 	"github.com/shell-echo/sandbox-runtime/provider"
+	"github.com/shell-echo/sandbox-runtime/provider/admission"
 	providerv1 "github.com/shell-echo/sandbox-runtime/providerapi/v1"
 )
 
@@ -39,6 +40,33 @@ func TestNewServerFailsClosedBeforeStartup(t *testing.T) {
 				t.Fatal("NewServer() error = nil")
 			}
 		})
+	}
+}
+
+func TestNewServerAllocatesProtectedHeaderBudget(t *testing.T) {
+	material := newTestMTLSMaterial(t, []string{testAllowedIdentity})
+	options := validTransportOptions(material, 8443)
+	source := validCapabilitySource(t)
+
+	discovery, err := NewServer(context.Background(), options, source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if discovery.http.MaxHeaderBytes != providerMaxHeaderBytes {
+		t.Fatalf("discovery header budget = %d, want %d", discovery.http.MaxHeaderBytes, providerMaxHeaderBytes)
+	}
+
+	options.Protected = &ProtectedTransportOptions{Gate: newTestProtectedGate(t, &testAdmissionGuard{})}
+	protected, err := NewServer(context.Background(), options, source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if protected.http.MaxHeaderBytes != providerProtectedMaxHeaderBytes {
+		t.Fatalf("protected header budget = %d, want %d", protected.http.MaxHeaderBytes, providerProtectedMaxHeaderBytes)
+	}
+	minimum := admission.MaxAdmissionContextBytes + maxCompactBearerBytes
+	if protected.http.MaxHeaderBytes <= minimum {
+		t.Fatalf("protected header budget = %d, must exceed required security headers %d", protected.http.MaxHeaderBytes, minimum)
 	}
 }
 

@@ -105,6 +105,72 @@ func TestDecodeAdmissionContextCarrierEnforcesSchemaBounds(t *testing.T) {
 	}
 }
 
+func TestDecodeAdmissionContextCarrierClosesQueryByOperation(t *testing.T) {
+	base := validAdmissionContextForTest()
+	event := base
+	event.Operation = OperationReadEvents
+	event.RequestContractID = "urn:agent-platform:sandbox-event-read-operation-descriptor:v1"
+	event.RequestDigestProfile = DigestProfileFullDocument
+	event.HTTPTarget = AdmissionTarget{Method: http.MethodGet, Path: "/v1/sandboxes/sandbox-1/events", NormalizedQuery: []AdmissionQuery{}}
+
+	tests := []struct {
+		name    string
+		context AdmissionContext
+		valid   bool
+	}{
+		{
+			name: "query forbidden for mutation",
+			context: func() AdmissionContext {
+				value := base
+				value.HTTPTarget.NormalizedQuery = []AdmissionQuery{{Name: "unexpected", Value: "value"}}
+				return value
+			}(),
+		},
+		{
+			name: "unknown event query",
+			context: func() AdmissionContext {
+				value := event
+				value.HTTPTarget.NormalizedQuery = []AdmissionQuery{{Name: "unexpected", Value: "value"}}
+				return value
+			}(),
+		},
+		{
+			name: "noncanonical event sequence",
+			context: func() AdmissionContext {
+				value := event
+				value.HTTPTarget.NormalizedQuery = []AdmissionQuery{{Name: "after_sequence", Value: "01"}}
+				return value
+			}(),
+		},
+		{
+			name: "canonical event sequence",
+			context: func() AdmissionContext {
+				value := event
+				value.HTTPTarget.NormalizedQuery = []AdmissionQuery{{Name: "after_sequence", Value: "1"}}
+				return value
+			}(),
+			valid: true,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			value := test.context
+			digest, err := DigestForAdmissionContext(value)
+			if err != nil {
+				t.Fatal(err)
+			}
+			value.ContextDigest = digest
+			_, err = DecodeAdmissionContextCarrier(encodeAdmissionContextForTest(t, value))
+			if test.valid && err != nil {
+				t.Fatalf("DecodeAdmissionContextCarrier() error = %v", err)
+			}
+			if !test.valid && !errors.Is(err, ErrInvalidAdmissionContext) {
+				t.Fatalf("DecodeAdmissionContextCarrier() error = %v, want %v", err, ErrInvalidAdmissionContext)
+			}
+		})
+	}
+}
+
 func validAdmissionContextForTest() AdmissionContext {
 	return AdmissionContext{
 		ContextContractID:        AdmissionContextContractID,

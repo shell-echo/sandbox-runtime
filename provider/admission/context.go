@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -93,7 +94,7 @@ func DecodeAdmissionContextCarrier(carrier string) (AdmissionContext, error) {
 }
 
 func validAdmissionContext(context AdmissionContext) bool {
-	if context.ContextContractID != AdmissionContextContractID || context.ContextDigestProfile != AdmissionContextDigestProfile || !digestPattern.MatchString(context.ContextDigest) || !digestPattern.MatchString(context.PolicyDigest) || !digestPattern.MatchString(context.RequestDigest) || !context.Operation.Supported() || !context.RequestDigestProfile.Supported() || !context.HTTPTarget.valid() || context.FencingToken < 1 || context.FencingToken > maxSafeJSONInteger {
+	if context.ContextContractID != AdmissionContextContractID || context.ContextDigestProfile != AdmissionContextDigestProfile || !digestPattern.MatchString(context.ContextDigest) || !digestPattern.MatchString(context.PolicyDigest) || !digestPattern.MatchString(context.RequestDigest) || !context.Operation.Supported() || !context.RequestDigestProfile.Supported() || !context.HTTPTarget.validForOperation(context.Operation) || context.FencingToken < 1 || context.FencingToken > maxSafeJSONInteger {
 		return false
 	}
 	if !audiencePattern.MatchString(context.ProviderInstanceAudience) || !validBoundedText(context.ControllerSubject, 1, 200) || !validBoundedText(context.ProviderRevisionID, 1, 200) || !validBoundedText(context.TenantID, 1, 200) || !validBoundedText(context.WorkOrderID, 1, 200) || !validBoundedText(context.SandboxID, 1, 200) || !validBoundedText(context.OperationID, 1, 200) || !validBoundedText(context.AttemptID, 1, 200) || !validBoundedText(context.RequestContractID, 1, 200) {
@@ -110,18 +111,28 @@ func validAdmissionContext(context AdmissionContext) bool {
 	return true
 }
 
-func (target AdmissionTarget) valid() bool {
+func (target AdmissionTarget) validForOperation(operation Operation) bool {
 	if target.Method != http.MethodGet && target.Method != http.MethodPost || len(target.Path) < 4 || len(target.Path) > 600 || !contextPathPattern.MatchString(target.Path) || target.NormalizedQuery == nil || len(target.NormalizedQuery) > 4 {
 		return false
 	}
-	previous := ""
-	for _, item := range target.NormalizedQuery {
-		if !validBoundedText(item.Name, 1, 100) || !validBoundedText(item.Value, 1, 100) || (previous != "" && item.Name <= previous) {
-			return false
-		}
-		previous = item.Name
+	if operation != OperationReadEvents {
+		return len(target.NormalizedQuery) == 0
 	}
-	return true
+	if target.Method != http.MethodGet {
+		return false
+	}
+	if len(target.NormalizedQuery) == 0 {
+		return true
+	}
+	if len(target.NormalizedQuery) != 1 || target.NormalizedQuery[0].Name != "after_sequence" {
+		return false
+	}
+	return validAfterSequence(target.NormalizedQuery[0].Value)
+}
+
+func validAfterSequence(value string) bool {
+	sequence, err := strconv.ParseInt(value, 10, 64)
+	return err == nil && sequence >= 0 && sequence <= maxSafeJSONInteger && strconv.FormatInt(sequence, 10) == value
 }
 
 func admissionContextDigest(raw []byte) (string, error) {

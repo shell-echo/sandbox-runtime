@@ -1,16 +1,23 @@
 package providerapi
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
 	"strconv"
 	"strings"
+	"sync/atomic"
 
 	"github.com/shell-echo/sandbox-runtime/provider/admission"
 	providerv1 "github.com/shell-echo/sandbox-runtime/providerapi/v1"
 )
+
+const providerUnavailableRetryAfterSeconds = 1
+
+var admissionTraceCounter atomic.Uint64
 
 // ProtectedTransportOptions supplies the already-composed application gate.
 // The composition root must construct it from frozen operator trust material;
@@ -46,6 +53,14 @@ func (h *protectedHandler) ServeHTTP(response http.ResponseWriter, request *http
 	facts, err := h.identity.protectedFacts(request)
 	if err != nil {
 		writeAdmissionError(response, http.StatusUnauthorized, "SANDBOX_UNAUTHENTICATED", false)
+		return
+	}
+	if err := h.gate.AuthenticateBearer(request.Context(), facts.compactBearer); err != nil {
+		if errors.Is(err, admission.ErrUnauthenticated) {
+			writeAdmissionError(response, http.StatusUnauthorized, "SANDBOX_UNAUTHENTICATED", false)
+		} else {
+			writeAdmissionError(response, http.StatusServiceUnavailable, "SANDBOX_PROVIDER_UNAVAILABLE", true)
+		}
 		return
 	}
 	values := request.Header.Values(admission.AdmissionContextHeader)
@@ -108,11 +123,24 @@ func (h *protectedHandler) ServeHTTP(response http.ResponseWriter, request *http
 }
 
 func writeAdmissionError(response http.ResponseWriter, status int, code string, retryable bool) {
+	traceID := newAdmissionTraceID()
 	response.Header().Set("Content-Type", "application/json")
+	response.Header().Set("X-Request-ID", traceID)
+	if retryable {
+		response.Header().Set("Retry-After", strconv.Itoa(providerUnavailableRetryAfterSeconds))
+	}
 	response.WriteHeader(status)
 	_ = json.NewEncoder(response).Encode(providerv1.StandardError{
-		Code: code, Message: "sandbox provider operation is not available", Retryable: retryable,
+		Code: code, Message: "sandbox provider operation is not available", Retryable: retryable, TraceID: traceID,
 	})
+}
+
+func newAdmissionTraceID() string {
+	var random [16]byte
+	if _, err := rand.Read(random[:]); err == nil {
+		return hex.EncodeToString(random[:])
+	}
+	return "provider-" + strconv.FormatUint(admissionTraceCounter.Add(1), 10)
 }
 
 func protectedDocument(request *http.Request, context admission.AdmissionContext, route protectedRoute, pathValues map[string]string) ([]byte, int) {
