@@ -12,7 +12,8 @@ production readiness.
 
 | Item | Evidence | Status |
 | --- | --- | --- |
-| Checkout | `codex/p1.1-release-gate-status@7b35a63` | In progress |
+| Checkout | `codex/p1.1-release-gate-status@67d3109` | In progress |
+| Review | PR [#17](https://github.com/shell-echo/sandbox-runtime/pull/17), open, mergeable | Awaiting review/merge |
 | Worktree | clean after the Contract migration changes are committed | Verified |
 | Contract namespace | `urn:shell-echo:sandbox-runtime:provider-v1` | Locked |
 | Contract version/license | `1.0.0` / MIT | Locked |
@@ -28,9 +29,9 @@ It does not clone, mount, or read an external source repository.
 | Slice | Scope | Status | Required next evidence |
 | --- | --- | --- | --- |
 | P0.0 | Freeze local Contract ownership, namespace, version, license, resource layout, and lock | Passed locally; commits `c0efc67`, `fb83eb5` | Full verifier and CI on the migration branch |
-| P0.1 | Replace external lock verifier with local tree/digest/semantic/fixture validation | Passed locally in `6043236` | CI provider-contract job |
-| P0.2 | Migrate DTO/projection tests and CI to local Contract | Passed locally in `6043236` | CI provider-contract job |
-| P0.3 | Rebase architecture, ADRs, README, plans, and status on local Contract | Passed locally in `7b35a63` | Documentation review on PR |
+| P0.1 | Replace external lock verifier with local tree/digest/semantic/fixture validation | PR #17 CI passed in run `32359485518` | Review/merge |
+| P0.2 | Migrate DTO/projection tests and CI to local Contract | PR #17 projection/test CI passed in run `32359485518` | Review/merge |
+| P0.3 | Rebase architecture, ADRs, README, plans, and status on local Contract | Landed; PR #17 CI passed in run `32359485518` | Review/merge |
 | P1.1a | Provider v1 DTOs and strict decoder | Historical implementation exists; compatibility evidence reset by Contract change | Re-run local Contract projection and decoder matrix |
 | P1.1b | mTLS-only capability discovery | Implementation exists; local Contract response authority now explicit | Real TLS matrix, local response projection, CI |
 | P1.1c | Protected-operation admission primitives and transport composition | Implementation exists; local Contract semantic coverage is incomplete | Re-run admission matrix under local rules; do not claim lifecycle |
@@ -73,12 +74,11 @@ Passed locally (authorized test environment):
 
 Pending:
 
-- CI for the local `provider-contract` job;
-- final documentation review on the PR.
+- PR #17 review and merge;
+- execution of the declared local Conformance Suite beyond projection tests.
 
 ## Next Entry
 
-Open review for `7b35a63` and wait for the local `provider-contract` CI job. Only after the
-new Contract projection, admission matrix, and CI are green may P1.1d be
-reopened. P1.2 remains prohibited until that release gate is explicitly
-closed.
+After PR #17 merges, re-run the P1.1 admission matrix under the local Contract
+and decide whether P1.1d can close. P1.2 remains prohibited until that release
+gate is explicitly closed.
