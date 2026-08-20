@@ -72,14 +72,13 @@ must bind. Path and request-document values may supplement it, but transport
 must never derive a missing context field by copying it from the bearer being
 verified.
 
-The current Provider request surface supplies a mutation envelope and a few
-path values, but it does not itself carry the complete admitted-operation
-context for post-create mutations or reads. The architecture assigns durable
-SandboxOperation records and their reconciliation to P1.2. Until an
-authoritative, non-P1.2 context source is specified and locked, protected
-transport composition remains blocked: registering a route, accepting a
-configured admission listener, or introducing a local context cache would
-either trust the bearer circularly or advance P1.2 early.
+The locked Provider Contract now supplies an Admission Context carrier for this
+purpose. Protected transport accepts exactly one strictly decoded carrier,
+binds its controller subject to the TLS-verified caller, and verifies the
+carrier's Contract ID, digest, target, and token binding before the admission
+gate. The carrier is neither a Provider-local lifecycle cache nor a substitute
+for the Agent Platform's durable SandboxOperation ledger; P1.2 reconciliation
+and lifecycle authority remain outside this decision.
 
 ### Replay and fencing guard
 
@@ -126,9 +125,8 @@ separate from this decision.
   it cannot silently fetch trust material at request time.
 - Protected mutation admission has durable single-controller replay/fencing
   protection without claiming an asynchronous Provider operation ledger.
-- A protected transport cannot safely be exposed until it receives an
-  independently trusted admitted-operation context. The P1.1c application
-  components remain local evidence while this source is unresolved.
+- Protected transport consumes only the locked Admission Context carrier; it
+  does not derive or cache context from bearer claims or local lifecycle state.
 - A future multi-controller deployment must replace the local guard with a
   coordination mechanism that proves equivalent atomic semantics before any
   multi-controller claim.
@@ -155,8 +153,9 @@ separate from this decision.
 ## Evidence boundary
 
 This ADR is a local provider security decision. It does not modify the locked
-Contract, prove a JWS implementation, resolve the admitted-operation-context
-gap, register a protected route, establish
+Contract, establish aggregate conformance, or create Provider lifecycle
+authority. Protected transport may consume the locked Admission Context carrier
+without resolving P1.2. This ADR does not establish
 `sandbox-core-v1` conformance, or prove platform interoperability,
 multi-controller reliability, multi-tenant safety, deployment readiness, or
 production readiness.
