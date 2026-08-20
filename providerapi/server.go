@@ -135,5 +135,12 @@ func (s *Server) Startup(ctx context.Context) error {
 // Shutdown gracefully stops the Provider listener within the caller's
 // deadline.
 func (s *Server) Shutdown(ctx context.Context) error {
-	return s.http.Shutdown(ctx)
+	return normalizeProviderShutdownError(s.http.Shutdown(ctx))
+}
+
+func normalizeProviderShutdownError(err error) error {
+	if errors.Is(err, net.ErrClosed) {
+		return nil
+	}
+	return err
 }

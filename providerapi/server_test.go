@@ -3,6 +3,7 @@ package providerapi
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -67,6 +68,16 @@ func TestNewServerAllocatesProtectedHeaderBudget(t *testing.T) {
 	minimum := admission.MaxAdmissionContextBytes + maxCompactBearerBytes
 	if protected.http.MaxHeaderBytes <= minimum {
 		t.Fatalf("protected header budget = %d, must exceed required security headers %d", protected.http.MaxHeaderBytes, minimum)
+	}
+}
+
+func TestServerShutdownTreatsClosedListenerAsComplete(t *testing.T) {
+	if err := normalizeProviderShutdownError(net.ErrClosed); err != nil {
+		t.Fatalf("normalizeProviderShutdownError(net.ErrClosed) = %v, want nil", err)
+	}
+	original := errors.New("shutdown failed")
+	if err := normalizeProviderShutdownError(original); !errors.Is(err, original) {
+		t.Fatalf("normalizeProviderShutdownError(%v) = %v, want original", original, err)
 	}
 }
 
