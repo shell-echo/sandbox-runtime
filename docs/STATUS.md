@@ -1,6 +1,6 @@
 # Project Execution Status
 
-Last updated: 2026-08-19
+Last updated: 2026-08-20
 
 This document is the single local source of truth for current execution status:
 what has landed, which release gates remain open, and which implementation
@@ -15,15 +15,17 @@ reports progress against those authorities.
 ## Current snapshot
 
 - Baseline branch: `main`
-- Baseline revision: `c107912fe0b7e4930bbd5a666650043d1c41b1ab`
+- Baseline revision: `8fc59d57c7bf3ec9797fcbdd82db0151f1bb9072`
 - Current phase: P1.1, Provider API admission
 - Current slice: P1.1c.4b.2b.3 protected transport composition
 - P1.1 release gate: open
-- Slices in progress: the P1.1c protected transport is blocked. The locked
-  request/descriptor input cannot independently supply complete admitted
-  operation context for post-create mutation or read binding, and P1.2 is the
-  phase that owns durable SandboxOperation state. No route, listener setting,
-  local context cache, or token-claim echo is permitted as a workaround.
+- Slices in progress: P1.1c protected transport composition is implemented on
+  feature branch `codex/p1.1c-protected-transport` at `fdb3424`, but is not
+  merged. It consumes the locked Admission Context carrier and binds it to the
+  mTLS caller, JWS, request/read descriptor, and admission gate before returning
+  only bounded unavailable/error outcomes. Operator key-file/configuration
+  wiring and full release evidence remain open; no P1.2 state or dispatch was
+  added.
 
 The implemented Provider discovery listener is separate from the local
 management API and remains disabled by default. When enabled, it accepts TLS
@@ -44,7 +46,7 @@ runtime capability.
 | P1.0: contract intake and ownership freeze | Closed | Contract identity and ownership-boundary evidence only. |
 | P1.1a: wire DTO and Contract validation harness | Implemented and merged into `main` | Component and locked Contract projection evidence only. |
 | P1.1b: mTLS-only capability discovery | Implemented and verified on `main`; transport reconciliation merged through PR #9 | Application model, immutable source, response mapping, exact GET-only routing, mTLS identity admission, default-disabled configuration, composition, enabled-listener behavior, emitted-response projection, fail-together lifecycle, tagged Docker integration, strict query/body input evidence, and transport reconciliation CI passed. The `400`/`501` operation-level error-wire authority gap remains separately pending. |
-| P1.1c: protected-operation admission | Blocked at protected transport composition; component implementation merged through PR #10 | ADR 0002 defines local trust, caller binding, guard, response precedence, and the admitted-operation-context precondition. The pure key, clock, and mutation-guard ports, frozen static and bounded-file trusted public-key sources, bounded compact-JWS verification, strict bounded RFC 8785 request/descriptor digest verification, application gate, shared TLS/request identity extractor, and atomically persisted guard exist as component evidence. The locked route inputs do not independently supply the complete admitted operation context for post-create mutations and reads; P1.2 owns the durable state that would do so. No protected route, repository/driver dispatch, or P1.2 state has been implemented. |
+| P1.1c: protected-operation admission | In progress on feature branch; code commit `fdb3424`, not merged | Locked Admission Context is decoded strictly and bound to the verified mTLS caller, protected route, JWS v2 claims, canonical request/read descriptor, and pure gate. All 14 protected paths are matched, but successful admission deliberately returns bounded unavailable/error and never calls repository/driver/lifecycle code. Full race/vet/Contract projection evidence, operator key-file/configuration composition, PR CI, and release review remain open. |
 | P1.1d: admission release gate | Not started | P1.1 remains open. |
 
 P1.0 closed at revision `102f36a6240a4c33892b0ebc25232859b63e334c`.
@@ -183,20 +185,31 @@ PR #10 merged the P1.1c admission components at
 and post-merge main CI run
 [`32242739010`](https://github.com/shell-echo/sandbox-runtime/actions/runs/32242739010)
 both passed `agent-contract-lock`, `test`, and `docker-integration`. This
-proves only the merged component and projection evidence; it does not supply
-the missing admitted-operation context, expose a protected route, or close
-P1.1.
+proves only the merged component and projection evidence; it did not expose a
+protected route or close P1.1.
+
+The protected transport composition is currently an unmerged feature-branch
+change at `fdb3424`. Focused `provider/admission` and `providerapi` tests pass,
+including Context caller mismatch, Schema bounds, strict target binding, JWS
+Context binding, guard-before-dispatch, and bounded unavailable mapping. The
+full race/shuffle suite, `go vet`, Contract lock/projection checks, and PR CI
+have not yet been rerun for this commit. The command composition root still
+does not load operator trusted-key paths or instantiate `ProtectedTransportOptions`;
+the listener remains discovery-only unless a caller explicitly supplies the
+protected options. This is component/feature-branch evidence, not a merged or
+production-ready claim.
 
 ## Open gate and unproven claims
 
 P1.1 is not complete. Its architecture release gate still requires Schema and
 fixture compatibility, mTLS discovery, token binding, digest substitution,
-expiry, replay, and stale-fencing admission tests to pass.
+expiry, replay, stale-fencing admission tests, transport composition review,
+and reproducible CI evidence to pass.
 
 The current revision does not prove or claim:
 
-- transport-wired mTLS caller admission, replay/fencing rejection before an
-  actual Provider dispatch, or protected-route behavior;
+- merged/configured protected-listener behavior and operator trust-material
+  wiring;
 - P1.2 lifecycle, durable operations, leases, events, or reconciliation;
 - the aggregate `sandbox-core-v1` conformance profile;
 - Agent Platform end-to-end compatibility or cross-provider interchangeability;
@@ -209,10 +222,11 @@ P1.1c now has the accepted local trust and admission-state decision in
 [ADR 0002](adr/0002-provider-operation-admission.md), a bounded compact-JWS
 parser/verifier, strict canonical request/descriptor digest verification,
 application-level context/time binding, a pure protected-operation gate, a
-static/file trusted-key source, a shared TLS/request identity extractor, and a
-durable single-controller guard. Protected transport composition is blocked on
-an authoritative admitted-operation context that is not provided by the locked
-route inputs and cannot be replaced by P1.2 state early. The detailed scope,
+static/file trusted-key source, a shared TLS/request identity extractor, a
+durable single-controller guard, and an unmerged protected transport adapter.
+The next entry is full validation and review of `fdb3424`, followed by a
+narrow composition-root/configuration slice if required; no P1.2 lifecycle or
+repository/driver dispatch may be added in this step. The detailed scope,
 acceptance evidence, and stop conditions are in
 [the P1.1c admission plan](plan/p1.1c-protected-operation-admission.md).
 
