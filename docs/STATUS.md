@@ -20,12 +20,13 @@ reports progress against those authorities.
 - Current slice: P1.1c.4b.2b.3 protected transport composition
 - P1.1 release gate: open
 - Slices in progress: P1.1c protected transport composition is implemented on
-  feature branch `codex/p1.1c-protected-transport` at `fdb3424`, but is not
-  merged. It consumes the locked Admission Context carrier and binds it to the
-  mTLS caller, JWS, request/read descriptor, and admission gate before returning
-  only bounded unavailable/error outcomes. Operator key-file/configuration
-  wiring and full release evidence remain open; no P1.2 state or dispatch was
-  added.
+  PR #13 branch at `e697afc`, but is not merged. It consumes the locked
+  Admission Context carrier and binds it to the mTLS caller, JWS, request/read
+  descriptor, and admission gate before returning only bounded unavailable/error
+  outcomes. Review fixes enforce bearer-authentication precedence, closed GET
+  query input, adequate security-header budget, trace correlation, and 503 retry
+  advice. Operator key-file/configuration wiring and full release evidence remain
+  open; no P1.2 state or dispatch was added.
 
 The implemented Provider discovery listener is separate from the local
 management API and remains disabled by default. When enabled, it accepts TLS
@@ -46,7 +47,7 @@ runtime capability.
 | P1.0: contract intake and ownership freeze | Closed | Contract identity and ownership-boundary evidence only. |
 | P1.1a: wire DTO and Contract validation harness | Implemented and merged into `main` | Component and locked Contract projection evidence only. |
 | P1.1b: mTLS-only capability discovery | Implemented and verified on `main`; transport reconciliation merged through PR #9 | Application model, immutable source, response mapping, exact GET-only routing, mTLS identity admission, default-disabled configuration, composition, enabled-listener behavior, emitted-response projection, fail-together lifecycle, tagged Docker integration, strict query/body input evidence, and transport reconciliation CI passed. The `400`/`501` operation-level error-wire authority gap remains separately pending. |
-| P1.1c: protected-operation admission | In progress on feature branch; code commit `fdb3424`, not merged | Locked Admission Context is decoded strictly and bound to the verified mTLS caller, protected route, JWS v2 claims, canonical request/read descriptor, and pure gate. All 14 protected paths are matched, but successful admission deliberately returns bounded unavailable/error and never calls repository/driver/lifecycle code. Full race/vet/Contract projection evidence, operator key-file/configuration composition, PR CI, and release review remain open. |
+| P1.1c: protected-operation admission | In progress on PR #13; review-fix commit `e697afc`, not merged | Locked Admission Context is decoded strictly and bound to the verified mTLS caller, protected route, JWS v2 claims, canonical request/read descriptor, and pure gate. All 14 protected paths are matched. Bearer authentication now precedes Context/document validation; query input is closed per operation; admitted error results carry trace correlation and 503 retry advice. Successful admission deliberately returns bounded unavailable/error and never calls repository/driver/lifecycle code. Local full validation passed; PR CI must rerun, while operator key-file/configuration composition and release review remain open. |
 | P1.1d: admission release gate | Not started | P1.1 remains open. |
 
 P1.0 closed at revision `102f36a6240a4c33892b0ebc25232859b63e334c`.
@@ -188,13 +189,13 @@ both passed `agent-contract-lock`, `test`, and `docker-integration`. This
 proves only the merged component and projection evidence; it did not expose a
 protected route or close P1.1.
 
-The protected transport composition is currently an unmerged feature-branch
-change at `fdb3424`. Focused `provider/admission` and `providerapi` tests pass,
-including Context caller mismatch, Schema bounds, strict target binding, JWS
-Context binding, guard-before-dispatch, and bounded unavailable mapping. The
-full race/shuffle suite, `go vet`, Contract lock/projection checks, and tagged
-Docker integration all pass locally for this commit. PR CI has not yet run.
-The command composition root still
+The protected transport composition is currently an unmerged PR #13 change.
+Initial implementation `fdb3424` passed its local validation. Automated review
+then found bearer-authentication precedence, aggregate security-header budget,
+closed GET query, trace-correlation, and retry-header gaps. Review-fix commit
+`e697afc` addresses them and passed focused and complete local validation:
+race/shuffle tests, `go vet`, Contract lock/projection checks, and tagged Docker
+integration. PR CI must rerun for the updated head. The command composition root still
 does not load operator trusted-key paths or instantiate `ProtectedTransportOptions`;
 the listener remains discovery-only unless a caller explicitly supplies the
 protected options. This is component/feature-branch evidence, not a merged or
@@ -225,9 +226,10 @@ parser/verifier, strict canonical request/descriptor digest verification,
 application-level context/time binding, a pure protected-operation gate, a
 static/file trusted-key source, a shared TLS/request identity extractor, a
 durable single-controller guard, and an unmerged protected transport adapter.
-The next entry is full validation and review of `fdb3424`, followed by a
-narrow composition-root/configuration slice if required; no P1.2 lifecycle or
-repository/driver dispatch may be added in this step. The detailed scope,
+The immediate entry is PR #13 CI and merge review of `e697afc`; after merge,
+the next implementation slice is narrow composition-root/configuration wiring.
+No P1.2 lifecycle or repository/driver dispatch may be added in either step.
+The detailed scope,
 acceptance evidence, and stop conditions are in
 [the P1.1c admission plan](plan/p1.1c-protected-operation-admission.md).
 
