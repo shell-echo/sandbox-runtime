@@ -7,5 +7,9 @@
     {"id": "capabilities-request-empty", "method": "GET", "path": "/v1/capabilities", "request": {"query": "forbidden", "body": "forbidden", "content_length": "zero-only", "transfer_encoding": "identity-only"}},
     {"id": "capabilities-snapshot-immutable", "method": "GET", "path": "/v1/capabilities", "response": {"capabilities": "empty-array", "runtime_profiles": "empty-array", "snapshot_restore_profiles": "metadata-only"}},
     {"id": "capabilities-no-mutation-dispatch", "method": "GET", "path": "/v1/capabilities", "forbids": ["repository-dispatch", "driver-dispatch", "lifecycle-dispatch"]}
+    ,{"id": "protected-admission-mtls-and-bearer", "scope": "protected-operations", "requires": ["verified-client-certificate", "admitted-uri-san", "short-lived-jws-bearer"]}
+    ,{"id": "protected-admission-binding", "scope": "protected-operations", "requires": ["provider-revision-binding", "caller-binding", "request-or-descriptor-digest-binding", "deadline-binding", "policy-decision-binding"]}
+    ,{"id": "protected-admission-replay-fencing", "scope": "protected-mutations", "requires": ["jti-replay-rejection", "stale-fencing-rejection", "fail-before-dispatch"]}
+    ,{"id": "protected-admission-contract-ids", "scope": "protected-operations", "contract_id_namespace": "urn:shell-echo:sandbox-runtime", "digest_profiles": ["rfc8785-request-excluding-request-digest-v1", "rfc8785-full-document-v1"]}
   ]
 }

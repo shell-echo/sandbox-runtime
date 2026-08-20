@@ -20,15 +20,15 @@ import (
 )
 
 const (
-	AdmissionContextContractID    = "urn:agent-platform:sandbox-provider-admission-context:v1"
+	AdmissionContextContractID    = "urn:shell-echo:sandbox-runtime:admission-context:v1"
 	AdmissionContextDigestProfile = "rfc8785-full-document-excluding-context-digest-v1"
-	AdmissionContextHeader        = "X-Agent-Sandbox-Admission-Context"
+	AdmissionContextHeader        = "X-Sandbox-Runtime-Admission-Context"
 	MaxAdmissionContextBytes      = 16384
 )
 
 var contextPathPattern = regexp.MustCompile(`^/v1(?:/[A-Za-z0-9._:-]+)+$`)
 
-// AdmissionContext is the independently admitted Platform snapshot carried by
+// AdmissionContext is the independently admitted caller snapshot carried by
 // every protected Sandbox Provider request. It is never derived from bearer
 // claims; the transport compares those claims to this value.
 type AdmissionContext struct {
@@ -71,7 +71,7 @@ var (
 )
 
 // DecodeAdmissionContextCarrier validates and decodes the unpadded base64url
-// carrier declared by the locked Provider OpenAPI. It rejects padding,
+// carrier declared by the local Provider Contract. It rejects padding,
 // whitespace, duplicate members, unknown members, trailing JSON, and a digest
 // that does not cover the complete document excluding context_digest.
 func DecodeAdmissionContextCarrier(carrier string) (AdmissionContext, error) {

@@ -20,10 +20,12 @@ func TestValidateTokenBindingRejectsMismatchedContext(t *testing.T) {
 	}{
 		{name: "caller", mutate: func(binding *TokenBinding) { binding.Caller = "spiffe://provider/other-controller" }},
 		{name: "provider revision", mutate: func(binding *TokenBinding) { binding.ProviderRevisionID = "provider-revision-other" }},
-		{name: "audience", mutate: func(binding *TokenBinding) { binding.Audience = "urn:agent-platform:provider-instance:other" }},
+		{name: "audience", mutate: func(binding *TokenBinding) {
+			binding.Audience = "urn:shell-echo:sandbox-runtime:provider-instance:other"
+		}},
 		{name: "operation", mutate: func(binding *TokenBinding) {
 			binding.Operation = OperationCreate
-			binding.RequestContractID = "urn:agent-platform:sandbox-create-request:v1"
+			binding.RequestContractID = "urn:shell-echo:sandbox-runtime:request:create:v1"
 		}},
 		{name: "sandbox", mutate: func(binding *TokenBinding) { binding.SandboxID = "sandbox-other" }},
 		{name: "operation id", mutate: func(binding *TokenBinding) { binding.OperationID = "operation-other" }},

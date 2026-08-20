@@ -1,0 +1,5 @@
+{
+  "method": "POST",
+  "path": "/v1/sandboxes/sandbox-1/exec",
+  "normalized_query": []
+}

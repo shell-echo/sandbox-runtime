@@ -29,7 +29,7 @@ const (
 var (
 	ErrInvalidToken = errors.New("provider admission token is invalid")
 
-	audiencePattern = regexp.MustCompile(`^urn:agent-platform:provider-instance:[A-Za-z0-9._:-]{1,200}$`)
+	audiencePattern = regexp.MustCompile(`^urn:shell-echo:sandbox-runtime:provider-instance:[A-Za-z0-9._:-]{1,200}$`)
 	digestPattern   = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 )
 
@@ -244,20 +244,20 @@ type requestBinding struct {
 }
 
 var requestBindings = map[Operation]requestBinding{
-	OperationCreate:               {contractID: "urn:agent-platform:sandbox-create-request:v1", profile: DigestProfileRequestExcludingDigest},
-	OperationRestore:              {contractID: "urn:agent-platform:sandbox-restore-request:v1", profile: DigestProfileRequestExcludingDigest},
-	OperationSetDesiredState:      {contractID: "urn:agent-platform:sandbox-desired-state-request:v1", profile: DigestProfileRequestExcludingDigest},
-	OperationExtendLease:          {contractID: "urn:agent-platform:sandbox-lease-request:v1", profile: DigestProfileRequestExcludingDigest},
-	OperationExec:                 {contractID: "urn:agent-platform:sandbox-exec-request:v1", profile: DigestProfileRequestExcludingDigest},
-	OperationCancelExec:           {contractID: "urn:agent-platform:sandbox-cancel-exec-request:v1", profile: DigestProfileRequestExcludingDigest},
-	OperationOpenRuntimeSession:   {contractID: "urn:agent-platform:sandbox-runtime-session-open-request:v1", profile: DigestProfileRequestExcludingDigest},
-	OperationSnapshot:             {contractID: "urn:agent-platform:sandbox-snapshot-request:v1", profile: DigestProfileRequestExcludingDigest},
-	OperationTerminate:            {contractID: "urn:agent-platform:sandbox-terminate-request:v1", profile: DigestProfileRequestExcludingDigest},
-	OperationReadSandbox:          {contractID: "urn:agent-platform:sandbox-status-operation-descriptor:v1", profile: DigestProfileFullDocument},
-	OperationReadOperation:        {contractID: "urn:agent-platform:sandbox-operation-read-operation-descriptor:v1", profile: DigestProfileFullDocument},
-	OperationReadResult:           {contractID: "urn:agent-platform:sandbox-exec-result-operation-descriptor:v1", profile: DigestProfileFullDocument},
-	OperationReadSnapshotManifest: {contractID: "urn:agent-platform:sandbox-snapshot-manifest-operation-descriptor:v1", profile: DigestProfileFullDocument},
-	OperationReadEvents:           {contractID: "urn:agent-platform:sandbox-event-read-operation-descriptor:v1", profile: DigestProfileFullDocument},
+	OperationCreate:               {contractID: "urn:shell-echo:sandbox-runtime:request:create:v1", profile: DigestProfileRequestExcludingDigest},
+	OperationRestore:              {contractID: "urn:shell-echo:sandbox-runtime:request:restore:v1", profile: DigestProfileRequestExcludingDigest},
+	OperationSetDesiredState:      {contractID: "urn:shell-echo:sandbox-runtime:request:set-desired-state:v1", profile: DigestProfileRequestExcludingDigest},
+	OperationExtendLease:          {contractID: "urn:shell-echo:sandbox-runtime:request:extend-lease:v1", profile: DigestProfileRequestExcludingDigest},
+	OperationExec:                 {contractID: "urn:shell-echo:sandbox-runtime:request:exec:v1", profile: DigestProfileRequestExcludingDigest},
+	OperationCancelExec:           {contractID: "urn:shell-echo:sandbox-runtime:request:cancel-exec:v1", profile: DigestProfileRequestExcludingDigest},
+	OperationOpenRuntimeSession:   {contractID: "urn:shell-echo:sandbox-runtime:request:open-runtime-session:v1", profile: DigestProfileRequestExcludingDigest},
+	OperationSnapshot:             {contractID: "urn:shell-echo:sandbox-runtime:request:snapshot:v1", profile: DigestProfileRequestExcludingDigest},
+	OperationTerminate:            {contractID: "urn:shell-echo:sandbox-runtime:request:terminate:v1", profile: DigestProfileRequestExcludingDigest},
+	OperationReadSandbox:          {contractID: "urn:shell-echo:sandbox-runtime:descriptor:status:v1", profile: DigestProfileFullDocument},
+	OperationReadOperation:        {contractID: "urn:shell-echo:sandbox-runtime:descriptor:operation:v1", profile: DigestProfileFullDocument},
+	OperationReadResult:           {contractID: "urn:shell-echo:sandbox-runtime:descriptor:exec-result:v1", profile: DigestProfileFullDocument},
+	OperationReadSnapshotManifest: {contractID: "urn:shell-echo:sandbox-runtime:descriptor:snapshot-manifest:v1", profile: DigestProfileFullDocument},
+	OperationReadEvents:           {contractID: "urn:shell-echo:sandbox-runtime:descriptor:events:v1", profile: DigestProfileFullDocument},
 }
 
 func validRequestBinding(claims TokenClaims) bool {

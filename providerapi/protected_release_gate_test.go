@@ -363,7 +363,7 @@ func newProtectedReleaseContext(route protectedReleaseRoute) admission.Admission
 	}
 	return admission.AdmissionContext{
 		ContextContractID: admission.AdmissionContextContractID, ContextDigestProfile: admission.AdmissionContextDigestProfile,
-		ControllerSubject: testAllowedIdentity, ProviderRevisionID: "provider-revision-1", ProviderInstanceAudience: "urn:agent-platform:provider-instance:provider-1",
+		ControllerSubject: testAllowedIdentity, ProviderRevisionID: "provider-revision-1", ProviderInstanceAudience: "urn:shell-echo:sandbox-runtime:provider-instance:provider-1",
 		TenantID: "tenant-1", WorkOrderID: "work-order-1", PolicyDigest: testDigest('a'), PolicyDecidedAt: releaseGateTestTime().Add(-time.Minute).Format(time.RFC3339Nano),
 		Operation: route.operation, SandboxID: "sandbox-1", OperationID: "operation-1", AttemptID: "attempt-1", FencingToken: 1,
 		DeadlineAt: releaseGateTestTime().Add(4 * time.Minute).Format(time.RFC3339Nano), RequestContractID: contractID, RequestDigestProfile: profile,
@@ -373,30 +373,30 @@ func newProtectedReleaseContext(route protectedReleaseRoute) admission.Admission
 
 func protectedReleaseRequestBinding(operation admission.Operation) (string, admission.DigestProfile) {
 	if operation == admission.OperationReadSandbox {
-		return "urn:agent-platform:sandbox-status-operation-descriptor:v1", admission.DigestProfileFullDocument
+		return "urn:shell-echo:sandbox-runtime:descriptor:status:v1", admission.DigestProfileFullDocument
 	}
 	if operation == admission.OperationReadOperation {
-		return "urn:agent-platform:sandbox-operation-read-operation-descriptor:v1", admission.DigestProfileFullDocument
+		return "urn:shell-echo:sandbox-runtime:descriptor:operation:v1", admission.DigestProfileFullDocument
 	}
 	if operation == admission.OperationReadResult {
-		return "urn:agent-platform:sandbox-exec-result-operation-descriptor:v1", admission.DigestProfileFullDocument
+		return "urn:shell-echo:sandbox-runtime:descriptor:exec-result:v1", admission.DigestProfileFullDocument
 	}
 	if operation == admission.OperationReadSnapshotManifest {
-		return "urn:agent-platform:sandbox-snapshot-manifest-operation-descriptor:v1", admission.DigestProfileFullDocument
+		return "urn:shell-echo:sandbox-runtime:descriptor:snapshot-manifest:v1", admission.DigestProfileFullDocument
 	}
 	if operation == admission.OperationReadEvents {
-		return "urn:agent-platform:sandbox-event-read-operation-descriptor:v1", admission.DigestProfileFullDocument
+		return "urn:shell-echo:sandbox-runtime:descriptor:events:v1", admission.DigestProfileFullDocument
 	}
 	contractIDs := map[admission.Operation]string{
-		admission.OperationCreate:             "urn:agent-platform:sandbox-create-request:v1",
-		admission.OperationRestore:            "urn:agent-platform:sandbox-restore-request:v1",
-		admission.OperationSetDesiredState:    "urn:agent-platform:sandbox-desired-state-request:v1",
-		admission.OperationExtendLease:        "urn:agent-platform:sandbox-lease-request:v1",
-		admission.OperationExec:               "urn:agent-platform:sandbox-exec-request:v1",
-		admission.OperationCancelExec:         "urn:agent-platform:sandbox-cancel-exec-request:v1",
-		admission.OperationOpenRuntimeSession: "urn:agent-platform:sandbox-runtime-session-open-request:v1",
-		admission.OperationSnapshot:           "urn:agent-platform:sandbox-snapshot-request:v1",
-		admission.OperationTerminate:          "urn:agent-platform:sandbox-terminate-request:v1",
+		admission.OperationCreate:             "urn:shell-echo:sandbox-runtime:request:create:v1",
+		admission.OperationRestore:            "urn:shell-echo:sandbox-runtime:request:restore:v1",
+		admission.OperationSetDesiredState:    "urn:shell-echo:sandbox-runtime:request:set-desired-state:v1",
+		admission.OperationExtendLease:        "urn:shell-echo:sandbox-runtime:request:extend-lease:v1",
+		admission.OperationExec:               "urn:shell-echo:sandbox-runtime:request:exec:v1",
+		admission.OperationCancelExec:         "urn:shell-echo:sandbox-runtime:request:cancel-exec:v1",
+		admission.OperationOpenRuntimeSession: "urn:shell-echo:sandbox-runtime:request:open-runtime-session:v1",
+		admission.OperationSnapshot:           "urn:shell-echo:sandbox-runtime:request:snapshot:v1",
+		admission.OperationTerminate:          "urn:shell-echo:sandbox-runtime:request:terminate:v1",
 	}
 	return contractIDs[operation], admission.DigestProfileRequestExcludingDigest
 }

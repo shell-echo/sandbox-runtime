@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:shell-echo:sandbox-runtime:contract:admission-target:v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["method", "path", "normalized_query"],
+  "properties": {
+    "method": {"enum": ["GET", "POST"]},
+    "path": {"type": "string", "pattern": "^/v1(?:/[A-Za-z0-9._:-]+)+$", "maxLength": 600},
+    "normalized_query": {
+      "type": "array",
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "value"],
+        "properties": {"name": {"type": "string", "minLength": 1}, "value": {"type": "string", "minLength": 1}}
+      }
+    }
+  }
+}

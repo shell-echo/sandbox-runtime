@@ -57,6 +57,9 @@ paths:
               schema:
                 $ref: ../schemas/standard-error.schema.json
 components:
+  schemas:
+    AdmissionContext:
+      $ref: ../schemas/admission-context.schema.json
   securitySchemes:
     mutualTLS:
       type: mutualTLS
