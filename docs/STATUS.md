@@ -192,8 +192,9 @@ The protected transport composition is currently an unmerged feature-branch
 change at `fdb3424`. Focused `provider/admission` and `providerapi` tests pass,
 including Context caller mismatch, Schema bounds, strict target binding, JWS
 Context binding, guard-before-dispatch, and bounded unavailable mapping. The
-full race/shuffle suite, `go vet`, Contract lock/projection checks, and PR CI
-have not yet been rerun for this commit. The command composition root still
+full race/shuffle suite, `go vet`, Contract lock/projection checks, and tagged
+Docker integration all pass locally for this commit. PR CI has not yet run.
+The command composition root still
 does not load operator trusted-key paths or instantiate `ProtectedTransportOptions`;
 the listener remains discovery-only unless a caller explicitly supplies the
 protected options. This is component/feature-branch evidence, not a merged or
