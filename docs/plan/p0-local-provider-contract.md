@@ -1,6 +1,7 @@
 # P0 Local Provider Contract Migration
 
-Status: in progress on `codex/p1.1-release-gate-status`.
+Status: locally implemented and validated on `codex/p1.1-release-gate-status`
+at `6043236`; CI/review pending.
 
 The former external Agent Platform Contract is no longer an authority or a
 runtime dependency. This plan establishes the repository-owned MIT Contract
@@ -24,12 +25,15 @@ arrays empty until a later reviewed protocol change.
 
 ## Slice Order
 
-1. P0.0: land the Contract resources and bind their Git tree/digests.
+1. P0.0: land the Contract resources and bind their Git tree/digests. Passed
+   in `c0efc67` and `fb83eb5`.
 2. P0.1: replace the external lock verifier with local tree, digest, manifest,
    semantic-rule, fixture, and Suite checks.
+   Passed locally in `6043236`.
 3. P0.2: migrate projection tests, DTO fixtures, and CI to the local Contract.
+   Passed locally in `6043236`.
 4. P0.3: update architecture, development standards, ADRs, README, plans, and
-   status ledger.
+   status ledger. Passed locally in `6043236`.
 5. P0.4: rerun P1.1a-b-c/d evidence under the local Contract; do not advance
    P1.2 until the P1.1 release gate closes.
 
