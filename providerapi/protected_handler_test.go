@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -110,6 +111,32 @@ func TestProtectedHandlerRejectsInactiveBearerBeforeContext(t *testing.T) {
 				t.Fatalf("inactive bearer response=%d guard_calls=%d body=%s", response.Code, guard.Calls(), response.Body.String())
 			}
 		})
+	}
+}
+
+func TestProtectedHandlerMapsBearerExpiryDuringDocumentReadToUnauthorized(t *testing.T) {
+	material := newTestMTLSMaterial(t, []string{testAllowedIdentity})
+	identity, err := newClientIdentityAdmission([]string{testAllowedIdentity})
+	if err != nil {
+		t.Fatal(err)
+	}
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	clock := &advancingAdmissionClock{now: releaseGateTestTime()}
+	guard := &releaseGateGuard{decision: admission.MutationGuardAccepted}
+	handler := newReleaseGateHandlerWithClock(t, identity, publicKey, guard, clock)
+	request := newProtectedReleaseRequest(t, allProtectedReleaseRoutes()[5], privateKey, material.client, "jti-expiry-during-read")
+	body, err := io.ReadAll(request.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Body = &expiryAdvancingBody{data: body, clock: clock, expiredAt: releaseGateTestTime().Add(5 * time.Minute)}
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusUnauthorized || guard.Calls() != 0 {
+		t.Fatalf("expired during document read response=%d guard_calls=%d body=%s", response.Code, guard.Calls(), response.Body.String())
 	}
 }
 
@@ -282,6 +309,45 @@ func validProtectedContextForTest(t *testing.T, operation admission.Operation, p
 type testAdmissionClock struct{ now time.Time }
 
 func (c testAdmissionClock) Now() time.Time { return c.now }
+
+type advancingAdmissionClock struct {
+	mu  sync.Mutex
+	now time.Time
+}
+
+func (c *advancingAdmissionClock) Now() time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.now
+}
+
+func (c *advancingAdmissionClock) SetNow(now time.Time) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.now = now
+}
+
+type expiryAdvancingBody struct {
+	data      []byte
+	clock     *advancingAdmissionClock
+	expiredAt time.Time
+	advanced  bool
+}
+
+func (body *expiryAdvancingBody) Read(target []byte) (int, error) {
+	if !body.advanced {
+		body.clock.SetNow(body.expiredAt)
+		body.advanced = true
+	}
+	if len(body.data) == 0 {
+		return 0, io.EOF
+	}
+	read := copy(target, body.data)
+	body.data = body.data[read:]
+	return read, nil
+}
+
+func (body *expiryAdvancingBody) Close() error { return nil }
 
 type testAdmissionGuard struct {
 	mu    sync.Mutex

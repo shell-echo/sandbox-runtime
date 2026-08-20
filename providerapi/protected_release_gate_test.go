@@ -282,9 +282,13 @@ func TestProtectedHandlerConcurrentAdmissionMatrix(t *testing.T) {
 }
 
 func newReleaseGateHandler(t *testing.T, identity *clientIdentityAdmission, publicKey ed25519.PublicKey, guard *releaseGateGuard) http.Handler {
+	return newReleaseGateHandlerWithClock(t, identity, publicKey, guard, testAdmissionClock{now: releaseGateTestTime()})
+}
+
+func newReleaseGateHandlerWithClock(t *testing.T, identity *clientIdentityAdmission, publicKey ed25519.PublicKey, guard *releaseGateGuard, clock admission.Clock) http.Handler {
 	t.Helper()
 	keys := mustTestTrustedKeySource(t, publicKey)
-	gate, err := admission.NewProtectedOperationGate(keys, testAdmissionClock{now: releaseGateTestTime()}, guard)
+	gate, err := admission.NewProtectedOperationGate(keys, clock, guard)
 	if err != nil {
 		t.Fatal(err)
 	}

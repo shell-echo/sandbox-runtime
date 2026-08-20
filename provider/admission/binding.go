@@ -5,7 +5,10 @@ import (
 	"time"
 )
 
-var ErrUnauthorizedTokenBinding = errors.New("provider admission token binding is not authorized")
+var (
+	ErrUnauthorizedTokenBinding = errors.New("provider admission token binding is not authorized")
+	errInactiveBearer           = errors.New("provider admission bearer is inactive")
+)
 
 // TokenBinding contains only transport-verified and request-normalized facts
 // that must exactly match a verified protected-operation token. Caller is the
@@ -67,7 +70,13 @@ func ValidateTokenBinding(token VerifiedToken, binding TokenBinding, clock Clock
 		return ErrUnauthorizedTokenBinding
 	}
 	now := clock.Now()
-	if now.IsZero() || !validTokenLifetime(claims, binding.PolicyDecisionAt, deadline, now) {
+	if now.IsZero() {
+		return ErrUnauthorizedTokenBinding
+	}
+	if !validBearerLifetime(claims, now) {
+		return errors.Join(ErrUnauthorizedTokenBinding, errInactiveBearer)
+	}
+	if !validTokenLifetime(claims, binding.PolicyDecisionAt, deadline, now) {
 		return ErrUnauthorizedTokenBinding
 	}
 	return nil

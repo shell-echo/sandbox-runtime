@@ -102,6 +102,9 @@ func (g *ProtectedOperationGate) Admit(ctx context.Context, request ProtectedOpe
 		return ErrUnauthenticated
 	}
 	if err := ValidateTokenBinding(token, request.Binding, g.clock); err != nil {
+		if errors.Is(err, errInactiveBearer) {
+			return ErrUnauthenticated
+		}
 		return ErrForbidden
 	}
 	if err := VerifyRequestDigest(token.Claims.RequestDigestProfile, token.Claims.RequestDigest, request.Document); err != nil {

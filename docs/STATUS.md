@@ -237,9 +237,12 @@ production readiness remain unproven.
 
 P1.1d local evidence then added the bearer-lifetime classification regression
 and a generated test-local admission matrix for all 14 protected routes. The
-focused race-enabled Provider API matrix passed on 2026-08-20. It proves only
-the tested transport/gate boundary; it does not substitute for repository or
-driver dispatch evidence, CI, or the P1.1 release gate.
+focused race-enabled Provider API matrix passed on 2026-08-20. A follow-up
+review case also proved that a Bearer expiring while a protected request body
+is read maps to `401` at final admission rather than `403`; the regression
+preserves the no-dispatch guard boundary. It proves only the tested
+transport/gate boundary; it does not substitute for repository or driver
+dispatch evidence, CI, or the P1.1 release gate.
 
 ## Open gate and unproven claims
 
