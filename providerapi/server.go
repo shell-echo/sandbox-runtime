@@ -11,14 +11,17 @@ import (
 
 	"github.com/shell-echo/sandbox-runtime/option"
 	"github.com/shell-echo/sandbox-runtime/provider"
+	"github.com/shell-echo/sandbox-runtime/provider/admission"
 )
 
 const (
-	providerReadHeaderTimeout = 10 * time.Second
-	providerReadTimeout       = 30 * time.Second
-	providerWriteTimeout      = 30 * time.Second
-	providerIdleTimeout       = 120 * time.Second
-	providerMaxHeaderBytes    = 8 << 10
+	providerReadHeaderTimeout       = 10 * time.Second
+	providerReadTimeout             = 30 * time.Second
+	providerWriteTimeout            = 30 * time.Second
+	providerIdleTimeout             = 120 * time.Second
+	providerMaxHeaderBytes          = 8 << 10
+	providerProtectedHeaderReserve  = 8 << 10
+	providerProtectedMaxHeaderBytes = admission.MaxAdmissionContextBytes + maxCompactBearerBytes + providerProtectedHeaderReserve
 )
 
 // TransportOptions contains only the process-local inputs needed to construct
@@ -30,6 +33,7 @@ type TransportOptions struct {
 	ServerPrivateKeyFile       string
 	ClientCABundleFile         string
 	AllowedClientURIIdentities []string
+	Protected                  *ProtectedTransportOptions
 }
 
 // Server is the dedicated mTLS-only Provider API server. Construction loads
@@ -68,22 +72,45 @@ func NewServer(ctx context.Context, options TransportOptions, source provider.Ca
 	if err != nil {
 		return nil, err
 	}
+	rootHandler := handler
+	maxHeaderBytes := providerMaxHeaderBytes
+	if options.Protected != nil {
+		protected, protectedErr := newProtectedHandler(identityAdmission, *options.Protected)
+		if protectedErr != nil {
+			return nil, protectedErr
+		}
+		rootHandler = &providerHandler{capabilities: handler, protected: protected}
+		maxHeaderBytes = providerProtectedMaxHeaderBytes
+	}
 
 	listenConfig := &net.ListenConfig{}
 	return &Server{
 		identityAdmission: identityAdmission,
 		http: &http.Server{
 			Addr:              options.Address.Addr(),
-			Handler:           handler,
+			Handler:           rootHandler,
 			TLSConfig:         tlsConfig,
 			ReadHeaderTimeout: providerReadHeaderTimeout,
 			ReadTimeout:       providerReadTimeout,
 			WriteTimeout:      providerWriteTimeout,
 			IdleTimeout:       providerIdleTimeout,
-			MaxHeaderBytes:    providerMaxHeaderBytes,
+			MaxHeaderBytes:    maxHeaderBytes,
 		},
 		listen: listenConfig.Listen,
 	}, nil
+}
+
+type providerHandler struct {
+	capabilities http.Handler
+	protected    http.Handler
+}
+
+func (h *providerHandler) ServeHTTP(response http.ResponseWriter, request *http.Request) {
+	if request.URL.Path == capabilitiesPath {
+		h.capabilities.ServeHTTP(response, request)
+		return
+	}
+	h.protected.ServeHTTP(response, request)
 }
 
 // Startup serves HTTPS until Shutdown completes. Empty certificate arguments
@@ -108,5 +135,12 @@ func (s *Server) Startup(ctx context.Context) error {
 // Shutdown gracefully stops the Provider listener within the caller's
 // deadline.
 func (s *Server) Shutdown(ctx context.Context) error {
-	return s.http.Shutdown(ctx)
+	return normalizeProviderShutdownError(s.http.Shutdown(ctx))
+}
+
+func normalizeProviderShutdownError(err error) error {
+	if errors.Is(err, net.ErrClosed) {
+		return nil
+	}
+	return err
 }

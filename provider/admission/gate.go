@@ -50,6 +50,29 @@ func NewProtectedOperationGate(keys TrustedKeySource, clock Clock, guard Mutatio
 	return &ProtectedOperationGate{keys: keys, clock: clock, guard: guard}, nil
 }
 
+// AuthenticateBearer verifies only the compact JWS authentication boundary.
+// Transport uses it before evaluating auxiliary Context or document input so
+// malformed or unverifiable bearer material cannot probe those validations.
+// Binding, digest, replay, and fencing checks remain in Admit.
+func (g *ProtectedOperationGate) AuthenticateBearer(ctx context.Context, compactToken string) error {
+	if g == nil || g.keys == nil {
+		return ErrUnavailable
+	}
+	if ctx == nil {
+		return ErrUnauthenticated
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if _, err := VerifyCompactJWS(ctx, compactToken, g.keys); err != nil {
+		if contextErr := ctx.Err(); contextErr != nil {
+			return contextErr
+		}
+		return ErrUnauthenticated
+	}
+	return nil
+}
+
 // Admit verifies one compact token against transport-normalized and
 // TLS-verified binding facts, then verifies the actual canonical request or
 // read-descriptor digest. The compact token and document are transient input

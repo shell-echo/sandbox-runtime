@@ -12,22 +12,25 @@ var ErrUnauthorizedTokenBinding = errors.New("provider admission token binding i
 // unique allowlisted URI SAN selected from a TLS-verified client leaf, never a
 // caller-provided header value.
 type TokenBinding struct {
-	Caller               string
-	ProviderRevisionID   string
-	Audience             string
-	Operation            Operation
-	SandboxID            string
-	OperationID          string
-	AttemptID            string
-	FencingToken         int64
-	TenantID             string
-	WorkOrderID          string
-	PolicyDigest         string
-	RequestContractID    string
-	RequestDigestProfile DigestProfile
-	RequestDigest        string
-	PolicyDecisionAt     time.Time
-	DeadlineAt           time.Time
+	Caller                        string
+	ProviderRevisionID            string
+	Audience                      string
+	Operation                     Operation
+	SandboxID                     string
+	OperationID                   string
+	AttemptID                     string
+	FencingToken                  int64
+	TenantID                      string
+	WorkOrderID                   string
+	PolicyDigest                  string
+	RequestContractID             string
+	RequestDigestProfile          DigestProfile
+	RequestDigest                 string
+	PolicyDecisionAt              time.Time
+	DeadlineAt                    time.Time
+	AdmissionContextContractID    string
+	AdmissionContextDigestProfile string
+	AdmissionContextDigest        string
 }
 
 // ValidateTokenBinding rejects a verified token unless every contextual value
@@ -51,7 +54,11 @@ func ValidateTokenBinding(token VerifiedToken, binding TokenBinding, clock Clock
 		claims.PolicyDigest != binding.PolicyDigest ||
 		claims.RequestContractID != binding.RequestContractID ||
 		claims.RequestDigestProfile != binding.RequestDigestProfile ||
-		claims.RequestDigest != binding.RequestDigest {
+		claims.RequestDigest != binding.RequestDigest ||
+		(binding.AdmissionContextContractID != "" && !sameRFC3339Time(claims.PolicyDecidedAt, binding.PolicyDecisionAt)) ||
+		claims.AdmissionContextContractID != binding.AdmissionContextContractID ||
+		claims.AdmissionContextDigestProfile != binding.AdmissionContextDigestProfile ||
+		claims.AdmissionContextDigest != binding.AdmissionContextDigest {
 		return ErrUnauthorizedTokenBinding
 	}
 
@@ -64,6 +71,11 @@ func ValidateTokenBinding(token VerifiedToken, binding TokenBinding, clock Clock
 		return ErrUnauthorizedTokenBinding
 	}
 	return nil
+}
+
+func sameRFC3339Time(value string, expected time.Time) bool {
+	parsed, err := time.Parse(time.RFC3339Nano, value)
+	return err == nil && parsed.Equal(expected)
 }
 
 func validTokenBinding(binding TokenBinding) bool {
