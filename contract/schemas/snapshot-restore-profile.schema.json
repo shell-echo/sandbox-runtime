@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:shell-echo:sandbox-runtime:contract:snapshot-restore-profile:v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["profile_id", "level", "suite_id", "suite_version", "suite_digest"],
+  "properties": {
+    "profile_id": {"type": "string", "minLength": 1, "maxLength": 200},
+    "level": {"enum": ["workspace", "filesystem", "process"]},
+    "suite_id": {"const": "sandbox-provider"},
+    "suite_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+    "suite_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}

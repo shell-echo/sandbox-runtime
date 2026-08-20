@@ -1,5 +1,5 @@
-// Package providercontract validates the local Provider v1 wire projection
-// against a separately supplied, locked Agent Contract checkout.
+// Package providercontract validates the Provider v1 wire projection against
+// the repository-owned Contract locked by this module.
 package providercontract
 
 import (
@@ -39,8 +39,8 @@ type Projection struct {
 	requestLimits map[string]int64
 }
 
-// Load verifies the source checkout before reading and compiling any projected
-// OpenAPI Schema or example resource.
+// Load verifies the local Contract source before reading and compiling any
+// projected OpenAPI Schema or fixture resource.
 func Load(ctx context.Context, lockPath, sourceRoot string) (*Projection, error) {
 	lock, err := contractlock.Load(lockPath)
 	if err != nil {
@@ -134,7 +134,7 @@ func (p *Projection) ReadExample(name string) ([]byte, error) {
 	if !fs.ValidPath(name) || path.Base(name) != name {
 		return nil, errors.New("example name must be one clean path segment")
 	}
-	examplePath, err := securePath(p.contractRoot, path.Join("examples/contracts", name))
+	examplePath, err := securePath(p.contractRoot, path.Join("fixtures", name))
 	if err != nil {
 		return nil, err
 	}

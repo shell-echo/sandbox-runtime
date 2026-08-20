@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:shell-echo:sandbox-runtime:contract:provider-limits:v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["max_cpu_millis", "max_memory_bytes", "max_ephemeral_storage_bytes", "max_lease_seconds", "max_exec_seconds"],
+  "properties": {
+    "max_cpu_millis": {"type": "integer", "minimum": 1},
+    "max_memory_bytes": {"type": "integer", "minimum": 1},
+    "max_ephemeral_storage_bytes": {"type": "integer", "minimum": 1},
+    "max_workspace_bytes": {"type": "integer", "minimum": 1},
+    "max_gpu_count": {"type": "integer", "minimum": 0},
+    "max_lease_seconds": {"type": "integer", "minimum": 1},
+    "max_exec_seconds": {"type": "integer", "minimum": 1}
+  }
+}

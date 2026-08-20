@@ -1,6 +1,6 @@
 # ADR 0001: Agent Platform Provider Boundary
 
-- Status: Accepted
+- Status: Accepted (ownership model; external compatibility dependency superseded)
 - Date: 2026-07-30
 
 ## Context
@@ -35,13 +35,14 @@ repository's Docker driver or provider-local controller.
 
 The existing `/instances` API remains an internal development and management
 surface. Its request, model, state machine, errors, and response envelope are not
-the Provider API wire contract. Provider DTOs must be generated or validated
-from the locked upstream Contract and translated at an explicit adapter boundary.
+the Provider API wire contract. Provider DTOs must be validated from the
+repository-owned Provider Contract and translated at an explicit adapter
+boundary.
 
 ## Consequences
 
-- Agent Blueprint and Application planning text must be coordinated before an
-  end-to-end integration claim; this repository cannot change that authority.
+- External caller planning text must be coordinated before an end-to-end
+  integration claim; this repository cannot change caller authority.
 - Both the Agent Platform and this service retain operation records, but for
   different authorities. Correlation IDs, attempts, and fencing tokens connect
   them without making provider-local state authoritative for platform outcomes.
@@ -53,5 +54,5 @@ from the locked upstream Contract and translated at an explicit adapter boundary
 
 ## Non-goals
 
-This decision does not implement Provider API v1, modify the upstream Contract,
-approve production multi-tenant Docker isolation, or adapt DeerFlow.
+This decision does not implement Provider API v1, approve production
+multi-tenant Docker isolation, or adapt a third-party runtime.

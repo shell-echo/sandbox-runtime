@@ -1,0 +1,62 @@
+openapi: 3.1.1
+info:
+  title: Shell Echo Sandbox Runtime Provider API
+  version: 1.0.0
+  x-contract-namespace: urn:shell-echo:sandbox-runtime:provider-v1
+  x-contract-license: MIT
+servers:
+  - url: https://provider.invalid
+paths:
+  /v1/capabilities:
+    get:
+      operationId: getCapabilities
+      summary: Discover immutable provider capabilities
+      security:
+        - mutualTLS: []
+      responses:
+        '200':
+          description: Immutable capability snapshot
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/provider-capabilities.schema.json
+        '400':
+          description: Request metadata is not empty or supported
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '401':
+          description: Client certificate or bearer authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '403':
+          description: Client identity is not admitted
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '500':
+          description: Provider failed to construct its immutable snapshot
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '501':
+          description: HTTP parser rejected an unsupported transfer coding
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '503':
+          description: Provider is temporarily unavailable
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+components:
+  securitySchemes:
+    mutualTLS:
+      type: mutualTLS

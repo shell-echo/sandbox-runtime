@@ -1,5 +1,5 @@
-// Package contractlock verifies the immutable Agent Platform Contract inputs
-// consumed by this repository without copying those resources into this module.
+// Package contractlock verifies the immutable repository-owned Provider
+// Contract consumed by this module.
 package contractlock
 
 import (
@@ -29,7 +29,7 @@ var (
 	digestPattern    = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 )
 
-// Lock identifies one immutable upstream Contract input set.
+// Lock identifies one immutable local Contract input set.
 type Lock struct {
 	FormatVersion int          `json:"format_version"`
 	Source        Source       `json:"source"`
@@ -37,25 +37,30 @@ type Lock struct {
 	SandboxSuite  SandboxSuite `json:"sandbox_suite"`
 }
 
-// Source identifies the upstream Git repository and Contract tree.
+// Source identifies the Git repository and Contract tree that owns the
+// Contract. The verifier permits later commits only when this tree is unchanged.
 type Source struct {
 	Repository   string `json:"repository"`
 	Revision     string `json:"revision"`
 	ContractTree string `json:"contract_tree"`
 }
 
-// Contract identifies the upstream manifest and Provider OpenAPI.
+// Contract identifies the repository-owned manifest, OpenAPI, and semantic
+// resources.
 type Contract struct {
-	Root           string `json:"root"`
-	License        string `json:"license"`
-	Consumption    string `json:"consumption"`
-	ManifestPath   string `json:"manifest_path"`
-	ManifestDigest string `json:"manifest_digest"`
-	OpenAPIPath    string `json:"openapi_path"`
-	OpenAPISHA256  string `json:"openapi_sha256"`
+	Root              string `json:"root"`
+	Namespace         string `json:"namespace"`
+	Version           string `json:"version"`
+	License           string `json:"license"`
+	ManifestPath      string `json:"manifest_path"`
+	ManifestDigest    string `json:"manifest_digest"`
+	OpenAPIPath       string `json:"openapi_path"`
+	OpenAPISHA256     string `json:"openapi_sha256"`
+	SemanticRulesPath string `json:"semantic_rules_path"`
+	FixturesRoot      string `json:"fixtures_root"`
 }
 
-// SandboxSuite identifies the required upstream conformance input.
+// SandboxSuite identifies the required local conformance input.
 type SandboxSuite struct {
 	Path            string `json:"path"`
 	SuiteID         string `json:"suite_id"`
@@ -116,29 +121,36 @@ func (l Lock) Validate() error {
 		return errors.New("contract source tree must be a full lowercase Git object ID")
 	}
 	for name, path := range map[string]string{
-		"contract root": l.Contract.Root,
-		"manifest":      l.Contract.ManifestPath,
-		"OpenAPI":       l.Contract.OpenAPIPath,
-		"Sandbox Suite": l.SandboxSuite.Path,
+		"contract root":  l.Contract.Root,
+		"manifest":       l.Contract.ManifestPath,
+		"OpenAPI":        l.Contract.OpenAPIPath,
+		"semantic rules": l.Contract.SemanticRulesPath,
+		"fixtures root":  l.Contract.FixturesRoot,
+		"Sandbox Suite":  l.SandboxSuite.Path,
 	} {
 		if !fs.ValidPath(path) || path == "." {
 			return fmt.Errorf("%s path must be a clean relative slash path", name)
 		}
 	}
 	for name, path := range map[string]string{
-		"manifest":      l.Contract.ManifestPath,
-		"OpenAPI":       l.Contract.OpenAPIPath,
-		"Sandbox Suite": l.SandboxSuite.Path,
+		"manifest":       l.Contract.ManifestPath,
+		"OpenAPI":        l.Contract.OpenAPIPath,
+		"semantic rules": l.Contract.SemanticRulesPath,
+		"fixtures root":  l.Contract.FixturesRoot,
+		"Sandbox Suite":  l.SandboxSuite.Path,
 	} {
 		if !strings.HasPrefix(path, l.Contract.Root+"/") {
 			return fmt.Errorf("%s path must be inside the Contract root", name)
 		}
 	}
-	if l.Contract.License != "LicenseRef-Proprietary" {
-		return errors.New("unexpected upstream Contract license")
+	if l.Contract.Namespace != "urn:shell-echo:sandbox-runtime:provider-v1" {
+		return errors.New("unexpected Provider Contract namespace")
 	}
-	if l.Contract.Consumption != "read-only-checkout" {
-		return errors.New("upstream Contract must use read-only-checkout consumption")
+	if !regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+$`).MatchString(l.Contract.Version) {
+		return errors.New("Provider Contract version must be semantic version")
+	}
+	if l.Contract.License != "MIT" {
+		return errors.New("Provider Contract must use the repository MIT license")
 	}
 	for name, digest := range map[string]string{
 		"manifest":      l.Contract.ManifestDigest,
@@ -219,13 +231,22 @@ func Verify(ctx context.Context, lock Lock, sourceRoot string) (Report, error) {
 		return Report{}, err
 	}
 	var manifest struct {
-		ManifestDigest string `json:"manifest_digest"`
+		Namespace string `json:"namespace"`
+		Version   string `json:"version"`
+		License   string `json:"license"`
 	}
 	if err := readMetadata(manifestPath, &manifest); err != nil {
 		return Report{}, fmt.Errorf("read Contract manifest: %w", err)
 	}
-	if manifest.ManifestDigest != lock.Contract.ManifestDigest {
-		return Report{}, fmt.Errorf("Contract manifest digest %s, want %s", manifest.ManifestDigest, lock.Contract.ManifestDigest)
+	if manifest.Namespace != lock.Contract.Namespace || manifest.Version != lock.Contract.Version || manifest.License != lock.Contract.License {
+		return Report{}, errors.New("Contract manifest identity does not match the contract lock")
+	}
+	manifestDigest, err := fileSHA256(manifestPath)
+	if err != nil {
+		return Report{}, fmt.Errorf("hash Contract manifest: %w", err)
+	}
+	if manifestDigest != lock.Contract.ManifestDigest {
+		return Report{}, fmt.Errorf("Contract manifest digest %s, want %s", manifestDigest, lock.Contract.ManifestDigest)
 	}
 
 	openAPIPath, err := securePath(root, lock.Contract.OpenAPIPath)
@@ -238,6 +259,32 @@ func Verify(ctx context.Context, lock Lock, sourceRoot string) (Report, error) {
 	}
 	if openAPIDigest != lock.Contract.OpenAPISHA256 {
 		return Report{}, fmt.Errorf("Provider OpenAPI digest %s, want %s", openAPIDigest, lock.Contract.OpenAPISHA256)
+	}
+
+	semanticRulesPath, err := securePath(root, lock.Contract.SemanticRulesPath)
+	if err != nil {
+		return Report{}, err
+	}
+	var semanticRules struct {
+		Namespace string            `json:"namespace"`
+		Version   string            `json:"version"`
+		Rules     []json.RawMessage `json:"rules"`
+	}
+	if err := readMetadata(semanticRulesPath, &semanticRules); err != nil {
+		return Report{}, fmt.Errorf("read semantic rules: %w", err)
+	}
+	if semanticRules.Namespace != lock.Contract.Namespace || semanticRules.Version != lock.Contract.Version || len(semanticRules.Rules) == 0 {
+		return Report{}, errors.New("semantic rules identity or rules are invalid")
+	}
+	fixturesRoot, err := securePath(root, lock.Contract.FixturesRoot)
+	if err != nil {
+		return Report{}, err
+	}
+	if info, err := os.Stat(fixturesRoot); err != nil || !info.IsDir() {
+		if err == nil {
+			err = errors.New("not a directory")
+		}
+		return Report{}, fmt.Errorf("inspect Contract fixtures: %w", err)
 	}
 
 	suitePath, err := securePath(root, lock.SandboxSuite.Path)
@@ -273,7 +320,7 @@ func Verify(ctx context.Context, lock Lock, sourceRoot string) (Report, error) {
 		LockedRevision: lockedRevision,
 		CheckoutHead:   checkoutHead,
 		ContractTree:   checkoutTree,
-		ManifestDigest: manifest.ManifestDigest,
+		ManifestDigest: manifestDigest,
 		OpenAPISHA256:  openAPIDigest,
 		SuiteDigest:    suite.SuiteDigest,
 	}, nil
@@ -303,7 +350,14 @@ func securePath(root, relative string) (string, error) {
 }
 
 func normalizeRepository(repository string) string {
-	return strings.TrimSuffix(strings.TrimSuffix(repository, "/"), ".git")
+	repository = strings.TrimSpace(repository)
+	if strings.HasPrefix(repository, "git@") {
+		if separator := strings.IndexByte(repository, ':'); separator > 0 {
+			repository = "https://" + repository[4:separator] + "/" + repository[separator+1:]
+		}
+	}
+	repository = strings.TrimSuffix(strings.TrimSuffix(repository, "/"), ".git")
+	return strings.TrimPrefix(repository, "https://")
 }
 
 func readMetadata(path string, destination any) error {

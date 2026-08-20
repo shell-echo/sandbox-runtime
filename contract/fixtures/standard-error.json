@@ -1,0 +1,6 @@
+{
+  "code": "SANDBOX_REQUEST_INVALID",
+  "message": "request metadata is invalid",
+  "retryable": false,
+  "trace_id": "trace-local-1"
+}

@@ -13,9 +13,8 @@ import (
 
 func TestVerifyAcceptsEquivalentCleanContractTree(t *testing.T) {
 	source := t.TempDir()
-	writeTestFile(t, source, "contract/compatibility/contract-manifest.json", `{"manifest_digest":"sha256:`+strings.Repeat("a", 64)+`"}`)
+	writeContractFixture(t, source)
 	writeTestFile(t, source, "contract/openapi/sandbox-provider-v1.yaml", "openapi: 3.1.1\n")
-	writeTestFile(t, source, "contract/conformance/sandbox/v1/suite.json", `{"suite_id":"sandbox-provider","suite_version":"1.0.0","suite_digest":"sha256:`+strings.Repeat("b", 64)+`","profiles":[{"profile_id":"sandbox-core-v1"}]}`)
 	runGit(t, source, "init")
 	runGit(t, source, "config", "user.name", "Contract Lock Test")
 	runGit(t, source, "config", "user.email", "contract-lock@example.invalid")
@@ -44,9 +43,8 @@ func TestVerifyAcceptsEquivalentCleanContractTree(t *testing.T) {
 
 func TestVerifyRejectsDirtyContract(t *testing.T) {
 	source := t.TempDir()
-	writeTestFile(t, source, "contract/compatibility/contract-manifest.json", `{"manifest_digest":"sha256:`+strings.Repeat("a", 64)+`"}`)
+	writeContractFixture(t, source)
 	writeTestFile(t, source, "contract/openapi/sandbox-provider-v1.yaml", "openapi: 3.1.1\n")
-	writeTestFile(t, source, "contract/conformance/sandbox/v1/suite.json", `{"suite_id":"sandbox-provider","suite_version":"1.0.0","suite_digest":"sha256:`+strings.Repeat("b", 64)+`","profiles":[{"profile_id":"sandbox-core-v1"}]}`)
 	runGit(t, source, "init")
 	runGit(t, source, "config", "user.name", "Contract Lock Test")
 	runGit(t, source, "config", "user.email", "contract-lock@example.invalid")
@@ -90,22 +88,33 @@ func testLock(revision, tree, openAPIDigest string) Lock {
 			ContractTree: tree,
 		},
 		Contract: Contract{
-			Root:           "contract",
-			License:        "LicenseRef-Proprietary",
-			Consumption:    "read-only-checkout",
-			ManifestPath:   "contract/compatibility/contract-manifest.json",
-			ManifestDigest: "sha256:" + strings.Repeat("a", 64),
-			OpenAPIPath:    "contract/openapi/sandbox-provider-v1.yaml",
-			OpenAPISHA256:  openAPIDigest,
+			Root:              "contract",
+			Namespace:         "urn:shell-echo:sandbox-runtime:provider-v1",
+			Version:           "1.0.0",
+			License:           "MIT",
+			ManifestPath:      "contract/compatibility/contract-manifest.json",
+			ManifestDigest:    digestString([]byte(`{"license":"MIT","namespace":"urn:shell-echo:sandbox-runtime:provider-v1","version":"1.0.0"}`)),
+			OpenAPIPath:       "contract/openapi/sandbox-provider-v1.yaml",
+			OpenAPISHA256:     openAPIDigest,
+			SemanticRulesPath: "contract/semantic-rules/provider-v1.json",
+			FixturesRoot:      "contract/fixtures",
 		},
 		SandboxSuite: SandboxSuite{
 			Path:            "contract/conformance/sandbox/v1/suite.json",
 			SuiteID:         "sandbox-provider",
 			SuiteVersion:    "1.0.0",
 			SuiteDigest:     "sha256:" + strings.Repeat("b", 64),
-			RequiredProfile: "sandbox-core-v1",
+			RequiredProfile: "sandbox-runtime-provider-v1",
 		},
 	}
+}
+
+func writeContractFixture(t *testing.T, source string) {
+	t.Helper()
+	writeTestFile(t, source, "contract/compatibility/contract-manifest.json", `{"license":"MIT","namespace":"urn:shell-echo:sandbox-runtime:provider-v1","version":"1.0.0"}`)
+	writeTestFile(t, source, "contract/semantic-rules/provider-v1.json", `{"namespace":"urn:shell-echo:sandbox-runtime:provider-v1","version":"1.0.0","rules":[{}]}`)
+	writeTestFile(t, source, "contract/fixtures/capabilities.json", `{}`)
+	writeTestFile(t, source, "contract/conformance/sandbox/v1/suite.json", `{"suite_id":"sandbox-provider","suite_version":"1.0.0","suite_digest":"sha256:`+strings.Repeat("b", 64)+`","profiles":[{"profile_id":"sandbox-runtime-provider-v1"}]}`)
 }
 
 func writeTestFile(t *testing.T, root, relative, contents string) {

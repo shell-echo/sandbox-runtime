@@ -13,30 +13,22 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  agent-contract-lock:
+  provider-contract:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
-          repository: CelestialsGroup/agent-blueprints
-          ref: cf623ac7b6c8730a0a609076adaefe5197488667
-          path: .agent-contract-source
-          persist-credentials: false
+          fetch-depth: 0
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version-file: go.mod
           cache: true
-      - name: Verify locked Agent Contract inputs
-        run: go run ./cmd/verify-agent-contract -source-root .agent-contract-source
+      - name: Verify locked local Provider Contract
+        run: go run ./cmd/verify-contract -source-root .
       - name: Validate Provider v1 DTO projection and fixtures
-        env:
-          AGENT_CONTRACT_SOURCE_ROOT: ${{ github.workspace }}/.agent-contract-source
         run: go test -count=1 ./providerapi/v1 -run '^TestLockedContractProjection$'
       - name: Validate Provider capability response projection
-        env:
-          AGENT_CONTRACT_SOURCE_ROOT: ${{ github.workspace }}/.agent-contract-source
         run: go test -count=1 ./providerapi -run '^TestLockedCapabilityResponseSchema$'
 
   test:
@@ -44,6 +36,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version-file: go.mod
