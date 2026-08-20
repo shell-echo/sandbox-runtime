@@ -12,7 +12,7 @@ production readiness.
 
 | Item | Evidence | Status |
 | --- | --- | --- |
-| Checkout | `codex/p1.1-release-gate-status@6043236` | In progress |
+| Checkout | `codex/p1.1-release-gate-status@7b35a63` | In progress |
 | Worktree | clean after the Contract migration changes are committed | Verified |
 | Contract namespace | `urn:shell-echo:sandbox-runtime:provider-v1` | Locked |
 | Contract version/license | `1.0.0` / MIT | Locked |
@@ -30,7 +30,7 @@ It does not clone, mount, or read an external source repository.
 | P0.0 | Freeze local Contract ownership, namespace, version, license, resource layout, and lock | Passed locally; commits `c0efc67`, `fb83eb5` | Full verifier and CI on the migration branch |
 | P0.1 | Replace external lock verifier with local tree/digest/semantic/fixture validation | Passed locally in `6043236` | CI provider-contract job |
 | P0.2 | Migrate DTO/projection tests and CI to local Contract | Passed locally in `6043236` | CI provider-contract job |
-| P0.3 | Rebase architecture, ADRs, README, plans, and status on local Contract | Passed locally in `6043236` | Documentation review on PR |
+| P0.3 | Rebase architecture, ADRs, README, plans, and status on local Contract | Passed locally in `7b35a63` | Documentation review on PR |
 | P1.1a | Provider v1 DTOs and strict decoder | Historical implementation exists; compatibility evidence reset by Contract change | Re-run local Contract projection and decoder matrix |
 | P1.1b | mTLS-only capability discovery | Implementation exists; local Contract response authority now explicit | Real TLS matrix, local response projection, CI |
 | P1.1c | Protected-operation admission primitives and transport composition | Implementation exists; local Contract semantic coverage is incomplete | Re-run admission matrix under local rules; do not claim lifecycle |
@@ -78,7 +78,7 @@ Pending:
 
 ## Next Entry
 
-Open review for `6043236` and wait for the local `provider-contract` CI job. Only after the
+Open review for `7b35a63` and wait for the local `provider-contract` CI job. Only after the
 new Contract projection, admission matrix, and CI are green may P1.1d be
 reopened. P1.2 remains prohibited until that release gate is explicitly
 closed.
