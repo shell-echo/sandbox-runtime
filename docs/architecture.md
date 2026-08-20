@@ -75,12 +75,12 @@ The compatibility implementation must be generated or validated against the
 immutable upstream revision in the contract lock. The locked contract identifies
 itself as Sandbox Provider API `1.0.0`, protocol `v1`:
 
-- [Sandbox Provider contract](https://github.com/CelestialsGroup/agent-blueprints/blob/0c91871fa469e951b8a508fe735a2a9a5797a67e/blueprint/docs/33_SANDBOX_PROVIDER_CONTRACT.md)
-- [Sandbox security and isolation](https://github.com/CelestialsGroup/agent-blueprints/blob/0c91871fa469e951b8a508fe735a2a9a5797a67e/blueprint/docs/34_SANDBOX_SECURITY_AND_ISOLATION.md)
-- [Conformance and migration](https://github.com/CelestialsGroup/agent-blueprints/blob/0c91871fa469e951b8a508fe735a2a9a5797a67e/blueprint/docs/36_SANDBOX_CONFORMANCE_AND_MIGRATION.md)
-- [OpenAPI v1](https://github.com/CelestialsGroup/agent-blueprints/blob/0c91871fa469e951b8a508fe735a2a9a5797a67e/contract/openapi/sandbox-provider-v1.yaml)
-- [JSON Schemas](https://github.com/CelestialsGroup/agent-blueprints/tree/0c91871fa469e951b8a508fe735a2a9a5797a67e/contract/schemas)
-- [Sandbox Conformance Suite](https://github.com/CelestialsGroup/agent-blueprints/blob/0c91871fa469e951b8a508fe735a2a9a5797a67e/contract/conformance/sandbox/v1/suite.json)
+- [Sandbox Provider contract](https://github.com/CelestialsGroup/agent-blueprints/blob/cf623ac7b6c8730a0a609076adaefe5197488667/blueprint/docs/33_SANDBOX_PROVIDER_CONTRACT.md)
+- [Sandbox security and isolation](https://github.com/CelestialsGroup/agent-blueprints/blob/cf623ac7b6c8730a0a609076adaefe5197488667/blueprint/docs/34_SANDBOX_SECURITY_AND_ISOLATION.md)
+- [Conformance and migration](https://github.com/CelestialsGroup/agent-blueprints/blob/cf623ac7b6c8730a0a609076adaefe5197488667/blueprint/docs/36_SANDBOX_CONFORMANCE_AND_MIGRATION.md)
+- [OpenAPI v1](https://github.com/CelestialsGroup/agent-blueprints/blob/cf623ac7b6c8730a0a609076adaefe5197488667/contract/openapi/sandbox-provider-v1.yaml)
+- [JSON Schemas](https://github.com/CelestialsGroup/agent-blueprints/tree/cf623ac7b6c8730a0a609076adaefe5197488667/contract/schemas)
+- [Sandbox Conformance Suite](https://github.com/CelestialsGroup/agent-blueprints/blob/cf623ac7b6c8730a0a609076adaefe5197488667/contract/conformance/sandbox/v1/suite.json)
 
 The upstream Contract is marked `LicenseRef-Proprietary`, while this repository
 is MIT licensed. Contract resources are therefore consumed from a read-only
