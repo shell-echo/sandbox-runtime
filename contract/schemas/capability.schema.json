@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:shell-echo:sandbox-runtime:contract:capability:v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "versions"],
+  "properties": {
+    "id": {"type": "string", "pattern": "^sandbox\\.[a-z0-9-]+$"},
+    "versions": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "profiles": {"type": "array", "items": {"type": "string", "minLength": 1}}
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:shell-echo:sandbox-runtime:contract:runtime-profile:v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "isolation_class"],
+  "properties": {
+    "id": {"type": "string", "minLength": 1, "maxLength": 200},
+    "isolation_class": {"enum": ["container", "hardened-container", "microvm", "virtual-machine", "local-process"]},
+    "runtime_class_name": {"type": "string", "minLength": 1},
+    "architecture": {"type": "array", "items": {"enum": ["amd64", "arm64"]}}
+  }
+}

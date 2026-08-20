@@ -1,0 +1,17 @@
+{
+  "suite_id": "sandbox-provider",
+  "suite_version": "1.0.0",
+  "profiles": [
+    {
+      "profile_id": "sandbox-runtime-provider-v1",
+      "tests": [
+        "capability-discovery-mtls-only",
+        "capability-discovery-admitted-identity",
+        "capability-discovery-immutable-schema",
+        "capability-discovery-empty-request",
+        "capability-discovery-no-mutation-routes"
+      ]
+    }
+  ],
+  "suite_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+}

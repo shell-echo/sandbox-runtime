@@ -1,0 +1,11 @@
+{
+  "namespace": "urn:shell-echo:sandbox-runtime:provider-v1",
+  "version": "1.0.0",
+  "rules": [
+    {"id": "capabilities-mtls-only", "method": "GET", "path": "/v1/capabilities", "requires": ["verified-client-certificate", "admitted-uri-san"]},
+    {"id": "capabilities-no-bearer-substitution", "method": "GET", "path": "/v1/capabilities", "forbids": ["bearer-as-mtls-identity"]},
+    {"id": "capabilities-request-empty", "method": "GET", "path": "/v1/capabilities", "request": {"query": "forbidden", "body": "forbidden", "content_length": "zero-only", "transfer_encoding": "identity-only"}},
+    {"id": "capabilities-snapshot-immutable", "method": "GET", "path": "/v1/capabilities", "response": {"capabilities": "empty-array", "runtime_profiles": "empty-array", "snapshot_restore_profiles": "metadata-only"}},
+    {"id": "capabilities-no-mutation-dispatch", "method": "GET", "path": "/v1/capabilities", "forbids": ["repository-dispatch", "driver-dispatch", "lifecycle-dispatch"]}
+  ]
+}

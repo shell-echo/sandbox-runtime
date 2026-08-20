@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:shell-echo:sandbox-runtime:contract:provider-capabilities:v1",
+  "title": "Sandbox Runtime Provider Capabilities",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "provider_revision_id",
+    "api_version",
+    "capabilities",
+    "runtime_profiles",
+    "snapshot_restore_profiles",
+    "limits"
+  ],
+  "properties": {
+    "provider_revision_id": {"type": "string", "minLength": 1, "maxLength": 200},
+    "api_version": {"const": "v1"},
+    "capabilities": {
+      "type": "array",
+      "items": {"$ref": "urn:shell-echo:sandbox-runtime:contract:capability:v1"}
+    },
+    "runtime_profiles": {
+      "type": "array",
+      "items": {"$ref": "urn:shell-echo:sandbox-runtime:contract:runtime-profile:v1"}
+    },
+    "snapshot_restore_profiles": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "urn:shell-echo:sandbox-runtime:contract:snapshot-restore-profile:v1"}
+    },
+    "limits": {"$ref": "urn:shell-echo:sandbox-runtime:contract:provider-limits:v1"}
+  }
+}
