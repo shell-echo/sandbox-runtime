@@ -102,6 +102,24 @@ func (c *Coordinator) AcceptCreate(ctx context.Context, request lifecycle.Create
 	return c.repository.ReserveCreate(ctx, request.IdempotencyKey, request.RequestDigest, sandbox, operation)
 }
 
+// GetSandbox reads one provider-local sandbox record without dispatching
+// reconciliation or runtime work.
+func (c *Coordinator) GetSandbox(ctx context.Context, sandboxID string) (lifecycle.Sandbox, error) {
+	if err := contextError(ctx); err != nil {
+		return lifecycle.Sandbox{}, err
+	}
+	return c.repository.GetSandbox(ctx, sandboxID)
+}
+
+// GetOperation reads one provider-local operation record without dispatching
+// reconciliation or runtime work.
+func (c *Coordinator) GetOperation(ctx context.Context, operationID string) (lifecycle.Operation, error) {
+	if err := contextError(ctx); err != nil {
+		return lifecycle.Operation{}, err
+	}
+	return c.repository.GetOperation(ctx, operationID)
+}
+
 // ReconcilePending resumes every non-terminal create operation in stable ID
 // order. A single failure is returned after earlier results are retained; the
 // next call can safely retry because all writes and events are idempotent.

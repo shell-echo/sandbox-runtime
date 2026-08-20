@@ -498,9 +498,9 @@ visibility.
 
 ### Provider lifecycle
 
-- [ ] add durable Provider sandbox, operation, lease, and event models
-- [ ] add idempotency, generation, fencing, deadlines, and reconciliation
-- [ ] expose the asynchronous Provider API v1 lifecycle subset
+- [x] add durable Provider sandbox, operation, lease, and event models
+- [x] add idempotency, generation, fencing, deadlines, and reconciliation
+- [ ] expose the asynchronous Provider API v1 lifecycle subset (P1.2.4 projection in progress)
 - [ ] pass the applicable local lifecycle and security Conformance Suite
 
 ### Manifest and blocks

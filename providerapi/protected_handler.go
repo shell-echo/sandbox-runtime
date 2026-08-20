@@ -1,6 +1,7 @@
 package providerapi
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -10,8 +11,11 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"github.com/shell-echo/sandbox-runtime/provider/admission"
+	"github.com/shell-echo/sandbox-runtime/provider/lifecycle"
+	"github.com/shell-echo/sandbox-runtime/provider/lifecycle/repository"
 	providerv1 "github.com/shell-echo/sandbox-runtime/providerapi/v1"
 )
 
@@ -23,12 +27,25 @@ var admissionTraceCounter atomic.Uint64
 // The composition root must construct it from frozen operator trust material;
 // a nil value keeps the Provider listener discovery-only.
 type ProtectedTransportOptions struct {
-	Gate *admission.ProtectedOperationGate
+	Gate        *admission.ProtectedOperationGate
+	Application LifecycleApplication
+	Now         func() time.Time
+}
+
+// LifecycleApplication is the narrow Provider application boundary. Its
+// implementation owns provider-local state and must not expose instance or
+// runtime-driver models through this transport package.
+type LifecycleApplication interface {
+	AcceptCreate(context.Context, lifecycle.CreateRequest) (repository.CreateResult, error)
+	GetSandbox(context.Context, string) (lifecycle.Sandbox, error)
+	GetOperation(context.Context, string) (lifecycle.Operation, error)
 }
 
 type protectedHandler struct {
-	identity *clientIdentityAdmission
-	gate     *admission.ProtectedOperationGate
+	identity    *clientIdentityAdmission
+	gate        *admission.ProtectedOperationGate
+	application LifecycleApplication
+	now         func() time.Time
 }
 
 type protectedRoute struct {
@@ -41,7 +58,11 @@ func newProtectedHandler(identity *clientIdentityAdmission, options ProtectedTra
 	if identity == nil || options.Gate == nil {
 		return nil, errors.New("protected Provider transport requires mTLS identity and admission gate")
 	}
-	return &protectedHandler{identity: identity, gate: options.Gate}, nil
+	now := options.Now
+	if now == nil {
+		now = func() time.Time { return time.Now().UTC() }
+	}
+	return &protectedHandler{identity: identity, gate: options.Gate, application: options.Application, now: now}, nil
 }
 
 func (h *protectedHandler) ServeHTTP(response http.ResponseWriter, request *http.Request) {
@@ -113,8 +134,22 @@ func (h *protectedHandler) ServeHTTP(response http.ResponseWriter, request *http
 		}
 		return
 	}
-	// P1.1c deliberately stops after admission. No repository, driver, or
-	// lifecycle operation is started until a later slice owns its response.
+	if h.application != nil {
+		switch route.operation {
+		case admission.OperationCreate:
+			h.serveCreate(response, request, context, document, route)
+			return
+		case admission.OperationReadSandbox:
+			h.serveSandboxStatus(response, request, context)
+			return
+		case admission.OperationReadOperation:
+			h.serveOperation(response, request, context)
+			return
+		}
+	}
+	// P1.2.4 deliberately leaves reserved lifecycle families behind the
+	// admission boundary. No repository, driver, or lifecycle operation is
+	// started for those routes.
 	if route.allowUnavailable {
 		writeAdmissionError(response, http.StatusServiceUnavailable, "SANDBOX_PROVIDER_UNAVAILABLE", true)
 	} else {
@@ -123,6 +158,10 @@ func (h *protectedHandler) ServeHTTP(response http.ResponseWriter, request *http
 }
 
 func writeAdmissionError(response http.ResponseWriter, status int, code string, retryable bool) {
+	writeStandardError(response, status, code, retryable, "sandbox provider operation is not available")
+}
+
+func writeStandardError(response http.ResponseWriter, status int, code string, retryable bool, message string) {
 	traceID := newAdmissionTraceID()
 	response.Header().Set("Content-Type", "application/json")
 	response.Header().Set("X-Request-ID", traceID)
@@ -131,7 +170,7 @@ func writeAdmissionError(response http.ResponseWriter, status int, code string, 
 	}
 	response.WriteHeader(status)
 	_ = json.NewEncoder(response).Encode(providerv1.StandardError{
-		Code: code, Message: "sandbox provider operation is not available", Retryable: retryable, TraceID: traceID,
+		Code: code, Message: message, Retryable: retryable, TraceID: traceID,
 	})
 }
 

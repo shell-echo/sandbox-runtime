@@ -12,9 +12,9 @@ production readiness.
 
 | Item | Evidence | Status |
 | --- | --- | --- |
-| Checkout | `codex/p1.2-lifecycle-coordinator` from `ac72eab` | P1.2.3 in progress |
-| Review | PR [#17](https://github.com/shell-echo/sandbox-runtime/pull/17) merged as `43ff3d7`; PR [#18](https://github.com/shell-echo/sandbox-runtime/pull/18) merged as `4774c3a`; PR [#19](https://github.com/shell-echo/sandbox-runtime/pull/19) merged as `e2755f5`; PR [#21](https://github.com/shell-echo/sandbox-runtime/pull/21) merged as `c5a4a65`; PR [#22](https://github.com/shell-echo/sandbox-runtime/pull/22) merged as `44f39ec`; PR [#23](https://github.com/shell-echo/sandbox-runtime/pull/23) merged as `ac72eab` | P1.2.2 passed; P1.2.3 in progress |
-| Worktree | clean | Verified |
+| Checkout | `codex/p1.2-lifecycle-projection` from `origin/main@2e3dde6` | P1.2.4 implementation in progress |
+| Review | PR [#17](https://github.com/shell-echo/sandbox-runtime/pull/17) merged as `43ff3d7`; PR [#18](https://github.com/shell-echo/sandbox-runtime/pull/18) merged as `4774c3a`; PR [#19](https://github.com/shell-echo/sandbox-runtime/pull/19) merged as `e2755f5`; PR [#21](https://github.com/shell-echo/sandbox-runtime/pull/21) merged as `c5a4a65`; PR [#22](https://github.com/shell-echo/sandbox-runtime/pull/22) merged as `44f39ec`; PR [#23](https://github.com/shell-echo/sandbox-runtime/pull/23) merged as `ac72eab`; PR [#24](https://github.com/shell-echo/sandbox-runtime/pull/24) merged as `2e3dde6` | P1.2.3 passed; P1.2.4 pending review |
+| Worktree | P1.2.4 changes present; not yet committed | Verified before commit |
 | Contract namespace | `urn:shell-echo:sandbox-runtime:provider-v1` | Locked |
 | Contract version/license | `1.0.0` / MIT | Locked |
 | Contract resources | OpenAPI, admission and lifecycle schemas, semantic rules, fixtures, Suite | Locked and merged; P1.2.0 passed |
@@ -40,8 +40,9 @@ It does not clone, mount, or read an external source repository.
 | P1.2.0 | Lifecycle Contract and authority inventory | Passed; PR #21 and post-merge CI run `32368734877` passed | Retain Contract lock and projection regression |
 | P1.2.1 | Pure lifecycle domain | Passed; PR #22 and post-merge CI run `32370133083` passed | Retain domain transition regression |
 | P1.2.2 | Atomic repository ports and development adapters | Passed; PR #23 merge `ac72eab`, post-merge CI `32372662597` passed | Retain repository fault/restart evidence; no multi-controller claim |
-| P1.2.3 | Provider-local coordinator and reconciliation | In progress; internal create dispatch/restart inspection only, no public route or DTO | Coordinator race/fault/deadline/unknown-outcome tests, review and CI |
-| P1.2 | Async lifecycle, operation ledger, reconciliation, events | P1.2.3 in progress; no Provider route behavior changed | P1.2.3 closure before lifecycle projection |
+| P1.2.3 | Provider-local coordinator and reconciliation | Passed in PR #24 merge `2e3dde6`; post-merge CI reported successful | Retain coordinator fault/restart evidence; no multi-controller claim |
+| P1.2.4 | Provider API lifecycle projection | In progress on `codex/p1.2-lifecycle-projection`; three Contract-authorized routes only, application-injected, reserved routes remain unavailable | Review/PR CI, post-merge CI, lifecycle projection and Contract/Conformance evidence |
+| P1.2 | Async lifecycle, operation ledger, reconciliation, events | P1.2.0-P1.2.3 passed; P1.2.4 in progress | Close P1.2.4 before lifecycle release gate |
 | P2 | Coding/remote-shell profile | Not started | P1.2 completion and profile-specific Conformance |
 | P3 | Migration readiness and external-caller integration | Not started | External caller E2E, rollback and canary evidence |
 | P4 | Production hardening | Not started | Deployment, multi-controller, multi-tenant, and production gates |
@@ -91,7 +92,8 @@ Passed locally (authorized test environment):
 
 Pending:
 
-- P1.2.3 coordinator review and PR/post-merge CI;
+- P1.2.4 review, PR/post-merge CI, and lifecycle projection release evidence;
+- P1.2.5 lifecycle release gate and fault/concurrency matrix;
 - optional content-derived Suite digest enhancement;
 - aggregate lifecycle conformance, external-caller E2E, reliability, tenancy,
   deployment, and production gates.
@@ -103,6 +105,12 @@ post-merge run `32365284283`. P1.2.0 is closed by PR #21, its three successful
 PR checks, and post-merge run `32368734877`. P1.2.1 is closed by PR #22, its
 three successful PR checks, and post-merge run `32370133083`. P1.2.2 is closed
 as provider-local persistence only; the file adapter is single-controller
-development evidence. P1.2.3 is limited to internal create dispatch and
-restart reconciliation. Transport, aggregate, multi-controller, tenancy,
-deployment, and production claims remain unproven.
+development evidence. P1.2.3 is closed as internal create dispatch and restart
+reconciliation. P1.2.4 currently projects only `POST /v1/sandboxes`, `GET
+/v1/sandboxes/{sandbox_id}`, and `GET /v1/operations/{operation_id}` after
+protected admission. The command composition root does not yet construct a
+lifecycle application, so an enabled protected listener remains fail-closed
+with `503` until a later composition/release decision supplies one. Reserved
+routes remain absent, and aggregate conformance, external-caller E2E,
+multi-controller reliability, tenancy, deployment, and production claims
+remain unproven.
