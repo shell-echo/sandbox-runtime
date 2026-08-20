@@ -50,12 +50,13 @@ func NewProtectedOperationGate(keys TrustedKeySource, clock Clock, guard Mutatio
 	return &ProtectedOperationGate{keys: keys, clock: clock, guard: guard}, nil
 }
 
-// AuthenticateBearer verifies only the compact JWS authentication boundary.
-// Transport uses it before evaluating auxiliary Context or document input so
-// malformed or unverifiable bearer material cannot probe those validations.
-// Binding, digest, replay, and fencing checks remain in Admit.
+// AuthenticateBearer verifies the compact JWS authentication boundary and its
+// self-contained short-lived credential window. Transport uses it before
+// evaluating auxiliary Context or document input so malformed, inactive, or
+// unverifiable bearer material cannot probe those validations. Contextual
+// binding, digest, replay, and fencing checks remain in Admit.
 func (g *ProtectedOperationGate) AuthenticateBearer(ctx context.Context, compactToken string) error {
-	if g == nil || g.keys == nil {
+	if g == nil || g.keys == nil || g.clock == nil {
 		return ErrUnavailable
 	}
 	if ctx == nil {
@@ -64,10 +65,14 @@ func (g *ProtectedOperationGate) AuthenticateBearer(ctx context.Context, compact
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if _, err := VerifyCompactJWS(ctx, compactToken, g.keys); err != nil {
+	token, err := VerifyCompactJWS(ctx, compactToken, g.keys)
+	if err != nil {
 		if contextErr := ctx.Err(); contextErr != nil {
 			return contextErr
 		}
+		return ErrUnauthenticated
+	}
+	if !validBearerLifetime(token.Claims, g.clock.Now()) {
 		return ErrUnauthenticated
 	}
 	return nil

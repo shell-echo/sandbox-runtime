@@ -53,6 +53,66 @@ func TestProtectedHandlerRejectsUnverifiedBearerBeforeContext(t *testing.T) {
 	}
 }
 
+func TestProtectedHandlerRejectsInactiveBearerBeforeContext(t *testing.T) {
+	material := newTestMTLSMaterial(t, []string{testAllowedIdentity})
+	identity, err := newClientIdentityAdmission([]string{testAllowedIdentity})
+	if err != nil {
+		t.Fatal(err)
+	}
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, test := range []struct {
+		name   string
+		mutate func(map[string]any)
+	}{
+		{
+			name: "not yet valid",
+			mutate: func(claims map[string]any) {
+				claims["nbf"] = time.Date(2026, 8, 20, 0, 2, 0, 0, time.UTC).Unix()
+			},
+		},
+		{
+			name: "expired",
+			mutate: func(claims map[string]any) {
+				claims["exp"] = time.Date(2026, 8, 20, 0, 1, 0, 0, time.UTC).Unix()
+			},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			guard := &testAdmissionGuard{}
+			gate, err := admission.NewProtectedOperationGate(
+				mustTestTrustedKeySource(t, publicKey),
+				testAdmissionClock{now: time.Date(2026, 8, 20, 0, 1, 30, 0, time.UTC)},
+				guard,
+			)
+			if err != nil {
+				t.Fatal(err)
+			}
+			handler, err := newProtectedHandler(identity, ProtectedTransportOptions{Gate: gate})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			contextValue := validProtectedContextForTest(t, admission.OperationExec, "/v1/sandboxes/sandbox-1/exec", "sandbox-1")
+			claims := admissionTokenClaimsForTest(contextValue)
+			test.mutate(claims)
+			request := httptest.NewRequest(http.MethodPost, "https://provider.test/v1/sandboxes/sandbox-1/exec", strings.NewReader(`{}`))
+			state := verifiedState(t, material.client)
+			request.TLS = &state
+			request.Header.Set("Authorization", "Bearer "+signTestAdmissionToken(t, privateKey, claims))
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+
+			if response.Code != http.StatusUnauthorized || guard.Calls() != 0 {
+				t.Fatalf("inactive bearer response=%d guard_calls=%d body=%s", response.Code, guard.Calls(), response.Body.String())
+			}
+		})
+	}
+}
+
 func TestProtectedHandlerAdmitsV2ContextThenStopsBeforeLifecycle(t *testing.T) {
 	material := newTestMTLSMaterial(t, []string{testAllowedIdentity})
 	identity, err := newClientIdentityAdmission([]string{testAllowedIdentity})
@@ -248,15 +308,21 @@ func newTestProtectedGate(t *testing.T, guard *testAdmissionGuard) *admission.Pr
 
 func newTestProtectedGateWithPublicKey(t *testing.T, publicKey ed25519.PublicKey, guard *testAdmissionGuard) *admission.ProtectedOperationGate {
 	t.Helper()
-	keys, err := admission.NewStaticTrustedKeySource([]admission.StaticTrustedKey{{ID: "test", Algorithm: admission.AlgorithmEdDSA, PublicKey: publicKey}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	gate, err := admission.NewProtectedOperationGate(keys, testAdmissionClock{now: time.Now().UTC()}, guard)
+	keys := mustTestTrustedKeySource(t, publicKey)
+	gate, err := admission.NewProtectedOperationGate(keys, testAdmissionClock{now: time.Date(2026, 8, 20, 0, 1, 0, 0, time.UTC)}, guard)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return gate
+}
+
+func mustTestTrustedKeySource(t *testing.T, publicKey ed25519.PublicKey) admission.TrustedKeySource {
+	t.Helper()
+	keys, err := admission.NewStaticTrustedKeySource([]admission.StaticTrustedKey{{ID: "test", Algorithm: admission.AlgorithmEdDSA, PublicKey: publicKey}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return keys
 }
 
 func admissionTokenClaimsForTest(contextValue admission.AdmissionContext) map[string]any {

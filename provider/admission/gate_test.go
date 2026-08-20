@@ -87,6 +87,49 @@ func TestProtectedOperationGateAuthenticatesBearerBeforeBindings(t *testing.T) {
 	}
 }
 
+func TestProtectedOperationGateRejectsInactiveBearerBeforeBindings(t *testing.T) {
+	fixture := newEdDSAFixture(t)
+	token, _, _, clock := gateTokenAndBinding()
+
+	for _, test := range []struct {
+		name   string
+		mutate func(*TokenClaims, *fixedClock)
+	}{
+		{
+			name: "not yet valid",
+			mutate: func(_ *TokenClaims, clock *fixedClock) {
+				clock.now = time.Unix(109, 0).UTC()
+			},
+		},
+		{
+			name: "expired",
+			mutate: func(_ *TokenClaims, clock *fixedClock) {
+				clock.now = time.Unix(180, 0).UTC()
+			},
+		},
+		{
+			name: "invalid credential lifetime",
+			mutate: func(token *TokenClaims, _ *fixedClock) {
+				token.IssuedAt = token.NotBefore + 1
+			},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			testToken := token
+			testClock := clock
+			test.mutate(&testToken.Claims, &testClock)
+			gate, err := NewProtectedOperationGate(fixture.keys, &testClock, &recordingMutationGuard{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			compact := fixture.token(t, JWSHeader{Algorithm: fixture.algorithm, KeyID: fixture.keyID, Type: expectedJWSType}, testToken.Claims)
+			if err := gate.AuthenticateBearer(context.Background(), compact); !errors.Is(err, ErrUnauthenticated) {
+				t.Fatalf("AuthenticateBearer() error = %v, want %v", err, ErrUnauthenticated)
+			}
+		})
+	}
+}
+
 func TestProtectedOperationGateDoesNotConsumeReadJTI(t *testing.T) {
 	fixture := newEdDSAFixture(t)
 	token, binding, _, clock := gateTokenAndBinding()

@@ -98,7 +98,7 @@ func validTokenBinding(binding TokenBinding) bool {
 }
 
 func validTokenLifetime(claims TokenClaims, policyDecisionAt, deadlineAt, now time.Time) bool {
-	if claims.IssuedAt > claims.NotBefore || claims.NotBefore >= claims.ExpiresAt || claims.ExpiresAt-claims.IssuedAt > 300 {
+	if !validBearerLifetime(claims, now) {
 		return false
 	}
 	notBefore := time.Unix(claims.NotBefore, 0)
@@ -106,5 +106,17 @@ func validTokenLifetime(claims TokenClaims, policyDecisionAt, deadlineAt, now ti
 	if notBefore.Before(policyDecisionAt) || expiresAt.After(deadlineAt) {
 		return false
 	}
+	return true
+}
+
+// validBearerLifetime checks the self-contained short-lived credential window
+// before transport evaluates an admitted operation context. Context-relative
+// policy and deadline relationships remain part of full token binding.
+func validBearerLifetime(claims TokenClaims, now time.Time) bool {
+	if now.IsZero() || claims.IssuedAt > claims.NotBefore || claims.NotBefore >= claims.ExpiresAt || claims.ExpiresAt-claims.IssuedAt > 300 {
+		return false
+	}
+	notBefore := time.Unix(claims.NotBefore, 0)
+	expiresAt := time.Unix(claims.ExpiresAt, 0)
 	return !now.Before(notBefore) && now.Before(expiresAt)
 }
