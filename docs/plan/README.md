@@ -11,7 +11,8 @@ in [`docs/STATUS.md`](../STATUS.md).
 
 | Phase | Plan | Status |
 | --- | --- | --- |
-| P0 | [Local Provider Contract migration](p0-local-provider-contract.md) | PR #17 and PR #18 merged with post-merge CI passed; P0.4 Suite runner follow-up in progress |
-| P1.1 | [Provider API admission](p1.1-provider-api-admission.md) | P1.1a-b-c passed under local Contract; P1.1d release gate remains open |
-| P1.1b | [mTLS capability discovery](p1.1b-capability-discovery.md) | Local TLS and response projection revalidation passed; PR evidence pending |
-| P1.1c | [Protected-operation admission](p1.1c-protected-operation-admission.md) | Local semantic binding, admission matrix, PR #18, and post-merge CI passed; gate review pending |
+| P0 | [Local Provider Contract migration](p0-local-provider-contract.md) | PR #17-#19 merged; post-merge CI passed; P0.4 closed |
+| P1.1 | [Provider API admission](p1.1-provider-api-admission.md) | P1.1d release gate passed; lifecycle remains unclaimed |
+| P1.1b | [mTLS capability discovery](p1.1b-capability-discovery.md) | Passed under local Contract with PR/post-merge evidence |
+| P1.1c | [Protected-operation admission](p1.1c-protected-operation-admission.md) | Passed under local Contract with PR/post-merge evidence |
+| P1.2 | [Async lifecycle](p1.2-async-lifecycle.md) | Planning; no lifecycle behavior implemented |
