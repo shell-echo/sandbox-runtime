@@ -12,7 +12,7 @@ production readiness.
 
 | Item | Evidence | Status |
 | --- | --- | --- |
-| Checkout | `codex/p1.1-release-gate-status@67d3109` | In progress |
+| Checkout | `codex/p1.1-release-gate-status@602720b` | In progress |
 | Review | PR [#17](https://github.com/shell-echo/sandbox-runtime/pull/17), open, mergeable | Awaiting review/merge |
 | Worktree | clean after the Contract migration changes are committed | Verified |
 | Contract namespace | `urn:shell-echo:sandbox-runtime:provider-v1` | Locked |
