@@ -106,8 +106,8 @@ Policy defines what an instance is allowed to do: resource limits, network acces
 
 ## Architecture direction
 
-The provider boundary, compatibility requirements for the Agent Platform,
-security baseline, and authoritative phased delivery plan are defined in
+The provider boundary, repository-owned Contract, security baseline, and
+authoritative phased delivery plan are defined in
 [the architecture document](docs/architecture.md). The independent-provider
 ownership decision is recorded in
 [ADR 0001](docs/adr/0001-agent-platform-provider-boundary.md).
@@ -485,13 +485,13 @@ visibility.
 - [x] health endpoint
 - [x] Docker packaging for the control plane
 
-### Agent Platform contract intake
+### Provider Contract and admission
 
 - [x] define the independent Sandbox Provider ownership boundary
-- [x] lock the upstream revision, Contract tree, manifest, OpenAPI, and Sandbox Suite
-- [x] add read-only Contract lock verification
+- [x] establish the MIT Provider Contract, namespace, schemas, semantic rules, fixtures, and Suite
+- [x] add local Contract lock verification
 - [x] define Provider DTOs separately from local instance and driver models
-- [x] validate Provider DTOs and fixtures against the locked Contract
+- [x] validate Provider DTOs and fixtures against the locked local Contract
 - [x] implement mTLS-only capability discovery
 - [x] implement per-operation JWS and request/descriptor digest admission
   boundary; protected operations still stop before lifecycle dispatch
@@ -501,7 +501,7 @@ visibility.
 - [ ] add durable Provider sandbox, operation, lease, and event models
 - [ ] add idempotency, generation, fencing, deadlines, and reconciliation
 - [ ] expose the asynchronous Provider API v1 lifecycle subset
-- [ ] pass the applicable `sandbox-core-v1` lifecycle and security tests
+- [ ] pass the applicable local lifecycle and security Conformance Suite
 
 ### Manifest and blocks
 

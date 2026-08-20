@@ -1,289 +1,85 @@
-# Project Execution Status
+# Project Status
 
-Last updated: 2026-08-20
+Updated: 2026-08-20
 
-This document is the single local source of truth for current execution status:
-what has landed, which release gates remain open, and which implementation
-slice is next. It does not redefine protocol, architecture, engineering rules,
-or release criteria.
+This document is the implementation ledger for the repository-owned MIT
+Provider Contract. It distinguishes local component evidence, Contract
+projection evidence, CI, Conformance, external-caller compatibility,
+multi-controller reliability, multi-tenant security, deployment, and
+production readiness.
 
-When sources disagree, authority remains with the locked upstream Agent
-Contract, followed by accepted ADRs and `docs/architecture.md`, then
-`docs/development.md` and the applicable implementation plan. This document
-reports progress against those authorities.
+## Current Baseline
 
-## Current snapshot
-
-- Baseline branch: `main`
-- Baseline revision: `beb5538bce2484daebe83b44b66f4ed41f21953c`
-- Locked Agent Contract revision: `cf623ac7b6c8730a0a609076adaefe5197488667`
-- Locked Contract tree: `73cc7c6bbaf541991c7804bded6de22a7928b91b`
-- Current phase: P1.1, Provider API admission
-- Current slice: P1.1d admission release-gate evidence
-- P1.1 release gate: open
-- Slices in progress: PR #13 merged protected transport composition at
-  `bbb2dc390c091a6b68a2ac67b673ac1effea6fb9`, and PR #14 merged the
-  default-disabled operator key-file/guard-state configuration at
-  `203198e45ab7811cfc938be36816ba570ddd83ee`. PR #14 CI run `32344672309`
-  and post-merge run `32344913375` passed all required jobs. PR #15 merged the
-  P1.1d bearer-lifetime classification fix and all-route admission evidence at
-  `beb5538bce2484daebe83b44b66f4ed41f21953c`; PR CI run `32350233111` and
-  post-merge main run `32350883500` passed all required jobs. No P1.2 state or
-  dispatch was added.
-
-The implemented Provider discovery listener is separate from the local
-management API and remains disabled by default. When enabled, it accepts TLS
-1.2 or newer and requires both normal client certificate verification and an
-exact URI SAN match from an operator-configured allowlist of fragment-free
-absolute URI identities. No URI scheme is hard-coded. Failed certificate or
-URI identity admission is rejected during the TLS handshake before HTTP routing.
-The only registered Provider operation is `GET /v1/capabilities`; its immutable
-raw v1 response contains empty `capabilities` and `runtime_profiles` arrays and
-at least one required content-addressed compatibility profile. The profile is
-descriptive metadata and does not advertise snapshot, restore, or another
-runtime capability.
-
-## Delivery status
-
-| Scope | Status | Evidence boundary |
+| Item | Evidence | Status |
 | --- | --- | --- |
-| P1.0: contract intake and ownership freeze | Closed | Contract identity and ownership-boundary evidence only. |
-| P1.1a: wire DTO and Contract validation harness | Implemented and merged into `main` | Component and locked Contract projection evidence only. |
-| P1.1b: mTLS-only capability discovery | Implemented and verified on `main`; transport reconciliation merged through PR #9 | Application model, immutable source, response mapping, exact GET-only routing, mTLS identity admission, default-disabled configuration, composition, enabled-listener behavior, emitted-response projection, fail-together lifecycle, tagged Docker integration, strict query/body input evidence, and transport reconciliation CI passed. The `400`/`501` operation-level error-wire authority gap remains separately pending. |
-| P1.1c: protected-operation admission | Implemented and merged through PR #14; PR and post-merge CI passed | Locked Admission Context is decoded strictly and bound to the verified mTLS caller, protected route, JWS v2 claims, canonical request/read descriptor, and pure gate. All 14 protected paths are matched. Bearer authentication, including self-contained expiry/not-before validity, precedes Context/document validation; explicit configuration loads only frozen public-key files and an exclusive durable guard before it enables protected routes. Successful admission deliberately returns bounded unavailable/error and never calls repository/driver/lifecycle code. |
-| P1.1d: admission release gate | Implemented and merged through PR #15; PR and post-merge CI passed | Local evidence covers all 14 protected paths, request/read-descriptor digest substitution, inactive bearer, expiry during document read, replay, stale fencing, cancellation, and concurrent admission. The P1.1 gate remains open for the separate Contract-owner `400`/`501` authority clarification. |
+| Checkout | `codex/p1.1-release-gate-status@fb83eb5` | In progress |
+| Worktree | clean after the Contract migration changes are committed | Verified |
+| Contract namespace | `urn:shell-echo:sandbox-runtime:provider-v1` | Locked |
+| Contract version/license | `1.0.0` / MIT | Locked |
+| Contract resources | OpenAPI, six JSON Schemas, semantic rules, two fixtures, Suite | Landed in `c0efc67` |
+| Contract lock | local revision/tree and OpenAPI/manifest digests in `compatibility/sandbox-runtime/contract.lock.json` | Landed in `fb83eb5` |
+| External Agent Contract | no longer consumed; old compatibility evidence is historical only | Removed from implementation |
 
-P1.0 closed at revision `102f36a6240a4c33892b0ebc25232859b63e334c`.
-P1.1a reached `main` through merge revision `255c927`.
+The lock verifier is intentionally bound to the repository-owned Contract tree.
+It does not clone, mount, or read an external source repository.
 
-## Recorded evidence
+## Plan Ledger
 
-The P1.1a plan records validation on 2026-07-30 using the project Go 1.26
-container toolchain:
+| Slice | Scope | Status | Required next evidence |
+| --- | --- | --- | --- |
+| P0.0 | Freeze local Contract ownership, namespace, version, license, resource layout, and lock | Passed locally; commits `c0efc67`, `fb83eb5` | Full verifier and CI on the migration branch |
+| P0.1 | Replace external lock verifier with local tree/digest/semantic/fixture validation | In progress | `go test`, `go vet`, `go run ./cmd/verify-contract -source-root .` |
+| P0.2 | Migrate DTO/projection tests and CI to local Contract | In progress | Projection tests without external checkout and CI provider-contract job |
+| P0.3 | Rebase architecture, ADRs, README, plans, and status on local Contract | In progress | Documentation review plus `git diff --check` |
+| P1.1a | Provider v1 DTOs and strict decoder | Historical implementation exists; compatibility evidence reset by Contract change | Re-run local Contract projection and decoder matrix |
+| P1.1b | mTLS-only capability discovery | Implementation exists; local Contract response authority now explicit | Real TLS matrix, local response projection, CI |
+| P1.1c | Protected-operation admission primitives and transport composition | Implementation exists; local Contract semantic coverage is incomplete | Re-run admission matrix under local rules; do not claim lifecycle |
+| P1.1d | Admission release gate | Not closed under the new Contract | Local Suite/security matrix, PR CI, review of semantic rules |
+| P1.2 | Async lifecycle, operation ledger, reconciliation, events | Not started; prohibited until P1.1d closes | New implementation slice only after gate closure |
+| P2 | Coding/remote-shell profile | Not started | P1.2 completion and profile-specific Conformance |
+| P3 | Migration readiness and external-caller integration | Not started | External caller E2E, rollback and canary evidence |
+| P4 | Production hardening | Not started | Deployment, multi-controller, multi-tenant, and production gates |
 
-- race-enabled, shuffled Go tests;
+## Evidence Boundary
+
+The previously merged P1.1 PRs and their green CI runs prove the old
+implementation against the former external Contract only. They do not prove
+the new local Contract. Until the migration is merged and revalidated:
+
+- local Go tests are component evidence only;
+- the local Contract verifier proves lock/resource identity, not protocol
+  conformance;
+- the local Suite is a declaration until its tests are executed;
+- no aggregate lifecycle conformance, external-caller E2E,
+  multi-controller reliability, multi-tenant safety, deployment readiness, or
+  production readiness is claimed.
+
+The local Contract explicitly authorizes the discovery operation's `400` and
+parser-visible `501` outcomes, but implementation evidence for those outcomes
+still needs to be re-run under the new projection.
+
+## Current Verification
+
+Passed:
+
+- JSON parsing of all newly added Contract resources;
+- `git diff --check` before the migration edits;
+- `internal/contractlock` unit tests;
+- local Provider projection test for `providerapi/v1`.
+
+Pending or environment-limited:
+
+- full `go test -race -shuffle=on -count=1 ./...`;
 - `go vet ./...`;
-- Agent Contract lock verification against a read-only checkout;
-- Provider projection validation for the locked OpenAPI document schemas,
-  operation body limits, upstream examples, and locally constructed response
-  documents described in the plan;
-- `git diff --check`.
+- provider API socket/TLS tests, because this sandbox denies loopback bind;
+- tagged Docker integration;
+- CI for the local `provider-contract` job;
+- final documentation review and migration commit.
 
-The tagged Docker integration test was not required because P1.1a did not
-change driver or lifecycle behavior. The authoritative command details and
-evidence counts remain in the
-[P1.1 implementation plan](plan/p1.1-provider-api-admission.md#p11a-validation-record).
+## Next Entry
 
-P1.1b unit 1 was validated on 2026-08-01 with Go 1.26 in Apple Container:
-
-- focused and full-repository race-enabled, shuffled Go tests;
-- focused and full-repository `go vet`;
-- Agent Contract lock verification against the locked read-only checkout;
-- the existing P1.1a Provider projection regression;
-- `git diff --check`.
-
-P1.1b units 2-4 were then implemented and validated on 2026-08-01 with the
-same toolchain and locked Contract checkout:
-
-- full-repository race-enabled, shuffled Go tests;
-- full-repository `go vet`;
-- Agent Contract lock verification;
-- the existing P1.1a Provider projection regression;
-- validation of the actual emitted capability response against the locked
-  capability Schema;
-- `git diff --check`.
-
-The final composition unit was implemented and validated on 2026-08-01. It
-adds the separately named Provider HTTPS server at the composition root,
-explicit configuration-to-application mapping, real mTLS listener evidence,
-plaintext rejection, and cancellation-safe fail-together startup. Cross-review
-identified and the implementation fixed an existing shutdown-before-bind race,
-late signal registration, cancellation error misclassification, and test
-listener TOCTOU.
-
-The complete local validation passed:
-
-- full-repository race-enabled, shuffled Go tests;
-- full-repository `go vet`;
-- Agent Contract lock verification at revision
-  `0c91871fa469e951b8a508fe735a2a9a5797a67e`;
-- the P1.1a locked Provider projection regression;
-- the P1.1b emitted capability response Schema projection;
-- `git diff --check`.
-
-Because the composition unit hardens the shared server lifecycle, the tagged
-Docker integration command became mandatory. It was executed in Apple
-Container with `SANDBOX_RUNTIME_DOCKER_INTEGRATION=1`, but both integration
-tests stopped before exercising the driver because no Docker Engine socket
-exists at `/var/run/docker.sock`. This is recorded as an unavailable required
-environment, not as a passing gate or a code failure. Apple Container is the Go
-toolchain host here; it is not a Docker Engine API endpoint.
-
-GitHub Actions CI run
-[`30690971538`](https://github.com/shell-echo/sandbox-runtime/actions/runs/30690971538)
-then validated revision `78bc9e27d1edbf39a982758c0c9b0f44a00477ba`
-on 2026-08-01. All three jobs passed:
-
-- `agent-contract-lock`, including both locked Provider projections;
-- `test`, including full-repository race-enabled shuffled tests and `go vet`;
-- `docker-integration`, including the required tagged Docker integration tests
-  against the GitHub-hosted Docker Engine.
-
-This closes P1.1b only. It does not close the P1.1 admission release gate.
-
-Post-closure input-boundary hardening landed at revision `e85d2c2` on
-2026-08-02. It rejects local API/Provider port reuse before startup, bounds TLS
-material and CA count, rejects non-regular TLS material without blocking on a
-FIFO, and centralizes bounded fragment-free URI identity validation. Apple
-Container validation passed the full race-enabled shuffled test suite,
-`go vet`, the locked Agent Contract verifier, and both mandatory Provider
-projections. The tagged Docker integration test was not required because this
-hardening changes neither a runtime driver nor lifecycle behavior. GitHub CI
-evidence for this revision has not yet been recorded; the earlier P1.1b CI run
-does not substitute for it.
-
-Revision `fae94fd49a82d4a84092e3397d2b0a19f611d61c` records the resulting
-Provider hardening evidence, and GitHub Actions run
-[`30754320465`](https://github.com/shell-echo/sandbox-runtime/actions/runs/30754320465)
-passed its Agent Contract lock/projections, race-enabled shuffled tests and
-vet, and tagged Docker integration jobs. That CI proves only the tested main
-revision, not the P1.1 release gate.
-
-PR #8 merged strict capability-discovery input handling at
-`7b0bd13803a1720859ad0c167627db5aca496261`. Its pull-request CI run
-[`32209203243`](https://github.com/shell-echo/sandbox-runtime/actions/runs/32209203243)
-passed for `87ed45c0b94c2ca6c7c10e22ed1b4eec182fc6a9`, and the post-merge main
-CI run
-[`32210577595`](https://github.com/shell-echo/sandbox-runtime/actions/runs/32210577595)
-passed for that merge commit. Those runs close the previously pending PR/CI
-evidence for strict query/body input handling. They do not close the P1.1
-release gate or prove `sandbox-core-v1`, Agent Platform end-to-end behavior,
-multi-controller or multi-tenant properties, deployment, or production
-readiness.
-
-For request metadata visible to the handler, the follow-on transport
-reconciliation keeps query strings (including a bare trailing `?`), nonzero or
-unknown `Content-Length`, and `chunked` transfer encoding fail closed with an
-empty `400` before capability, application, repository, or driver dispatch.
-The handler does not read or probe `Body`; this does not claim that the Go
-server lifecycle never reads or drains framing. A real mTLS HTTP/1.1 test also
-records that unsupported `Transfer-Encoding: gzip` is rejected by the Go parser
-with its standard-library `501` before the handler. The test makes no claim for
-HTTP/2 or other Go versions. The locked operation lists neither `400` nor `501`
-in its response list, and its generic malformed-request component does not
-grant operation-level wire authority. Upstream clarification remains pending;
-no new error status or body is introduced here.
-
-PR #9 merged that transport reconciliation at
-`c9cb48240fdcff472d6e594b70e6c36cb5147a6a`. Its pull-request CI run
-[`32228848484`](https://github.com/shell-echo/sandbox-runtime/actions/runs/32228848484)
-and post-merge main CI run
-[`32229889627`](https://github.com/shell-echo/sandbox-runtime/actions/runs/32229889627)
-both passed `agent-contract-lock`, `test`, and `docker-integration`. This
-closes only the transport-reconciliation evidence; it does not resolve the
-separate discovery error-wire authority gap or close P1.1.
-
-PR #10 merged the P1.1c admission components at
-`c107912fe0b7e4930bbd5a666650043d1c41b1ab`. Its pull-request CI run
-[`32242490402`](https://github.com/shell-echo/sandbox-runtime/actions/runs/32242490402)
-and post-merge main CI run
-[`32242739010`](https://github.com/shell-echo/sandbox-runtime/actions/runs/32242739010)
-both passed `agent-contract-lock`, `test`, and `docker-integration`. This
-proves only the merged component and projection evidence; it did not expose a
-protected route or close P1.1.
-
-PR #13 merged protected transport composition at
-`bbb2dc390c091a6b68a2ac67b673ac1effea6fb9`. Initial implementation `fdb3424`
-passed its local validation. Automated review
-then found bearer-authentication precedence, aggregate security-header budget,
-closed GET query, trace-correlation, and retry-header gaps. Review-fix commit
-`e697afc` addressed them, but its new PR CI merge candidate exposed an existing
-Provider listener shutdown race: cancellation could close the listener before
-`Shutdown`, which then returned `net.ErrClosed`. Commit `beee48b` makes that
-completed close idempotent and passed five race/shuffle Provider API repetitions
-plus complete local validation: race/shuffle tests, `go vet`, Contract
-lock/projection checks, and tagged Docker integration. Pull-request CI run
-[`32342795664`](https://github.com/shell-echo/sandbox-runtime/actions/runs/32342795664)
-and post-merge main CI run
-[`32343090796`](https://github.com/shell-echo/sandbox-runtime/actions/runs/32343090796)
-both passed `agent-contract-lock`, `test`, and `docker-integration`. The command
-composition root at that merge still
-does not load operator trusted-key paths or instantiate `ProtectedTransportOptions`;
-the listener remains discovery-only unless a caller explicitly supplies the
-protected options. This is component/feature-branch evidence, not a merged or
-production-ready claim.
-
-The current P1.1c configuration-composition branch adds an independently
-default-disabled `server.provider.protected_admission` section. Enabling it
-requires 1..32 unique `EdDSA` or `ES256` public-key files plus a durable guard
-state path. The command composition root reads and freezes the public keys,
-retains the single-controller guard lock through service lifetime, passes the
-resulting gate to the Provider listener, and releases the guard on later startup
-failure or process exit. Partial configuration, a missing/malformed key file,
-or unavailable/corrupt guard state fails closed before the listener starts.
-
-Complete local validation for that feature branch passed on 2026-08-20:
-
-- `AGENT_CONTRACT_SOURCE_ROOT=/tmp/agent-blueprints-cf623ac go test -race -shuffle=on -count=1 ./...`;
-- `go vet ./...`;
-- `go run ./cmd/verify-agent-contract -source-root /tmp/agent-blueprints-cf623ac`;
-- `SANDBOX_RUNTIME_DOCKER_INTEGRATION=1 go test -tags=integration -count=1 ./driver/docker`; and
-- `gofmt` plus `git diff --check`.
-
-This is local component, composition, Contract projection, and Docker-driver
-regression evidence only. PR #15 CI and post-merge main CI run `32350883500`
-passed all required jobs. The P1.1 release gate, aggregate conformance,
-Platform end-to-end compatibility, multi-controller reliability, multi-tenant
-security, deployment readiness, and production readiness remain unproven.
-
-P1.1d local evidence then added the bearer-lifetime classification regression
-and a generated test-local admission matrix for all 14 protected routes. The
-focused race-enabled Provider API matrix passed on 2026-08-20. A follow-up
-review case also proved that a Bearer expiring while a protected request body
-is read maps to `401` at final admission rather than `403`; the regression
-preserves the no-dispatch guard boundary. It proves only the tested
-transport/gate boundary; it does not substitute for repository or driver
-dispatch evidence, CI, or the P1.1 release gate.
-
-## Open gate and unproven claims
-
-P1.1 is not complete. Its architecture release gate still requires Schema and
-fixture compatibility, mTLS discovery, token binding, digest substitution,
-expiry, replay, stale-fencing admission tests, transport composition review,
-and reproducible CI evidence to pass.
-
-The current revision does not prove or claim:
-
-- closure of the P1.1 release gate and the separate `400`/`501` Contract
-  authority clarification;
-- P1.2 lifecycle, durable operations, leases, events, or reconciliation;
-- the aggregate `sandbox-core-v1` conformance profile;
-- Agent Platform end-to-end compatibility or cross-provider interchangeability;
-- multi-controller reliability, multi-tenant isolation, deployment readiness,
-  or production readiness.
-
-## Next implementation slice
-
-P1.1c now has the accepted local trust and admission-state decision in
-[ADR 0002](adr/0002-provider-operation-admission.md), a bounded compact-JWS
-parser/verifier, strict canonical request/descriptor digest verification,
-application-level context/time binding, a pure protected-operation gate, a
-static/file trusted-key source, a shared TLS/request identity extractor, a
-durable single-controller guard, and a merged protected transport adapter. The
-immediate entry is P1.1 release-gate closure review and resolution of the
-separate capability-discovery `400`/`501` Contract authority gap. No P1.2
-lifecycle or repository/driver dispatch may be added before the P1.1 release
-gate closes.
-The detailed scope,
-acceptance evidence, and stop conditions are in
-[the P1.1c admission plan](plan/p1.1c-protected-operation-admission.md).
-
-Mutation routes, full operation admission, lifecycle dispatch, and P1.2 work
-remain outside the current planning unit. Landing future code alone does not
-close P1.1.
-
-## Maintenance rule
-
-Update this document whenever a slice starts, lands, is blocked, or changes the
-evidence available for a release gate. Keep plans focused on intended scope and
-acceptance criteria; keep current execution truth here.
+Complete P0.1-P0.3 in one migration commit, run the full local gates in an
+environment that permits loopback and Docker, then open review. Only after the
+new Contract projection, admission matrix, and CI are green may P1.1d be
+reopened. P1.2 remains prohibited until that release gate is explicitly
+closed.

@@ -9,7 +9,7 @@ tests and required for the tagged Docker integration test.
 go test -race -shuffle=on -count=1 ./...
 go vet ./...
 SANDBOX_RUNTIME_DOCKER_INTEGRATION=1 go test -tags=integration -count=1 ./driver/docker
-go run ./cmd/verify-agent-contract -source-root /path/to/agent-blueprints
+go run ./cmd/verify-contract -source-root .
 ```
 
 Format changed Go files with `gofmt`. Do not weaken or skip a gate to make a
@@ -50,14 +50,14 @@ Never expose container IDs, host paths, daemon errors, raw endpoints, secrets,
 or credentials through a stable API. Production configuration must fail closed
 when authentication, persistence, image pinning, or transport safety is absent.
 
-## Agent Contract discipline
+## Provider Contract discipline
 
-The upstream Blueprint explains intent; its locked OpenAPI, Schemas, semantic
-rules, fixtures, and Conformance Suite define wire behavior. Do not edit or copy
-the proprietary upstream Contract into this MIT repository. Update
-`compatibility/agent-platform/contract.lock.json` only as a reviewed compatibility
-change, then update generated DTOs, mappings, fixtures, tests, and documentation
-together.
+The repository-owned MIT Contract under `contract/` defines wire behavior through
+its locked OpenAPI, JSON Schemas, semantic rules, fixtures, and Conformance
+Suite. Update `compatibility/sandbox-runtime/contract.lock.json` only as a
+reviewed protocol change, then update DTOs, mappings, fixtures, tests, and
+documentation together. Do not claim compatibility with an absent external
+Contract.
 
 Contract lock verification proves only the identity of consumed inputs. Unit
 tests prove components. Conformance, multi-controller reliability, security,

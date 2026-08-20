@@ -7,22 +7,17 @@ workload is a remote shell, while browser, desktop, GPU, and stronger isolation
 backends are optional capabilities that can be added without changing the
 provider-facing control protocol.
 
-One explicit compatibility target is
-[`CelestialsGroup/agent-blueprints`](https://github.com/CelestialsGroup/agent-blueprints).
-That platform defines its own native Sandbox Provider plan and a stable provider
-boundary. This project is a candidate independent implementation of that
-boundary. DeerFlow and other third-party sandboxes are research references, not
-current adapters, dependencies, or data models that this repository should copy.
-
-This document summarizes the upstream contract locked by
-[`compatibility/agent-platform/contract.lock.json`](../compatibility/agent-platform/contract.lock.json).
-The normative sources remain the locked OpenAPI, JSON Schemas, semantic rules,
-fixtures, and Conformance Suite. When this document disagrees with those
-resources, the locked contract wins.
+The Provider boundary is defined by the repository-owned MIT Contract under
+[`contract/`](../contract/). Its normative resources are the locked OpenAPI,
+JSON Schemas, semantic rules, fixtures, and Conformance Suite. The lock is
+recorded in [`compatibility/sandbox-runtime/contract.lock.json`](../compatibility/sandbox-runtime/contract.lock.json).
+This repository no longer consumes or claims compatibility with an external
+Agent Platform Contract. A future adapter may be added as a separate,
+explicitly versioned compatibility layer.
 
 ## Compatibility boundary
 
-The Agent Platform owns business and orchestration truth:
+A calling platform owns business and orchestration truth:
 
 - tenant, user, authorization, `WorkOrder`, `Run`, and workflow state;
 - provider selection and immutable `ProviderRevision` binding for each run;
@@ -39,14 +34,14 @@ The Agent Platform owns business and orchestration truth:
 - internal runtime endpoints;
 - provider snapshot payloads and backend metrics.
 
-It must not become authoritative for Agent Platform users, final work status,
+It must not become authoritative for caller users, final work status,
 artifact records, billing, or public session credentials. Conversely, the
-Agent Platform must not depend on container IDs, Pod names, Apple Container
+calling platform must not depend on container IDs, Pod names, Apple Container
 IDs, host paths, or any other provider implementation detail.
 
 ```mermaid
 flowchart LR
-    AP["Agent Platform stable kernel and SandboxOperation ledger"] -->|"Sandbox Provider API v1"| PA["sandbox-runtime provider API"]
+    AP["Calling platform operation ledger"] -->|"Local Provider Contract v1"| PA["sandbox-runtime provider API"]
     AP --> RG["Runtime Gateway"]
     PA --> OS["Provider-local operations and reconciliation"]
     OS --> SS["Sandbox application service"]
@@ -58,48 +53,36 @@ flowchart LR
     SS --> EP
 ```
 
-The current `/instances` API is a local management API, not the upstream
-Sandbox Provider API. The current `instance.Service` may remain the internal
+The current `/instances` API is a local management API, not the Provider
+Contract API. The current `instance.Service` may remain the internal
 application boundary and `instance.Driver` the backend port, but neither model
 should be serialized directly as the cross-project protocol.
 
 The accepted ownership decision is recorded in
 [`docs/adr/0001-agent-platform-provider-boundary.md`](adr/0001-agent-platform-provider-boundary.md).
-The Agent Platform owns its durable aggregate operation ledger and authorization
+The calling platform owns its durable aggregate operation ledger and authorization
 decisions. This service owns only provider-local operation progress and backend
 evidence required to answer the Provider API safely.
 
 ## Contract source and versioning
 
-The compatibility implementation must be generated or validated against the
-immutable upstream revision in the contract lock. The locked contract identifies
-itself as Sandbox Provider API `1.0.0`, protocol `v1`:
-
-- [Sandbox Provider contract](https://github.com/CelestialsGroup/agent-blueprints/blob/cf623ac7b6c8730a0a609076adaefe5197488667/blueprint/docs/33_SANDBOX_PROVIDER_CONTRACT.md)
-- [Sandbox security and isolation](https://github.com/CelestialsGroup/agent-blueprints/blob/cf623ac7b6c8730a0a609076adaefe5197488667/blueprint/docs/34_SANDBOX_SECURITY_AND_ISOLATION.md)
-- [Conformance and migration](https://github.com/CelestialsGroup/agent-blueprints/blob/cf623ac7b6c8730a0a609076adaefe5197488667/blueprint/docs/36_SANDBOX_CONFORMANCE_AND_MIGRATION.md)
-- [OpenAPI v1](https://github.com/CelestialsGroup/agent-blueprints/blob/cf623ac7b6c8730a0a609076adaefe5197488667/contract/openapi/sandbox-provider-v1.yaml)
-- [JSON Schemas](https://github.com/CelestialsGroup/agent-blueprints/tree/cf623ac7b6c8730a0a609076adaefe5197488667/contract/schemas)
-- [Sandbox Conformance Suite](https://github.com/CelestialsGroup/agent-blueprints/blob/cf623ac7b6c8730a0a609076adaefe5197488667/contract/conformance/sandbox/v1/suite.json)
-
-The upstream Contract is marked `LicenseRef-Proprietary`, while this repository
-is MIT licensed. Contract resources are therefore consumed from a read-only
-checkout and verified by digest; they are not copied into this repository.
+The current Contract namespace is
+`urn:shell-echo:sandbox-runtime:provider-v1`, version `1.0.0`, and MIT licensed.
+The lock binds the Contract tree, manifest, OpenAPI digest, semantic rules,
+fixtures, and local Conformance Suite to an immutable Git revision. Contract
+resources are validated in place; no external checkout, source-root mount, or
+proprietary resource is required.
 
 Compatibility rules:
 
-1. The Agent Platform selects a provider and immutable ProviderRevision before
-   starting a run. A running workload is never silently moved to a different
-   revision.
-2. Protocol changes are additive within `v1`. A breaking semantic or schema
-   change requires a new protocol version.
-3. Capability negotiation, not provider-name checks, decides whether a workload
+1. Protocol changes are additive within `v1`. A breaking semantic or schema
+   change requires a new protocol version and namespace revision.
+2. Capability negotiation, not provider-name checks, decides whether a workload
    may be scheduled.
-4. A provider switch applies to new runs. Existing runs drain on their original
-   revision unless an explicitly compatible workspace snapshot is restored into
-   a new sandbox.
-5. Upstream contract fixtures and conformance tests are release gates. Narrative
-   documentation alone is not sufficient proof of compatibility.
+3. Provider revision identifiers remain immutable for the lifetime of an
+   admitted workload.
+4. Local fixtures and conformance tests are release gates. Narrative
+   documentation alone is not sufficient proof of Contract compatibility.
 
 ## Provider API v1
 
@@ -153,7 +136,7 @@ conformance must not rely on a trusted flat network.
 
 ## Capabilities and profiles
 
-The upstream capability vocabulary currently includes:
+The Contract capability vocabulary currently includes:
 
 | Capability | Meaning in this project |
 | --- | --- |
@@ -333,7 +316,7 @@ driver/*     --------------------------------> backend engines
 - the provider-local operation coordinator owns the idempotency, attempts,
   fencing, deadlines, cancellation evidence, and reconciliation needed to
   execute and report one Provider API request safely. It does not replace the
-  Agent Platform's authoritative SandboxOperation ledger.
+  calling platform's authoritative operation ledger.
 - repositories persist sandboxes, operations, events, leases, and retained
   results through explicit interfaces. A file repository remains suitable for
   single-process development, not multi-controller production.
@@ -350,8 +333,8 @@ its conformance tests.
 
 ## Current gap assessment
 
-The current code is a sound lifecycle foundation, but it is not yet an
-Agent Platform-compatible provider:
+The current code is a sound lifecycle foundation, but the broader asynchronous
+Provider Contract is not yet implemented:
 
 | Area | Current state | Required direction |
 | --- | --- | --- |
@@ -371,17 +354,17 @@ Agent Platform-compatible provider:
 
 ### Phase 1: stable provider core
 
-#### P1.0: contract intake and ownership freeze
+#### P1.0: local Contract ownership freeze
 
 - record the independent Provider ownership decision;
-- pin the upstream revision, Contract tree, manifest, OpenAPI, and Sandbox Suite;
-- verify the lock against a read-only upstream checkout in CI;
-- keep upstream proprietary resources outside this MIT repository;
+- pin the repository-owned Contract tree, manifest, OpenAPI, semantic rules,
+  fixtures, and Conformance Suite;
+- verify the lock against this repository in CI;
+- keep the Contract MIT-licensed and versioned in this repository;
 - define development and compatibility change rules.
 
-Release gate: the lock verifier passes and this repository contains no copied
-upstream Contract resources. This gate proves input identity only, not protocol
-conformance.
+Release gate: the local lock verifier and resource validation pass. This gate
+proves Contract identity only, not protocol conformance.
 
 #### P1.1: Provider API admission
 
@@ -389,7 +372,7 @@ Implementation slices and evidence boundaries are tracked in the
 [P1.1 Provider API admission plan](plan/p1.1-provider-api-admission.md).
 
 - define provider DTOs separately from `instance` and driver models;
-- generate or validate them against the locked Schemas and fixtures;
+- validate them against the locked local Schemas and fixtures;
 - implement mTLS-only capability discovery;
 - implement the closed JWS header, claims, operation, descriptor, and request
   digest admission boundary for all protected operations.
@@ -414,20 +397,20 @@ conformance tests pass.
 - implement terminal sessions through an opaque internal endpoint;
 - integrate artifact staging without making the provider the artifact authority.
 
-Release gate: Agent Platform coding and shell scenarios run against this provider
-without DeerFlow-specific fields, endpoint leakage, or cross-tenant access.
+Release gate: a separately supplied caller can run its coding and shell
+scenarios against this provider without endpoint leakage or cross-tenant access.
 
 ### Phase 3: migration readiness
 
-- run the Agent Platform native provider and `sandbox-runtime` against the same
-  locked Conformance Suite;
+- run an external caller and `sandbox-runtime` against the same locked local
+  Conformance Suite;
 - shadow-validate capabilities and requests without serving production traffic;
 - canary only new runs and lock each run to its selected ProviderRevision;
 - prove rollback changes only new bindings and old-provider runs can drain;
 - compare lifecycle latency, exec success, orphan count, session stability,
   resource evidence, and reconciliation backlog.
 
-Release gate: the platform can switch the matching capability profile by
+Release gate: the caller can switch the matching capability profile by
 configuration without changing WorkOrder, Artifact, event, usage, gateway, or
 frontend contracts.
 
