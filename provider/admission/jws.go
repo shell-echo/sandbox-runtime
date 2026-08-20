@@ -20,9 +20,10 @@ import (
 )
 
 const (
-	maxCompactJWSBytes = 8 << 10
-	expectedJWSType    = "agent-sandbox-operation+jwt"
-	expectedIssuer     = "agent-platform"
+	maxCompactJWSBytes       = 8 << 10
+	expectedJWSType          = "agent-sandbox-operation+jwt"
+	expectedJWSAdmissionType = "agent-sandbox-operation-admission+jwt"
+	expectedIssuer           = "agent-platform"
 )
 
 var (
@@ -91,26 +92,30 @@ type JWSHeader struct {
 // Contextual caller, request, temporal, replay, and fencing checks remain
 // separate P1.1c admission units.
 type TokenClaims struct {
-	JTI                  string        `json:"jti"`
-	Issuer               string        `json:"iss"`
-	Subject              string        `json:"sub"`
-	Audience             string        `json:"aud"`
-	IssuedAt             int64         `json:"iat"`
-	NotBefore            int64         `json:"nbf"`
-	ExpiresAt            int64         `json:"exp"`
-	Operation            Operation     `json:"operation"`
-	ProviderRevisionID   string        `json:"provider_revision_id"`
-	SandboxID            string        `json:"sandbox_id"`
-	OperationID          string        `json:"operation_id"`
-	AttemptID            string        `json:"attempt_id"`
-	FencingToken         int64         `json:"fencing_token"`
-	TenantID             string        `json:"tenant_id"`
-	WorkOrderID          string        `json:"work_order_id"`
-	PolicyDigest         string        `json:"policy_digest"`
-	RequestContractID    string        `json:"request_contract_id"`
-	RequestDigestProfile DigestProfile `json:"request_digest_profile"`
-	RequestDigest        string        `json:"request_digest"`
-	DeadlineAt           string        `json:"deadline_at"`
+	JTI                           string        `json:"jti"`
+	Issuer                        string        `json:"iss"`
+	Subject                       string        `json:"sub"`
+	Audience                      string        `json:"aud"`
+	IssuedAt                      int64         `json:"iat"`
+	NotBefore                     int64         `json:"nbf"`
+	ExpiresAt                     int64         `json:"exp"`
+	Operation                     Operation     `json:"operation"`
+	ProviderRevisionID            string        `json:"provider_revision_id"`
+	SandboxID                     string        `json:"sandbox_id"`
+	OperationID                   string        `json:"operation_id"`
+	AttemptID                     string        `json:"attempt_id"`
+	FencingToken                  int64         `json:"fencing_token"`
+	TenantID                      string        `json:"tenant_id"`
+	WorkOrderID                   string        `json:"work_order_id"`
+	PolicyDigest                  string        `json:"policy_digest"`
+	PolicyDecidedAt               string        `json:"policy_decided_at"`
+	RequestContractID             string        `json:"request_contract_id"`
+	RequestDigestProfile          DigestProfile `json:"request_digest_profile"`
+	RequestDigest                 string        `json:"request_digest"`
+	DeadlineAt                    string        `json:"deadline_at"`
+	AdmissionContextContractID    string        `json:"admission_context_contract_id"`
+	AdmissionContextDigestProfile string        `json:"admission_context_digest_profile"`
+	AdmissionContextDigest        string        `json:"admission_context_digest"`
 }
 
 // VerifiedToken contains a signature-verified, closed header and claims shape.
@@ -156,7 +161,7 @@ func VerifyCompactJWS(ctx context.Context, compact string, keys TrustedKeySource
 		return VerifiedToken{}, ErrInvalidToken
 	}
 	var claims TokenClaims
-	if !decodeClosedJSON(payloadBytes, &claims) || !validateClaimsShape(claims) {
+	if !decodeClosedJSON(payloadBytes, &claims) || !validateClaimsForHeader(header, claims) {
 		return VerifiedToken{}, ErrInvalidToken
 	}
 
@@ -182,7 +187,23 @@ func decodeCompactSegment(segment string) ([]byte, bool) {
 }
 
 func validateHeader(header JWSHeader) bool {
-	return header.Algorithm.Supported() && header.Type == expectedJWSType && validBoundedText(string(header.KeyID), 1, 200)
+	return header.Algorithm.Supported() && (header.Type == expectedJWSType || header.Type == expectedJWSAdmissionType) && validBoundedText(string(header.KeyID), 1, 200)
+}
+
+func validateClaimsForHeader(header JWSHeader, claims TokenClaims) bool {
+	if !validateClaimsShape(claims) {
+		return false
+	}
+	if header.Type != expectedJWSAdmissionType {
+		return claims.AdmissionContextContractID == "" && claims.AdmissionContextDigestProfile == "" && claims.AdmissionContextDigest == ""
+	}
+	if claims.PolicyDecidedAt == "" {
+		return false
+	}
+	if _, err := time.Parse(time.RFC3339Nano, claims.PolicyDecidedAt); err != nil {
+		return false
+	}
+	return claims.AdmissionContextContractID == AdmissionContextContractID && claims.AdmissionContextDigestProfile == AdmissionContextDigestProfile && digestPattern.MatchString(claims.AdmissionContextDigest)
 }
 
 func validateClaimsShape(claims TokenClaims) bool {
@@ -197,6 +218,11 @@ func validateClaimsShape(claims TokenClaims) bool {
 	}
 	if _, err := time.Parse(time.RFC3339Nano, claims.DeadlineAt); err != nil {
 		return false
+	}
+	if claims.PolicyDecidedAt != "" {
+		if _, err := time.Parse(time.RFC3339Nano, claims.PolicyDecidedAt); err != nil {
+			return false
+		}
 	}
 	if !validBoundedText(claims.JTI, 16, 200) || !validBoundedText(claims.Subject, 1, 200) {
 		return false

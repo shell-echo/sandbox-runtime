@@ -30,6 +30,7 @@ type TransportOptions struct {
 	ServerPrivateKeyFile       string
 	ClientCABundleFile         string
 	AllowedClientURIIdentities []string
+	Protected                  *ProtectedTransportOptions
 }
 
 // Server is the dedicated mTLS-only Provider API server. Construction loads
@@ -68,13 +69,21 @@ func NewServer(ctx context.Context, options TransportOptions, source provider.Ca
 	if err != nil {
 		return nil, err
 	}
+	rootHandler := handler
+	if options.Protected != nil {
+		protected, protectedErr := newProtectedHandler(identityAdmission, *options.Protected)
+		if protectedErr != nil {
+			return nil, protectedErr
+		}
+		rootHandler = &providerHandler{capabilities: handler, protected: protected}
+	}
 
 	listenConfig := &net.ListenConfig{}
 	return &Server{
 		identityAdmission: identityAdmission,
 		http: &http.Server{
 			Addr:              options.Address.Addr(),
-			Handler:           handler,
+			Handler:           rootHandler,
 			TLSConfig:         tlsConfig,
 			ReadHeaderTimeout: providerReadHeaderTimeout,
 			ReadTimeout:       providerReadTimeout,
@@ -84,6 +93,19 @@ func NewServer(ctx context.Context, options TransportOptions, source provider.Ca
 		},
 		listen: listenConfig.Listen,
 	}, nil
+}
+
+type providerHandler struct {
+	capabilities http.Handler
+	protected    http.Handler
+}
+
+func (h *providerHandler) ServeHTTP(response http.ResponseWriter, request *http.Request) {
+	if request.URL.Path == capabilitiesPath {
+		h.capabilities.ServeHTTP(response, request)
+		return
+	}
+	h.protected.ServeHTTP(response, request)
 }
 
 // Startup serves HTTPS until Shutdown completes. Empty certificate arguments
