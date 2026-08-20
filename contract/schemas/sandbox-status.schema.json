@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:shell-echo:sandbox-runtime:contract:sandbox-status:v1",
+  "title": "Sandbox Runtime Provider Sandbox Status",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "sandbox_id", "tenant_id", "work_order_id", "workspace_id",
+    "provider_revision_id", "desired_state", "observed_state", "generation",
+    "observed_generation", "lease_expires_at", "created_at", "updated_at",
+    "sandbox_slot_key"
+  ],
+  "properties": {
+    "sandbox_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$"},
+    "tenant_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$"},
+    "work_order_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$"},
+    "workspace_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$"},
+    "provider_revision_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$"},
+    "desired_state": {"enum": ["ready", "suspended", "terminated"]},
+    "observed_state": {"enum": ["requested", "provisioning", "ready", "suspending", "suspended", "resuming", "terminating", "terminated", "expired", "failed"]},
+    "generation": {"type": "integer", "minimum": 1},
+    "observed_generation": {"type": "integer", "minimum": 0},
+    "runtime_profile": {"type": "string", "minLength": 1, "maxLength": 200},
+    "runtime_endpoint_reference": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,399}$"},
+    "lease_expires_at": {"type": "string", "format": "date-time"},
+    "snapshot_reference": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,399}$"},
+    "last_error": {"$ref": "urn:shell-echo:sandbox-runtime:contract:provider-error:v1"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "updated_at": {"type": "string", "format": "date-time"},
+    "sandbox_slot_key": {"type": "string", "pattern": "^[a-z0-9][a-z0-9/_-]{0,127}$"},
+    "agent_run_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$"},
+    "provider_state_reference": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,399}$"}
+  }
+}

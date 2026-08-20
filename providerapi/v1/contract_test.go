@@ -25,10 +25,14 @@ func TestLockedContractProjection(t *testing.T) {
 	}
 
 	factories := map[string]func() any{
-		"admission-context.schema.json":     func() any { return &map[string]any{} },
-		"admission-target.schema.json":      func() any { return &map[string]any{} },
-		"provider-capabilities.schema.json": func() any { return &Capabilities{} },
-		"standard-error.schema.json":        func() any { return &StandardError{} },
+		"admission-context.schema.json":      func() any { return &map[string]any{} },
+		"admission-target.schema.json":       func() any { return &map[string]any{} },
+		"create-sandbox-request.schema.json": func() any { return &CreateRequest{} },
+		"provider-capabilities.schema.json":  func() any { return &Capabilities{} },
+		"provider-error.schema.json":         func() any { return &ProviderError{} },
+		"provider-operation.schema.json":     func() any { return &Operation{} },
+		"sandbox-status.schema.json":         func() any { return &Status{} },
+		"standard-error.schema.json":         func() any { return &StandardError{} },
 	}
 	expectedNames := make([]string, 0, len(factories))
 	for name := range factories {
@@ -38,15 +42,19 @@ func TestLockedContractProjection(t *testing.T) {
 	if names := projection.SchemaNames(); !reflect.DeepEqual(names, expectedNames) {
 		t.Fatalf("Provider projection = %v, want %v", names, expectedNames)
 	}
-	if limits := projection.RequestBodyLimits(); len(limits) != 0 {
-		t.Fatalf("Provider request body limits = %v, want none for discovery-only Contract", limits)
+	if limits := projection.RequestBodyLimits(); !reflect.DeepEqual(limits, map[string]int64{"create-sandbox-request.schema.json": 1 << 20}) {
+		t.Fatalf("Provider request body limits = %v, want create request limit", limits)
 	}
 
 	fixtures := map[string]string{
-		"admission-context.schema.json":     "admission-context.json",
-		"admission-target.schema.json":      "admission-target.json",
-		"provider-capabilities.schema.json": "capabilities.json",
-		"standard-error.schema.json":        "standard-error.json",
+		"admission-context.schema.json":      "admission-context.json",
+		"admission-target.schema.json":       "admission-target.json",
+		"create-sandbox-request.schema.json": "create-sandbox-request.json",
+		"provider-capabilities.schema.json":  "capabilities.json",
+		"provider-error.schema.json":         "provider-error.json",
+		"provider-operation.schema.json":     "provider-operation.json",
+		"sandbox-status.schema.json":         "sandbox-status.json",
+		"standard-error.schema.json":         "standard-error.json",
 	}
 	for schemaName, fixtureName := range fixtures {
 		t.Run("fixture/"+fixtureName, func(t *testing.T) {

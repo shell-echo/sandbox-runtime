@@ -15,4 +15,4 @@ in [`docs/STATUS.md`](../STATUS.md).
 | P1.1 | [Provider API admission](p1.1-provider-api-admission.md) | P1.1d release gate passed; lifecycle remains unclaimed |
 | P1.1b | [mTLS capability discovery](p1.1b-capability-discovery.md) | Passed under local Contract with PR/post-merge evidence |
 | P1.1c | [Protected-operation admission](p1.1c-protected-operation-admission.md) | Passed under local Contract with PR/post-merge evidence |
-| P1.2 | [Async lifecycle](p1.2-async-lifecycle.md) | Planning; no lifecycle behavior implemented |
+| P1.2 | [Async lifecycle](p1.2-async-lifecycle.md) | P1.2.0 Contract/ADR in progress; no lifecycle behavior implemented |

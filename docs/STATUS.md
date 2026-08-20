@@ -12,13 +12,13 @@ production readiness.
 
 | Item | Evidence | Status |
 | --- | --- | --- |
-| Checkout | `codex/p1.2-lifecycle-plan` from `e2755f5` | Planning |
+| Checkout | `codex/p1.2-contract-inventory` from `57186cc` | P1.2.0 in progress |
 | Review | PR [#17](https://github.com/shell-echo/sandbox-runtime/pull/17) merged as `43ff3d7`; PR [#18](https://github.com/shell-echo/sandbox-runtime/pull/18) merged as `4774c3a`; PR [#19](https://github.com/shell-echo/sandbox-runtime/pull/19) merged as `e2755f5` | P1.1d passed; P1.2 plan pending |
 | Worktree | clean | Verified |
 | Contract namespace | `urn:shell-echo:sandbox-runtime:provider-v1` | Locked |
 | Contract version/license | `1.0.0` / MIT | Locked |
-| Contract resources | OpenAPI, admission schemas, semantic rules, fixtures, Suite | Local tree updated through `72c2574` |
-| Contract lock | revision `e0ed615`; tree `bb3fcd7`; OpenAPI, manifest, semantic-rule, fixture, and Suite bindings | Locked locally |
+| Contract resources | OpenAPI, admission and lifecycle schemas, semantic rules, fixtures, Suite | Locked locally; P1.2.0 review/CI pending |
+| Contract lock | revision `5fc9ce3`; tree `1a75340`; OpenAPI, manifest, semantic-rule, fixture, and Suite bindings | Locked locally |
 | External Agent Contract | no longer consumed; old compatibility evidence is historical only | Removed from implementation |
 
 The lock verifier is intentionally bound to the repository-owned Contract tree.
@@ -37,7 +37,8 @@ It does not clone, mount, or read an external source repository.
 | P1.1b | mTLS-only capability discovery | Passed under local Contract through PR #18; post-merge run `32363581638` passed | No new slice; retain TLS/projection coverage |
 | P1.1c | Protected-operation admission primitives and transport composition | Passed under local Contract through PR #18; post-merge run `32363581638` passed | P1.1d release-gate review |
 | P1.1d | Admission release gate | Passed; Suite runner, race/shuffle matrix, PR CI, and post-merge CI all passed | Retain gate evidence; do not expand claim beyond P1.1 |
-| P1.2 | Async lifecycle, operation ledger, reconciliation, events | Planning; now unblocked by P1.1d, no lifecycle behavior changed | Authority/Contract inventory and first bounded implementation slice |
+| P1.2.0 | Lifecycle Contract and authority inventory | In progress; ADR 0004, lock, projection and local Suite evidence passed | Review, PR CI, post-merge CI, then close P1.2.0 |
+| P1.2 | Async lifecycle, operation ledger, reconciliation, events | P1.2.0 in progress; no lifecycle behavior changed | P1.2.0 closure before P1.2.1 domain code |
 | P2 | Coding/remote-shell profile | Not started | P1.2 completion and profile-specific Conformance |
 | P3 | Migration readiness and external-caller integration | Not started | External caller E2E, rollback and canary evidence |
 | P4 | Production hardening | Not started | Deployment, multi-controller, multi-tenant, and production gates |
@@ -84,7 +85,7 @@ Passed locally (authorized test environment):
 
 Pending:
 
-- P1.2 authority/Contract inventory and first bounded lifecycle plan;
+- P1.2.0 review and PR/post-merge CI;
 - optional content-derived Suite digest enhancement;
 - aggregate lifecycle conformance, external-caller E2E, reliability, tenancy,
   deployment, and production gates.
@@ -92,6 +93,6 @@ Pending:
 ## Next Entry
 
 P1.1d is explicitly closed by the local Suite/security matrix, PR #19 CI, and
-post-merge run `32365284283`. The next entry is P1.2 planning; implementation
-must remain bounded by the lifecycle Contract and this repository's ownership
-boundary.
+post-merge run `32365284283`. P1.2.0 is the active Contract/ADR slice; local
+lock, projection, race, vet, and 14-case Suite evidence pass, while review and
+CI remain open. No lifecycle domain code may start before P1.2.0 closure.

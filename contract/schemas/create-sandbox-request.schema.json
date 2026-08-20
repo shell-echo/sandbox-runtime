@@ -1,0 +1,173 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:shell-echo:sandbox-runtime:contract:create-sandbox-request:v1",
+  "title": "Sandbox Runtime Create Sandbox Request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "operation_id",
+    "attempt_id",
+    "fencing_token",
+    "idempotency_key",
+    "request_digest",
+    "deadline_at",
+    "protocol_version",
+    "spec"
+  ],
+  "properties": {
+    "operation_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$"},
+    "attempt_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$"},
+    "fencing_token": {"type": "integer", "minimum": 1},
+    "idempotency_key": {"type": "string", "minLength": 1, "maxLength": 200},
+    "request_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "deadline_at": {"type": "string", "format": "date-time"},
+    "protocol_version": {"const": "v1"},
+    "spec": {"$ref": "#/$defs/SandboxSpec"},
+    "trace_context": {
+      "type": ["object", "null"],
+      "maxProperties": 16,
+      "additionalProperties": true
+    }
+  },
+  "$defs": {
+    "Identifier": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$"},
+    "Digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "SandboxSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sandbox_id",
+        "tenant_id",
+        "work_order_id",
+        "workspace_id",
+        "branch_id",
+        "provider_resolution_id",
+        "provider_revision_id",
+        "image",
+        "runtime_profile",
+        "resources",
+        "required_capabilities",
+        "network",
+        "workspace",
+        "lease",
+        "security",
+        "sandbox_slot_key"
+      ],
+      "properties": {
+        "sandbox_id": {"$ref": "#/$defs/Identifier"},
+        "tenant_id": {"$ref": "#/$defs/Identifier"},
+        "work_order_id": {"$ref": "#/$defs/Identifier"},
+        "workspace_id": {"$ref": "#/$defs/Identifier"},
+        "branch_id": {"$ref": "#/$defs/Identifier"},
+        "provider_resolution_id": {"$ref": "#/$defs/Identifier"},
+        "provider_revision_id": {"$ref": "#/$defs/Identifier"},
+        "image": {"$ref": "#/$defs/Image"},
+        "runtime_profile": {"type": "string", "minLength": 1, "maxLength": 200},
+        "resources": {"$ref": "#/$defs/Resources"},
+        "required_capabilities": {"type": "array", "maxItems": 64, "items": {"$ref": "#/$defs/CapabilityRequirement"}},
+        "optional_capabilities": {"type": "array", "maxItems": 64, "items": {"$ref": "#/$defs/CapabilityRequirement"}},
+        "network": {"$ref": "#/$defs/NetworkPolicy"},
+        "workspace": {"$ref": "#/$defs/WorkspacePolicy"},
+        "lease": {"$ref": "#/$defs/LeasePolicy"},
+        "placement_constraints": {"$ref": "#/$defs/PlacementConstraints"},
+        "security": {"$ref": "#/$defs/SecurityPolicy"},
+        "labels": {
+          "type": "object",
+          "maxProperties": 32,
+          "propertyNames": {"pattern": "^[A-Za-z0-9._/-]{1,64}$"},
+          "additionalProperties": {"type": "string", "maxLength": 200}
+        },
+        "sandbox_slot_key": {"type": "string", "pattern": "^[a-z0-9][a-z0-9/_-]{0,127}$"},
+        "agent_run_id": {"$ref": "#/$defs/Identifier"}
+      }
+    },
+    "Image": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reference", "digest"],
+      "properties": {
+        "reference": {"type": "string", "minLength": 1, "maxLength": 500},
+        "digest": {"$ref": "#/$defs/Digest"},
+        "architecture": {"enum": ["amd64", "arm64"]}
+      }
+    },
+    "Resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cpu_millis", "memory_bytes", "ephemeral_storage_bytes", "pids_limit"],
+      "properties": {
+        "cpu_millis": {"type": "integer", "minimum": 1},
+        "memory_bytes": {"type": "integer", "minimum": 1},
+        "ephemeral_storage_bytes": {"type": "integer", "minimum": 1},
+        "workspace_bytes": {"type": "integer", "minimum": 1},
+        "gpu_count": {"type": "integer", "minimum": 0},
+        "pids_limit": {"type": "integer", "minimum": 1}
+      }
+    },
+    "CapabilityRequirement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^sandbox\\.[a-z0-9-]+$"},
+        "version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+        "profile": {"type": "string", "minLength": 1, "maxLength": 200}
+      }
+    },
+    "NetworkPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode"],
+      "properties": {
+        "mode": {"enum": ["none", "restricted", "full"]},
+        "policy_reference": {"$ref": "#/$defs/Identifier"},
+        "egress_gateway_required": {"type": "boolean"}
+      }
+    },
+    "WorkspacePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "base_revision_id", "base_revision_digest", "base_workspace_head_version", "commit_mode"],
+      "properties": {
+        "mode": {"enum": ["ephemeral", "persistent"]},
+        "base_revision_id": {"$ref": "#/$defs/Identifier"},
+        "base_revision_digest": {"$ref": "#/$defs/Digest"},
+        "base_workspace_head_version": {"type": "integer", "minimum": 0},
+        "commit_mode": {"enum": ["read_only", "cas_new_revision"]},
+        "snapshot_reference": {"$ref": "#/$defs/Identifier"},
+        "mount_path": {"const": "/workspace"}
+      }
+    },
+    "LeasePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["expires_at", "max_extension_seconds"],
+      "properties": {
+        "expires_at": {"type": "string", "format": "date-time"},
+        "max_extension_seconds": {"type": "integer", "minimum": 0}
+      }
+    },
+    "PlacementConstraints": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "region_id": {"$ref": "#/$defs/Identifier"},
+        "resource_class": {"enum": ["standard", "browser", "office", "video", "gpu"]},
+        "architecture": {"enum": ["amd64", "arm64"]}
+      }
+    },
+    "SecurityPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["privilege_level", "root_filesystem", "service_account_mode", "allow_privilege_escalation", "host_namespace_access"],
+      "properties": {
+        "privilege_level": {"const": "unprivileged"},
+        "root_filesystem": {"const": "read_only"},
+        "service_account_mode": {"enum": ["none", "restricted"]},
+        "allow_privilege_escalation": {"const": false},
+        "host_namespace_access": {"const": false},
+        "seccomp_profile": {"enum": ["runtime-default", "localhost-profile"]}
+      }
+    }
+  }
+}
