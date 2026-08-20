@@ -11,7 +11,7 @@ in [`docs/STATUS.md`](../STATUS.md).
 
 | Phase | Plan | Status |
 | --- | --- | --- |
-| P0 | [Local Provider Contract migration](p0-local-provider-contract.md) | In progress: resources and lock landed; validator, CI, and documentation migration pending |
-| P1.1 | [Provider API admission](p1.1-provider-api-admission.md) | Implementation exists, but compatibility evidence is reset until it passes the local Contract |
-| P1.1b | [mTLS capability discovery](p1.1b-capability-discovery.md) | Implementation exists; local response projection and CI revalidation pending |
-| P1.1c | [Protected-operation admission](p1.1c-protected-operation-admission.md) | Implementation exists; local semantic/admission revalidation pending |
+| P0 | [Local Provider Contract migration](p0-local-provider-contract.md) | PR #17 merged; post-merge CI passed; P0.4 revalidation follow-up in progress |
+| P1.1 | [Provider API admission](p1.1-provider-api-admission.md) | Local Contract revalidation passed on the current branch; release gate remains open |
+| P1.1b | [mTLS capability discovery](p1.1b-capability-discovery.md) | Local TLS and response projection revalidation passed; PR evidence pending |
+| P1.1c | [Protected-operation admission](p1.1c-protected-operation-admission.md) | Local semantic binding and admission matrix passed; PR evidence pending |

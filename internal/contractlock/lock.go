@@ -48,16 +48,17 @@ type Source struct {
 // Contract identifies the repository-owned manifest, OpenAPI, and semantic
 // resources.
 type Contract struct {
-	Root              string `json:"root"`
-	Namespace         string `json:"namespace"`
-	Version           string `json:"version"`
-	License           string `json:"license"`
-	ManifestPath      string `json:"manifest_path"`
-	ManifestDigest    string `json:"manifest_digest"`
-	OpenAPIPath       string `json:"openapi_path"`
-	OpenAPISHA256     string `json:"openapi_sha256"`
-	SemanticRulesPath string `json:"semantic_rules_path"`
-	FixturesRoot      string `json:"fixtures_root"`
+	Root                string `json:"root"`
+	Namespace           string `json:"namespace"`
+	Version             string `json:"version"`
+	License             string `json:"license"`
+	ManifestPath        string `json:"manifest_path"`
+	ManifestDigest      string `json:"manifest_digest"`
+	OpenAPIPath         string `json:"openapi_path"`
+	OpenAPISHA256       string `json:"openapi_sha256"`
+	SemanticRulesPath   string `json:"semantic_rules_path"`
+	SemanticRulesSHA256 string `json:"semantic_rules_sha256"`
+	FixturesRoot        string `json:"fixtures_root"`
 }
 
 // SandboxSuite identifies the required local conformance input.
@@ -153,9 +154,10 @@ func (l Lock) Validate() error {
 		return errors.New("Provider Contract must use the repository MIT license")
 	}
 	for name, digest := range map[string]string{
-		"manifest":      l.Contract.ManifestDigest,
-		"OpenAPI":       l.Contract.OpenAPISHA256,
-		"Sandbox Suite": l.SandboxSuite.SuiteDigest,
+		"manifest":       l.Contract.ManifestDigest,
+		"OpenAPI":        l.Contract.OpenAPISHA256,
+		"semantic rules": l.Contract.SemanticRulesSHA256,
+		"Sandbox Suite":  l.SandboxSuite.SuiteDigest,
 	} {
 		if !digestPattern.MatchString(digest) {
 			return fmt.Errorf("%s digest must be a lowercase SHA-256 digest", name)
@@ -272,6 +274,13 @@ func Verify(ctx context.Context, lock Lock, sourceRoot string) (Report, error) {
 	}
 	if err := readMetadata(semanticRulesPath, &semanticRules); err != nil {
 		return Report{}, fmt.Errorf("read semantic rules: %w", err)
+	}
+	semanticRulesDigest, err := fileSHA256(semanticRulesPath)
+	if err != nil {
+		return Report{}, fmt.Errorf("hash semantic rules: %w", err)
+	}
+	if semanticRulesDigest != lock.Contract.SemanticRulesSHA256 {
+		return Report{}, fmt.Errorf("semantic rules digest %s, want %s", semanticRulesDigest, lock.Contract.SemanticRulesSHA256)
 	}
 	if semanticRules.Namespace != lock.Contract.Namespace || semanticRules.Version != lock.Contract.Version || len(semanticRules.Rules) == 0 {
 		return Report{}, errors.New("semantic rules identity or rules are invalid")

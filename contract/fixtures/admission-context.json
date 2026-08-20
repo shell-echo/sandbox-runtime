@@ -1,0 +1,22 @@
+{
+  "context_contract_id": "urn:shell-echo:sandbox-runtime:admission-context:v1",
+  "context_digest_profile": "rfc8785-full-document-excluding-context-digest-v1",
+  "context_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "controller_subject": "spiffe://provider/controller",
+  "provider_revision_id": "provider-revision-1",
+  "provider_instance_audience": "urn:shell-echo:sandbox-runtime:provider-instance:provider-1",
+  "tenant_id": "tenant-1",
+  "work_order_id": "work-order-1",
+  "policy_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "policy_decided_at": "2026-08-20T00:00:00Z",
+  "operation": "exec",
+  "sandbox_id": "sandbox-1",
+  "operation_id": "operation-1",
+  "attempt_id": "attempt-1",
+  "fencing_token": 1,
+  "deadline_at": "2026-08-20T00:04:00Z",
+  "request_contract_id": "urn:shell-echo:sandbox-runtime:request:exec:v1",
+  "request_digest_profile": "rfc8785-request-excluding-request-digest-v1",
+  "request_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "http_target": {"method": "POST", "path": "/v1/sandboxes/sandbox-1/exec", "normalized_query": []}
+}

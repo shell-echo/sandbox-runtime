@@ -9,7 +9,12 @@
         "capability-discovery-admitted-identity",
         "capability-discovery-immutable-schema",
         "capability-discovery-empty-request",
-        "capability-discovery-no-mutation-routes"
+        "capability-discovery-no-mutation-routes",
+        "protected-admission-context-schema",
+        "protected-admission-token-binding",
+        "protected-admission-digest-substitution",
+        "protected-admission-expiry",
+        "protected-admission-replay-and-fencing"
       ]
     }
   ],

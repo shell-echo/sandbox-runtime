@@ -109,7 +109,7 @@ func TestDecodeAdmissionContextCarrierClosesQueryByOperation(t *testing.T) {
 	base := validAdmissionContextForTest()
 	event := base
 	event.Operation = OperationReadEvents
-	event.RequestContractID = "urn:agent-platform:sandbox-event-read-operation-descriptor:v1"
+	event.RequestContractID = "urn:shell-echo:sandbox-runtime:descriptor:events:v1"
 	event.RequestDigestProfile = DigestProfileFullDocument
 	event.HTTPTarget = AdmissionTarget{Method: http.MethodGet, Path: "/v1/sandboxes/sandbox-1/events", NormalizedQuery: []AdmissionQuery{}}
 
@@ -177,12 +177,12 @@ func validAdmissionContextForTest() AdmissionContext {
 		ContextDigestProfile:     AdmissionContextDigestProfile,
 		ControllerSubject:        "spiffe://provider/controller",
 		ProviderRevisionID:       "provider-revision-1",
-		ProviderInstanceAudience: "urn:agent-platform:provider-instance:provider-1",
+		ProviderInstanceAudience: "urn:shell-echo:sandbox-runtime:provider-instance:provider-1",
 		TenantID:                 "tenant-1", WorkOrderID: "work-order-1",
 		PolicyDigest: validDigest('a'), PolicyDecidedAt: "2026-08-20T00:00:00Z",
 		Operation: OperationExec, SandboxID: "sandbox-1", OperationID: "operation-1",
 		AttemptID: "attempt-1", FencingToken: 1, DeadlineAt: "2026-08-20T00:05:00Z",
-		RequestContractID:    "urn:agent-platform:sandbox-exec-request:v1",
+		RequestContractID:    "urn:shell-echo:sandbox-runtime:request:exec:v1",
 		RequestDigestProfile: DigestProfileRequestExcludingDigest, RequestDigest: validDigest('b'),
 		HTTPTarget: AdmissionTarget{Method: http.MethodPost, Path: "/v1/sandboxes/sandbox-1/exec", NormalizedQuery: []AdmissionQuery{}},
 	}

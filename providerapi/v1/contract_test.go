@@ -25,6 +25,8 @@ func TestLockedContractProjection(t *testing.T) {
 	}
 
 	factories := map[string]func() any{
+		"admission-context.schema.json":     func() any { return &map[string]any{} },
+		"admission-target.schema.json":      func() any { return &map[string]any{} },
 		"provider-capabilities.schema.json": func() any { return &Capabilities{} },
 		"standard-error.schema.json":        func() any { return &StandardError{} },
 	}
@@ -41,6 +43,8 @@ func TestLockedContractProjection(t *testing.T) {
 	}
 
 	fixtures := map[string]string{
+		"admission-context.schema.json":     "admission-context.json",
+		"admission-target.schema.json":      "admission-target.json",
 		"provider-capabilities.schema.json": "capabilities.json",
 		"standard-error.schema.json":        "standard-error.json",
 	}

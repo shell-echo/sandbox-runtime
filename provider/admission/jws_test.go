@@ -75,8 +75,8 @@ func TestVerifyCompactJWSRejectsClosedClaimFailures(t *testing.T) {
 		name    string
 		payload any
 	}{
-		{name: "unknown claim", payload: map[string]any{"jti": "jti-1", "iss": expectedIssuer, "sub": "spiffe://provider/controller", "aud": "urn:agent-platform:provider-instance:provider-1", "iat": 1, "nbf": 1, "exp": 2, "operation": OperationExec, "provider_revision_id": "provider-revision-1", "sandbox_id": "sandbox-1", "operation_id": "operation-1", "attempt_id": "attempt-1", "fencing_token": 1, "tenant_id": "tenant-1", "work_order_id": "work-order-1", "policy_digest": validDigest('a'), "request_contract_id": "urn:agent-platform:sandbox-exec-request:v1", "request_digest_profile": DigestProfileRequestExcludingDigest, "request_digest": validDigest('b'), "deadline_at": "2026-08-19T16:00:00Z", "extra": true}},
-		{name: "duplicate claim", payload: `{"jti":"jti-1","jti":"jti-2","iss":"agent-platform","sub":"spiffe://provider/controller","aud":"urn:agent-platform:provider-instance:provider-1","iat":1,"nbf":1,"exp":2,"operation":"exec","provider_revision_id":"provider-revision-1","sandbox_id":"sandbox-1","operation_id":"operation-1","attempt_id":"attempt-1","fencing_token":1,"tenant_id":"tenant-1","work_order_id":"work-order-1","policy_digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","request_contract_id":"urn:agent-platform:sandbox-exec-request:v1","request_digest_profile":"rfc8785-request-excluding-request-digest-v1","request_digest":"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","deadline_at":"2026-08-19T16:00:00Z"}`},
+		{name: "unknown claim", payload: map[string]any{"jti": "jti-1", "iss": expectedIssuer, "sub": "spiffe://provider/controller", "aud": "urn:shell-echo:sandbox-runtime:provider-instance:provider-1", "iat": 1, "nbf": 1, "exp": 2, "operation": OperationExec, "provider_revision_id": "provider-revision-1", "sandbox_id": "sandbox-1", "operation_id": "operation-1", "attempt_id": "attempt-1", "fencing_token": 1, "tenant_id": "tenant-1", "work_order_id": "work-order-1", "policy_digest": validDigest('a'), "request_contract_id": "urn:shell-echo:sandbox-runtime:request:exec:v1", "request_digest_profile": DigestProfileRequestExcludingDigest, "request_digest": validDigest('b'), "deadline_at": "2026-08-19T16:00:00Z", "extra": true}},
+		{name: "duplicate claim", payload: `{"jti":"jti-1","jti":"jti-2","iss":"agent-platform","sub":"spiffe://provider/controller","aud":"urn:shell-echo:sandbox-runtime:provider-instance:provider-1","iat":1,"nbf":1,"exp":2,"operation":"exec","provider_revision_id":"provider-revision-1","sandbox_id":"sandbox-1","operation_id":"operation-1","attempt_id":"attempt-1","fencing_token":1,"tenant_id":"tenant-1","work_order_id":"work-order-1","policy_digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","request_contract_id":"urn:shell-echo:sandbox-runtime:request:exec:v1","request_digest_profile":"rfc8785-request-excluding-request-digest-v1","request_digest":"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","deadline_at":"2026-08-19T16:00:00Z"}`},
 		{name: "unsupported operation", payload: mutateClaims(func(claims *TokenClaims) { claims.Operation = "undeclared" })},
 		{name: "wrong issuer", payload: mutateClaims(func(claims *TokenClaims) { claims.Issuer = "other" })},
 		{name: "invalid digest", payload: mutateClaims(func(claims *TokenClaims) { claims.RequestDigest = "sha256:invalid" })},
@@ -85,7 +85,9 @@ func TestVerifyCompactJWSRejectsClosedClaimFailures(t *testing.T) {
 		{name: "short jti", payload: mutateClaims(func(claims *TokenClaims) { claims.JTI = "short" })},
 		{name: "oversized jti", payload: mutateClaims(func(claims *TokenClaims) { claims.JTI = strings.Repeat("j", 201) })},
 		{name: "oversized subject", payload: mutateClaims(func(claims *TokenClaims) { claims.Subject = strings.Repeat("s", 201) })},
-		{name: "wrong operation contract", payload: mutateClaims(func(claims *TokenClaims) { claims.RequestContractID = "urn:agent-platform:sandbox-create-request:v1" })},
+		{name: "wrong operation contract", payload: mutateClaims(func(claims *TokenClaims) {
+			claims.RequestContractID = "urn:shell-echo:sandbox-runtime:request:create:v1"
+		})},
 		{name: "wrong digest profile", payload: mutateClaims(func(claims *TokenClaims) { claims.RequestDigestProfile = DigestProfileFullDocument })},
 	}
 	for _, test := range tests {
@@ -215,7 +217,7 @@ func validTokenClaims() TokenClaims {
 		JTI:                  "jti-000000000000",
 		Issuer:               expectedIssuer,
 		Subject:              "spiffe://provider/controller",
-		Audience:             "urn:agent-platform:provider-instance:provider-1",
+		Audience:             "urn:shell-echo:sandbox-runtime:provider-instance:provider-1",
 		IssuedAt:             1,
 		NotBefore:            1,
 		ExpiresAt:            2,
@@ -228,7 +230,7 @@ func validTokenClaims() TokenClaims {
 		TenantID:             "tenant-1",
 		WorkOrderID:          "work-order-1",
 		PolicyDigest:         validDigest('a'),
-		RequestContractID:    "urn:agent-platform:sandbox-exec-request:v1",
+		RequestContractID:    "urn:shell-echo:sandbox-runtime:request:exec:v1",
 		RequestDigestProfile: DigestProfileRequestExcludingDigest,
 		RequestDigest:        validDigest('b'),
 		DeadlineAt:           "2026-08-19T16:00:00Z",
