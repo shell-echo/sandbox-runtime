@@ -2,7 +2,7 @@
 
 Status: merged through PR #17 as `43ff3d755811545c0d3a1f1799e55afa97402587`;
 post-merge CI run `32360376058` passed all required jobs. The follow-up P0.4
-revalidation is in progress on `codex/p1.1-local-admission-contract@f9297c4`.
+revalidation is in progress on `codex/p1.1d-release-gate-evidence@4774c3a`.
 
 The former external Agent Platform Contract is no longer an authority or a
 runtime dependency. This plan establishes the repository-owned MIT Contract
@@ -34,15 +34,16 @@ arrays empty until a later reviewed protocol change.
    Merged in PR #17.
 4. P0.3: update architecture, development standards, ADRs, README, plans, and
    status ledger. Merged in PR #17.
-5. P0.4: rerun P1.1a-b-c/d evidence under the local Contract. The current
-   branch has passed local verification; PR and post-merge evidence remain
-   required. Do not advance P1.2 until the P1.1 release gate closes.
+5. P0.4: rerun P1.1a-b-c/d evidence under the local Contract. PR #18 and its
+   post-merge CI passed; the current branch adds the executable Suite runner
+   and CI invocation. Do not advance P1.2 until the P1.1 release gate closes.
 
 ## Evidence and Boundaries
 
 The lock verifier proves identity and resource integrity only. Projection tests
-prove selected schemas and fixtures. The local Conformance Suite remains
-unexecuted until a runner is implemented or adopted. No external-caller E2E,
+prove selected schemas and fixtures. The local Suite runner executes the locked
+case IDs, but does not establish aggregate lifecycle conformance. No external-caller
+E2E,
 aggregate lifecycle conformance, multi-controller reliability, multi-tenant
 security, deployment readiness, or production readiness is implied.
 

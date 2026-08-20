@@ -10,6 +10,7 @@ go test -race -shuffle=on -count=1 ./...
 go vet ./...
 SANDBOX_RUNTIME_DOCKER_INTEGRATION=1 go test -tags=integration -count=1 ./driver/docker
 go run ./cmd/verify-contract -source-root .
+go run ./cmd/run-conformance -source-root . -race -shuffle
 ```
 
 Format changed Go files with `gofmt`. Do not weaken or skip a gate to make a
