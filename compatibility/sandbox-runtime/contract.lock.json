@@ -2,8 +2,8 @@
   "format_version": 1,
   "source": {
     "repository": "https://github.com/shell-echo/sandbox-runtime.git",
-    "revision": "e0ed615b102b159afe4efe2999e5054d1348f10c",
-    "contract_tree": "bb3fcd782ca2ca7c7f924e1ecd428ec8cc844ae0"
+    "revision": "5fc9ce3fb2e739412781d4ca806a514305c410e6",
+    "contract_tree": "1a753407b36dac2af42be1923909d162fc410cc8"
   },
   "contract": {
     "root": "contract",
@@ -11,11 +11,11 @@
     "version": "1.0.0",
     "license": "MIT",
     "manifest_path": "contract/compatibility/contract-manifest.json",
-    "manifest_digest": "sha256:fd1da97471fdf28ec05f5f9b2cd2a91516ac02fb48badee8c928ce4f02b92e8a",
+    "manifest_digest": "sha256:4a2dc9f53b96471002631bf1484a08c205b9515d90fd2172b4dd342056f95f81",
     "openapi_path": "contract/openapi/sandbox-runtime-provider-v1.yaml",
-    "openapi_sha256": "sha256:a26d026321d4fc702694677b368d824dcaa47ef229e15d6835c615910a181e27",
+    "openapi_sha256": "sha256:878a303f35521084a990656993844d2cdd6e1da266aed00fbed32df9beda866c",
     "semantic_rules_path": "contract/semantic-rules/provider-v1.json",
-    "semantic_rules_sha256": "sha256:604ea92ab83580d8ddee2fab56f734145e12dab5c364c7d21ec1967166ea7db3",
+    "semantic_rules_sha256": "sha256:596a83130636474d0ac231d1f0a1290ab3245bd180fda3346be268cd05ab6e4e",
     "fixtures_root": "contract/fixtures"
   },
   "sandbox_suite": {
