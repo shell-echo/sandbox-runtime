@@ -168,11 +168,11 @@ rejected with an empty `400` before capability, application, repository, or
 driver dispatch. The handler does not read or probe `Body`; this does not claim
 that the Go server lifecycle never reads or drains request framing. Unsupported
 transfer codings can instead be rejected by the Go `net/http` parser before the
-handler with its standard-library `501` response. Neither `400` nor `501` is
-listed for this operation in the locked OpenAPI response list, and the generic
-malformed-request component cannot supply operation-level wire authority. The
-P1.1b plan records this clarification gap; neither response is a full Contract
-error-wire claim.
+handler with its standard-library `501` response. The repository-owned OpenAPI
+authorizes both `400` and `501` for this operation; the implementation still
+returns the bounded empty `400` handler response and observes the parser-level
+`501` without claiming a Provider error document for either case until the
+corresponding response projection tests pass.
 
 ### Health check
 

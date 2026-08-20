@@ -1,7 +1,8 @@
 # P0 Local Provider Contract Migration
 
-Status: locally implemented and validated on `codex/p1.1-release-gate-status`
-at `6043236`; CI/review pending.
+Status: merged through PR #17 as `43ff3d755811545c0d3a1f1799e55afa97402587`;
+post-merge CI run `32360376058` passed all required jobs. The follow-up P0.4
+revalidation is in progress on `codex/p1.1-local-admission-contract@f9297c4`.
 
 The former external Agent Platform Contract is no longer an authority or a
 runtime dependency. This plan establishes the repository-owned MIT Contract
@@ -28,14 +29,14 @@ arrays empty until a later reviewed protocol change.
 1. P0.0: land the Contract resources and bind their Git tree/digests. Passed
    in `c0efc67` and `fb83eb5`.
 2. P0.1: replace the external lock verifier with local tree, digest, manifest,
-   semantic-rule, fixture, and Suite checks.
-   Passed locally in `6043236`.
+   semantic-rule, fixture, and Suite checks. Merged in PR #17.
 3. P0.2: migrate projection tests, DTO fixtures, and CI to the local Contract.
-   Passed locally in `6043236`.
+   Merged in PR #17.
 4. P0.3: update architecture, development standards, ADRs, README, plans, and
-   status ledger. Passed locally in `6043236`.
-5. P0.4: rerun P1.1a-b-c/d evidence under the local Contract; do not advance
-   P1.2 until the P1.1 release gate closes.
+   status ledger. Merged in PR #17.
+5. P0.4: rerun P1.1a-b-c/d evidence under the local Contract. The current
+   branch has passed local verification; PR and post-merge evidence remain
+   required. Do not advance P1.2 until the P1.1 release gate closes.
 
 ## Evidence and Boundaries
 
