@@ -31,6 +31,8 @@ Currently implemented:
 - separate Provider API v1 wire DTOs and locked Contract projection validation
 - default-disabled Provider capability discovery on a separate mTLS-only HTTPS
   listener
+- default-disabled protected-operation admission with frozen public-key files
+  and a single-controller replay/fencing guard
 
 Planned but not yet implemented:
 
@@ -142,7 +144,7 @@ operator-supplied allowlist of fragment-free absolute URI identities. No URI
 scheme is hard-coded, and clients that fail certificate or URI identity
 admission are rejected during the TLS handshake before HTTP routing.
 
-The admitted Provider surface currently contains only:
+With the default configuration, the admitted Provider surface contains only:
 
 ```http
 GET /v1/capabilities
@@ -153,7 +155,11 @@ envelope. The immutable startup document intentionally advertises empty
 `capabilities` and `runtime_profiles` arrays, plus at least one required,
 content-addressed snapshot/restore compatibility profile. That compatibility
 metadata does not advertise or authorize snapshot, restore, or another runtime
-capability. All Provider mutation and lifecycle routes remain absent.
+capability. The `protected_admission` configuration is independently disabled
+by default. When explicitly enabled with an immutable public-key bundle and a
+durable guard state file, it adds the protected-operation admission boundary but
+still stops after admission with a bounded Provider error. It does not dispatch
+repository, driver, lifecycle, or P1.2 operation-ledger work.
 
 Capability discovery has no query parameters or request document. For request
 metadata visible to the handler, a query string (including a bare trailing
@@ -487,7 +493,8 @@ visibility.
 - [x] define Provider DTOs separately from local instance and driver models
 - [x] validate Provider DTOs and fixtures against the locked Contract
 - [x] implement mTLS-only capability discovery
-- [ ] implement per-operation JWS and request/descriptor digest admission
+- [x] implement per-operation JWS and request/descriptor digest admission
+  boundary; protected operations still stop before lifecycle dispatch
 
 ### Provider lifecycle
 

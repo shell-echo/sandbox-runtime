@@ -28,8 +28,9 @@ type ServerConfig struct {
 // ProviderConfig keeps the Provider listener transport separate from the
 // application capability document it serves.
 type ProviderConfig struct {
-	Transport  ProviderTransportConfig  `mapstructure:"transport"`
-	Capability ProviderCapabilityConfig `mapstructure:"capability"`
+	Transport          ProviderTransportConfig          `mapstructure:"transport"`
+	Capability         ProviderCapabilityConfig         `mapstructure:"capability"`
+	ProtectedAdmission ProviderProtectedAdmissionConfig `mapstructure:"protected_admission"`
 }
 
 // ProviderTransportConfig configures the dedicated, mTLS-only Provider
@@ -51,6 +52,23 @@ type ProviderCapabilityConfig struct {
 	ProviderRevisionID      string                         `mapstructure:"provider_revision_id"`
 	Limits                  ProviderLimitsConfig           `mapstructure:"limits"`
 	SnapshotRestoreProfiles []ProviderCompatibilityProfile `mapstructure:"snapshot_restore_profiles"`
+}
+
+// ProviderProtectedAdmissionConfig controls the opt-in protected-operation
+// boundary. It is independent from mTLS-only capability discovery so an
+// omitted or disabled section cannot accidentally expose protected routes.
+type ProviderProtectedAdmissionConfig struct {
+	Enabled                 bool                                   `mapstructure:"enabled"`
+	GuardStateFile          string                                 `mapstructure:"guard_state_file"`
+	TrustedVerificationKeys []ProviderTrustedVerificationKeyConfig `mapstructure:"trusted_verification_keys"`
+}
+
+// ProviderTrustedVerificationKeyConfig identifies one operator-managed SPKI
+// public-key file. It never accepts or configures private key material.
+type ProviderTrustedVerificationKeyConfig struct {
+	ID            string `mapstructure:"id"`
+	Algorithm     string `mapstructure:"algorithm"`
+	PublicKeyFile string `mapstructure:"public_key_file"`
 }
 
 // ProviderLimitsConfig declares hard limits for the Provider revision.
@@ -118,6 +136,9 @@ func (c *ProviderConfig) Validate() error {
 	if err := c.Capability.validateEnabled(); err != nil {
 		return fmt.Errorf("capability %w", err)
 	}
+	if err := c.ProtectedAdmission.validateEnabled(); err != nil {
+		return fmt.Errorf("protected admission %w", err)
+	}
 	return nil
 }
 
@@ -166,6 +187,41 @@ func (c *ProviderCapabilityConfig) validateEnabled() error {
 			return fmt.Errorf("conflicting snapshot/restore compatibility profile %q", profile.ProfileID)
 		}
 		profilesByID[profile.ProfileID] = profile
+	}
+	return nil
+}
+
+func (c *ProviderProtectedAdmissionConfig) validateEnabled() error {
+	if !c.Enabled {
+		return nil
+	}
+	if strings.TrimSpace(c.GuardStateFile) == "" {
+		return errors.New("guard state file must not be empty")
+	}
+	if count := len(c.TrustedVerificationKeys); count < 1 || count > 32 {
+		return fmt.Errorf("trusted verification key count must be between 1 and 32, got %d", count)
+	}
+
+	ids := make(map[string]struct{}, len(c.TrustedVerificationKeys))
+	for index, key := range c.TrustedVerificationKeys {
+		if !utf8.ValidString(key.ID) || strings.TrimSpace(key.ID) == "" {
+			return fmt.Errorf("trusted verification key %d ID must be valid UTF-8 and not blank", index)
+		}
+		if count := utf8.RuneCountInString(key.ID); count < 1 || count > 128 {
+			return fmt.Errorf("trusted verification key %d ID must contain between 1 and 128 characters, got %d", index, count)
+		}
+		if _, exists := ids[key.ID]; exists {
+			return fmt.Errorf("trusted verification key %d duplicates ID %q", index, key.ID)
+		}
+		ids[key.ID] = struct{}{}
+		switch key.Algorithm {
+		case "EdDSA", "ES256":
+		default:
+			return fmt.Errorf("trusted verification key %d has unsupported algorithm %q", index, key.Algorithm)
+		}
+		if strings.TrimSpace(key.PublicKeyFile) == "" {
+			return fmt.Errorf("trusted verification key %d public-key file must not be empty", index)
+		}
 	}
 	return nil
 }

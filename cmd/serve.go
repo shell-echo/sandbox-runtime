@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/distribution/reference"
 	"github.com/opencontainers/go-digest"
@@ -17,6 +18,8 @@ import (
 	instancefile "github.com/shell-echo/sandbox-runtime/instance/file"
 	"github.com/shell-echo/sandbox-runtime/instance/memory"
 	"github.com/shell-echo/sandbox-runtime/provider"
+	"github.com/shell-echo/sandbox-runtime/provider/admission"
+	admissionfile "github.com/shell-echo/sandbox-runtime/provider/admission/file"
 	"github.com/shell-echo/sandbox-runtime/providerapi"
 	"github.com/shell-echo/sandbox-runtime/server"
 	"github.com/shell-echo/sandbox-runtime/server/api"
@@ -36,10 +39,11 @@ func runServe(cmd *cobra.Command, _ []string) (result error) {
 	if err := validateServeConfiguration(config.Application, config.Server, config.Runtime, config.Repository); err != nil {
 		return err
 	}
-	providerServer, err := newProviderServer(cmd.Context(), config.Server.Provider)
+	providerServer, closeProvider, err := newProviderServer(cmd.Context(), config.Server.Provider)
 	if err != nil {
 		return err
 	}
+	defer func() { result = errors.Join(result, closeProvider()) }()
 	runtimeDriver, closeRuntime, err := newRuntimeDriver(cmd.Context(), config.Runtime)
 	if err != nil {
 		return err
@@ -75,17 +79,21 @@ func enabledServers(apiServer, providerServer server.Server) map[string]server.S
 	return servers
 }
 
-func newProviderServer(ctx context.Context, providerConfig config.ProviderConfig) (server.Server, error) {
+func newProviderServer(ctx context.Context, providerConfig config.ProviderConfig) (server.Server, func() error, error) {
 	if !providerConfig.Transport.Enabled {
-		return nil, nil
+		return nil, noOpProviderClose, nil
 	}
 	if err := providerConfig.Validate(); err != nil {
-		return nil, fmt.Errorf("validate Provider configuration: %w", err)
+		return nil, noOpProviderClose, fmt.Errorf("validate Provider configuration: %w", err)
 	}
 
 	source, err := newProviderCapabilitySource(providerConfig.Capability)
 	if err != nil {
-		return nil, err
+		return nil, noOpProviderClose, err
+	}
+	protected, closeProtected, err := newProviderProtectedTransportOptions(providerConfig.ProtectedAdmission, systemAdmissionClock{})
+	if err != nil {
+		return nil, noOpProviderClose, err
 	}
 	transport := providerConfig.Transport
 	providerServer, err := providerapi.NewServer(ctx, providerapi.TransportOptions{
@@ -94,11 +102,48 @@ func newProviderServer(ctx context.Context, providerConfig config.ProviderConfig
 		ServerPrivateKeyFile:       transport.ServerPrivateKeyFile,
 		ClientCABundleFile:         transport.ClientCABundleFile,
 		AllowedClientURIIdentities: append([]string(nil), transport.AllowedClientURIIdentities...),
+		Protected:                  protected,
 	}, source)
 	if err != nil {
-		return nil, fmt.Errorf("construct Provider API server: %w", err)
+		return nil, noOpProviderClose, errors.Join(fmt.Errorf("construct Provider API server: %w", err), closeProtected())
 	}
-	return providerServer, nil
+	return providerServer, closeProtected, nil
+}
+
+func noOpProviderClose() error { return nil }
+
+// systemAdmissionClock is chosen at the process composition boundary. The
+// admission package still receives only its narrow Clock port.
+type systemAdmissionClock struct{}
+
+func (systemAdmissionClock) Now() time.Time { return time.Now().UTC() }
+
+func newProviderProtectedTransportOptions(protectedConfig config.ProviderProtectedAdmissionConfig, clock admission.Clock) (*providerapi.ProtectedTransportOptions, func() error, error) {
+	if !protectedConfig.Enabled {
+		return nil, noOpProviderClose, nil
+	}
+
+	files := make([]admissionfile.TrustedKeyFile, len(protectedConfig.TrustedVerificationKeys))
+	for index, key := range protectedConfig.TrustedVerificationKeys {
+		files[index] = admissionfile.TrustedKeyFile{
+			ID:        admission.KeyID(key.ID),
+			Algorithm: admission.Algorithm(key.Algorithm),
+			Path:      key.PublicKeyFile,
+		}
+	}
+	keys, err := admissionfile.LoadTrustedKeySource(files)
+	if err != nil {
+		return nil, noOpProviderClose, fmt.Errorf("load Provider trusted verification keys: %w", err)
+	}
+	guard, err := admissionfile.NewGuard(protectedConfig.GuardStateFile, clock)
+	if err != nil {
+		return nil, noOpProviderClose, fmt.Errorf("open Provider admission guard: %w", err)
+	}
+	gate, err := admission.NewProtectedOperationGate(keys, clock, guard)
+	if err != nil {
+		return nil, noOpProviderClose, errors.Join(fmt.Errorf("construct Provider admission gate: %w", err), guard.Close())
+	}
+	return &providerapi.ProtectedTransportOptions{Gate: gate}, guard.Close, nil
 }
 
 func newProviderCapabilitySource(capability config.ProviderCapabilityConfig) (*provider.StaticCapabilitySource, error) {
@@ -142,6 +187,9 @@ func cloneOptionalInt64(value *int64) *int64 {
 func validateServeConfiguration(application *config.ApplicationConfig, serverConfig *config.ServerConfig, runtimeConfig *config.RuntimeConfig, repositoryConfig *config.RepositoryConfig) error {
 	if application == nil || serverConfig == nil || runtimeConfig == nil || repositoryConfig == nil {
 		return errors.New("application, server, runtime, and repository configuration are required")
+	}
+	if err := serverConfig.Provider.Validate(); err != nil {
+		return fmt.Errorf("validate Provider configuration: %w", err)
 	}
 	if serverConfig.Provider.Transport.Enabled && serverConfig.API.Port == serverConfig.Provider.Transport.Address.Port {
 		return errors.New("server.api and server.provider transport must use different ports")

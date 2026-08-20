@@ -65,6 +65,21 @@ max_exec_seconds = 0
 #suite_version = '0.0.0'
 #suite_digest = 'sha256:<64 lowercase hexadecimal characters>'
 
+# Protected Provider operations are a separately opt-in transport boundary. When
+# enabled, startup reads each immutable SPKI PUBLIC KEY PEM file once and opens
+# the single-controller guard state before the listener accepts traffic. Do not
+# put private keys, bearer values, or inline key material in this file.
+[server.provider.protected_admission]
+enabled = false
+guard_state_file = ''
+
+# Enabling protected admission requires 1..32 unique entries. Every file must
+# contain exactly one regular PUBLIC KEY PEM block; algorithm is EdDSA or ES256.
+# [[server.provider.protected_admission.trusted_verification_keys]]
+# id = 'agent-platform-ed25519-2026-08'
+# algorithm = 'EdDSA'
+# public_key_file = '/run/secrets/provider-admission/agent-platform-ed25519.pem'
+
 [runtime]
 driver = 'fake' # fake | docker
 

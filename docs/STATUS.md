@@ -25,8 +25,9 @@ reports progress against those authorities.
   descriptor, and admission gate before returning only bounded unavailable/error
   outcomes. Review fixes enforce bearer-authentication precedence, closed GET
   query input, adequate security-header budget, trace correlation, and 503 retry
-  advice. Operator key-file/configuration wiring and the P1.1 release evidence
-  remain open; no P1.2 state or dispatch was added.
+  advice. The current feature branch adds default-disabled operator
+  key-file/guard-state configuration and composition; PR CI and the P1.1
+  release evidence remain open; no P1.2 state or dispatch was added.
 
 The implemented Provider discovery listener is separate from the local
 management API and remains disabled by default. When enabled, it accepts TLS
@@ -47,7 +48,7 @@ runtime capability.
 | P1.0: contract intake and ownership freeze | Closed | Contract identity and ownership-boundary evidence only. |
 | P1.1a: wire DTO and Contract validation harness | Implemented and merged into `main` | Component and locked Contract projection evidence only. |
 | P1.1b: mTLS-only capability discovery | Implemented and verified on `main`; transport reconciliation merged through PR #9 | Application model, immutable source, response mapping, exact GET-only routing, mTLS identity admission, default-disabled configuration, composition, enabled-listener behavior, emitted-response projection, fail-together lifecycle, tagged Docker integration, strict query/body input evidence, and transport reconciliation CI passed. The `400`/`501` operation-level error-wire authority gap remains separately pending. |
-| P1.1c: protected-operation admission | Protected transport merged through PR #13; configuration wiring in progress | Locked Admission Context is decoded strictly and bound to the verified mTLS caller, protected route, JWS v2 claims, canonical request/read descriptor, and pure gate. All 14 protected paths are matched. Bearer authentication precedes Context/document validation; query input is closed per operation; admitted error results carry trace correlation and 503 retry advice. Shutdown is idempotent when startup cancellation has already closed its listener. Successful admission deliberately returns bounded unavailable/error and never calls repository/driver/lifecycle code. PR and post-merge CI passed; operator key-file/configuration wiring and release review remain open. |
+| P1.1c: protected-operation admission | Protected transport merged through PR #13; configuration composition implemented on the current feature branch, awaiting PR CI | Locked Admission Context is decoded strictly and bound to the verified mTLS caller, protected route, JWS v2 claims, canonical request/read descriptor, and pure gate. All 14 protected paths are matched. Bearer authentication precedes Context/document validation; query input is closed per operation; admitted error results carry trace correlation and 503 retry advice. Shutdown is idempotent when startup cancellation has already closed its listener. Explicit configuration loads only frozen public-key files and an exclusive durable guard before it enables protected routes; successful admission deliberately returns bounded unavailable/error and never calls repository/driver/lifecycle code. |
 | P1.1d: admission release gate | Not started | P1.1 remains open. |
 
 P1.0 closed at revision `102f36a6240a4c33892b0ebc25232859b63e334c`.
@@ -204,11 +205,34 @@ lock/projection checks, and tagged Docker integration. Pull-request CI run
 and post-merge main CI run
 [`32343090796`](https://github.com/shell-echo/sandbox-runtime/actions/runs/32343090796)
 both passed `agent-contract-lock`, `test`, and `docker-integration`. The command
-composition root still
+composition root at that merge still
 does not load operator trusted-key paths or instantiate `ProtectedTransportOptions`;
 the listener remains discovery-only unless a caller explicitly supplies the
 protected options. This is component/feature-branch evidence, not a merged or
 production-ready claim.
+
+The current P1.1c configuration-composition branch adds an independently
+default-disabled `server.provider.protected_admission` section. Enabling it
+requires 1..32 unique `EdDSA` or `ES256` public-key files plus a durable guard
+state path. The command composition root reads and freezes the public keys,
+retains the single-controller guard lock through service lifetime, passes the
+resulting gate to the Provider listener, and releases the guard on later startup
+failure or process exit. Partial configuration, a missing/malformed key file,
+or unavailable/corrupt guard state fails closed before the listener starts.
+
+Complete local validation for that feature branch passed on 2026-08-20:
+
+- `AGENT_CONTRACT_SOURCE_ROOT=/tmp/agent-blueprints-cf623ac go test -race -shuffle=on -count=1 ./...`;
+- `go vet ./...`;
+- `go run ./cmd/verify-agent-contract -source-root /tmp/agent-blueprints-cf623ac`;
+- `SANDBOX_RUNTIME_DOCKER_INTEGRATION=1 go test -tags=integration -count=1 ./driver/docker`; and
+- `gofmt` plus `git diff --check`.
+
+This is local component, composition, Contract projection, and Docker-driver
+regression evidence only. PR CI, merge review, post-merge CI, the P1.1 release
+gate, aggregate conformance, Platform end-to-end compatibility,
+multi-controller reliability, multi-tenant security, deployment readiness, and
+production readiness remain unproven.
 
 ## Open gate and unproven claims
 
@@ -219,7 +243,7 @@ and reproducible CI evidence to pass.
 
 The current revision does not prove or claim:
 
-- configured protected-listener behavior and operator trust-material wiring;
+- merged protected-listener configuration/composition behavior and its PR CI;
 - P1.2 lifecycle, durable operations, leases, events, or reconciliation;
 - the aggregate `sandbox-core-v1` conformance profile;
 - Agent Platform end-to-end compatibility or cross-provider interchangeability;
@@ -234,10 +258,11 @@ parser/verifier, strict canonical request/descriptor digest verification,
 application-level context/time binding, a pure protected-operation gate, a
 static/file trusted-key source, a shared TLS/request identity extractor, a
 durable single-controller guard, and a merged protected transport adapter. The
-immediate implementation slice is narrow composition-root/configuration wiring:
-frozen operator public keys, a durable guard state path, and fail-closed
-listener composition. No P1.2 lifecycle or repository/driver dispatch may be
-added in this step.
+immediate entry is review and CI for the narrow composition-root/configuration
+wiring: frozen operator public keys, a durable guard state path, and fail-closed
+listener composition. After its merge evidence closes, the next planned unit is
+P1.1d release-gate evidence. No P1.2 lifecycle or repository/driver dispatch
+may be added in either step.
 The detailed scope,
 acceptance evidence, and stop conditions are in
 [the P1.1c admission plan](plan/p1.1c-protected-operation-admission.md).

@@ -73,6 +73,30 @@ func TestLoadProviderScalarEnvOverrides(t *testing.T) {
 	}
 }
 
+func TestLoadProviderProtectedAdmissionTOML(t *testing.T) {
+	snapshotGlobals(t)
+	body := validEnabledProviderTOML() + `
+[server.provider.protected_admission]
+enabled = true
+guard_state_file = "data/provider-admission.json"
+
+[[server.provider.protected_admission.trusted_verification_keys]]
+id = "agent-platform-ed25519"
+algorithm = "EdDSA"
+public_key_file = "/run/secrets/provider-admission/agent-platform-ed25519.pem"
+`
+	if err := Load(writeConfig(t, body)); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	protected := Server.Provider.ProtectedAdmission
+	if !protected.Enabled || protected.GuardStateFile != "data/provider-admission.json" {
+		t.Fatalf("protected admission = %#v", protected)
+	}
+	if len(protected.TrustedVerificationKeys) != 1 || protected.TrustedVerificationKeys[0].ID != "agent-platform-ed25519" || protected.TrustedVerificationKeys[0].Algorithm != "EdDSA" {
+		t.Fatalf("trusted verification keys = %#v", protected.TrustedVerificationKeys)
+	}
+}
+
 func TestLoadProviderRejectsEmptyHost(t *testing.T) {
 	snapshotGlobals(t)
 	body := strings.Replace(validEnabledProviderTOML(), `host = "127.0.0.1"`, `host = ""`, 1)
@@ -110,6 +134,13 @@ func TestDisabledProviderAcceptsPlaceholders(t *testing.T) {
 			Limits:             ProviderLimitsConfig{},
 			SnapshotRestoreProfiles: []ProviderCompatibilityProfile{{
 				ProfileID: "", Level: "invalid", SuiteID: "invalid",
+			}},
+		},
+		ProtectedAdmission: ProviderProtectedAdmissionConfig{
+			Enabled:        true,
+			GuardStateFile: "",
+			TrustedVerificationKeys: []ProviderTrustedVerificationKeyConfig{{
+				ID: "", Algorithm: "not-an-algorithm", PublicKeyFile: "",
 			}},
 		},
 	}
@@ -270,6 +301,37 @@ func TestEnabledProviderProfileValidation(t *testing.T) {
 	}
 }
 
+func TestEnabledProviderProtectedAdmissionValidation(t *testing.T) {
+	tests := map[string]func(*ProviderProtectedAdmissionConfig){
+		"empty guard state file": func(c *ProviderProtectedAdmissionConfig) { c.GuardStateFile = " " },
+		"no trusted keys":        func(c *ProviderProtectedAdmissionConfig) { c.TrustedVerificationKeys = nil },
+		"too many trusted keys": func(c *ProviderProtectedAdmissionConfig) {
+			c.TrustedVerificationKeys = make([]ProviderTrustedVerificationKeyConfig, 33)
+			for index := range c.TrustedVerificationKeys {
+				c.TrustedVerificationKeys[index] = ProviderTrustedVerificationKeyConfig{ID: fmt.Sprintf("key-%d", index), Algorithm: "EdDSA", PublicKeyFile: fmt.Sprintf("key-%d.pem", index)}
+			}
+		},
+		"blank key ID":         func(c *ProviderProtectedAdmissionConfig) { c.TrustedVerificationKeys[0].ID = " \t" },
+		"invalid UTF-8 key ID": func(c *ProviderProtectedAdmissionConfig) { c.TrustedVerificationKeys[0].ID = string([]byte{0xff}) },
+		"oversized key ID":     func(c *ProviderProtectedAdmissionConfig) { c.TrustedVerificationKeys[0].ID = strings.Repeat("a", 129) },
+		"duplicate key ID": func(c *ProviderProtectedAdmissionConfig) {
+			c.TrustedVerificationKeys = append(c.TrustedVerificationKeys, c.TrustedVerificationKeys[0])
+		},
+		"unsupported algorithm": func(c *ProviderProtectedAdmissionConfig) { c.TrustedVerificationKeys[0].Algorithm = "RS256" },
+		"empty public key file": func(c *ProviderProtectedAdmissionConfig) { c.TrustedVerificationKeys[0].PublicKeyFile = " " },
+	}
+	for name, mutate := range tests {
+		t.Run(name, func(t *testing.T) {
+			config := validEnabledProviderConfig()
+			config.ProtectedAdmission = validProtectedAdmissionConfig()
+			mutate(&config.ProtectedAdmission)
+			if err := config.Validate(); err == nil {
+				t.Fatal("Validate() error = nil, want protected admission rejection")
+			}
+		})
+	}
+}
+
 func TestEnabledProviderProfileCharacterAndCountBoundaries(t *testing.T) {
 	for _, test := range []struct {
 		name      string
@@ -412,6 +474,16 @@ func validEnabledProviderConfig() ProviderConfig {
 				SuiteDigest:  "sha256:" + strings.Repeat("a", 64),
 			}},
 		},
+	}
+}
+
+func validProtectedAdmissionConfig() ProviderProtectedAdmissionConfig {
+	return ProviderProtectedAdmissionConfig{
+		Enabled:        true,
+		GuardStateFile: "data/provider-admission.json",
+		TrustedVerificationKeys: []ProviderTrustedVerificationKeyConfig{{
+			ID: "agent-platform-ed25519", Algorithm: "EdDSA", PublicKeyFile: "agent-platform-ed25519.pem",
+		}},
 	}
 }
 
