@@ -1,0 +1,456 @@
+package providerapi
+
+import (
+	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/sha256"
+	"crypto/tls"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/gowebpki/jcs"
+	"github.com/shell-echo/sandbox-runtime/provider/admission"
+)
+
+const releaseGateTestTimeUnix = int64(1_787_184_060)
+
+type protectedReleaseRoute struct {
+	name             string
+	method           string
+	path             string
+	query            string
+	operation        admission.Operation
+	allowUnavailable bool
+}
+
+func allProtectedReleaseRoutes() []protectedReleaseRoute {
+	return []protectedReleaseRoute{
+		{name: "create sandbox", method: http.MethodPost, path: "/v1/sandboxes", operation: admission.OperationCreate, allowUnavailable: true},
+		{name: "restore sandbox", method: http.MethodPost, path: "/v1/sandboxes:restore", operation: admission.OperationRestore, allowUnavailable: true},
+		{name: "read sandbox", method: http.MethodGet, path: "/v1/sandboxes/sandbox-1", operation: admission.OperationReadSandbox, allowUnavailable: true},
+		{name: "set desired state", method: http.MethodPost, path: "/v1/sandboxes/sandbox-1/desired-state", operation: admission.OperationSetDesiredState, allowUnavailable: true},
+		{name: "extend lease", method: http.MethodPost, path: "/v1/sandboxes/sandbox-1/lease", operation: admission.OperationExtendLease, allowUnavailable: true},
+		{name: "execute", method: http.MethodPost, path: "/v1/sandboxes/sandbox-1/exec", operation: admission.OperationExec, allowUnavailable: true},
+		{name: "cancel execute", method: http.MethodPost, path: "/v1/sandboxes/sandbox-1/exec:cancel", operation: admission.OperationCancelExec},
+		{name: "open runtime session", method: http.MethodPost, path: "/v1/sandboxes/sandbox-1/runtime-sessions", operation: admission.OperationOpenRuntimeSession, allowUnavailable: true},
+		{name: "create snapshot", method: http.MethodPost, path: "/v1/sandboxes/sandbox-1/snapshots", operation: admission.OperationSnapshot, allowUnavailable: true},
+		{name: "terminate sandbox", method: http.MethodPost, path: "/v1/sandboxes/sandbox-1:terminate", operation: admission.OperationTerminate, allowUnavailable: true},
+		{name: "read operation", method: http.MethodGet, path: "/v1/operations/operation-1", operation: admission.OperationReadOperation, allowUnavailable: true},
+		{name: "read execute result", method: http.MethodGet, path: "/v1/operations/operation-1/exec-result", operation: admission.OperationReadResult},
+		{name: "read snapshot manifest", method: http.MethodGet, path: "/v1/operations/operation-1/snapshot-manifest", operation: admission.OperationReadSnapshotManifest, allowUnavailable: true},
+		{name: "read events", method: http.MethodGet, path: "/v1/sandboxes/sandbox-1/events", query: "?after_sequence=2", operation: admission.OperationReadEvents, allowUnavailable: true},
+	}
+}
+
+func TestProtectedHandlerReleaseGateCoversAllProtectedRoutes(t *testing.T) {
+	material := newTestMTLSMaterial(t, []string{testAllowedIdentity})
+	identity, err := newClientIdentityAdmission([]string{testAllowedIdentity})
+	if err != nil {
+		t.Fatal(err)
+	}
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, route := range allProtectedReleaseRoutes() {
+		route := route
+		t.Run(route.name, func(t *testing.T) {
+			guard := &releaseGateGuard{decision: admission.MutationGuardAccepted}
+			handler := newReleaseGateHandler(t, identity, publicKey, guard)
+			request := newProtectedReleaseRequest(t, route, privateKey, material.client, "jti-release-0001")
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+
+			wantStatus := http.StatusInternalServerError
+			if route.allowUnavailable {
+				wantStatus = http.StatusServiceUnavailable
+			}
+			if response.Code != wantStatus {
+				t.Fatalf("valid %s response=%d, want %d body=%s", route.operation, response.Code, wantStatus, response.Body.String())
+			}
+			assertAdmissionErrorHeaders(t, response, route.allowUnavailable)
+			wantGuardCalls := 0
+			if route.operation.Mutation() {
+				wantGuardCalls = 1
+			}
+			if got := guard.Calls(); got != wantGuardCalls {
+				t.Fatalf("valid %s guard calls=%d, want %d", route.operation, got, wantGuardCalls)
+			}
+		})
+	}
+}
+
+func TestProtectedHandlerRejectsRequestDescriptorSubstitutionAcrossAllRoutes(t *testing.T) {
+	material := newTestMTLSMaterial(t, []string{testAllowedIdentity})
+	identity, err := newClientIdentityAdmission([]string{testAllowedIdentity})
+	if err != nil {
+		t.Fatal(err)
+	}
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, route := range allProtectedReleaseRoutes() {
+		route := route
+		t.Run(route.name, func(t *testing.T) {
+			guard := &releaseGateGuard{decision: admission.MutationGuardAccepted}
+			handler := newReleaseGateHandler(t, identity, publicKey, guard)
+			request := newProtectedReleaseRequest(t, route, privateKey, material.client, "jti-substitution-0001")
+			contextValue := admissionContextFromReleaseRequest(t, request)
+			contextValue.RequestDigest = testDigest('c')
+			contextDigest, err := admission.DigestForAdmissionContext(contextValue)
+			if err != nil {
+				t.Fatal(err)
+			}
+			contextValue.ContextDigest = contextDigest
+			claims := admissionTokenClaimsForTest(contextValue)
+			request.Header.Set(admission.AdmissionContextHeader, encodeTestAdmissionContext(t, contextValue))
+			request.Header.Set("Authorization", "Bearer "+signTestAdmissionToken(t, privateKey, claims))
+
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+			if response.Code != http.StatusForbidden || guard.Calls() != 0 {
+				t.Fatalf("substituted %s response=%d guard_calls=%d body=%s", route.operation, response.Code, guard.Calls(), response.Body.String())
+			}
+		})
+	}
+}
+
+func TestProtectedHandlerRejectsInactiveBearerAcrossAllRoutes(t *testing.T) {
+	material := newTestMTLSMaterial(t, []string{testAllowedIdentity})
+	identity, err := newClientIdentityAdmission([]string{testAllowedIdentity})
+	if err != nil {
+		t.Fatal(err)
+	}
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, test := range []struct {
+		name   string
+		mutate func(map[string]any)
+	}{
+		{name: "not yet valid", mutate: func(claims map[string]any) { claims["nbf"] = releaseGateTestTime().Add(time.Second).Unix() }},
+		{name: "expired", mutate: func(claims map[string]any) { claims["exp"] = releaseGateTestTime().Unix() }},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			for _, route := range allProtectedReleaseRoutes() {
+				route := route
+				t.Run(route.name, func(t *testing.T) {
+					guard := &releaseGateGuard{decision: admission.MutationGuardAccepted}
+					handler := newReleaseGateHandler(t, identity, publicKey, guard)
+					request := newProtectedReleaseRequest(t, route, privateKey, material.client, "jti-inactive-0001")
+					claims := admissionTokenClaimsForTest(admissionContextFromReleaseRequest(t, request))
+					test.mutate(claims)
+					request.Header.Set("Authorization", "Bearer "+signTestAdmissionToken(t, privateKey, claims))
+					response := httptest.NewRecorder()
+					handler.ServeHTTP(response, request)
+					if response.Code != http.StatusUnauthorized || guard.Calls() != 0 {
+						t.Fatalf("inactive %s response=%d guard_calls=%d body=%s", route.operation, response.Code, guard.Calls(), response.Body.String())
+					}
+				})
+			}
+		})
+	}
+}
+
+func TestProtectedHandlerRejectsReplayAndStaleFencingAcrossAllMutations(t *testing.T) {
+	material := newTestMTLSMaterial(t, []string{testAllowedIdentity})
+	identity, err := newClientIdentityAdmission([]string{testAllowedIdentity})
+	if err != nil {
+		t.Fatal(err)
+	}
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, decision := range []struct {
+		name  string
+		value admission.MutationGuardDecision
+	}{
+		{name: "replayed JTI", value: admission.MutationGuardReplayed},
+		{name: "stale fencing", value: admission.MutationGuardStaleFencing},
+	} {
+		t.Run(decision.name, func(t *testing.T) {
+			for _, route := range allProtectedReleaseRoutes() {
+				if !route.operation.Mutation() {
+					continue
+				}
+				route := route
+				t.Run(route.name, func(t *testing.T) {
+					guard := &releaseGateGuard{decision: decision.value}
+					handler := newReleaseGateHandler(t, identity, publicKey, guard)
+					request := newProtectedReleaseRequest(t, route, privateKey, material.client, "jti-conflict-0001")
+					response := httptest.NewRecorder()
+					handler.ServeHTTP(response, request)
+					if response.Code != http.StatusConflict || guard.Calls() != 1 {
+						t.Fatalf("%s %s response=%d guard_calls=%d body=%s", decision.name, route.operation, response.Code, guard.Calls(), response.Body.String())
+					}
+					assertAdmissionErrorHeaders(t, response, false)
+				})
+			}
+		})
+	}
+}
+
+func TestProtectedHandlerCancellationStopsAllProtectedRoutesBeforeGuard(t *testing.T) {
+	material := newTestMTLSMaterial(t, []string{testAllowedIdentity})
+	identity, err := newClientIdentityAdmission([]string{testAllowedIdentity})
+	if err != nil {
+		t.Fatal(err)
+	}
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, route := range allProtectedReleaseRoutes() {
+		route := route
+		t.Run(route.name, func(t *testing.T) {
+			guard := &releaseGateGuard{decision: admission.MutationGuardAccepted}
+			handler := newReleaseGateHandler(t, identity, publicKey, guard)
+			request := newProtectedReleaseRequest(t, route, privateKey, material.client, "jti-canceled-0001")
+			canceled, cancel := context.WithCancel(context.Background())
+			cancel()
+			request = request.WithContext(canceled)
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+			if response.Code != http.StatusServiceUnavailable || guard.Calls() != 0 {
+				t.Fatalf("canceled %s response=%d guard_calls=%d body=%s", route.operation, response.Code, guard.Calls(), response.Body.String())
+			}
+			assertAdmissionErrorHeaders(t, response, true)
+		})
+	}
+}
+
+func TestProtectedHandlerConcurrentAdmissionMatrix(t *testing.T) {
+	material := newTestMTLSMaterial(t, []string{testAllowedIdentity})
+	identity, err := newClientIdentityAdmission([]string{testAllowedIdentity})
+	if err != nil {
+		t.Fatal(err)
+	}
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, route := range allProtectedReleaseRoutes() {
+		route := route
+		t.Run(route.name, func(t *testing.T) {
+			const workers = 8
+			guard := &releaseGateGuard{decision: admission.MutationGuardAccepted}
+			handler := newReleaseGateHandler(t, identity, publicKey, guard)
+			results := make(chan int, workers)
+			for worker := range workers {
+				go func(worker int) {
+					request := newProtectedReleaseRequest(t, route, privateKey, material.client, fmt.Sprintf("jti-race-%012d", worker))
+					response := httptest.NewRecorder()
+					handler.ServeHTTP(response, request)
+					results <- response.Code
+				}(worker)
+			}
+			wantStatus := http.StatusInternalServerError
+			if route.allowUnavailable {
+				wantStatus = http.StatusServiceUnavailable
+			}
+			for range workers {
+				if got := <-results; got != wantStatus {
+					t.Fatalf("concurrent %s response=%d, want %d", route.operation, got, wantStatus)
+				}
+			}
+			wantCalls := 0
+			if route.operation.Mutation() {
+				wantCalls = workers
+			}
+			if got := guard.Calls(); got != wantCalls {
+				t.Fatalf("concurrent %s guard calls=%d, want %d", route.operation, got, wantCalls)
+			}
+		})
+	}
+}
+
+func newReleaseGateHandler(t *testing.T, identity *clientIdentityAdmission, publicKey ed25519.PublicKey, guard *releaseGateGuard) http.Handler {
+	t.Helper()
+	keys := mustTestTrustedKeySource(t, publicKey)
+	gate, err := admission.NewProtectedOperationGate(keys, testAdmissionClock{now: releaseGateTestTime()}, guard)
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler, err := newProtectedHandler(identity, ProtectedTransportOptions{Gate: gate})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return handler
+}
+
+func newProtectedReleaseRequest(t *testing.T, route protectedReleaseRoute, privateKey ed25519.PrivateKey, clientCertificate tls.Certificate, jti string) *http.Request {
+	t.Helper()
+	requestURL := "https://provider.test" + route.path + route.query
+	var body []byte
+	var digest string
+	if route.method == http.MethodPost {
+		body, digest = releaseMutationDocument(t, route.operation)
+	}
+	request := httptest.NewRequest(route.method, requestURL, nil)
+	matched, pathValues, ok := matchProtectedRoute(request)
+	if !ok || matched.operation != route.operation {
+		t.Fatalf("release route %s was not matched as %s: %#v %v", route.path, route.operation, matched, ok)
+	}
+	contextValue := newProtectedReleaseContext(route)
+	var document []byte
+	if route.method == http.MethodPost {
+		contextValue.RequestDigest = digest
+	} else {
+		var status int
+		document, status = readDescriptor(contextValue, request, pathValues)
+		if status != 0 {
+			t.Fatalf("read descriptor status=%d for %s", status, route.operation)
+		}
+		contextValue.RequestDigest = releaseFullDocumentDigest(t, document)
+	}
+	if route.method == http.MethodPost {
+		request = httptest.NewRequest(route.method, requestURL, strings.NewReader(string(body)))
+		request.Header.Set("Content-Type", "application/json")
+	}
+	state := verifiedState(t, clientCertificate)
+	request.TLS = &state
+	contextDigest, err := admission.DigestForAdmissionContext(contextValue)
+	if err != nil {
+		t.Fatal(err)
+	}
+	contextValue.ContextDigest = contextDigest
+	claims := admissionTokenClaimsForTest(contextValue)
+	claims["jti"] = jti
+	request.Header.Set("Authorization", "Bearer "+signTestAdmissionToken(t, privateKey, claims))
+	request.Header.Set(admission.AdmissionContextHeader, encodeTestAdmissionContext(t, contextValue))
+	return request
+}
+
+func admissionContextFromReleaseRequest(t *testing.T, request *http.Request) admission.AdmissionContext {
+	t.Helper()
+	values := request.Header.Values(admission.AdmissionContextHeader)
+	if len(values) != 1 {
+		t.Fatalf("admission context header values=%d, want 1", len(values))
+	}
+	contextValue, err := admission.DecodeAdmissionContextCarrier(values[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	return contextValue
+}
+
+func newProtectedReleaseContext(route protectedReleaseRoute) admission.AdmissionContext {
+	contractID, profile := protectedReleaseRequestBinding(route.operation)
+	queries := []admission.AdmissionQuery{}
+	if route.operation == admission.OperationReadEvents {
+		queries = append(queries, admission.AdmissionQuery{Name: "after_sequence", Value: "2"})
+	}
+	return admission.AdmissionContext{
+		ContextContractID: admission.AdmissionContextContractID, ContextDigestProfile: admission.AdmissionContextDigestProfile,
+		ControllerSubject: testAllowedIdentity, ProviderRevisionID: "provider-revision-1", ProviderInstanceAudience: "urn:agent-platform:provider-instance:provider-1",
+		TenantID: "tenant-1", WorkOrderID: "work-order-1", PolicyDigest: testDigest('a'), PolicyDecidedAt: releaseGateTestTime().Add(-time.Minute).Format(time.RFC3339Nano),
+		Operation: route.operation, SandboxID: "sandbox-1", OperationID: "operation-1", AttemptID: "attempt-1", FencingToken: 1,
+		DeadlineAt: releaseGateTestTime().Add(4 * time.Minute).Format(time.RFC3339Nano), RequestContractID: contractID, RequestDigestProfile: profile,
+		RequestDigest: testDigest('b'), HTTPTarget: admission.AdmissionTarget{Method: route.method, Path: route.path, NormalizedQuery: queries},
+	}
+}
+
+func protectedReleaseRequestBinding(operation admission.Operation) (string, admission.DigestProfile) {
+	if operation == admission.OperationReadSandbox {
+		return "urn:agent-platform:sandbox-status-operation-descriptor:v1", admission.DigestProfileFullDocument
+	}
+	if operation == admission.OperationReadOperation {
+		return "urn:agent-platform:sandbox-operation-read-operation-descriptor:v1", admission.DigestProfileFullDocument
+	}
+	if operation == admission.OperationReadResult {
+		return "urn:agent-platform:sandbox-exec-result-operation-descriptor:v1", admission.DigestProfileFullDocument
+	}
+	if operation == admission.OperationReadSnapshotManifest {
+		return "urn:agent-platform:sandbox-snapshot-manifest-operation-descriptor:v1", admission.DigestProfileFullDocument
+	}
+	if operation == admission.OperationReadEvents {
+		return "urn:agent-platform:sandbox-event-read-operation-descriptor:v1", admission.DigestProfileFullDocument
+	}
+	contractIDs := map[admission.Operation]string{
+		admission.OperationCreate:             "urn:agent-platform:sandbox-create-request:v1",
+		admission.OperationRestore:            "urn:agent-platform:sandbox-restore-request:v1",
+		admission.OperationSetDesiredState:    "urn:agent-platform:sandbox-desired-state-request:v1",
+		admission.OperationExtendLease:        "urn:agent-platform:sandbox-lease-request:v1",
+		admission.OperationExec:               "urn:agent-platform:sandbox-exec-request:v1",
+		admission.OperationCancelExec:         "urn:agent-platform:sandbox-cancel-exec-request:v1",
+		admission.OperationOpenRuntimeSession: "urn:agent-platform:sandbox-runtime-session-open-request:v1",
+		admission.OperationSnapshot:           "urn:agent-platform:sandbox-snapshot-request:v1",
+		admission.OperationTerminate:          "urn:agent-platform:sandbox-terminate-request:v1",
+	}
+	return contractIDs[operation], admission.DigestProfileRequestExcludingDigest
+}
+
+func releaseMutationDocument(t *testing.T, operation admission.Operation) ([]byte, string) {
+	t.Helper()
+	withoutDigest, err := json.Marshal(map[string]any{"operation": string(operation), "local_case": "p1.1d"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	canonical, err := jcs.Transform(withoutDigest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest := releaseCanonicalDigest(canonical)
+	withDigest, err := json.Marshal(map[string]any{"operation": string(operation), "local_case": "p1.1d", "request_digest": digest})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return withDigest, digest
+}
+
+func releaseFullDocumentDigest(t *testing.T, document []byte) string {
+	t.Helper()
+	canonical, err := jcs.Transform(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return releaseCanonicalDigest(canonical)
+}
+
+func releaseCanonicalDigest(canonical []byte) string {
+	digest := sha256.Sum256(canonical)
+	return "sha256:" + hex.EncodeToString(digest[:])
+}
+
+func releaseGateTestTime() time.Time {
+	return time.Unix(releaseGateTestTimeUnix, 0).UTC()
+}
+
+type releaseGateGuard struct {
+	mu       sync.Mutex
+	decision admission.MutationGuardDecision
+	err      error
+	calls    int
+}
+
+func (g *releaseGateGuard) Reserve(_ context.Context, _ admission.MutationGuardRequest) (admission.MutationGuardDecision, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.calls++
+	return g.decision, g.err
+}
+
+func (g *releaseGateGuard) Calls() int {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.calls
+}
+
+var _ admission.MutationGuard = (*releaseGateGuard)(nil)

@@ -15,19 +15,19 @@ reports progress against those authorities.
 ## Current snapshot
 
 - Baseline branch: `main`
-- Baseline revision: `bbb2dc390c091a6b68a2ac67b673ac1effea6fb9`
+- Baseline revision: `203198e45ab7811cfc938be36816ba570ddd83ee`
+- Locked Agent Contract revision: `cf623ac7b6c8730a0a609076adaefe5197488667`
+- Locked Contract tree: `73cc7c6bbaf541991c7804bded6de22a7928b91b`
 - Current phase: P1.1, Provider API admission
-- Current slice: P1.1c protected transport composition/configuration
+- Current slice: P1.1d admission release-gate evidence
 - P1.1 release gate: open
 - Slices in progress: PR #13 merged protected transport composition at
-  `bbb2dc390c091a6b68a2ac67b673ac1effea6fb9`. It consumes the locked
-  Admission Context carrier and binds it to the mTLS caller, JWS, request/read
-  descriptor, and admission gate before returning only bounded unavailable/error
-  outcomes. Review fixes enforce bearer-authentication precedence, closed GET
-  query input, adequate security-header budget, trace correlation, and 503 retry
-  advice. The current feature branch adds default-disabled operator
-  key-file/guard-state configuration and composition; PR CI and the P1.1
-  release evidence remain open; no P1.2 state or dispatch was added.
+  `bbb2dc390c091a6b68a2ac67b673ac1effea6fb9`, and PR #14 merged the
+  default-disabled operator key-file/guard-state configuration at
+  `203198e45ab7811cfc938be36816ba570ddd83ee`. PR #14 CI run `32344672309`
+  and post-merge run `32344913375` passed all required jobs. The current
+  feature branch adds the P1.1d bearer-lifetime classification fix and the
+  all-route admission evidence matrix; no P1.2 state or dispatch was added.
 
 The implemented Provider discovery listener is separate from the local
 management API and remains disabled by default. When enabled, it accepts TLS
@@ -48,8 +48,8 @@ runtime capability.
 | P1.0: contract intake and ownership freeze | Closed | Contract identity and ownership-boundary evidence only. |
 | P1.1a: wire DTO and Contract validation harness | Implemented and merged into `main` | Component and locked Contract projection evidence only. |
 | P1.1b: mTLS-only capability discovery | Implemented and verified on `main`; transport reconciliation merged through PR #9 | Application model, immutable source, response mapping, exact GET-only routing, mTLS identity admission, default-disabled configuration, composition, enabled-listener behavior, emitted-response projection, fail-together lifecycle, tagged Docker integration, strict query/body input evidence, and transport reconciliation CI passed. The `400`/`501` operation-level error-wire authority gap remains separately pending. |
-| P1.1c: protected-operation admission | Protected transport merged through PR #13; configuration composition implemented on the current feature branch, awaiting PR CI | Locked Admission Context is decoded strictly and bound to the verified mTLS caller, protected route, JWS v2 claims, canonical request/read descriptor, and pure gate. All 14 protected paths are matched. Bearer authentication precedes Context/document validation; query input is closed per operation; admitted error results carry trace correlation and 503 retry advice. Shutdown is idempotent when startup cancellation has already closed its listener. Explicit configuration loads only frozen public-key files and an exclusive durable guard before it enables protected routes; successful admission deliberately returns bounded unavailable/error and never calls repository/driver/lifecycle code. |
-| P1.1d: admission release gate | Not started | P1.1 remains open. |
+| P1.1c: protected-operation admission | Implemented and merged through PR #14; PR and post-merge CI passed | Locked Admission Context is decoded strictly and bound to the verified mTLS caller, protected route, JWS v2 claims, canonical request/read descriptor, and pure gate. All 14 protected paths are matched. Bearer authentication, including self-contained expiry/not-before validity, precedes Context/document validation; explicit configuration loads only frozen public-key files and an exclusive durable guard before it enables protected routes. Successful admission deliberately returns bounded unavailable/error and never calls repository/driver/lifecycle code. |
+| P1.1d: admission release gate | In progress on the current feature branch | Local evidence covers all 14 protected paths, request/read-descriptor digest substitution, inactive bearer, replay, stale fencing, cancellation, and concurrent admission. The P1.1 gate remains open pending full local validation, review, PR CI, and any required Contract-owner clarification. |
 
 P1.0 closed at revision `102f36a6240a4c33892b0ebc25232859b63e334c`.
 P1.1a reached `main` through merge revision `255c927`.
@@ -229,10 +229,17 @@ Complete local validation for that feature branch passed on 2026-08-20:
 - `gofmt` plus `git diff --check`.
 
 This is local component, composition, Contract projection, and Docker-driver
-regression evidence only. PR CI, merge review, post-merge CI, the P1.1 release
-gate, aggregate conformance, Platform end-to-end compatibility,
+regression evidence only. PR CI, merge review, post-merge CI for the current
+P1.1d branch, the P1.1 release gate, aggregate conformance, Platform end-to-end
+compatibility,
 multi-controller reliability, multi-tenant security, deployment readiness, and
 production readiness remain unproven.
+
+P1.1d local evidence then added the bearer-lifetime classification regression
+and a generated test-local admission matrix for all 14 protected routes. The
+focused race-enabled Provider API matrix passed on 2026-08-20. It proves only
+the tested transport/gate boundary; it does not substitute for repository or
+driver dispatch evidence, CI, or the P1.1 release gate.
 
 ## Open gate and unproven claims
 
@@ -243,7 +250,7 @@ and reproducible CI evidence to pass.
 
 The current revision does not prove or claim:
 
-- merged protected-listener configuration/composition behavior and its PR CI;
+- P1.1d PR review/CI or closure of the P1.1 release gate;
 - P1.2 lifecycle, durable operations, leases, events, or reconciliation;
 - the aggregate `sandbox-core-v1` conformance profile;
 - Agent Platform end-to-end compatibility or cross-provider interchangeability;
@@ -258,11 +265,9 @@ parser/verifier, strict canonical request/descriptor digest verification,
 application-level context/time binding, a pure protected-operation gate, a
 static/file trusted-key source, a shared TLS/request identity extractor, a
 durable single-controller guard, and a merged protected transport adapter. The
-immediate entry is review and CI for the narrow composition-root/configuration
-wiring: frozen operator public keys, a durable guard state path, and fail-closed
-listener composition. After its merge evidence closes, the next planned unit is
-P1.1d release-gate evidence. No P1.2 lifecycle or repository/driver dispatch
-may be added in either step.
+immediate entry is completion of P1.1d full local validation, review, and CI
+for the bounded admission matrix. No P1.2 lifecycle or repository/driver
+dispatch may be added before the P1.1 release gate closes.
 The detailed scope,
 acceptance evidence, and stop conditions are in
 [the P1.1c admission plan](plan/p1.1c-protected-operation-admission.md).
