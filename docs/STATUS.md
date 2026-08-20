@@ -12,8 +12,8 @@ production readiness.
 
 | Item | Evidence | Status |
 | --- | --- | --- |
-| Checkout | `codex/p1.1-local-admission-contract@f9297c4` | In progress; PR pending |
-| Review | PR [#17](https://github.com/shell-echo/sandbox-runtime/pull/17) merged as `43ff3d7`; current branch has no PR yet | Current slice pending review |
+| Checkout | `codex/p1.1d-release-gate-evidence` from `4774c3a` | In progress; PR pending |
+| Review | PR [#17](https://github.com/shell-echo/sandbox-runtime/pull/17) merged as `43ff3d7`; PR [#18](https://github.com/shell-echo/sandbox-runtime/pull/18) merged as `4774c3a` | Current P1.1d slice pending review |
 | Worktree | clean | Verified |
 | Contract namespace | `urn:shell-echo:sandbox-runtime:provider-v1` | Locked |
 | Contract version/license | `1.0.0` / MIT | Locked |
@@ -32,11 +32,11 @@ It does not clone, mount, or read an external source repository.
 | P0.1 | Replace external lock verifier with local tree/digest/semantic/fixture validation | Passed and merged in PR #17 | Current lock revalidation on this branch |
 | P0.2 | Migrate DTO/projection tests and CI to local Contract | Passed and merged in PR #17 | Current projection regression |
 | P0.3 | Rebase architecture, ADRs, README, plans, and status on local Contract | Passed and merged in PR #17 | Keep docs synchronized with follow-up Contract changes |
-| P0.4 | Re-run P1.1 evidence against the repository-owned Contract | In progress; local validation passed on `f9297c4` | PR CI and post-merge evidence |
-| P1.1a | Provider v1 DTOs and strict decoder | Local projection and decoder regression passed on `f9297c4` | PR CI and post-merge evidence |
-| P1.1b | mTLS-only capability discovery | Local TLS matrix and locked response projection passed on `f9297c4` | PR CI and post-merge evidence |
-| P1.1c | Protected-operation admission primitives and transport composition | Local Contract semantic binding matrix and admission regression passed on `f9297c4` | PR CI, review, and post-merge evidence |
-| P1.1d | Admission release gate | In progress; not closed | Execute/approve local Suite and security matrix, then PR and post-merge CI |
+| P0.4 | Re-run P1.1 evidence against the repository-owned Contract | In progress; PR #18 post-merge validation passed, Suite runner follow-up pending | Merge current runner and record post-merge evidence |
+| P1.1a | Provider v1 DTOs and strict decoder | Passed under local Contract through PR #18; post-merge run `32363581638` passed | No new slice; retain regression coverage |
+| P1.1b | mTLS-only capability discovery | Passed under local Contract through PR #18; post-merge run `32363581638` passed | No new slice; retain TLS/projection coverage |
+| P1.1c | Protected-operation admission primitives and transport composition | Passed under local Contract through PR #18; post-merge run `32363581638` passed | P1.1d release-gate review |
+| P1.1d | Admission release gate | In progress; local Suite runner and race/shuffle matrix passed on current branch, not yet merged | PR CI, post-merge CI, Suite digest integrity review, gate decision |
 | P1.2 | Async lifecycle, operation ledger, reconciliation, events | Not started; prohibited until P1.1d closes | New implementation slice only after gate closure |
 | P2 | Coding/remote-shell profile | Not started | P1.2 completion and profile-specific Conformance |
 | P3 | Migration readiness and external-caller integration | Not started | External caller E2E, rollback and canary evidence |
@@ -45,17 +45,20 @@ It does not clone, mount, or read an external source repository.
 ## Evidence Boundary
 
 PR #17 merged the repository-owned Contract migration and its post-merge CI
-run `32360376058` passed `provider-contract`, `test`, and
-`docker-integration`. The current branch adds protected-admission Contract
-resources and bindings; those are not main-branch or release-gate evidence until
-the follow-up review and merge complete.
+run `32360376058` passed all required jobs. PR #18 then merged the protected-
+admission Contract resources and bindings as `4774c3a`; post-merge run
+`32363581638` passed `provider-contract`, `test`, and `docker-integration`.
+The current branch adds the local Suite runner and its CI invocation; those are
+not release-gate evidence until this follow-up is reviewed and merged.
 
 - local Go tests are component evidence only;
 - the local Contract verifier proves lock/resource identity, not protocol
   conformance;
-- the local Suite is still a declaration until its cases are executed by a
-  conformance runner; projection and semantic-binding tests are narrower
-  evidence;
+- the local Suite runner now executes all 10 required case IDs with the
+  `providerapi` and `provider/admission` test matrices; this remains Provider
+  component/Contract-suite evidence, not aggregate lifecycle conformance;
+- `suite_digest` is still a locked declared value and is not recomputed from
+  Suite contents by the verifier; content-bound Suite integrity remains open;
 - no aggregate lifecycle conformance, external-caller E2E,
   multi-controller reliability, multi-tenant safety, deployment readiness, or
   production readiness is claimed.
@@ -79,14 +82,13 @@ Passed locally (authorized test environment):
 
 Pending:
 
-- PR for `codex/p1.1-local-admission-contract` and its PR CI;
+- PR for `codex/p1.1d-release-gate-evidence` and its PR CI;
 - post-merge CI on the resulting main revision;
-- execution of the declared local Conformance Suite beyond projection and
-  semantic-binding tests;
+- review/decision on content-bound Suite digest integrity;
 - review of the P1.1d release-gate evidence.
 
 ## Next Entry
 
-After the current branch is reviewed and merged, re-run the post-merge
-admission matrix and decide whether P1.1d can close. P1.2 remains prohibited
-until that release gate is explicitly closed.
+After the current branch is reviewed and merged, verify its post-merge CI and
+decide whether P1.1d can close. P1.2 remains prohibited until that release gate
+is explicitly closed.
