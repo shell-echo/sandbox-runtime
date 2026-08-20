@@ -21,7 +21,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           repository: CelestialsGroup/agent-blueprints
-          ref: 0c91871fa469e951b8a508fe735a2a9a5797a67e
+          ref: cf623ac7b6c8730a0a609076adaefe5197488667
           path: .agent-contract-source
           persist-credentials: false
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
