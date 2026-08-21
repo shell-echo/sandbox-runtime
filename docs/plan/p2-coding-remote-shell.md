@@ -6,7 +6,8 @@ projection gate passed in PR #30 merge `9d00212`; post-merge CI
 `32444266288` passed. P2.1 local domain/application-port work passed in PR #31
 merge `67b64a9`; post-merge CI `32445893337` passed. P2.2a result and
 cancellation-intent domain passed in PR #33 merge `ba39053`; post-merge CI
-`32454054853` passed. P2.2b persistence is the next unimplemented slice.
+`32454054853` passed. P2.2b persistence is implemented and locally verified
+on the current feature branch; commit, PR, and post-merge evidence are pending.
 ADR 0009 records the ownership boundary and ADR 0010 records the bounded exec
 Contract decision.
 
@@ -85,8 +86,12 @@ domain. Result retention is derived from the admitted exec request; an intent
 does not claim process cancellation. PR #33 and post-merge CI
 `32454054853` close this domain slice as local component evidence.
 
-P2.2b will add a separate exec ledger with atomic idempotency, immutable
-snapshots, result-expiry tombstones, and restart recovery. It must not reuse
-the lifecycle repository or dispatch an executor during recovery. P2.2c may
-add bounded coordination and an optional cancellation port, but continues to
-exclude Provider HTTP composition and Docker/backend adapters.
+P2.2b adds a separate exec ledger with atomic idempotency, immutable snapshots,
+result-expiry tombstones, and restart recovery. Its local implementation and
+verification are complete, pending commit and PR evidence. It must not reuse
+the lifecycle repository or dispatch an executor during recovery. P2.2c may add
+bounded coordination and an optional cancellation port, but continues to
+exclude Provider HTTP composition and Docker/backend adapters. The current
+repository port records an already-produced opaque dispatch receipt; it is not
+a durable pre-dispatch accept. P2.2c must not start an executor before that
+acceptance is durable and must introduce an explicit reservation/attach design.
