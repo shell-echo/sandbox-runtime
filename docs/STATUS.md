@@ -49,8 +49,9 @@ It does not clone, mount, or read an external source repository.
 | P2.0b | Bounded exec Contract resources | Passed in PR #30 merge `9d00212`; no runtime dispatch | Retain lock source revision/tree and valid/rejection fixture evidence |
 | P2.0c | Exec Contract lock/projection gate | Passed in PR #30; post-merge CI run `32444266288` passed | No runtime claim from the Contract gate |
 | P2.1 | Bounded exec domain/application port | Passed in PR #31 merge `67b64a9`; post-merge CI `32445893337` passed; no public composition | Retain P2.2 non-goals and local-only evidence boundary |
-| P2.2 | Retained result and cancellation behavior | Not started | Design independent provider-local persistence/cancellation boundary; then implement with focused recovery tests |
-| P2 | Coding/remote-shell profile | P2.1 closed; P2.2 is next | P2.2 design and implementation evidence |
+| P2.2a | Exec result and cancellation-intent domain | Local validation passed; no persistence, dispatch, or HTTP composition | Commit, PR CI, review, merge, and post-merge CI |
+| P2.2 | Retained result and cancellation behavior | In progress through P2.2a | Independent ledger/tombstone/recovery, then bounded coordination evidence |
+| P2 | Coding/remote-shell profile | P2.1 closed; P2.2 in progress | P2.2a evidence, then P2.2b persistence |
 | P3 | Migration readiness and external-caller integration | Not started | External caller E2E, rollback and canary evidence |
 | P4 | Production hardening | Not started | Deployment, multi-controller, multi-tenant, and production gates |
 

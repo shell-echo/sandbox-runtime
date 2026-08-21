@@ -76,3 +76,16 @@ intent, reconciliation, sessions, artifacts, usage, and `/instances`. An
 `expected_generation` is bounded but not compared to sandbox state until a
 future explicitly authorized persistence/reconciliation slice supplies that
 state boundary.
+
+## P2.2 Delivery Breakdown
+
+P2.2a defines only the provider-local retained-result and cancellation-intent
+domain. Result retention is derived from the admitted exec request; an intent
+does not claim process cancellation. Local domain validation is complete, while
+review and CI evidence remain pending.
+
+P2.2b will add a separate exec ledger with atomic idempotency, immutable
+snapshots, result-expiry tombstones, and restart recovery. It must not reuse
+the lifecycle repository or dispatch an executor during recovery. P2.2c may
+add bounded coordination and an optional cancellation port, but continues to
+exclude Provider HTTP composition and Docker/backend adapters.
