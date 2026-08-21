@@ -2,8 +2,8 @@
 
 Status: P2.0a authority inventory passed in PR #29 merge `83965a2` and
 post-merge CI `32440383198`. P2.0b Contract resources are defined in the local
-resource commit `4a2a58f`; P2.0c lock/projection local gate passed and PR
-evidence is pending.
+resource commit `4a2a58f`; P2.0c lock/projection local gate and PR #30 CI run
+`32443572559` passed; merge/post-merge evidence is pending.
 ADR 0009 records the ownership boundary and ADR 0010 records the bounded exec
 Contract decision.
 
@@ -38,8 +38,8 @@ wire DTOs. The P2.0b resource commit intentionally has no runtime dispatch.
   boundaries and security-base assumptions (passed; ADR 0009);
 - P2.0b: additive Contract resources, semantic rules, fixtures, and Suite
   (implemented in resource commit `4a2a58f`);
-- P2.0c: lock and projection gate with no runtime dispatch (local gate passed;
-  PR evidence pending; ADR 0010);
+- P2.0c: lock and projection gate with no runtime dispatch (local gate and PR
+  #30 CI passed; merge/post-merge evidence pending; ADR 0010);
 - P2.1: bounded exec application/domain ports after P2.0 closes;
 - P2.2: retained result and cancellation behavior;
 - P2.3: opaque terminal/session application and gateway handoff;
