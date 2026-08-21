@@ -20,6 +20,12 @@ import (
 	"github.com/shell-echo/sandbox-runtime/provider"
 	"github.com/shell-echo/sandbox-runtime/provider/admission"
 	admissionfile "github.com/shell-echo/sandbox-runtime/provider/admission/file"
+	lifecycleapplication "github.com/shell-echo/sandbox-runtime/provider/lifecycle/application"
+	lifecyclecoordinator "github.com/shell-echo/sandbox-runtime/provider/lifecycle/coordinator"
+	lifecyclefake "github.com/shell-echo/sandbox-runtime/provider/lifecycle/driver/fake"
+	lifecyclerepository "github.com/shell-echo/sandbox-runtime/provider/lifecycle/repository"
+	lifecyclefile "github.com/shell-echo/sandbox-runtime/provider/lifecycle/repository/file"
+	lifecyclememory "github.com/shell-echo/sandbox-runtime/provider/lifecycle/repository/memory"
 	"github.com/shell-echo/sandbox-runtime/providerapi"
 	"github.com/shell-echo/sandbox-runtime/server"
 	"github.com/shell-echo/sandbox-runtime/server/api"
@@ -86,14 +92,21 @@ func newProviderServer(ctx context.Context, providerConfig config.ProviderConfig
 	if err := providerConfig.Validate(); err != nil {
 		return nil, noOpProviderClose, fmt.Errorf("validate Provider configuration: %w", err)
 	}
-
-	source, err := newProviderCapabilitySource(providerConfig.Capability)
+	lifecycleApp, closeLifecycle, err := newProviderLifecycleApplication(ctx, providerConfig.Lifecycle)
 	if err != nil {
 		return nil, noOpProviderClose, err
 	}
+
+	source, err := newProviderCapabilitySource(providerConfig.Capability)
+	if err != nil {
+		return nil, noOpProviderClose, errors.Join(err, closeLifecycle())
+	}
 	protected, closeProtected, err := newProviderProtectedTransportOptions(providerConfig.ProtectedAdmission, systemAdmissionClock{})
 	if err != nil {
-		return nil, noOpProviderClose, err
+		return nil, noOpProviderClose, errors.Join(err, closeLifecycle())
+	}
+	if protected != nil {
+		protected.Application = lifecycleApp
 	}
 	transport := providerConfig.Transport
 	providerServer, err := providerapi.NewServer(ctx, providerapi.TransportOptions{
@@ -105,9 +118,48 @@ func newProviderServer(ctx context.Context, providerConfig config.ProviderConfig
 		Protected:                  protected,
 	}, source)
 	if err != nil {
-		return nil, noOpProviderClose, errors.Join(fmt.Errorf("construct Provider API server: %w", err), closeProtected())
+		return nil, noOpProviderClose, errors.Join(fmt.Errorf("construct Provider API server: %w", err), closeProtected(), closeLifecycle())
 	}
-	return providerServer, closeProtected, nil
+	return providerServer, func() error { return errors.Join(closeProtected(), closeLifecycle()) }, nil
+}
+
+func newProviderLifecycleApplication(ctx context.Context, lifecycleConfig config.ProviderLifecycleConfig) (*lifecycleapplication.Application, func() error, error) {
+	if !lifecycleConfig.Enabled {
+		return nil, noOpProviderClose, nil
+	}
+	if err := lifecycleConfig.Validate(); err != nil {
+		return nil, noOpProviderClose, fmt.Errorf("validate Provider lifecycle configuration: %w", err)
+	}
+	var lifecycleRepo lifecyclerepository.Repository
+	switch lifecycleConfig.Repository.Driver {
+	case config.ProviderLifecycleMemoryRepository:
+		lifecycleRepo = lifecyclememory.NewRepository()
+	case config.ProviderLifecycleFileRepository:
+		repo, err := lifecyclefile.NewRepository(lifecycleConfig.Repository.File.Path)
+		if err != nil {
+			return nil, noOpProviderClose, fmt.Errorf("open Provider lifecycle repository: %w", err)
+		}
+		lifecycleRepo = repo
+	default:
+		return nil, noOpProviderClose, fmt.Errorf("unsupported Provider lifecycle repository %q", lifecycleConfig.Repository.Driver)
+	}
+	var driver lifecyclecoordinator.Driver
+	switch lifecycleConfig.Driver {
+	case config.ProviderLifecycleFakeDriver:
+		driver = lifecyclefake.New()
+	default:
+		_ = lifecycleRepo.Close()
+		return nil, noOpProviderClose, fmt.Errorf("unsupported Provider lifecycle driver %q", lifecycleConfig.Driver)
+	}
+	application, err := lifecycleapplication.New(lifecycleRepo, driver, systemAdmissionClock{})
+	if err != nil {
+		_ = lifecycleRepo.Close()
+		return nil, noOpProviderClose, fmt.Errorf("construct Provider lifecycle application: %w", err)
+	}
+	if err := application.Recover(ctx); err != nil {
+		return nil, noOpProviderClose, errors.Join(fmt.Errorf("recover Provider lifecycle: %w", err), lifecycleRepo.Close())
+	}
+	return application, lifecycleRepo.Close, nil
 }
 
 func noOpProviderClose() error { return nil }
@@ -199,6 +251,14 @@ func validateServeConfiguration(application *config.ApplicationConfig, serverCon
 	}
 	if application.Mode == config.ApplicationProductionMode && repositoryConfig.Driver == config.RepositoryMemoryDriver {
 		return errors.New("production mode requires a persistent repository")
+	}
+	if application.Mode == config.ApplicationProductionMode && serverConfig.Provider.Lifecycle.Enabled {
+		if serverConfig.Provider.Lifecycle.Driver == config.ProviderLifecycleFakeDriver {
+			return errors.New("production mode requires a production-capable Provider lifecycle driver")
+		}
+		if serverConfig.Provider.Lifecycle.Repository.Driver != config.ProviderLifecycleFileRepository {
+			return errors.New("production mode requires a persistent Provider lifecycle repository")
+		}
 	}
 	if runtimeConfig.Driver == config.RuntimeDockerDriver && repositoryConfig.Driver == config.RepositoryMemoryDriver {
 		return errors.New("docker runtime requires a persistent repository")

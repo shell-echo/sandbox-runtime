@@ -43,7 +43,7 @@ It does not clone, mount, or read an external source repository.
 | P1.2.3 | Provider-local coordinator and reconciliation | Passed in PR #24 merge `2e3dde6`; post-merge CI reported successful | Retain coordinator fault/restart evidence; no multi-controller claim |
 | P1.2.4 | Provider API lifecycle projection | Passed in PR #25 merge `88506d1`; PR CI run `32378782202` and post-merge CI run `32435540542` all required jobs successful | Retain projection/Schema/admission evidence; no runtime composition claim |
 | P1.2.5 | Lifecycle release gate | In progress; local Suite lifecycle IDs now execute coordinator/projection behavior matrices | Complete authorized fault/concurrency matrix, document unsupported/unproven families, PR/post-merge CI |
-| P1.2.5a | Provider lifecycle composition | Next; ADR 0008 and independent composition boundary | Config/application/repository/driver wiring, startup reconciliation, production fail-closed tests, PR/post-merge CI |
+| P1.2.5a | Provider lifecycle composition | Implemented locally; focused acceptance pending | Config/application/repository/driver wiring, startup reconciliation, production fail-closed tests, PR/post-merge CI |
 | P1.2 | Async lifecycle, operation ledger, reconciliation, events | P1.2.0-P1.2.4 passed; P1.2.5 release gate in progress; P1.2.5a next | Close P1.2.5 before P2 or production claims |
 | P2 | Coding/remote-shell profile | Not started | P1.2 completion and profile-specific Conformance |
 | P3 | Migration readiness and external-caller integration | Not started | External caller E2E, rollback and canary evidence |
@@ -112,14 +112,14 @@ CI run `32435540542` passed all required jobs. PR #26 merged the behavior-bound
 Conformance mappings as `4ccb107`; its post-merge run `32436541588` remains
 待补证 in this checkout because the GitHub Actions API was unavailable. It projects only `POST /v1/sandboxes`, `GET
 /v1/sandboxes/{sandbox_id}`, and `GET /v1/operations/{operation_id}` after
-protected admission. The command composition root does not yet construct a
-lifecycle application, so an enabled protected listener remains fail-closed
-with `503` until a later composition/release decision supplies one. Reserved
+protected admission. The command composition root now constructs an independent
+Provider lifecycle application when explicitly enabled; disabled and
+production-fake configurations remain fail-closed. Reserved
 routes remain absent, and aggregate conformance, external-caller E2E,
 multi-controller reliability, tenancy, deployment, and production claims
 remain unproven. The P1.2.5 local Conformance mappings now exercise
 coordinator idempotency, stale generation, concurrent reconciliation, deadlines,
 cancellation, unknown outcomes, restart inspection, and locked DTO projection.
 Terminate/lease/orphan cleanup are not authorized by the current Contract
-revision, and the command composition root still does not construct a Provider
-lifecycle application; P1.2.5a is the next implementation entry.
+revision. P1.2.5a is implemented locally; its focused acceptance and PR
+post-merge evidence remain pending.

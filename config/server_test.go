@@ -97,6 +97,40 @@ public_key_file = "/run/secrets/provider-admission/agent-platform-ed25519.pem"
 	}
 }
 
+func TestLoadProviderLifecycleTOML(t *testing.T) {
+	snapshotGlobals(t)
+	body := validEnabledProviderTOML() + `
+[server.provider.protected_admission]
+enabled = true
+guard_state_file = "data/provider-admission.json"
+
+[[server.provider.protected_admission.trusted_verification_keys]]
+id = "agent-platform-ed25519"
+algorithm = "EdDSA"
+public_key_file = "/run/secrets/provider-admission/agent-platform-ed25519.pem"
+
+[server.provider.lifecycle]
+enabled = true
+driver = "fake"
+
+[server.provider.lifecycle.repository]
+driver = "file"
+
+[server.provider.lifecycle.repository.file]
+path = "data/provider-lifecycle.json"
+`
+	if err := Load(writeConfig(t, body)); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	lifecycle := Server.Provider.Lifecycle
+	if !lifecycle.Enabled || lifecycle.Driver != ProviderLifecycleFakeDriver {
+		t.Fatalf("lifecycle = %#v", lifecycle)
+	}
+	if lifecycle.Repository.Driver != ProviderLifecycleFileRepository || lifecycle.Repository.File.Path != "data/provider-lifecycle.json" {
+		t.Fatalf("lifecycle repository = %#v", lifecycle.Repository)
+	}
+}
+
 func TestLoadProviderRejectsEmptyHost(t *testing.T) {
 	snapshotGlobals(t)
 	body := strings.Replace(validEnabledProviderTOML(), `host = "127.0.0.1"`, `host = ""`, 1)
@@ -327,6 +361,41 @@ func TestEnabledProviderProtectedAdmissionValidation(t *testing.T) {
 			mutate(&config.ProtectedAdmission)
 			if err := config.Validate(); err == nil {
 				t.Fatal("Validate() error = nil, want protected admission rejection")
+			}
+		})
+	}
+}
+
+func TestEnabledProviderLifecycleRequiresProtectedAdmission(t *testing.T) {
+	provider := validEnabledProviderConfig()
+	provider.Lifecycle.Enabled = true
+	provider.Lifecycle.Driver = ProviderLifecycleFakeDriver
+	provider.Lifecycle.Repository.Driver = ProviderLifecycleMemoryRepository
+	if err := provider.Validate(); err == nil {
+		t.Fatal("lifecycle without protected admission was accepted")
+	}
+}
+
+func TestEnabledProviderLifecycleRejectsInvalidRepository(t *testing.T) {
+	tests := map[string]func(*ProviderLifecycleConfig){
+		"driver":            func(c *ProviderLifecycleConfig) { c.Driver = "docker" },
+		"repository driver": func(c *ProviderLifecycleConfig) { c.Repository.Driver = "database" },
+		"repository path": func(c *ProviderLifecycleConfig) {
+			c.Repository.Driver = ProviderLifecycleFileRepository
+			c.Repository.File.Path = " "
+		},
+	}
+	for name, mutate := range tests {
+		t.Run(name, func(t *testing.T) {
+			provider := validEnabledProviderConfig()
+			provider.ProtectedAdmission = validProtectedAdmissionConfig()
+			provider.Lifecycle = ProviderLifecycleConfig{
+				Enabled: true, Driver: ProviderLifecycleFakeDriver,
+				Repository: ProviderLifecycleRepositoryConfig{Driver: ProviderLifecycleMemoryRepository},
+			}
+			mutate(&provider.Lifecycle)
+			if err := provider.Validate(); err == nil {
+				t.Fatal("invalid lifecycle configuration was accepted")
 			}
 		})
 	}
