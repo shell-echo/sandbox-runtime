@@ -16,4 +16,4 @@ in [`docs/STATUS.md`](../STATUS.md).
 | P1.1b | [mTLS capability discovery](p1.1b-capability-discovery.md) | Passed under local Contract with PR/post-merge evidence |
 | P1.1c | [Protected-operation admission](p1.1c-protected-operation-admission.md) | Passed under local Contract with PR/post-merge evidence |
 | P1.2 | [Async lifecycle](p1.2-async-lifecycle.md) | Bounded Contract-authorized subset passed through PR #27; reserved lifecycle families remain separately gated |
-| P2.0 | [Coding/remote-shell authority inventory](p2-coding-remote-shell.md) | In progress; ADR 0009 boundary recorded, Contract/Schema/Suite work next |
+| P2.0 | [Coding/remote-shell authority inventory](p2-coding-remote-shell.md) | P2.0a/b/c local gates and PR #30 CI passed; merge/post-merge pending |

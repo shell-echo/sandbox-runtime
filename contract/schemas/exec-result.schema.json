@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:shell-echo:sandbox-runtime:contract:exec-result:v1",
+  "title": "Sandbox Runtime Retained Exec Result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "operation_id",
+    "attempt_id",
+    "fencing_token",
+    "sandbox_id",
+    "status",
+    "started_at",
+    "completed_at",
+    "retained_until"
+  ],
+  "properties": {
+    "operation_id": {"$ref": "#/$defs/Identifier"},
+    "attempt_id": {"$ref": "#/$defs/Identifier"},
+    "fencing_token": {"type": "integer", "minimum": 1},
+    "sandbox_id": {"$ref": "#/$defs/Identifier"},
+    "status": {"enum": ["completed", "failed", "cancelled", "outcome_unknown"]},
+    "exit_code": {"type": ["integer", "null"], "minimum": -1, "maximum": 255},
+    "signal": {"type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[A-Za-z0-9._-]+$"},
+    "stdout_reference": {"type": "string", "pattern": "^ref:[A-Za-z0-9][A-Za-z0-9._:/-]{0,399}$"},
+    "stderr_reference": {"type": "string", "pattern": "^ref:[A-Za-z0-9][A-Za-z0-9._:/-]{0,399}$"},
+    "started_at": {"type": "string", "format": "date-time"},
+    "completed_at": {"type": "string", "format": "date-time"},
+    "retained_until": {"type": "string", "format": "date-time"},
+    "error": {"$ref": "urn:shell-echo:sandbox-runtime:contract:provider-error:v1"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "outcome_unknown"}}},
+      "then": {
+        "required": ["error"],
+        "properties": {"error": {"properties": {"outcome": {"const": "outcome_unknown"}}}}
+      }
+    }
+  ],
+  "$defs": {
+    "Identifier": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$"}
+  }
+}

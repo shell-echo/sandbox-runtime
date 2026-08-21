@@ -1,0 +1,99 @@
+{
+  "cases": [
+    {
+      "name": "plaintext environment value",
+      "schema": "exec-request.schema.json",
+      "document": {
+        "operation_id": "operation-exec-reject-env",
+        "attempt_id": "attempt-exec-reject-env",
+        "fencing_token": 1,
+        "idempotency_key": "reject-env",
+        "request_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+        "deadline_at": "2026-08-21T00:05:00Z",
+        "expected_generation": 1,
+        "command": ["printf", "hello"],
+        "working_directory": "/workspace",
+        "result_retention_seconds": 3600,
+        "environment": {"TOKEN": "plaintext-secret"}
+      }
+    },
+    {
+      "name": "path traversal",
+      "schema": "exec-request.schema.json",
+      "document": {
+        "operation_id": "operation-exec-reject-path",
+        "attempt_id": "attempt-exec-reject-path",
+        "fencing_token": 1,
+        "idempotency_key": "reject-path",
+        "request_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+        "deadline_at": "2026-08-21T00:05:00Z",
+        "expected_generation": 1,
+        "command": ["printf", "hello"],
+        "working_directory": "/workspace/../etc",
+        "result_retention_seconds": 3600
+      }
+    },
+    {
+      "name": "missing grant digest",
+      "schema": "exec-request.schema.json",
+      "document": {
+        "operation_id": "operation-exec-reject-grant",
+        "attempt_id": "attempt-exec-reject-grant",
+        "fencing_token": 1,
+        "idempotency_key": "reject-grant",
+        "request_digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+        "deadline_at": "2026-08-21T00:05:00Z",
+        "expected_generation": 1,
+        "command": ["printf", "hello"],
+        "working_directory": "/workspace",
+        "result_retention_seconds": 3600,
+        "secret_grant_id": "grant:without-digest"
+      }
+    },
+    {
+      "name": "unknown cancellation reason",
+      "schema": "cancel-exec-request.schema.json",
+      "document": {
+        "operation_id": "operation-cancel-reject-reason",
+        "attempt_id": "attempt-cancel-reject-reason",
+        "fencing_token": 1,
+        "idempotency_key": "reject-reason",
+        "request_digest": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+        "deadline_at": "2026-08-21T00:06:00Z",
+        "expected_generation": 1,
+        "target_operation_id": "operation-exec-1",
+        "target_attempt_id": "attempt-exec-1",
+        "reason": "force_kill"
+      }
+    },
+    {
+      "name": "backend result reference",
+      "schema": "exec-result.schema.json",
+      "document": {
+        "operation_id": "operation-exec-1",
+        "attempt_id": "attempt-exec-1",
+        "fencing_token": 1,
+        "sandbox_id": "sandbox-1",
+        "status": "completed",
+        "stdout_reference": "/var/lib/docker/containers/abc/stdout",
+        "started_at": "2026-08-21T00:00:02Z",
+        "completed_at": "2026-08-21T00:00:03Z",
+        "retained_until": "2026-08-21T01:00:03Z"
+      }
+    },
+    {
+      "name": "unknown outcome without unknown error",
+      "schema": "exec-result.schema.json",
+      "document": {
+        "operation_id": "operation-exec-1",
+        "attempt_id": "attempt-exec-1",
+        "fencing_token": 1,
+        "sandbox_id": "sandbox-1",
+        "status": "outcome_unknown",
+        "started_at": "2026-08-21T00:00:02Z",
+        "completed_at": "2026-08-21T00:00:03Z",
+        "retained_until": "2026-08-21T01:00:03Z"
+      }
+    }
+  ]
+}

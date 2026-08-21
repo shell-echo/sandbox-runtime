@@ -27,7 +27,10 @@ func TestLockedContractProjection(t *testing.T) {
 	factories := map[string]func() any{
 		"admission-context.schema.json":      func() any { return &map[string]any{} },
 		"admission-target.schema.json":       func() any { return &map[string]any{} },
+		"cancel-exec-request.schema.json":    func() any { return &CancelExecRequest{} },
 		"create-sandbox-request.schema.json": func() any { return &CreateRequest{} },
+		"exec-request.schema.json":           func() any { return &ExecRequest{} },
+		"exec-result.schema.json":            func() any { return &ExecResult{} },
 		"provider-capabilities.schema.json":  func() any { return &Capabilities{} },
 		"provider-error.schema.json":         func() any { return &ProviderError{} },
 		"provider-operation.schema.json":     func() any { return &Operation{} },
@@ -42,14 +45,21 @@ func TestLockedContractProjection(t *testing.T) {
 	if names := projection.SchemaNames(); !reflect.DeepEqual(names, expectedNames) {
 		t.Fatalf("Provider projection = %v, want %v", names, expectedNames)
 	}
-	if limits := projection.RequestBodyLimits(); !reflect.DeepEqual(limits, map[string]int64{"create-sandbox-request.schema.json": 1 << 20}) {
+	if limits := projection.RequestBodyLimits(); !reflect.DeepEqual(limits, map[string]int64{
+		"cancel-exec-request.schema.json":    65536,
+		"create-sandbox-request.schema.json": 1 << 20,
+		"exec-request.schema.json":           262144,
+	}) {
 		t.Fatalf("Provider request body limits = %v, want create request limit", limits)
 	}
 
 	fixtures := map[string]string{
 		"admission-context.schema.json":      "admission-context.json",
 		"admission-target.schema.json":       "admission-target.json",
+		"cancel-exec-request.schema.json":    "cancel-exec-request.json",
 		"create-sandbox-request.schema.json": "create-sandbox-request.json",
+		"exec-request.schema.json":           "exec-request.json",
+		"exec-result.schema.json":            "exec-result.json",
 		"provider-capabilities.schema.json":  "capabilities.json",
 		"provider-error.schema.json":         "provider-error.json",
 		"provider-operation.schema.json":     "provider-operation.json",

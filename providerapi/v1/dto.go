@@ -341,15 +341,16 @@ type LeaseRequest struct {
 
 type ExecRequest struct {
 	MutationEnvelope
-	ExpectedGeneration int64             `json:"expected_generation"`
-	Command            []string          `json:"command"`
-	WorkingDirectory   string            `json:"working_directory"`
-	Environment        map[string]string `json:"environment,omitempty"`
-	SecretReferenceIDs []string          `json:"secret_reference_ids,omitempty"`
-	SecretGrantID      string            `json:"secret_grant_id,omitempty"`
-	SecretGrantDigest  SHA256Digest      `json:"secret_grant_digest,omitempty"`
-	StdinReference     string            `json:"stdin_reference,omitempty"`
-	Capture            *ExecCapture      `json:"capture,omitempty"`
+	ExpectedGeneration     int64             `json:"expected_generation"`
+	Command                []string          `json:"command"`
+	WorkingDirectory       string            `json:"working_directory"`
+	ResultRetentionSeconds int64             `json:"result_retention_seconds"`
+	Environment            map[string]string `json:"environment,omitempty"`
+	SecretReferenceIDs     []string          `json:"secret_reference_ids,omitempty"`
+	SecretGrantID          string            `json:"secret_grant_id,omitempty"`
+	SecretGrantDigest      SHA256Digest      `json:"secret_grant_digest,omitempty"`
+	StdinReference         string            `json:"stdin_reference,omitempty"`
+	Capture                *ExecCapture      `json:"capture,omitempty"`
 }
 
 type ExecCapture struct {
@@ -624,8 +625,9 @@ type ExecResult struct {
 	StderrReference string           `json:"stderr_reference,omitempty"`
 	StartedAt       string           `json:"started_at"`
 	CompletedAt     string           `json:"completed_at"`
-	Usage           []UsageEntry     `json:"usage"`
+	Usage           []UsageEntry     `json:"usage,omitempty"`
 	Error           *ProviderError   `json:"error,omitempty"`
+	RetainedUntil   string           `json:"retained_until"`
 }
 
 type MeterID string

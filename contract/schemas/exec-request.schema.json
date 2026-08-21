@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:shell-echo:sandbox-runtime:contract:exec-request:v1",
+  "title": "Sandbox Runtime Bounded Exec Request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "operation_id",
+    "attempt_id",
+    "fencing_token",
+    "idempotency_key",
+    "request_digest",
+    "deadline_at",
+    "expected_generation",
+    "command",
+    "working_directory",
+    "result_retention_seconds"
+  ],
+  "properties": {
+    "operation_id": {"$ref": "#/$defs/Identifier"},
+    "attempt_id": {"$ref": "#/$defs/Identifier"},
+    "fencing_token": {"type": "integer", "minimum": 1},
+    "idempotency_key": {"type": "string", "minLength": 1, "maxLength": 200},
+    "request_digest": {"$ref": "#/$defs/Digest"},
+    "deadline_at": {"type": "string", "format": "date-time"},
+    "expected_generation": {"type": "integer", "minimum": 1},
+    "command": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": {"type": "string", "minLength": 1, "maxLength": 4096, "pattern": "^[^\\x00\\r\\n]*$"}
+    },
+    "working_directory": {
+      "type": "string",
+      "maxLength": 256,
+      "pattern": "^/(workspace|tmp)(/[A-Za-z0-9_-][A-Za-z0-9._-]*)*$"
+    },
+    "result_retention_seconds": {"type": "integer", "minimum": 1, "maximum": 86400},
+    "environment": {
+      "type": "object",
+      "maxProperties": 64,
+      "propertyNames": {"pattern": "^[A-Za-z_][A-Za-z0-9_]{0,63}$"},
+      "additionalProperties": {"type": "string", "pattern": "^envref:[A-Za-z0-9][A-Za-z0-9._:/-]{0,399}$"}
+    },
+    "secret_reference_ids": {
+      "type": "array",
+      "maxItems": 64,
+      "items": {"$ref": "#/$defs/Identifier"}
+    },
+    "secret_grant_id": {"type": "string", "pattern": "^grant:[A-Za-z0-9][A-Za-z0-9._:/-]{0,399}$"},
+    "secret_grant_digest": {"$ref": "#/$defs/Digest"},
+    "stdin_reference": {"type": "string", "pattern": "^ref:[A-Za-z0-9][A-Za-z0-9._:/-]{0,399}$"},
+    "capture": {"$ref": "#/$defs/Capture"}
+  },
+  "allOf": [
+    {
+      "if": {"required": ["secret_grant_id"]},
+      "then": {"required": ["secret_grant_digest"]}
+    },
+    {
+      "if": {"required": ["secret_grant_digest"]},
+      "then": {"required": ["secret_grant_id"]}
+    }
+  ],
+  "$defs": {
+    "Identifier": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$"},
+    "Digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "Capture": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "stdout": {"type": "boolean"},
+        "stderr": {"type": "boolean"},
+        "max_bytes": {"type": "integer", "minimum": 1, "maximum": 8388608}
+      }
+    }
+  }
+}
