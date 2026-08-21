@@ -8,6 +8,7 @@
         "capability-discovery-mtls-only",
         "capability-discovery-admitted-identity",
         "capability-discovery-immutable-schema",
+        "capability-discovery-terminal-profile-advertisement",
         "capability-discovery-empty-request",
         "capability-discovery-no-mutation-routes",
         "protected-admission-context-schema",
