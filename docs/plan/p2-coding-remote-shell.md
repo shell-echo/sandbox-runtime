@@ -1,7 +1,8 @@
 # P2.0 Coding and Remote-Shell Authority Inventory
 
-Status: next planning slice after the bounded P1.2 lifecycle subset passed in
-PR #27 merge `28076a7` and post-merge CI `32439289227`.
+Status: P2.0a authority inventory in progress after the bounded P1.2 lifecycle
+subset passed in PR #27 merge `28076a7` and post-merge CI `32439289227`.
+ADR 0009 records the initial coding/remote-shell ownership boundary.
 
 ## Authority stop condition
 
@@ -31,7 +32,7 @@ wire DTOs.
 ## Delivery order
 
 - P2.0a: ownership and authority inventory, including caller/runtime-gateway
-  boundaries and security-base assumptions;
+  boundaries and security-base assumptions (in progress; ADR 0009);
 - P2.0b: additive Contract resources, semantic rules, fixtures, and Suite;
 - P2.0c: lock and projection gate with no runtime dispatch;
 - P2.1: bounded exec application/domain ports after P2.0 closes;

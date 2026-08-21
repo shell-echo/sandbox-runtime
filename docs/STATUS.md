@@ -12,9 +12,9 @@ production readiness.
 
 | Item | Evidence | Status |
 | --- | --- | --- |
-| Checkout | `codex/p1.2-close` from `origin/main@28076a7` | P1.2 bounded authorized subset passed; P2.0 authority inventory next |
+| Checkout | `codex/p2.0-authority` from `origin/main@2b25f76` | P2.0a authority inventory in progress |
 | Review | PR [#17](https://github.com/shell-echo/sandbox-runtime/pull/17) merged as `43ff3d7`; PR [#18](https://github.com/shell-echo/sandbox-runtime/pull/18) merged as `4774c3a`; PR [#19](https://github.com/shell-echo/sandbox-runtime/pull/19) merged as `e2755f5`; PR [#21](https://github.com/shell-echo/sandbox-runtime/pull/21) merged as `c5a4a65`; PR [#22](https://github.com/shell-echo/sandbox-runtime/pull/22) merged as `44f39ec`; PR [#23](https://github.com/shell-echo/sandbox-runtime/pull/23) merged as `ac72eab`; PR [#24](https://github.com/shell-echo/sandbox-runtime/pull/24) merged as `2e3dde6`; PR [#25](https://github.com/shell-echo/sandbox-runtime/pull/25) merged as `88506d1`; PR [#26](https://github.com/shell-echo/sandbox-runtime/pull/26) merged as `4ccb107`; PR [#27](https://github.com/shell-echo/sandbox-runtime/pull/27) open at `14c141b` | P1.2.4 passed; PR #26 post-merge CI `32436541588` passed; PR #27 prior CI `32437976999` passed, latest head CI pending |
-| Worktree | Clean at `28076a7` before this ledger update | New status/plan commit pending |
+| Worktree | P2.0a ADR/plan changes present; not yet committed | Focused docs evidence pending |
 | Contract namespace | `urn:shell-echo:sandbox-runtime:provider-v1` | Locked |
 | Contract version/license | `1.0.0` / MIT | Locked |
 | Contract resources | OpenAPI, admission and lifecycle schemas, semantic rules, fixtures, Suite | Locked and merged; P1.2.0 passed |
@@ -45,7 +45,7 @@ It does not clone, mount, or read an external source repository.
 | P1.2.5 | Lifecycle release gate | Passed for the current Contract-authorized subset; local Suite behavior matrix and reserved-family boundary recorded | Retain no-claim boundary for terminate/lease/orphan families; no aggregate or production claim |
 | P1.2.5a | Provider lifecycle composition | Passed in PR #27 merge `28076a7`; post-merge CI `32439289227` passed | Retain fake-driver and production-readiness boundaries |
 | P1.2 | Async lifecycle, operation ledger, reconciliation, events | Passed for the bounded Contract-authorized subset; full architecture lifecycle families remain separately gated | P2.0 authority inventory; do not implement unauthorized lifecycle families |
-| P2.0 | Coding/remote-shell authority inventory | Next; no runtime implementation | Contract/Schema/semantic rules/fixtures/Suite before exec or session code |
+| P2.0 | Coding/remote-shell authority inventory | In progress; ADR 0009 boundary recorded | Contract/Schema/semantic rules/fixtures/Suite before exec or session code |
 | P2 | Coding/remote-shell profile | P2.0 authority inventory next; runtime implementation not started | Add Contract/Schema/semantic rules/fixtures/Suite before exec or session code |
 | P3 | Migration readiness and external-caller integration | Not started | External caller E2E, rollback and canary evidence |
 | P4 | Production hardening | Not started | Deployment, multi-controller, multi-tenant, and production gates |
