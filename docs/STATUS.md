@@ -12,9 +12,9 @@ production readiness.
 
 | Item | Evidence | Status |
 | --- | --- | --- |
-| Checkout | `codex/p1.2-lifecycle-next` at `297eeb6`, based on `origin/main@4ccb107` | P1.2.5a locally implemented; PR/CI pending |
+| Checkout | `codex/p1.2-close` from `origin/main@28076a7` | P1.2 bounded authorized subset passed; P2.0 authority inventory next |
 | Review | PR [#17](https://github.com/shell-echo/sandbox-runtime/pull/17) merged as `43ff3d7`; PR [#18](https://github.com/shell-echo/sandbox-runtime/pull/18) merged as `4774c3a`; PR [#19](https://github.com/shell-echo/sandbox-runtime/pull/19) merged as `e2755f5`; PR [#21](https://github.com/shell-echo/sandbox-runtime/pull/21) merged as `c5a4a65`; PR [#22](https://github.com/shell-echo/sandbox-runtime/pull/22) merged as `44f39ec`; PR [#23](https://github.com/shell-echo/sandbox-runtime/pull/23) merged as `ac72eab`; PR [#24](https://github.com/shell-echo/sandbox-runtime/pull/24) merged as `2e3dde6`; PR [#25](https://github.com/shell-echo/sandbox-runtime/pull/25) merged as `88506d1`; PR [#26](https://github.com/shell-echo/sandbox-runtime/pull/26) merged as `4ccb107`; PR [#27](https://github.com/shell-echo/sandbox-runtime/pull/27) open at `14c141b` | P1.2.4 passed; PR #26 post-merge CI `32436541588` passed; PR #27 prior CI `32437976999` passed, latest head CI pending |
-| Worktree | Clean at `297eeb6` | Local composition evidence recorded; no remote PR claim |
+| Worktree | Clean at `28076a7` before this ledger update | New status/plan commit pending |
 | Contract namespace | `urn:shell-echo:sandbox-runtime:provider-v1` | Locked |
 | Contract version/license | `1.0.0` / MIT | Locked |
 | Contract resources | OpenAPI, admission and lifecycle schemas, semantic rules, fixtures, Suite | Locked and merged; P1.2.0 passed |
@@ -42,10 +42,11 @@ It does not clone, mount, or read an external source repository.
 | P1.2.2 | Atomic repository ports and development adapters | Passed; PR #23 merge `ac72eab`, post-merge CI `32372662597` passed | Retain repository fault/restart evidence; no multi-controller claim |
 | P1.2.3 | Provider-local coordinator and reconciliation | Passed in PR #24 merge `2e3dde6`; post-merge CI reported successful | Retain coordinator fault/restart evidence; no multi-controller claim |
 | P1.2.4 | Provider API lifecycle projection | Passed in PR #25 merge `88506d1`; PR CI run `32378782202` and post-merge CI run `32435540542` all required jobs successful | Retain projection/Schema/admission evidence; no runtime composition claim |
-| P1.2.5 | Lifecycle release gate | In progress; local Suite lifecycle IDs now execute coordinator/projection behavior matrices | Complete authorized fault/concurrency matrix, document unsupported/unproven families, PR/post-merge CI |
-| P1.2.5a | Provider lifecycle composition | PR #27 open; prior CI `32437976999` passed; latest head check pending | Latest head PR CI, review/merge, post-merge CI, then retain fake-driver and production-readiness boundaries |
-| P1.2 | Async lifecycle, operation ledger, reconciliation, events | P1.2.0-P1.2.4 passed; P1.2.5 release gate in progress; P1.2.5a next | Close P1.2.5 before P2 or production claims |
-| P2 | Coding/remote-shell profile | Not started | P1.2 completion and profile-specific Conformance |
+| P1.2.5 | Lifecycle release gate | Passed for the current Contract-authorized subset; local Suite behavior matrix and reserved-family boundary recorded | Retain no-claim boundary for terminate/lease/orphan families; no aggregate or production claim |
+| P1.2.5a | Provider lifecycle composition | Passed in PR #27 merge `28076a7`; post-merge CI `32439289227` passed | Retain fake-driver and production-readiness boundaries |
+| P1.2 | Async lifecycle, operation ledger, reconciliation, events | Passed for the bounded Contract-authorized subset; full architecture lifecycle families remain separately gated | P2.0 authority inventory; do not implement unauthorized lifecycle families |
+| P2.0 | Coding/remote-shell authority inventory | Next; no runtime implementation | Contract/Schema/semantic rules/fixtures/Suite before exec or session code |
+| P2 | Coding/remote-shell profile | P2.0 authority inventory next; runtime implementation not started | Add Contract/Schema/semantic rules/fixtures/Suite before exec or session code |
 | P3 | Migration readiness and external-caller integration | Not started | External caller E2E, rollback and canary evidence |
 | P4 | Production hardening | Not started | Deployment, multi-controller, multi-tenant, and production gates |
 
@@ -94,7 +95,7 @@ Passed locally (authorized test environment):
 
 Pending:
 
-- P1.2.5 lifecycle release gate and fault/concurrency matrix;
+- P2.0 coding/remote-shell Contract authority inventory;
 - optional content-derived Suite digest enhancement;
 - aggregate lifecycle conformance, external-caller E2E, reliability, tenancy,
   deployment, and production gates.
@@ -109,8 +110,9 @@ as provider-local persistence only; the file adapter is single-controller
 development evidence. P1.2.3 is closed as internal create dispatch and restart
 reconciliation. P1.2.4 is closed as a projection/component slice; post-merge
 CI run `32435540542` passed all required jobs. PR #26 merged the behavior-bound
-Conformance mappings as `4ccb107`; its post-merge run `32436541588` remains
-待补证 in this checkout because the GitHub Actions API was unavailable. It projects only `POST /v1/sandboxes`, `GET
+Conformance mappings as `4ccb107`; post-merge run `32436541588` passed. PR #27
+then composed the independent Provider lifecycle application and merged as
+`28076a7`; post-merge run `32439289227` passed. It projects only `POST /v1/sandboxes`, `GET
 /v1/sandboxes/{sandbox_id}`, and `GET /v1/operations/{operation_id}` after
 protected admission. The command composition root now constructs an independent
 Provider lifecycle application when explicitly enabled; disabled and
@@ -121,5 +123,6 @@ remain unproven. The P1.2.5 local Conformance mappings now exercise
 coordinator idempotency, stale generation, concurrent reconciliation, deadlines,
 cancellation, unknown outcomes, restart inspection, and locked DTO projection.
 Terminate/lease/orphan cleanup are not authorized by the current Contract
-revision. P1.2.5a is implemented locally; its focused acceptance and PR
-post-merge evidence remain pending.
+revision. P1.2.5 is closed only for the current authorized subset. Terminate,
+lease mutation, orphan cleanup, exec, sessions, snapshots, and aggregate caller
+compatibility remain unproven or Contract-reserved.

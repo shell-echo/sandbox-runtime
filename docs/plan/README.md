@@ -15,4 +15,5 @@ in [`docs/STATUS.md`](../STATUS.md).
 | P1.1 | [Provider API admission](p1.1-provider-api-admission.md) | P1.1d release gate passed; lifecycle remains unclaimed |
 | P1.1b | [mTLS capability discovery](p1.1b-capability-discovery.md) | Passed under local Contract with PR/post-merge evidence |
 | P1.1c | [Protected-operation admission](p1.1c-protected-operation-admission.md) | Passed under local Contract with PR/post-merge evidence |
-| P1.2 | [Async lifecycle](p1.2-async-lifecycle.md) | P1.2.0-P1.2.4 passed; P1.2.5 release gate in progress; P1.2.5a composition next |
+| P1.2 | [Async lifecycle](p1.2-async-lifecycle.md) | Bounded Contract-authorized subset passed through PR #27; reserved lifecycle families remain separately gated |
+| P2.0 | [Coding/remote-shell authority inventory](p2-coding-remote-shell.md) | Next; Contract/Schema/Suite work required before runtime implementation |
