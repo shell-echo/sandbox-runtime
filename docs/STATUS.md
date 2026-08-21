@@ -12,9 +12,9 @@ production readiness.
 
 | Item | Evidence | Status |
 | --- | --- | --- |
-| Checkout | `codex/p1.2-lifecycle-next` from `origin/main@4ccb107` | P1.2.5 evidence work in progress; P1.2.5a composition next |
+| Checkout | `codex/p1.2-lifecycle-next` at `297eeb6`, based on `origin/main@4ccb107` | P1.2.5a locally implemented; PR/CI pending |
 | Review | PR [#17](https://github.com/shell-echo/sandbox-runtime/pull/17) merged as `43ff3d7`; PR [#18](https://github.com/shell-echo/sandbox-runtime/pull/18) merged as `4774c3a`; PR [#19](https://github.com/shell-echo/sandbox-runtime/pull/19) merged as `e2755f5`; PR [#21](https://github.com/shell-echo/sandbox-runtime/pull/21) merged as `c5a4a65`; PR [#22](https://github.com/shell-echo/sandbox-runtime/pull/22) merged as `44f39ec`; PR [#23](https://github.com/shell-echo/sandbox-runtime/pull/23) merged as `ac72eab`; PR [#24](https://github.com/shell-echo/sandbox-runtime/pull/24) merged as `2e3dde6`; PR [#25](https://github.com/shell-echo/sandbox-runtime/pull/25) merged as `88506d1`; PR [#26](https://github.com/shell-echo/sandbox-runtime/pull/26) merged as `4ccb107` | P1.2.4 passed; PR #26 post-merge CI待补证; P1.2.5 in progress |
-| Worktree | Clean at `4ccb107`; composition docs are the current local change | P1.2.5a planning |
+| Worktree | Clean at `297eeb6` | Local composition evidence recorded; no remote PR claim |
 | Contract namespace | `urn:shell-echo:sandbox-runtime:provider-v1` | Locked |
 | Contract version/license | `1.0.0` / MIT | Locked |
 | Contract resources | OpenAPI, admission and lifecycle schemas, semantic rules, fixtures, Suite | Locked and merged; P1.2.0 passed |
