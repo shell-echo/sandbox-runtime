@@ -12,7 +12,7 @@ production readiness.
 
 | Item | Evidence | Status |
 | --- | --- | --- |
-| Checkout | `origin/main@ba39053` | P2.2a closed; P2.2b independent exec ledger is next |
+| Checkout | `origin/main@22f026f` | P2.2a closed; P2.2b implementation is locally verified and awaiting PR evidence |
 | Review | PR [#17](https://github.com/shell-echo/sandbox-runtime/pull/17) merged as `43ff3d7`; PR [#18](https://github.com/shell-echo/sandbox-runtime/pull/18) merged as `4774c3a`; PR [#19](https://github.com/shell-echo/sandbox-runtime/pull/19) merged as `e2755f5`; PR [#21](https://github.com/shell-echo/sandbox-runtime/pull/21) merged as `c5a4a65`; PR [#22](https://github.com/shell-echo/sandbox-runtime/pull/22) merged as `44f39ec`; PR [#23](https://github.com/shell-echo/sandbox-runtime/pull/23) merged as `ac72eab`; PR [#24](https://github.com/shell-echo/sandbox-runtime/pull/24) merged as `2e3dde6`; PR [#25](https://github.com/shell-echo/sandbox-runtime/pull/25) merged as `88506d1`; PR [#26](https://github.com/shell-echo/sandbox-runtime/pull/26) merged as `4ccb107`; PR [#27](https://github.com/shell-echo/sandbox-runtime/pull/27) merged as `28076a7`; PR [#28](https://github.com/shell-echo/sandbox-runtime/pull/28) merged as `2b25f76`; PR [#29](https://github.com/shell-echo/sandbox-runtime/pull/29) merged as `83965a2`; PR [#30](https://github.com/shell-echo/sandbox-runtime/pull/30) merged as `9d00212`; PR [#31](https://github.com/shell-echo/sandbox-runtime/pull/31) merged as `67b64a9`; PR [#32](https://github.com/shell-echo/sandbox-runtime/pull/32) merged as `5883da9`; PR [#33](https://github.com/shell-echo/sandbox-runtime/pull/33) merged as `ba39053` | PR #33 CI `32448177536` and post-merge CI `32454054853` provider-contract, test, and docker-integration passed |
 | P2.2a release evidence | `2fa2e72` on PR #33, merged as `ba39053` | Local race/shuffle, vet, lock, Suite, PR CI, and post-merge CI passed |
 | Contract namespace | `urn:shell-echo:sandbox-runtime:provider-v1` | Locked |
@@ -50,9 +50,9 @@ It does not clone, mount, or read an external source repository.
 | P2.0c | Exec Contract lock/projection gate | Passed in PR #30; post-merge CI run `32444266288` passed | No runtime claim from the Contract gate |
 | P2.1 | Bounded exec domain/application port | Passed in PR #31 merge `67b64a9`; post-merge CI `32445893337` passed; no public composition | Retain P2.2 non-goals and local-only evidence boundary |
 | P2.2a | Exec result and cancellation-intent domain | Passed in PR #33 merge `ba39053`; post-merge CI `32454054853` passed; no persistence, dispatch, or HTTP composition | Retain local-only evidence boundary |
-| P2.2b | Independent exec ledger persistence | Not started | Atomic idempotency/result writes, expiry tombstones, immutable snapshots, restart/corruption tests |
-| P2.2 | Retained result and cancellation behavior | In progress; P2.2a closed | P2.2b persistence, then P2.2c bounded coordination |
-| P2 | Coding/remote-shell profile | P2.1 and P2.2a closed; P2.2b is next | P2.2b implementation evidence |
+| P2.2b | Independent exec ledger persistence | Local implementation and verification passed; PR evidence pending | Commit, PR CI, post-merge CI, and retained local evidence |
+| P2.2 | Retained result and cancellation behavior | In progress; P2.2a closed and P2.2b locally verified | P2.2b PR/post-merge evidence, then P2.2c bounded coordination |
+| P2 | Coding/remote-shell profile | P2.1 and P2.2a closed; P2.2b locally verified | P2.2b PR evidence before P2.2c |
 | P3 | Migration readiness and external-caller integration | Not started | External caller E2E, rollback and canary evidence |
 | P4 | Production hardening | Not started | Deployment, multi-controller, multi-tenant, and production gates |
 
@@ -99,10 +99,17 @@ Passed locally (authorized test environment):
 - P1.2.3 coordinator race/shuffle tests for idempotent accept, deadline
   pre-dispatch, known/unknown runtime outcomes, restart inspection, stale
   generation rejection, event replay, and concurrent reconciliation.
+- P2.2b provider exec repository tests for idempotency and digest binding,
+  cancellation target/generation binding, independent cancellation fencing, result
+  retention and tombstones, immutable snapshots, concurrent memory access,
+  file restart/lock/corruption handling, and cancelled contexts;
+- P2.2b full race/shuffle test matrix, `go vet`, local Contract lock verifier,
+  19-case local Conformance Suite, dependency-boundary check, and `git diff
+  --check` passed in the authorized test environment.
 
 Pending:
 
-- P2.2b design, implementation, PR, and post-merge evidence;
+- P2.2b commit, PR review/CI, and post-merge evidence;
 - optional content-derived Suite digest enhancement;
 - aggregate lifecycle conformance, external-caller E2E, reliability, tenancy,
   deployment, and production gates.
