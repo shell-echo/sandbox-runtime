@@ -3,10 +3,13 @@ package repository
 import (
 	"fmt"
 	"reflect"
+	"regexp"
 	"time"
 
 	providerexec "github.com/shell-echo/sandbox-runtime/provider/exec"
 )
+
+var attachmentIdentifierPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$`)
 
 const snapshotVersion = 1
 
@@ -55,13 +58,36 @@ func (s *State) ensureMaps() {
 	}
 }
 
-func (s *State) ReserveExecution(request providerexec.Request, dispatch providerexec.Dispatch) (providerexec.ExecutionReservation, error) {
+func (s *State) ReserveExecution(request providerexec.Request, dispatch ...providerexec.Dispatch) (providerexec.ExecutionReservation, error) {
+	acceptedAt := time.Now().UTC()
+	if len(dispatch) == 1 {
+		acceptedAt = dispatch[0].AcceptedAt
+	}
+	return s.reserveExecutionAt(request, acceptedAt, dispatch...)
+}
+
+// ReserveExecutionAt is the deterministic form used by repository adapters.
+// With no dispatch it records only durable admission; a later AttachExecution
+// must bind the executor receipt to this exact identity.
+func (s *State) ReserveExecutionAt(request providerexec.Request, acceptedAt time.Time, dispatch ...providerexec.Dispatch) (providerexec.ExecutionReservation, error) {
+	return s.reserveExecutionAt(request, acceptedAt, dispatch...)
+}
+
+func (s *State) reserveExecutionAt(request providerexec.Request, acceptedAt time.Time, dispatch ...providerexec.Dispatch) (providerexec.ExecutionReservation, error) {
 	s.ensureMaps()
-	if err := request.Validate(dispatch.AcceptedAt); err != nil {
+	if len(dispatch) > 1 {
+		return providerexec.ExecutionReservation{}, fmt.Errorf("%w: multiple dispatch receipts", providerexec.ErrInvalidDispatch)
+	}
+	if acceptedAt.IsZero() {
+		return providerexec.ExecutionReservation{}, fmt.Errorf("%w: acceptance time", providerexec.ErrInvalidRequest)
+	}
+	if err := request.Validate(acceptedAt); err != nil {
 		return providerexec.ExecutionReservation{}, fmt.Errorf("validate execution request: %w", err)
 	}
-	if err := dispatch.Validate(); err != nil {
-		return providerexec.ExecutionReservation{}, err
+	if len(dispatch) == 1 {
+		if err := dispatch[0].Validate(); err != nil {
+			return providerexec.ExecutionReservation{}, err
+		}
 	}
 	if existing, ok := s.ExecutionIdempotency[request.IdempotencyKey]; ok {
 		if existing.RequestDigest != request.RequestDigest || existing.OperationID != request.OperationID {
@@ -79,10 +105,50 @@ func (s *State) ReserveExecution(request providerexec.Request, dispatch provider
 	if _, ok := s.Executions[request.OperationID]; ok {
 		return providerexec.ExecutionReservation{}, ErrAlreadyExists
 	}
-	record := providerexec.ExecutionRecord{Request: request.Clone(), Dispatch: dispatch}
+	if len(dispatch) == 1 {
+		for operationID, other := range s.Executions {
+			if operationID != request.OperationID && other.Attached && other.Dispatch.ExecutionReference == dispatch[0].ExecutionReference {
+				return providerexec.ExecutionReservation{}, ErrConflict
+			}
+		}
+	}
+	record := providerexec.ExecutionRecord{Request: request.Clone(), ReservedAt: acceptedAt.UTC()}
+	if len(dispatch) == 1 {
+		record.Dispatch = dispatch[0]
+		record.Attached = true
+	}
 	s.Executions[request.OperationID] = record.Clone()
 	s.ExecutionIdempotency[request.IdempotencyKey] = IdempotencyRecord{Key: request.IdempotencyKey, RequestDigest: request.RequestDigest, OperationID: request.OperationID}
 	return providerexec.ExecutionReservation{Execution: record, Replayed: false}, nil
+}
+
+func (s *State) AttachExecution(attachment providerexec.ExecutionAttachment) (providerexec.ExecutionReservation, error) {
+	if err := validateAttachment(attachment); err != nil {
+		return providerexec.ExecutionReservation{}, err
+	}
+	s.ensureMaps()
+	record, ok := s.Executions[attachment.OperationID]
+	if !ok {
+		return providerexec.ExecutionReservation{}, ErrNotFound
+	}
+	if !executionAttachmentMatches(record.Request, attachment) {
+		return providerexec.ExecutionReservation{}, ErrConflict
+	}
+	if record.Attached {
+		if record.Dispatch.ExecutionReference != attachment.Dispatch.ExecutionReference {
+			return providerexec.ExecutionReservation{}, ErrConflict
+		}
+		return providerexec.ExecutionReservation{Execution: record.Clone(), Replayed: true}, nil
+	}
+	for operationID, other := range s.Executions {
+		if operationID != attachment.OperationID && other.Attached && other.Dispatch.ExecutionReference == attachment.Dispatch.ExecutionReference {
+			return providerexec.ExecutionReservation{}, ErrConflict
+		}
+	}
+	record.Dispatch = attachment.Dispatch
+	record.Attached = true
+	s.Executions[attachment.OperationID] = record.Clone()
+	return providerexec.ExecutionReservation{Execution: record.Clone(), Replayed: false}, nil
 }
 
 func (s *State) GetExecution(operationID string) (providerexec.ExecutionRecord, error) {
@@ -127,6 +193,15 @@ func (s *State) ReserveCancellation(intent providerexec.CancellationIntent, now 
 	return providerexec.CancellationReservation{Intent: intent, Replayed: false}, nil
 }
 
+func (s *State) GetCancellation(operationID string) (providerexec.CancellationIntent, error) {
+	s.ensureMaps()
+	intent, ok := s.CancellationIntents[operationID]
+	if !ok {
+		return providerexec.CancellationIntent{}, fmt.Errorf("%w: cancellation %s", ErrNotFound, operationID)
+	}
+	return intent, nil
+}
+
 func (s *State) StoreResult(result providerexec.Result) error {
 	s.ensureMaps()
 	if err := result.Validate(); err != nil {
@@ -137,6 +212,9 @@ func (s *State) StoreResult(result providerexec.Result) error {
 		return ErrNotFound
 	}
 	if record.Request.AttemptID != result.AttemptID || record.Request.SandboxID != result.SandboxID || record.Request.FencingToken != result.FencingToken {
+		return ErrConflict
+	}
+	if !record.Attached {
 		return ErrConflict
 	}
 	expectedRetention := result.CompletedAt.Add(record.Request.ResultRetention)
@@ -208,7 +286,25 @@ func (s *State) Import(snapshot PersistedState) error {
 	}
 	imported := NewState()
 	for operationID, record := range snapshot.Executions {
-		if operationID == "" || record.Request.OperationID != operationID || record.Request.Validate(record.Dispatch.AcceptedAt) != nil || record.Dispatch.Validate() != nil {
+		if operationID == "" || record.Request.OperationID != operationID || !validPersistedRequest(record.Request) {
+			return ErrCorrupt
+		}
+		// Version-1 snapshots predate Attached and always carried a receipt.
+		if !record.Attached && record.Dispatch.ExecutionReference != "" {
+			record.Attached = true
+		}
+		if record.ReservedAt.IsZero() {
+			if record.Attached {
+				record.ReservedAt = record.Dispatch.AcceptedAt
+			} else {
+				return ErrCorrupt
+			}
+		}
+		if record.Attached {
+			if record.Dispatch.Validate() != nil {
+				return ErrCorrupt
+			}
+		} else if record.Dispatch != (providerexec.Dispatch{}) {
 			return ErrCorrupt
 		}
 		if record.Result != nil {
@@ -268,7 +364,7 @@ func (s *State) Import(snapshot PersistedState) error {
 }
 
 func (s *State) validateStoredResult(record providerexec.ExecutionRecord) error {
-	if record.Result == nil {
+	if record.Result == nil || !record.Attached {
 		return ErrCorrupt
 	}
 	result := *record.Result
@@ -276,6 +372,39 @@ func (s *State) validateStoredResult(record providerexec.ExecutionRecord) error 
 		return ErrCorrupt
 	}
 	return nil
+}
+
+func validateAttachment(attachment providerexec.ExecutionAttachment) error {
+	if err := attachment.Dispatch.Validate(); err != nil {
+		return err
+	}
+	request := providerexec.Request{
+		OperationID: attachment.OperationID, AttemptID: attachment.AttemptID,
+		SandboxID: attachment.SandboxID, FencingToken: attachment.FencingToken,
+		ExpectedGeneration: attachment.ExpectedGeneration,
+	}
+	for name, value := range map[string]string{
+		"operation_id": request.OperationID, "attempt_id": request.AttemptID, "sandbox_id": request.SandboxID,
+	} {
+		if !attachmentIdentifierPattern.MatchString(value) {
+			return fmt.Errorf("%w: %s", providerexec.ErrInvalidRequest, name)
+		}
+	}
+	if request.FencingToken < 1 || request.ExpectedGeneration < 1 {
+		return fmt.Errorf("%w: attachment fence", providerexec.ErrInvalidRequest)
+	}
+	return nil
+}
+
+func executionAttachmentMatches(request providerexec.Request, attachment providerexec.ExecutionAttachment) bool {
+	return request.OperationID == attachment.OperationID && request.AttemptID == attachment.AttemptID && request.SandboxID == attachment.SandboxID && request.FencingToken == attachment.FencingToken && request.ExpectedGeneration == attachment.ExpectedGeneration
+}
+
+func validPersistedRequest(request providerexec.Request) bool {
+	if request.Deadline.IsZero() {
+		return false
+	}
+	return request.Validate(request.Deadline.Add(-time.Nanosecond)) == nil
 }
 
 func sameExecutionIdentity(left, right providerexec.Request) bool {

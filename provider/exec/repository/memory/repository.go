@@ -19,7 +19,7 @@ type Repository struct {
 
 func NewRepository() *Repository { return &Repository{state: repository.NewState()} }
 
-func (r *Repository) ReserveExecution(ctx context.Context, request providerexec.Request, dispatch providerexec.Dispatch) (providerexec.ExecutionReservation, error) {
+func (r *Repository) ReserveExecution(ctx context.Context, request providerexec.Request, dispatch ...providerexec.Dispatch) (providerexec.ExecutionReservation, error) {
 	if err := repository.ContextError(ctx); err != nil {
 		return providerexec.ExecutionReservation{}, err
 	}
@@ -28,7 +28,23 @@ func (r *Repository) ReserveExecution(ctx context.Context, request providerexec.
 	if err := r.checkOpen(ctx); err != nil {
 		return providerexec.ExecutionReservation{}, err
 	}
-	return r.state.ReserveExecution(request, dispatch)
+	acceptedAt := time.Now().UTC()
+	if len(dispatch) == 1 {
+		acceptedAt = dispatch[0].AcceptedAt
+	}
+	return r.state.ReserveExecutionAt(request, acceptedAt, dispatch...)
+}
+
+func (r *Repository) AttachExecution(ctx context.Context, attachment providerexec.ExecutionAttachment) (providerexec.ExecutionReservation, error) {
+	if err := repository.ContextError(ctx); err != nil {
+		return providerexec.ExecutionReservation{}, err
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if err := r.checkOpen(ctx); err != nil {
+		return providerexec.ExecutionReservation{}, err
+	}
+	return r.state.AttachExecution(attachment)
 }
 
 func (r *Repository) GetExecution(ctx context.Context, operationID string) (providerexec.ExecutionRecord, error) {
@@ -53,6 +69,18 @@ func (r *Repository) ReserveCancellation(ctx context.Context, intent providerexe
 		return providerexec.CancellationReservation{}, err
 	}
 	return r.state.ReserveCancellation(intent, time.Now().UTC())
+}
+
+func (r *Repository) GetCancellation(ctx context.Context, operationID string) (providerexec.CancellationIntent, error) {
+	if err := repository.ContextError(ctx); err != nil {
+		return providerexec.CancellationIntent{}, err
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if r.closed {
+		return providerexec.CancellationIntent{}, repository.ErrClosed
+	}
+	return r.state.GetCancellation(operationID)
 }
 
 func (r *Repository) StoreResult(ctx context.Context, result providerexec.Result) error {

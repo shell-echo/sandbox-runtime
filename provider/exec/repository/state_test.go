@@ -36,6 +36,91 @@ func resultFor(request providerexec.Request, status providerexec.ResultStatus) p
 	return result
 }
 
+func attachmentFor(request providerexec.Request, reference providerexec.ExecutionReference) providerexec.ExecutionAttachment {
+	return providerexec.ExecutionAttachment{
+		OperationID: request.OperationID, AttemptID: request.AttemptID, SandboxID: request.SandboxID,
+		FencingToken: request.FencingToken, ExpectedGeneration: request.ExpectedGeneration,
+		Dispatch: providerexec.Dispatch{ExecutionReference: reference, AcceptedAt: stateTestTime.Add(2 * time.Second)},
+	}
+}
+
+func TestStateReservesBeforeAttachAndBindsIdentityIdempotently(t *testing.T) {
+	state := NewState()
+	request, _ := validExecution()
+	attachment := attachmentFor(request, "ref:exec/receipt-attached")
+	if _, err := state.AttachExecution(attachment); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("attach before reserve = %v, want ErrNotFound", err)
+	}
+	reserved, err := state.ReserveExecutionAt(request, stateTestTime)
+	if err != nil || reserved.Replayed || reserved.Execution.Attached || !reserved.Execution.ReservedAt.Equal(stateTestTime) {
+		t.Fatalf("durable reservation = %#v, %v", reserved, err)
+	}
+	if err := state.StoreResult(resultFor(request, providerexec.ResultCompleted)); !errors.Is(err, ErrConflict) {
+		t.Fatalf("result before attach = %v, want ErrConflict", err)
+	}
+	attached, err := state.AttachExecution(attachment)
+	if err != nil || attached.Replayed || !attached.Execution.Attached || attached.Execution.Dispatch.ExecutionReference != attachment.Dispatch.ExecutionReference {
+		t.Fatalf("first attach = %#v, %v", attached, err)
+	}
+	replayAttachment := attachment
+	replayAttachment.Dispatch.AcceptedAt = attachment.Dispatch.AcceptedAt.Add(time.Minute)
+	replay, err := state.AttachExecution(replayAttachment)
+	if err != nil || !replay.Replayed || replay.Execution.Dispatch.ExecutionReference != attachment.Dispatch.ExecutionReference {
+		t.Fatalf("same receipt replay = %#v, %v", replay, err)
+	}
+	differentReceipt := attachmentFor(request, "ref:exec/other-receipt")
+	if _, err := state.AttachExecution(differentReceipt); !errors.Is(err, ErrConflict) {
+		t.Fatalf("different receipt = %v, want ErrConflict", err)
+	}
+	differentIdentity := attachment
+	differentIdentity.ExpectedGeneration++
+	if _, err := state.AttachExecution(differentIdentity); !errors.Is(err, ErrConflict) {
+		t.Fatalf("different identity = %v, want ErrConflict", err)
+	}
+}
+
+func TestStateRejectsReceiptReuseAcrossReservationsAndPreservesDeepCopy(t *testing.T) {
+	state := NewState()
+	request, _ := validExecution()
+	if _, err := state.ReserveExecutionAt(request, stateTestTime); err != nil {
+		t.Fatal(err)
+	}
+	first := attachmentFor(request, "ref:exec/shared-receipt")
+	if _, err := state.AttachExecution(first); err != nil {
+		t.Fatal(err)
+	}
+	second := request.Clone()
+	second.OperationID = "operation-2"
+	second.AttemptID = "attempt-2"
+	second.IdempotencyKey = "exec-key-2"
+	if _, err := state.ReserveExecutionAt(second, stateTestTime); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := state.AttachExecution(providerexec.ExecutionAttachment{
+		OperationID: second.OperationID, AttemptID: second.AttemptID, SandboxID: second.SandboxID,
+		FencingToken: second.FencingToken, ExpectedGeneration: second.ExpectedGeneration,
+		Dispatch: first.Dispatch,
+	}); !errors.Is(err, ErrConflict) {
+		t.Fatalf("receipt reuse = %v, want ErrConflict", err)
+	}
+	third := second.Clone()
+	third.OperationID = "operation-3"
+	third.AttemptID = "attempt-3"
+	third.IdempotencyKey = "exec-key-3"
+	if _, err := state.ReserveExecution(third, first.Dispatch); !errors.Is(err, ErrConflict) {
+		t.Fatalf("combined reserve receipt reuse = %v, want ErrConflict", err)
+	}
+	got, err := state.GetExecution(request.OperationID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got.Request.Command[0] = "mutated"
+	gotAgain, err := state.GetExecution(request.OperationID)
+	if err != nil || gotAgain.Request.Command[0] != "printf" {
+		t.Fatalf("deep copy after attach = %#v, %v", gotAgain, err)
+	}
+}
+
 func TestStateExecutionIdempotencyAndCancellationBinding(t *testing.T) {
 	state := NewState()
 	request, dispatch := validExecution()
@@ -60,6 +145,13 @@ func TestStateExecutionIdempotencyAndCancellationBinding(t *testing.T) {
 	cancelReplay, err := state.ReserveCancellation(intent, stateTestTime)
 	if err != nil || !cancelReplay.Replayed {
 		t.Fatalf("cancel replay = %#v, %v", cancelReplay, err)
+	}
+	queried, err := state.GetCancellation(intent.OperationID)
+	if err != nil || queried != intent {
+		t.Fatalf("cancellation query = %#v, %v", queried, err)
+	}
+	if _, err := state.GetCancellation("missing-cancel"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("missing cancellation query = %v", err)
 	}
 	if _, err := state.ReserveCancellation(func() providerexec.CancellationIntent {
 		bad := intent

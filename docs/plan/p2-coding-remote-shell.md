@@ -8,6 +8,8 @@ merge `67b64a9`; post-merge CI `32445893337` passed. P2.2a result and
 cancellation-intent domain passed in PR #33 merge `ba39053`; post-merge CI
 `32454054853` passed. P2.2b persistence passed in PR #35 merge `c467cd4`;
 PR CI `32456100570` and post-merge CI `32456279722` passed.
+P2.2c local reservation/attach and bounded coordinator implementation is
+complete on the current feature branch; PR and post-merge evidence are pending.
 ADR 0009 records the ownership boundary and ADR 0010 records the bounded exec
 Contract decision.
 
@@ -95,3 +97,9 @@ exclude Provider HTTP composition and Docker/backend adapters. The current
 repository port records an already-produced opaque dispatch receipt; it is not
 a durable pre-dispatch accept. P2.2c must not start an executor before that
 acceptance is durable and must introduce an explicit reservation/attach design.
+
+P2.2c implements the reservation/attach ordering and optional Canceler boundary
+without HTTP, Docker/backend selection, or lifecycle repository reuse. It keeps
+known non-context dispatch errors as durable pending state, maps context/receipt
+uncertainty to no-redispatch recovery, and treats cancellation replay as query-
+only until a separately observed confirmation exists.
