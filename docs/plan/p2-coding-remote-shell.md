@@ -3,8 +3,9 @@
 Status: P2.0a authority inventory passed in PR #29 merge `83965a2` and
 post-merge CI `32440383198`. P2.0b/c bounded exec resources, lock, and
 projection gate passed in PR #30 merge `9d00212`; post-merge CI
-`32444266288` passed. P2.1 local domain/application-port implementation is
-ready for its independent commit and PR evidence.
+`32444266288` passed. P2.1 local domain/application-port work passed in PR #31
+merge `67b64a9`; post-merge CI `32445893337` passed. P2.2 is the next
+unimplemented slice.
 ADR 0009 records the ownership boundary and ADR 0010 records the bounded exec
 Contract decision.
 
@@ -44,8 +45,8 @@ acceptance, result retention, cancellation, reconciliation, or backend adapter.
   (implemented in resource commit `4a2a58f`);
 - P2.0c: lock and projection gate with no runtime dispatch (passed in PR #30
   merge `9d00212`; post-merge CI `32444266288` passed; ADR 0010);
-- P2.1: bounded exec application/domain ports after P2.0 closes (local
-  implementation verified; commit/PR/post-merge evidence pending);
+- P2.1: bounded exec application/domain ports after P2.0 closes (passed in PR
+  #31 merge `67b64a9`; post-merge CI `32445893337` passed);
 - P2.2: retained result and cancellation behavior;
 - P2.3: opaque terminal/session application and gateway handoff;
 - P2.4: artifact staging and usage evidence.
@@ -56,6 +57,12 @@ None of these slices establishes external-caller compatibility, multi-tenant
 security, deployment readiness, or production readiness by itself.
 
 ## P2.1 Boundary
+
+Status: passed as a local component/application boundary only. It does not
+establish Provider HTTP compatibility, durable operation semantics, runtime
+execution behavior, external-caller compatibility, multi-controller
+reliability, multi-tenant safety, deployment readiness, or production
+readiness.
 
 P2.1 owns only a backend-neutral Provider-local request model, strict bounded
 validation, immutable invocation copy, execution port, and application service.
