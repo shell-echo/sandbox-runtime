@@ -4,8 +4,9 @@ Status: P2.0a authority inventory passed in PR #29 merge `83965a2` and
 post-merge CI `32440383198`. P2.0b/c bounded exec resources, lock, and
 projection gate passed in PR #30 merge `9d00212`; post-merge CI
 `32444266288` passed. P2.1 local domain/application-port work passed in PR #31
-merge `67b64a9`; post-merge CI `32445893337` passed. P2.2 is the next
-unimplemented slice.
+merge `67b64a9`; post-merge CI `32445893337` passed. P2.2a result and
+cancellation-intent domain passed in PR #33 merge `ba39053`; post-merge CI
+`32454054853` passed. P2.2b persistence is the next unimplemented slice.
 ADR 0009 records the ownership boundary and ADR 0010 records the bounded exec
 Contract decision.
 
@@ -81,8 +82,8 @@ state boundary.
 
 P2.2a defines only the provider-local retained-result and cancellation-intent
 domain. Result retention is derived from the admitted exec request; an intent
-does not claim process cancellation. Local domain validation is complete, while
-review and CI evidence remain pending.
+does not claim process cancellation. PR #33 and post-merge CI
+`32454054853` close this domain slice as local component evidence.
 
 P2.2b will add a separate exec ledger with atomic idempotency, immutable
 snapshots, result-expiry tombstones, and restart recovery. It must not reuse
