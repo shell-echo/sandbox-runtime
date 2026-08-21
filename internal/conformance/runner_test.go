@@ -46,6 +46,21 @@ func TestLocalSuiteCasesHaveRunnerMappings(t *testing.T) {
 	}
 }
 
+func TestLifecycleSuiteCasesExecuteBehaviorPackages(t *testing.T) {
+	want := map[string]testCase{
+		"lifecycle-create-request-schema":          {Package: "./providerapi"},
+		"lifecycle-operation-state-schema":         {Package: "./providerapi"},
+		"lifecycle-idempotency-generation-fencing": {Package: "./provider/lifecycle/coordinator"},
+		"lifecycle-deadline-outcome":               {Package: "./provider/lifecycle/coordinator"},
+	}
+	for id, expected := range want {
+		got := testCases[id]
+		if got.Package != expected.Package || got.Run == "" {
+			t.Fatalf("Suite case %q mapping = %#v, want package %q and a behavior pattern", id, got, expected.Package)
+		}
+	}
+}
+
 func TestWithSourceRootEnvReplacesExistingValue(t *testing.T) {
 	const key = "SANDBOX_RUNTIME_CONTRACT_SOURCE_ROOT="
 	original := os.Getenv("SANDBOX_RUNTIME_CONTRACT_SOURCE_ROOT")

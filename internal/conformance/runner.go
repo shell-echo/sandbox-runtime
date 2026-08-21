@@ -92,20 +92,20 @@ var testCases = map[string]testCase{
 		Run:     `^TestProtectedHandlerRejectsReplayAndStaleFencingAcrossAllMutations$`,
 	},
 	"lifecycle-create-request-schema": {
-		Package: "./providerapi/v1",
-		Run:     `^TestLockedContractProjection$`,
+		Package: "./providerapi",
+		Run:     `^(TestDecodeCreateRequestProjectsOnlyAdmittedProviderFields|TestDecodeCreateRequestRejectsUnsupportedCapabilitiesAndContextSubstitution|TestLifecycleProjectionsMatchLockedSchemas)$`,
 	},
 	"lifecycle-operation-state-schema": {
-		Package: "./providerapi/v1",
-		Run:     `^TestLockedContractProjection$`,
+		Package: "./providerapi",
+		Run:     `^(TestLifecycleProjectionsAreBoundedAndOpaque|TestLifecycleProjectionsMatchLockedSchemas)$`,
 	},
 	"lifecycle-idempotency-generation-fencing": {
-		Package: "./providerapi/v1",
-		Run:     `^TestLocalContractLifecycleSemanticRules$`,
+		Package: "./provider/lifecycle/coordinator",
+		Run:     `^(TestAcceptCreateIsDurableAndIdempotent|TestStaleGenerationPreventsDriverDispatch|TestConcurrentReconcileSerializesDispatch)$`,
 	},
 	"lifecycle-deadline-outcome": {
-		Package: "./providerapi/v1",
-		Run:     `^TestLocalContractLifecycleSemanticRules$`,
+		Package: "./provider/lifecycle/coordinator",
+		Run:     `^(TestKnownFailureAndDeadlineDoNotDispatch|TestCanceledContextDoesNotDispatch|TestCreateUnknownOutcomeIsNotRetriedBlindlyAndReconcilesByInspection|TestRestartedRunningOperationIsReconciledWithoutDuplicateCreate)$`,
 	},
 }
 

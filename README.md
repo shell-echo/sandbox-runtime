@@ -500,7 +500,7 @@ visibility.
 
 - [x] add durable Provider sandbox, operation, lease, and event models
 - [x] add idempotency, generation, fencing, deadlines, and reconciliation
-- [ ] expose the asynchronous Provider API v1 lifecycle subset (P1.2.4 projection in progress)
+- [x] expose the Contract-authorized asynchronous Provider API v1 lifecycle projection (runtime composition remains gated)
 - [ ] pass the applicable local lifecycle and security Conformance Suite
 
 ### Manifest and blocks
