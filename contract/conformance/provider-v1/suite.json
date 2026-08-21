@@ -23,7 +23,12 @@
         "exec-cancel-schema",
         "exec-result-schema",
         "exec-semantic-bounds",
-        "exec-rejection-fixtures"
+        "exec-rejection-fixtures",
+        "runtime-session-open-schema",
+        "runtime-session-operation-schema",
+        "runtime-session-handoff-schema",
+        "runtime-session-semantic-bounds",
+        "runtime-session-rejection-fixtures"
       ]
     }
   ],

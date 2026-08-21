@@ -40,6 +40,8 @@ func TestDecodeStrictRejectsClosedEnumAndIdentifierValues(t *testing.T) {
 		{name: "desired state", document: `{"desired_state":"terminated"}`, destination: &DesiredStateRequest{}},
 		{name: "digest", document: `{"request_digest":"sha256:not-a-digest"}`, destination: &MutationEnvelope{}},
 		{name: "slot key", document: `{"sandbox_slot_key":"Primary Code"}`, destination: &Status{}},
+		{name: "terminal session runtime", document: `{"runtime_type":"browser"}`, destination: &RuntimeSessionOpenRequest{}},
+		{name: "terminal session protocol", document: `{"protocol":"webrtc"}`, destination: &RuntimeSessionHandoff{}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

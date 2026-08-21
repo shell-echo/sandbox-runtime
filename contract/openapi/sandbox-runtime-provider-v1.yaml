@@ -340,6 +340,86 @@ paths:
             application/json:
               schema:
                 $ref: ../schemas/standard-error.schema.json
+  /v1/sandboxes/{sandbox_id}/runtime-sessions:
+    post:
+      operationId: openTerminalRuntimeSession
+      summary: Accept an asynchronous terminal session request
+      security:
+        - mutualTLS: []
+          bearerAuth: []
+      parameters:
+        - name: sandbox_id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/runtime-session-open-request.schema.json
+      x-max-encoded-body-bytes: 65536
+      responses:
+        '202':
+          description: Terminal-session open operation accepted
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/provider-operation.schema.json
+        '400':
+          description: Session request document or metadata is invalid
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '401':
+          description: Client certificate or bearer authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '403':
+          description: Session is not authorized by the admitted context
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '409':
+          description: Idempotency, attempt, generation, or fencing conflict
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '422':
+          description: Terminal capability, profile, or sandbox state is unsupported
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '429':
+          description: Provider terminal-session capacity is temporarily exhausted
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '503':
+          description: Provider is draining or temporarily unavailable
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
   /v1/operations/{operation_id}:
     get:
       operationId: getOperation
@@ -449,6 +529,68 @@ paths:
                 $ref: ../schemas/standard-error.schema.json
         '410':
           description: Retained execution result has expired
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '503':
+          description: Provider is draining or temporarily unavailable
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+  /v1/operations/{operation_id}/runtime-session:
+    get:
+      operationId: getRuntimeSessionHandoff
+      summary: Read a bounded terminal session handoff document
+      security:
+        - mutualTLS: []
+          bearerAuth: []
+      parameters:
+        - name: operation_id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$'
+      responses:
+        '200':
+          description: Opaque terminal session handoff document
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/runtime-session-handoff.schema.json
+        '400':
+          description: Request metadata or path is invalid
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '401':
+          description: Client certificate or bearer authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '403':
+          description: Request is not authorized by the admitted context
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '404':
+          description: Terminal session operation is not known to this provider revision
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '410':
+          description: Terminal session handoff has expired
           content:
             application/json:
               schema:

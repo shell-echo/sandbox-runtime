@@ -1,0 +1,74 @@
+{
+  "cases": [
+    {
+      "name": "unsupported browser runtime type",
+      "schema": "runtime-session-open-request.schema.json",
+      "document": {
+        "operation_id": "operation-session-reject-type",
+        "attempt_id": "attempt-session-reject-type",
+        "fencing_token": 1,
+        "idempotency_key": "reject-session-type",
+        "request_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "deadline_at": "2026-08-21T00:05:00Z",
+        "expected_generation": 1,
+        "runtime_session_id": "session-reject-type",
+        "runtime_type": "browser",
+        "capability_profile_id": "terminal-v1",
+        "expires_at": "2026-08-21T00:04:00Z"
+      }
+    },
+    {
+      "name": "gateway scope injection",
+      "schema": "runtime-session-open-request.schema.json",
+      "document": {
+        "operation_id": "operation-session-reject-scope",
+        "attempt_id": "attempt-session-reject-scope",
+        "fencing_token": 1,
+        "idempotency_key": "reject-session-scope",
+        "request_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "deadline_at": "2026-08-21T00:05:00Z",
+        "expected_generation": 1,
+        "runtime_session_id": "session-reject-scope",
+        "runtime_type": "terminal",
+        "capability_profile_id": "terminal-v1",
+        "expires_at": "2026-08-21T00:04:00Z",
+        "scopes": ["terminal.write"]
+      }
+    },
+    {
+      "name": "raw endpoint handoff",
+      "schema": "runtime-session-handoff.schema.json",
+      "document": {
+        "operation_id": "operation-session-1",
+        "attempt_id": "attempt-session-1",
+        "fencing_token": 1,
+        "sandbox_id": "sandbox-1",
+        "runtime_session_id": "session-1",
+        "runtime_type": "terminal",
+        "capability_profile_id": "terminal-v1",
+        "protocol": "websocket",
+        "internal_endpoint_reference": "wss://10.0.0.1:8443/terminal",
+        "connection_generation": 1,
+        "expires_at": "2026-08-21T00:04:00Z"
+      }
+    },
+    {
+      "name": "provider token handoff",
+      "schema": "runtime-session-handoff.schema.json",
+      "document": {
+        "operation_id": "operation-session-1",
+        "attempt_id": "attempt-session-1",
+        "fencing_token": 1,
+        "sandbox_id": "sandbox-1",
+        "runtime_session_id": "session-1",
+        "runtime_type": "terminal",
+        "capability_profile_id": "terminal-v1",
+        "protocol": "websocket",
+        "internal_endpoint_reference": "ref:session:opaque-1",
+        "provider_access_token_reference": "token:provider-1",
+        "connection_generation": 1,
+        "expires_at": "2026-08-21T00:04:00Z"
+      }
+    }
+  ]
+}

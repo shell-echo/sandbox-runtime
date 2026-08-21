@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:shell-echo:sandbox-runtime:contract:runtime-session-open-request:v1",
+  "title": "Sandbox Runtime Terminal Session Open Request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "operation_id",
+    "attempt_id",
+    "fencing_token",
+    "idempotency_key",
+    "request_digest",
+    "deadline_at",
+    "expected_generation",
+    "runtime_session_id",
+    "runtime_type",
+    "capability_profile_id",
+    "expires_at"
+  ],
+  "properties": {
+    "operation_id": {"$ref": "#/$defs/Identifier"},
+    "attempt_id": {"$ref": "#/$defs/Identifier"},
+    "fencing_token": {"type": "integer", "minimum": 1},
+    "idempotency_key": {"type": "string", "minLength": 1, "maxLength": 200},
+    "request_digest": {"$ref": "#/$defs/Digest"},
+    "deadline_at": {"type": "string", "format": "date-time"},
+    "expected_generation": {"type": "integer", "minimum": 1},
+    "runtime_session_id": {"$ref": "#/$defs/Identifier"},
+    "runtime_type": {"const": "terminal"},
+    "capability_profile_id": {"$ref": "#/$defs/Identifier"},
+    "expires_at": {"type": "string", "format": "date-time"}
+  },
+  "$defs": {
+    "Identifier": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$"},
+    "Digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}

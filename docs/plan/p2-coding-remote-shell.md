@@ -52,7 +52,10 @@ acceptance, result retention, cancellation, reconciliation, or backend adapter.
 - P2.1: bounded exec application/domain ports after P2.0 closes (passed in PR
   #31 merge `67b64a9`; post-merge CI `32445893337` passed);
 - P2.2: retained result and cancellation behavior;
-- P2.3: opaque terminal/session application and gateway handoff;
+- P2.3a: terminal session Contract authority: ADR, OpenAPI, Schemas,
+  semantics, fixtures, and Suite, without runtime implementation;
+- P2.3b: terminal session lock and DTO/admission projection gate;
+- P2.3c: opaque terminal session application and Gateway handoff;
 - P2.4: artifact staging and usage evidence.
 
 Each implementation slice requires its own focused tests, race/shuffle suite,
@@ -104,6 +107,7 @@ known non-context dispatch errors as durable pending state, maps context/receipt
 uncertainty to no-redispatch recovery, and treats cancellation replay as query-
 only until a separately observed confirmation exists.
 
-P2.2c is closed as provider-local coordination evidence only. P2.3 is the next
-authority review for opaque terminal/session application and gateway handoff;
-the current Contract does not authorize those public resources.
+P2.2c is closed as provider-local coordination evidence only. P2.3a is the
+next authority slice for terminal sessions. It must lock an additive Contract
+and projection gate before any terminal/session application, transport, or
+Gateway behavior can begin.

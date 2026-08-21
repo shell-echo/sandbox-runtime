@@ -127,6 +127,26 @@ var testCases = map[string]testCase{
 		Package: "./providerapi/v1",
 		Run:     `^TestExecRejectionFixtures$`,
 	},
+	"runtime-session-open-schema": {
+		Package: "./providerapi/v1",
+		Run:     `^TestLockedRuntimeSessionOpenRequestProjection$`,
+	},
+	"runtime-session-operation-schema": {
+		Package: "./providerapi/v1",
+		Run:     `^TestLockedRuntimeSessionOperationProjection$`,
+	},
+	"runtime-session-handoff-schema": {
+		Package: "./providerapi/v1",
+		Run:     `^TestLockedRuntimeSessionHandoffProjection$`,
+	},
+	"runtime-session-semantic-bounds": {
+		Package: "./providerapi/v1",
+		Run:     `^TestLocalContractRuntimeSessionSemanticRules$`,
+	},
+	"runtime-session-rejection-fixtures": {
+		Package: "./providerapi/v1",
+		Run:     `^TestRuntimeSessionRejectionFixtures$`,
+	},
 }
 
 // Run verifies the locked local Contract and executes every case in its

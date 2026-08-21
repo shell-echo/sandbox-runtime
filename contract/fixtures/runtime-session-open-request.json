@@ -1,0 +1,13 @@
+{
+  "operation_id": "operation-session-1",
+  "attempt_id": "attempt-session-1",
+  "fencing_token": 1,
+  "idempotency_key": "session-open-1",
+  "request_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "deadline_at": "2026-08-21T00:05:00Z",
+  "expected_generation": 1,
+  "runtime_session_id": "session-1",
+  "runtime_type": "terminal",
+  "capability_profile_id": "terminal-v1",
+  "expires_at": "2026-08-21T00:04:00Z"
+}
