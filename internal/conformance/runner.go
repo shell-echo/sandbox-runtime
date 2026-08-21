@@ -63,6 +63,10 @@ var testCases = map[string]testCase{
 		Package: "./providerapi",
 		Run:     `^(TestLockedCapabilityResponseSchema|TestCapabilitiesHandlerReadsSourceOnceAndFreezesResponse)$`,
 	},
+	"capability-discovery-terminal-profile-advertisement": {
+		Package: "./providerapi",
+		Run:     `^TestMapCapabilitiesProjectsTerminalAdvertisement$`,
+	},
 	"capability-discovery-empty-request": {
 		Package: "./providerapi",
 		Run:     `^(TestCapabilitiesHandlerRejectsRequestsWithoutADocumentBeforeDispatch|TestProviderServerReconcilesHTTP11CapabilityInputTransport)$`,

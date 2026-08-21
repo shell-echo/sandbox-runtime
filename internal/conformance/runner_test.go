@@ -29,6 +29,7 @@ func TestLocalSuiteCasesHaveRunnerMappings(t *testing.T) {
 		"capability-discovery-mtls-only",
 		"capability-discovery-admitted-identity",
 		"capability-discovery-immutable-schema",
+		"capability-discovery-terminal-profile-advertisement",
 		"capability-discovery-empty-request",
 		"capability-discovery-no-mutation-routes",
 		"protected-admission-context-schema",
@@ -58,20 +59,21 @@ func TestLocalSuiteCasesHaveRunnerMappings(t *testing.T) {
 
 func TestLifecycleSuiteCasesExecuteBehaviorPackages(t *testing.T) {
 	want := map[string]testCase{
-		"lifecycle-create-request-schema":          {Package: "./providerapi"},
-		"lifecycle-operation-state-schema":         {Package: "./providerapi"},
-		"lifecycle-idempotency-generation-fencing": {Package: "./provider/lifecycle/coordinator"},
-		"lifecycle-deadline-outcome":               {Package: "./provider/lifecycle/coordinator"},
-		"exec-request-schema":                      {Package: "./providerapi/v1"},
-		"exec-cancel-schema":                       {Package: "./providerapi/v1"},
-		"exec-result-schema":                       {Package: "./providerapi/v1"},
-		"exec-semantic-bounds":                     {Package: "./providerapi/v1"},
-		"exec-rejection-fixtures":                  {Package: "./providerapi/v1"},
-		"runtime-session-open-schema":              {Package: "./providerapi/v1"},
-		"runtime-session-operation-schema":         {Package: "./providerapi/v1"},
-		"runtime-session-handoff-schema":           {Package: "./providerapi/v1"},
-		"runtime-session-semantic-bounds":          {Package: "./providerapi/v1"},
-		"runtime-session-rejection-fixtures":       {Package: "./providerapi/v1"},
+		"lifecycle-create-request-schema":                     {Package: "./providerapi"},
+		"lifecycle-operation-state-schema":                    {Package: "./providerapi"},
+		"lifecycle-idempotency-generation-fencing":            {Package: "./provider/lifecycle/coordinator"},
+		"lifecycle-deadline-outcome":                          {Package: "./provider/lifecycle/coordinator"},
+		"capability-discovery-terminal-profile-advertisement": {Package: "./providerapi"},
+		"exec-request-schema":                                 {Package: "./providerapi/v1"},
+		"exec-cancel-schema":                                  {Package: "./providerapi/v1"},
+		"exec-result-schema":                                  {Package: "./providerapi/v1"},
+		"exec-semantic-bounds":                                {Package: "./providerapi/v1"},
+		"exec-rejection-fixtures":                             {Package: "./providerapi/v1"},
+		"runtime-session-open-schema":                         {Package: "./providerapi/v1"},
+		"runtime-session-operation-schema":                    {Package: "./providerapi/v1"},
+		"runtime-session-handoff-schema":                      {Package: "./providerapi/v1"},
+		"runtime-session-semantic-bounds":                     {Package: "./providerapi/v1"},
+		"runtime-session-rejection-fixtures":                  {Package: "./providerapi/v1"},
 	}
 	for id, expected := range want {
 		got := testCases[id]

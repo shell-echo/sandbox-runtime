@@ -1,10 +1,14 @@
 package providerapi
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/shell-echo/sandbox-runtime/internal/providercontract"
 	"github.com/shell-echo/sandbox-runtime/provider"
 	providerv1 "github.com/shell-echo/sandbox-runtime/providerapi/v1"
 )
@@ -56,6 +60,69 @@ func TestMapCapabilitiesDefensivelyCopiesPointersAndProfiles(t *testing.T) {
 	}
 }
 
+func TestMapCapabilitiesProjectsTerminalAdvertisement(t *testing.T) {
+	capabilities, runtimeProfiles := providerTerminalAdvertisements()
+	snapshot, err := provider.NewCapabilitySnapshotWithAdvertisements("revision-1", provider.Limits{
+		MaxCPUMillis:             1000,
+		MaxMemoryBytes:           1 << 30,
+		MaxEphemeralStorageBytes: 1 << 30,
+		MaxLeaseSeconds:          3600,
+		MaxExecSeconds:           300,
+	}, capabilities, runtimeProfiles, []provider.SnapshotRestoreProfile{{
+		ProfileID:    "sandbox-snapshot-workspace-v1",
+		Level:        provider.SnapshotLevelWorkspace,
+		SuiteID:      provider.CompatibilitySuiteSandboxProvider,
+		SuiteVersion: "1.0.0",
+		SuiteDigest:  provider.SHA256Digest("sha256:" + strings.Repeat("a", 64)),
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	document := mapCapabilities(snapshot)
+	if len(document.Capabilities) != 1 || document.Capabilities[0].ID != providerv1.CapabilityTerminal ||
+		len(document.Capabilities[0].Versions) != 1 || document.Capabilities[0].Versions[0] != "v1" ||
+		len(document.Capabilities[0].Profiles) != 1 || document.Capabilities[0].Profiles[0] != "terminal-ws-v1" {
+		t.Fatalf("terminal capability = %#v", document.Capabilities)
+	}
+	if len(document.RuntimeProfiles) != 1 || document.RuntimeProfiles[0].ID != "sandbox-runtime-terminal-v1" ||
+		len(document.RuntimeProfiles[0].CapabilityProfileIDs) != 1 || document.RuntimeProfiles[0].CapabilityProfileIDs[0] != "terminal-ws-v1" {
+		t.Fatalf("terminal runtime profile = %#v", document.RuntimeProfiles)
+	}
+	if err := validateCapabilities(document); err != nil {
+		t.Fatalf("validateCapabilities() error = %v", err)
+	}
+	encoded, err := json.Marshal(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sourceRoot := localContractSourceRoot(t)
+	projection, err := providercontract.Load(context.Background(), filepath.Join(sourceRoot, "compatibility/sandbox-runtime/contract.lock.json"), sourceRoot)
+	if err != nil {
+		t.Fatalf("load locked Provider projection: %v", err)
+	}
+	if err := projection.Validate("provider-capabilities.schema.json", encoded); err != nil {
+		t.Fatalf("application capability projection is invalid: %v", err)
+	}
+	handler, err := newCapabilitiesHandler(context.Background(), &capabilityReaderSpy{snapshot: snapshot})
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := serve(handler, "GET", capabilitiesPath, "")
+	if response.Code != 200 {
+		t.Fatalf("handler status = %d, want 200", response.Code)
+	}
+	if err := projection.Validate("provider-capabilities.schema.json", response.Body.Bytes()); err != nil {
+		t.Fatalf("handler capability projection is invalid: %v", err)
+	}
+
+	snapshot.Capabilities[0].Profiles[0] = "mutated"
+	snapshot.RuntimeProfiles[0].CapabilityProfileIDs[0] = "mutated"
+	if document.Capabilities[0].Profiles[0] != "terminal-ws-v1" || document.RuntimeProfiles[0].CapabilityProfileIDs[0] != "terminal-ws-v1" {
+		t.Fatalf("snapshot mutation changed mapped document: %#v", document)
+	}
+}
+
 func TestValidateCapabilitiesRejectsInvalidDocuments(t *testing.T) {
 	valid := mapCapabilities(validSnapshot(t, int64Pointer(4096), int64Pointer(0)))
 	tests := map[string]func(*providerv1.Capabilities){
@@ -65,11 +132,31 @@ func TestValidateCapabilitiesRejectsInvalidDocuments(t *testing.T) {
 		},
 		"API version":      func(d *providerv1.Capabilities) { d.APIVersion = "v2" },
 		"nil capabilities": func(d *providerv1.Capabilities) { d.Capabilities = nil },
-		"advertised capability": func(d *providerv1.Capabilities) {
+		"invalid capability ID": func(d *providerv1.Capabilities) {
+			d.Capabilities = []providerv1.Capability{{ID: "sandbox.Terminal"}}
+		},
+		"non-terminal missing versions": func(d *providerv1.Capabilities) {
 			d.Capabilities = []providerv1.Capability{{ID: providerv1.CapabilityExec}}
 		},
+		"non-terminal capability": func(d *providerv1.Capabilities) {
+			d.Capabilities = []providerv1.Capability{{ID: providerv1.CapabilityExec, Versions: []string{"v1"}}}
+		},
 		"nil runtime profiles": func(d *providerv1.Capabilities) { d.RuntimeProfiles = nil },
-		"advertised runtime": func(d *providerv1.Capabilities) {
+		"invalid runtime isolation": func(d *providerv1.Capabilities) {
+			d.RuntimeProfiles = []providerv1.RuntimeProfile{{ID: "runtime-1", IsolationClass: "unknown"}}
+		},
+		"terminal missing profile": func(d *providerv1.Capabilities) {
+			d.Capabilities = []providerv1.Capability{{ID: providerv1.CapabilityTerminal, Versions: []string{"v1"}}}
+		},
+		"terminal profile has no runtime mapping": func(d *providerv1.Capabilities) {
+			d.Capabilities = []providerv1.Capability{{ID: providerv1.CapabilityTerminal, Versions: []string{"v1"}, Profiles: []string{"terminal-ws-v1"}}}
+		},
+		"runtime maps unadvertised profile": func(d *providerv1.Capabilities) {
+			d.RuntimeProfiles = []providerv1.RuntimeProfile{{
+				ID: "runtime-1", IsolationClass: providerv1.IsolationContainer, CapabilityProfileIDs: []string{"terminal-ws-v1"},
+			}}
+		},
+		"runtime profile without terminal": func(d *providerv1.Capabilities) {
 			d.RuntimeProfiles = []providerv1.RuntimeProfile{{ID: "runtime-1", IsolationClass: providerv1.IsolationContainer}}
 		},
 		"zero CPU":         func(d *providerv1.Capabilities) { d.Limits.MaxCPUMillis = 0 },
@@ -176,10 +263,24 @@ func validWireProfile(id string) providerv1.SnapshotRestoreProfile {
 
 func cloneDocument(document providerv1.Capabilities) providerv1.Capabilities {
 	capabilities := make([]providerv1.Capability, len(document.Capabilities))
-	copy(capabilities, document.Capabilities)
+	for index, capability := range document.Capabilities {
+		capabilities[index] = providerv1.Capability{
+			ID:       capability.ID,
+			Versions: append([]string(nil), capability.Versions...),
+			Profiles: append([]string(nil), capability.Profiles...),
+		}
+	}
 	document.Capabilities = capabilities
 	runtimeProfiles := make([]providerv1.RuntimeProfile, len(document.RuntimeProfiles))
-	copy(runtimeProfiles, document.RuntimeProfiles)
+	for index, profile := range document.RuntimeProfiles {
+		runtimeProfiles[index] = providerv1.RuntimeProfile{
+			ID:                   profile.ID,
+			IsolationClass:       profile.IsolationClass,
+			RuntimeClassName:     profile.RuntimeClassName,
+			Architecture:         append([]providerv1.Architecture(nil), profile.Architecture...),
+			CapabilityProfileIDs: append([]string(nil), profile.CapabilityProfileIDs...),
+		}
+	}
 	document.RuntimeProfiles = runtimeProfiles
 	document.SnapshotRestoreProfile = append([]providerv1.SnapshotRestoreProfile(nil), document.SnapshotRestoreProfile...)
 	document.Limits.MaxWorkspaceBytes = cloneInt64(document.Limits.MaxWorkspaceBytes)
@@ -188,3 +289,17 @@ func cloneDocument(document providerv1.Capabilities) providerv1.Capabilities {
 }
 
 func int64Pointer(value int64) *int64 { return &value }
+
+func providerTerminalAdvertisements() ([]provider.Capability, []provider.RuntimeProfile) {
+	return []provider.Capability{{
+			ID:       "sandbox.terminal",
+			Versions: []string{"v1"},
+			Profiles: []string{"terminal-ws-v1"},
+		}}, []provider.RuntimeProfile{{
+			ID:                   "sandbox-runtime-terminal-v1",
+			IsolationClass:       "container",
+			RuntimeClassName:     "sandbox-runtime-terminal",
+			Architecture:         []string{"amd64"},
+			CapabilityProfileIDs: []string{"terminal-ws-v1"},
+		}}
+}

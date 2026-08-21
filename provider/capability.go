@@ -32,7 +32,13 @@ type CompatibilitySuiteID string
 
 const CompatibilitySuiteSandboxProvider CompatibilitySuiteID = "sandbox-provider"
 
-const maxSnapshotRestoreProfiles = 32
+const (
+	maxSnapshotRestoreProfiles = 32
+	maxCapabilities            = 64
+	maxCapabilityVersions      = 16
+	maxCapabilityProfiles      = 64
+	maxRuntimeProfiles         = 64
+)
 
 // SHA256Digest is a lowercase, algorithm-qualified SHA-256 digest.
 type SHA256Digest string
@@ -58,12 +64,32 @@ type Limits struct {
 	MaxExecSeconds           int64
 }
 
+// Capability describes one advertised Provider capability and its immutable
+// capability-profile identifiers.
+type Capability struct {
+	ID       string
+	Versions []string
+	Profiles []string
+}
+
+// RuntimeProfile identifies a runtime class and the capability profiles it can
+// serve. It is metadata only; advertising one does not start a runtime.
+type RuntimeProfile struct {
+	ID                   string
+	IsolationClass       string
+	RuntimeClassName     string
+	Architecture         []string
+	CapabilityProfileIDs []string
+}
+
 // CapabilitySnapshot is the immutable-at-source capability document consumed
 // by Provider adapters. Callers receive defensive copies and may mutate their
 // copy without changing future reads.
 type CapabilitySnapshot struct {
 	ProviderRevisionID      string
 	APIVersion              APIVersion
+	Capabilities            []Capability
+	RuntimeProfiles         []RuntimeProfile
 	SnapshotRestoreProfiles []SnapshotRestoreProfile
 	Limits                  Limits
 }
@@ -71,16 +97,25 @@ type CapabilitySnapshot struct {
 var (
 	suiteVersionPattern = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+$`)
 	digestPattern       = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
+	capabilityIDPattern = regexp.MustCompile(`^sandbox\.[a-z0-9-]+$`)
+	identifierPattern   = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$`)
 )
 
-// NewCapabilitySnapshot validates and freezes the honest P1.1b startup model.
-// It contains no capability or runtime-profile model because P1.1b advertises
-// neither; the future wire adapter is responsible for encoding both as empty
-// arrays in the Contract document.
+// NewCapabilitySnapshot validates and freezes the default-disabled startup
+// model. It intentionally advertises neither capabilities nor runtime profiles.
 func NewCapabilitySnapshot(providerRevisionID string, limits Limits, profiles []SnapshotRestoreProfile) (CapabilitySnapshot, error) {
+	return NewCapabilitySnapshotWithAdvertisements(providerRevisionID, limits, nil, nil, profiles)
+}
+
+// NewCapabilitySnapshotWithAdvertisements validates and freezes a capability
+// snapshot. A terminal capability is valid only when each of its advertised
+// profiles maps to an advertised runtime profile.
+func NewCapabilitySnapshotWithAdvertisements(providerRevisionID string, limits Limits, capabilities []Capability, runtimeProfiles []RuntimeProfile, profiles []SnapshotRestoreProfile) (CapabilitySnapshot, error) {
 	snapshot := CapabilitySnapshot{
 		ProviderRevisionID:      providerRevisionID,
 		APIVersion:              APIVersionV1,
+		Capabilities:            cloneCapabilities(capabilities),
+		RuntimeProfiles:         cloneRuntimeProfiles(runtimeProfiles),
 		SnapshotRestoreProfiles: append([]SnapshotRestoreProfile(nil), profiles...),
 		Limits:                  cloneLimits(limits),
 	}
@@ -130,6 +165,9 @@ func validateCapabilitySnapshot(snapshot CapabilitySnapshot) error {
 	if err := validateLimits(snapshot.Limits); err != nil {
 		return err
 	}
+	if err := validateCapabilityAdvertisements(snapshot.Capabilities, snapshot.RuntimeProfiles); err != nil {
+		return err
+	}
 	if len(snapshot.SnapshotRestoreProfiles) == 0 {
 		return errors.New("at least one snapshot/restore compatibility profile is required")
 	}
@@ -151,6 +189,132 @@ func validateCapabilitySnapshot(snapshot CapabilitySnapshot) error {
 		profilesByID[profile.ProfileID] = profile
 	}
 	return nil
+}
+
+func validateCapabilityAdvertisements(capabilities []Capability, runtimeProfiles []RuntimeProfile) error {
+	if len(capabilities) > maxCapabilities {
+		return fmt.Errorf("capabilities must not exceed %d", maxCapabilities)
+	}
+	if len(runtimeProfiles) > maxRuntimeProfiles {
+		return fmt.Errorf("runtime profiles must not exceed %d", maxRuntimeProfiles)
+	}
+
+	capabilitiesByID := make(map[string]Capability, len(capabilities))
+	profileIDs := make(map[string]struct{})
+	for index, capability := range capabilities {
+		if !capabilityIDPattern.MatchString(capability.ID) {
+			return fmt.Errorf("capability %d has an invalid ID %q", index, capability.ID)
+		}
+		if _, exists := capabilitiesByID[capability.ID]; exists {
+			return fmt.Errorf("duplicate capability %q", capability.ID)
+		}
+		if capability.Versions == nil {
+			return fmt.Errorf("capability %q versions must be a non-nil array", capability.ID)
+		}
+		if len(capability.Versions) > maxCapabilityVersions {
+			return fmt.Errorf("capability %q versions must not exceed %d", capability.ID, maxCapabilityVersions)
+		}
+		versions := make(map[string]struct{}, len(capability.Versions))
+		for _, version := range capability.Versions {
+			if !identifierPattern.MatchString(version) {
+				return fmt.Errorf("capability %q has an invalid version %q", capability.ID, version)
+			}
+			if _, exists := versions[version]; exists {
+				return fmt.Errorf("capability %q repeats version %q", capability.ID, version)
+			}
+			versions[version] = struct{}{}
+		}
+		if len(capability.Profiles) > maxCapabilityProfiles {
+			return fmt.Errorf("capability %q profiles must not exceed %d", capability.ID, maxCapabilityProfiles)
+		}
+		profiles := make(map[string]struct{}, len(capability.Profiles))
+		for _, profileID := range capability.Profiles {
+			if !identifierPattern.MatchString(profileID) {
+				return fmt.Errorf("capability %q has an invalid profile ID %q", capability.ID, profileID)
+			}
+			if _, exists := profiles[profileID]; exists {
+				return fmt.Errorf("capability %q repeats profile ID %q", capability.ID, profileID)
+			}
+			if _, exists := profileIDs[profileID]; exists {
+				return fmt.Errorf("capability profile ID %q is not globally unique", profileID)
+			}
+			profiles[profileID] = struct{}{}
+			profileIDs[profileID] = struct{}{}
+		}
+		if capability.ID == "sandbox.terminal" && (len(capability.Versions) == 0 || len(capability.Profiles) == 0) {
+			return errors.New("terminal capability must advertise at least one version and profile")
+		}
+		capabilitiesByID[capability.ID] = capability
+	}
+	terminal, terminalAdvertised := capabilitiesByID["sandbox.terminal"]
+	if !terminalAdvertised {
+		if len(capabilities) != 0 {
+			return errors.New("P2.3c0 permits only terminal capability advertisements")
+		}
+		if len(runtimeProfiles) != 0 {
+			return errors.New("runtime profiles require an advertised terminal capability")
+		}
+		return nil
+	}
+	if len(capabilities) != 1 {
+		return errors.New("P2.3c0 permits only one terminal capability advertisement")
+	}
+
+	mappedProfiles := make(map[string]struct{})
+	runtimeIDs := make(map[string]struct{}, len(runtimeProfiles))
+	for index, runtimeProfile := range runtimeProfiles {
+		if !identifierPattern.MatchString(runtimeProfile.ID) {
+			return fmt.Errorf("runtime profile %d has an invalid ID %q", index, runtimeProfile.ID)
+		}
+		if _, exists := runtimeIDs[runtimeProfile.ID]; exists {
+			return fmt.Errorf("duplicate runtime profile %q", runtimeProfile.ID)
+		}
+		runtimeIDs[runtimeProfile.ID] = struct{}{}
+		if !validIsolationClass(runtimeProfile.IsolationClass) {
+			return fmt.Errorf("runtime profile %q has an invalid isolation class %q", runtimeProfile.ID, runtimeProfile.IsolationClass)
+		}
+		if runtimeProfile.RuntimeClassName != "" && (!utf8.ValidString(runtimeProfile.RuntimeClassName) || strings.TrimSpace(runtimeProfile.RuntimeClassName) == "") {
+			return fmt.Errorf("runtime profile %q has an invalid runtime class name", runtimeProfile.ID)
+		}
+		architectures := make(map[string]struct{}, len(runtimeProfile.Architecture))
+		for _, architecture := range runtimeProfile.Architecture {
+			if architecture != "amd64" && architecture != "arm64" {
+				return fmt.Errorf("runtime profile %q has an invalid architecture %q", runtimeProfile.ID, architecture)
+			}
+			if _, exists := architectures[architecture]; exists {
+				return fmt.Errorf("runtime profile %q repeats architecture %q", runtimeProfile.ID, architecture)
+			}
+			architectures[architecture] = struct{}{}
+		}
+		if len(runtimeProfile.CapabilityProfileIDs) > maxCapabilityProfiles {
+			return fmt.Errorf("runtime profile %q capability profiles must not exceed %d", runtimeProfile.ID, maxCapabilityProfiles)
+		}
+		for _, profileID := range runtimeProfile.CapabilityProfileIDs {
+			if _, exists := profileIDs[profileID]; !exists {
+				return fmt.Errorf("runtime profile %q references unadvertised capability profile %q", runtimeProfile.ID, profileID)
+			}
+			if _, exists := mappedProfiles[profileID]; exists {
+				return fmt.Errorf("capability profile %q maps to more than one runtime profile", profileID)
+			}
+			mappedProfiles[profileID] = struct{}{}
+		}
+	}
+
+	for _, profileID := range terminal.Profiles {
+		if _, mapped := mappedProfiles[profileID]; !mapped {
+			return fmt.Errorf("terminal capability profile %q has no advertised runtime profile", profileID)
+		}
+	}
+	return nil
+}
+
+func validIsolationClass(value string) bool {
+	switch value {
+	case "container", "hardened-container", "microvm", "virtual-machine", "local-process":
+		return true
+	default:
+		return false
+	}
 }
 
 func validateLimits(limits Limits) error {
@@ -203,9 +367,37 @@ func validateSnapshotRestoreProfile(profile SnapshotRestoreProfile) error {
 }
 
 func cloneCapabilitySnapshot(snapshot CapabilitySnapshot) CapabilitySnapshot {
+	snapshot.Capabilities = cloneCapabilities(snapshot.Capabilities)
+	snapshot.RuntimeProfiles = cloneRuntimeProfiles(snapshot.RuntimeProfiles)
 	snapshot.SnapshotRestoreProfiles = append([]SnapshotRestoreProfile(nil), snapshot.SnapshotRestoreProfiles...)
 	snapshot.Limits = cloneLimits(snapshot.Limits)
 	return snapshot
+}
+
+func cloneCapabilities(source []Capability) []Capability {
+	result := make([]Capability, len(source))
+	for index, capability := range source {
+		result[index] = Capability{
+			ID:       capability.ID,
+			Versions: append([]string(nil), capability.Versions...),
+			Profiles: append([]string(nil), capability.Profiles...),
+		}
+	}
+	return result
+}
+
+func cloneRuntimeProfiles(source []RuntimeProfile) []RuntimeProfile {
+	result := make([]RuntimeProfile, len(source))
+	for index, profile := range source {
+		result[index] = RuntimeProfile{
+			ID:                   profile.ID,
+			IsolationClass:       profile.IsolationClass,
+			RuntimeClassName:     profile.RuntimeClassName,
+			Architecture:         append([]string(nil), profile.Architecture...),
+			CapabilityProfileIDs: append([]string(nil), profile.CapabilityProfileIDs...),
+		}
+	}
+	return result
 }
 
 func cloneLimits(limits Limits) Limits {

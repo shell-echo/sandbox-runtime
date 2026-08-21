@@ -11,17 +11,47 @@ import (
 	providerv1 "github.com/shell-echo/sandbox-runtime/providerapi/v1"
 )
 
-const maxSnapshotRestoreProfiles = 32
+const (
+	maxSnapshotRestoreProfiles = 32
+	maxCapabilities            = 64
+	maxCapabilityVersions      = 16
+	maxCapabilityProfiles      = 64
+	maxRuntimeProfiles         = 64
+)
 
 var (
 	suiteVersionPattern = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+$`)
 	digestPattern       = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
+	capabilityIDPattern = regexp.MustCompile(`^sandbox\.[a-z0-9-]+$`)
+	identifierPattern   = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$`)
 )
 
 // mapCapabilities explicitly projects the application-owned startup snapshot
-// into the Provider v1 wire model. P1.1b deliberately advertises no runtime
-// capability or runtime profile.
+// into the Provider v1 wire model. The default snapshot remains disabled, while
+// an explicit terminal advertisement carries an exact profile mapping.
 func mapCapabilities(snapshot provider.CapabilitySnapshot) providerv1.Capabilities {
+	capabilities := make([]providerv1.Capability, len(snapshot.Capabilities))
+	for index, capability := range snapshot.Capabilities {
+		capabilities[index] = providerv1.Capability{
+			ID:       providerv1.CapabilityID(capability.ID),
+			Versions: append([]string(nil), capability.Versions...),
+			Profiles: append([]string(nil), capability.Profiles...),
+		}
+	}
+	runtimeProfiles := make([]providerv1.RuntimeProfile, len(snapshot.RuntimeProfiles))
+	for index, profile := range snapshot.RuntimeProfiles {
+		architectures := make([]providerv1.Architecture, len(profile.Architecture))
+		for architectureIndex, architecture := range profile.Architecture {
+			architectures[architectureIndex] = providerv1.Architecture(architecture)
+		}
+		runtimeProfiles[index] = providerv1.RuntimeProfile{
+			ID:                   profile.ID,
+			IsolationClass:       providerv1.IsolationClass(profile.IsolationClass),
+			RuntimeClassName:     profile.RuntimeClassName,
+			Architecture:         architectures,
+			CapabilityProfileIDs: append([]string(nil), profile.CapabilityProfileIDs...),
+		}
+	}
 	profiles := make([]providerv1.SnapshotRestoreProfile, len(snapshot.SnapshotRestoreProfiles))
 	for index, profile := range snapshot.SnapshotRestoreProfiles {
 		profiles[index] = providerv1.SnapshotRestoreProfile{
@@ -36,8 +66,8 @@ func mapCapabilities(snapshot provider.CapabilitySnapshot) providerv1.Capabiliti
 	return providerv1.Capabilities{
 		ProviderRevisionID:     snapshot.ProviderRevisionID,
 		APIVersion:             providerv1.APIVersion(snapshot.APIVersion),
-		Capabilities:           make([]providerv1.Capability, 0),
-		RuntimeProfiles:        make([]providerv1.RuntimeProfile, 0),
+		Capabilities:           capabilities,
+		RuntimeProfiles:        runtimeProfiles,
 		SnapshotRestoreProfile: profiles,
 		Limits: providerv1.ProviderLimits{
 			MaxCPUMillis:             snapshot.Limits.MaxCPUMillis,
@@ -51,9 +81,9 @@ func mapCapabilities(snapshot provider.CapabilitySnapshot) providerv1.Capabiliti
 	}
 }
 
-// validateCapabilities enforces the locked capability Schema constraints used
-// by P1.1b and its stricter zero-advertisement policy. It is a local fail-closed
-// boundary, not a replacement for validation against the locked Contract.
+// validateCapabilities enforces the locked capability Schema constraints and
+// terminal profile relationship. It is a local fail-closed boundary, not a
+// replacement for validation against the locked Contract.
 func validateCapabilities(document providerv1.Capabilities) error {
 	if !utf8.ValidString(document.ProviderRevisionID) || strings.TrimSpace(document.ProviderRevisionID) == "" {
 		return errors.New("provider revision ID must be valid UTF-8 and not empty")
@@ -61,11 +91,8 @@ func validateCapabilities(document providerv1.Capabilities) error {
 	if document.APIVersion != providerv1.APIVersionV1 {
 		return fmt.Errorf("unsupported API version %q", document.APIVersion)
 	}
-	if document.Capabilities == nil || len(document.Capabilities) != 0 {
-		return errors.New("P1.1b capabilities must be a non-nil empty array")
-	}
-	if document.RuntimeProfiles == nil || len(document.RuntimeProfiles) != 0 {
-		return errors.New("P1.1b runtime profiles must be a non-nil empty array")
+	if err := validateCapabilityAdvertisements(document.Capabilities, document.RuntimeProfiles); err != nil {
+		return err
 	}
 	if err := validateLimits(document.Limits); err != nil {
 		return err
@@ -91,6 +118,138 @@ func validateCapabilities(document providerv1.Capabilities) error {
 		profilesByID[profile.ProfileID] = profile
 	}
 	return nil
+}
+
+func validateCapabilityAdvertisements(capabilities []providerv1.Capability, runtimeProfiles []providerv1.RuntimeProfile) error {
+	if capabilities == nil {
+		return errors.New("capabilities must be a non-nil array")
+	}
+	if runtimeProfiles == nil {
+		return errors.New("runtime profiles must be a non-nil array")
+	}
+	if len(capabilities) > maxCapabilities {
+		return fmt.Errorf("capabilities must not exceed %d", maxCapabilities)
+	}
+	if len(runtimeProfiles) > maxRuntimeProfiles {
+		return fmt.Errorf("runtime profiles must not exceed %d", maxRuntimeProfiles)
+	}
+
+	capabilitiesByID := make(map[providerv1.CapabilityID]providerv1.Capability, len(capabilities))
+	profileIDs := make(map[string]struct{})
+	for index, capability := range capabilities {
+		if !capabilityIDPattern.MatchString(string(capability.ID)) {
+			return fmt.Errorf("capability %d has an invalid ID %q", index, capability.ID)
+		}
+		if _, exists := capabilitiesByID[capability.ID]; exists {
+			return fmt.Errorf("duplicate capability %q", capability.ID)
+		}
+		if capability.Versions == nil {
+			return fmt.Errorf("capability %q versions must be a non-nil array", capability.ID)
+		}
+		if len(capability.Versions) > maxCapabilityVersions {
+			return fmt.Errorf("capability %q versions must not exceed %d", capability.ID, maxCapabilityVersions)
+		}
+		versions := make(map[string]struct{}, len(capability.Versions))
+		for _, version := range capability.Versions {
+			if !identifierPattern.MatchString(version) {
+				return fmt.Errorf("capability %q has an invalid version %q", capability.ID, version)
+			}
+			if _, exists := versions[version]; exists {
+				return fmt.Errorf("capability %q repeats version %q", capability.ID, version)
+			}
+			versions[version] = struct{}{}
+		}
+		if len(capability.Profiles) > maxCapabilityProfiles {
+			return fmt.Errorf("capability %q profiles must not exceed %d", capability.ID, maxCapabilityProfiles)
+		}
+		profiles := make(map[string]struct{}, len(capability.Profiles))
+		for _, profileID := range capability.Profiles {
+			if !identifierPattern.MatchString(profileID) {
+				return fmt.Errorf("capability %q has an invalid profile ID %q", capability.ID, profileID)
+			}
+			if _, exists := profiles[profileID]; exists {
+				return fmt.Errorf("capability %q repeats profile ID %q", capability.ID, profileID)
+			}
+			if _, exists := profileIDs[profileID]; exists {
+				return fmt.Errorf("capability profile ID %q is not globally unique", profileID)
+			}
+			profiles[profileID] = struct{}{}
+			profileIDs[profileID] = struct{}{}
+		}
+		if capability.ID == providerv1.CapabilityTerminal && (len(capability.Versions) == 0 || len(capability.Profiles) == 0) {
+			return errors.New("terminal capability must advertise at least one version and profile")
+		}
+		capabilitiesByID[capability.ID] = capability
+	}
+	terminal, terminalAdvertised := capabilitiesByID[providerv1.CapabilityTerminal]
+	if !terminalAdvertised {
+		if len(capabilities) != 0 {
+			return errors.New("P2.3c0 permits only terminal capability advertisements")
+		}
+		if len(runtimeProfiles) != 0 {
+			return errors.New("runtime profiles require an advertised terminal capability")
+		}
+		return nil
+	}
+	if len(capabilities) != 1 {
+		return errors.New("P2.3c0 permits only one terminal capability advertisement")
+	}
+
+	mappedProfiles := make(map[string]struct{})
+	runtimeIDs := make(map[string]struct{}, len(runtimeProfiles))
+	for index, runtimeProfile := range runtimeProfiles {
+		if !identifierPattern.MatchString(runtimeProfile.ID) {
+			return fmt.Errorf("runtime profile %d has an invalid ID %q", index, runtimeProfile.ID)
+		}
+		if _, exists := runtimeIDs[runtimeProfile.ID]; exists {
+			return fmt.Errorf("duplicate runtime profile %q", runtimeProfile.ID)
+		}
+		runtimeIDs[runtimeProfile.ID] = struct{}{}
+		if !validIsolationClass(runtimeProfile.IsolationClass) {
+			return fmt.Errorf("runtime profile %q has an invalid isolation class %q", runtimeProfile.ID, runtimeProfile.IsolationClass)
+		}
+		if runtimeProfile.RuntimeClassName != "" && (!utf8.ValidString(runtimeProfile.RuntimeClassName) || strings.TrimSpace(runtimeProfile.RuntimeClassName) == "") {
+			return fmt.Errorf("runtime profile %q has an invalid runtime class name", runtimeProfile.ID)
+		}
+		architectures := make(map[providerv1.Architecture]struct{}, len(runtimeProfile.Architecture))
+		for _, architecture := range runtimeProfile.Architecture {
+			if architecture != providerv1.ArchitectureAMD64 && architecture != providerv1.ArchitectureARM64 {
+				return fmt.Errorf("runtime profile %q has an invalid architecture %q", runtimeProfile.ID, architecture)
+			}
+			if _, exists := architectures[architecture]; exists {
+				return fmt.Errorf("runtime profile %q repeats architecture %q", runtimeProfile.ID, architecture)
+			}
+			architectures[architecture] = struct{}{}
+		}
+		if len(runtimeProfile.CapabilityProfileIDs) > maxCapabilityProfiles {
+			return fmt.Errorf("runtime profile %q capability profiles must not exceed %d", runtimeProfile.ID, maxCapabilityProfiles)
+		}
+		for _, profileID := range runtimeProfile.CapabilityProfileIDs {
+			if _, exists := profileIDs[profileID]; !exists {
+				return fmt.Errorf("runtime profile %q references unadvertised capability profile %q", runtimeProfile.ID, profileID)
+			}
+			if _, exists := mappedProfiles[profileID]; exists {
+				return fmt.Errorf("capability profile %q maps to more than one runtime profile", profileID)
+			}
+			mappedProfiles[profileID] = struct{}{}
+		}
+	}
+
+	for _, profileID := range terminal.Profiles {
+		if _, mapped := mappedProfiles[profileID]; !mapped {
+			return fmt.Errorf("terminal capability profile %q has no advertised runtime profile", profileID)
+		}
+	}
+	return nil
+}
+
+func validIsolationClass(value providerv1.IsolationClass) bool {
+	switch value {
+	case providerv1.IsolationContainer, providerv1.IsolationHardenedContainer, providerv1.IsolationMicroVM, providerv1.IsolationVirtualMachine, providerv1.IsolationLocalProcess:
+		return true
+	default:
+		return false
+	}
 }
 
 func validateLimits(limits providerv1.ProviderLimits) error {
