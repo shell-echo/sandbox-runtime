@@ -12,9 +12,9 @@ production readiness.
 
 | Item | Evidence | Status |
 | --- | --- | --- |
-| Checkout | `codex/p2.1-exec-runtime` from `origin/main@9d00212` | P2.0c closed; P2.1 local domain/application-port work is under review preparation |
-| Review | PR [#17](https://github.com/shell-echo/sandbox-runtime/pull/17) merged as `43ff3d7`; PR [#18](https://github.com/shell-echo/sandbox-runtime/pull/18) merged as `4774c3a`; PR [#19](https://github.com/shell-echo/sandbox-runtime/pull/19) merged as `e2755f5`; PR [#21](https://github.com/shell-echo/sandbox-runtime/pull/21) merged as `c5a4a65`; PR [#22](https://github.com/shell-echo/sandbox-runtime/pull/22) merged as `44f39ec`; PR [#23](https://github.com/shell-echo/sandbox-runtime/pull/23) merged as `ac72eab`; PR [#24](https://github.com/shell-echo/sandbox-runtime/pull/24) merged as `2e3dde6`; PR [#25](https://github.com/shell-echo/sandbox-runtime/pull/25) merged as `88506d1`; PR [#26](https://github.com/shell-echo/sandbox-runtime/pull/26) merged as `4ccb107`; PR [#27](https://github.com/shell-echo/sandbox-runtime/pull/27) merged as `28076a7`; PR [#28](https://github.com/shell-echo/sandbox-runtime/pull/28) merged as `2b25f76`; PR [#29](https://github.com/shell-echo/sandbox-runtime/pull/29) merged as `83965a2`; PR [#30](https://github.com/shell-echo/sandbox-runtime/pull/30) merged as `9d00212` | PR #30 post-merge CI run `32444266288` provider-contract, test, and docker-integration passed |
-| Worktree | `codex/p2.1-exec-runtime` contains the uncommitted P2.1 slice on `origin/main@9d00212` | Full local race/shuffle, verifier, vet, and 19-case Suite passed; PR evidence pending |
+| Checkout | `origin/main@67b64a9` | P2.1 closed; P2.2 retained-result/cancellation work is not started |
+| Review | PR [#17](https://github.com/shell-echo/sandbox-runtime/pull/17) merged as `43ff3d7`; PR [#18](https://github.com/shell-echo/sandbox-runtime/pull/18) merged as `4774c3a`; PR [#19](https://github.com/shell-echo/sandbox-runtime/pull/19) merged as `e2755f5`; PR [#21](https://github.com/shell-echo/sandbox-runtime/pull/21) merged as `c5a4a65`; PR [#22](https://github.com/shell-echo/sandbox-runtime/pull/22) merged as `44f39ec`; PR [#23](https://github.com/shell-echo/sandbox-runtime/pull/23) merged as `ac72eab`; PR [#24](https://github.com/shell-echo/sandbox-runtime/pull/24) merged as `2e3dde6`; PR [#25](https://github.com/shell-echo/sandbox-runtime/pull/25) merged as `88506d1`; PR [#26](https://github.com/shell-echo/sandbox-runtime/pull/26) merged as `4ccb107`; PR [#27](https://github.com/shell-echo/sandbox-runtime/pull/27) merged as `28076a7`; PR [#28](https://github.com/shell-echo/sandbox-runtime/pull/28) merged as `2b25f76`; PR [#29](https://github.com/shell-echo/sandbox-runtime/pull/29) merged as `83965a2`; PR [#30](https://github.com/shell-echo/sandbox-runtime/pull/30) merged as `9d00212`; PR [#31](https://github.com/shell-echo/sandbox-runtime/pull/31) merged as `67b64a9` | PR #31 CI `32445583674` and post-merge CI `32445893337` provider-contract, test, and docker-integration passed |
+| P2.1 release evidence | `9a1a97e` on PR #31, merged as `67b64a9` | Local race/shuffle, vet, lock, Suite, PR CI, and post-merge CI passed |
 | Contract namespace | `urn:shell-echo:sandbox-runtime:provider-v1` | Locked |
 | Contract version/license | `1.0.0` / MIT | Locked |
 | Contract resources | OpenAPI, admission, lifecycle, and bounded exec schemas, semantic rules, fixtures, Suite | P2.0b/c passed and merged; P2.1 does not alter Contract resources |
@@ -48,8 +48,9 @@ It does not clone, mount, or read an external source repository.
 | P2.0a | Coding/remote-shell authority inventory | Passed in PR #29 merge `83965a2`; post-merge CI `32440383198` passed | Retain ADR 0009 ownership boundary |
 | P2.0b | Bounded exec Contract resources | Passed in PR #30 merge `9d00212`; no runtime dispatch | Retain lock source revision/tree and valid/rejection fixture evidence |
 | P2.0c | Exec Contract lock/projection gate | Passed in PR #30; post-merge CI run `32444266288` passed | No runtime claim from the Contract gate |
-| P2.1 | Bounded exec domain/application port | Local implementation, race/shuffle, vet, lock, and Suite verification passed; no public composition | Commit, PR CI, review, merge, and post-merge CI; retain P2.2 non-goals |
-| P2 | Coding/remote-shell profile | P2.0 closed; P2.1 in progress | P2.1 PR evidence, then P2.2 retained-result/cancellation design |
+| P2.1 | Bounded exec domain/application port | Passed in PR #31 merge `67b64a9`; post-merge CI `32445893337` passed; no public composition | Retain P2.2 non-goals and local-only evidence boundary |
+| P2.2 | Retained result and cancellation behavior | Not started | Design independent provider-local persistence/cancellation boundary; then implement with focused recovery tests |
+| P2 | Coding/remote-shell profile | P2.1 closed; P2.2 is next | P2.2 design and implementation evidence |
 | P3 | Migration readiness and external-caller integration | Not started | External caller E2E, rollback and canary evidence |
 | P4 | Production hardening | Not started | Deployment, multi-controller, multi-tenant, and production gates |
 
@@ -99,7 +100,7 @@ Passed locally (authorized test environment):
 
 Pending:
 
-- P2.1 commit, PR, review, and post-merge evidence;
+- P2.2 design, implementation, PR, and post-merge evidence;
 - optional content-derived Suite digest enhancement;
 - aggregate lifecycle conformance, external-caller E2E, reliability, tenancy,
   deployment, and production gates.
@@ -132,6 +133,7 @@ lease mutation, orphan cleanup, sessions, snapshots, runtime exec behavior,
 and aggregate caller compatibility remain unproven or Contract-reserved. PR
 #30 closed the bounded exec Contract gate only. P2.1 locally validates an
 uncomposed Provider-local execution port with bounded input and opaque receipt
-validation; it does not expose an exec route, durably accept an operation,
-retain a result, record cancellation intent, reconcile an outcome, select a
-Docker/backend adapter, or prove runtime execution behavior.
+validation. PR #31 and post-merge CI close that local component slice. It does
+not expose an exec route, durably accept an operation, retain a result, record
+cancellation intent, reconcile an outcome, select a Docker/backend adapter, or
+prove runtime execution behavior.
