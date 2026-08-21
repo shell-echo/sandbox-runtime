@@ -12,15 +12,16 @@ production readiness.
 
 | Item | Evidence | Status |
 | --- | --- | --- |
-| Checkout | `origin/main@97fb429` | P2.2c closed; P2.3a/b are active, unmerged Contract and projection slices |
+| Checkout | `origin/main@21f5236` | P2.3a/b sources and projection are merged; terminal-session acceptance is blocked by a locked Contract semantic contradiction |
 | Review | PR [#17](https://github.com/shell-echo/sandbox-runtime/pull/17) merged as `43ff3d7`; PR [#18](https://github.com/shell-echo/sandbox-runtime/pull/18) merged as `4774c3a`; PR [#19](https://github.com/shell-echo/sandbox-runtime/pull/19) merged as `e2755f5`; PR [#21](https://github.com/shell-echo/sandbox-runtime/pull/21) merged as `c5a4a65`; PR [#22](https://github.com/shell-echo/sandbox-runtime/pull/22) merged as `44f39ec`; PR [#23](https://github.com/shell-echo/sandbox-runtime/pull/23) merged as `ac72eab`; PR [#24](https://github.com/shell-echo/sandbox-runtime/pull/24) merged as `2e3dde6`; PR [#25](https://github.com/shell-echo/sandbox-runtime/pull/25) merged as `88506d1`; PR [#26](https://github.com/shell-echo/sandbox-runtime/pull/26) merged as `4ccb107`; PR [#27](https://github.com/shell-echo/sandbox-runtime/pull/27) merged as `28076a7`; PR [#28](https://github.com/shell-echo/sandbox-runtime/pull/28) merged as `2b25f76`; PR [#29](https://github.com/shell-echo/sandbox-runtime/pull/29) merged as `83965a2`; PR [#30](https://github.com/shell-echo/sandbox-runtime/pull/30) merged as `9d00212`; PR [#31](https://github.com/shell-echo/sandbox-runtime/pull/31) merged as `67b64a9`; PR [#32](https://github.com/shell-echo/sandbox-runtime/pull/32) merged as `5883da9`; PR [#33](https://github.com/shell-echo/sandbox-runtime/pull/33) merged as `ba39053`; PR [#35](https://github.com/shell-echo/sandbox-runtime/pull/35) merged as `c467cd4`; PR [#36](https://github.com/shell-echo/sandbox-runtime/pull/36) merged as `3a980bd`; PR [#37](https://github.com/shell-echo/sandbox-runtime/pull/37) merged as `f9cfbc3`; PR [#38](https://github.com/shell-echo/sandbox-runtime/pull/38) merged as `7ebcc8f`; PR [#39](https://github.com/shell-echo/sandbox-runtime/pull/39) merged as `17072e6`; PR [#40](https://github.com/shell-echo/sandbox-runtime/pull/40) merged as `65a9ba3`; PR [#41](https://github.com/shell-echo/sandbox-runtime/pull/41) merged as `ac555619`; PR [#42](https://github.com/shell-echo/sandbox-runtime/pull/42) merged as `97fb429` | PR #42 CI `32465114377` and post-merge CI `32465443385` provider-contract, test, and docker-integration passed |
 | P2.2a release evidence | `2fa2e72` on PR #33, merged as `ba39053` | Local race/shuffle, vet, lock, Suite, PR CI, and post-merge CI passed |
 | P2.2b release evidence | `e26bf2b` on PR #35, merged as `c467cd4` | Local race/shuffle, vet, lock, 19-case Suite, PR CI `32456100570`, and post-merge CI `32456279722` passed; no HTTP/dispatch composition |
 | P2.2c release evidence | `275a9e9` on PR #39, merged as `17072e6` | Local race/shuffle, vet, lock, 19-case Suite, PR CI `32460695928`, and post-merge CI `32460914417` passed; no HTTP/Docker/automatic redispatch |
+| P2.3a/b merge evidence | PR [#43](https://github.com/shell-echo/sandbox-runtime/pull/43) merged as `21f5236` | PR CI `32468912019` and post-merge CI `32469390678` provider-contract, test, and docker-integration passed; this proves resource/lock/projection evidence only |
 | Contract namespace | `urn:shell-echo:sandbox-runtime:provider-v1` | Locked |
 | Contract version/license | `1.0.0` / MIT | Locked |
-| Contract resources | OpenAPI, admission, lifecycle, and bounded exec schemas, semantic rules, fixtures, Suite | P2.0b/c passed and merged; P2.1 does not alter Contract resources |
-| Contract lock | revision `4a2a58f`; tree `960220a`; OpenAPI, manifest, semantic-rule, fixture, and Suite bindings | Local verifier, 19-case Conformance, PR #30 CI, and post-merge CI passed |
+| Contract resources | OpenAPI, admission, lifecycle, bounded exec, and terminal-session schemas, semantic rules, fixtures, Suite | P2.3a/b added terminal-session resources, but the locked capability zero-advertisement rule conflicts with their terminal capability/profile requirement |
+| Contract lock | revision `1c6cc0e`; tree `9fda7577`; OpenAPI, manifest, semantic-rule, fixture, and Suite bindings | Local verifier, 24-case Conformance, PR #43 CI, and post-merge CI passed; P2.3c0 must reconcile the semantic contradiction before acceptance |
 | External Agent Contract | no longer consumed; old compatibility evidence is historical only | Removed from implementation |
 
 The lock verifier is intentionally bound to the repository-owned Contract tree.
@@ -54,11 +55,15 @@ It does not clone, mount, or read an external source repository.
 | P2.2a | Exec result and cancellation-intent domain | Passed in PR #33 merge `ba39053`; post-merge CI `32454054853` passed; no persistence, dispatch, or HTTP composition | Retain local-only evidence boundary |
 | P2.2b | Independent exec ledger persistence | Passed in PR #35 merge `c467cd4`; post-merge CI `32456279722` passed | Retain local-only evidence boundary; P2.2c design gate next |
 | P2.2c | Bounded exec coordination and optional cancellation port | Passed in PR #39 merge `17072e6`; post-merge CI `32460914417` passed | Retain no-HTTP/no-Docker/no-auto-recovery boundaries |
-| P2.2 | Retained result and cancellation behavior | Passed for P2.2a-c bounded provider-local subset | P2.3a Contract authority resources and evidence |
-| P2.3a | Terminal session Contract authority | In progress; no locked Contract or runtime implementation yet | Resource review, lock/projection gate, PR, and post-merge CI |
-| P2.3b | Terminal session lock and DTO/admission projection | Not started | P2.3a resource commit, lock, projection tests, Suite mapping, and CI |
-| P2.3c | Terminal session application and Gateway handoff | Not started | P2.3b lock gate and separate runtime evidence |
-| P2 | Coding/remote-shell profile | P2.1 and P2.2a-c closed for bounded provider-local subset | P2.3a Contract authority and subsequent evidence |
+| P2.2 | Retained result and cancellation behavior | Passed for P2.2a-c bounded provider-local subset | P2.3c0 Contract consistency gate and subsequent session evidence |
+| P2.3a | Terminal session Contract resources | Pending evidence: PR #43 merged and CI passed, but the locked semantic rules contradict its capability/profile prerequisite | P2.3c0 capability/profile Contract reconciliation, lock, Suite, PR, and post-merge CI |
+| P2.3b | Terminal session lock and DTO/admission projection | Pending evidence: lock, projection, and 24-case Suite passed in PR #43, but cannot establish an honest accepted session | P2.3c0 capability/profile Contract reconciliation evidence |
+| P2.3c0 | Terminal capability/profile Contract reconciliation | Not started | Replace the zero-advertisement assertion with bounded terminal advertisement, fixture/semantic/Suite association, lock, PR, and post-merge CI |
+| P2.3c1 | Provider-local terminal session domain and transactional authority port | Blocked by P2.3c0 | Separate bounded model/port tests; no transport, allocator, driver, or Gateway |
+| P2.3c2 | Durable terminal session ledger and atomic sandbox authority check | Blocked by P2.3c0/c1 | Idempotency, expiry, restart, and same-transaction ready/generation/lease/fencing evidence |
+| P2.3c3 | Protected transport projection and opaque handoff retrieval | Blocked by P2.3c0-c2 | Route, admission, error projection, and endpoint non-disclosure evidence; no public Gateway claim |
+| P2.3c4 | Runtime Gateway integration | Not started | Independently owned authorization, proxy, reconnect, revocation, recording, external caller, and end-to-end evidence |
+| P2 | Coding/remote-shell profile | P2.1 and P2.2a-c closed for bounded provider-local subset | P2.3c0 Contract consistency gate and subsequent evidence |
 | P3 | Migration readiness and external-caller integration | Not started | External caller E2E, rollback and canary evidence |
 | P4 | Production hardening | Not started | Deployment, multi-controller, multi-tenant, and production gates |
 
@@ -120,8 +125,9 @@ Passed locally (authorized test environment):
 
 Pending:
 
-- P2.3a Contract authority, P2.3b lock/projection, P2.3c application,
-  PR, and post-merge evidence;
+- P2.3c0 terminal capability/profile Contract consistency; P2.3c1 domain,
+  P2.3c2 durable authority, P2.3c3 transport projection, and separate Gateway
+  integration evidence;
 - optional content-derived Suite digest enhancement;
 - aggregate lifecycle conformance, external-caller E2E, reliability, tenancy,
   deployment, and production gates.
@@ -179,6 +185,10 @@ lifecycle-repository reuse, aggregate conformance, external E2E,
 multi-controller, tenancy, deployment, and production claims remain unproven.
 
 P2.2c is closed by PR #39 merge `17072e6`, PR CI `32460695928`, and post-merge
-CI `32460914417`. P2.3a is now the active Contract authority slice. It cannot
-enable terminal/session/Gateway runtime behavior until a distinct resource
-commit and P2.3b lock/projection gate are accepted.
+CI `32460914417`. PR #43 merged P2.3a/b as `21f5236`; PR CI `32468912019` and
+post-merge CI `32469390678` passed. Its locked semantic rules nevertheless
+require a terminal capability/profile for session acceptance while separately
+requiring capability and runtime-profile arrays to remain empty. P2.3c is
+therefore blocked at P2.3c0: reconcile that Contract rule, fixtures, Suite,
+projection, and lock before any terminal session application, transport,
+allocator, driver, or Gateway behavior can begin.

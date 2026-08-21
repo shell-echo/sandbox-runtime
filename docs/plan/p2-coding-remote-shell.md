@@ -10,17 +10,22 @@ cancellation-intent domain passed in PR #33 merge `ba39053`; post-merge CI
 PR CI `32456100570` and post-merge CI `32456279722` passed.
 P2.2c reservation/attach and bounded coordinator passed in PR #39 merge
 `17072e6`; PR CI `32460695928` and post-merge CI `32460914417` passed.
+P2.3a/b terminal-session resources, lock, and projection merged in PR #43 as
+`21f5236`; PR CI `32468912019` and post-merge CI `32469390678` passed. They do
+not establish an acceptable terminal session because the locked capability
+semantic rule still requires empty capability and runtime-profile arrays.
 ADR 0009 records the ownership boundary and ADR 0010 records the bounded exec
 Contract decision.
 
 ## Authority stop condition
 
-The current repository-owned Contract authorizes capability discovery, the
-bounded create/status/operation lifecycle projection, and bounded `exec`,
-exec-cancellation-intent, and retained-result wire resources. Runtime sessions,
-terminal endpoints, usage evidence, and artifact staging remain unauthorized.
-The architecture narrative is not sufficient authority to implement any route
-or runtime behavior beyond the locked resources and this delivery order.
+The current repository-owned Contract contains terminal-only session routes,
+but its locked semantic rules are internally inconsistent: session acceptance
+requires an advertised terminal capability/profile while discovery requires
+empty capability and runtime-profile arrays. The routes must remain unavailable
+until P2.3c0 reconciles that contradiction. The architecture narrative is not
+sufficient authority to implement any route or runtime behavior beyond the
+locked, internally consistent resources and this delivery order.
 
 Before runtime behavior changes, this slice must:
 
@@ -52,10 +57,16 @@ acceptance, result retention, cancellation, reconciliation, or backend adapter.
 - P2.1: bounded exec application/domain ports after P2.0 closes (passed in PR
   #31 merge `67b64a9`; post-merge CI `32445893337` passed);
 - P2.2: retained result and cancellation behavior;
-- P2.3a: terminal session Contract authority: ADR, OpenAPI, Schemas,
-  semantics, fixtures, and Suite, without runtime implementation;
-- P2.3b: terminal session lock and DTO/admission projection gate;
-- P2.3c: opaque terminal session application and Gateway handoff;
+- P2.3a/b: terminal session Contract authority, lock, DTO/admission projection,
+  and Suite gate (merged in PR #43, pending Contract-consistency evidence);
+- P2.3c0: reconcile terminal capability/profile advertisement in the Contract,
+  fixture, semantic rules, Suite, projection, and lock;
+- P2.3c1: provider-local terminal session domain and transactional authority
+  port, without transport, allocator, driver, or Gateway;
+- P2.3c2: durable session ledger and atomic sandbox ready/generation/lease/
+  fencing authority check;
+- P2.3c3: protected transport projection and opaque handoff retrieval;
+- P2.3c4: separately owned Runtime Gateway integration evidence;
 - P2.4: artifact staging and usage evidence.
 
 Each implementation slice requires its own focused tests, race/shuffle suite,
@@ -107,7 +118,8 @@ known non-context dispatch errors as durable pending state, maps context/receipt
 uncertainty to no-redispatch recovery, and treats cancellation replay as query-
 only until a separately observed confirmation exists.
 
-P2.2c is closed as provider-local coordination evidence only. P2.3a is the
-next authority slice for terminal sessions. It must lock an additive Contract
-and projection gate before any terminal/session application, transport, or
-Gateway behavior can begin.
+P2.2c is closed as provider-local coordination evidence only. P2.3a/b provide
+merged resource and projection evidence, but P2.3c0 is the active blocker: no
+terminal session application, transport, allocator, driver, or Gateway behavior
+may begin until the locked zero-advertisement rule and terminal-profile
+requirement are reconciled and independently re-locked.

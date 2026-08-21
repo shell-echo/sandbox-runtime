@@ -88,11 +88,15 @@ Compatibility rules:
 
 The versioned provider surface contains these operation families:
 
-The table is the target architecture inventory. In the current repository-owned
-Contract revision, only `POST /v1/sandboxes`, `GET /v1/sandboxes/{sandbox_id}`,
-and `GET /v1/operations/{operation_id}` are authorized by ADR 0004. The other
-lifecycle families remain reserved and must stay absent from the Provider
-router until an additive Contract revision, fixtures, and release gate exist.
+The table is the target architecture inventory. The current repository-owned
+Contract authorizes `POST /v1/sandboxes`, `GET /v1/sandboxes/{sandbox_id}`,
+`GET /v1/operations/{operation_id}`, and terminal-session open/handoff
+resources. The terminal-session resources remain unavailable: their locked
+semantic rules require a terminal capability/profile while discovery still
+requires empty capability and runtime-profile arrays. P2.3c0 must reconcile
+that contradiction before the session routes may be composed. The other
+lifecycle families remain reserved and must stay absent from the Provider router
+until an additive Contract revision, fixtures, and release gate exist.
 
 | Method and path | Responsibility |
 | --- | --- |
@@ -104,10 +108,11 @@ router until an additive Contract revision, fixtures, and release gate exist.
 | `POST /v1/sandboxes/{sandbox_id}/lease` | Renew the bounded sandbox lease. |
 | `POST /v1/sandboxes/{sandbox_id}/exec` | Start an asynchronous process execution. |
 | `POST /v1/sandboxes/{sandbox_id}/exec:cancel` | Record cancellation intent for an execution. |
-| `POST /v1/sandboxes/{sandbox_id}/runtime-sessions` | Open an internal terminal, browser, desktop, or port-forward session. |
+| `POST /v1/sandboxes/{sandbox_id}/runtime-sessions` | Open an internal terminal session; browser, desktop, and port-forward remain future capability-specific routes. |
 | `POST /v1/sandboxes/{sandbox_id}/snapshots` | Start snapshot creation at a declared level. |
 | `POST /v1/sandboxes/{sandbox_id}:terminate` | Idempotently request teardown. |
 | `GET /v1/operations/{operation_id}` | Read durable asynchronous operation state. |
+| `GET /v1/operations/{operation_id}/runtime-session` | Read an opaque terminal session handoff after a successful session operation. |
 | `GET /v1/operations/{operation_id}/exec-result` | Read a retained execution result. |
 | `GET /v1/operations/{operation_id}/snapshot-manifest` | Read a completed snapshot manifest. |
 | `GET /v1/sandboxes/{sandbox_id}/events` | Resume a sequenced provider event stream. |
