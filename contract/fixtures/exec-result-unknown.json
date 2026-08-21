@@ -1,0 +1,16 @@
+{
+  "operation_id": "operation-exec-unknown-1",
+  "attempt_id": "attempt-exec-unknown-1",
+  "fencing_token": 1,
+  "sandbox_id": "sandbox-1",
+  "status": "outcome_unknown",
+  "started_at": "2026-08-21T00:10:02Z",
+  "completed_at": "2026-08-21T00:10:03Z",
+  "retained_until": "2026-08-21T01:10:03Z",
+  "error": {
+    "code": "SANDBOX_EXEC_OUTCOME_UNKNOWN",
+    "message": "execution outcome requires reconciliation",
+    "retryable": true,
+    "outcome": "outcome_unknown"
+  }
+}

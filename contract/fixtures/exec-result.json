@@ -1,0 +1,13 @@
+{
+  "operation_id": "operation-exec-1",
+  "attempt_id": "attempt-exec-1",
+  "fencing_token": 1,
+  "sandbox_id": "sandbox-1",
+  "status": "completed",
+  "exit_code": 0,
+  "stdout_reference": "ref:exec/stdout-1",
+  "stderr_reference": "ref:exec/stderr-1",
+  "started_at": "2026-08-21T00:00:02Z",
+  "completed_at": "2026-08-21T00:00:03Z",
+  "retained_until": "2026-08-21T01:00:03Z"
+}

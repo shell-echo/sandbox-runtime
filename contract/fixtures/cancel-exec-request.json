@@ -1,0 +1,12 @@
+{
+  "operation_id": "operation-cancel-exec-1",
+  "attempt_id": "attempt-cancel-exec-1",
+  "fencing_token": 2,
+  "idempotency_key": "cancel-exec-request-1",
+  "request_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+  "deadline_at": "2026-08-21T00:06:00Z",
+  "expected_generation": 1,
+  "target_operation_id": "operation-exec-1",
+  "target_attempt_id": "attempt-exec-1",
+  "reason": "caller_requested"
+}

@@ -1,0 +1,24 @@
+{
+  "operation_id": "operation-exec-1",
+  "attempt_id": "attempt-exec-1",
+  "fencing_token": 1,
+  "idempotency_key": "exec-request-1",
+  "request_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+  "deadline_at": "2026-08-21T00:05:00Z",
+  "expected_generation": 1,
+  "command": ["printf", "hello"],
+  "working_directory": "/workspace/src",
+  "result_retention_seconds": 3600,
+  "environment": {
+    "HOME": "envref:grant/exec-home"
+  },
+  "secret_reference_ids": ["secret-ref-1"],
+  "secret_grant_id": "grant:exec-1",
+  "secret_grant_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+  "stdin_reference": "ref:stdin-1",
+  "capture": {
+    "stdout": true,
+    "stderr": true,
+    "max_bytes": 65536
+  }
+}

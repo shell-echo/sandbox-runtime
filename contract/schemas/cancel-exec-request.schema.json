@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:shell-echo:sandbox-runtime:contract:cancel-exec-request:v1",
+  "title": "Sandbox Runtime Exec Cancellation Intent",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "operation_id",
+    "attempt_id",
+    "fencing_token",
+    "idempotency_key",
+    "request_digest",
+    "deadline_at",
+    "expected_generation",
+    "target_operation_id",
+    "target_attempt_id",
+    "reason"
+  ],
+  "properties": {
+    "operation_id": {"$ref": "#/$defs/Identifier"},
+    "attempt_id": {"$ref": "#/$defs/Identifier"},
+    "fencing_token": {"type": "integer", "minimum": 1},
+    "idempotency_key": {"type": "string", "minLength": 1, "maxLength": 200},
+    "request_digest": {"$ref": "#/$defs/Digest"},
+    "deadline_at": {"type": "string", "format": "date-time"},
+    "expected_generation": {"type": "integer", "minimum": 1},
+    "target_operation_id": {"$ref": "#/$defs/Identifier"},
+    "target_attempt_id": {"$ref": "#/$defs/Identifier"},
+    "reason": {"enum": ["caller_requested", "deadline_exceeded", "shutdown", "policy"]}
+  },
+  "$defs": {
+    "Identifier": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$"},
+    "Digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}

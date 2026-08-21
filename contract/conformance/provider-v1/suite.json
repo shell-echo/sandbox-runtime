@@ -18,7 +18,12 @@
         "lifecycle-create-request-schema",
         "lifecycle-operation-state-schema",
         "lifecycle-idempotency-generation-fencing",
-        "lifecycle-deadline-outcome"
+        "lifecycle-deadline-outcome",
+        "exec-request-schema",
+        "exec-cancel-schema",
+        "exec-result-schema",
+        "exec-semantic-bounds",
+        "exec-rejection-fixtures"
       ]
     }
   ],
