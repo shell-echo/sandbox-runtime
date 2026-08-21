@@ -12,13 +12,13 @@ production readiness.
 
 | Item | Evidence | Status |
 | --- | --- | --- |
-| Checkout | `codex/p2.0-authority` from `origin/main@2b25f76` | P2.0a authority inventory in progress |
-| Review | PR [#17](https://github.com/shell-echo/sandbox-runtime/pull/17) merged as `43ff3d7`; PR [#18](https://github.com/shell-echo/sandbox-runtime/pull/18) merged as `4774c3a`; PR [#19](https://github.com/shell-echo/sandbox-runtime/pull/19) merged as `e2755f5`; PR [#21](https://github.com/shell-echo/sandbox-runtime/pull/21) merged as `c5a4a65`; PR [#22](https://github.com/shell-echo/sandbox-runtime/pull/22) merged as `44f39ec`; PR [#23](https://github.com/shell-echo/sandbox-runtime/pull/23) merged as `ac72eab`; PR [#24](https://github.com/shell-echo/sandbox-runtime/pull/24) merged as `2e3dde6`; PR [#25](https://github.com/shell-echo/sandbox-runtime/pull/25) merged as `88506d1`; PR [#26](https://github.com/shell-echo/sandbox-runtime/pull/26) merged as `4ccb107`; PR [#27](https://github.com/shell-echo/sandbox-runtime/pull/27) open at `14c141b` | P1.2.4 passed; PR #26 post-merge CI `32436541588` passed; PR #27 prior CI `32437976999` passed, latest head CI pending |
-| Worktree | P2.0a ADR/plan changes present; not yet committed | Focused docs evidence pending |
+| Checkout | `codex/p2.0-exec-contract` from `origin/main@83965a2` | P2.0b resources landed; P2.0c lock/projection gate in progress |
+| Review | PR [#17](https://github.com/shell-echo/sandbox-runtime/pull/17) merged as `43ff3d7`; PR [#18](https://github.com/shell-echo/sandbox-runtime/pull/18) merged as `4774c3a`; PR [#19](https://github.com/shell-echo/sandbox-runtime/pull/19) merged as `e2755f5`; PR [#21](https://github.com/shell-echo/sandbox-runtime/pull/21) merged as `c5a4a65`; PR [#22](https://github.com/shell-echo/sandbox-runtime/pull/22) merged as `44f39ec`; PR [#23](https://github.com/shell-echo/sandbox-runtime/pull/23) merged as `ac72eab`; PR [#24](https://github.com/shell-echo/sandbox-runtime/pull/24) merged as `2e3dde6`; PR [#25](https://github.com/shell-echo/sandbox-runtime/pull/25) merged as `88506d1`; PR [#26](https://github.com/shell-echo/sandbox-runtime/pull/26) merged as `4ccb107`; PR [#27](https://github.com/shell-echo/sandbox-runtime/pull/27) merged as `28076a7`; PR [#28](https://github.com/shell-echo/sandbox-runtime/pull/28) merged as `2b25f76`; PR [#29](https://github.com/shell-echo/sandbox-runtime/pull/29) merged as `83965a2` | P2.0a authority inventory passed; P2.0b/c local evidence pending PR |
+| Worktree | `codex/p2.0-exec-contract` ahead of `origin/main@83965a2` by two commits | Full local race/shuffle, verifier, vet, and 19-case Suite passed; PR evidence pending |
 | Contract namespace | `urn:shell-echo:sandbox-runtime:provider-v1` | Locked |
 | Contract version/license | `1.0.0` / MIT | Locked |
-| Contract resources | OpenAPI, admission and lifecycle schemas, semantic rules, fixtures, Suite | Locked and merged; P1.2.0 passed |
-| Contract lock | revision `5fc9ce3`; tree `1a75340`; OpenAPI, manifest, semantic-rule, fixture, and Suite bindings | Locked locally |
+| Contract resources | OpenAPI, admission, lifecycle, and bounded exec schemas, semantic rules, fixtures, Suite | P2.0b resources committed; lock/projection gate in progress |
+| Contract lock | revision `4a2a58f`; tree `960220a`; OpenAPI, manifest, semantic-rule, fixture, and Suite bindings | Local verifier and 19-case Conformance passed; PR CI pending |
 | External Agent Contract | no longer consumed; old compatibility evidence is historical only | Removed from implementation |
 
 The lock verifier is intentionally bound to the repository-owned Contract tree.
@@ -45,8 +45,10 @@ It does not clone, mount, or read an external source repository.
 | P1.2.5 | Lifecycle release gate | Passed for the current Contract-authorized subset; local Suite behavior matrix and reserved-family boundary recorded | Retain no-claim boundary for terminate/lease/orphan families; no aggregate or production claim |
 | P1.2.5a | Provider lifecycle composition | Passed in PR #27 merge `28076a7`; post-merge CI `32439289227` passed | Retain fake-driver and production-readiness boundaries |
 | P1.2 | Async lifecycle, operation ledger, reconciliation, events | Passed for the bounded Contract-authorized subset; full architecture lifecycle families remain separately gated | P2.0 authority inventory; do not implement unauthorized lifecycle families |
-| P2.0 | Coding/remote-shell authority inventory | In progress; ADR 0009 boundary recorded | Contract/Schema/semantic rules/fixtures/Suite before exec or session code |
-| P2 | Coding/remote-shell profile | P2.0 authority inventory next; runtime implementation not started | Add Contract/Schema/semantic rules/fixtures/Suite before exec or session code |
+| P2.0a | Coding/remote-shell authority inventory | Passed in PR #29 merge `83965a2`; post-merge CI `32440383198` passed | Retain ADR 0009 ownership boundary |
+| P2.0b | Bounded exec Contract resources | Passed locally in resource commit `4a2a58f`; no runtime dispatch | Lock source revision/tree and retain valid/rejection fixture evidence |
+| P2.0c | Exec Contract lock/projection gate | Local gate passed and committed; PR evidence pending | PR CI and post-merge CI; no runtime claim |
+| P2 | Coding/remote-shell profile | P2.0b/c in progress; runtime implementation not started | P2.1 runtime ports only after P2.0c closes |
 | P3 | Migration readiness and external-caller integration | Not started | External caller E2E, rollback and canary evidence |
 | P4 | Production hardening | Not started | Deployment, multi-controller, multi-tenant, and production gates |
 
@@ -62,8 +64,9 @@ run `32365284283` passed all required jobs.
 - local Go tests are component evidence only;
 - the local Contract verifier proves lock/resource identity, not protocol
   conformance;
-- the local Suite runner executes all 10 required case IDs with the
-  `providerapi` and `provider/admission` test matrices; this remains Provider
+- the local Suite runner executes the locked lifecycle/admission and five P2.0b
+  exec case IDs with the `providerapi`, `providerapi/v1`, and
+  `provider/admission` test matrices; this remains Provider
   component/Contract-suite evidence, not aggregate lifecycle conformance;
 - `suite_digest` is still a locked declared value and is not recomputed from
   Suite contents by the verifier; Git Contract-tree binding protects the
@@ -95,7 +98,7 @@ Passed locally (authorized test environment):
 
 Pending:
 
-- P2.0 coding/remote-shell Contract authority inventory;
+- P2.0c PR and post-merge evidence;
 - optional content-derived Suite digest enhancement;
 - aggregate lifecycle conformance, external-caller E2E, reliability, tenancy,
   deployment, and production gates.
@@ -124,5 +127,7 @@ coordinator idempotency, stale generation, concurrent reconciliation, deadlines,
 cancellation, unknown outcomes, restart inspection, and locked DTO projection.
 Terminate/lease/orphan cleanup are not authorized by the current Contract
 revision. P1.2.5 is closed only for the current authorized subset. Terminate,
-lease mutation, orphan cleanup, exec, sessions, snapshots, and aggregate caller
-compatibility remain unproven or Contract-reserved.
+lease mutation, orphan cleanup, sessions, snapshots, runtime exec behavior,
+and aggregate caller compatibility remain unproven or Contract-reserved. P2.0b
+now defines the bounded exec wire authority only; it does not implement or
+prove execution dispatch, retained-result storage, or cancellation behavior.

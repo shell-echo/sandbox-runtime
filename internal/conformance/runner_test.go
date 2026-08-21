@@ -40,6 +40,11 @@ func TestLocalSuiteCasesHaveRunnerMappings(t *testing.T) {
 		"lifecycle-operation-state-schema",
 		"lifecycle-idempotency-generation-fencing",
 		"lifecycle-deadline-outcome",
+		"exec-request-schema",
+		"exec-cancel-schema",
+		"exec-result-schema",
+		"exec-semantic-bounds",
+		"exec-rejection-fixtures",
 	}
 	if err := validateCases(ids); err != nil {
 		t.Fatal(err)
@@ -52,6 +57,11 @@ func TestLifecycleSuiteCasesExecuteBehaviorPackages(t *testing.T) {
 		"lifecycle-operation-state-schema":         {Package: "./providerapi"},
 		"lifecycle-idempotency-generation-fencing": {Package: "./provider/lifecycle/coordinator"},
 		"lifecycle-deadline-outcome":               {Package: "./provider/lifecycle/coordinator"},
+		"exec-request-schema":                      {Package: "./providerapi/v1"},
+		"exec-cancel-schema":                       {Package: "./providerapi/v1"},
+		"exec-result-schema":                       {Package: "./providerapi/v1"},
+		"exec-semantic-bounds":                     {Package: "./providerapi/v1"},
+		"exec-rejection-fixtures":                  {Package: "./providerapi/v1"},
 	}
 	for id, expected := range want {
 		got := testCases[id]

@@ -107,6 +107,26 @@ var testCases = map[string]testCase{
 		Package: "./provider/lifecycle/coordinator",
 		Run:     `^(TestKnownFailureAndDeadlineDoNotDispatch|TestCanceledContextDoesNotDispatch|TestCreateUnknownOutcomeIsNotRetriedBlindlyAndReconcilesByInspection|TestRestartedRunningOperationIsReconciledWithoutDuplicateCreate)$`,
 	},
+	"exec-request-schema": {
+		Package: "./providerapi/v1",
+		Run:     `^TestLockedExecRequestProjection$`,
+	},
+	"exec-cancel-schema": {
+		Package: "./providerapi/v1",
+		Run:     `^TestLockedCancelExecRequestProjection$`,
+	},
+	"exec-result-schema": {
+		Package: "./providerapi/v1",
+		Run:     `^TestLockedExecResultProjection$`,
+	},
+	"exec-semantic-bounds": {
+		Package: "./providerapi/v1",
+		Run:     `^TestLocalContractExecSemanticRules$`,
+	},
+	"exec-rejection-fixtures": {
+		Package: "./providerapi/v1",
+		Run:     `^TestExecRejectionFixtures$`,
+	},
 }
 
 // Run verifies the locked local Contract and executes every case in its
