@@ -12,13 +12,13 @@ production readiness.
 
 | Item | Evidence | Status |
 | --- | --- | --- |
-| Checkout | `codex/p2.0-exec-contract` from `origin/main@83965a2` | P2.0b resources landed; P2.0c lock/projection gate in progress |
-| Review | PR [#17](https://github.com/shell-echo/sandbox-runtime/pull/17) merged as `43ff3d7`; PR [#18](https://github.com/shell-echo/sandbox-runtime/pull/18) merged as `4774c3a`; PR [#19](https://github.com/shell-echo/sandbox-runtime/pull/19) merged as `e2755f5`; PR [#21](https://github.com/shell-echo/sandbox-runtime/pull/21) merged as `c5a4a65`; PR [#22](https://github.com/shell-echo/sandbox-runtime/pull/22) merged as `44f39ec`; PR [#23](https://github.com/shell-echo/sandbox-runtime/pull/23) merged as `ac72eab`; PR [#24](https://github.com/shell-echo/sandbox-runtime/pull/24) merged as `2e3dde6`; PR [#25](https://github.com/shell-echo/sandbox-runtime/pull/25) merged as `88506d1`; PR [#26](https://github.com/shell-echo/sandbox-runtime/pull/26) merged as `4ccb107`; PR [#27](https://github.com/shell-echo/sandbox-runtime/pull/27) merged as `28076a7`; PR [#28](https://github.com/shell-echo/sandbox-runtime/pull/28) merged as `2b25f76`; PR [#29](https://github.com/shell-echo/sandbox-runtime/pull/29) merged as `83965a2`; PR [#30](https://github.com/shell-echo/sandbox-runtime/pull/30) open at `840b3b8` | PR #30 CI run `32443572559` provider-contract, test, and docker-integration passed; merge/post-merge pending |
-| Worktree | `codex/p2.0-exec-contract` ahead of `origin/main@83965a2` by two commits | Full local race/shuffle, verifier, vet, and 19-case Suite passed; PR evidence pending |
+| Checkout | `codex/p2.1-exec-runtime` from `origin/main@9d00212` | P2.0c closed; P2.1 local domain/application-port work is under review preparation |
+| Review | PR [#17](https://github.com/shell-echo/sandbox-runtime/pull/17) merged as `43ff3d7`; PR [#18](https://github.com/shell-echo/sandbox-runtime/pull/18) merged as `4774c3a`; PR [#19](https://github.com/shell-echo/sandbox-runtime/pull/19) merged as `e2755f5`; PR [#21](https://github.com/shell-echo/sandbox-runtime/pull/21) merged as `c5a4a65`; PR [#22](https://github.com/shell-echo/sandbox-runtime/pull/22) merged as `44f39ec`; PR [#23](https://github.com/shell-echo/sandbox-runtime/pull/23) merged as `ac72eab`; PR [#24](https://github.com/shell-echo/sandbox-runtime/pull/24) merged as `2e3dde6`; PR [#25](https://github.com/shell-echo/sandbox-runtime/pull/25) merged as `88506d1`; PR [#26](https://github.com/shell-echo/sandbox-runtime/pull/26) merged as `4ccb107`; PR [#27](https://github.com/shell-echo/sandbox-runtime/pull/27) merged as `28076a7`; PR [#28](https://github.com/shell-echo/sandbox-runtime/pull/28) merged as `2b25f76`; PR [#29](https://github.com/shell-echo/sandbox-runtime/pull/29) merged as `83965a2`; PR [#30](https://github.com/shell-echo/sandbox-runtime/pull/30) merged as `9d00212` | PR #30 post-merge CI run `32444266288` provider-contract, test, and docker-integration passed |
+| Worktree | `codex/p2.1-exec-runtime` contains the uncommitted P2.1 slice on `origin/main@9d00212` | Full local race/shuffle, verifier, vet, and 19-case Suite passed; PR evidence pending |
 | Contract namespace | `urn:shell-echo:sandbox-runtime:provider-v1` | Locked |
 | Contract version/license | `1.0.0` / MIT | Locked |
-| Contract resources | OpenAPI, admission, lifecycle, and bounded exec schemas, semantic rules, fixtures, Suite | P2.0b resources committed; lock/projection gate in progress |
-| Contract lock | revision `4a2a58f`; tree `960220a`; OpenAPI, manifest, semantic-rule, fixture, and Suite bindings | Local verifier, 19-case Conformance, and PR #30 CI passed; post-merge pending |
+| Contract resources | OpenAPI, admission, lifecycle, and bounded exec schemas, semantic rules, fixtures, Suite | P2.0b/c passed and merged; P2.1 does not alter Contract resources |
+| Contract lock | revision `4a2a58f`; tree `960220a`; OpenAPI, manifest, semantic-rule, fixture, and Suite bindings | Local verifier, 19-case Conformance, PR #30 CI, and post-merge CI passed |
 | External Agent Contract | no longer consumed; old compatibility evidence is historical only | Removed from implementation |
 
 The lock verifier is intentionally bound to the repository-owned Contract tree.
@@ -46,9 +46,10 @@ It does not clone, mount, or read an external source repository.
 | P1.2.5a | Provider lifecycle composition | Passed in PR #27 merge `28076a7`; post-merge CI `32439289227` passed | Retain fake-driver and production-readiness boundaries |
 | P1.2 | Async lifecycle, operation ledger, reconciliation, events | Passed for the bounded Contract-authorized subset; full architecture lifecycle families remain separately gated | P2.0 authority inventory; do not implement unauthorized lifecycle families |
 | P2.0a | Coding/remote-shell authority inventory | Passed in PR #29 merge `83965a2`; post-merge CI `32440383198` passed | Retain ADR 0009 ownership boundary |
-| P2.0b | Bounded exec Contract resources | Passed locally in resource commit `4a2a58f`; no runtime dispatch | Lock source revision/tree and retain valid/rejection fixture evidence |
-| P2.0c | Exec Contract lock/projection gate | PR #30 CI run `32443572559` passed; merge pending | Post-merge CI; no runtime claim |
-| P2 | Coding/remote-shell profile | P2.0b/c in progress; runtime implementation not started | P2.1 runtime ports only after P2.0c closes |
+| P2.0b | Bounded exec Contract resources | Passed in PR #30 merge `9d00212`; no runtime dispatch | Retain lock source revision/tree and valid/rejection fixture evidence |
+| P2.0c | Exec Contract lock/projection gate | Passed in PR #30; post-merge CI run `32444266288` passed | No runtime claim from the Contract gate |
+| P2.1 | Bounded exec domain/application port | Local implementation, race/shuffle, vet, lock, and Suite verification passed; no public composition | Commit, PR CI, review, merge, and post-merge CI; retain P2.2 non-goals |
+| P2 | Coding/remote-shell profile | P2.0 closed; P2.1 in progress | P2.1 PR evidence, then P2.2 retained-result/cancellation design |
 | P3 | Migration readiness and external-caller integration | Not started | External caller E2E, rollback and canary evidence |
 | P4 | Production hardening | Not started | Deployment, multi-controller, multi-tenant, and production gates |
 
@@ -98,7 +99,7 @@ Passed locally (authorized test environment):
 
 Pending:
 
-- P2.0c merge and post-merge evidence;
+- P2.1 commit, PR, review, and post-merge evidence;
 - optional content-derived Suite digest enhancement;
 - aggregate lifecycle conformance, external-caller E2E, reliability, tenancy,
   deployment, and production gates.
@@ -128,6 +129,9 @@ cancellation, unknown outcomes, restart inspection, and locked DTO projection.
 Terminate/lease/orphan cleanup are not authorized by the current Contract
 revision. P1.2.5 is closed only for the current authorized subset. Terminate,
 lease mutation, orphan cleanup, sessions, snapshots, runtime exec behavior,
-and aggregate caller compatibility remain unproven or Contract-reserved. P2.0b
-now defines the bounded exec wire authority only; it does not implement or
-prove execution dispatch, retained-result storage, or cancellation behavior.
+and aggregate caller compatibility remain unproven or Contract-reserved. PR
+#30 closed the bounded exec Contract gate only. P2.1 locally validates an
+uncomposed Provider-local execution port with bounded input and opaque receipt
+validation; it does not expose an exec route, durably accept an operation,
+retain a result, record cancellation intent, reconcile an outcome, select a
+Docker/backend adapter, or prove runtime execution behavior.

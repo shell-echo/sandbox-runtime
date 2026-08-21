@@ -1,19 +1,21 @@
 # P2.0 Coding and Remote-Shell Authority Inventory
 
 Status: P2.0a authority inventory passed in PR #29 merge `83965a2` and
-post-merge CI `32440383198`. P2.0b Contract resources are defined in the local
-resource commit `4a2a58f`; P2.0c lock/projection local gate and PR #30 CI run
-`32443572559` passed; merge/post-merge evidence is pending.
+post-merge CI `32440383198`. P2.0b/c bounded exec resources, lock, and
+projection gate passed in PR #30 merge `9d00212`; post-merge CI
+`32444266288` passed. P2.1 local domain/application-port implementation is
+ready for its independent commit and PR evidence.
 ADR 0009 records the ownership boundary and ADR 0010 records the bounded exec
 Contract decision.
 
 ## Authority stop condition
 
-The current repository-owned Contract authorizes only capability discovery and
-the bounded create/status/operation lifecycle projection. It does not yet
-authorize `exec`, cancellation, retained exec results, runtime sessions,
-terminal endpoints, usage evidence, or artifact staging wire mappings. The
-architecture narrative is not sufficient authority to implement those routes.
+The current repository-owned Contract authorizes capability discovery, the
+bounded create/status/operation lifecycle projection, and bounded `exec`,
+exec-cancellation-intent, and retained-result wire resources. Runtime sessions,
+terminal endpoints, usage evidence, and artifact staging remain unauthorized.
+The architecture narrative is not sufficient authority to implement any route
+or runtime behavior beyond the locked resources and this delivery order.
 
 Before runtime behavior changes, this slice must:
 
@@ -30,7 +32,9 @@ Before runtime behavior changes, this slice must:
 No exec, terminal, session, snapshot, artifact, or public endpoint code may be
 implemented before those inputs are locked. Do not copy or restore an absent
 external Contract, and do not reuse `/instances` or backend structs as Provider
-wire DTOs. The P2.0b resource commit intentionally has no runtime dispatch.
+wire DTOs. The P2.0b resource commit intentionally has no runtime dispatch;
+P2.1 remains uncomposed from Provider HTTP and contains no durable operation
+acceptance, result retention, cancellation, reconciliation, or backend adapter.
 
 ## Delivery order
 
@@ -38,9 +42,10 @@ wire DTOs. The P2.0b resource commit intentionally has no runtime dispatch.
   boundaries and security-base assumptions (passed; ADR 0009);
 - P2.0b: additive Contract resources, semantic rules, fixtures, and Suite
   (implemented in resource commit `4a2a58f`);
-- P2.0c: lock and projection gate with no runtime dispatch (local gate and PR
-  #30 CI passed; merge/post-merge evidence pending; ADR 0010);
-- P2.1: bounded exec application/domain ports after P2.0 closes;
+- P2.0c: lock and projection gate with no runtime dispatch (passed in PR #30
+  merge `9d00212`; post-merge CI `32444266288` passed; ADR 0010);
+- P2.1: bounded exec application/domain ports after P2.0 closes (local
+  implementation verified; commit/PR/post-merge evidence pending);
 - P2.2: retained result and cancellation behavior;
 - P2.3: opaque terminal/session application and gateway handoff;
 - P2.4: artifact staging and usage evidence.
@@ -49,3 +54,18 @@ Each implementation slice requires its own focused tests, race/shuffle suite,
 Contract lock verification, Conformance evidence, PR CI, and post-merge CI.
 None of these slices establishes external-caller compatibility, multi-tenant
 security, deployment readiness, or production readiness by itself.
+
+## P2.1 Boundary
+
+P2.1 owns only a backend-neutral Provider-local request model, strict bounded
+validation, immutable invocation copy, execution port, and application service.
+It derives a context deadline for the port and reports a cancellation or
+deadline during dispatch as an unknown outcome. The opaque execution receipt is
+validated before it can leave the application boundary.
+
+P2.1 excludes Provider HTTP dispatch, `202` operation projection, lifecycle
+repository reuse, backend/Docker selection, retained results, cancellation
+intent, reconciliation, sessions, artifacts, usage, and `/instances`. An
+`expected_generation` is bounded but not compared to sandbox state until a
+future explicitly authorized persistence/reconciliation slice supplies that
+state boundary.
