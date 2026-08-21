@@ -19,6 +19,8 @@
     {"path": "schemas/exec-request.schema.json", "kind": "json-schema", "id": "urn:shell-echo:sandbox-runtime:contract:exec-request:v1"},
     {"path": "schemas/cancel-exec-request.schema.json", "kind": "json-schema", "id": "urn:shell-echo:sandbox-runtime:contract:cancel-exec-request:v1"},
     {"path": "schemas/exec-result.schema.json", "kind": "json-schema", "id": "urn:shell-echo:sandbox-runtime:contract:exec-result:v1"},
+    {"path": "schemas/runtime-session-open-request.schema.json", "kind": "json-schema", "id": "urn:shell-echo:sandbox-runtime:contract:runtime-session-open-request:v1"},
+    {"path": "schemas/runtime-session-handoff.schema.json", "kind": "json-schema", "id": "urn:shell-echo:sandbox-runtime:contract:runtime-session-handoff:v1"},
     {"path": "semantic-rules/provider-v1.json", "kind": "semantic-rules", "id": "urn:shell-echo:sandbox-runtime:semantic-rules:provider-v1"},
     {"path": "fixtures/capabilities.json", "kind": "fixture", "id": "urn:shell-echo:sandbox-runtime:fixture:capabilities:v1"},
     {"path": "fixtures/standard-error.json", "kind": "fixture", "id": "urn:shell-echo:sandbox-runtime:fixture:standard-error:v1"},
@@ -34,6 +36,10 @@
     {"path": "fixtures/exec-result-unknown.json", "kind": "fixture", "id": "urn:shell-echo:sandbox-runtime:fixture:exec-result-unknown:v1"},
     {"path": "fixtures/provider-operation-exec.json", "kind": "fixture", "id": "urn:shell-echo:sandbox-runtime:fixture:provider-operation-exec:v1"},
     {"path": "fixtures/exec-rejections.json", "kind": "fixture", "id": "urn:shell-echo:sandbox-runtime:fixture:exec-rejections:v1"},
+    {"path": "fixtures/runtime-session-open-request.json", "kind": "fixture", "id": "urn:shell-echo:sandbox-runtime:fixture:runtime-session-open-request:v1"},
+    {"path": "fixtures/runtime-session-handoff.json", "kind": "fixture", "id": "urn:shell-echo:sandbox-runtime:fixture:runtime-session-handoff:v1"},
+    {"path": "fixtures/provider-operation-runtime-session.json", "kind": "fixture", "id": "urn:shell-echo:sandbox-runtime:fixture:provider-operation-runtime-session:v1"},
+    {"path": "fixtures/runtime-session-rejections.json", "kind": "fixture", "id": "urn:shell-echo:sandbox-runtime:fixture:runtime-session-rejections:v1"},
     {"path": "conformance/provider-v1/suite.json", "kind": "conformance-suite", "id": "urn:shell-echo:sandbox-runtime:conformance:provider-v1"}
   ]
 }

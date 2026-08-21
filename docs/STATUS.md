@@ -54,8 +54,11 @@ It does not clone, mount, or read an external source repository.
 | P2.2a | Exec result and cancellation-intent domain | Passed in PR #33 merge `ba39053`; post-merge CI `32454054853` passed; no persistence, dispatch, or HTTP composition | Retain local-only evidence boundary |
 | P2.2b | Independent exec ledger persistence | Passed in PR #35 merge `c467cd4`; post-merge CI `32456279722` passed | Retain local-only evidence boundary; P2.2c design gate next |
 | P2.2c | Bounded exec coordination and optional cancellation port | Passed in PR #39 merge `17072e6`; post-merge CI `32460914417` passed | Retain no-HTTP/no-Docker/no-auto-recovery boundaries |
-| P2.2 | Retained result and cancellation behavior | Passed for P2.2a-c bounded provider-local subset | P2.3 design authority and evidence; no Contract expansion assumed |
-| P2 | Coding/remote-shell profile | P2.1 and P2.2a-c closed for bounded provider-local subset | P2.3 design and implementation evidence |
+| P2.2 | Retained result and cancellation behavior | Passed for P2.2a-c bounded provider-local subset | P2.3a Contract authority resources and evidence |
+| P2.3a | Terminal session Contract authority | In progress; no locked Contract or runtime implementation yet | Resource review, lock/projection gate, PR, and post-merge CI |
+| P2.3b | Terminal session lock and DTO/admission projection | Not started | P2.3a resource commit, lock, projection tests, Suite mapping, and CI |
+| P2.3c | Terminal session application and Gateway handoff | Not started | P2.3b lock gate and separate runtime evidence |
+| P2 | Coding/remote-shell profile | P2.1 and P2.2a-c closed for bounded provider-local subset | P2.3a Contract authority and subsequent evidence |
 | P3 | Migration readiness and external-caller integration | Not started | External caller E2E, rollback and canary evidence |
 | P4 | Production hardening | Not started | Deployment, multi-controller, multi-tenant, and production gates |
 
@@ -117,7 +120,8 @@ Passed locally (authorized test environment):
 
 Pending:
 
-- P2.3 design, implementation, PR, and post-merge evidence;
+- P2.3a Contract authority, P2.3b lock/projection, P2.3c application,
+  PR, and post-merge evidence;
 - optional content-derived Suite digest enhancement;
 - aggregate lifecycle conformance, external-caller E2E, reliability, tenancy,
   deployment, and production gates.
@@ -175,6 +179,6 @@ lifecycle-repository reuse, aggregate conformance, external E2E,
 multi-controller, tenancy, deployment, and production claims remain unproven.
 
 P2.2c is closed by PR #39 merge `17072e6`, PR CI `32460695928`, and post-merge
-CI `32460914417`. The next entry is P2.3, which requires a fresh authority
-review before any terminal/session/gateway behavior; the current Contract keeps
-those resources outside the authorized runtime surface.
+CI `32460914417`. P2.3a is now the active Contract authority slice. It cannot
+enable terminal/session/Gateway runtime behavior until a distinct resource
+commit and P2.3b lock/projection gate are accepted.

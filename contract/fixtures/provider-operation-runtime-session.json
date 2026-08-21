@@ -1,0 +1,9 @@
+{
+  "operation_id": "operation-session-1",
+  "attempt_id": "attempt-session-1",
+  "fencing_token": 1,
+  "sandbox_id": "sandbox-1",
+  "type": "open_runtime_session",
+  "status": "accepted",
+  "observed_at": "2026-08-21T00:00:01Z"
+}
