@@ -30,6 +30,8 @@ var (
 	ErrInvalidApplication   = errors.New("invalid Provider exec application")
 	ErrDispatchUnknown      = errors.New("Provider exec dispatch outcome is unknown")
 	ErrInvalidDispatch      = errors.New("invalid Provider exec dispatch receipt")
+	ErrInvalidResult        = errors.New("invalid Provider exec retained result")
+	ErrInvalidCancellation  = errors.New("invalid Provider exec cancellation intent")
 	identifierPattern       = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$`)
 	digestPattern           = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 	workingDirectoryPattern = regexp.MustCompile(`^/(workspace|tmp)(/[A-Za-z0-9_-][A-Za-z0-9._-]*)*$`)
@@ -37,6 +39,7 @@ var (
 	environmentRefPattern   = regexp.MustCompile(`^envref:[A-Za-z0-9][A-Za-z0-9._:/-]{0,399}$`)
 	grantPattern            = regexp.MustCompile(`^grant:[A-Za-z0-9][A-Za-z0-9._:/-]{0,399}$`)
 	referencePattern        = regexp.MustCompile(`^ref:[A-Za-z0-9][A-Za-z0-9._:/-]{0,399}$`)
+	signalPattern           = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
 )
 
 // Request is the provider-neutral projection of the Contract exec request.
