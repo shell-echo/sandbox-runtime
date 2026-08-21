@@ -31,6 +31,40 @@ type ProviderConfig struct {
 	Transport          ProviderTransportConfig          `mapstructure:"transport"`
 	Capability         ProviderCapabilityConfig         `mapstructure:"capability"`
 	ProtectedAdmission ProviderProtectedAdmissionConfig `mapstructure:"protected_admission"`
+	Lifecycle          ProviderLifecycleConfig          `mapstructure:"lifecycle"`
+}
+
+// ProviderLifecycleDriver identifies a Provider-local runtime implementation.
+// It is intentionally separate from the local instance runtime driver.
+type ProviderLifecycleDriver string
+
+const ProviderLifecycleFakeDriver ProviderLifecycleDriver = "fake"
+
+// ProviderLifecycleRepositoryDriver identifies Provider-local persistence.
+type ProviderLifecycleRepositoryDriver string
+
+const (
+	ProviderLifecycleMemoryRepository ProviderLifecycleRepositoryDriver = "memory"
+	ProviderLifecycleFileRepository   ProviderLifecycleRepositoryDriver = "file"
+)
+
+type ProviderLifecycleRepositoryFileConfig struct {
+	Path string `mapstructure:"path"`
+}
+
+// ProviderLifecycleRepositoryConfig is independent from the /instances
+// repository configuration and its durability claims.
+type ProviderLifecycleRepositoryConfig struct {
+	Driver ProviderLifecycleRepositoryDriver     `mapstructure:"driver"`
+	File   ProviderLifecycleRepositoryFileConfig `mapstructure:"file"`
+}
+
+// ProviderLifecycleConfig controls composition of the authorized Provider
+// lifecycle application. Disabled configuration is inert.
+type ProviderLifecycleConfig struct {
+	Enabled    bool                              `mapstructure:"enabled"`
+	Driver     ProviderLifecycleDriver           `mapstructure:"driver"`
+	Repository ProviderLifecycleRepositoryConfig `mapstructure:"repository"`
 }
 
 // ProviderTransportConfig configures the dedicated, mTLS-only Provider
@@ -128,6 +162,9 @@ func (c *ServerConfig) load(v *viper.Viper) error {
 // configuration is inert and may retain template placeholders.
 func (c *ProviderConfig) Validate() error {
 	if !c.Transport.Enabled {
+		if c.Lifecycle.Enabled {
+			return errors.New("lifecycle requires Provider transport to be enabled")
+		}
 		return nil
 	}
 	if err := c.Transport.validateEnabled(); err != nil {
@@ -139,7 +176,37 @@ func (c *ProviderConfig) Validate() error {
 	if err := c.ProtectedAdmission.validateEnabled(); err != nil {
 		return fmt.Errorf("protected admission %w", err)
 	}
+	if err := c.Lifecycle.validateEnabled(); err != nil {
+		return fmt.Errorf("lifecycle %w", err)
+	}
+	if c.Lifecycle.Enabled && !c.ProtectedAdmission.Enabled {
+		return errors.New("lifecycle requires protected admission to be enabled")
+	}
 	return nil
+}
+
+func (c *ProviderLifecycleConfig) validateEnabled() error {
+	if !c.Enabled {
+		return nil
+	}
+	if c.Driver != ProviderLifecycleFakeDriver {
+		return fmt.Errorf("driver %q is unsupported", c.Driver)
+	}
+	switch c.Repository.Driver {
+	case ProviderLifecycleMemoryRepository:
+	case ProviderLifecycleFileRepository:
+		if strings.TrimSpace(c.Repository.File.Path) == "" {
+			return errors.New("repository.file.path must not be empty")
+		}
+	default:
+		return fmt.Errorf("repository driver %q is unsupported", c.Repository.Driver)
+	}
+	return nil
+}
+
+// Validate checks an explicitly enabled Provider lifecycle configuration.
+func (c ProviderLifecycleConfig) Validate() error {
+	return c.validateEnabled()
 }
 
 func (c *ProviderTransportConfig) validateEnabled() error {
@@ -281,6 +348,15 @@ func defaultServerConfig() *ServerConfig {
 		API: option.HTTP{
 			Host: defaultServerAPIHost,
 			Port: defaultServerAPIPort,
+		},
+		Provider: ProviderConfig{
+			Lifecycle: ProviderLifecycleConfig{
+				Driver: ProviderLifecycleFakeDriver,
+				Repository: ProviderLifecycleRepositoryConfig{
+					Driver: ProviderLifecycleMemoryRepository,
+					File:   ProviderLifecycleRepositoryFileConfig{Path: "data/provider-lifecycle.json"},
+				},
+			},
 		},
 	}
 }

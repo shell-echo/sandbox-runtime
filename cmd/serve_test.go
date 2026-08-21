@@ -140,6 +140,42 @@ func TestValidateServeConfigurationProductionBoundaries(t *testing.T) {
 	}
 }
 
+func TestValidateServeConfigurationRejectsFakeProviderLifecycleInProduction(t *testing.T) {
+	application := &config.ApplicationConfig{Mode: config.ApplicationProductionMode}
+	serverConfig := &config.ServerConfig{API: option.HTTP{Host: "127.0.0.1", Port: 8080}, Provider: validProviderConfigForServeTest()}
+	serverConfig.Provider.ProtectedAdmission = validProtectedAdmissionConfigForServeTest()
+	serverConfig.Provider.Lifecycle = config.ProviderLifecycleConfig{
+		Enabled: true,
+		Driver:  config.ProviderLifecycleFakeDriver,
+		Repository: config.ProviderLifecycleRepositoryConfig{
+			Driver: config.ProviderLifecycleFileRepository,
+			File:   config.ProviderLifecycleRepositoryFileConfig{Path: "provider-lifecycle.json"},
+		},
+	}
+	runtimeConfig := &config.RuntimeConfig{Driver: config.RuntimeDockerDriver, Docker: config.RuntimeDockerConfig{Image: "example/shell@sha256:" + strings.Repeat("a", 64)}}
+	repositoryConfig := &config.RepositoryConfig{Driver: config.RepositoryFileDriver, File: config.RepositoryFileConfig{Path: "instances.json"}}
+	if err := validateServeConfiguration(application, serverConfig, runtimeConfig, repositoryConfig); err == nil {
+		t.Fatal("production accepted the Provider fake lifecycle driver")
+	}
+}
+
+func TestNewProviderLifecycleApplicationUsesIndependentComposition(t *testing.T) {
+	lifecycleConfig := config.ProviderLifecycleConfig{
+		Enabled: true,
+		Driver:  config.ProviderLifecycleFakeDriver,
+		Repository: config.ProviderLifecycleRepositoryConfig{
+			Driver: config.ProviderLifecycleMemoryRepository,
+		},
+	}
+	application, closeApplication, err := newProviderLifecycleApplication(context.Background(), lifecycleConfig)
+	if err != nil || application == nil || closeApplication == nil {
+		t.Fatalf("newProviderLifecycleApplication() = %T, %t, %v", application, closeApplication != nil, err)
+	}
+	if err := closeApplication(); err != nil {
+		t.Fatalf("close Provider lifecycle application: %v", err)
+	}
+}
+
 func TestValidateServeConfigurationRejectsProviderPortCollision(t *testing.T) {
 	application := &config.ApplicationConfig{Mode: config.ApplicationDevelopmentMode}
 	serverConfig := &config.ServerConfig{
@@ -371,6 +407,13 @@ func validProviderConfigForServeTest() config.ProviderConfig {
 				SuiteDigest: "sha256:" + strings.Repeat("a", 64),
 			}},
 		},
+	}
+}
+
+func validProtectedAdmissionConfigForServeTest() config.ProviderProtectedAdmissionConfig {
+	return config.ProviderProtectedAdmissionConfig{
+		Enabled: true, GuardStateFile: "provider-admission.json",
+		TrustedVerificationKeys: []config.ProviderTrustedVerificationKeyConfig{{ID: "key-1", Algorithm: "EdDSA", PublicKeyFile: "key.pem"}},
 	}
 }
 

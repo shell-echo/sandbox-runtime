@@ -500,7 +500,7 @@ visibility.
 
 - [x] add durable Provider sandbox, operation, lease, and event models
 - [x] add idempotency, generation, fencing, deadlines, and reconciliation
-- [x] expose the Contract-authorized asynchronous Provider API v1 lifecycle projection (runtime composition remains gated)
+- [x] compose the authorized Provider lifecycle application for development (production driver and readiness remain gated)
 - [ ] pass the applicable local lifecycle and security Conformance Suite
 
 ### Manifest and blocks
