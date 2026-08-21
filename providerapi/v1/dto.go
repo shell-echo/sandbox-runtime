@@ -122,6 +122,13 @@ const (
 	RuntimePortForward RuntimeType = "port_forward"
 )
 
+// TerminalRuntimeType is deliberately narrower than the architecture's
+// reserved runtime vocabulary. The locked P2.3 session Contract admits only
+// terminal sessions.
+type TerminalRuntimeType string
+
+const TerminalRuntimeTerminal TerminalRuntimeType = "terminal"
+
 type SessionProtocol string
 
 const (
@@ -208,6 +215,10 @@ func (v *OperationState) UnmarshalJSON(data []byte) error {
 func (v *RuntimeType) UnmarshalJSON(data []byte) error {
 	return unmarshalEnum(data, "runtime type", v, RuntimeTerminal, RuntimeBrowser,
 		RuntimeDesktop, RuntimePortForward)
+}
+
+func (v *TerminalRuntimeType) UnmarshalJSON(data []byte) error {
+	return unmarshalEnum(data, "terminal runtime type", v, TerminalRuntimeTerminal)
 }
 
 func (v *SessionProtocol) UnmarshalJSON(data []byte) error {
@@ -371,12 +382,11 @@ type RestoreRequest struct {
 
 type RuntimeSessionOpenRequest struct {
 	MutationEnvelope
-	ExpectedGeneration int64       `json:"expected_generation"`
-	RuntimeSessionID   string      `json:"runtime_session_id"`
-	RuntimeType        RuntimeType `json:"runtime_type"`
-	Scopes             []string    `json:"scopes"`
-	TargetPort         *int64      `json:"target_port,omitempty"`
-	ExpiresAt          string      `json:"expires_at"`
+	ExpectedGeneration  int64               `json:"expected_generation"`
+	RuntimeSessionID    string              `json:"runtime_session_id"`
+	RuntimeType         TerminalRuntimeType `json:"runtime_type"`
+	CapabilityProfileID string              `json:"capability_profile_id"`
+	ExpiresAt           string              `json:"expires_at"`
 }
 
 type SnapshotConsistency string
@@ -674,19 +684,26 @@ type UsageEntry struct {
 	OccurredAt        string      `json:"occurred_at"`
 }
 
-type RuntimeSessionEndpoint struct {
-	OperationID                  string          `json:"operation_id"`
-	AttemptID                    string          `json:"attempt_id"`
-	FencingToken                 int64           `json:"fencing_token"`
-	SandboxID                    string          `json:"sandbox_id"`
-	RuntimeSessionID             string          `json:"runtime_session_id"`
-	ProviderSessionID            string          `json:"provider_session_id"`
-	RuntimeType                  RuntimeType     `json:"runtime_type"`
-	Protocol                     SessionProtocol `json:"protocol"`
-	InternalEndpointReference    string          `json:"internal_endpoint_reference"`
-	ProviderAccessTokenReference string          `json:"provider_access_token_reference,omitempty"`
-	ConnectionGeneration         int64           `json:"connection_generation"`
-	ExpiresAt                    string          `json:"expires_at"`
+type RuntimeSessionHandoff struct {
+	OperationID               string              `json:"operation_id"`
+	AttemptID                 string              `json:"attempt_id"`
+	FencingToken              int64               `json:"fencing_token"`
+	SandboxID                 string              `json:"sandbox_id"`
+	RuntimeSessionID          string              `json:"runtime_session_id"`
+	RuntimeType               TerminalRuntimeType `json:"runtime_type"`
+	CapabilityProfileID       string              `json:"capability_profile_id"`
+	Protocol                  TerminalProtocol    `json:"protocol"`
+	InternalEndpointReference string              `json:"internal_endpoint_reference"`
+	ConnectionGeneration      int64               `json:"connection_generation"`
+	ExpiresAt                 string              `json:"expires_at"`
+}
+
+type TerminalProtocol string
+
+const TerminalProtocolWebSocket TerminalProtocol = "websocket"
+
+func (v *TerminalProtocol) UnmarshalJSON(data []byte) error {
+	return unmarshalEnum(data, "terminal protocol", v, TerminalProtocolWebSocket)
 }
 
 type SnapshotPortability string

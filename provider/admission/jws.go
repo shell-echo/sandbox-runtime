@@ -49,6 +49,7 @@ const (
 	OperationReadSandbox          Operation = "read_sandbox"
 	OperationReadOperation        Operation = "read_operation"
 	OperationReadResult           Operation = "read_result"
+	OperationReadRuntimeSession   Operation = "read_runtime_session"
 	OperationReadSnapshotManifest Operation = "read_snapshot_manifest"
 	OperationReadEvents           Operation = "read_events"
 )
@@ -60,7 +61,7 @@ func (operation Operation) Supported() bool {
 		OperationExtendLease, OperationExec, OperationCancelExec,
 		OperationOpenRuntimeSession, OperationSnapshot, OperationTerminate,
 		OperationReadSandbox, OperationReadOperation, OperationReadResult,
-		OperationReadSnapshotManifest, OperationReadEvents:
+		OperationReadRuntimeSession, OperationReadSnapshotManifest, OperationReadEvents:
 		return true
 	default:
 		return false
@@ -256,6 +257,7 @@ var requestBindings = map[Operation]requestBinding{
 	OperationReadSandbox:          {contractID: "urn:shell-echo:sandbox-runtime:descriptor:status:v1", profile: DigestProfileFullDocument},
 	OperationReadOperation:        {contractID: "urn:shell-echo:sandbox-runtime:descriptor:operation:v1", profile: DigestProfileFullDocument},
 	OperationReadResult:           {contractID: "urn:shell-echo:sandbox-runtime:descriptor:exec-result:v1", profile: DigestProfileFullDocument},
+	OperationReadRuntimeSession:   {contractID: "urn:shell-echo:sandbox-runtime:descriptor:runtime-session:v1", profile: DigestProfileFullDocument},
 	OperationReadSnapshotManifest: {contractID: "urn:shell-echo:sandbox-runtime:descriptor:snapshot-manifest:v1", profile: DigestProfileFullDocument},
 	OperationReadEvents:           {contractID: "urn:shell-echo:sandbox-runtime:descriptor:events:v1", profile: DigestProfileFullDocument},
 }
