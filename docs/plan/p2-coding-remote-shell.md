@@ -15,8 +15,10 @@ P2.3a/b terminal-session resources, lock, and projection merged in PR #43 as
 corrected resources `71fee34` and projection/lock `ab9defc` reconcile the
 capability prerequisite. PR #44 head `16136d2` passed exact-head CI
 `32685685846`, merged as `6c1fc90`, and passed post-merge CI `32686754674`.
-P2.3c1 now has local provider-only domain and transactional authority-port
-evidence; commit, PR, CI, merge, and post-merge evidence remain pending.
+P2.3c1 has provider-only domain and transactional authority-port evidence. PR
+#45 merged it as `4c37d8c`; PR CI `32696507856` and post-merge CI `32696727371`
+passed all three jobs. P2.3c2 now adds independent durable session authority
+adapters on `main`; its direct push and post-push CI evidence remain pending.
 ADR 0009 records the ownership boundary and ADR 0010 records the bounded exec
 Contract decision.
 
@@ -68,7 +70,8 @@ acceptance, result retention, cancellation, reconciliation, or backend adapter.
 - P2.3c1: provider-local terminal session domain and transactional authority
   port, without transport, allocator, driver, or Gateway;
 - P2.3c2: durable session ledger and atomic sandbox ready/generation/lease/
-  fencing authority check;
+  fencing authority check (memory/file adapters, idempotency replay, expiry,
+  restart, and compare-and-set evidence; no transport or dispatch);
 - P2.3c3: protected transport projection and opaque handoff retrieval;
 - P2.3c4: separately owned Runtime Gateway integration evidence;
 - P2.4: artifact staging and usage evidence.
@@ -133,6 +136,8 @@ P2.3c1 locally defines only the provider-local terminal session request and
 record state, successful-only opaque WebSocket handoff derivation, and the
 transactional authority port that P2.3c2 must implement. Focused/full
 race-shuffle, vet, unchanged Contract lock, 26-case Suite, JSON, dependency,
-and diff checks passed. There is no session persistence, atomic sandbox adapter,
-transport, allocator, driver, or Gateway behavior. The slice remains in
-progress until commit, PR CI, merge, and post-merge evidence close it.
+and diff checks passed. PR #45 and its post-merge CI close P2.3c1 as
+provider-local domain/authority evidence only. P2.3c2 adds independent memory
+and file persistence with restart, expiry, idempotency, CAS generation/fencing,
+and same-transaction authority rechecks. It still excludes Provider HTTP,
+transport, allocator, driver, and Gateway behavior.

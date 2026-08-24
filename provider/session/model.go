@@ -40,19 +40,19 @@ const ProtocolWebSocket Protocol = "websocket"
 // SandboxID and ProviderRevisionID are supplied by admitted path/token context,
 // not trusted from additional wire fields.
 type OpenRequest struct {
-	SandboxID           string
-	ProviderRevisionID  string
-	OperationID         string
-	AttemptID           string
-	FencingToken        int64
-	IdempotencyKey      string
-	RequestDigest       string
-	Deadline            time.Time
-	ExpectedGeneration  int64
-	RuntimeSessionID    string
-	RuntimeType         RuntimeType
-	CapabilityProfileID string
-	ExpiresAt           time.Time
+	SandboxID           string      `json:"sandbox_id"`
+	ProviderRevisionID  string      `json:"provider_revision_id"`
+	OperationID         string      `json:"operation_id"`
+	AttemptID           string      `json:"attempt_id"`
+	FencingToken        int64       `json:"fencing_token"`
+	IdempotencyKey      string      `json:"idempotency_key"`
+	RequestDigest       string      `json:"request_digest"`
+	Deadline            time.Time   `json:"deadline"`
+	ExpectedGeneration  int64       `json:"expected_generation"`
+	RuntimeSessionID    string      `json:"runtime_session_id"`
+	RuntimeType         RuntimeType `json:"runtime_type"`
+	CapabilityProfileID string      `json:"capability_profile_id"`
+	ExpiresAt           time.Time   `json:"expires_at"`
 }
 
 // Clone returns an immutable value snapshot for authority and application
@@ -140,8 +140,8 @@ func (s Status) terminal() bool {
 // is an opaque control-plane handle, never a URL, address, credential, backend
 // identifier, or public bearer token.
 type EndpointEvidence struct {
-	InternalEndpointReference string
-	ConnectionGeneration      int64
+	InternalEndpointReference string `json:"internal_endpoint_reference"`
+	ConnectionGeneration      int64  `json:"connection_generation"`
 }
 
 func (e EndpointEvidence) validate() error {
@@ -154,17 +154,17 @@ func (e EndpointEvidence) validate() error {
 // Handoff is immutable provider-local terminal connection evidence. The
 // transport layer may project it only after a successful open operation.
 type Handoff struct {
-	OperationID               string
-	AttemptID                 string
-	FencingToken              int64
-	SandboxID                 string
-	RuntimeSessionID          string
-	RuntimeType               RuntimeType
-	CapabilityProfileID       string
-	Protocol                  Protocol
-	InternalEndpointReference string
-	ConnectionGeneration      int64
-	ExpiresAt                 time.Time
+	OperationID               string      `json:"operation_id"`
+	AttemptID                 string      `json:"attempt_id"`
+	FencingToken              int64       `json:"fencing_token"`
+	SandboxID                 string      `json:"sandbox_id"`
+	RuntimeSessionID          string      `json:"runtime_session_id"`
+	RuntimeType               RuntimeType `json:"runtime_type"`
+	CapabilityProfileID       string      `json:"capability_profile_id"`
+	Protocol                  Protocol    `json:"protocol"`
+	InternalEndpointReference string      `json:"internal_endpoint_reference"`
+	ConnectionGeneration      int64       `json:"connection_generation"`
+	ExpiresAt                 time.Time   `json:"expires_at"`
 }
 
 func (h Handoff) Validate() error {
@@ -182,12 +182,48 @@ func (h Handoff) Validate() error {
 // Record is the immutable provider-local state of one open operation. A
 // Handoff is present if and only if the operation succeeded.
 type Record struct {
-	Request    OpenRequest
-	Status     Status
-	AcceptedAt time.Time
-	ObservedAt time.Time
-	Handoff    *Handoff
+	Request    OpenRequest `json:"request"`
+	Status     Status      `json:"status"`
+	AcceptedAt time.Time   `json:"accepted_at"`
+	ObservedAt time.Time   `json:"observed_at"`
+	Handoff    *Handoff    `json:"handoff,omitempty"`
 }
+
+// SandboxAuthority is the provider-local, transactionally checked snapshot
+// required before accepting or completing a terminal session. It is not a
+// public Provider DTO and carries no backend or caller-owned implementation
+// detail.
+type SandboxAuthority struct {
+	SandboxID           string    `json:"sandbox_id"`
+	ProviderRevisionID  string    `json:"provider_revision_id"`
+	Ready               bool      `json:"ready"`
+	Generation          int64     `json:"generation"`
+	LeaseExpiresAt      time.Time `json:"lease_expires_at"`
+	FencingToken        int64     `json:"fencing_token"`
+	CapabilityProfileID string    `json:"capability_profile_id"`
+}
+
+// Validate checks the structural bounds of a persisted authority snapshot.
+// Lease freshness is checked transactionally against the operation request.
+func (a SandboxAuthority) Validate() error {
+	for name, value := range map[string]string{
+		"sandbox_id":           a.SandboxID,
+		"provider_revision_id": a.ProviderRevisionID,
+	} {
+		if !identifierPattern.MatchString(value) {
+			return fmt.Errorf("%w: authority %s", ErrInvalidRecord, name)
+		}
+	}
+	if a.Generation < 1 || a.FencingToken < 1 || a.LeaseExpiresAt.IsZero() {
+		return fmt.Errorf("%w: authority bounds", ErrInvalidRecord)
+	}
+	if a.Ready && !identifierPattern.MatchString(a.CapabilityProfileID) {
+		return fmt.Errorf("%w: authority capability profile", ErrInvalidRecord)
+	}
+	return nil
+}
+
+func (a SandboxAuthority) Clone() SandboxAuthority { return a }
 
 type Reservation struct {
 	Record   Record
