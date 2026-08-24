@@ -17,8 +17,9 @@ capability prerequisite. PR #44 head `16136d2` passed exact-head CI
 `32685685846`, merged as `6c1fc90`, and passed post-merge CI `32686754674`.
 P2.3c1 has provider-only domain and transactional authority-port evidence. PR
 #45 merged it as `4c37d8c`; PR CI `32696507856` and post-merge CI `32696727371`
-passed all three jobs. P2.3c2 now adds independent durable session authority
-adapters on `main`; its direct push and post-push CI evidence remain pending.
+passed all three jobs. P2.3c2 adds independent durable session authority
+adapters on `main@e5c9dec`. Post-push CI #103 / run `32698606341` passed all
+three jobs; Node.js 20 deprecation warnings remain. P2.3c3 is the next entry.
 ADR 0009 records the ownership boundary and ADR 0010 records the bounded exec
 Contract decision.
 
@@ -139,5 +140,6 @@ race-shuffle, vet, unchanged Contract lock, 26-case Suite, JSON, dependency,
 and diff checks passed. PR #45 and its post-merge CI close P2.3c1 as
 provider-local domain/authority evidence only. P2.3c2 adds independent memory
 and file persistence with restart, expiry, idempotency, CAS generation/fencing,
-and same-transaction authority rechecks. It still excludes Provider HTTP,
-transport, allocator, driver, and Gateway behavior.
+and same-transaction authority rechecks. Direct-main commit `e5c9dec` and
+post-push CI #103 / run `32698606341` passed. It still excludes Provider HTTP,
+transport, allocator, driver, and Gateway behavior. P2.3c3 is the next entry.

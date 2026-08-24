@@ -16,4 +16,4 @@ in [`docs/STATUS.md`](../STATUS.md).
 | P1.1b | [mTLS capability discovery](p1.1b-capability-discovery.md) | Passed under local Contract with PR/post-merge evidence |
 | P1.1c | [Protected-operation admission](p1.1c-protected-operation-admission.md) | Passed under local Contract with PR/post-merge evidence |
 | P1.2 | [Async lifecycle](p1.2-async-lifecycle.md) | Bounded Contract-authorized subset passed through PR #27; reserved lifecycle families remain separately gated |
-| P2 | [Coding/remote-shell authority inventory](p2-coding-remote-shell.md) | P2.3c1 passed in PR #45; P2.3c2 durable session authority implementation in progress on `main` |
+| P2 | [Coding/remote-shell authority inventory](p2-coding-remote-shell.md) | P2.3c2 passed on `main@e5c9dec`; post-push CI #103 passed; P2.3c3 next |
