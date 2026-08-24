@@ -63,7 +63,7 @@ func coordinatorRequest() providerexec.Request {
 		SandboxID: "sandbox-1", OperationID: "operation-1", AttemptID: "attempt-1",
 		FencingToken: 1, ExpectedGeneration: 1, IdempotencyKey: "exec-key-1",
 		RequestDigest: "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-		Deadline:      coordinatorTestTime.Add(time.Hour), Command: []string{"true"},
+		Deadline:      time.Now().UTC().Add(time.Hour), Command: []string{"true"},
 		WorkingDirectory: "/workspace", ResultRetention: time.Hour,
 	}
 }
@@ -73,7 +73,7 @@ func coordinatorCancellation() providerexec.CancellationIntent {
 		SandboxID: "sandbox-1", OperationID: "cancel-1", AttemptID: "cancel-attempt-1", FencingToken: 2,
 		ExpectedGeneration: 1, IdempotencyKey: "cancel-key-1",
 		RequestDigest: "sha256:3333333333333333333333333333333333333333333333333333333333333333",
-		Deadline:      coordinatorTestTime.Add(time.Hour), TargetOperationID: "operation-1", TargetAttemptID: "attempt-1",
+		Deadline:      time.Now().UTC().Add(time.Hour), TargetOperationID: "operation-1", TargetAttemptID: "attempt-1",
 		Reason: providerexec.CancellationCallerRequested,
 	}
 }

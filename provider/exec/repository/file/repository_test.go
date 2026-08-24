@@ -18,7 +18,7 @@ func fileExecution() (providerexec.Request, providerexec.Dispatch) {
 	request := providerexec.Request{
 		SandboxID: "sandbox-file", OperationID: "operation-file", AttemptID: "attempt-file", FencingToken: 1, ExpectedGeneration: 1,
 		IdempotencyKey: "file-key", RequestDigest: "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-		Deadline: fileTestTime.Add(time.Minute), Command: []string{"true"}, WorkingDirectory: "/workspace", ResultRetention: time.Hour,
+		Deadline: time.Now().UTC().Add(time.Hour), Command: []string{"true"}, WorkingDirectory: "/workspace", ResultRetention: time.Hour,
 	}
 	return request, providerexec.Dispatch{ExecutionReference: "ref:file/1", AcceptedAt: fileTestTime}
 }
@@ -36,7 +36,7 @@ func TestRepositoryPersistsResultCancellationAndTombstoneAcrossRestart(t *testin
 	intent := providerexec.CancellationIntent{
 		SandboxID: request.SandboxID, OperationID: "cancel-file", AttemptID: "cancel-attempt", FencingToken: 2, ExpectedGeneration: 1,
 		IdempotencyKey: "cancel-file-key", RequestDigest: "sha256:3333333333333333333333333333333333333333333333333333333333333333",
-		Deadline: fileTestTime.Add(time.Minute), TargetOperationID: request.OperationID, TargetAttemptID: request.AttemptID, Reason: providerexec.CancellationShutdown,
+		Deadline: time.Now().UTC().Add(time.Hour), TargetOperationID: request.OperationID, TargetAttemptID: request.AttemptID, Reason: providerexec.CancellationShutdown,
 	}
 	if _, err := r.ReserveCancellation(context.Background(), intent); err != nil {
 		t.Fatal(err)
