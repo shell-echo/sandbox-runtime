@@ -12,7 +12,7 @@ production readiness.
 
 | Item | Evidence | Status |
 | --- | --- | --- |
-| Checkout | `codex/p2.3-session-application@412a9c1`, based on `origin/main@21f5236` | P2.3c0 is pushed with local verification; PR, CI, merge, and post-merge evidence are pending |
+| Checkout | `codex/p2.3-session-application@46644dc`, based on `origin/main@21f5236` | P2.3c0 is pushed and PR [#44](https://github.com/shell-echo/sandbox-runtime/pull/44) is open; CI, merge, and post-merge evidence are pending |
 | Review | PR [#17](https://github.com/shell-echo/sandbox-runtime/pull/17) merged as `43ff3d7`; PR [#18](https://github.com/shell-echo/sandbox-runtime/pull/18) merged as `4774c3a`; PR [#19](https://github.com/shell-echo/sandbox-runtime/pull/19) merged as `e2755f5`; PR [#21](https://github.com/shell-echo/sandbox-runtime/pull/21) merged as `c5a4a65`; PR [#22](https://github.com/shell-echo/sandbox-runtime/pull/22) merged as `44f39ec`; PR [#23](https://github.com/shell-echo/sandbox-runtime/pull/23) merged as `ac72eab`; PR [#24](https://github.com/shell-echo/sandbox-runtime/pull/24) merged as `2e3dde6`; PR [#25](https://github.com/shell-echo/sandbox-runtime/pull/25) merged as `88506d1`; PR [#26](https://github.com/shell-echo/sandbox-runtime/pull/26) merged as `4ccb107`; PR [#27](https://github.com/shell-echo/sandbox-runtime/pull/27) merged as `28076a7`; PR [#28](https://github.com/shell-echo/sandbox-runtime/pull/28) merged as `2b25f76`; PR [#29](https://github.com/shell-echo/sandbox-runtime/pull/29) merged as `83965a2`; PR [#30](https://github.com/shell-echo/sandbox-runtime/pull/30) merged as `9d00212`; PR [#31](https://github.com/shell-echo/sandbox-runtime/pull/31) merged as `67b64a9`; PR [#32](https://github.com/shell-echo/sandbox-runtime/pull/32) merged as `5883da9`; PR [#33](https://github.com/shell-echo/sandbox-runtime/pull/33) merged as `ba39053`; PR [#35](https://github.com/shell-echo/sandbox-runtime/pull/35) merged as `c467cd4`; PR [#36](https://github.com/shell-echo/sandbox-runtime/pull/36) merged as `3a980bd`; PR [#37](https://github.com/shell-echo/sandbox-runtime/pull/37) merged as `f9cfbc3`; PR [#38](https://github.com/shell-echo/sandbox-runtime/pull/38) merged as `7ebcc8f`; PR [#39](https://github.com/shell-echo/sandbox-runtime/pull/39) merged as `17072e6`; PR [#40](https://github.com/shell-echo/sandbox-runtime/pull/40) merged as `65a9ba3`; PR [#41](https://github.com/shell-echo/sandbox-runtime/pull/41) merged as `ac555619`; PR [#42](https://github.com/shell-echo/sandbox-runtime/pull/42) merged as `97fb429` | PR #42 CI `32465114377` and post-merge CI `32465443385` provider-contract, test, and docker-integration passed |
 | P2.2a release evidence | `2fa2e72` on PR #33, merged as `ba39053` | Local race/shuffle, vet, lock, Suite, PR CI, and post-merge CI passed |
 | P2.2b release evidence | `e26bf2b` on PR #35, merged as `c467cd4` | Local race/shuffle, vet, lock, 19-case Suite, PR CI `32456100570`, and post-merge CI `32456279722` passed; no HTTP/dispatch composition |
@@ -20,9 +20,9 @@ production readiness.
 | P2.3a/b merge evidence | PR [#43](https://github.com/shell-echo/sandbox-runtime/pull/43) merged as `21f5236` | PR CI `32468912019` and post-merge CI `32469390678` provider-contract, test, and docker-integration passed; this proves resource/lock/projection evidence only |
 | Contract namespace | `urn:shell-echo:sandbox-runtime:provider-v1` | Locked |
 | Contract version/license | `1.0.0` / MIT | Locked |
-| P2.3c0 local evidence | resources `b582746`/`f92c227`; projection and lock `412a9c1` | Full race/shuffle, vet, lock verifier, 25-case Conformance Suite, and diff check passed locally; pushed, PR pending |
+| P2.3c0 local evidence | resources `b582746`/`f92c227`; projection and lock `412a9c1`; ledger `46644dc` | Full race/shuffle, vet, lock verifier, 25-case Conformance Suite, and diff check passed locally; PR #44 open |
 | Contract resources | OpenAPI, admission, lifecycle, bounded exec, terminal-session schemas, terminal capability/profile fixture and mapping semantics, Suite | Local Contract consistency is restored; zero advertisement remains the default and the only nonzero advertisement authorized by this slice is a strict terminal mapping |
-| Contract lock | revision `f92c227`; tree `c139a322`; OpenAPI, manifest, semantic-rule, fixture, and Suite bindings | Local verifier and 25-case Conformance passed; PR CI and post-merge evidence remain pending |
+| Contract lock | revision `f92c227`; tree `c139a322`; OpenAPI, manifest, semantic-rule, fixture, and Suite bindings | Local verifier and 25-case Conformance passed; PR #44 CI and post-merge evidence remain pending |
 | External Agent Contract | no longer consumed; old compatibility evidence is historical only | Removed from implementation |
 
 The lock verifier is intentionally bound to the repository-owned Contract tree.
@@ -59,7 +59,7 @@ It does not clone, mount, or read an external source repository.
 | P2.2 | Retained result and cancellation behavior | Passed for P2.2a-c bounded provider-local subset | P2.3c0 Contract consistency gate and subsequent session evidence |
 | P2.3a | Terminal session Contract resources | Passed as resource evidence in PR #43 merge `21f5236`; session behavior remains unimplemented | Retain resource projection regression |
 | P2.3b | Terminal session lock and DTO/admission projection | Passed as lock/projection evidence in PR #43; the former capability consistency gap is addressed by P2.3c0 | Retain 24-case baseline and P2.3c0 review evidence |
-| P2.3c0 | Terminal capability/profile Contract reconciliation | In progress: local implementation, lock, 25-case Suite, and push passed at `412a9c1`; PR/CI/merge evidence pending | Create PR, pass PR CI, merge, and pass post-merge CI |
+| P2.3c0 | Terminal capability/profile Contract reconciliation | In progress: local implementation, lock, 25-case Suite, and push passed; PR #44 open, CI/merge evidence pending | Pass PR CI, merge, and pass post-merge CI |
 | P2.3c1 | Provider-local terminal session domain and transactional authority port | Blocked by P2.3c0 merge gate | Separate bounded model/port tests; no transport, allocator, driver, or Gateway |
 | P2.3c2 | Durable terminal session ledger and atomic sandbox authority check | Blocked by P2.3c0/c1 | Idempotency, expiry, restart, and same-transaction ready/generation/lease/fencing evidence |
 | P2.3c3 | Protected transport projection and opaque handoff retrieval | Blocked by P2.3c0-c2 | Route, admission, error projection, and endpoint non-disclosure evidence; no public Gateway claim |
@@ -126,7 +126,7 @@ Passed locally (authorized test environment):
 
 Pending:
 
-- P2.3c0 PR, CI, merge, and post-merge evidence; P2.3c1 domain, P2.3c2 durable
+- P2.3c0 PR #44 CI, merge, and post-merge evidence; P2.3c1 domain, P2.3c2 durable
   authority, P2.3c3 transport projection, and separate Gateway integration
   evidence;
 - optional content-derived Suite digest enhancement;
