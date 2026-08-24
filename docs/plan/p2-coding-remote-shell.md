@@ -12,9 +12,10 @@ P2.2c reservation/attach and bounded coordinator passed in PR #39 merge
 `17072e6`; PR CI `32460695928` and post-merge CI `32460914417` passed.
 P2.3a/b terminal-session resources, lock, and projection merged in PR #43 as
 `21f5236`; PR CI `32468912019` and post-merge CI `32469390678` passed. P2.3c0
-resources `b582746`/`f92c227` and projection/lock `412a9c1` reconcile the
-capability prerequisite locally; PR #44 is open and CI/merge/post-merge evidence
-remain pending.
+corrected resources `71fee34` and projection/lock `ab9defc` reconcile the
+capability prerequisite locally. PR #44 CI run `32684139996` passed for prior
+head `e72a702`, but is superseded; correction push, exact-head CI, merge, and
+post-merge evidence remain pending.
 ADR 0009 records the ownership boundary and ADR 0010 records the bounded exec
 Contract decision.
 
@@ -61,8 +62,8 @@ acceptance, result retention, cancellation, reconciliation, or backend adapter.
 - P2.3a/b: terminal session Contract authority, lock, DTO/admission projection,
   and Suite gate (merged in PR #43);
 - P2.3c0: reconcile terminal capability/profile advertisement in the Contract,
-  fixture, semantic rules, Suite, projection, and lock (locally passed and
-  pushed; PR #44 CI/merge evidence pending);
+  fixture, semantic rules, Suite, projection, and lock (final local evidence
+  passed; correction push and exact-head PR #44 CI/merge evidence pending);
 - P2.3c1: provider-local terminal session domain and transactional authority
   port, without transport, allocator, driver, or Gateway;
 - P2.3c2: durable session ledger and atomic sandbox ready/generation/lease/
@@ -122,7 +123,11 @@ only until a separately observed confirmation exists.
 
 P2.2c is closed as provider-local coordination evidence only. P2.3c0 has locally
 reconciled and re-locked the zero-or-terminal-only advertisement rule, with full
-race/shuffle, vet, lock, 25-case Suite, and diff evidence. PR #44 is open. The
-slice remains in progress until its CI, merge, and post-merge CI pass. P2.3c1
-and all terminal session application, transport, allocator, driver, and Gateway
-behavior remain blocked until that gate closes.
+race/shuffle, vet, lock, 26-case Suite, JSON, and diff evidence. The canonical
+terminal advertisement is version `1.0.0`, capability profile `terminal-v1`,
+and runtime profile `sandbox-runtime-terminal-v1`. PR #44 is open; its prior-
+head CI passed but is superseded. The slice remains in progress until the
+corrections are pushed, exact-head CI passes, the PR is freshly approved and
+merged, and post-merge CI passes. P2.3c1 and all terminal session application,
+transport, allocator, driver, and Gateway behavior remain blocked until that
+gate closes.
