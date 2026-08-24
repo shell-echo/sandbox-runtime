@@ -1,6 +1,6 @@
 # ADR 0011: Terminal Session Contract and Gateway Handoff
 
-- Status: Proposed; P2.3c0 final local reconciliation passed, exact-head PR evidence pending
+- Status: Accepted for P2.3a-P2.3c0 Contract and projection scope
 - Date: 2026-08-21
 
 ## Context
@@ -49,8 +49,8 @@ only:
   `sandbox.terminal` at semver `1.0.0` and map the canonical `terminal-v1`
   capability profile to exactly one advertised runtime profile. Local resource,
   lock, DTO, handler projection, cross-resource consistency, and 26-case Suite
-  evidence exists. PR #44's prior-head CI passed but is superseded; exact-head
-  PR and post-merge evidence remain pending.
+  evidence exists. PR #44 head `16136d2` passed exact-head CI `32685685846`,
+  merged as `6c1fc90`, and passed post-merge CI `32686754674`.
 - This Contract reconciliation does not accept an open request. P2.3c1-c3 must
   separately establish the session application, durable authority, and
   protected transport before either route can be enabled.
