@@ -11,21 +11,21 @@ PR CI `32456100570` and post-merge CI `32456279722` passed.
 P2.2c reservation/attach and bounded coordinator passed in PR #39 merge
 `17072e6`; PR CI `32460695928` and post-merge CI `32460914417` passed.
 P2.3a/b terminal-session resources, lock, and projection merged in PR #43 as
-`21f5236`; PR CI `32468912019` and post-merge CI `32469390678` passed. They do
-not establish an acceptable terminal session because the locked capability
-semantic rule still requires empty capability and runtime-profile arrays.
+`21f5236`; PR CI `32468912019` and post-merge CI `32469390678` passed. P2.3c0
+resources `b582746`/`f92c227` and projection/lock `412a9c1` reconcile the
+capability prerequisite locally; PR and post-merge evidence remain pending.
 ADR 0009 records the ownership boundary and ADR 0010 records the bounded exec
 Contract decision.
 
 ## Authority stop condition
 
-The current repository-owned Contract contains terminal-only session routes,
-but its locked semantic rules are internally inconsistent: session acceptance
-requires an advertised terminal capability/profile while discovery requires
-empty capability and runtime-profile arrays. The routes must remain unavailable
-until P2.3c0 reconciles that contradiction. The architecture narrative is not
-sufficient authority to implement any route or runtime behavior beyond the
-locked, internally consistent resources and this delivery order.
+The current repository-owned Contract contains terminal-only session routes and
+a strict zero-or-terminal-only capability mapping. The default remains zero
+advertisement; a terminal advertisement must associate its version and profile
+with an explicit runtime profile. The routes remain unavailable because this
+slice adds no session application, durable authority, transport composition, or
+Gateway. The architecture narrative is not sufficient authority to implement
+behavior beyond the locked resources and this delivery order.
 
 Before runtime behavior changes, this slice must:
 
@@ -58,9 +58,10 @@ acceptance, result retention, cancellation, reconciliation, or backend adapter.
   #31 merge `67b64a9`; post-merge CI `32445893337` passed);
 - P2.2: retained result and cancellation behavior;
 - P2.3a/b: terminal session Contract authority, lock, DTO/admission projection,
-  and Suite gate (merged in PR #43, pending Contract-consistency evidence);
+  and Suite gate (merged in PR #43);
 - P2.3c0: reconcile terminal capability/profile advertisement in the Contract,
-  fixture, semantic rules, Suite, projection, and lock;
+  fixture, semantic rules, Suite, projection, and lock (locally passed and
+  pushed at `412a9c1`; PR/CI/merge evidence pending);
 - P2.3c1: provider-local terminal session domain and transactional authority
   port, without transport, allocator, driver, or Gateway;
 - P2.3c2: durable session ledger and atomic sandbox ready/generation/lease/
@@ -118,8 +119,9 @@ known non-context dispatch errors as durable pending state, maps context/receipt
 uncertainty to no-redispatch recovery, and treats cancellation replay as query-
 only until a separately observed confirmation exists.
 
-P2.2c is closed as provider-local coordination evidence only. P2.3a/b provide
-merged resource and projection evidence, but P2.3c0 is the active blocker: no
-terminal session application, transport, allocator, driver, or Gateway behavior
-may begin until the locked zero-advertisement rule and terminal-profile
-requirement are reconciled and independently re-locked.
+P2.2c is closed as provider-local coordination evidence only. P2.3c0 has locally
+reconciled and re-locked the zero-or-terminal-only advertisement rule, with full
+race/shuffle, vet, lock, 25-case Suite, and diff evidence. It remains in progress
+until PR CI, merge, and post-merge CI pass. P2.3c1 and all terminal session
+application, transport, allocator, driver, and Gateway behavior remain blocked
+until that gate closes.

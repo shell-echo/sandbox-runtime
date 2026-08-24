@@ -16,4 +16,4 @@ in [`docs/STATUS.md`](../STATUS.md).
 | P1.1b | [mTLS capability discovery](p1.1b-capability-discovery.md) | Passed under local Contract with PR/post-merge evidence |
 | P1.1c | [Protected-operation admission](p1.1c-protected-operation-admission.md) | Passed under local Contract with PR/post-merge evidence |
 | P1.2 | [Async lifecycle](p1.2-async-lifecycle.md) | Bounded Contract-authorized subset passed through PR #27; reserved lifecycle families remain separately gated |
-| P2 | [Coding/remote-shell authority inventory](p2-coding-remote-shell.md) | P2.3a/b resource and projection evidence merged in PR #43; P2.3c0 Contract consistency gate is the active next slice |
+| P2 | [Coding/remote-shell authority inventory](p2-coding-remote-shell.md) | P2.3c0 locally verified and pushed at `412a9c1`; PR/CI/merge gate pending before P2.3c1 |

@@ -91,12 +91,13 @@ The versioned provider surface contains these operation families:
 The table is the target architecture inventory. The current repository-owned
 Contract authorizes `POST /v1/sandboxes`, `GET /v1/sandboxes/{sandbox_id}`,
 `GET /v1/operations/{operation_id}`, and terminal-session open/handoff
-resources. The terminal-session resources remain unavailable: their locked
-semantic rules require a terminal capability/profile while discovery still
-requires empty capability and runtime-profile arrays. P2.3c0 must reconcile
-that contradiction before the session routes may be composed. The other
-lifecycle families remain reserved and must stay absent from the Provider router
-until an additive Contract revision, fixtures, and release gate exist.
+resources. P2.3c0 reconciles terminal advertisement as a strict zero-or-terminal-
+only snapshot: disabled configurations advertise no capability or runtime
+profile; an enabled snapshot must map `sandbox.terminal`, its version and
+capability profile to an explicit runtime profile. This Contract projection does
+not compose either session route. The other lifecycle families remain reserved
+and must stay absent from the Provider router until an additive Contract
+revision, fixtures, and release gate exist.
 
 | Method and path | Responsibility |
 | --- | --- |
