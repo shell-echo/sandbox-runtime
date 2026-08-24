@@ -216,7 +216,7 @@ func validateCapabilityAdvertisements(capabilities []Capability, runtimeProfiles
 		}
 		versions := make(map[string]struct{}, len(capability.Versions))
 		for _, version := range capability.Versions {
-			if !identifierPattern.MatchString(version) {
+			if !identifierPattern.MatchString(version) || (capability.ID == "sandbox.terminal" && !suiteVersionPattern.MatchString(version)) {
 				return fmt.Errorf("capability %q has an invalid version %q", capability.ID, version)
 			}
 			if _, exists := versions[version]; exists {

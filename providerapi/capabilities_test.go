@@ -81,12 +81,12 @@ func TestMapCapabilitiesProjectsTerminalAdvertisement(t *testing.T) {
 
 	document := mapCapabilities(snapshot)
 	if len(document.Capabilities) != 1 || document.Capabilities[0].ID != providerv1.CapabilityTerminal ||
-		len(document.Capabilities[0].Versions) != 1 || document.Capabilities[0].Versions[0] != "v1" ||
-		len(document.Capabilities[0].Profiles) != 1 || document.Capabilities[0].Profiles[0] != "terminal-ws-v1" {
+		len(document.Capabilities[0].Versions) != 1 || document.Capabilities[0].Versions[0] != "1.0.0" ||
+		len(document.Capabilities[0].Profiles) != 1 || document.Capabilities[0].Profiles[0] != "terminal-v1" {
 		t.Fatalf("terminal capability = %#v", document.Capabilities)
 	}
 	if len(document.RuntimeProfiles) != 1 || document.RuntimeProfiles[0].ID != "sandbox-runtime-terminal-v1" ||
-		len(document.RuntimeProfiles[0].CapabilityProfileIDs) != 1 || document.RuntimeProfiles[0].CapabilityProfileIDs[0] != "terminal-ws-v1" {
+		len(document.RuntimeProfiles[0].CapabilityProfileIDs) != 1 || document.RuntimeProfiles[0].CapabilityProfileIDs[0] != "terminal-v1" {
 		t.Fatalf("terminal runtime profile = %#v", document.RuntimeProfiles)
 	}
 	if err := validateCapabilities(document); err != nil {
@@ -118,7 +118,7 @@ func TestMapCapabilitiesProjectsTerminalAdvertisement(t *testing.T) {
 
 	snapshot.Capabilities[0].Profiles[0] = "mutated"
 	snapshot.RuntimeProfiles[0].CapabilityProfileIDs[0] = "mutated"
-	if document.Capabilities[0].Profiles[0] != "terminal-ws-v1" || document.RuntimeProfiles[0].CapabilityProfileIDs[0] != "terminal-ws-v1" {
+	if document.Capabilities[0].Profiles[0] != "terminal-v1" || document.RuntimeProfiles[0].CapabilityProfileIDs[0] != "terminal-v1" {
 		t.Fatalf("snapshot mutation changed mapped document: %#v", document)
 	}
 }
@@ -139,21 +139,27 @@ func TestValidateCapabilitiesRejectsInvalidDocuments(t *testing.T) {
 			d.Capabilities = []providerv1.Capability{{ID: providerv1.CapabilityExec}}
 		},
 		"non-terminal capability": func(d *providerv1.Capabilities) {
-			d.Capabilities = []providerv1.Capability{{ID: providerv1.CapabilityExec, Versions: []string{"v1"}}}
+			d.Capabilities = []providerv1.Capability{{ID: providerv1.CapabilityExec, Versions: []string{"1.0.0"}}}
+		},
+		"terminal invalid version": func(d *providerv1.Capabilities) {
+			d.Capabilities = []providerv1.Capability{{ID: providerv1.CapabilityTerminal, Versions: []string{"v1"}, Profiles: []string{"terminal-v1"}}}
+			d.RuntimeProfiles = []providerv1.RuntimeProfile{{
+				ID: "runtime-1", IsolationClass: providerv1.IsolationContainer, CapabilityProfileIDs: []string{"terminal-v1"},
+			}}
 		},
 		"nil runtime profiles": func(d *providerv1.Capabilities) { d.RuntimeProfiles = nil },
 		"invalid runtime isolation": func(d *providerv1.Capabilities) {
 			d.RuntimeProfiles = []providerv1.RuntimeProfile{{ID: "runtime-1", IsolationClass: "unknown"}}
 		},
 		"terminal missing profile": func(d *providerv1.Capabilities) {
-			d.Capabilities = []providerv1.Capability{{ID: providerv1.CapabilityTerminal, Versions: []string{"v1"}}}
+			d.Capabilities = []providerv1.Capability{{ID: providerv1.CapabilityTerminal, Versions: []string{"1.0.0"}}}
 		},
 		"terminal profile has no runtime mapping": func(d *providerv1.Capabilities) {
-			d.Capabilities = []providerv1.Capability{{ID: providerv1.CapabilityTerminal, Versions: []string{"v1"}, Profiles: []string{"terminal-ws-v1"}}}
+			d.Capabilities = []providerv1.Capability{{ID: providerv1.CapabilityTerminal, Versions: []string{"1.0.0"}, Profiles: []string{"terminal-v1"}}}
 		},
 		"runtime maps unadvertised profile": func(d *providerv1.Capabilities) {
 			d.RuntimeProfiles = []providerv1.RuntimeProfile{{
-				ID: "runtime-1", IsolationClass: providerv1.IsolationContainer, CapabilityProfileIDs: []string{"terminal-ws-v1"},
+				ID: "runtime-1", IsolationClass: providerv1.IsolationContainer, CapabilityProfileIDs: []string{"terminal-v1"},
 			}}
 		},
 		"runtime profile without terminal": func(d *providerv1.Capabilities) {
@@ -293,13 +299,13 @@ func int64Pointer(value int64) *int64 { return &value }
 func providerTerminalAdvertisements() ([]provider.Capability, []provider.RuntimeProfile) {
 	return []provider.Capability{{
 			ID:       "sandbox.terminal",
-			Versions: []string{"v1"},
-			Profiles: []string{"terminal-ws-v1"},
+			Versions: []string{"1.0.0"},
+			Profiles: []string{"terminal-v1"},
 		}}, []provider.RuntimeProfile{{
 			ID:                   "sandbox-runtime-terminal-v1",
 			IsolationClass:       "container",
 			RuntimeClassName:     "sandbox-runtime-terminal",
 			Architecture:         []string{"amd64"},
-			CapabilityProfileIDs: []string{"terminal-ws-v1"},
+			CapabilityProfileIDs: []string{"terminal-v1"},
 		}}
 }

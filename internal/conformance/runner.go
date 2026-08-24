@@ -67,6 +67,10 @@ var testCases = map[string]testCase{
 		Package: "./providerapi",
 		Run:     `^TestMapCapabilitiesProjectsTerminalAdvertisement$`,
 	},
+	"capability-discovery-terminal-session-contract-consistency": {
+		Package: "./providerapi/v1",
+		Run:     `^TestLockedTerminalSessionContractConsistency$`,
+	},
 	"capability-discovery-empty-request": {
 		Package: "./providerapi",
 		Run:     `^(TestCapabilitiesHandlerRejectsRequestsWithoutADocumentBeforeDispatch|TestProviderServerReconcilesHTTP11CapabilityInputTransport)$`,

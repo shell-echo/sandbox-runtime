@@ -2,8 +2,8 @@
   "format_version": 1,
   "source": {
     "repository": "https://github.com/shell-echo/sandbox-runtime.git",
-    "revision": "f92c227354c19ac742579df50de4097fe380b3e5",
-    "contract_tree": "c139a3228060711a59d639c5e025eeadc918fddd"
+    "revision": "71fee34380affcb46e1e1dce667475aa241048a4",
+    "contract_tree": "4fafb742e40231cbf9fb957f5998bdce932fdb0d"
   },
   "contract": {
     "root": "contract",
@@ -15,7 +15,7 @@
     "openapi_path": "contract/openapi/sandbox-runtime-provider-v1.yaml",
     "openapi_sha256": "sha256:ca9e9d28d33b6144a0ab5e89350ac4549b9e03466a51fb6bdf67f80ab8cc4765",
     "semantic_rules_path": "contract/semantic-rules/provider-v1.json",
-    "semantic_rules_sha256": "sha256:0b3f56c96bcf278539083657f34b39b3754b984f58b0f559526ce021dec4f15e",
+    "semantic_rules_sha256": "sha256:1b07682a7c0398219b7d52c9283f78d520a81a36f77eb729bcff81dcd90671b9",
     "fixtures_root": "contract/fixtures"
   },
   "sandbox_suite": {
