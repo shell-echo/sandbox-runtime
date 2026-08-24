@@ -4,8 +4,8 @@
   "capabilities": [
     {
       "id": "sandbox.terminal",
-      "versions": ["v1"],
-      "profiles": ["terminal-ws-v1"]
+      "versions": ["1.0.0"],
+      "profiles": ["terminal-v1"]
     }
   ],
   "runtime_profiles": [
@@ -14,7 +14,7 @@
       "isolation_class": "container",
       "runtime_class_name": "sandbox-runtime-terminal",
       "architecture": ["amd64"],
-      "capability_profile_ids": ["terminal-ws-v1"]
+      "capability_profile_ids": ["terminal-v1"]
     }
   ],
   "snapshot_restore_profiles": [
