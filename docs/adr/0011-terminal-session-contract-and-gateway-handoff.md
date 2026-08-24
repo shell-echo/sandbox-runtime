@@ -1,6 +1,6 @@
 # ADR 0011: Terminal Session Contract and Gateway Handoff
 
-- Status: Proposed for P2.3a Contract scope
+- Status: Proposed; P2.3c0 final local reconciliation passed, exact-head PR evidence pending
 - Date: 2026-08-21
 
 ## Context
@@ -42,8 +42,18 @@ only:
 - P2.3a changes only Contract authority: OpenAPI, Schemas, semantic rules,
   fixtures, Suite IDs, and this ADR. It adds no router, application, driver,
   terminal process, or Gateway implementation.
-- P2.3b must add the lock, strict wire DTO projection, admission binding, and
-  Suite runner mappings before this Contract can be accepted as a gate.
+- PR #43 added the P2.3a/b resources, lock, strict wire DTO projection,
+  admission binding, and Suite runner mappings.
+- P2.3c0 defines a strict zero-or-terminal-only capability snapshot. Disabled
+  configurations retain empty arrays. A nonempty snapshot must advertise only
+  `sandbox.terminal` at semver `1.0.0` and map the canonical `terminal-v1`
+  capability profile to exactly one advertised runtime profile. Local resource,
+  lock, DTO, handler projection, cross-resource consistency, and 26-case Suite
+  evidence exists. PR #44's prior-head CI passed but is superseded; exact-head
+  PR and post-merge evidence remain pending.
+- This Contract reconciliation does not accept an open request. P2.3c1-c3 must
+  separately establish the session application, durable authority, and
+  protected transport before either route can be enabled.
 - Later slices require separate evidence for the session application, protected
   transport projection, and a trusted Runtime Gateway integration.
 - This decision excludes browser, desktop, port-forward, Docker or other

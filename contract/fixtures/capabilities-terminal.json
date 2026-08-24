@@ -1,0 +1,36 @@
+{
+  "provider_revision_id": "provider-revision-local-v1",
+  "api_version": "v1",
+  "capabilities": [
+    {
+      "id": "sandbox.terminal",
+      "versions": ["1.0.0"],
+      "profiles": ["terminal-v1"]
+    }
+  ],
+  "runtime_profiles": [
+    {
+      "id": "sandbox-runtime-terminal-v1",
+      "isolation_class": "container",
+      "runtime_class_name": "sandbox-runtime-terminal",
+      "architecture": ["amd64"],
+      "capability_profile_ids": ["terminal-v1"]
+    }
+  ],
+  "snapshot_restore_profiles": [
+    {
+      "profile_id": "sandbox-snapshot-workspace-v1",
+      "level": "workspace",
+      "suite_id": "sandbox-provider",
+      "suite_version": "1.0.0",
+      "suite_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  ],
+  "limits": {
+    "max_cpu_millis": 1000,
+    "max_memory_bytes": 1073741824,
+    "max_ephemeral_storage_bytes": 1073741824,
+    "max_lease_seconds": 3600,
+    "max_exec_seconds": 300
+  }
+}

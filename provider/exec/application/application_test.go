@@ -36,7 +36,7 @@ func applicationRequest() providerexec.Request {
 		ExpectedGeneration: 1,
 		IdempotencyKey:     "exec-request-1",
 		RequestDigest:      "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-		Deadline:           applicationTestNow.Add(time.Minute),
+		Deadline:           time.Now().UTC().Add(time.Hour),
 		Command:            []string{"printf", "hello"},
 		WorkingDirectory:   "/workspace/src",
 		ResultRetention:    time.Hour,

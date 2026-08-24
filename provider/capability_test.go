@@ -23,6 +23,90 @@ func TestNewCapabilitySnapshotAcceptsHonestZeroCapabilityModel(t *testing.T) {
 	if snapshot.Limits.MaxGPUCount == nil || *snapshot.Limits.MaxGPUCount != 0 {
 		t.Fatalf("max GPU count = %v, want explicit zero", snapshot.Limits.MaxGPUCount)
 	}
+	if snapshot.Capabilities == nil || snapshot.RuntimeProfiles == nil || len(snapshot.Capabilities) != 0 || len(snapshot.RuntimeProfiles) != 0 {
+		t.Fatalf("default advertisements = %#v / %#v, want non-nil empty arrays", snapshot.Capabilities, snapshot.RuntimeProfiles)
+	}
+}
+
+func TestNewCapabilitySnapshotWithAdvertisementsAcceptsTerminalProfileMapping(t *testing.T) {
+	capabilities, runtimeProfiles := validTerminalAdvertisements()
+	snapshot, err := NewCapabilitySnapshotWithAdvertisements("revision-1", validLimits(nil, nil), capabilities, runtimeProfiles, validProfiles())
+	if err != nil {
+		t.Fatalf("NewCapabilitySnapshotWithAdvertisements() error = %v", err)
+	}
+	if len(snapshot.Capabilities) != 1 || snapshot.Capabilities[0].ID != "sandbox.terminal" ||
+		len(snapshot.Capabilities[0].Versions) != 1 || snapshot.Capabilities[0].Versions[0] != "1.0.0" ||
+		len(snapshot.Capabilities[0].Profiles) != 1 || snapshot.Capabilities[0].Profiles[0] != "terminal-v1" {
+		t.Fatalf("terminal capability = %#v", snapshot.Capabilities)
+	}
+	if len(snapshot.RuntimeProfiles) != 1 || snapshot.RuntimeProfiles[0].ID != "sandbox-runtime-terminal-v1" ||
+		len(snapshot.RuntimeProfiles[0].CapabilityProfileIDs) != 1 || snapshot.RuntimeProfiles[0].CapabilityProfileIDs[0] != "terminal-v1" {
+		t.Fatalf("terminal runtime profile = %#v", snapshot.RuntimeProfiles)
+	}
+
+	capabilities[0].Versions[0] = "mutated"
+	runtimeProfiles[0].CapabilityProfileIDs[0] = "mutated"
+	if snapshot.Capabilities[0].Versions[0] != "1.0.0" || snapshot.RuntimeProfiles[0].CapabilityProfileIDs[0] != "terminal-v1" {
+		t.Fatalf("constructor input changed snapshot: %#v", snapshot)
+	}
+
+	source, err := NewStaticCapabilitySource(snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	returned, err := source.CapabilitySnapshot(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	returned.Capabilities[0].Profiles[0] = "mutated-return"
+	returned.RuntimeProfiles[0].CapabilityProfileIDs[0] = "mutated-return"
+	again, err := source.CapabilitySnapshot(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again.Capabilities[0].Profiles[0] != "terminal-v1" || again.RuntimeProfiles[0].CapabilityProfileIDs[0] != "terminal-v1" {
+		t.Fatalf("returned mutation changed source snapshot: %#v", again)
+	}
+}
+
+func TestNewCapabilitySnapshotWithAdvertisementsRejectsInvalidTerminalMappings(t *testing.T) {
+	tests := map[string]func(*[]Capability, *[]RuntimeProfile){
+		"non-terminal missing versions": func(capabilities *[]Capability, runtimeProfiles *[]RuntimeProfile) {
+			*capabilities = []Capability{{ID: "sandbox.exec"}}
+			*runtimeProfiles = nil
+		},
+		"non-terminal capability": func(capabilities *[]Capability, runtimeProfiles *[]RuntimeProfile) {
+			*capabilities = []Capability{{ID: "sandbox.exec", Versions: []string{"1.0.0"}}}
+			*runtimeProfiles = nil
+		},
+		"terminal invalid version": func(capabilities *[]Capability, _ *[]RuntimeProfile) {
+			(*capabilities)[0].Versions = []string{"v1"}
+		},
+		"terminal missing version": func(capabilities *[]Capability, _ *[]RuntimeProfile) { (*capabilities)[0].Versions = nil },
+		"terminal missing profile": func(capabilities *[]Capability, _ *[]RuntimeProfile) { (*capabilities)[0].Profiles = nil },
+		"unmapped terminal profile": func(_ *[]Capability, runtimeProfiles *[]RuntimeProfile) {
+			(*runtimeProfiles)[0].CapabilityProfileIDs = nil
+		},
+		"unknown profile mapping": func(_ *[]Capability, runtimeProfiles *[]RuntimeProfile) {
+			(*runtimeProfiles)[0].CapabilityProfileIDs = []string{"other"}
+		},
+		"runtime profile without terminal": func(capabilities *[]Capability, runtimeProfiles *[]RuntimeProfile) {
+			*capabilities = nil
+			*runtimeProfiles = []RuntimeProfile{{ID: "runtime-1", IsolationClass: "container"}}
+		},
+		"duplicate capability": func(capabilities *[]Capability, _ *[]RuntimeProfile) {
+			*capabilities = append(*capabilities, (*capabilities)[0])
+		},
+	}
+	for name, mutate := range tests {
+		t.Run(name, func(t *testing.T) {
+			capabilities, runtimeProfiles := validTerminalAdvertisements()
+			mutate(&capabilities, &runtimeProfiles)
+			if _, err := NewCapabilitySnapshotWithAdvertisements("revision-1", validLimits(nil, nil), capabilities, runtimeProfiles, validProfiles()); err == nil {
+				t.Fatal("NewCapabilitySnapshotWithAdvertisements() error = nil")
+			}
+		})
+	}
 }
 
 func TestNewCapabilitySnapshotRejectsInvalidRevision(t *testing.T) {
@@ -282,6 +366,20 @@ func validLimits(workspace, gpu *int64) Limits {
 
 func validProfiles() []SnapshotRestoreProfile {
 	return []SnapshotRestoreProfile{validProfile("sandbox-snapshot-workspace-v1", SnapshotLevelWorkspace)}
+}
+
+func validTerminalAdvertisements() ([]Capability, []RuntimeProfile) {
+	return []Capability{{
+			ID:       "sandbox.terminal",
+			Versions: []string{"1.0.0"},
+			Profiles: []string{"terminal-v1"},
+		}}, []RuntimeProfile{{
+			ID:                   "sandbox-runtime-terminal-v1",
+			IsolationClass:       "container",
+			RuntimeClassName:     "sandbox-runtime-terminal",
+			Architecture:         []string{"amd64"},
+			CapabilityProfileIDs: []string{"terminal-v1"},
+		}}
 }
 
 func validProfile(id string, level SnapshotLevel) SnapshotRestoreProfile {

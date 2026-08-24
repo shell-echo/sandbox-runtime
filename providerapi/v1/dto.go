@@ -290,10 +290,11 @@ type Capability struct {
 }
 
 type RuntimeProfile struct {
-	ID               string         `json:"id"`
-	IsolationClass   IsolationClass `json:"isolation_class"`
-	RuntimeClassName string         `json:"runtime_class_name,omitempty"`
-	Architecture     []Architecture `json:"architecture,omitempty"`
+	ID                   string         `json:"id"`
+	IsolationClass       IsolationClass `json:"isolation_class"`
+	RuntimeClassName     string         `json:"runtime_class_name,omitempty"`
+	Architecture         []Architecture `json:"architecture,omitempty"`
+	CapabilityProfileIDs []string       `json:"capability_profile_ids,omitempty"`
 }
 
 type SnapshotRestoreProfile struct {

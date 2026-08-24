@@ -102,6 +102,157 @@ func TestLockedContractProjection(t *testing.T) {
 	})
 }
 
+func TestLockedTerminalCapabilityAdvertisementProjection(t *testing.T) {
+	sourceRoot := localContractSourceRoot(t)
+	projection, err := providercontract.Load(context.Background(), filepath.Join(sourceRoot, "compatibility/sandbox-runtime/contract.lock.json"), sourceRoot)
+	if err != nil {
+		t.Fatalf("load local Provider projection: %v", err)
+	}
+	document, err := projection.ReadExample("capabilities-terminal.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := projection.Validate("provider-capabilities.schema.json", document); err != nil {
+		t.Fatalf("terminal capability fixture is invalid: %v", err)
+	}
+	var capabilities Capabilities
+	if err := DecodeStrict(bytes.NewReader(document), 1<<20, &capabilities); err != nil {
+		t.Fatalf("decode terminal capability fixture: %v", err)
+	}
+	if len(capabilities.Capabilities) != 1 || capabilities.Capabilities[0].ID != CapabilityTerminal ||
+		len(capabilities.Capabilities[0].Versions) != 1 || capabilities.Capabilities[0].Versions[0] != "1.0.0" ||
+		len(capabilities.Capabilities[0].Profiles) != 1 || capabilities.Capabilities[0].Profiles[0] != "terminal-v1" {
+		t.Fatalf("terminal capability projection = %#v", capabilities.Capabilities)
+	}
+	if len(capabilities.RuntimeProfiles) != 1 || capabilities.RuntimeProfiles[0].ID != "sandbox-runtime-terminal-v1" ||
+		len(capabilities.RuntimeProfiles[0].CapabilityProfileIDs) != 1 || capabilities.RuntimeProfiles[0].CapabilityProfileIDs[0] != "terminal-v1" {
+		t.Fatalf("terminal runtime profile projection = %#v", capabilities.RuntimeProfiles)
+	}
+	projected, err := json.Marshal(capabilities)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := projection.Validate("provider-capabilities.schema.json", projected); err != nil {
+		t.Fatalf("terminal capability DTO projection is invalid: %v", err)
+	}
+
+	semanticRules, err := os.ReadFile(filepath.Join(sourceRoot, "contract/semantic-rules/provider-v1.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var semantics struct {
+		Rules []struct {
+			ID       string   `json:"id"`
+			Method   string   `json:"method"`
+			Path     string   `json:"path"`
+			Scope    string   `json:"scope"`
+			Requires []string `json:"requires"`
+			Response struct {
+				CapabilityID string `json:"capability_id"`
+				ProfileMap   string `json:"capability_profile_to_runtime_profile"`
+			} `json:"response"`
+		} `json:"rules"`
+	}
+	if err := json.Unmarshal(semanticRules, &semantics); err != nil {
+		t.Fatalf("decode local semantic rules: %v", err)
+	}
+	for _, rule := range semantics.Rules {
+		if rule.ID != "capabilities-terminal-profile-advertisement" {
+			continue
+		}
+		if rule.Method != "GET" || rule.Path != "/v1/capabilities" || rule.Scope != "terminal-session-advertisement" ||
+			rule.Response.CapabilityID != "sandbox.terminal" || rule.Response.ProfileMap != "explicit-capability_profile_ids" {
+			t.Fatalf("terminal advertisement semantic rule = %#v", rule)
+		}
+		for _, requirement := range []string{
+			"terminal-disabled-means-zero-advertisement",
+			"sandbox-terminal-capability-must-advertise-at-least-one-version",
+			"advertised-terminal-version-must-be-sandbox-capability-requirement-compatible-semver",
+			"terminal-capability-profile-must-map-to-an-advertised-runtime-profile",
+			"terminal-capability-profile-must-match-runtime-session-fixtures",
+			"session-admission-must-match-exact-advertised-capability-version-profile-and-runtime-profile",
+		} {
+			if !containsString(rule.Requires, requirement) {
+				t.Fatalf("terminal advertisement semantic rule is missing %q", requirement)
+			}
+		}
+		return
+	}
+	t.Fatal("local Contract is missing terminal capability advertisement semantic rule")
+}
+
+func TestLockedTerminalSessionContractConsistency(t *testing.T) {
+	sourceRoot := localContractSourceRoot(t)
+	projection, err := providercontract.Load(context.Background(), filepath.Join(sourceRoot, "compatibility/sandbox-runtime/contract.lock.json"), sourceRoot)
+	if err != nil {
+		t.Fatalf("load local Provider projection: %v", err)
+	}
+
+	capabilityDocument, err := projection.ReadExample("capabilities-terminal.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := projection.Validate("provider-capabilities.schema.json", capabilityDocument); err != nil {
+		t.Fatalf("terminal capability fixture is invalid: %v", err)
+	}
+	var capabilities Capabilities
+	if err := DecodeStrict(bytes.NewReader(capabilityDocument), 1<<20, &capabilities); err != nil {
+		t.Fatalf("decode terminal capability fixture: %v", err)
+	}
+	if len(capabilities.Capabilities) != 1 || len(capabilities.Capabilities[0].Versions) != 1 || len(capabilities.Capabilities[0].Profiles) != 1 || len(capabilities.RuntimeProfiles) != 1 {
+		t.Fatalf("terminal capability fixture must contain one version, profile, and runtime profile: %#v", capabilities)
+	}
+	terminal := capabilities.Capabilities[0]
+	profileID := terminal.Profiles[0]
+	if terminal.ID != CapabilityTerminal || !containsString(capabilities.RuntimeProfiles[0].CapabilityProfileIDs, profileID) {
+		t.Fatalf("terminal capability profile is not mapped to the canonical runtime profile: %#v", capabilities)
+	}
+
+	openDocument, err := projection.ReadExample("runtime-session-open-request.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var openRequest RuntimeSessionOpenRequest
+	if err := DecodeStrict(bytes.NewReader(openDocument), MaxRuntimeSessionOpenRequestBytes, &openRequest); err != nil {
+		t.Fatalf("decode runtime session open fixture: %v", err)
+	}
+	handoffDocument, err := projection.ReadExample("runtime-session-handoff.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var handoff RuntimeSessionHandoff
+	if err := DecodeStrict(bytes.NewReader(handoffDocument), 1<<20, &handoff); err != nil {
+		t.Fatalf("decode runtime session handoff fixture: %v", err)
+	}
+	if openRequest.CapabilityProfileID != profileID || handoff.CapabilityProfileID != profileID {
+		t.Fatalf("terminal profile mismatch: advertised=%q open=%q handoff=%q", profileID, openRequest.CapabilityProfileID, handoff.CapabilityProfileID)
+	}
+
+	createDocument, err := projection.ReadExample("create-sandbox-request.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var createRequest map[string]any
+	if err := json.Unmarshal(createDocument, &createRequest); err != nil {
+		t.Fatalf("decode create sandbox fixture: %v", err)
+	}
+	spec, ok := createRequest["spec"].(map[string]any)
+	if !ok {
+		t.Fatal("create sandbox fixture is missing spec object")
+	}
+	spec["runtime_profile"] = capabilities.RuntimeProfiles[0].ID
+	spec["required_capabilities"] = []any{map[string]any{
+		"id": string(terminal.ID), "version": terminal.Versions[0], "profile": profileID,
+	}}
+	projectedCreate, err := json.Marshal(createRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := projection.Validate("create-sandbox-request.schema.json", projectedCreate); err != nil {
+		t.Fatalf("advertised terminal version/profile cannot form a valid sandbox requirement: %v", err)
+	}
+}
+
 func localContractSourceRoot(t *testing.T) string {
 	t.Helper()
 	if sourceRoot := os.Getenv(contractSourceRootEnvironment); sourceRoot != "" {
@@ -112,4 +263,13 @@ func localContractSourceRoot(t *testing.T) string {
 		t.Fatal("resolve local Contract source root")
 	}
 	return filepath.Clean(filepath.Join(filepath.Dir(file), "../.."))
+}
+
+func containsString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
 }
