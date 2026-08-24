@@ -15,6 +15,8 @@ P2.3a/b terminal-session resources, lock, and projection merged in PR #43 as
 corrected resources `71fee34` and projection/lock `ab9defc` reconcile the
 capability prerequisite. PR #44 head `16136d2` passed exact-head CI
 `32685685846`, merged as `6c1fc90`, and passed post-merge CI `32686754674`.
+P2.3c1 now has local provider-only domain and transactional authority-port
+evidence; commit, PR, CI, merge, and post-merge evidence remain pending.
 ADR 0009 records the ownership boundary and ADR 0010 records the bounded exec
 Contract decision.
 
@@ -127,6 +129,10 @@ terminal advertisement is version `1.0.0`, capability profile `terminal-v1`,
 and runtime profile `sandbox-runtime-terminal-v1`. PR #44's prior-head CI passed
 but was superseded. Exact-head CI `32685685846`, merge `6c1fc90`, and post-merge
 CI `32686754674` then passed, closing P2.3c0 as Contract/projection evidence.
-P2.3c1 is unblocked but not implemented. It may define only the provider-local
-terminal session domain and transactional authority port; persistence,
-transport, allocator, driver, and Gateway behavior remain later gates.
+P2.3c1 locally defines only the provider-local terminal session request and
+record state, successful-only opaque WebSocket handoff derivation, and the
+transactional authority port that P2.3c2 must implement. Focused/full
+race-shuffle, vet, unchanged Contract lock, 26-case Suite, JSON, dependency,
+and diff checks passed. There is no session persistence, atomic sandbox adapter,
+transport, allocator, driver, or Gateway behavior. The slice remains in
+progress until commit, PR CI, merge, and post-merge evidence close it.
