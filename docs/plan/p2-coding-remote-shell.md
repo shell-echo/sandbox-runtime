@@ -43,7 +43,10 @@ readers with collision-safe aggregation. No Contract/lock, handler, router,
 config, or HTTP route changed.
 
 P2.4a3 transport composition is implemented locally in commits `f5111a5`,
-`ce3c6e0`, and `9a4bc71` and awaits full release gates and CI. It composes
+`ce3c6e0`, and `9a4bc71`, with the independent admission/error correction in
+`c469337`. Local full release gates pass. CI `32832926138` passed all three
+jobs for the pre-fix transport revision at `a93a587`; post-fix CI for
+`c469337` is pending. It composes
 only the three locked artifact/usage routes plus the generic operation-family
 reader. mTLS, bearer/JWS, target, strict request or descriptor digest,
 operation correlation, and mutation guard admission complete before any
@@ -52,10 +55,12 @@ application call. The stage route performs durable accept only and returns a
 evidence. Evidence reads resolve by operation ID and enforce operation,
 sandbox, attempt, and fencing correlation. The default command composition
 injects no synthetic artifact stager or usage collector; absent dependencies
-fail closed with bounded `503` responses. Focused transport/projection tests
-pass; full race/shuffle, vet, lock, Conformance, required CI, external-caller,
-aggregate, multi-controller, tenancy, deployment, and production gates remain
-open.
+fail closed with bounded `503` responses. Strict schema preflight now rejects
+invalid artifact-stage documents before mutation guard reservation; create and
+session routes need the same ordering review before future composition. Focused
+transport/projection tests, full race/shuffle, vet, lock, 35-case Conformance,
+and diff checks pass locally. Post-fix CI, external-caller, aggregate,
+multi-controller, tenancy, deployment, and production gates remain open.
 
 ## Authority stop condition
 
@@ -295,11 +300,13 @@ artifact operation authority, operation-keyed usage reader, and family
 aggregator. P2.4a3 now composes the locked POST staging route and the two
 locked GET evidence routes, with strict request/descriptor projection, error
 mapping, mTLS and bearer admission, and route-nondisclosure behavior. Admission
-completes before application dispatch; the stage handler invokes only durable
-`Accept` and returns `202`, while evidence handlers read only by operation ID.
+completes before application dispatch; the stage handler performs strict schema
+preflight before mutation admission, invokes only durable `Accept`, and returns
+`202`, while evidence handlers read only by operation ID.
 The generic operation route uses the composed family reader and exposes known
-`artifact_stage` operations. Focused component tests pass, but full release
-evidence is pending. The command root does not invent an artifact source,
+`artifact_stage` operations. Focused component tests and local full gates pass;
+CI `32832926138` covers the pre-fix transport revision, while post-fix CI for
+`c469337` is pending. The command root does not invent an artifact source,
 stager, usage collector, or production persistence configuration, so missing
 dependencies remain fail-closed. This slice does not authorize artifact
 publication, billing truth, a real content scanner, external-caller

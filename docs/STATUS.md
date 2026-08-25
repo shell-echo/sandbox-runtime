@@ -12,7 +12,7 @@ production readiness.
 
 | Item | Evidence | Status |
 | --- | --- | --- |
-| Checkout | `main@9a4bc71` (local, not yet pushed) | P2.4a3 transport composition is implemented in `f5111a5`, `ce3c6e0`, and `9a4bc71`; focused component tests pass; full release gates and CI are pending |
+| Checkout | `main@c469337` (local, ahead of `origin/main@a93a587`, not yet pushed) | P2.4a3 transport composition is implemented in `f5111a5`, `ce3c6e0`, `9a4bc71`, with strict artifact-stage document preflight and error-category correction in `c469337`; local full gates pass. CI `32832926138` passed for the pre-fix transport revision at `a93a587`; post-fix CI for `c469337` is pending |
 | Review | PR [#17](https://github.com/shell-echo/sandbox-runtime/pull/17) merged as `43ff3d7`; PR [#18](https://github.com/shell-echo/sandbox-runtime/pull/18) merged as `4774c3a`; PR [#19](https://github.com/shell-echo/sandbox-runtime/pull/19) merged as `e2755f5`; PR [#21](https://github.com/shell-echo/sandbox-runtime/pull/21) merged as `c5a4a65`; PR [#22](https://github.com/shell-echo/sandbox-runtime/pull/22) merged as `44f39ec`; PR [#23](https://github.com/shell-echo/sandbox-runtime/pull/23) merged as `ac72eab`; PR [#24](https://github.com/shell-echo/sandbox-runtime/pull/24) merged as `2e3dde6`; PR [#25](https://github.com/shell-echo/sandbox-runtime/pull/25) merged as `88506d1`; PR [#26](https://github.com/shell-echo/sandbox-runtime/pull/26) merged as `4ccb107`; PR [#27](https://github.com/shell-echo/sandbox-runtime/pull/27) merged as `28076a7`; PR [#28](https://github.com/shell-echo/sandbox-runtime/pull/28) merged as `2b25f76`; PR [#29](https://github.com/shell-echo/sandbox-runtime/pull/29) merged as `83965a2`; PR [#30](https://github.com/shell-echo/sandbox-runtime/pull/30) merged as `9d00212`; PR [#31](https://github.com/shell-echo/sandbox-runtime/pull/31) merged as `67b64a9`; PR [#32](https://github.com/shell-echo/sandbox-runtime/pull/32) merged as `5883da9`; PR [#33](https://github.com/shell-echo/sandbox-runtime/pull/33) merged as `ba39053`; PR [#35](https://github.com/shell-echo/sandbox-runtime/pull/35) merged as `c467cd4`; PR [#36](https://github.com/shell-echo/sandbox-runtime/pull/36) merged as `3a980bd`; PR [#37](https://github.com/shell-echo/sandbox-runtime/pull/37) merged as `f9cfbc3`; PR [#38](https://github.com/shell-echo/sandbox-runtime/pull/38) merged as `7ebcc8f`; PR [#39](https://github.com/shell-echo/sandbox-runtime/pull/39) merged as `17072e6`; PR [#40](https://github.com/shell-echo/sandbox-runtime/pull/40) merged as `65a9ba3`; PR [#41](https://github.com/shell-echo/sandbox-runtime/pull/41) merged as `ac555619`; PR [#42](https://github.com/shell-echo/sandbox-runtime/pull/42) merged as `97fb429` | PR #42 CI `32465114377` and post-merge CI `32465443385` provider-contract, test, and docker-integration passed |
 | P2.2a release evidence | `2fa2e72` on PR #33, merged as `ba39053` | Local race/shuffle, vet, lock, Suite, PR CI, and post-merge CI passed |
 | P2.2b release evidence | `e26bf2b` on PR #35, merged as `c467cd4` | Local race/shuffle, vet, lock, 19-case Suite, PR CI `32456100570`, and post-merge CI `32456279722` passed; no HTTP/dispatch composition |
@@ -38,7 +38,7 @@ production readiness.
 | P2.4a1 release evidence | post-push CI run `32823783136` | `provider-contract`, `test`, and `docker-integration` all passed; local race/shuffle, vet, lock verifier, projection/admission tests, and 35-case Suite also passed |
 | P2.4a2 application component | commits `152033f`, `0440272`, and `4d0bb70` | Independent artifact accepted/running/terminal/outcome-unknown authority, explicit dispatch/reconcile boundary, memory/file adapters, expiry tombstones, usage operation-id index, lifecycle/artifact operation readers, and collision-safe aggregator; no handler/router/config change |
 | P2.4a2 release evidence | post-push CI run `32827387303` | `provider-contract`, `test`, and `docker-integration` all passed; local authorized race/shuffle, vet, lock verifier, 35-case Suite, dependency-boundary tests, and `git diff --check` passed |
-| P2.4a3 transport component evidence | commits `f5111a5`, `ce3c6e0`, `9a4bc71` | Three locked routes are admitted before application dispatch; artifact accept returns only `202` operation; evidence/usage state mappings and operation-family aggregation pass focused tests; default composition injects no synthetic artifact/usage dependencies and fails closed when absent |
+| P2.4a3 transport component evidence | commits `f5111a5`, `ce3c6e0`, `9a4bc71`, correction `c469337` | Three locked routes are admitted before application dispatch; artifact accept returns only `202` operation; evidence/usage state mappings and operation-family aggregation pass. Local race/shuffle, vet, lock verifier, 35-case Suite, focused projection tests, and diff checks pass. CI `32832926138` passed all three jobs for `a93a587`; `c469337` adds invalid-document `400` classification and artifact-stage schema preflight, with post-fix CI pending. Preflight coverage is currently limited to artifact stage; create/session require the same ordering review before their future composition |
 | P3 local evidence | implementation commit `4212e88` | Revision identity validation, deterministic canary binding, rollback-only-new-run behavior, old-run draining, shadow validation bounds, and migration metric aggregation passed focused race/shuffle and vet; external caller gate remains open |
 | P3 component release evidence | post-push CI run `32805284762` | CI run concluded success for `4212e88`; this remains local migration component evidence, not external caller, canary traffic, rollback E2E, or production readiness |
 | Contract resources | OpenAPI, admission, lifecycle, bounded exec, terminal-session, artifact-staging, usage-evidence schemas, fixtures, semantic rules, and Suite | Local Contract authority is locked; artifact publication, billing, and tenant authority remain outside the Provider |
@@ -88,8 +88,8 @@ It does not clone, mount, or read an external source repository.
 | P2.4a0 | Artifact/usage protected-admission authority reconciliation | Passed in direct-main commits `3a9d8b7`, `7e00715`, and `2aba87f`; CI `32819717542` passed | Retain 33-case Suite, lock, guard classification, descriptor digest, async outcome, safe error, and route-absence regression |
 | P2.4a1 | Operation aggregation and evidence-read authority reconciliation | Passed in direct-main commits `3846c9e`, `6f549c2`, and `dbea0e8`; CI `32823783136` passed | Retain 35-case Suite and locked pending/outcome-unknown/unavailable/expired state matrices; no runtime implementation claim |
 | P2.4a2 | Artifact/usage Provider application and operation-family component | Passed for bounded provider-local application/repository/reader evidence in direct-main commits `152033f`, `0440272`, and `4d0bb70`; CI `32827387303` passed | Retain durable accept-before-dispatch, CAS/generation/fencing, restart/expiry/corruption, usage operation correlation, all-family aggregation, and duplicate-ID fail-closed evidence; no HTTP composition |
-| P2.4a | Artifact/usage Provider transport composition | Implemented locally; release evidence pending | Push `f5111a5`/`ce3c6e0`/`9a4bc71`; run full race/shuffle, vet, lock verifier, 35-case Suite, diff check, and required CI; retain no external-caller or production claim |
-| P2 | Coding/remote-shell profile | In progress: P2.1, P2.2a-c, P2.3a-c4, P2.4, P2.4a0, P2.4a1, and P2.4a2 have bounded component/Contract evidence | P2.4a transport composition, then separately supplied external-caller release-gate evidence |
+| P2.4a | Artifact/usage Provider transport composition | Local component evidence passed; CI `32832926138` passed for `a93a587`; post-fix `c469337` CI pending | Push `c469337`; verify post-fix CI and retain the artifact-stage-only preflight boundary. Create/session ordering review remains future work; retain no external-caller or production claim |
+| P2 | Coding/remote-shell profile | In progress: P2.1, P2.2a-c, P2.3a-c4, P2.4, P2.4a0, P2.4a1, P2.4a2, and local P2.4a3 transport evidence are bounded | Complete post-fix P2.4a CI, then obtain separately supplied external-caller release-gate evidence |
 | P3 | Migration readiness and external-caller integration | In progress for local binding/shadow/metrics component evidence only (`4212e88`) | External caller against locked Suite, shadow parity, canary/rollback/drain, and unchanged platform contracts |
 | P4 | Production hardening | Not started | Deployment, multi-controller, multi-tenant, and production gates |
 
@@ -191,8 +191,7 @@ Passed locally (authorized test environment):
 
 Pending:
 
-- P2.4a artifact/usage async application facade and Provider transport;
-- P3 external-caller Gateway E2E and migration evidence;
+- P2.4a post-fix CI for `c469337`, followed by external-caller Gateway E2E and migration evidence;
 - optional content-derived Suite digest enhancement;
 - aggregate lifecycle conformance, external-caller E2E, reliability, tenancy,
   deployment, and production gates.
@@ -296,15 +295,17 @@ executed the 35-case Suite. P2.4a2 then supplied the bounded application,
 durable authority adapters, usage operation reader, and operation-family
 aggregator in `152033f`, `0440272`, and `4d0bb70`; CI `32827387303` passed all
 three required jobs. P2.4a3 now composes the three locked routes in commits
-`f5111a5`, `ce3c6e0`, and `9a4bc71`: admission and descriptor binding complete
-before application calls; stage returns only a `202` operation; artifact and
-usage evidence projections enforce operation/sandbox/attempt/fencing
-correlation; and the generic operation route uses composed family readers.
-Focused Provider tests pass, including admission failures with zero application
-calls, pending/unknown/expired state mappings, route nondisclosure, and
-operation aggregation. The command composition root injects no synthetic
-artifact stager or usage collector; missing dependencies remain a bounded
-`503` surface. Full race/shuffle, vet, lock, Suite, required CI, and external
-caller gates remain open. Artifact publication, billing, aggregate conformance,
-multi-controller reliability, multi-tenant safety, deployment, and production
-readiness are not claimed.
+`f5111a5`, `ce3c6e0`, and `9a4bc71`, with the independent admission/error
+correction in `c469337`: admission and descriptor binding complete before
+application calls; stage returns only a `202` operation; artifact and usage
+evidence projections enforce operation/sandbox/attempt/fencing correlation;
+and the generic operation route uses composed family readers. Strict schema
+preflight now rejects artifact-stage invalid documents before mutation guard
+reservation; create/session routes remain future ordering-review scope.
+Focused Provider tests and the local full race/shuffle, vet, lock, Suite, and
+diff gates pass. CI `32832926138` passed all three jobs for `a93a587`, while
+post-fix CI for `c469337` remains pending. The command composition root injects
+no synthetic artifact stager or usage collector; missing dependencies remain a
+bounded `503` surface. Artifact publication, billing, aggregate conformance,
+external-caller compatibility, multi-controller reliability, multi-tenant
+safety, deployment, and production readiness are not claimed.
