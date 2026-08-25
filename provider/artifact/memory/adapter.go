@@ -17,7 +17,7 @@ import (
 )
 
 var (
-	ErrNotFound = errors.New("artifact staging evidence not found")
+	ErrNotFound = artifact.ErrSourceMissing
 	ErrConflict = errors.New("artifact staging evidence conflict")
 	ErrClosed   = errors.New("artifact staging adapter is closed")
 )
@@ -137,6 +137,25 @@ func (a *Adapter) Get(ctx context.Context, operationID string) (artifact.Evidenc
 	return stored.evidence, nil
 }
 
+func (a *Adapter) GetEvidence(ctx context.Context, operationID string, now time.Time) (artifact.Evidence, error) {
+	if err := contextError(ctx); err != nil {
+		return artifact.Evidence{}, err
+	}
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	if a.closed {
+		return artifact.Evidence{}, ErrClosed
+	}
+	stored, ok := a.evidence[operationID]
+	if !ok {
+		return artifact.Evidence{}, artifact.ErrEvidenceNotFound
+	}
+	if now.IsZero() || !now.UTC().Before(stored.evidence.ExpiresAt) {
+		return artifact.Evidence{}, artifact.ErrEvidenceExpired
+	}
+	return stored.evidence, nil
+}
+
 func (a *Adapter) Close() error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -165,6 +184,7 @@ func digest(content []byte) string {
 }
 
 var _ artifact.Stager = (*Adapter)(nil)
+var _ artifact.EvidenceReader = (*Adapter)(nil)
 
 func sameRequest(left, right artifact.Request) bool {
 	return left.SandboxID == right.SandboxID && left.OperationID == right.OperationID && left.AttemptID == right.AttemptID && left.FencingToken == right.FencingToken && left.ExpectedGeneration == right.ExpectedGeneration && left.IdempotencyKey == right.IdempotencyKey && left.RequestDigest == right.RequestDigest && left.Deadline.Equal(right.Deadline) && left.ArtifactReference == right.ArtifactReference && left.SourcePath == right.SourcePath && left.ExpectedDigest == right.ExpectedDigest && left.ExpectedMediaType == right.ExpectedMediaType && left.MaxBytes == right.MaxBytes && left.Retention == right.Retention
