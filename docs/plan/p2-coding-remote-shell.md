@@ -84,7 +84,9 @@ acceptance, result retention, cancellation, reconciliation, or backend adapter.
   for bounded Provider transport evidence in `186190b`; CI run `32799871307`);
 - P2.3c4: separately owned Runtime Gateway integration evidence (bounded
   component evidence passed in `e675cb9`; post-push CI `32801539995`);
-- P2.4: artifact staging and usage evidence.
+- P2.4: artifact staging and usage evidence (Contract authority commits
+  `4f3da4e`/`649c293`; provider-local domain/ports `1ca700d`; memory adapters
+  `41225c0` with fix `3b94146`; post-push CI `32804619553` passed).
 
 Each implementation slice requires its own focused tests, race/shuffle suite,
 Contract lock verification, Conformance evidence, PR CI, and post-merge CI.
@@ -171,3 +173,23 @@ component evidence only. A concrete WebSocket wire adapter, external caller
 E2E, distributed revocation, multi-controller reliability, deployment,
 tenancy, and production readiness remain unproven; P3 migration readiness and
 external-caller integration is the next entry.
+
+## P2.4 Boundary
+
+P2.4 is closed for bounded provider-local evidence only. The locked Contract
+adds an opaque artifact staging request and evidence document plus usage
+evidence dimensions for wall time, CPU, memory, network, storage, workspace,
+and execution count. The domain enforces stable `/outputs` paths, digest/MIME/
+size bounds, evidence expiry, check status, operation correlation, meter/unit
+compatibility, and immutable replay/conflict behavior. The memory adapter is a
+single-process development/test implementation that reads only injected output
+bytes and stores bounded evidence in memory.
+
+The Provider does not publish artifacts, issue public URLs, own tenant or
+billing truth, perform distributed reconciliation, compose HTTP routes, or
+select a runtime driver in this slice. Active-content and malware checks are
+injected local checks; passing tests do not prove a real scanner, platform PKI,
+external caller compatibility, aggregate lifecycle conformance,
+multi-controller reliability, multi-tenant security, deployment, or production
+readiness. The next entry is P3 migration readiness and external-caller
+integration.
