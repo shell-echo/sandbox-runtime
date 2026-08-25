@@ -44,9 +44,9 @@ config, or HTTP route changed.
 
 P2.4a3 transport composition is implemented locally in commits `f5111a5`,
 `ce3c6e0`, and `9a4bc71`, with the independent admission/error correction in
-`c469337`. Local full release gates pass. CI `32832926138` passed all three
-jobs for the pre-fix transport revision at `a93a587`; post-fix CI for
-`c469337` is pending. It composes
+`c469337`. Local full release gates pass. Post-push CI `32838784395` passed
+all three jobs (`provider-contract`, `test`, `docker-integration`) for
+`1ca115b`. It composes
 only the three locked artifact/usage routes plus the generic operation-family
 reader. mTLS, bearer/JWS, target, strict request or descriptor digest,
 operation correlation, and mutation guard admission complete before any
@@ -59,7 +59,7 @@ fail closed with bounded `503` responses. Strict schema preflight now rejects
 invalid artifact-stage documents before mutation guard reservation; create and
 session routes need the same ordering review before future composition. Focused
 transport/projection tests, full race/shuffle, vet, lock, 35-case Conformance,
-and diff checks pass locally. Post-fix CI, external-caller, aggregate,
+diff checks, and post-push CI pass. External-caller, aggregate,
 multi-controller, tenancy, deployment, and production gates remain open.
 
 ## Authority stop condition
@@ -134,8 +134,9 @@ acceptance, result retention, cancellation, reconciliation, or backend adapter.
   operation-family readers/aggregator, and durable adapters (passed in
   `152033f`, `0440272`, and `4d0bb70`; post-push CI `32827387303`);
 - P2.4a: compose only the three locked routes over the P2.4a2 component
-  (implemented locally; release evidence pending; direct memory-adapter
-  dispatch is forbidden).
+  (passed for bounded component evidence in `f5111a5`, `ce3c6e0`, `9a4bc71`,
+  `c469337`, and `1ca115b`; post-push CI `32838784395` passed; direct
+  memory-adapter dispatch remains forbidden).
 
 Each implementation slice requires its own focused tests, race/shuffle suite,
 Contract lock verification, Conformance evidence, PR CI, and post-merge CI.
@@ -304,9 +305,8 @@ completes before application dispatch; the stage handler performs strict schema
 preflight before mutation admission, invokes only durable `Accept`, and returns
 `202`, while evidence handlers read only by operation ID.
 The generic operation route uses the composed family reader and exposes known
-`artifact_stage` operations. Focused component tests and local full gates pass;
-CI `32832926138` covers the pre-fix transport revision, while post-fix CI for
-`c469337` is pending. The command root does not invent an artifact source,
+`artifact_stage` operations. Focused component tests, local full gates, and
+post-push CI `32838784395` pass. The command root does not invent an artifact source,
 stager, usage collector, or production persistence configuration, so missing
 dependencies remain fail-closed. This slice does not authorize artifact
 publication, billing truth, a real content scanner, external-caller
