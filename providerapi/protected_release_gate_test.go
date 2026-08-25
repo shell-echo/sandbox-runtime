@@ -45,6 +45,7 @@ func allProtectedReleaseRoutes() []protectedReleaseRoute {
 		{name: "terminate sandbox", method: http.MethodPost, path: "/v1/sandboxes/sandbox-1:terminate", operation: admission.OperationTerminate, allowUnavailable: true},
 		{name: "read operation", method: http.MethodGet, path: "/v1/operations/operation-1", operation: admission.OperationReadOperation, allowUnavailable: true},
 		{name: "read execute result", method: http.MethodGet, path: "/v1/operations/operation-1/exec-result", operation: admission.OperationReadResult},
+		{name: "read runtime session handoff", method: http.MethodGet, path: "/v1/operations/operation-1/runtime-session", operation: admission.OperationReadRuntimeSession, allowUnavailable: true},
 		{name: "read snapshot manifest", method: http.MethodGet, path: "/v1/operations/operation-1/snapshot-manifest", operation: admission.OperationReadSnapshotManifest, allowUnavailable: true},
 		{name: "read events", method: http.MethodGet, path: "/v1/sandboxes/sandbox-1/events", query: "?after_sequence=2", operation: admission.OperationReadEvents, allowUnavailable: true},
 	}
@@ -380,6 +381,9 @@ func protectedReleaseRequestBinding(operation admission.Operation) (string, admi
 	}
 	if operation == admission.OperationReadResult {
 		return "urn:shell-echo:sandbox-runtime:descriptor:exec-result:v1", admission.DigestProfileFullDocument
+	}
+	if operation == admission.OperationReadRuntimeSession {
+		return "urn:shell-echo:sandbox-runtime:descriptor:runtime-session:v1", admission.DigestProfileFullDocument
 	}
 	if operation == admission.OperationReadSnapshotManifest {
 		return "urn:shell-echo:sandbox-runtime:descriptor:snapshot-manifest:v1", admission.DigestProfileFullDocument

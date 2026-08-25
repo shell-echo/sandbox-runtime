@@ -19,7 +19,9 @@ P2.3c1 has provider-only domain and transactional authority-port evidence. PR
 #45 merged it as `4c37d8c`; PR CI `32696507856` and post-merge CI `32696727371`
 passed all three jobs. P2.3c2 adds independent durable session authority
 adapters on `main@e5c9dec`. Post-push CI #103 / run `32698606341` passed all
-three jobs; Node.js 20 deprecation warnings remain. P2.3c3 is the next entry.
+three jobs; Node.js 20 deprecation warnings remain. P2.3c3 is the current
+transport-projection slice; its local implementation is complete and release
+CI is pending.
 ADR 0009 records the ownership boundary and ADR 0010 records the bounded exec
 Contract decision.
 
@@ -28,10 +30,12 @@ Contract decision.
 The current repository-owned Contract contains terminal-only session routes and
 a strict zero-or-terminal-only capability mapping. The default remains zero
 advertisement; a terminal advertisement must associate its version and profile
-with an explicit runtime profile. The routes remain unavailable because this
-slice adds no session application, durable authority, transport composition, or
-Gateway. The architecture narrative is not sufficient authority to implement
-behavior beyond the locked resources and this delivery order.
+with an explicit runtime profile. The protected routes are opt-in: the
+transport accepts an independently composed session application, while the
+command composition root still creates none by default. This slice adds no
+Gateway, allocator, runtime driver, or WebSocket data plane. The architecture
+narrative is not sufficient authority to implement behavior beyond the locked
+resources and this delivery order.
 
 Before runtime behavior changes, this slice must:
 
@@ -73,7 +77,8 @@ acceptance, result retention, cancellation, reconciliation, or backend adapter.
 - P2.3c2: durable session ledger and atomic sandbox ready/generation/lease/
   fencing authority check (memory/file adapters, idempotency replay, expiry,
   restart, and compare-and-set evidence; no transport or dispatch);
-- P2.3c3: protected transport projection and opaque handoff retrieval;
+- P2.3c3: protected transport projection and opaque handoff retrieval (local
+  implementation complete; release evidence pending);
 - P2.3c4: separately owned Runtime Gateway integration evidence;
 - P2.4: artifact staging and usage evidence.
 
@@ -141,5 +146,14 @@ and diff checks passed. PR #45 and its post-merge CI close P2.3c1 as
 provider-local domain/authority evidence only. P2.3c2 adds independent memory
 and file persistence with restart, expiry, idempotency, CAS generation/fencing,
 and same-transaction authority rechecks. Direct-main commit `e5c9dec` and
-post-push CI #103 / run `32698606341` passed. It still excludes Provider HTTP,
-transport, allocator, driver, and Gateway behavior. P2.3c3 is the next entry.
+post-push CI #103 / run `32698606341` passed. P2.3c3 now provides an
+independently composed terminal-session application boundary and protected
+transport projection for the two locked session routes. It strictly binds body
+and descriptor admission context, returns the accepted operation projection,
+and returns only successful, unexpired opaque handoff data. Error mapping
+covers pending, expired, missing, unsupported, conflict, and unknown-outcome
+states; endpoint non-disclosure and reserved-route regression tests are
+included. The command composition root still leaves this application nil, so
+no allocator, runtime driver, WebSocket data plane, or Gateway is started.
+P2.3c3 release CI and review evidence remain pending; P2.3c4 is the next
+implementation entry.

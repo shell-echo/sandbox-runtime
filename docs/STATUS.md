@@ -1,6 +1,6 @@
 # Project Status
 
-Updated: 2026-08-24
+Updated: 2026-08-25
 
 This document is the implementation ledger for the repository-owned MIT
 Provider Contract. It distinguishes local component evidence, Contract
@@ -12,7 +12,7 @@ production readiness.
 
 | Item | Evidence | Status |
 | --- | --- | --- |
-| Checkout | `main` | P2.3c2 implementation `e5c9dec` and release evidence commit `57f8898` are pushed; implementation remains provider-local only |
+| Checkout | `main` | P2.3c3 implementation is being validated on top of `137dac3`; the protected session route remains opt-in and provider-local |
 | Review | PR [#17](https://github.com/shell-echo/sandbox-runtime/pull/17) merged as `43ff3d7`; PR [#18](https://github.com/shell-echo/sandbox-runtime/pull/18) merged as `4774c3a`; PR [#19](https://github.com/shell-echo/sandbox-runtime/pull/19) merged as `e2755f5`; PR [#21](https://github.com/shell-echo/sandbox-runtime/pull/21) merged as `c5a4a65`; PR [#22](https://github.com/shell-echo/sandbox-runtime/pull/22) merged as `44f39ec`; PR [#23](https://github.com/shell-echo/sandbox-runtime/pull/23) merged as `ac72eab`; PR [#24](https://github.com/shell-echo/sandbox-runtime/pull/24) merged as `2e3dde6`; PR [#25](https://github.com/shell-echo/sandbox-runtime/pull/25) merged as `88506d1`; PR [#26](https://github.com/shell-echo/sandbox-runtime/pull/26) merged as `4ccb107`; PR [#27](https://github.com/shell-echo/sandbox-runtime/pull/27) merged as `28076a7`; PR [#28](https://github.com/shell-echo/sandbox-runtime/pull/28) merged as `2b25f76`; PR [#29](https://github.com/shell-echo/sandbox-runtime/pull/29) merged as `83965a2`; PR [#30](https://github.com/shell-echo/sandbox-runtime/pull/30) merged as `9d00212`; PR [#31](https://github.com/shell-echo/sandbox-runtime/pull/31) merged as `67b64a9`; PR [#32](https://github.com/shell-echo/sandbox-runtime/pull/32) merged as `5883da9`; PR [#33](https://github.com/shell-echo/sandbox-runtime/pull/33) merged as `ba39053`; PR [#35](https://github.com/shell-echo/sandbox-runtime/pull/35) merged as `c467cd4`; PR [#36](https://github.com/shell-echo/sandbox-runtime/pull/36) merged as `3a980bd`; PR [#37](https://github.com/shell-echo/sandbox-runtime/pull/37) merged as `f9cfbc3`; PR [#38](https://github.com/shell-echo/sandbox-runtime/pull/38) merged as `7ebcc8f`; PR [#39](https://github.com/shell-echo/sandbox-runtime/pull/39) merged as `17072e6`; PR [#40](https://github.com/shell-echo/sandbox-runtime/pull/40) merged as `65a9ba3`; PR [#41](https://github.com/shell-echo/sandbox-runtime/pull/41) merged as `ac555619`; PR [#42](https://github.com/shell-echo/sandbox-runtime/pull/42) merged as `97fb429` | PR #42 CI `32465114377` and post-merge CI `32465443385` provider-contract, test, and docker-integration passed |
 | P2.2a release evidence | `2fa2e72` on PR #33, merged as `ba39053` | Local race/shuffle, vet, lock, Suite, PR CI, and post-merge CI passed |
 | P2.2b release evidence | `e26bf2b` on PR #35, merged as `c467cd4` | Local race/shuffle, vet, lock, 19-case Suite, PR CI `32456100570`, and post-merge CI `32456279722` passed; no HTTP/dispatch composition |
@@ -26,6 +26,7 @@ production readiness.
 | P2.3c1 release evidence | PR [#45](https://github.com/shell-echo/sandbox-runtime/pull/45) merged as `4c37d8c` | PR CI `32696507856` and post-merge CI `32696727371` passed `provider-contract`, `test`, and `docker-integration`; Node.js 20 deprecation warnings remain |
 | P2.3c2 local evidence | independent session memory/file repositories and transactional sandbox authority checks | Focused/full race/shuffle, vet, unchanged Contract lock, 26-case Suite, restart, expiry, idempotency, CAS generation/fencing, and diff checks passed; no transport or dispatch composition |
 | P2.3c2 release evidence | direct `main` commit `e5c9dec` | Post-push CI #103 / run `32698606341` passed `provider-contract`, `test`, and `docker-integration`; Node.js 20 deprecation warnings remain |
+| P2.3c3 local evidence | current implementation on `main` worktree | Session application, protected POST/GET projection, admission binding, strict decode, status/expiry mapping, opaque endpoint non-disclosure, route coverage, full compile, and focused tests passed; no Gateway/WebSocket composition |
 | Contract resources | OpenAPI, admission, lifecycle, bounded exec, terminal-session schemas, terminal capability/profile fixture and mapping semantics, Suite | Local Contract consistency is restored; the terminal advertisement uses semver `1.0.0` and canonical profile `terminal-v1`; zero advertisement remains the default |
 | Contract lock | revision `71fee34380affcb46e1e1dce667475aa241048a4`; tree `4fafb742e40231cbf9fb957f5998bdce932fdb0d`; semantic rules `sha256:1b07682a7c0398219b7d52c9283f78d520a81a36f77eb729bcff81dcd90671b9` | Local verifier, 26-case Conformance, exact-head PR CI, merge, and post-merge CI passed |
 | External Agent Contract | no longer consumed; old compatibility evidence is historical only | Removed from implementation |
@@ -67,7 +68,7 @@ It does not clone, mount, or read an external source repository.
 | P2.3c0 | Terminal capability/profile Contract reconciliation | Passed in PR #44 merge `6c1fc90`; exact-head PR CI `32685685846` and post-merge CI `32686754674` passed | Retain 26-case Contract/projection regression and evidence boundaries |
 | P2.3c1 | Provider-local terminal session domain and transactional authority port | Passed: PR #45 merged as `4c37d8c`; PR/post-merge CI passed | Retain no-persistence/no-transport boundary |
 | P2.3c2 | Durable terminal session ledger and atomic sandbox authority check | Passed on `main@e5c9dec`; post-push CI #103 passed | Retain no-transport/no-dispatch/no-multi-controller boundary; P2.3c3 next |
-| P2.3c3 | Protected transport projection and opaque handoff retrieval | Blocked by P2.3c0-c2 | Route, admission, error projection, and endpoint non-disclosure evidence; no public Gateway claim |
+| P2.3c3 | Protected transport projection and opaque handoff retrieval | In progress: local evidence passed, release CI pending | Record implementation commit, push result, CI jobs, and retain no-Gateway/no-WebSocket boundary |
 | P2.3c4 | Runtime Gateway integration | Not started | Independently owned authorization, proxy, reconnect, revocation, recording, external caller, and end-to-end evidence |
 | P2 | Coding/remote-shell profile | P2.1, P2.2a-c, and P2.3a-c0 closed for bounded Provider/Contract evidence | P2.3c1 provider-local session domain and authority port |
 | P3 | Migration readiness and external-caller integration | Not started | External caller E2E, rollback and canary evidence |
@@ -138,7 +139,7 @@ Passed locally (authorized test environment):
 
 Pending:
 
-- P2.3c3 transport projection and separate Gateway integration evidence;
+- P2.3c3 release CI and review evidence, then separate Gateway integration evidence;
 - optional content-derived Suite digest enhancement;
 - aggregate lifecycle conformance, external-caller E2E, reliability, tenancy,
   deployment, and production gates.
@@ -215,6 +216,15 @@ post-merge CI `32696727371` passed all three jobs. P2.3c2 adds independent
 provider/session memory and file persistence, idempotency replay, expiry
 handling, compare-and-set generation/fencing, and same-transaction authority
 rechecks. Direct main commit `e5c9dec` and post-push CI #103 / run
-`32698606341` passed all three jobs. No Provider HTTP route, allocator, runtime
-driver, WebSocket data plane, or Gateway is composed. The next entry is
-P2.3c3 protected transport projection.
+`32698606341` passed all three jobs. P2.3c3 now adds an independently
+injectable session application boundary to the protected transport. POST
+`/v1/sandboxes/{sandbox_id}/runtime-sessions` strictly decodes and projects an
+accepted terminal operation after admission; GET
+`/v1/operations/{operation_id}/runtime-session` projects only a successful,
+unexpired opaque handoff. Pending, expired, failed, cancelled, and
+`outcome_unknown` records map to stable errors; raw endpoints, addresses,
+credentials, and provider tokens are rejected or omitted. The command
+composition root still does not create an allocator, runtime driver,
+WebSocket data plane, or Gateway integration, and no external-caller,
+multi-controller, tenancy, deployment, or production claim is made. The next
+entry after P2.3c3 release evidence is P2.3c4 Runtime Gateway integration.

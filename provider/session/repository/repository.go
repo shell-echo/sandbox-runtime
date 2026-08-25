@@ -20,7 +20,7 @@ var (
 	ErrCorrupt             = errors.New("terminal session repository is corrupt")
 	ErrDurability          = session.ErrDurability
 	ErrClosed              = errors.New("terminal session repository is closed")
-	ErrExpired             = errors.New("terminal session handoff has expired")
+	ErrExpired             = session.ErrHandoffExpired
 )
 
 // Repository is the durable authority adapter required by session.Authority.

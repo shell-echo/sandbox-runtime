@@ -22,6 +22,7 @@ var (
 	ErrInvalidTransition  = errors.New("invalid Provider terminal session transition")
 	ErrTerminalOperation  = errors.New("Provider terminal session operation is terminal")
 	ErrHandoffUnavailable = errors.New("Provider terminal session handoff is unavailable")
+	ErrHandoffExpired     = errors.New("Provider terminal session handoff has expired")
 
 	identifierPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$`)
 	digestPattern     = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)

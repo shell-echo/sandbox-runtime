@@ -16,6 +16,8 @@ import (
 	"github.com/shell-echo/sandbox-runtime/provider/admission"
 	"github.com/shell-echo/sandbox-runtime/provider/lifecycle"
 	"github.com/shell-echo/sandbox-runtime/provider/lifecycle/repository"
+	"github.com/shell-echo/sandbox-runtime/provider/session"
+	sessionapplication "github.com/shell-echo/sandbox-runtime/provider/session/application"
 	providerv1 "github.com/shell-echo/sandbox-runtime/providerapi/v1"
 )
 
@@ -27,9 +29,10 @@ var admissionTraceCounter atomic.Uint64
 // The composition root must construct it from frozen operator trust material;
 // a nil value keeps the Provider listener discovery-only.
 type ProtectedTransportOptions struct {
-	Gate        *admission.ProtectedOperationGate
-	Application LifecycleApplication
-	Now         func() time.Time
+	Gate               *admission.ProtectedOperationGate
+	Application        LifecycleApplication
+	SessionApplication RuntimeSessionApplication
+	Now                func() time.Time
 }
 
 // LifecycleApplication is the narrow Provider application boundary. Its
@@ -41,10 +44,18 @@ type LifecycleApplication interface {
 	GetOperation(context.Context, string) (lifecycle.Operation, error)
 }
 
+// RuntimeSessionApplication is the narrow terminal-session application
+// boundary. It returns bounded projections rather than repository records.
+type RuntimeSessionApplication interface {
+	Open(context.Context, session.OpenRequest) (sessionapplication.Operation, error)
+	GetHandoff(context.Context, string) (sessionapplication.Handoff, error)
+}
+
 type protectedHandler struct {
 	identity    *clientIdentityAdmission
 	gate        *admission.ProtectedOperationGate
 	application LifecycleApplication
+	sessionApp  RuntimeSessionApplication
 	now         func() time.Time
 }
 
@@ -62,7 +73,7 @@ func newProtectedHandler(identity *clientIdentityAdmission, options ProtectedTra
 	if now == nil {
 		now = func() time.Time { return time.Now().UTC() }
 	}
-	return &protectedHandler{identity: identity, gate: options.Gate, application: options.Application, now: now}, nil
+	return &protectedHandler{identity: identity, gate: options.Gate, application: options.Application, sessionApp: options.SessionApplication, now: now}, nil
 }
 
 func (h *protectedHandler) ServeHTTP(response http.ResponseWriter, request *http.Request) {
@@ -144,6 +155,16 @@ func (h *protectedHandler) ServeHTTP(response http.ResponseWriter, request *http
 			return
 		case admission.OperationReadOperation:
 			h.serveOperation(response, request, context)
+			return
+		}
+	}
+	if h.sessionApp != nil {
+		switch route.operation {
+		case admission.OperationOpenRuntimeSession:
+			h.serveRuntimeSessionOpen(response, request, context, document)
+			return
+		case admission.OperationReadRuntimeSession:
+			h.serveRuntimeSessionHandoff(response, request, context)
 			return
 		}
 	}
@@ -287,6 +308,8 @@ func matchProtectedRoute(request *http.Request) (protectedRoute, map[string]stri
 		}
 		if len(parts) == 4 && request.Method == http.MethodGet {
 			switch parts[3] {
+			case "runtime-session":
+				return protectedRoute{operation: admission.OperationReadRuntimeSession, allowUnavailable: true}, values, true
 			case "exec-result":
 				return protectedRoute{operation: admission.OperationReadResult, allowUnavailable: false}, values, true
 			case "snapshot-manifest":
