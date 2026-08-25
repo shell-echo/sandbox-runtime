@@ -155,6 +155,30 @@ var testCases = map[string]testCase{
 		Package: "./providerapi/v1",
 		Run:     `^TestRuntimeSessionRejectionFixtures$`,
 	},
+	"artifact-staging-request-schema": {
+		Package: "./providerapi/v1",
+		Run:     `^TestLockedArtifactAndUsageProjection/artifact-staging-request\.json$`,
+	},
+	"artifact-staging-evidence-schema": {
+		Package: "./providerapi/v1",
+		Run:     `^TestLockedArtifactAndUsageProjection/artifact-staging-evidence\.json$`,
+	},
+	"artifact-staging-semantic-bounds": {
+		Package: "./providerapi/v1",
+		Run:     `^TestLocalContractArtifactAndUsageSemanticRules$`,
+	},
+	"artifact-staging-rejection-fixtures": {
+		Package: "./providerapi/v1",
+		Run:     `^TestArtifactStagingRejectionFixtures$`,
+	},
+	"usage-evidence-schema": {
+		Package: "./providerapi/v1",
+		Run:     `^TestLockedArtifactAndUsageProjection/usage-evidence\.json$`,
+	},
+	"usage-evidence-semantic-bounds": {
+		Package: "./providerapi/v1",
+		Run:     `^TestLocalContractArtifactAndUsageSemanticRules$`,
+	},
 }
 
 // Run verifies the locked local Contract and executes every case in its

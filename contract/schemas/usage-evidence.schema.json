@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:shell-echo:sandbox-runtime:contract:usage-evidence:v1",
+  "title": "Sandbox Runtime Usage Evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "evidence_id",
+    "sandbox_id",
+    "operation_id",
+    "attempt_id",
+    "fencing_token",
+    "entries",
+    "reconciliation_status",
+    "observed_at",
+    "retained_until",
+    "evidence_digest"
+  ],
+  "properties": {
+    "evidence_id": {"$ref": "#/$defs/Identifier"},
+    "sandbox_id": {"$ref": "#/$defs/Identifier"},
+    "operation_id": {"$ref": "#/$defs/Identifier"},
+    "attempt_id": {"$ref": "#/$defs/Identifier"},
+    "fencing_token": {"type": "integer", "minimum": 1},
+    "entries": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "items": {"$ref": "#/$defs/Entry"}
+    },
+    "reconciliation_status": {"enum": ["complete", "partial", "unknown"]},
+    "observed_at": {"type": "string", "format": "date-time"},
+    "retained_until": {"type": "string", "format": "date-time"},
+    "evidence_digest": {"$ref": "#/$defs/Digest"}
+  },
+  "$defs": {
+    "Identifier": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$"},
+    "Digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "Entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entry_id", "sandbox_id", "meter", "quantity", "unit", "meter_source", "evidence_reference", "occurred_at"],
+      "properties": {
+        "entry_id": {"$ref": "#/$defs/Identifier"},
+        "sandbox_id": {"$ref": "#/$defs/Identifier"},
+        "operation_id": {"$ref": "#/$defs/Identifier"},
+        "meter": {"enum": ["sandbox.wall_time_milliseconds", "sandbox.cpu_nanoseconds", "sandbox.memory_byte_milliseconds", "sandbox.network_ingress_bytes", "sandbox.network_egress_bytes", "sandbox.storage_read_bytes", "sandbox.storage_write_bytes", "sandbox.workspace_peak_bytes", "sandbox.exec_count"]},
+        "quantity": {"type": "integer", "minimum": 0},
+        "unit": {"enum": ["milliseconds", "nanoseconds", "byte-milliseconds", "bytes", "count"]},
+        "meter_source": {"enum": ["platform_metered", "runtime_metered", "reconciled"]},
+        "evidence_reference": {"type": "string", "pattern": "^ref:[A-Za-z0-9][A-Za-z0-9._:/-]{0,399}$"},
+        "occurred_at": {"type": "string", "format": "date-time"}
+      }
+    }
+  }
+}

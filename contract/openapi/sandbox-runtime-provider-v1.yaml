@@ -265,6 +265,81 @@ paths:
             application/json:
               schema:
                 $ref: ../schemas/standard-error.schema.json
+  /v1/sandboxes/{sandbox_id}/artifacts:stage:
+    post:
+      operationId: stageSandboxArtifact
+      summary: Accept a bounded provider-local artifact staging request
+      security:
+        - mutualTLS: []
+          bearerAuth: []
+      parameters:
+        - name: sandbox_id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/artifact-staging-request.schema.json
+      x-max-encoded-body-bytes: 65536
+      responses:
+        '202':
+          description: Artifact staging operation accepted
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/provider-operation.schema.json
+        '400':
+          description: Artifact staging request document or metadata is invalid
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '401':
+          description: Client certificate or bearer authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '403':
+          description: Artifact staging is not authorized by the admitted context
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '409':
+          description: Idempotency, generation, or fencing conflict
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '422':
+          description: Artifact staging policy or content checks are unsupported
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '410':
+          description: Artifact staging request evidence has expired
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '503':
+          description: Provider is draining or temporarily unavailable
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
   /v1/sandboxes/{sandbox_id}/exec:cancel:
     post:
       operationId: cancelSandboxExec
@@ -529,6 +604,130 @@ paths:
                 $ref: ../schemas/standard-error.schema.json
         '410':
           description: Retained execution result has expired
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '503':
+          description: Provider is draining or temporarily unavailable
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+  /v1/operations/{operation_id}/artifact-staging-evidence:
+    get:
+      operationId: getArtifactStagingEvidence
+      summary: Read bounded provider-local artifact staging evidence
+      security:
+        - mutualTLS: []
+          bearerAuth: []
+      parameters:
+        - name: operation_id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$'
+      responses:
+        '200':
+          description: Artifact staging evidence
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/artifact-staging-evidence.schema.json
+        '400':
+          description: Request metadata or path is invalid
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '401':
+          description: Client certificate or bearer authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '403':
+          description: Request is not authorized by the admitted context
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '404':
+          description: Artifact staging operation is not known to this provider revision
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '410':
+          description: Artifact staging evidence has expired
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '503':
+          description: Provider is draining or temporarily unavailable
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+  /v1/operations/{operation_id}/usage-evidence:
+    get:
+      operationId: getUsageEvidence
+      summary: Read bounded provider-local usage evidence
+      security:
+        - mutualTLS: []
+          bearerAuth: []
+      parameters:
+        - name: operation_id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$'
+      responses:
+        '200':
+          description: Usage evidence for one provider-local operation
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/usage-evidence.schema.json
+        '400':
+          description: Request metadata or path is invalid
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '401':
+          description: Client certificate or bearer authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '403':
+          description: Request is not authorized by the admitted context
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '404':
+          description: Usage evidence is not known to this provider revision
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '410':
+          description: Usage evidence has expired
           content:
             application/json:
               schema:

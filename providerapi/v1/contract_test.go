@@ -27,12 +27,15 @@ func TestLockedContractProjection(t *testing.T) {
 	factories := map[string]func() any{
 		"admission-context.schema.json":            func() any { return &map[string]any{} },
 		"admission-target.schema.json":             func() any { return &map[string]any{} },
+		"artifact-staging-evidence.schema.json":    func() any { return &ArtifactStagingEvidence{} },
+		"artifact-staging-request.schema.json":     func() any { return &ArtifactStagingRequest{} },
 		"cancel-exec-request.schema.json":          func() any { return &CancelExecRequest{} },
 		"create-sandbox-request.schema.json":       func() any { return &CreateRequest{} },
 		"exec-request.schema.json":                 func() any { return &ExecRequest{} },
 		"exec-result.schema.json":                  func() any { return &ExecResult{} },
 		"runtime-session-handoff.schema.json":      func() any { return &RuntimeSessionHandoff{} },
 		"runtime-session-open-request.schema.json": func() any { return &RuntimeSessionOpenRequest{} },
+		"usage-evidence.schema.json":               func() any { return &UsageEvidence{} },
 		"provider-capabilities.schema.json":        func() any { return &Capabilities{} },
 		"provider-error.schema.json":               func() any { return &ProviderError{} },
 		"provider-operation.schema.json":           func() any { return &Operation{} },
@@ -51,6 +54,7 @@ func TestLockedContractProjection(t *testing.T) {
 		"cancel-exec-request.schema.json":          65536,
 		"create-sandbox-request.schema.json":       1 << 20,
 		"exec-request.schema.json":                 262144,
+		"artifact-staging-request.schema.json":     65536,
 		"runtime-session-open-request.schema.json": 65536,
 	}) {
 		t.Fatalf("Provider request body limits = %v, want create request limit", limits)
@@ -59,12 +63,15 @@ func TestLockedContractProjection(t *testing.T) {
 	fixtures := map[string]string{
 		"admission-context.schema.json":            "admission-context.json",
 		"admission-target.schema.json":             "admission-target.json",
+		"artifact-staging-evidence.schema.json":    "artifact-staging-evidence.json",
+		"artifact-staging-request.schema.json":     "artifact-staging-request.json",
 		"cancel-exec-request.schema.json":          "cancel-exec-request.json",
 		"create-sandbox-request.schema.json":       "create-sandbox-request.json",
 		"exec-request.schema.json":                 "exec-request.json",
 		"exec-result.schema.json":                  "exec-result.json",
 		"runtime-session-handoff.schema.json":      "runtime-session-handoff.json",
 		"runtime-session-open-request.schema.json": "runtime-session-open-request.json",
+		"usage-evidence.schema.json":               "usage-evidence.json",
 		"provider-capabilities.schema.json":        "capabilities.json",
 		"provider-error.schema.json":               "provider-error.json",
 		"provider-operation.schema.json":           "provider-operation.json",
@@ -98,6 +105,23 @@ func TestLockedContractProjection(t *testing.T) {
 		document := []byte(`{"provider_revision_id":"provider-revision-local-v1","api_version":"v1","capabilities":[],"runtime_profiles":[],"snapshot_restore_profiles":[],"limits":{}}`)
 		if err := projection.Validate("provider-capabilities.schema.json", document); err == nil {
 			t.Fatal("Validate() error = nil, want Schema mismatch")
+		}
+	})
+
+	t.Run("artifact stage operation", func(t *testing.T) {
+		document, err := projection.ReadExample("provider-operation-artifact-stage.json")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := projection.Validate("provider-operation.schema.json", document); err != nil {
+			t.Fatalf("artifact stage operation fixture is invalid: %v", err)
+		}
+		var operation Operation
+		if err := DecodeStrict(bytes.NewReader(document), 1<<20, &operation); err != nil {
+			t.Fatalf("decode artifact stage operation: %v", err)
+		}
+		if operation.Type != OperationArtifactStage {
+			t.Fatalf("operation type = %q, want %q", operation.Type, OperationArtifactStage)
 		}
 	})
 }

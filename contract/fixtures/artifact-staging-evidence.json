@@ -1,0 +1,18 @@
+{
+  "operation_id": "artifact-operation-1",
+  "attempt_id": "artifact-attempt-1",
+  "fencing_token": 3,
+  "sandbox_id": "sandbox-1",
+  "artifact_reference": "artifact-ref:platform/artifact-1",
+  "staging_reference": "ref:staging/artifact-1",
+  "status": "staged",
+  "content_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "media_type": "application/json",
+  "size_bytes": 512,
+  "tenant_binding_check": {"status": "passed", "checked_at": "2026-08-25T11:58:00Z", "evidence_reference": "ref:check/tenant-1"},
+  "active_content_check": {"status": "passed", "checked_at": "2026-08-25T11:58:01Z", "evidence_reference": "ref:check/content-1"},
+  "malware_check": {"status": "passed", "checked_at": "2026-08-25T11:58:02Z", "evidence_reference": "ref:check/malware-1"},
+  "observed_at": "2026-08-25T11:58:03Z",
+  "expires_at": "2026-08-25T12:58:03Z",
+  "evidence_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+}

@@ -10,7 +10,7 @@
     "attempt_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$"},
     "fencing_token": {"type": "integer", "minimum": 1},
     "sandbox_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$"},
-    "type": {"enum": ["create", "exec", "cancel_exec", "open_runtime_session"]},
+    "type": {"enum": ["create", "exec", "cancel_exec", "open_runtime_session", "artifact_stage"]},
     "status": {"enum": ["accepted", "running", "succeeded", "failed", "cancelled", "outcome_unknown"]},
     "provider_operation_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$"},
     "result_reference": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,399}$"},

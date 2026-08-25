@@ -1,0 +1,9 @@
+{
+  "operation_id": "artifact-operation-1",
+  "attempt_id": "artifact-attempt-1",
+  "fencing_token": 3,
+  "sandbox_id": "sandbox-1",
+  "type": "artifact_stage",
+  "status": "accepted",
+  "observed_at": "2026-08-25T11:57:00Z"
+}

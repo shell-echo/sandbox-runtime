@@ -100,6 +100,7 @@ const (
 	OperationResume             OperationType = "resume"
 	OperationTerminate          OperationType = "terminate"
 	OperationOpenRuntimeSession OperationType = "open_runtime_session"
+	OperationArtifactStage      OperationType = "artifact_stage"
 )
 
 type OperationState string
@@ -203,7 +204,7 @@ func (v *OperationType) UnmarshalJSON(data []byte) error {
 	return unmarshalEnum(data, "operation type", v, OperationCreate,
 		OperationExtendLease, OperationExec, OperationCancelExec, OperationSnapshot,
 		OperationRestore, OperationSuspend, OperationResume, OperationTerminate,
-		OperationOpenRuntimeSession)
+		OperationOpenRuntimeSession, OperationArtifactStage)
 }
 
 func (v *OperationState) UnmarshalJSON(data []byte) error {
@@ -639,6 +640,90 @@ type ExecResult struct {
 	Usage           []UsageEntry     `json:"usage,omitempty"`
 	Error           *ProviderError   `json:"error,omitempty"`
 	RetainedUntil   string           `json:"retained_until"`
+}
+
+type ArtifactStagingRequest struct {
+	MutationEnvelope
+	ExpectedGeneration int64        `json:"expected_generation"`
+	ArtifactReference  string       `json:"artifact_reference"`
+	SourcePath         string       `json:"source_path"`
+	ExpectedDigest     SHA256Digest `json:"expected_digest"`
+	ExpectedMediaType  string       `json:"expected_media_type"`
+	MaxBytes           int64        `json:"max_bytes"`
+	RetentionSeconds   int64        `json:"retention_seconds"`
+}
+
+type ArtifactStagingStatus string
+
+const (
+	ArtifactStaged   ArtifactStagingStatus = "staged"
+	ArtifactRejected ArtifactStagingStatus = "rejected"
+)
+
+func (v *ArtifactStagingStatus) UnmarshalJSON(data []byte) error {
+	return unmarshalEnum(data, "artifact staging status", v, ArtifactStaged, ArtifactRejected)
+}
+
+type EvidenceCheckStatus string
+
+const (
+	EvidenceCheckPassed EvidenceCheckStatus = "passed"
+	EvidenceCheckFailed EvidenceCheckStatus = "failed"
+	EvidenceCheckNotRun EvidenceCheckStatus = "not_run"
+)
+
+func (v *EvidenceCheckStatus) UnmarshalJSON(data []byte) error {
+	return unmarshalEnum(data, "evidence check status", v, EvidenceCheckPassed, EvidenceCheckFailed, EvidenceCheckNotRun)
+}
+
+type EvidenceCheck struct {
+	Status            EvidenceCheckStatus `json:"status"`
+	CheckedAt         string              `json:"checked_at"`
+	EvidenceReference string              `json:"evidence_reference,omitempty"`
+}
+
+type ArtifactStagingEvidence struct {
+	OperationID        string                `json:"operation_id"`
+	AttemptID          string                `json:"attempt_id"`
+	FencingToken       int64                 `json:"fencing_token"`
+	SandboxID          string                `json:"sandbox_id"`
+	ArtifactReference  string                `json:"artifact_reference"`
+	StagingReference   string                `json:"staging_reference,omitempty"`
+	Status             ArtifactStagingStatus `json:"status"`
+	ContentDigest      SHA256Digest          `json:"content_digest"`
+	MediaType          string                `json:"media_type"`
+	SizeBytes          int64                 `json:"size_bytes"`
+	TenantBindingCheck EvidenceCheck         `json:"tenant_binding_check"`
+	ActiveContentCheck EvidenceCheck         `json:"active_content_check"`
+	MalwareCheck       EvidenceCheck         `json:"malware_check"`
+	ObservedAt         string                `json:"observed_at"`
+	ExpiresAt          string                `json:"expires_at"`
+	EvidenceDigest     SHA256Digest          `json:"evidence_digest"`
+}
+
+type UsageReconciliationStatus string
+
+const (
+	UsageReconciliationComplete UsageReconciliationStatus = "complete"
+	UsageReconciliationPartial  UsageReconciliationStatus = "partial"
+	UsageReconciliationUnknown  UsageReconciliationStatus = "unknown"
+)
+
+func (v *UsageReconciliationStatus) UnmarshalJSON(data []byte) error {
+	return unmarshalEnum(data, "usage reconciliation status", v, UsageReconciliationComplete, UsageReconciliationPartial, UsageReconciliationUnknown)
+}
+
+type UsageEvidence struct {
+	EvidenceID           string                    `json:"evidence_id"`
+	SandboxID            string                    `json:"sandbox_id"`
+	OperationID          string                    `json:"operation_id"`
+	AttemptID            string                    `json:"attempt_id"`
+	FencingToken         int64                     `json:"fencing_token"`
+	Entries              []UsageEntry              `json:"entries"`
+	ReconciliationStatus UsageReconciliationStatus `json:"reconciliation_status"`
+	ObservedAt           string                    `json:"observed_at"`
+	RetainedUntil        string                    `json:"retained_until"`
+	EvidenceDigest       SHA256Digest              `json:"evidence_digest"`
 }
 
 type MeterID string

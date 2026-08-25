@@ -52,6 +52,12 @@ func TestLocalSuiteCasesHaveRunnerMappings(t *testing.T) {
 		"runtime-session-handoff-schema",
 		"runtime-session-semantic-bounds",
 		"runtime-session-rejection-fixtures",
+		"artifact-staging-request-schema",
+		"artifact-staging-evidence-schema",
+		"artifact-staging-semantic-bounds",
+		"artifact-staging-rejection-fixtures",
+		"usage-evidence-schema",
+		"usage-evidence-semantic-bounds",
 	}
 	if err := validateCases(ids); err != nil {
 		t.Fatal(err)
@@ -76,6 +82,12 @@ func TestLifecycleSuiteCasesExecuteBehaviorPackages(t *testing.T) {
 		"runtime-session-handoff-schema":                             {Package: "./providerapi/v1"},
 		"runtime-session-semantic-bounds":                            {Package: "./providerapi/v1"},
 		"runtime-session-rejection-fixtures":                         {Package: "./providerapi/v1"},
+		"artifact-staging-request-schema":                            {Package: "./providerapi/v1"},
+		"artifact-staging-evidence-schema":                           {Package: "./providerapi/v1"},
+		"artifact-staging-semantic-bounds":                           {Package: "./providerapi/v1"},
+		"artifact-staging-rejection-fixtures":                        {Package: "./providerapi/v1"},
+		"usage-evidence-schema":                                      {Package: "./providerapi/v1"},
+		"usage-evidence-semantic-bounds":                             {Package: "./providerapi/v1"},
 	}
 	for id, expected := range want {
 		got := testCases[id]

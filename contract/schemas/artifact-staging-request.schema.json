@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:shell-echo:sandbox-runtime:contract:artifact-staging-request:v1",
+  "title": "Sandbox Runtime Artifact Staging Request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "operation_id",
+    "attempt_id",
+    "fencing_token",
+    "idempotency_key",
+    "request_digest",
+    "deadline_at",
+    "expected_generation",
+    "artifact_reference",
+    "source_path",
+    "expected_digest",
+    "expected_media_type",
+    "max_bytes",
+    "retention_seconds"
+  ],
+  "properties": {
+    "operation_id": {"$ref": "#/$defs/Identifier"},
+    "attempt_id": {"$ref": "#/$defs/Identifier"},
+    "fencing_token": {"type": "integer", "minimum": 1},
+    "idempotency_key": {"type": "string", "minLength": 1, "maxLength": 200},
+    "request_digest": {"$ref": "#/$defs/Digest"},
+    "deadline_at": {"type": "string", "format": "date-time"},
+    "expected_generation": {"type": "integer", "minimum": 1},
+    "artifact_reference": {"type": "string", "pattern": "^artifact-ref:[A-Za-z0-9][A-Za-z0-9._:/-]{0,399}$"},
+    "source_path": {"type": "string", "maxLength": 512, "pattern": "^/outputs(?:/[A-Za-z0-9_-][A-Za-z0-9._-]*)*$"},
+    "expected_digest": {"$ref": "#/$defs/Digest"},
+    "expected_media_type": {"type": "string", "minLength": 3, "maxLength": 127, "pattern": "^[a-z0-9][a-z0-9!#$&^_.+-]*/[a-z0-9][a-z0-9!#$&^_.+-]*$"},
+    "max_bytes": {"type": "integer", "minimum": 1, "maximum": 67108864},
+    "retention_seconds": {"type": "integer", "minimum": 1, "maximum": 86400}
+  },
+  "$defs": {
+    "Identifier": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$"},
+    "Digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}

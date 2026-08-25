@@ -1,0 +1,16 @@
+{
+  "evidence_id": "usage-evidence-1",
+  "sandbox_id": "sandbox-1",
+  "operation_id": "exec-operation-1",
+  "attempt_id": "exec-attempt-1",
+  "fencing_token": 2,
+  "entries": [
+    {"entry_id": "usage-entry-wall", "sandbox_id": "sandbox-1", "operation_id": "exec-operation-1", "meter": "sandbox.wall_time_milliseconds", "quantity": 1250, "unit": "milliseconds", "meter_source": "runtime_metered", "evidence_reference": "ref:usage/wall-1", "occurred_at": "2026-08-25T11:00:00Z"},
+    {"entry_id": "usage-entry-cpu", "sandbox_id": "sandbox-1", "operation_id": "exec-operation-1", "meter": "sandbox.cpu_nanoseconds", "quantity": 900000, "unit": "nanoseconds", "meter_source": "runtime_metered", "evidence_reference": "ref:usage/cpu-1", "occurred_at": "2026-08-25T11:00:00Z"},
+    {"entry_id": "usage-entry-count", "sandbox_id": "sandbox-1", "operation_id": "exec-operation-1", "meter": "sandbox.exec_count", "quantity": 1, "unit": "count", "meter_source": "reconciled", "evidence_reference": "ref:usage/count-1", "occurred_at": "2026-08-25T11:00:01Z"}
+  ],
+  "reconciliation_status": "complete",
+  "observed_at": "2026-08-25T11:00:02Z",
+  "retained_until": "2026-08-25T12:00:02Z",
+  "evidence_digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+}

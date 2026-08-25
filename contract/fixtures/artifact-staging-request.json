@@ -1,0 +1,15 @@
+{
+  "operation_id": "artifact-operation-1",
+  "attempt_id": "artifact-attempt-1",
+  "fencing_token": 3,
+  "idempotency_key": "artifact-idempotency-1",
+  "request_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "deadline_at": "2026-08-25T12:00:00Z",
+  "expected_generation": 4,
+  "artifact_reference": "artifact-ref:platform/artifact-1",
+  "source_path": "/outputs/report.json",
+  "expected_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "expected_media_type": "application/json",
+  "max_bytes": 1048576,
+  "retention_seconds": 3600
+}
