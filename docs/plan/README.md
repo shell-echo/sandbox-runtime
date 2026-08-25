@@ -17,3 +17,4 @@ in [`docs/STATUS.md`](../STATUS.md).
 | P1.1c | [Protected-operation admission](p1.1c-protected-operation-admission.md) | Passed under local Contract with PR/post-merge evidence |
 | P1.2 | [Async lifecycle](p1.2-async-lifecycle.md) | Bounded Contract-authorized subset passed through PR #27; reserved lifecycle families remain separately gated |
 | P2 | [Coding/remote-shell authority inventory](p2-coding-remote-shell.md) | P2.4 bounded artifact/usage evidence passed through `main@3b94146`; post-push CI `32804619553` passed; P3 external-caller integration next |
+| P3 | [Migration readiness](p3-migration-readiness.md) | Local binding/shadow/metrics component `main@4212e88`; external caller E2E, canary, rollback, and migration release gate still open |

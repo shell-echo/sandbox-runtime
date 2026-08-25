@@ -32,6 +32,8 @@ production readiness.
 | P2.4 Contract authority | commits `4f3da4e` and `649c293` | Additive artifact staging request/evidence and usage evidence schemas, OpenAPI paths, semantic rules, fixtures, DTO projection, Suite cases, and ADR 0012; no runtime dispatch in the Contract step |
 | P2.4 local evidence | commits `1ca700d` and `41225c0`, fix `3b94146` | Artifact/usage bounded domain, ports, memory staging/repository adapters, digest/MIME/size and check admission, idempotent replay/conflict, expiry, close, cancellation, and immutable evidence tests; component evidence only |
 | P2.4 release evidence | post-push CI run `32804619553` | `provider-contract`, `test`, and `docker-integration` all passed for the final adapter revision; no Provider HTTP composition or external-caller claim |
+| P3 local evidence | implementation commit `4212e88` | Revision identity validation, deterministic canary binding, rollback-only-new-run behavior, old-run draining, shadow validation bounds, and migration metric aggregation passed focused race/shuffle and vet; external caller gate remains open |
+| P3 component release evidence | post-push CI run `32805284762` | CI run concluded success for `4212e88`; this remains local migration component evidence, not external caller, canary traffic, rollback E2E, or production readiness |
 | Contract resources | OpenAPI, admission, lifecycle, bounded exec, terminal-session, artifact-staging, usage-evidence schemas, fixtures, semantic rules, and Suite | Local Contract authority is locked; artifact publication, billing, and tenant authority remain outside the Provider |
 | Contract lock | revision `4f3da4e784592442a39b9207daf176e66c4e21cb`; tree `10958188b3388baaa9843dc65596485e177db257`; semantic rules `sha256:9d5a0579dbc606486aa4b739f47ec8374a973bbc98ca950f9be46dea75edc272` | Local verifier, 32-case Conformance, full race/shuffle, post-push CI `32803610679`, and projection tests passed |
 | External Agent Contract | no longer consumed; old compatibility evidence is historical only | Removed from implementation |
@@ -77,7 +79,7 @@ It does not clone, mount, or read an external source repository.
 | P2.3c4 | Runtime Gateway integration | Passed for bounded Gateway component evidence | External caller E2E, real WebSocket adapter, distributed revocation, multi-controller reliability, and production deployment remain unproven |
 | P2.4 | Artifact staging and usage evidence | Passed for bounded Provider Contract/domain/memory-adapter evidence; direct-main commits through `3b94146`, post-push CI `32804619553` | No HTTP composition, platform artifact publication, billing, distributed reconciliation, tenancy, deployment, or production claim |
 | P2 | Coding/remote-shell profile | P2.1, P2.2a-c, P2.3a-c4, and P2.4 closed for bounded Provider/Contract/transport/Gateway/evidence work | P3 external-caller integration and migration readiness |
-| P3 | Migration readiness and external-caller integration | Not started | External caller E2E, rollback and canary evidence |
+| P3 | Migration readiness and external-caller integration | In progress for local binding/shadow/metrics component evidence only (`4212e88`) | External caller against locked Suite, shadow parity, canary/rollback/drain, and unchanged platform contracts |
 | P4 | Production hardening | Not started | Deployment, multi-controller, multi-tenant, and production gates |
 
 ## Evidence Boundary
@@ -151,6 +153,11 @@ Passed locally (authorized test environment):
   artifact publication, billing truth, distributed reconciliation, external
   caller, tenancy, deployment, or production claim is made. The next entry is
   P3 migration readiness and external-caller integration.
+- P3 local component verification covers immutable ProviderRevision binding,
+  deterministic canary selection, rollback isolation, drain state, shadow
+  validation without dispatch, bounded metric aggregation, race/shuffle, vet,
+  and `git diff --check`. This does not prove an external caller, traffic
+  canary, rollback E2E, or platform-contract compatibility.
 
 Pending:
 
