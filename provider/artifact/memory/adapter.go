@@ -101,6 +101,9 @@ func (a *Adapter) Stage(ctx context.Context, request artifact.Request) (artifact
 	if contentMatches {
 		evidence.ActiveContentCheck.Status = check(ctx, a.activeContent, content)
 		evidence.MalwareCheck.Status = check(ctx, a.malware, content)
+		if err := contextError(ctx); err != nil {
+			return artifact.Evidence{}, err
+		}
 	}
 	if contentMatches && evidence.TenantBindingCheck.Status == artifact.CheckPassed && evidence.ActiveContentCheck.Status == artifact.CheckPassed && evidence.MalwareCheck.Status == artifact.CheckPassed {
 		evidence.Status = artifact.StatusStaged

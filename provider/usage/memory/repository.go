@@ -6,6 +6,7 @@ package memory
 import (
 	"context"
 	"errors"
+	"reflect"
 	"sync"
 	"time"
 
@@ -50,7 +51,7 @@ func (r *Repository) Put(ctx context.Context, evidence usage.Evidence) error {
 		return err
 	}
 	if previous, ok := r.values[evidence.EvidenceID]; ok {
-		if previous.EvidenceDigest == evidence.EvidenceDigest {
+		if reflect.DeepEqual(previous, evidence) {
 			return nil
 		}
 		return ErrConflict
