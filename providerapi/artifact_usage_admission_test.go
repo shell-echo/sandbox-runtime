@@ -74,14 +74,19 @@ func TestArtifactUsageReadDescriptorsMatchLockedFixture(t *testing.T) {
 	}
 }
 
-func TestArtifactUsageRoutesRemainAbsentUntilTransportComposition(t *testing.T) {
-	for _, request := range []*http.Request{
-		mustProviderRequest(t, http.MethodPost, "/v1/sandboxes/sandbox-1/artifacts:stage"),
-		mustProviderRequest(t, http.MethodGet, "/v1/operations/artifact-operation-1/artifact-staging-evidence"),
-		mustProviderRequest(t, http.MethodGet, "/v1/operations/exec-operation-1/usage-evidence"),
-	} {
-		if _, _, ok := matchProtectedRoute(request); ok {
-			t.Fatalf("P2.4a0 unexpectedly composed %s %s", request.Method, request.URL.Path)
+func TestArtifactUsageRoutesAreTransportBoundaries(t *testing.T) {
+	tests := []struct {
+		method, path string
+		operation    admission.Operation
+	}{
+		{http.MethodPost, "/v1/sandboxes/sandbox-1/artifacts:stage", admission.OperationStageArtifact},
+		{http.MethodGet, "/v1/operations/artifact-operation-1/artifact-staging-evidence", admission.OperationReadArtifactStagingEvidence},
+		{http.MethodGet, "/v1/operations/exec-operation-1/usage-evidence", admission.OperationReadUsageEvidence},
+	}
+	for _, test := range tests {
+		route, _, ok := matchProtectedRoute(mustProviderRequest(t, test.method, test.path))
+		if !ok || route.operation != test.operation {
+			t.Fatalf("route %s %s = %#v, %v; want operation %q", test.method, test.path, route, ok, test.operation)
 		}
 	}
 }

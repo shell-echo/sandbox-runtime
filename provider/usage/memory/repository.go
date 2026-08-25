@@ -14,7 +14,7 @@ import (
 )
 
 var (
-	ErrNotFound = errors.New("usage evidence not found")
+	ErrNotFound = usage.ErrEvidenceNotFound
 	ErrConflict = errors.New("usage evidence conflict")
 	ErrClosed   = errors.New("usage evidence repository is closed")
 )

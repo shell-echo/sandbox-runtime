@@ -14,10 +14,13 @@ import (
 	"time"
 
 	"github.com/shell-echo/sandbox-runtime/provider/admission"
+	"github.com/shell-echo/sandbox-runtime/provider/artifact"
 	"github.com/shell-echo/sandbox-runtime/provider/lifecycle"
 	"github.com/shell-echo/sandbox-runtime/provider/lifecycle/repository"
+	provideroperation "github.com/shell-echo/sandbox-runtime/provider/operation"
 	"github.com/shell-echo/sandbox-runtime/provider/session"
 	sessionapplication "github.com/shell-echo/sandbox-runtime/provider/session/application"
+	"github.com/shell-echo/sandbox-runtime/provider/usage"
 	providerv1 "github.com/shell-echo/sandbox-runtime/providerapi/v1"
 )
 
@@ -29,10 +32,13 @@ var admissionTraceCounter atomic.Uint64
 // The composition root must construct it from frozen operator trust material;
 // a nil value keeps the Provider listener discovery-only.
 type ProtectedTransportOptions struct {
-	Gate               *admission.ProtectedOperationGate
-	Application        LifecycleApplication
-	SessionApplication RuntimeSessionApplication
-	Now                func() time.Time
+	Gate                *admission.ProtectedOperationGate
+	Application         LifecycleApplication
+	SessionApplication  RuntimeSessionApplication
+	ArtifactApplication ArtifactApplication
+	UsageEvidenceReader usage.EvidenceReader
+	OperationReader     provideroperation.Reader
+	Now                 func() time.Time
 }
 
 // LifecycleApplication is the narrow Provider application boundary. Its
@@ -51,18 +57,31 @@ type RuntimeSessionApplication interface {
 	GetHandoff(context.Context, string) (sessionapplication.Handoff, error)
 }
 
+// ArtifactApplication is the narrow Provider-local artifact boundary. The
+// transport accepts work and reads retained evidence only through this port;
+// it never calls a stager or repository directly.
+type ArtifactApplication interface {
+	Accept(context.Context, artifact.Request) (artifact.Reservation, error)
+	GetOperation(context.Context, string) (artifact.Operation, error)
+	GetEvidence(context.Context, string) (artifact.Evidence, error)
+}
+
 type protectedHandler struct {
-	identity    *clientIdentityAdmission
-	gate        *admission.ProtectedOperationGate
-	application LifecycleApplication
-	sessionApp  RuntimeSessionApplication
-	now         func() time.Time
+	identity        *clientIdentityAdmission
+	gate            *admission.ProtectedOperationGate
+	application     LifecycleApplication
+	sessionApp      RuntimeSessionApplication
+	artifactApp     ArtifactApplication
+	usageReader     usage.EvidenceReader
+	operationReader provideroperation.Reader
+	now             func() time.Time
 }
 
 type protectedRoute struct {
 	operation        admission.Operation
 	maxBodyBytes     int64
 	allowUnavailable bool
+	oversizeStatus   int
 }
 
 func newProtectedHandler(identity *clientIdentityAdmission, options ProtectedTransportOptions) (http.Handler, error) {
@@ -73,7 +92,12 @@ func newProtectedHandler(identity *clientIdentityAdmission, options ProtectedTra
 	if now == nil {
 		now = func() time.Time { return time.Now().UTC() }
 	}
-	return &protectedHandler{identity: identity, gate: options.Gate, application: options.Application, sessionApp: options.SessionApplication, now: now}, nil
+	return &protectedHandler{
+		identity: identity, gate: options.Gate, application: options.Application,
+		sessionApp: options.SessionApplication, artifactApp: options.ArtifactApplication,
+		usageReader: options.UsageEvidenceReader, operationReader: options.OperationReader,
+		now: now,
+	}, nil
 }
 
 func (h *protectedHandler) ServeHTTP(response http.ResponseWriter, request *http.Request) {
@@ -158,6 +182,20 @@ func (h *protectedHandler) ServeHTTP(response http.ResponseWriter, request *http
 			return
 		}
 	}
+	if h.artifactApp != nil {
+		switch route.operation {
+		case admission.OperationStageArtifact:
+			h.serveArtifactStage(response, request, context, document)
+			return
+		case admission.OperationReadArtifactStagingEvidence:
+			h.serveArtifactEvidence(response, request, context)
+			return
+		}
+	}
+	if h.usageReader != nil && route.operation == admission.OperationReadUsageEvidence {
+		h.serveUsageEvidence(response, request, context)
+		return
+	}
 	if h.sessionApp != nil {
 		switch route.operation {
 		case admission.OperationOpenRuntimeSession:
@@ -214,7 +252,7 @@ func protectedDocument(request *http.Request, context admission.AdmissionContext
 		return nil, http.StatusBadRequest
 	}
 	if request.ContentLength > route.maxBodyBytes {
-		return nil, http.StatusRequestEntityTooLarge
+		return nil, route.bodyLimitStatus()
 	}
 	if request.Body == nil {
 		return nil, http.StatusBadRequest
@@ -222,9 +260,16 @@ func protectedDocument(request *http.Request, context admission.AdmissionContext
 	limited := io.LimitReader(request.Body, route.maxBodyBytes+1)
 	document, err := io.ReadAll(limited)
 	if err != nil || int64(len(document)) > route.maxBodyBytes || len(document) == 0 {
-		return nil, http.StatusRequestEntityTooLarge
+		return nil, route.bodyLimitStatus()
 	}
 	return document, 0
+}
+
+func (route protectedRoute) bodyLimitStatus() int {
+	if route.oversizeStatus != 0 {
+		return route.oversizeStatus
+	}
+	return http.StatusRequestEntityTooLarge
 }
 
 func readDescriptor(context admission.AdmissionContext, request *http.Request, pathValues map[string]string) ([]byte, int) {
@@ -291,10 +336,15 @@ func matchProtectedRoute(request *http.Request) (protectedRoute, map[string]stri
 				"exec:cancel":      {admission.OperationCancelExec, providerv1.MaxCancelExecRequestBytes, false},
 				"runtime-sessions": {admission.OperationOpenRuntimeSession, providerv1.MaxRuntimeSessionOpenRequestBytes, true},
 				"snapshots":        {admission.OperationSnapshot, providerv1.MaxSnapshotRequestBytes, true},
+				"artifacts:stage":  {admission.OperationStageArtifact, providerv1.MaxArtifactStagingRequestBytes, true},
 				":terminate":       {admission.OperationTerminate, providerv1.MaxTerminateRequestBytes, true},
 			}
 			if candidate, ok := operations[parts[3]]; ok {
-				return protectedRoute{operation: candidate.operation, maxBodyBytes: candidate.maxBody, allowUnavailable: candidate.unavailable}, values, true
+				oversizeStatus := 0
+				if candidate.operation == admission.OperationStageArtifact {
+					oversizeStatus = http.StatusBadRequest
+				}
+				return protectedRoute{operation: candidate.operation, maxBodyBytes: candidate.maxBody, allowUnavailable: candidate.unavailable, oversizeStatus: oversizeStatus}, values, true
 			}
 		}
 		if len(parts) == 4 && parts[3] == "events" && request.Method == http.MethodGet {
@@ -314,6 +364,10 @@ func matchProtectedRoute(request *http.Request) (protectedRoute, map[string]stri
 				return protectedRoute{operation: admission.OperationReadResult, allowUnavailable: false}, values, true
 			case "snapshot-manifest":
 				return protectedRoute{operation: admission.OperationReadSnapshotManifest, allowUnavailable: true}, values, true
+			case "artifact-staging-evidence":
+				return protectedRoute{operation: admission.OperationReadArtifactStagingEvidence, allowUnavailable: true}, values, true
+			case "usage-evidence":
+				return protectedRoute{operation: admission.OperationReadUsageEvidence, allowUnavailable: true}, values, true
 			}
 		}
 	}

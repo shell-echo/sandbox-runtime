@@ -14,6 +14,7 @@ import (
 	"github.com/shell-echo/sandbox-runtime/provider/admission"
 	"github.com/shell-echo/sandbox-runtime/provider/lifecycle"
 	"github.com/shell-echo/sandbox-runtime/provider/lifecycle/repository"
+	provideroperation "github.com/shell-echo/sandbox-runtime/provider/operation"
 	providerv1 "github.com/shell-echo/sandbox-runtime/providerapi/v1"
 )
 
@@ -59,6 +60,21 @@ func (h *protectedHandler) serveSandboxStatus(response http.ResponseWriter, requ
 }
 
 func (h *protectedHandler) serveOperation(response http.ResponseWriter, request *http.Request, admitted admission.AdmissionContext) {
+	if h.operationReader != nil {
+		view, err := h.operationReader.ReadOperation(request.Context(), admitted.OperationID)
+		if err != nil {
+			status, code, retryable := mapOperationReaderError(err)
+			writeStandardError(response, status, code, retryable, operationErrorMessage(code))
+			return
+		}
+		projected, err := operationViewProjection(view)
+		if err != nil {
+			writeStandardError(response, http.StatusServiceUnavailable, "SANDBOX_PROVIDER_UNAVAILABLE", true, "sandbox operation is unavailable")
+			return
+		}
+		writeJSON(response, http.StatusOK, projected)
+		return
+	}
 	operation, err := h.application.GetOperation(request.Context(), admitted.OperationID)
 	if err != nil {
 		status, code, retryable := mapLifecycleError(err)
@@ -71,6 +87,19 @@ func (h *protectedHandler) serveOperation(response http.ResponseWriter, request 
 		return
 	}
 	writeJSON(response, http.StatusOK, projected)
+}
+
+func mapOperationReaderError(err error) (int, string, bool) {
+	switch {
+	case errors.Is(err, provideroperation.ErrNotFound):
+		return http.StatusNotFound, "SANDBOX_NOT_FOUND", false
+	case errors.Is(err, provideroperation.ErrConflict):
+		return http.StatusServiceUnavailable, "SANDBOX_PROVIDER_UNAVAILABLE", true
+	case errors.Is(err, provideroperation.ErrUnavailable), errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
+		return http.StatusServiceUnavailable, "SANDBOX_PROVIDER_UNAVAILABLE", true
+	default:
+		return http.StatusServiceUnavailable, "SANDBOX_PROVIDER_UNAVAILABLE", true
+	}
 }
 
 func decodeCreateRequest(document []byte, admitted admission.AdmissionContext, now time.Time) (lifecycle.CreateRequest, error) {

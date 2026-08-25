@@ -12,11 +12,13 @@ import (
 const MaxEntries = 16
 
 var (
-	ErrInvalidEvidence = errors.New("invalid Provider usage evidence")
-	ErrEvidenceExpired = errors.New("Provider usage evidence has expired")
-	identifierPattern  = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$`)
-	referencePattern   = regexp.MustCompile(`^ref:[A-Za-z0-9][A-Za-z0-9._:/-]{0,399}$`)
-	digestPattern      = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
+	ErrInvalidEvidence     = errors.New("invalid Provider usage evidence")
+	ErrEvidenceNotFound    = errors.New("Provider usage evidence not found")
+	ErrEvidenceUnavailable = errors.New("Provider usage evidence is unavailable")
+	ErrEvidenceExpired     = errors.New("Provider usage evidence has expired")
+	identifierPattern      = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$`)
+	referencePattern       = regexp.MustCompile(`^ref:[A-Za-z0-9][A-Za-z0-9._:/-]{0,399}$`)
+	digestPattern          = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 )
 
 type Meter string
