@@ -42,6 +42,21 @@ operation-keyed usage evidence lookup, and lifecycle/artifact operation-family
 readers with collision-safe aggregation. No Contract/lock, handler, router,
 config, or HTTP route changed.
 
+P2.4a3 transport composition is implemented locally in commits `f5111a5`,
+`ce3c6e0`, and `9a4bc71` and awaits full release gates and CI. It composes
+only the three locked artifact/usage routes plus the generic operation-family
+reader. mTLS, bearer/JWS, target, strict request or descriptor digest,
+operation correlation, and mutation guard admission complete before any
+application call. The stage route performs durable accept only and returns a
+`202` Provider operation; it does not synchronously dispatch a stager or expose
+evidence. Evidence reads resolve by operation ID and enforce operation,
+sandbox, attempt, and fencing correlation. The default command composition
+injects no synthetic artifact stager or usage collector; absent dependencies
+fail closed with bounded `503` responses. Focused transport/projection tests
+pass; full race/shuffle, vet, lock, Conformance, required CI, external-caller,
+aggregate, multi-controller, tenancy, deployment, and production gates remain
+open.
+
 ## Authority stop condition
 
 The current repository-owned Contract contains terminal-only session routes and
@@ -113,8 +128,9 @@ acceptance, result retention, cancellation, reconciliation, or backend adapter.
 - P2.4a2: add the separately tested asynchronous application facade,
   operation-family readers/aggregator, and durable adapters (passed in
   `152033f`, `0440272`, and `4d0bb70`; post-push CI `32827387303`);
-- P2.4a: compose only the three locked routes over the P2.4a2 component (not
-  started; direct memory-adapter dispatch is forbidden).
+- P2.4a: compose only the three locked routes over the P2.4a2 component
+  (implemented locally; release evidence pending; direct memory-adapter
+  dispatch is forbidden).
 
 Each implementation slice requires its own focused tests, race/shuffle suite,
 Contract lock verification, Conformance evidence, PR CI, and post-merge CI.
@@ -276,18 +292,18 @@ caller was added or proven.
 
 P2.4a2 has supplied the separately tested application boundary, durable
 artifact operation authority, operation-keyed usage reader, and family
-aggregator. Its evidence is provider-local component evidence only: no handler,
-router, config, or HTTP composition is included. P2.4a transport composition
-is not started. Before any route is composed, admission must complete and bind
-the full request or descriptor before the application is called. The transport
-must not dispatch directly to the current synchronous artifact stager or
-evidence-ID-keyed usage memory repository.
-
-Only after that boundary is proven may P2.4a compose the locked POST staging
-route and the two locked GET evidence routes, with their strict request,
-projection, error, mTLS, bearer, and route-nondisclosure behavior. This slice
-does not authorize artifact publication, billing truth, a real content scanner,
-external-caller compatibility, aggregate conformance, multi-controller
-reliability, multi-tenant security, deployment, or production readiness. The P2
-release gate remains open until a separately supplied external caller executes
-the locked surface end to end.
+aggregator. P2.4a3 now composes the locked POST staging route and the two
+locked GET evidence routes, with strict request/descriptor projection, error
+mapping, mTLS and bearer admission, and route-nondisclosure behavior. Admission
+completes before application dispatch; the stage handler invokes only durable
+`Accept` and returns `202`, while evidence handlers read only by operation ID.
+The generic operation route uses the composed family reader and exposes known
+`artifact_stage` operations. Focused component tests pass, but full release
+evidence is pending. The command root does not invent an artifact source,
+stager, usage collector, or production persistence configuration, so missing
+dependencies remain fail-closed. This slice does not authorize artifact
+publication, billing truth, a real content scanner, external-caller
+compatibility, aggregate conformance, multi-controller reliability,
+multi-tenant security, deployment, or production readiness. The P2 release gate
+remains open until a separately supplied external caller executes the locked
+surface end to end.
