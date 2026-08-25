@@ -179,6 +179,10 @@ var testCases = map[string]testCase{
 		Package: "./providerapi/v1",
 		Run:     `^TestLocalContractArtifactAndUsageSemanticRules$`,
 	},
+	"artifact-usage-protected-admission-bindings": {
+		Package: "./provider/admission",
+		Run:     `^TestLocalContractArtifactUsageAdmissionBindings$`,
+	},
 }
 
 // Run verifies the locked local Contract and executes every case in its

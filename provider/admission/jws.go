@@ -37,21 +37,24 @@ var (
 type Operation string
 
 const (
-	OperationCreate               Operation = "create"
-	OperationRestore              Operation = "restore"
-	OperationSetDesiredState      Operation = "set_desired_state"
-	OperationExtendLease          Operation = "extend_lease"
-	OperationExec                 Operation = "exec"
-	OperationCancelExec           Operation = "cancel_exec"
-	OperationOpenRuntimeSession   Operation = "open_runtime_session"
-	OperationSnapshot             Operation = "snapshot"
-	OperationTerminate            Operation = "terminate"
-	OperationReadSandbox          Operation = "read_sandbox"
-	OperationReadOperation        Operation = "read_operation"
-	OperationReadResult           Operation = "read_result"
-	OperationReadRuntimeSession   Operation = "read_runtime_session"
-	OperationReadSnapshotManifest Operation = "read_snapshot_manifest"
-	OperationReadEvents           Operation = "read_events"
+	OperationCreate                      Operation = "create"
+	OperationRestore                     Operation = "restore"
+	OperationSetDesiredState             Operation = "set_desired_state"
+	OperationExtendLease                 Operation = "extend_lease"
+	OperationExec                        Operation = "exec"
+	OperationCancelExec                  Operation = "cancel_exec"
+	OperationOpenRuntimeSession          Operation = "open_runtime_session"
+	OperationStageArtifact               Operation = "stage_artifact"
+	OperationSnapshot                    Operation = "snapshot"
+	OperationTerminate                   Operation = "terminate"
+	OperationReadSandbox                 Operation = "read_sandbox"
+	OperationReadOperation               Operation = "read_operation"
+	OperationReadResult                  Operation = "read_result"
+	OperationReadRuntimeSession          Operation = "read_runtime_session"
+	OperationReadArtifactStagingEvidence Operation = "read_artifact_staging_evidence"
+	OperationReadUsageEvidence           Operation = "read_usage_evidence"
+	OperationReadSnapshotManifest        Operation = "read_snapshot_manifest"
+	OperationReadEvents                  Operation = "read_events"
 )
 
 // Supported reports whether operation is in the closed token claim allowlist.
@@ -59,9 +62,10 @@ func (operation Operation) Supported() bool {
 	switch operation {
 	case OperationCreate, OperationRestore, OperationSetDesiredState,
 		OperationExtendLease, OperationExec, OperationCancelExec,
-		OperationOpenRuntimeSession, OperationSnapshot, OperationTerminate,
+		OperationOpenRuntimeSession, OperationStageArtifact, OperationSnapshot, OperationTerminate,
 		OperationReadSandbox, OperationReadOperation, OperationReadResult,
-		OperationReadRuntimeSession, OperationReadSnapshotManifest, OperationReadEvents:
+		OperationReadRuntimeSession, OperationReadArtifactStagingEvidence,
+		OperationReadUsageEvidence, OperationReadSnapshotManifest, OperationReadEvents:
 		return true
 	default:
 		return false
@@ -245,21 +249,24 @@ type requestBinding struct {
 }
 
 var requestBindings = map[Operation]requestBinding{
-	OperationCreate:               {contractID: "urn:shell-echo:sandbox-runtime:request:create:v1", profile: DigestProfileRequestExcludingDigest},
-	OperationRestore:              {contractID: "urn:shell-echo:sandbox-runtime:request:restore:v1", profile: DigestProfileRequestExcludingDigest},
-	OperationSetDesiredState:      {contractID: "urn:shell-echo:sandbox-runtime:request:set-desired-state:v1", profile: DigestProfileRequestExcludingDigest},
-	OperationExtendLease:          {contractID: "urn:shell-echo:sandbox-runtime:request:extend-lease:v1", profile: DigestProfileRequestExcludingDigest},
-	OperationExec:                 {contractID: "urn:shell-echo:sandbox-runtime:request:exec:v1", profile: DigestProfileRequestExcludingDigest},
-	OperationCancelExec:           {contractID: "urn:shell-echo:sandbox-runtime:request:cancel-exec:v1", profile: DigestProfileRequestExcludingDigest},
-	OperationOpenRuntimeSession:   {contractID: "urn:shell-echo:sandbox-runtime:request:open-runtime-session:v1", profile: DigestProfileRequestExcludingDigest},
-	OperationSnapshot:             {contractID: "urn:shell-echo:sandbox-runtime:request:snapshot:v1", profile: DigestProfileRequestExcludingDigest},
-	OperationTerminate:            {contractID: "urn:shell-echo:sandbox-runtime:request:terminate:v1", profile: DigestProfileRequestExcludingDigest},
-	OperationReadSandbox:          {contractID: "urn:shell-echo:sandbox-runtime:descriptor:status:v1", profile: DigestProfileFullDocument},
-	OperationReadOperation:        {contractID: "urn:shell-echo:sandbox-runtime:descriptor:operation:v1", profile: DigestProfileFullDocument},
-	OperationReadResult:           {contractID: "urn:shell-echo:sandbox-runtime:descriptor:exec-result:v1", profile: DigestProfileFullDocument},
-	OperationReadRuntimeSession:   {contractID: "urn:shell-echo:sandbox-runtime:descriptor:runtime-session:v1", profile: DigestProfileFullDocument},
-	OperationReadSnapshotManifest: {contractID: "urn:shell-echo:sandbox-runtime:descriptor:snapshot-manifest:v1", profile: DigestProfileFullDocument},
-	OperationReadEvents:           {contractID: "urn:shell-echo:sandbox-runtime:descriptor:events:v1", profile: DigestProfileFullDocument},
+	OperationCreate:                      {contractID: "urn:shell-echo:sandbox-runtime:request:create:v1", profile: DigestProfileRequestExcludingDigest},
+	OperationRestore:                     {contractID: "urn:shell-echo:sandbox-runtime:request:restore:v1", profile: DigestProfileRequestExcludingDigest},
+	OperationSetDesiredState:             {contractID: "urn:shell-echo:sandbox-runtime:request:set-desired-state:v1", profile: DigestProfileRequestExcludingDigest},
+	OperationExtendLease:                 {contractID: "urn:shell-echo:sandbox-runtime:request:extend-lease:v1", profile: DigestProfileRequestExcludingDigest},
+	OperationExec:                        {contractID: "urn:shell-echo:sandbox-runtime:request:exec:v1", profile: DigestProfileRequestExcludingDigest},
+	OperationCancelExec:                  {contractID: "urn:shell-echo:sandbox-runtime:request:cancel-exec:v1", profile: DigestProfileRequestExcludingDigest},
+	OperationOpenRuntimeSession:          {contractID: "urn:shell-echo:sandbox-runtime:request:open-runtime-session:v1", profile: DigestProfileRequestExcludingDigest},
+	OperationStageArtifact:               {contractID: "urn:shell-echo:sandbox-runtime:request:stage-artifact:v1", profile: DigestProfileRequestExcludingDigest},
+	OperationSnapshot:                    {contractID: "urn:shell-echo:sandbox-runtime:request:snapshot:v1", profile: DigestProfileRequestExcludingDigest},
+	OperationTerminate:                   {contractID: "urn:shell-echo:sandbox-runtime:request:terminate:v1", profile: DigestProfileRequestExcludingDigest},
+	OperationReadSandbox:                 {contractID: "urn:shell-echo:sandbox-runtime:descriptor:status:v1", profile: DigestProfileFullDocument},
+	OperationReadOperation:               {contractID: "urn:shell-echo:sandbox-runtime:descriptor:operation:v1", profile: DigestProfileFullDocument},
+	OperationReadResult:                  {contractID: "urn:shell-echo:sandbox-runtime:descriptor:exec-result:v1", profile: DigestProfileFullDocument},
+	OperationReadRuntimeSession:          {contractID: "urn:shell-echo:sandbox-runtime:descriptor:runtime-session:v1", profile: DigestProfileFullDocument},
+	OperationReadArtifactStagingEvidence: {contractID: "urn:shell-echo:sandbox-runtime:descriptor:artifact-staging-evidence:v1", profile: DigestProfileFullDocument},
+	OperationReadUsageEvidence:           {contractID: "urn:shell-echo:sandbox-runtime:descriptor:usage-evidence:v1", profile: DigestProfileFullDocument},
+	OperationReadSnapshotManifest:        {contractID: "urn:shell-echo:sandbox-runtime:descriptor:snapshot-manifest:v1", profile: DigestProfileFullDocument},
+	OperationReadEvents:                  {contractID: "urn:shell-echo:sandbox-runtime:descriptor:events:v1", profile: DigestProfileFullDocument},
 }
 
 func validRequestBinding(claims TokenClaims) bool {
