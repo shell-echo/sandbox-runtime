@@ -26,6 +26,7 @@ import (
 	lifecyclerepository "github.com/shell-echo/sandbox-runtime/provider/lifecycle/repository"
 	lifecyclefile "github.com/shell-echo/sandbox-runtime/provider/lifecycle/repository/file"
 	lifecyclememory "github.com/shell-echo/sandbox-runtime/provider/lifecycle/repository/memory"
+	provideroperation "github.com/shell-echo/sandbox-runtime/provider/operation"
 	"github.com/shell-echo/sandbox-runtime/providerapi"
 	"github.com/shell-echo/sandbox-runtime/server"
 	"github.com/shell-echo/sandbox-runtime/server/api"
@@ -107,6 +108,11 @@ func newProviderServer(ctx context.Context, providerConfig config.ProviderConfig
 	}
 	if protected != nil {
 		protected.Application = lifecycleApp
+		operationReader, readerErr := newProviderOperationReader(lifecycleApp, nil)
+		if readerErr != nil {
+			return nil, noOpProviderClose, errors.Join(readerErr, closeProtected(), closeLifecycle())
+		}
+		protected.OperationReader = operationReader
 	}
 	transport := providerConfig.Transport
 	providerServer, err := providerapi.NewServer(ctx, providerapi.TransportOptions{
@@ -121,6 +127,33 @@ func newProviderServer(ctx context.Context, providerConfig config.ProviderConfig
 		return nil, noOpProviderClose, errors.Join(fmt.Errorf("construct Provider API server: %w", err), closeProtected(), closeLifecycle())
 	}
 	return providerServer, func() error { return errors.Join(closeProtected(), closeLifecycle()) }, nil
+}
+
+// newProviderOperationReader composes only the operation families whose
+// application boundaries were explicitly injected. Artifact and usage
+// dependencies remain absent from the default composition root until a real
+// source/stager and collector are configured; the transport then fails closed
+// rather than exposing a partial or synthetic operation surface.
+func newProviderOperationReader(lifecycleApp providerapi.LifecycleApplication, artifactApp providerapi.ArtifactApplication) (provideroperation.Reader, error) {
+	readers := make([]provideroperation.Reader, 0, 2)
+	if lifecycleApp != nil {
+		reader, err := provideroperation.NewLifecycleReader(lifecycleApp)
+		if err != nil {
+			return nil, err
+		}
+		readers = append(readers, reader)
+	}
+	if artifactApp != nil {
+		reader, err := provideroperation.NewArtifactReader(artifactApp)
+		if err != nil {
+			return nil, err
+		}
+		readers = append(readers, reader)
+	}
+	if len(readers) == 0 {
+		return nil, nil
+	}
+	return provideroperation.NewAggregator(readers...)
 }
 
 func newProviderLifecycleApplication(ctx context.Context, lifecycleConfig config.ProviderLifecycleConfig) (*lifecycleapplication.Application, func() error, error) {
