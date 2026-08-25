@@ -70,7 +70,7 @@ It does not clone, mount, or read an external source repository.
 | P2.3c2 | Durable terminal session ledger and atomic sandbox authority check | Passed on `main@e5c9dec`; post-push CI #103 passed | Retain no-transport/no-dispatch/no-multi-controller boundary; P2.3c3 next |
 | P2.3c3 | Protected transport projection and opaque handoff retrieval | Passed for bounded Provider transport evidence | Retain no-Gateway/no-WebSocket boundary; P2.3c4 requires independent Gateway evidence |
 | P2.3c4 | Runtime Gateway integration | Not started | Independently owned authorization, proxy, reconnect, revocation, recording, external caller, and end-to-end evidence |
-| P2 | Coding/remote-shell profile | P2.1, P2.2a-c, and P2.3a-c0 closed for bounded Provider/Contract evidence | P2.3c1 provider-local session domain and authority port |
+| P2 | Coding/remote-shell profile | P2.1, P2.2a-c, and P2.3a-c3 closed for bounded Provider/Contract/transport evidence | P2.3c4 independently owned Runtime Gateway integration |
 | P3 | Migration readiness and external-caller integration | Not started | External caller E2E, rollback and canary evidence |
 | P4 | Production hardening | Not started | Deployment, multi-controller, multi-tenant, and production gates |
 
