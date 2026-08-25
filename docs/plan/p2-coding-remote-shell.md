@@ -23,8 +23,12 @@ three jobs; Node.js 20 deprecation warnings remain. P2.3c3 implementation
 commit `186190b` and post-push CI run `32799871307` passed all three jobs.
 P2.3c4 implementation commit `e675cb9` and post-push CI run `32801539995`
 also passed all three jobs; the latter closes only bounded Gateway component
-evidence. ADR 0009 records the ownership boundary and ADR 0010 records the
-bounded exec Contract decision.
+evidence. P2.4 Contract/domain/memory-adapter work passed through `3b94146` and
+post-push CI `32804619553`. P2.4a0 protected-admission authority reconciliation
+passed in Contract commits `3a9d8b7` and `7e00715` plus lock/admission commit
+`2aba87f`; post-push CI `32819717542` passed. The three artifact/usage routes
+remain absent. ADR 0009 records the ownership boundary, ADR 0010 records the
+bounded exec Contract decision, and ADR 0013 records the P2.4a0 bindings.
 
 ## Authority stop condition
 
@@ -86,7 +90,14 @@ acceptance, result retention, cancellation, reconciliation, or backend adapter.
   component evidence passed in `e675cb9`; post-push CI `32801539995`);
 - P2.4: artifact staging and usage evidence (Contract authority commits
   `4f3da4e`/`649c293`; provider-local domain/ports `1ca700d`; memory adapters
-  `41225c0` with fix `3b94146`; post-push CI `32804619553` passed).
+  `41225c0` with fix `3b94146`; post-push CI `32804619553` passed);
+- P2.4a0: reconcile artifact/usage protected-admission operation names,
+  Contract IDs, digest profiles, mutation classification, asynchronous
+  outcomes, safe error surface, fixtures, Suite, and lock before transport
+  (passed in `3a9d8b7`, `7e00715`, and `2aba87f`; post-push CI `32819717542`);
+- P2.4a: add a separately tested asynchronous application facade and
+  operation-keyed evidence readers, then compose only the three locked routes
+  (not started; direct memory-adapter dispatch is forbidden).
 
 Each implementation slice requires its own focused tests, race/shuffle suite,
 Contract lock verification, Conformance evidence, PR CI, and post-merge CI.
@@ -191,5 +202,51 @@ select a runtime driver in this slice. Active-content and malware checks are
 injected local checks; passing tests do not prove a real scanner, platform PKI,
 external caller compatibility, aggregate lifecycle conformance,
 multi-controller reliability, multi-tenant security, deployment, or production
-readiness. The next entry is P3 migration readiness and external-caller
-integration.
+readiness.
+
+## P2.4a0 Protected-Admission Authority
+
+P2.4a0 is passed as Contract and admission-component evidence only. It locks
+exactly three admission operations: `stage_artifact`,
+`read_artifact_staging_evidence`, and `read_usage_evidence`. The staging
+operation is a mutation and consumes replay/fencing guard state. The two reads
+are side-effect-free and do not consume mutation guard state. The Provider
+operation result type `artifact_stage` is not an admission operation, and
+unknown operation names fail closed.
+
+The staging boundary is asynchronous: durable acceptance precedes staging or
+content-check dispatch and the accept response contains only a `202` Provider
+operation. A staged artifact produces a succeeded operation and immutable
+`staged` evidence; a content rejection produces a failed operation and
+immutable `rejected` evidence; a missing source produces a failed operation and
+no manufactured evidence, so evidence retrieval returns `404`. Encoded body
+overflow is `400`, unsafe or unprojectable pre-accept failure is `503`, and the
+stable surface does not add `413` or `500`.
+
+Both read request digests cover a complete descriptor containing exactly
+`operation`, `sandbox_id`, `operation_id`, `attempt_id`, and `fencing_token`.
+The fixture, closed Go allowlist, request binding, mutation guard, locked
+projection, and 33-case Suite agree on these values. Route-absence tests prove
+that P2.4a0 did not add a handler, application dispatch, staging call, or usage
+collection. Contract revision
+`7e00715e5e3583ec4f98eb25cfeab587638ac858`, tree
+`fb403fe691832f377fb9d9609cd196419cb26397`, local race/shuffle, vet, verifier,
+Suite, and post-push CI `32819717542` passed.
+
+## P2.4a Transport Entry
+
+P2.4a is not started. Before any route is composed, it must add a separately
+tested application boundary that durably accepts staging work and exposes
+artifact and usage evidence through operation-keyed read ports. Admission must
+complete and bind the full request or descriptor before the application is
+called. The transport must not dispatch directly to the current synchronous
+artifact stager or evidence-ID-keyed usage memory repository.
+
+Only after that boundary is proven may P2.4a compose the locked POST staging
+route and the two locked GET evidence routes, with their strict request,
+projection, error, mTLS, bearer, and route-nondisclosure behavior. This slice
+does not authorize artifact publication, billing truth, a real content scanner,
+external-caller compatibility, aggregate conformance, multi-controller
+reliability, multi-tenant security, deployment, or production readiness. The P2
+release gate remains open until a separately supplied external caller executes
+the locked surface end to end.
