@@ -29,8 +29,8 @@ func TestVerifyRequestDigestExcludesAndBindsRequestDigest(t *testing.T) {
 	}
 
 	wrongEmbedded := []byte("{\"request_digest\":\"" + digestForTest("other") + "\",\"operation\":\"exec\",\"nested\":{\"b\":2,\"a\":1}}")
-	if err := VerifyRequestDigest(DigestProfileRequestExcludingDigest, expected, wrongEmbedded); err != ErrInvalidRequestDocument {
-		t.Fatalf("wrong embedded digest error = %v, want %v", err, ErrInvalidRequestDocument)
+	if err := VerifyRequestDigest(DigestProfileRequestExcludingDigest, expected, wrongEmbedded); err != ErrRequestDigestMismatch {
+		t.Fatalf("wrong embedded digest error = %v, want %v", err, ErrRequestDigestMismatch)
 	}
 }
 

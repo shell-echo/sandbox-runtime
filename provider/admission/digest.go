@@ -41,6 +41,9 @@ func VerifyRequestDigest(profile DigestProfile, expectedDigest string, document 
 	if profile == DigestProfileRequestExcludingDigest {
 		canonical, err = canonicalWithoutRequestDigest(canonical, expectedDigest)
 		if err != nil {
+			if errors.Is(err, ErrRequestDigestMismatch) {
+				return ErrRequestDigestMismatch
+			}
 			return ErrInvalidRequestDocument
 		}
 	}
@@ -80,8 +83,11 @@ func canonicalWithoutRequestDigest(canonical []byte, expectedDigest string) ([]b
 		return nil, ErrInvalidRequestDocument
 	}
 	var requestDigest string
-	if err := json.Unmarshal(encodedDigest, &requestDigest); err != nil || !digestPattern.MatchString(requestDigest) || requestDigest != expectedDigest {
+	if err := json.Unmarshal(encodedDigest, &requestDigest); err != nil || !digestPattern.MatchString(requestDigest) {
 		return nil, ErrInvalidRequestDocument
+	}
+	if requestDigest != expectedDigest {
+		return nil, ErrRequestDigestMismatch
 	}
 	delete(document, "request_digest")
 	withoutDigest, err := json.Marshal(document)

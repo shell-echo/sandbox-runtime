@@ -66,6 +66,35 @@ func TestProtectedOperationGateRejectsBeforeGuardReservation(t *testing.T) {
 	}
 }
 
+func TestProtectedOperationGatePreservesInvalidDocumentCategory(t *testing.T) {
+	fixture := newEdDSAFixture(t)
+	token, binding, _, clock := gateTokenAndBinding()
+	compact := fixture.token(t, JWSHeader{Algorithm: fixture.algorithm, KeyID: fixture.keyID, Type: expectedJWSType}, token.Claims)
+	for _, test := range []struct {
+		name     string
+		document []byte
+	}{
+		{name: "duplicate member", document: []byte(`{"operation":"exec","operation":"exec","request_digest":"` + token.Claims.RequestDigest + `"}`)},
+		{name: "malformed", document: []byte(`{"operation":`)},
+		{name: "oversized", document: append([]byte{'{'}, append(make([]byte, maxAdmissionDocumentBytes+1), '}')...)},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			guard := &recordingMutationGuard{}
+			gate, err := NewProtectedOperationGate(fixture.keys, &clock, guard)
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = gate.Admit(context.Background(), ProtectedOperationRequest{CompactToken: compact, Binding: binding, Document: test.document})
+			if !errors.Is(err, ErrInvalidRequestDocument) || !errors.Is(err, ErrForbidden) {
+				t.Fatalf("Admit() error = %v, want invalid document forbidden category", err)
+			}
+			if calls := len(guard.Requests()); calls != 0 {
+				t.Fatalf("guard calls = %d, want 0", calls)
+			}
+		})
+	}
+}
+
 func TestProtectedOperationGateAuthenticatesBearerBeforeBindings(t *testing.T) {
 	fixture := newEdDSAFixture(t)
 	token, _, _, clock := gateTokenAndBinding()

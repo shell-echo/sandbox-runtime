@@ -108,6 +108,9 @@ func (g *ProtectedOperationGate) Admit(ctx context.Context, request ProtectedOpe
 		return ErrForbidden
 	}
 	if err := VerifyRequestDigest(token.Claims.RequestDigestProfile, token.Claims.RequestDigest, request.Document); err != nil {
+		if errors.Is(err, ErrInvalidRequestDocument) {
+			return errors.Join(ErrForbidden, ErrInvalidRequestDocument)
+		}
 		return ErrForbidden
 	}
 	if !token.Claims.Operation.Mutation() {

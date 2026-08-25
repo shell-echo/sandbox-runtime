@@ -65,8 +65,80 @@ func TestProtectedArtifactAdmissionFailureDoesNotCallApplication(t *testing.T) {
 	request.Body = ioNopCloser(strings.NewReader(`{"unknown":true}`))
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
-	if response.Code != http.StatusForbidden || app.acceptCalls != 0 || guard.Calls() != 0 {
+	if response.Code != http.StatusBadRequest || app.acceptCalls != 0 || guard.Calls() != 0 {
 		t.Fatalf("invalid stage response=%d accept_calls=%d guard_calls=%d body=%s", response.Code, app.acceptCalls, guard.Calls(), response.Body.String())
+	}
+}
+
+func TestProtectedArtifactStrictDocumentErrorsAreBadRequest(t *testing.T) {
+	material := newTestMTLSMaterial(t, []string{testAllowedIdentity})
+	identity, err := newClientIdentityAdmission([]string{testAllowedIdentity})
+	if err != nil {
+		t.Fatal(err)
+	}
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		name string
+		body string
+	}{
+		{name: "unknown member", body: `{"unknown":true}`},
+		{name: "duplicate member", body: `{"operation_id":"operation-1","operation_id":"operation-1"}`},
+		{name: "malformed", body: `{"operation_id":`},
+		{name: "oversized", body: `{"operation_id":"` + strings.Repeat("x", int(providerv1.MaxArtifactStagingRequestBytes)) + `"}`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			guard := &releaseGateGuard{decision: admission.MutationGuardAccepted}
+			app := &transportArtifactApp{}
+			handler := newArtifactTransportHandler(t, identity, publicKey, guard, app, nil, nil)
+			request := newProtectedReleaseRequest(t, protectedReleaseRoute{method: http.MethodPost, path: "/v1/sandboxes/sandbox-1/artifacts:stage", operation: admission.OperationStageArtifact, allowUnavailable: true}, privateKey, material.client, "jti-stage-strict-"+test.name+"-1")
+			request.Body = ioNopCloser(strings.NewReader(test.body))
+			request.ContentLength = int64(len(test.body))
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+			if response.Code != http.StatusBadRequest || app.acceptCalls != 0 || guard.Calls() != 0 {
+				t.Fatalf("response=%d accept_calls=%d guard_calls=%d body=%s", response.Code, app.acceptCalls, guard.Calls(), response.Body.String())
+			}
+		})
+	}
+}
+
+func TestProtectedArtifactSchemaInvalidDocumentDoesNotReserveMutation(t *testing.T) {
+	material := newTestMTLSMaterial(t, []string{testAllowedIdentity})
+	identity, err := newClientIdentityAdmission([]string{testAllowedIdentity})
+	if err != nil {
+		t.Fatal(err)
+	}
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	guard := &releaseGateGuard{decision: admission.MutationGuardAccepted}
+	app := &transportArtifactApp{}
+	handler := newArtifactTransportHandler(t, identity, publicKey, guard, app, nil, nil)
+	request := newProtectedReleaseRequest(t, protectedReleaseRoute{method: http.MethodPost, path: "/v1/sandboxes/sandbox-1/artifacts:stage", operation: admission.OperationStageArtifact, allowUnavailable: true}, privateKey, material.client, "jti-stage-schema-invalid-1")
+	contextValue := admissionContextFromReleaseRequest(t, request)
+	withoutDigest := []byte(`{"unknown":true}`)
+	digest := releaseFullDocumentDigest(t, withoutDigest)
+	body := []byte(`{"unknown":true,"request_digest":"` + digest + `"}`)
+	contextValue.RequestDigest = digest
+	contextDigest, err := admission.DigestForAdmissionContext(contextValue)
+	if err != nil {
+		t.Fatal(err)
+	}
+	contextValue.ContextDigest = contextDigest
+	claims := admissionTokenClaimsForTest(contextValue)
+	claims["jti"] = "jti-stage-schema-invalid-1"
+	request.Header.Set("Authorization", "Bearer "+signTestAdmissionToken(t, privateKey, claims))
+	request.Header.Set(admission.AdmissionContextHeader, encodeTestAdmissionContext(t, contextValue))
+	request.Body = ioNopCloser(strings.NewReader(string(body)))
+	request.ContentLength = int64(len(body))
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusBadRequest || app.acceptCalls != 0 || guard.Calls() != 0 {
+		t.Fatalf("schema-invalid stage response=%d accept_calls=%d guard_calls=%d body=%s", response.Code, app.acceptCalls, guard.Calls(), response.Body.String())
 	}
 }
 

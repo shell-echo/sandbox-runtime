@@ -1,6 +1,7 @@
 package providerapi
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -146,6 +147,10 @@ func (h *protectedHandler) ServeHTTP(response http.ResponseWriter, request *http
 		writeAdmissionError(response, status, "SANDBOX_INVALID_REQUEST", false)
 		return
 	}
+	if err := validateProtectedDocument(route, document); err != nil {
+		writeAdmissionError(response, http.StatusBadRequest, "SANDBOX_INVALID_REQUEST", false)
+		return
+	}
 	binding := context.TokenBinding(facts.caller)
 	err = h.gate.Admit(request.Context(), admission.ProtectedOperationRequest{
 		CompactToken: facts.compactBearer,
@@ -156,6 +161,8 @@ func (h *protectedHandler) ServeHTTP(response http.ResponseWriter, request *http
 		switch {
 		case errors.Is(err, admission.ErrUnauthenticated):
 			writeAdmissionError(response, http.StatusUnauthorized, "SANDBOX_UNAUTHENTICATED", false)
+		case errors.Is(err, admission.ErrInvalidRequestDocument):
+			writeAdmissionError(response, http.StatusBadRequest, "SANDBOX_INVALID_REQUEST", false)
 		case errors.Is(err, admission.ErrForbidden):
 			writeAdmissionError(response, http.StatusForbidden, "SANDBOX_FORBIDDEN", false)
 		case errors.Is(err, admission.ErrConflict):
@@ -214,6 +221,19 @@ func (h *protectedHandler) ServeHTTP(response http.ResponseWriter, request *http
 		writeAdmissionError(response, http.StatusServiceUnavailable, "SANDBOX_PROVIDER_UNAVAILABLE", true)
 	} else {
 		writeAdmissionError(response, http.StatusInternalServerError, "SANDBOX_PROVIDER_ERROR", false)
+	}
+}
+
+// validateProtectedDocument performs the route schema check before mutation
+// admission can consume replay/fencing state. It intentionally does not check
+// token bindings or semantic correlation; those remain the gate's authority.
+func validateProtectedDocument(route protectedRoute, document []byte) error {
+	switch route.operation {
+	case admission.OperationStageArtifact:
+		var request providerv1.ArtifactStagingRequest
+		return providerv1.DecodeStrict(bytes.NewReader(document), providerv1.MaxArtifactStagingRequestBytes, &request)
+	default:
+		return nil
 	}
 }
 
