@@ -12,7 +12,7 @@ production readiness.
 
 | Item | Evidence | Status |
 | --- | --- | --- |
-| Checkout | `main` | P2.4a0 protected-admission authority is pushed at `2aba87f`; CI `32819717542` passed; artifact/usage routes remain uncomposed and their truth remains provider-local evidence only |
+| Checkout | `main@dbea0e8` | P2.4a1 operation/evidence-read authority is pushed; CI `32823783136` passed; artifact/usage application, aggregation, and transport remain unimplemented |
 | Review | PR [#17](https://github.com/shell-echo/sandbox-runtime/pull/17) merged as `43ff3d7`; PR [#18](https://github.com/shell-echo/sandbox-runtime/pull/18) merged as `4774c3a`; PR [#19](https://github.com/shell-echo/sandbox-runtime/pull/19) merged as `e2755f5`; PR [#21](https://github.com/shell-echo/sandbox-runtime/pull/21) merged as `c5a4a65`; PR [#22](https://github.com/shell-echo/sandbox-runtime/pull/22) merged as `44f39ec`; PR [#23](https://github.com/shell-echo/sandbox-runtime/pull/23) merged as `ac72eab`; PR [#24](https://github.com/shell-echo/sandbox-runtime/pull/24) merged as `2e3dde6`; PR [#25](https://github.com/shell-echo/sandbox-runtime/pull/25) merged as `88506d1`; PR [#26](https://github.com/shell-echo/sandbox-runtime/pull/26) merged as `4ccb107`; PR [#27](https://github.com/shell-echo/sandbox-runtime/pull/27) merged as `28076a7`; PR [#28](https://github.com/shell-echo/sandbox-runtime/pull/28) merged as `2b25f76`; PR [#29](https://github.com/shell-echo/sandbox-runtime/pull/29) merged as `83965a2`; PR [#30](https://github.com/shell-echo/sandbox-runtime/pull/30) merged as `9d00212`; PR [#31](https://github.com/shell-echo/sandbox-runtime/pull/31) merged as `67b64a9`; PR [#32](https://github.com/shell-echo/sandbox-runtime/pull/32) merged as `5883da9`; PR [#33](https://github.com/shell-echo/sandbox-runtime/pull/33) merged as `ba39053`; PR [#35](https://github.com/shell-echo/sandbox-runtime/pull/35) merged as `c467cd4`; PR [#36](https://github.com/shell-echo/sandbox-runtime/pull/36) merged as `3a980bd`; PR [#37](https://github.com/shell-echo/sandbox-runtime/pull/37) merged as `f9cfbc3`; PR [#38](https://github.com/shell-echo/sandbox-runtime/pull/38) merged as `7ebcc8f`; PR [#39](https://github.com/shell-echo/sandbox-runtime/pull/39) merged as `17072e6`; PR [#40](https://github.com/shell-echo/sandbox-runtime/pull/40) merged as `65a9ba3`; PR [#41](https://github.com/shell-echo/sandbox-runtime/pull/41) merged as `ac555619`; PR [#42](https://github.com/shell-echo/sandbox-runtime/pull/42) merged as `97fb429` | PR #42 CI `32465114377` and post-merge CI `32465443385` provider-contract, test, and docker-integration passed |
 | P2.2a release evidence | `2fa2e72` on PR #33, merged as `ba39053` | Local race/shuffle, vet, lock, Suite, PR CI, and post-merge CI passed |
 | P2.2b release evidence | `e26bf2b` on PR #35, merged as `c467cd4` | Local race/shuffle, vet, lock, 19-case Suite, PR CI `32456100570`, and post-merge CI `32456279722` passed; no HTTP/dispatch composition |
@@ -34,10 +34,12 @@ production readiness.
 | P2.4 release evidence | post-push CI run `32804619553` | `provider-contract`, `test`, and `docker-integration` all passed for the final adapter revision; no Provider HTTP composition or external-caller claim |
 | P2.4a0 admission authority | Contract commits `3a9d8b7` and `7e00715`; lock/admission commit `2aba87f` | Locks `stage_artifact`, `read_artifact_staging_evidence`, and `read_usage_evidence`; the stage mutation consumes replay/fencing guard state, reads do not; async outcomes, `400`/`503` error surface, descriptor JCS digests, unknown-operation rejection, and route absence are covered |
 | P2.4a0 release evidence | post-push CI run `32819717542` | `provider-contract`, `test`, and `docker-integration` all passed; this proves Contract/admission authority only, not handler, application, staging dispatch, usage collection, or external-caller compatibility |
+| P2.4a1 read authority | Contract commits `3846c9e` and `6f549c2`; lock/projection commit `dbea0e8`; ADR 0014 | Locks generic operation-family aggregation plus artifact pending/outcome-unknown/expired and usage unavailable/expired read states; no application, repository, aggregator, handler, router, or transport was added |
+| P2.4a1 release evidence | post-push CI run `32823783136` | `provider-contract`, `test`, and `docker-integration` all passed; local race/shuffle, vet, lock verifier, projection/admission tests, and 35-case Suite also passed |
 | P3 local evidence | implementation commit `4212e88` | Revision identity validation, deterministic canary binding, rollback-only-new-run behavior, old-run draining, shadow validation bounds, and migration metric aggregation passed focused race/shuffle and vet; external caller gate remains open |
 | P3 component release evidence | post-push CI run `32805284762` | CI run concluded success for `4212e88`; this remains local migration component evidence, not external caller, canary traffic, rollback E2E, or production readiness |
 | Contract resources | OpenAPI, admission, lifecycle, bounded exec, terminal-session, artifact-staging, usage-evidence schemas, fixtures, semantic rules, and Suite | Local Contract authority is locked; artifact publication, billing, and tenant authority remain outside the Provider |
-| Contract lock | revision `7e00715e5e3583ec4f98eb25cfeab587638ac858`; tree `fb403fe691832f377fb9d9609cd196419cb26397`; semantic rules `sha256:e10c196be44488e1190c5dfbf4c0f54a52bcb73ae7abc69c52e2f0e186d0022a` | Local verifier, 33-case Conformance, full race/shuffle, post-push CI `32819717542`, and projection/admission tests passed |
+| Contract lock | revision `6f549c222ab5ff5b57ed1a49bd2ac5bb95d3b311`; tree `b27453d048a2cd8b90f54008d5c4eac28f38c9cb`; manifest `sha256:dbad71c6d8b475f6c6fa64e944872feacece81c0281a4a58f42c303b75200bbd`; OpenAPI `sha256:091280c0d68b786fdb754f8f8f69d013294ef582716821af7d3d87efbfc86436`; semantic rules `sha256:221776879aaa784ca8ead7dd4531cdd14095b5b7cbf966bbcc163eed82685952` | Local verifier, 35-case Conformance, full race/shuffle, post-push CI `32823783136`, and projection/admission tests passed; Suite file SHA-256 is `1fe858bc73cbcee5505c3e07fb35d5e28beb15ebca72a8ff5bb15785f258f3bf`, while the declared Suite digest remains the existing placeholder |
 | External Agent Contract | no longer consumed; old compatibility evidence is historical only | Removed from implementation |
 
 The lock verifier is intentionally bound to the repository-owned Contract tree.
@@ -81,8 +83,9 @@ It does not clone, mount, or read an external source repository.
 | P2.3c4 | Runtime Gateway integration | Passed for bounded Gateway component evidence | External caller E2E, real WebSocket adapter, distributed revocation, multi-controller reliability, and production deployment remain unproven |
 | P2.4 | Artifact staging and usage evidence | Passed for bounded Provider Contract/domain/memory-adapter evidence; direct-main commits through `3b94146`, post-push CI `32804619553` | No HTTP composition, platform artifact publication, billing, distributed reconciliation, tenancy, deployment, or production claim |
 | P2.4a0 | Artifact/usage protected-admission authority reconciliation | Passed in direct-main commits `3a9d8b7`, `7e00715`, and `2aba87f`; CI `32819717542` passed | Retain 33-case Suite, lock, guard classification, descriptor digest, async outcome, safe error, and route-absence regression |
-| P2.4a | Artifact/usage Provider transport composition | Not started | Add a separately tested async application facade and operation-keyed evidence readers before composing the three locked routes; no direct memory-adapter dispatch |
-| P2 | Coding/remote-shell profile | In progress: P2.1, P2.2a-c, P2.3a-c4, P2.4, and P2.4a0 have bounded component/Contract evidence | P2.4a transport, then separately supplied external-caller release-gate evidence |
+| P2.4a1 | Operation aggregation and evidence-read authority reconciliation | Passed in direct-main commits `3846c9e`, `6f549c2`, and `dbea0e8`; CI `32823783136` passed | Retain 35-case Suite and locked pending/outcome-unknown/unavailable/expired state matrices; no runtime implementation claim |
+| P2.4a | Artifact/usage Provider application and transport composition | Not started | Implement separately tested async application facade, operation-family readers/aggregator, and only then the three locked routes; no direct memory-adapter dispatch |
+| P2 | Coding/remote-shell profile | In progress: P2.1, P2.2a-c, P2.3a-c4, P2.4, P2.4a0, and P2.4a1 have bounded component/Contract evidence | P2.4a application/aggregation/transport, then separately supplied external-caller release-gate evidence |
 | P3 | Migration readiness and external-caller integration | In progress for local binding/shadow/metrics component evidence only (`4212e88`) | External caller against locked Suite, shadow parity, canary/rollback/drain, and unchanged platform contracts |
 | P4 | Production hardening | Not started | Deployment, multi-controller, multi-tenant, and production gates |
 
@@ -98,7 +101,7 @@ run `32365284283` passed all required jobs.
 - local Go tests are component evidence only;
 - the local Contract verifier proves lock/resource identity, not protocol
   conformance;
-- the local Suite runner executes 33 locked admission, lifecycle, exec,
+- the local Suite runner executes 35 locked admission, lifecycle, exec,
   terminal-session, artifact-staging, and usage-evidence case IDs with the
   `providerapi`, `providerapi/v1`, and `provider/admission` test matrices; this remains Provider
   component/Contract-suite evidence, not aggregate lifecycle conformance;
@@ -159,7 +162,12 @@ Passed locally (authorized test environment):
   locked the three missing protected-admission operation bindings, async
   outcomes, safe pre-accept errors, and read descriptor digests. CI
   `32819717542` passed all required jobs for `2aba87f`, while route-absence tests
-  confirm that no artifact/usage transport was composed.
+  confirm that no artifact/usage transport was composed. P2.4a1 then locked
+  generic operation-family aggregation and the artifact/usage read-state
+  matrices in `3846c9e`, `6f549c2`, and `dbea0e8`. Local race/shuffle, vet,
+  lock verification, the 35-case Suite, projection/admission tests, and
+  post-push CI `32823783136` passed. This adds no application, repository,
+  aggregator, handler, router, transport, or external-caller evidence.
 - P3 local component verification covers immutable ProviderRevision binding,
   deterministic canary selection, rollback isolation, drain state, shadow
   validation without dispatch, bounded metric aggregation, race/shuffle, vet,
@@ -266,7 +274,10 @@ A concrete WebSocket wire adapter, external caller E2E, distributed
 revocation, multi-controller reliability, tenancy, deployment, and production
 claims remain unproven. P2.4a0 then reconciled the artifact/usage protected-
 admission vocabulary and lock in `3a9d8b7`, `7e00715`, and `2aba87f`; post-push
-CI `32819717542` passed all three required jobs. The next local implementation
-entry is P2.4a: define a durable asynchronous application facade and operation-
-keyed evidence readers, then compose only the three locked routes. P3 external-
+CI `32819717542` passed all three required jobs. P2.4a1 locked operation-family
+aggregation and the evidence-read state matrices in `3846c9e`, `6f549c2`, and
+`dbea0e8`; post-push CI `32823783136` passed all three required jobs and
+executed the 35-case Suite. The next local implementation entry is P2.4a:
+implement a durable asynchronous application facade and operation-family
+readers/aggregator, then compose only the three locked routes. P3 external-
 caller and migration release gates remain open after that component slice.
