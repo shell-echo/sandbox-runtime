@@ -3,7 +3,7 @@
   "attempt_id": "artifact-attempt-1",
   "fencing_token": 3,
   "idempotency_key": "artifact-idempotency-1",
-  "request_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "request_digest": "sha256:813c32c35c60442f131a477a9a7af4029edc896c4baa47a2cbb0c0afdc550b4f",
   "deadline_at": "2026-08-25T12:00:00Z",
   "expected_generation": 4,
   "artifact_reference": "artifact-ref:platform/artifact-1",
