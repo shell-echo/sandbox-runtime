@@ -169,6 +169,10 @@ func (h *protectedHandler) ServeHTTP(response http.ResponseWriter, request *http
 		}
 		return
 	}
+	if route.operation == admission.OperationReadOperation && (h.application != nil || h.operationReader != nil) {
+		h.serveOperation(response, request, context)
+		return
+	}
 	if h.application != nil {
 		switch route.operation {
 		case admission.OperationCreate:
@@ -176,9 +180,6 @@ func (h *protectedHandler) ServeHTTP(response http.ResponseWriter, request *http
 			return
 		case admission.OperationReadSandbox:
 			h.serveSandboxStatus(response, request, context)
-			return
-		case admission.OperationReadOperation:
-			h.serveOperation(response, request, context)
 			return
 		}
 	}

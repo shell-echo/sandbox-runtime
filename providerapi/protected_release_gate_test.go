@@ -47,6 +47,9 @@ func allProtectedReleaseRoutes() []protectedReleaseRoute {
 		{name: "read execute result", method: http.MethodGet, path: "/v1/operations/operation-1/exec-result", operation: admission.OperationReadResult},
 		{name: "read runtime session handoff", method: http.MethodGet, path: "/v1/operations/operation-1/runtime-session", operation: admission.OperationReadRuntimeSession, allowUnavailable: true},
 		{name: "read snapshot manifest", method: http.MethodGet, path: "/v1/operations/operation-1/snapshot-manifest", operation: admission.OperationReadSnapshotManifest, allowUnavailable: true},
+		{name: "stage artifact", method: http.MethodPost, path: "/v1/sandboxes/sandbox-1/artifacts:stage", operation: admission.OperationStageArtifact, allowUnavailable: true},
+		{name: "read artifact evidence", method: http.MethodGet, path: "/v1/operations/operation-1/artifact-staging-evidence", operation: admission.OperationReadArtifactStagingEvidence, allowUnavailable: true},
+		{name: "read usage evidence", method: http.MethodGet, path: "/v1/operations/operation-1/usage-evidence", operation: admission.OperationReadUsageEvidence, allowUnavailable: true},
 		{name: "read events", method: http.MethodGet, path: "/v1/sandboxes/sandbox-1/events", query: "?after_sequence=2", operation: admission.OperationReadEvents, allowUnavailable: true},
 	}
 }
@@ -391,6 +394,12 @@ func protectedReleaseRequestBinding(operation admission.Operation) (string, admi
 	if operation == admission.OperationReadEvents {
 		return "urn:shell-echo:sandbox-runtime:descriptor:events:v1", admission.DigestProfileFullDocument
 	}
+	if operation == admission.OperationReadArtifactStagingEvidence {
+		return "urn:shell-echo:sandbox-runtime:descriptor:artifact-staging-evidence:v1", admission.DigestProfileFullDocument
+	}
+	if operation == admission.OperationReadUsageEvidence {
+		return "urn:shell-echo:sandbox-runtime:descriptor:usage-evidence:v1", admission.DigestProfileFullDocument
+	}
 	contractIDs := map[admission.Operation]string{
 		admission.OperationCreate:             "urn:shell-echo:sandbox-runtime:request:create:v1",
 		admission.OperationRestore:            "urn:shell-echo:sandbox-runtime:request:restore:v1",
@@ -401,13 +410,25 @@ func protectedReleaseRequestBinding(operation admission.Operation) (string, admi
 		admission.OperationOpenRuntimeSession: "urn:shell-echo:sandbox-runtime:request:open-runtime-session:v1",
 		admission.OperationSnapshot:           "urn:shell-echo:sandbox-runtime:request:snapshot:v1",
 		admission.OperationTerminate:          "urn:shell-echo:sandbox-runtime:request:terminate:v1",
+		admission.OperationStageArtifact:      "urn:shell-echo:sandbox-runtime:request:stage-artifact:v1",
 	}
 	return contractIDs[operation], admission.DigestProfileRequestExcludingDigest
 }
 
 func releaseMutationDocument(t *testing.T, operation admission.Operation) ([]byte, string) {
 	t.Helper()
-	withoutDigest, err := json.Marshal(map[string]any{"operation": string(operation), "local_case": "p1.1d"})
+	var document map[string]any
+	if operation == admission.OperationStageArtifact {
+		document = map[string]any{
+			"operation_id": "operation-1", "attempt_id": "attempt-1", "fencing_token": int64(1),
+			"idempotency_key": "artifact-idempotency-1", "deadline_at": releaseGateTestTime().Add(4 * time.Minute).Format(time.RFC3339Nano),
+			"expected_generation": int64(1), "artifact_reference": "artifact-ref:artifact-1", "source_path": "/outputs/result.txt",
+			"expected_digest": "sha256:" + strings.Repeat("a", 64), "expected_media_type": "text/plain", "max_bytes": int64(1024), "retention_seconds": int64(60),
+		}
+	} else {
+		document = map[string]any{"operation": string(operation), "local_case": "p1.1d"}
+	}
+	withoutDigest, err := json.Marshal(document)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -416,7 +437,8 @@ func releaseMutationDocument(t *testing.T, operation admission.Operation) ([]byt
 		t.Fatal(err)
 	}
 	digest := releaseCanonicalDigest(canonical)
-	withDigest, err := json.Marshal(map[string]any{"operation": string(operation), "local_case": "p1.1d", "request_digest": digest})
+	document["request_digest"] = digest
+	withDigest, err := json.Marshal(document)
 	if err != nil {
 		t.Fatal(err)
 	}
