@@ -59,6 +59,8 @@ func TestLocalSuiteCasesHaveRunnerMappings(t *testing.T) {
 		"usage-evidence-schema",
 		"usage-evidence-semantic-bounds",
 		"artifact-usage-protected-admission-bindings",
+		"artifact-operation-read-schema",
+		"artifact-usage-read-state-matrix",
 	}
 	if err := validateCases(ids); err != nil {
 		t.Fatal(err)
@@ -90,6 +92,8 @@ func TestLifecycleSuiteCasesExecuteBehaviorPackages(t *testing.T) {
 		"usage-evidence-schema":                                      {Package: "./providerapi/v1"},
 		"usage-evidence-semantic-bounds":                             {Package: "./providerapi/v1"},
 		"artifact-usage-protected-admission-bindings":                {Package: "./provider/admission"},
+		"artifact-operation-read-schema":                             {Package: "./providerapi/v1"},
+		"artifact-usage-read-state-matrix":                           {Package: "./providerapi/v1"},
 	}
 	for id, expected := range want {
 		got := testCases[id]

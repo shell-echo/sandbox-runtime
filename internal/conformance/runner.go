@@ -183,6 +183,14 @@ var testCases = map[string]testCase{
 		Package: "./provider/admission",
 		Run:     `^TestLocalContractArtifactUsageAdmissionBindings$`,
 	},
+	"artifact-operation-read-schema": {
+		Package: "./providerapi/v1",
+		Run:     `^TestLockedArtifactOperationReadProjection$`,
+	},
+	"artifact-usage-read-state-matrix": {
+		Package: "./providerapi/v1",
+		Run:     `^TestLocalContractArtifactUsageReadStateMatrix$`,
+	},
 }
 
 // Run verifies the locked local Contract and executes every case in its

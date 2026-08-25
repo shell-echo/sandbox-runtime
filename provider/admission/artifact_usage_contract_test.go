@@ -43,9 +43,10 @@ type artifactUsageAcceptanceSemantics struct {
 }
 
 type artifactUsageOutcome struct {
-	OperationStatus    string `json:"operation_status"`
-	EvidenceStatus     string `json:"evidence_status"`
-	EvidenceReadStatus int    `json:"evidence_read_status"`
+	OperationStatus     string `json:"operation_status"`
+	OperationReadStatus int    `json:"operation_read_status"`
+	EvidenceStatus      string `json:"evidence_status"`
+	EvidenceReadStatus  int    `json:"evidence_read_status"`
 }
 
 func TestLocalContractArtifactUsageAdmissionBindings(t *testing.T) {
@@ -107,9 +108,9 @@ func assertArtifactUsageAuthoritySemantics(t *testing.T, fixture artifactUsageAc
 		t.Fatalf("artifact staging pre-accept fixture = %#v", fixture)
 	}
 	wantOutcomes := map[string]artifactUsageOutcome{
-		"staged":           {OperationStatus: "succeeded", EvidenceStatus: "staged", EvidenceReadStatus: http.StatusOK},
-		"content_rejected": {OperationStatus: "failed", EvidenceStatus: "rejected", EvidenceReadStatus: http.StatusOK},
-		"source_missing":   {OperationStatus: "failed", EvidenceStatus: "absent", EvidenceReadStatus: http.StatusNotFound},
+		"staged":           {OperationStatus: "succeeded", OperationReadStatus: http.StatusOK, EvidenceStatus: "staged", EvidenceReadStatus: http.StatusOK},
+		"content_rejected": {OperationStatus: "failed", OperationReadStatus: http.StatusOK, EvidenceStatus: "rejected", EvidenceReadStatus: http.StatusOK},
+		"source_missing":   {OperationStatus: "failed", OperationReadStatus: http.StatusOK, EvidenceStatus: "absent", EvidenceReadStatus: http.StatusNotFound},
 	}
 	gotOutcomes := map[string]artifactUsageOutcome{"staged": fixture.Staged, "content_rejected": fixture.ContentRejected, "source_missing": fixture.SourceMissing}
 	for name, expected := range wantOutcomes {
