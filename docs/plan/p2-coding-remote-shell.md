@@ -34,6 +34,14 @@ records the ownership boundary, ADR 0010 records the bounded exec Contract
 decision, ADR 0013 records the P2.4a0 bindings, and ADR 0014 records the
 operation-family and evidence-read authority.
 
+P2.4a2 application/component evidence passed in commits `152033f`, `0440272`,
+and `4d0bb70`; post-push CI `32827387303` passed all three jobs. It adds an
+independent artifact accepted-before-dispatch authority, explicit dispatch and
+reconcile boundaries, memory/file durable adapters, expiry tombstones,
+operation-keyed usage evidence lookup, and lifecycle/artifact operation-family
+readers with collision-safe aggregation. No Contract/lock, handler, router,
+config, or HTTP route changed.
+
 ## Authority stop condition
 
 The current repository-owned Contract contains terminal-only session routes and
@@ -102,9 +110,11 @@ acceptance, result retention, cancellation, reconciliation, or backend adapter.
 - P2.4a1: lock generic operation-family aggregation and artifact/usage pending,
   outcome-unknown, unavailable, and expired read states before implementation
   (passed in `3846c9e`, `6f549c2`, and `dbea0e8`; post-push CI `32823783136`);
-- P2.4a: add a separately tested asynchronous application facade and
-  operation-family readers/aggregator, then compose only the three locked
-  routes (not started; direct memory-adapter dispatch is forbidden).
+- P2.4a2: add the separately tested asynchronous application facade,
+  operation-family readers/aggregator, and durable adapters (passed in
+  `152033f`, `0440272`, and `4d0bb70`; post-push CI `32827387303`);
+- P2.4a: compose only the three locked routes over the P2.4a2 component (not
+  started; direct memory-adapter dispatch is forbidden).
 
 Each implementation slice requires its own focused tests, race/shuffle suite,
 Contract lock verification, Conformance evidence, PR CI, and post-merge CI.
@@ -262,16 +272,16 @@ post-push CI `32823783136` passed. No application, repository, aggregator,
 handler, router, transport, staging dispatch, usage collection, or external
 caller was added or proven.
 
-## P2.4a Application and Transport Entry
+## P2.4a2 Application Component and P2.4a Transport Entry
 
-P2.4a is not started. P2.4a1 resolves the Contract authority prerequisites, but
-before any route is composed this slice must add a separately tested
-application boundary that durably accepts staging work and exposes operations,
-artifact evidence, and usage evidence through operation-family read ports and
-an aggregator. Admission must complete and bind the full request or descriptor
-before the application is called. The transport must not dispatch directly to
-the current synchronous artifact stager or evidence-ID-keyed usage memory
-repository.
+P2.4a2 has supplied the separately tested application boundary, durable
+artifact operation authority, operation-keyed usage reader, and family
+aggregator. Its evidence is provider-local component evidence only: no handler,
+router, config, or HTTP composition is included. P2.4a transport composition
+is not started. Before any route is composed, admission must complete and bind
+the full request or descriptor before the application is called. The transport
+must not dispatch directly to the current synchronous artifact stager or
+evidence-ID-keyed usage memory repository.
 
 Only after that boundary is proven may P2.4a compose the locked POST staging
 route and the two locked GET evidence routes, with their strict request,
