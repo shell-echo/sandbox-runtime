@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -45,6 +46,15 @@ func TestPutGetAndIdempotentReplay(t *testing.T) {
 	if err != nil || again.Entries[0].Quantity == 999 {
 		t.Fatalf("Get() did not return an immutable snapshot: %#v, %v", again, err)
 	}
+	byOperation, err := repository.GetEvidence(context.Background(), evidence.OperationID, repositoryTestNow)
+	if err != nil || byOperation.EvidenceID != evidence.EvidenceID {
+		t.Fatalf("GetEvidence() = %#v, %v", byOperation, err)
+	}
+	byOperation.Entries[0].Quantity = 777
+	again, _ = repository.GetEvidence(context.Background(), evidence.OperationID, repositoryTestNow)
+	if again.Entries[0].Quantity == 777 {
+		t.Fatalf("operation lookup did not return immutable snapshot: %#v", again)
+	}
 }
 
 func TestPutConflictsAndExpiry(t *testing.T) {
@@ -58,9 +68,26 @@ func TestPutConflictsAndExpiry(t *testing.T) {
 	if err := repository.Put(context.Background(), conflict); err != ErrConflict {
 		t.Fatalf("conflict error = %v, want %v", err, ErrConflict)
 	}
+	operationConflict := evidence
+	operationConflict.EvidenceID = "usage-evidence-2"
+	if err := repository.Put(context.Background(), operationConflict); !errors.Is(err, ErrConflict) {
+		t.Fatalf("operation conflict error = %v", err)
+	}
+	correlationConflict := evidence
+	correlationConflict.EvidenceID = "usage-evidence-3"
+	correlationConflict.AttemptID = "exec-attempt-2"
+	if err := repository.Put(context.Background(), correlationConflict); !errors.Is(err, ErrConflict) {
+		t.Fatalf("correlation conflict error = %v", err)
+	}
 	repository.clock = ClockFunc(func() time.Time { return evidence.RetainedUntil })
 	if _, err := repository.Get(context.Background(), evidence.EvidenceID); err != usage.ErrEvidenceExpired {
 		t.Fatalf("expired Get() error = %v", err)
+	}
+	if _, err := repository.GetEvidence(context.Background(), evidence.OperationID, evidence.RetainedUntil); !errors.Is(err, usage.ErrEvidenceExpired) {
+		t.Fatalf("expired GetEvidence() error = %v", err)
+	}
+	if _, err := repository.GetEvidence(context.Background(), "missing-operation", repositoryTestNow); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("missing GetEvidence() error = %v", err)
 	}
 }
 

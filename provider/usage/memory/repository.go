@@ -25,17 +25,18 @@ type ClockFunc func() time.Time
 func (f ClockFunc) Now() time.Time { return f() }
 
 type Repository struct {
-	mu     sync.RWMutex
-	clock  Clock
-	values map[string]usage.Evidence
-	closed bool
+	mu             sync.RWMutex
+	clock          Clock
+	values         map[string]usage.Evidence
+	operationIndex map[string]string
+	closed         bool
 }
 
 func NewRepository(clock Clock) (*Repository, error) {
 	if clock == nil {
 		return nil, errors.New("usage memory repository clock is required")
 	}
-	return &Repository{clock: clock, values: make(map[string]usage.Evidence)}, nil
+	return &Repository{clock: clock, values: make(map[string]usage.Evidence), operationIndex: make(map[string]string)}, nil
 }
 
 func (r *Repository) Put(ctx context.Context, evidence usage.Evidence) error {
@@ -56,8 +57,43 @@ func (r *Repository) Put(ctx context.Context, evidence usage.Evidence) error {
 		}
 		return ErrConflict
 	}
+	if evidenceID, ok := r.operationIndex[evidence.OperationID]; ok {
+		previous, exists := r.values[evidenceID]
+		if !exists || previous.SandboxID != evidence.SandboxID || previous.AttemptID != evidence.AttemptID || previous.FencingToken != evidence.FencingToken || !reflect.DeepEqual(previous, evidence) {
+			return ErrConflict
+		}
+		return nil
+	}
 	r.values[evidence.EvidenceID] = evidence.Clone()
+	r.operationIndex[evidence.OperationID] = evidence.EvidenceID
 	return nil
+}
+
+func (r *Repository) GetByOperation(ctx context.Context, operationID string) (usage.Evidence, error) {
+	return r.GetEvidence(ctx, operationID, r.clock.Now().UTC())
+}
+
+func (r *Repository) GetEvidence(ctx context.Context, operationID string, now time.Time) (usage.Evidence, error) {
+	if err := contextError(ctx); err != nil {
+		return usage.Evidence{}, err
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if r.closed {
+		return usage.Evidence{}, ErrClosed
+	}
+	evidenceID, ok := r.operationIndex[operationID]
+	if !ok {
+		return usage.Evidence{}, ErrNotFound
+	}
+	evidence, ok := r.values[evidenceID]
+	if !ok || evidence.OperationID != operationID {
+		return usage.Evidence{}, ErrConflict
+	}
+	if now.IsZero() || !now.UTC().Before(evidence.RetainedUntil) {
+		return usage.Evidence{}, usage.ErrEvidenceExpired
+	}
+	return evidence.Clone(), nil
 }
 
 func (r *Repository) Get(ctx context.Context, evidenceID string) (usage.Evidence, error) {
@@ -78,6 +114,8 @@ func (r *Repository) Get(ctx context.Context, evidenceID string) (usage.Evidence
 	}
 	return evidence.Clone(), nil
 }
+
+var _ usage.EvidenceReader = (*Repository)(nil)
 
 func (r *Repository) Close() error {
 	r.mu.Lock()

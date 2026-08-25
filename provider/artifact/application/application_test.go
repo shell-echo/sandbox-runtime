@@ -60,6 +60,40 @@ func TestAcceptIsDurableBeforeExplicitDispatchAndReplayDoesNotRedispatch(t *test
 	}
 }
 
+func TestConcurrentDispatchCallsStagerOnce(t *testing.T) {
+	authority := newFakeAuthority()
+	stager := &fakeStager{stage: func(_ context.Context, request artifact.Request) (artifact.Evidence, error) {
+		return applicationEvidence(request, artifact.StatusStaged), nil
+	}}
+	app, _ := New(authority, stager, ClockFunc(func() time.Time { return applicationTestTime }))
+	request := applicationRequest("operation-concurrent", "key-concurrent")
+	_, _ = app.Accept(context.Background(), request)
+	const callers = 16
+	var wg sync.WaitGroup
+	wg.Add(callers)
+	errorsSeen := make(chan error, callers)
+	for range callers {
+		go func() {
+			defer wg.Done()
+			operation, err := app.Dispatch(context.Background(), request.OperationID)
+			if err == nil && operation.Status != artifact.OperationSucceeded {
+				err = errors.New("dispatch did not return succeeded operation")
+			}
+			errorsSeen <- err
+		}()
+	}
+	wg.Wait()
+	close(errorsSeen)
+	for err := range errorsSeen {
+		if err != nil {
+			t.Fatalf("concurrent Dispatch() error = %v", err)
+		}
+	}
+	if stager.calls != 1 {
+		t.Fatalf("Stage calls = %d, want 1", stager.calls)
+	}
+}
+
 func TestDispatchRecordsRejectedAndSourceMissingTruth(t *testing.T) {
 	for _, test := range []struct {
 		name       string
