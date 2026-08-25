@@ -37,7 +37,9 @@
         "artifact-staging-rejection-fixtures",
         "usage-evidence-schema",
         "usage-evidence-semantic-bounds",
-        "artifact-usage-protected-admission-bindings"
+        "artifact-usage-protected-admission-bindings",
+        "artifact-operation-read-schema",
+        "artifact-usage-read-state-matrix"
       ]
     }
   ],

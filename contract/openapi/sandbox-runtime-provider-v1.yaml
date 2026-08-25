@@ -511,7 +511,7 @@ paths:
             pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$'
       responses:
         '200':
-          description: Current provider-local operation state
+          description: Current provider-local operation state from the owning operation family, including artifact_stage operations
           content:
             application/json:
               schema:
@@ -535,7 +535,7 @@ paths:
               schema:
                 $ref: ../schemas/standard-error.schema.json
         '404':
-          description: Operation is not known to this provider revision
+          description: Operation is not known by any composed operation-family authority in this provider revision
           content:
             application/json:
               schema:
@@ -659,19 +659,35 @@ paths:
               schema:
                 $ref: ../schemas/standard-error.schema.json
         '404':
-          description: Artifact staging operation is not known to this provider revision
+          description: Artifact staging operation is unknown or completed with no evidence because its source was missing
+          x-error-codes:
+            - code: SANDBOX_ARTIFACT_EVIDENCE_NOT_FOUND
+              retryable: false
+              conditions: [unknown_operation, source_missing]
           content:
             application/json:
               schema:
                 $ref: ../schemas/standard-error.schema.json
         '410':
           description: Artifact staging evidence has expired
+          x-error-codes:
+            - code: SANDBOX_ARTIFACT_EVIDENCE_EXPIRED
+              retryable: false
+              conditions: [expired]
           content:
             application/json:
               schema:
                 $ref: ../schemas/standard-error.schema.json
         '503':
-          description: Provider is draining or temporarily unavailable
+          description: Artifact staging evidence is pending, the staging outcome is unknown and requires reconciliation, or the provider is temporarily unavailable
+          x-error-codes:
+            - code: SANDBOX_ARTIFACT_EVIDENCE_PENDING
+              retryable: true
+              conditions: [accepted, running]
+            - code: SANDBOX_ARTIFACT_OUTCOME_UNKNOWN
+              retryable: true
+              reconciliation_required: true
+              conditions: [outcome_unknown]
           headers:
             Retry-After:
               schema:
@@ -721,19 +737,31 @@ paths:
               schema:
                 $ref: ../schemas/standard-error.schema.json
         '404':
-          description: Usage evidence is not known to this provider revision
+          description: Usage evidence is not known for this provider-local operation
+          x-error-codes:
+            - code: SANDBOX_USAGE_EVIDENCE_NOT_FOUND
+              retryable: false
+              conditions: [unknown_operation, no_evidence]
           content:
             application/json:
               schema:
                 $ref: ../schemas/standard-error.schema.json
         '410':
           description: Usage evidence has expired
+          x-error-codes:
+            - code: SANDBOX_USAGE_EVIDENCE_EXPIRED
+              retryable: false
+              conditions: [expired]
           content:
             application/json:
               schema:
                 $ref: ../schemas/standard-error.schema.json
         '503':
-          description: Provider is draining or temporarily unavailable
+          description: Known usage evidence is not yet readable or the provider is temporarily unable to read it
+          x-error-codes:
+            - code: SANDBOX_USAGE_EVIDENCE_UNAVAILABLE
+              retryable: true
+              conditions: [known_not_yet_readable, temporarily_unavailable]
           headers:
             Retry-After:
               schema:

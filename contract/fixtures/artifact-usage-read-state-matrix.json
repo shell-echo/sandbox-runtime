@@ -1,0 +1,29 @@
+{
+  "provider_operation_read": {
+    "route": "GET /v1/operations/{operation_id}",
+    "operation_types": ["create", "exec", "cancel_exec", "open_runtime_session", "artifact_stage"],
+    "artifact_stage_known_status": 200,
+    "unknown_after_all_family_readers_status": 404
+  },
+  "artifact_evidence": {
+    "unknown_operation": {"status": 404, "code": "SANDBOX_ARTIFACT_EVIDENCE_NOT_FOUND", "retryable": false},
+    "source_missing": {"operation_status": "failed", "operation_read_status": 200, "status": 404, "code": "SANDBOX_ARTIFACT_EVIDENCE_NOT_FOUND", "retryable": false},
+    "accepted": {"operation_status": "accepted", "operation_read_status": 200, "status": 503, "code": "SANDBOX_ARTIFACT_EVIDENCE_PENDING", "retryable": true, "retry_after_required": true},
+    "running": {"operation_status": "running", "operation_read_status": 200, "status": 503, "code": "SANDBOX_ARTIFACT_EVIDENCE_PENDING", "retryable": true, "retry_after_required": true},
+    "outcome_unknown": {"operation_status": "outcome_unknown", "operation_read_status": 200, "status": 503, "code": "SANDBOX_ARTIFACT_OUTCOME_UNKNOWN", "retryable": true, "retry_after_required": true, "reconciliation_required": true},
+    "staged": {"operation_status": "succeeded", "operation_read_status": 200, "status": 200, "evidence_status": "staged"},
+    "content_rejected": {"operation_status": "failed", "operation_read_status": 200, "status": 200, "evidence_status": "rejected"},
+    "expired": {"status": 410, "code": "SANDBOX_ARTIFACT_EVIDENCE_EXPIRED", "retryable": false}
+  },
+  "usage_evidence": {
+    "unknown_or_absent": {"status": 404, "code": "SANDBOX_USAGE_EVIDENCE_NOT_FOUND", "retryable": false},
+    "known_not_yet_readable": {"status": 503, "code": "SANDBOX_USAGE_EVIDENCE_UNAVAILABLE", "retryable": true, "retry_after_required": true},
+    "temporarily_unavailable": {"status": 503, "code": "SANDBOX_USAGE_EVIDENCE_UNAVAILABLE", "retryable": true, "retry_after_required": true},
+    "available_reconciliation_statuses": {"values": ["complete", "partial", "unknown"], "status": 200},
+    "expired": {"status": 410, "code": "SANDBOX_USAGE_EVIDENCE_EXPIRED", "retryable": false}
+  },
+  "read_admission": {
+    "descriptor_fields": ["operation", "sandbox_id", "operation_id", "attempt_id", "fencing_token"],
+    "mutation_guard_consumed": false
+  }
+}

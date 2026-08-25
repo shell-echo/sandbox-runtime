@@ -48,8 +48,8 @@
     "encoded_body_too_large_status": 400,
     "unsafe_or_unprojectable_internal_failure_status": 503,
     "forbidden_pre_accept_statuses": [413, 500],
-    "staged": {"operation_status": "succeeded", "evidence_status": "staged", "evidence_read_status": 200},
-    "content_rejected": {"operation_status": "failed", "evidence_status": "rejected", "evidence_read_status": 200},
-    "source_missing": {"operation_status": "failed", "evidence_status": "absent", "evidence_read_status": 404}
+    "staged": {"operation_status": "succeeded", "operation_read_status": 200, "evidence_status": "staged", "evidence_read_status": 200},
+    "content_rejected": {"operation_status": "failed", "operation_read_status": 200, "evidence_status": "rejected", "evidence_read_status": 200},
+    "source_missing": {"operation_status": "failed", "operation_read_status": 200, "evidence_status": "absent", "evidence_read_status": 404}
   }
 }
