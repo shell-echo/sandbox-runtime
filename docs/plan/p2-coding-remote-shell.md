@@ -21,8 +21,10 @@ passed all three jobs. P2.3c2 adds independent durable session authority
 adapters on `main@e5c9dec`. Post-push CI #103 / run `32698606341` passed all
 three jobs; Node.js 20 deprecation warnings remain. P2.3c3 implementation
 commit `186190b` and post-push CI run `32799871307` passed all three jobs.
-ADR 0009 records the ownership boundary and ADR 0010 records the bounded exec
-Contract decision.
+P2.3c4 implementation commit `e675cb9` and post-push CI run `32801539995`
+also passed all three jobs; the latter closes only bounded Gateway component
+evidence. ADR 0009 records the ownership boundary and ADR 0010 records the
+bounded exec Contract decision.
 
 ## Authority stop condition
 
@@ -31,10 +33,12 @@ a strict zero-or-terminal-only capability mapping. The default remains zero
 advertisement; a terminal advertisement must associate its version and profile
 with an explicit runtime profile. The protected routes are opt-in: the
 transport accepts an independently composed session application, while the
-command composition root still creates none by default. This slice adds no
-Gateway, allocator, runtime driver, or WebSocket data plane. The architecture
-narrative is not sufficient authority to implement behavior beyond the locked
-resources and this delivery order.
+command composition root still creates none by default. P2.0-P2.3c3 add no
+Gateway, allocator, runtime driver, or WebSocket data plane. P2.3c4 is an
+independently owned Gateway component boundary and does not compose a Provider
+runtime or claim a production WebSocket wire. The architecture narrative is
+not sufficient authority to implement behavior beyond the locked resources and
+this delivery order.
 
 Before runtime behavior changes, this slice must:
 
@@ -78,7 +82,8 @@ acceptance, result retention, cancellation, reconciliation, or backend adapter.
   restart, and compare-and-set evidence; no transport or dispatch);
 - P2.3c3: protected transport projection and opaque handoff retrieval (passed
   for bounded Provider transport evidence in `186190b`; CI run `32799871307`);
-- P2.3c4: separately owned Runtime Gateway integration evidence;
+- P2.3c4: separately owned Runtime Gateway integration evidence (bounded
+  component evidence passed in `e675cb9`; post-push CI `32801539995`);
 - P2.4: artifact staging and usage evidence.
 
 Each implementation slice requires its own focused tests, race/shuffle suite,
@@ -155,5 +160,14 @@ states; endpoint non-disclosure and reserved-route regression tests are
 included. The command composition root still leaves this application nil, so
 no allocator, runtime driver, WebSocket data plane, or Gateway is started.
 P2.3c3 is closed for bounded Provider transport evidence by implementation
-commit `186190b` and post-push CI `32799871307`; P2.3c4 is the next
-implementation entry.
+commit `186190b` and post-push CI `32799871307`. P2.3c4 now adds an
+independently owned Gateway boundary with caller/tenant/session authorization
+binding, opaque reference resolution, bidirectional frame proxying, bounded
+reconnect, expiry and generation checks, revocation interruption, and
+metadata-only audit recording. Local race/shuffle, vet, dependency-boundary,
+and diff checks passed; implementation commit `e675cb9` and post-push CI
+`32801539995` passed all three jobs. This closes P2.3c4 for bounded Gateway
+component evidence only. A concrete WebSocket wire adapter, external caller
+E2E, distributed revocation, multi-controller reliability, deployment,
+tenancy, and production readiness remain unproven; P3 migration readiness and
+external-caller integration is the next entry.
