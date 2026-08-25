@@ -36,7 +36,8 @@
         "artifact-staging-semantic-bounds",
         "artifact-staging-rejection-fixtures",
         "usage-evidence-schema",
-        "usage-evidence-semantic-bounds"
+        "usage-evidence-semantic-bounds",
+        "artifact-usage-protected-admission-bindings"
       ]
     }
   ],

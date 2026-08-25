@@ -37,7 +37,7 @@
     "work_order_id": {"type": "string", "minLength": 1, "maxLength": 200},
     "policy_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "policy_decided_at": {"type": "string", "format": "date-time"},
-    "operation": {"enum": ["create", "restore", "read_sandbox", "set_desired_state", "extend_lease", "exec", "cancel_exec", "open_runtime_session", "snapshot", "terminate", "read_operation", "read_result", "read_runtime_session", "read_snapshot_manifest", "read_events"]},
+    "operation": {"enum": ["create", "restore", "read_sandbox", "set_desired_state", "extend_lease", "exec", "cancel_exec", "open_runtime_session", "stage_artifact", "snapshot", "terminate", "read_operation", "read_result", "read_runtime_session", "read_artifact_staging_evidence", "read_usage_evidence", "read_snapshot_manifest", "read_events"]},
     "sandbox_id": {"type": "string", "minLength": 1, "maxLength": 200},
     "operation_id": {"type": "string", "minLength": 1, "maxLength": 200},
     "attempt_id": {"type": "string", "minLength": 1, "maxLength": 200},

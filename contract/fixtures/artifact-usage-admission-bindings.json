@@ -1,0 +1,53 @@
+{
+  "bindings": [
+    {
+      "operation": "stage_artifact",
+      "method": "POST",
+      "path": "/v1/sandboxes/sandbox-1/artifacts:stage",
+      "request_contract_id": "urn:shell-echo:sandbox-runtime:request:stage-artifact:v1",
+      "request_digest_profile": "rfc8785-request-excluding-request-digest-v1",
+      "mutation": true
+    },
+    {
+      "operation": "read_artifact_staging_evidence",
+      "method": "GET",
+      "path": "/v1/operations/artifact-operation-1/artifact-staging-evidence",
+      "request_contract_id": "urn:shell-echo:sandbox-runtime:descriptor:artifact-staging-evidence:v1",
+      "request_digest_profile": "rfc8785-full-document-v1",
+      "descriptor_document": {
+        "operation": "read_artifact_staging_evidence",
+        "sandbox_id": "sandbox-1",
+        "operation_id": "artifact-operation-1",
+        "attempt_id": "artifact-attempt-1",
+        "fencing_token": 3
+      },
+      "request_digest": "sha256:a4dab0ecaeb1d468b1ebfbc692c323b71aa312af72d1e441084bde8caa7f6eee",
+      "mutation": false
+    },
+    {
+      "operation": "read_usage_evidence",
+      "method": "GET",
+      "path": "/v1/operations/exec-operation-1/usage-evidence",
+      "request_contract_id": "urn:shell-echo:sandbox-runtime:descriptor:usage-evidence:v1",
+      "request_digest_profile": "rfc8785-full-document-v1",
+      "descriptor_document": {
+        "operation": "read_usage_evidence",
+        "sandbox_id": "sandbox-1",
+        "operation_id": "exec-operation-1",
+        "attempt_id": "exec-attempt-1",
+        "fencing_token": 2
+      },
+      "request_digest": "sha256:7bf584fccaad6f956d9a4725075c3cef92b7135f0010fc20e6a858f1e0246e52",
+      "mutation": false
+    }
+  ],
+  "rejected_operations": ["artifact_stage", "unknown"],
+  "acceptance_semantics": {
+    "encoded_body_too_large_status": 400,
+    "unsafe_or_unprojectable_internal_failure_status": 503,
+    "forbidden_pre_accept_statuses": [413, 500],
+    "staged": {"operation_status": "succeeded", "evidence_status": "staged", "evidence_read_status": 200},
+    "content_rejected": {"operation_status": "failed", "evidence_status": "rejected", "evidence_read_status": 200},
+    "source_missing": {"operation_status": "failed", "evidence_status": "absent", "evidence_read_status": 404}
+  }
+}

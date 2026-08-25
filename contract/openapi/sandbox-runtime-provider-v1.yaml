@@ -294,7 +294,7 @@ paths:
               schema:
                 $ref: ../schemas/provider-operation.schema.json
         '400':
-          description: Artifact staging request document or metadata is invalid
+          description: Artifact staging request document or metadata is invalid, including an encoded body over the operation limit
           content:
             application/json:
               schema:
@@ -330,7 +330,7 @@ paths:
               schema:
                 $ref: ../schemas/standard-error.schema.json
         '503':
-          description: Provider is draining or temporarily unavailable
+          description: Provider is draining, temporarily unavailable, or cannot safely complete durable acceptance
           headers:
             Retry-After:
               schema:
