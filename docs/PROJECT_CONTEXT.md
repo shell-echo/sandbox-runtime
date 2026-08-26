@@ -129,10 +129,10 @@ multi-tenant, deployment, and production readiness.
 
 ## Current Snapshot
 
-This snapshot was audited on 2026-08-26 against local implementation evidence
-baseline `de18787`. P2.5d repository CI is pending; the latest verified remote
-CI baseline remains P2.5c evidence commit `9b10abd`. These baselines identify
-reviewed evidence; they are not self-updating assertions about the checkout.
+This snapshot was audited on 2026-08-26 against P2.5d implementation commit
+`de18787` and evidence baseline `e3a8265`. Repository CI `32929140044` passed
+for that evidence baseline. These baselines identify reviewed evidence; they
+are not self-updating assertions about the checkout.
 
 Contract identity:
 
@@ -148,7 +148,7 @@ Contract identity:
 | P1.1 | Passed for DTO, mTLS discovery, JWS/digest/replay/fencing admission | Does not prove runtime behavior or production identity infrastructure |
 | P1.2 | Passed for the bounded Contract-authorized lifecycle subset and development composition | Provider lifecycle has fake and Docker development adapters; reserved lifecycle families and production gates remain open |
 | P2.1-P2.4a3 | Bounded exec, result, terminal, Gateway, artifact, usage, admission, application, persistence, and transport components have local Contract/CI evidence | P2 is not vertically composed into a real coding/shell Provider and no independent caller E2E environment exists |
-| P2.5a-d | Plan, coding/shell Contract/profile, mutation preflight, and Provider Docker runtime foundation pass local gates; P2.5b-c CI passes and P2.5d CI is pending | Exec/session/artifact/usage verticals and nonempty startup advertisement remain disabled; P2.5e-i are open |
+| P2.5a-d | Plan, coding/shell Contract/profile, mutation preflight, and Provider Docker runtime foundation pass their local and CI gates | Exec/session/artifact/usage verticals and nonempty startup advertisement remain disabled; P2.5e-i are open |
 | P3 | Local revision binding, shadow-validation, canary/rollback/drain, and metrics primitives passed component tests | P2 gate, external caller, real traffic parity, canary, rollback, and old-run drain E2E remain open |
 | P4 | Optional capability profiles have not started | Each browser/desktop/forwarding/snapshot/GPU/isolation profile needs independent Contract, security, and conformance gates |
 
@@ -157,9 +157,9 @@ multi-controller reliability, hostile multi-tenant security, deployment, and
 production operations remain separate and unproven even after a future P2/P3
 E2E passes.
 
-The latest verified repository CI for `9b10abd` is run `32926181615`; its
-`provider-contract`, `test`, and `docker-integration` jobs passed. This remains
-CI evidence, not independent caller or production evidence.
+The latest verified implementation/evidence CI for `e3a8265` is run
+`32929140044`; its `provider-contract`, `test`, and `docker-integration` jobs
+passed. This remains CI evidence, not independent caller or production evidence.
 
 ## Current P2 Blockers
 
@@ -193,8 +193,8 @@ create/session bounded strict decode ahead of mutation guard reservation and
 bind the regression into the locked Suite runner; local gates and CI
 `32926181615` pass. P2.5d commit `de18787` adds the independent Provider Docker
 lifecycle adapter and passes its local fault/restart, full Go, Contract/Suite,
-and real Docker integration gates; repository CI is pending. Capability
-advertisement remains empty. The next implementation slice after CI is P2.5e:
+and real Docker integration gates; CI `32929140044` passed all three jobs.
+Capability advertisement remains empty. The next implementation slice is P2.5e:
 
 1. Compose exec HTTP through durable acceptance, coordination, execution,
    cancellation, result reads, and usage evidence.
