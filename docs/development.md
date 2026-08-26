@@ -64,6 +64,19 @@ Contract lock verification proves only the identity of consumed inputs. Unit
 tests prove components. Conformance, multi-controller reliability, security,
 deployment, and production readiness remain separate evidence tiers.
 
+## Composition and advertisement discipline
+
+Provider lifecycle, exec, terminal/Gateway, artifact/usage, and capability
+advertisement are separate readiness boundaries. Development exec composition
+requires the Provider Docker lifecycle runtime and its own durable file ledger;
+it must not reuse local `/instances` persistence. Production continues to
+reject the development Provider lifecycle and exec adapters.
+
+Keep startup advertisement empty until the complete P2.5h dependency graph and
+its named gates pass. A composed route, a Contract projection, a local Suite
+mapping, and CI are distinct evidence and none substitutes for the independent
+P2.5i caller/platform E2E gate.
+
 ## Change and review discipline
 
 Keep changes scoped to one delivery slice and state its non-goals. New behavior

@@ -38,6 +38,9 @@ Currently implemented:
   listener
 - default-disabled protected-operation admission with frozen public-key files
   and a single-controller replay/fencing guard
+- default-disabled, development-only Provider exec composition over the Docker
+  lifecycle runtime, a separate durable ledger, bounded private output capture,
+  cancellation, result expiry, and restart reconciliation
 
 Planned but not yet implemented:
 
@@ -162,9 +165,12 @@ content-addressed snapshot/restore compatibility profile. That compatibility
 metadata does not advertise or authorize snapshot, restore, or another runtime
 capability. The `protected_admission` configuration is independently disabled
 by default. When explicitly enabled with an immutable public-key bundle and a
-durable guard state file, it adds the protected-operation admission boundary but
-still stops after admission with a bounded Provider error. It does not dispatch
-repository, driver, lifecycle, or P1.2 operation-ledger work.
+durable guard state file, it adds the protected-operation admission boundary.
+Individually enabled Provider lifecycle and exec applications may then compose
+only their locked routes. Exec requires the Provider Docker lifecycle runtime
+and its own file ledger; the development adapters remain rejected in production.
+Terminal/Gateway and artifact/usage runtime composition remain absent, and
+startup still advertises no runtime capability.
 
 Capability discovery has no query parameters or request document. For request
 metadata visible to the handler, a query string (including a bare trailing
@@ -499,7 +505,7 @@ visibility.
 - [x] validate Provider DTOs and fixtures against the locked local Contract
 - [x] implement mTLS-only capability discovery
 - [x] implement per-operation JWS and request/descriptor digest admission
-  boundary; protected operations still stop before lifecycle dispatch
+  boundary across the individually composed Provider routes
 
 ### Provider lifecycle
 
@@ -508,7 +514,11 @@ visibility.
 - [x] compose the authorized Provider lifecycle application for development (production driver and readiness remain gated)
 - [x] add an independent Provider Docker lifecycle adapter with stable mounts,
   restart observation, unknown-outcome evidence, and cleanup
+- [x] compose development exec/cancel/result routes over durable acceptance,
+  Docker execution, bounded private capture, expiry, and reconciliation
 - [x] pass the locked local lifecycle/security Suite mappings (component evidence only)
+- [ ] compose terminal/Gateway and artifact/usage verticals
+- [ ] derive nonempty advertisement from complete readiness
 - [ ] pass the independent caller release gate
 
 ### Manifest and blocks

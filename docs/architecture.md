@@ -350,14 +350,14 @@ vertical and its release gates are not yet implemented:
 
 | Area | Current state | Required direction |
 | --- | --- | --- |
-| Backend abstraction | Local `instance.Driver` remains separate; the Provider lifecycle has its own fake and Docker development adapters. | Add Provider-specific optional exec/session/snapshot capability ports without reusing `/instances` models. |
+| Backend abstraction | Local `instance.Driver` remains separate; the Provider lifecycle has its own fake and Docker development adapters, and exec uses focused Provider-only runtime ports. | Add session/snapshot capability ports without reusing `/instances` models and retain narrow optional interfaces. |
 | Lifecycle recovery | Provider file persistence and Docker observation reconcile pending/unknown create work for one controller. | Retain unknown-outcome evidence; add transactional production storage before multi-controller operation. |
 | Persistence | Memory and atomically replaced file repository. | Retain for development; introduce transactional production storage before multi-controller operation. |
-| API | Local `/instances` and the protected Provider v1 surface are separate; authorized lifecycle/session/artifact/usage routes have bounded projections. | Complete runtime application dispatch and resumable event composition without expanding Contract authority. |
+| API | Local `/instances` and the protected Provider v1 surface are separate; authorized lifecycle/session/artifact/usage routes have bounded projections, and development exec routes now reach a real Docker executor. | Complete terminal/Gateway and artifact/usage dispatch without expanding Contract authority. |
 | Capabilities | Empty, terminal-only, and atomic coding/shell snapshots are locked; command startup remains empty by default. | Advertise the coding/shell profile only after all P2.5h dependencies pass. |
-| Execution | Bounded Contract/domain/coordinator/ledger components exist without a real executor. | Complete P2.5e dispatch, cancellation, retained result, reconciliation, and usage integration. |
+| Execution | P2.5e locally composes durable exec/cancel/result/operation handling with real Docker execution, private bounded capture, cancellation, expiry, and reconciliation for one development controller. | Obtain CI, retain the recovery/correlation gates, and complete real usage collection in P2.5g; do not advertise before P2.5h. |
 | Terminal | Session authority and Gateway components exist without a real allocator or WebSocket adapter. | Complete P2.5f opaque handoff and data-plane composition. |
-| Workspace | The Provider Docker development adapter supplies `/inputs`, `/workspace`, `/outputs`, and bounded tmpfs `/tmp` with owned cleanup. | Add exec/artifact consumers, capacity enforcement, and stronger isolation evidence. |
+| Workspace | The Provider Docker development adapter supplies `/inputs`, `/workspace`, `/outputs`, and bounded tmpfs `/tmp` with owned cleanup; exec consumes that runtime without exposing host paths. | Add artifact consumers, capacity enforcement, and stronger isolation evidence. |
 | Security | Docker defaults already drop capabilities, use non-root/read-only root, disable networking, and limit resources. | Add policy enforcement, stronger isolation profiles, secret grants, egress controls, audit evidence, and production auth. |
 | Events and usage | Durable lifecycle events and bounded usage-evidence components exist without a complete runtime collector composition. | Complete collection/reconciliation while leaving platform accounting authority outside the Provider. |
 | Snapshots/browser/desktop | Not implemented and not advertised. | Keep optional until implemented and independently conformant. |

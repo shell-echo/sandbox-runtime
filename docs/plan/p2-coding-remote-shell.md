@@ -315,3 +315,21 @@ compatibility, aggregate conformance, multi-controller reliability,
 multi-tenant security, deployment, or production readiness. The P2 release gate
 remains open until a separately supplied external caller executes the locked
 surface end to end.
+
+## P2.5 Vertical Composition Status
+
+P2.5a-d have completed the composition plan, locked coding/shell Contract
+profile, mutation preflight ordering, and Provider Docker runtime foundation;
+their latest CI evidence is run `32929140044`. P2.5e commit `5917a57` now
+locally composes the protected exec/cancel/result/operation surface over
+durable acceptance, independent persistence, real Docker execution and
+cancellation, bounded private output capture, result expiry, and restart/on-
+demand reconciliation. Its full Go, Contract verifier, locked 38-case Suite,
+focused race, diff, and live Docker integration gates passed locally; CI has
+not run.
+
+This does not close P2. Terminal/Gateway composition is next in P2.5f,
+artifact/usage remains P2.5g, readiness-derived nonempty advertisement remains
+P2.5h, and the independently supplied caller/platform E2E remains P2.5i.
+Aggregate conformance, multi-controller reliability, multi-tenant security,
+deployment, and production readiness remain independent unproven gates.
