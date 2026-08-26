@@ -491,6 +491,50 @@ func TestEnabledProviderDockerLifecycleRequiresPinnedBoundedPersistentConfigurat
 	}
 }
 
+func TestEnabledProviderExecRequiresDockerLifecycleAndIndependentFileLedger(t *testing.T) {
+	valid := validEnabledProviderConfig()
+	valid.ProtectedAdmission = validProtectedAdmissionConfig()
+	valid.Lifecycle = validProviderDockerLifecycleConfig()
+	valid.Exec = ProviderExecConfig{Enabled: true, RepositoryFile: "data/provider-exec.json"}
+	if err := valid.Validate(); err != nil {
+		t.Fatalf("valid Provider exec configuration: %v", err)
+	}
+
+	tests := map[string]func(*ProviderConfig){
+		"missing protected admission": func(c *ProviderConfig) { c.ProtectedAdmission.Enabled = false },
+		"disabled lifecycle":          func(c *ProviderConfig) { c.Lifecycle.Enabled = false },
+		"fake lifecycle":              func(c *ProviderConfig) { c.Lifecycle.Driver = ProviderLifecycleFakeDriver },
+		"memory lifecycle repository": func(c *ProviderConfig) { c.Lifecycle.Repository.Driver = ProviderLifecycleMemoryRepository },
+		"missing exec repository":     func(c *ProviderConfig) { c.Exec.RepositoryFile = " " },
+	}
+	for name, mutate := range tests {
+		t.Run(name, func(t *testing.T) {
+			candidate := valid
+			mutate(&candidate)
+			if err := candidate.Validate(); err == nil {
+				t.Fatal("invalid Provider exec configuration was accepted")
+			}
+		})
+	}
+}
+
+func validProviderDockerLifecycleConfig() ProviderLifecycleConfig {
+	return ProviderLifecycleConfig{
+		Enabled: true, Driver: ProviderLifecycleDockerDriver,
+		Repository: ProviderLifecycleRepositoryConfig{
+			Driver: ProviderLifecycleFileRepository,
+			File:   ProviderLifecycleRepositoryFileConfig{Path: "data/provider-lifecycle.json"},
+		},
+		Docker: ProviderLifecycleDockerConfig{
+			Image: "example/shell@sha256:" + strings.Repeat("a", 64), PullPolicy: "if_not_present",
+			MemoryBytes: 512 << 20, NanoCPUs: 1_000_000_000, PidsLimit: 256, TmpfsBytes: 64 << 20,
+			OperationTimeoutSeconds: 30, PullTimeoutSeconds: 300, StopTimeoutSeconds: 10,
+			User: "65532:65532", Command: []string{"sleep", "3600"}, DataRoot: "data/provider-runtime",
+			Namespace: "provider-dev", ControllerID: "controller-one",
+		},
+	}
+}
+
 func TestEnabledProviderProfileCharacterAndCountBoundaries(t *testing.T) {
 	for _, test := range []struct {
 		name      string

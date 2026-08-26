@@ -280,7 +280,8 @@ func operationViewProjection(view provideroperation.View) (providerv1.Operation,
 	projected := providerv1.Operation{
 		OperationID: view.OperationID, AttemptID: view.AttemptID, FencingToken: view.FencingToken,
 		SandboxID: view.SandboxID, Type: providerv1.OperationType(view.Type), Status: providerv1.OperationState(view.Status),
-		ProviderOperationID: view.ProviderOperationID, ObservedAt: view.ObservedAt.UTC().Format(time.RFC3339Nano),
+		ProviderOperationID: view.ProviderOperationID, ResultReference: view.ResultReference,
+		ObservedAt: view.ObservedAt.UTC().Format(time.RFC3339Nano),
 	}
 	if view.Failure != nil {
 		code := strings.ToUpper(strings.ReplaceAll(view.Failure.Code, "-", "_"))
@@ -299,6 +300,9 @@ func operationViewProjection(view provideroperation.View) (providerv1.Operation,
 func operationErrorMessage(code string) string {
 	if code == "SANDBOX_ARTIFACT_OUTCOME_UNKNOWN" {
 		return artifactErrorMessage(code)
+	}
+	if strings.HasPrefix(code, "SANDBOX_EXEC_") {
+		return execErrorMessage(code)
 	}
 	return lifecycleErrorMessage(code)
 }

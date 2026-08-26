@@ -20,6 +20,14 @@ type Repository struct {
 func NewRepository() *Repository { return &Repository{state: repository.NewState()} }
 
 func (r *Repository) ReserveExecution(ctx context.Context, request providerexec.Request, dispatch ...providerexec.Dispatch) (providerexec.ExecutionReservation, error) {
+	acceptedAt := time.Now().UTC()
+	if len(dispatch) == 1 {
+		acceptedAt = dispatch[0].AcceptedAt
+	}
+	return r.ReserveExecutionAt(ctx, request, acceptedAt, dispatch...)
+}
+
+func (r *Repository) ReserveExecutionAt(ctx context.Context, request providerexec.Request, acceptedAt time.Time, dispatch ...providerexec.Dispatch) (providerexec.ExecutionReservation, error) {
 	if err := repository.ContextError(ctx); err != nil {
 		return providerexec.ExecutionReservation{}, err
 	}
@@ -27,10 +35,6 @@ func (r *Repository) ReserveExecution(ctx context.Context, request providerexec.
 	defer r.mu.Unlock()
 	if err := r.checkOpen(ctx); err != nil {
 		return providerexec.ExecutionReservation{}, err
-	}
-	acceptedAt := time.Now().UTC()
-	if len(dispatch) == 1 {
-		acceptedAt = dispatch[0].AcceptedAt
 	}
 	return r.state.ReserveExecutionAt(request, acceptedAt, dispatch...)
 }
@@ -59,7 +63,23 @@ func (r *Repository) GetExecution(ctx context.Context, operationID string) (prov
 	return r.state.GetExecution(operationID)
 }
 
+func (r *Repository) ListExecutions(ctx context.Context) ([]providerexec.ExecutionRecord, error) {
+	if err := repository.ContextError(ctx); err != nil {
+		return nil, err
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if r.closed {
+		return nil, repository.ErrClosed
+	}
+	return r.state.ListExecutions(), nil
+}
+
 func (r *Repository) ReserveCancellation(ctx context.Context, intent providerexec.CancellationIntent) (providerexec.CancellationReservation, error) {
+	return r.ReserveCancellationAt(ctx, intent, time.Now().UTC())
+}
+
+func (r *Repository) ReserveCancellationAt(ctx context.Context, intent providerexec.CancellationIntent, acceptedAt time.Time) (providerexec.CancellationReservation, error) {
 	if err := repository.ContextError(ctx); err != nil {
 		return providerexec.CancellationReservation{}, err
 	}
@@ -68,7 +88,7 @@ func (r *Repository) ReserveCancellation(ctx context.Context, intent providerexe
 	if err := r.checkOpen(ctx); err != nil {
 		return providerexec.CancellationReservation{}, err
 	}
-	return r.state.ReserveCancellation(intent, time.Now().UTC())
+	return r.state.ReserveCancellation(intent, acceptedAt)
 }
 
 func (r *Repository) GetCancellation(ctx context.Context, operationID string) (providerexec.CancellationIntent, error) {
@@ -81,6 +101,18 @@ func (r *Repository) GetCancellation(ctx context.Context, operationID string) (p
 		return providerexec.CancellationIntent{}, repository.ErrClosed
 	}
 	return r.state.GetCancellation(operationID)
+}
+
+func (r *Repository) GetCancellationReservation(ctx context.Context, operationID string) (providerexec.CancellationReservation, error) {
+	if err := repository.ContextError(ctx); err != nil {
+		return providerexec.CancellationReservation{}, err
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if r.closed {
+		return providerexec.CancellationReservation{}, repository.ErrClosed
+	}
+	return r.state.GetCancellationReservation(operationID)
 }
 
 func (r *Repository) StoreResult(ctx context.Context, result providerexec.Result) error {

@@ -2,6 +2,7 @@ package file
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -121,8 +122,8 @@ func TestRepositoryPersistsReservationBeforeAttachAcrossRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 	request, _ := fileExecution()
-	reserved, err := r.ReserveExecution(context.Background(), request)
-	if err != nil || reserved.Execution.Attached {
+	reserved, err := r.ReserveExecutionAt(context.Background(), request, fileTestTime)
+	if err != nil || reserved.Execution.Attached || !reserved.Execution.ReservedAt.Equal(fileTestTime) {
 		t.Fatalf("reservation = %#v, %v", reserved, err)
 	}
 	if err := r.Close(); err != nil {
@@ -178,5 +179,61 @@ func TestRepositoryAttachHonorsCanceledContext(t *testing.T) {
 	}
 	if _, err := r.AttachExecution(ctx, attachment); !errors.Is(err, context.Canceled) {
 		t.Fatalf("canceled attach = %v", err)
+	}
+}
+
+func TestRepositoryMigratesVersionOneSnapshotOnNextMutation(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "exec.json")
+	state := repository.NewState()
+	request, dispatch := fileExecution()
+	if _, err := state.ReserveExecution(request, dispatch); err != nil {
+		t.Fatal(err)
+	}
+	intent := providerexec.CancellationIntent{
+		SandboxID: request.SandboxID, OperationID: "cancel-file", AttemptID: "cancel-attempt", FencingToken: 2, ExpectedGeneration: 1,
+		IdempotencyKey: "cancel-file-key", RequestDigest: "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+		Deadline: time.Now().UTC().Add(time.Hour), TargetOperationID: request.OperationID, TargetAttemptID: request.AttemptID, Reason: providerexec.CancellationShutdown,
+	}
+	if _, err := state.ReserveCancellation(intent, fileTestTime.Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	snapshot := state.Export()
+	snapshot.Version = 1
+	snapshot.CancellationReservedAt = nil
+	for operationID, record := range snapshot.Executions {
+		record.Terminal = nil
+		snapshot.Executions[operationID] = record
+	}
+	encoded, err := json.Marshal(snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, encoded, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	r, err := NewRepository(path)
+	if err != nil {
+		t.Fatalf("open version 1 repository: %v", err)
+	}
+	reservation, err := r.GetCancellationReservation(context.Background(), intent.OperationID)
+	if err != nil || !reservation.ReservedAt.Equal(fileTestTime) {
+		t.Fatalf("migrated reservation = %#v, %v", reservation, err)
+	}
+	second := request.Clone()
+	second.OperationID, second.AttemptID, second.IdempotencyKey = "operation-file-two", "attempt-file-two", "file-key-two"
+	second.RequestDigest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	if _, err := r.ReserveExecution(context.Background(), second); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Close(); err != nil {
+		t.Fatal(err)
+	}
+	var rewritten repository.PersistedState
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(content, &rewritten); err != nil || rewritten.Version != 2 || rewritten.CancellationReservedAt[intent.OperationID].IsZero() {
+		t.Fatalf("rewritten snapshot = %#v, %v", rewritten, err)
 	}
 }

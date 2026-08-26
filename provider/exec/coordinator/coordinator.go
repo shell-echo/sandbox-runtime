@@ -16,6 +16,8 @@ var (
 	ErrInvalidCoordinator = errors.New("invalid exec coordinator")
 )
 
+const cancellationPersistenceTimeout = 5 * time.Second
+
 // Clock keeps acceptance and cancellation completion times deterministic in
 // component tests.
 type Clock interface {
@@ -26,11 +28,9 @@ type ClockFunc func() time.Time
 
 func (f ClockFunc) Now() time.Time { return f() }
 
-// Canceler is an optional provider-local capability. The attachment contains
-// only bounded identity and an opaque execution receipt.
-type Canceler interface {
-	Cancel(context.Context, providerexec.ExecutionAttachment) error
-}
+// Canceler remains an exported alias for callers built against the P2.2c
+// coordinator boundary.
+type Canceler = providerexec.Canceler
 
 // CancellationStatus describes what this coordinator can prove. A durable
 // intent is not proof of process cancellation.
@@ -49,15 +49,25 @@ type CancellationResult struct {
 type Coordinator struct {
 	repository repository.Repository
 	executor   providerexec.Executor
-	canceler   Canceler
+	observer   providerexec.Observer
+	canceler   providerexec.Canceler
+	cleaner    providerexec.ResultCleaner
 	clock      Clock
 }
 
 func New(repo repository.Repository, executor providerexec.Executor, clock Clock, canceler Canceler) (*Coordinator, error) {
+	return NewWithRuntime(repo, executor, nil, canceler, nil, clock)
+}
+
+func NewWithObserver(repo repository.Repository, executor providerexec.Executor, observer providerexec.Observer, clock Clock, canceler providerexec.Canceler) (*Coordinator, error) {
+	return NewWithRuntime(repo, executor, observer, canceler, nil, clock)
+}
+
+func NewWithRuntime(repo repository.Repository, executor providerexec.Executor, observer providerexec.Observer, canceler providerexec.Canceler, cleaner providerexec.ResultCleaner, clock Clock) (*Coordinator, error) {
 	if repo == nil || executor == nil || clock == nil {
 		return nil, ErrInvalidCoordinator
 	}
-	return &Coordinator{repository: repo, executor: executor, canceler: canceler, clock: clock}, nil
+	return &Coordinator{repository: repo, executor: executor, observer: observer, canceler: canceler, cleaner: cleaner, clock: clock}, nil
 }
 
 // Start durably reserves an execution before invoking the executor. Replayed
@@ -74,7 +84,7 @@ func (c *Coordinator) Start(ctx context.Context, request providerexec.Request) (
 	if err := request.Validate(now); err != nil {
 		return providerexec.ExecutionReservation{}, err
 	}
-	reservation, err := c.repository.ReserveExecution(ctx, request)
+	reservation, err := c.repository.ReserveExecutionAt(ctx, request, now)
 	if err != nil || reservation.Replayed {
 		return reservation, err
 	}
@@ -108,7 +118,7 @@ func (c *Coordinator) Start(ctx context.Context, request providerexec.Request) (
 	if err != nil {
 		// The executor has already been called. The durable reservation remains
 		// unattached and retries deliberately do not dispatch again.
-		return reservation, err
+		return reservation, errors.Join(providerexec.ErrDispatchUnknown, err)
 	}
 	return attached, nil
 }
@@ -137,6 +147,16 @@ func (c *Coordinator) GetCancellation(ctx context.Context, operationID string) (
 	return c.repository.GetCancellation(ctx, operationID)
 }
 
+func (c *Coordinator) GetCancellationReservation(ctx context.Context, operationID string) (providerexec.CancellationReservation, error) {
+	if c == nil || c.repository == nil {
+		return providerexec.CancellationReservation{}, ErrInvalidCoordinator
+	}
+	if err := repository.ContextError(ctx); err != nil {
+		return providerexec.CancellationReservation{}, err
+	}
+	return c.repository.GetCancellationReservation(ctx, operationID)
+}
+
 // GetResult reads retained evidence and preserves the repository's pending,
 // expired, and not-found distinctions.
 func (c *Coordinator) GetResult(ctx context.Context, operationID string, now time.Time) (providerexec.Result, error) {
@@ -146,7 +166,154 @@ func (c *Coordinator) GetResult(ctx context.Context, operationID string, now tim
 	if err := repository.ContextError(ctx); err != nil {
 		return providerexec.Result{}, err
 	}
+	record, err := c.repository.GetExecution(ctx, operationID)
+	if err != nil {
+		return providerexec.Result{}, err
+	}
+	if c.cleaner != nil && (record.ResultExpired || record.Result != nil && !now.UTC().Before(record.Result.RetainedUntil)) {
+		if err := c.cleaner.CleanupResult(ctx, record.Request.Clone()); err != nil {
+			return providerexec.Result{}, err
+		}
+	}
 	return c.repository.GetResult(ctx, operationID, now)
+}
+
+// StoreOutcome persists trusted bounded terminal evidence. Known provider
+// failures and unknown dispatch outcomes may be stored before a receipt is
+// attached; successful application or cancellation evidence may not.
+func (c *Coordinator) StoreOutcome(ctx context.Context, operationID string, startedAt, completedAt time.Time, outcome providerexec.ResultOutcome) (providerexec.Result, error) {
+	if c == nil || c.repository == nil {
+		return providerexec.Result{}, ErrInvalidCoordinator
+	}
+	if err := repository.ContextError(ctx); err != nil {
+		return providerexec.Result{}, err
+	}
+	record, err := c.repository.GetExecution(ctx, operationID)
+	if err != nil {
+		return providerexec.Result{}, err
+	}
+	if record.Result != nil {
+		return *record.Result.Clone(), nil
+	}
+	if startedAt.IsZero() {
+		startedAt = record.ReservedAt
+	}
+	if completedAt.Before(startedAt) {
+		completedAt = startedAt
+	}
+	result, err := providerexec.NewResult(record.Request, startedAt, completedAt, outcome)
+	if err != nil {
+		return providerexec.Result{}, err
+	}
+	if err := c.repository.StoreResult(ctx, result); err != nil {
+		return providerexec.Result{}, err
+	}
+	return result, nil
+}
+
+// Reconcile observes one accepted execution without repeating dispatch. It can
+// recover a lost receipt attachment by operation identity and stores terminal
+// evidence exactly once.
+func (c *Coordinator) Reconcile(ctx context.Context, operationID string) (providerexec.ExecutionRecord, error) {
+	if c == nil || c.repository == nil || c.clock == nil {
+		return providerexec.ExecutionRecord{}, ErrInvalidCoordinator
+	}
+	if err := repository.ContextError(ctx); err != nil {
+		return providerexec.ExecutionRecord{}, err
+	}
+	record, err := c.repository.GetExecution(ctx, operationID)
+	if err != nil || record.Result != nil || record.ResultExpired || c.observer == nil {
+		return record, err
+	}
+	observation, err := c.observer.Observe(ctx, record.Request.Clone())
+	if err != nil {
+		return record, err
+	}
+	if err := observation.Validate(); err != nil {
+		return record, providerexec.ErrInvalidObservation
+	}
+	if record.Attached {
+		if record.Dispatch.ExecutionReference != observation.ExecutionReference {
+			return record, repository.ErrConflict
+		}
+	} else {
+		attached, attachErr := c.repository.AttachExecution(ctx, providerexec.ExecutionAttachment{
+			OperationID: record.Request.OperationID, AttemptID: record.Request.AttemptID,
+			SandboxID: record.Request.SandboxID, FencingToken: record.Request.FencingToken,
+			ExpectedGeneration: record.Request.ExpectedGeneration,
+			Dispatch:           providerexec.Dispatch{ExecutionReference: observation.ExecutionReference, AcceptedAt: observation.StartedAt},
+		})
+		if attachErr != nil {
+			return record, attachErr
+		}
+		record = attached.Execution
+	}
+	if observation.Running {
+		return record.Clone(), nil
+	}
+	result, err := c.StoreOutcome(ctx, operationID, observation.StartedAt, observation.CompletedAt, providerexec.ResultOutcome{
+		Status: observation.Status, ExitCode: observation.ExitCode, Signal: observation.Signal,
+		StdoutReference: observation.StdoutReference, StderrReference: observation.StderrReference,
+		Error: observation.Error,
+	})
+	if err != nil {
+		return record, err
+	}
+	record.Result = result.Clone()
+	terminal, err := providerexec.NewTerminalSummary(result)
+	if err != nil {
+		return record, err
+	}
+	record.Terminal = terminal.Clone()
+	return record.Clone(), nil
+}
+
+func (c *Coordinator) Recover(ctx context.Context) ([]providerexec.ExecutionRecord, error) {
+	if c == nil || c.repository == nil {
+		return nil, ErrInvalidCoordinator
+	}
+	records, err := c.repository.ListExecutions(ctx)
+	if err != nil {
+		return nil, err
+	}
+	results := make([]providerexec.ExecutionRecord, 0, len(records))
+	for _, record := range records {
+		if record.ResultExpired {
+			if c.cleaner != nil {
+				if cleanupErr := c.cleaner.CleanupResult(ctx, record.Request.Clone()); cleanupErr != nil {
+					return results, cleanupErr
+				}
+			}
+			continue
+		}
+		if record.Result != nil {
+			if !c.clock.Now().UTC().Before(record.Result.RetainedUntil) {
+				_, expiryErr := c.GetResult(ctx, record.Request.OperationID, c.clock.Now().UTC())
+				if expiryErr != nil && !errors.Is(expiryErr, repository.ErrExpired) {
+					return results, expiryErr
+				}
+			}
+			continue
+		}
+		reconciled, reconcileErr := c.Reconcile(ctx, record.Request.OperationID)
+		if errors.Is(reconcileErr, providerexec.ErrExecutionNotFound) {
+			result, storeErr := c.StoreOutcome(ctx, record.Request.OperationID, record.ReservedAt, c.clock.Now().UTC(), providerexec.ResultOutcome{
+				Status: providerexec.ResultOutcomeUnknown,
+				Error:  &providerexec.ResultError{Code: "SANDBOX_EXEC_OUTCOME_UNKNOWN", Message: "execution outcome requires reconciliation", Retryable: true, Outcome: providerexec.ErrorOutcomeUnknown},
+			})
+			if storeErr != nil {
+				return results, storeErr
+			}
+			reconciled = record.Clone()
+			reconciled.Result = result.Clone()
+			reconcileErr = nil
+		}
+		if reconcileErr != nil {
+			return results, reconcileErr
+		}
+		results = append(results, reconciled.Clone())
+	}
+	return results, nil
 }
 
 // Cancel durably records cancellation intent first. With an attached receipt
@@ -159,7 +326,8 @@ func (c *Coordinator) Cancel(ctx context.Context, intent providerexec.Cancellati
 	if err := repository.ContextError(ctx); err != nil {
 		return CancellationResult{}, err
 	}
-	reservation, err := c.repository.ReserveCancellation(ctx, intent)
+	now := c.clock.Now().UTC()
+	reservation, err := c.repository.ReserveCancellationAt(ctx, intent, now)
 	if err != nil {
 		return CancellationResult{}, err
 	}
@@ -172,7 +340,7 @@ func (c *Coordinator) Cancel(ctx context.Context, intent providerexec.Cancellati
 		return result, err
 	}
 	if reservation.Replayed {
-		if target.Result != nil && target.Result.Status == providerexec.ResultCancelled {
+		if target.Terminal != nil && target.Terminal.Status == providerexec.ResultCancelled {
 			result.Status = CancellationConfirmed
 		}
 		// A replay cannot safely repeat an external cancellation side effect.
@@ -202,7 +370,7 @@ func (c *Coordinator) Cancel(ctx context.Context, intent providerexec.Cancellati
 	if err := c.canceler.Cancel(cancelContext, attachment); err != nil {
 		return result, err
 	}
-	now := c.clock.Now().UTC()
+	now = c.clock.Now().UTC()
 	if now.Before(target.Dispatch.AcceptedAt) {
 		now = target.Dispatch.AcceptedAt
 	}
@@ -210,9 +378,18 @@ func (c *Coordinator) Cancel(ctx context.Context, intent providerexec.Cancellati
 	if err != nil {
 		return result, err
 	}
-	if err := c.repository.StoreResult(ctx, retained); err != nil {
+	writeCtx, writeCancel := context.WithTimeout(context.WithoutCancel(nonNilContext(ctx)), cancellationPersistenceTimeout)
+	defer writeCancel()
+	if err := c.repository.StoreResult(writeCtx, retained); err != nil {
 		return result, err
 	}
 	result.Status = CancellationConfirmed
 	return result, nil
+}
+
+func nonNilContext(ctx context.Context) context.Context {
+	if ctx == nil {
+		return context.Background()
+	}
+	return ctx
 }

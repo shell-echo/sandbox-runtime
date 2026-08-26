@@ -61,3 +61,21 @@ func TestRepositoryConcurrencyAndImmutability(t *testing.T) {
 		t.Fatalf("read after close = %v", err)
 	}
 }
+
+func TestRepositoryPreservesExplicitAcceptanceTimes(t *testing.T) {
+	r := NewRepository()
+	request, _ := memoryExecution()
+	reserved, err := r.ReserveExecutionAt(context.Background(), request, memoryTestTime)
+	if err != nil || !reserved.Execution.ReservedAt.Equal(memoryTestTime) {
+		t.Fatalf("execution reservation = %#v, %v", reserved, err)
+	}
+	intent := providerexec.CancellationIntent{
+		SandboxID: request.SandboxID, OperationID: "cancel-memory", AttemptID: "cancel-attempt", FencingToken: 2, ExpectedGeneration: request.ExpectedGeneration,
+		IdempotencyKey: "cancel-memory-key", RequestDigest: "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+		Deadline: memoryTestTime.Add(time.Minute), TargetOperationID: request.OperationID, TargetAttemptID: request.AttemptID, Reason: providerexec.CancellationCallerRequested,
+	}
+	cancelled, err := r.ReserveCancellationAt(context.Background(), intent, memoryTestTime.Add(time.Second))
+	if err != nil || !cancelled.ReservedAt.Equal(memoryTestTime.Add(time.Second)) {
+		t.Fatalf("cancellation reservation = %#v, %v", cancelled, err)
+	}
+}

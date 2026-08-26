@@ -26,10 +26,14 @@ type Repository interface {
 	// ReserveExecution durably records admission before dispatch. The optional
 	// dispatch argument preserves the P2.2b combined reserve-and-attach API.
 	ReserveExecution(context.Context, providerexec.Request, ...providerexec.Dispatch) (providerexec.ExecutionReservation, error)
+	ReserveExecutionAt(context.Context, providerexec.Request, time.Time, ...providerexec.Dispatch) (providerexec.ExecutionReservation, error)
 	AttachExecution(context.Context, providerexec.ExecutionAttachment) (providerexec.ExecutionReservation, error)
 	GetExecution(context.Context, string) (providerexec.ExecutionRecord, error)
+	ListExecutions(context.Context) ([]providerexec.ExecutionRecord, error)
 	ReserveCancellation(context.Context, providerexec.CancellationIntent) (providerexec.CancellationReservation, error)
+	ReserveCancellationAt(context.Context, providerexec.CancellationIntent, time.Time) (providerexec.CancellationReservation, error)
 	GetCancellation(context.Context, string) (providerexec.CancellationIntent, error)
+	GetCancellationReservation(context.Context, string) (providerexec.CancellationReservation, error)
 	StoreResult(context.Context, providerexec.Result) error
 	GetResult(context.Context, string, time.Time) (providerexec.Result, error)
 	Close() error

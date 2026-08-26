@@ -66,6 +66,68 @@ type Result struct {
 	Error           *ResultError
 }
 
+// TerminalSummary preserves operation truth after the retained result and its
+// private output have expired. It deliberately excludes output references,
+// exit details, and retention metadata.
+type TerminalSummary struct {
+	Status      ResultStatus
+	CompletedAt time.Time
+	Error       *ResultError
+}
+
+func NewTerminalSummary(result Result) (TerminalSummary, error) {
+	if err := result.Validate(); err != nil {
+		return TerminalSummary{}, err
+	}
+	return TerminalSummary{Status: result.Status, CompletedAt: result.CompletedAt.UTC(), Error: cloneResultError(result.Error)}, nil
+}
+
+func (s TerminalSummary) Validate() error {
+	switch s.Status {
+	case ResultCompleted, ResultFailed, ResultCancelled, ResultOutcomeUnknown:
+	default:
+		return ErrInvalidResult
+	}
+	if s.CompletedAt.IsZero() {
+		return ErrInvalidResult
+	}
+	if s.Error != nil && (!resultCodePattern.MatchString(s.Error.Code) || !validBoundedString(s.Error.Message, 1, 512) || (s.Error.Outcome != ErrorOutcomeKnown && s.Error.Outcome != ErrorOutcomeUnknown)) {
+		return ErrInvalidResult
+	}
+	if s.Status == ResultOutcomeUnknown && (s.Error == nil || s.Error.Outcome != ErrorOutcomeUnknown) {
+		return ErrInvalidResult
+	}
+	return nil
+}
+
+func (s *TerminalSummary) Clone() *TerminalSummary {
+	if s == nil {
+		return nil
+	}
+	clone := *s
+	clone.Error = cloneResultError(s.Error)
+	return &clone
+}
+
+// UsageIdentity is the minimal correlation source a later usage collector may
+// consume. It carries no output, error, billing, tenant, or backend detail.
+type UsageIdentity struct {
+	SandboxID    string
+	OperationID  string
+	AttemptID    string
+	FencingToken int64
+}
+
+func (r Result) UsageIdentity() (UsageIdentity, error) {
+	if err := r.Validate(); err != nil {
+		return UsageIdentity{}, err
+	}
+	return UsageIdentity{
+		SandboxID: r.SandboxID, OperationID: r.OperationID,
+		AttemptID: r.AttemptID, FencingToken: r.FencingToken,
+	}, nil
+}
+
 // NewResult binds trusted completion evidence to the immutable request and
 // derives retention from its already-admitted retention duration.
 func NewResult(request Request, startedAt, completedAt time.Time, outcome ResultOutcome) (Result, error) {

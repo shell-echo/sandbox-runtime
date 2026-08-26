@@ -4,14 +4,17 @@ package docker
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/moby/moby/client"
 
+	providerexec "github.com/shell-echo/sandbox-runtime/provider/exec"
 	"github.com/shell-echo/sandbox-runtime/provider/lifecycle/coordinator"
 )
 
@@ -69,6 +72,20 @@ func TestProviderDockerLifecycleIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitForMountMarkers(t, driver, sandbox.ID, paths.workspace+"/ready", paths.outputs+"/ready")
+	execRequest := integrationExecRequest(sandbox.ID, "integration-exec", time.Now().UTC())
+	reference, err := driver.Start(ctx, providerexec.Invocation{Request: execRequest, StartedAt: time.Now().UTC()})
+	if err != nil || !strings.HasPrefix(string(reference), "ref:exec/") {
+		t.Fatalf("Start exec = %q, %v", reference, err)
+	}
+	execObservation := waitForExecTerminal(t, driver, execRequest)
+	if execObservation.Status != providerexec.ResultCompleted || execObservation.ExitCode == nil || *execObservation.ExitCode != 7 || execObservation.StdoutReference == "" || execObservation.StderrReference == "" {
+		t.Fatalf("exec observation = %#v", execObservation)
+	}
+	execStatePath := driver.execStatePath(filepath.Join(paths.root, "exec"), execRequest.OperationID)
+	execState, err := loadExecState(execStatePath)
+	if err != nil || execState.StdoutBytes != 4 || execState.StderrBytes != 4 || !execState.StdoutTruncated || !execState.StderrTruncated {
+		t.Fatalf("exec capture state = %#v, %v", execState, err)
+	}
 	if err := driver.Close(); err != nil {
 		t.Fatalf("Close before restart: %v", err)
 	}
@@ -81,6 +98,38 @@ func TestProviderDockerLifecycleIntegration(t *testing.T) {
 	if observation, err := restarted.Inspect(ctx, sandbox.ID); err != nil || observation.State != coordinator.RuntimeReady {
 		t.Fatalf("Inspect after restart = %#v, %v", observation, err)
 	}
+	restartedExec, err := restarted.Observe(ctx, execRequest)
+	if err != nil || restartedExec.Status != providerexec.ResultCompleted || restartedExec.ExecutionReference != reference {
+		t.Fatalf("Observe exec after restart = %#v, %v", restartedExec, err)
+	}
+	if err := restarted.CleanupResult(ctx, execRequest); err != nil {
+		t.Fatalf("CleanupResult: %v", err)
+	}
+	for _, path := range []string{execState.StdoutPath, execState.StderrPath, execStatePath} {
+		if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("expired exec evidence remains at %q: %v", path, err)
+		}
+	}
+
+	cancelRequest := integrationExecRequest(sandbox.ID, "integration-cancel", time.Now().UTC())
+	cancelRequest.Command = []string{"sh", "-c", "sleep 60"}
+	cancelRequest.CaptureStdout, cancelRequest.CaptureStderr, cancelRequest.CaptureMaxBytes = false, false, 0
+	cancelReference, err := restarted.Start(ctx, providerexec.Invocation{Request: cancelRequest, StartedAt: time.Now().UTC()})
+	if err != nil {
+		t.Fatalf("Start cancellable exec: %v", err)
+	}
+	waitForExecRunning(t, restarted, cancelRequest)
+	if err := restarted.Cancel(ctx, providerexec.ExecutionAttachment{
+		OperationID: cancelRequest.OperationID, AttemptID: cancelRequest.AttemptID, SandboxID: cancelRequest.SandboxID,
+		FencingToken: cancelRequest.FencingToken, ExpectedGeneration: cancelRequest.ExpectedGeneration,
+		Dispatch: providerexec.Dispatch{ExecutionReference: cancelReference, AcceptedAt: time.Now().UTC()},
+	}); err != nil {
+		t.Fatalf("Cancel exec: %v", err)
+	}
+	cancelled, err := restarted.Observe(ctx, cancelRequest)
+	if err != nil || cancelled.Status != providerexec.ResultCancelled {
+		t.Fatalf("Observe cancelled exec = %#v, %v", cancelled, err)
+	}
 	if err := restarted.Create(ctx, sandbox); err != nil {
 		t.Fatalf("idempotent Create after restart: %v", err)
 	}
@@ -90,6 +139,43 @@ func TestProviderDockerLifecycleIntegration(t *testing.T) {
 	if _, err := os.Stat(paths.root); !os.IsNotExist(err) {
 		t.Fatalf("mount root remains after Remove: %v", err)
 	}
+}
+
+func integrationExecRequest(sandboxID, operationID string, now time.Time) providerexec.Request {
+	return providerexec.Request{
+		SandboxID: sandboxID, OperationID: operationID, AttemptID: operationID + "-attempt",
+		FencingToken: 2, ExpectedGeneration: 1, IdempotencyKey: operationID + "-key",
+		RequestDigest: "sha256:" + strings.Repeat("d", 64), Deadline: now.Add(time.Minute),
+		Command: []string{"sh", "-c", "printf abcdef; printf uvwxyz >&2; exit 7"}, WorkingDirectory: "/workspace",
+		ResultRetention: time.Hour, CaptureStdout: true, CaptureStderr: true, CaptureMaxBytes: 4,
+	}
+}
+
+func waitForExecRunning(t *testing.T, driver *Driver, request providerexec.Request) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		observation, err := driver.Observe(context.Background(), request)
+		if err == nil && observation.Running {
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	t.Fatal("exec did not reach running state")
+}
+
+func waitForExecTerminal(t *testing.T, driver *Driver, request providerexec.Request) providerexec.Observation {
+	t.Helper()
+	deadline := time.Now().Add(20 * time.Second)
+	for time.Now().Before(deadline) {
+		observation, err := driver.Observe(context.Background(), request)
+		if err == nil && !observation.Running {
+			return observation
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	t.Fatal("exec did not reach terminal state")
+	return providerexec.Observation{}
 }
 
 func waitForMountMarkers(t *testing.T, driver *Driver, sandboxID string, markers ...string) {

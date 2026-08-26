@@ -407,14 +407,21 @@ func admissionTokenClaimsForTest(contextValue admission.AdmissionContext) map[st
 
 func testRequestDocument(t *testing.T) ([]byte, string) {
 	t.Helper()
-	encoded, _ := json.Marshal(map[string]any{"operation": "exec"})
+	document := map[string]any{
+		"operation_id": "operation-1", "attempt_id": "attempt-1", "fencing_token": int64(1),
+		"idempotency_key": "exec-idempotency-1", "deadline_at": "2026-08-20T00:05:00Z",
+		"expected_generation": int64(1), "command": []string{"true"}, "working_directory": "/workspace",
+		"result_retention_seconds": int64(60),
+	}
+	encoded, _ := json.Marshal(document)
 	canonical, err := jcs.Transform(encoded)
 	if err != nil {
 		t.Fatal(err)
 	}
 	digest := sha256.Sum256(canonical)
 	requestDigest := "sha256:" + hex.EncodeToString(digest[:])
-	body, err := json.Marshal(map[string]any{"operation": "exec", "request_digest": requestDigest})
+	document["request_digest"] = requestDigest
+	body, err := json.Marshal(document)
 	if err != nil {
 		t.Fatal(err)
 	}

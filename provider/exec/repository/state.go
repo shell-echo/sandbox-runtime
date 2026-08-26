@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"reflect"
 	"regexp"
+	"sort"
 	"time"
 
 	providerexec "github.com/shell-echo/sandbox-runtime/provider/exec"
@@ -11,12 +12,13 @@ import (
 
 var attachmentIdentifierPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$`)
 
-const snapshotVersion = 1
+const snapshotVersion = 2
 
 type State struct {
 	Executions              map[string]providerexec.ExecutionRecord
 	ExecutionIdempotency    map[string]IdempotencyRecord
 	CancellationIntents     map[string]providerexec.CancellationIntent
+	CancellationReservedAt  map[string]time.Time
 	CancellationIdempotency map[string]IdempotencyRecord
 }
 
@@ -31,6 +33,7 @@ type PersistedState struct {
 	Executions              map[string]providerexec.ExecutionRecord
 	ExecutionIdempotency    map[string]IdempotencyRecord
 	CancellationIntents     map[string]providerexec.CancellationIntent
+	CancellationReservedAt  map[string]time.Time
 	CancellationIdempotency map[string]IdempotencyRecord
 }
 
@@ -39,6 +42,7 @@ func NewState() State {
 		Executions:              make(map[string]providerexec.ExecutionRecord),
 		ExecutionIdempotency:    make(map[string]IdempotencyRecord),
 		CancellationIntents:     make(map[string]providerexec.CancellationIntent),
+		CancellationReservedAt:  make(map[string]time.Time),
 		CancellationIdempotency: make(map[string]IdempotencyRecord),
 	}
 }
@@ -52,6 +56,9 @@ func (s *State) ensureMaps() {
 	}
 	if s.CancellationIntents == nil {
 		s.CancellationIntents = make(map[string]providerexec.CancellationIntent)
+	}
+	if s.CancellationReservedAt == nil {
+		s.CancellationReservedAt = make(map[string]time.Time)
 	}
 	if s.CancellationIdempotency == nil {
 		s.CancellationIdempotency = make(map[string]IdempotencyRecord)
@@ -88,6 +95,9 @@ func (s *State) reserveExecutionAt(request providerexec.Request, acceptedAt time
 		if err := dispatch[0].Validate(); err != nil {
 			return providerexec.ExecutionReservation{}, err
 		}
+		if dispatch[0].AcceptedAt.Before(acceptedAt) {
+			return providerexec.ExecutionReservation{}, ErrConflict
+		}
 	}
 	if existing, ok := s.ExecutionIdempotency[request.IdempotencyKey]; ok {
 		if existing.RequestDigest != request.RequestDigest || existing.OperationID != request.OperationID {
@@ -103,6 +113,9 @@ func (s *State) reserveExecutionAt(request providerexec.Request, acceptedAt time
 		return providerexec.ExecutionReservation{Execution: record.Clone(), Replayed: true}, nil
 	}
 	if _, ok := s.Executions[request.OperationID]; ok {
+		return providerexec.ExecutionReservation{}, ErrAlreadyExists
+	}
+	if _, ok := s.CancellationIntents[request.OperationID]; ok {
 		return providerexec.ExecutionReservation{}, ErrAlreadyExists
 	}
 	if len(dispatch) == 1 {
@@ -134,6 +147,9 @@ func (s *State) AttachExecution(attachment providerexec.ExecutionAttachment) (pr
 	if !executionAttachmentMatches(record.Request, attachment) {
 		return providerexec.ExecutionReservation{}, ErrConflict
 	}
+	if attachment.Dispatch.AcceptedAt.Before(record.ReservedAt) {
+		return providerexec.ExecutionReservation{}, ErrConflict
+	}
 	if record.Attached {
 		if record.Dispatch.ExecutionReference != attachment.Dispatch.ExecutionReference {
 			return providerexec.ExecutionReservation{}, ErrConflict
@@ -160,6 +176,20 @@ func (s *State) GetExecution(operationID string) (providerexec.ExecutionRecord, 
 	return record.Clone(), nil
 }
 
+func (s *State) ListExecutions() []providerexec.ExecutionRecord {
+	s.ensureMaps()
+	operationIDs := make([]string, 0, len(s.Executions))
+	for operationID := range s.Executions {
+		operationIDs = append(operationIDs, operationID)
+	}
+	sort.Strings(operationIDs)
+	result := make([]providerexec.ExecutionRecord, 0, len(operationIDs))
+	for _, operationID := range operationIDs {
+		result = append(result, s.Executions[operationID].Clone())
+	}
+	return result
+}
+
 func (s *State) ReserveCancellation(intent providerexec.CancellationIntent, now time.Time) (providerexec.CancellationReservation, error) {
 	s.ensureMaps()
 	if err := intent.Validate(now); err != nil {
@@ -173,7 +203,11 @@ func (s *State) ReserveCancellation(intent providerexec.CancellationIntent, now 
 		if !ok {
 			return providerexec.CancellationReservation{}, fmt.Errorf("%w: cancellation idempotency record", ErrCorrupt)
 		}
-		return providerexec.CancellationReservation{Intent: stored, Replayed: true}, nil
+		reservedAt, ok := s.CancellationReservedAt[stored.OperationID]
+		if !ok || reservedAt.IsZero() {
+			return providerexec.CancellationReservation{}, fmt.Errorf("%w: cancellation acceptance time", ErrCorrupt)
+		}
+		return providerexec.CancellationReservation{Intent: stored, ReservedAt: reservedAt, Replayed: true}, nil
 	}
 	target, ok := s.Executions[intent.TargetOperationID]
 	if !ok {
@@ -185,12 +219,28 @@ func (s *State) ReserveCancellation(intent providerexec.CancellationIntent, now 
 	if target.Result != nil || target.ResultExpired {
 		return providerexec.CancellationReservation{}, ErrAlreadyExists
 	}
+	if _, ok := s.Executions[intent.OperationID]; ok {
+		return providerexec.CancellationReservation{}, ErrAlreadyExists
+	}
 	if _, ok := s.CancellationIntents[intent.OperationID]; ok {
 		return providerexec.CancellationReservation{}, ErrAlreadyExists
 	}
 	s.CancellationIntents[intent.OperationID] = intent
+	s.CancellationReservedAt[intent.OperationID] = now.UTC()
 	s.CancellationIdempotency[intent.IdempotencyKey] = IdempotencyRecord{Key: intent.IdempotencyKey, RequestDigest: intent.RequestDigest, OperationID: intent.OperationID}
-	return providerexec.CancellationReservation{Intent: intent, Replayed: false}, nil
+	return providerexec.CancellationReservation{Intent: intent, ReservedAt: now.UTC(), Replayed: false}, nil
+}
+
+func (s *State) GetCancellationReservation(operationID string) (providerexec.CancellationReservation, error) {
+	intent, err := s.GetCancellation(operationID)
+	if err != nil {
+		return providerexec.CancellationReservation{}, err
+	}
+	reservedAt, ok := s.CancellationReservedAt[operationID]
+	if !ok || reservedAt.IsZero() {
+		return providerexec.CancellationReservation{}, fmt.Errorf("%w: cancellation acceptance time", ErrCorrupt)
+	}
+	return providerexec.CancellationReservation{Intent: intent, ReservedAt: reservedAt, Replayed: true}, nil
 }
 
 func (s *State) GetCancellation(operationID string) (providerexec.CancellationIntent, error) {
@@ -214,7 +264,10 @@ func (s *State) StoreResult(result providerexec.Result) error {
 	if record.Request.AttemptID != result.AttemptID || record.Request.SandboxID != result.SandboxID || record.Request.FencingToken != result.FencingToken {
 		return ErrConflict
 	}
-	if !record.Attached {
+	if result.StartedAt.Before(record.ReservedAt) {
+		return ErrConflict
+	}
+	if !record.Attached && result.Status != providerexec.ResultFailed && result.Status != providerexec.ResultOutcomeUnknown {
 		return ErrConflict
 	}
 	expectedRetention := result.CompletedAt.Add(record.Request.ResultRetention)
@@ -226,11 +279,20 @@ func (s *State) StoreResult(result providerexec.Result) error {
 	}
 	if record.Result != nil {
 		if reflect.DeepEqual(*record.Result, result) {
+			terminal, err := providerexec.NewTerminalSummary(result)
+			if err != nil || record.Terminal == nil || !reflect.DeepEqual(*record.Terminal, terminal) {
+				return ErrCorrupt
+			}
 			return nil
 		}
 		return ErrConflict
 	}
+	terminal, err := providerexec.NewTerminalSummary(result)
+	if err != nil {
+		return err
+	}
 	record.Result = result.Clone()
+	record.Terminal = terminal.Clone()
 	s.Executions[result.OperationID] = record
 	return nil
 }
@@ -263,6 +325,7 @@ func (s State) Export() PersistedState {
 		Executions:              make(map[string]providerexec.ExecutionRecord, len(s.Executions)),
 		ExecutionIdempotency:    make(map[string]IdempotencyRecord, len(s.ExecutionIdempotency)),
 		CancellationIntents:     make(map[string]providerexec.CancellationIntent, len(s.CancellationIntents)),
+		CancellationReservedAt:  make(map[string]time.Time, len(s.CancellationReservedAt)),
 		CancellationIdempotency: make(map[string]IdempotencyRecord, len(s.CancellationIdempotency)),
 	}
 	for key, record := range s.Executions {
@@ -274,6 +337,9 @@ func (s State) Export() PersistedState {
 	for key, intent := range s.CancellationIntents {
 		result.CancellationIntents[key] = intent
 	}
+	for key, reservedAt := range s.CancellationReservedAt {
+		result.CancellationReservedAt[key] = reservedAt
+	}
 	for key, record := range s.CancellationIdempotency {
 		result.CancellationIdempotency[key] = record
 	}
@@ -281,7 +347,10 @@ func (s State) Export() PersistedState {
 }
 
 func (s *State) Import(snapshot PersistedState) error {
-	if snapshot.Version != snapshotVersion || snapshot.Executions == nil || snapshot.ExecutionIdempotency == nil || snapshot.CancellationIntents == nil || snapshot.CancellationIdempotency == nil {
+	if (snapshot.Version != 1 && snapshot.Version != snapshotVersion) || snapshot.Executions == nil || snapshot.ExecutionIdempotency == nil || snapshot.CancellationIntents == nil || snapshot.CancellationIdempotency == nil {
+		return ErrCorrupt
+	}
+	if snapshot.Version == snapshotVersion && snapshot.CancellationReservedAt == nil {
 		return ErrCorrupt
 	}
 	imported := NewState()
@@ -301,7 +370,7 @@ func (s *State) Import(snapshot PersistedState) error {
 			}
 		}
 		if record.Attached {
-			if record.Dispatch.Validate() != nil {
+			if record.Dispatch.Validate() != nil || record.Dispatch.AcceptedAt.Before(record.ReservedAt) {
 				return ErrCorrupt
 			}
 		} else if record.Dispatch != (providerexec.Dispatch{}) {
@@ -311,9 +380,33 @@ func (s *State) Import(snapshot PersistedState) error {
 			if err := imported.validateStoredResult(record); err != nil {
 				return err
 			}
+			terminal, err := providerexec.NewTerminalSummary(*record.Result)
+			if err != nil {
+				return ErrCorrupt
+			}
+			if record.Terminal == nil {
+				record.Terminal = terminal.Clone()
+			} else if record.Terminal.Validate() != nil || !reflect.DeepEqual(*record.Terminal, terminal) {
+				return ErrCorrupt
+			}
 		}
 		if record.ResultExpired && record.Result != nil {
 			return ErrCorrupt
+		}
+		if record.ResultExpired && record.Terminal == nil {
+			completedAt := record.ReservedAt
+			if record.Attached && record.Dispatch.AcceptedAt.After(completedAt) {
+				completedAt = record.Dispatch.AcceptedAt
+			}
+			record.Terminal = &providerexec.TerminalSummary{
+				Status: providerexec.ResultOutcomeUnknown, CompletedAt: completedAt,
+				Error: &providerexec.ResultError{Code: "SANDBOX_EXEC_OUTCOME_UNKNOWN", Message: "expired execution outcome is no longer available", Retryable: false, Outcome: providerexec.ErrorOutcomeUnknown},
+			}
+		}
+		if record.Terminal != nil {
+			if record.Terminal.Validate() != nil || record.Terminal.CompletedAt.Before(record.ReservedAt) || record.Result == nil && !record.ResultExpired {
+				return ErrCorrupt
+			}
 		}
 		imported.Executions[operationID] = record.Clone()
 	}
@@ -337,11 +430,22 @@ func (s *State) Import(snapshot PersistedState) error {
 		if operationID == "" || intent.OperationID != operationID || intent.Validate(time.Time{}) != nil {
 			return ErrCorrupt
 		}
+		if _, collision := imported.Executions[operationID]; collision {
+			return ErrCorrupt
+		}
 		target, ok := imported.Executions[intent.TargetOperationID]
 		if !ok || target.Request.AttemptID != intent.TargetAttemptID || target.Request.SandboxID != intent.SandboxID || target.Request.ExpectedGeneration != intent.ExpectedGeneration {
 			return ErrCorrupt
 		}
 		imported.CancellationIntents[operationID] = intent
+		reservedAt := snapshot.CancellationReservedAt[operationID]
+		if snapshot.Version == 1 && reservedAt.IsZero() {
+			reservedAt = target.ReservedAt
+		}
+		if reservedAt.IsZero() || reservedAt.After(intent.Deadline) {
+			return ErrCorrupt
+		}
+		imported.CancellationReservedAt[operationID] = reservedAt.UTC()
 	}
 	for key, idempotency := range snapshot.CancellationIdempotency {
 		if key == "" || idempotency.Key != key || idempotency.RequestDigest == "" || idempotency.OperationID == "" {
@@ -364,10 +468,13 @@ func (s *State) Import(snapshot PersistedState) error {
 }
 
 func (s *State) validateStoredResult(record providerexec.ExecutionRecord) error {
-	if record.Result == nil || !record.Attached {
+	if record.Result == nil {
 		return ErrCorrupt
 	}
 	result := *record.Result
+	if !record.Attached && result.Status != providerexec.ResultFailed && result.Status != providerexec.ResultOutcomeUnknown {
+		return ErrCorrupt
+	}
 	if err := result.Validate(); err != nil || result.OperationID != record.Request.OperationID || result.AttemptID != record.Request.AttemptID || result.SandboxID != record.Request.SandboxID || result.FencingToken != record.Request.FencingToken || !result.RetainedUntil.Equal(result.CompletedAt.Add(record.Request.ResultRetention)) {
 		return ErrCorrupt
 	}

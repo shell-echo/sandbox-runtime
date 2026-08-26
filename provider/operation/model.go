@@ -5,8 +5,11 @@ package operation
 import (
 	"context"
 	"errors"
+	"regexp"
 	"time"
 )
+
+var resultReferencePattern = regexp.MustCompile(`^ref:[A-Za-z0-9][A-Za-z0-9._:/-]{0,399}$`)
 
 var (
 	ErrNotFound    = errors.New("Provider operation not found")
@@ -52,6 +55,7 @@ type View struct {
 	Type                Type
 	Status              Status
 	ProviderOperationID string
+	ResultReference     string
 	ObservedAt          time.Time
 	Failure             *Failure
 }
@@ -67,6 +71,9 @@ func (v View) Clone() View {
 
 func (v View) Validate() error {
 	if v.OperationID == "" || v.AttemptID == "" || v.SandboxID == "" || v.FencingToken < 1 || v.ObservedAt.IsZero() {
+		return ErrInvalidView
+	}
+	if v.ResultReference != "" && !resultReferencePattern.MatchString(v.ResultReference) {
 		return ErrInvalidView
 	}
 	switch v.Type {

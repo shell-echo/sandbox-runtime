@@ -55,6 +55,47 @@ func TestResultValidateRejectsUnsafeAndUnknownEvidence(t *testing.T) {
 	}
 }
 
+func TestResultProjectsBoundedUsageCorrelationIdentity(t *testing.T) {
+	request := validRequest()
+	result, err := NewResult(request, execTestNow, execTestNow.Add(time.Second), ResultOutcome{Status: ResultCompleted})
+	if err != nil {
+		t.Fatal(err)
+	}
+	identity, err := result.UsageIdentity()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if identity.SandboxID != request.SandboxID || identity.OperationID != request.OperationID || identity.AttemptID != request.AttemptID || identity.FencingToken != request.FencingToken {
+		t.Fatalf("usage correlation identity = %#v", identity)
+	}
+	result.OperationID = ""
+	if _, err := result.UsageIdentity(); !errors.Is(err, ErrInvalidResult) {
+		t.Fatalf("invalid usage correlation error = %v", err)
+	}
+}
+
+func TestTerminalSummaryDropsRetainedResultDetails(t *testing.T) {
+	request := validRequest()
+	exitCode := 7
+	result, err := NewResult(request, execTestNow, execTestNow.Add(time.Second), ResultOutcome{
+		Status: ResultCompleted, ExitCode: &exitCode, StdoutReference: "ref:exec/stdout-1", StderrReference: "ref:exec/stderr-1",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	summary, err := NewTerminalSummary(result)
+	if err != nil || summary.Status != ResultCompleted || !summary.CompletedAt.Equal(result.CompletedAt) || summary.Error != nil {
+		t.Fatalf("terminal summary = %#v, %v", summary, err)
+	}
+	if err := summary.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	unknown := TerminalSummary{Status: ResultOutcomeUnknown, CompletedAt: execTestNow}
+	if err := unknown.Validate(); !errors.Is(err, ErrInvalidResult) {
+		t.Fatalf("unknown summary error = %v", err)
+	}
+}
+
 func TestCancellationIntentValidate(t *testing.T) {
 	valid := CancellationIntent{
 		SandboxID: "sandbox-1", OperationID: "cancel-1", AttemptID: "attempt-cancel-1", FencingToken: 2, ExpectedGeneration: 1,

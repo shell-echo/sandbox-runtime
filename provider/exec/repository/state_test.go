@@ -55,6 +55,11 @@ func TestStateReservesBeforeAttachAndBindsIdentityIdempotently(t *testing.T) {
 	if err != nil || reserved.Replayed || reserved.Execution.Attached || !reserved.Execution.ReservedAt.Equal(stateTestTime) {
 		t.Fatalf("durable reservation = %#v, %v", reserved, err)
 	}
+	earlyAttachment := attachment
+	earlyAttachment.Dispatch.AcceptedAt = stateTestTime.Add(-time.Nanosecond)
+	if _, err := state.AttachExecution(earlyAttachment); !errors.Is(err, ErrConflict) {
+		t.Fatalf("pre-reservation dispatch time = %v, want ErrConflict", err)
+	}
 	if err := state.StoreResult(resultFor(request, providerexec.ResultCompleted)); !errors.Is(err, ErrConflict) {
 		t.Fatalf("result before attach = %v, want ErrConflict", err)
 	}
@@ -173,6 +178,29 @@ func TestStateExecutionIdempotencyAndCancellationBinding(t *testing.T) {
 	}
 }
 
+func TestStateRejectsExecutionAndCancellationOperationIDCollisions(t *testing.T) {
+	state := NewState()
+	request, dispatch := validExecution()
+	if _, err := state.ReserveExecution(request, dispatch); err != nil {
+		t.Fatal(err)
+	}
+	intent := validCancellation()
+	intent.OperationID = request.OperationID
+	if _, err := state.ReserveCancellation(intent, stateTestTime); !errors.Is(err, ErrAlreadyExists) {
+		t.Fatalf("cancellation using execution operation ID = %v, want ErrAlreadyExists", err)
+	}
+	intent = validCancellation()
+	if _, err := state.ReserveCancellation(intent, stateTestTime); err != nil {
+		t.Fatal(err)
+	}
+	second := request.Clone()
+	second.OperationID, second.AttemptID, second.IdempotencyKey = intent.OperationID, "attempt-2", "exec-key-2"
+	second.RequestDigest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	if _, err := state.ReserveExecution(second, providerexec.Dispatch{ExecutionReference: "ref:exec/receipt-2", AcceptedAt: stateTestTime}); !errors.Is(err, ErrAlreadyExists) {
+		t.Fatalf("execution using cancellation operation ID = %v, want ErrAlreadyExists", err)
+	}
+}
+
 func TestStateResultWriteIsBoundedIdempotentAndExpiresToTombstone(t *testing.T) {
 	state := NewState()
 	request, dispatch := validExecution()
@@ -199,6 +227,10 @@ func TestStateResultWriteIsBoundedIdempotentAndExpiresToTombstone(t *testing.T) 
 	}
 	if _, err, changedState := state.ReadResult(request.OperationID, result.RetainedUntil); !errors.Is(err, ErrExpired) || !changedState {
 		t.Fatalf("result expiry = %v, changed=%t", err, changedState)
+	}
+	record, err := state.GetExecution(request.OperationID)
+	if err != nil || record.Terminal == nil || record.Terminal.Status != providerexec.ResultCompleted || record.Terminal.Error != nil {
+		t.Fatalf("terminal summary after expiry = %#v, %v", record.Terminal, err)
 	}
 	if _, err, changedState := state.ReadResult(request.OperationID, result.RetainedUntil.Add(time.Second)); !errors.Is(err, ErrExpired) || changedState {
 		t.Fatalf("tombstone read = %v, changed=%t", err, changedState)
@@ -233,5 +265,88 @@ func TestStateImportRejectsBrokenReferences(t *testing.T) {
 	delete(snapshot.CancellationIdempotency, intent.IdempotencyKey)
 	if err := broken.Import(snapshot); !errors.Is(err, ErrCorrupt) {
 		t.Fatalf("missing cancellation idempotency import = %v", err)
+	}
+	snapshot = state.Export()
+	delete(snapshot.CancellationIntents, intent.OperationID)
+	delete(snapshot.CancellationReservedAt, intent.OperationID)
+	intent.OperationID = request.OperationID
+	snapshot.CancellationIntents[intent.OperationID] = intent
+	snapshot.CancellationReservedAt[intent.OperationID] = stateTestTime
+	snapshot.CancellationIdempotency[intent.IdempotencyKey] = IdempotencyRecord{Key: intent.IdempotencyKey, RequestDigest: intent.RequestDigest, OperationID: intent.OperationID}
+	if err := broken.Import(snapshot); !errors.Is(err, ErrCorrupt) {
+		t.Fatalf("cross-family operation collision import = %v", err)
+	}
+}
+
+func TestStateImportsVersionOneCancellationAcceptanceTime(t *testing.T) {
+	state := NewState()
+	request, dispatch := validExecution()
+	if _, err := state.ReserveExecution(request, dispatch); err != nil {
+		t.Fatal(err)
+	}
+	intent := validCancellation()
+	if _, err := state.ReserveCancellation(intent, stateTestTime.Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	snapshot := state.Export()
+	snapshot.Version = 1
+	snapshot.CancellationReservedAt = nil
+	for operationID, record := range snapshot.Executions {
+		record.Terminal = nil
+		snapshot.Executions[operationID] = record
+	}
+	imported := NewState()
+	if err := imported.Import(snapshot); err != nil {
+		t.Fatalf("Import version 1: %v", err)
+	}
+	reservation, err := imported.GetCancellationReservation(intent.OperationID)
+	if err != nil || !reservation.ReservedAt.Equal(stateTestTime) {
+		t.Fatalf("migrated cancellation reservation = %#v, %v", reservation, err)
+	}
+	exported := imported.Export()
+	if exported.Version != snapshotVersion || !exported.CancellationReservedAt[intent.OperationID].Equal(stateTestTime) {
+		t.Fatalf("version 2 export = %#v", exported)
+	}
+}
+
+func TestStateImportsLegacyExpiredResultAsOutcomeUnknownOperationTruth(t *testing.T) {
+	state := NewState()
+	request, dispatch := validExecution()
+	if _, err := state.ReserveExecution(request, dispatch); err != nil {
+		t.Fatal(err)
+	}
+	result := resultFor(request, providerexec.ResultCompleted)
+	if err := state.StoreResult(result); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, changed := state.ReadResult(request.OperationID, result.RetainedUntil); !changed {
+		t.Fatal("result did not expire")
+	}
+	snapshot := state.Export()
+	snapshot.Version = 1
+	snapshot.CancellationReservedAt = nil
+	record := snapshot.Executions[request.OperationID]
+	record.Terminal = nil
+	snapshot.Executions[request.OperationID] = record
+	imported := NewState()
+	if err := imported.Import(snapshot); err != nil {
+		t.Fatal(err)
+	}
+	migrated, err := imported.GetExecution(request.OperationID)
+	if err != nil || migrated.Terminal == nil || migrated.Terminal.Status != providerexec.ResultOutcomeUnknown || migrated.Terminal.Error == nil {
+		t.Fatalf("migrated terminal summary = %#v, %v", migrated.Terminal, err)
+	}
+}
+
+func TestStateRejectsVersionTwoWithoutCancellationAcceptanceMap(t *testing.T) {
+	state := NewState()
+	request, dispatch := validExecution()
+	if _, err := state.ReserveExecution(request, dispatch); err != nil {
+		t.Fatal(err)
+	}
+	snapshot := state.Export()
+	snapshot.CancellationReservedAt = nil
+	if err := state.Import(snapshot); !errors.Is(err, ErrCorrupt) {
+		t.Fatalf("Import error = %v, want ErrCorrupt", err)
 	}
 }

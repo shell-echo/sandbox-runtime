@@ -19,6 +19,9 @@ import (
 	"github.com/shell-echo/sandbox-runtime/provider"
 	"github.com/shell-echo/sandbox-runtime/provider/admission"
 	admissionfile "github.com/shell-echo/sandbox-runtime/provider/admission/file"
+	execfile "github.com/shell-echo/sandbox-runtime/provider/exec/repository/file"
+	lifecycleapplication "github.com/shell-echo/sandbox-runtime/provider/lifecycle/application"
+	lifecycledocker "github.com/shell-echo/sandbox-runtime/provider/lifecycle/driver/docker"
 )
 
 // TestServeCmdRegistered confirms the serve subcommand is wired onto the root
@@ -184,6 +187,40 @@ func TestNewProviderLifecycleApplicationUsesIndependentComposition(t *testing.T)
 	}
 	if err := closeApplication(); err != nil {
 		t.Fatalf("close Provider lifecycle application: %v", err)
+	}
+}
+
+func TestNewProviderExecApplicationRequiresDependenciesAndReleasesRepository(t *testing.T) {
+	disabled, closeDisabled, err := newProviderExecApplication(context.Background(), config.ProviderExecConfig{}, nil, nil)
+	if err != nil || disabled != nil || closeDisabled == nil {
+		t.Fatalf("disabled exec composition = %T, %t, %v", disabled, closeDisabled != nil, err)
+	}
+	if err := closeDisabled(); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "provider-exec.json")
+	enabled := config.ProviderExecConfig{Enabled: true, RepositoryFile: path}
+	if application, closeApplication, err := newProviderExecApplication(context.Background(), enabled, nil, nil); err == nil || application != nil {
+		t.Fatalf("missing dependencies = %T, %v", application, err)
+	} else if closeErr := closeApplication(); closeErr != nil {
+		t.Fatalf("close missing-dependency composition: %v", closeErr)
+	}
+	application, closeApplication, err := newProviderExecApplication(context.Background(), enabled, &lifecycleapplication.Application{}, &lifecycledocker.Driver{})
+	if err != nil || application == nil || closeApplication == nil {
+		t.Fatalf("exec composition = %T, %t, %v", application, closeApplication != nil, err)
+	}
+	if _, err := execfile.NewRepository(path); err == nil {
+		t.Fatal("exec composition did not retain the single-controller repository lock")
+	}
+	if err := closeApplication(); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := execfile.NewRepository(path)
+	if err != nil {
+		t.Fatalf("reopen released exec repository: %v", err)
+	}
+	if err := reopened.Close(); err != nil {
+		t.Fatal(err)
 	}
 }
 

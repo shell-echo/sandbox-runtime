@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 
 	cerrdefs "github.com/containerd/errdefs"
 	"github.com/moby/moby/api/types/container"
@@ -52,6 +53,28 @@ type containerInfo struct {
 	paused     bool
 	restarting bool
 	dead       bool
+}
+
+type execEngine interface {
+	execCreate(context.Context, string, execCreateRequest) (string, error)
+	execStart(context.Context, string, bool) error
+	execAttach(context.Context, string) (io.ReadCloser, error)
+	execInspect(context.Context, string) (execInfo, error)
+}
+
+type execCreateRequest struct {
+	user             string
+	workingDirectory string
+	command          []string
+	attachStdout     bool
+	attachStderr     bool
+}
+
+type execInfo struct {
+	id          string
+	containerID string
+	running     bool
+	exitCode    int
 }
 
 type mobyEngine struct {
@@ -162,6 +185,50 @@ func (e *mobyEngine) start(ctx context.Context, id string) error {
 func (e *mobyEngine) remove(ctx context.Context, id string) error {
 	_, err := e.client.ContainerRemove(ctx, id, client.ContainerRemoveOptions{Force: true, RemoveVolumes: true})
 	return err
+}
+
+func (e *mobyEngine) execCreate(ctx context.Context, containerID string, request execCreateRequest) (string, error) {
+	result, err := e.client.ExecCreate(ctx, containerID, client.ExecCreateOptions{
+		User: request.user, Privileged: false, TTY: false,
+		AttachStdout: request.attachStdout, AttachStderr: request.attachStderr,
+		WorkingDir: request.workingDirectory, Cmd: append([]string(nil), request.command...),
+	})
+	if err != nil {
+		return "", err
+	}
+	return result.ID, nil
+}
+
+func (e *mobyEngine) execStart(ctx context.Context, execID string, detach bool) error {
+	_, err := e.client.ExecStart(ctx, execID, client.ExecStartOptions{Detach: detach})
+	return err
+}
+
+func (e *mobyEngine) execAttach(ctx context.Context, execID string) (io.ReadCloser, error) {
+	response, err := e.client.ExecAttach(ctx, execID, client.ExecAttachOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return &hijackedExecStream{reader: response.Reader, close: response.Close}, nil
+}
+
+func (e *mobyEngine) execInspect(ctx context.Context, execID string) (execInfo, error) {
+	result, err := e.client.ExecInspect(ctx, execID, client.ExecInspectOptions{})
+	if err != nil {
+		return execInfo{}, err
+	}
+	return execInfo{id: result.ID, containerID: result.ContainerID, running: result.Running, exitCode: result.ExitCode}, nil
+}
+
+type hijackedExecStream struct {
+	reader io.Reader
+	close  func()
+}
+
+func (s *hijackedExecStream) Read(value []byte) (int, error) { return s.reader.Read(value) }
+func (s *hijackedExecStream) Close() error {
+	s.close()
+	return nil
 }
 
 func (e *mobyEngine) close() error { return e.client.Close() }

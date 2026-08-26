@@ -67,6 +67,10 @@ func (h *protectedHandler) serveOperation(response http.ResponseWriter, request 
 			writeStandardError(response, status, code, retryable, operationErrorMessage(code))
 			return
 		}
+		if view.OperationID != admitted.OperationID || view.AttemptID != admitted.AttemptID || view.FencingToken != admitted.FencingToken || view.SandboxID != admitted.SandboxID {
+			writeStandardError(response, http.StatusServiceUnavailable, "SANDBOX_PROVIDER_UNAVAILABLE", true, "sandbox operation is unavailable")
+			return
+		}
 		projected, err := operationViewProjection(view)
 		if err != nil {
 			writeStandardError(response, http.StatusServiceUnavailable, "SANDBOX_PROVIDER_UNAVAILABLE", true, "sandbox operation is unavailable")

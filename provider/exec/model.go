@@ -29,7 +29,11 @@ var (
 	ErrDeadlineExpired      = errors.New("Provider exec request deadline has expired")
 	ErrInvalidApplication   = errors.New("invalid Provider exec application")
 	ErrDispatchUnknown      = errors.New("Provider exec dispatch outcome is unknown")
+	ErrExecutionNotFound    = errors.New("Provider exec execution was not found")
+	ErrExecutionNotRunning  = errors.New("Provider exec execution is not running")
+	ErrUnsupportedRequest   = errors.New("Provider exec request uses an unsupported runtime feature")
 	ErrInvalidDispatch      = errors.New("invalid Provider exec dispatch receipt")
+	ErrInvalidObservation   = errors.New("invalid Provider exec runtime observation")
 	ErrInvalidResult        = errors.New("invalid Provider exec retained result")
 	ErrInvalidCancellation  = errors.New("invalid Provider exec cancellation intent")
 	identifierPattern       = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$`)
@@ -79,6 +83,51 @@ type Invocation struct {
 type Dispatch struct {
 	ExecutionReference ExecutionReference
 	AcceptedAt         time.Time
+}
+
+// Observation is backend-neutral execution evidence used for demand-driven
+// and startup reconciliation. Backend identifiers, paths, endpoints, and raw
+// errors are deliberately excluded.
+type Observation struct {
+	ExecutionReference ExecutionReference
+	Status             ResultStatus
+	Running            bool
+	StartedAt          time.Time
+	CompletedAt        time.Time
+	ExitCode           *int
+	Signal             string
+	StdoutReference    string
+	StderrReference    string
+	Error              *ResultError
+}
+
+func (o Observation) Validate() error {
+	if err := o.ExecutionReference.Validate(); err != nil || o.StartedAt.IsZero() {
+		return ErrInvalidObservation
+	}
+	if o.Running {
+		if o.Status != "" || !o.CompletedAt.IsZero() || o.ExitCode != nil || o.Signal != "" || o.Error != nil {
+			return ErrInvalidObservation
+		}
+		return nil
+	}
+	if o.CompletedAt.IsZero() || o.CompletedAt.Before(o.StartedAt) {
+		return ErrInvalidObservation
+	}
+	outcome := ResultOutcome{
+		Status: o.Status, ExitCode: cloneExitCode(o.ExitCode), Signal: o.Signal,
+		StdoutReference: o.StdoutReference, StderrReference: o.StderrReference,
+		Error: cloneResultError(o.Error),
+	}
+	probe := Request{
+		SandboxID: "probe", OperationID: "probe", AttemptID: "probe",
+		FencingToken: 1, ResultRetention: time.Second,
+	}
+	_, err := NewResult(probe, o.StartedAt, o.CompletedAt, outcome)
+	if err != nil {
+		return ErrInvalidObservation
+	}
+	return nil
 }
 
 // Clone returns a deep copy suitable for crossing the application/port

@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	cerrdefs "github.com/containerd/errdefs"
@@ -107,11 +108,13 @@ func (o Options) validate() (int, int, error) {
 // Driver creates only Provider-owned resources and returns backend-neutral
 // lifecycle observations. It provides single-controller development evidence.
 type Driver struct {
-	engine   engine
-	options  Options
-	dataRoot string
-	uid      int
-	gid      int
+	engine       engine
+	options      Options
+	dataRoot     string
+	uid          int
+	gid          int
+	execMu       sync.Mutex
+	execCaptures map[string]chan struct{}
 }
 
 func New(ctx context.Context, options Options) (*Driver, error) {
@@ -150,7 +153,7 @@ func newDriver(backend engine, options Options) (*Driver, error) {
 		return nil, err
 	}
 	options.Command = append([]string(nil), options.Command...)
-	return &Driver{engine: backend, options: options, dataRoot: root, uid: uid, gid: gid}, nil
+	return &Driver{engine: backend, options: options, dataRoot: root, uid: uid, gid: gid, execCaptures: make(map[string]chan struct{})}, nil
 }
 
 func (d *Driver) Create(ctx context.Context, sandbox lifecycle.Sandbox) error {

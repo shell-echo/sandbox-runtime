@@ -3,13 +3,15 @@ package exec
 import "time"
 
 // ExecutionRecord is the provider-local immutable admission record plus any
-// terminal evidence known to this repository. A nil Result means pending.
+// terminal evidence known to this repository. Terminal remains after Result
+// expires so operation truth cannot regress to running.
 type ExecutionRecord struct {
 	Request       Request
 	ReservedAt    time.Time
 	Dispatch      Dispatch
 	Attached      bool
 	Result        *Result
+	Terminal      *TerminalSummary
 	ResultExpired bool
 }
 
@@ -33,14 +35,16 @@ type ExecutionReservation struct {
 }
 
 type CancellationReservation struct {
-	Intent   CancellationIntent
-	Replayed bool
+	Intent     CancellationIntent
+	ReservedAt time.Time
+	Replayed   bool
 }
 
 func (r ExecutionRecord) Clone() ExecutionRecord {
 	clone := r
 	clone.Request = r.Request.Clone()
 	clone.Result = r.Result.Clone()
+	clone.Terminal = r.Terminal.Clone()
 	return clone
 }
 

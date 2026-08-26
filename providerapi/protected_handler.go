@@ -16,6 +16,7 @@ import (
 
 	"github.com/shell-echo/sandbox-runtime/provider/admission"
 	"github.com/shell-echo/sandbox-runtime/provider/artifact"
+	providerexec "github.com/shell-echo/sandbox-runtime/provider/exec"
 	"github.com/shell-echo/sandbox-runtime/provider/lifecycle"
 	"github.com/shell-echo/sandbox-runtime/provider/lifecycle/repository"
 	provideroperation "github.com/shell-echo/sandbox-runtime/provider/operation"
@@ -37,6 +38,7 @@ type ProtectedTransportOptions struct {
 	Application         LifecycleApplication
 	SessionApplication  RuntimeSessionApplication
 	ArtifactApplication ArtifactApplication
+	ExecApplication     ExecApplication
 	UsageEvidenceReader usage.EvidenceReader
 	OperationReader     provideroperation.Reader
 	Now                 func() time.Time
@@ -67,12 +69,21 @@ type ArtifactApplication interface {
 	GetEvidence(context.Context, string) (artifact.Evidence, error)
 }
 
+// ExecApplication is the bounded vertically composed exec application. It
+// exposes no repository, lifecycle-driver, or backend-engine type.
+type ExecApplication interface {
+	AcceptExec(context.Context, providerexec.Request) (provideroperation.View, error)
+	AcceptCancellation(context.Context, providerexec.CancellationIntent) (provideroperation.View, error)
+	GetResult(context.Context, string) (providerexec.Result, error)
+}
+
 type protectedHandler struct {
 	identity        *clientIdentityAdmission
 	gate            *admission.ProtectedOperationGate
 	application     LifecycleApplication
 	sessionApp      RuntimeSessionApplication
 	artifactApp     ArtifactApplication
+	execApp         ExecApplication
 	usageReader     usage.EvidenceReader
 	operationReader provideroperation.Reader
 	now             func() time.Time
@@ -96,6 +107,7 @@ func newProtectedHandler(identity *clientIdentityAdmission, options ProtectedTra
 	return &protectedHandler{
 		identity: identity, gate: options.Gate, application: options.Application,
 		sessionApp: options.SessionApplication, artifactApp: options.ArtifactApplication,
+		execApp:     options.ExecApplication,
 		usageReader: options.UsageEvidenceReader, operationReader: options.OperationReader,
 		now: now,
 	}, nil
@@ -200,6 +212,19 @@ func (h *protectedHandler) ServeHTTP(response http.ResponseWriter, request *http
 			return
 		}
 	}
+	if h.execApp != nil {
+		switch route.operation {
+		case admission.OperationExec:
+			h.serveExec(response, request, context, document)
+			return
+		case admission.OperationCancelExec:
+			h.serveExecCancellation(response, request, context, document)
+			return
+		case admission.OperationReadResult:
+			h.serveExecResult(response, request, context)
+			return
+		}
+	}
 	if h.usageReader != nil && route.operation == admission.OperationReadUsageEvidence {
 		h.serveUsageEvidence(response, request, context)
 		return
@@ -238,6 +263,12 @@ func validateProtectedDocument(route protectedRoute, document []byte) error {
 	case admission.OperationStageArtifact:
 		var request providerv1.ArtifactStagingRequest
 		return providerv1.DecodeStrict(bytes.NewReader(document), providerv1.MaxArtifactStagingRequestBytes, &request)
+	case admission.OperationExec:
+		var request providerv1.ExecRequest
+		return providerv1.DecodeStrict(bytes.NewReader(document), providerv1.MaxExecRequestBytes, &request)
+	case admission.OperationCancelExec:
+		var request providerv1.CancelExecRequest
+		return providerv1.DecodeStrict(bytes.NewReader(document), providerv1.MaxCancelExecRequestBytes, &request)
 	default:
 		return nil
 	}
@@ -368,7 +399,8 @@ func matchProtectedRoute(request *http.Request) (protectedRoute, map[string]stri
 			}
 			if candidate, ok := operations[parts[3]]; ok {
 				oversizeStatus := 0
-				if candidate.operation == admission.OperationOpenRuntimeSession || candidate.operation == admission.OperationStageArtifact {
+				if candidate.operation == admission.OperationOpenRuntimeSession || candidate.operation == admission.OperationStageArtifact ||
+					candidate.operation == admission.OperationExec || candidate.operation == admission.OperationCancelExec {
 					oversizeStatus = http.StatusBadRequest
 				}
 				return protectedRoute{operation: candidate.operation, maxBodyBytes: candidate.maxBody, allowUnavailable: candidate.unavailable, oversizeStatus: oversizeStatus}, values, true

@@ -112,6 +112,13 @@ data_root = 'data/provider-runtime'
 namespace = 'default'
 controller_id = ''
 
+# P2.5e exec composition is separately opt-in and development-only. It requires
+# the Docker Provider lifecycle above and an independent single-controller file
+# ledger. Capability advertisement remains empty until P2.5h.
+[server.provider.exec]
+enabled = false
+repository_file = 'data/provider-exec.json'
+
 [runtime]
 driver = 'fake' # fake | docker
 

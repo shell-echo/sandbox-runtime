@@ -108,6 +108,8 @@ func TestProtectedHandlerRejectsDigestConsistentCreateAndSessionDocumentsBeforeG
 	for _, route := range []protectedReleaseRoute{
 		{name: "create sandbox", method: http.MethodPost, path: "/v1/sandboxes", operation: admission.OperationCreate, allowUnavailable: true},
 		{name: "open runtime session", method: http.MethodPost, path: "/v1/sandboxes/sandbox-1/runtime-sessions", operation: admission.OperationOpenRuntimeSession, allowUnavailable: true},
+		{name: "execute", method: http.MethodPost, path: "/v1/sandboxes/sandbox-1/exec", operation: admission.OperationExec, allowUnavailable: true},
+		{name: "cancel execute", method: http.MethodPost, path: "/v1/sandboxes/sandbox-1/exec:cancel", operation: admission.OperationCancelExec},
 	} {
 		route := route
 		t.Run(route.name, func(t *testing.T) {
@@ -157,6 +159,8 @@ func TestProtectedHandlerRejectsOversizedCreateAndSessionDocumentsBeforeGuard(t 
 	}{
 		{route: protectedReleaseRoute{name: "create sandbox", method: http.MethodPost, path: "/v1/sandboxes", operation: admission.OperationCreate, allowUnavailable: true}, maxBytes: providerv1.MaxCreateRequestBytes},
 		{route: protectedReleaseRoute{name: "open runtime session", method: http.MethodPost, path: "/v1/sandboxes/sandbox-1/runtime-sessions", operation: admission.OperationOpenRuntimeSession, allowUnavailable: true}, maxBytes: providerv1.MaxRuntimeSessionOpenRequestBytes},
+		{route: protectedReleaseRoute{name: "execute", method: http.MethodPost, path: "/v1/sandboxes/sandbox-1/exec", operation: admission.OperationExec, allowUnavailable: true}, maxBytes: providerv1.MaxExecRequestBytes},
+		{route: protectedReleaseRoute{name: "cancel execute", method: http.MethodPost, path: "/v1/sandboxes/sandbox-1/exec:cancel", operation: admission.OperationCancelExec}, maxBytes: providerv1.MaxCancelExecRequestBytes},
 	} {
 		test := test
 		t.Run(test.route.name, func(t *testing.T) {
@@ -528,6 +532,20 @@ func releaseMutationDocument(t *testing.T, operation admission.Operation) ([]byt
 			"idempotency_key": "artifact-idempotency-1", "deadline_at": releaseGateTestTime().Add(4 * time.Minute).Format(time.RFC3339Nano),
 			"expected_generation": int64(1), "artifact_reference": "artifact-ref:artifact-1", "source_path": "/outputs/result.txt",
 			"expected_digest": "sha256:" + strings.Repeat("a", 64), "expected_media_type": "text/plain", "max_bytes": int64(1024), "retention_seconds": int64(60),
+		}
+	case admission.OperationExec:
+		document = map[string]any{
+			"operation_id": "operation-1", "attempt_id": "attempt-1", "fencing_token": int64(1),
+			"idempotency_key": "exec-idempotency-1", "deadline_at": releaseGateTestTime().Add(4 * time.Minute).Format(time.RFC3339Nano),
+			"expected_generation": int64(1), "command": []string{"true"}, "working_directory": "/workspace",
+			"result_retention_seconds": int64(60),
+		}
+	case admission.OperationCancelExec:
+		document = map[string]any{
+			"operation_id": "operation-1", "attempt_id": "attempt-1", "fencing_token": int64(1),
+			"idempotency_key": "cancel-idempotency-1", "deadline_at": releaseGateTestTime().Add(4 * time.Minute).Format(time.RFC3339Nano),
+			"expected_generation": int64(1), "target_operation_id": "exec-operation-1", "target_attempt_id": "exec-attempt-1",
+			"reason": "caller_requested",
 		}
 	default:
 		document = map[string]any{"operation": string(operation), "local_case": "p1.1d"}

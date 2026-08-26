@@ -33,6 +33,7 @@ type ProviderConfig struct {
 	Capability         ProviderCapabilityConfig         `mapstructure:"capability"`
 	ProtectedAdmission ProviderProtectedAdmissionConfig `mapstructure:"protected_admission"`
 	Lifecycle          ProviderLifecycleConfig          `mapstructure:"lifecycle"`
+	Exec               ProviderExecConfig               `mapstructure:"exec"`
 }
 
 // ProviderLifecycleDriver identifies a Provider-local runtime implementation.
@@ -90,6 +91,13 @@ type ProviderLifecycleConfig struct {
 	Driver     ProviderLifecycleDriver           `mapstructure:"driver"`
 	Repository ProviderLifecycleRepositoryConfig `mapstructure:"repository"`
 	Docker     ProviderLifecycleDockerConfig     `mapstructure:"docker"`
+}
+
+// ProviderExecConfig enables the P2.5e single-controller exec vertical. Its
+// ledger is independent from lifecycle and local /instances persistence.
+type ProviderExecConfig struct {
+	Enabled        bool   `mapstructure:"enabled"`
+	RepositoryFile string `mapstructure:"repository_file"`
 }
 
 // ProviderTransportConfig configures the dedicated, mTLS-only Provider
@@ -189,8 +197,8 @@ func (c *ServerConfig) load(v *viper.Viper) error {
 // configuration is inert and may retain template placeholders.
 func (c *ProviderConfig) Validate() error {
 	if !c.Transport.Enabled {
-		if c.Lifecycle.Enabled {
-			return errors.New("lifecycle requires Provider transport to be enabled")
+		if c.Lifecycle.Enabled || c.Exec.Enabled {
+			return errors.New("lifecycle and exec require Provider transport to be enabled")
 		}
 		return nil
 	}
@@ -206,10 +214,36 @@ func (c *ProviderConfig) Validate() error {
 	if err := c.Lifecycle.validateEnabled(); err != nil {
 		return fmt.Errorf("lifecycle %w", err)
 	}
+	if err := c.Exec.validateEnabled(); err != nil {
+		return fmt.Errorf("exec %w", err)
+	}
 	if c.Lifecycle.Enabled && !c.ProtectedAdmission.Enabled {
 		return errors.New("lifecycle requires protected admission to be enabled")
 	}
+	if c.Exec.Enabled {
+		if !c.ProtectedAdmission.Enabled {
+			return errors.New("exec requires protected admission to be enabled")
+		}
+		if !c.Lifecycle.Enabled || c.Lifecycle.Driver != ProviderLifecycleDockerDriver || c.Lifecycle.Repository.Driver != ProviderLifecycleFileRepository {
+			return errors.New("exec requires the Docker Provider lifecycle and its file repository")
+		}
+	}
 	return nil
+}
+
+func (c *ProviderExecConfig) validateEnabled() error {
+	if !c.Enabled {
+		return nil
+	}
+	if strings.TrimSpace(c.RepositoryFile) == "" {
+		return errors.New("repository_file must not be empty")
+	}
+	return nil
+}
+
+// Validate checks an explicitly enabled Provider exec configuration.
+func (c ProviderExecConfig) Validate() error {
+	return c.validateEnabled()
 }
 
 func (c *ProviderLifecycleConfig) validateEnabled() error {
@@ -421,6 +455,7 @@ func defaultServerConfig() *ServerConfig {
 			Port: defaultServerAPIPort,
 		},
 		Provider: ProviderConfig{
+			Exec: ProviderExecConfig{RepositoryFile: "data/provider-exec.json"},
 			Lifecycle: ProviderLifecycleConfig{
 				Driver: ProviderLifecycleFakeDriver,
 				Repository: ProviderLifecycleRepositoryConfig{

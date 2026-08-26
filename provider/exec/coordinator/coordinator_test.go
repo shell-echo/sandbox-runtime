@@ -41,6 +41,29 @@ type testCanceler struct {
 	attach providerexec.ExecutionAttachment
 }
 
+type testObserver struct {
+	observation providerexec.Observation
+	err         error
+	calls       int
+}
+
+type testCleaner struct {
+	calls    int
+	requests []providerexec.Request
+	err      error
+}
+
+func (c *testCleaner) CleanupResult(_ context.Context, request providerexec.Request) error {
+	c.calls++
+	c.requests = append(c.requests, request.Clone())
+	return c.err
+}
+
+func (o *testObserver) Observe(context.Context, providerexec.Request) (providerexec.Observation, error) {
+	o.calls++
+	return o.observation, o.err
+}
+
 type attachFailRepository struct {
 	repository.Repository
 	err error
@@ -95,6 +118,9 @@ func TestStartPersistsBeforeDispatchAndNeverRedispatchesReplay(t *testing.T) {
 	first, err := c.Start(context.Background(), request)
 	if err != nil || first.Replayed || !first.Execution.Attached {
 		t.Fatalf("first start = %#v, %v", first, err)
+	}
+	if !first.Execution.ReservedAt.Equal(coordinatorTestTime) || !first.Execution.Dispatch.AcceptedAt.Equal(coordinatorTestTime) {
+		t.Fatalf("acceptance times = reserved %s dispatch %s, want %s", first.Execution.ReservedAt, first.Execution.Dispatch.AcceptedAt, coordinatorTestTime)
 	}
 	if executor.Calls() != 1 {
 		t.Fatalf("executor calls = %d, want 1", executor.Calls())
@@ -198,6 +224,9 @@ func TestCancelRecordsCancelledOnlyAfterCancelerConfirmation(t *testing.T) {
 	if err != nil || result.Status != CancellationConfirmed {
 		t.Fatalf("cancel = %#v, %v", result, err)
 	}
+	if !result.Reservation.ReservedAt.Equal(coordinatorTestTime) {
+		t.Fatalf("cancellation reserved at = %s, want %s", result.Reservation.ReservedAt, coordinatorTestTime)
+	}
 	if canceler.calls != 1 || canceler.attach.Dispatch.ExecutionReference != "ref:exec/receipt-1" {
 		t.Fatalf("canceler call = %d attachment = %#v", canceler.calls, canceler.attach)
 	}
@@ -260,5 +289,83 @@ func TestCancelDoesNotOverwriteExistingResult(t *testing.T) {
 	}
 	if canceler.calls != 0 {
 		t.Fatalf("canceler calls after completed result = %d, want 0", canceler.calls)
+	}
+}
+
+func TestRecoverAttachesLostReceiptAndStoresApplicationExit(t *testing.T) {
+	repo := memory.NewRepository()
+	request := coordinatorRequest()
+	if _, err := repo.ReserveExecutionAt(context.Background(), request, coordinatorTestTime); err != nil {
+		t.Fatal(err)
+	}
+	exitCode := 23
+	observer := &testObserver{observation: providerexec.Observation{
+		ExecutionReference: "ref:exec/recovered", Status: providerexec.ResultCompleted,
+		StartedAt: coordinatorTestTime, CompletedAt: coordinatorTestTime.Add(time.Second), ExitCode: &exitCode,
+	}}
+	coordinator, err := NewWithObserver(repo, &testExecutor{reference: "ref:exec/unused"}, observer, ClockFunc(func() time.Time { return coordinatorTestTime.Add(2 * time.Second) }), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	recovered, err := coordinator.Recover(context.Background())
+	if err != nil || len(recovered) != 1 || recovered[0].Result == nil || recovered[0].Result.Status != providerexec.ResultCompleted || !recovered[0].Attached {
+		t.Fatalf("Recover = %#v, %v", recovered, err)
+	}
+	if observer.calls != 1 || recovered[0].Result.ExitCode == nil || *recovered[0].Result.ExitCode != 23 {
+		t.Fatalf("observer_calls=%d result=%#v", observer.calls, recovered[0].Result)
+	}
+}
+
+func TestRecoverPersistsUnknownWhenRuntimeIdentityIsAbsent(t *testing.T) {
+	repo := memory.NewRepository()
+	request := coordinatorRequest()
+	if _, err := repo.ReserveExecutionAt(context.Background(), request, coordinatorTestTime); err != nil {
+		t.Fatal(err)
+	}
+	observer := &testObserver{err: providerexec.ErrExecutionNotFound}
+	coordinator, err := NewWithObserver(repo, &testExecutor{reference: "ref:exec/unused"}, observer, ClockFunc(func() time.Time { return coordinatorTestTime.Add(2 * time.Second) }), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	recovered, err := coordinator.Recover(context.Background())
+	if err != nil || len(recovered) != 1 || recovered[0].Result == nil || recovered[0].Result.Status != providerexec.ResultOutcomeUnknown || recovered[0].Attached {
+		t.Fatalf("Recover = %#v, %v", recovered, err)
+	}
+}
+
+func TestGetResultCleansPrivateRuntimeEvidenceBeforeDurableExpiry(t *testing.T) {
+	repo := memory.NewRepository()
+	request := coordinatorRequest()
+	dispatch := providerexec.Dispatch{ExecutionReference: "ref:exec/receipt-cleanup", AcceptedAt: coordinatorTestTime}
+	if _, err := repo.ReserveExecution(context.Background(), request, dispatch); err != nil {
+		t.Fatal(err)
+	}
+	result, err := providerexec.NewResult(request, coordinatorTestTime, coordinatorTestTime.Add(time.Second), providerexec.ResultOutcome{Status: providerexec.ResultCompleted})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.StoreResult(context.Background(), result); err != nil {
+		t.Fatal(err)
+	}
+	cleaner := &testCleaner{}
+	c, err := NewWithRuntime(repo, &testExecutor{reference: "ref:exec/unused"}, nil, nil, cleaner, ClockFunc(func() time.Time { return result.RetainedUntil }))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.GetResult(context.Background(), request.OperationID, result.RetainedUntil); !errors.Is(err, repository.ErrExpired) {
+		t.Fatalf("GetResult expiry error = %v", err)
+	}
+	if cleaner.calls != 1 || len(cleaner.requests) != 1 || cleaner.requests[0].RequestDigest != request.RequestDigest {
+		t.Fatalf("cleanup calls = %d, requests = %#v", cleaner.calls, cleaner.requests)
+	}
+	record, err := repo.GetExecution(context.Background(), request.OperationID)
+	if err != nil || !record.ResultExpired || record.Result != nil {
+		t.Fatalf("expired record = %#v, %v", record, err)
+	}
+	if _, err := c.GetResult(context.Background(), request.OperationID, result.RetainedUntil.Add(time.Second)); !errors.Is(err, repository.ErrExpired) {
+		t.Fatalf("replayed expiry error = %v", err)
+	}
+	if cleaner.calls != 2 {
+		t.Fatalf("idempotent cleanup calls = %d, want 2", cleaner.calls)
 	}
 }
