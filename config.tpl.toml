@@ -80,18 +80,37 @@ guard_state_file = ''
 # algorithm = 'EdDSA'
 # public_key_file = '/run/secrets/provider-admission/agent-platform-ed25519.pem'
 
-# Provider lifecycle composition is separately gated. The fake driver is for
-# development evidence only; production rejects it. The repository is not the
-# local /instances repository and file mode is single-controller evidence.
+# Provider lifecycle composition is separately gated. Both current drivers are
+# development evidence only and production rejects them. Docker requires the
+# independent file repository and does not reuse local /instances state.
 [server.provider.lifecycle]
 enabled = false
-driver = 'fake'
+driver = 'fake' # fake | docker
 
 [server.provider.lifecycle.repository]
 driver = 'memory'             # memory | file
 
 [server.provider.lifecycle.repository.file]
 path = 'data/provider-lifecycle.json'
+
+# Required only when server.provider.lifecycle.driver = 'docker'. Replace the
+# image with a real sha256 digest and set a stable controller ID before enabling.
+[server.provider.lifecycle.docker]
+host = ''
+image = ''
+pull_policy = 'if_not_present'
+memory_bytes = 536870912
+nano_cpus = 1000000000
+pids_limit = 256
+tmpfs_bytes = 67108864
+operation_timeout_seconds = 30
+pull_timeout_seconds = 300
+stop_timeout_seconds = 10
+user = '65532:65532'
+command = ['/bin/sh', '-c', "trap 'exit 0' TERM INT; while :; do sleep 3600 & wait $!; done"]
+data_root = 'data/provider-runtime'
+namespace = 'default'
+controller_id = ''
 
 [runtime]
 driver = 'fake' # fake | docker

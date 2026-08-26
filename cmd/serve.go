@@ -22,6 +22,7 @@ import (
 	admissionfile "github.com/shell-echo/sandbox-runtime/provider/admission/file"
 	lifecycleapplication "github.com/shell-echo/sandbox-runtime/provider/lifecycle/application"
 	lifecyclecoordinator "github.com/shell-echo/sandbox-runtime/provider/lifecycle/coordinator"
+	lifecycledocker "github.com/shell-echo/sandbox-runtime/provider/lifecycle/driver/docker"
 	lifecyclefake "github.com/shell-echo/sandbox-runtime/provider/lifecycle/driver/fake"
 	lifecyclerepository "github.com/shell-echo/sandbox-runtime/provider/lifecycle/repository"
 	lifecyclefile "github.com/shell-echo/sandbox-runtime/provider/lifecycle/repository/file"
@@ -177,22 +178,39 @@ func newProviderLifecycleApplication(ctx context.Context, lifecycleConfig config
 		return nil, noOpProviderClose, fmt.Errorf("unsupported Provider lifecycle repository %q", lifecycleConfig.Repository.Driver)
 	}
 	var driver lifecyclecoordinator.Driver
+	closeDriver := noOpProviderClose
 	switch lifecycleConfig.Driver {
 	case config.ProviderLifecycleFakeDriver:
 		driver = lifecyclefake.New()
+	case config.ProviderLifecycleDockerDriver:
+		cfg := lifecycleConfig.Docker
+		dockerDriver, err := lifecycledocker.New(ctx, lifecycledocker.Options{
+			Host: cfg.Host, Image: cfg.Image, PullPolicy: lifecycledocker.PullPolicy(cfg.PullPolicy),
+			MemoryBytes: cfg.MemoryBytes, NanoCPUs: cfg.NanoCPUs, PidsLimit: cfg.PidsLimit,
+			TmpfsBytes: cfg.TmpfsBytes, OperationTimeoutSeconds: cfg.OperationTimeoutSeconds,
+			PullTimeoutSeconds: cfg.PullTimeoutSeconds, StopTimeoutSeconds: cfg.StopTimeoutSeconds,
+			User: cfg.User, Command: append([]string(nil), cfg.Command...), DataRoot: cfg.DataRoot,
+			Namespace: cfg.Namespace, ControllerID: cfg.ControllerID,
+		})
+		if err != nil {
+			_ = lifecycleRepo.Close()
+			return nil, noOpProviderClose, fmt.Errorf("construct Provider Docker lifecycle driver: %w", err)
+		}
+		driver = dockerDriver
+		closeDriver = dockerDriver.Close
 	default:
 		_ = lifecycleRepo.Close()
 		return nil, noOpProviderClose, fmt.Errorf("unsupported Provider lifecycle driver %q", lifecycleConfig.Driver)
 	}
 	application, err := lifecycleapplication.New(lifecycleRepo, driver, systemAdmissionClock{})
 	if err != nil {
-		_ = lifecycleRepo.Close()
+		_ = errors.Join(closeDriver(), lifecycleRepo.Close())
 		return nil, noOpProviderClose, fmt.Errorf("construct Provider lifecycle application: %w", err)
 	}
 	if err := application.Recover(ctx); err != nil {
-		return nil, noOpProviderClose, errors.Join(fmt.Errorf("recover Provider lifecycle: %w", err), lifecycleRepo.Close())
+		return nil, noOpProviderClose, errors.Join(fmt.Errorf("recover Provider lifecycle: %w", err), closeDriver(), lifecycleRepo.Close())
 	}
-	return application, lifecycleRepo.Close, nil
+	return application, func() error { return errors.Join(closeDriver(), lifecycleRepo.Close()) }, nil
 }
 
 func noOpProviderClose() error { return nil }
@@ -286,12 +304,7 @@ func validateServeConfiguration(application *config.ApplicationConfig, serverCon
 		return errors.New("production mode requires a persistent repository")
 	}
 	if application.Mode == config.ApplicationProductionMode && serverConfig.Provider.Lifecycle.Enabled {
-		if serverConfig.Provider.Lifecycle.Driver == config.ProviderLifecycleFakeDriver {
-			return errors.New("production mode requires a production-capable Provider lifecycle driver")
-		}
-		if serverConfig.Provider.Lifecycle.Repository.Driver != config.ProviderLifecycleFileRepository {
-			return errors.New("production mode requires a persistent Provider lifecycle repository")
-		}
+		return errors.New("production mode rejects Provider lifecycle drivers until a production-capable adapter passes its release gates")
 	}
 	if runtimeConfig.Driver == config.RuntimeDockerDriver && repositoryConfig.Driver == config.RepositoryMemoryDriver {
 		return errors.New("docker runtime requires a persistent repository")

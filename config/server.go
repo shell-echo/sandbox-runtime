@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -38,7 +39,10 @@ type ProviderConfig struct {
 // It is intentionally separate from the local instance runtime driver.
 type ProviderLifecycleDriver string
 
-const ProviderLifecycleFakeDriver ProviderLifecycleDriver = "fake"
+const (
+	ProviderLifecycleFakeDriver   ProviderLifecycleDriver = "fake"
+	ProviderLifecycleDockerDriver ProviderLifecycleDriver = "docker"
+)
 
 // ProviderLifecycleRepositoryDriver identifies Provider-local persistence.
 type ProviderLifecycleRepositoryDriver string
@@ -59,12 +63,33 @@ type ProviderLifecycleRepositoryConfig struct {
 	File   ProviderLifecycleRepositoryFileConfig `mapstructure:"file"`
 }
 
+// ProviderLifecycleDockerConfig is intentionally independent from the local
+// runtime.docker configuration. It configures only Provider-owned resources.
+type ProviderLifecycleDockerConfig struct {
+	Host                    string   `mapstructure:"host"`
+	Image                   string   `mapstructure:"image"`
+	PullPolicy              string   `mapstructure:"pull_policy"`
+	MemoryBytes             int64    `mapstructure:"memory_bytes"`
+	NanoCPUs                int64    `mapstructure:"nano_cpus"`
+	PidsLimit               int64    `mapstructure:"pids_limit"`
+	TmpfsBytes              int64    `mapstructure:"tmpfs_bytes"`
+	OperationTimeoutSeconds int      `mapstructure:"operation_timeout_seconds"`
+	PullTimeoutSeconds      int      `mapstructure:"pull_timeout_seconds"`
+	StopTimeoutSeconds      int      `mapstructure:"stop_timeout_seconds"`
+	User                    string   `mapstructure:"user"`
+	Command                 []string `mapstructure:"command"`
+	DataRoot                string   `mapstructure:"data_root"`
+	Namespace               string   `mapstructure:"namespace"`
+	ControllerID            string   `mapstructure:"controller_id"`
+}
+
 // ProviderLifecycleConfig controls composition of the authorized Provider
 // lifecycle application. Disabled configuration is inert.
 type ProviderLifecycleConfig struct {
 	Enabled    bool                              `mapstructure:"enabled"`
 	Driver     ProviderLifecycleDriver           `mapstructure:"driver"`
 	Repository ProviderLifecycleRepositoryConfig `mapstructure:"repository"`
+	Docker     ProviderLifecycleDockerConfig     `mapstructure:"docker"`
 }
 
 // ProviderTransportConfig configures the dedicated, mTLS-only Provider
@@ -129,6 +154,8 @@ type ProviderCompatibilityProfile struct {
 var (
 	providerSuiteVersionPattern = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+$`)
 	providerSuiteDigestPattern  = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
+	providerPinnedImagePattern  = regexp.MustCompile(`^.+@sha256:[0-9a-f]{64}$`)
+	providerOwnershipPattern    = regexp.MustCompile(`^[A-Za-z0-9._-]{1,63}$`)
 )
 
 // load registers the section's defaults and env bindings, unmarshals the merged
@@ -189,7 +216,13 @@ func (c *ProviderLifecycleConfig) validateEnabled() error {
 	if !c.Enabled {
 		return nil
 	}
-	if c.Driver != ProviderLifecycleFakeDriver {
+	switch c.Driver {
+	case ProviderLifecycleFakeDriver:
+	case ProviderLifecycleDockerDriver:
+		if err := c.Docker.validate(); err != nil {
+			return fmt.Errorf("docker %w", err)
+		}
+	default:
 		return fmt.Errorf("driver %q is unsupported", c.Driver)
 	}
 	switch c.Repository.Driver {
@@ -201,7 +234,45 @@ func (c *ProviderLifecycleConfig) validateEnabled() error {
 	default:
 		return fmt.Errorf("repository driver %q is unsupported", c.Repository.Driver)
 	}
+	if c.Driver == ProviderLifecycleDockerDriver && c.Repository.Driver != ProviderLifecycleFileRepository {
+		return errors.New("docker driver requires the single-controller file repository")
+	}
 	return nil
+}
+
+func (c ProviderLifecycleDockerConfig) validate() error {
+	if !providerPinnedImagePattern.MatchString(c.Image) {
+		return errors.New("image must be pinned by sha256 digest")
+	}
+	if c.PullPolicy != "never" && c.PullPolicy != "if_not_present" && c.PullPolicy != "always" {
+		return fmt.Errorf("pull policy %q is unsupported", c.PullPolicy)
+	}
+	if c.MemoryBytes <= 0 || c.NanoCPUs <= 0 || c.PidsLimit <= 0 || c.TmpfsBytes <= 0 {
+		return errors.New("resource limits must be positive")
+	}
+	if c.OperationTimeoutSeconds <= 0 || c.PullTimeoutSeconds <= 0 || c.StopTimeoutSeconds < 0 {
+		return errors.New("operation timeouts are invalid")
+	}
+	if !validProviderNumericUser(c.User) {
+		return errors.New("user must be numeric non-root uid:gid")
+	}
+	if len(c.Command) == 0 || strings.TrimSpace(c.DataRoot) == "" {
+		return errors.New("command and data_root are required")
+	}
+	if !providerOwnershipPattern.MatchString(c.Namespace) || !providerOwnershipPattern.MatchString(c.ControllerID) {
+		return errors.New("namespace and controller_id must be bounded ownership identifiers")
+	}
+	return nil
+}
+
+func validProviderNumericUser(value string) bool {
+	parts := strings.Split(value, ":")
+	if len(parts) != 2 {
+		return false
+	}
+	uid, uidErr := strconv.ParseUint(parts[0], 10, 31)
+	gid, gidErr := strconv.ParseUint(parts[1], 10, 31)
+	return uidErr == nil && gidErr == nil && uid > 0 && gid > 0
 }
 
 // Validate checks an explicitly enabled Provider lifecycle configuration.
@@ -355,6 +426,13 @@ func defaultServerConfig() *ServerConfig {
 				Repository: ProviderLifecycleRepositoryConfig{
 					Driver: ProviderLifecycleMemoryRepository,
 					File:   ProviderLifecycleRepositoryFileConfig{Path: "data/provider-lifecycle.json"},
+				},
+				Docker: ProviderLifecycleDockerConfig{
+					PullPolicy: "if_not_present", MemoryBytes: 512 << 20,
+					NanoCPUs: 1_000_000_000, PidsLimit: 256, TmpfsBytes: 64 << 20,
+					OperationTimeoutSeconds: 30, PullTimeoutSeconds: 300, StopTimeoutSeconds: 10,
+					User: "65532:65532", Command: []string{"/bin/sh", "-c", "trap 'exit 0' TERM INT; while :; do sleep 3600 & wait $!; done"},
+					DataRoot: "data/provider-runtime", Namespace: "default",
 				},
 			},
 		},

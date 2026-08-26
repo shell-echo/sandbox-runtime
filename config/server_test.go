@@ -131,6 +131,58 @@ path = "data/provider-lifecycle.json"
 	}
 }
 
+func TestLoadProviderDockerLifecycleTOML(t *testing.T) {
+	snapshotGlobals(t)
+	body := validEnabledProviderTOML() + `
+[server.provider.protected_admission]
+enabled = true
+guard_state_file = "data/provider-admission.json"
+
+[[server.provider.protected_admission.trusted_verification_keys]]
+id = "agent-platform-ed25519"
+algorithm = "EdDSA"
+public_key_file = "/run/secrets/provider-admission/agent-platform-ed25519.pem"
+
+[server.provider.lifecycle]
+enabled = true
+driver = "docker"
+
+[server.provider.lifecycle.repository]
+driver = "file"
+
+[server.provider.lifecycle.repository.file]
+path = "data/provider-lifecycle.json"
+
+[server.provider.lifecycle.docker]
+image = "example/shell@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+pull_policy = "never"
+memory_bytes = 268435456
+nano_cpus = 500000000
+pids_limit = 128
+tmpfs_bytes = 33554432
+operation_timeout_seconds = 12
+pull_timeout_seconds = 34
+stop_timeout_seconds = 5
+user = "65532:65532"
+command = ["sleep", "3600"]
+data_root = "data/provider-runtime"
+namespace = "provider-dev"
+controller_id = "controller-one"
+`
+	if err := Load(writeConfig(t, body)); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	lifecycle := Server.Provider.Lifecycle
+	if lifecycle.Driver != ProviderLifecycleDockerDriver || lifecycle.Repository.Driver != ProviderLifecycleFileRepository {
+		t.Fatalf("lifecycle = %#v", lifecycle)
+	}
+	docker := lifecycle.Docker
+	if docker.PullPolicy != "never" || docker.MemoryBytes != 268435456 || docker.TmpfsBytes != 33554432 ||
+		docker.User != "65532:65532" || docker.ControllerID != "controller-one" || len(docker.Command) != 2 {
+		t.Fatalf("Provider Docker lifecycle = %#v", docker)
+	}
+}
+
 func TestLoadProviderRejectsEmptyHost(t *testing.T) {
 	snapshotGlobals(t)
 	body := strings.Replace(validEnabledProviderTOML(), `host = "127.0.0.1"`, `host = ""`, 1)
@@ -378,7 +430,7 @@ func TestEnabledProviderLifecycleRequiresProtectedAdmission(t *testing.T) {
 
 func TestEnabledProviderLifecycleRejectsInvalidRepository(t *testing.T) {
 	tests := map[string]func(*ProviderLifecycleConfig){
-		"driver":            func(c *ProviderLifecycleConfig) { c.Driver = "docker" },
+		"driver":            func(c *ProviderLifecycleConfig) { c.Driver = "unknown" },
 		"repository driver": func(c *ProviderLifecycleConfig) { c.Repository.Driver = "database" },
 		"repository path": func(c *ProviderLifecycleConfig) {
 			c.Repository.Driver = ProviderLifecycleFileRepository
@@ -396,6 +448,44 @@ func TestEnabledProviderLifecycleRejectsInvalidRepository(t *testing.T) {
 			mutate(&provider.Lifecycle)
 			if err := provider.Validate(); err == nil {
 				t.Fatal("invalid lifecycle configuration was accepted")
+			}
+		})
+	}
+}
+
+func TestEnabledProviderDockerLifecycleRequiresPinnedBoundedPersistentConfiguration(t *testing.T) {
+	valid := ProviderLifecycleConfig{
+		Enabled: true, Driver: ProviderLifecycleDockerDriver,
+		Repository: ProviderLifecycleRepositoryConfig{
+			Driver: ProviderLifecycleFileRepository,
+			File:   ProviderLifecycleRepositoryFileConfig{Path: "data/provider-lifecycle.json"},
+		},
+		Docker: ProviderLifecycleDockerConfig{
+			Image: "example/shell@sha256:" + strings.Repeat("a", 64), PullPolicy: "if_not_present",
+			MemoryBytes: 512 << 20, NanoCPUs: 1_000_000_000, PidsLimit: 256, TmpfsBytes: 64 << 20,
+			OperationTimeoutSeconds: 30, PullTimeoutSeconds: 300, StopTimeoutSeconds: 10,
+			User: "65532:65532", Command: []string{"sleep", "3600"}, DataRoot: "data/provider-runtime",
+			Namespace: "provider-dev", ControllerID: "controller-one",
+		},
+	}
+	if err := valid.Validate(); err != nil {
+		t.Fatalf("valid Docker lifecycle: %v", err)
+	}
+	tests := map[string]func(*ProviderLifecycleConfig){
+		"memory repository": func(c *ProviderLifecycleConfig) { c.Repository.Driver = ProviderLifecycleMemoryRepository },
+		"mutable image":     func(c *ProviderLifecycleConfig) { c.Docker.Image = "alpine:3.23" },
+		"root user":         func(c *ProviderLifecycleConfig) { c.Docker.User = "0:0" },
+		"overflow user":     func(c *ProviderLifecycleConfig) { c.Docker.User = "999999999999:65532" },
+		"missing tmpfs":     func(c *ProviderLifecycleConfig) { c.Docker.TmpfsBytes = 0 },
+		"missing data root": func(c *ProviderLifecycleConfig) { c.Docker.DataRoot = "" },
+		"controller":        func(c *ProviderLifecycleConfig) { c.Docker.ControllerID = "bad controller" },
+	}
+	for name, mutate := range tests {
+		t.Run(name, func(t *testing.T) {
+			candidate := valid
+			mutate(&candidate)
+			if err := candidate.Validate(); err == nil {
+				t.Fatal("invalid Provider Docker lifecycle configuration was accepted")
 			}
 		})
 	}

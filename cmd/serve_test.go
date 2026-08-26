@@ -140,7 +140,7 @@ func TestValidateServeConfigurationProductionBoundaries(t *testing.T) {
 	}
 }
 
-func TestValidateServeConfigurationRejectsFakeProviderLifecycleInProduction(t *testing.T) {
+func TestValidateServeConfigurationRejectsDevelopmentProviderLifecycleInProduction(t *testing.T) {
 	application := &config.ApplicationConfig{Mode: config.ApplicationProductionMode}
 	serverConfig := &config.ServerConfig{API: option.HTTP{Host: "127.0.0.1", Port: 8080}, Provider: validProviderConfigForServeTest()}
 	serverConfig.Provider.ProtectedAdmission = validProtectedAdmissionConfigForServeTest()
@@ -156,6 +156,17 @@ func TestValidateServeConfigurationRejectsFakeProviderLifecycleInProduction(t *t
 	repositoryConfig := &config.RepositoryConfig{Driver: config.RepositoryFileDriver, File: config.RepositoryFileConfig{Path: "instances.json"}}
 	if err := validateServeConfiguration(application, serverConfig, runtimeConfig, repositoryConfig); err == nil {
 		t.Fatal("production accepted the Provider fake lifecycle driver")
+	}
+	serverConfig.Provider.Lifecycle.Driver = config.ProviderLifecycleDockerDriver
+	serverConfig.Provider.Lifecycle.Docker = config.ProviderLifecycleDockerConfig{
+		Image: "example/shell@sha256:" + strings.Repeat("a", 64), PullPolicy: "if_not_present",
+		MemoryBytes: 512 << 20, NanoCPUs: 1_000_000_000, PidsLimit: 256, TmpfsBytes: 64 << 20,
+		OperationTimeoutSeconds: 30, PullTimeoutSeconds: 300, StopTimeoutSeconds: 10,
+		User: "65532:65532", Command: []string{"sleep", "3600"}, DataRoot: "provider-runtime",
+		Namespace: "provider-dev", ControllerID: "controller-one",
+	}
+	if err := validateServeConfiguration(application, serverConfig, runtimeConfig, repositoryConfig); err == nil {
+		t.Fatal("production accepted the Provider Docker development lifecycle driver")
 	}
 }
 
