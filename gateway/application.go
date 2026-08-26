@@ -286,7 +286,15 @@ func (g *Gateway) proxyAttempt(ctx context.Context, client, backend Stream, gran
 	monitorDone := make(chan struct{})
 	go func() {
 		defer close(monitorDone)
-		timer := time.NewTimer(time.Until(grant.ExpiresAt))
+		expiresIn := grant.ExpiresAt.Sub(g.clock.Now().UTC())
+		if expiresIn <= 0 {
+			expired.Store(true)
+			cancel()
+			_ = client.Close(context.Background())
+			_ = backend.Close(context.Background())
+			return
+		}
+		timer := time.NewTimer(expiresIn)
 		defer timer.Stop()
 		select {
 		case <-watch:

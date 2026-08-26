@@ -238,6 +238,37 @@ func TestGatewayConnectProxiesOpaqueFramesAndRecordsMetadataOnly(t *testing.T) {
 	}
 }
 
+func TestGatewayProxyExpiryUsesConfiguredClock(t *testing.T) {
+	fixedNow := time.Unix(1, 0).UTC()
+	client, backend := newTestStream(), newTestStream()
+	revocations, recorder := newTestRevocations(), &testRecorder{}
+	grant := gatewayGrant()
+	grant.ExpiresAt = fixedNow.Add(time.Hour)
+	endpoint := validEndpoint(backend)
+	endpoint.ExpiresAt = grant.ExpiresAt
+	gateway, err := New(Options{
+		Authorizer:  testAuthorizer{grant: grant},
+		Resolver:    &testResolver{endpoints: []Endpoint{endpoint}},
+		Revocations: revocations,
+		Recorder:    recorder,
+		Clock:       ClockFunc(func() time.Time { return fixedNow }),
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	result := make(chan error, 1)
+	go func() { result <- gateway.Connect(context.Background(), gatewayRequest(), client) }()
+	client.push(Frame{Type: TextFrame, Payload: []byte("configured-clock")})
+	if got := backend.pull(t); string(got.Payload) != "configured-clock" {
+		t.Fatalf("backend frame = %#v", got)
+	}
+	_ = client.Close(context.Background())
+	if err := <-result; err != nil {
+		t.Fatalf("Connect() error = %v", err)
+	}
+}
+
 func TestGatewayReconnectsWithFreshOpaqueResolution(t *testing.T) {
 	client, first, second := newTestStream(), newTestStream(), newTestStream()
 	revocations, recorder := newTestRevocations(), &testRecorder{}
