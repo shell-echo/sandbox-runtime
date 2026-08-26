@@ -129,18 +129,19 @@ multi-tenant, deployment, and production readiness.
 
 ## Current Snapshot
 
-This snapshot was audited on 2026-08-26 against implementation evidence
-baseline `b4c7e2d`. At audit time, `main` and `origin/main` both resolved to that
-commit. The baseline identifies reviewed implementation evidence; it is not a
-self-updating assertion about the current checkout.
+This snapshot was audited on 2026-08-26 against committed local implementation
+through `123d16a`. The last verified remote/CI baseline remains
+`origin/main@b4c7e2d`; the P2.5 commits have not been pushed. These baselines
+identify reviewed evidence; they are not self-updating assertions about the
+current checkout.
 
 Contract identity:
 
 - namespace: `urn:shell-echo:sandbox-runtime:provider-v1`
 - version/license: `1.0.0` / MIT
-- revision: `6f549c222ab5ff5b57ed1a49bd2ac5bb95d3b311`
-- Contract tree: `b27453d048a2cd8b90f54008d5c4eac28f38c9cb`
-- locked Conformance Suite: 35 cases
+- revision: `22a148e2898477790512d5bb742605654ff00ebf`
+- Contract tree: `1a967c9c6ce9646c8431f6ee48699ec9f406a589`
+- locked Conformance Suite: 38 cases
 
 | Phase | Verified maturity | Open gate |
 | --- | --- | --- |
@@ -148,6 +149,7 @@ Contract identity:
 | P1.1 | Passed for DTO, mTLS discovery, JWS/digest/replay/fencing admission | Does not prove runtime behavior or production identity infrastructure |
 | P1.2 | Passed for the bounded Contract-authorized lifecycle subset and development composition | Provider lifecycle still uses only a fake driver; reserved lifecycle families and production gates remain open |
 | P2.1-P2.4a3 | Bounded exec, result, terminal, Gateway, artifact, usage, admission, application, persistence, and transport components have local Contract/CI evidence | P2 is not vertically composed into a real coding/shell Provider and no independent caller E2E environment exists |
+| P2.5a-b | Vertical-composition plan accepted; atomic exec+terminal coding/shell capability profile is locked and its fail-closed local projection passes the 38-case Suite | P2.5b CI is pending; no runtime behavior or nonempty startup advertisement is enabled; P2.5c-i remain open |
 | P3 | Local revision binding, shadow-validation, canary/rollback/drain, and metrics primitives passed component tests | P2 gate, external caller, real traffic parity, canary, rollback, and old-run drain E2E remain open |
 | P4 | Optional capability profiles have not started | Each browser/desktop/forwarding/snapshot/GPU/isolation profile needs independent Contract, security, and conformance gates |
 
@@ -173,7 +175,7 @@ make the current Provider a usable coding/shell implementation.
    Provider runtime currently supplies stable mounts, terminal allocation and
    WebSocket transport, artifact staging, or usage collection.
 2. No independently owned caller/platform E2E environment is runnable. The
-   repository's 35-case runner maps to repository-local Go tests and CI has no
+   repository's 38-case runner maps to repository-local Go tests and CI has no
    external-platform job. The separately inspected platform candidate at
    `CelestialsGroup/agent-blueprints@cf623ac` still marks Sandbox Provider,
    Sandbox Controller, and Runtime Gateway unimplemented and has no executable
@@ -185,20 +187,21 @@ No external E2E was run or claimed during the audit.
 
 P2.5a established [ADR 0015](adr/0015-coding-shell-vertical-composition.md) and
 the [vertical-composition plan](plan/p2.5-coding-shell-vertical-composition.md).
-The next implementation slice is P2.5b:
+P2.5b then locked one atomic exec+terminal coding/shell profile in Contract
+commit `22a148e` and projected it fail closed in `123d16a`. Its local gates pass,
+but CI is pending and runtime composition remains disabled. The next
+implementation slice is P2.5c:
 
-1. Extend and lock Contract authority for one honest coding/shell capability
-   and runtime profile before advertising or dispatching it.
-2. Audit create/session strict preflight ordering before their mutation guards.
-3. Implement a Provider-specific real runtime adapter with the four stable
+1. Audit create/session strict preflight ordering before their mutation guards.
+2. Implement a Provider-specific real runtime adapter with the four stable
    guest paths; do not reuse the local `/instances` wire model.
-4. Compose exec HTTP through durable acceptance, coordination, execution,
+3. Compose exec HTTP through durable acceptance, coordination, execution,
    cancellation, result reads, and usage evidence.
-5. Compose terminal authority, allocator, opaque handoff, a concrete WebSocket
+4. Compose terminal authority, allocator, opaque handoff, a concrete WebSocket
    adapter, and Gateway integration.
-6. Compose a real artifact stager and usage collector, then enable capability
+5. Compose a real artifact stager and usage collector, then enable capability
    advertisement only when all required dependencies are present.
-7. Supply an independently owned mTLS/JWS caller and reproducible deployment,
+6. Supply an independently owned mTLS/JWS caller and reproducible deployment,
    run the locked Suite and coding/shell E2E, and only then evaluate P3 traffic
    shadowing, canary, rollback, and drain.
 
