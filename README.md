@@ -32,6 +32,8 @@ Currently implemented:
 - configurable fake and Docker runtime drivers
 - instance lifecycle HTTP API backed by the selected driver
 - separate Provider API v1 wire DTOs and locked Contract projection validation
+- Provider-specific fake and Docker lifecycle adapters kept separate from local
+  `/instances`, with stable coding/shell mounts in the Docker development adapter
 - default-disabled Provider capability discovery on a separate mTLS-only HTTPS
   listener
 - default-disabled protected-operation admission with frozen public-key files
@@ -504,7 +506,10 @@ visibility.
 - [x] add durable Provider sandbox, operation, lease, and event models
 - [x] add idempotency, generation, fencing, deadlines, and reconciliation
 - [x] compose the authorized Provider lifecycle application for development (production driver and readiness remain gated)
-- [ ] pass the applicable local lifecycle and security Conformance Suite
+- [x] add an independent Provider Docker lifecycle adapter with stable mounts,
+  restart observation, unknown-outcome evidence, and cleanup
+- [x] pass the locked local lifecycle/security Suite mappings (component evidence only)
+- [ ] pass the independent caller release gate
 
 ### Manifest and blocks
 

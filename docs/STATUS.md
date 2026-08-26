@@ -42,6 +42,7 @@ production readiness.
 | Gateway clock correction | commit `0893ac3` | Grant-expiry timers now derive from the configured clock used by authorization and endpoint checks. Focused Gateway race/shuffle passed ten consecutive runs and the full race/shuffle suite passed. This is component regression evidence only |
 | P2.5b Contract/projection evidence | Contract commit `22a148e`; projection/lock commit `123d16a`; status baseline `206caeb` | Locks one atomic `sandbox.exec@1.0.0` + `sandbox.terminal@1.0.0` coding/shell profile and retains terminal-only compatibility. Empty, terminal-only, and complete coding/shell advertisements are accepted; exec-only, missing/split mapping, and unknown-capability shapes fail closed. Full race/shuffle, vet, lock verification, 38-case Suite, diff checks, and post-push CI `32924361132` passed. No runtime behavior or nonempty startup advertisement was enabled |
 | P2.5c admission-ordering evidence | transport commit `6c2962b`; Suite mapping `6340604`; status baseline `9b10abd` | Create and runtime-session bounded strict decode and Contract-safe `400` body-limit rejection precede digest/binding admission and mutation guard reservation. Digest-consistent unknown fields and oversized bodies consume no guard state; valid replay and stale fencing remain `409`. Full race/shuffle, vet, unchanged lock verification, mapped 38-case Suite, diff checks, and post-push CI `32926181615` passed. No dispatch or runtime behavior was added |
+| P2.5d local runtime evidence | implementation commit `de18787` | Provider-specific Docker lifecycle adapter, stable `/inputs` read-only, `/workspace` mutable, `/outputs` staging, bounded tmpfs `/tmp`, digest-pinned image, numeric non-root user, read-only root, resource/network bounds, ownership labels, idempotent create/remove, restart observation, unknown-outcome evidence, and explicit development composition passed focused/full race-shuffle, vet, unchanged Contract verification, 38-case Suite, diff checks, and both real Docker integration packages. CI is pending; this is single-controller development evidence only |
 | P3 local evidence | implementation commit `4212e88` | Revision identity validation, deterministic canary binding, rollback-only-new-run behavior, old-run draining, shadow validation bounds, and migration metric aggregation passed focused race/shuffle and vet; external caller gate remains open |
 | P3 component release evidence | post-push CI run `32805284762` | CI run concluded success for `4212e88`; this remains local migration component evidence, not external caller, canary traffic, rollback E2E, or production readiness |
 | External caller/platform E2E audit | implementation baseline `b4c7e2d`; separately owned `CelestialsGroup/agent-blueprints@cf623ac` | Blocked: this repository has no external-caller executable, deployment target, or E2E CI job. Its current 38-case runner dispatches repository-local Go tests. The separately owned platform checkout still marks Sandbox Provider, Sandbox Controller, and Runtime Gateway unimplemented, and its `test/e2e` directory contains no runnable scenario. No E2E command was run or claimed |
@@ -96,7 +97,8 @@ It does not clone, mount, or read an external source repository.
 | P2.5a | Coding/shell vertical-composition authority and delivery plan | Passed as design evidence in ADR 0015 and `docs/plan/p2.5-coding-shell-vertical-composition.md`; no Contract, config, runtime, route, or advertisement behavior changed | Retain the ownership and evidence boundaries through P2.5b-i |
 | P2.5b | Coding/shell Contract profile reconciliation | Contract authority committed as `22a148e`; projection/lock committed as `123d16a`; full local gates and CI `32924361132` passed | Retain Contract/profile regression. Runtime composition and startup advertisement remain disabled |
 | P2.5c | Create/session mutation preflight ordering | Transport correction `6c2962b`, Suite mapping `6340604`, and CI `32926181615` pass the slice gates | Retain admission-ordering regression; begin P2.5d Provider runtime foundation. No dispatch, runtime, external-caller, or production claim |
-| P2 | Coding/remote-shell profile | In progress: P2.1-P2.4a3 have bounded component/Contract evidence, P2.5a design evidence is accepted, and P2.5b-c gates pass. The current command composition is not a real coding/shell Provider, and no separately supplied caller is runnable | Complete P2.5d-h Provider vertical composition, then supply an independently owned caller and reproducible P2.5i environment. Aggregate conformance, multi-controller reliability, multi-tenant security, deployment, and production gates remain open |
+| P2.5d | Provider runtime foundation | Local gate passed in `de18787`; post-push CI pending | Retain Provider/local `/instances` separation, real Docker integration, restart/unknown/cleanup evidence, empty advertisement, and production rejection. Begin P2.5e exec vertical only after CI passes |
+| P2 | Coding/remote-shell profile | In progress: P2.1-P2.4a3 have bounded component/Contract evidence, P2.5a-c gates pass, and P2.5d has local single-controller runtime evidence. The current command composition is not a complete coding/shell Provider, and no separately supplied caller is runnable | Complete P2.5e-h Provider vertical composition, then supply an independently owned caller and reproducible P2.5i environment. Aggregate conformance, multi-controller reliability, multi-tenant security, deployment, and production gates remain open |
 | P3 | Migration readiness and external-caller integration | Blocked after local binding/shadow/metrics component evidence (`4212e88`): P2 is not vertically complete and no runnable external caller/platform E2E environment is available | Complete P2, then supply the caller, mTLS/JWS material, Provider endpoint/configuration, and scenario runner; prove locked-Suite parity, shadow parity, canary/rollback/drain, and unchanged platform contracts |
 | P4 | Optional capability profiles | Not started | Add browser, desktop, port forwarding, snapshots/restore, GPU, nested-container, and stronger-isolation profiles only through independent Contract, security, and conformance gates |
 | Production readiness | Independent evidence tier, not a shortcut from P4 | Not established | Deployment, multi-controller reliability, multi-tenant security, operations, and production gates |
@@ -220,6 +222,19 @@ Passed locally (authorized test environment):
   Contract lock verification, the mapped 38-case Suite, diff checks, and
   post-push CI `32926181615` passed. Application dispatch, runtime composition,
   and external-caller evidence remain pending.
+- P2.5d local verification covers a Provider-specific Docker adapter without
+  importing local `instance` models or repositories; exact ownership and
+  immutable-spec digests; stable read-only `/inputs`, writable `/workspace`
+  and `/outputs`, bounded tmpfs `/tmp`; digest-pinned image, numeric non-root
+  identity, read-only root, disabled networking, dropped capabilities,
+  no-new-privileges, resource/log bounds, idempotent create/remove, context
+  cancellation, foreign-resource refusal, lost-response `outcome_unknown`,
+  file-repository restart observation, and mount cleanup. Focused and full
+  race/shuffle, vet, unchanged Contract verification, the 38-case Suite, diff
+  checks, and live integration for both Docker packages passed at `de18787`.
+  Post-push CI is pending. This does not add exec/session/artifact/usage runtime
+  dispatch, nonempty advertisement, external caller, multi-controller,
+  multi-tenant, deployment, or production evidence.
 - P3 local component verification covers immutable ProviderRevision binding,
   deterministic canary selection, rollback isolation, drain state, shadow
   validation without dispatch, bounded metric aggregation, race/shuffle, vet,
@@ -228,11 +243,10 @@ Passed locally (authorized test environment):
 
 Pending:
 
-- P2 coding/shell Provider vertical composition. The command root currently
-  injects only lifecycle application behavior, Provider lifecycle supports only
-  its fake driver, exec does not dispatch a runtime executor, session/artifact/
-  usage applications are not command-composed, and startup advertises no
-  capability or runtime profile;
+- P2 coding/shell Provider vertical composition. The command root can now select
+  the Provider fake or Docker lifecycle adapter, but exec does not dispatch a
+  runtime executor, session/artifact/usage applications are not command-composed,
+  and startup advertises no capability or runtime profile;
 - P2/P3 external-caller Gateway E2E and migration evidence. The 2026-08-26
   environment audit found no runnable independently supplied caller, platform
   composition, or E2E target; local Suite mappings and Gateway tests remain

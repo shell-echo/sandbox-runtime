@@ -345,21 +345,21 @@ its conformance tests.
 
 ## Current gap assessment
 
-The current code is a sound lifecycle foundation, but the broader asynchronous
-Provider Contract is not yet implemented:
+The current code has bounded Provider components, but the complete coding/shell
+vertical and its release gates are not yet implemented:
 
 | Area | Current state | Required direction |
 | --- | --- | --- |
-| Backend abstraction | `instance.Driver` separates lifecycle from Docker. | Keep internal; add optional exec/session/snapshot capability ports. |
-| Lifecycle recovery | Single-process service reconciles persisted records and backend resources. | Add desired/observed generations, durable operations, fencing, leases, and unknown-outcome reconciliation. |
+| Backend abstraction | Local `instance.Driver` remains separate; the Provider lifecycle has its own fake and Docker development adapters. | Add Provider-specific optional exec/session/snapshot capability ports without reusing `/instances` models. |
+| Lifecycle recovery | Provider file persistence and Docker observation reconcile pending/unknown create work for one controller. | Retain unknown-outcome evidence; add transactional production storage before multi-controller operation. |
 | Persistence | Memory and atomically replaced file repository. | Retain for development; introduce transactional production storage before multi-controller operation. |
-| API | Synchronous local `/instances` CRUD. | Add a separate versioned Provider API v1 with async operation resources and resumable events. |
-| Capabilities | Shell workload label only. | Add versioned capability discovery and profile/limit validation. |
-| Execution | Not implemented. | Add bounded async exec, cancellation evidence, retained results, and usage evidence. |
-| Terminal | Not implemented. | Add an internal terminal endpoint and gateway-safe opaque session reference. |
-| Workspace | Only bounded `/tmp`; root is read-only. | Add the four stable paths, quotas, ownership, staging, and cleanup policy. |
+| API | Local `/instances` and the protected Provider v1 surface are separate; authorized lifecycle/session/artifact/usage routes have bounded projections. | Complete runtime application dispatch and resumable event composition without expanding Contract authority. |
+| Capabilities | Empty, terminal-only, and atomic coding/shell snapshots are locked; command startup remains empty by default. | Advertise the coding/shell profile only after all P2.5h dependencies pass. |
+| Execution | Bounded Contract/domain/coordinator/ledger components exist without a real executor. | Complete P2.5e dispatch, cancellation, retained result, reconciliation, and usage integration. |
+| Terminal | Session authority and Gateway components exist without a real allocator or WebSocket adapter. | Complete P2.5f opaque handoff and data-plane composition. |
+| Workspace | The Provider Docker development adapter supplies `/inputs`, `/workspace`, `/outputs`, and bounded tmpfs `/tmp` with owned cleanup. | Add exec/artifact consumers, capacity enforcement, and stronger isolation evidence. |
 | Security | Docker defaults already drop capabilities, use non-root/read-only root, disable networking, and limit resources. | Add policy enforcement, stronger isolation profiles, secret grants, egress controls, audit evidence, and production auth. |
-| Events and usage | Not implemented. | Add durable sequenced events and provider evidence suitable for platform accounting. |
+| Events and usage | Durable lifecycle events and bounded usage-evidence components exist without a complete runtime collector composition. | Complete collection/reconciliation while leaving platform accounting authority outside the Provider. |
 | Snapshots/browser/desktop | Not implemented and not advertised. | Keep optional until implemented and independently conformant. |
 
 ## Delivery plan and release gates
