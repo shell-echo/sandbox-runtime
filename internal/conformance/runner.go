@@ -109,7 +109,7 @@ var testCases = map[string]testCase{
 	},
 	"protected-admission-replay-and-fencing": {
 		Package: "./providerapi",
-		Run:     `^TestProtectedHandlerRejectsReplayAndStaleFencingAcrossAllMutations$`,
+		Run:     `^(TestProtectedHandlerRejectsDigestConsistentCreateAndSessionDocumentsBeforeGuard|TestProtectedHandlerRejectsOversizedCreateAndSessionDocumentsBeforeGuard|TestProtectedHandlerRejectsReplayAndStaleFencingAcrossAllMutations)$`,
 	},
 	"lifecycle-create-request-schema": {
 		Package: "./providerapi",
