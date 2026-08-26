@@ -69,6 +69,58 @@ func TestNewCapabilitySnapshotWithAdvertisementsAcceptsTerminalProfileMapping(t 
 	}
 }
 
+func TestNewCapabilitySnapshotWithAdvertisementsAcceptsCodingShellProfileMapping(t *testing.T) {
+	capabilities, runtimeProfiles := validCodingShellAdvertisements()
+	snapshot, err := NewCapabilitySnapshotWithAdvertisements("revision-1", validLimits(nil, nil), capabilities, runtimeProfiles, validProfiles())
+	if err != nil {
+		t.Fatalf("NewCapabilitySnapshotWithAdvertisements() error = %v", err)
+	}
+	if len(snapshot.Capabilities) != 2 || snapshot.Capabilities[0].ID != "sandbox.exec" || snapshot.Capabilities[1].ID != "sandbox.terminal" {
+		t.Fatalf("coding/shell capabilities = %#v", snapshot.Capabilities)
+	}
+	if len(snapshot.RuntimeProfiles) != 1 || snapshot.RuntimeProfiles[0].ID != "sandbox-runtime-coding-shell-v1" ||
+		len(snapshot.RuntimeProfiles[0].CapabilityProfileIDs) != 2 ||
+		snapshot.RuntimeProfiles[0].CapabilityProfileIDs[0] != "exec-v1" || snapshot.RuntimeProfiles[0].CapabilityProfileIDs[1] != "terminal-v1" {
+		t.Fatalf("coding/shell runtime profile = %#v", snapshot.RuntimeProfiles)
+	}
+
+	capabilities[0].Profiles[0] = "mutated"
+	runtimeProfiles[0].CapabilityProfileIDs[0] = "mutated"
+	if snapshot.Capabilities[0].Profiles[0] != "exec-v1" || snapshot.RuntimeProfiles[0].CapabilityProfileIDs[0] != "exec-v1" {
+		t.Fatalf("constructor input changed coding/shell snapshot: %#v", snapshot)
+	}
+}
+
+func TestNewCapabilitySnapshotWithAdvertisementsRejectsPartialCodingShellMappings(t *testing.T) {
+	tests := map[string]func(*[]Capability, *[]RuntimeProfile){
+		"exec only": func(capabilities *[]Capability, _ *[]RuntimeProfile) {
+			*capabilities = (*capabilities)[:1]
+		},
+		"missing exec profile mapping": func(_ *[]Capability, runtimeProfiles *[]RuntimeProfile) {
+			(*runtimeProfiles)[0].CapabilityProfileIDs = []string{"terminal-v1"}
+		},
+		"split runtime profiles": func(_ *[]Capability, runtimeProfiles *[]RuntimeProfile) {
+			*runtimeProfiles = []RuntimeProfile{
+				{ID: "sandbox-runtime-exec-v1", IsolationClass: "container", CapabilityProfileIDs: []string{"exec-v1"}},
+				{ID: "sandbox-runtime-terminal-v1", IsolationClass: "container", CapabilityProfileIDs: []string{"terminal-v1"}},
+			}
+		},
+		"unknown capability": func(capabilities *[]Capability, runtimeProfiles *[]RuntimeProfile) {
+			*capabilities = append(*capabilities, Capability{ID: "sandbox.browser", Versions: []string{"1.0.0"}, Profiles: []string{"browser-v1"}})
+			(*runtimeProfiles)[0].CapabilityProfileIDs = append((*runtimeProfiles)[0].CapabilityProfileIDs, "browser-v1")
+		},
+	}
+	for name, mutate := range tests {
+		t.Run(name, func(t *testing.T) {
+			capabilities, runtimeProfiles := validCodingShellAdvertisements()
+			mutate(&capabilities, &runtimeProfiles)
+			if _, err := NewCapabilitySnapshotWithAdvertisements("revision-1", validLimits(nil, nil), capabilities, runtimeProfiles, validProfiles()); err == nil {
+				t.Fatal("NewCapabilitySnapshotWithAdvertisements() error = nil")
+			}
+		})
+	}
+}
+
 func TestNewCapabilitySnapshotWithAdvertisementsRejectsInvalidTerminalMappings(t *testing.T) {
 	tests := map[string]func(*[]Capability, *[]RuntimeProfile){
 		"non-terminal missing versions": func(capabilities *[]Capability, runtimeProfiles *[]RuntimeProfile) {
@@ -379,6 +431,19 @@ func validTerminalAdvertisements() ([]Capability, []RuntimeProfile) {
 			RuntimeClassName:     "sandbox-runtime-terminal",
 			Architecture:         []string{"amd64"},
 			CapabilityProfileIDs: []string{"terminal-v1"},
+		}}
+}
+
+func validCodingShellAdvertisements() ([]Capability, []RuntimeProfile) {
+	return []Capability{
+			{ID: "sandbox.exec", Versions: []string{"1.0.0"}, Profiles: []string{"exec-v1"}},
+			{ID: "sandbox.terminal", Versions: []string{"1.0.0"}, Profiles: []string{"terminal-v1"}},
+		}, []RuntimeProfile{{
+			ID:                   "sandbox-runtime-coding-shell-v1",
+			IsolationClass:       "container",
+			RuntimeClassName:     "sandbox-runtime-coding-shell",
+			Architecture:         []string{"amd64"},
+			CapabilityProfileIDs: []string{"exec-v1", "terminal-v1"},
 		}}
 }
 

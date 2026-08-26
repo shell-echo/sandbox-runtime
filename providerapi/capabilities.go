@@ -28,7 +28,7 @@ var (
 
 // mapCapabilities explicitly projects the application-owned startup snapshot
 // into the Provider v1 wire model. The default snapshot remains disabled, while
-// an explicit terminal advertisement carries an exact profile mapping.
+// terminal-only and coding/shell advertisements carry exact profile mappings.
 func mapCapabilities(snapshot provider.CapabilitySnapshot) providerv1.Capabilities {
 	capabilities := make([]providerv1.Capability, len(snapshot.Capabilities))
 	for index, capability := range snapshot.Capabilities {
@@ -82,8 +82,8 @@ func mapCapabilities(snapshot provider.CapabilitySnapshot) providerv1.Capabiliti
 }
 
 // validateCapabilities enforces the locked capability Schema constraints and
-// terminal profile relationship. It is a local fail-closed boundary, not a
-// replacement for validation against the locked Contract.
+// terminal/coding-shell profile relationships. It is a local fail-closed
+// boundary, not a replacement for validation against the locked Contract.
 func validateCapabilities(document providerv1.Capabilities) error {
 	if !utf8.ValidString(document.ProviderRevisionID) || strings.TrimSpace(document.ProviderRevisionID) == "" {
 		return errors.New("provider revision ID must be valid UTF-8 and not empty")
@@ -151,7 +151,7 @@ func validateCapabilityAdvertisements(capabilities []providerv1.Capability, runt
 		}
 		versions := make(map[string]struct{}, len(capability.Versions))
 		for _, version := range capability.Versions {
-			if !identifierPattern.MatchString(version) || (capability.ID == providerv1.CapabilityTerminal && !suiteVersionPattern.MatchString(version)) {
+			if !identifierPattern.MatchString(version) || ((capability.ID == providerv1.CapabilityExec || capability.ID == providerv1.CapabilityTerminal) && !suiteVersionPattern.MatchString(version)) {
 				return fmt.Errorf("capability %q has an invalid version %q", capability.ID, version)
 			}
 			if _, exists := versions[version]; exists {
@@ -176,23 +176,27 @@ func validateCapabilityAdvertisements(capabilities []providerv1.Capability, runt
 			profiles[profileID] = struct{}{}
 			profileIDs[profileID] = struct{}{}
 		}
-		if capability.ID == providerv1.CapabilityTerminal && (len(capability.Versions) == 0 || len(capability.Profiles) == 0) {
-			return errors.New("terminal capability must advertise at least one version and profile")
+		if (capability.ID == providerv1.CapabilityExec || capability.ID == providerv1.CapabilityTerminal) && (len(capability.Versions) == 0 || len(capability.Profiles) == 0) {
+			return fmt.Errorf("capability %q must advertise at least one version and profile", capability.ID)
 		}
 		capabilitiesByID[capability.ID] = capability
 	}
-	terminal, terminalAdvertised := capabilitiesByID[providerv1.CapabilityTerminal]
-	if !terminalAdvertised {
-		if len(capabilities) != 0 {
-			return errors.New("P2.3c0 permits only terminal capability advertisements")
-		}
+	if len(capabilities) == 0 {
 		if len(runtimeProfiles) != 0 {
-			return errors.New("runtime profiles require an advertised terminal capability")
+			return errors.New("runtime profiles require an advertised capability")
 		}
 		return nil
 	}
-	if len(capabilities) != 1 {
-		return errors.New("P2.3c0 permits only one terminal capability advertisement")
+	execCapability, execAdvertised := capabilitiesByID[providerv1.CapabilityExec]
+	terminalCapability, terminalAdvertised := capabilitiesByID[providerv1.CapabilityTerminal]
+	switch {
+	case len(capabilities) == 1 && terminalAdvertised && !execAdvertised:
+	case len(capabilities) == 2 && terminalAdvertised && execAdvertised:
+	default:
+		return errors.New("Provider v1 permits only terminal-only or atomic coding/shell capability advertisements")
+	}
+	if len(runtimeProfiles) != 1 {
+		return errors.New("an advertised Provider v1 capability shape requires exactly one runtime profile")
 	}
 
 	mappedProfiles := make(map[string]struct{})
@@ -224,6 +228,9 @@ func validateCapabilityAdvertisements(capabilities []providerv1.Capability, runt
 		if len(runtimeProfile.CapabilityProfileIDs) > maxCapabilityProfiles {
 			return fmt.Errorf("runtime profile %q capability profiles must not exceed %d", runtimeProfile.ID, maxCapabilityProfiles)
 		}
+		if len(runtimeProfile.CapabilityProfileIDs) == 0 {
+			return fmt.Errorf("runtime profile %q must map at least one capability profile", runtimeProfile.ID)
+		}
 		for _, profileID := range runtimeProfile.CapabilityProfileIDs {
 			if _, exists := profileIDs[profileID]; !exists {
 				return fmt.Errorf("runtime profile %q references unadvertised capability profile %q", runtimeProfile.ID, profileID)
@@ -235,9 +242,11 @@ func validateCapabilityAdvertisements(capabilities []providerv1.Capability, runt
 		}
 	}
 
-	for _, profileID := range terminal.Profiles {
-		if _, mapped := mappedProfiles[profileID]; !mapped {
-			return fmt.Errorf("terminal capability profile %q has no advertised runtime profile", profileID)
+	for _, capability := range []providerv1.Capability{execCapability, terminalCapability} {
+		for _, profileID := range capability.Profiles {
+			if _, mapped := mappedProfiles[profileID]; !mapped {
+				return fmt.Errorf("capability %q profile %q has no advertised runtime profile", capability.ID, profileID)
+			}
 		}
 	}
 	return nil

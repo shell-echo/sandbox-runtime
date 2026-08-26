@@ -71,6 +71,18 @@ var testCases = map[string]testCase{
 		Package: "./providerapi/v1",
 		Run:     `^TestLockedTerminalSessionContractConsistency$`,
 	},
+	"capability-discovery-coding-shell-profile-advertisement": {
+		Package: "./providerapi",
+		Run:     `^TestMapCapabilitiesProjectsCodingShellAdvertisement$`,
+	},
+	"capability-discovery-coding-shell-contract-consistency": {
+		Package: "./providerapi/v1",
+		Run:     `^TestLockedCodingShellContractConsistency$`,
+	},
+	"capability-discovery-coding-shell-rejection-fixtures": {
+		Package: "./providerapi",
+		Run:     `^TestCodingShellCapabilityRejectionFixtures$`,
+	},
 	"capability-discovery-empty-request": {
 		Package: "./providerapi",
 		Run:     `^(TestCapabilitiesHandlerRejectsRequestsWithoutADocumentBeforeDispatch|TestProviderServerReconcilesHTTP11CapabilityInputTransport)$`,

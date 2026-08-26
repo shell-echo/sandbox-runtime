@@ -123,6 +123,81 @@ func TestMapCapabilitiesProjectsTerminalAdvertisement(t *testing.T) {
 	}
 }
 
+func TestMapCapabilitiesProjectsCodingShellAdvertisement(t *testing.T) {
+	capabilities, runtimeProfiles := providerCodingShellAdvertisements()
+	snapshot, err := provider.NewCapabilitySnapshotWithAdvertisements("revision-1", provider.Limits{
+		MaxCPUMillis: 1000, MaxMemoryBytes: 1 << 30, MaxEphemeralStorageBytes: 1 << 30,
+		MaxLeaseSeconds: 3600, MaxExecSeconds: 300,
+	}, capabilities, runtimeProfiles, []provider.SnapshotRestoreProfile{{
+		ProfileID: "sandbox-snapshot-workspace-v1", Level: provider.SnapshotLevelWorkspace,
+		SuiteID: provider.CompatibilitySuiteSandboxProvider, SuiteVersion: "1.0.0",
+		SuiteDigest: provider.SHA256Digest("sha256:" + strings.Repeat("a", 64)),
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	document := mapCapabilities(snapshot)
+	if err := validateCapabilities(document); err != nil {
+		t.Fatalf("validate coding/shell projection: %v", err)
+	}
+	if len(document.Capabilities) != 2 || document.Capabilities[0].ID != providerv1.CapabilityExec || document.Capabilities[1].ID != providerv1.CapabilityTerminal {
+		t.Fatalf("coding/shell capability projection = %#v", document.Capabilities)
+	}
+	if len(document.RuntimeProfiles) != 1 || document.RuntimeProfiles[0].ID != "sandbox-runtime-coding-shell-v1" ||
+		len(document.RuntimeProfiles[0].CapabilityProfileIDs) != 2 {
+		t.Fatalf("coding/shell runtime projection = %#v", document.RuntimeProfiles)
+	}
+
+	projection, err := providercontract.Load(context.Background(), filepath.Join(localContractSourceRoot(t), "compatibility/sandbox-runtime/contract.lock.json"), localContractSourceRoot(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := json.Marshal(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := projection.Validate("provider-capabilities.schema.json", encoded); err != nil {
+		t.Fatalf("coding/shell projection is not Contract-valid: %v", err)
+	}
+}
+
+func TestCodingShellCapabilityRejectionFixtures(t *testing.T) {
+	projection, err := providercontract.Load(context.Background(), filepath.Join(localContractSourceRoot(t), "compatibility/sandbox-runtime/contract.lock.json"), localContractSourceRoot(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	document, err := projection.ReadExample("capabilities-coding-shell-rejections.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fixture struct {
+		Cases []struct {
+			Name     string                  `json:"name"`
+			Document providerv1.Capabilities `json:"document"`
+		} `json:"cases"`
+	}
+	if err := json.Unmarshal(document, &fixture); err != nil {
+		t.Fatalf("decode coding/shell rejection fixtures: %v", err)
+	}
+	if len(fixture.Cases) < 4 {
+		t.Fatalf("coding/shell rejection fixture count = %d, want at least 4", len(fixture.Cases))
+	}
+	for _, test := range fixture.Cases {
+		t.Run(test.Name, func(t *testing.T) {
+			encoded, err := json.Marshal(test.Document)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := projection.Validate("provider-capabilities.schema.json", encoded); err != nil {
+				t.Fatalf("semantic rejection fixture must remain Schema-valid: %v", err)
+			}
+			if err := validateCapabilities(test.Document); err == nil {
+				t.Fatal("validateCapabilities() error = nil")
+			}
+		})
+	}
+}
+
 func TestValidateCapabilitiesRejectsInvalidDocuments(t *testing.T) {
 	valid := mapCapabilities(validSnapshot(t, int64Pointer(4096), int64Pointer(0)))
 	tests := map[string]func(*providerv1.Capabilities){
@@ -307,5 +382,18 @@ func providerTerminalAdvertisements() ([]provider.Capability, []provider.Runtime
 			RuntimeClassName:     "sandbox-runtime-terminal",
 			Architecture:         []string{"amd64"},
 			CapabilityProfileIDs: []string{"terminal-v1"},
+		}}
+}
+
+func providerCodingShellAdvertisements() ([]provider.Capability, []provider.RuntimeProfile) {
+	return []provider.Capability{
+			{ID: "sandbox.exec", Versions: []string{"1.0.0"}, Profiles: []string{"exec-v1"}},
+			{ID: "sandbox.terminal", Versions: []string{"1.0.0"}, Profiles: []string{"terminal-v1"}},
+		}, []provider.RuntimeProfile{{
+			ID:                   "sandbox-runtime-coding-shell-v1",
+			IsolationClass:       "container",
+			RuntimeClassName:     "sandbox-runtime-coding-shell",
+			Architecture:         []string{"amd64"},
+			CapabilityProfileIDs: []string{"exec-v1", "terminal-v1"},
 		}}
 }
