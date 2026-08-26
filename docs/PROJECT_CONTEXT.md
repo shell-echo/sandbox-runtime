@@ -129,12 +129,10 @@ multi-tenant, deployment, and production readiness.
 
 ## Current Snapshot
 
-This snapshot was audited on 2026-08-26 against local P2.5e implementation
-commit `5917a57`. Its local gates passed, but it has not been pushed and has no
-CI evidence. The latest verified remote/CI evidence remains P2.5d baseline
-`e3a8265`, for which repository CI `32929140044` passed. These baselines
-identify reviewed evidence; they are not self-updating assertions about the
-checkout.
+This snapshot was audited on 2026-08-26 against P2.5e implementation commit
+`5917a57` and evidence baseline `2f7a79b`. Repository CI `32937530059` passed
+for that evidence baseline. These baselines identify reviewed evidence; they
+are not self-updating assertions about the checkout.
 
 Contract identity:
 
@@ -150,7 +148,7 @@ Contract identity:
 | P1.1 | Passed for DTO, mTLS discovery, JWS/digest/replay/fencing admission | Does not prove runtime behavior or production identity infrastructure |
 | P1.2 | Passed for the bounded Contract-authorized lifecycle subset and development composition | Provider lifecycle has fake and Docker development adapters; reserved lifecycle families and production gates remain open |
 | P2.1-P2.4a3 | Bounded exec, result, terminal, Gateway, artifact, usage, admission, application, persistence, and transport components have local Contract/CI evidence | P2 is not vertically composed into a real coding/shell Provider and no independent caller E2E environment exists |
-| P2.5a-e | Plan, coding/shell Contract/profile, mutation preflight, Docker runtime foundation, and the exec vertical pass their local gates; P2.5a-d also have CI evidence | P2.5e CI, terminal/Gateway, artifact/usage, readiness-derived advertisement, and independent caller gates remain open |
+| P2.5a-e | Plan, coding/shell Contract/profile, mutation preflight, Docker runtime foundation, and the exec vertical pass their local and CI gates | Terminal/Gateway, artifact/usage, readiness-derived advertisement, and independent caller gates remain open |
 | P3 | Local revision binding, shadow-validation, canary/rollback/drain, and metrics primitives passed component tests | P2 gate, external caller, real traffic parity, canary, rollback, and old-run drain E2E remain open |
 | P4 | Optional capability profiles have not started | Each browser/desktop/forwarding/snapshot/GPU/isolation profile needs independent Contract, security, and conformance gates |
 
@@ -159,10 +157,10 @@ multi-controller reliability, hostile multi-tenant security, deployment, and
 production operations remain separate and unproven even after a future P2/P3
 E2E passes.
 
-The latest verified implementation/evidence CI for `e3a8265` is run
-`32929140044`; its `provider-contract`, `test`, and `docker-integration` jobs
-passed. The newer local implementation `5917a57` has no CI evidence. Neither
-baseline supplies independent caller or production evidence.
+The latest verified implementation/evidence CI for `2f7a79b` is run
+`32937530059`; its `provider-contract`, `test`, and `docker-integration` jobs
+passed. This remains repository CI evidence, not independent caller or
+production evidence.
 
 ## Current P2 Blockers
 
@@ -172,7 +170,7 @@ make the current Provider a usable coding/shell implementation.
 1. Provider vertical composition is incomplete. P2.5e locally composes the
    protected exec/cancel/result/operation routes over durable acceptance, a
    separate file ledger, and the Provider Docker executor/canceler, but it is a
-   development-only single-controller slice without CI evidence. Terminal,
+   development-only single-controller slice. Terminal,
    Gateway, artifact, and usage applications remain absent from command
    composition. Startup capability construction still advertises empty
    capability and runtime-profile arrays. No real terminal allocation/WebSocket,
@@ -203,9 +201,9 @@ operation projection, durable accept-before-dispatch and restart
 reconciliation, bounded private output capture, real Docker execution and
 cancellation, and fail-closed development composition. Full race/shuffle, vet,
 Contract verification, the locked 38-case Suite, diff checks, focused race
-matrices, and real Docker integration passed locally. CI is pending and
-capability advertisement remains empty. The next implementation slice is
-P2.5f:
+matrices, and real Docker integration passed locally. CI `32937530059` passed
+all three jobs. Capability advertisement remains empty. The next implementation
+slice is P2.5f:
 
 1. Compose terminal authority, allocator, opaque handoff, a concrete WebSocket
    adapter, and Gateway integration.

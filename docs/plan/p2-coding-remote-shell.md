@@ -319,14 +319,14 @@ surface end to end.
 ## P2.5 Vertical Composition Status
 
 P2.5a-d have completed the composition plan, locked coding/shell Contract
-profile, mutation preflight ordering, and Provider Docker runtime foundation;
-their latest CI evidence is run `32929140044`. P2.5e commit `5917a57` now
-locally composes the protected exec/cancel/result/operation surface over
+profile, mutation preflight ordering, and Provider Docker runtime foundation.
+P2.5e commit `5917a57` now composes the protected
+exec/cancel/result/operation surface over
 durable acceptance, independent persistence, real Docker execution and
 cancellation, bounded private output capture, result expiry, and restart/on-
 demand reconciliation. Its full Go, Contract verifier, locked 38-case Suite,
-focused race, diff, and live Docker integration gates passed locally; CI has
-not run.
+focused race, diff, and live Docker integration gates passed locally; CI
+`32937530059` passed all three jobs for evidence baseline `2f7a79b`.
 
 This does not close P2. Terminal/Gateway composition is next in P2.5f,
 artifact/usage remains P2.5g, readiness-derived nonempty advertisement remains
