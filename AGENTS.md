@@ -2,11 +2,13 @@
 
 ## Authority and scope
 
-Read `README.md`, `docs/architecture.md`, the applicable ADRs, and
-`docs/development.md` before changing behavior. The architecture delivery plan
+Read `docs/PROJECT_CONTEXT.md` first when starting a new session, then read
+`README.md`, `docs/architecture.md`, the applicable ADRs, and
+`docs/development.md` before changing behavior. The project context is a
+handoff index, not an authority override. The architecture delivery plan
 defines order and release gates. For Agent Platform compatibility, the locked
-upstream OpenAPI, JSON Schemas, semantic rules, fixtures, and Conformance Suite
-outrank local narrative text.
+repository-owned OpenAPI, JSON Schemas, semantic rules, fixtures, and
+Conformance Suite outrank local narrative text.
 
 Keep the Provider API separate from the local `/instances` management API.
 Provider wire DTOs must not reuse `instance` or Docker engine structs. The Agent

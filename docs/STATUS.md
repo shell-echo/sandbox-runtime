@@ -1,6 +1,6 @@
 # Project Status
 
-Updated: 2026-08-25
+Updated: 2026-08-26
 
 This document is the implementation ledger for the repository-owned MIT
 Provider Contract. It distinguishes local component evidence, Contract
@@ -12,7 +12,7 @@ production readiness.
 
 | Item | Evidence | Status |
 | --- | --- | --- |
-| Checkout | `main@1ca115b == origin/main` | P2.4a3 transport composition and the strict artifact-stage document preflight/error-category correction in `c469337` are merged. Local full gates and post-push CI `32838784395` (`provider-contract`, `test`, `docker-integration`) passed |
+| Audited implementation baseline | `b4c7e2d`; at audit time `main == origin/main` | `b4c7e2d` records the closed P2.4a3 CI evidence. P2.4a3 transport composition and the strict artifact-stage document preflight/error-category correction in `c469337` are merged. Local full gates and post-push CI `32838784395` (`provider-contract`, `test`, `docker-integration`) passed. Verify the live checkout independently; this evidence baseline is intentionally not a self-updating `HEAD` claim |
 | Review | PR [#17](https://github.com/shell-echo/sandbox-runtime/pull/17) merged as `43ff3d7`; PR [#18](https://github.com/shell-echo/sandbox-runtime/pull/18) merged as `4774c3a`; PR [#19](https://github.com/shell-echo/sandbox-runtime/pull/19) merged as `e2755f5`; PR [#21](https://github.com/shell-echo/sandbox-runtime/pull/21) merged as `c5a4a65`; PR [#22](https://github.com/shell-echo/sandbox-runtime/pull/22) merged as `44f39ec`; PR [#23](https://github.com/shell-echo/sandbox-runtime/pull/23) merged as `ac72eab`; PR [#24](https://github.com/shell-echo/sandbox-runtime/pull/24) merged as `2e3dde6`; PR [#25](https://github.com/shell-echo/sandbox-runtime/pull/25) merged as `88506d1`; PR [#26](https://github.com/shell-echo/sandbox-runtime/pull/26) merged as `4ccb107`; PR [#27](https://github.com/shell-echo/sandbox-runtime/pull/27) merged as `28076a7`; PR [#28](https://github.com/shell-echo/sandbox-runtime/pull/28) merged as `2b25f76`; PR [#29](https://github.com/shell-echo/sandbox-runtime/pull/29) merged as `83965a2`; PR [#30](https://github.com/shell-echo/sandbox-runtime/pull/30) merged as `9d00212`; PR [#31](https://github.com/shell-echo/sandbox-runtime/pull/31) merged as `67b64a9`; PR [#32](https://github.com/shell-echo/sandbox-runtime/pull/32) merged as `5883da9`; PR [#33](https://github.com/shell-echo/sandbox-runtime/pull/33) merged as `ba39053`; PR [#35](https://github.com/shell-echo/sandbox-runtime/pull/35) merged as `c467cd4`; PR [#36](https://github.com/shell-echo/sandbox-runtime/pull/36) merged as `3a980bd`; PR [#37](https://github.com/shell-echo/sandbox-runtime/pull/37) merged as `f9cfbc3`; PR [#38](https://github.com/shell-echo/sandbox-runtime/pull/38) merged as `7ebcc8f`; PR [#39](https://github.com/shell-echo/sandbox-runtime/pull/39) merged as `17072e6`; PR [#40](https://github.com/shell-echo/sandbox-runtime/pull/40) merged as `65a9ba3`; PR [#41](https://github.com/shell-echo/sandbox-runtime/pull/41) merged as `ac555619`; PR [#42](https://github.com/shell-echo/sandbox-runtime/pull/42) merged as `97fb429` | PR #42 CI `32465114377` and post-merge CI `32465443385` provider-contract, test, and docker-integration passed |
 | P2.2a release evidence | `2fa2e72` on PR #33, merged as `ba39053` | Local race/shuffle, vet, lock, Suite, PR CI, and post-merge CI passed |
 | P2.2b release evidence | `e26bf2b` on PR #35, merged as `c467cd4` | Local race/shuffle, vet, lock, 19-case Suite, PR CI `32456100570`, and post-merge CI `32456279722` passed; no HTTP/dispatch composition |
@@ -41,6 +41,7 @@ production readiness.
 | P2.4a3 transport component evidence | commits `f5111a5`, `ce3c6e0`, `9a4bc71`, correction `c469337` | Three locked routes are admitted before application dispatch; artifact accept returns only `202` operation; evidence/usage state mappings and operation-family aggregation pass. Local race/shuffle, vet, lock verifier, 35-case Suite, focused projection tests, diff checks, and post-push CI `32838784395` (all three jobs) pass. Preflight coverage is currently limited to artifact stage; create/session require the same ordering review before their future composition |
 | P3 local evidence | implementation commit `4212e88` | Revision identity validation, deterministic canary binding, rollback-only-new-run behavior, old-run draining, shadow validation bounds, and migration metric aggregation passed focused race/shuffle and vet; external caller gate remains open |
 | P3 component release evidence | post-push CI run `32805284762` | CI run concluded success for `4212e88`; this remains local migration component evidence, not external caller, canary traffic, rollback E2E, or production readiness |
+| External caller/platform E2E audit | implementation baseline `b4c7e2d`; separately owned `CelestialsGroup/agent-blueprints@cf623ac` | Blocked: this repository has no external-caller executable, deployment target, or E2E CI job. Its 35-case runner dispatches repository-local Go tests. The separately owned platform checkout still marks Sandbox Provider, Sandbox Controller, and Runtime Gateway unimplemented, and its `test/e2e` directory contains no runnable scenario. No E2E command was run or claimed |
 | Contract resources | OpenAPI, admission, lifecycle, bounded exec, terminal-session, artifact-staging, usage-evidence schemas, fixtures, semantic rules, and Suite | Local Contract authority is locked; artifact publication, billing, and tenant authority remain outside the Provider |
 | Contract lock | revision `6f549c222ab5ff5b57ed1a49bd2ac5bb95d3b311`; tree `b27453d048a2cd8b90f54008d5c4eac28f38c9cb`; manifest `sha256:dbad71c6d8b475f6c6fa64e944872feacece81c0281a4a58f42c303b75200bbd`; OpenAPI `sha256:091280c0d68b786fdb754f8f8f69d013294ef582716821af7d3d87efbfc86436`; semantic rules `sha256:221776879aaa784ca8ead7dd4531cdd14095b5b7cbf966bbcc163eed82685952` | Local verifier, 35-case Conformance, full race/shuffle, post-push CI `32823783136`, and projection/admission tests passed; Suite file SHA-256 is `1fe858bc73cbcee5505c3e07fb35d5e28beb15ebca72a8ff5bb15785f258f3bf`, while the declared Suite digest remains the existing placeholder |
 | External Agent Contract | no longer consumed; old compatibility evidence is historical only | Removed from implementation |
@@ -89,9 +90,10 @@ It does not clone, mount, or read an external source repository.
 | P2.4a1 | Operation aggregation and evidence-read authority reconciliation | Passed in direct-main commits `3846c9e`, `6f549c2`, and `dbea0e8`; CI `32823783136` passed | Retain 35-case Suite and locked pending/outcome-unknown/unavailable/expired state matrices; no runtime implementation claim |
 | P2.4a2 | Artifact/usage Provider application and operation-family component | Passed for bounded provider-local application/repository/reader evidence in direct-main commits `152033f`, `0440272`, and `4d0bb70`; CI `32827387303` passed | Retain durable accept-before-dispatch, CAS/generation/fencing, restart/expiry/corruption, usage operation correlation, all-family aggregation, and duplicate-ID fail-closed evidence; no HTTP composition |
 | P2.4a | Artifact/usage Provider transport composition | Passed for bounded component evidence; post-push CI `32838784395` passed | Retain the artifact-stage-only preflight boundary. Create/session ordering review remains future work; obtain separately supplied external-caller evidence; no aggregate, tenancy, deployment, or production claim |
-| P2 | Coding/remote-shell profile | In progress: P2.1, P2.2a-c, P2.3a-c4, P2.4, P2.4a0, P2.4a1, P2.4a2, and P2.4a3 have bounded component/Contract evidence | Separately supplied external-caller release-gate evidence; aggregate conformance, multi-controller reliability, multi-tenant security, deployment, and production gates remain open |
-| P3 | Migration readiness and external-caller integration | In progress for local binding/shadow/metrics component evidence only (`4212e88`) | External caller against locked Suite, shadow parity, canary/rollback/drain, and unchanged platform contracts |
-| P4 | Production hardening | Not started | Deployment, multi-controller, multi-tenant, and production gates |
+| P2 | Coding/remote-shell profile | In progress: P2.1, P2.2a-c, P2.3a-c4, P2.4, P2.4a0, P2.4a1, P2.4a2, and P2.4a3 have bounded component/Contract evidence. The current command composition is not a real coding/shell Provider, and no separately supplied caller is runnable | First close the coding/shell Contract/profile and Provider vertical composition, then supply an independently owned caller and reproducible environment. Aggregate conformance, multi-controller reliability, multi-tenant security, deployment, and production gates remain open |
+| P3 | Migration readiness and external-caller integration | Blocked after local binding/shadow/metrics component evidence (`4212e88`): P2 is not vertically complete and no runnable external caller/platform E2E environment is available | Complete P2, then supply the caller, mTLS/JWS material, Provider endpoint/configuration, and scenario runner; prove locked-Suite parity, shadow parity, canary/rollback/drain, and unchanged platform contracts |
+| P4 | Optional capability profiles | Not started | Add browser, desktop, port forwarding, snapshots/restore, GPU, nested-container, and stronger-isolation profiles only through independent Contract, security, and conformance gates |
+| Production readiness | Independent evidence tier, not a shortcut from P4 | Not established | Deployment, multi-controller reliability, multi-tenant security, operations, and production gates |
 
 ## Evidence Boundary
 
@@ -200,7 +202,15 @@ Passed locally (authorized test environment):
 
 Pending:
 
-- P3 external-caller Gateway E2E and migration evidence;
+- P2 coding/shell Provider vertical composition. The command root currently
+  injects only lifecycle application behavior, Provider lifecycle supports only
+  its fake driver, exec does not dispatch a runtime executor, session/artifact/
+  usage applications are not command-composed, and startup advertises no
+  capability or runtime profile;
+- P2/P3 external-caller Gateway E2E and migration evidence. The 2026-08-26
+  environment audit found no runnable independently supplied caller, platform
+  composition, or E2E target; local Suite mappings and Gateway tests remain
+  component evidence only;
 - optional content-derived Suite digest enhancement;
 - aggregate lifecycle conformance, external-caller E2E, reliability, tenancy,
   deployment, and production gates.
@@ -318,3 +328,24 @@ no synthetic artifact stager or usage collector; missing dependencies remain a
 bounded `503` surface. Artifact publication, billing, aggregate conformance,
 external-caller compatibility, multi-controller reliability, multi-tenant
 safety, deployment, and production readiness are not claimed.
+
+The 2026-08-26 external-caller environment audit used implementation evidence
+baseline `b4c7e2d`; `main` and `origin/main` both resolved to that commit when
+the audit began. `cmd/run-conformance` was confirmed to
+execute the 35 locked case IDs as repository-local `go test` selectors, and the
+repository CI has no external-platform or E2E job. The separately owned
+`CelestialsGroup/agent-blueprints` candidate was checked at its current remote
+`main@cf623ac`; its Application still marks Sandbox Provider, Sandbox
+Controller, and Runtime Gateway as not implemented, while `test/e2e` contains
+no runnable scenario. The intervening remote changes are Contract and Contract-
+validation work, not caller composition. Therefore no independent caller or
+platform E2E command was available to run, and no local Contract, CI, Gateway,
+or migration component result is promoted to external-caller evidence.
+
+Unblocking requires a separately owned caller checkout and executable scenario
+runner, exact locked-Contract identity, Provider endpoint plus mTLS/JWS trust
+material, and a deployable composition for the caller, Provider, and Gateway.
+Only that environment may supply the P2 coding/shell release evidence and the
+P3 shadow, canary, rollback, old-run drain, metric-parity, and unchanged-
+platform-contract evidence. Multi-controller, multi-tenant, deployment, and
+production readiness remain separate gates after those E2E scenarios pass.

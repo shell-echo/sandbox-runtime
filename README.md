@@ -9,8 +9,11 @@ The project is intentionally **runtime-first**. It is not just a cloud browser U
 ## Status
 
 This repository is in the foundation stage.
-Current implementation progress, open release gates, and the next planned slice
-are tracked in [`docs/STATUS.md`](docs/STATUS.md).
+Start a new development session with
+[`docs/PROJECT_CONTEXT.md`](docs/PROJECT_CONTEXT.md). It summarizes the current
+architecture, engineering rules, verified maturity, blockers, and next work;
+the detailed implementation evidence ledger remains in
+[`docs/STATUS.md`](docs/STATUS.md).
 
 Currently implemented:
 
