@@ -18,14 +18,17 @@
       "reference": "registry.invalid/sandbox/base",
       "digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
     },
-    "runtime_profile": "sandbox-runtime-default-v1",
+    "runtime_profile": "sandbox-runtime-coding-shell-v1",
     "resources": {
       "cpu_millis": 1000,
       "memory_bytes": 1073741824,
       "ephemeral_storage_bytes": 1073741824,
       "pids_limit": 128
     },
-    "required_capabilities": [],
+    "required_capabilities": [
+      {"id": "sandbox.exec", "version": "1.0.0", "profile": "exec-v1"},
+      {"id": "sandbox.terminal", "version": "1.0.0", "profile": "terminal-v1"}
+    ],
     "network": {"mode": "none"},
     "workspace": {
       "mode": "ephemeral",

@@ -15,7 +15,7 @@ paths:
         - mutualTLS: []
       responses:
         '200':
-          description: Immutable capability snapshot
+          description: Immutable empty, terminal-only, or coding/shell capability snapshot
           content:
             application/json:
               schema:
@@ -102,7 +102,7 @@ paths:
               schema:
                 $ref: ../schemas/standard-error.schema.json
         '422':
-          description: Requested sandbox profile is unsupported
+          description: Requested runtime or capability profile is unsupported or is not an exact advertised combination
           content:
             application/json:
               schema:

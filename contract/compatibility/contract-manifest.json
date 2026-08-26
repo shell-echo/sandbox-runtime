@@ -27,6 +27,8 @@
     {"path": "semantic-rules/provider-v1.json", "kind": "semantic-rules", "id": "urn:shell-echo:sandbox-runtime:semantic-rules:provider-v1"},
     {"path": "fixtures/capabilities.json", "kind": "fixture", "id": "urn:shell-echo:sandbox-runtime:fixture:capabilities:v1"},
     {"path": "fixtures/capabilities-terminal.json", "kind": "fixture", "id": "urn:shell-echo:sandbox-runtime:fixture:capabilities-terminal:v1"},
+    {"path": "fixtures/capabilities-coding-shell.json", "kind": "fixture", "id": "urn:shell-echo:sandbox-runtime:fixture:capabilities-coding-shell:v1"},
+    {"path": "fixtures/capabilities-coding-shell-rejections.json", "kind": "fixture", "id": "urn:shell-echo:sandbox-runtime:fixture:capabilities-coding-shell-rejections:v1"},
     {"path": "fixtures/standard-error.json", "kind": "fixture", "id": "urn:shell-echo:sandbox-runtime:fixture:standard-error:v1"},
     {"path": "fixtures/admission-context.json", "kind": "fixture", "id": "urn:shell-echo:sandbox-runtime:fixture:admission-context:v1"},
     {"path": "fixtures/admission-target.json", "kind": "fixture", "id": "urn:shell-echo:sandbox-runtime:fixture:admission-target:v1"},
