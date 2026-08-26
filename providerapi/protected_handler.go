@@ -229,6 +229,12 @@ func (h *protectedHandler) ServeHTTP(response http.ResponseWriter, request *http
 // token bindings or semantic correlation; those remain the gate's authority.
 func validateProtectedDocument(route protectedRoute, document []byte) error {
 	switch route.operation {
+	case admission.OperationCreate:
+		var request providerv1.CreateRequest
+		return providerv1.DecodeStrict(bytes.NewReader(document), providerv1.MaxCreateRequestBytes, &request)
+	case admission.OperationOpenRuntimeSession:
+		var request providerv1.RuntimeSessionOpenRequest
+		return providerv1.DecodeStrict(bytes.NewReader(document), providerv1.MaxRuntimeSessionOpenRequestBytes, &request)
 	case admission.OperationStageArtifact:
 		var request providerv1.ArtifactStagingRequest
 		return providerv1.DecodeStrict(bytes.NewReader(document), providerv1.MaxArtifactStagingRequestBytes, &request)
@@ -329,7 +335,7 @@ func matchProtectedRoute(request *http.Request) (protectedRoute, map[string]stri
 	path := strings.Trim(request.URL.Path, "/")
 	parts := strings.Split(path, "/")
 	if len(parts) == 2 && parts[0] == "v1" && parts[1] == "sandboxes" && request.Method == http.MethodPost {
-		return protectedRoute{operation: admission.OperationCreate, maxBodyBytes: providerv1.MaxCreateRequestBytes, allowUnavailable: true}, map[string]string{}, true
+		return protectedRoute{operation: admission.OperationCreate, maxBodyBytes: providerv1.MaxCreateRequestBytes, allowUnavailable: true, oversizeStatus: http.StatusBadRequest}, map[string]string{}, true
 	}
 	if path == "v1/sandboxes:restore" && request.Method == http.MethodPost {
 		return protectedRoute{operation: admission.OperationRestore, maxBodyBytes: providerv1.MaxRestoreRequestBytes, allowUnavailable: true}, map[string]string{}, true
@@ -362,7 +368,7 @@ func matchProtectedRoute(request *http.Request) (protectedRoute, map[string]stri
 			}
 			if candidate, ok := operations[parts[3]]; ok {
 				oversizeStatus := 0
-				if candidate.operation == admission.OperationStageArtifact {
+				if candidate.operation == admission.OperationOpenRuntimeSession || candidate.operation == admission.OperationStageArtifact {
 					oversizeStatus = http.StatusBadRequest
 				}
 				return protectedRoute{operation: candidate.operation, maxBodyBytes: candidate.maxBody, allowUnavailable: candidate.unavailable, oversizeStatus: oversizeStatus}, values, true

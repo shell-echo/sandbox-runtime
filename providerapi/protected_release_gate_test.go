@@ -18,6 +18,7 @@ import (
 
 	"github.com/gowebpki/jcs"
 	"github.com/shell-echo/sandbox-runtime/provider/admission"
+	providerv1 "github.com/shell-echo/sandbox-runtime/providerapi/v1"
 )
 
 const releaseGateTestTimeUnix = int64(1_787_184_060)
@@ -88,6 +89,88 @@ func TestProtectedHandlerReleaseGateCoversAllProtectedRoutes(t *testing.T) {
 			}
 			if got := guard.Calls(); got != wantGuardCalls {
 				t.Fatalf("valid %s guard calls=%d, want %d", route.operation, got, wantGuardCalls)
+			}
+		})
+	}
+}
+
+func TestProtectedHandlerRejectsDigestConsistentCreateAndSessionDocumentsBeforeGuard(t *testing.T) {
+	material := newTestMTLSMaterial(t, []string{testAllowedIdentity})
+	identity, err := newClientIdentityAdmission([]string{testAllowedIdentity})
+	if err != nil {
+		t.Fatal(err)
+	}
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, route := range []protectedReleaseRoute{
+		{name: "create sandbox", method: http.MethodPost, path: "/v1/sandboxes", operation: admission.OperationCreate, allowUnavailable: true},
+		{name: "open runtime session", method: http.MethodPost, path: "/v1/sandboxes/sandbox-1/runtime-sessions", operation: admission.OperationOpenRuntimeSession, allowUnavailable: true},
+	} {
+		route := route
+		t.Run(route.name, func(t *testing.T) {
+			guard := &releaseGateGuard{decision: admission.MutationGuardAccepted}
+			handler := newReleaseGateHandler(t, identity, publicKey, guard)
+			request := newProtectedReleaseRequest(t, route, privateKey, material.client, "jti-preflight-invalid-1")
+			contextValue := admissionContextFromReleaseRequest(t, request)
+			withoutDigest := []byte(`{"unknown":true}`)
+			digest := releaseFullDocumentDigest(t, withoutDigest)
+			body := []byte(`{"unknown":true,"request_digest":"` + digest + `"}`)
+			contextValue.RequestDigest = digest
+			contextDigest, err := admission.DigestForAdmissionContext(contextValue)
+			if err != nil {
+				t.Fatal(err)
+			}
+			contextValue.ContextDigest = contextDigest
+			claims := admissionTokenClaimsForTest(contextValue)
+			claims["jti"] = "jti-preflight-invalid-1"
+			request.Header.Set("Authorization", "Bearer "+signTestAdmissionToken(t, privateKey, claims))
+			request.Header.Set(admission.AdmissionContextHeader, encodeTestAdmissionContext(t, contextValue))
+			request.Body = ioNopCloser(strings.NewReader(string(body)))
+			request.ContentLength = int64(len(body))
+
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+			if response.Code != http.StatusBadRequest || guard.Calls() != 0 {
+				t.Fatalf("response=%d guard_calls=%d body=%s", response.Code, guard.Calls(), response.Body.String())
+			}
+		})
+	}
+}
+
+func TestProtectedHandlerRejectsOversizedCreateAndSessionDocumentsBeforeGuard(t *testing.T) {
+	material := newTestMTLSMaterial(t, []string{testAllowedIdentity})
+	identity, err := newClientIdentityAdmission([]string{testAllowedIdentity})
+	if err != nil {
+		t.Fatal(err)
+	}
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, test := range []struct {
+		route    protectedReleaseRoute
+		maxBytes int64
+	}{
+		{route: protectedReleaseRoute{name: "create sandbox", method: http.MethodPost, path: "/v1/sandboxes", operation: admission.OperationCreate, allowUnavailable: true}, maxBytes: providerv1.MaxCreateRequestBytes},
+		{route: protectedReleaseRoute{name: "open runtime session", method: http.MethodPost, path: "/v1/sandboxes/sandbox-1/runtime-sessions", operation: admission.OperationOpenRuntimeSession, allowUnavailable: true}, maxBytes: providerv1.MaxRuntimeSessionOpenRequestBytes},
+	} {
+		test := test
+		t.Run(test.route.name, func(t *testing.T) {
+			guard := &releaseGateGuard{decision: admission.MutationGuardAccepted}
+			handler := newReleaseGateHandler(t, identity, publicKey, guard)
+			request := newProtectedReleaseRequest(t, test.route, privateKey, material.client, "jti-preflight-oversized-1")
+			body := strings.Repeat(" ", int(test.maxBytes)+1)
+			request.Body = ioNopCloser(strings.NewReader(body))
+			request.ContentLength = int64(len(body))
+
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+			if response.Code != http.StatusBadRequest || guard.Calls() != 0 {
+				t.Fatalf("response=%d guard_calls=%d body=%s", response.Code, guard.Calls(), response.Body.String())
 			}
 		})
 	}
@@ -418,14 +501,35 @@ func protectedReleaseRequestBinding(operation admission.Operation) (string, admi
 func releaseMutationDocument(t *testing.T, operation admission.Operation) ([]byte, string) {
 	t.Helper()
 	var document map[string]any
-	if operation == admission.OperationStageArtifact {
+	switch operation {
+	case admission.OperationCreate:
+		request, _ := validProjectionCreateRequest(releaseGateTestTime())
+		request.OperationID = "operation-1"
+		request.DeadlineAt = releaseGateTestTime().Add(4 * time.Minute).Format(time.RFC3339Nano)
+		request.Spec.WorkOrderID = "work-order-1"
+		request.Spec.ProviderRevisionID = "provider-revision-1"
+		encoded, err := json.Marshal(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := json.Unmarshal(encoded, &document); err != nil {
+			t.Fatal(err)
+		}
+		delete(document, "request_digest")
+	case admission.OperationOpenRuntimeSession:
+		encoded, _ := validRuntimeSessionOpenDocument(t)
+		if err := json.Unmarshal(encoded, &document); err != nil {
+			t.Fatal(err)
+		}
+		delete(document, "request_digest")
+	case admission.OperationStageArtifact:
 		document = map[string]any{
 			"operation_id": "operation-1", "attempt_id": "attempt-1", "fencing_token": int64(1),
 			"idempotency_key": "artifact-idempotency-1", "deadline_at": releaseGateTestTime().Add(4 * time.Minute).Format(time.RFC3339Nano),
 			"expected_generation": int64(1), "artifact_reference": "artifact-ref:artifact-1", "source_path": "/outputs/result.txt",
 			"expected_digest": "sha256:" + strings.Repeat("a", 64), "expected_media_type": "text/plain", "max_bytes": int64(1024), "retention_seconds": int64(60),
 		}
-	} else {
+	default:
 		document = map[string]any{"operation": string(operation), "local_case": "p1.1d"}
 	}
 	withoutDigest, err := json.Marshal(document)
