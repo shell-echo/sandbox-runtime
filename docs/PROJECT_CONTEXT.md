@@ -183,10 +183,13 @@ No external E2E was run or claimed during the audit.
 
 ## Next Implementation Order
 
-1. Add a scoped P2 coding/shell vertical-composition plan and ADR, including
-   explicit non-goals and release evidence.
-2. Extend and lock Contract authority for one honest coding/shell capability
+P2.5a established [ADR 0015](adr/0015-coding-shell-vertical-composition.md) and
+the [vertical-composition plan](plan/p2.5-coding-shell-vertical-composition.md).
+The next implementation slice is P2.5b:
+
+1. Extend and lock Contract authority for one honest coding/shell capability
    and runtime profile before advertising or dispatching it.
+2. Audit create/session strict preflight ordering before their mutation guards.
 3. Implement a Provider-specific real runtime adapter with the four stable
    guest paths; do not reuse the local `/instances` wire model.
 4. Compose exec HTTP through durable acceptance, coordination, execution,
@@ -195,8 +198,7 @@ No external E2E was run or claimed during the audit.
    adapter, and Gateway integration.
 6. Compose a real artifact stager and usage collector, then enable capability
    advertisement only when all required dependencies are present.
-7. Audit create/session strict preflight ordering before their mutation guards.
-8. Supply an independently owned mTLS/JWS caller and reproducible deployment,
+7. Supply an independently owned mTLS/JWS caller and reproducible deployment,
    run the locked Suite and coding/shell E2E, and only then evaluate P3 traffic
    shadowing, canary, rollback, and drain.
 

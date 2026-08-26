@@ -221,8 +221,9 @@ and diff checks passed; implementation commit `e675cb9` and post-push CI
 `32801539995` passed all three jobs. This closes P2.3c4 for bounded Gateway
 component evidence only. A concrete WebSocket wire adapter, external caller
 E2E, distributed revocation, multi-controller reliability, deployment,
-tenancy, and production readiness remain unproven; P3 migration readiness and
-external-caller integration is the next entry.
+tenancy, and production readiness remain unproven. P2.5 Contract profile
+reconciliation and Provider vertical composition are the next entry; P3 and
+external-caller migration evidence remain blocked behind that work.
 
 ## P2.4 Boundary
 
