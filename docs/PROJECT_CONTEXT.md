@@ -129,10 +129,11 @@ multi-tenant, deployment, and production readiness.
 
 ## Current Snapshot
 
-This snapshot was audited on 2026-08-26 against implementation evidence
-baseline `206caeb`. At P2.5b CI completion, `main` and `origin/main` both
-resolved to that commit. The baseline identifies reviewed evidence; it is not a
-self-updating assertion about the current checkout.
+This snapshot was audited on 2026-08-26 against committed local implementation
+through `6340604`. The latest verified remote/CI baseline remains
+`origin/main@5388dc7`, with CI run `32924661417`. These baselines identify
+reviewed evidence; they are not self-updating assertions about the current
+checkout.
 
 Contract identity:
 
@@ -148,7 +149,7 @@ Contract identity:
 | P1.1 | Passed for DTO, mTLS discovery, JWS/digest/replay/fencing admission | Does not prove runtime behavior or production identity infrastructure |
 | P1.2 | Passed for the bounded Contract-authorized lifecycle subset and development composition | Provider lifecycle still uses only a fake driver; reserved lifecycle families and production gates remain open |
 | P2.1-P2.4a3 | Bounded exec, result, terminal, Gateway, artifact, usage, admission, application, persistence, and transport components have local Contract/CI evidence | P2 is not vertically composed into a real coding/shell Provider and no independent caller E2E environment exists |
-| P2.5a-b | Vertical-composition plan accepted; atomic exec+terminal coding/shell capability profile is locked and its fail-closed local projection passes the 38-case Suite and repository CI | No runtime behavior or nonempty startup advertisement is enabled; P2.5c-i remain open |
+| P2.5a-c | Vertical-composition plan and coding/shell Contract/profile pass their gates; create/session strict document and body-limit preflight now precedes mutation guard reservation in local evidence | P2.5c CI is pending; no runtime behavior or nonempty startup advertisement is enabled; P2.5d-i remain open |
 | P3 | Local revision binding, shadow-validation, canary/rollback/drain, and metrics primitives passed component tests | P2 gate, external caller, real traffic parity, canary, rollback, and old-run drain E2E remain open |
 | P4 | Optional capability profiles have not started | Each browser/desktop/forwarding/snapshot/GPU/isolation profile needs independent Contract, security, and conformance gates |
 
@@ -157,7 +158,7 @@ multi-controller reliability, hostile multi-tenant security, deployment, and
 production operations remain separate and unproven even after a future P2/P3
 E2E passes.
 
-The latest verified repository CI for `206caeb` is run `32924361132`; its
+The latest verified repository CI for `5388dc7` is run `32924661417`; its
 `provider-contract`, `test`, and `docker-integration` jobs passed. This remains
 CI evidence, not independent caller or production evidence.
 
@@ -188,19 +189,21 @@ P2.5a established [ADR 0015](adr/0015-coding-shell-vertical-composition.md) and
 the [vertical-composition plan](plan/p2.5-coding-shell-vertical-composition.md).
 P2.5b then locked one atomic exec+terminal coding/shell profile in Contract
 commit `22a148e` and projected it fail closed in `123d16a`. Its local gates and
-repository CI `32924361132` pass, while runtime composition remains disabled.
-The next implementation slice is P2.5c:
+repository CI `32924361132` pass. P2.5c commits `6c2962b` and `6340604` move
+create/session bounded strict decode ahead of mutation guard reservation and
+bind the regression into the locked Suite runner; local gates pass and CI is
+pending. Runtime composition remains disabled. After P2.5c CI, the next
+implementation slice is P2.5d:
 
-1. Audit create/session strict preflight ordering before their mutation guards.
-2. Implement a Provider-specific real runtime adapter with the four stable
+1. Implement a Provider-specific real runtime adapter with the four stable
    guest paths; do not reuse the local `/instances` wire model.
-3. Compose exec HTTP through durable acceptance, coordination, execution,
+2. Compose exec HTTP through durable acceptance, coordination, execution,
    cancellation, result reads, and usage evidence.
-4. Compose terminal authority, allocator, opaque handoff, a concrete WebSocket
+3. Compose terminal authority, allocator, opaque handoff, a concrete WebSocket
    adapter, and Gateway integration.
-5. Compose a real artifact stager and usage collector, then enable capability
+4. Compose a real artifact stager and usage collector, then enable capability
    advertisement only when all required dependencies are present.
-6. Supply an independently owned mTLS/JWS caller and reproducible deployment,
+5. Supply an independently owned mTLS/JWS caller and reproducible deployment,
    run the locked Suite and coding/shell E2E, and only then evaluate P3 traffic
    shadowing, canary, rollback, and drain.
 
