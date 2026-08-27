@@ -2,6 +2,7 @@ package file
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -124,17 +125,20 @@ func TestRepositoryRechecksAuthorityBeforeSuccessfulHandoff(t *testing.T) {
 		t.Fatal(err)
 	}
 	request := fileRequest()
-	reserved, err := r.ReserveOpen(context.Background(), request, fileTestTime)
+	_, err = r.ReserveOpen(context.Background(), request, fileTestTime)
 	if err != nil {
 		t.Fatal(err)
 	}
-	running, err := session.Transition(reserved.Record, session.StatusRunning, fileTestTime.Add(time.Second), nil)
+	attached, err := r.AttachAllocation(context.Background(), session.AllocationReceipt{
+		Reference: "ref:terminal/33333333333333333333333333333333", SandboxID: request.SandboxID,
+		RuntimeSessionID: request.RuntimeSessionID, OperationID: request.OperationID, AttemptID: request.AttemptID,
+		FencingToken: request.FencingToken, ExpectedGeneration: request.ExpectedGeneration,
+		ConnectionGeneration: 1, AllocatedAt: fileTestTime.Add(time.Second), ExpiresAt: request.ExpiresAt,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := r.UpdateOpenAt(context.Background(), running, session.StatusAccepted, fileTestTime.Add(time.Second)); err != nil {
-		t.Fatal(err)
-	}
+	running := attached.Record
 	authority := fileAuthority()
 	authority.Ready = false
 	if err := r.ReplaceSandboxAuthority(context.Background(), authority, 1, 1); err != nil {
@@ -150,5 +154,49 @@ func TestRepositoryRechecksAuthorityBeforeSuccessfulHandoff(t *testing.T) {
 	got, err := r.GetOpenAt(context.Background(), request.OperationID, fileTestTime.Add(2*time.Second))
 	if err != nil || got.Status != session.StatusRunning {
 		t.Fatalf("record after rejected success = %#v, %v", got, err)
+	}
+}
+
+func TestRepositoryMigratesVersionOneSnapshotOnNextMutation(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "session.json")
+	state := repository.NewState()
+	if err := state.PutSandboxAuthority(fileAuthority()); err != nil {
+		t.Fatal(err)
+	}
+	request := fileRequest()
+	if _, err := state.ReserveOpenAt(request, fileTestTime); err != nil {
+		t.Fatal(err)
+	}
+	snapshot := state.Export()
+	snapshot.Version = 1
+	encoded, err := json.Marshal(snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, encoded, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	r, err := NewRepository(path)
+	if err != nil {
+		t.Fatalf("open version 1 repository: %v", err)
+	}
+	if got, err := r.GetOpenAt(context.Background(), request.OperationID, fileTestTime.Add(time.Second)); err != nil || got.Status != session.StatusAccepted {
+		t.Fatalf("migrated accepted operation = %#v, %v", got, err)
+	}
+	updatedAuthority := fileAuthority()
+	updatedAuthority.LeaseExpiresAt = updatedAuthority.LeaseExpiresAt.Add(time.Minute)
+	if err := r.SynchronizeSandboxAuthority(context.Background(), updatedAuthority); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Close(); err != nil {
+		t.Fatal(err)
+	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rewritten repository.PersistedState
+	if err := json.Unmarshal(content, &rewritten); err != nil || rewritten.Version != 2 || len(rewritten.Sessions) != 1 {
+		t.Fatalf("rewritten snapshot = %#v, %v", rewritten, err)
 	}
 }

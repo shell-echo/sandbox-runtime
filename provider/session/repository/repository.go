@@ -28,7 +28,7 @@ var (
 // trusted lifecycle coordinator; they do not expose or replace that
 // coordinator's aggregate state.
 type Repository interface {
-	session.Authority
+	session.CoordinationAuthority
 	PutSandboxAuthority(context.Context, session.SandboxAuthority) error
 	ReplaceSandboxAuthority(context.Context, session.SandboxAuthority, int64, int64) error
 	GetSandboxAuthority(context.Context, string) (session.SandboxAuthority, error)

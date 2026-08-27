@@ -56,6 +56,42 @@ func (r *Repository) GetOpenAt(ctx context.Context, operationID string, now time
 	return r.state.GetOpenAt(operationID, now)
 }
 
+func (r *Repository) ListOpen(ctx context.Context) ([]session.Record, error) {
+	if err := repository.ContextError(ctx); err != nil {
+		return nil, err
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if r.closed {
+		return nil, repository.ErrClosed
+	}
+	return r.state.ListOpen(), nil
+}
+
+func (r *Repository) AttachAllocation(ctx context.Context, receipt session.AllocationReceipt) (session.Reservation, error) {
+	if err := repository.ContextError(ctx); err != nil {
+		return session.Reservation{}, err
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if err := r.checkOpen(ctx); err != nil {
+		return session.Reservation{}, err
+	}
+	return r.state.AttachAllocation(receipt)
+}
+
+func (r *Repository) ObserveAllocation(ctx context.Context, operationID string, observation session.AllocationEvidence) (session.Record, error) {
+	if err := repository.ContextError(ctx); err != nil {
+		return session.Record{}, err
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if err := r.checkOpen(ctx); err != nil {
+		return session.Record{}, err
+	}
+	return r.state.ObserveAllocation(operationID, observation)
+}
+
 func (r *Repository) UpdateOpen(ctx context.Context, record session.Record, expectedStatus session.Status) error {
 	if err := repository.ContextError(ctx); err != nil {
 		return err
@@ -90,6 +126,18 @@ func (r *Repository) PutSandboxAuthority(ctx context.Context, authority session.
 		return err
 	}
 	return r.state.PutSandboxAuthority(authority)
+}
+
+func (r *Repository) SynchronizeSandboxAuthority(ctx context.Context, authority session.SandboxAuthority) error {
+	if err := repository.ContextError(ctx); err != nil {
+		return err
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if err := r.checkOpen(ctx); err != nil {
+		return err
+	}
+	return r.state.SynchronizeSandboxAuthority(authority)
 }
 
 func (r *Repository) ReplaceSandboxAuthority(ctx context.Context, authority session.SandboxAuthority, expectedGeneration, fencingToken int64) error {

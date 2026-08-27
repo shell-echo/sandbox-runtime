@@ -19,6 +19,8 @@ var (
 	ErrInvalidExpiry      = errors.New("invalid Provider terminal session expiry")
 	ErrInvalidRecord      = errors.New("invalid Provider terminal session record")
 	ErrInvalidHandoff     = errors.New("invalid Provider terminal session handoff")
+	ErrInvalidAllocation  = errors.New("invalid Provider terminal session allocation evidence")
+	ErrAllocationConflict = errors.New("Provider terminal session allocation evidence conflict")
 	ErrInvalidTransition  = errors.New("invalid Provider terminal session transition")
 	ErrTerminalOperation  = errors.New("Provider terminal session operation is terminal")
 	ErrHandoffUnavailable = errors.New("Provider terminal session handoff is unavailable")
@@ -27,6 +29,7 @@ var (
 	identifierPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$`)
 	digestPattern     = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 	endpointPattern   = regexp.MustCompile(`^ref:session:[A-Za-z0-9][A-Za-z0-9._-]{0,199}$`)
+	allocationPattern = regexp.MustCompile(`^ref:terminal/[0-9a-f]{32}$`)
 )
 
 type RuntimeType string
@@ -168,6 +171,84 @@ type Handoff struct {
 	ExpiresAt                 time.Time   `json:"expires_at"`
 }
 
+// AllocationReceipt is the durable, provider-neutral identity returned by the
+// terminal runtime. It deliberately excludes backend container, process,
+// socket, endpoint, and credential data. It is not a Contract-visible handoff.
+type AllocationReceipt struct {
+	Reference            string    `json:"reference"`
+	SandboxID            string    `json:"sandbox_id"`
+	RuntimeSessionID     string    `json:"runtime_session_id"`
+	OperationID          string    `json:"operation_id"`
+	AttemptID            string    `json:"attempt_id"`
+	FencingToken         int64     `json:"fencing_token"`
+	ExpectedGeneration   int64     `json:"expected_generation"`
+	ConnectionGeneration int64     `json:"connection_generation"`
+	AllocatedAt          time.Time `json:"allocated_at"`
+	ExpiresAt            time.Time `json:"expires_at"`
+}
+
+func (r AllocationReceipt) Validate() error {
+	if !allocationPattern.MatchString(r.Reference) {
+		return ErrInvalidAllocation
+	}
+	for _, value := range []string{r.SandboxID, r.RuntimeSessionID, r.OperationID, r.AttemptID} {
+		if !identifierPattern.MatchString(value) {
+			return ErrInvalidAllocation
+		}
+	}
+	if r.FencingToken < 1 || r.ExpectedGeneration < 1 || r.ConnectionGeneration < 1 ||
+		r.AllocatedAt.IsZero() || r.ExpiresAt.IsZero() || !r.ExpiresAt.After(r.AllocatedAt) {
+		return ErrInvalidAllocation
+	}
+	return nil
+}
+
+func (r AllocationReceipt) matchesRequest(request OpenRequest) bool {
+	return r.SandboxID == request.SandboxID &&
+		r.RuntimeSessionID == request.RuntimeSessionID &&
+		r.OperationID == request.OperationID &&
+		r.AttemptID == request.AttemptID &&
+		r.FencingToken == request.FencingToken &&
+		r.ExpectedGeneration == request.ExpectedGeneration &&
+		r.ExpiresAt.Equal(request.ExpiresAt)
+}
+
+type AllocationState string
+
+const (
+	AllocationRunning        AllocationState = "running"
+	AllocationAbsent         AllocationState = "absent"
+	AllocationExpired        AllocationState = "expired"
+	AllocationOutcomeUnknown AllocationState = "outcome_unknown"
+)
+
+func (s AllocationState) valid() bool {
+	switch s {
+	case AllocationRunning, AllocationAbsent, AllocationExpired, AllocationOutcomeUnknown:
+		return true
+	default:
+		return false
+	}
+}
+
+// AllocationEvidence stores the latest bounded observation for one immutable
+// allocation receipt. The receipt remains unchanged across observations.
+type AllocationEvidence struct {
+	Receipt    AllocationReceipt `json:"receipt"`
+	State      AllocationState   `json:"state"`
+	ObservedAt time.Time         `json:"observed_at"`
+}
+
+func (e AllocationEvidence) Validate(request OpenRequest) error {
+	if err := e.Receipt.Validate(); err != nil || !e.Receipt.matchesRequest(request) ||
+		!e.State.valid() || e.ObservedAt.IsZero() || e.ObservedAt.Before(e.Receipt.AllocatedAt) {
+		return ErrInvalidAllocation
+	}
+	return nil
+}
+
+func (e AllocationEvidence) Clone() AllocationEvidence { return e }
+
 func (h Handoff) Validate() error {
 	for _, value := range []string{h.OperationID, h.AttemptID, h.SandboxID, h.RuntimeSessionID, h.CapabilityProfileID} {
 		if !identifierPattern.MatchString(value) {
@@ -183,11 +264,12 @@ func (h Handoff) Validate() error {
 // Record is the immutable provider-local state of one open operation. A
 // Handoff is present if and only if the operation succeeded.
 type Record struct {
-	Request    OpenRequest `json:"request"`
-	Status     Status      `json:"status"`
-	AcceptedAt time.Time   `json:"accepted_at"`
-	ObservedAt time.Time   `json:"observed_at"`
-	Handoff    *Handoff    `json:"handoff,omitempty"`
+	Request    OpenRequest         `json:"request"`
+	Status     Status              `json:"status"`
+	AcceptedAt time.Time           `json:"accepted_at"`
+	ObservedAt time.Time           `json:"observed_at"`
+	Allocation *AllocationEvidence `json:"allocation,omitempty"`
+	Handoff    *Handoff            `json:"handoff,omitempty"`
 }
 
 // SandboxAuthority is the provider-local, transactionally checked snapshot
@@ -247,6 +329,10 @@ func NewRecord(request OpenRequest, acceptedAt time.Time) (Record, error) {
 func (r Record) Clone() Record {
 	clone := r
 	clone.Request = r.Request.Clone()
+	if r.Allocation != nil {
+		allocation := r.Allocation.Clone()
+		clone.Allocation = &allocation
+	}
 	if r.Handoff != nil {
 		handoff := *r.Handoff
 		clone.Handoff = &handoff
@@ -266,6 +352,11 @@ func (r Record) Validate() error {
 	if err := r.Request.Validate(r.AcceptedAt); err != nil {
 		return fmt.Errorf("%w: %v", ErrInvalidRecord, err)
 	}
+	if r.Allocation != nil {
+		if err := r.Allocation.Validate(r.Request); err != nil || r.Allocation.ObservedAt.After(r.ObservedAt) {
+			return ErrInvalidRecord
+		}
+	}
 	if r.Status != StatusSucceeded {
 		if r.Handoff != nil {
 			return ErrInvalidRecord
@@ -279,6 +370,83 @@ func (r Record) Validate() error {
 		return ErrInvalidRecord
 	}
 	return nil
+}
+
+// AttachAllocation binds a terminal receipt to an accepted operation and
+// advances it to running. A replay with the exact receipt is immutable.
+func AttachAllocation(record Record, receipt AllocationReceipt) (Record, error) {
+	if err := record.Validate(); err != nil {
+		return Record{}, err
+	}
+	if err := receipt.Validate(); err != nil || !receipt.matchesRequest(record.Request) ||
+		receipt.AllocatedAt.Before(record.AcceptedAt) || !receipt.AllocatedAt.Before(record.Request.Deadline) {
+		return Record{}, ErrInvalidAllocation
+	}
+	if record.Allocation != nil {
+		if sameAllocationReceipt(record.Allocation.Receipt, receipt) {
+			return record.Clone(), nil
+		}
+		return Record{}, ErrAllocationConflict
+	}
+	if record.Status != StatusAccepted {
+		return Record{}, ErrTerminalOperation
+	}
+	updated, err := Transition(record, StatusRunning, receipt.AllocatedAt, nil)
+	if err != nil {
+		return Record{}, err
+	}
+	updated.Allocation = &AllocationEvidence{Receipt: receipt, State: AllocationRunning, ObservedAt: receipt.AllocatedAt.UTC()}
+	if err := updated.Validate(); err != nil {
+		return Record{}, err
+	}
+	return updated, nil
+}
+
+// ObserveAllocation records bounded runtime evidence without starting a
+// replacement resource. Absent and expired observations are known failures;
+// uncertain evidence is permanently outcome_unknown.
+func ObserveAllocation(record Record, observation AllocationEvidence) (Record, error) {
+	if err := record.Validate(); err != nil {
+		return Record{}, err
+	}
+	if record.Allocation == nil || record.Status != StatusRunning {
+		return Record{}, ErrTerminalOperation
+	}
+	if err := observation.Validate(record.Request); err != nil ||
+		!sameAllocationReceipt(record.Allocation.Receipt, observation.Receipt) ||
+		observation.ObservedAt.Before(record.Allocation.ObservedAt) {
+		return Record{}, ErrAllocationConflict
+	}
+	updated := record.Clone()
+	updated.Allocation = &observation
+	updated.ObservedAt = observation.ObservedAt.UTC()
+	switch observation.State {
+	case AllocationRunning:
+		updated.Status = StatusRunning
+	case AllocationAbsent, AllocationExpired:
+		updated.Status = StatusFailed
+	case AllocationOutcomeUnknown:
+		updated.Status = StatusOutcomeUnknown
+	default:
+		return Record{}, ErrInvalidAllocation
+	}
+	if err := updated.Validate(); err != nil {
+		return Record{}, err
+	}
+	return updated, nil
+}
+
+func sameAllocationReceipt(left, right AllocationReceipt) bool {
+	return left.Reference == right.Reference &&
+		left.SandboxID == right.SandboxID &&
+		left.RuntimeSessionID == right.RuntimeSessionID &&
+		left.OperationID == right.OperationID &&
+		left.AttemptID == right.AttemptID &&
+		left.FencingToken == right.FencingToken &&
+		left.ExpectedGeneration == right.ExpectedGeneration &&
+		left.ConnectionGeneration == right.ConnectionGeneration &&
+		left.AllocatedAt.Equal(right.AllocatedAt) &&
+		left.ExpiresAt.Equal(right.ExpiresAt)
 }
 
 var transitions = map[Status]map[Status]bool{

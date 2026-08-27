@@ -9,7 +9,10 @@ import (
 	"github.com/shell-echo/sandbox-runtime/provider/session"
 )
 
-const snapshotVersion = 1
+const (
+	legacySnapshotVersion = 1
+	snapshotVersion       = 2
+)
 
 // State is the adapter-independent mutable snapshot. Adapters must hold their
 // own lock while calling its methods.
@@ -106,6 +109,35 @@ func (s *State) GetSandboxAuthority(sandboxID string) (session.SandboxAuthority,
 	return authority.Clone(), nil
 }
 
+// SynchronizeSandboxAuthority upserts a trusted lifecycle projection while
+// preserving monotonic generation and session-local fencing high-water marks.
+// It is atomic only with respect to this session repository.
+func (s *State) SynchronizeSandboxAuthority(authority session.SandboxAuthority) error {
+	s.ensureMaps()
+	if err := authority.Validate(); err != nil {
+		return err
+	}
+	current, ok := s.Authorities[authority.SandboxID]
+	if !ok {
+		s.Authorities[authority.SandboxID] = authority.Clone()
+		return nil
+	}
+	if current.ProviderRevisionID != authority.ProviderRevisionID {
+		return session.ErrProviderRevisionConflict
+	}
+	if current.CapabilityProfileID != authority.CapabilityProfileID {
+		return session.ErrCapabilityUnsupported
+	}
+	if authority.Generation < current.Generation {
+		return session.ErrGenerationConflict
+	}
+	if authority.FencingToken < current.FencingToken {
+		return session.ErrStaleFencingToken
+	}
+	s.Authorities[authority.SandboxID] = authority.Clone()
+	return nil
+}
+
 func (s *State) ReserveOpenAt(request session.OpenRequest, acceptedAt time.Time) (session.Reservation, error) {
 	s.ensureMaps()
 	acceptedAt = acceptedAt.UTC()
@@ -172,6 +204,66 @@ func (s *State) GetOpenAt(operationID string, now time.Time) (session.Record, er
 	return record.Clone(), nil
 }
 
+func (s *State) ListOpen() []session.Record {
+	s.ensureMaps()
+	operationIDs := make([]string, 0, len(s.Sessions))
+	for operationID := range s.Sessions {
+		operationIDs = append(operationIDs, operationID)
+	}
+	sort.Strings(operationIDs)
+	result := make([]session.Record, 0, len(operationIDs))
+	for _, operationID := range operationIDs {
+		result = append(result, s.Sessions[operationID].Clone())
+	}
+	return result
+}
+
+func (s *State) AttachAllocation(receipt session.AllocationReceipt) (session.Reservation, error) {
+	s.ensureMaps()
+	if err := receipt.Validate(); err != nil {
+		return session.Reservation{}, err
+	}
+	current, ok := s.Sessions[receipt.OperationID]
+	if !ok {
+		return session.Reservation{}, fmt.Errorf("%w: operation %s", ErrNotFound, receipt.OperationID)
+	}
+	for operationID, record := range s.Sessions {
+		if operationID != receipt.OperationID && record.Allocation != nil && record.Allocation.Receipt.Reference == receipt.Reference {
+			return session.Reservation{}, session.ErrAllocationConflict
+		}
+	}
+	if current.Allocation == nil {
+		authority, err := s.GetSandboxAuthority(current.Request.SandboxID)
+		if err != nil {
+			return session.Reservation{}, err
+		}
+		if err := checkAuthority(authority, current.Request, receipt.AllocatedAt); err != nil {
+			return session.Reservation{}, err
+		}
+	}
+	updated, err := session.AttachAllocation(current, receipt)
+	if err != nil {
+		return session.Reservation{}, err
+	}
+	replayed := current.Allocation != nil
+	s.Sessions[receipt.OperationID] = updated.Clone()
+	return session.Reservation{Record: updated.Clone(), Replayed: replayed}, nil
+}
+
+func (s *State) ObserveAllocation(operationID string, observation session.AllocationEvidence) (session.Record, error) {
+	s.ensureMaps()
+	current, ok := s.Sessions[operationID]
+	if !ok {
+		return session.Record{}, fmt.Errorf("%w: operation %s", ErrNotFound, operationID)
+	}
+	updated, err := session.ObserveAllocation(current, observation)
+	if err != nil {
+		return session.Record{}, err
+	}
+	s.Sessions[operationID] = updated.Clone()
+	return updated.Clone(), nil
+}
+
 func (s *State) UpdateOpenAt(record session.Record, expectedStatus session.Status, now time.Time) error {
 	s.ensureMaps()
 	if now.IsZero() {
@@ -186,6 +278,12 @@ func (s *State) UpdateOpenAt(record session.Record, expectedStatus session.Statu
 	}
 	if !sameOpenRequest(current.Request, record.Request) || !sameTime(current.AcceptedAt, record.AcceptedAt) {
 		return ErrConflict
+	}
+	if !reflect.DeepEqual(current.Allocation, record.Allocation) || current.Status == session.StatusAccepted && record.Status == session.StatusRunning {
+		return ErrConflict
+	}
+	if record.Status == session.StatusSucceeded && current.Allocation == nil {
+		return session.ErrInvalidAllocation
 	}
 	if err := record.Validate(); err != nil {
 		return err
@@ -284,7 +382,7 @@ func (s State) Export() PersistedState {
 }
 
 func (s *State) Import(snapshot PersistedState) error {
-	if snapshot.Version != snapshotVersion {
+	if snapshot.Version != legacySnapshotVersion && snapshot.Version != snapshotVersion {
 		return fmt.Errorf("%w: unsupported state version %d", ErrCorrupt, snapshot.Version)
 	}
 	loaded := NewState()
@@ -298,8 +396,21 @@ func (s *State) Import(snapshot PersistedState) error {
 		loaded.Authorities[authority.SandboxID] = authority.Clone()
 	}
 	for _, record := range snapshot.Sessions {
+		if snapshot.Version == legacySnapshotVersion {
+			if record.Allocation != nil {
+				return fmt.Errorf("%w: version 1 session contains allocation evidence", ErrCorrupt)
+			}
+			// Version 1 had no allocator. A retained running state therefore
+			// cannot be reconciled without risking replacement allocation.
+			if record.Status == session.StatusRunning {
+				record.Status = session.StatusOutcomeUnknown
+			}
+		}
 		if err := record.Validate(); err != nil {
 			return fmt.Errorf("%w: session: %v", ErrCorrupt, err)
+		}
+		if err := validatePersistedRecord(record); err != nil {
+			return err
 		}
 		operationID := record.Request.OperationID
 		if _, exists := loaded.Sessions[operationID]; exists {
@@ -308,6 +419,13 @@ func (s *State) Import(snapshot PersistedState) error {
 		authority, exists := loaded.Authorities[record.Request.SandboxID]
 		if !exists || authority.ProviderRevisionID != record.Request.ProviderRevisionID {
 			return fmt.Errorf("%w: session %q references missing authority", ErrCorrupt, operationID)
+		}
+		if record.Allocation != nil {
+			for otherID, other := range loaded.Sessions {
+				if other.Allocation != nil && other.Allocation.Receipt.Reference == record.Allocation.Receipt.Reference {
+					return fmt.Errorf("%w: sessions %q and %q share allocation reference", ErrCorrupt, otherID, operationID)
+				}
+			}
 		}
 		loaded.Sessions[operationID] = record.Clone()
 	}
@@ -333,5 +451,25 @@ func (s *State) Import(snapshot PersistedState) error {
 		}
 	}
 	*s = loaded
+	return nil
+}
+
+func validatePersistedRecord(record session.Record) error {
+	switch record.Status {
+	case session.StatusAccepted:
+		if record.Allocation != nil {
+			return fmt.Errorf("%w: accepted session contains allocation evidence", ErrCorrupt)
+		}
+	case session.StatusRunning:
+		if record.Allocation == nil || record.Allocation.State != session.AllocationRunning {
+			return fmt.Errorf("%w: running session lacks running allocation evidence", ErrCorrupt)
+		}
+	case session.StatusSucceeded:
+		// A missing receipt is retained only for a valid version-1 handoff.
+		// New success transitions are rejected without an attached receipt.
+		if record.Allocation != nil && record.Allocation.State != session.AllocationRunning {
+			return fmt.Errorf("%w: successful session has non-running allocation evidence", ErrCorrupt)
+		}
+	}
 	return nil
 }

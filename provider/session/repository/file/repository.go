@@ -86,6 +86,44 @@ func (r *Repository) GetOpenAt(ctx context.Context, operationID string, now time
 	return r.state.GetOpenAt(operationID, now)
 }
 
+func (r *Repository) ListOpen(ctx context.Context) ([]session.Record, error) {
+	if err := repository.ContextError(ctx); err != nil {
+		return nil, err
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if r.closed {
+		return nil, repository.ErrClosed
+	}
+	return r.state.ListOpen(), nil
+}
+
+func (r *Repository) AttachAllocation(ctx context.Context, receipt session.AllocationReceipt) (session.Reservation, error) {
+	if err := repository.ContextError(ctx); err != nil {
+		return session.Reservation{}, err
+	}
+	var result session.Reservation
+	err := r.mutate(ctx, func() error {
+		var err error
+		result, err = r.state.AttachAllocation(receipt)
+		return err
+	})
+	return result, err
+}
+
+func (r *Repository) ObserveAllocation(ctx context.Context, operationID string, observation session.AllocationEvidence) (session.Record, error) {
+	if err := repository.ContextError(ctx); err != nil {
+		return session.Record{}, err
+	}
+	var result session.Record
+	err := r.mutate(ctx, func() error {
+		var err error
+		result, err = r.state.ObserveAllocation(operationID, observation)
+		return err
+	})
+	return result, err
+}
+
 func (r *Repository) UpdateOpen(ctx context.Context, record session.Record, expectedStatus session.Status) error {
 	return r.UpdateOpenAt(ctx, record, expectedStatus, time.Now().UTC())
 }
@@ -102,6 +140,13 @@ func (r *Repository) PutSandboxAuthority(ctx context.Context, authority session.
 		return err
 	}
 	return r.mutate(ctx, func() error { return r.state.PutSandboxAuthority(authority) })
+}
+
+func (r *Repository) SynchronizeSandboxAuthority(ctx context.Context, authority session.SandboxAuthority) error {
+	if err := repository.ContextError(ctx); err != nil {
+		return err
+	}
+	return r.mutate(ctx, func() error { return r.state.SynchronizeSandboxAuthority(authority) })
 }
 
 func (r *Repository) ReplaceSandboxAuthority(ctx context.Context, authority session.SandboxAuthority, expectedGeneration, fencingToken int64) error {

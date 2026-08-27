@@ -213,6 +213,67 @@ func TestRecordValidateRejectsMismatchedOrNonOpaqueHandoff(t *testing.T) {
 	}
 }
 
+func TestAllocationAttachmentAndObservationAreIdentityBound(t *testing.T) {
+	request := validOpenRequest()
+	record, err := NewRecord(request, sessionTestNow.Add(time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	receipt := AllocationReceipt{
+		Reference: "ref:terminal/11111111111111111111111111111111",
+		SandboxID: request.SandboxID, RuntimeSessionID: request.RuntimeSessionID,
+		OperationID: request.OperationID, AttemptID: request.AttemptID,
+		FencingToken: request.FencingToken, ExpectedGeneration: request.ExpectedGeneration,
+		ConnectionGeneration: 1, AllocatedAt: sessionTestNow.Add(2 * time.Second), ExpiresAt: request.ExpiresAt,
+	}
+	running, err := AttachAllocation(record, receipt)
+	if err != nil || running.Status != StatusRunning || running.Allocation == nil || running.Allocation.Receipt != receipt {
+		t.Fatalf("AttachAllocation() = %#v, %v", running, err)
+	}
+	replayed, err := AttachAllocation(running, receipt)
+	if err != nil || replayed.Allocation == nil || replayed.Allocation.Receipt != receipt {
+		t.Fatalf("AttachAllocation replay = %#v, %v", replayed, err)
+	}
+	substituted := receipt
+	substituted.Reference = "ref:terminal/22222222222222222222222222222222"
+	if _, err := AttachAllocation(running, substituted); !errors.Is(err, ErrAllocationConflict) {
+		t.Fatalf("receipt substitution = %v", err)
+	}
+
+	unknown, err := ObserveAllocation(running, AllocationEvidence{
+		Receipt: receipt, State: AllocationOutcomeUnknown, ObservedAt: sessionTestNow.Add(3 * time.Second),
+	})
+	if err != nil || unknown.Status != StatusOutcomeUnknown || unknown.Allocation == nil || unknown.Allocation.State != AllocationOutcomeUnknown {
+		t.Fatalf("ObserveAllocation() = %#v, %v", unknown, err)
+	}
+	if _, err := ObserveAllocation(unknown, AllocationEvidence{Receipt: receipt, State: AllocationRunning, ObservedAt: sessionTestNow.Add(4 * time.Second)}); !errors.Is(err, ErrTerminalOperation) {
+		t.Fatalf("outcome_unknown observation replay = %v", err)
+	}
+}
+
+func TestRecordCloneDoesNotShareAllocationEvidence(t *testing.T) {
+	request := validOpenRequest()
+	record, err := NewRecord(request, sessionTestNow.Add(time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	record, err = AttachAllocation(record, AllocationReceipt{
+		Reference: "ref:terminal/33333333333333333333333333333333",
+		SandboxID: request.SandboxID, RuntimeSessionID: request.RuntimeSessionID,
+		OperationID: request.OperationID, AttemptID: request.AttemptID,
+		FencingToken: request.FencingToken, ExpectedGeneration: request.ExpectedGeneration,
+		ConnectionGeneration: 1, AllocatedAt: sessionTestNow.Add(2 * time.Second), ExpiresAt: request.ExpiresAt,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	clone := record.Clone()
+	record.Allocation.Receipt.Reference = "ref:terminal/44444444444444444444444444444444"
+	if clone.Allocation == nil || clone.Allocation.Receipt.Reference != "ref:terminal/33333333333333333333333333333333" {
+		t.Fatalf("Clone() shares allocation evidence: %#v", clone.Allocation)
+	}
+}
+
 func beginRecord(record *Record) {
 	updated, err := Transition(*record, StatusRunning, sessionTestNow.Add(2*time.Second), nil)
 	if err != nil {

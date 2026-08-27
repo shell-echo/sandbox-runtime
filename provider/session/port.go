@@ -40,3 +40,15 @@ type Authority interface {
 	GetOpen(ctx context.Context, operationID string) (Record, error)
 	UpdateOpen(ctx context.Context, record Record, expectedStatus Status) error
 }
+
+// CoordinationAuthority extends durable session truth with the operations
+// needed by a runtime coordinator. SynchronizeSandboxAuthority stores a
+// trusted lifecycle projection before ReserveOpen or successful completion;
+// it does not make lifecycle and session repositories one atomic transaction.
+type CoordinationAuthority interface {
+	Authority
+	SynchronizeSandboxAuthority(context.Context, SandboxAuthority) error
+	AttachAllocation(context.Context, AllocationReceipt) (Reservation, error)
+	ObserveAllocation(context.Context, string, AllocationEvidence) (Record, error)
+	ListOpen(context.Context) ([]Record, error)
+}
