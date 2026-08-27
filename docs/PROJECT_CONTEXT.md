@@ -1,6 +1,6 @@
 # Project Context
 
-Updated: 2026-08-26
+Updated: 2026-08-27
 
 This is the stable entry point for a new developer, AI agent, development
 device, or implementation session. It summarizes the system, engineering
@@ -148,7 +148,7 @@ Contract identity:
 | P1.1 | Passed for DTO, mTLS discovery, JWS/digest/replay/fencing admission | Does not prove runtime behavior or production identity infrastructure |
 | P1.2 | Passed for the bounded Contract-authorized lifecycle subset and development composition | Provider lifecycle has fake and Docker development adapters; reserved lifecycle families and production gates remain open |
 | P2.1-P2.4a3 | Bounded exec, result, terminal, Gateway, artifact, usage, admission, application, persistence, and transport components have local Contract/CI evidence | P2 is not vertically composed into a real coding/shell Provider and no independent caller E2E environment exists |
-| P2.5a-e | Plan, coding/shell Contract/profile, mutation preflight, Docker runtime foundation, and the exec vertical pass their local and CI gates | Terminal/Gateway, artifact/usage, readiness-derived advertisement, and independent caller gates remain open |
+| P2.5a-e, P2.5f0 | Plan, coding/shell Contract/profile, mutation preflight, Docker runtime foundation, and the exec vertical pass their local and CI gates; the terminal/Gateway authority and recovery audit is complete as design evidence | Reconnectable terminal runtime and Gateway composition, artifact/usage, readiness-derived advertisement, and independent caller gates remain open |
 | P3 | Local revision binding, shadow-validation, canary/rollback/drain, and metrics primitives passed component tests | P2 gate, external caller, real traffic parity, canary, rollback, and old-run drain E2E remain open |
 | P4 | Optional capability profiles have not started | Each browser/desktop/forwarding/snapshot/GPU/isolation profile needs independent Contract, security, and conformance gates |
 
@@ -175,6 +175,9 @@ make the current Provider a usable coding/shell implementation.
    composition. Startup capability construction still advertises empty
    capability and runtime-profile arrays. No real terminal allocation/WebSocket,
    artifact staging, or usage collection is yet composed.
+   The P2.5f0 audit also established that the current non-TTY Docker exec
+   attach has no stdin and cannot be reconstructed after Provider restart; it
+   cannot serve as terminal reconnect evidence.
 2. No independently owned caller/platform E2E environment is runnable. The
    repository's 38-case runner maps to repository-local Go tests and CI has no
    external-platform job. The separately inspected platform candidate at
@@ -202,11 +205,16 @@ reconciliation, bounded private output capture, real Docker execution and
 cancellation, and fail-closed development composition. Full race/shuffle, vet,
 Contract verification, the locked 38-case Suite, diff checks, focused race
 matrices, and real Docker integration passed locally. CI `32937530059` passed
-all three jobs. Capability advertisement remains empty. The next implementation
-slice is P2.5f:
+all three jobs. P2.5f0 then audited terminal/Gateway authority, data-plane,
+recovery, persistence, cleanup, capacity, and deployment boundaries without
+changing runtime behavior. Capability advertisement remains empty. The next
+implementation slice is P2.5f1:
 
-1. Compose terminal authority, allocator, opaque handoff, a concrete WebSocket
-   adapter, and Gateway integration.
+1. Implement the reconnectable terminal runtime/broker port and Docker adapter,
+   then complete durable coordination, opaque reference resolution, bounded
+   WebSocket/Gateway composition, command recovery, and the local evidence gate
+   through P2.5f7. The detailed order is in the
+   [terminal/Gateway plan](plan/p2.5f-terminal-gateway-vertical.md).
 2. Compose a real artifact stager and usage collector, then enable capability
    advertisement only when all required dependencies are present.
 3. Supply an independently owned mTLS/JWS caller and reproducible deployment,

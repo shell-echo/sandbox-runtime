@@ -77,6 +77,22 @@ its named gates pass. A composed route, a Contract projection, a local Suite
 mapping, and CI are distinct evidence and none substitutes for the independent
 P2.5i caller/platform E2E gate.
 
+## Terminal and Gateway discipline
+
+A terminal runtime must be independently reattachable after Provider restart;
+do not present a retained in-memory stream, one-shot Docker exec attach, or a
+replacement shell as reconnect evidence. Persist provider-neutral allocation
+receipts and opaque `ref:session:*` references separately from adapter-private
+backend identity. Reconstruct a fresh dial operation through the resolver on
+every Gateway connect or reconnect; never persist a Go closure.
+
+Gateway user and tenant authorization, revocation policy, and audit sinks are
+caller-owned ports. Enabled composition must require them explicitly and fail
+closed when any is absent. Do not add a static or allow-all authorizer. The
+current Provider Contract does not authorize resize or explicit close-session
+mutations, so either feature requires a coordinated protocol decision before
+implementation.
+
 ## Change and review discipline
 
 Keep changes scoped to one delivery slice and state its non-goals. New behavior

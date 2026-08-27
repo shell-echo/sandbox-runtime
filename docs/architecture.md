@@ -242,6 +242,16 @@ token. The Agent Platform Runtime Gateway authorizes and proxies terminal,
 browser, desktop, and port-forward traffic and owns reconnect policy and
 recording metadata.
 
+Terminal reconnect requires a runtime resource that can be independently
+reattached after the Provider process loses its in-memory stream. A one-shot
+Docker exec attach, persisted backend exec ID, or replacement shell process is
+not equivalent. Provider-neutral session state stores only bounded allocation
+evidence, opaque reference, connection generation, and expiry; backend broker
+identity stays in adapter-private state. The Gateway resolves the opaque
+reference into a fresh dial operation on every connection attempt. Its
+authorizer, revocation source, and recorder remain caller-owned dependencies
+with no Provider-supplied allow-all fallback.
+
 Snapshot manifests include provider revision, snapshot level, digest, size,
 content reference, and compatibility metadata. Workspace-only snapshots may be
 portable across providers. Filesystem and process snapshots are provider/revision
@@ -356,7 +366,7 @@ vertical and its release gates are not yet implemented:
 | API | Local `/instances` and the protected Provider v1 surface are separate; authorized lifecycle/session/artifact/usage routes have bounded projections, and development exec routes now reach a real Docker executor. | Complete terminal/Gateway and artifact/usage dispatch without expanding Contract authority. |
 | Capabilities | Empty, terminal-only, and atomic coding/shell snapshots are locked; command startup remains empty by default. | Advertise the coding/shell profile only after all P2.5h dependencies pass. |
 | Execution | P2.5e composes durable exec/cancel/result/operation handling with real Docker execution, private bounded capture, cancellation, expiry, and reconciliation for one development controller; local gates and CI pass. | Retain the recovery/correlation gates and complete real usage collection in P2.5g; do not advertise before P2.5h. |
-| Terminal | Session authority and Gateway components exist without a real allocator or WebSocket adapter. | Complete P2.5f opaque handoff and data-plane composition. |
+| Terminal | Session authority and Gateway components exist without a real allocator or WebSocket adapter. P2.5f0 established that the current one-shot Docker exec attach cannot satisfy terminal restart/reconnect. | Begin P2.5f1 with a reconnectable terminal runtime/broker port and Docker adapter, then complete durable coordination, opaque resolution, bounded WebSocket, Gateway, and command composition through P2.5f7. |
 | Workspace | The Provider Docker development adapter supplies `/inputs`, `/workspace`, `/outputs`, and bounded tmpfs `/tmp` with owned cleanup; exec consumes that runtime without exposing host paths. | Add artifact consumers, capacity enforcement, and stronger isolation evidence. |
 | Security | Docker defaults already drop capabilities, use non-root/read-only root, disable networking, and limit resources. | Add policy enforcement, stronger isolation profiles, secret grants, egress controls, audit evidence, and production auth. |
 | Events and usage | Durable lifecycle events and bounded usage-evidence components exist without a complete runtime collector composition. | Complete collection/reconciliation while leaving platform accounting authority outside the Provider. |
