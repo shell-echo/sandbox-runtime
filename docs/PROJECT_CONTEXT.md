@@ -129,12 +129,13 @@ multi-tenant, deployment, and production readiness.
 
 ## Current Snapshot
 
-This snapshot was audited on 2026-08-27 against P2.5f3 implementation commit
-`b1acdd1`. Its full local gates, including the locked 38-case Suite and live
-Docker terminal integration, passed. The Contract remains unchanged. Evidence
-baseline `7138a4c`, which contains that implementation, then passed repository
-CI run `33059304542`. These baselines identify reviewed evidence; they are not
-self-updating assertions about the checkout.
+This snapshot was audited on 2026-08-27 against P2.5f4 implementation commit
+`14f14cc`. Its full local regression gates, including the locked 38-case Suite
+and live Docker terminal integration, passed. The Contract remains unchanged.
+Repository CI has not yet been recorded for P2.5f4; the latest CI baseline is
+still P2.5f3 evidence commit `7138a4c`, run `33059304542`. These baselines
+identify reviewed evidence; they are not self-updating assertions about the
+checkout.
 
 Contract identity:
 
@@ -150,7 +151,8 @@ Contract identity:
 | P1.1 | Passed for DTO, mTLS discovery, JWS/digest/replay/fencing admission | Does not prove runtime behavior or production identity infrastructure |
 | P1.2 | Passed for the bounded Contract-authorized lifecycle subset and development composition | Provider lifecycle has fake and Docker development adapters; reserved lifecycle families and production gates remain open |
 | P2.1-P2.4a3 | Bounded exec, result, terminal, Gateway, artifact, usage, admission, application, persistence, and transport components have local Contract/CI evidence | P2 is not vertically composed into a real coding/shell Provider and no independent caller E2E environment exists |
-| P2.5a-e, P2.5f0-f3 | Plan, coding/shell Contract/profile, mutation preflight, Docker runtime foundation, and the exec vertical pass their local and CI gates; the terminal/Gateway audit, reconnectable terminal runtime, durable session coordination/migration, and opaque reference registry/resolver pass their current local and CI gates | WebSocket/Gateway command composition, artifact/usage, readiness-derived advertisement, and independent caller gates remain open |
+| P2.5a-e, P2.5f0-f3 | Plan, coding/shell Contract/profile, mutation preflight, Docker runtime foundation, and the exec vertical pass their local and CI gates; the terminal/Gateway audit, reconnectable terminal runtime, durable session coordination/migration, and opaque reference registry/resolver pass their current local and CI gates | Retain their single-controller component boundary |
+| P2.5f4 | Bounded WebSocket and terminal-byte-stream adapters pass local component and regression gates in `14f14cc`; the WebSocket edge requires caller-owned handshake admission and has explicit frame/origin controls | Gateway composition, command composition, artifact/usage, readiness-derived advertisement, CI for f4, and independent caller gates remain open |
 | P3 | Local revision binding, shadow-validation, canary/rollback/drain, and metrics primitives passed component tests | P2 gate, external caller, real traffic parity, canary, rollback, and old-run drain E2E remain open |
 | P4 | Optional capability profiles have not started | Each browser/desktop/forwarding/snapshot/GPU/isolation profile needs independent Contract, security, and conformance gates |
 
@@ -180,11 +182,13 @@ make the current Provider a usable coding/shell implementation.
    and v1-to-v2 migration. P2.5f3 separately persists opaque `ref:session:*`
    records and resolves only a fresh internal terminal attach after rechecking
    registry state and the committed session handoff on both resolve and dial.
-   The two repositories remain non-atomic, and neither component is
-   command-composed. WebSocket/Gateway, artifact, and usage applications remain
-   absent from command composition. Startup capability construction still
-   advertises empty capability and runtime-profile arrays. No artifact staging
-   or usage collection is yet composed.
+   P2.5f4 adds bounded adapters from caller-admitted WebSocket messages and
+   `provider/terminal.Stream` bytes to `gateway.Stream`, but does not compose
+   them with the Gateway or Provider command roots. The two repositories remain
+   non-atomic. Gateway, artifact, and usage applications remain absent from
+   command composition. Startup capability construction still advertises empty
+   capability and runtime-profile arrays. No artifact staging or usage
+   collection is yet composed.
 2. No independently owned caller/platform E2E environment is runnable. The
    repository's 38-case runner maps to repository-local Go tests and CI has no
    external-platform job. The separately inspected platform candidate at
@@ -238,12 +242,28 @@ adapter-private attach for each dial. File-backed restart, collision, expiry,
 revocation, generation/reference mismatch, and concurrent resolve/revoke tests
 pass locally. The registry/session repositories are intentionally non-atomic,
 and no command composition or public backend endpoint is added. Repository CI
-`33059304542` passed all three jobs for evidence baseline `7138a4c`. The
+`33059304542` passed all three jobs for evidence baseline `7138a4c`. P2.5f4
+implementation `14f14cc` adds `gateway/adapter`: a direct
+`github.com/coder/websocket@v1.8.15` dependency (ISC-licensed, source-reviewed
+for context reads/writes, message limits, control frames, and close behavior),
+plus bounded adapters between the WebSocket/terminal byte surfaces and
+`gateway.Stream`. It requires a caller-supplied pre-upgrade admission callback,
+rejects wildcard origin patterns, retains the library's default same-origin
+protection and disabled compression, accepts only text/binary data-plane
+frames, and uses a 32 KiB default with a 64 KiB hard cap. Focused adapter
+race/shuffle tests cover admission, origin rejection, binary flow, control
+frames, over-limit `1009` close, cancellation, close, abrupt disconnect, and
+partial terminal I/O. Full race/shuffle, vet, module verification, unchanged
+Contract verification, the locked 38-case Suite, diff checks, and both Docker
+regression packages passed locally. CI for f4 is pending. `govulncheck` and an
+OSV scanner were not available, so no vulnerability scan is claimed. The
 remaining terminal vertical is open and capability advertisement remains empty.
-The next implementation slice is P2.5f4:
+The next implementation slice is P2.5f5:
 
-1. Implement bounded WebSocket/Gateway stream composition, command recovery,
-   and the local evidence gate through P2.5f7. The detailed order is in the
+1. Compose the existing Gateway only with caller-owned `Authorizer`,
+   `RevocationSource`, and `Recorder`, plus a Provider-backed resolver and the
+   f4 adapters. Then complete f6 command/recovery/shutdown composition and f7
+   local vertical evidence. The detailed order is in the
    [terminal/Gateway plan](plan/p2.5f-terminal-gateway-vertical.md).
 2. Compose a real artifact stager and usage collector, then enable capability
    advertisement only when all required dependencies are present.

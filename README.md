@@ -41,6 +41,9 @@ Currently implemented:
 - default-disabled, development-only Provider exec composition over the Docker
   lifecycle runtime, a separate durable ledger, bounded private output capture,
   cancellation, result expiry, and restart reconciliation
+- bounded `gateway.Stream` adapters for an admitted WebSocket edge and private
+  terminal byte stream; no public Gateway route, caller authorization, Provider
+  resolver, command composition, or capability advertisement is enabled
 
 Planned but not yet implemented:
 
@@ -48,7 +51,7 @@ Planned but not yet implemented:
 - Block registry
 - runtime images for browser and desktop workloads
 - display, audio, input, streaming, clipboard, and file-transfer modules
-- WebRTC / VNC / WebSocket connectors
+- deployable WebRTC / VNC / public WebSocket Gateway composition
 - web viewer and management console
 - SDKs for embedding and automation
 
