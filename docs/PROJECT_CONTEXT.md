@@ -131,10 +131,10 @@ multi-tenant, deployment, and production readiness.
 
 This snapshot was audited on 2026-08-27 against P2.5f3 implementation commit
 `b1acdd1`. Its full local gates, including the locked 38-case Suite and live
-Docker terminal integration, passed. The Contract remains unchanged. Repository
-CI for P2.5f3 is pending; the latest completed evidence baseline is P2.5f2
-`3abefd4`, for which run `33045725476` passed. These baselines identify reviewed
-evidence; they are not self-updating assertions about the checkout.
+Docker terminal integration, passed. The Contract remains unchanged. Evidence
+baseline `7138a4c`, which contains that implementation, then passed repository
+CI run `33059304542`. These baselines identify reviewed evidence; they are not
+self-updating assertions about the checkout.
 
 Contract identity:
 
@@ -150,7 +150,7 @@ Contract identity:
 | P1.1 | Passed for DTO, mTLS discovery, JWS/digest/replay/fencing admission | Does not prove runtime behavior or production identity infrastructure |
 | P1.2 | Passed for the bounded Contract-authorized lifecycle subset and development composition | Provider lifecycle has fake and Docker development adapters; reserved lifecycle families and production gates remain open |
 | P2.1-P2.4a3 | Bounded exec, result, terminal, Gateway, artifact, usage, admission, application, persistence, and transport components have local Contract/CI evidence | P2 is not vertically composed into a real coding/shell Provider and no independent caller E2E environment exists |
-| P2.5a-e, P2.5f0-f3 | Plan, coding/shell Contract/profile, mutation preflight, Docker runtime foundation, and the exec vertical pass their local and CI gates; the terminal/Gateway audit, reconnectable terminal runtime, durable session coordination/migration, and opaque reference registry/resolver pass their current gates | P2.5f3 repository CI, WebSocket/Gateway command composition, artifact/usage, readiness-derived advertisement, and independent caller gates remain open |
+| P2.5a-e, P2.5f0-f3 | Plan, coding/shell Contract/profile, mutation preflight, Docker runtime foundation, and the exec vertical pass their local and CI gates; the terminal/Gateway audit, reconnectable terminal runtime, durable session coordination/migration, and opaque reference registry/resolver pass their current local and CI gates | WebSocket/Gateway command composition, artifact/usage, readiness-derived advertisement, and independent caller gates remain open |
 | P3 | Local revision binding, shadow-validation, canary/rollback/drain, and metrics primitives passed component tests | P2 gate, external caller, real traffic parity, canary, rollback, and old-run drain E2E remain open |
 | P4 | Optional capability profiles have not started | Each browser/desktop/forwarding/snapshot/GPU/isolation profile needs independent Contract, security, and conformance gates |
 
@@ -159,10 +159,10 @@ multi-controller reliability, hostile multi-tenant security, deployment, and
 production operations remain separate and unproven even after a future P2/P3
 E2E passes.
 
-The latest verified repository CI is P2.5f2 evidence baseline `3abefd4`, run
-`33045725476`; its `provider-contract`, `test`, and `docker-integration` jobs
-passed. P2.5f3 repository CI remains pending. Repository CI remains distinct
-from independent caller and production evidence.
+The latest verified repository CI is P2.5f3 evidence baseline `7138a4c`, run
+`33059304542`; its `provider-contract`, `test`, and `docker-integration` jobs
+passed. Repository CI remains distinct from independent caller and production
+evidence.
 
 ## Current P2 Blockers
 
@@ -237,10 +237,10 @@ expiry/revocation and exact committed-handoff identity, then constructs a fresh
 adapter-private attach for each dial. File-backed restart, collision, expiry,
 revocation, generation/reference mismatch, and concurrent resolve/revoke tests
 pass locally. The registry/session repositories are intentionally non-atomic,
-and no command composition or public backend endpoint is added. P2.5f3
-repository CI is pending. The remaining terminal vertical is open and
-capability advertisement remains empty. The next implementation slice is
-P2.5f4:
+and no command composition or public backend endpoint is added. Repository CI
+`33059304542` passed all three jobs for evidence baseline `7138a4c`. The
+remaining terminal vertical is open and capability advertisement remains empty.
+The next implementation slice is P2.5f4:
 
 1. Implement bounded WebSocket/Gateway stream composition, command recovery,
    and the local evidence gate through P2.5f7. The detailed order is in the
