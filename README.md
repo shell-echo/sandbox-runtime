@@ -169,11 +169,13 @@ durable guard state file, it adds the protected-operation admission boundary.
 Individually enabled Provider lifecycle and exec applications may then compose
 only their locked routes. Exec requires the Provider Docker lifecycle runtime
 and its own file ledger; the development adapters remain rejected in production.
-A reconnectable terminal runtime/broker, Docker adapter, and durable session
-coordination application now exist as uncomposed development components. The
-session repository migrates v1 state to provider-neutral v2 allocation and
-recovery evidence, but opaque `ref:session:*` resolution, WebSocket/Gateway
-command composition, and artifact/usage runtime composition remain absent.
+A reconnectable terminal runtime/broker, Docker adapter, durable session
+coordination application, and private opaque `ref:session:*` registry/resolver
+now exist as uncomposed development components. The file-backed registry
+reconstructs a fresh terminal attach after restart and rechecks expiry,
+revocation, committed session handoff, and identity bindings before each dial;
+it does not expose backend data. WebSocket/Gateway command composition and
+artifact/usage runtime composition remain absent.
 Startup still advertises no runtime capability.
 
 Capability discovery has no query parameters or request document. For request
