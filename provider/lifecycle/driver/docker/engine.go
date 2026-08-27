@@ -5,6 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
+	"sync"
+	"time"
 
 	cerrdefs "github.com/containerd/errdefs"
 	"github.com/moby/moby/api/types/container"
@@ -62,12 +65,28 @@ type execEngine interface {
 	execInspect(context.Context, string) (execInfo, error)
 }
 
+type terminalEngine interface {
+	execCreate(context.Context, string, execCreateRequest) (string, error)
+	execStart(context.Context, string, bool) error
+	execInspect(context.Context, string) (execInfo, error)
+	execAttachTerminal(context.Context, string) (terminalConnection, error)
+}
+
+type terminalConnection interface {
+	io.ReadWriteCloser
+	SetReadDeadline(time.Time) error
+	SetWriteDeadline(time.Time) error
+}
+
 type execCreateRequest struct {
 	user             string
 	workingDirectory string
 	command          []string
+	environment      []string
+	attachStdin      bool
 	attachStdout     bool
 	attachStderr     bool
+	tty              bool
 }
 
 type execInfo struct {
@@ -189,8 +208,9 @@ func (e *mobyEngine) remove(ctx context.Context, id string) error {
 
 func (e *mobyEngine) execCreate(ctx context.Context, containerID string, request execCreateRequest) (string, error) {
 	result, err := e.client.ExecCreate(ctx, containerID, client.ExecCreateOptions{
-		User: request.user, Privileged: false, TTY: false,
-		AttachStdout: request.attachStdout, AttachStderr: request.attachStderr,
+		User: request.user, Privileged: false, TTY: request.tty,
+		AttachStdin: request.attachStdin, AttachStdout: request.attachStdout, AttachStderr: request.attachStderr,
+		Env:        append([]string(nil), request.environment...),
 		WorkingDir: request.workingDirectory, Cmd: append([]string(nil), request.command...),
 	})
 	if err != nil {
@@ -212,6 +232,14 @@ func (e *mobyEngine) execAttach(ctx context.Context, execID string) (io.ReadClos
 	return &hijackedExecStream{reader: response.Reader, close: response.Close}, nil
 }
 
+func (e *mobyEngine) execAttachTerminal(ctx context.Context, execID string) (terminalConnection, error) {
+	response, err := e.client.ExecAttach(ctx, execID, client.ExecAttachOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return &hijackedTerminalStream{reader: response.Reader, connection: response.Conn, close: response.Close}, nil
+}
+
 func (e *mobyEngine) execInspect(ctx context.Context, execID string) (execInfo, error) {
 	result, err := e.client.ExecInspect(ctx, execID, client.ExecInspectOptions{})
 	if err != nil {
@@ -228,6 +256,34 @@ type hijackedExecStream struct {
 func (s *hijackedExecStream) Read(value []byte) (int, error) { return s.reader.Read(value) }
 func (s *hijackedExecStream) Close() error {
 	s.close()
+	return nil
+}
+
+type hijackedTerminalStream struct {
+	reader     io.Reader
+	connection net.Conn
+	close      func()
+	closeOnce  sync.Once
+}
+
+func (s *hijackedTerminalStream) Read(value []byte) (int, error) {
+	return s.reader.Read(value)
+}
+
+func (s *hijackedTerminalStream) Write(value []byte) (int, error) {
+	return s.connection.Write(value)
+}
+
+func (s *hijackedTerminalStream) SetReadDeadline(deadline time.Time) error {
+	return s.connection.SetReadDeadline(deadline)
+}
+
+func (s *hijackedTerminalStream) SetWriteDeadline(deadline time.Time) error {
+	return s.connection.SetWriteDeadline(deadline)
+}
+
+func (s *hijackedTerminalStream) Close() error {
+	s.closeOnce.Do(s.close)
 	return nil
 }
 

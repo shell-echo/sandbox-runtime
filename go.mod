@@ -4,6 +4,7 @@ go 1.26
 
 require (
 	github.com/containerd/errdefs v1.0.0
+	github.com/creack/pty v1.1.24
 	github.com/distribution/reference v0.6.0
 	github.com/gin-gonic/gin v1.12.0
 	github.com/go-viper/mapstructure/v2 v2.5.0
@@ -16,6 +17,7 @@ require (
 	github.com/spf13/viper v1.21.0
 	go.yaml.in/yaml/v3 v3.0.4
 	golang.org/x/sys v0.41.0
+	golang.org/x/term v0.40.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
 

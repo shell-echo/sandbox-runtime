@@ -7,7 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -16,6 +18,7 @@ import (
 
 	providerexec "github.com/shell-echo/sandbox-runtime/provider/exec"
 	"github.com/shell-echo/sandbox-runtime/provider/lifecycle/coordinator"
+	providerterminal "github.com/shell-echo/sandbox-runtime/provider/terminal"
 )
 
 func TestProviderDockerLifecycleIntegration(t *testing.T) {
@@ -86,6 +89,37 @@ func TestProviderDockerLifecycleIntegration(t *testing.T) {
 	if err != nil || execState.StdoutBytes != 4 || execState.StderrBytes != 4 || !execState.StdoutTruncated || !execState.StderrTruncated {
 		t.Fatalf("exec capture state = %#v, %v", execState, err)
 	}
+	brokerGuestPath := "/workspace/.sandbox-runtime/bin/terminal-broker"
+	buildIntegrationTerminalBroker(ctx, t, filepath.Join(paths.workspace, ".sandbox-runtime", "bin", "terminal-broker"))
+	terminalOptions := TerminalOptions{
+		BrokerPath: brokerGuestPath, ShellPath: "/bin/sh", MaxSessionsPerSandbox: 2, MaxSessionsPerController: 4,
+		Clock: providerterminal.ClockFunc(func() time.Time { return time.Now().UTC() }),
+	}
+	terminalRuntime, err := NewTerminalRuntime(driver, terminalOptions)
+	if err != nil {
+		t.Fatalf("NewTerminalRuntime: %v", err)
+	}
+	terminalAllocation := integrationTerminalAllocation(sandbox.ID, time.Now().UTC())
+	terminalReceipt, err := terminalRuntime.Allocate(ctx, terminalAllocation)
+	if err != nil {
+		t.Fatalf("Allocate terminal: %v", err)
+	}
+	terminalStream, err := terminalRuntime.Attach(ctx, terminalReceipt)
+	if err != nil {
+		t.Fatalf("Attach terminal: %v", err)
+	}
+	writeAndReadTerminalMarker(t, terminalStream, "SR_RECONNECT=preserved; printf 'TERMINAL-FIRST:%s\\n' \"$SR_RECONNECT\"\n", "TERMINAL-FIRST:preserved")
+	if err := terminalStream.Close(); err != nil {
+		t.Fatalf("Close first terminal stream: %v", err)
+	}
+	_, terminalStatePath, err := terminalRuntime.stateLocationForReceipt(terminalReceipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	privateBeforeRestart, err := loadTerminalState(terminalStatePath)
+	if err != nil {
+		t.Fatalf("load terminal private state: %v", err)
+	}
 	if err := driver.Close(); err != nil {
 		t.Fatalf("Close before restart: %v", err)
 	}
@@ -101,6 +135,32 @@ func TestProviderDockerLifecycleIntegration(t *testing.T) {
 	restartedExec, err := restarted.Observe(ctx, execRequest)
 	if err != nil || restartedExec.Status != providerexec.ResultCompleted || restartedExec.ExecutionReference != reference {
 		t.Fatalf("Observe exec after restart = %#v, %v", restartedExec, err)
+	}
+	restartedTerminal, err := NewTerminalRuntime(restarted, terminalOptions)
+	if err != nil {
+		t.Fatalf("NewTerminalRuntime after restart: %v", err)
+	}
+	terminalObservation, err := restartedTerminal.Observe(ctx, terminalReceipt)
+	if err != nil || terminalObservation.State != providerterminal.ObservationRunning {
+		t.Fatalf("Observe terminal after restart = %#v, %v", terminalObservation, err)
+	}
+	reconnectedTerminal, err := restartedTerminal.Attach(ctx, terminalReceipt)
+	if err != nil {
+		t.Fatalf("Attach terminal after restart: %v", err)
+	}
+	writeAndReadTerminalMarker(t, reconnectedTerminal, "printf 'TERMINAL-SECOND:%s\\n' \"$SR_RECONNECT\"\n", "TERMINAL-SECOND:preserved")
+	if err := reconnectedTerminal.Close(); err != nil {
+		t.Fatalf("Close reconnected terminal stream: %v", err)
+	}
+	privateAfterRestart, err := loadTerminalState(terminalStatePath)
+	if err != nil || privateAfterRestart.BackendBrokerExecID != privateBeforeRestart.BackendBrokerExecID {
+		t.Fatalf("terminal broker identity changed across restart: before=%q after=%q err=%v", privateBeforeRestart.BackendBrokerExecID, privateAfterRestart.BackendBrokerExecID, err)
+	}
+	if err := restartedTerminal.Cleanup(ctx, terminalReceipt); err != nil {
+		t.Fatalf("Cleanup terminal: %v", err)
+	}
+	if _, err := os.Stat(terminalStatePath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("terminal private state remains after cleanup: %v", err)
 	}
 	if err := restarted.CleanupResult(ctx, execRequest); err != nil {
 		t.Fatalf("CleanupResult: %v", err)
@@ -139,6 +199,63 @@ func TestProviderDockerLifecycleIntegration(t *testing.T) {
 	if _, err := os.Stat(paths.root); !os.IsNotExist(err) {
 		t.Fatalf("mount root remains after Remove: %v", err)
 	}
+}
+
+func integrationTerminalAllocation(sandboxID string, now time.Time) providerterminal.Allocation {
+	return providerterminal.Allocation{
+		AllocatedAt: now,
+		Request: providerterminal.AllocationRequest{
+			SandboxID: sandboxID, RuntimeSessionID: "integration-terminal",
+			OperationID: "integration-terminal-operation", AttemptID: "integration-terminal-attempt",
+			FencingToken: 3, ExpectedGeneration: 1,
+			RequestDigest:    "sha256:" + strings.Repeat("e", 64),
+			WorkingDirectory: "/workspace", ExpiresAt: now.Add(time.Minute),
+		},
+	}
+}
+
+func buildIntegrationTerminalBroker(ctx context.Context, t *testing.T, destination string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(destination), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	moduleRoot, err := filepath.Abs("../../../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	command := exec.CommandContext(ctx, "go", "build", "-trimpath", "-o", destination, "./cmd/terminal-broker")
+	command.Dir = moduleRoot
+	command.Env = append(os.Environ(), "CGO_ENABLED=0", "GOOS=linux", "GOARCH="+runtime.GOARCH, "GOCACHE="+filepath.Join(t.TempDir(), "go-cache"))
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("build Linux terminal broker: %v: %s", err, output)
+	}
+	if err := os.Chmod(destination, 0o755); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func writeAndReadTerminalMarker(t *testing.T, stream providerterminal.Stream, command, marker string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if _, err := stream.Write(ctx, []byte(command)); err != nil {
+		t.Fatalf("write terminal command: %v", err)
+	}
+	buffer := make([]byte, 4096)
+	var output strings.Builder
+	for output.Len() < 64<<10 {
+		count, err := stream.Read(ctx, buffer)
+		if count > 0 {
+			output.Write(buffer[:count])
+			if strings.Contains(output.String(), marker) {
+				return
+			}
+		}
+		if err != nil {
+			t.Fatalf("read terminal marker %q from %q: %v", marker, output.String(), err)
+		}
+	}
+	t.Fatalf("terminal output exceeded bound without marker %q", marker)
 }
 
 func integrationExecRequest(sandboxID, operationID string, now time.Time) providerexec.Request {
