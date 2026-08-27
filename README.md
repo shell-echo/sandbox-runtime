@@ -169,8 +169,11 @@ durable guard state file, it adds the protected-operation admission boundary.
 Individually enabled Provider lifecycle and exec applications may then compose
 only their locked routes. Exec requires the Provider Docker lifecycle runtime
 and its own file ledger; the development adapters remain rejected in production.
-Terminal/Gateway and artifact/usage runtime composition remain absent, and
-startup still advertises no runtime capability.
+A reconnectable terminal runtime/broker and Docker adapter now exist as an
+uncomposed development capability. Durable session coordination, opaque
+`ref:session:*` resolution, WebSocket/Gateway command composition, and
+artifact/usage runtime composition remain absent, and startup still advertises
+no runtime capability.
 
 Capability discovery has no query parameters or request document. For request
 metadata visible to the handler, a query string (including a bare trailing
@@ -516,8 +519,10 @@ visibility.
   restart observation, unknown-outcome evidence, and cleanup
 - [x] compose development exec/cancel/result routes over durable acceptance,
   Docker execution, bounded private capture, expiry, and reconciliation
+- [x] add a reconnectable Provider terminal runtime/broker and Docker adapter
+  with private backend identity and restart-reattach evidence
 - [x] pass the locked local lifecycle/security Suite mappings (component evidence only)
-- [ ] compose terminal/Gateway and artifact/usage verticals
+- [ ] compose durable terminal sessions/Gateway and artifact/usage verticals
 - [ ] derive nonempty advertisement from complete readiness
 - [ ] pass the independent caller release gate
 

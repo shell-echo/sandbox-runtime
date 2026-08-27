@@ -86,6 +86,13 @@ receipts and opaque `ref:session:*` references separately from adapter-private
 backend identity. Reconstruct a fresh dial operation through the resolver on
 every Gateway connect or reconnect; never persist a Go closure.
 
+The P2.5f1 Docker development adapter uses an in-sandbox PTY broker and keeps
+its container, broker-exec, and Unix-socket identity in adapter-private state.
+Its integration test builds the broker into the test sandbox's writable
+`/workspace`; that is test deployment evidence only. A real deployment must
+ship the broker at a fixed read-only image path before the adapter can be
+considered for production configuration.
+
 Gateway user and tenant authorization, revocation policy, and audit sinks are
 caller-owned ports. Enabled composition must require them explicitly and fail
 closed when any is absent. Do not add a static or allow-all authorizer. The

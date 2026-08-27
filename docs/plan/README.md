@@ -16,7 +16,7 @@ in [`docs/STATUS.md`](../STATUS.md).
 | P1.1b | [mTLS capability discovery](p1.1b-capability-discovery.md) | Passed under local Contract with PR/post-merge evidence |
 | P1.1c | [Protected-operation admission](p1.1c-protected-operation-admission.md) | Passed under local Contract with PR/post-merge evidence |
 | P1.2 | [Async lifecycle](p1.2-async-lifecycle.md) | Bounded Contract-authorized subset passed through PR #27; reserved lifecycle families remain separately gated |
-| P2 | [Coding/remote-shell authority inventory](p2-coding-remote-shell.md) | Bounded slices through P2.5e have component/Contract/CI evidence; P2.5f0 design audit is complete; Provider composition and independent caller E2E remain open |
-| P2.5 | [Coding/shell vertical composition](p2.5-coding-shell-vertical-composition.md) | P2.5a-e pass through CI `32937530059`; P2.5f0 design evidence is complete and P2.5f1 is next |
-| P2.5f | [Terminal and Gateway vertical](p2.5f-terminal-gateway-vertical.md) | f0 authority/data-plane/recovery audit complete; no runtime, WebSocket, Gateway command composition, or advertisement added |
+| P2 | [Coding/remote-shell authority inventory](p2-coding-remote-shell.md) | Bounded slices through P2.5e have component/Contract/CI evidence; P2.5f0 design and P2.5f1 local runtime-adapter evidence pass; Provider composition and independent caller E2E remain open |
+| P2.5 | [Coding/shell vertical composition](p2.5-coding-shell-vertical-composition.md) | P2.5a-e pass through CI `32937530059`; P2.5f0 design and P2.5f1 local gates pass, with P2.5f2 next |
+| P2.5f | [Terminal and Gateway vertical](p2.5f-terminal-gateway-vertical.md) | f0 audit and f1 reconnectable terminal runtime/Docker adapter complete locally; session coordination, WebSocket, Gateway command composition, CI, and advertisement remain open |
 | P3 | [Migration readiness](p3-migration-readiness.md) | Local binding/shadow/metrics component evidence exists; P2 completion, external caller E2E, real canary, rollback, drain, and migration gates remain open |
