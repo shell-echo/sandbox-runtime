@@ -131,11 +131,11 @@ multi-tenant, deployment, and production readiness.
 
 This snapshot was audited on 2026-08-27 against P2.5f5 implementation commit
 `fdfc771`. Its focused and full local regression gates, including the locked
-38-case Suite, passed without changing the Contract. P2.5f4 evidence baseline
-`1d9da67`, which contains the preceding adapter implementation, remains the
-latest repository-CI baseline: run `33064864447` passed `provider-contract`,
-`test`, and `docker-integration`. These baselines identify reviewed evidence;
-they are not self-updating assertions about the checkout.
+38-case Suite, passed without changing the Contract. P2.5f5 evidence baseline
+`754c57d`, which contains that implementation, then passed repository CI run
+`33067526022` (`provider-contract`, `test`, and `docker-integration`). These
+baselines identify reviewed evidence; they are not self-updating assertions
+about the checkout.
 
 Contract identity:
 
@@ -153,7 +153,7 @@ Contract identity:
 | P2.1-P2.4a3 | Bounded exec, result, terminal, Gateway, artifact, usage, admission, application, persistence, and transport components have local Contract/CI evidence | P2 is not vertically composed into a real coding/shell Provider and no independent caller E2E environment exists |
 | P2.5a-e, P2.5f0-f3 | Plan, coding/shell Contract/profile, mutation preflight, Docker runtime foundation, and the exec vertical pass their local and CI gates; the terminal/Gateway audit, reconnectable terminal runtime, durable session coordination/migration, and opaque reference registry/resolver pass their current local and CI gates | Retain their single-controller component boundary |
 | P2.5f4 | Bounded WebSocket and terminal-byte-stream adapters pass local component and repository CI gates in implementation `14f14cc` and evidence baseline `1d9da67`; the WebSocket edge requires caller-owned handshake admission and has explicit frame/origin controls | Gateway composition, command composition, artifact/usage, readiness-derived advertisement, and independent caller gates remain open |
-| P2.5f5 | `gateway/composition` locally composes the existing Gateway only with caller-owned authorization, revocation, recording, and handshake-admission ports plus the Provider reference resolver and f4 adapters; missing or typed-nil dependencies fail closed | Command/configuration composition, artifact/usage, readiness-derived advertisement, independent caller, and repository CI gates remain open |
+| P2.5f5 | `gateway/composition` composes the existing Gateway only with caller-owned authorization, revocation, recording, and handshake-admission ports plus the Provider reference resolver and f4 adapters; missing or typed-nil dependencies fail closed. Its local gates and repository CI `33067526022` pass | Command/configuration composition, artifact/usage, readiness-derived advertisement, and independent caller gates remain open |
 | P3 | Local revision binding, shadow-validation, canary/rollback/drain, and metrics primitives passed component tests | P2 gate, external caller, real traffic parity, canary, rollback, and old-run drain E2E remain open |
 | P4 | Optional capability profiles have not started | Each browser/desktop/forwarding/snapshot/GPU/isolation profile needs independent Contract, security, and conformance gates |
 
@@ -162,8 +162,8 @@ multi-controller reliability, hostile multi-tenant security, deployment, and
 production operations remain separate and unproven even after a future P2/P3
 E2E passes.
 
-The latest verified repository CI is P2.5f4 evidence baseline `1d9da67`, run
-`33064864447`; its `provider-contract`, `test`, and `docker-integration` jobs
+The latest verified repository CI is P2.5f5 evidence baseline `754c57d`, run
+`33067526022`; its `provider-contract`, `test`, and `docker-integration` jobs
 passed. Repository CI remains distinct from independent caller and production
 evidence.
 
@@ -269,11 +269,14 @@ terminal dial through the bounded f4 terminal adapter, rejects missing and
 typed-nil dependencies and incomplete endpoint data fail closed, and closes the
 caller stream on all connection exits. Focused and full race/shuffle, vet,
 module verification, unchanged Contract verification, and the locked 38-case
-Suite passed locally. This is a local composition component, not Provider
-command configuration, repository CI, external-caller E2E, aggregate
-conformance, multi-controller, multi-tenant, deployment, or production
-evidence. The remaining terminal vertical is open and capability advertisement
-remains empty. The next implementation slice is P2.5f6:
+Suite passed locally. This is a composition component, not Provider command
+configuration, external-caller E2E, aggregate conformance, multi-controller,
+multi-tenant, deployment, or production
+evidence. Repository CI `33067526022` then passed all three required jobs for
+evidence baseline `754c57d`; it is still not external-caller, aggregate,
+multi-controller, multi-tenant, deployment, or production evidence. The
+remaining terminal vertical is open and capability advertisement remains empty.
+The next implementation slice is P2.5f6:
 
 1. Add explicit development command configuration, startup recovery order,
    capacity limits, shutdown cleanup, and route nondisclosure for the composed
