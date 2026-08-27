@@ -129,13 +129,13 @@ multi-tenant, deployment, and production readiness.
 
 ## Current Snapshot
 
-This snapshot was audited on 2026-08-27 against P2.5f4 implementation commit
-`14f14cc`. Its full local regression gates, including the locked 38-case Suite
-and live Docker terminal integration, passed. The Contract remains unchanged.
-P2.5f4 evidence baseline `1d9da67`, which contains that implementation, then
-passed repository CI run `33064864447` (`provider-contract`, `test`, and
-`docker-integration`). These baselines identify reviewed evidence; they are not
-self-updating assertions about the checkout.
+This snapshot was audited on 2026-08-27 against P2.5f5 implementation commit
+`fdfc771`. Its focused and full local regression gates, including the locked
+38-case Suite, passed without changing the Contract. P2.5f4 evidence baseline
+`1d9da67`, which contains the preceding adapter implementation, remains the
+latest repository-CI baseline: run `33064864447` passed `provider-contract`,
+`test`, and `docker-integration`. These baselines identify reviewed evidence;
+they are not self-updating assertions about the checkout.
 
 Contract identity:
 
@@ -153,6 +153,7 @@ Contract identity:
 | P2.1-P2.4a3 | Bounded exec, result, terminal, Gateway, artifact, usage, admission, application, persistence, and transport components have local Contract/CI evidence | P2 is not vertically composed into a real coding/shell Provider and no independent caller E2E environment exists |
 | P2.5a-e, P2.5f0-f3 | Plan, coding/shell Contract/profile, mutation preflight, Docker runtime foundation, and the exec vertical pass their local and CI gates; the terminal/Gateway audit, reconnectable terminal runtime, durable session coordination/migration, and opaque reference registry/resolver pass their current local and CI gates | Retain their single-controller component boundary |
 | P2.5f4 | Bounded WebSocket and terminal-byte-stream adapters pass local component and repository CI gates in implementation `14f14cc` and evidence baseline `1d9da67`; the WebSocket edge requires caller-owned handshake admission and has explicit frame/origin controls | Gateway composition, command composition, artifact/usage, readiness-derived advertisement, and independent caller gates remain open |
+| P2.5f5 | `gateway/composition` locally composes the existing Gateway only with caller-owned authorization, revocation, recording, and handshake-admission ports plus the Provider reference resolver and f4 adapters; missing or typed-nil dependencies fail closed | Command/configuration composition, artifact/usage, readiness-derived advertisement, independent caller, and repository CI gates remain open |
 | P3 | Local revision binding, shadow-validation, canary/rollback/drain, and metrics primitives passed component tests | P2 gate, external caller, real traffic parity, canary, rollback, and old-run drain E2E remain open |
 | P4 | Optional capability profiles have not started | Each browser/desktop/forwarding/snapshot/GPU/isolation profile needs independent Contract, security, and conformance gates |
 
@@ -161,8 +162,8 @@ multi-controller reliability, hostile multi-tenant security, deployment, and
 production operations remain separate and unproven even after a future P2/P3
 E2E passes.
 
-The latest verified repository CI is P2.5f3 evidence baseline `7138a4c`, run
-`33059304542`; its `provider-contract`, `test`, and `docker-integration` jobs
+The latest verified repository CI is P2.5f4 evidence baseline `1d9da67`, run
+`33064864447`; its `provider-contract`, `test`, and `docker-integration` jobs
 passed. Repository CI remains distinct from independent caller and production
 evidence.
 
@@ -183,12 +184,14 @@ make the current Provider a usable coding/shell implementation.
    records and resolves only a fresh internal terminal attach after rechecking
    registry state and the committed session handoff on both resolve and dial.
    P2.5f4 adds bounded adapters from caller-admitted WebSocket messages and
-   `provider/terminal.Stream` bytes to `gateway.Stream`, but does not compose
-   them with the Gateway or Provider command roots. The two repositories remain
-   non-atomic. Gateway, artifact, and usage applications remain absent from
-   command composition. Startup capability construction still advertises empty
-   capability and runtime-profile arrays. No artifact staging or usage
-   collection is yet composed.
+   `provider/terminal.Stream` bytes to `gateway.Stream`. P2.5f5 composes them
+   with the existing Gateway only when the caller supplies authorization,
+   revocation, recording, and handshake-admission ports, and projects every
+   fresh Provider dial into a bounded terminal stream. The two repositories
+   remain non-atomic. This Gateway composition is not command-composed; artifact
+   and usage applications also remain absent from command composition. Startup
+   capability construction still advertises empty capability and runtime-profile
+   arrays. No artifact staging or usage collection is yet composed.
 2. No independently owned caller/platform E2E environment is runnable. The
    repository's 38-case runner maps to repository-local Go tests and CI has no
    external-platform job. The separately inspected platform candidate at
@@ -258,14 +261,24 @@ Contract verification, the locked 38-case Suite, diff checks, and both Docker
 regression packages passed locally. Repository CI `33064864447` then passed
 `provider-contract`, `test`, and `docker-integration` for evidence baseline
 `1d9da67`. `govulncheck` and an OSV scanner were not available, so no
-vulnerability scan is claimed. The
-remaining terminal vertical is open and capability advertisement remains empty.
-The next implementation slice is P2.5f5:
+vulnerability scan is claimed. P2.5f5 implementation `fdfc771` adds
+`gateway/composition`, which requires caller-owned `Authorizer`,
+`RevocationSource`, `Recorder`, and WebSocket handshake admission together with
+a Provider reference resolver. It projects each freshly resolved Provider
+terminal dial through the bounded f4 terminal adapter, rejects missing and
+typed-nil dependencies and incomplete endpoint data fail closed, and closes the
+caller stream on all connection exits. Focused and full race/shuffle, vet,
+module verification, unchanged Contract verification, and the locked 38-case
+Suite passed locally. This is a local composition component, not Provider
+command configuration, repository CI, external-caller E2E, aggregate
+conformance, multi-controller, multi-tenant, deployment, or production
+evidence. The remaining terminal vertical is open and capability advertisement
+remains empty. The next implementation slice is P2.5f6:
 
-1. Compose the existing Gateway only with caller-owned `Authorizer`,
-   `RevocationSource`, and `Recorder`, plus a Provider-backed resolver and the
-   f4 adapters. Then complete f6 command/recovery/shutdown composition and f7
-   local vertical evidence. The detailed order is in the
+1. Add explicit development command configuration, startup recovery order,
+   capacity limits, shutdown cleanup, and route nondisclosure for the composed
+   terminal/Gateway dependencies. Then complete f7 local vertical evidence. The
+   detailed order is in the
    [terminal/Gateway plan](plan/p2.5f-terminal-gateway-vertical.md).
 2. Compose a real artifact stager and usage collector, then enable capability
    advertisement only when all required dependencies are present.

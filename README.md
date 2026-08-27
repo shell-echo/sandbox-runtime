@@ -42,8 +42,10 @@ Currently implemented:
   lifecycle runtime, a separate durable ledger, bounded private output capture,
   cancellation, result expiry, and restart reconciliation
 - bounded `gateway.Stream` adapters for an admitted WebSocket edge and private
-  terminal byte stream; no public Gateway route, caller authorization, Provider
-  resolver, command composition, or capability advertisement is enabled
+  terminal byte stream, plus a local composition that requires caller-owned
+  authorization, revocation, recording, and a Provider reference resolver; no
+  public Gateway route, command composition, or capability advertisement is
+  enabled
 
 Planned but not yet implemented:
 
@@ -174,11 +176,13 @@ only their locked routes. Exec requires the Provider Docker lifecycle runtime
 and its own file ledger; the development adapters remain rejected in production.
 A reconnectable terminal runtime/broker, Docker adapter, durable session
 coordination application, and private opaque `ref:session:*` registry/resolver
-now exist as uncomposed development components. The file-backed registry
-reconstructs a fresh terminal attach after restart and rechecks expiry,
-revocation, committed session handoff, and identity bindings before each dial;
-it does not expose backend data. WebSocket/Gateway command composition and
-artifact/usage runtime composition remain absent.
+now exist as development components. The file-backed registry reconstructs a
+fresh terminal attach after restart and rechecks expiry, revocation, committed
+session handoff, and identity bindings before each dial; it does not expose
+backend data. A local Gateway composition requires caller-owned authorization,
+revocation, recording, and WebSocket admission before it can proxy that fresh
+attach. WebSocket/Gateway command composition and artifact/usage runtime
+composition remain absent.
 Startup still advertises no runtime capability.
 
 Capability discovery has no query parameters or request document. For request
