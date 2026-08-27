@@ -131,10 +131,9 @@ multi-tenant, deployment, and production readiness.
 
 This snapshot was audited on 2026-08-27 against P2.5f1 implementation commit
 `6778d3c`. Its full local gates, including live Docker terminal reconnect,
-passed. The latest repository CI evidence remains P2.5e baseline `2f7a79b` and
-run `32937530059`; P2.5f1 has not been pushed or exercised by repository CI.
-These baselines identify reviewed evidence; they are not self-updating
-assertions about the checkout.
+passed. Evidence baseline `66dd3d1` then passed repository CI run `33033284420`
+for P2.5f1. These baselines identify reviewed evidence; they are not
+self-updating assertions about the checkout.
 
 Contract identity:
 
@@ -150,7 +149,7 @@ Contract identity:
 | P1.1 | Passed for DTO, mTLS discovery, JWS/digest/replay/fencing admission | Does not prove runtime behavior or production identity infrastructure |
 | P1.2 | Passed for the bounded Contract-authorized lifecycle subset and development composition | Provider lifecycle has fake and Docker development adapters; reserved lifecycle families and production gates remain open |
 | P2.1-P2.4a3 | Bounded exec, result, terminal, Gateway, artifact, usage, admission, application, persistence, and transport components have local Contract/CI evidence | P2 is not vertically composed into a real coding/shell Provider and no independent caller E2E environment exists |
-| P2.5a-e, P2.5f0-f1 | Plan, coding/shell Contract/profile, mutation preflight, Docker runtime foundation, and the exec vertical pass their local and CI gates; the terminal/Gateway audit and reconnectable terminal runtime/Docker adapter pass their respective design and local gates | Durable session coordination, opaque resolution, WebSocket/Gateway composition, artifact/usage, readiness-derived advertisement, and independent caller gates remain open |
+| P2.5a-e, P2.5f0-f1 | Plan, coding/shell Contract/profile, mutation preflight, Docker runtime foundation, and the exec vertical pass their local and CI gates; the terminal/Gateway audit and reconnectable terminal runtime/Docker adapter pass their respective design, local, and CI gates | Durable session coordination, opaque resolution, WebSocket/Gateway composition, artifact/usage, readiness-derived advertisement, and independent caller gates remain open |
 | P3 | Local revision binding, shadow-validation, canary/rollback/drain, and metrics primitives passed component tests | P2 gate, external caller, real traffic parity, canary, rollback, and old-run drain E2E remain open |
 | P4 | Optional capability profiles have not started | Each browser/desktop/forwarding/snapshot/GPU/isolation profile needs independent Contract, security, and conformance gates |
 
@@ -159,10 +158,10 @@ multi-controller reliability, hostile multi-tenant security, deployment, and
 production operations remain separate and unproven even after a future P2/P3
 E2E passes.
 
-The latest verified repository CI for `2f7a79b` is run `32937530059`; its
-`provider-contract`, `test`, and `docker-integration` jobs passed. P2.5f1 local
-evidence at `6778d3c` is newer and has no repository CI result yet. Neither tier
-is independent caller or production evidence.
+The latest verified repository CI for P2.5f1 evidence baseline `66dd3d1` is run
+`33033284420`; its `provider-contract`, `test`, and `docker-integration` jobs
+passed. This remains repository CI evidence, not independent caller or
+production evidence.
 
 ## Current P2 Blockers
 
@@ -217,8 +216,9 @@ and fresh attach to the same shell after Provider driver reconstruction. Full
 race/shuffle, vet, module verification, unchanged Contract verification, the
 locked 38-case Suite, diff checks, focused terminal tests, and live Docker
 integration passed locally. This is runtime-adapter evidence only; repository
-CI and the remaining terminal vertical are still open. Capability advertisement
-remains empty. The next implementation slice is P2.5f2:
+CI `33033284420` subsequently passed all three jobs for evidence baseline
+`66dd3d1`. The remaining terminal vertical is still open. Capability
+advertisement remains empty. The next implementation slice is P2.5f2:
 
 1. Implement durable session coordination, repository migration, and trusted
    lifecycle-authority synchronization, then complete opaque reference
