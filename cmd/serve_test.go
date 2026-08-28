@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -22,6 +23,10 @@ import (
 	execfile "github.com/shell-echo/sandbox-runtime/provider/exec/repository/file"
 	lifecycleapplication "github.com/shell-echo/sandbox-runtime/provider/lifecycle/application"
 	lifecycledocker "github.com/shell-echo/sandbox-runtime/provider/lifecycle/driver/docker"
+	"github.com/shell-echo/sandbox-runtime/provider/session"
+	sessionreference "github.com/shell-echo/sandbox-runtime/provider/session/reference"
+	sessionreferencememory "github.com/shell-echo/sandbox-runtime/provider/session/reference/repository/memory"
+	providerterminal "github.com/shell-echo/sandbox-runtime/provider/terminal"
 )
 
 // TestServeCmdRegistered confirms the serve subcommand is wired onto the root
@@ -221,6 +226,56 @@ func TestNewProviderExecApplicationRequiresDependenciesAndReleasesRepository(t *
 	}
 	if err := reopened.Close(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestProviderTerminalApplicationShutdownRevokesBeforeIdentityBoundCleanup(t *testing.T) {
+	now := time.Now().UTC()
+	request := session.OpenRequest{
+		SandboxID: "sandbox-terminal-close", ProviderRevisionID: "provider-revision-terminal-close",
+		OperationID: "operation-terminal-close", AttemptID: "attempt-terminal-close", FencingToken: 1,
+		IdempotencyKey: "terminal-close-key", RequestDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		Deadline: now.Add(time.Minute), ExpectedGeneration: 1, RuntimeSessionID: "session-terminal-close",
+		RuntimeType: session.RuntimeTerminal, CapabilityProfileID: "terminal-v1", ExpiresAt: now.Add(30 * time.Second),
+	}
+	running, err := session.NewRecord(request, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	running, err = session.AttachAllocation(running, session.AllocationReceipt{
+		Reference: "ref:terminal/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", SandboxID: request.SandboxID,
+		RuntimeSessionID: request.RuntimeSessionID, OperationID: request.OperationID, AttemptID: request.AttemptID,
+		FencingToken: request.FencingToken, ExpectedGeneration: request.ExpectedGeneration,
+		ConnectionGeneration: 1, AllocatedAt: now, ExpiresAt: request.ExpiresAt,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	registry := sessionreferencememory.NewRegistry()
+	registered, err := sessionreference.NewRecord("ref:session:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", running, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := registry.Create(context.Background(), registered); err != nil {
+		t.Fatal(err)
+	}
+	order := make([]string, 0, 4)
+	application := &providerTerminalApplication{
+		authority:  &terminalShutdownAuthority{records: []session.Record{running}},
+		runtime:    &terminalShutdownRuntime{order: &order},
+		references: &terminalShutdownReferenceStore{Store: registry, order: &order},
+		clock:      systemAdmissionClock{}, shutdownCleanup: time.Second,
+		closeReferences: func() error { order = append(order, "references-close"); return registry.Close() },
+		closeSession:    func() error { order = append(order, "sessions-close"); return nil },
+	}
+	if err := application.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := application.Close(); err != nil {
+		t.Fatalf("second close: %v", err)
+	}
+	if got, want := strings.Join(order, ","), "revoke,cleanup,references-close,sessions-close"; got != want {
+		t.Fatalf("shutdown order = %q, want %q", got, want)
 	}
 }
 
@@ -430,6 +485,58 @@ type testLifecycleServer struct{}
 func (*testLifecycleServer) Startup(context.Context) error  { return nil }
 func (*testLifecycleServer) Shutdown(context.Context) error { return nil }
 
+type terminalShutdownAuthority struct {
+	session.CoordinationAuthority
+	records []session.Record
+}
+
+func (a *terminalShutdownAuthority) ListOpen(context.Context) ([]session.Record, error) {
+	result := make([]session.Record, len(a.records))
+	for index, record := range a.records {
+		result[index] = record.Clone()
+	}
+	return result, nil
+}
+
+type terminalShutdownReferenceStore struct {
+	sessionreference.Store
+	order *[]string
+	mu    sync.Mutex
+}
+
+func (s *terminalShutdownReferenceStore) Revoke(ctx context.Context, value string, when time.Time) error {
+	s.mu.Lock()
+	*s.order = append(*s.order, "revoke")
+	s.mu.Unlock()
+	return s.Store.Revoke(ctx, value, when)
+}
+
+type terminalShutdownRuntime struct {
+	order   *[]string
+	receipt providerterminal.Receipt
+	mu      sync.Mutex
+}
+
+func (*terminalShutdownRuntime) Allocate(context.Context, providerterminal.Allocation) (providerterminal.Receipt, error) {
+	return providerterminal.Receipt{}, providerterminal.ErrTerminalUnsupported
+}
+
+func (*terminalShutdownRuntime) Observe(context.Context, providerterminal.Receipt) (providerterminal.Observation, error) {
+	return providerterminal.Observation{}, providerterminal.ErrTerminalUnsupported
+}
+
+func (*terminalShutdownRuntime) Attach(context.Context, providerterminal.Receipt) (providerterminal.Stream, error) {
+	return nil, providerterminal.ErrTerminalUnsupported
+}
+
+func (r *terminalShutdownRuntime) Cleanup(_ context.Context, receipt providerterminal.Receipt) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.receipt = receipt
+	*r.order = append(*r.order, "cleanup")
+	return nil
+}
+
 type fixedAdmissionClock struct{ now time.Time }
 
 func (clock fixedAdmissionClock) Now() time.Time { return clock.now }
@@ -483,3 +590,6 @@ func writeTrustedPublicKeyForServeTest(t *testing.T, directory string) string {
 }
 
 var _ admission.Clock = fixedAdmissionClock{}
+var _ session.CoordinationAuthority = (*terminalShutdownAuthority)(nil)
+var _ sessionreference.Store = (*terminalShutdownReferenceStore)(nil)
+var _ providerterminal.Runtime = (*terminalShutdownRuntime)(nil)

@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -34,6 +35,7 @@ type ProviderConfig struct {
 	ProtectedAdmission ProviderProtectedAdmissionConfig `mapstructure:"protected_admission"`
 	Lifecycle          ProviderLifecycleConfig          `mapstructure:"lifecycle"`
 	Exec               ProviderExecConfig               `mapstructure:"exec"`
+	Terminal           ProviderTerminalConfig           `mapstructure:"terminal"`
 }
 
 // ProviderLifecycleDriver identifies a Provider-local runtime implementation.
@@ -100,6 +102,22 @@ type ProviderExecConfig struct {
 	RepositoryFile string `mapstructure:"repository_file"`
 }
 
+// ProviderTerminalConfig enables the single-controller development terminal
+// vertical. It never configures a public Gateway, caller identity, or
+// capability advertisement.
+type ProviderTerminalConfig struct {
+	Enabled                  bool   `mapstructure:"enabled"`
+	SessionRepositoryFile    string `mapstructure:"session_repository_file"`
+	ReferenceRegistryFile    string `mapstructure:"reference_registry_file"`
+	RuntimeProfileID         string `mapstructure:"runtime_profile_id"`
+	CapabilityProfileID      string `mapstructure:"capability_profile_id"`
+	BrokerPath               string `mapstructure:"broker_path"`
+	ShellPath                string `mapstructure:"shell_path"`
+	MaxSessionsPerSandbox    int    `mapstructure:"max_sessions_per_sandbox"`
+	MaxSessionsPerController int    `mapstructure:"max_sessions_per_controller"`
+	ShutdownCleanupSeconds   int    `mapstructure:"shutdown_cleanup_seconds"`
+}
+
 // ProviderTransportConfig configures the dedicated, mTLS-only Provider
 // listener. TLS policy is fixed by the transport implementation, not exposed as
 // a downgradeable configuration value.
@@ -164,6 +182,7 @@ var (
 	providerSuiteDigestPattern  = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 	providerPinnedImagePattern  = regexp.MustCompile(`^.+@sha256:[0-9a-f]{64}$`)
 	providerOwnershipPattern    = regexp.MustCompile(`^[A-Za-z0-9._-]{1,63}$`)
+	providerProfileIDPattern    = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$`)
 )
 
 // load registers the section's defaults and env bindings, unmarshals the merged
@@ -197,8 +216,8 @@ func (c *ServerConfig) load(v *viper.Viper) error {
 // configuration is inert and may retain template placeholders.
 func (c *ProviderConfig) Validate() error {
 	if !c.Transport.Enabled {
-		if c.Lifecycle.Enabled || c.Exec.Enabled {
-			return errors.New("lifecycle and exec require Provider transport to be enabled")
+		if c.Lifecycle.Enabled || c.Exec.Enabled || c.Terminal.Enabled {
+			return errors.New("lifecycle, exec, and terminal require Provider transport to be enabled")
 		}
 		return nil
 	}
@@ -217,6 +236,9 @@ func (c *ProviderConfig) Validate() error {
 	if err := c.Exec.validateEnabled(); err != nil {
 		return fmt.Errorf("exec %w", err)
 	}
+	if err := c.Terminal.validateEnabled(); err != nil {
+		return fmt.Errorf("terminal %w", err)
+	}
 	if c.Lifecycle.Enabled && !c.ProtectedAdmission.Enabled {
 		return errors.New("lifecycle requires protected admission to be enabled")
 	}
@@ -226,6 +248,14 @@ func (c *ProviderConfig) Validate() error {
 		}
 		if !c.Lifecycle.Enabled || c.Lifecycle.Driver != ProviderLifecycleDockerDriver || c.Lifecycle.Repository.Driver != ProviderLifecycleFileRepository {
 			return errors.New("exec requires the Docker Provider lifecycle and its file repository")
+		}
+	}
+	if c.Terminal.Enabled {
+		if !c.ProtectedAdmission.Enabled {
+			return errors.New("terminal requires protected admission to be enabled")
+		}
+		if !c.Lifecycle.Enabled || c.Lifecycle.Driver != ProviderLifecycleDockerDriver || c.Lifecycle.Repository.Driver != ProviderLifecycleFileRepository {
+			return errors.New("terminal requires the Docker Provider lifecycle and its file repository")
 		}
 	}
 	return nil
@@ -244,6 +274,63 @@ func (c *ProviderExecConfig) validateEnabled() error {
 // Validate checks an explicitly enabled Provider exec configuration.
 func (c ProviderExecConfig) Validate() error {
 	return c.validateEnabled()
+}
+
+func (c *ProviderTerminalConfig) validateEnabled() error {
+	if !c.Enabled {
+		return nil
+	}
+	for _, path := range []struct {
+		name  string
+		value string
+	}{
+		{"session_repository_file", c.SessionRepositoryFile},
+		{"reference_registry_file", c.ReferenceRegistryFile},
+	} {
+		if strings.TrimSpace(path.value) == "" {
+			return fmt.Errorf("%s must not be empty", path.name)
+		}
+	}
+	if filepath.Clean(c.SessionRepositoryFile) == filepath.Clean(c.ReferenceRegistryFile) {
+		return errors.New("session_repository_file and reference_registry_file must be distinct")
+	}
+	if !providerProfileIDPattern.MatchString(c.RuntimeProfileID) || !providerProfileIDPattern.MatchString(c.CapabilityProfileID) {
+		return errors.New("runtime_profile_id and capability_profile_id must be bounded identifiers")
+	}
+	if !validProviderGuestExecutable(c.BrokerPath) || !validProviderGuestExecutable(c.ShellPath) {
+		return errors.New("broker_path and shell_path must be absolute safe guest executable paths")
+	}
+	if c.MaxSessionsPerSandbox < 1 || c.MaxSessionsPerSandbox > 1_000 ||
+		c.MaxSessionsPerController < c.MaxSessionsPerSandbox || c.MaxSessionsPerController > 1_000 {
+		return errors.New("terminal session capacities must be bounded and controller capacity must cover each sandbox")
+	}
+	if c.ShutdownCleanupSeconds < 1 || c.ShutdownCleanupSeconds > 300 {
+		return errors.New("shutdown_cleanup_seconds must be between 1 and 300")
+	}
+	return nil
+}
+
+// Validate checks an explicitly enabled Provider terminal configuration.
+func (c ProviderTerminalConfig) Validate() error {
+	return c.validateEnabled()
+}
+
+func validProviderGuestExecutable(value string) bool {
+	if value == "" || !filepath.IsAbs(value) || filepath.Clean(value) != value || value == "/" || strings.ContainsAny(value, "\x00\r\n") {
+		return false
+	}
+	for _, component := range strings.Split(strings.TrimPrefix(value, "/"), "/") {
+		if component == "" || component == "." || component == ".." {
+			return false
+		}
+		for _, char := range component {
+			if char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z' || char >= '0' && char <= '9' || char == '.' || char == '_' || char == '-' {
+				continue
+			}
+			return false
+		}
+	}
+	return true
 }
 
 func (c *ProviderLifecycleConfig) validateEnabled() error {
@@ -456,6 +543,12 @@ func defaultServerConfig() *ServerConfig {
 		},
 		Provider: ProviderConfig{
 			Exec: ProviderExecConfig{RepositoryFile: "data/provider-exec.json"},
+			Terminal: ProviderTerminalConfig{
+				SessionRepositoryFile: "data/provider-terminal-sessions.json", ReferenceRegistryFile: "data/provider-terminal-references.json",
+				RuntimeProfileID: "coding-shell-v1", CapabilityProfileID: "coding-shell-terminal-v1",
+				BrokerPath: "/workspace/.sandbox-runtime/terminal-broker", ShellPath: "/bin/sh",
+				MaxSessionsPerSandbox: 4, MaxSessionsPerController: 64, ShutdownCleanupSeconds: 10,
+			},
 			Lifecycle: ProviderLifecycleConfig{
 				Driver: ProviderLifecycleFakeDriver,
 				Repository: ProviderLifecycleRepositoryConfig{

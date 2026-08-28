@@ -3,6 +3,7 @@ package reference
 import (
 	"context"
 	"errors"
+	"sync"
 	"time"
 
 	"github.com/shell-echo/sandbox-runtime/provider/session"
@@ -16,6 +17,7 @@ const MaxRegistrationAttempts = 4
 type Store interface {
 	Create(context.Context, Record) error
 	Get(context.Context, string) (Record, error)
+	FindRunning(context.Context, session.Record) (Record, error)
 	Revoke(context.Context, string, time.Time) error
 }
 
@@ -55,6 +57,7 @@ type Registrar struct {
 	store     Store
 	clock     Clock
 	generator Generator
+	mu        sync.Mutex
 }
 
 func NewRegistrar(store Store, clock Clock, generator Generator) (*Registrar, error) {
@@ -72,6 +75,16 @@ func (r *Registrar) Register(ctx context.Context, source session.Record) (Regist
 		return Registration{}, ErrUnavailable
 	}
 	if err := contextError(ctx); err != nil {
+		return Registration{}, err
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if existing, err := r.store.FindRunning(ctx, source); err == nil {
+		if existing.RevokedAt != nil {
+			return Registration{}, ErrUnavailable
+		}
+		return Registration{Record: existing.Clone(), Evidence: existing.Evidence()}, nil
+	} else if !errors.Is(err, ErrNotFound) {
 		return Registration{}, err
 	}
 	now := r.clock.Now().UTC()

@@ -130,6 +130,28 @@ type failAttachAuthority struct {
 	failNext bool
 }
 
+type handoffRegistrarSpy struct {
+	mu       sync.Mutex
+	evidence session.EndpointEvidence
+	err      error
+	calls    int
+	sources  []session.Record
+}
+
+func (r *handoffRegistrarSpy) RegisterHandoff(_ context.Context, source session.Record) (session.EndpointEvidence, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.calls++
+	r.sources = append(r.sources, source.Clone())
+	return r.evidence, r.err
+}
+
+func (r *handoffRegistrarSpy) Calls() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.calls
+}
+
 func (a *failAttachAuthority) AttachAllocation(ctx context.Context, receipt session.AllocationReceipt) (session.Reservation, error) {
 	a.mu.Lock()
 	if a.failNext {
@@ -191,6 +213,56 @@ func TestVerticalOpenAllocatesAfterDurableAcceptanceAndReplaysWithoutReplacement
 	allocate, starts, observe, _ := runtime.counts()
 	if allocate != 1 || starts != 1 || observe != 1 {
 		t.Fatalf("runtime calls allocate=%d starts=%d observe=%d", allocate, starts, observe)
+	}
+}
+
+func TestVerticalHandoffRegistrarCommitsOnceAndRecoveryCompletesRunningRecord(t *testing.T) {
+	now := applicationTestTime
+	clock := &verticalClock{now: now}
+	repository := sessionmemory.NewRepository()
+	reader := &sessionSandboxReader{sandbox: verticalSandbox(now)}
+	runtime := newSessionRuntime(clock)
+	registrar := &handoffRegistrarSpy{evidence: session.EndpointEvidence{InternalEndpointReference: "ref:session:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", ConnectionGeneration: 1}}
+	vertical, err := NewVerticalWithHandoffRegistrar(repository, runtime, reader, verticalProfile(), registrar, clock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := validApplicationRequest()
+	operation, err := vertical.Open(context.Background(), request)
+	if err != nil || operation.Status != session.StatusSucceeded {
+		t.Fatalf("Open() = %#v, %v", operation, err)
+	}
+	if registrar.Calls() != 1 {
+		t.Fatalf("registrar calls = %d, want 1", registrar.Calls())
+	}
+	if replay, err := vertical.Open(context.Background(), request); err != nil || replay.Status != session.StatusSucceeded || registrar.Calls() != 1 {
+		t.Fatalf("Open replay = %#v, %v; registrar calls = %d", replay, err, registrar.Calls())
+	}
+	handoff, err := vertical.GetHandoff(context.Background(), request.OperationID)
+	if err != nil || handoff.InternalEndpointReference != registrar.evidence.InternalEndpointReference {
+		t.Fatalf("GetHandoff() = %#v, %v", handoff, err)
+	}
+
+	request.OperationID = "operation-recovery"
+	request.AttemptID = "attempt-recovery"
+	request.RuntimeSessionID = "session-recovery"
+	request.IdempotencyKey = "key-recovery"
+	request.RequestDigest = "sha256:abababababababababababababababababababababababababababababababab"
+	withoutRegistrar := newVerticalTest(t, repository, runtime, reader, clock)
+	if running, err := withoutRegistrar.Open(context.Background(), request); err != nil || running.Status != session.StatusRunning {
+		t.Fatalf("Open pending recovery = %#v, %v", running, err)
+	}
+	recoveredRegistrar := &handoffRegistrarSpy{evidence: session.EndpointEvidence{InternalEndpointReference: "ref:session:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", ConnectionGeneration: 1}}
+	restarted, err := NewVerticalWithHandoffRegistrar(repository, runtime, reader, verticalProfile(), recoveredRegistrar, clock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	recovered, err := restarted.Recover(context.Background())
+	if err != nil || len(recovered) != 1 || recovered[0].OperationID != request.OperationID || recovered[0].Status != session.StatusSucceeded {
+		t.Fatalf("Recover() = %#v, %v", recovered, err)
+	}
+	if recoveredRegistrar.Calls() != 1 {
+		t.Fatalf("recovery registrar calls = %d, want 1", recoveredRegistrar.Calls())
 	}
 }
 

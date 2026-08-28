@@ -7,6 +7,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/shell-echo/sandbox-runtime/provider/session"
 	"github.com/shell-echo/sandbox-runtime/provider/session/reference"
 )
 
@@ -53,6 +54,34 @@ func (s *State) Get(value string) (reference.Record, error) {
 	return record.Clone(), nil
 }
 
+// FindRunning returns the sole reference registered for an exact running
+// session allocation. It lets a recovered or replayed completion retry the
+// session commit without minting another opaque reference.
+func (s *State) FindRunning(source session.Record) (reference.Record, error) {
+	s.ensureMap()
+	if err := source.Validate(); err != nil || source.Status != session.StatusRunning || source.Allocation == nil || source.Allocation.State != session.AllocationRunning {
+		return reference.Record{}, reference.ErrInvalidRecord
+	}
+	var found *reference.Record
+	for _, record := range s.References {
+		if record.OperationID != source.Request.OperationID {
+			continue
+		}
+		if !recordMatchesRunning(record, source) {
+			return reference.Record{}, reference.ErrConflict
+		}
+		if found != nil {
+			return reference.Record{}, reference.ErrConflict
+		}
+		clone := record.Clone()
+		found = &clone
+	}
+	if found == nil {
+		return reference.Record{}, reference.ErrNotFound
+	}
+	return found.Clone(), nil
+}
+
 // Revoke marks a record durably unavailable instead of deleting it. Keeping a
 // tombstone makes an in-flight resolver fail closed after it rechecks at Dial.
 func (s *State) Revoke(value string, revokedAt time.Time) error {
@@ -74,6 +103,30 @@ func (s *State) Revoke(value string, revokedAt time.Time) error {
 	}
 	s.References[value] = record.Clone()
 	return nil
+}
+
+func recordMatchesRunning(record reference.Record, source session.Record) bool {
+	if err := record.Validate(); err != nil || source.Allocation == nil {
+		return false
+	}
+	receipt := source.Allocation.Receipt
+	return record.AttemptID == source.Request.AttemptID &&
+		record.FencingToken == source.Request.FencingToken &&
+		record.SandboxID == source.Request.SandboxID &&
+		record.ProviderRevisionID == source.Request.ProviderRevisionID &&
+		record.RuntimeSessionID == source.Request.RuntimeSessionID &&
+		record.CapabilityProfileID == source.Request.CapabilityProfileID &&
+		record.ConnectionGeneration == receipt.ConnectionGeneration &&
+		record.ExpiresAt.Equal(source.Request.ExpiresAt) &&
+		sameReceipt(record.Receipt, receipt)
+}
+
+func sameReceipt(left, right session.AllocationReceipt) bool {
+	return left.Reference == right.Reference && left.SandboxID == right.SandboxID &&
+		left.RuntimeSessionID == right.RuntimeSessionID && left.OperationID == right.OperationID &&
+		left.AttemptID == right.AttemptID && left.FencingToken == right.FencingToken &&
+		left.ExpectedGeneration == right.ExpectedGeneration && left.ConnectionGeneration == right.ConnectionGeneration &&
+		left.AllocatedAt.Equal(right.AllocatedAt) && left.ExpiresAt.Equal(right.ExpiresAt)
 }
 
 func (s State) Export() PersistedState {

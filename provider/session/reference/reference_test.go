@@ -65,6 +65,22 @@ func (s *testStore) Get(_ context.Context, value string) (Record, error) {
 	return record.Clone(), nil
 }
 
+func (s *testStore) FindRunning(_ context.Context, source session.Record) (Record, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, record := range s.records {
+		if record.OperationID != source.Request.OperationID {
+			continue
+		}
+		if source.Allocation == nil || record.AttemptID != source.Request.AttemptID || record.FencingToken != source.Request.FencingToken ||
+			record.Receipt.Reference != source.Allocation.Receipt.Reference {
+			return Record{}, ErrConflict
+		}
+		return record.Clone(), nil
+	}
+	return Record{}, ErrNotFound
+}
+
 func (s *testStore) Revoke(_ context.Context, value string, revokedAt time.Time) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -156,7 +172,11 @@ func testRequest() session.OpenRequest {
 
 func runningSession(t *testing.T) session.Record {
 	t.Helper()
-	request := testRequest()
+	return runningSessionForRequest(t, testRequest())
+}
+
+func runningSessionForRequest(t *testing.T, request session.OpenRequest) session.Record {
+	t.Helper()
 	record, err := session.NewRecord(request, referenceTestTime)
 	if err != nil {
 		t.Fatal(err)
@@ -209,7 +229,13 @@ func TestRegistrarRetriesOpaqueReferenceCollision(t *testing.T) {
 	clock := &testClock{now: referenceTestTime}
 	store := newTestStore()
 	running := runningSession(t)
-	existing, err := NewRecord("ref:session:11111111111111111111111111111111", running, clock.Now())
+	otherRequest := testRequest()
+	otherRequest.OperationID = "operation-reference-other"
+	otherRequest.AttemptID = "attempt-reference-other"
+	otherRequest.RuntimeSessionID = "session-reference-other"
+	otherRequest.IdempotencyKey = "reference-key-other"
+	other := runningSessionForRequest(t, otherRequest)
+	existing, err := NewRecord("ref:session:11111111111111111111111111111111", other, clock.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -231,6 +257,31 @@ func TestRegistrarRetriesOpaqueReferenceCollision(t *testing.T) {
 	}
 	if registration.Evidence.InternalEndpointReference != registration.Record.Reference || registration.Evidence.ConnectionGeneration != 1 {
 		t.Fatalf("evidence = %#v", registration.Evidence)
+	}
+}
+
+func TestRegistrarReusesExactRunningSessionReference(t *testing.T) {
+	clock := &testClock{now: referenceTestTime}
+	store := newTestStore()
+	generated := 0
+	registrar, err := NewRegistrar(store, clock, func() (string, error) {
+		generated++
+		return "ref:session:33333333333333333333333333333333", nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	running := runningSession(t)
+	first, err := registrar.Register(context.Background(), running)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := registrar.Register(context.Background(), running)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if generated != 1 || second.Record.Reference != first.Record.Reference || second.Evidence != first.Evidence {
+		t.Fatalf("registrations first=%#v second=%#v generated=%d", first, second, generated)
 	}
 }
 

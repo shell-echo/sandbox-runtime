@@ -22,6 +22,15 @@ type SandboxReader interface {
 	GetSandbox(context.Context, string) (lifecycle.Sandbox, error)
 }
 
+// HandoffRegistrar durably registers one opaque endpoint reference for a
+// running allocation. It is deliberately narrower than the reference registry
+// so this application remains independent of reference persistence and Gateway
+// concerns. The vertical rechecks lifecycle authority before it accepts the
+// returned evidence as a successful handoff.
+type HandoffRegistrar interface {
+	RegisterHandoff(context.Context, session.Record) (session.EndpointEvidence, error)
+}
+
 // TerminalProfile binds one configured lifecycle runtime profile to the
 // terminal capability profile and its fixed guest working directory.
 type TerminalProfile struct {
@@ -48,13 +57,21 @@ type Vertical struct {
 	sandboxes SandboxReader
 	profile   TerminalProfile
 	clock     Clock
+	registrar HandoffRegistrar
 }
 
 func NewVertical(authority session.CoordinationAuthority, runtime terminal.Runtime, sandboxes SandboxReader, profile TerminalProfile, clock Clock) (*Vertical, error) {
+	return NewVerticalWithHandoffRegistrar(authority, runtime, sandboxes, profile, nil, clock)
+}
+
+// NewVerticalWithHandoffRegistrar enables an optional opaque-handoff
+// completion step after a running allocation is persisted. A nil registrar
+// preserves the f2 component boundary: callers can commit a handoff later.
+func NewVerticalWithHandoffRegistrar(authority session.CoordinationAuthority, runtime terminal.Runtime, sandboxes SandboxReader, profile TerminalProfile, registrar HandoffRegistrar, clock Clock) (*Vertical, error) {
 	if authority == nil || runtime == nil || sandboxes == nil || clock == nil || profile.validate() != nil {
 		return nil, ErrInvalidApplication
 	}
-	return &Vertical{authority: authority, runtime: runtime, sandboxes: sandboxes, profile: profile, clock: clock}, nil
+	return &Vertical{authority: authority, runtime: runtime, sandboxes: sandboxes, profile: profile, registrar: registrar, clock: clock}, nil
 }
 
 // Open durably reserves before allocation. Replays reconcile the same
@@ -75,6 +92,10 @@ func (a *Vertical) Open(ctx context.Context, request session.OpenRequest) (Opera
 	if err != nil {
 		return Operation{}, err
 	}
+	record, err = a.completeHandoff(ctx, record)
+	if err != nil {
+		return Operation{}, err
+	}
 	return operationProjection(record)
 }
 
@@ -84,11 +105,15 @@ func (a *Vertical) Reconcile(ctx context.Context, operationID string) (Operation
 	if err := a.ready(ctx); err != nil {
 		return Operation{}, err
 	}
-	record, err := a.authority.GetOpen(ctx, operationID)
+	record, err := a.getOpen(ctx, operationID)
 	if err != nil {
 		return Operation{}, err
 	}
 	record, err = a.progress(ctx, record)
+	if err != nil {
+		return Operation{}, err
+	}
+	record, err = a.completeHandoff(ctx, record)
 	if err != nil {
 		return Operation{}, err
 	}
@@ -117,6 +142,10 @@ func (a *Vertical) Recover(ctx context.Context) ([]Operation, error) {
 		if reconcileErr != nil {
 			return results, reconcileErr
 		}
+		reconciled, reconcileErr = a.completeHandoff(ctx, reconciled)
+		if reconcileErr != nil {
+			return results, reconcileErr
+		}
 		operation, projectionErr := operationProjection(reconciled)
 		if projectionErr != nil {
 			return results, projectionErr
@@ -126,6 +155,24 @@ func (a *Vertical) Recover(ctx context.Context) ([]Operation, error) {
 	return results, nil
 }
 
+func (a *Vertical) completeHandoff(ctx context.Context, record session.Record) (session.Record, error) {
+	if record.Status != session.StatusRunning || a.registrar == nil {
+		return record.Clone(), nil
+	}
+	evidence, err := a.registrar.RegisterHandoff(ctx, record)
+	if err != nil {
+		return record.Clone(), err
+	}
+	if _, err := a.CommitHandoff(ctx, record.Request.OperationID, evidence); err != nil {
+		return record.Clone(), err
+	}
+	completed, err := a.getOpen(ctx, record.Request.OperationID)
+	if err != nil {
+		return session.Record{}, err
+	}
+	return completed.Clone(), nil
+}
+
 // CommitHandoff accepts only evidence minted by a later opaque-reference
 // registry. It refreshes lifecycle authority and transactionally rechecks it
 // before recording success; this method does not create or resolve a reference.
@@ -133,7 +180,7 @@ func (a *Vertical) CommitHandoff(ctx context.Context, operationID string, eviden
 	if err := a.ready(ctx); err != nil {
 		return Operation{}, err
 	}
-	record, err := a.authority.GetOpen(ctx, operationID)
+	record, err := a.getOpen(ctx, operationID)
 	if err != nil {
 		return Operation{}, err
 	}
@@ -368,6 +415,15 @@ func (a *Vertical) updateOpen(ctx context.Context, record session.Record, expect
 		return timed.UpdateOpenAt(ctx, record, expected, now)
 	}
 	return a.authority.UpdateOpen(ctx, record, expected)
+}
+
+func (a *Vertical) getOpen(ctx context.Context, operationID string) (session.Record, error) {
+	if timed, ok := a.authority.(interface {
+		GetOpenAt(context.Context, string, time.Time) (session.Record, error)
+	}); ok {
+		return timed.GetOpenAt(ctx, operationID, a.clock.Now().UTC())
+	}
+	return a.authority.GetOpen(ctx, operationID)
 }
 
 func (a *Vertical) monotonicNow(floor time.Time) time.Time {

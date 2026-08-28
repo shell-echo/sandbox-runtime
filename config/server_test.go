@@ -183,6 +183,67 @@ controller_id = "controller-one"
 	}
 }
 
+func TestLoadProviderTerminalTOML(t *testing.T) {
+	snapshotGlobals(t)
+	body := validEnabledProviderTOML() + `
+[server.provider.protected_admission]
+enabled = true
+guard_state_file = "data/provider-admission.json"
+
+[[server.provider.protected_admission.trusted_verification_keys]]
+id = "agent-platform-ed25519"
+algorithm = "EdDSA"
+public_key_file = "/run/secrets/provider-admission/agent-platform-ed25519.pem"
+
+[server.provider.lifecycle]
+enabled = true
+driver = "docker"
+
+[server.provider.lifecycle.repository]
+driver = "file"
+
+[server.provider.lifecycle.repository.file]
+path = "data/provider-lifecycle.json"
+
+[server.provider.lifecycle.docker]
+image = "example/shell@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+pull_policy = "never"
+memory_bytes = 268435456
+nano_cpus = 500000000
+pids_limit = 128
+tmpfs_bytes = 33554432
+operation_timeout_seconds = 12
+pull_timeout_seconds = 34
+stop_timeout_seconds = 5
+user = "65532:65532"
+command = ["sleep", "3600"]
+data_root = "data/provider-runtime"
+namespace = "provider-dev"
+controller_id = "controller-one"
+
+[server.provider.terminal]
+enabled = true
+session_repository_file = "data/provider-terminal-sessions.json"
+reference_registry_file = "data/provider-terminal-references.json"
+runtime_profile_id = "coding-shell-v1"
+capability_profile_id = "coding-shell-terminal-v1"
+broker_path = "/workspace/.sandbox-runtime/terminal-broker"
+shell_path = "/bin/sh"
+max_sessions_per_sandbox = 2
+max_sessions_per_controller = 8
+shutdown_cleanup_seconds = 12
+`
+	if err := Load(writeConfig(t, body)); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	terminal := Server.Provider.Terminal
+	if !terminal.Enabled || terminal.SessionRepositoryFile != "data/provider-terminal-sessions.json" ||
+		terminal.ReferenceRegistryFile != "data/provider-terminal-references.json" || terminal.MaxSessionsPerSandbox != 2 ||
+		terminal.MaxSessionsPerController != 8 || terminal.ShutdownCleanupSeconds != 12 {
+		t.Fatalf("terminal = %#v", terminal)
+	}
+}
+
 func TestLoadProviderRejectsEmptyHost(t *testing.T) {
 	snapshotGlobals(t)
 	body := strings.Replace(validEnabledProviderTOML(), `host = "127.0.0.1"`, `host = ""`, 1)
@@ -596,6 +657,48 @@ func TestEnabledProviderRejectsEmptyRevision(t *testing.T) {
 	}
 }
 
+func TestProviderTerminalConfigurationValidation(t *testing.T) {
+	valid := validTerminalProviderConfig()
+	if err := valid.Validate(); err != nil {
+		t.Fatalf("valid terminal configuration rejected: %v", err)
+	}
+	if disabled := func() ProviderConfig {
+		config := validEnabledProviderConfig()
+		config.Terminal = ProviderTerminalConfig{Enabled: false}
+		return config
+	}(); disabled.Validate() != nil {
+		t.Fatalf("disabled terminal placeholders rejected: %v", disabled.Validate())
+	}
+
+	tests := map[string]func(*ProviderConfig){
+		"transport disabled":          func(c *ProviderConfig) { c.Transport.Enabled = false },
+		"protected admission":         func(c *ProviderConfig) { c.ProtectedAdmission.Enabled = false },
+		"fake lifecycle":              func(c *ProviderConfig) { c.Lifecycle.Driver = ProviderLifecycleFakeDriver },
+		"memory lifecycle repository": func(c *ProviderConfig) { c.Lifecycle.Repository.Driver = ProviderLifecycleMemoryRepository },
+		"missing session repository":  func(c *ProviderConfig) { c.Terminal.SessionRepositoryFile = "" },
+		"missing reference registry":  func(c *ProviderConfig) { c.Terminal.ReferenceRegistryFile = "" },
+		"same persistence path":       func(c *ProviderConfig) { c.Terminal.ReferenceRegistryFile = c.Terminal.SessionRepositoryFile },
+		"invalid runtime profile":     func(c *ProviderConfig) { c.Terminal.RuntimeProfileID = "runtime profile" },
+		"invalid terminal profile":    func(c *ProviderConfig) { c.Terminal.CapabilityProfileID = ".terminal" },
+		"unsafe broker":               func(c *ProviderConfig) { c.Terminal.BrokerPath = "/workspace/../broker" },
+		"unsafe shell":                func(c *ProviderConfig) { c.Terminal.ShellPath = "/bin/sh;id" },
+		"zero per sandbox":            func(c *ProviderConfig) { c.Terminal.MaxSessionsPerSandbox = 0 },
+		"controller below sandbox":    func(c *ProviderConfig) { c.Terminal.MaxSessionsPerController = c.Terminal.MaxSessionsPerSandbox - 1 },
+		"excess controller":           func(c *ProviderConfig) { c.Terminal.MaxSessionsPerController = 1_001 },
+		"zero cleanup":                func(c *ProviderConfig) { c.Terminal.ShutdownCleanupSeconds = 0 },
+		"excess cleanup":              func(c *ProviderConfig) { c.Terminal.ShutdownCleanupSeconds = 301 },
+	}
+	for name, mutate := range tests {
+		t.Run(name, func(t *testing.T) {
+			config := validTerminalProviderConfig()
+			mutate(&config)
+			if err := config.Validate(); err == nil {
+				t.Fatal("Validate() error = nil, want terminal configuration rejection")
+			}
+		})
+	}
+}
+
 // TestLoadServerDefaults confirms Load applies the server defaults when no file
 // or env is present.
 func TestLoadServerDefaults(t *testing.T) {
@@ -688,6 +791,29 @@ func validProtectedAdmissionConfig() ProviderProtectedAdmissionConfig {
 			ID: "agent-platform-ed25519", Algorithm: "EdDSA", PublicKeyFile: "agent-platform-ed25519.pem",
 		}},
 	}
+}
+
+func validTerminalProviderConfig() ProviderConfig {
+	config := validEnabledProviderConfig()
+	config.ProtectedAdmission = validProtectedAdmissionConfig()
+	config.Lifecycle = ProviderLifecycleConfig{
+		Enabled: true, Driver: ProviderLifecycleDockerDriver,
+		Repository: ProviderLifecycleRepositoryConfig{Driver: ProviderLifecycleFileRepository, File: ProviderLifecycleRepositoryFileConfig{Path: "data/provider-lifecycle.json"}},
+		Docker: ProviderLifecycleDockerConfig{
+			Image: "example/shell@sha256:" + strings.Repeat("a", 64), PullPolicy: "if_not_present",
+			MemoryBytes: 512 << 20, NanoCPUs: 1_000_000_000, PidsLimit: 256, TmpfsBytes: 64 << 20,
+			OperationTimeoutSeconds: 30, PullTimeoutSeconds: 300, StopTimeoutSeconds: 10,
+			User: "65532:65532", Command: []string{"sleep", "3600"}, DataRoot: "data/provider-runtime",
+			Namespace: "provider-dev", ControllerID: "controller-one",
+		},
+	}
+	config.Terminal = ProviderTerminalConfig{
+		Enabled: true, SessionRepositoryFile: "data/provider-terminal-sessions.json", ReferenceRegistryFile: "data/provider-terminal-references.json",
+		RuntimeProfileID: "coding-shell-v1", CapabilityProfileID: "coding-shell-terminal-v1",
+		BrokerPath: "/workspace/.sandbox-runtime/terminal-broker", ShellPath: "/bin/sh",
+		MaxSessionsPerSandbox: 4, MaxSessionsPerController: 64, ShutdownCleanupSeconds: 10,
+	}
+	return config
 }
 
 func distinctProfiles(count int) []ProviderCompatibilityProfile {

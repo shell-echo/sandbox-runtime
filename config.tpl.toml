@@ -119,6 +119,22 @@ controller_id = ''
 enabled = false
 repository_file = 'data/provider-exec.json'
 
+# P2.5f6 terminal composition is independently opt-in and development-only.
+# It uses the Provider Docker lifecycle, private single-controller session and
+# reference files, and a guest-side broker. It does not expose a Gateway,
+# create caller authorization, or advertise a capability profile.
+[server.provider.terminal]
+enabled = false
+session_repository_file = 'data/provider-terminal-sessions.json'
+reference_registry_file = 'data/provider-terminal-references.json'
+runtime_profile_id = 'coding-shell-v1'
+capability_profile_id = 'coding-shell-terminal-v1'
+broker_path = '/workspace/.sandbox-runtime/terminal-broker'
+shell_path = '/bin/sh'
+max_sessions_per_sandbox = 4
+max_sessions_per_controller = 64
+shutdown_cleanup_seconds = 10
+
 [runtime]
 driver = 'fake' # fake | docker
 

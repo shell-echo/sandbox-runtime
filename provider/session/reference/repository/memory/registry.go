@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/shell-echo/sandbox-runtime/provider/session"
 	"github.com/shell-echo/sandbox-runtime/provider/session/reference"
 	"github.com/shell-echo/sandbox-runtime/provider/session/reference/repository"
 )
@@ -41,6 +42,18 @@ func (r *Registry) Get(ctx context.Context, value string) (reference.Record, err
 		return reference.Record{}, reference.ErrClosed
 	}
 	return r.state.Get(value)
+}
+
+func (r *Registry) FindRunning(ctx context.Context, source session.Record) (reference.Record, error) {
+	if err := contextError(ctx); err != nil {
+		return reference.Record{}, err
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if r.closed {
+		return reference.Record{}, reference.ErrClosed
+	}
+	return r.state.FindRunning(source)
 }
 
 func (r *Registry) Revoke(ctx context.Context, value string, revokedAt time.Time) error {

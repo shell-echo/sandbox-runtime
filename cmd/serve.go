@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/distribution/reference"
@@ -32,6 +33,12 @@ import (
 	lifecyclefile "github.com/shell-echo/sandbox-runtime/provider/lifecycle/repository/file"
 	lifecyclememory "github.com/shell-echo/sandbox-runtime/provider/lifecycle/repository/memory"
 	provideroperation "github.com/shell-echo/sandbox-runtime/provider/operation"
+	"github.com/shell-echo/sandbox-runtime/provider/session"
+	sessionapplication "github.com/shell-echo/sandbox-runtime/provider/session/application"
+	sessionreference "github.com/shell-echo/sandbox-runtime/provider/session/reference"
+	sessionreferencefile "github.com/shell-echo/sandbox-runtime/provider/session/reference/repository/file"
+	sessionfile "github.com/shell-echo/sandbox-runtime/provider/session/repository/file"
+	providerterminal "github.com/shell-echo/sandbox-runtime/provider/terminal"
 	"github.com/shell-echo/sandbox-runtime/providerapi"
 	"github.com/shell-echo/sandbox-runtime/server"
 	"github.com/shell-echo/sandbox-runtime/server/api"
@@ -115,12 +122,17 @@ func newProviderServer(ctx context.Context, providerConfig config.ProviderConfig
 	if err != nil {
 		return nil, noOpProviderClose, errors.Join(err, closeProtected(), closeLifecycle())
 	}
+	terminalApp, closeTerminal, err := newProviderTerminalApplication(ctx, providerConfig.Terminal, lifecycleApp, execRuntime)
+	if err != nil {
+		return nil, noOpProviderClose, errors.Join(err, closeExec(), closeProtected(), closeLifecycle())
+	}
 	if protected != nil {
 		protected.Application = lifecycleApp
 		protected.ExecApplication = execApp
+		protected.SessionApplication = terminalApp
 		operationReader, readerErr := newProviderOperationReader(lifecycleApp, execApp, nil)
 		if readerErr != nil {
-			return nil, noOpProviderClose, errors.Join(readerErr, closeExec(), closeProtected(), closeLifecycle())
+			return nil, noOpProviderClose, errors.Join(readerErr, closeTerminal(), closeExec(), closeProtected(), closeLifecycle())
 		}
 		protected.OperationReader = operationReader
 	}
@@ -134,9 +146,9 @@ func newProviderServer(ctx context.Context, providerConfig config.ProviderConfig
 		Protected:                  protected,
 	}, source)
 	if err != nil {
-		return nil, noOpProviderClose, errors.Join(fmt.Errorf("construct Provider API server: %w", err), closeExec(), closeProtected(), closeLifecycle())
+		return nil, noOpProviderClose, errors.Join(fmt.Errorf("construct Provider API server: %w", err), closeTerminal(), closeExec(), closeProtected(), closeLifecycle())
 	}
-	return providerServer, func() error { return errors.Join(closeExec(), closeProtected(), closeLifecycle()) }, nil
+	return providerServer, func() error { return errors.Join(closeTerminal(), closeExec(), closeProtected(), closeLifecycle()) }, nil
 }
 
 // newProviderOperationReader composes only the operation families whose
@@ -264,6 +276,160 @@ func newProviderExecApplication(ctx context.Context, execConfig config.ProviderE
 	return application, repo.Close, nil
 }
 
+// providerTerminalApplication owns development-only process composition around
+// the otherwise provider-neutral session vertical. It is intentionally not a
+// Gateway: no caller authorization, public listener, or capability
+// advertisement is supplied here.
+type providerTerminalApplication struct {
+	vertical   *sessionapplication.Vertical
+	authority  session.CoordinationAuthority
+	runtime    providerterminal.Runtime
+	references sessionreference.Store
+	clock      systemAdmissionClock
+
+	shutdownCleanup time.Duration
+	closeSession    func() error
+	closeReferences func() error
+	closeOnce       sync.Once
+	closeErr        error
+}
+
+type providerTerminalHandoffRegistrar struct{ registrar *sessionreference.Registrar }
+
+func (r providerTerminalHandoffRegistrar) RegisterHandoff(ctx context.Context, source session.Record) (session.EndpointEvidence, error) {
+	if r.registrar == nil {
+		return session.EndpointEvidence{}, sessionreference.ErrUnavailable
+	}
+	registration, err := r.registrar.Register(ctx, source)
+	if err != nil {
+		return session.EndpointEvidence{}, err
+	}
+	return registration.Evidence, nil
+}
+
+func newProviderTerminalApplication(ctx context.Context, terminalConfig config.ProviderTerminalConfig, lifecycleApp *lifecycleapplication.Application, runtime *lifecycledocker.Driver) (*providerTerminalApplication, func() error, error) {
+	if !terminalConfig.Enabled {
+		return nil, noOpProviderClose, nil
+	}
+	if err := terminalConfig.Validate(); err != nil {
+		return nil, noOpProviderClose, fmt.Errorf("validate Provider terminal configuration: %w", err)
+	}
+	if lifecycleApp == nil || runtime == nil {
+		return nil, noOpProviderClose, errors.New("Provider terminal requires a composed Docker lifecycle runtime")
+	}
+	sessions, err := sessionfile.NewRepository(terminalConfig.SessionRepositoryFile)
+	if err != nil {
+		return nil, noOpProviderClose, fmt.Errorf("open Provider terminal session repository: %w", err)
+	}
+	references, err := sessionreferencefile.NewRegistry(terminalConfig.ReferenceRegistryFile)
+	if err != nil {
+		return nil, noOpProviderClose, errors.Join(fmt.Errorf("open Provider terminal reference registry: %w", err), sessions.Close())
+	}
+	terminalRuntime, err := lifecycledocker.NewTerminalRuntime(runtime, lifecycledocker.TerminalOptions{
+		BrokerPath: terminalConfig.BrokerPath, ShellPath: terminalConfig.ShellPath,
+		MaxSessionsPerSandbox: terminalConfig.MaxSessionsPerSandbox, MaxSessionsPerController: terminalConfig.MaxSessionsPerController,
+		Clock: systemAdmissionClock{},
+	})
+	if err != nil {
+		return nil, noOpProviderClose, errors.Join(fmt.Errorf("construct Provider Docker terminal runtime: %w", err), references.Close(), sessions.Close())
+	}
+	registrar, err := sessionreference.NewRegistrar(references, systemAdmissionClock{}, nil)
+	if err != nil {
+		return nil, noOpProviderClose, errors.Join(fmt.Errorf("construct Provider terminal handoff registrar: %w", err), references.Close(), sessions.Close())
+	}
+	vertical, err := sessionapplication.NewVerticalWithHandoffRegistrar(
+		sessions, terminalRuntime, lifecycleApp,
+		sessionapplication.TerminalProfile{RuntimeProfileID: terminalConfig.RuntimeProfileID, CapabilityProfileID: terminalConfig.CapabilityProfileID, WorkingDirectory: "/workspace"},
+		providerTerminalHandoffRegistrar{registrar: registrar}, systemAdmissionClock{},
+	)
+	if err != nil {
+		return nil, noOpProviderClose, errors.Join(fmt.Errorf("construct Provider terminal application: %w", err), references.Close(), sessions.Close())
+	}
+	application := &providerTerminalApplication{
+		vertical: vertical, authority: sessions, runtime: terminalRuntime, references: references, clock: systemAdmissionClock{},
+		shutdownCleanup: time.Duration(terminalConfig.ShutdownCleanupSeconds) * time.Second,
+		closeSession:    sessions.Close, closeReferences: references.Close,
+	}
+	if _, err := application.vertical.Recover(ctx); err != nil {
+		return nil, noOpProviderClose, errors.Join(fmt.Errorf("recover Provider terminal sessions: %w", err), application.Close())
+	}
+	return application, application.Close, nil
+}
+
+func (a *providerTerminalApplication) Open(ctx context.Context, request session.OpenRequest) (sessionapplication.Operation, error) {
+	if a == nil || a.vertical == nil {
+		return sessionapplication.Operation{}, sessionapplication.ErrInvalidApplication
+	}
+	return a.vertical.Open(ctx, request)
+}
+
+func (a *providerTerminalApplication) GetHandoff(ctx context.Context, operationID string) (sessionapplication.Handoff, error) {
+	if a == nil || a.vertical == nil {
+		return sessionapplication.Handoff{}, sessionapplication.ErrInvalidApplication
+	}
+	return a.vertical.GetHandoff(ctx, operationID)
+}
+
+// Close runs after server.RunE has stopped the Provider listener. It revokes
+// any registered running handoff before identity-bound broker cleanup, so a
+// concurrent resolver cannot attach while the terminal is being removed.
+func (a *providerTerminalApplication) Close() error {
+	if a == nil {
+		return nil
+	}
+	a.closeOnce.Do(func() {
+		a.closeErr = a.shutdown()
+	})
+	return a.closeErr
+}
+
+func (a *providerTerminalApplication) shutdown() error {
+	var result error
+	cleanupContext, cancel := context.WithTimeout(context.Background(), a.shutdownCleanup)
+	defer cancel()
+	if a.authority == nil || a.runtime == nil || a.references == nil || a.clock.Now().IsZero() {
+		result = errors.Join(result, sessionapplication.ErrInvalidApplication)
+	} else {
+		records, err := a.authority.ListOpen(cleanupContext)
+		if err != nil {
+			result = errors.Join(result, fmt.Errorf("list Provider terminal sessions for shutdown: %w", err))
+		} else {
+			for _, record := range records {
+				if record.Status != session.StatusRunning || record.Allocation == nil {
+					continue
+				}
+				registration, findErr := a.references.FindRunning(cleanupContext, record)
+				if findErr == nil {
+					if revokeErr := a.references.Revoke(cleanupContext, registration.Reference, a.clock.Now()); revokeErr != nil {
+						result = errors.Join(result, fmt.Errorf("revoke Provider terminal handoff: %w", revokeErr))
+					}
+				} else if !errors.Is(findErr, sessionreference.ErrNotFound) {
+					result = errors.Join(result, fmt.Errorf("find Provider terminal handoff for shutdown: %w", findErr))
+				}
+				if cleanupErr := a.runtime.Cleanup(cleanupContext, providerTerminalReceipt(record.Allocation.Receipt)); cleanupErr != nil {
+					result = errors.Join(result, fmt.Errorf("cleanup Provider terminal allocation: %w", cleanupErr))
+				}
+			}
+		}
+	}
+	if a.closeReferences != nil {
+		result = errors.Join(result, a.closeReferences())
+	}
+	if a.closeSession != nil {
+		result = errors.Join(result, a.closeSession())
+	}
+	return result
+}
+
+func providerTerminalReceipt(receipt session.AllocationReceipt) providerterminal.Receipt {
+	return providerterminal.Receipt{
+		Reference: providerterminal.Reference(receipt.Reference), SandboxID: receipt.SandboxID,
+		RuntimeSessionID: receipt.RuntimeSessionID, OperationID: receipt.OperationID, AttemptID: receipt.AttemptID,
+		FencingToken: receipt.FencingToken, ExpectedGeneration: receipt.ExpectedGeneration,
+		ConnectionGeneration: receipt.ConnectionGeneration, AllocatedAt: receipt.AllocatedAt.UTC(), ExpiresAt: receipt.ExpiresAt.UTC(),
+	}
+}
+
 func noOpProviderClose() error { return nil }
 
 // systemAdmissionClock is chosen at the process composition boundary. The
@@ -354,8 +520,8 @@ func validateServeConfiguration(application *config.ApplicationConfig, serverCon
 	if application.Mode == config.ApplicationProductionMode && repositoryConfig.Driver == config.RepositoryMemoryDriver {
 		return errors.New("production mode requires a persistent repository")
 	}
-	if application.Mode == config.ApplicationProductionMode && (serverConfig.Provider.Lifecycle.Enabled || serverConfig.Provider.Exec.Enabled) {
-		return errors.New("production mode rejects Provider lifecycle and exec drivers until production-capable adapters pass their release gates")
+	if application.Mode == config.ApplicationProductionMode && (serverConfig.Provider.Lifecycle.Enabled || serverConfig.Provider.Exec.Enabled || serverConfig.Provider.Terminal.Enabled) {
+		return errors.New("production mode rejects Provider lifecycle, exec, and terminal drivers until production-capable adapters pass their release gates")
 	}
 	if runtimeConfig.Driver == config.RuntimeDockerDriver && repositoryConfig.Driver == config.RepositoryMemoryDriver {
 		return errors.New("docker runtime requires a persistent repository")
