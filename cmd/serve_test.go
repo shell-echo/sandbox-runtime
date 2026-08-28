@@ -25,7 +25,9 @@ import (
 	lifecycledocker "github.com/shell-echo/sandbox-runtime/provider/lifecycle/driver/docker"
 	"github.com/shell-echo/sandbox-runtime/provider/session"
 	sessionreference "github.com/shell-echo/sandbox-runtime/provider/session/reference"
+	sessionreferencefile "github.com/shell-echo/sandbox-runtime/provider/session/reference/repository/file"
 	sessionreferencememory "github.com/shell-echo/sandbox-runtime/provider/session/reference/repository/memory"
+	sessionfile "github.com/shell-echo/sandbox-runtime/provider/session/repository/file"
 	providerterminal "github.com/shell-echo/sandbox-runtime/provider/terminal"
 )
 
@@ -225,6 +227,63 @@ func TestNewProviderExecApplicationRequiresDependenciesAndReleasesRepository(t *
 		t.Fatalf("reopen released exec repository: %v", err)
 	}
 	if err := reopened.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestNewProviderTerminalApplicationRecoversBeforeReturningAndReleasesLocks(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/_ping" {
+			http.NotFound(response, request)
+			return
+		}
+		response.Header().Set("API-Version", "1.55")
+		response.Header().Set("OSType", "linux")
+		response.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+	driver, err := lifecycledocker.New(context.Background(), lifecycledocker.Options{
+		Host: server.URL, Image: "example/shell@sha256:" + strings.Repeat("a", 64), PullPolicy: lifecycledocker.PullNever,
+		MemoryBytes: 256 << 20, NanoCPUs: 500_000_000, PidsLimit: 128, TmpfsBytes: 32 << 20,
+		OperationTimeoutSeconds: 2, PullTimeoutSeconds: 2, StopTimeoutSeconds: 1, User: "65532:65532",
+		Command: []string{"sleep", "3600"}, DataRoot: filepath.Join(t.TempDir(), "runtime"), Namespace: "test", ControllerID: "controller-test",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer driver.Close()
+	directory := t.TempDir()
+	terminalConfig := config.ProviderTerminalConfig{
+		Enabled: true, SessionRepositoryFile: filepath.Join(directory, "sessions.json"), ReferenceRegistryFile: filepath.Join(directory, "references.json"),
+		RuntimeProfileID: "coding-shell-v1", CapabilityProfileID: "coding-shell-terminal-v1",
+		BrokerPath: "/workspace/.sandbox-runtime/terminal-broker", ShellPath: "/bin/sh",
+		MaxSessionsPerSandbox: 2, MaxSessionsPerController: 4, ShutdownCleanupSeconds: 1,
+	}
+	application, closeApplication, err := newProviderTerminalApplication(context.Background(), terminalConfig, &lifecycleapplication.Application{}, driver)
+	if err != nil || application == nil || closeApplication == nil {
+		t.Fatalf("newProviderTerminalApplication() = %T, closer %t, %v", application, closeApplication != nil, err)
+	}
+	if _, err := sessionfile.NewRepository(terminalConfig.SessionRepositoryFile); err == nil {
+		t.Fatal("terminal composition did not retain the session repository lock")
+	}
+	if _, err := sessionreferencefile.NewRegistry(terminalConfig.ReferenceRegistryFile); err == nil {
+		t.Fatal("terminal composition did not retain the reference registry lock")
+	}
+	if err := closeApplication(); err != nil {
+		t.Fatal(err)
+	}
+	sessions, err := sessionfile.NewRepository(terminalConfig.SessionRepositoryFile)
+	if err != nil {
+		t.Fatalf("reopen terminal session repository: %v", err)
+	}
+	if err := sessions.Close(); err != nil {
+		t.Fatal(err)
+	}
+	references, err := sessionreferencefile.NewRegistry(terminalConfig.ReferenceRegistryFile)
+	if err != nil {
+		t.Fatalf("reopen terminal reference registry: %v", err)
+	}
+	if err := references.Close(); err != nil {
 		t.Fatal(err)
 	}
 }
