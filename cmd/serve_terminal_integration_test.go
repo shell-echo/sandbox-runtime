@@ -150,7 +150,7 @@ func f7TerminalConfig(dataRoot string) config.ProviderTerminalConfig {
 		Enabled:               true,
 		SessionRepositoryFile: filepath.Join(dataRoot, "terminal-sessions.json"),
 		ReferenceRegistryFile: filepath.Join(dataRoot, "terminal-references.json"),
-		RuntimeProfileID:      lifecycledocker.CodingShellRuntimeProfile, CapabilityProfileID: "coding-shell-terminal-v1",
+		RuntimeProfileID:      lifecycledocker.CodingShellRuntimeProfile, CapabilityProfileID: "terminal-v1",
 		BrokerPath: "/workspace/.sandbox-runtime/bin/terminal-broker", ShellPath: "/bin/sh",
 		MaxSessionsPerSandbox: 2, MaxSessionsPerController: 4, ShutdownCleanupSeconds: 5,
 	}
@@ -174,7 +174,7 @@ func f7SessionOpenRequest(now time.Time, sandboxID string) session.OpenRequest {
 		OperationID: "f7-terminal", AttemptID: "f7-terminal-attempt", FencingToken: 1,
 		IdempotencyKey: "f7-terminal-key", RequestDigest: "sha256:" + strings.Repeat("b", 64),
 		Deadline: now.Add(2 * time.Minute), ExpectedGeneration: 1, RuntimeSessionID: "f7-session",
-		RuntimeType: session.RuntimeTerminal, CapabilityProfileID: "coding-shell-terminal-v1", ExpiresAt: now.Add(2 * time.Minute),
+		RuntimeType: session.RuntimeTerminal, CapabilityProfileID: "terminal-v1", ExpiresAt: now.Add(2 * time.Minute),
 	}
 }
 

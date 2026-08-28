@@ -120,10 +120,6 @@ func newProviderServer(ctx context.Context, providerConfig config.ProviderConfig
 		return nil, noOpProviderClose, err
 	}
 
-	source, err := newProviderCapabilitySource(providerConfig.Capability)
-	if err != nil {
-		return nil, noOpProviderClose, errors.Join(err, closeLifecycle())
-	}
 	protected, closeProtected, err := newProviderProtectedTransportOptions(providerConfig.ProtectedAdmission, systemAdmissionClock{})
 	if err != nil {
 		return nil, noOpProviderClose, errors.Join(err, closeLifecycle())
@@ -148,17 +144,46 @@ func newProviderServer(ctx context.Context, providerConfig config.ProviderConfig
 	if err != nil {
 		return nil, noOpProviderClose, errors.Join(err, closeTerminal(), closeExec(), closeUsage(), closeProtected(), closeLifecycle())
 	}
+	var operationReader provideroperation.Reader
+	var readerErr error
 	if protected != nil {
 		protected.Application = lifecycleApp
 		protected.ExecApplication = execApp
 		protected.SessionApplication = terminalApp
 		protected.ArtifactApplication = artifactApp
 		protected.UsageEvidenceReader = usageReader
-		operationReader, readerErr := newProviderOperationReader(lifecycleApp, execApp, artifactApp)
+		operationReader, readerErr = newProviderOperationReader(lifecycleApp, execApp, artifactApp)
 		if readerErr != nil {
 			return nil, noOpProviderClose, errors.Join(readerErr, closeArtifact(), closeTerminal(), closeExec(), closeUsage(), closeProtected(), closeLifecycle())
 		}
 		protected.OperationReader = operationReader
+	}
+	readiness := providerCapabilityReadiness{
+		ProtectedAdmission:   protected != nil && protected.Gate != nil,
+		MutationGuard:        protected != nil && protected.Gate != nil,
+		LifecyclePersistence: lifecycleApp != nil && providerConfig.Lifecycle.Repository.Driver == config.ProviderLifecycleFileRepository,
+		RuntimeLifecycle:     execRuntime != nil,
+		StableMounts:         execRuntime != nil,
+		ExecAcceptance:       execApp != nil,
+		ExecExecutor:         execApp != nil && execRuntime != nil,
+		ExecCancellation:     execApp != nil,
+		ExecResultRetention:  execApp != nil,
+		ExecReconciliation:   execApp != nil,
+		UsageCollection:      usageCollector != nil && usageReader != nil,
+		TerminalAuthority:    terminalApp != nil,
+		TerminalAllocator:    terminalApp != nil,
+		OpaqueHandoff:        terminalApp != nil,
+		TerminalWebSocket:    false, // f4 is not command-composed; the caller owns the Gateway edge.
+		GatewayBoundary:      false, // f5 requires caller-owned authorization, revocation, and recording.
+		ArtifactAcceptance:   artifactApp != nil,
+		OutputStaging:        artifactApp != nil && execRuntime != nil,
+		ContentChecks:        artifactApp != nil,
+		RetainedEvidence:     artifactApp != nil && usageReader != nil,
+		OperationAggregation: operationReader != nil,
+	}
+	source, err := newProviderCapabilitySource(providerConfig.Capability, readiness)
+	if err != nil {
+		return nil, noOpProviderClose, errors.Join(err, closeArtifact(), closeTerminal(), closeExec(), closeUsage(), closeProtected(), closeLifecycle())
 	}
 	transport := providerConfig.Transport
 	providerServer, err := providerapi.NewServer(ctx, providerapi.TransportOptions{
@@ -591,7 +616,81 @@ func newProviderProtectedTransportOptions(protectedConfig config.ProviderProtect
 	return &providerapi.ProtectedTransportOptions{Gate: gate}, guard.Close, nil
 }
 
-func newProviderCapabilitySource(capability config.ProviderCapabilityConfig) (*provider.StaticCapabilitySource, error) {
+// providerCapabilityReadiness is the command-root dependency graph for the
+// canonical coding/shell profile. A configured capability is not advertised
+// until every node is backed by a composed application or adapter.
+type providerCapabilityReadiness struct {
+	ProtectedAdmission   bool
+	MutationGuard        bool
+	LifecyclePersistence bool
+	RuntimeLifecycle     bool
+	StableMounts         bool
+	ExecAcceptance       bool
+	ExecExecutor         bool
+	ExecCancellation     bool
+	ExecResultRetention  bool
+	ExecReconciliation   bool
+	UsageCollection      bool
+	TerminalAuthority    bool
+	TerminalAllocator    bool
+	OpaqueHandoff        bool
+	TerminalWebSocket    bool
+	GatewayBoundary      bool
+	ArtifactAcceptance   bool
+	OutputStaging        bool
+	ContentChecks        bool
+	RetainedEvidence     bool
+	OperationAggregation bool
+}
+
+func (r providerCapabilityReadiness) missingDependencies() []string {
+	checks := []struct {
+		name  string
+		ready bool
+	}{
+		{"protected mTLS/JWS admission", r.ProtectedAdmission},
+		{"durable mutation guard", r.MutationGuard},
+		{"lifecycle persistence", r.LifecyclePersistence},
+		{"real runtime lifecycle adapter", r.RuntimeLifecycle},
+		{"stable /inputs,/workspace,/outputs,/tmp mounts", r.StableMounts},
+		{"durable exec acceptance", r.ExecAcceptance},
+		{"exec executor", r.ExecExecutor},
+		{"exec cancellation", r.ExecCancellation},
+		{"exec result retention", r.ExecResultRetention},
+		{"exec reconciliation", r.ExecReconciliation},
+		{"usage collection", r.UsageCollection},
+		{"terminal authority", r.TerminalAuthority},
+		{"terminal allocator", r.TerminalAllocator},
+		{"opaque terminal handoff", r.OpaqueHandoff},
+		{"concrete terminal WebSocket data plane", r.TerminalWebSocket},
+		{"trusted caller-owned Gateway boundary", r.GatewayBoundary},
+		{"artifact acceptance", r.ArtifactAcceptance},
+		{"real output staging", r.OutputStaging},
+		{"bounded artifact content checks", r.ContentChecks},
+		{"retained artifact/usage evidence", r.RetainedEvidence},
+		{"operation-family aggregation", r.OperationAggregation},
+	}
+	missing := make([]string, 0)
+	for _, check := range checks {
+		if !check.ready {
+			missing = append(missing, check.name)
+		}
+	}
+	return missing
+}
+
+// newProviderCapabilitySource derives the immutable startup advertisement
+// from the composed dependency graph. The optional argument keeps the helper
+// useful for the pre-readiness empty snapshot tests; command startup always
+// supplies the graph explicitly.
+func newProviderCapabilitySource(capability config.ProviderCapabilityConfig, graph ...providerCapabilityReadiness) (*provider.StaticCapabilitySource, error) {
+	if len(graph) > 1 {
+		return nil, errors.New("construct Provider capability source: at most one readiness graph is allowed")
+	}
+	var readiness providerCapabilityReadiness
+	if len(graph) == 1 {
+		readiness = graph[0]
+	}
 	profiles := make([]provider.SnapshotRestoreProfile, len(capability.SnapshotRestoreProfiles))
 	for index, profile := range capability.SnapshotRestoreProfiles {
 		profiles[index] = provider.SnapshotRestoreProfile{
@@ -602,7 +701,25 @@ func newProviderCapabilitySource(capability config.ProviderCapabilityConfig) (*p
 			SuiteDigest:  provider.SHA256Digest(profile.SuiteDigest),
 		}
 	}
-	snapshot, err := provider.NewCapabilitySnapshot(capability.ProviderRevisionID, provider.Limits{
+	var capabilities []provider.Capability
+	var runtimeProfiles []provider.RuntimeProfile
+	if capability.CodingShellEnabled {
+		if missing := readiness.missingDependencies(); len(missing) != 0 {
+			return nil, fmt.Errorf("coding/shell profile enabled but dependency graph is incomplete: %s", strings.Join(missing, ", "))
+		}
+		capabilities = []provider.Capability{
+			{ID: "sandbox.exec", Versions: []string{config.ProviderCodingShellCapabilityVersion}, Profiles: []string{config.ProviderCodingShellExecProfileID}},
+			{ID: "sandbox.terminal", Versions: []string{config.ProviderCodingShellCapabilityVersion}, Profiles: []string{config.ProviderCodingShellTerminalProfileID}},
+		}
+		runtimeProfiles = []provider.RuntimeProfile{{
+			ID:                   config.ProviderCodingShellRuntimeProfileID,
+			IsolationClass:       "container",
+			RuntimeClassName:     config.ProviderCodingShellRuntimeClassName,
+			Architecture:         []string{"amd64"},
+			CapabilityProfileIDs: []string{config.ProviderCodingShellExecProfileID, config.ProviderCodingShellTerminalProfileID},
+		}}
+	}
+	snapshot, err := provider.NewCapabilitySnapshotWithAdvertisements(capability.ProviderRevisionID, provider.Limits{
 		MaxCPUMillis:             capability.Limits.MaxCPUMillis,
 		MaxMemoryBytes:           capability.Limits.MaxMemoryBytes,
 		MaxEphemeralStorageBytes: capability.Limits.MaxEphemeralStorageBytes,
@@ -610,7 +727,7 @@ func newProviderCapabilitySource(capability config.ProviderCapabilityConfig) (*p
 		MaxGPUCount:              cloneOptionalInt64(capability.Limits.MaxGPUCount),
 		MaxLeaseSeconds:          capability.Limits.MaxLeaseSeconds,
 		MaxExecSeconds:           capability.Limits.MaxExecSeconds,
-	}, profiles)
+	}, capabilities, runtimeProfiles, profiles)
 	if err != nil {
 		return nil, fmt.Errorf("construct Provider capability snapshot: %w", err)
 	}

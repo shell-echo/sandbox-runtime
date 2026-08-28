@@ -225,8 +225,8 @@ controller_id = "controller-one"
 enabled = true
 session_repository_file = "data/provider-terminal-sessions.json"
 reference_registry_file = "data/provider-terminal-references.json"
-runtime_profile_id = "coding-shell-v1"
-capability_profile_id = "coding-shell-terminal-v1"
+runtime_profile_id = "sandbox-runtime-coding-shell-v1"
+capability_profile_id = "terminal-v1"
 broker_path = "/workspace/.sandbox-runtime/terminal-broker"
 shell_path = "/bin/sh"
 max_sessions_per_sandbox = 2
@@ -632,13 +632,36 @@ func TestProviderUsageConfigurationRequiresComposedExec(t *testing.T) {
 	}
 }
 
+func TestEnabledProviderCodingShellRequiresCompleteCanonicalComposition(t *testing.T) {
+	valid := validCodingShellProviderConfig()
+	if err := valid.Validate(); err != nil {
+		t.Fatalf("valid coding/shell configuration: %v", err)
+	}
+	for name, mutate := range map[string]func(*ProviderConfig){
+		"exec":               func(c *ProviderConfig) { c.Exec.Enabled = false },
+		"terminal":           func(c *ProviderConfig) { c.Terminal.Enabled = false },
+		"artifact":           func(c *ProviderConfig) { c.Artifact.Enabled = false },
+		"usage":              func(c *ProviderConfig) { c.Usage.Enabled = false },
+		"runtime profile":    func(c *ProviderConfig) { c.Terminal.RuntimeProfileID = "coding-shell-v1" },
+		"capability profile": func(c *ProviderConfig) { c.Terminal.CapabilityProfileID = "coding-shell-terminal-v1" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			candidate := valid
+			mutate(&candidate)
+			if err := candidate.Validate(); err == nil {
+				t.Fatal("incomplete coding/shell configuration was accepted")
+			}
+		})
+	}
+}
+
 func TestProviderComponentStateFilesMustBeDistinct(t *testing.T) {
 	valid := validArtifactProviderConfig()
 	valid.Exec = ProviderExecConfig{Enabled: true, RepositoryFile: "data/provider-exec.json"}
 	valid.Usage = ProviderUsageConfig{Enabled: true, RepositoryFile: "data/provider-usage.json"}
 	valid.Terminal = ProviderTerminalConfig{
 		Enabled: true, SessionRepositoryFile: "data/provider-terminal-sessions.json", ReferenceRegistryFile: "data/provider-terminal-references.json",
-		RuntimeProfileID: "coding-shell-v1", CapabilityProfileID: "coding-shell-terminal-v1",
+		RuntimeProfileID: "sandbox-runtime-coding-shell-v1", CapabilityProfileID: "terminal-v1",
 		BrokerPath: "/workspace/.sandbox-runtime/terminal-broker", ShellPath: "/bin/sh",
 		MaxSessionsPerSandbox: 2, MaxSessionsPerController: 4, ShutdownCleanupSeconds: 1,
 	}
@@ -697,6 +720,20 @@ func validArtifactProviderConfig() ProviderConfig {
 		Enabled: true, RepositoryFile: "data/provider-artifacts.json", StagingRoot: "data/provider-artifact-staging",
 		ActiveContentCommand: []string{"scan-active"}, MalwareCommand: []string{"scan-malware"},
 	}
+	return provider
+}
+
+func validCodingShellProviderConfig() ProviderConfig {
+	provider := validArtifactProviderConfig()
+	provider.Exec = ProviderExecConfig{Enabled: true, RepositoryFile: "data/provider-exec.json"}
+	provider.Terminal = ProviderTerminalConfig{
+		Enabled: true, SessionRepositoryFile: "data/provider-terminal-sessions.json", ReferenceRegistryFile: "data/provider-terminal-references.json",
+		RuntimeProfileID: ProviderCodingShellRuntimeProfileID, CapabilityProfileID: ProviderCodingShellTerminalProfileID,
+		BrokerPath: "/workspace/.sandbox-runtime/terminal-broker", ShellPath: "/bin/sh",
+		MaxSessionsPerSandbox: 4, MaxSessionsPerController: 64, ShutdownCleanupSeconds: 10,
+	}
+	provider.Usage = ProviderUsageConfig{Enabled: true, RepositoryFile: "data/provider-usage.json"}
+	provider.Capability.CodingShellEnabled = true
 	return provider
 }
 
@@ -913,7 +950,7 @@ func validTerminalProviderConfig() ProviderConfig {
 	}
 	config.Terminal = ProviderTerminalConfig{
 		Enabled: true, SessionRepositoryFile: "data/provider-terminal-sessions.json", ReferenceRegistryFile: "data/provider-terminal-references.json",
-		RuntimeProfileID: "coding-shell-v1", CapabilityProfileID: "coding-shell-terminal-v1",
+		RuntimeProfileID: "sandbox-runtime-coding-shell-v1", CapabilityProfileID: "terminal-v1",
 		BrokerPath: "/workspace/.sandbox-runtime/terminal-broker", ShellPath: "/bin/sh",
 		MaxSessionsPerSandbox: 4, MaxSessionsPerController: 64, ShutdownCleanupSeconds: 10,
 	}

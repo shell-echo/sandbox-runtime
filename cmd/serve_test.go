@@ -337,7 +337,7 @@ func TestNewProviderTerminalApplicationRecoversBeforeReturningAndReleasesLocks(t
 	directory := t.TempDir()
 	terminalConfig := config.ProviderTerminalConfig{
 		Enabled: true, SessionRepositoryFile: filepath.Join(directory, "sessions.json"), ReferenceRegistryFile: filepath.Join(directory, "references.json"),
-		RuntimeProfileID: "coding-shell-v1", CapabilityProfileID: "coding-shell-terminal-v1",
+		RuntimeProfileID: "sandbox-runtime-coding-shell-v1", CapabilityProfileID: "terminal-v1",
 		BrokerPath: "/workspace/.sandbox-runtime/terminal-broker", ShellPath: "/bin/sh",
 		MaxSessionsPerSandbox: 2, MaxSessionsPerController: 4, ShutdownCleanupSeconds: 1,
 	}
@@ -596,6 +596,88 @@ func TestNewProviderCapabilitySourceRejectsInvalidModel(t *testing.T) {
 	capability.ProviderRevisionID = ""
 	if _, err := newProviderCapabilitySource(capability); err == nil {
 		t.Fatal("newProviderCapabilitySource() error = nil")
+	}
+}
+
+func TestNewProviderCapabilitySourceAdvertisesCanonicalCodingShellWhenReady(t *testing.T) {
+	capability := validProviderCapabilityConfig(nil, nil)
+	capability.CodingShellEnabled = true
+	source, err := newProviderCapabilitySource(capability, completeProviderCapabilityReadiness())
+	if err != nil {
+		t.Fatalf("newProviderCapabilitySource() = %v", err)
+	}
+	snapshot, err := source.CapabilitySnapshot(context.Background())
+	if err != nil {
+		t.Fatalf("CapabilitySnapshot() = %v", err)
+	}
+	if len(snapshot.Capabilities) != 2 || snapshot.Capabilities[0].ID != "sandbox.exec" || snapshot.Capabilities[1].ID != "sandbox.terminal" {
+		t.Fatalf("capabilities = %#v", snapshot.Capabilities)
+	}
+	if len(snapshot.Capabilities[0].Versions) != 1 || snapshot.Capabilities[0].Versions[0] != "1.0.0" ||
+		len(snapshot.Capabilities[0].Profiles) != 1 || snapshot.Capabilities[0].Profiles[0] != "exec-v1" ||
+		len(snapshot.Capabilities[1].Versions) != 1 || snapshot.Capabilities[1].Versions[0] != "1.0.0" ||
+		len(snapshot.Capabilities[1].Profiles) != 1 || snapshot.Capabilities[1].Profiles[0] != "terminal-v1" {
+		t.Fatalf("capability mappings = %#v", snapshot.Capabilities)
+	}
+	if len(snapshot.RuntimeProfiles) != 1 {
+		t.Fatalf("runtime profiles = %#v", snapshot.RuntimeProfiles)
+	}
+	runtimeProfile := snapshot.RuntimeProfiles[0]
+	if runtimeProfile.ID != "sandbox-runtime-coding-shell-v1" || runtimeProfile.IsolationClass != "container" ||
+		runtimeProfile.RuntimeClassName != "sandbox-runtime-coding-shell" || len(runtimeProfile.Architecture) != 1 || runtimeProfile.Architecture[0] != "amd64" ||
+		len(runtimeProfile.CapabilityProfileIDs) != 2 || runtimeProfile.CapabilityProfileIDs[0] != "exec-v1" || runtimeProfile.CapabilityProfileIDs[1] != "terminal-v1" {
+		t.Fatalf("runtime profile = %#v", runtimeProfile)
+	}
+}
+
+func TestNewProviderCapabilitySourceRejectsEveryMissingCodingShellDependency(t *testing.T) {
+	capability := validProviderCapabilityConfig(nil, nil)
+	capability.CodingShellEnabled = true
+	allReady := completeProviderCapabilityReadiness()
+	tests := []struct {
+		name   string
+		clear  func(*providerCapabilityReadiness)
+		needle string
+	}{
+		{"protected admission", func(r *providerCapabilityReadiness) { r.ProtectedAdmission = false }, "protected mTLS/JWS admission"},
+		{"mutation guard", func(r *providerCapabilityReadiness) { r.MutationGuard = false }, "durable mutation guard"},
+		{"lifecycle persistence", func(r *providerCapabilityReadiness) { r.LifecyclePersistence = false }, "lifecycle persistence"},
+		{"runtime lifecycle", func(r *providerCapabilityReadiness) { r.RuntimeLifecycle = false }, "real runtime lifecycle adapter"},
+		{"stable mounts", func(r *providerCapabilityReadiness) { r.StableMounts = false }, "stable /inputs"},
+		{"exec acceptance", func(r *providerCapabilityReadiness) { r.ExecAcceptance = false }, "durable exec acceptance"},
+		{"exec executor", func(r *providerCapabilityReadiness) { r.ExecExecutor = false }, "exec executor"},
+		{"exec cancellation", func(r *providerCapabilityReadiness) { r.ExecCancellation = false }, "exec cancellation"},
+		{"exec result", func(r *providerCapabilityReadiness) { r.ExecResultRetention = false }, "exec result retention"},
+		{"exec reconciliation", func(r *providerCapabilityReadiness) { r.ExecReconciliation = false }, "exec reconciliation"},
+		{"usage", func(r *providerCapabilityReadiness) { r.UsageCollection = false }, "usage collection"},
+		{"terminal authority", func(r *providerCapabilityReadiness) { r.TerminalAuthority = false }, "terminal authority"},
+		{"terminal allocator", func(r *providerCapabilityReadiness) { r.TerminalAllocator = false }, "terminal allocator"},
+		{"opaque handoff", func(r *providerCapabilityReadiness) { r.OpaqueHandoff = false }, "opaque terminal handoff"},
+		{"terminal WebSocket", func(r *providerCapabilityReadiness) { r.TerminalWebSocket = false }, "terminal WebSocket"},
+		{"Gateway", func(r *providerCapabilityReadiness) { r.GatewayBoundary = false }, "caller-owned Gateway"},
+		{"artifact acceptance", func(r *providerCapabilityReadiness) { r.ArtifactAcceptance = false }, "artifact acceptance"},
+		{"output staging", func(r *providerCapabilityReadiness) { r.OutputStaging = false }, "real output staging"},
+		{"content checks", func(r *providerCapabilityReadiness) { r.ContentChecks = false }, "content checks"},
+		{"retained evidence", func(r *providerCapabilityReadiness) { r.RetainedEvidence = false }, "retained artifact/usage evidence"},
+		{"operation aggregation", func(r *providerCapabilityReadiness) { r.OperationAggregation = false }, "operation-family aggregation"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			readiness := allReady
+			test.clear(&readiness)
+			if _, err := newProviderCapabilitySource(capability, readiness); err == nil || !strings.Contains(err.Error(), test.needle) {
+				t.Fatalf("error = %v, want missing %q", err, test.needle)
+			}
+		})
+	}
+}
+
+func completeProviderCapabilityReadiness() providerCapabilityReadiness {
+	return providerCapabilityReadiness{
+		ProtectedAdmission: true, MutationGuard: true, LifecyclePersistence: true, RuntimeLifecycle: true, StableMounts: true,
+		ExecAcceptance: true, ExecExecutor: true, ExecCancellation: true, ExecResultRetention: true, ExecReconciliation: true, UsageCollection: true,
+		TerminalAuthority: true, TerminalAllocator: true, OpaqueHandoff: true, TerminalWebSocket: true, GatewayBoundary: true,
+		ArtifactAcceptance: true, OutputStaging: true, ContentChecks: true, RetainedEvidence: true, OperationAggregation: true,
 	}
 }
 

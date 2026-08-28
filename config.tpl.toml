@@ -46,6 +46,11 @@ port = 8443
 
 [server.provider.capability]
 provider_revision_id = ''
+# Explicitly requests the canonical coding/shell profile. Startup derives the
+# advertisement from the complete dependency graph and fails closed if any
+# required component is missing. Keep false until a complete Provider/Gateway
+# deployment is available.
+coding_shell_enabled = false
 
 [server.provider.capability.limits]
 max_cpu_millis = 0
@@ -114,21 +119,23 @@ controller_id = ''
 
 # P2.5e exec composition is separately opt-in and development-only. It requires
 # the Docker Provider lifecycle above and an independent single-controller file
-# ledger. Capability advertisement remains empty until P2.5h.
+# ledger. The canonical profile is advertised only when the complete P2.5h
+# readiness graph, including the caller-owned Gateway edge, is available.
 [server.provider.exec]
 enabled = false
 repository_file = 'data/provider-exec.json'
 
 # P2.5f6 terminal composition is independently opt-in and development-only.
 # It uses the Provider Docker lifecycle, private single-controller session and
-# reference files, and a guest-side broker. It does not expose a Gateway,
-# create caller authorization, or advertise a capability profile.
+# reference files, and a guest-side broker. It does not expose a Gateway or
+# create caller authorization. Its standalone composition cannot advertise the
+# canonical profile until the caller-owned Gateway edge is supplied.
 [server.provider.terminal]
 enabled = false
 session_repository_file = 'data/provider-terminal-sessions.json'
 reference_registry_file = 'data/provider-terminal-references.json'
-runtime_profile_id = 'coding-shell-v1'
-capability_profile_id = 'coding-shell-terminal-v1'
+runtime_profile_id = 'sandbox-runtime-coding-shell-v1'
+capability_profile_id = 'terminal-v1'
 broker_path = '/workspace/.sandbox-runtime/terminal-broker'
 shell_path = '/bin/sh'
 max_sessions_per_sandbox = 4

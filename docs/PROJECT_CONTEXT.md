@@ -129,15 +129,18 @@ multi-tenant, deployment, and production readiness.
 
 ## Current Snapshot
 
-This snapshot was audited on 2026-08-28 against the reviewed P2.5g worktree
-based on `33dc5d`. The default-disabled development composition now includes
-the artifact/usage vertical as well as the earlier exec and terminal slices.
-Focused and full local regression gates, the unchanged locked 38-case Suite,
-and a Docker-tagged artifact/usage restart vertical passed. P2.5g repository CI
-is still pending. The latest verified repository CI remains run `33134521467`
-at P2.5f7 evidence baseline `cefbc74`, where `provider-contract`, `test`, and
-`docker-integration` passed. These baselines identify reviewed evidence; they
-are not self-updating assertions about the checkout.
+This snapshot was audited on 2026-08-28 against `main@0e6e108` plus the current
+P2.5h working tree. The default-disabled development composition includes the
+artifact/usage vertical as well as the earlier exec and terminal slices. P2.5h
+adds explicit `coding_shell_enabled` configuration, canonical Contract IDs, and
+a startup dependency graph that derives an immutable advertisement only from a
+complete composition. Full local regression gates, the unchanged locked
+38-case Suite, and fixed-digest Docker integration pass. P2.5g repository CI
+and the current P2.5h implementation CI are not yet recorded. The latest
+verified repository CI remains run `33134521467` at P2.5f7 evidence baseline
+`cefbc74`, where `provider-contract`, `test`, and `docker-integration` passed.
+These baselines identify reviewed evidence; they are not self-updating
+assertions about the checkout.
 
 Contract identity:
 
@@ -158,7 +161,8 @@ Contract identity:
 | P2.5f5 | `gateway/composition` composes the existing Gateway only with caller-owned authorization, revocation, recording, and handshake-admission ports plus the Provider reference resolver and f4 adapters; missing or typed-nil dependencies fail closed. Its local gates and repository CI `33067526022` pass | Readiness-derived advertisement and independent caller gates remain open; f6 command composition remains deliberately Gateway-free |
 | P2.5f6 | Explicit default-disabled development terminal configuration now composes the Docker terminal runtime, durable session/reference files, recovery, idempotent opaque-handoff completion, protected Provider session injection, bounded cleanup, and production rejection. Local gates pass in `c4c7cbc` and `8a794c0`; repository CI `33134521467` passes at evidence baseline `cefbc74` | Retain its terminal boundary; P2.5g separately adds artifact/usage command composition, while readiness-derived advertisement and independent caller gates remain open |
 | P2.5f7 | A Docker-tagged `cmd` test composes the real f6 terminal root with test-supplied f5 Gateway policy, proves durable opaque handoff and same-shell reconnect after Provider process reconstruction, and is included in the CI Docker command. Local gates pass in `0e8b284`; repository CI `33134521467` passes at evidence baseline `cefbc74` | Retain the same-repository terminal evidence boundary; it is not an external caller or deployable Gateway |
-| P2.5g | The reviewed worktree based on `33dc5d` command-composes default-disabled artifact and usage development adapters. It adds a generation-bound `/outputs` reader, injected tenant/active-content/malware checks, private opaque staging, durable async artifact recovery, deterministic partial exec usage, and lifecycle/exec/artifact operation aggregation. Focused/full local and Docker-tagged restart gates pass | Repository CI is pending. Capability advertisement remains empty; publication, billing, external caller, aggregate, multi-controller, multi-tenant, deployment, and production gates remain open |
+| P2.5g | `main@0e6e108` command-composes default-disabled artifact and usage development adapters: generation-bound `/outputs` reader, tenant/active-content/malware checks, private opaque staging, durable async recovery, deterministic partial exec usage, and lifecycle/exec/artifact operation aggregation. Focused/full local and fixed-digest Docker-tagged restart gates pass | Repository CI remains pending. Retain development-only/single-controller boundaries; publication, billing, external caller, aggregate, multi-controller, multi-tenant, deployment, and production gates remain open |
+| P2.5h | The current working tree adds explicit canonical coding/shell opt-in and a deterministic readiness graph. It rejects explicit enablement when any admission, lifecycle, exec, usage, terminal data-plane, caller-owned Gateway, artifact/evidence, or aggregation node is absent; disabled startup remains empty; a complete synthetic graph projects the exact locked `sandbox.exec`/`sandbox.terminal` capabilities and `sandbox-runtime-coding-shell-v1` profile | The command root deliberately has no caller-owned WebSocket/Gateway composition, so no live nonempty advertisement is possible yet. Synthetic readiness projection is not a deployable profile or external-caller E2E; repository CI is still pending |
 | P3 | Local revision binding, shadow-validation, canary/rollback/drain, and metrics primitives passed component tests | P2 gate, external caller, real traffic parity, canary, rollback, and old-run drain E2E remain open |
 | P4 | Optional capability profiles have not started | Each browser/desktop/forwarding/snapshot/GPU/isolation profile needs independent Contract, security, and conformance gates |
 
@@ -207,9 +211,12 @@ make the current Provider a usable coding/shell implementation.
    checks, private opaque staging, durable artifact workers and recovery,
    deterministic partial wall-time/exec-count usage, and all-family operation
    aggregation. Its local Docker vertical proves staged, rejected, missing,
-   restart, and non-disclosure behavior only. Startup advertisement remains
-   empty, production mode rejects these development adapters, and P2.5h must
-   still derive the exact immutable profile from a complete dependency graph.
+   restart, and non-disclosure behavior only. P2.5h now adds the explicit
+   `coding_shell_enabled` flag and checks every required dependency before
+   deriving the exact immutable Contract snapshot. The command graph marks the
+   concrete terminal WebSocket and caller-owned Gateway boundary unavailable,
+   so an explicitly enabled profile fails startup rather than advertising a
+   partial runtime; the default-disabled path remains empty.
 2. No independently owned caller/platform E2E environment is runnable. The
    repository's 38-case runner maps to repository-local Go tests and CI has no
    external-platform job. The separately inspected platform candidate at
@@ -308,13 +315,13 @@ content scanners without shell interpolation; returns only opaque private
 staging references; persists async artifact outcomes and partial exec-derived
 usage across restart; and includes artifact operations in the family reader.
 Its focused, full local, and Docker-tagged gates pass, while repository CI
-remains pending. The next implementation slice is P2.5h:
+   remains pending. P2.5h is implemented in the current working tree:
 
-1. Add readiness-derived profile composition and enable capability
-   advertisement only when all required dependencies are present.
-2. Supply an independently owned mTLS/JWS caller and reproducible deployment,
-   run the locked Suite and coding/shell E2E, and only then evaluate P3 traffic
-   shadowing, canary, rollback, and drain.
+1. Obtain repository CI for P2.5g and P2.5h, preserving the distinction between
+   local component/projection evidence and CI evidence.
+2. Supply an independently owned mTLS/JWS caller and reproducible Provider plus
+   Gateway deployment, run the locked Suite and coding/shell E2E, and only then
+   evaluate P3 traffic shadowing, canary, rollback, and drain.
 
 The detailed case-by-case evidence and exact open claims remain in
 [`STATUS.md`](STATUS.md).

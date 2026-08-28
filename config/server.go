@@ -153,10 +153,25 @@ type ProviderTransportConfig struct {
 // configuration. Compatibility profiles are metadata only and do not
 // advertise or authorize a runtime capability.
 type ProviderCapabilityConfig struct {
+	// CodingShellEnabled explicitly requests the canonical coding/shell
+	// capability profile. Advertisement is still gated by the command
+	// composition readiness graph; this flag must never be treated as proof
+	// that the dependency graph is complete.
+	CodingShellEnabled      bool                           `mapstructure:"coding_shell_enabled"`
 	ProviderRevisionID      string                         `mapstructure:"provider_revision_id"`
 	Limits                  ProviderLimitsConfig           `mapstructure:"limits"`
 	SnapshotRestoreProfiles []ProviderCompatibilityProfile `mapstructure:"snapshot_restore_profiles"`
 }
+
+// Provider coding/shell identifiers are locked by the repository-owned
+// Provider v1 Contract. They are not operator-selectable advertisement IDs.
+const (
+	ProviderCodingShellRuntimeProfileID  = "sandbox-runtime-coding-shell-v1"
+	ProviderCodingShellRuntimeClassName  = "sandbox-runtime-coding-shell"
+	ProviderCodingShellExecProfileID     = "exec-v1"
+	ProviderCodingShellTerminalProfileID = "terminal-v1"
+	ProviderCodingShellCapabilityVersion = "1.0.0"
+)
 
 // ProviderProtectedAdmissionConfig controls the opt-in protected-operation
 // boundary. It is independent from mTLS-only capability discovery so an
@@ -235,7 +250,7 @@ func (c *ServerConfig) load(v *viper.Viper) error {
 // configuration is inert and may retain template placeholders.
 func (c *ProviderConfig) Validate() error {
 	if !c.Transport.Enabled {
-		if c.Lifecycle.Enabled || c.Exec.Enabled || c.Terminal.Enabled || c.Artifact.Enabled || c.Usage.Enabled {
+		if c.Capability.CodingShellEnabled || c.Lifecycle.Enabled || c.Exec.Enabled || c.Terminal.Enabled || c.Artifact.Enabled || c.Usage.Enabled {
 			return errors.New("lifecycle, exec, terminal, artifact, and usage require Provider transport to be enabled")
 		}
 		return nil
@@ -294,6 +309,14 @@ func (c *ProviderConfig) Validate() error {
 	if c.Usage.Enabled {
 		if !c.ProtectedAdmission.Enabled || !c.Exec.Enabled {
 			return errors.New("usage requires protected admission and the composed exec vertical")
+		}
+	}
+	if c.Capability.CodingShellEnabled {
+		if !c.Exec.Enabled || !c.Terminal.Enabled || !c.Artifact.Enabled || !c.Usage.Enabled {
+			return errors.New("coding/shell profile requires exec, terminal, artifact, and usage to be enabled")
+		}
+		if c.Terminal.RuntimeProfileID != ProviderCodingShellRuntimeProfileID || c.Terminal.CapabilityProfileID != ProviderCodingShellTerminalProfileID {
+			return errors.New("coding/shell profile requires the locked runtime and terminal capability profile IDs")
 		}
 	}
 	files := make([]string, 0, 7)
@@ -659,7 +682,7 @@ func defaultServerConfig() *ServerConfig {
 			Usage: ProviderUsageConfig{RepositoryFile: "data/provider-usage.json"},
 			Terminal: ProviderTerminalConfig{
 				SessionRepositoryFile: "data/provider-terminal-sessions.json", ReferenceRegistryFile: "data/provider-terminal-references.json",
-				RuntimeProfileID: "coding-shell-v1", CapabilityProfileID: "coding-shell-terminal-v1",
+				RuntimeProfileID: ProviderCodingShellRuntimeProfileID, CapabilityProfileID: ProviderCodingShellTerminalProfileID,
 				BrokerPath: "/workspace/.sandbox-runtime/terminal-broker", ShellPath: "/bin/sh",
 				MaxSessionsPerSandbox: 4, MaxSessionsPerController: 64, ShutdownCleanupSeconds: 10,
 			},
