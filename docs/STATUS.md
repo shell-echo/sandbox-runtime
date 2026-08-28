@@ -13,7 +13,7 @@ production readiness.
 | Item | Evidence | Status |
 | --- | --- | --- |
 | Latest local implementation evidence | P2.5h implementation `2c55173` based on `main@0e6e108` | Adds explicit `coding_shell_enabled` configuration, canonical Contract profile IDs, and a readiness-derived immutable capability source. Missing dependency nodes fail closed when the profile is explicitly enabled; the default-disabled path remains an empty advertisement. Full race/shuffle, vet, module verification, the locked 38-case Suite, fixed-digest Docker integration, and diff checks passed. Because the command root does not own a caller-authorized Gateway/WebSocket edge, no live command configuration can advertise the profile yet. This is same-repository single-controller component/projection evidence only; it is not external-caller, aggregate, multi-controller, multi-tenant, deployment, billing, publication, or production evidence |
-| Latest repository CI evidence | P2.5f7 implementation/test `0e8b284`; evidence baseline `cefbc74` | Repository CI `33134521467` passed `provider-contract`, `test`, and `docker-integration` for evidence baseline `cefbc74`, which contains the P2.5f6 command composition and P2.5f7 vertical test. This is repository CI evidence only, not external-caller or production evidence. Verify the live checkout independently; these are intentionally not self-updating `HEAD` claims |
+| Latest repository CI evidence | P2.5h documentation baseline `0ec712c` | Repository CI `33159099578` passed `provider-contract`, `test`, and `docker-integration` for `0ec712c`. The preceding P2.5g implementation `0e6e108` also passed all three jobs in run `33157119149`. These are repository CI results only, not external-caller or production evidence; both runs include GitHub's Node.js 20 deprecation warnings |
 | Review | PR [#17](https://github.com/shell-echo/sandbox-runtime/pull/17) merged as `43ff3d7`; PR [#18](https://github.com/shell-echo/sandbox-runtime/pull/18) merged as `4774c3a`; PR [#19](https://github.com/shell-echo/sandbox-runtime/pull/19) merged as `e2755f5`; PR [#21](https://github.com/shell-echo/sandbox-runtime/pull/21) merged as `c5a4a65`; PR [#22](https://github.com/shell-echo/sandbox-runtime/pull/22) merged as `44f39ec`; PR [#23](https://github.com/shell-echo/sandbox-runtime/pull/23) merged as `ac72eab`; PR [#24](https://github.com/shell-echo/sandbox-runtime/pull/24) merged as `2e3dde6`; PR [#25](https://github.com/shell-echo/sandbox-runtime/pull/25) merged as `88506d1`; PR [#26](https://github.com/shell-echo/sandbox-runtime/pull/26) merged as `4ccb107`; PR [#27](https://github.com/shell-echo/sandbox-runtime/pull/27) merged as `28076a7`; PR [#28](https://github.com/shell-echo/sandbox-runtime/pull/28) merged as `2b25f76`; PR [#29](https://github.com/shell-echo/sandbox-runtime/pull/29) merged as `83965a2`; PR [#30](https://github.com/shell-echo/sandbox-runtime/pull/30) merged as `9d00212`; PR [#31](https://github.com/shell-echo/sandbox-runtime/pull/31) merged as `67b64a9`; PR [#32](https://github.com/shell-echo/sandbox-runtime/pull/32) merged as `5883da9`; PR [#33](https://github.com/shell-echo/sandbox-runtime/pull/33) merged as `ba39053`; PR [#35](https://github.com/shell-echo/sandbox-runtime/pull/35) merged as `c467cd4`; PR [#36](https://github.com/shell-echo/sandbox-runtime/pull/36) merged as `3a980bd`; PR [#37](https://github.com/shell-echo/sandbox-runtime/pull/37) merged as `f9cfbc3`; PR [#38](https://github.com/shell-echo/sandbox-runtime/pull/38) merged as `7ebcc8f`; PR [#39](https://github.com/shell-echo/sandbox-runtime/pull/39) merged as `17072e6`; PR [#40](https://github.com/shell-echo/sandbox-runtime/pull/40) merged as `65a9ba3`; PR [#41](https://github.com/shell-echo/sandbox-runtime/pull/41) merged as `ac555619`; PR [#42](https://github.com/shell-echo/sandbox-runtime/pull/42) merged as `97fb429` | PR #42 CI `32465114377` and post-merge CI `32465443385` provider-contract, test, and docker-integration passed |
 | P2.2a release evidence | `2fa2e72` on PR #33, merged as `ba39053` | Local race/shuffle, vet, lock, Suite, PR CI, and post-merge CI passed |
 | P2.2b release evidence | `e26bf2b` on PR #35, merged as `c467cd4` | Local race/shuffle, vet, lock, 19-case Suite, PR CI `32456100570`, and post-merge CI `32456279722` passed; no HTTP/dispatch composition |
@@ -118,9 +118,9 @@ It does not clone, mount, or read an external source repository.
 | P2.5f5 | Gateway composition | Local composition gate and CI `33067526022` passed in implementation `fdfc771` and evidence baseline `754c57d` | Retain caller-owned policy and no-public-Gateway/no-external-caller boundary; f6 command composition does not weaken that boundary |
 | P2.5f6 | Development terminal command configuration and process lifecycle | Local evidence passes in `c4c7cbc` and `8a794c0`; evidence baseline `cefbc74` passed repository CI `33134521467` | Retain default-disabled/single-controller/no-public-Gateway boundary; f7 and P2.5g evidence are recorded separately, while readiness-derived advertisement and independent caller E2E remain open |
 | P2.5f7 | Terminal/Gateway vertical evidence gate | Local single-controller Docker/race/restart/reconnect gate passes in `0e8b284`; evidence baseline `cefbc74` passed repository CI `33134521467` | Retain same-repository test boundary and no-public-Gateway/no-external-caller claims; P2.5g artifact/usage evidence is recorded separately |
-| P2.5g | Artifact and usage vertical | Local gate passes in implementation `0e6e108`: default-disabled development composition, durable artifact/usage repositories, async recovery/shutdown, real Docker output confinement and private staging, partial exec-derived usage, operation aggregation, and restart evidence | Repository CI for `0e6e108` remains pending. Retain development-only/single-controller boundaries; publication, billing, external caller, aggregate, reliability, tenancy, deployment, and production claims remain open |
-| P2.5h | Readiness-derived composition and exact advertisement | Local component/projection gate passes in the current working tree: explicit opt-in config, canonical IDs, complete dependency graph validation, empty-disabled behavior, and immutable exact Contract snapshot generation. The command graph still lacks the caller-owned WebSocket/Gateway boundary, so explicit startup remains fail-closed | Obtain repository CI for the implementation commit, then supply an independently owned caller and reproducible P2.5i environment. Do not treat the synthetic complete-readiness projection as a running deployment or external caller evidence |
-| P2 | Coding/remote-shell profile | In progress: P2.1-P2.4a3 have bounded component/Contract evidence, P2.5a-e and P2.5f1-f7 pass local and repository CI gates, P2.5f0 has design evidence, P2.5g local evidence passes with repository CI pending, and P2.5h readiness/config/projection evidence passes while command advertisement remains fail-closed without Gateway/WebSocket composition. No separately supplied caller is runnable | Complete P2.5g/P2.5h repository CI, then supply an independently owned caller and reproducible P2.5i environment. Aggregate conformance, multi-controller reliability, multi-tenant security, deployment, and production gates remain open |
+| P2.5g | Artifact and usage vertical | Local gate passes in implementation `0e6e108`: default-disabled development composition, durable artifact/usage repositories, async recovery/shutdown, real Docker output confinement and private staging, partial exec-derived usage, operation aggregation, and restart evidence. Repository CI `33157119149` passed all three jobs | Retain development-only/single-controller boundaries; publication, billing, external caller, aggregate, reliability, tenancy, deployment, and production claims remain open |
+| P2.5h | Readiness-derived composition and exact advertisement | Local component/projection gate passes in implementation `2c55173`: explicit opt-in config, canonical IDs, complete dependency graph validation, empty-disabled behavior, and immutable exact Contract snapshot generation. Repository CI `33159099578` passed all three jobs. The command graph still lacks the caller-owned WebSocket/Gateway boundary, so explicit startup remains fail-closed | Supply an independently owned caller and reproducible P2.5i environment. Do not treat the synthetic complete-readiness projection or repository CI as a running deployment or external caller evidence |
+| P2 | Coding/remote-shell profile | In progress: P2.1-P2.4a3 have bounded component/Contract evidence, P2.5a-e and P2.5f1-f7 pass local and repository CI gates, P2.5f0 has design evidence, and P2.5g/P2.5h now pass their local and repository CI gates. The command advertisement remains fail-closed without Gateway/WebSocket composition, and no separately supplied caller is runnable | Supply an independently owned caller and reproducible P2.5i environment. Aggregate conformance, multi-controller reliability, multi-tenant security, deployment, and production gates remain open |
 | P3 | Migration readiness and external-caller integration | Blocked after local binding/shadow/metrics component evidence (`4212e88`): P2 is not vertically complete and no runnable external caller/platform E2E environment is available | Complete P2, then supply the caller, mTLS/JWS material, Provider endpoint/configuration, and scenario runner; prove locked-Suite parity, shadow parity, canary/rollback/drain, and unchanged platform contracts |
 | P4 | Optional capability profiles | Not started | Add browser, desktop, port forwarding, snapshots/restore, GPU, nested-container, and stronger-isolation profiles only through independent Contract, security, and conformance gates |
 | Production readiness | Independent evidence tier, not a shortcut from P4 | Not established | Deployment, multi-controller reliability, multi-tenant security, operations, and production gates |
@@ -329,7 +329,8 @@ Passed locally (authorized test environment):
   Suite, diff checks, and a Docker-tagged command-root vertical covering
   staged/rejected/missing evidence, operation aggregation, opaque-reference
   non-disclosure, and artifact/usage restart recovery. This reviewed worktree
-  is based on `33dc5d`; repository CI is pending. It proves no external caller,
+  is based on implementation `0e6e108`; repository CI `33157119149` passes all
+  three jobs. It proves no external caller,
   aggregate conformance, multi-controller reliability, multi-tenant security,
   deployment, publication, billing, or production readiness.
 - P3 local component verification covers immutable ProviderRevision binding,
@@ -344,9 +345,11 @@ Pending:
   the default-disabled, single-controller terminal session/reference/runtime
   slice after recovery, but it does not expose a public Gateway or invent
   caller-owned authorization, revocation, or recording. It also composes the
-  default-disabled P2.5g artifact/usage development slice, whose local gate
-  passes while repository CI remains pending. Startup still advertises no
-  capability or runtime profile. P2.5h remains open;
+  default-disabled P2.5g artifact/usage development slice, whose local gate and
+  repository CI run `33157119149` pass. Startup still advertises no capability
+  or runtime profile because the caller-owned Gateway/WebSocket boundary is not
+  command-composed. P2.5h's local and repository CI run `33159099578` pass for
+  bounded readiness/projection evidence;
 - P2/P3 external-caller Gateway E2E and migration evidence. The 2026-08-26
   environment audit found no runnable independently supplied caller, platform
   composition, or E2E target; local Suite mappings and Gateway tests remain
@@ -492,13 +495,15 @@ P3 shadow, canary, rollback, old-run drain, metric-parity, and unchanged-
 platform-contract evidence. Multi-controller, multi-tenant, deployment, and
 production readiness remain separate gates after those E2E scenarios pass.
 
-The 2026-08-28 P2.5g review was based on `main@33dc5d` plus the documented
-worktree implementation. Its artifact/usage local and Docker gates pass, while
-repository CI remains pending. The subsequent P2.5h implementation `2c55173`
-is based on `main@0e6e108` and adds explicit canonical-profile opt-in, dependency-absence
-validation, and readiness-derived immutable advertisement. Full local Go,
-Contract/Suite, diff, and fixed-digest Docker gates pass without changing
-Contract revision `22a148e2898477790512d5bb742605654ff00ebf` or its 38 cases.
+The 2026-08-28 P2.5g review was based on implementation `0e6e108` from
+`main@0e6e108`; its artifact/usage local and Docker gates pass, and repository
+CI run `33157119149` passes all three jobs. The subsequent P2.5h implementation
+`2c55173` is based on `main@0e6e108` and adds explicit canonical-profile opt-in,
+dependency-absence validation, and readiness-derived immutable advertisement.
+Full local Go, Contract/Suite, diff, and fixed-digest Docker gates pass without
+changing Contract revision `22a148e2898477790512d5bb742605654ff00ebf` or its
+38 cases. Repository CI run `33159099578` passes all three jobs for
+documentation baseline `0ec712c`.
 The command root intentionally marks the concrete WebSocket and caller-owned
 Gateway boundary unavailable, so explicit profile startup fails closed and no
 nonempty live advertisement is claimed. P2.5i remains blocked on the
