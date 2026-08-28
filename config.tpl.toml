@@ -135,6 +135,22 @@ max_sessions_per_sandbox = 4
 max_sessions_per_controller = 64
 shutdown_cleanup_seconds = 10
 
+# P2.5g artifact staging is independently opt-in and development-only. Both
+# scanner fields are direct argv arrays. Artifact bytes are sent through stdin;
+# no host path or public artifact URL is passed to the commands.
+[server.provider.artifact]
+enabled = false
+repository_file = 'data/provider-artifacts.json'
+staging_root = 'data/provider-artifact-staging'
+active_content_command = []
+malware_command = []
+
+# Usage evidence is derived only from real retained exec results and remains
+# partial provider-local evidence. It is not accounting or billing authority.
+[server.provider.usage]
+enabled = false
+repository_file = 'data/provider-usage.json'
+
 [runtime]
 driver = 'fake' # fake | docker
 

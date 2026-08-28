@@ -129,14 +129,15 @@ multi-tenant, deployment, and production readiness.
 
 ## Current Snapshot
 
-This snapshot was audited on 2026-08-28 against P2.5f7 terminal vertical test
-`0e8b284` and evidence baseline `cefbc74`. The explicit, default-disabled
-terminal command composition and its Docker-tagged local
-Gateway/restart/reconnect evidence passed focused and full local regression
-gates, including the locked 38-case Suite, without changing the Contract.
-Repository CI run `33134521467` then passed `provider-contract`, `test`, and
-`docker-integration` at `cefbc74`. These baselines identify reviewed evidence;
-they are not self-updating assertions about the checkout.
+This snapshot was audited on 2026-08-28 against the reviewed P2.5g worktree
+based on `33dc5d`. The default-disabled development composition now includes
+the artifact/usage vertical as well as the earlier exec and terminal slices.
+Focused and full local regression gates, the unchanged locked 38-case Suite,
+and a Docker-tagged artifact/usage restart vertical passed. P2.5g repository CI
+is still pending. The latest verified repository CI remains run `33134521467`
+at P2.5f7 evidence baseline `cefbc74`, where `provider-contract`, `test`, and
+`docker-integration` passed. These baselines identify reviewed evidence; they
+are not self-updating assertions about the checkout.
 
 Contract identity:
 
@@ -151,12 +152,13 @@ Contract identity:
 | P0 | Passed: repository-owned MIT Contract migration and lock | Retain lock and projection regression |
 | P1.1 | Passed for DTO, mTLS discovery, JWS/digest/replay/fencing admission | Does not prove runtime behavior or production identity infrastructure |
 | P1.2 | Passed for the bounded Contract-authorized lifecycle subset and development composition | Provider lifecycle has fake and Docker development adapters; reserved lifecycle families and production gates remain open |
-| P2.1-P2.4a3 | Bounded exec, result, terminal, Gateway, artifact, usage, admission, application, persistence, and transport components have local Contract/CI evidence | P2 is not vertically composed into a real coding/shell Provider and no independent caller E2E environment exists |
+| P2.1-P2.4a3 | Bounded exec, result, terminal, Gateway, artifact, usage, admission, application, persistence, and transport components have local Contract/CI evidence | Retain these component and Contract boundaries; later vertical evidence is recorded separately and no independent caller E2E environment exists |
 | P2.5a-e, P2.5f0-f3 | Plan, coding/shell Contract/profile, mutation preflight, Docker runtime foundation, and the exec vertical pass their local and CI gates; the terminal/Gateway audit, reconnectable terminal runtime, durable session coordination/migration, and opaque reference registry/resolver pass their current local and CI gates | Retain their single-controller component boundary |
-| P2.5f4 | Bounded WebSocket and terminal-byte-stream adapters pass local component and repository CI gates in implementation `14f14cc` and evidence baseline `1d9da67`; the WebSocket edge requires caller-owned handshake admission and has explicit frame/origin controls | Its downstream f5-f7 gates are recorded separately; artifact/usage, readiness-derived advertisement, and independent caller gates remain open |
-| P2.5f5 | `gateway/composition` composes the existing Gateway only with caller-owned authorization, revocation, recording, and handshake-admission ports plus the Provider reference resolver and f4 adapters; missing or typed-nil dependencies fail closed. Its local gates and repository CI `33067526022` pass | Artifact/usage, readiness-derived advertisement, and independent caller gates remain open; f6 command composition remains deliberately Gateway-free |
-| P2.5f6 | Explicit default-disabled development terminal configuration now composes the Docker terminal runtime, durable session/reference files, recovery, idempotent opaque-handoff completion, protected Provider session injection, bounded cleanup, and production rejection. Local gates pass in `c4c7cbc` and `8a794c0`; repository CI `33134521467` passes at evidence baseline `cefbc74` | Artifact/usage, readiness-derived advertisement, and independent caller gates remain open; f7 separately closes only the terminal vertical component gate, and no public Gateway listener or caller policy is configured |
-| P2.5f7 | A Docker-tagged `cmd` test composes the real f6 terminal root with test-supplied f5 Gateway policy, proves durable opaque handoff and same-shell reconnect after Provider process reconstruction, and is included in the CI Docker command. Local gates pass in `0e8b284`; repository CI `33134521467` passes at evidence baseline `cefbc74` | Artifact/usage, readiness-derived advertisement, and independent caller gates remain open; same-repository test policy is not an external caller or deployable Gateway |
+| P2.5f4 | Bounded WebSocket and terminal-byte-stream adapters pass local component and repository CI gates in implementation `14f14cc` and evidence baseline `1d9da67`; the WebSocket edge requires caller-owned handshake admission and has explicit frame/origin controls | Its downstream f5-f7 gates are recorded separately; readiness-derived advertisement and independent caller gates remain open |
+| P2.5f5 | `gateway/composition` composes the existing Gateway only with caller-owned authorization, revocation, recording, and handshake-admission ports plus the Provider reference resolver and f4 adapters; missing or typed-nil dependencies fail closed. Its local gates and repository CI `33067526022` pass | Readiness-derived advertisement and independent caller gates remain open; f6 command composition remains deliberately Gateway-free |
+| P2.5f6 | Explicit default-disabled development terminal configuration now composes the Docker terminal runtime, durable session/reference files, recovery, idempotent opaque-handoff completion, protected Provider session injection, bounded cleanup, and production rejection. Local gates pass in `c4c7cbc` and `8a794c0`; repository CI `33134521467` passes at evidence baseline `cefbc74` | Retain its terminal boundary; P2.5g separately adds artifact/usage command composition, while readiness-derived advertisement and independent caller gates remain open |
+| P2.5f7 | A Docker-tagged `cmd` test composes the real f6 terminal root with test-supplied f5 Gateway policy, proves durable opaque handoff and same-shell reconnect after Provider process reconstruction, and is included in the CI Docker command. Local gates pass in `0e8b284`; repository CI `33134521467` passes at evidence baseline `cefbc74` | Retain the same-repository terminal evidence boundary; it is not an external caller or deployable Gateway |
+| P2.5g | The reviewed worktree based on `33dc5d` command-composes default-disabled artifact and usage development adapters. It adds a generation-bound `/outputs` reader, injected tenant/active-content/malware checks, private opaque staging, durable async artifact recovery, deterministic partial exec usage, and lifecycle/exec/artifact operation aggregation. Focused/full local and Docker-tagged restart gates pass | Repository CI is pending. Capability advertisement remains empty; publication, billing, external caller, aggregate, multi-controller, multi-tenant, deployment, and production gates remain open |
 | P3 | Local revision binding, shadow-validation, canary/rollback/drain, and metrics primitives passed component tests | P2 gate, external caller, real traffic parity, canary, rollback, and old-run drain E2E remain open |
 | P4 | Optional capability profiles have not started | Each browser/desktop/forwarding/snapshot/GPU/isolation profile needs independent Contract, security, and conformance gates |
 
@@ -175,8 +177,8 @@ remains distinct from independent caller and production evidence.
 P2 has two independent blockers. Supplying an external caller alone would not
 make the current Provider a usable coding/shell implementation.
 
-1. Provider vertical composition is incomplete. P2.5e locally composes the
-   protected exec/cancel/result/operation routes over durable acceptance, a
+1. Provider profile readiness and advertisement remain incomplete. P2.5e
+   locally composes the protected exec/cancel/result/operation routes over durable acceptance, a
    separate file ledger, and the Provider Docker executor/canceler, but it is a
    development-only single-controller slice. P2.5f1 adds a backend-neutral
    terminal runtime, an in-sandbox PTY broker, and a Docker adapter that can
@@ -199,9 +201,15 @@ make the current Provider a usable coding/shell implementation.
    remains empty. P2.5f7 now proves the local single-controller path through a
    test-supplied caller policy and WebSocket Gateway, including same-shell
    reconnect after reconstruction; this is same-repository evidence and does
-   not make the Gateway deployable or external. Artifact and usage applications
-   remain absent from command composition. No artifact staging or usage
-   collection is yet composed.
+   not make the Gateway deployable or external. P2.5g now command-composes
+   default-disabled development artifact and usage applications: a Docker
+   generation-bound `/outputs` reader, injected tenant/active-content/malware
+   checks, private opaque staging, durable artifact workers and recovery,
+   deterministic partial wall-time/exec-count usage, and all-family operation
+   aggregation. Its local Docker vertical proves staged, rejected, missing,
+   restart, and non-disclosure behavior only. Startup advertisement remains
+   empty, production mode rejects these development adapters, and P2.5h must
+   still derive the exact immutable profile from a complete dependency graph.
 2. No independently owned caller/platform E2E environment is runnable. The
    repository's 38-case runner maps to repository-local Go tests and CI has no
    external-platform job. The separately inspected platform candidate at
@@ -292,13 +300,19 @@ production rejection. P2.5f7 test `0e8b284` then closes the local
 single-controller terminal vertical gate with a real Docker session, durable
 handoff, test-supplied Gateway policy, and same-shell reconnect after process
 reconstruction. Their full local gates pass, and evidence baseline `cefbc74`
-passed repository CI `33134521467`. The next implementation slice is P2.5g:
+passed repository CI `33134521467`. P2.5g in the reviewed worktree based on
+`33dc5d` then adds the default-disabled artifact/usage command vertical. It
+binds staging to lifecycle readiness, tenant, generation, lease, and fencing;
+reads only regular files beneath the owned Docker `/outputs`; runs injected
+content scanners without shell interpolation; returns only opaque private
+staging references; persists async artifact outcomes and partial exec-derived
+usage across restart; and includes artifact operations in the family reader.
+Its focused, full local, and Docker-tagged gates pass, while repository CI
+remains pending. The next implementation slice is P2.5h:
 
-1. Compose a real `/outputs` artifact reader/stager, injected security checks,
-   retained evidence, usage collection, and all-family operation aggregation.
-2. Add readiness-derived profile composition and enable capability
+1. Add readiness-derived profile composition and enable capability
    advertisement only when all required dependencies are present.
-3. Supply an independently owned mTLS/JWS caller and reproducible deployment,
+2. Supply an independently owned mTLS/JWS caller and reproducible deployment,
    run the locked Suite and coding/shell E2E, and only then evaluate P3 traffic
    shadowing, canary, rollback, and drain.
 

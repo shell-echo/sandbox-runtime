@@ -16,3 +16,11 @@ type Collector interface {
 type EvidenceReader interface {
 	GetEvidence(context.Context, string, time.Time) (Evidence, error)
 }
+
+// Store retains immutable provider-local usage evidence. It is not an
+// accounting or billing ledger.
+type Store interface {
+	EvidenceReader
+	Put(context.Context, Evidence) error
+	Close() error
+}

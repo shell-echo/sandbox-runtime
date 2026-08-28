@@ -20,6 +20,7 @@ import (
 	"github.com/shell-echo/sandbox-runtime/provider"
 	"github.com/shell-echo/sandbox-runtime/provider/admission"
 	admissionfile "github.com/shell-echo/sandbox-runtime/provider/admission/file"
+	artifactfile "github.com/shell-echo/sandbox-runtime/provider/artifact/repository/file"
 	execfile "github.com/shell-echo/sandbox-runtime/provider/exec/repository/file"
 	lifecycleapplication "github.com/shell-echo/sandbox-runtime/provider/lifecycle/application"
 	lifecycledocker "github.com/shell-echo/sandbox-runtime/provider/lifecycle/driver/docker"
@@ -29,6 +30,7 @@ import (
 	sessionreferencememory "github.com/shell-echo/sandbox-runtime/provider/session/reference/repository/memory"
 	sessionfile "github.com/shell-echo/sandbox-runtime/provider/session/repository/file"
 	providerterminal "github.com/shell-echo/sandbox-runtime/provider/terminal"
+	usagefile "github.com/shell-echo/sandbox-runtime/provider/usage/repository/file"
 )
 
 // TestServeCmdRegistered confirms the serve subcommand is wired onto the root
@@ -198,7 +200,7 @@ func TestNewProviderLifecycleApplicationUsesIndependentComposition(t *testing.T)
 }
 
 func TestNewProviderExecApplicationRequiresDependenciesAndReleasesRepository(t *testing.T) {
-	disabled, closeDisabled, err := newProviderExecApplication(context.Background(), config.ProviderExecConfig{}, nil, nil)
+	disabled, closeDisabled, err := newProviderExecApplication(context.Background(), config.ProviderExecConfig{}, nil, nil, nil)
 	if err != nil || disabled != nil || closeDisabled == nil {
 		t.Fatalf("disabled exec composition = %T, %t, %v", disabled, closeDisabled != nil, err)
 	}
@@ -207,12 +209,12 @@ func TestNewProviderExecApplicationRequiresDependenciesAndReleasesRepository(t *
 	}
 	path := filepath.Join(t.TempDir(), "provider-exec.json")
 	enabled := config.ProviderExecConfig{Enabled: true, RepositoryFile: path}
-	if application, closeApplication, err := newProviderExecApplication(context.Background(), enabled, nil, nil); err == nil || application != nil {
+	if application, closeApplication, err := newProviderExecApplication(context.Background(), enabled, nil, nil, nil); err == nil || application != nil {
 		t.Fatalf("missing dependencies = %T, %v", application, err)
 	} else if closeErr := closeApplication(); closeErr != nil {
 		t.Fatalf("close missing-dependency composition: %v", closeErr)
 	}
-	application, closeApplication, err := newProviderExecApplication(context.Background(), enabled, &lifecycleapplication.Application{}, &lifecycledocker.Driver{})
+	application, closeApplication, err := newProviderExecApplication(context.Background(), enabled, &lifecycleapplication.Application{}, &lifecycledocker.Driver{}, nil)
 	if err != nil || application == nil || closeApplication == nil {
 		t.Fatalf("exec composition = %T, %t, %v", application, closeApplication != nil, err)
 	}
@@ -225,6 +227,86 @@ func TestNewProviderExecApplicationRequiresDependenciesAndReleasesRepository(t *
 	reopened, err := execfile.NewRepository(path)
 	if err != nil {
 		t.Fatalf("reopen released exec repository: %v", err)
+	}
+	if err := reopened.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestNewProviderUsageCompositionRequiresExecAndReleasesRepository(t *testing.T) {
+	store, collector, closeDisabled, err := newProviderUsageCollector(config.ProviderUsageConfig{})
+	if err != nil || store != nil || collector != nil || closeDisabled == nil {
+		t.Fatalf("disabled usage composition = %T, %T, %t, %v", store, collector, closeDisabled != nil, err)
+	}
+	if err := closeDisabled(); err != nil {
+		t.Fatal(err)
+	}
+
+	path := filepath.Join(t.TempDir(), "provider-usage.json")
+	enabled := config.ProviderUsageConfig{Enabled: true, RepositoryFile: path}
+	store, collector, closeUsage, err := newProviderUsageCollector(enabled)
+	if err != nil || store == nil || collector == nil || closeUsage == nil {
+		t.Fatalf("usage collector composition = %T, %T, %t, %v", store, collector, closeUsage != nil, err)
+	}
+	if reader, err := newProviderUsageReader(enabled, store, collector, nil); err == nil || reader != nil {
+		t.Fatalf("usage reader without exec = %T, %v", reader, err)
+	}
+	if _, err := usagefile.NewRepository(path, systemAdmissionClock{}); err == nil {
+		t.Fatal("usage composition did not retain the single-controller repository lock")
+	}
+	if err := closeUsage(); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := usagefile.NewRepository(path, systemAdmissionClock{})
+	if err != nil {
+		t.Fatalf("reopen released usage repository: %v", err)
+	}
+	if err := reopened.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestNewProviderArtifactApplicationRequiresDependenciesAndReleasesRepository(t *testing.T) {
+	disabled, closeDisabled, err := newProviderArtifactApplication(context.Background(), config.ProviderArtifactConfig{}, nil, nil)
+	if err != nil || disabled != nil || closeDisabled == nil {
+		t.Fatalf("disabled artifact composition = %T, %t, %v", disabled, closeDisabled != nil, err)
+	}
+	if err := closeDisabled(); err != nil {
+		t.Fatal(err)
+	}
+
+	directory := t.TempDir()
+	enabled := config.ProviderArtifactConfig{
+		Enabled: true, RepositoryFile: filepath.Join(directory, "provider-artifacts.json"), StagingRoot: filepath.Join(directory, "staging"),
+		ActiveContentCommand: []string{"true"}, MalwareCommand: []string{"true"},
+	}
+	if application, closeApplication, err := newProviderArtifactApplication(context.Background(), enabled, nil, nil); err == nil || application != nil {
+		t.Fatalf("artifact application without runtime = %T, %v", application, err)
+	} else if closeErr := closeApplication(); closeErr != nil {
+		t.Fatalf("close missing-dependency composition: %v", closeErr)
+	}
+
+	missingScanner := enabled
+	missingScanner.ActiveContentCommand = []string{filepath.Join(directory, "missing-scanner")}
+	if application, closeApplication, err := newProviderArtifactApplication(context.Background(), missingScanner, &lifecycleapplication.Application{}, &lifecycledocker.Driver{}); err == nil || application != nil {
+		t.Fatalf("artifact application with missing scanner = %T, %v", application, err)
+	} else if closeErr := closeApplication(); closeErr != nil {
+		t.Fatalf("close failed scanner composition: %v", closeErr)
+	}
+
+	application, closeApplication, err := newProviderArtifactApplication(context.Background(), enabled, &lifecycleapplication.Application{}, &lifecycledocker.Driver{})
+	if err != nil || application == nil || closeApplication == nil {
+		t.Fatalf("artifact application composition = %T, %t, %v", application, closeApplication != nil, err)
+	}
+	if _, err := artifactfile.NewRepository(enabled.RepositoryFile); err == nil {
+		t.Fatal("artifact composition did not retain the single-controller repository lock")
+	}
+	if err := closeApplication(); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := artifactfile.NewRepository(enabled.RepositoryFile)
+	if err != nil {
+		t.Fatalf("reopen released artifact repository: %v", err)
 	}
 	if err := reopened.Close(); err != nil {
 		t.Fatal(err)

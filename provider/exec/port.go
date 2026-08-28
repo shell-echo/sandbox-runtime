@@ -32,3 +32,9 @@ type Canceler interface {
 type ResultCleaner interface {
 	CleanupResult(context.Context, Request) error
 }
+
+// ResultObserver receives already-durable terminal result evidence. It may
+// derive additional provider-local evidence, but it cannot alter exec truth.
+type ResultObserver interface {
+	ObserveResult(context.Context, Result) error
+}

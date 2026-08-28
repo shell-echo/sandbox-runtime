@@ -71,9 +71,24 @@ func TestArtifactOperationRejectsCancelledAndMismatchedEvidence(t *testing.T) {
 	}
 }
 
+func TestRejectedEvidenceRetainsActualDigestMediaAndSize(t *testing.T) {
+	now := time.Date(2026, 8, 25, 12, 0, 0, 0, time.UTC)
+	request := validOperationRequest(now)
+	accepted, _ := NewOperation(request, now)
+	running, _ := Transition(accepted, OperationRunning, now.Add(time.Second), "", nil)
+	evidence := validOperationEvidence(request, now.Add(2*time.Second), StatusRejected)
+	evidence.ContentDigest = "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+	evidence.MediaType = "text/plain"
+	evidence.SizeBytes = request.MaxBytes + 1
+	failed, err := Transition(running, OperationFailed, now.Add(2*time.Second), FailureContentRejected, &evidence)
+	if err != nil || failed.Evidence == nil || failed.Evidence.ContentDigest != evidence.ContentDigest || failed.Evidence.SizeBytes != evidence.SizeBytes {
+		t.Fatalf("rejected Transition() = %#v, %v", failed, err)
+	}
+}
+
 func validOperationRequest(now time.Time) Request {
 	return Request{
-		SandboxID: "sandbox-1", OperationID: "artifact-operation-1", AttemptID: "artifact-attempt-1",
+		SandboxID: "sandbox-1", TenantID: "tenant-1", OperationID: "artifact-operation-1", AttemptID: "artifact-attempt-1",
 		FencingToken: 3, ExpectedGeneration: 4, IdempotencyKey: "artifact-key-1",
 		RequestDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		Deadline:      now.Add(2 * time.Hour), ArtifactReference: "artifact-ref:platform/artifact-1",

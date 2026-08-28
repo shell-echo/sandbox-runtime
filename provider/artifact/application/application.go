@@ -69,7 +69,7 @@ func (a *Application) Dispatch(ctx context.Context, operationID string) (artifac
 		return a.reconcileLocked(ctx, operation)
 	}
 	now := a.clock.Now().UTC()
-	if !operation.Request.Deadline.After(now) {
+	if !operation.Request.Deadline.After(now) || !operation.Request.ExpiresAt(operation.AcceptedAt).After(now) {
 		return a.failBeforeDispatch(ctx, operation, artifact.FailureDeadlineExpired, artifact.ErrDeadlineExpired)
 	}
 	if err := contextError(ctx); err != nil {
@@ -82,9 +82,13 @@ func (a *Application) Dispatch(ctx context.Context, operationID string) (artifac
 	if err := a.authority.UpdateStage(ctx, running, artifact.OperationAccepted); err != nil {
 		return artifact.Operation{}, err
 	}
-	operationContext, cancel := context.WithDeadline(ctx, operation.Request.Deadline)
+	dispatchDeadline := operation.Request.Deadline
+	if evidenceDeadline := operation.Request.ExpiresAt(operation.AcceptedAt); evidenceDeadline.Before(dispatchDeadline) {
+		dispatchDeadline = evidenceDeadline
+	}
+	operationContext, cancel := context.WithTimeout(ctx, dispatchDeadline.Sub(now))
 	defer cancel()
-	evidence, stageErr := a.stager.Stage(operationContext, operation.Request.Clone())
+	evidence, stageErr := a.stager.Stage(operationContext, operation.Request.Clone(), operation.AcceptedAt)
 	observedAt := a.observedAfter(running.ObservedAt)
 	if stageErr != nil {
 		if errors.Is(stageErr, artifact.ErrSourceMissing) {
@@ -134,6 +138,7 @@ func (a *Application) Recover(ctx context.Context) ([]artifact.Operation, error)
 		return nil, err
 	}
 	results := make([]artifact.Operation, 0, len(operations))
+	recoveredUnknown := false
 	for _, operation := range operations {
 		if operation.Status != artifact.OperationAccepted && operation.Status != artifact.OperationRunning && operation.Status != artifact.OperationOutcomeUnknown {
 			continue
@@ -143,8 +148,15 @@ func (a *Application) Recover(ctx context.Context) ([]artifact.Operation, error)
 			results = append(results, result.Clone())
 		}
 		if reconcileErr != nil {
+			if reconcileErr == artifact.ErrOutcomeUnknown {
+				recoveredUnknown = true
+				continue
+			}
 			return results, reconcileErr
 		}
+	}
+	if recoveredUnknown {
+		return results, artifact.ErrOutcomeUnknown
 	}
 	return results, nil
 }

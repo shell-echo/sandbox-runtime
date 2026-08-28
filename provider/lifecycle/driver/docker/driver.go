@@ -33,6 +33,7 @@ const (
 	namespaceLabel      = "io.github.shell-echo.sandbox-runtime.namespace"
 	controllerLabel     = "io.github.shell-echo.sandbox-runtime.controller-id"
 	runtimeProfileLabel = "io.github.shell-echo.sandbox-runtime.runtime-profile"
+	generationLabel     = "io.github.shell-echo.sandbox-runtime.generation"
 	specDigestLabel     = "io.github.shell-echo.sandbox-runtime.provider-spec-digest"
 	providerOwner       = "provider-lifecycle"
 	containerPrefix     = "sandbox-runtime-provider-"
@@ -392,7 +393,8 @@ func (d *Driver) createRequest(sandbox lifecycle.Sandbox, paths mountPaths) (cre
 		labels: map[string]string{
 			managedLabel: "true", ownerLabel: providerOwner, sandboxLabel: sandbox.ID,
 			namespaceLabel: d.options.Namespace, controllerLabel: d.options.ControllerID,
-			runtimeProfileLabel: sandbox.RuntimeProfile, specDigestLabel: digest,
+			runtimeProfileLabel: sandbox.RuntimeProfile, generationLabel: strconv.FormatUint(sandbox.Generation, 10),
+			specDigestLabel: digest,
 		},
 	}, nil
 }

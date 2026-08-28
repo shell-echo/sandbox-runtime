@@ -579,6 +579,99 @@ func TestEnabledProviderExecRequiresDockerLifecycleAndIndependentFileLedger(t *t
 	}
 }
 
+func TestProviderArtifactConfigurationRequiresProtectedDockerDependenciesAndScanners(t *testing.T) {
+	valid := validArtifactProviderConfig()
+	if err := valid.Validate(); err != nil {
+		t.Fatalf("valid Provider artifact configuration: %v", err)
+	}
+
+	tests := map[string]func(*ProviderConfig){
+		"transport disabled":          func(c *ProviderConfig) { c.Transport.Enabled = false },
+		"protected admission":         func(c *ProviderConfig) { c.ProtectedAdmission.Enabled = false },
+		"disabled lifecycle":          func(c *ProviderConfig) { c.Lifecycle.Enabled = false },
+		"fake lifecycle":              func(c *ProviderConfig) { c.Lifecycle.Driver = ProviderLifecycleFakeDriver },
+		"memory lifecycle repository": func(c *ProviderConfig) { c.Lifecycle.Repository.Driver = ProviderLifecycleMemoryRepository },
+		"missing repository":          func(c *ProviderConfig) { c.Artifact.RepositoryFile = " " },
+		"missing staging root":        func(c *ProviderConfig) { c.Artifact.StagingRoot = "" },
+		"same repository and root":    func(c *ProviderConfig) { c.Artifact.StagingRoot = c.Artifact.RepositoryFile },
+		"missing active scanner":      func(c *ProviderConfig) { c.Artifact.ActiveContentCommand = nil },
+		"missing malware scanner":     func(c *ProviderConfig) { c.Artifact.MalwareCommand = nil },
+		"unsafe scanner argument":     func(c *ProviderConfig) { c.Artifact.MalwareCommand = []string{"scan", "bad\narg"} },
+	}
+	for name, mutate := range tests {
+		t.Run(name, func(t *testing.T) {
+			candidate := validArtifactProviderConfig()
+			mutate(&candidate)
+			if err := candidate.Validate(); err == nil {
+				t.Fatal("invalid Provider artifact configuration was accepted")
+			}
+		})
+	}
+}
+
+func TestProviderUsageConfigurationRequiresComposedExec(t *testing.T) {
+	valid := validArtifactProviderConfig()
+	valid.Exec = ProviderExecConfig{Enabled: true, RepositoryFile: "data/provider-exec.json"}
+	valid.Usage = ProviderUsageConfig{Enabled: true, RepositoryFile: "data/provider-usage.json"}
+	if err := valid.Validate(); err != nil {
+		t.Fatalf("valid Provider usage configuration: %v", err)
+	}
+
+	for name, mutate := range map[string]func(*ProviderConfig){
+		"protected admission": func(c *ProviderConfig) { c.ProtectedAdmission.Enabled = false },
+		"exec disabled":       func(c *ProviderConfig) { c.Exec.Enabled = false },
+		"repository missing":  func(c *ProviderConfig) { c.Usage.RepositoryFile = " " },
+	} {
+		t.Run(name, func(t *testing.T) {
+			candidate := valid
+			mutate(&candidate)
+			if err := candidate.Validate(); err == nil {
+				t.Fatal("invalid Provider usage configuration was accepted")
+			}
+		})
+	}
+}
+
+func TestProviderComponentStateFilesMustBeDistinct(t *testing.T) {
+	valid := validArtifactProviderConfig()
+	valid.Exec = ProviderExecConfig{Enabled: true, RepositoryFile: "data/provider-exec.json"}
+	valid.Usage = ProviderUsageConfig{Enabled: true, RepositoryFile: "data/provider-usage.json"}
+	valid.Terminal = ProviderTerminalConfig{
+		Enabled: true, SessionRepositoryFile: "data/provider-terminal-sessions.json", ReferenceRegistryFile: "data/provider-terminal-references.json",
+		RuntimeProfileID: "coding-shell-v1", CapabilityProfileID: "coding-shell-terminal-v1",
+		BrokerPath: "/workspace/.sandbox-runtime/terminal-broker", ShellPath: "/bin/sh",
+		MaxSessionsPerSandbox: 2, MaxSessionsPerController: 4, ShutdownCleanupSeconds: 1,
+	}
+	if err := valid.Validate(); err != nil {
+		t.Fatalf("distinct Provider component files: %v", err)
+	}
+	for name, collision := range map[string]string{
+		"admission": valid.ProtectedAdmission.GuardStateFile,
+		"lifecycle": valid.Lifecycle.Repository.File.Path,
+		"exec":      valid.Exec.RepositoryFile,
+		"terminal":  valid.Terminal.SessionRepositoryFile,
+		"reference": valid.Terminal.ReferenceRegistryFile,
+		"artifact":  valid.Artifact.RepositoryFile,
+	} {
+		t.Run(name, func(t *testing.T) {
+			candidate := valid
+			candidate.Usage.RepositoryFile = collision
+			if err := candidate.Validate(); err == nil {
+				t.Fatal("colliding Provider component files were accepted")
+			}
+		})
+	}
+}
+
+func TestDisabledProviderArtifactAndUsageConfigurationIsInert(t *testing.T) {
+	provider := validEnabledProviderConfig()
+	provider.Artifact = ProviderArtifactConfig{RepositoryFile: "", StagingRoot: "", ActiveContentCommand: nil, MalwareCommand: nil}
+	provider.Usage = ProviderUsageConfig{RepositoryFile: ""}
+	if err := provider.Validate(); err != nil {
+		t.Fatalf("disabled artifact and usage placeholders rejected: %v", err)
+	}
+}
+
 func validProviderDockerLifecycleConfig() ProviderLifecycleConfig {
 	return ProviderLifecycleConfig{
 		Enabled: true, Driver: ProviderLifecycleDockerDriver,
@@ -594,6 +687,17 @@ func validProviderDockerLifecycleConfig() ProviderLifecycleConfig {
 			Namespace: "provider-dev", ControllerID: "controller-one",
 		},
 	}
+}
+
+func validArtifactProviderConfig() ProviderConfig {
+	provider := validEnabledProviderConfig()
+	provider.ProtectedAdmission = validProtectedAdmissionConfig()
+	provider.Lifecycle = validProviderDockerLifecycleConfig()
+	provider.Artifact = ProviderArtifactConfig{
+		Enabled: true, RepositoryFile: "data/provider-artifacts.json", StagingRoot: "data/provider-artifact-staging",
+		ActiveContentCommand: []string{"scan-active"}, MalwareCommand: []string{"scan-malware"},
+	}
+	return provider
 }
 
 func TestEnabledProviderProfileCharacterAndCountBoundaries(t *testing.T) {

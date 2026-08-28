@@ -9,7 +9,9 @@ import (
 	"github.com/shell-echo/sandbox-runtime/provider/artifact"
 )
 
-const snapshotVersion = 1
+// Version 2 adds the admission-derived tenant binding to every persisted
+// request. Version 1 cannot be migrated without inventing tenant authority.
+const snapshotVersion = 2
 
 type State struct {
 	Operations      map[string]artifact.Operation
@@ -96,6 +98,28 @@ func (s *State) GetSandboxAuthority(sandboxID string) (artifact.SandboxAuthority
 		return artifact.SandboxAuthority{}, fmt.Errorf("%w: sandbox authority %s", ErrNotFound, sandboxID)
 	}
 	return authority.Clone(), nil
+}
+
+// SynchronizeSandboxAuthority upserts a trusted lifecycle generation while
+// preserving this repository's operation-local fencing high-water mark.
+func (s *State) SynchronizeSandboxAuthority(authority artifact.SandboxAuthority) error {
+	s.ensureMaps()
+	if err := authority.Validate(); err != nil {
+		return err
+	}
+	current, ok := s.Authorities[authority.SandboxID]
+	if !ok {
+		s.Authorities[authority.SandboxID] = authority.Clone()
+		return nil
+	}
+	if authority.Generation < current.Generation {
+		return artifact.ErrGenerationConflict
+	}
+	if authority.FencingToken < current.FencingToken {
+		return artifact.ErrStaleFencingToken
+	}
+	s.Authorities[authority.SandboxID] = authority.Clone()
+	return nil
 }
 
 func (s *State) ReserveStageAt(request artifact.Request, acceptedAt time.Time) (artifact.Reservation, error) {
@@ -307,7 +331,7 @@ func idempotencyScope(request artifact.Request) string {
 }
 
 func sameRequest(left, right artifact.Request) bool {
-	return left.SandboxID == right.SandboxID && left.OperationID == right.OperationID && left.AttemptID == right.AttemptID &&
+	return left.SandboxID == right.SandboxID && left.TenantID == right.TenantID && left.OperationID == right.OperationID && left.AttemptID == right.AttemptID &&
 		left.FencingToken == right.FencingToken && left.ExpectedGeneration == right.ExpectedGeneration &&
 		left.IdempotencyKey == right.IdempotencyKey && left.RequestDigest == right.RequestDigest && left.Deadline.Equal(right.Deadline) &&
 		left.ArtifactReference == right.ArtifactReference && left.SourcePath == right.SourcePath && left.ExpectedDigest == right.ExpectedDigest &&

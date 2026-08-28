@@ -58,7 +58,7 @@ func NewAdapter(clock Clock, files map[string][]byte, tenantBound bool, activeCo
 	return &Adapter{clock: clock, files: copyFiles, tenantBound: tenantBound, activeContent: activeContent, malware: malware, evidence: make(map[string]record)}, nil
 }
 
-func (a *Adapter) Stage(ctx context.Context, request artifact.Request) (artifact.Evidence, error) {
+func (a *Adapter) Stage(ctx context.Context, request artifact.Request, acceptedAt time.Time) (artifact.Evidence, error) {
 	if err := contextError(ctx); err != nil {
 		return artifact.Evidence{}, err
 	}
@@ -89,7 +89,7 @@ func (a *Adapter) Stage(ctx context.Context, request artifact.Request) (artifact
 		TenantBindingCheck: artifact.Check{Status: artifact.CheckFailed, CheckedAt: now},
 		ActiveContentCheck: artifact.Check{Status: artifact.CheckNotRun, CheckedAt: now},
 		MalwareCheck:       artifact.Check{Status: artifact.CheckNotRun, CheckedAt: now},
-		ObservedAt:         now, ExpiresAt: request.ExpiresAt(now), EvidenceDigest: digest([]byte(request.OperationID + ":" + digest(content))),
+		ObservedAt:         now, ExpiresAt: request.ExpiresAt(acceptedAt), EvidenceDigest: digest([]byte(request.OperationID + ":" + digest(content))),
 	}
 	if evidence.MediaType == "" {
 		evidence.MediaType = "application/octet-stream"
@@ -187,5 +187,5 @@ var _ artifact.Stager = (*Adapter)(nil)
 var _ artifact.EvidenceReader = (*Adapter)(nil)
 
 func sameRequest(left, right artifact.Request) bool {
-	return left.SandboxID == right.SandboxID && left.OperationID == right.OperationID && left.AttemptID == right.AttemptID && left.FencingToken == right.FencingToken && left.ExpectedGeneration == right.ExpectedGeneration && left.IdempotencyKey == right.IdempotencyKey && left.RequestDigest == right.RequestDigest && left.Deadline.Equal(right.Deadline) && left.ArtifactReference == right.ArtifactReference && left.SourcePath == right.SourcePath && left.ExpectedDigest == right.ExpectedDigest && left.ExpectedMediaType == right.ExpectedMediaType && left.MaxBytes == right.MaxBytes && left.Retention == right.Retention
+	return left.SandboxID == right.SandboxID && left.TenantID == right.TenantID && left.OperationID == right.OperationID && left.AttemptID == right.AttemptID && left.FencingToken == right.FencingToken && left.ExpectedGeneration == right.ExpectedGeneration && left.IdempotencyKey == right.IdempotencyKey && left.RequestDigest == right.RequestDigest && left.Deadline.Equal(right.Deadline) && left.ArtifactReference == right.ArtifactReference && left.SourcePath == right.SourcePath && left.ExpectedDigest == right.ExpectedDigest && left.ExpectedMediaType == right.ExpectedMediaType && left.MaxBytes == right.MaxBytes && left.Retention == right.Retention
 }

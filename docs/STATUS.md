@@ -12,7 +12,7 @@ production readiness.
 
 | Item | Evidence | Status |
 | --- | --- | --- |
-| Latest local implementation evidence | P2.5f7 terminal vertical test `0e8b284` | A Docker-tagged command-root test now drives lifecycle readiness, terminal allocation, durable `ref:session:*` handoff, caller-owned test Gateway/WebSocket policy, process reconstruction, fresh resolver/dial, and same-shell reconnect. Focused race, full race/shuffle, vet, unchanged Contract verification, the locked 38-case Suite, dependency checks, exact CI Docker command, and diff checks passed locally. This is same-repository single-controller evidence only; it is not an external caller, aggregate, multi-controller, multi-tenant, deployment, or production claim |
+| Latest local implementation evidence | P2.5g reviewed worktree based on `33dc5d` | The default-disabled command root now composes real Docker `/outputs` artifact staging, durable async artifact recovery, deterministic partial exec usage evidence, and lifecycle/exec/artifact operation aggregation. Focused/full race-shuffle, vet, module and unchanged Contract verification, the locked 38-case Suite, exact CI Docker command with a locally cached digest-pinned image, and diff checks passed. This is same-repository single-controller development evidence only; it is not external-caller, aggregate, multi-controller, multi-tenant, deployment, billing, publication, or production evidence |
 | Latest repository CI evidence | P2.5f7 implementation/test `0e8b284`; evidence baseline `cefbc74` | Repository CI `33134521467` passed `provider-contract`, `test`, and `docker-integration` for evidence baseline `cefbc74`, which contains the P2.5f6 command composition and P2.5f7 vertical test. This is repository CI evidence only, not external-caller or production evidence. Verify the live checkout independently; these are intentionally not self-updating `HEAD` claims |
 | Review | PR [#17](https://github.com/shell-echo/sandbox-runtime/pull/17) merged as `43ff3d7`; PR [#18](https://github.com/shell-echo/sandbox-runtime/pull/18) merged as `4774c3a`; PR [#19](https://github.com/shell-echo/sandbox-runtime/pull/19) merged as `e2755f5`; PR [#21](https://github.com/shell-echo/sandbox-runtime/pull/21) merged as `c5a4a65`; PR [#22](https://github.com/shell-echo/sandbox-runtime/pull/22) merged as `44f39ec`; PR [#23](https://github.com/shell-echo/sandbox-runtime/pull/23) merged as `ac72eab`; PR [#24](https://github.com/shell-echo/sandbox-runtime/pull/24) merged as `2e3dde6`; PR [#25](https://github.com/shell-echo/sandbox-runtime/pull/25) merged as `88506d1`; PR [#26](https://github.com/shell-echo/sandbox-runtime/pull/26) merged as `4ccb107`; PR [#27](https://github.com/shell-echo/sandbox-runtime/pull/27) merged as `28076a7`; PR [#28](https://github.com/shell-echo/sandbox-runtime/pull/28) merged as `2b25f76`; PR [#29](https://github.com/shell-echo/sandbox-runtime/pull/29) merged as `83965a2`; PR [#30](https://github.com/shell-echo/sandbox-runtime/pull/30) merged as `9d00212`; PR [#31](https://github.com/shell-echo/sandbox-runtime/pull/31) merged as `67b64a9`; PR [#32](https://github.com/shell-echo/sandbox-runtime/pull/32) merged as `5883da9`; PR [#33](https://github.com/shell-echo/sandbox-runtime/pull/33) merged as `ba39053`; PR [#35](https://github.com/shell-echo/sandbox-runtime/pull/35) merged as `c467cd4`; PR [#36](https://github.com/shell-echo/sandbox-runtime/pull/36) merged as `3a980bd`; PR [#37](https://github.com/shell-echo/sandbox-runtime/pull/37) merged as `f9cfbc3`; PR [#38](https://github.com/shell-echo/sandbox-runtime/pull/38) merged as `7ebcc8f`; PR [#39](https://github.com/shell-echo/sandbox-runtime/pull/39) merged as `17072e6`; PR [#40](https://github.com/shell-echo/sandbox-runtime/pull/40) merged as `65a9ba3`; PR [#41](https://github.com/shell-echo/sandbox-runtime/pull/41) merged as `ac555619`; PR [#42](https://github.com/shell-echo/sandbox-runtime/pull/42) merged as `97fb429` | PR #42 CI `32465114377` and post-merge CI `32465443385` provider-contract, test, and docker-integration passed |
 | P2.2a release evidence | `2fa2e72` on PR #33, merged as `ba39053` | Local race/shuffle, vet, lock, Suite, PR CI, and post-merge CI passed |
@@ -115,9 +115,10 @@ It does not clone, mount, or read an external source repository.
 | P2.5f3 | Opaque reference registry and resolver | Passed local and repository CI gates in implementation `b1acdd1`, evidence baseline `7138a4c`, and CI `33059304542` | Retain the separate non-atomic session/reference stores and no-command-composition boundary through f4-f7 |
 | P2.5f4 | WebSocket and terminal stream adapters | Local component/full regression gates and CI `33064864447` passed in implementation `14f14cc` and evidence baseline `1d9da67` | Compose f5 only with caller-owned authorization, revocation, and recorder ports. Retain no-command-composition/no-external-caller boundary |
 | P2.5f5 | Gateway composition | Local composition gate and CI `33067526022` passed in implementation `fdfc771` and evidence baseline `754c57d` | Retain caller-owned policy and no-public-Gateway/no-external-caller boundary; f6 command composition does not weaken that boundary |
-| P2.5f6 | Development terminal command configuration and process lifecycle | Local evidence passes in `c4c7cbc` and `8a794c0`; evidence baseline `cefbc74` passed repository CI `33134521467` | Retain default-disabled/single-controller/no-public-Gateway boundary; f7 closes only the terminal vertical component gate, then work continues with artifact/usage, readiness-derived advertisement, and independent caller E2E |
-| P2.5f7 | Terminal/Gateway vertical evidence gate | Local single-controller Docker/race/restart/reconnect gate passes in `0e8b284`; evidence baseline `cefbc74` passed repository CI `33134521467` | Retain same-repository test boundary and no-public-Gateway/no-external-caller claims; continue to P2.5g artifact/usage vertical |
-| P2 | Coding/remote-shell profile | In progress: P2.1-P2.4a3 have bounded component/Contract evidence, P2.5a-e gates pass locally and in CI, P2.5f0 has design evidence, and P2.5f1-f7 pass their current local and repository CI gates. No separately supplied caller is runnable | Complete P2.5g-h Provider vertical evidence and CI, then supply an independently owned caller and reproducible P2.5i environment. Aggregate conformance, multi-controller reliability, multi-tenant security, deployment, and production gates remain open |
+| P2.5f6 | Development terminal command configuration and process lifecycle | Local evidence passes in `c4c7cbc` and `8a794c0`; evidence baseline `cefbc74` passed repository CI `33134521467` | Retain default-disabled/single-controller/no-public-Gateway boundary; f7 and P2.5g evidence are recorded separately, while readiness-derived advertisement and independent caller E2E remain open |
+| P2.5f7 | Terminal/Gateway vertical evidence gate | Local single-controller Docker/race/restart/reconnect gate passes in `0e8b284`; evidence baseline `cefbc74` passed repository CI `33134521467` | Retain same-repository test boundary and no-public-Gateway/no-external-caller claims; P2.5g artifact/usage evidence is recorded separately |
+| P2.5g | Artifact and usage vertical | Local gate passes in the reviewed worktree based on `33dc5d`: default-disabled development composition, durable artifact/usage repositories, async recovery/shutdown, real Docker output confinement and private staging, partial exec-derived usage, operation aggregation, and restart evidence | Repository CI remains pending. Retain empty advertisement and development-only/single-controller boundaries; publication, billing, external caller, aggregate, reliability, tenancy, deployment, and production claims remain open |
+| P2 | Coding/remote-shell profile | In progress: P2.1-P2.4a3 have bounded component/Contract evidence, P2.5a-e and P2.5f1-f7 pass local and repository CI gates, P2.5f0 has design evidence, and P2.5g passes its local gate with CI pending. No separately supplied caller is runnable | Complete P2.5g repository CI and P2.5h readiness-derived advertisement, then supply an independently owned caller and reproducible P2.5i environment. Aggregate conformance, multi-controller reliability, multi-tenant security, deployment, and production gates remain open |
 | P3 | Migration readiness and external-caller integration | Blocked after local binding/shadow/metrics component evidence (`4212e88`): P2 is not vertically complete and no runnable external caller/platform E2E environment is available | Complete P2, then supply the caller, mTLS/JWS material, Provider endpoint/configuration, and scenario runner; prove locked-Suite parity, shadow parity, canary/rollback/drain, and unchanged platform contracts |
 | P4 | Optional capability profiles | Not started | Add browser, desktop, port forwarding, snapshots/restore, GPU, nested-container, and stronger-isolation profiles only through independent Contract, security, and conformance gates |
 | Production readiness | Independent evidence tier, not a shortcut from P4 | Not established | Deployment, multi-controller reliability, multi-tenant security, operations, and production gates |
@@ -266,8 +267,9 @@ Passed locally (authorized test environment):
   race/shuffle, vet, unchanged Contract verification, the 38-case Suite, diff
   checks, and live integration for both Docker packages passed at `5917a57`.
   Post-push CI `32937530059` passed `provider-contract`, `test`, and
-  `docker-integration` for evidence baseline `2f7a79b`. Usage identity is
-  bounded correlation only; a real usage collector remains P2.5g. This does not
+  `docker-integration` for evidence baseline `2f7a79b`. At that baseline usage
+  identity was bounded correlation only and the real collector was deferred to
+  P2.5g; the later P2.5g local evidence is recorded separately. P2.5e does not
   prove external caller compatibility,
   aggregate conformance, multi-controller reliability, multi-tenant security,
   deployment, or production readiness.
@@ -307,6 +309,27 @@ Passed locally (authorized test environment):
   nonempty advertisement, external caller, aggregate conformance,
   cross-repository atomicity, multi-controller reliability, multi-tenant
   security, deployment, or production readiness.
+- P2.5g local verification covers artifact snapshot v2 with admission-derived
+  tenant authority and explicit rejection of untrusted v1 state; durable
+  accept-before-dispatch; lifecycle readiness, tenant, generation, lease, and
+  fencing synchronization; request/retention deadlines; staged, rejected,
+  missing, unknown, expired, recovery, and shutdown outcomes; and no swallowed
+  reconciliation or persistence failures. The Docker output reader confines
+  reads to an owned running generation and rejects links, directories, and
+  non-regular files. The stager enforces digest/media/size, executes injected
+  scanners by argv with bytes on stdin, writes private atomic content, and
+  returns only `ref:staging/*`. Exec result observation derives only stable
+  wall-time and exec-count evidence with `partial` reconciliation; it does not
+  invent CPU, memory, network, price, or billing truth. Versioned locked file
+  repositories, all-family operation reads, state-file separation, and
+  default-disabled development composition pass focused and full race/shuffle,
+  vet, `go mod verify`, unchanged Contract verification, the locked 38-case
+  Suite, diff checks, and a Docker-tagged command-root vertical covering
+  staged/rejected/missing evidence, operation aggregation, opaque-reference
+  non-disclosure, and artifact/usage restart recovery. This reviewed worktree
+  is based on `33dc5d`; repository CI is pending. It proves no external caller,
+  aggregate conformance, multi-controller reliability, multi-tenant security,
+  deployment, publication, billing, or production readiness.
 - P3 local component verification covers immutable ProviderRevision binding,
   deterministic canary selection, rollback isolation, drain state, shadow
   validation without dispatch, bounded metric aggregation, race/shuffle, vet,
@@ -318,10 +341,10 @@ Pending:
 - P2 coding/shell Provider vertical composition. The command root now composes
   the default-disabled, single-controller terminal session/reference/runtime
   slice after recovery, but it does not expose a public Gateway or invent
-  caller-owned authorization, revocation, or recording. Artifact/usage
-  applications remain absent and startup advertises no capability or runtime
-  profile. P2.5f0-f7 retain their local and repository CI evidence. P2.5g-h
-  remain open;
+  caller-owned authorization, revocation, or recording. It also composes the
+  default-disabled P2.5g artifact/usage development slice, whose local gate
+  passes while repository CI remains pending. Startup still advertises no
+  capability or runtime profile. P2.5h remains open;
 - P2/P3 external-caller Gateway E2E and migration evidence. The 2026-08-26
   environment audit found no runnable independently supplied caller, platform
   composition, or E2E target; local Suite mappings and Gateway tests remain
@@ -466,3 +489,12 @@ Only that environment may supply the P2 coding/shell release evidence and the
 P3 shadow, canary, rollback, old-run drain, metric-parity, and unchanged-
 platform-contract evidence. Multi-controller, multi-tenant, deployment, and
 production readiness remain separate gates after those E2E scenarios pass.
+
+The 2026-08-28 P2.5g review is based on `main@33dc5d` plus the documented
+worktree implementation. Complete local Go, Contract/Suite, diff, and
+Docker-tagged artifact/usage vertical gates pass without changing Contract
+revision `22a148e2898477790512d5bb742605654ff00ebf` or its 38 cases. Repository
+CI is still pending, so the next implementation entry is P2.5h
+readiness-derived composition and exact locked advertisement. P2.5i remains
+blocked on the independently owned caller and deployable Provider/Gateway
+inputs recorded above.

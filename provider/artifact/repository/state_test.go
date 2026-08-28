@@ -46,6 +46,29 @@ func TestStateReserveReplayAndAuthorityConflicts(t *testing.T) {
 	}
 }
 
+func TestStateSynchronizeSandboxAuthorityPreservesFencingHighWater(t *testing.T) {
+	state := NewState()
+	if err := state.SynchronizeSandboxAuthority(stateAuthority()); err != nil {
+		t.Fatal(err)
+	}
+	advanced := stateAuthority()
+	advanced.Generation++
+	advanced.FencingToken++
+	if err := state.SynchronizeSandboxAuthority(advanced); err != nil {
+		t.Fatalf("advance authority: %v", err)
+	}
+	staleGeneration := advanced
+	staleGeneration.Generation--
+	if err := state.SynchronizeSandboxAuthority(staleGeneration); !errors.Is(err, artifact.ErrGenerationConflict) {
+		t.Fatalf("stale generation error = %v", err)
+	}
+	staleFence := advanced
+	staleFence.FencingToken--
+	if err := state.SynchronizeSandboxAuthority(staleFence); !errors.Is(err, artifact.ErrStaleFencingToken) {
+		t.Fatalf("stale fencing error = %v", err)
+	}
+}
+
 func TestStateTransitionsEvidenceExpiryAndRoundTrip(t *testing.T) {
 	state := NewState()
 	_ = state.PutSandboxAuthority(stateAuthority())
@@ -133,7 +156,7 @@ func stateAuthority() artifact.SandboxAuthority {
 
 func stateRequest(operationID, key string) artifact.Request {
 	return artifact.Request{
-		SandboxID: "sandbox-1", OperationID: operationID, AttemptID: "attempt-1", FencingToken: 3,
+		SandboxID: "sandbox-1", TenantID: "tenant-1", OperationID: operationID, AttemptID: "attempt-1", FencingToken: 3,
 		ExpectedGeneration: 4, IdempotencyKey: key,
 		RequestDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		Deadline:      stateTestTime.Add(2 * time.Hour), ArtifactReference: "artifact-ref:platform/artifact-1",

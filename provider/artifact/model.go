@@ -37,6 +37,10 @@ var (
 	ErrIdempotencyConflict = errors.New("Provider artifact staging idempotency conflict")
 	ErrGenerationConflict  = errors.New("Provider artifact staging sandbox generation conflict")
 	ErrStaleFencingToken   = errors.New("Provider artifact staging fencing token is stale")
+	ErrSandboxNotReady     = errors.New("Provider artifact staging sandbox is not ready")
+	ErrSandboxLeaseExpired = errors.New("Provider artifact staging sandbox lease has expired")
+	ErrTenantBinding       = errors.New("Provider artifact staging tenant binding failed")
+	ErrUnsupportedChecks   = errors.New("Provider artifact staging checks are unsupported")
 	ErrDurability          = errors.New("Provider artifact staging authority durability failure")
 
 	identifierPattern        = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$`)
@@ -52,6 +56,7 @@ var (
 // from a second body field.
 type Request struct {
 	SandboxID          string
+	TenantID           string
 	OperationID        string
 	AttemptID          string
 	FencingToken       int64
@@ -71,7 +76,8 @@ func (r Request) Clone() Request { return r }
 
 func (r Request) Validate(now time.Time) error {
 	for name, value := range map[string]string{
-		"sandbox_id": r.SandboxID, "operation_id": r.OperationID, "attempt_id": r.AttemptID,
+		"sandbox_id": r.SandboxID, "tenant_id": r.TenantID,
+		"operation_id": r.OperationID, "attempt_id": r.AttemptID,
 	} {
 		if !identifierPattern.MatchString(value) {
 			return fmt.Errorf("%w: %s", ErrInvalidRequest, name)
@@ -299,15 +305,16 @@ func Transition(operation Operation, next OperationStatus, observedAt time.Time,
 }
 
 func evidenceMatchesRequest(evidence Evidence, request Request) bool {
-	return evidence.OperationID == request.OperationID &&
-		evidence.AttemptID == request.AttemptID &&
-		evidence.FencingToken == request.FencingToken &&
-		evidence.SandboxID == request.SandboxID &&
-		evidence.ArtifactReference == request.ArtifactReference &&
-		evidence.ContentDigest == request.ExpectedDigest &&
-		evidence.MediaType == request.ExpectedMediaType &&
-		evidence.SizeBytes <= request.MaxBytes &&
-		!evidence.ExpiresAt.After(request.Deadline)
+	if evidence.OperationID != request.OperationID ||
+		evidence.AttemptID != request.AttemptID ||
+		evidence.FencingToken != request.FencingToken ||
+		evidence.SandboxID != request.SandboxID ||
+		evidence.ArtifactReference != request.ArtifactReference ||
+		evidence.ExpiresAt.After(request.Deadline) {
+		return false
+	}
+	return evidence.Status != StatusStaged ||
+		(evidence.ContentDigest == request.ExpectedDigest && evidence.MediaType == request.ExpectedMediaType && evidence.SizeBytes <= request.MaxBytes)
 }
 
 type Status string

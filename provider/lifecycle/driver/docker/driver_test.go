@@ -79,7 +79,7 @@ func TestDriverLifecycleUsesStableProviderMounts(t *testing.T) {
 		t.Fatalf("container identity = %q, %q", created.name, created.workingDirectory)
 	}
 	if created.labels[ownerLabel] != providerOwner || created.labels[sandboxLabel] != sandbox.ID ||
-		created.labels[runtimeProfileLabel] != CodingShellRuntimeProfile || created.labels[specDigestLabel] == "" {
+		created.labels[runtimeProfileLabel] != CodingShellRuntimeProfile || created.labels[generationLabel] != "1" || created.labels[specDigestLabel] == "" {
 		t.Fatalf("ownership labels = %#v", created.labels)
 	}
 	if created.user != options.User || !created.readonly || created.tmpfs["/tmp"] == "" {

@@ -87,10 +87,11 @@ func TestRepositoryPersistsEvidenceExpiryTombstone(t *testing.T) {
 
 func TestRepositoryRejectsCorruptPartialAndCanceledWrites(t *testing.T) {
 	for name, contents := range map[string]string{
-		"unsupported-version": `{"version":99}`,
-		"unknown-field":       `{"version":1,"operations":[],"idempotency":[],"authorities":[],"unknown":true}`,
-		"trailing-json":       `{"version":1,"operations":[],"idempotency":[],"authorities":[]} {}`,
-		"partial-state":       `{"version":1,"operations":[{}],"idempotency":[],"authorities":[]}`,
+		"unsupported-version":   `{"version":99}`,
+		"legacy-without-tenant": `{"version":1,"operations":[],"idempotency":[],"authorities":[]}`,
+		"unknown-field":         `{"version":2,"operations":[],"idempotency":[],"authorities":[],"unknown":true}`,
+		"trailing-json":         `{"version":2,"operations":[],"idempotency":[],"authorities":[]} {}`,
+		"partial-state":         `{"version":2,"operations":[{}],"idempotency":[],"authorities":[]}`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "artifact.json")
@@ -137,7 +138,7 @@ func TestRepositoryRejectsCorruptPartialAndCanceledWrites(t *testing.T) {
 
 type countingStager struct{ calls int }
 
-func (s *countingStager) Stage(context.Context, artifact.Request) (artifact.Evidence, error) {
+func (s *countingStager) Stage(context.Context, artifact.Request, time.Time) (artifact.Evidence, error) {
 	s.calls++
 	return artifact.Evidence{}, errors.New("unexpected staging")
 }
@@ -148,7 +149,7 @@ func fileAuthority() artifact.SandboxAuthority {
 
 func fileRequest(operationID, key string) artifact.Request {
 	return artifact.Request{
-		SandboxID: "sandbox-file", OperationID: operationID, AttemptID: "attempt-file", FencingToken: 3,
+		SandboxID: "sandbox-file", TenantID: "tenant-file", OperationID: operationID, AttemptID: "attempt-file", FencingToken: 3,
 		ExpectedGeneration: 4, IdempotencyKey: key,
 		RequestDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		Deadline:      fileTestTime.Add(2 * time.Hour), ArtifactReference: "artifact-ref:platform/file",

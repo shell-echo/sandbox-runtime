@@ -10,7 +10,7 @@ var artifactTestNow = time.Date(2026, 8, 25, 12, 0, 0, 0, time.UTC)
 
 func validArtifactRequest() Request {
 	return Request{
-		SandboxID: "sandbox-1", OperationID: "artifact-operation-1", AttemptID: "artifact-attempt-1",
+		SandboxID: "sandbox-1", TenantID: "tenant-1", OperationID: "artifact-operation-1", AttemptID: "artifact-attempt-1",
 		FencingToken: 3, ExpectedGeneration: 4, IdempotencyKey: "artifact-idempotency-1",
 		RequestDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		Deadline:      artifactTestNow.Add(time.Hour), ArtifactReference: "artifact-ref:platform/artifact-1",

@@ -116,6 +116,18 @@ func (r *Repository) GetSandboxAuthority(ctx context.Context, sandboxID string) 
 	return r.state.GetSandboxAuthority(sandboxID)
 }
 
+func (r *Repository) SynchronizeSandboxAuthority(ctx context.Context, authority artifact.SandboxAuthority) error {
+	if err := repository.ContextError(ctx); err != nil {
+		return err
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.closed {
+		return repository.ErrClosed
+	}
+	return r.state.SynchronizeSandboxAuthority(authority)
+}
+
 func (r *Repository) Close() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()

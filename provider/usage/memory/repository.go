@@ -116,6 +116,7 @@ func (r *Repository) Get(ctx context.Context, evidenceID string) (usage.Evidence
 }
 
 var _ usage.EvidenceReader = (*Repository)(nil)
+var _ usage.Store = (*Repository)(nil)
 
 func (r *Repository) Close() error {
 	r.mu.Lock()

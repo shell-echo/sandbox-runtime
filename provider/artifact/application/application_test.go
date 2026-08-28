@@ -175,8 +175,8 @@ func TestRecoverDispatchesAcceptedAndDoesNotRedispatchRunning(t *testing.T) {
 		return applicationEvidence(request, artifact.StatusStaged), nil
 	}}
 	app, _ := New(authority, stager, ClockFunc(func() time.Time { return applicationTestTime }))
-	accepted := applicationRequest("operation-accepted", "key-accepted")
-	runningRequest := applicationRequest("operation-running", "key-running")
+	accepted := applicationRequest("operation-z-accepted", "key-accepted")
+	runningRequest := applicationRequest("operation-a-running", "key-running")
 	_, _ = app.Accept(context.Background(), accepted)
 	reservation, _ := app.Accept(context.Background(), runningRequest)
 	running, _ := artifact.Transition(reservation.Operation, artifact.OperationRunning, applicationTestTime, "", nil)
@@ -194,13 +194,48 @@ func TestRecoverDispatchesAcceptedAndDoesNotRedispatchRunning(t *testing.T) {
 	}
 }
 
+func TestRecoverDoesNotHideDispatchFailureJoinedWithUnknownOutcome(t *testing.T) {
+	authority := newFakeAuthority()
+	dispatchFailure := errors.New("scanner unavailable")
+	stager := &fakeStager{stage: func(context.Context, artifact.Request) (artifact.Evidence, error) {
+		return artifact.Evidence{}, dispatchFailure
+	}}
+	app, _ := New(authority, stager, ClockFunc(func() time.Time { return applicationTestTime }))
+	request := applicationRequest("operation-recover-failure", "key-recover-failure")
+	if _, err := app.Accept(context.Background(), request); err != nil {
+		t.Fatal(err)
+	}
+	results, err := app.Recover(context.Background())
+	if len(results) != 1 || !errors.Is(err, artifact.ErrOutcomeUnknown) || !errors.Is(err, dispatchFailure) {
+		t.Fatalf("Recover() = %#v, %v", results, err)
+	}
+}
+
+func TestDispatchRejectsExpiredEvidenceRetentionBeforeStaging(t *testing.T) {
+	now := applicationTestTime
+	authority := newFakeAuthority()
+	stager := &fakeStager{stage: func(_ context.Context, request artifact.Request) (artifact.Evidence, error) {
+		return applicationEvidence(request, artifact.StatusStaged), nil
+	}}
+	app, _ := New(authority, stager, ClockFunc(func() time.Time { return now }))
+	request := applicationRequest("operation-expired-retention", "key-expired-retention")
+	if _, err := app.Accept(context.Background(), request); err != nil {
+		t.Fatal(err)
+	}
+	now = now.Add(request.Retention)
+	operation, err := app.Dispatch(context.Background(), request.OperationID)
+	if !errors.Is(err, artifact.ErrDeadlineExpired) || operation.Status != artifact.OperationFailed || operation.Failure != artifact.FailureDeadlineExpired || stager.calls != 0 {
+		t.Fatalf("Dispatch() = %#v, %v; calls=%d", operation, err, stager.calls)
+	}
+}
+
 type fakeStager struct {
 	mu    sync.Mutex
 	calls int
 	stage func(context.Context, artifact.Request) (artifact.Evidence, error)
 }
 
-func (s *fakeStager) Stage(ctx context.Context, request artifact.Request) (artifact.Evidence, error) {
+func (s *fakeStager) Stage(ctx context.Context, request artifact.Request, _ time.Time) (artifact.Evidence, error) {
 	s.mu.Lock()
 	s.calls++
 	s.mu.Unlock()
@@ -302,7 +337,7 @@ func (a *fakeAuthority) GetEvidence(_ context.Context, operationID string, now t
 
 func applicationRequest(operationID, key string) artifact.Request {
 	return artifact.Request{
-		SandboxID: "sandbox-1", OperationID: operationID, AttemptID: "attempt-1", FencingToken: 3,
+		SandboxID: "sandbox-1", TenantID: "tenant-1", OperationID: operationID, AttemptID: "attempt-1", FencingToken: 3,
 		ExpectedGeneration: 4, IdempotencyKey: key,
 		RequestDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		Deadline:      applicationTestTime.Add(2 * time.Hour), ArtifactReference: "artifact-ref:platform/artifact-1",

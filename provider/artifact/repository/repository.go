@@ -21,6 +21,7 @@ var (
 
 type Repository interface {
 	artifact.Authority
+	SynchronizeSandboxAuthority(context.Context, artifact.SandboxAuthority) error
 	PutSandboxAuthority(context.Context, artifact.SandboxAuthority) error
 	ReplaceSandboxAuthority(context.Context, artifact.SandboxAuthority, int64, int64) error
 	GetSandboxAuthority(context.Context, string) (artifact.SandboxAuthority, error)

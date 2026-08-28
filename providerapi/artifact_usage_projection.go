@@ -102,7 +102,8 @@ func decodeArtifactStageRequest(document []byte, admitted admission.AdmissionCon
 		return artifact.Request{}, errors.New("artifact staging retention overflows duration")
 	}
 	projected := artifact.Request{
-		SandboxID: admitted.SandboxID, OperationID: request.OperationID, AttemptID: request.AttemptID,
+		SandboxID: admitted.SandboxID, TenantID: admitted.TenantID,
+		OperationID: request.OperationID, AttemptID: request.AttemptID,
 		FencingToken: request.FencingToken, ExpectedGeneration: request.ExpectedGeneration,
 		IdempotencyKey: request.IdempotencyKey, RequestDigest: string(request.RequestDigest), Deadline: deadline,
 		ArtifactReference: request.ArtifactReference, SourcePath: request.SourcePath,
@@ -192,6 +193,10 @@ func usageEvidenceProjection(evidence usage.Evidence, now time.Time) (providerv1
 
 func mapArtifactApplicationError(err error) (int, string, bool) {
 	switch {
+	case errors.Is(err, artifact.ErrTenantBinding):
+		return http.StatusForbidden, "SANDBOX_FORBIDDEN", false
+	case errors.Is(err, artifact.ErrUnsupportedChecks):
+		return http.StatusUnprocessableEntity, "SANDBOX_CAPABILITY_UNSUPPORTED", false
 	case errors.Is(err, artifact.ErrIdempotencyConflict):
 		return http.StatusConflict, "SANDBOX_IDEMPOTENCY_CONFLICT", false
 	case errors.Is(err, artifact.ErrGenerationConflict):
@@ -200,7 +205,7 @@ func mapArtifactApplicationError(err error) (int, string, bool) {
 		return http.StatusConflict, "SANDBOX_CONFLICT", false
 	case errors.Is(err, artifact.ErrInvalidRequest), errors.Is(err, artifact.ErrDeadlineExpired):
 		return http.StatusBadRequest, "SANDBOX_INVALID_REQUEST", false
-	case errors.Is(err, artifact.ErrDurability), errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
+	case errors.Is(err, artifact.ErrSandboxNotReady), errors.Is(err, artifact.ErrSandboxLeaseExpired), errors.Is(err, artifact.ErrDurability), errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
 		return http.StatusServiceUnavailable, "SANDBOX_PROVIDER_UNAVAILABLE", true
 	default:
 		return http.StatusServiceUnavailable, "SANDBOX_PROVIDER_UNAVAILABLE", true

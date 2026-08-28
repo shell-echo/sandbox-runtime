@@ -52,6 +52,7 @@ type Coordinator struct {
 	observer   providerexec.Observer
 	canceler   providerexec.Canceler
 	cleaner    providerexec.ResultCleaner
+	resultSink providerexec.ResultObserver
 	clock      Clock
 }
 
@@ -64,10 +65,18 @@ func NewWithObserver(repo repository.Repository, executor providerexec.Executor,
 }
 
 func NewWithRuntime(repo repository.Repository, executor providerexec.Executor, observer providerexec.Observer, canceler providerexec.Canceler, cleaner providerexec.ResultCleaner, clock Clock) (*Coordinator, error) {
+	return newWithRuntime(repo, executor, observer, canceler, cleaner, nil, clock)
+}
+
+func NewWithRuntimeAndResultObserver(repo repository.Repository, executor providerexec.Executor, observer providerexec.Observer, canceler providerexec.Canceler, cleaner providerexec.ResultCleaner, resultSink providerexec.ResultObserver, clock Clock) (*Coordinator, error) {
+	return newWithRuntime(repo, executor, observer, canceler, cleaner, resultSink, clock)
+}
+
+func newWithRuntime(repo repository.Repository, executor providerexec.Executor, observer providerexec.Observer, canceler providerexec.Canceler, cleaner providerexec.ResultCleaner, resultSink providerexec.ResultObserver, clock Clock) (*Coordinator, error) {
 	if repo == nil || executor == nil || clock == nil {
 		return nil, ErrInvalidCoordinator
 	}
-	return &Coordinator{repository: repo, executor: executor, observer: observer, canceler: canceler, cleaner: cleaner, clock: clock}, nil
+	return &Coordinator{repository: repo, executor: executor, observer: observer, canceler: canceler, cleaner: cleaner, resultSink: resultSink, clock: clock}, nil
 }
 
 // Start durably reserves an execution before invoking the executor. Replayed
@@ -175,7 +184,14 @@ func (c *Coordinator) GetResult(ctx context.Context, operationID string, now tim
 			return providerexec.Result{}, err
 		}
 	}
-	return c.repository.GetResult(ctx, operationID, now)
+	result, err := c.repository.GetResult(ctx, operationID, now)
+	if err != nil {
+		return providerexec.Result{}, err
+	}
+	if err := c.observeResult(ctx, result); err != nil {
+		return providerexec.Result{}, err
+	}
+	return result, nil
 }
 
 // StoreOutcome persists trusted bounded terminal evidence. Known provider
@@ -193,7 +209,11 @@ func (c *Coordinator) StoreOutcome(ctx context.Context, operationID string, star
 		return providerexec.Result{}, err
 	}
 	if record.Result != nil {
-		return *record.Result.Clone(), nil
+		result := *record.Result.Clone()
+		if err := c.observeResult(ctx, result); err != nil {
+			return result, err
+		}
+		return result, nil
 	}
 	if startedAt.IsZero() {
 		startedAt = record.ReservedAt
@@ -207,6 +227,9 @@ func (c *Coordinator) StoreOutcome(ctx context.Context, operationID string, star
 	}
 	if err := c.repository.StoreResult(ctx, result); err != nil {
 		return providerexec.Result{}, err
+	}
+	if err := c.observeResult(ctx, result); err != nil {
+		return result, err
 	}
 	return result, nil
 }
@@ -287,6 +310,9 @@ func (c *Coordinator) Recover(ctx context.Context) ([]providerexec.ExecutionReco
 			continue
 		}
 		if record.Result != nil {
+			if err := c.observeResult(ctx, *record.Result.Clone()); err != nil {
+				return results, err
+			}
 			if !c.clock.Now().UTC().Before(record.Result.RetainedUntil) {
 				_, expiryErr := c.GetResult(ctx, record.Request.OperationID, c.clock.Now().UTC())
 				if expiryErr != nil && !errors.Is(expiryErr, repository.ErrExpired) {
@@ -383,8 +409,18 @@ func (c *Coordinator) Cancel(ctx context.Context, intent providerexec.Cancellati
 	if err := c.repository.StoreResult(writeCtx, retained); err != nil {
 		return result, err
 	}
+	if err := c.observeResult(writeCtx, retained); err != nil {
+		return result, err
+	}
 	result.Status = CancellationConfirmed
 	return result, nil
+}
+
+func (c *Coordinator) observeResult(ctx context.Context, result providerexec.Result) error {
+	if c.resultSink == nil {
+		return nil
+	}
+	return c.resultSink.ObserveResult(ctx, result)
 }
 
 func nonNilContext(ctx context.Context) context.Context {

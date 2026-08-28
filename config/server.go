@@ -36,6 +36,8 @@ type ProviderConfig struct {
 	Lifecycle          ProviderLifecycleConfig          `mapstructure:"lifecycle"`
 	Exec               ProviderExecConfig               `mapstructure:"exec"`
 	Terminal           ProviderTerminalConfig           `mapstructure:"terminal"`
+	Artifact           ProviderArtifactConfig           `mapstructure:"artifact"`
+	Usage              ProviderUsageConfig              `mapstructure:"usage"`
 }
 
 // ProviderLifecycleDriver identifies a Provider-local runtime implementation.
@@ -116,6 +118,23 @@ type ProviderTerminalConfig struct {
 	MaxSessionsPerSandbox    int    `mapstructure:"max_sessions_per_sandbox"`
 	MaxSessionsPerController int    `mapstructure:"max_sessions_per_controller"`
 	ShutdownCleanupSeconds   int    `mapstructure:"shutdown_cleanup_seconds"`
+}
+
+// ProviderArtifactConfig enables provider-local /outputs staging. Scanner
+// commands are direct argv arrays; content is supplied only through stdin.
+type ProviderArtifactConfig struct {
+	Enabled              bool     `mapstructure:"enabled"`
+	RepositoryFile       string   `mapstructure:"repository_file"`
+	StagingRoot          string   `mapstructure:"staging_root"`
+	ActiveContentCommand []string `mapstructure:"active_content_command"`
+	MalwareCommand       []string `mapstructure:"malware_command"`
+}
+
+// ProviderUsageConfig enables durable evidence derived from composed exec
+// results. It does not configure pricing, accounting, or billing.
+type ProviderUsageConfig struct {
+	Enabled        bool   `mapstructure:"enabled"`
+	RepositoryFile string `mapstructure:"repository_file"`
 }
 
 // ProviderTransportConfig configures the dedicated, mTLS-only Provider
@@ -216,8 +235,8 @@ func (c *ServerConfig) load(v *viper.Viper) error {
 // configuration is inert and may retain template placeholders.
 func (c *ProviderConfig) Validate() error {
 	if !c.Transport.Enabled {
-		if c.Lifecycle.Enabled || c.Exec.Enabled || c.Terminal.Enabled {
-			return errors.New("lifecycle, exec, and terminal require Provider transport to be enabled")
+		if c.Lifecycle.Enabled || c.Exec.Enabled || c.Terminal.Enabled || c.Artifact.Enabled || c.Usage.Enabled {
+			return errors.New("lifecycle, exec, terminal, artifact, and usage require Provider transport to be enabled")
 		}
 		return nil
 	}
@@ -239,6 +258,12 @@ func (c *ProviderConfig) Validate() error {
 	if err := c.Terminal.validateEnabled(); err != nil {
 		return fmt.Errorf("terminal %w", err)
 	}
+	if err := c.Artifact.validateEnabled(); err != nil {
+		return fmt.Errorf("artifact %w", err)
+	}
+	if err := c.Usage.validateEnabled(); err != nil {
+		return fmt.Errorf("usage %w", err)
+	}
 	if c.Lifecycle.Enabled && !c.ProtectedAdmission.Enabled {
 		return errors.New("lifecycle requires protected admission to be enabled")
 	}
@@ -257,6 +282,49 @@ func (c *ProviderConfig) Validate() error {
 		if !c.Lifecycle.Enabled || c.Lifecycle.Driver != ProviderLifecycleDockerDriver || c.Lifecycle.Repository.Driver != ProviderLifecycleFileRepository {
 			return errors.New("terminal requires the Docker Provider lifecycle and its file repository")
 		}
+	}
+	if c.Artifact.Enabled {
+		if !c.ProtectedAdmission.Enabled {
+			return errors.New("artifact requires protected admission to be enabled")
+		}
+		if !c.Lifecycle.Enabled || c.Lifecycle.Driver != ProviderLifecycleDockerDriver || c.Lifecycle.Repository.Driver != ProviderLifecycleFileRepository {
+			return errors.New("artifact requires the Docker Provider lifecycle and its file repository")
+		}
+	}
+	if c.Usage.Enabled {
+		if !c.ProtectedAdmission.Enabled || !c.Exec.Enabled {
+			return errors.New("usage requires protected admission and the composed exec vertical")
+		}
+	}
+	files := make([]string, 0, 7)
+	if c.ProtectedAdmission.Enabled {
+		files = append(files, c.ProtectedAdmission.GuardStateFile)
+	}
+	if c.Lifecycle.Enabled && c.Lifecycle.Repository.Driver == ProviderLifecycleFileRepository {
+		files = append(files, c.Lifecycle.Repository.File.Path)
+	}
+	if c.Exec.Enabled {
+		files = append(files, c.Exec.RepositoryFile)
+	}
+	if c.Terminal.Enabled {
+		files = append(files, c.Terminal.SessionRepositoryFile, c.Terminal.ReferenceRegistryFile)
+	}
+	if c.Artifact.Enabled {
+		files = append(files, c.Artifact.RepositoryFile)
+	}
+	if c.Usage.Enabled {
+		files = append(files, c.Usage.RepositoryFile)
+	}
+	seenFiles := make(map[string]struct{})
+	for _, configured := range files {
+		if strings.TrimSpace(configured) == "" {
+			continue
+		}
+		clean := filepath.Clean(configured)
+		if _, exists := seenFiles[clean]; exists {
+			return errors.New("Provider component state files must be distinct")
+		}
+		seenFiles[clean] = struct{}{}
 	}
 	return nil
 }
@@ -313,6 +381,48 @@ func (c *ProviderTerminalConfig) validateEnabled() error {
 // Validate checks an explicitly enabled Provider terminal configuration.
 func (c ProviderTerminalConfig) Validate() error {
 	return c.validateEnabled()
+}
+
+func (c *ProviderArtifactConfig) validateEnabled() error {
+	if !c.Enabled {
+		return nil
+	}
+	if strings.TrimSpace(c.RepositoryFile) == "" || strings.TrimSpace(c.StagingRoot) == "" {
+		return errors.New("repository_file and staging_root must not be empty")
+	}
+	if filepath.Clean(c.RepositoryFile) == filepath.Clean(c.StagingRoot) {
+		return errors.New("repository_file and staging_root must be distinct")
+	}
+	if !validProviderCommand(c.ActiveContentCommand) || !validProviderCommand(c.MalwareCommand) {
+		return errors.New("active_content_command and malware_command must be bounded argv arrays")
+	}
+	return nil
+}
+
+func (c ProviderArtifactConfig) Validate() error { return c.validateEnabled() }
+
+func (c *ProviderUsageConfig) validateEnabled() error {
+	if !c.Enabled {
+		return nil
+	}
+	if strings.TrimSpace(c.RepositoryFile) == "" {
+		return errors.New("repository_file must not be empty")
+	}
+	return nil
+}
+
+func (c ProviderUsageConfig) Validate() error { return c.validateEnabled() }
+
+func validProviderCommand(command []string) bool {
+	if len(command) < 1 || len(command) > 64 {
+		return false
+	}
+	for _, argument := range command {
+		if !utf8.ValidString(argument) || utf8.RuneCountInString(argument) < 1 || utf8.RuneCountInString(argument) > 4096 || strings.ContainsAny(argument, "\x00\r\n") {
+			return false
+		}
+	}
+	return true
 }
 
 func validProviderGuestExecutable(value string) bool {
@@ -543,6 +653,10 @@ func defaultServerConfig() *ServerConfig {
 		},
 		Provider: ProviderConfig{
 			Exec: ProviderExecConfig{RepositoryFile: "data/provider-exec.json"},
+			Artifact: ProviderArtifactConfig{
+				RepositoryFile: "data/provider-artifacts.json", StagingRoot: "data/provider-artifact-staging",
+			},
+			Usage: ProviderUsageConfig{RepositoryFile: "data/provider-usage.json"},
 			Terminal: ProviderTerminalConfig{
 				SessionRepositoryFile: "data/provider-terminal-sessions.json", ReferenceRegistryFile: "data/provider-terminal-references.json",
 				RuntimeProfileID: "coding-shell-v1", CapabilityProfileID: "coding-shell-terminal-v1",

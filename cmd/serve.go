@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"net"
 	"os"
 	"strings"
@@ -21,10 +22,16 @@ import (
 	"github.com/shell-echo/sandbox-runtime/provider"
 	"github.com/shell-echo/sandbox-runtime/provider/admission"
 	admissionfile "github.com/shell-echo/sandbox-runtime/provider/admission/file"
+	"github.com/shell-echo/sandbox-runtime/provider/artifact"
+	artifactapplication "github.com/shell-echo/sandbox-runtime/provider/artifact/application"
+	artifactfile "github.com/shell-echo/sandbox-runtime/provider/artifact/repository/file"
+	artifactstaging "github.com/shell-echo/sandbox-runtime/provider/artifact/staging"
+	providerexec "github.com/shell-echo/sandbox-runtime/provider/exec"
 	execapplication "github.com/shell-echo/sandbox-runtime/provider/exec/application"
 	execcoordinator "github.com/shell-echo/sandbox-runtime/provider/exec/coordinator"
 	execrepository "github.com/shell-echo/sandbox-runtime/provider/exec/repository"
 	execfile "github.com/shell-echo/sandbox-runtime/provider/exec/repository/file"
+	"github.com/shell-echo/sandbox-runtime/provider/lifecycle"
 	lifecycleapplication "github.com/shell-echo/sandbox-runtime/provider/lifecycle/application"
 	lifecyclecoordinator "github.com/shell-echo/sandbox-runtime/provider/lifecycle/coordinator"
 	lifecycledocker "github.com/shell-echo/sandbox-runtime/provider/lifecycle/driver/docker"
@@ -39,6 +46,9 @@ import (
 	sessionreferencefile "github.com/shell-echo/sandbox-runtime/provider/session/reference/repository/file"
 	sessionfile "github.com/shell-echo/sandbox-runtime/provider/session/repository/file"
 	providerterminal "github.com/shell-echo/sandbox-runtime/provider/terminal"
+	"github.com/shell-echo/sandbox-runtime/provider/usage"
+	usageapplication "github.com/shell-echo/sandbox-runtime/provider/usage/application"
+	usagefile "github.com/shell-echo/sandbox-runtime/provider/usage/repository/file"
 	"github.com/shell-echo/sandbox-runtime/providerapi"
 	"github.com/shell-echo/sandbox-runtime/server"
 	"github.com/shell-echo/sandbox-runtime/server/api"
@@ -118,21 +128,35 @@ func newProviderServer(ctx context.Context, providerConfig config.ProviderConfig
 	if err != nil {
 		return nil, noOpProviderClose, errors.Join(err, closeLifecycle())
 	}
-	execApp, closeExec, err := newProviderExecApplication(ctx, providerConfig.Exec, lifecycleApp, execRuntime)
+	usageStore, usageCollector, closeUsage, err := newProviderUsageCollector(providerConfig.Usage)
 	if err != nil {
 		return nil, noOpProviderClose, errors.Join(err, closeProtected(), closeLifecycle())
 	}
+	execApp, closeExec, err := newProviderExecApplication(ctx, providerConfig.Exec, lifecycleApp, execRuntime, usageCollector)
+	if err != nil {
+		return nil, noOpProviderClose, errors.Join(err, closeUsage(), closeProtected(), closeLifecycle())
+	}
+	usageReader, err := newProviderUsageReader(providerConfig.Usage, usageStore, usageCollector, execApp)
+	if err != nil {
+		return nil, noOpProviderClose, errors.Join(err, closeExec(), closeUsage(), closeProtected(), closeLifecycle())
+	}
 	terminalApp, closeTerminal, err := newProviderTerminalApplication(ctx, providerConfig.Terminal, lifecycleApp, execRuntime)
 	if err != nil {
-		return nil, noOpProviderClose, errors.Join(err, closeExec(), closeProtected(), closeLifecycle())
+		return nil, noOpProviderClose, errors.Join(err, closeExec(), closeUsage(), closeProtected(), closeLifecycle())
+	}
+	artifactApp, closeArtifact, err := newProviderArtifactApplication(ctx, providerConfig.Artifact, lifecycleApp, execRuntime)
+	if err != nil {
+		return nil, noOpProviderClose, errors.Join(err, closeTerminal(), closeExec(), closeUsage(), closeProtected(), closeLifecycle())
 	}
 	if protected != nil {
 		protected.Application = lifecycleApp
 		protected.ExecApplication = execApp
 		protected.SessionApplication = terminalApp
-		operationReader, readerErr := newProviderOperationReader(lifecycleApp, execApp, nil)
+		protected.ArtifactApplication = artifactApp
+		protected.UsageEvidenceReader = usageReader
+		operationReader, readerErr := newProviderOperationReader(lifecycleApp, execApp, artifactApp)
 		if readerErr != nil {
-			return nil, noOpProviderClose, errors.Join(readerErr, closeTerminal(), closeExec(), closeProtected(), closeLifecycle())
+			return nil, noOpProviderClose, errors.Join(readerErr, closeArtifact(), closeTerminal(), closeExec(), closeUsage(), closeProtected(), closeLifecycle())
 		}
 		protected.OperationReader = operationReader
 	}
@@ -146,16 +170,17 @@ func newProviderServer(ctx context.Context, providerConfig config.ProviderConfig
 		Protected:                  protected,
 	}, source)
 	if err != nil {
-		return nil, noOpProviderClose, errors.Join(fmt.Errorf("construct Provider API server: %w", err), closeTerminal(), closeExec(), closeProtected(), closeLifecycle())
+		return nil, noOpProviderClose, errors.Join(fmt.Errorf("construct Provider API server: %w", err), closeArtifact(), closeTerminal(), closeExec(), closeUsage(), closeProtected(), closeLifecycle())
 	}
-	return providerServer, func() error { return errors.Join(closeTerminal(), closeExec(), closeProtected(), closeLifecycle()) }, nil
+	return providerServer, func() error {
+		return errors.Join(closeArtifact(), closeTerminal(), closeExec(), closeUsage(), closeProtected(), closeLifecycle())
+	}, nil
 }
 
 // newProviderOperationReader composes only the operation families whose
-// application boundaries were explicitly injected. Artifact and usage
-// dependencies remain absent from the default composition root until a real
-// source/stager and collector are configured; the transport then fails closed
-// rather than exposing a partial or synthetic operation surface.
+// application boundaries were explicitly injected. Usage evidence remains a
+// read sidecar correlated to exec operations rather than a separate operation
+// family.
 func newProviderOperationReader(lifecycleApp providerapi.LifecycleApplication, execApp provideroperation.Reader, artifactApp providerapi.ArtifactApplication) (provideroperation.Reader, error) {
 	readers := make([]provideroperation.Reader, 0, 3)
 	if lifecycleApp != nil {
@@ -244,7 +269,7 @@ func newProviderLifecycleRuntime(ctx context.Context, lifecycleConfig config.Pro
 	return application, execRuntime, func() error { return errors.Join(closeDriver(), lifecycleRepo.Close()) }, nil
 }
 
-func newProviderExecApplication(ctx context.Context, execConfig config.ProviderExecConfig, lifecycleApp *lifecycleapplication.Application, runtime *lifecycledocker.Driver) (*execapplication.Vertical, func() error, error) {
+func newProviderExecApplication(ctx context.Context, execConfig config.ProviderExecConfig, lifecycleApp *lifecycleapplication.Application, runtime *lifecycledocker.Driver, resultSink providerexec.ResultObserver) (*execapplication.Vertical, func() error, error) {
 	if !execConfig.Enabled {
 		return nil, noOpProviderClose, nil
 	}
@@ -259,7 +284,7 @@ func newProviderExecApplication(ctx context.Context, execConfig config.ProviderE
 		return nil, noOpProviderClose, fmt.Errorf("open Provider exec repository: %w", err)
 	}
 	var repository execrepository.Repository = repo
-	coordinator, err := execcoordinator.NewWithRuntime(repository, runtime, runtime, runtime, runtime, systemAdmissionClock{})
+	coordinator, err := execcoordinator.NewWithRuntimeAndResultObserver(repository, runtime, runtime, runtime, runtime, resultSink, systemAdmissionClock{})
 	if err != nil {
 		_ = repo.Close()
 		return nil, noOpProviderClose, fmt.Errorf("construct Provider exec coordinator: %w", err)
@@ -274,6 +299,106 @@ func newProviderExecApplication(ctx context.Context, execConfig config.ProviderE
 		return nil, noOpProviderClose, fmt.Errorf("recover Provider exec operations: %w", err)
 	}
 	return application, repo.Close, nil
+}
+
+func newProviderUsageCollector(usageConfig config.ProviderUsageConfig) (usage.Store, *usageapplication.ResultCollector, func() error, error) {
+	if !usageConfig.Enabled {
+		return nil, nil, noOpProviderClose, nil
+	}
+	if err := usageConfig.Validate(); err != nil {
+		return nil, nil, noOpProviderClose, fmt.Errorf("validate Provider usage configuration: %w", err)
+	}
+	repository, err := usagefile.NewRepository(usageConfig.RepositoryFile, systemAdmissionClock{})
+	if err != nil {
+		return nil, nil, noOpProviderClose, fmt.Errorf("open Provider usage repository: %w", err)
+	}
+	collector, err := usageapplication.NewResultCollector(repository, systemAdmissionClock{})
+	if err != nil {
+		_ = repository.Close()
+		return nil, nil, noOpProviderClose, fmt.Errorf("construct Provider usage collector: %w", err)
+	}
+	return repository, collector, repository.Close, nil
+}
+
+func newProviderUsageReader(usageConfig config.ProviderUsageConfig, store usage.Store, collector *usageapplication.ResultCollector, execApp *execapplication.Vertical) (usage.EvidenceReader, error) {
+	if !usageConfig.Enabled {
+		return nil, nil
+	}
+	if store == nil || collector == nil || execApp == nil {
+		return nil, errors.New("Provider usage requires a composed exec result source")
+	}
+	reader, err := usageapplication.NewReader(store, execApp, collector)
+	if err != nil {
+		return nil, fmt.Errorf("construct Provider usage reader: %w", err)
+	}
+	return reader, nil
+}
+
+type providerArtifactTenantChecker struct {
+	sandboxes *lifecycleapplication.Application
+	clock     systemAdmissionClock
+}
+
+func (c providerArtifactTenantChecker) CheckTenantBinding(ctx context.Context, request artifact.Request) (artifact.CheckStatus, error) {
+	if c.sandboxes == nil {
+		return artifact.CheckNotRun, artifact.ErrUnsupportedChecks
+	}
+	sandbox, err := c.sandboxes.GetSandbox(ctx, request.SandboxID)
+	if err != nil {
+		return artifact.CheckNotRun, err
+	}
+	if err := sandbox.Validate(); err != nil || sandbox.ID != request.SandboxID || sandbox.Generation > math.MaxInt64 || int64(sandbox.Generation) != request.ExpectedGeneration {
+		return artifact.CheckNotRun, artifact.ErrGenerationConflict
+	}
+	if sandbox.TenantID != request.TenantID {
+		return artifact.CheckFailed, nil
+	}
+	if sandbox.DesiredState != lifecycle.DesiredReady || sandbox.ObservedState != lifecycle.ObservedReady || sandbox.ObservedGeneration != sandbox.Generation || !sandbox.LeaseExpiresAt.After(c.clock.Now()) {
+		return artifact.CheckNotRun, artifact.ErrSandboxNotReady
+	}
+	return artifact.CheckPassed, nil
+}
+
+func newProviderArtifactApplication(ctx context.Context, artifactConfig config.ProviderArtifactConfig, lifecycleApp *lifecycleapplication.Application, runtime *lifecycledocker.Driver) (*artifactapplication.Vertical, func() error, error) {
+	if !artifactConfig.Enabled {
+		return nil, noOpProviderClose, nil
+	}
+	if err := artifactConfig.Validate(); err != nil {
+		return nil, noOpProviderClose, fmt.Errorf("validate Provider artifact configuration: %w", err)
+	}
+	if lifecycleApp == nil || runtime == nil {
+		return nil, noOpProviderClose, errors.New("Provider artifact staging requires a composed Docker lifecycle runtime")
+	}
+	repository, err := artifactfile.NewRepository(artifactConfig.RepositoryFile)
+	if err != nil {
+		return nil, noOpProviderClose, fmt.Errorf("open Provider artifact repository: %w", err)
+	}
+	activeContent, err := artifactstaging.NewCommandChecker(artifactConfig.ActiveContentCommand)
+	if err != nil {
+		_ = repository.Close()
+		return nil, noOpProviderClose, fmt.Errorf("construct Provider active-content checker: %w", err)
+	}
+	malware, err := artifactstaging.NewCommandChecker(artifactConfig.MalwareCommand)
+	if err != nil {
+		_ = repository.Close()
+		return nil, noOpProviderClose, fmt.Errorf("construct Provider malware checker: %w", err)
+	}
+	tenant := providerArtifactTenantChecker{sandboxes: lifecycleApp, clock: systemAdmissionClock{}}
+	stager, err := artifactstaging.New(runtime, tenant, activeContent, malware, artifactConfig.StagingRoot, systemAdmissionClock{})
+	if err != nil {
+		_ = repository.Close()
+		return nil, noOpProviderClose, fmt.Errorf("construct Provider artifact stager: %w", err)
+	}
+	application, err := artifactapplication.NewVertical(repository, stager, lifecycleApp, stager, systemAdmissionClock{})
+	if err != nil {
+		_ = repository.Close()
+		return nil, noOpProviderClose, fmt.Errorf("construct Provider artifact application: %w", err)
+	}
+	if _, err := application.Recover(ctx); err != nil {
+		_ = errors.Join(application.Close(), repository.Close())
+		return nil, noOpProviderClose, fmt.Errorf("recover Provider artifact operations: %w", err)
+	}
+	return application, func() error { return errors.Join(application.Close(), repository.Close()) }, nil
 }
 
 // providerTerminalApplication owns development-only process composition around
@@ -520,8 +645,8 @@ func validateServeConfiguration(application *config.ApplicationConfig, serverCon
 	if application.Mode == config.ApplicationProductionMode && repositoryConfig.Driver == config.RepositoryMemoryDriver {
 		return errors.New("production mode requires a persistent repository")
 	}
-	if application.Mode == config.ApplicationProductionMode && (serverConfig.Provider.Lifecycle.Enabled || serverConfig.Provider.Exec.Enabled || serverConfig.Provider.Terminal.Enabled) {
-		return errors.New("production mode rejects Provider lifecycle, exec, and terminal drivers until production-capable adapters pass their release gates")
+	if application.Mode == config.ApplicationProductionMode && (serverConfig.Provider.Lifecycle.Enabled || serverConfig.Provider.Exec.Enabled || serverConfig.Provider.Terminal.Enabled || serverConfig.Provider.Artifact.Enabled || serverConfig.Provider.Usage.Enabled) {
+		return errors.New("production mode rejects Provider lifecycle, exec, terminal, artifact, and usage drivers until production-capable adapters pass their release gates")
 	}
 	if runtimeConfig.Driver == config.RuntimeDockerDriver && repositoryConfig.Driver == config.RepositoryMemoryDriver {
 		return errors.New("docker runtime requires a persistent repository")

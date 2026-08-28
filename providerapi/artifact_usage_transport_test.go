@@ -318,7 +318,7 @@ func validTransportArtifactEvidence() artifact.Evidence {
 func validTransportArtifactOperation() artifact.Operation {
 	now := releaseGateTestTime()
 	request := artifact.Request{
-		SandboxID: "sandbox-1", OperationID: "operation-1", AttemptID: "attempt-1", FencingToken: 1, ExpectedGeneration: 1,
+		SandboxID: "sandbox-1", TenantID: "tenant-1", OperationID: "operation-1", AttemptID: "attempt-1", FencingToken: 1, ExpectedGeneration: 1,
 		IdempotencyKey: "artifact-idempotency-1", RequestDigest: "sha256:" + strings.Repeat("d", 64), Deadline: now.Add(4 * time.Minute),
 		ArtifactReference: "artifact-ref:artifact-1", SourcePath: "/outputs/result.txt", ExpectedDigest: "sha256:" + strings.Repeat("a", 64),
 		ExpectedMediaType: "text/plain", MaxBytes: 1024, Retention: time.Minute,

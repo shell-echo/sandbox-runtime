@@ -130,6 +130,10 @@ func (r *Repository) GetSandboxAuthority(ctx context.Context, sandboxID string) 
 	return r.state.GetSandboxAuthority(sandboxID)
 }
 
+func (r *Repository) SynchronizeSandboxAuthority(ctx context.Context, authority artifact.SandboxAuthority) error {
+	return r.mutate(ctx, func() error { return r.state.SynchronizeSandboxAuthority(authority) })
+}
+
 func (r *Repository) Close() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()

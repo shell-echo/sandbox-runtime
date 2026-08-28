@@ -84,7 +84,7 @@ func memoryAuthority() artifact.SandboxAuthority {
 
 func memoryRequest() artifact.Request {
 	return artifact.Request{
-		SandboxID: "sandbox-memory", OperationID: "operation-memory", AttemptID: "attempt-memory",
+		SandboxID: "sandbox-memory", TenantID: "tenant-memory", OperationID: "operation-memory", AttemptID: "attempt-memory",
 		FencingToken: 5, ExpectedGeneration: 2, IdempotencyKey: "key-memory",
 		RequestDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		Deadline:      memoryTestTime.Add(2 * time.Hour), ArtifactReference: "artifact-ref:platform/memory",
