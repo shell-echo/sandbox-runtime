@@ -61,4 +61,4 @@ jobs:
       - name: Run Docker integration test
         env:
           SANDBOX_RUNTIME_DOCKER_INTEGRATION: "1"
-        run: go test -tags=integration -count=1 ./driver/docker ./provider/lifecycle/driver/docker
+        run: go test -tags=integration -count=1 ./cmd ./driver/docker ./provider/lifecycle/driver/docker
