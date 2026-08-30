@@ -304,7 +304,7 @@ func newAdmissionTraceID() string {
 
 func protectedDocument(request *http.Request, context admission.AdmissionContext, route protectedRoute, pathValues map[string]string) ([]byte, int) {
 	if request.Method == http.MethodGet {
-		if request.ContentLength != 0 || len(request.TransferEncoding) != 0 || request.Body != nil && request.Body != http.NoBody {
+		if request.ContentLength != 0 || len(request.TransferEncoding) != 0 || !readBodyIsEmpty(request.Body) {
 			return nil, http.StatusBadRequest
 		}
 		return readDescriptor(context, request, pathValues)
@@ -324,6 +324,15 @@ func protectedDocument(request *http.Request, context admission.AdmissionContext
 		return nil, route.bodyLimitStatus()
 	}
 	return document, 0
+}
+
+func readBodyIsEmpty(body io.ReadCloser) bool {
+	if body == nil || body == http.NoBody {
+		return true
+	}
+	var probe [1]byte
+	n, err := body.Read(probe[:])
+	return n == 0 && errors.Is(err, io.EOF)
 }
 
 func (route protectedRoute) bodyLimitStatus() int {

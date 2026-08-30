@@ -264,6 +264,35 @@ func TestWriteAdmissionErrorUsesTraceAndRetryHeaders(t *testing.T) {
 	}
 }
 
+func TestProtectedDocumentAcceptsHTTP2EmptyBodyAndRejectsData(t *testing.T) {
+	contextValue := admission.AdmissionContext{
+		Operation: admission.OperationReadOperation, SandboxID: "sandbox-1",
+		OperationID: "operation-1", AttemptID: "attempt-1", FencingToken: 1,
+	}
+	route := protectedRoute{operation: admission.OperationReadOperation}
+	for _, test := range []struct {
+		name       string
+		body       io.ReadCloser
+		wantStatus int
+	}{
+		{name: "HTTP/1 no body", body: http.NoBody},
+		{name: "HTTP/2 empty stream", body: io.NopCloser(strings.NewReader(""))},
+		{name: "unknown-length data", body: io.NopCloser(strings.NewReader("x")), wantStatus: http.StatusBadRequest},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodGet, "https://provider.test/v1/operations/operation-1", nil)
+			request.Body = test.body
+			document, status := protectedDocument(request, contextValue, route, map[string]string{"operation_id": "operation-1"})
+			if status != test.wantStatus {
+				t.Fatalf("status = %d, want %d", status, test.wantStatus)
+			}
+			if test.wantStatus == 0 && len(document) == 0 {
+				t.Fatal("empty read descriptor")
+			}
+		})
+	}
+}
+
 func assertAdmissionErrorHeaders(t *testing.T, response *httptest.ResponseRecorder, retryable bool) {
 	t.Helper()
 	var document providerv1.StandardError
