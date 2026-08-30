@@ -129,22 +129,23 @@ multi-tenant, deployment, and production readiness.
 
 ## Current Snapshot
 
-This snapshot was audited on 2026-08-30 against the reviewed evidence baseline
-`main@bba02a6`. The default-disabled development composition includes the
-artifact/usage vertical as well as the earlier exec and terminal slices. P2.5h
-adds explicit
-`coding_shell_enabled` configuration, canonical Contract IDs, and a startup
-dependency graph that derives an immutable advertisement only from a complete
-composition. Full local regression gates, the unchanged locked 38-case Suite,
-and fixed-digest Docker integration pass. Repository CI run `33157119149`
-passes all three jobs for P2.5g implementation `0e6e108`, and run
-`33159099578` passes all three jobs for P2.5h documentation baseline
-`0ec712c`. Repository CI run `33160646494` also passes all three jobs for the
-reviewed documentation baseline `bba02a6`. These are repository CI results
-only; the runs include GitHub's Node.js 20 deprecation warnings and do not
-establish external-caller or
-production evidence. The baselines identify reviewed evidence; they are not
-self-updating assertions about the checkout.
+This snapshot was audited on 2026-08-30 against Provider implementation
+baseline `d58497e5359056858564b9ac663178958cf5a6d6` and independent reference
+caller baseline `926141af89da53355be6d4326d42bacda44db92a`. Provider fixes after
+the previous documentation baseline bind create requirements to advertised
+capabilities, preserve empty HTTP/2 reads, dispatch accepted lifecycle work,
+aggregate terminal-session operations, and prevent a caller Gateway grant from
+outliving its Provider endpoint.
+
+The Provider full race/shuffle suite, vet, module verification, Contract lock
+verifier, and unchanged locked 38-case Suite pass at `d58497e`. The separate
+`sandbox-runtime-e2e` module then passed 15 initial and 5 process-reconstruction
+scenarios over real mTLS/JWS HTTPS, WebSocket, separate caller/reference-stack
+processes, and Docker. Its clean-run manifest is under ignored local evidence
+directory `20260830T072224.989788000Z` and pins both commits, Contract identity,
+configuration digests, and a digest-pinned local `linux/amd64` runtime image.
+This is reference external-caller evidence only. The latest repository CI still
+predates these local commits, so no CI result is claimed for them.
 
 Contract identity:
 
@@ -157,23 +158,18 @@ Contract identity:
 | Phase | Verified maturity | Open gate |
 | --- | --- | --- |
 | P0 | Passed: repository-owned MIT Contract migration and lock | Retain lock and projection regression |
-| P1.1 | Passed for DTO, mTLS discovery, JWS/digest/replay/fencing admission | Does not prove runtime behavior or production identity infrastructure |
-| P1.2 | Passed for the bounded Contract-authorized lifecycle subset and development composition | Provider lifecycle has fake and Docker development adapters; reserved lifecycle families and production gates remain open |
-| P2.1-P2.4a3 | Bounded exec, result, terminal, Gateway, artifact, usage, admission, application, persistence, and transport components have local Contract/CI evidence | Retain these component and Contract boundaries; later vertical evidence is recorded separately and no independent caller E2E environment exists |
-| P2.5a-e, P2.5f0-f3 | Plan, coding/shell Contract/profile, mutation preflight, Docker runtime foundation, and the exec vertical pass their local and CI gates; the terminal/Gateway audit, reconnectable terminal runtime, durable session coordination/migration, and opaque reference registry/resolver pass their current local and CI gates | Retain their single-controller component boundary |
-| P2.5f4 | Bounded WebSocket and terminal-byte-stream adapters pass local component and repository CI gates in implementation `14f14cc` and evidence baseline `1d9da67`; the WebSocket edge requires caller-owned handshake admission and has explicit frame/origin controls | Its downstream f5-f7 gates are recorded separately; readiness-derived advertisement and independent caller gates remain open |
-| P2.5f5 | `gateway/composition` composes the existing Gateway only with caller-owned authorization, revocation, recording, and handshake-admission ports plus the Provider reference resolver and f4 adapters; missing or typed-nil dependencies fail closed. Its local gates and repository CI `33067526022` pass | Readiness-derived advertisement and independent caller gates remain open; f6 command composition remains deliberately Gateway-free |
-| P2.5f6 | Explicit default-disabled development terminal configuration now composes the Docker terminal runtime, durable session/reference files, recovery, idempotent opaque-handoff completion, protected Provider session injection, bounded cleanup, and production rejection. Local gates pass in `c4c7cbc` and `8a794c0`; repository CI `33134521467` passes at evidence baseline `cefbc74` | Retain its terminal boundary; P2.5g separately adds artifact/usage command composition, while readiness-derived advertisement and independent caller gates remain open |
-| P2.5f7 | A Docker-tagged `cmd` test composes the real f6 terminal root with test-supplied f5 Gateway policy, proves durable opaque handoff and same-shell reconnect after Provider process reconstruction, and is included in the CI Docker command. Local gates pass in `0e8b284`; repository CI `33134521467` passes at evidence baseline `cefbc74` | Retain the same-repository terminal evidence boundary; it is not an external caller or deployable Gateway |
-| P2.5g | `main@0e6e108` command-composes default-disabled artifact and usage development adapters: generation-bound `/outputs` reader, tenant/active-content/malware checks, private opaque staging, durable async recovery, deterministic partial exec usage, and lifecycle/exec/artifact operation aggregation. Focused/full local and fixed-digest Docker-tagged restart gates pass; repository CI `33157119149` passes all three jobs | Retain development-only/single-controller boundaries; publication, billing, external caller, aggregate, multi-controller, multi-tenant, deployment, and production gates remain open |
-| P2.5h | Implementation `2c55173` adds explicit canonical coding/shell opt-in and a deterministic readiness graph. It rejects explicit enablement when any admission, lifecycle, exec, usage, terminal data-plane, caller-owned Gateway, artifact/evidence, or aggregation node is absent; disabled startup remains empty; a complete synthetic graph projects the exact locked `sandbox.exec`/`sandbox.terminal` capabilities and `sandbox-runtime-coding-shell-v1` profile. Repository CI `33159099578` passes all three jobs | The command root deliberately has no caller-owned WebSocket/Gateway composition, so no live nonempty advertisement is possible yet. Synthetic readiness projection is not a deployable profile or external-caller E2E; retain the external caller gate |
-| P3 | Local revision binding, shadow-validation, canary/rollback/drain, and metrics primitives passed component tests | P2 gate, external caller, real traffic parity, canary, rollback, and old-run drain E2E remain open |
+| P1.1 | Passed for DTO, mTLS discovery, JWS/digest/replay/fencing admission | Production identity infrastructure remains unproven |
+| P1.2 | Passed for the bounded Contract-authorized lifecycle subset and development composition | Reserved lifecycle families and production gates remain open |
+| P2 components | P2.1-P2.5h local component, Contract projection, Docker, and recorded repository CI gates pass within their named boundaries | Retain single-controller/development constraints and exact Contract lock |
+| P2.5i | Passed for the clean independent reference caller: 15 initial plus 5 restart/resume scenarios against Provider `d58497e` | Add repository/CI publication separately; do not reinterpret this as Agent Platform or production evidence |
+| P2 | Reference coding/shell caller release gate passed | Aggregate conformance, actual Agent Platform compatibility, multi-controller, hostile multi-tenant isolation, deployment, and production gates remain open |
+| P3 | Local revision binding, shadow-validation, canary/rollback/drain, and metrics primitives passed component tests | Real platform traffic shadow parity, canary, rollback, old-run drain, metric parity, and unchanged platform contracts remain open |
 | P4 | Optional capability profiles have not started | Each browser/desktop/forwarding/snapshot/GPU/isolation profile needs independent Contract, security, and conformance gates |
 
 Production readiness is not a numbered phase shortcut. Aggregate conformance,
 multi-controller reliability, hostile multi-tenant security, deployment, and
-production operations remain separate and unproven even after a future P2/P3
-E2E passes.
+production operations remain separate and unproven after the reference P2 gate
+and require their own future evidence.
 
 The latest verified repository CI is reviewed documentation baseline
 `bba02a6`, run `33160646494`; its `provider-contract`, `test`, and
@@ -181,33 +177,28 @@ The latest verified repository CI is reviewed documentation baseline
 gates remain run `33157119149` and run `33159099578`, respectively. Repository
 CI remains distinct from independent caller and production evidence.
 
-## Current P2 Blocker
+## P2.5i Reference Result
 
-P2 has one remaining release gate: P2.5i independent caller/platform E2E. The
-missing caller-owned Gateway/WebSocket deployment and the missing independent
-scenario runner are coupled inputs to that gate, not two independent
-Provider-local implementation failures. P2.5h passed its bounded readiness and
-Contract-projection gate by rejecting explicit profile enablement while that
-caller-owned boundary is absent; the Provider must not invent allow-all
-authorization, revocation, recording, or handshake defaults to make the
-profile appear runnable.
+The earlier audit correctly found no existing platform caller. A new separately
+versioned reference harness now exists at
+`/Users/echo/Projects/shell-echo/sandbox-runtime-e2e`. Its caller module has an
+import-boundary test that forbids Provider implementation imports; the separate
+reference-stack process alone composes exported Provider/Gateway packages with
+explicit caller-owned policy.
 
-| Required P2.5i input | 2026-08-30 audit |
-| --- | --- |
-| Independent caller executable and scenario runner | Absent; the repository has no external-platform job and the separately owned platform candidate has only an E2E planning README |
-| Matching locked Contract and Suite | Absent in the candidate; its application lock selects only `runtime-core-v1`, not this repository's sandbox Suite |
-| Caller/Provider mTLS PKI and JWS trust material | Absent |
-| Deployable Provider, caller-owned Gateway, and real runtime configuration | Absent; the candidate marks Sandbox Provider, Sandbox Controller, and Runtime Gateway not implemented |
-| Two tenant/authorization contexts | Absent; no runnable caller policy or negative-isolation scenario exists |
+The clean `926141a` harness run against Provider `d58497e` verified exact
+Contract/Suite identity, two ephemeral mTLS/JWS controller identities, locked
+capability discovery, protected lifecycle, replay, exec/result/usage, stale
+fencing, cancellation, opaque terminal handoff, Gateway bytes, wrong-caller and
+cross-tenant denial, grant expiry, revocation, artifact staging/evidence,
+process reconstruction, retained evidence, and same-shell reconnect. It
+exposed no backend endpoint and left no managed container or new temporary run
+directory.
 
-The relevant local platform checkout was clean at `main@e7d7e1f` and 15 commits
-behind its locally cached `origin/main@cf623ac`. Those cached remote commits are
-Contract and Contract-validation work, not caller composition. Both an
-escalated `git ls-remote` query and browser access to GitHub were unavailable on
-2026-08-30, so `cf623ac` is recorded as the inspected local remote-tracking
-reference, not as a fresh network proof of GitHub's current branch tip.
-
-No external E2E was run or claimed during the audit.
+This closes the reference external-caller P2.5i gate. It does not prove the
+separately owned Agent Platform candidate can call the Provider, nor aggregate
+conformance, distributed revocation, multi-controller reliability, hostile
+multi-tenant isolation, deployment, or production readiness.
 
 ## Next Implementation Order
 
@@ -302,12 +293,15 @@ Its focused, full local, and Docker-tagged gates pass, and repository CI
 repository CI `33159099578` also pass their bounded readiness/projection gates.
 Reviewed documentation baseline `bba02a6` passes repository CI `33160646494`.
 
-1. Supply an independently owned mTLS/JWS caller and reproducible Provider plus
-   Gateway deployment, run the locked Suite and coding/shell E2E, and only then
-   evaluate P3 traffic shadowing, canary, rollback, and drain.
-2. Keep P3, aggregate conformance, multi-controller, multi-tenant, deployment,
-   and production-readiness claims blocked until their separately named gates
-   have reproducible evidence.
+1. Preserve the clean P2.5i reference harness and add remote/CI publication as
+   a separate operational task; the current evidence is local and reproducible.
+2. Begin P3 only against a real platform migration target: lock the same
+   Contract/profile, shadow capabilities and requests, canary only new runs,
+   prove rollback and old-run drain, and compare the required metrics without
+   changing platform-owned contracts.
+3. Keep aggregate conformance, multi-controller, hostile multi-tenant,
+   deployment, and production-readiness claims blocked until their separately
+   named gates have reproducible evidence.
 
 The detailed case-by-case evidence and exact open claims remain in
 [`STATUS.md`](STATUS.md).

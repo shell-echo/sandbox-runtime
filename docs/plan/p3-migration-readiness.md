@@ -2,8 +2,9 @@
 
 Status: the repository-local migration component boundary is implemented in
 commit `4212e88`; post-push CI run `32805284762` concluded success. P3 is
-blocked because the P2 coding/shell Provider is not vertically composed and no
-separately supplied external caller is connected to this repository.
+ready for real platform integration because the separately versioned reference
+P2.5i caller gate now passes. No actual Agent Platform shadow traffic, canary,
+rollback, drain, or metric-parity evidence exists yet.
 
 ## Authority and scope
 
@@ -48,11 +49,9 @@ compatibility evidence.
 
 ## Release gate and next work
 
-P3 work must not proceed to external migration claims until the P2 coding/shell
-Contract profile and Provider vertical composition pass their own gates. P3 is
-not release-ready until a separately supplied caller then runs the same locked
-Conformance Suite against this provider, proves capability/request shadow
-parity, canaries only new runs, demonstrates rollback and old-run drain, and
-compares lifecycle, exec, orphan, session, resource-evidence, and
-reconciliation metrics without changing WorkOrder, Artifact, event, usage,
-Gateway, or frontend contracts.
+The reference P2.5i harness closes the prerequisite caller gate without proving
+platform migration. P3 is not release-ready until a real platform target locks
+the same Contract/profile, proves capability/request shadow parity, canaries
+only new runs, demonstrates rollback and old-run drain, and compares lifecycle,
+exec, orphan, session, resource-evidence, and reconciliation metrics without
+changing WorkOrder, Artifact, event, usage, Gateway, or frontend contracts.

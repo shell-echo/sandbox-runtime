@@ -181,9 +181,13 @@ fresh terminal attach after restart and rechecks expiry, revocation, committed
 session handoff, and identity bindings before each dial; it does not expose
 backend data. A local Gateway composition requires caller-owned authorization,
 revocation, recording, and WebSocket admission before it can proxy that fresh
-attach. WebSocket/Gateway command composition and artifact/usage runtime
-composition remain absent.
-Startup still advertises no runtime capability.
+attach. The Provider command root includes default-disabled development
+artifact/usage composition but deliberately does not supply caller-owned public
+Gateway policy. Default standalone startup therefore still advertises no
+runtime capability. The separately versioned reference E2E stack supplies
+those caller-owned dependencies externally and has passed the exact atomic
+coding/shell advertisement and full reference caller scenarios; this does not
+turn the Provider default into a deployable production Gateway.
 
 Capability discovery has no query parameters or request document. For request
 metadata visible to the handler, a query string (including a bare trailing
@@ -532,9 +536,9 @@ visibility.
 - [x] add a reconnectable Provider terminal runtime/broker and Docker adapter
   with private backend identity and restart-reattach evidence
 - [x] pass the locked local lifecycle/security Suite mappings (component evidence only)
-- [ ] compose durable terminal sessions/Gateway and artifact/usage verticals
-- [ ] derive nonempty advertisement from complete readiness
-- [ ] pass the independent caller release gate
+- [x] compose durable terminal sessions and artifact/usage development verticals
+- [x] derive the exact nonempty advertisement from a complete externally supplied readiness graph
+- [x] pass the independent reference caller release gate (Agent Platform and production gates remain separate)
 
 ### Manifest and blocks
 
