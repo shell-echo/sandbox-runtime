@@ -1,6 +1,6 @@
 # Project Status
 
-Updated: 2026-08-28
+Updated: 2026-08-30
 
 This document is the implementation ledger for the repository-owned MIT
 Provider Contract. It distinguishes local component evidence, Contract
@@ -13,7 +13,7 @@ production readiness.
 | Item | Evidence | Status |
 | --- | --- | --- |
 | Latest local implementation evidence | P2.5h implementation `2c55173` based on `main@0e6e108` | Adds explicit `coding_shell_enabled` configuration, canonical Contract profile IDs, and a readiness-derived immutable capability source. Missing dependency nodes fail closed when the profile is explicitly enabled; the default-disabled path remains an empty advertisement. Full race/shuffle, vet, module verification, the locked 38-case Suite, fixed-digest Docker integration, and diff checks passed. Because the command root does not own a caller-authorized Gateway/WebSocket edge, no live command configuration can advertise the profile yet. This is same-repository single-controller component/projection evidence only; it is not external-caller, aggregate, multi-controller, multi-tenant, deployment, billing, publication, or production evidence |
-| Latest repository CI evidence | P2.5h documentation baseline `0ec712c` | Repository CI `33159099578` passed `provider-contract`, `test`, and `docker-integration` for `0ec712c`. The preceding P2.5g implementation `0e6e108` also passed all three jobs in run `33157119149`. These are repository CI results only, not external-caller or production evidence; both runs include GitHub's Node.js 20 deprecation warnings |
+| Latest repository CI evidence | Reviewed documentation baseline `bba02a6` | Repository CI `33160646494` passed `provider-contract`, `test`, and `docker-integration` for `bba02a6`. The underlying P2.5h and P2.5g gates passed all three jobs in runs `33159099578` and `33157119149`. These are repository CI results only, not external-caller or production evidence; the runs include GitHub's Node.js 20 deprecation warnings |
 | Review | PR [#17](https://github.com/shell-echo/sandbox-runtime/pull/17) merged as `43ff3d7`; PR [#18](https://github.com/shell-echo/sandbox-runtime/pull/18) merged as `4774c3a`; PR [#19](https://github.com/shell-echo/sandbox-runtime/pull/19) merged as `e2755f5`; PR [#21](https://github.com/shell-echo/sandbox-runtime/pull/21) merged as `c5a4a65`; PR [#22](https://github.com/shell-echo/sandbox-runtime/pull/22) merged as `44f39ec`; PR [#23](https://github.com/shell-echo/sandbox-runtime/pull/23) merged as `ac72eab`; PR [#24](https://github.com/shell-echo/sandbox-runtime/pull/24) merged as `2e3dde6`; PR [#25](https://github.com/shell-echo/sandbox-runtime/pull/25) merged as `88506d1`; PR [#26](https://github.com/shell-echo/sandbox-runtime/pull/26) merged as `4ccb107`; PR [#27](https://github.com/shell-echo/sandbox-runtime/pull/27) merged as `28076a7`; PR [#28](https://github.com/shell-echo/sandbox-runtime/pull/28) merged as `2b25f76`; PR [#29](https://github.com/shell-echo/sandbox-runtime/pull/29) merged as `83965a2`; PR [#30](https://github.com/shell-echo/sandbox-runtime/pull/30) merged as `9d00212`; PR [#31](https://github.com/shell-echo/sandbox-runtime/pull/31) merged as `67b64a9`; PR [#32](https://github.com/shell-echo/sandbox-runtime/pull/32) merged as `5883da9`; PR [#33](https://github.com/shell-echo/sandbox-runtime/pull/33) merged as `ba39053`; PR [#35](https://github.com/shell-echo/sandbox-runtime/pull/35) merged as `c467cd4`; PR [#36](https://github.com/shell-echo/sandbox-runtime/pull/36) merged as `3a980bd`; PR [#37](https://github.com/shell-echo/sandbox-runtime/pull/37) merged as `f9cfbc3`; PR [#38](https://github.com/shell-echo/sandbox-runtime/pull/38) merged as `7ebcc8f`; PR [#39](https://github.com/shell-echo/sandbox-runtime/pull/39) merged as `17072e6`; PR [#40](https://github.com/shell-echo/sandbox-runtime/pull/40) merged as `65a9ba3`; PR [#41](https://github.com/shell-echo/sandbox-runtime/pull/41) merged as `ac555619`; PR [#42](https://github.com/shell-echo/sandbox-runtime/pull/42) merged as `97fb429` | PR #42 CI `32465114377` and post-merge CI `32465443385` provider-contract, test, and docker-integration passed |
 | P2.2a release evidence | `2fa2e72` on PR #33, merged as `ba39053` | Local race/shuffle, vet, lock, Suite, PR CI, and post-merge CI passed |
 | P2.2b release evidence | `e26bf2b` on PR #35, merged as `c467cd4` | Local race/shuffle, vet, lock, 19-case Suite, PR CI `32456100570`, and post-merge CI `32456279722` passed; no HTTP/dispatch composition |
@@ -56,7 +56,7 @@ production readiness.
 | P2.5h readiness-derived composition and advertisement | implementation `2c55173` | `ProviderCapabilityConfig.CodingShellEnabled` is an explicit opt-in. The command root constructs a deterministic dependency graph only after lifecycle, admission, exec, usage, terminal, artifact, and operation readers are composed. The source advertises exactly `sandbox.exec@1.0.0`/`exec-v1`, `sandbox.terminal@1.0.0`/`terminal-v1`, and `sandbox-runtime-coding-shell-v1` only when every graph node is ready; otherwise explicit enablement returns a startup error and disabled configuration returns non-nil empty arrays. Config and per-node dependency-absence matrices, immutable snapshot projection, canonical terminal IDs, full race/shuffle, vet, lock verification, the 38-case Suite, fixed-digest Docker integration, and diff checks pass. The command graph intentionally marks the concrete WebSocket and caller-owned Gateway boundary unavailable, so this slice does not produce a runnable nonempty-profile deployment or external-caller evidence |
 | P3 local evidence | implementation commit `4212e88` | Revision identity validation, deterministic canary binding, rollback-only-new-run behavior, old-run draining, shadow validation bounds, and migration metric aggregation passed focused race/shuffle and vet; external caller gate remains open |
 | P3 component release evidence | post-push CI run `32805284762` | CI run concluded success for `4212e88`; this remains local migration component evidence, not external caller, canary traffic, rollback E2E, or production readiness |
-| External caller/platform E2E audit | implementation baseline `b4c7e2d`; separately owned `CelestialsGroup/agent-blueprints@cf623ac` | Blocked: this repository has no external-caller executable, deployment target, or E2E CI job. Its current 38-case runner dispatches repository-local Go tests. The separately owned platform checkout still marks Sandbox Provider, Sandbox Controller, and Runtime Gateway unimplemented, and its `test/e2e` directory contains no runnable scenario. No E2E command was run or claimed |
+| External caller/platform E2E audit | 2026-08-30 review baseline `bba02a6`; separately owned platform checkout with cached `origin/main@cf623ac` | Environment unavailable: this repository has no external-caller executable, deployment target, or E2E CI job, and its 38-case runner dispatches repository-local Go tests. The platform checkout has no sandbox caller command, sandbox Suite lock, deployable Gateway, PKI/JWS material, or runnable E2E scenario. GitHub was unreachable during the audit, so `cf623ac` is a locally cached remote-tracking reference rather than fresh network evidence. No E2E command was run or claimed |
 | Contract resources | OpenAPI, admission, lifecycle, bounded exec, terminal-session, artifact-staging, usage-evidence schemas, fixtures, semantic rules, and Suite | Local Contract authority is locked; artifact publication, billing, and tenant authority remain outside the Provider |
 | Contract lock | revision `22a148e2898477790512d5bb742605654ff00ebf`; tree `1a967c9c6ce9646c8431f6ee48699ec9f406a589`; manifest `sha256:52e47726556a35ae0f1d5867a2f744341efda15475141bed0a9f93a602c4f13c`; OpenAPI `sha256:93e9e0d4492db16fc75f3bfa08e2b7061b133638ff196c60aed45022421bda4f`; semantic rules `sha256:85e7955b18638183ee5295bd6be60b6f94aa0feeee0610cd20492fc0a3e7feb0` | Local verifier, 38-case Conformance, full race/shuffle, vet, projection tests, and post-push CI `32924361132` passed. Suite file SHA-256 is `b43c59ed10d3667223523d04470b52401dae240647228b0db305a1a88ba6bde0`, while the declared Suite digest remains the existing placeholder |
 | External Agent Contract | no longer consumed; old compatibility evidence is historical only | Removed from implementation |
@@ -350,7 +350,7 @@ Pending:
   or runtime profile because the caller-owned Gateway/WebSocket boundary is not
   command-composed. P2.5h's local and repository CI run `33159099578` pass for
   bounded readiness/projection evidence;
-- P2/P3 external-caller Gateway E2E and migration evidence. The 2026-08-26
+- P2/P3 external-caller Gateway E2E and migration evidence. The 2026-08-30
   environment audit found no runnable independently supplied caller, platform
   composition, or E2E target; local Suite mappings and Gateway tests remain
   component evidence only;
@@ -473,23 +473,43 @@ bounded `503` surface. Artifact publication, billing, aggregate conformance,
 external-caller compatibility, multi-controller reliability, multi-tenant
 safety, deployment, and production readiness are not claimed.
 
-The 2026-08-26 external-caller environment audit used implementation evidence
-baseline `b4c7e2d`; `main` and `origin/main` both resolved to that commit when
-the audit began. `cmd/run-conformance` was confirmed to execute the then-locked
-35 case IDs as repository-local `go test` selectors; P2.5b has since expanded
-the local Suite to 38 cases without adding an external caller. The
-repository CI has no external-platform or E2E job. The separately owned
-`CelestialsGroup/agent-blueprints` candidate was checked at its current remote
-`main@cf623ac`; its Application still marks Sandbox Provider, Sandbox
-Controller, and Runtime Gateway as not implemented, while `test/e2e` contains
-no runnable scenario. The intervening remote changes are Contract and Contract-
-validation work, not caller composition. Therefore no independent caller or
-platform E2E command was available to run, and no local Contract, CI, Gateway,
-or migration component result is promoted to external-caller evidence.
+The 2026-08-30 external-caller environment audit used reviewed evidence
+baseline `bba02a6`; `HEAD`, `main`, and `origin/main` all resolved to that commit
+and the worktree was clean when the audit began. `cmd/run-conformance` executes
+the locked 38 case IDs as repository-local `go test` selectors, and repository
+CI has no external-platform or E2E job.
 
-Unblocking requires a separately owned caller checkout and executable scenario
-runner, exact locked-Contract identity, Provider endpoint plus mTLS/JWS trust
-material, and a deployable composition for the caller, Provider, and Gateway.
+| Local candidate | Audit result |
+| --- | --- |
+| `/Users/echo/Projects/sandbox-codex` | Remote-desktop project, not a Provider caller; its existing untracked `.DS_Store` was not modified |
+| `/Users/echo/Projects/sandbox` | Non-Git directory containing only a standalone code-server `Dockerfile`; no Provider caller or scenario runner |
+| `/Users/echo/Projects/nightingales/shell-echo/sandbox-runtime` | Old Provider checkout at `fae94fd`, not an independent caller; its existing untracked `mise.toml` was not modified |
+| `/Users/echo/Projects/nightingales/agent` | Relevant separately owned platform candidate, but no runnable sandbox caller/Gateway/E2E composition |
+
+The platform candidate was clean at local `main@e7d7e1f`, 15 commits behind
+its locally cached `origin/main@cf623ac`. Its `application/test/e2e`,
+`application/provider/sandbox`, `application/cmd/sandbox-controller`, and
+`application/cmd/runtime-gateway` paths contain planning README files rather
+than executable roots. Sandbox Provider, Sandbox Controller, and Runtime
+Gateway are explicitly marked not implemented. Its application dependency lock
+selects only `runtime-core-v1`, not a sandbox Suite. The cached commits through
+`cf623ac` are Contract and Contract-validation work, not caller composition.
+Both browser access and an escalated `git ls-remote` query to GitHub timed out,
+so no fresh network assertion about the current remote tip is made.
+
+| Required P2.5i input | Audit result |
+| --- | --- |
+| Independent caller checkout and executable scenario runner | Absent |
+| Exact matching sandbox Contract and Suite lock | Absent in the platform application lock |
+| Caller/Provider mTLS PKI and JWS trust material | Absent |
+| Deployable Provider, Gateway, and real runtime configuration | Absent |
+| At least two authorization/tenant contexts | Absent |
+
+Therefore the external environment is unavailable, not failed: there was no
+valid P2.5i command to run. No local Contract, CI, Provider admission, Gateway,
+or migration component result is promoted to external-caller evidence.
+Unblocking requires the five inputs above.
+
 Only that environment may supply the P2 coding/shell release evidence and the
 P3 shadow, canary, rollback, old-run drain, metric-parity, and unchanged-
 platform-contract evidence. Multi-controller, multi-tenant, deployment, and
@@ -503,7 +523,8 @@ dependency-absence validation, and readiness-derived immutable advertisement.
 Full local Go, Contract/Suite, diff, and fixed-digest Docker gates pass without
 changing Contract revision `22a148e2898477790512d5bb742605654ff00ebf` or its
 38 cases. Repository CI run `33159099578` passes all three jobs for
-documentation baseline `0ec712c`.
+documentation baseline `0ec712c`, and run `33160646494` passes all three jobs
+for the reviewed documentation baseline `bba02a6`.
 The command root intentionally marks the concrete WebSocket and caller-owned
 Gateway boundary unavailable, so explicit profile startup fails closed and no
 nonempty live advertisement is claimed. P2.5i remains blocked on the
