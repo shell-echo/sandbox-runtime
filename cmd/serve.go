@@ -152,7 +152,7 @@ func newProviderServer(ctx context.Context, providerConfig config.ProviderConfig
 		protected.SessionApplication = terminalApp
 		protected.ArtifactApplication = artifactApp
 		protected.UsageEvidenceReader = usageReader
-		operationReader, readerErr = newProviderOperationReader(lifecycleApp, execApp, artifactApp)
+		operationReader, readerErr = newProviderOperationReader(lifecycleApp, execApp, terminalApp, artifactApp)
 		if readerErr != nil {
 			return nil, noOpProviderClose, errors.Join(readerErr, closeArtifact(), closeTerminal(), closeExec(), closeUsage(), closeProtected(), closeLifecycle())
 		}
@@ -206,8 +206,8 @@ func newProviderServer(ctx context.Context, providerConfig config.ProviderConfig
 // application boundaries were explicitly injected. Usage evidence remains a
 // read sidecar correlated to exec operations rather than a separate operation
 // family.
-func newProviderOperationReader(lifecycleApp providerapi.LifecycleApplication, execApp provideroperation.Reader, artifactApp providerapi.ArtifactApplication) (provideroperation.Reader, error) {
-	readers := make([]provideroperation.Reader, 0, 3)
+func newProviderOperationReader(lifecycleApp providerapi.LifecycleApplication, execApp provideroperation.Reader, sessionApp *providerTerminalApplication, artifactApp providerapi.ArtifactApplication) (provideroperation.Reader, error) {
+	readers := make([]provideroperation.Reader, 0, 4)
 	if lifecycleApp != nil {
 		reader, err := provideroperation.NewLifecycleReader(lifecycleApp)
 		if err != nil {
@@ -217,6 +217,13 @@ func newProviderOperationReader(lifecycleApp providerapi.LifecycleApplication, e
 	}
 	if execApp != nil {
 		readers = append(readers, execApp)
+	}
+	if sessionApp != nil {
+		reader, err := provideroperation.NewSessionReader(sessionApp)
+		if err != nil {
+			return nil, err
+		}
+		readers = append(readers, reader)
 	}
 	if artifactApp != nil {
 		reader, err := provideroperation.NewArtifactReader(artifactApp)
@@ -518,6 +525,13 @@ func (a *providerTerminalApplication) GetHandoff(ctx context.Context, operationI
 		return sessionapplication.Handoff{}, sessionapplication.ErrInvalidApplication
 	}
 	return a.vertical.GetHandoff(ctx, operationID)
+}
+
+func (a *providerTerminalApplication) GetOperation(ctx context.Context, operationID string) (sessionapplication.Operation, error) {
+	if a == nil || a.vertical == nil {
+		return sessionapplication.Operation{}, sessionapplication.ErrInvalidApplication
+	}
+	return a.vertical.GetOperation(ctx, operationID)
 }
 
 // Close runs after server.RunE has stopped the Provider listener. It revokes

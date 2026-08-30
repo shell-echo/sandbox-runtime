@@ -131,7 +131,7 @@ func TestProviderArtifactUsageVerticalIntegration(t *testing.T) {
 		t.Fatalf("missing artifact evidence error = %v", err)
 	}
 
-	operationReader, err := newProviderOperationReader(composition.lifecycle, composition.exec, composition.artifact)
+	operationReader, err := newProviderOperationReader(composition.lifecycle, composition.exec, nil, composition.artifact)
 	if err != nil {
 		t.Fatal(err)
 	}

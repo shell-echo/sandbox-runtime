@@ -215,6 +215,14 @@ func (a *Vertical) GetHandoff(ctx context.Context, operationID string) (Handoff,
 	return base.GetHandoff(ctx, operationID)
 }
 
+func (a *Vertical) GetOperation(ctx context.Context, operationID string) (Operation, error) {
+	if a == nil {
+		return Operation{}, ErrInvalidApplication
+	}
+	base := &Application{authority: a.authority, clock: a.clock}
+	return base.GetOperation(ctx, operationID)
+}
+
 func (a *Vertical) progress(ctx context.Context, record session.Record) (session.Record, error) {
 	if record.Status != session.StatusAccepted && record.Status != session.StatusRunning {
 		return a.cleanupTerminal(ctx, record)

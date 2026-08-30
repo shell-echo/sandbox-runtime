@@ -87,6 +87,26 @@ func (a *Application) Open(ctx context.Context, request session.OpenRequest) (Op
 	return operationProjection(reservation.Record)
 }
 
+// GetOperation reads the durable terminal-session operation without projecting
+// handoff details or repository state across the application boundary.
+func (a *Application) GetOperation(ctx context.Context, operationID string) (Operation, error) {
+	if a == nil || a.authority == nil || a.clock == nil {
+		return Operation{}, ErrInvalidApplication
+	}
+	if ctx == nil {
+		return Operation{}, context.Canceled
+	}
+	now := a.clock.Now().UTC()
+	if now.IsZero() || operationID == "" {
+		return Operation{}, session.ErrInvalidRequest
+	}
+	record, err := a.getOpen(ctx, operationID, now)
+	if err != nil {
+		return Operation{}, err
+	}
+	return operationProjection(record)
+}
+
 // GetHandoff reads the successful opaque handoff. Accepted/running records
 // are explicitly pending; failed, cancelled, and outcome-unknown records can
 // never mint or reopen one.

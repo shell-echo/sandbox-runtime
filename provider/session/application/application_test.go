@@ -94,6 +94,22 @@ func TestOpenReturnsAcceptedProjectionAndDoesNotDispatch(t *testing.T) {
 	}
 }
 
+func TestGetOperationProjectsDurableRecord(t *testing.T) {
+	request := validApplicationRequest()
+	record, err := session.NewRecord(request, applicationTestTime)
+	if err != nil {
+		t.Fatal(err)
+	}
+	spy := &authoritySpy{record: record}
+	operation, err := newTestApplication(t, spy).GetOperation(context.Background(), request.OperationID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if operation.OperationID != request.OperationID || operation.AttemptID != request.AttemptID || operation.FencingToken != request.FencingToken || operation.SandboxID != request.SandboxID || operation.Status != session.StatusAccepted || !operation.ObservedAt.Equal(record.ObservedAt) {
+		t.Fatalf("operation = %#v", operation)
+	}
+}
+
 func TestGetHandoffOnlyProjectsSuccessfulOpaqueRecord(t *testing.T) {
 	spy := &authoritySpy{}
 	request := validApplicationRequest()
