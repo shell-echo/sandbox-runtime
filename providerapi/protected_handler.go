@@ -14,6 +14,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/shell-echo/sandbox-runtime/provider"
 	"github.com/shell-echo/sandbox-runtime/provider/admission"
 	"github.com/shell-echo/sandbox-runtime/provider/artifact"
 	providerexec "github.com/shell-echo/sandbox-runtime/provider/exec"
@@ -42,6 +43,7 @@ type ProtectedTransportOptions struct {
 	UsageEvidenceReader usage.EvidenceReader
 	OperationReader     provideroperation.Reader
 	Now                 func() time.Time
+	capabilitySnapshot  provider.CapabilitySnapshot
 }
 
 // LifecycleApplication is the narrow Provider application boundary. Its
@@ -86,6 +88,7 @@ type protectedHandler struct {
 	execApp         ExecApplication
 	usageReader     usage.EvidenceReader
 	operationReader provideroperation.Reader
+	capabilities    provider.CapabilitySnapshot
 	now             func() time.Time
 }
 
@@ -109,7 +112,7 @@ func newProtectedHandler(identity *clientIdentityAdmission, options ProtectedTra
 		sessionApp: options.SessionApplication, artifactApp: options.ArtifactApplication,
 		execApp:     options.ExecApplication,
 		usageReader: options.UsageEvidenceReader, operationReader: options.OperationReader,
-		now: now,
+		capabilities: options.capabilitySnapshot, now: now,
 	}, nil
 }
 

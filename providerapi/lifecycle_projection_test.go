@@ -17,6 +17,7 @@ import (
 
 	"github.com/gowebpki/jcs"
 	"github.com/shell-echo/sandbox-runtime/internal/providercontract"
+	"github.com/shell-echo/sandbox-runtime/provider"
 	"github.com/shell-echo/sandbox-runtime/provider/admission"
 	"github.com/shell-echo/sandbox-runtime/provider/lifecycle"
 	"github.com/shell-echo/sandbox-runtime/provider/lifecycle/repository"
@@ -77,7 +78,7 @@ func TestDecodeCreateRequestProjectsOnlyAdmittedProviderFields(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	projected, err := decodeCreateRequest(document, admitted, now)
+	projected, err := decodeCreateRequest(document, admitted, now, provider.CapabilitySnapshot{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,7 +95,7 @@ func TestDecodeCreateRequestRejectsUnsupportedCapabilitiesAndContextSubstitution
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := decodeCreateRequest(document, admitted, now); err == nil || !isProjectionUnsupported(err) {
+	if _, err := decodeCreateRequest(document, admitted, now, provider.CapabilitySnapshot{}); err == nil || !isProjectionUnsupported(err) {
 		t.Fatalf("unsupported capability error = %v", err)
 	}
 	request.Spec.RequiredCapabilities = nil
@@ -103,9 +104,92 @@ func TestDecodeCreateRequestRejectsUnsupportedCapabilitiesAndContextSubstitution
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := decodeCreateRequest(document, admitted, now); err == nil {
+	if _, err := decodeCreateRequest(document, admitted, now, provider.CapabilitySnapshot{}); err == nil {
 		t.Fatal("context substitution was accepted")
 	}
+}
+
+func TestDecodeCreateRequestBindsAdvertisedCodingShellCapabilities(t *testing.T) {
+	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	snapshot := validCodingShellSnapshot(t)
+	validRequest := func() (providerv1.CreateRequest, admission.AdmissionContext) {
+		request, admitted := validProjectionCreateRequest(now)
+		request.Spec.RuntimeProfile = "sandbox-runtime-coding-shell-v1"
+		request.Spec.RequiredCapabilities = []providerv1.CapabilityRequirement{
+			{ID: "sandbox.exec", Version: "1.0.0", Profile: "exec-v1"},
+			{ID: "sandbox.terminal", Version: "1.0.0", Profile: "terminal-v1"},
+		}
+		return request, admitted
+	}
+	decode := func(t *testing.T, request providerv1.CreateRequest, admitted admission.AdmissionContext) error {
+		t.Helper()
+		document, err := json.Marshal(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = decodeCreateRequest(document, admitted, now, snapshot)
+		return err
+	}
+
+	request, admitted := validRequest()
+	request.Spec.RequiredCapabilities[0], request.Spec.RequiredCapabilities[1] = request.Spec.RequiredCapabilities[1], request.Spec.RequiredCapabilities[0]
+	if err := decode(t, request, admitted); err != nil {
+		t.Fatalf("exact advertised requirements were rejected: %v", err)
+	}
+
+	tests := map[string]func(*providerv1.CreateRequest, *admission.AdmissionContext){
+		"Provider revision": func(request *providerv1.CreateRequest, admitted *admission.AdmissionContext) {
+			request.Spec.ProviderRevisionID = "revision-other"
+			admitted.ProviderRevisionID = "revision-other"
+		},
+		"runtime profile": func(request *providerv1.CreateRequest, _ *admission.AdmissionContext) {
+			request.Spec.RuntimeProfile = "sandbox-runtime-other-v1"
+		},
+		"missing capability": func(request *providerv1.CreateRequest, _ *admission.AdmissionContext) {
+			request.Spec.RequiredCapabilities = request.Spec.RequiredCapabilities[:1]
+		},
+		"duplicate profile": func(request *providerv1.CreateRequest, _ *admission.AdmissionContext) {
+			request.Spec.RequiredCapabilities[1] = request.Spec.RequiredCapabilities[0]
+		},
+		"capability ID": func(request *providerv1.CreateRequest, _ *admission.AdmissionContext) {
+			request.Spec.RequiredCapabilities[0].ID = "sandbox.terminal"
+		},
+		"capability version": func(request *providerv1.CreateRequest, _ *admission.AdmissionContext) {
+			request.Spec.RequiredCapabilities[0].Version = "2.0.0"
+		},
+		"capability profile": func(request *providerv1.CreateRequest, _ *admission.AdmissionContext) {
+			request.Spec.RequiredCapabilities[0].Profile = "other-v1"
+		},
+		"optional capability": func(request *providerv1.CreateRequest, _ *admission.AdmissionContext) {
+			request.Spec.OptionalCapabilities = []providerv1.CapabilityRequirement{{ID: "sandbox.exec", Version: "1.0.0", Profile: "exec-v1"}}
+		},
+	}
+	for name, mutate := range tests {
+		t.Run(name, func(t *testing.T) {
+			request, admitted := validRequest()
+			mutate(&request, &admitted)
+			if err := decode(t, request, admitted); err == nil || !isProjectionUnsupported(err) {
+				t.Fatalf("capability binding error = %v", err)
+			}
+		})
+	}
+}
+
+func validCodingShellSnapshot(t *testing.T) provider.CapabilitySnapshot {
+	t.Helper()
+	base := validSnapshot(t, nil, nil)
+	capabilities, runtimeProfiles := providerCodingShellAdvertisements()
+	snapshot, err := provider.NewCapabilitySnapshotWithAdvertisements(
+		base.ProviderRevisionID,
+		base.Limits,
+		capabilities,
+		runtimeProfiles,
+		base.SnapshotRestoreProfiles,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return snapshot
 }
 
 func TestLifecycleProjectionsAreBoundedAndOpaque(t *testing.T) {

@@ -17,16 +17,28 @@ const capabilitiesPath = "/v1/capabilities"
 // before the returned handler can serve traffic. It remains package-private so
 // callers cannot bypass the mTLS-only Provider server composition.
 func newCapabilitiesHandler(ctx context.Context, source provider.CapabilityReader) (http.Handler, error) {
+	snapshot, err := readCapabilitySnapshot(ctx, source)
+	if err != nil {
+		return nil, err
+	}
+	return newCapabilitiesHandlerFromSnapshot(snapshot)
+}
+
+func readCapabilitySnapshot(ctx context.Context, source provider.CapabilityReader) (provider.CapabilitySnapshot, error) {
 	if ctx == nil {
-		return nil, errors.New("capability construction context is nil")
+		return provider.CapabilitySnapshot{}, errors.New("capability construction context is nil")
 	}
 	if source == nil {
-		return nil, errors.New("capability source is nil")
+		return provider.CapabilitySnapshot{}, errors.New("capability source is nil")
 	}
 	snapshot, err := source.CapabilitySnapshot(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("read capability snapshot: %w", err)
+		return provider.CapabilitySnapshot{}, fmt.Errorf("read capability snapshot: %w", err)
 	}
+	return snapshot, nil
+}
+
+func newCapabilitiesHandlerFromSnapshot(snapshot provider.CapabilitySnapshot) (http.Handler, error) {
 	document := mapCapabilities(snapshot)
 	if err := validateCapabilities(document); err != nil {
 		return nil, fmt.Errorf("validate Provider v1 capability response: %w", err)

@@ -59,7 +59,11 @@ func NewServer(ctx context.Context, options TransportOptions, source provider.Ca
 		return nil, fmt.Errorf("validate Provider server address: %w", err)
 	}
 
-	handler, err := newCapabilitiesHandler(ctx, source)
+	snapshot, err := readCapabilitySnapshot(ctx, source)
+	if err != nil {
+		return nil, err
+	}
+	handler, err := newCapabilitiesHandlerFromSnapshot(snapshot)
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +79,9 @@ func NewServer(ctx context.Context, options TransportOptions, source provider.Ca
 	rootHandler := handler
 	maxHeaderBytes := providerMaxHeaderBytes
 	if options.Protected != nil {
-		protected, protectedErr := newProtectedHandler(identityAdmission, *options.Protected)
+		protectedOptions := *options.Protected
+		protectedOptions.capabilitySnapshot = snapshot
+		protected, protectedErr := newProtectedHandler(identityAdmission, protectedOptions)
 		if protectedErr != nil {
 			return nil, protectedErr
 		}

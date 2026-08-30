@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/shell-echo/sandbox-runtime/provider"
 	"github.com/shell-echo/sandbox-runtime/provider/admission"
 	"github.com/shell-echo/sandbox-runtime/provider/lifecycle"
 	"github.com/shell-echo/sandbox-runtime/provider/lifecycle/repository"
@@ -21,7 +22,7 @@ import (
 var errUnsupportedCreateCapability = errors.New("requested Provider capability is unsupported")
 
 func (h *protectedHandler) serveCreate(response http.ResponseWriter, request *http.Request, admitted admission.AdmissionContext, document []byte, _ protectedRoute) {
-	create, err := decodeCreateRequest(document, admitted, h.now().UTC())
+	create, err := decodeCreateRequest(document, admitted, h.now().UTC(), h.capabilities)
 	if err != nil {
 		status, code := http.StatusBadRequest, "SANDBOX_INVALID_REQUEST"
 		if errors.Is(err, errUnsupportedCreateCapability) {
@@ -106,7 +107,7 @@ func mapOperationReaderError(err error) (int, string, bool) {
 	}
 }
 
-func decodeCreateRequest(document []byte, admitted admission.AdmissionContext, now time.Time) (lifecycle.CreateRequest, error) {
+func decodeCreateRequest(document []byte, admitted admission.AdmissionContext, now time.Time, capabilities provider.CapabilitySnapshot) (lifecycle.CreateRequest, error) {
 	var request providerv1.CreateRequest
 	if err := providerv1.DecodeStrict(bytes.NewReader(document), providerv1.MaxCreateRequestBytes, &request); err != nil {
 		return lifecycle.CreateRequest{}, err
@@ -124,7 +125,7 @@ func decodeCreateRequest(document []byte, admitted admission.AdmissionContext, n
 	if admitted.OperationID != request.OperationID || admitted.AttemptID != request.AttemptID || admitted.FencingToken != request.FencingToken || admitted.SandboxID != request.Spec.SandboxID || admitted.TenantID != request.Spec.TenantID || admitted.WorkOrderID != request.Spec.WorkOrderID || admitted.ProviderRevisionID != request.Spec.ProviderRevisionID {
 		return lifecycle.CreateRequest{}, errors.New("Provider create request does not match admitted context")
 	}
-	if len(request.Spec.RequiredCapabilities) != 0 || len(request.Spec.OptionalCapabilities) != 0 {
+	if err := validateCreateCapabilityRequirements(request.Spec, capabilities); err != nil {
 		return lifecycle.CreateRequest{}, errUnsupportedCreateCapability
 	}
 	if request.Spec.Network.Mode != providerv1.NetworkNone || request.Spec.Network.PolicyReference != "" || (request.Spec.Network.EgressGatewayRequired != nil && *request.Spec.Network.EgressGatewayRequired) {
@@ -184,6 +185,73 @@ func decodeCreateRequest(document []byte, admitted admission.AdmissionContext, n
 		return lifecycle.CreateRequest{}, err
 	}
 	return create, nil
+}
+
+func validateCreateCapabilityRequirements(spec providerv1.SandboxSpec, snapshot provider.CapabilitySnapshot) error {
+	if len(snapshot.Capabilities) == 0 && len(snapshot.RuntimeProfiles) == 0 {
+		if len(spec.RequiredCapabilities) != 0 || len(spec.OptionalCapabilities) != 0 {
+			return errors.New("capability requirements require an advertised runtime profile")
+		}
+		return nil
+	}
+	if spec.ProviderRevisionID != snapshot.ProviderRevisionID {
+		return errors.New("Provider revision does not match capability advertisement")
+	}
+	if len(spec.OptionalCapabilities) != 0 {
+		return errors.New("optional capabilities are not supported")
+	}
+
+	var runtimeProfile *provider.RuntimeProfile
+	for index := range snapshot.RuntimeProfiles {
+		if snapshot.RuntimeProfiles[index].ID == spec.RuntimeProfile {
+			runtimeProfile = &snapshot.RuntimeProfiles[index]
+			break
+		}
+	}
+	if runtimeProfile == nil {
+		return errors.New("runtime profile is not advertised")
+	}
+
+	expectedProfiles := make(map[string]struct{}, len(runtimeProfile.CapabilityProfileIDs))
+	for _, profileID := range runtimeProfile.CapabilityProfileIDs {
+		expectedProfiles[profileID] = struct{}{}
+	}
+	if len(spec.RequiredCapabilities) != len(expectedProfiles) {
+		return errors.New("required capabilities do not exactly cover the runtime profile")
+	}
+
+	capabilitiesByProfile := make(map[string]provider.Capability, len(expectedProfiles))
+	for _, capability := range snapshot.Capabilities {
+		for _, profileID := range capability.Profiles {
+			capabilitiesByProfile[profileID] = capability
+		}
+	}
+	seenProfiles := make(map[string]struct{}, len(spec.RequiredCapabilities))
+	for _, requirement := range spec.RequiredCapabilities {
+		if _, expected := expectedProfiles[requirement.Profile]; !expected {
+			return errors.New("required capability profile is not part of the runtime profile")
+		}
+		if _, duplicate := seenProfiles[requirement.Profile]; duplicate {
+			return errors.New("required capability profile is duplicated")
+		}
+		seenProfiles[requirement.Profile] = struct{}{}
+
+		capability, advertised := capabilitiesByProfile[requirement.Profile]
+		if !advertised || requirement.ID != capability.ID {
+			return errors.New("required capability does not match its advertised profile")
+		}
+		versionAdvertised := false
+		for _, version := range capability.Versions {
+			if requirement.Version == version {
+				versionAdvertised = true
+				break
+			}
+		}
+		if !versionAdvertised {
+			return errors.New("required capability version is not advertised")
+		}
+	}
+	return nil
 }
 
 func operationProjection(operation lifecycle.Operation) (providerv1.Operation, error) {
