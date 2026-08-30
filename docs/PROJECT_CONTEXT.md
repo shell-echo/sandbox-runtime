@@ -131,7 +131,7 @@ multi-tenant, deployment, and production readiness.
 
 This snapshot was audited on 2026-08-30 against Provider implementation
 baseline `d58497e5359056858564b9ac663178958cf5a6d6` and independent reference
-caller baseline `926141af89da53355be6d4326d42bacda44db92a`. Provider fixes after
+caller baseline `1d93722000056ddcf7dff41d2c633ee8f7b130db`. Provider fixes after
 the previous documentation baseline bind create requirements to advertised
 capabilities, preserve empty HTTP/2 reads, dispatch accepted lifecycle work,
 aggregate terminal-session operations, and prevent a caller Gateway grant from
@@ -142,7 +142,7 @@ verifier, and unchanged locked 38-case Suite pass at `d58497e`. The separate
 `sandbox-runtime-e2e` module then passed 15 initial and 5 process-reconstruction
 scenarios over real mTLS/JWS HTTPS, WebSocket, separate caller/reference-stack
 processes, and Docker. Its clean-run manifest is under ignored local evidence
-directory `20260830T072224.989788000Z` and pins both commits, Contract identity,
+directory `20260830T073427.356961000Z` and pins both commits, Contract identity,
 configuration digests, and a digest-pinned local `linux/amd64` runtime image.
 This is reference external-caller evidence only. The latest repository CI still
 predates these local commits, so no CI result is claimed for them.
@@ -186,7 +186,7 @@ import-boundary test that forbids Provider implementation imports; the separate
 reference-stack process alone composes exported Provider/Gateway packages with
 explicit caller-owned policy.
 
-The clean `926141a` harness run against Provider `d58497e` verified exact
+The clean `1d93722` harness run against Provider `d58497e` verified exact
 Contract/Suite identity, two ephemeral mTLS/JWS controller identities, locked
 capability discovery, protected lifecycle, replay, exec/result/usage, stale
 fencing, cancellation, opaque terminal handoff, Gateway bytes, wrong-caller and
