@@ -11,13 +11,14 @@ import (
 	"github.com/shell-echo/sandbox-runtime/provider/lifecycle/repository/memory"
 )
 
-func TestApplicationAcceptsAndRecoversCreate(t *testing.T) {
+func TestApplicationAcceptsAndDispatchesCreate(t *testing.T) {
 	now := time.Date(2026, 8, 21, 10, 0, 0, 0, time.UTC)
 	repo := memory.NewRepository()
 	app, err := New(repo, fake.New(), coordinator.ClockFunc(func() time.Time { return now }))
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer app.Close()
 	request := lifecycle.CreateRequest{
 		OperationID: "operation-1", AttemptID: "attempt-1", FencingToken: 1,
 		IdempotencyKey: "key-1", RequestDigest: "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
@@ -31,11 +32,15 @@ func TestApplicationAcceptsAndRecoversCreate(t *testing.T) {
 	if err != nil || accepted.Operation.State != lifecycle.OperationAccepted {
 		t.Fatalf("AcceptCreate() = %#v, %v", accepted, err)
 	}
-	if err := app.Recover(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	operation, err := app.GetOperation(context.Background(), request.OperationID)
-	if err != nil || operation.State != lifecycle.OperationSucceeded {
-		t.Fatalf("GetOperation() = %#v, %v", operation, err)
+	deadline := time.Now().Add(time.Second)
+	for {
+		operation, err := app.GetOperation(context.Background(), request.OperationID)
+		if err == nil && operation.State == lifecycle.OperationSucceeded {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("GetOperation() = %#v, %v", operation, err)
+		}
+		time.Sleep(time.Millisecond)
 	}
 }

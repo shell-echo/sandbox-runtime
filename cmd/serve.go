@@ -289,9 +289,9 @@ func newProviderLifecycleRuntime(ctx context.Context, lifecycleConfig config.Pro
 		return nil, nil, noOpProviderClose, fmt.Errorf("construct Provider lifecycle application: %w", err)
 	}
 	if err := application.Recover(ctx); err != nil {
-		return nil, nil, noOpProviderClose, errors.Join(fmt.Errorf("recover Provider lifecycle: %w", err), closeDriver(), lifecycleRepo.Close())
+		return nil, nil, noOpProviderClose, errors.Join(fmt.Errorf("recover Provider lifecycle: %w", err), application.Close(), closeDriver(), lifecycleRepo.Close())
 	}
-	return application, execRuntime, func() error { return errors.Join(closeDriver(), lifecycleRepo.Close()) }, nil
+	return application, execRuntime, func() error { return errors.Join(application.Close(), closeDriver(), lifecycleRepo.Close()) }, nil
 }
 
 func newProviderExecApplication(ctx context.Context, execConfig config.ProviderExecConfig, lifecycleApp *lifecycleapplication.Application, runtime *lifecycledocker.Driver, resultSink providerexec.ResultObserver) (*execapplication.Vertical, func() error, error) {
