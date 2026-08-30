@@ -382,7 +382,7 @@ func validateEndpoint(endpoint Endpoint, grant Grant, now time.Time) error {
 	if endpoint.ExpiresAt.IsZero() || !endpoint.ExpiresAt.After(now) {
 		return ErrExpired
 	}
-	if endpoint.ExpiresAt.After(grant.ExpiresAt) {
+	if grant.ExpiresAt.After(endpoint.ExpiresAt) {
 		return ErrStaleReference
 	}
 	return nil

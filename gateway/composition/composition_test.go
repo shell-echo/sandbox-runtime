@@ -193,11 +193,11 @@ func TestConnectFailsClosedForIncompleteProviderEndpoint(t *testing.T) {
 	}{
 		{"missing dial", reference.Endpoint{
 			Reference: validRequest().HandoffReference, ConnectionGeneration: 1,
-			ExpiresAt: compositionTestTime.Add(30 * time.Second),
+			ExpiresAt: compositionTestTime.Add(time.Minute),
 		}, gateway.ErrReferenceUnavailable},
 		{"typed nil terminal stream", reference.Endpoint{
 			Reference: validRequest().HandoffReference, ConnectionGeneration: 1,
-			ExpiresAt: compositionTestTime.Add(30 * time.Second),
+			ExpiresAt: compositionTestTime.Add(time.Minute),
 			Dial: func(context.Context) (terminal.Stream, error) {
 				var stream *terminalStream
 				return stream, nil
@@ -400,7 +400,7 @@ func terminalEndpoint(referenceValue string, stream terminal.Stream) reference.E
 	return reference.Endpoint{
 		Reference: referenceValue, SandboxID: "sandbox-1", RuntimeSessionID: "session-1",
 		CapabilityProfileID: "terminal-v1", ConnectionGeneration: 1,
-		ExpiresAt: compositionTestTime.Add(30 * time.Second),
+		ExpiresAt: compositionTestTime.Add(time.Minute),
 		Dial:      func(context.Context) (terminal.Stream, error) { return stream, nil },
 	}
 }

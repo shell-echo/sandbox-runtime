@@ -204,6 +204,20 @@ func validEndpoint(stream *testStream) Endpoint {
 	}
 }
 
+func TestValidateEndpointBoundsGrantToProviderExpiry(t *testing.T) {
+	grant := gatewayGrant()
+	endpoint := validEndpoint(newTestStream())
+	endpoint.ExpiresAt = grant.ExpiresAt.Add(time.Minute)
+	if err := validateEndpoint(endpoint, grant, gatewayTestNow); err != nil {
+		t.Fatalf("shorter grant rejected: %v", err)
+	}
+
+	endpoint.ExpiresAt = grant.ExpiresAt.Add(-time.Minute)
+	if err := validateEndpoint(endpoint, grant, gatewayTestNow); !errors.Is(err, ErrStaleReference) {
+		t.Fatalf("grant beyond Provider expiry = %v, want ErrStaleReference", err)
+	}
+}
+
 func TestGatewayConnectProxiesOpaqueFramesAndRecordsMetadataOnly(t *testing.T) {
 	client, backend := newTestStream(), newTestStream()
 	revocations, recorder := newTestRevocations(), &testRecorder{}
