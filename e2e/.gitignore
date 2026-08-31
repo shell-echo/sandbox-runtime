@@ -1,0 +1,6 @@
+/bin/
+/evidence/
+/secrets/
+/state/
+/tmp/
+*.log

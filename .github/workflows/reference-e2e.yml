@@ -1,0 +1,61 @@
+name: Reference E2E
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: reference-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  reference-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out the Provider and caller harness
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: e2e/go.mod
+          cache: true
+          cache-dependency-path: |
+            e2e/go.sum
+            go.sum
+
+      - name: Download Go modules
+        working-directory: e2e
+        run: go mod download
+
+      - name: Verify the locked Provider and Contract
+        working-directory: e2e
+        run: go run ./cmd/e2e -check
+
+      - name: Run caller harness tests
+        working-directory: e2e
+        run: go test -race -shuffle=on -count=1 ./...
+
+      - name: Run caller harness vet
+        working-directory: e2e
+        run: go vet ./...
+
+      - name: Run the reference external-caller E2E
+        working-directory: e2e
+        run: go run ./cmd/e2e -source-image local -evidence-root evidence
+
+      - name: Upload sanitized reference evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: reference-e2e-evidence-${{ github.run_id }}
+          path: e2e/evidence
+          if-no-files-found: warn
+          retention-days: 14
