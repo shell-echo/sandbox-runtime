@@ -10,6 +10,13 @@ reference deployment process composes exported `sandbox-runtime` Provider and
 Gateway packages with explicit test policy. The caller never imports Provider
 models, repositories, drivers, command packages, or test helpers.
 
+`cmd/platform-e2e` runs an additional Agent Platform candidate mode. Its
+`platform-caller` process owns a bounded candidate Run/ProviderRevision policy,
+performs live capability/request shadow checks, and then invokes the same
+black-box wire caller. This is a candidate integration harness only; it does
+not represent the separately owned Veronica Application or close the real P3
+platform gate.
+
 ## Locked input
 
 | Item | Value |

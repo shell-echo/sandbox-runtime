@@ -42,6 +42,30 @@ type Options struct {
 	ProviderRoot string
 	EvidenceRoot string
 	SourceImage  string
+	CallerKind   CallerKind
+}
+
+// CallerKind identifies the independently launched caller process used by a
+// run. The default remains the co-located reference caller.
+type CallerKind string
+
+const (
+	CallerReference         CallerKind = "reference"
+	CallerPlatformCandidate CallerKind = "agent-platform-candidate"
+)
+
+func selectCaller(kind CallerKind) (CallerKind, string, string, string, error) {
+	if kind == "" {
+		kind = CallerReference
+	}
+	switch kind {
+	case CallerReference:
+		return kind, "caller", "./cmd/caller", "reference external-caller P2.5i only; not Agent Platform, aggregate conformance, multi-controller, multi-tenant, deployment, or production readiness", nil
+	case CallerPlatformCandidate:
+		return kind, "platform-caller", "./cmd/platform-caller", "Agent Platform candidate integration only; not real Veronica, aggregate conformance, multi-controller, hostile multi-tenant, deployment, or production readiness", nil
+	default:
+		return "", "", "", "", fmt.Errorf("unsupported E2E caller kind %q", kind)
+	}
 }
 
 type Result struct {
@@ -53,6 +77,7 @@ type Result struct {
 
 type evidenceManifest struct {
 	CreatedAt           string   `json:"created_at"`
+	CallerKind          string   `json:"caller_kind"`
 	HarnessCommit       string   `json:"harness_commit"`
 	ProviderCommit      string   `json:"provider_commit"`
 	ContractRevision    string   `json:"contract_revision"`
@@ -64,11 +89,17 @@ type evidenceManifest struct {
 	StackConfigDigest   string   `json:"stack_config_digest"`
 	CallerConfigDigests []string `json:"caller_config_digests"`
 	Reports             []string `json:"reports"`
+	CandidateReports    []string `json:"candidate_reports,omitempty"`
+	CandidateBoundary   string   `json:"candidate_evidence_boundary,omitempty"`
 	Commands            []string `json:"commands"`
 	EvidenceBoundary    string   `json:"evidence_boundary"`
 }
 
 func Run(ctx context.Context, options Options) (_ Result, resultErr error) {
+	callerKind, callerBinaryName, callerPackage, evidenceBoundary, err := selectCaller(options.CallerKind)
+	if err != nil {
+		return Result{}, err
+	}
 	moduleRoot, err := filepath.Abs(options.ModuleRoot)
 	if err != nil {
 		return Result{}, err
@@ -134,13 +165,13 @@ func Run(ctx context.Context, options Options) (_ Result, resultErr error) {
 	}
 	goCache := filepath.Join(runRoot, "go-cache")
 	referenceStackBinary := filepath.Join(binRoot, "reference-stack")
-	callerBinary := filepath.Join(binRoot, "caller")
+	callerBinary := filepath.Join(binRoot, callerBinaryName)
 	terminalBrokerBinary := filepath.Join(binRoot, "terminal-broker")
 	referenceRuntimeBinary := filepath.Join(binRoot, "reference-runtime")
 	if err := build(ctx, moduleRoot, goCache, nil, referenceStackBinary, "./cmd/reference-stack"); err != nil {
 		return Result{}, err
 	}
-	if err := build(ctx, moduleRoot, goCache, nil, callerBinary, "./cmd/caller"); err != nil {
+	if err := build(ctx, moduleRoot, goCache, nil, callerBinary, callerPackage); err != nil {
 		return Result{}, err
 	}
 	if err := build(ctx, providerRoot, goCache, []string{"GOOS=linux", "GOARCH=amd64", "CGO_ENABLED=0"}, terminalBrokerBinary, "./cmd/terminal-broker"); err != nil {
@@ -304,17 +335,21 @@ func Run(ctx context.Context, options Options) (_ Result, resultErr error) {
 		return Result{}, err
 	}
 	manifest := evidenceManifest{
-		CreatedAt: time.Now().UTC().Format(time.RFC3339Nano), HarnessCommit: harnessCommit, ProviderCommit: lock.ProviderCommit,
+		CreatedAt: time.Now().UTC().Format(time.RFC3339Nano), CallerKind: string(callerKind), HarnessCommit: harnessCommit, ProviderCommit: lock.ProviderCommit,
 		ContractRevision: lock.ContractRevision, ContractTree: lock.ContractTree, SuiteCases: lock.SuiteCases,
 		RuntimeImage: runtimeImage, RuntimePlatform: "linux/amd64", RuntimePreparation: runtimePreparation, StackConfigDigest: stackConfigDigest,
 		CallerConfigDigests: []string{initialConfigDigest, resumeConfigDigest},
 		Reports:             []string{filepath.Base(initialReportPath), filepath.Base(resumeReportPath)},
 		Commands: []string{
-			"go build ./cmd/reference-stack", "go build ./cmd/caller", "GOOS=linux GOARCH=amd64 go build ./cmd/terminal-broker", "GOOS=linux GOARCH=amd64 go build ./cmd/reference-runtime",
-			"reference-stack -config <ephemeral>", "caller -config <ephemeral> (initial)",
-			"reference-stack -config <same-state> (reconstructed)", "caller -config <ephemeral> (resume)",
+			"go build ./cmd/reference-stack", "go build " + callerPackage, "GOOS=linux GOARCH=amd64 go build ./cmd/terminal-broker", "GOOS=linux GOARCH=amd64 go build ./cmd/reference-runtime",
+			"reference-stack -config <ephemeral>", callerBinaryName + " -config <ephemeral> (initial)",
+			"reference-stack -config <same-state> (reconstructed)", callerBinaryName + " -config <ephemeral> (resume)",
 		},
-		EvidenceBoundary: "reference external-caller P2.5i only; not Agent Platform, aggregate conformance, multi-controller, multi-tenant, deployment, or production readiness",
+		EvidenceBoundary: evidenceBoundary,
+	}
+	if callerKind == CallerPlatformCandidate {
+		manifest.CandidateReports = []string{filepath.Base(initialReportPath), filepath.Base(resumeReportPath)}
+		manifest.CandidateBoundary = evidenceBoundary
 	}
 	if _, err := writeJSON(filepath.Join(evidenceDirectory, "manifest.json"), manifest); err != nil {
 		return Result{}, err

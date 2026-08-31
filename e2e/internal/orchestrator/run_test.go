@@ -29,6 +29,32 @@ func TestImageDigestFromReference(t *testing.T) {
 	}
 }
 
+func TestSelectCallerDefaultsToReference(t *testing.T) {
+	kind, binary, packagePath, boundary, err := selectCaller("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if kind != CallerReference || binary != "caller" || packagePath != "./cmd/caller" || !strings.Contains(boundary, "reference external-caller") {
+		t.Fatalf("selection = %q, %q, %q, %q", kind, binary, packagePath, boundary)
+	}
+}
+
+func TestSelectCallerPlatformCandidateIsExplicit(t *testing.T) {
+	kind, binary, packagePath, boundary, err := selectCaller(CallerPlatformCandidate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if kind != CallerPlatformCandidate || binary != "platform-caller" || packagePath != "./cmd/platform-caller" || !strings.Contains(boundary, "Agent Platform candidate integration only") {
+		t.Fatalf("selection = %q, %q, %q, %q", kind, binary, packagePath, boundary)
+	}
+}
+
+func TestSelectCallerRejectsUnknownKind(t *testing.T) {
+	if _, _, _, _, err := selectCaller(CallerKind("unknown")); err == nil {
+		t.Fatal("unknown caller kind was accepted")
+	}
+}
+
 func TestImageDigestFromReferenceRejectsInvalidInputs(t *testing.T) {
 	for _, test := range []struct {
 		name, reference string
