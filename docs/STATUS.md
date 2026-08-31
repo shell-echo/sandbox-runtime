@@ -14,7 +14,7 @@ production readiness.
 | --- | --- | --- |
 | Latest Provider implementation evidence | implementation `d58497e5359056858564b9ac663178958cf5a6d6` | Includes create capability binding, HTTP/2 empty-read admission, live lifecycle dispatch, terminal-session operation aggregation, and Gateway grant-to-endpoint expiry bounding. Full race/shuffle, vet, module verification, Contract verifier, locked 38-case Suite, and diff checks passed locally. This implementation is included in the descendant CI baseline `f509eca7a309cbecc4702c8a982189656ebd151b`, run `33348916594` |
 | Latest repository CI evidence | Provider implementation `f509eca7a309cbecc4702c8a982189656ebd151b` | Repository CI run `33348916594` passed `provider-contract`, `test`, and `docker-integration` for the pushed Provider implementation. The earlier P2.5h and P2.5g documentation baselines passed in runs `33159099578` and `33157119149`. These are repository CI results only, not external-caller or production evidence |
-| Latest reference external-caller evidence | independent harness `1d93722000056ddcf7dff41d2c633ee8f7b130db`; ignored evidence `20260830T073427.356961000Z` | Against Provider `d58497e`, all 15 initial and 5 process-reconstruction/resume scenarios passed over mTLS/JWS HTTPS, WebSocket, separate caller/reference-stack processes, and Docker. The manifest pins both commits, Contract revision/tree, 38-case Suite identity, configuration digests, and runtime image digest. This is P2.5i reference caller evidence only |
+| Latest reference external-caller evidence | co-located `e2e/` harness `d661a9862b0b0fc6b433a5fc7e1ffa021495e260`; ignored evidence `20260831T023312.448033000Z` | Against Provider `d58497e`, all 15 initial and 5 process-reconstruction/resume scenarios passed over mTLS/JWS HTTPS, WebSocket, separate caller/reference-stack processes, and Docker. The manifest pins both commits, Contract revision/tree, 38-case Suite identity, configuration digests, and runtime image digest. This is P2.5i reference caller evidence only; the root workflow is prepared but has not yet produced a GitHub Actions result |
 | Review | PR [#17](https://github.com/shell-echo/sandbox-runtime/pull/17) merged as `43ff3d7`; PR [#18](https://github.com/shell-echo/sandbox-runtime/pull/18) merged as `4774c3a`; PR [#19](https://github.com/shell-echo/sandbox-runtime/pull/19) merged as `e2755f5`; PR [#21](https://github.com/shell-echo/sandbox-runtime/pull/21) merged as `c5a4a65`; PR [#22](https://github.com/shell-echo/sandbox-runtime/pull/22) merged as `44f39ec`; PR [#23](https://github.com/shell-echo/sandbox-runtime/pull/23) merged as `ac72eab`; PR [#24](https://github.com/shell-echo/sandbox-runtime/pull/24) merged as `2e3dde6`; PR [#25](https://github.com/shell-echo/sandbox-runtime/pull/25) merged as `88506d1`; PR [#26](https://github.com/shell-echo/sandbox-runtime/pull/26) merged as `4ccb107`; PR [#27](https://github.com/shell-echo/sandbox-runtime/pull/27) merged as `28076a7`; PR [#28](https://github.com/shell-echo/sandbox-runtime/pull/28) merged as `2b25f76`; PR [#29](https://github.com/shell-echo/sandbox-runtime/pull/29) merged as `83965a2`; PR [#30](https://github.com/shell-echo/sandbox-runtime/pull/30) merged as `9d00212`; PR [#31](https://github.com/shell-echo/sandbox-runtime/pull/31) merged as `67b64a9`; PR [#32](https://github.com/shell-echo/sandbox-runtime/pull/32) merged as `5883da9`; PR [#33](https://github.com/shell-echo/sandbox-runtime/pull/33) merged as `ba39053`; PR [#35](https://github.com/shell-echo/sandbox-runtime/pull/35) merged as `c467cd4`; PR [#36](https://github.com/shell-echo/sandbox-runtime/pull/36) merged as `3a980bd`; PR [#37](https://github.com/shell-echo/sandbox-runtime/pull/37) merged as `f9cfbc3`; PR [#38](https://github.com/shell-echo/sandbox-runtime/pull/38) merged as `7ebcc8f`; PR [#39](https://github.com/shell-echo/sandbox-runtime/pull/39) merged as `17072e6`; PR [#40](https://github.com/shell-echo/sandbox-runtime/pull/40) merged as `65a9ba3`; PR [#41](https://github.com/shell-echo/sandbox-runtime/pull/41) merged as `ac555619`; PR [#42](https://github.com/shell-echo/sandbox-runtime/pull/42) merged as `97fb429` | PR #42 CI `32465114377` and post-merge CI `32465443385` provider-contract, test, and docker-integration passed |
 | P2.2a release evidence | `2fa2e72` on PR #33, merged as `ba39053` | Local race/shuffle, vet, lock, Suite, PR CI, and post-merge CI passed |
 | P2.2b release evidence | `e26bf2b` on PR #35, merged as `c467cd4` | Local race/shuffle, vet, lock, 19-case Suite, PR CI `32456100570`, and post-merge CI `32456279722` passed; no HTTP/dispatch composition |
@@ -57,8 +57,8 @@ production readiness.
 | P2.5h readiness-derived composition and advertisement | implementation `2c55173` | `ProviderCapabilityConfig.CodingShellEnabled` is an explicit opt-in. The command root constructs a deterministic dependency graph only after lifecycle, admission, exec, usage, terminal, artifact, and operation readers are composed. The source advertises exactly `sandbox.exec@1.0.0`/`exec-v1`, `sandbox.terminal@1.0.0`/`terminal-v1`, and `sandbox-runtime-coding-shell-v1` only when every graph node is ready; otherwise explicit enablement returns a startup error and disabled configuration returns non-nil empty arrays. Config and per-node dependency-absence matrices, immutable snapshot projection, canonical terminal IDs, full race/shuffle, vet, lock verification, the 38-case Suite, fixed-digest Docker integration, and diff checks pass. The command graph intentionally marks the concrete WebSocket and caller-owned Gateway boundary unavailable, so this slice does not produce a runnable nonempty-profile deployment or external-caller evidence |
 | P3 local evidence | implementation commit `4212e88` | Revision identity validation, deterministic canary binding, rollback-only-new-run behavior, old-run draining, shadow validation bounds, and migration metric aggregation passed focused race/shuffle and vet; real platform traffic and migration evidence remain open |
 | P3 component release evidence | post-push CI run `32805284762` | CI run concluded success for `4212e88`; this remains local migration component evidence, not external caller, canary traffic, rollback E2E, or production readiness |
-| Historical external platform audit | 2026-08-30 review baseline `bba02a6`; platform checkout cached `origin/main@cf623ac` | The existing Agent Platform candidate still had no runnable sandbox caller, Gateway, lock, PKI/JWS, or scenario runner. This finding remains relevant to actual platform compatibility but no longer blocks the separately versioned reference P2.5i harness |
-| P2.5i reference external caller | harness `1d93722000056ddcf7dff41d2c633ee8f7b130db`; Provider `d58497e5359056858564b9ac663178958cf5a6d6` | Clean local run passed 15 initial plus 5 restart/resume scenarios, including two controller contexts, endpoint non-disclosure, negative authorization, expiry/revocation, retained evidence, and same-shell reconnect. No Agent Platform, aggregate, multi-controller, hostile multi-tenant, deployment, or production claim |
+| Historical external platform audit | 2026-08-30 review baseline `bba02a6`; platform checkout cached `origin/main@cf623ac` | The existing Agent Platform candidate still had no runnable sandbox caller, Gateway, lock, PKI/JWS, or scenario runner. This finding remains relevant to actual platform compatibility but no longer blocks the co-located reference P2.5i harness |
+| P2.5i reference external caller | co-located harness `d661a9862b0b0fc6b433a5fc7e1ffa021495e260`; Provider `d58497e5359056858564b9ac663178958cf5a6d6` | Clean local run passed 15 initial plus 5 restart/resume scenarios, including two controller contexts, endpoint non-disclosure, negative authorization, expiry/revocation, retained evidence, and same-shell reconnect. The harness is a separately runnable Go module and process boundary under `e2e/`; no Agent Platform, aggregate, multi-controller, hostile multi-tenant, deployment, or production claim |
 | Contract resources | OpenAPI, admission, lifecycle, bounded exec, terminal-session, artifact-staging, usage-evidence schemas, fixtures, semantic rules, and Suite | Local Contract authority is locked; artifact publication, billing, and tenant authority remain outside the Provider |
 | Contract lock | revision `22a148e2898477790512d5bb742605654ff00ebf`; tree `1a967c9c6ce9646c8431f6ee48699ec9f406a589`; manifest `sha256:52e47726556a35ae0f1d5867a2f744341efda15475141bed0a9f93a602c4f13c`; OpenAPI `sha256:93e9e0d4492db16fc75f3bfa08e2b7061b133638ff196c60aed45022421bda4f`; semantic rules `sha256:85e7955b18638183ee5295bd6be60b6f94aa0feeee0610cd20492fc0a3e7feb0` | Local verifier, 38-case Conformance, full race/shuffle, vet, projection tests, and post-push CI `32924361132` passed. Suite file SHA-256 is `b43c59ed10d3667223523d04470b52401dae240647228b0db305a1a88ba6bde0`, while the declared Suite digest remains the existing placeholder |
 | External Agent Contract | no longer consumed; old compatibility evidence is historical only | Removed from implementation |
@@ -122,9 +122,9 @@ It does not clone, mount, or read an external source repository.
 | P2.5f7 | Terminal/Gateway vertical evidence gate | Local single-controller Docker/race/restart/reconnect gate passes in `0e8b284`; evidence baseline `cefbc74` passed repository CI `33134521467` | Retain same-repository test boundary and no-public-Gateway/no-external-caller claims; P2.5g artifact/usage evidence is recorded separately |
 | P2.5g | Artifact and usage vertical | Local gate passes in implementation `0e6e108`: default-disabled development composition, durable artifact/usage repositories, async recovery/shutdown, real Docker output confinement and private staging, partial exec-derived usage, operation aggregation, and restart evidence. Repository CI `33157119149` passed all three jobs | Retain development-only/single-controller boundaries; publication, billing, external caller, aggregate, reliability, tenancy, deployment, and production claims remain open |
 | P2.5h | Readiness-derived composition and exact advertisement | Local component/projection gate passes in implementation `2c55173`: explicit opt-in config, canonical IDs, complete dependency graph validation, empty-disabled behavior, and immutable exact Contract snapshot generation. Repository CI `33159099578` passed all three jobs. The Provider command graph still deliberately lacks caller-owned WebSocket/Gateway policy | Retain fail-closed Provider ownership. The reference stack supplies policy externally for P2.5i without adding an allow-all Provider default |
-| P2.5i | Independent reference caller release gate | Passed locally with clean harness `1d93722` against Provider `d58497e`; evidence `20260830T073427.356961000Z` records 15 initial and 5 restart/resume passes, exact lock/config/image identities, separate processes, real sockets, and Docker | Publish/run this harness in CI separately. Do not promote it to Agent Platform, aggregate, multi-controller, hostile multi-tenant, deployment, or production evidence |
+| P2.5i | Independent reference caller release gate | Passed locally with clean co-located harness `d661a98` against Provider `d58497e`; evidence `20260831T023312.448033000Z` records 15 initial and 5 restart/resume passes, exact lock/config/image identities, separate processes, real sockets, and Docker | Run the root `.github/workflows/reference-e2e.yml` and retain its artifact. Do not promote this reference result to Agent Platform, aggregate, multi-controller, hostile multi-tenant, deployment, or production evidence |
 | P2 | Coding/remote-shell profile | Passed for the architecture's separately supplied reference caller gate. All earlier component/Contract gates retain their narrower evidence boundaries | Actual Agent Platform compatibility, aggregate conformance, multi-controller reliability, hostile multi-tenant security, deployment, and production gates remain open |
-| P3 | Migration readiness and platform integration | Ready to begin from local binding/shadow/metrics component evidence (`4212e88`) now that the reference P2 caller gate passes | Supply a real platform migration target and prove locked-Suite/request shadow parity, new-run-only canary, rollback, old-run drain, metric parity, and unchanged platform-owned contracts |
+| P3 | Migration readiness and platform integration | Local binding/shadow/metrics component evidence (`4212e88`) is present; the reference P2 caller gate passes | Supply a real platform migration target and prove locked-Suite/request shadow parity, new-run-only canary, rollback, old-run drain, metric parity, and unchanged platform-owned contracts |
 | P4 | Optional capability profiles | Not started | Add browser, desktop, port forwarding, snapshots/restore, GPU, nested-container, and stronger-isolation profiles only through independent Contract, security, and conformance gates |
 | Production readiness | Independent evidence tier, not a shortcut from P4 | Not established | Deployment, multi-controller reliability, multi-tenant security, operations, and production gates |
 
@@ -344,18 +344,19 @@ Passed locally (authorized test environment):
 
 Pending:
 
-- remote/CI publication of the independently versioned P2.5i reference harness;
-  its clean local 15+5 scenario result is external-caller evidence, while the
-  Provider command root correctly remains free of caller-owned authorization,
-  revocation, recording, and public Gateway defaults;
+- execution and publication of the co-located, independently versioned P2.5i
+  reference harness through `.github/workflows/reference-e2e.yml`; its clean
+  local 15+5 scenario result is external-caller evidence, while the Provider
+  command root correctly remains free of caller-owned authorization, revocation,
+  recording, and public Gateway defaults;
 - actual Agent Platform integration and P3 migration evidence. The separately
   inspected platform candidate still has no runnable sandbox caller/Gateway;
   the reference harness does not substitute for real request shadow parity,
   canary, rollback, old-run drain, metric parity, or unchanged platform
   contracts;
 - optional content-derived Suite digest enhancement;
-- aggregate lifecycle conformance, external-caller E2E, reliability, tenancy,
-  deployment, and production gates.
+- Agent Platform caller E2E, aggregate lifecycle conformance, reliability,
+  tenancy, deployment, and production gates.
 
 ## Next Entry
 
@@ -477,21 +478,24 @@ no existing caller in the Provider repository or the separately inspected
 Agent Platform candidate. That historical result is retained as the reason a
 new independent harness was created; it is no longer the current P2.5i state.
 
-`/Users/echo/Projects/shell-echo/sandbox-runtime-e2e` is now a separate Git
-module. Its caller and command cannot import Provider implementation packages;
-only its reference deployment process imports exported Provider/Gateway
-composition. Full evidence runs reject a dirty or unversioned harness and a
-Provider checkout with non-documentation changes after the locked baseline.
+`e2e/` is a separately runnable Go module and process boundary co-located in this
+Provider repository. Its caller and command cannot import Provider
+implementation packages; only its reference deployment process imports
+exported Provider/Gateway composition. Full evidence runs reject a dirty or
+unversioned harness and a Provider checkout with non-documentation changes after
+the locked baseline. The root workflow is tracked in
+`.github/workflows/reference-e2e.yml`, but it has not yet produced a hosted CI
+result.
 
 The final clean local run used:
 
 | Input | Locked value |
 | --- | --- |
-| Caller harness | `1d93722000056ddcf7dff41d2c633ee8f7b130db` |
+| Caller harness | `d661a9862b0b0fc6b433a5fc7e1ffa021495e260` |
 | Provider implementation | `d58497e5359056858564b9ac663178958cf5a6d6` |
 | Contract revision/tree | `22a148e2898477790512d5bb742605654ff00ebf` / `1a967c9c6ce9646c8431f6ee48699ec9f406a589` |
 | Suite identity | repository-owned Provider v1, 38 cases |
-| Evidence directory | `20260830T073427.356961000Z` under the ignored E2E evidence root |
+| Evidence directory | `20260831T023312.448033000Z` under `e2e/evidence/` (ignored) |
 
 All 15 initial and 5 reconstruction/resume scenarios passed. The initial run
 covered exact capability discovery, protected create, replay, lifecycle,

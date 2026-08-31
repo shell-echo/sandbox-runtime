@@ -1,6 +1,6 @@
 # Project Context
 
-Updated: 2026-08-30
+Updated: 2026-08-31
 
 This is the stable entry point for a new developer, AI agent, development
 device, or implementation session. It summarizes the system, engineering
@@ -129,24 +129,25 @@ multi-tenant, deployment, and production readiness.
 
 ## Current Snapshot
 
-This snapshot was audited on 2026-08-30 against Provider implementation
-baseline `d58497e5359056858564b9ac663178958cf5a6d6` and independent reference
-caller baseline `1d93722000056ddcf7dff41d2c633ee8f7b130db`. Provider fixes after
+This snapshot was audited on 2026-08-31 against Provider implementation
+baseline `d58497e5359056858564b9ac663178958cf5a6d6` and co-located reference
+caller baseline `d661a9862b0b0fc6b433a5fc7e1ffa021495e260`. Provider fixes after
 the previous documentation baseline bind create requirements to advertised
 capabilities, preserve empty HTTP/2 reads, dispatch accepted lifecycle work,
 aggregate terminal-session operations, and prevent a caller Gateway grant from
 outliving its Provider endpoint.
 
 The Provider full race/shuffle suite, vet, module verification, Contract lock
-verifier, and unchanged locked 38-case Suite pass at `d58497e`. The separate
-`sandbox-runtime-e2e` module then passed 15 initial and 5 process-reconstruction
-scenarios over real mTLS/JWS HTTPS, WebSocket, separate caller/reference-stack
-processes, and Docker. Its clean-run manifest is under ignored local evidence
-directory `20260830T073427.356961000Z` and pins both commits, Contract identity,
+verifier, and unchanged locked 38-case Suite pass at `d58497e`. The co-located
+`e2e/` module then passed 15 initial and 5 process-reconstruction scenarios over
+real mTLS/JWS HTTPS, WebSocket, separate caller/reference-stack processes, and
+Docker. Its clean-run manifest is under ignored local evidence directory
+`20260831T023312.448033000Z` and pins both commits, Contract identity,
 configuration digests, and a digest-pinned local `linux/amd64` runtime image.
 This is reference external-caller evidence only. The Provider implementation
 baseline is covered by repository CI run `33348916594` at descendant commit
-`f509eca`; no CI result is claimed for the separate local caller harness.
+`f509eca`; the root reference-E2E workflow is prepared but no hosted result is
+claimed yet.
 
 Contract identity:
 
@@ -162,7 +163,7 @@ Contract identity:
 | P1.1 | Passed for DTO, mTLS discovery, JWS/digest/replay/fencing admission | Production identity infrastructure remains unproven |
 | P1.2 | Passed for the bounded Contract-authorized lifecycle subset and development composition | Reserved lifecycle families and production gates remain open |
 | P2 components | P2.1-P2.5h local component, Contract projection, Docker, and recorded repository CI gates pass within their named boundaries | Retain single-controller/development constraints and exact Contract lock |
-| P2.5i | Passed for the clean independent reference caller: 15 initial plus 5 restart/resume scenarios against Provider `d58497e` | Add repository/CI publication separately; do not reinterpret this as Agent Platform or production evidence |
+| P2.5i | Passed for the clean co-located independent reference caller: 15 initial plus 5 restart/resume scenarios against Provider `d58497e` | Run `.github/workflows/reference-e2e.yml`; do not reinterpret this as Agent Platform or production evidence |
 | P2 | Reference coding/shell caller release gate passed | Aggregate conformance, actual Agent Platform compatibility, multi-controller, hostile multi-tenant isolation, deployment, and production gates remain open |
 | P3 | Local revision binding, shadow-validation, canary/rollback/drain, and metrics primitives passed component tests | Real platform traffic shadow parity, canary, rollback, old-run drain, metric parity, and unchanged platform contracts remain open |
 | P4 | Optional capability profiles have not started | Each browser/desktop/forwarding/snapshot/GPU/isolation profile needs independent Contract, security, and conformance gates |
@@ -181,14 +182,14 @@ independent caller and production evidence.
 
 ## P2.5i Reference Result
 
-The earlier audit correctly found no existing platform caller. A new separately
-versioned reference harness now exists at
-`/Users/echo/Projects/shell-echo/sandbox-runtime-e2e`. Its caller module has an
+The earlier audit correctly found no existing platform caller. A separately
+versioned reference harness now exists as the `e2e/` Go module and process
+boundary inside this Provider repository. Its caller module has an
 import-boundary test that forbids Provider implementation imports; the separate
 reference-stack process alone composes exported Provider/Gateway packages with
 explicit caller-owned policy.
 
-The clean `1d93722` harness run against Provider `d58497e` verified exact
+The clean `d661a98` harness run against Provider `d58497e` verified exact
 Contract/Suite identity, two ephemeral mTLS/JWS controller identities, locked
 capability discovery, protected lifecycle, replay, exec/result/usage, stale
 fencing, cancellation, opaque terminal handoff, Gateway bytes, wrong-caller and
@@ -295,8 +296,9 @@ Its focused, full local, and Docker-tagged gates pass, and repository CI
 repository CI `33159099578` also pass their bounded readiness/projection gates.
 Reviewed documentation baseline `bba02a6` passes repository CI `33160646494`.
 
-1. Preserve the clean P2.5i reference harness and add remote/CI publication as
-   a separate operational task; the current evidence is local and reproducible.
+1. Preserve the clean P2.5i reference harness and run the tracked root
+   reference-E2E workflow; the current evidence is local and reproducible, but
+   hosted CI publication is still pending.
 2. Begin P3 only against a real platform migration target: lock the same
    Contract/profile, shadow capabilities and requests, canary only new runs,
    prove rollback and old-run drain, and compare the required metrics without
