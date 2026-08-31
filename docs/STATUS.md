@@ -15,6 +15,7 @@ production readiness.
 | Latest Provider implementation evidence | implementation `d58497e5359056858564b9ac663178958cf5a6d6` | Includes create capability binding, HTTP/2 empty-read admission, live lifecycle dispatch, terminal-session operation aggregation, and Gateway grant-to-endpoint expiry bounding. Full race/shuffle, vet, module verification, Contract verifier, locked 38-case Suite, and diff checks passed locally. This implementation is included in the descendant CI baseline `f509eca7a309cbecc4702c8a982189656ebd151b`, run `33348916594` |
 | Latest repository CI evidence | pushed documentation/fix baseline `555436c82bb2e1f0fd75e9c2d5cb24a4d0e8dc89` | Repository CI run `33379217795` passed `provider-contract`, `test`, and `docker-integration`; the run emitted only GitHub's Node.js 20 deprecation warnings. Earlier P2.5h and P2.5g implementation gates remain in runs `33159099578` and `33157119149`. These are repository CI results only, not external-caller or production evidence |
 | Latest reference external-caller evidence | co-located `e2e/` harness `e329150df3d33a21ba30c1f616a94246b4ff8804`; ignored evidence `20260831T094209.963835000Z`; hosted run `33379217800` | Against Provider `d58497e`, all 15 initial and 5 process-reconstruction/resume scenarios passed locally and hosted over mTLS/JWS HTTPS, WebSocket, separate caller/reference-stack processes, and Docker, including Gateway revocation after the bounded drain fix. Hosted artifact `reference-e2e-evidence-33379217800` has digest `sha256:68250a85683dcbd8f01397d7373e98215382379ff895c0a58692de23c1880733`. This is P2.5i reference caller evidence only |
+| Latest Agent Platform candidate integration evidence | candidate harness commit `47bd627cd4e5f8bb868eae3c8ba85300ea23181d`; ignored evidence `e2e/evidence/20260831T103546.265112000Z` | `cmd/platform-e2e` ran `platform-caller` and `reference-stack` as separate processes over real mTLS/JWS HTTPS, WebSocket, Docker, and restart/resume state. All 15 initial and 5 resume scenarios passed; manifest pins Provider `d58497e`, Contract 38 cases, and runtime digest `sha256:9ed4729720a6ec55b55c833d9c62dc9592b19ffdb6159ce906f49a988925109f`. This is Agent Platform candidate integration evidence only, not real Veronica or production evidence |
 | Review | PR [#17](https://github.com/shell-echo/sandbox-runtime/pull/17) merged as `43ff3d7`; PR [#18](https://github.com/shell-echo/sandbox-runtime/pull/18) merged as `4774c3a`; PR [#19](https://github.com/shell-echo/sandbox-runtime/pull/19) merged as `e2755f5`; PR [#21](https://github.com/shell-echo/sandbox-runtime/pull/21) merged as `c5a4a65`; PR [#22](https://github.com/shell-echo/sandbox-runtime/pull/22) merged as `44f39ec`; PR [#23](https://github.com/shell-echo/sandbox-runtime/pull/23) merged as `ac72eab`; PR [#24](https://github.com/shell-echo/sandbox-runtime/pull/24) merged as `2e3dde6`; PR [#25](https://github.com/shell-echo/sandbox-runtime/pull/25) merged as `88506d1`; PR [#26](https://github.com/shell-echo/sandbox-runtime/pull/26) merged as `4ccb107`; PR [#27](https://github.com/shell-echo/sandbox-runtime/pull/27) merged as `28076a7`; PR [#28](https://github.com/shell-echo/sandbox-runtime/pull/28) merged as `2b25f76`; PR [#29](https://github.com/shell-echo/sandbox-runtime/pull/29) merged as `83965a2`; PR [#30](https://github.com/shell-echo/sandbox-runtime/pull/30) merged as `9d00212`; PR [#31](https://github.com/shell-echo/sandbox-runtime/pull/31) merged as `67b64a9`; PR [#32](https://github.com/shell-echo/sandbox-runtime/pull/32) merged as `5883da9`; PR [#33](https://github.com/shell-echo/sandbox-runtime/pull/33) merged as `ba39053`; PR [#35](https://github.com/shell-echo/sandbox-runtime/pull/35) merged as `c467cd4`; PR [#36](https://github.com/shell-echo/sandbox-runtime/pull/36) merged as `3a980bd`; PR [#37](https://github.com/shell-echo/sandbox-runtime/pull/37) merged as `f9cfbc3`; PR [#38](https://github.com/shell-echo/sandbox-runtime/pull/38) merged as `7ebcc8f`; PR [#39](https://github.com/shell-echo/sandbox-runtime/pull/39) merged as `17072e6`; PR [#40](https://github.com/shell-echo/sandbox-runtime/pull/40) merged as `65a9ba3`; PR [#41](https://github.com/shell-echo/sandbox-runtime/pull/41) merged as `ac555619`; PR [#42](https://github.com/shell-echo/sandbox-runtime/pull/42) merged as `97fb429` | PR #42 CI `32465114377` and post-merge CI `32465443385` provider-contract, test, and docker-integration passed |
 | P2.2a release evidence | `2fa2e72` on PR #33, merged as `ba39053` | Local race/shuffle, vet, lock, Suite, PR CI, and post-merge CI passed |
 | P2.2b release evidence | `e26bf2b` on PR #35, merged as `c467cd4` | Local race/shuffle, vet, lock, 19-case Suite, PR CI `32456100570`, and post-merge CI `32456279722` passed; no HTTP/dispatch composition |
@@ -57,8 +58,9 @@ production readiness.
 | P2.5h readiness-derived composition and advertisement | implementation `2c55173` | `ProviderCapabilityConfig.CodingShellEnabled` is an explicit opt-in. The command root constructs a deterministic dependency graph only after lifecycle, admission, exec, usage, terminal, artifact, and operation readers are composed. The source advertises exactly `sandbox.exec@1.0.0`/`exec-v1`, `sandbox.terminal@1.0.0`/`terminal-v1`, and `sandbox-runtime-coding-shell-v1` only when every graph node is ready; otherwise explicit enablement returns a startup error and disabled configuration returns non-nil empty arrays. Config and per-node dependency-absence matrices, immutable snapshot projection, canonical terminal IDs, full race/shuffle, vet, lock verification, the 38-case Suite, fixed-digest Docker integration, and diff checks pass. The command graph intentionally marks the concrete WebSocket and caller-owned Gateway boundary unavailable, so this slice does not produce a runnable nonempty-profile deployment or external-caller evidence |
 | P3 local evidence | implementation commit `4212e88` | Revision identity validation, deterministic canary binding, rollback-only-new-run behavior, old-run draining, shadow validation bounds, and migration metric aggregation passed focused race/shuffle and vet; real platform traffic and migration evidence remain open |
 | P3 component release evidence | post-push CI run `32805284762` | CI run concluded success for `4212e88`; this remains local migration component evidence, not external caller, canary traffic, rollback E2E, or production readiness |
-| Historical external platform audit | 2026-08-30 review baseline `bba02a6`; platform checkout cached `origin/main@cf623ac` | The existing Agent Platform candidate still had no runnable sandbox caller, Gateway, lock, PKI/JWS, or scenario runner. This finding remains relevant to actual platform compatibility but no longer blocks the co-located reference P2.5i harness |
-| Current Agent Platform candidate audit | 2026-08-31 read-only audit; `veronica` local `main@4f812468e2827c86823490ce83e578ec4448cb3d`, cached `origin/main@a758c219fd9f14a015368ab95914ed7386c05afc`; old `sandbox-runtime-e2e@2981842` | `veronica` exposes Blueprint/governance and TF00 feasibility material plus Python runners, but no runnable Application service, Provider client, Gateway, mTLS/JWS PKI, endpoint, or migration traffic harness. The old checkout has no remote and is reference-caller preparation only. Pre-existing `veronica` changes were preserved. P3 real platform evidence remains blocked |
+| Historical external platform audit | 2026-08-30 review baseline `bba02a6`; platform checkout cached `origin/main@cf623ac` | The existing Agent Platform candidate then had no runnable sandbox caller, Gateway, lock, PKI/JWS, or scenario runner. This finding explains why the co-located candidate harness was added; it is not evidence about the real platform |
+| Current real-platform audit | 2026-08-31 read-only audit; `veronica` local `main@4f812468e2827c86823490ce83e578ec4448cb3d`, cached `origin/main@a758c219fd9f14a015368ab95914ed7386c05afc`; old `sandbox-runtime-e2e@2981842` | `veronica` exposes Blueprint/governance and TF00 feasibility material plus Python runners, but no runnable Application service, Provider client, Gateway, mTLS/JWS PKI, endpoint, or migration traffic harness. The old checkout has no remote and is reference-caller preparation only. Pre-existing `veronica` changes were preserved. The new co-located candidate harness is separate and does not close real platform evidence |
+| P3 candidate integration evidence | harness commit `47bd627`; evidence `e2e/evidence/20260831T103546.265112000Z` | Candidate capability/request shadow checks, ProviderRevision binding, canary rollback preserving old-run identity, new-run stable selection, candidate state reconstruction, 15 initial and 5 resume scenarios, candidate metrics, and black-box import boundary passed. Boundary is `Agent Platform candidate integration only`; real platform shadow parity, canary traffic, rollback/drain, and platform-contract ownership remain open |
 | P2.5i reference external caller | co-located harness `e329150df3d33a21ba30c1f616a94246b4ff8804`; Provider `d58497e5359056858564b9ac663178958cf5a6d6`; hosted run `33379217800` | Clean local and hosted runs passed 15 initial plus 5 restart/resume scenarios, including two controller contexts, endpoint non-disclosure, negative authorization, expiry/revocation, retained evidence, and same-shell reconnect. Hosted CI run `33379217795` also passed all three Provider jobs; artifact digest is `sha256:68250a85683dcbd8f01397d7373e98215382379ff895c0a58692de23c1880733`. No Agent Platform, aggregate, multi-controller, hostile multi-tenant, deployment, or production claim |
 | Contract resources | OpenAPI, admission, lifecycle, bounded exec, terminal-session, artifact-staging, usage-evidence schemas, fixtures, semantic rules, and Suite | Local Contract authority is locked; artifact publication, billing, and tenant authority remain outside the Provider |
 | Contract lock | revision `22a148e2898477790512d5bb742605654ff00ebf`; tree `1a967c9c6ce9646c8431f6ee48699ec9f406a589`; manifest `sha256:52e47726556a35ae0f1d5867a2f744341efda15475141bed0a9f93a602c4f13c`; OpenAPI `sha256:93e9e0d4492db16fc75f3bfa08e2b7061b133638ff196c60aed45022421bda4f`; semantic rules `sha256:85e7955b18638183ee5295bd6be60b6f94aa0feeee0610cd20492fc0a3e7feb0` | Local verifier, 38-case Conformance, full race/shuffle, vet, projection tests, and post-push CI `32924361132` passed. Suite file SHA-256 is `b43c59ed10d3667223523d04470b52401dae240647228b0db305a1a88ba6bde0`, while the declared Suite digest remains the existing placeholder |
@@ -125,7 +127,7 @@ It does not clone, mount, or read an external source repository.
 | P2.5h | Readiness-derived composition and exact advertisement | Local component/projection gate passes in implementation `2c55173`: explicit opt-in config, canonical IDs, complete dependency graph validation, empty-disabled behavior, and immutable exact Contract snapshot generation. Repository CI `33159099578` passed all three jobs. The Provider command graph still deliberately lacks caller-owned WebSocket/Gateway policy | Retain fail-closed Provider ownership. The reference stack supplies policy externally for P2.5i without adding an allow-all Provider default |
 | P2.5i | Independent reference caller release gate | Passed locally with clean co-located harness `e329150` against Provider `d58497e`; evidence `20260831T094209.963835000Z` records 15 initial and 5 restart/resume passes, exact lock/config/image identities, separate processes, real sockets, Docker, and a temporary-registry named digest | Hosted run `33379217800` passed the same 15 initial and 5 restart/resume scenarios on commit `555436c`; artifact `reference-e2e-evidence-33379217800` digest is `sha256:68250a85683dcbd8f01397d7373e98215382379ff895c0a58692de23c1880733`. The prior `33377404561` failure was the caller-side one-shot-read false negative fixed by the bounded drain. Do not promote this reference result to Agent Platform, aggregate, multi-controller, hostile multi-tenant, deployment, or production evidence |
 | P2 | Coding/remote-shell profile | Passed for the architecture's separately supplied reference caller gate. All earlier component/Contract gates retain their narrower evidence boundaries | Actual Agent Platform compatibility, aggregate conformance, multi-controller reliability, hostile multi-tenant security, deployment, and production gates remain open |
-| P3 | Migration readiness and platform integration | Local binding/shadow/metrics component evidence (`4212e88`) is present; the reference P2 caller gate passes | Supply a real platform migration target and prove locked-Suite/request shadow parity, new-run-only canary, rollback, old-run drain, metric parity, and unchanged platform-owned contracts |
+| P3 | Migration readiness and platform integration | Local component evidence (`4212e88`) and co-located Agent Platform candidate integration evidence (`47bd627`, 15+5 scenarios) are present; the reference P2 caller gate passes | Supply a real platform migration target and prove locked-Suite/request shadow parity, new-run-only canary, rollback, old-run drain, metric parity, and unchanged platform-owned contracts |
 | P4 | Optional capability profiles | Not started | Add browser, desktop, port forwarding, snapshots/restore, GPU, nested-container, and stronger-isolation profiles only through independent Contract, security, and conformance gates |
 | Production readiness | Independent evidence tier, not a shortcut from P4 | Not established | Deployment, multi-controller reliability, multi-tenant security, operations, and production gates |
 
@@ -345,14 +347,14 @@ Passed locally (authorized test environment):
 
 Open:
 
-- actual Agent Platform integration and P3 migration evidence. The
+- real Agent Platform integration and P3 migration evidence. The
   2026-08-31 audit of `veronica` found only Blueprint/governance and TF00
-  feasibility material, not a runnable sandbox caller/Gateway, mTLS/JWS
-  identity setup, endpoint, or migration harness. The old
-  `sandbox-runtime-e2e` checkout is reference-caller preparation only. The
-  hosted reference harness proves only its named scenarios and does not
-  substitute for real request shadow parity, canary, rollback, old-run drain,
-  metric parity, or unchanged platform contracts;
+  feasibility material, not a runnable Application service, sandbox
+  caller/Gateway, mTLS/JWS identity setup, endpoint, or migration harness.
+  The co-located `platform-e2e` run is a candidate integration harness and is
+  recorded separately; it does not substitute for real request shadow parity,
+  canary traffic, rollback, old-run drain, metric parity, or unchanged
+  platform contracts;
 - optional content-derived Suite digest enhancement;
 - Agent Platform caller E2E, aggregate lifecycle conformance, reliability,
   tenancy, deployment, and production gates.
@@ -372,9 +374,10 @@ of the following as a reproducible, non-secret test entrypoint:
    roll future selection back, drain old runs, and compare lifecycle, exec,
    orphan, session, resource-evidence, and reconciliation metrics.
 
-Until those inputs exist, the correct action is documentation and audit only;
-the locked 38-case Suite and co-located `e2e/` run must not be relabeled as
-Agent Platform E2E or migration evidence.
+Until those inputs exist, the candidate harness can provide only bounded
+integration evidence. The locked 38-case Suite and co-located `e2e/` run must
+not be relabeled as real Agent Platform E2E, aggregate conformance, or
+migration evidence.
 
 ## Next Entry
 
@@ -506,6 +509,18 @@ the locked baseline. The root workflow is tracked in
 initial and 5 reconstruction/resume scenarios on commit `555436c`. Its uploaded
 artifact digest is `sha256:68250a85683dcbd8f01397d7373e98215382379ff895c0a58692de23c1880733`.
 
+The candidate integration run then used harness commit `47bd627` and the same
+locked Provider/Contract identities. `cmd/platform-e2e` launched a separate
+`platform-caller` process, performed live capability and create-request shadow
+checks, exercised candidate ProviderRevision selection plus canary rollback and
+old-run drain policy, and persisted candidate state across Provider process
+reconstruction. The ignored manifest is
+`e2e/evidence/20260831T103546.265112000Z/manifest.json`; it records 15 initial
+and 5 resume scenarios, runtime digest
+`sha256:9ed4729720a6ec55b55c833d9c62dc9592b19ffdb6159ce906f49a988925109f`, and
+the boundary `Agent Platform candidate integration only`. Docker resources were
+cleaned after the run.
+
 The final clean local run used:
 
 | Input | Locked value |
@@ -525,7 +540,7 @@ exec/usage/artifact evidence, opaque handoff, and the same terminal shell.
 
 This is sufficient for the local and hosted reference P2.5i caller gate. The
 hosted artifact is recorded above. It is not evidence that the existing Agent
-Platform candidate is compatible, and it does not prove
+real Veronica is compatible, and it does not prove
 aggregate conformance, distributed revocation, multi-controller reliability,
 hostile multi-tenant isolation, deployment, or production readiness. P3 still
 requires a real platform migration target and its separately named traffic

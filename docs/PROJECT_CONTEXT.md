@@ -156,6 +156,17 @@ restart/resume scenarios after the bounded Gateway revocation drain fix. The
 uploaded artifact is `reference-e2e-evidence-33379217800` with digest
 `sha256:68250a85683dcbd8f01397d7373e98215382379ff895c0a58692de23c1880733`.
 
+The co-located `e2e/` module also contains an explicitly named
+`agent-platform-candidate` caller. Candidate run `47bd627` passed 15 initial and
+5 resume scenarios over separate `platform-caller` and `reference-stack`
+processes, with live capability/request shadow checks, ProviderRevision
+selection, canary rollback/drain policy, state reconstruction, mTLS/JWS,
+WebSocket, and Docker. Its ignored manifest is
+`e2e/evidence/20260831T103546.265112000Z/manifest.json`. This is candidate
+integration evidence only and does not represent real Veronica, aggregate
+conformance, hostile multi-tenant security, deployment, or production
+readiness.
+
 Contract identity:
 
 - namespace: `urn:shell-echo:sandbox-runtime:provider-v1`
@@ -172,7 +183,7 @@ Contract identity:
 | P2 components | P2.1-P2.5h local component, Contract projection, Docker, and recorded repository CI gates pass within their named boundaries | Retain single-controller/development constraints and exact Contract lock |
 | P2.5i | Passed locally and hosted for the clean co-located independent reference caller: 15 initial plus 5 restart/resume scenarios against Provider `d58497e` using harness `e329150` | Reference artifact is published in hosted run `33379217800`; do not reinterpret this as Agent Platform or production evidence |
 | P2 | Reference coding/shell caller release gate passed | Aggregate conformance, actual Agent Platform compatibility, multi-controller, hostile multi-tenant isolation, deployment, and production gates remain open |
-| P3 | Local revision binding, shadow-validation, canary/rollback/drain, and metrics primitives passed component tests | Real platform traffic shadow parity, canary, rollback, old-run drain, metric parity, and unchanged platform contracts remain open |
+| P3 | Local revision binding/shadow/metrics component evidence plus candidate integration run `47bd627` (15 initial + 5 resume) | Real platform traffic shadow parity, canary, rollback, old-run drain, metric parity, and unchanged platform contracts remain open |
 | P4 | Optional capability profiles have not started | Each browser/desktop/forwarding/snapshot/GPU/isolation profile needs independent Contract, security, and conformance gates |
 
 Production readiness is not a numbered phase shortcut. Aggregate conformance,
@@ -205,10 +216,10 @@ process reconstruction, retained evidence, and same-shell reconnect. It
 exposed no backend endpoint and left no managed container or new temporary run
 directory.
 
-This closes the reference external-caller P2.5i gate. It does not prove the
-separately owned Agent Platform candidate can call the Provider, nor aggregate
-conformance, distributed revocation, multi-controller reliability, hostile
-multi-tenant isolation, deployment, or production readiness.
+This closes the reference external-caller P2.5i gate. It does not prove real
+Veronica compatibility, aggregate conformance, distributed revocation,
+multi-controller reliability, hostile multi-tenant isolation, deployment, or
+production readiness.
 
 ## Platform Candidate Audit
 
@@ -227,9 +238,9 @@ caller or migration harness in the available adjacent projects:
   future remote-checkout preparation and the canonical reference harness is
   now the co-located `e2e/` module; it is not an Agent Platform caller.
 
-Therefore P3 remains blocked for real platform evidence. The reference P2.5i
-result is valid and complete within its named boundary, but it cannot establish
-platform request shadow parity, real canary/rollback, old-run drain, metric
+Therefore P3 remains blocked for real platform evidence. The candidate result
+is valid and complete within its named boundary, but it cannot establish real
+platform request shadow parity, canary traffic, rollback, old-run drain, metric
 parity, or unchanged platform-owned contracts. Resuming P3 requires a real
 platform caller/service, the locked Contract/profile and ProviderRevision,
 identity-bound mTLS/JWS PKI, reachable Provider/Gateway endpoints, and a
@@ -328,10 +339,10 @@ Its focused, full local, and Docker-tagged gates pass, and repository CI
 repository CI `33159099578` also pass their bounded readiness/projection gates.
 Reviewed documentation baseline `bba02a6` passes repository CI `33160646494`.
 
-1. Preserve the clean P2.5i reference harness and its hosted artifact; the
-   reference caller gate is now complete at both local and hosted evidence
-   tiers.
-2. Begin P3 only against a real platform migration target: lock the same
+1. Preserve the clean reference and candidate harnesses and their named local
+   evidence; the reference caller gate and candidate integration gate are
+   complete within their separate boundaries.
+2. Begin real P3 only against a platform migration target: lock the same
    Contract/profile, shadow capabilities and requests, canary only new runs,
    prove rollback and old-run drain, and compare the required metrics without
    changing platform-owned contracts.
