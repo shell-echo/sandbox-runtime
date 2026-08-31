@@ -62,8 +62,11 @@ locally built Docker images had no usable named `RepoDigest`. The temporary
 registry fix enabled run `33377404561`, which passed the first 11 initial
 scenarios but then exposed a caller-side false negative: one Gateway revocation
 read did not drain a queued PTY frame before close. The caller now drains frames
-until close within a bounded timeout, and a hosted rerun is pending. A green
-run proves only the named reference caller scenarios;
+until close within a bounded timeout. Hosted run `33379217800` then passed all
+15 initial and 5 restart/resume scenarios on commit `555436c` and uploaded
+artifact `reference-e2e-evidence-33379217800` with digest
+`sha256:68250a85683dcbd8f01397d7373e98215382379ff895c0a58692de23c1880733`.
+A green run proves only the named reference caller scenarios;
 it does not prove Agent Platform compatibility, aggregate conformance,
 multi-controller reliability, hostile tenant isolation, deployment readiness,
 or production readiness.
