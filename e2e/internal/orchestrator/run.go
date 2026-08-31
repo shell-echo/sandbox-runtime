@@ -146,17 +146,20 @@ func Run(ctx context.Context, options Options) (_ Result, resultErr error) {
 	if err := build(ctx, moduleRoot, goCache, []string{"GOOS=linux", "GOARCH=amd64", "CGO_ENABLED=0"}, referenceRuntimeBinary, "./cmd/reference-runtime"); err != nil {
 		return Result{}, err
 	}
-	var runtimeImage, runtimeDigest string
+	var runtimeImage, runtimeImageReference, runtimeDigest string
 	var restoreImage func(context.Context) error
 	var imageErr error
 	if sourceImage == "local" {
 		imageErr = errors.New("local runtime image requested")
 	} else {
 		runtimeImage, runtimeDigest, restoreImage, imageErr = prepareAMD64Image(ctx, dockerClient, sourceImage)
+		if imageErr == nil {
+			runtimeImageReference = strings.Split(runtimeImage, "@")[0]
+		}
 	}
 	runtimePreparation := "pulled linux/amd64 image"
 	if imageErr != nil {
-		runtimeImage, runtimeDigest, restoreImage, err = prepareLocalAMD64Image(ctx, dockerClient, runRoot, referenceRuntimeBinary)
+		runtimeImage, runtimeImageReference, runtimeDigest, restoreImage, err = prepareLocalAMD64Image(ctx, dockerClient, runRoot, referenceRuntimeBinary)
 		if err != nil {
 			return Result{}, errors.Join(fmt.Errorf("pull configured runtime image: %w", imageErr), fmt.Errorf("build local runtime image: %w", err))
 		}
@@ -240,7 +243,7 @@ func Run(ctx context.Context, options Options) (_ Result, resultErr error) {
 		Phase:           caller.PhaseInitial,
 		ProviderBaseURL: "https://" + providerAddress, GatewayBaseURL: "https://" + gatewayAddress,
 		CAFile: material.CAFile, ProviderRevisionID: providerRevisionID, ProviderInstanceAudience: providerAudience,
-		RuntimeImageReference: strings.Split(runtimeImage, "@")[0], RuntimeImageDigest: runtimeDigest, GatewayAdminToken: adminToken,
+		RuntimeImageReference: runtimeImageReference, RuntimeImageDigest: runtimeDigest, GatewayAdminToken: adminToken,
 		ControllerA: caller.IdentityConfig{
 			ControllerSubject: material.ControllerA.URI, CertificateFile: material.ControllerA.CertificateFile,
 			PrivateKeyFile: material.ControllerA.PrivateKeyFile, JWSPrivateKeyFile: material.ControllerA.JWSPrivateFile,
@@ -365,17 +368,17 @@ func prepareAMD64Image(ctx context.Context, apiClient *client.Client, source str
 	return pinned, digest, restore, nil
 }
 
-func prepareLocalAMD64Image(ctx context.Context, apiClient *client.Client, runRoot, runtimeBinary string) (string, string, func(context.Context) error, error) {
+func prepareLocalAMD64Image(ctx context.Context, apiClient *client.Client, runRoot, runtimeBinary string) (string, string, string, func(context.Context) error, error) {
 	buildRoot := filepath.Join(runRoot, "runtime-image")
 	if err := os.MkdirAll(buildRoot, 0o700); err != nil {
-		return "", "", nil, err
+		return "", "", "", nil, err
 	}
 	binary, err := os.ReadFile(runtimeBinary)
 	if err != nil {
-		return "", "", nil, err
+		return "", "", "", nil, err
 	}
 	if err := os.WriteFile(filepath.Join(buildRoot, "reference-runtime"), binary, 0o555); err != nil {
-		return "", "", nil, err
+		return "", "", "", nil, err
 	}
 	const dockerfile = `FROM scratch
 COPY reference-runtime /bin/sh
@@ -385,24 +388,24 @@ USER 65532:65532
 WORKDIR /workspace
 `
 	if err := os.WriteFile(filepath.Join(buildRoot, "Dockerfile"), []byte(dockerfile), 0o600); err != nil {
-		return "", "", nil, err
+		return "", "", "", nil, err
 	}
 	token, err := randomSecret("")
 	if err != nil {
-		return "", "", nil, err
+		return "", "", "", nil, err
 	}
 	tag := "shell-echo/sandbox-runtime-e2e-runtime:" + token[:16]
 	command := exec.CommandContext(ctx, "docker", "build", "--platform", "linux/amd64", "--provenance=false", "--tag", tag, buildRoot)
 	combined, err := command.CombinedOutput()
 	if err != nil {
-		return "", "", nil, fmt.Errorf("docker build local runtime: %w: %s", err, strings.TrimSpace(string(combined)))
+		return "", "", "", nil, fmt.Errorf("docker build local runtime: %w: %s", err, strings.TrimSpace(string(combined)))
 	}
 	inspection, err := apiClient.ImageInspect(ctx, tag)
 	if err != nil {
-		return "", "", nil, err
+		return "", "", "", nil, err
 	}
 	if inspection.Os != "linux" || inspection.Architecture != "amd64" {
-		return "", "", nil, fmt.Errorf("local runtime image platform = %s/%s, want linux/amd64", inspection.Os, inspection.Architecture)
+		return "", "", "", nil, fmt.Errorf("local runtime image platform = %s/%s, want linux/amd64", inspection.Os, inspection.Architecture)
 	}
 	pinned := ""
 	for _, candidate := range inspection.RepoDigests {
@@ -414,22 +417,18 @@ WORKDIR /workspace
 	}
 	if pinned == "" {
 		// A locally built image has no registry RepoDigest on Docker engines
-		// that have not pushed it. Its immutable image ID is still a valid
-		// local digest selector when combined with the build tag.
-		candidate, _, candidateErr := localImageIDReference(tag, inspection.ID)
-		if candidateErr == nil {
-			candidateInspection, inspectErr := apiClient.ImageInspect(ctx, candidate)
-			if inspectErr == nil && candidateInspection.ID == inspection.ID && candidateInspection.Os == "linux" && candidateInspection.Architecture == "amd64" {
-				pinned = candidate
-			}
+		// that have not pushed it. The already inspected immutable image ID is
+		// accepted directly by ImageInspect and ContainerCreate with PullNever.
+		if isImageDigest(inspection.ID) {
+			pinned = inspection.ID
 		}
 	}
 	if pinned == "" {
-		return "", "", nil, errors.New("locally built amd64 image has no resolvable digest reference")
+		return "", "", "", nil, errors.New("locally built amd64 image has no resolvable digest reference")
 	}
-	digestIndex := strings.LastIndex(pinned, "@sha256:")
-	if digestIndex < 0 {
-		return "", "", nil, errors.New("local runtime image digest reference is invalid")
+	digest, err := imageDigestFromReference(pinned)
+	if err != nil {
+		return "", "", "", nil, errors.New("local runtime image digest reference is invalid")
 	}
 	cleanup := func(cleanupCtx context.Context) error {
 		_, err := apiClient.ImageRemove(cleanupCtx, tag, client.ImageRemoveOptions{Force: true})
@@ -438,21 +437,27 @@ WORKDIR /workspace
 		}
 		return err
 	}
-	return pinned, pinned[digestIndex+1:], cleanup, nil
+	return pinned, tag, digest, cleanup, nil
 }
 
-func localImageIDReference(tag, imageID string) (string, string, error) {
+func isImageDigest(value string) bool {
 	const prefix = "sha256:"
-	if !strings.HasPrefix(imageID, prefix) || len(imageID) != len(prefix)+sha256.Size*2 {
-		return "", "", errors.New("local image ID is not a SHA-256 digest")
+	if !strings.HasPrefix(value, prefix) || len(value) != len(prefix)+sha256.Size*2 {
+		return false
 	}
-	if _, err := hex.DecodeString(strings.TrimPrefix(imageID, prefix)); err != nil {
-		return "", "", errors.New("local image ID is not a SHA-256 digest")
+	_, err := hex.DecodeString(strings.TrimPrefix(value, prefix))
+	return err == nil
+}
+
+func imageDigestFromReference(reference string) (string, error) {
+	digest := reference
+	if at := strings.LastIndex(reference, "@"); at >= 0 {
+		digest = reference[at+1:]
 	}
-	if strings.TrimSpace(tag) == "" || strings.ContainsAny(tag, "@ \t\r\n") {
-		return "", "", errors.New("local image tag is invalid")
+	if !isImageDigest(digest) {
+		return "", errors.New("image reference does not contain a SHA-256 digest")
 	}
-	return tag + "@" + imageID, imageID, nil
+	return digest, nil
 }
 
 func build(ctx context.Context, root, goCache string, additionalEnv []string, output, packagePath string) error {
