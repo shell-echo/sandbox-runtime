@@ -33,6 +33,23 @@ func TestProviderDocumentationPathIsNarrow(t *testing.T) {
 	}
 }
 
+func TestProviderChangePathAllowsOnlyHarnessAndDocumentation(t *testing.T) {
+	for path, want := range map[string]bool{
+		"README.md":                           true,
+		"docs/STATUS.md":                      true,
+		"e2e/cmd/caller/main.go":              true,
+		"e2e/internal/lock/lock.go":           true,
+		".github/workflows/reference-e2e.yml": true,
+		"cmd/serve.go":                        false,
+		"provider/code.go":                    false,
+		"e2e/../provider/code.go":             false,
+	} {
+		if got := providerChangePath(path); got != want {
+			t.Errorf("providerChangePath(%q) = %t, want %t", path, got, want)
+		}
+	}
+}
+
 func TestHarnessRevisionRequiresCleanCommit(t *testing.T) {
 	root := t.TempDir()
 	runTestGit(t, root, "init", "-q")

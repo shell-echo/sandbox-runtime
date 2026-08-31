@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	pathpkg "path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -44,8 +45,9 @@ type suite struct {
 }
 
 // Verify rejects a checkout whose implementation or locked Contract differs
-// from the evidence baseline. Documentation-only descendants are allowed so
-// recording evidence does not invalidate the implementation lock.
+// from the evidence baseline. Documentation and the co-located harness paths
+// are allowed so evidence maintenance does not invalidate the implementation
+// lock.
 func Verify(providerRoot string) error {
 	root, err := filepath.Abs(providerRoot)
 	if err != nil {
@@ -64,7 +66,7 @@ func Verify(providerRoot string) error {
 		return err
 	}
 	for _, path := range strings.Fields(changed) {
-		if !providerDocumentationPath(path) {
+		if !providerChangePath(path) {
 			return fmt.Errorf("Provider implementation differs from %s at %s", ProviderCommit, path)
 		}
 	}
@@ -99,6 +101,14 @@ func Verify(providerRoot string) error {
 
 func providerDocumentationPath(path string) bool {
 	return path == "README.md" || strings.HasPrefix(path, "docs/")
+}
+
+func providerChangePath(changedPath string) bool {
+	if pathpkg.Clean(changedPath) != changedPath {
+		return false
+	}
+	return providerDocumentationPath(changedPath) || changedPath == ".github/workflows/reference-e2e.yml" ||
+		changedPath == "e2e" || strings.HasPrefix(changedPath, "e2e/")
 }
 
 // HarnessRevision returns the exact independently versioned caller revision.
