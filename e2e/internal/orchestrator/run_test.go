@@ -3,8 +3,41 @@ package orchestrator
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
+
+func TestLocalImageIDReference(t *testing.T) {
+	imageID := "sha256:" + strings.Repeat("a", 64)
+	gotReference, gotDigest, err := localImageIDReference("example.invalid/reference:local", imageID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotReference != "example.invalid/reference:local@"+imageID {
+		t.Fatalf("reference = %q", gotReference)
+	}
+	if gotDigest != imageID {
+		t.Fatalf("digest = %q, want %q", gotDigest, imageID)
+	}
+}
+
+func TestLocalImageIDReferenceRejectsInvalidInputs(t *testing.T) {
+	for _, test := range []struct {
+		name, tag, imageID string
+	}{
+		{name: "missing digest", tag: "example.invalid/reference:local", imageID: ""},
+		{name: "wrong digest length", tag: "example.invalid/reference:local", imageID: "sha256:" + strings.Repeat("a", 63)},
+		{name: "non-hex digest", tag: "example.invalid/reference:local", imageID: "sha256:" + strings.Repeat("g", 64)},
+		{name: "empty tag", tag: "", imageID: "sha256:" + strings.Repeat("a", 64)},
+		{name: "tag with digest", tag: "example.invalid/reference:local@sha256:" + strings.Repeat("a", 64), imageID: "sha256:" + strings.Repeat("a", 64)},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if _, _, err := localImageIDReference(test.tag, test.imageID); err == nil {
+				t.Fatal("accepted invalid local image identity")
+			}
+		})
+	}
+}
 
 func TestCleanupRunRootRestoresDirectoryPermissions(t *testing.T) {
 	temporaryRoot := t.TempDir()

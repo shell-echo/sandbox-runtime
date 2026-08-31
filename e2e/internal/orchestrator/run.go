@@ -413,6 +413,18 @@ WORKDIR /workspace
 		}
 	}
 	if pinned == "" {
+		// A locally built image has no registry RepoDigest on Docker engines
+		// that have not pushed it. Its immutable image ID is still a valid
+		// local digest selector when combined with the build tag.
+		candidate, _, candidateErr := localImageIDReference(tag, inspection.ID)
+		if candidateErr == nil {
+			candidateInspection, inspectErr := apiClient.ImageInspect(ctx, candidate)
+			if inspectErr == nil && candidateInspection.ID == inspection.ID && candidateInspection.Os == "linux" && candidateInspection.Architecture == "amd64" {
+				pinned = candidate
+			}
+		}
+	}
+	if pinned == "" {
 		return "", "", nil, errors.New("locally built amd64 image has no resolvable digest reference")
 	}
 	digestIndex := strings.LastIndex(pinned, "@sha256:")
@@ -427,6 +439,20 @@ WORKDIR /workspace
 		return err
 	}
 	return pinned, pinned[digestIndex+1:], cleanup, nil
+}
+
+func localImageIDReference(tag, imageID string) (string, string, error) {
+	const prefix = "sha256:"
+	if !strings.HasPrefix(imageID, prefix) || len(imageID) != len(prefix)+sha256.Size*2 {
+		return "", "", errors.New("local image ID is not a SHA-256 digest")
+	}
+	if _, err := hex.DecodeString(strings.TrimPrefix(imageID, prefix)); err != nil {
+		return "", "", errors.New("local image ID is not a SHA-256 digest")
+	}
+	if strings.TrimSpace(tag) == "" || strings.ContainsAny(tag, "@ \t\r\n") {
+		return "", "", errors.New("local image tag is invalid")
+	}
+	return tag + "@" + imageID, imageID, nil
 }
 
 func build(ctx context.Context, root, goCache string, additionalEnv []string, output, packagePath string) error {
