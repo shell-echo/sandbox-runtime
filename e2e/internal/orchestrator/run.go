@@ -1,6 +1,7 @@
 package orchestrator
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
@@ -10,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -32,6 +34,7 @@ const (
 	referenceNamespace  = "reference-e2e"
 	referenceController = "reference-e2e-controller"
 	runRootPrefix       = "sandbox-runtime-e2e-"
+	registryImage       = "registry:2"
 )
 
 type Options struct {
@@ -395,10 +398,45 @@ WORKDIR /workspace
 		return "", "", "", nil, err
 	}
 	tag := "shell-echo/sandbox-runtime-e2e-runtime:" + token[:16]
+	registry, err := startLocalRegistry(ctx, apiClient)
+	if err != nil {
+		return "", "", "", nil, err
+	}
+	registryTag := registry.address + "/sandbox-runtime-e2e/runtime:" + token[:16]
+	pinned := ""
+	cleanupComplete := false
+	cleanupArtifacts := func(cleanupCtx context.Context) error {
+		var result error
+		for _, image := range []string{registryTag, tag, pinned} {
+			if image == "" {
+				continue
+			}
+			_, removeErr := apiClient.ImageRemove(cleanupCtx, image, client.ImageRemoveOptions{Force: true})
+			if !cerrdefs.IsNotFound(removeErr) {
+				result = errors.Join(result, removeErr)
+			}
+		}
+		result = errors.Join(result, removeLocalRegistry(cleanupCtx, apiClient, registry))
+		return result
+	}
+	defer func() {
+		if cleanupComplete {
+			return
+		}
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		_ = cleanupArtifacts(cleanupCtx)
+	}()
 	command := exec.CommandContext(ctx, "docker", "build", "--platform", "linux/amd64", "--provenance=false", "--tag", tag, buildRoot)
 	combined, err := command.CombinedOutput()
 	if err != nil {
 		return "", "", "", nil, fmt.Errorf("docker build local runtime: %w: %s", err, strings.TrimSpace(string(combined)))
+	}
+	if _, err := runDockerCommand(ctx, "tag", tag, registryTag); err != nil {
+		return "", "", "", nil, fmt.Errorf("tag local runtime for temporary registry: %w", err)
+	}
+	if _, err := runDockerCommand(ctx, "push", "--platform", "linux/amd64", registryTag); err != nil {
+		return "", "", "", nil, fmt.Errorf("push local runtime to temporary registry: %w", err)
 	}
 	inspection, err := apiClient.ImageInspect(ctx, tag)
 	if err != nil {
@@ -407,7 +445,6 @@ WORKDIR /workspace
 	if inspection.Os != "linux" || inspection.Architecture != "amd64" {
 		return "", "", "", nil, fmt.Errorf("local runtime image platform = %s/%s, want linux/amd64", inspection.Os, inspection.Architecture)
 	}
-	pinned := ""
 	for _, candidate := range inspection.RepoDigests {
 		candidateInspection, candidateErr := apiClient.ImageInspect(ctx, candidate)
 		if candidateErr == nil && candidateInspection.Os == "linux" && candidateInspection.Architecture == "amd64" {
@@ -416,28 +453,114 @@ WORKDIR /workspace
 		}
 	}
 	if pinned == "" {
-		// A locally built image has no registry RepoDigest on Docker engines
-		// that have not pushed it. The already inspected immutable image ID is
-		// accepted directly by ImageInspect and ContainerCreate with PullNever.
-		if isImageDigest(inspection.ID) {
-			pinned = inspection.ID
-		}
-	}
-	if pinned == "" {
-		return "", "", "", nil, errors.New("locally built amd64 image has no resolvable digest reference")
+		return "", "", "", nil, errors.New("locally built amd64 image has no registry-backed digest reference")
 	}
 	digest, err := imageDigestFromReference(pinned)
 	if err != nil {
-		return "", "", "", nil, errors.New("local runtime image digest reference is invalid")
+		return "", "", "", nil, fmt.Errorf("temporary registry image digest reference is invalid: %w", err)
 	}
 	cleanup := func(cleanupCtx context.Context) error {
-		_, err := apiClient.ImageRemove(cleanupCtx, tag, client.ImageRemoveOptions{Force: true})
-		if cerrdefs.IsNotFound(err) {
-			return nil
-		}
-		return err
+		cleanupComplete = true
+		return cleanupArtifacts(cleanupCtx)
 	}
-	return pinned, tag, digest, cleanup, nil
+	return pinned, registryTag, digest, cleanup, nil
+}
+
+type localRegistry struct {
+	address     string
+	containerID string
+}
+
+func startLocalRegistry(ctx context.Context, apiClient *client.Client) (localRegistry, error) {
+	address, err := allocateAddress()
+	if err != nil {
+		return localRegistry{}, fmt.Errorf("allocate temporary registry address: %w", err)
+	}
+	token, err := randomSecret("")
+	if err != nil {
+		return localRegistry{}, err
+	}
+	name := "sandbox-runtime-e2e-registry-" + token[:16]
+	output, err := runDockerCommand(ctx,
+		"run", "--detach", "--name", name,
+		"--publish", address+":5000",
+		"--label", "io.github.shell-echo.sandbox-runtime.managed=true",
+		"--label", "io.github.shell-echo.sandbox-runtime.namespace="+referenceNamespace,
+		"--label", "io.github.shell-echo.sandbox-runtime.controller-id="+referenceController,
+		"--label", "io.github.shell-echo.sandbox-runtime.role=registry",
+		registryImage,
+	)
+	if err != nil {
+		return localRegistry{}, fmt.Errorf("start temporary registry: %w", err)
+	}
+	fields := strings.Fields(output)
+	if len(fields) == 0 {
+		return localRegistry{}, errors.New("start temporary registry returned no container ID")
+	}
+	containerID := strings.TrimSpace(fields[0])
+	registry := localRegistry{address: address, containerID: containerID}
+	if err := waitForRegistry(ctx, address); err != nil {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		_ = removeLocalRegistry(cleanupCtx, apiClient, registry)
+		return localRegistry{}, err
+	}
+	return registry, nil
+}
+
+func removeLocalRegistry(ctx context.Context, apiClient *client.Client, registry localRegistry) error {
+	if registry.containerID == "" {
+		return nil
+	}
+	_, err := apiClient.ContainerRemove(ctx, registry.containerID, client.ContainerRemoveOptions{Force: true, RemoveVolumes: true})
+	if cerrdefs.IsNotFound(err) {
+		return nil
+	}
+	return err
+}
+
+func waitForRegistry(ctx context.Context, address string) error {
+	deadline, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	client := &http.Client{Timeout: 500 * time.Millisecond}
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		request, err := http.NewRequestWithContext(deadline, http.MethodGet, "http://"+address+"/v2/", nil)
+		if err == nil {
+			response, requestErr := client.Do(request)
+			if requestErr == nil {
+				_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 1024))
+				_ = response.Body.Close()
+				if response.StatusCode >= http.StatusOK && response.StatusCode < http.StatusMultipleChoices {
+					return nil
+				}
+			}
+		}
+		select {
+		case <-deadline.Done():
+			return fmt.Errorf("wait for temporary registry %s: %w", address, deadline.Err())
+		case <-ticker.C:
+		}
+	}
+}
+
+func runDockerCommand(ctx context.Context, args ...string) (string, error) {
+	command := exec.CommandContext(ctx, "docker", args...)
+	var stdout, stderr bytes.Buffer
+	command.Stdout = &stdout
+	command.Stderr = &stderr
+	if err := command.Run(); err != nil {
+		detail := strings.TrimSpace(stderr.String())
+		if detail == "" {
+			detail = strings.TrimSpace(stdout.String())
+		}
+		if len(detail) > 4096 {
+			detail = detail[:4096] + "..."
+		}
+		return "", fmt.Errorf("docker %s: %w: %s", strings.Join(args, " "), err, detail)
+	}
+	return stdout.String(), nil
 }
 
 func isImageDigest(value string) bool {
