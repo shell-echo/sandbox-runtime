@@ -157,12 +157,13 @@ uploaded artifact is `reference-e2e-evidence-33379217800` with digest
 `sha256:68250a85683dcbd8f01397d7373e98215382379ff895c0a58692de23c1880733`.
 
 The co-located `e2e/` module also contains an explicitly named
-`agent-platform-candidate` caller. Candidate run `47bd627` passed 15 initial and
+`agent-platform-candidate` caller. Candidate implementation `47bd627` passed 15 initial and
 5 resume scenarios over separate `platform-caller` and `reference-stack`
 processes, with live capability/request shadow checks, ProviderRevision
 selection, canary rollback/drain policy, state reconstruction, mTLS/JWS,
 WebSocket, and Docker. Its ignored manifest is
-`e2e/evidence/20260831T103546.265112000Z/manifest.json`. This is candidate
+`e2e/evidence/20260831T104115.065616000Z/manifest.json` (clean evidence
+harness `9e5f546`). This is candidate
 integration evidence only and does not represent real Veronica, aggregate
 conformance, hostile multi-tenant security, deployment, or production
 readiness.
