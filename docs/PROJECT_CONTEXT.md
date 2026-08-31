@@ -131,7 +131,7 @@ multi-tenant, deployment, and production readiness.
 
 This snapshot was audited on 2026-08-31 against Provider implementation
 baseline `d58497e5359056858564b9ac663178958cf5a6d6` and co-located reference
-caller baseline `d661a9862b0b0fc6b433a5fc7e1ffa021495e260`. Provider fixes after
+caller baseline `b28923b25079245c3088993badb4831c44598494`. Provider fixes after
 the previous documentation baseline bind create requirements to advertised
 capabilities, preserve empty HTTP/2 reads, dispatch accepted lifecycle work,
 aggregate terminal-session operations, and prevent a caller Gateway grant from
@@ -142,12 +142,13 @@ verifier, and unchanged locked 38-case Suite pass at `d58497e`. The co-located
 `e2e/` module then passed 15 initial and 5 process-reconstruction scenarios over
 real mTLS/JWS HTTPS, WebSocket, separate caller/reference-stack processes, and
 Docker. Its clean-run manifest is under ignored local evidence directory
-`20260831T023312.448033000Z` and pins both commits, Contract identity,
-configuration digests, and a digest-pinned local `linux/amd64` runtime image.
+`20260831T025259.339167000Z` and pins both commits, Contract identity,
+configuration digests, and a local tag plus immutable image-ID digest for the
+`linux/amd64` runtime image.
 This is reference external-caller evidence only. The Provider implementation
 baseline is covered by repository CI run `33348916594` at descendant commit
-`f509eca`; the root reference-E2E workflow is prepared but no hosted result is
-claimed yet.
+`f509eca`; hosted Reference E2E run `33351621726` failed on the local-image
+RepoDigest assumption, which `b28923b` fixes; its rerun is pending.
 
 Contract identity:
 
@@ -163,7 +164,7 @@ Contract identity:
 | P1.1 | Passed for DTO, mTLS discovery, JWS/digest/replay/fencing admission | Production identity infrastructure remains unproven |
 | P1.2 | Passed for the bounded Contract-authorized lifecycle subset and development composition | Reserved lifecycle families and production gates remain open |
 | P2 components | P2.1-P2.5h local component, Contract projection, Docker, and recorded repository CI gates pass within their named boundaries | Retain single-controller/development constraints and exact Contract lock |
-| P2.5i | Passed for the clean co-located independent reference caller: 15 initial plus 5 restart/resume scenarios against Provider `d58497e` | Run `.github/workflows/reference-e2e.yml`; do not reinterpret this as Agent Platform or production evidence |
+| P2.5i | Passed for the clean co-located independent reference caller: 15 initial plus 5 restart/resume scenarios against Provider `d58497e` | Rerun `.github/workflows/reference-e2e.yml` after `b28923b`; do not reinterpret this as Agent Platform or production evidence |
 | P2 | Reference coding/shell caller release gate passed | Aggregate conformance, actual Agent Platform compatibility, multi-controller, hostile multi-tenant isolation, deployment, and production gates remain open |
 | P3 | Local revision binding, shadow-validation, canary/rollback/drain, and metrics primitives passed component tests | Real platform traffic shadow parity, canary, rollback, old-run drain, metric parity, and unchanged platform contracts remain open |
 | P4 | Optional capability profiles have not started | Each browser/desktop/forwarding/snapshot/GPU/isolation profile needs independent Contract, security, and conformance gates |
@@ -189,7 +190,7 @@ import-boundary test that forbids Provider implementation imports; the separate
 reference-stack process alone composes exported Provider/Gateway packages with
 explicit caller-owned policy.
 
-The clean `d661a98` harness run against Provider `d58497e` verified exact
+The clean `b28923b` harness run against Provider `d58497e` verified exact
 Contract/Suite identity, two ephemeral mTLS/JWS controller identities, locked
 capability discovery, protected lifecycle, replay, exec/result/usage, stale
 fencing, cancellation, opaque terminal handoff, Gateway bytes, wrong-caller and
