@@ -171,11 +171,12 @@ multi-controller reliability, hostile multi-tenant security, deployment, and
 production operations remain separate and unproven after the reference P2 gate
 and require their own future evidence.
 
-The latest verified repository CI is reviewed documentation baseline
-`bba02a6`, run `33160646494`; its `provider-contract`, `test`, and
-`docker-integration` jobs passed. The underlying P2.5g and P2.5h implementation
-gates remain run `33157119149` and run `33159099578`, respectively. Repository
-CI remains distinct from independent caller and production evidence.
+The latest verified repository CI for the pushed Provider implementation
+`f509eca7a309cbecc4702c8a982189656ebd151b` is run `33348916594`; its
+`provider-contract`, `test`, and `docker-integration` jobs passed. The
+underlying P2.5g and P2.5h implementation gates remain run `33157119149` and
+run `33159099578`, respectively. Repository CI remains distinct from
+independent caller and production evidence.
 
 ## P2.5i Reference Result
 
