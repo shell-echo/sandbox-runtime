@@ -150,10 +150,13 @@ real `name@sha256:<digest>` reference even when a Docker engine omits
 `RepoDigests` for locally built images.
 This is reference external-caller evidence only. The Provider implementation
 baseline is covered by repository CI run `33348916594` at descendant commit
-`f509eca`; hosted Reference E2E runs `33351621726`, `33352179181`, and
+`f509eca`. Hosted Reference E2E runs `33351621726`, `33352179181`, and
 `33352689522` failed because hosted locally built images had no usable named
-`RepoDigest`. The current `e9a9903` harness publishes the local image through a
-temporary registry; a new hosted run is still pending.
+`RepoDigest`. The temporary-registry fix then allowed hosted run
+`33377404561` to start the caller and pass the first 11 initial scenarios, but
+the caller's one-shot Gateway revocation read mistook a queued PTY frame for an
+open connection. The harness is being corrected to drain frames until close
+within a bounded timeout; hosted publication remains pending.
 
 Contract identity:
 
@@ -169,7 +172,7 @@ Contract identity:
 | P1.1 | Passed for DTO, mTLS discovery, JWS/digest/replay/fencing admission | Production identity infrastructure remains unproven |
 | P1.2 | Passed for the bounded Contract-authorized lifecycle subset and development composition | Reserved lifecycle families and production gates remain open |
 | P2 components | P2.1-P2.5h local component, Contract projection, Docker, and recorded repository CI gates pass within their named boundaries | Retain single-controller/development constraints and exact Contract lock |
-| P2.5i | Passed for the clean co-located independent reference caller: 15 initial plus 5 restart/resume scenarios against Provider `d58497e` | Rerun `.github/workflows/reference-e2e.yml` after `9ff2b15`; do not reinterpret this as Agent Platform or production evidence |
+| P2.5i | Passed locally for the clean co-located independent reference caller: 15 initial plus 5 restart/resume scenarios against Provider `d58497e` | Hosted run `33377404561` reached 11 initial scenarios before a caller-side Gateway revocation observation bug; rerun after the bounded drain fix. Do not reinterpret this as Agent Platform or production evidence |
 | P2 | Reference coding/shell caller release gate passed | Aggregate conformance, actual Agent Platform compatibility, multi-controller, hostile multi-tenant isolation, deployment, and production gates remain open |
 | P3 | Local revision binding, shadow-validation, canary/rollback/drain, and metrics primitives passed component tests | Real platform traffic shadow parity, canary, rollback, old-run drain, metric parity, and unchanged platform contracts remain open |
 | P4 | Optional capability profiles have not started | Each browser/desktop/forwarding/snapshot/GPU/isolation profile needs independent Contract, security, and conformance gates |
@@ -302,9 +305,10 @@ Its focused, full local, and Docker-tagged gates pass, and repository CI
 repository CI `33159099578` also pass their bounded readiness/projection gates.
 Reviewed documentation baseline `bba02a6` passes repository CI `33160646494`.
 
-1. Preserve the clean P2.5i reference harness and run the tracked root
-   reference-E2E workflow; the current evidence is local and reproducible, but
-   hosted CI publication is still pending.
+1. Preserve the clean P2.5i reference harness and rerun the tracked root
+   reference-E2E workflow after the Gateway revocation drain fix; the current
+   15+5 evidence is local and reproducible, but hosted CI publication is still
+   pending.
 2. Begin P3 only against a real platform migration target: lock the same
    Contract/profile, shadow capabilities and requests, canary only new runs,
    prove rollback and old-run drain, and compare the required metrics without

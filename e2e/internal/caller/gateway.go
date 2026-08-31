@@ -164,12 +164,26 @@ func verifyGatewayRevocation(ctx context.Context, client *http.Client, config Co
 	if result.StatusCode != http.StatusNoContent {
 		return fmt.Errorf("Gateway revoke status = %d, want 204", result.StatusCode)
 	}
-	readCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	return waitForGatewayClose(ctx, 3*time.Second, func(readCtx context.Context) error {
+		_, _, err := connection.Read(readCtx)
+		return err
+	})
+}
+
+func waitForGatewayClose(ctx context.Context, timeout time.Duration, read func(context.Context) error) error {
+	readCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	if _, _, err := connection.Read(readCtx); err == nil {
-		return errors.New("revoked Gateway connection remained open")
+	for {
+		if err := read(readCtx); err != nil {
+			if errors.Is(readCtx.Err(), context.DeadlineExceeded) && errors.Is(err, context.DeadlineExceeded) {
+				return errors.New("revoked Gateway connection remained open")
+			}
+			if errors.Is(readCtx.Err(), context.Canceled) {
+				return readCtx.Err()
+			}
+			return nil
+		}
 	}
-	return nil
 }
 
 func readUntil(ctx context.Context, connection *websocket.Conn, expected string) error {

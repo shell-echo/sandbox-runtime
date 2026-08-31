@@ -58,9 +58,12 @@ Current implementation status is tracked in [../docs/STATUS.md](../docs/STATUS.m
 checkout. It verifies the locked Contract, runs the harness race/vet gates, and
 executes the Docker reference run before uploading sanitized evidence. The
 hosted runs `33351621726`, `33352179181`, and `33352689522` failed because
-locally built Docker images had no usable named `RepoDigest`; `e9a9903` fixes
-this by publishing the local image through the temporary registry, and a new
-hosted run is pending. A green run proves only the named reference caller scenarios;
+locally built Docker images had no usable named `RepoDigest`. The temporary-
+registry fix enabled run `33377404561`, which passed the first 11 initial
+scenarios but then exposed a caller-side false negative: one Gateway revocation
+read did not drain a queued PTY frame before close. The caller now drains frames
+until close within a bounded timeout, and a hosted rerun is pending. A green
+run proves only the named reference caller scenarios;
 it does not prove Agent Platform compatibility, aggregate conformance,
 multi-controller reliability, hostile tenant isolation, deployment readiness,
 or production readiness.
