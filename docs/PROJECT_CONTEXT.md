@@ -144,8 +144,9 @@ scenarios over real mTLS/JWS HTTPS, WebSocket, separate caller/reference-stack
 processes, and Docker. Its clean-run manifest is under ignored local evidence
 directory `20260830T073427.356961000Z` and pins both commits, Contract identity,
 configuration digests, and a digest-pinned local `linux/amd64` runtime image.
-This is reference external-caller evidence only. The latest repository CI still
-predates these local commits, so no CI result is claimed for them.
+This is reference external-caller evidence only. The Provider implementation
+baseline is covered by repository CI run `33348916594` at descendant commit
+`f509eca`; no CI result is claimed for the separate local caller harness.
 
 Contract identity:
 
