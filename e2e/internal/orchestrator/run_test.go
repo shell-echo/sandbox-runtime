@@ -1,10 +1,14 @@
 package orchestrator
 
 import (
+	"context"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestImageDigestFromReference(t *testing.T) {
@@ -40,6 +44,35 @@ func TestImageDigestFromReferenceRejectsInvalidInputs(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestWaitForRegistryAcceptsHealthyV2Endpoint(t *testing.T) {
+	httpClient := &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		if request.URL.Path != "/v2/" {
+			return &http.Response{StatusCode: http.StatusNotFound, Body: io.NopCloser(strings.NewReader(""))}, nil
+		}
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(""))}, nil
+	})}
+	if err := waitForRegistryWithClient(context.Background(), "127.0.0.1:5000", httpClient); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestWaitForRegistryHonorsContext(t *testing.T) {
+	httpClient := &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: http.StatusServiceUnavailable, Body: io.NopCloser(strings.NewReader(""))}, nil
+	})}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	if err := waitForRegistryWithClient(ctx, "127.0.0.1:5000", httpClient); err == nil {
+		t.Fatal("healthy registry wait accepted an unavailable endpoint")
+	}
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (roundTrip roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) {
+	return roundTrip(request)
 }
 
 func TestCleanupRunRootRestoresDirectoryPermissions(t *testing.T) {

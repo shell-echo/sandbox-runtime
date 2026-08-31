@@ -521,15 +521,18 @@ func removeLocalRegistry(ctx context.Context, apiClient *client.Client, registry
 }
 
 func waitForRegistry(ctx context.Context, address string) error {
+	return waitForRegistryWithClient(ctx, address, &http.Client{Timeout: 500 * time.Millisecond})
+}
+
+func waitForRegistryWithClient(ctx context.Context, address string, httpClient *http.Client) error {
 	deadline, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	client := &http.Client{Timeout: 500 * time.Millisecond}
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 	for {
 		request, err := http.NewRequestWithContext(deadline, http.MethodGet, "http://"+address+"/v2/", nil)
 		if err == nil {
-			response, requestErr := client.Do(request)
+			response, requestErr := httpClient.Do(request)
 			if requestErr == nil {
 				_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 1024))
 				_ = response.Body.Close()

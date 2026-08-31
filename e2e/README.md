@@ -28,11 +28,12 @@ exact enclosing repository commit in its manifest.
 ## Latest verified evidence
 
 The clean implementation baseline
-`7ed591fc26da259857b14e082bf09a0dbcb6825d` passed the complete reference run
+`e9a99036cba2e09fa45118a0c34786bdd0b6d0e6` passed the complete reference run
 against Provider `d58497e5359056858564b9ac663178958cf5a6d6`. The ignored local
-evidence directory is `evidence/20260831T030259.957424000Z`; its manifest
+evidence directory is `evidence/20260831T032610.353349000Z`; its manifest
 records the two commits, unchanged Contract identity, configuration digests,
-and a locally built digest-pinned `linux/amd64` runtime image.
+and a locally built `linux/amd64` runtime image pushed to a uniquely labeled
+temporary `registry:2` and addressed by its immutable named manifest digest.
 
 All 15 initial scenarios and all 5 reconstruction/resume scenarios passed.
 This is the P2.5i reference external-caller result only, within the evidence
@@ -56,9 +57,10 @@ Current implementation status is tracked in [../docs/STATUS.md](../docs/STATUS.m
 `../.github/workflows/reference-e2e.yml` runs this module from the Provider
 checkout. It verifies the locked Contract, runs the harness race/vet gates, and
 executes the Docker reference run before uploading sanitized evidence. The
-hosted runs `33351621726` and `33352179181` failed because local Docker images
-had no registry RepoDigest; the raw image-ID digest fallback is fixed in
-`7ed591f` and a rerun is pending. A green run proves only the named reference caller scenarios;
+hosted runs `33351621726`, `33352179181`, and `33352689522` failed because
+locally built Docker images had no usable named `RepoDigest`; `e9a9903` fixes
+this by publishing the local image through the temporary registry, and a new
+hosted run is pending. A green run proves only the named reference caller scenarios;
 it does not prove Agent Platform compatibility, aggregate conformance,
 multi-controller reliability, hostile tenant isolation, deployment readiness,
 or production readiness.
