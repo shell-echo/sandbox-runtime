@@ -28,9 +28,9 @@ exact enclosing repository commit in its manifest.
 ## Latest verified evidence
 
 The clean implementation baseline
-`b28923b25079245c3088993badb4831c44598494` passed the complete reference run
+`7ed591fc26da259857b14e082bf09a0dbcb6825d` passed the complete reference run
 against Provider `d58497e5359056858564b9ac663178958cf5a6d6`. The ignored local
-evidence directory is `evidence/20260831T025259.339167000Z`; its manifest
+evidence directory is `evidence/20260831T030259.957424000Z`; its manifest
 records the two commits, unchanged Contract identity, configuration digests,
 and a locally built digest-pinned `linux/amd64` runtime image.
 
@@ -56,9 +56,9 @@ Current implementation status is tracked in [../docs/STATUS.md](../docs/STATUS.m
 `../.github/workflows/reference-e2e.yml` runs this module from the Provider
 checkout. It verifies the locked Contract, runs the harness race/vet gates, and
 executes the Docker reference run before uploading sanitized evidence. The
-first hosted run `33351621726` failed because the local Docker image had no
-registry RepoDigest; the image-ID digest fallback is fixed in `b28923b` and a
-rerun is pending. A green run proves only the named reference caller scenarios;
+hosted runs `33351621726` and `33352179181` failed because local Docker images
+had no registry RepoDigest; the raw image-ID digest fallback is fixed in
+`7ed591f` and a rerun is pending. A green run proves only the named reference caller scenarios;
 it does not prove Agent Platform compatibility, aggregate conformance,
 multi-controller reliability, hostile tenant isolation, deployment readiness,
 or production readiness.
