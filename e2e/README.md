@@ -28,9 +28,9 @@ exact enclosing repository commit in its manifest.
 ## Latest verified evidence
 
 The clean implementation baseline
-`e9a99036cba2e09fa45118a0c34786bdd0b6d0e6` passed the complete reference run
+`9ff2b150f7353399d3660334a057e105543428cc` passed the complete reference run
 against Provider `d58497e5359056858564b9ac663178958cf5a6d6`. The ignored local
-evidence directory is `evidence/20260831T032610.353349000Z`; its manifest
+evidence directory is `evidence/20260831T033558.195791000Z`; its manifest
 records the two commits, unchanged Contract identity, configuration digests,
 and a locally built `linux/amd64` runtime image pushed to a uniquely labeled
 temporary `registry:2` and addressed by its immutable named manifest digest.
