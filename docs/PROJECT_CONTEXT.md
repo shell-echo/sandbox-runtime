@@ -131,7 +131,7 @@ multi-tenant, deployment, and production readiness.
 
 This snapshot was audited on 2026-08-31 against Provider implementation
 baseline `d58497e5359056858564b9ac663178958cf5a6d6` and co-located reference
-caller baseline `9ff2b150f7353399d3660334a057e105543428cc`. Provider fixes after
+caller baseline `e329150df3d33a21ba30c1f616a94246b4ff8804`. Provider fixes after
 the previous documentation baseline bind create requirements to advertised
 capabilities, preserve empty HTTP/2 reads, dispatch accepted lifecycle work,
 aggregate terminal-session operations, and prevent a caller Gateway grant from
@@ -142,7 +142,7 @@ verifier, and unchanged locked 38-case Suite pass at `d58497e`. The co-located
 `e2e/` module then passed 15 initial and 5 process-reconstruction scenarios over
 real mTLS/JWS HTTPS, WebSocket, separate caller/reference-stack processes, and
 Docker. Its clean-run manifest is under ignored local evidence directory
-`20260831T033558.195791000Z` and pins both commits, Contract identity,
+`20260831T094209.963835000Z` and pins both commits, Contract identity,
 configuration digests, and a temporary-registry tag plus immutable named
 manifest digest for the `linux/amd64` runtime image. The harness starts and
 cleans a uniquely labeled local `registry:2` container so the Provider sees a
@@ -172,7 +172,7 @@ Contract identity:
 | P1.1 | Passed for DTO, mTLS discovery, JWS/digest/replay/fencing admission | Production identity infrastructure remains unproven |
 | P1.2 | Passed for the bounded Contract-authorized lifecycle subset and development composition | Reserved lifecycle families and production gates remain open |
 | P2 components | P2.1-P2.5h local component, Contract projection, Docker, and recorded repository CI gates pass within their named boundaries | Retain single-controller/development constraints and exact Contract lock |
-| P2.5i | Passed locally for the clean co-located independent reference caller: 15 initial plus 5 restart/resume scenarios against Provider `d58497e` | Hosted run `33377404561` reached 11 initial scenarios before a caller-side Gateway revocation observation bug; rerun after the bounded drain fix. Do not reinterpret this as Agent Platform or production evidence |
+| P2.5i | Passed locally for the clean co-located independent reference caller: 15 initial plus 5 restart/resume scenarios against Provider `d58497e` using harness `e329150` | Hosted run `33377404561` reached 11 initial scenarios before the pre-fix caller-side Gateway revocation observation bug; rerun against the fixed harness. Do not reinterpret this as Agent Platform or production evidence |
 | P2 | Reference coding/shell caller release gate passed | Aggregate conformance, actual Agent Platform compatibility, multi-controller, hostile multi-tenant isolation, deployment, and production gates remain open |
 | P3 | Local revision binding, shadow-validation, canary/rollback/drain, and metrics primitives passed component tests | Real platform traffic shadow parity, canary, rollback, old-run drain, metric parity, and unchanged platform contracts remain open |
 | P4 | Optional capability profiles have not started | Each browser/desktop/forwarding/snapshot/GPU/isolation profile needs independent Contract, security, and conformance gates |
@@ -198,7 +198,7 @@ import-boundary test that forbids Provider implementation imports; the separate
 reference-stack process alone composes exported Provider/Gateway packages with
 explicit caller-owned policy.
 
-The clean `9ff2b15` harness run against Provider `d58497e` verified exact
+The clean `e329150` harness run against Provider `d58497e` verified exact
 Contract/Suite identity, two ephemeral mTLS/JWS controller identities, locked
 capability discovery, protected lifecycle, replay, exec/result/usage, stale
 fencing, cancellation, opaque terminal handoff, Gateway bytes, wrong-caller and

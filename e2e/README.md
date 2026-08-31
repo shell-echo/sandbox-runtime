@@ -28,9 +28,9 @@ exact enclosing repository commit in its manifest.
 ## Latest verified evidence
 
 The clean implementation baseline
-`9ff2b150f7353399d3660334a057e105543428cc` passed the complete reference run
+`e329150df3d33a21ba30c1f616a94246b4ff8804` passed the complete reference run
 against Provider `d58497e5359056858564b9ac663178958cf5a6d6`. The ignored local
-evidence directory is `evidence/20260831T033558.195791000Z`; its manifest
+evidence directory is `evidence/20260831T094209.963835000Z`; its manifest
 records the two commits, unchanged Contract identity, configuration digests,
 and a locally built `linux/amd64` runtime image pushed to a uniquely labeled
 temporary `registry:2` and addressed by its immutable named manifest digest.
@@ -58,7 +58,7 @@ Current implementation status is tracked in [../docs/STATUS.md](../docs/STATUS.m
 checkout. It verifies the locked Contract, runs the harness race/vet gates, and
 executes the Docker reference run before uploading sanitized evidence. The
 hosted runs `33351621726`, `33352179181`, and `33352689522` failed because
-locally built Docker images had no usable named `RepoDigest`. The temporary-
+locally built Docker images had no usable named `RepoDigest`. The temporary
 registry fix enabled run `33377404561`, which passed the first 11 initial
 scenarios but then exposed a caller-side false negative: one Gateway revocation
 read did not drain a queued PTY frame before close. The caller now drains frames
