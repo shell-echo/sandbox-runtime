@@ -210,6 +210,31 @@ separately owned Agent Platform candidate can call the Provider, nor aggregate
 conformance, distributed revocation, multi-controller reliability, hostile
 multi-tenant isolation, deployment, or production readiness.
 
+## Platform Candidate Audit
+
+The 2026-08-31 read-only audit found no independently runnable Agent Platform
+caller or migration harness in the available adjacent projects:
+
+- `/Users/echo/Projects/shell-echo/veronica` is a Blueprint/governance and TF00
+  feasibility repository. Its local `main` is `4f812468e2827c86823490ce83e578ec4448cb3d`
+  (ahead of its cached `origin/main` `a758c219fd9f14a015368ab95914ed7386c05afc`),
+  and its working tree contains pre-existing user changes that were preserved.
+  The audit found feasibility Python runners but no Application service,
+  Provider client, Gateway, mTLS/JWS identity configuration, Provider endpoint,
+  shadow/canary runner, or rollback/drain harness.
+- `/Users/echo/Projects/shell-echo/sandbox-runtime-e2e` is an older independent
+  reference-caller checkout at `2981842` with no remote. Its README describes
+  future remote-checkout preparation and the canonical reference harness is
+  now the co-located `e2e/` module; it is not an Agent Platform caller.
+
+Therefore P3 remains blocked for real platform evidence. The reference P2.5i
+result is valid and complete within its named boundary, but it cannot establish
+platform request shadow parity, real canary/rollback, old-run drain, metric
+parity, or unchanged platform-owned contracts. Resuming P3 requires a real
+platform caller/service, the locked Contract/profile and ProviderRevision,
+identity-bound mTLS/JWS PKI, reachable Provider/Gateway endpoints, and a
+platform-owned shadow/canary/rollback/drain and metrics comparison entrypoint.
+
 ## Next Implementation Order
 
 P2.5a established [ADR 0015](adr/0015-coding-shell-vertical-composition.md) and

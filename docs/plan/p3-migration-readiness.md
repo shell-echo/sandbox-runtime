@@ -1,10 +1,12 @@
 # P3 Migration Readiness Plan
 
 Status: the repository-local migration component boundary is implemented in
-commit `4212e88`; post-push CI run `32805284762` concluded success. P3 is
-ready for real platform integration because the separately versioned reference
-P2.5i caller gate now passes. No actual Agent Platform shadow traffic, canary,
-rollback, drain, or metric-parity evidence exists yet.
+commit `4212e88`; post-push CI run `32805284762` concluded success. The
+separately versioned reference P2.5i caller gate passes, so this slice is ready
+to consume a real platform target. The 2026-08-31 audit found no runnable Agent
+Platform caller or migration harness in the available platform candidate. P3 is
+therefore blocked for actual shadow traffic, canary, rollback, drain, and
+metric-parity evidence.
 
 ## Authority and scope
 
@@ -34,6 +36,22 @@ production traffic routing, platform database/queue integration, deployment,
 multi-controller coordination, cross-tenant authorization, or production
 readiness. Local callbacks and metrics are component test seams, not external
 compatibility evidence.
+
+## Current platform audit
+
+The available `/Users/echo/Projects/shell-echo/veronica` checkout contains
+Blueprint/governance and TF00 feasibility assets with Python runners, but no
+Application service, Provider client, Gateway, mTLS/JWS PKI configuration,
+reachable endpoint, or migration traffic harness. Its pre-existing working-tree
+changes were left untouched. The older
+`/Users/echo/Projects/shell-echo/sandbox-runtime-e2e` checkout is a reference
+caller preparation tree with no remote, not an Agent Platform caller.
+
+This is a blocking environment gap, not a failed Provider test. The minimum
+input to resume P3 is a real platform caller/service with the locked
+Contract/profile and ProviderRevision, identity-bound mTLS/JWS credentials,
+Provider/Gateway endpoints, and a platform-owned shadow/canary/rollback/drain
+and metric-comparison harness.
 
 ## Acceptance evidence
 

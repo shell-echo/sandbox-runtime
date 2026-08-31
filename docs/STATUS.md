@@ -58,6 +58,7 @@ production readiness.
 | P3 local evidence | implementation commit `4212e88` | Revision identity validation, deterministic canary binding, rollback-only-new-run behavior, old-run draining, shadow validation bounds, and migration metric aggregation passed focused race/shuffle and vet; real platform traffic and migration evidence remain open |
 | P3 component release evidence | post-push CI run `32805284762` | CI run concluded success for `4212e88`; this remains local migration component evidence, not external caller, canary traffic, rollback E2E, or production readiness |
 | Historical external platform audit | 2026-08-30 review baseline `bba02a6`; platform checkout cached `origin/main@cf623ac` | The existing Agent Platform candidate still had no runnable sandbox caller, Gateway, lock, PKI/JWS, or scenario runner. This finding remains relevant to actual platform compatibility but no longer blocks the co-located reference P2.5i harness |
+| Current Agent Platform candidate audit | 2026-08-31 read-only audit; `veronica` local `main@4f812468e2827c86823490ce83e578ec4448cb3d`, cached `origin/main@a758c219fd9f14a015368ab95914ed7386c05afc`; old `sandbox-runtime-e2e@2981842` | `veronica` exposes Blueprint/governance and TF00 feasibility material plus Python runners, but no runnable Application service, Provider client, Gateway, mTLS/JWS PKI, endpoint, or migration traffic harness. The old checkout has no remote and is reference-caller preparation only. Pre-existing `veronica` changes were preserved. P3 real platform evidence remains blocked |
 | P2.5i reference external caller | co-located harness `e329150df3d33a21ba30c1f616a94246b4ff8804`; Provider `d58497e5359056858564b9ac663178958cf5a6d6`; hosted run `33379217800` | Clean local and hosted runs passed 15 initial plus 5 restart/resume scenarios, including two controller contexts, endpoint non-disclosure, negative authorization, expiry/revocation, retained evidence, and same-shell reconnect. Hosted CI run `33379217795` also passed all three Provider jobs; artifact digest is `sha256:68250a85683dcbd8f01397d7373e98215382379ff895c0a58692de23c1880733`. No Agent Platform, aggregate, multi-controller, hostile multi-tenant, deployment, or production claim |
 | Contract resources | OpenAPI, admission, lifecycle, bounded exec, terminal-session, artifact-staging, usage-evidence schemas, fixtures, semantic rules, and Suite | Local Contract authority is locked; artifact publication, billing, and tenant authority remain outside the Provider |
 | Contract lock | revision `22a148e2898477790512d5bb742605654ff00ebf`; tree `1a967c9c6ce9646c8431f6ee48699ec9f406a589`; manifest `sha256:52e47726556a35ae0f1d5867a2f744341efda15475141bed0a9f93a602c4f13c`; OpenAPI `sha256:93e9e0d4492db16fc75f3bfa08e2b7061b133638ff196c60aed45022421bda4f`; semantic rules `sha256:85e7955b18638183ee5295bd6be60b6f94aa0feeee0610cd20492fc0a3e7feb0` | Local verifier, 38-case Conformance, full race/shuffle, vet, projection tests, and post-push CI `32924361132` passed. Suite file SHA-256 is `b43c59ed10d3667223523d04470b52401dae240647228b0db305a1a88ba6bde0`, while the declared Suite digest remains the existing placeholder |
@@ -344,14 +345,36 @@ Passed locally (authorized test environment):
 
 Open:
 
-- actual Agent Platform integration and P3 migration evidence. The separately
-  inspected platform candidate still has no runnable sandbox caller/Gateway;
-  the hosted reference harness proves only its named scenarios and does not
+- actual Agent Platform integration and P3 migration evidence. The
+  2026-08-31 audit of `veronica` found only Blueprint/governance and TF00
+  feasibility material, not a runnable sandbox caller/Gateway, mTLS/JWS
+  identity setup, endpoint, or migration harness. The old
+  `sandbox-runtime-e2e` checkout is reference-caller preparation only. The
+  hosted reference harness proves only its named scenarios and does not
   substitute for real request shadow parity, canary, rollback, old-run drain,
   metric parity, or unchanged platform contracts;
 - optional content-derived Suite digest enhancement;
 - Agent Platform caller E2E, aggregate lifecycle conformance, reliability,
   tenancy, deployment, and production gates.
+
+## Platform Integration Blocker
+
+P3 cannot start its real traffic evidence until the platform side supplies all
+of the following as a reproducible, non-secret test entrypoint:
+
+1. A real Agent Platform caller/service that owns WorkOrder/Run policy and
+   invokes the Provider Contract over the intended network boundary.
+2. The exact ProviderRevision, Contract/profile lock, capability/request mapping,
+   and platform-owned shadow comparison rules.
+3. Identity-bound mTLS/JWS PKI, caller/tenant bindings, and reachable Provider
+   and caller-owned Gateway endpoints.
+4. A harness that can generate shadow traffic, bind only new runs to a canary,
+   roll future selection back, drain old runs, and compare lifecycle, exec,
+   orphan, session, resource-evidence, and reconciliation metrics.
+
+Until those inputs exist, the correct action is documentation and audit only;
+the locked 38-case Suite and co-located `e2e/` run must not be relabeled as
+Agent Platform E2E or migration evidence.
 
 ## Next Entry
 
