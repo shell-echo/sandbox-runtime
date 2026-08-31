@@ -463,6 +463,7 @@ WORKDIR /workspace
 		cleanupComplete = true
 		return cleanupArtifacts(cleanupCtx)
 	}
+	cleanupComplete = true
 	return pinned, registryTag, digest, cleanup, nil
 }
 
