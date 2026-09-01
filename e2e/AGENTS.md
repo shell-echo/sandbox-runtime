@@ -19,10 +19,10 @@ Provider repository. Keep these boundaries strict:
   `sandbox-runtime/internal/*`, local `/instances` packages, or test helpers.
 - Never commit generated private keys, certificates, bearer tokens, runtime
   state, logs, or artifact bytes.
-- A passing run proves only the named reference external-caller scenarios. It
-  is not Agent Platform compatibility, aggregate conformance, multi-controller
-  reliability, hostile multi-tenant security, deployment readiness, or
-  production readiness.
+- Each passing run proves only its named reference or candidate scenarios. A
+  candidate run is not real Agent Platform compatibility. Neither mode proves
+  aggregate conformance, multi-controller reliability, hostile multi-tenant
+  security, deployment readiness, or production readiness.
 
 Format Go changes with `gofmt`, then run:
 

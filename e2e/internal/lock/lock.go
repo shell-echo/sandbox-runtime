@@ -108,6 +108,7 @@ func providerChangePath(changedPath string) bool {
 		return false
 	}
 	return providerDocumentationPath(changedPath) || changedPath == ".github/workflows/reference-e2e.yml" ||
+		changedPath == ".github/workflows/platform-candidate-e2e.yml" ||
 		changedPath == "e2e" || strings.HasPrefix(changedPath, "e2e/")
 }
 

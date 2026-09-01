@@ -77,3 +77,10 @@ A green run proves only the named reference caller scenarios;
 it does not prove Agent Platform compatibility, aggregate conformance,
 multi-controller reliability, hostile tenant isolation, deployment readiness,
 or production readiness.
+
+`../.github/workflows/platform-candidate-e2e.yml` independently verifies the
+candidate mode, runs the same race/vet gates, executes `cmd/platform-e2e` with
+Docker, and uploads `platform-candidate-e2e-evidence-<run-id>`. Its artifact and
+workflow name deliberately remain separate from reference caller evidence. A
+green candidate workflow proves only candidate integration, not compatibility
+with the real Veronica Application or any production gate.
