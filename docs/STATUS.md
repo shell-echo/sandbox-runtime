@@ -1,6 +1,6 @@
 # Project Status
 
-Updated: 2026-08-31
+Updated: 2026-09-01
 
 This document is the implementation ledger for the repository-owned MIT
 Provider Contract. It distinguishes local component evidence, Contract
@@ -59,7 +59,7 @@ production readiness.
 | P3 local evidence | implementation commit `4212e88` | Revision identity validation, deterministic canary binding, rollback-only-new-run behavior, old-run draining, shadow validation bounds, and migration metric aggregation passed focused race/shuffle and vet; real platform traffic and migration evidence remain open |
 | P3 component release evidence | post-push CI run `32805284762` | CI run concluded success for `4212e88`; this remains local migration component evidence, not external caller, canary traffic, rollback E2E, or production readiness |
 | Historical external platform audit | 2026-08-30 review baseline `bba02a6`; platform checkout cached `origin/main@cf623ac` | The existing Agent Platform candidate then had no runnable sandbox caller, Gateway, lock, PKI/JWS, or scenario runner. This finding explains why the co-located candidate harness was added; it is not evidence about the real platform |
-| Current real-platform audit | 2026-08-31 read-only audit; `veronica` local `main@4f812468e2827c86823490ce83e578ec4448cb3d`, cached `origin/main@a758c219fd9f14a015368ab95914ed7386c05afc`; old `sandbox-runtime-e2e@2981842` | `veronica` exposes Blueprint/governance and TF00 feasibility material plus Python runners, but no runnable Application service, Provider client, Gateway, mTLS/JWS PKI, endpoint, or migration traffic harness. The old checkout has no remote and is reference-caller preparation only. Pre-existing `veronica` changes were preserved. The new co-located candidate harness is separate and does not close real platform evidence |
+| Current real-platform audit | 2026-09-01 read-only re-audit; `veronica` local `main@4f812468e2827c86823490ce83e578ec4448cb3d`, 85 commits ahead of live GitHub `origin/main@a758c219fd9f14a015368ab95914ed7386c05afc`; old `sandbox-runtime-e2e@2981842` | `veronica` exposes Blueprint/governance and Temporal/PostgreSQL TF00 feasibility material plus Python runners. Tracked and visible untracked source and build/deployment/identity-material manifests contain no runnable Application service, Provider client, WorkOrder/AgentRun mapping, Gateway, mTLS/JWS PKI, Provider endpoint, or migration traffic harness. Its bounded Temporal dev-server smoke explicitly forbids workers, workflows, T2/T3, and external services. The old checkout has no remote and is reference-caller preparation only. Pre-existing `veronica` changes were preserved. The co-located candidate harness is separate and does not close real platform evidence |
 | P3 candidate integration evidence | implementation `47bd627`; local evidence `e2e/evidence/20260831T104115.065616000Z`; hosted baseline `c7ff5eb`, run `33460370618` | Local and Hosted candidate capability/request shadow checks, ProviderRevision binding, canary rollback preserving old-run identity, new-run stable selection, candidate state reconstruction, 15 initial and 5 resume scenarios, candidate metrics, and black-box import boundary passed. Boundary is `Agent Platform candidate integration only`; real platform shadow parity, canary traffic, rollback/drain, and platform-contract ownership remain open |
 | P2.5i reference external caller | co-located harness `e329150df3d33a21ba30c1f616a94246b4ff8804`; Provider `d58497e5359056858564b9ac663178958cf5a6d6`; hosted run `33379217800` | Clean local and hosted runs passed 15 initial plus 5 restart/resume scenarios, including two controller contexts, endpoint non-disclosure, negative authorization, expiry/revocation, retained evidence, and same-shell reconnect. Hosted CI run `33379217795` also passed all three Provider jobs; artifact digest is `sha256:68250a85683dcbd8f01397d7373e98215382379ff895c0a58692de23c1880733`. No Agent Platform, aggregate, multi-controller, hostile multi-tenant, deployment, or production claim |
 | Contract resources | OpenAPI, admission, lifecycle, bounded exec, terminal-session, artifact-staging, usage-evidence schemas, fixtures, semantic rules, and Suite | Local Contract authority is locked; artifact publication, billing, and tenant authority remain outside the Provider |
@@ -348,9 +348,10 @@ Passed locally (authorized test environment):
 Open:
 
 - real Agent Platform integration and P3 migration evidence. The
-  2026-08-31 audit of `veronica` found only Blueprint/governance and TF00
-  feasibility material, not a runnable Application service, sandbox
-  caller/Gateway, mTLS/JWS identity setup, endpoint, or migration harness.
+  2026-09-01 read-only re-audit of local and live-remote `veronica` found only
+  Blueprint/governance and TF00 feasibility material, not a runnable
+  Application service, sandbox caller/Gateway, WorkOrder/AgentRun mapping,
+  mTLS/JWS identity setup, endpoint, or migration harness.
   The co-located `platform-e2e` run is a candidate integration harness and is
   recorded separately; it does not substitute for real request shadow parity,
   canary traffic, rollback, old-run drain, metric parity, or unchanged

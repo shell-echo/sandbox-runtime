@@ -1,6 +1,6 @@
 # Project Context
 
-Updated: 2026-08-31
+Updated: 2026-09-01
 
 This is the stable entry point for a new developer, AI agent, development
 device, or implementation session. It summarizes the system, engineering
@@ -225,16 +225,22 @@ production readiness.
 
 ## Platform Candidate Audit
 
-The 2026-08-31 read-only audit found no independently runnable Agent Platform
-caller or migration harness in the available adjacent projects:
+The 2026-09-01 read-only re-audit found no independently runnable Agent
+Platform caller or migration harness in the available adjacent projects:
 
 - `/Users/echo/Projects/shell-echo/veronica` is a Blueprint/governance and TF00
   feasibility repository. Its local `main` is `4f812468e2827c86823490ce83e578ec4448cb3d`
-  (ahead of its cached `origin/main` `a758c219fd9f14a015368ab95914ed7386c05afc`),
-  and its working tree contains pre-existing user changes that were preserved.
-  The audit found feasibility Python runners but no Application service,
-  Provider client, Gateway, mTLS/JWS identity configuration, Provider endpoint,
-  shadow/canary runner, or rollback/drain harness.
+  (85 commits ahead of `origin/main`
+  `a758c219fd9f14a015368ab95914ed7386c05afc`); a live GitHub `ls-remote`
+  confirmed that remote branch identity. Its working tree contains pre-existing
+  user changes that were preserved. The audit covered tracked and visible
+  untracked source plus build, deployment, and identity-material manifests. It
+  found only Blueprint/governance and Temporal/PostgreSQL feasibility Python
+  runners, with no Application service, Provider client, WorkOrder/AgentRun
+  mapping, Gateway, mTLS/JWS identity configuration, Provider endpoint,
+  shadow/canary traffic entrypoint, or rollback/drain harness. The bounded
+  Temporal dev-server runner explicitly forbids workers, workflows, T2/T3, and
+  external services, so it is not a platform caller.
 - `/Users/echo/Projects/shell-echo/sandbox-runtime-e2e` is an older independent
   reference-caller checkout at `2981842` with no remote. Its README describes
   future remote-checkout preparation and the canonical reference harness is

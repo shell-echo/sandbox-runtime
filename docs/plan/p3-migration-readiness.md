@@ -3,10 +3,10 @@
 Status: the repository-local migration component boundary is implemented in
 commit `4212e88`; post-push CI run `32805284762` concluded success. The
 separately versioned reference P2.5i caller gate passes, so this slice is ready
-to consume a real platform target. The 2026-08-31 audit found no runnable Agent
-Platform caller or migration harness in the available platform candidate. P3 is
-therefore blocked for actual shadow traffic, canary, rollback, drain, and
-metric-parity evidence.
+to consume a real platform target. The 2026-09-01 read-only re-audit found no
+runnable Agent Platform caller or migration harness in the available platform
+candidate. P3 is therefore blocked for actual shadow traffic, canary, rollback,
+drain, and metric-parity evidence.
 
 ## Authority and scope
 
@@ -39,11 +39,16 @@ compatibility evidence.
 
 ## Current platform audit
 
-The available `/Users/echo/Projects/shell-echo/veronica` checkout contains
-Blueprint/governance and TF00 feasibility assets with Python runners, but no
-Application service, Provider client, Gateway, mTLS/JWS PKI configuration,
-reachable endpoint, or migration traffic harness. Its pre-existing working-tree
-changes were left untouched. The older
+The available `/Users/echo/Projects/shell-echo/veronica` checkout is local
+`main@4f812468e2827c86823490ce83e578ec4448cb3d`, 85 commits ahead of live
+GitHub `origin/main@a758c219fd9f14a015368ab95914ed7386c05afc`. Its tracked
+and visible untracked tree contains Blueprint/governance and TF00 feasibility
+assets with Python runners, but no Application service, Provider client,
+WorkOrder/AgentRun mapping, Gateway, mTLS/JWS PKI configuration, reachable
+Provider endpoint, or migration traffic harness. The bounded Temporal
+dev-server smoke explicitly forbids workers, workflows, T2/T3, and external
+services and therefore cannot serve as a platform caller. Its pre-existing
+working-tree changes were left untouched. The older
 `/Users/echo/Projects/shell-echo/sandbox-runtime-e2e` checkout is a reference
 caller preparation tree with no remote, not an Agent Platform caller.
 
