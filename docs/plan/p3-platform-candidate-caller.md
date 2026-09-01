@@ -1,11 +1,11 @@
 # P3 Platform Candidate Caller
 
-Status: local candidate integration complete; hosted candidate validation in
-progress; real P3 remains blocked. This slice adds a runnable Agent Platform
+Status: local and Hosted candidate integration complete; real P3 remains
+blocked. This slice adds a runnable Agent Platform
 candidate caller and process-level harness inside the independently versioned
-`e2e/` module. It consumes the Provider only through the Contract wire surface and
-records candidate integration evidence; it does not claim compatibility with a
-separately owned production Veronica Application.
+`e2e/` module. It consumes the Provider only through the Contract wire surface
+and records candidate integration evidence; it does not claim compatibility
+with a separately owned production Veronica Application.
 
 ## Scope
 

@@ -157,16 +157,17 @@ uploaded artifact is `reference-e2e-evidence-33379217800` with digest
 `sha256:68250a85683dcbd8f01397d7373e98215382379ff895c0a58692de23c1880733`.
 
 The co-located `e2e/` module also contains an explicitly named
-`agent-platform-candidate` caller. Candidate implementation `47bd627` passed 15 initial and
-5 resume scenarios over separate `platform-caller` and `reference-stack`
-processes, with live capability/request shadow checks, ProviderRevision
-selection, canary rollback/drain policy, state reconstruction, mTLS/JWS,
-WebSocket, and Docker. Its ignored manifest is
-`e2e/evidence/20260831T104115.065616000Z/manifest.json` (clean evidence
-harness `9e5f546`). This is candidate
-integration evidence only and does not represent real Veronica, aggregate
-conformance, hostile multi-tenant security, deployment, or production
-readiness.
+`agent-platform-candidate` caller. Candidate implementation `47bd627` passed 15
+initial and 5 resume scenarios over separate `platform-caller` and
+`reference-stack` processes, with live capability/request shadow checks,
+ProviderRevision selection, canary rollback/drain policy, state reconstruction,
+mTLS/JWS, WebSocket, and Docker. The independent Hosted workflow run
+`33460370618` passed the same candidate gate at baseline `c7ff5eb`; artifact
+`platform-candidate-e2e-evidence-33460370618` has digest
+`sha256:54f0aea847dcb0b1808c6c902f1465979a3ec4362d52ab8884187e85ea6343f7`.
+This is candidate integration evidence only and does not represent real
+Veronica, aggregate conformance, hostile multi-tenant security, deployment, or
+production readiness.
 
 Contract identity:
 
@@ -184,7 +185,7 @@ Contract identity:
 | P2 components | P2.1-P2.5h local component, Contract projection, Docker, and recorded repository CI gates pass within their named boundaries | Retain single-controller/development constraints and exact Contract lock |
 | P2.5i | Passed locally and hosted for the clean co-located independent reference caller: 15 initial plus 5 restart/resume scenarios against Provider `d58497e` using harness `e329150` | Reference artifact is published in hosted run `33379217800`; do not reinterpret this as Agent Platform or production evidence |
 | P2 | Reference coding/shell caller release gate passed | Aggregate conformance, actual Agent Platform compatibility, multi-controller, hostile multi-tenant isolation, deployment, and production gates remain open |
-| P3 | Local revision binding/shadow/metrics component evidence plus candidate integration run `47bd627` (15 initial + 5 resume) | Real platform traffic shadow parity, canary, rollback, old-run drain, metric parity, and unchanged platform contracts remain open |
+| P3 | Local revision binding/shadow/metrics component evidence plus local and Hosted candidate integration (`47bd627`/`c7ff5eb`, 15 initial + 5 resume) | Real platform traffic shadow parity, canary, rollback, old-run drain, metric parity, and unchanged platform contracts remain open |
 | P4 | Optional capability profiles have not started | Each browser/desktop/forwarding/snapshot/GPU/isolation profile needs independent Contract, security, and conformance gates |
 
 Production readiness is not a numbered phase shortcut. Aggregate conformance,
@@ -192,8 +193,8 @@ multi-controller reliability, hostile multi-tenant security, deployment, and
 production operations remain separate and unproven after the reference P2 gate
 and require their own future evidence.
 
-The latest verified repository CI for the pushed repository baseline
-`555436c82bb2e1f0fd75e9c2d5cb24a4d0e8dc89` is run `33379217795`; its
+The latest verified repository CI for the pushed workflow baseline
+`c7ff5eba6609bb0d047ab6d4cb1f6c53b09d27ed` is run `33460370563`; its
 `provider-contract`, `test`, and `docker-integration` jobs passed. The
 underlying P2.5g and P2.5h implementation gates remain run `33157119149` and
 run `33159099578`, respectively. Repository CI remains distinct from

@@ -84,3 +84,8 @@ Docker, and uploads `platform-candidate-e2e-evidence-<run-id>`. Its artifact and
 workflow name deliberately remain separate from reference caller evidence. A
 green candidate workflow proves only candidate integration, not compatibility
 with the real Veronica Application or any production gate.
+
+Hosted run `33460370618` passed all 15 initial and 5 restart/resume candidate
+scenarios on workflow baseline `c7ff5eb`. Artifact
+`platform-candidate-e2e-evidence-33460370618` has digest
+`sha256:54f0aea847dcb0b1808c6c902f1465979a3ec4362d52ab8884187e85ea6343f7`.
