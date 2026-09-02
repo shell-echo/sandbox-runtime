@@ -1,0 +1,24 @@
+{
+  "evidence_id": "browser-usage-evidence-1",
+  "sandbox_id": "browser-sandbox-1",
+  "operation_id": "browser-session-operation-1",
+  "attempt_id": "browser-session-attempt-1",
+  "fencing_token": 2,
+  "entries": [
+    {
+      "entry_id": "browser-session-duration-1",
+      "sandbox_id": "browser-sandbox-1",
+      "operation_id": "browser-session-operation-1",
+      "meter": "sandbox.browser_session_milliseconds",
+      "quantity": 180000,
+      "unit": "milliseconds",
+      "meter_source": "runtime_metered",
+      "evidence_reference": "ref:usage/browser-session-1",
+      "occurred_at": "2026-09-02T08:03:00Z"
+    }
+  ],
+  "reconciliation_status": "complete",
+  "observed_at": "2026-09-02T08:03:01Z",
+  "retained_until": "2026-09-02T09:03:01Z",
+  "evidence_digest": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+}

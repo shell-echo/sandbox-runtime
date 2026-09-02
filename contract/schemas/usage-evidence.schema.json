@@ -44,7 +44,7 @@
         "entry_id": {"$ref": "#/$defs/Identifier"},
         "sandbox_id": {"$ref": "#/$defs/Identifier"},
         "operation_id": {"$ref": "#/$defs/Identifier"},
-        "meter": {"enum": ["sandbox.wall_time_milliseconds", "sandbox.cpu_nanoseconds", "sandbox.memory_byte_milliseconds", "sandbox.network_ingress_bytes", "sandbox.network_egress_bytes", "sandbox.storage_read_bytes", "sandbox.storage_write_bytes", "sandbox.workspace_peak_bytes", "sandbox.exec_count"]},
+        "meter": {"enum": ["sandbox.wall_time_milliseconds", "sandbox.cpu_nanoseconds", "sandbox.memory_byte_milliseconds", "sandbox.network_ingress_bytes", "sandbox.network_egress_bytes", "sandbox.storage_read_bytes", "sandbox.storage_write_bytes", "sandbox.workspace_peak_bytes", "sandbox.exec_count", "sandbox.browser_session_milliseconds"]},
         "quantity": {"type": "integer", "minimum": 0},
         "unit": {"enum": ["milliseconds", "nanoseconds", "byte-milliseconds", "bytes", "count"]},
         "meter_source": {"enum": ["platform_metered", "runtime_metered", "reconciled"]},

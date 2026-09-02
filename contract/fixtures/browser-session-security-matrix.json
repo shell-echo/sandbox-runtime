@@ -1,0 +1,20 @@
+{
+  "gateway_ownership": {
+    "user_authorization": "caller-owned",
+    "tenant_authorization": "caller-owned",
+    "revocation": "caller-owned",
+    "audit": "caller-owned",
+    "reconnect_policy": "caller-owned"
+  },
+  "cases": [
+    {"name": "wrong controller identity", "boundary": "provider-admission", "result": "deny-before-dispatch", "status": 403},
+    {"name": "cross tenant context", "boundary": "provider-and-gateway", "result": "deny-before-resolution", "status": 403},
+    {"name": "stale sandbox generation", "boundary": "provider-admission", "result": "deny-before-dispatch", "status": 409},
+    {"name": "expired handoff", "boundary": "provider-and-gateway", "result": "deny-before-resolution", "status": 410},
+    {"name": "revoked gateway grant", "boundary": "caller-gateway", "result": "deny-before-resolution"},
+    {"name": "sandbox rebuild generation mismatch", "boundary": "provider-and-gateway", "result": "deny-before-resolution"},
+    {"name": "raw endpoint disclosure", "boundary": "provider-projection", "result": "reject-document"},
+    {"name": "session egress override", "boundary": "provider-schema", "result": "reject-document"},
+    {"name": "session secret injection", "boundary": "provider-schema", "result": "reject-document"}
+  ]
+}

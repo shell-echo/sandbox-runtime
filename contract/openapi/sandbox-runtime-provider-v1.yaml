@@ -15,7 +15,7 @@ paths:
         - mutualTLS: []
       responses:
         '200':
-          description: Immutable empty, terminal-only, or coding/shell capability snapshot
+          description: Immutable empty, terminal-only, coding/shell, or browser-only capability snapshot
           content:
             application/json:
               schema:
@@ -495,6 +495,90 @@ paths:
             application/json:
               schema:
                 $ref: ../schemas/standard-error.schema.json
+  /v1/sandboxes/{sandbox_id}/browser-sessions:
+    post:
+      operationId: openBrowserSession
+      summary: Accept an asynchronous browser session request
+      x-required-capability:
+        id: sandbox.browser
+        version: 1.0.0
+        profile: browser-v1
+      security:
+        - mutualTLS: []
+          bearerAuth: []
+      parameters:
+        - name: sandbox_id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/browser-session-open-request.schema.json
+      x-max-encoded-body-bytes: 65536
+      responses:
+        '202':
+          description: Browser-session open operation accepted
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/provider-operation.schema.json
+        '400':
+          description: Browser session request document or metadata is invalid
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '401':
+          description: Client certificate or bearer authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '403':
+          description: Browser session is not authorized by the admitted controller and tenant context
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '409':
+          description: Idempotency, attempt, generation, or fencing conflict
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '422':
+          description: Browser capability, profile, or sandbox state is unsupported
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '429':
+          description: Provider browser-session capacity is temporarily exhausted
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '503':
+          description: Provider is draining or temporarily unavailable
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
   /v1/operations/{operation_id}:
     get:
       operationId: getOperation
@@ -511,7 +595,7 @@ paths:
             pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$'
       responses:
         '200':
-          description: Current provider-local operation state from the owning operation family, including artifact_stage operations
+          description: Current provider-local operation state from the owning operation family, including artifact_stage and open_browser_session when their operation families are composed
           content:
             application/json:
               schema:
@@ -818,6 +902,72 @@ paths:
                 $ref: ../schemas/standard-error.schema.json
         '410':
           description: Terminal session handoff has expired
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '503':
+          description: Provider is draining or temporarily unavailable
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+  /v1/operations/{operation_id}/browser-session:
+    get:
+      operationId: getBrowserSessionHandoff
+      summary: Read a bounded browser session handoff document
+      x-required-capability:
+        id: sandbox.browser
+        version: 1.0.0
+        profile: browser-v1
+      security:
+        - mutualTLS: []
+          bearerAuth: []
+      parameters:
+        - name: operation_id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$'
+      responses:
+        '200':
+          description: Opaque browser session handoff for caller-owned Gateway resolution
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/browser-session-handoff.schema.json
+        '400':
+          description: Request metadata or path is invalid
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '401':
+          description: Client certificate or bearer authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '403':
+          description: Request is not authorized by the admitted controller and tenant context
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '404':
+          description: Browser session operation is not known to this provider revision
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '410':
+          description: Browser session handoff has expired or its sandbox generation is no longer current
           content:
             application/json:
               schema:

@@ -1,7 +1,7 @@
 {
   "provider_operation_read": {
     "route": "GET /v1/operations/{operation_id}",
-    "operation_types": ["create", "exec", "cancel_exec", "open_runtime_session", "artifact_stage"],
+    "operation_types": ["create", "exec", "cancel_exec", "open_runtime_session", "open_browser_session", "artifact_stage"],
     "artifact_stage_known_status": 200,
     "unknown_after_all_family_readers_status": 404
   },

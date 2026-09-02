@@ -1,0 +1,12 @@
+{
+  "operation_id": "browser-session-operation-1",
+  "attempt_id": "browser-session-attempt-1",
+  "fencing_token": 2,
+  "sandbox_id": "browser-sandbox-1",
+  "browser_session_id": "browser-session-1",
+  "capability_profile_id": "browser-v1",
+  "protocol": "websocket",
+  "internal_endpoint_reference": "ref:browser-session:opaque-1",
+  "connection_generation": 1,
+  "expires_at": "2026-09-02T08:04:00Z"
+}

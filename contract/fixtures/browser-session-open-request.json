@@ -1,0 +1,12 @@
+{
+  "operation_id": "browser-session-operation-1",
+  "attempt_id": "browser-session-attempt-1",
+  "fencing_token": 2,
+  "idempotency_key": "open-browser-session-1",
+  "request_digest": "sha256:4a8183de8f2462f849fee45f83b65170c8d65b2664361d834ee78be5a649310e",
+  "deadline_at": "2026-09-02T08:05:00Z",
+  "expected_generation": 1,
+  "browser_session_id": "browser-session-1",
+  "capability_profile_id": "browser-v1",
+  "expires_at": "2026-09-02T08:04:00Z"
+}

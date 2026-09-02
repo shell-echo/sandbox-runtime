@@ -1,0 +1,90 @@
+{
+  "cases": [
+    {
+      "name": "browser mixed with terminal",
+      "document": {
+        "provider_revision_id": "provider-revision-local-v1",
+        "api_version": "v1",
+        "capabilities": [
+          {"id": "sandbox.browser", "versions": ["1.0.0"], "profiles": ["browser-v1"]},
+          {"id": "sandbox.terminal", "versions": ["1.0.0"], "profiles": ["terminal-v1"]}
+        ],
+        "runtime_profiles": [
+          {"id": "sandbox-runtime-browser-v1", "isolation_class": "container", "architecture": ["amd64"], "capability_profile_ids": ["browser-v1", "terminal-v1"]}
+        ],
+        "snapshot_restore_profiles": [
+          {"profile_id": "sandbox-snapshot-workspace-v1", "level": "workspace", "suite_id": "sandbox-provider", "suite_version": "1.0.0", "suite_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+        ],
+        "limits": {"max_cpu_millis": 2000, "max_memory_bytes": 2147483648, "max_ephemeral_storage_bytes": 2147483648, "max_lease_seconds": 3600, "max_exec_seconds": 300}
+      }
+    },
+    {
+      "name": "browser missing version",
+      "document": {
+        "provider_revision_id": "provider-revision-local-v1",
+        "api_version": "v1",
+        "capabilities": [
+          {"id": "sandbox.browser", "versions": [], "profiles": ["browser-v1"]}
+        ],
+        "runtime_profiles": [
+          {"id": "sandbox-runtime-browser-v1", "isolation_class": "container", "architecture": ["amd64"], "capability_profile_ids": ["browser-v1"]}
+        ],
+        "snapshot_restore_profiles": [
+          {"profile_id": "sandbox-snapshot-workspace-v1", "level": "workspace", "suite_id": "sandbox-provider", "suite_version": "1.0.0", "suite_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+        ],
+        "limits": {"max_cpu_millis": 2000, "max_memory_bytes": 2147483648, "max_ephemeral_storage_bytes": 2147483648, "max_lease_seconds": 3600, "max_exec_seconds": 300}
+      }
+    },
+    {
+      "name": "browser wrong version",
+      "document": {
+        "provider_revision_id": "provider-revision-local-v1",
+        "api_version": "v1",
+        "capabilities": [
+          {"id": "sandbox.browser", "versions": ["2.0.0"], "profiles": ["browser-v1"]}
+        ],
+        "runtime_profiles": [
+          {"id": "sandbox-runtime-browser-v1", "isolation_class": "container", "architecture": ["amd64"], "capability_profile_ids": ["browser-v1"]}
+        ],
+        "snapshot_restore_profiles": [
+          {"profile_id": "sandbox-snapshot-workspace-v1", "level": "workspace", "suite_id": "sandbox-provider", "suite_version": "1.0.0", "suite_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+        ],
+        "limits": {"max_cpu_millis": 2000, "max_memory_bytes": 2147483648, "max_ephemeral_storage_bytes": 2147483648, "max_lease_seconds": 3600, "max_exec_seconds": 300}
+      }
+    },
+    {
+      "name": "browser wrong capability profile",
+      "document": {
+        "provider_revision_id": "provider-revision-local-v1",
+        "api_version": "v1",
+        "capabilities": [
+          {"id": "sandbox.browser", "versions": ["1.0.0"], "profiles": ["browser-experimental"]}
+        ],
+        "runtime_profiles": [
+          {"id": "sandbox-runtime-browser-v1", "isolation_class": "container", "architecture": ["amd64"], "capability_profile_ids": ["browser-experimental"]}
+        ],
+        "snapshot_restore_profiles": [
+          {"profile_id": "sandbox-snapshot-workspace-v1", "level": "workspace", "suite_id": "sandbox-provider", "suite_version": "1.0.0", "suite_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+        ],
+        "limits": {"max_cpu_millis": 2000, "max_memory_bytes": 2147483648, "max_ephemeral_storage_bytes": 2147483648, "max_lease_seconds": 3600, "max_exec_seconds": 300}
+      }
+    },
+    {
+      "name": "browser wrong runtime profile",
+      "document": {
+        "provider_revision_id": "provider-revision-local-v1",
+        "api_version": "v1",
+        "capabilities": [
+          {"id": "sandbox.browser", "versions": ["1.0.0"], "profiles": ["browser-v1"]}
+        ],
+        "runtime_profiles": [
+          {"id": "sandbox-runtime-terminal-v1", "isolation_class": "container", "architecture": ["amd64"], "capability_profile_ids": ["browser-v1"]}
+        ],
+        "snapshot_restore_profiles": [
+          {"profile_id": "sandbox-snapshot-workspace-v1", "level": "workspace", "suite_id": "sandbox-provider", "suite_version": "1.0.0", "suite_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+        ],
+        "limits": {"max_cpu_millis": 2000, "max_memory_bytes": 2147483648, "max_ephemeral_storage_bytes": 2147483648, "max_lease_seconds": 3600, "max_exec_seconds": 300}
+      }
+    }
+  ]
+}

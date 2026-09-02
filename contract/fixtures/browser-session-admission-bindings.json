@@ -1,0 +1,30 @@
+{
+  "bindings": [
+    {
+      "operation": "open_browser_session",
+      "method": "POST",
+      "path": "/v1/sandboxes/browser-sandbox-1/browser-sessions",
+      "request_contract_id": "urn:shell-echo:sandbox-runtime:request:open-browser-session:v1",
+      "request_digest_profile": "rfc8785-request-excluding-request-digest-v1",
+      "request_fixture": "browser-session-open-request.json",
+      "request_digest": "sha256:4a8183de8f2462f849fee45f83b65170c8d65b2664361d834ee78be5a649310e",
+      "mutation": true
+    },
+    {
+      "operation": "read_browser_session",
+      "method": "GET",
+      "path": "/v1/operations/browser-session-operation-1/browser-session",
+      "request_contract_id": "urn:shell-echo:sandbox-runtime:descriptor:browser-session:v1",
+      "request_digest_profile": "rfc8785-full-document-v1",
+      "descriptor_document": {
+        "operation": "read_browser_session",
+        "sandbox_id": "browser-sandbox-1",
+        "operation_id": "browser-session-operation-1",
+        "attempt_id": "browser-session-attempt-1",
+        "fencing_token": 2
+      },
+      "request_digest": "sha256:adc6fd27b4c4488984b8c4ba6f84136a534ea89b0f5d4639ed206d56c2f7409b",
+      "mutation": false
+    }
+  ]
+}

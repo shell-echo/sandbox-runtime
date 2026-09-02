@@ -1,0 +1,120 @@
+{
+  "cases": [
+    {
+      "name": "terminal runtime field injection",
+      "schema": "browser-session-open-request.schema.json",
+      "document": {
+        "operation_id": "browser-session-operation-1",
+        "attempt_id": "browser-session-attempt-1",
+        "fencing_token": 2,
+        "idempotency_key": "open-browser-session-1",
+        "request_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "deadline_at": "2026-09-02T08:05:00Z",
+        "expected_generation": 1,
+        "browser_session_id": "browser-session-1",
+        "capability_profile_id": "browser-v1",
+        "expires_at": "2026-09-02T08:04:00Z",
+        "runtime_type": "browser"
+      }
+    },
+    {
+      "name": "gateway scope injection",
+      "schema": "browser-session-open-request.schema.json",
+      "document": {
+        "operation_id": "browser-session-operation-1",
+        "attempt_id": "browser-session-attempt-1",
+        "fencing_token": 2,
+        "idempotency_key": "open-browser-session-1",
+        "request_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "deadline_at": "2026-09-02T08:05:00Z",
+        "expected_generation": 1,
+        "browser_session_id": "browser-session-1",
+        "capability_profile_id": "browser-v1",
+        "expires_at": "2026-09-02T08:04:00Z",
+        "scopes": ["browser.control"]
+      }
+    },
+    {
+      "name": "initial URL injection",
+      "schema": "browser-session-open-request.schema.json",
+      "document": {
+        "operation_id": "browser-session-operation-1",
+        "attempt_id": "browser-session-attempt-1",
+        "fencing_token": 2,
+        "idempotency_key": "open-browser-session-1",
+        "request_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "deadline_at": "2026-09-02T08:05:00Z",
+        "expected_generation": 1,
+        "browser_session_id": "browser-session-1",
+        "capability_profile_id": "browser-v1",
+        "expires_at": "2026-09-02T08:04:00Z",
+        "initial_url": "https://example.invalid"
+      }
+    },
+    {
+      "name": "raw endpoint handoff",
+      "schema": "browser-session-handoff.schema.json",
+      "document": {
+        "operation_id": "browser-session-operation-1",
+        "attempt_id": "browser-session-attempt-1",
+        "fencing_token": 2,
+        "sandbox_id": "browser-sandbox-1",
+        "browser_session_id": "browser-session-1",
+        "capability_profile_id": "browser-v1",
+        "protocol": "websocket",
+        "internal_endpoint_reference": "ws://10.0.0.1:9222/devtools/browser/raw",
+        "connection_generation": 1,
+        "expires_at": "2026-09-02T08:04:00Z"
+      }
+    },
+    {
+      "name": "terminal reference handoff",
+      "schema": "browser-session-handoff.schema.json",
+      "document": {
+        "operation_id": "browser-session-operation-1",
+        "attempt_id": "browser-session-attempt-1",
+        "fencing_token": 2,
+        "sandbox_id": "browser-sandbox-1",
+        "browser_session_id": "browser-session-1",
+        "capability_profile_id": "browser-v1",
+        "protocol": "websocket",
+        "internal_endpoint_reference": "ref:session:terminal-1",
+        "connection_generation": 1,
+        "expires_at": "2026-09-02T08:04:00Z"
+      }
+    },
+    {
+      "name": "provider token handoff",
+      "schema": "browser-session-handoff.schema.json",
+      "document": {
+        "operation_id": "browser-session-operation-1",
+        "attempt_id": "browser-session-attempt-1",
+        "fencing_token": 2,
+        "sandbox_id": "browser-sandbox-1",
+        "browser_session_id": "browser-session-1",
+        "capability_profile_id": "browser-v1",
+        "protocol": "websocket",
+        "internal_endpoint_reference": "ref:browser-session:opaque-1",
+        "provider_access_token_reference": "token:provider-1",
+        "connection_generation": 1,
+        "expires_at": "2026-09-02T08:04:00Z"
+      }
+    },
+    {
+      "name": "unapproved protocol handoff",
+      "schema": "browser-session-handoff.schema.json",
+      "document": {
+        "operation_id": "browser-session-operation-1",
+        "attempt_id": "browser-session-attempt-1",
+        "fencing_token": 2,
+        "sandbox_id": "browser-sandbox-1",
+        "browser_session_id": "browser-session-1",
+        "capability_profile_id": "browser-v1",
+        "protocol": "webrtc",
+        "internal_endpoint_reference": "ref:browser-session:opaque-1",
+        "connection_generation": 1,
+        "expires_at": "2026-09-02T08:04:00Z"
+      }
+    }
+  ]
+}
