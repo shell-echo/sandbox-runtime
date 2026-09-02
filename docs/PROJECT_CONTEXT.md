@@ -134,7 +134,7 @@ multi-tenant, deployment, and production readiness.
 
 ## Current Snapshot
 
-This snapshot was audited on 2026-08-31 against Provider implementation
+This snapshot was audited on 2026-09-02 against Provider implementation
 baseline `d58497e5359056858564b9ac663178958cf5a6d6` and co-located reference
 caller baseline `e329150df3d33a21ba30c1f616a94246b4ff8804`. Provider fixes after
 the previous documentation baseline bind create requirements to advertised
@@ -173,6 +173,13 @@ mTLS/JWS, WebSocket, and Docker. The independent Hosted workflow run
 This is candidate integration evidence only and does not represent real
 Veronica, aggregate conformance, hostile multi-tenant security, deployment, or
 production readiness.
+
+On 2026-09-02 the current documentation descendant `77ff509` was rechecked
+with the required Provider race/shuffle, vet, Contract verifier, locked
+38-case Suite, and independent `e2e/` race/shuffle/vet checks. The checks
+passed with loopback permission enabled; the unprivileged sandbox run could
+not bind local listeners and is recorded as an environment limitation, not a
+code failure. No implementation or Contract files changed in this audit.
 
 Contract identity:
 
@@ -230,12 +237,12 @@ production readiness.
 
 ## Platform Candidate Audit
 
-The 2026-09-01 read-only re-audit found no independently runnable Agent
+The 2026-09-02 read-only re-audit found no independently runnable Agent
 Platform caller or migration harness in the available adjacent projects:
 
 - `/Users/echo/Projects/shell-echo/veronica` is a Blueprint/governance and TF00
-  feasibility repository. Its local `main` is `4f812468e2827c86823490ce83e578ec4448cb3d`
-  (85 commits ahead of `origin/main`
+  feasibility repository. Its local `main` is `17bb3855ba513b3a0e511f68f48c4e6aefbf265d`
+  (90 commits ahead of `origin/main`
   `a758c219fd9f14a015368ab95914ed7386c05afc`); a live GitHub `ls-remote`
   confirmed that remote branch identity. Its working tree contains pre-existing
   user changes that were preserved. The audit covered tracked and visible
