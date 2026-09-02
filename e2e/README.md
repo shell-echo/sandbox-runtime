@@ -37,7 +37,32 @@ and platform-candidate runners still execute only the coding/shell scenarios;
 advancing this identity is not browser runtime, browser caller, or browser E2E
 evidence.
 
-## Latest historical verified evidence
+## Latest verified local evidence
+
+Harness `75e572599907a1dc15199f245a5e2f1719d6d967` passed both locked modes
+against Provider `24b2e36485c334634e561009850d1905ec3115d5`:
+
+- reference run `20260902T065111.030014000Z` passed 15 initial and 5
+  reconstruction/resume scenarios;
+- platform-candidate run `20260902T065200.812211000Z` passed the same 15 and 5
+  scenarios with its separately named candidate policy; and
+- both manifests pin Contract revision `5096e71`, tree `859f76d`, 48 Suite
+  cases, and linux/amd64 runtime image digest
+  `sha256:93b6504a7ee1a78e46dbe9fc3e71a70eabf09f96834f5ab148d2bed9c558812c`.
+
+These runs are coding/shell regression evidence only. They do not exercise the
+Contract-authorized browser routes, a browser runtime, or a browser caller.
+
+The latest published previous-lock runs are Reference E2E `33591808946` and
+Platform Candidate E2E `33591808961` at harness baseline `b72fc3b`. Their
+artifacts have digests
+`sha256:ae1cdeb11ba9d64924e6fb94d76bee84ae3a4c298459dc20d443a0c269d51526`
+and
+`sha256:781073eebc55ead15d24b366aeabaca58ef6112ed1cbad4ce1145ece4d249d77`,
+respectively. Both manifests pin Provider `e5d7324`, the 38-case previous
+Contract lock, and coding/shell-only scenarios.
+
+## Previous verified evidence
 
 The previous lock-refresh baseline `2f165f9eb023392c1b6fb33845549f27e7364734`
 passed the complete reference run against Provider

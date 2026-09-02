@@ -89,15 +89,12 @@ Compatibility rules:
 The versioned provider surface contains these operation families:
 
 The table is the target architecture inventory. The current repository-owned
-Contract authorizes `POST /v1/sandboxes`, `GET /v1/sandboxes/{sandbox_id}`,
-`GET /v1/operations/{operation_id}`, and terminal-session open/handoff
-resources. P2.3c0 reconciles terminal advertisement as a strict zero-or-terminal-
-only snapshot: disabled configurations advertise no capability or runtime
-profile; an enabled snapshot must map `sandbox.terminal`, its version and
-capability profile to an explicit runtime profile. This Contract projection does
-not compose either session route. The other lifecycle families remain reserved
-and must stay absent from the Provider router until an additive Contract
-revision, fixtures, and release gate exist.
+Contract authorizes the coding/shell surface plus browser capability, create,
+session-open, opaque-handoff, operation, usage, and admission authority. The
+Provider implementation composes the coding/shell development surface only.
+The two browser-session routes remain deliberately absent from the protected
+router, startup advertisement remains empty unless the existing coding/shell
+dependency graph passes, and no browser runtime or Gateway is composed.
 
 | Method and path | Responsibility |
 | --- | --- |
@@ -109,11 +106,13 @@ revision, fixtures, and release gate exist.
 | `POST /v1/sandboxes/{sandbox_id}/lease` | Renew the bounded sandbox lease. |
 | `POST /v1/sandboxes/{sandbox_id}/exec` | Start an asynchronous process execution. |
 | `POST /v1/sandboxes/{sandbox_id}/exec:cancel` | Record cancellation intent for an execution. |
-| `POST /v1/sandboxes/{sandbox_id}/runtime-sessions` | Open an internal terminal session; browser, desktop, and port-forward remain future capability-specific routes. |
+| `POST /v1/sandboxes/{sandbox_id}/runtime-sessions` | Open an internal terminal session. Browser authority does not reuse this route. |
+| `POST /v1/sandboxes/{sandbox_id}/browser-sessions` | Contract-authorized asynchronous browser session request; currently absent from Provider composition. |
 | `POST /v1/sandboxes/{sandbox_id}/snapshots` | Start snapshot creation at a declared level. |
 | `POST /v1/sandboxes/{sandbox_id}:terminate` | Idempotently request teardown. |
 | `GET /v1/operations/{operation_id}` | Read durable asynchronous operation state. |
 | `GET /v1/operations/{operation_id}/runtime-session` | Read an opaque terminal session handoff after a successful session operation. |
+| `GET /v1/operations/{operation_id}/browser-session` | Contract-authorized opaque browser handoff for caller-owned Gateway resolution; currently absent from Provider composition. |
 | `GET /v1/operations/{operation_id}/exec-result` | Read a retained execution result. |
 | `GET /v1/operations/{operation_id}/snapshot-manifest` | Read a completed snapshot manifest. |
 | `GET /v1/sandboxes/{sandbox_id}/events` | Resume a sequenced provider event stream. |
@@ -355,22 +354,23 @@ its conformance tests.
 
 ## Current gap assessment
 
-The current code has bounded Provider components, but the complete coding/shell
-vertical and its release gates are not yet implemented:
+The current code has passed its named reference coding/shell caller gate and
+has browser Contract authority only; the broader reliability, security,
+deployment, and optional-profile gates remain open:
 
 | Area | Current state | Required direction |
 | --- | --- | --- |
 | Backend abstraction | Local `instance.Driver` remains separate; the Provider lifecycle has its own fake and Docker development adapters, while exec and terminal use focused Provider-only runtime ports. | Add future snapshot capability ports without reusing `/instances` models and retain narrow optional interfaces. |
 | Lifecycle recovery | Provider file persistence and Docker observation reconcile pending/unknown create work for one controller. | Retain unknown-outcome evidence; add transactional production storage before multi-controller operation. |
 | Persistence | Memory and atomically replaced file repository. | Retain for development; introduce transactional production storage before multi-controller operation. |
-| API | Local `/instances` and the protected Provider v1 surface are separate; authorized lifecycle/session/artifact/usage routes have bounded projections, and development exec routes now reach a real Docker executor. | Complete terminal/Gateway and artifact/usage dispatch without expanding Contract authority. |
-| Capabilities | Empty, terminal-only, and atomic coding/shell snapshots are locked; command startup remains empty by default. | Advertise the coding/shell profile only after all P2.5h dependencies pass. |
+| API | Local `/instances` and the protected Provider v1 surface are separate; authorized coding/shell lifecycle/session/artifact/usage routes have bounded projections, and development exec routes reach a real Docker executor. Browser routes are Contract-authorized but explicitly uncomposed and return `404`. | Add browser transport only after its runtime/session application and private Gateway dependencies pass their component gates. |
+| Capabilities | Empty, terminal-only, atomic coding/shell, and browser-only snapshots are locked; browser validation is projection authority only and command startup does not advertise it. | Advertise browser only after its complete image, runtime, Gateway, evidence, security, and independent-caller gates pass. |
 | Execution | P2.5e composes durable exec/cancel/result/operation handling with real Docker execution, private bounded capture, cancellation, expiry, and reconciliation for one development controller; local gates and CI pass. | Retain the recovery/correlation gates and complete real usage collection in P2.5g; do not advertise before P2.5h. |
 | Terminal | P2.5f1 adds a backend-neutral terminal runtime, PTY-owning guest broker, and Docker adapter with private durable identity, bounded capacity, cleanup, and same-shell reattach after Provider driver reconstruction. P2.5f2 adds an uncomposed single-controller session vertical with durable accept-before-allocation, provider-neutral receipts/observations, lifecycle projection, restart reconciliation, cleanup retry, and v1-to-v2 migration. P2.5f3 adds a separate durable opaque-reference registry/resolver that rechecks registry and committed-handoff bindings before every fresh attach. P2.5f4 adds bounded WebSocket and terminal-byte-stream adapters outside Gateway policy, with mandatory caller handshake admission, explicit origin allowlists, disabled compression, and 32 KiB default / 64 KiB hard frame limits. | Compose the existing Gateway only with caller-owned authorization, revocation, and recording ports, then add command composition and the evidence gate through P2.5f7. The separate session/reference repositories are non-atomic; do not infer multi-controller, external-caller, or production readiness. |
 | Workspace | The Provider Docker development adapter supplies `/inputs`, `/workspace`, `/outputs`, and bounded tmpfs `/tmp` with owned cleanup; exec consumes that runtime without exposing host paths. | Add artifact consumers, capacity enforcement, and stronger isolation evidence. |
 | Security | Docker defaults already drop capabilities, use non-root/read-only root, disable networking, and limit resources. | Add policy enforcement, stronger isolation profiles, secret grants, egress controls, audit evidence, and production auth. |
 | Events and usage | Durable lifecycle events and bounded usage-evidence components exist without a complete runtime collector composition. | Complete collection/reconciliation while leaving platform accounting authority outside the Provider. |
-| Snapshots/browser/desktop | Not implemented and not advertised. | Keep optional until implemented and independently conformant. |
+| Snapshots/browser/desktop | Browser Contract authority/projection is locked, but browser runtime/image/routes/advertisement are not implemented; snapshots and desktop remain unauthorized optional behavior. | Build and verify the browser image and uncomposed components next; keep every optional profile unadvertised until its independent gates pass. |
 
 ## Delivery plan and release gates
 
