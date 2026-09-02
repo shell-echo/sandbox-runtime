@@ -152,19 +152,20 @@ WebSocket, separate caller/reference-stack processes, and Docker. Its manifest
 pins the three identities above and linux/amd64 runtime image digest
 `sha256:93b6504a7ee1a78e46dbe9fc3e71a70eabf09f96834f5ab148d2bed9c558812c`.
 This is reference coding/shell evidence only; it does not exercise browser.
-Hosted Reference E2E run `33591808946` remains the latest published reference
-artifact and uses the previous Contract lock. Its artifact
-`reference-e2e-evidence-33591808946` has digest
-`sha256:ae1cdeb11ba9d64924e6fb94d76bee84ae3a4c298459dc20d443a0c269d51526`.
+Hosted Reference E2E run `33602869956` passed the same current lock at release
+baseline `13c6a57`. Its artifact `reference-e2e-evidence-33602869956` has
+digest
+`sha256:1b0ccc43b254041c618d58c1c14039162bbf1a31ecd22cbe5c72e64cefa6351e`.
+This remains coding/shell reference evidence and contains no browser scenario.
 
 The explicitly named `agent-platform-candidate` mode passed the same current
 lock in local run `20260902T065200.812211000Z`: 15 initial and 5 resume
 coding/shell scenarios over separate `platform-caller` and `reference-stack`
 processes with candidate shadow/selection/rollback/drain policy and state
-reconstruction. Hosted workflow run `33591808961` remains the latest published
-candidate artifact on the previous lock. Its artifact
-`platform-candidate-e2e-evidence-33591808961` has digest
-`sha256:781073eebc55ead15d24b366aeabaca58ef6112ed1cbad4ce1145ece4d249d77`.
+reconstruction. Hosted workflow run `33602870006` passed the same current lock
+at release baseline `13c6a57`. Its artifact
+`platform-candidate-e2e-evidence-33602870006` has digest
+`sha256:958dee960d3503a20f987393307ae14c6d10b3adbf02d2684ed952a9a34b8b0c`.
 Local and hosted candidate results do not represent browser evidence, real
 Veronica, aggregate conformance, hostile multi-tenant security, deployment, or
 production readiness.
@@ -202,9 +203,9 @@ Contract identity:
 | P1.1 | Passed for DTO, mTLS discovery, JWS/digest/replay/fencing admission | Production identity infrastructure remains unproven |
 | P1.2 | Passed for the bounded Contract-authorized lifecycle subset and development composition | Reserved lifecycle families and production gates remain open |
 | P2 components | P2.1-P2.5h local component, Contract projection, Docker, and recorded repository CI gates pass within their named boundaries | Retain single-controller/development constraints and exact Contract lock |
-| P2.5i | Current local reference lock-refresh passed 15 initial plus 5 restart/resume coding/shell scenarios against Provider `24b2e36` using harness `75e5725`; prior hosted reference evidence remains published | Local evidence is `20260902T065111.030014000Z`; no browser scenario, Agent Platform, or production property is implied |
+| P2.5i | Current local reference lock-refresh passed 15 initial plus 5 restart/resume coding/shell scenarios against Provider `24b2e36` using harness `75e5725`; hosted release run `33602869956` passed the same current lock | Local evidence is `20260902T065111.030014000Z`; no browser scenario, Agent Platform, or production property is implied |
 | P2 | Reference coding/shell caller release gate passed | Aggregate conformance, actual Agent Platform compatibility, multi-controller, hostile multi-tenant isolation, deployment, and production gates remain open |
-| P3 | Local revision binding/shadow/metrics component evidence plus current local candidate integration (`20260902T065200.812211000Z`) and prior Hosted candidate integration (`e5d7324`/`b72fc3b`) | Real platform traffic shadow parity, canary, rollback, old-run drain, metric parity, and unchanged platform contracts remain open |
+| P3 | Local revision binding/shadow/metrics component evidence plus current local candidate integration (`20260902T065200.812211000Z`) and hosted candidate lock regression (`24b2e36`/`13c6a57`) | Real platform traffic shadow parity, canary, rollback, old-run drain, metric parity, and unchanged platform contracts remain open |
 | P4 | Browser Contract authority/projection passed; browser runtime implementation has not started | Build/verify the browser image and uncomposed components next; handler, advertisement, browser caller, security, deployment, and production gates remain open |
 
 Production readiness is not a numbered phase shortcut. Aggregate conformance,
@@ -212,8 +213,9 @@ multi-controller reliability, hostile multi-tenant security, deployment, and
 production operations remain separate and unproven after the reference P2 gate
 and require their own future evidence.
 
-The latest verified repository CI for the pushed workflow baseline
-`b72fc3b96b63987477c793979dc7cc9ef8952905` is run `33591808969`; its
+The browser-authority release baseline
+`13c6a57770ac4c7ecbfedc16755e660162d209d5` is covered by repository CI run
+`33602869924`; its
 `provider-contract`, `test`, and `docker-integration` jobs passed. The
 underlying P2.5g and P2.5h implementation gates remain run `33157119149` and
 run `33159099578`, respectively. Repository CI remains distinct from

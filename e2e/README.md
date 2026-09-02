@@ -53,14 +53,16 @@ against Provider `24b2e36485c334634e561009850d1905ec3115d5`:
 These runs are coding/shell regression evidence only. They do not exercise the
 Contract-authorized browser routes, a browser runtime, or a browser caller.
 
-The latest published previous-lock runs are Reference E2E `33591808946` and
-Platform Candidate E2E `33591808961` at harness baseline `b72fc3b`. Their
-artifacts have digests
-`sha256:ae1cdeb11ba9d64924e6fb94d76bee84ae3a4c298459dc20d443a0c269d51526`
+Hosted release baseline `13c6a57` passed the current lock in Reference E2E run
+`33602869956` and Platform Candidate E2E run `33602870006`. Their artifacts
+have digests
+`sha256:1b0ccc43b254041c618d58c1c14039162bbf1a31ecd22cbe5c72e64cefa6351e`
 and
-`sha256:781073eebc55ead15d24b366aeabaca58ef6112ed1cbad4ce1145ece4d249d77`,
-respectively. Both manifests pin Provider `e5d7324`, the 38-case previous
-Contract lock, and coding/shell-only scenarios.
+`sha256:958dee960d3503a20f987393307ae14c6d10b3adbf02d2684ed952a9a34b8b0c`,
+respectively. Both manifests pin Provider `24b2e36`, Contract revision
+`5096e71`, tree `859f76d`, 48 Suite cases, and coding/shell-only scenarios.
+The preceding 38-case-lock runs remain `33591808946` and `33591808961` at
+baseline `b72fc3b`.
 
 ## Previous verified evidence
 
