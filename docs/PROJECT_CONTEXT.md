@@ -181,6 +181,12 @@ passed with loopback permission enabled; the unprivileged sandbox run could
 not bind local listeners and is recorded as an environment limitation, not a
 code failure. No implementation or Contract files changed in this audit.
 
+The internal Block manifest foundation is available under `blocks/` with ADR
+0016 and plan `block-manifest-loader.md`. It is a strict, bounded local
+configuration registry only; it does not advertise Provider capabilities,
+execute blocks, or establish browser/desktop, deployment, or production
+evidence.
+
 Contract identity:
 
 - namespace: `urn:shell-echo:sandbox-runtime:provider-v1`

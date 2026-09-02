@@ -48,11 +48,11 @@ Currently implemented:
   authorization, revocation, recording, and a Provider reference resolver; no
   public Gateway route, command composition, or capability advertisement is
   enabled
+- strict internal Block manifest parsing and a bounded read-only registry;
+  this configuration format is not Provider wire behavior
 
 Planned but not yet implemented:
 
-- Block manifest loader
-- Block registry
 - runtime images for browser and desktop workloads
 - display, audio, input, streaming, clipboard, and file-transfer modules
 - deployable WebRTC / VNC / public WebSocket Gateway composition
@@ -545,10 +545,10 @@ visibility.
 
 ### Manifest and blocks
 
-- [ ] define block manifest format
-- [ ] load block manifests from disk
-- [ ] validate manifests
-- [ ] expose block registry APIs
+- [x] define internal block manifest format
+- [x] load block manifests from disk
+- [x] validate manifests
+- [x] expose internal block registry APIs (no public route)
 - [ ] add `browser-chrome` manifest prototype
 
 ### Instance lifecycle
