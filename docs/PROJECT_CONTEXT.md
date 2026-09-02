@@ -135,15 +135,19 @@ multi-tenant, deployment, and production readiness.
 ## Current Snapshot
 
 This snapshot was audited on 2026-09-02 against Provider implementation
-baseline `d58497e5359056858564b9ac663178958cf5a6d6` and co-located reference
-caller baseline `e329150df3d33a21ba30c1f616a94246b4ff8804`. Provider fixes after
+baseline `e5d7324ef1d4508b8b0c474fe5ead47edd6f5146` and co-located E2E harness
+baseline `2f165f9eb023392c1b6fb33845549f27e7364734`. Provider protocol behavior
+remains unchanged from `d58497e5359056858564b9ac663178958cf5a6d6`; the new
+commit adds only the internal Block manifest foundation and its documentation.
+Provider fixes after
 the previous documentation baseline bind create requirements to advertised
 capabilities, preserve empty HTTP/2 reads, dispatch accepted lifecycle work,
 aggregate terminal-session operations, and prevent a caller Gateway grant from
 outliving its Provider endpoint.
 
 The Provider full race/shuffle suite, vet, module verification, Contract lock
-verifier, and unchanged locked 38-case Suite pass at `d58497e`. The co-located
+verifier, and unchanged locked 38-case Suite pass at the current implementation
+baseline. The co-located
 `e2e/` module then passed 15 initial and 5 process-reconstruction scenarios over
 real mTLS/JWS HTTPS, WebSocket, separate caller/reference-stack processes, and
 Docker. Its clean-run manifest is under ignored local evidence directory
@@ -174,12 +178,14 @@ This is candidate integration evidence only and does not represent real
 Veronica, aggregate conformance, hostile multi-tenant security, deployment, or
 production readiness.
 
-On 2026-09-02 the current documentation descendant `77ff509` was rechecked
-with the required Provider race/shuffle, vet, Contract verifier, locked
-38-case Suite, and independent `e2e/` race/shuffle/vet checks. The checks
-passed with loopback permission enabled; the unprivileged sandbox run could
-not bind local listeners and is recorded as an environment limitation, not a
-code failure. No implementation or Contract files changed in this audit.
+On 2026-09-02 the current implementation and E2E lock were rechecked with
+Provider race/shuffle, vet, Contract verifier, locked 38-case Suite, Block
+component tests, and independent `e2e/` race/shuffle/vet/lock checks. The
+reference run `20260902T035608.264731000Z` and candidate run
+`20260902T035641.384559000Z` each passed 15 initial plus 5 reconstruction/
+resume scenarios against the current lock. The checks passed with loopback
+permission enabled; the unprivileged sandbox run could not bind local listeners
+and is recorded as an environment limitation, not a code failure.
 
 The internal Block manifest foundation is available under `blocks/` with ADR
 0016 and plan `block-manifest-loader.md`. It is a strict, bounded local
@@ -201,9 +207,9 @@ Contract identity:
 | P1.1 | Passed for DTO, mTLS discovery, JWS/digest/replay/fencing admission | Production identity infrastructure remains unproven |
 | P1.2 | Passed for the bounded Contract-authorized lifecycle subset and development composition | Reserved lifecycle families and production gates remain open |
 | P2 components | P2.1-P2.5h local component, Contract projection, Docker, and recorded repository CI gates pass within their named boundaries | Retain single-controller/development constraints and exact Contract lock |
-| P2.5i | Passed locally and hosted for the clean co-located independent reference caller: 15 initial plus 5 restart/resume scenarios against Provider `d58497e` using harness `e329150` | Reference artifact is published in hosted run `33379217800`; do not reinterpret this as Agent Platform or production evidence |
+| P2.5i | Passed locally and hosted for the clean co-located independent reference caller: 15 initial plus 5 restart/resume scenarios against Provider `e5d7324` using harness `2f165f9` | Local evidence is `20260902T035608.264731000Z`; reference artifact is published in hosted run `33379217800`. Do not reinterpret this as Agent Platform or production evidence |
 | P2 | Reference coding/shell caller release gate passed | Aggregate conformance, actual Agent Platform compatibility, multi-controller, hostile multi-tenant isolation, deployment, and production gates remain open |
-| P3 | Local revision binding/shadow/metrics component evidence plus local and Hosted candidate integration (`47bd627`/`c7ff5eb`, 15 initial + 5 resume) | Real platform traffic shadow parity, canary, rollback, old-run drain, metric parity, and unchanged platform contracts remain open |
+| P3 | Local revision binding/shadow/metrics component evidence plus local candidate integration (`20260902T035641.384559000Z`) and Hosted candidate integration (`47bd627`/`c7ff5eb`, 15 initial + 5 resume) | Real platform traffic shadow parity, canary, rollback, old-run drain, metric parity, and unchanged platform contracts remain open |
 | P4 | Optional capability profiles have not started | Each browser/desktop/forwarding/snapshot/GPU/isolation profile needs independent Contract, security, and conformance gates |
 
 Production readiness is not a numbered phase shortcut. Aggregate conformance,
@@ -240,6 +246,15 @@ This closes the reference external-caller P2.5i gate. It does not prove real
 Veronica compatibility, aggregate conformance, distributed revocation,
 multi-controller reliability, hostile multi-tenant isolation, deployment, or
 production readiness.
+
+The 2026-09-02 lock-refresh runs used harness `2f165f9eb023392c1b6fb33845549f27e7364734`
+and Provider `e5d7324ef1d4508b8b0c474fe5ead47edd6f5146`. The reference evidence
+`e2e/evidence/20260902T035608.264731000Z/manifest.json` and candidate evidence
+`e2e/evidence/20260902T035641.384559000Z/manifest.json` each record 15 initial
+plus 5 reconstruction/resume passes, Contract 38 cases, and a linux/amd64
+named runtime digest. The candidate manifest remains explicitly bounded to
+candidate integration and does not represent real Veronica or production
+traffic.
 
 ## Platform Candidate Audit
 

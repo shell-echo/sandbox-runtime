@@ -34,13 +34,13 @@ exact enclosing repository commit in its manifest.
 
 ## Latest verified evidence
 
-The clean implementation baseline
-`e329150df3d33a21ba30c1f616a94246b4ff8804` passed the complete reference run
-against Provider `d58497e5359056858564b9ac663178958cf5a6d6`. The ignored local
-evidence directory is `evidence/20260831T094209.963835000Z`; its manifest
-records the two commits, unchanged Contract identity, configuration digests,
-and a locally built `linux/amd64` runtime image pushed to a uniquely labeled
-temporary `registry:2` and addressed by its immutable named manifest digest.
+The current lock-refresh baseline `2f165f9eb023392c1b6fb33845549f27e7364734`
+passed the complete reference run against Provider
+`e5d7324ef1d4508b8b0c474fe5ead47edd6f5146`. The ignored local evidence
+directory is `evidence/20260902T035608.264731000Z`; its manifest records the
+two commits, unchanged Contract identity, configuration digests, and a locally
+built `linux/amd64` runtime image pushed to a uniquely labeled temporary
+`registry:2` and addressed by its immutable named manifest digest.
 
 All 15 initial scenarios and all 5 reconstruction/resume scenarios passed.
 This is the P2.5i reference external-caller result only, within the evidence
