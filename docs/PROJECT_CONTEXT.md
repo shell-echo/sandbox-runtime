@@ -1,6 +1,6 @@
 # Project Context
 
-Updated: 2026-09-01
+Updated: 2026-09-02
 
 This is the stable entry point for a new developer, AI agent, development
 device, or implementation session. It summarizes the system, engineering
@@ -37,6 +37,11 @@ Use these sources in authority order:
    architecture gates.
 5. [`STATUS.md`](STATUS.md) is the detailed evidence ledger. Code, Git state,
    and reproducible test or CI results must still support every status claim.
+
+For a caller-facing summary of the locked Provider routes, ownership boundary,
+admission rules, and integration checklist, read the
+[`Provider Integration Profile`](platform-integration-profile.md). It is a
+navigation guide only; the Contract resources and lock remain authoritative.
 
 When sources disagree, do not silently blend them. Apply the higher-authority
 source, verify the implementation, and update the stale narrative document.

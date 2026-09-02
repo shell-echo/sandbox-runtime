@@ -13,7 +13,9 @@ Start a new development session with
 [`docs/PROJECT_CONTEXT.md`](docs/PROJECT_CONTEXT.md). It summarizes the current
 architecture, engineering rules, verified maturity, blockers, and next work;
 the detailed implementation evidence ledger remains in
-[`docs/STATUS.md`](docs/STATUS.md).
+[`docs/STATUS.md`](docs/STATUS.md). For the caller-facing Provider routes,
+ownership boundary, admission rules, and integration checklist, see the
+[`Provider Integration Profile`](docs/platform-integration-profile.md).
 
 Currently implemented:
 
