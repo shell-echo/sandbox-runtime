@@ -195,9 +195,10 @@ evidence.
 
 P4 authority planning is recorded in ADR 0017 and
 [`plan/p4-optional-profiles.md`](plan/p4-optional-profiles.md). Browser is the
-first optional-profile candidate, but its first slice is Contract and image/
-security authority audit only. No browser/desktop route, runtime image,
-capability advertisement, or production configuration is enabled.
+first optional-profile candidate, and the plan records the 2026-09-02 browser
+Contract gap inventory. Its first slice is Contract and image/security
+authority audit only. No browser/desktop route, runtime image, capability
+advertisement, or production configuration is enabled.
 
 Contract identity:
 

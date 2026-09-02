@@ -1,9 +1,9 @@
 # P4 Optional Profiles
 
-Status: authority and readiness planning accepted in ADR 0017. No optional
-profile is implemented or advertised. This plan does not change the Provider
-Contract and does not close P3, aggregate conformance, deployment, or
-production gates.
+Status: authority and readiness planning accepted in ADR 0017; the browser gap
+inventory below is recorded. No optional profile is implemented or advertised.
+This plan does not change the Provider Contract and does not close P3, aggregate
+conformance, deployment, or production gates.
 
 ## Objective
 
@@ -51,6 +51,25 @@ The browser first slice is documentation and fixture design only:
 
 No browser route, `sandbox.browser` advertisement, runtime image, or public
 endpoint is part of this first slice.
+
+## Browser authority audit findings
+
+The 2026-09-02 audit inspected the locked Contract resources rather than
+inferring support from generic schema vocabulary:
+
+| Contract surface | Observed fact | Required decision before implementation |
+| --- | --- | --- |
+| Capability schema | `capability.schema.json` accepts IDs matching `sandbox.*`, so `sandbox.browser` is syntactically representable | Add browser-specific semantic rules, versions, profiles, and cross-resource consistency; generic schema acceptance is not support |
+| Capability snapshot semantics | `provider-v1.json` limits snapshots to empty, terminal-only, or coding/shell shapes | Define an additive browser advertisement shape and lock its fixture, projection, and Suite cases |
+| Create request | `create-sandbox-request.schema.json` includes generic capability requirements and `resource_class: browser` | Bind browser requirements to an advertised revision/profile, image architecture, resources, network, and lifecycle behavior |
+| Runtime session | `runtime-session-open-request.schema.json` fixes `runtime_type` to `terminal`; semantic rules forbid browser, desktop, and port-forward runtime requests | Decide whether browser needs a new session resource/protocol or a separately authorized data-plane contract; do not reuse terminal admission |
+| HTTP surface | The OpenAPI contains lifecycle, exec, terminal-session, artifact, usage, and operation routes but no browser session or endpoint route | Add only an approved browser route set with opaque handoff and caller-owned Gateway policy |
+| Fixtures and Suite | Existing fixtures cover empty, terminal, coding/shell, and explicit browser rejection; no browser success fixture or Suite case exists | Add success/rejection, restart, expiry, cross-tenant, endpoint non-disclosure, and usage cases together with the Contract lock |
+| Runtime image | No browser image, digest, provenance attestation, architecture matrix, or guest endpoint is present | Build or publish a reproducible image and verify mounts, user, limits, network, and endpoint behavior before Provider composition |
+
+This inventory is authority evidence only. It does not authorize a browser
+capability, change the current Contract revision, or make the internal Block
+manifest a wire resource.
 
 ## Acceptance evidence
 
