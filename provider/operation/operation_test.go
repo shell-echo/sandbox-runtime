@@ -83,3 +83,14 @@ func TestAggregatorReturnsImmutableViewAndPropagatesContext(t *testing.T) {
 		t.Fatalf("canceled read = %v", err)
 	}
 }
+
+func TestBrowserSessionOperationTypeIsContractValid(t *testing.T) {
+	view := operationView("browser-operation-1", TypeBrowserSession)
+	if err := view.Validate(); err != nil {
+		t.Fatalf("browser session operation view is invalid: %v", err)
+	}
+	view.Type = "browser_session"
+	if err := view.Validate(); !errors.Is(err, ErrInvalidView) {
+		t.Fatalf("unknown browser operation type error = %v, want ErrInvalidView", err)
+	}
+}

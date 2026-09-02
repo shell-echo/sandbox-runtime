@@ -142,7 +142,7 @@ func TestLocalContractArtifactUsageReadStateMatrix(t *testing.T) {
 
 func assertEvidenceReadFixture(t *testing.T, fixture evidenceReadMatrix) {
 	t.Helper()
-	wantOperationTypes := []string{"create", "exec", "cancel_exec", "open_runtime_session", "artifact_stage"}
+	wantOperationTypes := []string{"create", "exec", "cancel_exec", "open_runtime_session", "open_browser_session", "artifact_stage"}
 	if fixture.ProviderOperationRead.Route != "GET /v1/operations/{operation_id}" ||
 		!slices.Equal(fixture.ProviderOperationRead.OperationTypes, wantOperationTypes) ||
 		fixture.ProviderOperationRead.ArtifactStageKnownStatus != http.StatusOK ||
@@ -255,7 +255,7 @@ func assertEvidenceReadOpenAPI(t *testing.T) {
 		t.Fatal(err)
 	}
 	operationResponses := document.Paths["/v1/operations/{operation_id}"].Get.Responses
-	if !strings.Contains(operationResponses["200"].Description, "artifact_stage") || !strings.Contains(operationResponses["404"].Description, "any composed operation-family authority") {
+	if !strings.Contains(operationResponses["200"].Description, "artifact_stage") || !strings.Contains(operationResponses["200"].Description, "open_browser_session") || !strings.Contains(operationResponses["404"].Description, "any composed operation-family authority") {
 		t.Fatalf("generic operation OpenAPI descriptions do not bind aggregation")
 	}
 	artifactResponses := document.Paths["/v1/operations/{operation_id}/artifact-staging-evidence"].Get.Responses

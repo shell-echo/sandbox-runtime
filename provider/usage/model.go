@@ -33,6 +33,7 @@ const (
 	MeterStorageWrite   Meter = "sandbox.storage_write_bytes"
 	MeterWorkspacePeak  Meter = "sandbox.workspace_peak_bytes"
 	MeterExecCount      Meter = "sandbox.exec_count"
+	MeterBrowserSession Meter = "sandbox.browser_session_milliseconds"
 )
 
 type Source string
@@ -79,7 +80,7 @@ func (e Entry) Validate() error {
 
 func meterUnit(meter Meter) (string, bool) {
 	switch meter {
-	case MeterWallTime:
+	case MeterWallTime, MeterBrowserSession:
 		return "milliseconds", true
 	case MeterCPU:
 		return "nanoseconds", true

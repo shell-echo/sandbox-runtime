@@ -100,6 +100,7 @@ const (
 	OperationResume             OperationType = "resume"
 	OperationTerminate          OperationType = "terminate"
 	OperationOpenRuntimeSession OperationType = "open_runtime_session"
+	OperationOpenBrowserSession OperationType = "open_browser_session"
 	OperationArtifactStage      OperationType = "artifact_stage"
 )
 
@@ -204,7 +205,7 @@ func (v *OperationType) UnmarshalJSON(data []byte) error {
 	return unmarshalEnum(data, "operation type", v, OperationCreate,
 		OperationExtendLease, OperationExec, OperationCancelExec, OperationSnapshot,
 		OperationRestore, OperationSuspend, OperationResume, OperationTerminate,
-		OperationOpenRuntimeSession, OperationArtifactStage)
+		OperationOpenRuntimeSession, OperationOpenBrowserSession, OperationArtifactStage)
 }
 
 func (v *OperationState) UnmarshalJSON(data []byte) error {
@@ -389,6 +390,14 @@ type RuntimeSessionOpenRequest struct {
 	RuntimeType         TerminalRuntimeType `json:"runtime_type"`
 	CapabilityProfileID string              `json:"capability_profile_id"`
 	ExpiresAt           string              `json:"expires_at"`
+}
+
+type BrowserSessionOpenRequest struct {
+	MutationEnvelope
+	ExpectedGeneration  int64  `json:"expected_generation"`
+	BrowserSessionID    string `json:"browser_session_id"`
+	CapabilityProfileID string `json:"capability_profile_id"`
+	ExpiresAt           string `json:"expires_at"`
 }
 
 type SnapshotConsistency string
@@ -782,6 +791,27 @@ type RuntimeSessionHandoff struct {
 	InternalEndpointReference string              `json:"internal_endpoint_reference"`
 	ConnectionGeneration      int64               `json:"connection_generation"`
 	ExpiresAt                 string              `json:"expires_at"`
+}
+
+type BrowserSessionHandoff struct {
+	OperationID               string          `json:"operation_id"`
+	AttemptID                 string          `json:"attempt_id"`
+	FencingToken              int64           `json:"fencing_token"`
+	SandboxID                 string          `json:"sandbox_id"`
+	BrowserSessionID          string          `json:"browser_session_id"`
+	CapabilityProfileID       string          `json:"capability_profile_id"`
+	Protocol                  BrowserProtocol `json:"protocol"`
+	InternalEndpointReference string          `json:"internal_endpoint_reference"`
+	ConnectionGeneration      int64           `json:"connection_generation"`
+	ExpiresAt                 string          `json:"expires_at"`
+}
+
+type BrowserProtocol string
+
+const BrowserProtocolWebSocket BrowserProtocol = "websocket"
+
+func (v *BrowserProtocol) UnmarshalJSON(data []byte) error {
+	return unmarshalEnum(data, "browser protocol", v, BrowserProtocolWebSocket)
 }
 
 type TerminalProtocol string

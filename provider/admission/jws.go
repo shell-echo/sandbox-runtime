@@ -44,6 +44,7 @@ const (
 	OperationExec                        Operation = "exec"
 	OperationCancelExec                  Operation = "cancel_exec"
 	OperationOpenRuntimeSession          Operation = "open_runtime_session"
+	OperationOpenBrowserSession          Operation = "open_browser_session"
 	OperationStageArtifact               Operation = "stage_artifact"
 	OperationSnapshot                    Operation = "snapshot"
 	OperationTerminate                   Operation = "terminate"
@@ -51,6 +52,7 @@ const (
 	OperationReadOperation               Operation = "read_operation"
 	OperationReadResult                  Operation = "read_result"
 	OperationReadRuntimeSession          Operation = "read_runtime_session"
+	OperationReadBrowserSession          Operation = "read_browser_session"
 	OperationReadArtifactStagingEvidence Operation = "read_artifact_staging_evidence"
 	OperationReadUsageEvidence           Operation = "read_usage_evidence"
 	OperationReadSnapshotManifest        Operation = "read_snapshot_manifest"
@@ -62,9 +64,9 @@ func (operation Operation) Supported() bool {
 	switch operation {
 	case OperationCreate, OperationRestore, OperationSetDesiredState,
 		OperationExtendLease, OperationExec, OperationCancelExec,
-		OperationOpenRuntimeSession, OperationStageArtifact, OperationSnapshot, OperationTerminate,
+		OperationOpenRuntimeSession, OperationOpenBrowserSession, OperationStageArtifact, OperationSnapshot, OperationTerminate,
 		OperationReadSandbox, OperationReadOperation, OperationReadResult,
-		OperationReadRuntimeSession, OperationReadArtifactStagingEvidence,
+		OperationReadRuntimeSession, OperationReadBrowserSession, OperationReadArtifactStagingEvidence,
 		OperationReadUsageEvidence, OperationReadSnapshotManifest, OperationReadEvents:
 		return true
 	default:
@@ -256,6 +258,7 @@ var requestBindings = map[Operation]requestBinding{
 	OperationExec:                        {contractID: "urn:shell-echo:sandbox-runtime:request:exec:v1", profile: DigestProfileRequestExcludingDigest},
 	OperationCancelExec:                  {contractID: "urn:shell-echo:sandbox-runtime:request:cancel-exec:v1", profile: DigestProfileRequestExcludingDigest},
 	OperationOpenRuntimeSession:          {contractID: "urn:shell-echo:sandbox-runtime:request:open-runtime-session:v1", profile: DigestProfileRequestExcludingDigest},
+	OperationOpenBrowserSession:          {contractID: "urn:shell-echo:sandbox-runtime:request:open-browser-session:v1", profile: DigestProfileRequestExcludingDigest},
 	OperationStageArtifact:               {contractID: "urn:shell-echo:sandbox-runtime:request:stage-artifact:v1", profile: DigestProfileRequestExcludingDigest},
 	OperationSnapshot:                    {contractID: "urn:shell-echo:sandbox-runtime:request:snapshot:v1", profile: DigestProfileRequestExcludingDigest},
 	OperationTerminate:                   {contractID: "urn:shell-echo:sandbox-runtime:request:terminate:v1", profile: DigestProfileRequestExcludingDigest},
@@ -263,6 +266,7 @@ var requestBindings = map[Operation]requestBinding{
 	OperationReadOperation:               {contractID: "urn:shell-echo:sandbox-runtime:descriptor:operation:v1", profile: DigestProfileFullDocument},
 	OperationReadResult:                  {contractID: "urn:shell-echo:sandbox-runtime:descriptor:exec-result:v1", profile: DigestProfileFullDocument},
 	OperationReadRuntimeSession:          {contractID: "urn:shell-echo:sandbox-runtime:descriptor:runtime-session:v1", profile: DigestProfileFullDocument},
+	OperationReadBrowserSession:          {contractID: "urn:shell-echo:sandbox-runtime:descriptor:browser-session:v1", profile: DigestProfileFullDocument},
 	OperationReadArtifactStagingEvidence: {contractID: "urn:shell-echo:sandbox-runtime:descriptor:artifact-staging-evidence:v1", profile: DigestProfileFullDocument},
 	OperationReadUsageEvidence:           {contractID: "urn:shell-echo:sandbox-runtime:descriptor:usage-evidence:v1", profile: DigestProfileFullDocument},
 	OperationReadSnapshotManifest:        {contractID: "urn:shell-echo:sandbox-runtime:descriptor:snapshot-manifest:v1", profile: DigestProfileFullDocument},

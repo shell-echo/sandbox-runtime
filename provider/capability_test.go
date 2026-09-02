@@ -91,6 +91,62 @@ func TestNewCapabilitySnapshotWithAdvertisementsAcceptsCodingShellProfileMapping
 	}
 }
 
+func TestNewCapabilitySnapshotWithAdvertisementsAcceptsBrowserProfileMapping(t *testing.T) {
+	capabilities, runtimeProfiles := validBrowserAdvertisements()
+	snapshot, err := NewCapabilitySnapshotWithAdvertisements("revision-1", validLimits(nil, nil), capabilities, runtimeProfiles, validProfiles())
+	if err != nil {
+		t.Fatalf("NewCapabilitySnapshotWithAdvertisements() error = %v", err)
+	}
+	if len(snapshot.Capabilities) != 1 || snapshot.Capabilities[0].ID != "sandbox.browser" ||
+		len(snapshot.Capabilities[0].Versions) != 1 || snapshot.Capabilities[0].Versions[0] != "1.0.0" ||
+		len(snapshot.Capabilities[0].Profiles) != 1 || snapshot.Capabilities[0].Profiles[0] != "browser-v1" {
+		t.Fatalf("browser capability = %#v", snapshot.Capabilities)
+	}
+	if len(snapshot.RuntimeProfiles) != 1 || snapshot.RuntimeProfiles[0].ID != "sandbox-runtime-browser-v1" ||
+		len(snapshot.RuntimeProfiles[0].CapabilityProfileIDs) != 1 || snapshot.RuntimeProfiles[0].CapabilityProfileIDs[0] != "browser-v1" {
+		t.Fatalf("browser runtime profile = %#v", snapshot.RuntimeProfiles)
+	}
+
+	capabilities[0].Profiles[0] = "mutated"
+	runtimeProfiles[0].CapabilityProfileIDs[0] = "mutated"
+	if snapshot.Capabilities[0].Profiles[0] != "browser-v1" || snapshot.RuntimeProfiles[0].CapabilityProfileIDs[0] != "browser-v1" {
+		t.Fatalf("constructor input changed browser snapshot: %#v", snapshot)
+	}
+}
+
+func TestNewCapabilitySnapshotWithAdvertisementsRejectsInvalidBrowserMappings(t *testing.T) {
+	tests := map[string]func(*[]Capability, *[]RuntimeProfile){
+		"mixed with terminal": func(capabilities *[]Capability, _ *[]RuntimeProfile) {
+			*capabilities = append(*capabilities, Capability{ID: "sandbox.terminal", Versions: []string{"1.0.0"}, Profiles: []string{"terminal-v1"}})
+		},
+		"missing version": func(capabilities *[]Capability, _ *[]RuntimeProfile) {
+			(*capabilities)[0].Versions = nil
+		},
+		"wrong version": func(capabilities *[]Capability, _ *[]RuntimeProfile) {
+			(*capabilities)[0].Versions = []string{"2.0.0"}
+		},
+		"wrong capability profile": func(capabilities *[]Capability, runtimeProfiles *[]RuntimeProfile) {
+			(*capabilities)[0].Profiles = []string{"browser-experimental"}
+			(*runtimeProfiles)[0].CapabilityProfileIDs = []string{"browser-experimental"}
+		},
+		"wrong runtime profile": func(_ *[]Capability, runtimeProfiles *[]RuntimeProfile) {
+			(*runtimeProfiles)[0].ID = "sandbox-runtime-terminal-v1"
+		},
+		"extra runtime mapping": func(_ *[]Capability, runtimeProfiles *[]RuntimeProfile) {
+			(*runtimeProfiles)[0].CapabilityProfileIDs = append((*runtimeProfiles)[0].CapabilityProfileIDs, "terminal-v1")
+		},
+	}
+	for name, mutate := range tests {
+		t.Run(name, func(t *testing.T) {
+			capabilities, runtimeProfiles := validBrowserAdvertisements()
+			mutate(&capabilities, &runtimeProfiles)
+			if _, err := NewCapabilitySnapshotWithAdvertisements("revision-1", validLimits(nil, nil), capabilities, runtimeProfiles, validProfiles()); err == nil {
+				t.Fatal("NewCapabilitySnapshotWithAdvertisements() error = nil")
+			}
+		})
+	}
+}
+
 func TestNewCapabilitySnapshotWithAdvertisementsRejectsPartialCodingShellMappings(t *testing.T) {
 	tests := map[string]func(*[]Capability, *[]RuntimeProfile){
 		"exec only": func(capabilities *[]Capability, _ *[]RuntimeProfile) {
@@ -444,6 +500,20 @@ func validCodingShellAdvertisements() ([]Capability, []RuntimeProfile) {
 			RuntimeClassName:     "sandbox-runtime-coding-shell",
 			Architecture:         []string{"amd64"},
 			CapabilityProfileIDs: []string{"exec-v1", "terminal-v1"},
+		}}
+}
+
+func validBrowserAdvertisements() ([]Capability, []RuntimeProfile) {
+	return []Capability{{
+			ID:       "sandbox.browser",
+			Versions: []string{"1.0.0"},
+			Profiles: []string{"browser-v1"},
+		}}, []RuntimeProfile{{
+			ID:                   "sandbox-runtime-browser-v1",
+			IsolationClass:       "container",
+			RuntimeClassName:     "sandbox-runtime-browser",
+			Architecture:         []string{"amd64"},
+			CapabilityProfileIDs: []string{"browser-v1"},
 		}}
 }
 

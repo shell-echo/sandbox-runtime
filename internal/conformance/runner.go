@@ -83,6 +83,18 @@ var testCases = map[string]testCase{
 		Package: "./providerapi",
 		Run:     `^TestCodingShellCapabilityRejectionFixtures$`,
 	},
+	"capability-discovery-browser-profile-advertisement": {
+		Package: "./providerapi",
+		Run:     `^TestMapCapabilitiesProjectsBrowserAdvertisement$`,
+	},
+	"capability-discovery-browser-contract-consistency": {
+		Package: "./providerapi/v1",
+		Run:     `^TestLockedBrowserCapabilityContractConsistency$`,
+	},
+	"capability-discovery-browser-rejection-fixtures": {
+		Package: "./providerapi",
+		Run:     `^TestBrowserCapabilityRejectionFixtures$`,
+	},
 	"capability-discovery-empty-request": {
 		Package: "./providerapi",
 		Run:     `^(TestCapabilitiesHandlerRejectsRequestsWithoutADocumentBeforeDispatch|TestProviderServerReconcilesHTTP11CapabilityInputTransport)$`,
@@ -166,6 +178,34 @@ var testCases = map[string]testCase{
 	"runtime-session-rejection-fixtures": {
 		Package: "./providerapi/v1",
 		Run:     `^TestRuntimeSessionRejectionFixtures$`,
+	},
+	"browser-session-open-schema": {
+		Package: "./providerapi/v1",
+		Run:     `^TestLockedBrowserSessionOpenRequestProjection$`,
+	},
+	"browser-session-operation-schema": {
+		Package: "./providerapi/v1",
+		Run:     `^TestLockedBrowserSessionOperationProjection$`,
+	},
+	"browser-session-handoff-schema": {
+		Package: "./providerapi/v1",
+		Run:     `^TestLockedBrowserSessionHandoffProjection$`,
+	},
+	"browser-session-semantic-bounds": {
+		Package: "./providerapi/v1",
+		Run:     `^(TestLocalContractBrowserSessionSemanticRules|TestLocalContractBrowserSessionSecurityMatrix)$`,
+	},
+	"browser-session-rejection-fixtures": {
+		Package: "./providerapi/v1",
+		Run:     `^TestBrowserSessionRejectionFixtures$`,
+	},
+	"browser-session-usage-evidence": {
+		Package: "./providerapi/v1",
+		Run:     `^TestLockedBrowserSessionUsageEvidenceProjection$`,
+	},
+	"browser-session-protected-admission-bindings": {
+		Package: "./provider/admission",
+		Run:     `^TestLocalContractBrowserSessionAdmissionBindings$`,
 	},
 	"artifact-staging-request-schema": {
 		Package: "./providerapi/v1",

@@ -25,6 +25,7 @@ const (
 	TypeExec           Type = "exec"
 	TypeCancelExec     Type = "cancel_exec"
 	TypeRuntimeSession Type = "open_runtime_session"
+	TypeBrowserSession Type = "open_browser_session"
 	TypeArtifactStage  Type = "artifact_stage"
 )
 
@@ -77,7 +78,7 @@ func (v View) Validate() error {
 		return ErrInvalidView
 	}
 	switch v.Type {
-	case TypeCreate, TypeExec, TypeCancelExec, TypeRuntimeSession, TypeArtifactStage:
+	case TypeCreate, TypeExec, TypeCancelExec, TypeRuntimeSession, TypeBrowserSession, TypeArtifactStage:
 	default:
 		return ErrInvalidView
 	}

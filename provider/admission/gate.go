@@ -148,7 +148,7 @@ func (operation Operation) Mutation() bool {
 	switch operation {
 	case OperationCreate, OperationRestore, OperationSetDesiredState,
 		OperationExtendLease, OperationExec, OperationCancelExec,
-		OperationOpenRuntimeSession, OperationStageArtifact, OperationSnapshot, OperationTerminate:
+		OperationOpenRuntimeSession, OperationOpenBrowserSession, OperationStageArtifact, OperationSnapshot, OperationTerminate:
 		return true
 	default:
 		return false

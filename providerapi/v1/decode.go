@@ -18,6 +18,7 @@ const (
 	MaxExecRequestBytes               int64 = 256 << 10
 	MaxCancelExecRequestBytes         int64 = 64 << 10
 	MaxRuntimeSessionOpenRequestBytes int64 = 64 << 10
+	MaxBrowserSessionOpenRequestBytes int64 = 64 << 10
 	MaxArtifactStagingRequestBytes    int64 = 64 << 10
 	MaxSnapshotRequestBytes           int64 = 256 << 10
 	MaxTerminateRequestBytes          int64 = 64 << 10

@@ -108,9 +108,9 @@ func NewCapabilitySnapshot(providerRevisionID string, limits Limits, profiles []
 }
 
 // NewCapabilitySnapshotWithAdvertisements validates and freezes a capability
-// snapshot. The locked v1 shapes are empty, terminal-only, or an atomic
-// coding/shell profile. Every advertised capability profile must map to the
-// single advertised runtime profile.
+// snapshot. The locked v1 shapes are empty, terminal-only, atomic coding/shell,
+// or browser-only. Every advertised capability profile must map to the single
+// advertised runtime profile.
 func NewCapabilitySnapshotWithAdvertisements(providerRevisionID string, limits Limits, capabilities []Capability, runtimeProfiles []RuntimeProfile, profiles []SnapshotRestoreProfile) (CapabilitySnapshot, error) {
 	snapshot := CapabilitySnapshot{
 		ProviderRevisionID:      providerRevisionID,
@@ -217,7 +217,7 @@ func validateCapabilityAdvertisements(capabilities []Capability, runtimeProfiles
 		}
 		versions := make(map[string]struct{}, len(capability.Versions))
 		for _, version := range capability.Versions {
-			if !identifierPattern.MatchString(version) || ((capability.ID == "sandbox.exec" || capability.ID == "sandbox.terminal") && !suiteVersionPattern.MatchString(version)) {
+			if !identifierPattern.MatchString(version) || ((capability.ID == "sandbox.exec" || capability.ID == "sandbox.terminal" || capability.ID == "sandbox.browser") && !suiteVersionPattern.MatchString(version)) {
 				return fmt.Errorf("capability %q has an invalid version %q", capability.ID, version)
 			}
 			if _, exists := versions[version]; exists {
@@ -242,7 +242,7 @@ func validateCapabilityAdvertisements(capabilities []Capability, runtimeProfiles
 			profiles[profileID] = struct{}{}
 			profileIDs[profileID] = struct{}{}
 		}
-		if (capability.ID == "sandbox.exec" || capability.ID == "sandbox.terminal") && (len(capability.Versions) == 0 || len(capability.Profiles) == 0) {
+		if (capability.ID == "sandbox.exec" || capability.ID == "sandbox.terminal" || capability.ID == "sandbox.browser") && (len(capability.Versions) == 0 || len(capability.Profiles) == 0) {
 			return fmt.Errorf("capability %q must advertise at least one version and profile", capability.ID)
 		}
 		capabilitiesByID[capability.ID] = capability
@@ -253,16 +253,24 @@ func validateCapabilityAdvertisements(capabilities []Capability, runtimeProfiles
 		}
 		return nil
 	}
-	execCapability, execAdvertised := capabilitiesByID["sandbox.exec"]
-	terminalCapability, terminalAdvertised := capabilitiesByID["sandbox.terminal"]
+	_, execAdvertised := capabilitiesByID["sandbox.exec"]
+	_, terminalAdvertised := capabilitiesByID["sandbox.terminal"]
+	browserCapability, browserAdvertised := capabilitiesByID["sandbox.browser"]
 	switch {
-	case len(capabilities) == 1 && terminalAdvertised && !execAdvertised:
-	case len(capabilities) == 2 && terminalAdvertised && execAdvertised:
+	case len(capabilities) == 1 && terminalAdvertised && !execAdvertised && !browserAdvertised:
+	case len(capabilities) == 2 && terminalAdvertised && execAdvertised && !browserAdvertised:
+	case len(capabilities) == 1 && browserAdvertised && !terminalAdvertised && !execAdvertised:
+		if len(browserCapability.Versions) != 1 || browserCapability.Versions[0] != "1.0.0" || len(browserCapability.Profiles) != 1 || browserCapability.Profiles[0] != "browser-v1" {
+			return errors.New("browser capability must advertise exactly version 1.0.0 and profile browser-v1")
+		}
 	default:
-		return errors.New("Provider v1 permits only terminal-only or atomic coding/shell capability advertisements")
+		return errors.New("Provider v1 permits only terminal-only, atomic coding/shell, or browser-only capability advertisements")
 	}
 	if len(runtimeProfiles) != 1 {
 		return errors.New("an advertised Provider v1 capability shape requires exactly one runtime profile")
+	}
+	if browserAdvertised && (runtimeProfiles[0].ID != "sandbox-runtime-browser-v1" || len(runtimeProfiles[0].CapabilityProfileIDs) != 1 || runtimeProfiles[0].CapabilityProfileIDs[0] != "browser-v1") {
+		return errors.New("browser capability must map only to runtime profile sandbox-runtime-browser-v1")
 	}
 
 	mappedProfiles := make(map[string]struct{})
@@ -308,7 +316,7 @@ func validateCapabilityAdvertisements(capabilities []Capability, runtimeProfiles
 		}
 	}
 
-	for _, capability := range []Capability{execCapability, terminalCapability} {
+	for _, capability := range capabilities {
 		for _, profileID := range capability.Profiles {
 			if _, mapped := mappedProfiles[profileID]; !mapped {
 				return fmt.Errorf("capability %q profile %q has no advertised runtime profile", capability.ID, profileID)

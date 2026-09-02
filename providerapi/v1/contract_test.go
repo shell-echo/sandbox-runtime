@@ -29,6 +29,8 @@ func TestLockedContractProjection(t *testing.T) {
 		"admission-target.schema.json":             func() any { return &map[string]any{} },
 		"artifact-staging-evidence.schema.json":    func() any { return &ArtifactStagingEvidence{} },
 		"artifact-staging-request.schema.json":     func() any { return &ArtifactStagingRequest{} },
+		"browser-session-handoff.schema.json":      func() any { return &BrowserSessionHandoff{} },
+		"browser-session-open-request.schema.json": func() any { return &BrowserSessionOpenRequest{} },
 		"cancel-exec-request.schema.json":          func() any { return &CancelExecRequest{} },
 		"create-sandbox-request.schema.json":       func() any { return &CreateRequest{} },
 		"exec-request.schema.json":                 func() any { return &ExecRequest{} },
@@ -55,6 +57,7 @@ func TestLockedContractProjection(t *testing.T) {
 		"create-sandbox-request.schema.json":       1 << 20,
 		"exec-request.schema.json":                 262144,
 		"artifact-staging-request.schema.json":     65536,
+		"browser-session-open-request.schema.json": 65536,
 		"runtime-session-open-request.schema.json": 65536,
 	}) {
 		t.Fatalf("Provider request body limits = %v, want create request limit", limits)
@@ -65,6 +68,8 @@ func TestLockedContractProjection(t *testing.T) {
 		"admission-target.schema.json":             "admission-target.json",
 		"artifact-staging-evidence.schema.json":    "artifact-staging-evidence.json",
 		"artifact-staging-request.schema.json":     "artifact-staging-request.json",
+		"browser-session-handoff.schema.json":      "browser-session-handoff.json",
+		"browser-session-open-request.schema.json": "browser-session-open-request.json",
 		"cancel-exec-request.schema.json":          "cancel-exec-request.json",
 		"create-sandbox-request.schema.json":       "create-sandbox-request.json",
 		"exec-request.schema.json":                 "exec-request.json",

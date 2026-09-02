@@ -28,7 +28,8 @@ var (
 
 // mapCapabilities explicitly projects the application-owned startup snapshot
 // into the Provider v1 wire model. The default snapshot remains disabled, while
-// terminal-only and coding/shell advertisements carry exact profile mappings.
+// terminal-only, coding/shell, and browser-only advertisements carry exact
+// profile mappings.
 func mapCapabilities(snapshot provider.CapabilitySnapshot) providerv1.Capabilities {
 	capabilities := make([]providerv1.Capability, len(snapshot.Capabilities))
 	for index, capability := range snapshot.Capabilities {
@@ -82,8 +83,9 @@ func mapCapabilities(snapshot provider.CapabilitySnapshot) providerv1.Capabiliti
 }
 
 // validateCapabilities enforces the locked capability Schema constraints and
-// terminal/coding-shell profile relationships. It is a local fail-closed
-// boundary, not a replacement for validation against the locked Contract.
+// terminal/coding-shell/browser profile relationships. It is a local
+// fail-closed boundary, not a replacement for validation against the locked
+// Contract.
 func validateCapabilities(document providerv1.Capabilities) error {
 	if !utf8.ValidString(document.ProviderRevisionID) || strings.TrimSpace(document.ProviderRevisionID) == "" {
 		return errors.New("provider revision ID must be valid UTF-8 and not empty")
@@ -151,7 +153,7 @@ func validateCapabilityAdvertisements(capabilities []providerv1.Capability, runt
 		}
 		versions := make(map[string]struct{}, len(capability.Versions))
 		for _, version := range capability.Versions {
-			if !identifierPattern.MatchString(version) || ((capability.ID == providerv1.CapabilityExec || capability.ID == providerv1.CapabilityTerminal) && !suiteVersionPattern.MatchString(version)) {
+			if !identifierPattern.MatchString(version) || ((capability.ID == providerv1.CapabilityExec || capability.ID == providerv1.CapabilityTerminal || capability.ID == providerv1.CapabilityBrowser) && !suiteVersionPattern.MatchString(version)) {
 				return fmt.Errorf("capability %q has an invalid version %q", capability.ID, version)
 			}
 			if _, exists := versions[version]; exists {
@@ -176,7 +178,7 @@ func validateCapabilityAdvertisements(capabilities []providerv1.Capability, runt
 			profiles[profileID] = struct{}{}
 			profileIDs[profileID] = struct{}{}
 		}
-		if (capability.ID == providerv1.CapabilityExec || capability.ID == providerv1.CapabilityTerminal) && (len(capability.Versions) == 0 || len(capability.Profiles) == 0) {
+		if (capability.ID == providerv1.CapabilityExec || capability.ID == providerv1.CapabilityTerminal || capability.ID == providerv1.CapabilityBrowser) && (len(capability.Versions) == 0 || len(capability.Profiles) == 0) {
 			return fmt.Errorf("capability %q must advertise at least one version and profile", capability.ID)
 		}
 		capabilitiesByID[capability.ID] = capability
@@ -187,16 +189,24 @@ func validateCapabilityAdvertisements(capabilities []providerv1.Capability, runt
 		}
 		return nil
 	}
-	execCapability, execAdvertised := capabilitiesByID[providerv1.CapabilityExec]
-	terminalCapability, terminalAdvertised := capabilitiesByID[providerv1.CapabilityTerminal]
+	_, execAdvertised := capabilitiesByID[providerv1.CapabilityExec]
+	_, terminalAdvertised := capabilitiesByID[providerv1.CapabilityTerminal]
+	browserCapability, browserAdvertised := capabilitiesByID[providerv1.CapabilityBrowser]
 	switch {
-	case len(capabilities) == 1 && terminalAdvertised && !execAdvertised:
-	case len(capabilities) == 2 && terminalAdvertised && execAdvertised:
+	case len(capabilities) == 1 && terminalAdvertised && !execAdvertised && !browserAdvertised:
+	case len(capabilities) == 2 && terminalAdvertised && execAdvertised && !browserAdvertised:
+	case len(capabilities) == 1 && browserAdvertised && !terminalAdvertised && !execAdvertised:
+		if len(browserCapability.Versions) != 1 || browserCapability.Versions[0] != "1.0.0" || len(browserCapability.Profiles) != 1 || browserCapability.Profiles[0] != "browser-v1" {
+			return errors.New("browser capability must advertise exactly version 1.0.0 and profile browser-v1")
+		}
 	default:
-		return errors.New("Provider v1 permits only terminal-only or atomic coding/shell capability advertisements")
+		return errors.New("Provider v1 permits only terminal-only, atomic coding/shell, or browser-only capability advertisements")
 	}
 	if len(runtimeProfiles) != 1 {
 		return errors.New("an advertised Provider v1 capability shape requires exactly one runtime profile")
+	}
+	if browserAdvertised && (runtimeProfiles[0].ID != "sandbox-runtime-browser-v1" || len(runtimeProfiles[0].CapabilityProfileIDs) != 1 || runtimeProfiles[0].CapabilityProfileIDs[0] != "browser-v1") {
+		return errors.New("browser capability must map only to runtime profile sandbox-runtime-browser-v1")
 	}
 
 	mappedProfiles := make(map[string]struct{})
@@ -242,7 +252,7 @@ func validateCapabilityAdvertisements(capabilities []providerv1.Capability, runt
 		}
 	}
 
-	for _, capability := range []providerv1.Capability{execCapability, terminalCapability} {
+	for _, capability := range capabilities {
 		for _, profileID := range capability.Profiles {
 			if _, mapped := mappedProfiles[profileID]; !mapped {
 				return fmt.Errorf("capability %q profile %q has no advertised runtime profile", capability.ID, profileID)

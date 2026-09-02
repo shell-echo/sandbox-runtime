@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -158,6 +159,83 @@ func TestMapCapabilitiesProjectsCodingShellAdvertisement(t *testing.T) {
 	}
 	if err := projection.Validate("provider-capabilities.schema.json", encoded); err != nil {
 		t.Fatalf("coding/shell projection is not Contract-valid: %v", err)
+	}
+}
+
+func TestMapCapabilitiesProjectsBrowserAdvertisement(t *testing.T) {
+	capabilities, runtimeProfiles := providerBrowserAdvertisements()
+	snapshot, err := provider.NewCapabilitySnapshotWithAdvertisements("revision-1", provider.Limits{
+		MaxCPUMillis: 1000, MaxMemoryBytes: 1 << 30, MaxEphemeralStorageBytes: 1 << 30,
+		MaxLeaseSeconds: 3600, MaxExecSeconds: 300,
+	}, capabilities, runtimeProfiles, []provider.SnapshotRestoreProfile{{
+		ProfileID: "sandbox-snapshot-workspace-v1", Level: provider.SnapshotLevelWorkspace,
+		SuiteID: provider.CompatibilitySuiteSandboxProvider, SuiteVersion: "1.0.0",
+		SuiteDigest: provider.SHA256Digest("sha256:" + strings.Repeat("a", 64)),
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	document := mapCapabilities(snapshot)
+	if err := validateCapabilities(document); err != nil {
+		t.Fatalf("validate browser projection: %v", err)
+	}
+	if len(document.Capabilities) != 1 || document.Capabilities[0].ID != providerv1.CapabilityBrowser ||
+		!reflect.DeepEqual(document.Capabilities[0].Versions, []string{"1.0.0"}) ||
+		!reflect.DeepEqual(document.Capabilities[0].Profiles, []string{"browser-v1"}) {
+		t.Fatalf("browser capability projection = %#v", document.Capabilities)
+	}
+	if len(document.RuntimeProfiles) != 1 || document.RuntimeProfiles[0].ID != "sandbox-runtime-browser-v1" ||
+		!reflect.DeepEqual(document.RuntimeProfiles[0].CapabilityProfileIDs, []string{"browser-v1"}) {
+		t.Fatalf("browser runtime projection = %#v", document.RuntimeProfiles)
+	}
+
+	projection, err := providercontract.Load(context.Background(), filepath.Join(localContractSourceRoot(t), "compatibility/sandbox-runtime/contract.lock.json"), localContractSourceRoot(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := json.Marshal(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := projection.Validate("provider-capabilities.schema.json", encoded); err != nil {
+		t.Fatalf("browser projection is not Contract-valid: %v", err)
+	}
+}
+
+func TestBrowserCapabilityRejectionFixtures(t *testing.T) {
+	projection, err := providercontract.Load(context.Background(), filepath.Join(localContractSourceRoot(t), "compatibility/sandbox-runtime/contract.lock.json"), localContractSourceRoot(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	document, err := projection.ReadExample("capabilities-browser-rejections.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fixture struct {
+		Cases []struct {
+			Name     string                  `json:"name"`
+			Document providerv1.Capabilities `json:"document"`
+		} `json:"cases"`
+	}
+	if err := json.Unmarshal(document, &fixture); err != nil {
+		t.Fatalf("decode browser rejection fixtures: %v", err)
+	}
+	if len(fixture.Cases) < 5 {
+		t.Fatalf("browser rejection fixture count = %d, want at least 5", len(fixture.Cases))
+	}
+	for _, test := range fixture.Cases {
+		t.Run(test.Name, func(t *testing.T) {
+			encoded, err := json.Marshal(test.Document)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := projection.Validate("provider-capabilities.schema.json", encoded); err != nil {
+				t.Fatalf("semantic rejection fixture must remain Schema-valid: %v", err)
+			}
+			if err := validateCapabilities(test.Document); err == nil {
+				t.Fatal("validateCapabilities() error = nil")
+			}
+		})
 	}
 }
 
@@ -395,5 +473,14 @@ func providerCodingShellAdvertisements() ([]provider.Capability, []provider.Runt
 			RuntimeClassName:     "sandbox-runtime-coding-shell",
 			Architecture:         []string{"amd64"},
 			CapabilityProfileIDs: []string{"exec-v1", "terminal-v1"},
+		}}
+}
+
+func providerBrowserAdvertisements() ([]provider.Capability, []provider.RuntimeProfile) {
+	return []provider.Capability{{
+			ID: "sandbox.browser", Versions: []string{"1.0.0"}, Profiles: []string{"browser-v1"},
+		}}, []provider.RuntimeProfile{{
+			ID: "sandbox-runtime-browser-v1", IsolationClass: "container", RuntimeClassName: "sandbox-runtime-browser",
+			Architecture: []string{"amd64"}, CapabilityProfileIDs: []string{"browser-v1"},
 		}}
 }

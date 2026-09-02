@@ -50,3 +50,21 @@ func TestEvidenceCloneCopiesEntries(t *testing.T) {
 		t.Fatal("clone shares entries")
 	}
 }
+
+func TestBrowserSessionMeterRequiresMilliseconds(t *testing.T) {
+	evidence := validUsageEvidence()
+	evidence.OperationID = "browser-operation-1"
+	evidence.AttemptID = "browser-attempt-1"
+	evidence.Entries = []Entry{{
+		EntryID: "browser-duration-1", SandboxID: evidence.SandboxID, OperationID: evidence.OperationID,
+		Meter: MeterBrowserSession, Quantity: 180000, Unit: "milliseconds", MeterSource: SourceRuntime,
+		EvidenceReference: "ref:usage/browser-session-1", OccurredAt: usageTestNow,
+	}}
+	if err := evidence.Validate(usageTestNow); err != nil {
+		t.Fatalf("browser session meter is invalid: %v", err)
+	}
+	evidence.Entries[0].Unit = "seconds"
+	if err := evidence.Validate(usageTestNow); err == nil {
+		t.Fatal("browser session meter accepted a non-Contract unit")
+	}
+}

@@ -89,9 +89,10 @@ func TestCapabilitiesHandlerRejectsMethodsAndAbsentRoutesWithoutSourceReads(t *t
 		"/v1/sandboxes/sandbox-1", "/v1/sandboxes/sandbox-1/desired-state",
 		"/v1/sandboxes/sandbox-1/lease", "/v1/sandboxes/sandbox-1/exec",
 		"/v1/sandboxes/sandbox-1/exec:cancel", "/v1/sandboxes/sandbox-1/runtime-sessions",
+		"/v1/sandboxes/sandbox-1/browser-sessions",
 		"/v1/sandboxes/sandbox-1/snapshots", "/v1/sandboxes/sandbox-1:terminate",
 		"/v1/operations/op-1", "/v1/operations/op-1/exec-result",
-		"/v1/operations/op-1/snapshot-manifest", "/v1/sandboxes/sandbox-1/events",
+		"/v1/operations/op-1/browser-session", "/v1/operations/op-1/snapshot-manifest", "/v1/sandboxes/sandbox-1/events",
 	}
 	for _, path := range absentPaths {
 		t.Run(path, func(t *testing.T) {
