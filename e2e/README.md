@@ -21,24 +21,29 @@ platform gate.
 
 | Item | Value |
 | --- | --- |
-| Provider implementation | `e5d7324ef1d4508b8b0c474fe5ead47edd6f5146` |
+| Provider implementation | `24b2e36485c334634e561009850d1905ec3115d5` |
 | Contract namespace | `urn:shell-echo:sandbox-runtime:provider-v1` |
-| Contract revision | `22a148e2898477790512d5bb742605654ff00ebf` |
-| Contract tree | `1a967c9c6ce9646c8431f6ee48699ec9f406a589` |
-| Suite | repository-owned Provider v1, 38 cases |
+| Contract revision | `5096e71fb84fbec22aa3487a0e55a1b49602ab8b` |
+| Contract tree | `859f76dc0e855a0c8abdbbb5648df100dabb4328` |
+| Suite | repository-owned Provider v1, 48 cases |
 
 `go.mod` points to the parent Provider checkout. The verifier refuses to run if
 the Provider commit or Contract lock differs from the values above. A full
 evidence run also refuses tracked or untracked harness changes and records the
 exact enclosing repository commit in its manifest.
 
-## Latest verified evidence
+The lock now includes browser Contract authority and projection. The reference
+and platform-candidate runners still execute only the coding/shell scenarios;
+advancing this identity is not browser runtime, browser caller, or browser E2E
+evidence.
 
-The current lock-refresh baseline `2f165f9eb023392c1b6fb33845549f27e7364734`
+## Latest historical verified evidence
+
+The previous lock-refresh baseline `2f165f9eb023392c1b6fb33845549f27e7364734`
 passed the complete reference run against Provider
 `e5d7324ef1d4508b8b0c474fe5ead47edd6f5146`. The ignored local evidence
 directory is `evidence/20260902T035608.264731000Z`; its manifest records the
-two commits, unchanged Contract identity, configuration digests, and a locally
+two commits, the previous Contract identity, configuration digests, and a locally
 built `linux/amd64` runtime image pushed to a uniquely labeled temporary
 `registry:2` and addressed by its immutable named manifest digest.
 
