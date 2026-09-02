@@ -22,3 +22,4 @@ in [`docs/STATUS.md`](../STATUS.md).
 | P3 | [Migration readiness](p3-migration-readiness.md) | Local binding/shadow/metrics component evidence plus local and Hosted candidate integration (`47bd627`/`c7ff5eb`, 15+5 scenarios) exist; real platform shadow E2E, canary, rollback, drain, and migration gates remain blocked |
 | P3 candidate | [Platform candidate caller](p3-platform-candidate-caller.md) | Candidate caller and Docker process harness passed locally and in Hosted run `33460370618`; evidence remains distinct from real Veronica platform evidence |
 | Internal foundation | [Internal Block Manifest Loader](block-manifest-loader.md) | Implemented as bounded component evidence; no Provider Contract or public API change |
+| P4 authority | [Optional Profiles](p4-optional-profiles.md) | ADR 0017 authority/readiness planning accepted; no optional profile, Provider Contract, or advertisement change |

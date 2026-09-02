@@ -193,6 +193,12 @@ configuration registry only; it does not advertise Provider capabilities,
 execute blocks, or establish browser/desktop, deployment, or production
 evidence.
 
+P4 authority planning is recorded in ADR 0017 and
+[`plan/p4-optional-profiles.md`](plan/p4-optional-profiles.md). Browser is the
+first optional-profile candidate, but its first slice is Contract and image/
+security authority audit only. No browser/desktop route, runtime image,
+capability advertisement, or production configuration is enabled.
+
 Contract identity:
 
 - namespace: `urn:shell-echo:sandbox-runtime:provider-v1`
@@ -210,7 +216,7 @@ Contract identity:
 | P2.5i | Passed locally and hosted for the clean co-located independent reference caller: 15 initial plus 5 restart/resume scenarios against Provider `e5d7324` using harness `2f165f9` | Local evidence is `20260902T035608.264731000Z`; reference artifact is published in hosted run `33379217800`. Do not reinterpret this as Agent Platform or production evidence |
 | P2 | Reference coding/shell caller release gate passed | Aggregate conformance, actual Agent Platform compatibility, multi-controller, hostile multi-tenant isolation, deployment, and production gates remain open |
 | P3 | Local revision binding/shadow/metrics component evidence plus local candidate integration (`20260902T035641.384559000Z`) and Hosted candidate integration (`47bd627`/`c7ff5eb`, 15 initial + 5 resume) | Real platform traffic shadow parity, canary, rollback, old-run drain, metric parity, and unchanged platform contracts remain open |
-| P4 | Optional capability profiles have not started | Each browser/desktop/forwarding/snapshot/GPU/isolation profile needs independent Contract, security, and conformance gates |
+| P4 | Authority/readiness planning accepted in ADR 0017; no optional profile implementation | Each browser/desktop/forwarding/snapshot/GPU/isolation profile needs independent Contract, security, and conformance gates |
 
 Production readiness is not a numbered phase shortcut. Aggregate conformance,
 multi-controller reliability, hostile multi-tenant security, deployment, and
