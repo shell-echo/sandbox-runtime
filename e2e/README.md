@@ -21,7 +21,7 @@ platform gate.
 
 | Item | Value |
 | --- | --- |
-| Provider implementation | `83a7884f3f8de2aefc5e255919dd8c0d6fa041f1` |
+| Provider implementation | `cd33ba35c59bba62c48d13c0dcd08aeef5d9a434` |
 | Contract namespace | `urn:shell-echo:sandbox-runtime:provider-v1` |
 | Contract revision | `5096e71fb84fbec22aa3487a0e55a1b49602ab8b` |
 | Contract tree | `859f76dc0e855a0c8abdbbb5648df100dabb4328` |
@@ -34,10 +34,11 @@ exact enclosing repository commit in its manifest.
 
 The lock now includes browser Contract authority/projection, the sandboxed
 image/provenance publication implementation, the explicit arm64/v8 index
-descriptor correction, and the uncomposed Provider-local browser session
-component. The reference and platform-candidate runners still
-execute only the coding/shell scenarios; advancing this identity is not
-browser runtime composition, browser caller, or browser E2E evidence.
+descriptor correction, the uncomposed Provider-local browser session
+component, and the fail-closed Docker/private-relay adapter. The reference and
+platform-candidate runners still execute only the coding/shell scenarios;
+advancing this identity is not Browser external-caller E2E, restricted-egress,
+aggregate conformance, or production evidence.
 
 ## Latest verified evidence
 
