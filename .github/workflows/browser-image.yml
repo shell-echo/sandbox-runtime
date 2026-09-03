@@ -77,11 +77,12 @@ jobs:
       - name: Export the platform manifest digest
         env:
           DIGEST: ${{ steps.build.outputs.digest }}
+          PLATFORM_ID: ${{ matrix.artifact_suffix }}
         run: |
           mkdir -p "${RUNNER_TEMP}/digests"
           digest="${DIGEST#sha256:}"
           test "${#digest}" -eq 64
-          touch "${RUNNER_TEMP}/digests/${digest}"
+          touch "${RUNNER_TEMP}/digests/${PLATFORM_ID}-${digest}"
 
       - name: Upload the platform manifest digest
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -126,14 +127,51 @@ jobs:
         run: |
           mapfile -t digest_files < <(find "${RUNNER_TEMP}/digests" -maxdepth 1 -type f -print | sort)
           test "${#digest_files[@]}" -eq 2
-          references=()
+          mkdir -p "${RUNNER_TEMP}/descriptors"
+          descriptor_args=()
+          seen_amd64=0
+          seen_arm64=0
           for digest_file in "${digest_files[@]}"; do
-            digest="$(basename "${digest_file}")"
+            filename="$(basename "${digest_file}")"
+            platform_id="${filename%%-*}"
+            digest="${filename#*-}"
             test "${#digest}" -eq 64
-            references+=("${IMAGE_NAME}@sha256:${digest}")
+            case "${platform_id}" in
+              amd64)
+                test "${seen_amd64}" = "0"
+                platform_json='{"architecture":"amd64","os":"linux"}'
+                seen_amd64=1
+                ;;
+              arm64)
+                test "${seen_arm64}" = "0"
+                platform_json='{"architecture":"arm64","os":"linux","variant":"v8"}'
+                seen_arm64=1
+                ;;
+              *)
+                exit 1
+                ;;
+            esac
+            descriptor_path="${RUNNER_TEMP}/descriptors/${platform_id}.json"
+            docker buildx imagetools inspect "${IMAGE_NAME}@sha256:${digest}" --format '{{json .Manifest}}' \
+              | jq --argjson platform "${platform_json}" '.platform = $platform' > "${descriptor_path}"
+            jq -e --arg digest "sha256:${digest}" --argjson platform "${platform_json}" \
+              '.digest == $digest and .size > 0 and .platform == $platform' \
+              "${descriptor_path}" > /dev/null
+            descriptor_args+=(--file "${descriptor_path}")
           done
-          docker buildx imagetools create --tag "${IMAGE_NAME}:${IMAGE_TAG}" "${references[@]}"
-          digest="$(docker buildx imagetools inspect "${IMAGE_NAME}:${IMAGE_TAG}" --format '{{json .Manifest}}' | jq -r .digest)"
+          test "${seen_amd64}" = "1"
+          test "${seen_arm64}" = "1"
+          docker buildx imagetools create --tag "${IMAGE_NAME}:${IMAGE_TAG}" "${descriptor_args[@]}"
+          manifest="$(docker buildx imagetools inspect "${IMAGE_NAME}:${IMAGE_TAG}" --format '{{json .Manifest}}')"
+          jq -e '
+            .mediaType == "application/vnd.oci.image.index.v1+json" and
+            (.manifests | map(.platform) | sort_by(.architecture)) ==
+              ([
+                {"architecture":"amd64","os":"linux"},
+                {"architecture":"arm64","os":"linux","variant":"v8"}
+              ] | sort_by(.architecture))
+          ' <<< "${manifest}" > /dev/null
+          digest="$(jq -r .digest <<< "${manifest}")"
           test "${digest#sha256:}" != "${digest}"
           echo "digest=${digest}" >> "${GITHUB_OUTPUT}"
 
