@@ -21,7 +21,7 @@ platform gate.
 
 | Item | Value |
 | --- | --- |
-| Provider implementation | `24b2e36485c334634e561009850d1905ec3115d5` |
+| Provider implementation | `4df7f22bb834aec93ad6cfbf2c95d1d3c86bd8bd` |
 | Contract namespace | `urn:shell-echo:sandbox-runtime:provider-v1` |
 | Contract revision | `5096e71fb84fbec22aa3487a0e55a1b49602ab8b` |
 | Contract tree | `859f76dc0e855a0c8abdbbb5648df100dabb4328` |
@@ -37,10 +37,10 @@ and platform-candidate runners still execute only the coding/shell scenarios;
 advancing this identity is not browser runtime, browser caller, or browser E2E
 evidence.
 
-## Latest verified local evidence
+## Latest verified local evidence before this lock update
 
-Harness `75e572599907a1dc15199f245a5e2f1719d6d967` passed both locked modes
-against Provider `24b2e36485c334634e561009850d1905ec3115d5`:
+The following evidence was produced before the browser image component and
+against the previous Provider baseline `24b2e36485c334634e561009850d1905ec3115d5`:
 
 - reference run `20260902T065111.030014000Z` passed 15 initial and 5
   reconstruction/resume scenarios;
@@ -53,7 +53,7 @@ against Provider `24b2e36485c334634e561009850d1905ec3115d5`:
 These runs are coding/shell regression evidence only. They do not exercise the
 Contract-authorized browser routes, a browser runtime, or a browser caller.
 
-Hosted release baseline `13c6a57` passed the current lock in Reference E2E run
+Hosted release baseline `13c6a57` passed that previous lock in Reference E2E run
 `33602869956` and Platform Candidate E2E run `33602870006`. Their artifacts
 have digests
 `sha256:1b0ccc43b254041c618d58c1c14039162bbf1a31ecd22cbe5c72e64cefa6351e`
@@ -63,6 +63,11 @@ respectively. Both manifests pin Provider `24b2e36`, Contract revision
 `5096e71`, tree `859f76d`, 48 Suite cases, and coding/shell-only scenarios.
 The preceding 38-case-lock runs remain `33591808946` and `33591808961` at
 baseline `b72fc3b`.
+
+The lock is now advanced to Provider `4df7f22` for the browser image component.
+The existing evidence above remains valid only for `24b2e36`; a new run against
+the advanced lock is required before recording fresh reference or candidate
+evidence. These runners still contain no browser scenario.
 
 ## Previous verified evidence
 
