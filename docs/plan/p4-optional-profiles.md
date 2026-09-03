@@ -1,9 +1,10 @@
 # P4 Optional Profiles
 
-Status: browser Contract/Go projection, the digest-pinned image component, and
-uncomposed Provider-local session/application/reference/usage components pass
-their named local gates. No browser handler, route composition, or advertisement
-is implemented. This work does not
+Status: browser Contract/Go projection, a sandboxed signed first image
+publication, and uncomposed Provider-local session/application/reference/usage
+components have named evidence. The first index omitted the locked arm64 `v8`
+variant; correction `494401a` awaits republishing. No Browser runtime adapter,
+handler, route composition, or advertisement is implemented. This work does not
 close P3, browser external-caller, aggregate conformance, multi-controller,
 multi-tenant, deployment, or production gates.
 
@@ -25,9 +26,14 @@ evidence chain before it can be advertised.
   not advertise the browser capability.
 - The repository has a browser image component under
   `profiles/browser/image/`, with immutable amd64/arm64 upstream pins,
-  deterministic local platform digests, and a fixed private guest endpoint.
-  It is not a composed browser runtime, session service, or deployable public
-  Gateway.
+  a fixed private guest endpoint, a fail-closed Chromium seccomp profile, and
+  no unsandboxed launch path. Manual run `33721789424` published the signed
+  two-architecture GHCR index
+  `sha256:ad2039fa0079a4160f2d97ae8e142452b04a87b425cef3c036e7745a678b3f51`
+  from source `4db7c97`, but its arm64 descriptor omitted `variant: v8`.
+  Correction `494401a` uses explicit OCI descriptors and exact post-publish
+  assertions; a new run is required. The image is not a composed browser
+  runtime, session service, or deployable public Gateway.
 - The uncomposed `provider/browser` component supplies browser-specific domain
   types, runtime ports, durable memory/file authority, restart reconciliation,
   expiry/cancellation/unknown-outcome cleanup, opaque reference registry and
@@ -42,7 +48,7 @@ evidence chain before it can be advertised.
 
 | Order | Profile | First slice | Required gates before advertisement |
 | --- | --- | --- | --- |
-| 1 | Browser | Contract authority complete; image/provenance and uncomposed runtime components next | Image and guest tests, runtime/session recovery, Gateway policy, usage evidence, security/concurrency matrix, independent browser caller |
+| 1 | Browser | Contract authority complete; signed sandbox evidence exists; exact arm64/v8 publication correction awaits rerun | Exact two-platform publication, runtime/session recovery, Gateway policy, usage evidence, security/concurrency matrix, independent browser caller |
 | 2 | Desktop | Contract and authority audit; display/input/session boundary design | Desktop protocol and image, display/input security, Gateway/reconnect, usage, fault and caller evidence |
 | 3 | Workspace snapshot/restore | Digest and compatibility audit | Secret exclusion, digest verification, new sandbox identity, restore fault/recovery, Contract and caller evidence |
 | 4 | Port-forward | Target and egress authority audit | Explicit target allowlist, network isolation, expiry/revocation, cross-tenant and caller evidence |
@@ -77,12 +83,12 @@ inferring support from generic schema vocabulary:
 | Contract surface | Locked result | Remaining implementation gate |
 | --- | --- | --- |
 | Capability snapshot | Browser-only `1.0.0`/`browser-v1` maps to `sandbox-runtime-browser-v1`; mixed, wrong-version, wrong-profile, and wrong-runtime shapes fail closed | Derive advertisement only from a complete browser dependency graph |
-| Create request | Browser fixture binds exact capability/runtime, digest-pinned amd64 image authority, restricted network policy, stable workspace, and unprivileged security fields; the image component has reproducible local platform digests | Attach signed provenance and validate the image under a usable Chromium sandbox before composition |
-| Session and handoff | Separate schemas and routes bind session/operation/attempt/fence identity and expose only an expiring opaque reference; uncomposed browser authority, coordinator, registry, and resolver now pass focused lifecycle/restart/expiry tests | Compose transport only after a usable browser sandbox, Gateway policy, and caller evidence pass |
+| Create request | Browser fixture binds exact capability/runtime, digest-pinned amd64 image authority, restricted network policy, stable workspace, and unprivileged security fields; ADR 0019 plus publication run `33721789424` establish sandbox and signed provenance evidence, while exact arm64/v8 index evidence remains pending | Re-publish `494401a`, then bind the immutable digest and exact seccomp policy in a fail-closed runtime adapter before composition |
+| Session and handoff | Separate schemas and routes bind session/operation/attempt/fence identity and expose only an expiring opaque reference; uncomposed browser authority, coordinator, registry, and resolver now pass focused lifecycle/restart/expiry tests | Compose transport only after exact image publication, Gateway policy, and caller evidence pass |
 | Gateway security | Semantic rules and security matrix leave user/tenant authorization, revocation, audit, reconnect, and fresh reference resolution with the caller; the Provider-local registry/resolver rechecks opaque state and committed handoff on every dial | Compose only with caller-owned authorization/revocation/audit/reconnect ports and fault-test the combined Gateway |
 | Usage | Browser duration meter and operation/sandbox correlation are locked under the shared usage route; the uncomposed component derives bounded duration evidence from successful handoff and earliest trusted stop/expiry | Add runtime termination/reconciliation integration and route projection after composition |
 | Fixtures and Suite | Success/rejection/security/admission fixtures and 10 new Suite cases raise the locked Suite from 38 to 48 cases | Add runtime fault/concurrency/image cases in later slices; current Suite is Contract projection evidence only |
-| Runtime image | ADR 0018 image component passes amd64/arm64 reproducibility and constrained Docker smoke with immutable source pins and loopback CDP; signed provenance attestation and verified Chromium sandbox remain absent | Attach signed provenance, replace the development `--no-sandbox` override with a verified sandbox posture, and re-run mounts, user, limits, network, and endpoint checks before Provider composition |
+| Runtime image | ADR 0019 removes every `--no-sandbox` path, binds seccomp digest `sha256:3bdf2fd28636409951409621735f616997d0fd4851259851ac4c340dff90e05b`, and passes local/native amd64 and arm64 sandbox gates. Run `33721789424` publishes signed index `sha256:ad2039fa0079a4160f2d97ae8e142452b04a87b425cef3c036e7745a678b3f51`; attestation `44906258` verifies, but the arm64 descriptor omitted `v8` | Re-publish correction `494401a`, assert exact linux/amd64 plus linux/arm64/v8, then implement an adapter that supplies the exact image and runtime controls |
 
 This result is Contract/projection authority only. It does not make the
 internal Block manifest a wire resource or establish browser runtime evidence.
@@ -94,27 +100,33 @@ internal Block manifest a wire resource or establish browser runtime evidence.
   `859f76dc0e855a0c8abdbbb5648df100dabb4328`, and 48-case Suite;
 - Contract verifier, browser projection/admission/security/route-absence tests,
   and the locked 48-case Conformance Suite pass locally;
-- ADR 0018 browser image component: two no-cache builds per platform produce
-  stable local platform digests with `SOURCE_DATE_EPOCH=0` and
-  `--provenance=false`; both constrained Docker smoke runs report Chromium
-  `151.0.7922.109` on loopback. This is component evidence only; the signed
-  provenance and usable browser-sandbox gates remain open;
+- ADR 0018/0019 browser image evidence: local arm64 and amd64 integration runs
+  report Chromium `151.0.7922.109`, a sandboxed zygote, and no `--no-sandbox`
+  process under the exact declared container controls. Native-runner
+  publication run `33721789424` publishes linux/amd64 and linux/arm64 content
+  under immutable digest
+  `sha256:ad2039fa0079a4160f2d97ae8e142452b04a87b425cef3c036e7745a678b3f51`;
+  GitHub OIDC/Sigstore attestation `44906258` and an independent constrained
+  `gh attestation verify` pass. The arm64 descriptor omitted locked variant
+  `v8`; correction `494401a` awaits a new publication;
 - Browser session component commit `9a5d225` and E2E harness lock commit
   `6163de1`; reference and candidate 15+5 coding/shell regression runs against
   that Provider lock pass locally and in hosted runs `33712412443` and
   `33712412503`; these runs contain no browser scenario; and
-- runtime/image/handler/advertisement, real platform, multi-controller,
+- runtime adapter/handler/Gateway/advertisement, real platform, multi-controller,
   multi-tenant, deployment, and production evidence remain explicitly open.
 
 ## Next work
 
-The digest-pinned browser image component is complete under ADR 0018 for
-source, supported architectures, numeric user, read-only root, stable mounts,
-limits, restricted egress, and a private guest endpoint. The uncomposed
-Provider-local browser session/application/reference/usage components now pass
+The digest-pinned browser image passes the ADR 0019 sandbox and signed
+provenance checks for both supported architectures, but correction `494401a`
+must be republished to close the exact arm64/v8 index gate. The uncomposed
+Provider-local browser session/application/reference/usage components pass
 their focused lifecycle, restart, expiry, cleanup, opaque-resolution, and
-duration evidence tests. In parallel, obtain signed provenance and a usable
-browser sandbox; both remain required before composition. Do not add handler
-routes or enable advertisement until those component gates and the caller-owned
-Gateway boundary pass; browser external-caller E2E follows after composition
-and remains separate from the existing coding/shell harness runs.
+duration evidence tests. Next, republish and verify the corrected exact index,
+then implement the Browser runtime adapter with its immutable digest, seccomp
+policy, identity, mounts, limits, private endpoint, and network controls before
+composing protected handlers and the caller-owned Gateway boundary. Do not
+enable advertisement until that complete graph passes its fault/security
+gates; browser external-caller E2E follows after composition and remains
+separate from coding/shell harness runs.

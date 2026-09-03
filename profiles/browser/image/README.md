@@ -30,8 +30,9 @@ config/history clock and `--provenance=false` makes the locally loaded platform
 manifest digest stable; run the same command twice and compare `docker image
 inspect --format '{{.Id}}'`. BuildKit's default provenance attestation embeds
 the invocation clock in its index wrapper, so its index digest is not used for
-this component reproducibility check. A signed provenance attestation remains a
-separate required gate before capability advertisement.
+this component reproducibility check. The separately named signed publication
+evidence below establishes provenance for the immutable release index; it does
+not replace local platform reproducibility evidence.
 
 The selected headless-shell build uses Chromium's user-namespace sandbox. The
 runtime must supply the checked-in `chromium-seccomp.json`: Docker's default
@@ -88,8 +89,27 @@ They must not be used for Provider browser composition. The manual-only
 platforms, publishes an immutable `sha-<source-commit>` GHCR index, signs its
 digest with GitHub Actions OIDC/Sigstore SLSA provenance, and verifies the
 repository, signer workflow, source commit, and hosted-runner identity. Merely
-checking in that workflow is not provenance evidence: a named successful run,
-immutable digest, and verified attestation must be recorded separately.
+checking in that workflow is not provenance evidence. The first passing
+native-architecture publication is:
+
+| Item | Verified value |
+| --- | --- |
+| Workflow run | `33721789424` |
+| Source | `4db7c97e57d096a3389cf9480acb1bc912456a1d` |
+| Image | `ghcr.io/shell-echo/sandbox-runtime-browser@sha256:ad2039fa0079a4160f2d97ae8e142452b04a87b425cef3c036e7745a678b3f51` |
+| Immutable tag | `sha-4db7c97e57d096a3389cf9480acb1bc912456a1d` |
+| linux/amd64 content manifest | `sha256:2d7000518bae7370217fc2e6d90f7c1a0ef80a45fbba22a6afb303ea5858366e` |
+| linux/arm64/v8 content manifest | `sha256:de44731cbb9a1b082842ffa27ff3c024f4ff737c34f54eaaba9834e7447b9480` |
+| GitHub attestation | `44906258` |
+
+The workflow verified the repository, signer workflow, source commit, and
+hosted-runner identity, and an independent `gh attestation verify` with the
+same constraints succeeded. A separate local `docker buildx imagetools
+inspect` found exactly linux/amd64 and linux/arm64 descriptors, but the arm64
+descriptor omitted the manifest-authorized `variant: v8`. Commit `494401a`
+switches index assembly to explicit platform descriptors and adds an exact
+post-publish assertion. A new named run must pass before this first publication
+can be superseded as the exact two-platform gate.
 
 The sandbox and provenance gates do not by themselves authorize Provider
 routes or capability advertisement. Restricted egress policy, a private

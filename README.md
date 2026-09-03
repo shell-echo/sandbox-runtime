@@ -8,7 +8,10 @@ The project is intentionally **runtime-first**. It is not just a cloud browser U
 
 ## Status
 
-This repository is in the foundation stage.
+This repository is in active implementation. The coding/shell reference-caller
+gate passes, while real Agent Platform migration, optional Browser composition,
+deployment, multi-controller, hostile multi-tenant, and production gates remain
+open.
 Start a new development session with
 [`docs/PROJECT_CONTEXT.md`](docs/PROJECT_CONTEXT.md). It summarizes the current
 architecture, engineering rules, verified maturity, blockers, and next work;
@@ -50,10 +53,19 @@ Currently implemented:
   enabled
 - strict internal Block manifest parsing and a bounded read-only registry;
   this configuration format is not Provider wire behavior
+- an optional Browser image component with native amd64/arm64 sandbox tests,
+  a fixed fail-closed seccomp profile, a first immutable GHCR index, and
+  verified GitHub OIDC/Sigstore provenance; an exact arm64/v8 descriptor
+  correction awaits republishing, and this remains image evidence rather than
+  a Provider route
+- uncomposed Provider-local Browser session, opaque-reference, operation, and
+  duration-evidence components; no Browser runtime adapter, handler, Gateway,
+  advertisement, or browser caller is enabled
 
 Planned but not yet implemented:
 
-- runtime images for browser and desktop workloads
+- Browser runtime/transport/Gateway composition and independent caller E2E
+- runtime images for desktop workloads
 - display, audio, input, streaming, clipboard, and file-transfer modules
 - deployable WebRTC / VNC / public WebSocket Gateway composition
 - web viewer and management console
@@ -562,7 +574,8 @@ visibility.
 
 - [x] implement Docker driver
 - [ ] create base runtime image
-- [ ] create browser runtime image
+- [x] create the sandboxed, signed browser image component (exact arm64/v8
+  index republish and Provider runtime composition remain open)
 - [x] support container create/start/stop/inspect/remove
 - [ ] support container logs
 - [x] define runtime resource limits

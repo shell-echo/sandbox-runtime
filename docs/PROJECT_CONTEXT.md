@@ -137,8 +137,10 @@ multi-tenant, deployment, and production readiness.
 This snapshot was audited on 2026-09-03 against browser Contract authority
 `5096e71fb84fbec22aa3487a0e55a1b49602ab8b`, Provider projection baseline
 `24b2e36485c334634e561009850d1905ec3115d5`, browser session implementation
-`9a5d225f793f37ccafdac31c276ccbcb1bc862ad`, and co-located E2E harness lock
-`6163de1f6c13c76977126c2e16aed63e2b534aca`. The Contract slice authorizes an
+`9a5d225f793f37ccafdac31c276ccbcb1bc862ad`, sandbox/provenance implementation
+`6e02f1c22f489802b0b2c9f06f4a807d2e7c36e5`, corrected native-runner Provider
+baseline `99b8d3607a1b71578b91944d24b3691be1c2d939`, and co-located E2E harness
+lock `4db7c97e57d096a3389cf9480acb1bc912456a1d`. The Contract slice authorizes an
 atomic browser-only capability shape, create/session/handoff schemas, protected
 admission bindings, opaque reference security, operation/usage projection, and
 10 new Suite cases. The browser image component is implemented under
@@ -149,46 +151,52 @@ browser caller scenario is included.
 
 The Contract verifier and locked 48-case Suite pass against the current
 projection. The `e2e/` module race/shuffle, vet, and lock checks also pass. A
-clean reference run `20260903T034204.154672000Z` passed 15 initial and 5
+clean reference run `20260903T060030.939339000Z` passed 15 initial and 5
 process-reconstruction/resume coding/shell scenarios over real mTLS/JWS HTTPS,
 WebSocket, separate caller/reference-stack processes, and Docker. Its manifest
 pins the Provider implementation, Contract, harness, and linux/amd64 runtime
 image digest
-`sha256:d417baef2da3de3c202142347cf7e044ea58c17b55166875fc867b538dc16bed`.
+`sha256:b95139130d11fbeb49c34b8acb4f21342975173f2970f8522d2cfdb3703574ec`.
 This is reference coding/shell evidence only; it does not exercise browser.
-Hosted Reference E2E run `33712412443` passed the same 15 initial and 5
-reconstruction/resume coding/shell scenarios against Provider lock `9a5d225`.
-Its artifact `reference-e2e-evidence-33712412443` has digest
-`sha256:aa7a6bebf51ac917a9d1fe5e238a57ef0f90ac9566dc652c6402405ec75befa4`.
+Hosted Reference E2E run `33721442750` passed the same 15 initial and 5
+reconstruction/resume coding/shell scenarios against Provider lock `99b8d36`.
+Its artifact `reference-e2e-evidence-33721442750` has digest
+`sha256:ac517e4c3add088550d53a39877fdb5f0fbd55dcc95d860d5d87ee798784b7e9`.
 This remains reference coding/shell evidence only and contains no browser
 scenario.
 
 The explicitly named `agent-platform-candidate` mode passed the same current
-lock in local run `20260903T034240.506959000Z`: 15 initial and 5 resume
+lock in local run `20260903T060021.842723000Z`: 15 initial and 5 resume
 coding/shell scenarios over separate `platform-caller` and `reference-stack`
 processes with candidate shadow/selection/rollback/drain policy and state
-reconstruction. Hosted workflow run `33712412503` passed the same current lock
-against Provider `9a5d225`. Its artifact
-`platform-candidate-e2e-evidence-33712412503` has digest
-`sha256:308016d3012d2e61ae68af8606523e6c8f2e4f2b76c80360f36321d1ebdbb147`.
+reconstruction. Hosted workflow run `33721442749` passed the same current lock
+against Provider `99b8d36`. Its artifact
+`platform-candidate-e2e-evidence-33721442749` has digest
+`sha256:94f37525d0fece0571492b84bdba9f6f79b68a2e66022d4ce6be77d56d829db7`.
 Local and hosted candidate results do not represent browser evidence, real
 Veronica, aggregate conformance, hostile multi-tenant security, deployment, or
 production readiness.
 
-The browser image component is recorded in ADR 0018. It repacks immutable
-`docker.io/chromedp/headless-shell` amd64/arm64 manifests into a scratch image
-with a fixed loopback CDP endpoint, numeric `1000:1000` user, read-only root,
-stable `/workspace` and `/tmp` mounts, and a default-denied unsandboxed launch.
-Two no-cache builds per platform are identical when invoked with
-`SOURCE_DATE_EPOCH=0` and `--provenance=false`: arm64 platform digest
-`sha256:6f2372feb2808b9de666138c6eed5e62b033c467114eed689d100f61f2a8009c` and
-amd64 platform digest
-`sha256:38ff93f17e372560506f41b8ef77f43e06b0f37a04df17ce15d87297a1b97f83`.
-Constrained Docker smoke on both architectures returned Chromium
-`151.0.7922.109` over loopback. BuildKit's default attestation index embeds
-invocation-time metadata, so its index digest is not used for this local
-reproducibility check; signed provenance, a usable browser sandbox, and all
-Provider/browser caller gates remain open.
+ADR 0018 records the original reproducible browser image component, while ADR
+0019 requires the current `sandbox.runtime/browser-image/v2` sandbox posture
+and signed publication. The image has no `--no-sandbox` path and binds a
+fail-closed Chromium seccomp profile with digest
+`sha256:3bdf2fd28636409951409621735f616997d0fd4851259851ac4c340dff90e05b`.
+Local arm64 and amd64 integration runs returned Chromium `151.0.7922.109` over
+loopback, found a sandboxed zygote, and retained the numeric user, read-only
+root, drop-all, no-new-privileges, network-none, mount, and resource controls.
+Manual publication run `33721789424` passed both native-architecture gates and
+published
+`ghcr.io/shell-echo/sandbox-runtime-browser@sha256:ad2039fa0079a4160f2d97ae8e142452b04a87b425cef3c036e7745a678b3f51`
+under tag `sha-4db7c97e57d096a3389cf9480acb1bc912456a1d`. Attestation `44906258`
+binds the GitHub OIDC/Sigstore signer to this repository, workflow, source
+commit, and hosted runner, and the constrained `gh attestation verify`
+invocation succeeded independently. Registry inspection found exactly
+`linux/amd64` and `linux/arm64` descriptors, but the latter omitted the locked
+`variant: v8`. Commit `494401a` corrects index assembly and adds an exact
+post-publish platform assertion; a new named publication must pass before the
+exact platform publication gate closes. No Browser runtime adapter, Provider
+route, Gateway composition, advertisement, or caller scenario is implied.
 
 The two current E2E runs left no managed Docker container. Their evidence is
 ignored local output, not a published CI artifact. The unprivileged sandbox
@@ -204,12 +212,15 @@ evidence.
 
 P4 authority planning is recorded in ADR 0017 and
 [`plan/p4-optional-profiles.md`](plan/p4-optional-profiles.md). Browser Contract
-authority and Go projection are now locked, and ADR 0018 records the
-reproducible image component; both browser routes remain absent from the
-Provider router. The uncomposed `provider/browser` session/application,
-reference, and usage components now pass focused local gates. No browser
-capability advertisement or production configuration is enabled; the next
-slice is a usable browser runtime plus its protected/Gateway composition.
+authority and Go projection are now locked, ADR 0018 records the reproducible
+image foundation. ADR 0019 and run `33721789424` provide sandbox and signed
+provenance evidence, while `494401a` fixes the discovered arm64 variant
+descriptor gap and awaits republishing. Both browser routes remain absent from
+the Provider router.
+The uncomposed `provider/browser` session/application/reference/usage
+components pass focused local gates. No browser capability advertisement or
+production configuration is enabled; the next slice is the Browser runtime
+adapter and protected/Gateway composition.
 
 Contract identity:
 
@@ -225,10 +236,10 @@ Contract identity:
 | P1.1 | Passed for DTO, mTLS discovery, JWS/digest/replay/fencing admission | Production identity infrastructure remains unproven |
 | P1.2 | Passed for the bounded Contract-authorized lifecycle subset and development composition | Reserved lifecycle families and production gates remain open |
 | P2 components | P2.1-P2.5h local component, Contract projection, Docker, and recorded repository CI gates pass within their named boundaries | Retain single-controller/development constraints and exact Contract lock |
-| P2.5i | Current local reference lock-refresh passed 15 initial plus 5 restart/resume coding/shell scenarios against Provider `9a5d225` using harness `6163de1`; hosted run `33712412443` passed the same current lock | Local evidence is `20260903T034204.154672000Z`; no browser scenario, Agent Platform, or production property is implied |
+| P2.5i | Current local reference lock-refresh passed 15 initial plus 5 restart/resume coding/shell scenarios against Provider `99b8d36` using harness `4db7c97`; hosted run `33721442750` passed the same current lock | Local evidence is `20260903T060030.939339000Z`; no browser scenario, Agent Platform, or production property is implied |
 | P2 | Reference coding/shell caller release gate passed | Aggregate conformance, actual Agent Platform compatibility, multi-controller, hostile multi-tenant isolation, deployment, and production gates remain open |
-| P3 | Local revision binding/shadow/metrics component evidence plus current local candidate integration (`20260903T034240.506959000Z`) and hosted candidate lock regression (`6163de1`/`33712412503`) | Real platform traffic shadow parity, canary, rollback, old-run drain, metric parity, and unchanged platform contracts remain open |
-| P4 | Browser Contract authority/projection, image component, and uncomposed Provider-local session/application/reference/usage components pass their named local gates | Build/attach signed provenance and a usable browser sandbox, then compose runtime/handler/Gateway; browser advertisement, caller, security, deployment, and production gates remain open |
+| P3 | Local revision binding/shadow/metrics component evidence plus current local candidate integration (`20260903T060021.842723000Z`) and hosted candidate lock regression (`4db7c97`/`33721442749`) | Real platform traffic shadow parity, canary, rollback, old-run drain, metric parity, and unchanged platform contracts remain open |
+| P4 | Browser Contract authority/projection, sandboxed signed first publication, and uncomposed Provider-local session/application/reference/usage components have named evidence; exact arm64/v8 index correction `494401a` awaits republishing | Re-run and verify the exact image publication, then compose the runtime adapter, protected handlers, and caller-owned Gateway; browser advertisement, caller, security, deployment, and production gates remain open |
 
 Production readiness is not a numbered phase shortcut. Aggregate conformance,
 multi-controller reliability, hostile multi-tenant security, deployment, and
@@ -237,12 +248,12 @@ and require their own future evidence.
 
 The browser session implementation/ledger baseline `df78739` is covered by
 repository CI run `33712081491`; its `provider-contract`, `test`, and
-`docker-integration` jobs passed. The follow-up E2E lock baseline `6163de1`
-passed the same three jobs in run `33712412434`, while hosted Reference and
-Candidate runs `33712412443` and `33712412503` passed their separately named
-coding/shell scenarios. Repository CI remains distinct from independent caller
-and production evidence, and neither hosted caller run contains a browser
-scenario.
+`docker-integration` jobs passed. The browser publication E2E lock baseline
+`4db7c97` passed the same three jobs in run `33721442751`, while hosted
+Reference and Candidate runs `33721442750` and `33721442749` passed their
+separately named coding/shell scenarios. Repository CI remains distinct from
+independent caller and production evidence, and neither hosted caller run
+contains a browser scenario.
 
 ## P2.5i Reference Result
 
@@ -267,10 +278,10 @@ Veronica compatibility, aggregate conformance, distributed revocation,
 multi-controller reliability, hostile multi-tenant isolation, deployment, or
 production readiness.
 
-The current lock-refresh runs use harness `6163de1f6c13c76977126c2e16aed63e2b534aca`
-and Provider `9a5d225f793f37ccafdac31c276ccbcb1bc862ad`. Reference evidence
-`e2e/evidence/20260903T034204.154672000Z/manifest.json` and candidate evidence
-`e2e/evidence/platform-candidate/20260903T034240.506959000Z/manifest.json` each
+The current lock-refresh runs use harness `4db7c97e57d096a3389cf9480acb1bc912456a1d`
+and Provider `99b8d3607a1b71578b91944d24b3691be1c2d939`. Reference evidence
+`e2e/evidence/20260903T060030.939339000Z/manifest.json` and candidate evidence
+`e2e/evidence/platform-candidate/20260903T060021.842723000Z/manifest.json` each
 record 15 initial plus 5 reconstruction/resume coding/shell passes, Contract 48
 cases, and the same linux/amd64 named runtime digest. Neither manifest contains
 a browser scenario; the candidate manifest also remains explicitly bounded to
@@ -401,11 +412,12 @@ Its focused, full local, and Docker-tagged gates pass, and repository CI
 repository CI `33159099578` also pass their bounded readiness/projection gates.
 Reviewed documentation baseline `bba02a6` passes repository CI `33160646494`.
 
-1. Obtain signed provenance and a usable browser sandbox for the completed
-   image component, then compose the provider-local browser runtime with the
-   already implemented uncomposed session/application/reference/usage
-   components. Keep protected routes absent and do not advertise
-   `sandbox.browser` until the complete dependency graph passes.
+1. Publish `494401a` or its E2E lock descendant and verify that the signed OCI
+   index contains exactly linux/amd64 and linux/arm64/v8. Then compose that
+   image through a Browser runtime adapter, the existing provider-local
+   session/application/reference/usage components, protected handlers, and the
+   caller-owned Gateway boundary. Keep routes absent and do not advertise
+   `sandbox.browser` until that complete dependency graph passes.
 2. Preserve the clean reference and candidate coding/shell harnesses and their
    named local evidence. Add browser caller scenarios only after browser
    transport composition has its own gate.
