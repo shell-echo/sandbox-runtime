@@ -7,8 +7,10 @@ and `provider/browser/driver/docker` add a fail-closed, still-uncomposed Docker
 adapter and private relay component. ADR 0021 and
 `provider/browser/provenance/ghcli` add a real, still-uncomposed provenance
 verifier. ADR 0022 and implementation `7e60340` add a real, still-uncomposed
-restricted-egress provisioner and immutable create-policy binding. No Browser
-handler, route composition, caller-owned Gateway, or advertisement exists.
+restricted-egress provisioner and immutable create-policy binding. ADR 0023 and
+implementation `b8423f5` add protected Browser open/handoff handler component
+evidence. No Browser command/runtime composition, caller-owned Gateway, or
+advertisement exists.
 This work does not close P3, browser external-caller, aggregate conformance,
 multi-controller, multi-tenant, deployment, or production gates.
 
@@ -25,9 +27,10 @@ evidence chain before it can be advertised.
   / `browser-v1` shape, `sandbox-runtime-browser-v1`, a browser create fixture,
   separate browser session open/handoff resources, protected-admission
   bindings, and browser duration usage evidence.
-- Browser authority does not reuse the terminal-session route. The Provider
-  router intentionally does not match either browser route, and startup does
-  not advertise the browser capability.
+- Browser authority does not reuse the terminal-session route. The protected
+  router now matches both Browser routes and fails closed when no Browser
+  application is injected. Command startup injects none and does not advertise
+  the browser capability.
 - The repository has a browser image component under
   `profiles/browser/image/`, with immutable amd64/arm64 upstream pins,
   a fixed private guest endpoint, a fail-closed Chromium seccomp profile, and
@@ -68,6 +71,13 @@ evidence chain before it can be advertised.
   Repository CI `33747803509` passes its four named jobs but does not execute
   the Browser restricted-egress tagged case. This is single-controller local
   component/lifecycle-binding evidence only.
+- ADR 0023 and `b8423f5` add a narrow protected-transport application port and
+  the two Contract-authorized Browser handlers. They apply the existing
+  mTLS/JWS/admission gate, reject unknown/oversized input before mutation state,
+  correlate admitted and application identities, project Browser operations,
+  enforce handoff expiry, and return only `ref:browser-session:*`. Full local
+  race/shuffle, vet, Contract verification, and the unchanged 48-case Suite
+  pass. This is not command/runtime composition or Browser caller evidence.
 - `blocks/` can validate an internal digest-pinned Block manifest, but it does
   not authorize a Provider capability or establish image provenance.
 - A real Agent Platform caller and migration traffic harness remain unavailable;
@@ -99,10 +109,10 @@ The completed authority slice locks:
 - caller-owned Gateway user/tenant authorization, revocation, audit, and
   reconnect policy, with URL/IP/port/CDP/backend-token disclosure forbidden.
 
-These are wire and projection authorities, not runnable routes. Route-absence
-tests require both browser paths to return `404` without consuming the mutation
-guard. No runtime image, public endpoint, or advertisement is part of this
-slice.
+These began as wire and projection authorities. ADR 0023 now gives both routes
+bounded protected-handler component evidence while keeping absent application
+composition fail closed. No public endpoint, caller-owned Gateway, startup
+advertisement, or external caller is part of that slice.
 
 ## Browser authority result
 
@@ -112,12 +122,12 @@ inferring support from generic schema vocabulary:
 | Contract surface | Locked result | Remaining implementation gate |
 | --- | --- | --- |
 | Capability snapshot | Browser-only `1.0.0`/`browser-v1` maps to `sandbox-runtime-browser-v1`; mixed, wrong-version, wrong-profile, and wrong-runtime shapes fail closed | Derive advertisement only from a complete browser dependency graph |
-| Create request | Browser fixture binds exact capability/runtime, digest-pinned amd64 image authority, restricted network policy, stable workspace, and unprivileged security fields; ADR 0019 plus publication run `33724368530` establish exact amd64/arm64/v8 sandbox and signed provenance evidence; ADR 0021 supplies a real uncomposed verifier, while ADR 0022 and `7e60340` bind the create policy to a real restricted-egress provisioner and validate full runtime dependency startup locally | Preserve this policy through protected transport composition; do not allow session-time substitution or advertise before the complete graph passes |
-| Session and handoff | Separate schemas and routes bind session/operation/attempt/fence identity and expose only an expiring opaque reference; uncomposed browser authority, coordinator, registry, resolver, and Docker adapter now pass focused lifecycle/restart/expiry/private-attach tests | Compose protected transport and the caller-owned Gateway only after real runtime dependencies and their security tests pass |
+| Create request | Browser fixture binds exact capability/runtime, digest-pinned amd64 image authority, restricted network policy, stable workspace, and unprivileged security fields; ADR 0019 plus publication run `33724368530` establish exact amd64/arm64/v8 sandbox and signed provenance evidence; ADR 0021 supplies a real uncomposed verifier, while ADR 0022 and `7e60340` bind the create policy to a real restricted-egress provisioner and validate full runtime dependency startup locally | Preserve this policy through command/runtime composition; do not allow session-time substitution or advertise before the complete graph passes |
+| Session and handoff | Separate schemas and routes bind session/operation/attempt/fence identity and expose only an expiring opaque reference; browser authority, coordinator, registry, resolver, Docker adapter, and protected handlers now pass their separately bounded component gates | Compose the command/runtime graph and caller-owned Gateway only after real dependencies and their security tests pass |
 | Gateway security | Semantic rules and security matrix leave user/tenant authorization, revocation, audit, reconnect, and fresh reference resolution with the caller; the Provider-local registry/resolver rechecks opaque state and committed handoff on every dial | Compose only with caller-owned authorization/revocation/audit/reconnect ports and fault-test the combined Gateway |
 | Usage | Browser duration meter and operation/sandbox correlation are locked under the shared usage route; the uncomposed component derives bounded duration evidence from successful handoff and earliest trusted stop/expiry | Add runtime termination/reconciliation integration and route projection after composition |
 | Fixtures and Suite | Success/rejection/security/admission fixtures and 10 new Suite cases raise the locked Suite from 38 to 48 cases | Add runtime fault/concurrency/image cases in later slices; current Suite is Contract projection evidence only |
-| Runtime image | ADR 0019 removes every `--no-sandbox` path, binds seccomp digest `sha256:3bdf2fd28636409951409621735f616997d0fd4851259851ac4c340dff90e05b`, and passes local/native amd64 and arm64 sandbox gates. Run `33724368530` publishes exact signed index `sha256:87d3216c22ada0fea74b375a3ee5c2ddf021d3e1913569e2aeb4a316ed3b5c2f`; attestation `44912296` and independent platform inspection verify. ADR 0020 and the Docker adapter machine-bind that publication, validate local image metadata, apply the exact runtime controls, and establish the private CDP WebSocket stream. ADR 0021 and implementation `9390554` verify the immutable publication through the real GitHub CLI/Sigstore path. ADR 0022 and `7e60340` validate complete local runtime dependency startup with the real verifier and restricted egress | Compose protected Browser transport and the caller-owned Gateway without weakening the verified runtime graph |
+| Runtime image | ADR 0019 removes every `--no-sandbox` path, binds seccomp digest `sha256:3bdf2fd28636409951409621735f616997d0fd4851259851ac4c340dff90e05b`, and passes local/native amd64 and arm64 sandbox gates. Run `33724368530` publishes exact signed index `sha256:87d3216c22ada0fea74b375a3ee5c2ddf021d3e1913569e2aeb4a316ed3b5c2f`; attestation `44912296` and independent platform inspection verify. ADR 0020 and the Docker adapter machine-bind that publication, validate local image metadata, apply the exact runtime controls, and establish the private CDP WebSocket stream. ADR 0021 and implementation `9390554` verify the immutable publication through the real GitHub CLI/Sigstore path. ADR 0022 and `7e60340` validate complete local runtime dependency startup with the real verifier and restricted egress | Compose the Browser command/runtime graph and caller-owned Gateway without weakening the verified transport and runtime graph |
 
 This result is Contract/projection authority only. It does not make the
 internal Block manifest a wire resource or establish browser runtime evidence.
@@ -127,8 +137,8 @@ internal Block manifest a wire resource or establish browser runtime evidence.
 - Contract authority commit `5096e71` and projection/lock commit `24b2e36`;
 - Contract revision `5096e71fb84fbec22aa3487a0e55a1b49602ab8b`, tree
   `859f76dc0e855a0c8abdbbb5648df100dabb4328`, and 48-case Suite;
-- Contract verifier, browser projection/admission/security/route-absence tests,
-  and the locked 48-case Conformance Suite pass locally;
+- Contract verifier, browser projection/admission/security/protected-transport
+  tests, and the locked 48-case Conformance Suite pass locally;
 - ADR 0018/0019 browser image evidence: local arm64 and amd64 integration runs
   report Chromium `151.0.7922.109`, a sandboxed zygote, and no `--no-sandbox`
   process under the exact declared container controls. Native-runner
@@ -160,17 +170,22 @@ internal Block manifest a wire resource or establish browser runtime evidence.
   `sha256:202bbf92fcbcce87e4b800f093d1df281125ab6fa43152906564cf8e0b7021d6`;
   repository CI `33747803509` passes, but its Docker job does not execute this
   Browser tagged case. This is not published Gateway provenance or deployment
-  evidence. Protected handler/Gateway composition, advertisement, Browser
-  caller, real platform, multi-controller, multi-tenant, deployment, and
-  production evidence remain explicitly open.
+  evidence; and
+- ADR 0023 and protected transport implementation `b8423f5` pass route,
+  preflight/admission ordering, correlation, operation/handoff projection,
+  expiry, opaque-reference security, failure, concurrency, aggregation, full
+  race/shuffle, vet, Contract verifier, and unchanged 48-case Suite gates.
+  Browser command/runtime composition, caller-owned Gateway, advertisement,
+  Browser caller, real platform, multi-controller, multi-tenant, deployment,
+  and production evidence remain explicitly open.
 
 ## Next work
 
 The image, session/application/reference/usage components, fail-closed Docker
-adapter, real provenance verifier, restricted-egress provisioner, and
-create-time policy binding now have evidence within their named boundaries.
-Next, compose protected Browser handlers and the caller-owned Gateway boundary
-without weakening those bindings. Do not enable
-advertisement until that complete graph passes its fault/security gates;
-browser external-caller E2E follows after composition and remains separate from
+adapter, real provenance verifier, restricted-egress provisioner, create-time
+policy binding, and protected handlers now have evidence within their named
+boundaries. Next, compose the caller-owned Gateway boundary, then add the
+complete default-disabled Browser command/runtime graph without weakening those
+bindings. Do not enable advertisement until that graph passes its
+fault/security and external-caller gates; Browser E2E remains separate from
 coding/shell harness runs.

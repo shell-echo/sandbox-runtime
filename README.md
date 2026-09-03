@@ -56,8 +56,8 @@ Currently implemented:
 - an optional Browser image component with native amd64/arm64 sandbox tests,
   a fixed fail-closed seccomp profile, an immutable GHCR index containing
   exactly linux/amd64 and linux/arm64/v8, and independently verified GitHub
-  OIDC/Sigstore provenance; this remains image evidence rather than a Provider
-  route
+  OIDC/Sigstore provenance; this image evidence does not by itself enable a
+  Provider route
 - uncomposed Provider-local Browser session, opaque-reference, operation,
   duration-evidence, and fail-closed Docker runtime-adapter components; the
   adapter binds the exact signed image, private non-TTY CDP relay, stable guest
@@ -66,12 +66,15 @@ Currently implemented:
   uncomposed Docker restricted-egress provisioner. Browser lifecycle authority
   persists the create-time restricted policy; the adapter binds it to a
   per-allocation internal network, pinned private DNS/HTTP/TLS gateway, and
-  exact hostname policy. No Browser handler, caller-owned Gateway,
-  advertisement, or browser caller is enabled
+  exact hostname policy
+- protected Browser open/handoff transport handlers that preserve admission
+  correlation and project only an expiring opaque reference. No Browser
+  command/runtime composition, caller-owned Gateway, advertisement, or browser
+  caller is enabled
 
 Planned but not yet implemented:
 
-- Browser protected transport, caller-owned Gateway composition, capability
+- Browser command/runtime composition, caller-owned Gateway, capability
   advertisement, and independent caller E2E
 - runtime images for desktop workloads
 - display, audio, input, streaming, clipboard, and file-transfer modules

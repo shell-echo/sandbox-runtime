@@ -141,7 +141,8 @@ This snapshot was audited on 2026-09-03 against browser Contract authority
 `6e02f1c22f489802b0b2c9f06f4a807d2e7c36e5`, Browser Docker adapter
 `cd33ba35c59bba62c48d13c0dcd08aeef5d9a434`, Browser provenance verifier
 `939055475f73b0023b3946172a2c40750a99c7ea`, Browser restricted-egress and
-create-policy implementation `7e60340`, and co-located E2E harness lock
+create-policy implementation `7e60340`, protected Browser transport
+implementation `b8423f5`, and co-located E2E harness lock
 `7f15628aac81cea59d548100cb29a38d1cb7f14a`. The Contract slice authorizes an
 atomic browser-only capability shape, create/session/handoff schemas, protected
 admission bindings, opaque reference security, operation/usage projection, and
@@ -149,8 +150,12 @@ admission bindings, opaque reference security, operation/usage projection, and
 `profiles/browser/image/`. The uncomposed Provider-local browser
 session/application/reference/usage component is implemented under
 `provider/browser/`. ADR 0020 and `provider/browser/driver/docker` add an
-uncomposed fail-closed Docker adapter for that runtime port; no protected-route
-composition, startup advertisement, or browser caller scenario is included.
+uncomposed fail-closed Docker adapter for that runtime port. ADR 0023 and
+`b8423f5` add protected Browser open/handoff routing, admission correlation,
+bounded error projection, and opaque response projection through a narrow
+application port. The command root still injects no Browser application; no
+caller-owned Gateway, startup advertisement, or browser caller scenario is
+included.
 
 The Contract verifier and locked 48-case Suite pass against the current
 projection. The `e2e/` module race/shuffle, vet, and lock checks also pass. A
@@ -237,7 +242,11 @@ adapter/provisioner reconstruction, and exact cleanup with no managed resource
 remaining. This is single-controller local Docker component/lifecycle-binding
 evidence, not protected Provider transport, caller-owned Gateway, Browser
 external-caller E2E, multi-controller, multi-tenant, deployment, or production
-evidence.
+evidence. Separately, ADR 0023 and `b8423f5` compose the two protected Browser
+handlers behind existing mTLS/JWS/admission controls. Local race/shuffle, vet,
+Contract verification, and the unchanged 48-case Suite pass. This is
+admission/transport component evidence only because command startup still has
+no Browser application or caller-owned Gateway.
 
 The two current coding/shell E2E runs and the Browser restricted-egress
 integration left no managed Docker container or network. Their local evidence
@@ -256,14 +265,15 @@ P4 authority planning is recorded in ADR 0017 and
 [`plan/p4-optional-profiles.md`](plan/p4-optional-profiles.md). Browser Contract
 authority and Go projection are now locked, ADR 0018 records the reproducible
 image foundation. ADR 0019 and run `33724368530` provide exact amd64/arm64/v8
-sandbox and signed provenance evidence. Both browser routes remain absent from
-the Provider router.
-The uncomposed `provider/browser` session/application/reference/usage
+sandbox and signed provenance evidence. ADR 0023 and `b8423f5` now add both
+Browser routes to the protected router through a narrow injectable application
+port, with nil application failing closed as retryable `503`.
+The uncomposed-at-startup `provider/browser` session/application/reference/usage
 components, Docker runtime adapter, provenance verifier, restricted-egress
 provisioner, and create-policy binding pass their bounded local component gates.
-No browser capability advertisement or production configuration is enabled;
-the next slice is protected Browser handler composition followed by the
-caller-owned Gateway boundary.
+No Browser command composition, caller-owned Gateway, capability advertisement,
+or production configuration is enabled; the next slice is the caller-owned
+Gateway boundary and then Browser external-caller evidence.
 
 Contract identity:
 
@@ -282,7 +292,7 @@ Contract identity:
 | P2.5i | Latest local reference evidence passed 15 initial plus 5 restart/resume coding/shell scenarios against Provider `9390554` using harness `330f629`; hosted run `33747803507` passed Provider `7e60340` using harness `7f15628` | Local evidence is `20260903T091011.164430000Z`; neither run contains a browser scenario or implies Agent Platform or production properties |
 | P2 | Reference coding/shell caller release gate passed | Aggregate conformance, actual Agent Platform compatibility, multi-controller, hostile multi-tenant isolation, deployment, and production gates remain open |
 | P3 | Local revision binding/shadow/metrics component evidence plus latest local candidate integration (`20260903T091045.591005000Z`, `330f629`/`9390554`) and hosted candidate regression (`33747803514`, `7f15628`/`7e60340`) | Real platform traffic shadow parity, canary, rollback, old-run drain, metric parity, and unchanged platform contracts remain open |
-| P4 | Browser Contract authority/projection, exact sandboxed signed amd64/arm64/v8 publication, uncomposed Provider-local session/application/reference/usage components, the fail-closed Docker/private-relay adapter, real provenance verifier, restricted-egress provisioner, and create-policy binding have named evidence | Compose protected handlers and the caller-owned Gateway; browser advertisement, external caller, multi-controller, multi-tenant, deployment, and production gates remain open |
+| P4 | Browser Contract authority/projection, exact sandboxed signed amd64/arm64/v8 publication, Provider-local session/application/reference/usage components, the fail-closed Docker/private-relay adapter, real provenance verifier, restricted-egress provisioner, create-policy binding, and protected handler component have named evidence | Compose the command/runtime graph and caller-owned Gateway; browser advertisement, external caller, multi-controller, multi-tenant, deployment, and production gates remain open |
 
 Production readiness is not a numbered phase shortcut. Aggregate conformance,
 multi-controller reliability, hostile multi-tenant security, deployment, and
@@ -455,14 +465,14 @@ Its focused, full local, and Docker-tagged gates pass, and repository CI
 repository CI `33159099578` also pass their bounded readiness/projection gates.
 Reviewed documentation baseline `bba02a6` passes repository CI `33160646494`.
 
-1. Compose the existing Provider-local session/application/reference/usage,
-   Docker runtime, provenance, and restricted-egress components behind strict
-   protected Browser handlers, then compose the caller-owned Gateway boundary.
-   Keep routes absent and do not advertise `sandbox.browser` until that complete
-   dependency graph passes.
+1. Compose the caller-owned Browser Gateway with explicit user/tenant
+   authorization, revocation, audit, reconnect, and fresh-reference resolution,
+   then add the complete default-disabled Browser command/runtime graph. Keep
+   `sandbox.browser` unadvertised until that graph and its external-caller gate
+   pass.
 2. Preserve the clean reference and candidate coding/shell harnesses and their
    named local evidence. Add browser caller scenarios only after browser
-   transport composition has its own gate.
+   protected transport and caller-owned Gateway have their own gates.
 3. Begin real P3 only against a platform migration target: lock the same
    Contract/profile, shadow capabilities and requests, canary only new runs,
    prove rollback and old-run drain, and compare the required metrics without
