@@ -21,7 +21,7 @@ platform gate.
 
 | Item | Value |
 | --- | --- |
-| Provider implementation | `99b8d3607a1b71578b91944d24b3691be1c2d939` |
+| Provider implementation | `494401a17f3c8c3d533ea32c569ec6b1434ca4b1` |
 | Contract namespace | `urn:shell-echo:sandbox-runtime:provider-v1` |
 | Contract revision | `5096e71fb84fbec22aa3487a0e55a1b49602ab8b` |
 | Contract tree | `859f76dc0e855a0c8abdbbb5648df100dabb4328` |
@@ -33,8 +33,9 @@ evidence run also refuses tracked or untracked harness changes and records the
 exact enclosing repository commit in its manifest.
 
 The lock now includes browser Contract authority/projection, the sandboxed
-image/provenance publication implementation, and the uncomposed Provider-local
-browser session component. The reference and platform-candidate runners still
+image/provenance publication implementation, the explicit arm64/v8 index
+descriptor correction, and the uncomposed Provider-local browser session
+component. The reference and platform-candidate runners still
 execute only the coding/shell scenarios; advancing this identity is not
 browser runtime composition, browser caller, or browser E2E evidence.
 
