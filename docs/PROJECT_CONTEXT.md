@@ -1,6 +1,6 @@
 # Project Context
 
-Updated: 2026-09-02
+Updated: 2026-09-03
 
 This is the stable entry point for a new developer, AI agent, development
 device, or implementation session. It summarizes the system, engineering
@@ -134,15 +134,16 @@ multi-tenant, deployment, and production readiness.
 
 ## Current Snapshot
 
-This snapshot was audited on 2026-09-02 against browser Contract authority
+This snapshot was audited on 2026-09-03 against browser Contract authority
 `5096e71fb84fbec22aa3487a0e55a1b49602ab8b`, Provider projection baseline
 `24b2e36485c334634e561009850d1905ec3115d5`, and co-located E2E harness lock
 `75e572599907a1dc15199f245a5e2f1719d6d967`. The new slice authorizes an
 atomic browser-only capability shape, create/session/handoff schemas, protected
 admission bindings, opaque reference security, operation/usage projection, and
-10 new Suite cases. It deliberately adds no browser runtime, image,
-application, protected-route composition, startup advertisement, or browser
-caller scenario.
+10 new Suite cases. The browser image component is now implemented under
+`profiles/browser/image/`; no browser session application,
+protected-route composition, startup advertisement, or browser caller scenario
+is included.
 
 The Contract verifier and locked 48-case Suite pass against the current
 projection. The `e2e/` module race/shuffle, vet, and lock checks also pass. A
@@ -170,6 +171,21 @@ Local and hosted candidate results do not represent browser evidence, real
 Veronica, aggregate conformance, hostile multi-tenant security, deployment, or
 production readiness.
 
+The browser image component is recorded in ADR 0018. It repacks immutable
+`docker.io/chromedp/headless-shell` amd64/arm64 manifests into a scratch image
+with a fixed loopback CDP endpoint, numeric `1000:1000` user, read-only root,
+stable `/workspace` and `/tmp` mounts, and a default-denied unsandboxed launch.
+Two no-cache builds per platform are identical when invoked with
+`SOURCE_DATE_EPOCH=0` and `--provenance=false`: arm64 platform digest
+`sha256:6f2372feb2808b9de666138c6eed5e62b033c467114eed689d100f61f2a8009c` and
+amd64 platform digest
+`sha256:38ff93f17e372560506f41b8ef77f43e06b0f37a04df17ce15d87297a1b97f83`.
+Constrained Docker smoke on both architectures returned Chromium
+`151.0.7922.109` over loopback. BuildKit's default attestation index embeds
+invocation-time metadata, so its index digest is not used for this local
+reproducibility check; signed provenance, a usable browser sandbox, and all
+Provider/browser caller gates remain open.
+
 The two current E2E runs left no managed Docker container. Their evidence is
 ignored local output, not a published CI artifact. The unprivileged sandbox
 cannot bind the test listeners or access the Docker socket, so network/Docker
@@ -184,10 +200,11 @@ evidence.
 
 P4 authority planning is recorded in ADR 0017 and
 [`plan/p4-optional-profiles.md`](plan/p4-optional-profiles.md). Browser Contract
-authority and Go projection are now locked, while both browser routes remain
-absent from the Provider router. The next slice is a reproducible browser image
-and uncomposed provider-local runtime/session components. No browser capability
-advertisement or production configuration is enabled.
+authority and Go projection are now locked, and ADR 0018 records the
+reproducible image component; both browser routes remain absent from the
+Provider router. The next slice is uncomposed provider-local runtime/session
+components. No browser capability advertisement or production configuration is
+enabled.
 
 Contract identity:
 
@@ -206,7 +223,7 @@ Contract identity:
 | P2.5i | Current local reference lock-refresh passed 15 initial plus 5 restart/resume coding/shell scenarios against Provider `24b2e36` using harness `75e5725`; hosted release run `33602869956` passed the same current lock | Local evidence is `20260902T065111.030014000Z`; no browser scenario, Agent Platform, or production property is implied |
 | P2 | Reference coding/shell caller release gate passed | Aggregate conformance, actual Agent Platform compatibility, multi-controller, hostile multi-tenant isolation, deployment, and production gates remain open |
 | P3 | Local revision binding/shadow/metrics component evidence plus current local candidate integration (`20260902T065200.812211000Z`) and hosted candidate lock regression (`24b2e36`/`13c6a57`) | Real platform traffic shadow parity, canary, rollback, old-run drain, metric parity, and unchanged platform contracts remain open |
-| P4 | Browser Contract authority/projection passed; browser runtime implementation has not started | Build/verify the browser image and uncomposed components next; handler, advertisement, browser caller, security, deployment, and production gates remain open |
+| P4 | Browser Contract authority/projection and the browser image component pass their named local gates; browser runtime/session implementation has not started | Build/attach signed provenance and a usable browser sandbox, then implement uncomposed runtime/session/evidence components; handler, advertisement, browser caller, security, deployment, and production gates remain open |
 
 Production readiness is not a numbered phase shortcut. Aggregate conformance,
 multi-controller reliability, hostile multi-tenant security, deployment, and
@@ -377,10 +394,11 @@ Its focused, full local, and Docker-tagged gates pass, and repository CI
 repository CI `33159099578` also pass their bounded readiness/projection gates.
 Reviewed documentation baseline `bba02a6` passes repository CI `33160646494`.
 
-1. Build and verify a reproducible browser runtime image, then implement the
-   provider-local browser session/application, durable operation/evidence,
-   expiry, cleanup, usage, and opaque-resolution components without composing
-   the protected routes or advertising `sandbox.browser`.
+1. Obtain signed provenance and a usable browser sandbox for the completed
+   image component, then implement the provider-local browser
+   session/application, durable operation/evidence, expiry, cleanup, usage, and
+   opaque-resolution components without composing the protected routes or
+   advertising `sandbox.browser`.
 2. Preserve the clean reference and candidate coding/shell harnesses and their
    named local evidence. Add browser caller scenarios only after browser
    transport composition has its own gate.

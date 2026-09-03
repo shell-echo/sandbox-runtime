@@ -1,9 +1,10 @@
 # P4 Optional Profiles
 
-Status: browser Contract authority and Go projection are locked. No browser
-runtime, image, application, handler, route composition, or advertisement is
-implemented. This work does not close P3, browser external-caller, aggregate
-conformance, multi-controller, multi-tenant, deployment, or production gates.
+Status: browser Contract/Go projection and the digest-pinned image component
+are complete within their named local gates. No browser session application,
+handler, route composition, or advertisement is implemented. This work does not
+close P3, browser external-caller, aggregate conformance, multi-controller,
+multi-tenant, deployment, or production gates.
 
 ## Objective
 
@@ -21,8 +22,11 @@ evidence chain before it can be advertised.
 - Browser authority does not reuse the terminal-session route. The Provider
   router intentionally does not match either browser route, and startup does
   not advertise the browser capability.
-- The repository has no browser or desktop runtime image, guest endpoint
-  protocol, or deployable public Gateway composition.
+- The repository has a browser image component under
+  `profiles/browser/image/`, with immutable amd64/arm64 upstream pins,
+  deterministic local platform digests, and a fixed private guest endpoint.
+  It is not a composed browser runtime, session service, or deployable public
+  Gateway.
 - `blocks/` can validate an internal digest-pinned Block manifest, but it does
   not authorize a Provider capability or establish image provenance.
 - A real Agent Platform caller and migration traffic harness remain unavailable;
@@ -72,7 +76,7 @@ inferring support from generic schema vocabulary:
 | Gateway security | Semantic rules and security matrix leave user/tenant authorization, revocation, audit, reconnect, and fresh reference resolution with the caller | Implement and fault-test private endpoint resolution and caller-owned policy composition |
 | Usage | Browser duration meter and operation/sandbox correlation are locked under the shared usage route | Implement bounded collection, reconciliation, expiry, and restart behavior |
 | Fixtures and Suite | Success/rejection/security/admission fixtures and 10 new Suite cases raise the locked Suite from 38 to 48 cases | Add runtime fault/concurrency/image cases in later slices; current Suite is Contract projection evidence only |
-| Runtime image | No browser image, digest, provenance attestation, architecture matrix, or guest endpoint is present | Build or publish a reproducible image and verify mounts, user, limits, network, and endpoint behavior before Provider composition |
+| Runtime image | ADR 0018 image component passes amd64/arm64 reproducibility and constrained Docker smoke with immutable source pins and loopback CDP; signed provenance attestation and verified Chromium sandbox remain absent | Attach signed provenance, replace the development `--no-sandbox` override with a verified sandbox posture, and re-run mounts, user, limits, network, and endpoint checks before Provider composition |
 
 This result is Contract/projection authority only. It does not make the
 internal Block manifest a wire resource or establish browser runtime evidence.
@@ -84,6 +88,11 @@ internal Block manifest a wire resource or establish browser runtime evidence.
   `859f76dc0e855a0c8abdbbb5648df100dabb4328`, and 48-case Suite;
 - Contract verifier, browser projection/admission/security/route-absence tests,
   and the locked 48-case Conformance Suite pass locally;
+- ADR 0018 browser image component: two no-cache builds per platform produce
+  stable local platform digests with `SOURCE_DATE_EPOCH=0` and
+  `--provenance=false`; both constrained Docker smoke runs report Chromium
+  `151.0.7922.109` on loopback. This is component evidence only; the signed
+  provenance and usable browser-sandbox gates remain open;
 - E2E harness lock commit `75e5725` plus reference and candidate 15+5
   coding/shell regression runs; these runs contain no browser scenario; and
 - runtime/image/handler/advertisement, real platform, multi-controller,
@@ -91,11 +100,13 @@ internal Block manifest a wire resource or establish browser runtime evidence.
 
 ## Next work
 
-Build and verify a reproducible digest-pinned browser image first: source,
-supported architectures, provenance, numeric user, read-only root, stable
-mounts, limits, restricted egress, and a private guest endpoint. Then implement
+The digest-pinned browser image component is complete under ADR 0018 for
+source, supported architectures, numeric user, read-only root, stable mounts,
+limits, restricted egress, and a private guest endpoint. Next implement
 uncomposed provider-local browser session ports, durable operation/session
-state, reconciliation, expiry, cleanup, usage, and opaque resolution. Do not
-add handler routes or enable advertisement until those component gates and the
-caller-owned Gateway boundary pass; browser external-caller E2E follows after
-composition and remains separate from the existing coding/shell harness runs.
+state, reconciliation, expiry, cleanup, usage, and opaque resolution. In
+parallel, obtain signed provenance and a usable browser sandbox; both remain
+required before composition. Do not add handler routes or enable advertisement
+until those component gates and the caller-owned Gateway boundary pass; browser
+external-caller E2E follows after composition and remains separate from the
+existing coding/shell harness runs.

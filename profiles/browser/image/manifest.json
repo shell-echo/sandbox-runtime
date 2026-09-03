@@ -1,0 +1,78 @@
+{
+  "schema_version": "sandbox.runtime/browser-image/v1",
+  "profile_id": "sandbox-runtime-browser-v1",
+  "runtime_class_name": "sandbox-runtime-browser",
+  "source": {
+    "repository": "docker.io/chromedp/headless-shell",
+    "tag": "latest",
+    "index_digest": "sha256:2d349b544a1ea6b5b5fd7c0fe99215ff662339c57407ee2e8c0a11af93516b04",
+    "manifests": {
+      "linux/amd64": {
+        "digest": "sha256:5f877a2a559dea1a99fb750da695d28a020cdd49db660aead6c78a46e3c7dd50",
+        "architecture": "amd64"
+      },
+      "linux/arm64/v8": {
+        "digest": "sha256:2fc473f3f926ccae8dbfedf60897937dece94ff7bbdfab20457ebfc732c2b162",
+        "architecture": "arm64",
+        "variant": "v8"
+      }
+    }
+  },
+  "browser": {
+    "binary": "/headless-shell/headless-shell",
+    "version": "Chromium 151.0.7922.109",
+    "protocol": "cdp",
+    "endpoint": {
+      "address": "127.0.0.1",
+      "port": 9222,
+      "public": false
+    }
+  },
+  "launch": {
+    "arguments": [
+      "--headless",
+      "--no-sandbox",
+      "--disable-gpu",
+      "--disable-dev-shm-usage",
+      "--no-first-run",
+      "--no-default-browser-check",
+      "--remote-debugging-address=127.0.0.1",
+      "--remote-debugging-port=9222"
+    ],
+    "user_arguments": "rejected",
+    "development_override": "BROWSER_RUNTIME_ALLOW_UNSANDBOXED=1"
+  },
+  "security": {
+    "uid": 1000,
+    "gid": 1000,
+    "root_filesystem": "read_only",
+    "no_new_privileges": true,
+    "capabilities": "drop_all",
+    "browser_sandbox": "disabled",
+    "container_isolation_required": true
+  },
+  "mounts": [
+    {
+      "path": "/workspace",
+      "mode": "rw",
+      "required": true
+    },
+    {
+      "path": "/tmp",
+      "mode": "rw",
+      "required": true
+    }
+  ],
+  "network": {
+    "mode": "restricted",
+    "egress_gateway_required": true,
+    "endpoint_loopback_only": true
+  },
+  "provenance": {
+    "upstream_source": "https://github.com/chromedp/docker-headless-shell",
+    "upstream_index_digest": "sha256:2d349b544a1ea6b5b5fd7c0fe99215ff662339c57407ee2e8c0a11af93516b04",
+    "build_context": "profiles/browser/image",
+    "reproducible_inputs": true,
+    "attestation_required_before_advertisement": true
+  }
+}

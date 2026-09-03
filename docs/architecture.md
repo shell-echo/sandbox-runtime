@@ -355,8 +355,9 @@ its conformance tests.
 ## Current gap assessment
 
 The current code has passed its named reference coding/shell caller gate and
-has browser Contract authority only; the broader reliability, security,
-deployment, and optional-profile gates remain open:
+has browser Contract authority plus a separately verified image component; the
+broader reliability, security, deployment, and optional-profile gates remain
+open:
 
 | Area | Current state | Required direction |
 | --- | --- | --- |
@@ -370,7 +371,7 @@ deployment, and optional-profile gates remain open:
 | Workspace | The Provider Docker development adapter supplies `/inputs`, `/workspace`, `/outputs`, and bounded tmpfs `/tmp` with owned cleanup; exec consumes that runtime without exposing host paths. | Add artifact consumers, capacity enforcement, and stronger isolation evidence. |
 | Security | Docker defaults already drop capabilities, use non-root/read-only root, disable networking, and limit resources. | Add policy enforcement, stronger isolation profiles, secret grants, egress controls, audit evidence, and production auth. |
 | Events and usage | Durable lifecycle events and bounded usage-evidence components exist without a complete runtime collector composition. | Complete collection/reconciliation while leaving platform accounting authority outside the Provider. |
-| Snapshots/browser/desktop | Browser Contract authority/projection is locked, but browser runtime/image/routes/advertisement are not implemented; snapshots and desktop remain unauthorized optional behavior. | Build and verify the browser image and uncomposed components next; keep every optional profile unadvertised until its independent gates pass. |
+| Snapshots/browser/desktop | Browser Contract authority/projection is locked and the digest-pinned browser image component passes local dual-architecture smoke/reproducibility checks, but browser runtime/session/routes/advertisement are not composed; snapshots and desktop remain unauthorized optional behavior. | Implement and verify uncomposed browser runtime/session/evidence components, then keep every optional profile unadvertised until its independent gates pass. |
 
 ## Delivery plan and release gates
 
