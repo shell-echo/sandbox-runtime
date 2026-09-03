@@ -21,7 +21,7 @@ platform gate.
 
 | Item | Value |
 | --- | --- |
-| Provider implementation | `4df7f22bb834aec93ad6cfbf2c95d1d3c86bd8bd` |
+| Provider implementation | `9a5d225f793f37ccafdac31c276ccbcb1bc862ad` |
 | Contract namespace | `urn:shell-echo:sandbox-runtime:provider-v1` |
 | Contract revision | `5096e71fb84fbec22aa3487a0e55a1b49602ab8b` |
 | Contract tree | `859f76dc0e855a0c8abdbbb5648df100dabb4328` |
@@ -32,15 +32,16 @@ the Provider commit or Contract lock differs from the values above. A full
 evidence run also refuses tracked or untracked harness changes and records the
 exact enclosing repository commit in its manifest.
 
-The lock now includes browser Contract authority and projection. The reference
-and platform-candidate runners still execute only the coding/shell scenarios;
-advancing this identity is not browser runtime, browser caller, or browser E2E
-evidence.
+The lock now includes browser Contract authority/projection, the image
+component, and the uncomposed Provider-local browser session component. The
+reference and platform-candidate runners still execute only the coding/shell
+scenarios; advancing this identity is not browser runtime, browser caller, or
+browser E2E evidence.
 
-## Latest verified evidence
+## Previous hosted evidence before this lock update
 
 Hosted Reference E2E run `33708670563` and Platform Candidate E2E run
-`33708670564` passed the advanced Provider lock `4df7f22` with 15 initial and
+`33708670564` passed the previous Provider lock `4df7f22` with 15 initial and
 5 reconstruction/resume coding/shell scenarios each. Their artifacts are
 `reference-e2e-evidence-33708670563` (digest
 `sha256:36596ce808833b12cfcab44277d1acc1715c559608c5e2b57293f00d5e3af961`)
@@ -78,10 +79,10 @@ respectively. Both manifests pin Provider `24b2e36`, Contract revision
 The preceding 38-case-lock runs remain `33591808946` and `33591808961` at
 baseline `b72fc3b`.
 
-The lock was advanced to Provider `4df7f22` for the browser image component.
-The historical evidence above remains valid only for `24b2e36`; the hosted runs
-in the preceding section are the fresh evidence for the advanced lock. These
-runners still contain no browser scenario.
+The previous lock was advanced to Provider `4df7f22` for the browser image
+component. The historical evidence above remains valid only for `24b2e36`; the
+hosted runs in the preceding section are evidence for the previous image lock.
+These runners still contain no browser scenario.
 
 ## Previous verified evidence
 
