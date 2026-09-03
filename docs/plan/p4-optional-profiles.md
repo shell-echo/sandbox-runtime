@@ -106,10 +106,10 @@ internal Block manifest a wire resource or establish browser runtime evidence.
   `sha256:87d3216c22ada0fea74b375a3ee5c2ddf021d3e1913569e2aeb4a316ed3b5c2f`;
   GitHub OIDC/Sigstore attestation `44912296`, an independent constrained
   `gh attestation verify`, and independent registry inspection pass;
-- Browser session component commit `9a5d225`, current E2E harness lock
-  `58ed009`, and Provider lock `c91d83f`; reference and candidate 15+5
-  coding/shell regression runs pass locally and in hosted runs `33724009124`
-  and `33724009180`; these runs contain no browser scenario; and
+- Browser session component commit `9a5d225`; latest hosted E2E harness/Provider
+  evidence `e7e4d57`/`83a7884`; reference and candidate 15+5 coding/shell
+  regression runs pass in hosted runs `33725665014` and `33725664854`; these
+  runs contain no browser scenario; and
 - runtime adapter/handler/Gateway/advertisement, real platform, multi-controller,
   multi-tenant, deployment, and production evidence remain explicitly open.
 
