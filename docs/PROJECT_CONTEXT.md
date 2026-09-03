@@ -146,8 +146,9 @@ admission bindings, opaque reference security, operation/usage projection, and
 10 new Suite cases. The browser image component is implemented under
 `profiles/browser/image/`. The uncomposed Provider-local browser
 session/application/reference/usage component is implemented under
-`provider/browser/`; no protected-route composition, startup advertisement, or
-browser caller scenario is included.
+`provider/browser/`. ADR 0020 and `provider/browser/driver/docker` add an
+uncomposed fail-closed Docker adapter for that runtime port; no protected-route
+composition, startup advertisement, or browser caller scenario is included.
 
 The Contract verifier and locked 48-case Suite pass against the current
 projection. The `e2e/` module race/shuffle, vet, and lock checks also pass. A
@@ -194,8 +195,19 @@ commit, and hosted runner, and a constrained `gh attestation verify`
 invocation succeeded independently. Independent registry inspection found
 exactly `linux/amd64` and `linux/arm64/v8` descriptors and no extra manifest.
 This closes the exact browser image sandbox/provenance publication gate. No
-Browser runtime adapter, Provider route, Gateway composition, advertisement,
-or caller scenario is implied.
+Provider route, Gateway composition, advertisement, or caller scenario is
+implied by the publication evidence.
+
+ADR 0020 and the Browser Docker adapter machine-bind that exact publication,
+the checked-in seccomp profile, numeric identity, bounded stable guest mounts,
+finite resources, durable private allocation state, and a fresh non-TTY relay
+to container-loopback CDP. Focused/full race-shuffle, vet, Contract verification,
+the unchanged 48-case Suite, and the tagged Docker driver matrix pass locally.
+The live Browser case deliberately uses `network=none`; it proves private CDP
+discovery, RFC 6455 upgrade, and `Browser.getVersion` only, not restricted
+egress or complete runtime startup. The public adapter still requires real
+provenance-verifier and restricted-network implementations and fails closed
+without them.
 
 The two current E2E runs left no managed Docker container. Their evidence is
 ignored local output, not a published CI artifact. The unprivileged sandbox
@@ -216,9 +228,10 @@ image foundation. ADR 0019 and run `33724368530` provide exact amd64/arm64/v8
 sandbox and signed provenance evidence. Both browser routes remain absent from
 the Provider router.
 The uncomposed `provider/browser` session/application/reference/usage
-components pass focused local gates. No browser capability advertisement or
-production configuration is enabled; the next slice is the Browser runtime
-adapter and protected/Gateway composition.
+components and Docker runtime adapter pass their bounded local component gates.
+No browser capability advertisement or production configuration is enabled;
+the next slice is the real provenance/restricted-egress dependency pair and
+create-time policy binding, followed by protected/Gateway composition.
 
 Contract identity:
 
@@ -237,7 +250,7 @@ Contract identity:
 | P2.5i | Latest local reference evidence passed 15 initial plus 5 restart/resume coding/shell scenarios against Provider `c91d83f` using harness `58ed009`; hosted run `33725665014` passed harness `e7e4d57` against Provider `83a7884` | Local evidence is `20260903T063459.332316000Z`; no browser scenario, Agent Platform, or production property is implied |
 | P2 | Reference coding/shell caller release gate passed | Aggregate conformance, actual Agent Platform compatibility, multi-controller, hostile multi-tenant isolation, deployment, and production gates remain open |
 | P3 | Local revision binding/shadow/metrics component evidence plus latest local candidate integration (`20260903T063535.043227000Z`, `58ed009`/`c91d83f`) and hosted candidate regression (`e7e4d57`/`83a7884`, run `33725664854`) | Real platform traffic shadow parity, canary, rollback, old-run drain, metric parity, and unchanged platform contracts remain open |
-| P4 | Browser Contract authority/projection, exact sandboxed signed amd64/arm64/v8 publication, and uncomposed Provider-local session/application/reference/usage components have named evidence | Compose the runtime adapter, protected handlers, and caller-owned Gateway; browser advertisement, caller, security, deployment, and production gates remain open |
+| P4 | Browser Contract authority/projection, exact sandboxed signed amd64/arm64/v8 publication, uncomposed Provider-local session/application/reference/usage components, and the fail-closed Docker/private-relay adapter have named evidence | Implement real provenance/restricted-egress dependencies and create-policy binding, then protected handlers and caller-owned Gateway; browser advertisement, caller, security, deployment, and production gates remain open |
 
 Production readiness is not a numbered phase shortcut. Aggregate conformance,
 multi-controller reliability, hostile multi-tenant security, deployment, and
@@ -410,12 +423,13 @@ Its focused, full local, and Docker-tagged gates pass, and repository CI
 repository CI `33159099578` also pass their bounded readiness/projection gates.
 Reviewed documentation baseline `bba02a6` passes repository CI `33160646494`.
 
-1. Bind the exact published digest from run `33724368530` through a fail-closed
-   Browser runtime adapter with the locked seccomp policy, identity, mounts,
-   limits, private endpoint, and network controls. Then compose the existing
-   provider-local session/application/reference/usage components, protected
-   handlers, and the caller-owned Gateway boundary. Keep routes absent and do
-   not advertise `sandbox.browser` until that complete dependency graph passes.
+1. Implement the real provenance verifier and restricted-egress provisioner,
+   bind the create-time network-policy reference through lifecycle composition,
+   and validate the complete Browser adapter with those dependencies. Then
+   compose the existing Provider-local session/application/reference/usage
+   components, protected handlers, and the caller-owned Gateway boundary. Keep
+   routes absent and do not advertise `sandbox.browser` until that complete
+   dependency graph passes.
 2. Preserve the clean reference and candidate coding/shell harnesses and their
    named local evidence. Add browser caller scenarios only after browser
    transport composition has its own gate.

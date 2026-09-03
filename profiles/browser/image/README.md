@@ -111,6 +111,11 @@ provenance evidence only because its arm64 descriptor omitted the
 manifest-authorized `variant: v8`; commit `494401a` corrected that gap before
 the exact publication above.
 
+`publication.go` exposes this exact immutable evidence as machine-checked
+runtime input. It is not a substitute for signature verification: the Browser
+Docker adapter still requires an injected verifier to validate this identity
+at startup and has no success-by-configuration fallback.
+
 The sandbox and provenance gates do not by themselves authorize Provider
 routes or capability advertisement. Restricted egress policy, a private
 endpoint resolver, caller-owned Gateway authorization/revocation/audit/

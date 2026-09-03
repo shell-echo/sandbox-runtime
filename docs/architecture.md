@@ -94,7 +94,8 @@ session-open, opaque-handoff, operation, usage, and admission authority. The
 Provider implementation composes the coding/shell development surface only.
 The two browser-session routes remain deliberately absent from the protected
 router, startup advertisement remains empty unless the existing coding/shell
-dependency graph passes, and no browser runtime or Gateway is composed.
+dependency graph passes, and the uncomposed Browser Docker adapter still lacks
+real restricted-egress/provenance dependencies and Gateway composition.
 
 | Method and path | Responsibility |
 | --- | --- |
@@ -371,7 +372,7 @@ open:
 | Workspace | The Provider Docker development adapter supplies `/inputs`, `/workspace`, `/outputs`, and bounded tmpfs `/tmp` with owned cleanup; exec consumes that runtime without exposing host paths. | Add artifact consumers, capacity enforcement, and stronger isolation evidence. |
 | Security | Docker defaults already drop capabilities, use non-root/read-only root, disable networking, and limit resources. | Add policy enforcement, stronger isolation profiles, secret grants, egress controls, audit evidence, and production auth. |
 | Events and usage | Durable lifecycle events and bounded usage-evidence components exist without a complete runtime collector composition. | Complete collection/reconciliation while leaving platform accounting authority outside the Provider. |
-| Snapshots/browser/desktop | Browser Contract authority/projection and the digest-pinned browser image component pass their named local gates. The uncomposed `provider/browser` session/application/reference/usage components now pass focused lifecycle, restart, expiry, cleanup, opaque-resolution, and duration-evidence tests; browser runtime/session routes, Gateway, and advertisement are still not composed. Snapshots and desktop remain unauthorized optional behavior. | Obtain signed provenance and a usable browser sandbox, then compose browser runtime/handler/Gateway only after its independent security and caller gates pass; keep every optional profile unadvertised until complete. |
+| Snapshots/browser/desktop | Browser Contract authority/projection and the exact signed image pass their named gates. The uncomposed `provider/browser` session/application/reference/usage components and fail-closed Docker adapter have focused evidence: exact image/seccomp metadata, fixed non-TTY loopback relay, durable allocation identity, four stable bounded guest mounts, ownership, restart observation, capacity, expiry, and cleanup. The public adapter still requires real provenance verification and restricted-egress provisioning, so Browser routes, Gateway, and advertisement remain uncomposed. Snapshots and desktop remain unauthorized optional behavior. | Implement and validate the real restricted-egress/provenance dependencies and bind create-time network authority before protected handler/Gateway composition; keep every optional profile unadvertised until its security and caller gates pass. |
 
 ## Delivery plan and release gates
 

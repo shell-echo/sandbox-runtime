@@ -58,13 +58,16 @@ Currently implemented:
   exactly linux/amd64 and linux/arm64/v8, and independently verified GitHub
   OIDC/Sigstore provenance; this remains image evidence rather than a Provider
   route
-- uncomposed Provider-local Browser session, opaque-reference, operation, and
-  duration-evidence components; no Browser runtime adapter, handler, Gateway,
-  advertisement, or browser caller is enabled
+- uncomposed Provider-local Browser session, opaque-reference, operation,
+  duration-evidence, and fail-closed Docker runtime-adapter components; the
+  adapter binds the exact signed image, private non-TTY CDP relay, stable guest
+  mounts, and runtime limits, but no real restricted-egress/provenance
+  dependency, handler, Gateway, advertisement, or browser caller is enabled
 
 Planned but not yet implemented:
 
-- Browser runtime/transport/Gateway composition and independent caller E2E
+- Browser restricted-egress/provenance dependencies, protected transport,
+  Gateway composition, and independent caller E2E
 - runtime images for desktop workloads
 - display, audio, input, streaming, clipboard, and file-transfer modules
 - deployable WebRTC / VNC / public WebSocket Gateway composition
