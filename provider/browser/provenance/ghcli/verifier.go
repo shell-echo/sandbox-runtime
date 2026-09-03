@@ -177,11 +177,23 @@ func commandEnvironment() []string {
 	environment := make([]string, 0, len(os.Environ())+2)
 	for _, entry := range os.Environ() {
 		key, _, _ := strings.Cut(entry, "=")
-		if key != promptKey && key != colorKey {
+		if allowedCommandEnvironment(key) {
 			environment = append(environment, entry)
 		}
 	}
 	return append(environment, promptKey+"=1", colorKey+"=1")
+}
+
+func allowedCommandEnvironment(key string) bool {
+	switch key {
+	case "ALL_PROXY", "DOCKER_CONFIG", "GH_CONFIG_DIR", "GH_TOKEN", "GITHUB_TOKEN",
+		"HOME", "HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY", "PATH", "SSL_CERT_DIR",
+		"SSL_CERT_FILE", "TEMP", "TMP", "TMPDIR", "USERPROFILE", "WINDIR",
+		"XDG_CONFIG_HOME", "all_proxy", "https_proxy", "http_proxy", "no_proxy":
+		return true
+	default:
+		return false
+	}
 }
 
 type boundedBuffer struct{ bytes.Buffer }

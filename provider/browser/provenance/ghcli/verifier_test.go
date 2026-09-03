@@ -284,3 +284,23 @@ func TestBoundedBufferRejectsOverflow(t *testing.T) {
 		t.Fatalf("overflow write = %d, %v", written, err)
 	}
 }
+
+func TestCommandEnvironmentAllowsOnlyVerifierDependencies(t *testing.T) {
+	t.Setenv("GH_TOKEN", "short-lived-read-token")
+	t.Setenv("SANDBOX_RUNTIME_PRIVATE_VALUE", "must-not-be-inherited")
+	environment := map[string]string{}
+	for _, entry := range commandEnvironment() {
+		key, value, found := strings.Cut(entry, "=")
+		if !found {
+			t.Fatalf("invalid environment entry %q", entry)
+		}
+		environment[key] = value
+	}
+	if environment["GH_TOKEN"] != "short-lived-read-token" || environment["GH_PROMPT_DISABLED"] != "1" ||
+		environment["NO_COLOR"] != "1" {
+		t.Fatalf("required environment = %#v", environment)
+	}
+	if _, inherited := environment["SANDBOX_RUNTIME_PRIVATE_VALUE"]; inherited {
+		t.Fatal("unrelated control-plane environment was inherited")
+	}
+}

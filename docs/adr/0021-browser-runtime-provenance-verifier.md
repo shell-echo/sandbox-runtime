@@ -56,10 +56,13 @@ identity; the signed run invocation, subject, and source identity are the
 runtime-verifiable fields exposed by the verifier result.
 
 The adapter discards command diagnostics and returns only stable errors. It
-preserves cancellation and deadlines. The Browser Docker driver gives network
-readiness, provenance verification, image pull, and image inspection separate
-bounded contexts so a real registry verification does not inherit the private
-relay's ten-second connection probe limit.
+passes only the environment needed for GitHub/registry authentication,
+credential discovery, proxy/CA policy, and temporary files; unrelated control-
+plane environment values are not inherited. It preserves cancellation and
+deadlines. The Browser Docker driver gives network readiness, provenance
+verification, image pull, and image inspection separate bounded contexts so a
+real registry verification does not inherit the private relay's ten-second
+connection probe limit.
 
 ## Release boundary
 
@@ -68,7 +71,9 @@ cover exact argv, identity drift, ambiguous or malformed output, executable
 replacement, bounded output, safe errors, and context propagation. A tagged
 integration invokes the pinned local GitHub CLI against the exact GHCR
 attestation bundle. Repository CI runs that integration as a separately named
-`browser-provenance` job with a read-only package credential.
+`browser-provenance` job with a read-only package credential. The integration
+hashes the selected CLI for that test process; it does not prove how a future
+deployment independently distributes or audits the configured CLI digest.
 
 This is real provenance-verifier component evidence only. The integration does
 not start the Browser image, enforce restricted egress, bind create policy,
