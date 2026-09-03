@@ -61,12 +61,14 @@ Currently implemented:
 - uncomposed Provider-local Browser session, opaque-reference, operation,
   duration-evidence, and fail-closed Docker runtime-adapter components; the
   adapter binds the exact signed image, private non-TTY CDP relay, stable guest
-  mounts, and runtime limits, but no real restricted-egress/provenance
-  dependency, handler, Gateway, advertisement, or browser caller is enabled
+  mounts, and runtime limits
+- a real, uncomposed GitHub CLI/Sigstore Browser provenance verifier; no real
+  restricted-egress provisioner, create-policy binding, handler, Gateway,
+  advertisement, or browser caller is enabled
 
 Planned but not yet implemented:
 
-- Browser restricted-egress/provenance dependencies, protected transport,
+- Browser restricted-egress and create-policy binding, protected transport,
   Gateway composition, and independent caller E2E
 - runtime images for desktop workloads
 - display, audio, input, streaming, clipboard, and file-transfer modules
