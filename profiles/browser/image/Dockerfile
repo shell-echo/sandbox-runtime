@@ -37,14 +37,15 @@ LABEL org.opencontainers.image.title="sandbox-runtime browser guest" \
       org.opencontainers.image.base.name="${BASE_IMAGE}" \
       org.opencontainers.image.base.digest="${BASE_IMAGE_DIGEST}" \
       io.github.shell-echo.sandbox-runtime.profile="sandbox-runtime-browser-v1" \
+      io.github.shell-echo.sandbox-runtime.browser-sandbox="user-namespace" \
+      io.github.shell-echo.sandbox-runtime.seccomp-profile-digest="sha256:3bdf2fd28636409951409621735f616997d0fd4851259851ac4c340dff90e05b" \
       io.github.shell-echo.sandbox-runtime.provenance.source-digest="${BASE_IMAGE_DIGEST}" \
       io.github.shell-echo.sandbox-runtime.provenance.source-date-epoch="${SOURCE_DATE_EPOCH}"
 
 ENV HOME=/tmp/browser-home \
     XDG_CACHE_HOME=/tmp/browser-cache \
     XDG_CONFIG_HOME=/tmp/browser-config \
-    XDG_RUNTIME_DIR=/tmp/browser-runtime \
-    BROWSER_RUNTIME_ALLOW_UNSANDBOXED=0
+    XDG_RUNTIME_DIR=/tmp/browser-runtime
 
 USER 1000:1000
 WORKDIR /workspace

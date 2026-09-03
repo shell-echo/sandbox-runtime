@@ -1,0 +1,12 @@
+The chromium-seccomp.json profile is derived from Microsoft Playwright's
+utils/docker/seccomp_profile.json at commit
+ae935a43d9e376e4759548f6b3c6905c7b282333.
+
+Portions Copyright (c) Microsoft Corporation.
+Portions Copyright 2017 Google Inc.
+
+The derived file was changed for sandbox-runtime: unsupported architecture
+mappings and capability-gated rules were removed, and the explicit Chromium
+user-namespace sandbox rule was limited to chroot, clone, setns, and unshare.
+The derived file is distributed under the Apache License, Version 2.0; see
+LICENSE.chromium-seccomp in this directory.

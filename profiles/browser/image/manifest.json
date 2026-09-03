@@ -1,5 +1,5 @@
 {
-  "schema_version": "sandbox.runtime/browser-image/v1",
+  "schema_version": "sandbox.runtime/browser-image/v2",
   "profile_id": "sandbox-runtime-browser-v1",
   "runtime_class_name": "sandbox-runtime-browser",
   "source": {
@@ -31,16 +31,16 @@
   "launch": {
     "arguments": [
       "--headless",
-      "--no-sandbox",
       "--disable-gpu",
       "--disable-dev-shm-usage",
       "--no-first-run",
       "--no-default-browser-check",
+      "--user-data-dir=/tmp/browser-cache/profile",
       "--remote-debugging-address=127.0.0.1",
       "--remote-debugging-port=9222"
     ],
     "user_arguments": "rejected",
-    "development_override": "BROWSER_RUNTIME_ALLOW_UNSANDBOXED=1"
+    "sandbox_required": true
   },
   "security": {
     "uid": 1000,
@@ -48,7 +48,14 @@
     "root_filesystem": "read_only",
     "no_new_privileges": true,
     "capabilities": "drop_all",
-    "browser_sandbox": "disabled",
+    "browser_sandbox": "user_namespace",
+    "user_namespaces_required": true,
+    "seccomp_profile": {
+      "path": "profiles/browser/image/chromium-seccomp.json",
+      "digest": "sha256:3bdf2fd28636409951409621735f616997d0fd4851259851ac4c340dff90e05b",
+      "derived_from": "https://github.com/microsoft/playwright/blob/ae935a43d9e376e4759548f6b3c6905c7b282333/utils/docker/seccomp_profile.json",
+      "allowed_sandbox_syscalls": ["chroot", "clone", "setns", "unshare"]
+    },
     "container_isolation_required": true
   },
   "mounts": [

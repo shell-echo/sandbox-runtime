@@ -1,0 +1,170 @@
+name: Browser Image Publication
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: browser-image-${{ github.sha }}
+  cancel-in-progress: false
+
+env:
+  IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/sandbox-runtime-browser
+
+jobs:
+  build-platform:
+    if: github.ref == 'refs/heads/main'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            source_digest: sha256:5f877a2a559dea1a99fb750da695d28a020cdd49db660aead6c78a46e3c7dd50
+            artifact_suffix: amd64
+          - platform: linux/arm64/v8
+            source_digest: sha256:2fc473f3f926ccae8dbfedf60897937dece94ff7bbdfab20457ebfc732c2b162
+            artifact_suffix: arm64
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Check out the exact publication source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
+        with:
+          platforms: all
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Run the sandboxed browser image integration gate
+        env:
+          SANDBOX_RUNTIME_BROWSER_IMAGE_INTEGRATION: "1"
+          SANDBOX_RUNTIME_BROWSER_PLATFORM: ${{ matrix.platform }}
+        run: go test -tags=integration -count=1 -run '^TestBrowserImageSandboxIntegration$' ./profiles/browser/image
+
+      - name: Log in to the GitHub Container Registry
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push the content-addressed platform manifest
+        id: build
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: profiles/browser/image
+          platforms: ${{ matrix.platform }}
+          build-args: |
+            BASE_IMAGE_DIGEST=${{ matrix.source_digest }}
+            SOURCE_DATE_EPOCH=0
+            VCS_REF=${{ github.sha }}
+          outputs: type=image,name=${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
+          provenance: false
+          sbom: false
+
+      - name: Export the platform manifest digest
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          mkdir -p "${RUNNER_TEMP}/digests"
+          digest="${DIGEST#sha256:}"
+          test "${#digest}" -eq 64
+          touch "${RUNNER_TEMP}/digests/${digest}"
+
+      - name: Upload the platform manifest digest
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: browser-image-digest-${{ matrix.artifact_suffix }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  publish-index:
+    if: github.ref == 'refs/heads/main'
+    needs: build-platform
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: Download the platform manifest digests
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          pattern: browser-image-digest-*
+          path: ${{ runner.temp }}/digests
+          merge-multiple: true
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Log in to the GitHub Container Registry
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish the immutable multi-platform index
+        id: index
+        env:
+          IMAGE_TAG: sha-${{ github.sha }}
+        run: |
+          mapfile -t digest_files < <(find "${RUNNER_TEMP}/digests" -maxdepth 1 -type f -print | sort)
+          test "${#digest_files[@]}" -eq 2
+          references=()
+          for digest_file in "${digest_files[@]}"; do
+            digest="$(basename "${digest_file}")"
+            test "${#digest}" -eq 64
+            references+=("${IMAGE_NAME}@sha256:${digest}")
+          done
+          docker buildx imagetools create --tag "${IMAGE_NAME}:${IMAGE_TAG}" "${references[@]}"
+          digest="$(docker buildx imagetools inspect "${IMAGE_NAME}:${IMAGE_TAG}" --format '{{json .Manifest}}' | jq -r .digest)"
+          test "${digest#sha256:}" != "${digest}"
+          echo "digest=${digest}" >> "${GITHUB_OUTPUT}"
+
+      - name: Attest the published index with GitHub OIDC
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
+        with:
+          subject-name: ${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.index.outputs.digest }}
+          push-to-registry: true
+
+      - name: Verify the signed provenance and signer identity
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DIGEST: ${{ steps.index.outputs.digest }}
+        run: >-
+          gh attestation verify "oci://${IMAGE_NAME}@${DIGEST}"
+          --repo "${GITHUB_REPOSITORY}"
+          --signer-workflow "github.com/${GITHUB_REPOSITORY}/.github/workflows/browser-image.yml"
+          --source-digest "${GITHUB_SHA}"
+          --deny-self-hosted-runners
+
+      - name: Record the immutable publication identity
+        env:
+          DIGEST: ${{ steps.index.outputs.digest }}
+        run: |
+          echo "### Browser image publication" >> "${GITHUB_STEP_SUMMARY}"
+          echo "" >> "${GITHUB_STEP_SUMMARY}"
+          echo "- Source: \`${GITHUB_SHA}\`" >> "${GITHUB_STEP_SUMMARY}"
+          echo "- Image: \`${IMAGE_NAME}@${DIGEST}\`" >> "${GITHUB_STEP_SUMMARY}"
+          echo "- Tag: \`sha-${GITHUB_SHA}\`" >> "${GITHUB_STEP_SUMMARY}"
+          echo "- Provenance: GitHub OIDC/SLSA, verified in this job" >> "${GITHUB_STEP_SUMMARY}"
