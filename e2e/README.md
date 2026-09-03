@@ -42,22 +42,30 @@ aggregate conformance, or production evidence.
 
 ## Latest verified evidence
 
-Hosted Reference E2E run `33725665014` and Platform Candidate E2E run
-`33725664854` passed harness lock `e7e4d57` against Provider `83a7884` with 15
+Hosted Reference E2E run `33732133556` and Platform Candidate E2E run
+`33732133569` passed harness lock `e1de512` against Provider `cd33ba3` with 15
 initial and 5 reconstruction/resume coding/shell scenarios each. Their
-artifacts are `reference-e2e-evidence-33725665014` (digest
-`sha256:0b821ace9d7c358ab4e27621ea00358a0b6181efbeaf92dadc5d02143fcce709`)
-and `platform-candidate-e2e-evidence-33725664854` (digest
-`sha256:b8af85f45206aa09b63e01fd1f173d4f39d819f87b75a5ac19c80a315aff4776`).
+artifacts are `reference-e2e-evidence-33732133556` (digest
+`sha256:99f610aece673129923a36e176d11d90e10ca5587dec6a0c017b0db0a7a3ac34`)
+and `platform-candidate-e2e-evidence-33732133569` (digest
+`sha256:41b42b9f9fe7060e9ac1a74a676fe28cf89416bcdabb231fcefe95d111c1bf5d`).
 Both manifests pin Contract revision `5096e71`, tree `859f76d`, and 48 Suite
-cases. The latest local runs, `20260903T063459.332316000Z` and
-`20260903T063535.043227000Z` passed the same respective scenario sets with
-the previous harness/Provider lock `58ed009`/`c91d83f` and runtime digest
-`sha256:e1057acdc717391699ea414abdf9e379110257c15d2c8fd64b9eb260f801cddd`.
+cases. The latest local runs, `20260903T081108.412519000Z` and
+`20260903T081149.245310000Z`, passed the same respective scenario sets with
+harness/Provider lock `e1de512`/`cd33ba3` and runtime digest
+`sha256:c52ed6549ee4f91f119b0c0b167e93dd488aa9566bd7f3e40d9289131150f595`.
 These remain coding/shell regression and candidate-integration evidence only;
 they contain no browser scenario.
 
 ## Previous hosted evidence before this lock update
+
+Hosted Reference E2E run `33725665014` and Platform Candidate E2E run
+`33725664854` passed harness lock `e7e4d57` against Provider `83a7884` with 15
+initial and 5 reconstruction/resume coding/shell scenarios each. Their
+artifact digests are
+`sha256:0b821ace9d7c358ab4e27621ea00358a0b6181efbeaf92dadc5d02143fcce709`
+and
+`sha256:b8af85f45206aa09b63e01fd1f173d4f39d819f87b75a5ac19c80a315aff4776`.
 
 Hosted Reference E2E run `33724009124` and Platform Candidate E2E run
 `33724009180` passed harness lock `58ed009` against Provider `c91d83f` with 15
@@ -166,10 +174,10 @@ until close within a bounded timeout. Hosted run `33379217800` then passed all
 15 initial and 5 restart/resume scenarios on commit `555436c` and uploaded
 artifact `reference-e2e-evidence-33379217800` with digest
 `sha256:68250a85683dcbd8f01397d7373e98215382379ff895c0a58692de23c1880733`.
-The latest recorded lock-refresh run `33725665014` passed Provider `83a7884`
-with harness `e7e4d57` and uploaded `reference-e2e-evidence-33725665014` with
+The latest recorded lock-refresh run `33732133556` passed Provider `cd33ba3`
+with harness `e1de512` and uploaded `reference-e2e-evidence-33732133556` with
 digest
-`sha256:0b821ace9d7c358ab4e27621ea00358a0b6181efbeaf92dadc5d02143fcce709`.
+`sha256:99f610aece673129923a36e176d11d90e10ca5587dec6a0c017b0db0a7a3ac34`.
 A green run proves only the named reference caller scenarios;
 it does not prove Agent Platform compatibility, aggregate conformance,
 multi-controller reliability, hostile tenant isolation, deployment readiness,
@@ -186,7 +194,7 @@ Hosted run `33460370618` passed all 15 initial and 5 restart/resume candidate
 scenarios on workflow baseline `c7ff5eb`. Artifact
 `platform-candidate-e2e-evidence-33460370618` has digest
 `sha256:54f0aea847dcb0b1808c6c902f1465979a3ec4362d52ab8884187e85ea6343f7`.
-The latest recorded lock-refresh run `33725664854` passed Provider `83a7884`
-with harness `e7e4d57` and uploaded
-`platform-candidate-e2e-evidence-33725664854` with digest
-`sha256:b8af85f45206aa09b63e01fd1f173d4f39d819f87b75a5ac19c80a315aff4776`.
+The latest recorded lock-refresh run `33732133569` passed Provider `cd33ba3`
+with harness `e1de512` and uploaded
+`platform-candidate-e2e-evidence-33732133569` with digest
+`sha256:41b42b9f9fe7060e9ac1a74a676fe28cf89416bcdabb231fcefe95d111c1bf5d`.

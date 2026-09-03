@@ -117,16 +117,17 @@ internal Block manifest a wire resource or establish browser runtime evidence.
   GitHub OIDC/Sigstore attestation `44912296`, an independent constrained
   `gh attestation verify`, and independent registry inspection pass;
 - Browser session component commit `9a5d225`; latest hosted E2E harness/Provider
-  evidence `e7e4d57`/`83a7884`; reference and candidate 15+5 coding/shell
-  regression runs pass in hosted runs `33725665014` and `33725664854`; these
+  evidence `e1de512`/`cd33ba3`; reference and candidate 15+5 coding/shell
+  regression runs pass in hosted runs `33732133556` and `33732133569`; these
   runs contain no browser scenario; and
-- ADR 0020 and the uncomposed Docker adapter component pass focused and full
+- ADR 0020 and Browser adapter implementation `cd33ba3` pass focused and full
   race/shuffle, vet, exact Contract verification, the unchanged 48-case Suite,
-  and the tagged Docker driver matrix. The Browser tagged case exercises the
-  exact published image, four guest mounts, sandbox controls, non-TTY relay,
-  private version discovery, RFC 6455 upgrade, and `Browser.getVersion` over
-  `network=none`; it does not test restricted egress or runtime startup with
-  real dependency implementations; and
+  and the tagged Docker driver matrix. Repository CI `33731520938` and lock
+  refresh CI `33732133500` pass all three jobs. The Browser tagged case
+  exercises the exact published image, four guest mounts, sandbox controls,
+  non-TTY relay, private version discovery, RFC 6455 upgrade, and
+  `Browser.getVersion` over `network=none`; it does not test restricted egress
+  or runtime startup with real dependency implementations; and
 - real provenance/restricted-egress dependencies, handler/Gateway/
   advertisement, real platform, multi-controller, multi-tenant, deployment,
   and production evidence remain explicitly open.
