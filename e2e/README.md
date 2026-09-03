@@ -45,27 +45,35 @@ aggregate conformance, or production evidence.
 
 ## Latest verified evidence
 
-Hosted Reference E2E run `33737531617` and Platform Candidate E2E run
-`33737531705` passed harness lock `330f629` against Provider `9390554` with 15
+Hosted Reference E2E run `33747803507` and Platform Candidate E2E run
+`33747803514` passed harness lock `7f15628` against Provider `7e60340` with 15
 initial and 5 reconstruction/resume coding/shell scenarios each. Their
-artifacts are `reference-e2e-evidence-33737531617` (digest
-`sha256:1a7c63d60c3dc61e9acd3057b9218ca85269d61e53157222a93458c4372746fe`)
-and `platform-candidate-e2e-evidence-33737531705` (digest
-`sha256:52ad3fcd3c5c1477be06bc270c9ace9e5988e737d7c4d475ce22ee7267af0ab0`).
+artifacts are `reference-e2e-evidence-33747803507` (digest
+`sha256:c0cf1f430bef0f354423412a15db0de5b6fce0201c3a583402b7fa9dcfc233ad`)
+and `platform-candidate-e2e-evidence-33747803514` (digest
+`sha256:3f85c05e23d84f00d88b41302f7d8fd401579bd7ab07b2464d1f346388eb1f5c`).
 Both manifests pin Contract revision `5096e71`, tree `859f76d`, and 48 Suite
 cases. The latest local runs, `20260903T091011.164430000Z` and
 `20260903T091045.591005000Z`, passed the same respective scenario sets with
 harness/Provider lock `330f629`/`9390554` and runtime digest
 `sha256:a5e7f2dd16bb091f39db3bc6bd98747742ff9902dd2977c4ca6d07d425236291`.
 The hosted Reference and Candidate manifests record runtime digests
-`sha256:ab0dec5d18f177e4b5ac982d0a130967d0880f1713ac19e7962dd03477bba01f`
-and `sha256:cc4a540ed90b7ffbcd993e77623da504b0207ce61d3f316676d179c16d7f80f3`,
+`sha256:fc512317b09b7c60b65d0dd0601b9b7602229fd4d65fb25dd3cb049d58c684b3`
+and `sha256:1ac9282fc77247d2c34a003d184372b58666a2e747bafddaaa138bcecd716873`,
 respectively. Their artifact run directories are
-`20260903T091239.236111166Z` and `20260903T091233.683567653Z`.
+`20260903T110613.459807443Z` and `20260903T110608.526760977Z`.
 These remain coding/shell regression and candidate-integration evidence only;
 they contain no browser scenario.
 
 ## Previous hosted evidence before this lock update
+
+Hosted Reference E2E run `33737531617` and Platform Candidate E2E run
+`33737531705` passed harness lock `330f629` against Provider `9390554` with 15
+initial and 5 reconstruction/resume coding/shell scenarios each. Their artifact
+digests are
+`sha256:1a7c63d60c3dc61e9acd3057b9218ca85269d61e53157222a93458c4372746fe`
+and
+`sha256:52ad3fcd3c5c1477be06bc270c9ace9e5988e737d7c4d475ce22ee7267af0ab0`.
 
 Hosted Reference E2E run `33732133556` and Platform Candidate E2E run
 `33732133569` passed harness lock `e1de512` against Provider `cd33ba3` with 15
@@ -190,10 +198,10 @@ until close within a bounded timeout. Hosted run `33379217800` then passed all
 15 initial and 5 restart/resume scenarios on commit `555436c` and uploaded
 artifact `reference-e2e-evidence-33379217800` with digest
 `sha256:68250a85683dcbd8f01397d7373e98215382379ff895c0a58692de23c1880733`.
-The latest recorded lock-refresh run `33737531617` passed Provider `9390554`
-with harness `330f629` and uploaded `reference-e2e-evidence-33737531617` with
+The latest recorded lock-refresh run `33747803507` passed Provider `7e60340`
+with harness `7f15628` and uploaded `reference-e2e-evidence-33747803507` with
 digest
-`sha256:1a7c63d60c3dc61e9acd3057b9218ca85269d61e53157222a93458c4372746fe`.
+`sha256:c0cf1f430bef0f354423412a15db0de5b6fce0201c3a583402b7fa9dcfc233ad`.
 A green run proves only the named reference caller scenarios;
 it does not prove Agent Platform compatibility, aggregate conformance,
 multi-controller reliability, hostile tenant isolation, deployment readiness,
@@ -210,7 +218,7 @@ Hosted run `33460370618` passed all 15 initial and 5 restart/resume candidate
 scenarios on workflow baseline `c7ff5eb`. Artifact
 `platform-candidate-e2e-evidence-33460370618` has digest
 `sha256:54f0aea847dcb0b1808c6c902f1465979a3ec4362d52ab8884187e85ea6343f7`.
-The latest recorded lock-refresh run `33737531705` passed Provider `9390554`
-with harness `330f629` and uploaded
-`platform-candidate-e2e-evidence-33737531705` with digest
-`sha256:52ad3fcd3c5c1477be06bc270c9ace9e5988e737d7c4d475ce22ee7267af0ab0`.
+The latest recorded lock-refresh run `33747803514` passed Provider `7e60340`
+with harness `7f15628` and uploaded
+`platform-candidate-e2e-evidence-33747803514` with digest
+`sha256:3f85c05e23d84f00d88b41302f7d8fd401579bd7ab07b2464d1f346388eb1f5c`.

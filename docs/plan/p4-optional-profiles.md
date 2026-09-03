@@ -64,8 +64,10 @@ evidence chain before it can be advertised.
   permits only validated DNS A, HTTP Host, TLS SNI, and public resolved
   addresses. Implementation `7e60340` passes focused/full race-shuffle, vet,
   the unchanged Contract verifier and 48-case Suite, and a real local Docker
-  composition with the existing `gh` verifier and signed Browser image. This is
-  single-controller component/lifecycle-binding evidence only.
+  composition with the existing `gh` verifier and signed Browser image.
+  Repository CI `33747803509` passes its four named jobs but does not execute
+  the Browser restricted-egress tagged case. This is single-controller local
+  component/lifecycle-binding evidence only.
 - `blocks/` can validate an internal digest-pinned Block manifest, but it does
   not authorize a Provider capability or establish image provenance.
 - A real Agent Platform caller and migration traffic harness remain unavailable;
@@ -136,8 +138,8 @@ internal Block manifest a wire resource or establish browser runtime evidence.
   GitHub OIDC/Sigstore attestation `44912296`, an independent constrained
   `gh attestation verify`, and independent registry inspection pass;
 - Browser session component commit `9a5d225`; latest hosted E2E harness/Provider
-  evidence `330f629`/`9390554`; reference and candidate 15+5 coding/shell
-  regression runs pass in hosted runs `33737531617` and `33737531705`; these
+  evidence `7f15628`/`7e60340`; reference and candidate 15+5 coding/shell
+  regression runs pass in hosted runs `33747803507` and `33747803514`; these
   runs contain no browser scenario; and
 - ADR 0020 and Browser adapter implementation `cd33ba3` pass focused and full
   race/shuffle, vet, exact Contract verification, the unchanged 48-case Suite,
@@ -156,10 +158,11 @@ internal Block manifest a wire resource or establish browser runtime evidence.
   Suite, existing Docker driver/lifecycle regressions, and the combined tagged
   Browser integration. The local Gateway image ID is
   `sha256:202bbf92fcbcce87e4b800f093d1df281125ab6fa43152906564cf8e0b7021d6`;
-  this is not published Gateway provenance or deployment evidence. Protected
-  handler/Gateway composition, advertisement, Browser caller, real platform,
-  multi-controller, multi-tenant, deployment, and production evidence remain
-  explicitly open.
+  repository CI `33747803509` passes, but its Docker job does not execute this
+  Browser tagged case. This is not published Gateway provenance or deployment
+  evidence. Protected handler/Gateway composition, advertisement, Browser
+  caller, real platform, multi-controller, multi-tenant, deployment, and
+  production evidence remain explicitly open.
 
 ## Next work
 
