@@ -6,7 +6,9 @@ import (
 	"crypto/sha1" // #nosec G505 -- required by the RFC 6455 test handshake.
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"io"
+	"net/netip"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -60,8 +62,9 @@ type fakeNetwork struct {
 
 func newFakeNetwork() *fakeNetwork {
 	return &fakeNetwork{attachment: NetworkAttachment{
-		DockerName: "browser-egress-network-1", LeaseID: "browser-network-lease-1",
-		PolicyReference: "browser-egress-policy-1", EgressGateway: true,
+		DockerName: "browser-egress-network-1", GatewayContainer: "browser-egress-gateway-1", GatewayAddress: "10.88.0.2",
+		LeaseID: "browser-network-lease-1", PolicyReference: "browser-egress-policy-1",
+		PolicyDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", EgressGateway: true,
 	}}
 }
 func (n *fakeNetwork) Ready(_ context.Context, policy string) error {
@@ -140,7 +143,25 @@ func (e *fakeEngine) create(_ context.Context, request createRequest) (string, e
 	if e.container != nil {
 		return "", cerrdefs.ErrConflict
 	}
-	e.container = &containerInfo{id: fakeContainerID, labels: cloneStrings(request.labels), status: "created"}
+	resolver := netip.MustParseAddr(request.dnsResolver)
+	e.container = &containerInfo{
+		id: fakeContainerID, imageID: e.image.id, imageReference: request.image,
+		labels: cloneStrings(request.labels), user: request.user, workingDirectory: request.workingDirectory,
+		entrypoint: append([]string(nil), e.image.entrypoint...), command: append([]string(nil), e.image.command...),
+		environment: append([]string(nil), e.image.environment...), stopTimeout: request.stopTimeout, status: "created",
+		readOnlyRoot: true, tmpfs: map[string]string{
+			"/inputs":    fmt.Sprintf("ro,noexec,nosuid,nodev,size=%d,mode=0555", request.inputsBytes),
+			"/tmp":       fmt.Sprintf("rw,noexec,nosuid,nodev,size=%d,mode=1777", request.tmpfsBytes),
+			"/workspace": fmt.Sprintf("rw,noexec,nosuid,nodev,size=%d,mode=0700", request.workspaceBytes),
+			"/outputs":   fmt.Sprintf("rw,noexec,nosuid,nodev,size=%d,mode=0700", request.outputsBytes),
+		},
+		dns: []netip.Addr{resolver}, capDrop: []string{"ALL"},
+		securityOptions: []string{"no-new-privileges:true", "seccomp=" + request.seccompProfile},
+		memoryBytes:     request.memoryBytes, memorySwap: request.memoryBytes, nanoCPUs: request.nanoCPUs, pidsLimit: request.pidsLimit,
+		networkMode: request.networkName, restartPolicy: "no", logType: "local",
+		logConfig: map[string]string{"max-size": "10m", "max-file": "3"},
+		networks:  map[string]netip.Addr{request.networkName: netip.MustParseAddr("10.88.0.3")},
+	}
 	return e.container.id, nil
 }
 func (e *fakeEngine) inspect(_ context.Context, _ string) (containerInfo, error) {
@@ -154,6 +175,19 @@ func (e *fakeEngine) inspect(_ context.Context, _ string) (containerInfo, error)
 	}
 	result := *e.container
 	result.labels = cloneStrings(e.container.labels)
+	result.entrypoint = append([]string(nil), e.container.entrypoint...)
+	result.command = append([]string(nil), e.container.command...)
+	result.environment = append([]string(nil), e.container.environment...)
+	result.tmpfs = cloneStrings(e.container.tmpfs)
+	result.dns = append([]netip.Addr(nil), e.container.dns...)
+	result.capAdd = append([]string(nil), e.container.capAdd...)
+	result.capDrop = append([]string(nil), e.container.capDrop...)
+	result.securityOptions = append([]string(nil), e.container.securityOptions...)
+	result.logConfig = cloneStrings(e.container.logConfig)
+	result.networks = make(map[string]netip.Addr, len(e.container.networks))
+	for name, address := range e.container.networks {
+		result.networks[name] = address
+	}
 	return result, nil
 }
 func (e *fakeEngine) start(context.Context, string) error {
@@ -267,6 +301,7 @@ func validImageInfo(t *testing.T) imageInfo {
 	}
 	publication := browserimage.LockedPublication()
 	return imageInfo{
+		id:                "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
 		repositoryDigests: []string{publication.Image()}, descriptorDigest: publication.Digest,
 		user: BrowserUser, entrypoint: []string{"/usr/local/bin/browser-runtime"}, workingDirectory: "/workspace",
 		architecture: "amd64", operatingSystem: "linux",
@@ -284,14 +319,42 @@ func validImageInfo(t *testing.T) imageInfo {
 	}
 }
 
+func TestRestartRejectsBrowserNetworkAndDNSDrift(t *testing.T) {
+	clock := &fakeClock{now: browserDriverTestTime}
+	root := t.TempDir()
+	backend := &fakeEngine{}
+	options := validOptions(t, root, clock)
+	driver := testDriver(t, backend, newFakeNetwork(), options)
+	want := allocation(clock.Now())
+	if _, err := driver.Allocate(context.Background(), want); err != nil {
+		t.Fatal(err)
+	}
+	backend.mu.Lock()
+	backend.container.networks["bridge"] = netip.MustParseAddr("172.17.0.2")
+	backend.mu.Unlock()
+	restarted := testDriver(t, backend, newFakeNetwork(), options)
+	if _, err := restarted.Allocate(context.Background(), want); !errors.Is(err, providerbrowser.ErrBrowserConflict) {
+		t.Fatalf("extra network drift = %v", err)
+	}
+	backend.mu.Lock()
+	delete(backend.container.networks, "bridge")
+	backend.container.dns = []netip.Addr{netip.MustParseAddr("8.8.8.8")}
+	backend.mu.Unlock()
+	restarted = testDriver(t, backend, newFakeNetwork(), options)
+	if _, err := restarted.Allocate(context.Background(), want); !errors.Is(err, providerbrowser.ErrBrowserConflict) {
+		t.Fatalf("DNS drift = %v", err)
+	}
+}
+
 func allocation(now time.Time) providerbrowser.Allocation {
 	return providerbrowser.Allocation{
 		Request: providerbrowser.AllocationRequest{
 			SandboxID: "sandbox-1", BrowserSessionID: "browser-session-1",
 			OperationID: "operation-1", AttemptID: "attempt-1", FencingToken: 1,
-			ExpectedGeneration: 1,
-			RequestDigest:      "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-			ExpiresAt:          now.Add(5 * time.Minute),
+			ExpectedGeneration:     1,
+			RequestDigest:          "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			NetworkPolicyReference: "browser-egress-policy-1",
+			ExpiresAt:              now.Add(5 * time.Minute),
 		},
 		AllocatedAt: now,
 	}
@@ -439,6 +502,7 @@ func TestAllocateProjectsExactRuntimeAndReplays(t *testing.T) {
 	backend.mu.Unlock()
 	if request.image != browserimage.LockedPublication().Image() || request.user != BrowserUser || request.workingDirectory != "/workspace" ||
 		request.networkName != network.attachment.DockerName || request.memoryBytes <= 0 || request.nanoCPUs <= 0 || request.pidsLimit <= 0 ||
+		request.dnsResolver != network.attachment.GatewayAddress ||
 		!strings.Contains(request.seccompProfile, `"defaultAction": "SCMP_ACT_ERRNO"`) ||
 		request.labels[ownerLabel] != providerOwner || request.labels[specDigestLabel] == "" {
 		t.Fatalf("create request = %#v", request)
@@ -520,6 +584,20 @@ func TestAllocateRejectsUnsafeNetworkAndSecondSandboxSession(t *testing.T) {
 	_, acquires, _, _ := network.counts()
 	if acquires != 1 {
 		t.Fatalf("capacity check acquired %d networks", acquires)
+	}
+}
+
+func TestAllocateRejectsNetworkPolicySubstitution(t *testing.T) {
+	clock := &fakeClock{now: browserDriverTestTime}
+	backend := &fakeEngine{}
+	driver := testDriver(t, backend, newFakeNetwork(), validOptions(t, t.TempDir(), clock))
+	want := allocation(clock.Now())
+	want.Request.NetworkPolicyReference = "browser-egress-policy-other"
+	if _, err := driver.Allocate(context.Background(), want); !errors.Is(err, providerbrowser.ErrBrowserUnsupported) {
+		t.Fatalf("policy substitution error = %v", err)
+	}
+	if len(backend.createRequests) != 0 {
+		t.Fatal("policy substitution reached Docker create")
 	}
 }
 

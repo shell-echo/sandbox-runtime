@@ -48,6 +48,9 @@ func (r *runtimeSpy) Allocate(_ context.Context, allocation browser.Allocation) 
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.allocations++
+	if allocation.Request.NetworkPolicyReference != "browser-egress-policy-1" {
+		return browser.AllocationReceipt{}, browser.ErrBrowserUnsupported
+	}
 	if r.allocationErr != nil {
 		return browser.AllocationReceipt{}, r.allocationErr
 	}
@@ -95,7 +98,7 @@ func (r *registrarSpy) RegisterHandoff(context.Context, browser.Record) (browser
 }
 
 func browserSandbox(now time.Time) lifecycle.Sandbox {
-	return lifecycle.Sandbox{ID: "sandbox-1", TenantID: "tenant-1", WorkOrderID: "work-1", WorkspaceID: "workspace-1", ProviderRevisionID: "revision-1", RuntimeProfile: "sandbox-runtime-browser-v1", SandboxSlotKey: "primary-browser", DesiredState: lifecycle.DesiredReady, ObservedState: lifecycle.ObservedReady, Generation: 1, ObservedGeneration: 1, LeaseExpiresAt: now.Add(time.Hour), CreatedAt: now.Add(-time.Minute), UpdatedAt: now}
+	return lifecycle.Sandbox{ID: "sandbox-1", TenantID: "tenant-1", WorkOrderID: "work-1", WorkspaceID: "workspace-1", ProviderRevisionID: "revision-1", RuntimeProfile: lifecycle.BrowserRuntimeProfile, Network: lifecycle.NetworkPolicy{Mode: lifecycle.NetworkRestricted, PolicyReference: "browser-egress-policy-1", EgressGatewayRequired: true}, SandboxSlotKey: "primary-browser", DesiredState: lifecycle.DesiredReady, ObservedState: lifecycle.ObservedReady, Generation: 1, ObservedGeneration: 1, LeaseExpiresAt: now.Add(time.Hour), CreatedAt: now.Add(-time.Minute), UpdatedAt: now}
 }
 func browserRequest(now time.Time) browser.OpenRequest {
 	return browser.OpenRequest{SandboxID: "sandbox-1", ProviderRevisionID: "revision-1", OperationID: "operation-1", AttemptID: "attempt-1", FencingToken: 1, IdempotencyKey: "key-1", RequestDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", Deadline: now.Add(10 * time.Minute), ExpectedGeneration: 1, BrowserSessionID: "browser-session-1", CapabilityProfileID: browser.CapabilityProfileID, ExpiresAt: now.Add(5 * time.Minute)}

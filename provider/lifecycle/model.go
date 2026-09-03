@@ -12,8 +12,9 @@ import (
 )
 
 const (
-	MaxIdentifierLength = 200
-	MaxSlotKeyLength    = 128
+	MaxIdentifierLength   = 200
+	MaxSlotKeyLength      = 128
+	BrowserRuntimeProfile = "sandbox-runtime-browser-v1"
 )
 
 var (
@@ -180,14 +181,15 @@ func (e Event) Validate() error {
 }
 
 type SandboxSpec struct {
-	SandboxID          string    `json:"sandbox_id"`
-	TenantID           string    `json:"tenant_id"`
-	WorkOrderID        string    `json:"work_order_id"`
-	WorkspaceID        string    `json:"workspace_id"`
-	ProviderRevisionID string    `json:"provider_revision_id"`
-	RuntimeProfile     string    `json:"runtime_profile"`
-	SandboxSlotKey     string    `json:"sandbox_slot_key"`
-	LeaseExpiresAt     time.Time `json:"lease_expires_at"`
+	SandboxID          string        `json:"sandbox_id"`
+	TenantID           string        `json:"tenant_id"`
+	WorkOrderID        string        `json:"work_order_id"`
+	WorkspaceID        string        `json:"workspace_id"`
+	ProviderRevisionID string        `json:"provider_revision_id"`
+	RuntimeProfile     string        `json:"runtime_profile"`
+	Network            NetworkPolicy `json:"network"`
+	SandboxSlotKey     string        `json:"sandbox_slot_key"`
+	LeaseExpiresAt     time.Time     `json:"lease_expires_at"`
 }
 
 func (s SandboxSpec) Validate(now time.Time) error {
@@ -208,6 +210,9 @@ func (s SandboxSpec) Validate(now time.Time) error {
 	}
 	if err := ValidateSlotKey(s.SandboxSlotKey); err != nil {
 		return fmt.Errorf("%w: sandbox_slot_key: %w", ErrInvalidSpec, err)
+	}
+	if err := s.Network.Validate(s.RuntimeProfile); err != nil {
+		return err
 	}
 	if s.LeaseExpiresAt.IsZero() || !s.LeaseExpiresAt.After(now) {
 		return fmt.Errorf("%w: lease must be after current time", ErrInvalidSpec)
@@ -254,6 +259,7 @@ type Sandbox struct {
 	WorkspaceID        string        `json:"workspace_id"`
 	ProviderRevisionID string        `json:"provider_revision_id"`
 	RuntimeProfile     string        `json:"runtime_profile"`
+	Network            NetworkPolicy `json:"network"`
 	SandboxSlotKey     string        `json:"sandbox_slot_key"`
 	DesiredState       DesiredState  `json:"desired_state"`
 	ObservedState      ObservedState `json:"observed_state"`
@@ -280,6 +286,9 @@ func (s Sandbox) Validate() error {
 	if err := ValidateSlotKey(s.SandboxSlotKey); err != nil {
 		return fmt.Errorf("%w: sandbox_slot_key: %w", ErrInvalidSpec, err)
 	}
+	if err := s.Network.Validate(s.RuntimeProfile); err != nil {
+		return err
+	}
 	if !s.DesiredState.valid() || !s.ObservedState.valid() {
 		return ErrInvalidState
 	}
@@ -291,6 +300,35 @@ func (s Sandbox) Validate() error {
 	}
 	if s.UpdatedAt.Before(s.CreatedAt) {
 		return ErrInvalidSpec
+	}
+	return nil
+}
+
+type NetworkMode string
+
+const (
+	NetworkNone       NetworkMode = "none"
+	NetworkRestricted NetworkMode = "restricted"
+)
+
+type NetworkPolicy struct {
+	Mode                  NetworkMode `json:"mode,omitempty"`
+	PolicyReference       string      `json:"policy_reference,omitempty"`
+	EgressGatewayRequired bool        `json:"egress_gateway_required,omitempty"`
+}
+
+func (p NetworkPolicy) Validate(runtimeProfile string) error {
+	switch p.Mode {
+	case "", NetworkNone:
+		if p.PolicyReference != "" || p.EgressGatewayRequired || runtimeProfile == BrowserRuntimeProfile {
+			return fmt.Errorf("%w: invalid network-none policy", ErrInvalidSpec)
+		}
+	case NetworkRestricted:
+		if runtimeProfile != BrowserRuntimeProfile || !p.EgressGatewayRequired || ValidateIdentifier(p.PolicyReference) != nil {
+			return fmt.Errorf("%w: invalid Browser restricted-network policy", ErrInvalidSpec)
+		}
+	default:
+		return fmt.Errorf("%w: unsupported network policy", ErrInvalidSpec)
 	}
 	return nil
 }

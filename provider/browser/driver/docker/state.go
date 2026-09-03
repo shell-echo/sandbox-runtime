@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	browserStateVersion  = 1
+	browserStateVersion  = 2
 	maxBrowserStateBytes = 64 << 10
 	connectionGeneration = 1
 )
@@ -72,7 +72,8 @@ func sameAllocationRequest(left, right providerbrowser.AllocationRequest) bool {
 	return left.SandboxID == right.SandboxID && left.BrowserSessionID == right.BrowserSessionID &&
 		left.OperationID == right.OperationID && left.AttemptID == right.AttemptID &&
 		left.FencingToken == right.FencingToken && left.ExpectedGeneration == right.ExpectedGeneration &&
-		left.RequestDigest == right.RequestDigest && left.ExpiresAt.Equal(right.ExpiresAt)
+		left.RequestDigest == right.RequestDigest && left.NetworkPolicyReference == right.NetworkPolicyReference &&
+		left.ExpiresAt.Equal(right.ExpiresAt)
 }
 
 func sameReceipt(left, right providerbrowser.AllocationReceipt) bool {

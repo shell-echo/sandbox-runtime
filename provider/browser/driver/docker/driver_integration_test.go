@@ -56,7 +56,7 @@ func TestBrowserRelayTransportIntegration(t *testing.T) {
 		user: BrowserUser, workingDirectory: "/workspace",
 		memoryBytes: 1 << 30, nanoCPUs: 1_000_000_000, pidsLimit: 256,
 		inputsBytes: 16 << 20, tmpfsBytes: 256 << 20, workspaceBytes: 256 << 20, outputsBytes: 128 << 20, stopTimeout: 10,
-		networkName: "none", seccompProfile: string(seccomp),
+		networkName: "none", dnsResolver: "10.88.0.2", seccompProfile: string(seccomp),
 	})
 	if err != nil {
 		t.Fatal(err)

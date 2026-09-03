@@ -37,7 +37,7 @@ func TestMobyEngineProjectsBrowserIsolation(t *testing.T) {
 		labels: map[string]string{managedLabel: "true"}, user: BrowserUser, workingDirectory: "/workspace",
 		memoryBytes: 1 << 30, nanoCPUs: 1_000_000_000, pidsLimit: 256,
 		inputsBytes: 16 << 20, tmpfsBytes: 256 << 20, workspaceBytes: 512 << 20, outputsBytes: 128 << 20, stopTimeout: 10,
-		networkName: "browser-egress-network-1", seccompProfile: seccomp,
+		networkName: "browser-egress-network-1", dnsResolver: "10.88.0.2", seccompProfile: seccomp,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -50,6 +50,9 @@ func TestMobyEngineProjectsBrowserIsolation(t *testing.T) {
 	if host == nil || host.NetworkMode != "browser-egress-network-1" || host.Privileged || host.AutoRemove ||
 		!host.ReadonlyRootfs || host.PublishAllPorts || len(host.PortBindings) != 0 || len(host.Binds) != 0 || len(host.Mounts) != 0 {
 		t.Fatalf("host isolation = %#v", host)
+	}
+	if len(host.DNS) != 1 || host.DNS[0].String() != "10.88.0.2" {
+		t.Fatalf("DNS resolvers = %#v", host.DNS)
 	}
 	if len(host.CapDrop) != 1 || host.CapDrop[0] != "ALL" || len(host.CapAdd) != 0 ||
 		len(host.SecurityOpt) != 2 || host.SecurityOpt[0] != "no-new-privileges:true" || host.SecurityOpt[1] != "seccomp="+seccomp {

@@ -128,8 +128,9 @@ func decodeCreateRequest(document []byte, admitted admission.AdmissionContext, n
 	if err := validateCreateCapabilityRequirements(request.Spec, capabilities); err != nil {
 		return lifecycle.CreateRequest{}, errUnsupportedCreateCapability
 	}
-	if request.Spec.Network.Mode != providerv1.NetworkNone || request.Spec.Network.PolicyReference != "" || (request.Spec.Network.EgressGatewayRequired != nil && *request.Spec.Network.EgressGatewayRequired) {
-		return lifecycle.CreateRequest{}, errors.New("Provider network policy is not supported")
+	networkPolicy, err := projectCreateNetworkPolicy(request.Spec)
+	if err != nil {
+		return lifecycle.CreateRequest{}, err
 	}
 	if request.Spec.Workspace.Mode != providerv1.WorkspaceEphemeral || request.Spec.Workspace.CommitMode != providerv1.WorkspaceReadOnly || request.Spec.Workspace.SnapshotReference != "" || (request.Spec.Workspace.MountPath != "" && request.Spec.Workspace.MountPath != providerv1.WorkspaceMount) {
 		return lifecycle.CreateRequest{}, errors.New("Provider workspace policy is not supported")
@@ -177,6 +178,7 @@ func decodeCreateRequest(document []byte, admitted admission.AdmissionContext, n
 			WorkspaceID:        request.Spec.WorkspaceID,
 			ProviderRevisionID: request.Spec.ProviderRevisionID,
 			RuntimeProfile:     request.Spec.RuntimeProfile,
+			Network:            networkPolicy,
 			SandboxSlotKey:     string(request.Spec.SandboxSlotKey),
 			LeaseExpiresAt:     leaseExpiresAt,
 		},
@@ -185,6 +187,30 @@ func decodeCreateRequest(document []byte, admitted admission.AdmissionContext, n
 		return lifecycle.CreateRequest{}, err
 	}
 	return create, nil
+}
+
+func projectCreateNetworkPolicy(spec providerv1.SandboxSpec) (lifecycle.NetworkPolicy, error) {
+	switch spec.Network.Mode {
+	case providerv1.NetworkNone:
+		if spec.Network.PolicyReference != "" ||
+			(spec.Network.EgressGatewayRequired != nil && *spec.Network.EgressGatewayRequired) ||
+			spec.RuntimeProfile == lifecycle.BrowserRuntimeProfile {
+			return lifecycle.NetworkPolicy{}, errors.New("Provider network-none policy is not supported for this runtime")
+		}
+		return lifecycle.NetworkPolicy{Mode: lifecycle.NetworkNone}, nil
+	case providerv1.NetworkRestricted:
+		if spec.RuntimeProfile != lifecycle.BrowserRuntimeProfile || spec.Network.PolicyReference == "" ||
+			spec.Network.EgressGatewayRequired == nil || !*spec.Network.EgressGatewayRequired ||
+			lifecycle.ValidateIdentifier(spec.Network.PolicyReference) != nil {
+			return lifecycle.NetworkPolicy{}, errors.New("Provider restricted network policy is invalid")
+		}
+		return lifecycle.NetworkPolicy{
+			Mode: lifecycle.NetworkRestricted, PolicyReference: spec.Network.PolicyReference,
+			EgressGatewayRequired: true,
+		}, nil
+	default:
+		return lifecycle.NetworkPolicy{}, errors.New("Provider network policy is not supported")
+	}
 }
 
 func validateCreateCapabilityRequirements(spec providerv1.SandboxSpec, snapshot provider.CapabilitySnapshot) error {

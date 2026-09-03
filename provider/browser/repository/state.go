@@ -9,7 +9,7 @@ import (
 	"github.com/shell-echo/sandbox-runtime/provider/browser"
 )
 
-const snapshotVersion = 1
+const snapshotVersion = 2
 
 type State struct {
 	Sessions    map[string]browser.Record
@@ -62,6 +62,9 @@ func (s *State) SynchronizeSandboxAuthority(authority browser.SandboxAuthority) 
 	}
 	if current.CapabilityProfileID != authority.CapabilityProfileID {
 		return browser.ErrCapabilityUnsupported
+	}
+	if current.NetworkPolicyReference != authority.NetworkPolicyReference {
+		return browser.ErrNetworkPolicyConflict
 	}
 	if authority.Generation < current.Generation {
 		return browser.ErrGenerationConflict

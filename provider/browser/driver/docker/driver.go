@@ -10,9 +10,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -57,6 +59,7 @@ type Driver struct {
 	dataRoot    string
 	manifest    browserimage.Manifest
 	publication browserimage.Publication
+	image       imageInfo
 	seccomp     string
 	provenance  ProvenanceVerifier
 	network     RestrictedNetwork
@@ -150,7 +153,7 @@ func newDriver(ctx context.Context, backend engine, options Options, provenance 
 	}
 	return &Driver{
 		engine: backend, options: options, dataRoot: root, manifest: manifest,
-		publication: publication, seccomp: string(seccomp), provenance: provenance, network: network,
+		publication: publication, image: image, seccomp: string(seccomp), provenance: provenance, network: network,
 	}, nil
 }
 
@@ -202,6 +205,9 @@ func (d *Driver) Allocate(ctx context.Context, allocation providerbrowser.Alloca
 	if err := allocation.Validate(); err != nil {
 		return providerbrowser.AllocationReceipt{}, err
 	}
+	if allocation.Request.NetworkPolicyReference != d.options.NetworkPolicyReference {
+		return providerbrowser.AllocationReceipt{}, providerbrowser.ErrBrowserUnsupported
+	}
 	now := d.options.Clock.Now().UTC()
 	if now.IsZero() || !allocation.Request.ExpiresAt.After(now) {
 		return providerbrowser.AllocationReceipt{}, providerbrowser.ErrBrowserExpired
@@ -234,7 +240,7 @@ func (d *Driver) Allocate(ctx context.Context, allocation providerbrowser.Alloca
 	attachment, err := d.network.Acquire(operationCtx, NetworkRequest{
 		SandboxID: allocation.Request.SandboxID, BrowserSessionID: allocation.Request.BrowserSessionID,
 		Namespace: d.options.Namespace, ControllerID: d.options.ControllerID,
-		PolicyReference: d.options.NetworkPolicyReference,
+		PolicyReference: allocation.Request.NetworkPolicyReference,
 	})
 	if err != nil {
 		if contextErr := allocationContextError(operationCtx, err); contextErr != nil {
@@ -543,7 +549,54 @@ func (d *Driver) inspectOwned(ctx context.Context, state browserState) (containe
 		labels[runtimeProfileLabel] != BrowserRuntimeProfile || labels[specDigestLabel] != state.SpecDigest {
 		return containerInfo{}, false, ErrOwnershipConflict
 	}
+	if validateContainerRuntime(info, d.createRequest(state), d.image) != nil {
+		return containerInfo{}, false, ErrOwnershipConflict
+	}
 	return info, true, nil
+}
+
+func validateContainerRuntime(info containerInfo, request createRequest, image imageInfo) error {
+	expectedTmpfs := map[string]string{
+		"/inputs":    fmt.Sprintf("ro,noexec,nosuid,nodev,size=%d,mode=0555", request.inputsBytes),
+		"/tmp":       fmt.Sprintf("rw,noexec,nosuid,nodev,size=%d,mode=1777", request.tmpfsBytes),
+		"/workspace": fmt.Sprintf("rw,noexec,nosuid,nodev,size=%d,mode=0700", request.workspaceBytes),
+		"/outputs":   fmt.Sprintf("rw,noexec,nosuid,nodev,size=%d,mode=0700", request.outputsBytes),
+	}
+	resolver, resolverErr := netip.ParseAddr(request.dnsResolver)
+	address, attached := info.networks[request.networkName]
+	validRuntimeAddress := attached && ((info.status == "created" && (!address.IsValid() || address.IsPrivate())) ||
+		(address.IsValid() && address.IsPrivate()))
+	if info.imageID != image.id || info.imageReference != request.image || info.user != request.user ||
+		info.workingDirectory != request.workingDirectory || strings.Join(info.entrypoint, "\x00") != strings.Join(image.entrypoint, "\x00") ||
+		strings.Join(info.command, "\x00") != strings.Join(image.command, "\x00") ||
+		strings.Join(info.environment, "\x00") != strings.Join(image.environment, "\x00") ||
+		info.stopTimeout != request.stopTimeout || info.exposedPorts != 0 || info.privileged || info.autoRemove ||
+		!info.readOnlyRoot || info.publishAllPorts || info.portBindings != 0 || info.binds != 0 || info.mounts != 0 ||
+		!stringMapEqual(info.tmpfs, expectedTmpfs) || resolverErr != nil || len(info.dns) != 1 || info.dns[0] != resolver ||
+		len(info.capAdd) != 0 || strings.Join(info.capDrop, "\x00") != "ALL" || len(info.securityOptions) != 2 ||
+		info.securityOptions[0] != "no-new-privileges:true" || info.securityOptions[1] != "seccomp="+request.seccompProfile ||
+		info.memoryBytes != request.memoryBytes || info.memorySwap != request.memoryBytes || info.nanoCPUs != request.nanoCPUs ||
+		info.pidsLimit != request.pidsLimit || info.networkMode != request.networkName || !privateNamespaceMode(info.pidMode) || !privateNamespaceMode(info.ipcMode) ||
+		(info.restartPolicy != "" && info.restartPolicy != "no") || info.logType != "local" ||
+		!stringMapEqual(info.logConfig, map[string]string{"max-size": "10m", "max-file": "3"}) ||
+		len(info.networks) != 1 || !validRuntimeAddress {
+		return ErrInvalidRuntime
+	}
+	return nil
+}
+
+func privateNamespaceMode(value string) bool { return value == "" || value == "private" }
+
+func stringMapEqual(left, right map[string]string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for key, value := range right {
+		if left[key] != value {
+			return false
+		}
+	}
+	return true
 }
 
 func (d *Driver) createRequest(state browserState) createRequest {
@@ -553,7 +606,8 @@ func (d *Driver) createRequest(state browserState) createRequest {
 		memoryBytes: d.options.MemoryBytes, nanoCPUs: d.options.NanoCPUs, pidsLimit: d.options.PidsLimit,
 		inputsBytes: d.options.InputsBytes, tmpfsBytes: d.options.TmpfsBytes,
 		workspaceBytes: d.options.WorkspaceBytes, outputsBytes: d.options.OutputsBytes,
-		stopTimeout: d.options.StopTimeoutSeconds, networkName: state.Network.DockerName, seccompProfile: d.seccomp,
+		stopTimeout: d.options.StopTimeoutSeconds, networkName: state.Network.DockerName,
+		dnsResolver: state.Network.GatewayAddress, seccompProfile: d.seccomp,
 		labels: map[string]string{
 			managedLabel: "true", ownerLabel: providerOwner,
 			sandboxLabel: state.Request.SandboxID, browserSessionLabel: state.Request.BrowserSessionID,
@@ -588,7 +642,7 @@ func (d *Driver) specDigest(allocation providerbrowser.Allocation) (string, erro
 		WorkspaceBytes: d.options.WorkspaceBytes, OutputsBytes: d.options.OutputsBytes,
 		StopTimeout:   d.options.StopTimeoutSeconds,
 		SeccompDigest: d.manifest.Security.SeccompProfile.Digest,
-		NetworkPolicy: d.options.NetworkPolicyReference, Namespace: d.options.Namespace,
+		NetworkPolicy: allocation.Request.NetworkPolicyReference, Namespace: d.options.Namespace,
 		ControllerID: d.options.ControllerID, RuntimeProfileID: BrowserRuntimeProfile,
 	}
 	encoded, err := json.Marshal(value)

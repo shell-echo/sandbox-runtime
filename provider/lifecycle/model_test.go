@@ -72,6 +72,35 @@ func TestCreateRejectsInvalidBoundsAndTime(t *testing.T) {
 	}
 }
 
+func TestBrowserCreateRequiresRestrictedGatewayPolicy(t *testing.T) {
+	request := validCreateRequest()
+	request.Spec.RuntimeProfile = BrowserRuntimeProfile
+	request.Spec.Network = NetworkPolicy{
+		Mode: NetworkRestricted, PolicyReference: "browser-egress-policy-1", EgressGatewayRequired: true,
+	}
+	sandbox, _, err := StartCreate(request, lifecycleTestTime)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sandbox.Network != request.Spec.Network {
+		t.Fatalf("network policy = %#v", sandbox.Network)
+	}
+	for name, mutate := range map[string]func(*CreateRequest){
+		"network none":      func(r *CreateRequest) { r.Spec.Network = NetworkPolicy{Mode: NetworkNone} },
+		"missing policy":    func(r *CreateRequest) { r.Spec.Network.PolicyReference = "" },
+		"missing gateway":   func(r *CreateRequest) { r.Spec.Network.EgressGatewayRequired = false },
+		"restricted coding": func(r *CreateRequest) { r.Spec.RuntimeProfile = "profile-1" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			invalid := request
+			mutate(&invalid)
+			if _, _, err := StartCreate(invalid, lifecycleTestTime); !errors.Is(err, ErrInvalidSpec) {
+				t.Fatalf("error = %v", err)
+			}
+		})
+	}
+}
+
 func TestObservedTransitionsEnforceGenerationAndStateOrder(t *testing.T) {
 	sandbox, _, err := StartCreate(validCreateRequest(), lifecycleTestTime)
 	if err != nil {

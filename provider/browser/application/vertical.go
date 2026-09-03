@@ -274,7 +274,11 @@ func (a *Vertical) progress(ctx context.Context, record browser.Record) (browser
 }
 
 func (a *Vertical) allocate(ctx context.Context, record browser.Record) (browser.Record, error) {
-	request := browser.AllocationRequest{SandboxID: record.Request.SandboxID, BrowserSessionID: record.Request.BrowserSessionID, OperationID: record.Request.OperationID, AttemptID: record.Request.AttemptID, FencingToken: record.Request.FencingToken, ExpectedGeneration: record.Request.ExpectedGeneration, RequestDigest: record.Request.RequestDigest, ExpiresAt: record.Request.ExpiresAt.UTC()}
+	authority, err := a.authority.GetSandboxAuthority(ctx, record.Request.SandboxID)
+	if err != nil {
+		return browser.Record{}, err
+	}
+	request := browser.AllocationRequest{SandboxID: record.Request.SandboxID, BrowserSessionID: record.Request.BrowserSessionID, OperationID: record.Request.OperationID, AttemptID: record.Request.AttemptID, FencingToken: record.Request.FencingToken, ExpectedGeneration: record.Request.ExpectedGeneration, RequestDigest: record.Request.RequestDigest, NetworkPolicyReference: authority.NetworkPolicyReference, ExpiresAt: record.Request.ExpiresAt.UTC()}
 	allocation := browser.Allocation{Request: request, AllocatedAt: record.AcceptedAt.UTC()}
 	if err := allocation.Validate(); err != nil {
 		return a.persistStatus(ctx, record, browser.StatusFailed, a.monotonicNow(record.ObservedAt))
@@ -401,7 +405,10 @@ func (a *Vertical) synchronizeAndReserve(ctx context.Context, request browser.Op
 	if sandbox.RuntimeProfile != a.profile.RuntimeProfileID {
 		return browser.Reservation{}, browser.ErrCapabilityUnsupported
 	}
-	authority := browser.SandboxAuthority{SandboxID: sandbox.ID, ProviderRevisionID: sandbox.ProviderRevisionID, Ready: sandbox.DesiredState == lifecycle.DesiredReady && sandbox.ObservedState == lifecycle.ObservedReady && sandbox.ObservedGeneration == sandbox.Generation, Generation: int64(sandbox.Generation), LeaseExpiresAt: sandbox.LeaseExpiresAt.UTC(), FencingToken: request.FencingToken, CapabilityProfileID: a.profile.CapabilityProfileID}
+	if sandbox.Network.Mode != lifecycle.NetworkRestricted || !sandbox.Network.EgressGatewayRequired || sandbox.Network.PolicyReference == "" {
+		return browser.Reservation{}, browser.ErrCapabilityUnsupported
+	}
+	authority := browser.SandboxAuthority{SandboxID: sandbox.ID, ProviderRevisionID: sandbox.ProviderRevisionID, Ready: sandbox.DesiredState == lifecycle.DesiredReady && sandbox.ObservedState == lifecycle.ObservedReady && sandbox.ObservedGeneration == sandbox.Generation, Generation: int64(sandbox.Generation), LeaseExpiresAt: sandbox.LeaseExpiresAt.UTC(), FencingToken: request.FencingToken, CapabilityProfileID: a.profile.CapabilityProfileID, NetworkPolicyReference: sandbox.Network.PolicyReference}
 	if err := a.authority.SynchronizeSandboxAuthority(ctx, authority); err != nil {
 		return browser.Reservation{}, err
 	}

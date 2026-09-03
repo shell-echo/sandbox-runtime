@@ -14,14 +14,15 @@ var (
 )
 
 type AllocationRequest struct {
-	SandboxID          string
-	BrowserSessionID   string
-	OperationID        string
-	AttemptID          string
-	FencingToken       int64
-	ExpectedGeneration int64
-	RequestDigest      string
-	ExpiresAt          time.Time
+	SandboxID              string
+	BrowserSessionID       string
+	OperationID            string
+	AttemptID              string
+	FencingToken           int64
+	ExpectedGeneration     int64
+	RequestDigest          string
+	NetworkPolicyReference string
+	ExpiresAt              time.Time
 }
 
 func (r AllocationRequest) Validate(now time.Time) error {
@@ -31,6 +32,7 @@ func (r AllocationRequest) Validate(now time.Time) error {
 	for name, value := range map[string]string{
 		"sandbox_id": r.SandboxID, "browser_session_id": r.BrowserSessionID,
 		"operation_id": r.OperationID, "attempt_id": r.AttemptID,
+		"network_policy_reference": r.NetworkPolicyReference,
 	} {
 		if !allocationIdentifierPattern.MatchString(value) {
 			return fmt.Errorf("%w: %s", ErrInvalidRequest, name)
@@ -86,6 +88,7 @@ type Authority interface {
 type CoordinationAuthority interface {
 	Authority
 	SynchronizeSandboxAuthority(context.Context, SandboxAuthority) error
+	GetSandboxAuthority(context.Context, string) (SandboxAuthority, error)
 	AttachAllocation(context.Context, AllocationReceipt) (Reservation, error)
 	ObserveAllocation(context.Context, string, AllocationEvidence) (Record, error)
 	ListOpen(context.Context) ([]Record, error)

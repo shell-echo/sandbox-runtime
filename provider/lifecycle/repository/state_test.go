@@ -94,6 +94,20 @@ func TestStateUpdatesRequireExpectedGenerationAndCurrentFencing(t *testing.T) {
 	}
 }
 
+func TestStateRejectsNetworkPolicyMutation(t *testing.T) {
+	state := NewState()
+	sandbox, operation := validRecords(t)
+	sandbox.RuntimeProfile = lifecycle.BrowserRuntimeProfile
+	sandbox.Network = lifecycle.NetworkPolicy{Mode: lifecycle.NetworkRestricted, PolicyReference: "browser-egress-policy-1", EgressGatewayRequired: true}
+	if _, err := state.ReserveCreate("create-key-1", "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", sandbox, operation); err != nil {
+		t.Fatal(err)
+	}
+	sandbox.Network.PolicyReference = "browser-egress-policy-2"
+	if err := state.UpdateSandbox(sandbox, sandbox.Generation, operation.FencingToken); !errors.Is(err, ErrConflict) {
+		t.Fatalf("network mutation error = %v", err)
+	}
+}
+
 func TestStateEventsAreMonotonicAndReplaySafe(t *testing.T) {
 	state := NewState()
 	sandbox, operation := validRecords(t)

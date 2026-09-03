@@ -11,6 +11,7 @@ go vet ./...
 SANDBOX_RUNTIME_DOCKER_INTEGRATION=1 go test -tags=integration -count=1 ./driver/docker ./provider/lifecycle/driver/docker
 SANDBOX_RUNTIME_BROWSER_ADAPTER_INTEGRATION=1 go test -tags=integration -count=1 ./provider/browser/driver/docker
 SANDBOX_RUNTIME_BROWSER_PROVENANCE_INTEGRATION=1 go test -tags=integration -count=1 ./provider/browser/provenance/ghcli
+SANDBOX_RUNTIME_BROWSER_NETWORK_INTEGRATION=1 SANDBOX_RUNTIME_BROWSER_GATEWAY_IMAGE=sha256:<local-image-id> go test -tags=integration -count=1 -run '^TestBrowserRestrictedEgressIntegration$' ./provider/browser/driver/docker
 go run ./cmd/verify-contract -source-root .
 go run ./cmd/run-conformance -source-root . -race -shuffle
 ```

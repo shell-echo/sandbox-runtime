@@ -175,6 +175,79 @@ func TestDecodeCreateRequestBindsAdvertisedCodingShellCapabilities(t *testing.T)
 	}
 }
 
+func TestDecodeCreateRequestBindsBrowserRestrictedNetworkPolicy(t *testing.T) {
+	now := time.Date(2026, 9, 3, 12, 0, 0, 0, time.UTC)
+	request, admitted := validProjectionCreateRequest(now)
+	request.Spec.RuntimeProfile = lifecycle.BrowserRuntimeProfile
+	request.Spec.RequiredCapabilities = []providerv1.CapabilityRequirement{{
+		ID: "sandbox.browser", Version: "1.0.0", Profile: "browser-v1",
+	}}
+	required := true
+	request.Spec.Network = providerv1.NetworkPolicy{
+		Mode: providerv1.NetworkRestricted, PolicyReference: "browser-egress-policy-1",
+		EgressGatewayRequired: &required,
+	}
+	base := validSnapshot(t, nil, nil)
+	capabilities, runtimeProfiles := providerBrowserAdvertisements()
+	snapshot, err := provider.NewCapabilitySnapshotWithAdvertisements(
+		base.ProviderRevisionID, base.Limits, capabilities, runtimeProfiles, base.SnapshotRestoreProfiles,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	document, err := json.Marshal(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	projected, err := decodeCreateRequest(document, admitted, now, snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := lifecycle.NetworkPolicy{Mode: lifecycle.NetworkRestricted, PolicyReference: "browser-egress-policy-1", EgressGatewayRequired: true}
+	if projected.Spec.Network != want {
+		t.Fatalf("network policy = %#v", projected.Spec.Network)
+	}
+}
+
+func TestProjectCreateNetworkPolicyRejectsBrowserDowngrade(t *testing.T) {
+	required, notRequired := true, false
+	valid := providerv1.SandboxSpec{
+		RuntimeProfile: lifecycle.BrowserRuntimeProfile,
+		Network:        providerv1.NetworkPolicy{Mode: providerv1.NetworkRestricted, PolicyReference: "browser-egress-policy-1", EgressGatewayRequired: &required},
+	}
+	for name, mutate := range map[string]func(*providerv1.SandboxSpec){
+		"network none": func(spec *providerv1.SandboxSpec) {
+			spec.Network = providerv1.NetworkPolicy{Mode: providerv1.NetworkNone}
+		},
+		"full egress": func(spec *providerv1.SandboxSpec) {
+			spec.Network.Mode = providerv1.NetworkFull
+		},
+		"missing policy": func(spec *providerv1.SandboxSpec) {
+			spec.Network.PolicyReference = ""
+		},
+		"invalid policy": func(spec *providerv1.SandboxSpec) {
+			spec.Network.PolicyReference = "browser/policy"
+		},
+		"missing gateway": func(spec *providerv1.SandboxSpec) {
+			spec.Network.EgressGatewayRequired = nil
+		},
+		"gateway false": func(spec *providerv1.SandboxSpec) {
+			spec.Network.EgressGatewayRequired = &notRequired
+		},
+		"restricted coding": func(spec *providerv1.SandboxSpec) {
+			spec.RuntimeProfile = "sandbox-runtime-coding-shell-v1"
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			spec := valid
+			mutate(&spec)
+			if _, err := projectCreateNetworkPolicy(spec); err == nil {
+				t.Fatal("invalid network policy was accepted")
+			}
+		})
+	}
+}
+
 func validCodingShellSnapshot(t *testing.T) provider.CapabilitySnapshot {
 	t.Helper()
 	base := validSnapshot(t, nil, nil)

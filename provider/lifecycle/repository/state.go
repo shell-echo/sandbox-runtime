@@ -139,6 +139,9 @@ func (s *State) UpdateSandbox(sandbox lifecycle.Sandbox, expectedGeneration, fen
 	if sandbox.LeaseExpiresAt != current.LeaseExpiresAt {
 		return ErrConflict
 	}
+	if sandbox.Network != current.Network {
+		return ErrConflict
+	}
 	if sandbox.Generation != current.Generation {
 		lease, ok := s.Leases[sandbox.ID]
 		if !ok {

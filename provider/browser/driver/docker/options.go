@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/netip"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -87,16 +88,22 @@ type ProvenanceVerifier interface {
 // restricted-egress provisioner. DockerName and LeaseID are never projected to
 // Provider or Gateway clients.
 type NetworkAttachment struct {
-	DockerName      string
-	LeaseID         string
-	PolicyReference string
-	EgressGateway   bool
-	Public          bool
+	DockerName       string
+	GatewayContainer string
+	GatewayAddress   string
+	LeaseID          string
+	PolicyReference  string
+	PolicyDigest     string
+	EgressGateway    bool
+	Public           bool
 }
 
 func (a NetworkAttachment) validate(expectedPolicy string) error {
-	if !networkNamePattern.MatchString(a.DockerName) || !privateValuePattern.MatchString(a.LeaseID) ||
-		a.PolicyReference != expectedPolicy || !a.EgressGateway || a.Public {
+	resolver, resolverErr := netip.ParseAddr(a.GatewayAddress)
+	if !networkNamePattern.MatchString(a.DockerName) || !networkNamePattern.MatchString(a.GatewayContainer) ||
+		!privateValuePattern.MatchString(a.LeaseID) || a.PolicyReference != expectedPolicy ||
+		!digestPattern.MatchString(a.PolicyDigest) || resolverErr != nil || !resolver.Is4() || !resolver.IsPrivate() ||
+		!a.EgressGateway || a.Public {
 		return ErrNetworkUnavailable
 	}
 	switch a.DockerName {

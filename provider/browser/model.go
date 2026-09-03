@@ -31,6 +31,7 @@ var (
 	ErrLeaseExpired             = errors.New("Provider browser session sandbox lease has expired")
 	ErrStaleFencingToken        = errors.New("Provider browser session fencing token is stale")
 	ErrCapabilityUnsupported    = errors.New("Provider browser session capability profile is unsupported")
+	ErrNetworkPolicyConflict    = errors.New("Provider browser session network policy conflict")
 
 	identifierPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$`)
 	digestPattern     = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
@@ -253,18 +254,20 @@ type Record struct {
 }
 
 type SandboxAuthority struct {
-	SandboxID           string    `json:"sandbox_id"`
-	ProviderRevisionID  string    `json:"provider_revision_id"`
-	Ready               bool      `json:"ready"`
-	Generation          int64     `json:"generation"`
-	LeaseExpiresAt      time.Time `json:"lease_expires_at"`
-	FencingToken        int64     `json:"fencing_token"`
-	CapabilityProfileID string    `json:"capability_profile_id"`
+	SandboxID              string    `json:"sandbox_id"`
+	ProviderRevisionID     string    `json:"provider_revision_id"`
+	Ready                  bool      `json:"ready"`
+	Generation             int64     `json:"generation"`
+	LeaseExpiresAt         time.Time `json:"lease_expires_at"`
+	FencingToken           int64     `json:"fencing_token"`
+	CapabilityProfileID    string    `json:"capability_profile_id"`
+	NetworkPolicyReference string    `json:"network_policy_reference"`
 }
 
 func (a SandboxAuthority) Validate() error {
 	if !identifierPattern.MatchString(a.SandboxID) || !identifierPattern.MatchString(a.ProviderRevisionID) ||
-		a.Generation < 1 || a.FencingToken < 1 || a.LeaseExpiresAt.IsZero() || a.CapabilityProfileID != CapabilityProfileID {
+		a.Generation < 1 || a.FencingToken < 1 || a.LeaseExpiresAt.IsZero() || a.CapabilityProfileID != CapabilityProfileID ||
+		!identifierPattern.MatchString(a.NetworkPolicyReference) {
 		return fmt.Errorf("%w: sandbox authority", ErrInvalidRecord)
 	}
 	return nil

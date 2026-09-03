@@ -18,6 +18,7 @@ func StartCreate(request CreateRequest, now time.Time) (Sandbox, Operation, erro
 		WorkspaceID:        request.Spec.WorkspaceID,
 		ProviderRevisionID: request.Spec.ProviderRevisionID,
 		RuntimeProfile:     request.Spec.RuntimeProfile,
+		Network:            request.Spec.Network,
 		SandboxSlotKey:     request.Spec.SandboxSlotKey,
 		DesiredState:       DesiredReady,
 		ObservedState:      ObservedRequested,

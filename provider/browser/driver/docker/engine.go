@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/netip"
 	"sync"
 	"time"
 
@@ -28,6 +29,7 @@ type engine interface {
 }
 
 type imageInfo struct {
+	id                string
 	repositoryDigests []string
 	descriptorDigest  string
 	labels            map[string]string
@@ -39,6 +41,7 @@ type imageInfo struct {
 	variant           string
 	operatingSystem   string
 	exposedPorts      int
+	environment       []string
 }
 
 type createRequest struct {
@@ -56,17 +59,41 @@ type createRequest struct {
 	outputsBytes     int64
 	stopTimeout      int
 	networkName      string
+	dnsResolver      string
 	seccompProfile   string
 }
 
 type containerInfo struct {
-	id         string
-	labels     map[string]string
-	status     string
-	running    bool
-	paused     bool
-	restarting bool
-	dead       bool
+	id, imageID, imageReference string
+	labels                      map[string]string
+	user, workingDirectory      string
+	entrypoint, command         []string
+	environment                 []string
+	stopTimeout                 int
+	exposedPorts                int
+	status                      string
+	running                     bool
+	paused                      bool
+	restarting                  bool
+	dead                        bool
+	privileged                  bool
+	autoRemove                  bool
+	readOnlyRoot                bool
+	publishAllPorts             bool
+	portBindings                int
+	binds, mounts               int
+	tmpfs                       map[string]string
+	dns                         []netip.Addr
+	capAdd, capDrop             []string
+	securityOptions             []string
+	memoryBytes, memorySwap     int64
+	nanoCPUs, pidsLimit         int64
+	networkMode                 string
+	pidMode, ipcMode            string
+	restartPolicy               string
+	logType                     string
+	logConfig                   map[string]string
+	networks                    map[string]netip.Addr
 }
 
 type relayConnection interface {
@@ -143,16 +170,22 @@ func (e *mobyEngine) inspectImage(ctx context.Context, image string) (imageInfo,
 		descriptorDigest = result.Descriptor.Digest.String()
 	}
 	return imageInfo{
+		id:                result.ID,
 		repositoryDigests: append([]string(nil), result.RepoDigests...), descriptorDigest: descriptorDigest,
 		labels: cloneStrings(result.Config.Labels), user: result.Config.User,
 		entrypoint: append([]string(nil), result.Config.Entrypoint...), command: append([]string(nil), result.Config.Cmd...),
 		workingDirectory: result.Config.WorkingDir, architecture: result.Architecture,
 		variant: result.Variant, operatingSystem: result.Os, exposedPorts: len(result.Config.ExposedPorts),
+		environment: append([]string(nil), result.Config.Env...),
 	}, nil
 }
 
 func (e *mobyEngine) create(ctx context.Context, request createRequest) (string, error) {
 	pidsLimit := request.pidsLimit
+	dnsResolver, err := netip.ParseAddr(request.dnsResolver)
+	if err != nil || !dnsResolver.Is4() || !dnsResolver.IsPrivate() {
+		return "", errors.New("invalid Browser DNS resolver")
+	}
 	result, err := e.client.ContainerCreate(ctx, client.ContainerCreateOptions{
 		Name: request.name,
 		Config: &container.Config{
@@ -161,6 +194,7 @@ func (e *mobyEngine) create(ctx context.Context, request createRequest) (string,
 		},
 		HostConfig: &container.HostConfig{
 			NetworkMode: container.NetworkMode(request.networkName),
+			DNS:         []netip.Addr{dnsResolver},
 			CapDrop:     []string{"ALL"}, SecurityOpt: []string{"no-new-privileges:true", "seccomp=" + request.seccompProfile},
 			AutoRemove: false, ReadonlyRootfs: true,
 			Tmpfs: map[string]string{
@@ -188,14 +222,40 @@ func (e *mobyEngine) inspect(ctx context.Context, id string) (containerInfo, err
 		return containerInfo{}, err
 	}
 	response := result.Container
-	if response.State == nil || response.Config == nil {
+	if response.State == nil || response.Config == nil || response.HostConfig == nil || response.NetworkSettings == nil {
 		return containerInfo{}, errors.New("incomplete Browser container inspection")
 	}
-	return containerInfo{
-		id: response.ID, labels: cloneStrings(response.Config.Labels), status: string(response.State.Status),
+	info := containerInfo{
+		id: response.ID, imageID: response.Image, imageReference: response.Config.Image,
+		labels: cloneStrings(response.Config.Labels), user: response.Config.User,
+		workingDirectory: response.Config.WorkingDir, entrypoint: append([]string(nil), response.Config.Entrypoint...),
+		command: append([]string(nil), response.Config.Cmd...), environment: append([]string(nil), response.Config.Env...),
+		exposedPorts: len(response.Config.ExposedPorts), status: string(response.State.Status),
 		running: response.State.Running, paused: response.State.Paused,
 		restarting: response.State.Restarting, dead: response.State.Dead,
-	}, nil
+		privileged: response.HostConfig.Privileged, autoRemove: response.HostConfig.AutoRemove,
+		readOnlyRoot: response.HostConfig.ReadonlyRootfs, publishAllPorts: response.HostConfig.PublishAllPorts,
+		portBindings: len(response.HostConfig.PortBindings), binds: len(response.HostConfig.Binds), mounts: len(response.HostConfig.Mounts),
+		tmpfs: cloneStrings(response.HostConfig.Tmpfs), dns: append([]netip.Addr(nil), response.HostConfig.DNS...),
+		capAdd: append([]string(nil), response.HostConfig.CapAdd...), capDrop: append([]string(nil), response.HostConfig.CapDrop...),
+		securityOptions: append([]string(nil), response.HostConfig.SecurityOpt...), memoryBytes: response.HostConfig.Memory,
+		memorySwap: response.HostConfig.MemorySwap, nanoCPUs: response.HostConfig.NanoCPUs,
+		networkMode: string(response.HostConfig.NetworkMode), pidMode: string(response.HostConfig.PidMode), ipcMode: string(response.HostConfig.IpcMode),
+		restartPolicy: string(response.HostConfig.RestartPolicy.Name), logType: response.HostConfig.LogConfig.Type,
+		logConfig: cloneStrings(response.HostConfig.LogConfig.Config), networks: make(map[string]netip.Addr, len(response.NetworkSettings.Networks)),
+	}
+	if response.Config.StopTimeout != nil {
+		info.stopTimeout = *response.Config.StopTimeout
+	}
+	if response.HostConfig.PidsLimit != nil {
+		info.pidsLimit = *response.HostConfig.PidsLimit
+	}
+	for name, endpoint := range response.NetworkSettings.Networks {
+		if endpoint != nil {
+			info.networks[name] = endpoint.IPAddress
+		}
+	}
+	return info, nil
 }
 
 func (e *mobyEngine) start(ctx context.Context, id string) error {
