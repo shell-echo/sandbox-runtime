@@ -21,7 +21,7 @@ platform gate.
 
 | Item | Value |
 | --- | --- |
-| Provider implementation | `494401a17f3c8c3d533ea32c569ec6b1434ca4b1` |
+| Provider implementation | `c91d83f4565034908e9582dab3a33390524e972b` |
 | Contract namespace | `urn:shell-echo:sandbox-runtime:provider-v1` |
 | Contract revision | `5096e71fb84fbec22aa3487a0e55a1b49602ab8b` |
 | Contract tree | `859f76dc0e855a0c8abdbbb5648df100dabb4328` |
