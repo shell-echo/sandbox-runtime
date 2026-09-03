@@ -54,10 +54,10 @@ Currently implemented:
 - strict internal Block manifest parsing and a bounded read-only registry;
   this configuration format is not Provider wire behavior
 - an optional Browser image component with native amd64/arm64 sandbox tests,
-  a fixed fail-closed seccomp profile, a first immutable GHCR index, and
-  verified GitHub OIDC/Sigstore provenance; an exact arm64/v8 descriptor
-  correction awaits republishing, and this remains image evidence rather than
-  a Provider route
+  a fixed fail-closed seccomp profile, an immutable GHCR index containing
+  exactly linux/amd64 and linux/arm64/v8, and independently verified GitHub
+  OIDC/Sigstore provenance; this remains image evidence rather than a Provider
+  route
 - uncomposed Provider-local Browser session, opaque-reference, operation, and
   duration-evidence components; no Browser runtime adapter, handler, Gateway,
   advertisement, or browser caller is enabled
@@ -574,8 +574,8 @@ visibility.
 
 - [x] implement Docker driver
 - [ ] create base runtime image
-- [x] create the sandboxed, signed browser image component (exact arm64/v8
-  index republish and Provider runtime composition remain open)
+- [x] create and publish the exact sandboxed, signed amd64/arm64/v8 browser
+  image component (Provider runtime composition remains open)
 - [x] support container create/start/stop/inspect/remove
 - [ ] support container logs
 - [x] define runtime resource limits

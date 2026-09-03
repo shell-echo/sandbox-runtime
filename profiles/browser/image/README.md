@@ -89,27 +89,27 @@ They must not be used for Provider browser composition. The manual-only
 platforms, publishes an immutable `sha-<source-commit>` GHCR index, signs its
 digest with GitHub Actions OIDC/Sigstore SLSA provenance, and verifies the
 repository, signer workflow, source commit, and hosted-runner identity. Merely
-checking in that workflow is not provenance evidence. The first passing
+checking in that workflow is not provenance evidence. The exact passing
 native-architecture publication is:
 
 | Item | Verified value |
 | --- | --- |
-| Workflow run | `33721789424` |
-| Source | `4db7c97e57d096a3389cf9480acb1bc912456a1d` |
-| Image | `ghcr.io/shell-echo/sandbox-runtime-browser@sha256:ad2039fa0079a4160f2d97ae8e142452b04a87b425cef3c036e7745a678b3f51` |
-| Immutable tag | `sha-4db7c97e57d096a3389cf9480acb1bc912456a1d` |
-| linux/amd64 content manifest | `sha256:2d7000518bae7370217fc2e6d90f7c1a0ef80a45fbba22a6afb303ea5858366e` |
-| linux/arm64/v8 content manifest | `sha256:de44731cbb9a1b082842ffa27ff3c024f4ff737c34f54eaaba9834e7447b9480` |
-| GitHub attestation | `44906258` |
+| Workflow run | `33724368530` |
+| Source | `58ed0093816d3daa3000750013b8e5991ef4bcf7` |
+| Image | `ghcr.io/shell-echo/sandbox-runtime-browser@sha256:87d3216c22ada0fea74b375a3ee5c2ddf021d3e1913569e2aeb4a316ed3b5c2f` |
+| Immutable tag | `sha-58ed0093816d3daa3000750013b8e5991ef4bcf7` |
+| linux/amd64 content manifest | `sha256:5e68861696218355998a552800908fd9ef26698435010761f9f7265145a3c746` |
+| linux/arm64/v8 content manifest | `sha256:93ddabde08132c50650d141cf47403263622fe72a5fad1ffaffbf69a94e35591` |
+| GitHub attestation | `44912296` |
 
 The workflow verified the repository, signer workflow, source commit, and
 hosted-runner identity, and an independent `gh attestation verify` with the
 same constraints succeeded. A separate local `docker buildx imagetools
-inspect` found exactly linux/amd64 and linux/arm64 descriptors, but the arm64
-descriptor omitted the manifest-authorized `variant: v8`. Commit `494401a`
-switches index assembly to explicit platform descriptors and adds an exact
-post-publish assertion. A new named run must pass before this first publication
-can be superseded as the exact two-platform gate.
+inspect` found exactly linux/amd64 and linux/arm64/v8 descriptors and no extra
+manifest. The predecessor run `33721789424` remains historical sandbox and
+provenance evidence only because its arm64 descriptor omitted the
+manifest-authorized `variant: v8`; commit `494401a` corrected that gap before
+the exact publication above.
 
 The sandbox and provenance gates do not by themselves authorize Provider
 routes or capability advertisement. Restricted egress policy, a private
