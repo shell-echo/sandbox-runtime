@@ -21,7 +21,7 @@ platform gate.
 
 | Item | Value |
 | --- | --- |
-| Provider implementation | `9a5d225f793f37ccafdac31c276ccbcb1bc862ad` |
+| Provider implementation | `6e02f1c22f489802b0b2c9f06f4a807d2e7c36e5` |
 | Contract namespace | `urn:shell-echo:sandbox-runtime:provider-v1` |
 | Contract revision | `5096e71fb84fbec22aa3487a0e55a1b49602ab8b` |
 | Contract tree | `859f76dc0e855a0c8abdbbb5648df100dabb4328` |
@@ -32,11 +32,11 @@ the Provider commit or Contract lock differs from the values above. A full
 evidence run also refuses tracked or untracked harness changes and records the
 exact enclosing repository commit in its manifest.
 
-The lock now includes browser Contract authority/projection, the image
-component, and the uncomposed Provider-local browser session component. The
-reference and platform-candidate runners still execute only the coding/shell
-scenarios; advancing this identity is not browser runtime, browser caller, or
-browser E2E evidence.
+The lock now includes browser Contract authority/projection, the sandboxed
+image/provenance publication implementation, and the uncomposed Provider-local
+browser session component. The reference and platform-candidate runners still
+execute only the coding/shell scenarios; advancing this identity is not
+browser runtime composition, browser caller, or browser E2E evidence.
 
 ## Latest verified evidence
 
