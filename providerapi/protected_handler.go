@@ -17,6 +17,8 @@ import (
 	"github.com/shell-echo/sandbox-runtime/provider"
 	"github.com/shell-echo/sandbox-runtime/provider/admission"
 	"github.com/shell-echo/sandbox-runtime/provider/artifact"
+	"github.com/shell-echo/sandbox-runtime/provider/browser"
+	browserapplication "github.com/shell-echo/sandbox-runtime/provider/browser/application"
 	providerexec "github.com/shell-echo/sandbox-runtime/provider/exec"
 	"github.com/shell-echo/sandbox-runtime/provider/lifecycle"
 	"github.com/shell-echo/sandbox-runtime/provider/lifecycle/repository"
@@ -38,6 +40,7 @@ type ProtectedTransportOptions struct {
 	Gate                *admission.ProtectedOperationGate
 	Application         LifecycleApplication
 	SessionApplication  RuntimeSessionApplication
+	BrowserApplication  BrowserApplication
 	ArtifactApplication ArtifactApplication
 	ExecApplication     ExecApplication
 	UsageEvidenceReader usage.EvidenceReader
@@ -62,6 +65,14 @@ type RuntimeSessionApplication interface {
 	GetHandoff(context.Context, string) (sessionapplication.Handoff, error)
 }
 
+// BrowserApplication is the narrow Provider-local Browser application
+// boundary. Public user and tenant authorization remains outside this port in
+// the caller-owned Gateway.
+type BrowserApplication interface {
+	Open(context.Context, browser.OpenRequest) (browserapplication.Operation, error)
+	GetHandoff(context.Context, string) (browserapplication.Handoff, error)
+}
+
 // ArtifactApplication is the narrow Provider-local artifact boundary. The
 // transport accepts work and reads retained evidence only through this port;
 // it never calls a stager or repository directly.
@@ -84,6 +95,7 @@ type protectedHandler struct {
 	gate            *admission.ProtectedOperationGate
 	application     LifecycleApplication
 	sessionApp      RuntimeSessionApplication
+	browserApp      BrowserApplication
 	artifactApp     ArtifactApplication
 	execApp         ExecApplication
 	usageReader     usage.EvidenceReader
@@ -110,7 +122,7 @@ func newProtectedHandler(identity *clientIdentityAdmission, options ProtectedTra
 	return &protectedHandler{
 		identity: identity, gate: options.Gate, application: options.Application,
 		sessionApp: options.SessionApplication, artifactApp: options.ArtifactApplication,
-		execApp:     options.ExecApplication,
+		browserApp: options.BrowserApplication, execApp: options.ExecApplication,
 		usageReader: options.UsageEvidenceReader, operationReader: options.OperationReader,
 		capabilities: options.capabilitySnapshot, now: now,
 	}, nil
@@ -242,6 +254,16 @@ func (h *protectedHandler) ServeHTTP(response http.ResponseWriter, request *http
 			return
 		}
 	}
+	if h.browserApp != nil {
+		switch route.operation {
+		case admission.OperationOpenBrowserSession:
+			h.serveBrowserSessionOpen(response, request, context, document)
+			return
+		case admission.OperationReadBrowserSession:
+			h.serveBrowserSessionHandoff(response, request, context)
+			return
+		}
+	}
 	// P1.2.4 deliberately leaves reserved lifecycle families behind the
 	// admission boundary. No repository, driver, or lifecycle operation is
 	// started for those routes.
@@ -263,6 +285,9 @@ func validateProtectedDocument(route protectedRoute, document []byte) error {
 	case admission.OperationOpenRuntimeSession:
 		var request providerv1.RuntimeSessionOpenRequest
 		return providerv1.DecodeStrict(bytes.NewReader(document), providerv1.MaxRuntimeSessionOpenRequestBytes, &request)
+	case admission.OperationOpenBrowserSession:
+		var request providerv1.BrowserSessionOpenRequest
+		return providerv1.DecodeStrict(bytes.NewReader(document), providerv1.MaxBrowserSessionOpenRequestBytes, &request)
 	case admission.OperationStageArtifact:
 		var request providerv1.ArtifactStagingRequest
 		return providerv1.DecodeStrict(bytes.NewReader(document), providerv1.MaxArtifactStagingRequestBytes, &request)
@@ -405,13 +430,14 @@ func matchProtectedRoute(request *http.Request) (protectedRoute, map[string]stri
 				"exec":             {admission.OperationExec, providerv1.MaxExecRequestBytes, true},
 				"exec:cancel":      {admission.OperationCancelExec, providerv1.MaxCancelExecRequestBytes, false},
 				"runtime-sessions": {admission.OperationOpenRuntimeSession, providerv1.MaxRuntimeSessionOpenRequestBytes, true},
+				"browser-sessions": {admission.OperationOpenBrowserSession, providerv1.MaxBrowserSessionOpenRequestBytes, true},
 				"snapshots":        {admission.OperationSnapshot, providerv1.MaxSnapshotRequestBytes, true},
 				"artifacts:stage":  {admission.OperationStageArtifact, providerv1.MaxArtifactStagingRequestBytes, true},
 				":terminate":       {admission.OperationTerminate, providerv1.MaxTerminateRequestBytes, true},
 			}
 			if candidate, ok := operations[parts[3]]; ok {
 				oversizeStatus := 0
-				if candidate.operation == admission.OperationOpenRuntimeSession || candidate.operation == admission.OperationStageArtifact ||
+				if candidate.operation == admission.OperationOpenRuntimeSession || candidate.operation == admission.OperationOpenBrowserSession || candidate.operation == admission.OperationStageArtifact ||
 					candidate.operation == admission.OperationExec || candidate.operation == admission.OperationCancelExec {
 					oversizeStatus = http.StatusBadRequest
 				}
@@ -431,6 +457,8 @@ func matchProtectedRoute(request *http.Request) (protectedRoute, map[string]stri
 			switch parts[3] {
 			case "runtime-session":
 				return protectedRoute{operation: admission.OperationReadRuntimeSession, allowUnavailable: true}, values, true
+			case "browser-session":
+				return protectedRoute{operation: admission.OperationReadBrowserSession, allowUnavailable: true}, values, true
 			case "exec-result":
 				return protectedRoute{operation: admission.OperationReadResult, allowUnavailable: false}, values, true
 			case "snapshot-manifest":

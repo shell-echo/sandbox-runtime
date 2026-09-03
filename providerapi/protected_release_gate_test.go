@@ -42,11 +42,13 @@ func allProtectedReleaseRoutes() []protectedReleaseRoute {
 		{name: "execute", method: http.MethodPost, path: "/v1/sandboxes/sandbox-1/exec", operation: admission.OperationExec, allowUnavailable: true},
 		{name: "cancel execute", method: http.MethodPost, path: "/v1/sandboxes/sandbox-1/exec:cancel", operation: admission.OperationCancelExec},
 		{name: "open runtime session", method: http.MethodPost, path: "/v1/sandboxes/sandbox-1/runtime-sessions", operation: admission.OperationOpenRuntimeSession, allowUnavailable: true},
+		{name: "open browser session", method: http.MethodPost, path: "/v1/sandboxes/sandbox-1/browser-sessions", operation: admission.OperationOpenBrowserSession, allowUnavailable: true},
 		{name: "create snapshot", method: http.MethodPost, path: "/v1/sandboxes/sandbox-1/snapshots", operation: admission.OperationSnapshot, allowUnavailable: true},
 		{name: "terminate sandbox", method: http.MethodPost, path: "/v1/sandboxes/sandbox-1:terminate", operation: admission.OperationTerminate, allowUnavailable: true},
 		{name: "read operation", method: http.MethodGet, path: "/v1/operations/operation-1", operation: admission.OperationReadOperation, allowUnavailable: true},
 		{name: "read execute result", method: http.MethodGet, path: "/v1/operations/operation-1/exec-result", operation: admission.OperationReadResult},
 		{name: "read runtime session handoff", method: http.MethodGet, path: "/v1/operations/operation-1/runtime-session", operation: admission.OperationReadRuntimeSession, allowUnavailable: true},
+		{name: "read browser session handoff", method: http.MethodGet, path: "/v1/operations/operation-1/browser-session", operation: admission.OperationReadBrowserSession, allowUnavailable: true},
 		{name: "read snapshot manifest", method: http.MethodGet, path: "/v1/operations/operation-1/snapshot-manifest", operation: admission.OperationReadSnapshotManifest, allowUnavailable: true},
 		{name: "stage artifact", method: http.MethodPost, path: "/v1/sandboxes/sandbox-1/artifacts:stage", operation: admission.OperationStageArtifact, allowUnavailable: true},
 		{name: "read artifact evidence", method: http.MethodGet, path: "/v1/operations/operation-1/artifact-staging-evidence", operation: admission.OperationReadArtifactStagingEvidence, allowUnavailable: true},
@@ -108,6 +110,7 @@ func TestProtectedHandlerRejectsDigestConsistentCreateAndSessionDocumentsBeforeG
 	for _, route := range []protectedReleaseRoute{
 		{name: "create sandbox", method: http.MethodPost, path: "/v1/sandboxes", operation: admission.OperationCreate, allowUnavailable: true},
 		{name: "open runtime session", method: http.MethodPost, path: "/v1/sandboxes/sandbox-1/runtime-sessions", operation: admission.OperationOpenRuntimeSession, allowUnavailable: true},
+		{name: "open browser session", method: http.MethodPost, path: "/v1/sandboxes/sandbox-1/browser-sessions", operation: admission.OperationOpenBrowserSession, allowUnavailable: true},
 		{name: "execute", method: http.MethodPost, path: "/v1/sandboxes/sandbox-1/exec", operation: admission.OperationExec, allowUnavailable: true},
 		{name: "cancel execute", method: http.MethodPost, path: "/v1/sandboxes/sandbox-1/exec:cancel", operation: admission.OperationCancelExec},
 	} {
@@ -159,6 +162,7 @@ func TestProtectedHandlerRejectsOversizedCreateAndSessionDocumentsBeforeGuard(t 
 	}{
 		{route: protectedReleaseRoute{name: "create sandbox", method: http.MethodPost, path: "/v1/sandboxes", operation: admission.OperationCreate, allowUnavailable: true}, maxBytes: providerv1.MaxCreateRequestBytes},
 		{route: protectedReleaseRoute{name: "open runtime session", method: http.MethodPost, path: "/v1/sandboxes/sandbox-1/runtime-sessions", operation: admission.OperationOpenRuntimeSession, allowUnavailable: true}, maxBytes: providerv1.MaxRuntimeSessionOpenRequestBytes},
+		{route: protectedReleaseRoute{name: "open browser session", method: http.MethodPost, path: "/v1/sandboxes/sandbox-1/browser-sessions", operation: admission.OperationOpenBrowserSession, allowUnavailable: true}, maxBytes: providerv1.MaxBrowserSessionOpenRequestBytes},
 		{route: protectedReleaseRoute{name: "execute", method: http.MethodPost, path: "/v1/sandboxes/sandbox-1/exec", operation: admission.OperationExec, allowUnavailable: true}, maxBytes: providerv1.MaxExecRequestBytes},
 		{route: protectedReleaseRoute{name: "cancel execute", method: http.MethodPost, path: "/v1/sandboxes/sandbox-1/exec:cancel", operation: admission.OperationCancelExec}, maxBytes: providerv1.MaxCancelExecRequestBytes},
 	} {
@@ -475,6 +479,9 @@ func protectedReleaseRequestBinding(operation admission.Operation) (string, admi
 	if operation == admission.OperationReadRuntimeSession {
 		return "urn:shell-echo:sandbox-runtime:descriptor:runtime-session:v1", admission.DigestProfileFullDocument
 	}
+	if operation == admission.OperationReadBrowserSession {
+		return "urn:shell-echo:sandbox-runtime:descriptor:browser-session:v1", admission.DigestProfileFullDocument
+	}
 	if operation == admission.OperationReadSnapshotManifest {
 		return "urn:shell-echo:sandbox-runtime:descriptor:snapshot-manifest:v1", admission.DigestProfileFullDocument
 	}
@@ -495,6 +502,7 @@ func protectedReleaseRequestBinding(operation admission.Operation) (string, admi
 		admission.OperationExec:               "urn:shell-echo:sandbox-runtime:request:exec:v1",
 		admission.OperationCancelExec:         "urn:shell-echo:sandbox-runtime:request:cancel-exec:v1",
 		admission.OperationOpenRuntimeSession: "urn:shell-echo:sandbox-runtime:request:open-runtime-session:v1",
+		admission.OperationOpenBrowserSession: "urn:shell-echo:sandbox-runtime:request:open-browser-session:v1",
 		admission.OperationSnapshot:           "urn:shell-echo:sandbox-runtime:request:snapshot:v1",
 		admission.OperationTerminate:          "urn:shell-echo:sandbox-runtime:request:terminate:v1",
 		admission.OperationStageArtifact:      "urn:shell-echo:sandbox-runtime:request:stage-artifact:v1",
@@ -522,6 +530,12 @@ func releaseMutationDocument(t *testing.T, operation admission.Operation) ([]byt
 		delete(document, "request_digest")
 	case admission.OperationOpenRuntimeSession:
 		encoded, _ := validRuntimeSessionOpenDocument(t)
+		if err := json.Unmarshal(encoded, &document); err != nil {
+			t.Fatal(err)
+		}
+		delete(document, "request_digest")
+	case admission.OperationOpenBrowserSession:
+		encoded, _ := validBrowserSessionOpenDocument(t)
 		if err := json.Unmarshal(encoded, &document); err != nil {
 			t.Fatal(err)
 		}
