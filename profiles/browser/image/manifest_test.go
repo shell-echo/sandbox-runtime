@@ -126,6 +126,8 @@ func TestPublicationWorkflowIsManualPinnedAndManifestBound(t *testing.T) {
 		"if: github.ref == 'refs/heads/main'",
 		manifest.Source.Manifests["linux/amd64"].Digest,
 		manifest.Source.Manifests["linux/arm64/v8"].Digest,
+		"runner: ubuntu-24.04",
+		"runner: ubuntu-24.04-arm",
 		"SANDBOX_RUNTIME_BROWSER_IMAGE_INTEGRATION",
 		"push-by-digest=true",
 		"sha-${{ github.sha }}",

@@ -46,7 +46,8 @@ hardening, not hostile multi-tenant isolation evidence.
 The repository owns a manual-only `Browser Image Publication` workflow. It:
 
 1. runs only from `main` and pins every third-party action by commit;
-2. selects the locked upstream digest independently for amd64 and arm64;
+2. uses native `ubuntu-24.04` amd64 and `ubuntu-24.04-arm` runners, selecting
+   the locked upstream digest independently for each architecture;
 3. runs the sandboxed image integration gate before publication;
 4. pushes content-addressed platform manifests to GHCR and combines them under
    the immutable `sha-<source-commit>` tag, never `latest`; and
