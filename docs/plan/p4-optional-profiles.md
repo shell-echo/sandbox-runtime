@@ -99,9 +99,10 @@ internal Block manifest a wire resource or establish browser runtime evidence.
   `--provenance=false`; both constrained Docker smoke runs report Chromium
   `151.0.7922.109` on loopback. This is component evidence only; the signed
   provenance and usable browser-sandbox gates remain open;
-- E2E harness lock commit `75e5725` plus reference and candidate 15+5
-  coding/shell regression runs against Provider lock `4df7f22` (hosted runs
-  `33708670563` and `33708670564`); these runs contain no browser scenario; and
+- Browser session component commit `9a5d225` and E2E harness lock commit
+  `6163de1`; reference and candidate 15+5 coding/shell regression runs against
+  that Provider lock pass locally and in hosted runs `33712412443` and
+  `33712412503`; these runs contain no browser scenario; and
 - runtime/image/handler/advertisement, real platform, multi-controller,
   multi-tenant, deployment, and production evidence remain explicitly open.
 

@@ -38,6 +38,21 @@ reference and platform-candidate runners still execute only the coding/shell
 scenarios; advancing this identity is not browser runtime, browser caller, or
 browser E2E evidence.
 
+## Latest verified evidence
+
+Hosted Reference E2E run `33712412443` and Platform Candidate E2E run
+`33712412503` passed harness lock `6163de1` against Provider `9a5d225` with 15
+initial and 5 reconstruction/resume coding/shell scenarios each. Their
+artifacts are `reference-e2e-evidence-33712412443` (digest
+`sha256:aa7a6bebf51ac917a9d1fe5e238a57ef0f90ac9566dc652c6402405ec75befa4`)
+and `platform-candidate-e2e-evidence-33712412503` (digest
+`sha256:308016d3012d2e61ae68af8606523e6c8f2e4f2b76c80360f36321d1ebdbb147`).
+Both manifests pin Contract revision `5096e71`, tree `859f76d`, and 48 Suite
+cases. Local runs `20260903T034204.154672000Z` and
+`20260903T034240.506959000Z` passed the same respective scenario sets. These
+remain coding/shell regression and candidate-integration evidence only; they
+contain no browser scenario.
+
 ## Previous hosted evidence before this lock update
 
 Hosted Reference E2E run `33708670563` and Platform Candidate E2E run
