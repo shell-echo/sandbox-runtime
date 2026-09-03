@@ -37,7 +37,21 @@ and platform-candidate runners still execute only the coding/shell scenarios;
 advancing this identity is not browser runtime, browser caller, or browser E2E
 evidence.
 
-## Latest verified local evidence before this lock update
+## Latest verified evidence
+
+Hosted Reference E2E run `33708670563` and Platform Candidate E2E run
+`33708670564` passed the advanced Provider lock `4df7f22` with 15 initial and
+5 reconstruction/resume coding/shell scenarios each. Their artifacts are
+`reference-e2e-evidence-33708670563` (digest
+`sha256:36596ce808833b12cfcab44277d1acc1715c559608c5e2b57293f00d5e3af961`)
+and `platform-candidate-e2e-evidence-33708670564` (digest
+`sha256:80e2828d0cabb613bf0cb683202690c9876f94d9d86a73018380cae3b2a88542`).
+Both manifests pin Contract revision `5096e71`, tree `859f76d`, 48 Suite
+cases, and the named linux/amd64 runtime image digest. These remain
+coding/shell regression and candidate-integration evidence only; they contain
+no browser scenario.
+
+## Previous verified local evidence before this lock update
 
 The following evidence was produced before the browser image component and
 against the previous Provider baseline `24b2e36485c334634e561009850d1905ec3115d5`:
@@ -64,10 +78,10 @@ respectively. Both manifests pin Provider `24b2e36`, Contract revision
 The preceding 38-case-lock runs remain `33591808946` and `33591808961` at
 baseline `b72fc3b`.
 
-The lock is now advanced to Provider `4df7f22` for the browser image component.
-The existing evidence above remains valid only for `24b2e36`; a new run against
-the advanced lock is required before recording fresh reference or candidate
-evidence. These runners still contain no browser scenario.
+The lock was advanced to Provider `4df7f22` for the browser image component.
+The historical evidence above remains valid only for `24b2e36`; the hosted runs
+in the preceding section are the fresh evidence for the advanced lock. These
+runners still contain no browser scenario.
 
 ## Previous verified evidence
 

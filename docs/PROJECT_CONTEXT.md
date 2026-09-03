@@ -158,6 +158,13 @@ baseline `13c6a57`. Its artifact `reference-e2e-evidence-33602869956` has
 digest
 `sha256:1b0ccc43b254041c618d58c1c14039162bbf1a31ecd22cbe5c72e64cefa6351e`.
 This remains coding/shell reference evidence and contains no browser scenario.
+After the browser image lock update, hosted Reference E2E run `33708670563`
+passed the same 15 initial and 5 reconstruction/resume coding/shell scenarios
+against Provider lock `4df7f22`. Its artifact
+`reference-e2e-evidence-33708670563` has digest
+`sha256:36596ce808833b12cfcab44277d1acc1715c559608c5e2b57293f00d5e3af961`.
+This remains reference coding/shell evidence only and contains no browser
+scenario.
 
 The explicitly named `agent-platform-candidate` mode passed the same current
 lock in local run `20260902T065200.812211000Z`: 15 initial and 5 resume
@@ -170,6 +177,12 @@ at release baseline `13c6a57`. Its artifact
 Local and hosted candidate results do not represent browser evidence, real
 Veronica, aggregate conformance, hostile multi-tenant security, deployment, or
 production readiness.
+Hosted candidate run `33708670564` also passed the same 15 initial and 5
+reconstruction/resume coding/shell scenarios against Provider lock `4df7f22`.
+Its artifact `platform-candidate-e2e-evidence-33708670564` has digest
+`sha256:80e2828d0cabb613bf0cb683202690c9876f94d9d86a73018380cae3b2a88542`.
+This remains candidate integration evidence only and contains no browser
+scenario.
 
 The browser image component is recorded in ADR 0018. It repacks immutable
 `docker.io/chromedp/headless-shell` amd64/arm64 manifests into a scratch image
@@ -234,6 +247,8 @@ The browser-authority release baseline
 `13c6a57770ac4c7ecbfedc16755e660162d209d5` is covered by repository CI run
 `33602869924`; its
 `provider-contract`, `test`, and `docker-integration` jobs passed. The
+follow-up browser image/E2E-lock baseline `2b7bd96` passed the same three jobs
+in run `33708670579`. The
 underlying P2.5g and P2.5h implementation gates remain run `33157119149` and
 run `33159099578`, respectively. Repository CI remains distinct from
 independent caller and production evidence.
