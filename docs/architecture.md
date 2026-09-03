@@ -113,12 +113,12 @@ absent.
 | `POST /v1/sandboxes/{sandbox_id}/exec` | Start an asynchronous process execution. |
 | `POST /v1/sandboxes/{sandbox_id}/exec:cancel` | Record cancellation intent for an execution. |
 | `POST /v1/sandboxes/{sandbox_id}/runtime-sessions` | Open an internal terminal session. Browser authority does not reuse this route. |
-| `POST /v1/sandboxes/{sandbox_id}/browser-sessions` | Contract-authorized asynchronous browser session request; currently absent from Provider composition. |
+| `POST /v1/sandboxes/{sandbox_id}/browser-sessions` | Contract-authorized asynchronous browser session request; the protected handler is registered, while command composition supplies no Browser application and therefore fails closed. |
 | `POST /v1/sandboxes/{sandbox_id}/snapshots` | Start snapshot creation at a declared level. |
 | `POST /v1/sandboxes/{sandbox_id}:terminate` | Idempotently request teardown. |
 | `GET /v1/operations/{operation_id}` | Read durable asynchronous operation state. |
 | `GET /v1/operations/{operation_id}/runtime-session` | Read an opaque terminal session handoff after a successful session operation. |
-| `GET /v1/operations/{operation_id}/browser-session` | Contract-authorized opaque browser handoff for caller-owned Gateway resolution; currently absent from Provider composition. |
+| `GET /v1/operations/{operation_id}/browser-session` | Contract-authorized opaque browser handoff for caller-owned Gateway resolution; the protected handler is registered, while command composition supplies no Browser application and therefore fails closed. |
 | `GET /v1/operations/{operation_id}/exec-result` | Read a retained execution result. |
 | `GET /v1/operations/{operation_id}/snapshot-manifest` | Read a completed snapshot manifest. |
 | `GET /v1/sandboxes/{sandbox_id}/events` | Resume a sequenced provider event stream. |

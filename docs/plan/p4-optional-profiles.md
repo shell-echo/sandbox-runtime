@@ -148,8 +148,8 @@ internal Block manifest a wire resource or establish browser runtime evidence.
   GitHub OIDC/Sigstore attestation `44912296`, an independent constrained
   `gh attestation verify`, and independent registry inspection pass;
 - Browser session component commit `9a5d225`; latest hosted E2E harness/Provider
-  evidence `7f15628`/`7e60340`; reference and candidate 15+5 coding/shell
-  regression runs pass in hosted runs `33747803507` and `33747803514`; these
+  evidence `a2721ad`/`b8423f5`; reference and candidate 15+5 coding/shell
+  regression runs pass in hosted runs `33760609272` and `33760609231`; these
   runs contain no browser scenario; and
 - ADR 0020 and Browser adapter implementation `cd33ba3` pass focused and full
   race/shuffle, vet, exact Contract verification, the unchanged 48-case Suite,
@@ -175,6 +175,9 @@ internal Block manifest a wire resource or establish browser runtime evidence.
   preflight/admission ordering, correlation, operation/handoff projection,
   expiry, opaque-reference security, failure, concurrency, aggregation, full
   race/shuffle, vet, Contract verifier, and unchanged 48-case Suite gates.
+  Harness lock `a2721ad` passes repository CI `33760609353` and hosted
+  Reference/Candidate coding/shell regressions `33760609272`/`33760609231`;
+  those caller runs contain no Browser scenario.
   Browser command/runtime composition, caller-owned Gateway, advertisement,
   Browser caller, real platform, multi-controller, multi-tenant, deployment,
   and production evidence remain explicitly open.
