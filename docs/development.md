@@ -10,6 +10,7 @@ go test -race -shuffle=on -count=1 ./...
 go vet ./...
 SANDBOX_RUNTIME_DOCKER_INTEGRATION=1 go test -tags=integration -count=1 ./driver/docker ./provider/lifecycle/driver/docker
 SANDBOX_RUNTIME_BROWSER_ADAPTER_INTEGRATION=1 go test -tags=integration -count=1 ./provider/browser/driver/docker
+SANDBOX_RUNTIME_BROWSER_PROVENANCE_INTEGRATION=1 go test -tags=integration -count=1 ./provider/browser/provenance/ghcli
 go run ./cmd/verify-contract -source-root .
 go run ./cmd/run-conformance -source-root . -race -shuffle
 ```

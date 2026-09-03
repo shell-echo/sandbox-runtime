@@ -65,6 +65,7 @@ type Options struct {
 	WorkspaceBytes           int64
 	OutputsBytes             int64
 	OperationTimeoutSeconds  int
+	ProvenanceTimeoutSeconds int
 	PullTimeoutSeconds       int
 	StopTimeoutSeconds       int
 	DataRoot                 string
@@ -143,6 +144,7 @@ func (o Options) validate() error {
 		return fmt.Errorf("%w: invalid resource limits", ErrInvalidOptions)
 	}
 	if o.OperationTimeoutSeconds <= 0 || o.OperationTimeoutSeconds > maxTimeoutSeconds ||
+		o.ProvenanceTimeoutSeconds <= 0 || o.ProvenanceTimeoutSeconds > maxTimeoutSeconds ||
 		o.PullTimeoutSeconds <= 0 || o.PullTimeoutSeconds > maxTimeoutSeconds ||
 		o.StopTimeoutSeconds < 0 || o.StopTimeoutSeconds > maxTimeoutSeconds {
 		return fmt.Errorf("%w: invalid timeouts", ErrInvalidOptions)

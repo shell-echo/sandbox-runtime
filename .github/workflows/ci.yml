@@ -48,6 +48,29 @@ jobs:
       - run: go test -race -shuffle=on -count=1 ./...
       - run: go vet ./...
 
+  browser-provenance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Verify locked Browser image provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SANDBOX_RUNTIME_BROWSER_PROVENANCE_INTEGRATION: "1"
+        run: go test -tags=integration -count=1 ./provider/browser/provenance/ghcli
+
   docker-integration:
     runs-on: ubuntu-latest
     timeout-minutes: 10

@@ -108,17 +108,27 @@ func newDriver(ctx context.Context, backend engine, options Options, provenance 
 	if err != nil {
 		return nil, ErrInvalidOptions
 	}
-	startupCtx, cancel := context.WithTimeout(ctx, connectTimeout)
-	defer cancel()
-	if err := backend.ping(startupCtx); err != nil {
-		return nil, safeContextError(ErrInvalidDriver, startupCtx, err)
+	pingCtx, pingCancel := context.WithTimeout(ctx, connectTimeout)
+	if err := backend.ping(pingCtx); err != nil {
+		result := safeContextError(ErrInvalidDriver, pingCtx, err)
+		pingCancel()
+		return nil, result
 	}
-	if err := network.Ready(startupCtx, options.NetworkPolicyReference); err != nil {
-		return nil, safeContextError(ErrNetworkUnavailable, startupCtx, err)
+	pingCancel()
+	networkCtx, networkCancel := context.WithTimeout(ctx, connectTimeout)
+	if err := network.Ready(networkCtx, options.NetworkPolicyReference); err != nil {
+		result := safeContextError(ErrNetworkUnavailable, networkCtx, err)
+		networkCancel()
+		return nil, result
 	}
-	if err := provenance.Verify(startupCtx, publication); err != nil {
-		return nil, safeContextError(ErrInvalidProvenance, startupCtx, err)
+	networkCancel()
+	provenanceCtx, provenanceCancel := context.WithTimeout(ctx, time.Duration(options.ProvenanceTimeoutSeconds)*time.Second)
+	if err := provenance.Verify(provenanceCtx, publication); err != nil {
+		result := safeContextError(ErrInvalidProvenance, provenanceCtx, err)
+		provenanceCancel()
+		return nil, result
 	}
+	provenanceCancel()
 	pullCtx, pullCancel := context.WithTimeout(ctx, time.Duration(options.PullTimeoutSeconds)*time.Second)
 	err = backend.ensureImage(pullCtx, options.Image, options.PullPolicy)
 	if err != nil {

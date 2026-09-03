@@ -31,15 +31,18 @@ func (c *fakeClock) Now() time.Time    { c.mu.Lock(); defer c.mu.Unlock(); retur
 func (c *fakeClock) Set(now time.Time) { c.mu.Lock(); c.now = now; c.mu.Unlock() }
 
 type fakeProvenance struct {
-	mu    sync.Mutex
-	calls int
-	err   error
+	mu          sync.Mutex
+	calls       int
+	deadline    time.Time
+	hasDeadline bool
+	err         error
 }
 
-func (v *fakeProvenance) Verify(_ context.Context, publication browserimage.Publication) error {
+func (v *fakeProvenance) Verify(ctx context.Context, publication browserimage.Publication) error {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 	v.calls++
+	v.deadline, v.hasDeadline = ctx.Deadline()
 	if publication.Validate() != nil {
 		return browserimage.ErrInvalidPublication
 	}
@@ -246,7 +249,8 @@ func validOptions(t *testing.T, root string, clock Clock) Options {
 		Image: browserimage.LockedPublication().Image(), PullPolicy: PullNever,
 		MemoryBytes: 1 << 30, NanoCPUs: 1_000_000_000, PidsLimit: 256,
 		InputsBytes: 16 << 20, TmpfsBytes: 256 << 20, WorkspaceBytes: 256 << 20, OutputsBytes: 256 << 20,
-		OperationTimeoutSeconds: 5, PullTimeoutSeconds: 5, StopTimeoutSeconds: 10,
+		OperationTimeoutSeconds: 5, ProvenanceTimeoutSeconds: 120,
+		PullTimeoutSeconds: 5, StopTimeoutSeconds: 10,
 		DataRoot: root, ManifestPath: filepath.Join(imageRoot, "manifest.json"),
 		SeccompPath: filepath.Join(imageRoot, "chromium-seccomp.json"),
 		Namespace:   "browser-test", ControllerID: "controller-1",
@@ -317,6 +321,7 @@ func TestOptionsFailClosed(t *testing.T) {
 		"workspace":           func(o *Options) { o.WorkspaceBytes = o.MemoryBytes + 1 },
 		"outputs":             func(o *Options) { o.OutputsBytes = 0 },
 		"timeout":             func(o *Options) { o.OperationTimeoutSeconds = 0 },
+		"provenance timeout":  func(o *Options) { o.ProvenanceTimeoutSeconds = 0 },
 		"relative manifest":   func(o *Options) { o.ManifestPath = "manifest.json" },
 		"namespace":           func(o *Options) { o.Namespace = "unsafe/name" },
 		"network policy":      func(o *Options) { o.NetworkPolicyReference = "" },
@@ -354,6 +359,9 @@ func TestNewDriverVerifiesPublicationNetworkAndImage(t *testing.T) {
 	}
 	if driver.publication.Validate() != nil || provenance.calls != 1 {
 		t.Fatalf("publication was not verified: %#v calls=%d", driver.publication, provenance.calls)
+	}
+	if !provenance.hasDeadline || time.Until(provenance.deadline) < time.Minute {
+		t.Fatalf("provenance deadline = %v, present=%v", provenance.deadline, provenance.hasDeadline)
 	}
 	ready, _, _, _ := network.counts()
 	if ready != 1 {
