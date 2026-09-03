@@ -140,7 +140,8 @@ This snapshot was audited on 2026-09-03 against browser Contract authority
 `9a5d225f793f37ccafdac31c276ccbcb1bc862ad`, sandbox/provenance implementation
 `6e02f1c22f489802b0b2c9f06f4a807d2e7c36e5`, Browser Docker adapter
 `cd33ba35c59bba62c48d13c0dcd08aeef5d9a434`, Browser provenance verifier
-`939055475f73b0023b3946172a2c40750a99c7ea`, and co-located E2E harness lock
+`939055475f73b0023b3946172a2c40750a99c7ea`, Browser restricted-egress and
+create-policy implementation `7e60340`, and co-located E2E harness lock
 `330f62929d24614011c414b133198a03f267388d`. The Contract slice authorizes an
 atomic browser-only capability shape, create/session/handoff schemas, protected
 admission bindings, opaque reference security, operation/usage projection, and
@@ -219,11 +220,27 @@ rehashes an operator-supplied `gh` executable, verifies the immutable GHCR
 bundle against exact GitHub OIDC/Sigstore identity and signed statement fields,
 bounds output and environment inheritance, and preserves cancellation. Its
 tagged live GHCR integration passes locally. It is not wired into a complete
-Browser startup; the real restricted-egress provisioner and create-time policy
-binding remain absent.
+Browser transport.
 
-The two current E2E runs left no managed Docker container. Their evidence is
-ignored local output, not a published CI artifact. The unprivileged sandbox
+ADR 0022 and implementation `7e60340` add the still-uncomposed restricted-egress
+Gateway process and Docker provisioner plus immutable lifecycle/create policy
+binding. Each allocation receives an internal bridge; the Browser has only that
+network and only the Gateway private IP as DNS, while the Gateway has that
+bridge plus one explicitly owned uplink. DNS, HTTP Host, TLS SNI, resolved
+public-address checks, image/container/network identity, policy digest, lease,
+and restart state all fail closed. The combined tagged integration used the
+real `gh` provenance verifier, the exact signed Browser image, and local Gateway
+image `sha256:202bbf92fcbcce87e4b800f093d1df281125ab6fa43152906564cf8e0b7021d6`.
+It passed allowed HTTP/HTTPS navigation, denied unlisted and metadata targets,
+adapter/provisioner reconstruction, and exact cleanup with no managed resource
+remaining. This is single-controller local Docker component/lifecycle-binding
+evidence, not protected Provider transport, caller-owned Gateway, Browser
+external-caller E2E, multi-controller, multi-tenant, deployment, or production
+evidence.
+
+The two current coding/shell E2E runs and the Browser restricted-egress
+integration left no managed Docker container or network. Their local evidence
+is not a published CI artifact. The unprivileged sandbox
 cannot bind the test listeners or access the Docker socket, so network/Docker
 checks were run in the authorized local environment and the restriction is not
 recorded as a code failure.
@@ -241,11 +258,11 @@ image foundation. ADR 0019 and run `33724368530` provide exact amd64/arm64/v8
 sandbox and signed provenance evidence. Both browser routes remain absent from
 the Provider router.
 The uncomposed `provider/browser` session/application/reference/usage
-components, Docker runtime adapter, and provenance verifier pass their bounded
-local component gates.
+components, Docker runtime adapter, provenance verifier, restricted-egress
+provisioner, and create-policy binding pass their bounded local component gates.
 No browser capability advertisement or production configuration is enabled;
-the next slice is the real restricted-egress provisioner and create-time policy
-binding, followed by protected/Gateway composition.
+the next slice is protected Browser handler composition followed by the
+caller-owned Gateway boundary.
 
 Contract identity:
 
@@ -264,7 +281,7 @@ Contract identity:
 | P2.5i | Latest local reference evidence passed 15 initial plus 5 restart/resume coding/shell scenarios against Provider `9390554` using harness `330f629`; hosted run `33737531617` passed the same lock | Local evidence is `20260903T091011.164430000Z`; no browser scenario, Agent Platform, or production property is implied |
 | P2 | Reference coding/shell caller release gate passed | Aggregate conformance, actual Agent Platform compatibility, multi-controller, hostile multi-tenant isolation, deployment, and production gates remain open |
 | P3 | Local revision binding/shadow/metrics component evidence plus latest local candidate integration (`20260903T091045.591005000Z`, `330f629`/`9390554`) and hosted candidate regression (run `33737531705`) | Real platform traffic shadow parity, canary, rollback, old-run drain, metric parity, and unchanged platform contracts remain open |
-| P4 | Browser Contract authority/projection, exact sandboxed signed amd64/arm64/v8 publication, uncomposed Provider-local session/application/reference/usage components, the fail-closed Docker/private-relay adapter, and the real uncomposed provenance verifier have named evidence | Implement the real restricted-egress provisioner and create-policy binding, then protected handlers and caller-owned Gateway; browser advertisement, caller, security, deployment, and production gates remain open |
+| P4 | Browser Contract authority/projection, exact sandboxed signed amd64/arm64/v8 publication, uncomposed Provider-local session/application/reference/usage components, the fail-closed Docker/private-relay adapter, real provenance verifier, restricted-egress provisioner, and create-policy binding have named evidence | Compose protected handlers and the caller-owned Gateway; browser advertisement, external caller, multi-controller, multi-tenant, deployment, and production gates remain open |
 
 Production readiness is not a numbered phase shortcut. Aggregate conformance,
 multi-controller reliability, hostile multi-tenant security, deployment, and
@@ -435,12 +452,10 @@ Its focused, full local, and Docker-tagged gates pass, and repository CI
 repository CI `33159099578` also pass their bounded readiness/projection gates.
 Reviewed documentation baseline `bba02a6` passes repository CI `33160646494`.
 
-1. Implement the real restricted-egress provisioner, bind the create-time
-   network-policy reference through lifecycle composition, and validate the
-   complete Browser adapter with it and the existing real provenance verifier.
-   Then compose the existing Provider-local session/application/reference/usage
-   components, protected handlers, and the caller-owned Gateway boundary. Keep
-   routes absent and do not advertise `sandbox.browser` until that complete
+1. Compose the existing Provider-local session/application/reference/usage,
+   Docker runtime, provenance, and restricted-egress components behind strict
+   protected Browser handlers, then compose the caller-owned Gateway boundary.
+   Keep routes absent and do not advertise `sandbox.browser` until that complete
    dependency graph passes.
 2. Preserve the clean reference and candidate coding/shell harnesses and their
    named local evidence. Add browser caller scenarios only after browser

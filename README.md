@@ -62,14 +62,17 @@ Currently implemented:
   duration-evidence, and fail-closed Docker runtime-adapter components; the
   adapter binds the exact signed image, private non-TTY CDP relay, stable guest
   mounts, and runtime limits
-- a real, uncomposed GitHub CLI/Sigstore Browser provenance verifier; no real
-  restricted-egress provisioner, create-policy binding, handler, Gateway,
+- a real, uncomposed GitHub CLI/Sigstore Browser provenance verifier and a real
+  uncomposed Docker restricted-egress provisioner. Browser lifecycle authority
+  persists the create-time restricted policy; the adapter binds it to a
+  per-allocation internal network, pinned private DNS/HTTP/TLS gateway, and
+  exact hostname policy. No Browser handler, caller-owned Gateway,
   advertisement, or browser caller is enabled
 
 Planned but not yet implemented:
 
-- Browser restricted-egress and create-policy binding, protected transport,
-  Gateway composition, and independent caller E2E
+- Browser protected transport, caller-owned Gateway composition, capability
+  advertisement, and independent caller E2E
 - runtime images for desktop workloads
 - display, audio, input, streaming, clipboard, and file-transfer modules
 - deployable WebRTC / VNC / public WebSocket Gateway composition

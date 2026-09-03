@@ -93,10 +93,12 @@ Contract authorizes the coding/shell surface plus browser capability, create,
 session-open, opaque-handoff, operation, usage, and admission authority. The
 Provider implementation composes the coding/shell development surface only.
 The two browser-session routes remain deliberately absent from the protected
-router, startup advertisement remains empty unless the existing coding/shell
-dependency graph passes. The Browser Docker adapter and real GitHub
-CLI/Sigstore provenance verifier remain uncomposed; restricted-egress,
-create-policy binding, and Gateway composition are still absent.
+router, and startup advertisement remains empty unless the existing coding/shell
+dependency graph passes. The Browser session/application components, Docker
+adapter, real GitHub CLI/Sigstore provenance verifier, restricted-egress
+provisioner, and immutable create-policy binding remain uncomposed behind that
+transport. Protected Browser handlers and caller-owned Gateway composition are
+still absent.
 
 | Method and path | Responsibility |
 | --- | --- |
@@ -373,7 +375,7 @@ open:
 | Workspace | The Provider Docker development adapter supplies `/inputs`, `/workspace`, `/outputs`, and bounded tmpfs `/tmp` with owned cleanup; exec consumes that runtime without exposing host paths. | Add artifact consumers, capacity enforcement, and stronger isolation evidence. |
 | Security | Docker defaults already drop capabilities, use non-root/read-only root, disable networking, and limit resources. | Add policy enforcement, stronger isolation profiles, secret grants, egress controls, audit evidence, and production auth. |
 | Events and usage | Durable lifecycle events and bounded usage-evidence components exist without a complete runtime collector composition. | Complete collection/reconciliation while leaving platform accounting authority outside the Provider. |
-| Snapshots/browser/desktop | Browser Contract authority/projection and the exact signed image pass their named gates. The uncomposed `provider/browser` session/application/reference/usage components and fail-closed Docker adapter have focused evidence: exact image/seccomp metadata, fixed non-TTY loopback relay, durable allocation identity, four stable bounded guest mounts, ownership, restart observation, capacity, expiry, and cleanup. The real GitHub CLI/Sigstore provenance verifier also passes its separate component gate but is not wired into complete startup. Restricted-egress provisioning is absent, so Browser routes, Gateway, and advertisement remain uncomposed. Snapshots and desktop remain unauthorized optional behavior. | Implement and validate the real restricted-egress provisioner, bind create-time network authority, and compose it with the existing provenance verifier before protected handler/Gateway composition; keep every optional profile unadvertised until its security and caller gates pass. |
+| Snapshots/browser/desktop | Browser Contract authority/projection and the exact signed image pass their named gates. The uncomposed `provider/browser` session/application/reference/usage components, fail-closed Docker adapter, real GitHub CLI/Sigstore provenance verifier, restricted-egress provisioner, and immutable create-policy binding have focused evidence. The local egress Gateway enforces DNS/HTTP/TLS policy on a per-allocation internal network; it is not the caller-owned Gateway. Browser protected handlers, caller-owned Gateway composition, and advertisement remain absent. Snapshots and desktop remain unauthorized optional behavior. | Compose protected Browser handlers and the caller-owned Gateway without weakening the verified runtime, provenance, network, or create-policy bindings; keep every optional profile unadvertised until its security and independent-caller gates pass. |
 
 ## Delivery plan and release gates
 
