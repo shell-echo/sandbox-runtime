@@ -1,8 +1,9 @@
 # P4 Optional Profiles
 
-Status: browser Contract/Go projection and the digest-pinned image component
-are complete within their named local gates. No browser session application,
-handler, route composition, or advertisement is implemented. This work does not
+Status: browser Contract/Go projection, the digest-pinned image component, and
+uncomposed Provider-local session/application/reference/usage components pass
+their named local gates. No browser handler, route composition, or advertisement
+is implemented. This work does not
 close P3, browser external-caller, aggregate conformance, multi-controller,
 multi-tenant, deployment, or production gates.
 
@@ -27,6 +28,11 @@ evidence chain before it can be advertised.
   deterministic local platform digests, and a fixed private guest endpoint.
   It is not a composed browser runtime, session service, or deployable public
   Gateway.
+- The uncomposed `provider/browser` component supplies browser-specific domain
+  types, runtime ports, durable memory/file authority, restart reconciliation,
+  expiry/cancellation/unknown-outcome cleanup, opaque reference registry and
+  resolver, operation projection, and bounded duration usage evidence. It is a
+  single-controller Provider-local component and has no transport composition.
 - `blocks/` can validate an internal digest-pinned Block manifest, but it does
   not authorize a Provider capability or establish image provenance.
 - A real Agent Platform caller and migration traffic harness remain unavailable;
@@ -71,10 +77,10 @@ inferring support from generic schema vocabulary:
 | Contract surface | Locked result | Remaining implementation gate |
 | --- | --- | --- |
 | Capability snapshot | Browser-only `1.0.0`/`browser-v1` maps to `sandbox-runtime-browser-v1`; mixed, wrong-version, wrong-profile, and wrong-runtime shapes fail closed | Derive advertisement only from a complete browser dependency graph |
-| Create request | Browser fixture binds exact capability/runtime, digest-pinned amd64 image authority, restricted network policy, stable workspace, and unprivileged security fields | Supply a real reproducible image digest and validate its declared runtime behavior |
-| Session and handoff | Separate schemas and routes bind session/operation/attempt/fence identity and expose only an expiring opaque reference | Implement durable browser session application/repository/runtime ports without composing transport yet |
-| Gateway security | Semantic rules and security matrix leave user/tenant authorization, revocation, audit, reconnect, and fresh reference resolution with the caller | Implement and fault-test private endpoint resolution and caller-owned policy composition |
-| Usage | Browser duration meter and operation/sandbox correlation are locked under the shared usage route | Implement bounded collection, reconciliation, expiry, and restart behavior |
+| Create request | Browser fixture binds exact capability/runtime, digest-pinned amd64 image authority, restricted network policy, stable workspace, and unprivileged security fields; the image component has reproducible local platform digests | Attach signed provenance and validate the image under a usable Chromium sandbox before composition |
+| Session and handoff | Separate schemas and routes bind session/operation/attempt/fence identity and expose only an expiring opaque reference; uncomposed browser authority, coordinator, registry, and resolver now pass focused lifecycle/restart/expiry tests | Compose transport only after a usable browser sandbox, Gateway policy, and caller evidence pass |
+| Gateway security | Semantic rules and security matrix leave user/tenant authorization, revocation, audit, reconnect, and fresh reference resolution with the caller; the Provider-local registry/resolver rechecks opaque state and committed handoff on every dial | Compose only with caller-owned authorization/revocation/audit/reconnect ports and fault-test the combined Gateway |
+| Usage | Browser duration meter and operation/sandbox correlation are locked under the shared usage route; the uncomposed component derives bounded duration evidence from successful handoff and earliest trusted stop/expiry | Add runtime termination/reconciliation integration and route projection after composition |
 | Fixtures and Suite | Success/rejection/security/admission fixtures and 10 new Suite cases raise the locked Suite from 38 to 48 cases | Add runtime fault/concurrency/image cases in later slices; current Suite is Contract projection evidence only |
 | Runtime image | ADR 0018 image component passes amd64/arm64 reproducibility and constrained Docker smoke with immutable source pins and loopback CDP; signed provenance attestation and verified Chromium sandbox remain absent | Attach signed provenance, replace the development `--no-sandbox` override with a verified sandbox posture, and re-run mounts, user, limits, network, and endpoint checks before Provider composition |
 
@@ -103,11 +109,11 @@ internal Block manifest a wire resource or establish browser runtime evidence.
 
 The digest-pinned browser image component is complete under ADR 0018 for
 source, supported architectures, numeric user, read-only root, stable mounts,
-limits, restricted egress, and a private guest endpoint. Next implement
-uncomposed provider-local browser session ports, durable operation/session
-state, reconciliation, expiry, cleanup, usage, and opaque resolution. In
-parallel, obtain signed provenance and a usable browser sandbox; both remain
-required before composition. Do not add handler routes or enable advertisement
-until those component gates and the caller-owned Gateway boundary pass; browser
-external-caller E2E follows after composition and remains separate from the
-existing coding/shell harness runs.
+limits, restricted egress, and a private guest endpoint. The uncomposed
+Provider-local browser session/application/reference/usage components now pass
+their focused lifecycle, restart, expiry, cleanup, opaque-resolution, and
+duration evidence tests. In parallel, obtain signed provenance and a usable
+browser sandbox; both remain required before composition. Do not add handler
+routes or enable advertisement until those component gates and the caller-owned
+Gateway boundary pass; browser external-caller E2E follows after composition
+and remains separate from the existing coding/shell harness runs.

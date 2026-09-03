@@ -140,10 +140,11 @@ This snapshot was audited on 2026-09-03 against browser Contract authority
 `75e572599907a1dc15199f245a5e2f1719d6d967`. The new slice authorizes an
 atomic browser-only capability shape, create/session/handoff schemas, protected
 admission bindings, opaque reference security, operation/usage projection, and
-10 new Suite cases. The browser image component is now implemented under
-`profiles/browser/image/`; no browser session application,
-protected-route composition, startup advertisement, or browser caller scenario
-is included.
+10 new Suite cases. The browser image component is implemented under
+`profiles/browser/image/`. The uncomposed Provider-local browser
+session/application/reference/usage component is implemented under
+`provider/browser/`; no protected-route composition, startup advertisement, or
+browser caller scenario is included.
 
 The Contract verifier and locked 48-case Suite pass against the current
 projection. The `e2e/` module race/shuffle, vet, and lock checks also pass. A
@@ -215,9 +216,10 @@ P4 authority planning is recorded in ADR 0017 and
 [`plan/p4-optional-profiles.md`](plan/p4-optional-profiles.md). Browser Contract
 authority and Go projection are now locked, and ADR 0018 records the
 reproducible image component; both browser routes remain absent from the
-Provider router. The next slice is uncomposed provider-local runtime/session
-components. No browser capability advertisement or production configuration is
-enabled.
+Provider router. The uncomposed `provider/browser` session/application,
+reference, and usage components now pass focused local gates. No browser
+capability advertisement or production configuration is enabled; the next
+slice is a usable browser runtime plus its protected/Gateway composition.
 
 Contract identity:
 
@@ -236,7 +238,7 @@ Contract identity:
 | P2.5i | Current local reference lock-refresh passed 15 initial plus 5 restart/resume coding/shell scenarios against Provider `24b2e36` using harness `75e5725`; hosted release run `33602869956` passed the same current lock | Local evidence is `20260902T065111.030014000Z`; no browser scenario, Agent Platform, or production property is implied |
 | P2 | Reference coding/shell caller release gate passed | Aggregate conformance, actual Agent Platform compatibility, multi-controller, hostile multi-tenant isolation, deployment, and production gates remain open |
 | P3 | Local revision binding/shadow/metrics component evidence plus current local candidate integration (`20260902T065200.812211000Z`) and hosted candidate lock regression (`24b2e36`/`13c6a57`) | Real platform traffic shadow parity, canary, rollback, old-run drain, metric parity, and unchanged platform contracts remain open |
-| P4 | Browser Contract authority/projection and the browser image component pass their named local gates; browser runtime/session implementation has not started | Build/attach signed provenance and a usable browser sandbox, then implement uncomposed runtime/session/evidence components; handler, advertisement, browser caller, security, deployment, and production gates remain open |
+| P4 | Browser Contract authority/projection, image component, and uncomposed Provider-local session/application/reference/usage components pass their named local gates | Build/attach signed provenance and a usable browser sandbox, then compose runtime/handler/Gateway; browser advertisement, caller, security, deployment, and production gates remain open |
 
 Production readiness is not a numbered phase shortcut. Aggregate conformance,
 multi-controller reliability, hostile multi-tenant security, deployment, and
@@ -410,10 +412,10 @@ repository CI `33159099578` also pass their bounded readiness/projection gates.
 Reviewed documentation baseline `bba02a6` passes repository CI `33160646494`.
 
 1. Obtain signed provenance and a usable browser sandbox for the completed
-   image component, then implement the provider-local browser
-   session/application, durable operation/evidence, expiry, cleanup, usage, and
-   opaque-resolution components without composing the protected routes or
-   advertising `sandbox.browser`.
+   image component, then compose the provider-local browser runtime with the
+   already implemented uncomposed session/application/reference/usage
+   components. Keep protected routes absent and do not advertise
+   `sandbox.browser` until the complete dependency graph passes.
 2. Preserve the clean reference and candidate coding/shell harnesses and their
    named local evidence. Add browser caller scenarios only after browser
    transport composition has its own gate.
