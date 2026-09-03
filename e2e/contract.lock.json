@@ -2,7 +2,7 @@
   "schema_version": 1,
   "provider": {
     "repository": "github.com/shell-echo/sandbox-runtime",
-    "commit": "c91d83f4565034908e9582dab3a33390524e972b"
+    "commit": "83a7884f3f8de2aefc5e255919dd8c0d6fa041f1"
   },
   "contract": {
     "namespace": "urn:shell-echo:sandbox-runtime:provider-v1",
