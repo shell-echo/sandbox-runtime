@@ -131,7 +131,7 @@ func TestProviderArtifactUsageVerticalIntegration(t *testing.T) {
 		t.Fatalf("missing artifact evidence error = %v", err)
 	}
 
-	operationReader, err := newProviderOperationReader(composition.lifecycle, composition.exec, nil, composition.artifact)
+	operationReader, err := newProviderOperationReader(composition.lifecycle, composition.exec, nil, composition.artifact, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -189,7 +189,7 @@ func openP25GComposition(ctx context.Context, lifecycleConfig config.ProviderLif
 	if err != nil {
 		return nil, errors.Join(err, closeUsage(), closeLifecycle())
 	}
-	usageReader, err := newProviderUsageReader(usageConfig, store, collector, execApp)
+	usageReader, err := newProviderUsageReader(usageConfig, store, collector, execApp, nil)
 	if err != nil {
 		return nil, errors.Join(err, closeExec(), closeUsage(), closeLifecycle())
 	}

@@ -840,6 +840,65 @@ func TestProviderTerminalConfigurationValidation(t *testing.T) {
 	}
 }
 
+func TestProviderBrowserConfigurationRequiresCompleteFailClosedGraph(t *testing.T) {
+	valid := validBrowserProviderConfig()
+	if err := valid.Validate(); err != nil {
+		t.Fatalf("valid Browser configuration rejected: %v", err)
+	}
+	for name, mutate := range map[string]func(*ProviderConfig){
+		"transport":            func(c *ProviderConfig) { c.Transport.Enabled = false },
+		"protected admission":  func(c *ProviderConfig) { c.ProtectedAdmission.Enabled = false },
+		"lifecycle disabled":   func(c *ProviderConfig) { c.Lifecycle.Enabled = false },
+		"wrong lifecycle":      func(c *ProviderConfig) { c.Lifecycle.Driver = ProviderLifecycleFakeDriver },
+		"memory lifecycle":     func(c *ProviderConfig) { c.Lifecycle.Repository.Driver = ProviderLifecycleMemoryRepository },
+		"usage disabled":       func(c *ProviderConfig) { c.Usage.Enabled = false },
+		"session repository":   func(c *ProviderConfig) { c.Browser.SessionRepositoryFile = "" },
+		"reference registry":   func(c *ProviderConfig) { c.Browser.ReferenceRegistryFile = c.Browser.SessionRepositoryFile },
+		"mutable image":        func(c *ProviderConfig) { c.Browser.Docker.Image = "browser:latest" },
+		"resource limit":       func(c *ProviderConfig) { c.Browser.Docker.WorkspaceBytes = c.Browser.Docker.MemoryBytes + 1 },
+		"multiple per sandbox": func(c *ProviderConfig) { c.Browser.Docker.MaxSessionsPerSandbox = 2 },
+		"relative gh":          func(c *ProviderConfig) { c.Browser.Provenance.ExecutablePath = "gh" },
+		"gh digest":            func(c *ProviderConfig) { c.Browser.Provenance.ExecutableDigest = "sha256:bad" },
+		"gateway image":        func(c *ProviderConfig) { c.Browser.RestrictedNetwork.GatewayImage = "gateway:latest" },
+		"default uplink":       func(c *ProviderConfig) { c.Browser.RestrictedNetwork.UplinkNetwork = "bridge" },
+		"missing policy":       func(c *ProviderConfig) { c.Browser.RestrictedNetwork.Policies = nil },
+		"policy mismatch":      func(c *ProviderConfig) { c.Browser.Docker.NetworkPolicyReference = "browser-egress-policy-other" },
+		"ownership mismatch":   func(c *ProviderConfig) { c.Browser.RestrictedNetwork.ControllerID = "other-controller" },
+		"host mismatch":        func(c *ProviderConfig) { c.Browser.RestrictedNetwork.Host = "tcp://other.example:2376" },
+		"shutdown timeout":     func(c *ProviderConfig) { c.Browser.ShutdownCleanupSeconds = 0 },
+		"usage retention":      func(c *ProviderConfig) { c.Browser.UsageRetentionSeconds = 30 },
+	} {
+		t.Run(name, func(t *testing.T) {
+			candidate := validBrowserProviderConfig()
+			mutate(&candidate)
+			if err := candidate.Validate(); err == nil {
+				t.Fatal("invalid Browser configuration was accepted")
+			}
+		})
+	}
+}
+
+func TestDisabledProviderBrowserConfigurationIsInert(t *testing.T) {
+	provider := validEnabledProviderConfig()
+	provider.Browser = ProviderBrowserConfig{
+		Enabled:           false,
+		Docker:            ProviderBrowserDockerConfig{Image: "mutable", MaxSessionsPerSandbox: 99},
+		Provenance:        ProviderBrowserProvenanceConfig{ExecutablePath: "relative"},
+		RestrictedNetwork: ProviderBrowserNetworkConfig{GatewayImage: "mutable", UplinkNetwork: "bridge"},
+	}
+	if err := provider.Validate(); err != nil {
+		t.Fatalf("disabled Browser placeholders rejected: %v", err)
+	}
+}
+
+func TestProviderBrowserStateFilesRemainIndependent(t *testing.T) {
+	provider := validBrowserProviderConfig()
+	provider.Browser.SessionRepositoryFile = provider.Usage.RepositoryFile
+	if err := provider.Validate(); err == nil {
+		t.Fatal("Browser session and usage state-file collision was accepted")
+	}
+}
+
 // TestLoadServerDefaults confirms Load applies the server defaults when no file
 // or env is present.
 func TestLoadServerDefaults(t *testing.T) {
@@ -953,6 +1012,37 @@ func validTerminalProviderConfig() ProviderConfig {
 		RuntimeProfileID: "sandbox-runtime-coding-shell-v1", CapabilityProfileID: "terminal-v1",
 		BrokerPath: "/workspace/.sandbox-runtime/terminal-broker", ShellPath: "/bin/sh",
 		MaxSessionsPerSandbox: 4, MaxSessionsPerController: 64, ShutdownCleanupSeconds: 10,
+	}
+	return config
+}
+
+func validBrowserProviderConfig() ProviderConfig {
+	config := validEnabledProviderConfig()
+	config.ProtectedAdmission = validProtectedAdmissionConfig()
+	config.Lifecycle = ProviderLifecycleConfig{
+		Enabled: true, Driver: ProviderLifecycleBrowserDriver,
+		Repository: ProviderLifecycleRepositoryConfig{Driver: ProviderLifecycleFileRepository, File: ProviderLifecycleRepositoryFileConfig{Path: "data/provider-browser-lifecycle.json"}},
+	}
+	config.Usage = ProviderUsageConfig{Enabled: true, RepositoryFile: "data/provider-browser-usage.json"}
+	config.Browser = ProviderBrowserConfig{
+		Enabled: true, SessionRepositoryFile: "data/provider-browser-sessions.json", ReferenceRegistryFile: "data/provider-browser-references.json",
+		ShutdownCleanupSeconds: 10, UsageRetentionSeconds: 3600,
+		Docker: ProviderBrowserDockerConfig{
+			Image: "ghcr.io/shell-echo/sandbox-runtime-browser@sha256:" + strings.Repeat("a", 64), PullPolicy: "if_not_present",
+			MemoryBytes: 1 << 30, NanoCPUs: 1_000_000_000, PidsLimit: 256,
+			InputsBytes: 16 << 20, TmpfsBytes: 256 << 20, WorkspaceBytes: 256 << 20, OutputsBytes: 128 << 20,
+			OperationTimeoutSeconds: 90, ProvenanceTimeoutSeconds: 120, PullTimeoutSeconds: 120, StopTimeoutSeconds: 10,
+			DataRoot: "data/provider-browser-runtime", ManifestPath: "profiles/browser/image/manifest.json", SeccompPath: "profiles/browser/image/chromium-seccomp.json",
+			Namespace: "browser-dev", ControllerID: "browser-controller", NetworkPolicyReference: "browser-egress-policy-1",
+			MaxSessionsPerSandbox: 1, MaxSessionsPerController: 16,
+		},
+		Provenance: ProviderBrowserProvenanceConfig{ExecutablePath: "/usr/local/bin/gh", ExecutableDigest: "sha256:" + strings.Repeat("b", 64)},
+		RestrictedNetwork: ProviderBrowserNetworkConfig{
+			GatewayImage: "sha256:" + strings.Repeat("c", 64), UplinkNetwork: "browser-uplink",
+			Namespace: "browser-dev", ControllerID: "browser-controller",
+			Policies:    []ProviderBrowserNetworkPolicyConfig{{Reference: "browser-egress-policy-1", AllowedHosts: []string{"example.com"}}},
+			MemoryBytes: 128 << 20, NanoCPUs: 500_000_000, PidsLimit: 64, OperationTimeoutSeconds: 90, StopTimeoutSeconds: 10,
+		},
 	}
 	return config
 }

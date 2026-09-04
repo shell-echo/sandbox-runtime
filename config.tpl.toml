@@ -158,6 +158,67 @@ malware_command = []
 enabled = false
 repository_file = 'data/provider-usage.json'
 
+# P4 Browser composition is independently opt-in and development-only. It
+# composes the Provider-local lifecycle, signed Chromium runtime, restricted
+# egress, protected Browser routes, opaque handoff registry, and usage reader.
+# It does not expose a public Browser Gateway and does not advertise
+# sandbox.browser. The caller must separately own authorization, revocation,
+# audit, reconnect policy, WebSocket admission, and the public listener.
+[server.provider.browser]
+enabled = false
+session_repository_file = 'data/provider-browser-sessions.json'
+reference_registry_file = 'data/provider-browser-references.json'
+shutdown_cleanup_seconds = 10
+usage_retention_seconds = 3600
+
+[server.provider.browser.docker]
+host = ''
+image = 'ghcr.io/shell-echo/sandbox-runtime-browser@sha256:87d3216c22ada0fea74b375a3ee5c2ddf021d3e1913569e2aeb4a316ed3b5c2f'
+pull_policy = 'if_not_present'
+memory_bytes = 1073741824
+nano_cpus = 1000000000
+pids_limit = 256
+inputs_bytes = 16777216
+tmpfs_bytes = 268435456
+workspace_bytes = 268435456
+outputs_bytes = 134217728
+operation_timeout_seconds = 90
+provenance_timeout_seconds = 120
+pull_timeout_seconds = 120
+stop_timeout_seconds = 10
+data_root = 'data/provider-browser-runtime'
+manifest_path = 'profiles/browser/image/manifest.json'
+seccomp_path = 'profiles/browser/image/chromium-seccomp.json'
+namespace = 'default'
+controller_id = ''
+network_policy_reference = 'browser-egress-policy-1'
+max_sessions_per_sandbox = 1
+max_sessions_per_controller = 16
+
+[server.provider.browser.provenance]
+# Both fields are required when Browser is enabled. executable_digest pins the
+# exact gh binary used for Sigstore/SLSA verification.
+executable_path = ''
+executable_digest = ''
+
+[server.provider.browser.restricted_network]
+host = ''
+# Use an immutable local image ID or digest-pinned repository reference.
+gateway_image = ''
+# Must name an explicitly operator-owned network, never bridge/default/host.
+uplink_network = ''
+namespace = 'default'
+controller_id = ''
+memory_bytes = 134217728
+nano_cpus = 500000000
+pids_limit = 64
+operation_timeout_seconds = 90
+stop_timeout_seconds = 10
+
+[[server.provider.browser.restricted_network.policies]]
+reference = 'browser-egress-policy-1'
+allowed_hosts = []
+
 [runtime]
 driver = 'fake' # fake | docker
 

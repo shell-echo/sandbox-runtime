@@ -195,6 +195,43 @@ func validateImage(info imageInfo, manifest browserimage.Manifest, publication b
 	return nil
 }
 
+// Ready revalidates the runtime dependencies used by the Browser lifecycle
+// readiness adapter. It performs no allocation and returns no backend detail.
+func (d *Driver) Ready(ctx context.Context) error {
+	if err := contextError(ctx); err != nil {
+		return err
+	}
+	if d == nil || d.engine == nil || d.provenance == nil || d.network == nil {
+		return ErrInvalidDriver
+	}
+	networkCtx, networkCancel := context.WithTimeout(ctx, connectTimeout)
+	if err := d.network.Ready(networkCtx, d.options.NetworkPolicyReference); err != nil {
+		result := safeContextError(ErrNetworkUnavailable, networkCtx, err)
+		networkCancel()
+		return result
+	}
+	networkCancel()
+	provenanceCtx, provenanceCancel := context.WithTimeout(ctx, time.Duration(d.options.ProvenanceTimeoutSeconds)*time.Second)
+	if err := d.provenance.Verify(provenanceCtx, d.publication); err != nil {
+		result := safeContextError(ErrInvalidProvenance, provenanceCtx, err)
+		provenanceCancel()
+		return result
+	}
+	provenanceCancel()
+	inspectCtx, inspectCancel := context.WithTimeout(ctx, time.Duration(d.options.OperationTimeoutSeconds)*time.Second)
+	image, err := d.engine.inspectImage(inspectCtx, d.options.Image)
+	if err != nil {
+		result := safeContextError(ErrInvalidRuntime, inspectCtx, err)
+		inspectCancel()
+		return result
+	}
+	inspectCancel()
+	if validateImage(image, d.manifest, d.publication) != nil {
+		return ErrInvalidRuntime
+	}
+	return nil
+}
+
 func (d *Driver) Allocate(ctx context.Context, allocation providerbrowser.Allocation) (providerbrowser.AllocationReceipt, error) {
 	if err := contextError(ctx); err != nil {
 		return providerbrowser.AllocationReceipt{}, err

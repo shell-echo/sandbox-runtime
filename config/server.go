@@ -38,6 +38,7 @@ type ProviderConfig struct {
 	Terminal           ProviderTerminalConfig           `mapstructure:"terminal"`
 	Artifact           ProviderArtifactConfig           `mapstructure:"artifact"`
 	Usage              ProviderUsageConfig              `mapstructure:"usage"`
+	Browser            ProviderBrowserConfig            `mapstructure:"browser"`
 }
 
 // ProviderLifecycleDriver identifies a Provider-local runtime implementation.
@@ -45,8 +46,9 @@ type ProviderConfig struct {
 type ProviderLifecycleDriver string
 
 const (
-	ProviderLifecycleFakeDriver   ProviderLifecycleDriver = "fake"
-	ProviderLifecycleDockerDriver ProviderLifecycleDriver = "docker"
+	ProviderLifecycleFakeDriver    ProviderLifecycleDriver = "fake"
+	ProviderLifecycleDockerDriver  ProviderLifecycleDriver = "docker"
+	ProviderLifecycleBrowserDriver ProviderLifecycleDriver = "browser"
 )
 
 // ProviderLifecycleRepositoryDriver identifies Provider-local persistence.
@@ -137,6 +139,70 @@ type ProviderUsageConfig struct {
 	RepositoryFile string `mapstructure:"repository_file"`
 }
 
+// ProviderBrowserConfig controls the default-disabled development Browser
+// vertical. It contains Provider-local runtime inputs only; caller identity,
+// authorization, revocation, audit, and the public Gateway remain outside this
+// configuration surface.
+type ProviderBrowserConfig struct {
+	Enabled                bool                            `mapstructure:"enabled"`
+	SessionRepositoryFile  string                          `mapstructure:"session_repository_file"`
+	ReferenceRegistryFile  string                          `mapstructure:"reference_registry_file"`
+	ShutdownCleanupSeconds int                             `mapstructure:"shutdown_cleanup_seconds"`
+	UsageRetentionSeconds  int                             `mapstructure:"usage_retention_seconds"`
+	Docker                 ProviderBrowserDockerConfig     `mapstructure:"docker"`
+	Provenance             ProviderBrowserProvenanceConfig `mapstructure:"provenance"`
+	RestrictedNetwork      ProviderBrowserNetworkConfig    `mapstructure:"restricted_network"`
+}
+
+type ProviderBrowserDockerConfig struct {
+	Host                     string `mapstructure:"host"`
+	Image                    string `mapstructure:"image"`
+	PullPolicy               string `mapstructure:"pull_policy"`
+	MemoryBytes              int64  `mapstructure:"memory_bytes"`
+	NanoCPUs                 int64  `mapstructure:"nano_cpus"`
+	PidsLimit                int64  `mapstructure:"pids_limit"`
+	InputsBytes              int64  `mapstructure:"inputs_bytes"`
+	TmpfsBytes               int64  `mapstructure:"tmpfs_bytes"`
+	WorkspaceBytes           int64  `mapstructure:"workspace_bytes"`
+	OutputsBytes             int64  `mapstructure:"outputs_bytes"`
+	OperationTimeoutSeconds  int    `mapstructure:"operation_timeout_seconds"`
+	ProvenanceTimeoutSeconds int    `mapstructure:"provenance_timeout_seconds"`
+	PullTimeoutSeconds       int    `mapstructure:"pull_timeout_seconds"`
+	StopTimeoutSeconds       int    `mapstructure:"stop_timeout_seconds"`
+	DataRoot                 string `mapstructure:"data_root"`
+	ManifestPath             string `mapstructure:"manifest_path"`
+	SeccompPath              string `mapstructure:"seccomp_path"`
+	Namespace                string `mapstructure:"namespace"`
+	ControllerID             string `mapstructure:"controller_id"`
+	NetworkPolicyReference   string `mapstructure:"network_policy_reference"`
+	MaxSessionsPerSandbox    int    `mapstructure:"max_sessions_per_sandbox"`
+	MaxSessionsPerController int    `mapstructure:"max_sessions_per_controller"`
+}
+
+type ProviderBrowserProvenanceConfig struct {
+	ExecutablePath   string `mapstructure:"executable_path"`
+	ExecutableDigest string `mapstructure:"executable_digest"`
+}
+
+type ProviderBrowserNetworkPolicyConfig struct {
+	Reference    string   `mapstructure:"reference"`
+	AllowedHosts []string `mapstructure:"allowed_hosts"`
+}
+
+type ProviderBrowserNetworkConfig struct {
+	Host                    string                               `mapstructure:"host"`
+	GatewayImage            string                               `mapstructure:"gateway_image"`
+	UplinkNetwork           string                               `mapstructure:"uplink_network"`
+	Namespace               string                               `mapstructure:"namespace"`
+	ControllerID            string                               `mapstructure:"controller_id"`
+	Policies                []ProviderBrowserNetworkPolicyConfig `mapstructure:"policies"`
+	MemoryBytes             int64                                `mapstructure:"memory_bytes"`
+	NanoCPUs                int64                                `mapstructure:"nano_cpus"`
+	PidsLimit               int64                                `mapstructure:"pids_limit"`
+	OperationTimeoutSeconds int                                  `mapstructure:"operation_timeout_seconds"`
+	StopTimeoutSeconds      int                                  `mapstructure:"stop_timeout_seconds"`
+}
+
 // ProviderTransportConfig configures the dedicated, mTLS-only Provider
 // listener. TLS policy is fixed by the transport implementation, not exposed as
 // a downgradeable configuration value.
@@ -212,11 +278,14 @@ type ProviderCompatibilityProfile struct {
 }
 
 var (
-	providerSuiteVersionPattern = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+$`)
-	providerSuiteDigestPattern  = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
-	providerPinnedImagePattern  = regexp.MustCompile(`^.+@sha256:[0-9a-f]{64}$`)
-	providerOwnershipPattern    = regexp.MustCompile(`^[A-Za-z0-9._-]{1,63}$`)
-	providerProfileIDPattern    = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$`)
+	providerSuiteVersionPattern   = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+$`)
+	providerSuiteDigestPattern    = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
+	providerPinnedImagePattern    = regexp.MustCompile(`^.+@sha256:[0-9a-f]{64}$`)
+	providerImmutableImagePattern = regexp.MustCompile(`^(?:sha256:[0-9a-f]{64}|.+@sha256:[0-9a-f]{64})$`)
+	providerOwnershipPattern      = regexp.MustCompile(`^[A-Za-z0-9._-]{1,63}$`)
+	providerProfileIDPattern      = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$`)
+	providerDockerNamePattern     = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$`)
+	providerSHA256Pattern         = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 )
 
 // load registers the section's defaults and env bindings, unmarshals the merged
@@ -250,8 +319,8 @@ func (c *ServerConfig) load(v *viper.Viper) error {
 // configuration is inert and may retain template placeholders.
 func (c *ProviderConfig) Validate() error {
 	if !c.Transport.Enabled {
-		if c.Capability.CodingShellEnabled || c.Lifecycle.Enabled || c.Exec.Enabled || c.Terminal.Enabled || c.Artifact.Enabled || c.Usage.Enabled {
-			return errors.New("lifecycle, exec, terminal, artifact, and usage require Provider transport to be enabled")
+		if c.Capability.CodingShellEnabled || c.Lifecycle.Enabled || c.Exec.Enabled || c.Terminal.Enabled || c.Artifact.Enabled || c.Usage.Enabled || c.Browser.Enabled {
+			return errors.New("lifecycle, exec, terminal, artifact, usage, and browser require Provider transport to be enabled")
 		}
 		return nil
 	}
@@ -278,6 +347,9 @@ func (c *ProviderConfig) Validate() error {
 	}
 	if err := c.Usage.validateEnabled(); err != nil {
 		return fmt.Errorf("usage %w", err)
+	}
+	if err := c.Browser.validateEnabled(); err != nil {
+		return fmt.Errorf("browser %w", err)
 	}
 	if c.Lifecycle.Enabled && !c.ProtectedAdmission.Enabled {
 		return errors.New("lifecycle requires protected admission to be enabled")
@@ -306,9 +378,20 @@ func (c *ProviderConfig) Validate() error {
 			return errors.New("artifact requires the Docker Provider lifecycle and its file repository")
 		}
 	}
+	if c.Browser.Enabled {
+		if !c.ProtectedAdmission.Enabled {
+			return errors.New("browser requires protected admission to be enabled")
+		}
+		if !c.Lifecycle.Enabled || c.Lifecycle.Driver != ProviderLifecycleBrowserDriver || c.Lifecycle.Repository.Driver != ProviderLifecycleFileRepository {
+			return errors.New("browser requires the Browser lifecycle readiness driver and its file repository")
+		}
+		if !c.Usage.Enabled {
+			return errors.New("browser requires durable usage evidence storage")
+		}
+	}
 	if c.Usage.Enabled {
-		if !c.ProtectedAdmission.Enabled || !c.Exec.Enabled {
-			return errors.New("usage requires protected admission and the composed exec vertical")
+		if !c.ProtectedAdmission.Enabled || (!c.Exec.Enabled && !c.Browser.Enabled) {
+			return errors.New("usage requires protected admission and a composed exec or Browser vertical")
 		}
 	}
 	if c.Capability.CodingShellEnabled {
@@ -337,6 +420,9 @@ func (c *ProviderConfig) Validate() error {
 	}
 	if c.Usage.Enabled {
 		files = append(files, c.Usage.RepositoryFile)
+	}
+	if c.Browser.Enabled {
+		files = append(files, c.Browser.SessionRepositoryFile, c.Browser.ReferenceRegistryFile)
 	}
 	seenFiles := make(map[string]struct{})
 	for _, configured := range files {
@@ -436,6 +522,112 @@ func (c *ProviderUsageConfig) validateEnabled() error {
 
 func (c ProviderUsageConfig) Validate() error { return c.validateEnabled() }
 
+func (c *ProviderBrowserConfig) validateEnabled() error {
+	if !c.Enabled {
+		return nil
+	}
+	for name, value := range map[string]string{
+		"session_repository_file": c.SessionRepositoryFile,
+		"reference_registry_file": c.ReferenceRegistryFile,
+	} {
+		if strings.TrimSpace(value) == "" {
+			return fmt.Errorf("%s must not be empty", name)
+		}
+	}
+	if filepath.Clean(c.SessionRepositoryFile) == filepath.Clean(c.ReferenceRegistryFile) {
+		return errors.New("session_repository_file and reference_registry_file must be distinct")
+	}
+	if c.ShutdownCleanupSeconds < 1 || c.ShutdownCleanupSeconds > 300 ||
+		c.UsageRetentionSeconds < 60 || c.UsageRetentionSeconds > 2_592_000 {
+		return errors.New("shutdown and usage-retention durations are outside their bounds")
+	}
+	if err := c.Docker.validate(); err != nil {
+		return fmt.Errorf("docker %w", err)
+	}
+	if !filepath.IsAbs(c.Provenance.ExecutablePath) || !providerSHA256Pattern.MatchString(c.Provenance.ExecutableDigest) {
+		return errors.New("provenance executable_path must be absolute and executable_digest must be sha256-pinned")
+	}
+	if err := c.RestrictedNetwork.validate(c.Docker.NetworkPolicyReference); err != nil {
+		return fmt.Errorf("restricted network %w", err)
+	}
+	if c.Docker.Namespace != c.RestrictedNetwork.Namespace || c.Docker.ControllerID != c.RestrictedNetwork.ControllerID {
+		return errors.New("docker and restricted-network ownership identities must match")
+	}
+	if strings.TrimSpace(c.Docker.Host) != strings.TrimSpace(c.RestrictedNetwork.Host) {
+		return errors.New("docker and restricted-network hosts must match")
+	}
+	return nil
+}
+
+func (c ProviderBrowserConfig) Validate() error { return c.validateEnabled() }
+
+func (c ProviderBrowserDockerConfig) validate() error {
+	if !providerPinnedImagePattern.MatchString(c.Image) {
+		return errors.New("image must be pinned by sha256 digest")
+	}
+	switch c.PullPolicy {
+	case "never", "if_not_present", "always":
+	default:
+		return errors.New("pull_policy is unsupported")
+	}
+	const maxBytes = int64(64 << 30)
+	for _, value := range []int64{c.MemoryBytes, c.InputsBytes, c.TmpfsBytes, c.WorkspaceBytes, c.OutputsBytes} {
+		if value <= 0 || value > maxBytes {
+			return errors.New("byte limits must be positive and bounded")
+		}
+	}
+	if c.InputsBytes > c.MemoryBytes || c.TmpfsBytes > c.MemoryBytes || c.WorkspaceBytes > c.MemoryBytes || c.OutputsBytes > c.MemoryBytes ||
+		c.NanoCPUs <= 0 || c.NanoCPUs > 64_000_000_000 || c.PidsLimit <= 0 || c.PidsLimit > 4_096 {
+		return errors.New("resource limits are invalid")
+	}
+	for _, value := range []int{c.OperationTimeoutSeconds, c.ProvenanceTimeoutSeconds, c.PullTimeoutSeconds} {
+		if value < 1 || value > 600 {
+			return errors.New("operation, provenance, and pull timeouts must be between 1 and 600 seconds")
+		}
+	}
+	if c.StopTimeoutSeconds < 0 || c.StopTimeoutSeconds > 600 || strings.TrimSpace(c.DataRoot) == "" ||
+		strings.TrimSpace(c.ManifestPath) == "" || strings.TrimSpace(c.SeccompPath) == "" ||
+		!providerProfileIDPattern.MatchString(c.NetworkPolicyReference) ||
+		!providerOwnershipPattern.MatchString(c.Namespace) || !providerOwnershipPattern.MatchString(c.ControllerID) ||
+		c.MaxSessionsPerSandbox != 1 || c.MaxSessionsPerController < 1 || c.MaxSessionsPerController > 1_000 {
+		return errors.New("state paths, ownership, policy, capacity, or stop timeout is invalid")
+	}
+	return nil
+}
+
+func (c ProviderBrowserNetworkConfig) validate(expectedPolicy string) error {
+	if !providerImmutableImagePattern.MatchString(c.GatewayImage) || !providerDockerNamePattern.MatchString(c.UplinkNetwork) ||
+		!providerOwnershipPattern.MatchString(c.Namespace) || !providerOwnershipPattern.MatchString(c.ControllerID) ||
+		c.MemoryBytes <= 0 || c.MemoryBytes > 1<<30 || c.NanoCPUs <= 0 || c.NanoCPUs > 4_000_000_000 ||
+		c.PidsLimit <= 0 || c.PidsLimit > 256 || c.OperationTimeoutSeconds < 1 || c.OperationTimeoutSeconds > 600 ||
+		c.StopTimeoutSeconds < 0 || c.StopTimeoutSeconds > 600 || len(c.Policies) < 1 || len(c.Policies) > 64 {
+		return errors.New("gateway image, uplink, ownership, resources, timeouts, or policies are invalid")
+	}
+	switch c.UplinkNetwork {
+	case "none", "host", "bridge", "default":
+		return errors.New("uplink network must be explicitly operator-owned")
+	}
+	seen := make(map[string]struct{}, len(c.Policies))
+	for _, policy := range c.Policies {
+		if !providerProfileIDPattern.MatchString(policy.Reference) || len(policy.AllowedHosts) < 1 || len(policy.AllowedHosts) > 256 {
+			return errors.New("network policy reference or hostname count is invalid")
+		}
+		if _, exists := seen[policy.Reference]; exists {
+			return errors.New("network policy references must be unique")
+		}
+		seen[policy.Reference] = struct{}{}
+		for _, host := range policy.AllowedHosts {
+			if strings.TrimSpace(host) == "" || strings.TrimSpace(host) != host || len(host) > 253 {
+				return errors.New("network policy host is invalid")
+			}
+		}
+	}
+	if _, exists := seen[expectedPolicy]; !exists {
+		return errors.New("docker network policy reference is not configured")
+	}
+	return nil
+}
+
 func validProviderCommand(command []string) bool {
 	if len(command) < 1 || len(command) > 64 {
 		return false
@@ -476,6 +668,7 @@ func (c *ProviderLifecycleConfig) validateEnabled() error {
 		if err := c.Docker.validate(); err != nil {
 			return fmt.Errorf("docker %w", err)
 		}
+	case ProviderLifecycleBrowserDriver:
 	default:
 		return fmt.Errorf("driver %q is unsupported", c.Driver)
 	}
@@ -680,6 +873,23 @@ func defaultServerConfig() *ServerConfig {
 				RepositoryFile: "data/provider-artifacts.json", StagingRoot: "data/provider-artifact-staging",
 			},
 			Usage: ProviderUsageConfig{RepositoryFile: "data/provider-usage.json"},
+			Browser: ProviderBrowserConfig{
+				SessionRepositoryFile: "data/provider-browser-sessions.json", ReferenceRegistryFile: "data/provider-browser-references.json",
+				ShutdownCleanupSeconds: 10, UsageRetentionSeconds: 3600,
+				Docker: ProviderBrowserDockerConfig{
+					Image:      "ghcr.io/shell-echo/sandbox-runtime-browser@sha256:87d3216c22ada0fea74b375a3ee5c2ddf021d3e1913569e2aeb4a316ed3b5c2f",
+					PullPolicy: "if_not_present", MemoryBytes: 1 << 30, NanoCPUs: 1_000_000_000, PidsLimit: 256,
+					InputsBytes: 16 << 20, TmpfsBytes: 256 << 20, WorkspaceBytes: 256 << 20, OutputsBytes: 128 << 20,
+					OperationTimeoutSeconds: 90, ProvenanceTimeoutSeconds: 120, PullTimeoutSeconds: 120, StopTimeoutSeconds: 10,
+					DataRoot: "data/provider-browser-runtime", ManifestPath: "profiles/browser/image/manifest.json",
+					SeccompPath: "profiles/browser/image/chromium-seccomp.json", Namespace: "default",
+					NetworkPolicyReference: "browser-egress-policy-1", MaxSessionsPerSandbox: 1, MaxSessionsPerController: 16,
+				},
+				RestrictedNetwork: ProviderBrowserNetworkConfig{
+					Namespace: "default", MemoryBytes: 128 << 20, NanoCPUs: 500_000_000, PidsLimit: 64,
+					OperationTimeoutSeconds: 90, StopTimeoutSeconds: 10,
+				},
+			},
 			Terminal: ProviderTerminalConfig{
 				SessionRepositoryFile: "data/provider-terminal-sessions.json", ReferenceRegistryFile: "data/provider-terminal-references.json",
 				RuntimeProfileID: ProviderCodingShellRuntimeProfileID, CapabilityProfileID: ProviderCodingShellTerminalProfileID,

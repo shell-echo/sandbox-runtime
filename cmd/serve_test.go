@@ -21,6 +21,11 @@ import (
 	"github.com/shell-echo/sandbox-runtime/provider/admission"
 	admissionfile "github.com/shell-echo/sandbox-runtime/provider/admission/file"
 	artifactfile "github.com/shell-echo/sandbox-runtime/provider/artifact/repository/file"
+	providerbrowser "github.com/shell-echo/sandbox-runtime/provider/browser"
+	browserreference "github.com/shell-echo/sandbox-runtime/provider/browser/reference"
+	browserreferencefile "github.com/shell-echo/sandbox-runtime/provider/browser/reference/repository/file"
+	browserreferencememory "github.com/shell-echo/sandbox-runtime/provider/browser/reference/repository/memory"
+	browserfile "github.com/shell-echo/sandbox-runtime/provider/browser/repository/file"
 	execfile "github.com/shell-echo/sandbox-runtime/provider/exec/repository/file"
 	lifecycleapplication "github.com/shell-echo/sandbox-runtime/provider/lifecycle/application"
 	lifecycledocker "github.com/shell-echo/sandbox-runtime/provider/lifecycle/driver/docker"
@@ -30,6 +35,8 @@ import (
 	sessionreferencememory "github.com/shell-echo/sandbox-runtime/provider/session/reference/repository/memory"
 	sessionfile "github.com/shell-echo/sandbox-runtime/provider/session/repository/file"
 	providerterminal "github.com/shell-echo/sandbox-runtime/provider/terminal"
+	providerusage "github.com/shell-echo/sandbox-runtime/provider/usage"
+	usagememory "github.com/shell-echo/sandbox-runtime/provider/usage/memory"
 	usagefile "github.com/shell-echo/sandbox-runtime/provider/usage/repository/file"
 )
 
@@ -248,7 +255,7 @@ func TestNewProviderUsageCompositionRequiresExecAndReleasesRepository(t *testing
 	if err != nil || store == nil || collector == nil || closeUsage == nil {
 		t.Fatalf("usage collector composition = %T, %T, %t, %v", store, collector, closeUsage != nil, err)
 	}
-	if reader, err := newProviderUsageReader(enabled, store, collector, nil); err == nil || reader != nil {
+	if reader, err := newProviderUsageReader(enabled, store, collector, nil, nil); err == nil || reader != nil {
 		t.Fatalf("usage reader without exec = %T, %v", reader, err)
 	}
 	if _, err := usagefile.NewRepository(path, systemAdmissionClock{}); err == nil {
@@ -367,6 +374,172 @@ func TestNewProviderTerminalApplicationRecoversBeforeReturningAndReleasesLocks(t
 	}
 	if err := references.Close(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestNewProviderBrowserApplicationRecoversBeforeReturningAndReleasesLocks(t *testing.T) {
+	directory := t.TempDir()
+	sessionPath := filepath.Join(directory, "browser-sessions.json")
+	referencePath := filepath.Join(directory, "browser-references.json")
+	sessions, err := browserfile.NewRepository(sessionPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	references, err := browserreferencefile.NewRegistry(referencePath)
+	if err != nil {
+		_ = sessions.Close()
+		t.Fatal(err)
+	}
+	runtime := &browserShutdownRuntime{}
+	resolver, err := browserreference.NewResolver(references, sessions, runtime, systemAdmissionClock{})
+	if err != nil {
+		_ = references.Close()
+		_ = sessions.Close()
+		t.Fatal(err)
+	}
+	graph := &providerBrowserRuntime{
+		authority: sessions, runtime: runtime, references: references, resolver: resolver,
+		closeAuthority: sessions.Close, closeReferences: references.Close,
+		closeRuntime: func() error { return nil }, closeNetwork: func() error { return nil },
+	}
+	store, err := usagememory.NewRepository(usagememory.ClockFunc(time.Now))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	browserConfig := config.ProviderBrowserConfig{Enabled: true, ShutdownCleanupSeconds: 1, UsageRetentionSeconds: 3600}
+	application, closeApplication, err := newProviderBrowserApplication(context.Background(), browserConfig, graph, &lifecycleapplication.Application{}, store)
+	if err != nil || application == nil || application.Resolver() == nil || closeApplication == nil {
+		t.Fatalf("newProviderBrowserApplication() = %T, resolver %t, closer %t, %v", application, application != nil && application.Resolver() != nil, closeApplication != nil, err)
+	}
+	if _, err := browserfile.NewRepository(sessionPath); err == nil {
+		t.Fatal("Browser application did not retain the session repository lock")
+	}
+	if _, err := browserreferencefile.NewRegistry(referencePath); err == nil {
+		t.Fatal("Browser application did not retain the reference registry lock")
+	}
+	if err := closeApplication(); err != nil {
+		t.Fatal(err)
+	}
+	if err := closeApplication(); err != nil {
+		t.Fatalf("second close: %v", err)
+	}
+	reopenedSessions, err := browserfile.NewRepository(sessionPath)
+	if err != nil {
+		t.Fatalf("reopen Browser session repository: %v", err)
+	}
+	if err := reopenedSessions.Close(); err != nil {
+		t.Fatal(err)
+	}
+	reopenedReferences, err := browserreferencefile.NewRegistry(referencePath)
+	if err != nil {
+		t.Fatalf("reopen Browser reference registry: %v", err)
+	}
+	if err := reopenedReferences.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestProviderBrowserApplicationShutdownRevokesBeforeIdentityBoundCleanup(t *testing.T) {
+	now := time.Now().UTC()
+	record := browserShutdownRecord(t, now, providerbrowser.StatusRunning, now.Add(30*time.Second))
+	registry := browserreferencememory.NewRegistry()
+	registered, err := browserreference.NewRecord("ref:browser-session:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", record, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := registry.Create(context.Background(), registered); err != nil {
+		t.Fatal(err)
+	}
+	order := make([]string, 0, 6)
+	runtime := &browserShutdownRuntime{order: &order}
+	graph := &providerBrowserRuntime{
+		authority:    &browserShutdownAuthority{records: []providerbrowser.Record{record}},
+		runtime:      runtime,
+		references:   &browserShutdownReferenceStore{Store: registry, order: &order},
+		closeRuntime: func() error { order = append(order, "runtime-close"); return nil },
+		closeNetwork: func() error { order = append(order, "network-close"); return nil },
+		closeReferences: func() error {
+			order = append(order, "references-close")
+			return registry.Close()
+		},
+		closeAuthority: func() error { order = append(order, "sessions-close"); return nil },
+	}
+	application := &providerBrowserApplication{runtime: graph, clock: systemAdmissionClock{}, shutdownCleanup: time.Second}
+	if err := application.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := application.Close(); err != nil {
+		t.Fatalf("second close: %v", err)
+	}
+	if got, want := strings.Join(order, ","), "revoke,cleanup,runtime-close,network-close,references-close,sessions-close"; got != want {
+		t.Fatalf("shutdown order = %q, want %q", got, want)
+	}
+	if runtime.receipt != record.Allocation.Receipt {
+		t.Fatalf("cleanup receipt = %#v, want %#v", runtime.receipt, record.Allocation.Receipt)
+	}
+}
+
+func TestProviderBrowserApplicationShutdownPreservesRecoverableSessions(t *testing.T) {
+	now := time.Now().UTC()
+	records := []providerbrowser.Record{
+		browserShutdownRecord(t, now, providerbrowser.StatusSucceeded, now.Add(time.Minute)),
+	}
+	accepted, err := providerbrowser.NewRecord(browserShutdownRequest(now, "accepted"), now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	records = append(records, accepted)
+	order := make([]string, 0, 4)
+	runtime := &browserShutdownRuntime{order: &order}
+	graph := &providerBrowserRuntime{
+		authority:       &browserShutdownAuthority{records: records},
+		runtime:         runtime,
+		references:      &browserShutdownReferenceStore{Store: browserreferencememory.NewRegistry(), order: &order},
+		closeRuntime:    func() error { order = append(order, "runtime-close"); return nil },
+		closeNetwork:    func() error { order = append(order, "network-close"); return nil },
+		closeReferences: func() error { order = append(order, "references-close"); return nil },
+		closeAuthority:  func() error { order = append(order, "sessions-close"); return nil },
+	}
+	application := &providerBrowserApplication{runtime: graph, clock: systemAdmissionClock{}, shutdownCleanup: time.Second}
+	if err := application.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := strings.Join(order, ","), "runtime-close,network-close,references-close,sessions-close"; got != want {
+		t.Fatalf("recoverable session shutdown order = %q, want %q", got, want)
+	}
+}
+
+func TestProviderBrowserApplicationShutdownRevokesExpiredCommittedHandoff(t *testing.T) {
+	now := time.Now().UTC()
+	record := browserShutdownRecord(t, now.Add(-time.Minute), providerbrowser.StatusSucceeded, now.Add(-time.Second))
+	registry := browserreferencememory.NewRegistry()
+	registered, err := browserreference.NewRecord(record.Handoff.InternalEndpointReference, browserShutdownRecord(t, now.Add(-time.Minute), providerbrowser.StatusRunning, now.Add(-time.Second)), now.Add(-30*time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := registry.Create(context.Background(), registered); err != nil {
+		t.Fatal(err)
+	}
+	order := make([]string, 0, 6)
+	graph := &providerBrowserRuntime{
+		authority:    &browserShutdownAuthority{records: []providerbrowser.Record{record}},
+		runtime:      &browserShutdownRuntime{order: &order},
+		references:   &browserShutdownReferenceStore{Store: registry, order: &order},
+		closeRuntime: func() error { order = append(order, "runtime-close"); return nil },
+		closeNetwork: func() error { order = append(order, "network-close"); return nil },
+		closeReferences: func() error {
+			order = append(order, "references-close")
+			return registry.Close()
+		},
+		closeAuthority: func() error { order = append(order, "sessions-close"); return nil },
+	}
+	application := &providerBrowserApplication{runtime: graph, clock: systemAdmissionClock{}, shutdownCleanup: time.Second}
+	if err := application.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := strings.Join(order, ","), "revoke,cleanup,runtime-close,network-close,references-close,sessions-close"; got != want {
+		t.Fatalf("expired handoff shutdown order = %q, want %q", got, want)
 	}
 }
 
@@ -740,6 +913,93 @@ type terminalShutdownRuntime struct {
 	mu      sync.Mutex
 }
 
+type browserShutdownAuthority struct {
+	providerbrowser.CoordinationAuthority
+	records []providerbrowser.Record
+}
+
+func (a *browserShutdownAuthority) ListOpen(context.Context) ([]providerbrowser.Record, error) {
+	result := make([]providerbrowser.Record, len(a.records))
+	for index := range a.records {
+		result[index] = a.records[index].Clone()
+	}
+	return result, nil
+}
+
+type browserShutdownReferenceStore struct {
+	browserreference.Store
+	order *[]string
+}
+
+func (s *browserShutdownReferenceStore) Revoke(ctx context.Context, reference string, revokedAt time.Time) error {
+	*s.order = append(*s.order, "revoke")
+	return s.Store.Revoke(ctx, reference, revokedAt)
+}
+
+type browserShutdownRuntime struct {
+	order   *[]string
+	receipt providerbrowser.AllocationReceipt
+}
+
+func (*browserShutdownRuntime) Allocate(context.Context, providerbrowser.Allocation) (providerbrowser.AllocationReceipt, error) {
+	return providerbrowser.AllocationReceipt{}, providerbrowser.ErrBrowserUnsupported
+}
+
+func (*browserShutdownRuntime) Observe(context.Context, providerbrowser.AllocationReceipt) (providerbrowser.AllocationObservation, error) {
+	return providerbrowser.AllocationObservation{}, providerbrowser.ErrBrowserUnsupported
+}
+
+func (*browserShutdownRuntime) Attach(context.Context, providerbrowser.AllocationReceipt) (providerbrowser.Stream, error) {
+	return nil, providerbrowser.ErrBrowserUnsupported
+}
+
+func (r *browserShutdownRuntime) Cleanup(_ context.Context, receipt providerbrowser.AllocationReceipt) error {
+	r.receipt = receipt
+	if r.order != nil {
+		*r.order = append(*r.order, "cleanup")
+	}
+	return nil
+}
+
+func browserShutdownRequest(now time.Time, suffix string) providerbrowser.OpenRequest {
+	return providerbrowser.OpenRequest{
+		SandboxID: "sandbox-browser-close-" + suffix, ProviderRevisionID: "provider-revision-browser-close",
+		OperationID: "operation-browser-close-" + suffix, AttemptID: "attempt-browser-close-" + suffix, FencingToken: 1,
+		IdempotencyKey: "browser-close-key-" + suffix, RequestDigest: "sha256:" + strings.Repeat("b", 64),
+		Deadline: now.Add(time.Minute), ExpectedGeneration: 1, BrowserSessionID: "browser-session-close-" + suffix,
+		CapabilityProfileID: providerbrowser.CapabilityProfileID, ExpiresAt: now.Add(30 * time.Second),
+	}
+}
+
+func browserShutdownRecord(t *testing.T, now time.Time, status providerbrowser.Status, expiresAt time.Time) providerbrowser.Record {
+	t.Helper()
+	request := browserShutdownRequest(now, string(status))
+	request.ExpiresAt = expiresAt
+	record, err := providerbrowser.NewRecord(request, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	receipt := providerbrowser.AllocationReceipt{
+		Reference: "ref:browser/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", SandboxID: request.SandboxID,
+		BrowserSessionID: request.BrowserSessionID, OperationID: request.OperationID, AttemptID: request.AttemptID,
+		FencingToken: request.FencingToken, ExpectedGeneration: request.ExpectedGeneration,
+		ConnectionGeneration: 1, AllocatedAt: now, ExpiresAt: request.ExpiresAt,
+	}
+	record, err = providerbrowser.AttachAllocation(record, receipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status == providerbrowser.StatusSucceeded {
+		record, err = providerbrowser.Transition(record, status, now, &providerbrowser.EndpointEvidence{
+			InternalEndpointReference: "ref:browser-session:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", ConnectionGeneration: 1,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	return record
+}
+
 func (*terminalShutdownRuntime) Allocate(context.Context, providerterminal.Allocation) (providerterminal.Receipt, error) {
 	return providerterminal.Receipt{}, providerterminal.ErrTerminalUnsupported
 }
@@ -816,3 +1076,7 @@ var _ admission.Clock = fixedAdmissionClock{}
 var _ session.CoordinationAuthority = (*terminalShutdownAuthority)(nil)
 var _ sessionreference.Store = (*terminalShutdownReferenceStore)(nil)
 var _ providerterminal.Runtime = (*terminalShutdownRuntime)(nil)
+var _ providerbrowser.CoordinationAuthority = (*browserShutdownAuthority)(nil)
+var _ browserreference.Store = (*browserShutdownReferenceStore)(nil)
+var _ providerbrowser.Runtime = (*browserShutdownRuntime)(nil)
+var _ providerusage.Store = (*usagememory.Repository)(nil)

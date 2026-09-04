@@ -480,6 +480,41 @@ func TestNewDriverPreservesDependencyContextErrors(t *testing.T) {
 	}
 }
 
+func TestReadyRevalidatesRuntimeDependenciesAndHidesDetails(t *testing.T) {
+	clock := &fakeClock{now: browserDriverTestTime}
+	backend := &fakeEngine{image: validImageInfo(t)}
+	provenance := &fakeProvenance{}
+	network := newFakeNetwork()
+	driver, err := newDriver(context.Background(), backend, validOptions(t, t.TempDir(), clock), provenance, network)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := driver.Ready(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	readyCalls, _, _, _ := network.counts()
+	if provenance.calls != 2 || readyCalls != 2 {
+		t.Fatalf("revalidation calls provenance=%d network=%d", provenance.calls, readyCalls)
+	}
+	network.readyErr = errors.New("private network detail")
+	if err := driver.Ready(context.Background()); !errors.Is(err, ErrNetworkUnavailable) || strings.Contains(err.Error(), "private network detail") {
+		t.Fatalf("network readiness error = %v", err)
+	}
+	network.readyErr = nil
+	provenance.err = errors.New("private signature detail")
+	if err := driver.Ready(context.Background()); !errors.Is(err, ErrInvalidProvenance) || strings.Contains(err.Error(), "private signature detail") {
+		t.Fatalf("provenance readiness error = %v", err)
+	}
+	provenance.err = nil
+	backend.image.exposedPorts = 1
+	if err := driver.Ready(context.Background()); !errors.Is(err, ErrInvalidRuntime) {
+		t.Fatalf("image drift readiness error = %v", err)
+	}
+	if err := driver.Ready(nil); !errors.Is(err, context.Canceled) {
+		t.Fatalf("nil context readiness = %v", err)
+	}
+}
+
 func TestAllocateProjectsExactRuntimeAndReplays(t *testing.T) {
 	clock := &fakeClock{now: browserDriverTestTime}
 	backend := &fakeEngine{}

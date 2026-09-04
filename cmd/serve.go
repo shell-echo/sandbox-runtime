@@ -7,6 +7,7 @@ import (
 	"math"
 	"net"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -26,6 +27,17 @@ import (
 	artifactapplication "github.com/shell-echo/sandbox-runtime/provider/artifact/application"
 	artifactfile "github.com/shell-echo/sandbox-runtime/provider/artifact/repository/file"
 	artifactstaging "github.com/shell-echo/sandbox-runtime/provider/artifact/staging"
+	providerbrowser "github.com/shell-echo/sandbox-runtime/provider/browser"
+	browserapplication "github.com/shell-echo/sandbox-runtime/provider/browser/application"
+	browserdocker "github.com/shell-echo/sandbox-runtime/provider/browser/driver/docker"
+	browserlifecycle "github.com/shell-echo/sandbox-runtime/provider/browser/lifecycle"
+	browsernetworkdocker "github.com/shell-echo/sandbox-runtime/provider/browser/network/docker"
+	browsernetworkgateway "github.com/shell-echo/sandbox-runtime/provider/browser/network/gateway"
+	browserprovenance "github.com/shell-echo/sandbox-runtime/provider/browser/provenance/ghcli"
+	browserreference "github.com/shell-echo/sandbox-runtime/provider/browser/reference"
+	browserreferencefile "github.com/shell-echo/sandbox-runtime/provider/browser/reference/repository/file"
+	browserfile "github.com/shell-echo/sandbox-runtime/provider/browser/repository/file"
+	browserusage "github.com/shell-echo/sandbox-runtime/provider/browser/usage"
 	providerexec "github.com/shell-echo/sandbox-runtime/provider/exec"
 	execapplication "github.com/shell-echo/sandbox-runtime/provider/exec/application"
 	execcoordinator "github.com/shell-echo/sandbox-runtime/provider/exec/coordinator"
@@ -115,34 +127,46 @@ func newProviderServer(ctx context.Context, providerConfig config.ProviderConfig
 	if err := providerConfig.Validate(); err != nil {
 		return nil, noOpProviderClose, fmt.Errorf("validate Provider configuration: %w", err)
 	}
-	lifecycleApp, execRuntime, closeLifecycle, err := newProviderLifecycleRuntime(ctx, providerConfig.Lifecycle)
+	browserRuntime, err := newProviderBrowserRuntime(ctx, providerConfig.Browser)
 	if err != nil {
 		return nil, noOpProviderClose, err
+	}
+	var browserLifecycleDriver lifecyclecoordinator.Driver
+	if browserRuntime != nil {
+		browserLifecycleDriver = browserRuntime.lifecycle
+	}
+	lifecycleApp, execRuntime, closeLifecycle, err := newProviderLifecycleRuntimeWithDriver(ctx, providerConfig.Lifecycle, browserLifecycleDriver)
+	if err != nil {
+		return nil, noOpProviderClose, errors.Join(err, closeProviderBrowserRuntime(browserRuntime))
 	}
 
 	protected, closeProtected, err := newProviderProtectedTransportOptions(providerConfig.ProtectedAdmission, systemAdmissionClock{})
 	if err != nil {
-		return nil, noOpProviderClose, errors.Join(err, closeLifecycle())
+		return nil, noOpProviderClose, errors.Join(err, closeLifecycle(), closeProviderBrowserRuntime(browserRuntime))
 	}
 	usageStore, usageCollector, closeUsage, err := newProviderUsageCollector(providerConfig.Usage)
 	if err != nil {
-		return nil, noOpProviderClose, errors.Join(err, closeProtected(), closeLifecycle())
+		return nil, noOpProviderClose, errors.Join(err, closeProtected(), closeLifecycle(), closeProviderBrowserRuntime(browserRuntime))
 	}
 	execApp, closeExec, err := newProviderExecApplication(ctx, providerConfig.Exec, lifecycleApp, execRuntime, usageCollector)
 	if err != nil {
-		return nil, noOpProviderClose, errors.Join(err, closeUsage(), closeProtected(), closeLifecycle())
-	}
-	usageReader, err := newProviderUsageReader(providerConfig.Usage, usageStore, usageCollector, execApp)
-	if err != nil {
-		return nil, noOpProviderClose, errors.Join(err, closeExec(), closeUsage(), closeProtected(), closeLifecycle())
+		return nil, noOpProviderClose, errors.Join(err, closeUsage(), closeProtected(), closeLifecycle(), closeProviderBrowserRuntime(browserRuntime))
 	}
 	terminalApp, closeTerminal, err := newProviderTerminalApplication(ctx, providerConfig.Terminal, lifecycleApp, execRuntime)
 	if err != nil {
-		return nil, noOpProviderClose, errors.Join(err, closeExec(), closeUsage(), closeProtected(), closeLifecycle())
+		return nil, noOpProviderClose, errors.Join(err, closeExec(), closeUsage(), closeProtected(), closeLifecycle(), closeProviderBrowserRuntime(browserRuntime))
 	}
 	artifactApp, closeArtifact, err := newProviderArtifactApplication(ctx, providerConfig.Artifact, lifecycleApp, execRuntime)
 	if err != nil {
-		return nil, noOpProviderClose, errors.Join(err, closeTerminal(), closeExec(), closeUsage(), closeProtected(), closeLifecycle())
+		return nil, noOpProviderClose, errors.Join(err, closeTerminal(), closeExec(), closeUsage(), closeProtected(), closeLifecycle(), closeProviderBrowserRuntime(browserRuntime))
+	}
+	browserApp, closeBrowser, err := newProviderBrowserApplication(ctx, providerConfig.Browser, browserRuntime, lifecycleApp, usageStore)
+	if err != nil {
+		return nil, noOpProviderClose, errors.Join(err, closeArtifact(), closeTerminal(), closeExec(), closeUsage(), closeProtected(), closeLifecycle())
+	}
+	usageReader, err := newProviderUsageReader(providerConfig.Usage, usageStore, usageCollector, execApp, browserApp)
+	if err != nil {
+		return nil, noOpProviderClose, errors.Join(err, closeBrowser(), closeArtifact(), closeTerminal(), closeExec(), closeUsage(), closeProtected(), closeLifecycle())
 	}
 	var operationReader provideroperation.Reader
 	var readerErr error
@@ -151,10 +175,11 @@ func newProviderServer(ctx context.Context, providerConfig config.ProviderConfig
 		protected.ExecApplication = execApp
 		protected.SessionApplication = terminalApp
 		protected.ArtifactApplication = artifactApp
+		protected.BrowserApplication = browserApp
 		protected.UsageEvidenceReader = usageReader
-		operationReader, readerErr = newProviderOperationReader(lifecycleApp, execApp, terminalApp, artifactApp)
+		operationReader, readerErr = newProviderOperationReader(lifecycleApp, execApp, terminalApp, artifactApp, browserApp)
 		if readerErr != nil {
-			return nil, noOpProviderClose, errors.Join(readerErr, closeArtifact(), closeTerminal(), closeExec(), closeUsage(), closeProtected(), closeLifecycle())
+			return nil, noOpProviderClose, errors.Join(readerErr, closeBrowser(), closeArtifact(), closeTerminal(), closeExec(), closeUsage(), closeProtected(), closeLifecycle())
 		}
 		protected.OperationReader = operationReader
 	}
@@ -183,7 +208,7 @@ func newProviderServer(ctx context.Context, providerConfig config.ProviderConfig
 	}
 	source, err := newProviderCapabilitySource(providerConfig.Capability, readiness)
 	if err != nil {
-		return nil, noOpProviderClose, errors.Join(err, closeArtifact(), closeTerminal(), closeExec(), closeUsage(), closeProtected(), closeLifecycle())
+		return nil, noOpProviderClose, errors.Join(err, closeBrowser(), closeArtifact(), closeTerminal(), closeExec(), closeUsage(), closeProtected(), closeLifecycle())
 	}
 	transport := providerConfig.Transport
 	providerServer, err := providerapi.NewServer(ctx, providerapi.TransportOptions{
@@ -195,10 +220,10 @@ func newProviderServer(ctx context.Context, providerConfig config.ProviderConfig
 		Protected:                  protected,
 	}, source)
 	if err != nil {
-		return nil, noOpProviderClose, errors.Join(fmt.Errorf("construct Provider API server: %w", err), closeArtifact(), closeTerminal(), closeExec(), closeUsage(), closeProtected(), closeLifecycle())
+		return nil, noOpProviderClose, errors.Join(fmt.Errorf("construct Provider API server: %w", err), closeBrowser(), closeArtifact(), closeTerminal(), closeExec(), closeUsage(), closeProtected(), closeLifecycle())
 	}
 	return providerServer, func() error {
-		return errors.Join(closeArtifact(), closeTerminal(), closeExec(), closeUsage(), closeProtected(), closeLifecycle())
+		return errors.Join(closeBrowser(), closeArtifact(), closeTerminal(), closeExec(), closeUsage(), closeProtected(), closeLifecycle())
 	}, nil
 }
 
@@ -206,8 +231,8 @@ func newProviderServer(ctx context.Context, providerConfig config.ProviderConfig
 // application boundaries were explicitly injected. Usage evidence remains a
 // read sidecar correlated to exec operations rather than a separate operation
 // family.
-func newProviderOperationReader(lifecycleApp providerapi.LifecycleApplication, execApp provideroperation.Reader, sessionApp *providerTerminalApplication, artifactApp providerapi.ArtifactApplication) (provideroperation.Reader, error) {
-	readers := make([]provideroperation.Reader, 0, 4)
+func newProviderOperationReader(lifecycleApp providerapi.LifecycleApplication, execApp provideroperation.Reader, sessionApp *providerTerminalApplication, artifactApp providerapi.ArtifactApplication, browserApp *providerBrowserApplication) (provideroperation.Reader, error) {
+	readers := make([]provideroperation.Reader, 0, 5)
 	if lifecycleApp != nil {
 		reader, err := provideroperation.NewLifecycleReader(lifecycleApp)
 		if err != nil {
@@ -232,6 +257,13 @@ func newProviderOperationReader(lifecycleApp providerapi.LifecycleApplication, e
 		}
 		readers = append(readers, reader)
 	}
+	if browserApp != nil {
+		reader, err := provideroperation.NewBrowserSessionReader(browserApp)
+		if err != nil {
+			return nil, err
+		}
+		readers = append(readers, reader)
+	}
 	if len(readers) == 0 {
 		return nil, nil
 	}
@@ -244,6 +276,10 @@ func newProviderLifecycleApplication(ctx context.Context, lifecycleConfig config
 }
 
 func newProviderLifecycleRuntime(ctx context.Context, lifecycleConfig config.ProviderLifecycleConfig) (*lifecycleapplication.Application, *lifecycledocker.Driver, func() error, error) {
+	return newProviderLifecycleRuntimeWithDriver(ctx, lifecycleConfig, nil)
+}
+
+func newProviderLifecycleRuntimeWithDriver(ctx context.Context, lifecycleConfig config.ProviderLifecycleConfig, browserDriver lifecyclecoordinator.Driver) (*lifecycleapplication.Application, *lifecycledocker.Driver, func() error, error) {
 	if !lifecycleConfig.Enabled {
 		return nil, nil, noOpProviderClose, nil
 	}
@@ -286,6 +322,12 @@ func newProviderLifecycleRuntime(ctx context.Context, lifecycleConfig config.Pro
 		driver = dockerDriver
 		execRuntime = dockerDriver
 		closeDriver = dockerDriver.Close
+	case config.ProviderLifecycleBrowserDriver:
+		if browserDriver == nil {
+			_ = lifecycleRepo.Close()
+			return nil, nil, noOpProviderClose, errors.New("Provider Browser lifecycle requires a composed Browser runtime readiness driver")
+		}
+		driver = browserDriver
 	default:
 		_ = lifecycleRepo.Close()
 		return nil, nil, noOpProviderClose, fmt.Errorf("unsupported Provider lifecycle driver %q", lifecycleConfig.Driver)
@@ -352,18 +394,35 @@ func newProviderUsageCollector(usageConfig config.ProviderUsageConfig) (usage.St
 	return repository, collector, repository.Close, nil
 }
 
-func newProviderUsageReader(usageConfig config.ProviderUsageConfig, store usage.Store, collector *usageapplication.ResultCollector, execApp *execapplication.Vertical) (usage.EvidenceReader, error) {
+func newProviderUsageReader(usageConfig config.ProviderUsageConfig, store usage.Store, collector *usageapplication.ResultCollector, execApp *execapplication.Vertical, browserApp *providerBrowserApplication) (usage.EvidenceReader, error) {
 	if !usageConfig.Enabled {
 		return nil, nil
 	}
-	if store == nil || collector == nil || execApp == nil {
-		return nil, errors.New("Provider usage requires a composed exec result source")
+	if store == nil || collector == nil {
+		return nil, errors.New("Provider usage requires a composed durable store and collector")
 	}
-	reader, err := usageapplication.NewReader(store, execApp, collector)
+	readers := make([]usage.EvidenceReader, 0, 2)
+	if execApp != nil {
+		reader, err := usageapplication.NewReader(store, execApp, collector)
+		if err != nil {
+			return nil, fmt.Errorf("construct Provider exec usage reader: %w", err)
+		}
+		readers = append(readers, reader)
+	}
+	if browserApp != nil && browserApp.usage != nil {
+		readers = append(readers, browserApp.usage)
+	}
+	if len(readers) == 0 {
+		return nil, errors.New("Provider usage requires a composed evidence source")
+	}
+	if len(readers) == 1 {
+		return readers[0], nil
+	}
+	aggregator, err := usage.NewAggregator(readers...)
 	if err != nil {
-		return nil, fmt.Errorf("construct Provider usage reader: %w", err)
+		return nil, fmt.Errorf("construct Provider usage aggregator: %w", err)
 	}
-	return reader, nil
+	return aggregator, nil
 }
 
 type providerArtifactTenantChecker struct {
@@ -431,6 +490,268 @@ func newProviderArtifactApplication(ctx context.Context, artifactConfig config.P
 		return nil, noOpProviderClose, fmt.Errorf("recover Provider artifact operations: %w", err)
 	}
 	return application, func() error { return errors.Join(application.Close(), repository.Close()) }, nil
+}
+
+// providerBrowserRuntime owns the Provider-local Browser adapters and durable
+// stores. The public caller Gateway is intentionally not part of this graph.
+type providerBrowserRuntime struct {
+	authority  providerbrowser.CoordinationAuthority
+	runtime    providerbrowser.Runtime
+	references browserreference.Store
+	resolver   *browserreference.Resolver
+	lifecycle  *browserlifecycle.Driver
+
+	closeAuthority  func() error
+	closeReferences func() error
+	closeRuntime    func() error
+	closeNetwork    func() error
+	closeOnce       sync.Once
+	closeErr        error
+}
+
+func newProviderBrowserRuntime(ctx context.Context, browserConfig config.ProviderBrowserConfig) (*providerBrowserRuntime, error) {
+	if !browserConfig.Enabled {
+		return nil, nil
+	}
+	if err := browserConfig.Validate(); err != nil {
+		return nil, fmt.Errorf("validate Provider Browser configuration: %w", err)
+	}
+	sessions, err := browserfile.NewRepository(browserConfig.SessionRepositoryFile)
+	if err != nil {
+		return nil, fmt.Errorf("open Provider Browser session repository: %w", err)
+	}
+	references, err := browserreferencefile.NewRegistry(browserConfig.ReferenceRegistryFile)
+	if err != nil {
+		return nil, errors.Join(fmt.Errorf("open Provider Browser reference registry: %w", err), sessions.Close())
+	}
+	verifier, err := browserprovenance.New(browserprovenance.Options{
+		ExecutablePath: browserConfig.Provenance.ExecutablePath, ExecutableDigest: browserConfig.Provenance.ExecutableDigest,
+	})
+	if err != nil {
+		return nil, errors.Join(fmt.Errorf("construct Provider Browser provenance verifier: %w", err), references.Close(), sessions.Close())
+	}
+	policies := make([]browsernetworkgateway.Policy, len(browserConfig.RestrictedNetwork.Policies))
+	for index, configured := range browserConfig.RestrictedNetwork.Policies {
+		policies[index] = browsernetworkgateway.Policy{Reference: configured.Reference, AllowedHosts: append([]string(nil), configured.AllowedHosts...)}
+	}
+	networkConfig := browserConfig.RestrictedNetwork
+	network, err := browsernetworkdocker.New(ctx, browsernetworkdocker.Options{
+		Host: networkConfig.Host, GatewayImage: networkConfig.GatewayImage, UplinkNetwork: networkConfig.UplinkNetwork,
+		Namespace: networkConfig.Namespace, ControllerID: networkConfig.ControllerID, Policies: policies,
+		MemoryBytes: networkConfig.MemoryBytes, NanoCPUs: networkConfig.NanoCPUs, PidsLimit: networkConfig.PidsLimit,
+		OperationTimeoutSeconds: networkConfig.OperationTimeoutSeconds, StopTimeoutSeconds: networkConfig.StopTimeoutSeconds,
+	})
+	if err != nil {
+		return nil, errors.Join(fmt.Errorf("construct Provider Browser restricted network: %w", err), references.Close(), sessions.Close())
+	}
+	manifestPath, err := filepath.Abs(browserConfig.Docker.ManifestPath)
+	if err != nil {
+		return nil, errors.Join(fmt.Errorf("resolve Provider Browser manifest path: %w", err), network.Close(), references.Close(), sessions.Close())
+	}
+	seccompPath, err := filepath.Abs(browserConfig.Docker.SeccompPath)
+	if err != nil {
+		return nil, errors.Join(fmt.Errorf("resolve Provider Browser seccomp path: %w", err), network.Close(), references.Close(), sessions.Close())
+	}
+	dockerConfig := browserConfig.Docker
+	runtime, err := browserdocker.New(ctx, browserdocker.Options{
+		Host: dockerConfig.Host, Image: dockerConfig.Image, PullPolicy: browserdocker.PullPolicy(dockerConfig.PullPolicy),
+		MemoryBytes: dockerConfig.MemoryBytes, NanoCPUs: dockerConfig.NanoCPUs, PidsLimit: dockerConfig.PidsLimit,
+		InputsBytes: dockerConfig.InputsBytes, TmpfsBytes: dockerConfig.TmpfsBytes,
+		WorkspaceBytes: dockerConfig.WorkspaceBytes, OutputsBytes: dockerConfig.OutputsBytes,
+		OperationTimeoutSeconds: dockerConfig.OperationTimeoutSeconds, ProvenanceTimeoutSeconds: dockerConfig.ProvenanceTimeoutSeconds,
+		PullTimeoutSeconds: dockerConfig.PullTimeoutSeconds, StopTimeoutSeconds: dockerConfig.StopTimeoutSeconds,
+		DataRoot: dockerConfig.DataRoot, ManifestPath: manifestPath, SeccompPath: seccompPath,
+		Namespace: dockerConfig.Namespace, ControllerID: dockerConfig.ControllerID,
+		NetworkPolicyReference: dockerConfig.NetworkPolicyReference,
+		MaxSessionsPerSandbox:  dockerConfig.MaxSessionsPerSandbox, MaxSessionsPerController: dockerConfig.MaxSessionsPerController,
+		Clock: systemAdmissionClock{},
+	}, verifier, network)
+	if err != nil {
+		return nil, errors.Join(fmt.Errorf("construct Provider Browser Docker runtime: %w", err), network.Close(), references.Close(), sessions.Close())
+	}
+	resolver, err := browserreference.NewResolver(references, sessions, runtime, systemAdmissionClock{})
+	if err != nil {
+		return nil, errors.Join(fmt.Errorf("construct Provider Browser reference resolver: %w", err), runtime.Close(), network.Close(), references.Close(), sessions.Close())
+	}
+	readiness, err := browserlifecycle.New(runtime, dockerConfig.NetworkPolicyReference)
+	if err != nil {
+		return nil, errors.Join(fmt.Errorf("construct Provider Browser lifecycle readiness: %w", err), runtime.Close(), network.Close(), references.Close(), sessions.Close())
+	}
+	return &providerBrowserRuntime{
+		authority: sessions, runtime: runtime, references: references, resolver: resolver, lifecycle: readiness,
+		closeAuthority: sessions.Close, closeReferences: references.Close, closeRuntime: runtime.Close, closeNetwork: network.Close,
+	}, nil
+}
+
+func (r *providerBrowserRuntime) Close() error {
+	if r == nil {
+		return nil
+	}
+	r.closeOnce.Do(func() {
+		r.closeErr = errors.Join(r.closeRuntime(), r.closeNetwork(), r.closeReferences(), r.closeAuthority())
+	})
+	return r.closeErr
+}
+
+func closeProviderBrowserRuntime(runtime *providerBrowserRuntime) error {
+	if runtime == nil {
+		return nil
+	}
+	return runtime.Close()
+}
+
+type providerBrowserApplication struct {
+	vertical *browserapplication.Vertical
+	runtime  *providerBrowserRuntime
+	usage    usage.EvidenceReader
+	clock    systemAdmissionClock
+
+	shutdownCleanup time.Duration
+	closeOnce       sync.Once
+	closeErr        error
+}
+
+type providerBrowserHandoffRegistrar struct{ registrar *browserreference.Registrar }
+
+func (r providerBrowserHandoffRegistrar) RegisterHandoff(ctx context.Context, source providerbrowser.Record) (providerbrowser.EndpointEvidence, error) {
+	if r.registrar == nil {
+		return providerbrowser.EndpointEvidence{}, browserreference.ErrUnavailable
+	}
+	registration, err := r.registrar.Register(ctx, source)
+	if err != nil {
+		return providerbrowser.EndpointEvidence{}, err
+	}
+	return registration.Evidence, nil
+}
+
+func newProviderBrowserApplication(ctx context.Context, browserConfig config.ProviderBrowserConfig, runtime *providerBrowserRuntime, lifecycleApp *lifecycleapplication.Application, usageStore usage.Store) (*providerBrowserApplication, func() error, error) {
+	if !browserConfig.Enabled {
+		return nil, noOpProviderClose, nil
+	}
+	if runtime == nil || lifecycleApp == nil || usageStore == nil {
+		return nil, noOpProviderClose, errors.Join(errors.New("Provider Browser requires runtime, lifecycle, and usage dependencies"), closeProviderBrowserRuntime(runtime))
+	}
+	registrar, err := browserreference.NewRegistrar(runtime.references, systemAdmissionClock{}, nil)
+	if err != nil {
+		return nil, noOpProviderClose, errors.Join(fmt.Errorf("construct Provider Browser handoff registrar: %w", err), runtime.Close())
+	}
+	vertical, err := browserapplication.NewVerticalWithHandoffRegistrar(
+		runtime.authority, runtime.runtime, lifecycleApp,
+		browserapplication.BrowserProfile{RuntimeProfileID: lifecycle.BrowserRuntimeProfile, CapabilityProfileID: providerbrowser.CapabilityProfileID},
+		providerBrowserHandoffRegistrar{registrar: registrar}, systemAdmissionClock{},
+	)
+	if err != nil {
+		return nil, noOpProviderClose, errors.Join(fmt.Errorf("construct Provider Browser application: %w", err), runtime.Close())
+	}
+	usageReader, err := browserusage.NewReader(runtime.authority, usageStore, time.Duration(browserConfig.UsageRetentionSeconds)*time.Second)
+	if err != nil {
+		return nil, noOpProviderClose, errors.Join(fmt.Errorf("construct Provider Browser usage reader: %w", err), runtime.Close())
+	}
+	application := &providerBrowserApplication{
+		vertical: vertical, runtime: runtime, usage: usageReader, clock: systemAdmissionClock{},
+		shutdownCleanup: time.Duration(browserConfig.ShutdownCleanupSeconds) * time.Second,
+	}
+	if _, err := vertical.Recover(ctx); err != nil {
+		return nil, noOpProviderClose, errors.Join(fmt.Errorf("recover Provider Browser sessions: %w", err), application.Close())
+	}
+	return application, application.Close, nil
+}
+
+func (a *providerBrowserApplication) Open(ctx context.Context, request providerbrowser.OpenRequest) (browserapplication.Operation, error) {
+	if a == nil || a.vertical == nil {
+		return browserapplication.Operation{}, browserapplication.ErrInvalidApplication
+	}
+	return a.vertical.Open(ctx, request)
+}
+
+func (a *providerBrowserApplication) GetHandoff(ctx context.Context, operationID string) (browserapplication.Handoff, error) {
+	if a == nil || a.vertical == nil {
+		return browserapplication.Handoff{}, browserapplication.ErrInvalidApplication
+	}
+	return a.vertical.GetHandoff(ctx, operationID)
+}
+
+func (a *providerBrowserApplication) GetOperation(ctx context.Context, operationID string) (browserapplication.Operation, error) {
+	if a == nil || a.vertical == nil {
+		return browserapplication.Operation{}, browserapplication.ErrInvalidApplication
+	}
+	return a.vertical.GetOperation(ctx, operationID)
+}
+
+func (a *providerBrowserApplication) Resolver() *browserreference.Resolver {
+	if a == nil || a.runtime == nil {
+		return nil
+	}
+	return a.runtime.resolver
+}
+
+func (a *providerBrowserApplication) Close() error {
+	if a == nil {
+		return nil
+	}
+	a.closeOnce.Do(func() { a.closeErr = a.shutdown() })
+	return a.closeErr
+}
+
+func (a *providerBrowserApplication) shutdown() error {
+	if a.runtime == nil {
+		return browserapplication.ErrInvalidApplication
+	}
+	cleanupContext, cancel := context.WithTimeout(context.Background(), a.shutdownCleanup)
+	defer cancel()
+	var result error
+	records, err := a.runtime.authority.ListOpen(cleanupContext)
+	if err != nil {
+		result = errors.Join(result, fmt.Errorf("list Provider Browser sessions for shutdown: %w", err))
+	} else {
+		now := a.clock.Now()
+		for _, record := range records {
+			if record.Allocation == nil || !browserRecordNeedsShutdownCleanup(record, now) {
+				continue
+			}
+			if revokeErr := revokeProviderBrowserHandoff(cleanupContext, a.runtime.references, record, now); revokeErr != nil {
+				result = errors.Join(result, revokeErr)
+			}
+			if cleanupErr := a.runtime.runtime.Cleanup(cleanupContext, record.Allocation.Receipt); cleanupErr != nil {
+				result = errors.Join(result, fmt.Errorf("cleanup Provider Browser allocation: %w", cleanupErr))
+			}
+		}
+	}
+	return errors.Join(result, a.runtime.Close())
+}
+
+func revokeProviderBrowserHandoff(ctx context.Context, references browserreference.Store, record providerbrowser.Record, now time.Time) error {
+	if record.Handoff != nil {
+		if err := references.Revoke(ctx, record.Handoff.InternalEndpointReference, now); err != nil && !errors.Is(err, browserreference.ErrNotFound) {
+			return fmt.Errorf("revoke Provider Browser handoff: %w", err)
+		}
+		return nil
+	}
+	if record.Status != providerbrowser.StatusRunning {
+		return nil
+	}
+	registration, err := references.FindRunning(ctx, record)
+	if errors.Is(err, browserreference.ErrNotFound) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("find Provider Browser handoff for shutdown: %w", err)
+	}
+	if err := references.Revoke(ctx, registration.Reference, now); err != nil && !errors.Is(err, browserreference.ErrNotFound) {
+		return fmt.Errorf("revoke Provider Browser handoff: %w", err)
+	}
+	return nil
+}
+
+func browserRecordNeedsShutdownCleanup(record providerbrowser.Record, now time.Time) bool {
+	switch record.Status {
+	case providerbrowser.StatusSucceeded:
+		return !now.Before(record.Request.ExpiresAt)
+	case providerbrowser.StatusAccepted:
+		return false
+	default:
+		return true
+	}
 }
 
 // providerTerminalApplication owns development-only process composition around
@@ -776,8 +1097,8 @@ func validateServeConfiguration(application *config.ApplicationConfig, serverCon
 	if application.Mode == config.ApplicationProductionMode && repositoryConfig.Driver == config.RepositoryMemoryDriver {
 		return errors.New("production mode requires a persistent repository")
 	}
-	if application.Mode == config.ApplicationProductionMode && (serverConfig.Provider.Lifecycle.Enabled || serverConfig.Provider.Exec.Enabled || serverConfig.Provider.Terminal.Enabled || serverConfig.Provider.Artifact.Enabled || serverConfig.Provider.Usage.Enabled) {
-		return errors.New("production mode rejects Provider lifecycle, exec, terminal, artifact, and usage drivers until production-capable adapters pass their release gates")
+	if application.Mode == config.ApplicationProductionMode && (serverConfig.Provider.Lifecycle.Enabled || serverConfig.Provider.Exec.Enabled || serverConfig.Provider.Terminal.Enabled || serverConfig.Provider.Artifact.Enabled || serverConfig.Provider.Usage.Enabled || serverConfig.Provider.Browser.Enabled) {
+		return errors.New("production mode rejects Provider lifecycle, exec, terminal, artifact, usage, and Browser drivers until production-capable adapters pass their release gates")
 	}
 	if runtimeConfig.Driver == config.RuntimeDockerDriver && repositoryConfig.Driver == config.RepositoryMemoryDriver {
 		return errors.New("docker runtime requires a persistent repository")
