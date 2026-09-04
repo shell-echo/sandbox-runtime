@@ -296,7 +296,7 @@ func RunBrowser(ctx context.Context, options Options) (_ Result, resultErr error
 			"browser reference-stack -config <ephemeral>", "browser-caller -config <ephemeral> (initial)",
 			"browser reference-stack -config <same-state> (reconstructed)", "browser-caller -config <ephemeral> (resume)",
 		},
-		EvidenceBoundary: "Browser external-caller E2E including process-local pre-upgrade edge limits against an independent reference process; not distributed capacity or revocation, capability advertisement, aggregate conformance, real Agent Platform, multi-controller, hostile multi-tenant, deployment, or production readiness",
+		EvidenceBoundary: "Browser external-caller E2E including process-local pre-upgrade service and listener/TLS/HTTP bounds against an independent reference process; not partition-aware shared or distributed capacity, durable distributed revocation, production capability advertisement, aggregate conformance, real Agent Platform, multi-controller, hostile multi-tenant, deployment, or production readiness",
 	}
 	if _, err := writeJSON(filepath.Join(evidenceDirectory, "manifest.json"), manifest); err != nil {
 		return Result{}, err
