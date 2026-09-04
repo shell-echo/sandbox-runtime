@@ -63,6 +63,12 @@ func (r *runner) runBrowserInitial(ctx context.Context) error {
 	}); err != nil {
 		return err
 	}
+	if err := r.step(ctx, "Browser Gateway listener TLS and HTTP bounds", func(ctx context.Context) error {
+		r.a.http.CloseIdleConnections()
+		return verifyBrowserGatewayTransportBounds(ctx, r.config)
+	}); err != nil {
+		return err
+	}
 	if err := r.step(ctx, "Browser Gateway wrong caller and cross-tenant rejection", func(ctx context.Context) error {
 		return verifyBrowserGatewayDenials(ctx, r.a.http, r.config, handoff)
 	}); err != nil {

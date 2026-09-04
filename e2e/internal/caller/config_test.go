@@ -11,8 +11,10 @@ func TestConfigValidateRequiresExplicitProfileAndArchitecture(t *testing.T) {
 		t.Fatal(err)
 	}
 	for name, mutate := range map[string]func(*Config){
-		"profile":      func(config *Config) { config.Profile = "" },
-		"architecture": func(config *Config) { config.RuntimeArchitecture = "riscv64" },
+		"profile":                  func(config *Config) { config.Profile = "" },
+		"architecture":             func(config *Config) { config.RuntimeArchitecture = "riscv64" },
+		"missing listener limit":   func(config *Config) { config.GatewayListenerLimit = 0 },
+		"excessive listener limit": func(config *Config) { config.GatewayListenerLimit = 257 },
 	} {
 		t.Run(name, func(t *testing.T) {
 			candidate := validCallerConfig()
@@ -32,6 +34,7 @@ func validCallerConfig() Config {
 		ProviderInstanceAudience: "urn:shell-echo:sandbox-runtime:provider-instance:e2e",
 		RuntimeImageReference:    "example.invalid/browser", RuntimeImageDigest: "sha256:" + strings.Repeat("a", 64),
 		RuntimeArchitecture: "arm64", GatewayAdminToken: "admin-token",
+		GatewayListenerLimit: 32,
 		ControllerA: IdentityConfig{
 			ControllerSubject: "spiffe://reference-caller/controller-a", CertificateFile: "/tmp/a.pem", PrivateKeyFile: "/tmp/a-key.pem",
 			JWSPrivateKeyFile: "/tmp/a-jws.pem", JWSKeyID: "a", GatewayToken: "token-a", GatewayCallerID: "caller-a",

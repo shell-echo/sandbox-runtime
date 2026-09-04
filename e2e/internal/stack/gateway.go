@@ -249,6 +249,16 @@ type jsonlRecorder struct {
 	buf  *bufio.Writer
 }
 
+func newPublicGatewayServer(config Config, handler http.Handler) (*gatewayedge.TLSServer, error) {
+	return gatewayedge.NewTLSServer(gatewayedge.ServerOptions{
+		Address: config.GatewayAddress, Handler: handler,
+		ServerCertificateFile: config.GatewayCertificateFile, ServerPrivateKeyFile: config.GatewayPrivateKeyFile,
+		MaxConnections: config.GatewayListenerLimit, ReadHeaderTimeout: time.Second,
+		ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second,
+		IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 << 10,
+	})
+}
+
 func newJSONLRecorder(path string) (*jsonlRecorder, error) {
 	file, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {

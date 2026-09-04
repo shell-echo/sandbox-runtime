@@ -49,6 +49,7 @@ type Config struct {
 	GatewayPrincipals        []GatewayPrincipal `json:"gateway_principals"`
 	GatewayAdminToken        string             `json:"gateway_admin_token"`
 	GatewayAuditFile         string             `json:"gateway_audit_file"`
+	GatewayListenerLimit     int                `json:"gateway_listener_limit"`
 	Browser                  *BrowserConfig     `json:"browser,omitempty"`
 }
 
@@ -104,6 +105,9 @@ func (c Config) Validate() error {
 	}
 	if c.ProviderAddress == c.GatewayAddress {
 		return errors.New("Provider and Gateway addresses must differ")
+	}
+	if c.GatewayListenerLimit < 1 || c.GatewayListenerLimit > 256 {
+		return errors.New("gateway_listener_limit must be between 1 and 256")
 	}
 	switch c.Profile {
 	case ProfileCodingShell:

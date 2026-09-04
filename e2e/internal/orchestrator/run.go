@@ -270,6 +270,7 @@ func Run(ctx context.Context, options Options) (_ Result, resultErr error) {
 			{Token: tokenB, CallerID: "reference-caller-b", TenantID: "tenant-e2e-b"},
 		},
 		GatewayAdminToken: adminToken, GatewayAuditFile: filepath.Join(stateRoot, "gateway-audit.jsonl"),
+		GatewayListenerLimit: 32,
 	}
 	stackConfigPath := filepath.Join(secretsRoot, "stack.json")
 	stackConfigDigest, err := writeJSON(stackConfigPath, stackConfig)
@@ -282,6 +283,7 @@ func Run(ctx context.Context, options Options) (_ Result, resultErr error) {
 		ProviderBaseURL: "https://" + providerAddress, GatewayBaseURL: "https://" + gatewayAddress,
 		CAFile: material.CAFile, ProviderRevisionID: providerRevisionID, ProviderInstanceAudience: providerAudience,
 		RuntimeImageReference: runtimeImageReference, RuntimeImageDigest: runtimeDigest, RuntimeArchitecture: "amd64", GatewayAdminToken: adminToken,
+		GatewayListenerLimit: 32,
 		ControllerA: caller.IdentityConfig{
 			ControllerSubject: material.ControllerA.URI, CertificateFile: material.ControllerA.CertificateFile,
 			PrivateKeyFile: material.ControllerA.PrivateKeyFile, JWSPrivateKeyFile: material.ControllerA.JWSPrivateFile,

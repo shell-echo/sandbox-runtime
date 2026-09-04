@@ -1,12 +1,18 @@
 package caller
 
 import (
+	"bufio"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -224,6 +230,168 @@ type browserEdgeAttempt struct {
 	status     int
 	retryAfter string
 	err        error
+}
+
+func verifyBrowserGatewayTransportBounds(ctx context.Context, config Config) error {
+	endpoint, err := url.Parse(config.GatewayBaseURL)
+	if err != nil || endpoint.Host == "" {
+		return errors.Join(err, errors.New("Browser Gateway endpoint is invalid"))
+	}
+	roots, err := loadGatewayRoots(config.CAFile)
+	if err != nil {
+		return err
+	}
+
+	legacy, err := dialGatewayTLS(ctx, endpoint.Host, roots, tls.VersionTLS12, tls.VersionTLS12, []string{"http/1.1"}, time.Second)
+	if err == nil {
+		_ = legacy.Close()
+		return errors.New("Browser Gateway accepted TLS 1.2")
+	}
+
+	oversized, err := dialGatewayTLS(ctx, endpoint.Host, roots, tls.VersionTLS13, tls.VersionTLS13, []string{"h2", "http/1.1"}, 2*time.Second)
+	if err != nil {
+		return fmt.Errorf("connect Browser Gateway TLS 1.3: %w", err)
+	}
+	state := oversized.ConnectionState()
+	if state.Version != tls.VersionTLS13 || state.NegotiatedProtocol != "http/1.1" {
+		_ = oversized.Close()
+		return fmt.Errorf("Browser Gateway negotiated TLS=%x ALPN=%q", state.Version, state.NegotiatedProtocol)
+	}
+	request := "GET /healthz HTTP/1.1\r\nHost: localhost\r\nX-Oversized: " + strings.Repeat("x", 32<<10) + "\r\nConnection: close\r\n\r\n"
+	if _, err := io.WriteString(oversized, request); err != nil {
+		_ = oversized.Close()
+		return err
+	}
+	response, err := http.ReadResponse(bufio.NewReader(oversized), &http.Request{Method: http.MethodGet})
+	if err != nil {
+		_ = oversized.Close()
+		return fmt.Errorf("read oversized Browser Gateway rejection: %w", err)
+	}
+	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 4096))
+	_ = response.Body.Close()
+	_ = oversized.Close()
+	if response.StatusCode != http.StatusRequestHeaderFieldsTooLarge {
+		return fmt.Errorf("oversized Browser Gateway header status = %d, want 431", response.StatusCode)
+	}
+
+	slow, err := dialGatewayTLS(ctx, endpoint.Host, roots, tls.VersionTLS13, tls.VersionTLS13, []string{"http/1.1"}, 2*time.Second)
+	if err != nil {
+		return err
+	}
+	if _, err := io.WriteString(slow, "GET /healthz HTTP/1.1\r\nHost: localhost"); err != nil {
+		_ = slow.Close()
+		return err
+	}
+	if err := slow.SetReadDeadline(time.Now().Add(3 * time.Second)); err != nil {
+		_ = slow.Close()
+		return err
+	}
+	if _, err := slow.Read(make([]byte, 1)); err == nil {
+		_ = slow.Close()
+		return errors.New("slow Browser Gateway request header was not reclaimed")
+	}
+	_ = slow.Close()
+
+	held := make([]net.Conn, 0, config.GatewayListenerLimit+4)
+	defer func() {
+		for _, connection := range held {
+			_ = connection.Close()
+		}
+	}()
+	for index := 0; index < config.GatewayListenerLimit+4; index++ {
+		connection, err := (&net.Dialer{Timeout: time.Second}).DialContext(ctx, "tcp", endpoint.Host)
+		if err != nil {
+			return fmt.Errorf("fill Browser Gateway listener slot %d: %w", index+1, err)
+		}
+		held = append(held, connection)
+	}
+	if err := waitForDuration(ctx, 75*time.Millisecond); err != nil {
+		return err
+	}
+	blocked, err := (&net.Dialer{Timeout: time.Second}).DialContext(ctx, "tcp", endpoint.Host)
+	if err != nil {
+		return fmt.Errorf("probe saturated Browser Gateway listener: %w", err)
+	}
+	blockedTLS := tls.Client(blocked, gatewayTLSConfig(roots, tls.VersionTLS13, tls.VersionTLS13, []string{"http/1.1"}))
+	if err := blockedTLS.SetDeadline(time.Now().Add(250 * time.Millisecond)); err != nil {
+		_ = blockedTLS.Close()
+		return err
+	}
+	if err := blockedTLS.HandshakeContext(ctx); err == nil {
+		_ = blockedTLS.Close()
+		return errors.New("connection beyond Browser Gateway listener capacity completed TLS")
+	}
+	_ = blockedTLS.Close()
+	for _, connection := range held {
+		_ = connection.Close()
+	}
+	held = nil
+
+	transport := &http.Transport{
+		Proxy: nil, TLSClientConfig: gatewayTLSConfig(roots, tls.VersionTLS13, tls.VersionTLS13, []string{"http/1.1"}),
+		DisableKeepAlives: true, TLSHandshakeTimeout: 2 * time.Second, ResponseHeaderTimeout: 2 * time.Second,
+	}
+	defer transport.CloseIdleConnections()
+	client := &http.Client{Transport: transport, Timeout: 3 * time.Second}
+	var health *http.Response
+	for attempt := 0; attempt < 20; attempt++ {
+		health, err = client.Get(config.GatewayBaseURL + "/healthz")
+		if err == nil {
+			break
+		}
+		if err := waitForDuration(ctx, 50*time.Millisecond); err != nil {
+			return err
+		}
+	}
+	if err != nil {
+		return fmt.Errorf("Browser Gateway listener did not recover: %w", err)
+	}
+	_, _ = io.Copy(io.Discard, io.LimitReader(health.Body, 4096))
+	_ = health.Body.Close()
+	if health.StatusCode != http.StatusOK {
+		return fmt.Errorf("Browser Gateway recovery status = %d, want 200", health.StatusCode)
+	}
+	return nil
+}
+
+func loadGatewayRoots(path string) (*x509.CertPool, error) {
+	contents, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read Browser Gateway CA: %w", err)
+	}
+	roots := x509.NewCertPool()
+	if !roots.AppendCertsFromPEM(contents) {
+		return nil, errors.New("Browser Gateway CA bundle is invalid")
+	}
+	return roots, nil
+}
+
+func dialGatewayTLS(ctx context.Context, address string, roots *x509.CertPool, minVersion, maxVersion uint16, protocols []string, timeout time.Duration) (*tls.Conn, error) {
+	raw, err := (&net.Dialer{Timeout: timeout}).DialContext(ctx, "tcp", address)
+	if err != nil {
+		return nil, err
+	}
+	connection := tls.Client(raw, gatewayTLSConfig(roots, minVersion, maxVersion, protocols))
+	if err := connection.SetDeadline(time.Now().Add(timeout)); err != nil {
+		_ = connection.Close()
+		return nil, err
+	}
+	if err := connection.HandshakeContext(ctx); err != nil {
+		_ = connection.Close()
+		return nil, err
+	}
+	if err := connection.SetDeadline(time.Time{}); err != nil {
+		_ = connection.Close()
+		return nil, err
+	}
+	return connection, nil
+}
+
+func gatewayTLSConfig(roots *x509.CertPool, minVersion, maxVersion uint16, protocols []string) *tls.Config {
+	return &tls.Config{
+		MinVersion: minVersion, MaxVersion: maxVersion, RootCAs: roots,
+		ServerName: "localhost", NextProtos: append([]string(nil), protocols...),
+	}
 }
 
 func waitForDuration(ctx context.Context, duration time.Duration) error {

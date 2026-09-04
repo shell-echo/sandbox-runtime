@@ -47,6 +47,8 @@ func TestConfigValidateRejectsAmbiguousIdentityInputs(t *testing.T) {
 		{name: "unsupported key algorithm", mutate: func(config *Config) { config.TrustedJWSKeys[0].Algorithm = "ES256" }},
 		{name: "non loopback Provider", mutate: func(config *Config) { config.ProviderAddress = "0.0.0.0:10443" }},
 		{name: "same listener", mutate: func(config *Config) { config.GatewayAddress = config.ProviderAddress }},
+		{name: "missing Gateway listener limit", mutate: func(config *Config) { config.GatewayListenerLimit = 0 }},
+		{name: "excessive Gateway listener limit", mutate: func(config *Config) { config.GatewayListenerLimit = 257 }},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			config := validConfig(t)
@@ -141,6 +143,7 @@ func validConfig(t *testing.T) Config {
 			{Token: "token-b", CallerID: "caller-b", TenantID: "tenant-b"},
 		},
 		GatewayAdminToken: "admin-token", GatewayAuditFile: filepath.Join(root, "gateway.jsonl"),
+		GatewayListenerLimit: 32,
 	}
 }
 

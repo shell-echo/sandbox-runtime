@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"math"
 	"net"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -52,8 +51,11 @@ func (clock) Now() time.Time { return time.Now().UTC() }
 
 type Stack struct {
 	provider *providerapi.Server
-	gateway  *http.Server
-	closers  []func() error
+	gateway  interface {
+		Startup(context.Context) error
+		Shutdown(context.Context) error
+	}
+	closers []func() error
 }
 
 func Open(ctx context.Context, config Config) (_ *Stack, result error) {
@@ -218,27 +220,20 @@ func Open(ctx context.Context, config Config) (_ *Stack, result error) {
 		return nil, err
 	}
 	stack.addCloser(referenceGateway.Close)
-	stack.gateway = &http.Server{
-		Addr: config.GatewayAddress, Handler: referenceGateway.Handler(),
-		ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second,
-		WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 << 10,
+	stack.gateway, err = newPublicGatewayServer(config, referenceGateway.Handler())
+	if err != nil {
+		return nil, err
 	}
 	return stack, nil
 }
 
-func (s *Stack) Run(ctx context.Context, gatewayCertificate, gatewayKey string) error {
+func (s *Stack) Run(ctx context.Context) error {
 	if s == nil || s.provider == nil || s.gateway == nil {
 		return errors.New("reference stack is unavailable")
 	}
 	errorsChannel := make(chan error, 2)
 	go func() { errorsChannel <- s.provider.Startup(ctx) }()
-	go func() {
-		err := s.gateway.ListenAndServeTLS(gatewayCertificate, gatewayKey)
-		if errors.Is(err, http.ErrServerClosed) {
-			err = nil
-		}
-		errorsChannel <- err
-	}()
+	go func() { errorsChannel <- s.gateway.Startup(ctx) }()
 	select {
 	case <-ctx.Done():
 		shutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)

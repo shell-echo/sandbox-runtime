@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -190,10 +189,9 @@ func openBrowser(ctx context.Context, config Config) (_ *Stack, result error) {
 		return nil, err
 	}
 	stack.addCloser(referenceGateway.Close)
-	stack.gateway = &http.Server{
-		Addr: config.GatewayAddress, Handler: referenceGateway.Handler(),
-		ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second,
-		WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 << 10,
+	stack.gateway, err = newPublicGatewayServer(config, referenceGateway.Handler())
+	if err != nil {
+		return nil, err
 	}
 	return stack, nil
 }

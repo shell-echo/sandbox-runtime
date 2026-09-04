@@ -41,6 +41,7 @@ type Config struct {
 	RuntimeImageDigest       string         `json:"runtime_image_digest"`
 	RuntimeArchitecture      string         `json:"runtime_architecture"`
 	GatewayAdminToken        string         `json:"gateway_admin_token"`
+	GatewayListenerLimit     int            `json:"gateway_listener_limit"`
 	ControllerA              IdentityConfig `json:"controller_a"`
 	ControllerB              IdentityConfig `json:"controller_b"`
 }
@@ -90,6 +91,9 @@ func (c Config) Validate() error {
 	}
 	if c.ProviderBaseURL == c.GatewayBaseURL {
 		return errors.New("Provider and Gateway endpoints must differ")
+	}
+	if c.GatewayListenerLimit < 1 || c.GatewayListenerLimit > 256 {
+		return errors.New("gateway_listener_limit must be between 1 and 256")
 	}
 	if !isDigest(c.RuntimeImageDigest) || (c.RuntimeArchitecture != "amd64" && c.RuntimeArchitecture != "arm64") ||
 		!strings.HasPrefix(c.ProviderInstanceAudience, "urn:shell-echo:sandbox-runtime:provider-instance:") {

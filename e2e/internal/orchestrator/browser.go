@@ -190,6 +190,7 @@ func RunBrowser(ctx context.Context, options Options) (_ Result, resultErr error
 			{Token: tokenB, CallerID: "browser-reference-caller-b", TenantID: "tenant-browser-e2e-b"},
 		},
 		GatewayAdminToken: adminToken, GatewayAuditFile: filepath.Join(stateRoot, "browser-gateway-audit.jsonl"),
+		GatewayListenerLimit: 32,
 		Browser: &stack.BrowserConfig{
 			GatewayImage: gatewayImage, UplinkNetwork: uplinkName, Namespace: browserReferenceNamespace,
 			RuntimeArchitecture:      architecture,
@@ -209,7 +210,8 @@ func RunBrowser(ctx context.Context, options Options) (_ Result, resultErr error
 		ProviderBaseURL: "https://" + providerAddress, GatewayBaseURL: "https://" + gatewayAddress,
 		CAFile: material.CAFile, ProviderRevisionID: providerRevisionID, ProviderInstanceAudience: providerAudience,
 		RuntimeImageReference: publication.Repository, RuntimeImageDigest: publication.Digest, RuntimeArchitecture: architecture,
-		GatewayAdminToken: adminToken,
+		GatewayAdminToken:    adminToken,
+		GatewayListenerLimit: 32,
 		ControllerA: caller.IdentityConfig{
 			ControllerSubject: material.ControllerA.URI, CertificateFile: material.ControllerA.CertificateFile,
 			PrivateKeyFile: material.ControllerA.PrivateKeyFile, JWSPrivateKeyFile: material.ControllerA.JWSPrivateFile,

@@ -31,7 +31,7 @@ func main() {
 		_, _ = fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	err = errors.Join(reference.Run(ctx, config.GatewayCertificateFile, config.GatewayPrivateKeyFile), reference.Close())
+	err = errors.Join(reference.Run(ctx), reference.Close())
 	if err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
