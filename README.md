@@ -80,14 +80,12 @@ Currently implemented:
   distributed revocation
 - a default-disabled Browser Provider command/runtime graph and a separate
   Browser-only reference stack plus black-box caller. Hosted Browser Reference
-  E2E run `33846603547` passes 11 initial and 5 process-reconstruction
+  E2E run `33854020809` passes 12 initial and 5 process-reconstruction
   scenarios through real mTLS/JWS HTTPS, WebSocket, signed-image provenance,
   Docker, restricted egress, concurrent same-session capacity rejection and
-  release, usage evidence, and cleanup. The production command still exposes
-  no public Browser Gateway and does not advertise Browser. A newer clean local
-  run `20260904T080946.250607000Z` passes 12+5 scenarios including
-  authenticated wrong-Origin pre-upgrade rate rejection and recovery; hosted
-  evidence for that added scenario is pending
+  release, authenticated wrong-Origin pre-upgrade rate rejection and recovery,
+  usage evidence, and cleanup. The production command still exposes no public
+  Browser Gateway and does not advertise Browser
 
 Planned but not yet implemented:
 

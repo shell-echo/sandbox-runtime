@@ -148,7 +148,8 @@ composition `66183b1f49b22c211e43c841d15383b745e89967`, Browser DNS compatibilit
 implementation `f760369dd4b71f507b15a2aecf988e98ca74854b`, Browser Gateway local
 capacity implementation `7b062e6511f73b916dd18977041d83732e590088`, Browser
 pre-upgrade edge implementation `44ea2eecc75752870d4e8580a75be26578dcd63a`,
-and co-located E2E harness `249cdd4c3735ff093ab362e8afda13db3deae95c`.
+and hosted co-located E2E evidence baseline
+`e7e7f03b5910b0210e061a635462e4d521f0393c`.
 The Contract slice authorizes an atomic browser-only capability shape,
 create/session/handoff schemas, protected admission bindings, opaque reference
 security, operation/usage projection, and 10 new Suite cases. The browser image
@@ -181,11 +182,11 @@ pins Provider `44ea2ee`, harness `249cdd4`, the Contract, and linux/amd64 runtim
 image digest
 `sha256:bcd5dbff8b2d108ee7dab464a85ee7d39ef74a8616a6af73a94ebb10ff8eaf75`.
 This is reference coding/shell evidence only; it does not exercise browser.
-Hosted Reference E2E run `33846603323` passed the same 15 initial and 5
-reconstruction/resume coding/shell scenarios against current harness/Provider
-lock `28a9a5e`/`7b062e6`. Its artifact
-`reference-e2e-evidence-33846603323` has digest
-`sha256:333be42b84c1d2ebfff86bae7d619348e84d13fe29b6f15975b587c2d38447c3`.
+Hosted Reference E2E run `33854020874` passed the same 15 initial and 5
+reconstruction/resume coding/shell scenarios against harness/Provider lock
+`e7e7f03`/`44ea2ee`. Its artifact
+`reference-e2e-evidence-33854020874` has digest
+`sha256:220650f1b61b0297ec445ded03bf3a15870514a9482c9e55012ddfba8ae0da2d`.
 This remains reference coding/shell evidence only and contains no browser
 scenario.
 
@@ -194,28 +195,35 @@ The explicitly named `agent-platform-candidate` mode passed local run
 `249cdd4`/`44ea2ee`: 15 initial and 5 resume coding/shell scenarios over
 separate `platform-caller` and `reference-stack` processes with candidate
 shadow/selection/rollback/drain policy and state reconstruction. Hosted
-workflow run `33846603454` passed the same scenario set against current
-harness/Provider lock `28a9a5e`/`7b062e6`. Its artifact
-`platform-candidate-e2e-evidence-33846603454` has digest
-`sha256:d3148037292f4e883dc96a1e224294f5841a4ae838bc1c8e2fe5e67455d39f95`.
+workflow run `33854020947` passed the same scenario set against
+harness/Provider lock `e7e7f03`/`44ea2ee`. Its artifact
+`platform-candidate-e2e-evidence-33854020947` has digest
+`sha256:48cbe44c433e5b3a858a2691fe1f736469b2e8d71228541f2bdfcc4aab1c15b1`.
 Local and hosted candidate results do not represent browser evidence, real
 Veronica, aggregate conformance, hostile multi-tenant security, deployment, or
 production readiness.
 
-Hosted Browser Reference E2E run `33846603547` passed all 11 initial and 5
+Hosted Browser Reference E2E run `33854020809` passed all 12 initial and 5
 process-reconstruction scenarios against harness/Provider lock
-`28a9a5e`/`7b062e6`. The path uses separate reference-stack and black-box caller
+`e7e7f03`/`44ea2ee`. The path uses separate reference-stack and black-box caller
 processes over mTLS/JWS HTTPS and a caller-owned WebSocket Gateway, the exact
 signed `linux/amd64` Browser image, real GitHub OIDC/Sigstore provenance,
 restricted egress, durable state, duration usage evidence, and exact resource
-cleanup. The added scenario holds one CDP connection, rejects a second
+cleanup. The capacity scenario holds one CDP connection, rejects a second
 same-session grant without disrupting the first, and connects a replacement
-after release. Artifact `browser-reference-e2e-evidence-33846603547` has digest
-`sha256:b024225aa3545fa56a7cc5113f29c0817a86ebc70c3976e10d81bf3507546cba`.
-Its manifest and reports were inspected; the 20-record metadata-only Gateway
-audit contains exactly one `capacity_rejected` event and no endpoint, token, or
-CDP payload. This closes the process-local capacity scenario within the Browser
-reference external-caller gate only.
+after release. The edge scenario sends 16 authenticated wrong-Origin requests,
+observes ordinary `403` plus generic pre-upgrade `429` with bounded
+`Retry-After`, and recovers. Artifact
+`browser-reference-e2e-evidence-33854020809` has digest
+`sha256:b081ce8a3bf7e3e0c37e4bf036630483735c3812eeaf24d311048ff0a9122779`.
+Its inspected run directory `20260904T083407.182245415Z` pins the Contract/tree,
+48-case Suite, signed Browser image, and `linux/amd64`. Both reports contain
+only passing scenarios. The 20-record metadata-only Gateway audit has six
+`authorized`, six `connected`, four `client_closed`, and one each
+`capacity_rejected`, `denied`, `expired`, and `revoked`; it contains no
+`grant-browser-edge-*` identity, endpoint, token, or CDP payload. This closes
+the process-local post-authorization capacity and pre-upgrade Browser service
+scenarios within the Browser reference external-caller gate only.
 
 Clean local Browser run `20260904T080946.250607000Z` then passed 12 initial and
 5 process-reconstruction scenarios against harness/Provider lock
@@ -226,9 +234,9 @@ requests, observes ordinary `403` plus generic pre-upgrade `429` with bounded
 `Retry-After`, and observes ordinary `403` again after the window. The
 20-record Gateway audit retains the six `authorized`, six `connected`, four
 `client_closed`, and one each `capacity_rejected`, `denied`, `expired`, and
-`revoked` events, with no `grant-browser-edge-*` identity. Hosted evidence for
-this added scenario is pending. Listener/TLS/HTTP-layer limits,
-partition-aware shared or distributed capacity, durable distributed revocation,
+`revoked` events, with no `grant-browser-edge-*` identity.
+Listener/TLS/HTTP-layer limits, partition-aware shared or distributed capacity,
+durable distributed revocation,
 production advertisement, real Agent Platform, aggregate, multi-controller,
 hostile multi-tenant, deployment, and production gates remain open.
 
@@ -298,7 +306,7 @@ no Provider-owned user authorization, production Browser advertisement, or
 public Browser Gateway. ADR 0026 and `79fee2b` supply those caller-owned policies
 only in a separate reference deployment and first proved the complete 10+5
 Browser external-caller path in hosted run `33838215924`. ADR 0027 and
-`7b062e6` add process-local connection capacity; current harness `28a9a5e` and
+`7b062e6` add process-local connection capacity; capacity harness `28a9a5e` and
 hosted run `33846603547` add its active rejection/release scenario without
 changing the production advertisement boundary. ADR 0028 and `44ea2ee` add the
 process-local pre-upgrade connection/rate gate, and harness `249cdd4` proves its
@@ -319,11 +327,10 @@ through 0024 cover the Provider-local runtime, provenance, restricted egress,
 protected transport, and caller-owned Browser Gateway components. ADR 0025 and
 `66183b1` compose the default-disabled Provider graph; ADR 0026 defines the
 independent reference caller. ADR 0027 and `7b062e6` add process-local Gateway
-capacity, and harness `28a9a5e` exercises it. Hosted run `33846603547` closes
-that Browser reference external-caller scenario with 11 initial and 5
-reconstruction passes. ADR 0028 and `44ea2ee` add process-local pre-upgrade
-connection/rate control; a clean local 12+5 run with harness `249cdd4` passes,
-while hosted evidence remains pending. Production Browser advertisement/public
+capacity, and harness `28a9a5e` exercises its original 11+5 hosted scenario.
+ADR 0028 and `44ea2ee` add process-local pre-upgrade connection/rate control;
+hosted run `33854020809` passes the combined 12+5 Browser caller against harness
+`e7e7f03`. Production Browser advertisement/public
 Gateway, listener/TLS/HTTP controls, partition-aware shared capacity,
 distributed durable revocation, remaining profile-specific security and
 concurrency, aggregate, multi-controller, multi-tenant, deployment, and
@@ -343,10 +350,10 @@ Contract identity:
 | P1.1 | Passed for DTO, mTLS discovery, JWS/digest/replay/fencing admission | Production identity infrastructure remains unproven |
 | P1.2 | Passed for the bounded Contract-authorized lifecycle subset and development composition | Reserved lifecycle families and production gates remain open |
 | P2 components | P2.1-P2.5h local component, Contract projection, Docker, and recorded repository CI gates pass within their named boundaries | Retain single-controller/development constraints and exact Contract lock |
-| P2.5i | Hosted run `33846603323` passed 15 initial plus 5 restart/resume coding/shell scenarios against harness/Provider lock `28a9a5e`/`7b062e6`; latest clean local run `20260904T081521.464863000Z` passed against current local `249cdd4`/`44ea2ee` lock | Neither run contains a Browser scenario or implies Agent Platform or production properties; hosted regression for the current local lock is pending |
+| P2.5i | Hosted run `33854020874` passed 15 initial plus 5 restart/resume coding/shell scenarios against harness/Provider lock `e7e7f03`/`44ea2ee`; latest clean local run `20260904T081521.464863000Z` passed against `249cdd4`/`44ea2ee` | Neither run contains a Browser scenario or implies Agent Platform or production properties |
 | P2 | Reference coding/shell caller release gate passed | Aggregate conformance, actual Agent Platform compatibility, multi-controller, hostile multi-tenant isolation, deployment, and production gates remain open |
-| P3 | Local revision binding/shadow/metrics component evidence plus latest local candidate integration (`20260904T081706.648122000Z`, `249cdd4`/`44ea2ee`) and hosted candidate regression `33846603454` against earlier lock `28a9a5e`/`7b062e6` | Real platform traffic shadow parity, canary, rollback, old-run drain, metric parity, and unchanged platform contracts remain open; hosted regression for the current local lock is pending |
-| P4 | Browser Contract authority/projection, exact sandboxed signed amd64/arm64/v8 publication, Provider-local components, default-disabled command/runtime composition, process-local Gateway capacity, hosted 11+5 Browser capacity evidence, and local 12+5 pre-upgrade edge evidence pass their named gates | Hosted evidence for the added edge scenario, production Browser advertisement/public Gateway, listener/TLS/HTTP limits, partition-aware shared capacity, distributed durable revocation, remaining profile-specific security/concurrency, aggregate, multi-controller, multi-tenant, deployment, and production gates remain open |
+| P3 | Local revision binding/shadow/metrics component evidence plus latest local candidate integration (`20260904T081706.648122000Z`, `249cdd4`/`44ea2ee`) and hosted candidate regression `33854020947` against `e7e7f03`/`44ea2ee` | Real platform traffic shadow parity, canary, rollback, old-run drain, metric parity, and unchanged platform contracts remain open |
+| P4 | Browser Contract authority/projection, exact sandboxed signed amd64/arm64/v8 publication, Provider-local components, default-disabled command/runtime composition, process-local Gateway capacity, and hosted 12+5 Browser pre-upgrade edge evidence pass their named gates | Production Browser advertisement/public Gateway, listener/TLS/HTTP limits, partition-aware shared capacity, distributed durable revocation, remaining profile-specific security/concurrency, aggregate, multi-controller, multi-tenant, deployment, and production gates remain open |
 
 Production readiness is not a numbered phase shortcut. Aggregate conformance,
 multi-controller reliability, hostile multi-tenant security, deployment, and
@@ -387,7 +394,14 @@ covered by repository CI `33850219645`, Reference `33850219700`, Candidate
 20 or `punycode` warnings. This is CI runtime maintenance only. The subsequent
 Browser edge implementation `44ea2ee` and harness `249cdd4` pass all required
 local Go/Contract/E2E gates and the clean local Browser 12+5 run described
-above. Hosted workflows for this edge lock have not yet run.
+above. Repository CI `33854020951` passes all four jobs. Hosted Reference
+`33854020874`, Candidate `33854020947`, and Browser `33854020809` pass their
+separate 15+5, 15+5, and 12+5 scenario sets against harness `e7e7f03` and
+Provider `44ea2ee`; their artifact digests are
+`sha256:220650f1b61b0297ec445ded03bf3a15870514a9482c9e55012ddfba8ae0da2d`,
+`sha256:48cbe44c433e5b3a858a2691fe1f736469b2e8d71228541f2bdfcc4aab1c15b1`,
+and `sha256:b081ce8a3bf7e3e0c37e4bf036630483735c3812eeaf24d311048ff0a9122779`,
+respectively. The three caller modes retain distinct evidence boundaries.
 
 ## P2.5i Reference Result
 

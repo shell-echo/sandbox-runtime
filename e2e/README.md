@@ -85,24 +85,29 @@ passes this command and emits its manifest. Hosted execution is isolated in
 
 ## Latest verified evidence
 
-Clean local Browser Reference run `20260904T080946.250607000Z` passed harness
-`249cdd4` against Provider `44ea2ee`: all 12 initial and 5
-process-reconstruction scenarios passed on `linux/arm64`. The added black-box
-scenario sends 16 authenticated requests with a rejected Origin, observes both
-ordinary `403` and pre-upgrade `429` responses with bounded `Retry-After`, then
-observes ordinary `403` again after recovery. The 20-record Gateway audit keeps
+Hosted Browser Reference run `33854020809` passed harness `e7e7f03` against
+Provider `44ea2ee`: all 12 initial and 5 process-reconstruction scenarios passed
+on `linux/amd64`. The added black-box scenario sends 16 authenticated requests
+with a rejected Origin, observes both ordinary `403` and pre-upgrade `429`
+responses with bounded `Retry-After`, then observes ordinary `403` again after
+recovery. The 20-record Gateway audit keeps
 the existing six `authorized`, six `connected`, four `client_closed`, and one
 each `capacity_rejected`, `denied`, `expired`, and `revoked` events; it contains
-no `grant-browser-edge-*` identity. This is local Browser reference
-external-caller evidence for process-local pre-upgrade limits only. Hosted
-evidence for this lock is pending, and listener/TLS/HTTP limits, partition-aware
-shared capacity, distributed revocation, production advertisement, real Agent
-Platform, aggregate conformance, multi-controller, hostile multi-tenant,
-deployment, and production gates remain open.
+no `grant-browser-edge-*` identity. This is hosted Browser reference
+external-caller evidence for process-local pre-upgrade limits only;
+listener/TLS/HTTP limits, partition-aware shared capacity, distributed
+revocation, production advertisement, real Agent Platform, aggregate
+conformance, multi-controller, hostile multi-tenant, deployment, and production
+gates remain open. Artifact
+`browser-reference-e2e-evidence-33854020809` has digest
+`sha256:b081ce8a3bf7e3e0c37e4bf036630483735c3812eeaf24d311048ff0a9122779`;
+its inspected run directory is `20260904T083407.182245415Z`. The clean local
+`linux/arm64` precursor is `20260904T080946.250607000Z` on harness `249cdd4`.
 
-Hosted Browser Reference E2E run `33846603547` passed harness `28a9a5e` against
-Provider `7b062e6`: all 11 initial and 5 process-reconstruction scenarios
-passed on `linux/amd64`. Its manifest pins Contract revision `5096e71`, tree
+The preceding hosted Browser Reference E2E run `33846603547` passed harness
+`28a9a5e` against Provider `7b062e6`: all 11 initial and 5
+process-reconstruction scenarios passed on `linux/amd64`. Its manifest pins
+Contract revision `5096e71`, tree
 `859f76d`, 48 Suite cases, the signed Browser image
 `sha256:87d3216c22ada0fea74b375a3ee5c2ddf021d3e1913569e2aeb4a316ed3b5c2f`,
 and support image
@@ -121,13 +126,13 @@ capacity/revocation, production
 advertisement, real Agent Platform, aggregate conformance, multi-controller,
 hostile multi-tenant, deployment, or production evidence.
 
-Hosted coding/shell Reference run `33846603323` and Platform Candidate run
-`33846603454` passed the respective 15+5 scenario sets against the same
-harness/Provider lock `28a9a5e`/`7b062e6`. Their artifacts are
-`reference-e2e-evidence-33846603323` (digest
-`sha256:333be42b84c1d2ebfff86bae7d619348e84d13fe29b6f15975b587c2d38447c3`)
-and `platform-candidate-e2e-evidence-33846603454` (digest
-`sha256:d3148037292f4e883dc96a1e224294f5841a4ae838bc1c8e2fe5e67455d39f95`).
+Hosted coding/shell Reference run `33854020874` and Platform Candidate run
+`33854020947` passed the respective 15+5 scenario sets against the same
+harness/Provider lock `e7e7f03`/`44ea2ee`. Their artifacts are
+`reference-e2e-evidence-33854020874` (digest
+`sha256:220650f1b61b0297ec445ded03bf3a15870514a9482c9e55012ddfba8ae0da2d`)
+and `platform-candidate-e2e-evidence-33854020947` (digest
+`sha256:48cbe44c433e5b3a858a2691fe1f736469b2e8d71228541f2bdfcc4aab1c15b1`).
 The candidate result covers only its named shadow/selection/rollback/drain
 policy. Neither coding/shell run contains a Browser scenario. Clean local
 Reference run `20260904T081521.464863000Z` and Candidate run
@@ -313,9 +318,9 @@ until close within a bounded timeout. Hosted run `33379217800` then passed all
 15 initial and 5 restart/resume scenarios on commit `555436c` and uploaded
 artifact `reference-e2e-evidence-33379217800` with digest
 `sha256:68250a85683dcbd8f01397d7373e98215382379ff895c0a58692de23c1880733`.
-The current lock-refresh run `33846603323` passed Provider `7b062e6` with
-harness `28a9a5e` and uploaded `reference-e2e-evidence-33846603323` with digest
-`sha256:333be42b84c1d2ebfff86bae7d619348e84d13fe29b6f15975b587c2d38447c3`.
+The current lock-refresh run `33854020874` passed Provider `44ea2ee` with
+harness `e7e7f03` and uploaded `reference-e2e-evidence-33854020874` with digest
+`sha256:220650f1b61b0297ec445ded03bf3a15870514a9482c9e55012ddfba8ae0da2d`.
 A green run proves only the named reference caller scenarios;
 it does not prove Agent Platform compatibility, aggregate conformance,
 multi-controller reliability, hostile tenant isolation, deployment readiness,
@@ -332,7 +337,7 @@ Hosted run `33460370618` passed all 15 initial and 5 restart/resume candidate
 scenarios on workflow baseline `c7ff5eb`. Artifact
 `platform-candidate-e2e-evidence-33460370618` has digest
 `sha256:54f0aea847dcb0b1808c6c902f1465979a3ec4362d52ab8884187e85ea6343f7`.
-The current lock-refresh run `33846603454` passed Provider `7b062e6` with
-harness `28a9a5e` and uploaded
-`platform-candidate-e2e-evidence-33846603454` with digest
-`sha256:d3148037292f4e883dc96a1e224294f5841a4ae838bc1c8e2fe5e67455d39f95`.
+The current lock-refresh run `33854020947` passed Provider `44ea2ee` with
+harness `e7e7f03` and uploaded
+`platform-candidate-e2e-evidence-33854020947` with digest
+`sha256:48cbe44c433e5b3a858a2691fe1f736469b2e8d71228541f2bdfcc4aab1c15b1`.
