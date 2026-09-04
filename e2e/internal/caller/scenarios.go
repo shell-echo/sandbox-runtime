@@ -250,8 +250,13 @@ func (r *runner) verifyCapabilities(ctx context.Context) error {
 		return err
 	}
 	if r.config.Profile == ProfileBrowser {
+		wantSnapshotProfiles := []SnapshotRestoreProfile{{
+			ProfileID: "sandbox-snapshot-workspace-v1", Level: "workspace", SuiteID: "sandbox-provider",
+			SuiteVersion: "1.0.0", SuiteDigest: "sha256:" + strings.Repeat("a", 64),
+		}}
 		if capabilities.ProviderRevisionID != r.config.ProviderRevisionID || capabilities.APIVersion != "v1" ||
-			len(capabilities.Capabilities) != 0 || len(capabilities.RuntimeProfiles) != 0 || len(capabilities.SnapshotRestoreProfiles) != 0 {
+			len(capabilities.Capabilities) != 0 || len(capabilities.RuntimeProfiles) != 0 ||
+			!reflect.DeepEqual(capabilities.SnapshotRestoreProfiles, wantSnapshotProfiles) {
 			return fmt.Errorf("pre-advertisement Browser capability snapshot differs from lock: %#v", capabilities)
 		}
 		return nil

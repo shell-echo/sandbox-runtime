@@ -1,6 +1,7 @@
 package stack
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -77,6 +78,21 @@ func TestConfigValidateRequiresCompleteBrowserProfile(t *testing.T) {
 				t.Fatal("invalid Browser config was accepted")
 			}
 		})
+	}
+}
+
+func TestBrowserCapabilitySourceKeepsOnlyRequiredCompatibilityMetadata(t *testing.T) {
+	t.Parallel()
+	source, err := browserCapabilitySource("browser-provider-revision-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := source.CapabilitySnapshot(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snapshot.Capabilities) != 0 || len(snapshot.RuntimeProfiles) != 0 || len(snapshot.SnapshotRestoreProfiles) != 1 {
+		t.Fatalf("pre-advertisement Browser snapshot = %#v", snapshot)
 	}
 }
 

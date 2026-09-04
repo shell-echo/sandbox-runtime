@@ -29,8 +29,9 @@ policy, PKI, JWS keys, and two distinct caller/tenant identities. It composes
 the exact signed Browser publication, the pinned GitHub CLI provenance
 verifier, a locally built immutable restricted-egress Gateway image, one
 operator-owned uplink, durable single-controller stores, protected Provider
-routes, and the caller-owned Browser Gateway. Capability discovery remains an
-empty, non-nil pre-advertisement snapshot.
+routes, and the caller-owned Browser Gateway. Capability discovery retains the
+Contract-required snapshot/restore compatibility metadata while its capability
+and runtime-profile arrays remain empty for this pre-advertisement gate.
 
 An evidence run uses initial and reconstructed processes over the same durable
 state. It covers protected lifecycle create, Browser session allocation,

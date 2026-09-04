@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -283,7 +284,11 @@ func browserCapabilitySource(providerRevisionID string) (*provider.StaticCapabil
 	snapshot, err := provider.NewCapabilitySnapshotWithAdvertisements(providerRevisionID, provider.Limits{
 		MaxCPUMillis: 2000, MaxMemoryBytes: 2 << 30, MaxEphemeralStorageBytes: 2 << 30,
 		MaxWorkspaceBytes: &workspace, MaxGPUCount: &gpu, MaxLeaseSeconds: 3600, MaxExecSeconds: 300,
-	}, nil, nil, nil)
+	}, nil, nil, []provider.SnapshotRestoreProfile{{
+		ProfileID: "sandbox-snapshot-workspace-v1", Level: provider.SnapshotLevelWorkspace,
+		SuiteID: provider.CompatibilitySuiteSandboxProvider, SuiteVersion: "1.0.0",
+		SuiteDigest: provider.SHA256Digest("sha256:" + strings.Repeat("a", 64)),
+	}})
 	if err != nil {
 		return nil, fmt.Errorf("construct pre-advertisement Browser capability snapshot: %w", err)
 	}
