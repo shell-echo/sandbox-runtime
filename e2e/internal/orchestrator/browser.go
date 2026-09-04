@@ -1,9 +1,11 @@
 package orchestrator
 
 import (
+	"bufio"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -14,6 +16,7 @@ import (
 
 	cerrdefs "github.com/containerd/errdefs"
 	"github.com/moby/moby/client"
+	"github.com/shell-echo/sandbox-runtime/gateway"
 	browserimage "github.com/shell-echo/sandbox-runtime/profiles/browser/image"
 
 	"github.com/shell-echo/sandbox-runtime-e2e/internal/caller"
@@ -269,7 +272,11 @@ func RunBrowser(ctx context.Context, options Options) (_ Result, resultErr error
 	if err := assertBrowserManagedResourcesAbsent(ctx, dockerClient, browserReferenceNamespace); err != nil {
 		return Result{}, err
 	}
-	if err := copyFile(filepath.Join(stateRoot, "browser-gateway-audit.jsonl"), filepath.Join(evidenceDirectory, "browser-gateway-audit.jsonl")); err != nil {
+	auditPath := filepath.Join(stateRoot, "browser-gateway-audit.jsonl")
+	if err := assertNoBrowserEdgeAuditEvents(auditPath); err != nil {
+		return Result{}, err
+	}
+	if err := copyFile(auditPath, filepath.Join(evidenceDirectory, "browser-gateway-audit.jsonl")); err != nil {
 		return Result{}, err
 	}
 	manifest := evidenceManifest{
@@ -287,7 +294,7 @@ func RunBrowser(ctx context.Context, options Options) (_ Result, resultErr error
 			"browser reference-stack -config <ephemeral>", "browser-caller -config <ephemeral> (initial)",
 			"browser reference-stack -config <same-state> (reconstructed)", "browser-caller -config <ephemeral> (resume)",
 		},
-		EvidenceBoundary: "Browser external-caller E2E against an independent reference process; not capability advertisement, aggregate conformance, real Agent Platform, multi-controller, hostile multi-tenant, deployment, or production readiness",
+		EvidenceBoundary: "Browser external-caller E2E including process-local pre-upgrade edge limits against an independent reference process; not distributed capacity or revocation, capability advertisement, aggregate conformance, real Agent Platform, multi-controller, hostile multi-tenant, deployment, or production readiness",
 	}
 	if _, err := writeJSON(filepath.Join(evidenceDirectory, "manifest.json"), manifest); err != nil {
 		return Result{}, err
@@ -296,6 +303,31 @@ func RunBrowser(ctx context.Context, options Options) (_ Result, resultErr error
 		EvidenceDirectory: evidenceDirectory, RuntimeImage: publication.Image(),
 		InitialScenarios: len(initialReport.Scenarios), ResumeScenarios: len(resumeReport.Scenarios),
 	}, nil
+}
+
+func assertNoBrowserEdgeAuditEvents(path string) error {
+	file, err := os.Open(path)
+	if err != nil {
+		return fmt.Errorf("open Browser Gateway audit: %w", err)
+	}
+	defer file.Close()
+	scanner := bufio.NewScanner(file)
+	scanner.Buffer(make([]byte, 4096), 64<<10)
+	line := 0
+	for scanner.Scan() {
+		line++
+		var event gateway.AuditEvent
+		if err := json.Unmarshal(scanner.Bytes(), &event); err != nil {
+			return fmt.Errorf("decode Browser Gateway audit line %d: %w", line, err)
+		}
+		if strings.HasPrefix(event.GrantID, caller.BrowserEdgeGrantPrefix) {
+			return fmt.Errorf("Browser edge request reached Gateway audit at line %d", line)
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("scan Browser Gateway audit: %w", err)
+	}
+	return nil
 }
 
 func provenanceExecutable() (string, string, error) {

@@ -26,6 +26,7 @@ type gatewayRequest struct {
 	ConnectionGeneration int64
 	ExpiresAt            time.Time
 	Bearer               string
+	Origin               string
 }
 
 func gatewayConnect(ctx context.Context, client *http.Client, baseURL string, request gatewayRequest) (*websocket.Conn, *http.Response, error) {
@@ -50,7 +51,11 @@ func gatewayConnect(ctx context.Context, client *http.Client, baseURL string, re
 	query.Set("connection_generation", strconv.FormatInt(request.ConnectionGeneration, 10))
 	query.Set("expires_at", request.ExpiresAt.UTC().Format(time.RFC3339Nano))
 	endpoint.RawQuery = query.Encode()
-	header := http.Header{"Origin": []string{"https://reference-caller.invalid"}}
+	origin := request.Origin
+	if origin == "" {
+		origin = "https://reference-caller.invalid"
+	}
+	header := http.Header{"Origin": []string{origin}}
 	if request.Bearer != "" {
 		header.Set("Authorization", "Bearer "+request.Bearer)
 	}

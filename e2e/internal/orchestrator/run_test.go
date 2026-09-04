@@ -2,6 +2,7 @@ package orchestrator
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"os"
@@ -9,6 +10,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/shell-echo/sandbox-runtime-e2e/internal/caller"
+	"github.com/shell-echo/sandbox-runtime/gateway"
 )
 
 func TestImageDigestFromReference(t *testing.T) {
@@ -145,5 +149,45 @@ func TestCleanupRunRootRejectsUnrecognizedTarget(t *testing.T) {
 	}
 	if _, err := os.Stat(target); err != nil {
 		t.Fatalf("rejected target was changed: %v", err)
+	}
+}
+
+func TestAssertNoBrowserEdgeAuditEvents(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "browser-gateway-audit.jsonl")
+	events := []gateway.AuditEvent{
+		{Type: gateway.AuditAuthorized, GrantID: "grant-browser-normal-1", BrowserSessionID: "browser-session-1"},
+		{Type: gateway.AuditClientClosed, GrantID: "grant-browser-normal-1", BrowserSessionID: "browser-session-1"},
+	}
+	writeAudit := func(events []gateway.AuditEvent) {
+		t.Helper()
+		var content strings.Builder
+		for _, event := range events {
+			encoded, err := json.Marshal(event)
+			if err != nil {
+				t.Fatal(err)
+			}
+			content.Write(encoded)
+			content.WriteByte('\n')
+		}
+		if err := os.WriteFile(path, []byte(content.String()), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeAudit(events)
+	if err := assertNoBrowserEdgeAuditEvents(path); err != nil {
+		t.Fatalf("ordinary audit rejected: %v", err)
+	}
+	events = append(events, gateway.AuditEvent{
+		Type: gateway.AuditDenied, GrantID: caller.BrowserEdgeGrantPrefix + "burst-01", BrowserSessionID: "browser-session-1",
+	})
+	writeAudit(events)
+	if err := assertNoBrowserEdgeAuditEvents(path); err == nil {
+		t.Fatal("edge request was accepted in Gateway audit")
+	}
+	if err := os.WriteFile(path, []byte("not-json\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := assertNoBrowserEdgeAuditEvents(path); err == nil {
+		t.Fatal("malformed Gateway audit was accepted")
 	}
 }

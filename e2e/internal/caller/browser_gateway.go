@@ -5,12 +5,18 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/coder/websocket"
 )
+
+// BrowserEdgeGrantPrefix lets the orchestrator prove that pre-upgrade probes
+// never produced identity-bearing Gateway audit events.
+const BrowserEdgeGrantPrefix = "grant-browser-edge-"
 
 func browserRoundTrip(ctx context.Context, client *http.Client, config Config, handoff BrowserSessionHandoff, grantID string) error {
 	expiresAt, err := time.Parse(time.RFC3339Nano, handoff.ExpiresAt)
@@ -120,6 +126,115 @@ func verifyBrowserGatewayCapacity(ctx context.Context, client *http.Client, conf
 		}
 	}
 	return fmt.Errorf("Browser capacity was not released: %w", last)
+}
+
+func verifyBrowserGatewayEdgeLimits(ctx context.Context, client *http.Client, config Config, handoff BrowserSessionHandoff) error {
+	if err := waitForDuration(ctx, 1100*time.Millisecond); err != nil {
+		return err
+	}
+	expiresAt, err := time.Parse(time.RFC3339Nano, handoff.ExpiresAt)
+	if err != nil {
+		return err
+	}
+	grantExpiry := time.Now().UTC().Add(time.Minute)
+	if !grantExpiry.Before(expiresAt) {
+		grantExpiry = expiresAt
+	}
+
+	const attempts = 16
+	start := make(chan struct{})
+	results := make(chan browserEdgeAttempt, attempts)
+	for index := 0; index < attempts; index++ {
+		go func(index int) {
+			<-start
+			request := browserGatewayRequest(config, handoff, fmt.Sprintf("%sburst-%02d", BrowserEdgeGrantPrefix, index+1), grantExpiry)
+			request.Origin = "https://rejected-browser-origin.invalid"
+			attemptCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			defer cancel()
+			connection, response, err := gatewayConnect(attemptCtx, client, config.GatewayBaseURL, request)
+			if connection != nil {
+				_ = connection.CloseNow()
+			}
+			result := browserEdgeAttempt{err: err}
+			if response != nil {
+				result.status = response.StatusCode
+				result.retryAfter = response.Header.Get("Retry-After")
+				if response.Body != nil {
+					_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 4096))
+					_ = response.Body.Close()
+				}
+			}
+			results <- result
+		}(index)
+	}
+	close(start)
+
+	forbidden, limited, maxRetrySeconds := 0, 0, int64(0)
+	for index := 0; index < attempts; index++ {
+		result := <-results
+		if result.err == nil {
+			return errors.New("wrong-origin Browser edge request was upgraded")
+		}
+		switch result.status {
+		case http.StatusForbidden:
+			if result.retryAfter != "" {
+				return fmt.Errorf("ordinary origin rejection carried Retry-After %q", result.retryAfter)
+			}
+			forbidden++
+		case http.StatusTooManyRequests:
+			seconds, err := strconv.ParseInt(result.retryAfter, 10, 64)
+			if err != nil || seconds < 1 || seconds > 60 {
+				return fmt.Errorf("Browser edge Retry-After = %q", result.retryAfter)
+			}
+			if seconds > maxRetrySeconds {
+				maxRetrySeconds = seconds
+			}
+			limited++
+		default:
+			return fmt.Errorf("wrong-origin Browser edge status = %d: %w", result.status, result.err)
+		}
+	}
+	if forbidden == 0 || limited == 0 {
+		return fmt.Errorf("Browser edge burst observed forbidden=%d limited=%d; want both", forbidden, limited)
+	}
+	if err := waitForDuration(ctx, time.Duration(maxRetrySeconds)*time.Second+150*time.Millisecond); err != nil {
+		return err
+	}
+	recovery := browserGatewayRequest(config, handoff, BrowserEdgeGrantPrefix+"recovery", grantExpiry)
+	recovery.Origin = "https://rejected-browser-origin.invalid"
+	connection, response, err := gatewayConnect(ctx, client, config.GatewayBaseURL, recovery)
+	if connection != nil {
+		_ = connection.CloseNow()
+		return errors.New("wrong-origin Browser recovery request was upgraded")
+	}
+	if response == nil {
+		return fmt.Errorf("Browser edge recovery returned no response: %w", err)
+	}
+	if response.Body != nil {
+		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 4096))
+		_ = response.Body.Close()
+	}
+	if response.StatusCode != http.StatusForbidden || response.Header.Get("Retry-After") != "" {
+		return fmt.Errorf("Browser edge recovery status = %d retry=%q: %w", response.StatusCode, response.Header.Get("Retry-After"), err)
+	}
+	return nil
+}
+
+type browserEdgeAttempt struct {
+	status     int
+	retryAfter string
+	err        error
+}
+
+func waitForDuration(ctx context.Context, duration time.Duration) error {
+	timer := time.NewTimer(duration)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func browserAllowedNavigation(ctx context.Context, connection *websocket.Conn, targetURL, expected string) error {
