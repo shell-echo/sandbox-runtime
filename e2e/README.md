@@ -21,7 +21,7 @@ platform gate.
 
 | Item | Value |
 | --- | --- |
-| Provider implementation | `b8f89413cb34110793fa552ba1620f1529f6f416` |
+| Provider implementation | `997fb0db9d3517cf1c3e153217b1ac7305b4ebfd` |
 | Contract namespace | `urn:shell-echo:sandbox-runtime:provider-v1` |
 | Contract revision | `5096e71fb84fbec22aa3487a0e55a1b49602ab8b` |
 | Contract tree | `859f76dc0e855a0c8abdbbb5648df100dabb4328` |
@@ -42,7 +42,10 @@ the caller-owned Browser Gateway boundary, followed by the default-disabled
 Browser command/runtime graph and the process-local total/per-session Browser
 Gateway connection-capacity component, plus the process-local Browser
 public-edge connection and fixed-window request limiter, and the bounded
-accepted-connection TLS 1.3/HTTP/1.1 listener with explicit HTTP limits.
+accepted-connection TLS 1.3/HTTP/1.1 listener with explicit HTTP limits. It now
+also includes the authenticated-capacity port and its process-local atomic
+global, tenant, and session memory reference component. This does not establish
+a shared or distributed capacity backend.
 This Provider identity also includes the GitHub Actions migration from Node 20
 action runtimes to Node 24 action runtimes. That infrastructure update adds no
 Browser behavior, caller compatibility, or production-readiness evidence.
