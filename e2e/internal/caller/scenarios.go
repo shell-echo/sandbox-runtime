@@ -561,7 +561,7 @@ func (r *runner) readSandbox(ctx context.Context) (SandboxStatus, error) {
 }
 
 func (r *runner) waitOperation(ctx context.Context, reference operationReference) (Operation, error) {
-	deadline := time.Now().Add(30 * time.Second)
+	deadline := time.Now().Add(operationPollWindow(r.config.Profile))
 	var last Operation
 	for {
 		var operation Operation
@@ -582,6 +582,13 @@ func (r *runner) waitOperation(ctx context.Context, reference operationReference
 		case <-time.After(100 * time.Millisecond):
 		}
 	}
+}
+
+func operationPollWindow(profile string) time.Duration {
+	if profile == ProfileBrowser {
+		return 150 * time.Second
+	}
+	return 30 * time.Second
 }
 
 func (r *runner) readJSON(ctx context.Context, client *providerClient, method, path, operation string, reference operationReference, target any) error {

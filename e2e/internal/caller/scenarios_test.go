@@ -41,3 +41,13 @@ func TestArtifactRetentionExpiresBeforeDeadline(t *testing.T) {
 		t.Fatalf("artifact deadline margin = %s", margin)
 	}
 }
+
+func TestOperationPollWindowAllowsBoundedBrowserProvenance(t *testing.T) {
+	t.Parallel()
+	if got := operationPollWindow(ProfileBrowser); got != 150*time.Second {
+		t.Fatalf("Browser operation poll window = %v", got)
+	}
+	if got := operationPollWindow(ProfileCodingShell); got != 30*time.Second {
+		t.Fatalf("coding/shell operation poll window = %v", got)
+	}
+}

@@ -45,6 +45,11 @@ tree, Suite count, signed runtime image, platform, configuration digests,
 reports, commands, and evidence boundary. Secrets and runtime state remain in
 ignored ephemeral directories and are not included in evidence.
 
+The Browser caller allows 150 seconds for asynchronous operation completion so
+the runtime's bounded 120-second live provenance verification can finish and
+project its terminal state. Coding/shell caller polling remains bounded at 30
+seconds; the Browser allowance does not extend Provider deadlines.
+
 Add a separately named hosted workflow. It authenticates to GHCR, provides the
 short-lived GitHub token required by the real provenance verifier, reruns the
 harness race/vet checks, executes the Browser runner, and uploads only the
