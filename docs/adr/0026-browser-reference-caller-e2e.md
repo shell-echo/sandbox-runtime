@@ -45,10 +45,12 @@ tree, Suite count, signed runtime image, platform, configuration digests,
 reports, commands, and evidence boundary. Secrets and runtime state remain in
 ignored ephemeral directories and are not included in evidence.
 
-The Browser caller allows 150 seconds for asynchronous operation completion so
-the runtime's bounded 120-second live provenance verification can finish and
-project its terminal state. Coding/shell caller polling remains bounded at 30
-seconds; the Browser allowance does not extend Provider deadlines.
+The Browser reference stack bounds live provenance verification at 300 seconds
+to absorb observed GHCR/OCI attestation latency, while retaining the Docker
+driver's 600-second hard maximum. Listener readiness and Browser operation
+polling are bounded at 330 seconds so the terminal verification state can be
+projected. Coding/shell caller polling remains 30 seconds, the Browser runner
+is bounded at 20 minutes, and hosted execution retains its 25-minute job limit.
 
 Add a separately named hosted workflow. It authenticates to GHCR, provides the
 short-lived GitHub token required by the real provenance verifier, reruns the

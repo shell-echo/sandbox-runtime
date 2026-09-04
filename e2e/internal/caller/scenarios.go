@@ -586,7 +586,7 @@ func (r *runner) waitOperation(ctx context.Context, reference operationReference
 
 func operationPollWindow(profile string) time.Duration {
 	if profile == ProfileBrowser {
-		return 150 * time.Second
+		return 330 * time.Second
 	}
 	return 30 * time.Second
 }

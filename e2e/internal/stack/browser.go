@@ -33,6 +33,8 @@ import (
 	"github.com/shell-echo/sandbox-runtime/providerapi"
 )
 
+const browserProvenanceTimeoutSeconds = 300
+
 func openBrowser(ctx context.Context, config Config) (_ *Stack, result error) {
 	if err := os.MkdirAll(config.StateRoot, 0o700); err != nil {
 		return nil, err
@@ -81,7 +83,7 @@ func openBrowser(ctx context.Context, config Config) (_ *Stack, result error) {
 		Image: config.RuntimeImage, PullPolicy: browserdocker.PullIfNotPresent,
 		MemoryBytes: 1 << 30, NanoCPUs: 1_000_000_000, PidsLimit: 256,
 		InputsBytes: 16 << 20, TmpfsBytes: 256 << 20, WorkspaceBytes: 256 << 20, OutputsBytes: 128 << 20,
-		OperationTimeoutSeconds: 90, ProvenanceTimeoutSeconds: 120, PullTimeoutSeconds: 120, StopTimeoutSeconds: 10,
+		OperationTimeoutSeconds: 90, ProvenanceTimeoutSeconds: browserProvenanceTimeoutSeconds, PullTimeoutSeconds: 120, StopTimeoutSeconds: 10,
 		DataRoot: config.RuntimeDataRoot, ManifestPath: browserConfig.ManifestPath, SeccompPath: browserConfig.SeccompPath,
 		Namespace: browserConfig.Namespace, ControllerID: config.RuntimeControllerID,
 		NetworkPolicyReference: browserConfig.NetworkPolicyReference,

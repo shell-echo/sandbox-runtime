@@ -23,8 +23,9 @@ import (
 )
 
 const (
-	browserReferenceNamespace  = "reference-browser-e2e"
-	browserReferenceController = "reference-browser-e2e-controller"
+	browserReferenceNamespace       = "reference-browser-e2e"
+	browserReferenceController      = "reference-browser-e2e-controller"
+	browserListenerReadinessTimeout = 330 * time.Second
 )
 
 // RunBrowser launches a Browser-only reference stack and a separately built
@@ -229,7 +230,7 @@ func RunBrowser(ctx context.Context, options Options) (_ Result, resultErr error
 	if err != nil {
 		return Result{}, err
 	}
-	if err := waitForListenersWithin(ctx, initialStack, 150*time.Second, providerAddress, gatewayAddress); err != nil {
+	if err := waitForListenersWithin(ctx, initialStack, browserListenerReadinessTimeout, providerAddress, gatewayAddress); err != nil {
 		_ = initialStack.Stop()
 		return Result{}, err
 	}
@@ -249,7 +250,7 @@ func RunBrowser(ctx context.Context, options Options) (_ Result, resultErr error
 	if err != nil {
 		return Result{}, err
 	}
-	if err := waitForListenersWithin(ctx, resumeStack, 150*time.Second, providerAddress, gatewayAddress); err != nil {
+	if err := waitForListenersWithin(ctx, resumeStack, browserListenerReadinessTimeout, providerAddress, gatewayAddress); err != nil {
 		_ = resumeStack.Stop()
 		return Result{}, err
 	}
