@@ -47,6 +47,81 @@ func browserRoundTrip(ctx context.Context, client *http.Client, config Config, h
 	return browserDeniedNavigation(callCtx, connection, "http://example.net/")
 }
 
+func verifyBrowserGatewayCapacity(ctx context.Context, client *http.Client, config Config, handoff BrowserSessionHandoff) error {
+	expiresAt, err := time.Parse(time.RFC3339Nano, handoff.ExpiresAt)
+	if err != nil {
+		return err
+	}
+	grantExpiry := time.Now().UTC().Add(time.Minute)
+	if !grantExpiry.Before(expiresAt) {
+		grantExpiry = expiresAt
+	}
+	primary, response, err := gatewayConnect(ctx, client, config.GatewayBaseURL,
+		browserGatewayRequest(config, handoff, "grant-browser-capacity-primary-1", grantExpiry))
+	if err != nil {
+		return gatewayDialError("primary Browser capacity connection", response, err)
+	}
+	defer primary.CloseNow()
+	callCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	if err := browserCall(callCtx, primary, 600, "", "Browser.getVersion", nil, nil); err != nil {
+		cancel()
+		return fmt.Errorf("establish primary Browser capacity connection: %w", err)
+	}
+	cancel()
+
+	contender, response, err := gatewayConnect(ctx, client, config.GatewayBaseURL,
+		browserGatewayRequest(config, handoff, "grant-browser-capacity-contender-1", grantExpiry))
+	if err != nil {
+		return gatewayDialError("contending Browser capacity connection", response, err)
+	}
+	readCtx, readCancel := context.WithTimeout(ctx, 3*time.Second)
+	_, _, readErr := contender.Read(readCtx)
+	readContextErr := readCtx.Err()
+	readCancel()
+	contender.CloseNow()
+	if readErr == nil {
+		return errors.New("contending Browser connection remained open")
+	}
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	if errors.Is(readContextErr, context.DeadlineExceeded) {
+		return errors.New("contending Browser connection was not rejected by capacity")
+	}
+
+	callCtx, cancel = context.WithTimeout(ctx, 15*time.Second)
+	if err := browserCall(callCtx, primary, 601, "", "Browser.getVersion", nil, nil); err != nil {
+		cancel()
+		return fmt.Errorf("capacity rejection interrupted the primary Browser connection: %w", err)
+	}
+	cancel()
+	if err := primary.Close(websocket.StatusNormalClosure, "capacity release"); err != nil {
+		return fmt.Errorf("close primary Browser capacity connection: %w", err)
+	}
+
+	var last error
+	for attempt := 0; attempt < 20; attempt++ {
+		replacement, response, err := gatewayConnect(ctx, client, config.GatewayBaseURL,
+			browserGatewayRequest(config, handoff, fmt.Sprintf("grant-browser-capacity-replacement-%d", attempt+1), grantExpiry))
+		if err != nil {
+			return gatewayDialError("replacement Browser capacity connection", response, err)
+		}
+		callCtx, cancel = context.WithTimeout(ctx, time.Second)
+		last = browserCall(callCtx, replacement, 602, "", "Browser.getVersion", nil, nil)
+		cancel()
+		replacement.CloseNow()
+		if last == nil {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(50 * time.Millisecond):
+		}
+	}
+	return fmt.Errorf("Browser capacity was not released: %w", last)
+}
+
 func browserAllowedNavigation(ctx context.Context, connection *websocket.Conn, targetURL, expected string) error {
 	var last error
 	for attempt := 0; attempt < 2; attempt++ {

@@ -53,6 +53,11 @@ func (r *runner) runBrowserInitial(ctx context.Context) error {
 	}); err != nil {
 		return err
 	}
+	if err := r.step(ctx, "Browser Gateway concurrent capacity and release", func(ctx context.Context) error {
+		return verifyBrowserGatewayCapacity(ctx, r.a.http, r.config, handoff)
+	}); err != nil {
+		return err
+	}
 	if err := r.step(ctx, "Browser Gateway wrong caller and cross-tenant rejection", func(ctx context.Context) error {
 		return verifyBrowserGatewayDenials(ctx, r.a.http, r.config, handoff)
 	}); err != nil {

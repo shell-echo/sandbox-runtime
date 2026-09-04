@@ -55,8 +55,10 @@ Focused race/shuffle tests must prove invalid configuration rejection,
 per-session rejection while global capacity remains, global rejection,
 concurrent contention, no Provider resolution on rejection, metadata-only
 audit identity, stream closure, and slot reuse after connection close and
-revocation. Full repository race/shuffle, vet, the unchanged Contract verifier,
-and the 48-case Conformance Suite remain required.
+revocation. The black-box Browser caller must also hold one CDP connection,
+observe rejection of a second same-session grant without disrupting the first,
+then reconnect after release. Full repository race/shuffle, vet, the unchanged
+Contract verifier, and the 48-case Conformance Suite remain required.
 
 This component limits only connections that have entered the Gateway policy
 state machine. `BrowserService.Serve` still upgrades the WebSocket before

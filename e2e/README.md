@@ -64,8 +64,9 @@ go run ./cmd/browser-e2e -evidence-root evidence/browser
 ```
 
 The run exercises the initial and reconstructed Browser lifecycle/session,
-opaque handoff, CDP, allowed/denied egress, Gateway authorization expiry and
-revocation, duration usage, and cleanup paths. The Browser-only reference stack
+opaque handoff, CDP, allowed/denied egress, Gateway authorization expiry,
+revocation, concurrent same-session capacity/release, duration usage, and
+cleanup paths. The Browser-only reference stack
 advertises the exact locked Browser profile required by lifecycle admission;
 the production command remains default-disabled and does not advertise it. A
 passing run is Browser reference external-caller evidence only; it is not
