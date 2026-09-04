@@ -29,6 +29,12 @@ type Options struct {
 	Clock            Clock
 	MaxReconnects    int
 	ReconnectBackoff time.Duration
+
+	// MaxConnections and MaxConnectionsPerSession enable a non-blocking,
+	// process-local capacity bound when both are non-zero. Callers that need a
+	// distributed limit must supply that boundary outside this component.
+	MaxConnections           int
+	MaxConnectionsPerSession int
 }
 
 type Gateway struct {
@@ -39,6 +45,7 @@ type Gateway struct {
 	clock            Clock
 	maxReconnects    int
 	reconnectBackoff time.Duration
+	capacity         *connectionCapacity
 }
 
 func New(options Options) (*Gateway, error) {
@@ -60,10 +67,15 @@ func New(options Options) (*Gateway, error) {
 	if backoff < 0 || backoff > MaxReconnectBackoff {
 		return nil, fmt.Errorf("%w: reconnect backoff", ErrInvalidRequest)
 	}
+	capacity, err := newConnectionCapacity(options.MaxConnections, options.MaxConnectionsPerSession)
+	if err != nil {
+		return nil, fmt.Errorf("%w: connection capacity", err)
+	}
 	return &Gateway{
 		authorizer: options.Authorizer, resolver: options.Resolver,
 		revocations: options.Revocations, recorder: options.Recorder,
 		clock: clock, maxReconnects: maxReconnects, reconnectBackoff: backoff,
+		capacity: capacity,
 	}, nil
 }
 
@@ -100,6 +112,12 @@ func (g *Gateway) Connect(ctx context.Context, request ConnectRequest, client St
 		g.recordDenied(ctx, request, now, err)
 		return errors.Join(ErrUnauthorized, err)
 	}
+	release, err := g.capacity.acquire(grant)
+	if err != nil {
+		_ = g.record(ctx, eventForGrant(grant, AuditCapacityRejected, now, 0, 0, 0, "connection capacity exhausted"))
+		return err
+	}
+	defer release()
 	revoked, err := g.revocations.IsRevoked(ctx, grant.GrantID)
 	if err != nil {
 		g.recordDenied(ctx, request, now, err)

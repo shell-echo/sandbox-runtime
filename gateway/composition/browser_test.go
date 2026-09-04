@@ -40,6 +40,10 @@ func TestNewBrowserFailsClosedForEveryRequiredDependency(t *testing.T) {
 		{"WebSocket admission", func(options *BrowserOptions) { options.WebSocket.Admission = nil }},
 		{"invalid frame limit", func(options *BrowserOptions) { options.WebSocket.MaxFrameBytes = adapter.MaxFrameBytes + 1 }},
 		{"invalid reconnect limit", func(options *BrowserOptions) { options.MaxReconnects = gateway.MaxReconnectAttempts + 1 }},
+		{"missing total connection capacity", func(options *BrowserOptions) { options.MaxConnections = 0 }},
+		{"missing per-session connection capacity", func(options *BrowserOptions) { options.MaxConnectionsPerSession = 0 }},
+		{"per-session capacity exceeds total", func(options *BrowserOptions) { options.MaxConnectionsPerSession = options.MaxConnections + 1 }},
+		{"total connection capacity exceeds bound", func(options *BrowserOptions) { options.MaxConnections = gateway.MaxConnectionCapacity + 1 }},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -222,8 +226,10 @@ func TestBrowserConnectRevocationInterruptsActiveProxy(t *testing.T) {
 		return browserEndpoint(value, backend), nil
 	}}
 	revocations := newTestRevocations()
+	recorder := &testRecorder{}
 	options := validBrowserOptions(t, resolver)
 	options.Revocations = revocations
+	options.Recorder = recorder
 	service, err := NewBrowser(options)
 	if err != nil {
 		t.Fatal(err)
@@ -232,12 +238,131 @@ func TestBrowserConnectRevocationInterruptsActiveProxy(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- service.Connect(context.Background(), validBrowserRequest(), client) }()
 	revocations.WaitWatch(t)
+	recorder.WaitEvent(t, gateway.AuditConnected)
 	revocations.Revoke()
 	if err := waitError(t, done); !errors.Is(err, gateway.ErrRevoked) {
 		t.Fatalf("Connect() error = %v; want revoked", err)
 	}
 	if !client.Closed() || backend.CloseCalls() == 0 {
 		t.Fatalf("revocation closure: client=%t backend=%d", client.Closed(), backend.CloseCalls())
+	}
+	retry := newGatewayStream()
+	if err := service.Connect(context.Background(), validBrowserRequest(), retry); !errors.Is(err, gateway.ErrRevoked) {
+		t.Fatalf("Connect() after revocation error = %v; want revoked", err)
+	}
+	if !retry.Closed() {
+		t.Fatal("revoked retry stream was not closed")
+	}
+}
+
+func TestBrowserConnectEnforcesAndReleasesLocalCapacity(t *testing.T) {
+	resolver := &browserProviderResolverSpy{resolve: func(_ context.Context, value string) (browserreference.Endpoint, error) {
+		stream := newBrowserRawStream()
+		request := browserRequestFor(value)
+		endpoint := browserEndpoint(value, stream)
+		endpoint.SandboxID = request.SandboxID
+		endpoint.BrowserSessionID = request.BrowserSessionID
+		return endpoint, nil
+	}}
+	recorder := &testRecorder{}
+	revocations := newTestRevocations()
+	options := validBrowserOptions(t, resolver)
+	options.MaxConnections = 2
+	options.MaxConnectionsPerSession = 1
+	options.Recorder = recorder
+	options.Revocations = revocations
+	options.Authorizer = testAuthorizer(func(_ context.Context, request gateway.ConnectRequest) (gateway.Grant, error) {
+		grant := browserGrantFor(request)
+		grant.GrantID = "grant-" + request.BrowserSessionID
+		return grant, nil
+	})
+	service, err := NewBrowser(options)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	firstRequest := browserRequestFor("ref:browser-session:11111111111111111111111111111111")
+	secondRequest := browserRequestFor("ref:browser-session:22222222222222222222222222222222")
+	firstClient := newGatewayStream()
+	firstDone := make(chan error, 1)
+	go func() { firstDone <- service.Connect(context.Background(), firstRequest, firstClient) }()
+	resolver.WaitCalls(t, 1)
+	wantChecks, wantWatches := revocations.Counts()
+	perSessionClient := newGatewayStream()
+	if err := service.Connect(context.Background(), firstRequest, perSessionClient); !errors.Is(err, gateway.ErrCapacityExhausted) {
+		t.Fatalf("per-session Connect() error = %v; want capacity exhausted", err)
+	}
+	if resolver.Calls() != 1 || !perSessionClient.Closed() {
+		t.Fatalf("per-session rejection resolved=%d closed=%t", resolver.Calls(), perSessionClient.Closed())
+	}
+	if checks, watches := revocations.Counts(); checks != wantChecks || watches != wantWatches {
+		t.Fatalf("per-session rejection reached revocations: checks=%d/%d watches=%d/%d", checks, wantChecks, watches, wantWatches)
+	}
+
+	secondClient := newGatewayStream()
+	secondDone := make(chan error, 1)
+	go func() { secondDone <- service.Connect(context.Background(), secondRequest, secondClient) }()
+	resolver.WaitCalls(t, 2)
+	wantChecks, wantWatches = revocations.Counts()
+
+	const contenders = 32
+	results := make(chan error, contenders)
+	clients := make([]*gatewayStream, contenders)
+	for index := range clients {
+		clients[index] = newGatewayStream()
+		go func(client *gatewayStream) {
+			results <- service.Connect(context.Background(), firstRequest, client)
+		}(clients[index])
+	}
+	for range contenders {
+		if err := <-results; !errors.Is(err, gateway.ErrCapacityExhausted) {
+			t.Fatalf("same-session concurrent Connect() error = %v; want capacity exhausted", err)
+		}
+	}
+	thirdClient := newGatewayStream()
+	if err := service.Connect(context.Background(), browserRequestFor("ref:browser-session:33333333333333333333333333333333"), thirdClient); !errors.Is(err, gateway.ErrCapacityExhausted) {
+		t.Fatalf("total-capacity Connect() error = %v; want capacity exhausted", err)
+	}
+	if resolver.Calls() != 2 {
+		t.Fatalf("capacity rejection reached Provider resolver %d times; want 2", resolver.Calls())
+	}
+	if checks, watches := revocations.Counts(); checks != wantChecks || watches != wantWatches {
+		t.Fatalf("global rejection reached revocations: checks=%d/%d watches=%d/%d", checks, wantChecks, watches, wantWatches)
+	}
+	for _, client := range append(clients, thirdClient) {
+		if !client.Closed() {
+			t.Fatal("capacity-rejected Browser stream was not closed")
+		}
+	}
+
+	firstClient.CloseNow()
+	if err := waitError(t, firstDone); err != nil {
+		t.Fatalf("first Connect() error = %v", err)
+	}
+	replacement := newGatewayStream()
+	replacementDone := make(chan error, 1)
+	go func() { replacementDone <- service.Connect(context.Background(), firstRequest, replacement) }()
+	resolver.WaitCalls(t, 3)
+	replacement.CloseNow()
+	if err := waitError(t, replacementDone); err != nil {
+		t.Fatalf("replacement Connect() error = %v", err)
+	}
+	secondClient.CloseNow()
+	if err := waitError(t, secondDone); err != nil {
+		t.Fatalf("second Connect() error = %v", err)
+	}
+
+	capacityEvents := 0
+	for _, event := range recorder.Events() {
+		if event.Type == gateway.AuditCapacityRejected {
+			capacityEvents++
+			if event.BrowserSessionID == "" || event.RuntimeSessionID != "" || event.TenantID == "" || event.SandboxID == "" {
+				t.Fatalf("capacity audit identity = %#v", event)
+			}
+		}
+	}
+	if capacityEvents != contenders+2 {
+		t.Fatalf("capacity audit events = %d; want %d", capacityEvents, contenders+2)
 	}
 }
 
@@ -301,16 +426,22 @@ func validBrowserOptions(t *testing.T, resolver BrowserProviderResolver) Browser
 			return browserGrantFor(request), nil
 		}),
 		Revocations: newTestRevocations(), Recorder: &testRecorder{}, Resolver: resolver,
-		WebSocket: adapter.WebSocketOptions{Admission: func(context.Context, *http.Request) error { return nil }},
-		Clock:     gateway.ClockFunc(func() time.Time { return compositionTestTime }),
+		WebSocket:      adapter.WebSocketOptions{Admission: func(context.Context, *http.Request) error { return nil }},
+		Clock:          gateway.ClockFunc(func() time.Time { return compositionTestTime }),
+		MaxConnections: 8, MaxConnectionsPerSession: 1,
 	}
 }
 
 func validBrowserRequest() gateway.ConnectRequest {
+	return browserRequestFor("ref:browser-session:11111111111111111111111111111111")
+}
+
+func browserRequestFor(reference string) gateway.ConnectRequest {
+	sessionID := "browser-session-" + string(reference[len(reference)-1])
 	return gateway.ConnectRequest{
 		CallerID: "caller-1", TenantID: "tenant-1", SandboxID: "sandbox-1",
-		BrowserSessionID: "browser-session-1", CapabilityProfileID: providerbrowser.CapabilityProfileID,
-		HandoffReference: "ref:browser-session:11111111111111111111111111111111",
+		BrowserSessionID: sessionID, CapabilityProfileID: providerbrowser.CapabilityProfileID,
+		HandoffReference: reference,
 	}
 }
 

@@ -68,6 +68,7 @@ func newReferenceGateway(config Config, terminalResolver *sessionreference.Resol
 		service, err := gatewaycomposition.NewBrowser(gatewaycomposition.BrowserOptions{
 			Authorizer: result, Revocations: revocations, Recorder: recorder, Resolver: browserResolver,
 			WebSocket: webSocket, MaxReconnects: 1, ReconnectBackoff: 10 * time.Millisecond,
+			MaxConnections: 16, MaxConnectionsPerSession: 1,
 		})
 		if err != nil {
 			_ = recorder.Close()

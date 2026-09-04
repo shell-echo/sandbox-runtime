@@ -101,7 +101,10 @@ Production startup still has no public Browser Gateway route and does not
 advertise Browser. ADR 0026 and harness `79fee2b` provide a separate Browser-only
 reference deployment and black-box caller; hosted run `33838215924` passes its
 10 initial and 5 reconstruction scenarios. That reference-only advertisement
-and caller result do not establish a production Browser deployment.
+and caller result do not establish a production Browser deployment. ADR 0027
+adds explicit process-local total/per-session Browser Gateway connection
+capacity before revocation and Provider resolution. It does not bound the
+pre-upgrade public edge or establish distributed capacity.
 
 | Method and path | Responsibility |
 | --- | --- |
@@ -378,7 +381,7 @@ advertisement, and optional-profile gates remain open:
 | Workspace | The Provider Docker development adapter supplies `/inputs`, `/workspace`, `/outputs`, and bounded tmpfs `/tmp` with owned cleanup; exec consumes that runtime without exposing host paths. | Add artifact consumers, capacity enforcement, and stronger isolation evidence. |
 | Security | Docker defaults already drop capabilities, use non-root/read-only root, disable networking, and limit resources. | Add policy enforcement, stronger isolation profiles, secret grants, egress controls, audit evidence, and production auth. |
 | Events and usage | Durable lifecycle events and bounded usage-evidence components exist without a complete runtime collector composition. | Complete collection/reconciliation while leaving platform accounting authority outside the Provider. |
-| Snapshots/browser/desktop | Browser Contract authority/projection, exact signed image, Provider-local session/application/reference/usage, Docker adapter, provenance verifier, restricted-egress provisioner, create-policy binding, protected handlers, caller-owned Gateway, default-disabled command graph, and hosted 10+5 Browser reference-caller path have named evidence. The restricted-egress Gateway remains distinct from the caller-owned Gateway. Production Browser advertisement/public Gateway deployment, aggregate, multi-controller, tenant, deployment, and production gates remain open. Snapshots and desktop remain unauthorized optional behavior. | Complete the Browser profile-specific security/concurrency and deployment gates before production advertisement; then begin the Desktop authority audit without reusing Browser or terminal routes. |
+| Snapshots/browser/desktop | Browser Contract authority/projection, exact signed image, Provider-local session/application/reference/usage, Docker adapter, provenance verifier, restricted-egress provisioner, create-policy binding, protected handlers, caller-owned Gateway, default-disabled command graph, and hosted 10+5 Browser reference-caller path have named evidence. The Gateway now has explicit process-local total/per-session connection capacity before revocation and Provider resolution. The restricted-egress Gateway remains distinct from the caller-owned Gateway. Production Browser advertisement/public Gateway deployment, aggregate, distributed capacity/revocation, multi-controller, tenant, deployment, and production gates remain open. Snapshots and desktop remain unauthorized optional behavior. | Add pre-upgrade public-edge load shedding, distributed revocation/capacity, hostile-tenant evidence, and deployable storage/configuration before production advertisement; then begin the Desktop authority audit without reusing Browser or terminal routes. |
 
 ## Delivery plan and release gates
 

@@ -354,6 +354,7 @@ func openBrowserPublicGateway(t *testing.T, resolver gatewaycomposition.BrowserP
 			},
 			OriginPatterns: []string{"https://browser-caller.invalid"},
 		},
+		MaxConnections: 4, MaxConnectionsPerSession: 1,
 	})
 	if err != nil {
 		t.Fatal(err)

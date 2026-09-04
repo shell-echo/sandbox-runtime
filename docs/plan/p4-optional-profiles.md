@@ -8,9 +8,11 @@ and implementation `66183b1` compose the default-disabled Browser Provider
 graph. ADR 0026 and harness `79fee2b` add the separate reference deployment and
 black-box caller; hosted run `33838215924` passes all 10 initial and 5
 process-reconstruction Browser scenarios against Provider `f760369`. Production
-Browser advertisement and public Gateway deployment remain absent. This work
-does not close P3, real Agent Platform, aggregate conformance, multi-controller,
-multi-tenant, deployment, or production gates.
+Browser advertisement and public Gateway deployment remain absent. ADR 0027
+also adds explicit process-local Browser Gateway connection capacity. This work
+does not close pre-upgrade edge limits, distributed capacity or revocation, P3,
+real Agent Platform, aggregate conformance, multi-controller, multi-tenant,
+deployment, or production gates.
 
 ## Objective
 
@@ -99,6 +101,10 @@ evidence chain before it can be advertised.
   10 initial and 5 reconstructed-process scenarios; artifact
   `browser-reference-e2e-evidence-33838215924` has digest
   `sha256:4acfbc97c0c1f64e987b00870849a2244e33596918d08e659385c428310843ea`.
+- ADR 0027 requires explicit total and per-session Browser Gateway connection
+  limits. The single-process ledger rejects without queueing before revocation
+  access or Provider resolution and releases on every exit path. It does not
+  limit WebSocket upgrade or authorization work and is not distributed.
 - `blocks/` can validate an internal digest-pinned Block manifest, but it does
   not authorize a Provider capability or establish image provenance.
 - A real Agent Platform caller and migration traffic harness remain unavailable;
@@ -146,7 +152,7 @@ inferring support from generic schema vocabulary:
 | Capability snapshot | Browser-only `1.0.0`/`browser-v1` maps to `sandbox-runtime-browser-v1`; mixed, wrong-version, wrong-profile, and wrong-runtime shapes fail closed. The reference deployment advertises only this shape | Keep production advertisement disabled until the remaining profile-specific security, concurrency, deployment, and operational gates pass |
 | Create request | Browser fixture binds exact capability/runtime, digest-pinned amd64 image authority, restricted network policy, stable workspace, and unprivileged security fields. The default-disabled command graph preserves these bindings and the hosted caller proves lifecycle creation | Replace development/single-controller dependencies with reviewed production configuration before deployment |
 | Session and handoff | Separate schemas and routes bind session/operation/attempt/fence identity and expose only an expiring opaque reference. Hosted initial and reconstructed-process scenarios prove the combined Provider and caller-owned Gateway path | Add distributed reliability and production deployment evidence without exposing backend identity |
-| Gateway security | Semantic rules leave user/tenant authorization, revocation, audit, reconnect, and fresh reference resolution with the caller. Hosted reference scenarios prove wrong-caller/cross-tenant denial, expiry, active revocation, metadata-only audit, and reconnect | Add hostile multi-tenant, distributed revocation, capacity, abuse, and deployable public-edge evidence |
+| Gateway security | Semantic rules leave user/tenant authorization, revocation, audit, reconnect, and fresh reference resolution with the caller. Hosted reference scenarios prove wrong-caller/cross-tenant denial, expiry, active revocation, metadata-only audit, and reconnect. ADR 0027 adds non-blocking single-process total/per-session connection capacity before revocation and Provider resolution | Add pre-upgrade load shedding, hostile multi-tenant, distributed revocation/capacity, abuse, and deployable public-edge evidence |
 | Usage | Browser duration meter and operation/sandbox correlation are locked under the shared usage route; hosted initial/resume scenarios prove partial and complete duration evidence | Keep platform publication and billing truth outside the Provider; add production retention and reconciliation evidence |
 | Fixtures and Suite | Success/rejection/security/admission fixtures and 10 new Suite cases raise the locked Suite from 38 to 48 cases | Add runtime fault/concurrency/image cases in later slices; current Suite is Contract projection evidence only |
 | Runtime image | ADR 0019 removes every `--no-sandbox` path, binds seccomp digest `sha256:3bdf2fd28636409951409621735f616997d0fd4851259851ac4c340dff90e05b`, and passes local/native amd64 and arm64 sandbox gates. Run `33724368530` publishes exact signed index `sha256:87d3216c22ada0fea74b375a3ee5c2ddf021d3e1913569e2aeb4a316ed3b5c2f`; attestation `44912296` and independent platform inspection verify. The Docker adapter, provenance verifier, restricted egress, default-disabled command graph, and hosted `linux/amd64` reference caller machine-bind and exercise that publication | Publish and review the restricted-egress Gateway image and production deployment configuration separately |
@@ -225,16 +231,23 @@ internal Block manifest a wire resource or establishes production readiness.
   deployable public Gateway, real platform, aggregate conformance,
   multi-controller, hostile multi-tenant, deployment, and production evidence
   remain explicitly open.
+- ADR 0027 and its Browser Gateway capacity implementation pass focused
+  concurrent race/shuffle tests for explicit configuration, total and
+  per-session rejection, pre-resolver enforcement, metadata-only rejection
+  audit, stream closure, revocation release, and slot reuse. This is
+  single-process component evidence only; full repository and hosted evidence
+  are recorded separately in `docs/STATUS.md`.
 
 ## Next work
 
 The Browser authority, image, Provider-local components, default-disabled
-command/runtime graph, and independent reference-caller chain now pass their
-named gates. Next, close the remaining profile-specific fault/concurrency and
-hostile-boundary gaps, define a deployable caller-owned Gateway and production
-storage/revocation configuration, and review whether those results justify a
-production advertisement switch. Keep Browser Reference E2E separate from
-coding/shell, real Agent Platform, aggregate conformance, multi-controller,
-multi-tenant, deployment, and production evidence. After the Browser readiness
-record is complete, begin the Desktop Contract/authority audit as the next
-optional profile rather than reusing Browser or terminal routes.
+command/runtime graph, independent reference-caller chain, and process-local
+Gateway connection capacity now pass their named gates. Next, design the
+deployable caller-owned public edge with pre-upgrade load shedding, distributed
+revocation/capacity, and production storage/configuration; then add hostile
+tenant and operational evidence before reviewing production advertisement.
+Keep Browser Reference E2E separate from coding/shell, real Agent Platform,
+aggregate conformance, multi-controller, multi-tenant, deployment, and
+production evidence. After the Browser readiness record is complete, begin the
+Desktop Contract/authority audit as the next optional profile rather than
+reusing Browser or terminal routes.

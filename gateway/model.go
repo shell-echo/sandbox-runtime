@@ -20,6 +20,7 @@ var (
 	ErrReferenceUnavailable = errors.New("Runtime Gateway handoff reference is unavailable")
 	ErrStaleReference       = errors.New("Runtime Gateway handoff reference is stale")
 	ErrReconnectExhausted   = errors.New("Runtime Gateway reconnect attempts exhausted")
+	ErrCapacityExhausted    = errors.New("Runtime Gateway connection capacity exhausted")
 	ErrAuditUnavailable     = errors.New("Runtime Gateway audit recording is unavailable")
 	ErrProxyUnavailable     = errors.New("Runtime Gateway proxy is unavailable")
 
@@ -29,8 +30,9 @@ var (
 )
 
 const (
-	MaxReconnectAttempts = 3
-	MaxReconnectBackoff  = 30 * time.Second
+	MaxReconnectAttempts  = 3
+	MaxReconnectBackoff   = 30 * time.Second
+	MaxConnectionCapacity = 1_000
 )
 
 // ConnectRequest is the public Gateway-side identity and session selection.
@@ -178,13 +180,14 @@ type AuditEvent struct {
 type AuditEventType string
 
 const (
-	AuditAuthorized      AuditEventType = "authorized"
-	AuditDenied          AuditEventType = "denied"
-	AuditConnected       AuditEventType = "connected"
-	AuditReconnected     AuditEventType = "reconnected"
-	AuditBackendClosed   AuditEventType = "backend_closed"
-	AuditRevoked         AuditEventType = "revoked"
-	AuditExpired         AuditEventType = "expired"
-	AuditClientClosed    AuditEventType = "client_closed"
-	AuditReconnectFailed AuditEventType = "reconnect_failed"
+	AuditAuthorized       AuditEventType = "authorized"
+	AuditDenied           AuditEventType = "denied"
+	AuditConnected        AuditEventType = "connected"
+	AuditReconnected      AuditEventType = "reconnected"
+	AuditBackendClosed    AuditEventType = "backend_closed"
+	AuditRevoked          AuditEventType = "revoked"
+	AuditExpired          AuditEventType = "expired"
+	AuditClientClosed     AuditEventType = "client_closed"
+	AuditReconnectFailed  AuditEventType = "reconnect_failed"
+	AuditCapacityRejected AuditEventType = "capacity_rejected"
 )

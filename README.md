@@ -72,7 +72,9 @@ Currently implemented:
   correlation and project only an expiring opaque reference
 - a caller-owned Browser Gateway boundary with separate
   `browser_session_id`/`ref:browser-session:*` identity, exact endpoint binding,
-  metadata-only audit, bounded reconnect/revocation, and RFC 6455 CDP framing
+  metadata-only audit, bounded reconnect/revocation, RFC 6455 CDP framing, and
+  explicit process-local total/per-session connection capacity. The capacity
+  bound does not replace distributed or pre-WebSocket edge controls
 - a default-disabled Browser Provider command/runtime graph and a separate
   Browser-only reference stack plus black-box caller. Hosted Browser Reference
   E2E passes 10 initial and 5 process-reconstruction scenarios through real
@@ -83,8 +85,8 @@ Currently implemented:
 Planned but not yet implemented:
 
 - production Browser advertisement and deployable caller-owned Gateway
-  integration after the remaining profile-specific security, concurrency, and
-  operational gates
+  integration after distributed revocation/capacity, pre-upgrade edge limits,
+  hostile-tenant, storage, and operational gates
 - runtime images for desktop workloads
 - display, audio, input, streaming, clipboard, and file-transfer modules
 - deployable WebRTC / VNC / public WebSocket Gateway composition

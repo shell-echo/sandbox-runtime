@@ -290,8 +290,10 @@ func TestConnectRevocationInterruptsActiveTerminalProxy(t *testing.T) {
 		return terminalEndpoint(value, backend), nil
 	}}
 	revocations := newTestRevocations()
+	recorder := &testRecorder{}
 	options := validOptions(t, resolver)
 	options.Revocations = revocations
+	options.Recorder = recorder
 	service, err := New(options)
 	if err != nil {
 		t.Fatal(err)
@@ -300,6 +302,7 @@ func TestConnectRevocationInterruptsActiveTerminalProxy(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- service.Connect(context.Background(), validRequest(), client) }()
 	revocations.WaitWatch(t)
+	recorder.WaitEvent(t, gateway.AuditConnected)
 	revocations.Revoke()
 	if err := waitError(t, done); !errors.Is(err, gateway.ErrRevoked) {
 		t.Fatalf("Connect() error = %v; want revoked", err)
@@ -465,6 +468,8 @@ type testRevocations struct {
 	watch   chan struct{}
 	watched chan struct{}
 	once    sync.Once
+	checks  int
+	watches int
 }
 
 func newTestRevocations() *testRevocations {
@@ -474,12 +479,22 @@ func newTestRevocations() *testRevocations {
 func (r *testRevocations) IsRevoked(context.Context, string) (bool, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	r.checks++
 	return r.revoked, nil
 }
 
 func (r *testRevocations) Watch(context.Context, string) (<-chan struct{}, error) {
+	r.mu.Lock()
+	r.watches++
+	r.mu.Unlock()
 	r.once.Do(func() { close(r.watched) })
 	return r.watch, nil
+}
+
+func (r *testRevocations) Counts() (checks, watches int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.checks, r.watches
 }
 
 func (r *testRevocations) Revoke() {
@@ -517,6 +532,24 @@ func (r *testRecorder) Events() []gateway.AuditEvent {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return append([]gateway.AuditEvent(nil), r.events...)
+}
+
+func (r *testRecorder) WaitEvent(t *testing.T, eventType gateway.AuditEventType) {
+	t.Helper()
+	deadline := time.NewTimer(5 * time.Second)
+	defer deadline.Stop()
+	for {
+		for _, event := range r.Events() {
+			if event.Type == eventType {
+				return
+			}
+		}
+		select {
+		case <-time.After(time.Millisecond):
+		case <-deadline.C:
+			t.Fatalf("Gateway audit events = %#v; want %s", r.Events(), eventType)
+		}
+	}
 }
 
 type gatewayStream struct {
