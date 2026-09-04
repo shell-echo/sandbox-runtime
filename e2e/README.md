@@ -21,7 +21,7 @@ platform gate.
 
 | Item | Value |
 | --- | --- |
-| Provider implementation | `b8423f58b58cf34dfc690e87e6ec44afe50c45da` |
+| Provider implementation | `5aae2810c4957ec7abad7de0e67f9507d9543c81` |
 | Contract namespace | `urn:shell-echo:sandbox-runtime:provider-v1` |
 | Contract revision | `5096e71fb84fbec22aa3487a0e55a1b49602ab8b` |
 | Contract tree | `859f76dc0e855a0c8abdbbb5648df100dabb4328` |
@@ -37,11 +37,12 @@ image/provenance publication implementation, the explicit arm64/v8 index
 descriptor correction, the uncomposed Provider-local browser session
 component, the fail-closed Docker/private-relay adapter, and the real GitHub
 CLI/Sigstore provenance-verifier component, the restricted-egress provisioner,
-immutable create-policy binding, and protected Browser transport component.
+immutable create-policy binding, protected Browser transport component, and
+the uncomposed caller-owned Browser Gateway boundary.
 The reference and platform-candidate runners still execute only the
 coding/shell scenarios; advancing this identity records regression coverage
 only and is not Browser external-caller E2E, command/runtime composition,
-caller-owned Gateway, aggregate conformance, or production evidence.
+aggregate conformance, or production evidence.
 
 ## Latest verified evidence
 
