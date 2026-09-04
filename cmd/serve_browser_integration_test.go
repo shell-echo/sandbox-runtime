@@ -344,6 +344,12 @@ func openBrowserPublicGateway(t *testing.T, resolver gatewaycomposition.BrowserP
 	if err != nil {
 		t.Fatal(err)
 	}
+	capacity, err := gateway.NewLocalConnectionCapacity(gateway.LocalConnectionCapacityOptions{
+		MaxTotal: 4, MaxPerTenant: 2, MaxPerSession: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	service, err := gatewaycomposition.NewBrowser(gatewaycomposition.BrowserOptions{
 		Authorizer: browserVerticalAuthorizer{request: connect, grant: gateway.Grant{
 			GrantID: "browser-grant-1", CallerID: connect.CallerID, TenantID: connect.TenantID,
@@ -361,7 +367,7 @@ func openBrowserPublicGateway(t *testing.T, resolver gatewaycomposition.BrowserP
 			},
 			OriginPatterns: []string{"https://browser-caller.invalid"},
 		},
-		Edge:           edgeGate,
+		Edge: edgeGate, Capacity: capacity,
 		MaxConnections: 4, MaxConnectionsPerSession: 1,
 	})
 	if err != nil {

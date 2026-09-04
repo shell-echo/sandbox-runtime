@@ -21,6 +21,7 @@ var (
 	ErrStaleReference       = errors.New("Runtime Gateway handoff reference is stale")
 	ErrReconnectExhausted   = errors.New("Runtime Gateway reconnect attempts exhausted")
 	ErrCapacityExhausted    = errors.New("Runtime Gateway connection capacity exhausted")
+	ErrCapacityUnavailable  = errors.New("Runtime Gateway connection capacity is unavailable")
 	ErrAuditUnavailable     = errors.New("Runtime Gateway audit recording is unavailable")
 	ErrProxyUnavailable     = errors.New("Runtime Gateway proxy is unavailable")
 
@@ -33,7 +34,39 @@ const (
 	MaxReconnectAttempts  = 3
 	MaxReconnectBackoff   = 30 * time.Second
 	MaxConnectionCapacity = 1_000
+
+	MinCapacityReleaseTimeout     = 100 * time.Millisecond
+	DefaultCapacityReleaseTimeout = 5 * time.Second
+	MaxCapacityReleaseTimeout     = 30 * time.Second
 )
+
+// CapacitySubject is the credential-free identity used by a caller-owned
+// capacity authority. It deliberately excludes caller and grant identifiers,
+// bearer credentials, and the opaque Provider reference so those values cannot
+// create a fresh partition for the same session.
+type CapacitySubject struct {
+	TenantID            string
+	SandboxID           string
+	RuntimeSessionID    string
+	BrowserSessionID    string
+	CapabilityProfileID string
+	ExpiresAt           time.Time
+}
+
+type CapacityEventKind string
+
+const (
+	CapacityEventLost        CapacityEventKind = "lost"
+	CapacityEventUnavailable CapacityEventKind = "unavailable"
+)
+
+// CapacityEvent reports that a previously acquired lease is no longer safe to
+// use. Err is internal diagnostic context and must not be copied into a stable
+// public response or audit message.
+type CapacityEvent struct {
+	Kind CapacityEventKind
+	Err  error
+}
 
 // ConnectRequest is the public Gateway-side identity and session selection.
 // It contains no bearer credential. Authorization is performed by the
@@ -180,14 +213,17 @@ type AuditEvent struct {
 type AuditEventType string
 
 const (
-	AuditAuthorized       AuditEventType = "authorized"
-	AuditDenied           AuditEventType = "denied"
-	AuditConnected        AuditEventType = "connected"
-	AuditReconnected      AuditEventType = "reconnected"
-	AuditBackendClosed    AuditEventType = "backend_closed"
-	AuditRevoked          AuditEventType = "revoked"
-	AuditExpired          AuditEventType = "expired"
-	AuditClientClosed     AuditEventType = "client_closed"
-	AuditReconnectFailed  AuditEventType = "reconnect_failed"
-	AuditCapacityRejected AuditEventType = "capacity_rejected"
+	AuditAuthorized            AuditEventType = "authorized"
+	AuditDenied                AuditEventType = "denied"
+	AuditConnected             AuditEventType = "connected"
+	AuditReconnected           AuditEventType = "reconnected"
+	AuditBackendClosed         AuditEventType = "backend_closed"
+	AuditRevoked               AuditEventType = "revoked"
+	AuditExpired               AuditEventType = "expired"
+	AuditClientClosed          AuditEventType = "client_closed"
+	AuditReconnectFailed       AuditEventType = "reconnect_failed"
+	AuditCapacityRejected      AuditEventType = "capacity_rejected"
+	AuditCapacityUnavailable   AuditEventType = "capacity_unavailable"
+	AuditCapacityLost          AuditEventType = "capacity_lost"
+	AuditCapacityReleaseFailed AuditEventType = "capacity_release_failed"
 )

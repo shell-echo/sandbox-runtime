@@ -44,6 +44,11 @@ func TestNewBrowserFailsClosedForEveryRequiredDependency(t *testing.T) {
 			var gate *browserEdgeGateSpy
 			options.Edge = gate
 		}},
+		{"authenticated connection capacity", func(options *BrowserOptions) { options.Capacity = nil }},
+		{"typed nil authenticated connection capacity", func(options *BrowserOptions) {
+			var capacity *gateway.LocalConnectionCapacity
+			options.Capacity = capacity
+		}},
 		{"invalid frame limit", func(options *BrowserOptions) { options.WebSocket.MaxFrameBytes = adapter.MaxFrameBytes + 1 }},
 		{"invalid reconnect limit", func(options *BrowserOptions) { options.MaxReconnects = gateway.MaxReconnectAttempts + 1 }},
 		{"missing total connection capacity", func(options *BrowserOptions) { options.MaxConnections = 0 }},
@@ -539,6 +544,60 @@ func TestBrowserConnectEnforcesAndReleasesLocalCapacity(t *testing.T) {
 	}
 }
 
+func TestBrowserAuthenticatedCapacityCannotBeBypassedByCallerOrGrant(t *testing.T) {
+	resolver := &browserProviderResolverSpy{resolve: func(_ context.Context, value string) (browserreference.Endpoint, error) {
+		return browserEndpoint(value, newBrowserRawStream()), nil
+	}}
+	capacity, err := gateway.NewLocalConnectionCapacity(gateway.LocalConnectionCapacityOptions{
+		MaxTotal: 4, MaxPerTenant: 4, MaxPerSession: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	options := validBrowserOptions(t, resolver)
+	options.Capacity = capacity
+	options.MaxConnections = 4
+	options.MaxConnectionsPerSession = 2
+	options.Authorizer = testAuthorizer(func(_ context.Context, request gateway.ConnectRequest) (gateway.Grant, error) {
+		grant := browserGrantFor(request)
+		grant.GrantID = "browser-grant-" + request.CallerID
+		return grant, nil
+	})
+	service, err := NewBrowser(options)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	firstRequest := validBrowserRequest()
+	firstClient := newGatewayStream()
+	firstDone := make(chan error, 1)
+	go func() { firstDone <- service.Connect(context.Background(), firstRequest, firstClient) }()
+	resolver.WaitCalls(t, 1)
+
+	secondRequest := firstRequest
+	secondRequest.CallerID = "caller-2"
+	secondClient := newGatewayStream()
+	if err := service.Connect(context.Background(), secondRequest, secondClient); !errors.Is(err, gateway.ErrCapacityExhausted) {
+		t.Fatalf("second caller Connect() error = %v; want capacity exhausted", err)
+	}
+	if resolver.Calls() != 1 || !secondClient.Closed() {
+		t.Fatalf("authenticated-capacity rejection resolved=%d closed=%t", resolver.Calls(), secondClient.Closed())
+	}
+
+	firstClient.CloseNow()
+	if err := waitError(t, firstDone); err != nil {
+		t.Fatalf("first Connect() error = %v", err)
+	}
+	replacement := newGatewayStream()
+	replacementDone := make(chan error, 1)
+	go func() { replacementDone <- service.Connect(context.Background(), secondRequest, replacement) }()
+	resolver.WaitCalls(t, 2)
+	replacement.CloseNow()
+	if err := waitError(t, replacementDone); err != nil {
+		t.Fatalf("replacement Connect() error = %v", err)
+	}
+}
+
 func TestBrowserServeUsesPublicAndPrivateWebSocketAdapters(t *testing.T) {
 	backend := newBrowserRawStream()
 	resolver := &browserProviderResolverSpy{resolve: func(_ context.Context, value string) (browserreference.Endpoint, error) {
@@ -602,13 +661,19 @@ func TestBrowserServeUsesPublicAndPrivateWebSocketAdapters(t *testing.T) {
 
 func validBrowserOptions(t *testing.T, resolver BrowserProviderResolver) BrowserOptions {
 	t.Helper()
+	capacity, err := gateway.NewLocalConnectionCapacity(gateway.LocalConnectionCapacityOptions{
+		MaxTotal: 8, MaxPerTenant: 4, MaxPerSession: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	return BrowserOptions{
 		Authorizer: testAuthorizer(func(_ context.Context, request gateway.ConnectRequest) (gateway.Grant, error) {
 			return browserGrantFor(request), nil
 		}),
 		Revocations: newTestRevocations(), Recorder: &testRecorder{}, Resolver: resolver,
-		WebSocket:      adapter.WebSocketOptions{Admission: func(context.Context, *http.Request) error { return nil }},
-		Edge:           &browserEdgeGateSpy{},
+		WebSocket: adapter.WebSocketOptions{Admission: func(context.Context, *http.Request) error { return nil }},
+		Edge:      &browserEdgeGateSpy{}, Capacity: capacity,
 		Clock:          gateway.ClockFunc(func() time.Time { return compositionTestTime }),
 		MaxConnections: 8, MaxConnectionsPerSession: 1,
 	}

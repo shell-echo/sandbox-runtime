@@ -73,11 +73,20 @@ func newReferenceGateway(config Config, terminalResolver *sessionreference.Resol
 			_ = recorder.Close()
 			return nil, err
 		}
+		capacity, err := gateway.NewLocalConnectionCapacity(gateway.LocalConnectionCapacityOptions{
+			MaxTotal: 16, MaxPerTenant: 8, MaxPerSession: 1,
+		})
+		if err != nil {
+			_ = recorder.Close()
+			return nil, err
+		}
 		service, err := gatewaycomposition.NewBrowser(gatewaycomposition.BrowserOptions{
 			Authorizer: result, Revocations: revocations, Recorder: recorder, Resolver: browserResolver,
 			WebSocket: webSocket, MaxReconnects: 1, ReconnectBackoff: 10 * time.Millisecond,
-			Edge:           edgeGate,
-			MaxConnections: 16, MaxConnectionsPerSession: 1,
+			Edge: edgeGate, Capacity: capacity,
+			// Keep the older local guard above the authenticated session limit so
+			// the black-box contention scenario exercises the injected authority.
+			MaxConnections: 16, MaxConnectionsPerSession: 2,
 		})
 		if err != nil {
 			_ = recorder.Close()

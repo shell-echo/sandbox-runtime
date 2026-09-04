@@ -11,6 +11,21 @@ type Authorizer interface {
 	Authorize(context.Context, ConnectRequest) (Grant, error)
 }
 
+// ConnectionCapacity is a caller-owned capacity authority. Subject is derived
+// only from an authorization grant that the Gateway has validated and bound to
+// the original request.
+type ConnectionCapacity interface {
+	Acquire(context.Context, CapacitySubject) (ConnectionLease, error)
+}
+
+// ConnectionLease reserves authenticated capacity for one logical Gateway
+// connection, including reconnect attempts. Events must remain open while the
+// lease is healthy. Release must be idempotent.
+type ConnectionLease interface {
+	Events() <-chan CapacityEvent
+	Release(context.Context) error
+}
+
 // Endpoint is a resolved provider handoff. ReferenceResolver implementations
 // must resolve the exact opaque reference and return a fresh Dial function for
 // every reconnect attempt. No URL, host, port, or backend identifier crosses

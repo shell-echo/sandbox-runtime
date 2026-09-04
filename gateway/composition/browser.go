@@ -31,10 +31,12 @@ type BrowserOptions struct {
 	Resolver    BrowserProviderResolver
 	WebSocket   adapter.WebSocketOptions
 	Edge        edge.Gate
+	Capacity    gateway.ConnectionCapacity
 
-	Clock            gateway.Clock
-	MaxReconnects    int
-	ReconnectBackoff time.Duration
+	Clock                  gateway.Clock
+	MaxReconnects          int
+	ReconnectBackoff       time.Duration
+	CapacityReleaseTimeout time.Duration
 
 	// Browser connections are rejected rather than queued when either local
 	// bound is reached. These limits cover one BrowserService process only.
@@ -63,6 +65,7 @@ func NewBrowser(options BrowserOptions) (*BrowserService, error) {
 		{"Browser provider resolver", options.Resolver},
 		{"WebSocket admission", options.WebSocket.Admission},
 		{"public edge gate", options.Edge},
+		{"authenticated connection capacity", options.Capacity},
 	} {
 		if nilDependency(dependency.value) {
 			return nil, fmt.Errorf("%w: %s is required", ErrInvalidOptions, dependency.name)
@@ -83,6 +86,8 @@ func NewBrowser(options BrowserOptions) (*BrowserService, error) {
 		Revocations: options.Revocations, Recorder: options.Recorder,
 		Clock: options.Clock, MaxReconnects: options.MaxReconnects,
 		ReconnectBackoff:         options.ReconnectBackoff,
+		Capacity:                 options.Capacity,
+		CapacityReleaseTimeout:   options.CapacityReleaseTimeout,
 		MaxConnections:           options.MaxConnections,
 		MaxConnectionsPerSession: options.MaxConnectionsPerSession,
 	})

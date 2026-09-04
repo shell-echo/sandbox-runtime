@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync/atomic"
 	"time"
 )
 
@@ -29,23 +28,30 @@ type Options struct {
 	Clock            Clock
 	MaxReconnects    int
 	ReconnectBackoff time.Duration
+	Capacity         ConnectionCapacity
+
+	// CapacityReleaseTimeout bounds the independent cleanup context used to
+	// release an acquired external capacity lease after the connection ends.
+	CapacityReleaseTimeout time.Duration
 
 	// MaxConnections and MaxConnectionsPerSession enable a non-blocking,
-	// process-local capacity bound when both are non-zero. Callers that need a
-	// distributed limit must supply that boundary outside this component.
+	// process-local capacity bound when both are non-zero. Capacity is the
+	// separate post-authorization authority used for tenant-aware policy.
 	MaxConnections           int
 	MaxConnectionsPerSession int
 }
 
 type Gateway struct {
-	authorizer       Authorizer
-	resolver         ReferenceResolver
-	revocations      RevocationSource
-	recorder         Recorder
-	clock            Clock
-	maxReconnects    int
-	reconnectBackoff time.Duration
-	capacity         *connectionCapacity
+	authorizer             Authorizer
+	resolver               ReferenceResolver
+	revocations            RevocationSource
+	recorder               Recorder
+	clock                  Clock
+	maxReconnects          int
+	reconnectBackoff       time.Duration
+	capacity               *connectionCapacity
+	authenticatedCapacity  ConnectionCapacity
+	capacityReleaseTimeout time.Duration
 }
 
 func New(options Options) (*Gateway, error) {
@@ -67,6 +73,16 @@ func New(options Options) (*Gateway, error) {
 	if backoff < 0 || backoff > MaxReconnectBackoff {
 		return nil, fmt.Errorf("%w: reconnect backoff", ErrInvalidRequest)
 	}
+	if options.Capacity != nil && isTypedNil(options.Capacity) {
+		return nil, fmt.Errorf("%w: connection capacity", ErrProxyUnavailable)
+	}
+	capacityReleaseTimeout := options.CapacityReleaseTimeout
+	if capacityReleaseTimeout == 0 {
+		capacityReleaseTimeout = DefaultCapacityReleaseTimeout
+	}
+	if capacityReleaseTimeout < MinCapacityReleaseTimeout || capacityReleaseTimeout > MaxCapacityReleaseTimeout {
+		return nil, fmt.Errorf("%w: capacity release timeout", ErrInvalidRequest)
+	}
 	capacity, err := newConnectionCapacity(options.MaxConnections, options.MaxConnectionsPerSession)
 	if err != nil {
 		return nil, fmt.Errorf("%w: connection capacity", err)
@@ -75,7 +91,8 @@ func New(options Options) (*Gateway, error) {
 		authorizer: options.Authorizer, resolver: options.Resolver,
 		revocations: options.Revocations, recorder: options.Recorder,
 		clock: clock, maxReconnects: maxReconnects, reconnectBackoff: backoff,
-		capacity: capacity,
+		capacity: capacity, authenticatedCapacity: options.Capacity,
+		capacityReleaseTimeout: capacityReleaseTimeout,
 	}, nil
 }
 
@@ -83,7 +100,7 @@ func New(options Options) (*Gateway, error) {
 // caller closes, the grant expires, or it is revoked. Provider disconnects
 // are retried through a fresh reference resolution while retaining the same
 // caller stream. The Gateway never exposes or interprets an endpoint address.
-func (g *Gateway) Connect(ctx context.Context, request ConnectRequest, client Stream) error {
+func (g *Gateway) Connect(ctx context.Context, request ConnectRequest, client Stream) (resultErr error) {
 	if g == nil || client == nil {
 		return ErrProxyUnavailable
 	}
@@ -112,14 +129,51 @@ func (g *Gateway) Connect(ctx context.Context, request ConnectRequest, client St
 		g.recordDenied(ctx, request, now, err)
 		return errors.Join(ErrUnauthorized, err)
 	}
-	release, err := g.capacity.acquire(grant)
+	releaseLocal, err := g.capacity.acquire(grant)
 	if err != nil {
 		_ = g.record(ctx, eventForGrant(grant, AuditCapacityRejected, now, 0, 0, 0, "connection capacity exhausted"))
 		return err
 	}
-	defer release()
+	defer releaseLocal()
+	if g.authenticatedCapacity != nil {
+		lease, err := g.authenticatedCapacity.Acquire(ctx, capacitySubjectForGrant(grant))
+		if err != nil {
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				return err
+			}
+			if errors.Is(err, ErrCapacityExhausted) {
+				_ = g.record(ctx, eventForGrant(grant, AuditCapacityRejected, now, 0, 0, 0, "authenticated connection capacity exhausted"))
+				return err
+			}
+			_ = g.record(ctx, eventForGrant(grant, AuditCapacityUnavailable, now, 0, 0, 0, "connection capacity unavailable"))
+			return errors.Join(ErrCapacityUnavailable, err)
+		}
+		if lease == nil || isTypedNil(lease) {
+			_ = g.record(ctx, eventForGrant(grant, AuditCapacityUnavailable, now, 0, 0, 0, "connection capacity lease unavailable"))
+			return ErrCapacityUnavailable
+		}
+		events := lease.Events()
+		if err := initialCapacityEventError(events); err != nil {
+			resultErr = err
+			g.finishCapacityLease(grant, lease, &resultErr)
+			return resultErr
+		}
+		capacityCtx, cancelCapacity, monitorDone := monitorCapacityEvents(ctx, events)
+		ctx = capacityCtx
+		defer func() {
+			cancelCapacity(context.Canceled)
+			<-monitorDone
+			g.finishCapacityLease(grant, lease, &resultErr)
+		}()
+		if err := capacityContextError(ctx); err != nil {
+			return err
+		}
+	}
 	revoked, err := g.revocations.IsRevoked(ctx, grant.GrantID)
 	if err != nil {
+		if capacityErr := capacityContextError(ctx); capacityErr != nil {
+			return capacityErr
+		}
 		g.recordDenied(ctx, request, now, err)
 		return errors.Join(ErrProxyUnavailable, err)
 	}
@@ -129,11 +183,18 @@ func (g *Gateway) Connect(ctx context.Context, request ConnectRequest, client St
 	}
 	watch, err := g.revocations.Watch(ctx, grant.GrantID)
 	if err != nil {
+		if capacityErr := capacityContextError(ctx); capacityErr != nil {
+			return capacityErr
+		}
 		g.recordDenied(ctx, request, now, err)
 		return errors.Join(ErrProxyUnavailable, err)
 	}
 	if watch == nil {
 		return errors.Join(ErrProxyUnavailable, errors.New("revocation watcher is nil"))
+	}
+	if authorityErr := g.authorityError(ctx, watch, grant.ExpiresAt); authorityErr != nil {
+		g.recordAuthorityTermination(grant, authorityErr, 0, 0, 0)
+		return authorityErr
 	}
 	if err := g.record(ctx, eventForGrant(grant, AuditAuthorized, now, 0, 0, 0, "")); err != nil {
 		return errors.Join(ErrAuditUnavailable, err)
@@ -141,28 +202,37 @@ func (g *Gateway) Connect(ctx context.Context, request ConnectRequest, client St
 
 	var reconnects int
 	for {
-		now = g.clock.Now().UTC()
-		if !now.Before(grant.ExpiresAt) {
-			_ = g.record(ctx, eventForGrant(grant, AuditExpired, now, reconnects, 0, 0, "grant expired"))
+		if authorityErr := g.authorityError(ctx, watch, grant.ExpiresAt); authorityErr != nil {
+			g.recordAuthorityTermination(grant, authorityErr, reconnects, 0, 0)
 			_ = client.Close(context.Background())
-			return ErrExpired
+			return authorityErr
 		}
+		now = g.clock.Now().UTC()
 		revoked, err = g.revocations.IsRevoked(ctx, grant.GrantID)
 		if err != nil {
 			_ = client.Close(context.Background())
+			if authorityErr := g.authorityError(ctx, watch, grant.ExpiresAt); authorityErr != nil {
+				g.recordAuthorityTermination(grant, authorityErr, reconnects, 0, 0)
+				return authorityErr
+			}
 			return errors.Join(ErrProxyUnavailable, err)
 		}
 		if revoked {
-			_ = g.record(ctx, eventForGrant(grant, AuditRevoked, now, reconnects, 0, 0, "grant revoked"))
+			g.recordAuthorityTermination(grant, ErrRevoked, reconnects, 0, 0)
 			_ = client.Close(context.Background())
 			return ErrRevoked
 		}
 
 		endpoint, err := g.resolver.Resolve(ctx, grant.HandoffReference)
+		if authorityErr := g.authorityError(ctx, watch, grant.ExpiresAt); authorityErr != nil {
+			g.recordAuthorityTermination(grant, authorityErr, reconnects, 0, 0)
+			_ = client.Close(context.Background())
+			return authorityErr
+		}
 		if err != nil {
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 				_ = client.Close(context.Background())
-				return err
+				return contextResult(ctx, err)
 			}
 			if reconnects == 0 {
 				_ = g.record(ctx, eventForGrant(grant, AuditReconnectFailed, now, reconnects, 0, 0, "handoff resolution failed"))
@@ -174,7 +244,9 @@ func (g *Gateway) Connect(ctx context.Context, request ConnectRequest, client St
 				_ = client.Close(context.Background())
 				return errors.Join(ErrReconnectExhausted, err)
 			}
-			if err := g.waitReconnect(ctx, grant.ExpiresAt); err != nil {
+			if err := g.waitReconnect(ctx, watch, grant.ExpiresAt); err != nil {
+				g.recordAuthorityTermination(grant, err, reconnects, 0, 0)
+				_ = client.Close(context.Background())
 				return err
 			}
 			reconnects++
@@ -185,17 +257,27 @@ func (g *Gateway) Connect(ctx context.Context, request ConnectRequest, client St
 			return err
 		}
 		backend, err := endpoint.Dial(ctx)
+		if authorityErr := g.authorityError(ctx, watch, grant.ExpiresAt); authorityErr != nil {
+			g.recordAuthorityTermination(grant, authorityErr, reconnects, 0, 0)
+			if backend != nil {
+				_ = backend.Close(context.Background())
+			}
+			_ = client.Close(context.Background())
+			return authorityErr
+		}
 		if err != nil {
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 				_ = client.Close(context.Background())
-				return err
+				return contextResult(ctx, err)
 			}
 			if reconnects >= g.maxReconnects {
 				_ = g.record(ctx, eventForGrant(grant, AuditReconnectFailed, now, reconnects, 0, 0, "backend dial failed"))
 				_ = client.Close(context.Background())
 				return errors.Join(ErrReconnectExhausted, err)
 			}
-			if err := g.waitReconnect(ctx, grant.ExpiresAt); err != nil {
+			if err := g.waitReconnect(ctx, watch, grant.ExpiresAt); err != nil {
+				g.recordAuthorityTermination(grant, err, reconnects, 0, 0)
+				_ = client.Close(context.Background())
 				return err
 			}
 			reconnects++
@@ -204,6 +286,12 @@ func (g *Gateway) Connect(ctx context.Context, request ConnectRequest, client St
 		if backend == nil {
 			_ = client.Close(context.Background())
 			return errors.Join(ErrReferenceUnavailable, errors.New("resolver returned nil backend stream"))
+		}
+		if authorityErr := g.authorityError(ctx, watch, grant.ExpiresAt); authorityErr != nil {
+			g.recordAuthorityTermination(grant, authorityErr, reconnects, 0, 0)
+			_ = backend.Close(context.Background())
+			_ = client.Close(context.Background())
+			return authorityErr
 		}
 
 		if err := g.record(ctx, eventForGrant(grant, connectedEvent(reconnects), now, reconnects, 0, 0, "")); err != nil {
@@ -215,11 +303,11 @@ func (g *Gateway) Connect(ctx context.Context, request ConnectRequest, client St
 		_ = backend.Close(context.Background())
 		switch {
 		case result.revoked:
-			_ = g.record(ctx, eventForGrant(grant, AuditRevoked, g.clock.Now().UTC(), reconnects, result.frames, result.bytes, "grant revoked"))
+			g.recordAuthorityTermination(grant, ErrRevoked, reconnects, result.frames, result.bytes)
 			_ = client.Close(context.Background())
 			return ErrRevoked
 		case result.expired:
-			_ = g.record(ctx, eventForGrant(grant, AuditExpired, g.clock.Now().UTC(), reconnects, result.frames, result.bytes, "grant expired"))
+			g.recordAuthorityTermination(grant, ErrExpired, reconnects, result.frames, result.bytes)
 			_ = client.Close(context.Background())
 			return ErrExpired
 		case result.clientClosed:
@@ -237,13 +325,19 @@ func (g *Gateway) Connect(ctx context.Context, request ConnectRequest, client St
 				_ = client.Close(context.Background())
 				return ErrReconnectExhausted
 			}
-			if err := g.waitReconnect(ctx, grant.ExpiresAt); err != nil {
+			if err := g.waitReconnect(ctx, watch, grant.ExpiresAt); err != nil {
+				g.recordAuthorityTermination(grant, err, reconnects, result.frames, result.bytes)
+				_ = client.Close(context.Background())
 				return err
 			}
 			reconnects++
 			continue
 		default:
 			_ = client.Close(context.Background())
+			if authorityErr := g.authorityError(ctx, watch, grant.ExpiresAt); authorityErr != nil {
+				g.recordAuthorityTermination(grant, authorityErr, reconnects, result.frames, result.bytes)
+				return authorityErr
+			}
 			if result.err != nil && (errors.Is(result.err, context.Canceled) || errors.Is(result.err, context.DeadlineExceeded)) {
 				return result.err
 			}
@@ -252,9 +346,102 @@ func (g *Gateway) Connect(ctx context.Context, request ConnectRequest, client St
 	}
 }
 
-func (g *Gateway) waitReconnect(ctx context.Context, expiresAt time.Time) error {
-	if !expiresAt.After(g.clock.Now().UTC()) {
+func monitorCapacityEvents(parent context.Context, events <-chan CapacityEvent) (context.Context, context.CancelCauseFunc, <-chan struct{}) {
+	ctx, cancel := context.WithCancelCause(parent)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		select {
+		case event, open := <-events:
+			cancel(capacityEventError(event, open))
+		case <-ctx.Done():
+		}
+	}()
+	return ctx, cancel, done
+}
+
+func capacityContextError(ctx context.Context) error {
+	if ctx == nil {
+		return context.Canceled
+	}
+	cause := context.Cause(ctx)
+	if errors.Is(cause, ErrCapacityUnavailable) {
+		return cause
+	}
+	return nil
+}
+
+func contextResult(ctx context.Context, fallback error) error {
+	if capacityErr := capacityContextError(ctx); capacityErr != nil {
+		return capacityErr
+	}
+	return fallback
+}
+
+func revocationSignaled(watch <-chan struct{}) bool {
+	select {
+	case <-watch:
+		return true
+	default:
+		return false
+	}
+}
+
+func (g *Gateway) authorityError(ctx context.Context, watch <-chan struct{}, expiresAt time.Time) error {
+	if revocationSignaled(watch) {
+		return ErrRevoked
+	}
+	if !g.clock.Now().UTC().Before(expiresAt) {
 		return ErrExpired
+	}
+	if capacityErr := capacityContextError(ctx); capacityErr != nil {
+		return capacityErr
+	}
+	if ctx != nil && ctx.Err() != nil {
+		return ctx.Err()
+	}
+	return nil
+}
+
+func (g *Gateway) recordAuthorityTermination(grant Grant, err error, attempt int, frames, bytes uint64) {
+	switch {
+	case errors.Is(err, ErrRevoked):
+		g.recordBoundedEvent(eventForGrant(grant, AuditRevoked, g.clock.Now().UTC(), attempt, frames, bytes, "grant revoked"))
+	case errors.Is(err, ErrExpired):
+		g.recordBoundedEvent(eventForGrant(grant, AuditExpired, g.clock.Now().UTC(), attempt, frames, bytes, "grant expired"))
+	}
+}
+
+func (g *Gateway) finishCapacityLease(grant Grant, lease ConnectionLease, resultErr *error) {
+	if resultErr == nil {
+		return
+	}
+	if eventType := capacityAuditType(*resultErr); eventType != "" {
+		reason := "connection capacity unavailable"
+		if eventType == AuditCapacityLost {
+			reason = "connection capacity lease lost"
+		}
+		g.recordBoundedEvent(eventForGrant(grant, eventType, g.clock.Now().UTC(), 0, 0, 0, reason))
+	}
+	releaseCtx, cancel := context.WithTimeout(context.Background(), g.capacityReleaseTimeout)
+	releaseErr := lease.Release(releaseCtx)
+	cancel()
+	if releaseErr == nil {
+		return
+	}
+	*resultErr = errors.Join(*resultErr, ErrCapacityUnavailable, releaseErr)
+	g.recordBoundedEvent(eventForGrant(grant, AuditCapacityReleaseFailed, g.clock.Now().UTC(), 0, 0, 0, "connection capacity lease release failed"))
+}
+
+func (g *Gateway) recordBoundedEvent(event AuditEvent) {
+	recordCtx, cancel := context.WithTimeout(context.Background(), g.capacityReleaseTimeout)
+	defer cancel()
+	_ = g.record(recordCtx, event)
+}
+
+func (g *Gateway) waitReconnect(ctx context.Context, watch <-chan struct{}, expiresAt time.Time) error {
+	if err := g.authorityError(ctx, watch, expiresAt); err != nil {
+		return err
 	}
 	if g.reconnectBackoff == 0 {
 		return nil
@@ -263,12 +450,9 @@ func (g *Gateway) waitReconnect(ctx context.Context, expiresAt time.Time) error 
 	defer timer.Stop()
 	select {
 	case <-ctx.Done():
-		return ctx.Err()
+		return g.authorityError(ctx, watch, expiresAt)
 	case <-timer.C:
-		if !expiresAt.After(g.clock.Now().UTC()) {
-			return ErrExpired
-		}
-		return nil
+		return g.authorityError(ctx, watch, expiresAt)
 	}
 }
 
@@ -299,52 +483,77 @@ type proxyResult struct {
 func (g *Gateway) proxyAttempt(ctx context.Context, client, backend Stream, grant Grant, watch <-chan struct{}) proxyResult {
 	attemptCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	var revoked atomic.Bool
-	var expired atomic.Bool
-	monitorDone := make(chan struct{})
-	go func() {
-		defer close(monitorDone)
-		expiresIn := grant.ExpiresAt.Sub(g.clock.Now().UTC())
-		if expiresIn <= 0 {
-			expired.Store(true)
-			cancel()
-			_ = client.Close(context.Background())
-			_ = backend.Close(context.Background())
-			return
-		}
-		timer := time.NewTimer(expiresIn)
-		defer timer.Stop()
-		select {
-		case <-watch:
-			revoked.Store(true)
-			cancel()
-			_ = client.Close(context.Background())
-			_ = backend.Close(context.Background())
-		case <-timer.C:
-			expired.Store(true)
-			cancel()
-			_ = client.Close(context.Background())
-			_ = backend.Close(context.Background())
-		case <-attemptCtx.Done():
-		}
-	}()
-
 	results := make(chan transferResult, 2)
 	go transfer(attemptCtx, clientSide, client, backend, results)
 	go transfer(attemptCtx, backendSide, backend, client, results)
-	first := <-results
+
+	expiresIn := grant.ExpiresAt.Sub(g.clock.Now().UTC())
+	var expiry <-chan time.Time
+	var timer *time.Timer
+	expired := expiresIn <= 0
+	if !expired {
+		timer = time.NewTimer(expiresIn)
+		expiry = timer.C
+		defer timer.Stop()
+	}
+
+	var first transferResult
+	haveFirst := false
+	revoked := false
+	if !expired {
+		select {
+		case first = <-results:
+			haveFirst = true
+		case <-watch:
+			revoked = true
+		case <-expiry:
+			expired = true
+		case <-ctx.Done():
+		}
+	}
+
+	// Resolve simultaneously ready authority signals with one stable priority.
+	// A confirmed revocation outranks expiry, which outranks capacity loss.
+	if !revoked {
+		select {
+		case <-watch:
+			revoked = true
+		default:
+		}
+	}
+	if !expired && expiry != nil {
+		select {
+		case <-expiry:
+			expired = true
+		default:
+		}
+	}
+	if !expired {
+		expired = !g.clock.Now().UTC().Before(grant.ExpiresAt)
+	}
+	capacityErr := capacityContextError(ctx)
+	authorityStopped := revoked || expired || capacityErr != nil || (!haveFirst && ctx.Err() != nil)
 	cancel()
 	_ = backend.Close(context.Background())
-	<-monitorDone
+	if authorityStopped {
+		_ = client.Close(context.Background())
+	}
+	if !haveFirst {
+		first = <-results
+	}
 	second := <-results
-	result := proxyResult{revoked: revoked.Load(), expired: expired.Load(), err: first.err}
+	result := proxyResult{revoked: revoked, expired: expired, err: first.err}
 	result.frames = first.frames + second.frames
 	result.bytes = first.bytes + second.bytes
 	if result.revoked || result.expired {
 		return result
 	}
+	if capacityErr != nil {
+		result.err = capacityErr
+		return result
+	}
 	if ctx.Err() != nil {
-		result.err = ctx.Err()
+		result.err = contextResult(ctx, ctx.Err())
 		return result
 	}
 	// The first completed transfer determines why this attempt ended. The
