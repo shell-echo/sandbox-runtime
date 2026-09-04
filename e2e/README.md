@@ -85,6 +85,21 @@ passes this command and emits its manifest. Hosted execution is isolated in
 
 ## Latest verified evidence
 
+Clean local Browser Reference run `20260904T080946.250607000Z` passed harness
+`249cdd4` against Provider `44ea2ee`: all 12 initial and 5
+process-reconstruction scenarios passed on `linux/arm64`. The added black-box
+scenario sends 16 authenticated requests with a rejected Origin, observes both
+ordinary `403` and pre-upgrade `429` responses with bounded `Retry-After`, then
+observes ordinary `403` again after recovery. The 20-record Gateway audit keeps
+the existing six `authorized`, six `connected`, four `client_closed`, and one
+each `capacity_rejected`, `denied`, `expired`, and `revoked` events; it contains
+no `grant-browser-edge-*` identity. This is local Browser reference
+external-caller evidence for process-local pre-upgrade limits only. Hosted
+evidence for this lock is pending, and listener/TLS/HTTP limits, partition-aware
+shared capacity, distributed revocation, production advertisement, real Agent
+Platform, aggregate conformance, multi-controller, hostile multi-tenant,
+deployment, and production gates remain open.
+
 Hosted Browser Reference E2E run `33846603547` passed harness `28a9a5e` against
 Provider `7b062e6`: all 11 initial and 5 process-reconstruction scenarios
 passed on `linux/amd64`. Its manifest pins Contract revision `5096e71`, tree
@@ -100,8 +115,9 @@ without disrupting the first connection, then connects a replacement after
 release. The 20-record Gateway audit contains exactly one
 `capacity_rejected` event and only bounded metadata. The sanitized evidence
 otherwise contains the manifest, two reports, and bounded stack/caller logs.
-This is process-local capacity plus Browser reference external-caller evidence,
-not pre-upgrade edge control, distributed capacity/revocation, production
+This is process-local post-authorization capacity plus Browser reference
+external-caller evidence, not the newer pre-upgrade edge scenario, distributed
+capacity/revocation, production
 advertisement, real Agent Platform, aggregate conformance, multi-controller,
 hostile multi-tenant, deployment, or production evidence.
 
@@ -113,9 +129,13 @@ harness/Provider lock `28a9a5e`/`7b062e6`. Their artifacts are
 and `platform-candidate-e2e-evidence-33846603454` (digest
 `sha256:d3148037292f4e883dc96a1e224294f5841a4ae838bc1c8e2fe5e67455d39f95`).
 The candidate result covers only its named shadow/selection/rollback/drain
-policy. Neither coding/shell run contains a Browser scenario. The latest clean
-local Reference and Candidate runs remain `20260904T013909.243838000Z` and
-`20260904T014037.825223000Z` on the earlier `9eb32ba`/`5aae281` lock.
+policy. Neither coding/shell run contains a Browser scenario. Clean local
+Reference run `20260904T081521.464863000Z` and Candidate run
+`20260904T081706.648122000Z` each pass 15+5 scenarios against current
+harness/Provider `249cdd4`/`44ea2ee`; both pin runtime digest
+`sha256:bcd5dbff8b2d108ee7dab464a85ee7d39ef74a8616a6af73a94ebb10ff8eaf75`.
+These remain reference coding/shell and candidate integration evidence,
+respectively, not Browser or real Agent Platform evidence.
 
 The preceding hosted Browser Reference E2E run `33838215924` passed harness
 `79fee2b` against Provider `f760369` with 10 initial and 5 reconstruction

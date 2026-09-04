@@ -98,15 +98,21 @@ implementation `b8423f5` add the protected Browser handlers; ADR 0024 and
 0025 plus `66183b1` bind the Browser application, Docker runtime, provenance,
 restricted-egress, create-policy, operation, usage, and recovery dependencies.
 Production startup still has no public Browser Gateway route and does not
-advertise Browser. ADR 0026 and the current harness `28a9a5e` provide a separate
-Browser-only reference deployment and black-box caller; hosted run
-`33846603547` passes its 11 initial and 5 reconstruction scenarios against
-Provider `7b062e6`. That reference-only advertisement and caller result do not
-establish a production Browser deployment. ADR 0027 adds explicit process-local
-total/per-session Browser Gateway connection capacity before revocation and
-Provider resolution; the hosted caller actively proves same-session rejection,
-continued service of the admitted connection, and slot reuse after release. It
-does not bound the pre-upgrade public edge or establish distributed capacity.
+advertise Browser. ADR 0026 provides a separate Browser-only reference
+deployment and black-box caller; hosted run `33846603547` passes 11 initial and
+5 reconstruction scenarios against Provider `7b062e6`. That reference-only
+advertisement and caller result do not establish a production Browser
+deployment. ADR 0027 adds explicit process-local total/per-session Browser
+Gateway connection capacity before revocation and Provider resolution; the
+hosted caller actively proves same-session rejection, continued service of the
+admitted connection, and slot reuse after release. ADR 0028 and implementation
+`44ea2ee` additionally require a process-local global connection/fixed-window
+request gate before Browser WebSocket admission and upgrade. Local harness
+`249cdd4` passes 12+5 scenarios and actively proves generic pre-upgrade `429`
+with bounded `Retry-After`, recovery, and no identity-bearing Gateway audit for
+the rejected burst. Hosted evidence for this added scenario is pending. Neither
+local control establishes listener/TLS/HTTP-layer limits, partition-aware
+shared capacity, or distributed revocation.
 
 | Method and path | Responsibility |
 | --- | --- |
@@ -383,7 +389,7 @@ advertisement, and optional-profile gates remain open:
 | Workspace | The Provider Docker development adapter supplies `/inputs`, `/workspace`, `/outputs`, and bounded tmpfs `/tmp` with owned cleanup; exec consumes that runtime without exposing host paths. | Add artifact consumers, capacity enforcement, and stronger isolation evidence. |
 | Security | Docker defaults already drop capabilities, use non-root/read-only root, disable networking, and limit resources. | Add policy enforcement, stronger isolation profiles, secret grants, egress controls, audit evidence, and production auth. |
 | Events and usage | Durable lifecycle events and bounded usage-evidence components exist without a complete runtime collector composition. | Complete collection/reconciliation while leaving platform accounting authority outside the Provider. |
-| Snapshots/browser/desktop | Browser Contract authority/projection, exact signed image, Provider-local session/application/reference/usage, Docker adapter, provenance verifier, restricted-egress provisioner, create-policy binding, protected handlers, caller-owned Gateway, default-disabled command graph, and hosted 11+5 Browser reference-caller path have named evidence. The Gateway has explicit process-local total/per-session connection capacity before revocation and Provider resolution, including a black-box same-session rejection/release scenario. The restricted-egress Gateway remains distinct from the caller-owned Gateway. Production Browser advertisement/public Gateway deployment, aggregate, distributed capacity/revocation, multi-controller, tenant, deployment, and production gates remain open. Snapshots and desktop remain unauthorized optional behavior. | Add pre-upgrade public-edge load shedding, distributed revocation/capacity, hostile-tenant evidence, and deployable storage/configuration before production advertisement; then begin the Desktop authority audit without reusing Browser or terminal routes. |
+| Snapshots/browser/desktop | Browser Contract authority/projection, exact signed image, Provider-local session/application/reference/usage, Docker adapter, provenance verifier, restricted-egress provisioner, create-policy binding, protected handlers, caller-owned Gateway, default-disabled command graph, and hosted 11+5 Browser reference-caller path have named evidence. The Gateway has explicit process-local total/per-session post-authorization capacity with a hosted black-box rejection/release scenario. ADR 0028 adds process-local global connection and fixed-window request limits before Browser WebSocket admission/upgrade; a clean local 12+5 caller run proves rejection/recovery without reaching Gateway audit. The restricted-egress Gateway remains distinct from the caller-owned Gateway. Production Browser advertisement/public Gateway deployment, listener/TLS/HTTP limits, partition-aware shared capacity, distributed revocation, aggregate, multi-controller, tenant, deployment, and production gates remain open. Snapshots and desktop remain unauthorized optional behavior. | Add listener/TLS/HTTP limits, authenticated partition-aware shared or distributed capacity, durable distributed revocation, hostile-tenant evidence, and deployable storage/configuration before production advertisement; then begin the Desktop authority audit without reusing Browser or terminal routes. |
 
 ## Delivery plan and release gates
 

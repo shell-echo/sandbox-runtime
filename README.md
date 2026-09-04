@@ -73,21 +73,28 @@ Currently implemented:
 - a caller-owned Browser Gateway boundary with separate
   `browser_session_id`/`ref:browser-session:*` identity, exact endpoint binding,
   metadata-only audit, bounded reconnect/revocation, RFC 6455 CDP framing, and
-  explicit process-local total/per-session connection capacity. The capacity
-  bound does not replace distributed or pre-WebSocket edge controls
+  explicit process-local total/per-session connection capacity. Its public
+  Browser service also requires a process-local global connection/fixed-window
+  request limiter before WebSocket admission and upgrade. These local bounds do
+  not replace listener/TLS/HTTP controls, partition-aware shared capacity, or
+  distributed revocation
 - a default-disabled Browser Provider command/runtime graph and a separate
   Browser-only reference stack plus black-box caller. Hosted Browser Reference
   E2E run `33846603547` passes 11 initial and 5 process-reconstruction
   scenarios through real mTLS/JWS HTTPS, WebSocket, signed-image provenance,
   Docker, restricted egress, concurrent same-session capacity rejection and
   release, usage evidence, and cleanup. The production command still exposes
-  no public Browser Gateway and does not advertise Browser
+  no public Browser Gateway and does not advertise Browser. A newer clean local
+  run `20260904T080946.250607000Z` passes 12+5 scenarios including
+  authenticated wrong-Origin pre-upgrade rate rejection and recovery; hosted
+  evidence for that added scenario is pending
 
 Planned but not yet implemented:
 
 - production Browser advertisement and deployable caller-owned Gateway
-  integration after distributed revocation/capacity, pre-upgrade edge limits,
-  hostile-tenant, storage, and operational gates
+  integration after listener/TLS/HTTP limits, partition-aware shared or
+  distributed capacity, durable distributed revocation, hostile-tenant,
+  storage, and operational gates
 - runtime images for desktop workloads
 - display, audio, input, streaming, clipboard, and file-transfer modules
 - deployable WebRTC / VNC / public WebSocket Gateway composition
