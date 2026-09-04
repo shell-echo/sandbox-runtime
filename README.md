@@ -9,9 +9,9 @@ The project is intentionally **runtime-first**. It is not just a cloud browser U
 ## Status
 
 This repository is in active implementation. The coding/shell reference-caller
-gate passes, while real Agent Platform migration, optional Browser composition,
-deployment, multi-controller, hostile multi-tenant, and production gates remain
-open.
+gate passes, while real Agent Platform migration, complete Browser
+command/runtime composition and Browser caller evidence, deployment,
+multi-controller, hostile multi-tenant, and production gates remain open.
 Start a new development session with
 [`docs/PROJECT_CONTEXT.md`](docs/PROJECT_CONTEXT.md). It summarizes the current
 architecture, engineering rules, verified maturity, blockers, and next work;
@@ -68,14 +68,17 @@ Currently implemented:
   per-allocation internal network, pinned private DNS/HTTP/TLS gateway, and
   exact hostname policy
 - protected Browser open/handoff transport handlers that preserve admission
-  correlation and project only an expiring opaque reference. No Browser
-  command/runtime composition, caller-owned Gateway, advertisement, or browser
-  caller is enabled
+  correlation and project only an expiring opaque reference
+- an uncomposed caller-owned Browser Gateway boundary with separate
+  `browser_session_id`/`ref:browser-session:*` identity, exact endpoint binding,
+  metadata-only audit, bounded reconnect/revocation, and RFC 6455 CDP framing.
+  No Browser command/runtime composition, public Gateway route, advertisement,
+  or browser caller is enabled
 
 Planned but not yet implemented:
 
-- Browser command/runtime composition, caller-owned Gateway, capability
-  advertisement, and independent caller E2E
+- Browser command/runtime composition, caller-owned public Gateway integration,
+  capability advertisement, and independent caller E2E
 - runtime images for desktop workloads
 - display, audio, input, streaming, clipboard, and file-transfer modules
 - deployable WebRTC / VNC / public WebSocket Gateway composition

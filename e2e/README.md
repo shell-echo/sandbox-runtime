@@ -46,7 +46,22 @@ aggregate conformance, or production evidence.
 
 ## Latest verified evidence
 
-Hosted Reference E2E run `33760609272` and Platform Candidate E2E run
+Clean local Reference run `20260904T013909.243838000Z` and Platform Candidate
+run `20260904T014037.825223000Z` passed harness `9eb32ba` against Provider
+`5aae281` with 15 initial and 5 reconstruction/resume coding/shell scenarios
+each. Both manifests pin Contract revision `5096e71`, tree `859f76d`, 48 Suite
+cases, and linux/amd64 runtime digest
+`sha256:41c69ff79b9f895fa59e4a36d990993dffe0210b8b96df0bbf0647ae2ee651b4`.
+The candidate result additionally covers only its named
+shadow/selection/rollback/drain policy. Neither run contains a Browser scenario.
+Hosted Reference run `33826813099` and Platform Candidate run `33826813100`
+passed the same respective 15+5 scenario sets against this lock. Their artifacts
+are `reference-e2e-evidence-33826813099` (digest
+`sha256:dbe54035cd65ce60dcb1a45254d394dc04b0e530907363ea167f8502fd91fd8e`)
+and `platform-candidate-e2e-evidence-33826813100` (digest
+`sha256:f9a4f448e741c7945b225dd9dd1b72cf33d32745deb90a734b67fb41531f18bf`).
+
+The preceding hosted Reference E2E run `33760609272` and Platform Candidate run
 `33760609231` passed harness lock `a2721ad` against Provider `b8423f5` with 15
 initial and 5 reconstruction/resume coding/shell scenarios each. Their
 artifacts are `reference-e2e-evidence-33760609272` (digest
@@ -54,7 +69,7 @@ artifacts are `reference-e2e-evidence-33760609272` (digest
 and `platform-candidate-e2e-evidence-33760609231` (digest
 `sha256:d59a779678a79597859afa1d112a09fcb69e2b526519f2d9298dafe5f137bc9e`).
 Both manifests pin Contract revision `5096e71`, tree `859f76d`, and 48 Suite
-cases. The latest local runs, `20260903T091011.164430000Z` and
+cases. The preceding local runs, `20260903T091011.164430000Z` and
 `20260903T091045.591005000Z`, passed the same respective scenario sets with
 harness/Provider lock `330f629`/`9390554` and runtime digest
 `sha256:a5e7f2dd16bb091f39db3bc6bd98747742ff9902dd2977c4ca6d07d425236291`.
@@ -66,7 +81,7 @@ respectively. Their artifact run directories are
 These remain coding/shell regression and candidate-integration evidence only;
 they contain no browser scenario.
 
-## Previous hosted evidence before this lock update
+## Previous hosted evidence
 
 Hosted Reference E2E run `33747803507` and Platform Candidate E2E run
 `33747803514` passed harness lock `7f15628` against Provider `7e60340` with 15
