@@ -17,6 +17,7 @@ import (
 	"github.com/shell-echo/sandbox-runtime/gateway"
 	"github.com/shell-echo/sandbox-runtime/gateway/adapter"
 	gatewaycomposition "github.com/shell-echo/sandbox-runtime/gateway/composition"
+	gatewayedge "github.com/shell-echo/sandbox-runtime/gateway/edge"
 	browserreference "github.com/shell-echo/sandbox-runtime/provider/browser/reference"
 	sessionreference "github.com/shell-echo/sandbox-runtime/provider/session/reference"
 )
@@ -65,9 +66,17 @@ func newReferenceGateway(config Config, terminalResolver *sessionreference.Resol
 		result.terminal = service
 	}
 	if browserResolver != nil {
+		edgeGate, err := gatewayedge.NewLocalLimiter(gatewayedge.LocalOptions{
+			MaxConcurrent: 32, MaxRequestsPerWindow: 8, Window: time.Second,
+		})
+		if err != nil {
+			_ = recorder.Close()
+			return nil, err
+		}
 		service, err := gatewaycomposition.NewBrowser(gatewaycomposition.BrowserOptions{
 			Authorizer: result, Revocations: revocations, Recorder: recorder, Resolver: browserResolver,
 			WebSocket: webSocket, MaxReconnects: 1, ReconnectBackoff: 10 * time.Millisecond,
+			Edge:           edgeGate,
 			MaxConnections: 16, MaxConnectionsPerSession: 1,
 		})
 		if err != nil {

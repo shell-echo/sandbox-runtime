@@ -21,7 +21,7 @@ platform gate.
 
 | Item | Value |
 | --- | --- |
-| Provider implementation | `6c1dddee8bf105636ec9bea8787bd7b27555e2da` |
+| Provider implementation | `44ea2eecc75752870d4e8580a75be26578dcd63a` |
 | Contract namespace | `urn:shell-echo:sandbox-runtime:provider-v1` |
 | Contract revision | `5096e71fb84fbec22aa3487a0e55a1b49602ab8b` |
 | Contract tree | `859f76dc0e855a0c8abdbbb5648df100dabb4328` |
@@ -40,7 +40,8 @@ CLI/Sigstore provenance-verifier component, the restricted-egress provisioner,
 immutable create-policy binding, protected Browser transport component, and
 the caller-owned Browser Gateway boundary, followed by the default-disabled
 Browser command/runtime graph and the process-local total/per-session Browser
-Gateway connection-capacity component.
+Gateway connection-capacity component, plus the process-local Browser
+public-edge connection and fixed-window request limiter.
 This Provider identity also includes the GitHub Actions migration from Node 20
 action runtimes to Node 24 action runtimes. That infrastructure update adds no
 Browser behavior, caller compatibility, or production-readiness evidence.
