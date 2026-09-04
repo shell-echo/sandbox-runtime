@@ -80,32 +80,52 @@ passes this command and emits its manifest. Hosted execution is isolated in
 
 ## Latest verified evidence
 
-Hosted Browser Reference E2E run `33838215924` passed harness `79fee2b` against
-Provider `f760369`: all 10 initial and 5 process-reconstruction scenarios
+Hosted Browser Reference E2E run `33846603547` passed harness `28a9a5e` against
+Provider `7b062e6`: all 11 initial and 5 process-reconstruction scenarios
 passed on `linux/amd64`. Its manifest pins Contract revision `5096e71`, tree
 `859f76d`, 48 Suite cases, the signed Browser image
 `sha256:87d3216c22ada0fea74b375a3ee5c2ddf021d3e1913569e2aeb4a316ed3b5c2f`,
 and support image
-`sha256:71048069dce3987341429789244b862dd8fc9b287db1c230354a164fd7c14d33`.
-Artifact `browser-reference-e2e-evidence-33838215924` has digest
-`sha256:4acfbc97c0c1f64e987b00870849a2244e33596918d08e659385c428310843ea`;
-its run directory is `20260904T044941.754937659Z`. The sanitized evidence
-contains only the manifest, two reports, metadata-only Gateway audit, and
-bounded stack/caller logs. This is Browser reference external-caller evidence,
-not production advertisement, real Agent Platform, aggregate conformance,
-multi-controller, hostile multi-tenant, deployment, or production evidence.
+`sha256:5b5b721750a9450682f11c73f3cb1f3c0eb216f812329dfe75f9058a93d635a0`.
+Artifact `browser-reference-e2e-evidence-33846603547` has digest
+`sha256:b024225aa3545fa56a7cc5113f29c0817a86ebc70c3976e10d81bf3507546cba`;
+its run directory is `20260904T065835.995038539Z`. The added scenario holds one
+CDP connection, observes a second same-session grant rejected for capacity
+without disrupting the first connection, then connects a replacement after
+release. The 20-record Gateway audit contains exactly one
+`capacity_rejected` event and only bounded metadata. The sanitized evidence
+otherwise contains the manifest, two reports, and bounded stack/caller logs.
+This is process-local capacity plus Browser reference external-caller evidence,
+not pre-upgrade edge control, distributed capacity/revocation, production
+advertisement, real Agent Platform, aggregate conformance, multi-controller,
+hostile multi-tenant, deployment, or production evidence.
 
-Hosted coding/shell Reference run `33838215917` and Platform Candidate run
-`33838215882` passed the respective 15+5 scenario sets against the same
-harness/Provider lock `79fee2b`/`f760369`. Their artifacts are
-`reference-e2e-evidence-33838215917` (digest
-`sha256:77cd06014bc9ddf4c41130b1ccaf7b35210ebfbedf075662190500e708d23c2e`)
-and `platform-candidate-e2e-evidence-33838215882` (digest
-`sha256:9ad455bba6d61a082c2a5136fcf19c4609db6c759f035a0e5299ecc85f31e23e`).
+Hosted coding/shell Reference run `33846603323` and Platform Candidate run
+`33846603454` passed the respective 15+5 scenario sets against the same
+harness/Provider lock `28a9a5e`/`7b062e6`. Their artifacts are
+`reference-e2e-evidence-33846603323` (digest
+`sha256:333be42b84c1d2ebfff86bae7d619348e84d13fe29b6f15975b587c2d38447c3`)
+and `platform-candidate-e2e-evidence-33846603454` (digest
+`sha256:d3148037292f4e883dc96a1e224294f5841a4ae838bc1c8e2fe5e67455d39f95`).
 The candidate result covers only its named shadow/selection/rollback/drain
 policy. Neither coding/shell run contains a Browser scenario. The latest clean
 local Reference and Candidate runs remain `20260904T013909.243838000Z` and
 `20260904T014037.825223000Z` on the earlier `9eb32ba`/`5aae281` lock.
+
+The preceding hosted Browser Reference E2E run `33838215924` passed harness
+`79fee2b` against Provider `f760369` with 10 initial and 5 reconstruction
+scenarios. Artifact `browser-reference-e2e-evidence-33838215924` has digest
+`sha256:4acfbc97c0c1f64e987b00870849a2244e33596918d08e659385c428310843ea`.
+It established the complete Browser path before the capacity scenario was
+added and remains historical evidence for its named lock.
+
+The preceding hosted coding/shell Reference run `33838215917` and Platform
+Candidate run `33838215882` passed 15+5 against harness/Provider
+`79fee2b`/`f760369`. Their artifact digests are
+`sha256:77cd06014bc9ddf4c41130b1ccaf7b35210ebfbedf075662190500e708d23c2e`
+and `sha256:9ad455bba6d61a082c2a5136fcf19c4609db6c759f035a0e5299ecc85f31e23e`,
+respectively. These remain historical coding/shell regression and candidate
+integration evidence only.
 
 The preceding hosted Reference E2E run `33760609272` and Platform Candidate run
 `33760609231` passed harness lock `a2721ad` against Provider `b8423f5` with 15
@@ -268,10 +288,9 @@ until close within a bounded timeout. Hosted run `33379217800` then passed all
 15 initial and 5 restart/resume scenarios on commit `555436c` and uploaded
 artifact `reference-e2e-evidence-33379217800` with digest
 `sha256:68250a85683dcbd8f01397d7373e98215382379ff895c0a58692de23c1880733`.
-The latest recorded lock-refresh run `33760609272` passed Provider `b8423f5`
-with harness `a2721ad` and uploaded `reference-e2e-evidence-33760609272` with
-digest
-`sha256:1f8699b9f1dbc1169dd0539e78c349476889cd40c7984260ebc761c78611f70a`.
+The current lock-refresh run `33846603323` passed Provider `7b062e6` with
+harness `28a9a5e` and uploaded `reference-e2e-evidence-33846603323` with digest
+`sha256:333be42b84c1d2ebfff86bae7d619348e84d13fe29b6f15975b587c2d38447c3`.
 A green run proves only the named reference caller scenarios;
 it does not prove Agent Platform compatibility, aggregate conformance,
 multi-controller reliability, hostile tenant isolation, deployment readiness,
@@ -288,7 +307,7 @@ Hosted run `33460370618` passed all 15 initial and 5 restart/resume candidate
 scenarios on workflow baseline `c7ff5eb`. Artifact
 `platform-candidate-e2e-evidence-33460370618` has digest
 `sha256:54f0aea847dcb0b1808c6c902f1465979a3ec4362d52ab8884187e85ea6343f7`.
-The latest recorded lock-refresh run `33760609231` passed Provider `b8423f5`
-with harness `a2721ad` and uploaded
-`platform-candidate-e2e-evidence-33760609231` with digest
-`sha256:d59a779678a79597859afa1d112a09fcb69e2b526519f2d9298dafe5f137bc9e`.
+The current lock-refresh run `33846603454` passed Provider `7b062e6` with
+harness `28a9a5e` and uploaded
+`platform-candidate-e2e-evidence-33846603454` with digest
+`sha256:d3148037292f4e883dc96a1e224294f5841a4ae838bc1c8e2fe5e67455d39f95`.

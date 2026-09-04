@@ -7,9 +7,12 @@ transport, and caller-owned Gateway components have named evidence. ADR 0025
 and implementation `66183b1` compose the default-disabled Browser Provider
 graph. ADR 0026 and harness `79fee2b` add the separate reference deployment and
 black-box caller; hosted run `33838215924` passes all 10 initial and 5
-process-reconstruction Browser scenarios against Provider `f760369`. Production
-Browser advertisement and public Gateway deployment remain absent. ADR 0027
-also adds explicit process-local Browser Gateway connection capacity. This work
+process-reconstruction Browser scenarios against Provider `f760369`. ADR 0027,
+capacity implementation `7b062e6`, and current harness `28a9a5e` extend that
+path with process-local Browser Gateway connection capacity; hosted run
+`33846603547` passes 11 initial and 5 reconstruction scenarios against Provider
+`7b062e6`, including active same-session contention and release. Production
+Browser advertisement and public Gateway deployment remain absent. This work
 does not close pre-upgrade edge limits, distributed capacity or revocation, P3,
 real Agent Platform, aggregate conformance, multi-controller, multi-tenant,
 deployment, or production gates.
@@ -95,16 +98,19 @@ evidence chain before it can be advertised.
   reference stores, operation/usage aggregation, recovery, and bounded reverse
   shutdown. It exposes only the protected Provider routes and adds neither a
   public Browser Gateway nor production Browser advertisement.
-- ADR 0026 and harness `79fee2b` compose caller-owned authorization,
+- ADR 0026 and current harness `28a9a5e` compose caller-owned authorization,
   revocation, recording, WebSocket admission, and reference resolution in a
-  separate Browser-only reference deployment. Hosted run `33838215924` passes
-  10 initial and 5 reconstructed-process scenarios; artifact
-  `browser-reference-e2e-evidence-33838215924` has digest
-  `sha256:4acfbc97c0c1f64e987b00870849a2244e33596918d08e659385c428310843ea`.
+  separate Browser-only reference deployment. Hosted run `33846603547` passes
+  11 initial and 5 reconstructed-process scenarios against Provider `7b062e6`;
+  artifact `browser-reference-e2e-evidence-33846603547` has digest
+  `sha256:b024225aa3545fa56a7cc5113f29c0817a86ebc70c3976e10d81bf3507546cba`.
 - ADR 0027 requires explicit total and per-session Browser Gateway connection
   limits. The single-process ledger rejects without queueing before revocation
   access or Provider resolution and releases on every exit path. It does not
-  limit WebSocket upgrade or authorization work and is not distributed.
+  limit WebSocket upgrade or authorization work and is not distributed. The
+  current black-box caller holds one CDP connection, observes one metadata-only
+  capacity rejection without disrupting that connection, and reconnects after
+  release.
 - `blocks/` can validate an internal digest-pinned Block manifest, but it does
   not authorize a Provider capability or establish image provenance.
 - A real Agent Platform caller and migration traffic harness remain unavailable;
@@ -114,7 +120,7 @@ evidence chain before it can be advertised.
 
 | Order | Profile | First slice | Required gates before advertisement |
 | --- | --- | --- | --- |
-| 1 | Browser | Contract authority, exact signed amd64/arm64/v8 sandbox publication, default-disabled runtime composition, and independent Browser reference caller are complete | Remaining profile-specific security/concurrency, production advertisement, deployable caller-owned Gateway, and operational gates |
+| 1 | Browser | Contract authority, exact signed amd64/arm64/v8 sandbox publication, default-disabled runtime composition, independent Browser reference caller, and process-local Gateway connection capacity are complete | Pre-upgrade edge limits, distributed capacity/revocation, remaining hostile-tenant and operational evidence, production advertisement, and deployable caller-owned Gateway |
 | 2 | Desktop | Contract and authority audit; display/input/session boundary design | Desktop protocol and image, display/input security, Gateway/reconnect, usage, fault and caller evidence |
 | 3 | Workspace snapshot/restore | Digest and compatibility audit | Secret exclusion, digest verification, new sandbox identity, restore fault/recovery, Contract and caller evidence |
 | 4 | Port-forward | Target and egress authority audit | Explicit target allowlist, network isolation, expiry/revocation, cross-tenant and caller evidence |
@@ -152,7 +158,7 @@ inferring support from generic schema vocabulary:
 | Capability snapshot | Browser-only `1.0.0`/`browser-v1` maps to `sandbox-runtime-browser-v1`; mixed, wrong-version, wrong-profile, and wrong-runtime shapes fail closed. The reference deployment advertises only this shape | Keep production advertisement disabled until the remaining profile-specific security, concurrency, deployment, and operational gates pass |
 | Create request | Browser fixture binds exact capability/runtime, digest-pinned amd64 image authority, restricted network policy, stable workspace, and unprivileged security fields. The default-disabled command graph preserves these bindings and the hosted caller proves lifecycle creation | Replace development/single-controller dependencies with reviewed production configuration before deployment |
 | Session and handoff | Separate schemas and routes bind session/operation/attempt/fence identity and expose only an expiring opaque reference. Hosted initial and reconstructed-process scenarios prove the combined Provider and caller-owned Gateway path | Add distributed reliability and production deployment evidence without exposing backend identity |
-| Gateway security | Semantic rules leave user/tenant authorization, revocation, audit, reconnect, and fresh reference resolution with the caller. Hosted reference scenarios prove wrong-caller/cross-tenant denial, expiry, active revocation, metadata-only audit, and reconnect. ADR 0027 adds non-blocking single-process total/per-session connection capacity before revocation and Provider resolution | Add pre-upgrade load shedding, hostile multi-tenant, distributed revocation/capacity, abuse, and deployable public-edge evidence |
+| Gateway security | Semantic rules leave user/tenant authorization, revocation, audit, reconnect, and fresh reference resolution with the caller. Hosted reference scenarios prove wrong-caller/cross-tenant denial, expiry, active revocation, metadata-only audit, and reconnect. ADR 0027 adds non-blocking single-process total/per-session connection capacity before revocation and Provider resolution; current run `33846603547` actively proves same-session rejection and slot reuse | Add pre-upgrade load shedding, hostile multi-tenant, distributed revocation/capacity, abuse, and deployable public-edge evidence |
 | Usage | Browser duration meter and operation/sandbox correlation are locked under the shared usage route; hosted initial/resume scenarios prove partial and complete duration evidence | Keep platform publication and billing truth outside the Provider; add production retention and reconciliation evidence |
 | Fixtures and Suite | Success/rejection/security/admission fixtures and 10 new Suite cases raise the locked Suite from 38 to 48 cases | Add runtime fault/concurrency/image cases in later slices; current Suite is Contract projection evidence only |
 | Runtime image | ADR 0019 removes every `--no-sandbox` path, binds seccomp digest `sha256:3bdf2fd28636409951409621735f616997d0fd4851259851ac4c340dff90e05b`, and passes local/native amd64 and arm64 sandbox gates. Run `33724368530` publishes exact signed index `sha256:87d3216c22ada0fea74b375a3ee5c2ddf021d3e1913569e2aeb4a316ed3b5c2f`; attestation `44912296` and independent platform inspection verify. The Docker adapter, provenance verifier, restricted egress, default-disabled command graph, and hosted `linux/amd64` reference caller machine-bind and exercise that publication | Publish and review the restricted-egress Gateway image and production deployment configuration separately |
@@ -234,9 +240,18 @@ internal Block manifest a wire resource or establishes production readiness.
 - ADR 0027 and its Browser Gateway capacity implementation pass focused
   concurrent race/shuffle tests for explicit configuration, total and
   per-session rejection, pre-resolver enforcement, metadata-only rejection
-  audit, stream closure, revocation release, and slot reuse. This is
-  single-process component evidence only; full repository and hosted evidence
-  are recorded separately in `docs/STATUS.md`.
+  audit, stream closure, revocation release, and slot reuse. Implementation
+  `7b062e6`, harness `28a9a5e`, and repository CI `33846603580` pass the full
+  local/hosted gates. Hosted Browser Reference E2E `33846603547` passes 11+5
+  scenarios and actively verifies that a second same-session grant is rejected,
+  the admitted CDP connection remains usable, and a replacement connects after
+  release. Artifact digest is
+  `sha256:b024225aa3545fa56a7cc5113f29c0817a86ebc70c3976e10d81bf3507546cba`.
+  Hosted Reference/Candidate coding/shell regressions
+  `33846603323`/`33846603454` also pass 15+5 against the same lock, but contain
+  no Browser scenario and do not add Browser or real-platform evidence. This is
+  single-process capacity plus Browser reference external-caller evidence, not
+  a distributed, hostile-tenant, deployment, or production result.
 
 ## Next work
 
