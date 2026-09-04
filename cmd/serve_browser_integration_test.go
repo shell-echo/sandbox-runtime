@@ -26,6 +26,7 @@ import (
 	"github.com/shell-echo/sandbox-runtime/gateway"
 	"github.com/shell-echo/sandbox-runtime/gateway/adapter"
 	gatewaycomposition "github.com/shell-echo/sandbox-runtime/gateway/composition"
+	"github.com/shell-echo/sandbox-runtime/gateway/edge"
 	browserimage "github.com/shell-echo/sandbox-runtime/profiles/browser/image"
 	providerbrowser "github.com/shell-echo/sandbox-runtime/provider/browser"
 	browserapplication "github.com/shell-echo/sandbox-runtime/provider/browser/application"
@@ -337,6 +338,12 @@ func openBrowserPublicGateway(t *testing.T, resolver gatewaycomposition.BrowserP
 	t.Helper()
 	const token = "browser-caller-token"
 	recorder := &browserVerticalRecorder{}
+	edgeGate, err := edge.NewLocalLimiter(edge.LocalOptions{
+		MaxConcurrent: 4, MaxRequestsPerWindow: 64, Window: time.Second,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	service, err := gatewaycomposition.NewBrowser(gatewaycomposition.BrowserOptions{
 		Authorizer: browserVerticalAuthorizer{request: connect, grant: gateway.Grant{
 			GrantID: "browser-grant-1", CallerID: connect.CallerID, TenantID: connect.TenantID,
@@ -354,6 +361,7 @@ func openBrowserPublicGateway(t *testing.T, resolver gatewaycomposition.BrowserP
 			},
 			OriginPatterns: []string{"https://browser-caller.invalid"},
 		},
+		Edge:           edgeGate,
 		MaxConnections: 4, MaxConnectionsPerSession: 1,
 	})
 	if err != nil {

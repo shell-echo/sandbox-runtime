@@ -19,6 +19,7 @@ import (
 var (
 	ErrInvalidOptions = errors.New("invalid Runtime Gateway composition options")
 	ErrUnavailable    = errors.New("Runtime Gateway composition is unavailable")
+	ErrEdgeRejected   = errors.New("Browser public edge rejected request")
 )
 
 // ProviderResolver is the narrow Provider-side boundary used by this

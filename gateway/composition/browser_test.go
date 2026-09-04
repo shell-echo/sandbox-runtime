@@ -19,6 +19,7 @@ import (
 	"github.com/gobwas/ws/wsutil"
 	"github.com/shell-echo/sandbox-runtime/gateway"
 	"github.com/shell-echo/sandbox-runtime/gateway/adapter"
+	"github.com/shell-echo/sandbox-runtime/gateway/edge"
 	providerbrowser "github.com/shell-echo/sandbox-runtime/provider/browser"
 	browserreference "github.com/shell-echo/sandbox-runtime/provider/browser/reference"
 )
@@ -38,6 +39,11 @@ func TestNewBrowserFailsClosedForEveryRequiredDependency(t *testing.T) {
 			options.Resolver = resolver
 		}},
 		{"WebSocket admission", func(options *BrowserOptions) { options.WebSocket.Admission = nil }},
+		{"public edge gate", func(options *BrowserOptions) { options.Edge = nil }},
+		{"typed nil public edge gate", func(options *BrowserOptions) {
+			var gate *browserEdgeGateSpy
+			options.Edge = gate
+		}},
 		{"invalid frame limit", func(options *BrowserOptions) { options.WebSocket.MaxFrameBytes = adapter.MaxFrameBytes + 1 }},
 		{"invalid reconnect limit", func(options *BrowserOptions) { options.MaxReconnects = gateway.MaxReconnectAttempts + 1 }},
 		{"missing total connection capacity", func(options *BrowserOptions) { options.MaxConnections = 0 }},
@@ -54,6 +60,173 @@ func TestNewBrowserFailsClosedForEveryRequiredDependency(t *testing.T) {
 				t.Fatalf("NewBrowser() = %v, %v; want nil, invalid options", service, err)
 			}
 		})
+	}
+}
+
+func TestBrowserServeRejectsAtPublicEdgeBeforeDownstreamWork(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		err        error
+		status     int
+		retryAfter string
+		want       error
+	}{
+		{
+			name: "rate limited", err: browserEdgeRejection{cause: edge.ErrRateLimited, retryAfter: 1500 * time.Millisecond},
+			status: http.StatusTooManyRequests, retryAfter: "2", want: ErrEdgeRejected,
+		},
+		{
+			name: "capacity exhausted", err: browserEdgeRejection{cause: edge.ErrCapacityExhausted, retryAfter: time.Second},
+			status: http.StatusTooManyRequests, retryAfter: "1", want: ErrEdgeRejected,
+		},
+		{
+			name: "invalid retry hint", err: browserEdgeRejection{cause: edge.ErrRateLimited, retryAfter: edge.MaxWindow + time.Nanosecond},
+			status: http.StatusTooManyRequests, retryAfter: "1", want: ErrEdgeRejected,
+		},
+		{
+			name: "unknown failure", err: errors.New("limiter storage unavailable"),
+			status: http.StatusServiceUnavailable, want: ErrUnavailable,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			resolver := &browserProviderResolverSpy{resolve: func(context.Context, string) (browserreference.Endpoint, error) {
+				t.Fatal("public-edge rejection reached Provider resolution")
+				return browserreference.Endpoint{}, nil
+			}}
+			recorder := &testRecorder{}
+			revocations := newTestRevocations()
+			gate := &browserEdgeGateSpy{err: test.err}
+			authorizations, admissions := 0, 0
+			options := validBrowserOptions(t, resolver)
+			options.Edge = gate
+			options.Recorder = recorder
+			options.Revocations = revocations
+			options.Authorizer = testAuthorizer(func(context.Context, gateway.ConnectRequest) (gateway.Grant, error) {
+				authorizations++
+				return gateway.Grant{}, gateway.ErrUnauthorized
+			})
+			options.WebSocket.Admission = func(context.Context, *http.Request) error {
+				admissions++
+				return nil
+			}
+			service, err := NewBrowser(options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			response := httptest.NewRecorder()
+			request := httptest.NewRequest(http.MethodGet, "https://gateway.example.test/v1/browser/connect", nil)
+			err = service.Serve(request.Context(), response, request, validBrowserRequest())
+			if !errors.Is(err, test.want) || !errors.Is(err, test.err) {
+				t.Fatalf("Serve() error = %v; want %v and cause %v", err, test.want, test.err)
+			}
+			if response.Code != test.status || response.Header().Get("Retry-After") != test.retryAfter || strings.TrimSpace(response.Body.String()) != http.StatusText(test.status) {
+				t.Fatalf("edge response = status %d retry %q body %q", response.Code, response.Header().Get("Retry-After"), response.Body.String())
+			}
+			checks, watches := revocations.Counts()
+			calls, releases := gate.Counts()
+			if calls != 1 || releases != 0 || admissions != 0 || authorizations != 0 || resolver.Calls() != 0 || checks != 0 || watches != 0 || len(recorder.Events()) != 0 {
+				t.Fatalf("edge rejection reached downstream work: gate=%d/%d admission=%d authorize=%d resolve=%d revocation=%d/%d audit=%d", calls, releases, admissions, authorizations, resolver.Calls(), checks, watches, len(recorder.Events()))
+			}
+		})
+	}
+}
+
+func TestBrowserServeFailsClosedForCanceledOrInvalidEdgeLease(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		gate   *browserEdgeGateSpy
+		want   error
+		status int
+		body   string
+		cancel bool
+	}{
+		{name: "canceled", gate: &browserEdgeGateSpy{err: context.Canceled}, want: context.Canceled, status: http.StatusOK, cancel: true},
+		{name: "nil lease", gate: &browserEdgeGateSpy{nilLease: true}, want: ErrUnavailable, status: http.StatusServiceUnavailable, body: http.StatusText(http.StatusServiceUnavailable)},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			options := validBrowserOptions(t, &browserProviderResolverSpy{})
+			options.Edge = test.gate
+			service, err := NewBrowser(options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			request := httptest.NewRequest(http.MethodGet, "https://gateway.example.test/v1/browser/connect", nil)
+			if test.cancel {
+				ctx, cancel := context.WithCancel(request.Context())
+				cancel()
+				request = request.WithContext(ctx)
+			}
+			response := httptest.NewRecorder()
+			if err := service.Serve(request.Context(), response, request, validBrowserRequest()); !errors.Is(err, test.want) {
+				t.Fatalf("Serve() error = %v; want %v", err, test.want)
+			}
+			if response.Code != test.status || strings.TrimSpace(response.Body.String()) != test.body || response.Header().Get("Retry-After") != "" {
+				t.Fatalf("edge failure response = status %d retry %q body %q", response.Code, response.Header().Get("Retry-After"), response.Body.String())
+			}
+			if calls, releases := test.gate.Counts(); calls != 1 || releases != 0 {
+				t.Fatalf("edge gate calls/releases = %d/%d; want 1/0", calls, releases)
+			}
+		})
+	}
+}
+
+func TestBrowserServeReleasesPublicEdgeLeaseOnHandshakeFailure(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		admission adapter.HandshakeAdmission
+		want      error
+	}{
+		{
+			name: "admission", admission: func(context.Context, *http.Request) error { return errors.New("denied") },
+			want: adapter.ErrAdmissionRejected,
+		},
+		{
+			name: "upgrade", admission: func(context.Context, *http.Request) error { return nil },
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			gate := &browserEdgeGateSpy{}
+			resolver := &browserProviderResolverSpy{}
+			options := validBrowserOptions(t, resolver)
+			options.Edge = gate
+			options.WebSocket.Admission = test.admission
+			service, err := NewBrowser(options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			response := httptest.NewRecorder()
+			request := httptest.NewRequest(http.MethodGet, "https://gateway.example.test/v1/browser/connect", nil)
+			err = service.Serve(request.Context(), response, request, validBrowserRequest())
+			if err == nil || (test.want != nil && !errors.Is(err, test.want)) {
+				t.Fatalf("Serve() error = %v; want handshake failure %v", err, test.want)
+			}
+			if calls, releases := gate.Counts(); calls != 1 || releases != 1 {
+				t.Fatalf("edge gate calls/releases = %d/%d; want 1/1", calls, releases)
+			}
+			if resolver.Calls() != 0 {
+				t.Fatalf("handshake failure reached Provider resolver %d times", resolver.Calls())
+			}
+		})
+	}
+}
+
+func TestBrowserConnectDoesNotAcquirePublicEdgeLease(t *testing.T) {
+	gate := &browserEdgeGateSpy{err: edge.ErrRateLimited}
+	resolver := &browserProviderResolverSpy{}
+	options := validBrowserOptions(t, resolver)
+	options.Edge = gate
+	options.Authorizer = testAuthorizer(func(context.Context, gateway.ConnectRequest) (gateway.Grant, error) {
+		return gateway.Grant{}, gateway.ErrUnauthorized
+	})
+	service, err := NewBrowser(options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := service.Connect(context.Background(), validBrowserRequest(), newGatewayStream()); !errors.Is(err, gateway.ErrUnauthorized) {
+		t.Fatalf("Connect() error = %v; want unauthorized", err)
+	}
+	if calls, releases := gate.Counts(); calls != 0 || releases != 0 {
+		t.Fatalf("Connect() acquired public edge %d/%d times", calls, releases)
 	}
 }
 
@@ -373,6 +546,8 @@ func TestBrowserServeUsesPublicAndPrivateWebSocketAdapters(t *testing.T) {
 	}}
 	admitted := 0
 	options := validBrowserOptions(t, resolver)
+	gate := &browserEdgeGateSpy{}
+	options.Edge = gate
 	options.WebSocket.Admission = func(context.Context, *http.Request) error {
 		admitted++
 		return nil
@@ -394,6 +569,9 @@ func TestBrowserServeUsesPublicAndPrivateWebSocketAdapters(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer client.CloseNow()
+	if calls, releases := gate.Counts(); calls != 1 || releases != 0 {
+		t.Fatalf("active edge gate calls/releases = %d/%d; want 1/0", calls, releases)
+	}
 	requestPayload := []byte(`{"id":7,"method":"Browser.getVersion"}`)
 	if err := client.Write(ctx, websocket.MessageText, requestPayload); err != nil {
 		t.Fatal(err)
@@ -417,6 +595,9 @@ func TestBrowserServeUsesPublicAndPrivateWebSocketAdapters(t *testing.T) {
 	if admitted != 1 {
 		t.Fatalf("handshake admissions = %d; want one", admitted)
 	}
+	if calls, releases := gate.Counts(); calls != 1 || releases != 1 {
+		t.Fatalf("closed edge gate calls/releases = %d/%d; want 1/1", calls, releases)
+	}
 }
 
 func validBrowserOptions(t *testing.T, resolver BrowserProviderResolver) BrowserOptions {
@@ -427,10 +608,63 @@ func validBrowserOptions(t *testing.T, resolver BrowserProviderResolver) Browser
 		}),
 		Revocations: newTestRevocations(), Recorder: &testRecorder{}, Resolver: resolver,
 		WebSocket:      adapter.WebSocketOptions{Admission: func(context.Context, *http.Request) error { return nil }},
+		Edge:           &browserEdgeGateSpy{},
 		Clock:          gateway.ClockFunc(func() time.Time { return compositionTestTime }),
 		MaxConnections: 8, MaxConnectionsPerSession: 1,
 	}
 }
+
+type browserEdgeGateSpy struct {
+	mu       sync.Mutex
+	calls    int
+	releases int
+	err      error
+	nilLease bool
+}
+
+func (g *browserEdgeGateSpy) Acquire(context.Context) (edge.Lease, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.calls++
+	if g.err != nil {
+		return nil, g.err
+	}
+	if g.nilLease {
+		return nil, nil
+	}
+	return &browserEdgeLease{release: func() {
+		g.mu.Lock()
+		defer g.mu.Unlock()
+		g.releases++
+	}}, nil
+}
+
+func (g *browserEdgeGateSpy) Counts() (int, int) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.calls, g.releases
+}
+
+type browserEdgeLease struct {
+	once    sync.Once
+	release func()
+}
+
+func (l *browserEdgeLease) Release() {
+	if l == nil {
+		return
+	}
+	l.once.Do(l.release)
+}
+
+type browserEdgeRejection struct {
+	cause      error
+	retryAfter time.Duration
+}
+
+func (e browserEdgeRejection) Error() string             { return e.cause.Error() }
+func (e browserEdgeRejection) Unwrap() error             { return e.cause }
+func (e browserEdgeRejection) RetryAfter() time.Duration { return e.retryAfter }
 
 func validBrowserRequest() gateway.ConnectRequest {
 	return browserRequestFor("ref:browser-session:11111111111111111111111111111111")

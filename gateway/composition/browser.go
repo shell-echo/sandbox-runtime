@@ -2,12 +2,15 @@ package composition
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/shell-echo/sandbox-runtime/gateway"
 	"github.com/shell-echo/sandbox-runtime/gateway/adapter"
+	"github.com/shell-echo/sandbox-runtime/gateway/edge"
 	browserreference "github.com/shell-echo/sandbox-runtime/provider/browser/reference"
 )
 
@@ -27,6 +30,7 @@ type BrowserOptions struct {
 	Recorder    gateway.Recorder
 	Resolver    BrowserProviderResolver
 	WebSocket   adapter.WebSocketOptions
+	Edge        edge.Gate
 
 	Clock            gateway.Clock
 	MaxReconnects    int
@@ -43,6 +47,7 @@ type BrowserOptions struct {
 type BrowserService struct {
 	gateway   *gateway.Gateway
 	webSocket *adapter.WebSocketServer
+	edge      edge.Gate
 }
 
 // NewBrowser fails closed unless every caller-owned policy port, the Provider
@@ -57,6 +62,7 @@ func NewBrowser(options BrowserOptions) (*BrowserService, error) {
 		{"recorder", options.Recorder},
 		{"Browser provider resolver", options.Resolver},
 		{"WebSocket admission", options.WebSocket.Admission},
+		{"public edge gate", options.Edge},
 	} {
 		if nilDependency(dependency.value) {
 			return nil, fmt.Errorf("%w: %s is required", ErrInvalidOptions, dependency.name)
@@ -83,20 +89,51 @@ func NewBrowser(options BrowserOptions) (*BrowserService, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%w: Gateway: %w", ErrInvalidOptions, err)
 	}
-	return &BrowserService{gateway: proxy, webSocket: webSocket}, nil
+	return &BrowserService{gateway: proxy, webSocket: webSocket, edge: options.Edge}, nil
 }
 
-// Serve upgrades an already caller-admitted request and applies the supplied
-// Browser identity. Request extraction and identity policy remain caller-owned.
+// Serve reserves caller-owned public-edge capacity before WebSocket admission
+// and upgrade, then applies the supplied Browser identity. Request extraction
+// and identity policy remain caller-owned.
 func (s *BrowserService) Serve(ctx context.Context, response http.ResponseWriter, request *http.Request, connect gateway.ConnectRequest) error {
-	if s == nil || s.webSocket == nil {
+	if s == nil || s.webSocket == nil || s.edge == nil {
 		return ErrUnavailable
 	}
+	if response == nil || request == nil {
+		return adapter.ErrInvalidStream
+	}
+	lease, err := s.edge.Acquire(request.Context())
+	if err != nil {
+		return writeEdgeRejection(response, err)
+	}
+	if nilDependency(lease) {
+		http.Error(response, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
+		return ErrUnavailable
+	}
+	defer lease.Release()
 	client, err := s.webSocket.Upgrade(response, request)
 	if err != nil {
 		return err
 	}
 	return s.Connect(ctx, connect, client)
+}
+
+func writeEdgeRejection(response http.ResponseWriter, err error) error {
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return err
+	}
+	if errors.Is(err, edge.ErrCapacityExhausted) || errors.Is(err, edge.ErrRateLimited) {
+		retryAfter := edge.RetryAfter(err)
+		if retryAfter <= 0 || retryAfter > edge.MaxWindow {
+			retryAfter = time.Second
+		}
+		seconds := (retryAfter + time.Second - 1) / time.Second
+		response.Header().Set("Retry-After", strconv.FormatInt(int64(seconds), 10))
+		http.Error(response, http.StatusText(http.StatusTooManyRequests), http.StatusTooManyRequests)
+		return errors.Join(ErrEdgeRejected, err)
+	}
+	http.Error(response, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
+	return errors.Join(ErrUnavailable, err)
 }
 
 // Connect applies Browser Gateway policy to an already adapted caller stream.
