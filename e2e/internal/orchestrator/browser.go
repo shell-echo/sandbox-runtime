@@ -228,7 +228,7 @@ func RunBrowser(ctx context.Context, options Options) (_ Result, resultErr error
 	if err != nil {
 		return Result{}, err
 	}
-	if err := waitForListeners(ctx, initialStack, providerAddress, gatewayAddress); err != nil {
+	if err := waitForListenersWithin(ctx, initialStack, 150*time.Second, providerAddress, gatewayAddress); err != nil {
 		_ = initialStack.Stop()
 		return Result{}, err
 	}
@@ -248,7 +248,7 @@ func RunBrowser(ctx context.Context, options Options) (_ Result, resultErr error
 	if err != nil {
 		return Result{}, err
 	}
-	if err := waitForListeners(ctx, resumeStack, providerAddress, gatewayAddress); err != nil {
+	if err := waitForListenersWithin(ctx, resumeStack, 150*time.Second, providerAddress, gatewayAddress); err != nil {
 		_ = resumeStack.Stop()
 		return Result{}, err
 	}

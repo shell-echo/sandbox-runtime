@@ -751,7 +751,14 @@ func (c *childProcess) result() error {
 }
 
 func waitForListeners(ctx context.Context, child *childProcess, addresses ...string) error {
-	deadline := time.Now().Add(20 * time.Second)
+	return waitForListenersWithin(ctx, child, 20*time.Second, addresses...)
+}
+
+func waitForListenersWithin(ctx context.Context, child *childProcess, timeout time.Duration, addresses ...string) error {
+	if timeout <= 0 {
+		return errors.New("listener readiness timeout must be positive")
+	}
+	deadline := time.Now().Add(timeout)
 	for _, address := range addresses {
 		for {
 			select {

@@ -95,6 +95,13 @@ func TestWaitForRegistryHonorsContext(t *testing.T) {
 	}
 }
 
+func TestWaitForListenersWithinRejectsInvalidTimeout(t *testing.T) {
+	child := &childProcess{done: make(chan struct{})}
+	if err := waitForListenersWithin(context.Background(), child, 0); err == nil {
+		t.Fatal("listener readiness accepted a non-positive timeout")
+	}
+}
+
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (roundTrip roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) {
