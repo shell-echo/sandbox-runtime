@@ -21,7 +21,7 @@ platform gate.
 
 | Item | Value |
 | --- | --- |
-| Provider implementation | `7b062e6511f73b916dd18977041d83732e590088` |
+| Provider implementation | `6c1dddee8bf105636ec9bea8787bd7b27555e2da` |
 | Contract namespace | `urn:shell-echo:sandbox-runtime:provider-v1` |
 | Contract revision | `5096e71fb84fbec22aa3487a0e55a1b49602ab8b` |
 | Contract tree | `859f76dc0e855a0c8abdbbb5648df100dabb4328` |
@@ -41,6 +41,9 @@ immutable create-policy binding, protected Browser transport component, and
 the caller-owned Browser Gateway boundary, followed by the default-disabled
 Browser command/runtime graph and the process-local total/per-session Browser
 Gateway connection-capacity component.
+This Provider identity also includes the GitHub Actions migration from Node 20
+action runtimes to Node 24 action runtimes. That infrastructure update adds no
+Browser behavior, caller compatibility, or production-readiness evidence.
 The reference and platform-candidate runners still execute only the
 coding/shell scenarios; advancing this identity records regression coverage
 only and is not Browser external-caller E2E, aggregate conformance, or
