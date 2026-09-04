@@ -75,24 +75,27 @@ Currently implemented:
   metadata-only audit, bounded reconnect/revocation, RFC 6455 CDP framing, and
   explicit process-local total/per-session connection capacity. Its public
   Browser service also requires a process-local global connection/fixed-window
-  request limiter before WebSocket admission and upgrade. These local bounds do
-  not replace listener/TLS/HTTP controls, partition-aware shared capacity, or
-  distributed revocation
+  request limiter before WebSocket admission and upgrade. A separate bounded
+  TLS edge freezes server-auth material before bind, accepts only TLS 1.3 and
+  HTTP/1.1, and limits accepted connections, header size, and HTTP timeouts.
+  These process-local controls do not replace partition-aware shared capacity
+  or distributed revocation
 - a default-disabled Browser Provider command/runtime graph and a separate
   Browser-only reference stack plus black-box caller. Hosted Browser Reference
-  E2E run `33854020809` passes 12 initial and 5 process-reconstruction
+  E2E run `33857739150` passes 13 initial and 5 process-reconstruction
   scenarios through real mTLS/JWS HTTPS, WebSocket, signed-image provenance,
   Docker, restricted egress, concurrent same-session capacity rejection and
   release, authenticated wrong-Origin pre-upgrade rate rejection and recovery,
-  usage evidence, and cleanup. The production command still exposes no public
-  Browser Gateway and does not advertise Browser
+  TLS downgrade rejection, slow/oversized HTTP input rejection, listener
+  saturation/recovery, usage evidence, and cleanup. The production command
+  still exposes no public Browser Gateway and does not advertise Browser
 
 Planned but not yet implemented:
 
 - production Browser advertisement and deployable caller-owned Gateway
-  integration after listener/TLS/HTTP limits, partition-aware shared or
-  distributed capacity, durable distributed revocation, hostile-tenant,
-  storage, and operational gates
+  integration after authenticated partition-aware shared or distributed
+  capacity, durable distributed revocation, hostile-tenant, storage,
+  configuration, metrics, and operational gates
 - runtime images for desktop workloads
 - display, audio, input, streaming, clipboard, and file-transfer modules
 - deployable WebRTC / VNC / public WebSocket Gateway composition

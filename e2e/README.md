@@ -21,7 +21,7 @@ platform gate.
 
 | Item | Value |
 | --- | --- |
-| Provider implementation | `44ea2eecc75752870d4e8580a75be26578dcd63a` |
+| Provider implementation | `b8f89413cb34110793fa552ba1620f1529f6f416` |
 | Contract namespace | `urn:shell-echo:sandbox-runtime:provider-v1` |
 | Contract revision | `5096e71fb84fbec22aa3487a0e55a1b49602ab8b` |
 | Contract tree | `859f76dc0e855a0c8abdbbb5648df100dabb4328` |
@@ -41,7 +41,8 @@ immutable create-policy binding, protected Browser transport component, and
 the caller-owned Browser Gateway boundary, followed by the default-disabled
 Browser command/runtime graph and the process-local total/per-session Browser
 Gateway connection-capacity component, plus the process-local Browser
-public-edge connection and fixed-window request limiter.
+public-edge connection and fixed-window request limiter, and the bounded
+accepted-connection TLS 1.3/HTTP/1.1 listener with explicit HTTP limits.
 This Provider identity also includes the GitHub Actions migration from Node 20
 action runtimes to Node 24 action runtimes. That infrastructure update adds no
 Browser behavior, caller compatibility, or production-readiness evidence.
@@ -70,8 +71,9 @@ go run ./cmd/browser-e2e -evidence-root evidence/browser
 The run exercises the initial and reconstructed Browser lifecycle/session,
 opaque handoff, CDP, allowed/denied egress, Gateway authorization expiry,
 revocation, concurrent same-session capacity/release, authenticated
-wrong-origin pre-upgrade rate rejection and recovery, duration usage, and
-cleanup paths. The Browser-only reference stack
+wrong-origin pre-upgrade rate rejection and recovery, TLS downgrade rejection,
+slow/oversized header rejection, listener saturation/recovery, duration usage,
+and cleanup paths. The Browser-only reference stack
 advertises the exact locked Browser profile required by lifecycle admission;
 the production command remains default-disabled and does not advertise it. A
 passing run is Browser reference external-caller evidence only; it is not
@@ -85,24 +87,30 @@ passes this command and emits its manifest. Hosted execution is isolated in
 
 ## Latest verified evidence
 
-Hosted Browser Reference run `33854020809` passed harness `e7e7f03` against
-Provider `44ea2ee`: all 12 initial and 5 process-reconstruction scenarios passed
-on `linux/amd64`. The added black-box scenario sends 16 authenticated requests
-with a rejected Origin, observes both ordinary `403` and pre-upgrade `429`
-responses with bounded `Retry-After`, then observes ordinary `403` again after
-recovery. The 20-record Gateway audit keeps
-the existing six `authorized`, six `connected`, four `client_closed`, and one
-each `capacity_rejected`, `denied`, `expired`, and `revoked` events; it contains
-no `grant-browser-edge-*` identity. This is hosted Browser reference
-external-caller evidence for process-local pre-upgrade limits only;
-listener/TLS/HTTP limits, partition-aware shared capacity, distributed
-revocation, production advertisement, real Agent Platform, aggregate
-conformance, multi-controller, hostile multi-tenant, deployment, and production
-gates remain open. Artifact
-`browser-reference-e2e-evidence-33854020809` has digest
-`sha256:b081ce8a3bf7e3e0c37e4bf036630483735c3812eeaf24d311048ff0a9122779`;
-its inspected run directory is `20260904T083407.182245415Z`. The clean local
-`linux/arm64` precursor is `20260904T080946.250607000Z` on harness `249cdd4`.
+Hosted Browser Reference run `33857739150` passed harness `7a20d9d` against
+Provider `b8f8941`: all 13 initial and 5 process-reconstruction scenarios passed
+on `linux/amd64`. In addition to the prior capacity and wrong-Origin edge
+scenarios, the black-box caller rejects TLS 1.2, negotiates TLS 1.3 with
+HTTP/1.1, rejects slow and oversized headers before the handler, fills the
+accepted-connection limit, and proves recovery after release. The 20-record
+Gateway audit keeps the existing six `authorized`, six `connected`, four
+`client_closed`, and one each `capacity_rejected`, `denied`, `expired`, and
+`revoked` events; it contains no edge grant, endpoint, token, credential, CDP,
+or payload field. This is hosted Browser reference external-caller evidence for
+process-local service and listener/TLS/HTTP bounds only; partition-aware shared
+or distributed capacity, durable distributed revocation, production
+advertisement, real Agent Platform, aggregate conformance, multi-controller,
+hostile multi-tenant, deployment, and production gates remain open. Artifact
+`browser-reference-e2e-evidence-33857739150` has digest
+`sha256:94bcdfa53b667d4a6bc17fd6714cc9895e8402b830b8c6425c604c835f9228f`;
+its inspected run directory is `20260904T091942.992885726Z`. The clean local
+`linux/arm64` precursor is `20260904T091156.303717000Z` on harness `35cf068`
+against the same Provider implementation.
+
+The preceding hosted Browser Reference run `33854020809` passed 12+5 against
+harness/Provider `e7e7f03`/`44ea2ee` and remains the historical pre-upgrade
+service-limit baseline. Its artifact digest is
+`sha256:b081ce8a3bf7e3e0c37e4bf036630483735c3812eeaf24d311048ff0a9122779`.
 
 The preceding hosted Browser Reference E2E run `33846603547` passed harness
 `28a9a5e` against Provider `7b062e6`: all 11 initial and 5
@@ -126,17 +134,17 @@ capacity/revocation, production
 advertisement, real Agent Platform, aggregate conformance, multi-controller,
 hostile multi-tenant, deployment, or production evidence.
 
-Hosted coding/shell Reference run `33854020874` and Platform Candidate run
-`33854020947` passed the respective 15+5 scenario sets against the same
-harness/Provider lock `e7e7f03`/`44ea2ee`. Their artifacts are
-`reference-e2e-evidence-33854020874` (digest
-`sha256:220650f1b61b0297ec445ded03bf3a15870514a9482c9e55012ddfba8ae0da2d`)
-and `platform-candidate-e2e-evidence-33854020947` (digest
-`sha256:48cbe44c433e5b3a858a2691fe1f736469b2e8d71228541f2bdfcc4aab1c15b1`).
+Hosted coding/shell Reference run `33857739105` and Platform Candidate run
+`33857739189` passed the respective 15+5 scenario sets against the current
+harness/Provider lock `7a20d9d`/`b8f8941`. Their artifacts are
+`reference-e2e-evidence-33857739105` (digest
+`sha256:b9cbf768e7d7b1241643f309cd08cef69efe8c7d9b3a464c3da953f9d03adbb7`)
+and `platform-candidate-e2e-evidence-33857739189` (digest
+`sha256:61cf80c48b7103418f66acb0e370f19b60b2685271f2bb4a15f68547e4041bbb`).
 The candidate result covers only its named shadow/selection/rollback/drain
 policy. Neither coding/shell run contains a Browser scenario. Clean local
 Reference run `20260904T081521.464863000Z` and Candidate run
-`20260904T081706.648122000Z` each pass 15+5 scenarios against current
+`20260904T081706.648122000Z` each pass 15+5 scenarios against the earlier
 harness/Provider `249cdd4`/`44ea2ee`; both pin runtime digest
 `sha256:bcd5dbff8b2d108ee7dab464a85ee7d39ef74a8616a6af73a94ebb10ff8eaf75`.
 These remain reference coding/shell and candidate integration evidence,
@@ -318,9 +326,9 @@ until close within a bounded timeout. Hosted run `33379217800` then passed all
 15 initial and 5 restart/resume scenarios on commit `555436c` and uploaded
 artifact `reference-e2e-evidence-33379217800` with digest
 `sha256:68250a85683dcbd8f01397d7373e98215382379ff895c0a58692de23c1880733`.
-The current lock-refresh run `33854020874` passed Provider `44ea2ee` with
-harness `e7e7f03` and uploaded `reference-e2e-evidence-33854020874` with digest
-`sha256:220650f1b61b0297ec445ded03bf3a15870514a9482c9e55012ddfba8ae0da2d`.
+The latest lock-refresh run `33857739105` passed Provider `b8f8941` with
+harness `7a20d9d` and uploaded `reference-e2e-evidence-33857739105` with digest
+`sha256:b9cbf768e7d7b1241643f309cd08cef69efe8c7d9b3a464c3da953f9d03adbb7`.
 A green run proves only the named reference caller scenarios;
 it does not prove Agent Platform compatibility, aggregate conformance,
 multi-controller reliability, hostile tenant isolation, deployment readiness,
@@ -337,7 +345,7 @@ Hosted run `33460370618` passed all 15 initial and 5 restart/resume candidate
 scenarios on workflow baseline `c7ff5eb`. Artifact
 `platform-candidate-e2e-evidence-33460370618` has digest
 `sha256:54f0aea847dcb0b1808c6c902f1465979a3ec4362d52ab8884187e85ea6343f7`.
-The current lock-refresh run `33854020947` passed Provider `44ea2ee` with
-harness `e7e7f03` and uploaded
-`platform-candidate-e2e-evidence-33854020947` with digest
-`sha256:48cbe44c433e5b3a858a2691fe1f736469b2e8d71228541f2bdfcc4aab1c15b1`.
+The latest lock-refresh run `33857739189` passed Provider `b8f8941` with
+harness `7a20d9d` and uploaded
+`platform-candidate-e2e-evidence-33857739189` with digest
+`sha256:61cf80c48b7103418f66acb0e370f19b60b2685271f2bb4a15f68547e4041bbb`.
