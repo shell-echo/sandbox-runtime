@@ -74,6 +74,70 @@ func TestDNSResponseRejectsMalformedAndMultipleQuestions(t *testing.T) {
 	}
 }
 
+func TestDNSResponseAcceptsOneBoundedEDNS0Record(t *testing.T) {
+	server := testServer(t, nil, nil)
+	for name, resource := range map[string]dnsmessage.Resource{
+		"empty": {
+			Header: dnsmessage.ResourceHeader{Name: dnsmessage.MustNewName("."), Class: 1232},
+			Body:   &dnsmessage.OPTResource{},
+		},
+		"dnssec and padding": {
+			Header: dnsmessage.ResourceHeader{Name: dnsmessage.MustNewName("."), Class: 4096, TTL: 0x8000},
+			Body:   &dnsmessage.OPTResource{Options: []dnsmessage.Option{{Code: 12, Data: []byte{0, 0, 0, 0}}}},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			response, ok := server.dnsResponse(dnsQueryWithAdditionals(t, resource))
+			if !ok {
+				t.Fatal("EDNS0 query produced no response")
+			}
+			var message dnsmessage.Message
+			if err := message.Unpack(response); err != nil || message.Header.RCode != dnsmessage.RCodeSuccess || len(message.Answers) != 1 {
+				t.Fatalf("response = %#v, %v", message, err)
+			}
+		})
+	}
+}
+
+func TestDNSResponseRejectsUnsafeAdditionalRecords(t *testing.T) {
+	server := testServer(t, nil, nil)
+	root := dnsmessage.MustNewName(".")
+	for name, resources := range map[string][]dnsmessage.Resource{
+		"non OPT": {{
+			Header: dnsmessage.ResourceHeader{Name: root, Class: dnsmessage.ClassINET},
+			Body:   &dnsmessage.TXTResource{TXT: []string{"unexpected"}},
+		}},
+		"non root name": {{
+			Header: dnsmessage.ResourceHeader{Name: dnsmessage.MustNewName("allowed.example."), Class: 1232},
+			Body:   &dnsmessage.OPTResource{},
+		}},
+		"small payload": {{
+			Header: dnsmessage.ResourceHeader{Name: root, Class: 511}, Body: &dnsmessage.OPTResource{},
+		}},
+		"oversized payload": {{
+			Header: dnsmessage.ResourceHeader{Name: root, Class: 4097}, Body: &dnsmessage.OPTResource{},
+		}},
+		"unsupported version": {{
+			Header: dnsmessage.ResourceHeader{Name: root, Class: 1232, TTL: 1 << 16}, Body: &dnsmessage.OPTResource{},
+		}},
+		"multiple OPT": {
+			{Header: dnsmessage.ResourceHeader{Name: root, Class: 1232}, Body: &dnsmessage.OPTResource{}},
+			{Header: dnsmessage.ResourceHeader{Name: root, Class: 1232}, Body: &dnsmessage.OPTResource{}},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			response, ok := server.dnsResponse(dnsQueryWithAdditionals(t, resources...))
+			if !ok {
+				t.Fatal("invalid additional record produced no error response")
+			}
+			var message dnsmessage.Message
+			if err := message.Unpack(response); err != nil || message.Header.RCode != dnsmessage.RCodeFormatError || len(message.Answers) != 0 {
+				t.Fatalf("response = %#v, %v", message, err)
+			}
+		})
+	}
+}
+
 func TestDNSTCPFramingAndBounds(t *testing.T) {
 	server := testServer(t, nil, nil)
 	client, gateway := net.Pipe()
@@ -115,6 +179,39 @@ func dnsQuery(t *testing.T, host string, typeID dnsmessage.Type) []byte {
 	}
 	if err := builder.Question(dnsmessage.Question{Name: dnsmessage.MustNewName(host), Type: typeID, Class: dnsmessage.ClassINET}); err != nil {
 		t.Fatal(err)
+	}
+	message, err := builder.Finish()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return message
+}
+
+func dnsQueryWithAdditionals(t *testing.T, resources ...dnsmessage.Resource) []byte {
+	t.Helper()
+	builder := dnsmessage.NewBuilder(nil, dnsmessage.Header{ID: 42, RecursionDesired: true})
+	if err := builder.StartQuestions(); err != nil {
+		t.Fatal(err)
+	}
+	if err := builder.Question(dnsmessage.Question{Name: dnsmessage.MustNewName("allowed.example."), Type: dnsmessage.TypeA, Class: dnsmessage.ClassINET}); err != nil {
+		t.Fatal(err)
+	}
+	if err := builder.StartAdditionals(); err != nil {
+		t.Fatal(err)
+	}
+	for _, resource := range resources {
+		var err error
+		switch body := resource.Body.(type) {
+		case *dnsmessage.OPTResource:
+			err = builder.OPTResource(resource.Header, *body)
+		case *dnsmessage.TXTResource:
+			err = builder.TXTResource(resource.Header, *body)
+		default:
+			t.Fatalf("unsupported test resource %T", resource.Body)
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 	message, err := builder.Finish()
 	if err != nil {

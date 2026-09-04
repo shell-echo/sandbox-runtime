@@ -36,14 +36,18 @@ are bound through deterministic names and labels and re-inspected after process
 reconstruction. Release removes only exact owned resources.
 
 The gateway listens only on its internal address. It returns that address for
-allowed A queries and rejects other names; AAAA does not expose a bypass. HTTP
-port 80 requires an allowed Host header. TLS port 443 uses Go's TLS parser to
-read a bounded ClientHello and requires an allowed SNI before forwarding the
-original bytes. For every upstream connection, the gateway independently
-resolves the hostname, rejects loopback, unspecified, multicast, private,
-link-local, carrier-grade NAT, documentation, benchmark, reserved, and other
-non-public address ranges, and dials one validated address directly without an
-environment proxy. This closes direct-IP, redirect-to-private-address, Docker
+allowed A queries and rejects other names; AAAA does not expose a bypass. DNS
+queries may contain at most one bounded RFC 6891 EDNS0 OPT additional record
+with a root name, a 512-to-4096-byte UDP payload size, version zero, and only
+the DNSSEC OK flag. The gateway ignores its options and still rejects answer,
+authority, non-OPT, or repeated additional records. HTTP port 80 requires an
+allowed Host header. TLS port 443 uses Go's TLS parser to read a bounded
+ClientHello and requires an allowed SNI before forwarding the original bytes.
+For every upstream connection, the gateway independently resolves the
+hostname, rejects loopback, unspecified, multicast, private, link-local,
+carrier-grade NAT, documentation, benchmark, reserved, and other non-public
+address ranges, and dials one validated address directly without an environment
+proxy. This closes direct-IP, redirect-to-private-address, Docker
 service-discovery, and DNS-rebinding paths for the supported HTTP/HTTPS Browser
 egress profile. Other ports and protocols have no route through the internal
 network.

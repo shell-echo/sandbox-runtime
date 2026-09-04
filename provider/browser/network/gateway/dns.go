@@ -88,7 +88,7 @@ func (s *Server) dnsResponse(request []byte) ([]byte, bool) {
 		return s.buildDNSResponse(header, dnsmessage.Question{}, dnsmessage.RCodeFormatError, false)
 	}
 	if _, err := parser.Question(); !errors.Is(err, dnsmessage.ErrSectionDone) ||
-		!sectionEmpty(parser.AnswerHeader) || !sectionEmpty(parser.AuthorityHeader) || !sectionEmpty(parser.AdditionalHeader) {
+		!sectionEmpty(parser.AnswerHeader) || !sectionEmpty(parser.AuthorityHeader) || !validAdditionalSection(&parser) {
 		return s.buildDNSResponse(header, question, dnsmessage.RCodeFormatError, false)
 	}
 	allowed := question.Class == dnsmessage.ClassINET &&
@@ -98,6 +98,22 @@ func (s *Server) dnsResponse(request []byte) ([]byte, bool) {
 		return s.buildDNSResponse(header, question, dnsmessage.RCodeRefused, false)
 	}
 	return s.buildDNSResponse(header, question, dnsmessage.RCodeSuccess, question.Type == dnsmessage.TypeA)
+}
+
+func validAdditionalSection(parser *dnsmessage.Parser) bool {
+	header, err := parser.AdditionalHeader()
+	if errors.Is(err, dnsmessage.ErrSectionDone) {
+		return true
+	}
+	if err != nil || header.Type != dnsmessage.TypeOPT || header.Name.String() != "." ||
+		uint16(header.Class) < 512 || uint16(header.Class) > maxDNSMessageBytes ||
+		header.TTL & ^uint32(0x8000) != 0 {
+		return false
+	}
+	if _, err := parser.OPTResource(); err != nil {
+		return false
+	}
+	return sectionEmpty(parser.AdditionalHeader)
 }
 
 func sectionEmpty(next func() (dnsmessage.ResourceHeader, error)) bool {
