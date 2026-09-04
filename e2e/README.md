@@ -64,11 +64,13 @@ go run ./cmd/browser-e2e -evidence-root evidence/browser
 
 The run exercises the initial and reconstructed Browser lifecycle/session,
 opaque handoff, CDP, allowed/denied egress, Gateway authorization expiry and
-revocation, duration usage, and cleanup paths. It deliberately verifies that
-Browser remains unadvertised. A passing run is Browser reference
-external-caller evidence only; it is not aggregate conformance, real Agent
-Platform compatibility, hostile multi-tenant isolation, deployment, or
-production readiness. ADR 0026 defines the exact boundary.
+revocation, duration usage, and cleanup paths. The Browser-only reference stack
+advertises the exact locked Browser profile required by lifecycle admission;
+the production command remains default-disabled and does not advertise it. A
+passing run is Browser reference external-caller evidence only; it is not
+aggregate conformance, real Agent Platform compatibility, hostile multi-tenant
+isolation, deployment, or production readiness. ADR 0026 defines the exact
+boundary.
 
 No Browser run is recorded as verified evidence until the committed harness
 passes this command and emits its manifest. Hosted execution is isolated in

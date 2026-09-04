@@ -188,6 +188,7 @@ func RunBrowser(ctx context.Context, options Options) (_ Result, resultErr error
 		GatewayAdminToken: adminToken, GatewayAuditFile: filepath.Join(stateRoot, "browser-gateway-audit.jsonl"),
 		Browser: &stack.BrowserConfig{
 			GatewayImage: gatewayImage, UplinkNetwork: uplinkName, Namespace: browserReferenceNamespace,
+			RuntimeArchitecture:      architecture,
 			ManifestPath:             filepath.Join(providerRoot, "profiles/browser/image/manifest.json"),
 			SeccompPath:              filepath.Join(providerRoot, "profiles/browser/image/chromium-seccomp.json"),
 			ProvenanceExecutablePath: ghPath, ProvenanceExecutableDigest: ghDigest,

@@ -29,9 +29,10 @@ policy, PKI, JWS keys, and two distinct caller/tenant identities. It composes
 the exact signed Browser publication, the pinned GitHub CLI provenance
 verifier, a locally built immutable restricted-egress Gateway image, one
 operator-owned uplink, durable single-controller stores, protected Provider
-routes, and the caller-owned Browser Gateway. Capability discovery retains the
-Contract-required snapshot/restore compatibility metadata while its capability
-and runtime-profile arrays remain empty for this pre-advertisement gate.
+routes, and the caller-owned Browser Gateway. This Browser-only reference
+deployment advertises the exact Contract-authorized `sandbox.browser@1.0.0` /
+`browser-v1` shape and binds its runtime profile to the current Docker
+architecture. The production command remains default-disabled and unchanged.
 
 An evidence run uses initial and reconstructed processes over the same durable
 state. It covers protected lifecycle create, Browser session allocation,
@@ -56,9 +57,11 @@ harness is committed, the checkout is clean, `browser-e2e -check` passes, and
 the complete Docker run emits a valid manifest. Hosted evidence is recorded
 separately only after its workflow and uploaded artifact pass.
 
-The gate does not advertise `sandbox.browser` and does not establish aggregate
-conformance, real Agent Platform compatibility, multi-controller reliability,
-hostile multi-tenant isolation, deployment readiness, or production readiness.
+The gate does not enable Browser advertisement in the production command and
+does not establish aggregate conformance, real Agent Platform compatibility,
+multi-controller reliability, hostile multi-tenant isolation, deployment
+readiness, or production readiness. The reference-only advertisement is
+required because the Contract forbids creating an unadvertised Browser profile.
 The two test identities exercise bounded authorization failures; they are not a
 claim of hostile multi-tenant isolation.
 

@@ -56,6 +56,7 @@ type BrowserConfig struct {
 	GatewayImage               string   `json:"gateway_image"`
 	UplinkNetwork              string   `json:"uplink_network"`
 	Namespace                  string   `json:"namespace"`
+	RuntimeArchitecture        string   `json:"runtime_architecture"`
 	ManifestPath               string   `json:"manifest_path"`
 	SeccompPath                string   `json:"seccomp_path"`
 	ProvenanceExecutablePath   string   `json:"provenance_executable_path"`
@@ -170,7 +171,8 @@ func (c Config) Validate() error {
 func (c BrowserConfig) validate() error {
 	for name, value := range map[string]string{
 		"gateway_image": c.GatewayImage, "uplink_network": c.UplinkNetwork, "namespace": c.Namespace,
-		"manifest_path": c.ManifestPath, "seccomp_path": c.SeccompPath,
+		"runtime_architecture": c.RuntimeArchitecture,
+		"manifest_path":        c.ManifestPath, "seccomp_path": c.SeccompPath,
 		"provenance_executable_path":   c.ProvenanceExecutablePath,
 		"provenance_executable_digest": c.ProvenanceExecutableDigest,
 		"network_policy_reference":     c.NetworkPolicyReference,
@@ -178,6 +180,9 @@ func (c BrowserConfig) validate() error {
 		if strings.TrimSpace(value) == "" {
 			return fmt.Errorf("browser.%s is required", name)
 		}
+	}
+	if c.RuntimeArchitecture != "amd64" && c.RuntimeArchitecture != "arm64" {
+		return errors.New("Browser runtime architecture must be amd64 or arm64")
 	}
 	if !filepath.IsAbs(c.ManifestPath) || !filepath.IsAbs(c.SeccompPath) || !filepath.IsAbs(c.ProvenanceExecutablePath) {
 		return errors.New("Browser manifest, seccomp, and provenance executable paths must be absolute")

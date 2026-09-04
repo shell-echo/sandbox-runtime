@@ -164,7 +164,7 @@ func openBrowser(ctx context.Context, config Config) (_ *Stack, result error) {
 	protected.UsageEvidenceReader = usageReader
 	protected.OperationReader = operationReader
 
-	capabilities, err := browserCapabilitySource(config.ProviderRevisionID)
+	capabilities, err := browserCapabilitySource(config.ProviderRevisionID, browserConfig.RuntimeArchitecture)
 	if err != nil {
 		return nil, err
 	}
@@ -278,19 +278,24 @@ func ignoreBrowserReferenceNotFound(err error) error {
 	return err
 }
 
-func browserCapabilitySource(providerRevisionID string) (*provider.StaticCapabilitySource, error) {
+func browserCapabilitySource(providerRevisionID, architecture string) (*provider.StaticCapabilitySource, error) {
 	workspace := int64(1 << 30)
 	gpu := int64(0)
 	snapshot, err := provider.NewCapabilitySnapshotWithAdvertisements(providerRevisionID, provider.Limits{
 		MaxCPUMillis: 2000, MaxMemoryBytes: 2 << 30, MaxEphemeralStorageBytes: 2 << 30,
 		MaxWorkspaceBytes: &workspace, MaxGPUCount: &gpu, MaxLeaseSeconds: 3600, MaxExecSeconds: 300,
-	}, nil, nil, []provider.SnapshotRestoreProfile{{
+	}, []provider.Capability{{
+		ID: "sandbox.browser", Versions: []string{"1.0.0"}, Profiles: []string{providerbrowser.CapabilityProfileID},
+	}}, []provider.RuntimeProfile{{
+		ID: lifecycle.BrowserRuntimeProfile, IsolationClass: "container", RuntimeClassName: "sandbox-runtime-browser",
+		Architecture: []string{architecture}, CapabilityProfileIDs: []string{providerbrowser.CapabilityProfileID},
+	}}, []provider.SnapshotRestoreProfile{{
 		ProfileID: "sandbox-snapshot-workspace-v1", Level: provider.SnapshotLevelWorkspace,
 		SuiteID: provider.CompatibilitySuiteSandboxProvider, SuiteVersion: "1.0.0",
 		SuiteDigest: provider.SHA256Digest("sha256:" + strings.Repeat("a", 64)),
 	}})
 	if err != nil {
-		return nil, fmt.Errorf("construct pre-advertisement Browser capability snapshot: %w", err)
+		return nil, fmt.Errorf("construct Browser reference capability snapshot: %w", err)
 	}
 	return provider.NewStaticCapabilitySource(snapshot)
 }

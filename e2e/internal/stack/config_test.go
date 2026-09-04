@@ -69,7 +69,10 @@ func TestConfigValidateRequiresCompleteBrowserProfile(t *testing.T) {
 		"terminal fallback":      func(config *Config) { config.TerminalBrokerPath = "/bin/sh" },
 		"relative manifest":      func(config *Config) { config.Browser.ManifestPath = "manifest.json" },
 		"missing provenance pin": func(config *Config) { config.Browser.ProvenanceExecutableDigest = "" },
-		"broadened hosts":        func(config *Config) { config.Browser.AllowedHosts = []string{"example.com", "example.net"} },
+		"unsupported architecture": func(config *Config) {
+			config.Browser.RuntimeArchitecture = "riscv64"
+		},
+		"broadened hosts": func(config *Config) { config.Browser.AllowedHosts = []string{"example.com", "example.net"} },
 	} {
 		t.Run(name, func(t *testing.T) {
 			candidate := validBrowserConfig(t)
@@ -81,9 +84,9 @@ func TestConfigValidateRequiresCompleteBrowserProfile(t *testing.T) {
 	}
 }
 
-func TestBrowserCapabilitySourceKeepsOnlyRequiredCompatibilityMetadata(t *testing.T) {
+func TestBrowserCapabilitySourceAdvertisesExactReferenceProfile(t *testing.T) {
 	t.Parallel()
-	source, err := browserCapabilitySource("browser-provider-revision-1")
+	source, err := browserCapabilitySource("browser-provider-revision-1", "arm64")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,8 +94,14 @@ func TestBrowserCapabilitySourceKeepsOnlyRequiredCompatibilityMetadata(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(snapshot.Capabilities) != 0 || len(snapshot.RuntimeProfiles) != 0 || len(snapshot.SnapshotRestoreProfiles) != 1 {
-		t.Fatalf("pre-advertisement Browser snapshot = %#v", snapshot)
+	if len(snapshot.Capabilities) != 1 || snapshot.Capabilities[0].ID != "sandbox.browser" ||
+		len(snapshot.Capabilities[0].Versions) != 1 || snapshot.Capabilities[0].Versions[0] != "1.0.0" ||
+		len(snapshot.Capabilities[0].Profiles) != 1 || snapshot.Capabilities[0].Profiles[0] != "browser-v1" ||
+		len(snapshot.RuntimeProfiles) != 1 || snapshot.RuntimeProfiles[0].ID != "sandbox-runtime-browser-v1" ||
+		len(snapshot.RuntimeProfiles[0].Architecture) != 1 || snapshot.RuntimeProfiles[0].Architecture[0] != "arm64" ||
+		len(snapshot.RuntimeProfiles[0].CapabilityProfileIDs) != 1 || snapshot.RuntimeProfiles[0].CapabilityProfileIDs[0] != "browser-v1" ||
+		len(snapshot.SnapshotRestoreProfiles) != 1 {
+		t.Fatalf("Browser reference snapshot = %#v", snapshot)
 	}
 }
 
@@ -142,7 +151,7 @@ func validBrowserConfig(t *testing.T) Config {
 	config.TerminalBrokerPath = ""
 	config.Browser = &BrowserConfig{
 		GatewayImage: "sha256:" + strings.Repeat("b", 64), UplinkNetwork: "browser-uplink",
-		Namespace: "reference-browser-e2e", ManifestPath: filepath.Join(t.TempDir(), "manifest.json"),
+		Namespace: "reference-browser-e2e", RuntimeArchitecture: "arm64", ManifestPath: filepath.Join(t.TempDir(), "manifest.json"),
 		SeccompPath: filepath.Join(t.TempDir(), "seccomp.json"), ProvenanceExecutablePath: filepath.Join(t.TempDir(), "gh"),
 		ProvenanceExecutableDigest: "sha256:" + strings.Repeat("c", 64), NetworkPolicyReference: "browser-egress-policy-1",
 		AllowedHosts: []string{"example.com"},
