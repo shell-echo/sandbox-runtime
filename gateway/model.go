@@ -23,8 +23,9 @@ var (
 	ErrAuditUnavailable     = errors.New("Runtime Gateway audit recording is unavailable")
 	ErrProxyUnavailable     = errors.New("Runtime Gateway proxy is unavailable")
 
-	identifierPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$`)
-	referencePattern  = regexp.MustCompile(`^ref:session:[A-Za-z0-9][A-Za-z0-9._-]{0,199}$`)
+	identifierPattern        = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$`)
+	terminalReferencePattern = regexp.MustCompile(`^ref:session:[A-Za-z0-9][A-Za-z0-9._-]{0,199}$`)
+	browserReferencePattern  = regexp.MustCompile(`^ref:browser-session:[A-Za-z0-9][A-Za-z0-9._-]{0,199}$`)
 )
 
 const (
@@ -40,6 +41,7 @@ type ConnectRequest struct {
 	TenantID            string
 	SandboxID           string
 	RuntimeSessionID    string
+	BrowserSessionID    string
 	CapabilityProfileID string
 	HandoffReference    string
 }
@@ -49,17 +51,37 @@ func (r ConnectRequest) Validate() error {
 		"caller_id":             r.CallerID,
 		"tenant_id":             r.TenantID,
 		"sandbox_id":            r.SandboxID,
-		"runtime_session_id":    r.RuntimeSessionID,
 		"capability_profile_id": r.CapabilityProfileID,
 	} {
 		if !identifierPattern.MatchString(value) {
 			return fmt.Errorf("%w: %s", ErrInvalidRequest, name)
 		}
 	}
-	if !referencePattern.MatchString(r.HandoffReference) {
+	if !r.validSessionIdentity() {
+		return fmt.Errorf("%w: session identity", ErrInvalidRequest)
+	}
+	if !r.validReference() {
 		return fmt.Errorf("%w: handoff_reference", ErrInvalidRequest)
 	}
 	return nil
+}
+
+func (r ConnectRequest) validSessionIdentity() bool {
+	switch {
+	case r.RuntimeSessionID != "" && r.BrowserSessionID == "":
+		return identifierPattern.MatchString(r.RuntimeSessionID)
+	case r.BrowserSessionID != "" && r.RuntimeSessionID == "":
+		return identifierPattern.MatchString(r.BrowserSessionID)
+	default:
+		return false
+	}
+}
+
+func (r ConnectRequest) validReference() bool {
+	if r.RuntimeSessionID != "" {
+		return terminalReferencePattern.MatchString(r.HandoffReference)
+	}
+	return browserReferencePattern.MatchString(r.HandoffReference)
 }
 
 // Grant is the immutable result of caller authorization. The Gateway verifies
@@ -71,6 +93,7 @@ type Grant struct {
 	TenantID             string
 	SandboxID            string
 	RuntimeSessionID     string
+	BrowserSessionID     string
 	CapabilityProfileID  string
 	HandoffReference     string
 	ConnectionGeneration int64
@@ -84,7 +107,7 @@ func (g Grant) Validate(now time.Time) error {
 	request := ConnectRequest{
 		CallerID: g.CallerID, TenantID: g.TenantID, SandboxID: g.SandboxID,
 		RuntimeSessionID: g.RuntimeSessionID, CapabilityProfileID: g.CapabilityProfileID,
-		HandoffReference: g.HandoffReference,
+		BrowserSessionID: g.BrowserSessionID, HandoffReference: g.HandoffReference,
 	}
 	if err := request.Validate(); err != nil {
 		return fmt.Errorf("%w: %v", ErrInvalidGrant, err)
@@ -98,6 +121,7 @@ func (g Grant) Validate(now time.Time) error {
 func (g Grant) matches(request ConnectRequest) bool {
 	return g.CallerID == request.CallerID && g.TenantID == request.TenantID &&
 		g.SandboxID == request.SandboxID && g.RuntimeSessionID == request.RuntimeSessionID &&
+		g.BrowserSessionID == request.BrowserSessionID &&
 		g.CapabilityProfileID == request.CapabilityProfileID && g.HandoffReference == request.HandoffReference
 }
 
@@ -143,6 +167,7 @@ type AuditEvent struct {
 	TenantID             string
 	SandboxID            string
 	RuntimeSessionID     string
+	BrowserSessionID     string
 	ConnectionGeneration int64
 	Attempt              int
 	Frames               uint64

@@ -29,11 +29,12 @@ const (
 )
 
 var (
-	ErrInvalidOptions    = errors.New("invalid Gateway stream adapter options")
-	ErrAdmissionRejected = errors.New("Gateway handshake admission rejected")
-	ErrFrameTooLarge     = errors.New("Gateway frame exceeds configured limit")
-	ErrUnsupportedFrame  = errors.New("unsupported Gateway frame type")
-	ErrInvalidStream     = errors.New("invalid Gateway stream")
+	ErrInvalidOptions      = errors.New("invalid Gateway stream adapter options")
+	ErrAdmissionRejected   = errors.New("Gateway handshake admission rejected")
+	ErrFrameTooLarge       = errors.New("Gateway frame exceeds configured limit")
+	ErrUnsupportedFrame    = errors.New("unsupported Gateway frame type")
+	ErrInvalidStream       = errors.New("invalid Gateway stream")
+	ErrInvalidBrowserFrame = errors.New("invalid Browser WebSocket frame")
 )
 
 // HandshakeAdmission is caller-owned policy for the HTTP request before it is

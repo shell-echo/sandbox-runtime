@@ -197,6 +197,7 @@ func TestConnectFailsClosedForIncompleteProviderEndpoint(t *testing.T) {
 		}, gateway.ErrReferenceUnavailable},
 		{"typed nil terminal stream", reference.Endpoint{
 			Reference: validRequest().HandoffReference, ConnectionGeneration: 1,
+			SandboxID: "sandbox-1", RuntimeSessionID: "session-1", CapabilityProfileID: "terminal-v1",
 			ExpiresAt: compositionTestTime.Add(time.Minute),
 			Dial: func(context.Context) (terminal.Stream, error) {
 				var stream *terminalStream

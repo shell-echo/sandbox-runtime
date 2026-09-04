@@ -9,6 +9,7 @@ require (
 	github.com/distribution/reference v0.6.0
 	github.com/gin-gonic/gin v1.12.0
 	github.com/go-viper/mapstructure/v2 v2.5.0
+	github.com/gobwas/ws v1.4.0
 	github.com/gowebpki/jcs v1.0.1
 	github.com/moby/moby/api v1.55.0
 	github.com/moby/moby/client v0.5.0
@@ -17,6 +18,7 @@ require (
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
 	go.yaml.in/yaml/v3 v3.0.4
+	golang.org/x/net v0.51.0
 	golang.org/x/sys v0.41.0
 	golang.org/x/term v0.40.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
@@ -40,6 +42,8 @@ require (
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/go-playground/validator/v10 v10.30.1 // indirect
+	github.com/gobwas/httphead v0.1.0 // indirect
+	github.com/gobwas/pool v0.2.1 // indirect
 	github.com/goccy/go-json v0.10.5 // indirect
 	github.com/goccy/go-yaml v1.19.2 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
@@ -70,7 +74,6 @@ require (
 	go.opentelemetry.io/otel/trace v1.35.0 // indirect
 	golang.org/x/arch v0.22.0 // indirect
 	golang.org/x/crypto v0.48.0 // indirect
-	golang.org/x/net v0.51.0 // indirect
 	golang.org/x/text v0.34.0 // indirect
 	google.golang.org/protobuf v1.36.10 // indirect
 )

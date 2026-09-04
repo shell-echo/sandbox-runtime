@@ -146,7 +146,8 @@ func (r providerResolver) Resolve(ctx context.Context, value string) (gateway.En
 	}
 	return gateway.Endpoint{
 		Reference: endpoint.Reference, ConnectionGeneration: endpoint.ConnectionGeneration,
-		ExpiresAt: endpoint.ExpiresAt.UTC(),
+		SandboxID: endpoint.SandboxID, RuntimeSessionID: endpoint.RuntimeSessionID,
+		CapabilityProfileID: endpoint.CapabilityProfileID, ExpiresAt: endpoint.ExpiresAt.UTC(),
 		Dial: func(dialCtx context.Context) (gateway.Stream, error) {
 			stream, err := endpoint.Dial(dialCtx)
 			if err != nil {

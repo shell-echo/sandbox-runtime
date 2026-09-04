@@ -370,8 +370,13 @@ func oppositeSide(side streamSide) streamSide {
 }
 
 func validateEndpoint(endpoint Endpoint, grant Grant, now time.Time) error {
-	if endpoint.Reference != grant.HandoffReference || !referencePattern.MatchString(endpoint.Reference) {
+	request := ConnectRequest{RuntimeSessionID: grant.RuntimeSessionID, BrowserSessionID: grant.BrowserSessionID, HandoffReference: endpoint.Reference}
+	if endpoint.Reference != grant.HandoffReference || !request.validReference() {
 		return ErrReferenceUnavailable
+	}
+	if endpoint.SandboxID != grant.SandboxID || endpoint.RuntimeSessionID != grant.RuntimeSessionID ||
+		endpoint.BrowserSessionID != grant.BrowserSessionID || endpoint.CapabilityProfileID != grant.CapabilityProfileID {
+		return ErrStaleReference
 	}
 	if endpoint.ConnectionGeneration != grant.ConnectionGeneration {
 		return ErrStaleReference
@@ -399,6 +404,7 @@ func eventForGrant(grant Grant, eventType AuditEventType, at time.Time, attempt 
 	return AuditEvent{
 		Type: eventType, At: at, GrantID: grant.GrantID, CallerID: grant.CallerID,
 		TenantID: grant.TenantID, SandboxID: grant.SandboxID, RuntimeSessionID: grant.RuntimeSessionID,
+		BrowserSessionID:     grant.BrowserSessionID,
 		ConnectionGeneration: grant.ConnectionGeneration, Attempt: attempt, Frames: frames, Bytes: bytes, Reason: reason,
 	}
 }
@@ -413,6 +419,7 @@ func (g *Gateway) record(ctx context.Context, event AuditEvent) error {
 func (g *Gateway) recordDenied(ctx context.Context, request ConnectRequest, at time.Time, reason error) {
 	_ = g.recorder.Record(ctx, AuditEvent{
 		Type: AuditDenied, At: at, CallerID: request.CallerID, TenantID: request.TenantID,
-		SandboxID: request.SandboxID, RuntimeSessionID: request.RuntimeSessionID, Reason: reason.Error(),
+		SandboxID: request.SandboxID, RuntimeSessionID: request.RuntimeSessionID,
+		BrowserSessionID: request.BrowserSessionID, Reason: reason.Error(),
 	})
 }

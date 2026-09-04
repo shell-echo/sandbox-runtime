@@ -199,8 +199,10 @@ func newTestGateway(t *testing.T, resolver ReferenceResolver, authorizer Authori
 func validEndpoint(stream *testStream) Endpoint {
 	grant := gatewayGrant()
 	return Endpoint{
-		Reference: grant.HandoffReference, ConnectionGeneration: grant.ConnectionGeneration,
-		ExpiresAt: grant.ExpiresAt, Dial: func(context.Context) (Stream, error) { return stream, nil },
+		Reference: grant.HandoffReference, SandboxID: grant.SandboxID,
+		RuntimeSessionID: grant.RuntimeSessionID, CapabilityProfileID: grant.CapabilityProfileID,
+		ConnectionGeneration: grant.ConnectionGeneration,
+		ExpiresAt:            grant.ExpiresAt, Dial: func(context.Context) (Stream, error) { return stream, nil },
 	}
 }
 
@@ -395,6 +397,17 @@ func TestGatewayRejectsGrantBindingAndStaleEndpoint(t *testing.T) {
 			t.Fatalf("Connect() error = %v, want ErrStaleReference", err)
 		}
 	})
+	t.Run("mismatched endpoint identity", func(t *testing.T) {
+		client, backend := newTestStream(), newTestStream()
+		endpoint := validEndpoint(backend)
+		endpoint.SandboxID = "sandbox-other"
+		revocations, recorder := newTestRevocations(), &testRecorder{}
+		gateway := newTestGateway(t, &testResolver{endpoints: []Endpoint{endpoint}}, testAuthorizer{grant: gatewayGrant()}, revocations, recorder)
+		err := gateway.Connect(context.Background(), gatewayRequest(), client)
+		if !errors.Is(err, ErrStaleReference) {
+			t.Fatalf("Connect() error = %v, want ErrStaleReference", err)
+		}
+	})
 }
 
 func TestGatewayFailsClosedWhenAuditCannotBeRecorded(t *testing.T) {
@@ -413,5 +426,60 @@ func TestGatewayRejectsPublicEndpointLikeReference(t *testing.T) {
 	request.HandoffReference = "wss://127.0.0.1:8080/session"
 	if err := request.Validate(); !errors.Is(err, ErrInvalidRequest) {
 		t.Fatalf("Validate() error = %v, want ErrInvalidRequest", err)
+	}
+}
+
+func TestBrowserRequestRequiresExclusiveIdentityAndReferenceNamespace(t *testing.T) {
+	valid := ConnectRequest{
+		CallerID: "user-1", TenantID: "tenant-1", SandboxID: "sandbox-1",
+		BrowserSessionID: "browser-session-1", CapabilityProfileID: "browser-v1",
+		HandoffReference: "ref:browser-session:opaque-1",
+	}
+	if err := valid.Validate(); err != nil {
+		t.Fatalf("valid Browser request rejected: %v", err)
+	}
+	for name, edit := range map[string]func(*ConnectRequest){
+		"missing session":                 func(request *ConnectRequest) { request.BrowserSessionID = "" },
+		"both sessions":                   func(request *ConnectRequest) { request.RuntimeSessionID = "terminal-session-1" },
+		"nonempty invalid second session": func(request *ConnectRequest) { request.RuntimeSessionID = "invalid session" },
+		"terminal reference":              func(request *ConnectRequest) { request.HandoffReference = "ref:session:opaque-1" },
+		"public endpoint": func(request *ConnectRequest) {
+			request.HandoffReference = "ws://127.0.0.1:9222/devtools/browser/secret"
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			request := valid
+			edit(&request)
+			if err := request.Validate(); !errors.Is(err, ErrInvalidRequest) {
+				t.Fatalf("Validate() error = %v; want invalid request", err)
+			}
+		})
+	}
+}
+
+func TestBrowserGrantBindsSessionBeforeReferenceResolution(t *testing.T) {
+	request := ConnectRequest{
+		CallerID: "user-1", TenantID: "tenant-1", SandboxID: "sandbox-1",
+		BrowserSessionID: "browser-session-1", CapabilityProfileID: "browser-v1",
+		HandoffReference: "ref:browser-session:opaque-1",
+	}
+	grant := Grant{
+		GrantID: "grant-1", CallerID: request.CallerID, TenantID: request.TenantID,
+		SandboxID: request.SandboxID, BrowserSessionID: "browser-session-other",
+		CapabilityProfileID: request.CapabilityProfileID, HandoffReference: request.HandoffReference,
+		ConnectionGeneration: 1, ExpiresAt: gatewayTestNow.Add(time.Hour),
+	}
+	resolver := &testResolver{}
+	recorder := &testRecorder{}
+	proxy := newTestGateway(t, resolver, testAuthorizer{grant: grant}, newTestRevocations(), recorder)
+	if err := proxy.Connect(context.Background(), request, newTestStream()); !errors.Is(err, ErrUnauthorized) {
+		t.Fatalf("Connect() error = %v; want unauthorized", err)
+	}
+	if resolver.Calls() != 0 {
+		t.Fatalf("resolver calls = %d; want zero", resolver.Calls())
+	}
+	events := recorder.Events()
+	if len(events) != 1 || events[0].Type != AuditDenied || events[0].BrowserSessionID != request.BrowserSessionID || events[0].RuntimeSessionID != "" {
+		t.Fatalf("denied Browser audit = %#v", events)
 	}
 }

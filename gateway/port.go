@@ -17,6 +17,10 @@ type Authorizer interface {
 // this boundary.
 type Endpoint struct {
 	Reference            string
+	SandboxID            string
+	RuntimeSessionID     string
+	BrowserSessionID     string
+	CapabilityProfileID  string
 	ConnectionGeneration int64
 	ExpiresAt            time.Time
 	Dial                 func(context.Context) (Stream, error)
