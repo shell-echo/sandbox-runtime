@@ -34,7 +34,7 @@ jobs:
       packages: write
     steps:
       - name: Check out the exact publication source
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
@@ -45,7 +45,7 @@ jobs:
           cache: true
 
       - name: Set up Buildx
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
 
       - name: Run the sandboxed browser image integration gate
         env:
@@ -54,7 +54,7 @@ jobs:
         run: go test -tags=integration -count=1 -run '^TestBrowserImageSandboxIntegration$' ./profiles/browser/image
 
       - name: Log in to the GitHub Container Registry
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -62,7 +62,7 @@ jobs:
 
       - name: Build and push the content-addressed platform manifest
         id: build
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: profiles/browser/image
           platforms: ${{ matrix.platform }}
@@ -85,7 +85,7 @@ jobs:
           touch "${RUNNER_TEMP}/digests/${PLATFORM_ID}-${digest}"
 
       - name: Upload the platform manifest digest
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: browser-image-digest-${{ matrix.artifact_suffix }}
           path: ${{ runner.temp }}/digests/*
@@ -104,17 +104,17 @@ jobs:
       attestations: write
     steps:
       - name: Download the platform manifest digests
-        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: browser-image-digest-*
           path: ${{ runner.temp }}/digests
           merge-multiple: true
 
       - name: Set up Buildx
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
 
       - name: Log in to the GitHub Container Registry
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
