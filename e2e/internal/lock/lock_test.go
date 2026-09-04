@@ -41,6 +41,7 @@ func TestProviderChangePathAllowsOnlyHarnessAndDocumentation(t *testing.T) {
 		"e2e/internal/lock/lock.go":                    true,
 		".github/workflows/reference-e2e.yml":          true,
 		".github/workflows/platform-candidate-e2e.yml": true,
+		".github/workflows/browser-e2e.yml":            true,
 		".github/workflows/unrelated.yml":              false,
 		"cmd/serve.go":                                 false,
 		"provider/code.go":                             false,

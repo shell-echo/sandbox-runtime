@@ -57,6 +57,29 @@ func TestConfigValidateRejectsAmbiguousIdentityInputs(t *testing.T) {
 	}
 }
 
+func TestConfigValidateRequiresCompleteBrowserProfile(t *testing.T) {
+	t.Parallel()
+	valid := validBrowserConfig(t)
+	if err := valid.Validate(); err != nil {
+		t.Fatalf("valid Browser config rejected: %v", err)
+	}
+	for name, mutate := range map[string]func(*Config){
+		"missing Browser":        func(config *Config) { config.Browser = nil },
+		"terminal fallback":      func(config *Config) { config.TerminalBrokerPath = "/bin/sh" },
+		"relative manifest":      func(config *Config) { config.Browser.ManifestPath = "manifest.json" },
+		"missing provenance pin": func(config *Config) { config.Browser.ProvenanceExecutableDigest = "" },
+		"broadened hosts":        func(config *Config) { config.Browser.AllowedHosts = []string{"example.com", "example.net"} },
+	} {
+		t.Run(name, func(t *testing.T) {
+			candidate := validBrowserConfig(t)
+			mutate(&candidate)
+			if err := candidate.Validate(); err == nil {
+				t.Fatal("invalid Browser config was accepted")
+			}
+		})
+	}
+}
+
 func TestSplitAddress(t *testing.T) {
 	t.Parallel()
 	host, port, err := splitAddress("127.0.0.1:10443")
@@ -74,6 +97,7 @@ func validConfig(t *testing.T) Config {
 	t.Helper()
 	root := t.TempDir()
 	return Config{
+		Profile:         ProfileCodingShell,
 		ProviderAddress: "127.0.0.1:10443", GatewayAddress: "127.0.0.1:10444",
 		ProviderCertificateFile: filepath.Join(root, "provider.pem"), ProviderPrivateKeyFile: filepath.Join(root, "provider-key.pem"),
 		GatewayCertificateFile: filepath.Join(root, "gateway.pem"), GatewayPrivateKeyFile: filepath.Join(root, "gateway-key.pem"),
@@ -93,4 +117,19 @@ func validConfig(t *testing.T) Config {
 		},
 		GatewayAdminToken: "admin-token", GatewayAuditFile: filepath.Join(root, "gateway.jsonl"),
 	}
+}
+
+func validBrowserConfig(t *testing.T) Config {
+	t.Helper()
+	config := validConfig(t)
+	config.Profile = ProfileBrowser
+	config.TerminalBrokerPath = ""
+	config.Browser = &BrowserConfig{
+		GatewayImage: "sha256:" + strings.Repeat("b", 64), UplinkNetwork: "browser-uplink",
+		Namespace: "reference-browser-e2e", ManifestPath: filepath.Join(t.TempDir(), "manifest.json"),
+		SeccompPath: filepath.Join(t.TempDir(), "seccomp.json"), ProvenanceExecutablePath: filepath.Join(t.TempDir(), "gh"),
+		ProvenanceExecutableDigest: "sha256:" + strings.Repeat("c", 64), NetworkPolicyReference: "browser-egress-policy-1",
+		AllowedHosts: []string{"example.com"},
+	}
+	return config
 }

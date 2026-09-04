@@ -11,8 +11,10 @@ import (
 )
 
 const (
-	PhaseInitial = "initial"
-	PhaseResume  = "resume"
+	PhaseInitial       = "initial"
+	PhaseResume        = "resume"
+	ProfileCodingShell = "coding-shell"
+	ProfileBrowser     = "browser"
 )
 
 type IdentityConfig struct {
@@ -28,6 +30,7 @@ type IdentityConfig struct {
 }
 
 type Config struct {
+	Profile                  string         `json:"profile"`
 	Phase                    string         `json:"phase"`
 	ProviderBaseURL          string         `json:"provider_base_url"`
 	GatewayBaseURL           string         `json:"gateway_base_url"`
@@ -36,6 +39,7 @@ type Config struct {
 	ProviderInstanceAudience string         `json:"provider_instance_audience"`
 	RuntimeImageReference    string         `json:"runtime_image_reference"`
 	RuntimeImageDigest       string         `json:"runtime_image_digest"`
+	RuntimeArchitecture      string         `json:"runtime_architecture"`
 	GatewayAdminToken        string         `json:"gateway_admin_token"`
 	ControllerA              IdentityConfig `json:"controller_a"`
 	ControllerB              IdentityConfig `json:"controller_b"`
@@ -63,6 +67,9 @@ func LoadConfig(path string) (Config, error) {
 }
 
 func (c Config) Validate() error {
+	if c.Profile != ProfileCodingShell && c.Profile != ProfileBrowser {
+		return errors.New("caller profile must be coding-shell or browser")
+	}
 	if c.Phase != PhaseInitial && c.Phase != PhaseResume {
 		return errors.New("caller phase must be initial or resume")
 	}
@@ -71,7 +78,8 @@ func (c Config) Validate() error {
 		"ca_file": c.CAFile, "provider_revision_id": c.ProviderRevisionID,
 		"provider_instance_audience": c.ProviderInstanceAudience,
 		"runtime_image_reference":    c.RuntimeImageReference, "runtime_image_digest": c.RuntimeImageDigest,
-		"gateway_admin_token": c.GatewayAdminToken,
+		"runtime_architecture": c.RuntimeArchitecture,
+		"gateway_admin_token":  c.GatewayAdminToken,
 	} {
 		if strings.TrimSpace(value) == "" {
 			return fmt.Errorf("%s is required", name)
@@ -83,7 +91,8 @@ func (c Config) Validate() error {
 	if c.ProviderBaseURL == c.GatewayBaseURL {
 		return errors.New("Provider and Gateway endpoints must differ")
 	}
-	if !isDigest(c.RuntimeImageDigest) || !strings.HasPrefix(c.ProviderInstanceAudience, "urn:shell-echo:sandbox-runtime:provider-instance:") {
+	if !isDigest(c.RuntimeImageDigest) || (c.RuntimeArchitecture != "amd64" && c.RuntimeArchitecture != "arm64") ||
+		!strings.HasPrefix(c.ProviderInstanceAudience, "urn:shell-echo:sandbox-runtime:provider-instance:") {
 		return errors.New("caller runtime digest or Provider audience is invalid")
 	}
 	if err := c.ControllerA.validate("controller_a"); err != nil {

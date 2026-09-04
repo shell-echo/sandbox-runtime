@@ -79,12 +79,18 @@ func Run(ctx context.Context, config Config) (Report, error) {
 	if err := r.step(ctx, "locked capability discovery", r.verifyCapabilities); err != nil {
 		return r.report, err
 	}
-	if config.Phase == PhaseResume {
-		if err := r.runResume(ctx); err != nil {
+	if config.Profile == ProfileBrowser {
+		if err := r.runBrowser(ctx); err != nil {
 			return r.report, err
 		}
-	} else if err := r.runInitial(ctx); err != nil {
-		return r.report, err
+	} else {
+		if config.Phase == PhaseResume {
+			if err := r.runResume(ctx); err != nil {
+				return r.report, err
+			}
+		} else if err := r.runInitial(ctx); err != nil {
+			return r.report, err
+		}
 	}
 	r.report.CompletedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	return r.report, nil
@@ -243,6 +249,13 @@ func (r *runner) verifyCapabilities(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	if r.config.Profile == ProfileBrowser {
+		if capabilities.ProviderRevisionID != r.config.ProviderRevisionID || capabilities.APIVersion != "v1" ||
+			len(capabilities.Capabilities) != 0 || len(capabilities.RuntimeProfiles) != 0 || len(capabilities.SnapshotRestoreProfiles) != 0 {
+			return fmt.Errorf("pre-advertisement Browser capability snapshot differs from lock: %#v", capabilities)
+		}
+		return nil
+	}
 	wantCapabilities := []Capability{
 		{ID: "sandbox.exec", Versions: []string{"1.0.0"}, Profiles: []string{"exec-v1"}},
 		{ID: "sandbox.terminal", Versions: []string{"1.0.0"}, Profiles: []string{"terminal-v1"}},
@@ -266,7 +279,7 @@ func (r *runner) prepareCreate() (preparedRequest, error) {
 		"work_order_id": r.config.ControllerA.WorkOrderID, "workspace_id": workspaceID,
 		"branch_id": "e2e-branch-1", "provider_resolution_id": "e2e-provider-resolution-1",
 		"provider_revision_id": r.config.ProviderRevisionID,
-		"image":                map[string]any{"reference": r.config.RuntimeImageReference, "digest": r.config.RuntimeImageDigest, "architecture": "amd64"},
+		"image":                map[string]any{"reference": r.config.RuntimeImageReference, "digest": r.config.RuntimeImageDigest, "architecture": r.config.RuntimeArchitecture},
 		"runtime_profile":      "sandbox-runtime-coding-shell-v1",
 		"resources":            map[string]any{"cpu_millis": 500, "memory_bytes": 268435456, "ephemeral_storage_bytes": 268435456, "pids_limit": 64},
 		"required_capabilities": []any{

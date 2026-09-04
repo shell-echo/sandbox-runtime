@@ -20,6 +20,7 @@ type gatewayRequest struct {
 	TenantID             string
 	SandboxID            string
 	RuntimeSessionID     string
+	BrowserSessionID     string
 	CapabilityProfileID  string
 	HandoffReference     string
 	ConnectionGeneration int64
@@ -28,7 +29,11 @@ type gatewayRequest struct {
 }
 
 func gatewayConnect(ctx context.Context, client *http.Client, baseURL string, request gatewayRequest) (*websocket.Conn, *http.Response, error) {
-	endpoint, err := url.Parse(baseURL + "/v1/connect")
+	path := "/v1/connect"
+	if request.BrowserSessionID != "" {
+		path = "/v1/browser/connect"
+	}
+	endpoint, err := url.Parse(baseURL + path)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -39,6 +44,7 @@ func gatewayConnect(ctx context.Context, client *http.Client, baseURL string, re
 	query.Set("tenant_id", request.TenantID)
 	query.Set("sandbox_id", request.SandboxID)
 	query.Set("runtime_session_id", request.RuntimeSessionID)
+	query.Set("browser_session_id", request.BrowserSessionID)
 	query.Set("capability_profile_id", request.CapabilityProfileID)
 	query.Set("handoff_reference", request.HandoffReference)
 	query.Set("connection_generation", strconv.FormatInt(request.ConnectionGeneration, 10))

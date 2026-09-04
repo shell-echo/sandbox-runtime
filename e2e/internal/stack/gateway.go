@@ -17,7 +17,8 @@ import (
 	"github.com/shell-echo/sandbox-runtime/gateway"
 	"github.com/shell-echo/sandbox-runtime/gateway/adapter"
 	gatewaycomposition "github.com/shell-echo/sandbox-runtime/gateway/composition"
-	"github.com/shell-echo/sandbox-runtime/provider/session/reference"
+	browserreference "github.com/shell-echo/sandbox-runtime/provider/browser/reference"
+	sessionreference "github.com/shell-echo/sandbox-runtime/provider/session/reference"
 )
 
 type principalContextKey struct{}
@@ -30,14 +31,15 @@ type grantInput struct {
 }
 
 type referenceGateway struct {
-	service     *gatewaycomposition.Service
+	terminal    *gatewaycomposition.Service
+	browser     *gatewaycomposition.BrowserService
 	revocations *gateway.MemoryRevocations
 	principals  map[string]GatewayPrincipal
 	adminToken  string
 	recorder    *jsonlRecorder
 }
 
-func newReferenceGateway(config Config, resolver *reference.Resolver) (*referenceGateway, error) {
+func newReferenceGateway(config Config, terminalResolver *sessionreference.Resolver, browserResolver *browserreference.Resolver) (*referenceGateway, error) {
 	principals := make(map[string]GatewayPrincipal, len(config.GatewayPrincipals))
 	for _, principal := range config.GatewayPrincipals {
 		principals[principal.Token] = principal
@@ -48,23 +50,35 @@ func newReferenceGateway(config Config, resolver *reference.Resolver) (*referenc
 		return nil, err
 	}
 	result := &referenceGateway{revocations: revocations, principals: principals, adminToken: config.GatewayAdminToken, recorder: recorder}
-	service, err := gatewaycomposition.New(gatewaycomposition.Options{
-		Authorizer:  result,
-		Revocations: revocations,
-		Recorder:    recorder,
-		Resolver:    resolver,
-		WebSocket: adapter.WebSocketOptions{
-			Admission:      result.admitWebSocket,
-			OriginPatterns: []string{"https://reference-caller.invalid"},
-		},
-		MaxReconnects:    1,
-		ReconnectBackoff: 10 * time.Millisecond,
-	})
-	if err != nil {
-		_ = recorder.Close()
-		return nil, err
+	webSocket := adapter.WebSocketOptions{
+		Admission: result.admitWebSocket, OriginPatterns: []string{"https://reference-caller.invalid"},
 	}
-	result.service = service
+	if terminalResolver != nil {
+		service, err := gatewaycomposition.New(gatewaycomposition.Options{
+			Authorizer: result, Revocations: revocations, Recorder: recorder, Resolver: terminalResolver,
+			WebSocket: webSocket, MaxReconnects: 1, ReconnectBackoff: 10 * time.Millisecond,
+		})
+		if err != nil {
+			_ = recorder.Close()
+			return nil, err
+		}
+		result.terminal = service
+	}
+	if browserResolver != nil {
+		service, err := gatewaycomposition.NewBrowser(gatewaycomposition.BrowserOptions{
+			Authorizer: result, Revocations: revocations, Recorder: recorder, Resolver: browserResolver,
+			WebSocket: webSocket, MaxReconnects: 1, ReconnectBackoff: 10 * time.Millisecond,
+		})
+		if err != nil {
+			_ = recorder.Close()
+			return nil, err
+		}
+		result.browser = service
+	}
+	if result.terminal == nil && result.browser == nil {
+		_ = recorder.Close()
+		return nil, errors.New("reference Gateway requires a terminal or Browser resolver")
+	}
 	return result, nil
 }
 
@@ -79,7 +93,12 @@ func (g *referenceGateway) Close() error {
 
 func (g *referenceGateway) Handler() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /v1/connect", g.connect)
+	if g.terminal != nil {
+		mux.HandleFunc("GET /v1/connect", g.connect)
+	}
+	if g.browser != nil {
+		mux.HandleFunc("GET /v1/browser/connect", g.connectBrowser)
+	}
 	mux.HandleFunc("POST /v1/revoke/{grant_id}", g.revoke)
 	mux.HandleFunc("GET /healthz", func(response http.ResponseWriter, _ *http.Request) {
 		response.Header().Set("Content-Type", "application/json")
@@ -117,9 +136,42 @@ func (g *referenceGateway) connect(response http.ResponseWriter, request *http.R
 		GrantID: request.URL.Query().Get("grant_id"), ConnectionGeneration: generation, ExpiresAt: expiresAt.UTC(),
 	})
 	request = request.WithContext(ctx)
-	if err := g.service.Serve(ctx, response, request, connect); err != nil {
+	if err := g.terminal.Serve(ctx, response, request, connect); err != nil {
 		// A successful WebSocket upgrade owns its close status. Pre-upgrade
 		// failures use bounded HTTP status without leaking Provider details.
+		if !errors.Is(err, context.Canceled) {
+			return
+		}
+	}
+}
+
+func (g *referenceGateway) connectBrowser(response http.ResponseWriter, request *http.Request) {
+	principal, ok := g.authenticate(request.Header.Get("Authorization"))
+	if !ok {
+		http.Error(response, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	generation, err := strconv.ParseInt(request.URL.Query().Get("connection_generation"), 10, 64)
+	if err != nil || generation < 1 {
+		http.Error(response, "invalid connection generation", http.StatusBadRequest)
+		return
+	}
+	expiresAt, err := time.Parse(time.RFC3339Nano, request.URL.Query().Get("expires_at"))
+	if err != nil {
+		http.Error(response, "invalid expiry", http.StatusBadRequest)
+		return
+	}
+	connect := gateway.ConnectRequest{
+		CallerID: request.URL.Query().Get("caller_id"), TenantID: request.URL.Query().Get("tenant_id"),
+		SandboxID: request.URL.Query().Get("sandbox_id"), BrowserSessionID: request.URL.Query().Get("browser_session_id"),
+		CapabilityProfileID: request.URL.Query().Get("capability_profile_id"), HandoffReference: request.URL.Query().Get("handoff_reference"),
+	}
+	ctx := context.WithValue(request.Context(), principalContextKey{}, principal)
+	ctx = context.WithValue(ctx, grantContextKey{}, grantInput{
+		GrantID: request.URL.Query().Get("grant_id"), ConnectionGeneration: generation, ExpiresAt: expiresAt.UTC(),
+	})
+	request = request.WithContext(ctx)
+	if err := g.browser.Serve(ctx, response, request, connect); err != nil {
 		if !errors.Is(err, context.Canceled) {
 			return
 		}
@@ -157,7 +209,7 @@ func (g *referenceGateway) Authorize(ctx context.Context, request gateway.Connec
 	}
 	return gateway.Grant{
 		GrantID: input.GrantID, CallerID: request.CallerID,
-		TenantID: request.TenantID, SandboxID: request.SandboxID, RuntimeSessionID: request.RuntimeSessionID,
+		TenantID: request.TenantID, SandboxID: request.SandboxID, RuntimeSessionID: request.RuntimeSessionID, BrowserSessionID: request.BrowserSessionID,
 		CapabilityProfileID: request.CapabilityProfileID, HandoffReference: request.HandoffReference,
 		ConnectionGeneration: input.ConnectionGeneration, ExpiresAt: input.ExpiresAt,
 	}, nil

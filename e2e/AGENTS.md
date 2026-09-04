@@ -7,9 +7,9 @@ This directory is an independently runnable reference caller and deployment
 harness for `sandbox-runtime`, maintained as a separate Go module inside the
 Provider repository. Keep these boundaries strict:
 
-- `internal/caller` and `cmd/caller` must not import any package from
-  `github.com/shell-echo/sandbox-runtime`; they consume only the locked wire
-  Contract and public network endpoints.
+- `internal/caller`, `cmd/caller`, and `cmd/browser-caller` must not import any
+  package from `github.com/shell-echo/sandbox-runtime`; they consume only the
+  locked wire Contract and public network endpoints.
 - `internal/platform` and `cmd/platform-caller` are also black-box candidate
   caller code. They may compose `internal/caller` but must not import any
   Provider implementation package. Their reports are candidate integration
@@ -30,4 +30,5 @@ Format Go changes with `gofmt`, then run:
 go test -race -shuffle=on -count=1 ./...
 go vet ./...
 go run ./cmd/e2e -check
+go run ./cmd/browser-e2e -check
 ```

@@ -7,7 +7,13 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
+)
+
+const (
+	ProfileCodingShell = "coding-shell"
+	ProfileBrowser     = "browser"
 )
 
 type TrustedJWSKey struct {
@@ -23,6 +29,7 @@ type GatewayPrincipal struct {
 }
 
 type Config struct {
+	Profile                  string             `json:"profile"`
 	ProviderAddress          string             `json:"provider_address"`
 	GatewayAddress           string             `json:"gateway_address"`
 	ProviderCertificateFile  string             `json:"provider_certificate_file"`
@@ -42,6 +49,19 @@ type Config struct {
 	GatewayPrincipals        []GatewayPrincipal `json:"gateway_principals"`
 	GatewayAdminToken        string             `json:"gateway_admin_token"`
 	GatewayAuditFile         string             `json:"gateway_audit_file"`
+	Browser                  *BrowserConfig     `json:"browser,omitempty"`
+}
+
+type BrowserConfig struct {
+	GatewayImage               string   `json:"gateway_image"`
+	UplinkNetwork              string   `json:"uplink_network"`
+	Namespace                  string   `json:"namespace"`
+	ManifestPath               string   `json:"manifest_path"`
+	SeccompPath                string   `json:"seccomp_path"`
+	ProvenanceExecutablePath   string   `json:"provenance_executable_path"`
+	ProvenanceExecutableDigest string   `json:"provenance_executable_digest"`
+	NetworkPolicyReference     string   `json:"network_policy_reference"`
+	AllowedHosts               []string `json:"allowed_hosts"`
 }
 
 func LoadConfig(path string) (Config, error) {
@@ -67,14 +87,15 @@ func LoadConfig(path string) (Config, error) {
 
 func (c Config) Validate() error {
 	for name, value := range map[string]string{
+		"profile":          c.Profile,
 		"provider_address": c.ProviderAddress, "gateway_address": c.GatewayAddress,
 		"provider_certificate_file": c.ProviderCertificateFile, "provider_private_key_file": c.ProviderPrivateKeyFile,
 		"gateway_certificate_file": c.GatewayCertificateFile, "gateway_private_key_file": c.GatewayPrivateKeyFile,
 		"client_ca_file": c.ClientCAFile, "provider_revision_id": c.ProviderRevisionID,
 		"provider_instance_audience": c.ProviderInstanceAudience, "state_root": c.StateRoot,
 		"runtime_data_root": c.RuntimeDataRoot, "runtime_image": c.RuntimeImage,
-		"runtime_controller_id": c.RuntimeControllerID, "terminal_broker_path": c.TerminalBrokerPath,
-		"gateway_admin_token": c.GatewayAdminToken, "gateway_audit_file": c.GatewayAuditFile,
+		"runtime_controller_id": c.RuntimeControllerID,
+		"gateway_admin_token":   c.GatewayAdminToken, "gateway_audit_file": c.GatewayAuditFile,
 	} {
 		if strings.TrimSpace(value) == "" {
 			return fmt.Errorf("%s is required", name)
@@ -82,6 +103,21 @@ func (c Config) Validate() error {
 	}
 	if c.ProviderAddress == c.GatewayAddress {
 		return errors.New("Provider and Gateway addresses must differ")
+	}
+	switch c.Profile {
+	case ProfileCodingShell:
+		if strings.TrimSpace(c.TerminalBrokerPath) == "" || c.Browser != nil {
+			return errors.New("coding/shell profile requires terminal_broker_path and forbids Browser configuration")
+		}
+	case ProfileBrowser:
+		if strings.TrimSpace(c.TerminalBrokerPath) != "" || c.Browser == nil {
+			return errors.New("Browser profile requires Browser configuration and forbids terminal_broker_path")
+		}
+		if err := c.Browser.validate(); err != nil {
+			return err
+		}
+	default:
+		return errors.New("reference stack profile is unsupported")
 	}
 	if _, _, err := splitAddress(c.ProviderAddress); err != nil {
 		return fmt.Errorf("provider_address: %w", err)
@@ -127,6 +163,27 @@ func (c Config) Validate() error {
 		}
 		seenTokens[principal.Token] = struct{}{}
 		seenBindings[binding] = struct{}{}
+	}
+	return nil
+}
+
+func (c BrowserConfig) validate() error {
+	for name, value := range map[string]string{
+		"gateway_image": c.GatewayImage, "uplink_network": c.UplinkNetwork, "namespace": c.Namespace,
+		"manifest_path": c.ManifestPath, "seccomp_path": c.SeccompPath,
+		"provenance_executable_path":   c.ProvenanceExecutablePath,
+		"provenance_executable_digest": c.ProvenanceExecutableDigest,
+		"network_policy_reference":     c.NetworkPolicyReference,
+	} {
+		if strings.TrimSpace(value) == "" {
+			return fmt.Errorf("browser.%s is required", name)
+		}
+	}
+	if !filepath.IsAbs(c.ManifestPath) || !filepath.IsAbs(c.SeccompPath) || !filepath.IsAbs(c.ProvenanceExecutablePath) {
+		return errors.New("Browser manifest, seccomp, and provenance executable paths must be absolute")
+	}
+	if len(c.AllowedHosts) != 1 || c.AllowedHosts[0] != "example.com" {
+		return errors.New("Browser reference policy must allow only example.com")
 	}
 	return nil
 }

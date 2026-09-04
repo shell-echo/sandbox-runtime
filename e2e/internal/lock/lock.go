@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	ProviderCommit   = "5aae2810c4957ec7abad7de0e67f9507d9543c81"
+	ProviderCommit   = "66183b1f49b22c211e43c841d15383b745e89967"
 	ContractNS       = "urn:shell-echo:sandbox-runtime:provider-v1"
 	ContractRevision = "5096e71fb84fbec22aa3487a0e55a1b49602ab8b"
 	ContractTree     = "859f76dc0e855a0c8abdbbb5648df100dabb4328"
@@ -109,6 +109,7 @@ func providerChangePath(changedPath string) bool {
 	}
 	return providerDocumentationPath(changedPath) || changedPath == ".github/workflows/reference-e2e.yml" ||
 		changedPath == ".github/workflows/platform-candidate-e2e.yml" ||
+		changedPath == ".github/workflows/browser-e2e.yml" ||
 		changedPath == "e2e" || strings.HasPrefix(changedPath, "e2e/")
 }
 

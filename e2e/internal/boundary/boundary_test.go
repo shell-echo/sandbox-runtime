@@ -15,7 +15,7 @@ func TestBlackBoxCallerDoesNotImportProviderImplementation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, relative := range []string{"internal/caller", "cmd/caller", "internal/platform", "cmd/platform-caller"} {
+	for _, relative := range []string{"internal/caller", "cmd/caller", "cmd/browser-caller", "internal/platform", "cmd/platform-caller"} {
 		path := filepath.Join(root, relative)
 		matches, err := filepath.Glob(filepath.Join(path, "*.go"))
 		if err != nil {

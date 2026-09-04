@@ -37,6 +37,30 @@ func TestReferenceGatewayAuthorizationBindsCallerAndTenant(t *testing.T) {
 	}
 }
 
+func TestReferenceGatewayAuthorizationBindsBrowserSession(t *testing.T) {
+	t.Parallel()
+	principal := GatewayPrincipal{Token: "token-a", CallerID: "caller-a", TenantID: "tenant-a"}
+	reference := &referenceGateway{principals: map[string]GatewayPrincipal{principal.Token: principal}}
+	expiresAt := time.Now().UTC().Add(time.Minute)
+	ctx := context.WithValue(context.Background(), principalContextKey{}, principal)
+	ctx = context.WithValue(ctx, grantContextKey{}, grantInput{GrantID: "grant-browser-1", ConnectionGeneration: 2, ExpiresAt: expiresAt})
+	request := gateway.ConnectRequest{
+		CallerID: principal.CallerID, TenantID: principal.TenantID, SandboxID: "browser-sandbox-1",
+		BrowserSessionID: "browser-session-1", CapabilityProfileID: "browser-v1", HandoffReference: "ref:browser-session:opaque-1",
+	}
+	grant, err := reference.Authorize(ctx, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if grant.BrowserSessionID != request.BrowserSessionID || grant.RuntimeSessionID != "" || grant.ConnectionGeneration != 2 {
+		t.Fatalf("Browser grant = %#v", grant)
+	}
+	request.TenantID = "tenant-b"
+	if _, err := reference.Authorize(ctx, request); err == nil {
+		t.Fatal("Browser authorizer accepted a cross-tenant request")
+	}
+}
+
 func TestJSONLRecorderPersistsMetadataOnlyEvent(t *testing.T) {
 	t.Parallel()
 	path := filepath.Join(t.TempDir(), "gateway.jsonl")

@@ -21,7 +21,7 @@ platform gate.
 
 | Item | Value |
 | --- | --- |
-| Provider implementation | `5aae2810c4957ec7abad7de0e67f9507d9543c81` |
+| Provider implementation | `66183b1f49b22c211e43c841d15383b745e89967` |
 | Contract namespace | `urn:shell-echo:sandbox-runtime:provider-v1` |
 | Contract revision | `5096e71fb84fbec22aa3487a0e55a1b49602ab8b` |
 | Contract tree | `859f76dc0e855a0c8abdbbb5648df100dabb4328` |
@@ -38,11 +38,41 @@ descriptor correction, the uncomposed Provider-local browser session
 component, the fail-closed Docker/private-relay adapter, and the real GitHub
 CLI/Sigstore provenance-verifier component, the restricted-egress provisioner,
 immutable create-policy binding, protected Browser transport component, and
-the uncomposed caller-owned Browser Gateway boundary.
+the caller-owned Browser Gateway boundary, followed by the default-disabled
+Browser command/runtime graph.
 The reference and platform-candidate runners still execute only the
 coding/shell scenarios; advancing this identity records regression coverage
-only and is not Browser external-caller E2E, command/runtime composition,
-aggregate conformance, or production evidence.
+only and is not Browser external-caller E2E, aggregate conformance, or
+production evidence.
+
+## Browser reference runner
+
+`cmd/browser-e2e` runs a separate Browser-only reference stack and
+`cmd/browser-caller` process. The caller has no Provider implementation import
+and communicates only through mTLS/JWS HTTPS and the caller-owned Browser
+WebSocket Gateway. The stack uses the locked signed Browser image, real GitHub
+OIDC/Sigstore provenance verification, restricted egress, and durable
+single-controller state.
+
+From a clean committed checkout with Docker and authenticated `gh` available:
+
+```bash
+cd e2e
+go run ./cmd/browser-e2e -check
+go run ./cmd/browser-e2e -evidence-root evidence/browser
+```
+
+The run exercises the initial and reconstructed Browser lifecycle/session,
+opaque handoff, CDP, allowed/denied egress, Gateway authorization expiry and
+revocation, duration usage, and cleanup paths. It deliberately verifies that
+Browser remains unadvertised. A passing run is Browser reference
+external-caller evidence only; it is not aggregate conformance, real Agent
+Platform compatibility, hostile multi-tenant isolation, deployment, or
+production readiness. ADR 0026 defines the exact boundary.
+
+No Browser run is recorded as verified evidence until the committed harness
+passes this command and emits its manifest. Hosted execution is isolated in
+`.github/workflows/browser-e2e.yml` and publishes a separately named artifact.
 
 ## Latest verified evidence
 

@@ -36,11 +36,13 @@ var operationContracts = map[string]struct {
 	"exec":                           {"urn:shell-echo:sandbox-runtime:request:exec:v1", requestDigestExcluding, true},
 	"cancel_exec":                    {"urn:shell-echo:sandbox-runtime:request:cancel-exec:v1", requestDigestExcluding, true},
 	"open_runtime_session":           {"urn:shell-echo:sandbox-runtime:request:open-runtime-session:v1", requestDigestExcluding, true},
+	"open_browser_session":           {"urn:shell-echo:sandbox-runtime:request:open-browser-session:v1", requestDigestExcluding, true},
 	"stage_artifact":                 {"urn:shell-echo:sandbox-runtime:request:stage-artifact:v1", requestDigestExcluding, true},
 	"read_sandbox":                   {"urn:shell-echo:sandbox-runtime:descriptor:status:v1", requestDigestFull, false},
 	"read_operation":                 {"urn:shell-echo:sandbox-runtime:descriptor:operation:v1", requestDigestFull, false},
 	"read_result":                    {"urn:shell-echo:sandbox-runtime:descriptor:exec-result:v1", requestDigestFull, false},
 	"read_runtime_session":           {"urn:shell-echo:sandbox-runtime:descriptor:runtime-session:v1", requestDigestFull, false},
+	"read_browser_session":           {"urn:shell-echo:sandbox-runtime:descriptor:browser-session:v1", requestDigestFull, false},
 	"read_artifact_staging_evidence": {"urn:shell-echo:sandbox-runtime:descriptor:artifact-staging-evidence:v1", requestDigestFull, false},
 	"read_usage_evidence":            {"urn:shell-echo:sandbox-runtime:descriptor:usage-evidence:v1", requestDigestFull, false},
 }

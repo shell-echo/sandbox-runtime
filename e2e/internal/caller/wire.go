@@ -131,6 +131,19 @@ type RuntimeSessionHandoff struct {
 	ExpiresAt                 string `json:"expires_at"`
 }
 
+type BrowserSessionHandoff struct {
+	OperationID               string `json:"operation_id"`
+	AttemptID                 string `json:"attempt_id"`
+	FencingToken              int64  `json:"fencing_token"`
+	SandboxID                 string `json:"sandbox_id"`
+	BrowserSessionID          string `json:"browser_session_id"`
+	CapabilityProfileID       string `json:"capability_profile_id"`
+	Protocol                  string `json:"protocol"`
+	InternalEndpointReference string `json:"internal_endpoint_reference"`
+	ConnectionGeneration      int64  `json:"connection_generation"`
+	ExpiresAt                 string `json:"expires_at"`
+}
+
 type EvidenceCheck struct {
 	Status            string `json:"status"`
 	CheckedAt         string `json:"checked_at"`

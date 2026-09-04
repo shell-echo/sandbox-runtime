@@ -63,6 +63,9 @@ func Open(ctx context.Context, config Config) (_ *Stack, result error) {
 	if err := config.Validate(); err != nil {
 		return nil, err
 	}
+	if config.Profile == ProfileBrowser {
+		return openBrowser(ctx, config)
+	}
 	if err := os.MkdirAll(config.StateRoot, 0o700); err != nil {
 		return nil, err
 	}
@@ -210,7 +213,7 @@ func Open(ctx context.Context, config Config) (_ *Stack, result error) {
 	}
 	stack.provider = providerServer
 
-	referenceGateway, err := newReferenceGateway(config, resolver)
+	referenceGateway, err := newReferenceGateway(config, resolver, nil)
 	if err != nil {
 		return nil, err
 	}

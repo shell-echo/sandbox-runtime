@@ -86,6 +86,8 @@ type evidenceManifest struct {
 	RuntimeImage        string   `json:"runtime_image"`
 	RuntimePlatform     string   `json:"runtime_platform"`
 	RuntimePreparation  string   `json:"runtime_preparation"`
+	SupportImages       []string `json:"support_images,omitempty"`
+	VerifierDigest      string   `json:"verifier_executable_digest,omitempty"`
 	StackConfigDigest   string   `json:"stack_config_digest"`
 	CallerConfigDigests []string `json:"caller_config_digests"`
 	Reports             []string `json:"reports"`
@@ -250,6 +252,7 @@ func Run(ctx context.Context, options Options) (_ Result, resultErr error) {
 	providerRevisionID := "provider-revision-reference-e2e-v1"
 	providerAudience := "urn:shell-echo:sandbox-runtime:provider-instance:reference-e2e"
 	stackConfig := stack.Config{
+		Profile:         stack.ProfileCodingShell,
 		ProviderAddress: providerAddress, GatewayAddress: gatewayAddress,
 		ProviderCertificateFile: material.ProviderCertificateFile, ProviderPrivateKeyFile: material.ProviderPrivateKeyFile,
 		GatewayCertificateFile: material.GatewayCertificateFile, GatewayPrivateKeyFile: material.GatewayPrivateKeyFile,
@@ -274,10 +277,11 @@ func Run(ctx context.Context, options Options) (_ Result, resultErr error) {
 		return Result{}, err
 	}
 	callerConfig := caller.Config{
+		Profile:         caller.ProfileCodingShell,
 		Phase:           caller.PhaseInitial,
 		ProviderBaseURL: "https://" + providerAddress, GatewayBaseURL: "https://" + gatewayAddress,
 		CAFile: material.CAFile, ProviderRevisionID: providerRevisionID, ProviderInstanceAudience: providerAudience,
-		RuntimeImageReference: runtimeImageReference, RuntimeImageDigest: runtimeDigest, GatewayAdminToken: adminToken,
+		RuntimeImageReference: runtimeImageReference, RuntimeImageDigest: runtimeDigest, RuntimeArchitecture: "amd64", GatewayAdminToken: adminToken,
 		ControllerA: caller.IdentityConfig{
 			ControllerSubject: material.ControllerA.URI, CertificateFile: material.ControllerA.CertificateFile,
 			PrivateKeyFile: material.ControllerA.PrivateKeyFile, JWSPrivateKeyFile: material.ControllerA.JWSPrivateFile,
