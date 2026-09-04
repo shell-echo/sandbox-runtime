@@ -91,19 +91,17 @@ The versioned provider surface contains these operation families:
 The table is the target architecture inventory. The current repository-owned
 Contract authorizes the coding/shell surface plus browser capability, create,
 session-open, opaque-handoff, operation, usage, and admission authority. The
-Provider command composes the coding/shell development surface only. ADR 0023
-and implementation `b8423f5` add injectable protected Browser handlers for the
-two browser-session routes, including admission correlation and opaque handoff
-projection. ADR 0024 and implementation `5aae281` add an independently
-injectable caller-owned Browser Gateway component with explicit authorization,
-revocation, audit, WebSocket admission, reconnect, and Provider reference
-dependencies. The command still has no Browser runtime configuration or
-application injection, and startup advertisement remains empty unless the
-existing coding/shell dependency graph passes. The Browser
-session/application components, Docker adapter, real GitHub CLI/Sigstore
-provenance verifier, restricted-egress provisioner, and immutable create-policy
-binding remain uncomposed at startup. No Browser public Gateway route or startup
-composition is present.
+Provider command composes the coding/shell development surface and an
+explicitly enabled, default-disabled Browser control-plane graph. ADR 0023 and
+implementation `b8423f5` add the protected Browser handlers; ADR 0024 and
+`5aae281` add the independently injectable caller-owned Browser Gateway; and ADR
+0025 plus `66183b1` bind the Browser application, Docker runtime, provenance,
+restricted-egress, create-policy, operation, usage, and recovery dependencies.
+Production startup still has no public Browser Gateway route and does not
+advertise Browser. ADR 0026 and harness `79fee2b` provide a separate Browser-only
+reference deployment and black-box caller; hosted run `33838215924` passes its
+10 initial and 5 reconstruction scenarios. That reference-only advertisement
+and caller result do not establish a production Browser deployment.
 
 | Method and path | Responsibility |
 | --- | --- |
@@ -116,12 +114,12 @@ composition is present.
 | `POST /v1/sandboxes/{sandbox_id}/exec` | Start an asynchronous process execution. |
 | `POST /v1/sandboxes/{sandbox_id}/exec:cancel` | Record cancellation intent for an execution. |
 | `POST /v1/sandboxes/{sandbox_id}/runtime-sessions` | Open an internal terminal session. Browser authority does not reuse this route. |
-| `POST /v1/sandboxes/{sandbox_id}/browser-sessions` | Contract-authorized asynchronous browser session request; the protected handler is registered, while command composition supplies no Browser application and therefore fails closed. |
+| `POST /v1/sandboxes/{sandbox_id}/browser-sessions` | Contract-authorized asynchronous browser session request; the protected handler is registered, while the default-disabled command supplies a Browser application only after the exact Browser graph is enabled and validated. |
 | `POST /v1/sandboxes/{sandbox_id}/snapshots` | Start snapshot creation at a declared level. |
 | `POST /v1/sandboxes/{sandbox_id}:terminate` | Idempotently request teardown. |
 | `GET /v1/operations/{operation_id}` | Read durable asynchronous operation state. |
 | `GET /v1/operations/{operation_id}/runtime-session` | Read an opaque terminal session handoff after a successful session operation. |
-| `GET /v1/operations/{operation_id}/browser-session` | Contract-authorized opaque browser handoff for caller-owned Gateway resolution; the protected handler is registered, while command composition supplies no Browser application and therefore fails closed. |
+| `GET /v1/operations/{operation_id}/browser-session` | Contract-authorized opaque browser handoff for caller-owned Gateway resolution; the default-disabled command supplies a Browser application only after the exact Browser graph is enabled and validated. |
 | `GET /v1/operations/{operation_id}/exec-result` | Read a retained execution result. |
 | `GET /v1/operations/{operation_id}/snapshot-manifest` | Read a completed snapshot manifest. |
 | `GET /v1/sandboxes/{sandbox_id}/events` | Resume a sequenced provider event stream. |
@@ -363,24 +361,24 @@ its conformance tests.
 
 ## Current gap assessment
 
-The current code has passed its named reference coding/shell caller gate and
-has browser Contract authority plus a separately verified image component; the
-broader reliability, security, deployment, and optional-profile gates remain
-open:
+The current code has passed its separately named coding/shell and Browser
+reference-caller gates. Browser Contract, image, command/runtime, and reference
+caller evidence are present, while broader reliability, security, deployment,
+advertisement, and optional-profile gates remain open:
 
 | Area | Current state | Required direction |
 | --- | --- | --- |
 | Backend abstraction | Local `instance.Driver` remains separate; the Provider lifecycle has its own fake and Docker development adapters, while exec and terminal use focused Provider-only runtime ports. | Add future snapshot capability ports without reusing `/instances` models and retain narrow optional interfaces. |
 | Lifecycle recovery | Provider file persistence and Docker observation reconcile pending/unknown create work for one controller. | Retain unknown-outcome evidence; add transactional production storage before multi-controller operation. |
 | Persistence | Memory and atomically replaced file repository. | Retain for development; introduce transactional production storage before multi-controller operation. |
-| API | Local `/instances` and the protected Provider v1 surface are separate; authorized coding/shell lifecycle/session/artifact/usage routes have bounded projections, and development exec routes reach a real Docker executor. Browser open/handoff handlers and the separate caller-owned Browser Gateway now have component evidence, but command startup injects no Browser application or public Browser route. | Compose the complete Browser runtime application and caller edge only through explicit fail-closed configuration. |
-| Capabilities | Empty, terminal-only, atomic coding/shell, and browser-only snapshots are locked; browser validation is projection authority only and command startup does not advertise it. | Advertise browser only after its complete image, runtime, Gateway, evidence, security, and independent-caller gates pass. |
+| API | Local `/instances` and the protected Provider v1 surface are separate; authorized coding/shell lifecycle/session/artifact/usage routes have bounded projections, and development exec routes reach a real Docker executor. The default-disabled Browser command graph composes the protected Browser routes and runtime dependencies; the public caller-owned Browser Gateway exists only in the reference deployment. | Define a deployable caller-owned Gateway and production configuration without moving user/tenant authorization into the Provider. |
+| Capabilities | Empty, terminal-only, atomic coding/shell, and browser-only snapshots are locked. The Browser-only reference deployment advertises the exact locked shape for its caller test; production command startup still does not advertise Browser. | Advertise Browser in production only after the remaining profile-specific security, concurrency, deployment, and operational gates pass. |
 | Execution | P2.5e composes durable exec/cancel/result/operation handling with real Docker execution, private bounded capture, cancellation, expiry, and reconciliation for one development controller; local gates and CI pass. | Retain the recovery/correlation gates and complete real usage collection in P2.5g; do not advertise before P2.5h. |
 | Terminal | P2.5f1 adds a backend-neutral terminal runtime, PTY-owning guest broker, and Docker adapter with private durable identity, bounded capacity, cleanup, and same-shell reattach after Provider driver reconstruction. P2.5f2 adds an uncomposed single-controller session vertical with durable accept-before-allocation, provider-neutral receipts/observations, lifecycle projection, restart reconciliation, cleanup retry, and v1-to-v2 migration. P2.5f3 adds a separate durable opaque-reference registry/resolver that rechecks registry and committed-handoff bindings before every fresh attach. P2.5f4 adds bounded WebSocket and terminal-byte-stream adapters outside Gateway policy, with mandatory caller handshake admission, explicit origin allowlists, disabled compression, and 32 KiB default / 64 KiB hard frame limits. | Compose the existing Gateway only with caller-owned authorization, revocation, and recording ports, then add command composition and the evidence gate through P2.5f7. The separate session/reference repositories are non-atomic; do not infer multi-controller, external-caller, or production readiness. |
 | Workspace | The Provider Docker development adapter supplies `/inputs`, `/workspace`, `/outputs`, and bounded tmpfs `/tmp` with owned cleanup; exec consumes that runtime without exposing host paths. | Add artifact consumers, capacity enforcement, and stronger isolation evidence. |
 | Security | Docker defaults already drop capabilities, use non-root/read-only root, disable networking, and limit resources. | Add policy enforcement, stronger isolation profiles, secret grants, egress controls, audit evidence, and production auth. |
 | Events and usage | Durable lifecycle events and bounded usage-evidence components exist without a complete runtime collector composition. | Complete collection/reconciliation while leaving platform accounting authority outside the Provider. |
-| Snapshots/browser/desktop | Browser Contract authority/projection and the exact signed image pass their named gates. The uncomposed `provider/browser` session/application/reference/usage components, fail-closed Docker adapter, real GitHub CLI/Sigstore provenance verifier, restricted-egress provisioner, immutable create-policy binding, protected handlers, and caller-owned Browser Gateway component have focused evidence. The local egress Gateway enforces DNS/HTTP/TLS policy on a per-allocation internal network; it is distinct from the caller-owned Gateway. Command/runtime composition, a public Browser route, and advertisement remain absent. Snapshots and desktop remain unauthorized optional behavior. | Compose the Browser command/runtime graph and caller edge without weakening the verified transport, runtime, provenance, network, or create-policy bindings; keep every optional profile unadvertised until its security and independent-caller gates pass. |
+| Snapshots/browser/desktop | Browser Contract authority/projection, exact signed image, Provider-local session/application/reference/usage, Docker adapter, provenance verifier, restricted-egress provisioner, create-policy binding, protected handlers, caller-owned Gateway, default-disabled command graph, and hosted 10+5 Browser reference-caller path have named evidence. The restricted-egress Gateway remains distinct from the caller-owned Gateway. Production Browser advertisement/public Gateway deployment, aggregate, multi-controller, tenant, deployment, and production gates remain open. Snapshots and desktop remain unauthorized optional behavior. | Complete the Browser profile-specific security/concurrency and deployment gates before production advertisement; then begin the Desktop authority audit without reusing Browser or terminal routes. |
 
 ## Delivery plan and release gates
 

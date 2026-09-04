@@ -34,7 +34,7 @@ exact enclosing repository commit in its manifest.
 
 The lock now includes browser Contract authority/projection, the sandboxed
 image/provenance publication implementation, the explicit arm64/v8 index
-descriptor correction, the uncomposed Provider-local browser session
+descriptor correction, the Provider-local browser session
 component, the fail-closed Docker/private-relay adapter, and the real GitHub
 CLI/Sigstore provenance-verifier component, the restricted-egress provisioner,
 immutable create-policy binding, protected Browser transport component, and
@@ -78,20 +78,32 @@ passes this command and emits its manifest. Hosted execution is isolated in
 
 ## Latest verified evidence
 
-Clean local Reference run `20260904T013909.243838000Z` and Platform Candidate
-run `20260904T014037.825223000Z` passed harness `9eb32ba` against Provider
-`5aae281` with 15 initial and 5 reconstruction/resume coding/shell scenarios
-each. Both manifests pin Contract revision `5096e71`, tree `859f76d`, 48 Suite
-cases, and linux/amd64 runtime digest
-`sha256:41c69ff79b9f895fa59e4a36d990993dffe0210b8b96df0bbf0647ae2ee651b4`.
-The candidate result additionally covers only its named
-shadow/selection/rollback/drain policy. Neither run contains a Browser scenario.
-Hosted Reference run `33826813099` and Platform Candidate run `33826813100`
-passed the same respective 15+5 scenario sets against this lock. Their artifacts
-are `reference-e2e-evidence-33826813099` (digest
-`sha256:dbe54035cd65ce60dcb1a45254d394dc04b0e530907363ea167f8502fd91fd8e`)
-and `platform-candidate-e2e-evidence-33826813100` (digest
-`sha256:f9a4f448e741c7945b225dd9dd1b72cf33d32745deb90a734b67fb41531f18bf`).
+Hosted Browser Reference E2E run `33838215924` passed harness `79fee2b` against
+Provider `f760369`: all 10 initial and 5 process-reconstruction scenarios
+passed on `linux/amd64`. Its manifest pins Contract revision `5096e71`, tree
+`859f76d`, 48 Suite cases, the signed Browser image
+`sha256:87d3216c22ada0fea74b375a3ee5c2ddf021d3e1913569e2aeb4a316ed3b5c2f`,
+and support image
+`sha256:71048069dce3987341429789244b862dd8fc9b287db1c230354a164fd7c14d33`.
+Artifact `browser-reference-e2e-evidence-33838215924` has digest
+`sha256:4acfbc97c0c1f64e987b00870849a2244e33596918d08e659385c428310843ea`;
+its run directory is `20260904T044941.754937659Z`. The sanitized evidence
+contains only the manifest, two reports, metadata-only Gateway audit, and
+bounded stack/caller logs. This is Browser reference external-caller evidence,
+not production advertisement, real Agent Platform, aggregate conformance,
+multi-controller, hostile multi-tenant, deployment, or production evidence.
+
+Hosted coding/shell Reference run `33838215917` and Platform Candidate run
+`33838215882` passed the respective 15+5 scenario sets against the same
+harness/Provider lock `79fee2b`/`f760369`. Their artifacts are
+`reference-e2e-evidence-33838215917` (digest
+`sha256:77cd06014bc9ddf4c41130b1ccaf7b35210ebfbedf075662190500e708d23c2e`)
+and `platform-candidate-e2e-evidence-33838215882` (digest
+`sha256:9ad455bba6d61a082c2a5136fcf19c4609db6c759f035a0e5299ecc85f31e23e`).
+The candidate result covers only its named shadow/selection/rollback/drain
+policy. Neither coding/shell run contains a Browser scenario. The latest clean
+local Reference and Candidate runs remain `20260904T013909.243838000Z` and
+`20260904T014037.825223000Z` on the earlier `9eb32ba`/`5aae281` lock.
 
 The preceding hosted Reference E2E run `33760609272` and Platform Candidate run
 `33760609231` passed harness lock `a2721ad` against Provider `b8423f5` with 15

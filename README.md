@@ -8,10 +8,11 @@ The project is intentionally **runtime-first**. It is not just a cloud browser U
 
 ## Status
 
-This repository is in active implementation. The coding/shell reference-caller
-gate passes, while real Agent Platform migration, complete Browser
-command/runtime composition and Browser caller evidence, deployment,
-multi-controller, hostile multi-tenant, and production gates remain open.
+This repository is in active implementation. The coding/shell and Browser
+reference-caller gates pass within their separately named evidence boundaries.
+Real Agent Platform migration, production Browser advertisement and Gateway
+deployment, aggregate conformance, multi-controller, hostile multi-tenant,
+deployment, and production gates remain open.
 Start a new development session with
 [`docs/PROJECT_CONTEXT.md`](docs/PROJECT_CONTEXT.md). It summarizes the current
 architecture, engineering rules, verified maturity, blockers, and next work;
@@ -58,27 +59,32 @@ Currently implemented:
   exactly linux/amd64 and linux/arm64/v8, and independently verified GitHub
   OIDC/Sigstore provenance; this image evidence does not by itself enable a
   Provider route
-- uncomposed Provider-local Browser session, opaque-reference, operation,
+- Provider-local Browser session, opaque-reference, operation,
   duration-evidence, and fail-closed Docker runtime-adapter components; the
   adapter binds the exact signed image, private non-TTY CDP relay, stable guest
   mounts, and runtime limits
-- a real, uncomposed GitHub CLI/Sigstore Browser provenance verifier and a real
-  uncomposed Docker restricted-egress provisioner. Browser lifecycle authority
+- a real GitHub CLI/Sigstore Browser provenance verifier and a real Docker
+  restricted-egress provisioner. Browser lifecycle authority
   persists the create-time restricted policy; the adapter binds it to a
   per-allocation internal network, pinned private DNS/HTTP/TLS gateway, and
   exact hostname policy
 - protected Browser open/handoff transport handlers that preserve admission
   correlation and project only an expiring opaque reference
-- an uncomposed caller-owned Browser Gateway boundary with separate
+- a caller-owned Browser Gateway boundary with separate
   `browser_session_id`/`ref:browser-session:*` identity, exact endpoint binding,
-  metadata-only audit, bounded reconnect/revocation, and RFC 6455 CDP framing.
-  No Browser command/runtime composition, public Gateway route, advertisement,
-  or browser caller is enabled
+  metadata-only audit, bounded reconnect/revocation, and RFC 6455 CDP framing
+- a default-disabled Browser Provider command/runtime graph and a separate
+  Browser-only reference stack plus black-box caller. Hosted Browser Reference
+  E2E passes 10 initial and 5 process-reconstruction scenarios through real
+  mTLS/JWS HTTPS, WebSocket, signed-image provenance, Docker, restricted egress,
+  usage evidence, and cleanup. The production command still exposes no public
+  Browser Gateway and does not advertise Browser
 
 Planned but not yet implemented:
 
-- Browser command/runtime composition, caller-owned public Gateway integration,
-  capability advertisement, and independent caller E2E
+- production Browser advertisement and deployable caller-owned Gateway
+  integration after the remaining profile-specific security, concurrency, and
+  operational gates
 - runtime images for desktop workloads
 - display, audio, input, streaming, clipboard, and file-transfer modules
 - deployable WebRTC / VNC / public WebSocket Gateway composition
