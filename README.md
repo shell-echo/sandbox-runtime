@@ -12,10 +12,12 @@ This repository is in active implementation. The coding/shell and Browser
 reference-caller gates and the local plus hosted two-Gateway shared-capacity
 gates pass within their separately named evidence boundaries. ADR 0032 also
 passes its caller-owned exact-grant revocation port and real-Valkey adapter
-component gate. Its separate two-Gateway/independent-revoker black-box gate,
-real Agent Platform migration, production Browser advertisement and Gateway
-deployment, aggregate conformance, multi-controller, hostile multi-tenant,
-deployment, and production gates remain open.
+component gate plus its separate local and hosted two-Gateway,
+independent-revoker black-box gate. Real Agent Platform migration, downstream
+CDP fencing, Valkey provenance and HA/failover, production Browser
+advertisement/public Gateway composition, aggregate conformance,
+multi-controller, hostile multi-tenant, deployment, and production gates
+remain open.
 Start a new development session with
 [`docs/PROJECT_CONTEXT.md`](docs/PROJECT_CONTEXT.md). It summarizes the current
 architecture, engineering rules, verified maturity, blockers, and next work;
@@ -103,7 +105,14 @@ Currently implemented:
   resolution/dial work on authority termination, and add a Redis-compatible
   retained-tombstone source/writer with immutable policy, server-time lifetime
   bounds, monotonic expiry retention, bounded polling, and fail-closed outage
-  behavior. This is Gateway port plus adapter component evidence only
+  behavior. A separate clean `linux/arm64` run and hosted `linux/amd64` run
+  `33959122456` pass all seven retained-backend caller scenarios through two
+  Gateway processes, two black-box caller processes, and one independent
+  revoker process. The private echo fixture does not exercise Provider routes,
+  the Contract, or a real Browser/CDP path, and the runs do not establish
+  downstream fencing, Valkey provenance/HA, ACL role isolation, real Agent
+  Platform compatibility, multi-controller, hostile multi-tenant, deployment,
+  or production readiness
 - a default-disabled Browser Provider command/runtime graph and a separate
   Browser-only reference stack plus black-box caller. Hosted Browser Reference
   E2E run `33955436984` passes 13 initial and 5 process-reconstruction
@@ -117,10 +126,9 @@ Currently implemented:
 Planned but not yet implemented:
 
 - production Browser advertisement and deployable caller-owned Gateway
-  integration after the separately locked two-Gateway/independent-revoker
-  durable-revocation caller gate, downstream fencing, HA/failover consistency,
-  Valkey provenance, hostile-tenant, storage, configuration, metrics, and
-  operational gates
+  integration after downstream fencing, HA/failover consistency, Valkey
+  provenance, hostile-tenant, storage, configuration, metrics, and operational
+  gates
 - runtime images for desktop workloads
 - display, audio, input, streaming, clipboard, and file-transfer modules
 - deployable WebRTC / VNC / public WebSocket Gateway composition

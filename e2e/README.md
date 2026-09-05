@@ -5,10 +5,10 @@ MIT `sandbox-runtime` Provider Contract. This is a separate Go module and
 process boundary inside the Provider repository; it is not a same-package
 integration test and does not require a second Git repository.
 
-The module also contains a separately named Browser Gateway shared-capacity
-runner. That runner exercises only WSS, two Gateway fixture processes, and one
-real Redis-compatible authority. It pins Contract identity for context but does
-not call or exercise the Provider API.
+The module also contains separately named Browser Gateway shared-capacity and
+durable-revocation runners. They exercise only WSS, Gateway fixture processes,
+and one real Redis-compatible authority. They pin Contract identity for context
+but do not call or exercise the Provider API.
 
 The black-box caller uses only mTLS, JWS, HTTPS, and WebSocket. A separate
 reference deployment process composes exported `sandbox-runtime` Provider and
@@ -61,6 +61,9 @@ retained-tombstone adapter. Lock-refresh harness `59e08d5` passes current local 
 `13+5`, Reference `15+5`, Candidate `15+5`, and shared-capacity `10/10`
 regressions. These runs do not include the separate two-Gateway plus independent
 revoker durable-revocation caller scenario.
+Harness/Gateway source `e952ef9` adds that independent runner. Clean local
+`linux/arm64` run `20260905T095109.569973000Z` and hosted `linux/amd64` run
+`33959122456` each pass all seven locked scenarios.
 Hosted current-lock runs against harness `c7fe24d` and Provider `c0a55d1` also
 pass: Reference `33955436969`, Candidate `33955437046`, Browser `33955436984`,
 and shared capacity `33955436968`. Each retains its existing evidence boundary.
@@ -144,6 +147,41 @@ readiness. Hosted execution is isolated in
 `.github/workflows/shared-capacity-e2e.yml`; artifacts are uploaded only after
 the run's sanitization checks pass.
 
+## Durable-revocation runner
+
+`cmd/durable-revocation-e2e` runs the independently named
+`Browser Gateway durable distributed revocation black-box evidence` profile.
+It starts one pinned retained Valkey authority, two independent Gateway OS
+processes, two independent black-box caller processes, and one independent
+revoker/control process. The revoker uses only the exported revocation writer
+and Redis-compatible adapter ports; callers have no Provider dependency.
+
+From a clean committed checkout with Docker available:
+
+```bash
+cd e2e
+go run ./cmd/durable-revocation-e2e -check
+go run ./cmd/durable-revocation-e2e \
+  -evidence-root evidence/durable-revocation
+```
+
+The lock fixes Provider `c0a55d1`, the Valkey index and native platform
+manifests, 10-minute test grants, 100 ms revocation polling and operation
+timeouts, a 2-second propagation/outage bound, local capacity `16/8/4`, a
+one-reconnect upper bound with 10 ms backoff, and exactly seven scenarios. The
+scenarios prove active exact-grant disconnect on both Gateways, pre-resolution
+rejection, retained rejection after both Gateway reconstructions, exact-grant
+scope while another same-session grant and another tenant remain active,
+store-outage failure closure, recovery without resurrection, bounded
+propagation, no revocation/outage reconnect, and sanitized evidence.
+
+A passing run closes only ADR 0032's durable exact-grant caller gate. The
+private echo fixture is not Browser/CDP, and Contract/tree/48-case identity is
+metadata with `exercised=false`. The result does not establish downstream CDP
+fencing, Valkey provenance or HA/failover, ACL role separation, Provider API or
+real Agent Platform compatibility, Provider multi-controller reliability,
+hostile multi-tenant isolation, deployment readiness, or production readiness.
+
 ## Latest verified evidence
 
 Current-lock local regressions against Provider `c0a55d1` and harness
@@ -169,6 +207,21 @@ All manifests pin harness `c7fe24d`, Provider `c0a55d1`, and the same locked
 Contract/tree/48 cases; the shared-capacity manifest retains
 `contract.exercised=false`. These are the same four distinct regression tracks,
 not the ADR 0032 independent-revoker caller gate.
+
+Clean local durable-revocation run
+`evidence/durable-revocation/20260905T095109.569973000Z` passed all seven
+scenarios on `linux/arm64` against harness/Gateway `e952ef9` and Provider
+`c0a55d1`; Gateway A/B closed 72/72 ms after revoke acknowledgement. Hosted run
+`33959122456` passed the same seven scenarios on `linux/amd64`; downloaded run
+`20260905T095228.504289461Z` contains exactly seven sanitized files and records
+97/99 ms propagation. Artifact
+`browser-durable-revocation-e2e-evidence-33959122456` has GitHub digest
+`sha256:1384a4504725c90717a3a8da058713fb1b8ed763f2c941b961811eb8370b8600`.
+Both manifests pin Contract/tree/48 cases as metadata with
+`contract.exercised=false`, Valkey provenance as unestablished, and ACL role
+separation as false. These are durable-revocation Gateway/Valkey caller results,
+not Provider API, Browser/CDP, downstream-fencing, real-platform,
+multi-controller, hostile multi-tenant, deployment, or production evidence.
 
 Clean local shared-capacity run
 `evidence/shared-capacity/20260905T061037.558537000Z` passed all 10 scenarios on
@@ -437,11 +490,14 @@ mTLS/JWS admission, lifecycle, exec, terminal Gateway, artifact/usage, restart,
 expiry, endpoint non-disclosure, and negative cross-tenant authorization. The
 Browser runner proves only its locked Browser reference scenarios. The
 shared-capacity runner proves only its WSS/Gateway/Valkey scenarios and does not
-exercise the Provider Contract.
+exercise the Provider Contract. The durable-revocation runner proves only its
+retained exact-grant WSS/Gateway/Valkey scenarios and likewise records Contract
+identity as unexercised metadata.
 
 It does not prove compatibility with `agent-blueprints`, production identity
-infrastructure, distributed revocation, multi-controller operation, hostile
-tenant isolation, deployment readiness, or production readiness.
+infrastructure, downstream CDP fencing, Valkey provenance/HA, multi-controller
+operation, hostile tenant isolation, deployment readiness, or production
+readiness.
 
 Current implementation status is tracked in [../docs/STATUS.md](../docs/STATUS.md).
 
@@ -493,3 +549,11 @@ or production-readiness status.
 Hosted run `33949577876` passed this workflow on `linux/amd64` and uploaded
 `browser-shared-capacity-e2e-evidence-33949577876` with digest
 `sha256:6e938a1549f3ffe3b7a08cf9aa7cd58639f3d058f935c6da1e57dad45ffeb423`.
+
+`../.github/workflows/durable-revocation-e2e.yml` independently verifies the
+durable-revocation lock, runs the module race/vet gates, and executes the pinned
+Valkey plus two-Gateway/two-caller/independent-revoker runner. Hosted run
+`33959122456` passed on `linux/amd64` and uploaded
+`browser-durable-revocation-e2e-evidence-33959122456` with digest
+`sha256:1384a4504725c90717a3a8da058713fb1b8ed763f2c941b961811eb8370b8600`.
+Its green status is evidence only for the named ADR 0032 caller boundary.

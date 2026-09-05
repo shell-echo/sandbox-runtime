@@ -161,8 +161,10 @@ harness/Gateway source `ddbb2c4771a356bc3ab66295c93bef3b749e2c09`, plus hosted
 shared-capacity harness/Gateway source
 `de297e7d951881f8ed3792b4c3dd0553be87284c` and run `33949577876`, plus
 durable exact-grant revocation component implementation
-`c0a55d1e0a862f9e5a592abd27b1e25be3c85b3e` and current E2E lock/harness
-baseline `59e08d542b05ad1a047f439f4ea72e82c8c37404`.
+`c0a55d1e0a862f9e5a592abd27b1e25be3c85b3e` and earlier regression E2E
+lock/harness baseline `59e08d542b05ad1a047f439f4ea72e82c8c37404`, plus durable-revocation
+harness/Gateway source `e952ef9dabf4e9e6f2a984ce0c7944cb2bc569c7`, local run
+`20260905T095109.569973000Z`, and hosted run `33959122456`.
 The Contract slice authorizes an atomic browser-only capability shape,
 create/session/handoff schemas, protected admission bindings, opaque reference
 security, operation/usage projection, and 10 new Suite cases. The browser image
@@ -367,12 +369,18 @@ E2E lock `59e08d5` pins Provider `c0a55d1`. Current-lock local Browser run
 `20260905T080725.227680000Z` passes 10/10 on `linux/arm64`. These are regression
 evidence within their existing names: Browser still uses one process-local
 memory revocation authority, and shared capacity does not exercise revocation.
-The durable distributed revocation caller gate therefore remains open until a
-separately locked run uses two independent Gateway OS processes, an independent
-revoker/control process, and the same retained authority to prove active and
-pre-resolution revocation, restart retention, unaffected grants and tenants,
-outage recovery without resurrection, bounded propagation, and sanitized
-evidence. Downstream CDP fencing remains a separate later ADR and gate.
+Harness/Gateway source `e952ef9` now supplies the separate durable-revocation
+runner. Local `linux/arm64` run `20260905T095109.569973000Z` and hosted
+`linux/amd64` run `33959122456` each pass all seven locked scenarios through
+two independent Gateway OS processes, two independent black-box caller
+processes, an independent revoker/control process, and the same retained Valkey
+authority. They prove active and pre-resolution revocation, restart retention,
+exact-grant scope, outage failure closure, recovery without resurrection,
+bounded propagation, and sanitized evidence. The hosted artifact has digest
+`sha256:1384a4504725c90717a3a8da058713fb1b8ed763f2c941b961811eb8370b8600`.
+Contract/tree/48 cases are metadata with `exercised=false`; the fixture is not
+a real Browser/CDP path, and downstream CDP fencing remains a separate later
+ADR and gate.
 
 Hosted current-lock repository CI `33955437033` passes at repository revision
 `c7fe24d`. Reference, Candidate, Browser, and shared-capacity runs
@@ -384,6 +392,9 @@ reports. Their GitHub digests are recorded in `STATUS.md`. Browser still uses
 the process-local memory revocation authority, while shared capacity still does
 not exercise revocation, so these hosted runs also do not close ADR 0032's
 independent caller gate.
+
+The later dedicated hosted run `33959122456` is the separately named ADR 0032
+caller gate; it must not be conflated with those four regression tracks.
 
 ADR 0018 records the original reproducible browser image component, while ADR
 0019 requires the current `sandbox.runtime/browser-image/v2` sandbox posture
@@ -493,12 +504,15 @@ caller gate. Current-lock hosted CI `33955437033` and four regressions also pass
 against harness `c7fe24d` and Provider `c0a55d1`: Reference `33955436969`,
 Candidate `33955437046`, Browser `33955436984`, and shared capacity
 `33955436968`. They do not expand those boundaries.
+Separate harness/Gateway `e952ef9`, local run
+`20260905T095109.569973000Z`, and hosted run `33959122456` pass the seven-case
+durable-revocation caller gate on arm64 and amd64. Its Contract identity is
+unexercised metadata and its private echo path is not Browser/CDP.
 ADR 0028 and `44ea2ee` add process-local pre-upgrade connection/rate control;
 hosted run `33854020809` passes the combined 12+5 Browser caller against harness
 `e7e7f03`. ADR 0029 and `b8f8941` add listener/TLS/HTTP bounds; hosted run
 `33857739150` passes the 13+5 Browser caller against harness `7a20d9d`.
-Production Browser advertisement/public Gateway, the independent two-Gateway
-plus independent-revoker durable-revocation caller gate, downstream fencing, Valkey
+Production Browser advertisement/public Gateway, downstream fencing, Valkey
 provenance, HA/failover consistency,
 remaining profile-specific security and concurrency, aggregate,
 multi-controller, multi-tenant, deployment, and production gates remain
@@ -521,7 +535,7 @@ Contract identity:
 | P2.5i | Hosted regression `33955436969` passed 15 initial plus 5 restart/resume coding/shell scenarios against harness/Provider lock `c7fe24d`/`c0a55d1`; current local run `20260905T080530.577843000Z` passed against `59e08d5`/`c0a55d1` | Neither run contains a Browser scenario or implies Agent Platform, durable-revocation caller, or production properties |
 | P2 | Reference coding/shell caller release gate passed | Aggregate conformance, actual Agent Platform compatibility, multi-controller, hostile multi-tenant isolation, deployment, and production gates remain open |
 | P3 | Local revision binding/shadow/metrics component evidence plus current local candidate integration (`20260905T080623.861033000Z`, `59e08d5`/`c0a55d1` lock) and hosted candidate regression `33955437046` against `c7fe24d`/`c0a55d1` | Real platform traffic shadow parity, canary, rollback, old-run drain, metric parity, and unchanged platform contracts remain open |
-| P4 | Browser Contract authority/projection, exact sandboxed signed amd64/arm64/v8 publication, Provider-local components, default-disabled command/runtime composition, process-local Gateway limits, hosted run `33955436984` with 13+5 Browser evidence, local shared-capacity run `20260905T080725.227680000Z` with 10/10 on arm64, hosted shared-capacity run `33955436968` with 10/10 on amd64, and ADR 0032/`c0a55d1` exact-grant revocation port/Redis-compatible adapter component evidence pass their named gates | Production Browser advertisement/public Gateway, the independent two-Gateway/independent-revoker durable-revocation caller gate, downstream fencing, Valkey provenance, HA/failover consistency, production storage/configuration and metrics, remaining profile-specific security/concurrency, aggregate, multi-controller, multi-tenant, deployment, and production gates remain open |
+| P4 | Browser Contract authority/projection, exact sandboxed signed amd64/arm64/v8 publication, Provider-local components, default-disabled command/runtime composition, process-local Gateway limits, hosted run `33955436984` with 13+5 Browser evidence, local shared-capacity run `20260905T080725.227680000Z` with 10/10 on arm64, hosted shared-capacity run `33955436968` with 10/10 on amd64, ADR 0032/`c0a55d1` exact-grant revocation port/Redis-compatible adapter component evidence, and local plus hosted seven-case durable-revocation caller evidence under harness `e952ef9`/run `33959122456` pass their named gates | Production Browser advertisement/public Gateway, downstream fencing, Valkey provenance, HA/failover consistency, production storage/configuration and metrics, remaining profile-specific security/concurrency, aggregate, multi-controller, multi-tenant, deployment, and production gates remain open |
 
 Production readiness is not a numbered phase shortcut. Aggregate conformance,
 multi-controller reliability, hostile multi-tenant security, deployment, and
@@ -730,14 +744,10 @@ Its focused, full local, and Docker-tagged gates pass, and repository CI
 repository CI `33159099578` also pass their bounded readiness/projection gates.
 Reviewed documentation baseline `bba02a6` passes repository CI `33160646494`.
 
-1. Implement the separately locked ADR 0032 durable-revocation caller gate with
-   two independent Gateway OS processes, an independent revoker/control process,
-   and the same retained backend. Prove active disconnect and pre-resolution
-   rejection on both Gateways, restart retention, unaffected grants and tenants,
-   store-outage failure closure and recovery without resurrection, bounded
-   propagation, and sanitized evidence. Keep the ADR 0031 shared-capacity gates
-   under regression; do not merge this result with downstream fencing, Valkey
-   provenance/HA, deployment, or production evidence.
+1. Define and implement downstream CDP fencing as a separately reviewed ADR and
+   gate. Keep the ADR 0031 shared-capacity and ADR 0032 durable-revocation caller
+   gates under regression; do not merge either result with downstream fencing,
+   Valkey provenance/HA, deployment, or production evidence.
 2. Preserve the Browser, coding/shell Reference, and Platform Candidate harnesses
    as three separately named evidence modes. Do not relabel the Browser
    reference deployment as production or the candidate mode as real platform
