@@ -26,7 +26,7 @@ platform gate.
 
 | Item | Value |
 | --- | --- |
-| Provider implementation | `070eaa8ccafd5c428ac05e4c7136d3776b2617be` |
+| Provider implementation | `eaba2827dbabc10856d46b4b7dae90d965cc9bc5` |
 | Contract namespace | `urn:shell-echo:sandbox-runtime:provider-v1` |
 | Contract revision | `5096e71fb84fbec22aa3487a0e55a1b49602ab8b` |
 | Contract tree | `859f76dc0e855a0c8abdbbb5648df100dabb4328` |
@@ -69,6 +69,10 @@ the Redis-compatible action-fence adapter, private ingress component, and
 fail-closed Browser composition. Advancing this E2E lock permits the existing
 regression workflows to consume that Provider implementation; it is not the
 separate two-Gateway/unique-ingress/real-Chromium ADR 0033 caller gate.
+Harness baseline `eaba282` additionally adds the bounded independent
+downstream-fencing caller process. The two-caller Provider bootstrap,
+multi-process orchestrator, and 13 locked ADR 0033 scenarios are still not
+implemented or exercised.
 The latest verified hosted regressions before this lock refresh used harness
 `c7fe24d` and Provider `c0a55d1`: Reference `33955436969`, Candidate
 `33955437046`, Browser `33955436984`, and shared capacity `33955436968`. Each
