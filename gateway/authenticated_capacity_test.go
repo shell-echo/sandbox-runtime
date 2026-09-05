@@ -119,26 +119,17 @@ func (l *authenticatedCapacityLeaseSpy) snapshot() (int, []authenticatedCapacity
 }
 
 type authenticatedCapacityRevocationsSpy struct {
-	mu             sync.Mutex
-	isRevokedCalls int
-	watchCalls     int
-	watch          chan struct{}
-	log            *authenticatedCapacityCallLog
+	mu         sync.Mutex
+	watchCalls int
+	watch      *testRevocationWatch
+	log        *authenticatedCapacityCallLog
 }
 
 func newAuthenticatedCapacityRevocationsSpy(log *authenticatedCapacityCallLog) *authenticatedCapacityRevocationsSpy {
-	return &authenticatedCapacityRevocationsSpy{watch: make(chan struct{}), log: log}
+	return &authenticatedCapacityRevocationsSpy{watch: newTestRevocationWatch(), log: log}
 }
 
-func (r *authenticatedCapacityRevocationsSpy) IsRevoked(context.Context, string) (bool, error) {
-	r.mu.Lock()
-	r.isRevokedCalls++
-	r.mu.Unlock()
-	r.log.add("revocation is-revoked")
-	return false, nil
-}
-
-func (r *authenticatedCapacityRevocationsSpy) Watch(context.Context, string) (<-chan struct{}, error) {
+func (r *authenticatedCapacityRevocationsSpy) Watch(context.Context, RevocationSubject) (RevocationWatch, error) {
 	r.mu.Lock()
 	r.watchCalls++
 	r.mu.Unlock()
@@ -149,7 +140,7 @@ func (r *authenticatedCapacityRevocationsSpy) Watch(context.Context, string) (<-
 func (r *authenticatedCapacityRevocationsSpy) snapshot() (int, int) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return r.isRevokedCalls, r.watchCalls
+	return 0, r.watchCalls
 }
 
 type authenticatedCapacityResolverSpy struct {
@@ -353,10 +344,8 @@ func TestGatewayAuthenticatedCapacityFollowsAdmissionOrder(t *testing.T) {
 	wantPrefix := []string{
 		"authorize",
 		"capacity acquire",
-		"revocation is-revoked",
 		"revocation watch",
 		"audit authorized",
-		"revocation is-revoked",
 		"resolver resolve",
 		"endpoint dial",
 	}
@@ -608,7 +597,7 @@ func TestGatewayAuthenticatedCapacityUsesStableAuthorityPriority(t *testing.T) {
 		go func() { result <- gateway.Connect(context.Background(), gatewayRequest(), client) }()
 		waitForAuthenticatedCapacityAudit(t, recorder, AuditConnected)
 
-		close(revocations.watch)
+		revocations.watch.finish(ErrRevoked)
 		events <- CapacityEvent{Kind: CapacityEventLost}
 		select {
 		case err := <-result:
@@ -709,7 +698,7 @@ func TestGatewayAuthenticatedCapacityUsesStablePriorityAcrossExternalBoundaries(
 				t.Fatalf("Gateway did not reach %s boundary", boundary)
 			}
 
-			close(revocations.watch)
+			revocations.watch.finish(ErrRevoked)
 			events <- CapacityEvent{Kind: CapacityEventLost}
 			close(releaseBoundary)
 			select {
@@ -773,7 +762,7 @@ func TestGatewayAuthenticatedCapacityUsesStablePriorityAcrossExternalBoundaries(
 		}
 		waitForAuthenticatedCapacityAudit(t, recorder, AuditBackendClosed)
 
-		close(revocations.watch)
+		revocations.watch.finish(ErrRevoked)
 		events <- CapacityEvent{Kind: CapacityEventLost}
 		select {
 		case err := <-result:

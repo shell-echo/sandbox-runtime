@@ -611,12 +611,7 @@ func verifyBrowserGatewayRevocation(ctx context.Context, client *http.Client, co
 	if err := browserCall(callCtx, connection, 500, "", "Browser.getVersion", nil, nil); err != nil {
 		return err
 	}
-	revoke, err := http.NewRequestWithContext(ctx, http.MethodPost, config.GatewayBaseURL+"/v1/revoke/"+grantID, nil)
-	if err != nil {
-		return err
-	}
-	revoke.Header.Set("X-E2E-Admin-Token", config.GatewayAdminToken)
-	result, err := client.Do(revoke)
+	result, err := revokeGatewayGrant(ctx, client, config, grantID, request.ExpiresAt)
 	if err != nil {
 		return err
 	}

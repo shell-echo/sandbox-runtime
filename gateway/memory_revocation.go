@@ -11,80 +11,100 @@ import (
 type MemoryRevocations struct {
 	mu       sync.Mutex
 	revoked  map[string]bool
-	watchers map[string]map[*memoryWatcher]struct{}
+	watchers map[string]map[*memoryRevocationWatch]struct{}
 }
 
-type memoryWatcher struct {
-	signal     chan struct{}
-	stop       chan struct{}
-	signalOnce sync.Once
-	stopOnce   sync.Once
+type memoryRevocationWatch struct {
+	done chan struct{}
+	once sync.Once
+	mu   sync.Mutex
+	err  error
 }
 
 func NewMemoryRevocations() *MemoryRevocations {
-	return &MemoryRevocations{revoked: make(map[string]bool), watchers: make(map[string]map[*memoryWatcher]struct{})}
+	return &MemoryRevocations{revoked: make(map[string]bool), watchers: make(map[string]map[*memoryRevocationWatch]struct{})}
 }
 
-func (r *MemoryRevocations) IsRevoked(ctx context.Context, grantID string) (bool, error) {
-	if err := contextError(ctx); err != nil {
-		return false, err
+func (w *memoryRevocationWatch) Done() <-chan struct{} {
+	if w == nil {
+		return nil
 	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return r.revoked[grantID], nil
+	return w.done
 }
 
-func (r *MemoryRevocations) Watch(ctx context.Context, grantID string) (<-chan struct{}, error) {
+func (w *memoryRevocationWatch) Err() error {
+	if w == nil {
+		return ErrRevocationUnavailable
+	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.err
+}
+
+func (w *memoryRevocationWatch) finish(err error) {
+	w.once.Do(func() {
+		w.mu.Lock()
+		w.err = err
+		w.mu.Unlock()
+		close(w.done)
+	})
+}
+
+func (r *MemoryRevocations) Watch(ctx context.Context, subject RevocationSubject) (RevocationWatch, error) {
 	if err := contextError(ctx); err != nil {
 		return nil, err
 	}
-	watch := &memoryWatcher{signal: make(chan struct{}), stop: make(chan struct{})}
+	if r == nil || subject.Validate() != nil {
+		return nil, ErrRevocationUnavailable
+	}
+	watch := &memoryRevocationWatch{done: make(chan struct{})}
 	r.mu.Lock()
-	if r.revoked[grantID] {
-		watch.signalOnce.Do(func() { close(watch.signal) })
-		watch.stopOnce.Do(func() { close(watch.stop) })
+	if r.revoked[subject.GrantID] {
+		watch.finish(ErrRevoked)
 		r.mu.Unlock()
-		return watch.signal, nil
+		return watch, nil
 	}
-	if r.watchers[grantID] == nil {
-		r.watchers[grantID] = make(map[*memoryWatcher]struct{})
+	if r.watchers[subject.GrantID] == nil {
+		r.watchers[subject.GrantID] = make(map[*memoryRevocationWatch]struct{})
 	}
-	r.watchers[grantID][watch] = struct{}{}
+	r.watchers[subject.GrantID][watch] = struct{}{}
 	r.mu.Unlock()
 	go func() {
 		select {
 		case <-ctx.Done():
-		case <-watch.stop:
+		case <-watch.done:
 			return
 		}
 		r.mu.Lock()
-		if watchers := r.watchers[grantID]; watchers != nil {
+		if watchers := r.watchers[subject.GrantID]; watchers != nil {
 			delete(watchers, watch)
 			if len(watchers) == 0 {
-				delete(r.watchers, grantID)
+				delete(r.watchers, subject.GrantID)
 			}
 		}
 		r.mu.Unlock()
-		watch.stopOnce.Do(func() { close(watch.stop) })
+		watch.finish(ctx.Err())
 	}()
-	return watch.signal, nil
+	return watch, nil
 }
 
-func (r *MemoryRevocations) Revoke(ctx context.Context, grantID string) error {
+func (r *MemoryRevocations) Revoke(ctx context.Context, subject RevocationSubject) error {
 	if err := contextError(ctx); err != nil {
 		return err
 	}
+	if r == nil || subject.Validate() != nil {
+		return ErrRevocationUnavailable
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if r.revoked[grantID] {
+	if r.revoked[subject.GrantID] {
 		return nil
 	}
-	r.revoked[grantID] = true
-	for watch := range r.watchers[grantID] {
-		watch.signalOnce.Do(func() { close(watch.signal) })
-		watch.stopOnce.Do(func() { close(watch.stop) })
+	r.revoked[subject.GrantID] = true
+	for watch := range r.watchers[subject.GrantID] {
+		watch.finish(ErrRevoked)
 	}
-	delete(r.watchers, grantID)
+	delete(r.watchers, subject.GrantID)
 	return nil
 }
 
@@ -101,3 +121,5 @@ func contextError(ctx context.Context) error {
 }
 
 var _ RevocationSource = (*MemoryRevocations)(nil)
+var _ RevocationWriter = (*MemoryRevocations)(nil)
+var _ RevocationWatch = (*memoryRevocationWatch)(nil)

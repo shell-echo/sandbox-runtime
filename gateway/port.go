@@ -48,11 +48,26 @@ type ReferenceResolver interface {
 	Resolve(context.Context, string) (Endpoint, error)
 }
 
-// RevocationSource provides both a point-in-time check and an interrupt for a
-// currently proxied session. Reconnects must re-check it before dialing.
+// RevocationWatch is a stable, level-triggered view of one exact grant. Done
+// remains open while authority is healthy. After Done closes, Err must
+// consistently return either ErrRevoked, ErrRevocationUnavailable, or the
+// observing context error.
+type RevocationWatch interface {
+	Done() <-chan struct{}
+	Err() error
+}
+
+// RevocationSource atomically establishes the initial point-in-time decision
+// and an interrupt for one exact caller-owned grant. Durable implementations
+// must retain a revocation long enough for a watch to catch up after restart.
 type RevocationSource interface {
-	IsRevoked(context.Context, string) (bool, error)
-	Watch(context.Context, string) (<-chan struct{}, error)
+	Watch(context.Context, RevocationSubject) (RevocationWatch, error)
+}
+
+// RevocationWriter is the caller-owned control-plane mutation boundary. It is
+// deliberately separate from Provider handoff-reference revocation.
+type RevocationWriter interface {
+	Revoke(context.Context, RevocationSubject) error
 }
 
 // Recorder owns the caller/platform audit sink. Events do not contain frame

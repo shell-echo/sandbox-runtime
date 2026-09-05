@@ -203,7 +203,14 @@ func (g *referenceGateway) revoke(response http.ResponseWriter, request *http.Re
 		return
 	}
 	grantID := request.PathValue("grant_id")
-	if err := g.revocations.Revoke(request.Context(), grantID); err != nil {
+	expiresAt, err := time.Parse(time.RFC3339Nano, request.URL.Query().Get("expires_at"))
+	if err != nil {
+		http.Error(response, "invalid expiry", http.StatusBadRequest)
+		return
+	}
+	if err := g.revocations.Revoke(request.Context(), gateway.RevocationSubject{
+		GrantID: grantID, ExpiresAt: expiresAt.UTC(),
+	}); err != nil {
 		http.Error(response, "unavailable", http.StatusServiceUnavailable)
 		return
 	}

@@ -49,27 +49,49 @@ func (r *testResolver) Calls() int {
 type testRevocations struct {
 	mu      sync.Mutex
 	revoked map[string]bool
-	watch   map[string]chan struct{}
+	watch   map[string]*testRevocationWatch
 }
 
 func newTestRevocations() *testRevocations {
-	return &testRevocations{revoked: make(map[string]bool), watch: make(map[string]chan struct{})}
+	return &testRevocations{revoked: make(map[string]bool), watch: make(map[string]*testRevocationWatch)}
 }
 
-func (r *testRevocations) IsRevoked(_ context.Context, grantID string) (bool, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return r.revoked[grantID], nil
+type testRevocationWatch struct {
+	done chan struct{}
+	once sync.Once
+	mu   sync.Mutex
+	err  error
 }
 
-func (r *testRevocations) Watch(_ context.Context, grantID string) (<-chan struct{}, error) {
+func newTestRevocationWatch() *testRevocationWatch {
+	return &testRevocationWatch{done: make(chan struct{})}
+}
+
+func (w *testRevocationWatch) Done() <-chan struct{} { return w.done }
+
+func (w *testRevocationWatch) Err() error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.err
+}
+
+func (w *testRevocationWatch) finish(err error) {
+	w.once.Do(func() {
+		w.mu.Lock()
+		w.err = err
+		w.mu.Unlock()
+		close(w.done)
+	})
+}
+
+func (r *testRevocations) Watch(_ context.Context, subject RevocationSubject) (RevocationWatch, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	watch := make(chan struct{})
-	if r.revoked[grantID] {
-		close(watch)
+	watch := newTestRevocationWatch()
+	if r.revoked[subject.GrantID] {
+		watch.finish(ErrRevoked)
 	} else {
-		r.watch[grantID] = watch
+		r.watch[subject.GrantID] = watch
 	}
 	return watch, nil
 }
@@ -82,7 +104,7 @@ func (r *testRevocations) Revoke(grantID string) {
 	}
 	r.revoked[grantID] = true
 	if watch := r.watch[grantID]; watch != nil {
-		close(watch)
+		watch.finish(ErrRevoked)
 		delete(r.watch, grantID)
 	}
 }

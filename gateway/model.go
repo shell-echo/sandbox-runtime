@@ -12,18 +12,19 @@ import (
 )
 
 var (
-	ErrInvalidRequest       = errors.New("invalid Runtime Gateway connect request")
-	ErrInvalidGrant         = errors.New("invalid Runtime Gateway authorization grant")
-	ErrUnauthorized         = errors.New("Runtime Gateway caller is unauthorized")
-	ErrRevoked              = errors.New("Runtime Gateway session has been revoked")
-	ErrExpired              = errors.New("Runtime Gateway session has expired")
-	ErrReferenceUnavailable = errors.New("Runtime Gateway handoff reference is unavailable")
-	ErrStaleReference       = errors.New("Runtime Gateway handoff reference is stale")
-	ErrReconnectExhausted   = errors.New("Runtime Gateway reconnect attempts exhausted")
-	ErrCapacityExhausted    = errors.New("Runtime Gateway connection capacity exhausted")
-	ErrCapacityUnavailable  = errors.New("Runtime Gateway connection capacity is unavailable")
-	ErrAuditUnavailable     = errors.New("Runtime Gateway audit recording is unavailable")
-	ErrProxyUnavailable     = errors.New("Runtime Gateway proxy is unavailable")
+	ErrInvalidRequest        = errors.New("invalid Runtime Gateway connect request")
+	ErrInvalidGrant          = errors.New("invalid Runtime Gateway authorization grant")
+	ErrUnauthorized          = errors.New("Runtime Gateway caller is unauthorized")
+	ErrRevoked               = errors.New("Runtime Gateway session has been revoked")
+	ErrExpired               = errors.New("Runtime Gateway session has expired")
+	ErrReferenceUnavailable  = errors.New("Runtime Gateway handoff reference is unavailable")
+	ErrStaleReference        = errors.New("Runtime Gateway handoff reference is stale")
+	ErrReconnectExhausted    = errors.New("Runtime Gateway reconnect attempts exhausted")
+	ErrCapacityExhausted     = errors.New("Runtime Gateway connection capacity exhausted")
+	ErrCapacityUnavailable   = errors.New("Runtime Gateway connection capacity is unavailable")
+	ErrRevocationUnavailable = errors.New("Runtime Gateway revocation authority is unavailable")
+	ErrAuditUnavailable      = errors.New("Runtime Gateway audit recording is unavailable")
+	ErrProxyUnavailable      = errors.New("Runtime Gateway proxy is unavailable")
 
 	identifierPattern        = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$`)
 	terminalReferencePattern = regexp.MustCompile(`^ref:session:[A-Za-z0-9][A-Za-z0-9._-]{0,199}$`)
@@ -51,6 +52,21 @@ type CapacitySubject struct {
 	BrowserSessionID    string
 	CapabilityProfileID string
 	ExpiresAt           time.Time
+}
+
+// RevocationSubject is the exact caller-owned grant identity observed by the
+// Gateway. ExpiresAt lets a durable authority bound tombstone retention without
+// moving grant ownership into the Provider.
+type RevocationSubject struct {
+	GrantID   string
+	ExpiresAt time.Time
+}
+
+func (s RevocationSubject) Validate() error {
+	if !identifierPattern.MatchString(s.GrantID) || s.ExpiresAt.IsZero() {
+		return ErrInvalidGrant
+	}
+	return nil
 }
 
 type CapacityEventKind string
@@ -226,4 +242,5 @@ const (
 	AuditCapacityUnavailable   AuditEventType = "capacity_unavailable"
 	AuditCapacityLost          AuditEventType = "capacity_lost"
 	AuditCapacityReleaseFailed AuditEventType = "capacity_release_failed"
+	AuditRevocationUnavailable AuditEventType = "revocation_unavailable"
 )

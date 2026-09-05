@@ -161,12 +161,7 @@ func verifyGatewayRevocation(ctx context.Context, client *http.Client, config Co
 	if err := readUntil(ctx, connection, "revoke-ready"); err != nil {
 		return err
 	}
-	revoke, err := http.NewRequestWithContext(ctx, http.MethodPost, config.GatewayBaseURL+"/v1/revoke/"+grantID, nil)
-	if err != nil {
-		return err
-	}
-	revoke.Header.Set("X-E2E-Admin-Token", config.GatewayAdminToken)
-	result, err := client.Do(revoke)
+	result, err := revokeGatewayGrant(ctx, client, config, grantID, request.ExpiresAt)
 	if err != nil {
 		return err
 	}
@@ -179,6 +174,22 @@ func verifyGatewayRevocation(ctx context.Context, client *http.Client, config Co
 		_, _, err := connection.Read(readCtx)
 		return err
 	})
+}
+
+func revokeGatewayGrant(ctx context.Context, client *http.Client, config Config, grantID string, expiresAt time.Time) (*http.Response, error) {
+	endpoint, err := url.Parse(config.GatewayBaseURL + "/v1/revoke/" + url.PathEscape(grantID))
+	if err != nil {
+		return nil, err
+	}
+	query := endpoint.Query()
+	query.Set("expires_at", expiresAt.UTC().Format(time.RFC3339Nano))
+	endpoint.RawQuery = query.Encode()
+	revoke, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+	revoke.Header.Set("X-E2E-Admin-Token", config.GatewayAdminToken)
+	return client.Do(revoke)
 }
 
 func waitForGatewayClose(ctx context.Context, timeout time.Duration, read func(context.Context) error) error {

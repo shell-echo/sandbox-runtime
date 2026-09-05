@@ -55,7 +55,8 @@ type Gateway struct {
 }
 
 func New(options Options) (*Gateway, error) {
-	if options.Authorizer == nil || options.Resolver == nil || options.Revocations == nil || options.Recorder == nil {
+	if options.Authorizer == nil || options.Resolver == nil || options.Revocations == nil || options.Recorder == nil ||
+		isTypedNil(options.Revocations) {
 		return nil, ErrProxyUnavailable
 	}
 	clock := options.Clock
@@ -169,33 +170,29 @@ func (g *Gateway) Connect(ctx context.Context, request ConnectRequest, client St
 			return err
 		}
 	}
-	revoked, err := g.revocations.IsRevoked(ctx, grant.GrantID)
+	watchCtx, cancelWatch := context.WithCancel(ctx)
+	defer cancelWatch()
+	watch, err := g.revocations.Watch(watchCtx, revocationSubjectForGrant(grant))
 	if err != nil {
-		if capacityErr := capacityContextError(ctx); capacityErr != nil {
-			return capacityErr
-		}
-		g.recordDenied(ctx, request, now, err)
-		return errors.Join(ErrProxyUnavailable, err)
+		result := g.revocationSetupError(ctx, grant.ExpiresAt, err)
+		g.recordAuthorityTermination(grant, result, 0, 0, 0)
+		return result
 	}
-	if revoked {
-		g.recordDenied(ctx, request, now, ErrRevoked)
-		return ErrRevoked
-	}
-	watch, err := g.revocations.Watch(ctx, grant.GrantID)
-	if err != nil {
-		if capacityErr := capacityContextError(ctx); capacityErr != nil {
-			return capacityErr
-		}
-		g.recordDenied(ctx, request, now, err)
-		return errors.Join(ErrProxyUnavailable, err)
-	}
-	if watch == nil {
-		return errors.Join(ErrProxyUnavailable, errors.New("revocation watcher is nil"))
+	if watch == nil || isTypedNil(watch) || watch.Done() == nil {
+		result := g.revocationSetupError(ctx, grant.ExpiresAt, errors.New("revocation watcher is unavailable"))
+		g.recordAuthorityTermination(grant, result, 0, 0, 0)
+		return result
 	}
 	if authorityErr := g.authorityError(ctx, watch, grant.ExpiresAt); authorityErr != nil {
 		g.recordAuthorityTermination(grant, authorityErr, 0, 0, 0)
 		return authorityErr
 	}
+	authorityCtx, cancelAuthority, authorityMonitorDone := monitorRevocationWatch(ctx, watch)
+	ctx = authorityCtx
+	defer func() {
+		cancelAuthority(context.Canceled)
+		<-authorityMonitorDone
+	}()
 	if err := g.record(ctx, eventForGrant(grant, AuditAuthorized, now, 0, 0, 0, "")); err != nil {
 		return errors.Join(ErrAuditUnavailable, err)
 	}
@@ -208,20 +205,6 @@ func (g *Gateway) Connect(ctx context.Context, request ConnectRequest, client St
 			return authorityErr
 		}
 		now = g.clock.Now().UTC()
-		revoked, err = g.revocations.IsRevoked(ctx, grant.GrantID)
-		if err != nil {
-			_ = client.Close(context.Background())
-			if authorityErr := g.authorityError(ctx, watch, grant.ExpiresAt); authorityErr != nil {
-				g.recordAuthorityTermination(grant, authorityErr, reconnects, 0, 0)
-				return authorityErr
-			}
-			return errors.Join(ErrProxyUnavailable, err)
-		}
-		if revoked {
-			g.recordAuthorityTermination(grant, ErrRevoked, reconnects, 0, 0)
-			_ = client.Close(context.Background())
-			return ErrRevoked
-		}
 
 		endpoint, err := g.resolver.Resolve(ctx, grant.HandoffReference)
 		if authorityErr := g.authorityError(ctx, watch, grant.ExpiresAt); authorityErr != nil {
@@ -378,17 +361,59 @@ func contextResult(ctx context.Context, fallback error) error {
 	return fallback
 }
 
-func revocationSignaled(watch <-chan struct{}) bool {
+func monitorRevocationWatch(parent context.Context, watch RevocationWatch) (context.Context, context.CancelCauseFunc, <-chan struct{}) {
+	ctx, cancel := context.WithCancelCause(parent)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		select {
+		case <-watch.Done():
+			cancel(revocationWatchError(watch))
+		case <-ctx.Done():
+		}
+	}()
+	return ctx, cancel, done
+}
+
+func revocationWatchError(watch RevocationWatch) error {
+	if watch == nil || isTypedNil(watch) || watch.Done() == nil {
+		return ErrRevocationUnavailable
+	}
 	select {
-	case <-watch:
-		return true
+	case <-watch.Done():
+		err := watch.Err()
+		switch err {
+		case ErrRevoked:
+			return ErrRevoked
+		case context.Canceled, context.DeadlineExceeded:
+			return err
+		case ErrRevocationUnavailable:
+			return err
+		default:
+			return ErrRevocationUnavailable
+		}
 	default:
-		return false
+		return nil
 	}
 }
 
-func (g *Gateway) authorityError(ctx context.Context, watch <-chan struct{}, expiresAt time.Time) error {
-	if revocationSignaled(watch) {
+func (g *Gateway) revocationSetupError(ctx context.Context, expiresAt time.Time, sourceErr error) error {
+	if !g.clock.Now().UTC().Before(expiresAt) {
+		return ErrExpired
+	}
+	if capacityErr := capacityContextError(ctx); capacityErr != nil {
+		return capacityErr
+	}
+	if ctx != nil && ctx.Err() != nil &&
+		(errors.Is(sourceErr, context.Canceled) || errors.Is(sourceErr, context.DeadlineExceeded)) {
+		return ctx.Err()
+	}
+	return errors.Join(ErrProxyUnavailable, ErrRevocationUnavailable)
+}
+
+func (g *Gateway) authorityError(ctx context.Context, watch RevocationWatch, expiresAt time.Time) error {
+	revocationErr := revocationWatchError(watch)
+	if errors.Is(revocationErr, ErrRevoked) {
 		return ErrRevoked
 	}
 	if !g.clock.Now().UTC().Before(expiresAt) {
@@ -396,6 +421,12 @@ func (g *Gateway) authorityError(ctx context.Context, watch <-chan struct{}, exp
 	}
 	if capacityErr := capacityContextError(ctx); capacityErr != nil {
 		return capacityErr
+	}
+	if revocationErr != nil {
+		if errors.Is(revocationErr, context.Canceled) || errors.Is(revocationErr, context.DeadlineExceeded) {
+			return revocationErr
+		}
+		return errors.Join(ErrProxyUnavailable, ErrRevocationUnavailable, revocationErr)
 	}
 	if ctx != nil && ctx.Err() != nil {
 		return ctx.Err()
@@ -409,6 +440,8 @@ func (g *Gateway) recordAuthorityTermination(grant Grant, err error, attempt int
 		g.recordBoundedEvent(eventForGrant(grant, AuditRevoked, g.clock.Now().UTC(), attempt, frames, bytes, "grant revoked"))
 	case errors.Is(err, ErrExpired):
 		g.recordBoundedEvent(eventForGrant(grant, AuditExpired, g.clock.Now().UTC(), attempt, frames, bytes, "grant expired"))
+	case errors.Is(err, ErrRevocationUnavailable):
+		g.recordBoundedEvent(eventForGrant(grant, AuditRevocationUnavailable, g.clock.Now().UTC(), attempt, frames, bytes, "revocation authority unavailable"))
 	}
 }
 
@@ -439,7 +472,7 @@ func (g *Gateway) recordBoundedEvent(event AuditEvent) {
 	_ = g.record(recordCtx, event)
 }
 
-func (g *Gateway) waitReconnect(ctx context.Context, watch <-chan struct{}, expiresAt time.Time) error {
+func (g *Gateway) waitReconnect(ctx context.Context, watch RevocationWatch, expiresAt time.Time) error {
 	if err := g.authorityError(ctx, watch, expiresAt); err != nil {
 		return err
 	}
@@ -450,6 +483,8 @@ func (g *Gateway) waitReconnect(ctx context.Context, watch <-chan struct{}, expi
 	defer timer.Stop()
 	select {
 	case <-ctx.Done():
+		return g.authorityError(ctx, watch, expiresAt)
+	case <-watch.Done():
 		return g.authorityError(ctx, watch, expiresAt)
 	case <-timer.C:
 		return g.authorityError(ctx, watch, expiresAt)
@@ -480,7 +515,7 @@ type proxyResult struct {
 	bytes         uint64
 }
 
-func (g *Gateway) proxyAttempt(ctx context.Context, client, backend Stream, grant Grant, watch <-chan struct{}) proxyResult {
+func (g *Gateway) proxyAttempt(ctx context.Context, client, backend Stream, grant Grant, watch RevocationWatch) proxyResult {
 	attemptCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	results := make(chan transferResult, 2)
@@ -504,7 +539,7 @@ func (g *Gateway) proxyAttempt(ctx context.Context, client, backend Stream, gran
 		select {
 		case first = <-results:
 			haveFirst = true
-		case <-watch:
+		case <-watch.Done():
 			revoked = true
 		case <-expiry:
 			expired = true
@@ -514,13 +549,8 @@ func (g *Gateway) proxyAttempt(ctx context.Context, client, backend Stream, gran
 
 	// Resolve simultaneously ready authority signals with one stable priority.
 	// A confirmed revocation outranks expiry, which outranks capacity loss.
-	if !revoked {
-		select {
-		case <-watch:
-			revoked = true
-		default:
-		}
-	}
+	revocationErr := revocationWatchError(watch)
+	revoked = errors.Is(revocationErr, ErrRevoked)
 	if !expired && expiry != nil {
 		select {
 		case <-expiry:
@@ -532,7 +562,7 @@ func (g *Gateway) proxyAttempt(ctx context.Context, client, backend Stream, gran
 		expired = !g.clock.Now().UTC().Before(grant.ExpiresAt)
 	}
 	capacityErr := capacityContextError(ctx)
-	authorityStopped := revoked || expired || capacityErr != nil || (!haveFirst && ctx.Err() != nil)
+	authorityStopped := revocationErr != nil || expired || capacityErr != nil || (!haveFirst && ctx.Err() != nil)
 	cancel()
 	_ = backend.Close(context.Background())
 	if authorityStopped {
@@ -550,6 +580,14 @@ func (g *Gateway) proxyAttempt(ctx context.Context, client, backend Stream, gran
 	}
 	if capacityErr != nil {
 		result.err = capacityErr
+		return result
+	}
+	if revocationErr != nil {
+		if errors.Is(revocationErr, context.Canceled) || errors.Is(revocationErr, context.DeadlineExceeded) {
+			result.err = revocationErr
+		} else {
+			result.err = errors.Join(ErrProxyUnavailable, ErrRevocationUnavailable, revocationErr)
+		}
 		return result
 	}
 	if ctx.Err() != nil {
@@ -636,6 +674,10 @@ func eventForGrant(grant Grant, eventType AuditEventType, at time.Time, attempt 
 	}
 }
 
+func revocationSubjectForGrant(grant Grant) RevocationSubject {
+	return RevocationSubject{GrantID: grant.GrantID, ExpiresAt: grant.ExpiresAt.UTC()}
+}
+
 func (g *Gateway) record(ctx context.Context, event AuditEvent) error {
 	if event.At.IsZero() {
 		event.At = g.clock.Now().UTC()
@@ -644,9 +686,13 @@ func (g *Gateway) record(ctx context.Context, event AuditEvent) error {
 }
 
 func (g *Gateway) recordDenied(ctx context.Context, request ConnectRequest, at time.Time, reason error) {
+	boundedReason := "caller authorization denied"
+	if errors.Is(reason, ErrRevoked) {
+		boundedReason = "grant revoked"
+	}
 	_ = g.recorder.Record(ctx, AuditEvent{
 		Type: AuditDenied, At: at, CallerID: request.CallerID, TenantID: request.TenantID,
 		SandboxID: request.SandboxID, RuntimeSessionID: request.RuntimeSessionID,
-		BrowserSessionID: request.BrowserSessionID, Reason: reason.Error(),
+		BrowserSessionID: request.BrowserSessionID, Reason: boundedReason,
 	})
 }

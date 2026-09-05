@@ -465,28 +465,52 @@ func (r *testProviderResolver) WaitCalls(t *testing.T, want int) {
 type testRevocations struct {
 	mu      sync.Mutex
 	revoked bool
-	watch   chan struct{}
+	watch   *compositionRevocationWatch
 	watched chan struct{}
 	once    sync.Once
-	checks  int
 	watches int
 }
 
 func newTestRevocations() *testRevocations {
-	return &testRevocations{watch: make(chan struct{}), watched: make(chan struct{})}
+	return &testRevocations{watch: newCompositionRevocationWatch(), watched: make(chan struct{})}
 }
 
-func (r *testRevocations) IsRevoked(context.Context, string) (bool, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.checks++
-	return r.revoked, nil
+type compositionRevocationWatch struct {
+	done chan struct{}
+	once sync.Once
+	mu   sync.Mutex
+	err  error
 }
 
-func (r *testRevocations) Watch(context.Context, string) (<-chan struct{}, error) {
+func newCompositionRevocationWatch() *compositionRevocationWatch {
+	return &compositionRevocationWatch{done: make(chan struct{})}
+}
+
+func (w *compositionRevocationWatch) Done() <-chan struct{} { return w.done }
+
+func (w *compositionRevocationWatch) Err() error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.err
+}
+
+func (w *compositionRevocationWatch) finish(err error) {
+	w.once.Do(func() {
+		w.mu.Lock()
+		w.err = err
+		w.mu.Unlock()
+		close(w.done)
+	})
+}
+
+func (r *testRevocations) Watch(context.Context, gateway.RevocationSubject) (gateway.RevocationWatch, error) {
 	r.mu.Lock()
 	r.watches++
+	revoked := r.revoked
 	r.mu.Unlock()
+	if revoked {
+		r.watch.finish(gateway.ErrRevoked)
+	}
 	r.once.Do(func() { close(r.watched) })
 	return r.watch, nil
 }
@@ -494,14 +518,14 @@ func (r *testRevocations) Watch(context.Context, string) (<-chan struct{}, error
 func (r *testRevocations) Counts() (checks, watches int) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return r.checks, r.watches
+	return 0, r.watches
 }
 
 func (r *testRevocations) Revoke() {
 	r.mu.Lock()
 	if !r.revoked {
 		r.revoked = true
-		close(r.watch)
+		r.watch.finish(gateway.ErrRevoked)
 	}
 	r.mu.Unlock()
 }
