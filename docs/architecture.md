@@ -143,6 +143,19 @@ multi-controller, hostile multi-tenant, real Agent Platform, aggregate
 conformance, production configuration, deployment, and production readiness
 remain open.
 
+ADR 0032 and implementation `c0a55d1` add caller-owned exact-grant,
+level-triggered revocation-watch semantics and a Redis-compatible
+retained-tombstone source/writer. The adapter verifies an immutable policy, hashes
+namespace and grant identities, uses Redis server time for bounded grant
+lifetime and tombstone expiry, retains only the greatest expiry under repeated
+or out-of-order writes, and fails closed on authority loss or malformed state.
+Gateway tests prove pre-resolution rejection, cancellation of blocked resolve
+and dial work, active disconnect, reconnect suppression, deterministic
+revocation/expiry/capacity/unavailability priority, and bounded audit reasons.
+Real pinned-Valkey tests establish this component, not the independent
+durable-revocation caller gate. That gate still requires two Gateway OS processes and
+an independent revoker/control process against the same retained backend.
+
 | Method and path | Responsibility |
 | --- | --- |
 | `GET /v1/capabilities` | Return provider revision, runtime profiles, limits, and supported capability versions. |
@@ -418,7 +431,7 @@ advertisement, and optional-profile gates remain open:
 | Workspace | The Provider Docker development adapter supplies `/inputs`, `/workspace`, `/outputs`, and bounded tmpfs `/tmp` with owned cleanup; exec consumes that runtime without exposing host paths. | Add artifact consumers, capacity enforcement, and stronger isolation evidence. |
 | Security | Docker defaults already drop capabilities, use non-root/read-only root, disable networking, and limit resources. | Add policy enforcement, stronger isolation profiles, secret grants, egress controls, audit evidence, and production auth. |
 | Events and usage | Durable lifecycle events and bounded usage-evidence components exist without a complete runtime collector composition. | Complete collection/reconciliation while leaving platform accounting authority outside the Provider. |
-| Snapshots/browser/desktop | Browser Contract authority/projection, exact signed image, Provider-local session/application/reference/usage, Docker adapter, provenance verifier, restricted-egress provisioner, create-policy binding, protected handlers, caller-owned Gateway, default-disabled command graph, and hosted 13+5 Browser reference-caller path have named evidence. The Gateway has explicit process-local total/per-session post-authorization capacity, pre-upgrade service limits, bounded listener/TLS/HTTP behavior, and an authenticated-capacity port with both process-local memory and Redis-compatible implementations. ADR 0031/`9434540`, Provider baseline `2ed5e68`, local arm64 run `20260905T061037.558537000Z`, and hosted amd64 run `33949577876` add real Valkey plus two-independent-Gateway black-box evidence; the restricted-egress Gateway remains distinct from the caller-owned Gateway. Production Browser advertisement/public Gateway deployment, durable distributed revocation, downstream fencing, Valkey provenance, HA/failover consistency, aggregate, multi-controller, tenant, deployment, and production gates remain open. Snapshots and desktop remain unauthorized optional behavior. | Add durable distributed revocation and downstream fencing, establish Valkey provenance and HA/failover consistency, and add hostile-tenant evidence, metrics, and deployable storage/configuration before production advertisement; begin the Desktop authority audit only after the Browser readiness record is complete. |
+| Snapshots/browser/desktop | Browser Contract authority/projection, exact signed image, Provider-local session/application/reference/usage, Docker adapter, provenance verifier, restricted-egress provisioner, create-policy binding, protected handlers, caller-owned Gateway, default-disabled command graph, and hosted 13+5 Browser reference-caller path have named evidence. The Gateway has explicit process-local total/per-session post-authorization capacity, pre-upgrade service limits, bounded listener/TLS/HTTP behavior, and authenticated-capacity plus exact-grant revocation ports with process-local and Redis-compatible adapters. ADR 0031/`9434540`, Provider baseline `2ed5e68`, local arm64 run `20260905T061037.558537000Z`, and hosted amd64 run `33949577876` add real Valkey plus two-independent-Gateway shared-capacity evidence. ADR 0032/`c0a55d1` adds durable revocation component evidence; current-lock Browser, coding/shell, candidate, and shared-capacity local regressions pass under harness `59e08d5`. The restricted-egress Gateway remains distinct from the caller-owned Gateway. Production Browser advertisement/public Gateway deployment, the independent two-Gateway/independent-revoker durable-revocation caller gate, downstream fencing, Valkey provenance, HA/failover consistency, aggregate, multi-controller, tenant, deployment, and production gates remain open. Snapshots and desktop remain unauthorized optional behavior. | Close the durable-revocation caller gate and downstream fencing, establish Valkey provenance and HA/failover consistency, and add hostile-tenant evidence, metrics, and deployable storage/configuration before production advertisement; begin the Desktop authority audit only after the Browser readiness record is complete. |
 
 ## Delivery plan and release gates
 

@@ -26,7 +26,7 @@ platform gate.
 
 | Item | Value |
 | --- | --- |
-| Provider implementation | `2ed5e689f68627c2d7c8e96cf903fc001ea4a546` |
+| Provider implementation | `c0a55d1e0a862f9e5a592abd27b1e25be3c85b3e` |
 | Contract namespace | `urn:shell-echo:sandbox-runtime:provider-v1` |
 | Contract revision | `5096e71fb84fbec22aa3487a0e55a1b49602ab8b` |
 | Contract tree | `859f76dc0e855a0c8abdbbb5648df100dabb4328` |
@@ -55,6 +55,12 @@ Provider baseline `2ed5e68` and clean harness/Gateway source `ddbb2c4` pass its
 separately locked local two-Gateway evidence run. Hosted harness/Gateway source
 `de297e7` passes the same locked boundary in run `33949577876`. Both remain
 separate from the Browser reference evidence track.
+ADR 0032 and Provider `c0a55d1` additionally change the Gateway revocation port
+to one exact-grant level-triggered watch and add a Redis-compatible
+retained-tombstone adapter. Lock-refresh harness `59e08d5` passes current local Browser
+`13+5`, Reference `15+5`, Candidate `15+5`, and shared-capacity `10/10`
+regressions. These runs do not include the separate two-Gateway plus independent
+revoker durable-revocation caller scenario.
 This Provider identity also includes the GitHub Actions migration from Node 20
 action runtimes to Node 24 action runtimes. That infrastructure update adds no
 Browser behavior, caller compatibility, or production-readiness evidence.
@@ -136,6 +142,15 @@ readiness. Hosted execution is isolated in
 the run's sanitization checks pass.
 
 ## Latest verified evidence
+
+Current-lock local regressions against Provider `c0a55d1` and harness
+`59e08d5` pass in Browser run `20260905T080015.795386000Z` (`13+5`), Reference
+run `20260905T080530.577843000Z` (`15+5`), Platform Candidate run
+`20260905T080623.861033000Z` (`15+5`), and shared-capacity run
+`20260905T080725.227680000Z` (`10/10`, `linux/arm64`). The Browser reference
+still uses one process-local memory revocation authority; shared-capacity still
+uses a private echo fixture and does not exercise revocation. Therefore none is
+the ADR 0032 durable distributed revocation caller gate.
 
 Clean local shared-capacity run
 `evidence/shared-capacity/20260905T061037.558537000Z` passed all 10 scenarios on

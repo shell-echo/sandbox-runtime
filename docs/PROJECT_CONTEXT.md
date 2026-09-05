@@ -159,7 +159,10 @@ shared-capacity Provider baseline
 `2ed5e689f68627c2d7c8e96cf903fc001ea4a546`, and local evidence
 harness/Gateway source `ddbb2c4771a356bc3ab66295c93bef3b749e2c09`, plus hosted
 shared-capacity harness/Gateway source
-`de297e7d951881f8ed3792b4c3dd0553be87284c` and run `33949577876`.
+`de297e7d951881f8ed3792b4c3dd0553be87284c` and run `33949577876`, plus
+durable exact-grant revocation component implementation
+`c0a55d1e0a862f9e5a592abd27b1e25be3c85b3e` and current E2E lock/harness
+baseline `59e08d542b05ad1a047f439f4ea72e82c8c37404`.
 The Contract slice authorizes an atomic browser-only capability shape,
 create/session/handoff schemas, protected admission bindings, opaque reference
 security, operation/usage projection, and 10 new Suite cases. The browser image
@@ -345,6 +348,32 @@ HA/failover, durable distributed revocation, downstream fencing, Provider
 multi-controller, hostile multi-tenant, real Agent Platform, aggregate,
 deployment, or production behavior.
 
+ADR 0032 and implementation `c0a55d1` then replace the split revocation
+check/watch with one exact-grant level-triggered watch, cancel blocked Provider
+resolution and dial work when the authority terminates, and add a
+Redis-compatible retained-tombstone source/writer. The adapter verifies an
+immutable policy, hashes namespace and grant identities, uses Redis server time
+to bound grant lifetime and tombstone expiry, preserves the greatest expiry
+under duplicate or out-of-order revoke, polls within bounded operations, and
+fails closed on malformed state or authority loss. Focused/full race-shuffle,
+vet, Contract verification, the unchanged 48-case Suite, and the tagged real
+pinned-Valkey component integration pass locally. This establishes Gateway
+revocation port semantics plus one retained-backend adapter component only.
+
+E2E lock `59e08d5` pins Provider `c0a55d1`. Current-lock local Browser run
+`20260905T080015.795386000Z` passes 13+5 scenarios, Reference run
+`20260905T080530.577843000Z` and Platform Candidate run
+`20260905T080623.861033000Z` each pass 15+5, and shared-capacity run
+`20260905T080725.227680000Z` passes 10/10 on `linux/arm64`. These are regression
+evidence within their existing names: Browser still uses one process-local
+memory revocation authority, and shared capacity does not exercise revocation.
+The durable distributed revocation caller gate therefore remains open until a
+separately locked run uses two independent Gateway OS processes, an independent
+revoker/control process, and the same retained authority to prove active and
+pre-resolution revocation, restart retention, unaffected grants and tenants,
+outage recovery without resurrection, bounded propagation, and sanitized
+evidence. Downstream CDP fencing remains a separate later ADR and gate.
+
 ADR 0018 records the original reproducible browser image component, while ADR
 0019 requires the current `sandbox.runtime/browser-image/v2` sandbox posture
 and signed publication. The image has no `--no-sandbox` path and binds a
@@ -445,12 +474,18 @@ real-Valkey, two-independent-Gateway black-box gate against harness/Gateway
 source `ddbb2c4` and Provider baseline `2ed5e68`. Hosted run `33949577876`
 passes the same 10-scenario gate on `linux/amd64` against harness/Gateway source
 `de297e7` and the same Provider baseline.
+ADR 0032 and `c0a55d1` add exact-grant level-triggered revocation port and
+real-Valkey adapter component evidence. Current E2E lock `59e08d5` passes local
+Browser 13+5, Reference/Candidate 15+5, and shared-capacity 10/10 regressions;
+none is the separately required two-Gateway/independent-revoker revocation
+caller gate.
 ADR 0028 and `44ea2ee` add process-local pre-upgrade connection/rate control;
 hosted run `33854020809` passes the combined 12+5 Browser caller against harness
 `e7e7f03`. ADR 0029 and `b8f8941` add listener/TLS/HTTP bounds; hosted run
 `33857739150` passes the 13+5 Browser caller against harness `7a20d9d`.
-Production Browser advertisement/public Gateway, distributed durable
-revocation, downstream fencing, Valkey provenance, HA/failover consistency,
+Production Browser advertisement/public Gateway, the independent two-Gateway
+plus independent-revoker durable-revocation caller gate, downstream fencing, Valkey
+provenance, HA/failover consistency,
 remaining profile-specific security and concurrency, aggregate,
 multi-controller, multi-tenant, deployment, and production gates remain
 separate and open.
@@ -469,10 +504,10 @@ Contract identity:
 | P1.1 | Passed for DTO, mTLS discovery, JWS/digest/replay/fencing admission | Production identity infrastructure remains unproven |
 | P1.2 | Passed for the bounded Contract-authorized lifecycle subset and development composition | Reserved lifecycle families and production gates remain open |
 | P2 components | P2.1-P2.5h local component, Contract projection, Docker, and recorded repository CI gates pass within their named boundaries | Retain single-controller/development constraints and exact Contract lock |
-| P2.5i | Hosted regression `33940332897` passed 15 initial plus 5 restart/resume coding/shell scenarios against harness/Provider lock `6b01b75`/`997fb0d`; latest clean local run `20260904T081521.464863000Z` passed against the earlier `249cdd4`/`44ea2ee` lock | Neither run contains a Browser scenario or implies Agent Platform or production properties |
+| P2.5i | Hosted regression `33940332897` passed 15 initial plus 5 restart/resume coding/shell scenarios against harness/Provider lock `6b01b75`/`997fb0d`; current local run `20260905T080530.577843000Z` passed against harness/Provider `59e08d5`/`c0a55d1` | Neither run contains a Browser scenario or implies Agent Platform, durable-revocation caller, or production properties |
 | P2 | Reference coding/shell caller release gate passed | Aggregate conformance, actual Agent Platform compatibility, multi-controller, hostile multi-tenant isolation, deployment, and production gates remain open |
-| P3 | Local revision binding/shadow/metrics component evidence plus latest local candidate integration (`20260904T081706.648122000Z`, earlier `249cdd4`/`44ea2ee` lock) and hosted candidate regression `33940332881` against `6b01b75`/`997fb0d` | Real platform traffic shadow parity, canary, rollback, old-run drain, metric parity, and unchanged platform contracts remain open |
-| P4 | Browser Contract authority/projection, exact sandboxed signed amd64/arm64/v8 publication, Provider-local components, default-disabled command/runtime composition, process-local Gateway limits, hosted run `33940332911` with 13+5 Browser evidence, local shared-capacity run `20260905T061037.558537000Z` with 10/10 on arm64, and hosted shared-capacity run `33949577876` with 10/10 on amd64 pass their named gates | Production Browser advertisement/public Gateway, distributed durable revocation, downstream fencing, Valkey provenance, HA/failover consistency, production storage/configuration and metrics, remaining profile-specific security/concurrency, aggregate, multi-controller, multi-tenant, deployment, and production gates remain open |
+| P3 | Local revision binding/shadow/metrics component evidence plus current local candidate integration (`20260905T080623.861033000Z`, `59e08d5`/`c0a55d1` lock) and hosted candidate regression `33940332881` against `6b01b75`/`997fb0d` | Real platform traffic shadow parity, canary, rollback, old-run drain, metric parity, and unchanged platform contracts remain open |
+| P4 | Browser Contract authority/projection, exact sandboxed signed amd64/arm64/v8 publication, Provider-local components, default-disabled command/runtime composition, process-local Gateway limits, hosted run `33940332911` with 13+5 Browser evidence, local shared-capacity run `20260905T061037.558537000Z` with 10/10 on arm64, hosted shared-capacity run `33949577876` with 10/10 on amd64, and ADR 0032/`c0a55d1` exact-grant revocation port/Redis-compatible adapter component evidence pass their named gates | Production Browser advertisement/public Gateway, the independent two-Gateway/independent-revoker durable-revocation caller gate, downstream fencing, Valkey provenance, HA/failover consistency, production storage/configuration and metrics, remaining profile-specific security/concurrency, aggregate, multi-controller, multi-tenant, deployment, and production gates remain open |
 
 Production readiness is not a numbered phase shortcut. Aggregate conformance,
 multi-controller reliability, hostile multi-tenant security, deployment, and
@@ -541,17 +576,18 @@ exposed no backend endpoint and left no managed container or new temporary run
 directory.
 
 This closes the reference external-caller P2.5i gate. It does not prove real
-Veronica compatibility, aggregate conformance, distributed revocation,
+Veronica compatibility, aggregate conformance, distributed revocation caller behavior,
 multi-controller reliability, hostile multi-tenant isolation, deployment, or
 production readiness.
 
-The latest local coding/shell lock-refresh runs use harness `249cdd4c3735ff093ab362e8afda13db3deae95c`
-and Provider `44ea2eecc75752870d4e8580a75be26578dcd63a`. Reference evidence
-`e2e/evidence/20260904T081521.464863000Z/manifest.json` and candidate evidence
-`e2e/evidence/platform-candidate/20260904T081706.648122000Z/manifest.json` each
+The current local coding/shell lock-refresh runs use harness
+`59e08d542b05ad1a047f439f4ea72e82c8c37404` and Provider
+`c0a55d1e0a862f9e5a592abd27b1e25be3c85b3e`. Reference evidence
+`e2e/evidence/20260905T080530.577843000Z/manifest.json` and candidate evidence
+`e2e/evidence/platform-candidate/20260905T080623.861033000Z/manifest.json` each
 record 15 initial plus 5 reconstruction/resume coding/shell passes, Contract 48
 cases, and linux/amd64 runtime digest
-`sha256:bcd5dbff8b2d108ee7dab464a85ee7d39ef74a8616a6af73a94ebb10ff8eaf75`.
+`sha256:c1da999518ed8cf3c422142b705f3eeca5d60104be07bc28c15a7d527d2907fc`.
 Neither manifest contains a browser scenario; the candidate manifest also
 remains explicitly bounded to candidate integration and does not represent real
 Veronica or production traffic.
@@ -680,13 +716,14 @@ Its focused, full local, and Docker-tagged gates pass, and repository CI
 repository CI `33159099578` also pass their bounded readiness/projection gates.
 Reviewed documentation baseline `bba02a6` passes repository CI `33160646494`.
 
-1. Keep the ADR 0031 shared-capacity adapter and local plus hosted two-Gateway
-   black-box gates under regression, then design the next separately reviewed Browser
-   production slice: durable distributed revocation and downstream fencing,
-   Valkey provenance and HA/failover consistency, production storage and
-   configuration, metrics, hostile-tenant, and operational evidence. Do not
-   consider a production `sandbox.browser` advertisement switch until those
-   named gates pass.
+1. Implement the separately locked ADR 0032 durable-revocation caller gate with
+   two independent Gateway OS processes, an independent revoker/control process,
+   and the same retained backend. Prove active disconnect and pre-resolution
+   rejection on both Gateways, restart retention, unaffected grants and tenants,
+   store-outage failure closure and recovery without resurrection, bounded
+   propagation, and sanitized evidence. Keep the ADR 0031 shared-capacity gates
+   under regression; do not merge this result with downstream fencing, Valkey
+   provenance/HA, deployment, or production evidence.
 2. Preserve the Browser, coding/shell Reference, and Platform Candidate harnesses
    as three separately named evidence modes. Do not relabel the Browser
    reference deployment as production or the candidate mode as real platform

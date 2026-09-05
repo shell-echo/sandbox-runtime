@@ -10,10 +10,12 @@ The project is intentionally **runtime-first**. It is not just a cloud browser U
 
 This repository is in active implementation. The coding/shell and Browser
 reference-caller gates and the local plus hosted two-Gateway shared-capacity
-gates pass within their separately named evidence boundaries. Real Agent
-Platform migration, production Browser advertisement and Gateway deployment,
-aggregate conformance, multi-controller, hostile multi-tenant, deployment, and
-production gates remain open.
+gates pass within their separately named evidence boundaries. ADR 0032 also
+passes its caller-owned exact-grant revocation port and real-Valkey adapter
+component gate. Its separate two-Gateway/independent-revoker black-box gate,
+real Agent Platform migration, production Browser advertisement and Gateway
+deployment, aggregate conformance, multi-controller, hostile multi-tenant,
+deployment, and production gates remain open.
 Start a new development session with
 [`docs/PROJECT_CONTEXT.md`](docs/PROJECT_CONTEXT.md). It summarizes the current
 architecture, engineering rules, verified maturity, blockers, and next work;
@@ -94,8 +96,14 @@ Currently implemented:
   pre-upgrade limiter's HTTP `429`. Contract/Suite identity is metadata only
   (`exercised=false`), and neither run covers Browser image provenance,
   restricted egress, or Provider artifact/usage behavior.
-  This does not establish Valkey provenance, HA/failover consistency, durable
-  distributed revocation, downstream fencing, or production deployment
+  Those shared-capacity runs do not establish Valkey provenance, HA/failover
+  consistency, durable distributed revocation, downstream fencing, or
+  production deployment. ADR 0032 and `c0a55d1` replace the split revocation
+  check/watch with an exact-grant level-triggered watch, cancel blocked
+  resolution/dial work on authority termination, and add a Redis-compatible
+  retained-tombstone source/writer with immutable policy, server-time lifetime
+  bounds, monotonic expiry retention, bounded polling, and fail-closed outage
+  behavior. This is Gateway port plus adapter component evidence only
 - a default-disabled Browser Provider command/runtime graph and a separate
   Browser-only reference stack plus black-box caller. Hosted Browser Reference
   E2E run `33940332911` passes 13 initial and 5 process-reconstruction
@@ -109,9 +117,10 @@ Currently implemented:
 Planned but not yet implemented:
 
 - production Browser advertisement and deployable caller-owned Gateway
-  integration after durable distributed revocation, downstream fencing,
-  HA/failover consistency, Valkey provenance, hostile-tenant, storage,
-  configuration, metrics, and operational gates
+  integration after the separately locked two-Gateway/independent-revoker
+  durable-revocation caller gate, downstream fencing, HA/failover consistency,
+  Valkey provenance, hostile-tenant, storage, configuration, metrics, and
+  operational gates
 - runtime images for desktop workloads
 - display, audio, input, streaming, clipboard, and file-transfer modules
 - deployable WebRTC / VNC / public WebSocket Gateway composition
