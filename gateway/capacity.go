@@ -111,7 +111,7 @@ func (c *LocalConnectionCapacity) Acquire(ctx context.Context, subject CapacityS
 	if err := contextError(ctx); err != nil {
 		return nil, err
 	}
-	if err := subject.validate(); err != nil {
+	if err := subject.Validate(); err != nil {
 		return nil, errors.Join(ErrCapacityUnavailable, err)
 	}
 	key := connectionSessionKey{
@@ -129,7 +129,10 @@ func (c *LocalConnectionCapacity) Acquire(ctx context.Context, subject CapacityS
 	return &localConnectionLease{capacity: c, tenantID: subject.TenantID, sessionKey: key}, nil
 }
 
-func (s CapacitySubject) validate() error {
+// Validate checks the credential-free identity supplied to a caller-owned
+// capacity authority. Adapters in child packages use the same validation as
+// the process-local reference implementation.
+func (s CapacitySubject) Validate() error {
 	if !identifierPattern.MatchString(s.TenantID) || !identifierPattern.MatchString(s.SandboxID) ||
 		!identifierPattern.MatchString(s.CapabilityProfileID) || s.ExpiresAt.IsZero() {
 		return ErrInvalidRequest
