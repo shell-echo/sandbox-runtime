@@ -40,7 +40,7 @@ func loadMTLSConfigWithIdentity(certPath, keyPath, clientCAPath string, allowedU
 	if err != nil {
 		return nil, nil, fmt.Errorf("read provider mTLS server certificate: %w", err)
 	}
-	privateKeyPEM, err := readBoundedTLSMaterial(keyPath, maxServerPrivateKeyBytes)
+	privateKeyPEM, err := readBoundedPrivateTLSMaterial(keyPath, maxServerPrivateKeyBytes)
 	if err != nil {
 		return nil, nil, fmt.Errorf("read provider mTLS server private key: %w", err)
 	}
@@ -168,6 +168,14 @@ func newClientIdentityAdmission(identities []string) (*clientIdentityAdmission, 
 }
 
 func readBoundedTLSMaterial(path string, maxBytes int) ([]byte, error) {
+	return readBoundedTLSMaterialWithPrivacy(path, maxBytes, false)
+}
+
+func readBoundedPrivateTLSMaterial(path string, maxBytes int) ([]byte, error) {
+	return readBoundedTLSMaterialWithPrivacy(path, maxBytes, true)
+}
+
+func readBoundedTLSMaterialWithPrivacy(path string, maxBytes int, private bool) ([]byte, error) {
 	if path == "" {
 		return nil, errors.New("file path is required")
 	}
@@ -179,6 +187,15 @@ func readBoundedTLSMaterial(path string, maxBytes int) ([]byte, error) {
 		return nil, err
 	}
 	defer file.Close()
+	if private {
+		info, err := file.Stat()
+		if err != nil {
+			return nil, err
+		}
+		if info.Mode().Perm()&0o077 != 0 {
+			return nil, errors.New("private key file permissions are too broad")
+		}
+	}
 	contents, err := io.ReadAll(io.LimitReader(file, int64(maxBytes)+1))
 	if err != nil {
 		return nil, err

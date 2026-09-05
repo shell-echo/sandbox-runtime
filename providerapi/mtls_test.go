@@ -305,6 +305,11 @@ func TestLoadMTLSConfigRejectsInvalidFiles(t *testing.T) {
 	writeTestFile(t, oversizedCertificatePath, padPEMToSize(t, readTestFile(t, material.serverCert), maxServerCertificateBytes+1))
 	oversizedKeyPath := filepath.Join(material.directory, "oversized-key.pem")
 	writeTestFile(t, oversizedKeyPath, padPEMToSize(t, readTestFile(t, material.serverKey), maxServerPrivateKeyBytes+1))
+	readableKeyPath := filepath.Join(material.directory, "readable-key.pem")
+	writeTestFile(t, readableKeyPath, readTestFile(t, material.serverKey))
+	if err := os.Chmod(readableKeyPath, 0o640); err != nil {
+		t.Fatalf("make private key group-readable: %v", err)
+	}
 	oversizedCAPath := filepath.Join(material.directory, "oversized-ca.pem")
 	writeTestFile(t, oversizedCAPath, padPEMToSize(t, readTestFile(t, material.clientCA), maxClientCABundleBytes+1))
 	nonRegularPath := filepath.Join(material.directory, "non-regular")
@@ -326,6 +331,7 @@ func TestLoadMTLSConfigRejectsInvalidFiles(t *testing.T) {
 		{name: "oversized certificate", certPath: oversizedCertificatePath, keyPath: material.serverKey, caPath: material.clientCA, wantText: "file exceeds 65536 bytes"},
 		{name: "missing key", certPath: material.serverCert, keyPath: missingPath, caPath: material.clientCA},
 		{name: "oversized key", certPath: material.serverCert, keyPath: oversizedKeyPath, caPath: material.clientCA, wantText: "file exceeds 65536 bytes"},
+		{name: "group-readable key", certPath: material.serverCert, keyPath: readableKeyPath, caPath: material.clientCA, wantText: "permissions are too broad"},
 		{name: "mismatched key pair", certPath: material.serverCert, keyPath: otherKeyPath, caPath: material.clientCA},
 		{name: "missing client CA", certPath: material.serverCert, keyPath: material.serverKey, caPath: missingPath},
 		{name: "empty client CA", certPath: material.serverCert, keyPath: material.serverKey, caPath: emptyPath},
