@@ -659,6 +659,71 @@ func TestBrowserServeUsesPublicAndPrivateWebSocketAdapters(t *testing.T) {
 	}
 }
 
+func TestBrowserServeCapacityLossClosesWebSocketNormally(t *testing.T) {
+	backend := newBrowserRawStream()
+	resolver := &browserProviderResolverSpy{resolve: func(_ context.Context, value string) (browserreference.Endpoint, error) {
+		return browserEndpoint(value, backend), nil
+	}}
+	events := make(chan gateway.CapacityEvent, 1)
+	capacity := &browserCapacity{lease: &browserCapacityLease{events: events}}
+	recorder := &testRecorder{}
+	options := validBrowserOptions(t, resolver)
+	options.Capacity = capacity
+	options.Recorder = recorder
+	gate := &browserEdgeGateSpy{}
+	options.Edge = gate
+	service, err := NewBrowser(options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	serveResult := make(chan error, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		serveResult <- service.Serve(request.Context(), response, request, validBrowserRequest())
+	}))
+	defer server.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	client, _, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(server.URL, "http"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.CloseNow()
+	recorder.WaitEvent(t, gateway.AuditConnected)
+	events <- gateway.CapacityEvent{Kind: gateway.CapacityEventLost}
+
+	if _, _, err := client.Read(ctx); websocket.CloseStatus(err) != websocket.StatusNormalClosure {
+		t.Fatalf("capacity-loss close status = %v, want %v (error %v)", websocket.CloseStatus(err), websocket.StatusNormalClosure, err)
+	}
+	if err := waitError(t, serveResult); !errors.Is(err, gateway.ErrCapacityUnavailable) {
+		t.Fatalf("Serve() error = %v; want capacity unavailable", err)
+	}
+	if calls := capacity.lease.ReleaseCalls(); calls != 1 {
+		t.Fatalf("capacity lease releases = %d; want one", calls)
+	}
+	if calls := backend.CloseCalls(); calls == 0 {
+		t.Fatal("capacity loss did not close the private Browser stream")
+	}
+	if calls := resolver.Calls(); calls != 1 {
+		t.Fatalf("Browser resolver calls = %d; want one without reconnect", calls)
+	}
+	lost, reconnect := 0, 0
+	for _, event := range recorder.Events() {
+		switch event.Type {
+		case gateway.AuditCapacityLost:
+			lost++
+		case gateway.AuditReconnected, gateway.AuditReconnectFailed:
+			reconnect++
+		}
+	}
+	if lost != 1 || reconnect != 0 {
+		t.Fatalf("capacity-loss/reconnect audit counts = %d/%d; want 1/0", lost, reconnect)
+	}
+	if calls, releases := gate.Counts(); calls != 1 || releases != 1 {
+		t.Fatalf("public edge gate calls/releases = %d/%d; want 1/1", calls, releases)
+	}
+}
+
 func validBrowserOptions(t *testing.T, resolver BrowserProviderResolver) BrowserOptions {
 	t.Helper()
 	capacity, err := gateway.NewLocalConnectionCapacity(gateway.LocalConnectionCapacityOptions{
@@ -730,6 +795,35 @@ type browserEdgeRejection struct {
 func (e browserEdgeRejection) Error() string             { return e.cause.Error() }
 func (e browserEdgeRejection) Unwrap() error             { return e.cause }
 func (e browserEdgeRejection) RetryAfter() time.Duration { return e.retryAfter }
+
+type browserCapacity struct {
+	lease *browserCapacityLease
+}
+
+func (c *browserCapacity) Acquire(context.Context, gateway.CapacitySubject) (gateway.ConnectionLease, error) {
+	return c.lease, nil
+}
+
+type browserCapacityLease struct {
+	events <-chan gateway.CapacityEvent
+	mu     sync.Mutex
+	calls  int
+}
+
+func (l *browserCapacityLease) Events() <-chan gateway.CapacityEvent { return l.events }
+
+func (l *browserCapacityLease) Release(context.Context) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.calls++
+	return nil
+}
+
+func (l *browserCapacityLease) ReleaseCalls() int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.calls
+}
 
 func validBrowserRequest() gateway.ConnectRequest {
 	return browserRequestFor("ref:browser-session:11111111111111111111111111111111")

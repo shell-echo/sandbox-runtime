@@ -103,14 +103,27 @@ func (s *WebSocketServer) Upgrade(w http.ResponseWriter, r *http.Request) (gatew
 		return nil, err
 	}
 	connection.SetReadLimit(s.maxFrameBytes)
-	return &webSocketStream{
-		connection: connection, maxFrameBytes: s.maxFrameBytes, closeDone: make(chan struct{}),
-	}, nil
+	stream := &webSocketStream{
+		connection: connection, maxFrameBytes: s.maxFrameBytes,
+		readResults: make(chan webSocketReadResult, 1), readStop: make(chan struct{}), readDone: make(chan struct{}),
+		closeDone: make(chan struct{}),
+	}
+	go stream.readPump()
+	return stream, nil
+}
+
+type webSocketReadResult struct {
+	messageType websocket.MessageType
+	payload     []byte
+	err         error
 }
 
 type webSocketStream struct {
 	connection    *websocket.Conn
 	maxFrameBytes int64
+	readResults   chan webSocketReadResult
+	readStop      chan struct{}
+	readDone      chan struct{}
 
 	closeOnce sync.Once
 	closeDone chan struct{}
@@ -125,18 +138,29 @@ func (s *webSocketStream) Receive(ctx context.Context) (gateway.Frame, error) {
 	if err := contextError(ctx); err != nil {
 		return gateway.Frame{}, err
 	}
-	messageType, payload, err := s.connection.Read(ctx)
-	if err != nil {
-		if errors.Is(err, websocket.ErrMessageTooBig) {
-			return gateway.Frame{}, fmt.Errorf("%w: %v", ErrFrameTooLarge, err)
+	var result webSocketReadResult
+	select {
+	case <-ctx.Done():
+		return gateway.Frame{}, ctx.Err()
+	case <-s.readStop:
+		return gateway.Frame{}, io.ErrClosedPipe
+	case received, ok := <-s.readResults:
+		if !ok {
+			return gateway.Frame{}, io.ErrClosedPipe
 		}
-		return gateway.Frame{}, err
+		result = received
 	}
-	if int64(len(payload)) > s.maxFrameBytes {
+	if result.err != nil {
+		if errors.Is(result.err, websocket.ErrMessageTooBig) {
+			return gateway.Frame{}, fmt.Errorf("%w: %v", ErrFrameTooLarge, result.err)
+		}
+		return gateway.Frame{}, result.err
+	}
+	if int64(len(result.payload)) > s.maxFrameBytes {
 		return gateway.Frame{}, ErrFrameTooLarge
 	}
-	frame := gateway.Frame{Payload: append([]byte(nil), payload...)}
-	switch messageType {
+	frame := gateway.Frame{Payload: append([]byte(nil), result.payload...)}
+	switch result.messageType {
 	case websocket.MessageText:
 		frame.Type = gateway.TextFrame
 	case websocket.MessageBinary:
@@ -145,6 +169,24 @@ func (s *webSocketStream) Receive(ctx context.Context) (gateway.Frame, error) {
 		return gateway.Frame{}, ErrUnsupportedFrame
 	}
 	return frame, nil
+}
+
+func (s *webSocketStream) readPump() {
+	defer func() {
+		close(s.readResults)
+		close(s.readDone)
+	}()
+	for {
+		messageType, payload, err := s.connection.Read(context.Background())
+		select {
+		case s.readResults <- webSocketReadResult{messageType: messageType, payload: payload, err: err}:
+		case <-s.readStop:
+			return
+		}
+		if err != nil {
+			return
+		}
+	}
 }
 
 func (s *webSocketStream) Send(ctx context.Context, frame gateway.Frame) error {
@@ -169,10 +211,9 @@ func (s *webSocketStream) Send(ctx context.Context, frame gateway.Frame) error {
 	return s.connection.Write(ctx, messageType, append([]byte(nil), frame.Payload...))
 }
 
-// Close is idempotent. A bounded context can stop waiting for the normal
-// close handshake; the connection is then force-closed to release concurrent
-// reads and writes. A caller that supplies an unbounded context accepts the
-// WebSocket library's standards-compliant close-handshake timeout.
+// Close is idempotent. A bounded context can stop waiting for the normal close
+// handshake; the WebSocket library continues its bounded handshake and closes
+// the connection. An unbounded caller waits for that handshake to finish.
 func (s *webSocketStream) Close(ctx context.Context) error {
 	if s == nil || s.connection == nil {
 		return ErrInvalidStream
@@ -181,8 +222,10 @@ func (s *webSocketStream) Close(ctx context.Context) error {
 		return err
 	}
 	s.closeOnce.Do(func() {
+		close(s.readStop)
 		go func() {
 			err := s.connection.Close(websocket.StatusNormalClosure, "")
+			<-s.readDone
 			s.closeMu.Lock()
 			s.closeErr = err
 			s.closeMu.Unlock()
@@ -196,7 +239,6 @@ func (s *webSocketStream) Close(ctx context.Context) error {
 		s.closeMu.Unlock()
 		return err
 	case <-ctx.Done():
-		go func() { _ = s.connection.CloseNow() }()
 		return ctx.Err()
 	}
 }

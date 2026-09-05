@@ -201,10 +201,49 @@ func TestWebSocketHonorsCanceledContextsAndCloseDeadline(t *testing.T) {
 	if err := stream.Send(canceled, gateway.Frame{Type: gateway.BinaryFrame}); !errors.Is(err, context.Canceled) {
 		t.Fatalf("canceled send error = %v", err)
 	}
+	receiveDone := make(chan error, 1)
+	go func() {
+		_, err := stream.Receive(context.Background())
+		receiveDone <- err
+	}()
 	closeCtx, closeCancel := context.WithTimeout(context.Background(), 25*time.Millisecond)
 	defer closeCancel()
 	if err := stream.Close(closeCtx); !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("bounded close error = %v", err)
+	}
+	if err := awaitError(t, receiveDone); !errors.Is(err, io.ErrClosedPipe) {
+		t.Fatalf("receive after local close error = %v; want closed pipe", err)
+	}
+}
+
+func TestWebSocketCanceledReceivePreservesConnection(t *testing.T) {
+	server := mustWebSocketServer(t, WebSocketOptions{Admission: func(context.Context, *http.Request) error { return nil }})
+	endpoint, streams := startWebSocketServer(t, server)
+	client := dialWebSocket(t, endpoint, nil)
+	t.Cleanup(func() { _ = client.CloseNow() })
+	stream := awaitStream(t, streams)
+
+	readCtx, cancelRead := context.WithTimeout(context.Background(), 25*time.Millisecond)
+	defer cancelRead()
+	if _, err := stream.Receive(readCtx); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("canceled receive error = %v; want deadline exceeded", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := client.Write(ctx, websocket.MessageText, []byte("still-open")); err != nil {
+		t.Fatalf("client write after canceled receive: %v", err)
+	}
+	frame, err := stream.Receive(ctx)
+	if err != nil || frame.Type != gateway.TextFrame || string(frame.Payload) != "still-open" {
+		t.Fatalf("receive after cancellation = %#v, %v", frame, err)
+	}
+	if err := stream.Send(ctx, gateway.Frame{Type: gateway.BinaryFrame, Payload: []byte("response")}); err != nil {
+		t.Fatalf("stream send after canceled receive: %v", err)
+	}
+	messageType, payload, err := client.Read(ctx)
+	if err != nil || messageType != websocket.MessageBinary || string(payload) != "response" {
+		t.Fatalf("client read after cancellation = %v, %q, %v", messageType, payload, err)
 	}
 }
 
