@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "evidence_profile": "browser-durable-revocation-e2e-v1",
+  "provider_commit": "c0a55d1e0a862f9e5a592abd27b1e25be3c85b3e",
+  "contract": {
+    "namespace": "urn:shell-echo:sandbox-runtime:provider-v1",
+    "revision": "5096e71fb84fbec22aa3487a0e55a1b49602ab8b",
+    "tree": "859f76dc0e855a0c8abdbbb5648df100dabb4328",
+    "suite_cases": 48,
+    "exercised": false
+  },
+  "valkey": {
+    "image": "ghcr.io/valkey-io/valkey",
+    "index_digest": "sha256:ccfa19b0d743e48927e1c8c14e39e0acb97b5cea347fef0bfe340247fea920cd",
+    "platform_digests": {
+      "linux/amd64": "sha256:dd021e69e0a204fbb25b39c332c3dd61d51853d0a67e34f523cf1e1ab15fe478",
+      "linux/arm64": "sha256:d31209ff403ca1d95218612dd936405d84837a90bc00e3b631ebc6373b91830e"
+    },
+    "server_config_sha256": "sha256:12a690a249f1c28c5d3617bcc051216c3261270237035494dcb17764aa2111d2",
+    "acl_template_sha256": "sha256:901e39fd2ff5385dbbb8b93594bbbc737f669abeac27e982a409f290ac1e266a"
+  },
+  "processes": {
+    "gateways": 2,
+    "callers": 2,
+    "revokers": 1
+  },
+  "revocation_policy": {
+    "max_grant_lifetime_millis": 900000,
+    "poll_interval_millis": 100,
+    "operation_timeout_millis": 100
+  },
+  "bounds": {
+    "grant_lifetime_millis": 600000,
+    "propagation_millis": 2000,
+    "outage_millis": 2000
+  },
+  "local_capacity": {
+    "max_total": 16,
+    "max_per_tenant": 8,
+    "max_per_session": 4
+  },
+  "reconnect": {
+    "max_reconnects": 1,
+    "reconnect_backoff_millis": 10
+  },
+  "scenarios": [
+    "independent revoker disconnects the same exact active grant on both Gateways within bound",
+    "pre-revoked exact grant is rejected before authorized resolve and dial on both Gateways",
+    "retained revocation survives both Gateway process reconstructions",
+    "exact grant scope leaves another same-session grant and another tenant active",
+    "retained-store outage closes active connections and rejects new work before resolution",
+    "store recovery does not resurrect revoked grants and fresh grants recover",
+    "sensitive values are absent from evidence"
+  ],
+  "adapter": {
+    "policy_format": "gateway-revocation-tombstone-v1",
+    "policy_fingerprint": "ae12d5206ece7b9f53cebc3a488fcb17e45c8cf2da1084b8a0a2c960a0f40b9a",
+    "provision_script_sha1": "70d2f6f77787fbedf513a3d6eb74e8cc538d6205",
+    "check_script_sha1": "b8277b1708356afcd9953e3235211dc147d7a6b4",
+    "revoke_script_sha1": "be817bf51c4c4e70946f9c8ce32d8d81a1698277"
+  }
+}

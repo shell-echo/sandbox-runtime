@@ -48,6 +48,7 @@ func TestProviderChangePathAllowsOnlyHarnessAndDocumentation(t *testing.T) {
 		".github/workflows/platform-candidate-e2e.yml": true,
 		".github/workflows/browser-e2e.yml":            true,
 		".github/workflows/shared-capacity-e2e.yml":    true,
+		".github/workflows/durable-revocation-e2e.yml": true,
 		".github/workflows/unrelated.yml":              false,
 		"cmd/serve.go":                                 false,
 		"provider/code.go":                             false,
@@ -93,6 +94,44 @@ func TestSharedCapacityScenarioNamesReturnsCopy(t *testing.T) {
 	}
 }
 
+func TestDurableRevocationLock(t *testing.T) {
+	root, err := filepath.Abs("../../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, platform := range []string{"linux/amd64", "linux/arm64"} {
+		locked, err := LoadDurableRevocation(root, platform)
+		if err != nil {
+			t.Fatalf("LoadDurableRevocation(%q): %v", platform, err)
+		}
+		if locked.ProviderCommit != ProviderCommit || locked.Contract.Exercised ||
+			locked.Processes != (DurableRevocationProcesses{Gateways: 2, Callers: 2, Revokers: 1}) ||
+			locked.LocalCapacity != (DurableRevocationLocalCapacity{MaxTotal: 16, MaxPerTenant: 8, MaxPerSession: 4}) ||
+			locked.Reconnect != (DurableRevocationReconnect{MaxReconnects: 1, ReconnectBackoffMillis: 10}) {
+			t.Fatalf("LoadDurableRevocation(%q) returned the wrong baseline: %#v", platform, locked)
+		}
+		if locked.Valkey.SelectedPlatform != platform || locked.Valkey.SelectedChildDigest != locked.Valkey.PlatformDigests[platform] {
+			t.Fatalf("LoadDurableRevocation(%q) selected %q at %q", platform, locked.Valkey.SelectedPlatform, locked.Valkey.SelectedChildDigest)
+		}
+		if got := locked.Scenarios; len(got) != 7 ||
+			got[0] != "independent revoker disconnects the same exact active grant on both Gateways within bound" ||
+			got[len(got)-1] != "sensitive values are absent from evidence" {
+			t.Fatalf("LoadDurableRevocation(%q) scenarios = %#v", platform, got)
+		}
+	}
+	if _, err := LoadDurableRevocation(root, "linux/ppc64le"); err == nil || !strings.Contains(err.Error(), "is not locked") {
+		t.Fatalf("unsupported LoadDurableRevocation() error = %v", err)
+	}
+}
+
+func TestDurableRevocationScenarioNamesReturnsCopy(t *testing.T) {
+	first := DurableRevocationScenarioNames()
+	first[0] = "changed"
+	if second := DurableRevocationScenarioNames(); second[0] == "changed" {
+		t.Fatal("DurableRevocationScenarioNames returned mutable package state")
+	}
+}
+
 func TestDecodeStrictFileRejectsUnknownAndTrailingInput(t *testing.T) {
 	for name, content := range map[string]string{
 		"unknown":          `{"schema_version":1,"unknown":true}`,
@@ -118,6 +157,15 @@ func TestSharedCapacityNormalizedConfigurationDigests(t *testing.T) {
 		t.Fatalf("server config digest = %s, want %s", got, want)
 	}
 	if got, want := normalizedSHA256(SharedCapacityACLTemplate), "sha256:4d660aa0861d5a7396f5e50bec072a813395ad13f19b23df53317d222c43743a"; got != want {
+		t.Fatalf("ACL template digest = %s, want %s", got, want)
+	}
+}
+
+func TestDurableRevocationNormalizedConfigurationDigests(t *testing.T) {
+	if got, want := normalizedSHA256(DurableRevocationServerConfig), "sha256:12a690a249f1c28c5d3617bcc051216c3261270237035494dcb17764aa2111d2"; got != want {
+		t.Fatalf("server config digest = %s, want %s", got, want)
+	}
+	if got, want := normalizedSHA256(DurableRevocationACLTemplate), "sha256:901e39fd2ff5385dbbb8b93594bbbc737f669abeac27e982a409f290ac1e266a"; got != want {
 		t.Fatalf("ACL template digest = %s, want %s", got, want)
 	}
 }

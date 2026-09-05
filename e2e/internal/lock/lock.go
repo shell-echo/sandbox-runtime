@@ -19,8 +19,11 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
+	goredis "github.com/redis/go-redis/v9"
 	rediscapacity "github.com/shell-echo/sandbox-runtime/gateway/capacity/redis"
+	redisrevocation "github.com/shell-echo/sandbox-runtime/gateway/revocation/redis"
 )
 
 const (
@@ -34,6 +37,10 @@ const (
 	SharedCapacityEvidenceProfile = "browser-shared-capacity-e2e-v1"
 	SharedCapacityValkeyImage     = "ghcr.io/valkey-io/valkey"
 	SharedCapacityValkeyIndex     = "sha256:ccfa19b0d743e48927e1c8c14e39e0acb97b5cea347fef0bfe340247fea920cd"
+	DurableRevocationLockPath     = "e2e/durable-revocation.lock.json"
+	DurableRevocationProfile      = "browser-durable-revocation-e2e-v1"
+	DurableRevocationValkeyImage  = "ghcr.io/valkey-io/valkey"
+	DurableRevocationValkeyIndex  = "sha256:ccfa19b0d743e48927e1c8c14e39e0acb97b5cea347fef0bfe340247fea920cd"
 
 	SharedCapacityServerConfig = "bind 0.0.0.0\n" +
 		"protected-mode no\n" +
@@ -45,6 +52,15 @@ const (
 		"user e2e on >${PASSWORD} ~sandbox-runtime:{${NAMESPACE_SHA256}}:capacity:* " +
 		"+ping +type +zcard +set +get +hset +hlen +hget +time +zremrangebyscore " +
 		"+zrange +incr +zadd +pexpireat +zrem +evalsha +eval\n"
+	DurableRevocationServerConfig = "bind 0.0.0.0\n" +
+		"protected-mode no\n" +
+		"port 6379\n" +
+		"appendonly no\n" +
+		"save \"\"\n" +
+		"maxmemory-policy noeviction\n"
+	DurableRevocationACLTemplate = "user default off\n" +
+		"user e2e on >${PASSWORD} ~sandbox-runtime:{${NAMESPACE_SHA256}}:revocation:* " +
+		"+ping +type +hset +hlen +hget +time +get +set +pttl +pexpireat +evalsha +eval\n"
 
 	maxLockBytes = 64 << 10
 )
@@ -68,9 +84,23 @@ var sharedCapacityScenarioInventory = [10]string{
 	"sensitive values absent from evidence",
 }
 
+var durableRevocationScenarioInventory = [7]string{
+	"independent revoker disconnects the same exact active grant on both Gateways within bound",
+	"pre-revoked exact grant is rejected before authorized resolve and dial on both Gateways",
+	"retained revocation survives both Gateway process reconstructions",
+	"exact grant scope leaves another same-session grant and another tenant active",
+	"retained-store outage closes active connections and rejects new work before resolution",
+	"store recovery does not resurrect revoked grants and fresh grants recover",
+	"sensitive values are absent from evidence",
+}
+
 // SharedCapacityScenarios supports fixed-index scenario execution. Validation
 // uses a private copy so consumers cannot mutate the lock authority.
 var SharedCapacityScenarios = sharedCapacityScenarioInventory
+
+// DurableRevocationScenarios supports fixed-index scenario execution.
+// Validation uses a private copy so consumers cannot mutate lock authority.
+var DurableRevocationScenarios = durableRevocationScenarioInventory
 
 type SharedCapacityPolicy struct {
 	MaxTotal                  int   `json:"max_total"`
@@ -110,9 +140,82 @@ type SharedCapacityLock struct {
 	Adapter          SharedCapacityAdapterDescriptor `json:"adapter"`
 }
 
+type DurableRevocationContract struct {
+	Namespace  string `json:"namespace"`
+	Revision   string `json:"revision"`
+	Tree       string `json:"tree"`
+	SuiteCases int    `json:"suite_cases"`
+	Exercised  bool   `json:"exercised"`
+}
+
+// DurableRevocationValkey identifies the immutable retained backend selected
+// for a run. SelectedPlatform and SelectedChildDigest are derived while loading.
+type DurableRevocationValkey struct {
+	Image               string            `json:"image"`
+	IndexDigest         string            `json:"index_digest"`
+	PlatformDigests     map[string]string `json:"platform_digests"`
+	ServerConfigSHA256  string            `json:"server_config_sha256"`
+	ACLTemplateSHA256   string            `json:"acl_template_sha256"`
+	SelectedPlatform    string            `json:"-"`
+	SelectedChildDigest string            `json:"-"`
+}
+
+type DurableRevocationProcesses struct {
+	Gateways int `json:"gateways"`
+	Callers  int `json:"callers"`
+	Revokers int `json:"revokers"`
+}
+
+type DurableRevocationPolicy struct {
+	MaxGrantLifetimeMillis int64 `json:"max_grant_lifetime_millis"`
+	PollIntervalMillis     int64 `json:"poll_interval_millis"`
+	OperationTimeoutMillis int64 `json:"operation_timeout_millis"`
+}
+
+type DurableRevocationBounds struct {
+	GrantLifetimeMillis int64 `json:"grant_lifetime_millis"`
+	PropagationMillis   int64 `json:"propagation_millis"`
+	OutageMillis        int64 `json:"outage_millis"`
+}
+
+type DurableRevocationLocalCapacity struct {
+	MaxTotal      int `json:"max_total"`
+	MaxPerTenant  int `json:"max_per_tenant"`
+	MaxPerSession int `json:"max_per_session"`
+}
+
+type DurableRevocationReconnect struct {
+	MaxReconnects          int   `json:"max_reconnects"`
+	ReconnectBackoffMillis int64 `json:"reconnect_backoff_millis"`
+}
+
+type DurableRevocationAdapterDescriptor = redisrevocation.Descriptor
+
+// DurableRevocationLock is the validated black-box durable-revocation evidence
+// configuration. Contract metadata is pinned for provenance but not exercised.
+type DurableRevocationLock struct {
+	SchemaVersion   int                                `json:"schema_version"`
+	EvidenceProfile string                             `json:"evidence_profile"`
+	ProviderCommit  string                             `json:"provider_commit"`
+	Contract        DurableRevocationContract          `json:"contract"`
+	Valkey          DurableRevocationValkey            `json:"valkey"`
+	Processes       DurableRevocationProcesses         `json:"processes"`
+	Policy          DurableRevocationPolicy            `json:"revocation_policy"`
+	Bounds          DurableRevocationBounds            `json:"bounds"`
+	LocalCapacity   DurableRevocationLocalCapacity     `json:"local_capacity"`
+	Reconnect       DurableRevocationReconnect         `json:"reconnect"`
+	Scenarios       []string                           `json:"scenarios"`
+	Adapter         DurableRevocationAdapterDescriptor `json:"adapter"`
+}
+
 // SharedCapacityScenarioNames returns the exact ordered scenario inventory.
 func SharedCapacityScenarioNames() []string {
 	return append([]string(nil), sharedCapacityScenarioInventory[:]...)
+}
+
+// DurableRevocationScenarioNames returns the exact ordered scenario inventory.
+func DurableRevocationScenarioNames() []string {
+	return append([]string(nil), durableRevocationScenarioInventory[:]...)
 }
 
 type providerLock struct {
@@ -232,7 +335,138 @@ func providerChangePath(changedPath string) bool {
 		changedPath == ".github/workflows/platform-candidate-e2e.yml" ||
 		changedPath == ".github/workflows/browser-e2e.yml" ||
 		changedPath == ".github/workflows/shared-capacity-e2e.yml" ||
+		changedPath == ".github/workflows/durable-revocation-e2e.yml" ||
 		changedPath == "e2e" || strings.HasPrefix(changedPath, "e2e/")
+}
+
+// LoadDurableRevocation returns the exact durable-revocation evidence lock for
+// one explicitly supported runner platform.
+func LoadDurableRevocation(providerRoot, platform string) (DurableRevocationLock, error) {
+	root, err := filepath.Abs(providerRoot)
+	if err != nil {
+		return DurableRevocationLock{}, fmt.Errorf("resolve Provider root: %w", err)
+	}
+	var locked DurableRevocationLock
+	if err := decodeStrictFile(filepath.Join(root, DurableRevocationLockPath), &locked); err != nil {
+		return DurableRevocationLock{}, err
+	}
+	if err := validateDurableRevocationLock(locked); err != nil {
+		return DurableRevocationLock{}, err
+	}
+	child, ok := locked.Valkey.PlatformDigests[platform]
+	if !ok {
+		return DurableRevocationLock{}, fmt.Errorf("durable-revocation platform %q is not locked", platform)
+	}
+	locked.Valkey.SelectedPlatform = platform
+	locked.Valkey.SelectedChildDigest = child
+	return locked, nil
+}
+
+// VerifyDurableRevocation additionally proves that the clean Provider checkout
+// matches the implementation and Contract baseline consumed by the lock.
+func VerifyDurableRevocation(providerRoot, platform string) error {
+	if err := Verify(providerRoot); err != nil {
+		return err
+	}
+	_, err := LoadDurableRevocation(providerRoot, platform)
+	return err
+}
+
+func validateDurableRevocationLock(locked DurableRevocationLock) error {
+	if locked.SchemaVersion != 1 {
+		return fmt.Errorf("durable-revocation schema version = %d, want 1", locked.SchemaVersion)
+	}
+	if locked.EvidenceProfile != DurableRevocationProfile {
+		return fmt.Errorf("durable-revocation evidence profile = %q, want %q", locked.EvidenceProfile, DurableRevocationProfile)
+	}
+	if locked.ProviderCommit != ProviderCommit {
+		return fmt.Errorf("durable-revocation Provider commit = %q, want %q", locked.ProviderCommit, ProviderCommit)
+	}
+	expectedContract := DurableRevocationContract{
+		Namespace: ContractNS, Revision: ContractRevision, Tree: ContractTree, SuiteCases: SuiteCases, Exercised: false,
+	}
+	if locked.Contract != expectedContract {
+		return fmt.Errorf("durable-revocation Contract metadata = %#v, want %#v", locked.Contract, expectedContract)
+	}
+	if locked.Valkey.Image != DurableRevocationValkeyImage || locked.Valkey.IndexDigest != DurableRevocationValkeyIndex {
+		return errors.New("durable-revocation Valkey image or index digest differs from the evidence baseline")
+	}
+	expectedPlatforms := map[string]string{
+		"linux/amd64": "sha256:dd021e69e0a204fbb25b39c332c3dd61d51853d0a67e34f523cf1e1ab15fe478",
+		"linux/arm64": "sha256:d31209ff403ca1d95218612dd936405d84837a90bc00e3b631ebc6373b91830e",
+	}
+	if !reflect.DeepEqual(locked.Valkey.PlatformDigests, expectedPlatforms) {
+		return errors.New("durable-revocation Valkey platform digests differ from the evidence baseline")
+	}
+	for platform, digest := range locked.Valkey.PlatformDigests {
+		if platform != "linux/amd64" && platform != "linux/arm64" {
+			return fmt.Errorf("durable-revocation Valkey platform %q is not supported", platform)
+		}
+		if !digestPattern.MatchString(digest) {
+			return fmt.Errorf("durable-revocation Valkey digest for %s is invalid", platform)
+		}
+	}
+	expectedServerConfig := normalizedSHA256(DurableRevocationServerConfig)
+	expectedACLTemplate := normalizedSHA256(DurableRevocationACLTemplate)
+	if locked.Valkey.ServerConfigSHA256 != expectedServerConfig || locked.Valkey.ACLTemplateSHA256 != expectedACLTemplate {
+		return fmt.Errorf("durable-revocation Valkey normalized configuration digests = %q/%q, want %q/%q",
+			locked.Valkey.ServerConfigSHA256, locked.Valkey.ACLTemplateSHA256, expectedServerConfig, expectedACLTemplate)
+	}
+	expectedProcesses := DurableRevocationProcesses{Gateways: 2, Callers: 2, Revokers: 1}
+	if locked.Processes != expectedProcesses {
+		return fmt.Errorf("durable-revocation process topology = %#v, want %#v", locked.Processes, expectedProcesses)
+	}
+	expectedPolicy := DurableRevocationPolicy{
+		MaxGrantLifetimeMillis: 900000, PollIntervalMillis: 100, OperationTimeoutMillis: 100,
+	}
+	if locked.Policy != expectedPolicy {
+		return fmt.Errorf("durable-revocation policy = %#v, want %#v", locked.Policy, expectedPolicy)
+	}
+	expectedBounds := DurableRevocationBounds{
+		GrantLifetimeMillis: 600000, PropagationMillis: 2000, OutageMillis: 2000,
+	}
+	if locked.Bounds != expectedBounds {
+		return fmt.Errorf("durable-revocation bounds = %#v, want %#v", locked.Bounds, expectedBounds)
+	}
+	expectedLocalCapacity := DurableRevocationLocalCapacity{MaxTotal: 16, MaxPerTenant: 8, MaxPerSession: 4}
+	if locked.LocalCapacity != expectedLocalCapacity {
+		return fmt.Errorf("durable-revocation local capacity = %#v, want %#v", locked.LocalCapacity, expectedLocalCapacity)
+	}
+	expectedReconnect := DurableRevocationReconnect{MaxReconnects: 1, ReconnectBackoffMillis: 10}
+	if locked.Reconnect != expectedReconnect {
+		return fmt.Errorf("durable-revocation reconnect policy = %#v, want %#v", locked.Reconnect, expectedReconnect)
+	}
+	if !reflect.DeepEqual(locked.Scenarios, durableRevocationScenarioInventory[:]) {
+		return errors.New("durable-revocation scenario inventory differs from the evidence baseline")
+	}
+	descriptor, err := currentDurableRevocationDescriptor(locked.Policy)
+	if err != nil {
+		return err
+	}
+	if locked.Adapter != descriptor {
+		return fmt.Errorf("durable-revocation adapter descriptor = %#v, want %#v", locked.Adapter, descriptor)
+	}
+	return nil
+}
+
+func currentDurableRevocationDescriptor(policy DurableRevocationPolicy) (DurableRevocationAdapterDescriptor, error) {
+	timeout := time.Duration(policy.OperationTimeoutMillis) * time.Millisecond
+	client := goredis.NewClient(&goredis.Options{
+		Addr: "127.0.0.1:1", MaxRetries: -1, ContextTimeoutEnabled: true,
+		Protocol: 2, DisableIdentity: true, DialTimeout: timeout, ReadTimeout: timeout,
+		WriteTimeout: timeout, PoolTimeout: timeout,
+	})
+	defer func() { _ = client.Close() }()
+	revocations, err := redisrevocation.New(redisrevocation.Options{
+		Client: client, Namespace: "durable-revocation-lock-descriptor",
+		MaxGrantLifetime: time.Duration(policy.MaxGrantLifetimeMillis) * time.Millisecond,
+		PollInterval:     time.Duration(policy.PollIntervalMillis) * time.Millisecond,
+		OperationTimeout: timeout,
+	})
+	if err != nil {
+		return DurableRevocationAdapterDescriptor{}, fmt.Errorf("construct durable-revocation adapter descriptor: %w", err)
+	}
+	return revocations.Descriptor(), nil
 }
 
 // LoadSharedCapacity returns the exact shared-capacity evidence lock for one

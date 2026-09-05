@@ -22,6 +22,13 @@ Provider repository. Keep these boundaries strict:
   separate Gateway fixture. They may compose the exported Browser Gateway and
   Redis capacity adapter, but they do not exercise the Provider API or a real
   Browser runtime.
+- `internal/durablerevocation/caller` and `cmd/durable-revocation-caller` are
+  black-box callers and must have no direct or transitive Provider dependency.
+  `cmd/durable-revocation-revoker` is an independent control process and may
+  depend, among Provider packages, only on the exported `gateway` and
+  `gateway/revocation/redis` packages. The durable-revocation Gateway fixture
+  may compose exported Gateway ports, but the profile does not exercise
+  Provider protocol routes or a real Browser runtime.
 - Never commit generated private keys, certificates, bearer tokens, runtime
   state, logs, or artifact bytes.
 - Each passing run proves only its named reference or candidate scenarios. A
@@ -37,4 +44,5 @@ go vet ./...
 go run ./cmd/e2e -check
 go run ./cmd/browser-e2e -check
 go run ./cmd/shared-capacity-e2e -check
+go run ./cmd/durable-revocation-e2e -check
 ```

@@ -16,7 +16,11 @@ func TestBlackBoxCallerDoesNotImportProviderImplementation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, relative := range []string{"internal/caller", "cmd/caller", "cmd/browser-caller", "cmd/shared-capacity-caller", "internal/platform", "cmd/platform-caller"} {
+	for _, relative := range []string{
+		"internal/caller", "cmd/caller", "cmd/browser-caller", "cmd/shared-capacity-caller",
+		"internal/durablerevocation/caller", "cmd/durable-revocation-caller",
+		"internal/platform", "cmd/platform-caller",
+	} {
 		path := filepath.Join(root, relative)
 		matches, err := filepath.Glob(filepath.Join(path, "*.go"))
 		if err != nil {
@@ -42,19 +46,55 @@ func TestBlackBoxCallerDoesNotImportProviderImplementation(t *testing.T) {
 }
 
 func TestSharedCapacityCallerHasNoProviderDependency(t *testing.T) {
+	assertNoProviderDependency(t, "./cmd/shared-capacity-caller")
+}
+
+func TestDurableRevocationCallerHasNoProviderDependency(t *testing.T) {
+	assertNoProviderDependency(t, "./cmd/durable-revocation-caller")
+}
+
+func TestDurableRevocationRevokerUsesOnlyExportedRevocationPorts(t *testing.T) {
 	root, err := filepath.Abs("../..")
 	if err != nil {
 		t.Fatal(err)
 	}
-	command := exec.Command("go", "list", "-deps", "-f", "{{.ImportPath}}", "./cmd/shared-capacity-caller")
+	command := exec.Command("go", "list", "-deps", "-f", "{{.ImportPath}}", "./cmd/durable-revocation-revoker")
 	command.Dir = root
 	output, err := command.CombinedOutput()
 	if err != nil {
-		t.Fatalf("go list shared-capacity caller dependencies: %v: %s", err, strings.TrimSpace(string(output)))
+		t.Fatalf("go list durable-revocation revoker dependencies: %v: %s", err, strings.TrimSpace(string(output)))
+	}
+	allowed := map[string]bool{
+		"github.com/shell-echo/sandbox-runtime/gateway":                  true,
+		"github.com/shell-echo/sandbox-runtime/gateway/revocation/redis": true,
 	}
 	for _, dependency := range strings.Fields(string(output)) {
-		if dependency == "github.com/shell-echo/sandbox-runtime" || strings.HasPrefix(dependency, "github.com/shell-echo/sandbox-runtime/") {
-			t.Errorf("shared-capacity caller transitively imports Provider implementation package %q", dependency)
+		if providerPackage(dependency) && !allowed[dependency] {
+			t.Errorf("durable-revocation revoker transitively imports Provider package %q outside its exported allowlist", dependency)
 		}
 	}
+}
+
+func assertNoProviderDependency(t *testing.T, packagePath string) {
+	t.Helper()
+	root, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	command := exec.Command("go", "list", "-deps", "-f", "{{.ImportPath}}", packagePath)
+	command.Dir = root
+	output, err := command.CombinedOutput()
+	if err != nil {
+		t.Fatalf("go list %s dependencies: %v: %s", packagePath, err, strings.TrimSpace(string(output)))
+	}
+	for _, dependency := range strings.Fields(string(output)) {
+		if providerPackage(dependency) {
+			t.Errorf("%s transitively imports Provider implementation package %q", packagePath, dependency)
+		}
+	}
+}
+
+func providerPackage(importPath string) bool {
+	return importPath == "github.com/shell-echo/sandbox-runtime" ||
+		strings.HasPrefix(importPath, "github.com/shell-echo/sandbox-runtime/")
 }
