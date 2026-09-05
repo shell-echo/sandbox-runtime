@@ -84,20 +84,25 @@ type StandardError struct {
 }
 
 type SandboxStatus struct {
-	SandboxID          string `json:"sandbox_id"`
-	TenantID           string `json:"tenant_id"`
-	WorkOrderID        string `json:"work_order_id"`
-	WorkspaceID        string `json:"workspace_id"`
-	ProviderRevisionID string `json:"provider_revision_id"`
-	DesiredState       string `json:"desired_state"`
-	ObservedState      string `json:"observed_state"`
-	Generation         int64  `json:"generation"`
-	ObservedGeneration int64  `json:"observed_generation"`
-	RuntimeProfile     string `json:"runtime_profile"`
-	LeaseExpiresAt     string `json:"lease_expires_at"`
-	CreatedAt          string `json:"created_at"`
-	UpdatedAt          string `json:"updated_at"`
-	SandboxSlotKey     string `json:"sandbox_slot_key"`
+	SandboxID                string         `json:"sandbox_id"`
+	TenantID                 string         `json:"tenant_id"`
+	WorkOrderID              string         `json:"work_order_id"`
+	WorkspaceID              string         `json:"workspace_id"`
+	ProviderRevisionID       string         `json:"provider_revision_id"`
+	DesiredState             string         `json:"desired_state"`
+	ObservedState            string         `json:"observed_state"`
+	Generation               int64          `json:"generation"`
+	ObservedGeneration       int64          `json:"observed_generation"`
+	RuntimeProfile           string         `json:"runtime_profile,omitempty"`
+	RuntimeEndpointReference string         `json:"runtime_endpoint_reference,omitempty"`
+	LeaseExpiresAt           string         `json:"lease_expires_at"`
+	SnapshotReference        string         `json:"snapshot_reference,omitempty"`
+	LastError                *ProviderError `json:"last_error,omitempty"`
+	CreatedAt                string         `json:"created_at"`
+	UpdatedAt                string         `json:"updated_at"`
+	SandboxSlotKey           string         `json:"sandbox_slot_key"`
+	AgentRunID               string         `json:"agent_run_id,omitempty"`
+	ProviderStateReference   string         `json:"provider_state_reference,omitempty"`
 }
 
 type ExecResult struct {

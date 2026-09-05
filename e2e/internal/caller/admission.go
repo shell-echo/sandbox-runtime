@@ -52,6 +52,13 @@ type signer struct {
 	private  ed25519.PrivateKey
 }
 
+type admissionAuthority struct {
+	ControllerSubject        string
+	JWSKeyID                 string
+	ProviderRevisionID       string
+	ProviderInstanceAudience string
+}
+
 type admissionBinding struct {
 	Operation    string
 	SandboxID    string
@@ -160,6 +167,13 @@ func loadSigner(identity IdentityConfig) (*signer, error) {
 }
 
 func (s *signer) prepare(config Config, method, path string, body map[string]any, binding admissionBinding) (preparedRequest, error) {
+	return prepareAdmission(admissionAuthority{
+		ControllerSubject: s.identity.ControllerSubject, JWSKeyID: s.identity.JWSKeyID,
+		ProviderRevisionID: config.ProviderRevisionID, ProviderInstanceAudience: config.ProviderInstanceAudience,
+	}, s.private, method, path, body, binding)
+}
+
+func prepareAdmission(authority admissionAuthority, private ed25519.PrivateKey, method, path string, body map[string]any, binding admissionBinding) (preparedRequest, error) {
 	operation, ok := operationContracts[binding.Operation]
 	if !ok {
 		return preparedRequest{}, fmt.Errorf("unsupported operation %q", binding.Operation)
@@ -203,8 +217,8 @@ func (s *signer) prepare(config Config, method, path string, body map[string]any
 	policyDigest := sha256Digest([]byte("sandbox-runtime-e2e-reference-policy-v1"))
 	admitted := admissionContext{
 		ContextContractID: admissionContextContractID, ContextDigestProfile: admissionContextDigestProfile,
-		ControllerSubject: s.identity.ControllerSubject, ProviderRevisionID: config.ProviderRevisionID,
-		ProviderInstanceAudience: config.ProviderInstanceAudience, TenantID: binding.TenantID, WorkOrderID: binding.WorkOrderID,
+		ControllerSubject: authority.ControllerSubject, ProviderRevisionID: authority.ProviderRevisionID,
+		ProviderInstanceAudience: authority.ProviderInstanceAudience, TenantID: binding.TenantID, WorkOrderID: binding.WorkOrderID,
 		PolicyDigest: policyDigest, PolicyDecidedAt: policyTime.Format(time.RFC3339Nano), Operation: binding.Operation,
 		SandboxID: binding.SandboxID, OperationID: binding.OperationID, AttemptID: binding.AttemptID,
 		FencingToken: binding.FencingToken, DeadlineAt: deadline.Format(time.RFC3339Nano),
@@ -233,16 +247,16 @@ func (s *signer) prepare(config Config, method, path string, body map[string]any
 		expiresAt = deadline
 	}
 	claims := tokenClaims{
-		JTI: jti, Issuer: jwsIssuer, Subject: s.identity.ControllerSubject, Audience: config.ProviderInstanceAudience,
+		JTI: jti, Issuer: jwsIssuer, Subject: authority.ControllerSubject, Audience: authority.ProviderInstanceAudience,
 		IssuedAt: issuedAt, NotBefore: issuedAt, ExpiresAt: expiresAt.Unix(), Operation: binding.Operation,
-		ProviderRevisionID: config.ProviderRevisionID, SandboxID: binding.SandboxID, OperationID: binding.OperationID,
+		ProviderRevisionID: authority.ProviderRevisionID, SandboxID: binding.SandboxID, OperationID: binding.OperationID,
 		AttemptID: binding.AttemptID, FencingToken: binding.FencingToken, TenantID: binding.TenantID,
 		WorkOrderID: binding.WorkOrderID, PolicyDigest: policyDigest, PolicyDecidedAt: policyTime.Format(time.RFC3339Nano),
 		RequestContractID: operation.contractID, RequestDigestProfile: operation.profile, RequestDigest: requestDigest,
 		DeadlineAt: deadline.Format(time.RFC3339Nano), AdmissionContextContractID: admissionContextContractID,
 		AdmissionContextDigestProfile: admissionContextDigestProfile, AdmissionContextDigest: contextDigest,
 	}
-	compact, err := s.sign(claims)
+	compact, err := signAdmission(private, authority.JWSKeyID, claims)
 	if err != nil {
 		return preparedRequest{}, err
 	}
@@ -257,7 +271,11 @@ func (s *signer) prepare(config Config, method, path string, body map[string]any
 }
 
 func (s *signer) sign(claims tokenClaims) (string, error) {
-	header, err := json.Marshal(jwsHeader{Algorithm: "EdDSA", KeyID: s.identity.JWSKeyID, Type: jwsType})
+	return signAdmission(s.private, s.identity.JWSKeyID, claims)
+}
+
+func signAdmission(private ed25519.PrivateKey, keyID string, claims tokenClaims) (string, error) {
+	header, err := json.Marshal(jwsHeader{Algorithm: "EdDSA", KeyID: keyID, Type: jwsType})
 	if err != nil {
 		return "", err
 	}
@@ -268,7 +286,7 @@ func (s *signer) sign(claims tokenClaims) (string, error) {
 	encodedHeader := base64.RawURLEncoding.EncodeToString(header)
 	encodedPayload := base64.RawURLEncoding.EncodeToString(payload)
 	input := encodedHeader + "." + encodedPayload
-	signature := ed25519.Sign(s.private, []byte(input))
+	signature := ed25519.Sign(private, []byte(input))
 	return input + "." + base64.RawURLEncoding.EncodeToString(signature), nil
 }
 
