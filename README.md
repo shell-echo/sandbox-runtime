@@ -9,11 +9,11 @@ The project is intentionally **runtime-first**. It is not just a cloud browser U
 ## Status
 
 This repository is in active implementation. The coding/shell and Browser
-reference-caller gates and the local two-Gateway shared-capacity gate pass
-within their separately named evidence boundaries. Real Agent Platform
-migration, production Browser advertisement and Gateway deployment, aggregate
-conformance, multi-controller, hostile multi-tenant, deployment, and production
-gates remain open.
+reference-caller gates and the local plus hosted two-Gateway shared-capacity
+gates pass within their separately named evidence boundaries. Real Agent
+Platform migration, production Browser advertisement and Gateway deployment,
+aggregate conformance, multi-controller, hostile multi-tenant, deployment, and
+production gates remain open.
 Start a new development session with
 [`docs/PROJECT_CONTEXT.md`](docs/PROJECT_CONTEXT.md). It summarizes the current
 architecture, engineering rules, verified maturity, blockers, and next work;
@@ -86,9 +86,14 @@ Currently implemented:
   global/tenant/session leases, renewal, TTL reclamation, and stale-owner
   fencing. A clean local `linux/arm64` black-box run passed all 10 scenarios
   through two independent Gateway OS processes and one pinned Valkey authority.
+  Hosted workflow run `33949577876` separately passed the same 10 scenarios on
+  `linux/amd64`; its GitHub Actions artifact digest is
+  `sha256:6e938a1549f3ffe3b7a08cf9aa7cd58639f3d058f935c6da1e57dad45ffeb423`.
   Its private echo fixture does not call the Provider API or a real Browser/CDP;
   capacity rejection is a post-WebSocket-`101` normal `1000` close, not the
-  pre-upgrade limiter's HTTP `429`. No hosted shared-capacity pass is recorded.
+  pre-upgrade limiter's HTTP `429`. Contract/Suite identity is metadata only
+  (`exercised=false`), and neither run covers Browser image provenance,
+  restricted egress, or Provider artifact/usage behavior.
   This does not establish Valkey provenance, HA/failover consistency, durable
   distributed revocation, downstream fencing, or production deployment
 - a default-disabled Browser Provider command/runtime graph and a separate

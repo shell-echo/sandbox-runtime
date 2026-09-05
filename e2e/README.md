@@ -52,8 +52,9 @@ also includes the authenticated-capacity port and its process-local atomic
 global, tenant, and session memory reference component. ADR 0031 and Provider
 commit `9434540` additionally add the Redis-compatible shared-capacity adapter;
 Provider baseline `2ed5e68` and clean harness/Gateway source `ddbb2c4` pass its
-separately locked local two-Gateway evidence run. This remains separate from
-the Browser reference and hosted evidence tracks.
+separately locked local two-Gateway evidence run. Hosted harness/Gateway source
+`de297e7` passes the same locked boundary in run `33949577876`. Both remain
+separate from the Browser reference evidence track.
 This Provider identity also includes the GitHub Actions migration from Node 20
 action runtimes to Node 24 action runtimes. That infrastructure update adds no
 Browser behavior, caller compatibility, or production-readiness evidence.
@@ -153,6 +154,27 @@ Provider API, a real Browser/CDP runtime, image provenance, restricted egress,
 artifacts, or usage; it is not hosted, HA/failover, durable distributed
 revocation, downstream fencing, Provider multi-controller, hostile
 multi-tenant, real Agent Platform, deployment, or production evidence.
+
+Hosted Browser Shared Capacity E2E run `33949577876` independently passed all
+10 scenarios on `linux/amd64` against harness/Gateway source `de297e7` and
+Provider `2ed5e68`. Artifact
+`browser-shared-capacity-e2e-evidence-33949577876` has GitHub digest
+`sha256:6e938a1549f3ffe3b7a08cf9aa7cd58639f3d058f935c6da1e57dad45ffeb423`.
+Downloaded run `20260905T062246.271594332Z` contains exactly six sanitized
+files: one manifest, one report, two audit logs, and two observation logs. All
+10 report entries pass. The audits contain 22 `authorized`, 22 `connected`, 18
+`client_closed`, five `capacity_rejected`, two `capacity_lost`, and two
+`capacity_unavailable`; observations contain 22 `resolve` and 22 `dial`.
+The manifest pins Valkey index
+`sha256:ccfa19b0d743e48927e1c8c14e39e0acb97b5cea347fef0bfe340247fea920cd`
+and amd64 child
+`sha256:dd021e69e0a204fbb25b39c332c3dd61d51853d0a67e34f523cf1e1ab15fe478`,
+but records `provenance_not_established=true`. Contract/tree/48 cases remain
+metadata with `contract.exercised=false`. The private echo fixture does not
+exercise Provider API, real Browser/CDP, image provenance, restricted egress,
+Provider artifact/usage, HA/failover, durable distributed revocation,
+downstream fencing, Provider multi-controller, hostile multi-tenant, real Agent
+Platform, aggregate, deployment, or production behavior.
 
 Hosted Browser Reference run `33940332911` passed harness `6b01b75` against
 Provider `997fb0d`: all 13 initial and 5 process-reconstruction scenarios
@@ -435,3 +457,6 @@ Valkey plus two-Gateway black-box runner. It publishes
 its sanitization checks succeed. A green run does not change the Provider
 Contract, real Agent Platform, HA, multi-controller, multi-tenant, deployment,
 or production-readiness status.
+Hosted run `33949577876` passed this workflow on `linux/amd64` and uploaded
+`browser-shared-capacity-e2e-evidence-33949577876` with digest
+`sha256:6e938a1549f3ffe3b7a08cf9aa7cd58639f3d058f935c6da1e57dad45ffeb423`.
