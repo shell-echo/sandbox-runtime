@@ -21,6 +21,14 @@ type BrowserProviderResolver interface {
 	Resolve(context.Context, string) (browserreference.Endpoint, error)
 }
 
+// BrowserFencedProviderResolver is the narrow trusted private-ingress
+// boundary for a downstream-fenced Browser connection. Subject and fence are
+// supplied exactly by the Gateway after authorization and capacity admission;
+// this composition does not interpret or persist the opaque claim.
+type BrowserFencedProviderResolver interface {
+	ResolveFenced(context.Context, string, gateway.DownstreamFenceSubject, gateway.DownstreamFence) (browserreference.Endpoint, error)
+}
+
 // BrowserOptions contains every dependency required by the caller-owned
 // Browser Gateway. This package supplies no authorization, revocation, audit,
 // handshake-admission, or reconnect-policy default.
@@ -29,9 +37,13 @@ type BrowserOptions struct {
 	Revocations gateway.RevocationSource
 	Recorder    gateway.Recorder
 	Resolver    BrowserProviderResolver
-	WebSocket   adapter.WebSocketOptions
-	Edge        edge.Gate
-	Capacity    gateway.ConnectionCapacity
+	// FencedResolver is accepted only by NewFencedBrowser. NewBrowser rejects it
+	// so an intended downstream-fenced deployment cannot silently use the raw
+	// Provider attachment path.
+	FencedResolver BrowserFencedProviderResolver
+	WebSocket      adapter.WebSocketOptions
+	Edge           edge.Gate
+	Capacity       gateway.ConnectionCapacity
 
 	Clock                  gateway.Clock
 	MaxReconnects          int
@@ -55,6 +67,26 @@ type BrowserService struct {
 // NewBrowser fails closed unless every caller-owned policy port, the Provider
 // Browser resolver, and WebSocket handshake admission are supplied.
 func NewBrowser(options BrowserOptions) (*BrowserService, error) {
+	if options.FencedResolver != nil {
+		return nil, fmt.Errorf("%w: downstream-fenced Browser resolver is not valid for the ordinary composition", ErrInvalidOptions)
+	}
+	return newBrowser(options, false)
+}
+
+// NewFencedBrowser composes only the explicit downstream-fenced Browser path.
+// It rejects an ordinary resolver even when a fenced resolver is also present,
+// preventing configuration from retaining a raw private-CDP bypass.
+func NewFencedBrowser(options BrowserOptions) (*BrowserService, error) {
+	if options.Resolver != nil {
+		return nil, fmt.Errorf("%w: ordinary Browser resolver is not valid for the downstream-fenced composition", ErrInvalidOptions)
+	}
+	if nilDependency(options.FencedResolver) {
+		return nil, fmt.Errorf("%w: downstream-fenced Browser resolver is required", ErrInvalidOptions)
+	}
+	return newBrowser(options, true)
+}
+
+func newBrowser(options BrowserOptions, requireDownstreamFencing bool) (*BrowserService, error) {
 	for _, dependency := range []struct {
 		name  string
 		value any
@@ -62,7 +94,6 @@ func NewBrowser(options BrowserOptions) (*BrowserService, error) {
 		{"authorizer", options.Authorizer},
 		{"revocations", options.Revocations},
 		{"recorder", options.Recorder},
-		{"Browser provider resolver", options.Resolver},
 		{"WebSocket admission", options.WebSocket.Admission},
 		{"public edge gate", options.Edge},
 		{"authenticated connection capacity", options.Capacity},
@@ -78,11 +109,8 @@ func NewBrowser(options BrowserOptions) (*BrowserService, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%w: WebSocket adapter: %w", ErrInvalidOptions, err)
 	}
-	proxy, err := gateway.New(gateway.Options{
-		Authorizer: options.Authorizer,
-		Resolver: browserProviderResolver{
-			resolver: options.Resolver, maxFrameBytes: options.WebSocket.MaxFrameBytes,
-		},
+	gatewayOptions := gateway.Options{
+		Authorizer:  options.Authorizer,
 		Revocations: options.Revocations, Recorder: options.Recorder,
 		Clock: options.Clock, MaxReconnects: options.MaxReconnects,
 		ReconnectBackoff:         options.ReconnectBackoff,
@@ -90,11 +118,41 @@ func NewBrowser(options BrowserOptions) (*BrowserService, error) {
 		CapacityReleaseTimeout:   options.CapacityReleaseTimeout,
 		MaxConnections:           options.MaxConnections,
 		MaxConnectionsPerSession: options.MaxConnectionsPerSession,
-	})
+	}
+	if requireDownstreamFencing {
+		gatewayOptions.FencedResolver = browserFencedProviderResolver{
+			resolver: options.FencedResolver, maxFrameBytes: options.WebSocket.MaxFrameBytes,
+		}
+		gatewayOptions.RequireDownstreamFencing = true
+	} else {
+		if nilDependency(options.Resolver) {
+			return nil, fmt.Errorf("%w: Browser provider resolver is required", ErrInvalidOptions)
+		}
+		gatewayOptions.Resolver = browserProviderResolver{
+			resolver: options.Resolver, maxFrameBytes: options.WebSocket.MaxFrameBytes,
+		}
+	}
+	proxy, err := gateway.New(gatewayOptions)
 	if err != nil {
 		return nil, fmt.Errorf("%w: Gateway: %w", ErrInvalidOptions, err)
 	}
 	return &BrowserService{gateway: proxy, webSocket: webSocket, edge: options.Edge}, nil
+}
+
+type browserFencedProviderResolver struct {
+	resolver      BrowserFencedProviderResolver
+	maxFrameBytes int64
+}
+
+func (r browserFencedProviderResolver) ResolveFenced(ctx context.Context, value string, subject gateway.DownstreamFenceSubject, fence gateway.DownstreamFence) (gateway.Endpoint, error) {
+	if nilDependency(r.resolver) {
+		return gateway.Endpoint{}, ErrUnavailable
+	}
+	endpoint, err := r.resolver.ResolveFenced(ctx, value, subject, fence)
+	if err != nil {
+		return gateway.Endpoint{}, err
+	}
+	return adaptBrowserEndpoint(endpoint, r.maxFrameBytes)
 }
 
 // Serve reserves caller-owned public-edge capacity before WebSocket admission
@@ -156,13 +214,17 @@ type browserProviderResolver struct {
 }
 
 func (r browserProviderResolver) Resolve(ctx context.Context, value string) (gateway.Endpoint, error) {
-	if r.resolver == nil {
+	if nilDependency(r.resolver) {
 		return gateway.Endpoint{}, ErrUnavailable
 	}
 	endpoint, err := r.resolver.Resolve(ctx, value)
 	if err != nil {
 		return gateway.Endpoint{}, err
 	}
+	return adaptBrowserEndpoint(endpoint, r.maxFrameBytes)
+}
+
+func adaptBrowserEndpoint(endpoint browserreference.Endpoint, maxFrameBytes int64) (gateway.Endpoint, error) {
 	if endpoint.Dial == nil {
 		return gateway.Endpoint{}, ErrUnavailable
 	}
@@ -178,9 +240,10 @@ func (r browserProviderResolver) Resolve(ctx context.Context, value string) (gat
 			if nilDependency(stream) {
 				return nil, ErrUnavailable
 			}
-			return adapter.NewBrowserStream(stream, adapter.BrowserOptions{MaxFrameBytes: r.maxFrameBytes})
+			return adapter.NewBrowserStream(stream, adapter.BrowserOptions{MaxFrameBytes: maxFrameBytes})
 		},
 	}, nil
 }
 
 var _ gateway.ReferenceResolver = browserProviderResolver{}
+var _ gateway.FencedReferenceResolver = browserFencedProviderResolver{}

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strings"
 	"time"
 )
 
@@ -23,18 +24,25 @@ var (
 	ErrCapacityExhausted     = errors.New("Runtime Gateway connection capacity exhausted")
 	ErrCapacityUnavailable   = errors.New("Runtime Gateway connection capacity is unavailable")
 	ErrRevocationUnavailable = errors.New("Runtime Gateway revocation authority is unavailable")
+	ErrDownstreamFenceLost   = errors.New("Runtime Gateway downstream action fence was lost")
+	ErrDownstreamUnavailable = errors.New("Runtime Gateway downstream action fence is unavailable")
 	ErrAuditUnavailable      = errors.New("Runtime Gateway audit recording is unavailable")
 	ErrProxyUnavailable      = errors.New("Runtime Gateway proxy is unavailable")
 
 	identifierPattern        = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$`)
 	terminalReferencePattern = regexp.MustCompile(`^ref:session:[A-Za-z0-9][A-Za-z0-9._-]{0,199}$`)
 	browserReferencePattern  = regexp.MustCompile(`^ref:browser-session:[A-Za-z0-9][A-Za-z0-9._-]{0,199}$`)
+	downstreamFencePattern   = regexp.MustCompile(`^v1\.[A-Za-z0-9_-]+$`)
 )
 
 const (
-	MaxReconnectAttempts  = 3
-	MaxReconnectBackoff   = 30 * time.Second
-	MaxConnectionCapacity = 1_000
+	MaxReconnectAttempts       = 3
+	MaxReconnectBackoff        = 30 * time.Second
+	MaxConnectionCapacity      = 1_000
+	MaxDownstreamFenceBytes    = 512
+	MinDownstreamActionWindow  = 50 * time.Millisecond
+	MaxDownstreamActionWindow  = 30 * time.Second
+	MaxDownstreamClaimLifetime = 24 * time.Hour
 
 	MinCapacityReleaseTimeout     = 100 * time.Millisecond
 	DefaultCapacityReleaseTimeout = 5 * time.Second
@@ -52,6 +60,66 @@ type CapacitySubject struct {
 	BrowserSessionID    string
 	CapabilityProfileID string
 	ExpiresAt           time.Time
+}
+
+// DownstreamFence is an opaque, bearer-like claim for one exact acquired
+// capacity lease. It is allowed only on the trusted Gateway-to-ingress path and
+// must never be logged, audited, returned through a public API, or interpreted
+// outside the capacity adapter that issued it.
+type DownstreamFence struct {
+	opaque string
+}
+
+func NewDownstreamFence(opaque string) (DownstreamFence, error) {
+	if len(opaque) < len("v1.a") || len(opaque) > MaxDownstreamFenceBytes ||
+		!downstreamFencePattern.MatchString(opaque) || strings.ContainsAny(opaque, "\r\n\t ") {
+		return DownstreamFence{}, ErrDownstreamUnavailable
+	}
+	return DownstreamFence{opaque: opaque}, nil
+}
+
+// Opaque returns the claim only for a trusted internal transport or authority
+// adapter. Callers must not place it in errors, audit events, or evidence.
+func (f DownstreamFence) Opaque() string { return f.opaque }
+
+func (f DownstreamFence) Validate() error {
+	_, err := NewDownstreamFence(f.opaque)
+	return err
+}
+
+func (f DownstreamFence) String() string   { return "[redacted downstream fence]" }
+func (f DownstreamFence) GoString() string { return "gateway.DownstreamFence{[redacted]}" }
+
+// DownstreamFenceSubject is the exact Browser binding supplied to the private
+// ingress. ExpiresAt is the caller grant expiry, not the Provider handoff
+// expiry. Provider mutation fencing and connection generation remain separate
+// identities.
+type DownstreamFenceSubject struct {
+	TenantID             string
+	SandboxID            string
+	BrowserSessionID     string
+	CapabilityProfileID  string
+	ConnectionGeneration int64
+	ExpiresAt            time.Time
+}
+
+// DownstreamFenceDecision reports whether this action installed a newer
+// per-session high-water claim. The claim itself remains opaque and must not be
+// copied into diagnostics or evidence.
+type DownstreamFenceDecision struct {
+	Activated bool
+}
+
+func (s DownstreamFenceSubject) Validate() error {
+	for _, value := range []string{s.TenantID, s.SandboxID, s.BrowserSessionID, s.CapabilityProfileID} {
+		if !identifierPattern.MatchString(value) {
+			return ErrDownstreamUnavailable
+		}
+	}
+	if s.ConnectionGeneration < 1 || s.ExpiresAt.IsZero() {
+		return ErrDownstreamUnavailable
+	}
+	return nil
 }
 
 // RevocationSubject is the exact caller-owned grant identity observed by the
@@ -243,4 +311,6 @@ const (
 	AuditCapacityLost          AuditEventType = "capacity_lost"
 	AuditCapacityReleaseFailed AuditEventType = "capacity_release_failed"
 	AuditRevocationUnavailable AuditEventType = "revocation_unavailable"
+	AuditDownstreamFenceLost   AuditEventType = "downstream_fence_lost"
+	AuditDownstreamUnavailable AuditEventType = "downstream_fence_unavailable"
 )

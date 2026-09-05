@@ -54,6 +54,7 @@ type Options struct {
 type Capacity struct {
 	client *goredis.Client
 	keys   []string
+	keyTag string
 
 	policyArgs       []any
 	maxTotal         int
@@ -133,6 +134,7 @@ func New(options Options) (*Capacity, error) {
 			"sandbox-runtime:{" + tag + "}:capacity:policy",
 			"sandbox-runtime:{" + tag + "}:capacity:fence",
 		},
+		keyTag:     tag,
 		policyArgs: policyArgs,
 		maxTotal:   options.MaxTotal, maxPerTenant: options.MaxPerTenant, maxPerSession: options.MaxPerSession,
 		leaseTTL: options.LeaseTTL, renewInterval: options.RenewInterval,
@@ -242,20 +244,21 @@ func (c *Capacity) Acquire(ctx context.Context, subject gateway.CapacitySubject)
 }
 
 type connectionLease struct {
-	capacity       *Capacity
-	member         string
-	grantExpiresAt time.Time
-	confirmedUntil time.Time
-	grantBound     bool
-	events         chan gateway.CapacityEvent
-	stop           chan struct{}
-	done           chan struct{}
-	stopOnce       sync.Once
-	signalOnce     sync.Once
-	stateMu        sync.Mutex
-	releaseGate    chan struct{}
-	releasing      bool
-	released       bool
+	capacity        *Capacity
+	member          string
+	grantExpiresAt  time.Time
+	confirmedUntil  time.Time
+	grantBound      bool
+	events          chan gateway.CapacityEvent
+	stop            chan struct{}
+	done            chan struct{}
+	stopOnce        sync.Once
+	signalOnce      sync.Once
+	stateMu         sync.Mutex
+	releaseGate     chan struct{}
+	releasing       bool
+	released        bool
+	terminationKind string
 }
 
 func (l *connectionLease) Events() <-chan gateway.CapacityEvent {
@@ -387,6 +390,7 @@ func (l *connectionLease) signal(kind string, err error) {
 		return
 	}
 	l.signalOnce.Do(func() {
+		l.terminationKind = kind
 		l.events <- gateway.CapacityEvent{Kind: capacityEventKind(kind), Err: err}
 	})
 }

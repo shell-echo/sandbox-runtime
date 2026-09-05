@@ -23,12 +23,19 @@ func (f ClockFunc) Now() time.Time { return f() }
 type Options struct {
 	Authorizer       Authorizer
 	Resolver         ReferenceResolver
+	FencedResolver   FencedReferenceResolver
 	Revocations      RevocationSource
 	Recorder         Recorder
 	Clock            Clock
 	MaxReconnects    int
 	ReconnectBackoff time.Duration
 	Capacity         ConnectionCapacity
+
+	// RequireDownstreamFencing disables the ordinary resolver path and requires
+	// the acquired capacity lease to provide a claim for a private action-fenced
+	// Browser ingress. It is intentionally opt-in so terminal behavior and older
+	// evidence profiles retain their exact boundary.
+	RequireDownstreamFencing bool
 
 	// CapacityReleaseTimeout bounds the independent cleanup context used to
 	// release an acquired external capacity lease after the connection ends.
@@ -44,6 +51,8 @@ type Options struct {
 type Gateway struct {
 	authorizer             Authorizer
 	resolver               ReferenceResolver
+	fencedResolver         FencedReferenceResolver
+	requireDownstreamFence bool
 	revocations            RevocationSource
 	recorder               Recorder
 	clock                  Clock
@@ -55,9 +64,18 @@ type Gateway struct {
 }
 
 func New(options Options) (*Gateway, error) {
-	if options.Authorizer == nil || options.Resolver == nil || options.Revocations == nil || options.Recorder == nil ||
-		isTypedNil(options.Revocations) {
+	if options.Authorizer == nil || isTypedNil(options.Authorizer) ||
+		options.Revocations == nil || isTypedNil(options.Revocations) ||
+		options.Recorder == nil || isTypedNil(options.Recorder) ||
+		(options.Clock != nil && isTypedNil(options.Clock)) {
 		return nil, ErrProxyUnavailable
+	}
+	if options.RequireDownstreamFencing {
+		if options.Resolver != nil || options.FencedResolver == nil || isTypedNil(options.FencedResolver) || options.Capacity == nil {
+			return nil, fmt.Errorf("%w: downstream-fenced resolver and capacity are required", ErrProxyUnavailable)
+		}
+	} else if options.Resolver == nil || isTypedNil(options.Resolver) || options.FencedResolver != nil {
+		return nil, fmt.Errorf("%w: ordinary resolver is required", ErrProxyUnavailable)
 	}
 	clock := options.Clock
 	if clock == nil {
@@ -89,11 +107,12 @@ func New(options Options) (*Gateway, error) {
 		return nil, fmt.Errorf("%w: connection capacity", err)
 	}
 	return &Gateway{
-		authorizer: options.Authorizer, resolver: options.Resolver,
+		authorizer: options.Authorizer, resolver: options.Resolver, fencedResolver: options.FencedResolver,
 		revocations: options.Revocations, recorder: options.Recorder,
 		clock: clock, maxReconnects: maxReconnects, reconnectBackoff: backoff,
 		capacity: capacity, authenticatedCapacity: options.Capacity,
 		capacityReleaseTimeout: capacityReleaseTimeout,
+		requireDownstreamFence: options.RequireDownstreamFencing,
 	}, nil
 }
 
@@ -102,12 +121,13 @@ func New(options Options) (*Gateway, error) {
 // are retried through a fresh reference resolution while retaining the same
 // caller stream. The Gateway never exposes or interprets an endpoint address.
 func (g *Gateway) Connect(ctx context.Context, request ConnectRequest, client Stream) (resultErr error) {
-	if g == nil || client == nil {
+	if g == nil || client == nil || isTypedNil(client) {
 		return ErrProxyUnavailable
 	}
 	if ctx == nil {
 		return context.Canceled
 	}
+	callerCtx := ctx
 	if err := request.Validate(); err != nil {
 		return err
 	}
@@ -136,6 +156,7 @@ func (g *Gateway) Connect(ctx context.Context, request ConnectRequest, client St
 		return err
 	}
 	defer releaseLocal()
+	var downstreamFence DownstreamFence
 	if g.authenticatedCapacity != nil {
 		lease, err := g.authenticatedCapacity.Acquire(ctx, capacitySubjectForGrant(grant))
 		if err != nil {
@@ -158,6 +179,22 @@ func (g *Gateway) Connect(ctx context.Context, request ConnectRequest, client St
 			resultErr = err
 			g.finishCapacityLease(grant, lease, &resultErr)
 			return resultErr
+		}
+		if g.requireDownstreamFence {
+			fenced, ok := lease.(FencedConnectionLease)
+			if !ok || isTypedNil(fenced) {
+				resultErr = ErrDownstreamUnavailable
+				g.recordBoundedEvent(eventForGrant(grant, AuditDownstreamUnavailable, now, 0, 0, 0, "downstream action fence unavailable"))
+				g.finishCapacityLease(grant, lease, &resultErr)
+				return resultErr
+			}
+			downstreamFence, err = fenced.DownstreamFence()
+			if err != nil || downstreamFence.Validate() != nil {
+				resultErr = ErrDownstreamUnavailable
+				g.recordBoundedEvent(eventForGrant(grant, AuditDownstreamUnavailable, now, 0, 0, 0, "downstream action fence unavailable"))
+				g.finishCapacityLease(grant, lease, &resultErr)
+				return resultErr
+			}
 		}
 		capacityCtx, cancelCapacity, monitorDone := monitorCapacityEvents(ctx, events)
 		ctx = capacityCtx
@@ -206,11 +243,11 @@ func (g *Gateway) Connect(ctx context.Context, request ConnectRequest, client St
 		}
 		now = g.clock.Now().UTC()
 
-		endpoint, err := g.resolver.Resolve(ctx, grant.HandoffReference)
-		if authorityErr := g.authorityError(ctx, watch, grant.ExpiresAt); authorityErr != nil {
-			g.recordAuthorityTermination(grant, authorityErr, reconnects, 0, 0)
+		endpoint, err := g.resolve(ctx, grant, downstreamFence)
+		if boundaryErr := g.externalBoundaryError(ctx, watch, grant.ExpiresAt, err); boundaryErr != nil {
+			g.recordBoundaryTermination(grant, boundaryErr, reconnects, 0, 0)
 			_ = client.Close(context.Background())
-			return authorityErr
+			return boundaryErr
 		}
 		if err != nil {
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
@@ -240,15 +277,14 @@ func (g *Gateway) Connect(ctx context.Context, request ConnectRequest, client St
 			return err
 		}
 		backend, err := endpoint.Dial(ctx)
-		if authorityErr := g.authorityError(ctx, watch, grant.ExpiresAt); authorityErr != nil {
-			g.recordAuthorityTermination(grant, authorityErr, reconnects, 0, 0)
-			if backend != nil {
-				_ = backend.Close(context.Background())
-			}
+		if boundaryErr := g.externalBoundaryError(ctx, watch, grant.ExpiresAt, err); boundaryErr != nil {
+			g.recordBoundaryTermination(grant, boundaryErr, reconnects, 0, 0)
+			g.closeStream(backend)
 			_ = client.Close(context.Background())
-			return authorityErr
+			return boundaryErr
 		}
 		if err != nil {
+			g.closeStream(backend)
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 				_ = client.Close(context.Background())
 				return contextResult(ctx, err)
@@ -266,8 +302,12 @@ func (g *Gateway) Connect(ctx context.Context, request ConnectRequest, client St
 			reconnects++
 			continue
 		}
-		if backend == nil {
+		if backend == nil || isTypedNil(backend) {
 			_ = client.Close(context.Background())
+			if g.requireDownstreamFence {
+				g.recordBoundaryTermination(grant, ErrDownstreamUnavailable, reconnects, 0, 0)
+				return ErrDownstreamUnavailable
+			}
 			return errors.Join(ErrReferenceUnavailable, errors.New("resolver returned nil backend stream"))
 		}
 		if authorityErr := g.authorityError(ctx, watch, grant.ExpiresAt); authorityErr != nil {
@@ -282,7 +322,7 @@ func (g *Gateway) Connect(ctx context.Context, request ConnectRequest, client St
 			_ = client.Close(context.Background())
 			return errors.Join(ErrAuditUnavailable, err)
 		}
-		result := g.proxyAttempt(ctx, client, backend, grant, watch)
+		result := g.proxyAttempt(ctx, callerCtx, client, backend, grant, watch)
 		_ = backend.Close(context.Background())
 		switch {
 		case result.revoked:
@@ -293,6 +333,14 @@ func (g *Gateway) Connect(ctx context.Context, request ConnectRequest, client St
 			g.recordAuthorityTermination(grant, ErrExpired, reconnects, result.frames, result.bytes)
 			_ = client.Close(context.Background())
 			return ErrExpired
+		case errors.Is(result.err, ErrDownstreamFenceLost):
+			g.recordBoundaryTermination(grant, ErrDownstreamFenceLost, reconnects, result.frames, result.bytes)
+			_ = client.Close(context.Background())
+			return ErrDownstreamFenceLost
+		case errors.Is(result.err, ErrDownstreamUnavailable):
+			g.recordBoundaryTermination(grant, ErrDownstreamUnavailable, reconnects, result.frames, result.bytes)
+			_ = client.Close(context.Background())
+			return ErrDownstreamUnavailable
 		case result.clientClosed:
 			if err := g.record(ctx, eventForGrant(grant, AuditClientClosed, g.clock.Now().UTC(), reconnects, result.frames, result.bytes, "client closed")); err != nil {
 				return errors.Join(ErrAuditUnavailable, err)
@@ -434,6 +482,42 @@ func (g *Gateway) authorityError(ctx context.Context, watch RevocationWatch, exp
 	return nil
 }
 
+// externalBoundaryError preserves the stable authority ordering after an
+// external resolve or dial returns. In particular, a private-ingress fencing
+// decision outranks revocation-authority unavailability and must never enter
+// the ordinary reference reconnect path.
+func (g *Gateway) externalBoundaryError(ctx context.Context, watch RevocationWatch, expiresAt time.Time, operationErr error) error {
+	revocationErr := revocationWatchError(watch)
+	if errors.Is(revocationErr, ErrRevoked) {
+		return ErrRevoked
+	}
+	if !g.clock.Now().UTC().Before(expiresAt) {
+		return ErrExpired
+	}
+	if capacityErr := capacityContextError(ctx); capacityErr != nil {
+		return capacityErr
+	}
+	if g.requireDownstreamFence {
+		if fenceErr := downstreamFenceError(operationErr); fenceErr != nil {
+			return fenceErr
+		}
+	}
+	if g.requireDownstreamFence && operationErr != nil &&
+		!(ctx != nil && ctx.Err() != nil && (errors.Is(operationErr, context.Canceled) || errors.Is(operationErr, context.DeadlineExceeded))) {
+		return ErrDownstreamUnavailable
+	}
+	if revocationErr != nil {
+		if errors.Is(revocationErr, context.Canceled) || errors.Is(revocationErr, context.DeadlineExceeded) {
+			return revocationErr
+		}
+		return errors.Join(ErrProxyUnavailable, ErrRevocationUnavailable, revocationErr)
+	}
+	if ctx != nil && ctx.Err() != nil {
+		return ctx.Err()
+	}
+	return nil
+}
+
 func (g *Gateway) recordAuthorityTermination(grant Grant, err error, attempt int, frames, bytes uint64) {
 	switch {
 	case errors.Is(err, ErrRevoked):
@@ -442,6 +526,17 @@ func (g *Gateway) recordAuthorityTermination(grant Grant, err error, attempt int
 		g.recordBoundedEvent(eventForGrant(grant, AuditExpired, g.clock.Now().UTC(), attempt, frames, bytes, "grant expired"))
 	case errors.Is(err, ErrRevocationUnavailable):
 		g.recordBoundedEvent(eventForGrant(grant, AuditRevocationUnavailable, g.clock.Now().UTC(), attempt, frames, bytes, "revocation authority unavailable"))
+	}
+}
+
+func (g *Gateway) recordBoundaryTermination(grant Grant, err error, attempt int, frames, bytes uint64) {
+	switch {
+	case errors.Is(err, ErrDownstreamFenceLost):
+		g.recordBoundedEvent(eventForGrant(grant, AuditDownstreamFenceLost, g.clock.Now().UTC(), attempt, frames, bytes, "downstream action fence lost"))
+	case errors.Is(err, ErrDownstreamUnavailable):
+		g.recordBoundedEvent(eventForGrant(grant, AuditDownstreamUnavailable, g.clock.Now().UTC(), attempt, frames, bytes, "downstream action fence unavailable"))
+	default:
+		g.recordAuthorityTermination(grant, err, attempt, frames, bytes)
 	}
 }
 
@@ -462,8 +557,19 @@ func (g *Gateway) finishCapacityLease(grant Grant, lease ConnectionLease, result
 	if releaseErr == nil {
 		return
 	}
-	*resultErr = errors.Join(*resultErr, ErrCapacityUnavailable, releaseErr)
+	if !errors.Is(*resultErr, ErrDownstreamFenceLost) && !errors.Is(*resultErr, ErrDownstreamUnavailable) {
+		*resultErr = errors.Join(*resultErr, ErrCapacityUnavailable, releaseErr)
+	}
 	g.recordBoundedEvent(eventForGrant(grant, AuditCapacityReleaseFailed, g.clock.Now().UTC(), 0, 0, 0, "connection capacity lease release failed"))
+}
+
+func (g *Gateway) closeStream(stream Stream) {
+	if stream == nil || isTypedNil(stream) {
+		return
+	}
+	closeCtx, cancel := context.WithTimeout(context.Background(), g.capacityReleaseTimeout)
+	_ = stream.Close(closeCtx)
+	cancel()
 }
 
 func (g *Gateway) recordBoundedEvent(event AuditEvent) {
@@ -499,10 +605,11 @@ const (
 )
 
 type transferResult struct {
-	side   streamSide
-	err    error
-	frames uint64
-	bytes  uint64
+	side        streamSide
+	writeFailed bool
+	err         error
+	frames      uint64
+	bytes       uint64
 }
 
 type proxyResult struct {
@@ -515,7 +622,7 @@ type proxyResult struct {
 	bytes         uint64
 }
 
-func (g *Gateway) proxyAttempt(ctx context.Context, client, backend Stream, grant Grant, watch RevocationWatch) proxyResult {
+func (g *Gateway) proxyAttempt(ctx, callerCtx context.Context, client, backend Stream, grant Grant, watch RevocationWatch) proxyResult {
 	attemptCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	results := make(chan transferResult, 2)
@@ -582,6 +689,10 @@ func (g *Gateway) proxyAttempt(ctx context.Context, client, backend Stream, gran
 		result.err = capacityErr
 		return result
 	}
+	if fenceErr := g.downstreamFenceTransferError(callerCtx, first, second); fenceErr != nil {
+		result.err = fenceErr
+		return result
+	}
 	if revocationErr != nil {
 		if errors.Is(revocationErr, context.Canceled) || errors.Is(revocationErr, context.DeadlineExceeded) {
 			result.err = revocationErr
@@ -590,7 +701,17 @@ func (g *Gateway) proxyAttempt(ctx context.Context, client, backend Stream, gran
 		}
 		return result
 	}
-	if ctx.Err() != nil {
+	// A caller cancellation can make a client-to-backend transfer report a
+	// backend-side write failure only because Send observed the canceled
+	// context. The fence classifier above preserves explicit sentinels and real
+	// write failures while ignoring only a matching caller-context derivative.
+	// A separately reported revocation-authority outage still has higher
+	// priority and was handled above.
+	if callerCtx != nil && callerCtx.Err() != nil {
+		result.err = contextResult(ctx, callerCtx.Err())
+		return result
+	}
+	if ctx != nil && ctx.Err() != nil {
 		result.err = contextResult(ctx, ctx.Err())
 		return result
 	}
@@ -608,6 +729,52 @@ func (g *Gateway) proxyAttempt(ctx context.Context, client, backend Stream, gran
 	return result
 }
 
+func downstreamFenceError(errorsToCheck ...error) error {
+	for _, err := range errorsToCheck {
+		if errors.Is(err, ErrDownstreamFenceLost) {
+			return ErrDownstreamFenceLost
+		}
+	}
+	for _, err := range errorsToCheck {
+		if errors.Is(err, ErrDownstreamUnavailable) {
+			return ErrDownstreamUnavailable
+		}
+	}
+	return nil
+}
+
+func (g *Gateway) downstreamFenceTransferError(callerCtx context.Context, results ...transferResult) error {
+	if !g.requireDownstreamFence {
+		return nil
+	}
+	for _, result := range results {
+		if result.side != backendSide {
+			continue
+		}
+		if errors.Is(result.err, ErrDownstreamFenceLost) {
+			return ErrDownstreamFenceLost
+		}
+	}
+	for _, result := range results {
+		if result.side != backendSide {
+			continue
+		}
+		if errors.Is(result.err, ErrDownstreamUnavailable) ||
+			(result.writeFailed && !callerDerivedTransferError(callerCtx, result.err)) {
+			return ErrDownstreamUnavailable
+		}
+	}
+	return nil
+}
+
+func callerDerivedTransferError(callerCtx context.Context, transferErr error) bool {
+	if callerCtx == nil || callerCtx.Err() == nil {
+		return false
+	}
+	return (errors.Is(callerCtx.Err(), context.Canceled) && errors.Is(transferErr, context.Canceled)) ||
+		(errors.Is(callerCtx.Err(), context.DeadlineExceeded) && errors.Is(transferErr, context.DeadlineExceeded))
+}
+
 func transfer(ctx context.Context, source streamSide, src, dst Stream, results chan<- transferResult) {
 	var result transferResult
 	for {
@@ -618,7 +785,7 @@ func transfer(ctx context.Context, source streamSide, src, dst Stream, results c
 			return
 		}
 		if err := dst.Send(ctx, frame.Clone()); err != nil {
-			result.side, result.err = oppositeSide(source), err
+			result.side, result.writeFailed, result.err = oppositeSide(source), true, err
 			results <- result
 			return
 		}
@@ -676,6 +843,21 @@ func eventForGrant(grant Grant, eventType AuditEventType, at time.Time, attempt 
 
 func revocationSubjectForGrant(grant Grant) RevocationSubject {
 	return RevocationSubject{GrantID: grant.GrantID, ExpiresAt: grant.ExpiresAt.UTC()}
+}
+
+func downstreamFenceSubjectForGrant(grant Grant) DownstreamFenceSubject {
+	return DownstreamFenceSubject{
+		TenantID: grant.TenantID, SandboxID: grant.SandboxID,
+		BrowserSessionID: grant.BrowserSessionID, CapabilityProfileID: grant.CapabilityProfileID,
+		ConnectionGeneration: grant.ConnectionGeneration, ExpiresAt: grant.ExpiresAt.UTC(),
+	}
+}
+
+func (g *Gateway) resolve(ctx context.Context, grant Grant, fence DownstreamFence) (Endpoint, error) {
+	if g.requireDownstreamFence {
+		return g.fencedResolver.ResolveFenced(ctx, grant.HandoffReference, downstreamFenceSubjectForGrant(grant), fence)
+	}
+	return g.resolver.Resolve(ctx, grant.HandoffReference)
 }
 
 func (g *Gateway) record(ctx context.Context, event AuditEvent) error {

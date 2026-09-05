@@ -26,6 +26,23 @@ type ConnectionLease interface {
 	Release(context.Context) error
 }
 
+// FencedConnectionLease is the optional capability required by a downstream-
+// fenced Browser Gateway. It does not broaden the base capacity contract used
+// by terminal or unfenced reference compositions.
+type FencedConnectionLease interface {
+	ConnectionLease
+	DownstreamFence() (DownstreamFence, error)
+}
+
+// DownstreamFenceAuthority is used inside the unique private Browser ingress.
+// AuthorizeAction is the admission linearization point for one complete CDP
+// message or a connection activation. minimumWindow is the remaining bounded
+// ingress operation budget that the exact member must safely cover. Lost and
+// unavailable decisions must fail closed before downstream dial or write.
+type DownstreamFenceAuthority interface {
+	AuthorizeAction(context.Context, DownstreamFenceSubject, DownstreamFence, time.Duration) (DownstreamFenceDecision, error)
+}
+
 // Endpoint is a resolved provider handoff. ReferenceResolver implementations
 // must resolve the exact opaque reference and return a fresh Dial function for
 // every reconnect attempt. No URL, host, port, or backend identifier crosses
@@ -46,6 +63,13 @@ type Endpoint struct {
 // reference into a public endpoint.
 type ReferenceResolver interface {
 	Resolve(context.Context, string) (Endpoint, error)
+}
+
+// FencedReferenceResolver resolves only to a private ingress that independently
+// validates the opaque capacity claim for every downstream Browser action. It
+// must never return a direct Chromium or raw Provider attachment.
+type FencedReferenceResolver interface {
+	ResolveFenced(context.Context, string, DownstreamFenceSubject, DownstreamFence) (Endpoint, error)
 }
 
 // RevocationWatch is a stable, level-triggered view of one exact grant. Done

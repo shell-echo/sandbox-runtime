@@ -68,6 +68,52 @@ func TestNewBrowserFailsClosedForEveryRequiredDependency(t *testing.T) {
 	}
 }
 
+func TestNewBrowserRejectsDownstreamFencedResolver(t *testing.T) {
+	options := validBrowserOptions(t, &browserProviderResolverSpy{})
+	options.FencedResolver = &browserFencedProviderResolverSpy{}
+
+	service, err := NewBrowser(options)
+	if service != nil || !errors.Is(err, ErrInvalidOptions) {
+		t.Fatalf("NewBrowser() = %v, %v; want nil, invalid options", service, err)
+	}
+}
+
+func TestNewFencedBrowserFailsClosedForResolverConfiguration(t *testing.T) {
+	base := validBrowserOptions(t, nil)
+	base.FencedResolver = &browserFencedProviderResolverSpy{}
+	tests := []struct {
+		name string
+		edit func(*BrowserOptions)
+	}{
+		{"missing fenced resolver", func(options *BrowserOptions) { options.FencedResolver = nil }},
+		{"typed nil fenced resolver", func(options *BrowserOptions) {
+			var resolver *browserFencedProviderResolverSpy
+			options.FencedResolver = resolver
+		}},
+		{"ordinary resolver only", func(options *BrowserOptions) {
+			options.Resolver = &browserProviderResolverSpy{}
+			options.FencedResolver = nil
+		}},
+		{"ordinary and fenced resolvers", func(options *BrowserOptions) {
+			options.Resolver = &browserProviderResolverSpy{}
+		}},
+		{"typed nil ordinary and fenced resolvers", func(options *BrowserOptions) {
+			var resolver *browserProviderResolverSpy
+			options.Resolver = resolver
+		}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			options := base
+			test.edit(&options)
+			service, err := NewFencedBrowser(options)
+			if service != nil || !errors.Is(err, ErrInvalidOptions) {
+				t.Fatalf("NewFencedBrowser() = %v, %v; want nil, invalid options", service, err)
+			}
+		})
+	}
+}
+
 func TestBrowserServeRejectsAtPublicEdgeBeforeDownstreamWork(t *testing.T) {
 	for _, test := range []struct {
 		name       string
@@ -363,6 +409,73 @@ func TestBrowserConnectBridgesCDPFramesAndRecordsMetadataOnly(t *testing.T) {
 		if event.BrowserSessionID != "browser-session-1" || event.RuntimeSessionID != "" || event.TenantID == "" || event.SandboxID == "" {
 			t.Fatalf("Browser audit identity = %#v", event)
 		}
+	}
+}
+
+func TestFencedBrowserForwardsExactFenceBindingAndBridgesCDPFrames(t *testing.T) {
+	const fenceClaim = "v1.opaque_test_capacity_claim"
+	fence, err := gateway.NewDownstreamFence(fenceClaim)
+	if err != nil {
+		t.Fatal(err)
+	}
+	backend := newBrowserRawStream()
+	resolver := &browserFencedProviderResolverSpy{resolve: func(_ context.Context, value string, _ gateway.DownstreamFenceSubject, _ gateway.DownstreamFence) (browserreference.Endpoint, error) {
+		return browserEndpoint(value, backend), nil
+	}}
+	capacity := &browserFencedCapacity{lease: &browserFencedCapacityLease{
+		browserCapacityLease: &browserCapacityLease{events: make(chan gateway.CapacityEvent)},
+		fence:                fence,
+	}}
+	recorder := &testRecorder{}
+	options := validBrowserOptions(t, nil)
+	options.FencedResolver = resolver
+	options.Capacity = capacity
+	options.Recorder = recorder
+	service, err := NewFencedBrowser(options)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	request := validBrowserRequest()
+	client := newGatewayStream()
+	done := make(chan error, 1)
+	go func() { done <- service.Connect(context.Background(), request, client) }()
+	recorder.WaitEvent(t, gateway.AuditConnected)
+
+	message := []byte(`{"id":9,"method":"Browser.getVersion"}`)
+	client.ReceiveFrame(gateway.Frame{Type: gateway.TextFrame, Payload: message})
+	operation, payload := backend.WaitClientMessage(t)
+	if operation != ws.OpText || !bytes.Equal(payload, message) {
+		t.Fatalf("private Browser message = %v %q", operation, payload)
+	}
+	client.CloseNow()
+	if err := waitError(t, done); err != nil {
+		t.Fatalf("Connect() error = %v", err)
+	}
+
+	calls := resolver.Snapshot()
+	if len(calls) != 1 {
+		t.Fatalf("fenced Browser resolver calls = %d; want one", len(calls))
+	}
+	if calls[0].value != request.HandoffReference {
+		t.Fatalf("fenced Browser reference = %q; want %q", calls[0].value, request.HandoffReference)
+	}
+	wantSubject := gateway.DownstreamFenceSubject{
+		TenantID:             "tenant-1",
+		SandboxID:            "sandbox-1",
+		BrowserSessionID:     "browser-session-1",
+		CapabilityProfileID:  providerbrowser.CapabilityProfileID,
+		ConnectionGeneration: 1,
+		ExpiresAt:            compositionTestTime.Add(time.Minute),
+	}
+	if !reflect.DeepEqual(calls[0].subject, wantSubject) {
+		t.Fatalf("fenced Browser subject = %#v; want %#v", calls[0].subject, wantSubject)
+	}
+	if calls[0].fence.Opaque() != fenceClaim {
+		t.Fatal("fenced Browser claim was not forwarded unchanged")
+	}
+	if releases := capacity.lease.ReleaseCalls(); releases != 1 {
+		t.Fatalf("fenced capacity lease releases = %d; want one", releases)
 	}
 }
 
@@ -825,6 +938,23 @@ func (l *browserCapacityLease) ReleaseCalls() int {
 	return l.calls
 }
 
+type browserFencedCapacity struct {
+	lease *browserFencedCapacityLease
+}
+
+func (c *browserFencedCapacity) Acquire(context.Context, gateway.CapacitySubject) (gateway.ConnectionLease, error) {
+	return c.lease, nil
+}
+
+type browserFencedCapacityLease struct {
+	*browserCapacityLease
+	fence gateway.DownstreamFence
+}
+
+func (l *browserFencedCapacityLease) DownstreamFence() (gateway.DownstreamFence, error) {
+	return l.fence, nil
+}
+
 func validBrowserRequest() gateway.ConnectRequest {
 	return browserRequestFor("ref:browser-session:11111111111111111111111111111111")
 }
@@ -860,6 +990,35 @@ type browserProviderResolverSpy struct {
 	mu      sync.Mutex
 	calls   int
 	resolve func(context.Context, string) (browserreference.Endpoint, error)
+}
+
+type browserFencedProviderResolveCall struct {
+	value   string
+	subject gateway.DownstreamFenceSubject
+	fence   gateway.DownstreamFence
+}
+
+type browserFencedProviderResolverSpy struct {
+	mu      sync.Mutex
+	calls   []browserFencedProviderResolveCall
+	resolve func(context.Context, string, gateway.DownstreamFenceSubject, gateway.DownstreamFence) (browserreference.Endpoint, error)
+}
+
+func (r *browserFencedProviderResolverSpy) ResolveFenced(ctx context.Context, value string, subject gateway.DownstreamFenceSubject, fence gateway.DownstreamFence) (browserreference.Endpoint, error) {
+	r.mu.Lock()
+	r.calls = append(r.calls, browserFencedProviderResolveCall{value: value, subject: subject, fence: fence})
+	resolve := r.resolve
+	r.mu.Unlock()
+	if resolve == nil {
+		return browserreference.Endpoint{}, errors.New("test fenced Browser resolver is not configured")
+	}
+	return resolve(ctx, value, subject, fence)
+}
+
+func (r *browserFencedProviderResolverSpy) Snapshot() []browserFencedProviderResolveCall {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]browserFencedProviderResolveCall(nil), r.calls...)
 }
 
 func (r *browserProviderResolverSpy) Resolve(ctx context.Context, value string) (browserreference.Endpoint, error) {
