@@ -46,10 +46,14 @@ unavailability handling, bounded release, deterministic
 revocation/expiry/capacity termination priority, and a process-local memory
 reference with atomic global, tenant, and session accounting. E2E lock
 `49d1c20` passes the independent module race/shuffle, vet, and all three lock
-checks. This is port, memory-component, and lock-regression evidence only. No
-real shared store, two-Gateway-process run, TTL/renewal, crash reclamation,
-stale-owner fencing, hosted CI for this lock, distributed revocation,
-deployment, or production gate is claimed.
+checks. Repository CI `33940332882` and hosted Reference/Candidate/Browser runs
+`33940332897`/`33940332881`/`33940332911` pass against harness `6b01b75` and
+Provider `997fb0d`. Browser passes 13+5 on `linux/amd64`; artifact digest is
+`sha256:f4133967b6e573c701b82c72dc4d101febd4e6b28199e188fa0c8db049bff9ae`.
+This is port, memory-component, and single-process reference regression evidence
+only. No real shared store, two-Gateway-process run, TTL/renewal, crash
+reclamation, stale-owner fencing, distributed revocation, deployment, or
+production gate is claimed.
 
 ## Objective
 
@@ -175,8 +179,10 @@ evidence chain before it can be advertised.
   exact tenant/sandbox/session limits and excludes caller, grant, credentials,
   handoff reference, and endpoint data from its subject. E2E lock `49d1c20`
   binds the co-located harness to Provider `997fb0d` and passes all three check
-  modes locally. It does not implement shared-store TTL/renewal, ownership,
-  crash reclamation, stale-owner fencing, or cross-process coordination.
+  modes locally. Hosted Browser run `33940332911` passes 13+5 and its active
+  contention path reaches the authenticated memory authority. It does not
+  implement shared-store TTL/renewal, ownership, crash reclamation,
+  stale-owner fencing, or cross-process coordination.
 - `blocks/` can validate an internal digest-pinned Block manifest, but it does
   not authorize a Provider capability or establish image provenance.
 - A real Agent Platform caller and migration traffic harness remain unavailable;
@@ -357,8 +363,17 @@ internal Block manifest a wire resource or establishes production readiness.
   release-failure audit, stable termination priority, reconnect suppression,
   and concurrent acquisition/release. E2E lock `49d1c20` passes the independent
   module race/shuffle, vet, and Reference, Candidate, and Browser lock checks
-  against Provider `997fb0d`. These checks are co-located lock/regression
-  evidence, not a new hosted Browser run or real shared-capacity evidence.
+  against Provider `997fb0d`. Repository CI `33940332882` passes all four jobs.
+  Hosted Reference/Candidate `33940332897`/`33940332881` pass their separately
+  named 15+5 coding/shell sets. Hosted Browser `33940332911` passes 13+5 on
+  `linux/amd64`; inspected artifact
+  `browser-reference-e2e-evidence-33940332911` has digest
+  `sha256:f4133967b6e573c701b82c72dc4d101febd4e6b28199e188fa0c8db049bff9ae`.
+  Its 20-record metadata-only audit has six `authorized`, six `connected`, four
+  `client_closed`, and one each `capacity_rejected`, `denied`, `expired`, and
+  `revoked`, with no edge grant, endpoint, token, credential, CDP, or payload
+  field. These results remain single-process reference regressions, not real
+  shared-capacity evidence.
 
 ## Next work
 

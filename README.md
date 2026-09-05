@@ -85,7 +85,7 @@ Currently implemented:
   or distributed capacity backend or distributed revocation
 - a default-disabled Browser Provider command/runtime graph and a separate
   Browser-only reference stack plus black-box caller. Hosted Browser Reference
-  E2E run `33857739150` passes 13 initial and 5 process-reconstruction
+  E2E run `33940332911` passes 13 initial and 5 process-reconstruction
   scenarios through real mTLS/JWS HTTPS, WebSocket, signed-image provenance,
   Docker, restricted egress, concurrent same-session capacity rejection and
   release, authenticated wrong-Origin pre-upgrade rate rejection and recovery,

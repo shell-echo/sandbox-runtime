@@ -121,7 +121,11 @@ and a process-local memory reference with atomic global, tenant, and session
 accounting. Browser composition requires that authority, while the existing
 identity-free edge remains separate. The memory adapter and co-located harness
 do not establish shared or distributed capacity, cross-process correctness, or
-distributed revocation.
+distributed revocation. Hosted run `33940332911` against harness/Provider
+`6b01b75`/`997fb0d` passes the same 13+5 Browser reference scenarios with the
+authenticated memory authority wired into the active contention path. This is
+still single-process reference external-caller evidence, not the shared-capacity
+gate.
 
 | Method and path | Responsibility |
 | --- | --- |
@@ -398,7 +402,7 @@ advertisement, and optional-profile gates remain open:
 | Workspace | The Provider Docker development adapter supplies `/inputs`, `/workspace`, `/outputs`, and bounded tmpfs `/tmp` with owned cleanup; exec consumes that runtime without exposing host paths. | Add artifact consumers, capacity enforcement, and stronger isolation evidence. |
 | Security | Docker defaults already drop capabilities, use non-root/read-only root, disable networking, and limit resources. | Add policy enforcement, stronger isolation profiles, secret grants, egress controls, audit evidence, and production auth. |
 | Events and usage | Durable lifecycle events and bounded usage-evidence components exist without a complete runtime collector composition. | Complete collection/reconciliation while leaving platform accounting authority outside the Provider. |
-| Snapshots/browser/desktop | Browser Contract authority/projection, exact signed image, Provider-local session/application/reference/usage, Docker adapter, provenance verifier, restricted-egress provisioner, create-policy binding, protected handlers, caller-owned Gateway, default-disabled command graph, and hosted 13+5 Browser reference-caller path have named evidence. The Gateway has explicit process-local total/per-session post-authorization capacity, pre-upgrade service limits, bounded listener/TLS/HTTP behavior, and an authenticated-capacity port with a process-local global/tenant/session memory reference. ADR 0030 and `997fb0d` add only the latest port/component evidence; the restricted-egress Gateway remains distinct from the caller-owned Gateway. Production Browser advertisement/public Gateway deployment, a real shared or distributed capacity backend, distributed revocation, aggregate, multi-controller, tenant, deployment, and production gates remain open. Snapshots and desktop remain unauthorized optional behavior. | Add a reviewed shared backend and two-independent-Gateway evidence, then durable distributed revocation, hostile-tenant evidence, metrics, and deployable storage/configuration before production advertisement; begin the Desktop authority audit only after the Browser readiness record is complete. |
+| Snapshots/browser/desktop | Browser Contract authority/projection, exact signed image, Provider-local session/application/reference/usage, Docker adapter, provenance verifier, restricted-egress provisioner, create-policy binding, protected handlers, caller-owned Gateway, default-disabled command graph, and hosted 13+5 Browser reference-caller path have named evidence. The Gateway has explicit process-local total/per-session post-authorization capacity, pre-upgrade service limits, bounded listener/TLS/HTTP behavior, and an authenticated-capacity port with a process-local global/tenant/session memory reference. ADR 0030/`997fb0d` and hosted run `33940332911` add the latest port/component and single-process reference-caller regression evidence; the restricted-egress Gateway remains distinct from the caller-owned Gateway. Production Browser advertisement/public Gateway deployment, a real shared or distributed capacity backend, distributed revocation, aggregate, multi-controller, tenant, deployment, and production gates remain open. Snapshots and desktop remain unauthorized optional behavior. | Add a reviewed shared backend and two-independent-Gateway evidence, then durable distributed revocation, hostile-tenant evidence, metrics, and deployable storage/configuration before production advertisement; begin the Desktop authority audit only after the Browser readiness record is complete. |
 
 ## Delivery plan and release gates
 
