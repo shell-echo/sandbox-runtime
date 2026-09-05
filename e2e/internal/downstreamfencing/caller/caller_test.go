@@ -11,6 +11,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"math/big"
 	"net"
 	"net/http"
@@ -21,6 +22,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -268,6 +270,189 @@ func TestCallerConnectionCountIsBounded(t *testing.T) {
 	response := client.Execute(context.Background(), openCommand(1, "connection-new"))
 	if response.ErrorCode != ErrorConnectionCapacity {
 		t.Fatalf("capacity response = %#v", response)
+	}
+}
+
+func TestCallerLifetimeConnectionCountIsBounded(t *testing.T) {
+	caFile, _ := testPKI(t)
+	client := mustNewCaller(t, testConfig(caFile, "https://127.0.0.1:18443"))
+	defer client.Close()
+	client.mu.Lock()
+	client.openedCount = maxOpenedConnections
+	client.mu.Unlock()
+	response := client.Execute(context.Background(), openCommand(1, "connection-new"))
+	if response.ErrorCode != ErrorConnectionCapacity {
+		t.Fatalf("lifetime capacity response = %#v", response)
+	}
+}
+
+func TestUsedCDPIDCountIsBounded(t *testing.T) {
+	caFile, _ := testPKI(t)
+	client := mustNewCaller(t, testConfig(caFile, "https://127.0.0.1:18443"))
+	defer client.Close()
+	held := &heldConnection{usedCDPIDs: make(map[uint64]struct{}, maxUsedCDPIDs)}
+	for id := uint64(1); id <= maxUsedCDPIDs; id++ {
+		held.usedCDPIDs[id] = struct{}{}
+	}
+	response := Response{Version: ProtocolVersion, Sequence: 1}
+	ok := client.writeMessage(context.Background(), held, websocket.MessageText,
+		[]byte(`{"id":4097,"method":"Runtime.evaluate"}`), &response)
+	if ok || response.ErrorCode != ErrorInvalidCommand || len(held.usedCDPIDs) != maxUsedCDPIDs {
+		t.Fatalf("used-id capacity response = %#v, count = %d", response, len(held.usedCDPIDs))
+	}
+}
+
+func TestOpenContextErrorsAndHTTPRejectionAreDistinct(t *testing.T) {
+	caFile, certificate := testPKI(t)
+	server := newTLSServer(t, certificate, func(response http.ResponseWriter, request *http.Request) {
+		if request.URL.Query().Get("grant_id") == testGrant {
+			<-request.Context().Done()
+			return
+		}
+		http.Error(response, "rejected", http.StatusForbidden)
+	})
+	defer server.Close()
+	client := mustNewCaller(t, testConfig(caFile, server.URL))
+	defer client.Close()
+
+	canceledCtx, cancel := context.WithCancel(context.Background())
+	cancel()
+	canceled := client.Execute(canceledCtx, openCommand(1, "connection-canceled"))
+	if canceled.ErrorCode != ErrorOperationCanceled {
+		t.Fatalf("canceled open = %#v", canceled)
+	}
+	timed := openCommand(2, "connection-timeout")
+	timed.TimeoutMillis = minimumTimeout.Milliseconds()
+	timedOut := client.Execute(context.Background(), timed)
+	if timedOut.ErrorCode != ErrorOperationTimeout {
+		t.Fatalf("timed-out open = %#v", timedOut)
+	}
+
+	rejecting := newTLSServer(t, certificate, func(response http.ResponseWriter, _ *http.Request) {
+		http.Error(response, "private rejection", http.StatusForbidden)
+	})
+	defer rejecting.Close()
+	rejectedClient := mustNewCaller(t, testConfig(caFile, rejecting.URL))
+	defer rejectedClient.Close()
+	rejected := rejectedClient.Execute(context.Background(), openCommand(1, "connection-rejected"))
+	if rejected.ErrorCode != ErrorNotUpgraded {
+		t.Fatalf("HTTP rejection = %#v", rejected)
+	}
+}
+
+func TestPeerCloseStatusOverridesOnlyAbnormalFallback(t *testing.T) {
+	peerClose := websocket.CloseError{Code: websocket.StatusPolicyViolation, Reason: "policy"}
+	transportError := errors.New("transport closed")
+	for _, order := range [][]error{{transportError, peerClose}, {peerClose, transportError}} {
+		held := &heldConnection{}
+		for _, err := range order {
+			held.rememberClosed(err)
+		}
+		code, closed := held.closeStatus()
+		if !closed || code != int(websocket.StatusPolicyViolation) {
+			t.Fatalf("ordered close status = (%d, %t)", code, closed)
+		}
+	}
+
+	held := &heldConnection{}
+	var group sync.WaitGroup
+	for index := 0; index < 32; index++ {
+		group.Add(2)
+		go func() {
+			defer group.Done()
+			held.rememberClosed(transportError)
+		}()
+		go func() {
+			defer group.Done()
+			held.rememberClosed(peerClose)
+		}()
+	}
+	group.Wait()
+	code, closed := held.closeStatus()
+	if !closed || code != int(websocket.StatusPolicyViolation) {
+		t.Fatalf("concurrent close status = (%d, %t)", code, closed)
+	}
+}
+
+func TestShutdownWaitsForInflightOpen(t *testing.T) {
+	caFile, certificate := testPKI(t)
+	requestStarted := make(chan struct{})
+	releaseRequest := make(chan struct{})
+	server := newTLSServer(t, certificate, func(response http.ResponseWriter, _ *http.Request) {
+		close(requestStarted)
+		<-releaseRequest
+		http.Error(response, "rejected", http.StatusServiceUnavailable)
+	})
+	defer server.Close()
+	client := mustNewCaller(t, testConfig(caFile, server.URL))
+	defer client.Close()
+	openDone := make(chan Response, 1)
+	go func() { openDone <- client.Execute(context.Background(), openCommand(1, "connection-a")) }()
+	<-requestStarted
+	shutdownDone := make(chan Response, 1)
+	go func() {
+		shutdownDone <- client.Execute(context.Background(), Command{Version: ProtocolVersion, Sequence: 2, Action: ActionShutdown})
+	}()
+	waitForSequence(t, client, 2)
+	select {
+	case response := <-shutdownDone:
+		t.Fatalf("shutdown returned before open completed: %#v", response)
+	default:
+	}
+	close(releaseRequest)
+	if response := <-openDone; response.ErrorCode != ErrorNotUpgraded {
+		t.Fatalf("open response = %#v", response)
+	}
+	if response := <-shutdownDone; !response.OK || response.Outcome != OutcomeTerminated {
+		t.Fatalf("shutdown response = %#v", response)
+	}
+}
+
+func TestShutdownWaitsForInflightClose(t *testing.T) {
+	caFile, certificate := testPKI(t)
+	accepted := make(chan struct{})
+	releaseRead := make(chan struct{})
+	server := newTLSServer(t, certificate, func(response http.ResponseWriter, request *http.Request) {
+		connection, err := websocket.Accept(response, request, &websocket.AcceptOptions{OriginPatterns: []string{"reference-caller.invalid"}})
+		if err != nil {
+			return
+		}
+		defer connection.CloseNow()
+		close(accepted)
+		<-releaseRead
+		_, _, _ = connection.Read(request.Context())
+	})
+	defer server.Close()
+	client := mustNewCaller(t, testConfig(caFile, server.URL))
+	defer client.Close()
+	if response := client.Execute(context.Background(), openCommand(1, "connection-a")); !response.OK {
+		t.Fatalf("open response = %#v", response)
+	}
+	<-accepted
+	closeDone := make(chan Response, 1)
+	go func() {
+		closeDone <- client.Execute(context.Background(), Command{
+			Version: ProtocolVersion, Sequence: 2, Action: ActionClose, ConnectionID: "connection-a", TimeoutMillis: 2000,
+		})
+	}()
+	waitForSequence(t, client, 2)
+	waitForConnectionAbsent(t, client, "connection-a")
+	shutdownDone := make(chan Response, 1)
+	go func() {
+		shutdownDone <- client.Execute(context.Background(), Command{Version: ProtocolVersion, Sequence: 3, Action: ActionShutdown})
+	}()
+	waitForSequence(t, client, 3)
+	select {
+	case response := <-shutdownDone:
+		t.Fatalf("shutdown returned before close completed: %#v", response)
+	default:
+	}
+	close(releaseRead)
+	if response := <-closeDone; !response.OK || response.Outcome != OutcomeReleased {
+		t.Fatalf("close response = %#v", response)
+	}
+	if response := <-shutdownDone; !response.OK || response.Outcome != OutcomeTerminated {
+		t.Fatalf("shutdown response = %#v", response)
 	}
 }
 
@@ -703,6 +888,21 @@ func waitForSequence(t *testing.T, client *Caller, sequence uint64) {
 		time.Sleep(time.Millisecond)
 	}
 	t.Fatal("command did not begin")
+}
+
+func waitForConnectionAbsent(t *testing.T, client *Caller, connectionID string) {
+	t.Helper()
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		client.mu.Lock()
+		_, exists := client.connections[connectionID]
+		client.mu.Unlock()
+		if !exists {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatal("connection was not removed")
 }
 
 func writeFile(t *testing.T, name string, contents []byte, mode os.FileMode) string {

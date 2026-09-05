@@ -180,6 +180,7 @@ func (c *Caller) open(ctx context.Context, command Command, response Response) R
 	header.Set("Origin", "https://reference-caller.invalid")
 	dialCtx, cancel := context.WithTimeout(ctx, time.Duration(command.TimeoutMillis)*time.Millisecond)
 	connection, httpResponse, err := websocket.Dial(dialCtx, dialURL.String(), &websocket.DialOptions{HTTPClient: c.client, HTTPHeader: header})
+	dialContextErr := dialCtx.Err()
 	cancel()
 	if httpResponse != nil && httpResponse.Body != nil {
 		_, _ = io.Copy(io.Discard, io.LimitReader(httpResponse.Body, 1024))
@@ -193,6 +194,10 @@ func (c *Caller) open(ctx context.Context, command Command, response Response) R
 		response.ErrorCode = ErrorUpgradeFailed
 		if httpResponse != nil {
 			response.ErrorCode = ErrorNotUpgraded
+		} else if errors.Is(dialContextErr, context.DeadlineExceeded) {
+			response.ErrorCode = ErrorOperationTimeout
+		} else if errors.Is(dialContextErr, context.Canceled) {
+			response.ErrorCode = ErrorOperationCanceled
 		}
 		return response
 	}
@@ -557,16 +562,23 @@ func (c *Caller) containsPrivate(payload []byte) bool {
 }
 
 func (h *heldConnection) rememberClosed(err error) {
+	h.recordClosed(err)
+	if h.connection != nil {
+		_ = h.connection.CloseNow()
+	}
+}
+
+func (h *heldConnection) recordClosed(err error) {
+	observed := websocket.CloseStatus(err)
+	code := observed
+	if code < 0 {
+		code = websocket.StatusAbnormalClosure
+	}
 	h.stateMu.Lock()
-	if !h.closed {
-		code := websocket.CloseStatus(err)
-		if code < 0 {
-			code = websocket.StatusAbnormalClosure
-		}
+	if !h.closed || (h.closeCode == int(websocket.StatusAbnormalClosure) && observed >= 0) {
 		h.closed, h.closeCode = true, int(code)
 	}
 	h.stateMu.Unlock()
-	_ = h.connection.CloseNow()
 }
 
 func (h *heldConnection) isClosed() bool {
