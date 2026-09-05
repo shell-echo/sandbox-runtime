@@ -5,6 +5,11 @@ MIT `sandbox-runtime` Provider Contract. This is a separate Go module and
 process boundary inside the Provider repository; it is not a same-package
 integration test and does not require a second Git repository.
 
+The module also contains a separately named Browser Gateway shared-capacity
+runner. That runner exercises only WSS, two Gateway fixture processes, and one
+real Redis-compatible authority. It pins Contract identity for context but does
+not call or exercise the Provider API.
+
 The black-box caller uses only mTLS, JWS, HTTPS, and WebSocket. A separate
 reference deployment process composes exported `sandbox-runtime` Provider and
 Gateway packages with explicit test policy. The caller never imports Provider
@@ -21,7 +26,7 @@ platform gate.
 
 | Item | Value |
 | --- | --- |
-| Provider implementation | `997fb0db9d3517cf1c3e153217b1ac7305b4ebfd` |
+| Provider implementation | `94345407c149eb095f27ac1c51f60fa38a16a4af` |
 | Contract namespace | `urn:shell-echo:sandbox-runtime:provider-v1` |
 | Contract revision | `5096e71fb84fbec22aa3487a0e55a1b49602ab8b` |
 | Contract tree | `859f76dc0e855a0c8abdbbb5648df100dabb4328` |
@@ -44,8 +49,10 @@ Gateway connection-capacity component, plus the process-local Browser
 public-edge connection and fixed-window request limiter, and the bounded
 accepted-connection TLS 1.3/HTTP/1.1 listener with explicit HTTP limits. It now
 also includes the authenticated-capacity port and its process-local atomic
-global, tenant, and session memory reference component. This does not establish
-a shared or distributed capacity backend.
+global, tenant, and session memory reference component. ADR 0031 and Provider
+commit `9434540` additionally add the Redis-compatible shared-capacity adapter;
+its separately locked two-Gateway evidence still requires a clean committed
+harness run before it may be recorded as passing.
 This Provider identity also includes the GitHub Actions migration from Node 20
 action runtimes to Node 24 action runtimes. That infrastructure update adds no
 Browser behavior, caller compatibility, or production-readiness evidence.
@@ -88,7 +95,53 @@ No Browser run is recorded as verified evidence until the committed harness
 passes this command and emits its manifest. Hosted execution is isolated in
 `.github/workflows/browser-e2e.yml` and publishes a separately named artifact.
 
+## Shared-capacity runner
+
+`cmd/shared-capacity-e2e` runs the independently named
+`Browser Gateway shared-capacity black-box evidence` profile. It starts one
+pinned Valkey container, provisions the locked policy once, then starts two
+independent Gateway OS processes and independent black-box caller processes.
+The callers communicate only over TLS 1.3 WSS and do not import Provider
+implementation packages.
+
+From a clean committed checkout with Docker available:
+
+```bash
+cd e2e
+go run ./cmd/shared-capacity-e2e -check
+go run ./cmd/shared-capacity-e2e -evidence-root evidence/shared-capacity
+```
+
+The lock in `shared-capacity.lock.json` fixes the Provider adapter revision,
+Valkey index and native amd64/arm64 manifests, policy, Lua identities, two
+Gateway processes, and ten scenarios. The scenarios cover simultaneous
+global/tenant/session contention, unaffected-tenant service, renewal, confirmed
+loss, Gateway crash reclamation, stale-owner fencing, renew/release cleanup,
+retained-store outage recovery, and evidence sanitization. Shared-capacity
+rejection occurs after WebSocket upgrade and is observed as a normal `1000`
+close; the HTTP `429` plus `Retry-After` behavior belongs only to the separate
+pre-upgrade edge limiter.
+
+A passing run is real-backend, two-Gateway Browser Gateway shared-capacity
+black-box evidence only. It uses a private echo resolver and does not exercise
+Provider routes, Contract cases, a Browser/CDP runtime, image provenance,
+restricted egress, artifacts, or usage. It also does not establish Valkey
+provenance, HA/failover consistency, durable distributed revocation, downstream
+fencing, Provider multi-controller reliability, hostile multi-tenant isolation,
+real Agent Platform compatibility, deployment readiness, or production
+readiness. Hosted execution is isolated in
+`.github/workflows/shared-capacity-e2e.yml`; artifacts are uploaded only after
+the run's sanitization checks pass.
+
 ## Latest verified evidence
+
+Hosted Browser Reference run `33940332911` passed harness `6b01b75` against
+Provider `997fb0d`: all 13 initial and 5 process-reconstruction scenarios
+passed on `linux/amd64`, including the authenticated process-local memory
+capacity path. Artifact `browser-reference-e2e-evidence-33940332911` has digest
+`sha256:f4133967b6e573c701b82c72dc4d101febd4e6b28199e188fa0c8db049bff9ae`.
+This remains single-Gateway process-local Browser reference evidence; it is not
+the separately locked Redis shared-capacity runner or production evidence.
 
 Hosted Browser Reference run `33857739150` passed harness `7a20d9d` against
 Provider `b8f8941`: all 13 initial and 5 process-reconstruction scenarios passed
@@ -304,10 +357,13 @@ boundary below.
 
 ## Evidence boundary
 
-This project is intended to prove the P2.5i reference external-caller gate:
-real sockets and processes, mTLS/JWS admission, lifecycle, exec, terminal
-Gateway, artifact/usage, restart, expiry, endpoint non-disclosure, and negative
-cross-tenant authorization.
+This module keeps independent evidence tracks. The reference runner proves the
+P2.5i coding/shell external-caller gate through real sockets and processes,
+mTLS/JWS admission, lifecycle, exec, terminal Gateway, artifact/usage, restart,
+expiry, endpoint non-disclosure, and negative cross-tenant authorization. The
+Browser runner proves only its locked Browser reference scenarios. The
+shared-capacity runner proves only its WSS/Gateway/Valkey scenarios and does not
+exercise the Provider Contract.
 
 It does not prove compatibility with `agent-blueprints`, production identity
 infrastructure, distributed revocation, multi-controller operation, hostile
@@ -352,3 +408,11 @@ The latest lock-refresh run `33857739189` passed Provider `b8f8941` with
 harness `7a20d9d` and uploaded
 `platform-candidate-e2e-evidence-33857739189` with digest
 `sha256:61cf80c48b7103418f66acb0e370f19b60b2685271f2bb4a15f68547e4041bbb`.
+
+`../.github/workflows/shared-capacity-e2e.yml` independently verifies the
+shared-capacity lock, runs the module race/vet gates, and executes the pinned
+Valkey plus two-Gateway black-box runner. It publishes
+`browser-shared-capacity-e2e-evidence-<run-id>` only after the E2E command and
+its sanitization checks succeed. A green run does not change the Provider
+Contract, real Agent Platform, HA, multi-controller, multi-tenant, deployment,
+or production-readiness status.

@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "evidence_profile": "browser-shared-capacity-e2e-v1",
+  "provider_commit": "94345407c149eb095f27ac1c51f60fa38a16a4af",
+  "valkey": {
+    "image": "ghcr.io/valkey-io/valkey",
+    "index_digest": "sha256:ccfa19b0d743e48927e1c8c14e39e0acb97b5cea347fef0bfe340247fea920cd",
+    "platform_digests": {
+      "linux/amd64": "sha256:dd021e69e0a204fbb25b39c332c3dd61d51853d0a67e34f523cf1e1ab15fe478",
+      "linux/arm64": "sha256:d31209ff403ca1d95218612dd936405d84837a90bc00e3b631ebc6373b91830e"
+    },
+    "server_config_sha256": "sha256:12a690a249f1c28c5d3617bcc051216c3261270237035494dcb17764aa2111d2",
+    "acl_template_sha256": "sha256:4d660aa0861d5a7396f5e50bec072a813395ad13f19b23df53317d222c43743a"
+  },
+  "capacity_policy": {
+    "max_total": 4,
+    "max_per_tenant": 2,
+    "max_per_session": 1,
+    "lease_ttl_millis": 2000,
+    "renew_interval_millis": 400,
+    "renewal_safety_margin_millis": 500,
+    "operation_timeout_millis": 200
+  },
+  "gateway_processes": 2,
+  "scenarios": [
+    "cross-process session limit after WebSocket upgrade",
+    "cross-process tenant limit and unaffected tenant",
+    "cross-process global limit",
+    "renewal beyond three lease TTLs",
+    "confirmed lease loss closes without reconnect",
+    "Gateway crash TTL reclamation",
+    "stale owner and fence cannot affect successor",
+    "renew and release race does not resurrect",
+    "store outage fails closed and retained-state recovery",
+    "sensitive values absent from evidence"
+  ],
+  "adapter": {
+    "policy_format": "browser-authenticated-capacity-zset-v1",
+    "policy_fingerprint": "1b29321807530907a8407cd6d33bdefbbb980fd7cb0b297592181a2333a8bacd",
+    "provision_script_sha1": "410809d68e33d1fe118cf94dcff966951c62c1fb",
+    "acquire_script_sha1": "d3757b6cbde8072b30497a45c8433092c0a203f2",
+    "renew_script_sha1": "6292580f7e1a8840ec4c953eeff43bfdff8d68a6",
+    "release_script_sha1": "e25e50997683052eee15fe82194b2688db204f5c"
+  }
+}
