@@ -47,6 +47,16 @@ type Resolver struct {
 	maxMessageBytes int64
 }
 
+// CloseIdleConnections releases resolved HTTPS connections owned by this
+// process. Active private WebSocket streams remain owned by their Gateway
+// connection and are closed through the Stream contract.
+func (r *Resolver) CloseIdleConnections() {
+	if r == nil || r.client == nil {
+		return
+	}
+	r.client.CloseIdleConnections()
+}
+
 func NewResolver(options ResolverOptions) (*Resolver, error) {
 	if !validPrivateAddress(options.Address) || !validClientTLSPolicy(options.TLSConfig) {
 		return nil, ErrInvalidConfiguration

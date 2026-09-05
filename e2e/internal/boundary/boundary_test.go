@@ -75,6 +75,36 @@ func TestDurableRevocationRevokerUsesOnlyExportedRevocationPorts(t *testing.T) {
 	}
 }
 
+func TestDownstreamFencingGatewayUsesOnlyNarrowProviderTypes(t *testing.T) {
+	root, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	command := exec.Command("go", "list", "-deps", "-f", "{{.ImportPath}}", "./cmd/downstream-fencing-gateway")
+	command.Dir = root
+	output, err := command.CombinedOutput()
+	if err != nil {
+		t.Fatalf("go list downstream-fencing Gateway dependencies: %v: %s", err, strings.TrimSpace(string(output)))
+	}
+	allowedProviderTypes := map[string]bool{
+		"github.com/shell-echo/sandbox-runtime/provider/browser":           true,
+		"github.com/shell-echo/sandbox-runtime/provider/browser/reference": true,
+		// The shared composition package also declares the terminal narrow
+		// Endpoint/Stream adapters; none provides repository or driver access.
+		"github.com/shell-echo/sandbox-runtime/provider/session":           true,
+		"github.com/shell-echo/sandbox-runtime/provider/session/reference": true,
+		"github.com/shell-echo/sandbox-runtime/provider/terminal":          true,
+	}
+	for _, dependency := range strings.Fields(string(output)) {
+		if strings.HasPrefix(dependency, "github.com/shell-echo/sandbox-runtime/provider/") && !allowedProviderTypes[dependency] {
+			t.Errorf("downstream-fencing Gateway imports Provider implementation package %q outside its narrow type allowlist", dependency)
+		}
+		if strings.HasPrefix(dependency, "github.com/moby/") || strings.HasPrefix(dependency, "github.com/containerd/") {
+			t.Errorf("downstream-fencing Gateway imports container runtime package %q", dependency)
+		}
+	}
+}
+
 func assertNoProviderDependency(t *testing.T, packagePath string) {
 	t.Helper()
 	root, err := filepath.Abs("../..")
