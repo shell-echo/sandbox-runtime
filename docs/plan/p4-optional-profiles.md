@@ -97,6 +97,13 @@ Reference/Candidate 15+5, and shared-capacity 10/10 regressions. Those existing
 modes do not execute a two-Gateway/independent-revoker retained-backend
 scenario, so the durable distributed revocation caller gate remains open.
 
+Hosted current-lock repository CI `33955437033` passes at repository revision
+`c7fe24d`. Reference `33955436969` (15+5), Candidate `33955437046` (15+5),
+Browser `33955436984` (13+5), and shared capacity `33955436968` (10/10 on
+`linux/amd64`) pass with harness `c7fe24d` locked to Provider `c0a55d1`. Their
+artifacts were inspected and retain their separately named boundaries; none
+adds the missing independent revoker scenario.
+
 ## Objective
 
 Add optional runtime profiles one at a time while preserving the Provider and
@@ -253,6 +260,18 @@ evidence chain before it can be advertised.
   component integration passes. E2E lock `59e08d5` pins Provider `c0a55d1`, and
   current local Browser, Reference, Candidate, and shared-capacity regressions
   pass without exercising the independent durable-revocation caller gate.
+- Hosted current-lock repository CI `33955437033` passes at repository revision
+  `c7fe24d`. Four regressions pass with harness `c7fe24d` locked to Provider
+  `c0a55d1`: Reference `33955436969`, Candidate `33955437046`, Browser
+  `33955436984`, and shared capacity `33955436968`. Their respective artifact
+  digests are
+  `sha256:68642bb9810b397fada89bdb2666c11d46ddc0961eec6d6fd7d5e826e7336a70`,
+  `sha256:2b745f256e4a0e1bdfa46c5129b1d92548a6f7afd2630a0c0720eb552ed35147`,
+  `sha256:a5b0be338190b39f16c27e2a7b31ba983022fc8da8f60fa23c9d4fdce1834173`,
+  and `sha256:d99d76374c745fb9a7adcc9b7e09e1f24963641e7d86b277a9a0647b870acdc2`.
+  Downloaded manifests and reports preserve 15+5 Reference, 15+5 Candidate,
+  13+5 Browser, and 10/10 shared-capacity results. Browser still uses the memory
+  revocation authority and shared capacity does not exercise revocation.
 - `blocks/` can validate an internal digest-pinned Block manifest, but it does
   not authorize a Provider capability or establish image provenance.
 - A real Agent Platform caller and migration traffic harness remain unavailable;
@@ -493,12 +512,13 @@ bounded listener/TLS/HTTP component, and authenticated-capacity port/memory
 reference now pass their named evidence gates. The ADR 0031 adapter and local
 arm64 plus hosted amd64 two-Gateway real-Valkey shared-capacity gates also pass.
 ADR 0032 now passes its exact-grant revocation port and real Redis-compatible
-adapter component gate. Next, implement the separately locked two-Gateway plus
-independent-revoker retained-backend caller scenario required by ADR 0032. Keep
-downstream CDP fencing as a later independent ADR/gate, then establish Valkey
-provenance and HA/failover consistency and add metrics, production storage and
-configuration, hostile-tenant, and operational evidence before reviewing
-production advertisement.
+adapter component gate; the current-lock hosted regressions above pass without
+expanding that evidence boundary. Next, implement the separately locked
+two-Gateway plus independent-revoker retained-backend caller scenario required
+by ADR 0032. Keep downstream CDP fencing as a later independent ADR/gate, then
+establish Valkey provenance and HA/failover consistency and add metrics,
+production storage/configuration, hostile-tenant, and operational evidence
+before reviewing production advertisement.
 Keep Browser Reference E2E separate from coding/shell, real Agent Platform,
 aggregate conformance, multi-controller, multi-tenant, deployment, and
 production evidence. After the Browser readiness record is complete, begin the

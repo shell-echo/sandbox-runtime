@@ -88,9 +88,9 @@ Currently implemented:
   global/tenant/session leases, renewal, TTL reclamation, and stale-owner
   fencing. A clean local `linux/arm64` black-box run passed all 10 scenarios
   through two independent Gateway OS processes and one pinned Valkey authority.
-  Hosted workflow run `33949577876` separately passed the same 10 scenarios on
+  Hosted workflow run `33955436968` separately passed the same 10 scenarios on
   `linux/amd64`; its GitHub Actions artifact digest is
-  `sha256:6e938a1549f3ffe3b7a08cf9aa7cd58639f3d058f935c6da1e57dad45ffeb423`.
+  `sha256:d99d76374c745fb9a7adcc9b7e09e1f24963641e7d86b277a9a0647b870acdc2`.
   Its private echo fixture does not call the Provider API or a real Browser/CDP;
   capacity rejection is a post-WebSocket-`101` normal `1000` close, not the
   pre-upgrade limiter's HTTP `429`. Contract/Suite identity is metadata only
@@ -106,7 +106,7 @@ Currently implemented:
   behavior. This is Gateway port plus adapter component evidence only
 - a default-disabled Browser Provider command/runtime graph and a separate
   Browser-only reference stack plus black-box caller. Hosted Browser Reference
-  E2E run `33940332911` passes 13 initial and 5 process-reconstruction
+  E2E run `33955436984` passes 13 initial and 5 process-reconstruction
   scenarios through real mTLS/JWS HTTPS, WebSocket, signed-image provenance,
   Docker, restricted egress, concurrent same-session capacity rejection and
   release, authenticated wrong-Origin pre-upgrade rate rejection and recovery,

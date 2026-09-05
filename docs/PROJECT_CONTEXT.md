@@ -374,6 +374,17 @@ pre-resolution revocation, restart retention, unaffected grants and tenants,
 outage recovery without resurrection, bounded propagation, and sanitized
 evidence. Downstream CDP fencing remains a separate later ADR and gate.
 
+Hosted current-lock repository CI `33955437033` passes at repository revision
+`c7fe24d`. Reference, Candidate, Browser, and shared-capacity runs
+`33955436969`, `33955437046`, `33955436984`, and `33955436968` pass with harness
+`c7fe24d` locked to Provider `c0a55d1`.
+Downloaded artifacts pin the unchanged Contract/tree/48 cases and contain only
+passing 15+5 Reference, 15+5 Candidate, 13+5 Browser, and 10/10 shared-capacity
+reports. Their GitHub digests are recorded in `STATUS.md`. Browser still uses
+the process-local memory revocation authority, while shared capacity still does
+not exercise revocation, so these hosted runs also do not close ADR 0032's
+independent caller gate.
+
 ADR 0018 records the original reproducible browser image component, while ADR
 0019 requires the current `sandbox.runtime/browser-image/v2` sandbox posture
 and signed publication. The image has no `--no-sandbox` path and binds a
@@ -478,7 +489,10 @@ ADR 0032 and `c0a55d1` add exact-grant level-triggered revocation port and
 real-Valkey adapter component evidence. Current E2E lock `59e08d5` passes local
 Browser 13+5, Reference/Candidate 15+5, and shared-capacity 10/10 regressions;
 none is the separately required two-Gateway/independent-revoker revocation
-caller gate.
+caller gate. Current-lock hosted CI `33955437033` and four regressions also pass
+against harness `c7fe24d` and Provider `c0a55d1`: Reference `33955436969`,
+Candidate `33955437046`, Browser `33955436984`, and shared capacity
+`33955436968`. They do not expand those boundaries.
 ADR 0028 and `44ea2ee` add process-local pre-upgrade connection/rate control;
 hosted run `33854020809` passes the combined 12+5 Browser caller against harness
 `e7e7f03`. ADR 0029 and `b8f8941` add listener/TLS/HTTP bounds; hosted run
@@ -504,10 +518,10 @@ Contract identity:
 | P1.1 | Passed for DTO, mTLS discovery, JWS/digest/replay/fencing admission | Production identity infrastructure remains unproven |
 | P1.2 | Passed for the bounded Contract-authorized lifecycle subset and development composition | Reserved lifecycle families and production gates remain open |
 | P2 components | P2.1-P2.5h local component, Contract projection, Docker, and recorded repository CI gates pass within their named boundaries | Retain single-controller/development constraints and exact Contract lock |
-| P2.5i | Hosted regression `33940332897` passed 15 initial plus 5 restart/resume coding/shell scenarios against harness/Provider lock `6b01b75`/`997fb0d`; current local run `20260905T080530.577843000Z` passed against harness/Provider `59e08d5`/`c0a55d1` | Neither run contains a Browser scenario or implies Agent Platform, durable-revocation caller, or production properties |
+| P2.5i | Hosted regression `33955436969` passed 15 initial plus 5 restart/resume coding/shell scenarios against harness/Provider lock `c7fe24d`/`c0a55d1`; current local run `20260905T080530.577843000Z` passed against `59e08d5`/`c0a55d1` | Neither run contains a Browser scenario or implies Agent Platform, durable-revocation caller, or production properties |
 | P2 | Reference coding/shell caller release gate passed | Aggregate conformance, actual Agent Platform compatibility, multi-controller, hostile multi-tenant isolation, deployment, and production gates remain open |
-| P3 | Local revision binding/shadow/metrics component evidence plus current local candidate integration (`20260905T080623.861033000Z`, `59e08d5`/`c0a55d1` lock) and hosted candidate regression `33940332881` against `6b01b75`/`997fb0d` | Real platform traffic shadow parity, canary, rollback, old-run drain, metric parity, and unchanged platform contracts remain open |
-| P4 | Browser Contract authority/projection, exact sandboxed signed amd64/arm64/v8 publication, Provider-local components, default-disabled command/runtime composition, process-local Gateway limits, hosted run `33940332911` with 13+5 Browser evidence, local shared-capacity run `20260905T061037.558537000Z` with 10/10 on arm64, hosted shared-capacity run `33949577876` with 10/10 on amd64, and ADR 0032/`c0a55d1` exact-grant revocation port/Redis-compatible adapter component evidence pass their named gates | Production Browser advertisement/public Gateway, the independent two-Gateway/independent-revoker durable-revocation caller gate, downstream fencing, Valkey provenance, HA/failover consistency, production storage/configuration and metrics, remaining profile-specific security/concurrency, aggregate, multi-controller, multi-tenant, deployment, and production gates remain open |
+| P3 | Local revision binding/shadow/metrics component evidence plus current local candidate integration (`20260905T080623.861033000Z`, `59e08d5`/`c0a55d1` lock) and hosted candidate regression `33955437046` against `c7fe24d`/`c0a55d1` | Real platform traffic shadow parity, canary, rollback, old-run drain, metric parity, and unchanged platform contracts remain open |
+| P4 | Browser Contract authority/projection, exact sandboxed signed amd64/arm64/v8 publication, Provider-local components, default-disabled command/runtime composition, process-local Gateway limits, hosted run `33955436984` with 13+5 Browser evidence, local shared-capacity run `20260905T080725.227680000Z` with 10/10 on arm64, hosted shared-capacity run `33955436968` with 10/10 on amd64, and ADR 0032/`c0a55d1` exact-grant revocation port/Redis-compatible adapter component evidence pass their named gates | Production Browser advertisement/public Gateway, the independent two-Gateway/independent-revoker durable-revocation caller gate, downstream fencing, Valkey provenance, HA/failover consistency, production storage/configuration and metrics, remaining profile-specific security/concurrency, aggregate, multi-controller, multi-tenant, deployment, and production gates remain open |
 
 Production readiness is not a numbered phase shortcut. Aggregate conformance,
 multi-controller reliability, hostile multi-tenant security, deployment, and

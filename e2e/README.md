@@ -61,6 +61,9 @@ retained-tombstone adapter. Lock-refresh harness `59e08d5` passes current local 
 `13+5`, Reference `15+5`, Candidate `15+5`, and shared-capacity `10/10`
 regressions. These runs do not include the separate two-Gateway plus independent
 revoker durable-revocation caller scenario.
+Hosted current-lock runs against harness `c7fe24d` and Provider `c0a55d1` also
+pass: Reference `33955436969`, Candidate `33955437046`, Browser `33955436984`,
+and shared capacity `33955436968`. Each retains its existing evidence boundary.
 This Provider identity also includes the GitHub Actions migration from Node 20
 action runtimes to Node 24 action runtimes. That infrastructure update adds no
 Browser behavior, caller compatibility, or production-readiness evidence.
@@ -151,6 +154,21 @@ run `20260905T080530.577843000Z` (`15+5`), Platform Candidate run
 still uses one process-local memory revocation authority; shared-capacity still
 uses a private echo fixture and does not exercise revocation. Therefore none is
 the ADR 0032 durable distributed revocation caller gate.
+
+Hosted current-lock Reference run `33955436969` passes 15+5 and artifact
+`reference-e2e-evidence-33955436969` has digest
+`sha256:68642bb9810b397fada89bdb2666c11d46ddc0961eec6d6fd7d5e826e7336a70`.
+Platform Candidate `33955437046` passes 15+5 and its artifact digest is
+`sha256:2b745f256e4a0e1bdfa46c5129b1d92548a6f7afd2630a0c0720eb552ed35147`.
+Browser Reference `33955436984` passes 13+5 and its artifact digest is
+`sha256:a5b0be338190b39f16c27e2a7b31ba983022fc8da8f60fa23c9d4fdce1834173`.
+Shared Capacity `33955436968` passes 10/10 on `linux/amd64` and its artifact
+digest is
+`sha256:d99d76374c745fb9a7adcc9b7e09e1f24963641e7d86b277a9a0647b870acdc2`.
+All manifests pin harness `c7fe24d`, Provider `c0a55d1`, and the same locked
+Contract/tree/48 cases; the shared-capacity manifest retains
+`contract.exercised=false`. These are the same four distinct regression tracks,
+not the ADR 0032 independent-revoker caller gate.
 
 Clean local shared-capacity run
 `evidence/shared-capacity/20260905T061037.558537000Z` passed all 10 scenarios on
