@@ -635,6 +635,16 @@ func RunSharedCapacity(ctx context.Context, options Options) (_ SharedCapacityRe
 			cancelReplacement()
 			return errors.New("stale-owner replacement missed the renewal safety window")
 		}
+		resumeStoreNow, err := redisClient.Time(replacementCtx).Result()
+		if err != nil {
+			cancelReplacement()
+			return errors.New("read shared-capacity store time before stale Gateway resume")
+		}
+		resumeWindow := time.UnixMilli(old.score).Sub(resumeStoreNow) - safetyMargin - operationTimeout - 100*time.Millisecond
+		if resumeWindow <= 0 {
+			cancelReplacement()
+			return errors.New("stale-owner replacement missed the renewal safety window")
+		}
 		if err := signalSharedGateway(gatewayA, syscall.SIGCONT); err != nil {
 			cancelReplacement()
 			return err
