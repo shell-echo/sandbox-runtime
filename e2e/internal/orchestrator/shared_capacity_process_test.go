@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
+	"syscall"
 	"testing"
 	"time"
 
@@ -38,5 +40,44 @@ func TestSharedCallerRequestTimeoutTerminatesAmbiguousPipe(t *testing.T) {
 	}
 	if _, err := process.request(context.Background(), wire.Command{Action: wire.ActionShutdown}); err == nil {
 		t.Fatal("terminated caller process accepted another request")
+	}
+}
+
+func TestWaitForSharedGatewayStoppedObservesProcessState(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fixture uses POSIX process signals and ps")
+	}
+	command := exec.Command("sleep", "30")
+	child := &childProcess{command: command, done: make(chan struct{})}
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	go func() {
+		err := command.Wait()
+		child.mu.Lock()
+		child.err = err
+		child.mu.Unlock()
+		close(child.done)
+	}()
+	t.Cleanup(func() {
+		_ = command.Process.Signal(syscall.SIGCONT)
+		_ = command.Process.Kill()
+		select {
+		case <-child.done:
+		case <-time.After(2 * time.Second):
+			t.Error("fixture process did not exit")
+		}
+	})
+
+	if err := signalSharedGateway(child, syscall.SIGSTOP); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := waitForSharedGatewayStopped(ctx, child, time.Second); err != nil {
+		t.Fatal(err)
+	}
+	if err := signalSharedGateway(child, syscall.SIGCONT); err != nil {
+		t.Fatal(err)
 	}
 }

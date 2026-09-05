@@ -209,6 +209,36 @@ func signalSharedGateway(child *childProcess, signal syscall.Signal) error {
 	return child.command.Process.Signal(signal)
 }
 
+func waitForSharedGatewayStopped(ctx context.Context, child *childProcess, timeout time.Duration) error {
+	if child == nil || child.command == nil || child.command.Process == nil || ctx == nil {
+		return errors.New("shared-capacity Gateway process is unavailable")
+	}
+	deadline := time.NewTimer(timeout)
+	defer deadline.Stop()
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-child.done:
+			return errors.New("shared-capacity Gateway exited while awaiting stopped state")
+		default:
+		}
+		probeCtx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+		output, err := exec.CommandContext(probeCtx, "ps", "-o", "stat=", "-p", fmt.Sprint(child.command.Process.Pid)).Output()
+		cancel()
+		if err == nil && strings.HasPrefix(strings.TrimSpace(string(output)), "T") {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-deadline.C:
+			return errors.New("shared-capacity Gateway did not enter stopped state")
+		case <-ticker.C:
+		}
+	}
+}
+
 func killSharedGateway(child *childProcess) error {
 	if child == nil || child.command == nil || child.command.Process == nil {
 		return errors.New("shared-capacity Gateway process is unavailable")

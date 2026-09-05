@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -181,12 +182,14 @@ func RunSharedCapacity(ctx context.Context, options Options) (_ SharedCapacityRe
 	}
 	storePaused := false
 	defer func() {
-		cleanupCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-		defer cancel()
 		if storePaused {
-			resultErr = errors.Join(resultErr, valkey.unpause(cleanupCtx))
+			unpauseCtx, cancelUnpause := context.WithTimeout(context.Background(), 5*time.Second)
+			resultErr = errors.Join(resultErr, valkey.unpause(unpauseCtx))
+			cancelUnpause()
 		}
-		resultErr = errors.Join(resultErr, valkey.close(cleanupCtx))
+		closeCtx, cancelClose := context.WithTimeout(context.Background(), 15*time.Second)
+		resultErr = errors.Join(resultErr, valkey.close(closeCtx))
+		cancelClose()
 	}()
 
 	redisClient, err := newSharedRedisClient(valkey.redisURL, time.Duration(sharedLock.CapacityPolicy.OperationTimeoutMillis)*time.Millisecond)
@@ -539,6 +542,22 @@ func RunSharedCapacity(ctx context.Context, options Options) (_ SharedCapacityRe
 		if err != nil {
 			return err
 		}
+		beforeUnavailable, err := combinedRecordCount(auditA, auditB, "capacity_unavailable")
+		if err != nil {
+			return err
+		}
+		beforeReleaseFailed, err := combinedRecordCount(auditA, auditB, "capacity_release_failed")
+		if err != nil {
+			return err
+		}
+		initial, err := singleSharedLease(ctx, redisClient, namespace)
+		if err != nil {
+			return err
+		}
+		fresh, err := waitForSingleSharedLeaseRenewal(ctx, redisClient, namespace, initial, leaseTTL)
+		if err != nil {
+			return err
+		}
 		if err := signalSharedGateway(gatewayA, syscall.SIGSTOP); err != nil {
 			return err
 		}
@@ -550,17 +569,77 @@ func RunSharedCapacity(ctx context.Context, options Options) (_ SharedCapacityRe
 				}
 			}
 		}()
-		if err := waitForSharedDuration(ctx, leaseTTL+300*time.Millisecond); err != nil {
+		if err := waitForSharedGatewayStopped(ctx, gatewayA, time.Second); err != nil {
+			return err
+		}
+		// Replace the old record while its Gateway cannot renew. Resuming before
+		// the safety boundary forces the stale renewal through the authoritative
+		// script, which must reject the old owner rather than recreate it.
+		old, err := singleSharedLease(ctx, redisClient, namespace)
+		if err != nil {
+			return err
+		}
+		if old.member != fresh.member || old.fence != fresh.fence || old.score < fresh.score {
+			return errors.New("stale-owner lease identity changed before fault injection")
+		}
+		safetyMargin := time.Duration(policy.RenewalSafetyMarginMillis) * time.Millisecond
+		operationTimeout := time.Duration(policy.OperationTimeoutMillis) * time.Millisecond
+		storeNow, err := redisClient.Time(ctx).Result()
+		if err != nil {
+			return errors.New("read shared-capacity store time")
+		}
+		replacementWindow := time.UnixMilli(old.score).Sub(storeNow) - safetyMargin - operationTimeout - 100*time.Millisecond
+		if replacementWindow <= 0 {
+			return errors.New("stale-owner replacement missed the renewal safety window")
+		}
+		replacementCtx, cancelReplacement := context.WithTimeout(ctx, replacementWindow)
+		if err := removeSharedLease(replacementCtx, redisClient, namespace, old.member); err != nil {
+			cancelReplacement()
 			return err
 		}
 		successor := sharedOpenAttempt{caller: callers[1], connection: "stale-successor", gateway: "b", principal: "a", endpoint: "a1"}
-		if err := openHealthy(ctx, successor); err != nil {
+		if err := openHealthy(replacementCtx, successor); err != nil {
+			cancelReplacement()
 			return err
 		}
-		defer closeAttempt(context.Background(), successor)
+		successorLease, err := singleSharedLease(replacementCtx, redisClient, namespace)
+		if err != nil {
+			cancelReplacement()
+			return err
+		}
+		if successorLease.member == old.member || successorLease.fence <= old.fence {
+			cancelReplacement()
+			return errors.New("successor did not acquire a distinct higher-fenced lease")
+		}
+		earlyLost, err := combinedRecordCount(auditA, auditB, "capacity_lost")
+		if err != nil {
+			cancelReplacement()
+			return err
+		}
+		earlyUnavailable, err := combinedRecordCount(auditA, auditB, "capacity_unavailable")
+		if err != nil {
+			cancelReplacement()
+			return err
+		}
+		if earlyLost != beforeLost || earlyUnavailable != beforeUnavailable {
+			cancelReplacement()
+			return errors.New("stale Gateway reacted before confirmed process resume")
+		}
+		successorOpen := true
+		defer func() {
+			if successorOpen {
+				_ = closeAttempt(context.Background(), successor)
+			}
+		}()
+		if err := replacementCtx.Err(); err != nil {
+			cancelReplacement()
+			return errors.New("stale-owner replacement missed the renewal safety window")
+		}
 		if err := signalSharedGateway(gatewayA, syscall.SIGCONT); err != nil {
+			cancelReplacement()
 			return err
 		}
+		cancelReplacement()
 		gatewayASuspended = false
 		if err := expectClosed(ctx, stale, int(websocket.StatusNormalClosure), leaseTTL); err != nil {
 			return err
@@ -568,7 +647,38 @@ func RunSharedCapacity(ctx context.Context, options Options) (_ SharedCapacityRe
 		if err := waitForCombinedRecordDelta(ctx, auditA, auditB, "capacity_lost", beforeLost, 1, 2*time.Second); err != nil {
 			return err
 		}
-		return roundTrip(ctx, successor)
+		// The lost audit precedes bounded lease cleanup. Wait past both cleanup
+		// and two successor renewals before proving the stale release had no effect.
+		releaseBound := 2 * operationTimeout
+		if err := waitForSharedDuration(ctx, releaseBound+2*renewInterval+operationTimeout+100*time.Millisecond); err != nil {
+			return err
+		}
+		retained, err := singleSharedLease(ctx, redisClient, namespace)
+		if err != nil {
+			return err
+		}
+		if retained.member != successorLease.member || retained.fence != successorLease.fence || retained.score <= successorLease.score {
+			return errors.New("stale owner affected the renewed successor lease")
+		}
+		afterUnavailable, err := combinedRecordCount(auditA, auditB, "capacity_unavailable")
+		if err != nil {
+			return err
+		}
+		afterReleaseFailed, err := combinedRecordCount(auditA, auditB, "capacity_release_failed")
+		if err != nil {
+			return err
+		}
+		if afterUnavailable != beforeUnavailable || afterReleaseFailed != beforeReleaseFailed {
+			return errors.New("stale-owner replacement produced an unexpected capacity failure")
+		}
+		if err := roundTrip(ctx, successor); err != nil {
+			return err
+		}
+		if err := closeAttempt(ctx, successor); err != nil {
+			return err
+		}
+		successorOpen = false
+		return waitForSharedCardinality(ctx, redisClient, namespace, 0, 2*time.Second)
 	}); err != nil {
 		return SharedCapacityResult{}, err
 	}
@@ -768,7 +878,7 @@ func RunSharedCapacity(ctx context.Context, options Options) (_ SharedCapacityRe
 			SuiteCases: lock.SuiteCases, Exercised: false,
 		},
 		Reports: []string{filepath.Base(reportPath)}, Audits: auditNames, Observations: observationNames,
-		Faults: []string{"single lease removal", "SIGKILL owning Gateway", "SIGSTOP/SIGCONT stale owner", "retained Valkey pause/unpause"},
+		Faults: []string{"isolated lease removals", "SIGKILL owning Gateway", "SIGSTOP/SIGCONT stale owner", "retained Valkey pause/unpause"},
 		Commands: []string{
 			"go build ./cmd/shared-capacity-gateway", "go build ./cmd/shared-capacity-caller",
 			"shared-capacity-gateway -config <ephemeral> (two independent processes)",
@@ -1034,17 +1144,89 @@ func sharedCapacityLeaseKey(namespace string) string {
 	return "sandbox-runtime:{" + hex.EncodeToString(digest[:]) + "}:capacity:leases"
 }
 
-func removeSingleSharedLease(ctx context.Context, client *goredis.Client, namespace string) error {
-	key := sharedCapacityLeaseKey(namespace)
-	members, err := client.ZRange(ctx, key, 0, -1).Result()
+type sharedLeaseRecord struct {
+	member string
+	fence  uint64
+	score  int64
+}
+
+func singleSharedLease(ctx context.Context, client *goredis.Client, namespace string) (sharedLeaseRecord, error) {
+	members, err := client.ZRangeWithScores(ctx, sharedCapacityLeaseKey(namespace), 0, -1).Result()
 	if err != nil || len(members) != 1 {
-		return errors.Join(err, fmt.Errorf("shared-capacity lease cardinality = %d, want 1", len(members)))
+		return sharedLeaseRecord{}, errors.Join(err, fmt.Errorf("shared-capacity lease cardinality = %d, want 1", len(members)))
 	}
-	removed, err := client.ZRem(ctx, key, members[0]).Result()
+	member, ok := members[0].Member.(string)
+	parts := strings.Split(member, ":")
+	fence, fenceErr := func() (uint64, error) {
+		if len(parts) != 5 || len(parts[0]) != 32 || len(parts[1]) != 20 || len(parts[2]) != 64 || len(parts[3]) != 64 {
+			return 0, errors.New("invalid member shape")
+		}
+		for _, value := range []string{parts[0], parts[2], parts[3]} {
+			if _, err := hex.DecodeString(value); err != nil {
+				return 0, err
+			}
+		}
+		if _, err := strconv.ParseInt(parts[4], 10, 64); err != nil {
+			return 0, err
+		}
+		return strconv.ParseUint(parts[1], 10, 64)
+	}()
+	if !ok || fenceErr != nil || members[0].Score < 1 || members[0].Score >= 1<<53 ||
+		members[0].Score != float64(int64(members[0].Score)) {
+		return sharedLeaseRecord{}, errors.New("shared-capacity lease member is malformed")
+	}
+	return sharedLeaseRecord{member: member, fence: fence, score: int64(members[0].Score)}, nil
+}
+
+func waitForSingleSharedLeaseRenewal(
+	ctx context.Context,
+	client *goredis.Client,
+	namespace string,
+	previous sharedLeaseRecord,
+	timeout time.Duration,
+) (sharedLeaseRecord, error) {
+	deadline := time.NewTimer(timeout)
+	defer deadline.Stop()
+	ticker := time.NewTicker(20 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		current, err := singleSharedLease(ctx, client, namespace)
+		if err != nil {
+			return sharedLeaseRecord{}, err
+		}
+		if current.member != previous.member || current.fence != previous.fence {
+			return sharedLeaseRecord{}, errors.New("shared-capacity lease identity changed while awaiting renewal")
+		}
+		if current.score > previous.score {
+			return current, nil
+		}
+		select {
+		case <-ctx.Done():
+			return sharedLeaseRecord{}, ctx.Err()
+		case <-deadline.C:
+			return sharedLeaseRecord{}, errors.New("shared-capacity lease did not renew within its bound")
+		case <-ticker.C:
+		}
+	}
+}
+
+func removeSharedLease(ctx context.Context, client *goredis.Client, namespace, member string) error {
+	if member == "" {
+		return errors.New("shared-capacity lease member is unavailable")
+	}
+	removed, err := client.ZRem(ctx, sharedCapacityLeaseKey(namespace), member).Result()
 	if err != nil || removed != 1 {
 		return errors.Join(err, errors.New("remove exact shared-capacity lease failed"))
 	}
 	return nil
+}
+
+func removeSingleSharedLease(ctx context.Context, client *goredis.Client, namespace string) error {
+	record, err := singleSharedLease(ctx, client, namespace)
+	if err != nil {
+		return err
+	}
+	return removeSharedLease(ctx, client, namespace, record.member)
 }
 
 func assertSharedCardinality(ctx context.Context, client *goredis.Client, namespace string, want int64) error {
@@ -1056,6 +1238,25 @@ func assertSharedCardinality(ctx context.Context, client *goredis.Client, namesp
 		return fmt.Errorf("shared-capacity cardinality = %d, want %d", count, want)
 	}
 	return nil
+}
+
+func waitForSharedCardinality(ctx context.Context, client *goredis.Client, namespace string, want int64, timeout time.Duration) error {
+	deadline := time.NewTimer(timeout)
+	defer deadline.Stop()
+	ticker := time.NewTicker(20 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		if err := assertSharedCardinality(ctx, client, namespace, want); err == nil {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-deadline.C:
+			return assertSharedCardinality(ctx, client, namespace, want)
+		case <-ticker.C:
+		}
+	}
 }
 
 func combinedRecordCount(first, second, kind string) (int, error) {
