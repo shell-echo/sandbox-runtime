@@ -26,7 +26,7 @@ platform gate.
 
 | Item | Value |
 | --- | --- |
-| Provider implementation | `c0a55d1e0a862f9e5a592abd27b1e25be3c85b3e` |
+| Provider implementation | `b4d41c9a32b4ccf39edaba3fb8bf5ad239c1f945` |
 | Contract namespace | `urn:shell-echo:sandbox-runtime:provider-v1` |
 | Contract revision | `5096e71fb84fbec22aa3487a0e55a1b49602ab8b` |
 | Contract tree | `859f76dc0e855a0c8abdbbb5648df100dabb4328` |
@@ -64,9 +64,15 @@ revoker durable-revocation caller scenario.
 Harness/Gateway source `e952ef9` adds that independent runner. Clean local
 `linux/arm64` run `20260905T095109.569973000Z` and hosted `linux/amd64` run
 `33959122456` each pass all seven locked scenarios.
-Hosted current-lock runs against harness `c7fe24d` and Provider `c0a55d1` also
-pass: Reference `33955436969`, Candidate `33955437046`, Browser `33955436984`,
-and shared capacity `33955436968`. Each retains its existing evidence boundary.
+ADR 0033 and Provider `b4d41c9` subsequently add downstream CDP fencing ports,
+the Redis-compatible action-fence adapter, private ingress component, and
+fail-closed Browser composition. Advancing this E2E lock permits the existing
+regression workflows to consume that Provider implementation; it is not the
+separate two-Gateway/unique-ingress/real-Chromium ADR 0033 caller gate.
+The latest verified hosted regressions before this lock refresh used harness
+`c7fe24d` and Provider `c0a55d1`: Reference `33955436969`, Candidate
+`33955437046`, Browser `33955436984`, and shared capacity `33955436968`. Each
+retains its existing evidence boundary.
 This Provider identity also includes the GitHub Actions migration from Node 20
 action runtimes to Node 24 action runtimes. That infrastructure update adds no
 Browser behavior, caller compatibility, or production-readiness evidence.
@@ -165,7 +171,7 @@ go run ./cmd/durable-revocation-e2e \
   -evidence-root evidence/durable-revocation
 ```
 
-The lock fixes Provider `c0a55d1`, the Valkey index and native platform
+The lock fixes Provider `b4d41c9`, the Valkey index and native platform
 manifests, 10-minute test grants, 100 ms revocation polling and operation
 timeouts, a 2-second propagation/outage bound, local capacity `16/8/4`, a
 one-reconnect upper bound with 10 ms backoff, and exactly seven scenarios. The
@@ -184,8 +190,9 @@ hostile multi-tenant isolation, deployment readiness, or production readiness.
 
 ## Latest verified evidence
 
-Current-lock local regressions against Provider `c0a55d1` and harness
-`59e08d5` pass in Browser run `20260905T080015.795386000Z` (`13+5`), Reference
+The latest verified local regressions before this lock refresh ran against
+Provider `c0a55d1` and harness `59e08d5`: Browser run
+`20260905T080015.795386000Z` (`13+5`), Reference
 run `20260905T080530.577843000Z` (`15+5`), Platform Candidate run
 `20260905T080623.861033000Z` (`15+5`), and shared-capacity run
 `20260905T080725.227680000Z` (`10/10`, `linux/arm64`). The Browser reference
@@ -193,7 +200,8 @@ still uses one process-local memory revocation authority; shared-capacity still
 uses a private echo fixture and does not exercise revocation. Therefore none is
 the ADR 0032 durable distributed revocation caller gate.
 
-Hosted current-lock Reference run `33955436969` passes 15+5 and artifact
+The latest verified hosted pre-refresh Reference run `33955436969` passes 15+5,
+and its artifact
 `reference-e2e-evidence-33955436969` has digest
 `sha256:68642bb9810b397fada89bdb2666c11d46ddc0961eec6d6fd7d5e826e7336a70`.
 Platform Candidate `33955437046` passes 15+5 and its artifact digest is
