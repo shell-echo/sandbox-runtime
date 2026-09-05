@@ -207,6 +207,31 @@ func TestPostUpgradeNormalCloseIsProjected(t *testing.T) {
 	}
 }
 
+func TestRoundTripPreservesObservedNormalCloseForLaterProjection(t *testing.T) {
+	caFile, certificate := testPKI(t)
+	server := newTLSServer(t, certificate, func(w http.ResponseWriter, request *http.Request) {
+		connection, err := websocket.Accept(w, request, &websocket.AcceptOptions{OriginPatterns: []string{"reference-caller.invalid"}})
+		if err != nil {
+			return
+		}
+		defer connection.CloseNow()
+		_ = connection.Close(websocket.StatusNormalClosure, "capacity")
+	})
+	defer server.Close()
+	caller := mustNewCaller(t, testConfig(caFile, server.URL))
+	defer caller.Close()
+
+	if opened := caller.Execute(context.Background(), openCommand(1, "gateway-a", "principal-a", "endpoint-a")); !opened.OK || !opened.Upgraded {
+		t.Fatalf("open response = %#v", opened)
+	}
+	probe := caller.Execute(context.Background(), wire.Command{Version: wire.ProtocolVersion, Sequence: 2, Action: wire.ActionRoundTrip, ConnectionID: "connection-a", TimeoutMillis: 2000})
+	assertErrorCode(t, probe, errorRoundTripFailed)
+	closed := caller.Execute(context.Background(), wire.Command{Version: wire.ProtocolVersion, Sequence: 3, Action: wire.ActionExpectClosed, ConnectionID: "connection-a", TimeoutMillis: 2000})
+	if !closed.OK || closed.Outcome != wire.OutcomeClosed || closed.CloseCode != int(websocket.StatusNormalClosure) {
+		t.Fatalf("close response = %#v", closed)
+	}
+}
+
 func TestPostUpgradeTransportEOFIsProjectedAsAbnormalClose(t *testing.T) {
 	caFile, certificate := testPKI(t)
 	server := newTLSServer(t, certificate, func(w http.ResponseWriter, request *http.Request) {

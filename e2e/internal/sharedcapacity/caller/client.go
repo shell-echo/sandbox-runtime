@@ -43,6 +43,8 @@ const (
 
 type heldConnection struct {
 	connection *websocket.Conn
+	closed     bool
+	closeCode  int
 }
 
 // Caller executes the bounded shared-capacity control protocol.
@@ -224,11 +226,13 @@ func (c *Caller) roundTrip(ctx context.Context, command wire.Command, response w
 	callCtx, cancel := context.WithTimeout(ctx, time.Duration(command.TimeoutMillis)*time.Millisecond)
 	defer cancel()
 	if err := held.connection.Write(callCtx, websocket.MessageBinary, marker); err != nil {
+		c.rememberClose(command.ConnectionID, held, callCtx, err)
 		response.ErrorCode = errorRoundTripFailed
 		return response
 	}
 	messageType, received, err := held.connection.Read(callCtx)
 	if err != nil || messageType != websocket.MessageBinary || !bytesEqual(marker, received) {
+		c.rememberClose(command.ConnectionID, held, callCtx, err)
 		response.ErrorCode = errorRoundTripFailed
 		return response
 	}
@@ -245,6 +249,13 @@ func (c *Caller) expectClosed(ctx context.Context, command wire.Command, respons
 	held, exists := c.connections[command.ConnectionID]
 	if !exists {
 		response.ErrorCode = errorConnectionNotFound
+		return response
+	}
+	if held.closed {
+		delete(c.connections, command.ConnectionID)
+		response.OK = true
+		response.Outcome = wire.OutcomeClosed
+		response.CloseCode = held.closeCode
 		return response
 	}
 	readCtx, cancel := context.WithTimeout(ctx, time.Duration(command.TimeoutMillis)*time.Millisecond)
@@ -273,6 +284,20 @@ func (c *Caller) expectClosed(ctx context.Context, command wire.Command, respons
 		response.CloseCode = int(status)
 		return response
 	}
+}
+
+func (c *Caller) rememberClose(connectionID string, held heldConnection, operationCtx context.Context, err error) {
+	if err == nil || operationCtx == nil || operationCtx.Err() != nil {
+		return
+	}
+	status := websocket.CloseStatus(err)
+	if status < 0 {
+		status = websocket.StatusAbnormalClosure
+	}
+	held.closed = true
+	held.closeCode = int(status)
+	c.connections[connectionID] = held
+	_ = held.connection.CloseNow()
 }
 
 func (c *Caller) closeConnection(ctx context.Context, command wire.Command, response wire.Response) wire.Response {
