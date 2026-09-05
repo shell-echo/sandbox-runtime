@@ -20,6 +20,13 @@ Platform migration, Valkey provenance and HA/failover, production Browser
 advertisement/public Gateway composition, aggregate conformance,
 multi-controller, hostile multi-tenant, deployment, and production gates remain
 open.
+
+E2E lock/harness `17ed6ca` pins Provider `b4d41c9`; repository CI
+`33970773423` and the five separately named hosted regression workflows pass.
+Those reruns cover their existing Reference, Candidate, Browser,
+shared-capacity, and durable-revocation scenarios only and do not close the ADR
+0033 caller gate.
+
 Start a new development session with
 [`docs/PROJECT_CONTEXT.md`](docs/PROJECT_CONTEXT.md). It summarizes the current
 architecture, engineering rules, verified maturity, blockers, and next work;
@@ -92,9 +99,9 @@ Currently implemented:
   global/tenant/session leases, renewal, TTL reclamation, and stale-owner
   fencing. A clean local `linux/arm64` black-box run passed all 10 scenarios
   through two independent Gateway OS processes and one pinned Valkey authority.
-  Hosted workflow run `33955436968` separately passed the same 10 scenarios on
+  Hosted workflow run `33970773388` separately passed the same 10 scenarios on
   `linux/amd64`; its GitHub Actions artifact digest is
-  `sha256:d99d76374c745fb9a7adcc9b7e09e1f24963641e7d86b277a9a0647b870acdc2`.
+  `sha256:2350e3fbed3801366ade3bb4ed204545c1b0f55037a2dc7148de2ef4952e4216`.
   Its private echo fixture does not call the Provider API or a real Browser/CDP;
   capacity rejection is a post-WebSocket-`101` normal `1000` close, not the
   pre-upgrade limiter's HTTP `429`. Contract/Suite identity is metadata only
@@ -107,10 +114,11 @@ Currently implemented:
   resolution/dial work on authority termination, and add a Redis-compatible
   retained-tombstone source/writer with immutable policy, server-time lifetime
   bounds, monotonic expiry retention, bounded polling, and fail-closed outage
-  behavior. A separate clean `linux/arm64` run and hosted `linux/amd64` run
-  `33959122456` pass all seven retained-backend caller scenarios through two
-  Gateway processes, two black-box caller processes, and one independent
-  revoker process. The private echo fixture does not exercise Provider routes,
+  behavior. A separate clean `linux/arm64` run and current hosted
+  `linux/amd64` run `33970773353` pass all seven retained-backend caller
+  scenarios through two Gateway processes, two black-box caller processes, and
+  one independent revoker process. The private echo fixture does not exercise
+  Provider routes,
   the Contract, or a real Browser/CDP path, and the runs do not establish
   downstream fencing, Valkey provenance/HA, ACL role isolation, real Agent
   Platform compatibility, multi-controller, hostile multi-tenant, deployment,
@@ -128,7 +136,7 @@ Currently implemented:
   E2E
 - a default-disabled Browser Provider command/runtime graph and a separate
   Browser-only reference stack plus black-box caller. Hosted Browser Reference
-  E2E run `33955436984` passes 13 initial and 5 process-reconstruction
+  E2E run `33970773330` passes 13 initial and 5 process-reconstruction
   scenarios through real mTLS/JWS HTTPS, WebSocket, signed-image provenance,
   Docker, restricted egress, concurrent same-session capacity rejection and
   release, authenticated wrong-Origin pre-upgrade rate rejection and recovery,

@@ -57,10 +57,10 @@ separately locked local two-Gateway evidence run. Hosted harness/Gateway source
 separate from the Browser reference evidence track.
 ADR 0032 and Provider `c0a55d1` additionally change the Gateway revocation port
 to one exact-grant level-triggered watch and add a Redis-compatible
-retained-tombstone adapter. Lock-refresh harness `59e08d5` passes current local Browser
-`13+5`, Reference `15+5`, Candidate `15+5`, and shared-capacity `10/10`
-regressions. These runs do not include the separate two-Gateway plus independent
-revoker durable-revocation caller scenario.
+retained-tombstone adapter. Historical E2E lock/harness `59e08d5` passes the
+latest local pre-refresh Browser `13+5`, Reference `15+5`, Candidate `15+5`,
+and shared-capacity `10/10` regressions. These runs do not include the separate
+two-Gateway plus independent revoker durable-revocation caller scenario.
 Harness/Gateway source `e952ef9` adds that independent runner. Clean local
 `linux/arm64` run `20260905T095109.569973000Z` and hosted `linux/amd64` run
 `33959122456` each pass all seven locked scenarios.
@@ -215,6 +215,22 @@ All manifests pin harness `c7fe24d`, Provider `c0a55d1`, and the same locked
 Contract/tree/48 cases; the shared-capacity manifest retains
 `contract.exercised=false`. These are the same four distinct regression tracks,
 not the ADR 0032 independent-revoker caller gate.
+
+The post-refresh hosted runs pin harness `17ed6ca` and Provider `b4d41c9` and
+pass their existing scenario sets on `linux/amd64`: Reference `33970773414`
+passes 15+5 with artifact digest
+`sha256:de2c6f2d31d9dd5a8323d82560bf0f314970c8e1825d815d224d48aac2dcba16`;
+Platform Candidate `33970773345` passes 15+5 with digest
+`sha256:546c3ecd6f2cd23a629ab53eb61bbe23fa7361c8440297c0fb039886802d7bc0`;
+Browser Reference `33970773330` passes 13+5 with digest
+`sha256:38bb2d7edd0cf04350a3eb7974526296daf4b0cd58da7637ad889e4490c8d866`;
+shared capacity `33970773388` passes 10/10 with digest
+`sha256:2350e3fbed3801366ade3bb4ed204545c1b0f55037a2dc7148de2ef4952e4216`;
+and durable revocation `33970773353` passes 7/7 with digest
+`sha256:062bfea835758424eb399f22f63b78656b323c379d26e5cbaa78a9343fcc4eb9`.
+The shared-capacity and durable-revocation manifests retain
+`contract.exercised=false`. None of these unchanged scenario sets exercises the
+ADR 0033 two-Gateway/unique-ingress/real-Chromium downstream action-fence gate.
 
 Clean local durable-revocation run
 `evidence/durable-revocation/20260905T095109.569973000Z` passed all seven

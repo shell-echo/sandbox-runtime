@@ -166,7 +166,9 @@ lock/harness baseline `59e08d542b05ad1a047f439f4ea72e82c8c37404`, plus durable-r
 harness/Gateway source `e952ef9dabf4e9e6f2a984ce0c7944cb2bc569c7`, local run
 `20260905T095109.569973000Z`, and hosted run `33959122456`, plus downstream CDP
 fencing component and real-backend adapter integration implementation
-`b4d41c9a32b4ccf39edaba3fb8bf5ad239c1f945`.
+`b4d41c9a32b4ccf39edaba3fb8bf5ad239c1f945`, followed by current E2E
+lock/harness `17ed6ca14992a5af2a8eb11a0e72592c355e8494` and repository CI
+`33970773423`.
 The Contract slice authorizes an atomic browser-only capability shape,
 create/session/handoff schemas, protected admission bindings, opaque reference
 security, operation/usage projection, and 10 new Suite cases. The browser image
@@ -364,7 +366,7 @@ vet, Contract verification, the unchanged 48-case Suite, and the tagged real
 pinned-Valkey component integration pass locally. This establishes Gateway
 revocation port semantics plus one retained-backend adapter component only.
 
-E2E lock `59e08d5` pins Provider `c0a55d1`. Current-lock local Browser run
+Historical E2E lock `59e08d5` pins Provider `c0a55d1`. Its local Browser run
 `20260905T080015.795386000Z` passes 13+5 scenarios, Reference run
 `20260905T080530.577843000Z` and Platform Candidate run
 `20260905T080623.861033000Z` each pass 15+5, and shared-capacity run
@@ -384,7 +386,7 @@ Contract/tree/48 cases are metadata with `exercised=false`; the fixture is not
 a real Browser/CDP path, and downstream CDP fencing remains a separate later
 ADR and gate.
 
-Hosted current-lock repository CI `33955437033` passes at repository revision
+Hosted pre-ADR0033 repository CI `33955437033` passes at repository revision
 `c7fe24d`. Reference, Candidate, Browser, and shared-capacity runs
 `33955436969`, `33955437046`, `33955436984`, and `33955436968` pass with harness
 `c7fe24d` locked to Provider `c0a55d1`.
@@ -513,10 +515,10 @@ source `ddbb2c4` and Provider baseline `2ed5e68`. Hosted run `33949577876`
 passes the same 10-scenario gate on `linux/amd64` against harness/Gateway source
 `de297e7` and the same Provider baseline.
 ADR 0032 and `c0a55d1` add exact-grant level-triggered revocation port and
-real-Valkey adapter component evidence. Current E2E lock `59e08d5` passes local
+real-Valkey adapter component evidence. Historical E2E lock `59e08d5` passes local
 Browser 13+5, Reference/Candidate 15+5, and shared-capacity 10/10 regressions;
 none is the separately required two-Gateway/independent-revoker revocation
-caller gate. Current-lock hosted CI `33955437033` and four regressions also pass
+caller gate. Pre-ADR0033 hosted CI `33955437033` and four regressions also pass
 against harness `c7fe24d` and Provider `c0a55d1`: Reference `33955436969`,
 Candidate `33955437046`, Browser `33955436984`, and shared capacity
 `33955436968`. They do not expand those boundaries.
@@ -529,6 +531,13 @@ verification, the unchanged locked 48-case Suite, and tagged pinned-Valkey
 integration for its downstream CDP fencing component and real-backend adapter
 only. Its independent two-Gateway, unique-ingress, real-Chromium external-caller
 gate has not run.
+E2E lock/harness `17ed6ca` now pins Provider `b4d41c9`. Repository CI
+`33970773423` and hosted Reference, Candidate, Browser, shared-capacity, and
+durable-revocation regressions `33970773414`, `33970773345`, `33970773330`,
+`33970773388`, and `33970773353` pass their existing 15+5, 15+5, 13+5, 10/10,
+and 7/7 scenario sets on `linux/amd64`. Their inspected manifests and reports
+contain no ADR 0033 downstream action-fence scenario, so this refresh adds no
+new caller-gate claim.
 ADR 0028 and `44ea2ee` add process-local pre-upgrade connection/rate control;
 hosted run `33854020809` passes the combined 12+5 Browser caller against harness
 `e7e7f03`. ADR 0029 and `b8f8941` add listener/TLS/HTTP bounds; hosted run
@@ -554,10 +563,10 @@ Contract identity:
 | P1.1 | Passed for DTO, mTLS discovery, JWS/digest/replay/fencing admission | Production identity infrastructure remains unproven |
 | P1.2 | Passed for the bounded Contract-authorized lifecycle subset and development composition | Reserved lifecycle families and production gates remain open |
 | P2 components | P2.1-P2.5h local component, Contract projection, Docker, and recorded repository CI gates pass within their named boundaries | Retain single-controller/development constraints and exact Contract lock |
-| P2.5i | Hosted regression `33955436969` passed 15 initial plus 5 restart/resume coding/shell scenarios against harness/Provider lock `c7fe24d`/`c0a55d1`; current local run `20260905T080530.577843000Z` passed against `59e08d5`/`c0a55d1` | Neither run contains a Browser scenario or implies Agent Platform, durable-revocation caller, or production properties |
+| P2.5i | Hosted regression `33970773414` passed 15 initial plus 5 restart/resume coding/shell scenarios against harness/Provider lock `17ed6ca`/`b4d41c9`; latest local pre-refresh run `20260905T080530.577843000Z` passed against `59e08d5`/`c0a55d1` | Neither run contains a Browser scenario or implies Agent Platform, durable-revocation caller, or production properties |
 | P2 | Reference coding/shell caller release gate passed | Aggregate conformance, actual Agent Platform compatibility, multi-controller, hostile multi-tenant isolation, deployment, and production gates remain open |
-| P3 | Local revision binding/shadow/metrics component evidence plus current local candidate integration (`20260905T080623.861033000Z`, `59e08d5`/`c0a55d1` lock) and hosted candidate regression `33955437046` against `c7fe24d`/`c0a55d1` | Real platform traffic shadow parity, canary, rollback, old-run drain, metric parity, and unchanged platform contracts remain open |
-| P4 | Browser Contract authority/projection, exact sandboxed signed amd64/arm64/v8 publication, Provider-local components, default-disabled command/runtime composition, process-local Gateway limits, hosted run `33955436984` with 13+5 Browser evidence, local shared-capacity run `20260905T080725.227680000Z` with 10/10 on arm64, hosted shared-capacity run `33955436968` with 10/10 on amd64, ADR 0032/`c0a55d1` exact-grant revocation port/Redis-compatible adapter component evidence, local plus hosted seven-case durable-revocation caller evidence under harness `e952ef9`/run `33959122456`, and ADR 0033/`b4d41c9` downstream CDP fencing component plus real-backend adapter integration pass their named gates | Independent ADR 0033 two-Gateway/unique-ingress/real-Chromium caller E2E, private authenticated ingress topology, missing-high-water/restore controls, production Browser advertisement/public Gateway, Valkey provenance, HA/failover consistency, production storage/configuration and metrics, remaining profile-specific security/concurrency, aggregate, multi-controller, multi-tenant, deployment, and production gates remain open |
+| P3 | Local revision binding/shadow/metrics component evidence plus latest local pre-refresh candidate integration (`20260905T080623.861033000Z`, `59e08d5`/`c0a55d1` lock) and hosted candidate regression `33970773345` against `17ed6ca`/`b4d41c9` | Real platform traffic shadow parity, canary, rollback, old-run drain, metric parity, and unchanged platform contracts remain open |
+| P4 | Browser Contract authority/projection, exact sandboxed signed amd64/arm64/v8 publication, Provider-local components, default-disabled command/runtime composition, process-local Gateway limits, hosted run `33970773330` with 13+5 Browser evidence, local shared-capacity run `20260905T080725.227680000Z` with 10/10 on arm64, hosted shared-capacity run `33970773388` with 10/10 on amd64, ADR 0032/`c0a55d1` exact-grant revocation port/Redis-compatible adapter component evidence, local plus latest hosted seven-case durable-revocation caller evidence under runs `20260905T095109.569973000Z`/`33970773353`, and ADR 0033/`b4d41c9` downstream CDP fencing component plus real-backend adapter integration pass their named gates | Independent ADR 0033 two-Gateway/unique-ingress/real-Chromium caller E2E, private authenticated ingress topology, missing-high-water/restore controls, production Browser advertisement/public Gateway, Valkey provenance, HA/failover consistency, production storage/configuration and metrics, remaining profile-specific security/concurrency, aggregate, multi-controller, multi-tenant, deployment, and production gates remain open |
 
 Production readiness is not a numbered phase shortcut. Aggregate conformance,
 multi-controller reliability, hostile multi-tenant security, deployment, and
@@ -630,7 +639,7 @@ Veronica compatibility, aggregate conformance, distributed revocation caller beh
 multi-controller reliability, hostile multi-tenant isolation, deployment, or
 production readiness.
 
-The current local coding/shell lock-refresh runs use harness
+The latest local pre-ADR0033 coding/shell lock-refresh runs use harness
 `59e08d542b05ad1a047f439f4ea72e82c8c37404` and Provider
 `c0a55d1e0a862f9e5a592abd27b1e25be3c85b3e`. Reference evidence
 `e2e/evidence/20260905T080530.577843000Z/manifest.json` and candidate evidence

@@ -92,7 +92,7 @@ ADR 0032 and implementation `c0a55d1` add an atomic exact-grant,
 level-triggered revocation watch plus a Redis-compatible retained-tombstone
 source/writer. Focused/full race-shuffle, vet, Contract verification, the
 unchanged 48-case Suite, and tagged integration against the same pinned Valkey
-index pass locally. Current E2E lock `59e08d5` passes local Browser 13+5,
+index pass locally. Pre-ADR0033 E2E lock `59e08d5` passes local Browser 13+5,
 Reference/Candidate 15+5, and shared-capacity 10/10 regressions. Those existing
 modes do not execute a two-Gateway/independent-revoker retained-backend
 scenario. Harness/Gateway source `e952ef9` adds the separate locked runner;
@@ -103,7 +103,7 @@ Contract identity remains metadata with `exercised=false`, the echo fixture is
 not Browser/CDP, and downstream fencing plus all production gates remain open
 at that evidence baseline.
 
-Hosted current-lock repository CI `33955437033` passes at repository revision
+Hosted pre-ADR0033 repository CI `33955437033` passes at repository revision
 `c7fe24d`. Reference `33955436969` (15+5), Candidate `33955437046` (15+5),
 Browser `33955436984` (13+5), and shared capacity `33955436968` (10/10 on
 `linux/amd64`) pass with harness `c7fe24d` locked to Provider `c0a55d1`. Their
@@ -124,6 +124,15 @@ missing-high-water/restore controls, Valkey provenance/HA/failover, production
 metrics/configuration/deployment, multi-controller, hostile multi-tenant, real
 Agent Platform, aggregate conformance, and production readiness remain
 unproved.
+
+E2E lock/harness `17ed6ca` now pins Provider `b4d41c9`. Repository CI
+`33970773423` passes all four jobs, and hosted Reference `33970773414` (15+5),
+Candidate `33970773345` (15+5), Browser `33970773330` (13+5), shared capacity
+`33970773388` (10/10), and durable revocation `33970773353` (7/7) pass their
+existing `linux/amd64` profiles. No single run combines two Gateways, the
+unique private ingress, retained action-fence/high-water state, independent
+callers, and real Chromium. These are lock-refresh regressions, not the ADR
+0033 external-caller gate.
 
 ## Objective
 
@@ -278,10 +287,11 @@ evidence chain before it can be advertised.
   verifies immutable policy, hashes namespace/grant identities, uses Redis
   server time for bounded lifetime and expiry, retains the greatest expiry,
   and fails closed on malformed state or authority loss. The real-Valkey
-  component integration passes. E2E lock `59e08d5` pins Provider `c0a55d1`, and
-  current local Browser, Reference, Candidate, and shared-capacity regressions
-  pass without exercising the independent durable-revocation caller gate.
-- Hosted current-lock repository CI `33955437033` passes at repository revision
+  component integration passes. Historical E2E lock `59e08d5` pins Provider
+  `c0a55d1`; its local Browser, Reference, Candidate, and shared-capacity
+  regressions pass without exercising the independent durable-revocation caller
+  gate.
+- Hosted pre-ADR0033 repository CI `33955437033` passes at repository revision
   `c7fe24d`. Four regressions pass with harness `c7fe24d` locked to Provider
   `c0a55d1`: Reference `33955436969`, Candidate `33955437046`, Browser
   `33955436984`, and shared capacity `33955436968`. Their respective artifact
@@ -318,6 +328,12 @@ evidence chain before it can be advertised.
   provenance/HA/failover, production metrics/configuration/deployment,
   multi-controller, hostile multi-tenant, real platform, aggregate, or
   production evidence is added.
+- E2E lock/harness `17ed6ca` pins Provider `b4d41c9`; repository CI
+  `33970773423` and hosted Reference/Candidate/Browser/shared-capacity/durable-
+  revocation runs `33970773414`/`33970773345`/`33970773330`/`33970773388`/
+  `33970773353` pass their existing profiles. Their combined partial properties
+  must not be composed into an ADR 0033 claim: none runs the required unique
+  ingress and downstream action-fence topology end to end.
 - `blocks/` can validate an internal digest-pinned Block manifest, but it does
   not authorize a Provider capability or establish image provenance.
 - A real Agent Platform caller and migration traffic harness remain unavailable;
@@ -580,6 +596,8 @@ ADR 0032 now passes its exact-grant revocation port and real Redis-compatible
 adapter component gate plus its separately locked local and hosted
 two-Gateway/independent-revoker caller gate. ADR 0033/`b4d41c9` passes only the
 downstream CDP fencing component and real-backend adapter integration gate.
+The `17ed6ca` lock refresh confirms the five existing hosted profiles still
+pass against that Provider implementation, but adds no ADR 0033 scenario.
 Next, build and run its separately locked caller harness with two independent
 Gateway OS processes, one unique authenticated private ingress OS process,
 independent black-box callers, retained Valkey state, and the exact signed

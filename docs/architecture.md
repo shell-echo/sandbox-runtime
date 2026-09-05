@@ -181,6 +181,14 @@ Valkey provenance/HA/failover, production metrics/configuration/deployment,
 multi-controller reliability, hostile multi-tenant isolation, real Agent
 Platform compatibility, aggregate conformance, or production readiness.
 
+E2E lock/harness `17ed6ca` pins Provider `b4d41c9`; repository CI
+`33970773423` and the five existing hosted regression profiles pass. Those
+profiles distribute partial properties across different topologies: Browser
+Reference has real Chromium but not two Gateways plus a unique ingress, while
+shared capacity and durable revocation have two Gateways but use private echo
+fixtures and do not exercise downstream CDP actions. Their results therefore
+cannot be aggregated into the ADR 0033 caller gate.
+
 | Method and path | Responsibility |
 | --- | --- |
 | `GET /v1/capabilities` | Return provider revision, runtime profiles, limits, and supported capability versions. |
