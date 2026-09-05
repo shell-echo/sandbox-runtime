@@ -125,6 +125,29 @@ func TestLocalLimiterConcurrentContentionDoesNotExceedCapacity(t *testing.T) {
 	lease.Release()
 }
 
+func TestLocalLimiterSerializesClockObservationWithWindowState(t *testing.T) {
+	clock := newReorderingClock(time.Date(2026, 9, 5, 10, 0, 0, 0, time.UTC))
+	limiter, err := NewLocalLimiter(LocalOptions{
+		Clock: clock, MaxConcurrent: 2, MaxRequestsPerWindow: 2, Window: time.Minute,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	results := make(chan acquireOutcome, 2)
+	go collectAcquire(limiter, results)
+	<-clock.firstStarted
+	go collectAcquire(limiter, results)
+
+	for range 2 {
+		result := <-results
+		if result.err != nil || result.lease == nil {
+			t.Fatalf("concurrent Acquire() = %#v", result)
+		}
+		result.lease.Release()
+	}
+}
+
 func TestLocalLimiterFailsClosedForContextAndClockErrors(t *testing.T) {
 	clock := &testClock{now: time.Date(2026, 9, 4, 10, 0, 0, 0, time.UTC)}
 	limiter, err := NewLocalLimiter(LocalOptions{
@@ -168,6 +191,54 @@ func TestLocalLimiterFailsClosedForContextAndClockErrors(t *testing.T) {
 type testClock struct {
 	mu  sync.Mutex
 	now time.Time
+}
+
+type reorderingClock struct {
+	mu             sync.Mutex
+	now            time.Time
+	calls          int
+	firstStarted   chan struct{}
+	secondReturned chan struct{}
+}
+
+func newReorderingClock(now time.Time) *reorderingClock {
+	return &reorderingClock{
+		now:            now,
+		firstStarted:   make(chan struct{}),
+		secondReturned: make(chan struct{}),
+	}
+}
+
+func (c *reorderingClock) Now() time.Time {
+	c.mu.Lock()
+	c.calls++
+	call := c.calls
+	c.mu.Unlock()
+
+	switch call {
+	case 1:
+		close(c.firstStarted)
+		select {
+		case <-c.secondReturned:
+		case <-time.After(100 * time.Millisecond):
+		}
+		return c.now
+	case 2:
+		close(c.secondReturned)
+		return c.now.Add(time.Second)
+	default:
+		return c.now.Add(time.Duration(call) * time.Second)
+	}
+}
+
+type acquireOutcome struct {
+	lease Lease
+	err   error
+}
+
+func collectAcquire(limiter *LocalLimiter, results chan<- acquireOutcome) {
+	lease, err := limiter.Acquire(context.Background())
+	results <- acquireOutcome{lease: lease, err: err}
 }
 
 func (c *testClock) Now() time.Time {

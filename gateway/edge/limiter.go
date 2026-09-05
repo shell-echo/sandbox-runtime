@@ -103,13 +103,12 @@ func (l *LocalLimiter) Acquire(ctx context.Context) (Lease, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	now := l.clock.Now()
 	if now.IsZero() {
 		return nil, fmt.Errorf("%w: zero clock", ErrUnavailable)
 	}
-
-	l.mu.Lock()
-	defer l.mu.Unlock()
 	if l.windowStart.IsZero() {
 		l.windowStart = now
 	} else if now.Before(l.windowStart) {
