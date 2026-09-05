@@ -114,3 +114,43 @@ func TestBrowserProviderUnavailableFailsClosed(t *testing.T) {
 		t.Fatalf("nil BrowserProvider Close() error = %v", err)
 	}
 }
+
+func TestBrowserProviderConfigDoesNotRequirePublicGatewayConfiguration(t *testing.T) {
+	referenceConfig := validBrowserConfig(t)
+	referenceConfig.GatewayAddress = ""
+	referenceConfig.GatewayCertificateFile = ""
+	referenceConfig.GatewayPrivateKeyFile = ""
+	referenceConfig.GatewayPrincipals = nil
+	referenceConfig.GatewayAdminToken = ""
+	referenceConfig.GatewayAuditFile = ""
+	referenceConfig.GatewayListenerLimit = 0
+	if err := referenceConfig.Validate(); err == nil {
+		t.Fatal("full reference stack configuration without a public Gateway succeeded")
+	}
+
+	providerConfig := referenceConfig.browserProviderConfig()
+	if err := providerConfig.Validate(); err != nil {
+		t.Fatalf("Provider-only Browser configuration rejected without public Gateway fields: %v", err)
+	}
+}
+
+func TestBrowserProviderConfigRejectsIncompleteProviderInputs(t *testing.T) {
+	for name, mutate := range map[string]func(*BrowserProviderConfig){
+		"missing Provider address": func(config *BrowserProviderConfig) { config.ProviderAddress = "" },
+		"missing Browser config":   func(config *BrowserProviderConfig) { config.Browser = nil },
+		"duplicate client URI": func(config *BrowserProviderConfig) {
+			config.AllowedClientURIs[1] = config.AllowedClientURIs[0]
+		},
+		"duplicate JWS key": func(config *BrowserProviderConfig) {
+			config.TrustedJWSKeys[1].ID = config.TrustedJWSKeys[0].ID
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			config := validBrowserConfig(t).browserProviderConfig()
+			mutate(&config)
+			if err := config.Validate(); err == nil {
+				t.Fatal("invalid Provider-only Browser configuration succeeded")
+			}
+		})
+	}
+}

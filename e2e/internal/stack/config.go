@@ -53,6 +53,24 @@ type Config struct {
 	Browser                  *BrowserConfig     `json:"browser,omitempty"`
 }
 
+// BrowserProviderConfig contains only the Provider listener, admission,
+// runtime, and Browser dependencies owned by the Provider/ingress process.
+// Public Gateway configuration deliberately belongs to its separate process.
+type BrowserProviderConfig struct {
+	ProviderAddress         string          `json:"provider_address"`
+	ProviderCertificateFile string          `json:"provider_certificate_file"`
+	ProviderPrivateKeyFile  string          `json:"provider_private_key_file"`
+	ClientCAFile            string          `json:"client_ca_file"`
+	AllowedClientURIs       []string        `json:"allowed_client_uris"`
+	TrustedJWSKeys          []TrustedJWSKey `json:"trusted_jws_keys"`
+	ProviderRevisionID      string          `json:"provider_revision_id"`
+	StateRoot               string          `json:"state_root"`
+	RuntimeDataRoot         string          `json:"runtime_data_root"`
+	RuntimeImage            string          `json:"runtime_image"`
+	RuntimeControllerID     string          `json:"runtime_controller_id"`
+	Browser                 *BrowserConfig  `json:"browser"`
+}
+
 type BrowserConfig struct {
 	GatewayImage               string   `json:"gateway_image"`
 	UplinkNetwork              string   `json:"uplink_network"`
@@ -133,25 +151,8 @@ func (c Config) Validate() error {
 	if len(c.AllowedClientURIs) != 2 || len(c.TrustedJWSKeys) != 2 || len(c.GatewayPrincipals) != 2 {
 		return errors.New("reference stack requires exactly two caller identities, JWS keys, and Gateway principals")
 	}
-	seenURIs := make(map[string]struct{}, len(c.AllowedClientURIs))
-	for _, identity := range c.AllowedClientURIs {
-		if strings.TrimSpace(identity) == "" || identity != strings.TrimSpace(identity) {
-			return errors.New("allowed client URI identities are invalid")
-		}
-		if _, exists := seenURIs[identity]; exists {
-			return errors.New("allowed client URI identities must be unique")
-		}
-		seenURIs[identity] = struct{}{}
-	}
-	seenKeyIDs := make(map[string]struct{}, len(c.TrustedJWSKeys))
-	for _, key := range c.TrustedJWSKeys {
-		if strings.TrimSpace(key.ID) == "" || key.Algorithm != "EdDSA" || strings.TrimSpace(key.Path) == "" {
-			return errors.New("trusted JWS keys require an ID, EdDSA algorithm, and path")
-		}
-		if _, exists := seenKeyIDs[key.ID]; exists {
-			return errors.New("trusted JWS key IDs must be unique")
-		}
-		seenKeyIDs[key.ID] = struct{}{}
+	if err := validateProviderCallerAdmission(c.AllowedClientURIs, c.TrustedJWSKeys); err != nil {
+		return err
 	}
 	seenTokens := make(map[string]struct{})
 	seenBindings := make(map[string]struct{})
@@ -170,6 +171,79 @@ func (c Config) Validate() error {
 		seenBindings[binding] = struct{}{}
 	}
 	return nil
+}
+
+func (c BrowserProviderConfig) Validate() error {
+	for name, value := range map[string]string{
+		"provider_address":          c.ProviderAddress,
+		"provider_certificate_file": c.ProviderCertificateFile,
+		"provider_private_key_file": c.ProviderPrivateKeyFile,
+		"client_ca_file":            c.ClientCAFile,
+		"provider_revision_id":      c.ProviderRevisionID,
+		"state_root":                c.StateRoot,
+		"runtime_data_root":         c.RuntimeDataRoot,
+		"runtime_image":             c.RuntimeImage,
+		"runtime_controller_id":     c.RuntimeControllerID,
+	} {
+		if strings.TrimSpace(value) == "" {
+			return fmt.Errorf("%s is required", name)
+		}
+	}
+	if c.Browser == nil {
+		return errors.New("Browser Provider requires Browser configuration")
+	}
+	if err := c.Browser.validate(); err != nil {
+		return err
+	}
+	if _, _, err := splitAddress(c.ProviderAddress); err != nil {
+		return fmt.Errorf("provider_address: %w", err)
+	}
+	if len(c.AllowedClientURIs) != 2 || len(c.TrustedJWSKeys) != 2 {
+		return errors.New("Browser Provider requires exactly two caller identities and JWS keys")
+	}
+	return validateProviderCallerAdmission(c.AllowedClientURIs, c.TrustedJWSKeys)
+}
+
+func validateProviderCallerAdmission(allowedClientURIs []string, trustedJWSKeys []TrustedJWSKey) error {
+	seenURIs := make(map[string]struct{}, len(allowedClientURIs))
+	for _, identity := range allowedClientURIs {
+		if strings.TrimSpace(identity) == "" || identity != strings.TrimSpace(identity) {
+			return errors.New("allowed client URI identities are invalid")
+		}
+		if _, exists := seenURIs[identity]; exists {
+			return errors.New("allowed client URI identities must be unique")
+		}
+		seenURIs[identity] = struct{}{}
+	}
+	seenKeyIDs := make(map[string]struct{}, len(trustedJWSKeys))
+	for _, key := range trustedJWSKeys {
+		if strings.TrimSpace(key.ID) == "" || key.Algorithm != "EdDSA" || strings.TrimSpace(key.Path) == "" {
+			return errors.New("trusted JWS keys require an ID, EdDSA algorithm, and path")
+		}
+		if _, exists := seenKeyIDs[key.ID]; exists {
+			return errors.New("trusted JWS key IDs must be unique")
+		}
+		seenKeyIDs[key.ID] = struct{}{}
+	}
+	return nil
+}
+
+func (c Config) browserProviderConfig() BrowserProviderConfig {
+	var browser *BrowserConfig
+	if c.Browser != nil {
+		browserCopy := *c.Browser
+		browserCopy.AllowedHosts = append([]string(nil), c.Browser.AllowedHosts...)
+		browser = &browserCopy
+	}
+	return BrowserProviderConfig{
+		ProviderAddress: c.ProviderAddress, ProviderCertificateFile: c.ProviderCertificateFile,
+		ProviderPrivateKeyFile: c.ProviderPrivateKeyFile, ClientCAFile: c.ClientCAFile,
+		AllowedClientURIs:  append([]string(nil), c.AllowedClientURIs...),
+		TrustedJWSKeys:     append([]TrustedJWSKey(nil), c.TrustedJWSKeys...),
+		ProviderRevisionID: c.ProviderRevisionID, StateRoot: c.StateRoot,
+		RuntimeDataRoot: c.RuntimeDataRoot, RuntimeImage: c.RuntimeImage,
+		RuntimeControllerID: c.RuntimeControllerID, Browser: browser,
+	}
 }
 
 func (c BrowserConfig) validate() error {

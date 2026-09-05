@@ -55,7 +55,10 @@ type BrowserProvider struct {
 }
 
 func openBrowser(ctx context.Context, config Config) (_ *Stack, result error) {
-	browserProvider, err := OpenBrowserProvider(ctx, config)
+	if err := config.Validate(); err != nil {
+		return nil, err
+	}
+	browserProvider, err := OpenBrowserProvider(ctx, config.browserProviderConfig())
 	if err != nil {
 		return nil, err
 	}
@@ -82,7 +85,7 @@ func openBrowser(ctx context.Context, config Config) (_ *Stack, result error) {
 // OpenBrowserProvider initializes the reusable Provider-only Browser stack.
 // The caller remains responsible for coordinating Startup and Shutdown before
 // closing the owned runtime and repository resources.
-func OpenBrowserProvider(ctx context.Context, config Config) (_ *BrowserProvider, result error) {
+func OpenBrowserProvider(ctx context.Context, config BrowserProviderConfig) (_ *BrowserProvider, result error) {
 	if ctx == nil {
 		return nil, context.Canceled
 	}
@@ -209,7 +212,7 @@ func OpenBrowserProvider(ctx context.Context, config Config) (_ *BrowserProvider
 	if err != nil {
 		return nil, err
 	}
-	protected, closeAdmission, err := protectedOptions(config)
+	protected, closeAdmission, err := protectedOptions(config.StateRoot, config.TrustedJWSKeys)
 	if err != nil {
 		return nil, err
 	}
