@@ -115,9 +115,13 @@ implementation `b8f8941` add a bounded accepted-connection listener, frozen
 server-auth material, TLS 1.3/HTTP/1.1-only policy, HTTP header/time bounds, and
 context-aware lifecycle. Hosted run `33857739150` against harness `7a20d9d`
 passes 13+5 scenarios and black-box TLS downgrade, slow/oversized header,
-listener saturation, and recovery checks. All of these controls remain
-process-local; they do not establish authenticated partition-aware shared
-capacity or distributed revocation.
+listener saturation, and recovery checks. ADR 0030 and implementation
+`997fb0d` add a post-authorization capacity port, typed lease-loss handling,
+and a process-local memory reference with atomic global, tenant, and session
+accounting. Browser composition requires that authority, while the existing
+identity-free edge remains separate. The memory adapter and co-located harness
+do not establish shared or distributed capacity, cross-process correctness, or
+distributed revocation.
 
 | Method and path | Responsibility |
 | --- | --- |
@@ -394,7 +398,7 @@ advertisement, and optional-profile gates remain open:
 | Workspace | The Provider Docker development adapter supplies `/inputs`, `/workspace`, `/outputs`, and bounded tmpfs `/tmp` with owned cleanup; exec consumes that runtime without exposing host paths. | Add artifact consumers, capacity enforcement, and stronger isolation evidence. |
 | Security | Docker defaults already drop capabilities, use non-root/read-only root, disable networking, and limit resources. | Add policy enforcement, stronger isolation profiles, secret grants, egress controls, audit evidence, and production auth. |
 | Events and usage | Durable lifecycle events and bounded usage-evidence components exist without a complete runtime collector composition. | Complete collection/reconciliation while leaving platform accounting authority outside the Provider. |
-| Snapshots/browser/desktop | Browser Contract authority/projection, exact signed image, Provider-local session/application/reference/usage, Docker adapter, provenance verifier, restricted-egress provisioner, create-policy binding, protected handlers, caller-owned Gateway, default-disabled command graph, and hosted 13+5 Browser reference-caller path have named evidence. The Gateway has explicit process-local total/per-session post-authorization capacity, pre-upgrade service limits, and bounded listener/TLS/HTTP behavior with hosted black-box rejection/recovery scenarios. ADR 0029 and run `33857739150` add the latest transport evidence. The restricted-egress Gateway remains distinct from the caller-owned Gateway. Production Browser advertisement/public Gateway deployment, partition-aware shared capacity, distributed revocation, aggregate, multi-controller, tenant, deployment, and production gates remain open. Snapshots and desktop remain unauthorized optional behavior. | Add authenticated partition-aware shared or distributed capacity, durable distributed revocation, hostile-tenant evidence, metrics, and deployable storage/configuration before production advertisement; then begin the Desktop authority audit without reusing Browser or terminal routes. |
+| Snapshots/browser/desktop | Browser Contract authority/projection, exact signed image, Provider-local session/application/reference/usage, Docker adapter, provenance verifier, restricted-egress provisioner, create-policy binding, protected handlers, caller-owned Gateway, default-disabled command graph, and hosted 13+5 Browser reference-caller path have named evidence. The Gateway has explicit process-local total/per-session post-authorization capacity, pre-upgrade service limits, bounded listener/TLS/HTTP behavior, and an authenticated-capacity port with a process-local global/tenant/session memory reference. ADR 0030 and `997fb0d` add only the latest port/component evidence; the restricted-egress Gateway remains distinct from the caller-owned Gateway. Production Browser advertisement/public Gateway deployment, a real shared or distributed capacity backend, distributed revocation, aggregate, multi-controller, tenant, deployment, and production gates remain open. Snapshots and desktop remain unauthorized optional behavior. | Add a reviewed shared backend and two-independent-Gateway evidence, then durable distributed revocation, hostile-tenant evidence, metrics, and deployable storage/configuration before production advertisement; begin the Desktop authority audit only after the Browser readiness record is complete. |
 
 ## Delivery plan and release gates
 

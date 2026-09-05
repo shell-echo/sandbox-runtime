@@ -1,6 +1,6 @@
 # Project Context
 
-Updated: 2026-09-04
+Updated: 2026-09-05
 
 This is the stable entry point for a new developer, AI agent, development
 device, or implementation session. It summarizes the system, engineering
@@ -134,7 +134,7 @@ multi-tenant, deployment, and production readiness.
 
 ## Current Snapshot
 
-This snapshot was audited on 2026-09-04 against browser Contract authority
+This snapshot was audited on 2026-09-05 against browser Contract authority
 `5096e71fb84fbec22aa3487a0e55a1b49602ab8b`, Provider projection baseline
 `24b2e36485c334634e561009850d1905ec3115d5`, browser session implementation
 `9a5d225f793f37ccafdac31c276ccbcb1bc862ad`, sandbox/provenance implementation
@@ -150,7 +150,9 @@ capacity implementation `7b062e6511f73b916dd18977041d83732e590088`, Browser
 pre-upgrade edge implementation `44ea2eecc75752870d4e8580a75be26578dcd63a`,
 Browser listener/TLS/HTTP implementation
 `b8f89413cb34110793fa552ba1620f1529f6f416`,
-and hosted co-located E2E evidence baseline
+Browser authenticated-capacity implementation
+`997fb0db9d3517cf1c3e153217b1ac7305b4ebfd`, its co-located E2E lock
+`49d1c20`, and the preceding hosted co-located E2E evidence baseline
 `7a20d9df5d3213e2d094f7783b1b16899d8035ad`.
 The Contract slice authorizes an atomic browser-only capability shape,
 create/session/handoff schemas, protected admission bindings, opaque reference
@@ -174,9 +176,14 @@ process-local global connection/fixed-window request control before Browser
 WebSocket admission and upgrade. ADR 0029 and `b8f8941` add a separate bounded
 accepted-connection listener, frozen server-auth certificate, TLS
 1.3/HTTP/1.1-only policy, header/time limits, and context-aware lifecycle for
-the reference Gateway. The production command still exposes no public Browser
-Gateway route and does not advertise Browser; only the reference stack
-advertises the exact locked Browser profile.
+the reference Gateway. ADR 0030 and `997fb0d` add an authenticated-capacity
+port after exact grant binding, typed loss/unavailability events, bounded
+release, stable revocation/expiry/capacity termination priority, and a
+process-local memory reference with atomic global, tenant, and session
+accounting. Browser composition requires the port; no shared backend is
+implemented. The production command still exposes no public Browser Gateway
+route and does not advertise Browser; only the reference stack advertises the
+exact locked Browser profile.
 
 The Contract verifier and locked 48-case Suite pass against the current
 projection. The `e2e/` module race/shuffle, vet, and lock checks also pass. A
@@ -354,6 +361,9 @@ protected transport, and caller-owned Browser Gateway components. ADR 0025 and
 `66183b1` compose the default-disabled Provider graph; ADR 0026 defines the
 independent reference caller. ADR 0027 and `7b062e6` add process-local Gateway
 capacity, and harness `28a9a5e` exercises its original 11+5 hosted scenario.
+ADR 0030 and `997fb0d` add the authenticated-capacity port and process-local
+global/tenant/session memory component. E2E lock `49d1c20` passes all three
+clean lock checks, but no real shared store or two-Gateway-process run exists.
 ADR 0028 and `44ea2ee` add process-local pre-upgrade connection/rate control;
 hosted run `33854020809` passes the combined 12+5 Browser caller against harness
 `e7e7f03`. ADR 0029 and `b8f8941` add listener/TLS/HTTP bounds; hosted run
@@ -380,7 +390,7 @@ Contract identity:
 | P2.5i | Hosted regression `33857739105` passed 15 initial plus 5 restart/resume coding/shell scenarios against harness/Provider lock `7a20d9d`/`b8f8941`; latest clean local run `20260904T081521.464863000Z` passed against the earlier `249cdd4`/`44ea2ee` lock | Neither run contains a Browser scenario or implies Agent Platform or production properties |
 | P2 | Reference coding/shell caller release gate passed | Aggregate conformance, actual Agent Platform compatibility, multi-controller, hostile multi-tenant isolation, deployment, and production gates remain open |
 | P3 | Local revision binding/shadow/metrics component evidence plus latest local candidate integration (`20260904T081706.648122000Z`, earlier `249cdd4`/`44ea2ee` lock) and hosted candidate regression `33857739189` against `7a20d9d`/`b8f8941` | Real platform traffic shadow parity, canary, rollback, old-run drain, metric parity, and unchanged platform contracts remain open |
-| P4 | Browser Contract authority/projection, exact sandboxed signed amd64/arm64/v8 publication, Provider-local components, default-disabled command/runtime composition, process-local Gateway capacity, pre-upgrade service limits, and hosted 13+5 listener/TLS/HTTP Browser evidence pass their named gates | Production Browser advertisement/public Gateway, authenticated partition-aware shared capacity, distributed durable revocation, production storage/configuration and metrics, remaining profile-specific security/concurrency, aggregate, multi-controller, multi-tenant, deployment, and production gates remain open |
+| P4 | Browser Contract authority/projection, exact sandboxed signed amd64/arm64/v8 publication, Provider-local components, default-disabled command/runtime composition, process-local Gateway and pre-upgrade limits, hosted 13+5 listener/TLS/HTTP Browser evidence, and the ADR 0030 authenticated-capacity port/memory component pass their named gates | A real shared capacity adapter and two-independent-Gateway evidence, production Browser advertisement/public Gateway, distributed durable revocation, production storage/configuration and metrics, remaining profile-specific security/concurrency, aggregate, multi-controller, multi-tenant, deployment, and production gates remain open |
 
 Production readiness is not a numbered phase shortcut. Aggregate conformance,
 multi-controller reliability, hostile multi-tenant security, deployment, and
@@ -588,12 +598,14 @@ Its focused, full local, and Docker-tagged gates pass, and repository CI
 repository CI `33159099578` also pass their bounded readiness/projection gates.
 Reviewed documentation baseline `bba02a6` passes repository CI `33160646494`.
 
-1. Extend the caller-owned Browser public edge beyond its process-local service
-   and listener/TLS/HTTP gates: add authenticated partition-aware shared or
-   distributed capacity, durable distributed revocation, production
-   storage/configuration, and metrics. Then close hostile-tenant and operational
-   evidence before considering a production `sandbox.browser` advertisement
-   switch.
+1. Implement a reviewed shared adapter for the ADR 0030 authenticated-capacity
+   port, then exercise it from two independently started Gateway processes.
+   Prove atomic global/tenant/session limits, bounded TTL and renewal, crash
+   reclamation, stale-owner fencing, lease-loss termination, store-unavailable
+   failure closure, and recovery before calling the shared-capacity gate closed.
+   After that, add durable distributed revocation, production
+   storage/configuration, metrics, hostile-tenant, and operational evidence
+   before considering a production `sandbox.browser` advertisement switch.
 2. Preserve the Browser, coding/shell Reference, and Platform Candidate harnesses
    as three separately named evidence modes. Do not relabel the Browser
    reference deployment as production or the candidate mode as real platform

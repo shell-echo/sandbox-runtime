@@ -78,8 +78,11 @@ Currently implemented:
   request limiter before WebSocket admission and upgrade. A separate bounded
   TLS edge freezes server-auth material before bind, accepts only TLS 1.3 and
   HTTP/1.1, and limits accepted connections, header size, and HTTP timeouts.
-  These process-local controls do not replace partition-aware shared capacity
-  or distributed revocation
+  ADR 0030 also makes an authenticated-capacity authority explicit after exact
+  grant binding; its memory reference atomically accounts for global, tenant,
+  and session partitions and terminates an active connection if its lease is
+  lost. This reference remains process-local and does not replace a real shared
+  or distributed capacity backend or distributed revocation
 - a default-disabled Browser Provider command/runtime graph and a separate
   Browser-only reference stack plus black-box caller. Hosted Browser Reference
   E2E run `33857739150` passes 13 initial and 5 process-reconstruction

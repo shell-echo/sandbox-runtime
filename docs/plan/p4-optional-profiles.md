@@ -40,6 +40,17 @@ revocation, production storage/configuration and metrics, P3, real Agent
 Platform, aggregate, multi-controller, multi-tenant, deployment, and
 production gates remain open.
 
+ADR 0030 and implementation `997fb0d` now add the required
+authenticated-capacity port after exact grant binding, typed lease-loss and
+unavailability handling, bounded release, deterministic
+revocation/expiry/capacity termination priority, and a process-local memory
+reference with atomic global, tenant, and session accounting. E2E lock
+`49d1c20` passes the independent module race/shuffle, vet, and all three lock
+checks. This is port, memory-component, and lock-regression evidence only. No
+real shared store, two-Gateway-process run, TTL/renewal, crash reclamation,
+stale-owner fencing, hosted CI for this lock, distributed revocation,
+deployment, or production gate is claimed.
+
 ## Objective
 
 Add optional runtime profiles one at a time while preserving the Provider and
@@ -154,6 +165,18 @@ evidence chain before it can be advertised.
   rejection before the handler, listener saturation, and recovery. This remains
   one-process reference evidence, not partitioned/shared capacity, distributed
   revocation, production configuration, deployment, or production readiness.
+- ADR 0030 and implementation `997fb0d` require a separate caller-owned
+  authenticated-capacity authority after exact request/grant binding and before
+  revocation, authorized audit, Provider resolution, or dial. The Gateway
+  terminates an active connection on typed lease loss/unavailability, does not
+  reconnect, releases with an independent bounded context, and resolves
+  simultaneous termination causes as revocation, then expiry, then capacity,
+  then transport. The memory reference atomically enforces global, tenant, and
+  exact tenant/sandbox/session limits and excludes caller, grant, credentials,
+  handoff reference, and endpoint data from its subject. E2E lock `49d1c20`
+  binds the co-located harness to Provider `997fb0d` and passes all three check
+  modes locally. It does not implement shared-store TTL/renewal, ownership,
+  crash reclamation, stale-owner fencing, or cross-process coordination.
 - `blocks/` can validate an internal digest-pinned Block manifest, but it does
   not authorize a Provider capability or establish image provenance.
 - A real Agent Platform caller and migration traffic harness remain unavailable;
@@ -163,7 +186,7 @@ evidence chain before it can be advertised.
 
 | Order | Profile | First slice | Required gates before advertisement |
 | --- | --- | --- | --- |
-| 1 | Browser | Contract authority, exact signed amd64/arm64/v8 sandbox publication, default-disabled runtime composition, independent Browser reference caller, process-local Gateway connection capacity, pre-upgrade service limits, and bounded listener/TLS/HTTP behavior are complete within their named local/hosted evidence boundaries | Authenticated partition-aware shared or distributed capacity, durable distributed revocation, production storage/configuration and metrics, remaining hostile-tenant and operational evidence, production advertisement, and deployable caller-owned Gateway |
+| 1 | Browser | Contract authority, exact signed amd64/arm64/v8 sandbox publication, default-disabled runtime composition, independent Browser reference caller, process-local Gateway and pre-upgrade limits, bounded listener/TLS/HTTP behavior, and the ADR 0030 authenticated-capacity port/memory reference are complete within their named evidence boundaries | Real shared capacity adapter plus two-independent-Gateway TTL/renewal/crash/fencing/loss/recovery evidence, durable distributed revocation, production storage/configuration and metrics, remaining hostile-tenant and operational evidence, production advertisement, and deployable caller-owned Gateway |
 | 2 | Desktop | Contract and authority audit; display/input/session boundary design | Desktop protocol and image, display/input security, Gateway/reconnect, usage, fault and caller evidence |
 | 3 | Workspace snapshot/restore | Digest and compatibility audit | Secret exclusion, digest verification, new sandbox identity, restore fault/recovery, Contract and caller evidence |
 | 4 | Port-forward | Target and egress authority audit | Explicit target allowlist, network isolation, expiry/revocation, cross-tenant and caller evidence |
@@ -201,7 +224,7 @@ inferring support from generic schema vocabulary:
 | Capability snapshot | Browser-only `1.0.0`/`browser-v1` maps to `sandbox-runtime-browser-v1`; mixed, wrong-version, wrong-profile, and wrong-runtime shapes fail closed. The reference deployment advertises only this shape | Keep production advertisement disabled until the remaining profile-specific security, concurrency, deployment, and operational gates pass |
 | Create request | Browser fixture binds exact capability/runtime, digest-pinned amd64 image authority, restricted network policy, stable workspace, and unprivileged security fields. The default-disabled command graph preserves these bindings and the hosted caller proves lifecycle creation | Replace development/single-controller dependencies with reviewed production configuration before deployment |
 | Session and handoff | Separate schemas and routes bind session/operation/attempt/fence identity and expose only an expiring opaque reference. Hosted initial and reconstructed-process scenarios prove the combined Provider and caller-owned Gateway path | Add distributed reliability and production deployment evidence without exposing backend identity |
-| Gateway security | Semantic rules leave user/tenant authorization, revocation, audit, reconnect, and fresh reference resolution with the caller. Hosted reference scenarios prove wrong-caller/cross-tenant denial, expiry, active revocation, metadata-only audit, and reconnect. ADR 0027 adds non-blocking single-process total/per-session connection capacity before revocation and Provider resolution; run `33846603547` actively proves same-session rejection and slot reuse. ADR 0028 adds a process-local global connection/rate gate before Browser WebSocket admission and upgrade; hosted run `33854020809` proves rejection/recovery and Gateway-audit exclusion. ADR 0029 adds process-local listener/TLS/HTTP bounds; hosted run `33857739150` proves downgrade/slow-header/oversized-header rejection and capacity recovery | Add authenticated partition-aware shared or distributed capacity, durable distributed revocation, hostile multi-tenant, abuse, metrics, production configuration, and deployable public-edge evidence |
+| Gateway security | Semantic rules leave user/tenant authorization, revocation, audit, reconnect, and fresh reference resolution with the caller. Hosted reference scenarios prove wrong-caller/cross-tenant denial, expiry, active revocation, metadata-only audit, and reconnect. ADR 0027 adds non-blocking single-process total/per-session connection capacity before revocation and Provider resolution; run `33846603547` actively proves same-session rejection and slot reuse. ADR 0028 adds a process-local global connection/rate gate before Browser WebSocket admission and upgrade; hosted run `33854020809` proves rejection/recovery and Gateway-audit exclusion. ADR 0029 adds process-local listener/TLS/HTTP bounds; hosted run `33857739150` proves downgrade/slow-header/oversized-header rejection and capacity recovery. ADR 0030/`997fb0d` add the post-binding authenticated-capacity port, lease-loss semantics, and a global/tenant/session memory component; `49d1c20` locks the co-located harness | Implement a real shared adapter and prove atomic enforcement, bounded TTL/renewal, crash reclamation, stale-owner fencing, loss termination, unavailability closure, and recovery with two independent Gateway processes; then add durable distributed revocation, hostile multi-tenant, abuse, metrics, production configuration, and deployable public-edge evidence |
 | Usage | Browser duration meter and operation/sandbox correlation are locked under the shared usage route; hosted initial/resume scenarios prove partial and complete duration evidence | Keep platform publication and billing truth outside the Provider; add production retention and reconciliation evidence |
 | Fixtures and Suite | Success/rejection/security/admission fixtures and 10 new Suite cases raise the locked Suite from 38 to 48 cases | Add runtime fault/concurrency/image cases in later slices; current Suite is Contract projection evidence only |
 | Runtime image | ADR 0019 removes every `--no-sandbox` path, binds seccomp digest `sha256:3bdf2fd28636409951409621735f616997d0fd4851259851ac4c340dff90e05b`, and passes local/native amd64 and arm64 sandbox gates. Run `33724368530` publishes exact signed index `sha256:87d3216c22ada0fea74b375a3ee5c2ddf021d3e1913569e2aeb4a316ed3b5c2f`; attestation `44912296` and independent platform inspection verify. The Docker adapter, provenance verifier, restricted egress, default-disabled command graph, and hosted `linux/amd64` reference caller machine-bind and exercise that publication | Publish and review the restricted-egress Gateway image and production deployment configuration separately |
@@ -325,17 +348,32 @@ internal Block manifest a wire resource or establishes production readiness.
   pass their 15+5 coding/shell sets. This is listener/TLS/HTTP component and
   Browser reference evidence only, not shared/distributed capacity, durable
   distributed revocation, hostile-tenant, deployment, or production evidence.
+- ADR 0030 and implementation `997fb0d` pass focused and full repository
+  race/shuffle, vet, Contract verification, and the unchanged 48-case Suite.
+  Tests cover dependency and limit validation, authorization/acquisition
+  ordering, exact grant binding, atomic global/tenant/session contention,
+  no-partial reservation, cross-caller/grant same-session enforcement, tenant
+  independence, cancellation, loss/unavailability, idempotent bounded release,
+  release-failure audit, stable termination priority, reconnect suppression,
+  and concurrent acquisition/release. E2E lock `49d1c20` passes the independent
+  module race/shuffle, vet, and Reference, Candidate, and Browser lock checks
+  against Provider `997fb0d`. These checks are co-located lock/regression
+  evidence, not a new hosted Browser run or real shared-capacity evidence.
 
 ## Next work
 
 The Browser authority, image, Provider-local components, default-disabled
 command/runtime graph, independent reference-caller chain, process-local
 Gateway connection capacity, process-local pre-upgrade Browser service gate,
-and bounded listener/TLS/HTTP component now pass their named local/hosted gates.
-Next, extend the deployable caller-owned public edge with authenticated
-partition-aware shared or distributed capacity, durable distributed revocation,
-metrics, and production storage/configuration; then add hostile-tenant and operational
-evidence before reviewing production advertisement.
+bounded listener/TLS/HTTP component, and authenticated-capacity port/memory
+reference now pass their named evidence gates. Next, implement a reviewed real
+shared adapter for the ADR 0030 port and exercise it from two independently
+started Gateway processes. The gate requires atomic cross-process partitions,
+TTL/renewal, crash reclamation, stale-owner fencing, lease-loss termination,
+concurrent renewal/release, unavailable-store failure closure, and recovery.
+Only after that should durable distributed revocation, metrics, production
+storage/configuration, hostile-tenant and operational evidence, and production
+advertisement be reviewed.
 Keep Browser Reference E2E separate from coding/shell, real Agent Platform,
 aggregate conformance, multi-controller, multi-tenant, deployment, and
 production evidence. After the Browser readiness record is complete, begin the
