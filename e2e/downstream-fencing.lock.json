@@ -1,0 +1,169 @@
+{
+  "schema_version": 1,
+  "evidence_profile": "browser-downstream-fencing-e2e-v1",
+  "sources": {
+    "provider_revision": "b4d41c9a32b4ccf39edaba3fb8bf5ad239c1f945",
+    "harness_baseline": "0a993c2f631fcf067a9e0552b8582bed759bc077",
+    "gateway_component": {
+      "path": "gateway/composition/browser.go",
+      "revision": "b4d41c9a32b4ccf39edaba3fb8bf5ad239c1f945"
+    },
+    "ingress_component": {
+      "path": "gateway/cdpfence",
+      "revision": "b4d41c9a32b4ccf39edaba3fb8bf5ad239c1f945"
+    },
+    "caller_substrate": {
+      "path": "e2e/internal/caller",
+      "baseline_revision": "c0a55d1e0a862f9e5a592abd27b1e25be3c85b3e"
+    }
+  },
+  "contract": {
+    "namespace": "urn:shell-echo:sandbox-runtime:provider-v1",
+    "revision": "5096e71fb84fbec22aa3487a0e55a1b49602ab8b",
+    "tree": "859f76dc0e855a0c8abdbbb5648df100dabb4328",
+    "suite_cases": 48,
+    "suite_exercised": false,
+    "contract_metadata_only": true
+  },
+  "browser_image": {
+    "repository": "ghcr.io/shell-echo/sandbox-runtime-browser",
+    "index_digest": "sha256:87d3216c22ada0fea74b375a3ee5c2ddf021d3e1913569e2aeb4a316ed3b5c2f",
+    "immutable_tag": "sha-58ed0093816d3daa3000750013b8e5991ef4bcf7",
+    "platform_digests": {
+      "linux/amd64": "sha256:5e68861696218355998a552800908fd9ef26698435010761f9f7265145a3c746",
+      "linux/arm64/v8": "sha256:93ddabde08132c50650d141cf47403263622fe72a5fad1ffaffbf69a94e35591"
+    },
+    "runtime_profile_id": "sandbox-runtime-browser-v1",
+    "seccomp_digest": "sha256:3bdf2fd28636409951409621735f616997d0fd4851259851ac4c340dff90e05b",
+    "provenance": {
+      "established": true,
+      "source_commit": "58ed0093816d3daa3000750013b8e5991ef4bcf7",
+      "workflow": "github.com/shell-echo/sandbox-runtime/.github/workflows/browser-image.yml",
+      "run_id": 33724368530,
+      "attestation_id": 44912296,
+      "runner_policy": "deny-self-hosted-runners"
+    }
+  },
+  "valkey": {
+    "image": "ghcr.io/valkey-io/valkey",
+    "index_digest": "sha256:ccfa19b0d743e48927e1c8c14e39e0acb97b5cea347fef0bfe340247fea920cd",
+    "platform_digests": {
+      "linux/amd64": "sha256:dd021e69e0a204fbb25b39c332c3dd61d51853d0a67e34f523cf1e1ab15fe478",
+      "linux/arm64": "sha256:d31209ff403ca1d95218612dd936405d84837a90bc00e3b631ebc6373b91830e"
+    },
+    "database_index": 0,
+    "server_config_sha256": "sha256:12a690a249f1c28c5d3617bcc051216c3261270237035494dcb17764aa2111d2",
+    "acl_template_sha256": "sha256:84488d76e44e0fe4b2e3f67c943d83c02ff993db0b8af003c5cd2cc998f1293e",
+    "provenance_not_established": true
+  },
+  "capacity_policy": {
+    "max_total": 4,
+    "max_per_tenant": 2,
+    "max_per_session": 1,
+    "lease_ttl_millis": 3000,
+    "renew_interval_millis": 400,
+    "renewal_safety_margin_millis": 500,
+    "operation_timeout_millis": 200
+  },
+  "adapters": {
+    "capacity": {
+      "policy_format": "browser-authenticated-capacity-zset-v1",
+      "policy_fingerprint": "67e603c017cd5c2b1e902d517d2ba1148931d1552ddf722d98f3dd37f7f23c4b",
+      "provision_script_sha1": "410809d68e33d1fe118cf94dcff966951c62c1fb",
+      "acquire_script_sha1": "d3757b6cbde8072b30497a45c8433092c0a203f2",
+      "renew_script_sha1": "6292580f7e1a8840ec4c953eeff43bfdff8d68a6",
+      "release_script_sha1": "e25e50997683052eee15fe82194b2688db204f5c"
+    },
+    "action_fence": {
+      "policy_format": "browser-downstream-action-fence-v1",
+      "policy_fingerprint": "db4a2a211d65dc94e7c6228823851c24b77c77387df70117a1ff1f6896dc547f",
+      "capacity_policy_fingerprint": "67e603c017cd5c2b1e902d517d2ba1148931d1552ddf722d98f3dd37f7f23c4b",
+      "provision_script_sha1": "02ff9795ca66c9a529f0e19edaf8292789c5b951",
+      "authorize_script_sha1": "2d24781448dd1405d32583404349d2261bbb738c",
+      "max_claim_lifetime_ms": 86400000,
+      "max_action_window_ms": 30000
+    }
+  },
+  "private_wire": {
+    "protocol": "sandbox-runtime.downstream-fencing.v1",
+    "version": 1,
+    "resolve_path": "/private/v1/browser/downstream-fence/resolve",
+    "connect_path": "/private/v1/browser/downstream-fence/connect",
+    "tls_min_version": "1.3",
+    "tls_max_version": "1.3",
+    "alpn": ["http/1.1"],
+    "websocket_subprotocol": "sandbox-runtime.downstream-fencing.v1",
+    "mutual_tls_required": true,
+    "ingress_uri_identity": "spiffe://downstream-fencing/ingress",
+    "gateway_uri_identities": [
+      "spiffe://downstream-fencing/gateway-a",
+      "spiffe://downstream-fencing/gateway-b"
+    ],
+    "resolve_request_max_bytes": 4096,
+    "resolve_request_strict_json": true,
+    "endpoint_metadata_max_bytes": 4096,
+    "endpoint_metadata_strict_json": true,
+    "resolve_advances_high_water": false,
+    "resolve_metadata_only": true,
+    "high_water_activation_only": true,
+    "connect_fresh_resolve": true,
+    "connect_opens_ingress": true,
+    "activation_message_type": "text",
+    "activation_max_bytes": 4096,
+    "activation_strict_json": true,
+    "action_message_types": ["text", "binary"],
+    "action_max_bytes": 65536,
+    "complete_message_required": true,
+    "action_ack_message_type": "pong",
+    "action_ack_payload_sha256": "sha256:54f39ebeee5918fc51dc6db5929995b4400aeb511dd0a77b43ed1b214e996519",
+    "action_ack_after_send": true,
+    "error_codes": ["invalid_activation", "downstream_unavailable", "downstream_fence_lost"],
+    "url_query_allowed": false,
+    "url_fragment_allowed": false,
+    "url_userinfo_allowed": false,
+    "private_material_in_url_or_header": false,
+    "action_fence_claim_activation_only": true,
+    "exact_url_paths_required": true
+  },
+  "topology": {
+    "gateway_processes": 2,
+    "provider_ingress_processes": 1,
+    "caller_processes": 2,
+    "valkey_processes": 1,
+    "session_capacity_limit": 1,
+    "private_ingresses_per_session": 1,
+    "chromium_upstreams_per_session": 1,
+    "ingress_owns_browser_resolver": true,
+    "gateway_accesses_ingress_only": true,
+    "ingress_is_only_chromium_path": true,
+    "gateway_direct_chromium_access": false,
+    "gateway_direct_provider_attacher_access": false
+  },
+  "ingress": {
+    "action_timeout_millis": 1000,
+    "close_timeout_millis": 5000,
+    "max_sessions": 4,
+    "max_action_bytes": 65536
+  },
+  "transport": {
+    "client_resolve_timeout_millis": 1000,
+    "client_connect_and_io_timeout_millis": 2000,
+    "server_resolve_total_timeout_millis": 1000,
+    "server_activation_and_io_timeout_millis": 2000
+  },
+  "scenarios": [
+    "ordinary bounded real-CDP mutation through the unique ingress",
+    "Gateway A SIGSTOP beyond its confirmed capacity lease",
+    "Gateway B acquires and activates a higher fence",
+    "resumed Gateway A queued stale mutation is rejected before Chromium with no partial action",
+    "Gateway B distinct real-CDP mutation succeeds",
+    "pre-action lease loss is rejected before Chromium",
+    "higher-fence activation replaces the active old stream",
+    "lower-fence reconnect is rejected against retained high-water state",
+    "another Browser session and tenant remain active",
+    "Valkey outage fails closed and retained-state recovery succeeds",
+    "ingress reconstruction retains high-water and rejects a stale claim",
+    "no Gateway bypass exists and all owned runtime resources are cleaned",
+    "sanitized evidence pins every locked identity without private material"
+  ]
+}

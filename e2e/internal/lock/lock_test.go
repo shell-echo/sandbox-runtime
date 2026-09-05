@@ -49,6 +49,7 @@ func TestProviderChangePathAllowsOnlyHarnessAndDocumentation(t *testing.T) {
 		".github/workflows/browser-e2e.yml":            true,
 		".github/workflows/shared-capacity-e2e.yml":    true,
 		".github/workflows/durable-revocation-e2e.yml": true,
+		".github/workflows/downstream-fencing-e2e.yml": true,
 		".github/workflows/unrelated.yml":              false,
 		"cmd/serve.go":                                 false,
 		"provider/code.go":                             false,
