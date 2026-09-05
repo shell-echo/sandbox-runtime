@@ -24,15 +24,31 @@ type Identity struct {
 	JWSKeyID        string
 }
 
+type TLSIdentity struct {
+	URI             string
+	CertificateFile string
+	PrivateKeyFile  string
+}
+
 type Material struct {
 	CAFile                  string
 	ProviderCertificateFile string
 	ProviderPrivateKeyFile  string
 	GatewayCertificateFile  string
 	GatewayPrivateKeyFile   string
+	IngressCertificateFile  string
+	IngressPrivateKeyFile   string
+	GatewayA                TLSIdentity
+	GatewayB                TLSIdentity
 	ControllerA             Identity
 	ControllerB             Identity
 }
+
+const (
+	DownstreamIngressURI  = "spiffe://downstream-fencing/ingress"
+	DownstreamGatewayAURI = "spiffe://downstream-fencing/gateway-a"
+	DownstreamGatewayBURI = "spiffe://downstream-fencing/gateway-b"
+)
 
 func GeneratePKI(root string, now time.Time) (Material, error) {
 	if now.IsZero() {
@@ -67,6 +83,18 @@ func GeneratePKI(root string, now time.Time) (Material, error) {
 	if err != nil {
 		return Material{}, err
 	}
+	ingressCertificate, ingressKey, err := issueServerWithURI(root, "downstream-ingress", DownstreamIngressURI, caCertificate, caPrivate, now)
+	if err != nil {
+		return Material{}, err
+	}
+	gatewayA, err := issueTLSClient(root, "downstream-gateway-a", DownstreamGatewayAURI, caCertificate, caPrivate, now)
+	if err != nil {
+		return Material{}, err
+	}
+	gatewayB, err := issueTLSClient(root, "downstream-gateway-b", DownstreamGatewayBURI, caCertificate, caPrivate, now)
+	if err != nil {
+		return Material{}, err
+	}
 	controllerA, err := issueController(root, "controller-a", "spiffe://reference-caller/controller-a", caCertificate, caPrivate, now)
 	if err != nil {
 		return Material{}, err
@@ -78,11 +106,17 @@ func GeneratePKI(root string, now time.Time) (Material, error) {
 	return Material{
 		CAFile: caFile, ProviderCertificateFile: providerCertificate, ProviderPrivateKeyFile: providerKey,
 		GatewayCertificateFile: gatewayCertificate, GatewayPrivateKeyFile: gatewayKey,
+		IngressCertificateFile: ingressCertificate, IngressPrivateKeyFile: ingressKey,
+		GatewayA: gatewayA, GatewayB: gatewayB,
 		ControllerA: controllerA, ControllerB: controllerB,
 	}, nil
 }
 
 func issueServer(root, name string, ca *x509.Certificate, caKey ed25519.PrivateKey, now time.Time) (string, string, error) {
+	return issueServerWithURI(root, name, "", ca, caKey, now)
+}
+
+func issueServerWithURI(root, name, identity string, ca *x509.Certificate, caKey ed25519.PrivateKey, now time.Time) (string, string, error) {
 	public, private, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		return "", "", err
@@ -91,11 +125,41 @@ func issueServer(root, name string, ca *x509.Certificate, caKey ed25519.PrivateK
 	template.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}
 	template.DNSNames = []string{"localhost"}
 	template.IPAddresses = []net.IP{net.ParseIP("127.0.0.1")}
+	if identity != "" {
+		uri, err := url.Parse(identity)
+		if err != nil {
+			return "", "", err
+		}
+		template.URIs = []*url.URL{uri}
+	}
 	der, err := x509.CreateCertificate(rand.Reader, template, ca, public, caKey)
 	if err != nil {
 		return "", "", err
 	}
 	return writeTLSKeyPair(root, name, der, private)
+}
+
+func issueTLSClient(root, name, identity string, ca *x509.Certificate, caKey ed25519.PrivateKey, now time.Time) (TLSIdentity, error) {
+	uri, err := url.Parse(identity)
+	if err != nil {
+		return TLSIdentity{}, err
+	}
+	public, private, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		return TLSIdentity{}, err
+	}
+	template := certificateTemplate(name, now, false)
+	template.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}
+	template.URIs = []*url.URL{uri}
+	der, err := x509.CreateCertificate(rand.Reader, template, ca, public, caKey)
+	if err != nil {
+		return TLSIdentity{}, err
+	}
+	certificateFile, privateKeyFile, err := writeTLSKeyPair(root, name, der, private)
+	if err != nil {
+		return TLSIdentity{}, err
+	}
+	return TLSIdentity{URI: identity, CertificateFile: certificateFile, PrivateKeyFile: privateKeyFile}, nil
 }
 
 func issueController(root, name, identity string, ca *x509.Certificate, caKey ed25519.PrivateKey, now time.Time) (Identity, error) {

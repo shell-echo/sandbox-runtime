@@ -18,7 +18,6 @@ import (
 	"github.com/shell-echo/sandbox-runtime/gateway/adapter"
 	gatewaycomposition "github.com/shell-echo/sandbox-runtime/gateway/composition"
 	gatewayedge "github.com/shell-echo/sandbox-runtime/gateway/edge"
-	browserreference "github.com/shell-echo/sandbox-runtime/provider/browser/reference"
 	sessionreference "github.com/shell-echo/sandbox-runtime/provider/session/reference"
 )
 
@@ -40,7 +39,7 @@ type referenceGateway struct {
 	recorder    *jsonlRecorder
 }
 
-func newReferenceGateway(config Config, terminalResolver *sessionreference.Resolver, browserResolver *browserreference.Resolver) (*referenceGateway, error) {
+func newReferenceGateway(config Config, terminalResolver *sessionreference.Resolver, browserResolver gatewaycomposition.BrowserProviderResolver) (*referenceGateway, error) {
 	principals := make(map[string]GatewayPrincipal, len(config.GatewayPrincipals))
 	for _, principal := range config.GatewayPrincipals {
 		principals[principal.Token] = principal

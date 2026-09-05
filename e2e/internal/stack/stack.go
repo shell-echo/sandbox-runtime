@@ -50,8 +50,11 @@ type clock struct{}
 func (clock) Now() time.Time { return time.Now().UTC() }
 
 type Stack struct {
-	provider *providerapi.Server
-	gateway  interface {
+	provider interface {
+		Startup(context.Context) error
+		Shutdown(context.Context) error
+	}
+	gateway interface {
 		Startup(context.Context) error
 		Shutdown(context.Context) error
 	}

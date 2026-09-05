@@ -34,7 +34,61 @@ import (
 
 const browserProvenanceTimeoutSeconds = 300
 
+type browserProviderServer interface {
+	Startup(context.Context) error
+	Shutdown(context.Context) error
+}
+
+type browserProviderResolver interface {
+	Resolve(context.Context, string) (browserreference.Endpoint, error)
+}
+
+// BrowserProvider owns the Browser Provider server, runtime, durable state,
+// and opaque-reference resolver without composing a public Gateway.
+type BrowserProvider struct {
+	server   browserProviderServer
+	resolver browserProviderResolver
+	closers  []func() error
+
+	closeOnce sync.Once
+	closeErr  error
+}
+
 func openBrowser(ctx context.Context, config Config) (_ *Stack, result error) {
+	browserProvider, err := OpenBrowserProvider(ctx, config)
+	if err != nil {
+		return nil, err
+	}
+	stack := &Stack{provider: browserProvider}
+	stack.addCloser(browserProvider.Close)
+	defer func() {
+		if result != nil {
+			result = errors.Join(result, stack.Close())
+		}
+	}()
+
+	referenceGateway, err := newReferenceGateway(config, nil, browserProvider)
+	if err != nil {
+		return nil, err
+	}
+	stack.addCloser(referenceGateway.Close)
+	stack.gateway, err = newPublicGatewayServer(config, referenceGateway.Handler())
+	if err != nil {
+		return nil, err
+	}
+	return stack, nil
+}
+
+// OpenBrowserProvider initializes the reusable Provider-only Browser stack.
+// The caller remains responsible for coordinating Startup and Shutdown before
+// closing the owned runtime and repository resources.
+func OpenBrowserProvider(ctx context.Context, config Config) (_ *BrowserProvider, result error) {
+	if ctx == nil {
+		return nil, context.Canceled
+	}
+	if err := config.Validate(); err != nil {
+		return nil, err
+	}
 	if err := os.MkdirAll(config.StateRoot, 0o700); err != nil {
 		return nil, err
 	}
@@ -42,10 +96,10 @@ func openBrowser(ctx context.Context, config Config) (_ *Stack, result error) {
 	if browserConfig == nil {
 		return nil, errors.New("Browser reference configuration is unavailable")
 	}
-	stack := &Stack{}
+	providerStack := &BrowserProvider{}
 	defer func() {
 		if result != nil {
-			result = errors.Join(result, stack.Close())
+			result = errors.Join(result, providerStack.Close())
 		}
 	}()
 
@@ -53,12 +107,12 @@ func openBrowser(ctx context.Context, config Config) (_ *Stack, result error) {
 	if err != nil {
 		return nil, err
 	}
-	stack.addCloser(sessions.Close)
+	providerStack.addCloser(sessions.Close)
 	references, err := browserreferencefile.NewRegistry(filepath.Join(config.StateRoot, "browser-references.json"))
 	if err != nil {
 		return nil, err
 	}
-	stack.addCloser(references.Close)
+	providerStack.addCloser(references.Close)
 	verifier, err := browserprovenance.New(browserprovenance.Options{
 		ExecutablePath: browserConfig.ProvenanceExecutablePath, ExecutableDigest: browserConfig.ProvenanceExecutableDigest,
 	})
@@ -77,7 +131,7 @@ func openBrowser(ctx context.Context, config Config) (_ *Stack, result error) {
 	if err != nil {
 		return nil, err
 	}
-	stack.addCloser(network.Close)
+	providerStack.addCloser(network.Close)
 	runtime, err := browserdocker.New(ctx, browserdocker.Options{
 		Image: config.RuntimeImage, PullPolicy: browserdocker.PullIfNotPresent,
 		MemoryBytes: 1 << 30, NanoCPUs: 1_000_000_000, PidsLimit: 256,
@@ -91,7 +145,7 @@ func openBrowser(ctx context.Context, config Config) (_ *Stack, result error) {
 	if err != nil {
 		return nil, err
 	}
-	stack.addCloser(runtime.Close)
+	providerStack.addCloser(runtime.Close)
 	readiness, err := browserlifecycle.New(runtime, browserConfig.NetworkPolicyReference)
 	if err != nil {
 		return nil, err
@@ -100,12 +154,12 @@ func openBrowser(ctx context.Context, config Config) (_ *Stack, result error) {
 	if err != nil {
 		return nil, err
 	}
-	stack.addCloser(lifecycleRepo.Close)
+	providerStack.addCloser(lifecycleRepo.Close)
 	lifecycleApp, err := lifecycleapplication.New(lifecycleRepo, readiness, clock{})
 	if err != nil {
 		return nil, err
 	}
-	stack.addCloser(lifecycleApp.Close)
+	providerStack.addCloser(lifecycleApp.Close)
 	if err := lifecycleApp.Recover(ctx); err != nil {
 		return nil, err
 	}
@@ -114,7 +168,7 @@ func openBrowser(ctx context.Context, config Config) (_ *Stack, result error) {
 	if err != nil {
 		return nil, err
 	}
-	stack.addCloser(usageRepo.Close)
+	providerStack.addCloser(usageRepo.Close)
 	registrar, err := browserreference.NewRegistrar(references, clock{}, nil)
 	if err != nil {
 		return nil, err
@@ -141,7 +195,7 @@ func openBrowser(ctx context.Context, config Config) (_ *Stack, result error) {
 	if _, err := vertical.Recover(ctx); err != nil {
 		return nil, err
 	}
-	stack.addCloser(browserApp.Close)
+	providerStack.addCloser(browserApp.Close)
 
 	lifecycleReader, err := provideroperation.NewLifecycleReader(lifecycleApp)
 	if err != nil {
@@ -159,7 +213,7 @@ func openBrowser(ctx context.Context, config Config) (_ *Stack, result error) {
 	if err != nil {
 		return nil, err
 	}
-	stack.addCloser(closeAdmission)
+	providerStack.addCloser(closeAdmission)
 	protected.Application = lifecycleApp
 	protected.BrowserApplication = browserApp
 	protected.UsageEvidenceReader = usageReader
@@ -182,18 +236,47 @@ func openBrowser(ctx context.Context, config Config) (_ *Stack, result error) {
 	if err != nil {
 		return nil, err
 	}
-	stack.provider = providerServer
+	providerStack.server = providerServer
+	providerStack.resolver = resolver
+	return providerStack, nil
+}
 
-	referenceGateway, err := newReferenceGateway(config, nil, resolver)
-	if err != nil {
-		return nil, err
+func (p *BrowserProvider) Startup(ctx context.Context) error {
+	if p == nil || p.server == nil {
+		return errors.New("Browser Provider is unavailable")
 	}
-	stack.addCloser(referenceGateway.Close)
-	stack.gateway, err = newPublicGatewayServer(config, referenceGateway.Handler())
-	if err != nil {
-		return nil, err
+	return p.server.Startup(ctx)
+}
+
+func (p *BrowserProvider) Shutdown(ctx context.Context) error {
+	if p == nil || p.server == nil {
+		return errors.New("Browser Provider is unavailable")
 	}
-	return stack, nil
+	return p.server.Shutdown(ctx)
+}
+
+func (p *BrowserProvider) Resolve(ctx context.Context, reference string) (browserreference.Endpoint, error) {
+	if p == nil || p.resolver == nil {
+		return browserreference.Endpoint{}, browserreference.ErrUnavailable
+	}
+	return p.resolver.Resolve(ctx, reference)
+}
+
+func (p *BrowserProvider) Close() error {
+	if p == nil {
+		return nil
+	}
+	p.closeOnce.Do(func() {
+		for index := len(p.closers) - 1; index >= 0; index-- {
+			p.closeErr = errors.Join(p.closeErr, p.closers[index]())
+		}
+		p.closers = nil
+	})
+	return p.closeErr
+}
+
+func (p *BrowserProvider) addCloser(closer func() error) {
+	p.closers = append(p.closers, closer)
 }
 
 type browserRegistrar struct{ registrar *browserreference.Registrar }
