@@ -178,10 +178,16 @@ type DownstreamFencingTopology struct {
 }
 
 type DownstreamFencingIngress struct {
-	ActionTimeoutMillis int64 `json:"action_timeout_millis"`
-	CloseTimeoutMillis  int64 `json:"close_timeout_millis"`
-	MaxSessions         int   `json:"max_sessions"`
-	MaxActionBytes      int64 `json:"max_action_bytes"`
+	ActionTimeoutMillis     int64 `json:"action_timeout_millis"`
+	CloseTimeoutMillis      int64 `json:"close_timeout_millis"`
+	MaxSessions             int   `json:"max_sessions"`
+	MaxActionBytes          int64 `json:"max_action_bytes"`
+	MaxConnections          int   `json:"max_connections"`
+	ReadHeaderTimeoutMillis int64 `json:"read_header_timeout_millis"`
+	ReadTimeoutMillis       int64 `json:"read_timeout_millis"`
+	WriteTimeoutMillis      int64 `json:"write_timeout_millis"`
+	IdleTimeoutMillis       int64 `json:"idle_timeout_millis"`
+	MaxHeaderBytes          int   `json:"max_header_bytes"`
 }
 
 type DownstreamFencingTransport struct {
@@ -327,6 +333,8 @@ func validateDownstreamFencingLock(locked DownstreamFencingLock) error {
 	}
 	expectedIngress := DownstreamFencingIngress{
 		ActionTimeoutMillis: 1000, CloseTimeoutMillis: 5000, MaxSessions: 4, MaxActionBytes: 64 << 10,
+		MaxConnections: 32, ReadHeaderTimeoutMillis: 1000, ReadTimeoutMillis: 30000,
+		WriteTimeoutMillis: 30000, IdleTimeoutMillis: 60000, MaxHeaderBytes: 16 << 10,
 	}
 	if locked.Ingress != expectedIngress {
 		return fmt.Errorf("downstream-fencing ingress bounds = %#v, want %#v", locked.Ingress, expectedIngress)
