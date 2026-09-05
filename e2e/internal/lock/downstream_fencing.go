@@ -21,7 +21,7 @@ const (
 	DownstreamFencingLockPath = "e2e/downstream-fencing.lock.json"
 	DownstreamFencingProfile  = "browser-downstream-fencing-e2e-v1"
 
-	DownstreamFencingHarnessBaseline = "0a993c2f631fcf067a9e0552b8582bed759bc077"
+	DownstreamFencingHarnessBaseline = "24fc32821324e34dee790bbb3915530c6a777338"
 	DownstreamFencingGatewayRevision = "b4d41c9a32b4ccf39edaba3fb8bf5ad239c1f945"
 	DownstreamFencingIngressRevision = "b4d41c9a32b4ccf39edaba3fb8bf5ad239c1f945"
 	DownstreamFencingCallerBaseline  = "c0a55d1e0a862f9e5a592abd27b1e25be3c85b3e"
