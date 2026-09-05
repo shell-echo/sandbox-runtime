@@ -14,18 +14,24 @@ gates pass within their separately named evidence boundaries. ADR 0032 also
 passes its caller-owned exact-grant revocation port and real-Valkey adapter
 component gate plus its separate local and hosted two-Gateway,
 independent-revoker black-box gate. ADR 0033 passes only its downstream CDP
-fencing component and real-backend adapter integration gate. Its independent
-two-Gateway, unique-ingress, real-Chromium external-caller gate, real Agent
-Platform migration, Valkey provenance and HA/failover, production Browser
-advertisement/public Gateway composition, aggregate conformance,
+fencing component and real-backend adapter integration gate. Implementation
+`58488d7` additionally proves, in process/component tests, that two independent
+downstream caller OS processes each use their own mTLS/JWS Controller identity
+to bootstrap a Browser session from the Provider and then remain in the bounded
+JSONL control loop. Current E2E lock `f7de91d` records that implementation, but
+the 13-scenario downstream runner remains unimplemented and unexercised. The
+independent two-Gateway, unique-ingress, real-Chromium external-caller gate,
+real Agent Platform migration, Valkey provenance and HA/failover, production
+Browser advertisement/public Gateway composition, aggregate conformance,
 multi-controller, hostile multi-tenant, deployment, and production gates remain
 open.
 
-E2E lock/harness `17ed6ca` pins Provider `b4d41c9`; repository CI
-`33970773423` and the five separately named hosted regression workflows pass.
-Those reruns cover their existing Reference, Candidate, Browser,
-shared-capacity, and durable-revocation scenarios only and do not close the ADR
-0033 caller gate.
+The latest verified hosted baseline before `f7de91d` is lock `5750ba5` with
+Provider `cf70f5d`: repository CI `33987232781` and Reference, Candidate,
+Browser, shared-capacity, and durable-revocation runs `33987232773`,
+`33987232817`, `33987232789`, `33987232775`, and `33987232824` all pass. Those
+reruns cover existing profiles only. No hosted result is claimed for `f7de91d`,
+and none closes the ADR 0033 caller gate.
 
 Start a new development session with
 [`docs/PROJECT_CONTEXT.md`](docs/PROJECT_CONTEXT.md). It summarizes the current
@@ -114,7 +120,7 @@ Currently implemented:
   resolution/dial work on authority termination, and add a Redis-compatible
   retained-tombstone source/writer with immutable policy, server-time lifetime
   bounds, monotonic expiry retention, bounded polling, and fail-closed outage
-  behavior. A separate clean `linux/arm64` run and current hosted
+  behavior. A separate clean `linux/arm64` run and prior inspected hosted
   `linux/amd64` run `33970773353` pass all seven retained-backend caller
   scenarios through two Gateway processes, two black-box caller processes, and
   one independent revoker process. The private echo fixture does not exercise
@@ -134,6 +140,13 @@ Currently implemented:
   unique-ingress topology, missing-high-water or restore safety, or the
   separately required two-Gateway/unique-ingress/real-Chromium external-caller
   E2E
+- downstream caller bootstrap implementation `58488d7`: two independently
+  identified mTLS/JWS caller OS processes each perform Provider capability,
+  create, operation, sandbox, Browser-session, and handoff reconciliation, bind
+  the resulting opaque handoff only in private process state, and remain alive
+  in the existing JSONL loop. The dual-process test is process/component
+  evidence only; the downstream lock records `suite_exercised=false`, while
+  its check reports `runner_implemented=false`
 - a default-disabled Browser Provider command/runtime graph and a separate
   Browser-only reference stack plus black-box caller. Hosted Browser Reference
   E2E run `33970773330` passes 13 initial and 5 process-reconstruction
@@ -146,9 +159,12 @@ Currently implemented:
 
 Planned but not yet implemented:
 
-- an independently locked ADR 0033 caller harness using two Gateway processes,
-  one unique private ingress process, independent black-box callers, the real
-  retained authority, and the exact signed Browser image running real Chromium
+- private endpoint provisioning from each bootstrapped caller into its Gateway,
+  including Contract-wide handoff-reference validation in `gatewaystack`, then
+  the independently locked multi-process ADR 0033 orchestrator and 13-scenario
+  runner using two Gateway processes, one unique private ingress process, the
+  real retained Valkey authority, and the exact signed Browser image running
+  real Chromium
 - production Browser advertisement and deployable caller-owned Gateway
   integration after the ADR 0033 caller gate, HA/failover consistency, Valkey
   provenance, hostile-tenant, storage, configuration, metrics, and operational
