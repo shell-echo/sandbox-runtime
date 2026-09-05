@@ -15,6 +15,10 @@ const maxCommandBytes = 96 << 10
 // Cancellation interrupts active commands. The command entry point also closes
 // stdin on signal; embedders using another blocking Reader must unblock it.
 func Run(ctx context.Context, config Config, in io.Reader, out io.Writer) error {
+	return runWithPrivate(ctx, config, in, out, nil)
+}
+
+func runWithPrivate(ctx context.Context, config Config, in io.Reader, out io.Writer, extraPrivate []string) error {
 	if ctx == nil || in == nil || out == nil {
 		return errors.New("caller initialization failed")
 	}
@@ -23,6 +27,7 @@ func Run(ctx context.Context, config Config, in io.Reader, out io.Writer) error 
 		return errors.New("caller initialization failed")
 	}
 	defer client.Close()
+	client.privateText = appendPrivate(client.privateText, extraPrivate...)
 
 	scanner := bufio.NewScanner(in)
 	scanner.Buffer(make([]byte, 4096), maxCommandBytes)

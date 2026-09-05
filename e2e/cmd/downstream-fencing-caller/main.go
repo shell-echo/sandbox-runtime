@@ -8,18 +8,21 @@ import (
 	"os/signal"
 	"syscall"
 
+	providercaller "github.com/shell-echo/sandbox-runtime-e2e/internal/caller"
 	"github.com/shell-echo/sandbox-runtime-e2e/internal/downstreamfencing/caller"
 )
 
 func main() {
 	configPath := flag.String("config", "", "downstream-fencing caller JSON configuration")
+	providerBootstrapConfigPath := flag.String("provider-bootstrap-config", "", "Browser Provider bootstrap JSON configuration")
 	flag.Parse()
-	if *configPath == "" || flag.NArg() != 0 {
+	if *configPath == "" || *providerBootstrapConfigPath == "" || flag.NArg() != 0 {
 		_, _ = fmt.Fprintln(os.Stderr, "downstream-fencing caller configuration required")
 		os.Exit(2)
 	}
-	config, err := caller.LoadConfig(*configPath)
-	if err != nil {
+	config, configErr := caller.LoadBootstrapCallerConfig(*configPath)
+	providerConfig, providerConfigErr := providercaller.LoadBrowserBootstrapConfig(*providerBootstrapConfigPath)
+	if configErr != nil || providerConfigErr != nil {
 		_, _ = fmt.Fprintln(os.Stderr, "downstream-fencing caller configuration invalid")
 		os.Exit(1)
 	}
@@ -34,7 +37,7 @@ func main() {
 		case <-stopInputCloser:
 		}
 	}()
-	if err := caller.Run(ctx, config, os.Stdin, os.Stdout); err != nil {
+	if err := caller.RunBootstrapped(ctx, config, providerConfig, os.Stdin, os.Stdout); err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, "downstream-fencing caller failed")
 		os.Exit(1)
 	}

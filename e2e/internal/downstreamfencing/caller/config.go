@@ -27,7 +27,7 @@ const (
 var (
 	logicalIDPattern  = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
 	identifierPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$`)
-	referencePattern  = regexp.MustCompile(`^ref:browser-session:[0-9a-f]{32}$`)
+	referencePattern  = regexp.MustCompile(`^ref:browser-session:[A-Za-z0-9][A-Za-z0-9._-]{0,199}$`)
 )
 
 type resolvedGrantBinding struct {

@@ -39,22 +39,23 @@ const (
 )
 
 const (
-	BrowserBootstrapInvalidConfiguration = "invalid_configuration"
-	BrowserBootstrapTransportFailed      = "transport_failed"
-	BrowserBootstrapCapabilityRejected   = "capability_rejected"
-	BrowserBootstrapCapabilityInvalid    = "capability_invalid"
-	BrowserBootstrapCreateRejected       = "create_rejected"
-	BrowserBootstrapCreateInvalid        = "create_invalid"
-	BrowserBootstrapCreateFailed         = "create_failed"
-	BrowserBootstrapSandboxRejected      = "sandbox_rejected"
-	BrowserBootstrapSandboxInvalid       = "sandbox_invalid"
-	BrowserBootstrapOpenRejected         = "open_rejected"
-	BrowserBootstrapOpenInvalid          = "open_invalid"
-	BrowserBootstrapOpenFailed           = "open_failed"
-	BrowserBootstrapHandoffRejected      = "handoff_rejected"
-	BrowserBootstrapHandoffInvalid       = "handoff_invalid"
-	BrowserBootstrapTimedOut             = "timed_out"
-	BrowserBootstrapCanceled             = "canceled"
+	BrowserBootstrapInvalidConfiguration  = "invalid_configuration"
+	BrowserBootstrapTransportFailed       = "transport_failed"
+	BrowserBootstrapCapabilityRejected    = "capability_rejected"
+	BrowserBootstrapCapabilityInvalid     = "capability_invalid"
+	BrowserBootstrapCreateRejected        = "create_rejected"
+	BrowserBootstrapCreateInvalid         = "create_invalid"
+	BrowserBootstrapCreateFailed          = "create_failed"
+	BrowserBootstrapSandboxRejected       = "sandbox_rejected"
+	BrowserBootstrapSandboxInvalid        = "sandbox_invalid"
+	BrowserBootstrapOpenRejected          = "open_rejected"
+	BrowserBootstrapOpenInvalid           = "open_invalid"
+	BrowserBootstrapOpenFailed            = "open_failed"
+	BrowserBootstrapHandoffRejected       = "handoff_rejected"
+	BrowserBootstrapHandoffInvalid        = "handoff_invalid"
+	BrowserBootstrapEndpointBindingFailed = "endpoint_binding_failed"
+	BrowserBootstrapTimedOut              = "timed_out"
+	BrowserBootstrapCanceled              = "canceled"
 )
 
 var (
@@ -138,6 +139,21 @@ type BrowserBootstrapResult struct {
 	endpoint browserBootstrapEndpoint
 }
 
+// BrowserBootstrapEndpointSink receives one correlated, private endpoint in
+// memory. Implementations must not project its arguments into ordinary output,
+// logs, metrics, URLs, or public protocols.
+type BrowserBootstrapEndpointSink interface {
+	BindBrowserBootstrapEndpoint(
+		tenantID string,
+		sandboxID string,
+		browserSessionID string,
+		capabilityProfileID string,
+		handoffReference string,
+		connectionGeneration int64,
+		expiresAt time.Time,
+	) error
+}
+
 func (r BrowserBootstrapResult) String() string {
 	return "BrowserBootstrapResult{ready:" + strconv.FormatBool(r.ready()) + "}"
 }
@@ -146,6 +162,41 @@ func (r BrowserBootstrapResult) LogValue() slog.Value {
 	return slog.GroupValue(slog.Bool("ready", r.ready()))
 }
 func (r BrowserBootstrapResult) ready() bool { return r.endpoint.handoffReference != "" }
+
+// BindEndpoint passes the complete bootstrap result to one trusted in-process
+// sink without introducing an exported endpoint DTO. Sink failures are reduced
+// to a stable code so private arguments and implementation errors cannot escape.
+func (r BrowserBootstrapResult) BindEndpoint(sink BrowserBootstrapEndpointSink) error {
+	if !r.ready() || nilBrowserBootstrapEndpointSink(sink) {
+		return browserBootstrapFailure(BrowserBootstrapEndpointBindingFailed)
+	}
+	endpoint := r.endpoint
+	if err := sink.BindBrowserBootstrapEndpoint(
+		endpoint.tenantID,
+		endpoint.sandboxID,
+		endpoint.browserSessionID,
+		endpoint.capabilityProfileID,
+		endpoint.handoffReference,
+		endpoint.connectionGeneration,
+		endpoint.expiresAt,
+	); err != nil {
+		return browserBootstrapFailure(BrowserBootstrapEndpointBindingFailed)
+	}
+	return nil
+}
+
+func nilBrowserBootstrapEndpointSink(sink BrowserBootstrapEndpointSink) bool {
+	if sink == nil {
+		return true
+	}
+	value := reflect.ValueOf(sink)
+	switch value.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice, reflect.UnsafePointer:
+		return value.IsNil()
+	default:
+		return false
+	}
+}
 
 type browserBootstrapClient struct {
 	config    BrowserBootstrapConfig

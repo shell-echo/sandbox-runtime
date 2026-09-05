@@ -29,6 +29,9 @@ Provider repository. Keep these boundaries strict:
   `gateway/revocation/redis` packages. The durable-revocation Gateway fixture
   may compose exported Gateway ports, but the profile does not exercise
   Provider protocol routes or a real Browser runtime.
+- `internal/downstreamfencing/caller` and `cmd/downstream-fencing-caller` are
+  black-box callers. They may compose `internal/caller`, but must have no
+  direct or transitive Provider implementation dependency.
 - Never commit generated private keys, certificates, bearer tokens, runtime
   state, logs, or artifact bytes.
 - Each passing run proves only its named reference or candidate scenarios. A

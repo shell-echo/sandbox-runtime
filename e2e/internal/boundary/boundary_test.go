@@ -19,6 +19,7 @@ func TestBlackBoxCallerDoesNotImportProviderImplementation(t *testing.T) {
 	for _, relative := range []string{
 		"internal/caller", "cmd/caller", "cmd/browser-caller", "cmd/shared-capacity-caller",
 		"internal/durablerevocation/caller", "cmd/durable-revocation-caller",
+		"internal/downstreamfencing/caller", "cmd/downstream-fencing-caller",
 		"internal/platform", "cmd/platform-caller",
 	} {
 		path := filepath.Join(root, relative)
@@ -51,6 +52,10 @@ func TestSharedCapacityCallerHasNoProviderDependency(t *testing.T) {
 
 func TestDurableRevocationCallerHasNoProviderDependency(t *testing.T) {
 	assertNoProviderDependency(t, "./cmd/durable-revocation-caller")
+}
+
+func TestDownstreamFencingCallerHasNoProviderDependency(t *testing.T) {
+	assertNoProviderDependency(t, "./cmd/downstream-fencing-caller")
 }
 
 func TestDurableRevocationRevokerUsesOnlyExportedRevocationPorts(t *testing.T) {

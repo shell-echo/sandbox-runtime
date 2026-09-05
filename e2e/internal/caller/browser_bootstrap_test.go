@@ -57,6 +57,105 @@ type browserBootstrapProvider struct {
 	readAttempts        map[string]int
 }
 
+type browserBootstrapEndpointCapture struct {
+	tenantID             string
+	sandboxID            string
+	browserSessionID     string
+	capabilityProfileID  string
+	handoffReference     string
+	connectionGeneration int64
+	expiresAt            time.Time
+	calls                int
+	err                  error
+}
+
+func (s *browserBootstrapEndpointCapture) BindBrowserBootstrapEndpoint(
+	tenantID string,
+	sandboxID string,
+	browserSessionID string,
+	capabilityProfileID string,
+	handoffReference string,
+	connectionGeneration int64,
+	expiresAt time.Time,
+) error {
+	if s == nil {
+		panic("typed-nil Browser bootstrap endpoint sink invoked")
+	}
+	s.tenantID = tenantID
+	s.sandboxID = sandboxID
+	s.browserSessionID = browserSessionID
+	s.capabilityProfileID = capabilityProfileID
+	s.handoffReference = handoffReference
+	s.connectionGeneration = connectionGeneration
+	s.expiresAt = expiresAt
+	s.calls++
+	return s.err
+}
+
+func TestBrowserBootstrapResultBindsOneCorrelatedPrivateEndpoint(t *testing.T) {
+	expiresAt := time.Now().UTC().Add(time.Minute)
+	result := BrowserBootstrapResult{endpoint: browserBootstrapEndpoint{
+		tenantID: "tenant-private", sandboxID: "sandbox-private", browserSessionID: "browser-session-private",
+		capabilityProfileID: "browser-v1", handoffReference: bootstrapTestHandoff,
+		connectionGeneration: 7, expiresAt: expiresAt,
+	}}
+	sink := &browserBootstrapEndpointCapture{}
+	if err := result.BindEndpoint(sink); err != nil {
+		t.Fatal(err)
+	}
+	if sink.calls != 1 || sink.tenantID != result.endpoint.tenantID || sink.sandboxID != result.endpoint.sandboxID ||
+		sink.browserSessionID != result.endpoint.browserSessionID || sink.capabilityProfileID != result.endpoint.capabilityProfileID ||
+		sink.handoffReference != result.endpoint.handoffReference || sink.connectionGeneration != result.endpoint.connectionGeneration ||
+		!sink.expiresAt.Equal(expiresAt) {
+		t.Fatalf("bound endpoint = %#v", sink)
+	}
+	encoded, err := json.Marshal(result)
+	if err != nil || string(encoded) != "{}" {
+		t.Fatalf("ordinary JSON projection = %s, error = %v", encoded, err)
+	}
+	for _, projection := range []string{
+		result.String(), result.GoString(), fmt.Sprintf("%v", result), fmt.Sprintf("%+v", result), fmt.Sprintf("%#v", result),
+		result.LogValue().String(), slog.AnyValue(result).Resolve().String(),
+	} {
+		if strings.Contains(projection, bootstrapTestHandoff) || strings.Contains(projection, result.endpoint.sandboxID) {
+			t.Fatalf("formatted result leaked private bootstrap state: %s", projection)
+		}
+	}
+}
+
+func TestBrowserBootstrapResultRejectsEmptyAndNilEndpointSinks(t *testing.T) {
+	valid := BrowserBootstrapResult{endpoint: browserBootstrapEndpoint{handoffReference: bootstrapTestHandoff}}
+	var typedNil *browserBootstrapEndpointCapture
+	for name, test := range map[string]struct {
+		result BrowserBootstrapResult
+		sink   BrowserBootstrapEndpointSink
+	}{
+		"empty result": {result: BrowserBootstrapResult{}, sink: &browserBootstrapEndpointCapture{}},
+		"nil sink":     {result: valid, sink: nil},
+		"typed nil":    {result: valid, sink: typedNil},
+	} {
+		t.Run(name, func(t *testing.T) {
+			err := test.result.BindEndpoint(test.sink)
+			assertBrowserBootstrapError(t, err, BrowserBootstrapEndpointBindingFailed)
+		})
+	}
+}
+
+func TestBrowserBootstrapResultRedactsEndpointSinkFailure(t *testing.T) {
+	result := BrowserBootstrapResult{endpoint: browserBootstrapEndpoint{
+		sandboxID: "sandbox-private", handoffReference: bootstrapTestHandoff,
+	}}
+	sink := &browserBootstrapEndpointCapture{
+		err: fmt.Errorf("sink failed for %s at %s", result.endpoint.sandboxID, result.endpoint.handoffReference),
+	}
+	err := result.BindEndpoint(sink)
+	assertBrowserBootstrapError(t, err, BrowserBootstrapEndpointBindingFailed)
+	if sink.calls != 1 || strings.Contains(err.Error(), result.endpoint.sandboxID) ||
+		strings.Contains(err.Error(), result.endpoint.handoffReference) || strings.Contains(err.Error(), "sink failed") {
+		t.Fatalf("sink failure was not redacted: %v", err)
+	}
+}
+
 func TestBootstrapBrowserUsesOneMTLSJWSIdentityAndReturnsPrivateHandoff(t *testing.T) {
 	material := newBrowserBootstrapTestMaterial(t, "spiffe://downstream-caller/controller-a")
 	provider := &browserBootstrapProvider{t: t, config: material.config, jwsPublic: material.jwsPublic, jti: map[string]bool{}}
