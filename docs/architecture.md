@@ -165,6 +165,22 @@ real Browser/CDP path. These results do not establish downstream fencing,
 Valkey provenance or HA/failover, ACL role isolation, real Agent Platform,
 multi-controller, hostile multi-tenant, deployment, or production readiness.
 
+ADR 0033 and implementation `b4d41c9` add downstream action-fence and
+fenced-resolver ports, one Redis-compatible exact-member/session-high-water
+authority adapter, a complete-message private ingress component, and explicit
+fail-closed Browser composition. Targeted and full race/shuffle tests, vet,
+Contract verification, the unchanged locked 48-case Suite, and tagged real
+integration against pinned Valkey index
+`sha256:ccfa19b0d743e48927e1c8c14e39e0acb97b5cea347fef0bfe340247fea920cd`
+pass. This is component plus real-backend adapter integration evidence only.
+The required independent caller gate with two Gateway OS processes, one unique
+private ingress OS process, independent callers, and the exact signed Browser
+image running real Chromium has not run. The component also does not establish
+private authenticated ingress topology, missing-high-water/restore controls,
+Valkey provenance/HA/failover, production metrics/configuration/deployment,
+multi-controller reliability, hostile multi-tenant isolation, real Agent
+Platform compatibility, aggregate conformance, or production readiness.
+
 | Method and path | Responsibility |
 | --- | --- |
 | `GET /v1/capabilities` | Return provider revision, runtime profiles, limits, and supported capability versions. |
@@ -440,7 +456,7 @@ advertisement, and optional-profile gates remain open:
 | Workspace | The Provider Docker development adapter supplies `/inputs`, `/workspace`, `/outputs`, and bounded tmpfs `/tmp` with owned cleanup; exec consumes that runtime without exposing host paths. | Add artifact consumers, capacity enforcement, and stronger isolation evidence. |
 | Security | Docker defaults already drop capabilities, use non-root/read-only root, disable networking, and limit resources. | Add policy enforcement, stronger isolation profiles, secret grants, egress controls, audit evidence, and production auth. |
 | Events and usage | Durable lifecycle events and bounded usage-evidence components exist without a complete runtime collector composition. | Complete collection/reconciliation while leaving platform accounting authority outside the Provider. |
-| Snapshots/browser/desktop | Browser Contract authority/projection, exact signed image, Provider-local session/application/reference/usage, Docker adapter, provenance verifier, restricted-egress provisioner, create-policy binding, protected handlers, caller-owned Gateway, default-disabled command graph, and hosted 13+5 Browser reference-caller path have named evidence. The Gateway has explicit process-local total/per-session post-authorization capacity, pre-upgrade service limits, bounded listener/TLS/HTTP behavior, and authenticated-capacity plus exact-grant revocation ports with process-local and Redis-compatible adapters. ADR 0031/`9434540` plus current local arm64 run `20260905T080725.227680000Z` and hosted amd64 run `33955436968` add real Valkey plus two-independent-Gateway shared-capacity evidence. ADR 0032/`c0a55d1` adds durable revocation component evidence; harness/Gateway `e952ef9`, local arm64 run `20260905T095109.569973000Z`, and hosted amd64 run `33959122456` pass its separate seven-scenario two-Gateway/independent-revoker caller gate. Contract identity is metadata only and the fixture is not Browser/CDP. The restricted-egress Gateway remains distinct from the caller-owned Gateway. Production Browser advertisement/public Gateway deployment, downstream fencing, Valkey provenance, HA/failover consistency, aggregate, multi-controller, tenant, deployment, and production gates remain open. Snapshots and desktop remain unauthorized optional behavior. | Add downstream fencing, establish Valkey provenance and HA/failover consistency, and add hostile-tenant evidence, metrics, and deployable storage/configuration before production advertisement; begin the Desktop authority audit only after the Browser readiness record is complete. |
+| Snapshots/browser/desktop | Browser Contract authority/projection, exact signed image, Provider-local session/application/reference/usage, Docker adapter, provenance verifier, restricted-egress provisioner, create-policy binding, protected handlers, caller-owned Gateway, default-disabled command graph, and hosted 13+5 Browser reference-caller path have named evidence. The Gateway has explicit process-local total/per-session post-authorization capacity, pre-upgrade service limits, bounded listener/TLS/HTTP behavior, and authenticated-capacity plus exact-grant revocation ports with process-local and Redis-compatible adapters. ADR 0031/`9434540` plus current local arm64 run `20260905T080725.227680000Z` and hosted amd64 run `33955436968` add real Valkey plus two-independent-Gateway shared-capacity evidence. ADR 0032/`c0a55d1` adds durable revocation component evidence; harness/Gateway `e952ef9`, local arm64 run `20260905T095109.569973000Z`, and hosted amd64 run `33959122456` pass its separate seven-scenario two-Gateway/independent-revoker caller gate. ADR 0033/`b4d41c9` adds downstream action-fence/private-ingress/Redis adapter component and real-backend integration evidence only. Its independent two-Gateway/unique-ingress/real-Chromium caller E2E has not run. Contract identity remains separate, and the ADR 0032 echo fixture is not Browser/CDP. The restricted-egress Gateway remains distinct from the caller-owned Gateway. Production Browser advertisement/public Gateway deployment, private authenticated ingress topology, missing-high-water/restore controls, Valkey provenance/HA/failover, aggregate, multi-controller, hostile multi-tenant, deployment, and production gates remain open. Snapshots and desktop remain unauthorized optional behavior. | Build and run the separately locked ADR 0033 two-Gateway/unique-ingress/real-Chromium external-caller gate, then establish Valkey provenance/HA/failover and add hostile-tenant evidence, metrics, and deployable storage/configuration before production advertisement; begin the Desktop authority audit only after the Browser readiness record is complete. |
 
 ## Delivery plan and release gates
 

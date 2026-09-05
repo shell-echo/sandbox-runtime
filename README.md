@@ -13,11 +13,13 @@ reference-caller gates and the local plus hosted two-Gateway shared-capacity
 gates pass within their separately named evidence boundaries. ADR 0032 also
 passes its caller-owned exact-grant revocation port and real-Valkey adapter
 component gate plus its separate local and hosted two-Gateway,
-independent-revoker black-box gate. Real Agent Platform migration, downstream
-CDP fencing, Valkey provenance and HA/failover, production Browser
+independent-revoker black-box gate. ADR 0033 passes only its downstream CDP
+fencing component and real-backend adapter integration gate. Its independent
+two-Gateway, unique-ingress, real-Chromium external-caller gate, real Agent
+Platform migration, Valkey provenance and HA/failover, production Browser
 advertisement/public Gateway composition, aggregate conformance,
-multi-controller, hostile multi-tenant, deployment, and production gates
-remain open.
+multi-controller, hostile multi-tenant, deployment, and production gates remain
+open.
 Start a new development session with
 [`docs/PROJECT_CONTEXT.md`](docs/PROJECT_CONTEXT.md). It summarizes the current
 architecture, engineering rules, verified maturity, blockers, and next work;
@@ -113,6 +115,17 @@ Currently implemented:
   downstream fencing, Valkey provenance/HA, ACL role isolation, real Agent
   Platform compatibility, multi-controller, hostile multi-tenant, deployment,
   or production readiness
+- ADR 0033 downstream CDP fencing ports, a Redis-compatible exact-member and
+  retained session-high-water adapter, a private ingress component, and
+  fail-closed Browser composition. Targeted and full race/shuffle tests, vet,
+  the Contract verifier, the unchanged locked 48-case Suite, and tagged
+  integration against pinned Valkey index
+  `sha256:ccfa19b0d743e48927e1c8c14e39e0acb97b5cea347fef0bfe340247fea920cd`
+  pass at implementation `b4d41c9`. This is component plus real-backend adapter
+  integration evidence only. It does not establish a private authenticated
+  unique-ingress topology, missing-high-water or restore safety, or the
+  separately required two-Gateway/unique-ingress/real-Chromium external-caller
+  E2E
 - a default-disabled Browser Provider command/runtime graph and a separate
   Browser-only reference stack plus black-box caller. Hosted Browser Reference
   E2E run `33955436984` passes 13 initial and 5 process-reconstruction
@@ -125,8 +138,11 @@ Currently implemented:
 
 Planned but not yet implemented:
 
+- an independently locked ADR 0033 caller harness using two Gateway processes,
+  one unique private ingress process, independent black-box callers, the real
+  retained authority, and the exact signed Browser image running real Chromium
 - production Browser advertisement and deployable caller-owned Gateway
-  integration after downstream fencing, HA/failover consistency, Valkey
+  integration after the ADR 0033 caller gate, HA/failover consistency, Valkey
   provenance, hostile-tenant, storage, configuration, metrics, and operational
   gates
 - runtime images for desktop workloads
