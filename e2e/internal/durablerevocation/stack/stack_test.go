@@ -89,7 +89,7 @@ func TestControllerParsesOnlyExactCanonicalQuery(t *testing.T) {
 		t.Fatal("parseConnect() accepted duplicate query input")
 	}
 	query = validConnectQuery(config)
-	query.Set("expires_at", time.Now().Format(time.RFC3339Nano))
+	query.Set("expires_at", time.Now().In(time.FixedZone("non-utc", int(time.Hour/time.Second))).Format(time.RFC3339Nano))
 	if _, _, err := controller.parseConnect(query.Encode()); err == nil {
 		t.Fatal("parseConnect() accepted non-UTC expiry input")
 	}
