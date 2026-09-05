@@ -42,7 +42,9 @@ Format Go changes with `gofmt`, then run:
 go test -race -shuffle=on -count=1 ./...
 go vet ./...
 go run ./cmd/e2e -check
+go run ./cmd/platform-e2e -check
 go run ./cmd/browser-e2e -check
 go run ./cmd/shared-capacity-e2e -check
 go run ./cmd/durable-revocation-e2e -check
+go run ./cmd/downstream-fencing-e2e -check
 ```
