@@ -153,7 +153,11 @@ Browser listener/TLS/HTTP implementation
 Browser authenticated-capacity implementation
 `997fb0db9d3517cf1c3e153217b1ac7305b4ebfd`, its co-located E2E lock
 `49d1c20`, and hosted harness/evidence baseline
-`6b01b75f0e1f6ca1c60f033f8d5bab3898720a3b`.
+`6b01b75f0e1f6ca1c60f033f8d5bab3898720a3b`, plus Redis-compatible shared
+capacity implementation `94345407c149eb095f27ac1c51f60fa38a16a4af`,
+shared-capacity Provider baseline
+`2ed5e689f68627c2d7c8e96cf903fc001ea4a546`, and local evidence
+harness/Gateway source `ddbb2c4771a356bc3ab66295c93bef3b749e2c09`.
 The Contract slice authorizes an atomic browser-only capability shape,
 create/session/handoff schemas, protected admission bindings, opaque reference
 security, operation/usage projection, and 10 new Suite cases. The browser image
@@ -180,10 +184,12 @@ the reference Gateway. ADR 0030 and `997fb0d` add an authenticated-capacity
 port after exact grant binding, typed loss/unavailability events, bounded
 release, stable revocation/expiry/capacity termination priority, and a
 process-local memory reference with atomic global, tenant, and session
-accounting. Browser composition requires the port; no shared backend is
-implemented. The production command still exposes no public Browser Gateway
-route and does not advertise Browser; only the reference stack advertises the
-exact locked Browser profile.
+accounting. Browser composition requires the port. ADR 0031 and `9434540` add
+a Redis-compatible implementation with one bounded atomic capacity record,
+server-time leases, renewal, TTL reclamation, and stale-owner fencing. The
+production command still exposes no public Browser Gateway route and does not
+advertise Browser; only the reference stack advertises the exact locked Browser
+profile.
 
 The Contract verifier and locked 48-case Suite pass against the current
 projection. The `e2e/` module race/shuffle, vet, and lock checks also pass. A
@@ -294,6 +300,29 @@ reclamation, stale-owner fencing, durable distributed revocation, real Agent
 Platform, aggregate, multi-controller, hostile multi-tenant, deployment, and
 production gates remain open.
 
+ADR 0031 and implementation `9434540` then add the Redis-compatible shared
+capacity adapter, followed by the WebSocket close and deterministic stale-lease
+harness and edge-timing corrections through `ddbb2c4`. Clean local evidence
+`e2e/evidence/shared-capacity/20260905T061037.558537000Z` passes all 10 scenarios
+on `linux/arm64` through two independent Gateway OS processes and a real pinned
+Valkey authority. It covers cross-process global/tenant/session contention,
+unaffected-tenant service, renewal beyond three lease TTLs, confirmed loss,
+Gateway crash reclamation, stale-owner fencing, renew/release cleanup,
+retained-store outage failure closure and recovery, and evidence sanitization.
+Shared-capacity rejection occurs after WebSocket `101` and is observed as a
+normal `1000` close, not the pre-upgrade limiter's HTTP `429`. The manifest pins
+harness/Gateway source `ddbb2c4`, Provider baseline `2ed5e68`, policy fingerprint
+`1b29321807530907a8407cd6d33bdefbbb980fd7cb0b297592181a2333a8bacd`, Valkey
+index `sha256:ccfa19b0d743e48927e1c8c14e39e0acb97b5cea347fef0bfe340247fea920cd`,
+and arm64 child
+`sha256:d31209ff403ca1d95218612dd936405d84837a90bc00e3b631ebc6373b91830e`.
+Valkey provenance is explicitly not established. The Contract revision/tree
+and 48-case Suite are pinned as metadata with `exercised=false`; Provider API,
+real Browser/CDP, image provenance, restricted egress, artifact/usage, HA,
+durable distributed revocation, downstream fencing, Provider multi-controller,
+hostile multi-tenant, real Agent Platform, deployment, and production gates are
+not established by this local run.
+
 ADR 0018 records the original reproducible browser image component, while ADR
 0019 requires the current `sandbox.runtime/browser-image/v2` sandbox posture
 and signed publication. The image has no `--no-sandbox` path and binds a
@@ -388,15 +417,19 @@ ADR 0030 and `997fb0d` add the authenticated-capacity port and process-local
 global/tenant/session memory component. E2E lock `49d1c20` passes all three
 clean lock checks. Hosted CI `33940332882` and Reference/Candidate/Browser runs
 `33940332897`/`33940332881`/`33940332911` pass against harness `6b01b75` and
-Provider `997fb0d`, but no real shared store or two-Gateway-process run exists.
+Provider `997fb0d`. ADR 0031 and `9434540` add the Redis-compatible adapter;
+local run `20260905T061037.558537000Z` passes its separate 10-scenario
+real-Valkey, two-independent-Gateway black-box gate against harness/Gateway
+source `ddbb2c4` and Provider baseline `2ed5e68`.
 ADR 0028 and `44ea2ee` add process-local pre-upgrade connection/rate control;
 hosted run `33854020809` passes the combined 12+5 Browser caller against harness
 `e7e7f03`. ADR 0029 and `b8f8941` add listener/TLS/HTTP bounds; hosted run
 `33857739150` passes the 13+5 Browser caller against harness `7a20d9d`.
-Production Browser advertisement/public Gateway, partition-aware shared
-capacity, distributed durable revocation, remaining profile-specific security and
-concurrency, aggregate, multi-controller, multi-tenant, deployment, and
-production gates remain separate and open.
+Production Browser advertisement/public Gateway, distributed durable
+revocation, downstream fencing, Valkey provenance, HA/failover consistency,
+remaining profile-specific security and concurrency, aggregate,
+multi-controller, multi-tenant, deployment, and production gates remain
+separate and open.
 
 Contract identity:
 
@@ -415,7 +448,7 @@ Contract identity:
 | P2.5i | Hosted regression `33940332897` passed 15 initial plus 5 restart/resume coding/shell scenarios against harness/Provider lock `6b01b75`/`997fb0d`; latest clean local run `20260904T081521.464863000Z` passed against the earlier `249cdd4`/`44ea2ee` lock | Neither run contains a Browser scenario or implies Agent Platform or production properties |
 | P2 | Reference coding/shell caller release gate passed | Aggregate conformance, actual Agent Platform compatibility, multi-controller, hostile multi-tenant isolation, deployment, and production gates remain open |
 | P3 | Local revision binding/shadow/metrics component evidence plus latest local candidate integration (`20260904T081706.648122000Z`, earlier `249cdd4`/`44ea2ee` lock) and hosted candidate regression `33940332881` against `6b01b75`/`997fb0d` | Real platform traffic shadow parity, canary, rollback, old-run drain, metric parity, and unchanged platform contracts remain open |
-| P4 | Browser Contract authority/projection, exact sandboxed signed amd64/arm64/v8 publication, Provider-local components, default-disabled command/runtime composition, process-local Gateway and pre-upgrade limits, and hosted run `33940332911` with 13+5 listener/TLS/HTTP plus authenticated-memory-capacity Browser evidence pass their named gates | A real shared capacity adapter and two-independent-Gateway evidence, production Browser advertisement/public Gateway, distributed durable revocation, production storage/configuration and metrics, remaining profile-specific security/concurrency, aggregate, multi-controller, multi-tenant, deployment, and production gates remain open |
+| P4 | Browser Contract authority/projection, exact sandboxed signed amd64/arm64/v8 publication, Provider-local components, default-disabled command/runtime composition, process-local Gateway limits, hosted run `33940332911` with 13+5 Browser evidence, and local run `20260905T061037.558537000Z` with 10/10 real-Valkey, two-Gateway shared-capacity scenarios pass their named gates | Production Browser advertisement/public Gateway, distributed durable revocation, downstream fencing, Valkey provenance, HA/failover consistency, production storage/configuration and metrics, remaining profile-specific security/concurrency, aggregate, multi-controller, multi-tenant, deployment, and production gates remain open |
 
 Production readiness is not a numbered phase shortcut. Aggregate conformance,
 multi-controller reliability, hostile multi-tenant security, deployment, and
@@ -623,14 +656,13 @@ Its focused, full local, and Docker-tagged gates pass, and repository CI
 repository CI `33159099578` also pass their bounded readiness/projection gates.
 Reviewed documentation baseline `bba02a6` passes repository CI `33160646494`.
 
-1. Implement a reviewed shared adapter for the ADR 0030 authenticated-capacity
-   port, then exercise it from two independently started Gateway processes.
-   Prove atomic global/tenant/session limits, bounded TTL and renewal, crash
-   reclamation, stale-owner fencing, lease-loss termination, store-unavailable
-   failure closure, and recovery before calling the shared-capacity gate closed.
-   After that, add durable distributed revocation, production
-   storage/configuration, metrics, hostile-tenant, and operational evidence
-   before considering a production `sandbox.browser` advertisement switch.
+1. Keep the ADR 0031 shared-capacity adapter and local two-Gateway black-box
+   gate under regression, then design the next separately reviewed Browser
+   production slice: durable distributed revocation and downstream fencing,
+   Valkey provenance and HA/failover consistency, production storage and
+   configuration, metrics, hostile-tenant, and operational evidence. Do not
+   consider a production `sandbox.browser` advertisement switch until those
+   named gates pass.
 2. Preserve the Browser, coding/shell Reference, and Platform Candidate harnesses
    as three separately named evidence modes. Do not relabel the Browser
    reference deployment as production or the candidate mode as real platform

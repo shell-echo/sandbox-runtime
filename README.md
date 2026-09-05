@@ -9,10 +9,11 @@ The project is intentionally **runtime-first**. It is not just a cloud browser U
 ## Status
 
 This repository is in active implementation. The coding/shell and Browser
-reference-caller gates pass within their separately named evidence boundaries.
-Real Agent Platform migration, production Browser advertisement and Gateway
-deployment, aggregate conformance, multi-controller, hostile multi-tenant,
-deployment, and production gates remain open.
+reference-caller gates and the local two-Gateway shared-capacity gate pass
+within their separately named evidence boundaries. Real Agent Platform
+migration, production Browser advertisement and Gateway deployment, aggregate
+conformance, multi-controller, hostile multi-tenant, deployment, and production
+gates remain open.
 Start a new development session with
 [`docs/PROJECT_CONTEXT.md`](docs/PROJECT_CONTEXT.md). It summarizes the current
 architecture, engineering rules, verified maturity, blockers, and next work;
@@ -81,8 +82,15 @@ Currently implemented:
   ADR 0030 also makes an authenticated-capacity authority explicit after exact
   grant binding; its memory reference atomically accounts for global, tenant,
   and session partitions and terminates an active connection if its lease is
-  lost. This reference remains process-local and does not replace a real shared
-  or distributed capacity backend or distributed revocation
+  lost. ADR 0031 adds a Redis-compatible implementation with atomic shared
+  global/tenant/session leases, renewal, TTL reclamation, and stale-owner
+  fencing. A clean local `linux/arm64` black-box run passed all 10 scenarios
+  through two independent Gateway OS processes and one pinned Valkey authority.
+  Its private echo fixture does not call the Provider API or a real Browser/CDP;
+  capacity rejection is a post-WebSocket-`101` normal `1000` close, not the
+  pre-upgrade limiter's HTTP `429`. No hosted shared-capacity pass is recorded.
+  This does not establish Valkey provenance, HA/failover consistency, durable
+  distributed revocation, downstream fencing, or production deployment
 - a default-disabled Browser Provider command/runtime graph and a separate
   Browser-only reference stack plus black-box caller. Hosted Browser Reference
   E2E run `33940332911` passes 13 initial and 5 process-reconstruction
@@ -96,8 +104,8 @@ Currently implemented:
 Planned but not yet implemented:
 
 - production Browser advertisement and deployable caller-owned Gateway
-  integration after authenticated partition-aware shared or distributed
-  capacity, durable distributed revocation, hostile-tenant, storage,
+  integration after durable distributed revocation, downstream fencing,
+  HA/failover consistency, Valkey provenance, hostile-tenant, storage,
   configuration, metrics, and operational gates
 - runtime images for desktop workloads
 - display, audio, input, streaming, clipboard, and file-transfer modules

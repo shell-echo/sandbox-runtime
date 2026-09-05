@@ -26,7 +26,7 @@ platform gate.
 
 | Item | Value |
 | --- | --- |
-| Provider implementation | `94345407c149eb095f27ac1c51f60fa38a16a4af` |
+| Provider implementation | `2ed5e689f68627c2d7c8e96cf903fc001ea4a546` |
 | Contract namespace | `urn:shell-echo:sandbox-runtime:provider-v1` |
 | Contract revision | `5096e71fb84fbec22aa3487a0e55a1b49602ab8b` |
 | Contract tree | `859f76dc0e855a0c8abdbbb5648df100dabb4328` |
@@ -51,8 +51,9 @@ accepted-connection TLS 1.3/HTTP/1.1 listener with explicit HTTP limits. It now
 also includes the authenticated-capacity port and its process-local atomic
 global, tenant, and session memory reference component. ADR 0031 and Provider
 commit `9434540` additionally add the Redis-compatible shared-capacity adapter;
-its separately locked two-Gateway evidence still requires a clean committed
-harness run before it may be recorded as passing.
+Provider baseline `2ed5e68` and clean harness/Gateway source `ddbb2c4` pass its
+separately locked local two-Gateway evidence run. This remains separate from
+the Browser reference and hosted evidence tracks.
 This Provider identity also includes the GitHub Actions migration from Node 20
 action runtimes to Node 24 action runtimes. That infrastructure update adds no
 Browser behavior, caller compatibility, or production-readiness evidence.
@@ -134,6 +135,24 @@ readiness. Hosted execution is isolated in
 the run's sanitization checks pass.
 
 ## Latest verified evidence
+
+Clean local shared-capacity run
+`evidence/shared-capacity/20260905T061037.558537000Z` passed all 10 scenarios on
+`linux/arm64` against harness/Gateway source `ddbb2c4` and Provider baseline
+`2ed5e68`. It used two independent Gateway OS processes and Valkey index
+`sha256:ccfa19b0d743e48927e1c8c14e39e0acb97b5cea347fef0bfe340247fea920cd`
+with arm64 child
+`sha256:d31209ff403ca1d95218612dd936405d84837a90bc00e3b631ebc6373b91830e`;
+the policy fingerprint is
+`1b29321807530907a8407cd6d33bdefbbb980fd7cb0b297592181a2333a8bacd`.
+The manifest records 48 Suite cases only as locked metadata and explicitly sets
+`contract.exercised=false` and Valkey `provenance_not_established=true`.
+Capacity rejection occurs after WebSocket `101` as a normal `1000` close, not
+as HTTP `429`. This run uses a private echo resolver and does not exercise the
+Provider API, a real Browser/CDP runtime, image provenance, restricted egress,
+artifacts, or usage; it is not hosted, HA/failover, durable distributed
+revocation, downstream fencing, Provider multi-controller, hostile
+multi-tenant, real Agent Platform, deployment, or production evidence.
 
 Hosted Browser Reference run `33940332911` passed harness `6b01b75` against
 Provider `997fb0d`: all 13 initial and 5 process-reconstruction scenarios
