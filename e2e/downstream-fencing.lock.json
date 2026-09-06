@@ -14,7 +14,7 @@
     },
     "caller_substrate": {
       "path": "e2e/internal/caller",
-      "baseline_revision": "8a1049bfa1d68bdd88c9df3ebd02c2c9ac0434b5"
+      "baseline_revision": "074a9d4a42acef3bf7da57b1b250af8f0c1b1aa9"
     }
   },
   "contract": {
