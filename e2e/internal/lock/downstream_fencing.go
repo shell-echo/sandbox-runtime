@@ -873,7 +873,8 @@ func downstreamFencingHarnessPath(path string) bool {
 		return false
 	}
 	return path == "README.md" || path == "e2e" || strings.HasPrefix(path, "e2e/") || path == "docs" || strings.HasPrefix(path, "docs/") ||
-		path == ".github/workflows/downstream-fencing-e2e.yml"
+		path == ".github/workflows/downstream-fencing-e2e.yml" ||
+		path == ".github/workflows/downstream-fencing-v2-e2e.yml"
 }
 
 func downstreamFencingV2HarnessPath(path string) bool {

@@ -160,13 +160,14 @@ func TestDownstreamFencingActionTimeoutFitsCapacitySafetyWindow(t *testing.T) {
 
 func TestDownstreamFencingHarnessPathIsNarrow(t *testing.T) {
 	for path, want := range map[string]bool{
-		"e2e/cmd/downstream-fencing-e2e/main.go":       true,
-		"docs/STATUS.md":                               true,
-		".github/workflows/downstream-fencing-e2e.yml": true,
-		".github/workflows/browser-e2e.yml":            false,
-		"README.md":                                    true,
-		"gateway/cdpfence/ingress.go":                  false,
-		"e2e/../gateway/cdpfence/ingress.go":           false,
+		"e2e/cmd/downstream-fencing-e2e/main.go":          true,
+		"docs/STATUS.md":                                  true,
+		".github/workflows/downstream-fencing-e2e.yml":    true,
+		".github/workflows/downstream-fencing-v2-e2e.yml": true,
+		".github/workflows/browser-e2e.yml":               false,
+		"README.md":                                       true,
+		"gateway/cdpfence/ingress.go":                     false,
+		"e2e/../gateway/cdpfence/ingress.go":              false,
 	} {
 		if got := downstreamFencingHarnessPath(path); got != want {
 			t.Errorf("downstreamFencingHarnessPath(%q) = %t, want %t", path, got, want)
