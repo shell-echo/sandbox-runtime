@@ -223,19 +223,26 @@ Contract verification, the unchanged 48-case Suite, and tagged pinned-Valkey
 integration pass for this component. A separate locked 18-scenario v2 caller
 stack is implemented with two Gateway processes, two independent callers, one
 unique ingress, real Chromium, an orchestrator-only Redis fault credential, and
-an independent file witness. Clean local run `20260906T092259.737890000Z` at
-harness `d61cd86` passes 18/18 on `linux/arm64`, including deletion, restored-old
-snapshot, witness reconstruction, exact Redis-ahead-one recovery, and other
+an independent file witness. Clean local run `20260906T100233.295973000Z` at
+fixed harness `059357c` passes 18/18 on `linux/arm64`, including deletion,
+restored-old snapshot, witness reconstruction, exact Redis-ahead-one recovery, and other
 checkpoint-mismatch cases before rejected actions can open a new upstream dial.
 The exact five-file `0600` evidence set passes cleanup and sanitization. This is
-local ADR 0034 caller evidence only. Hosted run `34025141624` at checkout
-`05b3b46` independently passes 18/18 on `linux/amd64`; its inspected artifact
-contains evidence directory `20260906T093725.327949819Z` with exactly five
+local ADR 0034 caller evidence only. Hosted run `34026680591` at the same
+checkout independently passes 18/18 on `linux/amd64`; its inspected artifact
+contains evidence directory `20260906T101111.796974798Z` with exactly five
 sanitized files and has digest
-`sha256:55991ec39138183cefecab9cdfb5b23d4bada9b6b96286655cd9b8899a022203`.
+`sha256:3e68f1c4b5bd74e0ae0ff0fde2c9ffefc63852cf9fc82b3019bedfb228bf2c9a`.
 This is hosted ADR 0034 caller evidence only. The Suite is unexercised, and
 production witness, HA/failover, production ACL isolation, deployment, and
 production results remain absent.
+
+The orchestrator's restore control continues to inject real Redis
+`DUMP`/`RESTORE` faults, but fixed harness `059357c` verifies restored key type,
+logical string/hash/zset content, missing-key state, and TTL semantics rather
+than requiring non-canonical `DUMP` bytes to be identical. Intermediate run
+`34025787520` exposed the old byte-equality check as a verifier false negative;
+it did not establish a fencing failure.
 
 E2E lock/harness `17ed6ca` pins Provider `b4d41c9`; repository CI
 `33970773423` and the five existing hosted regression profiles pass. Those
@@ -520,7 +527,7 @@ advertisement, and optional-profile gates remain open:
 | Workspace | The Provider Docker development adapter supplies `/inputs`, `/workspace`, `/outputs`, and bounded tmpfs `/tmp` with owned cleanup; exec consumes that runtime without exposing host paths. | Add artifact consumers, capacity enforcement, and stronger isolation evidence. |
 | Security | Docker defaults already drop capabilities, use non-root/read-only root, disable networking, and limit resources. | Add policy enforcement, stronger isolation profiles, secret grants, egress controls, audit evidence, and production auth. |
 | Events and usage | Durable lifecycle events and bounded usage-evidence components exist without a complete runtime collector composition. | Complete collection/reconciliation while leaving platform accounting authority outside the Provider. |
-| Snapshots/browser/desktop | Browser Contract authority/projection, exact signed image, Provider-local session/application/reference/usage, Docker adapter, provenance verifier, restricted-egress provisioner, create-policy binding, protected handlers, caller-owned Gateway, default-disabled command graph, and hosted 13+5 Browser reference-caller path have named evidence. The Gateway has explicit process-local total/per-session post-authorization capacity, pre-upgrade service limits, bounded listener/TLS/HTTP behavior, and authenticated-capacity plus exact-grant revocation ports with process-local and Redis-compatible adapters. ADR 0031/`9434540` plus local arm64 run `20260905T080725.227680000Z` and hosted amd64 run `33955436968` add real Valkey plus two-independent-Gateway shared-capacity evidence. ADR 0032/`c0a55d1` adds durable revocation component evidence; harness/Gateway `e952ef9`, local arm64 run `20260905T095109.569973000Z`, and hosted amd64 run `33959122456` pass its separate seven-scenario two-Gateway/independent-revoker caller gate. ADR 0033/`b4d41c9` adds downstream action-fence/private-ingress/Redis adapter component evidence; harness/run `550c785`/`20260906T050213.016063000Z` and `2cadc53`/`34013982796` pass its separate 13-scenario v1 caller gate on arm64 and amd64. ADR 0034 separately adds witnessed-v2 deletion/rollback-detection component and pinned-Valkey adapter evidence; harness/run `d61cd86`/`20260906T092259.737890000Z` and checkout/run `05b3b46`/`34025141624` pass its independently locked 18-scenario real-Chromium caller gate on arm64 and amd64. Contract identity remains pinned while both downstream caller profiles leave the Suite unexercised, and the ADR 0032 echo fixture is not Browser/CDP. The restricted-egress Gateway remains distinct from the caller-owned Gateway. Production Browser advertisement/public Gateway and authenticated v2 ingress deployment, production independent witness/storage and restore operations, Valkey provenance/HA/failover, aggregate, multi-controller, hostile multi-tenant, deployment, and production gates remain open. Snapshots and desktop remain unauthorized optional behavior. | Establish a production witness and restore procedure, Valkey provenance/HA/failover, hostile-tenant evidence, production ACLs, metrics, and deployable storage/configuration before production advertisement; begin the Desktop authority audit only after the Browser readiness record is complete. |
+| Snapshots/browser/desktop | Browser Contract authority/projection, exact signed image, Provider-local session/application/reference/usage, Docker adapter, provenance verifier, restricted-egress provisioner, create-policy binding, protected handlers, caller-owned Gateway, default-disabled command graph, and hosted 13+5 Browser reference-caller path have named evidence. The Gateway has explicit process-local total/per-session post-authorization capacity, pre-upgrade service limits, bounded listener/TLS/HTTP behavior, and authenticated-capacity plus exact-grant revocation ports with process-local and Redis-compatible adapters. ADR 0031/`9434540` plus local arm64 run `20260905T080725.227680000Z` and hosted amd64 run `33955436968` add real Valkey plus two-independent-Gateway shared-capacity evidence. ADR 0032/`c0a55d1` adds durable revocation component evidence; harness/Gateway `e952ef9`, local arm64 run `20260905T095109.569973000Z`, and hosted amd64 run `33959122456` pass its separate seven-scenario two-Gateway/independent-revoker caller gate. ADR 0033/`b4d41c9` adds downstream action-fence/private-ingress/Redis adapter component evidence; harness/run `550c785`/`20260906T050213.016063000Z` and `2cadc53`/`34013982796` pass its separate 13-scenario v1 caller gate on arm64 and amd64. ADR 0034 separately adds witnessed-v2 deletion/rollback-detection component and pinned-Valkey adapter evidence; fixed harness `059357c` passes its independently locked 18-scenario real-Chromium caller gate in local run `20260906T100233.295973000Z` on arm64 and hosted run `34026680591` on amd64. Contract identity remains pinned while both downstream caller profiles leave the Suite unexercised, and the ADR 0032 echo fixture is not Browser/CDP. The restricted-egress Gateway remains distinct from the caller-owned Gateway. Production Browser advertisement/public Gateway and authenticated v2 ingress deployment, production independent witness/storage and restore operations, Valkey provenance/HA/failover, aggregate, multi-controller, hostile multi-tenant, deployment, and production gates remain open. Snapshots and desktop remain unauthorized optional behavior. | Establish a production witness and restore procedure, Valkey provenance/HA/failover, hostile-tenant evidence, production ACLs, metrics, and deployable storage/configuration before production advertisement; begin the Desktop authority audit only after the Browser readiness record is complete. |
 
 ## Delivery plan and release gates
 

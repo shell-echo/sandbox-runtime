@@ -26,9 +26,9 @@ session-history hash and an independent monotonic restore witness. Its local
 race/shuffle, vet, Contract verifier, unchanged 48-case Suite, and pinned-Valkey
 adapter gates pass. The existing reference stack and both ADR 0033 caller runs
 still use v1; they are not v2 deletion/restore evidence. The separately locked
-v2 runner passed all 18 scenarios locally on `linux/arm64` in run
-`20260906T092259.737890000Z` at harness `d61cd86` and in hosted `linux/amd64`
-run `34025141624` at checkout `05b3b46`. It used two Gateways, two independent
+v2 runner passes all 18 scenarios locally on `linux/arm64` in run
+`20260906T100233.295973000Z` and in hosted `linux/amd64` run `34026680591`, both
+at fixed harness `059357c`. It uses two Gateways, two independent
 mTLS/JWS callers, one unique ingress, signed real Chromium, an orchestrator-only
 Redis fault credential, and an independent file witness. The local exact
 five-file set is `0600`; both runs pass cleanup and sanitization. These close
@@ -39,15 +39,21 @@ aggregate conformance, multi-controller, hostile multi-tenant, deployment, and
 production gates remain open. The ADR 0033 and v2 profiles pin Contract
 identity but do not execute the Suite (`suite_exercised=false`).
 
-Hosted checkout `05b3b46` passes repository CI `34025141621`, Reference
-`34025141614`, Candidate `34025141593`, Browser `34025141601`, shared-capacity
-`34025141625`, durable-revocation `34025141591`, downstream-fencing v1
-`34025141610`, and downstream-fencing v2 `34025141624`. The independently
-inspected v2 artifact `browser-downstream-fencing-v2-e2e-evidence-34025141624`
-has GitHub digest
-`sha256:55991ec39138183cefecab9cdfb5b23d4bada9b6b96286655cd9b8899a022203`.
+Hosted checkout `059357c` passes repository CI `34026680576`, Reference
+`34026680567`, Candidate `34026680617`, Browser `34026680597`, shared-capacity
+`34026680568`, durable-revocation `34026680592`, downstream-fencing v1
+`34026680577`, and downstream-fencing v2 `34026680591`. The independently
+inspected v2 artifact `browser-downstream-fencing-v2-e2e-evidence-34026680591`
+has ID `9987350368` and GitHub digest
+`sha256:3e68f1c4b5bd74e0ae0ff0fde2c9ffefc63852cf9fc82b3019bedfb228bf2c9a`.
 These remain eight distinct workflows and seven separate E2E tracks, not
 aggregate conformance.
+
+An intermediate v2 workflow `34025787520` at `ef63be4` exposed a verifier
+false negative: Redis/Valkey `DUMP` bytes for a restored hash were treated as a
+canonical logical representation. Fix `059357c` retains real `DUMP`/`RESTORE`
+fault injection but verifies restored string/hash/zset content and TTL semantics
+instead; both fresh platform-specific runs above use that fix.
 
 Start a new development session with
 [`docs/PROJECT_CONTEXT.md`](docs/PROJECT_CONTEXT.md). It summarizes the current
@@ -162,9 +168,9 @@ Currently implemented:
   Focused and full race/shuffle tests, vet, Contract verification, the unchanged
   48-case Suite, and tagged integration against the same pinned Valkey index
   pass. The separate v2 caller harness passes 18/18 locally on `linux/arm64` in
-  run `20260906T092259.737890000Z` at harness `d61cd86` and hosted on
-  `linux/amd64` in run `34025141624` at checkout `05b3b46`; the Suite is not
-  executed. No default composition or production advertisement selects v2
+  run `20260906T100233.295973000Z` and hosted on `linux/amd64` in run
+  `34026680591`, both at fixed harness `059357c`; the Suite is not executed. No
+  default composition or production advertisement selects v2
 - downstream caller bootstrap implementation `58488d7`: two independently
   identified mTLS/JWS caller OS processes each perform Provider capability,
   create, operation, sandbox, Browser-session, and handoff reconciliation, bind

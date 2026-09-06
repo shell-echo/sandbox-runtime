@@ -274,14 +274,25 @@ The implementation starts five new ingress processes after the initial one:
 one expected fail-closed startup against restored-old state and four successful
 reconstructions for repair, interrupted-CAS recovery, mismatch repair, and
 cleanup. The Contract identity remains pinned, but the Suite is not executed
-(`suite_exercised=false`). Clean local run `20260906T092259.737890000Z` at
-harness `d61cd862b927bdba2a23ef002de5e0bdc760b30f` passes all 18 scenarios on
-`linux/arm64`; hosted run `34025141624` at checkout
-`05b3b466a7db566a288111d6bf0c32f5d9af72ff` passes the same set on
-`linux/amd64`. These platform-specific results do not establish a production
+(`suite_exercised=false`). The first clean local pass was
+`20260906T092259.737890000Z` at
+`d61cd862b927bdba2a23ef002de5e0bdc760b30f`. Fresh fixed-harness run
+`20260906T100233.295973000Z` at
+`059357cdd1f6f4ecd78ccbbaf9923add0fcd2230` passes all 18 scenarios on
+`linux/arm64`; hosted run `34026680591` at the same checkout passes the same 18
+scenarios on `linux/amd64`. These platform-specific results do not establish a production
 monotonic witness, correlated Redis-and-witness rollback protection, Valkey
 provenance/HA/failover, real Agent Platform compatibility, hostile multi-tenant
 isolation, deployment, or production readiness.
+
+The restore control still performs real Redis/Valkey `DUMP`/`RESTORE` fault
+injection. Its verification compares restored key type, logical
+string/hash/zset content, missing-key state, and persistent or temporary TTL
+semantics. Intermediate hosted run `34025787520` at `ef63be4` exposed the prior
+raw hash-`DUMP` byte-equality check as a verifier false negative; hash binary
+encoding is not a canonical logical representation. Fix `059357c` adds
+order-independent hash comparison plus replacement/string/zset regression
+tests without weakening the injected fault.
 
 ## Latest verified evidence
 
@@ -303,9 +314,9 @@ Both runs close only the named ADR 0033 caller gate on their respective
 platforms; neither executes the Contract Suite.
 
 Clean local witnessed-v2 run
-`evidence/downstream-fencing-v2/20260906T092259.737890000Z` passed all 18 ADR
-0034 scenarios on `linux/arm64` at harness `d61cd86`. It exercised two Gateway
-processes, two independent mTLS/JWS callers, one authenticated unique ingress,
+`evidence/downstream-fencing-v2/20260906T100233.295973000Z` passed all 18 ADR
+0034 scenarios on `linux/arm64` at fixed harness `059357c`. It exercised two
+Gateway processes, two independent mTLS/JWS callers, one authenticated unique ingress,
 retained Valkey, the independently retained `0600` file witness, and signed real
 Chromium. The run rejected retained-field deletion, complete-state deletion,
 and a restored pre-activation snapshot reusing the same capacity fence before a
@@ -318,23 +329,24 @@ manifest pins the Contract/tree/48-case identity with
 `suite_exercised=false`. This closes only the local `linux/arm64` ADR 0034
 external-caller gate.
 
-Hosted witnessed-v2 run `34025141624` at checkout `05b3b46` independently
+Hosted witnessed-v2 run `34026680591` at checkout `059357c` independently
 passed the same 18 scenarios on `linux/amd64`. Downloaded artifact
-`browser-downstream-fencing-v2-e2e-evidence-34025141624` contains evidence
-directory `20260906T093725.327949819Z` with exactly these five files:
+`browser-downstream-fencing-v2-e2e-evidence-34026680591` contains evidence
+directory `20260906T101111.796974798Z` with exactly these five files:
 `manifest.json`, `report.json`, `gateway-audit-a.jsonl`,
 `gateway-audit-b.jsonl`, and `ingress-observations.jsonl`. The report has no
 failed scenario; the manifest records all cleanup and sanitization booleans as
 true, five ingress reconstructions, no top-level v1 `adapters` field, the
 orchestrator-only separate restore credential, and
 `suite_exercised=false`. The artifact digest is
-`sha256:55991ec39138183cefecab9cdfb5b23d4bada9b6b96286655cd9b8899a022203`.
+`sha256:3e68f1c4b5bd74e0ae0ff0fde2c9ffefc63852cf9fc82b3019bedfb228bf2c9a`
+(artifact ID `9987350368`).
 This closes only the hosted `linux/amd64` ADR 0034 external-caller gate.
 
-The same `05b3b46` checkout also passes repository CI `34025141621`, Reference
-`34025141614`, Platform Candidate `34025141593`, Browser Reference
-`34025141601`, shared capacity `34025141625`, durable revocation `34025141591`,
-and downstream-fencing v1 `34025141610`. CI and all seven E2E profiles remain
+The same `059357c` checkout also passes repository CI `34026680576`, Reference
+`34026680567`, Platform Candidate `34026680617`, Browser Reference
+`34026680597`, shared capacity `34026680568`, durable revocation `34026680592`,
+and downstream-fencing v1 `34026680577`. CI and all seven E2E profiles remain
 separate evidence tracks.
 
 The latest verified local regressions before this lock refresh ran against
