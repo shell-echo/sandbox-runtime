@@ -18,19 +18,23 @@ fencing component and real-backend adapter integration gate. Implementation
 `58488d7` additionally proves, in process/component tests, that two independent
 downstream caller OS processes each use their own mTLS/JWS Controller identity
 to bootstrap a Browser session from the Provider and then remain in the bounded
-JSONL control loop. Current E2E lock `f7de91d` records that implementation, but
-the 13-scenario downstream runner remains unimplemented and unexercised. The
+JSONL control loop. Implementation `8a1049b` adds strict FD 3/4/5 private
+provisioning, exact final-configuration matching, fail-closed process management
+with kill plus bounded wait, and the full Contract handoff-reference grammar in
+`gatewaystack`.
+Current E2E lock `fb1b2b0` records that component baseline, but the 13-scenario
+downstream runner remains unimplemented and unexercised. The
 independent two-Gateway, unique-ingress, real-Chromium external-caller gate,
 real Agent Platform migration, Valkey provenance and HA/failover, production
 Browser advertisement/public Gateway composition, aggregate conformance,
 multi-controller, hostile multi-tenant, deployment, and production gates remain
 open.
 
-The latest verified hosted baseline before `f7de91d` is lock `5750ba5` with
-Provider `cf70f5d`: repository CI `33987232781` and Reference, Candidate,
-Browser, shared-capacity, and durable-revocation runs `33987232773`,
-`33987232817`, `33987232789`, `33987232775`, and `33987232824` all pass. Those
-reruns cover existing profiles only. No hosted result is claimed for `f7de91d`,
+The latest verified hosted checkout before `fb1b2b0` is `c3e34ef`, using E2E
+lock `f7de91d` and Provider `58488d7`: repository CI `33990418428` and
+Reference, Candidate, Browser, shared-capacity, and durable-revocation runs
+`33990418435`, `33990418458`, `33990418425`, `33990418420`, and `33990418412`
+all pass. Those reruns cover existing profiles only. No hosted result is claimed for `fb1b2b0`,
 and none closes the ADR 0033 caller gate.
 
 Start a new development session with
@@ -147,6 +151,15 @@ Currently implemented:
   in the existing JSONL loop. The dual-process test is process/component
   evidence only; the downstream lock records `suite_exercised=false`, while
   its check reports `runner_implemented=false`
+- downstream caller provisioning implementation `8a1049b` and lock `fb1b2b0`:
+  a trusted launcher passes one correlated request, private endpoint envelope,
+  and exact final caller configuration over fixed FD 3/4/5 pipes. Strict
+  bounded EOF-framed JSON, direction validation and close-on-exec setup, canonical live
+  expiry, at-most-once delivery, cancellation/failure kill plus bounded wait, natural-exit
+  cleanup, and Contract-wide handoff-reference validation pass process/component
+  tests. FD5 delivery alone is not child acceptance; readiness requires a
+  correlated JSONL response. `S_IFIFO` does not independently prove an
+  anonymous pipe, so the launcher remains trusted
 - a default-disabled Browser Provider command/runtime graph and a separate
   Browser-only reference stack plus black-box caller. Hosted Browser Reference
   E2E run `33970773330` passes 13 initial and 5 process-reconstruction
@@ -159,12 +172,10 @@ Currently implemented:
 
 Planned but not yet implemented:
 
-- private endpoint provisioning from each bootstrapped caller into its Gateway,
-  including Contract-wide handoff-reference validation in `gatewaystack`, then
-  the independently locked multi-process ADR 0033 orchestrator and 13-scenario
-  runner using two Gateway processes, one unique private ingress process, the
-  real retained Valkey authority, and the exact signed Browser image running
-  real Chromium
+- compose the existing provisioning/process components into the independently
+  locked ADR 0033 13-scenario runner using two Gateway processes, two
+  independent callers, one unique private ingress process, the real retained
+  Valkey authority, and the exact signed Browser image running real Chromium
 - production Browser advertisement and deployable caller-owned Gateway
   integration after the ADR 0033 caller gate, HA/failover consistency, Valkey
   provenance, hostile-tenant, storage, configuration, metrics, and operational

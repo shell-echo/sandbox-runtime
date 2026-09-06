@@ -74,13 +74,19 @@ downstream-fencing caller process. Provider baseline `cf70f5d` adds a bounded
 single-Controller Browser Provider bootstrap helper. Baseline `58488d7` wires
 that helper into the persistent downstream caller command and starts two
 independent caller processes with distinct mTLS/JWS identities in process-level
-component tests. Private endpoint provisioning into the Gateway configurations,
-the multi-process orchestrator, and the 13 locked ADR 0033 scenarios are still
-not implemented or exercised.
-The latest verified hosted regressions before this lock refresh used lock
-`5750ba5` and Provider baseline `cf70f5d`: repository CI `33987232781`,
-Reference `33987232773`, Candidate `33987232817`, Browser `33987232789`, shared
-capacity `33987232775`, and durable revocation `33987232824` all passed. These
+component tests. Implementation `8a1049b` then adds strict, bounded, EOF-framed
+FD 3/4/5 provisioning, exact final-configuration matching, fail-closed parent
+management with kill plus bounded wait, natural-exit pipe cleanup, and Contract-wide `gatewaystack`
+handoff-reference validation. Lock `fb1b2b0` records that process/component
+baseline. FD5 delivery is at-most-once and does not prove child acceptance;
+readiness requires a correlated JSONL response. The trusted launcher uses
+`os.Pipe`; FIFO type validation alone does not prove an anonymous pipe. The 13
+locked ADR 0033 scenarios remain unimplemented and unexercised.
+The latest verified hosted regressions before this lock refresh used checkout
+`c3e34ef`, E2E lock `f7de91d`, and Provider `58488d7`: repository CI
+`33990418428`, Reference `33990418435`, Candidate `33990418458`, Browser
+`33990418425`, shared capacity `33990418420`, and durable revocation
+`33990418412` all passed. These
 are existing regression tracks only; no hosted ADR 0033 runner exists yet.
 This Provider identity also includes the GitHub Actions migration from Node 20
 action runtimes to Node 24 action runtimes. That infrastructure update adds no

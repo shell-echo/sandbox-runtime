@@ -167,12 +167,13 @@ harness/Gateway source `e952ef9dabf4e9e6f2a984ce0c7944cb2bc569c7`, local run
 `20260905T095109.569973000Z`, and hosted run `33959122456`, plus downstream CDP
 fencing component and real-backend adapter integration implementation
 `b4d41c9a32b4ccf39edaba3fb8bf5ad239c1f945`, downstream caller bootstrap
-implementation `58488d70c0a43d68747ca6e14f81c56f1e23237a`, and current E2E lock
-`f7de91d7fb02511b9cf6a006c334f653396c3a21`. The latest verified hosted
-baseline preceding that lock is `5750ba5`: repository CI `33987232781` and the
-five existing hosted regressions `33987232773`, `33987232817`, `33987232789`,
-`33987232775`, and `33987232824` all pass. No hosted run is claimed for
-`f7de91d`.
+implementation `58488d70c0a43d68747ca6e14f81c56f1e23237a`, caller provisioning/process
+implementation `8a1049bfa1d68bdd88c9df3ebd02c2c9ac0434b5`, and current E2E lock
+`fb1b2b0a0b77eaf2bd989543d16d3571ef119a12`. The latest verified hosted
+checkout preceding that lock is `c3e34ef`, using E2E lock `f7de91d` and Provider
+`58488d7`: repository CI `33990418428` and the five existing hosted regressions
+`33990418435`, `33990418458`, `33990418425`, `33990418420`, and `33990418412`
+all pass. No hosted run is claimed for `fb1b2b0`.
 The Contract slice authorizes an atomic browser-only capability shape,
 create/session/handoff schemas, protected admission bindings, opaque reference
 security, operation/usage projection, and 10 new Suite cases. The browser image
@@ -540,15 +541,28 @@ downstream caller OS process. The dual-process test gives each caller a distinct
 mTLS/JWS Controller identity, reconciles its own capability/create/operation/
 sandbox/Browser-session/handoff chain, binds the opaque handoff only in private
 process state, and confirms both processes remain in the JSONL control loop.
-This is process/component evidence, not ADR 0033 external-caller E2E. Lock
-`f7de91d` keeps the 48-case Contract as metadata with
-`suite_exercised=false` and the downstream scenario inventory at 13. The runner
-remains unimplemented, and the lock check reports `runner_implemented=false`.
-The latest verified hosted baseline before that lock is `5750ba5`, which pins
-Provider `cf70f5d`. Repository CI `33987232781` and hosted Reference, Candidate,
-Browser, shared-capacity, and durable-revocation regressions `33987232773`,
-`33987232817`, `33987232789`, `33987232775`, and `33987232824` pass their
-existing scenario sets. No hosted run is claimed for `f7de91d`, and those
+Implementation `8a1049b` adds the correlated FD 3/4/5 request, private endpoint
+envelope, and exact final-configuration handoff; strict bounded EOF-framed JSON;
+fixed direction validation and close-on-exec setup; canonical live expiry checks;
+at-most-once delivery; cancellation, failure, and natural-exit cleanup; a
+fail-closed parent process management with kill plus bounded wait; and the full Contract handoff-reference
+grammar in `gatewaystack`. The parent manager is component code and has not yet
+composed two Gateways or the real retained backend/Chromium topology. FD5
+delivery is not child acceptance; a correlated JSONL response establishes
+readiness. FIFO type validation cannot distinguish a named FIFO from an
+anonymous pipe, so the `os.Pipe` launcher is trusted. The Contract has no
+Browser-session termination mutation, so handshake failure does not prove
+Provider resource cleanup. This remains process/component evidence, not ADR
+0033 external-caller E2E. Lock `fb1b2b0` keeps the 48-case Contract as metadata
+with `suite_exercised=false` and the downstream scenario inventory at 13. The
+runner remains unimplemented, and the lock check reports
+`runner_implemented=false`.
+The latest verified hosted checkout before that lock is `c3e34ef`, using E2E
+lock `f7de91d` and Provider `58488d7`. Repository CI `33990418428` and hosted
+Reference, Candidate, Browser, shared-capacity, and durable-revocation
+regressions `33990418435`, `33990418458`, `33990418425`, `33990418420`, and
+`33990418412` pass their existing scenario sets. No hosted run is claimed for
+`fb1b2b0`, and those
 earlier regressions contain no ADR 0033 downstream action-fence scenario.
 ADR 0028 and `44ea2ee` add process-local pre-upgrade connection/rate control;
 hosted run `33854020809` passes the combined 12+5 Browser caller against harness
@@ -578,7 +592,7 @@ Contract identity:
 | P2.5i | Hosted regression `33970773414` passed 15 initial plus 5 restart/resume coding/shell scenarios against harness/Provider lock `17ed6ca`/`b4d41c9`; latest local pre-refresh run `20260905T080530.577843000Z` passed against `59e08d5`/`c0a55d1` | Neither run contains a Browser scenario or implies Agent Platform, durable-revocation caller, or production properties |
 | P2 | Reference coding/shell caller release gate passed | Aggregate conformance, actual Agent Platform compatibility, multi-controller, hostile multi-tenant isolation, deployment, and production gates remain open |
 | P3 | Local revision binding/shadow/metrics component evidence plus latest local pre-refresh candidate integration (`20260905T080623.861033000Z`, `59e08d5`/`c0a55d1` lock) and hosted candidate regression `33970773345` against `17ed6ca`/`b4d41c9` | Real platform traffic shadow parity, canary, rollback, old-run drain, metric parity, and unchanged platform contracts remain open |
-| P4 | Browser Contract authority/projection, exact sandboxed signed amd64/arm64/v8 publication, Provider-local components, default-disabled command/runtime composition, process-local Gateway limits, the separately recorded Browser/shared-capacity/durable-revocation caller gates, ADR 0033/`b4d41c9` downstream fencing component plus real-backend integration, and `58488d7` dual-process downstream caller bootstrap component evidence pass within their named boundaries. Current lock `f7de91d` records `suite_exercised=false`; the runner remains unimplemented and the lock check reports `runner_implemented=false` | Provision each private bootstrap result into its Gateway, correct `gatewaystack` to accept the full Contract handoff-reference grammar, then build and run the independent ADR 0033 two-Gateway/unique-ingress/real-Chromium 13-scenario caller gate. Missing-high-water/restore, production Browser advertisement/public Gateway, Valkey provenance/HA, production configuration/metrics, aggregate, multi-controller, multi-tenant, deployment, and production gates remain open |
+| P4 | Browser Contract authority/projection, exact sandboxed signed amd64/arm64/v8 publication, Provider-local components, default-disabled command/runtime composition, process-local Gateway limits, the separately recorded Browser/shared-capacity/durable-revocation caller gates, ADR 0033/`b4d41c9` downstream fencing component plus real-backend integration, `58488d7` dual-process caller bootstrap, and `8a1049b` FD provisioning/process-manager/Contract-grammar component evidence pass within their named boundaries. Current lock `fb1b2b0` records `suite_exercised=false`; the runner remains unimplemented and the lock check reports `runner_implemented=false` | Compose and run the independent ADR 0033 two-Gateway/unique-ingress/retained-Valkey/signed-real-Chromium 13-scenario caller gate. Missing-high-water/restore, production Browser advertisement/public Gateway, Valkey provenance/HA, production configuration/metrics, aggregate, multi-controller, multi-tenant, deployment, and production gates remain open |
 
 Production readiness is not a numbered phase shortcut. Aggregate conformance,
 multi-controller reliability, hostile multi-tenant security, deployment, and
@@ -787,15 +801,12 @@ Its focused, full local, and Docker-tagged gates pass, and repository CI
 repository CI `33159099578` also pass their bounded readiness/projection gates.
 Reviewed documentation baseline `bba02a6` passes repository CI `33160646494`.
 
-1. Implement the private provisioning slice between each caller and its Gateway
-   with fixed inherited anonymous pipes: FD 3 carries the bootstrap request into
-   the caller, FD 4 returns the private endpoint result, and FD 5 carries the
-   final caller configuration back into the caller. Use strict bounded records,
-   fixed directions, close-on-exec discipline, and fail plus reap the child on
-   ambiguous delivery. This establishes at-most-once transfer only, not
-   crash-safe exactly-once delivery. Also align `gatewaystack` handoff validation
-   with the Contract-wide `ref:browser-session:*` grammar.
-2. Compose the separately locked ADR 0033 multi-process orchestrator and run all
+The private FD 3/4/5 provisioning protocol, parent process manager, and
+Contract-wide `gatewaystack` handoff validation are implemented at `8a1049b`
+and locked at `fb1b2b0` as process/component evidence. They have not run the
+complete ADR 0033 topology.
+
+1. Compose the separately locked ADR 0033 multi-process orchestrator and run all
    13 scenarios with two independent Gateway OS processes, one unique
    authenticated private ingress OS process, independent black-box callers,
    retained Valkey state, and the exact signed Browser image running real
@@ -804,17 +815,17 @@ Reviewed documentation baseline `bba02a6` passes repository CI `33160646494`.
    sanitized evidence. Keep `suite_exercised=false` until the Contract Suite is
    actually invoked, and do not treat the current process/component tests as
    this caller gate.
-3. Preserve the Browser, coding/shell Reference, and Platform Candidate harnesses
+2. Preserve the Browser, coding/shell Reference, and Platform Candidate harnesses
    as three separately named evidence modes. Do not relabel the Browser
    reference deployment as production or the candidate mode as real platform
    traffic.
-4. Begin real P3 only against a platform migration target: lock the same
+3. Begin real P3 only against a platform migration target: lock the same
    Contract/profile, shadow capabilities and requests, canary only new runs,
    prove rollback and old-run drain, and compare the required metrics without
    changing platform-owned contracts.
-5. Start the Desktop Contract/authority audit only after the Browser readiness
+4. Start the Desktop Contract/authority audit only after the Browser readiness
    record is complete; do not reuse terminal or Browser routes as a shortcut.
-6. Keep aggregate conformance, multi-controller, hostile multi-tenant,
+5. Keep aggregate conformance, multi-controller, hostile multi-tenant,
    deployment, and production-readiness claims blocked until their separately
    named gates have reproducible evidence.
 

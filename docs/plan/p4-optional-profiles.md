@@ -128,17 +128,20 @@ unproved.
 Downstream caller bootstrap implementation `58488d7` adds process/component
 evidence that two independent caller OS processes each use a distinct mTLS/JWS
 Controller identity, perform their own Provider Browser bootstrap, bind the
-opaque handoff only in private state, and remain alive in the JSONL loop. E2E
-lock `f7de91d` records that baseline, but keeps the locked 48-case Contract as
-metadata (`suite_exercised=false`) and the 13-scenario downstream runner
-unimplemented (`runner_implemented=false`).
+opaque handoff only in private state, and remain alive in the JSONL loop.
+Implementation `8a1049b` adds strict bounded EOF-framed FD 3/4/5 provisioning,
+exact final-config matching, at-most-once delivery, natural-exit cleanup,
+failure kill plus bounded wait, a parent process manager, and Contract-wide `gatewaystack` handoff
+validation. E2E lock `fb1b2b0` records that process/component baseline, but
+keeps the locked 48-case Contract as metadata (`suite_exercised=false`) and the
+13-scenario downstream runner unimplemented (`runner_implemented=false`).
 
-The latest verified hosted baseline preceding `f7de91d` is lock `5750ba5` with
-Provider `cf70f5d`. Repository CI `33987232781` and hosted Reference
-`33987232773` (15+5), Candidate `33987232817` (15+5), Browser `33987232789`
-(13+5), shared capacity `33987232775` (10/10), and durable revocation
-`33987232824` (7/7) pass their existing `linux/amd64` profiles. No hosted run is
-claimed for `f7de91d`. No single run combines the required two Gateways, unique
+The latest verified hosted checkout preceding `fb1b2b0` is `c3e34ef`, using
+E2E lock `f7de91d` and Provider `58488d7`. Repository CI `33990418428` and
+hosted Reference `33990418435` (15+5), Candidate `33990418458` (15+5), Browser
+`33990418425` (13+5), shared capacity `33990418420` (10/10), and durable
+revocation `33990418412` (7/7) pass their existing `linux/amd64` profiles. No hosted run is
+claimed for `fb1b2b0`. No single run combines the required two Gateways, unique
 private ingress, retained action-fence/high-water state, independent callers,
 and real Chromium; ADR 0033 external-caller E2E remains open.
 
@@ -338,17 +341,18 @@ evidence chain before it can be advertised.
   production evidence is added.
 - Implementation `58488d7` proves two independent downstream caller processes
   can each bootstrap through their own mTLS/JWS Controller identity and remain
-  in the persistent JSONL loop. This is process/component evidence only: the
-  private endpoints are not provisioned into the two Gateways, `gatewaystack`
-  does not yet accept the full Contract handoff-reference grammar, and no
-  multi-process orchestrator or 13-scenario runner exists. Lock `f7de91d`
-  therefore records `suite_exercised=false`; its check reports
-  `runner_implemented=false`.
-- The latest verified hosted lock `5750ba5` passes repository CI `33987232781`
-  and Reference/Candidate/Browser/shared-capacity/durable-revocation runs
-  `33987232773`/`33987232817`/`33987232789`/`33987232775`/`33987232824` against
-  Provider `cf70f5d`. These are preceding regression tracks; no hosted result is
-  claimed for `f7de91d`, and their partial properties must not be composed into
+  in the persistent JSONL loop. Implementation `8a1049b` adds the strict FD
+  3/4/5 provisioning protocol, full Contract handoff-reference grammar, and
+  fail-closed parent process manager. This is still process/component evidence:
+  no runner has composed two Gateways, unique ingress, retained Valkey, callers,
+  and real Chromium. Lock `fb1b2b0` therefore records
+  `suite_exercised=false`; its check reports `runner_implemented=false`.
+- The latest verified hosted checkout `c3e34ef` with E2E lock `f7de91d` and
+  Provider `58488d7` passes repository CI `33990418428` and
+  Reference/Candidate/Browser/shared-capacity/durable-revocation runs
+  `33990418435`/`33990418458`/`33990418425`/`33990418420`/`33990418412`.
+  These are preceding regression tracks; no hosted result is
+  claimed for `fb1b2b0`, and their partial properties must not be composed into
   an ADR 0033 claim.
 - `blocks/` can validate an internal digest-pinned Block manifest, but it does
   not authorize a Provider capability or establish image provenance.
@@ -359,7 +363,7 @@ evidence chain before it can be advertised.
 
 | Order | Profile | First slice | Required gates before advertisement |
 | --- | --- | --- | --- |
-| 1 | Browser | Contract authority, exact signed amd64/arm64/v8 sandbox publication, default-disabled runtime composition, independent Browser reference caller, Gateway limits, ADR 0031/0032 named component and caller gates, ADR 0033 downstream fencing component plus real-backend integration, and `58488d7` dual-process caller bootstrap tests are complete within their evidence tiers | FD 3/4/5 private endpoint provisioning, Contract-wide `gatewaystack` handoff validation, then the independent ADR 0033 multi-process 13-scenario two-Gateway/unique-ingress/real-Chromium E2E; missing-high-water/restore, Valkey provenance/HA/failover, production storage/configuration/metrics, hostile-tenant and operational evidence, production advertisement, and deployable caller-owned Gateway remain later gates |
+| 1 | Browser | Contract authority, exact signed amd64/arm64/v8 sandbox publication, default-disabled runtime composition, independent Browser reference caller, Gateway limits, ADR 0031/0032 named component and caller gates, ADR 0033 downstream fencing component plus real-backend integration, `58488d7` dual-process caller bootstrap, and `8a1049b` FD provisioning/process-manager tests are complete within their evidence tiers | Independent ADR 0033 multi-process 13-scenario two-Gateway/unique-ingress/retained-Valkey/signed-real-Chromium E2E; missing-high-water/restore, Valkey provenance/HA/failover, production storage/configuration/metrics, hostile-tenant and operational evidence, production advertisement, and deployable caller-owned Gateway remain later gates |
 | 2 | Desktop | Contract and authority audit; display/input/session boundary design | Desktop protocol and image, display/input security, Gateway/reconnect, usage, fault and caller evidence |
 | 3 | Workspace snapshot/restore | Digest and compatibility audit | Secret exclusion, digest verification, new sandbox identity, restore fault/recovery, Contract and caller evidence |
 | 4 | Port-forward | Target and egress authority audit | Explicit target allowlist, network isolation, expiry/revocation, cross-tenant and caller evidence |
@@ -599,11 +603,14 @@ internal Block manifest a wire resource or establishes production readiness.
   Browser composition. It is component plus real-backend adapter integration
   evidence, not independent caller E2E, authenticated unique-ingress topology,
   restore safety, or any platform, deployment, tenancy, or production gate.
-- Downstream caller bootstrap `58488d7` and lock `f7de91d` prove two distinct
-  mTLS/JWS caller OS processes can independently complete Provider bootstrap
-  and continue in the JSONL loop. This remains process/component evidence; the
-  lock records `suite_exercised=false`, the lock check reports
-  `runner_implemented=false`, and no hosted result is claimed for this lock.
+- Downstream caller bootstrap `58488d7`, provisioning/process implementation
+  `8a1049b`, and lock `fb1b2b0` prove two distinct mTLS/JWS caller OS processes
+  can independently complete Provider bootstrap, exchange a correlated private
+  endpoint and exact final config over FD 3/4/5, and continue in the JSONL loop.
+  This remains process/component evidence; FD5 delivery alone is not child
+  acceptance, FIFO type is not proof of an anonymous pipe, the lock records
+  `suite_exercised=false`, the lock check reports `runner_implemented=false`,
+  and no hosted result is claimed for this lock.
 
 ## Next work
 
@@ -617,17 +624,11 @@ ADR 0032 now passes its exact-grant revocation port and real Redis-compatible
 adapter component gate plus its separately locked local and hosted
 two-Gateway/independent-revoker caller gate. ADR 0033/`b4d41c9` passes only the
 downstream CDP fencing component and real-backend adapter integration gate;
-`58488d7` adds only dual-process caller-bootstrap evidence.
+`58488d7` and `8a1049b` add only dual-process bootstrap and
+provisioning/process-manager component evidence.
 
-Next, provision each caller's private endpoint into its Gateway over fixed
-inherited anonymous pipes: FD 3 carries the bootstrap request into the child,
-FD 4 returns the private endpoint result, and FD 5 carries the final caller
-configuration back into the child. Use strict bounded records, fixed pipe
-directions, close-on-exec discipline, and fail plus reap the child on ambiguous
-delivery. This proves at-most-once transfer, not crash-safe exactly-once
-delivery. Align `gatewaystack` with the full Contract handoff-reference grammar
-in the same slice. Then compose the multi-process orchestrator and run all 13
-locked scenarios with two independent Gateway OS processes, one unique
+Next, compose the multi-process orchestrator and run all 13 locked scenarios
+with two independent Gateway OS processes, one unique
 authenticated private ingress OS process, independent black-box callers,
 retained Valkey state, and the exact signed Browser image running real Chromium.
 Keep `suite_exercised=false` until the Contract Suite is actually invoked, and
