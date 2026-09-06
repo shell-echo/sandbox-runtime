@@ -50,7 +50,14 @@ func LoadConfig(path string) (Config, error) {
 		return Config{}, errors.New("invalid caller configuration")
 	}
 	contents, err := readBoundedRegularFile(path, maxConfigBytes, true)
-	if err != nil || validateUniqueJSONFields(contents) != nil {
+	if err != nil {
+		return Config{}, errors.New("invalid caller configuration")
+	}
+	return decodeConfig(contents)
+}
+
+func decodeConfig(contents []byte) (Config, error) {
+	if len(contents) == 0 || len(contents) > maxConfigBytes || validateUniqueJSONFields(contents) != nil {
 		return Config{}, errors.New("invalid caller configuration")
 	}
 	decoder := json.NewDecoder(bytes.NewReader(contents))

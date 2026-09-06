@@ -25,6 +25,59 @@ func TestValidateConfigAcceptsLockedGatewayTopology(t *testing.T) {
 	}
 }
 
+func TestValidateConfigUsesContractHandoffReferenceGrammar(t *testing.T) {
+	accepted := []string{
+		"ref:browser-session:A",
+		"ref:browser-session:A.z_9-",
+		"ref:browser-session:" + strings.Repeat("A", 200),
+		"ref:browser-session:" + strings.Repeat("1", 32),
+	}
+	for _, reference := range accepted {
+		t.Run("accept_"+reference, func(t *testing.T) {
+			config := validConfig(t)
+			config.Endpoints[0].HandoffReference = reference
+			if err := ValidateConfig(config); err != nil {
+				t.Fatalf("ValidateConfig() rejected Contract handoff %q: %v", reference, err)
+			}
+		})
+	}
+
+	rejected := []string{
+		"ref:browser-session:",
+		"ref:browser-session:.leading",
+		"ref:browser-session:_leading",
+		"ref:browser-session:-leading",
+		"ref:browser-session:" + strings.Repeat("A", 201),
+		"ref:browser-session:A:colon",
+		"ref:browser-session:A/slash",
+		"ref:browser-session:A space",
+		"ref:browser-session:A\nnewline",
+		"ref:browser-session:Aunicode-\u754c",
+		"ref:session:A",
+		"ws://127.0.0.1:9222/devtools/browser/A",
+	}
+	for _, reference := range rejected {
+		t.Run("reject_"+reference, func(t *testing.T) {
+			config := validConfig(t)
+			config.Endpoints[0].HandoffReference = reference
+			if err := ValidateConfig(config); err == nil {
+				t.Fatalf("ValidateConfig() accepted invalid handoff %q", reference)
+			}
+		})
+	}
+}
+
+func TestValidateConfigRejectsDuplicateContractHandoffReference(t *testing.T) {
+	config := validConfig(t)
+	duplicate := config.Endpoints[0]
+	duplicate.ID = "endpoint-2"
+	duplicate.BrowserSessionID = "browser-session-2"
+	config.Endpoints = append(config.Endpoints, duplicate)
+	if err := ValidateConfig(config); err == nil {
+		t.Fatal("ValidateConfig() accepted a duplicate Contract handoff reference")
+	}
+}
+
 func TestValidateConfigRejectsRoleTopologyAndLockDrift(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -69,6 +122,13 @@ func TestLoadConfigRequiresPrivateStrictRegularFile(t *testing.T) {
 	encoded, err := json.Marshal(config)
 	if err != nil {
 		t.Fatal(err)
+	}
+	validPath := filepath.Join(t.TempDir(), "gateway.json")
+	if err := os.WriteFile(validPath, encoded, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if loaded, err := LoadConfig(validPath); err != nil || loaded.Endpoints[0].HandoffReference != "ref:browser-session:opaque-1" {
+		t.Fatalf("LoadConfig() Contract handoff = %q, %v", loaded.Endpoints[0].HandoffReference, err)
 	}
 	for _, test := range []struct {
 		name    string
@@ -152,7 +212,7 @@ func validConfig(t *testing.T) Config {
 		}},
 		Endpoints: []Endpoint{{
 			ID: "endpoint-1", TenantID: "tenant-1", SandboxID: "sandbox-1", BrowserSessionID: "browser-session-1",
-			CapabilityProfileID: "browser-v1", HandoffReference: "ref:browser-session:" + strings.Repeat("1", 32),
+			CapabilityProfileID: "browser-v1", HandoffReference: "ref:browser-session:opaque-1",
 			ConnectionGeneration: 1,
 		}},
 		GrantBindings: []GrantBinding{{

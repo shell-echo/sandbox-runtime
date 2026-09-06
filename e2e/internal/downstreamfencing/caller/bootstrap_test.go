@@ -7,21 +7,52 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"math"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/coder/websocket"
 	providercaller "github.com/shell-echo/sandbox-runtime-e2e/internal/caller"
+	"github.com/shell-echo/sandbox-runtime-e2e/internal/downstreamfencing/provisioning"
 	"golang.org/x/sys/unix"
 )
 
 const bootstrapOpaqueReference = "ref:browser-session:opaque-bootstrap-1"
+
+type provisioningWriteBuffer struct {
+	bytes.Buffer
+	mu     sync.Mutex
+	closed bool
+}
+
+func (b *provisioningWriteBuffer) Write(content []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.closed {
+		return 0, os.ErrClosed
+	}
+	return b.Buffer.Write(content)
+}
+
+func (b *provisioningWriteBuffer) Close() error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.closed = true
+	return nil
+}
+
+func (b *provisioningWriteBuffer) contents() []byte {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return append([]byte(nil), b.Buffer.Bytes()...)
+}
 
 func TestLoadBootstrapCallerConfigRequiresStrictPrivateRegularFile(t *testing.T) {
 	config := testBootstrapCallerConfig(t)
@@ -234,6 +265,199 @@ func TestRunBootstrappedFreezesGatewayMapBeforeBootstrap(t *testing.T) {
 	if err := json.Unmarshal(bytes.TrimSpace(output.Bytes()), &response); err != nil || !response.OK || response.Outcome != OutcomeTerminated {
 		t.Fatalf("shutdown response = %#v, error = %v", response, err)
 	}
+}
+
+func TestRunProvisionedExchangesOneCorrelatedEndpointAndExactFinalConfig(t *testing.T) {
+	config := testBootstrapCallerConfig(t)
+	config.GrantBinding.LifetimeMillis = maxBootstrapGrantLifetimeMillis
+	providerConfig := testProviderBootstrapIdentity(config)
+	providerConfig.Controller.ControllerSubject = "spiffe://downstream-caller/controller-a"
+	request := testProvisioningRequest(providerConfig, "provisioning-a")
+	handoffExpiry := time.Now().UTC().Add(2 * time.Minute)
+	expected := materializeBootstrapCallerConfig(
+		config, bootstrapOpaqueReference, 7, handoffExpiry.Format(time.RFC3339Nano),
+	)
+	requestInput := provisioningRequestInput(t, request)
+	endpointOutput := &provisioningWriteBuffer{}
+	finalInput := provisioningFinalInput(t, request.RequestID, expected)
+	controlInput := strings.NewReader(`{"version":1,"sequence":1,"action":"shutdown"}` + "\n")
+	var controlOutput bytes.Buffer
+	bootstrap := func(_ context.Context, _ providercaller.BrowserBootstrapConfig, sink providercaller.BrowserBootstrapEndpointSink) error {
+		return sink.BindBrowserBootstrapEndpoint(
+			config.Endpoint.TenantID, config.Endpoint.SandboxID, config.Endpoint.BrowserSessionID,
+			config.Endpoint.CapabilityProfileID, bootstrapOpaqueReference, 7, handoffExpiry,
+		)
+	}
+	if err := runProvisioned(
+		context.Background(), config, providerConfig, requestInput, endpointOutput, finalInput,
+		controlInput, &controlOutput, bootstrap,
+	); err != nil {
+		t.Fatal(err)
+	}
+	envelope, err := provisioning.ReadEndpoint(bytes.NewReader(endpointOutput.contents()))
+	if err != nil || envelope.RequestID != request.RequestID || envelope.Endpoint.HandoffReference != bootstrapOpaqueReference ||
+		envelope.Endpoint.ConnectionGeneration != 7 || envelope.GrantBinding.ExpiresAt != handoffExpiry.Format(time.RFC3339Nano) ||
+		envelope.HandoffExpiresAt != handoffExpiry.Format(time.RFC3339Nano) {
+		t.Fatalf("endpoint envelope = %#v, error = %v", envelope, err)
+	}
+	var response Response
+	if err := json.Unmarshal(bytes.TrimSpace(controlOutput.Bytes()), &response); err != nil || !response.OK || response.Outcome != OutcomeTerminated {
+		t.Fatalf("shutdown response = %#v, error = %v", response, err)
+	}
+	for _, private := range append(bootstrapPrivateValues(config), bootstrapOpaqueReference, handoffExpiry.Format(time.RFC3339Nano)) {
+		if strings.Contains(controlOutput.String(), private) {
+			t.Fatalf("stdout leaked %q", private)
+		}
+	}
+}
+
+func TestRunProvisionedRejectsRequestDriftBeforeProviderMutation(t *testing.T) {
+	config := testBootstrapCallerConfig(t)
+	providerConfig := testProviderBootstrapIdentity(config)
+	providerConfig.Controller.ControllerSubject = "spiffe://downstream-caller/controller-a"
+	request := testProvisioningRequest(providerConfig, "provisioning-a")
+	request.SandboxID = "sandbox-drift"
+	called := false
+	bootstrap := func(context.Context, providercaller.BrowserBootstrapConfig, providercaller.BrowserBootstrapEndpointSink) error {
+		called = true
+		return nil
+	}
+	endpointOutput := &provisioningWriteBuffer{}
+	var controlOutput bytes.Buffer
+	err := runProvisioned(
+		context.Background(), config, providerConfig, provisioningRequestInput(t, request), endpointOutput,
+		io.NopCloser(strings.NewReader("")), strings.NewReader(""), &controlOutput, bootstrap,
+	)
+	assertBootstrappedCallerFailure(t, err, config, request.RequestID)
+	if called || len(endpointOutput.contents()) != 0 || controlOutput.Len() != 0 {
+		t.Fatalf("request drift reached bootstrap=%t endpoint=%q stdout=%q", called, endpointOutput.contents(), controlOutput.String())
+	}
+}
+
+func TestRunProvisionedRejectsFinalConfigDriftBeforeJSONL(t *testing.T) {
+	tests := map[string]func(*Config){
+		"Gateway":   func(config *Config) { config.Gateways["gateway-a"] = "https://127.0.0.1:19443" },
+		"principal": func(config *Config) { config.Principals[0].Token = strings.Repeat("x", 32) },
+		"endpoint":  func(config *Config) { config.Endpoints[0].ConnectionGeneration++ },
+		"handoff":   func(config *Config) { config.Endpoints[0].HandoffReference = "ref:browser-session:other" },
+		"grant":     func(config *Config) { config.GrantBindings[0].GrantID = "grant-other" },
+		"expiry": func(config *Config) {
+			expiresAt, _ := parseCanonicalExpiry(config.GrantBindings[0].ExpiresAt)
+			config.GrantBindings[0].ExpiresAt = expiresAt.Add(-time.Second).Format(time.RFC3339Nano)
+		},
+	}
+	for name, mutate := range tests {
+		t.Run(name, func(t *testing.T) {
+			config := testBootstrapCallerConfig(t)
+			config.GrantBinding.LifetimeMillis = maxBootstrapGrantLifetimeMillis
+			providerConfig := testProviderBootstrapIdentity(config)
+			providerConfig.Controller.ControllerSubject = "spiffe://downstream-caller/controller-a"
+			request := testProvisioningRequest(providerConfig, "provisioning-a")
+			handoffExpiry := time.Now().UTC().Add(2 * time.Minute)
+			finalConfig := materializeBootstrapCallerConfig(config, bootstrapOpaqueReference, 7, handoffExpiry.Format(time.RFC3339Nano))
+			mutate(&finalConfig)
+			endpointOutput := &provisioningWriteBuffer{}
+			var controlOutput bytes.Buffer
+			bootstrap := func(_ context.Context, _ providercaller.BrowserBootstrapConfig, sink providercaller.BrowserBootstrapEndpointSink) error {
+				return sink.BindBrowserBootstrapEndpoint(
+					config.Endpoint.TenantID, config.Endpoint.SandboxID, config.Endpoint.BrowserSessionID,
+					config.Endpoint.CapabilityProfileID, bootstrapOpaqueReference, 7, handoffExpiry,
+				)
+			}
+			err := runProvisioned(
+				context.Background(), config, providerConfig, provisioningRequestInput(t, request), endpointOutput,
+				provisioningFinalInput(t, request.RequestID, finalConfig),
+				strings.NewReader(`{"version":1,"sequence":1,"action":"shutdown"}`+"\n"), &controlOutput, bootstrap,
+			)
+			assertBootstrappedCallerFailure(t, err, config, request.RequestID)
+			if len(endpointOutput.contents()) == 0 || controlOutput.Len() != 0 {
+				t.Fatalf("final drift endpoint=%q stdout=%q", endpointOutput.contents(), controlOutput.String())
+			}
+		})
+	}
+}
+
+func TestRunProvisionedCancellationClosesActiveRequestPipe(t *testing.T) {
+	config := testBootstrapCallerConfig(t)
+	providerConfig := testProviderBootstrapIdentity(config)
+	providerConfig.Controller.ControllerSubject = "spiffe://downstream-caller/controller-a"
+	requestRead, requestWrite, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer requestWrite.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		done <- runProvisioned(
+			ctx, config, providerConfig, requestRead, &provisioningWriteBuffer{}, io.NopCloser(strings.NewReader("")),
+			strings.NewReader(""), io.Discard,
+			func(context.Context, providercaller.BrowserBootstrapConfig, providercaller.BrowserBootstrapEndpointSink) error {
+				return nil
+			},
+		)
+	}()
+	cancel()
+	select {
+	case err := <-done:
+		assertBootstrappedCallerFailure(t, err, config, "")
+	case <-time.After(time.Second):
+		t.Fatal("cancellation did not close the active provisioning request pipe")
+	}
+}
+
+func TestRunProvisionedRejectsTypedNilInputsBeforeProviderMutation(t *testing.T) {
+	config := testBootstrapCallerConfig(t)
+	providerConfig := testProviderBootstrapIdentity(config)
+	providerConfig.Controller.ControllerSubject = "spiffe://downstream-caller/controller-a"
+	called := false
+	bootstrap := func(context.Context, providercaller.BrowserBootstrapConfig, providercaller.BrowserBootstrapEndpointSink) error {
+		called = true
+		return nil
+	}
+	var nilFile *os.File
+	err := runProvisioned(
+		context.Background(), config, providerConfig, nilFile, &provisioningWriteBuffer{},
+		io.NopCloser(strings.NewReader("")), strings.NewReader(""), io.Discard, bootstrap,
+	)
+	assertBootstrappedCallerFailure(t, err, config, "")
+	if called {
+		t.Fatal("typed-nil provisioning input reached Provider bootstrap")
+	}
+}
+
+func TestRunProvisioningPhaseClosesOnceAndJoinsCancellationWatcher(t *testing.T) {
+	closer := &countingProvisioningCloser{closed: make(chan struct{})}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	err := runProvisioningPhase(ctx, closer, func() error {
+		<-closer.closed
+		return os.ErrClosed
+	})
+	if !errors.Is(err, errBootstrappedCaller) {
+		t.Fatalf("phase error = %v", err)
+	}
+	closer.mu.Lock()
+	closeCount := closer.closeCount
+	closer.mu.Unlock()
+	if closeCount != 1 {
+		t.Fatalf("close count = %d, want 1", closeCount)
+	}
+}
+
+type countingProvisioningCloser struct {
+	mu         sync.Mutex
+	closeCount int
+	closed     chan struct{}
+	once       sync.Once
+}
+
+func (c *countingProvisioningCloser) Close() error {
+	c.mu.Lock()
+	c.closeCount++
+	c.mu.Unlock()
+	c.once.Do(func() { close(c.closed) })
+	return nil
 }
 
 func TestBootstrapEndpointBindingRejectsDriftExpiryAndReuse(t *testing.T) {
@@ -455,6 +679,39 @@ func testProviderBootstrapIdentity(config BootstrapCallerConfig) providercaller.
 		SandboxID:        config.Endpoint.SandboxID,
 		BrowserSessionID: config.Endpoint.BrowserSessionID,
 	}
+}
+
+func testProvisioningRequest(config providercaller.BrowserBootstrapConfig, requestID string) provisioning.Request {
+	return provisioning.Request{
+		Version: provisioning.ProtocolVersion, RequestID: requestID,
+		ControllerSubject: config.Controller.ControllerSubject,
+		TenantID:          config.TenantID, SandboxID: config.SandboxID,
+		BrowserSessionID: config.BrowserSessionID, CapabilityProfileID: lockedCapabilityProfileID,
+	}
+}
+
+func provisioningRequestInput(t *testing.T, request provisioning.Request) io.ReadCloser {
+	t.Helper()
+	var document bytes.Buffer
+	if err := provisioning.WriteRequest(&document, request); err != nil {
+		t.Fatal(err)
+	}
+	return io.NopCloser(bytes.NewReader(document.Bytes()))
+}
+
+func provisioningFinalInput(t *testing.T, requestID string, config Config) io.ReadCloser {
+	t.Helper()
+	encoded, err := json.Marshal(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var document bytes.Buffer
+	if err := provisioning.WriteFinalConfiguration(&document, provisioning.FinalConfiguration{
+		Version: provisioning.ProtocolVersion, RequestID: requestID, Config: encoded,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return io.NopCloser(bytes.NewReader(document.Bytes()))
 }
 
 func bootstrapPrivateValues(config BootstrapCallerConfig) []string {

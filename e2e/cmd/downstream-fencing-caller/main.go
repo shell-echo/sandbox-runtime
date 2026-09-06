@@ -13,18 +13,28 @@ import (
 )
 
 func main() {
+	os.Exit(run())
+}
+
+func run() int {
 	configPath := flag.String("config", "", "downstream-fencing caller JSON configuration")
 	providerBootstrapConfigPath := flag.String("provider-bootstrap-config", "", "Browser Provider bootstrap JSON configuration")
 	flag.Parse()
 	if *configPath == "" || *providerBootstrapConfigPath == "" || flag.NArg() != 0 {
 		_, _ = fmt.Fprintln(os.Stderr, "downstream-fencing caller configuration required")
-		os.Exit(2)
+		return 2
 	}
+	provisioningFiles, err := caller.OpenInheritedProvisioning()
+	if err != nil {
+		_, _ = fmt.Fprintln(os.Stderr, "downstream-fencing caller provisioning required")
+		return 2
+	}
+	defer provisioningFiles.Close()
 	config, configErr := caller.LoadBootstrapCallerConfig(*configPath)
 	providerConfig, providerConfigErr := providercaller.LoadBrowserBootstrapConfig(*providerBootstrapConfigPath)
 	if configErr != nil || providerConfigErr != nil {
 		_, _ = fmt.Fprintln(os.Stderr, "downstream-fencing caller configuration invalid")
-		os.Exit(1)
+		return 1
 	}
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
@@ -37,8 +47,9 @@ func main() {
 		case <-stopInputCloser:
 		}
 	}()
-	if err := caller.RunBootstrapped(ctx, config, providerConfig, os.Stdin, os.Stdout); err != nil {
+	if err := caller.RunProvisioned(ctx, config, providerConfig, provisioningFiles, os.Stdin, os.Stdout); err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, "downstream-fencing caller failed")
-		os.Exit(1)
+		return 1
 	}
+	return 0
 }
