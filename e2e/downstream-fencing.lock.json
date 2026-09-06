@@ -3,7 +3,7 @@
   "evidence_profile": "browser-downstream-fencing-e2e-v1",
   "sources": {
     "provider_revision": "8ad7aca08d669af9cb71e02124478e23a3ae4990",
-    "harness_baseline": "8a1049bfa1d68bdd88c9df3ebd02c2c9ac0434b5",
+    "harness_baseline": "8ad7aca08d669af9cb71e02124478e23a3ae4990",
     "gateway_component": {
       "path": "gateway/composition/browser.go",
       "revision": "b4d41c9a32b4ccf39edaba3fb8bf5ad239c1f945"

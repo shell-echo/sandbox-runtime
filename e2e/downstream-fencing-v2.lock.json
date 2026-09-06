@@ -23,7 +23,7 @@
   },
   "base_lock": {
     "path": "e2e/downstream-fencing.lock.json",
-    "sha256": "sha256:8254c04257e58a158608a31709bc8ebbc491cad0ada31fc1bcbfd1cf65c46b08",
+    "sha256": "sha256:32b634e04fd9b5bccab1ad104145e2bc085d1a5342dfb1c3ceae3a7119743664",
     "evidence_profile": "browser-downstream-fencing-e2e-v1"
   },
   "contract": {
