@@ -12,6 +12,7 @@ SANDBOX_RUNTIME_DOCKER_INTEGRATION=1 go test -tags=integration -count=1 ./driver
 SANDBOX_RUNTIME_BROWSER_ADAPTER_INTEGRATION=1 go test -tags=integration -count=1 ./provider/browser/driver/docker
 SANDBOX_RUNTIME_BROWSER_PROVENANCE_INTEGRATION=1 go test -tags=integration -count=1 ./provider/browser/provenance/ghcli
 SANDBOX_RUNTIME_BROWSER_NETWORK_INTEGRATION=1 SANDBOX_RUNTIME_BROWSER_GATEWAY_IMAGE=sha256:<local-image-id> go test -tags=integration -count=1 -run '^TestBrowserRestrictedEgressIntegration$' ./provider/browser/driver/docker
+SANDBOX_RUNTIME_ACTION_HISTORY_POSTGRES_ADMIN_URL=postgres://<migration-owner>@127.0.0.1/witness SANDBOX_RUNTIME_ACTION_HISTORY_POSTGRES_URL=postgres://<runtime-role>@127.0.0.1/witness SANDBOX_RUNTIME_ACTION_HISTORY_POSTGRES_DENIED_URL=postgres://<denied-role>@127.0.0.1/witness SANDBOX_RUNTIME_SHARED_CAPACITY_REDIS_URL=redis://127.0.0.1:6379/0 go test -tags=integration -race -shuffle=on -count=1 ./gateway/capacity/redis
 go run ./cmd/verify-contract -source-root .
 go run ./cmd/run-conformance -source-root . -race -shuffle
 ```

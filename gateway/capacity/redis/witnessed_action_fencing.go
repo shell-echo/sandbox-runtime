@@ -150,6 +150,31 @@ func (f *WitnessedActionFencer) Verify(ctx context.Context) error {
 	return nil
 }
 
+// VerifyRestoredState is a strict, read-only recovery check. The unique
+// ingress must remain quarantined while it runs. Unlike Verify, it never
+// advances the witness when Redis is exactly one checkpoint ahead.
+func (f *WitnessedActionFencer) VerifyRestoredState(ctx context.Context) error {
+	if !f.valid() {
+		return gateway.ErrDownstreamUnavailable
+	}
+	checkpoint, err := f.witness.Load(ctx, f.policyFingerprint())
+	if err != nil {
+		return actionHistoryDownstreamError(ctx, err)
+	}
+	args := appendCopy(f.capacity.policyArgs, f.policyArgs...)
+	args = append(args, witnessedActionCheckpointFormat, checkpoint.sequence, checkpoint.token, "verify")
+	result, err := f.run(ctx, witnessedActionProvisionScript,
+		[]string{f.capacity.keys[1], f.capacity.keys[2], f.policyKey, f.stateKey}, args...)
+	if err != nil {
+		return actionHistoryDownstreamError(ctx, err)
+	}
+	values, err := resultStrings(result)
+	if err != nil || len(values) != 1 || values[0] != "ready" {
+		return gateway.ErrDownstreamUnavailable
+	}
+	return nil
+}
+
 func (f *WitnessedActionFencer) AuthorizeAction(
 	ctx context.Context,
 	subject gateway.DownstreamFenceSubject,

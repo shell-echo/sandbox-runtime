@@ -175,6 +175,18 @@ five sanitized files; artifact ID `9987350368` has digest
 This closes only the hosted ADR 0034 external-caller gate; production witness,
 HA/failover, deployment, advertisement, and production claims remain open.
 
+ADR 0035 now adds a PostgreSQL production-candidate witness adapter and a
+strict read-only controlled-restore check. The implementation binds the private
+capacity namespace and witnessed-v2 policy digests, uses bounded atomic CAS
+with local synchronous commit, supplies an explicit least-privilege migration,
+and keeps ordinary one-ahead runtime recovery separate from exact restore
+verification. Local unit/full race-shuffle, vet, Contract verification, the
+unchanged 48-case Suite, and the pinned-Valkey strict-recovery case pass. The
+tagged real PostgreSQL and combined rollback tests compile and have a dedicated
+workflow, but neither a local PostgreSQL run nor hosted result exists for this
+revision. This is component progress, not production storage or restore
+operations evidence.
+
 Intermediate hosted run `34025787520` at `ef63be4` exposed a harness verifier
 false negative: it treated raw post-`RESTORE` hash `DUMP` bytes as canonical
 logical state. Fix `059357c` keeps the real `DUMP`/`RESTORE` control but compares
@@ -702,9 +714,10 @@ adapter gates; its separately locked v2 caller runner passes 18/18 locally on
 in run `34026680591`, both at fixed harness `059357c`.
 
 Keep `suite_exercised=false` for both downstream caller profiles until a runner
-actually invokes the Contract Suite. Next address Valkey provenance/HA/failover,
-a production witness and restore procedure, metrics,
-production storage/configuration and authenticated-ingress topology,
+actually invokes the Contract Suite. Next run and inspect the PostgreSQL witness
+gate, pin the server artifact, and establish independent failure/backup domains
+plus ingress quarantine/resume. Then address Valkey/PostgreSQL HA/failover,
+metrics, production storage/configuration and authenticated-ingress topology,
 hostile-tenant, ACL, and operational evidence as later independent gates before
 reviewing production advertisement.
 Keep Browser Reference E2E separate from coding/shell, real Agent Platform,

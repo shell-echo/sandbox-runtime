@@ -237,6 +237,19 @@ This is hosted ADR 0034 caller evidence only. The Suite is unexercised, and
 production witness, HA/failover, production ACL isolation, deployment, and
 production results remain absent.
 
+ADR 0035 adds a PostgreSQL production-candidate `ActionHistoryWitness` and a
+strict read-only controlled-restore verification primitive. The row key combines
+the private capacity-namespace digest with the witnessed-v2 policy digest;
+conditional updates force local `synchronous_commit=on`, use bounded contexts,
+and project database failures without backend detail. Runtime roles receive no
+DDL, delete, or truncate authority. `VerifyRestoredState` accepts only exact
+Redis/witness equality and never performs the one-ahead repair retained by
+ordinary runtime `Verify`. Local unit/full, Contract/Suite, and pinned-Valkey
+strict-recovery checks pass, while the real PostgreSQL integration currently
+has compile evidence only and no hosted run. The adapter is not evidence of
+independent deployment domains, PostgreSQL or Valkey HA, controlled ingress
+operations, or production readiness.
+
 The orchestrator's restore control continues to inject real Redis
 `DUMP`/`RESTORE` faults, but fixed harness `059357c` verifies restored key type,
 logical string/hash/zset content, missing-key state, and TTL semantics rather

@@ -454,6 +454,21 @@ metrics/configuration and topology, deployment, multi-controller, hostile
 multi-tenant, real Agent Platform, aggregate conformance, and production
 readiness remain unproved.
 
+ADR 0035 now adds a PostgreSQL production-candidate witness adapter and strict
+read-only `VerifyRestoredState`. Rows are isolated by both the private capacity
+namespace digest and witnessed-v2 policy digest; mutations use atomic
+conditional updates, force primary-local synchronous commit, preserve bounded
+contexts, and redact database detail. The repository includes an explicit
+migration, column-scoped runtime grants, real PostgreSQL/Redis integration
+tests, and a separate workflow. Local full race/shuffle, vet, Contract
+verification, the unchanged 48-case Suite, and the pinned-Valkey strict
+one-ahead non-mutation case pass. The PostgreSQL-tagged tests compile, but this
+revision has no local real-PostgreSQL or hosted workflow result because the
+local service/image was unavailable. This is not production or HA evidence;
+independent failure and backup domains, controlled ingress quarantine/resume,
+server provenance, both stores' HA/failover, deployment, and correlated
+rollback remain open.
+
 Intermediate hosted run `34025787520` at documentation checkout `ef63be4`
 failed in the restore-control verification rather than the fencing behavior.
 The helper compared post-`RESTORE` hash `DUMP` bytes with the original dump,
@@ -866,22 +881,26 @@ Hosted harness `2cadc53` run `34013982796` passes the same scenarios on
 `20260906T052710.781616339Z` with exactly five sanitized files and has been
 inspected.
 
-1. Keep `suite_exercised=false` for both downstream caller profiles until a
+1. Run and inspect the PostgreSQL witness workflow, pin and verify its exact
+   server artifact, then prove independent failure/backup domains and the
+   controlled ingress quarantine/restore/verify/resume procedure. Do not call
+   the adapter or its component tests a production witness or HA evidence.
+2. Keep `suite_exercised=false` for both downstream caller profiles until a
    runner actually invokes the Contract Suite, and do not relabel the ADR 0033
    platform-specific v1 results as ADR 0034 evidence. Retain the local and hosted
    v2 artifacts as two platform-specific results, not aggregate or production
    evidence.
-2. Preserve the Browser, coding/shell Reference, and Platform Candidate harnesses
+3. Preserve the Browser, coding/shell Reference, and Platform Candidate harnesses
    as three separately named evidence modes. Do not relabel the Browser
    reference deployment as production or the candidate mode as real platform
    traffic.
-3. Begin real P3 only against a platform migration target: lock the same
+4. Begin real P3 only against a platform migration target: lock the same
    Contract/profile, shadow capabilities and requests, canary only new runs,
    prove rollback and old-run drain, and compare the required metrics without
    changing platform-owned contracts.
-4. Start the Desktop Contract/authority audit only after the Browser readiness
+5. Start the Desktop Contract/authority audit only after the Browser readiness
    record is complete; do not reuse terminal or Browser routes as a shortcut.
-5. Keep aggregate conformance, multi-controller, hostile multi-tenant,
+6. Keep aggregate conformance, multi-controller, hostile multi-tenant,
    deployment, and production-readiness claims blocked until their separately
    named gates have reproducible evidence.
 
