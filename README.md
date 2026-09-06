@@ -21,11 +21,16 @@ at harness `2cadc53` each pass all 13 downstream-fencing scenarios on
 mTLS/JWS caller processes, two Gateway processes, one authenticated unique
 ingress, retained Valkey state, and the exact signed Browser image running real
 Chromium. They close only the platform-specific ADR 0033 external-caller gates.
-The Contract identity is pinned, but its 48-case Suite is not exercised by this
-profile (`suite_exercised=false`). Real Agent Platform migration, Valkey
-provenance and HA/failover, production Browser advertisement/public Gateway
-composition, aggregate conformance, multi-controller, hostile multi-tenant,
-deployment, and production gates remain open.
+ADR 0034 adds an explicitly selected v2 component with a bounded permanent
+session-history hash and an independent monotonic restore witness. Its local
+race/shuffle, vet, Contract verifier, unchanged 48-case Suite, and pinned-Valkey
+adapter gates pass. The existing reference stack and both ADR 0033 caller runs
+still use v1; they are not v2 deletion/restore evidence. Real v2 Chromium caller
+E2E, a production witness, Valkey provenance and HA/failover, production Browser
+advertisement/public Gateway composition, real Agent Platform migration,
+aggregate conformance, multi-controller, hostile multi-tenant, deployment, and
+production gates remain open. The ADR 0033 profile pins Contract identity but
+does not execute the Suite (`suite_exercised=false`).
 
 Hosted checkout `2cadc53` passes repository CI `34013982778`, Reference
 `34013982794`, Candidate `34013982784`, Browser `34013982785`, shared-capacity
@@ -140,6 +145,14 @@ Currently implemented:
   pass at implementation `b4d41c9`. This remains component plus real-backend
   adapter integration evidence; the separately recorded local caller run below
   establishes only its named topology and scenarios
+- ADR 0034 witnessed downstream-action successor component. One bounded
+  permanent Redis hash retains exact session fingerprints and checkpoint state;
+  a separate monotonic witness detects a retained Redis state restored behind
+  it. The Darwin/Linux file witness is single-process component evidence and is
+  independent only when deployed outside the Redis snapshot/restore domain.
+  Focused and full race/shuffle tests, vet, Contract verification, the unchanged
+  48-case Suite, and tagged integration against the same pinned Valkey index
+  pass. No default composition or production advertisement selects v2
 - downstream caller bootstrap implementation `58488d7`: two independently
   identified mTLS/JWS caller OS processes each perform Provider capability,
   create, operation, sandbox, Browser-session, and handoff reconciliation, bind
@@ -182,10 +195,11 @@ Currently implemented:
 
 Planned but not yet implemented:
 
-- establish detection/control for prematurely deleted or
-  restore-missing high-water state, restored-snapshot consistency, HA/failover,
-  Valkey provenance, hostile-tenant, storage, configuration, metrics, and
-  operational gates
+- compose and lock a v2 multi-process real-Chromium caller gate that exercises
+  retained-history deletion and controlled older-snapshot restore with an
+  independently durable witness; separately establish production witness
+  storage, ingress suspension/repair, HA/failover, Valkey provenance,
+  hostile-tenant, configuration, metrics, ACL, and operational gates
 - production Browser advertisement and deployable caller-owned Gateway
   integration only after those independent readiness gates pass
 - runtime images for desktop workloads

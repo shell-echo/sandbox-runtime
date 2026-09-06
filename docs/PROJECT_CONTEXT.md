@@ -422,11 +422,20 @@ scenarios on `linux/amd64` and closes that platform-specific caller gate. Its
 artifact digest is
 `sha256:9c00f3ba184e82d7eff661b831c05c1bdf331fa41caf2d8bbb3353168ab155b0`.
 The Contract/tree/48-case identity is pinned, but the Suite is not exercised.
-Detection/control for prematurely deleted or restore-missing high-water state,
-restored-snapshot consistency, Valkey provenance/HA/failover, production
-metrics/configuration and topology, deployment, multi-controller, hostile
-multi-tenant, real Agent Platform, aggregate conformance, and production
-readiness remain unproved.
+
+ADR 0034 then adds a separately selected v2 action-fencing component. One
+bounded permanent Redis hash detects missing or malformed retained session
+history, and an independent sequence/token witness rejects a Redis action state
+restored behind it. The included Darwin/Linux `0600` file witness is
+single-process component evidence and is valid only outside the Redis
+snapshot/restore domain. Local focused/full race-shuffle, vet, Contract
+verification, the unchanged 48-case Suite, and tagged integration against the
+same pinned Valkey index pass. The existing downstream caller stack still uses
+ADR 0033 v1, so neither prior caller run is deletion/restore evidence. A locked
+v2 real-Chromium caller gate, production witness/storage, Valkey
+provenance/HA/failover, production metrics/configuration and topology,
+deployment, multi-controller, hostile multi-tenant, real Agent Platform,
+aggregate conformance, and production readiness remain unproved.
 
 ADR 0018 records the original reproducible browser image component, while ADR
 0019 requires the current `sandbox.runtime/browser-image/v2` sandbox posture
@@ -578,13 +587,13 @@ ADR 0028 and `44ea2ee` add process-local pre-upgrade connection/rate control;
 hosted run `33854020809` passes the combined 12+5 Browser caller against harness
 `e7e7f03`. ADR 0029 and `b8f8941` add listener/TLS/HTTP bounds; hosted run
 `33857739150` passes the 13+5 Browser caller against harness `7a20d9d`.
-Production Browser advertisement/public Gateway and private-ingress topology,
-prematurely deleted or restore-missing
-high-water controls, restored-snapshot consistency, Valkey provenance,
-HA/failover consistency,
-remaining profile-specific security and concurrency, aggregate,
-multi-controller, multi-tenant, deployment, and production gates remain
-separate and open.
+ADR 0034 separately passes its witnessed v2 deletion/rollback-detection
+component and pinned-Valkey adapter gates. It is not selected by this v1 caller
+topology. Production Browser advertisement/public Gateway and v2 private-ingress
+topology, a production independent witness, controlled restore operations,
+Valkey provenance and HA/failover consistency, remaining profile-specific
+security and concurrency, aggregate, multi-controller, multi-tenant,
+deployment, and production gates remain separate and open.
 
 Contract identity:
 
@@ -603,7 +612,7 @@ Contract identity:
 | P2.5i | Hosted regression `33970773414` passed 15 initial plus 5 restart/resume coding/shell scenarios against harness/Provider lock `17ed6ca`/`b4d41c9`; latest local pre-refresh run `20260905T080530.577843000Z` passed against `59e08d5`/`c0a55d1` | Neither run contains a Browser scenario or implies Agent Platform, durable-revocation caller, or production properties |
 | P2 | Reference coding/shell caller release gate passed | Aggregate conformance, actual Agent Platform compatibility, multi-controller, hostile multi-tenant isolation, deployment, and production gates remain open |
 | P3 | Local revision binding/shadow/metrics component evidence plus latest local pre-refresh candidate integration (`20260905T080623.861033000Z`, `59e08d5`/`c0a55d1` lock) and hosted candidate regression `33970773345` against `17ed6ca`/`b4d41c9` | Real platform traffic shadow parity, canary, rollback, old-run drain, metric parity, and unchanged platform contracts remain open |
-| P4 | Browser Contract authority/projection, exact sandboxed signed amd64/arm64/v8 publication, Provider-local components, default-disabled command/runtime composition, process-local Gateway limits, the separately recorded Browser/shared-capacity/durable-revocation caller gates, and ADR 0033 component evidence pass within their named boundaries. Local harness/run `550c785`/`20260906T050213.016063000Z` and hosted harness/run `2cadc53`/`34013982796` pass all 13 two-Gateway/unique-ingress/retained-Valkey/signed-real-Chromium scenarios on arm64 and amd64; their Contract Suite remains unexercised | Prematurely deleted or restore-missing high-water controls, restored-snapshot consistency, production Browser advertisement/public Gateway, Valkey provenance/HA, production configuration/metrics, aggregate, multi-controller, multi-tenant, deployment, and production gates remain open |
+| P4 | Browser Contract authority/projection, exact sandboxed signed amd64/arm64/v8 publication, Provider-local components, default-disabled command/runtime composition, process-local Gateway limits, the separately recorded Browser/shared-capacity/durable-revocation caller gates, ADR 0033 component/caller evidence, and the ADR 0034 v2 deletion/rollback-detection component pass within their named boundaries. The ADR 0033 caller runs remain v1 and their Contract Suite remains unexercised | A locked v2 real-Chromium deletion/restore caller gate, production independent witness/storage and restore operations, production Browser advertisement/public Gateway, Valkey provenance/HA, production configuration/metrics, aggregate, multi-controller, multi-tenant, deployment, and production gates remain open |
 
 Production readiness is not a numbered phase shortcut. Aggregate conformance,
 multi-controller reliability, hostile multi-tenant security, deployment, and
@@ -828,10 +837,12 @@ Hosted harness `2cadc53` run `34013982796` passes the same scenarios on
 `20260906T052710.781616339Z` with exactly five sanitized files and has been
 inspected.
 
-1. Keep `suite_exercised=false` until the Contract Suite is actually invoked,
-   and do not turn the platform-specific ADR 0033 caller results into aggregate
-   conformance. Implement detection/control for prematurely deleted or
-   restore-missing high-water state and restored-snapshot consistency next.
+1. Keep `suite_exercised=false` for the ADR 0033 caller profile until that
+   runner actually invokes the Contract Suite, and do not relabel its
+   platform-specific v1 results as ADR 0034 evidence. Next compose a locked v2
+   multi-process real-Chromium caller gate with independent witness
+   reconstruction, retained-history deletion, and controlled older-snapshot
+   restore scenarios.
 2. Preserve the Browser, coding/shell Reference, and Platform Candidate harnesses
    as three separately named evidence modes. Do not relabel the Browser
    reference deployment as production or the candidate mode as real platform
