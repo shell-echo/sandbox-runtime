@@ -276,10 +276,12 @@ reconstructions for repair, interrupted-CAS recovery, mismatch repair, and
 cleanup. The Contract identity remains pinned, but the Suite is not executed
 (`suite_exercised=false`). Clean local run `20260906T092259.737890000Z` at
 harness `d61cd862b927bdba2a23ef002de5e0bdc760b30f` passes all 18 scenarios on
-`linux/arm64`; the hosted v2 gate remains open. This local result does not
-establish a production monotonic witness, correlated Redis-and-witness rollback
-protection, Valkey provenance/HA/failover, real Agent Platform compatibility,
-hostile multi-tenant isolation, deployment, or production readiness.
+`linux/arm64`; hosted run `34025141624` at checkout
+`05b3b466a7db566a288111d6bf0c32f5d9af72ff` passes the same set on
+`linux/amd64`. These platform-specific results do not establish a production
+monotonic witness, correlated Redis-and-witness rollback protection, Valkey
+provenance/HA/failover, real Agent Platform compatibility, hostile multi-tenant
+isolation, deployment, or production readiness.
 
 ## Latest verified evidence
 
@@ -314,7 +316,26 @@ one expected fail-closed startup and four successful reconstructions. Exactly
 five `0600` evidence files passed the cleanup and sanitization checks. The
 manifest pins the Contract/tree/48-case identity with
 `suite_exercised=false`. This closes only the local `linux/arm64` ADR 0034
-external-caller gate; no hosted or production property follows from it.
+external-caller gate.
+
+Hosted witnessed-v2 run `34025141624` at checkout `05b3b46` independently
+passed the same 18 scenarios on `linux/amd64`. Downloaded artifact
+`browser-downstream-fencing-v2-e2e-evidence-34025141624` contains evidence
+directory `20260906T093725.327949819Z` with exactly these five files:
+`manifest.json`, `report.json`, `gateway-audit-a.jsonl`,
+`gateway-audit-b.jsonl`, and `ingress-observations.jsonl`. The report has no
+failed scenario; the manifest records all cleanup and sanitization booleans as
+true, five ingress reconstructions, no top-level v1 `adapters` field, the
+orchestrator-only separate restore credential, and
+`suite_exercised=false`. The artifact digest is
+`sha256:55991ec39138183cefecab9cdfb5b23d4bada9b6b96286655cd9b8899a022203`.
+This closes only the hosted `linux/amd64` ADR 0034 external-caller gate.
+
+The same `05b3b46` checkout also passes repository CI `34025141621`, Reference
+`34025141614`, Platform Candidate `34025141593`, Browser Reference
+`34025141601`, shared capacity `34025141625`, durable revocation `34025141591`,
+and downstream-fencing v1 `34025141610`. CI and all seven E2E profiles remain
+separate evidence tracks.
 
 The latest verified local regressions before this lock refresh ran against
 Provider `c0a55d1` and harness `59e08d5`: Browser run

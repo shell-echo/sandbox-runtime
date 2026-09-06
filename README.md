@@ -27,24 +27,27 @@ race/shuffle, vet, Contract verifier, unchanged 48-case Suite, and pinned-Valkey
 adapter gates pass. The existing reference stack and both ADR 0033 caller runs
 still use v1; they are not v2 deletion/restore evidence. The separately locked
 v2 runner passed all 18 scenarios locally on `linux/arm64` in run
-`20260906T092259.737890000Z` at harness `d61cd86`. It used two Gateways, two
-independent mTLS/JWS callers, one unique ingress, signed real Chromium, an
-orchestrator-only Redis fault credential, and an independent `0600` file
-witness; its exact five-file evidence set passed cleanup and sanitization. This
-closes only the local ADR 0034 external-caller gate. Hosted v2 evidence, a
-production witness, Valkey provenance and HA/failover, production Browser
+`20260906T092259.737890000Z` at harness `d61cd86` and in hosted `linux/amd64`
+run `34025141624` at checkout `05b3b46`. It used two Gateways, two independent
+mTLS/JWS callers, one unique ingress, signed real Chromium, an orchestrator-only
+Redis fault credential, and an independent file witness. The local exact
+five-file set is `0600`; both runs pass cleanup and sanitization. These close
+only the platform-specific ADR 0034 external-caller gates. A production witness,
+Valkey provenance and HA/failover, production Browser
 advertisement/public Gateway composition, real Agent Platform migration,
 aggregate conformance, multi-controller, hostile multi-tenant, deployment, and
 production gates remain open. The ADR 0033 and v2 profiles pin Contract
 identity but do not execute the Suite (`suite_exercised=false`).
 
-Hosted checkout `2cadc53` passes repository CI `34013982778`, Reference
-`34013982794`, Candidate `34013982784`, Browser `34013982785`, shared-capacity
-`34013982786`, durable-revocation `34013982798`, and downstream-fencing
-`34013982796`. The inspected downstream artifact
-`browser-downstream-fencing-e2e-evidence-34013982796` has GitHub digest
-`sha256:9c00f3ba184e82d7eff661b831c05c1bdf331fa41caf2d8bbb3353168ab155b0`.
-These remain seven distinct CI/evidence tracks, not aggregate conformance.
+Hosted checkout `05b3b46` passes repository CI `34025141621`, Reference
+`34025141614`, Candidate `34025141593`, Browser `34025141601`, shared-capacity
+`34025141625`, durable-revocation `34025141591`, downstream-fencing v1
+`34025141610`, and downstream-fencing v2 `34025141624`. The independently
+inspected v2 artifact `browser-downstream-fencing-v2-e2e-evidence-34025141624`
+has GitHub digest
+`sha256:55991ec39138183cefecab9cdfb5b23d4bada9b6b96286655cd9b8899a022203`.
+These remain eight distinct workflows and seven separate E2E tracks, not
+aggregate conformance.
 
 Start a new development session with
 [`docs/PROJECT_CONTEXT.md`](docs/PROJECT_CONTEXT.md). It summarizes the current
@@ -159,9 +162,9 @@ Currently implemented:
   Focused and full race/shuffle tests, vet, Contract verification, the unchanged
   48-case Suite, and tagged integration against the same pinned Valkey index
   pass. The separate v2 caller harness passes 18/18 locally on `linux/arm64` in
-  run `20260906T092259.737890000Z` at harness `d61cd86`; the Suite is not
-  executed and the hosted v2 gate remains open. No default composition or
-  production advertisement selects v2
+  run `20260906T092259.737890000Z` at harness `d61cd86` and hosted on
+  `linux/amd64` in run `34025141624` at checkout `05b3b46`; the Suite is not
+  executed. No default composition or production advertisement selects v2
 - downstream caller bootstrap implementation `58488d7`: two independently
   identified mTLS/JWS caller OS processes each perform Provider capability,
   create, operation, sandbox, Browser-session, and handoff reconciliation, bind
