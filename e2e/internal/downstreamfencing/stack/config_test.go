@@ -29,6 +29,28 @@ func TestValidateConfigAcceptsExplicitWitnessedV2Profile(t *testing.T) {
 	}
 }
 
+func TestValidateConfigAcceptsPostgresWitnessedV2VerificationModes(t *testing.T) {
+	for _, mode := range []string{ActionHistoryVerificationRuntime, ActionHistoryVerificationRestoredState} {
+		config := validConfig(t)
+		config.Authority.ActionFencingProfile = ActionFencingProfilePostgresWitnessedV2
+		config.Authority.ActionHistoryPostgresURL = "postgres://sandbox_runtime_witness:secret@127.0.0.1:15432/witness?sslmode=disable"
+		config.Authority.ActionHistoryOperationTimeoutMS = 200
+		config.Authority.ActionHistoryVerification = mode
+		if err := ValidateConfig(config); err != nil {
+			t.Fatalf("mode %q: %v", mode, err)
+		}
+	}
+}
+
+func TestValidateConfigAcceptsEscapedPostgresRuntimePassword(t *testing.T) {
+	config := validConfig(t)
+	setValidPostgresWitnessConfig(&config)
+	config.Authority.ActionHistoryPostgresURL = "postgres://sandbox_runtime_witness:p%40ss%3Aword@127.0.0.1:15432/witness?sslmode=disable"
+	if err := ValidateConfig(config); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestValidateConfigRejectsUnsafeTopologyAndPolicy(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -56,6 +78,39 @@ func TestValidateConfigRejectsUnsafeTopologyAndPolicy(t *testing.T) {
 		{name: "v2 witness collision", mutate: func(config *Config) {
 			config.Authority.ActionFencingProfile = ActionFencingProfileWitnessedV2
 			config.Authority.ActionHistoryWitnessFile = config.ObservationFile
+		}},
+		{name: "file v2 PostgreSQL URL", mutate: func(config *Config) {
+			config.Authority.ActionFencingProfile = ActionFencingProfileWitnessedV2
+			config.Authority.ActionHistoryWitnessFile = filepath.Join(t.TempDir(), "witness.json")
+			config.Authority.ActionHistoryPostgresURL = "postgres://sandbox_runtime_witness:secret@127.0.0.1:15432/witness?sslmode=disable"
+		}},
+		{name: "PostgreSQL v2 file witness", mutate: func(config *Config) {
+			setValidPostgresWitnessConfig(config)
+			config.Authority.ActionHistoryWitnessFile = filepath.Join(t.TempDir(), "witness.json")
+		}},
+		{name: "PostgreSQL v2 missing password", mutate: func(config *Config) {
+			setValidPostgresWitnessConfig(config)
+			config.Authority.ActionHistoryPostgresURL = "postgres://sandbox_runtime_witness@127.0.0.1:15432/witness?sslmode=disable"
+		}},
+		{name: "PostgreSQL v2 wrong role", mutate: func(config *Config) {
+			setValidPostgresWitnessConfig(config)
+			config.Authority.ActionHistoryPostgresURL = "postgres://postgres:secret@127.0.0.1:15432/witness?sslmode=disable"
+		}},
+		{name: "PostgreSQL v2 remote endpoint", mutate: func(config *Config) {
+			setValidPostgresWitnessConfig(config)
+			config.Authority.ActionHistoryPostgresURL = "postgres://sandbox_runtime_witness:secret@postgres.invalid:5432/witness?sslmode=disable"
+		}},
+		{name: "PostgreSQL v2 TLS profile drift", mutate: func(config *Config) {
+			setValidPostgresWitnessConfig(config)
+			config.Authority.ActionHistoryPostgresURL = "postgres://sandbox_runtime_witness:secret@127.0.0.1:15432/witness?sslmode=require"
+		}},
+		{name: "PostgreSQL v2 timeout drift", mutate: func(config *Config) {
+			setValidPostgresWitnessConfig(config)
+			config.Authority.ActionHistoryOperationTimeoutMS++
+		}},
+		{name: "PostgreSQL v2 verification mode", mutate: func(config *Config) {
+			setValidPostgresWitnessConfig(config)
+			config.Authority.ActionHistoryVerification = "repair"
 		}},
 		{name: "remote Redis", mutate: func(config *Config) { config.Authority.RedisURL = "redis://e2e:secret@redis.invalid:6379/0" }},
 		{name: "different Redis database", mutate: func(config *Config) { config.Authority.RedisURL = "redis://e2e:secret@127.0.0.1:16379/1" }},
@@ -210,4 +265,11 @@ func validConfig(t *testing.T) Config {
 		},
 		ObservationFile: filepath.Join(root, "ingress-observations.jsonl"),
 	}
+}
+
+func setValidPostgresWitnessConfig(config *Config) {
+	config.Authority.ActionFencingProfile = ActionFencingProfilePostgresWitnessedV2
+	config.Authority.ActionHistoryPostgresURL = "postgres://sandbox_runtime_witness:secret@127.0.0.1:15432/witness?sslmode=disable"
+	config.Authority.ActionHistoryOperationTimeoutMS = 200
+	config.Authority.ActionHistoryVerification = ActionHistoryVerificationRuntime
 }

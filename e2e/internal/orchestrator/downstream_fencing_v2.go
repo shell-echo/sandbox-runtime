@@ -196,7 +196,7 @@ func runDownstreamFencingV2Scenarios(ctx context.Context, input downstreamFencin
 		if err != nil {
 			return err
 		}
-		if err := expectDownstreamStackStartupRejected(ctx, failed, input.IngressAddress, 5*time.Second); err != nil {
+		if err := expectDownstreamStackStartupRejected(ctx, failed, 5*time.Second, input.IngressAddress); err != nil {
 			return err
 		}
 		if err := restoreDownstreamRedisSnapshot(ctx, input.OrchestratorRedisClient, currentSnapshot); err != nil {

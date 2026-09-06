@@ -294,6 +294,50 @@ encoding is not a canonical logical representation. Fix `059357c` adds
 order-independent hash comparison plus replacement/string/zset regression
 tests without weakening the injected fault.
 
+## PostgreSQL controlled-restore runner
+
+`cmd/postgres-controlled-restore-e2e` is the separate ADR 0036 same-runner
+reference operational profile. It retains the first ten real-Chromium v2
+scenarios, then stops the unique Provider/private-ingress process before any
+restore, proves both listeners and every Gateway bypass are unavailable,
+restores an older Redis snapshot, and requires strict `VerifyRestoredState`
+startup to reject it without advancing PostgreSQL or opening a listener. It
+then restores the exact current Redis state, resumes only through strict
+verification, and performs a post-resume real-CDP mutation.
+
+From a clean committed checkout with Docker and authenticated `gh` available:
+
+```bash
+cd e2e
+go run ./cmd/postgres-controlled-restore-e2e -check
+go run ./cmd/postgres-controlled-restore-e2e \
+  -evidence-root evidence/postgres-controlled-restore
+```
+
+The runner creates a pinned PostgreSQL container, applies the exact migration,
+uses an ephemeral administrator only for migration and grants, and supplies
+the runtime witness credential only to the orchestrator and private-ingress
+process. Redis restore remains separately credentialed and orchestrator-only.
+It emits the same exact five-file sanitized evidence shape as the downstream
+profiles.
+
+This is explicitly same-runner evidence. PostgreSQL and Valkey share the host,
+Docker engine, workflow, and operator, so the result does not prove independent
+failure or backup domains, either store's HA/failover, production restore
+automation, deployment readiness, or production readiness.
+
+Hosted `linux/amd64` run `34037307799` for PR head `ffa40d6` passes all 18
+scenarios. Downloaded artifact
+`browser-postgres-controlled-restore-e2e-evidence-34037307799` contains evidence
+directory `20260906T135101.549639716Z` with exactly the five locked files. The
+report is 18/18; the manifest records synthetic merge harness commit
+`b924b26a7794e559a9694a648dea9711f316bd39`, three ingress reconstructions,
+every cleanup and sanitization flag true, no file-witness v2 field, PostgreSQL
+restore evidence, `same_runner=true`, `independent_failure_domain=false`, and
+`suite_exercised=false`. Artifact ID `9990655840` has GitHub digest
+`sha256:6ab816b41fba98aac0f1cf76eee9739abc7fedf356695148bb17593b396b48eb`.
+This closes only the hosted ADR 0036 same-runner operational reference gate.
+
 ## Latest verified evidence
 
 Clean local downstream-fencing run

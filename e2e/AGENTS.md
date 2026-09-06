@@ -38,6 +38,11 @@ Provider repository. Keep these boundaries strict:
   credential, and the file witness must remain outside the Valkey snapshot and
   restore domain. Gateways and callers must never receive that credential or
   fault-control path.
+- `cmd/postgres-controlled-restore-e2e` is the separate ADR 0036 same-runner
+  operational reference profile. PostgreSQL runtime credentials may reach only
+  the orchestrator and Provider/private-ingress process. Redis restore control
+  remains orchestrator-only. The profile must record that it does not prove
+  independent failure/backup domains, HA, deployment, or production readiness.
 - Never commit generated private keys, certificates, bearer tokens, runtime
   state, logs, or artifact bytes.
 - Each passing run proves only its named reference or candidate scenarios. A
@@ -57,4 +62,5 @@ go run ./cmd/shared-capacity-e2e -check
 go run ./cmd/durable-revocation-e2e -check
 go run ./cmd/downstream-fencing-e2e -check
 go run ./cmd/downstream-fencing-v2-e2e -check
+go run ./cmd/postgres-controlled-restore-e2e -check
 ```

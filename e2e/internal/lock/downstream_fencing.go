@@ -35,6 +35,14 @@ const (
 	DownstreamFencingV2LockPath = "e2e/downstream-fencing-v2.lock.json"
 	DownstreamFencingV2Profile  = "browser-downstream-fencing-e2e-v2"
 
+	PostgresControlledRestoreLockPath        = "e2e/postgres-controlled-restore.lock.json"
+	PostgresControlledRestoreProfile         = "browser-postgres-controlled-restore-e2e-v1"
+	PostgresControlledRestoreHarnessBaseline = "9c235dc7c95c6fb2ae79c46b28b3e1626ab28928"
+	PostgresWitnessImage                     = "postgres"
+	PostgresWitnessIndex                     = "sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94"
+	PostgresWitnessResolvedTag               = "17.6-alpine3.22"
+	PostgresWitnessMigrationPath             = "gateway/capacity/redis/migrations/0001_action_history_witness.sql"
+
 	DownstreamFencingServerConfig = "bind 0.0.0.0\n" +
 		"protected-mode no\n" +
 		"port 6379\n" +
@@ -92,6 +100,27 @@ var downstreamFencingV2ScenarioInventory = [...]string{
 	"sanitized v2 evidence pins identities and records Contract Suite as unexercised",
 }
 
+var postgresControlledRestoreScenarioInventory = [...]string{
+	"ordinary bounded real-CDP mutation through the unique ingress",
+	"Gateway A SIGSTOP beyond its confirmed capacity lease",
+	"Gateway B acquires and activates a higher fence",
+	"resumed Gateway A queued stale mutation is rejected before Chromium with no partial action",
+	"Gateway B distinct real-CDP mutation succeeds",
+	"pre-action lease loss is rejected before Chromium",
+	"higher-fence activation replaces the active old stream",
+	"replaced lower-fence Gateway closes terminally without reconnect",
+	"another Browser session and tenant remain active",
+	"Valkey outage fails closed and retained-state recovery succeeds",
+	"unique ingress is quarantined before restore and Gateways have no bypass",
+	"orchestrator-only control restores an older Redis snapshot without restoring PostgreSQL",
+	"strict restored-state verification rejects the older snapshot without advancing PostgreSQL or opening listeners",
+	"orchestrator restores the exact current Redis state while ingress remains quarantined",
+	"strict restored-state verification accepts exact state before listeners resume",
+	"post-resume real-CDP mutation succeeds through the unique ingress",
+	"no Gateway bypass exists and all owned runtime resources are cleaned",
+	"sanitized PostgreSQL restore evidence records its same-runner boundary and unexercised Contract Suite",
+}
+
 type DownstreamFencingV2BaseLock struct {
 	Path            string `json:"path"`
 	SHA256          string `json:"sha256"`
@@ -142,6 +171,64 @@ type DownstreamFencingV2Lock struct {
 
 func DownstreamFencingV2ScenarioNames() []string {
 	return append([]string(nil), downstreamFencingV2ScenarioInventory[:]...)
+}
+
+type PostgresControlledRestoreImage struct {
+	Image                    string   `json:"image"`
+	IndexDigest              string   `json:"index_digest"`
+	ResolvedTag              string   `json:"resolved_tag"`
+	Platforms                []string `json:"platforms"`
+	Database                 string   `json:"database"`
+	RuntimeRole              string   `json:"runtime_role"`
+	MigrationPath            string   `json:"migration_path"`
+	MigrationSHA256          string   `json:"migration_sha256"`
+	ProvenanceNotEstablished bool     `json:"provenance_not_established"`
+	SameRunner               bool     `json:"same_runner"`
+	IndependentFailureDomain bool     `json:"independent_failure_domain"`
+
+	SelectedPlatform string `json:"-"`
+}
+
+type PostgresControlledRestoreWitness struct {
+	Kind                          string   `json:"kind"`
+	OperationTimeoutMillis        int64    `json:"operation_timeout_millis"`
+	RuntimePrivileges             []string `json:"runtime_privileges"`
+	RuntimeOwnsSchemaOrTable      bool     `json:"runtime_owns_schema_or_table"`
+	RuntimeHasDDLOrDestructiveDML bool     `json:"runtime_has_ddl_or_destructive_dml"`
+	CredentialsExposedToGateways  bool     `json:"credentials_exposed_to_gateways"`
+	CredentialsExposedToCallers   bool     `json:"credentials_exposed_to_callers"`
+}
+
+type PostgresControlledRestoreControl struct {
+	Owner                       string `json:"owner"`
+	Mechanism                   string `json:"mechanism"`
+	IngressQuarantine           string `json:"ingress_quarantine"`
+	Verification                string `json:"verification"`
+	SeparateRedisCredential     bool   `json:"separate_redis_credential"`
+	RestoreCredentialToGateways bool   `json:"restore_credential_to_gateways"`
+	RestoreCredentialToCallers  bool   `json:"restore_credential_to_callers"`
+	RestoresWitness             bool   `json:"restores_witness"`
+	VerificationMutatesWitness  bool   `json:"verification_mutates_witness"`
+	ResumeRequiresExactMatch    bool   `json:"resume_requires_exact_match"`
+}
+
+type PostgresControlledRestoreLock struct {
+	SchemaVersion   int                                            `json:"schema_version"`
+	EvidenceProfile string                                         `json:"evidence_profile"`
+	Sources         DownstreamFencingV2Sources                     `json:"sources"`
+	BaseLock        DownstreamFencingV2BaseLock                    `json:"base_lock"`
+	Contract        DownstreamFencingContract                      `json:"contract"`
+	ActionFence     rediscapacity.WitnessedActionFencingDescriptor `json:"action_fence"`
+	PostgreSQL      PostgresControlledRestoreImage                 `json:"postgresql"`
+	Witness         PostgresControlledRestoreWitness               `json:"witness"`
+	RestoreControl  PostgresControlledRestoreControl               `json:"restore_control"`
+	Scenarios       []string                                       `json:"scenarios"`
+
+	Base DownstreamFencingV2Lock `json:"-"`
+}
+
+func PostgresControlledRestoreScenarioNames() []string {
+	return append([]string(nil), postgresControlledRestoreScenarioInventory[:]...)
 }
 
 type DownstreamFencingComponentSource struct {
@@ -379,6 +466,44 @@ func LoadDownstreamFencingV2(providerRoot, platform string) (DownstreamFencingV2
 	return locked, nil
 }
 
+func LoadPostgresControlledRestore(providerRoot, platform string) (PostgresControlledRestoreLock, error) {
+	root, err := filepath.Abs(providerRoot)
+	if err != nil {
+		return PostgresControlledRestoreLock{}, fmt.Errorf("resolve Provider root: %w", err)
+	}
+	base, err := LoadDownstreamFencingV2(root, platform)
+	if err != nil {
+		return PostgresControlledRestoreLock{}, err
+	}
+	lockPath := filepath.Join(root, PostgresControlledRestoreLockPath)
+	if err := requirePostgresControlledRestoreFields(lockPath); err != nil {
+		return PostgresControlledRestoreLock{}, err
+	}
+	var locked PostgresControlledRestoreLock
+	if err := decodeStrictFile(lockPath, &locked); err != nil {
+		return PostgresControlledRestoreLock{}, err
+	}
+	baseContent, err := os.ReadFile(filepath.Join(root, DownstreamFencingV2LockPath))
+	if err != nil {
+		return PostgresControlledRestoreLock{}, err
+	}
+	migrationContent, err := os.ReadFile(filepath.Join(root, PostgresWitnessMigrationPath))
+	if err != nil {
+		return PostgresControlledRestoreLock{}, err
+	}
+	if err := validatePostgresControlledRestoreLock(
+		locked, normalizedSHA256(string(baseContent)), normalizedSHA256(string(migrationContent)), base,
+	); err != nil {
+		return PostgresControlledRestoreLock{}, err
+	}
+	if !containsExactString(locked.PostgreSQL.Platforms, platform) {
+		return PostgresControlledRestoreLock{}, fmt.Errorf("PostgreSQL controlled-restore platform %q is not locked", platform)
+	}
+	locked.PostgreSQL.SelectedPlatform = platform
+	locked.Base = base
+	return locked, nil
+}
+
 // VerifyDownstreamFencing verifies only the lock, clean Git checkout, Provider
 // identity, and source baselines. It does not assert that the E2E runner is
 // implemented or that the scenarios are executable.
@@ -402,6 +527,73 @@ func VerifyDownstreamFencingV2(providerRoot, platform string) error {
 		return err
 	}
 	return verifyDownstreamFencingV2Sources(providerRoot, locked.Sources)
+}
+
+func VerifyPostgresControlledRestore(providerRoot, platform string) error {
+	if err := Verify(providerRoot); err != nil {
+		return err
+	}
+	locked, err := LoadPostgresControlledRestore(providerRoot, platform)
+	if err != nil {
+		return err
+	}
+	return verifyPostgresControlledRestoreSources(providerRoot, locked.Sources)
+}
+
+func validatePostgresControlledRestoreLock(
+	locked PostgresControlledRestoreLock,
+	baseDigest string,
+	migrationDigest string,
+	base DownstreamFencingV2Lock,
+) error {
+	if locked.SchemaVersion != 1 || locked.EvidenceProfile != PostgresControlledRestoreProfile {
+		return errors.New("PostgreSQL controlled-restore lock identity is invalid")
+	}
+	expectedSources := DownstreamFencingV2Sources{
+		ProviderRevision: ProviderCommit, HarnessBaseline: PostgresControlledRestoreHarnessBaseline,
+		GatewayComponent:       DownstreamFencingComponentSource{Path: "gateway/composition/browser.go", Revision: DownstreamFencingGatewayRevision},
+		IngressComponent:       DownstreamFencingComponentSource{Path: "gateway/cdpfence", Revision: DownstreamFencingIngressRevision},
+		ActionHistoryComponent: DownstreamFencingComponentSource{Path: "gateway/capacity/redis", Revision: ProviderCommit},
+		CallerSubstrate:        DownstreamFencingBaselineSource{Path: "e2e/internal/caller", BaselineRevision: DownstreamFencingCallerBaseline},
+	}
+	if locked.Sources != expectedSources {
+		return errors.New("PostgreSQL controlled-restore sources differ from the locked component baselines")
+	}
+	expectedBase := DownstreamFencingV2BaseLock{
+		Path: DownstreamFencingV2LockPath, SHA256: baseDigest, EvidenceProfile: DownstreamFencingV2Profile,
+	}
+	if locked.BaseLock != expectedBase || base.EvidenceProfile != DownstreamFencingV2Profile ||
+		locked.Contract != base.Contract || locked.ActionFence != base.ActionFence || locked.Contract.SuiteExercised {
+		return errors.New("PostgreSQL controlled-restore base identity differs from the ADR 0034 substrate")
+	}
+	expectedPostgres := PostgresControlledRestoreImage{
+		Image: PostgresWitnessImage, IndexDigest: PostgresWitnessIndex, ResolvedTag: PostgresWitnessResolvedTag,
+		Platforms: []string{"linux/amd64", "linux/arm64"}, Database: "witness", RuntimeRole: "sandbox_runtime_witness",
+		MigrationPath: PostgresWitnessMigrationPath, MigrationSHA256: migrationDigest,
+		ProvenanceNotEstablished: true, SameRunner: true,
+	}
+	if !reflect.DeepEqual(locked.PostgreSQL, expectedPostgres) {
+		return errors.New("PostgreSQL controlled-restore image, migration, or evidence boundary differs from the lock")
+	}
+	expectedWitness := PostgresControlledRestoreWitness{
+		Kind: "postgresql-action-history-witness-v1", OperationTimeoutMillis: 200,
+		RuntimePrivileges: []string{"CONNECT", "USAGE", "SELECT", "INSERT_COLUMNS", "UPDATE_COLUMNS"},
+	}
+	if !reflect.DeepEqual(locked.Witness, expectedWitness) {
+		return errors.New("PostgreSQL controlled-restore witness role differs from the least-privilege lock")
+	}
+	expectedRestore := PostgresControlledRestoreControl{
+		Owner: "orchestrator-only", Mechanism: "redis-dump-restore-v1",
+		IngressQuarantine: "provider-private-ingress-process-stop", Verification: "VerifyRestoredState",
+		SeparateRedisCredential: true, ResumeRequiresExactMatch: true,
+	}
+	if locked.RestoreControl != expectedRestore {
+		return errors.New("PostgreSQL controlled-restore procedure differs from the ADR 0036 gate")
+	}
+	if !reflect.DeepEqual(locked.Scenarios, postgresControlledRestoreScenarioInventory[:]) {
+		return errors.New("PostgreSQL controlled-restore scenario inventory differs from the ADR 0036 gate")
+	}
+	return nil
 }
 
 func validateDownstreamFencingV2Lock(
@@ -648,6 +840,20 @@ func requireDownstreamFencingV2Fields(path string) error {
 	return nil
 }
 
+func requirePostgresControlledRestoreFields(path string) error {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read %s: %w", path, err)
+	}
+	if len(content) > maxLockBytes {
+		return fmt.Errorf("decode %s: lock exceeds %d bytes", path, maxLockBytes)
+	}
+	if err := requireJSONStructFields(content, reflect.TypeOf(PostgresControlledRestoreLock{}), "$"); err != nil {
+		return fmt.Errorf("decode %s: %w", path, err)
+	}
+	return nil
+}
+
 func requireJSONStructFields(encoded []byte, objectType reflect.Type, path string) error {
 	var object map[string]json.RawMessage
 	if err := json.Unmarshal(encoded, &object); err != nil {
@@ -838,6 +1044,37 @@ func verifyDownstreamFencingV2Sources(providerRoot string, sources DownstreamFen
 	return verifyExactComponentSource(root, "caller substrate", sources.CallerSubstrate.Path, sources.CallerSubstrate.BaselineRevision)
 }
 
+func verifyPostgresControlledRestoreSources(providerRoot string, sources DownstreamFencingV2Sources) error {
+	root, err := filepath.Abs(providerRoot)
+	if err != nil {
+		return fmt.Errorf("resolve Provider root: %w", err)
+	}
+	if _, err := HarnessRevision(root); err != nil {
+		return err
+	}
+	if err := verifyAncestor(root, sources.HarnessBaseline, "PostgreSQL controlled-restore harness baseline"); err != nil {
+		return err
+	}
+	changed, err := git(root, "diff", "--name-only", sources.HarnessBaseline, "HEAD")
+	if err != nil {
+		return err
+	}
+	for _, path := range strings.Fields(changed) {
+		if !postgresControlledRestoreHarnessPath(path) {
+			return fmt.Errorf("PostgreSQL controlled-restore harness differs from baseline at disallowed path %s", path)
+		}
+	}
+	for name, source := range map[string]DownstreamFencingComponentSource{
+		"Gateway": sources.GatewayComponent, "ingress": sources.IngressComponent,
+		"action history": sources.ActionHistoryComponent,
+	} {
+		if err := verifyExactComponentSource(root, name, source.Path, source.Revision); err != nil {
+			return err
+		}
+	}
+	return verifyExactComponentSource(root, "caller substrate", sources.CallerSubstrate.Path, sources.CallerSubstrate.BaselineRevision)
+}
+
 func verifyAncestor(root, revision, name string) error {
 	if !commitPattern.MatchString(revision) {
 		return fmt.Errorf("%s revision is invalid", name)
@@ -874,7 +1111,8 @@ func downstreamFencingHarnessPath(path string) bool {
 	}
 	return path == "README.md" || path == "e2e" || strings.HasPrefix(path, "e2e/") || path == "docs" || strings.HasPrefix(path, "docs/") ||
 		path == ".github/workflows/downstream-fencing-e2e.yml" ||
-		path == ".github/workflows/downstream-fencing-v2-e2e.yml"
+		path == ".github/workflows/downstream-fencing-v2-e2e.yml" ||
+		path == ".github/workflows/postgres-controlled-restore-e2e.yml"
 }
 
 func downstreamFencingV2HarnessPath(path string) bool {
@@ -883,5 +1121,24 @@ func downstreamFencingV2HarnessPath(path string) bool {
 	}
 	return path == "README.md" || path == "e2e" || strings.HasPrefix(path, "e2e/") ||
 		path == "docs" || strings.HasPrefix(path, "docs/") ||
-		path == ".github/workflows/downstream-fencing-v2-e2e.yml"
+		path == ".github/workflows/downstream-fencing-v2-e2e.yml" ||
+		path == ".github/workflows/postgres-controlled-restore-e2e.yml"
+}
+
+func postgresControlledRestoreHarnessPath(path string) bool {
+	if filepath.ToSlash(filepath.Clean(path)) != path {
+		return false
+	}
+	return path == "README.md" || path == "e2e" || strings.HasPrefix(path, "e2e/") ||
+		path == "docs" || strings.HasPrefix(path, "docs/") ||
+		path == ".github/workflows/postgres-controlled-restore-e2e.yml"
+}
+
+func containsExactString(values []string, expected string) bool {
+	for _, value := range values {
+		if value == expected {
+			return true
+		}
+	}
+	return false
 }

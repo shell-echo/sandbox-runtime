@@ -417,6 +417,26 @@ func TestDownstreamAuthorityV2ACLSeparatesOrchestratorCredential(t *testing.T) {
 	}
 }
 
+func TestDownstreamWitnessSensitiveValuesDoNotDeriveLockFromEmptyPath(t *testing.T) {
+	root := t.TempDir()
+	writeDownstreamTestFile(t, filepath.Join(root, "manifest.json"), []byte(
+		`{"lock":"e2e/downstream-fencing-v2.lock.json"}`,
+	))
+	values := downstreamWitnessSensitiveValues("orchestrator-password", "redis://orchestrator@example", "")
+	if len(values) != 2 || values[0] != "orchestrator-password" || values[1] != "redis://orchestrator@example" {
+		t.Fatalf("PostgreSQL witness sensitive values = %#v", values)
+	}
+	if err := assertEvidenceExcludes(root, values); err != nil {
+		t.Fatalf("legal lock metadata was treated as sensitive: %v", err)
+	}
+
+	witnessPath := filepath.Join(t.TempDir(), "action-history.json")
+	values = downstreamWitnessSensitiveValues("orchestrator-password", "redis://orchestrator@example", witnessPath)
+	if len(values) != 4 || values[2] != witnessPath || values[3] != witnessPath+".lock" {
+		t.Fatalf("file witness sensitive values = %#v", values)
+	}
+}
+
 func TestDownstreamHighWaterKeyMatchesLockedAdapterDerivation(t *testing.T) {
 	identity := downstreamFencingIdentity{}
 	identity.envelope.Endpoint.TenantID = "tenant-a"
@@ -488,6 +508,84 @@ func TestValidateDownstreamV2ManifestRequiresRestoreWitnessEvidence(t *testing.T
 	manifest.WitnessedV2 = &downstreamFencingV2Evidence{}
 	if err := validateDownstreamManifest(manifest); err == nil {
 		t.Fatal("v1 manifest accepted v2 evidence")
+	}
+}
+
+func TestValidatePostgresControlledRestoreManifestRequiresExplicitBoundary(t *testing.T) {
+	valid := func() downstreamFencingManifest {
+		manifest := validDownstreamTestManifest()
+		manifest.EvidenceName = postgresRestoreEvidenceName
+		manifest.EvidenceProfile = lock.PostgresControlledRestoreProfile
+		manifest.ProcessReconstructions = 3
+		manifest.Adapters = nil
+		manifest.EvidenceBoundary = postgresRestoreEvidenceBoundary
+		manifest.NonTargets = append(manifest.NonTargets,
+			"independent PostgreSQL and Valkey failure or backup domains",
+			"PostgreSQL or Valkey HA/failover", "PostgreSQL image provenance",
+			"production restore automation or operator authorization",
+		)
+		manifest.PostgresRestore = &downstreamPostgresRestoreEvidence{
+			Sources:            lock.DownstreamFencingV2Sources{ProviderRevision: lock.ProviderCommit},
+			BaseLock:           lock.DownstreamFencingV2BaseLock{EvidenceProfile: lock.DownstreamFencingV2Profile},
+			ActionFence:        rediscapacity.WitnessedActionFencingDescriptor{PolicyFormat: "browser-downstream-action-fence-v2"},
+			StrictConfigSHA256: "sha256:" + strings.Repeat("a", 64),
+			PostgreSQL: downstreamPostgresEvidence{
+				LocalImageID: "sha256:" + strings.Repeat("b", 64), ProvenanceNotEstablished: true,
+				SameRunner: true, RuntimeRoleVerified: true, Removed: true,
+			},
+			Witness: lock.PostgresControlledRestoreWitness{},
+			RestoreControl: lock.PostgresControlledRestoreControl{
+				SeparateRedisCredential: true, ResumeRequiresExactMatch: true,
+			},
+			IngressQuarantined: true, OlderSnapshotRejected: true, RejectedStateNoListeners: true,
+			RejectedStateNoPGAdvance: true, ExactStateResumed: true,
+			ExactVerificationNoAdvance: true, PostResumeCDPSucceeded: true,
+		}
+		return manifest
+	}
+	manifest := valid()
+	if err := validateDownstreamManifest(manifest); err != nil {
+		t.Fatalf("valid PostgreSQL restore manifest: %v", err)
+	}
+	manifest = valid()
+	manifest.ProcessReconstructions = 2
+	if err := validateDownstreamManifest(manifest); err == nil {
+		t.Fatal("PostgreSQL restore manifest accepted the wrong reconstruction count")
+	}
+	manifest = valid()
+	manifest.PostgresRestore = nil
+	if err := validateDownstreamManifest(manifest); err == nil {
+		t.Fatal("PostgreSQL restore manifest omitted PostgreSQL restore evidence")
+	}
+	manifest = valid()
+	manifest.WitnessedV2 = &downstreamFencingV2Evidence{}
+	if err := validateDownstreamManifest(manifest); err == nil {
+		t.Fatal("PostgreSQL restore manifest mixed file-witness and PostgreSQL evidence")
+	}
+	manifest = valid()
+	manifest.PostgresRestore.PostgreSQL.IndependentFailureDomain = true
+	if err := validateDownstreamManifest(manifest); err == nil {
+		t.Fatal("PostgreSQL restore manifest overclaimed an independent failure domain")
+	}
+	manifest = valid()
+	manifest.PostgresRestore.PostgreSQL.SameRunner = false
+	if err := validateDownstreamManifest(manifest); err == nil {
+		t.Fatal("PostgreSQL restore manifest omitted its same-runner boundary")
+	}
+	manifest = valid()
+	manifest.EvidenceBoundary = "independent production restore evidence"
+	if err := validateDownstreamManifest(manifest); err == nil {
+		t.Fatal("PostgreSQL restore manifest overclaimed its textual evidence boundary")
+	}
+	manifest = valid()
+	manifest.NonTargets = manifest.NonTargets[:len(manifest.NonTargets)-1]
+	if err := validateDownstreamManifest(manifest); err == nil {
+		t.Fatal("PostgreSQL restore manifest omitted a controlled-restore non-target")
+	}
+	manifest = valid()
+	manifest.PostgresRestore.ExactVerificationNoAdvance = false
+	if err := validateDownstreamManifest(manifest); err == nil {
+		t.Fatal("PostgreSQL restore manifest omitted strict verification non-mutation")
 	}
 }
 

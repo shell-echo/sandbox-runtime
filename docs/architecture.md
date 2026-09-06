@@ -252,6 +252,15 @@ pinned by the workflow. The adapter is not evidence of server provenance,
 independent deployment domains, PostgreSQL or Valkey HA, controlled ingress
 operations, or production readiness.
 
+ADR 0036 adds a separately named same-runner operational reference path for
+that primitive. It composes PostgreSQL with the existing two-Gateway,
+unique-ingress, real-Chromium harness; stops the Provider/private-ingress before
+restore; rejects an older Redis snapshot through strict verification without
+opening listeners or advancing PostgreSQL; and resumes only after exact state
+is restored. Because PostgreSQL and Valkey still share the runner, Docker
+engine, host, workflow, and operator, this closes no independent failure or
+backup-domain, HA/failover, deployment, or production gate.
+
 The orchestrator's restore control continues to inject real Redis
 `DUMP`/`RESTORE` faults, but fixed harness `059357c` verifies restored key type,
 logical string/hash/zset content, missing-key state, and TTL semantics rather

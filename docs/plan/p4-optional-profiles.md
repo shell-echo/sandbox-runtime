@@ -189,6 +189,15 @@ digest `sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94`
 which the workflow now pins. This is component progress, not image provenance,
 production storage, or restore-operations evidence.
 
+ADR 0036 adds a separate same-runner controlled-restore reference profile. It
+composes the PostgreSQL witness into the real two-Gateway, unique-ingress,
+real-Chromium harness; quarantines the combined Provider/private-ingress
+process before Redis restore; rejects older state through strict, read-only
+`VerifyRestoredState` before listener bind; and resumes only after exact-state
+verification. Its lock and evidence explicitly deny independent failure-domain
+and production claims. Independent PostgreSQL/Valkey failure and backup domains
+remain deployment-owned work after this reference ordering gate.
+
 Intermediate hosted run `34025787520` at `ef63be4` exposed a harness verifier
 false negative: it treated raw post-`RESTORE` hash `DUMP` bytes as canonical
 logical state. Fix `059357c` keeps the real `DUMP`/`RESTORE` control but compares

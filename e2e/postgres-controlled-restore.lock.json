@@ -1,0 +1,102 @@
+{
+  "schema_version": 1,
+  "evidence_profile": "browser-postgres-controlled-restore-e2e-v1",
+  "sources": {
+    "provider_revision": "3ff58dc556ebca78d96ad9f3700a1c2bb08942cd",
+    "harness_baseline": "9c235dc7c95c6fb2ae79c46b28b3e1626ab28928",
+    "gateway_component": {
+      "path": "gateway/composition/browser.go",
+      "revision": "b4d41c9a32b4ccf39edaba3fb8bf5ad239c1f945"
+    },
+    "ingress_component": {
+      "path": "gateway/cdpfence",
+      "revision": "b4d41c9a32b4ccf39edaba3fb8bf5ad239c1f945"
+    },
+    "action_history_component": {
+      "path": "gateway/capacity/redis",
+      "revision": "3ff58dc556ebca78d96ad9f3700a1c2bb08942cd"
+    },
+    "caller_substrate": {
+      "path": "e2e/internal/caller",
+      "baseline_revision": "074a9d4a42acef3bf7da57b1b250af8f0c1b1aa9"
+    }
+  },
+  "base_lock": {
+    "path": "e2e/downstream-fencing-v2.lock.json",
+    "sha256": "sha256:d8989d035ba7a308e49cf3b79bccfea4f71f770b975b94bdc95a22dd3007db60",
+    "evidence_profile": "browser-downstream-fencing-e2e-v2"
+  },
+  "contract": {
+    "namespace": "urn:shell-echo:sandbox-runtime:provider-v1",
+    "revision": "5096e71fb84fbec22aa3487a0e55a1b49602ab8b",
+    "tree": "859f76dc0e855a0c8abdbbb5648df100dabb4328",
+    "suite_cases": 48,
+    "suite_exercised": false,
+    "contract_metadata_only": false
+  },
+  "action_fence": {
+    "policy_format": "browser-downstream-action-fence-v2",
+    "policy_fingerprint": "4454622678ad72c4acc056de782d45ea28e6b8ce3b30958deaaf701e8079653b",
+    "capacity_policy_fingerprint": "67e603c017cd5c2b1e902d517d2ba1148931d1552ddf722d98f3dd37f7f23c4b",
+    "provision_script_sha1": "7175e4db4d797ed8c828b042ff475d8539997db5",
+    "authorize_script_sha1": "a3de15211f0ff4b02245c524c81c207c893909aa",
+    "checkpoint_format": "browser-downstream-action-checkpoint-v1",
+    "max_claim_lifetime_ms": 86400000,
+    "max_action_window_ms": 30000,
+    "max_history_entries": 4096
+  },
+  "postgresql": {
+    "image": "postgres",
+    "index_digest": "sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94",
+    "resolved_tag": "17.6-alpine3.22",
+    "platforms": ["linux/amd64", "linux/arm64"],
+    "database": "witness",
+    "runtime_role": "sandbox_runtime_witness",
+    "migration_path": "gateway/capacity/redis/migrations/0001_action_history_witness.sql",
+    "migration_sha256": "sha256:b1f8885738f38b8e9ea62efb840042f235b519f8f388ee59fe119b58e850289a",
+    "provenance_not_established": true,
+    "same_runner": true,
+    "independent_failure_domain": false
+  },
+  "witness": {
+    "kind": "postgresql-action-history-witness-v1",
+    "operation_timeout_millis": 200,
+    "runtime_privileges": ["CONNECT", "USAGE", "SELECT", "INSERT_COLUMNS", "UPDATE_COLUMNS"],
+    "runtime_owns_schema_or_table": false,
+    "runtime_has_ddl_or_destructive_dml": false,
+    "credentials_exposed_to_gateways": false,
+    "credentials_exposed_to_callers": false
+  },
+  "restore_control": {
+    "owner": "orchestrator-only",
+    "mechanism": "redis-dump-restore-v1",
+    "ingress_quarantine": "provider-private-ingress-process-stop",
+    "verification": "VerifyRestoredState",
+    "separate_redis_credential": true,
+    "restore_credential_to_gateways": false,
+    "restore_credential_to_callers": false,
+    "restores_witness": false,
+    "verification_mutates_witness": false,
+    "resume_requires_exact_match": true
+  },
+  "scenarios": [
+    "ordinary bounded real-CDP mutation through the unique ingress",
+    "Gateway A SIGSTOP beyond its confirmed capacity lease",
+    "Gateway B acquires and activates a higher fence",
+    "resumed Gateway A queued stale mutation is rejected before Chromium with no partial action",
+    "Gateway B distinct real-CDP mutation succeeds",
+    "pre-action lease loss is rejected before Chromium",
+    "higher-fence activation replaces the active old stream",
+    "replaced lower-fence Gateway closes terminally without reconnect",
+    "another Browser session and tenant remain active",
+    "Valkey outage fails closed and retained-state recovery succeeds",
+    "unique ingress is quarantined before restore and Gateways have no bypass",
+    "orchestrator-only control restores an older Redis snapshot without restoring PostgreSQL",
+    "strict restored-state verification rejects the older snapshot without advancing PostgreSQL or opening listeners",
+    "orchestrator restores the exact current Redis state while ingress remains quarantined",
+    "strict restored-state verification accepts exact state before listeners resume",
+    "post-resume real-CDP mutation succeeds through the unique ingress",
+    "no Gateway bypass exists and all owned runtime resources are cleaned",
+    "sanitized PostgreSQL restore evidence records its same-runner boundary and unexercised Contract Suite"
+  ]
+}

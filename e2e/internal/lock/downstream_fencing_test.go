@@ -160,17 +160,52 @@ func TestDownstreamFencingActionTimeoutFitsCapacitySafetyWindow(t *testing.T) {
 
 func TestDownstreamFencingHarnessPathIsNarrow(t *testing.T) {
 	for path, want := range map[string]bool{
-		"e2e/cmd/downstream-fencing-e2e/main.go":          true,
-		"docs/STATUS.md":                                  true,
-		".github/workflows/downstream-fencing-e2e.yml":    true,
-		".github/workflows/downstream-fencing-v2-e2e.yml": true,
-		".github/workflows/browser-e2e.yml":               false,
-		"README.md":                                       true,
-		"gateway/cdpfence/ingress.go":                     false,
-		"e2e/../gateway/cdpfence/ingress.go":              false,
+		"e2e/cmd/downstream-fencing-e2e/main.go":                true,
+		"docs/STATUS.md":                                        true,
+		".github/workflows/downstream-fencing-e2e.yml":          true,
+		".github/workflows/downstream-fencing-v2-e2e.yml":       true,
+		".github/workflows/postgres-controlled-restore-e2e.yml": true,
+		".github/workflows/browser-e2e.yml":                     false,
+		"README.md":                                             true,
+		"gateway/cdpfence/ingress.go":                           false,
+		"e2e/../gateway/cdpfence/ingress.go":                    false,
 	} {
 		if got := downstreamFencingHarnessPath(path); got != want {
 			t.Errorf("downstreamFencingHarnessPath(%q) = %t, want %t", path, got, want)
+		}
+	}
+}
+
+func TestDownstreamFencingV2HarnessPathIsNarrow(t *testing.T) {
+	for path, want := range map[string]bool{
+		"e2e/cmd/downstream-fencing-v2-e2e/main.go":             true,
+		"docs/adr/0034-browser-downstream-fencing-v2.md":        true,
+		".github/workflows/downstream-fencing-v2-e2e.yml":       true,
+		".github/workflows/postgres-controlled-restore-e2e.yml": true,
+		".github/workflows/downstream-fencing-e2e.yml":          false,
+		".github/workflows/browser-e2e.yml":                     false,
+		"gateway/capacity/redis/action_history.go":              false,
+		"e2e/../gateway/capacity/redis/action_history.go":       false,
+	} {
+		if got := downstreamFencingV2HarnessPath(path); got != want {
+			t.Errorf("downstreamFencingV2HarnessPath(%q) = %t, want %t", path, got, want)
+		}
+	}
+}
+
+func TestPostgresControlledRestoreHarnessPathIsNarrow(t *testing.T) {
+	for path, want := range map[string]bool{
+		"e2e/cmd/postgres-controlled-restore-e2e/main.go":                  true,
+		"docs/adr/0036-browser-postgresql-controlled-restore-reference.md": true,
+		".github/workflows/postgres-controlled-restore-e2e.yml":            true,
+		".github/workflows/downstream-fencing-v2-e2e.yml":                  false,
+		".github/workflows/downstream-fencing-e2e.yml":                     false,
+		".github/workflows/browser-e2e.yml":                                false,
+		"gateway/capacity/redis/action_history_postgres.go":                false,
+		"e2e/../gateway/capacity/redis/action_history_postgres.go":         false,
+	} {
+		if got := postgresControlledRestoreHarnessPath(path); got != want {
+			t.Errorf("postgresControlledRestoreHarnessPath(%q) = %t, want %t", path, got, want)
 		}
 	}
 }

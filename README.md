@@ -40,21 +40,32 @@ hosted workflow run `34031784793` at implementation `3ff58dc` passes the real
 PostgreSQL migration, role, concurrency, timeout, and combined pinned-Valkey
 rollback gate. That run resolved and the workflow now pins PostgreSQL digest
 `sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94`.
-This is not a production witness.
+This is not a production witness. ADR 0036 now implements a separately locked
+same-runner controlled-restore reference: PostgreSQL-backed witnessed fencing,
+Provider/private-ingress quarantine, older-Redis rejection through strict
+read-only verification, exact-state repair, and post-resume real CDP. Hosted
+`linux/amd64` run `34037307799` for PR head `ffa40d6` passes all 18 scenarios;
+the artifact records synthetic merge harness commit `b924b26`. Its independently
+inspected artifact contains exactly five sanitized files and records all cleanup
+checks as true. PostgreSQL and Valkey still share one host, Docker engine,
+operator, and workflow, so this profile cannot establish independent failure or
+backup domains.
 Valkey provenance and HA/failover, production Browser
 advertisement/public Gateway composition, real Agent Platform migration,
 aggregate conformance, multi-controller, hostile multi-tenant, deployment, and
-production gates remain open. The ADR 0033 and v2 profiles pin Contract
-identity but do not execute the Suite (`suite_exercised=false`).
+production gates remain open. The ADR 0033, v2, and controlled-restore profiles
+pin Contract identity but do not execute the Suite (`suite_exercised=false`).
 
-Hosted checkout `059357c` passes repository CI `34026680576`, Reference
-`34026680567`, Candidate `34026680617`, Browser `34026680597`, shared-capacity
-`34026680568`, durable-revocation `34026680592`, downstream-fencing v1
-`34026680577`, and downstream-fencing v2 `34026680591`. The independently
-inspected v2 artifact `browser-downstream-fencing-v2-e2e-evidence-34026680591`
-has ID `9987350368` and GitHub digest
-`sha256:3e68f1c4b5bd74e0ae0ff0fde2c9ffefc63852cf9fc82b3019bedfb228bf2c9a`.
-These remain eight distinct workflows and seven separate E2E tracks, not
+Hosted PR head `ffa40d6` passes repository CI `34037307804`, Reference
+`34037307791`, Candidate `34037307796`, Browser `34037307811`, shared-capacity
+`34037307801`, durable-revocation `34037307817`, downstream-fencing v1
+`34037307793`, downstream-fencing v2 `34037307798`, PostgreSQL witness
+`34037307790`, and PostgreSQL controlled restore `34037307799`. The independently
+inspected controlled-restore artifact
+`browser-postgres-controlled-restore-e2e-evidence-34037307799` has ID
+`9990655840` and GitHub digest
+`sha256:6ab816b41fba98aac0f1cf76eee9739abc7fedf356695148bb17593b396b48eb`.
+These remain ten distinct workflows and eight separate E2E tracks, not
 aggregate conformance.
 
 An intermediate v2 workflow `34025787520` at `ef63be4` exposed a verifier
@@ -188,6 +199,16 @@ Currently implemented:
   `34031784793` at `3ff58dc` passes the PostgreSQL and combined rollback tests;
   the workflow now pins the exact PostgreSQL digest resolved by that run. No
   provenance, HA, deployment, or production claim follows
+- ADR 0036 PostgreSQL controlled-restore reference. The separately named
+  18-scenario runner composes the ADR 0035 witness into the two-Gateway,
+  two-independent-caller, unique-ingress, real-Chromium harness. It quarantines
+  both Provider/private-ingress listeners before Redis restore, requires an
+  older snapshot to fail strict `VerifyRestoredState` without advancing
+  PostgreSQL, restores the exact current Redis state, and resumes real CDP only
+  after an exact match. Hosted `linux/amd64` run `34037307799` for PR head
+  `ffa40d6` passes 18/18; its inspected five-file artifact records synthetic
+  merge harness commit `b924b26` and all cleanup and sanitization checks as true.
+  The profile records `same_runner=true` and `independent_failure_domain=false`
 - downstream caller bootstrap implementation `58488d7`: two independently
   identified mTLS/JWS caller OS processes each perform Provider capability,
   create, operation, sandbox, Browser-session, and handoff reconciliation, bind
@@ -230,10 +251,10 @@ Currently implemented:
 
 Planned but not yet implemented:
 
-- run and inspect the PostgreSQL witness workflow, pin and verify the exact
-  PostgreSQL server artifact, then prove independent failure/backup domains,
-  ingress quarantine/resume, operational restore, HA/failover, metrics, and
-  role isolation without treating the component adapter as deployment evidence
+- use a deployment-owned environment to prove independent PostgreSQL/Valkey
+  failure and backup domains, HA/failover, operator authorization, metrics, and
+  rollback controls without promoting the passed same-runner reference to
+  deployment evidence
 - production Browser advertisement and deployable caller-owned Gateway
   integration only after those independent readiness gates pass
 - runtime images for desktop workloads

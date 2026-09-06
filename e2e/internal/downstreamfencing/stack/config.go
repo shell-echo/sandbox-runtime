@@ -25,8 +25,11 @@ import (
 const maxConfigBytes = 1 << 20
 
 const (
-	ActionFencingProfileV1          = "redis-action-fence-v1"
-	ActionFencingProfileWitnessedV2 = "redis-action-fence-witnessed-v2"
+	ActionFencingProfileV1                  = "redis-action-fence-v1"
+	ActionFencingProfileWitnessedV2         = "redis-action-fence-witnessed-v2"
+	ActionFencingProfilePostgresWitnessedV2 = "redis-action-fence-witnessed-v2-postgres"
+	ActionHistoryVerificationRuntime        = "runtime"
+	ActionHistoryVerificationRestoredState  = "restored-state"
 )
 
 const (
@@ -83,11 +86,14 @@ type IngressConfig struct {
 }
 
 type AuthorityConfig struct {
-	RedisURL                 string         `json:"redis_url"`
-	CapacityNamespace        string         `json:"capacity_namespace"`
-	CapacityPolicy           CapacityPolicy `json:"capacity_policy"`
-	ActionFencingProfile     string         `json:"action_fencing_profile"`
-	ActionHistoryWitnessFile string         `json:"action_history_witness_file,omitempty"`
+	RedisURL                        string         `json:"redis_url"`
+	CapacityNamespace               string         `json:"capacity_namespace"`
+	CapacityPolicy                  CapacityPolicy `json:"capacity_policy"`
+	ActionFencingProfile            string         `json:"action_fencing_profile"`
+	ActionHistoryWitnessFile        string         `json:"action_history_witness_file,omitempty"`
+	ActionHistoryPostgresURL        string         `json:"action_history_postgres_url,omitempty"`
+	ActionHistoryOperationTimeoutMS int64          `json:"action_history_operation_timeout_millis,omitempty"`
+	ActionHistoryVerification       string         `json:"action_history_verification,omitempty"`
 }
 
 type CapacityPolicy struct {
@@ -278,12 +284,31 @@ func validateAuthority(config AuthorityConfig) error {
 	}
 	switch config.ActionFencingProfile {
 	case ActionFencingProfileV1:
-		if config.ActionHistoryWitnessFile != "" {
+		if config.ActionHistoryWitnessFile != "" || config.ActionHistoryPostgresURL != "" ||
+			config.ActionHistoryOperationTimeoutMS != 0 || config.ActionHistoryVerification != "" {
 			return errors.New("v1 action fencing must not configure a witness")
 		}
 	case ActionFencingProfileWitnessedV2:
 		if strings.TrimSpace(config.ActionHistoryWitnessFile) == "" || !filepath.IsAbs(config.ActionHistoryWitnessFile) {
 			return errors.New("witnessed-v2 action fencing requires an absolute witness path")
+		}
+		if config.ActionHistoryPostgresURL != "" || config.ActionHistoryOperationTimeoutMS != 0 ||
+			config.ActionHistoryVerification != "" {
+			return errors.New("file witnessed-v2 action fencing must not configure PostgreSQL restore verification")
+		}
+	case ActionFencingProfilePostgresWitnessedV2:
+		if config.ActionHistoryWitnessFile != "" {
+			return errors.New("PostgreSQL witnessed-v2 action fencing must not configure a file witness")
+		}
+		if err := validatePostgresURL(config.ActionHistoryPostgresURL); err != nil {
+			return err
+		}
+		if config.ActionHistoryOperationTimeoutMS != lockedOperationTimeoutMillis {
+			return errors.New("PostgreSQL witness operation timeout differs from the locked profile")
+		}
+		if config.ActionHistoryVerification != ActionHistoryVerificationRuntime &&
+			config.ActionHistoryVerification != ActionHistoryVerificationRestoredState {
+			return errors.New("PostgreSQL witness verification mode is invalid")
 		}
 	default:
 		return errors.New("action fencing profile is invalid")
@@ -400,6 +425,30 @@ func validateRedisURL(value string) error {
 		ip := net.ParseIP(parsed.Hostname())
 		if ip == nil || !ip.IsLoopback() {
 			return errors.New("Redis authority must use an explicit loopback endpoint in this E2E process")
+		}
+	}
+	return nil
+}
+
+func validatePostgresURL(value string) error {
+	parsed, err := url.Parse(value)
+	if err != nil || (parsed.Scheme != "postgres" && parsed.Scheme != "postgresql") ||
+		parsed.Hostname() == "" || parsed.Port() == "" || parsed.Path != "/witness" ||
+		parsed.RawQuery != "sslmode=disable" || parsed.Fragment != "" || parsed.User == nil {
+		return errors.New("PostgreSQL witness URL must select the locked local database with explicit credentials")
+	}
+	port, err := strconv.Atoi(parsed.Port())
+	if err != nil || port < 1 || port > 65_535 {
+		return errors.New("PostgreSQL witness URL port is invalid")
+	}
+	password, hasPassword := parsed.User.Password()
+	if parsed.User.Username() != "sandbox_runtime_witness" || !hasPassword || password == "" {
+		return errors.New("PostgreSQL witness URL credentials are incomplete")
+	}
+	if parsed.Hostname() != "localhost" {
+		ip := net.ParseIP(parsed.Hostname())
+		if ip == nil || !ip.IsLoopback() {
+			return errors.New("PostgreSQL witness must use an explicit loopback endpoint in this E2E process")
 		}
 	}
 	return nil
