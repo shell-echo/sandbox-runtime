@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	goredis "github.com/redis/go-redis/v9"
 	"github.com/shell-echo/sandbox-runtime-e2e/internal/downstreamfencing/transport"
 	basestack "github.com/shell-echo/sandbox-runtime-e2e/internal/stack"
@@ -35,6 +36,7 @@ type Stack struct {
 	closeProvider func() error
 	closeRedis    func() error
 	closeWitness  func() error
+	closePostgres func()
 	observations  *observationWriter
 	stopTimeout   time.Duration
 
@@ -113,6 +115,25 @@ func Open(ctx context.Context, input Config) (_ *Stack, resultErr error) {
 		}
 		stack.closeWitness = witness.Close
 		actionFencer, err = rediscapacity.NewWitnessedActionFencer(capacity, witness)
+	case ActionFencingProfilePostgresWitnessedV2:
+		poolConfig, poolErr := pgxpool.ParseConfig(config.Authority.ActionHistoryPostgresURL)
+		if poolErr != nil {
+			return nil, errors.New("parse PostgreSQL witness configuration")
+		}
+		poolConfig.MaxConns = 4
+		pool, poolErr := pgxpool.NewWithConfig(ctx, poolConfig)
+		if poolErr != nil {
+			return nil, errors.New("construct PostgreSQL witness pool")
+		}
+		stack.closePostgres = pool.Close
+		witness, witnessErr := rediscapacity.NewPostgresActionHistoryWitness(rediscapacity.PostgresActionHistoryWitnessOptions{
+			Capacity: capacity, Pool: pool,
+			OperationTimeout: durationMillis(config.Authority.ActionHistoryOperationTimeoutMS),
+		})
+		if witnessErr != nil {
+			return nil, errors.New("construct PostgreSQL action-history witness")
+		}
+		actionFencer, err = rediscapacity.NewWitnessedActionFencer(capacity, witness)
 	default:
 		err = gateway.ErrDownstreamUnavailable
 	}
@@ -120,7 +141,10 @@ func Open(ctx context.Context, input Config) (_ *Stack, resultErr error) {
 		return nil, errors.New("construct retained action-fence authority")
 	}
 	verifier, ok := actionFencer.(interface{ Verify(context.Context) error })
-	if !ok || verifier.Verify(ctx) != nil {
+	if !ok {
+		return nil, errors.New("verify retained action-fence authority")
+	}
+	if verifyActionFencer(ctx, config.Authority.ActionHistoryVerification, verifier, actionFencer) != nil {
 		return nil, errors.New("verify retained action-fence authority")
 	}
 
@@ -154,6 +178,25 @@ func Open(ctx context.Context, input Config) (_ *Stack, resultErr error) {
 	}
 	stack.ingress = privateIngress
 	return stack, nil
+}
+
+func verifyActionFencer(
+	ctx context.Context,
+	mode string,
+	runtimeVerifier interface{ Verify(context.Context) error },
+	actionFencer any,
+) error {
+	if ctx == nil || runtimeVerifier == nil {
+		return gateway.ErrDownstreamUnavailable
+	}
+	if mode != ActionHistoryVerificationRestoredState {
+		return runtimeVerifier.Verify(ctx)
+	}
+	restoredVerifier, ok := actionFencer.(interface{ VerifyRestoredState(context.Context) error })
+	if !ok {
+		return gateway.ErrDownstreamUnavailable
+	}
+	return restoredVerifier.VerifyRestoredState(ctx)
 }
 
 // Run starts the Provider API and private ingress concurrently and stops both
@@ -246,6 +289,9 @@ func (s *Stack) Close() error {
 		}
 		if s.closeWitness != nil {
 			s.closeErr = errors.Join(s.closeErr, s.closeWitness())
+		}
+		if s.closePostgres != nil {
+			s.closePostgres()
 		}
 		if s.observations != nil {
 			s.closeErr = errors.Join(s.closeErr, s.observations.Close())

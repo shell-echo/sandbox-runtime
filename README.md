@@ -40,7 +40,14 @@ hosted workflow run `34031784793` at implementation `3ff58dc` passes the real
 PostgreSQL migration, role, concurrency, timeout, and combined pinned-Valkey
 rollback gate. That run resolved and the workflow now pins PostgreSQL digest
 `sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94`.
-This is not a production witness.
+This is not a production witness. ADR 0036 now implements a separately locked
+same-runner controlled-restore reference: PostgreSQL-backed witnessed fencing,
+Provider/private-ingress quarantine, older-Redis rejection through strict
+read-only verification, exact-state repair, and post-resume real CDP. Its
+runner, workflow, and component checks are present, but no clean committed
+18-scenario run or hosted five-file artifact has passed yet. PostgreSQL and
+Valkey still share one host, Docker engine, operator, and workflow, so this
+profile cannot establish independent failure or backup domains.
 Valkey provenance and HA/failover, production Browser
 advertisement/public Gateway composition, real Agent Platform migration,
 aggregate conformance, multi-controller, hostile multi-tenant, deployment, and
@@ -188,6 +195,15 @@ Currently implemented:
   `34031784793` at `3ff58dc` passes the PostgreSQL and combined rollback tests;
   the workflow now pins the exact PostgreSQL digest resolved by that run. No
   provenance, HA, deployment, or production claim follows
+- ADR 0036 PostgreSQL controlled-restore reference. The separately named
+  18-scenario runner composes the ADR 0035 witness into the two-Gateway,
+  two-independent-caller, unique-ingress, real-Chromium harness. It quarantines
+  both Provider/private-ingress listeners before Redis restore, requires an
+  older snapshot to fail strict `VerifyRestoredState` without advancing
+  PostgreSQL, restores the exact current Redis state, and resumes real CDP only
+  after an exact match. Local implementation checks are present; the clean
+  committed and hosted E2E gates remain pending. The profile records
+  `same_runner=true` and `independent_failure_domain=false`
 - downstream caller bootstrap implementation `58488d7`: two independently
   identified mTLS/JWS caller OS processes each perform Provider capability,
   create, operation, sandbox, Browser-session, and handoff reconciliation, bind
@@ -230,10 +246,11 @@ Currently implemented:
 
 Planned but not yet implemented:
 
-- run and inspect the PostgreSQL witness workflow, pin and verify the exact
-  PostgreSQL server artifact, then prove independent failure/backup domains,
-  ingress quarantine/resume, operational restore, HA/failover, metrics, and
-  role isolation without treating the component adapter as deployment evidence
+- run and inspect the clean hosted ADR 0036 controlled-restore workflow and its
+  exact five-file artifact; then use a deployment-owned environment to prove
+  independent PostgreSQL/Valkey failure and backup domains, HA/failover,
+  operator authorization, metrics, and rollback controls without promoting the
+  same-runner reference to deployment evidence
 - production Browser advertisement and deployable caller-owned Gateway
   integration only after those independent readiness gates pass
 - runtime images for desktop workloads

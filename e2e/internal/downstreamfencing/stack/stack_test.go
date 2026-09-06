@@ -25,6 +25,23 @@ type stubbornLifecycleStub struct {
 	startErr error
 }
 
+type actionFencerVerifierStub struct {
+	runtimeCalls  int
+	restoredCalls int
+	runtimeErr    error
+	restoredErr   error
+}
+
+func (s *actionFencerVerifierStub) Verify(context.Context) error {
+	s.runtimeCalls++
+	return s.runtimeErr
+}
+
+func (s *actionFencerVerifierStub) VerifyRestoredState(context.Context) error {
+	s.restoredCalls++
+	return s.restoredErr
+}
+
 func newStubbornLifecycleStub() *stubbornLifecycleStub {
 	return &stubbornLifecycleStub{started: make(chan struct{}), release: make(chan struct{}), exited: make(chan struct{})}
 }
@@ -161,5 +178,33 @@ func TestRedisClientUsesBoundedRESP2WithoutRetries(t *testing.T) {
 		options.DialTimeout != 200*time.Millisecond || options.ReadTimeout != 200*time.Millisecond ||
 		options.WriteTimeout != 200*time.Millisecond || options.PoolTimeout != 200*time.Millisecond {
 		t.Fatalf("unsafe Redis options: %#v", options)
+	}
+}
+
+func TestStrictRestoreVerificationNeverRunsRuntimeRecovery(t *testing.T) {
+	stub := &actionFencerVerifierStub{}
+	if err := verifyActionFencer(t.Context(), ActionHistoryVerificationRestoredState, stub, stub); err != nil {
+		t.Fatal(err)
+	}
+	if stub.runtimeCalls != 0 || stub.restoredCalls != 1 {
+		t.Fatalf("strict verification calls = runtime %d, restored %d", stub.runtimeCalls, stub.restoredCalls)
+	}
+
+	stub = &actionFencerVerifierStub{}
+	if err := verifyActionFencer(t.Context(), ActionHistoryVerificationRuntime, stub, stub); err != nil {
+		t.Fatal(err)
+	}
+	if stub.runtimeCalls != 1 || stub.restoredCalls != 0 {
+		t.Fatalf("runtime verification calls = runtime %d, restored %d", stub.runtimeCalls, stub.restoredCalls)
+	}
+}
+
+func TestStrictRestoreVerificationRequiresStrictPrimitive(t *testing.T) {
+	stub := &actionFencerVerifierStub{}
+	if err := verifyActionFencer(t.Context(), ActionHistoryVerificationRestoredState, stub, struct{}{}); err == nil {
+		t.Fatal("strict restore verification accepted a fencer without the strict primitive")
+	}
+	if stub.runtimeCalls != 0 {
+		t.Fatal("strict restore fallback invoked runtime recovery")
 	}
 }

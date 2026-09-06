@@ -294,6 +294,38 @@ encoding is not a canonical logical representation. Fix `059357c` adds
 order-independent hash comparison plus replacement/string/zset regression
 tests without weakening the injected fault.
 
+## PostgreSQL controlled-restore runner
+
+`cmd/postgres-controlled-restore-e2e` is the separate ADR 0036 same-runner
+reference operational profile. It retains the first ten real-Chromium v2
+scenarios, then stops the unique Provider/private-ingress process before any
+restore, proves both listeners and every Gateway bypass are unavailable,
+restores an older Redis snapshot, and requires strict `VerifyRestoredState`
+startup to reject it without advancing PostgreSQL or opening a listener. It
+then restores the exact current Redis state, resumes only through strict
+verification, and performs a post-resume real-CDP mutation.
+
+From a clean committed checkout with Docker and authenticated `gh` available:
+
+```bash
+cd e2e
+go run ./cmd/postgres-controlled-restore-e2e -check
+go run ./cmd/postgres-controlled-restore-e2e \
+  -evidence-root evidence/postgres-controlled-restore
+```
+
+The runner creates a pinned PostgreSQL container, applies the exact migration,
+uses an ephemeral administrator only for migration and grants, and supplies
+the runtime witness credential only to the orchestrator and private-ingress
+process. Redis restore remains separately credentialed and orchestrator-only.
+It emits the same exact five-file sanitized evidence shape as the downstream
+profiles.
+
+This is explicitly same-runner evidence. PostgreSQL and Valkey share the host,
+Docker engine, workflow, and operator, so the result does not prove independent
+failure or backup domains, either store's HA/failover, production restore
+automation, deployment readiness, or production readiness.
+
 ## Latest verified evidence
 
 Clean local downstream-fencing run

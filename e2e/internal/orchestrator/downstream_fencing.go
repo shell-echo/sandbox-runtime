@@ -25,6 +25,7 @@ import (
 
 	"github.com/coder/websocket"
 	cerrdefs "github.com/containerd/errdefs"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/moby/moby/client"
 	goredis "github.com/redis/go-redis/v9"
 	providercaller "github.com/shell-echo/sandbox-runtime-e2e/internal/caller"
@@ -45,13 +46,25 @@ import (
 const (
 	downstreamFencingEvidenceName   = "Browser downstream CDP action-fencing external-caller evidence"
 	downstreamFencingV2EvidenceName = "Browser witnessed action-history restore-fencing external-caller evidence"
+	postgresRestoreEvidenceName     = "Browser PostgreSQL controlled-restore reference operational evidence"
+	postgresRestoreEvidenceBoundary = "ADR 0036 same-runner two-Gateway, two-independent-caller, quarantined unique Provider/private-ingress, retained-Valkey, PostgreSQL-witness, signed-real-Chromium controlled-restore reference operational E2E only"
 	downstreamFencingNamespace      = "downstream-fencing-e2e"
 	downstreamFencingController     = "downstream-fencing-e2e-controller"
 	downstreamFencingV2Namespace    = "downstream-fencing-v2-e2e"
 	downstreamFencingV2Controller   = "downstream-fencing-v2-e2e-controller"
+	postgresRestoreNamespace        = "postgres-controlled-restore-e2e"
+	postgresRestoreController       = "postgres-controlled-restore-e2e-controller"
 	downstreamCommandTimeout        = 5 * time.Second
 	downstreamRecordMaximum         = 512
 	downstreamFileMaximum           = 16 << 20
+)
+
+type downstreamFencingMode uint8
+
+const (
+	downstreamFencingModeV1 downstreamFencingMode = iota
+	downstreamFencingModeFileWitnessV2
+	downstreamFencingModePostgresRestore
 )
 
 var downstreamEvidenceFiles = []string{
@@ -205,6 +218,7 @@ type downstreamFencingManifest struct {
 	NonTargets             []string                                  `json:"non_targets"`
 	EvidenceBoundary       string                                    `json:"evidence_boundary"`
 	WitnessedV2            *downstreamFencingV2Evidence              `json:"witnessed_v2,omitempty"`
+	PostgresRestore        *downstreamPostgresRestoreEvidence        `json:"postgres_controlled_restore,omitempty"`
 }
 
 type downstreamFencingV2Evidence struct {
@@ -222,6 +236,40 @@ type downstreamFencingV2Evidence struct {
 	WitnessReconstruction      bool                                           `json:"witness_reconstruction_rejected_rollback"`
 	AheadOneRecovered          bool                                           `json:"redis_ahead_one_recovered"`
 	OtherMismatchesRejected    bool                                           `json:"other_checkpoint_mismatches_rejected"`
+}
+
+type downstreamPostgresRestoreEvidence struct {
+	Sources                    lock.DownstreamFencingV2Sources                `json:"sources"`
+	BaseLock                   lock.DownstreamFencingV2BaseLock               `json:"base_lock"`
+	ActionFence                rediscapacity.WitnessedActionFencingDescriptor `json:"action_fence"`
+	PostgreSQL                 downstreamPostgresEvidence                     `json:"postgresql"`
+	Witness                    lock.PostgresControlledRestoreWitness          `json:"witness"`
+	RestoreControl             lock.PostgresControlledRestoreControl          `json:"restore_control"`
+	StrictConfigSHA256         string                                         `json:"strict_restore_config_sha256"`
+	IngressQuarantined         bool                                           `json:"ingress_quarantined_before_restore"`
+	OlderSnapshotRejected      bool                                           `json:"older_snapshot_rejected"`
+	RejectedStateNoListeners   bool                                           `json:"rejected_state_opened_no_listeners"`
+	RejectedStateNoPGAdvance   bool                                           `json:"rejected_state_did_not_advance_postgresql"`
+	ExactStateResumed          bool                                           `json:"exact_state_resumed"`
+	ExactVerificationNoAdvance bool                                           `json:"exact_verification_did_not_advance_postgresql"`
+	PostResumeCDPSucceeded     bool                                           `json:"post_resume_real_cdp_succeeded"`
+}
+
+type downstreamPostgresEvidence struct {
+	Image                    string `json:"image"`
+	IndexDigest              string `json:"index_digest"`
+	ResolvedTag              string `json:"resolved_tag"`
+	SelectedPlatform         string `json:"selected_platform"`
+	LocalImageID             string `json:"local_image_id"`
+	Database                 string `json:"database"`
+	RuntimeRole              string `json:"runtime_role"`
+	MigrationPath            string `json:"migration_path"`
+	MigrationSHA256          string `json:"migration_sha256"`
+	ProvenanceNotEstablished bool   `json:"provenance_not_established"`
+	SameRunner               bool   `json:"same_runner"`
+	IndependentFailureDomain bool   `json:"independent_failure_domain"`
+	RuntimeRoleVerified      bool   `json:"runtime_role_verified"`
+	Removed                  bool   `json:"removed"`
 }
 
 type downstreamFencingContractEvidence struct {
@@ -263,6 +311,7 @@ type downstreamFencingBinaryDigests struct {
 
 type downstreamFencingConfigDigests struct {
 	ProviderIngress    string   `json:"provider_ingress"`
+	StrictRestore      string   `json:"strict_restore,omitempty"`
 	Gateways           []string `json:"gateways"`
 	CallerBootstraps   []string `json:"caller_bootstraps"`
 	ProviderBootstraps []string `json:"provider_bootstraps"`
@@ -322,15 +371,21 @@ type downstreamFencingIdentity struct {
 // Provider/private-ingress process, one retained Valkey process, and the exact
 // signed Browser image running real Chromium.
 func RunDownstreamFencing(ctx context.Context, options Options) (_ DownstreamFencingResult, resultErr error) {
-	return runDownstreamFencing(ctx, options, false)
+	return runDownstreamFencing(ctx, options, downstreamFencingModeV1)
 }
 
 // RunDownstreamFencingV2 executes the separately locked ADR 0034 successor.
 func RunDownstreamFencingV2(ctx context.Context, options Options) (_ DownstreamFencingResult, resultErr error) {
-	return runDownstreamFencing(ctx, options, true)
+	return runDownstreamFencing(ctx, options, downstreamFencingModeFileWitnessV2)
 }
 
-func runDownstreamFencing(ctx context.Context, options Options, witnessedV2 bool) (_ DownstreamFencingResult, resultErr error) {
+// RunPostgresControlledRestore executes the separately locked ADR 0036
+// same-runner reference operational profile.
+func RunPostgresControlledRestore(ctx context.Context, options Options) (_ DownstreamFencingResult, resultErr error) {
+	return runDownstreamFencing(ctx, options, downstreamFencingModePostgresRestore)
+}
+
+func runDownstreamFencing(ctx context.Context, options Options, mode downstreamFencingMode) (_ DownstreamFencingResult, resultErr error) {
 	moduleRoot, err := filepath.Abs(options.ModuleRoot)
 	if err != nil {
 		return DownstreamFencingResult{}, err
@@ -345,9 +400,26 @@ func runDownstreamFencing(ctx context.Context, options Options, witnessedV2 bool
 	}
 	var locked lock.DownstreamFencingLock
 	var lockedV2 *lock.DownstreamFencingV2Lock
+	var lockedPostgres *lock.PostgresControlledRestoreLock
 	evidenceName := downstreamFencingEvidenceName
 	evidenceProfile := lock.DownstreamFencingProfile
-	if witnessedV2 {
+	witnessedV2 := mode != downstreamFencingModeV1
+	postgresRestore := mode == downstreamFencingModePostgresRestore
+	if postgresRestore {
+		if err := lock.VerifyPostgresControlledRestore(providerRoot, platform); err != nil {
+			return DownstreamFencingResult{}, err
+		}
+		value, err := lock.LoadPostgresControlledRestore(providerRoot, platform)
+		if err != nil {
+			return DownstreamFencingResult{}, err
+		}
+		lockedPostgres = &value
+		base := value.Base
+		lockedV2 = &base
+		locked = value.Base.Base
+		evidenceName = postgresRestoreEvidenceName
+		evidenceProfile = value.EvidenceProfile
+	} else if witnessedV2 {
 		if err := lock.VerifyDownstreamFencingV2(providerRoot, platform); err != nil {
 			return DownstreamFencingResult{}, err
 		}
@@ -376,6 +448,11 @@ func runDownstreamFencing(ctx context.Context, options Options, witnessedV2 bool
 		runtimeNamespace = downstreamFencingV2Namespace
 		runtimeController = downstreamFencingV2Controller
 	}
+	if lockedPostgres != nil {
+		scenarios = lockedPostgres.Scenarios
+		runtimeNamespace = postgresRestoreNamespace
+		runtimeController = postgresRestoreController
+	}
 	harnessCommit, err := lock.HarnessRevision(moduleRoot)
 	if err != nil {
 		return DownstreamFencingResult{}, err
@@ -402,7 +479,7 @@ func runDownstreamFencing(ctx context.Context, options Options, witnessedV2 bool
 		return DownstreamFencingResult{}, err
 	}
 	witnessPath := ""
-	if witnessedV2 {
+	if mode == downstreamFencingModeFileWitnessV2 {
 		witnessRoot := filepath.Join(runRoot, "independent-witness")
 		if err := os.MkdirAll(witnessRoot, 0o700); err != nil {
 			return DownstreamFencingResult{}, err
@@ -552,6 +629,25 @@ func runDownstreamFencing(ctx context.Context, options Options, witnessedV2 bool
 	if err := waitForSharedRedis(ctx, redisClient, 10*time.Second); err != nil {
 		return DownstreamFencingResult{}, err
 	}
+	var postgres *downstreamPostgres
+	var postgresPool *pgxpool.Pool
+	var postgresSensitive []string
+	postgresRemoved := false
+	if postgresRestore {
+		postgres, err = startDownstreamPostgres(ctx, runRoot, providerRoot, platform, lockedPostgres.PostgreSQL)
+		if err != nil {
+			return DownstreamFencingResult{}, err
+		}
+		postgresPool = postgres.runtimePool
+		postgresSensitive = append(postgresSensitive, postgres.sensitive...)
+		defer func() {
+			if !postgresRemoved {
+				closeCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+				resultErr = errors.Join(resultErr, postgres.close(closeCtx))
+				cancel()
+			}
+		}()
+	}
 	orchestratorRedisURL := ""
 	var orchestratorRedisClient *goredis.Client
 	orchestratorRedisClosed := true
@@ -572,7 +668,7 @@ func runDownstreamFencing(ctx context.Context, options Options, witnessedV2 bool
 		}()
 	}
 	if err := provisionDownstreamAuthorities(
-		ctx, redisClient, capacityNamespace, revocationNamespace, locked, witnessedV2, witnessPath,
+		ctx, redisClient, capacityNamespace, revocationNamespace, locked, witnessedV2, witnessPath, postgresPool,
 	); err != nil {
 		return DownstreamFencingResult{}, err
 	}
@@ -602,15 +698,31 @@ func runDownstreamFencing(ctx context.Context, options Options, witnessedV2 bool
 		providerRevisionID = "provider-revision-downstream-fencing-e2e-v2"
 	}
 	providerAudience := "urn:shell-echo:sandbox-runtime:provider-instance:downstream-fencing-e2e"
+	if postgresRestore {
+		providerRevisionID = "provider-revision-postgres-controlled-restore-e2e-v1"
+		providerAudience = "urn:shell-echo:sandbox-runtime:provider-instance:postgres-controlled-restore-e2e"
+	}
 	providerConfig := downstreamProviderConfig(
 		providerAddress, ingressAddress, stateRoot, runRoot, providerRoot, browserReference, browserGatewayImage, uplinkName,
 		architecture, ghPath, ghDigest, valkey.redisURL, capacityNamespace, locked, material, observationPath,
-		witnessedV2, witnessPath, runtimeNamespace, runtimeController,
+		witnessedV2, witnessPath, postgresRuntimeURL(postgres), downstreamstack.ActionHistoryVerificationRuntime,
+		runtimeNamespace, runtimeController,
 	)
 	providerConfigPath := filepath.Join(secretsRoot, "provider-ingress.json")
 	providerConfigDigest, err := writeJSON(providerConfigPath, providerConfig)
 	if err != nil {
 		return DownstreamFencingResult{}, err
+	}
+	strictProviderConfigPath := ""
+	strictProviderConfigDigest := ""
+	if postgresRestore {
+		strictProviderConfig := providerConfig
+		strictProviderConfig.Authority.ActionHistoryVerification = downstreamstack.ActionHistoryVerificationRestoredState
+		strictProviderConfigPath = filepath.Join(secretsRoot, "provider-ingress-strict-restore.json")
+		strictProviderConfigDigest, err = writeJSON(strictProviderConfigPath, strictProviderConfig)
+		if err != nil {
+			return DownstreamFencingResult{}, err
+		}
 	}
 
 	ingressProcess, err := startStack(ingressBinary, providerConfigPath, filepath.Join(logRoot, "provider-ingress-initial.log"))
@@ -638,6 +750,7 @@ func runDownstreamFencing(ctx context.Context, options Options, witnessedV2 bool
 	if err != nil {
 		return DownstreamFencingResult{}, err
 	}
+	sensitive = append(sensitive, postgresSensitive...)
 	callerBootstrapDigests := make([]string, 2)
 	providerBootstrapDigests := make([]string, 2)
 	callerBootstrapPaths := make([]string, 2)
@@ -1379,7 +1492,20 @@ func runDownstreamFencing(ctx context.Context, options Options, witnessedV2 bool
 			return DownstreamFencingResult{}, err
 		}
 	}
-	if witnessedV2 {
+	if postgresRestore {
+		if err := runDownstreamPostgresRestoreScenarios(ctx, downstreamPostgresRestoreScenarioInput{
+			Runner: runner, Scenarios: scenarios, RedisClient: redisClient,
+			OrchestratorRedisClient: orchestratorRedisClient, CapacityNamespace: capacityNamespace,
+			ObservationPath: observationPath, Callers: callers, Identities: identities, TargetID: targetID,
+			ExpectedMarker: replacementMarker, LeaseTTL: leaseTTL, IngressProcess: &ingressProcess,
+			IngressStopped: &ingressStopped, IngressBinary: ingressBinary,
+			StrictProviderConfigPath: strictProviderConfigPath, LogRoot: logRoot,
+			ProviderAddress: providerAddress, IngressAddress: ingressAddress, Locked: locked,
+			LockedPostgres: *lockedPostgres, PostgresPool: postgresPool, Sensitive: &sensitive,
+		}); err != nil {
+			return DownstreamFencingResult{}, err
+		}
+	} else if witnessedV2 {
 		if err := runDownstreamFencingV2Scenarios(ctx, downstreamFencingV2ScenarioInput{
 			Runner: runner, Scenarios: scenarios, RedisClient: redisClient,
 			OrchestratorRedisClient: orchestratorRedisClient, CapacityNamespace: capacityNamespace,
@@ -1470,6 +1596,18 @@ func runDownstreamFencing(ctx context.Context, options Options, witnessedV2 bool
 		}
 		ingressStopped = true
 		cleanupState.ProviderIngressStopped = true
+		if postgres != nil {
+			postgresID := postgres.containerID
+			if err := postgres.close(ctx); err != nil {
+				return err
+			}
+			postgresRemoved = true
+			if _, err := dockerClient.ContainerInspect(ctx, postgresID, client.ContainerInspectOptions{}); err == nil {
+				return errors.New("owned PostgreSQL container remains after cleanup")
+			} else if !cerrdefs.IsNotFound(err) {
+				return errors.New("confirm owned PostgreSQL container cleanup")
+			}
+		}
 		if err := assertBrowserRuntimeResourcesAbsent(ctx, dockerClient, runtimeNamespace, runtimeController); err != nil {
 			return err
 		}
@@ -1544,7 +1682,7 @@ func runDownstreamFencing(ctx context.Context, options Options, witnessedV2 bool
 			BrowserEgress: browserGatewayBinaryDigest, Verifier: ghDigest,
 		},
 		ConfigDigests: downstreamFencingConfigDigests{
-			ProviderIngress: providerConfigDigest, Gateways: gatewayConfigDigests,
+			ProviderIngress: providerConfigDigest, StrictRestore: strictProviderConfigDigest, Gateways: gatewayConfigDigests,
 			CallerBootstraps: callerBootstrapDigests, ProviderBootstraps: providerBootstrapDigests,
 			FinalCallers: finalCallerDigests,
 		},
@@ -1574,7 +1712,51 @@ func runDownstreamFencing(ctx context.Context, options Options, witnessedV2 bool
 		},
 		EvidenceBoundary: "ADR 0033 two-Gateway, two-independent-caller, unique Provider/private-ingress, retained-Valkey, signed-real-Chromium downstream action-fencing external-caller E2E only",
 	}
-	if lockedV2 != nil {
+	if lockedPostgres != nil {
+		manifest.Adapters = nil
+		manifest.Valkey.ACLTemplateSHA256 = lockedV2.ACLTemplateSHA256
+		manifest.PostgresRestore = &downstreamPostgresRestoreEvidence{
+			Sources: lockedPostgres.Sources, BaseLock: lockedPostgres.BaseLock,
+			ActionFence: lockedPostgres.ActionFence, Witness: lockedPostgres.Witness,
+			RestoreControl: lockedPostgres.RestoreControl, StrictConfigSHA256: strictProviderConfigDigest,
+			PostgreSQL: downstreamPostgresEvidence{
+				Image: lockedPostgres.PostgreSQL.Image, IndexDigest: lockedPostgres.PostgreSQL.IndexDigest,
+				ResolvedTag:      lockedPostgres.PostgreSQL.ResolvedTag,
+				SelectedPlatform: lockedPostgres.PostgreSQL.SelectedPlatform, LocalImageID: postgres.imageID,
+				Database: lockedPostgres.PostgreSQL.Database, RuntimeRole: lockedPostgres.PostgreSQL.RuntimeRole,
+				MigrationPath:            lockedPostgres.PostgreSQL.MigrationPath,
+				MigrationSHA256:          lockedPostgres.PostgreSQL.MigrationSHA256,
+				ProvenanceNotEstablished: lockedPostgres.PostgreSQL.ProvenanceNotEstablished,
+				SameRunner:               lockedPostgres.PostgreSQL.SameRunner,
+				IndependentFailureDomain: lockedPostgres.PostgreSQL.IndependentFailureDomain,
+				RuntimeRoleVerified:      postgres.runtimeRoleVerified, Removed: postgresRemoved,
+			},
+			IngressQuarantined: true, OlderSnapshotRejected: true, RejectedStateNoListeners: true,
+			RejectedStateNoPGAdvance: true, ExactStateResumed: true,
+			ExactVerificationNoAdvance: true, PostResumeCDPSucceeded: true,
+		}
+		manifest.ProcessReconstructions = 3
+		manifest.Commands = append(manifest.Commands,
+			"apply exact PostgreSQL witness migration with an ephemeral administrator",
+			"verify least-privilege PostgreSQL runtime role",
+			"orchestrator-only Redis DUMP/RESTORE controlled recovery",
+			"strict VerifyRestoredState before listener resume")
+		manifest.Faults = append(manifest.Faults,
+			"provider/private-ingress quarantine before Redis restore",
+			"older Redis snapshot retained while PostgreSQL remains current",
+			"strict restored-state startup rejection without listener exposure",
+			"exact current Redis state restoration before resume")
+		for index, target := range manifest.NonTargets {
+			if target == "HA/failover or restored-snapshot consistency" {
+				manifest.NonTargets[index] = "Valkey HA/failover consistency"
+			}
+		}
+		manifest.NonTargets = append(manifest.NonTargets,
+			"independent PostgreSQL and Valkey failure or backup domains",
+			"PostgreSQL or Valkey HA/failover", "PostgreSQL image provenance",
+			"production restore automation or operator authorization")
+		manifest.EvidenceBoundary = postgresRestoreEvidenceBoundary
+	} else if lockedV2 != nil {
 		manifest.Adapters = nil
 		manifest.Valkey.ACLTemplateSHA256 = lockedV2.ACLTemplateSHA256
 		manifest.WitnessedV2 = &downstreamFencingV2Evidence{
@@ -1760,6 +1942,8 @@ func downstreamProviderConfig(
 	observationPath string,
 	witnessedV2 bool,
 	witnessPath string,
+	postgresURL string,
+	verification string,
 	runtimeNamespace string,
 	runtimeController string,
 ) downstreamstack.Config {
@@ -1768,6 +1952,27 @@ func downstreamProviderConfig(
 	if witnessedV2 {
 		actionProfile = downstreamstack.ActionFencingProfileWitnessedV2
 		providerRevisionID = "provider-revision-downstream-fencing-e2e-v2"
+	}
+	authority := downstreamstack.AuthorityConfig{
+		RedisURL: redisURL, CapacityNamespace: capacityNamespace,
+		ActionFencingProfile: actionProfile, ActionHistoryWitnessFile: witnessPath,
+		CapacityPolicy: downstreamstack.CapacityPolicy{
+			MaxTotal: locked.CapacityPolicy.MaxTotal, MaxPerTenant: locked.CapacityPolicy.MaxPerTenant,
+			MaxPerSession:             locked.CapacityPolicy.MaxPerSession,
+			LeaseTTLMillis:            locked.CapacityPolicy.LeaseTTLMillis,
+			RenewIntervalMillis:       locked.CapacityPolicy.RenewIntervalMillis,
+			RenewalSafetyMarginMillis: locked.CapacityPolicy.RenewalSafetyMarginMillis,
+			OperationTimeoutMillis:    locked.CapacityPolicy.OperationTimeoutMillis,
+		},
+	}
+	if postgresURL != "" {
+		actionProfile = downstreamstack.ActionFencingProfilePostgresWitnessedV2
+		providerRevisionID = "provider-revision-postgres-controlled-restore-e2e-v1"
+		authority.ActionFencingProfile = actionProfile
+		authority.ActionHistoryWitnessFile = ""
+		authority.ActionHistoryPostgresURL = postgresURL
+		authority.ActionHistoryOperationTimeoutMS = locked.CapacityPolicy.OperationTimeoutMillis
+		authority.ActionHistoryVerification = verification
 	}
 	return downstreamstack.Config{
 		Provider: basestack.BrowserProviderConfig{
@@ -1802,18 +2007,7 @@ func downstreamProviderConfig(
 			ReadTimeoutMillis: locked.Ingress.ReadTimeoutMillis, WriteTimeoutMillis: locked.Ingress.WriteTimeoutMillis,
 			IdleTimeoutMillis: locked.Ingress.IdleTimeoutMillis, MaxHeaderBytes: locked.Ingress.MaxHeaderBytes,
 		},
-		Authority: downstreamstack.AuthorityConfig{
-			RedisURL: redisURL, CapacityNamespace: capacityNamespace,
-			ActionFencingProfile: actionProfile, ActionHistoryWitnessFile: witnessPath,
-			CapacityPolicy: downstreamstack.CapacityPolicy{
-				MaxTotal: locked.CapacityPolicy.MaxTotal, MaxPerTenant: locked.CapacityPolicy.MaxPerTenant,
-				MaxPerSession:             locked.CapacityPolicy.MaxPerSession,
-				LeaseTTLMillis:            locked.CapacityPolicy.LeaseTTLMillis,
-				RenewIntervalMillis:       locked.CapacityPolicy.RenewIntervalMillis,
-				RenewalSafetyMarginMillis: locked.CapacityPolicy.RenewalSafetyMarginMillis,
-				OperationTimeoutMillis:    locked.CapacityPolicy.OperationTimeoutMillis,
-			},
-		},
+		Authority:       authority,
 		ObservationFile: observationPath,
 	}
 }
@@ -2043,6 +2237,7 @@ func provisionDownstreamAuthorities(
 	locked lock.DownstreamFencingLock,
 	witnessedV2 bool,
 	witnessPath string,
+	postgresPool *pgxpool.Pool,
 ) error {
 	capacity, err := sharedCapacityFromLock(redisClient, capacityNamespace, locked.CapacityPolicy)
 	if err != nil {
@@ -2053,12 +2248,23 @@ func provisionDownstreamAuthorities(
 		Verify(context.Context) error
 	}
 	if witnessedV2 {
-		witness, witnessErr := rediscapacity.OpenFileActionHistoryWitness(witnessPath)
-		if witnessErr != nil {
-			return errors.New("open downstream-fencing-v2 witness for provisioning")
+		var witness rediscapacity.ActionHistoryWitness
+		if postgresPool != nil {
+			witness, err = rediscapacity.NewPostgresActionHistoryWitness(rediscapacity.PostgresActionHistoryWitnessOptions{
+				Capacity: capacity, Pool: postgresPool,
+				OperationTimeout: time.Duration(locked.CapacityPolicy.OperationTimeoutMillis) * time.Millisecond,
+			})
+		} else {
+			fileWitness, witnessErr := rediscapacity.OpenFileActionHistoryWitness(witnessPath)
+			if witnessErr != nil {
+				return errors.New("open downstream-fencing-v2 witness for provisioning")
+			}
+			defer fileWitness.Close()
+			witness = fileWitness
 		}
-		defer witness.Close()
-		fencer, err = rediscapacity.NewWitnessedActionFencer(capacity, witness)
+		if err == nil {
+			fencer, err = rediscapacity.NewWitnessedActionFencer(capacity, witness)
+		}
 	} else {
 		fencer, err = rediscapacity.NewActionFencer(capacity)
 	}
@@ -2406,9 +2612,12 @@ func validateDownstreamReport(report downstreamFencingReport, names []string) er
 	expectedName := downstreamFencingEvidenceName
 	if report.EvidenceProfile == lock.DownstreamFencingV2Profile {
 		expectedName = downstreamFencingV2EvidenceName
+	} else if report.EvidenceProfile == lock.PostgresControlledRestoreProfile {
+		expectedName = postgresRestoreEvidenceName
 	}
 	if report.EvidenceName != expectedName ||
-		(report.EvidenceProfile != lock.DownstreamFencingProfile && report.EvidenceProfile != lock.DownstreamFencingV2Profile) ||
+		(report.EvidenceProfile != lock.DownstreamFencingProfile && report.EvidenceProfile != lock.DownstreamFencingV2Profile &&
+			report.EvidenceProfile != lock.PostgresControlledRestoreProfile) ||
 		len(report.Scenarios) != len(names) {
 		return errors.New("downstream-fencing report identity or scenario count is invalid")
 	}
@@ -2424,21 +2633,43 @@ func validateDownstreamReport(report downstreamFencingReport, names []string) er
 func validateDownstreamManifest(manifest downstreamFencingManifest) error {
 	expectedName := downstreamFencingEvidenceName
 	v2 := manifest.EvidenceProfile == lock.DownstreamFencingV2Profile
+	postgresRestore := manifest.EvidenceProfile == lock.PostgresControlledRestoreProfile
 	if v2 {
 		expectedName = downstreamFencingV2EvidenceName
+	} else if postgresRestore {
+		expectedName = postgresRestoreEvidenceName
 	}
 	if manifest.EvidenceName != expectedName ||
-		(manifest.EvidenceProfile != lock.DownstreamFencingProfile && !v2) ||
+		(manifest.EvidenceProfile != lock.DownstreamFencingProfile && !v2 && !postgresRestore) ||
 		manifest.Contract.SuiteExercised || manifest.Contract.ContractMetadataOnly ||
-		len(manifest.Contract.ProviderRoutesExercised) == 0 || (!v2 && manifest.ProcessReconstructions != 2) ||
-		(v2 && manifest.ProcessReconstructions != 5) ||
-		(!v2 && manifest.Adapters == nil) || (v2 && manifest.Adapters != nil) ||
+		len(manifest.Contract.ProviderRoutesExercised) == 0 || (!v2 && !postgresRestore && manifest.ProcessReconstructions != 2) ||
+		(v2 && manifest.ProcessReconstructions != 5) || (postgresRestore && manifest.ProcessReconstructions != 3) ||
+		(!v2 && !postgresRestore && manifest.Adapters == nil) || ((v2 || postgresRestore) && manifest.Adapters != nil) ||
 		!manifest.Sanitization.ExactFileSet || !manifest.Sanitization.PrivateMaterialScan || !manifest.Sanitization.AuditRecordsValidated ||
 		!manifest.Cleanup.CallersStopped || !manifest.Cleanup.GatewaysStopped || !manifest.Cleanup.ProviderIngressStopped ||
 		!manifest.Cleanup.ValkeyRemoved || !manifest.Cleanup.BrowserResourcesRemoved || !manifest.Cleanup.SupportImageRemoved {
 		return errors.New("downstream-fencing manifest identity or evidence boundary is invalid")
 	}
-	if v2 {
+	if postgresRestore {
+		value := manifest.PostgresRestore
+		if value == nil || manifest.WitnessedV2 != nil ||
+			manifest.EvidenceBoundary != postgresRestoreEvidenceBoundary ||
+			value.Sources.ProviderRevision != lock.ProviderCommit ||
+			value.BaseLock.EvidenceProfile != lock.DownstreamFencingV2Profile ||
+			value.ActionFence.PolicyFormat != "browser-downstream-action-fence-v2" ||
+			value.StrictConfigSHA256 == "" || value.PostgreSQL.LocalImageID == "" ||
+			!value.PostgreSQL.ProvenanceNotEstablished || !value.PostgreSQL.SameRunner ||
+			value.PostgreSQL.IndependentFailureDomain || !value.PostgreSQL.RuntimeRoleVerified || !value.PostgreSQL.Removed ||
+			value.Witness.CredentialsExposedToGateways || value.Witness.CredentialsExposedToCallers ||
+			value.RestoreControl.RestoreCredentialToGateways || value.RestoreControl.RestoreCredentialToCallers ||
+			value.RestoreControl.RestoresWitness || value.RestoreControl.VerificationMutatesWitness ||
+			!value.RestoreControl.SeparateRedisCredential || !value.RestoreControl.ResumeRequiresExactMatch ||
+			!value.IngressQuarantined || !value.OlderSnapshotRejected || !value.RejectedStateNoListeners ||
+			!value.RejectedStateNoPGAdvance || !value.ExactStateResumed ||
+			!value.ExactVerificationNoAdvance || !value.PostResumeCDPSucceeded {
+			return errors.New("PostgreSQL controlled-restore manifest omits required operational evidence or boundary")
+		}
+	} else if v2 {
 		value := manifest.WitnessedV2
 		if value == nil || value.Sources.ProviderRevision != lock.ProviderCommit ||
 			value.BaseLock.EvidenceProfile != lock.DownstreamFencingProfile ||
@@ -2450,8 +2681,11 @@ func validateDownstreamManifest(manifest downstreamFencingManifest) error {
 			!value.WitnessReconstruction || !value.AheadOneRecovered || !value.OtherMismatchesRejected {
 			return errors.New("downstream-fencing-v2 manifest omits required restore-witness evidence")
 		}
-	} else if manifest.WitnessedV2 != nil {
-		return errors.New("downstream-fencing-v1 manifest contains v2 evidence")
+	} else if manifest.WitnessedV2 != nil || manifest.PostgresRestore != nil {
+		return errors.New("downstream-fencing-v1 manifest contains successor evidence")
+	}
+	if !postgresRestore && manifest.PostgresRestore != nil {
+		return errors.New("non-PostgreSQL manifest contains controlled-restore evidence")
 	}
 	if len(manifest.Reports) != 1 || manifest.Reports[0] != "report.json" ||
 		len(manifest.Audits) != 2 || manifest.Audits[0] != "gateway-audit-a.jsonl" || manifest.Audits[1] != "gateway-audit-b.jsonl" ||
@@ -2461,6 +2695,13 @@ func validateDownstreamManifest(manifest downstreamFencingManifest) error {
 	requiredNonTargets := []string{
 		"aggregate conformance", "Provider multi-controller reliability", "hostile multi-tenant isolation",
 		"real Agent Platform compatibility", "deployment readiness", "production readiness",
+	}
+	if postgresRestore {
+		requiredNonTargets = append(requiredNonTargets,
+			"independent PostgreSQL and Valkey failure or backup domains",
+			"PostgreSQL or Valkey HA/failover", "PostgreSQL image provenance",
+			"production restore automation or operator authorization",
+		)
 	}
 	for _, required := range requiredNonTargets {
 		found := false
@@ -2843,8 +3084,8 @@ func (w *failBeforeWitnessAdvance) CompareAndSwap(
 	return w.ActionHistoryWitness.CompareAndSwap(ctx, policyFingerprint, previous, replacement)
 }
 
-func expectDownstreamStackStartupRejected(ctx context.Context, child *childProcess, address string, timeout time.Duration) error {
-	if child == nil || timeout <= 0 {
+func expectDownstreamStackStartupRejected(ctx context.Context, child *childProcess, timeout time.Duration, addresses ...string) error {
+	if child == nil || timeout <= 0 || len(addresses) == 0 {
 		return errors.New("rejected ingress process input is invalid")
 	}
 	timer := time.NewTimer(timeout)
@@ -2860,18 +3101,15 @@ func expectDownstreamStackStartupRejected(ctx context.Context, child *childProce
 			if child.result() == nil {
 				return errors.New("invalid witnessed ingress exited successfully")
 			}
-			connection, err := net.DialTimeout("tcp4", address, 100*time.Millisecond)
-			if err == nil {
-				_ = connection.Close()
-				return errors.New("invalid witnessed ingress exposed a listener")
-			}
-			return nil
+			return assertDownstreamListenersUnavailable(addresses...)
 		case <-ticker.C:
-			connection, err := net.DialTimeout("tcp4", address, 50*time.Millisecond)
-			if err == nil {
-				_ = connection.Close()
-				_ = child.Stop()
-				return errors.New("invalid witnessed ingress became ready")
+			for _, address := range addresses {
+				connection, err := net.DialTimeout("tcp4", address, 50*time.Millisecond)
+				if err == nil {
+					_ = connection.Close()
+					_ = child.Stop()
+					return errors.New("invalid witnessed ingress became ready")
+				}
 			}
 		case <-timer.C:
 			_ = child.Stop()
