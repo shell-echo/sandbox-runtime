@@ -2641,9 +2641,22 @@ type downstreamRedisKeySnapshot struct {
 	present bool
 	payload string
 	ttl     time.Duration
+	value   downstreamRedisValueSnapshot
 }
 
 type downstreamRedisSnapshot []downstreamRedisKeySnapshot
+
+type downstreamRedisValueSnapshot struct {
+	kind        string
+	stringValue string
+	hashValue   map[string]string
+	zsetValue   []downstreamRedisZSetEntry
+}
+
+type downstreamRedisZSetEntry struct {
+	member string
+	score  float64
+}
 
 func captureDownstreamRedisSnapshot(
 	ctx context.Context,
@@ -2662,11 +2675,15 @@ func captureDownstreamRedisSnapshot(
 			return nil, errors.New("controlled Redis snapshot key set is invalid")
 		}
 		seen[key] = true
-		payload, err := client.Dump(operationCtx, key).Result()
-		if errors.Is(err, goredis.Nil) {
-			result = append(result, downstreamRedisKeySnapshot{key: key})
+		value, err := readDownstreamRedisValue(operationCtx, client, key)
+		if err != nil {
+			return nil, errors.New("capture controlled Redis snapshot contents")
+		}
+		if value.kind == "none" {
+			result = append(result, downstreamRedisKeySnapshot{key: key, value: value})
 			continue
 		}
+		payload, err := client.Dump(operationCtx, key).Result()
 		if err != nil || len(payload) == 0 || len(payload) > downstreamFileMaximum {
 			return nil, errors.New("capture bounded controlled Redis snapshot")
 		}
@@ -2677,7 +2694,9 @@ func captureDownstreamRedisSnapshot(
 		if ttl == -1 {
 			ttl = 0
 		}
-		result = append(result, downstreamRedisKeySnapshot{key: key, present: true, payload: payload, ttl: ttl})
+		result = append(result, downstreamRedisKeySnapshot{
+			key: key, present: true, payload: payload, ttl: ttl, value: value,
+		})
 	}
 	return result, nil
 }
@@ -2701,18 +2720,82 @@ func restoreDownstreamRedisSnapshot(ctx context.Context, client *goredis.Client,
 		return errors.New("clear controlled Redis restore targets")
 	}
 	for _, item := range snapshot {
+		if item.present {
+			if err := client.RestoreReplace(operationCtx, item.key, item.ttl, item.payload).Err(); err != nil {
+				return errors.New("restore controlled Redis snapshot")
+			}
+		}
+		actual, err := readDownstreamRedisValue(operationCtx, client, item.key)
+		if err != nil || !downstreamRedisValuesEqual(actual, item.value) {
+			return errors.New("verify controlled Redis snapshot restoration")
+		}
 		if !item.present {
 			continue
 		}
-		if err := client.RestoreReplace(operationCtx, item.key, item.ttl, item.payload).Err(); err != nil {
-			return errors.New("restore controlled Redis snapshot")
-		}
-		actual, err := client.Dump(operationCtx, item.key).Result()
-		if err != nil || actual != item.payload {
-			return errors.New("verify controlled Redis snapshot restoration")
+		actualTTL, err := client.PTTL(operationCtx, item.key).Result()
+		if err != nil || item.ttl == 0 && actualTTL != -1 || item.ttl > 0 && (actualTTL <= 0 || actualTTL > item.ttl) {
+			return errors.New("verify controlled Redis snapshot expiry")
 		}
 	}
 	return nil
+}
+
+func readDownstreamRedisValue(
+	ctx context.Context,
+	client *goredis.Client,
+	key string,
+) (downstreamRedisValueSnapshot, error) {
+	kind, err := client.Type(ctx, key).Result()
+	if err != nil {
+		return downstreamRedisValueSnapshot{}, err
+	}
+	value := downstreamRedisValueSnapshot{kind: kind}
+	switch kind {
+	case "none":
+		return value, nil
+	case "string":
+		value.stringValue, err = client.Get(ctx, key).Result()
+	case "hash":
+		value.hashValue, err = client.HGetAll(ctx, key).Result()
+	case "zset":
+		var entries []goredis.Z
+		entries, err = client.ZRangeWithScores(ctx, key, 0, -1).Result()
+		if err == nil {
+			value.zsetValue = make([]downstreamRedisZSetEntry, 0, len(entries))
+			for _, entry := range entries {
+				member, ok := entry.Member.(string)
+				if !ok {
+					return downstreamRedisValueSnapshot{}, errors.New("controlled Redis sorted-set member is invalid")
+				}
+				value.zsetValue = append(value.zsetValue, downstreamRedisZSetEntry{member: member, score: entry.Score})
+			}
+		}
+	default:
+		return downstreamRedisValueSnapshot{}, errors.New("controlled Redis snapshot type is unsupported")
+	}
+	if err != nil {
+		return downstreamRedisValueSnapshot{}, err
+	}
+	return value, nil
+}
+
+func downstreamRedisValuesEqual(left, right downstreamRedisValueSnapshot) bool {
+	if left.kind != right.kind || left.stringValue != right.stringValue || len(left.hashValue) != len(right.hashValue) ||
+		len(left.zsetValue) != len(right.zsetValue) {
+		return false
+	}
+	for field, value := range left.hashValue {
+		rightValue, ok := right.hashValue[field]
+		if !ok || rightValue != value {
+			return false
+		}
+	}
+	for index := range left.zsetValue {
+		if left.zsetValue[index] != right.zsetValue[index] {
+			return false
+		}
+	}
+	return true
 }
 
 func downstreamCapacityFence(ctx context.Context, client *goredis.Client, namespace string) (uint64, error) {

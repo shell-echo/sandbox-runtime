@@ -49,6 +49,50 @@ func TestDownstreamFencingRunnerFailsScenarioWhenPostconditionFails(t *testing.T
 	}
 }
 
+func TestDownstreamRedisValuesEqualUsesLogicalContents(t *testing.T) {
+	hash := downstreamRedisValueSnapshot{
+		kind: "hash",
+		hashValue: map[string]string{
+			"sequence":  "3",
+			"session:a": "retained-a",
+		},
+	}
+	reorderedHash := downstreamRedisValueSnapshot{
+		kind: "hash",
+		hashValue: map[string]string{
+			"session:a": "retained-a",
+			"sequence":  "3",
+		},
+	}
+	if !downstreamRedisValuesEqual(hash, reorderedHash) {
+		t.Fatal("equivalent hash contents did not compare equal")
+	}
+
+	changedHash := reorderedHash
+	changedHash.hashValue = map[string]string{"sequence": "3"}
+	if downstreamRedisValuesEqual(hash, changedHash) {
+		t.Fatal("hash with a missing field compared equal")
+	}
+	if downstreamRedisValuesEqual(
+		downstreamRedisValueSnapshot{kind: "hash", hashValue: map[string]string{"a": ""}},
+		downstreamRedisValueSnapshot{kind: "hash", hashValue: map[string]string{"b": ""}},
+	) {
+		t.Fatal("equal-cardinality hash with a different empty field compared equal")
+	}
+	if downstreamRedisValuesEqual(
+		downstreamRedisValueSnapshot{kind: "string", stringValue: "3"},
+		downstreamRedisValueSnapshot{kind: "string", stringValue: "4"},
+	) {
+		t.Fatal("different string contents compared equal")
+	}
+	if downstreamRedisValuesEqual(
+		downstreamRedisValueSnapshot{kind: "zset", zsetValue: []downstreamRedisZSetEntry{{member: "lease", score: 3}}},
+		downstreamRedisValueSnapshot{kind: "zset", zsetValue: []downstreamRedisZSetEntry{{member: "lease", score: 4}}},
+	) {
+		t.Fatal("different sorted-set contents compared equal")
+	}
+}
+
 func TestValidateDownstreamReportRequiresOrderedPasses(t *testing.T) {
 	names := []string{"one", "two"}
 	report := downstreamFencingReport{EvidenceName: downstreamFencingEvidenceName, EvidenceProfile: lock.DownstreamFencingProfile}
