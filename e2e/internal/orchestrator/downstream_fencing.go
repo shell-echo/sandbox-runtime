@@ -56,6 +56,8 @@ var downstreamEvidenceFiles = []string{
 	"report.json",
 }
 
+var errDownstreamEvidenceChanged = errors.New("downstream-fencing evidence changed while reading")
+
 var restoreDownstreamStaleMemberScript = goredis.NewScript(`
 local lease_type = redis.call('TYPE', KEYS[1]).ok
 local fence_type = redis.call('TYPE', KEYS[2]).ok
@@ -2124,17 +2126,20 @@ func waitForDownstreamObservation(
 	defer deadline.Stop()
 	ticker := time.NewTicker(20 * time.Millisecond)
 	defer ticker.Stop()
+	delta := 0
 	for {
 		after, err := downstreamObservationSnapshot(path)
-		if err != nil {
+		if err != nil && !errors.Is(err, errDownstreamEvidenceChanged) {
 			return nil, err
 		}
-		delta := downstreamObservationDelta(before, after, kind, result)
-		if delta == want {
-			return after, nil
-		}
-		if delta > want {
-			return nil, fmt.Errorf("private ingress %s:%s delta = %d, want %d", kind, result, delta, want)
+		if err == nil {
+			delta = downstreamObservationDelta(before, after, kind, result)
+			if delta == want {
+				return after, nil
+			}
+			if delta > want {
+				return nil, fmt.Errorf("private ingress %s:%s delta = %d, want %d", kind, result, delta, want)
+			}
 		}
 		select {
 		case <-ctx.Done():
@@ -2555,16 +2560,16 @@ func waitForDownstreamTerminalAudit(
 	defer ticker.Stop()
 	for {
 		after, err := readDownstreamGatewayAudit(path)
-		if err != nil {
+		if err != nil && !errors.Is(err, errDownstreamEvidenceChanged) {
 			return nil, err
 		}
-		if len(after) > len(before) {
+		if err == nil && len(after) > len(before) {
 			if err := assertDownstreamTerminalAudit(before, after); err != nil {
 				return nil, err
 			}
 			return after, nil
 		}
-		if len(after) < len(before) {
+		if err == nil && len(after) < len(before) {
 			return nil, errors.New("Gateway audit history was truncated")
 		}
 		select {
@@ -2586,23 +2591,29 @@ func waitForDownstreamObservationsUnchanged(
 	if ctx == nil || path == "" || window <= 0 {
 		return nil, errors.New("private ingress stability wait input is invalid")
 	}
-	deadline := time.NewTimer(window)
+	notBefore := time.Now().Add(window)
+	deadline := time.NewTimer(window + 500*time.Millisecond)
 	defer deadline.Stop()
 	ticker := time.NewTicker(20 * time.Millisecond)
 	defer ticker.Stop()
 	for {
 		current, err := downstreamObservationSnapshot(path)
-		if err != nil {
+		if err != nil && !errors.Is(err, errDownstreamEvidenceChanged) {
 			return nil, err
 		}
-		if !downstreamObservationsEqual(want, current) {
-			return current, errors.New("private ingress observations changed during the stability window")
+		if err == nil {
+			if !downstreamObservationsEqual(want, current) {
+				return current, errors.New("private ingress observations changed during the stability window")
+			}
+			if !time.Now().Before(notBefore) {
+				return current, nil
+			}
 		}
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		case <-deadline.C:
-			return current, nil
+			return nil, errors.New("private ingress observations did not stabilize")
 		case <-ticker.C:
 		}
 	}
@@ -2670,8 +2681,11 @@ func readDownstreamEvidenceFile(path string, allowMissing bool) ([]byte, error) 
 		return nil, errors.New("downstream-fencing evidence is not a bounded 0600 regular file")
 	}
 	contents, err := io.ReadAll(io.LimitReader(file, downstreamFileMaximum+1))
-	if err != nil || int64(len(contents)) != info.Size() || len(contents) > downstreamFileMaximum {
-		return nil, errors.New("downstream-fencing evidence changed or exceeded its byte limit while reading")
+	if err != nil || len(contents) > downstreamFileMaximum {
+		return nil, errors.New("read bounded downstream-fencing evidence")
+	}
+	if int64(len(contents)) != info.Size() {
+		return nil, errDownstreamEvidenceChanged
 	}
 	if contents == nil {
 		contents = make([]byte, 0)
