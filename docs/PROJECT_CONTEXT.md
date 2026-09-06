@@ -173,11 +173,14 @@ harness/run `550c7855704f22809e989ede0f67240033f320ba`/
 `20260906T050213.016063000Z`, and hosted downstream-fencing harness/run
 `2cadc534e54c6eacd37497887820a157a89585f5`/`34013982796`, plus fixed witnessed
 v2 harness `059357cdd1f6f4ecd78ccbbaf9923add0fcd2230`, local run
-`20260906T100233.295973000Z`, and hosted run `34026680591`. Hosted checkout
-`059357c` also passes repository CI `34026680576`, Reference `34026680567`,
-Candidate `34026680617`, Browser `34026680597`, shared-capacity `34026680568`,
-durable-revocation `34026680592`, and downstream-fencing v1 `34026680577`.
-These remain distinct evidence tracks.
+`20260906T100233.295973000Z`, and hosted run `34026680591`, plus PostgreSQL
+controlled-restore PR head/run `ffa40d643605e51d4ea1baebab1bd3f8bd710b5f`/
+`34037307799`, whose artifact records synthetic merge harness commit
+`b924b26a7794e559a9694a648dea9711f316bd39`. Hosted PR head `ffa40d6` also passes repository CI
+`34037307804`, Reference `34037307791`, Candidate `34037307796`, Browser
+`34037307811`, shared-capacity `34037307801`, durable-revocation `34037307817`,
+downstream-fencing v1 `34037307793`, downstream-fencing v2 `34037307798`, and
+PostgreSQL witness `34037307790`. These remain distinct evidence tracks.
 The Contract slice authorizes an atomic browser-only capability shape,
 create/session/handoff schemas, protected admission bindings, opaque reference
 security, operation/usage projection, and 10 new Suite cases. The browser image
@@ -469,10 +472,9 @@ and combined pinned-Valkey rollback cases against real PostgreSQL. Its initial
 tag pull resolved PostgreSQL digest
 `sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94`,
 which the workflow now pins. The local service remained unavailable. This is
-not production or HA evidence;
-independent failure and backup domains, controlled ingress quarantine/resume,
-server provenance, both stores' HA/failover, deployment, and correlated
-rollback remain open.
+not production or HA evidence; independent failure and backup domains, server
+provenance, both stores' HA/failover, deployment, correlated rollback, and
+deployment-owned controlled ingress operations remain open.
 
 ADR 0036 now implements a separately locked same-runner operational reference
 for the controlled ingress sequence. Its 18-scenario runner retains the first
@@ -483,12 +485,19 @@ without advancing PostgreSQL or opening a listener. It then restores the exact
 current Redis state, verifies without mutation, resumes the listeners, and
 performs a real-CDP read and write. The runner uses an orchestrator-only Redis
 restore credential and a PostgreSQL runtime role available only to the
-orchestrator and Provider/private-ingress process. Its component implementation
-and workflow are present, but the clean committed and hosted 18-scenario gates
-and five-file artifact inspection remain pending. The lock and manifest record
-`same_runner=true` and `independent_failure_domain=false`; this adds no
-independent host, storage, backup, operator, HA, deployment, or production
-evidence.
+orchestrator and Provider/private-ingress process. Hosted `linux/amd64` run
+`34037307799` for PR head `ffa40d6` passes all 18 scenarios. Its independently
+inspected artifact records synthetic merge harness commit `b924b26` and contains
+evidence directory `20260906T135101.549639716Z` with exactly five sanitized
+files; the report is 18/18, and the manifest records three ingress
+reconstructions, every cleanup and sanitization flag true, no file-witness v2
+field, PostgreSQL restore evidence, and an unexercised Contract Suite. Artifact
+ID `9990655840` has GitHub digest
+`sha256:6ab816b41fba98aac0f1cf76eee9739abc7fedf356695148bb17593b396b48eb`.
+This closes only the hosted same-runner ADR 0036 operational reference gate.
+The lock and manifest record `same_runner=true` and
+`independent_failure_domain=false`; this adds no independent host, storage,
+backup, operator, HA, deployment, or production evidence.
 
 Intermediate hosted run `34025787520` at documentation checkout `ef63be4`
 failed in the restore-control verification rather than the fencing behavior.
@@ -677,7 +686,7 @@ Contract identity:
 | P2.5i | Hosted regression `33970773414` passed 15 initial plus 5 restart/resume coding/shell scenarios against harness/Provider lock `17ed6ca`/`b4d41c9`; latest local pre-refresh run `20260905T080530.577843000Z` passed against `59e08d5`/`c0a55d1` | Neither run contains a Browser scenario or implies Agent Platform, durable-revocation caller, or production properties |
 | P2 | Reference coding/shell caller release gate passed | Aggregate conformance, actual Agent Platform compatibility, multi-controller, hostile multi-tenant isolation, deployment, and production gates remain open |
 | P3 | Local revision binding/shadow/metrics component evidence plus latest local pre-refresh candidate integration (`20260905T080623.861033000Z`, `59e08d5`/`c0a55d1` lock) and hosted candidate regression `33970773345` against `17ed6ca`/`b4d41c9` | Real platform traffic shadow parity, canary, rollback, old-run drain, metric parity, and unchanged platform contracts remain open |
-| P4 | Browser Contract authority/projection, exact sandboxed signed amd64/arm64/v8 publication, Provider-local components, default-disabled command/runtime composition, process-local Gateway limits, the separately recorded Browser/shared-capacity/durable-revocation caller gates, ADR 0033 component/caller evidence, the ADR 0034 v2 local/hosted deletion and rollback-detection gates, and the ADR 0035 PostgreSQL component gate pass within their named boundaries. ADR 0036 adds a same-runner controlled-restore reference implementation, but its clean committed and hosted 18-scenario evidence is pending | Production independent witness/storage and restore operations, production Browser advertisement/public Gateway, Valkey/PostgreSQL provenance and HA, production configuration/metrics, aggregate, multi-controller, multi-tenant, deployment, and production gates remain open |
+| P4 | Browser Contract authority/projection, exact sandboxed signed amd64/arm64/v8 publication, Provider-local components, default-disabled command/runtime composition, process-local Gateway limits, the separately recorded Browser/shared-capacity/durable-revocation caller gates, ADR 0033 component/caller evidence, the ADR 0034 v2 local/hosted deletion and rollback-detection gates, the ADR 0035 PostgreSQL component gate, and the ADR 0036 hosted same-runner controlled-restore gate pass within their named boundaries | Production independent witness/storage and restore operations, production Browser advertisement/public Gateway, Valkey/PostgreSQL provenance and HA, production configuration/metrics, aggregate, multi-controller, multi-tenant, deployment, and production gates remain open |
 
 Production readiness is not a numbered phase shortcut. Aggregate conformance,
 multi-controller reliability, hostile multi-tenant security, deployment, and
@@ -902,11 +911,10 @@ Hosted harness `2cadc53` run `34013982796` passes the same scenarios on
 `20260906T052710.781616339Z` with exactly five sanitized files and has been
 inspected.
 
-1. Commit, run, and inspect the hosted ADR 0036 controlled-restore workflow and
-   its exact five-file artifact. Treat it only as same-runner operational
-   reference evidence. Then prove independent failure/backup domains, HA, and
-   operator controls in a deployment-owned environment; do not call either the
-   adapter tests or same-runner E2E a production witness.
+1. Prove independent PostgreSQL/Valkey failure and backup domains, HA, and
+   operator controls in a deployment-owned environment. Retain hosted ADR 0036
+   run `34037307799` only as same-runner operational reference evidence; do not
+   call either the adapter tests or same-runner E2E a production witness.
 2. Keep `suite_exercised=false` for both downstream caller profiles until a
    runner actually invokes the Contract Suite, and do not relabel the ADR 0033
    platform-specific v1 results as ADR 0034 evidence. Retain the local and hosted

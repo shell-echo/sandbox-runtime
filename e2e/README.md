@@ -326,6 +326,18 @@ Docker engine, workflow, and operator, so the result does not prove independent
 failure or backup domains, either store's HA/failover, production restore
 automation, deployment readiness, or production readiness.
 
+Hosted `linux/amd64` run `34037307799` for PR head `ffa40d6` passes all 18
+scenarios. Downloaded artifact
+`browser-postgres-controlled-restore-e2e-evidence-34037307799` contains evidence
+directory `20260906T135101.549639716Z` with exactly the five locked files. The
+report is 18/18; the manifest records synthetic merge harness commit
+`b924b26a7794e559a9694a648dea9711f316bd39`, three ingress reconstructions,
+every cleanup and sanitization flag true, no file-witness v2 field, PostgreSQL
+restore evidence, `same_runner=true`, `independent_failure_domain=false`, and
+`suite_exercised=false`. Artifact ID `9990655840` has GitHub digest
+`sha256:6ab816b41fba98aac0f1cf76eee9739abc7fedf356695148bb17593b396b48eb`.
+This closes only the hosted ADR 0036 same-runner operational reference gate.
+
 ## Latest verified evidence
 
 Clean local downstream-fencing run
