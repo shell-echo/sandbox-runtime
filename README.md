@@ -14,25 +14,26 @@ gates pass within their separately named evidence boundaries. ADR 0032 also
 passes its caller-owned exact-grant revocation port and real-Valkey adapter
 component gate plus its separate local and hosted two-Gateway,
 independent-revoker black-box gate. ADR 0033 passes its downstream CDP fencing
-component and real-backend adapter integration gate, and local run
-`20260906T050213.016063000Z` passes all 13 downstream-fencing scenarios on
-`linux/arm64` at harness `550c785`. That run uses two independent mTLS/JWS
-caller processes, two Gateway processes, one authenticated unique ingress,
-retained Valkey state, and the exact signed Browser image running real Chromium.
-It closes only the local ADR 0033 external-caller gate. The Contract identity is
-pinned, but its 48-case Suite is not exercised by this profile
-(`suite_exercised=false`). Hosted `linux/amd64`, real Agent Platform migration,
-Valkey provenance and HA/failover, production Browser advertisement/public
-Gateway composition, aggregate conformance, multi-controller, hostile
-multi-tenant, deployment, and production gates remain open.
+component and real-backend adapter integration gate. Local run
+`20260906T050213.016063000Z` at harness `550c785` and hosted run `34013982796`
+at harness `2cadc53` each pass all 13 downstream-fencing scenarios on
+`linux/arm64` and `linux/amd64`, respectively. The runs use two independent
+mTLS/JWS caller processes, two Gateway processes, one authenticated unique
+ingress, retained Valkey state, and the exact signed Browser image running real
+Chromium. They close only the platform-specific ADR 0033 external-caller gates.
+The Contract identity is pinned, but its 48-case Suite is not exercised by this
+profile (`suite_exercised=false`). Real Agent Platform migration, Valkey
+provenance and HA/failover, production Browser advertisement/public Gateway
+composition, aggregate conformance, multi-controller, hostile multi-tenant,
+deployment, and production gates remain open.
 
-The latest verified hosted regression checkout is `c3e34ef`, using E2E
-lock `f7de91d` and Provider `58488d7`: repository CI `33990418428` and
-Reference, Candidate, Browser, shared-capacity, and durable-revocation runs
-`33990418435`, `33990418458`, `33990418425`, `33990418420`, and `33990418412`
-all pass. Those reruns cover existing profiles only. No hosted result is yet
-claimed for downstream-fencing harness `550c785`, and those earlier runs do not
-close its hosted gate.
+Hosted checkout `2cadc53` passes repository CI `34013982778`, Reference
+`34013982794`, Candidate `34013982784`, Browser `34013982785`, shared-capacity
+`34013982786`, durable-revocation `34013982798`, and downstream-fencing
+`34013982796`. The inspected downstream artifact
+`browser-downstream-fencing-e2e-evidence-34013982796` has GitHub digest
+`sha256:9c00f3ba184e82d7eff661b831c05c1bdf331fa41caf2d8bbb3353168ab155b0`.
+These remain seven distinct CI/evidence tracks, not aggregate conformance.
 
 Start a new development session with
 [`docs/PROJECT_CONTEXT.md`](docs/PROJECT_CONTEXT.md). It summarizes the current
@@ -155,14 +156,20 @@ Currently implemented:
   tests. FD5 delivery alone is not child acceptance; readiness requires a
   correlated JSONL response. `S_IFIFO` does not independently prove an
   anonymous pipe, so the launcher remains trusted
-- downstream-fencing E2E harness `550c785` and local run
-  `20260906T050213.016063000Z`: all 13 locked scenarios pass on `linux/arm64`
+- downstream-fencing local harness/run `550c785`/
+  `20260906T050213.016063000Z` and hosted harness/run `2cadc53`/`34013982796`:
+  all 13 locked scenarios pass on `linux/arm64` and `linux/amd64`, respectively,
   through two Gateway processes, two independent caller processes, one
   authenticated unique ingress, retained Valkey, and signed real Chromium.
-  The five `0600` evidence files pass exact-set, private-material, audit, and
-  cleanup checks. This is local ADR 0033 external-caller evidence only; the
-  Contract Suite is not executed and no hosted, real-platform, aggregate,
-  multi-controller, multi-tenant, deployment, or production claim is added
+  The five local `0600` evidence files pass exact-set, private-material, audit,
+  and cleanup checks. Downloaded GitHub artifact
+  `browser-downstream-fencing-e2e-evidence-34013982796` contains evidence
+  directory `20260906T052710.781616339Z` with exactly five sanitized files and
+  has digest
+  `sha256:9c00f3ba184e82d7eff661b831c05c1bdf331fa41caf2d8bbb3353168ab155b0`.
+  These are ADR 0033 external-caller results only; the Contract Suite is not
+  executed and no real-platform, aggregate, multi-controller, multi-tenant,
+  deployment, or production claim is added
 - a default-disabled Browser Provider command/runtime graph and a separate
   Browser-only reference stack plus black-box caller. Hosted Browser Reference
   E2E run `33970773330` passes 13 initial and 5 process-reconstruction
@@ -175,8 +182,7 @@ Currently implemented:
 
 Planned but not yet implemented:
 
-- reproduce the ADR 0033 downstream-fencing gate on hosted `linux/amd64`, then
-  separately establish detection/control for prematurely deleted or
+- establish detection/control for prematurely deleted or
   restore-missing high-water state, restored-snapshot consistency, HA/failover,
   Valkey provenance, hostile-tenant, storage, configuration, metrics, and
   operational gates

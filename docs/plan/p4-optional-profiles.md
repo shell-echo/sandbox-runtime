@@ -137,14 +137,19 @@ processes, two independent mTLS/JWS caller processes, one authenticated unique
 ingress, retained Valkey, and signed real Chromium. The Contract/tree/48-case
 identity is pinned and six Provider routes are exercised, but the Suite is not
 (`suite_exercised=false`). Exactly five `0600` files pass all cleanup and
-sanitization checks. This closes only the local ADR 0033 external-caller gate.
+sanitization checks. Hosted run `34013982796` at checkout/harness `2cadc53`
+independently passes the same 13 scenarios on `linux/amd64`. Downloaded artifact
+`browser-downstream-fencing-e2e-evidence-34013982796` contains evidence
+directory `20260906T052710.781616339Z` with exactly five sanitized files and
+pins the expected amd64 identities, topology, cleanup, and sanitization state.
+The GitHub artifact has digest
+`sha256:9c00f3ba184e82d7eff661b831c05c1bdf331fa41caf2d8bbb3353168ab155b0`.
+These close only the named ADR 0033 caller gates on their platforms.
 
-The latest verified hosted regression checkout is `c3e34ef`, using
-E2E lock `f7de91d` and Provider `58488d7`. Repository CI `33990418428` and
-hosted Reference `33990418435` (15+5), Candidate `33990418458` (15+5), Browser
-`33990418425` (13+5), shared capacity `33990418420` (10/10), and durable
-revocation `33990418412` (7/7) pass their existing `linux/amd64` profiles. No
-hosted downstream-fencing run is yet claimed for harness `550c785`.
+Hosted checkout `2cadc53` also passes repository CI `34013982778`, Reference
+`34013982794`, Candidate `34013982784`, Browser `34013982785`, shared capacity
+`34013982786`, and durable revocation `34013982798`; these remain separate
+evidence tracks.
 
 ## Objective
 
@@ -346,13 +351,14 @@ evidence chain before it can be advertised.
   Chromium. Its five-file `0600` evidence set passes cleanup and sanitization.
   Contract identity is pinned and Provider routes are exercised, but the Suite
   remains unexercised. This is the local ADR 0033 caller gate only.
-- The latest verified hosted checkout `c3e34ef` with E2E lock `f7de91d` and
-  Provider `58488d7` passes repository CI `33990418428` and
-  Reference/Candidate/Browser/shared-capacity/durable-revocation runs
-  `33990418435`/`33990418458`/`33990418425`/`33990418420`/`33990418412`.
-  These are preceding regression tracks; no hosted downstream-fencing result is
-  claimed for `550c785`, and their partial properties must not be composed into
-  an ADR 0033 claim.
+- Hosted checkout/harness `2cadc53` passes repository CI `34013982778` plus
+  Reference/Candidate/Browser/shared-capacity/durable-revocation/downstream
+  runs `34013982794`/`34013982784`/`34013982785`/`34013982786`/
+  `34013982798`/`34013982796`. The last run independently passes the ADR 0033
+  13-case gate on `linux/amd64`; its inspected artifact digest is
+  `sha256:9c00f3ba184e82d7eff661b831c05c1bdf331fa41caf2d8bbb3353168ab155b0`.
+  The six E2E profiles remain separate and must not be composed into an
+  aggregate claim.
 - `blocks/` can validate an internal digest-pinned Block manifest, but it does
   not authorize a Provider capability or establish image provenance.
 - A real Agent Platform caller and migration traffic harness remain unavailable;
@@ -362,7 +368,7 @@ evidence chain before it can be advertised.
 
 | Order | Profile | First slice | Required gates before advertisement |
 | --- | --- | --- | --- |
-| 1 | Browser | Contract authority, exact signed amd64/arm64/v8 sandbox publication, default-disabled runtime composition, independent Browser reference caller, Gateway limits, ADR 0031/0032 named component and caller gates, and ADR 0033 component evidence are complete within their tiers. Harness `550c785` local run `20260906T050213.016063000Z` also passes its 13-scenario arm64 caller gate | Hosted ADR 0033 repetition; deleted/restore-missing high-water controls; restored-snapshot consistency; Valkey provenance/HA/failover; production storage/configuration/metrics; hostile-tenant and operational evidence; production advertisement; and deployable caller-owned Gateway remain later gates |
+| 1 | Browser | Contract authority, exact signed amd64/arm64/v8 sandbox publication, default-disabled runtime composition, independent Browser reference caller, Gateway limits, ADR 0031/0032 named component and caller gates, and ADR 0033 component evidence are complete within their tiers. Local harness/run `550c785`/`20260906T050213.016063000Z` and hosted harness/run `2cadc53`/`34013982796` pass its 13-scenario caller gate on arm64 and amd64 | Deleted/restore-missing high-water controls; restored-snapshot consistency; Valkey provenance/HA/failover; production storage/configuration/metrics; hostile-tenant and operational evidence; production advertisement; and deployable caller-owned Gateway remain later gates |
 | 2 | Desktop | Contract and authority audit; display/input/session boundary design | Desktop protocol and image, display/input security, Gateway/reconnect, usage, fault and caller evidence |
 | 3 | Workspace snapshot/restore | Digest and compatibility audit | Secret exclusion, digest verification, new sandbox identity, restore fault/recovery, Contract and caller evidence |
 | 4 | Port-forward | Target and egress authority audit | Explicit target allowlist, network isolation, expiry/revocation, cross-tenant and caller evidence |
@@ -400,7 +406,7 @@ inferring support from generic schema vocabulary:
 | Capability snapshot | Browser-only `1.0.0`/`browser-v1` maps to `sandbox-runtime-browser-v1`; mixed, wrong-version, wrong-profile, and wrong-runtime shapes fail closed. The reference deployment advertises only this shape | Keep production advertisement disabled until the remaining profile-specific security, concurrency, deployment, and operational gates pass |
 | Create request | Browser fixture binds exact capability/runtime, digest-pinned amd64 image authority, restricted network policy, stable workspace, and unprivileged security fields. The default-disabled command graph preserves these bindings and the hosted caller proves lifecycle creation | Replace development/single-controller dependencies with reviewed production configuration before deployment |
 | Session and handoff | Separate schemas and routes bind session/operation/attempt/fence identity and expose only an expiring opaque reference. Hosted initial and reconstructed-process scenarios prove the combined Provider and caller-owned Gateway path | Add distributed reliability and production deployment evidence without exposing backend identity |
-| Gateway security | Semantic rules leave user/tenant authorization, revocation, audit, reconnect, and fresh reference resolution with the caller. Hosted reference scenarios prove wrong-caller/cross-tenant denial, expiry, active revocation, metadata-only audit, and reconnect. ADR 0027 adds non-blocking single-process total/per-session connection capacity before revocation and Provider resolution; run `33846603547` actively proves same-session rejection and slot reuse. ADR 0028 adds a process-local global connection/rate gate before Browser WebSocket admission and upgrade; hosted run `33854020809` proves rejection/recovery and Gateway-audit exclusion. ADR 0029 adds process-local listener/TLS/HTTP bounds; hosted run `33857739150` proves downgrade/slow-header/oversized-header rejection and capacity recovery. ADR 0030/`997fb0d` add the post-binding authenticated-capacity port, lease-loss semantics, and a global/tenant/session memory component; `49d1c20` locks the co-located harness. ADR 0031/`9434540`, local run `20260905T061037.558537000Z`, and hosted run `33949577876` add Redis-compatible atomic leases plus 10/10 arm64 and amd64 two-Gateway real-Valkey shared-capacity evidence. ADR 0032/`c0a55d1` add exact-grant level-triggered revocation and a Redis-compatible retained-tombstone adapter; harness `e952ef9`, local run `20260905T095109.569973000Z`, and hosted run `33959122456` pass its separate two-Gateway/independent-revoker seven-scenario caller gate. ADR 0033/`b4d41c9` adds downstream action-fence/private-ingress/Redis-adapter component evidence; harness `550c785` local run `20260906T050213.016063000Z` passes the separate 13-scenario two-Gateway/unique-ingress/real-Chromium caller gate on arm64 | Reproduce ADR 0033 on hosted amd64; establish deleted/restore-missing high-water detection, restored-snapshot consistency, Valkey provenance/HA/failover, and production authenticated-ingress topology; then add hostile multi-tenant, abuse, metrics, production configuration, and deployable public-edge evidence |
+| Gateway security | Semantic rules leave user/tenant authorization, revocation, audit, reconnect, and fresh reference resolution with the caller. Hosted reference scenarios prove wrong-caller/cross-tenant denial, expiry, active revocation, metadata-only audit, and reconnect. ADR 0027 adds non-blocking single-process total/per-session connection capacity before revocation and Provider resolution; run `33846603547` actively proves same-session rejection and slot reuse. ADR 0028 adds a process-local global connection/rate gate before Browser WebSocket admission and upgrade; hosted run `33854020809` proves rejection/recovery and Gateway-audit exclusion. ADR 0029 adds process-local listener/TLS/HTTP bounds; hosted run `33857739150` proves downgrade/slow-header/oversized-header rejection and capacity recovery. ADR 0030/`997fb0d` add the post-binding authenticated-capacity port, lease-loss semantics, and a global/tenant/session memory component; `49d1c20` locks the co-located harness. ADR 0031/`9434540`, local run `20260905T061037.558537000Z`, and hosted run `33949577876` add Redis-compatible atomic leases plus 10/10 arm64 and amd64 two-Gateway real-Valkey shared-capacity evidence. ADR 0032/`c0a55d1` add exact-grant level-triggered revocation and a Redis-compatible retained-tombstone adapter; harness `e952ef9`, local run `20260905T095109.569973000Z`, and hosted run `33959122456` pass its separate two-Gateway/independent-revoker seven-scenario caller gate. ADR 0033/`b4d41c9` adds downstream action-fence/private-ingress/Redis-adapter component evidence; local `550c785`/`20260906T050213.016063000Z` and hosted `2cadc53`/`34013982796` pass the separate 13-scenario two-Gateway/unique-ingress/real-Chromium caller gate on arm64 and amd64 | Establish deleted/restore-missing high-water detection, restored-snapshot consistency, Valkey provenance/HA/failover, and production authenticated-ingress topology; then add hostile multi-tenant, abuse, metrics, production configuration, and deployable public-edge evidence |
 | Usage | Browser duration meter and operation/sandbox correlation are locked under the shared usage route; hosted initial/resume scenarios prove partial and complete duration evidence | Keep platform publication and billing truth outside the Provider; add production retention and reconciliation evidence |
 | Fixtures and Suite | Success/rejection/security/admission fixtures and 10 new Suite cases raise the locked Suite from 38 to 48 cases | Add runtime fault/concurrency/image cases in later slices; current Suite is Contract projection evidence only |
 | Runtime image | ADR 0019 removes every `--no-sandbox` path, binds seccomp digest `sha256:3bdf2fd28636409951409621735f616997d0fd4851259851ac4c340dff90e05b`, and passes local/native amd64 and arm64 sandbox gates. Run `33724368530` publishes exact signed index `sha256:87d3216c22ada0fea74b375a3ee5c2ddf021d3e1913569e2aeb4a316ed3b5c2f`; attestation `44912296` and independent platform inspection verify. The Docker adapter, provenance verifier, restricted egress, default-disabled command graph, and hosted `linux/amd64` reference caller machine-bind and exercise that publication | Publish and review the restricted-egress Gateway image and production deployment configuration separately |
@@ -612,7 +618,12 @@ internal Block manifest a wire resource or establishes production readiness.
   all 13 scenarios on `linux/arm64`. Contract identity is pinned and six
   protected Provider routes are exercised, but the Suite is not
   (`suite_exercised=false`). The exact five-file `0600` evidence set passes all
-  cleanup and sanitization checks. No hosted result is yet claimed.
+  cleanup and sanitization checks. Hosted checkout/harness `2cadc53` run
+  `34013982796` passes the same 13 scenarios on `linux/amd64`. Downloaded GitHub
+  artifact `browser-downstream-fencing-e2e-evidence-34013982796` contains
+  evidence directory `20260906T052710.781616339Z` with exactly five sanitized
+  files and has digest
+  `sha256:9c00f3ba184e82d7eff661b831c05c1bdf331fa41caf2d8bbb3353168ab155b0`.
 
 ## Next work
 
@@ -626,12 +637,12 @@ ADR 0032 passes its exact-grant revocation port and real Redis-compatible
 adapter component gate plus its separately locked local and hosted
 two-Gateway/independent-revoker caller gate. ADR 0033/`b4d41c9` passes its
 downstream CDP fencing component and real-backend adapter integration gate;
-harness `550c785` local run `20260906T050213.016063000Z` also passes its 13-case
-arm64 external-caller gate.
+harness/run `550c785`/`20260906T050213.016063000Z` and
+`2cadc53`/`34013982796` also pass its 13-case external-caller gate on arm64 and
+amd64.
 
-Next, reproduce the multi-process runner on hosted `linux/amd64` and inspect its
-sanitized artifact. Keep `suite_exercised=false` until the Contract Suite is
-actually invoked, and keep prematurely deleted or restore-missing high-water
+Keep `suite_exercised=false` until the Contract Suite is actually invoked, and
+keep prematurely deleted or restore-missing high-water
 detection, restored-snapshot consistency, Valkey provenance/HA/failover,
 metrics, production storage/configuration and authenticated-ingress topology,
 hostile-tenant, and operational evidence as later independent gates before

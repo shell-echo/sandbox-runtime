@@ -169,12 +169,12 @@ fencing component and real-backend adapter integration implementation
 `b4d41c9a32b4ccf39edaba3fb8bf5ad239c1f945`, downstream caller bootstrap
 implementation `58488d70c0a43d68747ca6e14f81c56f1e23237a`, caller provisioning/process
 implementation `8a1049bfa1d68bdd88c9df3ebd02c2c9ac0434b5`, local downstream-fencing
-harness evidence `550c7855704f22809e989ede0f67240033f320ba`, and run
-`20260906T050213.016063000Z`. The latest verified hosted regression checkout is
-`c3e34ef`, using E2E lock `f7de91d` and Provider
-`58488d7`: repository CI `33990418428` and the five existing hosted regressions
-`33990418435`, `33990418458`, `33990418425`, `33990418420`, and `33990418412`
-all pass. No hosted downstream-fencing run is claimed for harness `550c785`.
+harness/run `550c7855704f22809e989ede0f67240033f320ba`/
+`20260906T050213.016063000Z`, and hosted downstream-fencing harness/run
+`2cadc534e54c6eacd37497887820a157a89585f5`/`34013982796`. Hosted checkout
+`2cadc53` also passes repository CI `34013982778`, Reference `34013982794`,
+Candidate `34013982784`, Browser `34013982785`, shared-capacity `34013982786`,
+and durable-revocation `34013982798`. These remain distinct evidence tracks.
 The Contract slice authorizes an atomic browser-only capability shape,
 create/session/handoff schemas, protected admission bindings, opaque reference
 security, operation/usage projection, and 10 new Suite cases. The browser image
@@ -417,10 +417,13 @@ pass. Local run `20260906T050213.016063000Z` at harness `550c785` additionally
 passes all 13 ADR 0033 external-caller scenarios on `linux/arm64` through two
 Gateway processes, two independent mTLS/JWS caller processes, one authenticated
 unique ingress, retained Valkey state, and signed real Chromium. This closes
-only the local named caller gate. The Contract/tree/48-case identity is pinned,
-but the Suite is not exercised. Hosted repetition, detection/control for
-prematurely deleted or restore-missing high-water state, restored-snapshot
-consistency, Valkey provenance/HA/failover, production
+the local named caller gate; hosted run `34013982796` passes the same 13
+scenarios on `linux/amd64` and closes that platform-specific caller gate. Its
+artifact digest is
+`sha256:9c00f3ba184e82d7eff661b831c05c1bdf331fa41caf2d8bbb3353168ab155b0`.
+The Contract/tree/48-case identity is pinned, but the Suite is not exercised.
+Detection/control for prematurely deleted or restore-missing high-water state,
+restored-snapshot consistency, Valkey provenance/HA/failover, production
 metrics/configuration and topology, deployment, multi-controller, hostile
 multi-tenant, real Agent Platform, aggregate conformance, and production
 readiness remain unproved.
@@ -563,19 +566,20 @@ reconnect, outage recovery, unaffected scopes, retained high-water across
 ingress reconstruction, bypass exclusion, cleanup, and sanitization. The
 Contract identity is pinned and six Provider routes are exercised, but the
 48-case Suite remains unexercised (`suite_exercised=false`).
-The latest verified hosted regression checkout is `c3e34ef`, using E2E
-lock `f7de91d` and Provider `58488d7`. Repository CI `33990418428` and hosted
-Reference, Candidate, Browser, shared-capacity, and durable-revocation
-regressions `33990418435`, `33990418458`, `33990418425`, `33990418420`, and
-`33990418412` pass their existing scenario sets. No hosted downstream-fencing
-run is claimed for harness `550c785`, and those
-earlier regressions contain no ADR 0033 downstream action-fence scenario.
+Hosted checkout `2cadc53` passes repository CI `34013982778`, Reference
+`34013982794`, Candidate `34013982784`, Browser `34013982785`, shared-capacity
+`34013982786`, durable-revocation `34013982798`, and downstream-fencing
+`34013982796`. Downloaded downstream artifact
+`browser-downstream-fencing-e2e-evidence-34013982796` contains evidence
+directory `20260906T052710.781616339Z` with exactly five sanitized files; its
+report passes 13/13 and its manifest pins the required amd64 image identities,
+topology, and cleanup state.
 ADR 0028 and `44ea2ee` add process-local pre-upgrade connection/rate control;
 hosted run `33854020809` passes the combined 12+5 Browser caller against harness
 `e7e7f03`. ADR 0029 and `b8f8941` add listener/TLS/HTTP bounds; hosted run
 `33857739150` passes the 13+5 Browser caller against harness `7a20d9d`.
-Production Browser advertisement/public Gateway, hosted ADR 0033 repetition,
-production private-ingress topology, prematurely deleted or restore-missing
+Production Browser advertisement/public Gateway and private-ingress topology,
+prematurely deleted or restore-missing
 high-water controls, restored-snapshot consistency, Valkey provenance,
 HA/failover consistency,
 remaining profile-specific security and concurrency, aggregate,
@@ -599,7 +603,7 @@ Contract identity:
 | P2.5i | Hosted regression `33970773414` passed 15 initial plus 5 restart/resume coding/shell scenarios against harness/Provider lock `17ed6ca`/`b4d41c9`; latest local pre-refresh run `20260905T080530.577843000Z` passed against `59e08d5`/`c0a55d1` | Neither run contains a Browser scenario or implies Agent Platform, durable-revocation caller, or production properties |
 | P2 | Reference coding/shell caller release gate passed | Aggregate conformance, actual Agent Platform compatibility, multi-controller, hostile multi-tenant isolation, deployment, and production gates remain open |
 | P3 | Local revision binding/shadow/metrics component evidence plus latest local pre-refresh candidate integration (`20260905T080623.861033000Z`, `59e08d5`/`c0a55d1` lock) and hosted candidate regression `33970773345` against `17ed6ca`/`b4d41c9` | Real platform traffic shadow parity, canary, rollback, old-run drain, metric parity, and unchanged platform contracts remain open |
-| P4 | Browser Contract authority/projection, exact sandboxed signed amd64/arm64/v8 publication, Provider-local components, default-disabled command/runtime composition, process-local Gateway limits, the separately recorded Browser/shared-capacity/durable-revocation caller gates, and ADR 0033 component evidence pass within their named boundaries. Local harness `550c785` run `20260906T050213.016063000Z` also passes all 13 two-Gateway/unique-ingress/retained-Valkey/signed-real-Chromium scenarios on `linux/arm64`; its Contract Suite remains unexercised | Reproduce ADR 0033 on hosted `linux/amd64`. Prematurely deleted or restore-missing high-water controls, restored-snapshot consistency, production Browser advertisement/public Gateway, Valkey provenance/HA, production configuration/metrics, aggregate, multi-controller, multi-tenant, deployment, and production gates remain open |
+| P4 | Browser Contract authority/projection, exact sandboxed signed amd64/arm64/v8 publication, Provider-local components, default-disabled command/runtime composition, process-local Gateway limits, the separately recorded Browser/shared-capacity/durable-revocation caller gates, and ADR 0033 component evidence pass within their named boundaries. Local harness/run `550c785`/`20260906T050213.016063000Z` and hosted harness/run `2cadc53`/`34013982796` pass all 13 two-Gateway/unique-ingress/retained-Valkey/signed-real-Chromium scenarios on arm64 and amd64; their Contract Suite remains unexercised | Prematurely deleted or restore-missing high-water controls, restored-snapshot consistency, production Browser advertisement/public Gateway, Valkey provenance/HA, production configuration/metrics, aggregate, multi-controller, multi-tenant, deployment, and production gates remain open |
 
 Production readiness is not a numbered phase shortcut. Aggregate conformance,
 multi-controller reliability, hostile multi-tenant security, deployment, and
@@ -689,9 +693,9 @@ Veronica or production traffic.
 The 2026-09-02 read-only re-audit found no independently runnable Agent
 Platform caller or migration harness in the available adjacent projects:
 
-- `/Users/echo/Projects/shell-echo/veronica` is a Blueprint/governance and TF00
-  feasibility repository. Its local `main` is `17bb3855ba513b3a0e511f68f48c4e6aefbf265d`
-  (90 commits ahead of `origin/main`
+- At that audit, `/Users/echo/Projects/shell-echo/veronica` was a
+  Blueprint/governance and TF00 feasibility repository. Its local `main` was
+  `17bb3855ba513b3a0e511f68f48c4e6aefbf265d` (90 commits ahead of `origin/main`
   `a758c219fd9f14a015368ab95914ed7386c05afc`); a live GitHub `ls-remote`
   confirmed that remote branch identity. Its working tree contains pre-existing
   user changes that were preserved. The audit covered tracked and visible
@@ -702,6 +706,13 @@ Platform caller or migration harness in the available adjacent projects:
   shadow/canary traffic entrypoint, or rollback/drain harness. The bounded
   Temporal dev-server runner explicitly forbids workers, workflows, T2/T3, and
   external services, so it is not a platform caller.
+- A 2026-09-06 identity-only check found the dirty `veronica` checkout at
+  `main@22343bb92b74e5d6e0aaf17d671344dd8c1bc7f9`, 110 commits ahead of unchanged
+  `origin/main@a758c219fd9f14a015368ab95914ed7386c05afc`. Newer content was not
+  re-audited, so this identity observation makes no current platform-capability
+  claim. No runnable platform target has been independently supplied to this
+  repository; that environment gap, rather than an assumption about the
+  newer external commits, keeps the real P3 gate open.
 - `/Users/echo/Projects/shell-echo/sandbox-runtime-e2e` is an older independent
   reference-caller checkout at `2981842` with no remote. Its README describes
   future remote-checkout preparation and the canonical reference harness is
@@ -812,11 +823,15 @@ The private FD 3/4/5 provisioning protocol, parent process manager, and
 Contract-wide `gatewaystack` handoff validation are implemented at `8a1049b`.
 Harness `550c785` composes them into the complete local ADR 0033 topology, and
 run `20260906T050213.016063000Z` passes all 13 scenarios on `linux/arm64`.
+Hosted harness `2cadc53` run `34013982796` passes the same scenarios on
+`linux/amd64`; the downloaded artifact contains evidence directory
+`20260906T052710.781616339Z` with exactly five sanitized files and has been
+inspected.
 
-1. Reproduce the separately locked ADR 0033 multi-process runner on hosted
-   `linux/amd64` and inspect its sanitized artifact. Keep
-   `suite_exercised=false` until the Contract Suite is actually invoked, and do
-   not turn this profile-specific caller gate into aggregate conformance.
+1. Keep `suite_exercised=false` until the Contract Suite is actually invoked,
+   and do not turn the platform-specific ADR 0033 caller results into aggregate
+   conformance. Implement detection/control for prematurely deleted or
+   restore-missing high-water state and restored-snapshot consistency next.
 2. Preserve the Browser, coding/shell Reference, and Platform Candidate harnesses
    as three separately named evidence modes. Do not relabel the Browser
    reference deployment as production or the candidate mode as real platform

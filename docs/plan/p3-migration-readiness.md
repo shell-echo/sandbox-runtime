@@ -3,9 +3,11 @@
 Status: the repository-local migration component boundary is implemented in
 commit `4212e88`; post-push CI run `32805284762` concluded success. The
 separately versioned reference P2.5i caller gate passes, so this slice is ready
-to consume a real platform target. The 2026-09-01 read-only re-audit found no
-runnable Agent Platform caller or migration harness in the available platform
-candidate. P3 is therefore blocked for actual shadow traffic, canary, rollback,
+to consume a real platform target. The 2026-09-02 read-only content audit found
+no runnable Agent Platform caller or migration harness in the available
+platform candidate. The 2026-09-06 identity-only check did not re-audit newer
+content, and no runnable platform target has since been independently supplied.
+P3 therefore remains blocked for actual shadow traffic, canary, rollback,
 drain, and metric-parity evidence.
 
 ## Authority and scope
@@ -37,18 +39,25 @@ multi-controller coordination, cross-tenant authorization, or production
 readiness. Local callbacks and metrics are component test seams, not external
 compatibility evidence.
 
-## Current platform audit
+## Completed platform audit and identity check
 
-The available `/Users/echo/Projects/shell-echo/veronica` checkout is local
-`main@4f812468e2827c86823490ce83e578ec4448cb3d`, 85 commits ahead of live
-GitHub `origin/main@a758c219fd9f14a015368ab95914ed7386c05afc`. Its tracked
-and visible untracked tree contains Blueprint/governance and TF00 feasibility
+The completed 2026-09-02 content audit observed the available
+`/Users/echo/Projects/shell-echo/veronica` checkout at local
+`main@17bb3855ba513b3a0e511f68f48c4e6aefbf265d`, 90 commits ahead of live
+GitHub `origin/main@a758c219fd9f14a015368ab95914ed7386c05afc`. Its tracked and
+visible untracked tree contained Blueprint/governance and TF00 feasibility
 assets with Python runners, but no Application service, Provider client,
 WorkOrder/AgentRun mapping, Gateway, mTLS/JWS PKI configuration, reachable
 Provider endpoint, or migration traffic harness. The bounded Temporal
-dev-server smoke explicitly forbids workers, workflows, T2/T3, and external
-services and therefore cannot serve as a platform caller. Its pre-existing
-working-tree changes were left untouched. The older
+dev-server smoke explicitly forbade workers, workflows, T2/T3, and external
+services and therefore could not serve as a platform caller.
+
+A 2026-09-06 identity-only check found the dirty checkout at
+`main@22343bb92b74e5d6e0aaf17d671344dd8c1bc7f9`, 110 commits ahead of unchanged
+`origin/main`. Newer content was not re-audited, so this observation makes no
+current capability claim. No runnable platform target has been independently
+supplied to this repository; that environment gap keeps the real P3 gate open.
+Pre-existing working-tree changes were left untouched. The older
 `/Users/echo/Projects/shell-echo/sandbox-runtime-e2e` checkout is a reference
 caller preparation tree with no remote, not an Agent Platform caller.
 

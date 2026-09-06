@@ -92,14 +92,10 @@ Gateway processes, two independently identified caller processes, one
 authenticated unique ingress, retained Valkey state, and signed real Chromium.
 Its manifest pins the Contract/tree/48-case identity but records
 `suite_exercised=false`; exactly five `0600` evidence files pass cleanup and
-sanitization checks.
-The latest verified hosted regressions before this lock refresh used checkout
-`c3e34ef`, E2E lock `f7de91d`, and Provider `58488d7`: repository CI
-`33990418428`, Reference `33990418435`, Candidate `33990418458`, Browser
-`33990418425`, shared capacity `33990418420`, and durable revocation
-`33990418412` all passed. These
-are existing regression tracks only. The downstream workflow now exists, but no
-hosted ADR 0033 run is claimed yet.
+sanitization checks. Hosted checkout `2cadc53` independently passes repository
+CI `34013982778`, Reference `34013982794`, Candidate `34013982784`, Browser
+`34013982785`, shared capacity `34013982786`, durable revocation `34013982798`,
+and downstream fencing `34013982796`. These remain distinct evidence tracks.
 This Provider identity also includes the GitHub Actions migration from Node 20
 action runtimes to Node 24 action runtimes. That infrastructure update adds no
 Browser behavior, caller compatibility, or production-readiness evidence.
@@ -252,8 +248,16 @@ on `linux/arm64` at harness `550c785`. The manifest pins Provider `58488d7`,
 harness baseline `8a1049b`, Gateway/ingress components `b4d41c9`, caller
 substrate `074a9d4`, the signed `linux/arm64/v8` Browser image, retained Valkey,
 and Contract/tree/48-case identity with `suite_exercised=false`. Exactly five
-`0600` files passed exact-set, private-material, audit, and cleanup checks. No
-hosted downstream-fencing result is claimed yet.
+`0600` files passed exact-set, private-material, audit, and cleanup checks.
+Hosted run `34013982796` at checkout/harness `2cadc53` independently passed the
+same 13 scenarios on `linux/amd64`. Downloaded GitHub artifact
+`browser-downstream-fencing-e2e-evidence-34013982796` contains evidence
+directory `20260906T052710.781616339Z` with exactly five sanitized files; its
+manifest pins the amd64 Browser/Valkey identities, topology, cleanup, and
+sanitization state. The artifact has digest
+`sha256:9c00f3ba184e82d7eff661b831c05c1bdf331fa41caf2d8bbb3353168ab155b0`.
+Both runs close only the named ADR 0033 caller gate on their respective
+platforms; neither executes the Contract Suite.
 
 The latest verified local regressions before this lock refresh ran against
 Provider `c0a55d1` and harness `59e08d5`: Browser run
@@ -654,5 +658,6 @@ Its green status is evidence only for the named ADR 0032 caller boundary.
 downstream-fencing lock, runs the module race/vet gates, and executes the full
 two-Gateway/two-caller/unique-ingress/retained-Valkey/real-Chromium runner. It
 publishes `browser-downstream-fencing-e2e-evidence-<run-id>` only after the run
-and sanitization checks succeed. The workflow exists, but no hosted result is
-claimed for harness `550c785` yet.
+and sanitization checks succeed. Hosted run `34013982796` passed on
+`linux/amd64` at checkout/harness `2cadc53`; its inspected artifact digest is
+`sha256:9c00f3ba184e82d7eff661b831c05c1bdf331fa41caf2d8bbb3353168ab155b0`.
