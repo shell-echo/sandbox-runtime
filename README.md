@@ -25,11 +25,14 @@ ADR 0034 adds an explicitly selected v2 component with a bounded permanent
 session-history hash and an independent monotonic restore witness. Its local
 race/shuffle, vet, Contract verifier, unchanged 48-case Suite, and pinned-Valkey
 adapter gates pass. The existing reference stack and both ADR 0033 caller runs
-still use v1; they are not v2 deletion/restore evidence. A separately locked
-18-scenario v2 multi-process real-Chromium runner is implemented with an
-orchestrator-only Redis fault credential and an independent file witness, but
-no clean committed local or hosted v2 run is recorded yet. V2 caller evidence,
-a production witness, Valkey provenance and HA/failover, production Browser
+still use v1; they are not v2 deletion/restore evidence. The separately locked
+v2 runner passed all 18 scenarios locally on `linux/arm64` in run
+`20260906T092259.737890000Z` at harness `d61cd86`. It used two Gateways, two
+independent mTLS/JWS callers, one unique ingress, signed real Chromium, an
+orchestrator-only Redis fault credential, and an independent `0600` file
+witness; its exact five-file evidence set passed cleanup and sanitization. This
+closes only the local ADR 0034 external-caller gate. Hosted v2 evidence, a
+production witness, Valkey provenance and HA/failover, production Browser
 advertisement/public Gateway composition, real Agent Platform migration,
 aggregate conformance, multi-controller, hostile multi-tenant, deployment, and
 production gates remain open. The ADR 0033 and v2 profiles pin Contract
@@ -155,9 +158,10 @@ Currently implemented:
   independent only when deployed outside the Redis snapshot/restore domain.
   Focused and full race/shuffle tests, vet, Contract verification, the unchanged
   48-case Suite, and tagged integration against the same pinned Valkey index
-  pass. The separate v2 caller harness is implemented but has no recorded clean
-  local or hosted run. No default composition or production advertisement
-  selects v2
+  pass. The separate v2 caller harness passes 18/18 locally on `linux/arm64` in
+  run `20260906T092259.737890000Z` at harness `d61cd86`; the Suite is not
+  executed and the hosted v2 gate remains open. No default composition or
+  production advertisement selects v2
 - downstream caller bootstrap implementation `58488d7`: two independently
   identified mTLS/JWS caller OS processes each perform Provider capability,
   create, operation, sandbox, Browser-session, and handoff reconciliation, bind

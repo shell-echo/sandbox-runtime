@@ -274,12 +274,12 @@ The implementation starts five new ingress processes after the initial one:
 one expected fail-closed startup against restored-old state and four successful
 reconstructions for repair, interrupted-CAS recovery, mismatch repair, and
 cleanup. The Contract identity remains pinned, but the Suite is not executed
-(`suite_exercised=false`). No local or hosted v2 caller run is recorded yet; the
-runner implementation alone is not deletion/restore caller evidence. Even a
-passing run would not establish a production monotonic witness, correlated
-Redis-and-witness rollback protection, Valkey provenance/HA/failover, real
-Agent Platform compatibility, hostile multi-tenant isolation, deployment, or
-production readiness.
+(`suite_exercised=false`). Clean local run `20260906T092259.737890000Z` at
+harness `d61cd862b927bdba2a23ef002de5e0bdc760b30f` passes all 18 scenarios on
+`linux/arm64`; the hosted v2 gate remains open. This local result does not
+establish a production monotonic witness, correlated Redis-and-witness rollback
+protection, Valkey provenance/HA/failover, real Agent Platform compatibility,
+hostile multi-tenant isolation, deployment, or production readiness.
 
 ## Latest verified evidence
 
@@ -299,6 +299,22 @@ sanitization state. The artifact has digest
 `sha256:9c00f3ba184e82d7eff661b831c05c1bdf331fa41caf2d8bbb3353168ab155b0`.
 Both runs close only the named ADR 0033 caller gate on their respective
 platforms; neither executes the Contract Suite.
+
+Clean local witnessed-v2 run
+`evidence/downstream-fencing-v2/20260906T092259.737890000Z` passed all 18 ADR
+0034 scenarios on `linux/arm64` at harness `d61cd86`. It exercised two Gateway
+processes, two independent mTLS/JWS callers, one authenticated unique ingress,
+retained Valkey, the independently retained `0600` file witness, and signed real
+Chromium. The run rejected retained-field deletion, complete-state deletion,
+and a restored pre-activation snapshot reusing the same capacity fence before a
+new upstream dial; it reconstructed the ingress and witness adapter, recovered
+the exact Redis-ahead-one interruption, and rejected other checkpoint
+mismatches. Five new ingress processes were observed after the initial process:
+one expected fail-closed startup and four successful reconstructions. Exactly
+five `0600` evidence files passed the cleanup and sanitization checks. The
+manifest pins the Contract/tree/48-case identity with
+`suite_exercised=false`. This closes only the local `linux/arm64` ADR 0034
+external-caller gate; no hosted or production property follows from it.
 
 The latest verified local regressions before this lock refresh ran against
 Provider `c0a55d1` and harness `59e08d5`: Browser run
