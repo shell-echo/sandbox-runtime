@@ -70,8 +70,9 @@ func TestResolverAndHandlerKeepResolveReadOnlyAndAcknowledgeCompletedAction(t *t
 	if err != nil {
 		t.Fatal(err)
 	}
+	observations := &recordingObserver{}
 	handler, err := NewHandler(HandlerOptions{
-		Ingress: ingress, Resolver: providerResolver,
+		Ingress: ingress, Resolver: providerResolver, Observer: observations,
 		GatewayRoles: []string{wire.GatewayARoleURI, wire.GatewayBRoleURI},
 	})
 	if err != nil {
@@ -204,6 +205,30 @@ func TestResolverAndHandlerKeepResolveReadOnlyAndAcknowledgeCompletedAction(t *t
 	if _, err := lowerEndpoint.Dial(t.Context()); !errors.Is(err, gateway.ErrDownstreamFenceLost) || strings.Contains(err.Error(), lowerFence.Opaque()) {
 		t.Fatalf("lower-fence Dial() error = %v", err)
 	}
+	wantObservations := []Observation{
+		{Type: ObservationResolve, Result: ObservationResultSucceeded, MessageType: ObservationMessageNone},
+		{Type: ObservationActivation, Result: ObservationResultReceived, MessageType: ObservationMessageText},
+		{Type: ObservationUpstreamDial, Result: ObservationResultSucceeded, MessageType: ObservationMessageNone},
+		{Type: ObservationActivation, Result: ObservationResultSucceeded, MessageType: ObservationMessageText},
+		{Type: ObservationActionRead, Result: ObservationResultComplete, MessageType: ObservationMessageText, Bytes: uint64(len(payload))},
+		{Type: ObservationActionForwarded, Result: ObservationResultSucceeded, MessageType: ObservationMessageText, Bytes: uint64(len(payload))},
+		{Type: ObservationActionRead, Result: ObservationResultComplete, MessageType: ObservationMessageText, Bytes: uint64(len(`{"id":2,"method":"Page.stopLoading"}`))},
+		{Type: ObservationActionFailed, Result: ObservationResultFenceLost, MessageType: ObservationMessageText, Bytes: uint64(len(`{"id":2,"method":"Page.stopLoading"}`))},
+		{Type: ObservationResolve, Result: ObservationResultSucceeded, MessageType: ObservationMessageNone},
+		{Type: ObservationActivation, Result: ObservationResultReceived, MessageType: ObservationMessageText},
+		{Type: ObservationActivation, Result: ObservationResultFenceLost, MessageType: ObservationMessageText},
+	}
+	gotObservations := observations.Values()
+	if len(gotObservations) != len(wantObservations) {
+		t.Fatalf("observation count = %d, want %d: %#v", len(gotObservations), len(wantObservations), gotObservations)
+	}
+	for index, want := range wantObservations {
+		got := gotObservations[index]
+		if got.Type != want.Type || got.Result != want.Result || got.MessageType != want.MessageType ||
+			(want.Bytes != 0 && got.Bytes != want.Bytes) || got.Bytes > wire.MaxMessageBytes {
+			t.Fatalf("observation %d = %#v, want %#v", index, got, want)
+		}
+	}
 }
 
 func TestHandlerBoundsResolveAndRejectsTypedNilDependencies(t *testing.T) {
@@ -216,6 +241,13 @@ func TestHandlerBoundsResolveAndRejectsTypedNilDependencies(t *testing.T) {
 		Ingress: ingress, Resolver: typedNilResolver, GatewayRoles: []string{wire.GatewayARoleURI},
 	}); !errors.Is(err, ErrInvalidConfiguration) {
 		t.Fatalf("typed-nil resolver error = %v", err)
+	}
+	var typedNilObserver *recordingObserver
+	if _, err := NewHandler(HandlerOptions{
+		Ingress: ingress, Resolver: &testProviderResolver{}, Observer: typedNilObserver,
+		GatewayRoles: []string{wire.GatewayARoleURI, wire.GatewayBRoleURI},
+	}); !errors.Is(err, ErrInvalidConfiguration) {
+		t.Fatalf("typed-nil observer error = %v", err)
 	}
 
 	requestValue, err := wire.NewResolutionRequest("ref:browser-session:opaque-1")
@@ -239,6 +271,110 @@ func TestHandlerBoundsResolveAndRejectsTypedNilDependencies(t *testing.T) {
 	var typedNilStream *controlledBrowserStream
 	if _, err := adaptBrowserDownstream(typedNilStream, wire.MaxMessageBytes); !errors.Is(err, gateway.ErrDownstreamUnavailable) {
 		t.Fatalf("typed-nil downstream error = %v", err)
+	}
+}
+
+func TestHandlerFailsClosedBeforeForwardingWhenObservationFails(t *testing.T) {
+	observer := &recordingObserver{failType: ObservationActionRead}
+	handler := &Handler{observer: observer, maxMessageBytes: wire.MaxMessageBytes, activationTimeout: 50 * time.Millisecond}
+	server, client := net.Pipe()
+	defer server.Close()
+	defer client.Close()
+	stream := newControlledBrowserStream()
+	defer stream.Close()
+	adapted, err := adapter.NewBrowserStream(stream, adapter.BrowserOptions{MaxFrameBytes: wire.MaxMessageBytes})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := []byte(`{"id":71,"method":"Runtime.evaluate"}`)
+	written := make(chan error, 1)
+	go func() { written <- wsutil.WriteClientMessage(client, ws.OpText, payload) }()
+	err = handler.forwardActions(t.Context(), server, server, &sync.Mutex{}, adapted)
+	if !errors.Is(err, gateway.ErrDownstreamUnavailable) {
+		t.Fatalf("forwardActions() error = %v", err)
+	}
+	if err := <-written; err != nil {
+		t.Fatal(err)
+	}
+	if got := stream.Written(); len(got) != 0 {
+		t.Fatalf("observer failure reached downstream: %q", got)
+	}
+	got := observer.Values()
+	if len(got) != 1 || got[0].Type != ObservationActionRead || got[0].Bytes != uint64(len(payload)) {
+		t.Fatalf("observer calls = %#v", got)
+	}
+}
+
+func TestResolveObservationFailureReturnsUnavailable(t *testing.T) {
+	requestValue, err := wire.NewResolutionRequest("ref:browser-session:opaque-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := wire.EncodeResolutionRequest(requestValue)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolver := &testProviderResolver{endpoint: browserreference.Endpoint{
+		Reference: "ref:browser-session:opaque-1", SandboxID: "sandbox", BrowserSessionID: "browser",
+		CapabilityProfileID: "profile", ConnectionGeneration: 1, ExpiresAt: time.Now().UTC().Add(time.Minute),
+		Dial: func(context.Context) (providerbrowser.Stream, error) { return newControlledBrowserStream(), nil },
+	}}
+	handler := &Handler{resolver: resolver, observer: &recordingObserver{failType: ObservationResolve}, resolveTimeout: 50 * time.Millisecond}
+	request := httptest.NewRequest(http.MethodPost, wire.ResolvePath, bytes.NewReader(encoded))
+	request.Header.Set("Content-Type", "application/json")
+	response := &deadlineRecorder{ResponseRecorder: httptest.NewRecorder()}
+	handler.serveResolve(response, request)
+	if response.Code != http.StatusServiceUnavailable || resolver.Calls() != 1 || strings.Contains(response.Body.String(), resolver.endpoint.Reference) {
+		t.Fatalf("failed observation response = %d %q, resolver calls = %d", response.Code, response.Body.String(), resolver.Calls())
+	}
+}
+
+func TestValidateObservationRejectsUnboundedOrInconsistentMetadata(t *testing.T) {
+	valid := []Observation{
+		{Type: ObservationResolve, Result: ObservationResultSucceeded, MessageType: ObservationMessageNone, Bytes: wire.MaxResolutionBytes},
+		{Type: ObservationResolve, Result: ObservationResultInvalid, MessageType: ObservationMessageNone},
+		{Type: ObservationResolve, Result: ObservationResultUnavailable, MessageType: ObservationMessageNone},
+		{Type: ObservationActivation, Result: ObservationResultReceived, MessageType: ObservationMessageText, Bytes: wire.MaxActivationBytes},
+		{Type: ObservationActivation, Result: ObservationResultSucceeded, MessageType: ObservationMessageText},
+		{Type: ObservationActivation, Result: ObservationResultInvalid, MessageType: ObservationMessageNone},
+		{Type: ObservationActivation, Result: ObservationResultInvalid, MessageType: ObservationMessageText},
+		{Type: ObservationActivation, Result: ObservationResultUnavailable, MessageType: ObservationMessageText},
+		{Type: ObservationActivation, Result: ObservationResultFenceLost, MessageType: ObservationMessageText},
+		{Type: ObservationUpstreamDial, Result: ObservationResultSucceeded, MessageType: ObservationMessageNone},
+		{Type: ObservationUpstreamDial, Result: ObservationResultUnavailable, MessageType: ObservationMessageNone},
+		{Type: ObservationActionRead, Result: ObservationResultComplete, MessageType: ObservationMessageText, Bytes: wire.MaxMessageBytes},
+		{Type: ObservationActionRead, Result: ObservationResultComplete, MessageType: ObservationMessageBinary},
+		{Type: ObservationActionForwarded, Result: ObservationResultSucceeded, MessageType: ObservationMessageText},
+		{Type: ObservationActionForwarded, Result: ObservationResultSucceeded, MessageType: ObservationMessageBinary},
+		{Type: ObservationActionFailed, Result: ObservationResultFenceLost, MessageType: ObservationMessageText},
+		{Type: ObservationActionFailed, Result: ObservationResultUnavailable, MessageType: ObservationMessageBinary},
+	}
+	for _, value := range valid {
+		if err := ValidateObservation(value); err != nil {
+			t.Fatalf("ValidateObservation() rejected %#v: %v", value, err)
+		}
+	}
+	for _, value := range []Observation{
+		{Type: ObservationType(strings.Repeat("x", MaxObservationTypeBytes+1)), Result: ObservationResultComplete, MessageType: ObservationMessageText},
+		{Type: ObservationResolve, Result: ObservationResultReceived, MessageType: ObservationMessageNone},
+		{Type: ObservationResolve, Result: ObservationResultSucceeded, MessageType: ObservationMessageText},
+		{Type: ObservationResolve, Result: ObservationResultSucceeded, MessageType: ObservationMessageNone, Bytes: wire.MaxResolutionBytes + 1},
+		{Type: ObservationActivation, Result: ObservationResultComplete, MessageType: ObservationMessageText},
+		{Type: ObservationActivation, Result: ObservationResultReceived, MessageType: ObservationMessageBinary},
+		{Type: ObservationActivation, Result: ObservationResultReceived, MessageType: ObservationMessageText, Bytes: wire.MaxActivationBytes + 1},
+		{Type: ObservationUpstreamDial, Result: ObservationResultReceived, MessageType: ObservationMessageNone},
+		{Type: ObservationActionRead, Result: ObservationResultComplete, MessageType: ObservationMessageType("payload"), Bytes: 1},
+		{Type: ObservationActionRead, Result: ObservationResultComplete, MessageType: ObservationMessageText, Bytes: wire.MaxMessageBytes + 1},
+		{Type: ObservationActionRead, Result: ObservationResultSucceeded, MessageType: ObservationMessageText},
+		{Type: ObservationUpstreamDial, Result: ObservationResultSucceeded, MessageType: ObservationMessageText},
+		{Type: ObservationUpstreamDial, Result: ObservationResultSucceeded, MessageType: ObservationMessageNone, Bytes: 1},
+		{Type: ObservationActionForwarded, Result: ObservationResultFenceLost, MessageType: ObservationMessageBinary},
+		{Type: ObservationActionFailed, Result: ObservationResultComplete, MessageType: ObservationMessageText},
+		{Type: ObservationActionFailed, Result: ObservationResultFenceLost, MessageType: ObservationMessageNone},
+	} {
+		if err := ValidateObservation(value); err == nil {
+			t.Fatalf("ValidateObservation() accepted %#v", value)
+		}
 	}
 }
 
@@ -369,6 +505,31 @@ type testFenceAuthority struct {
 	mu    sync.Mutex
 	calls int
 	err   error
+}
+
+type recordingObserver struct {
+	mu       sync.Mutex
+	values   []Observation
+	failType ObservationType
+}
+
+func (o *recordingObserver) Observe(value Observation) error {
+	if o == nil {
+		return errors.New("nil observer")
+	}
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.values = append(o.values, value)
+	if value.Type == o.failType {
+		return errors.New("observation unavailable")
+	}
+	return nil
+}
+
+func (o *recordingObserver) Values() []Observation {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return append([]Observation(nil), o.values...)
 }
 
 func (a *testFenceAuthority) AuthorizeAction(ctx context.Context, _ gateway.DownstreamFenceSubject, fence gateway.DownstreamFence, _ time.Duration) (gateway.DownstreamFenceDecision, error) {
@@ -515,4 +676,5 @@ func (s *controlledBrowserStream) Written() []byte {
 
 var _ gateway.DownstreamFenceAuthority = (*testFenceAuthority)(nil)
 var _ ProviderResolver = (*testProviderResolver)(nil)
+var _ Observer = (*recordingObserver)(nil)
 var _ providerbrowser.Stream = (*controlledBrowserStream)(nil)

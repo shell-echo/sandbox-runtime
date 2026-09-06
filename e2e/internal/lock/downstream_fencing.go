@@ -14,6 +14,7 @@ import (
 	goredis "github.com/redis/go-redis/v9"
 	"github.com/shell-echo/sandbox-runtime-e2e/internal/downstreamfencing/wire"
 	rediscapacity "github.com/shell-echo/sandbox-runtime/gateway/capacity/redis"
+	redisrevocation "github.com/shell-echo/sandbox-runtime/gateway/revocation/redis"
 	browserimage "github.com/shell-echo/sandbox-runtime/profiles/browser/image"
 )
 
@@ -36,7 +37,8 @@ const (
 		"save \"\"\n" +
 		"maxmemory-policy noeviction\n"
 	DownstreamFencingACLTemplate = "user default off\n" +
-		"user e2e on >${PASSWORD} ~sandbox-runtime:{${NAMESPACE_SHA256}}:capacity:* " +
+		"user e2e on >${PASSWORD} ~sandbox-runtime:{${CAPACITY_NAMESPACE_SHA256}}:capacity:* " +
+		"~sandbox-runtime:{${REVOCATION_NAMESPACE_SHA256}}:revocation:* " +
 		"+ping +type +zcard +zscore +set +get +hset +hlen +hget +time +pttl +zremrangebyscore " +
 		"+zrange +incr +zadd +pexpireat +zrem +evalsha +eval\n"
 )
@@ -200,25 +202,27 @@ type DownstreamFencingTransport struct {
 type DownstreamFencingAdapterDescriptors struct {
 	Capacity    rediscapacity.Descriptor              `json:"capacity"`
 	ActionFence rediscapacity.ActionFencingDescriptor `json:"action_fence"`
+	Revocation  redisrevocation.Descriptor            `json:"revocation"`
 }
 
 // DownstreamFencingLock is the immutable input plan for the independent ADR
 // 0033 caller gate. Loading this file is not evidence that the runner exists or
 // that any scenario has executed.
 type DownstreamFencingLock struct {
-	SchemaVersion   int                                 `json:"schema_version"`
-	EvidenceProfile string                              `json:"evidence_profile"`
-	Sources         DownstreamFencingSources            `json:"sources"`
-	Contract        DownstreamFencingContract           `json:"contract"`
-	BrowserImage    DownstreamFencingBrowserImage       `json:"browser_image"`
-	Valkey          DownstreamFencingValkey             `json:"valkey"`
-	CapacityPolicy  SharedCapacityPolicy                `json:"capacity_policy"`
-	Adapters        DownstreamFencingAdapterDescriptors `json:"adapters"`
-	PrivateWire     DownstreamFencingWire               `json:"private_wire"`
-	Topology        DownstreamFencingTopology           `json:"topology"`
-	Ingress         DownstreamFencingIngress            `json:"ingress"`
-	Transport       DownstreamFencingTransport          `json:"transport"`
-	Scenarios       []string                            `json:"scenarios"`
+	SchemaVersion    int                                 `json:"schema_version"`
+	EvidenceProfile  string                              `json:"evidence_profile"`
+	Sources          DownstreamFencingSources            `json:"sources"`
+	Contract         DownstreamFencingContract           `json:"contract"`
+	BrowserImage     DownstreamFencingBrowserImage       `json:"browser_image"`
+	Valkey           DownstreamFencingValkey             `json:"valkey"`
+	CapacityPolicy   SharedCapacityPolicy                `json:"capacity_policy"`
+	RevocationPolicy DurableRevocationPolicy             `json:"revocation_policy"`
+	Adapters         DownstreamFencingAdapterDescriptors `json:"adapters"`
+	PrivateWire      DownstreamFencingWire               `json:"private_wire"`
+	Topology         DownstreamFencingTopology           `json:"topology"`
+	Ingress          DownstreamFencingIngress            `json:"ingress"`
+	Transport        DownstreamFencingTransport          `json:"transport"`
+	Scenarios        []string                            `json:"scenarios"`
 }
 
 func DownstreamFencingScenarioNames() []string {
@@ -293,7 +297,7 @@ func validateDownstreamFencingLock(locked DownstreamFencingLock) error {
 	}
 	expectedContract := DownstreamFencingContract{
 		Namespace: ContractNS, Revision: ContractRevision, Tree: ContractTree, SuiteCases: SuiteCases,
-		SuiteExercised: false, ContractMetadataOnly: true,
+		SuiteExercised: false, ContractMetadataOnly: false,
 	}
 	if locked.Contract != expectedContract {
 		return fmt.Errorf("downstream-fencing Contract metadata = %#v, want %#v", locked.Contract, expectedContract)
@@ -312,7 +316,15 @@ func validateDownstreamFencingLock(locked DownstreamFencingLock) error {
 	if locked.CapacityPolicy != expectedPolicy {
 		return fmt.Errorf("downstream-fencing capacity policy = %#v, want %#v", locked.CapacityPolicy, expectedPolicy)
 	}
-	descriptors, err := currentDownstreamFencingDescriptors(expectedPolicy)
+	expectedRevocation := DurableRevocationPolicy{
+		MaxGrantLifetimeMillis: 900_000,
+		PollIntervalMillis:     100,
+		OperationTimeoutMillis: 100,
+	}
+	if locked.RevocationPolicy != expectedRevocation {
+		return fmt.Errorf("downstream-fencing revocation policy = %#v, want %#v", locked.RevocationPolicy, expectedRevocation)
+	}
+	descriptors, err := currentDownstreamFencingDescriptors(expectedPolicy, expectedRevocation)
 	if err != nil {
 		return err
 	}
@@ -466,7 +478,10 @@ func requireJSONStructFields(encoded []byte, objectType reflect.Type, path strin
 	return nil
 }
 
-func currentDownstreamFencingDescriptors(policy SharedCapacityPolicy) (DownstreamFencingAdapterDescriptors, error) {
+func currentDownstreamFencingDescriptors(
+	policy SharedCapacityPolicy,
+	revocationPolicy DurableRevocationPolicy,
+) (DownstreamFencingAdapterDescriptors, error) {
 	timeout := time.Duration(policy.OperationTimeoutMillis) * time.Millisecond
 	client := goredis.NewClient(&goredis.Options{
 		Addr: "127.0.0.1:1", MaxRetries: -1, ContextTimeoutEnabled: true,
@@ -489,7 +504,25 @@ func currentDownstreamFencingDescriptors(policy SharedCapacityPolicy) (Downstrea
 	if err != nil {
 		return DownstreamFencingAdapterDescriptors{}, fmt.Errorf("construct downstream-fencing action descriptor: %w", err)
 	}
-	return DownstreamFencingAdapterDescriptors{Capacity: capacity.Descriptor(), ActionFence: fencer.Descriptor()}, nil
+	revocationTimeout := time.Duration(revocationPolicy.OperationTimeoutMillis) * time.Millisecond
+	revocationClient := goredis.NewClient(&goredis.Options{
+		Addr: "127.0.0.1:1", MaxRetries: -1, ContextTimeoutEnabled: true,
+		Protocol: 2, DisableIdentity: true, DialTimeout: revocationTimeout, ReadTimeout: revocationTimeout,
+		WriteTimeout: revocationTimeout, PoolTimeout: revocationTimeout,
+	})
+	defer func() { _ = revocationClient.Close() }()
+	revocations, err := redisrevocation.New(redisrevocation.Options{
+		Client: revocationClient, Namespace: "downstream-fencing-lock-revocation-descriptor",
+		MaxGrantLifetime: time.Duration(revocationPolicy.MaxGrantLifetimeMillis) * time.Millisecond,
+		PollInterval:     time.Duration(revocationPolicy.PollIntervalMillis) * time.Millisecond,
+		OperationTimeout: time.Duration(revocationPolicy.OperationTimeoutMillis) * time.Millisecond,
+	})
+	if err != nil {
+		return DownstreamFencingAdapterDescriptors{}, fmt.Errorf("construct downstream-fencing revocation descriptor: %w", err)
+	}
+	return DownstreamFencingAdapterDescriptors{
+		Capacity: capacity.Descriptor(), ActionFence: fencer.Descriptor(), Revocation: revocations.Descriptor(),
+	}, nil
 }
 
 func verifyDownstreamFencingSources(providerRoot string, sources DownstreamFencingSources) error {

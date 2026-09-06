@@ -1,0 +1,72 @@
+name: Browser Downstream Fencing E2E
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: browser-downstream-fencing-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  browser-downstream-fencing-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out the Provider and downstream-fencing caller harness
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: e2e/go.mod
+          cache: true
+          cache-dependency-path: |
+            e2e/go.sum
+            go.sum
+
+      - name: Download Go modules
+        working-directory: e2e
+        run: go mod download
+
+      - name: Log in to GHCR for the locked Browser and Valkey images
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify the locked Provider, Browser, Valkey, and fencing harness
+        working-directory: e2e
+        run: go run ./cmd/downstream-fencing-e2e -check
+
+      - name: Run downstream-fencing harness tests
+        working-directory: e2e
+        run: go test -race -shuffle=on -count=1 ./...
+
+      - name: Run downstream-fencing harness vet
+        working-directory: e2e
+        run: go vet ./...
+
+      - name: Run the two-Gateway downstream-fencing external-caller E2E
+        working-directory: e2e
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: go run ./cmd/downstream-fencing-e2e -evidence-root evidence/downstream-fencing
+
+      - name: Upload sanitized downstream-fencing evidence
+        if: success()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: browser-downstream-fencing-e2e-evidence-${{ github.run_id }}
+          path: e2e/evidence/downstream-fencing
+          if-no-files-found: error
+          retention-days: 14

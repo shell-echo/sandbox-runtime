@@ -19,8 +19,9 @@ func TestDownstreamFencingLock(t *testing.T) {
 			t.Fatalf("LoadDownstreamFencing(%q): %v", platform, err)
 		}
 		if locked.Sources.ProviderRevision != ProviderCommit || locked.Sources.HarnessBaseline != DownstreamFencingHarnessBaseline ||
-			locked.Contract.SuiteExercised || !locked.Contract.ContractMetadataOnly ||
+			locked.Contract.SuiteExercised || locked.Contract.ContractMetadataOnly ||
 			!locked.BrowserImage.Provenance.Established || !locked.Valkey.ProvenanceNotEstablished ||
+			locked.RevocationPolicy.OperationTimeoutMillis != 100 || locked.Adapters.Revocation.PolicyFingerprint == "" ||
 			!locked.PrivateWire.ResolveMetadataOnly || !locked.PrivateWire.HighWaterActivationOnly ||
 			len(locked.PrivateWire.ErrorCodes) != 3 || locked.Topology.GatewayProcesses != 2 ||
 			locked.Topology.ProviderIngressProcesses != 1 || locked.Topology.CallerProcesses != 2 || locked.Topology.SessionCapacityLimit != 1 ||
@@ -136,7 +137,7 @@ func TestDownstreamFencingNormalizedConfigurationDigests(t *testing.T) {
 	if got, want := normalizedSHA256(DownstreamFencingServerConfig), "sha256:12a690a249f1c28c5d3617bcc051216c3261270237035494dcb17764aa2111d2"; got != want {
 		t.Fatalf("server config digest = %s, want %s", got, want)
 	}
-	if got, want := normalizedSHA256(DownstreamFencingACLTemplate), "sha256:84488d76e44e0fe4b2e3f67c943d83c02ff993db0b8af003c5cd2cc998f1293e"; got != want {
+	if got, want := normalizedSHA256(DownstreamFencingACLTemplate), "sha256:016ee77656e7bf55588f6663fa752df9cc050a030819a694ab825d880102213c"; got != want {
 		t.Fatalf("ACL template digest = %s, want %s", got, want)
 	}
 }

@@ -33,6 +33,7 @@ type Stack struct {
 
 	closeProvider func() error
 	closeRedis    func() error
+	observations  *observationWriter
 	stopTimeout   time.Duration
 
 	mu        sync.Mutex
@@ -72,6 +73,11 @@ func Open(ctx context.Context, input Config) (_ *Stack, resultErr error) {
 	if err != nil {
 		return nil, err
 	}
+	observationWriter, err := newObservationWriter(config.ObservationFile)
+	if err != nil {
+		return nil, errors.New("open private ingress observations")
+	}
+	stack.observations = observationWriter
 
 	operationTimeout := durationMillis(config.Authority.CapacityPolicy.OperationTimeoutMillis)
 	redisClient, err := newRedisClient(config.Authority.RedisURL, operationTimeout)
@@ -118,7 +124,7 @@ func Open(ctx context.Context, input Config) (_ *Stack, resultErr error) {
 		return nil, errors.New("construct unique downstream-fencing ingress")
 	}
 	handler, err := transport.NewHandler(transport.HandlerOptions{
-		Ingress: ingress, Resolver: provider, GatewayRoles: ingressPolicy.AllowedGatewayURIs,
+		Ingress: ingress, Resolver: provider, Observer: observationWriter, GatewayRoles: ingressPolicy.AllowedGatewayURIs,
 		ResolveTimeout:    durationMillis(ingressPolicy.ResolveTimeoutMillis),
 		ActivationTimeout: durationMillis(ingressPolicy.ActivationTimeoutMillis),
 		MaxMessageBytes:   ingressPolicy.MaxActionBytes,
@@ -221,6 +227,9 @@ func (s *Stack) Close() error {
 		}
 		if s.closeRedis != nil {
 			s.closeErr = errors.Join(s.closeErr, s.closeRedis())
+		}
+		if s.observations != nil {
+			s.closeErr = errors.Join(s.closeErr, s.observations.Close())
 		}
 	})
 	return s.closeErr

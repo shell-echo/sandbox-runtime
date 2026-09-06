@@ -51,9 +51,10 @@ var namespacePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$`)
 // Config is owned only by the independently started Provider/private-ingress
 // process. It deliberately contains no public Gateway or caller credential.
 type Config struct {
-	Provider  basestack.BrowserProviderConfig `json:"provider"`
-	Ingress   IngressConfig                   `json:"ingress"`
-	Authority AuthorityConfig                 `json:"authority"`
+	Provider        basestack.BrowserProviderConfig `json:"provider"`
+	Ingress         IngressConfig                   `json:"ingress"`
+	Authority       AuthorityConfig                 `json:"authority"`
+	ObservationFile string                          `json:"observation_file"`
 }
 
 type IngressConfig struct {
@@ -120,6 +121,9 @@ func LoadConfig(path string) (Config, error) {
 }
 
 func ValidateConfig(config Config) error {
+	if strings.TrimSpace(config.ObservationFile) == "" || !filepath.IsAbs(config.ObservationFile) {
+		return errors.New("private ingress observation file path must be absolute")
+	}
 	if err := config.Provider.Validate(); err != nil {
 		return fmt.Errorf("Provider configuration: %w", err)
 	}
@@ -292,10 +296,11 @@ func validateAuthority(config AuthorityConfig) error {
 
 func validateCriticalPathSeparation(config Config) error {
 	unique := map[string]string{
-		"Provider certificate":        config.Provider.ProviderCertificateFile,
-		"Provider private key":        config.Provider.ProviderPrivateKeyFile,
-		"private ingress certificate": config.Ingress.ServerCertificateFile,
-		"private ingress key":         config.Ingress.ServerPrivateKeyFile,
+		"Provider certificate":         config.Provider.ProviderCertificateFile,
+		"Provider private key":         config.Provider.ProviderPrivateKeyFile,
+		"private ingress certificate":  config.Ingress.ServerCertificateFile,
+		"private ingress key":          config.Ingress.ServerPrivateKeyFile,
+		"private ingress observations": config.ObservationFile,
 	}
 	for index, key := range config.Provider.TrustedJWSKeys {
 		unique[fmt.Sprintf("trusted JWS key %d", index)] = key.Path

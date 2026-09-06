@@ -30,6 +30,8 @@ func TestValidateConfigRejectsUnsafeTopologyAndPolicy(t *testing.T) {
 		{name: "colliding listeners", mutate: func(config *Config) { config.Ingress.Address = "127.0.0.1:18443" }},
 		{name: "relative Provider material", mutate: func(config *Config) { config.Provider.TrustedJWSKeys[0].Path = "key.pem" }},
 		{name: "colliding role keys", mutate: func(config *Config) { config.Ingress.ServerPrivateKeyFile = config.Provider.ProviderPrivateKeyFile }},
+		{name: "relative observations", mutate: func(config *Config) { config.ObservationFile = "observations.jsonl" }},
+		{name: "colliding observations", mutate: func(config *Config) { config.ObservationFile = config.Ingress.ServerCertificateFile }},
 		{name: "colliding JWS keys", mutate: func(config *Config) { config.Provider.TrustedJWSKeys[1].Path = config.Provider.TrustedJWSKeys[0].Path }},
 		{name: "wrong Gateway role", mutate: func(config *Config) { config.Ingress.AllowedGatewayURIs[1] = "spiffe://downstream-fencing/controller" }},
 		{name: "duplicate Gateway role", mutate: func(config *Config) { config.Ingress.AllowedGatewayURIs[1] = config.Ingress.AllowedGatewayURIs[0] }},
@@ -184,5 +186,6 @@ func validConfig(t *testing.T) Config {
 				RenewIntervalMillis: 400, RenewalSafetyMarginMillis: 500, OperationTimeoutMillis: 200,
 			},
 		},
+		ObservationFile: filepath.Join(root, "ingress-observations.jsonl"),
 	}
 }

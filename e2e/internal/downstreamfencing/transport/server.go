@@ -30,6 +30,7 @@ type ProviderResolver interface {
 type HandlerOptions struct {
 	Ingress           *cdpfence.Ingress
 	Resolver          ProviderResolver
+	Observer          Observer
 	GatewayRoles      []string
 	ResolveTimeout    time.Duration
 	ActivationTimeout time.Duration
@@ -41,6 +42,7 @@ type HandlerOptions struct {
 type Handler struct {
 	ingress           *cdpfence.Ingress
 	resolver          ProviderResolver
+	observer          Observer
 	gatewayRoles      []string
 	resolveTimeout    time.Duration
 	activationTimeout time.Duration
@@ -49,7 +51,7 @@ type Handler struct {
 }
 
 func NewHandler(options HandlerOptions) (*Handler, error) {
-	if options.Ingress == nil || nilDependency(options.Resolver) {
+	if options.Ingress == nil || nilDependency(options.Resolver) || (options.Observer != nil && nilDependency(options.Observer)) {
 		return nil, ErrInvalidConfiguration
 	}
 	if _, err := exactGatewayRoles(options.GatewayRoles); err != nil {
@@ -75,7 +77,7 @@ func NewHandler(options HandlerOptions) (*Handler, error) {
 		return nil, ErrInvalidConfiguration
 	}
 	return &Handler{
-		ingress: options.Ingress, resolver: options.Resolver,
+		ingress: options.Ingress, resolver: options.Resolver, observer: options.Observer,
 		gatewayRoles:   append([]string(nil), options.GatewayRoles...),
 		resolveTimeout: resolveTimeout, activationTimeout: activationTimeout, maxMessageBytes: maximum,
 		upgrader: ws.HTTPUpgrader{
@@ -107,6 +109,9 @@ func (h *Handler) ServeHTTP(response http.ResponseWriter, request *http.Request)
 
 func (h *Handler) serveResolve(response http.ResponseWriter, request *http.Request) {
 	if request.Method != http.MethodPost || request.Header.Get("Content-Type") != "application/json" {
+		if !h.observeHTTP(response, Observation{Type: ObservationResolve, Result: ObservationResultInvalid, MessageType: ObservationMessageNone}) {
+			return
+		}
 		http.Error(response, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return
 	}
@@ -115,24 +120,39 @@ func (h *Handler) serveResolve(response http.ResponseWriter, request *http.Reque
 	deadline, _ := resolveCtx.Deadline()
 	responseController := http.NewResponseController(response)
 	if err := responseController.SetReadDeadline(deadline); err != nil {
+		if !h.observeHTTP(response, Observation{Type: ObservationResolve, Result: ObservationResultUnavailable, MessageType: ObservationMessageNone}) {
+			return
+		}
 		http.Error(response, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
 		return
 	}
 	defer func() { _ = responseController.SetReadDeadline(time.Time{}) }()
 	encoded, err := io.ReadAll(io.LimitReader(request.Body, wire.MaxResolutionBytes+1))
 	if err != nil || len(encoded) > wire.MaxResolutionBytes {
+		if !h.observeHTTP(response, Observation{Type: ObservationResolve, Result: ObservationResultInvalid, MessageType: ObservationMessageNone, Bytes: boundedBytes(encoded, wire.MaxResolutionBytes)}) {
+			return
+		}
 		h.writeResolution(response, http.StatusBadRequest, wire.ResolutionResponse{Version: wire.ProtocolVersion, Status: wire.StatusRejected, ErrorCode: wire.ErrorInvalidActivation})
 		return
 	}
 	resolutionRequest, err := wire.DecodeResolutionRequest(encoded)
 	if err != nil {
+		if !h.observeHTTP(response, Observation{Type: ObservationResolve, Result: ObservationResultInvalid, MessageType: ObservationMessageNone, Bytes: uint64(len(encoded))}) {
+			return
+		}
 		h.writeResolution(response, http.StatusBadRequest, wire.ResolutionResponse{Version: wire.ProtocolVersion, Status: wire.StatusRejected, ErrorCode: wire.ErrorInvalidActivation})
 		return
 	}
 	reference, _ := resolutionRequest.Values()
 	endpoint, err := h.resolver.Resolve(resolveCtx, reference)
 	if err != nil || !validResolvedEndpoint(endpoint, reference) {
+		if !h.observeHTTP(response, Observation{Type: ObservationResolve, Result: ObservationResultUnavailable, MessageType: ObservationMessageNone, Bytes: uint64(len(encoded))}) {
+			return
+		}
 		h.writeResolution(response, http.StatusServiceUnavailable, wire.ResolutionResponse{Version: wire.ProtocolVersion, Status: wire.StatusRejected, ErrorCode: wire.ErrorUnavailable})
+		return
+	}
+	if !h.observeHTTP(response, Observation{Type: ObservationResolve, Result: ObservationResultSucceeded, MessageType: ObservationMessageNone, Bytes: uint64(len(encoded))}) {
 		return
 	}
 	h.writeResolution(response, http.StatusOK, wire.ResolutionResponse{
@@ -187,33 +207,67 @@ func (h *Handler) handleConnection(parent context.Context, connection net.Conn, 
 	defer activationCancel()
 	encoded, operation, err := readCompleteMessage(activationCtx, connection, reader, writes, wire.MaxActivationBytes, h.activationTimeout)
 	if err != nil || operation != ws.OpText {
+		if h.observe(Observation{Type: ObservationActivation, Result: ObservationResultInvalid, MessageType: observationMessageType(operation), Bytes: boundedBytes(encoded, wire.MaxActivationBytes)}) != nil {
+			return
+		}
 		writeClose(connection, writes, ws.StatusPolicyViolation, "invalid private activation")
 		return
 	}
 	activation, err := wire.DecodeActivation(encoded)
 	if err != nil {
+		if h.observe(Observation{Type: ObservationActivation, Result: ObservationResultInvalid, MessageType: ObservationMessageText, Bytes: uint64(len(encoded))}) != nil {
+			return
+		}
 		writeRejected(connection, writes, wire.ErrorInvalidActivation)
+		return
+	}
+	if h.observe(Observation{Type: ObservationActivation, Result: ObservationResultReceived, MessageType: ObservationMessageText, Bytes: uint64(len(encoded))}) != nil {
 		return
 	}
 	reference, subject, fence, _ := activation.Values()
 	endpoint, err := h.resolver.Resolve(activationCtx, reference)
 	if err != nil || !endpointMatches(endpoint, reference, subject) {
+		if h.observe(Observation{Type: ObservationActivation, Result: ObservationResultUnavailable, MessageType: ObservationMessageText, Bytes: uint64(len(encoded))}) != nil {
+			return
+		}
 		writeRejected(connection, writes, wire.ErrorUnavailable)
 		return
 	}
 	stream, err := h.ingress.Open(activationCtx, subject, fence, func(dialCtx context.Context) (gateway.Stream, error) {
 		downstream, err := endpoint.Dial(dialCtx)
 		if err != nil || nilDependency(downstream) {
+			if h.observe(Observation{Type: ObservationUpstreamDial, Result: ObservationResultUnavailable, MessageType: ObservationMessageNone}) != nil {
+				return nil, gateway.ErrDownstreamUnavailable
+			}
 			return nil, gateway.ErrDownstreamUnavailable
 		}
-		return adaptBrowserDownstream(downstream, h.maxMessageBytes)
+		adapted, err := adaptBrowserDownstream(downstream, h.maxMessageBytes)
+		if err != nil {
+			if h.observe(Observation{Type: ObservationUpstreamDial, Result: ObservationResultUnavailable, MessageType: ObservationMessageNone}) != nil {
+				return nil, gateway.ErrDownstreamUnavailable
+			}
+			return nil, err
+		}
+		if h.observe(Observation{Type: ObservationUpstreamDial, Result: ObservationResultSucceeded, MessageType: ObservationMessageNone}) != nil {
+			_ = adapted.Close(context.Background())
+			return nil, gateway.ErrDownstreamUnavailable
+		}
+		return adapted, nil
 	})
 	if err != nil {
+		result := observationFailureResult(err)
+		if h.observe(Observation{Type: ObservationActivation, Result: result, MessageType: ObservationMessageText, Bytes: uint64(len(encoded))}) != nil {
+			return
+		}
 		if errors.Is(err, gateway.ErrDownstreamFenceLost) {
 			writeRejected(connection, writes, wire.ErrorFenceLost)
 		} else {
 			writeRejected(connection, writes, wire.ErrorUnavailable)
 		}
+		return
+	}
+	if h.observe(Observation{Type: ObservationActivation, Result: ObservationResultSucceeded, MessageType: ObservationMessageText, Bytes: uint64(len(encoded))}) != nil {
+		_ = stream.Close(context.Background())
 		return
 	}
 	ready, _ := wire.EncodeResponse(wire.ActivationResponse{Version: wire.ProtocolVersion, Status: wire.StatusReady})
@@ -242,6 +296,7 @@ func (h *Handler) forwardActions(ctx context.Context, connection net.Conn, reade
 			return err
 		}
 		var frameType gateway.FrameType
+		messageType := observationMessageType(operation)
 		switch operation {
 		case ws.OpText:
 			frameType = gateway.TextFrame
@@ -250,8 +305,22 @@ func (h *Handler) forwardActions(ctx context.Context, connection net.Conn, reade
 		default:
 			return gateway.ErrDownstreamUnavailable
 		}
+		observation := Observation{Type: ObservationActionRead, Result: ObservationResultComplete, MessageType: messageType, Bytes: uint64(len(payload))}
+		if h.observe(observation) != nil {
+			return gateway.ErrDownstreamUnavailable
+		}
 		if err := stream.Send(ctx, gateway.Frame{Type: frameType, Payload: payload}); err != nil {
+			observation.Type = ObservationActionFailed
+			observation.Result = observationFailureResult(err)
+			if h.observe(observation) != nil {
+				return gateway.ErrDownstreamUnavailable
+			}
 			return err
+		}
+		observation.Type = ObservationActionForwarded
+		observation.Result = ObservationResultSucceeded
+		if h.observe(observation) != nil {
+			return gateway.ErrDownstreamUnavailable
 		}
 		writeCtx, cancel := context.WithTimeout(ctx, h.activationTimeout)
 		err = writeServerMessage(writeCtx, connection, writes, ws.OpPong, []byte(wire.ActionACKPayload))
@@ -260,6 +329,49 @@ func (h *Handler) forwardActions(ctx context.Context, connection net.Conn, reade
 			return gateway.ErrDownstreamUnavailable
 		}
 	}
+}
+
+func (h *Handler) observe(value Observation) error {
+	if err := ValidateObservation(value); err != nil {
+		return err
+	}
+	if h == nil || h.observer == nil {
+		return nil
+	}
+	return h.observer.Observe(value)
+}
+
+func (h *Handler) observeHTTP(response http.ResponseWriter, value Observation) bool {
+	if err := h.observe(value); err != nil {
+		http.Error(response, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
+		return false
+	}
+	return true
+}
+
+func observationMessageType(operation ws.OpCode) ObservationMessageType {
+	switch operation {
+	case ws.OpText:
+		return ObservationMessageText
+	case ws.OpBinary:
+		return ObservationMessageBinary
+	default:
+		return ObservationMessageNone
+	}
+}
+
+func observationFailureResult(err error) ObservationResult {
+	if errors.Is(err, gateway.ErrDownstreamFenceLost) {
+		return ObservationResultFenceLost
+	}
+	return ObservationResultUnavailable
+}
+
+func boundedBytes(payload []byte, maximum int64) uint64 {
+	if int64(len(payload)) > maximum {
+		return uint64(maximum)
+	}
+	return uint64(len(payload))
 }
 
 func (h *Handler) forwardResponses(ctx context.Context, connection net.Conn, writes *sync.Mutex, stream gateway.Stream) error {

@@ -32,3 +32,25 @@ func readBoundedRegularFile(path string, maximum int64, private bool) ([]byte, e
 	}
 	return contents, nil
 }
+
+func openPrivateAppendFile(path string) (*os.File, error) {
+	fd, err := unix.Open(path, unix.O_CREAT|unix.O_APPEND|unix.O_RDWR|unix.O_NONBLOCK|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0o600)
+	if err != nil {
+		return nil, err
+	}
+	if err := unix.Flock(fd, unix.LOCK_EX|unix.LOCK_NB); err != nil {
+		_ = unix.Close(fd)
+		return nil, errors.New("lock private ingress observation file")
+	}
+	file := os.NewFile(uintptr(fd), path)
+	if file == nil {
+		_ = unix.Close(fd)
+		return nil, errors.New("open private ingress observation file")
+	}
+	info, err := file.Stat()
+	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0o600 {
+		_ = file.Close()
+		return nil, errors.New("private ingress observation output must be a 0600 regular file")
+	}
+	return file, nil
+}
