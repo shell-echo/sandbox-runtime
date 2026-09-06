@@ -182,10 +182,12 @@ with local synchronous commit, supplies an explicit least-privilege migration,
 and keeps ordinary one-ahead runtime recovery separate from exact restore
 verification. Local unit/full race-shuffle, vet, Contract verification, the
 unchanged 48-case Suite, and the pinned-Valkey strict-recovery case pass. The
-tagged real PostgreSQL and combined rollback tests compile and have a dedicated
-workflow, but neither a local PostgreSQL run nor hosted result exists for this
-revision. This is component progress, not production storage or restore
-operations evidence.
+tagged real PostgreSQL and combined rollback tests compile, and hosted workflow
+run `34031784793` at implementation `3ff58dc` passes them against real
+PostgreSQL and the pinned Valkey image. Its initial PostgreSQL tag pull resolved
+digest `sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94`,
+which the workflow now pins. This is component progress, not image provenance,
+production storage, or restore-operations evidence.
 
 Intermediate hosted run `34025787520` at `ef63be4` exposed a harness verifier
 false negative: it treated raw post-`RESTORE` hash `DUMP` bytes as canonical

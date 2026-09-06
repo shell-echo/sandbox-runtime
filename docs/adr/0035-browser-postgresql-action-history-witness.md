@@ -122,11 +122,13 @@ reconstruction, missing-row behavior, schema constraints, runtime-role denial
 of destructive/DDL operations, bounded pool starvation, and a combined real
 Redis/PostgreSQL older-snapshot rejection.
 
-The CI PostgreSQL service is currently selected by a fixed version/platform
-tag rather than an immutable image digest. A passing run is therefore adapter
-semantics evidence, not PostgreSQL image provenance or a reproducible
-production deployment claim. Production evidence must pin and verify its
-server artifact and configuration separately.
+The CI PostgreSQL service is selected by immutable Docker Hub digest
+`sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94`,
+resolved from the fixed `17.6-alpine3.22` tag by initial hosted run
+`34031784793`. A passing run is adapter semantics and CI-input reproducibility
+evidence, not PostgreSQL image provenance or a reproducible production
+deployment claim. Production evidence must verify its server artifact and
+configuration separately.
 
 Passing these gates establishes only a production-candidate PostgreSQL witness
 adapter and controlled-restore verification primitive. It does not establish:

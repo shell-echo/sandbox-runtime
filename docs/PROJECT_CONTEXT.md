@@ -462,9 +462,14 @@ contexts, and redact database detail. The repository includes an explicit
 migration, column-scoped runtime grants, real PostgreSQL/Redis integration
 tests, and a separate workflow. Local full race/shuffle, vet, Contract
 verification, the unchanged 48-case Suite, and the pinned-Valkey strict
-one-ahead non-mutation case pass. The PostgreSQL-tagged tests compile, but this
-revision has no local real-PostgreSQL or hosted workflow result because the
-local service/image was unavailable. This is not production or HA evidence;
+one-ahead non-mutation case pass. Hosted workflow run `34031784793` at
+implementation `3ff58dc` passes the exact migration, runtime and denied roles,
+concurrent CAS/reconnect, missing and malformed state, bounded pool starvation,
+and combined pinned-Valkey rollback cases against real PostgreSQL. Its initial
+tag pull resolved PostgreSQL digest
+`sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94`,
+which the workflow now pins. The local service remained unavailable. This is
+not production or HA evidence;
 independent failure and backup domains, controlled ingress quarantine/resume,
 server provenance, both stores' HA/failover, deployment, and correlated
 rollback remain open.

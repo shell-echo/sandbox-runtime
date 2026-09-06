@@ -36,8 +36,11 @@ only the platform-specific ADR 0034 external-caller gates. ADR 0035 now adds a
 PostgreSQL production-candidate witness adapter, explicit least-privilege
 migration, and a strict read-only controlled-restore check. Its local unit,
 full-repository, Contract, Suite, and pinned-Valkey strict-recovery checks pass;
-the real PostgreSQL integration compiles, but no local PostgreSQL service or
-hosted run was available for this revision. This is not a production witness.
+hosted workflow run `34031784793` at implementation `3ff58dc` passes the real
+PostgreSQL migration, role, concurrency, timeout, and combined pinned-Valkey
+rollback gate. That run resolved and the workflow now pins PostgreSQL digest
+`sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94`.
+This is not a production witness.
 Valkey provenance and HA/failover, production Browser
 advertisement/public Gateway composition, real Agent Platform migration,
 aggregate conformance, multi-controller, hostile multi-tenant, deployment, and
@@ -181,9 +184,10 @@ Currently implemented:
   bounded durable conditional updates with `pgx/v5`, ships an explicit schema
   migration and least-privilege role guidance, redacts backend errors, and adds
   strict read-only `VerifyRestoredState` semantics. Local unit/full gates and a
-  pinned-Valkey one-ahead non-mutation check pass. The tagged PostgreSQL and
-  combined rollback tests compile and have a dedicated workflow, but have not
-  run on this revision; no HA, deployment, or production claim follows
+  pinned-Valkey one-ahead non-mutation check pass. Hosted workflow run
+  `34031784793` at `3ff58dc` passes the PostgreSQL and combined rollback tests;
+  the workflow now pins the exact PostgreSQL digest resolved by that run. No
+  provenance, HA, deployment, or production claim follows
 - downstream caller bootstrap implementation `58488d7`: two independently
   identified mTLS/JWS caller OS processes each perform Provider capability,
   create, operation, sandbox, Browser-session, and handoff reconciliation, bind

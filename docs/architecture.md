@@ -245,8 +245,10 @@ and project database failures without backend detail. Runtime roles receive no
 DDL, delete, or truncate authority. `VerifyRestoredState` accepts only exact
 Redis/witness equality and never performs the one-ahead repair retained by
 ordinary runtime `Verify`. Local unit/full, Contract/Suite, and pinned-Valkey
-strict-recovery checks pass, while the real PostgreSQL integration currently
-has compile evidence only and no hosted run. The adapter is not evidence of
+strict-recovery checks pass. Hosted workflow run `34031784793` at implementation
+`3ff58dc` passes the real PostgreSQL migration, role, concurrency, timeout, and
+combined pinned-Valkey rollback gate; its resolved PostgreSQL digest is now
+pinned by the workflow. The adapter is not evidence of server provenance,
 independent deployment domains, PostgreSQL or Valkey HA, controlled ingress
 operations, or production readiness.
 
