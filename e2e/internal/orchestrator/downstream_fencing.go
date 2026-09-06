@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -34,6 +35,7 @@ import (
 	"github.com/shell-echo/sandbox-runtime-e2e/internal/lock"
 	basestack "github.com/shell-echo/sandbox-runtime-e2e/internal/stack"
 	"github.com/shell-echo/sandbox-runtime-e2e/internal/testenv"
+	"github.com/shell-echo/sandbox-runtime/gateway"
 	rediscapacity "github.com/shell-echo/sandbox-runtime/gateway/capacity/redis"
 )
 
@@ -53,6 +55,76 @@ var downstreamEvidenceFiles = []string{
 	"manifest.json",
 	"report.json",
 }
+
+var restoreDownstreamStaleMemberScript = goredis.NewScript(`
+local lease_type = redis.call('TYPE', KEYS[1]).ok
+local fence_type = redis.call('TYPE', KEYS[2]).ok
+if (lease_type ~= 'none' and lease_type ~= 'zset') or fence_type ~= 'string' or
+   redis.call('ZCARD', KEYS[1]) ~= 0 then
+  return 0
+end
+local counter = redis.call('GET', KEYS[2])
+local stale_fence = tonumber(ARGV[2])
+local retained_fence = tonumber(ARGV[3])
+local lease_ttl = tonumber(ARGV[4])
+local bound_expiry = tonumber(ARGV[5])
+local required_window = tonumber(ARGV[6])
+if not counter or not (counter == '0' or string.match(counter, '^[1-9][0-9]*$')) or
+   string.len(counter) > 15 or not stale_fence or not retained_fence or
+   not lease_ttl or not bound_expiry or not required_window or
+   tonumber(counter) ~= retained_fence or tonumber(counter) <= stale_fence then
+  return 0
+end
+local clock = redis.call('TIME')
+local now = (clock[1] * 1000) + math.floor(clock[2] / 1000)
+local expiry = now + lease_ttl
+if expiry > bound_expiry then
+  expiry = bound_expiry
+end
+if expiry - now < required_window + 500 then
+  return 0
+end
+if redis.call('ZADD', KEYS[1], 'NX', expiry, ARGV[1]) ~= 1 then
+  return 0
+end
+redis.call('PEXPIREAT', KEYS[1], expiry)
+return expiry
+`)
+
+var validateDownstreamStaleMemberScript = goredis.NewScript(`
+if redis.call('TYPE', KEYS[1]).ok ~= 'zset' or
+   redis.call('TYPE', KEYS[2]).ok ~= 'string' or
+   redis.call('ZCARD', KEYS[1]) ~= 1 then
+  return 0
+end
+local exact = redis.call('ZRANGE', KEYS[1], 0, -1, 'WITHSCORES')
+if #exact ~= 2 or exact[1] ~= ARGV[1] then
+  return 0
+end
+local score = tonumber(exact[2])
+local bound_expiry = tonumber(ARGV[2])
+local required_window = tonumber(ARGV[3])
+local counter = redis.call('GET', KEYS[2])
+local stale_fence = tonumber(ARGV[4])
+local retained_fence = tonumber(ARGV[5])
+if not score or score ~= math.floor(score) or not bound_expiry or
+   not required_window or not counter or
+   not (counter == '0' or string.match(counter, '^[1-9][0-9]*$')) or
+   string.len(counter) > 15 or not stale_fence or not retained_fence or
+   tonumber(counter) ~= retained_fence or tonumber(counter) <= stale_fence then
+  return 0
+end
+local clock = redis.call('TIME')
+local now = (clock[1] * 1000) + math.floor(clock[2] / 1000)
+local remaining = score - now
+local lease_ttl = redis.call('PTTL', KEYS[1])
+if score > bound_expiry or remaining < required_window or
+   bound_expiry - now < required_window or not lease_ttl or
+   lease_ttl < remaining - 2 or lease_ttl > remaining then
+  return 0
+end
+return 1
+`)
 
 type DownstreamFencingResult struct {
 	EvidenceDirectory string
@@ -844,6 +916,7 @@ func RunDownstreamFencing(ctx context.Context, options Options) (_ DownstreamFen
 		if err != nil {
 			return err
 		}
+		sensitive = append(sensitive, oldLease.member)
 		if err := signalSharedGateway(gatewayB, syscall.SIGSTOP); err != nil {
 			return err
 		}
@@ -874,7 +947,10 @@ func RunDownstreamFencing(ctx context.Context, options Options) (_ DownstreamFen
 		if err != nil || newLease.fence <= oldLease.fence {
 			return errors.Join(err, errors.New("higher-fence activation did not replace the active old stream"))
 		}
-		after, err := downstreamObservationSnapshot(observationPath)
+		after, err := waitForDownstreamObservation(
+			ctx, observationPath, before, downstreamtransport.ObservationStreamTerminated,
+			downstreamtransport.ObservationResultFenceLost, 1, downstreamCommandTimeout,
+		)
 		if err != nil {
 			return err
 		}
@@ -888,6 +964,10 @@ func RunDownstreamFencing(ctx context.Context, options Options) (_ DownstreamFen
 	}
 
 	if err := runner.run(ctx, locked.Scenarios[7], func(ctx context.Context) error {
+		auditBefore, err := readDownstreamGatewayAudit(filepath.Join(stateRoot, "gateway-b-audit.jsonl"))
+		if err != nil {
+			return err
+		}
 		if err := signalSharedGateway(gatewayB, syscall.SIGCONT); err != nil {
 			return err
 		}
@@ -895,11 +975,21 @@ func RunDownstreamFencing(ctx context.Context, options Options) (_ DownstreamFen
 		if err := downstreamExpectedClosed(ctx, callers[0], "lower-b", leaseTTL); err != nil {
 			return err
 		}
-		after, err := waitForDownstreamObservation(ctx, observationPath, lowerReconnectBefore, "activation", "fence_lost", 1, downstreamCommandTimeout)
+		if _, err := waitForDownstreamTerminalAudit(
+			ctx, filepath.Join(stateRoot, "gateway-b-audit.jsonl"), auditBefore, downstreamCommandTimeout,
+		); err != nil {
+			return err
+		}
+		closed, err := waitForDownstreamObservationsUnchanged(
+			ctx, observationPath, lowerReconnectBefore, 100*time.Millisecond,
+		)
 		if err != nil {
 			return err
 		}
-		return assertDownstreamObservationDelta(lowerReconnectBefore, after, "upstream_dial", "succeeded", 0)
+		if !downstreamObservationsEqual(lowerReconnectBefore, closed) {
+			return errors.New("replaced lower-fence Gateway attempted an automatic reconnect")
+		}
+		return nil
 	}); err != nil {
 		return DownstreamFencingResult{}, err
 	}
@@ -1038,6 +1128,7 @@ func RunDownstreamFencing(ctx context.Context, options Options) (_ DownstreamFen
 		if err != nil {
 			return err
 		}
+		sensitive = append(sensitive, oldLease.member)
 		if err := signalSharedGateway(gatewayA, syscall.SIGSTOP); err != nil {
 			return err
 		}
@@ -1112,11 +1203,52 @@ func RunDownstreamFencing(ctx context.Context, options Options) (_ DownstreamFen
 		if err := downstreamExpectedClosed(ctx, callers[0], "reconstruct-stale-a", leaseTTL); err != nil {
 			return err
 		}
+		if err := gatewayA.Stop(); err != nil {
+			return err
+		}
+		gatewayAStopped = true
+		closed, err := downstreamObservationSnapshot(observationPath)
+		if err != nil {
+			return err
+		}
+		if !downstreamObservationsEqual(before, closed) {
+			return errors.New("reconstructed ingress received an automatic reconnect from the terminated stale Gateway")
+		}
+		if err := waitForSharedCardinality(ctx, redisClient, capacityNamespace, 0, leaseTTL); err != nil {
+			return err
+		}
+		claim, err := downstreamStaleFenceClaim(oldLease)
+		if err != nil {
+			return err
+		}
+		sensitive = append(sensitive, claim.Opaque())
+		requiredWindow := time.Duration(locked.Ingress.ActionTimeoutMillis) * time.Millisecond
+		if err := downstreamStaleActivationProbe(ctx, gatewayConfigA, identities[0], claim, func() error {
+			return restoreDownstreamStaleMember(
+				ctx, redisClient, capacityNamespace, oldLease, newLease, leaseTTL, requiredWindow,
+			)
+		}); err != nil {
+			return err
+		}
+		if err := validateDownstreamStaleMember(
+			ctx, redisClient, capacityNamespace, oldLease, newLease, requiredWindow,
+		); err != nil {
+			return err
+		}
+		// Server time only advances. A still-valid exact member after rejection
+		// excludes the earlier absent, expired, and insufficient-window loss paths.
 		after, err := waitForDownstreamObservation(ctx, observationPath, before, "activation", "fence_lost", 1, downstreamCommandTimeout)
 		if err != nil {
 			return err
 		}
-		return assertDownstreamObservationDelta(before, after, "upstream_dial", "succeeded", 0)
+		if err := assertDownstreamObservationDelta(before, after, "upstream_dial", "succeeded", 0); err != nil {
+			return err
+		}
+		highWaterFinal, err := downstreamHighWaterSnapshot(ctx, redisClient, capacityNamespace, identities[0])
+		if err != nil || highWaterFinal != highWaterBefore {
+			return errors.Join(err, errors.New("stale reconstruction probe changed retained action high-water"))
+		}
+		return removeSharedLease(ctx, redisClient, capacityNamespace, oldLease.member)
 	}); err != nil {
 		return DownstreamFencingResult{}, err
 	}
@@ -1175,10 +1307,12 @@ func RunDownstreamFencing(ctx context.Context, options Options) (_ DownstreamFen
 		shutdownCancel()
 		callersStopped = true
 		cleanupState.CallersStopped = true
-		if err := gatewayA.Stop(); err != nil {
-			return err
+		if !gatewayAStopped {
+			if err := gatewayA.Stop(); err != nil {
+				return err
+			}
+			gatewayAStopped = true
 		}
-		gatewayAStopped = true
 		if err := gatewayB.Stop(); err != nil {
 			return err
 		}
@@ -1271,11 +1405,13 @@ func RunDownstreamFencing(ctx context.Context, options Options) (_ DownstreamFen
 			"go build ./cmd/downstream-fencing-ingress", "go build ./cmd/downstream-fencing-gateway",
 			"go build ./cmd/downstream-fencing-caller", "GOOS=linux GOARCH=<locked> go build ./cmd/browser-egress-gateway",
 			"two caller FD 3/4/5 provisioning handshakes", "two caller JSONL control streams",
+			"controller-owned mTLS stale-claim activation probe",
 		},
 		Faults: []string{
 			"Gateway A SIGSTOP/SIGCONT after retained-store-time lease expiry",
-			"Gateway B SIGSTOP/SIGCONT lower-fence reconnect", "exact active lease removal before a complete action",
+			"Gateway B SIGSTOP/SIGCONT terminal replacement", "exact active lease removal before a complete action",
 			"retained Valkey pause/unpause", "Provider/private-ingress process reconstruction",
+			"controlled unique stale exact-member restoration below retained high-water",
 			"private-ingress shutdown no-bypass probe",
 		},
 		Cleanup: cleanupState,
@@ -2103,6 +2239,136 @@ func downstreamExpectedClosed(ctx context.Context, process *downstreamCallerProc
 	return nil
 }
 
+func downstreamStaleActivationProbe(
+	ctx context.Context,
+	config gatewaystack.Config,
+	identity downstreamFencingIdentity,
+	claim gateway.DownstreamFence,
+	beforeDial func() error,
+) error {
+	if ctx == nil || claim.Validate() != nil || beforeDial == nil {
+		return errors.New("stale downstream-fence probe input is invalid")
+	}
+	expiresAt, err := time.Parse(time.RFC3339Nano, identity.envelope.GrantBinding.ExpiresAt)
+	if err != nil || expiresAt.IsZero() || identity.envelope.GrantBinding.ExpiresAt != expiresAt.UTC().Format(time.RFC3339Nano) {
+		return errors.New("stale downstream-fence probe expiry is invalid")
+	}
+	subject := gateway.DownstreamFenceSubject{
+		TenantID: identity.envelope.Endpoint.TenantID, SandboxID: identity.envelope.Endpoint.SandboxID,
+		BrowserSessionID:     identity.envelope.Endpoint.BrowserSessionID,
+		CapabilityProfileID:  identity.envelope.Endpoint.CapabilityProfileID,
+		ConnectionGeneration: identity.envelope.Endpoint.ConnectionGeneration, ExpiresAt: expiresAt.UTC(),
+	}
+	if subject.Validate() != nil {
+		return errors.New("construct stale downstream-fence probe")
+	}
+	resolver, err := gatewaystack.NewPrivateResolver(config)
+	if err != nil {
+		return err
+	}
+	defer resolver.CloseIdleConnections()
+	endpoint, err := resolver.ResolveFenced(ctx, identity.envelope.Endpoint.HandoffReference, subject, claim)
+	if err != nil {
+		return errors.New("resolve stale downstream-fence probe")
+	}
+	if err := beforeDial(); err != nil {
+		return err
+	}
+	stream, err := endpoint.Dial(ctx)
+	if stream != nil {
+		_ = stream.Close()
+		return errors.New("stale downstream-fence probe reached a private upstream")
+	}
+	if !errors.Is(err, gateway.ErrDownstreamFenceLost) {
+		return errors.New("stale downstream-fence probe was not rejected as fence loss")
+	}
+	return nil
+}
+
+func downstreamStaleFenceClaim(lease sharedLeaseRecord) (gateway.DownstreamFence, error) {
+	if lease.member == "" || lease.fence == 0 {
+		return gateway.DownstreamFence{}, errors.New("stale downstream-fence lease is invalid")
+	}
+	claim, err := gateway.NewDownstreamFence("v1." + base64.RawURLEncoding.EncodeToString([]byte(lease.member)))
+	if err != nil {
+		return gateway.DownstreamFence{}, errors.New("construct stale downstream-fence claim")
+	}
+	return claim, nil
+}
+
+func restoreDownstreamStaleMember(
+	ctx context.Context,
+	client *goredis.Client,
+	namespace string,
+	stale, retained sharedLeaseRecord,
+	leaseTTL, requiredWindow time.Duration,
+) error {
+	if ctx == nil || client == nil || namespace == "" || stale.member == "" || stale.fence == 0 ||
+		retained.fence <= stale.fence || leaseTTL <= requiredWindow || requiredWindow < gateway.MinDownstreamActionWindow {
+		return errors.New("controlled stale-member restoration input is invalid")
+	}
+	parts := strings.Split(stale.member, ":")
+	if len(parts) != 5 {
+		return errors.New("controlled stale member is malformed")
+	}
+	boundExpiry, err := strconv.ParseInt(parts[4], 10, 64)
+	if err != nil || boundExpiry < 1 {
+		return errors.New("controlled stale member expiry is invalid")
+	}
+	operationCtx, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
+	score, err := restoreDownstreamStaleMemberScript.Run(
+		operationCtx, client,
+		[]string{sharedCapacityLeaseKey(namespace), downstreamCapacityFenceKey(namespace)},
+		stale.member, stale.fence, retained.fence, leaseTTL.Milliseconds(), boundExpiry, requiredWindow.Milliseconds(),
+	).Int64()
+	if err != nil || score < 1 {
+		return errors.Join(err, errors.New("restore controlled stale exact member"))
+	}
+	restored, err := singleSharedLease(operationCtx, client, namespace)
+	if err != nil || restored.member != stale.member || restored.fence != stale.fence || restored.score != score {
+		return errors.Join(err, errors.New("controlled stale exact member was not restored uniquely"))
+	}
+	return nil
+}
+
+func validateDownstreamStaleMember(
+	ctx context.Context,
+	client *goredis.Client,
+	namespace string,
+	stale, retained sharedLeaseRecord,
+	requiredWindow time.Duration,
+) error {
+	if ctx == nil || client == nil || namespace == "" || stale.member == "" || stale.fence == 0 ||
+		retained.fence <= stale.fence || requiredWindow < gateway.MinDownstreamActionWindow {
+		return errors.New("controlled stale-member validation input is invalid")
+	}
+	parts := strings.Split(stale.member, ":")
+	if len(parts) != 5 {
+		return errors.New("controlled stale member is malformed")
+	}
+	boundExpiry, err := strconv.ParseInt(parts[4], 10, 64)
+	if err != nil || boundExpiry < 1 {
+		return errors.New("controlled stale member expiry is invalid")
+	}
+	operationCtx, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
+	valid, err := validateDownstreamStaleMemberScript.Run(
+		operationCtx, client,
+		[]string{sharedCapacityLeaseKey(namespace), downstreamCapacityFenceKey(namespace)},
+		stale.member, boundExpiry, requiredWindow.Milliseconds(), stale.fence, retained.fence,
+	).Int64()
+	if err != nil || valid != 1 {
+		return errors.Join(err, errors.New("stale activation was not rejected against an otherwise-valid exact member"))
+	}
+	return nil
+}
+
+func downstreamCapacityFenceKey(namespace string) string {
+	digest := sha256.Sum256([]byte(namespace))
+	return "sandbox-runtime:{" + hex.EncodeToString(digest[:]) + "}:capacity:fence"
+}
+
 func downstreamOpen(
 	ctx context.Context,
 	process *downstreamCallerProcess,
@@ -2251,6 +2517,95 @@ func assertDownstreamActionRejected(
 		return errors.New("private ingress action rejection lacks an adjacent read/failure proof")
 	}
 	return nil
+}
+
+func assertDownstreamTerminalAudit(before, after []downstreamGatewayAudit) error {
+	if len(after) != len(before)+1 {
+		return errors.New("Gateway terminal audit delta is invalid")
+	}
+	for index := range before {
+		if before[index] != after[index] {
+			return errors.New("Gateway audit history changed")
+		}
+	}
+	terminal := after[len(before)]
+	if terminal.Sequence != uint64(len(after)) || terminal.Attempt != 0 {
+		return errors.New("Gateway terminal audit metadata is invalid")
+	}
+	switch terminal.Type {
+	case "capacity_lost", "capacity_unavailable", "downstream_fence_lost":
+		return nil
+	default:
+		return errors.New("Gateway did not close for a fenced authority boundary")
+	}
+}
+
+func waitForDownstreamTerminalAudit(
+	ctx context.Context,
+	path string,
+	before []downstreamGatewayAudit,
+	timeout time.Duration,
+) ([]downstreamGatewayAudit, error) {
+	if ctx == nil || path == "" || timeout <= 0 {
+		return nil, errors.New("Gateway terminal audit wait input is invalid")
+	}
+	deadline := time.NewTimer(timeout)
+	defer deadline.Stop()
+	ticker := time.NewTicker(20 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		after, err := readDownstreamGatewayAudit(path)
+		if err != nil {
+			return nil, err
+		}
+		if len(after) > len(before) {
+			if err := assertDownstreamTerminalAudit(before, after); err != nil {
+				return nil, err
+			}
+			return after, nil
+		}
+		if len(after) < len(before) {
+			return nil, errors.New("Gateway audit history was truncated")
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-deadline.C:
+			return nil, errors.New("Gateway terminal audit was not recorded")
+		case <-ticker.C:
+		}
+	}
+}
+
+func waitForDownstreamObservationsUnchanged(
+	ctx context.Context,
+	path string,
+	want downstreamObservations,
+	window time.Duration,
+) (downstreamObservations, error) {
+	if ctx == nil || path == "" || window <= 0 {
+		return nil, errors.New("private ingress stability wait input is invalid")
+	}
+	deadline := time.NewTimer(window)
+	defer deadline.Stop()
+	ticker := time.NewTicker(20 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		current, err := downstreamObservationSnapshot(path)
+		if err != nil {
+			return nil, err
+		}
+		if !downstreamObservationsEqual(want, current) {
+			return current, errors.New("private ingress observations changed during the stability window")
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-deadline.C:
+			return current, nil
+		case <-ticker.C:
+		}
+	}
 }
 
 func assertQueuedStaleActionRejected(before, after downstreamObservations, payloadBytes uint64) error {

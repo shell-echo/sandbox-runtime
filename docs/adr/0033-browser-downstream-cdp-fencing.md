@@ -311,12 +311,14 @@ The run must:
 - use distinct observable real-CDP mutations to prove that a message queued to
   the suspended old Gateway after its lease loss is rejected before Chromium,
   while the replacement owner's mutation succeeds;
-- prove pre-action loss, active-stream replacement, lower-fence reconnect
-  rejection, unaffected Browser sessions and tenants, and no partial old action
-  forwarded at the ingress;
+- prove pre-action loss, active-stream replacement, terminal closure of the
+  replaced lower-fence Gateway without automatic reconnect, unaffected Browser
+  sessions and tenants, and no partial old action forwarded at the ingress;
 - prove store-outage failure closure and recovery against retained state;
-- reconstruct the ingress while retained high-water state is present and prove
-  stale rejection; a gate that removes or restores away that state must add an
+- reconstruct the ingress while retained high-water state is present, restore a
+  controlled unique and otherwise-valid lower-fence exact member, and prove at
+  the real private boundary that retained high-water rejects it without an
+  upstream dial; a gate that removes or restores away that state must add an
   independent virgin-state marker or remain open;
 - leave no direct route from either Gateway to Chromium and clean every owned
   runtime resource; and

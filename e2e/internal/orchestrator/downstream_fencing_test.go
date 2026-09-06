@@ -227,6 +227,40 @@ func TestAssertQueuedStaleActionRejectedAllowsOnlyClosedBeforeReadOrExactFenceLo
 	}
 }
 
+func TestAssertDownstreamTerminalAuditRequiresOneFencedBoundaryEvent(t *testing.T) {
+	prefix := []downstreamGatewayAudit{
+		{Sequence: 1, Type: "authorized", Attempt: 0, ReasonCode: "authorized"},
+		{Sequence: 2, Type: "connected", Attempt: 0, ReasonCode: "connected"},
+	}
+	for _, kind := range []string{"capacity_lost", "capacity_unavailable", "downstream_fence_lost"} {
+		after := append(append([]downstreamGatewayAudit{}, prefix...), downstreamGatewayAudit{
+			Sequence: 3, Type: kind, Attempt: 0, ReasonCode: downstreamGatewayAuditReason(kind),
+		})
+		if err := assertDownstreamTerminalAudit(prefix, after); err != nil {
+			t.Fatalf("%s terminal audit: %v", kind, err)
+		}
+	}
+
+	changed := append([]downstreamGatewayAudit{}, prefix...)
+	changed[0].Type = "denied"
+	badType := append(append([]downstreamGatewayAudit{}, prefix...), downstreamGatewayAudit{Sequence: 3, Type: "client_closed"})
+	badAttempt := append(append([]downstreamGatewayAudit{}, prefix...), downstreamGatewayAudit{Sequence: 3, Type: "capacity_lost", Attempt: 1})
+	for name, after := range map[string][]downstreamGatewayAudit{
+		"missing":         prefix,
+		"history changed": append(changed, downstreamGatewayAudit{Sequence: 3, Type: "capacity_lost"}),
+		"wrong type":      badType,
+		"wrong attempt":   badAttempt,
+		"extra event": append(append(append([]downstreamGatewayAudit{}, prefix...),
+			downstreamGatewayAudit{Sequence: 3, Type: "capacity_lost"}), downstreamGatewayAudit{Sequence: 4, Type: "client_closed"}),
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := assertDownstreamTerminalAudit(prefix, after); err == nil {
+				t.Fatal("invalid terminal audit was accepted")
+			}
+		})
+	}
+}
+
 func TestCopyDownstreamEvidenceFileDoesNotTruncate(t *testing.T) {
 	root := t.TempDir()
 	source := filepath.Join(root, "source.jsonl")

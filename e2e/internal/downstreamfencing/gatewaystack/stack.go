@@ -40,10 +40,6 @@ func Open(ctx context.Context, input Config) (_ *Stack, resultErr error) {
 	if err != nil {
 		return nil, err
 	}
-	privateTLS, err := loadPrivateClientTLSConfig(config.PrivateIngress)
-	if err != nil {
-		return nil, err
-	}
 	processCtx, cancel := context.WithCancel(ctx)
 	stack := &Stack{cancel: cancel}
 	defer func() {
@@ -101,12 +97,7 @@ func Open(ctx context.Context, input Config) (_ *Stack, resultErr error) {
 		return nil, err
 	}
 	stack.controller = controller
-	privateResolver, err := transport.NewResolver(transport.ResolverOptions{
-		Address: config.PrivateIngress.Address, TLSConfig: privateTLS,
-		ResolveTimeout:  durationMillis(config.PrivateIngress.ResolveTimeoutMillis),
-		ConnectTimeout:  durationMillis(config.PrivateIngress.ConnectAndIOTimeoutMillis),
-		MaxMessageBytes: config.PrivateIngress.MaxMessageBytes,
-	})
+	privateResolver, err := NewPrivateResolver(config)
 	if err != nil {
 		return nil, errors.New("construct private downstream-fencing resolver")
 	}
@@ -141,6 +132,30 @@ func Open(ctx context.Context, input Config) (_ *Stack, resultErr error) {
 	}
 	stack.server = server
 	return stack, nil
+}
+
+// NewPrivateResolver constructs the exact private client used by a Gateway.
+// The orchestrator also uses it for controlled stale-claim reconnect probes at
+// the real mTLS ingress boundary.
+func NewPrivateResolver(input Config) (*transport.Resolver, error) {
+	if err := ValidateConfig(input); err != nil {
+		return nil, err
+	}
+	config := cloneConfig(input)
+	privateTLS, err := loadPrivateClientTLSConfig(config.PrivateIngress)
+	if err != nil {
+		return nil, err
+	}
+	resolver, err := transport.NewResolver(transport.ResolverOptions{
+		Address: config.PrivateIngress.Address, TLSConfig: privateTLS,
+		ResolveTimeout:  durationMillis(config.PrivateIngress.ResolveTimeoutMillis),
+		ConnectTimeout:  durationMillis(config.PrivateIngress.ConnectAndIOTimeoutMillis),
+		MaxMessageBytes: config.PrivateIngress.MaxMessageBytes,
+	})
+	if err != nil {
+		return nil, errors.New("construct private downstream-fencing resolver")
+	}
+	return resolver, nil
 }
 
 func (s *Stack) Run(ctx context.Context) error {

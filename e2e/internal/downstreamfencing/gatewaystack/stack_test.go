@@ -37,9 +37,20 @@ func TestPrivateClientTLSUsesExactGatewayRole(t *testing.T) {
 		tlsConfig.ServerName != "localhost" || tlsConfig.VerifyConnection == nil {
 		t.Fatalf("private TLS config = %#v", tlsConfig)
 	}
+	fullConfig := validConfig(t)
+	fullConfig.PrivateIngress = config
+	resolver, err := NewPrivateResolver(fullConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolver.CloseIdleConnections()
 	config.GatewayRoleURI = "spiffe://downstream-fencing/gateway-b"
 	if _, err := loadPrivateClientTLSConfig(config); err == nil {
 		t.Fatal("loadPrivateClientTLSConfig() accepted a mismatched URI-SAN role")
+	}
+	fullConfig.PrivateIngress = config
+	if _, err := NewPrivateResolver(fullConfig); err == nil {
+		t.Fatal("NewPrivateResolver() accepted a role that differs from the Gateway identity")
 	}
 }
 

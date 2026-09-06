@@ -51,7 +51,7 @@ var downstreamFencingScenarioInventory = [...]string{
 	"Gateway B distinct real-CDP mutation succeeds",
 	"pre-action lease loss is rejected before Chromium",
 	"higher-fence activation replaces the active old stream",
-	"lower-fence reconnect is rejected against retained high-water state",
+	"replaced lower-fence Gateway closes terminally without reconnect",
 	"another Browser session and tenant remain active",
 	"Valkey outage fails closed and retained-state recovery succeeds",
 	"ingress reconstruction retains high-water and rejects a stale claim",
