@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	downstreamtransport "github.com/shell-echo/sandbox-runtime-e2e/internal/downstreamfencing/transport"
 	"github.com/shell-echo/sandbox-runtime-e2e/internal/lock"
@@ -258,6 +259,19 @@ func TestAssertDownstreamTerminalAuditRequiresOneFencedBoundaryEvent(t *testing.
 				t.Fatal("invalid terminal audit was accepted")
 			}
 		})
+	}
+}
+
+func TestDownstreamLeaseExpiryIncludesExactServerTimeBoundary(t *testing.T) {
+	boundary := time.UnixMilli(1_000).UTC()
+	if downstreamLeaseExpiredAt(boundary.Add(-time.Millisecond), boundary.UnixMilli()) {
+		t.Fatal("lease expired before its retained-store score")
+	}
+	if !downstreamLeaseExpiredAt(boundary, boundary.UnixMilli()) {
+		t.Fatal("lease remained active at its retained-store score")
+	}
+	if !downstreamLeaseExpiredAt(boundary.Add(time.Millisecond), boundary.UnixMilli()) {
+		t.Fatal("lease remained active after its retained-store score")
 	}
 }
 

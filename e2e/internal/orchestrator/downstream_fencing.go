@@ -2456,7 +2456,7 @@ func waitForDownstreamLeaseExpiry(
 			(scoreErr == nil && score != float64(record.score)) {
 			return errors.New("downstream-fencing lease changed before confirmed server-time expiry")
 		}
-		if serverTime.UnixMilli() > record.score {
+		if downstreamLeaseExpiredAt(serverTime, record.score) {
 			return nil
 		}
 		if errors.Is(scoreErr, goredis.Nil) {
@@ -2470,6 +2470,10 @@ func waitForDownstreamLeaseExpiry(
 		case <-ticker.C:
 		}
 	}
+}
+
+func downstreamLeaseExpiredAt(serverTime time.Time, score int64) bool {
+	return !serverTime.IsZero() && score > 0 && serverTime.UnixMilli() >= score
 }
 
 func assertDownstreamObservationDelta(
