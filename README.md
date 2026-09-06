@@ -13,29 +13,26 @@ reference-caller gates and the local plus hosted two-Gateway shared-capacity
 gates pass within their separately named evidence boundaries. ADR 0032 also
 passes its caller-owned exact-grant revocation port and real-Valkey adapter
 component gate plus its separate local and hosted two-Gateway,
-independent-revoker black-box gate. ADR 0033 passes only its downstream CDP
-fencing component and real-backend adapter integration gate. Implementation
-`58488d7` additionally proves, in process/component tests, that two independent
-downstream caller OS processes each use their own mTLS/JWS Controller identity
-to bootstrap a Browser session from the Provider and then remain in the bounded
-JSONL control loop. Implementation `8a1049b` adds strict FD 3/4/5 private
-provisioning, exact final-configuration matching, fail-closed process management
-with kill plus bounded wait, and the full Contract handoff-reference grammar in
-`gatewaystack`.
-Current E2E lock `fb1b2b0` records that component baseline, but the 13-scenario
-downstream runner remains unimplemented and unexercised. The
-independent two-Gateway, unique-ingress, real-Chromium external-caller gate,
-real Agent Platform migration, Valkey provenance and HA/failover, production
-Browser advertisement/public Gateway composition, aggregate conformance,
-multi-controller, hostile multi-tenant, deployment, and production gates remain
-open.
+independent-revoker black-box gate. ADR 0033 passes its downstream CDP fencing
+component and real-backend adapter integration gate, and local run
+`20260906T050213.016063000Z` passes all 13 downstream-fencing scenarios on
+`linux/arm64` at harness `550c785`. That run uses two independent mTLS/JWS
+caller processes, two Gateway processes, one authenticated unique ingress,
+retained Valkey state, and the exact signed Browser image running real Chromium.
+It closes only the local ADR 0033 external-caller gate. The Contract identity is
+pinned, but its 48-case Suite is not exercised by this profile
+(`suite_exercised=false`). Hosted `linux/amd64`, real Agent Platform migration,
+Valkey provenance and HA/failover, production Browser advertisement/public
+Gateway composition, aggregate conformance, multi-controller, hostile
+multi-tenant, deployment, and production gates remain open.
 
-The latest verified hosted checkout before `fb1b2b0` is `c3e34ef`, using E2E
+The latest verified hosted regression checkout is `c3e34ef`, using E2E
 lock `f7de91d` and Provider `58488d7`: repository CI `33990418428` and
 Reference, Candidate, Browser, shared-capacity, and durable-revocation runs
 `33990418435`, `33990418458`, `33990418425`, `33990418420`, and `33990418412`
-all pass. Those reruns cover existing profiles only. No hosted result is claimed for `fb1b2b0`,
-and none closes the ADR 0033 caller gate.
+all pass. Those reruns cover existing profiles only. No hosted result is yet
+claimed for downstream-fencing harness `550c785`, and those earlier runs do not
+close its hosted gate.
 
 Start a new development session with
 [`docs/PROJECT_CONTEXT.md`](docs/PROJECT_CONTEXT.md). It summarizes the current
@@ -139,19 +136,17 @@ Currently implemented:
   the Contract verifier, the unchanged locked 48-case Suite, and tagged
   integration against pinned Valkey index
   `sha256:ccfa19b0d743e48927e1c8c14e39e0acb97b5cea347fef0bfe340247fea920cd`
-  pass at implementation `b4d41c9`. This is component plus real-backend adapter
-  integration evidence only. It does not establish a private authenticated
-  unique-ingress topology, missing-high-water or restore safety, or the
-  separately required two-Gateway/unique-ingress/real-Chromium external-caller
-  E2E
+  pass at implementation `b4d41c9`. This remains component plus real-backend
+  adapter integration evidence; the separately recorded local caller run below
+  establishes only its named topology and scenarios
 - downstream caller bootstrap implementation `58488d7`: two independently
   identified mTLS/JWS caller OS processes each perform Provider capability,
   create, operation, sandbox, Browser-session, and handoff reconciliation, bind
   the resulting opaque handoff only in private process state, and remain alive
   in the existing JSONL loop. The dual-process test is process/component
-  evidence only; the downstream lock records `suite_exercised=false`, while
-  its check reports `runner_implemented=false`
-- downstream caller provisioning implementation `8a1049b` and lock `fb1b2b0`:
+  evidence only; the downstream lock records `suite_exercised=false`
+- downstream caller provisioning implementation `8a1049b` and lock foundation
+  `fb1b2b0`:
   a trusted launcher passes one correlated request, private endpoint envelope,
   and exact final caller configuration over fixed FD 3/4/5 pipes. Strict
   bounded EOF-framed JSON, direction validation and close-on-exec setup, canonical live
@@ -160,6 +155,14 @@ Currently implemented:
   tests. FD5 delivery alone is not child acceptance; readiness requires a
   correlated JSONL response. `S_IFIFO` does not independently prove an
   anonymous pipe, so the launcher remains trusted
+- downstream-fencing E2E harness `550c785` and local run
+  `20260906T050213.016063000Z`: all 13 locked scenarios pass on `linux/arm64`
+  through two Gateway processes, two independent caller processes, one
+  authenticated unique ingress, retained Valkey, and signed real Chromium.
+  The five `0600` evidence files pass exact-set, private-material, audit, and
+  cleanup checks. This is local ADR 0033 external-caller evidence only; the
+  Contract Suite is not executed and no hosted, real-platform, aggregate,
+  multi-controller, multi-tenant, deployment, or production claim is added
 - a default-disabled Browser Provider command/runtime graph and a separate
   Browser-only reference stack plus black-box caller. Hosted Browser Reference
   E2E run `33970773330` passes 13 initial and 5 process-reconstruction
@@ -172,14 +175,13 @@ Currently implemented:
 
 Planned but not yet implemented:
 
-- compose the existing provisioning/process components into the independently
-  locked ADR 0033 13-scenario runner using two Gateway processes, two
-  independent callers, one unique private ingress process, the real retained
-  Valkey authority, and the exact signed Browser image running real Chromium
+- reproduce the ADR 0033 downstream-fencing gate on hosted `linux/amd64`, then
+  separately establish detection/control for prematurely deleted or
+  restore-missing high-water state, restored-snapshot consistency, HA/failover,
+  Valkey provenance, hostile-tenant, storage, configuration, metrics, and
+  operational gates
 - production Browser advertisement and deployable caller-owned Gateway
-  integration after the ADR 0033 caller gate, HA/failover consistency, Valkey
-  provenance, hostile-tenant, storage, configuration, metrics, and operational
-  gates
+  integration only after those independent readiness gates pass
 - runtime images for desktop workloads
 - display, audio, input, streaming, clipboard, and file-transfer modules
 - deployable WebRTC / VNC / public WebSocket Gateway composition

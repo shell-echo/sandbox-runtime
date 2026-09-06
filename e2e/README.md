@@ -5,10 +5,14 @@ MIT `sandbox-runtime` Provider Contract. This is a separate Go module and
 process boundary inside the Provider repository; it is not a same-package
 integration test and does not require a second Git repository.
 
-The module also contains separately named Browser Gateway shared-capacity and
-durable-revocation runners. They exercise only WSS, Gateway fixture processes,
-and one real Redis-compatible authority. They pin Contract identity for context
-but do not call or exercise the Provider API.
+The module also contains separately named Browser Gateway shared-capacity,
+durable-revocation, and downstream-fencing runners. The shared-capacity and
+durable-revocation profiles exercise only WSS, Gateway fixture processes, and
+one real Redis-compatible authority; they pin Contract identity for context but
+do not call the Provider API. The downstream-fencing profile is different: it
+bootstraps Browser resources through six protected Provider routes and drives
+real Chromium through an authenticated unique ingress, while leaving the
+48-case Contract Suite unexercised.
 
 The black-box caller uses only mTLS, JWS, HTTPS, and WebSocket. A separate
 reference deployment process composes exported `sandbox-runtime` Provider and
@@ -32,10 +36,11 @@ platform gate.
 | Contract tree | `859f76dc0e855a0c8abdbbb5648df100dabb4328` |
 | Suite | repository-owned Provider v1, 48 cases |
 
-`go.mod` points to the parent Provider checkout. The verifier refuses to run if
-the Provider commit or Contract lock differs from the values above. A full
-evidence run also refuses tracked or untracked harness changes and records the
-exact enclosing repository commit in its manifest.
+`go.mod` points to the parent Provider checkout. The verifier rejects a
+different locked Provider baseline or Contract identity, and rejects changes
+since that baseline outside the allowed harness, documentation, and workflow
+paths. A full evidence run also refuses tracked or untracked harness changes and
+records the exact enclosing repository commit in its manifest.
 
 The lock now includes browser Contract authority/projection, the sandboxed
 image/provenance publication implementation, the explicit arm64/v8 index
@@ -66,9 +71,7 @@ Harness/Gateway source `e952ef9` adds that independent runner. Clean local
 `33959122456` each pass all seven locked scenarios.
 ADR 0033 and Provider `b4d41c9` subsequently add downstream CDP fencing ports,
 the Redis-compatible action-fence adapter, private ingress component, and
-fail-closed Browser composition. Advancing this E2E lock permits the existing
-regression workflows to consume that Provider implementation; it is not the
-separate two-Gateway/unique-ingress/real-Chromium ADR 0033 caller gate.
+fail-closed Browser composition.
 Harness baseline `eaba282` additionally adds the bounded independent
 downstream-fencing caller process. Provider baseline `cf70f5d` adds a bounded
 single-Controller Browser Provider bootstrap helper. Baseline `58488d7` wires
@@ -77,17 +80,26 @@ independent caller processes with distinct mTLS/JWS identities in process-level
 component tests. Implementation `8a1049b` then adds strict, bounded, EOF-framed
 FD 3/4/5 provisioning, exact final-configuration matching, fail-closed parent
 management with kill plus bounded wait, natural-exit pipe cleanup, and Contract-wide `gatewaystack`
-handoff-reference validation. Lock `fb1b2b0` records that process/component
-baseline. FD5 delivery is at-most-once and does not prove child acceptance;
+handoff-reference validation. Lock foundation `fb1b2b0` records that
+process/component baseline. FD5 delivery is at-most-once and does not prove
+child acceptance;
 readiness requires a correlated JSONL response. The trusted launcher uses
-`os.Pipe`; FIFO type validation alone does not prove an anonymous pipe. The 13
-locked ADR 0033 scenarios remain unimplemented and unexercised.
+`os.Pipe`; FIFO type validation alone does not prove an anonymous pipe. Runner
+implementation `a2b82b0` and focused corrections through harness `550c785`
+compose the complete local ADR 0033 topology. Clean local run
+`20260906T050213.016063000Z` passes all 13 scenarios on `linux/arm64` with two
+Gateway processes, two independently identified caller processes, one
+authenticated unique ingress, retained Valkey state, and signed real Chromium.
+Its manifest pins the Contract/tree/48-case identity but records
+`suite_exercised=false`; exactly five `0600` evidence files pass cleanup and
+sanitization checks.
 The latest verified hosted regressions before this lock refresh used checkout
 `c3e34ef`, E2E lock `f7de91d`, and Provider `58488d7`: repository CI
 `33990418428`, Reference `33990418435`, Candidate `33990418458`, Browser
 `33990418425`, shared capacity `33990418420`, and durable revocation
 `33990418412` all passed. These
-are existing regression tracks only; no hosted ADR 0033 runner exists yet.
+are existing regression tracks only. The downstream workflow now exists, but no
+hosted ADR 0033 run is claimed yet.
 This Provider identity also includes the GitHub Actions migration from Node 20
 action runtimes to Node 24 action runtimes. That infrastructure update adds no
 Browser behavior, caller compatibility, or production-readiness evidence.
@@ -203,7 +215,45 @@ fencing, Valkey provenance or HA/failover, ACL role separation, Provider API or
 real Agent Platform compatibility, Provider multi-controller reliability,
 hostile multi-tenant isolation, deployment readiness, or production readiness.
 
+## Downstream-fencing runner
+
+`cmd/downstream-fencing-e2e` runs the independently named
+`Browser downstream CDP action-fencing external-caller evidence` profile. It
+starts two independent mTLS/JWS caller processes, two Gateway processes, one
+authenticated private-ingress process, one retained Valkey authority, and the
+exact signed Browser image running real Chromium.
+
+From a clean committed checkout with Docker and authenticated `gh` available:
+
+```bash
+cd e2e
+go run ./cmd/downstream-fencing-e2e -check
+go run ./cmd/downstream-fencing-e2e \
+  -evidence-root evidence/downstream-fencing
+```
+
+The 13 scenarios cover an ordinary bounded CDP mutation, expired-lease and
+higher-fence takeover interleavings, stale action rejection before Chromium,
+replacement success, terminal closure without reconnect, unaffected session
+and tenant scopes, fail-closed Valkey outage and recovery, retained high-water
+across ingress reconstruction, bypass exclusion, cleanup, and evidence
+sanitization. A passing run closes only the named ADR 0033 external-caller
+boundary for that platform. It does not execute the 48-case Contract Suite or
+establish exactly-once delivery, restored-snapshot consistency, Valkey
+provenance/HA/failover, real Agent Platform compatibility, Provider
+multi-controller reliability, hostile multi-tenant isolation, deployment, or
+production readiness.
+
 ## Latest verified evidence
+
+Clean local downstream-fencing run
+`evidence/downstream-fencing/20260906T050213.016063000Z` passed all 13 scenarios
+on `linux/arm64` at harness `550c785`. The manifest pins Provider `58488d7`,
+harness baseline `8a1049b`, Gateway/ingress components `b4d41c9`, caller
+substrate `074a9d4`, the signed `linux/arm64/v8` Browser image, retained Valkey,
+and Contract/tree/48-case identity with `suite_exercised=false`. Exactly five
+`0600` files passed exact-set, private-material, audit, and cleanup checks. No
+hosted downstream-fencing result is claimed yet.
 
 The latest verified local regressions before this lock refresh ran against
 Provider `c0a55d1` and harness `59e08d5`: Browser run
@@ -531,10 +581,13 @@ Browser runner proves only its locked Browser reference scenarios. The
 shared-capacity runner proves only its WSS/Gateway/Valkey scenarios and does not
 exercise the Provider Contract. The durable-revocation runner proves only its
 retained exact-grant WSS/Gateway/Valkey scenarios and likewise records Contract
-identity as unexercised metadata.
+identity as unexercised metadata. The downstream-fencing runner proves only its
+locked two-Gateway/two-caller/unique-ingress/retained-Valkey/real-Chromium
+action-fencing scenarios; it calls protected Provider routes but does not run
+the Contract Suite.
 
-It does not prove compatibility with `agent-blueprints`, production identity
-infrastructure, downstream CDP fencing, Valkey provenance/HA, multi-controller
+The module does not prove compatibility with `agent-blueprints`, production
+identity infrastructure, Valkey provenance/HA, Provider multi-controller
 operation, hostile tenant isolation, deployment readiness, or production
 readiness.
 
@@ -596,3 +649,10 @@ Valkey plus two-Gateway/two-caller/independent-revoker runner. Hosted run
 `browser-durable-revocation-e2e-evidence-33959122456` with digest
 `sha256:1384a4504725c90717a3a8da058713fb1b8ed763f2c941b961811eb8370b8600`.
 Its green status is evidence only for the named ADR 0032 caller boundary.
+
+`../.github/workflows/downstream-fencing-e2e.yml` independently verifies the
+downstream-fencing lock, runs the module race/vet gates, and executes the full
+two-Gateway/two-caller/unique-ingress/retained-Valkey/real-Chromium runner. It
+publishes `browser-downstream-fencing-e2e-evidence-<run-id>` only after the run
+and sanitization checks succeed. The workflow exists, but no hosted result is
+claimed for harness `550c785` yet.
