@@ -491,7 +491,8 @@ func (c *browserBootstrapClient) createSandbox(ctx context.Context, reference br
 	}
 	var operation Operation
 	if !decodeBrowserBootstrapOperation(result.body, &operation) || checkNoBackendDisclosure(result.body) != nil ||
-		!validBrowserBootstrapOperation(operation, c.config.SandboxID, reference, "accepted") {
+		!validBrowserBootstrapOperation(operation, c.config.SandboxID, reference, "") ||
+		!validBrowserBootstrapMutationProgress(operation.Status) {
 		return browserBootstrapMutationInvalidResponse, nil
 	}
 	return browserBootstrapMutationAccepted, nil
@@ -555,7 +556,8 @@ func (c *browserBootstrapClient) openBrowserSession(ctx context.Context, referen
 	}
 	var operation Operation
 	if !decodeBrowserBootstrapOperation(result.body, &operation) || checkNoBackendDisclosure(result.body) != nil ||
-		!validBrowserBootstrapOperation(operation, c.config.SandboxID, reference, "accepted") {
+		!validBrowserBootstrapOperation(operation, c.config.SandboxID, reference, "") ||
+		!validBrowserBootstrapMutationProgress(operation.Status) {
 		return expiresAt, browserBootstrapMutationInvalidResponse, nil
 	}
 	return expiresAt, browserBootstrapMutationAccepted, nil
@@ -829,6 +831,15 @@ func validBrowserBootstrapOperation(operation Operation, sandboxID string, refer
 		return operation.Error == nil || validBrowserBootstrapOperationError(operation.Error, "known_failed")
 	case "outcome_unknown":
 		return operation.Error == nil || validBrowserBootstrapOperationError(operation.Error, "outcome_unknown")
+	default:
+		return false
+	}
+}
+
+func validBrowserBootstrapMutationProgress(status string) bool {
+	switch status {
+	case "accepted", "running", "succeeded":
+		return true
 	default:
 		return false
 	}

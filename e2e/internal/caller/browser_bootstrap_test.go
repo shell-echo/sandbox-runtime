@@ -40,21 +40,23 @@ type browserBootstrapTestMaterial struct {
 }
 
 type browserBootstrapProvider struct {
-	t                   *testing.T
-	config              BrowserBootstrapConfig
-	jwsPublic           ed25519.PublicKey
-	dropMutations       bool
-	transientReads      bool
-	invalidReadPath     string
-	invalidReadStatus   int
-	invalidCreateStatus int
-	mu                  sync.Mutex
-	createRequests      int
-	openRequests        int
-	protectedRequests   int
-	openExpiry          string
-	jti                 map[string]bool
-	readAttempts        map[string]int
+	t                    *testing.T
+	config               BrowserBootstrapConfig
+	jwsPublic            ed25519.PublicKey
+	dropMutations        bool
+	transientReads       bool
+	invalidReadPath      string
+	invalidReadStatus    int
+	invalidCreateStatus  int
+	createResponseStatus string
+	openResponseStatus   string
+	mu                   sync.Mutex
+	createRequests       int
+	openRequests         int
+	protectedRequests    int
+	openExpiry           string
+	jti                  map[string]bool
+	readAttempts         map[string]int
 }
 
 type browserBootstrapEndpointCapture struct {
@@ -190,6 +192,59 @@ func TestBootstrapBrowserUsesOneMTLSJWSIdentityAndReturnsPrivateHandoff(t *testi
 	defer provider.mu.Unlock()
 	if provider.createRequests != 1 || provider.openRequests != 1 || provider.protectedRequests != 6 || len(provider.jti) != 6 {
 		t.Fatalf("Provider requests = create:%d open:%d protected:%d unique-jti:%d", provider.createRequests, provider.openRequests, provider.protectedRequests, len(provider.jti))
+	}
+}
+
+func TestBootstrapBrowserAcceptsSucceededOpenOperationInAcceptedResponse(t *testing.T) {
+	material := newBrowserBootstrapTestMaterial(t, "spiffe://downstream-caller/controller-a")
+	provider := &browserBootstrapProvider{
+		t: t, config: material.config, jwsPublic: material.jwsPublic,
+		openResponseStatus: "succeeded", jti: map[string]bool{},
+	}
+	server := newBrowserBootstrapTestServer(t, material, provider.serveHTTP)
+	defer server.Close()
+	material.config.ProviderBaseURL = server.URL
+	provider.config = material.config
+
+	if _, err := BootstrapBrowser(context.Background(), material.config); err != nil {
+		t.Fatal(err)
+	}
+	provider.mu.Lock()
+	defer provider.mu.Unlock()
+	if provider.createRequests != 1 || provider.openRequests != 1 {
+		t.Fatalf("Provider requests = create:%d open:%d", provider.createRequests, provider.openRequests)
+	}
+}
+
+func TestBootstrapBrowserAcceptsSucceededCreateOperationInAcceptedResponse(t *testing.T) {
+	material := newBrowserBootstrapTestMaterial(t, "spiffe://downstream-caller/controller-a")
+	provider := &browserBootstrapProvider{
+		t: t, config: material.config, jwsPublic: material.jwsPublic,
+		createResponseStatus: "succeeded", jti: map[string]bool{},
+	}
+	server := newBrowserBootstrapTestServer(t, material, provider.serveHTTP)
+	defer server.Close()
+	material.config.ProviderBaseURL = server.URL
+	provider.config = material.config
+
+	if _, err := BootstrapBrowser(context.Background(), material.config); err != nil {
+		t.Fatal(err)
+	}
+	provider.mu.Lock()
+	defer provider.mu.Unlock()
+	if provider.createRequests != 1 || provider.openRequests != 1 {
+		t.Fatalf("Provider requests = create:%d open:%d", provider.createRequests, provider.openRequests)
+	}
+}
+
+func TestBrowserBootstrapMutationProgressRejectsTerminalFailureStates(t *testing.T) {
+	for status, want := range map[string]bool{
+		"accepted": true, "running": true, "succeeded": true,
+		"failed": false, "cancelled": false, "outcome_unknown": false, "": false,
+	} {
+		if got := validBrowserBootstrapMutationProgress(status); got != want {
+			t.Fatalf("validBrowserBootstrapMutationProgress(%q) = %t, want %t", status, got, want)
+		}
 	}
 }
 
@@ -838,7 +893,11 @@ func (p *browserBootstrapProvider) serveHTTP(writer http.ResponseWriter, request
 			dropBrowserBootstrapResponse(p.t, writer)
 			return
 		}
-		writeBrowserBootstrapTestJSON(p.t, writer, http.StatusAccepted, browserBootstrapTestOperation(p.config, true, "accepted"))
+		status := p.createResponseStatus
+		if status == "" {
+			status = "accepted"
+		}
+		writeBrowserBootstrapTestJSON(p.t, writer, http.StatusAccepted, browserBootstrapTestOperation(p.config, true, status))
 	case "read_operation":
 		create := claims.OperationID == p.config.CreateOperationID
 		writeBrowserBootstrapTestJSON(p.t, writer, http.StatusOK, browserBootstrapTestOperation(p.config, create, "succeeded"))
@@ -865,7 +924,11 @@ func (p *browserBootstrapProvider) serveHTTP(writer http.ResponseWriter, request
 			dropBrowserBootstrapResponse(p.t, writer)
 			return
 		}
-		writeBrowserBootstrapTestJSON(p.t, writer, http.StatusAccepted, browserBootstrapTestOperation(p.config, false, "accepted"))
+		status := p.openResponseStatus
+		if status == "" {
+			status = "accepted"
+		}
+		writeBrowserBootstrapTestJSON(p.t, writer, http.StatusAccepted, browserBootstrapTestOperation(p.config, false, status))
 	case "read_browser_session":
 		p.mu.Lock()
 		expiresAt := p.openExpiry
