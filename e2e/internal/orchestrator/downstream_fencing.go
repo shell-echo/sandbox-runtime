@@ -30,6 +30,7 @@ import (
 	"github.com/shell-echo/sandbox-runtime-e2e/internal/downstreamfencing/provisioning"
 	downstreamstack "github.com/shell-echo/sandbox-runtime-e2e/internal/downstreamfencing/stack"
 	downstreamtransport "github.com/shell-echo/sandbox-runtime-e2e/internal/downstreamfencing/transport"
+	downstreamwire "github.com/shell-echo/sandbox-runtime-e2e/internal/downstreamfencing/wire"
 	"github.com/shell-echo/sandbox-runtime-e2e/internal/lock"
 	basestack "github.com/shell-echo/sandbox-runtime-e2e/internal/stack"
 	"github.com/shell-echo/sandbox-runtime-e2e/internal/testenv"
@@ -704,7 +705,10 @@ func RunDownstreamFencing(ctx context.Context, options Options) (_ DownstreamFen
 		if err != nil || replacementLease.fence <= staleLease.fence || replacementLease.member == staleLease.member {
 			return errors.Join(err, errors.New("replacement did not acquire a distinct higher fence"))
 		}
-		after, err := downstreamObservationSnapshot(observationPath)
+		after, err := waitForDownstreamObservation(
+			ctx, observationPath, before, downstreamtransport.ObservationStreamTerminated,
+			downstreamtransport.ObservationResultFenceLost, 1, downstreamCommandTimeout,
+		)
 		if err != nil {
 			return err
 		}
@@ -748,14 +752,11 @@ func RunDownstreamFencing(ctx context.Context, options Options) (_ DownstreamFen
 		if err := downstreamExpectedClosed(ctx, callers[0], "owner-a", leaseTTL); err != nil {
 			return err
 		}
-		after, err := waitForDownstreamObservation(
-			ctx, observationPath, before, downstreamtransport.ObservationActionFailed,
-			downstreamtransport.ObservationResultFenceLost, 1, downstreamCommandTimeout,
-		)
+		after, err := downstreamObservationSnapshot(observationPath)
 		if err != nil {
 			return err
 		}
-		if err := assertDownstreamActionRejected(before, after, downstreamtransport.ObservationResultFenceLost); err != nil {
+		if err := assertQueuedStaleActionRejected(before, after, uint64(payloadBytes)); err != nil {
 			return err
 		}
 		got, err := replacementB.evaluateString(ctx, replacementSession, downstreamReadExpression(), downstreamCommandTimeout)
@@ -2248,6 +2249,33 @@ func assertDownstreamActionRejected(
 	}
 	if !found {
 		return errors.New("private ingress action rejection lacks an adjacent read/failure proof")
+	}
+	return nil
+}
+
+func assertQueuedStaleActionRejected(before, after downstreamObservations, payloadBytes uint64) error {
+	if payloadBytes == 0 || payloadBytes > downstreamwire.MaxMessageBytes {
+		return errors.New("queued stale action size is invalid")
+	}
+	if !downstreamObservationPrefixEqual(before, after) {
+		return errors.New("private ingress observation history changed")
+	}
+	delta := after[len(before):]
+	if len(delta) == 0 {
+		// The higher-fence activation already produced a stream-termination
+		// witness before this scenario resumed the old Gateway. The queued public
+		// frame may therefore be rejected before the old private handler reads it.
+		return nil
+	}
+	if len(delta) != 2 {
+		return errors.New("queued stale action produced an invalid ingress trace")
+	}
+	read, failed := delta[0], delta[1]
+	if read.Type != downstreamtransport.ObservationActionRead || read.Result != downstreamtransport.ObservationResultComplete ||
+		read.MessageType != downstreamtransport.ObservationMessageText || read.Bytes != payloadBytes ||
+		failed.Type != downstreamtransport.ObservationActionFailed || failed.Result != downstreamtransport.ObservationResultFenceLost ||
+		failed.Sequence != read.Sequence+1 || failed.MessageType != read.MessageType || failed.Bytes != read.Bytes {
+		return errors.New("queued stale action lacks an exact read/fence-loss trace")
 	}
 	return nil
 }

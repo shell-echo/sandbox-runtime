@@ -17,12 +17,13 @@ const (
 type ObservationType string
 
 const (
-	ObservationResolve         ObservationType = "resolve"
-	ObservationActivation      ObservationType = "activation"
-	ObservationUpstreamDial    ObservationType = "upstream_dial"
-	ObservationActionRead      ObservationType = "action_read"
-	ObservationActionForwarded ObservationType = "action_forwarded"
-	ObservationActionFailed    ObservationType = "action_failed"
+	ObservationResolve          ObservationType = "resolve"
+	ObservationActivation       ObservationType = "activation"
+	ObservationUpstreamDial     ObservationType = "upstream_dial"
+	ObservationStreamTerminated ObservationType = "stream_terminated"
+	ObservationActionRead       ObservationType = "action_read"
+	ObservationActionForwarded  ObservationType = "action_forwarded"
+	ObservationActionFailed     ObservationType = "action_failed"
 )
 
 // ObservationResult is the bounded outcome vocabulary for an observation.
@@ -90,6 +91,10 @@ func ValidateObservation(value Observation) error {
 		if !oneOfResult(value.Result, ObservationResultSucceeded, ObservationResultUnavailable) ||
 			value.MessageType != ObservationMessageNone || value.Bytes != 0 {
 			return errors.New("private ingress upstream-dial observation is invalid")
+		}
+	case ObservationStreamTerminated:
+		if value.Result != ObservationResultFenceLost || value.MessageType != ObservationMessageNone || value.Bytes != 0 {
+			return errors.New("private ingress stream-termination observation is invalid")
 		}
 	case ObservationActionRead:
 		if value.Result != ObservationResultComplete || !dataMessageType(value.MessageType) || value.Bytes > wire.MaxMessageBytes {

@@ -283,6 +283,12 @@ func (h *Handler) handleConnection(parent context.Context, connection net.Conn, 
 	cancel()
 	_ = stream.Close(context.Background())
 	if errors.Is(result, gateway.ErrDownstreamFenceLost) {
+		if h.observe(Observation{
+			Type: ObservationStreamTerminated, Result: ObservationResultFenceLost, MessageType: ObservationMessageNone,
+		}) != nil {
+			writeClose(connection, writes, ws.StatusInternalServerError, "downstream unavailable")
+			return
+		}
 		writeClose(connection, writes, ws.StatusPolicyViolation, "downstream fence lost")
 	} else if result != nil && !errors.Is(result, io.EOF) && !errors.Is(result, context.Canceled) {
 		writeClose(connection, writes, ws.StatusInternalServerError, "downstream unavailable")

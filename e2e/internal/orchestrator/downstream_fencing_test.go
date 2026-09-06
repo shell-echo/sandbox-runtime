@@ -187,6 +187,46 @@ func TestAssertDownstreamActionRejectedRequiresAdjacentExactMessageAndNoForward(
 	}
 }
 
+func TestAssertQueuedStaleActionRejectedAllowsOnlyClosedBeforeReadOrExactFenceLoss(t *testing.T) {
+	const payloadBytes = 23
+	prefix := downstreamObservations{
+		downstreamTestObservation(1, downstreamtransport.ObservationStreamTerminated, downstreamtransport.ObservationResultFenceLost, downstreamtransport.ObservationMessageNone, 0),
+	}
+	read := downstreamTestObservation(2, downstreamtransport.ObservationActionRead, downstreamtransport.ObservationResultComplete, downstreamtransport.ObservationMessageText, payloadBytes)
+	failed := downstreamTestObservation(3, downstreamtransport.ObservationActionFailed, downstreamtransport.ObservationResultFenceLost, downstreamtransport.ObservationMessageText, payloadBytes)
+	if err := assertQueuedStaleActionRejected(prefix, prefix, payloadBytes); err != nil {
+		t.Fatalf("closed-before-read trace: %v", err)
+	}
+	if err := assertQueuedStaleActionRejected(prefix, append(append(downstreamObservations{}, prefix...), read, failed), payloadBytes); err != nil {
+		t.Fatalf("exact ingress rejection trace: %v", err)
+	}
+
+	wrongHistory := append(downstreamObservations{}, prefix...)
+	wrongHistory[0].Bytes = 1
+	wrongBytes := failed
+	wrongBytes.Bytes++
+	unavailable := failed
+	unavailable.Result = downstreamtransport.ObservationResultUnavailable
+	forwarded := downstreamTestObservation(4, downstreamtransport.ObservationActionForwarded, downstreamtransport.ObservationResultSucceeded, downstreamtransport.ObservationMessageText, payloadBytes)
+	for name, after := range map[string]downstreamObservations{
+		"history changed":        wrongHistory,
+		"read only":              append(append(downstreamObservations{}, prefix...), read),
+		"failed only":            append(append(downstreamObservations{}, prefix...), failed),
+		"wrong result":           append(append(downstreamObservations{}, prefix...), read, unavailable),
+		"metadata mismatch":      append(append(downstreamObservations{}, prefix...), read, wrongBytes),
+		"forwarded after reject": append(append(downstreamObservations{}, prefix...), read, failed, forwarded),
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := assertQueuedStaleActionRejected(prefix, after, payloadBytes); err == nil {
+				t.Fatal("invalid queued-stale trace was accepted")
+			}
+		})
+	}
+	if err := assertQueuedStaleActionRejected(prefix, prefix, 0); err == nil {
+		t.Fatal("zero-sized queued stale action was accepted")
+	}
+}
+
 func TestCopyDownstreamEvidenceFileDoesNotTruncate(t *testing.T) {
 	root := t.TempDir()
 	source := filepath.Join(root, "source.jsonl")
