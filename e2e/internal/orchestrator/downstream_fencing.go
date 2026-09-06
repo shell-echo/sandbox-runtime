@@ -1080,7 +1080,10 @@ func RunDownstreamFencing(ctx context.Context, options Options) (_ DownstreamFen
 		if err := waitForSharedRedis(ctx, redisClient, 5*time.Second); err != nil {
 			return err
 		}
-		if err := waitForDownstreamLeaseExpiry(ctx, redisClient, capacityNamespace, current, leaseTTL+time.Second); err != nil {
+		// A release written before the store outage may complete after the caller's
+		// bounded operation times out. Recovery therefore waits for the exact
+		// capacity set to drain by delayed release or retained TTL expiry.
+		if err := waitForSharedCardinality(ctx, redisClient, capacityNamespace, 0, leaseTTL+time.Second); err != nil {
 			return err
 		}
 		if err := downstreamOpen(ctx, callers[0], "recovered-b", "gateway-b", identities[0].envelope.GrantBinding.ID); err != nil {
