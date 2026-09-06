@@ -2032,7 +2032,7 @@ func downstreamGatewayAuditReason(kind string) string {
 		"reconnect_failed", "capacity_rejected", "capacity_unavailable", "capacity_lost", "capacity_release_failed",
 		"revocation_unavailable", "downstream_fence_lost":
 		return kind
-	case "downstream_unavailable":
+	case "downstream_fence_unavailable":
 		return "downstream_fence_unavailable"
 	default:
 		return ""

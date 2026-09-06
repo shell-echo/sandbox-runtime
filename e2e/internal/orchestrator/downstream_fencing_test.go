@@ -142,7 +142,7 @@ func TestReadDownstreamObservationsPreservesOrder(t *testing.T) {
 func TestReadDownstreamGatewayAuditRequiresStrictOrderedMetadata(t *testing.T) {
 	valid := []byte(
 		`{"sequence":1,"type":"authorized","timestamp":"2026-09-06T01:02:03Z","attempt":0,"frames":0,"bytes":0,"reason_code":"authorized"}` + "\n" +
-			`{"sequence":2,"type":"downstream_unavailable","timestamp":"2026-09-06T01:02:04Z","attempt":1,"frames":2,"bytes":17,"reason_code":"downstream_fence_unavailable"}` + "\n",
+			`{"sequence":2,"type":"downstream_fence_unavailable","timestamp":"2026-09-06T01:02:04Z","attempt":1,"frames":2,"bytes":17,"reason_code":"downstream_fence_unavailable"}` + "\n",
 	)
 	path := filepath.Join(t.TempDir(), "gateway-audit.jsonl")
 	writeDownstreamTestFile(t, path, valid)
