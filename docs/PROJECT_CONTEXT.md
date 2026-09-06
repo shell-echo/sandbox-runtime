@@ -430,10 +430,12 @@ restored behind it. The included Darwin/Linux `0600` file witness is
 single-process component evidence and is valid only outside the Redis
 snapshot/restore domain. Local focused/full race-shuffle, vet, Contract
 verification, the unchanged 48-case Suite, and tagged integration against the
-same pinned Valkey index pass. The existing downstream caller stack still uses
-ADR 0033 v1, so neither prior caller run is deletion/restore evidence. A locked
-v2 real-Chromium caller gate, production witness/storage, Valkey
-provenance/HA/failover, production metrics/configuration and topology,
+same pinned Valkey index pass. The existing downstream caller results still use
+ADR 0033 v1, so neither prior run is deletion/restore evidence. A separately
+locked 18-scenario v2 real-Chromium runner is implemented with an independent
+file witness and orchestrator-only Redis fault credential, but no clean local
+or hosted v2 run is recorded. V2 caller evidence, production witness/storage,
+Valkey provenance/HA/failover, production metrics/configuration and topology,
 deployment, multi-controller, hostile multi-tenant, real Agent Platform,
 aggregate conformance, and production readiness remain unproved.
 
@@ -589,11 +591,12 @@ hosted run `33854020809` passes the combined 12+5 Browser caller against harness
 `33857739150` passes the 13+5 Browser caller against harness `7a20d9d`.
 ADR 0034 separately passes its witnessed v2 deletion/rollback-detection
 component and pinned-Valkey adapter gates. It is not selected by this v1 caller
-topology. Production Browser advertisement/public Gateway and v2 private-ingress
-topology, a production independent witness, controlled restore operations,
-Valkey provenance and HA/failover consistency, remaining profile-specific
-security and concurrency, aggregate, multi-controller, multi-tenant,
-deployment, and production gates remain separate and open.
+topology. A separately locked v2 caller topology is implemented but has no
+clean local or hosted run. Production Browser advertisement/public Gateway and
+v2 private-ingress deployment, a production independent witness, controlled
+restore operations, Valkey provenance and HA/failover consistency, remaining
+profile-specific security and concurrency, aggregate, multi-controller,
+multi-tenant, deployment, and production gates remain separate and open.
 
 Contract identity:
 
@@ -612,7 +615,7 @@ Contract identity:
 | P2.5i | Hosted regression `33970773414` passed 15 initial plus 5 restart/resume coding/shell scenarios against harness/Provider lock `17ed6ca`/`b4d41c9`; latest local pre-refresh run `20260905T080530.577843000Z` passed against `59e08d5`/`c0a55d1` | Neither run contains a Browser scenario or implies Agent Platform, durable-revocation caller, or production properties |
 | P2 | Reference coding/shell caller release gate passed | Aggregate conformance, actual Agent Platform compatibility, multi-controller, hostile multi-tenant isolation, deployment, and production gates remain open |
 | P3 | Local revision binding/shadow/metrics component evidence plus latest local pre-refresh candidate integration (`20260905T080623.861033000Z`, `59e08d5`/`c0a55d1` lock) and hosted candidate regression `33970773345` against `17ed6ca`/`b4d41c9` | Real platform traffic shadow parity, canary, rollback, old-run drain, metric parity, and unchanged platform contracts remain open |
-| P4 | Browser Contract authority/projection, exact sandboxed signed amd64/arm64/v8 publication, Provider-local components, default-disabled command/runtime composition, process-local Gateway limits, the separately recorded Browser/shared-capacity/durable-revocation caller gates, ADR 0033 component/caller evidence, and the ADR 0034 v2 deletion/rollback-detection component pass within their named boundaries. The ADR 0033 caller runs remain v1 and their Contract Suite remains unexercised | A locked v2 real-Chromium deletion/restore caller gate, production independent witness/storage and restore operations, production Browser advertisement/public Gateway, Valkey provenance/HA, production configuration/metrics, aggregate, multi-controller, multi-tenant, deployment, and production gates remain open |
+| P4 | Browser Contract authority/projection, exact sandboxed signed amd64/arm64/v8 publication, Provider-local components, default-disabled command/runtime composition, process-local Gateway limits, the separately recorded Browser/shared-capacity/durable-revocation caller gates, ADR 0033 component/caller evidence, and the ADR 0034 v2 deletion/rollback-detection component pass within their named boundaries. The ADR 0033 caller runs remain v1; a separate locked v2 runner is implemented but unexecuted, and neither downstream profile executes the Contract Suite | Execute and inspect the v2 real-Chromium deletion/restore caller gate; production independent witness/storage and restore operations, production Browser advertisement/public Gateway, Valkey provenance/HA, production configuration/metrics, aggregate, multi-controller, multi-tenant, deployment, and production gates remain open |
 
 Production readiness is not a numbered phase shortcut. Aggregate conformance,
 multi-controller reliability, hostile multi-tenant security, deployment, and
@@ -839,10 +842,10 @@ inspected.
 
 1. Keep `suite_exercised=false` for the ADR 0033 caller profile until that
    runner actually invokes the Contract Suite, and do not relabel its
-   platform-specific v1 results as ADR 0034 evidence. Next compose a locked v2
-   multi-process real-Chromium caller gate with independent witness
-   reconstruction, retained-history deletion, and controlled older-snapshot
-   restore scenarios.
+   platform-specific v1 results as ADR 0034 evidence. Commit, execute, and
+   inspect the separately locked v2 multi-process real-Chromium runner with
+   independent witness reconstruction, retained-history deletion, and
+   controlled older-snapshot restore scenarios.
 2. Preserve the Browser, coding/shell Reference, and Platform Candidate harnesses
    as three separately named evidence modes. Do not relabel the Browser
    reference deployment as production or the candidate mode as real platform

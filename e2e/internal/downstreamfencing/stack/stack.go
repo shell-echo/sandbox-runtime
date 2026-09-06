@@ -12,6 +12,7 @@ import (
 	goredis "github.com/redis/go-redis/v9"
 	"github.com/shell-echo/sandbox-runtime-e2e/internal/downstreamfencing/transport"
 	basestack "github.com/shell-echo/sandbox-runtime-e2e/internal/stack"
+	"github.com/shell-echo/sandbox-runtime/gateway"
 	rediscapacity "github.com/shell-echo/sandbox-runtime/gateway/capacity/redis"
 	"github.com/shell-echo/sandbox-runtime/gateway/cdpfence"
 )
@@ -33,6 +34,7 @@ type Stack struct {
 
 	closeProvider func() error
 	closeRedis    func() error
+	closeWitness  func() error
 	observations  *observationWriter
 	stopTimeout   time.Duration
 
@@ -100,11 +102,25 @@ func Open(ctx context.Context, input Config) (_ *Stack, resultErr error) {
 	if err := capacity.Verify(ctx); err != nil {
 		return nil, errors.New("verify retained capacity authority")
 	}
-	actionFencer, err := rediscapacity.NewActionFencer(capacity)
+	var actionFencer gateway.DownstreamFenceAuthority
+	switch config.Authority.ActionFencingProfile {
+	case ActionFencingProfileV1:
+		actionFencer, err = rediscapacity.NewActionFencer(capacity)
+	case ActionFencingProfileWitnessedV2:
+		witness, witnessErr := rediscapacity.OpenFileActionHistoryWitness(config.Authority.ActionHistoryWitnessFile)
+		if witnessErr != nil {
+			return nil, errors.New("open independent action-history witness")
+		}
+		stack.closeWitness = witness.Close
+		actionFencer, err = rediscapacity.NewWitnessedActionFencer(capacity, witness)
+	default:
+		err = gateway.ErrDownstreamUnavailable
+	}
 	if err != nil {
 		return nil, errors.New("construct retained action-fence authority")
 	}
-	if err := actionFencer.Verify(ctx); err != nil {
+	verifier, ok := actionFencer.(interface{ Verify(context.Context) error })
+	if !ok || verifier.Verify(ctx) != nil {
 		return nil, errors.New("verify retained action-fence authority")
 	}
 
@@ -227,6 +243,9 @@ func (s *Stack) Close() error {
 		}
 		if s.closeRedis != nil {
 			s.closeErr = errors.Join(s.closeErr, s.closeRedis())
+		}
+		if s.closeWitness != nil {
+			s.closeErr = errors.Join(s.closeErr, s.closeWitness())
 		}
 		if s.observations != nil {
 			s.closeErr = errors.Join(s.closeErr, s.observations.Close())

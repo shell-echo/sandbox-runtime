@@ -25,6 +25,11 @@ import (
 const maxConfigBytes = 1 << 20
 
 const (
+	ActionFencingProfileV1          = "redis-action-fence-v1"
+	ActionFencingProfileWitnessedV2 = "redis-action-fence-witnessed-v2"
+)
+
+const (
 	lockedMaxTotal                  = 4
 	lockedMaxPerTenant              = 2
 	lockedMaxPerSession             = 1
@@ -78,9 +83,11 @@ type IngressConfig struct {
 }
 
 type AuthorityConfig struct {
-	RedisURL          string         `json:"redis_url"`
-	CapacityNamespace string         `json:"capacity_namespace"`
-	CapacityPolicy    CapacityPolicy `json:"capacity_policy"`
+	RedisURL                 string         `json:"redis_url"`
+	CapacityNamespace        string         `json:"capacity_namespace"`
+	CapacityPolicy           CapacityPolicy `json:"capacity_policy"`
+	ActionFencingProfile     string         `json:"action_fencing_profile"`
+	ActionHistoryWitnessFile string         `json:"action_history_witness_file,omitempty"`
 }
 
 type CapacityPolicy struct {
@@ -269,6 +276,18 @@ func validateAuthority(config AuthorityConfig) error {
 	if !namespacePattern.MatchString(config.CapacityNamespace) {
 		return errors.New("capacity namespace is invalid")
 	}
+	switch config.ActionFencingProfile {
+	case ActionFencingProfileV1:
+		if config.ActionHistoryWitnessFile != "" {
+			return errors.New("v1 action fencing must not configure a witness")
+		}
+	case ActionFencingProfileWitnessedV2:
+		if strings.TrimSpace(config.ActionHistoryWitnessFile) == "" || !filepath.IsAbs(config.ActionHistoryWitnessFile) {
+			return errors.New("witnessed-v2 action fencing requires an absolute witness path")
+		}
+	default:
+		return errors.New("action fencing profile is invalid")
+	}
 	policy := config.CapacityPolicy
 	if policy != (CapacityPolicy{
 		MaxTotal: lockedMaxTotal, MaxPerTenant: lockedMaxPerTenant, MaxPerSession: lockedMaxPerSession,
@@ -301,6 +320,10 @@ func validateCriticalPathSeparation(config Config) error {
 		"private ingress certificate":  config.Ingress.ServerCertificateFile,
 		"private ingress key":          config.Ingress.ServerPrivateKeyFile,
 		"private ingress observations": config.ObservationFile,
+	}
+	if config.Authority.ActionHistoryWitnessFile != "" {
+		unique["action-history witness"] = config.Authority.ActionHistoryWitnessFile
+		unique["action-history witness lock"] = config.Authority.ActionHistoryWitnessFile + ".lock"
 	}
 	for index, key := range config.Provider.TrustedJWSKeys {
 		unique[fmt.Sprintf("trusted JWS key %d", index)] = key.Path

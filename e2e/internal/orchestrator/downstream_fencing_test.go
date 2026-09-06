@@ -17,6 +17,8 @@ import (
 
 	downstreamtransport "github.com/shell-echo/sandbox-runtime-e2e/internal/downstreamfencing/transport"
 	"github.com/shell-echo/sandbox-runtime-e2e/internal/lock"
+	rediscapacity "github.com/shell-echo/sandbox-runtime/gateway/capacity/redis"
+	redisrevocation "github.com/shell-echo/sandbox-runtime/gateway/revocation/redis"
 )
 
 func TestDownstreamFencingRunnerRecordsOnlySuccessfulScenarioAsPassed(t *testing.T) {
@@ -30,6 +32,19 @@ func TestDownstreamFencingRunnerRecordsOnlySuccessfulScenarioAsPassed(t *testing
 	}
 	if len(runner.report.Scenarios) != 2 || runner.report.Scenarios[0].Status != "passed" ||
 		runner.report.Scenarios[1].Status != "failed" {
+		t.Fatalf("scenario report = %#v", runner.report.Scenarios)
+	}
+}
+
+func TestDownstreamFencingRunnerFailsScenarioWhenPostconditionFails(t *testing.T) {
+	sentinel := errors.New("postcondition failed")
+	runner := &downstreamFencingRunner{
+		afterScenario: func(context.Context) error { return sentinel },
+	}
+	if err := runner.run(context.Background(), "failed postcondition", func(context.Context) error { return nil }); !errors.Is(err, sentinel) {
+		t.Fatalf("postcondition error = %v", err)
+	}
+	if len(runner.report.Scenarios) != 1 || runner.report.Scenarios[0].Status != "failed" {
 		t.Fatalf("scenario report = %#v", runner.report.Scenarios)
 	}
 }
@@ -51,6 +66,21 @@ func TestValidateDownstreamReportRequiresOrderedPasses(t *testing.T) {
 	report.Scenarios[1].Status = "failed"
 	if err := validateDownstreamReport(report, names); err == nil {
 		t.Fatal("report accepted a failed scenario")
+	}
+}
+
+func TestValidateDownstreamV2ReportUsesSeparateIdentity(t *testing.T) {
+	names := []string{"one"}
+	report := downstreamFencingReport{
+		EvidenceName: downstreamFencingV2EvidenceName, EvidenceProfile: lock.DownstreamFencingV2Profile,
+		Scenarios: []downstreamFencingScenario{{Name: "one", Status: "passed"}},
+	}
+	if err := validateDownstreamReport(report, names); err != nil {
+		t.Fatalf("valid v2 report: %v", err)
+	}
+	report.EvidenceName = downstreamFencingEvidenceName
+	if err := validateDownstreamReport(report, names); err == nil {
+		t.Fatal("v2 report accepted the v1 evidence name")
 	}
 }
 
@@ -325,6 +355,24 @@ func TestDownstreamAuthorityACLUsesBothHashedNamespaces(t *testing.T) {
 	}
 }
 
+func TestDownstreamAuthorityV2ACLSeparatesOrchestratorCredential(t *testing.T) {
+	runtimePassword := strings.Repeat("r", 32)
+	orchestratorPassword := strings.Repeat("o", 32)
+	capacityNamespace := "capacity-private-v2"
+	revocationNamespace := "revocation-private-v2"
+	acl := downstreamAuthorityV2ACL(runtimePassword, orchestratorPassword, capacityNamespace, revocationNamespace)
+	capacityDigest := sha256.Sum256([]byte(capacityNamespace))
+	revocationDigest := sha256.Sum256([]byte(revocationNamespace))
+	if strings.Count(acl, ">"+runtimePassword) != 1 || strings.Count(acl, ">"+orchestratorPassword) != 1 ||
+		!strings.Contains(acl, hex.EncodeToString(capacityDigest[:])) ||
+		!strings.Contains(acl, hex.EncodeToString(revocationDigest[:])) ||
+		strings.Contains(acl, capacityNamespace) || strings.Contains(acl, revocationNamespace) ||
+		strings.Contains(strings.Split(acl, "user orchestrator")[0], "+restore") ||
+		strings.Contains(strings.Split(acl, "user orchestrator")[0], "+dump") {
+		t.Fatal("witnessed-v2 ACL does not separate runtime and restore control")
+	}
+}
+
 func TestDownstreamHighWaterKeyMatchesLockedAdapterDerivation(t *testing.T) {
 	identity := downstreamFencingIdentity{}
 	identity.envelope.Endpoint.TenantID = "tenant-a"
@@ -368,6 +416,37 @@ func TestValidateDownstreamManifestPreservesEvidenceBoundaryAndNonTargets(t *tes
 	}
 }
 
+func TestValidateDownstreamV2ManifestRequiresRestoreWitnessEvidence(t *testing.T) {
+	manifest := validDownstreamTestManifest()
+	manifest.EvidenceName = downstreamFencingV2EvidenceName
+	manifest.EvidenceProfile = lock.DownstreamFencingV2Profile
+	manifest.ProcessReconstructions = 5
+	manifest.Adapters = nil
+	manifest.WitnessedV2 = &downstreamFencingV2Evidence{
+		Sources:              lock.DownstreamFencingV2Sources{ProviderRevision: lock.ProviderCommit},
+		BaseLock:             lock.DownstreamFencingV2BaseLock{EvidenceProfile: lock.DownstreamFencingProfile},
+		ActionFence:          rediscapacity.WitnessedActionFencingDescriptor{PolicyFormat: "browser-downstream-action-fence-v2"},
+		Capacity:             rediscapacity.Descriptor{PolicyFingerprint: "capacity-policy-fingerprint"},
+		Revocation:           redisrevocation.Descriptor{PolicyFingerprint: "revocation-policy-fingerprint"},
+		Witness:              lock.DownstreamFencingV2Witness{OutsideValkeyRestoreDomain: true},
+		RestoreControl:       lock.DownstreamFencingV2RestoreControl{SeparateCredential: true},
+		SessionFieldDeletion: true, CompleteStateDeletion: true, SameNumericalFenceRollback: true,
+		WitnessReconstruction: true, AheadOneRecovered: true, OtherMismatchesRejected: true,
+	}
+	if err := validateDownstreamManifest(manifest); err != nil {
+		t.Fatalf("valid v2 manifest: %v", err)
+	}
+	manifest.WitnessedV2.AheadOneRecovered = false
+	if err := validateDownstreamManifest(manifest); err == nil {
+		t.Fatal("v2 manifest omitted ahead-one recovery")
+	}
+	manifest = validDownstreamTestManifest()
+	manifest.WitnessedV2 = &downstreamFencingV2Evidence{}
+	if err := validateDownstreamManifest(manifest); err == nil {
+		t.Fatal("v1 manifest accepted v2 evidence")
+	}
+}
+
 func downstreamTestObservation(
 	sequence uint64,
 	kind downstreamtransport.ObservationType,
@@ -403,12 +482,14 @@ func writeDownstreamTestFile(t *testing.T, path string, contents []byte) {
 }
 
 func validDownstreamTestManifest() downstreamFencingManifest {
+	adapters := lock.DownstreamFencingAdapterDescriptors{}
 	return downstreamFencingManifest{
 		EvidenceName: downstreamFencingEvidenceName, EvidenceProfile: lock.DownstreamFencingProfile,
 		Contract: downstreamFencingContractEvidence{
 			DownstreamFencingContract: lock.DownstreamFencingContract{}, ProviderRoutesExercised: []string{"GET /v1/capabilities"},
 		},
 		ProcessReconstructions: 2,
+		Adapters:               &adapters,
 		Reports:                []string{"report.json"},
 		Audits:                 []string{"gateway-audit-a.jsonl", "gateway-audit-b.jsonl"},
 		Observations:           []string{"ingress-observations.jsonl"},

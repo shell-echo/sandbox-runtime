@@ -20,6 +20,15 @@ func TestValidateConfigAcceptsBoundedProviderIngressTopology(t *testing.T) {
 	}
 }
 
+func TestValidateConfigAcceptsExplicitWitnessedV2Profile(t *testing.T) {
+	config := validConfig(t)
+	config.Authority.ActionFencingProfile = ActionFencingProfileWitnessedV2
+	config.Authority.ActionHistoryWitnessFile = filepath.Join(t.TempDir(), "witness.json")
+	if err := ValidateConfig(config); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestValidateConfigRejectsUnsafeTopologyAndPolicy(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -36,6 +45,18 @@ func TestValidateConfigRejectsUnsafeTopologyAndPolicy(t *testing.T) {
 		{name: "wrong Gateway role", mutate: func(config *Config) { config.Ingress.AllowedGatewayURIs[1] = "spiffe://downstream-fencing/controller" }},
 		{name: "duplicate Gateway role", mutate: func(config *Config) { config.Ingress.AllowedGatewayURIs[1] = config.Ingress.AllowedGatewayURIs[0] }},
 		{name: "uncredentialed Redis", mutate: func(config *Config) { config.Authority.RedisURL = "redis://127.0.0.1:16379/0" }},
+		{name: "unknown action profile", mutate: func(config *Config) { config.Authority.ActionFencingProfile = "unknown" }},
+		{name: "v1 witness", mutate: func(config *Config) {
+			config.Authority.ActionHistoryWitnessFile = filepath.Join(t.TempDir(), "witness.json")
+		}},
+		{name: "v2 relative witness", mutate: func(config *Config) {
+			config.Authority.ActionFencingProfile = ActionFencingProfileWitnessedV2
+			config.Authority.ActionHistoryWitnessFile = "witness.json"
+		}},
+		{name: "v2 witness collision", mutate: func(config *Config) {
+			config.Authority.ActionFencingProfile = ActionFencingProfileWitnessedV2
+			config.Authority.ActionHistoryWitnessFile = config.ObservationFile
+		}},
 		{name: "remote Redis", mutate: func(config *Config) { config.Authority.RedisURL = "redis://e2e:secret@redis.invalid:6379/0" }},
 		{name: "different Redis database", mutate: func(config *Config) { config.Authority.RedisURL = "redis://e2e:secret@127.0.0.1:16379/1" }},
 		{name: "multi-owner Browser session", mutate: func(config *Config) { config.Authority.CapacityPolicy.MaxPerSession = 2 }},
@@ -179,8 +200,9 @@ func validConfig(t *testing.T) Config {
 			WriteTimeoutMillis: 30000, IdleTimeoutMillis: 60000, MaxHeaderBytes: 16 << 10,
 		},
 		Authority: AuthorityConfig{
-			RedisURL:          "redis://e2e:" + strings.Repeat("s", 32) + "@127.0.0.1:16379/0",
-			CapacityNamespace: "downstream-fencing-e2e",
+			RedisURL:             "redis://e2e:" + strings.Repeat("s", 32) + "@127.0.0.1:16379/0",
+			CapacityNamespace:    "downstream-fencing-e2e",
+			ActionFencingProfile: ActionFencingProfileV1,
 			CapacityPolicy: CapacityPolicy{
 				MaxTotal: 4, MaxPerTenant: 2, MaxPerSession: 1, LeaseTTLMillis: 3000,
 				RenewIntervalMillis: 400, RenewalSafetyMarginMillis: 500, OperationTimeoutMillis: 200,

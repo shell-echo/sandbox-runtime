@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "evidence_profile": "browser-downstream-fencing-e2e-v2",
+  "sources": {
+    "provider_revision": "8ad7aca08d669af9cb71e02124478e23a3ae4990",
+    "harness_baseline": "8ad7aca08d669af9cb71e02124478e23a3ae4990",
+    "gateway_component": {
+      "path": "gateway/composition/browser.go",
+      "revision": "b4d41c9a32b4ccf39edaba3fb8bf5ad239c1f945"
+    },
+    "ingress_component": {
+      "path": "gateway/cdpfence",
+      "revision": "b4d41c9a32b4ccf39edaba3fb8bf5ad239c1f945"
+    },
+    "action_history_component": {
+      "path": "gateway/capacity/redis",
+      "revision": "8ad7aca08d669af9cb71e02124478e23a3ae4990"
+    },
+    "caller_substrate": {
+      "path": "e2e/internal/caller",
+      "baseline_revision": "074a9d4a42acef3bf7da57b1b250af8f0c1b1aa9"
+    }
+  },
+  "base_lock": {
+    "path": "e2e/downstream-fencing.lock.json",
+    "sha256": "sha256:8254c04257e58a158608a31709bc8ebbc491cad0ada31fc1bcbfd1cf65c46b08",
+    "evidence_profile": "browser-downstream-fencing-e2e-v1"
+  },
+  "contract": {
+    "namespace": "urn:shell-echo:sandbox-runtime:provider-v1",
+    "revision": "5096e71fb84fbec22aa3487a0e55a1b49602ab8b",
+    "tree": "859f76dc0e855a0c8abdbbb5648df100dabb4328",
+    "suite_cases": 48,
+    "suite_exercised": false,
+    "contract_metadata_only": false
+  },
+  "action_fence": {
+    "policy_format": "browser-downstream-action-fence-v2",
+    "policy_fingerprint": "4454622678ad72c4acc056de782d45ea28e6b8ce3b30958deaaf701e8079653b",
+    "capacity_policy_fingerprint": "67e603c017cd5c2b1e902d517d2ba1148931d1552ddf722d98f3dd37f7f23c4b",
+    "provision_script_sha1": "7175e4db4d797ed8c828b042ff475d8539997db5",
+    "authorize_script_sha1": "a3de15211f0ff4b02245c524c81c207c893909aa",
+    "checkpoint_format": "browser-downstream-action-checkpoint-v1",
+    "max_claim_lifetime_ms": 86400000,
+    "max_action_window_ms": 30000,
+    "max_history_entries": 4096
+  },
+  "witness": {
+    "kind": "single-process-file-v1",
+    "required_mode": "0600",
+    "outside_valkey_restore_domain": true,
+    "lifetime_exclusive_lock": true,
+    "reconstructed": true
+  },
+  "restore_control": {
+    "owner": "orchestrator-only",
+    "mechanism": "redis-dump-restore-v1",
+    "exposed_to_gateways": false,
+    "exposed_to_callers": false,
+    "separate_credential": true,
+    "restores_witness": false,
+    "reuses_capacity_fence": true
+  },
+  "acl_template_sha256": "sha256:70d93b2f7b3e82f17be65be523b80f4d8456fdfb3c7722988fa950ee39699208",
+  "scenarios": [
+    "ordinary bounded real-CDP mutation through the unique ingress",
+    "Gateway A SIGSTOP beyond its confirmed capacity lease",
+    "Gateway B acquires and activates a higher fence",
+    "resumed Gateway A queued stale mutation is rejected before Chromium with no partial action",
+    "Gateway B distinct real-CDP mutation succeeds",
+    "pre-action lease loss is rejected before Chromium",
+    "higher-fence activation replaces the active old stream",
+    "replaced lower-fence Gateway closes terminally without reconnect",
+    "another Browser session and tenant remain active",
+    "Valkey outage fails closed and retained-state recovery succeeds",
+    "single retained session-field deletion rejects before Chromium without a new upstream dial",
+    "complete action-state deletion rejects before Chromium without a new upstream dial",
+    "pre-activation snapshot restore reuses the numerical capacity fence and fails closed",
+    "ingress and file-witness reconstruction reject the restored older action state",
+    "exact Redis-ahead-one interrupted witness CAS recovers conservatively",
+    "behind divergent and more-than-one-ahead checkpoints remain unavailable",
+    "no Gateway bypass exists and all owned runtime resources are cleaned",
+    "sanitized v2 evidence pins identities and records Contract Suite as unexercised"
+  ]
+}

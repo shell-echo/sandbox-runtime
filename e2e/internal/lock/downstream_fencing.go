@@ -2,6 +2,7 @@ package lock
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -22,13 +23,17 @@ const (
 	DownstreamFencingLockPath = "e2e/downstream-fencing.lock.json"
 	DownstreamFencingProfile  = "browser-downstream-fencing-e2e-v1"
 
-	DownstreamFencingHarnessBaseline = "8a1049bfa1d68bdd88c9df3ebd02c2c9ac0434b5"
-	DownstreamFencingGatewayRevision = "b4d41c9a32b4ccf39edaba3fb8bf5ad239c1f945"
-	DownstreamFencingIngressRevision = "b4d41c9a32b4ccf39edaba3fb8bf5ad239c1f945"
-	DownstreamFencingCallerBaseline  = "074a9d4a42acef3bf7da57b1b250af8f0c1b1aa9"
+	DownstreamFencingHarnessBaseline   = "8a1049bfa1d68bdd88c9df3ebd02c2c9ac0434b5"
+	DownstreamFencingV2HarnessBaseline = "8ad7aca08d669af9cb71e02124478e23a3ae4990"
+	DownstreamFencingGatewayRevision   = "b4d41c9a32b4ccf39edaba3fb8bf5ad239c1f945"
+	DownstreamFencingIngressRevision   = "b4d41c9a32b4ccf39edaba3fb8bf5ad239c1f945"
+	DownstreamFencingCallerBaseline    = "074a9d4a42acef3bf7da57b1b250af8f0c1b1aa9"
 
 	DownstreamFencingValkeyImage = "ghcr.io/valkey-io/valkey"
 	DownstreamFencingValkeyIndex = "sha256:ccfa19b0d743e48927e1c8c14e39e0acb97b5cea347fef0bfe340247fea920cd"
+
+	DownstreamFencingV2LockPath = "e2e/downstream-fencing-v2.lock.json"
+	DownstreamFencingV2Profile  = "browser-downstream-fencing-e2e-v2"
 
 	DownstreamFencingServerConfig = "bind 0.0.0.0\n" +
 		"protected-mode no\n" +
@@ -41,6 +46,13 @@ const (
 		"~sandbox-runtime:{${REVOCATION_NAMESPACE_SHA256}}:revocation:* " +
 		"+ping +type +zcard +zscore +set +get +hset +hlen +hget +time +pttl +zremrangebyscore " +
 		"+zrange +incr +zadd +pexpireat +zrem +evalsha +eval\n"
+	DownstreamFencingV2ACLTemplate = "user default off\n" +
+		"user e2e on >${RUNTIME_PASSWORD} ~sandbox-runtime:{${CAPACITY_NAMESPACE_SHA256}}:capacity:* " +
+		"~sandbox-runtime:{${REVOCATION_NAMESPACE_SHA256}}:revocation:* " +
+		"+ping +type +zcard +zscore +set +get +hset +hlen +hget +hgetall +time +pttl +zremrangebyscore " +
+		"+zrange +incr +zadd +pexpireat +zrem +evalsha +eval\n" +
+		"user orchestrator on >${ORCHESTRATOR_PASSWORD} ~sandbox-runtime:{${CAPACITY_NAMESPACE_SHA256}}:capacity:* " +
+		"+ping +type +exists +get +set +hget +hmget +hgetall +hset +hdel +zcard +zrange +pttl +dump +restore +del\n"
 )
 
 var downstreamFencingScenarioInventory = [...]string{
@@ -57,6 +69,79 @@ var downstreamFencingScenarioInventory = [...]string{
 	"ingress reconstruction retains high-water and rejects a stale claim",
 	"no Gateway bypass exists and all owned runtime resources are cleaned",
 	"sanitized evidence pins every locked identity without private material",
+}
+
+var downstreamFencingV2ScenarioInventory = [...]string{
+	"ordinary bounded real-CDP mutation through the unique ingress",
+	"Gateway A SIGSTOP beyond its confirmed capacity lease",
+	"Gateway B acquires and activates a higher fence",
+	"resumed Gateway A queued stale mutation is rejected before Chromium with no partial action",
+	"Gateway B distinct real-CDP mutation succeeds",
+	"pre-action lease loss is rejected before Chromium",
+	"higher-fence activation replaces the active old stream",
+	"replaced lower-fence Gateway closes terminally without reconnect",
+	"another Browser session and tenant remain active",
+	"Valkey outage fails closed and retained-state recovery succeeds",
+	"single retained session-field deletion rejects before Chromium without a new upstream dial",
+	"complete action-state deletion rejects before Chromium without a new upstream dial",
+	"pre-activation snapshot restore reuses the numerical capacity fence and fails closed",
+	"ingress and file-witness reconstruction reject the restored older action state",
+	"exact Redis-ahead-one interrupted witness CAS recovers conservatively",
+	"behind divergent and more-than-one-ahead checkpoints remain unavailable",
+	"no Gateway bypass exists and all owned runtime resources are cleaned",
+	"sanitized v2 evidence pins identities and records Contract Suite as unexercised",
+}
+
+type DownstreamFencingV2BaseLock struct {
+	Path            string `json:"path"`
+	SHA256          string `json:"sha256"`
+	EvidenceProfile string `json:"evidence_profile"`
+}
+
+type DownstreamFencingV2Sources struct {
+	ProviderRevision       string                           `json:"provider_revision"`
+	HarnessBaseline        string                           `json:"harness_baseline"`
+	GatewayComponent       DownstreamFencingComponentSource `json:"gateway_component"`
+	IngressComponent       DownstreamFencingComponentSource `json:"ingress_component"`
+	ActionHistoryComponent DownstreamFencingComponentSource `json:"action_history_component"`
+	CallerSubstrate        DownstreamFencingBaselineSource  `json:"caller_substrate"`
+}
+
+type DownstreamFencingV2Witness struct {
+	Kind                       string `json:"kind"`
+	RequiredMode               string `json:"required_mode"`
+	OutsideValkeyRestoreDomain bool   `json:"outside_valkey_restore_domain"`
+	LifetimeExclusiveLock      bool   `json:"lifetime_exclusive_lock"`
+	Reconstructed              bool   `json:"reconstructed"`
+}
+
+type DownstreamFencingV2RestoreControl struct {
+	Owner               string `json:"owner"`
+	Mechanism           string `json:"mechanism"`
+	ExposedToGateways   bool   `json:"exposed_to_gateways"`
+	ExposedToCallers    bool   `json:"exposed_to_callers"`
+	SeparateCredential  bool   `json:"separate_credential"`
+	RestoresWitness     bool   `json:"restores_witness"`
+	ReusesCapacityFence bool   `json:"reuses_capacity_fence"`
+}
+
+type DownstreamFencingV2Lock struct {
+	SchemaVersion     int                                            `json:"schema_version"`
+	EvidenceProfile   string                                         `json:"evidence_profile"`
+	Sources           DownstreamFencingV2Sources                     `json:"sources"`
+	BaseLock          DownstreamFencingV2BaseLock                    `json:"base_lock"`
+	Contract          DownstreamFencingContract                      `json:"contract"`
+	ActionFence       rediscapacity.WitnessedActionFencingDescriptor `json:"action_fence"`
+	Witness           DownstreamFencingV2Witness                     `json:"witness"`
+	RestoreControl    DownstreamFencingV2RestoreControl              `json:"restore_control"`
+	ACLTemplateSHA256 string                                         `json:"acl_template_sha256"`
+	Scenarios         []string                                       `json:"scenarios"`
+
+	Base DownstreamFencingLock `json:"-"`
+}
+
+func DownstreamFencingV2ScenarioNames() []string {
+	return append([]string(nil), downstreamFencingV2ScenarioInventory[:]...)
 }
 
 type DownstreamFencingComponentSource struct {
@@ -264,6 +349,36 @@ func LoadDownstreamFencing(providerRoot, platform string) (DownstreamFencingLock
 	return locked, nil
 }
 
+// LoadDownstreamFencingV2 validates the explicit ADR 0034 successor and its
+// content-bound v1 transport/topology substrate without changing the v1 lock.
+func LoadDownstreamFencingV2(providerRoot, platform string) (DownstreamFencingV2Lock, error) {
+	root, err := filepath.Abs(providerRoot)
+	if err != nil {
+		return DownstreamFencingV2Lock{}, fmt.Errorf("resolve Provider root: %w", err)
+	}
+	base, err := LoadDownstreamFencing(root, platform)
+	if err != nil {
+		return DownstreamFencingV2Lock{}, err
+	}
+	lockPath := filepath.Join(root, DownstreamFencingV2LockPath)
+	if err := requireDownstreamFencingV2Fields(lockPath); err != nil {
+		return DownstreamFencingV2Lock{}, err
+	}
+	var locked DownstreamFencingV2Lock
+	if err := decodeStrictFile(lockPath, &locked); err != nil {
+		return DownstreamFencingV2Lock{}, err
+	}
+	baseContent, err := os.ReadFile(filepath.Join(root, DownstreamFencingLockPath))
+	if err != nil {
+		return DownstreamFencingV2Lock{}, err
+	}
+	if err := validateDownstreamFencingV2Lock(locked, normalizedSHA256(string(baseContent)), base); err != nil {
+		return DownstreamFencingV2Lock{}, err
+	}
+	locked.Base = base
+	return locked, nil
+}
+
 // VerifyDownstreamFencing verifies only the lock, clean Git checkout, Provider
 // identity, and source baselines. It does not assert that the E2E runner is
 // implemented or that the scenarios are executable.
@@ -276,6 +391,78 @@ func VerifyDownstreamFencing(providerRoot, platform string) error {
 		return err
 	}
 	return verifyDownstreamFencingSources(providerRoot, locked.Sources)
+}
+
+func VerifyDownstreamFencingV2(providerRoot, platform string) error {
+	if err := Verify(providerRoot); err != nil {
+		return err
+	}
+	locked, err := LoadDownstreamFencingV2(providerRoot, platform)
+	if err != nil {
+		return err
+	}
+	return verifyDownstreamFencingV2Sources(providerRoot, locked.Sources)
+}
+
+func validateDownstreamFencingV2Lock(
+	locked DownstreamFencingV2Lock,
+	baseDigest string,
+	base DownstreamFencingLock,
+) error {
+	if locked.SchemaVersion != 1 {
+		return fmt.Errorf("downstream-fencing-v2 schema version = %d, want 1", locked.SchemaVersion)
+	}
+	if locked.EvidenceProfile != DownstreamFencingV2Profile {
+		return fmt.Errorf("downstream-fencing-v2 evidence profile = %q, want %q", locked.EvidenceProfile, DownstreamFencingV2Profile)
+	}
+	expectedSources := DownstreamFencingV2Sources{
+		ProviderRevision: ProviderCommit, HarnessBaseline: DownstreamFencingV2HarnessBaseline,
+		GatewayComponent:       DownstreamFencingComponentSource{Path: "gateway/composition/browser.go", Revision: DownstreamFencingGatewayRevision},
+		IngressComponent:       DownstreamFencingComponentSource{Path: "gateway/cdpfence", Revision: DownstreamFencingIngressRevision},
+		ActionHistoryComponent: DownstreamFencingComponentSource{Path: "gateway/capacity/redis", Revision: ProviderCommit},
+		CallerSubstrate:        DownstreamFencingBaselineSource{Path: "e2e/internal/caller", BaselineRevision: DownstreamFencingCallerBaseline},
+	}
+	if locked.Sources != expectedSources {
+		return fmt.Errorf("downstream-fencing-v2 sources = %#v, want %#v", locked.Sources, expectedSources)
+	}
+	expectedBase := DownstreamFencingV2BaseLock{
+		Path: DownstreamFencingLockPath, SHA256: baseDigest, EvidenceProfile: DownstreamFencingProfile,
+	}
+	if locked.BaseLock != expectedBase || base.EvidenceProfile != DownstreamFencingProfile {
+		return errors.New("downstream-fencing-v2 base lock identity differs from the v1 substrate")
+	}
+	if locked.Contract != base.Contract || locked.Contract.SuiteExercised || locked.Contract.ContractMetadataOnly {
+		return errors.New("downstream-fencing-v2 Contract metadata differs from its unexercised locked identity")
+	}
+	descriptor, err := currentDownstreamFencingV2Descriptor(base.CapacityPolicy)
+	if err != nil {
+		return err
+	}
+	if locked.ActionFence != descriptor {
+		return fmt.Errorf("downstream-fencing-v2 action descriptor = %#v, want %#v", locked.ActionFence, descriptor)
+	}
+	expectedWitness := DownstreamFencingV2Witness{
+		Kind: "single-process-file-v1", RequiredMode: "0600", OutsideValkeyRestoreDomain: true,
+		LifetimeExclusiveLock: true, Reconstructed: true,
+	}
+	if locked.Witness != expectedWitness {
+		return errors.New("downstream-fencing-v2 witness boundary differs from the ADR 0034 gate")
+	}
+	expectedRestore := DownstreamFencingV2RestoreControl{
+		Owner: "orchestrator-only", Mechanism: "redis-dump-restore-v1", SeparateCredential: true,
+		ReusesCapacityFence: true,
+	}
+	if locked.RestoreControl != expectedRestore {
+		return errors.New("downstream-fencing-v2 restore control differs from the ADR 0034 gate")
+	}
+	wantACL := normalizedSHA256(DownstreamFencingV2ACLTemplate)
+	if locked.ACLTemplateSHA256 != wantACL {
+		return fmt.Errorf("downstream-fencing-v2 ACL template = %q, want %q", locked.ACLTemplateSHA256, wantACL)
+	}
+	if !reflect.DeepEqual(locked.Scenarios, downstreamFencingV2ScenarioInventory[:]) {
+		return errors.New("downstream-fencing-v2 scenario inventory differs from the ADR 0034 gate")
+	}
+	return nil
 }
 
 func validateDownstreamFencingLock(locked DownstreamFencingLock) error {
@@ -447,6 +634,20 @@ func requireDownstreamFencingFields(path string) error {
 	return nil
 }
 
+func requireDownstreamFencingV2Fields(path string) error {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read %s: %w", path, err)
+	}
+	if len(content) > maxLockBytes {
+		return fmt.Errorf("decode %s: lock exceeds %d bytes", path, maxLockBytes)
+	}
+	if err := requireJSONStructFields(content, reflect.TypeOf(DownstreamFencingV2Lock{}), "$"); err != nil {
+		return fmt.Errorf("decode %s: %w", path, err)
+	}
+	return nil
+}
+
 func requireJSONStructFields(encoded []byte, objectType reflect.Type, path string) error {
 	var object map[string]json.RawMessage
 	if err := json.Unmarshal(encoded, &object); err != nil {
@@ -525,6 +726,53 @@ func currentDownstreamFencingDescriptors(
 	}, nil
 }
 
+type descriptorActionHistoryWitness struct{}
+
+func (descriptorActionHistoryWitness) Load(context.Context, string) (rediscapacity.ActionHistoryCheckpoint, error) {
+	return rediscapacity.ActionHistoryCheckpoint{}, rediscapacity.ErrActionHistoryUnavailable
+}
+
+func (descriptorActionHistoryWitness) Provision(context.Context, string, rediscapacity.ActionHistoryCheckpoint) error {
+	return rediscapacity.ErrActionHistoryUnavailable
+}
+
+func (descriptorActionHistoryWitness) CompareAndSwap(
+	context.Context,
+	string,
+	rediscapacity.ActionHistoryCheckpoint,
+	rediscapacity.ActionHistoryCheckpoint,
+) error {
+	return rediscapacity.ErrActionHistoryUnavailable
+}
+
+func currentDownstreamFencingV2Descriptor(
+	policy SharedCapacityPolicy,
+) (rediscapacity.WitnessedActionFencingDescriptor, error) {
+	timeout := time.Duration(policy.OperationTimeoutMillis) * time.Millisecond
+	client := goredis.NewClient(&goredis.Options{
+		Addr: "127.0.0.1:1", MaxRetries: -1, ContextTimeoutEnabled: true,
+		Protocol: 2, DisableIdentity: true, DialTimeout: timeout, ReadTimeout: timeout,
+		WriteTimeout: timeout, PoolTimeout: timeout,
+	})
+	defer func() { _ = client.Close() }()
+	capacity, err := rediscapacity.New(rediscapacity.Options{
+		Client: client, Namespace: "downstream-fencing-v2-lock-descriptor",
+		MaxTotal: policy.MaxTotal, MaxPerTenant: policy.MaxPerTenant, MaxPerSession: policy.MaxPerSession,
+		LeaseTTL:            time.Duration(policy.LeaseTTLMillis) * time.Millisecond,
+		RenewInterval:       time.Duration(policy.RenewIntervalMillis) * time.Millisecond,
+		RenewalSafetyMargin: time.Duration(policy.RenewalSafetyMarginMillis) * time.Millisecond,
+		OperationTimeout:    timeout,
+	})
+	if err != nil {
+		return rediscapacity.WitnessedActionFencingDescriptor{}, fmt.Errorf("construct downstream-fencing-v2 capacity descriptor: %w", err)
+	}
+	fencer, err := rediscapacity.NewWitnessedActionFencer(capacity, descriptorActionHistoryWitness{})
+	if err != nil {
+		return rediscapacity.WitnessedActionFencingDescriptor{}, fmt.Errorf("construct downstream-fencing-v2 action descriptor: %w", err)
+	}
+	return fencer.Descriptor(), nil
+}
+
 func verifyDownstreamFencingSources(providerRoot string, sources DownstreamFencingSources) error {
 	root, err := filepath.Abs(providerRoot)
 	if err != nil {
@@ -557,6 +805,37 @@ func verifyDownstreamFencingSources(providerRoot string, sources DownstreamFenci
 		return err
 	}
 	return nil
+}
+
+func verifyDownstreamFencingV2Sources(providerRoot string, sources DownstreamFencingV2Sources) error {
+	root, err := filepath.Abs(providerRoot)
+	if err != nil {
+		return fmt.Errorf("resolve Provider root: %w", err)
+	}
+	if _, err := HarnessRevision(root); err != nil {
+		return err
+	}
+	if err := verifyAncestor(root, sources.HarnessBaseline, "downstream-fencing-v2 harness baseline"); err != nil {
+		return err
+	}
+	changed, err := git(root, "diff", "--name-only", sources.HarnessBaseline, "HEAD")
+	if err != nil {
+		return err
+	}
+	for _, path := range strings.Fields(changed) {
+		if !downstreamFencingV2HarnessPath(path) {
+			return fmt.Errorf("downstream-fencing-v2 harness differs from baseline at disallowed path %s", path)
+		}
+	}
+	for name, source := range map[string]DownstreamFencingComponentSource{
+		"Gateway": sources.GatewayComponent, "ingress": sources.IngressComponent,
+		"action history": sources.ActionHistoryComponent,
+	} {
+		if err := verifyExactComponentSource(root, name, source.Path, source.Revision); err != nil {
+			return err
+		}
+	}
+	return verifyExactComponentSource(root, "caller substrate", sources.CallerSubstrate.Path, sources.CallerSubstrate.BaselineRevision)
 }
 
 func verifyAncestor(root, revision, name string) error {
@@ -595,4 +874,13 @@ func downstreamFencingHarnessPath(path string) bool {
 	}
 	return path == "README.md" || path == "e2e" || strings.HasPrefix(path, "e2e/") || path == "docs" || strings.HasPrefix(path, "docs/") ||
 		path == ".github/workflows/downstream-fencing-e2e.yml"
+}
+
+func downstreamFencingV2HarnessPath(path string) bool {
+	if filepath.ToSlash(filepath.Clean(path)) != path {
+		return false
+	}
+	return path == "README.md" || path == "e2e" || strings.HasPrefix(path, "e2e/") ||
+		path == "docs" || strings.HasPrefix(path, "docs/") ||
+		path == ".github/workflows/downstream-fencing-v2-e2e.yml"
 }

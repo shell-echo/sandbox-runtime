@@ -25,12 +25,15 @@ ADR 0034 adds an explicitly selected v2 component with a bounded permanent
 session-history hash and an independent monotonic restore witness. Its local
 race/shuffle, vet, Contract verifier, unchanged 48-case Suite, and pinned-Valkey
 adapter gates pass. The existing reference stack and both ADR 0033 caller runs
-still use v1; they are not v2 deletion/restore evidence. Real v2 Chromium caller
-E2E, a production witness, Valkey provenance and HA/failover, production Browser
+still use v1; they are not v2 deletion/restore evidence. A separately locked
+18-scenario v2 multi-process real-Chromium runner is implemented with an
+orchestrator-only Redis fault credential and an independent file witness, but
+no clean committed local or hosted v2 run is recorded yet. V2 caller evidence,
+a production witness, Valkey provenance and HA/failover, production Browser
 advertisement/public Gateway composition, real Agent Platform migration,
 aggregate conformance, multi-controller, hostile multi-tenant, deployment, and
-production gates remain open. The ADR 0033 profile pins Contract identity but
-does not execute the Suite (`suite_exercised=false`).
+production gates remain open. The ADR 0033 and v2 profiles pin Contract
+identity but do not execute the Suite (`suite_exercised=false`).
 
 Hosted checkout `2cadc53` passes repository CI `34013982778`, Reference
 `34013982794`, Candidate `34013982784`, Browser `34013982785`, shared-capacity
@@ -152,7 +155,9 @@ Currently implemented:
   independent only when deployed outside the Redis snapshot/restore domain.
   Focused and full race/shuffle tests, vet, Contract verification, the unchanged
   48-case Suite, and tagged integration against the same pinned Valkey index
-  pass. No default composition or production advertisement selects v2
+  pass. The separate v2 caller harness is implemented but has no recorded clean
+  local or hosted run. No default composition or production advertisement
+  selects v2
 - downstream caller bootstrap implementation `58488d7`: two independently
   identified mTLS/JWS caller OS processes each perform Provider capability,
   create, operation, sandbox, Browser-session, and handoff reconciliation, bind

@@ -27,7 +27,7 @@ import (
 )
 
 const (
-	ProviderCommit   = "58488d70c0a43d68747ca6e14f81c56f1e23237a"
+	ProviderCommit   = "8ad7aca08d669af9cb71e02124478e23a3ae4990"
 	ContractNS       = "urn:shell-echo:sandbox-runtime:provider-v1"
 	ContractRevision = "5096e71fb84fbec22aa3487a0e55a1b49602ab8b"
 	ContractTree     = "859f76dc0e855a0c8abdbbb5648df100dabb4328"
@@ -337,6 +337,7 @@ func providerChangePath(changedPath string) bool {
 		changedPath == ".github/workflows/shared-capacity-e2e.yml" ||
 		changedPath == ".github/workflows/durable-revocation-e2e.yml" ||
 		changedPath == ".github/workflows/downstream-fencing-e2e.yml" ||
+		changedPath == ".github/workflows/downstream-fencing-v2-e2e.yml" ||
 		changedPath == "e2e" || strings.HasPrefix(changedPath, "e2e/")
 }
 

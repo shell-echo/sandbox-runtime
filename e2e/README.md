@@ -30,7 +30,7 @@ platform gate.
 
 | Item | Value |
 | --- | --- |
-| Provider implementation | `58488d70c0a43d68747ca6e14f81c56f1e23237a` |
+| Provider implementation | `8ad7aca08d669af9cb71e02124478e23a3ae4990` |
 | Contract namespace | `urn:shell-echo:sandbox-runtime:provider-v1` |
 | Contract revision | `5096e71fb84fbec22aa3487a0e55a1b49602ab8b` |
 | Contract tree | `859f76dc0e855a0c8abdbbb5648df100dabb4328` |
@@ -238,6 +238,47 @@ boundary for that platform. It does not execute the 48-case Contract Suite or
 establish exactly-once delivery, restored-snapshot consistency, Valkey
 provenance/HA/failover, real Agent Platform compatibility, Provider
 multi-controller reliability, hostile multi-tenant isolation, deployment, or
+production readiness.
+
+## Witnessed downstream-fencing v2 runner
+
+`cmd/downstream-fencing-v2-e2e` is the independently locked ADR 0034 successor
+profile. It content-binds the v1 transport, topology, Browser image, and
+Provider-call substrate while selecting `redis-action-fence-witnessed-v2` in a
+fresh capacity namespace. It does not change or relabel the v1 profile or its
+historical evidence.
+
+From a clean committed checkout with Docker and authenticated `gh` available:
+
+```bash
+cd e2e
+go run ./cmd/downstream-fencing-v2-e2e -check
+go run ./cmd/downstream-fencing-v2-e2e \
+  -evidence-root evidence/downstream-fencing-v2
+```
+
+The 18 scenarios retain the first ten real-Chromium, two-Gateway,
+two-independent-caller, unique-ingress behaviors from v1, then delete one
+retained session field, delete the complete action-state hash, restore a
+pre-activation Redis snapshot while reusing the same numerical capacity fence,
+reconstruct the ingress and file-witness adapter, inject and recover one exact
+Redis-ahead checkpoint, reject behind/divergent/more-than-one-ahead states,
+clean up, and sanitize the exact five-file evidence set. The runtime Redis user
+can execute only the capacity, revocation, and witnessed-action commands; a
+separate orchestrator user alone can execute the bounded `DUMP`, `RESTORE`,
+`HDEL`, and `DEL` fault controls. Gateways and callers receive only the runtime
+credential. The `0600` file witness is outside the logical Valkey restore set
+and is reconstructed from the retained file during process restarts.
+
+The implementation starts five new ingress processes after the initial one:
+one expected fail-closed startup against restored-old state and four successful
+reconstructions for repair, interrupted-CAS recovery, mismatch repair, and
+cleanup. The Contract identity remains pinned, but the Suite is not executed
+(`suite_exercised=false`). No local or hosted v2 caller run is recorded yet; the
+runner implementation alone is not deletion/restore caller evidence. Even a
+passing run would not establish a production monotonic witness, correlated
+Redis-and-witness rollback protection, Valkey provenance/HA/failover, real
+Agent Platform compatibility, hostile multi-tenant isolation, deployment, or
 production readiness.
 
 ## Latest verified evidence

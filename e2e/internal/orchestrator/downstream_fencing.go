@@ -13,6 +13,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -37,15 +39,19 @@ import (
 	"github.com/shell-echo/sandbox-runtime-e2e/internal/testenv"
 	"github.com/shell-echo/sandbox-runtime/gateway"
 	rediscapacity "github.com/shell-echo/sandbox-runtime/gateway/capacity/redis"
+	redisrevocation "github.com/shell-echo/sandbox-runtime/gateway/revocation/redis"
 )
 
 const (
-	downstreamFencingEvidenceName = "Browser downstream CDP action-fencing external-caller evidence"
-	downstreamFencingNamespace    = "downstream-fencing-e2e"
-	downstreamFencingController   = "downstream-fencing-e2e-controller"
-	downstreamCommandTimeout      = 5 * time.Second
-	downstreamRecordMaximum       = 512
-	downstreamFileMaximum         = 16 << 20
+	downstreamFencingEvidenceName   = "Browser downstream CDP action-fencing external-caller evidence"
+	downstreamFencingV2EvidenceName = "Browser witnessed action-history restore-fencing external-caller evidence"
+	downstreamFencingNamespace      = "downstream-fencing-e2e"
+	downstreamFencingController     = "downstream-fencing-e2e-controller"
+	downstreamFencingV2Namespace    = "downstream-fencing-v2-e2e"
+	downstreamFencingV2Controller   = "downstream-fencing-v2-e2e-controller"
+	downstreamCommandTimeout        = 5 * time.Second
+	downstreamRecordMaximum         = 512
+	downstreamFileMaximum           = 16 << 20
 )
 
 var downstreamEvidenceFiles = []string{
@@ -147,12 +153,16 @@ type downstreamFencingScenario struct {
 }
 
 type downstreamFencingRunner struct {
-	report downstreamFencingReport
+	report        downstreamFencingReport
+	afterScenario func(context.Context) error
 }
 
 func (r *downstreamFencingRunner) run(ctx context.Context, name string, scenario func(context.Context) error) error {
 	started := time.Now()
 	err := scenario(ctx)
+	if err == nil && r.afterScenario != nil {
+		err = r.afterScenario(ctx)
+	}
 	status := "passed"
 	if err != nil {
 		status = "failed"
@@ -167,33 +177,51 @@ func (r *downstreamFencingRunner) run(ctx context.Context, name string, scenario
 }
 
 type downstreamFencingManifest struct {
-	CreatedAt              string                                   `json:"created_at"`
-	EvidenceName           string                                   `json:"evidence_name"`
-	EvidenceProfile        string                                   `json:"evidence_profile"`
-	HarnessCommit          string                                   `json:"harness_commit"`
-	Sources                lock.DownstreamFencingSources            `json:"sources"`
-	Contract               downstreamFencingContractEvidence        `json:"contract"`
-	BrowserImage           downstreamFencingBrowserEvidence         `json:"browser_image"`
-	Valkey                 downstreamFencingValkeyEvidence          `json:"valkey"`
-	CapacityPolicy         lock.SharedCapacityPolicy                `json:"capacity_policy"`
-	RevocationPolicy       lock.DurableRevocationPolicy             `json:"revocation_policy"`
-	Adapters               lock.DownstreamFencingAdapterDescriptors `json:"adapters"`
-	PrivateWire            lock.DownstreamFencingWire               `json:"private_wire"`
-	Topology               lock.DownstreamFencingTopology           `json:"topology"`
-	Ingress                lock.DownstreamFencingIngress            `json:"ingress"`
-	Transport              lock.DownstreamFencingTransport          `json:"transport"`
-	BinaryDigests          downstreamFencingBinaryDigests           `json:"binary_digests"`
-	ConfigDigests          downstreamFencingConfigDigests           `json:"config_digests"`
-	ProcessReconstructions int                                      `json:"provider_ingress_process_reconstructions"`
-	Reports                []string                                 `json:"reports"`
-	Audits                 []string                                 `json:"audits"`
-	Observations           []string                                 `json:"observations"`
-	Commands               []string                                 `json:"commands"`
-	Faults                 []string                                 `json:"faults"`
-	Sanitization           downstreamFencingSanitization            `json:"sanitization"`
-	Cleanup                downstreamFencingCleanup                 `json:"cleanup"`
-	NonTargets             []string                                 `json:"non_targets"`
-	EvidenceBoundary       string                                   `json:"evidence_boundary"`
+	CreatedAt              string                                    `json:"created_at"`
+	EvidenceName           string                                    `json:"evidence_name"`
+	EvidenceProfile        string                                    `json:"evidence_profile"`
+	HarnessCommit          string                                    `json:"harness_commit"`
+	Sources                lock.DownstreamFencingSources             `json:"sources"`
+	Contract               downstreamFencingContractEvidence         `json:"contract"`
+	BrowserImage           downstreamFencingBrowserEvidence          `json:"browser_image"`
+	Valkey                 downstreamFencingValkeyEvidence           `json:"valkey"`
+	CapacityPolicy         lock.SharedCapacityPolicy                 `json:"capacity_policy"`
+	RevocationPolicy       lock.DurableRevocationPolicy              `json:"revocation_policy"`
+	Adapters               *lock.DownstreamFencingAdapterDescriptors `json:"adapters,omitempty"`
+	PrivateWire            lock.DownstreamFencingWire                `json:"private_wire"`
+	Topology               lock.DownstreamFencingTopology            `json:"topology"`
+	Ingress                lock.DownstreamFencingIngress             `json:"ingress"`
+	Transport              lock.DownstreamFencingTransport           `json:"transport"`
+	BinaryDigests          downstreamFencingBinaryDigests            `json:"binary_digests"`
+	ConfigDigests          downstreamFencingConfigDigests            `json:"config_digests"`
+	ProcessReconstructions int                                       `json:"provider_ingress_process_reconstructions"`
+	Reports                []string                                  `json:"reports"`
+	Audits                 []string                                  `json:"audits"`
+	Observations           []string                                  `json:"observations"`
+	Commands               []string                                  `json:"commands"`
+	Faults                 []string                                  `json:"faults"`
+	Sanitization           downstreamFencingSanitization             `json:"sanitization"`
+	Cleanup                downstreamFencingCleanup                  `json:"cleanup"`
+	NonTargets             []string                                  `json:"non_targets"`
+	EvidenceBoundary       string                                    `json:"evidence_boundary"`
+	WitnessedV2            *downstreamFencingV2Evidence              `json:"witnessed_v2,omitempty"`
+}
+
+type downstreamFencingV2Evidence struct {
+	Sources                    lock.DownstreamFencingV2Sources                `json:"sources"`
+	BaseLock                   lock.DownstreamFencingV2BaseLock               `json:"base_lock"`
+	ActionFence                rediscapacity.WitnessedActionFencingDescriptor `json:"action_fence"`
+	Capacity                   rediscapacity.Descriptor                       `json:"capacity"`
+	Revocation                 redisrevocation.Descriptor                     `json:"revocation"`
+	Witness                    lock.DownstreamFencingV2Witness                `json:"witness"`
+	RestoreControl             lock.DownstreamFencingV2RestoreControl         `json:"restore_control"`
+	ACLTemplateSHA256          string                                         `json:"acl_template_sha256"`
+	SessionFieldDeletion       bool                                           `json:"session_field_deletion_rejected"`
+	CompleteStateDeletion      bool                                           `json:"complete_state_deletion_rejected"`
+	SameNumericalFenceRollback bool                                           `json:"same_numerical_fence_rollback_rejected"`
+	WitnessReconstruction      bool                                           `json:"witness_reconstruction_rejected_rollback"`
+	AheadOneRecovered          bool                                           `json:"redis_ahead_one_recovered"`
+	OtherMismatchesRejected    bool                                           `json:"other_checkpoint_mismatches_rejected"`
 }
 
 type downstreamFencingContractEvidence struct {
@@ -294,6 +322,15 @@ type downstreamFencingIdentity struct {
 // Provider/private-ingress process, one retained Valkey process, and the exact
 // signed Browser image running real Chromium.
 func RunDownstreamFencing(ctx context.Context, options Options) (_ DownstreamFencingResult, resultErr error) {
+	return runDownstreamFencing(ctx, options, false)
+}
+
+// RunDownstreamFencingV2 executes the separately locked ADR 0034 successor.
+func RunDownstreamFencingV2(ctx context.Context, options Options) (_ DownstreamFencingResult, resultErr error) {
+	return runDownstreamFencing(ctx, options, true)
+}
+
+func runDownstreamFencing(ctx context.Context, options Options, witnessedV2 bool) (_ DownstreamFencingResult, resultErr error) {
 	moduleRoot, err := filepath.Abs(options.ModuleRoot)
 	if err != nil {
 		return DownstreamFencingResult{}, err
@@ -306,12 +343,38 @@ func RunDownstreamFencing(ctx context.Context, options Options) (_ DownstreamFen
 	if err != nil {
 		return DownstreamFencingResult{}, err
 	}
-	if err := lock.VerifyDownstreamFencing(providerRoot, platform); err != nil {
-		return DownstreamFencingResult{}, err
+	var locked lock.DownstreamFencingLock
+	var lockedV2 *lock.DownstreamFencingV2Lock
+	evidenceName := downstreamFencingEvidenceName
+	evidenceProfile := lock.DownstreamFencingProfile
+	if witnessedV2 {
+		if err := lock.VerifyDownstreamFencingV2(providerRoot, platform); err != nil {
+			return DownstreamFencingResult{}, err
+		}
+		value, err := lock.LoadDownstreamFencingV2(providerRoot, platform)
+		if err != nil {
+			return DownstreamFencingResult{}, err
+		}
+		lockedV2 = &value
+		locked = value.Base
+		evidenceName = downstreamFencingV2EvidenceName
+		evidenceProfile = value.EvidenceProfile
+	} else {
+		if err := lock.VerifyDownstreamFencing(providerRoot, platform); err != nil {
+			return DownstreamFencingResult{}, err
+		}
+		locked, err = lock.LoadDownstreamFencing(providerRoot, platform)
+		if err != nil {
+			return DownstreamFencingResult{}, err
+		}
 	}
-	locked, err := lock.LoadDownstreamFencing(providerRoot, platform)
-	if err != nil {
-		return DownstreamFencingResult{}, err
+	scenarios := locked.Scenarios
+	runtimeNamespace := downstreamFencingNamespace
+	runtimeController := downstreamFencingController
+	if lockedV2 != nil {
+		scenarios = lockedV2.Scenarios
+		runtimeNamespace = downstreamFencingV2Namespace
+		runtimeController = downstreamFencingV2Controller
 	}
 	harnessCommit, err := lock.HarnessRevision(moduleRoot)
 	if err != nil {
@@ -338,6 +401,14 @@ func RunDownstreamFencing(ctx context.Context, options Options) (_ DownstreamFen
 	if err := os.Chmod(runRoot, 0o700); err != nil {
 		return DownstreamFencingResult{}, err
 	}
+	witnessPath := ""
+	if witnessedV2 {
+		witnessRoot := filepath.Join(runRoot, "independent-witness")
+		if err := os.MkdirAll(witnessRoot, 0o700); err != nil {
+			return DownstreamFencingResult{}, err
+		}
+		witnessPath = filepath.Join(witnessRoot, "action-history.json")
+	}
 
 	dockerClient, err := client.New(client.FromEnv)
 	if err != nil {
@@ -348,7 +419,7 @@ func RunDownstreamFencing(ctx context.Context, options Options) (_ DownstreamFen
 	if architecture == platform {
 		return DownstreamFencingResult{}, errors.New("downstream-fencing Docker platform is invalid")
 	}
-	if err := cleanupBrowserResources(ctx, dockerClient, downstreamFencingNamespace); err != nil {
+	if err := cleanupBrowserResources(ctx, dockerClient, runtimeNamespace); err != nil {
 		return DownstreamFencingResult{}, err
 	}
 
@@ -411,7 +482,7 @@ func RunDownstreamFencing(ctx context.Context, options Options) (_ DownstreamFen
 		defer cancel()
 		resultErr = errors.Join(resultErr, cleanupGatewayImage(cleanupCtx))
 	}()
-	uplinkName, cleanupUplink, err := createBrowserUplink(ctx, dockerClient, downstreamFencingNamespace)
+	uplinkName, cleanupUplink, err := createBrowserUplink(ctx, dockerClient, runtimeNamespace)
 	if err != nil {
 		return DownstreamFencingResult{}, err
 	}
@@ -427,7 +498,7 @@ func RunDownstreamFencing(ctx context.Context, options Options) (_ DownstreamFen
 	defer func() {
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 		defer cancel()
-		resultErr = errors.Join(resultErr, cleanupBrowserResources(cleanupCtx, dockerClient, downstreamFencingNamespace))
+		resultErr = errors.Join(resultErr, cleanupBrowserResources(cleanupCtx, dockerClient, runtimeNamespace))
 	}()
 
 	ghPath, ghDigest, err := provenanceExecutable()
@@ -438,7 +509,15 @@ func RunDownstreamFencing(ctx context.Context, options Options) (_ DownstreamFen
 	if err != nil {
 		return DownstreamFencingResult{}, err
 	}
+	orchestratorPassword := ""
 	acl := downstreamAuthorityACL(password, capacityNamespace, revocationNamespace)
+	if witnessedV2 {
+		orchestratorPassword, err = randomSecret("")
+		if err != nil {
+			return DownstreamFencingResult{}, err
+		}
+		acl = downstreamAuthorityV2ACL(password, orchestratorPassword, capacityNamespace, revocationNamespace)
+	}
 	valkeyImage := locked.Valkey.Image + "@" + locked.Valkey.IndexDigest
 	valkey, err := startSharedValkey(ctx, runRoot, valkeyImage, platform, locked.Valkey.SelectedDigest,
 		lock.DownstreamFencingServerConfig, acl, "e2e", password)
@@ -473,7 +552,28 @@ func RunDownstreamFencing(ctx context.Context, options Options) (_ DownstreamFen
 	if err := waitForSharedRedis(ctx, redisClient, 10*time.Second); err != nil {
 		return DownstreamFencingResult{}, err
 	}
-	if err := provisionDownstreamAuthorities(ctx, redisClient, capacityNamespace, revocationNamespace, locked); err != nil {
+	orchestratorRedisURL := ""
+	var orchestratorRedisClient *goredis.Client
+	orchestratorRedisClosed := true
+	if witnessedV2 {
+		orchestratorRedisURL, err = downstreamCredentialURL(valkey.redisURL, "orchestrator", orchestratorPassword)
+		if err != nil {
+			return DownstreamFencingResult{}, err
+		}
+		orchestratorRedisClient, err = newSharedRedisClient(orchestratorRedisURL, operationTimeout)
+		if err != nil {
+			return DownstreamFencingResult{}, err
+		}
+		orchestratorRedisClosed = false
+		defer func() {
+			if !orchestratorRedisClosed {
+				resultErr = errors.Join(resultErr, orchestratorRedisClient.Close())
+			}
+		}()
+	}
+	if err := provisionDownstreamAuthorities(
+		ctx, redisClient, capacityNamespace, revocationNamespace, locked, witnessedV2, witnessPath,
+	); err != nil {
 		return DownstreamFencingResult{}, err
 	}
 
@@ -498,10 +598,14 @@ func RunDownstreamFencing(ctx context.Context, options Options) (_ DownstreamFen
 	}
 	observationPath := filepath.Join(stateRoot, "ingress-observations.jsonl")
 	providerRevisionID := "provider-revision-downstream-fencing-e2e-v1"
+	if witnessedV2 {
+		providerRevisionID = "provider-revision-downstream-fencing-e2e-v2"
+	}
 	providerAudience := "urn:shell-echo:sandbox-runtime:provider-instance:downstream-fencing-e2e"
 	providerConfig := downstreamProviderConfig(
 		providerAddress, ingressAddress, stateRoot, runRoot, providerRoot, browserReference, browserGatewayImage, uplinkName,
 		architecture, ghPath, ghDigest, valkey.redisURL, capacityNamespace, locked, material, observationPath,
+		witnessedV2, witnessPath, runtimeNamespace, runtimeController,
 	)
 	providerConfigPath := filepath.Join(secretsRoot, "provider-ingress.json")
 	providerConfigDigest, err := writeJSON(providerConfigPath, providerConfig)
@@ -657,6 +761,9 @@ func RunDownstreamFencing(ctx context.Context, options Options) (_ DownstreamFen
 		providerConfigPath, callerBootstrapPaths[0], callerBootstrapPaths[1],
 		providerBootstrapPaths[0], providerBootstrapPaths[1], gatewayConfigPaths[0], gatewayConfigPaths[1],
 	)
+	if witnessedV2 {
+		sensitive = append(sensitive, orchestratorPassword, orchestratorRedisURL, witnessPath, witnessPath+".lock")
+	}
 
 	baselineMarker, err := randomSecret("baseline-marker-")
 	if err != nil {
@@ -681,14 +788,27 @@ func RunDownstreamFencing(ctx context.Context, options Options) (_ DownstreamFen
 	sensitive = append(sensitive, baselineMarker, staleMarker, replacementMarker, preActionMarker, outageMarker)
 
 	runner := &downstreamFencingRunner{report: downstreamFencingReport{
-		EvidenceName: downstreamFencingEvidenceName, EvidenceProfile: locked.EvidenceProfile,
+		EvidenceName: evidenceName, EvidenceProfile: evidenceProfile,
 	}}
+	if witnessedV2 {
+		runner.afterScenario = func(ctx context.Context) error {
+			if orchestratorRedisClosed {
+				return nil
+			}
+			tokens, err := downstreamWitnessTokens(ctx, orchestratorRedisClient, downstreamActionStateKey(capacityNamespace))
+			if err != nil {
+				return err
+			}
+			sensitive = append(sensitive, tokens...)
+			return nil
+		}
+	}
 	leaseTTL := time.Duration(locked.CapacityPolicy.LeaseTTLMillis) * time.Millisecond
 	var staleLease, replacementLease sharedLeaseRecord
 	var targetID, ownerSession, replacementSession string
 	var ownerA, replacementB *downstreamCDPClient
 
-	if err := runner.run(ctx, locked.Scenarios[0], func(ctx context.Context) error {
+	if err := runner.run(ctx, scenarios[0], func(ctx context.Context) error {
 		before, err := downstreamObservationSnapshot(observationPath)
 		if err != nil {
 			return err
@@ -734,7 +854,7 @@ func RunDownstreamFencing(ctx context.Context, options Options) (_ DownstreamFen
 		return DownstreamFencingResult{}, err
 	}
 
-	if err := runner.run(ctx, locked.Scenarios[1], func(ctx context.Context) error {
+	if err := runner.run(ctx, scenarios[1], func(ctx context.Context) error {
 		initial, err := singleSharedLease(ctx, redisClient, capacityNamespace)
 		if err != nil {
 			return err
@@ -755,7 +875,7 @@ func RunDownstreamFencing(ctx context.Context, options Options) (_ DownstreamFen
 		return DownstreamFencingResult{}, err
 	}
 
-	if err := runner.run(ctx, locked.Scenarios[2], func(ctx context.Context) error {
+	if err := runner.run(ctx, scenarios[2], func(ctx context.Context) error {
 		before, err := downstreamObservationSnapshot(observationPath)
 		if err != nil {
 			return err
@@ -794,7 +914,7 @@ func RunDownstreamFencing(ctx context.Context, options Options) (_ DownstreamFen
 		return DownstreamFencingResult{}, err
 	}
 
-	if err := runner.run(ctx, locked.Scenarios[3], func(ctx context.Context) error {
+	if err := runner.run(ctx, scenarios[3], func(ctx context.Context) error {
 		before, err := downstreamObservationSnapshot(observationPath)
 		if err != nil {
 			return err
@@ -842,7 +962,7 @@ func RunDownstreamFencing(ctx context.Context, options Options) (_ DownstreamFen
 		return DownstreamFencingResult{}, err
 	}
 
-	if err := runner.run(ctx, locked.Scenarios[4], func(ctx context.Context) error {
+	if err := runner.run(ctx, scenarios[4], func(ctx context.Context) error {
 		got, err := replacementB.evaluateString(ctx, replacementSession, downstreamSetExpression(replacementMarker), downstreamCommandTimeout)
 		if err != nil || got != replacementMarker {
 			return errors.Join(err, errors.New("replacement real-CDP mutation did not persist"))
@@ -856,7 +976,7 @@ func RunDownstreamFencing(ctx context.Context, options Options) (_ DownstreamFen
 		return DownstreamFencingResult{}, err
 	}
 
-	if err := runner.run(ctx, locked.Scenarios[5], func(ctx context.Context) error {
+	if err := runner.run(ctx, scenarios[5], func(ctx context.Context) error {
 		current, err := singleSharedLease(ctx, redisClient, capacityNamespace)
 		if err != nil {
 			return err
@@ -896,7 +1016,7 @@ func RunDownstreamFencing(ctx context.Context, options Options) (_ DownstreamFen
 	var activeA *downstreamCDPClient
 	var activeASession string
 	var lowerReconnectBefore downstreamObservations
-	if err := runner.run(ctx, locked.Scenarios[6], func(ctx context.Context) error {
+	if err := runner.run(ctx, scenarios[6], func(ctx context.Context) error {
 		if err := waitForSharedCardinality(ctx, redisClient, capacityNamespace, 0, leaseTTL); err != nil {
 			return err
 		}
@@ -965,7 +1085,7 @@ func RunDownstreamFencing(ctx context.Context, options Options) (_ DownstreamFen
 		return DownstreamFencingResult{}, err
 	}
 
-	if err := runner.run(ctx, locked.Scenarios[7], func(ctx context.Context) error {
+	if err := runner.run(ctx, scenarios[7], func(ctx context.Context) error {
 		auditBefore, err := readDownstreamGatewayAudit(filepath.Join(stateRoot, "gateway-b-audit.jsonl"))
 		if err != nil {
 			return err
@@ -996,7 +1116,7 @@ func RunDownstreamFencing(ctx context.Context, options Options) (_ DownstreamFen
 		return DownstreamFencingResult{}, err
 	}
 
-	if err := runner.run(ctx, locked.Scenarios[8], func(ctx context.Context) error {
+	if err := runner.run(ctx, scenarios[8], func(ctx context.Context) error {
 		if err := downstreamOpen(ctx, callers[1], "unaffected-b", "gateway-b", identities[1].envelope.GrantBinding.ID); err != nil {
 			return err
 		}
@@ -1037,7 +1157,7 @@ func RunDownstreamFencing(ctx context.Context, options Options) (_ DownstreamFen
 		return DownstreamFencingResult{}, err
 	}
 
-	if err := runner.run(ctx, locked.Scenarios[9], func(ctx context.Context) error {
+	if err := runner.run(ctx, scenarios[9], func(ctx context.Context) error {
 		current, err := singleSharedLease(ctx, redisClient, capacityNamespace)
 		if err != nil {
 			return err
@@ -1111,155 +1231,174 @@ func RunDownstreamFencing(ctx context.Context, options Options) (_ DownstreamFen
 		return DownstreamFencingResult{}, err
 	}
 
-	if err := runner.run(ctx, locked.Scenarios[10], func(ctx context.Context) error {
-		if err := waitForSharedCardinality(ctx, redisClient, capacityNamespace, 0, leaseTTL); err != nil {
-			return err
-		}
-		if err := downstreamOpen(ctx, callers[0], "reconstruct-stale-a", "gateway-a", identities[0].envelope.GrantBinding.ID); err != nil {
-			return err
-		}
-		staleReconstruct, err := newDownstreamCDPClient(callers[0], "reconstruct-stale-a")
-		if err != nil {
-			return err
-		}
-		if err := staleReconstruct.browserVersion(ctx, downstreamCommandTimeout); err != nil {
-			return err
-		}
-		oldLease, err := singleSharedLease(ctx, redisClient, capacityNamespace)
-		if err != nil {
-			return err
-		}
-		oldLease, err = waitForSingleSharedLeaseRenewal(ctx, redisClient, capacityNamespace, oldLease, leaseTTL)
-		if err != nil {
-			return err
-		}
-		sensitive = append(sensitive, oldLease.member)
-		if err := signalSharedGateway(gatewayA, syscall.SIGSTOP); err != nil {
-			return err
-		}
-		gatewayAPaused = true
-		if err := waitForSharedGatewayStopped(ctx, gatewayA, time.Second); err != nil {
-			return err
-		}
-		if err := waitForDownstreamLeaseExpiry(ctx, redisClient, capacityNamespace, oldLease, leaseTTL+time.Second); err != nil {
-			return err
-		}
-		activationBefore, err := downstreamObservationSnapshot(observationPath)
-		if err != nil {
-			return err
-		}
-		if err := downstreamOpen(ctx, callers[0], "reconstruct-current-b", "gateway-b", identities[0].envelope.GrantBinding.ID); err != nil {
-			return err
-		}
-		currentB, err := newDownstreamCDPClient(callers[0], "reconstruct-current-b")
-		if err != nil {
-			return err
-		}
-		if err := currentB.browserVersion(ctx, downstreamCommandTimeout); err != nil {
-			return err
-		}
-		currentSession, err := currentB.attachTarget(ctx, targetID, downstreamCommandTimeout)
-		if err != nil {
-			return err
-		}
-		sensitive = append(sensitive, currentSession)
-		activationAfter, err := downstreamObservationSnapshot(observationPath)
-		if err != nil {
-			return err
-		}
-		if err := assertDownstreamObservationDelta(activationBefore, activationAfter, "activation", "succeeded", 1); err != nil {
-			return err
-		}
-		newLease, err := singleSharedLease(ctx, redisClient, capacityNamespace)
-		if err != nil || newLease.fence <= oldLease.fence {
-			return errors.Join(err, errors.New("reconstruction setup did not retain a higher fence"))
-		}
-		highWaterBefore, err := downstreamHighWaterSnapshot(ctx, redisClient, capacityNamespace, identities[0])
-		if err != nil {
-			return err
-		}
-		if err := downstreamClose(ctx, callers[0], "reconstruct-current-b"); err != nil {
-			return err
-		}
-		if err := ingressProcess.Stop(); err != nil {
-			return err
-		}
-		ingressStopped = true
-		ingressProcess, err = startStack(ingressBinary, providerConfigPath, filepath.Join(logRoot, "provider-ingress-reconstructed.log"))
-		if err != nil {
-			return err
-		}
-		ingressStopped = false
-		if err := waitForListenersWithin(ctx, ingressProcess, browserListenerReadinessTimeout, providerAddress, ingressAddress); err != nil {
-			return err
-		}
-		highWaterAfter, err := downstreamHighWaterSnapshot(ctx, redisClient, capacityNamespace, identities[0])
-		if err != nil || highWaterAfter != highWaterBefore {
-			return errors.Join(err, errors.New("retained action high-water changed across ingress reconstruction"))
-		}
-		before, err := downstreamObservationSnapshot(observationPath)
-		if err != nil {
-			return err
-		}
-		if err := signalSharedGateway(gatewayA, syscall.SIGCONT); err != nil {
-			return err
-		}
-		gatewayAPaused = false
-		if err := downstreamExpectedClosed(ctx, callers[0], "reconstruct-stale-a", leaseTTL); err != nil {
-			return err
-		}
-		if err := gatewayA.Stop(); err != nil {
-			return err
-		}
-		gatewayAStopped = true
-		closed, err := downstreamObservationSnapshot(observationPath)
-		if err != nil {
-			return err
-		}
-		if !downstreamObservationsEqual(before, closed) {
-			return errors.New("reconstructed ingress received an automatic reconnect from the terminated stale Gateway")
-		}
-		if err := waitForSharedCardinality(ctx, redisClient, capacityNamespace, 0, leaseTTL); err != nil {
-			return err
-		}
-		claim, err := downstreamStaleFenceClaim(oldLease)
-		if err != nil {
-			return err
-		}
-		sensitive = append(sensitive, claim.Opaque())
-		requiredWindow := time.Duration(locked.Ingress.ActionTimeoutMillis) * time.Millisecond
-		if err := downstreamStaleActivationProbe(ctx, gatewayConfigA, identities[0], claim, func() error {
-			return restoreDownstreamStaleMember(
-				ctx, redisClient, capacityNamespace, oldLease, newLease, leaseTTL, requiredWindow,
-			)
+	if !witnessedV2 {
+		if err := runner.run(ctx, scenarios[10], func(ctx context.Context) error {
+			if err := waitForSharedCardinality(ctx, redisClient, capacityNamespace, 0, leaseTTL); err != nil {
+				return err
+			}
+			if err := downstreamOpen(ctx, callers[0], "reconstruct-stale-a", "gateway-a", identities[0].envelope.GrantBinding.ID); err != nil {
+				return err
+			}
+			staleReconstruct, err := newDownstreamCDPClient(callers[0], "reconstruct-stale-a")
+			if err != nil {
+				return err
+			}
+			if err := staleReconstruct.browserVersion(ctx, downstreamCommandTimeout); err != nil {
+				return err
+			}
+			oldLease, err := singleSharedLease(ctx, redisClient, capacityNamespace)
+			if err != nil {
+				return err
+			}
+			oldLease, err = waitForSingleSharedLeaseRenewal(ctx, redisClient, capacityNamespace, oldLease, leaseTTL)
+			if err != nil {
+				return err
+			}
+			sensitive = append(sensitive, oldLease.member)
+			if err := signalSharedGateway(gatewayA, syscall.SIGSTOP); err != nil {
+				return err
+			}
+			gatewayAPaused = true
+			if err := waitForSharedGatewayStopped(ctx, gatewayA, time.Second); err != nil {
+				return err
+			}
+			if err := waitForDownstreamLeaseExpiry(ctx, redisClient, capacityNamespace, oldLease, leaseTTL+time.Second); err != nil {
+				return err
+			}
+			activationBefore, err := downstreamObservationSnapshot(observationPath)
+			if err != nil {
+				return err
+			}
+			if err := downstreamOpen(ctx, callers[0], "reconstruct-current-b", "gateway-b", identities[0].envelope.GrantBinding.ID); err != nil {
+				return err
+			}
+			currentB, err := newDownstreamCDPClient(callers[0], "reconstruct-current-b")
+			if err != nil {
+				return err
+			}
+			if err := currentB.browserVersion(ctx, downstreamCommandTimeout); err != nil {
+				return err
+			}
+			currentSession, err := currentB.attachTarget(ctx, targetID, downstreamCommandTimeout)
+			if err != nil {
+				return err
+			}
+			sensitive = append(sensitive, currentSession)
+			activationAfter, err := downstreamObservationSnapshot(observationPath)
+			if err != nil {
+				return err
+			}
+			if err := assertDownstreamObservationDelta(activationBefore, activationAfter, "activation", "succeeded", 1); err != nil {
+				return err
+			}
+			newLease, err := singleSharedLease(ctx, redisClient, capacityNamespace)
+			if err != nil || newLease.fence <= oldLease.fence {
+				return errors.Join(err, errors.New("reconstruction setup did not retain a higher fence"))
+			}
+			highWaterBefore, err := downstreamHighWaterSnapshot(ctx, redisClient, capacityNamespace, identities[0])
+			if err != nil {
+				return err
+			}
+			if err := downstreamClose(ctx, callers[0], "reconstruct-current-b"); err != nil {
+				return err
+			}
+			if err := ingressProcess.Stop(); err != nil {
+				return err
+			}
+			ingressStopped = true
+			ingressProcess, err = startStack(ingressBinary, providerConfigPath, filepath.Join(logRoot, "provider-ingress-reconstructed.log"))
+			if err != nil {
+				return err
+			}
+			ingressStopped = false
+			if err := waitForListenersWithin(ctx, ingressProcess, browserListenerReadinessTimeout, providerAddress, ingressAddress); err != nil {
+				return err
+			}
+			highWaterAfter, err := downstreamHighWaterSnapshot(ctx, redisClient, capacityNamespace, identities[0])
+			if err != nil || highWaterAfter != highWaterBefore {
+				return errors.Join(err, errors.New("retained action high-water changed across ingress reconstruction"))
+			}
+			before, err := downstreamObservationSnapshot(observationPath)
+			if err != nil {
+				return err
+			}
+			if err := signalSharedGateway(gatewayA, syscall.SIGCONT); err != nil {
+				return err
+			}
+			gatewayAPaused = false
+			if err := downstreamExpectedClosed(ctx, callers[0], "reconstruct-stale-a", leaseTTL); err != nil {
+				return err
+			}
+			if err := gatewayA.Stop(); err != nil {
+				return err
+			}
+			gatewayAStopped = true
+			closed, err := downstreamObservationSnapshot(observationPath)
+			if err != nil {
+				return err
+			}
+			if !downstreamObservationsEqual(before, closed) {
+				return errors.New("reconstructed ingress received an automatic reconnect from the terminated stale Gateway")
+			}
+			if err := waitForSharedCardinality(ctx, redisClient, capacityNamespace, 0, leaseTTL); err != nil {
+				return err
+			}
+			claim, err := downstreamStaleFenceClaim(oldLease)
+			if err != nil {
+				return err
+			}
+			sensitive = append(sensitive, claim.Opaque())
+			requiredWindow := time.Duration(locked.Ingress.ActionTimeoutMillis) * time.Millisecond
+			if err := downstreamStaleActivationProbe(ctx, gatewayConfigA, identities[0], claim, func() error {
+				return restoreDownstreamStaleMember(
+					ctx, redisClient, capacityNamespace, oldLease, newLease, leaseTTL, requiredWindow,
+				)
+			}); err != nil {
+				return err
+			}
+			if err := validateDownstreamStaleMember(
+				ctx, redisClient, capacityNamespace, oldLease, newLease, requiredWindow,
+			); err != nil {
+				return err
+			}
+			// Server time only advances. A still-valid exact member after rejection
+			// excludes the earlier absent, expired, and insufficient-window loss paths.
+			after, err := waitForDownstreamObservation(ctx, observationPath, before, "activation", "fence_lost", 1, downstreamCommandTimeout)
+			if err != nil {
+				return err
+			}
+			if err := assertDownstreamObservationDelta(before, after, "upstream_dial", "succeeded", 0); err != nil {
+				return err
+			}
+			highWaterFinal, err := downstreamHighWaterSnapshot(ctx, redisClient, capacityNamespace, identities[0])
+			if err != nil || highWaterFinal != highWaterBefore {
+				return errors.Join(err, errors.New("stale reconstruction probe changed retained action high-water"))
+			}
+			return removeSharedLease(ctx, redisClient, capacityNamespace, oldLease.member)
 		}); err != nil {
-			return err
+			return DownstreamFencingResult{}, err
 		}
-		if err := validateDownstreamStaleMember(
-			ctx, redisClient, capacityNamespace, oldLease, newLease, requiredWindow,
-		); err != nil {
-			return err
+	}
+	if witnessedV2 {
+		if err := runDownstreamFencingV2Scenarios(ctx, downstreamFencingV2ScenarioInput{
+			Runner: runner, Scenarios: scenarios, RedisClient: redisClient,
+			OrchestratorRedisClient: orchestratorRedisClient, CapacityNamespace: capacityNamespace,
+			WitnessPath: witnessPath, ObservationPath: observationPath, Callers: callers,
+			Identities: identities, TargetID: targetID, ExpectedMarker: replacementMarker, LeaseTTL: leaseTTL,
+			IngressProcess: &ingressProcess, IngressStopped: &ingressStopped, IngressBinary: ingressBinary,
+			ProviderConfigPath: providerConfigPath, LogRoot: logRoot, ProviderAddress: providerAddress,
+			IngressAddress: ingressAddress, Locked: locked, LockedV2: *lockedV2, Sensitive: &sensitive,
+		}); err != nil {
+			return DownstreamFencingResult{}, err
 		}
-		// Server time only advances. A still-valid exact member after rejection
-		// excludes the earlier absent, expired, and insufficient-window loss paths.
-		after, err := waitForDownstreamObservation(ctx, observationPath, before, "activation", "fence_lost", 1, downstreamCommandTimeout)
-		if err != nil {
-			return err
-		}
-		if err := assertDownstreamObservationDelta(before, after, "upstream_dial", "succeeded", 0); err != nil {
-			return err
-		}
-		highWaterFinal, err := downstreamHighWaterSnapshot(ctx, redisClient, capacityNamespace, identities[0])
-		if err != nil || highWaterFinal != highWaterBefore {
-			return errors.Join(err, errors.New("stale reconstruction probe changed retained action high-water"))
-		}
-		return removeSharedLease(ctx, redisClient, capacityNamespace, oldLease.member)
-	}); err != nil {
-		return DownstreamFencingResult{}, err
 	}
 
 	cleanupState := downstreamFencingCleanup{}
-	if err := runner.run(ctx, locked.Scenarios[11], func(ctx context.Context) error {
+	cleanupScenarioIndex := 11
+	if witnessedV2 {
+		cleanupScenarioIndex = 16
+	}
+	if err := runner.run(ctx, scenarios[cleanupScenarioIndex], func(ctx context.Context) error {
 		if err := ingressProcess.Stop(); err != nil {
 			return err
 		}
@@ -1331,8 +1470,14 @@ func RunDownstreamFencing(ctx context.Context, options Options) (_ DownstreamFen
 		}
 		ingressStopped = true
 		cleanupState.ProviderIngressStopped = true
-		if err := assertBrowserRuntimeResourcesAbsent(ctx, dockerClient, downstreamFencingNamespace, downstreamFencingController); err != nil {
+		if err := assertBrowserRuntimeResourcesAbsent(ctx, dockerClient, runtimeNamespace, runtimeController); err != nil {
 			return err
+		}
+		if orchestratorRedisClient != nil {
+			if err := orchestratorRedisClient.Close(); err != nil {
+				return err
+			}
+			orchestratorRedisClosed = true
 		}
 		if err := redisClient.Close(); err != nil {
 			return err
@@ -1358,7 +1503,7 @@ func RunDownstreamFencing(ctx context.Context, options Options) (_ DownstreamFen
 		}
 		gatewayImageRemoved = true
 		cleanupState.SupportImageRemoved = true
-		if err := assertBrowserManagedResourcesAbsent(ctx, dockerClient, downstreamFencingNamespace); err != nil {
+		if err := assertBrowserManagedResourcesAbsent(ctx, dockerClient, runtimeNamespace); err != nil {
 			return err
 		}
 		cleanupState.BrowserResourcesRemoved = true
@@ -1368,8 +1513,8 @@ func RunDownstreamFencing(ctx context.Context, options Options) (_ DownstreamFen
 	}
 
 	manifest := downstreamFencingManifest{
-		CreatedAt: time.Now().UTC().Format(time.RFC3339Nano), EvidenceName: downstreamFencingEvidenceName,
-		EvidenceProfile: locked.EvidenceProfile, HarnessCommit: harnessCommit, Sources: locked.Sources,
+		CreatedAt: time.Now().UTC().Format(time.RFC3339Nano), EvidenceName: evidenceName,
+		EvidenceProfile: evidenceProfile, HarnessCommit: harnessCommit, Sources: locked.Sources,
 		Contract: downstreamFencingContractEvidence{
 			DownstreamFencingContract: locked.Contract,
 			ProviderRoutesExercised: []string{
@@ -1392,7 +1537,7 @@ func RunDownstreamFencing(ctx context.Context, options Options) (_ DownstreamFen
 			ServerConfigSHA256: locked.Valkey.ServerConfigSHA256, ACLTemplateSHA256: locked.Valkey.ACLTemplateSHA256,
 			ProvenanceNotEstablished: locked.Valkey.ProvenanceNotEstablished,
 		},
-		CapacityPolicy: locked.CapacityPolicy, RevocationPolicy: locked.RevocationPolicy, Adapters: locked.Adapters,
+		CapacityPolicy: locked.CapacityPolicy, RevocationPolicy: locked.RevocationPolicy, Adapters: &locked.Adapters,
 		PrivateWire: locked.PrivateWire, Topology: locked.Topology, Ingress: locked.Ingress, Transport: locked.Transport,
 		BinaryDigests: downstreamFencingBinaryDigests{
 			ProviderIngress: ingressBinaryDigest, Gateway: gatewayBinaryDigest, Caller: callerBinaryDigest,
@@ -1429,14 +1574,42 @@ func RunDownstreamFencing(ctx context.Context, options Options) (_ DownstreamFen
 		},
 		EvidenceBoundary: "ADR 0033 two-Gateway, two-independent-caller, unique Provider/private-ingress, retained-Valkey, signed-real-Chromium downstream action-fencing external-caller E2E only",
 	}
+	if lockedV2 != nil {
+		manifest.Adapters = nil
+		manifest.Valkey.ACLTemplateSHA256 = lockedV2.ACLTemplateSHA256
+		manifest.WitnessedV2 = &downstreamFencingV2Evidence{
+			Sources: lockedV2.Sources, BaseLock: lockedV2.BaseLock, ActionFence: lockedV2.ActionFence,
+			Capacity: locked.Adapters.Capacity, Revocation: locked.Adapters.Revocation,
+			Witness: lockedV2.Witness, RestoreControl: lockedV2.RestoreControl,
+			ACLTemplateSHA256:    lockedV2.ACLTemplateSHA256,
+			SessionFieldDeletion: true, CompleteStateDeletion: true, SameNumericalFenceRollback: true,
+			WitnessReconstruction: true, AheadOneRecovered: true, OtherMismatchesRejected: true,
+		}
+		manifest.ProcessReconstructions = 5
+		manifest.Commands = append(manifest.Commands,
+			"orchestrator-only Redis DUMP/RESTORE fault control", "independent file-witness reconstruction")
+		manifest.Faults = append(manifest.Faults,
+			"single retained session-field deletion", "complete action-state deletion",
+			"pre-activation Redis snapshot restoration with numerical capacity-fence reuse",
+			"exact Redis-ahead-one interrupted witness CAS", "behind/divergent/more-than-one-ahead checkpoints")
+		for index, target := range manifest.NonTargets {
+			if target == "HA/failover or restored-snapshot consistency" {
+				manifest.NonTargets[index] = "Valkey HA/failover consistency"
+			}
+		}
+		manifest.NonTargets = append(manifest.NonTargets,
+			"production monotonic witness", "correlated Redis and witness rollback protection")
+		manifest.EvidenceBoundary = "ADR 0034 two-Gateway, two-independent-caller, unique Provider/private-ingress, retained-Valkey, independent file-witness, signed-real-Chromium deletion/restore-detection external-caller E2E only"
+	}
 
-	if err := runner.run(ctx, locked.Scenarios[12], func(context.Context) error {
+	sanitizationScenarioIndex := cleanupScenarioIndex + 1
+	if err := runner.run(ctx, scenarios[sanitizationScenarioIndex], func(context.Context) error {
 		if err := copyDownstreamEvidence(stateRoot, evidenceDirectory); err != nil {
 			return err
 		}
 		provisional := runner.report
 		provisional.Scenarios = append(append([]downstreamFencingScenario(nil), provisional.Scenarios...), downstreamFencingScenario{
-			Name: locked.Scenarios[12], Status: "pending", DurationMillis: 0,
+			Name: scenarios[sanitizationScenarioIndex], Status: "pending", DurationMillis: 0,
 		})
 		if _, err := writeJSON(filepath.Join(evidenceDirectory, "report.json"), provisional); err != nil {
 			return err
@@ -1475,7 +1648,7 @@ func RunDownstreamFencing(ctx context.Context, options Options) (_ DownstreamFen
 	if _, err := writeJSON(filepath.Join(evidenceDirectory, "report.json"), runner.report); err != nil {
 		return DownstreamFencingResult{}, err
 	}
-	if err := validateDownstreamReport(runner.report, locked.Scenarios); err != nil {
+	if err := validateDownstreamReport(runner.report, scenarios); err != nil {
 		return DownstreamFencingResult{}, err
 	}
 	if err := assertDownstreamExactFiles(evidenceDirectory, downstreamEvidenceFiles); err != nil {
@@ -1585,7 +1758,17 @@ func downstreamProviderConfig(
 	locked lock.DownstreamFencingLock,
 	material testenv.Material,
 	observationPath string,
+	witnessedV2 bool,
+	witnessPath string,
+	runtimeNamespace string,
+	runtimeController string,
 ) downstreamstack.Config {
+	actionProfile := downstreamstack.ActionFencingProfileV1
+	providerRevisionID := "provider-revision-downstream-fencing-e2e-v1"
+	if witnessedV2 {
+		actionProfile = downstreamstack.ActionFencingProfileWitnessedV2
+		providerRevisionID = "provider-revision-downstream-fencing-e2e-v2"
+	}
 	return downstreamstack.Config{
 		Provider: basestack.BrowserProviderConfig{
 			ProviderAddress: providerAddress, ProviderCertificateFile: material.ProviderCertificateFile,
@@ -1595,11 +1778,11 @@ func downstreamProviderConfig(
 				{ID: material.ControllerA.JWSKeyID, Algorithm: "EdDSA", Path: material.ControllerA.JWSPublicFile},
 				{ID: material.ControllerB.JWSKeyID, Algorithm: "EdDSA", Path: material.ControllerB.JWSPublicFile},
 			},
-			ProviderRevisionID: "provider-revision-downstream-fencing-e2e-v1",
+			ProviderRevisionID: providerRevisionID,
 			StateRoot:          filepath.Join(stateRoot, "provider"), RuntimeDataRoot: filepath.Join(runRoot, "browser-runtime"),
-			RuntimeImage: browserReference, RuntimeControllerID: downstreamFencingController,
+			RuntimeImage: browserReference, RuntimeControllerID: runtimeController,
 			Browser: &basestack.BrowserConfig{
-				GatewayImage: browserGatewayImage, UplinkNetwork: uplinkName, Namespace: downstreamFencingNamespace,
+				GatewayImage: browserGatewayImage, UplinkNetwork: uplinkName, Namespace: runtimeNamespace,
 				RuntimeArchitecture:      architecture,
 				ManifestPath:             filepath.Join(providerRoot, "profiles/browser/image/manifest.json"),
 				SeccompPath:              filepath.Join(providerRoot, "profiles/browser/image/chromium-seccomp.json"),
@@ -1621,6 +1804,7 @@ func downstreamProviderConfig(
 		},
 		Authority: downstreamstack.AuthorityConfig{
 			RedisURL: redisURL, CapacityNamespace: capacityNamespace,
+			ActionFencingProfile: actionProfile, ActionHistoryWitnessFile: witnessPath,
 			CapacityPolicy: downstreamstack.CapacityPolicy{
 				MaxTotal: locked.CapacityPolicy.MaxTotal, MaxPerTenant: locked.CapacityPolicy.MaxPerTenant,
 				MaxPerSession:             locked.CapacityPolicy.MaxPerSession,
@@ -1833,17 +2017,51 @@ func downstreamAuthorityACL(password, capacityNamespace, revocationNamespace str
 	return strings.ReplaceAll(result, "${REVOCATION_NAMESPACE_SHA256}", hex.EncodeToString(revocationDigest[:]))
 }
 
+func downstreamAuthorityV2ACL(runtimePassword, orchestratorPassword, capacityNamespace, revocationNamespace string) string {
+	capacityDigest := sha256.Sum256([]byte(capacityNamespace))
+	revocationDigest := sha256.Sum256([]byte(revocationNamespace))
+	result := strings.ReplaceAll(lock.DownstreamFencingV2ACLTemplate, "${RUNTIME_PASSWORD}", runtimePassword)
+	result = strings.ReplaceAll(result, "${ORCHESTRATOR_PASSWORD}", orchestratorPassword)
+	result = strings.ReplaceAll(result, "${CAPACITY_NAMESPACE_SHA256}", hex.EncodeToString(capacityDigest[:]))
+	return strings.ReplaceAll(result, "${REVOCATION_NAMESPACE_SHA256}", hex.EncodeToString(revocationDigest[:]))
+}
+
+func downstreamCredentialURL(endpoint, username, password string) (string, error) {
+	parsed, err := url.Parse(endpoint)
+	if err != nil || parsed.Scheme != "redis" || parsed.Host == "" || parsed.Path != "/0" ||
+		username == "" || password == "" {
+		return "", errors.New("construct downstream-fencing administrative store endpoint")
+	}
+	parsed.User = url.UserPassword(username, password)
+	return parsed.String(), nil
+}
+
 func provisionDownstreamAuthorities(
 	ctx context.Context,
 	redisClient *goredis.Client,
 	capacityNamespace, revocationNamespace string,
 	locked lock.DownstreamFencingLock,
+	witnessedV2 bool,
+	witnessPath string,
 ) error {
 	capacity, err := sharedCapacityFromLock(redisClient, capacityNamespace, locked.CapacityPolicy)
 	if err != nil {
 		return err
 	}
-	fencer, err := rediscapacity.NewActionFencer(capacity)
+	var fencer interface {
+		Provision(context.Context) error
+		Verify(context.Context) error
+	}
+	if witnessedV2 {
+		witness, witnessErr := rediscapacity.OpenFileActionHistoryWitness(witnessPath)
+		if witnessErr != nil {
+			return errors.New("open downstream-fencing-v2 witness for provisioning")
+		}
+		defer witness.Close()
+		fencer, err = rediscapacity.NewWitnessedActionFencer(capacity, witness)
+	} else {
+		fencer, err = rediscapacity.NewActionFencer(capacity)
+	}
 	if err != nil {
 		return err
 	}
@@ -2185,7 +2403,12 @@ func assertDownstreamExactFiles(root string, names []string) error {
 }
 
 func validateDownstreamReport(report downstreamFencingReport, names []string) error {
-	if report.EvidenceName != downstreamFencingEvidenceName || report.EvidenceProfile != lock.DownstreamFencingProfile ||
+	expectedName := downstreamFencingEvidenceName
+	if report.EvidenceProfile == lock.DownstreamFencingV2Profile {
+		expectedName = downstreamFencingV2EvidenceName
+	}
+	if report.EvidenceName != expectedName ||
+		(report.EvidenceProfile != lock.DownstreamFencingProfile && report.EvidenceProfile != lock.DownstreamFencingV2Profile) ||
 		len(report.Scenarios) != len(names) {
 		return errors.New("downstream-fencing report identity or scenario count is invalid")
 	}
@@ -2199,13 +2422,36 @@ func validateDownstreamReport(report downstreamFencingReport, names []string) er
 }
 
 func validateDownstreamManifest(manifest downstreamFencingManifest) error {
-	if manifest.EvidenceName != downstreamFencingEvidenceName || manifest.EvidenceProfile != lock.DownstreamFencingProfile ||
+	expectedName := downstreamFencingEvidenceName
+	v2 := manifest.EvidenceProfile == lock.DownstreamFencingV2Profile
+	if v2 {
+		expectedName = downstreamFencingV2EvidenceName
+	}
+	if manifest.EvidenceName != expectedName ||
+		(manifest.EvidenceProfile != lock.DownstreamFencingProfile && !v2) ||
 		manifest.Contract.SuiteExercised || manifest.Contract.ContractMetadataOnly ||
-		len(manifest.Contract.ProviderRoutesExercised) == 0 || manifest.ProcessReconstructions != 2 ||
+		len(manifest.Contract.ProviderRoutesExercised) == 0 || (!v2 && manifest.ProcessReconstructions != 2) ||
+		(v2 && manifest.ProcessReconstructions != 5) ||
+		(!v2 && manifest.Adapters == nil) || (v2 && manifest.Adapters != nil) ||
 		!manifest.Sanitization.ExactFileSet || !manifest.Sanitization.PrivateMaterialScan || !manifest.Sanitization.AuditRecordsValidated ||
 		!manifest.Cleanup.CallersStopped || !manifest.Cleanup.GatewaysStopped || !manifest.Cleanup.ProviderIngressStopped ||
 		!manifest.Cleanup.ValkeyRemoved || !manifest.Cleanup.BrowserResourcesRemoved || !manifest.Cleanup.SupportImageRemoved {
 		return errors.New("downstream-fencing manifest identity or evidence boundary is invalid")
+	}
+	if v2 {
+		value := manifest.WitnessedV2
+		if value == nil || value.Sources.ProviderRevision != lock.ProviderCommit ||
+			value.BaseLock.EvidenceProfile != lock.DownstreamFencingProfile ||
+			value.ActionFence.PolicyFormat != "browser-downstream-action-fence-v2" ||
+			value.Capacity.PolicyFingerprint == "" || value.Revocation.PolicyFingerprint == "" ||
+			!value.Witness.OutsideValkeyRestoreDomain || value.RestoreControl.ExposedToGateways ||
+			value.RestoreControl.ExposedToCallers || value.RestoreControl.RestoresWitness ||
+			!value.SessionFieldDeletion || !value.CompleteStateDeletion || !value.SameNumericalFenceRollback ||
+			!value.WitnessReconstruction || !value.AheadOneRecovered || !value.OtherMismatchesRejected {
+			return errors.New("downstream-fencing-v2 manifest omits required restore-witness evidence")
+		}
+	} else if manifest.WitnessedV2 != nil {
+		return errors.New("downstream-fencing-v1 manifest contains v2 evidence")
 	}
 	if len(manifest.Reports) != 1 || manifest.Reports[0] != "report.json" ||
 		len(manifest.Audits) != 2 || manifest.Audits[0] != "gateway-audit-a.jsonl" || manifest.Audits[1] != "gateway-audit-b.jsonl" ||
@@ -2375,6 +2621,229 @@ func validateDownstreamStaleMember(
 func downstreamCapacityFenceKey(namespace string) string {
 	digest := sha256.Sum256([]byte(namespace))
 	return "sandbox-runtime:{" + hex.EncodeToString(digest[:]) + "}:capacity:fence"
+}
+
+func downstreamActionStateKey(namespace string) string {
+	digest := sha256.Sum256([]byte(namespace))
+	return "sandbox-runtime:{" + hex.EncodeToString(digest[:]) + "}:capacity:action-fence:state"
+}
+
+func downstreamActionSessionField(identity downstreamFencingIdentity) (string, error) {
+	endpoint := identity.envelope.Endpoint
+	if endpoint.TenantID == "" || endpoint.SandboxID == "" || endpoint.BrowserSessionID == "" {
+		return "", errors.New("witnessed action-history subject is invalid")
+	}
+	return "session:" + downstreamDigestParts(endpoint.TenantID, endpoint.SandboxID, "browser", endpoint.BrowserSessionID), nil
+}
+
+type downstreamRedisKeySnapshot struct {
+	key     string
+	present bool
+	payload string
+	ttl     time.Duration
+}
+
+type downstreamRedisSnapshot []downstreamRedisKeySnapshot
+
+func captureDownstreamRedisSnapshot(
+	ctx context.Context,
+	client *goredis.Client,
+	keys ...string,
+) (downstreamRedisSnapshot, error) {
+	if ctx == nil || client == nil || len(keys) == 0 || len(keys) > 8 {
+		return nil, errors.New("controlled Redis snapshot input is invalid")
+	}
+	operationCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	result := make(downstreamRedisSnapshot, 0, len(keys))
+	seen := map[string]bool{}
+	for _, key := range keys {
+		if key == "" || seen[key] {
+			return nil, errors.New("controlled Redis snapshot key set is invalid")
+		}
+		seen[key] = true
+		payload, err := client.Dump(operationCtx, key).Result()
+		if errors.Is(err, goredis.Nil) {
+			result = append(result, downstreamRedisKeySnapshot{key: key})
+			continue
+		}
+		if err != nil || len(payload) == 0 || len(payload) > downstreamFileMaximum {
+			return nil, errors.New("capture bounded controlled Redis snapshot")
+		}
+		ttl, err := client.PTTL(operationCtx, key).Result()
+		if err != nil || (ttl < 0 && ttl != -1) {
+			return nil, errors.New("capture controlled Redis snapshot expiry")
+		}
+		if ttl == -1 {
+			ttl = 0
+		}
+		result = append(result, downstreamRedisKeySnapshot{key: key, present: true, payload: payload, ttl: ttl})
+	}
+	return result, nil
+}
+
+func restoreDownstreamRedisSnapshot(ctx context.Context, client *goredis.Client, snapshot downstreamRedisSnapshot) error {
+	if ctx == nil || client == nil || len(snapshot) == 0 || len(snapshot) > 8 {
+		return errors.New("controlled Redis restore input is invalid")
+	}
+	operationCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	keys := make([]string, 0, len(snapshot))
+	seen := map[string]bool{}
+	for _, item := range snapshot {
+		if item.key == "" || seen[item.key] || (item.present && (item.payload == "" || item.ttl < 0)) {
+			return errors.New("controlled Redis restore snapshot is invalid")
+		}
+		seen[item.key] = true
+		keys = append(keys, item.key)
+	}
+	if err := client.Del(operationCtx, keys...).Err(); err != nil {
+		return errors.New("clear controlled Redis restore targets")
+	}
+	for _, item := range snapshot {
+		if !item.present {
+			continue
+		}
+		if err := client.RestoreReplace(operationCtx, item.key, item.ttl, item.payload).Err(); err != nil {
+			return errors.New("restore controlled Redis snapshot")
+		}
+		actual, err := client.Dump(operationCtx, item.key).Result()
+		if err != nil || actual != item.payload {
+			return errors.New("verify controlled Redis snapshot restoration")
+		}
+	}
+	return nil
+}
+
+func downstreamCapacityFence(ctx context.Context, client *goredis.Client, namespace string) (uint64, error) {
+	operationCtx, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
+	value, err := client.Get(operationCtx, downstreamCapacityFenceKey(namespace)).Uint64()
+	if err != nil || value == 0 {
+		return 0, errors.New("read controlled capacity fence")
+	}
+	return value, nil
+}
+
+func downstreamFenceSubject(identity downstreamFencingIdentity) (gateway.DownstreamFenceSubject, error) {
+	expiresAt, err := time.Parse(time.RFC3339Nano, identity.envelope.GrantBinding.ExpiresAt)
+	if err != nil {
+		return gateway.DownstreamFenceSubject{}, errors.New("parse downstream-fencing subject expiry")
+	}
+	endpoint := identity.envelope.Endpoint
+	subject := gateway.DownstreamFenceSubject{
+		TenantID: endpoint.TenantID, SandboxID: endpoint.SandboxID, BrowserSessionID: endpoint.BrowserSessionID,
+		CapabilityProfileID: endpoint.CapabilityProfileID, ConnectionGeneration: endpoint.ConnectionGeneration,
+		ExpiresAt: expiresAt.UTC(),
+	}
+	if subject.Validate() != nil {
+		return gateway.DownstreamFenceSubject{}, errors.New("construct downstream-fencing subject")
+	}
+	return subject, nil
+}
+
+type failBeforeWitnessAdvance struct {
+	rediscapacity.ActionHistoryWitness
+	fail bool
+}
+
+func (w *failBeforeWitnessAdvance) CompareAndSwap(
+	ctx context.Context,
+	policyFingerprint string,
+	previous rediscapacity.ActionHistoryCheckpoint,
+	replacement rediscapacity.ActionHistoryCheckpoint,
+) error {
+	if w.fail {
+		w.fail = false
+		return rediscapacity.ErrActionHistoryUnavailable
+	}
+	return w.ActionHistoryWitness.CompareAndSwap(ctx, policyFingerprint, previous, replacement)
+}
+
+func expectDownstreamStackStartupRejected(ctx context.Context, child *childProcess, address string, timeout time.Duration) error {
+	if child == nil || timeout <= 0 {
+		return errors.New("rejected ingress process input is invalid")
+	}
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	ticker := time.NewTicker(25 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			_ = child.Stop()
+			return ctx.Err()
+		case <-child.done:
+			if child.result() == nil {
+				return errors.New("invalid witnessed ingress exited successfully")
+			}
+			connection, err := net.DialTimeout("tcp4", address, 100*time.Millisecond)
+			if err == nil {
+				_ = connection.Close()
+				return errors.New("invalid witnessed ingress exposed a listener")
+			}
+			return nil
+		case <-ticker.C:
+			connection, err := net.DialTimeout("tcp4", address, 50*time.Millisecond)
+			if err == nil {
+				_ = connection.Close()
+				_ = child.Stop()
+				return errors.New("invalid witnessed ingress became ready")
+			}
+		case <-timer.C:
+			_ = child.Stop()
+			return errors.New("invalid witnessed ingress did not reject startup")
+		}
+	}
+}
+
+func verifyDownstreamWitnessedStateUnavailable(
+	ctx context.Context,
+	capacity *rediscapacity.Capacity,
+	witnessPath string,
+) error {
+	witness, err := rediscapacity.OpenFileActionHistoryWitness(witnessPath)
+	if err != nil {
+		return errors.New("reopen independent action-history witness")
+	}
+	defer witness.Close()
+	fencer, err := rediscapacity.NewWitnessedActionFencer(capacity, witness)
+	if err != nil {
+		return errors.New("construct witnessed action fencer for mismatch probe")
+	}
+	if err := fencer.Verify(ctx); !errors.Is(err, gateway.ErrDownstreamUnavailable) {
+		return errors.New("witnessed action fencer accepted a checkpoint mismatch")
+	}
+	return nil
+}
+
+func downstreamCheckpointToken(seed string) string {
+	digest := sha256.Sum256([]byte(seed))
+	return hex.EncodeToString(digest[:])
+}
+
+func downstreamWitnessTokens(ctx context.Context, client *goredis.Client, stateKey string) ([]string, error) {
+	if ctx == nil || client == nil || stateKey == "" {
+		return nil, errors.New("read witnessed checkpoint tokens")
+	}
+	operationCtx, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
+	values, err := client.HMGet(operationCtx, stateKey, "token", "previous_token").Result()
+	if err != nil {
+		return nil, errors.New("read witnessed checkpoint tokens")
+	}
+	result := make([]string, 0, 2)
+	for _, value := range values {
+		token, ok := value.(string)
+		if !ok || len(token) != 64 {
+			return nil, errors.New("read witnessed checkpoint tokens")
+		}
+		result = append(result, token)
+	}
+	if len(result) != 2 {
+		return nil, errors.New("read witnessed checkpoint tokens")
+	}
+	return result, nil
 }
 
 func downstreamOpen(

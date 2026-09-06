@@ -32,6 +32,12 @@ Provider repository. Keep these boundaries strict:
 - `internal/downstreamfencing/caller` and `cmd/downstream-fencing-caller` are
   black-box callers. They may compose `internal/caller`, but must have no
   direct or transitive Provider implementation dependency.
+- `cmd/downstream-fencing-v2-e2e` is a separate ADR 0034 successor profile; do
+  not relabel ADR 0033 v1 evidence as v2. Its Redis `DUMP`, `RESTORE`, `HDEL`,
+  and `DEL` fault controls must remain orchestrator-only behind a separate
+  credential, and the file witness must remain outside the Valkey snapshot and
+  restore domain. Gateways and callers must never receive that credential or
+  fault-control path.
 - Never commit generated private keys, certificates, bearer tokens, runtime
   state, logs, or artifact bytes.
 - Each passing run proves only its named reference or candidate scenarios. A
@@ -50,4 +56,5 @@ go run ./cmd/browser-e2e -check
 go run ./cmd/shared-capacity-e2e -check
 go run ./cmd/durable-revocation-e2e -check
 go run ./cmd/downstream-fencing-e2e -check
+go run ./cmd/downstream-fencing-v2-e2e -check
 ```
