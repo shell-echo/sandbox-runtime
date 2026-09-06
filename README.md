@@ -32,7 +32,15 @@ at fixed harness `059357c`. It uses two Gateways, two independent
 mTLS/JWS callers, one unique ingress, signed real Chromium, an orchestrator-only
 Redis fault credential, and an independent file witness. The local exact
 five-file set is `0600`; both runs pass cleanup and sanitization. These close
-only the platform-specific ADR 0034 external-caller gates. A production witness,
+only the platform-specific ADR 0034 external-caller gates. ADR 0035 now adds a
+PostgreSQL production-candidate witness adapter, explicit least-privilege
+migration, and a strict read-only controlled-restore check. Its local unit,
+full-repository, Contract, Suite, and pinned-Valkey strict-recovery checks pass;
+hosted workflow run `34031784793` at implementation `3ff58dc` passes the real
+PostgreSQL migration, role, concurrency, timeout, and combined pinned-Valkey
+rollback gate. That run resolved and the workflow now pins PostgreSQL digest
+`sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94`.
+This is not a production witness.
 Valkey provenance and HA/failover, production Browser
 advertisement/public Gateway composition, real Agent Platform migration,
 aggregate conformance, multi-controller, hostile multi-tenant, deployment, and
@@ -171,6 +179,15 @@ Currently implemented:
   run `20260906T100233.295973000Z` and hosted on `linux/amd64` in run
   `34026680591`, both at fixed harness `059357c`; the Suite is not executed. No
   default composition or production advertisement selects v2
+- ADR 0035 PostgreSQL action-history witness candidate. It binds rows to both
+  private capacity-namespace and witnessed-v2 policy fingerprints, performs
+  bounded durable conditional updates with `pgx/v5`, ships an explicit schema
+  migration and least-privilege role guidance, redacts backend errors, and adds
+  strict read-only `VerifyRestoredState` semantics. Local unit/full gates and a
+  pinned-Valkey one-ahead non-mutation check pass. Hosted workflow run
+  `34031784793` at `3ff58dc` passes the PostgreSQL and combined rollback tests;
+  the workflow now pins the exact PostgreSQL digest resolved by that run. No
+  provenance, HA, deployment, or production claim follows
 - downstream caller bootstrap implementation `58488d7`: two independently
   identified mTLS/JWS caller OS processes each perform Provider capability,
   create, operation, sandbox, Browser-session, and handoff reconciliation, bind
@@ -213,11 +230,10 @@ Currently implemented:
 
 Planned but not yet implemented:
 
-- compose and lock a v2 multi-process real-Chromium caller gate that exercises
-  retained-history deletion and controlled older-snapshot restore with an
-  independently durable witness; separately establish production witness
-  storage, ingress suspension/repair, HA/failover, Valkey provenance,
-  hostile-tenant, configuration, metrics, ACL, and operational gates
+- run and inspect the PostgreSQL witness workflow, pin and verify the exact
+  PostgreSQL server artifact, then prove independent failure/backup domains,
+  ingress quarantine/resume, operational restore, HA/failover, metrics, and
+  role isolation without treating the component adapter as deployment evidence
 - production Browser advertisement and deployable caller-owned Gateway
   integration only after those independent readiness gates pass
 - runtime images for desktop workloads

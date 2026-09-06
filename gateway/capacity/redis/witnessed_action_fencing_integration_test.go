@@ -214,12 +214,22 @@ func TestIntegrationWitnessedActionFencingRecoversUnwitnessedCommit(t *testing.T
 	if err != nil || checkpoint.sequence != 0 {
 		t.Fatalf("witness advanced during injected failure: %v, %v", checkpoint, err)
 	}
+	if err := fencer.VerifyRestoredState(context.Background()); err != gateway.ErrDownstreamUnavailable {
+		t.Fatalf("VerifyRestoredState() with Redis ahead error = %v; want unavailable", err)
+	}
+	checkpoint, err = baseWitness.Load(context.Background(), fencer.policyFingerprint())
+	if err != nil || checkpoint.sequence != 0 {
+		t.Fatalf("strict restore verification advanced witness: %v, %v", checkpoint, err)
+	}
 	if err := fencer.Verify(context.Background()); err != nil {
 		t.Fatalf("Verify() did not finish the conservative checkpoint: %v", err)
 	}
 	checkpoint, err = baseWitness.Load(context.Background(), fencer.policyFingerprint())
 	if err != nil || checkpoint.sequence != 1 {
 		t.Fatalf("recovered witness checkpoint = %v, %v; want sequence 1", checkpoint, err)
+	}
+	if err := fencer.VerifyRestoredState(context.Background()); err != nil {
+		t.Fatalf("VerifyRestoredState() at exact checkpoint error = %v", err)
 	}
 	assertWitnessedActionCurrent(t, fencer, actionSubject, claim)
 	releaseIntegrationLease(t, lease)

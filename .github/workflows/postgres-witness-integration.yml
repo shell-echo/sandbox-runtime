@@ -1,0 +1,87 @@
+name: PostgreSQL Action-History Witness
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: postgres-action-history-witness-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  postgres-action-history-witness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres@sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94
+        env:
+          POSTGRES_DB: witness
+          POSTGRES_PASSWORD: postgres-test-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d witness"
+          --health-interval 2s
+          --health-timeout 2s
+          --health-retries 20
+      valkey:
+        image: ghcr.io/valkey-io/valkey@sha256:ccfa19b0d743e48927e1c8c14e39e0acb97b5cea347fef0bfe340247fea920cd
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "valkey-cli ping"
+          --health-interval 2s
+          --health-timeout 2s
+          --health-retries 20
+    steps:
+      - name: Check out the PostgreSQL witness component
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Download Go modules
+        run: go mod download
+
+      - name: Apply the witness migration and least-privilege test roles
+        env:
+          PGPASSWORD: postgres-test-password
+        run: |
+          psql -h 127.0.0.1 -U postgres -d witness -v ON_ERROR_STOP=1 \
+            -f gateway/capacity/redis/migrations/0001_action_history_witness.sql
+          psql -h 127.0.0.1 -U postgres -d witness -v ON_ERROR_STOP=1 \
+            -c "REVOKE CREATE ON DATABASE witness FROM PUBLIC"
+          psql -h 127.0.0.1 -U postgres -d witness -v ON_ERROR_STOP=1 \
+            -c "REVOKE ALL ON SCHEMA public FROM PUBLIC"
+          psql -h 127.0.0.1 -U postgres -d witness -v ON_ERROR_STOP=1 \
+            -c "CREATE ROLE sandbox_runtime_witness LOGIN PASSWORD 'runtime-test-password' NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT"
+          psql -h 127.0.0.1 -U postgres -d witness -v ON_ERROR_STOP=1 \
+            -c "CREATE ROLE sandbox_runtime_witness_denied LOGIN PASSWORD 'denied-test-password' NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT"
+          psql -h 127.0.0.1 -U postgres -d witness -v ON_ERROR_STOP=1 \
+            -c "GRANT CONNECT ON DATABASE witness TO sandbox_runtime_witness, sandbox_runtime_witness_denied"
+          psql -h 127.0.0.1 -U postgres -d witness -v ON_ERROR_STOP=1 \
+            -c "GRANT USAGE ON SCHEMA sandbox_runtime TO sandbox_runtime_witness"
+          psql -h 127.0.0.1 -U postgres -d witness -v ON_ERROR_STOP=1 \
+            -c "GRANT SELECT ON TABLE sandbox_runtime.action_history_witnesses TO sandbox_runtime_witness"
+          psql -h 127.0.0.1 -U postgres -d witness -v ON_ERROR_STOP=1 \
+            -c "GRANT INSERT (namespace_fingerprint, policy_fingerprint, format_version, sequence, token) ON TABLE sandbox_runtime.action_history_witnesses TO sandbox_runtime_witness"
+          psql -h 127.0.0.1 -U postgres -d witness -v ON_ERROR_STOP=1 \
+            -c "GRANT UPDATE (sequence, token, updated_at) ON TABLE sandbox_runtime.action_history_witnesses TO sandbox_runtime_witness"
+
+      - name: Run PostgreSQL witness and Redis rollback integration
+        env:
+          SANDBOX_RUNTIME_ACTION_HISTORY_POSTGRES_ADMIN_URL: postgres://postgres:postgres-test-password@127.0.0.1:5432/witness?sslmode=disable
+          SANDBOX_RUNTIME_ACTION_HISTORY_POSTGRES_URL: postgres://sandbox_runtime_witness:runtime-test-password@127.0.0.1:5432/witness?sslmode=disable
+          SANDBOX_RUNTIME_ACTION_HISTORY_POSTGRES_DENIED_URL: postgres://sandbox_runtime_witness_denied:denied-test-password@127.0.0.1:5432/witness?sslmode=disable
+          SANDBOX_RUNTIME_SHARED_CAPACITY_REDIS_URL: redis://127.0.0.1:6379/0
+        run: go test -tags=integration -race -shuffle=on -count=1 ./gateway/capacity/redis
