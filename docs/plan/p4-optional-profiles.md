@@ -722,15 +722,26 @@ harness/run `550c785`/`20260906T050213.016063000Z` and
 amd64. ADR 0034 separately passes its witnessed-v2 component and pinned-Valkey
 adapter gates; its separately locked v2 caller runner passes 18/18 locally on
 `linux/arm64` in run `20260906T100233.295973000Z` and hosted on `linux/amd64`
-in run `34026680591`, both at fixed harness `059357c`.
+in run `34026680591`, both at fixed harness `059357c`. ADR 0035 passes its
+PostgreSQL migration, least-privilege role, atomic witness, timeout, and strict
+read-only restore-verification component gate. ADR 0036 then composes that
+candidate into the same-runner controlled-restore reference. PR #47 merged as
+`a0cddf4`, and post-merge run `34038556283` passes 18/18; artifact `9991028239`
+contains the exact five sanitized files under `20260906T141526.647125530Z`,
+pins the merge as its harness, records three ingress reconstructions and all
+cleanup/sanitization checks true, and retains `same_runner=true`,
+`independent_failure_domain=false`, and `suite_exercised=false`.
 
-Keep `suite_exercised=false` for both downstream caller profiles until a runner
-actually invokes the Contract Suite. Next run and inspect the PostgreSQL witness
-gate, pin the server artifact, and establish independent failure/backup domains
-plus ingress quarantine/resume. Then address Valkey/PostgreSQL HA/failover,
-metrics, production storage/configuration and authenticated-ingress topology,
-hostile-tenant, ACL, and operational evidence as later independent gates before
-reviewing production advertisement.
+Keep `suite_exercised=false` for both downstream caller profiles and the
+controlled-restore profile until a runner actually invokes the Contract Suite.
+The next open gate is deployment-owned:
+prove independent PostgreSQL/Valkey failure and backup domains together with
+production ingress quarantine/resume and concurrent-operator controls. Then
+address both stores' provenance and HA/failover, metrics, production
+storage/configuration and authenticated-ingress topology, hostile-tenant, ACL,
+and operational evidence as later independent gates before reviewing production
+advertisement. This repository currently has no deployment target that can
+truthfully supply those results.
 Keep Browser Reference E2E separate from coding/shell, real Agent Platform,
 aggregate conformance, multi-controller, multi-tenant, deployment, and
 production evidence. After the Browser readiness record is complete, begin the

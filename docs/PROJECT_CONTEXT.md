@@ -174,13 +174,13 @@ harness/run `550c7855704f22809e989ede0f67240033f320ba`/
 `2cadc534e54c6eacd37497887820a157a89585f5`/`34013982796`, plus fixed witnessed
 v2 harness `059357cdd1f6f4ecd78ccbbaf9923add0fcd2230`, local run
 `20260906T100233.295973000Z`, and hosted run `34026680591`, plus PostgreSQL
-controlled-restore PR head/run `ffa40d643605e51d4ea1baebab1bd3f8bd710b5f`/
-`34037307799`, whose artifact records synthetic merge harness commit
-`b924b26a7794e559a9694a648dea9711f316bd39`. Hosted PR head `ffa40d6` also passes repository CI
-`34037307804`, Reference `34037307791`, Candidate `34037307796`, Browser
-`34037307811`, shared-capacity `34037307801`, durable-revocation `34037307817`,
-downstream-fencing v1 `34037307793`, downstream-fencing v2 `34037307798`, and
-PostgreSQL witness `34037307790`. These remain distinct evidence tracks.
+controlled-restore implementation `ffa40d643605e51d4ea1baebab1bd3f8bd710b5f`,
+PR #47 merge `a0cddf40d07f9ad81b02d3eb028f141aeb424228`, and post-merge run
+`34038556283`. Merge commit `a0cddf4` also passes repository CI `34038556281`,
+Reference `34038556295`, Candidate `34038556284`, Browser `34038556297`,
+shared-capacity `34038556314`, durable-revocation `34038556293`,
+downstream-fencing v1 `34038556291`, downstream-fencing v2 `34038556299`, and
+PostgreSQL witness `34038556301`. These remain distinct evidence tracks.
 The Contract slice authorizes an atomic browser-only capability shape,
 create/session/handoff schemas, protected admission bindings, opaque reference
 security, operation/usage projection, and 10 new Suite cases. The browser image
@@ -485,15 +485,15 @@ without advancing PostgreSQL or opening a listener. It then restores the exact
 current Redis state, verifies without mutation, resumes the listeners, and
 performs a real-CDP read and write. The runner uses an orchestrator-only Redis
 restore credential and a PostgreSQL runtime role available only to the
-orchestrator and Provider/private-ingress process. Hosted `linux/amd64` run
-`34037307799` for PR head `ffa40d6` passes all 18 scenarios. Its independently
-inspected artifact records synthetic merge harness commit `b924b26` and contains
-evidence directory `20260906T135101.549639716Z` with exactly five sanitized
+orchestrator and Provider/private-ingress process. PR #47 merged as `a0cddf4`;
+post-merge `linux/amd64` run `34038556283` passes all 18 scenarios. Its
+independently inspected artifact pins the exact merge harness and contains
+evidence directory `20260906T141526.647125530Z` with exactly five sanitized
 files; the report is 18/18, and the manifest records three ingress
 reconstructions, every cleanup and sanitization flag true, no file-witness v2
 field, PostgreSQL restore evidence, and an unexercised Contract Suite. Artifact
-ID `9990655840` has GitHub digest
-`sha256:6ab816b41fba98aac0f1cf76eee9739abc7fedf356695148bb17593b396b48eb`.
+ID `9991028239` has GitHub digest
+`sha256:72d822c44c2ab5e91ed500f5ef549d8ec1c63268443a48fa293c93a3d24ca14e`.
 This closes only the hosted same-runner ADR 0036 operational reference gate.
 The lock and manifest record `same_runner=true` and
 `independent_failure_domain=false`; this adds no independent host, storage,
@@ -913,13 +913,13 @@ inspected.
 
 1. Prove independent PostgreSQL/Valkey failure and backup domains, HA, and
    operator controls in a deployment-owned environment. Retain hosted ADR 0036
-   run `34037307799` only as same-runner operational reference evidence; do not
+   run `34038556283` only as same-runner operational reference evidence; do not
    call either the adapter tests or same-runner E2E a production witness.
-2. Keep `suite_exercised=false` for both downstream caller profiles until a
-   runner actually invokes the Contract Suite, and do not relabel the ADR 0033
-   platform-specific v1 results as ADR 0034 evidence. Retain the local and hosted
-   v2 artifacts as two platform-specific results, not aggregate or production
-   evidence.
+2. Keep `suite_exercised=false` for both downstream caller profiles and the
+   controlled-restore profile until a runner actually invokes the Contract Suite,
+   and do not relabel the ADR 0033 platform-specific v1 results as ADR 0034
+   evidence. Retain the local and hosted v2 artifacts as two platform-specific
+   results, not aggregate or production evidence.
 3. Preserve the Browser, coding/shell Reference, and Platform Candidate harnesses
    as three separately named evidence modes. Do not relabel the Browser
    reference deployment as production or the candidate mode as real platform

@@ -43,10 +43,10 @@ rollback gate. That run resolved and the workflow now pins PostgreSQL digest
 This is not a production witness. ADR 0036 now implements a separately locked
 same-runner controlled-restore reference: PostgreSQL-backed witnessed fencing,
 Provider/private-ingress quarantine, older-Redis rejection through strict
-read-only verification, exact-state repair, and post-resume real CDP. Hosted
-`linux/amd64` run `34037307799` for PR head `ffa40d6` passes all 18 scenarios;
-the artifact records synthetic merge harness commit `b924b26`. Its independently
-inspected artifact contains exactly five sanitized files and records all cleanup
+read-only verification, exact-state repair, and post-resume real CDP. PR #47
+merged as `a0cddf4`; post-merge `linux/amd64` run `34038556283` passes all 18
+scenarios. Its independently inspected artifact contains exactly five sanitized
+files, pins `harness_commit=a0cddf4`, and records all cleanup and sanitization
 checks as true. PostgreSQL and Valkey still share one host, Docker engine,
 operator, and workflow, so this profile cannot establish independent failure or
 backup domains.
@@ -56,15 +56,15 @@ aggregate conformance, multi-controller, hostile multi-tenant, deployment, and
 production gates remain open. The ADR 0033, v2, and controlled-restore profiles
 pin Contract identity but do not execute the Suite (`suite_exercised=false`).
 
-Hosted PR head `ffa40d6` passes repository CI `34037307804`, Reference
-`34037307791`, Candidate `34037307796`, Browser `34037307811`, shared-capacity
-`34037307801`, durable-revocation `34037307817`, downstream-fencing v1
-`34037307793`, downstream-fencing v2 `34037307798`, PostgreSQL witness
-`34037307790`, and PostgreSQL controlled restore `34037307799`. The independently
+Merge commit `a0cddf4` passes repository CI `34038556281`, Reference
+`34038556295`, Candidate `34038556284`, Browser `34038556297`, shared-capacity
+`34038556314`, durable-revocation `34038556293`, downstream-fencing v1
+`34038556291`, downstream-fencing v2 `34038556299`, PostgreSQL witness
+`34038556301`, and PostgreSQL controlled restore `34038556283`. The independently
 inspected controlled-restore artifact
-`browser-postgres-controlled-restore-e2e-evidence-34037307799` has ID
-`9990655840` and GitHub digest
-`sha256:6ab816b41fba98aac0f1cf76eee9739abc7fedf356695148bb17593b396b48eb`.
+`browser-postgres-controlled-restore-e2e-evidence-34038556283` has ID
+`9991028239` and GitHub digest
+`sha256:72d822c44c2ab5e91ed500f5ef549d8ec1c63268443a48fa293c93a3d24ca14e`.
 These remain ten distinct workflows and eight separate E2E tracks, not
 aggregate conformance.
 
@@ -205,9 +205,9 @@ Currently implemented:
   both Provider/private-ingress listeners before Redis restore, requires an
   older snapshot to fail strict `VerifyRestoredState` without advancing
   PostgreSQL, restores the exact current Redis state, and resumes real CDP only
-  after an exact match. Hosted `linux/amd64` run `34037307799` for PR head
-  `ffa40d6` passes 18/18; its inspected five-file artifact records synthetic
-  merge harness commit `b924b26` and all cleanup and sanitization checks as true.
+  after an exact match. Post-merge `linux/amd64` run `34038556283` for merge
+  `a0cddf4` passes 18/18; its inspected five-file artifact pins that exact
+  harness commit and records all cleanup and sanitization checks as true.
   The profile records `same_runner=true` and `independent_failure_domain=false`
 - downstream caller bootstrap implementation `58488d7`: two independently
   identified mTLS/JWS caller OS processes each perform Provider capability,
