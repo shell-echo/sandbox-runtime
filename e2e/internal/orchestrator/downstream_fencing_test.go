@@ -417,6 +417,26 @@ func TestDownstreamAuthorityV2ACLSeparatesOrchestratorCredential(t *testing.T) {
 	}
 }
 
+func TestDownstreamWitnessSensitiveValuesDoNotDeriveLockFromEmptyPath(t *testing.T) {
+	root := t.TempDir()
+	writeDownstreamTestFile(t, filepath.Join(root, "manifest.json"), []byte(
+		`{"lock":"e2e/downstream-fencing-v2.lock.json"}`,
+	))
+	values := downstreamWitnessSensitiveValues("orchestrator-password", "redis://orchestrator@example", "")
+	if len(values) != 2 || values[0] != "orchestrator-password" || values[1] != "redis://orchestrator@example" {
+		t.Fatalf("PostgreSQL witness sensitive values = %#v", values)
+	}
+	if err := assertEvidenceExcludes(root, values); err != nil {
+		t.Fatalf("legal lock metadata was treated as sensitive: %v", err)
+	}
+
+	witnessPath := filepath.Join(t.TempDir(), "action-history.json")
+	values = downstreamWitnessSensitiveValues("orchestrator-password", "redis://orchestrator@example", witnessPath)
+	if len(values) != 4 || values[2] != witnessPath || values[3] != witnessPath+".lock" {
+		t.Fatalf("file witness sensitive values = %#v", values)
+	}
+}
+
 func TestDownstreamHighWaterKeyMatchesLockedAdapterDerivation(t *testing.T) {
 	identity := downstreamFencingIdentity{}
 	identity.envelope.Endpoint.TenantID = "tenant-a"

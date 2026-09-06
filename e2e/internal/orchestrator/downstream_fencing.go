@@ -875,7 +875,9 @@ func runDownstreamFencing(ctx context.Context, options Options, mode downstreamF
 		providerBootstrapPaths[0], providerBootstrapPaths[1], gatewayConfigPaths[0], gatewayConfigPaths[1],
 	)
 	if witnessedV2 {
-		sensitive = append(sensitive, orchestratorPassword, orchestratorRedisURL, witnessPath, witnessPath+".lock")
+		sensitive = append(sensitive, downstreamWitnessSensitiveValues(
+			orchestratorPassword, orchestratorRedisURL, witnessPath,
+		)...)
 	}
 
 	baselineMarker, err := randomSecret("baseline-marker-")
@@ -1840,6 +1842,14 @@ func runDownstreamFencing(ctx context.Context, options Options, mode downstreamF
 		return DownstreamFencingResult{}, err
 	}
 	return DownstreamFencingResult{EvidenceDirectory: evidenceDirectory, Scenarios: len(runner.report.Scenarios), Platform: platform}, nil
+}
+
+func downstreamWitnessSensitiveValues(orchestratorPassword, orchestratorRedisURL, witnessPath string) []string {
+	values := []string{orchestratorPassword, orchestratorRedisURL}
+	if witnessPath != "" {
+		values = append(values, witnessPath, witnessPath+".lock")
+	}
+	return values
 }
 
 func downstreamAuthoritySecrets() (string, string, string, error) {
