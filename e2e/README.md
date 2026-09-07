@@ -30,10 +30,10 @@ platform gate.
 
 | Item | Value |
 | --- | --- |
-| Provider implementation | `3ff58dc556ebca78d96ad9f3700a1c2bb08942cd` |
+| Provider implementation | `9b9656dcfa2d739640d6179f75315fd4a960b8e6` |
 | Contract namespace | `urn:shell-echo:sandbox-runtime:provider-v1` |
-| Contract revision | `5096e71fb84fbec22aa3487a0e55a1b49602ab8b` |
-| Contract tree | `859f76dc0e855a0c8abdbbb5648df100dabb4328` |
+| Contract revision | `96187ae3923ca0b741c3de1bc58f31dae9c57080` |
+| Contract tree | `4f3c1f037efd505e1285068072369d257d68626d` |
 | Suite | repository-owned Provider v1, 48 cases |
 
 `go.mod` points to the parent Provider checkout. The verifier rejects a
