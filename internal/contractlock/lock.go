@@ -18,7 +18,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/shell-echo/sandbox-runtime/internal/suitedigest"
 )
@@ -255,6 +257,24 @@ func (l Lock) Validate() error {
 // The checkout itself may be a later commit only when its Contract tree is
 // unchanged and the Contract path has no worktree modifications.
 func Verify(ctx context.Context, lock Lock, sourceRoot string) (Report, error) {
+	gitExecutable, err := resolveGitExecutable()
+	if err != nil {
+		return Report{}, err
+	}
+	return VerifyWithGitExecutable(ctx, lock, sourceRoot, gitExecutable)
+}
+
+// VerifyWithGitExecutable is Verify with one caller-selected Git executable.
+// The executable is resolved to a regular absolute path once and reused for
+// every Git operation in this verification.
+func VerifyWithGitExecutable(ctx context.Context, lock Lock, sourceRoot, gitExecutable string) (Report, error) {
+	if ctx == nil {
+		return Report{}, errors.New("contract verification context is required")
+	}
+	gitExecutable, err := validateGitExecutable(gitExecutable)
+	if err != nil {
+		return Report{}, err
+	}
 	if err := lock.Validate(); err != nil {
 		return Report{}, err
 	}
@@ -272,7 +292,7 @@ func Verify(ctx context.Context, lock Lock, sourceRoot string) (Report, error) {
 	if err != nil {
 		return Report{}, fmt.Errorf("resolve source root: %w", err)
 	}
-	origin, err := git(ctx, root, "remote", "get-url", "origin")
+	origin, err := git(ctx, gitExecutable, root, "remote", "get-url", "origin")
 	if err != nil {
 		return Report{}, err
 	}
@@ -280,32 +300,32 @@ func Verify(ctx context.Context, lock Lock, sourceRoot string) (Report, error) {
 		return Report{}, fmt.Errorf("checkout origin %q, want %q", origin, lock.Source.Repository)
 	}
 
-	lockedRevision, err := git(ctx, root, "rev-parse", "--verify", lock.Source.Revision+"^{commit}")
+	lockedRevision, err := git(ctx, gitExecutable, root, "rev-parse", "--verify", lock.Source.Revision+"^{commit}")
 	if err != nil {
 		return Report{}, err
 	}
 	if lockedRevision != lock.Source.Revision {
 		return Report{}, fmt.Errorf("resolved locked revision %s, want %s", lockedRevision, lock.Source.Revision)
 	}
-	lockedTree, err := git(ctx, root, "rev-parse", lock.Source.Revision+":"+lock.Contract.Root)
+	lockedTree, err := git(ctx, gitExecutable, root, "rev-parse", lock.Source.Revision+":"+lock.Contract.Root)
 	if err != nil {
 		return Report{}, err
 	}
 	if lockedTree != lock.Source.ContractTree {
 		return Report{}, fmt.Errorf("locked Contract tree %s, want %s", lockedTree, lock.Source.ContractTree)
 	}
-	checkoutHead, err := git(ctx, root, "rev-parse", "HEAD")
+	checkoutHead, err := git(ctx, gitExecutable, root, "rev-parse", "HEAD")
 	if err != nil {
 		return Report{}, err
 	}
-	checkoutTree, err := git(ctx, root, "rev-parse", "HEAD:"+lock.Contract.Root)
+	checkoutTree, err := git(ctx, gitExecutable, root, "rev-parse", "HEAD:"+lock.Contract.Root)
 	if err != nil {
 		return Report{}, err
 	}
 	if checkoutTree != lock.Source.ContractTree {
 		return Report{}, fmt.Errorf("checkout Contract tree %s, want %s", checkoutTree, lock.Source.ContractTree)
 	}
-	dirty, err := git(ctx, root, "status", "--porcelain", "--untracked-files=all", "--", lock.Contract.Root)
+	dirty, err := git(ctx, gitExecutable, root, "status", "--porcelain", "--untracked-files=all", "--", lock.Contract.Root)
 	if err != nil {
 		return Report{}, err
 	}
@@ -313,7 +333,7 @@ func Verify(ctx context.Context, lock Lock, sourceRoot string) (Report, error) {
 		return Report{}, fmt.Errorf("checkout Contract path has uncommitted changes: %s", strings.ReplaceAll(dirty, "\n", "; "))
 	}
 
-	lockedResources, err := readLockedContractTree(ctx, root, lock.Source.Revision, lock.Contract.Root)
+	lockedResources, err := readLockedContractTree(ctx, gitExecutable, root, lock.Source.Revision, lock.Contract.Root)
 	if err != nil {
 		return Report{}, fmt.Errorf("read locked Contract tree: %w", err)
 	}
@@ -555,8 +575,8 @@ func readLockedResource(root, relative string, maximum int64, lockedResources ma
 	return actual, nil
 }
 
-func readLockedContractTree(ctx context.Context, root, revision, contractRoot string) (map[string][]byte, error) {
-	command := exec.CommandContext(ctx, "git", "-C", root, "archive", "--format=tar", revision, "--", contractRoot)
+func readLockedContractTree(ctx context.Context, gitExecutable, root, revision, contractRoot string) (map[string][]byte, error) {
+	command := exec.CommandContext(ctx, gitExecutable, "-C", root, "archive", "--format=tar", revision, "--", contractRoot)
 	var archive limitedBuffer
 	archive.maximum = maxSnapshotBytes + (8 << 20)
 	var stderr limitedBuffer
@@ -672,14 +692,43 @@ func validateContractManifestResources(contractRoot string, resources []contract
 	return nil
 }
 
-func git(ctx context.Context, root string, arguments ...string) (string, error) {
+func git(ctx context.Context, gitExecutable, root string, arguments ...string) (string, error) {
 	args := append([]string{"-C", root}, arguments...)
-	command := exec.CommandContext(ctx, "git", args...)
+	command := exec.CommandContext(ctx, gitExecutable, args...)
 	output, err := command.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("git %s: %w: %s", strings.Join(arguments, " "), err, strings.TrimSpace(string(output)))
 	}
 	return strings.TrimSpace(string(output)), nil
+}
+
+func resolveGitExecutable() (string, error) {
+	executable, err := exec.LookPath("git")
+	if err != nil {
+		return "", fmt.Errorf("resolve Git executable: %w", err)
+	}
+	return validateGitExecutable(executable)
+}
+
+func validateGitExecutable(executable string) (string, error) {
+	if !filepath.IsAbs(executable) {
+		return "", errors.New("Git executable must resolve to an absolute path")
+	}
+	resolved, err := filepath.EvalSymlinks(executable)
+	if err != nil {
+		return "", fmt.Errorf("resolve Git executable path: %w", err)
+	}
+	if !filepath.IsAbs(resolved) {
+		return "", errors.New("Git executable symlink must resolve to an absolute path")
+	}
+	info, err := os.Lstat(resolved)
+	if err != nil {
+		return "", fmt.Errorf("inspect Git executable: %w", err)
+	}
+	if !info.Mode().IsRegular() || (runtime.GOOS != "windows" && info.Mode().Perm()&0o111 == 0) {
+		return "", errors.New("Git executable must be a regular executable")
+	}
+	return resolved, nil
 }
 
 func securePath(root, relative string) (string, error) {
@@ -718,6 +767,12 @@ func decodeMetadata(document []byte, destination any) error {
 }
 
 func validateUniqueJSONMembers(document []byte) error {
+	if !utf8.Valid(document) {
+		return errors.New("JSON must be valid UTF-8")
+	}
+	if err := validateJSONUnicodeEscapes(document); err != nil {
+		return err
+	}
 	decoder := json.NewDecoder(bytes.NewReader(document))
 	decoder.UseNumber()
 	if err := consumeUniqueJSONValue(decoder); err != nil {
@@ -729,6 +784,65 @@ func validateUniqueJSONMembers(document []byte) error {
 		return err
 	}
 	return nil
+}
+
+func validateJSONUnicodeEscapes(document []byte) error {
+	inString := false
+	for index := 0; index < len(document); index++ {
+		switch document[index] {
+		case '"':
+			inString = !inString
+		case '\\':
+			if !inString || index+1 >= len(document) {
+				continue
+			}
+			if document[index+1] != 'u' {
+				index++
+				continue
+			}
+			codePoint, ok := decodeJSONHexQuad(document, index+2)
+			if !ok {
+				continue
+			}
+			switch {
+			case codePoint >= 0xd800 && codePoint <= 0xdbff:
+				if index+11 >= len(document) || document[index+6] != '\\' || document[index+7] != 'u' {
+					return errors.New("JSON contains an invalid Unicode surrogate escape")
+				}
+				low, ok := decodeJSONHexQuad(document, index+8)
+				if !ok || low < 0xdc00 || low > 0xdfff {
+					return errors.New("JSON contains an invalid Unicode surrogate escape")
+				}
+				index += 11
+			case codePoint >= 0xdc00 && codePoint <= 0xdfff:
+				return errors.New("JSON contains an invalid Unicode surrogate escape")
+			default:
+				index += 5
+			}
+		}
+	}
+	return nil
+}
+
+func decodeJSONHexQuad(document []byte, start int) (uint16, bool) {
+	if start+4 > len(document) {
+		return 0, false
+	}
+	var value uint16
+	for _, digit := range document[start : start+4] {
+		value <<= 4
+		switch {
+		case digit >= '0' && digit <= '9':
+			value += uint16(digit - '0')
+		case digit >= 'a' && digit <= 'f':
+			value += uint16(digit-'a') + 10
+		case digit >= 'A' && digit <= 'F':
+			value += uint16(digit-'A') + 10
+		default:
+			return 0, false
+		}
+	}
+	return value, true
 }
 
 func consumeUniqueJSONValue(decoder *json.Decoder) error {

@@ -14,11 +14,13 @@ import (
 	"mime"
 	"net"
 	"net/http"
+	"net/http/httptrace"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 	"unicode/utf8"
 )
@@ -331,8 +333,16 @@ func (e *executor) getOnly(ctx context.Context) error {
 		if err := ctx.Err(); err != nil {
 			return contextFailure(err)
 		}
-		e.unsafeMethodProbesSent = true
-		result, err := e.request(ctx, e.client, method, "/v1/capabilities", nil, 0)
+		var wroteRequest atomic.Bool
+		requestContext := httptrace.WithClientTrace(ctx, &httptrace.ClientTrace{
+			WroteRequest: func(httptrace.WroteRequestInfo) {
+				wroteRequest.Store(true)
+			},
+		})
+		result, err := e.request(requestContext, e.client, method, "/v1/capabilities", nil, 0)
+		if wroteRequest.Load() && unsafeHTTPMethod(method) {
+			e.unsafeMethodProbesSent = true
+		}
 		if err != nil {
 			return err
 		}
@@ -341,6 +351,15 @@ func (e *executor) getOnly(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+func unsafeHTTPMethod(method string) bool {
+	switch method {
+	case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
+		return true
+	default:
+		return false
+	}
 }
 
 func (e *executor) request(ctx context.Context, client *http.Client, method, path string, body io.Reader, contentLength int64) (wireResponse, error) {

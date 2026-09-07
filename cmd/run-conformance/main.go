@@ -34,9 +34,9 @@ func main() {
 		fail(err)
 	}
 	fmt.Printf(
-		"executed local Provider Conformance Suite %s@%s/%s (%s, %s): %d cases; runner %s; toolchain %s; race=%t; shuffle=%t\n",
+		"executed local Provider Conformance Suite %s@%s/%s (%s, %s): %d cases; runner %s; Go %s; Git %s; race=%t; shuffle=%t\nevidence boundary: %s\n",
 		report.SuiteID, report.SuiteVersion, report.ProfileID, report.SuiteDigestProfile, report.SuiteDigest, len(report.Cases),
-		report.RunnerRevision, report.GoToolchain, report.Race, report.Shuffle,
+		report.RunnerRevision, report.GoToolchain, report.GitVersion, report.Race, report.Shuffle, report.EvidenceBoundary,
 	)
 }
 

@@ -71,6 +71,20 @@ func TestVerifyAcceptsEquivalentCleanContractTree(t *testing.T) {
 	}
 }
 
+func TestVerifyWithGitExecutableRequiresAbsoluteRegularExecutable(t *testing.T) {
+	for name, executable := range map[string]string{
+		"relative":  "git",
+		"directory": t.TempDir(),
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := VerifyWithGitExecutable(context.Background(), Lock{}, t.TempDir(), executable)
+			if err == nil || !strings.Contains(err.Error(), "Git executable") {
+				t.Fatalf("VerifyWithGitExecutable(%q) = %v", executable, err)
+			}
+		})
+	}
+}
+
 func TestVerifyRejectsDirtyContract(t *testing.T) {
 	source, lock, _ := prepareContractRepository(t, testContractManifest("conformance-suite", true, "conformance-suite"))
 
@@ -146,6 +160,87 @@ func TestContractMetadataRejectsDuplicateJSONMembers(t *testing.T) {
 	var destination map[string]any
 	if err := decodeMetadata(semantic, &destination); err == nil || !strings.Contains(err.Error(), "duplicate JSON object member") {
 		t.Fatalf("decodeMetadata duplicate member = %v", err)
+	}
+}
+
+func TestContractMetadataRejectsInvalidJSONUnicode(t *testing.T) {
+	tests := []struct {
+		name     string
+		document []byte
+		want     string
+	}{
+		{
+			name:     "invalid UTF-8 in value",
+			document: append([]byte(`{"duplicate":1,"duplicate":2,"value":"`), 0xff, '"', '}'),
+			want:     "valid UTF-8",
+		},
+		{
+			name:     "invalid UTF-8 in key",
+			document: append([]byte(`{"duplicate":1,"duplicate":2,"`), 0xff, '"', ':', '1', '}'),
+			want:     "valid UTF-8",
+		},
+		{
+			name:     "lone high surrogate",
+			document: []byte(`{"duplicate":1,"duplicate":2,"value":"\uD800"}`),
+			want:     "invalid Unicode surrogate",
+		},
+		{
+			name:     "lone low surrogate",
+			document: []byte(`{"duplicate":1,"duplicate":2,"\uDC00":true}`),
+			want:     "invalid Unicode surrogate",
+		},
+		{
+			name:     "high surrogate followed by non-surrogate",
+			document: []byte(`{"duplicate":1,"duplicate":2,"value":"\uD800\u0041"}`),
+			want:     "invalid Unicode surrogate",
+		},
+		{
+			name:     "high surrogate followed by high surrogate",
+			document: []byte(`{"duplicate":1,"duplicate":2,"value":"\uD800\uD801"}`),
+			want:     "invalid Unicode surrogate",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if err := validateUniqueJSONMembers(test.document); err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("validateUniqueJSONMembers = %v, want error containing %q", err, test.want)
+			}
+		})
+	}
+}
+
+func TestContractMetadataUnicodeValidationAppliesToAllDecoders(t *testing.T) {
+	lockPath := filepath.Join(t.TempDir(), "lock.json")
+	invalidLock := append([]byte(`{"format_version":2,"value":"`), 0xff, '"', '}')
+	if err := os.WriteFile(lockPath, invalidLock, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Load(lockPath); err == nil || !strings.Contains(err.Error(), "valid UTF-8") {
+		t.Fatalf("Load invalid UTF-8 = %v", err)
+	}
+
+	manifest := []byte(`{"namespace":"\uD800","version":"1.0.0","license":"MIT","resources":[]}`)
+	if _, err := decodeContractManifest(manifest); err == nil || !strings.Contains(err.Error(), "invalid Unicode surrogate") {
+		t.Fatalf("decodeContractManifest invalid surrogate = %v", err)
+	}
+
+	semantic := []byte(`{"rules":[{"id":"\uDC00"}]}`)
+	var destination map[string]any
+	if err := decodeMetadata(semantic, &destination); err == nil || !strings.Contains(err.Error(), "invalid Unicode surrogate") {
+		t.Fatalf("decodeMetadata invalid surrogate = %v", err)
+	}
+}
+
+func TestContractMetadataAcceptsValidJSONUnicode(t *testing.T) {
+	for _, document := range [][]byte{
+		[]byte("{\"rocket\":\"\xf0\x9f\x9a\x80\"}"),
+		[]byte(`{"rocket":"\uD83D\uDE80"}`),
+		[]byte(`{"literal":"\\uD800"}`),
+	} {
+		var destination map[string]any
+		if err := decodeMetadata(document, &destination); err != nil {
+			t.Fatalf("decodeMetadata(%q): %v", document, err)
+		}
 	}
 }
 

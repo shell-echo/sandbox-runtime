@@ -38,14 +38,17 @@ type Report struct {
 	ProfileID          string
 	RunnerRevision     string
 	GoToolchain        string
+	GitVersion         string
+	EvidenceBoundary   string
 	Race               bool
 	Shuffle            bool
 	Cases              []string
 }
 
 type testCase struct {
-	Package string
-	Run     string
+	Package         string
+	Run             string
+	ExpectedMatches int
 }
 
 type runnerIdentity struct {
@@ -61,12 +64,13 @@ type goTestEvent struct {
 }
 
 type goTestEvidence struct {
-	started       map[string]struct{}
-	passed        map[string]struct{}
-	terminal      map[string]string
-	expected      *regexp.Regexp
-	packagePassed bool
-	packageFailed bool
+	started         map[string]struct{}
+	passed          map[string]struct{}
+	terminal        map[string]string
+	expected        *regexp.Regexp
+	expectedMatches int
+	packagePassed   bool
+	packageFailed   bool
 }
 
 const (
@@ -77,6 +81,7 @@ const (
 	maxRunnerArchivePathBytes = 4096
 	maxGitStderrBytes         = 64 << 10
 	maxToolchainOutputBytes   = 4 << 10
+	localEvidenceBoundary     = "host OS, filesystem, initial Git selection, and Go and Git executables are trusted local inputs; path and self-reported version checks do not attest their integrity"
 )
 
 // The IDs are Contract-owned. The package/test mapping is local execution
@@ -87,12 +92,14 @@ var testCases = map[string]testCase{
 		Run:     `^TestServerServesCapabilitiesOnlyAfterMTLSAdmission$`,
 	},
 	"capability-discovery-admitted-identity": {
-		Package: "./providerapi",
-		Run:     `^TestLoadMTLSConfig(AdmitsExactVerifiedURI|RejectsCertificateFailures)$`,
+		Package:         "./providerapi",
+		Run:             `^TestLoadMTLSConfig(AdmitsExactVerifiedURI|RejectsCertificateFailures)$`,
+		ExpectedMatches: 2,
 	},
 	"capability-discovery-immutable-schema": {
-		Package: "./providerapi",
-		Run:     `^(TestLockedCapabilityResponseSchema|TestCapabilitiesHandlerReadsSourceOnceAndFreezesResponse)$`,
+		Package:         "./providerapi",
+		Run:             `^(TestLockedCapabilityResponseSchema|TestCapabilitiesHandlerReadsSourceOnceAndFreezesResponse)$`,
+		ExpectedMatches: 2,
 	},
 	"capability-discovery-terminal-profile-advertisement": {
 		Package: "./providerapi",
@@ -127,56 +134,67 @@ var testCases = map[string]testCase{
 		Run:     `^TestBrowserCapabilityRejectionFixtures$`,
 	},
 	"capability-discovery-empty-request": {
-		Package: "./providerapi",
-		Run:     `^(TestCapabilitiesHandlerRejectsRequestsWithoutADocumentBeforeDispatch|TestProviderServerReconcilesHTTP11CapabilityInputTransport)$`,
+		Package:         "./providerapi",
+		Run:             `^(TestCapabilitiesHandlerRejectsRequestsWithoutADocumentBeforeDispatch|TestProviderServerReconcilesHTTP11CapabilityInputTransport)$`,
+		ExpectedMatches: 2,
 	},
 	"capability-discovery-no-mutation-routes": {
 		Package: "./providerapi",
 		Run:     `^TestCapabilitiesHandlerRejectsMethodsAndAbsentRoutesWithoutSourceReads$`,
 	},
 	"protected-admission-context-schema": {
-		Package: "./provider/admission",
-		Run:     `^(TestDecodeAdmissionContextCarrierEnforcesSchemaBounds|TestDecodeAdmissionContextCarrierRejectsCarrierAndDocumentConfusion)$`,
+		Package:         "./provider/admission",
+		Run:             `^(TestDecodeAdmissionContextCarrierEnforcesSchemaBounds|TestDecodeAdmissionContextCarrierRejectsCarrierAndDocumentConfusion)$`,
+		ExpectedMatches: 2,
 	},
 	"protected-admission-jws-profile-schema": {
-		Package: "./provider/admission",
-		Run:     `^(TestLocalContractProtectedAdmissionJWSProfile|TestLocalContractProtectedAdmissionJWSProfileRejectsRetiredWireProfile|TestVerifyCompactJWSRejectsClosedHeaderAndSignatureFailures|TestVerifyCompactJWSRejectsClosedClaimFailures|TestValidateTokenBindingRejectsInvalidTokenLifetime)$`,
+		Package:         "./provider/admission",
+		Run:             `^(TestLocalContractProtectedAdmissionJWSProfile|TestLocalContractProtectedAdmissionJWSProfileRejectsRetiredWireProfile|TestVerifyCompactJWSRejectsClosedHeaderAndSignatureFailures|TestVerifyCompactJWSRejectsClosedClaimFailures|TestValidateTokenBindingRejectsInvalidTokenLifetime)$`,
+		ExpectedMatches: 5,
 	},
 	"protected-admission-issuer-local-authority-binding": {
-		Package: "./provider/admission",
-		Run:     `^(TestLocalContractProtectedAdmissionIssuerLocalAuthorityBinding|TestNewAdmissionAuthorityAcceptsExactGenericIssuer|TestNewAdmissionAuthorityAcceptsExplicitLegacyStringOrURI|TestNewAdmissionAuthorityRejectsInvalidValues|TestVerifyCompactJWSRejectsTrustedIssuerSubstitution|TestVerifyCompactJWSSupportsOverlappingRotationKeys|TestProtectedOperationGateRejectsTrustedIssuerSubstitutionAsUnauthenticated|TestProtectedOperationGateRejectsLocalAuthorityMismatchBeforeGuard|TestValidateTokenBindingRejectsMismatchedContext)$`,
+		Package:         "./provider/admission",
+		Run:             `^(TestLocalContractProtectedAdmissionIssuerLocalAuthorityBinding|TestNewAdmissionAuthorityAcceptsExactGenericIssuer|TestNewAdmissionAuthorityAcceptsExplicitLegacyStringOrURI|TestNewAdmissionAuthorityRejectsInvalidValues|TestVerifyCompactJWSRejectsTrustedIssuerSubstitution|TestVerifyCompactJWSSupportsOverlappingRotationKeys|TestProtectedOperationGateRejectsTrustedIssuerSubstitutionAsUnauthenticated|TestProtectedOperationGateRejectsLocalAuthorityMismatchBeforeGuard|TestValidateTokenBindingRejectsMismatchedContext)$`,
+		ExpectedMatches: 9,
 	},
 	"protected-admission-token-binding": {
-		Package: "./provider/admission",
-		Run:     `^(TestValidateTokenBindingRejectsMismatchedContext|TestVerifyCompactJWSRequiresEachOperationBinding)$`,
+		Package:         "./provider/admission",
+		Run:             `^(TestValidateTokenBindingRejectsMismatchedContext|TestVerifyCompactJWSRequiresEachOperationBinding)$`,
+		ExpectedMatches: 2,
 	},
 	"protected-admission-digest-substitution": {
 		Package: "./providerapi",
 		Run:     `^TestProtectedHandlerRejectsRequestDescriptorSubstitutionAcrossAllRoutes$`,
 	},
 	"protected-admission-expiry": {
-		Package: "./providerapi",
-		Run:     `^(TestProtectedHandlerRejectsInactiveBearerAcrossAllRoutes|TestProtectedHandlerMapsBearerExpiryDuringDocumentReadToUnauthorized)$`,
+		Package:         "./providerapi",
+		Run:             `^(TestProtectedHandlerRejectsInactiveBearerAcrossAllRoutes|TestProtectedHandlerMapsBearerExpiryDuringDocumentReadToUnauthorized)$`,
+		ExpectedMatches: 2,
 	},
 	"protected-admission-replay-and-fencing": {
-		Package: "./providerapi",
-		Run:     `^(TestProtectedHandlerRejectsDigestConsistentCreateAndSessionDocumentsBeforeGuard|TestProtectedHandlerRejectsOversizedCreateAndSessionDocumentsBeforeGuard|TestProtectedHandlerRejectsReplayAndStaleFencingAcrossAllMutations)$`,
+		Package:         "./providerapi",
+		Run:             `^(TestProtectedHandlerRejectsDigestConsistentCreateAndSessionDocumentsBeforeGuard|TestProtectedHandlerRejectsOversizedCreateAndSessionDocumentsBeforeGuard|TestProtectedHandlerRejectsReplayAndStaleFencingAcrossAllMutations)$`,
+		ExpectedMatches: 3,
 	},
 	"lifecycle-create-request-schema": {
-		Package: "./providerapi",
-		Run:     `^(TestDecodeCreateRequestProjectsOnlyAdmittedProviderFields|TestDecodeCreateRequestRejectsUnsupportedCapabilitiesAndContextSubstitution|TestLifecycleProjectionsMatchLockedSchemas)$`,
+		Package:         "./providerapi",
+		Run:             `^(TestDecodeCreateRequestProjectsOnlyAdmittedProviderFields|TestDecodeCreateRequestRejectsUnsupportedCapabilitiesAndContextSubstitution|TestLifecycleProjectionsMatchLockedSchemas)$`,
+		ExpectedMatches: 3,
 	},
 	"lifecycle-operation-state-schema": {
-		Package: "./providerapi",
-		Run:     `^(TestLifecycleProjectionsAreBoundedAndOpaque|TestLifecycleProjectionsMatchLockedSchemas)$`,
+		Package:         "./providerapi",
+		Run:             `^(TestLifecycleProjectionsAreBoundedAndOpaque|TestLifecycleProjectionsMatchLockedSchemas)$`,
+		ExpectedMatches: 2,
 	},
 	"lifecycle-idempotency-generation-fencing": {
-		Package: "./provider/lifecycle/coordinator",
-		Run:     `^(TestAcceptCreateIsDurableAndIdempotent|TestStaleGenerationPreventsDriverDispatch|TestConcurrentReconcileSerializesDispatch)$`,
+		Package:         "./provider/lifecycle/coordinator",
+		Run:             `^(TestAcceptCreateIsDurableAndIdempotent|TestStaleGenerationPreventsDriverDispatch|TestConcurrentReconcileSerializesDispatch)$`,
+		ExpectedMatches: 3,
 	},
 	"lifecycle-deadline-outcome": {
-		Package: "./provider/lifecycle/coordinator",
-		Run:     `^(TestKnownFailureAndDeadlineDoNotDispatch|TestCanceledContextDoesNotDispatch|TestCreateUnknownOutcomeIsNotRetriedBlindlyAndReconcilesByInspection|TestRestartedRunningOperationIsReconciledWithoutDuplicateCreate)$`,
+		Package:         "./provider/lifecycle/coordinator",
+		Run:             `^(TestKnownFailureAndDeadlineDoNotDispatch|TestCanceledContextDoesNotDispatch|TestCreateUnknownOutcomeIsNotRetriedBlindlyAndReconcilesByInspection|TestRestartedRunningOperationIsReconciledWithoutDuplicateCreate)$`,
+		ExpectedMatches: 4,
 	},
 	"exec-request-schema": {
 		Package: "./providerapi/v1",
@@ -231,8 +249,9 @@ var testCases = map[string]testCase{
 		Run:     `^TestLockedBrowserSessionHandoffProjection$`,
 	},
 	"browser-session-semantic-bounds": {
-		Package: "./providerapi/v1",
-		Run:     `^(TestLocalContractBrowserSessionSemanticRules|TestLocalContractBrowserSessionSecurityMatrix)$`,
+		Package:         "./providerapi/v1",
+		Run:             `^(TestLocalContractBrowserSessionSemanticRules|TestLocalContractBrowserSessionSecurityMatrix)$`,
+		ExpectedMatches: 2,
 	},
 	"browser-session-rejection-fixtures": {
 		Package: "./providerapi/v1",
@@ -298,12 +317,21 @@ func Run(ctx context.Context, options Options, stdout, stderr io.Writer) (Report
 	if err != nil {
 		return Report{}, fmt.Errorf("resolve source root: %w", err)
 	}
+	testEnvironment := withSourceRootEnv(root)
+	goTool, err := resolveGoToolchain(ctx, identity.toolchain, testEnvironment)
+	if err != nil {
+		return Report{}, err
+	}
+	gitTool, gitVersion, err := resolveGitToolchain(ctx, testEnvironment)
+	if err != nil {
+		return Report{}, err
+	}
 	lockPath := filepath.Join(root, filepath.FromSlash(defaultLockPath))
 	lock, err := contractlock.Load(lockPath)
 	if err != nil {
 		return Report{}, err
 	}
-	verified, err := contractlock.Verify(ctx, lock, root)
+	verified, err := contractlock.VerifyWithGitExecutable(ctx, lock, root, gitTool)
 	if err != nil {
 		return Report{}, fmt.Errorf("verify locked Provider Contract: %w", err)
 	}
@@ -311,12 +339,7 @@ func Run(ctx context.Context, options Options, stdout, stderr io.Writer) (Report
 	if err := validateCases(suite.Cases); err != nil {
 		return Report{}, err
 	}
-	testEnvironment := withSourceRootEnv(root)
-	goTool, err := resolveGoToolchain(ctx, identity.toolchain, testEnvironment)
-	if err != nil {
-		return Report{}, err
-	}
-	executionRoot, err := prepareRunnerSource(ctx, root, identity.revision)
+	executionRoot, err := prepareRunnerSource(ctx, gitTool, root, identity.revision)
 	if err != nil {
 		return Report{}, fmt.Errorf("prepare runner source snapshot: %w", err)
 	}
@@ -326,7 +349,9 @@ func Run(ctx context.Context, options Options, stdout, stderr io.Writer) (Report
 		SuiteID: suite.ID, SuiteVersion: suite.Version,
 		SuiteDigest: suite.Digest, SuiteDigestProfile: suite.DigestProfile,
 		ProfileID: suite.ProfileID, RunnerRevision: identity.revision,
-		GoToolchain: identity.toolchain, Race: options.Race, Shuffle: options.Shuffle,
+		GoToolchain: identity.toolchain, GitVersion: gitVersion,
+		EvidenceBoundary: localEvidenceBoundary,
+		Race:             options.Race, Shuffle: options.Shuffle,
 		Cases: append([]string(nil), suite.Cases...),
 	}
 	for _, id := range suite.Cases {
@@ -342,7 +367,7 @@ func Run(ctx context.Context, options Options, stdout, stderr io.Writer) (Report
 		command := exec.CommandContext(ctx, goTool, args...)
 		command.Dir = executionRoot
 		command.Env = testEnvironment
-		if err := runGoTestCommand(ctx, command, caseSpec.Run, stdout, stderr); err != nil {
+		if err := runGoTestCommand(ctx, command, caseSpec.Run, caseSpec.expectedMatches(), stdout, stderr); err != nil {
 			return Report{}, fmt.Errorf("Suite case %q failed: %w", id, err)
 		}
 	}
@@ -352,6 +377,9 @@ func Run(ctx context.Context, options Options, stdout, stderr io.Writer) (Report
 func resolveGoToolchain(ctx context.Context, expectedVersion string, environment []string) (string, error) {
 	if ctx == nil {
 		return "", errors.New("Go toolchain context is required")
+	}
+	if _, explicit := os.LookupEnv("GOROOT"); explicit {
+		return "", errors.New("Runner requires GOROOT to be unset")
 	}
 	executableName := "go"
 	if runtime.GOOS == "windows" {
@@ -393,9 +421,56 @@ func resolveGoToolchain(ctx context.Context, expectedVersion string, environment
 	return executable, nil
 }
 
-func prepareRunnerSource(ctx context.Context, sourceRoot, revision string) (string, error) {
+func resolveGitToolchain(ctx context.Context, environment []string) (string, string, error) {
+	if ctx == nil {
+		return "", "", errors.New("Git toolchain context is required")
+	}
+	executable, err := exec.LookPath("git")
+	if err != nil {
+		return "", "", fmt.Errorf("resolve Runner Git executable: %w", err)
+	}
+	if !filepath.IsAbs(executable) {
+		return "", "", errors.New("Runner Git executable did not resolve to an absolute path")
+	}
+	executable, err = filepath.EvalSymlinks(executable)
+	if err != nil {
+		return "", "", fmt.Errorf("resolve Runner Git executable path: %w", err)
+	}
+	info, err := os.Lstat(executable)
+	if err != nil {
+		return "", "", fmt.Errorf("inspect Runner Git executable: %w", err)
+	}
+	if !filepath.IsAbs(executable) || !info.Mode().IsRegular() || (runtime.GOOS != "windows" && info.Mode().Perm()&0o111 == 0) {
+		return "", "", errors.New("Runner Git executable must be a regular absolute executable")
+	}
+
+	command := exec.CommandContext(ctx, executable, "--version")
+	command.Env = environment
+	var stdout boundedOutput
+	stdout.maximum = maxToolchainOutputBytes
+	var stderr boundedOutput
+	stderr.maximum = maxToolchainOutputBytes
+	command.Stdout = &stdout
+	command.Stderr = &stderr
+	if err := command.Run(); err != nil {
+		if contextErr := ctx.Err(); contextErr != nil {
+			return "", "", fmt.Errorf("inspect Git version: %w", contextErr)
+		}
+		return "", "", fmt.Errorf("inspect Git version: %w: %s", err, strings.TrimSpace(stderr.String()))
+	}
+	version := strings.TrimSpace(stdout.String())
+	if !strings.HasPrefix(version, "git version ") || strings.ContainsAny(version, "\r\n") {
+		return "", "", errors.New("Runner Git executable returned an invalid version")
+	}
+	return executable, strings.TrimPrefix(version, "git version "), nil
+}
+
+func prepareRunnerSource(ctx context.Context, gitExecutable, sourceRoot, revision string) (string, error) {
 	if ctx == nil {
 		return "", errors.New("runner source context is required")
+	}
+	if !filepath.IsAbs(gitExecutable) {
+		return "", errors.New("runner source Git executable must be an absolute path")
 	}
 	directory, err := os.MkdirTemp("", "sandbox-runtime-conformance-source-")
 	if err != nil {
@@ -410,7 +485,7 @@ func prepareRunnerSource(ctx context.Context, sourceRoot, revision string) (stri
 
 	commandContext, cancel := context.WithCancel(ctx)
 	defer cancel()
-	command := exec.CommandContext(commandContext, "git", "-C", sourceRoot, "archive", "--format=tar", revision)
+	command := exec.CommandContext(commandContext, gitExecutable, "-C", sourceRoot, "archive", "--format=tar", revision)
 	output, err := command.StdoutPipe()
 	if err != nil {
 		return "", fmt.Errorf("capture Git archive: %w", err)
@@ -640,9 +715,19 @@ func validGitRevision(value string) bool {
 	return true
 }
 
-func runGoTestCommand(ctx context.Context, command *exec.Cmd, expectedPattern string, stdout, stderr io.Writer) error {
+func (test testCase) expectedMatches() int {
+	if test.ExpectedMatches == 0 {
+		return 1
+	}
+	return test.ExpectedMatches
+}
+
+func runGoTestCommand(ctx context.Context, command *exec.Cmd, expectedPattern string, expectedMatches int, stdout, stderr io.Writer) error {
 	if ctx == nil {
 		return errors.New("go test context is required")
+	}
+	if expectedMatches < 1 {
+		return errors.New("go test expected match count must be positive")
 	}
 	expected, err := regexp.Compile(expectedPattern)
 	if err != nil {
@@ -663,7 +748,7 @@ func runGoTestCommand(ctx context.Context, command *exec.Cmd, expectedPattern st
 		return fmt.Errorf("start go test: %w", err)
 	}
 
-	evidence := newGoTestEvidence(expected)
+	evidence := newGoTestEvidence(expected, expectedMatches)
 	decoder := json.NewDecoder(output)
 	var streamErr error
 	for {
@@ -709,12 +794,13 @@ func runGoTestCommand(ctx context.Context, command *exec.Cmd, expectedPattern st
 	return nil
 }
 
-func newGoTestEvidence(expected *regexp.Regexp) *goTestEvidence {
+func newGoTestEvidence(expected *regexp.Regexp, expectedMatches int) *goTestEvidence {
 	return &goTestEvidence{
-		started:  make(map[string]struct{}),
-		passed:   make(map[string]struct{}),
-		terminal: make(map[string]string),
-		expected: expected,
+		started:         make(map[string]struct{}),
+		passed:          make(map[string]struct{}),
+		terminal:        make(map[string]string),
+		expected:        expected,
+		expectedMatches: expectedMatches,
 	}
 }
 
@@ -783,12 +869,16 @@ func (evidence *goTestEvidence) validate() error {
 			return fmt.Errorf("test %q did not emit a terminal result", test)
 		}
 	}
+	matched := 0
 	for test := range evidence.passed {
 		if evidence.expected.MatchString(test) {
-			return nil
+			matched++
 		}
 	}
-	return errors.New("no test matching the Suite case mapping passed")
+	if matched != evidence.expectedMatches {
+		return fmt.Errorf("%d tests matching the Suite case mapping passed; want exactly %d", matched, evidence.expectedMatches)
+	}
+	return nil
 }
 
 func withSourceRootEnv(root string) []string {

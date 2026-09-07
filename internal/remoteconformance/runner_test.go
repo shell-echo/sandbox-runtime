@@ -17,6 +17,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/http/httptrace"
 	"net/url"
 	"os"
 	"os/exec"
@@ -44,6 +45,12 @@ const (
 
 type capabilityValidator struct {
 	calls atomic.Int64
+}
+
+type roundTripperFunc func(*http.Request) (*http.Response, error)
+
+func (function roundTripperFunc) RoundTrip(request *http.Request) (*http.Response, error) {
+	return function(request)
 }
 
 func (v *capabilityValidator) Validate(name string, document []byte) error {
@@ -77,6 +84,59 @@ func TestExecutorRunsLockedDiscoveryCases(t *testing.T) {
 	}
 	if !executor.unsafeMethodProbesSent {
 		t.Fatal("unsafe method probes were not recorded")
+	}
+}
+
+func TestGetOnlyDoesNotRecordProbeBeforeRequestIsWritten(t *testing.T) {
+	target, err := url.Parse("https://provider.example.invalid")
+	if err != nil {
+		t.Fatal(err)
+	}
+	executor := &executor{
+		target: target,
+		client: &http.Client{Transport: roundTripperFunc(func(*http.Request) (*http.Response, error) {
+			return nil, errors.New("transport failed before writing request")
+		})},
+	}
+	if code := errorCode(executor.getOnly(context.Background())); code != "transport_failed" {
+		t.Fatalf("getOnly() error code = %q", code)
+	}
+	if executor.unsafeMethodProbesSent {
+		t.Fatal("unsafe method probe was recorded before any request was written")
+	}
+}
+
+func TestGetOnlyDoesNotRecordSafeHeadAsUnsafeProbe(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	target, err := url.Parse("https://provider.example.invalid")
+	if err != nil {
+		t.Fatal(err)
+	}
+	executor := &executor{
+		target: target,
+		client: &http.Client{Transport: roundTripperFunc(func(request *http.Request) (*http.Response, error) {
+			if request.Method != http.MethodHead {
+				t.Fatalf("request method = %q, want HEAD", request.Method)
+			}
+			trace := httptrace.ContextClientTrace(request.Context())
+			if trace == nil || trace.WroteRequest == nil {
+				t.Fatal("request lacks WroteRequest trace")
+			}
+			trace.WroteRequest(httptrace.WroteRequestInfo{})
+			cancel()
+			return &http.Response{
+				StatusCode: http.StatusMethodNotAllowed,
+				Header:     http.Header{"Allow": []string{http.MethodGet}},
+				Body:       io.NopCloser(strings.NewReader("")),
+			}, nil
+		})},
+	}
+	if err := executor.getOnly(ctx); !errors.Is(err, context.Canceled) {
+		t.Fatalf("getOnly() error = %v, want context.Canceled", err)
+	}
+	if executor.unsafeMethodProbesSent {
+		t.Fatal("safe HEAD request was recorded as an unsafe method probe")
 	}
 }
 

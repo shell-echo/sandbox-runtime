@@ -46,6 +46,17 @@ from the mutable source checkout, requires exact mapped test passes from the
 `go test -json` stream, and uses the Go toolchain version recorded in its build
 identity.
 
+The local runner rejects any explicit `GOROOT` in its process environment and
+uses the default `runtime.GOROOT()/bin/go` that corresponds to its build. It
+resolves Git once from the initial `PATH` to an absolute, symlink-resolved,
+regular executable and reuses that exact path for Contract verification and
+the runner-revision archive. The report records Git's self-reported version
+and states the host-tool evidence boundary. These checks remove an explicit Go
+root override, repeated `PATH` resolution, and silent Go build/run version
+mismatch; they do not attest the integrity of either executable. The host OS,
+filesystem, initial Git selection, and Go and Git binaries remain trusted local
+inputs to this repository-test evidence.
+
 ### Separate execution profiles
 
 The existing `sandbox-provider/sandbox-runtime-provider-v1` profile retains its

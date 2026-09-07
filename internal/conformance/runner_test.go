@@ -41,9 +41,34 @@ func TestResolveGoToolchainIgnoresPATHAndRejectsVersionMismatch(t *testing.T) {
 	if _, err := resolveGoToolchain(context.Background(), runtime.Version()+"-mismatch", environment); err == nil || !strings.Contains(err.Error(), "does not match build version") {
 		t.Fatalf("resolveGoToolchain(mismatch) = %v", err)
 	}
+	t.Setenv("GOROOT", runtime.GOROOT())
+	if _, err := resolveGoToolchain(context.Background(), runtime.Version(), environment); err == nil || !strings.Contains(err.Error(), "GOROOT to be unset") {
+		t.Fatalf("resolveGoToolchain(explicit GOROOT) = %v", err)
+	}
+}
+
+func TestResolveGitToolchainReturnsAbsoluteRegularExecutable(t *testing.T) {
+	executable, version, err := resolveGitToolchain(context.Background(), withSourceRootEnv(t.TempDir()))
+	if err != nil {
+		t.Fatalf("resolveGitToolchain: %v", err)
+	}
+	info, err := os.Lstat(executable)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !filepath.IsAbs(executable) || !info.Mode().IsRegular() {
+		t.Fatalf("resolved Git executable = %q, mode = %v", executable, info.Mode())
+	}
+	if version == "" || strings.HasPrefix(version, "git version ") {
+		t.Fatalf("resolved Git version = %q", version)
+	}
 }
 
 func TestPrepareRunnerSourceExecutesRevisionInsteadOfWorktree(t *testing.T) {
+	gitExecutable, _, err := resolveGitToolchain(context.Background(), withSourceRootEnv(t.TempDir()))
+	if err != nil {
+		t.Fatalf("resolveGitToolchain: %v", err)
+	}
 	repository := t.TempDir()
 	writeRunnerFixture(t, repository, "package fixture\n\nimport \"testing\"\n\nfunc TestSnapshot(*testing.T) {}\n")
 	runConformanceGit(t, repository, "init")
@@ -57,14 +82,15 @@ func TestPrepareRunnerSourceExecutesRevisionInsteadOfWorktree(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(repository, "fixture", "fixture_test.go"), []byte(failingTest), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	assertRunnerRevisionPasses(t, repository, passingRevision)
+	assertRunnerRevisionPasses(t, gitExecutable, repository, passingRevision)
 
 	runConformanceGit(t, repository, "add", "fixture/fixture_test.go")
 	runConformanceGit(t, repository, "commit", "-m", "failing head source")
 	if head := runConformanceGit(t, repository, "rev-parse", "HEAD"); head == passingRevision {
 		t.Fatal("fixture HEAD did not advance")
 	}
-	assertRunnerRevisionPasses(t, repository, passingRevision)
+	t.Setenv("PATH", t.TempDir())
+	assertRunnerRevisionPasses(t, gitExecutable, repository, passingRevision)
 }
 
 func TestExtractRunnerArchiveRejectsUnsafeEntries(t *testing.T) {
@@ -93,10 +119,10 @@ func TestExtractRunnerArchiveRejectsUnsafeEntries(t *testing.T) {
 	}
 }
 
-func assertRunnerRevisionPasses(t *testing.T, repository, revision string) {
+func assertRunnerRevisionPasses(t *testing.T, gitExecutable, repository, revision string) {
 	t.Helper()
 	ctx := context.Background()
-	snapshot, err := prepareRunnerSource(ctx, repository, revision)
+	snapshot, err := prepareRunnerSource(ctx, gitExecutable, repository, revision)
 	if err != nil {
 		t.Fatalf("prepareRunnerSource: %v", err)
 	}
@@ -117,7 +143,7 @@ func assertRunnerRevisionPasses(t *testing.T, repository, revision string) {
 	command.Env = withSourceRootEnv(repository)
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
-	if err := runGoTestCommand(ctx, command, `^TestSnapshot$`, &stdout, &stderr); err != nil {
+	if err := runGoTestCommand(ctx, command, `^TestSnapshot$`, 1, &stdout, &stderr); err != nil {
 		t.Fatalf("archived runner test = %v; stdout = %q; stderr = %q", err, stdout.String(), stderr.String())
 	}
 }
@@ -248,24 +274,24 @@ func TestRunGoTestCommandRequiresPassingExecutedTests(t *testing.T) {
 	for _, test := range []struct {
 		name       string
 		mode       string
+		pattern    string
+		matches    int
 		wantErr    string
 		wantOutput string
 	}{
-		{name: "zero matches", mode: "zero", wantErr: "no tests matched"},
-		{name: "all skipped", mode: "skip", wantErr: "skipped", wantOutput: "SKIP"},
-		{name: "pass", mode: "pass", wantOutput: "human-readable diagnostic"},
-		{name: "scaffold only", mode: "pass", wantErr: "matching the Suite case mapping"},
-		{name: "failure", mode: "fail", wantErr: "failed", wantOutput: "FAIL"},
+		{name: "zero matches", mode: "zero", pattern: `^TestMapped$`, matches: 1, wantErr: "no tests matched"},
+		{name: "all skipped", mode: "skip", pattern: `^TestMapped$`, matches: 1, wantErr: "skipped", wantOutput: "SKIP"},
+		{name: "pass", mode: "pass", pattern: `^TestMapped$`, matches: 1, wantOutput: "human-readable diagnostic"},
+		{name: "scaffold only", mode: "pass", pattern: `^TestMapped/required-subtest$`, matches: 1, wantErr: "matching the Suite case mapping"},
+		{name: "missing required mapped test", mode: "pass", pattern: `^(TestMapped|TestRequired)$`, matches: 2, wantErr: "1 tests matching"},
+		{name: "unexpected mapped test", mode: "two-pass", pattern: `^(TestMapped|TestRequired)$`, matches: 1, wantErr: "2 tests matching"},
+		{name: "failure", mode: "fail", pattern: `^TestMapped$`, matches: 1, wantErr: "failed", wantOutput: "FAIL"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			var stdout bytes.Buffer
 			var stderr bytes.Buffer
 			ctx := context.Background()
-			expected := `^TestMapped$`
-			if test.name == "scaffold only" {
-				expected = `^TestMapped/required-subtest$`
-			}
-			err := runGoTestCommand(ctx, conformanceHelperCommand(ctx, test.mode), expected, &stdout, &stderr)
+			err := runGoTestCommand(ctx, conformanceHelperCommand(ctx, test.mode), test.pattern, test.matches, &stdout, &stderr)
 			if test.wantErr == "" && err != nil {
 				t.Fatalf("runGoTestCommand() = %v; stderr = %q", err, stderr.String())
 			}
@@ -287,7 +313,7 @@ func TestRunGoTestCommandPreservesContextCancellation(t *testing.T) {
 	defer cancel()
 	var stdout bytes.Buffer
 	writer := cancelOnReadyWriter{writer: &stdout, cancel: cancel}
-	err := runGoTestCommand(ctx, conformanceHelperCommand(ctx, "block"), `^TestMapped$`, &writer, &bytes.Buffer{})
+	err := runGoTestCommand(ctx, conformanceHelperCommand(ctx, "block"), `^TestMapped$`, 1, &writer, &bytes.Buffer{})
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("runGoTestCommand() error = %v, want context.Canceled", err)
 	}
@@ -322,6 +348,12 @@ func TestConformanceGoTestHelper(*testing.T) {
 		emit(goTestEvent{Action: "output", Package: "example.test", Test: "TestMapped", Output: "human-readable diagnostic\n"})
 		emit(goTestEvent{Action: "pass", Package: "example.test", Test: "TestMapped"})
 		emit(goTestEvent{Action: "output", Package: "example.test", Output: "PASS\n"})
+		emit(goTestEvent{Action: "pass", Package: "example.test"})
+	case "two-pass":
+		for _, test := range []string{"TestMapped", "TestRequired"} {
+			emit(goTestEvent{Action: "run", Package: "example.test", Test: test})
+			emit(goTestEvent{Action: "pass", Package: "example.test", Test: test})
+		}
 		emit(goTestEvent{Action: "pass", Package: "example.test"})
 	case "fail":
 		emit(goTestEvent{Action: "run", Package: "example.test", Test: "TestMapped"})

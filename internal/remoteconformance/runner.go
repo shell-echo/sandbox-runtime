@@ -237,7 +237,7 @@ func run(ctx context.Context, options Options, identity RunnerIdentity) (Report,
 		},
 		Cases:                        make([]CaseResult, 0, len(verified.RemoteSuite.Cases)),
 		ContractMutationRoutesCalled: false,
-		EvidenceBoundary:             "remote Provider capability discovery over TLS 1.3 mTLS; method probes are sent only to /v1/capabilities, but a non-conforming target could produce side effects; this report does not claim zero side effects and is not protected admission, lifecycle, runtime, aggregate, multi-controller, multi-tenant, deployment, or production evidence",
+		EvidenceBoundary:             "runner host, filesystem, and Git executable are trusted local inputs; remote Provider capability discovery uses TLS 1.3 mTLS; method probes are sent only to /v1/capabilities, but a non-conforming target could produce side effects; this report does not claim zero side effects and is not protected admission, lifecycle, runtime, aggregate, multi-controller, multi-tenant, deployment, or production evidence",
 	}
 
 	for caseIndex, id := range verified.RemoteSuite.Cases {
