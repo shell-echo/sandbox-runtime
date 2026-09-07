@@ -218,7 +218,7 @@ Previously passed locally at their recorded identities (authorized test
 environment):
 
 - ADR 0038 implementation `034e647`, Contract lock `fd48de9`, projection
-  regression fix `af8a505`, and active E2E lock `b8d4829`; Contract revision
+  regression fix `af8a505`, and then-active E2E lock `b8d4829`; Contract revision
   `034e6476ff508a0571e64de9ce923799717b902b`, tree
   `33f1926feb8e12f24a8f92b9e6879102e19c2173`, and all 50 Suite cases;
 - root and E2E-module full race/shuffle tests and vet, the Contract verifier,
