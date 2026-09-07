@@ -2,8 +2,8 @@
   "schema_version": 1,
   "evidence_profile": "browser-downstream-fencing-e2e-v1",
   "sources": {
-    "provider_revision": "fd48de93af5113d331c64f542c35f3934cc8229a",
-    "harness_baseline": "fd48de93af5113d331c64f542c35f3934cc8229a",
+    "provider_revision": "af8a505f8e5604ab4daaf33ce473c002210e16af",
+    "harness_baseline": "af8a505f8e5604ab4daaf33ce473c002210e16af",
     "gateway_component": {
       "path": "gateway/composition/browser.go",
       "revision": "b4d41c9a32b4ccf39edaba3fb8bf5ad239c1f945"

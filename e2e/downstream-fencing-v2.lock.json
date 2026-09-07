@@ -2,8 +2,8 @@
   "schema_version": 1,
   "evidence_profile": "browser-downstream-fencing-e2e-v2",
   "sources": {
-    "provider_revision": "fd48de93af5113d331c64f542c35f3934cc8229a",
-    "harness_baseline": "fd48de93af5113d331c64f542c35f3934cc8229a",
+    "provider_revision": "af8a505f8e5604ab4daaf33ce473c002210e16af",
+    "harness_baseline": "af8a505f8e5604ab4daaf33ce473c002210e16af",
     "gateway_component": {
       "path": "gateway/composition/browser.go",
       "revision": "b4d41c9a32b4ccf39edaba3fb8bf5ad239c1f945"
@@ -14,7 +14,7 @@
     },
     "action_history_component": {
       "path": "gateway/capacity/redis",
-      "revision": "fd48de93af5113d331c64f542c35f3934cc8229a"
+      "revision": "af8a505f8e5604ab4daaf33ce473c002210e16af"
     },
     "caller_substrate": {
       "path": "e2e/internal/caller",
@@ -23,7 +23,7 @@
   },
   "base_lock": {
     "path": "e2e/downstream-fencing.lock.json",
-    "sha256": "sha256:fbf542c73a73fb3455331fea4edbf57aecc8cf7f4925f57e29541c4edd311563",
+    "sha256": "sha256:c5d2ee8c14c80a58d19ab13eb5ec0d1eac423eb598c41619764b183e06d4302a",
     "evidence_profile": "browser-downstream-fencing-e2e-v1"
   },
   "contract": {
