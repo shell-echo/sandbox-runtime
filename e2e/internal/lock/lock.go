@@ -502,7 +502,7 @@ func computeProviderSuiteDigest(content []byte) (string, error) {
 }
 
 func providerDocumentationPath(path string) bool {
-	return path == "README.md" || strings.HasPrefix(path, "docs/")
+	return path == "README.md" || path == "compatibility/sandbox-runtime/README.md" || strings.HasPrefix(path, "docs/")
 }
 
 func providerChangePath(changedPath string) bool {

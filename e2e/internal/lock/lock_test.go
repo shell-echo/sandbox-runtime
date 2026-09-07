@@ -26,12 +26,15 @@ func TestParentProviderCheckoutMatchesLock(t *testing.T) {
 
 func TestProviderDocumentationPathIsNarrow(t *testing.T) {
 	for path, want := range map[string]bool{
-		"README.md":             true,
+		"README.md": true,
+		"compatibility/sandbox-runtime/README.md": true,
 		"docs/STATUS.md":        true,
 		"docs/plan/p2.5.md":     true,
 		"README.md/embedded.go": false,
-		"cmd/README.md":         false,
-		"provider/code.go":      false,
+		"compatibility/sandbox-runtime/README.md/child.go": false,
+		"compatibility/sandbox-runtime/contract.lock.json": false,
+		"cmd/README.md":    false,
+		"provider/code.go": false,
 	} {
 		if got := providerDocumentationPath(path); got != want {
 			t.Errorf("providerDocumentationPath(%q) = %t, want %t", path, got, want)
@@ -41,7 +44,9 @@ func TestProviderDocumentationPathIsNarrow(t *testing.T) {
 
 func TestProviderChangePathAllowsOnlyHarnessAndDocumentation(t *testing.T) {
 	for path, want := range map[string]bool{
-		"README.md":                                             true,
+		"README.md": true,
+		"compatibility/sandbox-runtime/README.md":          true,
+		"compatibility/sandbox-runtime/contract.lock.json": false,
 		"docs/STATUS.md":                                        true,
 		"e2e/cmd/caller/main.go":                                true,
 		"e2e/internal/lock/lock.go":                             true,
