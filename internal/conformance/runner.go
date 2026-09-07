@@ -98,7 +98,7 @@ var testCases = map[string]testCase{
 	},
 	"capability-discovery-immutable-schema": {
 		Package:         "./providerapi",
-		Run:             `^(TestLockedCapabilityResponseSchema|TestCapabilitiesHandlerReadsSourceOnceAndFreezesResponse)$`,
+		Run:             `^(TestLockedCapabilityResponseSchema|TestNewCapabilitiesHandlerReadsSourceOnceAndFreezesResponse)$`,
 		ExpectedMatches: 2,
 	},
 	"capability-discovery-terminal-profile-advertisement": {

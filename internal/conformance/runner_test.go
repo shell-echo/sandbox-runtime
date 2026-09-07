@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"runtime/debug"
 	"strings"
@@ -305,6 +306,21 @@ func TestRunGoTestCommandRequiresPassingExecutedTests(t *testing.T) {
 				t.Fatalf("human output exposes raw JSON event: %q", stdout.String())
 			}
 		})
+	}
+}
+
+func TestImmutableCapabilityMappingNamesExistingTests(t *testing.T) {
+	test := testCases["capability-discovery-immutable-schema"]
+	if test.ExpectedMatches != 2 {
+		t.Fatalf("expected matches = %d, want 2", test.ExpectedMatches)
+	}
+	for _, name := range []string{
+		"TestLockedCapabilityResponseSchema",
+		"TestNewCapabilitiesHandlerReadsSourceOnceAndFreezesResponse",
+	} {
+		if matched, err := regexp.MatchString(test.Run, name); err != nil || !matched {
+			t.Fatalf("mapping %q does not match %q: %v", test.Run, name, err)
+		}
 	}
 }
 
