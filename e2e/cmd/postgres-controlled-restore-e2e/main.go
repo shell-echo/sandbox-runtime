@@ -38,9 +38,9 @@ func main() {
 			_, _ = fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
-		fmt.Printf("provider=%s harness_baseline=%s contract=%s tree=%s suite_cases=%d suite_exercised=%t profile=%s platform=%s browser=%s valkey=%s postgres=%s migration=%s same_runner=%t independent_failure_domain=%t scenarios=%d runner_entrypoint_present=true\n",
+		fmt.Printf("provider=%s harness_baseline=%s contract=%s tree=%s %s profile=%s platform=%s browser=%s valkey=%s postgres=%s migration=%s same_runner=%t independent_failure_domain=%t scenarios=%d runner_entrypoint_present=true\n",
 			locked.Sources.ProviderRevision, locked.Sources.HarnessBaseline, locked.Contract.Revision, locked.Contract.Tree,
-			locked.Contract.SuiteCases, locked.Contract.SuiteExercised, locked.EvidenceProfile, platform,
+			lock.SuiteCheckSummary(locked.Contract.SuiteExercised, locked.Contract.RemoteSuiteExercised), locked.EvidenceProfile, platform,
 			locked.Base.Base.BrowserImage.IndexDigest, locked.Base.Base.Valkey.IndexDigest,
 			locked.PostgreSQL.IndexDigest, locked.PostgreSQL.MigrationSHA256,
 			locked.PostgreSQL.SameRunner, locked.PostgreSQL.IndependentFailureDomain, len(locked.Scenarios))

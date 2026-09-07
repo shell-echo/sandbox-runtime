@@ -19,7 +19,10 @@ func TestDownstreamFencingLock(t *testing.T) {
 			t.Fatalf("LoadDownstreamFencing(%q): %v", platform, err)
 		}
 		if locked.Sources.ProviderRevision != ProviderCommit || locked.Sources.HarnessBaseline != DownstreamFencingHarnessBaseline ||
-			locked.Contract.SuiteExercised || locked.Contract.ContractMetadataOnly ||
+			locked.Contract.SuiteExercised || locked.Contract.RemoteSuiteExercised || locked.Contract.ContractMetadataOnly ||
+			locked.Contract.SuiteDigest != SuiteDigest || locked.Contract.SuiteProfile != SuiteProfile ||
+			locked.Contract.RemoteSuiteDigest != RemoteSuiteDigest || locked.Contract.RemoteSuiteProfile != RemoteSuiteProfile ||
+			locked.Contract.RemoteSuiteCases != RemoteSuiteCases ||
 			!locked.BrowserImage.Provenance.Established || !locked.Valkey.ProvenanceNotEstablished ||
 			locked.RevocationPolicy.OperationTimeoutMillis != 100 || locked.Adapters.Revocation.PolicyFingerprint == "" ||
 			!locked.PrivateWire.ResolveMetadataOnly || !locked.PrivateWire.HighWaterActivationOnly ||
@@ -54,7 +57,10 @@ func TestDownstreamFencingLockRequiresExplicitZeroValueFields(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, fieldPath := range [][]string{
+		{"contract", "suite_digest"},
+		{"contract", "remote_suite_profile"},
 		{"contract", "suite_exercised"},
+		{"contract", "remote_suite_exercised"},
 		{"valkey", "database_index"},
 		{"private_wire", "resolve_advances_high_water"},
 		{"private_wire", "url_query_allowed"},

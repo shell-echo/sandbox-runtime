@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/shell-echo/sandbox-runtime-e2e/internal/caller"
+	"github.com/shell-echo/sandbox-runtime-e2e/internal/lock"
 	"github.com/shell-echo/sandbox-runtime/gateway"
 )
 
@@ -56,6 +57,20 @@ func TestSelectCallerPlatformCandidateIsExplicit(t *testing.T) {
 func TestSelectCallerRejectsUnknownKind(t *testing.T) {
 	if _, _, _, _, err := selectCaller(CallerKind("unknown")); err == nil {
 		t.Fatal("unknown caller kind was accepted")
+	}
+}
+
+func TestRecordLockedSuitesSeparatesLocalAndRemoteMetadataWithoutExecutionClaim(t *testing.T) {
+	var manifest evidenceManifest
+	recordLockedSuites(&manifest)
+	if manifest.ContractRevision != lock.ContractRevision || manifest.ContractTree != lock.ContractTree ||
+		manifest.SuiteID != lock.SuiteID || manifest.SuiteDigest != lock.SuiteDigest ||
+		manifest.SuiteDigestProfile != lock.SuiteDigestProfile || manifest.SuiteProfile != lock.SuiteProfile ||
+		manifest.SuiteCases != lock.SuiteCases || manifest.RemoteSuiteID != lock.RemoteSuiteID ||
+		manifest.RemoteSuiteDigest != lock.RemoteSuiteDigest || manifest.RemoteSuiteDigestProfile != lock.RemoteSuiteDigestProfile ||
+		manifest.RemoteSuiteProfile != lock.RemoteSuiteProfile || manifest.RemoteSuiteCases != lock.RemoteSuiteCases ||
+		manifest.SuiteExercised || manifest.RemoteSuiteExercised {
+		t.Fatalf("recordLockedSuites() = %#v", manifest)
 	}
 }
 

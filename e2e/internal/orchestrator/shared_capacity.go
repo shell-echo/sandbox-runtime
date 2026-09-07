@@ -68,11 +68,23 @@ type sharedCapacityValkeyInfo struct {
 }
 
 type sharedContractInfo struct {
-	Namespace  string `json:"namespace"`
-	Revision   string `json:"revision"`
-	Tree       string `json:"tree"`
-	SuiteCases int    `json:"suite_cases"`
-	Exercised  bool   `json:"exercised"`
+	Namespace                string `json:"namespace"`
+	Revision                 string `json:"revision"`
+	Tree                     string `json:"tree"`
+	SuiteID                  string `json:"suite_id"`
+	SuiteVersion             string `json:"suite_version"`
+	SuiteDigest              string `json:"suite_digest"`
+	SuiteDigestProfile       string `json:"suite_digest_profile"`
+	SuiteProfile             string `json:"suite_profile"`
+	SuiteCases               int    `json:"suite_cases"`
+	RemoteSuiteID            string `json:"remote_suite_id"`
+	RemoteSuiteVersion       string `json:"remote_suite_version"`
+	RemoteSuiteDigest        string `json:"remote_suite_digest"`
+	RemoteSuiteDigestProfile string `json:"remote_suite_digest_profile"`
+	RemoteSuiteProfile       string `json:"remote_suite_profile"`
+	RemoteSuiteCases         int    `json:"remote_suite_cases"`
+	SuiteExercised           bool   `json:"suite_exercised"`
+	RemoteSuiteExercised     bool   `json:"remote_suite_exercised"`
 }
 
 type sharedScenarioRunner struct {
@@ -885,7 +897,11 @@ func RunSharedCapacity(ctx context.Context, options Options) (_ SharedCapacityRe
 		GatewayConfigDigests: []string{gatewayConfigDigestA, gatewayConfigDigestB}, CallerConfigDigest: callerConfigDigest,
 		Contract: sharedContractInfo{
 			Namespace: lock.ContractNS, Revision: lock.ContractRevision, Tree: lock.ContractTree,
-			SuiteCases: lock.SuiteCases, Exercised: false,
+			SuiteID: lock.SuiteID, SuiteVersion: lock.SuiteVersion, SuiteDigest: lock.SuiteDigest,
+			SuiteDigestProfile: lock.SuiteDigestProfile, SuiteProfile: lock.SuiteProfile, SuiteCases: lock.SuiteCases,
+			RemoteSuiteID: lock.RemoteSuiteID, RemoteSuiteVersion: lock.RemoteSuiteVersion, RemoteSuiteDigest: lock.RemoteSuiteDigest,
+			RemoteSuiteDigestProfile: lock.RemoteSuiteDigestProfile, RemoteSuiteProfile: lock.RemoteSuiteProfile,
+			RemoteSuiteCases: lock.RemoteSuiteCases, SuiteExercised: false, RemoteSuiteExercised: false,
 		},
 		Reports: []string{filepath.Base(reportPath)}, Audits: auditNames, Observations: observationNames,
 		Faults: []string{"isolated lease removals", "SIGKILL owning Gateway", "SIGSTOP/SIGCONT stale owner", "retained Valkey pause/unpause"},

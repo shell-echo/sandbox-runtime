@@ -1,9 +1,9 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "evidence_profile": "browser-postgres-controlled-restore-e2e-v1",
   "sources": {
-    "provider_revision": "af8a505f8e5604ab4daaf33ce473c002210e16af",
-    "harness_baseline": "af8a505f8e5604ab4daaf33ce473c002210e16af",
+    "provider_revision": "3fe314a012b808fe60dbd783d7c7c7121d3c548e",
+    "harness_baseline": "3fe314a012b808fe60dbd783d7c7c7121d3c548e",
     "gateway_component": {
       "path": "gateway/composition/browser.go",
       "revision": "b4d41c9a32b4ccf39edaba3fb8bf5ad239c1f945"
@@ -14,7 +14,7 @@
     },
     "action_history_component": {
       "path": "gateway/capacity/redis",
-      "revision": "af8a505f8e5604ab4daaf33ce473c002210e16af"
+      "revision": "3fe314a012b808fe60dbd783d7c7c7121d3c548e"
     },
     "caller_substrate": {
       "path": "e2e/internal/caller",
@@ -23,15 +23,27 @@
   },
   "base_lock": {
     "path": "e2e/downstream-fencing-v2.lock.json",
-    "sha256": "sha256:4018e26011d1994e47252a69f06acc6f2034720f7ddc12654641966d5b2fd4ec",
+    "sha256": "sha256:d59b8553134a0267f13c59f0aba55ebaf7fdea7f6a15a4f00f7bba79414dd395",
     "evidence_profile": "browser-downstream-fencing-e2e-v2"
   },
   "contract": {
     "namespace": "urn:shell-echo:sandbox-runtime:provider-v1",
-    "revision": "034e6476ff508a0571e64de9ce923799717b902b",
-    "tree": "33f1926feb8e12f24a8f92b9e6879102e19c2173",
+    "revision": "9206e601f75a54db0b66969239d7e8cc5bcc8af9",
+    "tree": "c5e4221f2ceaaaad53c8038e1ebaacfe0c5a4daf",
+    "suite_id": "sandbox-provider",
+    "suite_version": "1.0.0",
+    "suite_digest": "sha256:bf177a5bd2b4228605b3ebc311d25a1cc348d9548b2b5c2d333a0c69e71ca528",
+    "suite_digest_profile": "rfc8785-full-document-excluding-suite-digest-v1",
+    "suite_profile": "sandbox-runtime-provider-v1",
     "suite_cases": 50,
+    "remote_suite_id": "sandbox-provider-remote",
+    "remote_suite_version": "1.0.0",
+    "remote_suite_digest": "sha256:167922d972229a97a64bf22bc6a36ee20d4de19a023395d9f004f00c54cc49d0",
+    "remote_suite_digest_profile": "rfc8785-full-document-excluding-suite-digest-v1",
+    "remote_suite_profile": "sandbox-runtime-provider-remote-discovery-v1",
+    "remote_suite_cases": 6,
     "suite_exercised": false,
+    "remote_suite_exercised": false,
     "contract_metadata_only": false
   },
   "action_fence": {

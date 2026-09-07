@@ -474,6 +474,16 @@ func TestValidateDownstreamManifestPreservesEvidenceBoundaryAndNonTargets(t *tes
 		t.Fatal("manifest rewrote the locked Contract metadata-only flag")
 	}
 	manifest = validDownstreamTestManifest()
+	manifest.Contract.RemoteSuiteDigest = "sha256:" + strings.Repeat("0", 64)
+	if err := validateDownstreamManifest(manifest); err == nil {
+		t.Fatal("manifest rewrote the locked remote Suite identity")
+	}
+	manifest = validDownstreamTestManifest()
+	manifest.Contract.RemoteSuiteExercised = true
+	if err := validateDownstreamManifest(manifest); err == nil {
+		t.Fatal("manifest overclaimed remote Suite execution")
+	}
+	manifest = validDownstreamTestManifest()
 	manifest.NonTargets = manifest.NonTargets[:len(manifest.NonTargets)-1]
 	if err := validateDownstreamManifest(manifest); err == nil {
 		t.Fatal("manifest omitted a required non-target")
@@ -628,7 +638,7 @@ func validDownstreamTestManifest() downstreamFencingManifest {
 	return downstreamFencingManifest{
 		EvidenceName: downstreamFencingEvidenceName, EvidenceProfile: lock.DownstreamFencingProfile,
 		Contract: downstreamFencingContractEvidence{
-			DownstreamFencingContract: lock.DownstreamFencingContract{}, ProviderRoutesExercised: []string{"GET /v1/capabilities"},
+			DownstreamFencingContract: lock.DownstreamFencingContractMetadata(), ProviderRoutesExercised: []string{"GET /v1/capabilities"},
 		},
 		ProcessReconstructions: 2,
 		Adapters:               &adapters,

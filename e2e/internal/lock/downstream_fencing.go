@@ -23,8 +23,8 @@ const (
 	DownstreamFencingLockPath = "e2e/downstream-fencing.lock.json"
 	DownstreamFencingProfile  = "browser-downstream-fencing-e2e-v1"
 
-	DownstreamFencingHarnessBaseline   = "af8a505f8e5604ab4daaf33ce473c002210e16af"
-	DownstreamFencingV2HarnessBaseline = "af8a505f8e5604ab4daaf33ce473c002210e16af"
+	DownstreamFencingHarnessBaseline   = "3fe314a012b808fe60dbd783d7c7c7121d3c548e"
+	DownstreamFencingV2HarnessBaseline = "3fe314a012b808fe60dbd783d7c7c7121d3c548e"
 	DownstreamFencingGatewayRevision   = "b4d41c9a32b4ccf39edaba3fb8bf5ad239c1f945"
 	DownstreamFencingIngressRevision   = "b4d41c9a32b4ccf39edaba3fb8bf5ad239c1f945"
 	DownstreamFencingCallerBaseline    = "fd48de93af5113d331c64f542c35f3934cc8229a"
@@ -37,7 +37,7 @@ const (
 
 	PostgresControlledRestoreLockPath        = "e2e/postgres-controlled-restore.lock.json"
 	PostgresControlledRestoreProfile         = "browser-postgres-controlled-restore-e2e-v1"
-	PostgresControlledRestoreHarnessBaseline = "af8a505f8e5604ab4daaf33ce473c002210e16af"
+	PostgresControlledRestoreHarnessBaseline = "3fe314a012b808fe60dbd783d7c7c7121d3c548e"
 	PostgresWitnessImage                     = "postgres"
 	PostgresWitnessIndex                     = "sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94"
 	PostgresWitnessResolvedTag               = "17.6-alpine3.22"
@@ -254,12 +254,38 @@ type DownstreamFencingSources struct {
 }
 
 type DownstreamFencingContract struct {
-	Namespace            string `json:"namespace"`
-	Revision             string `json:"revision"`
-	Tree                 string `json:"tree"`
-	SuiteCases           int    `json:"suite_cases"`
-	SuiteExercised       bool   `json:"suite_exercised"`
-	ContractMetadataOnly bool   `json:"contract_metadata_only"`
+	Namespace                string `json:"namespace"`
+	Revision                 string `json:"revision"`
+	Tree                     string `json:"tree"`
+	SuiteID                  string `json:"suite_id"`
+	SuiteVersion             string `json:"suite_version"`
+	SuiteDigest              string `json:"suite_digest"`
+	SuiteDigestProfile       string `json:"suite_digest_profile"`
+	SuiteProfile             string `json:"suite_profile"`
+	SuiteCases               int    `json:"suite_cases"`
+	RemoteSuiteID            string `json:"remote_suite_id"`
+	RemoteSuiteVersion       string `json:"remote_suite_version"`
+	RemoteSuiteDigest        string `json:"remote_suite_digest"`
+	RemoteSuiteDigestProfile string `json:"remote_suite_digest_profile"`
+	RemoteSuiteProfile       string `json:"remote_suite_profile"`
+	RemoteSuiteCases         int    `json:"remote_suite_cases"`
+	SuiteExercised           bool   `json:"suite_exercised"`
+	RemoteSuiteExercised     bool   `json:"remote_suite_exercised"`
+	ContractMetadataOnly     bool   `json:"contract_metadata_only"`
+}
+
+// DownstreamFencingContractMetadata returns the exact Contract and Suite
+// identity recorded by active downstream evidence. Both Suites remain
+// metadata only for these profiles.
+func DownstreamFencingContractMetadata() DownstreamFencingContract {
+	return DownstreamFencingContract{
+		Namespace: ContractNS, Revision: ContractRevision, Tree: ContractTree,
+		SuiteID: SuiteID, SuiteVersion: SuiteVersion, SuiteDigest: SuiteDigest,
+		SuiteDigestProfile: SuiteDigestProfile, SuiteProfile: SuiteProfile, SuiteCases: SuiteCases,
+		RemoteSuiteID: RemoteSuiteID, RemoteSuiteVersion: RemoteSuiteVersion, RemoteSuiteDigest: RemoteSuiteDigest,
+		RemoteSuiteDigestProfile: RemoteSuiteDigestProfile, RemoteSuiteProfile: RemoteSuiteProfile, RemoteSuiteCases: RemoteSuiteCases,
+		SuiteExercised: false, RemoteSuiteExercised: false, ContractMetadataOnly: false,
+	}
 }
 
 type DownstreamFencingProvenance struct {
@@ -408,20 +434,23 @@ func LoadDownstreamFencing(providerRoot, platform string) (DownstreamFencingLock
 	if err != nil {
 		return DownstreamFencingLock{}, fmt.Errorf("resolve Provider root: %w", err)
 	}
+	locked, _, err := loadDownstreamFencingSnapshot(root, platform)
+	return locked, err
+}
+
+func loadDownstreamFencingSnapshot(root, platform string) (DownstreamFencingLock, []byte, error) {
 	lockPath := filepath.Join(root, DownstreamFencingLockPath)
-	if err := requireDownstreamFencingFields(lockPath); err != nil {
-		return DownstreamFencingLock{}, err
-	}
 	var locked DownstreamFencingLock
-	if err := decodeStrictFile(lockPath, &locked); err != nil {
-		return DownstreamFencingLock{}, err
+	content, err := decodeRequiredStrictFile(lockPath, reflect.TypeOf(DownstreamFencingLock{}), &locked)
+	if err != nil {
+		return DownstreamFencingLock{}, nil, err
 	}
 	if err := validateDownstreamFencingLock(locked); err != nil {
-		return DownstreamFencingLock{}, err
+		return DownstreamFencingLock{}, nil, err
 	}
 	valkeyDigest, ok := locked.Valkey.PlatformDigests[platform]
 	if !ok {
-		return DownstreamFencingLock{}, fmt.Errorf("downstream-fencing platform %q is not locked", platform)
+		return DownstreamFencingLock{}, nil, fmt.Errorf("downstream-fencing platform %q is not locked", platform)
 	}
 	browserPlatform := platform
 	if platform == "linux/arm64" {
@@ -429,11 +458,11 @@ func LoadDownstreamFencing(providerRoot, platform string) (DownstreamFencingLock
 	}
 	browserDigest, ok := locked.BrowserImage.PlatformDigests[browserPlatform]
 	if !ok {
-		return DownstreamFencingLock{}, fmt.Errorf("downstream-fencing Browser platform %q is not locked", browserPlatform)
+		return DownstreamFencingLock{}, nil, fmt.Errorf("downstream-fencing Browser platform %q is not locked", browserPlatform)
 	}
 	locked.Valkey.SelectedPlatform, locked.Valkey.SelectedDigest = platform, valkeyDigest
 	locked.BrowserImage.SelectedPlatform, locked.BrowserImage.SelectedDigest = browserPlatform, browserDigest
-	return locked, nil
+	return locked, content, nil
 }
 
 // LoadDownstreamFencingV2 validates the explicit ADR 0034 successor and its
@@ -443,27 +472,26 @@ func LoadDownstreamFencingV2(providerRoot, platform string) (DownstreamFencingV2
 	if err != nil {
 		return DownstreamFencingV2Lock{}, fmt.Errorf("resolve Provider root: %w", err)
 	}
-	base, err := LoadDownstreamFencing(root, platform)
+	locked, _, err := loadDownstreamFencingV2Snapshot(root, platform)
+	return locked, err
+}
+
+func loadDownstreamFencingV2Snapshot(root, platform string) (DownstreamFencingV2Lock, []byte, error) {
+	base, baseContent, err := loadDownstreamFencingSnapshot(root, platform)
 	if err != nil {
-		return DownstreamFencingV2Lock{}, err
+		return DownstreamFencingV2Lock{}, nil, err
 	}
 	lockPath := filepath.Join(root, DownstreamFencingV2LockPath)
-	if err := requireDownstreamFencingV2Fields(lockPath); err != nil {
-		return DownstreamFencingV2Lock{}, err
-	}
 	var locked DownstreamFencingV2Lock
-	if err := decodeStrictFile(lockPath, &locked); err != nil {
-		return DownstreamFencingV2Lock{}, err
-	}
-	baseContent, err := os.ReadFile(filepath.Join(root, DownstreamFencingLockPath))
+	content, err := decodeRequiredStrictFile(lockPath, reflect.TypeOf(DownstreamFencingV2Lock{}), &locked)
 	if err != nil {
-		return DownstreamFencingV2Lock{}, err
+		return DownstreamFencingV2Lock{}, nil, err
 	}
 	if err := validateDownstreamFencingV2Lock(locked, normalizedSHA256(string(baseContent)), base); err != nil {
-		return DownstreamFencingV2Lock{}, err
+		return DownstreamFencingV2Lock{}, nil, err
 	}
 	locked.Base = base
-	return locked, nil
+	return locked, content, nil
 }
 
 func LoadPostgresControlledRestore(providerRoot, platform string) (PostgresControlledRestoreLock, error) {
@@ -471,20 +499,13 @@ func LoadPostgresControlledRestore(providerRoot, platform string) (PostgresContr
 	if err != nil {
 		return PostgresControlledRestoreLock{}, fmt.Errorf("resolve Provider root: %w", err)
 	}
-	base, err := LoadDownstreamFencingV2(root, platform)
+	base, baseContent, err := loadDownstreamFencingV2Snapshot(root, platform)
 	if err != nil {
 		return PostgresControlledRestoreLock{}, err
 	}
 	lockPath := filepath.Join(root, PostgresControlledRestoreLockPath)
-	if err := requirePostgresControlledRestoreFields(lockPath); err != nil {
-		return PostgresControlledRestoreLock{}, err
-	}
 	var locked PostgresControlledRestoreLock
-	if err := decodeStrictFile(lockPath, &locked); err != nil {
-		return PostgresControlledRestoreLock{}, err
-	}
-	baseContent, err := os.ReadFile(filepath.Join(root, DownstreamFencingV2LockPath))
-	if err != nil {
+	if _, err := decodeRequiredStrictFile(lockPath, reflect.TypeOf(PostgresControlledRestoreLock{}), &locked); err != nil {
 		return PostgresControlledRestoreLock{}, err
 	}
 	migrationContent, err := os.ReadFile(filepath.Join(root, PostgresWitnessMigrationPath))
@@ -546,7 +567,7 @@ func validatePostgresControlledRestoreLock(
 	migrationDigest string,
 	base DownstreamFencingV2Lock,
 ) error {
-	if locked.SchemaVersion != 1 || locked.EvidenceProfile != PostgresControlledRestoreProfile {
+	if locked.SchemaVersion != 2 || locked.EvidenceProfile != PostgresControlledRestoreProfile {
 		return errors.New("PostgreSQL controlled-restore lock identity is invalid")
 	}
 	expectedSources := DownstreamFencingV2Sources{
@@ -601,8 +622,8 @@ func validateDownstreamFencingV2Lock(
 	baseDigest string,
 	base DownstreamFencingLock,
 ) error {
-	if locked.SchemaVersion != 1 {
-		return fmt.Errorf("downstream-fencing-v2 schema version = %d, want 1", locked.SchemaVersion)
+	if locked.SchemaVersion != 2 {
+		return fmt.Errorf("downstream-fencing-v2 schema version = %d, want 2", locked.SchemaVersion)
 	}
 	if locked.EvidenceProfile != DownstreamFencingV2Profile {
 		return fmt.Errorf("downstream-fencing-v2 evidence profile = %q, want %q", locked.EvidenceProfile, DownstreamFencingV2Profile)
@@ -658,8 +679,8 @@ func validateDownstreamFencingV2Lock(
 }
 
 func validateDownstreamFencingLock(locked DownstreamFencingLock) error {
-	if locked.SchemaVersion != 1 {
-		return fmt.Errorf("downstream-fencing schema version = %d, want 1", locked.SchemaVersion)
+	if locked.SchemaVersion != 2 {
+		return fmt.Errorf("downstream-fencing schema version = %d, want 2", locked.SchemaVersion)
 	}
 	if locked.EvidenceProfile != DownstreamFencingProfile {
 		return fmt.Errorf("downstream-fencing evidence profile = %q, want %q", locked.EvidenceProfile, DownstreamFencingProfile)
@@ -674,10 +695,7 @@ func validateDownstreamFencingLock(locked DownstreamFencingLock) error {
 	if locked.Sources != expectedSources {
 		return fmt.Errorf("downstream-fencing sources = %#v, want %#v", locked.Sources, expectedSources)
 	}
-	expectedContract := DownstreamFencingContract{
-		Namespace: ContractNS, Revision: ContractRevision, Tree: ContractTree, SuiteCases: SuiteCases,
-		SuiteExercised: false, ContractMetadataOnly: false,
-	}
+	expectedContract := DownstreamFencingContractMetadata()
 	if locked.Contract != expectedContract {
 		return fmt.Errorf("downstream-fencing Contract metadata = %#v, want %#v", locked.Contract, expectedContract)
 	}
@@ -810,48 +828,6 @@ func downstreamFencingWireBaseline() DownstreamFencingWire {
 		ErrorCodes:                     []string{wire.ErrorInvalidActivation, wire.ErrorUnavailable, wire.ErrorFenceLost},
 		ActionFenceClaimActivationOnly: true, ExactURLPathsRequired: true,
 	}
-}
-
-func requireDownstreamFencingFields(path string) error {
-	content, err := os.ReadFile(path)
-	if err != nil {
-		return fmt.Errorf("read %s: %w", path, err)
-	}
-	if len(content) > maxLockBytes {
-		return fmt.Errorf("decode %s: lock exceeds %d bytes", path, maxLockBytes)
-	}
-	if err := requireJSONStructFields(content, reflect.TypeOf(DownstreamFencingLock{}), "$"); err != nil {
-		return fmt.Errorf("decode %s: %w", path, err)
-	}
-	return nil
-}
-
-func requireDownstreamFencingV2Fields(path string) error {
-	content, err := os.ReadFile(path)
-	if err != nil {
-		return fmt.Errorf("read %s: %w", path, err)
-	}
-	if len(content) > maxLockBytes {
-		return fmt.Errorf("decode %s: lock exceeds %d bytes", path, maxLockBytes)
-	}
-	if err := requireJSONStructFields(content, reflect.TypeOf(DownstreamFencingV2Lock{}), "$"); err != nil {
-		return fmt.Errorf("decode %s: %w", path, err)
-	}
-	return nil
-}
-
-func requirePostgresControlledRestoreFields(path string) error {
-	content, err := os.ReadFile(path)
-	if err != nil {
-		return fmt.Errorf("read %s: %w", path, err)
-	}
-	if len(content) > maxLockBytes {
-		return fmt.Errorf("decode %s: lock exceeds %d bytes", path, maxLockBytes)
-	}
-	if err := requireJSONStructFields(content, reflect.TypeOf(PostgresControlledRestoreLock{}), "$"); err != nil {
-		return fmt.Errorf("decode %s: %w", path, err)
-	}
-	return nil
 }
 
 func requireJSONStructFields(encoded []byte, objectType reflect.Type, path string) error {

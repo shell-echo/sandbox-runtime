@@ -2655,7 +2655,7 @@ func validateDownstreamManifest(manifest downstreamFencingManifest) error {
 	}
 	if manifest.EvidenceName != expectedName ||
 		(manifest.EvidenceProfile != lock.DownstreamFencingProfile && !v2 && !postgresRestore) ||
-		manifest.Contract.SuiteExercised || manifest.Contract.ContractMetadataOnly ||
+		manifest.Contract.DownstreamFencingContract != lock.DownstreamFencingContractMetadata() ||
 		len(manifest.Contract.ProviderRoutesExercised) == 0 || (!v2 && !postgresRestore && manifest.ProcessReconstructions != 2) ||
 		(v2 && manifest.ProcessReconstructions != 5) || (postgresRestore && manifest.ProcessReconstructions != 3) ||
 		(!v2 && !postgresRestore && manifest.Adapters == nil) || ((v2 || postgresRestore) && manifest.Adapters != nil) ||

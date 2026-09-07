@@ -285,7 +285,6 @@ func RunBrowser(ctx context.Context, options Options) (_ Result, resultErr error
 	manifest := evidenceManifest{
 		CreatedAt: time.Now().UTC().Format(time.RFC3339Nano), CallerKind: "browser-reference",
 		HarnessCommit: harnessCommit, ProviderCommit: lock.ProviderCommit,
-		ContractRevision: lock.ContractRevision, ContractTree: lock.ContractTree, SuiteCases: lock.SuiteCases,
 		RuntimeImage: publication.Image(), RuntimePlatform: "linux/" + architecture,
 		RuntimePreparation: "locked signed Browser image with real GitHub OIDC/Sigstore verification",
 		SupportImages:      []string{gatewayImage}, VerifierDigest: ghDigest,
@@ -299,6 +298,7 @@ func RunBrowser(ctx context.Context, options Options) (_ Result, resultErr error
 		},
 		EvidenceBoundary: "Browser external-caller E2E including process-local pre-upgrade service and listener/TLS/HTTP bounds against an independent reference process; not partition-aware shared or distributed capacity, durable distributed revocation, production capability advertisement, aggregate conformance, real Agent Platform, multi-controller, hostile multi-tenant, deployment, or production readiness",
 	}
+	recordLockedSuites(&manifest)
 	if _, err := writeJSON(filepath.Join(evidenceDirectory, "manifest.json"), manifest); err != nil {
 		return Result{}, err
 	}

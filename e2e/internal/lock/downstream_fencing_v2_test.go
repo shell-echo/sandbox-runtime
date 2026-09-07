@@ -19,7 +19,9 @@ func TestDownstreamFencingV2Lock(t *testing.T) {
 			t.Fatalf("LoadDownstreamFencingV2(%q): %v", platform, err)
 		}
 		if locked.EvidenceProfile != DownstreamFencingV2Profile || locked.Sources.ProviderRevision != ProviderCommit ||
-			locked.Base.EvidenceProfile != DownstreamFencingProfile || locked.Contract.SuiteExercised ||
+			locked.Base.EvidenceProfile != DownstreamFencingProfile || locked.Contract.SuiteExercised || locked.Contract.RemoteSuiteExercised ||
+			locked.Contract.SuiteDigest != SuiteDigest || locked.Contract.RemoteSuiteDigest != RemoteSuiteDigest ||
+			locked.Contract.RemoteSuiteCases != RemoteSuiteCases ||
 			locked.ActionFence.PolicyFormat != "browser-downstream-action-fence-v2" ||
 			!locked.Witness.OutsideValkeyRestoreDomain || locked.RestoreControl.ExposedToGateways ||
 			locked.RestoreControl.ExposedToCallers || !locked.RestoreControl.SeparateCredential {
@@ -46,7 +48,10 @@ func TestDownstreamFencingV2LockRequiresExplicitZeroValueFields(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, fieldPath := range [][]string{
+		{"contract", "suite_digest_profile"},
+		{"contract", "remote_suite_cases"},
 		{"contract", "suite_exercised"},
+		{"contract", "remote_suite_exercised"},
 		{"restore_control", "exposed_to_gateways"},
 		{"restore_control", "exposed_to_callers"},
 		{"restore_control", "restores_witness"},

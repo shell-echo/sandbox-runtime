@@ -1,6 +1,7 @@
 package lock
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"os/exec"
@@ -108,7 +109,13 @@ func TestDurableRevocationLock(t *testing.T) {
 		if err != nil {
 			t.Fatalf("LoadDurableRevocation(%q): %v", platform, err)
 		}
-		if locked.ProviderCommit != ProviderCommit || locked.Contract.Exercised ||
+		if locked.ProviderCommit != ProviderCommit || locked.Contract.SuiteExercised || locked.Contract.RemoteSuiteExercised ||
+			locked.Contract.SuiteID != SuiteID || locked.Contract.SuiteVersion != SuiteVersion ||
+			locked.Contract.SuiteDigest != SuiteDigest || locked.Contract.SuiteDigestProfile != SuiteDigestProfile ||
+			locked.Contract.SuiteProfile != SuiteProfile || locked.Contract.SuiteCases != SuiteCases ||
+			locked.Contract.RemoteSuiteID != RemoteSuiteID || locked.Contract.RemoteSuiteVersion != RemoteSuiteVersion ||
+			locked.Contract.RemoteSuiteDigest != RemoteSuiteDigest || locked.Contract.RemoteSuiteDigestProfile != RemoteSuiteDigestProfile ||
+			locked.Contract.RemoteSuiteProfile != RemoteSuiteProfile || locked.Contract.RemoteSuiteCases != RemoteSuiteCases ||
 			locked.Processes != (DurableRevocationProcesses{Gateways: 2, Callers: 2, Revokers: 1}) ||
 			locked.LocalCapacity != (DurableRevocationLocalCapacity{MaxTotal: 16, MaxPerTenant: 8, MaxPerSession: 4}) ||
 			locked.Reconnect != (DurableRevocationReconnect{MaxReconnects: 1, ReconnectBackoffMillis: 10}) {
@@ -136,6 +143,44 @@ func TestDurableRevocationScenarioNamesReturnsCopy(t *testing.T) {
 	}
 }
 
+func TestSuiteCheckSummaryIncludesCompleteIdentitiesAndClaims(t *testing.T) {
+	want := map[string]string{
+		"suite_id":                    SuiteID,
+		"suite_version":               SuiteVersion,
+		"suite_profile":               SuiteProfile,
+		"suite_digest_profile":        SuiteDigestProfile,
+		"suite_digest":                SuiteDigest,
+		"suite_cases":                 "50",
+		"suite_exercised":             "false",
+		"remote_suite_id":             RemoteSuiteID,
+		"remote_suite_version":        RemoteSuiteVersion,
+		"remote_suite_profile":        RemoteSuiteProfile,
+		"remote_suite_digest_profile": RemoteSuiteDigestProfile,
+		"remote_suite_digest":         RemoteSuiteDigest,
+		"remote_suite_cases":          "6",
+		"remote_suite_exercised":      "true",
+	}
+	got := make(map[string]string, len(want))
+	for _, field := range strings.Fields(SuiteCheckSummary(false, true)) {
+		parts := strings.SplitN(field, "=", 2)
+		if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+			t.Fatalf("invalid Suite check field %q", field)
+		}
+		if _, duplicate := got[parts[0]]; duplicate {
+			t.Fatalf("duplicate Suite check field %q", parts[0])
+		}
+		got[parts[0]] = parts[1]
+	}
+	if len(got) != len(want) {
+		t.Fatalf("SuiteCheckSummary fields = %#v, want %#v", got, want)
+	}
+	for name, value := range want {
+		if got[name] != value {
+			t.Errorf("SuiteCheckSummary field %s = %q, want %q", name, got[name], value)
+		}
+	}
+}
+
 func TestDecodeStrictFileRejectsUnknownAndTrailingInput(t *testing.T) {
 	for name, content := range map[string]string{
 		"unknown":          `{"schema_version":1,"unknown":true}`,
@@ -153,6 +198,14 @@ func TestDecodeStrictFileRejectsUnknownAndTrailingInput(t *testing.T) {
 				t.Fatal("decodeStrictFile accepted invalid lock input")
 			}
 		})
+	}
+	oversizedPath := filepath.Join(t.TempDir(), "oversized-lock.json")
+	if err := os.WriteFile(oversizedPath, []byte(strings.Repeat(" ", maxLockBytes+1)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var target SharedCapacityLock
+	if err := decodeStrictFile(oversizedPath, &target); err == nil || !strings.Contains(err.Error(), "lock exceeds") {
+		t.Fatalf("decodeStrictFile oversized input error = %v", err)
 	}
 }
 
@@ -181,6 +234,143 @@ func TestE2EProviderLockMatchesCompiledBaseline(t *testing.T) {
 	}
 	if err := verifyE2EProviderLock(root); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestProviderSuiteContentDigestsMatchCompiledBaseline(t *testing.T) {
+	root, err := filepath.Abs("../../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		name, path, digest string
+	}{
+		{name: "local", path: expectedLocalSuiteLock().Path, digest: SuiteDigest},
+		{name: "remote", path: expectedRemoteSuiteLock().Path, digest: RemoteSuiteDigest},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			content, err := os.ReadFile(filepath.Join(root, test.path))
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := computeProviderSuiteDigest(content)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != test.digest {
+				t.Fatalf("content digest = %s, want %s", got, test.digest)
+			}
+		})
+	}
+}
+
+func TestProviderSuiteValidationUsesOneBoundedSnapshot(t *testing.T) {
+	root, err := filepath.Abs("../../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	locked := expectedLocalSuiteLock()
+	original, err := os.ReadFile(filepath.Join(root, locked.Path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	temporaryRoot := t.TempDir()
+	temporaryPath := filepath.Join(temporaryRoot, locked.Path)
+	if err := os.MkdirAll(filepath.Dir(temporaryPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(temporaryPath, original, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	reads := 0
+	readAndReplace := func(path string) ([]byte, error) {
+		reads++
+		content, err := readBoundedFile(path)
+		if err != nil {
+			return nil, err
+		}
+		if err := os.WriteFile(path, []byte(`{"suite_id":"replaced"}`), 0o600); err != nil {
+			return nil, err
+		}
+		return content, nil
+	}
+	if err := verifyProviderSuiteWithReader(
+		temporaryRoot, "local", locked, locked, "repository-go-test", SuiteCases, false, readAndReplace,
+	); err != nil {
+		t.Fatal(err)
+	}
+	if reads != 1 {
+		t.Fatalf("Provider Suite reads = %d, want 1", reads)
+	}
+}
+
+func TestE2EProviderLockRequiresExplicitSuiteEvidenceBoundary(t *testing.T) {
+	root, err := filepath.Abs("../../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	original, err := os.ReadFile(filepath.Join(root, "e2e/contract.lock.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{"suite_digest", "remote_suite_profile", "suite_exercised", "remote_suite_exercised"} {
+		t.Run(field, func(t *testing.T) {
+			var document map[string]any
+			if err := json.Unmarshal(original, &document); err != nil {
+				t.Fatal(err)
+			}
+			delete(document["contract"].(map[string]any), field)
+			encoded, err := json.Marshal(document)
+			if err != nil {
+				t.Fatal(err)
+			}
+			temporaryRoot := t.TempDir()
+			path := filepath.Join(temporaryRoot, "e2e/contract.lock.json")
+			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(path, encoded, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if err := verifyE2EProviderLock(temporaryRoot); err == nil || !strings.Contains(err.Error(), "missing required field") {
+				t.Fatalf("verifyE2EProviderLock() error = %v", err)
+			}
+		})
+	}
+}
+
+func TestDurableRevocationLockRequiresExplicitSuiteEvidenceBoundary(t *testing.T) {
+	root, err := filepath.Abs("../../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	original, err := os.ReadFile(filepath.Join(root, DurableRevocationLockPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{"suite_digest_profile", "remote_suite_cases", "suite_exercised", "remote_suite_exercised"} {
+		t.Run(field, func(t *testing.T) {
+			var document map[string]any
+			if err := json.Unmarshal(original, &document); err != nil {
+				t.Fatal(err)
+			}
+			delete(document["contract"].(map[string]any), field)
+			encoded, err := json.Marshal(document)
+			if err != nil {
+				t.Fatal(err)
+			}
+			temporaryRoot := t.TempDir()
+			path := filepath.Join(temporaryRoot, DurableRevocationLockPath)
+			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(path, encoded, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := LoadDurableRevocation(temporaryRoot, "linux/amd64"); err == nil || !strings.Contains(err.Error(), "missing required field") {
+				t.Fatalf("LoadDurableRevocation() error = %v", err)
+			}
+		})
 	}
 }
 

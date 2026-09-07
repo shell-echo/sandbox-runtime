@@ -38,9 +38,10 @@ func main() {
 			_, _ = fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
-		fmt.Printf("provider=%s contract=%s tree=%s suite_cases=%d contract_exercised=%t profile=%s platform=%s valkey=%s scenarios=%d\n",
-			locked.ProviderCommit, locked.Contract.Revision, locked.Contract.Tree, locked.Contract.SuiteCases,
-			locked.Contract.Exercised, locked.EvidenceProfile, platform, locked.Valkey.IndexDigest, len(locked.Scenarios))
+		fmt.Printf("provider=%s contract=%s tree=%s %s profile=%s platform=%s valkey=%s scenarios=%d\n",
+			locked.ProviderCommit, locked.Contract.Revision, locked.Contract.Tree,
+			lock.SuiteCheckSummary(locked.Contract.SuiteExercised, locked.Contract.RemoteSuiteExercised),
+			locked.EvidenceProfile, platform, locked.Valkey.IndexDigest, len(locked.Scenarios))
 		return
 	}
 
