@@ -38,7 +38,7 @@ func TestLoadProviderEnabledTOML(t *testing.T) {
 	if got := Server.Provider.Transport.Address.Addr(); got != "127.0.0.1:9443" {
 		t.Fatalf("Provider address = %q, want 127.0.0.1:9443", got)
 	}
-	if got := Server.Provider.Transport.AllowedClientURIIdentities; !reflect.DeepEqual(got, []string{"spiffe://agent-platform/provider-client"}) {
+	if got := Server.Provider.Transport.AllowedClientURIIdentities; !reflect.DeepEqual(got, []string{"spiffe://reference-caller.sandbox-runtime.test/provider-client"}) {
 		t.Fatalf("allowed identities = %#v", got)
 	}
 	if Server.Provider.Capability.ProviderRevisionID != "provider-revision-1" {
@@ -78,21 +78,25 @@ func TestLoadProviderProtectedAdmissionTOML(t *testing.T) {
 	body := validEnabledProviderTOML() + `
 [server.provider.protected_admission]
 enabled = true
+issuer = "https://reference-caller.sandbox-runtime.test"
+provider_instance_audience = "urn:shell-echo:sandbox-runtime:provider-instance:provider-1"
 guard_state_file = "data/provider-admission.json"
 
 [[server.provider.protected_admission.trusted_verification_keys]]
-id = "agent-platform-ed25519"
+id = "caller-ed25519"
 algorithm = "EdDSA"
-public_key_file = "/run/secrets/provider-admission/agent-platform-ed25519.pem"
+public_key_file = "/run/secrets/provider-admission/caller-ed25519.pem"
 `
 	if err := Load(writeConfig(t, body)); err != nil {
 		t.Fatalf("Load: %v", err)
 	}
 	protected := Server.Provider.ProtectedAdmission
-	if !protected.Enabled || protected.GuardStateFile != "data/provider-admission.json" {
+	if !protected.Enabled || protected.Issuer != "https://reference-caller.sandbox-runtime.test" ||
+		protected.ProviderInstanceAudience != "urn:shell-echo:sandbox-runtime:provider-instance:provider-1" ||
+		protected.GuardStateFile != "data/provider-admission.json" {
 		t.Fatalf("protected admission = %#v", protected)
 	}
-	if len(protected.TrustedVerificationKeys) != 1 || protected.TrustedVerificationKeys[0].ID != "agent-platform-ed25519" || protected.TrustedVerificationKeys[0].Algorithm != "EdDSA" {
+	if len(protected.TrustedVerificationKeys) != 1 || protected.TrustedVerificationKeys[0].ID != "caller-ed25519" || protected.TrustedVerificationKeys[0].Algorithm != "EdDSA" {
 		t.Fatalf("trusted verification keys = %#v", protected.TrustedVerificationKeys)
 	}
 }
@@ -102,12 +106,14 @@ func TestLoadProviderLifecycleTOML(t *testing.T) {
 	body := validEnabledProviderTOML() + `
 [server.provider.protected_admission]
 enabled = true
+issuer = "https://reference-caller.sandbox-runtime.test"
+provider_instance_audience = "urn:shell-echo:sandbox-runtime:provider-instance:provider-1"
 guard_state_file = "data/provider-admission.json"
 
 [[server.provider.protected_admission.trusted_verification_keys]]
-id = "agent-platform-ed25519"
+id = "caller-ed25519"
 algorithm = "EdDSA"
-public_key_file = "/run/secrets/provider-admission/agent-platform-ed25519.pem"
+public_key_file = "/run/secrets/provider-admission/caller-ed25519.pem"
 
 [server.provider.lifecycle]
 enabled = true
@@ -136,12 +142,14 @@ func TestLoadProviderDockerLifecycleTOML(t *testing.T) {
 	body := validEnabledProviderTOML() + `
 [server.provider.protected_admission]
 enabled = true
+issuer = "https://reference-caller.sandbox-runtime.test"
+provider_instance_audience = "urn:shell-echo:sandbox-runtime:provider-instance:provider-1"
 guard_state_file = "data/provider-admission.json"
 
 [[server.provider.protected_admission.trusted_verification_keys]]
-id = "agent-platform-ed25519"
+id = "caller-ed25519"
 algorithm = "EdDSA"
-public_key_file = "/run/secrets/provider-admission/agent-platform-ed25519.pem"
+public_key_file = "/run/secrets/provider-admission/caller-ed25519.pem"
 
 [server.provider.lifecycle]
 enabled = true
@@ -188,12 +196,14 @@ func TestLoadProviderTerminalTOML(t *testing.T) {
 	body := validEnabledProviderTOML() + `
 [server.provider.protected_admission]
 enabled = true
+issuer = "https://reference-caller.sandbox-runtime.test"
+provider_instance_audience = "urn:shell-echo:sandbox-runtime:provider-instance:provider-1"
 guard_state_file = "data/provider-admission.json"
 
 [[server.provider.protected_admission.trusted_verification_keys]]
-id = "agent-platform-ed25519"
+id = "caller-ed25519"
 algorithm = "EdDSA"
-public_key_file = "/run/secrets/provider-admission/agent-platform-ed25519.pem"
+public_key_file = "/run/secrets/provider-admission/caller-ed25519.pem"
 
 [server.provider.lifecycle]
 enabled = true
@@ -450,6 +460,11 @@ func TestEnabledProviderProfileValidation(t *testing.T) {
 
 func TestEnabledProviderProtectedAdmissionValidation(t *testing.T) {
 	tests := map[string]func(*ProviderProtectedAdmissionConfig){
+		"empty issuer":           func(c *ProviderProtectedAdmissionConfig) { c.Issuer = "" },
+		"malformed issuer URI":   func(c *ProviderProtectedAdmissionConfig) { c.Issuer = "https://caller.example/%zz" },
+		"fragment issuer":        func(c *ProviderProtectedAdmissionConfig) { c.Issuer += "#fragment" },
+		"empty audience":         func(c *ProviderProtectedAdmissionConfig) { c.ProviderInstanceAudience = "" },
+		"malformed audience":     func(c *ProviderProtectedAdmissionConfig) { c.ProviderInstanceAudience = "provider-1" },
 		"empty guard state file": func(c *ProviderProtectedAdmissionConfig) { c.GuardStateFile = " " },
 		"no trusted keys":        func(c *ProviderProtectedAdmissionConfig) { c.TrustedVerificationKeys = nil },
 		"too many trusted keys": func(c *ProviderProtectedAdmissionConfig) {
@@ -476,6 +491,15 @@ func TestEnabledProviderProtectedAdmissionValidation(t *testing.T) {
 				t.Fatal("Validate() error = nil, want protected admission rejection")
 			}
 		})
+	}
+}
+
+func TestEnabledProviderProtectedAdmissionAcceptsExplicitLegacyIssuer(t *testing.T) {
+	config := validEnabledProviderConfig()
+	config.ProtectedAdmission = validProtectedAdmissionConfig()
+	config.ProtectedAdmission.Issuer = "agent-platform"
+	if err := config.Validate(); err != nil {
+		t.Fatalf("Validate() rejected explicitly configured legacy issuer: %v", err)
 	}
 }
 
@@ -961,7 +985,7 @@ func validEnabledProviderConfig() ProviderConfig {
 			ServerCertificateFile:      "provider.crt",
 			ServerPrivateKeyFile:       "provider.key",
 			ClientCABundleFile:         "client-ca.pem",
-			AllowedClientURIIdentities: []string{"spiffe://agent-platform/provider-client"},
+			AllowedClientURIIdentities: []string{"spiffe://reference-caller.sandbox-runtime.test/provider-client"},
 		},
 		Capability: ProviderCapabilityConfig{
 			ProviderRevisionID: "provider-revision-1",
@@ -985,10 +1009,12 @@ func validEnabledProviderConfig() ProviderConfig {
 
 func validProtectedAdmissionConfig() ProviderProtectedAdmissionConfig {
 	return ProviderProtectedAdmissionConfig{
-		Enabled:        true,
-		GuardStateFile: "data/provider-admission.json",
+		Enabled:                  true,
+		Issuer:                   "https://reference-caller.sandbox-runtime.test",
+		ProviderInstanceAudience: "urn:shell-echo:sandbox-runtime:provider-instance:provider-1",
+		GuardStateFile:           "data/provider-admission.json",
 		TrustedVerificationKeys: []ProviderTrustedVerificationKeyConfig{{
-			ID: "agent-platform-ed25519", Algorithm: "EdDSA", PublicKeyFile: "agent-platform-ed25519.pem",
+			ID: "caller-ed25519", Algorithm: "EdDSA", PublicKeyFile: "caller-ed25519.pem",
 		}},
 	}
 }
@@ -1063,7 +1089,7 @@ enabled = true
 server_certificate_file = "provider.crt"
 server_private_key_file = "provider.key"
 client_ca_bundle_file = "client-ca.pem"
-allowed_client_uri_identities = ["spiffe://agent-platform/provider-client"]
+allowed_client_uri_identities = ["spiffe://reference-caller.sandbox-runtime.test/provider-client"]
 
 [server.provider.transport.address]
 host = "127.0.0.1"

@@ -58,6 +58,18 @@ consumers must implement the repository-owned Provider calling standard. The
 ADR 0033, v2, and controlled-restore profiles
 pin Contract identity but do not execute the Suite (`suite_exercised=false`).
 
+The current calling-standard slice implements ADR 0038's listener-local caller
+trust domain. Enabling protected admission requires one explicit issuer with no
+default or fallback, one Provider-local instance audience, the locally selected
+Provider revision, and 1..32 frozen public verification keys. The
+same-repository generic reference caller exercises that configuration as
+reference evidence; it is not interoperability evidence for an independently
+implemented external platform. The coordinated Contract, projection, and E2E
+slice still needs its complete validation before this revision is described as
+compatible. A multi-issuer listener, multi-tenant isolation, HA, deployment,
+production operation, and independent external-caller interoperability remain
+unproved.
+
 Merge commit `a0cddf4` passes repository CI `34038556281`, Reference
 `34038556295`, Candidate `34038556284`, Browser `34038556297`, shared-capacity
 `34038556314`, durable-revocation `34038556293`, downstream-fencing v1
@@ -107,8 +119,11 @@ Currently implemented:
   `/instances`, with stable coding/shell mounts in the Docker development adapter
 - default-disabled Provider capability discovery on a separate mTLS-only HTTPS
   listener
-- default-disabled protected-operation admission with frozen public-key files
-  and a single-controller replay/fencing guard
+- default-disabled protected-operation admission with one explicit
+  listener-local caller issuer, a Provider-local instance audience and
+  revision, 1..32 frozen public-key files, and a single-controller
+  replay/fencing guard; the current calling-standard slice still awaits its
+  complete validation
 - default-disabled, development-only Provider exec composition over the Docker
   lifecycle runtime, a separate durable ledger, bounded private output capture,
   cancellation, result expiry, and restart reconciliation
@@ -255,6 +270,10 @@ Currently implemented:
 
 Planned but not yet implemented:
 
+- multi-issuer or multi-consumer admission on one protected listener; this
+  requires separate identity, key-ID, replay, fencing, and policy namespaces
+- independently implemented external-caller interoperability evidence beyond
+  the same-repository generic reference caller
 - use a deployment-owned environment to prove independent PostgreSQL/Valkey
   failure and backup domains, HA/failover, operator authorization, metrics, and
   rollback controls without promoting the passed same-runner reference to
@@ -383,6 +402,19 @@ metadata does not advertise or authorize snapshot, restore, or another runtime
 capability. The `protected_admission` configuration is independently disabled
 by default. When explicitly enabled with an immutable public-key bundle and a
 durable guard state file, it adds the protected-operation admission boundary.
+Startup also requires one exact issuer, one Provider-instance audience, and the
+same Provider revision used by the immutable capability snapshot. No issuer is
+defaulted from legacy behavior or selected from the bearer. The listener
+freezes 1..32 distinct verification keys and its admitted URI SAN identities
+inside that one caller trust domain.
+
+Rotation is an explicit restart procedure: install old and new public keys
+under distinct `kid` values, restart, move the caller to the new signing key,
+wait until every token accepted under the old key has expired, remove the old
+key, and restart again. There is no remote JWKS refresh or simultaneous
+multi-issuer listener. These implementation properties remain subject to the
+current calling-standard slice's complete validation.
+
 Individually enabled Provider lifecycle and exec applications may then compose
 only their locked routes. Exec requires the Provider Docker lifecycle runtime
 and its own file ledger; the development adapters remain rejected in production.
@@ -736,6 +768,11 @@ visibility.
 - [x] implement mTLS-only capability discovery
 - [x] implement per-operation JWS and request/descriptor digest admission
   boundary across the individually composed Provider routes
+- [x] implement one explicit issuer-scoped caller trust domain per protected
+  listener, with Provider-local audience/revision anchors and bounded frozen
+  rotation keys (complete calling-standard slice validation remains pending)
+- [ ] qualify an independently implemented external caller; the
+  same-repository generic reference caller remains reference evidence only
 
 ### Provider lifecycle
 

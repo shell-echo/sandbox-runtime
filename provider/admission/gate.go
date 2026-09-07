@@ -24,9 +24,10 @@ var (
 // binding, and mutation replay/fencing admission before a caller can reach an
 // application dispatcher. It has no HTTP, repository, or driver dependency.
 type ProtectedOperationGate struct {
-	keys  TrustedKeySource
-	clock Clock
-	guard MutationGuard
+	keys      TrustedKeySource
+	authority AdmissionAuthority
+	clock     Clock
+	guard     MutationGuard
 }
 
 // ProtectedOperationRequest is the transient input to protected-operation
@@ -43,11 +44,11 @@ type ProtectedOperationRequest struct {
 // protected operation. A mutation guard is mandatory even when callers plan to
 // admit only reads, so enabling a future mutation path cannot silently bypass
 // durable replay and fencing checks.
-func NewProtectedOperationGate(keys TrustedKeySource, clock Clock, guard MutationGuard) (*ProtectedOperationGate, error) {
-	if keys == nil || clock == nil || guard == nil || clock.Now().IsZero() {
-		return nil, errors.New("protected Provider admission requires keys, clock, and mutation guard")
+func NewProtectedOperationGate(keys TrustedKeySource, authority AdmissionAuthority, clock Clock, guard MutationGuard) (*ProtectedOperationGate, error) {
+	if keys == nil || !authority.valid() || clock == nil || guard == nil || clock.Now().IsZero() {
+		return nil, errors.New("protected Provider admission requires keys, authority, clock, and mutation guard")
 	}
-	return &ProtectedOperationGate{keys: keys, clock: clock, guard: guard}, nil
+	return &ProtectedOperationGate{keys: keys, authority: authority, clock: clock, guard: guard}, nil
 }
 
 // AuthenticateBearer verifies the compact JWS authentication boundary and its
@@ -56,7 +57,7 @@ func NewProtectedOperationGate(keys TrustedKeySource, clock Clock, guard Mutatio
 // unverifiable bearer material cannot probe those validations. Contextual
 // binding, digest, replay, and fencing checks remain in Admit.
 func (g *ProtectedOperationGate) AuthenticateBearer(ctx context.Context, compactToken string) error {
-	if g == nil || g.keys == nil || g.clock == nil {
+	if g == nil || g.keys == nil || !g.authority.valid() || g.clock == nil {
 		return ErrUnavailable
 	}
 	if ctx == nil {
@@ -65,7 +66,7 @@ func (g *ProtectedOperationGate) AuthenticateBearer(ctx context.Context, compact
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	token, err := VerifyCompactJWS(ctx, compactToken, g.keys)
+	token, err := VerifyCompactJWS(ctx, compactToken, g.keys, g.authority)
 	if err != nil {
 		if contextErr := ctx.Err(); contextErr != nil {
 			return contextErr
@@ -84,7 +85,7 @@ func (g *ProtectedOperationGate) AuthenticateBearer(ctx context.Context, compact
 // only; neither the result nor any exported error retains them. The caller must
 // invoke this before any application, repository, or driver dispatch.
 func (g *ProtectedOperationGate) Admit(ctx context.Context, request ProtectedOperationRequest) error {
-	if g == nil || g.keys == nil || g.clock == nil || g.guard == nil {
+	if g == nil || g.keys == nil || !g.authority.valid() || g.clock == nil || g.guard == nil {
 		return ErrUnavailable
 	}
 	if ctx == nil {
@@ -94,14 +95,14 @@ func (g *ProtectedOperationGate) Admit(ctx context.Context, request ProtectedOpe
 		return err
 	}
 
-	token, err := VerifyCompactJWS(ctx, request.CompactToken, g.keys)
+	token, err := VerifyCompactJWS(ctx, request.CompactToken, g.keys, g.authority)
 	if err != nil {
 		if contextErr := ctx.Err(); contextErr != nil {
 			return contextErr
 		}
 		return ErrUnauthenticated
 	}
-	if err := ValidateTokenBinding(token, request.Binding, g.clock); err != nil {
+	if err := ValidateTokenBinding(token, request.Binding, g.authority, g.clock); err != nil {
 		if errors.Is(err, errInactiveBearer) {
 			return ErrUnauthenticated
 		}

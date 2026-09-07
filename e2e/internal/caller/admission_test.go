@@ -56,7 +56,10 @@ func TestPrepareProducesIndependentlyVerifiableAdmissionJWS(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	config := Config{ProviderRevisionID: "provider-revision-e2e-v1", ProviderInstanceAudience: "urn:shell-echo:sandbox-runtime:provider-instance:e2e"}
+	config := Config{
+		JWSIssuer: "https://reference-caller.sandbox-runtime.test", ProviderRevisionID: "provider-revision-e2e-v1",
+		ProviderInstanceAudience: "urn:shell-echo:sandbox-runtime:provider-instance:e2e",
+	}
 	deadline := time.Now().UTC().Add(time.Minute)
 	body := mutationEnvelope("operation-exec-1", "attempt-exec-1", 2, "exec-idempotency-1", deadline)
 	body["expected_generation"] = 1
@@ -87,7 +90,7 @@ func TestPrepareProducesIndependentlyVerifiableAdmissionJWS(t *testing.T) {
 	if err := decodeStrict(payload, &claims); err != nil {
 		t.Fatal(err)
 	}
-	if claims.JTI != "e2e-jti-fixed-00000001" || claims.Operation != "exec" || claims.RequestDigestProfile != requestDigestExcluding {
+	if claims.JTI != "e2e-jti-fixed-00000001" || claims.Issuer != config.JWSIssuer || claims.Operation != "exec" || claims.RequestDigestProfile != requestDigestExcluding {
 		t.Fatalf("claims = %#v", claims)
 	}
 	carrier, err := base64.RawURLEncoding.DecodeString(prepared.AdmissionContext)

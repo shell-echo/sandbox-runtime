@@ -6,9 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode/utf8"
 )
 
 const (
@@ -39,6 +41,7 @@ type Config struct {
 	ClientCAFile             string             `json:"client_ca_file"`
 	AllowedClientURIs        []string           `json:"allowed_client_uris"`
 	TrustedJWSKeys           []TrustedJWSKey    `json:"trusted_jws_keys"`
+	JWSIssuer                string             `json:"jws_issuer"`
 	ProviderRevisionID       string             `json:"provider_revision_id"`
 	ProviderInstanceAudience string             `json:"provider_instance_audience"`
 	StateRoot                string             `json:"state_root"`
@@ -57,18 +60,20 @@ type Config struct {
 // runtime, and Browser dependencies owned by the Provider/ingress process.
 // Public Gateway configuration deliberately belongs to its separate process.
 type BrowserProviderConfig struct {
-	ProviderAddress         string          `json:"provider_address"`
-	ProviderCertificateFile string          `json:"provider_certificate_file"`
-	ProviderPrivateKeyFile  string          `json:"provider_private_key_file"`
-	ClientCAFile            string          `json:"client_ca_file"`
-	AllowedClientURIs       []string        `json:"allowed_client_uris"`
-	TrustedJWSKeys          []TrustedJWSKey `json:"trusted_jws_keys"`
-	ProviderRevisionID      string          `json:"provider_revision_id"`
-	StateRoot               string          `json:"state_root"`
-	RuntimeDataRoot         string          `json:"runtime_data_root"`
-	RuntimeImage            string          `json:"runtime_image"`
-	RuntimeControllerID     string          `json:"runtime_controller_id"`
-	Browser                 *BrowserConfig  `json:"browser"`
+	ProviderAddress          string          `json:"provider_address"`
+	ProviderCertificateFile  string          `json:"provider_certificate_file"`
+	ProviderPrivateKeyFile   string          `json:"provider_private_key_file"`
+	ClientCAFile             string          `json:"client_ca_file"`
+	AllowedClientURIs        []string        `json:"allowed_client_uris"`
+	TrustedJWSKeys           []TrustedJWSKey `json:"trusted_jws_keys"`
+	JWSIssuer                string          `json:"jws_issuer"`
+	ProviderRevisionID       string          `json:"provider_revision_id"`
+	ProviderInstanceAudience string          `json:"provider_instance_audience"`
+	StateRoot                string          `json:"state_root"`
+	RuntimeDataRoot          string          `json:"runtime_data_root"`
+	RuntimeImage             string          `json:"runtime_image"`
+	RuntimeControllerID      string          `json:"runtime_controller_id"`
+	Browser                  *BrowserConfig  `json:"browser"`
 }
 
 type BrowserConfig struct {
@@ -111,7 +116,7 @@ func (c Config) Validate() error {
 		"provider_address": c.ProviderAddress, "gateway_address": c.GatewayAddress,
 		"provider_certificate_file": c.ProviderCertificateFile, "provider_private_key_file": c.ProviderPrivateKeyFile,
 		"gateway_certificate_file": c.GatewayCertificateFile, "gateway_private_key_file": c.GatewayPrivateKeyFile,
-		"client_ca_file": c.ClientCAFile, "provider_revision_id": c.ProviderRevisionID,
+		"client_ca_file": c.ClientCAFile, "jws_issuer": c.JWSIssuer, "provider_revision_id": c.ProviderRevisionID,
 		"provider_instance_audience": c.ProviderInstanceAudience, "state_root": c.StateRoot,
 		"runtime_data_root": c.RuntimeDataRoot, "runtime_image": c.RuntimeImage,
 		"runtime_controller_id": c.RuntimeControllerID,
@@ -123,6 +128,9 @@ func (c Config) Validate() error {
 	}
 	if c.ProviderAddress == c.GatewayAddress {
 		return errors.New("Provider and Gateway addresses must differ")
+	}
+	if !validGenericJWSIssuer(c.JWSIssuer) {
+		return errors.New("jws_issuer must be an exact absolute URI without a fragment")
 	}
 	if c.GatewayListenerLimit < 1 || c.GatewayListenerLimit > 256 {
 		return errors.New("gateway_listener_limit must be between 1 and 256")
@@ -175,15 +183,17 @@ func (c Config) Validate() error {
 
 func (c BrowserProviderConfig) Validate() error {
 	for name, value := range map[string]string{
-		"provider_address":          c.ProviderAddress,
-		"provider_certificate_file": c.ProviderCertificateFile,
-		"provider_private_key_file": c.ProviderPrivateKeyFile,
-		"client_ca_file":            c.ClientCAFile,
-		"provider_revision_id":      c.ProviderRevisionID,
-		"state_root":                c.StateRoot,
-		"runtime_data_root":         c.RuntimeDataRoot,
-		"runtime_image":             c.RuntimeImage,
-		"runtime_controller_id":     c.RuntimeControllerID,
+		"provider_address":           c.ProviderAddress,
+		"provider_certificate_file":  c.ProviderCertificateFile,
+		"provider_private_key_file":  c.ProviderPrivateKeyFile,
+		"client_ca_file":             c.ClientCAFile,
+		"jws_issuer":                 c.JWSIssuer,
+		"provider_revision_id":       c.ProviderRevisionID,
+		"provider_instance_audience": c.ProviderInstanceAudience,
+		"state_root":                 c.StateRoot,
+		"runtime_data_root":          c.RuntimeDataRoot,
+		"runtime_image":              c.RuntimeImage,
+		"runtime_controller_id":      c.RuntimeControllerID,
 	} {
 		if strings.TrimSpace(value) == "" {
 			return fmt.Errorf("%s is required", name)
@@ -191,6 +201,9 @@ func (c BrowserProviderConfig) Validate() error {
 	}
 	if c.Browser == nil {
 		return errors.New("Browser Provider requires Browser configuration")
+	}
+	if !validGenericJWSIssuer(c.JWSIssuer) {
+		return errors.New("jws_issuer must be an exact absolute URI without a fragment")
 	}
 	if err := c.Browser.validate(); err != nil {
 		return err
@@ -228,6 +241,14 @@ func validateProviderCallerAdmission(allowedClientURIs []string, trustedJWSKeys 
 	return nil
 }
 
+func validGenericJWSIssuer(issuer string) bool {
+	if !utf8.ValidString(issuer) || issuer == "" || strings.TrimSpace(issuer) != issuer || utf8.RuneCountInString(issuer) > 200 {
+		return false
+	}
+	parsed, err := url.Parse(issuer)
+	return err == nil && parsed.IsAbs() && parsed.Scheme != "" && parsed.Fragment == "" && parsed.String() == issuer
+}
+
 func (c Config) browserProviderConfig() BrowserProviderConfig {
 	var browser *BrowserConfig
 	if c.Browser != nil {
@@ -238,9 +259,10 @@ func (c Config) browserProviderConfig() BrowserProviderConfig {
 	return BrowserProviderConfig{
 		ProviderAddress: c.ProviderAddress, ProviderCertificateFile: c.ProviderCertificateFile,
 		ProviderPrivateKeyFile: c.ProviderPrivateKeyFile, ClientCAFile: c.ClientCAFile,
-		AllowedClientURIs:  append([]string(nil), c.AllowedClientURIs...),
-		TrustedJWSKeys:     append([]TrustedJWSKey(nil), c.TrustedJWSKeys...),
-		ProviderRevisionID: c.ProviderRevisionID, StateRoot: c.StateRoot,
+		AllowedClientURIs: append([]string(nil), c.AllowedClientURIs...),
+		TrustedJWSKeys:    append([]TrustedJWSKey(nil), c.TrustedJWSKeys...),
+		JWSIssuer:         c.JWSIssuer, ProviderRevisionID: c.ProviderRevisionID,
+		ProviderInstanceAudience: c.ProviderInstanceAudience, StateRoot: c.StateRoot,
 		RuntimeDataRoot: c.RuntimeDataRoot, RuntimeImage: c.RuntimeImage,
 		RuntimeControllerID: c.RuntimeControllerID, Browser: browser,
 	}

@@ -28,6 +28,18 @@ const (
 
 var contextPathPattern = regexp.MustCompile(`^/v1(?:/[A-Za-z0-9._:-]+)+$`)
 
+var admissionContextMembers = [...]string{
+	"context_contract_id", "context_digest_profile", "context_digest",
+	"controller_subject", "provider_revision_id", "provider_instance_audience",
+	"tenant_id", "work_order_id", "policy_digest", "policy_decided_at",
+	"operation", "sandbox_id", "operation_id", "attempt_id", "fencing_token",
+	"deadline_at", "request_contract_id", "request_digest_profile",
+	"request_digest", "http_target",
+}
+
+var admissionTargetMembers = [...]string{"method", "path", "normalized_query"}
+var admissionQueryMembers = [...]string{"name", "value"}
+
 // AdmissionContext is the independently admitted caller snapshot carried by
 // every protected Sandbox Provider request. It is never derived from bearer
 // claims; the transport compares those claims to this value.
@@ -83,7 +95,7 @@ func DecodeAdmissionContextCarrier(carrier string) (AdmissionContext, error) {
 		return AdmissionContext{}, ErrInvalidAdmissionContext
 	}
 	var context AdmissionContext
-	if !decodeClosedJSON(raw, &context) || !validAdmissionContext(context) {
+	if !decodeClosedJSON(raw, &context) || !hasExactAdmissionContextMembers(raw) || !validAdmissionContext(context) {
 		return AdmissionContext{}, ErrInvalidAdmissionContext
 	}
 	digest, err := admissionContextDigest(raw)
@@ -91,6 +103,34 @@ func DecodeAdmissionContextCarrier(carrier string) (AdmissionContext, error) {
 		return AdmissionContext{}, ErrInvalidAdmissionContext
 	}
 	return context, nil
+}
+
+func hasExactAdmissionContextMembers(raw []byte) bool {
+	if !hasExactRequiredJSONMembers(raw, admissionContextMembers[:]) {
+		return false
+	}
+	var document map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &document); err != nil {
+		return false
+	}
+	target := document["http_target"]
+	if !hasExactRequiredJSONMembers(target, admissionTargetMembers[:]) {
+		return false
+	}
+	var targetDocument map[string]json.RawMessage
+	if err := json.Unmarshal(target, &targetDocument); err != nil {
+		return false
+	}
+	var query []json.RawMessage
+	if err := json.Unmarshal(targetDocument["normalized_query"], &query); err != nil || query == nil {
+		return false
+	}
+	for _, item := range query {
+		if !hasExactRequiredJSONMembers(item, admissionQueryMembers[:]) {
+			return false
+		}
+	}
+	return true
 }
 
 func validAdmissionContext(context AdmissionContext) bool {

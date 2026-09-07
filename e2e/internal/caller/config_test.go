@@ -13,6 +13,10 @@ func TestConfigValidateRequiresExplicitProfileAndArchitecture(t *testing.T) {
 	for name, mutate := range map[string]func(*Config){
 		"profile":                  func(config *Config) { config.Profile = "" },
 		"architecture":             func(config *Config) { config.RuntimeArchitecture = "riscv64" },
+		"missing issuer":           func(config *Config) { config.JWSIssuer = "" },
+		"legacy issuer":            func(config *Config) { config.JWSIssuer = "agent-platform" },
+		"fragment issuer":          func(config *Config) { config.JWSIssuer += "#fragment" },
+		"non-exact issuer":         func(config *Config) { config.JWSIssuer = " " + config.JWSIssuer },
 		"missing listener limit":   func(config *Config) { config.GatewayListenerLimit = 0 },
 		"excessive listener limit": func(config *Config) { config.GatewayListenerLimit = 257 },
 	} {
@@ -30,7 +34,8 @@ func validCallerConfig() Config {
 	return Config{
 		Profile: ProfileBrowser, Phase: PhaseInitial,
 		ProviderBaseURL: "https://127.0.0.1:10443", GatewayBaseURL: "https://127.0.0.1:10444",
-		CAFile: "/tmp/ca.pem", ProviderRevisionID: "provider-revision-e2e-v1",
+		CAFile: "/tmp/ca.pem", JWSIssuer: "https://reference-caller.sandbox-runtime.test",
+		ProviderRevisionID:       "provider-revision-e2e-v1",
 		ProviderInstanceAudience: "urn:shell-echo:sandbox-runtime:provider-instance:e2e",
 		RuntimeImageReference:    "example.invalid/browser", RuntimeImageDigest: "sha256:" + strings.Repeat("a", 64),
 		RuntimeArchitecture: "arm64", GatewayAdminToken: "admin-token",

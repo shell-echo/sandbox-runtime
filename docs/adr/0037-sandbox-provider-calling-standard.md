@@ -25,12 +25,11 @@ selection, rollback, drain, and metric comparison. There is no longer a target
 against which that migration can be completed. Keeping P3 merely blocked would
 misrepresent a retired product dependency as an environment delay.
 
-One protocol-specific dependency also remains in the implementation. Protected
-admission currently accepts only the legacy JWS issuer `agent-platform`. The
-repository-owned Contract does not yet define a generic caller issuer model,
-issuer provisioning, or a compatibility transition from that legacy value.
-Changing the constant locally would alter protected wire behavior without the
-required Contract, fixture, and conformance review.
+At the time this ADR was accepted, one protocol-specific dependency remained:
+protected admission accepted only the legacy JWS issuer `agent-platform`, while
+the repository-owned Contract did not define a generic caller issuer model.
+ADR 0038 and its coordinated Contract resources resolve that design gap without
+making the Provider adapt to any consumer-specific model.
 
 ## Decision
 
@@ -119,24 +118,20 @@ multi-tenant safety, deployment readiness, or production readiness.
 
 ### Generic issuer protocol slice
 
-Generic protected callers remain gated on a coordinated issuer change. A
-future protocol slice must, before implementation:
+ADR 0038 resolves the issuer design slice. Each protected Provider listener has
+one required, exact, case-sensitive configured issuer; one Provider-local
+audience; one Provider-local revision; and issuer-scoped URI SAN identities and
+verification keys. There is no default, fallback, or multi-issuer listener.
+The opaque legacy value `agent-platform` is accepted only when it is the exact
+configured issuer.
 
-1. define the issuer's authority and canonical identifier without assuming the
-   retired Agent Platform;
-2. define how a Provider binds an admitted issuer to mTLS identity, audience,
-   key identifiers, trust material, and rotation policy;
-3. decide whether the legacy `agent-platform` issuer has an explicit bounded
-   compatibility window or requires a new protocol/profile version;
-4. update the normative Contract resources, fixtures, rejection cases,
-   Conformance Suite, compatibility lock, DTOs, and admission implementation
-   together; and
-5. prove both rejection of issuer substitution and successful admission from a
-   separately implemented generic caller.
-
-Until that slice passes, existing protected-admission evidence remains valid
-only for its exact locked legacy issuer behavior. Documentation or adapter
-configuration must not claim that an arbitrary issuer is already supported.
+The coordinated Contract defines the closed JWS header and claims profiles,
+the Admission Context header carrier, local-authority bindings, rejection
+classes, fixtures, and Suite case IDs. Compatibility still requires a reviewed
+lock refresh, complete implementation projection, local runner mappings, and
+separately implemented external-caller evidence. Historical protected-admission
+results remain evidence only for the exact issuer behavior and Contract identity
+they exercised.
 
 ## Consequences
 
@@ -146,15 +141,14 @@ configuration must not claim that an arbitrary issuer is already supported.
   evidence and code remain available without being promoted to a new claim.
 - New caller integrations need their own versioned adapter, black-box evidence,
   and deployment gates.
-- Generic protected interoperability is not complete until the issuer slice is
-  authorized by the Contract and exercised end to end.
-- The existing Provider Contract, implementation behavior, capability
-  advertisement, and production-readiness gates are unchanged by this ADR.
+- Generic protected interoperability is not complete until the ADR 0038
+  Contract revision is locked, implemented, and exercised end to end.
+- Capability advertisement and production-readiness gates remain unchanged by
+  the issuer decision.
 
 ## Non-goals
 
-This decision does not change Provider routes, schemas, JWS validation,
-capability advertisement, runtime composition, or persistence. It does not
-implement a replacement platform, SDK, public Gateway, generic issuer,
+This decision does not implement a replacement platform, SDK, public Gateway,
 multi-controller repository, hostile multi-tenant boundary, deployment, or
-production readiness.
+production readiness. ADR 0038 and its coordinated Contract change supersede
+only this ADR's previously deferred generic-issuer design slice.

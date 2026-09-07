@@ -212,7 +212,9 @@ func OpenBrowserProvider(ctx context.Context, config BrowserProviderConfig) (_ *
 	if err != nil {
 		return nil, err
 	}
-	protected, closeAdmission, err := protectedOptions(config.StateRoot, config.TrustedJWSKeys)
+	protected, closeAdmission, err := protectedOptions(
+		config.StateRoot, config.TrustedJWSKeys, config.JWSIssuer, config.ProviderRevisionID, config.ProviderInstanceAudience,
+	)
 	if err != nil {
 		return nil, err
 	}

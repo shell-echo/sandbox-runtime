@@ -21,6 +21,8 @@ import (
 	providerv1 "github.com/shell-echo/sandbox-runtime/providerapi/v1"
 )
 
+const testAdmissionIssuer = "https://reference-caller.sandbox-runtime.test"
+
 func TestProtectedHandlerRejectsUnverifiedBearerBeforeContext(t *testing.T) {
 	material := newTestMTLSMaterial(t, []string{testAllowedIdentity})
 	identity, err := newClientIdentityAdmission([]string{testAllowedIdentity})
@@ -86,6 +88,7 @@ func TestProtectedHandlerRejectsInactiveBearerBeforeContext(t *testing.T) {
 			guard := &testAdmissionGuard{}
 			gate, err := admission.NewProtectedOperationGate(
 				mustTestTrustedKeySource(t, publicKey),
+				mustTestAdmissionAuthority(t),
 				testAdmissionClock{now: time.Date(2026, 8, 20, 0, 1, 30, 0, time.UTC)},
 				guard,
 			)
@@ -175,7 +178,8 @@ func TestProtectedHandlerAdmitsV2ContextThenStopsBeforeLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	gate, err := admission.NewProtectedOperationGate(keys, testAdmissionClock{now: time.Date(2026, 8, 20, 0, 1, 0, 0, time.UTC)}, guard)
+	authority := mustTestAdmissionAuthority(t)
+	gate, err := admission.NewProtectedOperationGate(keys, authority, testAdmissionClock{now: time.Date(2026, 8, 20, 0, 1, 0, 0, time.UTC)}, guard)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -185,13 +189,13 @@ func TestProtectedHandlerAdmitsV2ContextThenStopsBeforeLifecycle(t *testing.T) {
 	}
 	claims := admissionTokenClaimsForTest(contextValue)
 	token := signTestAdmissionToken(t, privateKey, claims)
-	verified, err := admission.VerifyCompactJWS(context.Background(), token, keys)
+	verified, err := admission.VerifyCompactJWS(context.Background(), token, keys, authority)
 	if err != nil {
 		t.Fatalf("verify token error = %v", err)
 	}
 	binding := contextValue.TokenBinding(testAllowedIdentity)
 	clock := testAdmissionClock{now: time.Date(2026, 8, 20, 0, 1, 0, 0, time.UTC)}
-	if err := admission.ValidateTokenBinding(verified, binding, clock); err != nil {
+	if err := admission.ValidateTokenBinding(verified, binding, authority, clock); err != nil {
 		t.Fatalf("validate binding error = %v claims=%#v binding=%#v", err, verified.Claims, binding)
 	}
 	if err := admission.VerifyRequestDigest(verified.Claims.RequestDigestProfile, verified.Claims.RequestDigest, body); err != nil {
@@ -244,6 +248,68 @@ func TestProtectedHandlerRejectsContextSubjectMismatchBeforeGuard(t *testing.T) 
 	handler.ServeHTTP(response, request)
 	if response.Code != http.StatusForbidden || guard.Calls() != 0 {
 		t.Fatalf("mismatched context response=%d guard_calls=%d body=%s", response.Code, guard.Calls(), response.Body.String())
+	}
+}
+
+func TestProtectedHandlerRejectsCallerDocumentsThatAgreeOnNonLocalAuthorityBeforeGuard(t *testing.T) {
+	material := newTestMTLSMaterial(t, []string{testAllowedIdentity})
+	identity, err := newClientIdentityAdmission([]string{testAllowedIdentity})
+	if err != nil {
+		t.Fatal(err)
+	}
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, requestDigest := testRequestDocument(t)
+
+	for _, test := range []struct {
+		name   string
+		mutate func(*admission.AdmissionContext)
+	}{
+		{
+			name: "audience",
+			mutate: func(value *admission.AdmissionContext) {
+				value.ProviderInstanceAudience = "urn:shell-echo:sandbox-runtime:provider-instance:other"
+			},
+		},
+		{
+			name: "provider revision",
+			mutate: func(value *admission.AdmissionContext) {
+				value.ProviderRevisionID = "provider-revision-other"
+			},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			guard := &testAdmissionGuard{}
+			gate := newTestProtectedGateWithPublicKey(t, publicKey, guard)
+			handler, err := newProtectedHandler(identity, ProtectedTransportOptions{Gate: gate})
+			if err != nil {
+				t.Fatal(err)
+			}
+			contextValue := validProtectedContextForTest(t, admission.OperationExec, "/v1/sandboxes/sandbox-1/exec", "sandbox-1")
+			contextValue.RequestDigest = requestDigest
+			test.mutate(&contextValue)
+			contextValue.ContextDigest = ""
+			contextDigest, err := admission.DigestForAdmissionContext(contextValue)
+			if err != nil {
+				t.Fatal(err)
+			}
+			contextValue.ContextDigest = contextDigest
+
+			request := httptest.NewRequest(http.MethodPost, "https://provider.test/v1/sandboxes/sandbox-1/exec", strings.NewReader(string(body)))
+			state := verifiedState(t, material.client)
+			request.TLS = &state
+			request.Header.Set("Authorization", "Bearer "+signTestAdmissionToken(t, privateKey, admissionTokenClaimsForTest(contextValue)))
+			request.Header.Set("Content-Type", "application/json")
+			request.Header.Set(admission.AdmissionContextHeader, encodeTestAdmissionContext(t, contextValue))
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+
+			if response.Code != http.StatusForbidden || guard.Calls() != 0 {
+				t.Fatalf("non-local authority response=%d guard_calls=%d body=%s", response.Code, guard.Calls(), response.Body.String())
+			}
+		})
 	}
 }
 
@@ -404,7 +470,7 @@ func newTestProtectedGate(t *testing.T, guard *testAdmissionGuard) *admission.Pr
 func newTestProtectedGateWithPublicKey(t *testing.T, publicKey ed25519.PublicKey, guard *testAdmissionGuard) *admission.ProtectedOperationGate {
 	t.Helper()
 	keys := mustTestTrustedKeySource(t, publicKey)
-	gate, err := admission.NewProtectedOperationGate(keys, testAdmissionClock{now: time.Date(2026, 8, 20, 0, 1, 0, 0, time.UTC)}, guard)
+	gate, err := admission.NewProtectedOperationGate(keys, mustTestAdmissionAuthority(t), testAdmissionClock{now: time.Date(2026, 8, 20, 0, 1, 0, 0, time.UTC)}, guard)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -420,9 +486,30 @@ func mustTestTrustedKeySource(t *testing.T, publicKey ed25519.PublicKey) admissi
 	return keys
 }
 
+func mustTestAdmissionAuthority(t *testing.T) admission.AdmissionAuthority {
+	return mustTestAdmissionAuthorityFor(
+		t,
+		"provider-revision-1",
+		"urn:shell-echo:sandbox-runtime:provider-instance:provider-1",
+	)
+}
+
+func mustTestAdmissionAuthorityFor(t *testing.T, providerRevisionID, providerInstanceAudience string) admission.AdmissionAuthority {
+	t.Helper()
+	authority, err := admission.NewAdmissionAuthority(
+		testAdmissionIssuer,
+		providerRevisionID,
+		providerInstanceAudience,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return authority
+}
+
 func admissionTokenClaimsForTest(contextValue admission.AdmissionContext) map[string]any {
 	return map[string]any{
-		"jti": "jti-000000000000", "iss": "agent-platform", "sub": testAllowedIdentity,
+		"jti": "jti-000000000000", "iss": testAdmissionIssuer, "sub": testAllowedIdentity,
 		"aud": contextValue.ProviderInstanceAudience, "iat": time.Date(2026, 8, 20, 0, 0, 30, 0, time.UTC).Unix(), "nbf": time.Date(2026, 8, 20, 0, 0, 30, 0, time.UTC).Unix(), "exp": time.Date(2026, 8, 20, 0, 4, 0, 0, time.UTC).Unix(),
 		"operation": string(contextValue.Operation), "provider_revision_id": contextValue.ProviderRevisionID,
 		"sandbox_id": contextValue.SandboxID, "operation_id": contextValue.OperationID, "attempt_id": contextValue.AttemptID,

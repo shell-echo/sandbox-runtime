@@ -70,20 +70,27 @@ max_exec_seconds = 0
 #suite_version = '0.0.0'
 #suite_digest = 'sha256:<64 lowercase hexadecimal characters>'
 
-# Protected Provider operations are a separately opt-in transport boundary. When
-# enabled, startup reads each immutable SPKI PUBLIC KEY PEM file once and opens
-# the single-controller guard state before the listener accepts traffic. Do not
-# put private keys, bearer values, or inline key material in this file.
+# Protected Provider operations are a separately opt-in transport boundary. An
+# enabled listener requires one exact caller issuer and one unique local
+# Provider-instance audience; neither has a default or fallback. Use a globally
+# unique absolute URI for a generic caller issuer. Startup reads each immutable
+# SPKI PUBLIC KEY PEM file once and opens the single-controller guard state
+# before the listener accepts traffic. Do not put private keys, bearer values,
+# or inline key material in this file.
 [server.provider.protected_admission]
 enabled = false
+issuer = ''
+provider_instance_audience = ''
 guard_state_file = ''
 
-# Enabling protected admission requires 1..32 unique entries. Every file must
-# contain exactly one regular PUBLIC KEY PEM block; algorithm is EdDSA or ES256.
+# Enabling protected admission requires 1..32 unique issuer-scoped entries.
+# Every file must contain exactly one regular PUBLIC KEY PEM block; algorithm is
+# EdDSA or ES256. Rotation is frozen at startup and uses an overlapping bundle
+# plus explicit listener restarts as defined by ADR 0038.
 # [[server.provider.protected_admission.trusted_verification_keys]]
-# id = 'agent-platform-ed25519-2026-08'
+# id = 'caller-ed25519-2026-09'
 # algorithm = 'EdDSA'
-# public_key_file = '/run/secrets/provider-admission/agent-platform-ed25519.pem'
+# public_key_file = '/run/secrets/provider-admission/caller-ed25519.pem'
 
 # Provider lifecycle composition is separately gated. Both current drivers are
 # development evidence only and production rejects them. Docker requires the

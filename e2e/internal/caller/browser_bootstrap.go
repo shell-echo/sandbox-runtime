@@ -95,6 +95,7 @@ type BrowserBootstrapController struct {
 type BrowserBootstrapConfig struct {
 	ProviderBaseURL          string                     `json:"provider_base_url"`
 	CAFile                   string                     `json:"ca_file"`
+	JWSIssuer                string                     `json:"jws_issuer"`
 	ProviderRevisionID       string                     `json:"provider_revision_id"`
 	ProviderInstanceAudience string                     `json:"provider_instance_audience"`
 	RuntimeImageReference    string                     `json:"runtime_image_reference"`
@@ -657,6 +658,7 @@ func (c *browserBootstrapClient) waitHandoff(ctx context.Context, reference brow
 func (c *browserBootstrapClient) prepare(method, path string, body map[string]any, admissionOperation string, reference browserBootstrapReference, deadline time.Time) (preparedRequest, error) {
 	return prepareAdmission(admissionAuthority{
 		ControllerSubject: c.config.Controller.ControllerSubject, JWSKeyID: c.config.Controller.JWSKeyID,
+		JWSIssuer:          c.config.JWSIssuer,
 		ProviderRevisionID: c.config.ProviderRevisionID, ProviderInstanceAudience: c.config.ProviderInstanceAudience,
 	}, c.private, method, path, body, admissionBinding{
 		Operation: admissionOperation, SandboxID: c.config.SandboxID,
@@ -720,7 +722,7 @@ func validateBrowserBootstrapConfig(config BrowserBootstrapConfig) error {
 		}
 		seenPaths[clean] = true
 	}
-	if !validBrowserBootstrapSPIFFE(config.Controller.ControllerSubject) || !browserBootstrapIDPattern.MatchString(config.Controller.JWSKeyID) ||
+	if !validGenericJWSIssuer(config.JWSIssuer) || !validBrowserBootstrapSPIFFE(config.Controller.ControllerSubject) || !browserBootstrapIDPattern.MatchString(config.Controller.JWSKeyID) ||
 		!browserBootstrapAudiencePattern.MatchString(config.ProviderInstanceAudience) || !browserBootstrapIDPattern.MatchString(config.ProviderRevisionID) ||
 		!validBrowserBootstrapImage(config.RuntimeImageReference) || !isDigest(config.RuntimeImageDigest) ||
 		(config.RuntimeArchitecture != "amd64" && config.RuntimeArchitecture != "arm64") || !isDigest(config.WorkspaceRevisionDigest) ||

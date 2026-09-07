@@ -105,7 +105,15 @@ var testCases = map[string]testCase{
 	},
 	"protected-admission-context-schema": {
 		Package: "./provider/admission",
-		Run:     `^TestDecodeAdmissionContextCarrierEnforcesSchemaBounds$`,
+		Run:     `^(TestDecodeAdmissionContextCarrierEnforcesSchemaBounds|TestDecodeAdmissionContextCarrierRejectsCarrierAndDocumentConfusion)$`,
+	},
+	"protected-admission-jws-profile-schema": {
+		Package: "./provider/admission",
+		Run:     `^(TestLocalContractProtectedAdmissionJWSProfile|TestLocalContractProtectedAdmissionJWSProfileRejectsRetiredWireProfile|TestVerifyCompactJWSRejectsClosedHeaderAndSignatureFailures|TestVerifyCompactJWSRejectsClosedClaimFailures|TestValidateTokenBindingRejectsInvalidTokenLifetime)$`,
+	},
+	"protected-admission-issuer-local-authority-binding": {
+		Package: "./provider/admission",
+		Run:     `^(TestLocalContractProtectedAdmissionIssuerLocalAuthorityBinding|TestNewAdmissionAuthorityAcceptsExactGenericIssuer|TestNewAdmissionAuthorityAcceptsExplicitLegacyStringOrURI|TestNewAdmissionAuthorityRejectsInvalidValues|TestVerifyCompactJWSRejectsTrustedIssuerSubstitution|TestVerifyCompactJWSSupportsOverlappingRotationKeys|TestProtectedOperationGateRejectsTrustedIssuerSubstitutionAsUnauthenticated|TestProtectedOperationGateRejectsLocalAuthorityMismatchBeforeGuard|TestValidateTokenBindingRejectsMismatchedContext)$`,
 	},
 	"protected-admission-token-binding": {
 		Package: "./provider/admission",

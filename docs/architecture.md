@@ -88,6 +88,33 @@ Compatibility rules:
 4. Local fixtures and conformance tests are release gates. Narrative
    documentation alone is not sufficient proof of Contract compatibility.
 
+### Protected-listener caller trust
+
+The current ADR 0038 implementation assigns exactly one caller trust domain to
+each protected Provider listener. Startup requires an explicit bounded issuer;
+there is no default, alias, fallback, or bearer-selected issuer. The listener
+also freezes the exact Provider-instance audience and the immutable Provider
+revision selected locally for capability advertisement. Bearer claims and the
+caller-supplied Admission Context must independently equal those local anchors;
+agreement between the two caller-controlled documents is not sufficient.
+
+The same listener freezes 1..32 public verification keys and its admitted URI
+SAN identities inside that issuer-scoped domain. A `kid` is unique in the
+bundle. Rotation is a bounded restart rollout: add old and new keys under
+distinct `kid` values, restart, switch the caller, wait for every old-key token
+accepted by that listener to expire, remove the old key, and restart again.
+There is no remote JWKS refresh or multi-issuer listener. Supporting multiple
+issuers or consumers on one listener requires separately designed key-ID,
+identity, replay, fencing, and policy namespaces.
+
+This is the current implementation shape, not a completed interoperability
+claim. Its coordinated Contract, projection, configuration, and reference E2E
+slice still requires full validation. The same-repository generic reference
+caller is reference evidence and cannot prove interoperability with an
+independently implemented external platform. Multi-issuer admission,
+multi-tenant isolation, HA, deployment, and production readiness remain
+separate open gates.
+
 ## Provider API v1
 
 The versioned provider surface contains these operation families:
@@ -325,9 +352,13 @@ Expected protocol behavior includes:
   response instead of silently skipping history.
 
 Production transport uses mutual TLS plus short-lived bearer credentials bound
-to the ProviderRevision, operation/attempt, and policy scope. Loopback-only
-development mode may make authentication configurable, but production
-conformance must not rely on a trusted flat network.
+to the exact configured issuer, Provider-local audience and ProviderRevision,
+operation/attempt, and policy scope. An issuer or signature failure is an
+authentication failure; a verified token that misses the local audience or
+revision is an authorization failure before request digest verification or
+mutation-guard reservation. Loopback-only development mode may make
+authentication configurable, but production conformance must not rely on a
+trusted flat network.
 
 ## Capabilities and profiles
 
@@ -545,6 +576,7 @@ advertisement, and optional-profile gates remain open:
 
 | Area | Current state | Required direction |
 | --- | --- | --- |
+| Protected admission | The current ADR 0038 implementation requires one explicit issuer-scoped caller trust domain per listener, Provider-local audience/revision anchors, and 1..32 frozen verification keys. It includes overlap-key component and same-repository generic-reference coverage, but the coordinated slice has not yet completed every named gate. | Complete the current slice validation and retain exact authentication/authorization precedence. Treat multi-issuer admission and independently implemented external-caller interoperability as separate future gates. |
 | Backend abstraction | Local `instance.Driver` remains separate; the Provider lifecycle has its own fake and Docker development adapters, while exec and terminal use focused Provider-only runtime ports. | Add future snapshot capability ports without reusing `/instances` models and retain narrow optional interfaces. |
 | Lifecycle recovery | Provider file persistence and Docker observation reconcile pending/unknown create work for one controller. | Retain unknown-outcome evidence; add transactional production storage before multi-controller operation. |
 | Persistence | Memory and atomically replaced file repository. | Retain for development; introduce transactional production storage before multi-controller operation. |
@@ -582,10 +614,15 @@ Implementation slices and evidence boundaries are tracked in the
 - validate them against the locked local Schemas and fixtures;
 - implement mTLS-only capability discovery;
 - implement the closed JWS header, claims, operation, descriptor, and request
-  digest admission boundary for all protected operations.
+  digest admission boundary for all protected operations;
+- require one explicit issuer-scoped caller trust domain per protected listener,
+  anchor audience and Provider revision in local startup state, and freeze a
+  bounded overlap-capable verification-key bundle.
 
 Release gate: Schema/fixture compatibility, mTLS discovery, token binding,
-digest substitution, expiry, replay, and stale-fencing admission tests pass.
+issuer substitution, local audience/revision rejection, digest substitution,
+expiry, overlap rotation, replay, and stale-fencing admission tests pass. The
+current ADR 0038 delta remains pending the coordinated slice validation.
 
 #### P1.2: asynchronous lifecycle
 
@@ -606,6 +643,9 @@ conformance tests pass.
 
 Release gate: a separately supplied caller can run its coding and shell
 scenarios against this provider without endpoint leakage or cross-tenant access.
+The repository's generic reference caller satisfies only the named reference
+gate; it does not establish interoperability with an independently implemented
+external platform.
 
 ### Phase 3: named-platform migration (retired)
 

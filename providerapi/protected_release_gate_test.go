@@ -383,7 +383,7 @@ func newReleaseGateHandler(t *testing.T, identity *clientIdentityAdmission, publ
 func newReleaseGateHandlerWithClock(t *testing.T, identity *clientIdentityAdmission, publicKey ed25519.PublicKey, guard *releaseGateGuard, clock admission.Clock) http.Handler {
 	t.Helper()
 	keys := mustTestTrustedKeySource(t, publicKey)
-	gate, err := admission.NewProtectedOperationGate(keys, clock, guard)
+	gate, err := admission.NewProtectedOperationGate(keys, mustTestAdmissionAuthority(t), clock, guard)
 	if err != nil {
 		t.Fatal(err)
 	}

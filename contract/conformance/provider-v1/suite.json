@@ -19,6 +19,8 @@
         "capability-discovery-empty-request",
         "capability-discovery-no-mutation-routes",
         "protected-admission-context-schema",
+        "protected-admission-jws-profile-schema",
+        "protected-admission-issuer-local-authority-binding",
         "protected-admission-token-binding",
         "protected-admission-digest-substitution",
         "protected-admission-expiry",

@@ -11,6 +11,7 @@ import (
 
 	"github.com/shell-echo/sandbox-runtime/internal/provideridentity"
 	"github.com/shell-echo/sandbox-runtime/option"
+	"github.com/shell-echo/sandbox-runtime/provider/admission"
 	"github.com/spf13/viper"
 )
 
@@ -243,9 +244,11 @@ const (
 // boundary. It is independent from mTLS-only capability discovery so an
 // omitted or disabled section cannot accidentally expose protected routes.
 type ProviderProtectedAdmissionConfig struct {
-	Enabled                 bool                                   `mapstructure:"enabled"`
-	GuardStateFile          string                                 `mapstructure:"guard_state_file"`
-	TrustedVerificationKeys []ProviderTrustedVerificationKeyConfig `mapstructure:"trusted_verification_keys"`
+	Enabled                  bool                                   `mapstructure:"enabled"`
+	Issuer                   string                                 `mapstructure:"issuer"`
+	ProviderInstanceAudience string                                 `mapstructure:"provider_instance_audience"`
+	GuardStateFile           string                                 `mapstructure:"guard_state_file"`
+	TrustedVerificationKeys  []ProviderTrustedVerificationKeyConfig `mapstructure:"trusted_verification_keys"`
 }
 
 // ProviderTrustedVerificationKeyConfig identifies one operator-managed SPKI
@@ -330,7 +333,7 @@ func (c *ProviderConfig) Validate() error {
 	if err := c.Capability.validateEnabled(); err != nil {
 		return fmt.Errorf("capability %w", err)
 	}
-	if err := c.ProtectedAdmission.validateEnabled(); err != nil {
+	if err := c.ProtectedAdmission.validateEnabled(c.Capability.ProviderRevisionID); err != nil {
 		return fmt.Errorf("protected admission %w", err)
 	}
 	if err := c.Lifecycle.validateEnabled(); err != nil {
@@ -776,9 +779,12 @@ func (c *ProviderCapabilityConfig) validateEnabled() error {
 	return nil
 }
 
-func (c *ProviderProtectedAdmissionConfig) validateEnabled() error {
+func (c *ProviderProtectedAdmissionConfig) validateEnabled(providerRevisionID string) error {
 	if !c.Enabled {
 		return nil
+	}
+	if _, err := admission.NewAdmissionAuthority(c.Issuer, providerRevisionID, c.ProviderInstanceAudience); err != nil {
+		return fmt.Errorf("authority %w", err)
 	}
 	if strings.TrimSpace(c.GuardStateFile) == "" {
 		return errors.New("guard state file must not be empty")

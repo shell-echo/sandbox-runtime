@@ -44,6 +44,46 @@ lock. The current declared Suite digest remains a placeholder; the locked Git
 Contract tree protects the consumed Suite content, but the digest must not be
 presented as independently content-derived.
 
+### Listener-local caller trust
+
+The current ADR 0038 implementation assigns one caller trust domain to one
+protected Provider listener. Enabling the listener requires all of these local
+startup values:
+
+- one exact issuer with no default, alias, fallback, or normalization;
+- one Provider-instance audience and the immutable locally advertised Provider
+  revision;
+- the admitted mTLS URI SAN identities for that issuer; and
+- 1..32 public verification keys with distinct `kid` values.
+
+The Provider freezes those values before serving protected traffic. It never
+uses the bearer `iss`, `aud`, `provider_revision_id`, `kid`, `sub`, or the
+Admission Context to select a trust domain. The signed token and Admission
+Context must independently match the Provider-local audience and revision. A
+token from a trusted key but a different configured issuer is unauthenticated;
+a verified token with the wrong local audience or revision is forbidden before
+request digest verification or mutation reservation.
+
+Rotate signing keys through explicit overlap and restart:
+
+1. Install old and new public keys under distinct `kid` values, staying within
+   the 32-key limit.
+2. Restart the Provider listener so it freezes the overlap bundle.
+3. Stop all old-key signing, move the caller to the new signing key, and wait
+   300 seconds.
+4. Remove the old key and restart the listener again.
+
+There is no remote JWKS refresh or multi-issuer listener. A deployment that
+needs multiple issuer-scoped caller trust domains must use separate listeners
+or wait for a separately reviewed namespace design; it must not combine key or
+identity bundles informally.
+
+This describes the current implementation under validation. The coordinated
+Contract, projection, configuration, and reference E2E slice must complete its
+named gates before compatibility is claimed. The same-repository generic
+reference caller provides reference evidence; it does not establish
+independently implemented external-caller interoperability.
+
 ## Ownership boundary
 
 The Provider is a provider-local execution and evidence service. The caller is
@@ -96,9 +136,13 @@ these as typed Provider outcomes rather than parse implementation diagnostics.
 Protected operation routes require all of the following layers:
 
 1. A mutually authenticated TLS connection with an admitted caller identity.
-2. The Contract-defined bearer/JWS request metadata and descriptor digest.
-3. Replay, idempotency, attempt, generation, lease, and fencing checks.
-4. Strict schema and semantic validation before any mutation where the Contract
+2. Exact authentication against the listener's configured issuer and frozen
+   verification-key bundle.
+3. Authorization against the Provider-local audience/revision, mTLS subject,
+   Admission Context, operation, request, and policy bindings.
+4. The Contract-defined request metadata and descriptor digest.
+5. Replay, idempotency, attempt, generation, lease, and fencing checks.
+6. Strict schema and semantic validation before any mutation where the Contract
    requires preflight.
 
 `GET /v1/capabilities` is mTLS-only and has its own empty-request rules. A
@@ -172,8 +216,11 @@ integration:
 
 - Pin the Contract namespace, revision, tree digest, Suite, and selected
   ProviderRevision/profile.
+- Agree with the Provider operator on one exact issuer, Provider-instance
+  audience, Provider revision, admitted URI SAN identity, and distinct key IDs;
+  do not expect a default or fallback issuer.
 - Implement mTLS identity validation and JWS/digest admission using caller-owned
-  credentials and key rotation policy.
+  credentials and the overlap/restart key rotation procedure.
 - Map caller intent to Provider requests without moving business truth
   into the Provider.
 - Store Provider operation IDs, idempotency keys, attempts, generations, and
@@ -210,10 +257,12 @@ controlled-restore profiles use real Chromium but record the Contract Suite as
 unexercised (`suite_exercised=false`). The PostgreSQL witness workflow is a
 separate component/integration track rather than a ninth E2E profile.
 
-These results are useful integration evidence, not proof of aggregate
-conformance, multi-controller reliability, hostile multi-tenant isolation,
-deployment qualification, or production readiness. Those gates require their
-own environment and reproducible evidence.
+The generic reference caller in this repository remains reference evidence; it
+does not establish independently implemented external-caller interoperability.
+None of these results proves multi-issuer admission, aggregate conformance,
+multi-controller reliability, multi-tenant isolation, HA, deployment
+qualification, or production readiness. Those gates require their own
+environment and reproducible evidence.
 
 To reproduce the repository-level checks:
 
@@ -226,8 +275,9 @@ go run ./cmd/run-conformance -source-root . -race -shuffle
 
 All E2E commands are documented in [`e2e/README.md`](../e2e/README.md). Each
 artifact must retain its named boundary; partial properties from separate
-profiles must not be combined into aggregate conformance, generic-consumer,
-independent failure-domain, deployment, or production evidence.
+profiles must not be combined into aggregate conformance, independently
+implemented external-caller interoperability, independent failure-domain,
+deployment, or production evidence.
 
 ## Change protocol
 

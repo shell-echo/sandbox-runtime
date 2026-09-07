@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:shell-echo:sandbox-runtime:contract:protected-operation-jws-header:v1",
+  "title": "Sandbox Runtime Protected Operation JWS Header",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["alg", "kid", "typ"],
+  "properties": {
+    "alg": {"enum": ["EdDSA", "ES256"]},
+    "kid": {"type": "string", "minLength": 1, "maxLength": 128},
+    "typ": {"const": "agent-sandbox-operation-admission+jwt"}
+  }
+}

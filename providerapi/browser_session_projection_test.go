@@ -478,7 +478,7 @@ func validBrowserApplicationHandoff() browserapplication.Handoff {
 
 func newBrowserProtectedGate(t *testing.T, publicKey ed25519.PublicKey, guard admission.MutationGuard) *admission.ProtectedOperationGate {
 	t.Helper()
-	gate, err := admission.NewProtectedOperationGate(mustTestTrustedKeySource(t, publicKey), testAdmissionClock{now: releaseGateTestTime()}, guard)
+	gate, err := admission.NewProtectedOperationGate(mustTestTrustedKeySource(t, publicKey), mustTestAdmissionAuthority(t), testAdmissionClock{now: releaseGateTestTime()}, guard)
 	if err != nil {
 		t.Fatal(err)
 	}

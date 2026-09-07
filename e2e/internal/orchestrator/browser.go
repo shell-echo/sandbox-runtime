@@ -182,7 +182,7 @@ func RunBrowser(ctx context.Context, options Options) (_ Result, resultErr error
 			{ID: material.ControllerA.JWSKeyID, Algorithm: "EdDSA", Path: material.ControllerA.JWSPublicFile},
 			{ID: material.ControllerB.JWSKeyID, Algorithm: "EdDSA", Path: material.ControllerB.JWSPublicFile},
 		},
-		ProviderRevisionID: providerRevisionID, ProviderInstanceAudience: providerAudience,
+		JWSIssuer: referenceCallerJWSIssuer, ProviderRevisionID: providerRevisionID, ProviderInstanceAudience: providerAudience,
 		StateRoot: stateRoot, RuntimeDataRoot: filepath.Join(runRoot, "browser-runtime"), RuntimeImage: publication.Image(),
 		RuntimeControllerID: browserReferenceController,
 		GatewayPrincipals: []stack.GatewayPrincipal{
@@ -208,7 +208,8 @@ func RunBrowser(ctx context.Context, options Options) (_ Result, resultErr error
 	callerConfig := caller.Config{
 		Profile: caller.ProfileBrowser, Phase: caller.PhaseInitial,
 		ProviderBaseURL: "https://" + providerAddress, GatewayBaseURL: "https://" + gatewayAddress,
-		CAFile: material.CAFile, ProviderRevisionID: providerRevisionID, ProviderInstanceAudience: providerAudience,
+		CAFile: material.CAFile, JWSIssuer: referenceCallerJWSIssuer,
+		ProviderRevisionID: providerRevisionID, ProviderInstanceAudience: providerAudience,
 		RuntimeImageReference: publication.Repository, RuntimeImageDigest: publication.Digest, RuntimeArchitecture: architecture,
 		GatewayAdminToken:    adminToken,
 		GatewayListenerLimit: 32,

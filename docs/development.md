@@ -71,6 +71,34 @@ lock verification proves only the identity of consumed inputs. Unit
 tests prove components. Conformance, multi-controller reliability, security,
 deployment, and production readiness remain separate evidence tiers.
 
+## Protected admission trust discipline
+
+Treat one protected Provider listener as one caller trust domain. Enabled
+startup must require one exact issuer with no default, alias, or fallback; one
+Provider-instance audience; the immutable locally advertised Provider
+revision; the admitted URI SAN identities; and 1..32 frozen verification keys.
+Do not select issuer, audience, revision, identity allowlist, or key bundle from
+the bearer or Admission Context. The bearer and Admission Context must each
+match the Provider-local audience and revision rather than merely agree with
+one another.
+
+Key rotation is configuration plus restart, not dynamic discovery. Add old and
+new public keys under distinct `kid` values, restart, move the caller to the new
+key, wait for all accepted old-key tokens to expire, remove the old key, and
+restart again. Do not add remote JWKS refresh, an implicit key, or a second
+issuer to the listener without a separate design for key-ID, URI-SAN, replay,
+fencing, and policy namespaces.
+
+Tests for this boundary must cover exact generic issuer success, issuer
+substitution as authentication failure, Provider-local audience/revision
+rejection as authorization failure before mutation reservation, invalid startup
+configuration, and overlapping rotation keys. Passing these component and
+same-repository reference tests does not establish interoperability with an
+independently implemented external caller. The current calling-standard slice
+must complete its Contract, projection, configuration, and E2E validation
+before compatibility is claimed; multi-issuer, multi-tenant, HA, deployment,
+and production gates remain separate.
+
 ## Composition and advertisement discipline
 
 Provider lifecycle, exec, terminal/Gateway, artifact/usage, and capability
@@ -82,7 +110,8 @@ reject the development Provider lifecycle and exec adapters.
 Keep startup advertisement empty until the complete P2.5h dependency graph and
 its named gates pass. A composed route, a Contract projection, a local Suite
 mapping, and CI are distinct evidence and none substitutes for the independent
-P2.5i caller/platform E2E gate.
+P2.5i reference-caller E2E gate. That same-repository reference gate is itself
+distinct from independently implemented external-caller interoperability.
 
 ## Terminal and Gateway discipline
 

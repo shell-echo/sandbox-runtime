@@ -140,7 +140,7 @@ func newProviderServer(ctx context.Context, providerConfig config.ProviderConfig
 		return nil, noOpProviderClose, errors.Join(err, closeProviderBrowserRuntime(browserRuntime))
 	}
 
-	protected, closeProtected, err := newProviderProtectedTransportOptions(providerConfig.ProtectedAdmission, systemAdmissionClock{})
+	protected, closeProtected, err := newProviderProtectedTransportOptions(providerConfig.ProtectedAdmission, providerConfig.Capability.ProviderRevisionID, systemAdmissionClock{})
 	if err != nil {
 		return nil, noOpProviderClose, errors.Join(err, closeLifecycle(), closeProviderBrowserRuntime(browserRuntime))
 	}
@@ -923,9 +923,13 @@ type systemAdmissionClock struct{}
 
 func (systemAdmissionClock) Now() time.Time { return time.Now().UTC() }
 
-func newProviderProtectedTransportOptions(protectedConfig config.ProviderProtectedAdmissionConfig, clock admission.Clock) (*providerapi.ProtectedTransportOptions, func() error, error) {
+func newProviderProtectedTransportOptions(protectedConfig config.ProviderProtectedAdmissionConfig, providerRevisionID string, clock admission.Clock) (*providerapi.ProtectedTransportOptions, func() error, error) {
 	if !protectedConfig.Enabled {
 		return nil, noOpProviderClose, nil
+	}
+	authority, err := admission.NewAdmissionAuthority(protectedConfig.Issuer, providerRevisionID, protectedConfig.ProviderInstanceAudience)
+	if err != nil {
+		return nil, noOpProviderClose, fmt.Errorf("construct Provider admission authority: %w", err)
 	}
 
 	files := make([]admissionfile.TrustedKeyFile, len(protectedConfig.TrustedVerificationKeys))
@@ -944,7 +948,7 @@ func newProviderProtectedTransportOptions(protectedConfig config.ProviderProtect
 	if err != nil {
 		return nil, noOpProviderClose, fmt.Errorf("open Provider admission guard: %w", err)
 	}
-	gate, err := admission.NewProtectedOperationGate(keys, clock, guard)
+	gate, err := admission.NewProtectedOperationGate(keys, authority, clock, guard)
 	if err != nil {
 		return nil, noOpProviderClose, errors.Join(fmt.Errorf("construct Provider admission gate: %w", err), guard.Close())
 	}

@@ -79,6 +79,38 @@ func TestDecodeAdmissionContextCarrierRejectsCarrierAndDocumentConfusion(t *test
 	if _, err := DecodeAdmissionContextCarrier(base64.RawURLEncoding.EncodeToString([]byte(duplicate))); !errors.Is(err, ErrInvalidAdmissionContext) {
 		t.Fatalf("duplicate member error = %v", err)
 	}
+
+	delete(document, "unknown")
+	delete(document, "tenant_id")
+	document["TENANT_ID"] = context.TenantID
+	document["context_digest"] = ""
+	caseVariant, _ := json.Marshal(document)
+	caseVariantDigest, err := admissionContextDigest(caseVariant)
+	if err != nil {
+		t.Fatal(err)
+	}
+	document["context_digest"] = caseVariantDigest
+	caseVariant, _ = json.Marshal(document)
+	if _, err := DecodeAdmissionContextCarrier(base64.RawURLEncoding.EncodeToString(caseVariant)); !errors.Is(err, ErrInvalidAdmissionContext) {
+		t.Fatalf("case-variant member error = %v", err)
+	}
+
+	delete(document, "TENANT_ID")
+	document["tenant_id"] = context.TenantID
+	target := document["http_target"].(map[string]any)
+	target["METHOD"] = target["method"]
+	delete(target, "method")
+	document["context_digest"] = ""
+	nestedCaseVariant, _ := json.Marshal(document)
+	nestedCaseVariantDigest, err := admissionContextDigest(nestedCaseVariant)
+	if err != nil {
+		t.Fatal(err)
+	}
+	document["context_digest"] = nestedCaseVariantDigest
+	nestedCaseVariant, _ = json.Marshal(document)
+	if _, err := DecodeAdmissionContextCarrier(base64.RawURLEncoding.EncodeToString(nestedCaseVariant)); !errors.Is(err, ErrInvalidAdmissionContext) {
+		t.Fatalf("nested case-variant member error = %v", err)
+	}
 }
 
 func TestDecodeAdmissionContextCarrierEnforcesSchemaBounds(t *testing.T) {

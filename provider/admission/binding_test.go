@@ -8,7 +8,7 @@ import (
 
 func TestValidateTokenBindingAcceptsExactVerifiedContext(t *testing.T) {
 	token, binding, clock := validTokenBindingForTest()
-	if err := ValidateTokenBinding(token, binding, clock); err != nil {
+	if err := ValidateTokenBinding(token, binding, validAdmissionAuthorityForTest(), clock); err != nil {
 		t.Fatalf("ValidateTokenBinding() error = %v", err)
 	}
 }
@@ -41,7 +41,7 @@ func TestValidateTokenBindingRejectsMismatchedContext(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			token, binding, clock := validTokenBindingForTest()
 			test.mutate(&binding)
-			if err := ValidateTokenBinding(token, binding, clock); !errors.Is(err, ErrUnauthorizedTokenBinding) {
+			if err := ValidateTokenBinding(token, binding, validAdmissionAuthorityForTest(), clock); !errors.Is(err, ErrUnauthorizedTokenBinding) {
 				t.Fatalf("ValidateTokenBinding() error = %v, want %v", err, ErrUnauthorizedTokenBinding)
 			}
 		})
@@ -77,15 +77,18 @@ func TestValidateTokenBindingRejectsInvalidTokenLifetime(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			token, binding, clock := validTokenBindingForTest()
 			test.mutate(&token, &binding, &clock)
-			if err := ValidateTokenBinding(token, binding, clock); !errors.Is(err, ErrUnauthorizedTokenBinding) {
+			if err := ValidateTokenBinding(token, binding, validAdmissionAuthorityForTest(), clock); !errors.Is(err, ErrUnauthorizedTokenBinding) {
 				t.Fatalf("ValidateTokenBinding() error = %v, want %v", err, ErrUnauthorizedTokenBinding)
 			}
 		})
 	}
 
 	token, binding, _ := validTokenBindingForTest()
-	if err := ValidateTokenBinding(token, binding, nil); !errors.Is(err, ErrUnauthorizedTokenBinding) {
+	if err := ValidateTokenBinding(token, binding, validAdmissionAuthorityForTest(), nil); !errors.Is(err, ErrUnauthorizedTokenBinding) {
 		t.Fatalf("nil clock error = %v, want %v", err, ErrUnauthorizedTokenBinding)
+	}
+	if err := ValidateTokenBinding(token, binding, AdmissionAuthority{}, fixedClock{}); !errors.Is(err, ErrUnauthorizedTokenBinding) {
+		t.Fatalf("zero authority error = %v, want %v", err, ErrUnauthorizedTokenBinding)
 	}
 }
 
@@ -106,22 +109,25 @@ func validTokenBindingForTest() (VerifiedToken, TokenBinding, fixedClock) {
 	claims.DeadlineAt = deadline.Format(time.RFC3339Nano)
 	token := VerifiedToken{Claims: claims}
 	binding := TokenBinding{
-		Caller:               claims.Subject,
-		ProviderRevisionID:   claims.ProviderRevisionID,
-		Audience:             claims.Audience,
-		Operation:            claims.Operation,
-		SandboxID:            claims.SandboxID,
-		OperationID:          claims.OperationID,
-		AttemptID:            claims.AttemptID,
-		FencingToken:         claims.FencingToken,
-		TenantID:             claims.TenantID,
-		WorkOrderID:          claims.WorkOrderID,
-		PolicyDigest:         claims.PolicyDigest,
-		RequestContractID:    claims.RequestContractID,
-		RequestDigestProfile: claims.RequestDigestProfile,
-		RequestDigest:        claims.RequestDigest,
-		PolicyDecisionAt:     time.Unix(105, 0).UTC(),
-		DeadlineAt:           deadline,
+		Caller:                        claims.Subject,
+		ProviderRevisionID:            claims.ProviderRevisionID,
+		Audience:                      claims.Audience,
+		Operation:                     claims.Operation,
+		SandboxID:                     claims.SandboxID,
+		OperationID:                   claims.OperationID,
+		AttemptID:                     claims.AttemptID,
+		FencingToken:                  claims.FencingToken,
+		TenantID:                      claims.TenantID,
+		WorkOrderID:                   claims.WorkOrderID,
+		PolicyDigest:                  claims.PolicyDigest,
+		RequestContractID:             claims.RequestContractID,
+		RequestDigestProfile:          claims.RequestDigestProfile,
+		RequestDigest:                 claims.RequestDigest,
+		PolicyDecisionAt:              time.Unix(105, 0).UTC(),
+		DeadlineAt:                    deadline,
+		AdmissionContextContractID:    claims.AdmissionContextContractID,
+		AdmissionContextDigestProfile: claims.AdmissionContextDigestProfile,
+		AdmissionContextDigest:        claims.AdmissionContextDigest,
 	}
 	return token, binding, fixedClock{now: time.Unix(150, 0).UTC()}
 }

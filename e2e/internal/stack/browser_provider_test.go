@@ -138,6 +138,9 @@ func TestBrowserProviderConfigRejectsIncompleteProviderInputs(t *testing.T) {
 	for name, mutate := range map[string]func(*BrowserProviderConfig){
 		"missing Provider address": func(config *BrowserProviderConfig) { config.ProviderAddress = "" },
 		"missing Browser config":   func(config *BrowserProviderConfig) { config.Browser = nil },
+		"missing issuer":           func(config *BrowserProviderConfig) { config.JWSIssuer = "" },
+		"legacy issuer":            func(config *BrowserProviderConfig) { config.JWSIssuer = "agent-platform" },
+		"missing audience":         func(config *BrowserProviderConfig) { config.ProviderInstanceAudience = "" },
 		"duplicate client URI": func(config *BrowserProviderConfig) {
 			config.AllowedClientURIs[1] = config.AllowedClientURIs[0]
 		},

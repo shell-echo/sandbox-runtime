@@ -39,12 +39,15 @@ type TokenBinding struct {
 // ValidateTokenBinding rejects a verified token unless every contextual value
 // and its short-lived validity window match the admitted Provider operation.
 // It neither parses TLS state nor dispatches a Provider request.
-func ValidateTokenBinding(token VerifiedToken, binding TokenBinding, clock Clock) error {
-	if clock == nil || !validateClaimsShape(token.Claims) || !validTokenBinding(binding) {
+func ValidateTokenBinding(token VerifiedToken, binding TokenBinding, authority AdmissionAuthority, clock Clock) error {
+	if clock == nil || !authority.valid() || !validateClaimsShape(token.Claims) || !validTokenBinding(binding) {
 		return ErrUnauthorizedTokenBinding
 	}
 	claims := token.Claims
-	if claims.Subject != binding.Caller ||
+	if claims.Issuer != authority.issuer ||
+		claims.ProviderRevisionID != authority.providerRevisionID ||
+		claims.Audience != authority.providerInstanceAudience ||
+		claims.Subject != binding.Caller ||
 		claims.ProviderRevisionID != binding.ProviderRevisionID ||
 		claims.Audience != binding.Audience ||
 		claims.Operation != binding.Operation ||
@@ -88,7 +91,7 @@ func sameRFC3339Time(value string, expected time.Time) bool {
 }
 
 func validTokenBinding(binding TokenBinding) bool {
-	if !validBoundedText(binding.Caller, 1, 200) || !validRequiredText(binding.ProviderRevisionID) || !audiencePattern.MatchString(binding.Audience) || !binding.Operation.Supported() || binding.FencingToken < 1 || !digestPattern.MatchString(binding.PolicyDigest) || !digestPattern.MatchString(binding.RequestDigest) || !binding.RequestDigestProfile.Supported() || binding.PolicyDecisionAt.IsZero() || binding.DeadlineAt.IsZero() {
+	if !validBoundedText(binding.Caller, 1, 200) || !validRequiredText(binding.ProviderRevisionID) || !audiencePattern.MatchString(binding.Audience) || !binding.Operation.Supported() || binding.FencingToken < 1 || binding.FencingToken > maxSafeJSONInteger || !digestPattern.MatchString(binding.PolicyDigest) || !digestPattern.MatchString(binding.RequestDigest) || !binding.RequestDigestProfile.Supported() || binding.PolicyDecisionAt.IsZero() || binding.DeadlineAt.IsZero() {
 		return false
 	}
 	if !validRequestBinding(TokenClaims{

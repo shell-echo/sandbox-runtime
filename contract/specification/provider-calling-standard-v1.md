@@ -155,6 +155,11 @@ For a protected mutation, the Caller constructs a document accepted by the
 route's referenced JSON Schema and within the OpenAPI encoded-body limit. It
 uses the Contract-defined request digest profile and creates the admission
 context and target documents required by the `protected-admission-*` rules.
+The Caller serializes the complete Admission Context JSON document, computes
+its required digest, encodes it as unpadded base64url, and sends it as exactly
+one `X-Sandbox-Runtime-Admission-Context` header field value. Both the encoded
+value and decoded document are bounded to 16,384 characters and 16,384 bytes,
+respectively.
 
 For a protected read, the Caller constructs the exact descriptor and digest
 binding required for that operation. It does not substitute a mutation body,
@@ -166,14 +171,17 @@ different request.
 Protected routes require both the admitted mTLS identity and the short-lived
 JWS bearer defined by the OpenAPI security declaration and semantic rules
 `protected-admission-mtls-and-bearer`, `protected-admission-binding`,
+`protected-admission-jws-profile`,
+`protected-admission-issuer-local-authority-binding`,
 `protected-admission-replay-fencing`, and
 `protected-admission-contract-ids`.
 
-The admission binding covers the caller, Provider revision, HTTP target,
-operation, request or descriptor digest, policy decision, deadline, attempt,
-generation, fencing token, and other fields required by the referenced schema.
-Unknown, malformed, oversized, expired, replayed, substituted, or stale input
-is rejected before mutation where the Contract requires preflight.
+The admission binding covers the configured issuer, selected mTLS caller,
+Provider-local revision and audience, HTTP target, operation, request or
+descriptor digest, policy decision, deadline, attempt, generation, fencing
+token, and other fields required by the referenced schemas. Unknown, malformed,
+oversized, expired, replayed, substituted, or stale input is rejected before
+mutation where the Contract requires preflight.
 
 ### 5. Retain and reconcile the operation
 
@@ -204,6 +212,41 @@ bearer token as a replacement. Every protected route uses both mTLS and the
 Contract-defined JWS carrier. The Caller validates and rotates its own identity
 material according to its deployment policy; this Contract defines the wire
 binding, not a production PKI service.
+
+The bearer is a compact JWS with a closed
+`protected-operation-jws-header.schema.json` header and closed
+`protected-operation-jws-claims.schema.json` claims document. The protected
+header uses `typ` `agent-sandbox-operation-admission+jwt`, an `EdDSA` or `ES256`
+algorithm, and an issuer-scoped `kid`. Its `iss` claim is a 1-to-200-character
+JWT StringOrURI and must exactly, case-sensitively equal the one issuer
+configured for the Provider listener. A StringOrURI containing `:` is an
+absolute URI and MUST NOT contain a fragment. There is no default, fallback,
+alias, normalization, or bearer-led issuer discovery. The legacy opaque value
+`agent-platform` is accepted only if the operator explicitly configures that
+exact issuer.
+
+The maximum bearer lifetime from `iat` through `exp` is 300 seconds. Key
+rotation adds the new issuer-scoped public key and restarts the listener before
+the caller switches signing keys. After old-key signing stops, the operator
+waits 300 seconds, removes the old public key, and restarts the listener again.
+This overlap is explicit; key removal does not rely on remote discovery or an
+unbounded estimate of token expiry.
+
+The listener's admitted URI SAN controller identities and frozen verification
+keys all belong to that one issuer scope. The signed `sub` exactly equals the
+one selected TLS-verified URI SAN. The signed `aud` and
+`provider_revision_id`, and the corresponding Admission Context fields, each
+independently equal the Provider-local audience and immutable capability
+revision. Agreement between the two caller-supplied documents cannot replace
+those local comparisons. This profile does not use a certificate thumbprint or
+JWT `cnf` claim.
+
+An unknown issuer, unknown key ID, invalid signature, malformed JWS, or inactive
+token is an authentication failure represented by the operation's authorized
+`401`. After successful signature verification under the configured issuer,
+an incorrect mTLS subject, local audience, local Provider revision, or other
+admission binding is an authorization failure represented by `403`. Responses
+do not identify the failed issuer, key, certificate, or comparison.
 
 Digest calculation follows the exact digest profile named by the operation
 binding. Request mutations use
@@ -311,10 +354,6 @@ presented as one.
 The following are non-normative maturity boundaries, not additions to Provider
 wire behavior:
 
-- protected admission currently fixes the legacy JWS issuer
-  `agent-platform` in implementation code, while the locked Contract does not
-  yet define that exact value, issuer provisioning, or rotation; generic
-  protected-operation interoperability therefore remains unproved;
 - the current OpenAPI authorizes sandbox create/read but not explicit
   terminate, desired-state, lease-renewal, snapshot, restore, or event routes;
   names reserved in admission documents do not close that lifecycle;
@@ -344,6 +383,8 @@ This specification does not:
 - define the local `/instances` API;
 - define WorkOrder, Run, user, tenant-policy, billing, or artifact-publication
   models for a particular calling product;
+- define a multi-issuer listener, issuer selected by bearer input, remote JWKS
+  discovery, or a multi-consumer trust namespace;
 - expose a Provider-owned public terminal or Browser Gateway;
 - standardize backend IDs, daemon APIs, host paths, raw endpoints, credentials,
   or implementation diagnostics;

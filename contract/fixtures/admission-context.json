@@ -1,7 +1,7 @@
 {
   "context_contract_id": "urn:shell-echo:sandbox-runtime:admission-context:v1",
   "context_digest_profile": "rfc8785-full-document-excluding-context-digest-v1",
-  "context_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "context_digest": "sha256:b2a8f83541acfff6edf650d5c2dfd8fcf068915d3009b542a3ebb4670a310633",
   "controller_subject": "spiffe://provider/controller",
   "provider_revision_id": "provider-revision-1",
   "provider_instance_audience": "urn:shell-echo:sandbox-runtime:provider-instance:provider-1",

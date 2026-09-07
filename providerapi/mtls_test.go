@@ -22,7 +22,7 @@ import (
 
 const (
 	testServerName      = "provider.test"
-	testAllowedIdentity = "spiffe://agent-platform/provider-client"
+	testAllowedIdentity = "spiffe://reference-caller.sandbox-runtime.test/provider-client"
 )
 
 type testCA struct {
@@ -164,7 +164,7 @@ func TestLoadMTLSConfigRejectsUnallowedIdentitySources(t *testing.T) {
 			name:      "different URI SAN",
 			allowlist: []string{testAllowedIdentity},
 			options: testCertificateOptions{
-				uriStrings:  []string{"spiffe://agent-platform/other-client"},
+				uriStrings:  []string{"spiffe://reference-caller.sandbox-runtime.test/other-client"},
 				extKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
 			},
 		},
@@ -228,7 +228,7 @@ func TestLoadMTLSConfigAdmitsOneExactURIAmongMultiple(t *testing.T) {
 }
 
 func TestLoadMTLSConfigRejectsMultipleAllowedURIIdentities(t *testing.T) {
-	otherIdentity := "spiffe://agent-platform/other-client"
+	otherIdentity := "spiffe://reference-caller.sandbox-runtime.test/other-client"
 	material := newTestMTLSMaterial(t, []string{testAllowedIdentity, otherIdentity})
 	certificate := issueTestCertificate(t, material.ca, testCertificateOptions{
 		uriStrings:  []string{testAllowedIdentity, otherIdentity},
@@ -477,8 +477,8 @@ func TestLoadMTLSConfigPolicyAndFrozenAllowlist(t *testing.T) {
 		t.Fatal("ClientCAs is nil")
 	}
 
-	identities[0] = "spiffe://agent-platform/replaced"
-	identities = append(identities, "spiffe://agent-platform/added")
+	identities[0] = "spiffe://reference-caller.sandbox-runtime.test/replaced"
+	identities = append(identities, "spiffe://reference-caller.sandbox-runtime.test/added")
 	clientErr, serverErr := runTLSHandshake(material.serverConfig, clientTLSConfig(material, &material.client))
 	if clientErr != nil || serverErr != nil {
 		t.Fatalf("allowlist mutation changed admission: client=%v server=%v", clientErr, serverErr)

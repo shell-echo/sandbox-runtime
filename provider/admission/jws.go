@@ -20,17 +20,24 @@ import (
 )
 
 const (
-	maxCompactJWSBytes       = 8 << 10
-	expectedJWSType          = "agent-sandbox-operation+jwt"
-	expectedJWSAdmissionType = "agent-sandbox-operation-admission+jwt"
-	expectedIssuer           = "agent-platform"
+	maxCompactJWSBytes = 8 << 10
+	expectedJWSType    = "agent-sandbox-operation-admission+jwt"
 )
 
 var (
 	ErrInvalidToken = errors.New("provider admission token is invalid")
 
-	audiencePattern = regexp.MustCompile(`^urn:shell-echo:sandbox-runtime:provider-instance:[A-Za-z0-9._:-]{1,200}$`)
-	digestPattern   = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
+	audiencePattern   = regexp.MustCompile(`^urn:shell-echo:sandbox-runtime:provider-instance:[A-Za-z0-9._:-]{1,200}$`)
+	digestPattern     = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
+	jwsHeaderMembers  = [...]string{"alg", "kid", "typ"}
+	tokenClaimMembers = [...]string{
+		"jti", "iss", "sub", "aud", "iat", "nbf", "exp", "operation",
+		"provider_revision_id", "sandbox_id", "operation_id", "attempt_id",
+		"fencing_token", "tenant_id", "work_order_id", "policy_digest",
+		"policy_decided_at", "request_contract_id", "request_digest_profile",
+		"request_digest", "deadline_at", "admission_context_contract_id",
+		"admission_context_digest_profile", "admission_context_digest",
+	}
 )
 
 // Operation is a protected Sandbox Provider operation named by a token claim.
@@ -135,14 +142,14 @@ type VerifiedToken struct {
 // VerifyCompactJWS verifies a bounded compact JWS against keys and rejects a
 // header or claims document outside the locked closed surface. Contextual
 // caller, request, temporal, replay, and fencing binding are separate steps.
-func VerifyCompactJWS(ctx context.Context, compact string, keys TrustedKeySource) (VerifiedToken, error) {
+func VerifyCompactJWS(ctx context.Context, compact string, keys TrustedKeySource, authority AdmissionAuthority) (VerifiedToken, error) {
 	if ctx == nil {
 		return VerifiedToken{}, ErrInvalidToken
 	}
 	if err := ctx.Err(); err != nil {
 		return VerifiedToken{}, err
 	}
-	if keys == nil || len(compact) == 0 || len(compact) > maxCompactJWSBytes {
+	if keys == nil || !authority.valid() || len(compact) == 0 || len(compact) > maxCompactJWSBytes {
 		return VerifiedToken{}, ErrInvalidToken
 	}
 
@@ -164,11 +171,11 @@ func VerifyCompactJWS(ctx context.Context, compact string, keys TrustedKeySource
 	}
 
 	var header JWSHeader
-	if !decodeClosedJSON(headerBytes, &header) || !validateHeader(header) {
+	if !decodeClosedJSON(headerBytes, &header) || !hasExactRequiredJSONMembers(headerBytes, jwsHeaderMembers[:]) || !validateHeader(header) {
 		return VerifiedToken{}, ErrInvalidToken
 	}
 	var claims TokenClaims
-	if !decodeClosedJSON(payloadBytes, &claims) || !validateClaimsForHeader(header, claims) {
+	if !decodeClosedJSON(payloadBytes, &claims) || !hasExactRequiredJSONMembers(payloadBytes, tokenClaimMembers[:]) || !validateClaimsShape(claims) || claims.Issuer != authority.issuer {
 		return VerifiedToken{}, ErrInvalidToken
 	}
 
@@ -194,30 +201,14 @@ func decodeCompactSegment(segment string) ([]byte, bool) {
 }
 
 func validateHeader(header JWSHeader) bool {
-	return header.Algorithm.Supported() && (header.Type == expectedJWSType || header.Type == expectedJWSAdmissionType) && validBoundedText(string(header.KeyID), 1, 200)
-}
-
-func validateClaimsForHeader(header JWSHeader, claims TokenClaims) bool {
-	if !validateClaimsShape(claims) {
-		return false
-	}
-	if header.Type != expectedJWSAdmissionType {
-		return claims.AdmissionContextContractID == "" && claims.AdmissionContextDigestProfile == "" && claims.AdmissionContextDigest == ""
-	}
-	if claims.PolicyDecidedAt == "" {
-		return false
-	}
-	if _, err := time.Parse(time.RFC3339Nano, claims.PolicyDecidedAt); err != nil {
-		return false
-	}
-	return claims.AdmissionContextContractID == AdmissionContextContractID && claims.AdmissionContextDigestProfile == AdmissionContextDigestProfile && digestPattern.MatchString(claims.AdmissionContextDigest)
+	return header.Algorithm.Supported() && header.Type == expectedJWSType && validBoundedText(string(header.KeyID), 1, 128)
 }
 
 func validateClaimsShape(claims TokenClaims) bool {
-	if claims.Issuer != expectedIssuer || !claims.Operation.Supported() || !claims.RequestDigestProfile.Supported() || !validRequestBinding(claims) {
+	if !validIssuer(claims.Issuer) || !claims.Operation.Supported() || !claims.RequestDigestProfile.Supported() || !validRequestBinding(claims) {
 		return false
 	}
-	if claims.IssuedAt < 0 || claims.NotBefore < 0 || claims.ExpiresAt < 0 || claims.FencingToken < 1 {
+	if claims.IssuedAt < 0 || claims.NotBefore < 0 || claims.ExpiresAt < 0 || claims.FencingToken < 1 || claims.FencingToken > maxSafeJSONInteger {
 		return false
 	}
 	if !audiencePattern.MatchString(claims.Audience) || !digestPattern.MatchString(claims.PolicyDigest) || !digestPattern.MatchString(claims.RequestDigest) {
@@ -226,10 +217,13 @@ func validateClaimsShape(claims TokenClaims) bool {
 	if _, err := time.Parse(time.RFC3339Nano, claims.DeadlineAt); err != nil {
 		return false
 	}
-	if claims.PolicyDecidedAt != "" {
-		if _, err := time.Parse(time.RFC3339Nano, claims.PolicyDecidedAt); err != nil {
-			return false
-		}
+	if _, err := time.Parse(time.RFC3339Nano, claims.PolicyDecidedAt); err != nil {
+		return false
+	}
+	if claims.AdmissionContextContractID != AdmissionContextContractID ||
+		claims.AdmissionContextDigestProfile != AdmissionContextDigestProfile ||
+		!digestPattern.MatchString(claims.AdmissionContextDigest) {
+		return false
 	}
 	if !validBoundedText(claims.JTI, 16, 200) || !validBoundedText(claims.Subject, 1, 200) {
 		return false
@@ -238,7 +232,24 @@ func validateClaimsShape(claims TokenClaims) bool {
 		claims.ProviderRevisionID, claims.SandboxID,
 		claims.OperationID, claims.AttemptID, claims.TenantID, claims.WorkOrderID,
 	} {
-		if !validRequiredText(value) {
+		if !validBoundedText(value, 1, 200) {
+			return false
+		}
+	}
+	return true
+}
+
+func hasExactRequiredJSONMembers(data []byte, required []string) bool {
+	var document map[string]json.RawMessage
+	if err := json.Unmarshal(data, &document); err != nil {
+		return false
+	}
+	if len(document) != len(required) {
+		return false
+	}
+	for _, name := range required {
+		value, ok := document[name]
+		if !ok || bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
 			return false
 		}
 	}

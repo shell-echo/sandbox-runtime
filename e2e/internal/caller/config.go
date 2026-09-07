@@ -6,8 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"strings"
+	"unicode/utf8"
 )
 
 const (
@@ -35,6 +37,7 @@ type Config struct {
 	ProviderBaseURL          string         `json:"provider_base_url"`
 	GatewayBaseURL           string         `json:"gateway_base_url"`
 	CAFile                   string         `json:"ca_file"`
+	JWSIssuer                string         `json:"jws_issuer"`
 	ProviderRevisionID       string         `json:"provider_revision_id"`
 	ProviderInstanceAudience string         `json:"provider_instance_audience"`
 	RuntimeImageReference    string         `json:"runtime_image_reference"`
@@ -76,7 +79,7 @@ func (c Config) Validate() error {
 	}
 	for name, value := range map[string]string{
 		"provider_base_url": c.ProviderBaseURL, "gateway_base_url": c.GatewayBaseURL,
-		"ca_file": c.CAFile, "provider_revision_id": c.ProviderRevisionID,
+		"ca_file": c.CAFile, "jws_issuer": c.JWSIssuer, "provider_revision_id": c.ProviderRevisionID,
 		"provider_instance_audience": c.ProviderInstanceAudience,
 		"runtime_image_reference":    c.RuntimeImageReference, "runtime_image_digest": c.RuntimeImageDigest,
 		"runtime_architecture": c.RuntimeArchitecture,
@@ -91,6 +94,9 @@ func (c Config) Validate() error {
 	}
 	if c.ProviderBaseURL == c.GatewayBaseURL {
 		return errors.New("Provider and Gateway endpoints must differ")
+	}
+	if !validGenericJWSIssuer(c.JWSIssuer) {
+		return errors.New("jws_issuer must be an exact absolute URI without a fragment")
 	}
 	if c.GatewayListenerLimit < 1 || c.GatewayListenerLimit > 256 {
 		return errors.New("gateway_listener_limit must be between 1 and 256")
@@ -110,6 +116,14 @@ func (c Config) Validate() error {
 		return errors.New("caller identities, keys, Gateway tokens, and tenants must be distinct")
 	}
 	return nil
+}
+
+func validGenericJWSIssuer(issuer string) bool {
+	if !utf8.ValidString(issuer) || issuer == "" || strings.TrimSpace(issuer) != issuer || utf8.RuneCountInString(issuer) > 200 {
+		return false
+	}
+	parsed, err := url.Parse(issuer)
+	return err == nil && parsed.IsAbs() && parsed.Scheme != "" && parsed.Fragment == "" && parsed.String() == issuer
 }
 
 func (i IdentityConfig) validate(name string) error {

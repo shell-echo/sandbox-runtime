@@ -31,10 +31,11 @@ import (
 )
 
 const (
-	referenceNamespace  = "reference-e2e"
-	referenceController = "reference-e2e-controller"
-	runRootPrefix       = "sandbox-runtime-e2e-"
-	registryImage       = "registry:2"
+	referenceNamespace       = "reference-e2e"
+	referenceController      = "reference-e2e-controller"
+	referenceCallerJWSIssuer = "https://reference-caller.sandbox-runtime.test"
+	runRootPrefix            = "sandbox-runtime-e2e-"
+	registryImage            = "registry:2"
 )
 
 type Options struct {
@@ -262,7 +263,7 @@ func Run(ctx context.Context, options Options) (_ Result, resultErr error) {
 			{ID: material.ControllerA.JWSKeyID, Algorithm: "EdDSA", Path: material.ControllerA.JWSPublicFile},
 			{ID: material.ControllerB.JWSKeyID, Algorithm: "EdDSA", Path: material.ControllerB.JWSPublicFile},
 		},
-		ProviderRevisionID: providerRevisionID, ProviderInstanceAudience: providerAudience,
+		JWSIssuer: referenceCallerJWSIssuer, ProviderRevisionID: providerRevisionID, ProviderInstanceAudience: providerAudience,
 		StateRoot: stateRoot, RuntimeDataRoot: runtimeDataRoot, RuntimeImage: runtimeImage,
 		RuntimeControllerID: referenceController, TerminalBrokerPath: "/inputs/terminal-broker",
 		GatewayPrincipals: []stack.GatewayPrincipal{
@@ -281,7 +282,8 @@ func Run(ctx context.Context, options Options) (_ Result, resultErr error) {
 		Profile:         caller.ProfileCodingShell,
 		Phase:           caller.PhaseInitial,
 		ProviderBaseURL: "https://" + providerAddress, GatewayBaseURL: "https://" + gatewayAddress,
-		CAFile: material.CAFile, ProviderRevisionID: providerRevisionID, ProviderInstanceAudience: providerAudience,
+		CAFile: material.CAFile, JWSIssuer: referenceCallerJWSIssuer,
+		ProviderRevisionID: providerRevisionID, ProviderInstanceAudience: providerAudience,
 		RuntimeImageReference: runtimeImageReference, RuntimeImageDigest: runtimeDigest, RuntimeArchitecture: "amd64", GatewayAdminToken: adminToken,
 		GatewayListenerLimit: 32,
 		ControllerA: caller.IdentityConfig{

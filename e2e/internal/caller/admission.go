@@ -24,7 +24,6 @@ const (
 	requestDigestExcluding        = "rfc8785-request-excluding-request-digest-v1"
 	requestDigestFull             = "rfc8785-full-document-v1"
 	jwsType                       = "agent-sandbox-operation-admission+jwt"
-	jwsIssuer                     = "agent-platform"
 )
 
 var operationContracts = map[string]struct {
@@ -55,6 +54,7 @@ type signer struct {
 type admissionAuthority struct {
 	ControllerSubject        string
 	JWSKeyID                 string
+	JWSIssuer                string
 	ProviderRevisionID       string
 	ProviderInstanceAudience string
 }
@@ -169,6 +169,7 @@ func loadSigner(identity IdentityConfig) (*signer, error) {
 func (s *signer) prepare(config Config, method, path string, body map[string]any, binding admissionBinding) (preparedRequest, error) {
 	return prepareAdmission(admissionAuthority{
 		ControllerSubject: s.identity.ControllerSubject, JWSKeyID: s.identity.JWSKeyID,
+		JWSIssuer:          config.JWSIssuer,
 		ProviderRevisionID: config.ProviderRevisionID, ProviderInstanceAudience: config.ProviderInstanceAudience,
 	}, s.private, method, path, body, binding)
 }
@@ -247,7 +248,7 @@ func prepareAdmission(authority admissionAuthority, private ed25519.PrivateKey, 
 		expiresAt = deadline
 	}
 	claims := tokenClaims{
-		JTI: jti, Issuer: jwsIssuer, Subject: authority.ControllerSubject, Audience: authority.ProviderInstanceAudience,
+		JTI: jti, Issuer: authority.JWSIssuer, Subject: authority.ControllerSubject, Audience: authority.ProviderInstanceAudience,
 		IssuedAt: issuedAt, NotBefore: issuedAt, ExpiresAt: expiresAt.Unix(), Operation: binding.Operation,
 		ProviderRevisionID: authority.ProviderRevisionID, SandboxID: binding.SandboxID, OperationID: binding.OperationID,
 		AttemptID: binding.AttemptID, FencingToken: binding.FencingToken, TenantID: binding.TenantID,

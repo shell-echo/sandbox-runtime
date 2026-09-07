@@ -187,7 +187,9 @@ func Open(ctx context.Context, config Config) (_ *Stack, result error) {
 	if err != nil {
 		return nil, err
 	}
-	protected, closeAdmission, err := protectedOptions(config.StateRoot, config.TrustedJWSKeys)
+	protected, closeAdmission, err := protectedOptions(
+		config.StateRoot, config.TrustedJWSKeys, config.JWSIssuer, config.ProviderRevisionID, config.ProviderInstanceAudience,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -349,7 +351,13 @@ func aggregateOperations(lifecycleApp *lifecycleapplication.Application, execApp
 	return provideroperation.NewAggregator(lifecycleReader, execApp, sessionReader, artifactReader)
 }
 
-func protectedOptions(stateRoot string, trustedJWSKeys []TrustedJWSKey) (*providerapi.ProtectedTransportOptions, func() error, error) {
+func protectedOptions(
+	stateRoot string,
+	trustedJWSKeys []TrustedJWSKey,
+	issuer string,
+	providerRevisionID string,
+	providerInstanceAudience string,
+) (*providerapi.ProtectedTransportOptions, func() error, error) {
 	files := make([]admissionfile.TrustedKeyFile, len(trustedJWSKeys))
 	for index, key := range trustedJWSKeys {
 		files[index] = admissionfile.TrustedKeyFile{ID: admission.KeyID(key.ID), Algorithm: admission.Algorithm(key.Algorithm), Path: key.Path}
@@ -358,11 +366,15 @@ func protectedOptions(stateRoot string, trustedJWSKeys []TrustedJWSKey) (*provid
 	if err != nil {
 		return nil, nil, err
 	}
+	authority, err := admission.NewAdmissionAuthority(issuer, providerRevisionID, providerInstanceAudience)
+	if err != nil {
+		return nil, nil, err
+	}
 	guard, err := admissionfile.NewGuard(filepath.Join(stateRoot, "admission.json"), clock{})
 	if err != nil {
 		return nil, nil, err
 	}
-	gate, err := admission.NewProtectedOperationGate(keys, clock{}, guard)
+	gate, err := admission.NewProtectedOperationGate(keys, authority, clock{}, guard)
 	if err != nil {
 		_ = guard.Close()
 		return nil, nil, err

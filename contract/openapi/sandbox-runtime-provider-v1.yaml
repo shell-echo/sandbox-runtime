@@ -63,6 +63,8 @@ paths:
       security:
         - mutualTLS: []
           bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/AdmissionContextHeader'
       requestBody:
         required: true
         content:
@@ -137,6 +139,7 @@ paths:
         - mutualTLS: []
           bearerAuth: []
       parameters:
+        - $ref: '#/components/parameters/AdmissionContextHeader'
         - name: sandbox_id
           in: path
           required: true
@@ -193,6 +196,7 @@ paths:
         - mutualTLS: []
           bearerAuth: []
       parameters:
+        - $ref: '#/components/parameters/AdmissionContextHeader'
         - name: sandbox_id
           in: path
           required: true
@@ -273,6 +277,7 @@ paths:
         - mutualTLS: []
           bearerAuth: []
       parameters:
+        - $ref: '#/components/parameters/AdmissionContextHeader'
         - name: sandbox_id
           in: path
           required: true
@@ -348,6 +353,7 @@ paths:
         - mutualTLS: []
           bearerAuth: []
       parameters:
+        - $ref: '#/components/parameters/AdmissionContextHeader'
         - name: sandbox_id
           in: path
           required: true
@@ -423,6 +429,7 @@ paths:
         - mutualTLS: []
           bearerAuth: []
       parameters:
+        - $ref: '#/components/parameters/AdmissionContextHeader'
         - name: sandbox_id
           in: path
           required: true
@@ -507,6 +514,7 @@ paths:
         - mutualTLS: []
           bearerAuth: []
       parameters:
+        - $ref: '#/components/parameters/AdmissionContextHeader'
         - name: sandbox_id
           in: path
           required: true
@@ -587,6 +595,7 @@ paths:
         - mutualTLS: []
           bearerAuth: []
       parameters:
+        - $ref: '#/components/parameters/AdmissionContextHeader'
         - name: operation_id
           in: path
           required: true
@@ -649,6 +658,7 @@ paths:
         - mutualTLS: []
           bearerAuth: []
       parameters:
+        - $ref: '#/components/parameters/AdmissionContextHeader'
         - name: operation_id
           in: path
           required: true
@@ -711,6 +721,7 @@ paths:
         - mutualTLS: []
           bearerAuth: []
       parameters:
+        - $ref: '#/components/parameters/AdmissionContextHeader'
         - name: operation_id
           in: path
           required: true
@@ -789,6 +800,7 @@ paths:
         - mutualTLS: []
           bearerAuth: []
       parameters:
+        - $ref: '#/components/parameters/AdmissionContextHeader'
         - name: operation_id
           in: path
           required: true
@@ -863,6 +875,7 @@ paths:
         - mutualTLS: []
           bearerAuth: []
       parameters:
+        - $ref: '#/components/parameters/AdmissionContextHeader'
         - name: operation_id
           in: path
           required: true
@@ -929,6 +942,7 @@ paths:
         - mutualTLS: []
           bearerAuth: []
       parameters:
+        - $ref: '#/components/parameters/AdmissionContextHeader'
         - name: operation_id
           in: path
           required: true
@@ -984,6 +998,25 @@ paths:
               schema:
                 $ref: ../schemas/standard-error.schema.json
 components:
+  parameters:
+    AdmissionContextHeader:
+      name: X-Sandbox-Runtime-Admission-Context
+      in: header
+      required: true
+      description: >-
+        Exactly one header field value containing the unpadded base64url
+        encoding of the closed Admission Context document. The encoded value
+        and decoded document are each bounded to 16,384 bytes.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 16384
+        pattern: '^[A-Za-z0-9_-]+$'
+      x-exactly-one-value: true
+      x-content-encoding: base64url-unpadded
+      x-max-decoded-bytes: 16384
+      x-decoded-schema:
+        $ref: ../schemas/admission-context.schema.json
   schemas:
     AdmissionContext:
       $ref: ../schemas/admission-context.schema.json
@@ -998,3 +1031,15 @@ components:
       type: http
       scheme: bearer
       bearerFormat: compact-jws
+      description: >-
+        Compact JWS protected-operation token using the closed Contract header
+        and claims profiles. The exact issuer, audience, Provider revision,
+        admitted URI SAN identities, and verification keys are configured for
+        the Provider listener as defined by the semantic rules.
+      x-max-encoded-bytes: 8192
+      x-jws-profile:
+        serialization: compact
+        header-schema:
+          $ref: ../schemas/protected-operation-jws-header.schema.json
+        claims-schema:
+          $ref: ../schemas/protected-operation-jws-claims.schema.json

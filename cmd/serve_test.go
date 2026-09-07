@@ -660,7 +660,7 @@ func TestValidateServeConfigurationFailsClosedForInvalidProtectedAdmission(t *te
 
 func TestNewProviderProtectedTransportOptionsIsOptInAndReleasesGuard(t *testing.T) {
 	clock := fixedAdmissionClock{now: time.Unix(1_000, 0).UTC()}
-	disabled, closeDisabled, err := newProviderProtectedTransportOptions(config.ProviderProtectedAdmissionConfig{}, clock)
+	disabled, closeDisabled, err := newProviderProtectedTransportOptions(config.ProviderProtectedAdmissionConfig{}, "", clock)
 	if err != nil || disabled != nil {
 		t.Fatalf("disabled protected transport = %#v, %v", disabled, err)
 	}
@@ -672,13 +672,15 @@ func TestNewProviderProtectedTransportOptionsIsOptInAndReleasesGuard(t *testing.
 	keyPath := writeTrustedPublicKeyForServeTest(t, directory)
 	statePath := filepath.Join(directory, "guard", "admission.json")
 	protected := config.ProviderProtectedAdmissionConfig{
-		Enabled:        true,
-		GuardStateFile: statePath,
+		Enabled:                  true,
+		Issuer:                   "https://reference-caller.sandbox-runtime.test",
+		ProviderInstanceAudience: "urn:shell-echo:sandbox-runtime:provider-instance:provider-1",
+		GuardStateFile:           statePath,
 		TrustedVerificationKeys: []config.ProviderTrustedVerificationKeyConfig{{
-			ID: "agent-platform-ed25519", Algorithm: "EdDSA", PublicKeyFile: keyPath,
+			ID: "caller-ed25519", Algorithm: "EdDSA", PublicKeyFile: keyPath,
 		}},
 	}
-	options, closeProtected, err := newProviderProtectedTransportOptions(protected, clock)
+	options, closeProtected, err := newProviderProtectedTransportOptions(protected, "provider-revision-1", clock)
 	if err != nil || options == nil || options.Gate == nil || closeProtected == nil {
 		t.Fatalf("newProviderProtectedTransportOptions() = %#v, closer present %t, %v", options, closeProtected != nil, err)
 	}
@@ -700,13 +702,15 @@ func TestNewProviderProtectedTransportOptionsIsOptInAndReleasesGuard(t *testing.
 func TestNewProviderProtectedTransportOptionsFailsClosed(t *testing.T) {
 	clock := fixedAdmissionClock{now: time.Unix(1_000, 0).UTC()}
 	protected := config.ProviderProtectedAdmissionConfig{
-		Enabled:        true,
-		GuardStateFile: filepath.Join(t.TempDir(), "admission.json"),
+		Enabled:                  true,
+		Issuer:                   "https://reference-caller.sandbox-runtime.test",
+		ProviderInstanceAudience: "urn:shell-echo:sandbox-runtime:provider-instance:provider-1",
+		GuardStateFile:           filepath.Join(t.TempDir(), "admission.json"),
 		TrustedVerificationKeys: []config.ProviderTrustedVerificationKeyConfig{{
-			ID: "agent-platform-ed25519", Algorithm: "EdDSA", PublicKeyFile: "missing.pem",
+			ID: "caller-ed25519", Algorithm: "EdDSA", PublicKeyFile: "missing.pem",
 		}},
 	}
-	if options, closeProtected, err := newProviderProtectedTransportOptions(protected, clock); err == nil || options != nil {
+	if options, closeProtected, err := newProviderProtectedTransportOptions(protected, "provider-revision-1", clock); err == nil || options != nil {
 		t.Fatalf("missing trusted key = %#v, %v", options, err)
 	} else if closeErr := closeProtected(); closeErr != nil {
 		t.Fatalf("close failed protected transport: %v", closeErr)
@@ -715,7 +719,7 @@ func TestNewProviderProtectedTransportOptionsFailsClosed(t *testing.T) {
 	directory := t.TempDir()
 	protected.TrustedVerificationKeys[0].PublicKeyFile = writeTrustedPublicKeyForServeTest(t, directory)
 	protected.GuardStateFile = directory
-	if options, closeProtected, err := newProviderProtectedTransportOptions(protected, clock); err == nil || options != nil {
+	if options, closeProtected, err := newProviderProtectedTransportOptions(protected, "provider-revision-1", clock); err == nil || options != nil {
 		t.Fatalf("invalid guard state = %#v, %v", options, err)
 	} else if closeErr := closeProtected(); closeErr != nil {
 		t.Fatalf("close failed protected transport: %v", closeErr)
@@ -1032,7 +1036,7 @@ func validProviderConfigForServeTest() config.ProviderConfig {
 			ServerCertificateFile:      "provider.crt",
 			ServerPrivateKeyFile:       "provider.key",
 			ClientCABundleFile:         "client-ca.pem",
-			AllowedClientURIIdentities: []string{"spiffe://agent-platform/provider-client"},
+			AllowedClientURIIdentities: []string{"spiffe://reference-caller.sandbox-runtime.test/provider-client"},
 		},
 		Capability: config.ProviderCapabilityConfig{
 			ProviderRevisionID: "provider-revision-1",
@@ -1050,7 +1054,8 @@ func validProviderConfigForServeTest() config.ProviderConfig {
 
 func validProtectedAdmissionConfigForServeTest() config.ProviderProtectedAdmissionConfig {
 	return config.ProviderProtectedAdmissionConfig{
-		Enabled: true, GuardStateFile: "provider-admission.json",
+		Enabled: true, Issuer: "https://reference-caller.sandbox-runtime.test",
+		ProviderInstanceAudience: "urn:shell-echo:sandbox-runtime:provider-instance:provider-1", GuardStateFile: "provider-admission.json",
 		TrustedVerificationKeys: []config.ProviderTrustedVerificationKeyConfig{{ID: "key-1", Algorithm: "EdDSA", PublicKeyFile: "key.pem"}},
 	}
 }
