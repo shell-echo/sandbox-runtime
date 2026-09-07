@@ -127,11 +127,12 @@ configured issuer.
 
 The coordinated Contract defines the closed JWS header and claims profiles,
 the Admission Context header carrier, local-authority bindings, rejection
-classes, fixtures, and Suite case IDs. Compatibility still requires a reviewed
-lock refresh, complete implementation projection, local runner mappings, and
-separately implemented external-caller evidence. Historical protected-admission
-results remain evidence only for the exact issuer behavior and Contract identity
-they exercised.
+classes, fixtures, and Suite case IDs. The current repository slice has a
+reviewed lock refresh, complete implementation projection, local runner
+mappings, and same-repository reference evidence. A broader interoperability
+claim still requires separately implemented external-caller evidence.
+Historical protected-admission results remain evidence only for the exact
+issuer behavior and Contract identity they exercised.
 
 ## Consequences
 
@@ -141,8 +142,9 @@ they exercised.
   evidence and code remain available without being promoted to a new claim.
 - New caller integrations need their own versioned adapter, black-box evidence,
   and deployment gates.
-- Generic protected interoperability is not complete until the ADR 0038
-  Contract revision is locked, implemented, and exercised end to end.
+- The ADR 0038 Contract revision is locked, implemented, and exercised by the
+  same-repository reference caller; generic protected interoperability remains
+  incomplete until an independently implemented caller passes its own gate.
 - Capability advertisement and production-readiness gates remain unchanged by
   the issuer decision.
 

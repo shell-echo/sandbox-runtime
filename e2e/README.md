@@ -12,29 +12,38 @@ one real Redis-compatible authority; they pin Contract identity for context but
 do not call the Provider API. The downstream-fencing profile is different: it
 bootstraps Browser resources through six protected Provider routes and drives
 real Chromium through an authenticated unique ingress, while leaving the
-48-case Contract Suite unexercised.
+current 50-case Contract Suite unexercised.
 
 The black-box caller uses only mTLS, JWS, HTTPS, and WebSocket. A separate
 reference deployment process composes exported `sandbox-runtime` Provider and
 Gateway packages with explicit test policy. The caller never imports Provider
 models, repositories, drivers, command packages, or test helpers.
 
-`cmd/platform-e2e` runs an additional Agent Platform candidate mode. Its
+`cmd/platform-e2e` retains the historical Agent Platform candidate mode. Its
 `platform-caller` process owns a bounded candidate Run/ProviderRevision policy,
 performs live capability/request shadow checks, and then invokes the same
-black-box wire caller. This is a candidate integration harness only; it does
-not represent the separately owned Veronica Application or close the real P3
-platform gate.
+black-box wire caller. This is historical candidate evidence only; ADR 0037
+retired P3, and this mode does not represent an active external platform target
+or reopen that migration gate.
 
 ## Locked input
 
 | Item | Value |
 | --- | --- |
-| Provider implementation | `9b9656dcfa2d739640d6179f75315fd4a960b8e6` |
+| Provider implementation | `af8a505f8e5604ab4daaf33ce473c002210e16af` |
 | Contract namespace | `urn:shell-echo:sandbox-runtime:provider-v1` |
-| Contract revision | `96187ae3923ca0b741c3de1bc58f31dae9c57080` |
-| Contract tree | `4f3c1f037efd505e1285068072369d257d68626d` |
-| Suite | repository-owned Provider v1, 48 cases |
+| Contract revision | `034e6476ff508a0571e64de9ce923799717b902b` |
+| Contract tree | `33f1926feb8e12f24a8f92b9e6879102e19c2173` |
+| Suite | repository-owned Provider v1, 50 cases |
+
+Clean local reference run `20260907T044611.598221000Z` at harness
+`b8d482977cb4622ca578bd77c4eb8f7298af7273` passed all 15 initial and 5
+reconstruction/resume scenarios. Its manifest SHA-256 is
+`60bda2dae83053db447417cea5c5e38d4798e1e90b91fbb5cfc75d2991c6993e` and
+pins locally built `linux/amd64` runtime digest
+`sha256:60baefac927a0a77743aeca268b271b62b07079f31521f98fd3a4cb33474a999`.
+This is same-repository coding/shell reference evidence, not an independently
+implemented caller or a 50-case Suite execution.
 
 `go.mod` points to the parent Provider checkout. The verifier rejects a
 different locked Provider baseline or Contract identity, and rejects changes

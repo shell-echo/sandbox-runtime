@@ -94,10 +94,10 @@ substitution as authentication failure, Provider-local audience/revision
 rejection as authorization failure before mutation reservation, invalid startup
 configuration, and overlapping rotation keys. Passing these component and
 same-repository reference tests does not establish interoperability with an
-independently implemented external caller. The current calling-standard slice
-must complete its Contract, projection, configuration, and E2E validation
-before compatibility is claimed; multi-issuer, multi-tenant, HA, deployment,
-and production gates remain separate.
+independently implemented external caller. The repository-local
+calling-standard Contract, projection, configuration, conformance, E2E lock,
+and reference gates pass; multi-issuer, multi-tenant, HA, deployment,
+independent-caller qualification, and production gates remain separate.
 
 ## Composition and advertisement discipline
 

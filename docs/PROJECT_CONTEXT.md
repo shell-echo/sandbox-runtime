@@ -151,15 +151,17 @@ main workflows passed. The detailed component ledger below retains older
 per-gate commits and run IDs because those identify the exact evidence rather
 than the newest documentation commit.
 
-The current calling-standard worktree implements ADR 0038 across admission,
-startup configuration, Provider transport composition, Contract projection,
-and the same-repository generic reference caller. It requires one exact issuer,
-Provider-local audience and revision anchors, and a frozen bundle of at most 32
-keys. Rotation is operator-driven: overlap old and new distinct `kid` values,
+The ADR 0038 calling-standard slice is implemented and passes its coordinated
+repository-local gate. Implementation `034e647`, Contract lock `fd48de9`,
+projection regression fix `af8a505`, and active E2E lock `b8d4829` require one
+exact issuer, Provider-local audience and revision anchors, and a frozen bundle
+of at most 32 keys. The Contract verifier, 50-case conformance runner, root and
+E2E race/shuffle tests, vet, every E2E `-check` including the retained historical
+Candidate check, and Docker reference run `20260907T044611.598221000Z` pass.
+Rotation remains operator-driven: overlap old and new distinct `kid` values,
 restart, switch the caller, wait for old accepted tokens to expire, remove the
-old key, and restart again. The complete coordinated slice still requires its
-named validation before compatibility is claimed. The reference caller is
-repository reference evidence, not proof of interoperability with an
+old key, and restart again. The same-repository
+caller is reference evidence, not proof of interoperability with an
 independently implemented external platform. Multi-issuer admission,
 multi-tenant isolation, HA, deployment, production readiness, and independent
 external-caller interoperability remain open.
@@ -244,9 +246,18 @@ production command still exposes no public Browser Gateway route and does not
 advertise Browser; only the reference stack advertises the exact locked Browser
 profile.
 
-The Contract verifier and locked 48-case Suite pass against the current
-projection. The `e2e/` module race/shuffle, vet, and lock checks also pass. A
-clean reference run `20260904T081521.464863000Z` passed 15 initial and 5
+The Contract verifier and locked 50-case Suite pass against the current
+projection. The `e2e/` module race/shuffle, vet, and all active lock checks also
+pass. Clean Docker reference run `20260907T044611.598221000Z` at harness
+`b8d4829` and Provider baseline `af8a505` passed 15 initial and 5
+process-reconstruction/resume coding/shell scenarios over real mTLS/JWS HTTPS,
+WebSocket, separate caller/reference-stack processes, and Docker. Its manifest
+SHA-256 is `60bda2dae83053db447417cea5c5e38d4798e1e90b91fbb5cfc75d2991c6993e`
+and it pins locally built linux/amd64 runtime digest
+`sha256:60baefac927a0a77743aeca268b271b62b07079f31521f98fd3a4cb33474a999`.
+This is same-repository reference evidence; it does not execute the 50-case
+Suite or qualify an independently implemented caller. An earlier clean
+reference run `20260904T081521.464863000Z` passed 15 initial and 5
 process-reconstruction/resume coding/shell scenarios over real mTLS/JWS HTTPS,
 WebSocket, separate caller/reference-stack processes, and Docker. Its manifest
 pins Provider `44ea2ee`, harness `249cdd4`, the Contract, and linux/amd64 runtime
@@ -703,17 +714,17 @@ Contract identity:
 
 - namespace: `urn:shell-echo:sandbox-runtime:provider-v1`
 - version/license: `1.0.0` / MIT
-- revision: `96187ae3923ca0b741c3de1bc58f31dae9c57080`
-- Contract tree: `4f3c1f037efd505e1285068072369d257d68626d`
-- locked Conformance Suite: 48 cases
+- revision: `034e6476ff508a0571e64de9ce923799717b902b`
+- Contract tree: `33f1926feb8e12f24a8f92b9e6879102e19c2173`
+- locked Conformance Suite: 50 cases
 
 | Phase | Verified maturity | Open gate |
 | --- | --- | --- |
 | P0 | Passed: repository-owned MIT Contract migration and lock | Retain lock and projection regression |
-| P1.1 | The prior DTO, mTLS discovery, and JWS/digest/replay/fencing admission gate passed; the current ADR 0038 implementation adds one explicit listener-local caller trust domain, Provider-local audience/revision anchors, and up to 32 frozen keys | Complete the current calling-standard slice validation; production identity infrastructure, multi-issuer admission, and independent external-caller interoperability remain unproven |
+| P1.1 | The DTO, mTLS discovery, JWS/digest/replay/fencing admission, and ADR 0038 repository-local coordinated gates pass. The listener has one explicit caller trust domain, Provider-local audience/revision anchors, and up to 32 frozen keys | Production identity infrastructure, multi-issuer admission, deployment-owned rotation, and independent external-caller interoperability remain unproven |
 | P1.2 | Passed for the bounded Contract-authorized lifecycle subset and development composition | Reserved lifecycle families and production gates remain open |
 | P2 components | P2.1-P2.5h local component, Contract projection, Docker, and recorded repository CI gates pass within their named boundaries | Retain single-controller/development constraints and exact Contract lock |
-| P2.5i | Hosted regression `33970773414` passed 15 initial plus 5 restart/resume coding/shell scenarios against harness/Provider lock `17ed6ca`/`b4d41c9`; latest local pre-refresh run `20260905T080530.577843000Z` passed against `59e08d5`/`c0a55d1` | Neither run contains a Browser scenario or proves interoperability with an independently implemented external caller, durable-revocation caller behavior, or production properties |
+| P2.5i | Current local run `20260907T044611.598221000Z` passed 15 initial plus 5 restart/resume coding/shell scenarios against harness/Provider lock `b8d4829`/`af8a505`; hosted regression `33970773414` remains historical evidence against `17ed6ca`/`b4d41c9` | Neither run contains a Browser scenario or proves interoperability with an independently implemented external caller, durable-revocation caller behavior, or production properties |
 | P2 | Reference coding/shell caller release gate passed | Aggregate conformance, multi-controller, hostile multi-tenant isolation, deployment, and production gates remain open |
 | P3 | Retired by ADR 0037. Historical revision binding/shadow/metrics components and candidate runs retain their recorded evidence boundaries | No named-platform migration gate remains; external consumers adapt to the exact locked Provider Contract |
 | P4 | Browser Contract authority/projection, exact sandboxed signed amd64/arm64/v8 publication, Provider-local components, default-disabled command/runtime composition, process-local Gateway limits, the separately recorded Browser/shared-capacity/durable-revocation caller gates, ADR 0033 component/caller evidence, the ADR 0034 v2 local/hosted deletion and rollback-detection gates, the ADR 0035 PostgreSQL component gate, and the ADR 0036 hosted same-runner controlled-restore gate pass within their named boundaries | Production independent witness/storage and restore operations, production Browser advertisement/public Gateway, Valkey/PostgreSQL provenance and HA, production configuration/metrics, aggregate, multi-controller, multi-tenant, deployment, and production gates remain open |
@@ -917,24 +928,20 @@ Hosted harness `2cadc53` run `34013982796` passes the same scenarios on
 `20260906T052710.781616339Z` with exactly five sanitized files and has been
 inspected.
 
-1. Complete and validate the coordinated Provider Calling Standard and ADR 0038
-   slice across the repository-owned Contract, projection, Provider admission,
-   startup configuration, and active E2E locks without relabeling historical
-   evidence.
-2. Publish a content-derived Suite digest and provide a portable remote
+1. Publish a content-derived Suite digest and provide a portable remote
    black-box conformance runner. The same-repository generic reference caller is
    reference evidence only and does not establish independent external-platform
    interoperability.
-3. Preserve the Browser, coding/shell Reference, and historical Platform
+2. Preserve the Browser, coding/shell Reference, and historical Platform
    Candidate harnesses as separately named evidence modes. The candidate mode
    is historical and P3 is retired; future consumers own their adapters and
    rollout evidence.
-4. Prove independent PostgreSQL/Valkey failure and backup domains, HA, and
+3. Prove independent PostgreSQL/Valkey failure and backup domains, HA, and
    operator controls only in a deployment-owned environment. Retain hosted ADR
    0036 evidence as same-runner reference evidence.
-5. Start the Desktop Contract/authority audit only after the Browser readiness
+4. Start the Desktop Contract/authority audit only after the Browser readiness
    record is complete; do not reuse terminal or Browser routes as a shortcut.
-6. Keep multi-issuer admission, aggregate conformance, multi-controller,
+5. Keep multi-issuer admission, aggregate conformance, multi-controller,
    multi-tenant, HA, independent external-caller interoperability, deployment,
    and production-readiness claims blocked until their separately named gates
    have reproducible evidence.

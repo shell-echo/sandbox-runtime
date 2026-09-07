@@ -107,13 +107,12 @@ There is no remote JWKS refresh or multi-issuer listener. Supporting multiple
 issuers or consumers on one listener requires separately designed key-ID,
 identity, replay, fencing, and policy namespaces.
 
-This is the current implementation shape, not a completed interoperability
-claim. Its coordinated Contract, projection, configuration, and reference E2E
-slice still requires full validation. The same-repository generic reference
-caller is reference evidence and cannot prove interoperability with an
-independently implemented external platform. Multi-issuer admission,
-multi-tenant isolation, HA, deployment, and production readiness remain
-separate open gates.
+This implementation shape has passed its coordinated repository-local Contract,
+projection, configuration, conformance, E2E lock, and same-repository reference
+gate. That is not a completed interoperability claim: the reference caller
+cannot prove interoperability with an independently implemented external
+platform. Multi-issuer admission, multi-tenant isolation, HA, deployment, and
+production readiness remain separate open gates.
 
 ## Provider API v1
 
@@ -576,7 +575,7 @@ advertisement, and optional-profile gates remain open:
 
 | Area | Current state | Required direction |
 | --- | --- | --- |
-| Protected admission | The current ADR 0038 implementation requires one explicit issuer-scoped caller trust domain per listener, Provider-local audience/revision anchors, and 1..32 frozen verification keys. It includes overlap-key component and same-repository generic-reference coverage, but the coordinated slice has not yet completed every named gate. | Complete the current slice validation and retain exact authentication/authorization precedence. Treat multi-issuer admission and independently implemented external-caller interoperability as separate future gates. |
+| Protected admission | ADR 0038 requires one explicit issuer-scoped caller trust domain per listener, Provider-local audience/revision anchors, and 1..32 frozen verification keys. Its repository-local Contract, projection, configuration, conformance, E2E lock, overlap-key, and same-repository reference gates pass. | Retain exact authentication/authorization precedence. Treat multi-issuer admission and independently implemented external-caller interoperability as separate future gates. |
 | Backend abstraction | Local `instance.Driver` remains separate; the Provider lifecycle has its own fake and Docker development adapters, while exec and terminal use focused Provider-only runtime ports. | Add future snapshot capability ports without reusing `/instances` models and retain narrow optional interfaces. |
 | Lifecycle recovery | Provider file persistence and Docker observation reconcile pending/unknown create work for one controller. | Retain unknown-outcome evidence; add transactional production storage before multi-controller operation. |
 | Persistence | Memory and atomically replaced file repository. | Retain for development; introduce transactional production storage before multi-controller operation. |
@@ -622,7 +621,8 @@ Implementation slices and evidence boundaries are tracked in the
 Release gate: Schema/fixture compatibility, mTLS discovery, token binding,
 issuer substitution, local audience/revision rejection, digest substitution,
 expiry, overlap rotation, replay, and stale-fencing admission tests pass. The
-current ADR 0038 delta remains pending the coordinated slice validation.
+ADR 0038 repository-local coordinated gate also passes; independent external
+caller and deployment qualification remain separate.
 
 #### P1.2: asynchronous lifecycle
 

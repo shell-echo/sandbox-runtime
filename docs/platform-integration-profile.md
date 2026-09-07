@@ -22,7 +22,7 @@ Use these files together:
 | [`contract/schemas/`](../contract/schemas/) | Closed request, response, operation, and evidence shapes |
 | [`contract/semantic-rules/provider-v1.json`](../contract/semantic-rules/provider-v1.json) | Cross-field, ownership, admission, and lifecycle semantics |
 | [`contract/fixtures/`](../contract/fixtures/) | Canonical examples and negative cases |
-| [`contract/conformance/provider-v1/suite.json`](../contract/conformance/provider-v1/suite.json) | Locked 48-case Provider Suite |
+| [`contract/conformance/provider-v1/suite.json`](../contract/conformance/provider-v1/suite.json) | Locked 50-case Provider Suite |
 | [`compatibility/sandbox-runtime/contract.lock.json`](../compatibility/sandbox-runtime/contract.lock.json) | Contract revision and resource lock |
 | [`docs/architecture.md`](architecture.md) | Ownership boundaries and delivery gates |
 
@@ -33,9 +33,9 @@ The current Contract identity is:
 | Namespace | `urn:shell-echo:sandbox-runtime:provider-v1` |
 | Version | `1.0.0` |
 | License | `MIT` |
-| Revision | `96187ae3923ca0b741c3de1bc58f31dae9c57080` |
-| Contract tree | `4f3c1f037efd505e1285068072369d257d68626d` |
-| Suite | `sandbox-provider` / `sandbox-runtime-provider-v1`, 48 cases |
+| Revision | `034e6476ff508a0571e64de9ce923799717b902b` |
+| Contract tree | `33f1926feb8e12f24a8f92b9e6879102e19c2173` |
+| Suite | `sandbox-provider` / `sandbox-runtime-provider-v1`, 50 cases |
 
 An integration must pin this identity, the selected Provider revision, the
 runtime/profile identifiers, and the exact evidence or image digests it relies
@@ -78,11 +78,11 @@ needs multiple issuer-scoped caller trust domains must use separate listeners
 or wait for a separately reviewed namespace design; it must not combine key or
 identity bundles informally.
 
-This describes the current implementation under validation. The coordinated
-Contract, projection, configuration, and reference E2E slice must complete its
-named gates before compatibility is claimed. The same-repository generic
-reference caller provides reference evidence; it does not establish
-independently implemented external-caller interoperability.
+This implementation has passed its repository-local Contract, projection,
+configuration, conformance, E2E lock, and same-repository reference gates. That
+reference caller does not establish independently implemented external-caller
+interoperability; each deployment and external caller still needs its own
+pinned qualification evidence.
 
 ## Ownership boundary
 

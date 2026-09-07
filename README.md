@@ -58,17 +58,18 @@ consumers must implement the repository-owned Provider calling standard. The
 ADR 0033, v2, and controlled-restore profiles
 pin Contract identity but do not execute the Suite (`suite_exercised=false`).
 
-The current calling-standard slice implements ADR 0038's listener-local caller
-trust domain. Enabling protected admission requires one explicit issuer with no
-default or fallback, one Provider-local instance audience, the locally selected
-Provider revision, and 1..32 frozen public verification keys. The
-same-repository generic reference caller exercises that configuration as
-reference evidence; it is not interoperability evidence for an independently
-implemented external platform. The coordinated Contract, projection, and E2E
-slice still needs its complete validation before this revision is described as
-compatible. A multi-issuer listener, multi-tenant isolation, HA, deployment,
-production operation, and independent external-caller interoperability remain
-unproved.
+ADR 0038's listener-local caller trust domain is implemented and has passed its
+repository-local coordinated gate. Enabling protected admission requires one
+explicit issuer with no default or fallback, one Provider-local instance
+audience, the locally selected Provider revision, and 1..32 frozen public
+verification keys. Contract revision `034e647` contains 50 Suite cases; Provider
+baseline `af8a505` and E2E lock/harness `b8d4829` pass the full local race,
+vet, Contract, conformance, and lock checks. Docker reference run
+`20260907T044611.598221000Z` passes 15 initial plus 5 reconstruction scenarios.
+That same-repository caller is reference evidence, not interoperability evidence
+for an independently implemented external platform. A multi-issuer listener,
+multi-tenant isolation, HA, deployment, production operation, and independent
+external-caller interoperability remain unproved.
 
 Merge commit `a0cddf4` passes repository CI `34038556281`, Reference
 `34038556295`, Candidate `34038556284`, Browser `34038556297`, shared-capacity
@@ -122,8 +123,8 @@ Currently implemented:
 - default-disabled protected-operation admission with one explicit
   listener-local caller issuer, a Provider-local instance audience and
   revision, 1..32 frozen public-key files, and a single-controller
-  replay/fencing guard; the current calling-standard slice still awaits its
-  complete validation
+  replay/fencing guard; the repository-local coordinated calling-standard gate
+  passes
 - default-disabled, development-only Provider exec composition over the Docker
   lifecycle runtime, a separate durable ledger, bounded private output capture,
   cancellation, result expiry, and restart reconciliation
@@ -412,8 +413,9 @@ Rotation is an explicit restart procedure: install old and new public keys
 under distinct `kid` values, restart, move the caller to the new signing key,
 wait until every token accepted under the old key has expired, remove the old
 key, and restart again. There is no remote JWKS refresh or simultaneous
-multi-issuer listener. These implementation properties remain subject to the
-current calling-standard slice's complete validation.
+multi-issuer listener. The component, Contract, conformance, and same-repository
+reference gates for these implementation properties pass; deployment-owned key
+rotation and independently implemented caller qualification remain separate.
 
 Individually enabled Provider lifecycle and exec applications may then compose
 only their locked routes. Exec requires the Provider Docker lifecycle runtime
@@ -770,7 +772,7 @@ visibility.
   boundary across the individually composed Provider routes
 - [x] implement one explicit issuer-scoped caller trust domain per protected
   listener, with Provider-local audience/revision anchors and bounded frozen
-  rotation keys (complete calling-standard slice validation remains pending)
+  rotation keys, and pass its repository-local coordinated gate
 - [ ] qualify an independently implemented external caller; the
   same-repository generic reference caller remains reference evidence only
 
