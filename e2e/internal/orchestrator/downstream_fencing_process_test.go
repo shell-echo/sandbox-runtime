@@ -20,6 +20,8 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+const downstreamHelperReadyTimeout = 5 * time.Second
+
 func TestDownstreamCallerProcessProvisionsOnceAndShutsDown(t *testing.T) {
 	request := downstreamProvisioningRequest("request-success")
 	process, endpoint, err := startDownstreamHelper(t, context.Background(), "normal", request)
@@ -112,6 +114,7 @@ func TestDownstreamCallerProcessCancelDuringEndpointReadReaps(t *testing.T) {
 	marker := filepath.Join(t.TempDir(), "pid")
 	logPath := filepath.Join(t.TempDir(), "child.log")
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	type startResult struct {
 		err error
 	}
@@ -137,6 +140,29 @@ func TestDownstreamCallerProcessCancelDuringEndpointReadReaps(t *testing.T) {
 	}
 	assertFixedDownstreamError(t, err, request.RequestID)
 	assertHelperReaped(t, marker)
+}
+
+func TestWaitForHelperPIDWaitsForCompleteMarker(t *testing.T) {
+	reads := 0
+	pid := waitForHelperPIDUsing(t, "unused", func(string) ([]byte, error) {
+		reads++
+		switch reads {
+		case 1:
+			return nil, os.ErrNotExist
+		case 2:
+			return []byte{}, nil
+		case 3:
+			return []byte("partial"), nil
+		default:
+			return []byte(strconv.Itoa(os.Getpid())), nil
+		}
+	})
+	if pid != os.Getpid() {
+		t.Fatalf("helper PID = %d; want %d", pid, os.Getpid())
+	}
+	if reads != 4 {
+		t.Fatalf("PID marker reads = %d; want 4", reads)
+	}
 }
 
 func TestDownstreamCallerProcessEarlyExitIsReaped(t *testing.T) {
@@ -229,9 +255,6 @@ func TestDownstreamCallerProcessHelper(t *testing.T) {
 	if !ok {
 		return
 	}
-	if err := os.WriteFile(marker, []byte(strconv.Itoa(os.Getpid())), 0o600); err != nil {
-		os.Exit(90)
-	}
 	requestInput := os.NewFile(3, "helper-request")
 	endpointOutput := os.NewFile(4, "helper-endpoint")
 	finalInput := os.NewFile(5, "helper-final")
@@ -247,6 +270,9 @@ func TestDownstreamCallerProcessHelper(t *testing.T) {
 	_ = requestInput.Close()
 	if err != nil {
 		os.Exit(92)
+	}
+	if err := publishDownstreamHelperPID(marker); err != nil {
+		os.Exit(90)
 	}
 	if mode == "exit-after-request" {
 		os.Exit(0)
@@ -325,6 +351,32 @@ func startDownstreamHelper(
 
 func downstreamHelperArguments(mode, marker string) []string {
 	return []string{"-test.run=^TestDownstreamCallerProcessHelper$", "--", mode, marker}
+}
+
+func publishDownstreamHelperPID(marker string) error {
+	temporary, err := os.CreateTemp(filepath.Dir(marker), "."+filepath.Base(marker)+"-*")
+	if err != nil {
+		return err
+	}
+	temporaryPath := temporary.Name()
+	published := false
+	defer func() {
+		if !published {
+			_ = os.Remove(temporaryPath)
+		}
+	}()
+	if _, err := temporary.WriteString(strconv.Itoa(os.Getpid())); err != nil {
+		_ = temporary.Close()
+		return err
+	}
+	if err := temporary.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(temporaryPath, marker); err != nil {
+		return err
+	}
+	published = true
+	return nil
 }
 
 func downstreamHelperMode() (string, string, bool) {
@@ -408,20 +460,30 @@ func assertHelperReaped(t *testing.T, marker string) {
 
 func waitForHelperPID(t *testing.T, marker string) int {
 	t.Helper()
-	deadline := time.Now().Add(2 * time.Second)
+	return waitForHelperPIDUsing(t, marker, os.ReadFile)
+}
+
+func waitForHelperPIDUsing(t *testing.T, marker string, readMarker func(string) ([]byte, error)) int {
+	t.Helper()
+	deadline := time.Now().Add(downstreamHelperReadyTimeout)
+	var lastContent []byte
+	markerObserved := false
 	for time.Now().Before(deadline) {
-		content, err := os.ReadFile(marker)
+		content, err := readMarker(marker)
 		if err == nil {
+			markerObserved = true
+			lastContent = content
 			pid, parseErr := strconv.Atoi(string(content))
-			if parseErr != nil || pid < 1 {
-				t.Fatalf("invalid helper PID marker: %q", content)
+			if parseErr == nil && pid > 0 {
+				return pid
 			}
-			return pid
-		}
-		if !errors.Is(err, os.ErrNotExist) {
+		} else if !errors.Is(err, os.ErrNotExist) {
 			t.Fatal(err)
 		}
 		time.Sleep(10 * time.Millisecond)
+	}
+	if markerObserved {
+		t.Fatalf("helper PID marker did not become valid: %q", lastContent)
 	}
 	t.Fatal("helper PID marker was not created")
 	return 0
