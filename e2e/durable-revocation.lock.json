@@ -1,12 +1,12 @@
 {
   "schema_version": 1,
   "evidence_profile": "browser-durable-revocation-e2e-v1",
-  "provider_commit": "9b9656dcfa2d739640d6179f75315fd4a960b8e6",
+  "provider_commit": "fd48de93af5113d331c64f542c35f3934cc8229a",
   "contract": {
     "namespace": "urn:shell-echo:sandbox-runtime:provider-v1",
-    "revision": "96187ae3923ca0b741c3de1bc58f31dae9c57080",
-    "tree": "4f3c1f037efd505e1285068072369d257d68626d",
-    "suite_cases": 48,
+    "revision": "034e6476ff508a0571e64de9ce923799717b902b",
+    "tree": "33f1926feb8e12f24a8f92b9e6879102e19c2173",
+    "suite_cases": 50,
     "exercised": false
   },
   "valkey": {

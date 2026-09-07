@@ -27,11 +27,11 @@ import (
 )
 
 const (
-	ProviderCommit   = "9b9656dcfa2d739640d6179f75315fd4a960b8e6"
+	ProviderCommit   = "fd48de93af5113d331c64f542c35f3934cc8229a"
 	ContractNS       = "urn:shell-echo:sandbox-runtime:provider-v1"
-	ContractRevision = "96187ae3923ca0b741c3de1bc58f31dae9c57080"
-	ContractTree     = "4f3c1f037efd505e1285068072369d257d68626d"
-	SuiteCases       = 48
+	ContractRevision = "034e6476ff508a0571e64de9ce923799717b902b"
+	ContractTree     = "33f1926feb8e12f24a8f92b9e6879102e19c2173"
+	SuiteCases       = 50
 
 	SharedCapacityLockPath        = "e2e/shared-capacity.lock.json"
 	SharedCapacityEvidenceProfile = "browser-shared-capacity-e2e-v1"
