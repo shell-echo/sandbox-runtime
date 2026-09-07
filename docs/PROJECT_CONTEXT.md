@@ -750,6 +750,7 @@ Contract identity:
 | P2 components | P2.1-P2.5h local component, Contract projection, Docker, and recorded repository CI gates pass within their named boundaries | Retain single-controller/development constraints and exact Contract lock |
 | P2.5i | Latest completed local run `20260907T044611.598221000Z` passed 15 initial plus 5 restart/resume coding/shell scenarios against historical harness/Provider lock `b8d4829`/`af8a505`; hosted regression `33970773414` remains historical evidence against `17ed6ca`/`b4d41c9` | Neither run contains a Browser scenario or proves interoperability with an independently implemented external caller, durable-revocation caller behavior, or production properties |
 | P2.6 | Passed locally at implementation `3fe314a` and E2E lock refresh `ae476fe` for the content-derived local 50-case `repository-go-test` Suite and separate remote 6-case `remote-http-black-box` discovery profile | Independent third-party caller qualification, protected or mutating remote profiles, cleanup authority, and all broader readiness gates remain open |
+| P2.7 | P2.7a locks the verified `sandbox-runtime-external-caller-coding-shell-v1@1.0.0` machine-readable definition authority at `sha256:baee769c0acc395448af61faef99cd97fbb63ccb83c70eb51915952be519991a`, covering 15 initial plus 5 reconstruction cases, 41 interactions, and 91 per-observation source/actor/subject/correlation bindings. Overall P2.7 remains definition in progress and no external caller result exists | Add the closed report schema and report/evidence validator, then implement the external adapter process boundary, disposable harness, and independently supplied caller run |
 | P2 | Reference coding/shell caller release gate passed | Aggregate conformance, multi-controller, hostile multi-tenant isolation, deployment, and production gates remain open |
 | P3 | Retired by ADR 0037. Historical revision binding/shadow/metrics components and candidate runs retain their recorded evidence boundaries | No named-platform migration gate remains; external consumers adapt to the exact locked Provider Contract |
 | P4 | Browser Contract authority/projection, exact sandboxed signed amd64/arm64/v8 publication, Provider-local components, default-disabled command/runtime composition, process-local Gateway limits, the separately recorded Browser/shared-capacity/durable-revocation caller gates, ADR 0033 component/caller evidence, the ADR 0034 v2 local/hosted deletion and rollback-detection gates, the ADR 0035 PostgreSQL component gate, and the ADR 0036 hosted same-runner controlled-restore gate pass within their named boundaries | Production independent witness/storage and restore operations, production Browser advertisement/public Gateway, Valkey/PostgreSQL provenance and HA, production configuration/metrics, aggregate, multi-controller, multi-tenant, deployment, and production gates remain open |
@@ -953,9 +954,15 @@ Hosted harness `2cadc53` run `34013982796` passes the same scenarios on
 `20260906T052710.781616339Z` with exactly five sanitized files and has been
 inspected.
 
-1. Qualify an independently implemented caller against the exact locked
-   standard. The P2.6 local 50-case and remote 6-case discovery profiles are
-   repository-owned evidence and do not establish that interoperability.
+1. Implement the P2.7 closed report schema and evidence-root validator against
+   the locked content-addressed
+   `sandbox-runtime-external-caller-coding-shell-v1` profile, then implement the
+   external adapter process boundary and disposable harness with independent
+   observations, actual executed-artifact digests, distinct-tenant cases,
+   authoritative zero-resource cleanup proof, and external receipts. Qualify an
+   independently supplied caller only after those gates pass. The P2.6 local
+   50-case and remote 6-case discovery profiles are repository-owned evidence
+   and do not establish that interoperability.
 2. Before adding protected or mutating remote profiles, define their explicit
    cleanup authority, prerequisites, case-specific evidence, and incomplete-run
    semantics; do not reinterpret the discovery profile.

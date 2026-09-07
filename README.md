@@ -783,7 +783,13 @@ visibility.
   listener, with Provider-local audience/revision anchors and bounded frozen
   rotation keys, and pass its repository-local coordinated gate
 - [ ] qualify an independently implemented external caller; the
-  same-repository generic reference caller remains reference evidence only
+  same-repository generic reference caller remains reference evidence only.
+  ADR 0040 defines the boundary, and P2.7a locks the verified coding/shell
+  machine-readable definition authority at
+  `sha256:baee769c0acc395448af61faef99cd97fbb63ccb83c70eb51915952be519991a`.
+  Overall P2.7 remains definition in progress: its report schema, validator,
+  adapter/harness, and external execution remain open, and no external caller
+  has passed the gate
 
 ### Provider lifecycle
 

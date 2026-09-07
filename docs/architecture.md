@@ -585,7 +585,7 @@ advertisement, and optional-profile gates remain open:
 
 | Area | Current state | Required direction |
 | --- | --- | --- |
-| Conformance | ADR 0039 passes its local P2.6 release gate at implementation `3fe314a` and E2E lock refresh `ae476fe`: content-derived local and remote Suite identities, a clean-revision 50-case Go-test runner, and a separate six-case TLS 1.3 mTLS remote discovery runner. | Qualify independently implemented callers separately. Define cleanup authority and profile-specific evidence before adding protected or mutating remote cases; retain aggregate, multi-controller, multi-tenant, HA, deployment, and production gates. |
+| Conformance | ADR 0039 passes its local P2.6 release gate at implementation `3fe314a` and E2E lock refresh `ae476fe`: content-derived local and remote Suite identities, a clean-revision 50-case Go-test runner, and a separate six-case TLS 1.3 mTLS remote discovery runner. ADR 0040 and the verified P2.7a profile lock the independent external-caller definition authority; no report or execution result exists. | Implement the closed report schema, evidence-root validator, independent observers, and external adapter boundary before running the profile with a separately supplied caller. Define Provider-level cleanup authority and profile-specific evidence before adding protected or mutating remote Suite cases; retain aggregate, multi-controller, multi-tenant, HA, deployment, and production gates. |
 | Protected admission | ADR 0038 requires one explicit issuer-scoped caller trust domain per listener, Provider-local audience/revision anchors, and 1..32 frozen verification keys. Its repository-local Contract, projection, configuration, conformance, E2E lock, overlap-key, and same-repository reference gates pass. | Retain exact authentication/authorization precedence. Treat multi-issuer admission and independently implemented external-caller interoperability as separate future gates. |
 | Backend abstraction | Local `instance.Driver` remains separate; the Provider lifecycle has its own fake and Docker development adapters, while exec and terminal use focused Provider-only runtime ports. | Add future snapshot capability ports without reusing `/instances` models and retain narrow optional interfaces. |
 | Lifecycle recovery | Provider file persistence and Docker observation reconcile pending/unknown create work for one controller. | Retain unknown-outcome evidence; add transactional production storage before multi-controller operation. |
@@ -685,6 +685,53 @@ independently implemented caller, protected or
 mutating remote conformance, aggregate conformance, multi-controller
 reliability, hostile multi-tenant safety, HA, deployment, or production
 readiness.
+
+#### P2.7: independent external caller qualification
+
+- require an immutable caller implementation and qualification adapter supplied
+  from a source and release boundary outside this repository;
+- keep request signing, Admission Context construction, operation state, retry,
+  reconciliation, authorization, and Gateway policy in that external caller;
+- define a content-addressed machine-readable
+  `sandbox-runtime-external-caller-coding-shell-v1` profile with stable case IDs,
+  exact expectations and resource bounds, then add a closed report schema;
+- pin the actual executed Provider, caller, adapter, Gateway, and runtime
+  artifacts by digest, together with their source/release, Contract, Suite,
+  profile, topology, and configuration identities;
+- keep caller-owner assertions separate from observations made by an independent
+  repository-owned harness; and
+- use a dedicated disposable target, preserve cleanup obligations after unknown
+  outcomes, and require bounded teardown plus zero remaining run-owned runtime
+  resources.
+
+P2.7a locks the verified machine-readable definition authority at
+`sha256:baee769c0acc395448af61faef99cd97fbb63ccb83c70eb51915952be519991a`.
+Overall P2.7 definition remains in progress until the closed report schema and
+evidence validator exist, and no external caller has passed this gate. The
+same-repository reference caller cannot satisfy the independence requirement.
+Because Provider v1 has no terminate or lease-control route, P2.7 cleanup is
+operator-owned run-namespace teardown within the disposable qualification
+target, not a new Provider wire behavior or lifecycle-closure result.
+
+Release gate: the content-addressed profile and closed report schema lock the 15
+initial and 5 reconstruction cases with stable IDs and exact expectations. The
+actual executed Provider, external caller, adapter, caller-owned Gateway, runtime
+image, cleanup implementation, and resource inspector are pinned by artifact
+digest; the caller's independently declared consumed Contract and profile
+identities match the harness's expected identities. The topology contains two
+admitted controllers in different tenants and one same-CA unadmitted identity;
+each required interaction binds the exact actor and authorization context that
+its case needs. Repository-owned observers correlate safe Provider, Gateway,
+process, and authoritative resource observations with caller assertions and
+retain a bounded
+receipt for each external report that binds the invocation, external artifact
+and process, phase, ordered result digest, and completion state. Before mutation,
+the harness proves a dedicated run namespace and numeric resource/time/evidence
+bounds; after every success, failure, cancellation, or unknown outcome, bounded
+operator teardown and the pinned authoritative inspector prove zero run-owned
+runtime resources. The exact sanitized evidence set passes the closed validator.
+Missing external inputs or an unavailable environment leaves the gate without a
+result; it cannot be replaced by repository-owned caller evidence.
 
 ### Phase 3: named-platform migration (retired)
 

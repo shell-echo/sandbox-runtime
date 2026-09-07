@@ -26,6 +26,8 @@ jobs:
           cache: true
       - name: Verify locked local Provider Contract
         run: go run ./cmd/verify-contract -source-root .
+      - name: Verify locked P2.7a qualification profile definition
+        run: go run ./cmd/verify-qualification-profile -source-root .
       - name: Validate Provider v1 DTO projection and fixtures
         run: go test -count=1 ./providerapi/v1 -run '^TestLockedContractProjection$'
       - name: Validate Provider capability response projection
