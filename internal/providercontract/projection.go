@@ -7,11 +7,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
-	"os"
 	"path"
-	"path/filepath"
 	"sort"
 	"strings"
 
@@ -33,7 +30,8 @@ type manifestResource struct {
 }
 
 type Projection struct {
-	contractRoot  string
+	lock          contractlock.Lock
+	snapshot      contractlock.Report
 	schemaNames   []string
 	schemas       map[string]*jsonschema.Schema
 	requestLimits map[string]int64
@@ -46,30 +44,22 @@ func Load(ctx context.Context, lockPath, sourceRoot string) (*Projection, error)
 	if err != nil {
 		return nil, err
 	}
-	if _, err := contractlock.Verify(ctx, lock, sourceRoot); err != nil {
+	verified, err := contractlock.Verify(ctx, lock, sourceRoot)
+	if err != nil {
 		return nil, fmt.Errorf("verify Contract before projection: %w", err)
 	}
+	return LoadVerified(lock, verified)
+}
 
-	root, err := filepath.Abs(sourceRoot)
+// LoadVerified compiles a projection exclusively from the immutable byte
+// snapshot produced by contractlock.Verify.
+func LoadVerified(lock contractlock.Lock, verified contractlock.Report) (*Projection, error) {
+	manifestData, err := verified.Resource(lock, lock.Contract.ManifestPath)
 	if err != nil {
-		return nil, fmt.Errorf("resolve Contract source root: %w", err)
+		return nil, fmt.Errorf("read verified Contract manifest projection: %w", err)
 	}
-	root, err = filepath.EvalSymlinks(root)
-	if err != nil {
-		return nil, fmt.Errorf("resolve Contract source root: %w", err)
-	}
-	contractRoot, err := securePath(root, lock.Contract.Root)
-	if err != nil {
-		return nil, err
-	}
-
-	manifestPath, err := securePath(root, lock.Contract.ManifestPath)
-	if err != nil {
-		return nil, err
-	}
-	manifestData, err := readBounded(manifestPath, maxContractDocumentBytes)
-	if err != nil {
-		return nil, fmt.Errorf("read Contract manifest projection: %w", err)
+	if len(manifestData) > maxContractDocumentBytes {
+		return nil, fmt.Errorf("Contract manifest projection exceeds %d bytes", maxContractDocumentBytes)
 	}
 	var manifest struct {
 		Resources []manifestResource `json:"resources"`
@@ -78,25 +68,28 @@ func Load(ctx context.Context, lockPath, sourceRoot string) (*Projection, error)
 		return nil, fmt.Errorf("decode Contract manifest projection: %w", err)
 	}
 
-	openAPIPath, err := securePath(root, lock.Contract.OpenAPIPath)
+	openAPIData, err := verified.Resource(lock, lock.Contract.OpenAPIPath)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read verified Provider OpenAPI projection: %w", err)
 	}
-	openAPIData, err := readBounded(openAPIPath, maxContractDocumentBytes)
-	if err != nil {
-		return nil, fmt.Errorf("read Provider OpenAPI projection: %w", err)
+	if len(openAPIData) > maxContractDocumentBytes {
+		return nil, fmt.Errorf("Provider OpenAPI projection exceeds %d bytes", maxContractDocumentBytes)
 	}
 	schemaNames, requestLimits, err := externalSchemaProjection(openAPIData)
 	if err != nil {
 		return nil, err
 	}
 
-	compiled, err := compileSchemas(contractRoot, manifest.Resources, schemaNames)
+	loadResource := func(relative string) ([]byte, error) {
+		return verified.Resource(lock, lock.Contract.Root+"/"+relative)
+	}
+	compiled, err := compileSchemas(loadResource, manifest.Resources, schemaNames)
 	if err != nil {
 		return nil, err
 	}
 	return &Projection{
-		contractRoot:  contractRoot,
+		lock:          lock,
+		snapshot:      verified,
 		schemaNames:   schemaNames,
 		schemas:       compiled,
 		requestLimits: requestLimits,
@@ -134,13 +127,12 @@ func (p *Projection) ReadExample(name string) ([]byte, error) {
 	if !fs.ValidPath(name) || path.Base(name) != name {
 		return nil, errors.New("example name must be one clean path segment")
 	}
-	examplePath, err := securePath(p.contractRoot, path.Join("fixtures", name))
-	if err != nil {
-		return nil, err
-	}
-	data, err := readBounded(examplePath, maxExampleBytes)
+	data, err := p.snapshot.Resource(p.lock, p.lock.Contract.Root+"/"+path.Join("fixtures", name))
 	if err != nil {
 		return nil, fmt.Errorf("read Contract example %s: %w", name, err)
+	}
+	if len(data) > maxExampleBytes {
+		return nil, fmt.Errorf("Contract example %s exceeds %d bytes", name, maxExampleBytes)
 	}
 	return data, nil
 }
@@ -268,7 +260,7 @@ func collectYAMLRefs(value any, refs map[string]struct{}) {
 	}
 }
 
-func compileSchemas(contractRoot string, resources []manifestResource, schemaNames []string) (map[string]*jsonschema.Schema, error) {
+func compileSchemas(loadResource func(string) ([]byte, error), resources []manifestResource, schemaNames []string) (map[string]*jsonschema.Schema, error) {
 	byID := make(map[string]manifestResource)
 	byPath := make(map[string]manifestResource)
 	for _, resource := range resources {
@@ -300,13 +292,12 @@ func compileSchemas(contractRoot string, resources []manifestResource, schemaNam
 		if _, loaded := documentByID[resource.ID]; loaded {
 			continue
 		}
-		resourcePath, err := securePath(contractRoot, resource.Path)
-		if err != nil {
-			return nil, err
-		}
-		data, err := readBounded(resourcePath, maxContractDocumentBytes)
+		data, err := loadResource(resource.Path)
 		if err != nil {
 			return nil, fmt.Errorf("read projected Schema %s: %w", resource.Path, err)
+		}
+		if len(data) > maxContractDocumentBytes {
+			return nil, fmt.Errorf("projected Schema %s exceeds %d bytes", resource.Path, maxContractDocumentBytes)
 		}
 		var schemaDocument any
 		if err := json.Unmarshal(data, &schemaDocument); err != nil {
@@ -376,45 +367,4 @@ func collectJSONRefs(value any, refs map[string]struct{}) {
 			collectJSONRefs(item, refs)
 		}
 	}
-}
-
-func securePath(root, relative string) (string, error) {
-	if !fs.ValidPath(relative) || relative == "." {
-		return "", fmt.Errorf("Contract path %q must be a clean relative slash path", relative)
-	}
-	resolved, err := filepath.EvalSymlinks(filepath.Join(root, filepath.FromSlash(relative)))
-	if err != nil {
-		return "", fmt.Errorf("resolve Contract path %s: %w", relative, err)
-	}
-	relativeToRoot, err := filepath.Rel(root, resolved)
-	if err != nil || relativeToRoot == ".." || strings.HasPrefix(relativeToRoot, ".."+string(filepath.Separator)) {
-		return "", fmt.Errorf("Contract path %s escapes its verified root", relative)
-	}
-	return resolved, nil
-}
-
-func readBounded(filePath string, limit int64) ([]byte, error) {
-	file, err := os.Open(filePath)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-	info, err := file.Stat()
-	if err != nil {
-		return nil, err
-	}
-	if !info.Mode().IsRegular() {
-		return nil, errors.New("Contract resource is not a regular file")
-	}
-	if info.Size() > limit {
-		return nil, fmt.Errorf("Contract resource exceeds %d bytes", limit)
-	}
-	data, err := io.ReadAll(io.LimitReader(file, limit+1))
-	if err != nil {
-		return nil, err
-	}
-	if int64(len(data)) > limit {
-		return nil, fmt.Errorf("Contract resource exceeds %d bytes", limit)
-	}
-	return data, nil
 }

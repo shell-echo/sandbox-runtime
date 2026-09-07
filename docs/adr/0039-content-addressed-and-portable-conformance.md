@@ -40,7 +40,11 @@ The verifier returns the case inventory from the same validated read used for
 digest computation. The local runner must not reopen the Suite after
 verification. The digest covers Contract case inventory and metadata, not the
 repository-owned Go mapping or runner implementation; execution evidence must
-therefore continue to pin the exact runner revision.
+therefore pin the exact clean runner revision. The local runner executes Go
+tests from a bounded, read-only Git archive of that same revision rather than
+from the mutable source checkout, requires exact mapped test passes from the
+`go test -json` stream, and uses the Go toolchain version recorded in its build
+identity.
 
 ### Separate execution profiles
 
@@ -52,20 +56,33 @@ A second Contract resource, `sandbox-provider-remote`, defines
 `sandbox-runtime-provider-remote-discovery-v1` with
 `remote-http-black-box` execution mode and `mutations_performed=false`. Its six
 cases cover authenticated mTLS discovery, rejection without a client
-certificate, strict response-schema validation, byte-stable repeated discovery,
-empty-request rejection, and GET-only routing.
+certificate and with a chain-valid but unadmitted URI SAN, strict
+response-schema validation, byte-stable sequential discovery, empty-request
+rejection, and GET-only routing.
 
 The remote runner requires an explicit HTTPS origin, trust roots, client
-certificate and private key, and server name. It fixes TLS 1.3, disables proxy,
-redirect, and transparent compression behavior, bounds all input and output,
-preserves cancellation and deadlines, and never records private material or
-raw backend diagnostics. It emits a versioned machine-readable report with the
-exact Contract and Suite identities, target origin, observed Provider revision,
-case status, timing, and evidence boundary.
+certificate and private key, a second chain-valid but unadmitted client
+certificate and private key, the client CA roots used to validate both
+identities, and a server name. Each leaf must have client-auth usage and exactly
+one distinct absolute URI SAN. It fixes TLS 1.3, disables proxy, redirect, and
+transparent compression behavior, bounds all input and output, preserves
+cancellation and deadlines, and never records private material or raw backend
+diagnostics. It consumes one locked Contract byte snapshot and fails closed
+unless its Go build has an unmodified VCS revision. It emits a versioned
+machine-readable report with the exact Contract, Suite, runner, and target
+identities, case status, timing, incomplete state, unsafe-method-probe
+disclosure, and evidence boundary. It has no unscoped `conformant` field.
+
+`mutations_performed=false` means that this profile calls no
+Contract-authorized Provider mutation route. The GET-only case sends unsafe
+method probes to the discovery path. A conforming target rejects them, but the
+runner cannot prove that an arbitrary failing implementation caused no side
+effect, so the report does not claim actual zero mutation.
 
 There are no skipped or not-applicable cases in this first remote profile. A
-case that cannot execute makes the profile incomplete or failed; it is not
-counted as passed. Future capability-specific or mutating profiles require
+case that cannot execute makes the profile incomplete; it is neither executed
+nor counted as a Provider failure. Cancellation stops the remaining cases.
+Future capability-specific or mutating profiles require
 their own Contract resource, cleanup authority, prerequisites, and report
 semantics.
 

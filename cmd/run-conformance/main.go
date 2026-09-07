@@ -14,11 +14,9 @@ import (
 
 func main() {
 	var sourceRoot string
-	var lockPath string
 	var race bool
 	var shuffle bool
 	flag.StringVar(&sourceRoot, "source-root", ".", "repository source root")
-	flag.StringVar(&lockPath, "lock", "compatibility/sandbox-runtime/contract.lock.json", "relative or absolute Contract lock path")
 	flag.BoolVar(&race, "race", false, "run each Suite case with the race detector")
 	flag.BoolVar(&shuffle, "shuffle", false, "shuffle each Suite case")
 	flag.Parse()
@@ -27,18 +25,19 @@ func main() {
 	if err != nil {
 		fail(err)
 	}
-	if !filepath.IsAbs(lockPath) {
-		lockPath = filepath.Join(root, lockPath)
-	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	report, err := conformance.Run(ctx, conformance.Options{
-		SourceRoot: root, LockPath: lockPath, Race: race, Shuffle: shuffle,
+		SourceRoot: root, Race: race, Shuffle: shuffle,
 	}, os.Stdout, os.Stderr)
 	if err != nil {
 		fail(err)
 	}
-	fmt.Printf("executed local Provider Conformance Suite %s/%s: %d cases\n", report.SuiteID, report.ProfileID, len(report.Cases))
+	fmt.Printf(
+		"executed local Provider Conformance Suite %s@%s/%s (%s, %s): %d cases; runner %s; toolchain %s; race=%t; shuffle=%t\n",
+		report.SuiteID, report.SuiteVersion, report.ProfileID, report.SuiteDigestProfile, report.SuiteDigest, len(report.Cases),
+		report.RunnerRevision, report.GoToolchain, report.Race, report.Shuffle,
+	)
 }
 
 func fail(err error) {
