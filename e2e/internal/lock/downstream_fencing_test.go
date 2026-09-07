@@ -173,6 +173,8 @@ func TestDownstreamFencingHarnessPathIsNarrow(t *testing.T) {
 		".github/workflows/postgres-controlled-restore-e2e.yml": true,
 		".github/workflows/browser-e2e.yml":                     false,
 		"README.md":                                             true,
+		"compatibility/sandbox-runtime/README.md":               true,
+		"compatibility/sandbox-runtime/contract.lock.json":      false,
 		"gateway/cdpfence/ingress.go":                           false,
 		"e2e/../gateway/cdpfence/ingress.go":                    false,
 	} {
@@ -186,6 +188,8 @@ func TestDownstreamFencingV2HarnessPathIsNarrow(t *testing.T) {
 	for path, want := range map[string]bool{
 		"e2e/cmd/downstream-fencing-v2-e2e/main.go":             true,
 		"docs/adr/0034-browser-downstream-fencing-v2.md":        true,
+		"compatibility/sandbox-runtime/README.md":               true,
+		"compatibility/sandbox-runtime/contract.lock.json":      false,
 		".github/workflows/downstream-fencing-v2-e2e.yml":       true,
 		".github/workflows/postgres-controlled-restore-e2e.yml": true,
 		".github/workflows/downstream-fencing-e2e.yml":          false,
@@ -203,6 +207,8 @@ func TestPostgresControlledRestoreHarnessPathIsNarrow(t *testing.T) {
 	for path, want := range map[string]bool{
 		"e2e/cmd/postgres-controlled-restore-e2e/main.go":                  true,
 		"docs/adr/0036-browser-postgresql-controlled-restore-reference.md": true,
+		"compatibility/sandbox-runtime/README.md":                          true,
+		"compatibility/sandbox-runtime/contract.lock.json":                 false,
 		".github/workflows/postgres-controlled-restore-e2e.yml":            true,
 		".github/workflows/downstream-fencing-v2-e2e.yml":                  false,
 		".github/workflows/downstream-fencing-e2e.yml":                     false,

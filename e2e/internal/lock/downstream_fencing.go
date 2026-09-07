@@ -1085,7 +1085,7 @@ func downstreamFencingHarnessPath(path string) bool {
 	if filepath.ToSlash(filepath.Clean(path)) != path {
 		return false
 	}
-	return path == "README.md" || path == "e2e" || strings.HasPrefix(path, "e2e/") || path == "docs" || strings.HasPrefix(path, "docs/") ||
+	return providerDocumentationPath(path) || path == "e2e" || strings.HasPrefix(path, "e2e/") ||
 		path == ".github/workflows/downstream-fencing-e2e.yml" ||
 		path == ".github/workflows/downstream-fencing-v2-e2e.yml" ||
 		path == ".github/workflows/postgres-controlled-restore-e2e.yml"
@@ -1095,8 +1095,7 @@ func downstreamFencingV2HarnessPath(path string) bool {
 	if filepath.ToSlash(filepath.Clean(path)) != path {
 		return false
 	}
-	return path == "README.md" || path == "e2e" || strings.HasPrefix(path, "e2e/") ||
-		path == "docs" || strings.HasPrefix(path, "docs/") ||
+	return providerDocumentationPath(path) || path == "e2e" || strings.HasPrefix(path, "e2e/") ||
 		path == ".github/workflows/downstream-fencing-v2-e2e.yml" ||
 		path == ".github/workflows/postgres-controlled-restore-e2e.yml"
 }
@@ -1105,8 +1104,7 @@ func postgresControlledRestoreHarnessPath(path string) bool {
 	if filepath.ToSlash(filepath.Clean(path)) != path {
 		return false
 	}
-	return path == "README.md" || path == "e2e" || strings.HasPrefix(path, "e2e/") ||
-		path == "docs" || strings.HasPrefix(path, "docs/") ||
+	return providerDocumentationPath(path) || path == "e2e" || strings.HasPrefix(path, "e2e/") ||
 		path == ".github/workflows/postgres-controlled-restore-e2e.yml"
 }
 
