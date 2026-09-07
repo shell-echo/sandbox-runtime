@@ -683,8 +683,8 @@ Contract identity:
 
 - namespace: `urn:shell-echo:sandbox-runtime:provider-v1`
 - version/license: `1.0.0` / MIT
-- revision: `5096e71fb84fbec22aa3487a0e55a1b49602ab8b`
-- Contract tree: `859f76dc0e855a0c8abdbbb5648df100dabb4328`
+- revision: `96187ae3923ca0b741c3de1bc58f31dae9c57080`
+- Contract tree: `4f3c1f037efd505e1285068072369d257d68626d`
 - locked Conformance Suite: 48 cases
 
 | Phase | Verified maturity | Open gate |

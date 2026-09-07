@@ -33,8 +33,8 @@ The current Contract identity is:
 | Namespace | `urn:shell-echo:sandbox-runtime:provider-v1` |
 | Version | `1.0.0` |
 | License | `MIT` |
-| Revision | `5096e71fb84fbec22aa3487a0e55a1b49602ab8b` |
-| Contract tree | `859f76dc0e855a0c8abdbbb5648df100dabb4328` |
+| Revision | `96187ae3923ca0b741c3de1bc58f31dae9c57080` |
+| Contract tree | `4f3c1f037efd505e1285068072369d257d68626d` |
 | Suite | `sandbox-provider` / `sandbox-runtime-provider-v1`, 48 cases |
 
 An integration must pin this identity, the selected Provider revision, the
