@@ -360,15 +360,40 @@ metadata, case identity, and array ordering do. The recomputed digest MUST
 equal both the Suite's embedded `suite_digest` and the selected Contract lock.
 
 The portable remote profile executes only the six case IDs declared in
-`sandbox-provider-remote`. It uses an explicitly configured HTTPS origin,
-server trust roots, and mTLS client identity. It performs no Provider mutation,
-does not mint protected-operation bearer tokens, and reports each case as
-passed or failed. A complete green report proves only the remote discovery
-profile against the exact target and locked Contract identity. It does not
-execute the 50-case repository profile, prove protected admission or lifecycle
-behavior, or establish an independently implemented caller, aggregate
-conformance, multi-controller reliability, multi-tenant isolation, deployment,
-or production readiness.
+`sandbox-provider-remote`. It requires an explicitly configured HTTPS origin,
+server trust roots, TLS server name, expected Provider revision, one admitted
+mTLS client identity, and one chain-valid but unadmitted client identity issued
+under the same explicitly configured client CA roots. Each client leaf MUST be
+valid for client authentication, carry exactly one absolute URI SAN without a
+fragment, and use a distinct URI SAN. The runner verifies these prerequisites
+locally, then requires the admitted identity to succeed and both an absent
+client certificate and the unadmitted identity to be rejected while the
+credentialed target remains live. This distinguishes verified, URI-SAN-scoped
+client admission from a listener that merely requests any certificate.
+
+The profile calls no Contract-authorized Provider mutation route and does not
+mint protected-operation bearer tokens. Its GET-only case does send unsafe
+method probes such as POST and DELETE to the discovery path and requires their
+rejection. Therefore `mutations_performed=false` describes the selected
+Contract profile, not an observation that an arbitrary nonconforming target had
+no side effect. A report MUST disclose that unsafe method probes were sent and
+MUST NOT claim actual zero side effects for a failed target.
+
+The runner compiles Schemas only from the same bounded resource-byte snapshot
+verified against the locked Git tree. It executes repeated discovery reads in
+sequence and adds no implicit concurrency or capacity requirement. Cancellation
+or an unavailable prerequisite stops execution and leaves the Suite incomplete;
+unexecuted cases are not relabeled as failed Provider behavior. Formal evidence
+also pins the runner's unmodified Go build revision and toolchain; a missing or
+locally modified build identity fails closed.
+
+A complete green report proves only that the named remote discovery profile
+passed against the exact target, Provider revision, runner revision, and locked
+Contract identity. It reports `suite_exercised` and `profile_passed` without an
+unscoped `conformant` claim. It does not execute the 50-case repository profile,
+prove protected admission or lifecycle behavior, or establish an independently
+implemented caller, aggregate conformance, multi-controller reliability,
+multi-tenant isolation, deployment, or production readiness.
 
 ## Current implementation and deployment gaps
 
