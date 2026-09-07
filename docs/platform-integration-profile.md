@@ -33,16 +33,20 @@ The current Contract identity is:
 | Namespace | `urn:shell-echo:sandbox-runtime:provider-v1` |
 | Version | `1.0.0` |
 | License | `MIT` |
-| Revision | `034e6476ff508a0571e64de9ce923799717b902b` |
-| Contract tree | `33f1926feb8e12f24a8f92b9e6879102e19c2173` |
-| Suite | `sandbox-provider` / `sandbox-runtime-provider-v1`, 50 cases |
+| Revision | `9206e601f75a54db0b66969239d7e8cc5bcc8af9` |
+| Contract tree | `c5e4221f2ceaaaad53c8038e1ebaacfe0c5a4daf` |
+| Manifest digest | `sha256:23405c62747b6c678d2fcc84dfd885e435ab12771befdb29499b2e7367404da1` |
+| Local Suite | `sandbox-provider@1.0.0` / `sandbox-runtime-provider-v1`; `repository-go-test`; 50 cases; `sha256:bf177a5bd2b4228605b3ebc311d25a1cc348d9548b2b5c2d333a0c69e71ca528` |
+| Remote Suite | `sandbox-provider-remote@1.0.0` / `sandbox-runtime-provider-remote-discovery-v1`; `remote-http-black-box`; 6 cases; `sha256:167922d972229a97a64bf22bc6a36ee20d4de19a023395d9f004f00c54cc49d0` |
 
 An integration must pin this identity, the selected Provider revision, the
 runtime/profile identifiers, and the exact evidence or image digests it relies
 on. A repository commit or a passing local test does not replace the Contract
-lock. The current declared Suite digest remains a placeholder; the locked Git
-Contract tree protects the consumed Suite content, but the digest must not be
-presented as independently content-derived.
+lock. Both Suite digests use
+`rfc8785-full-document-excluding-suite-digest-v1`: the complete Suite object is
+RFC 8785 canonicalized after removing only its top-level `suite_digest`, then
+hashed with SHA-256. The Git revision and tree remain the broader Contract
+identity.
 
 ### Listener-local caller trust
 
@@ -233,8 +237,10 @@ integration:
   revocation, downstream fencing, independently operated witness/restore
   domains, and fail-closed quarantine/resume controls.
 - Keep artifact publication and billing outside the Provider evidence routes.
-- Run the locked Contract verifier, Conformance Suite, and a black-box caller
-  against a separately started Provider process.
+- Run the locked Contract verifier and the clean VCS-built 50-case local Suite
+  Runner. Run the distinct six-case remote discovery profile against a
+  separately started Provider, and qualify a separately implemented black-box
+  caller as its own evidence gate.
 - Own any consumer-side rollout, shadow, canary, rollback, drain, and metric
   comparison process. These are not Provider compatibility requirements.
 
@@ -259,6 +265,11 @@ separate component/integration track rather than a ninth E2E profile.
 
 The generic reference caller in this repository remains reference evidence; it
 does not establish independently implemented external-caller interoperability.
+P2.6's repository-owned content-derived 50-case local profile and six-case
+remote discovery profile pass locally at implementation `3fe314a` and E2E lock
+refresh `ae476fe`. Those profiles do not convert the existing E2E tracks into
+aggregate evidence, and the remote profile does not cover protected or
+mutating routes.
 None of these results proves multi-issuer admission, aggregate conformance,
 multi-controller reliability, multi-tenant isolation, HA, deployment
 qualification, or production readiness. Those gates require their own
@@ -270,8 +281,26 @@ To reproduce the repository-level checks:
 go test -race -shuffle=on -count=1 ./...
 go vet ./...
 go run ./cmd/verify-contract -source-root .
-go run ./cmd/run-conformance -source-root . -race -shuffle
+runner_dir="$(mktemp -d)"
+go build -buildvcs=true -o "$runner_dir/run-conformance" ./cmd/run-conformance
+"$runner_dir/run-conformance" -source-root . -race -shuffle
 ```
+
+The local Runner rejects missing or modified VCS build information and an
+explicit `GOROOT`, then executes the exact Runner revision from a bounded
+read-only Git archive. It resolves Git once to one absolute path reused for
+verification and archive creation. Every case declares an exact mapped-test
+count and requires all matching tests to be distinct, started, non-skipped
+passes. The host OS, filesystem, initial Git selection, and Go and Git
+executables remain trusted local inputs; path and self-reported version checks
+do not attest their integrity. Do not replace the build with `go run
+./cmd/run-conformance`; Go 1.26.5 does not record the required VCS settings for
+that generated executable. The remote CLI requires an HTTPS Provider origin,
+server CA, client CA, admitted client certificate/key, same-CA denied client
+certificate/key, TLS server name, and expected Provider revision. Its unsafe
+method flag becomes true only after a POST, PUT, PATCH, or DELETE discovery-path
+probe is actually written. Its complete invocation is documented in
+[`compatibility/sandbox-runtime/README.md`](../compatibility/sandbox-runtime/README.md).
 
 All E2E commands are documented in [`e2e/README.md`](../e2e/README.md). Each
 artifact must retain its named boundary; partial properties from separate

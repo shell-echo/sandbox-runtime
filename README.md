@@ -58,18 +58,27 @@ consumers must implement the repository-owned Provider calling standard. The
 ADR 0033, v2, and controlled-restore profiles
 pin Contract identity but do not execute the Suite (`suite_exercised=false`).
 
-ADR 0038's listener-local caller trust domain is implemented and has passed its
-repository-local coordinated gate. Enabling protected admission requires one
-explicit issuer with no default or fallback, one Provider-local instance
-audience, the locally selected Provider revision, and 1..32 frozen public
-verification keys. Contract revision `034e647` contains 50 Suite cases; Provider
-baseline `af8a505` and E2E lock/harness `b8d4829` pass the full local race,
-vet, Contract, conformance, and lock checks. Docker reference run
-`20260907T044611.598221000Z` passes 15 initial plus 5 reconstruction scenarios.
-That same-repository caller is reference evidence, not interoperability evidence
-for an independently implemented external platform. A multi-issuer listener,
-multi-tenant isolation, HA, deployment, production operation, and independent
-external-caller interoperability remain unproved.
+ADR 0038's listener-local caller trust domain remains implemented. P2.6 is now
+implemented at Provider baseline `3fe314a012b808fe60dbd783d7c7c7121d3c548e`
+against Contract revision `9206e601f75a54db0b66969239d7e8cc5bcc8af9`
+and tree `c5e4221f2ceaaaad53c8038e1ebaacfe0c5a4daf`. The lock contains a
+content-derived 50-case local `repository-go-test` Suite and a distinct
+content-derived 6-case `remote-http-black-box` discovery Suite. Each local case
+declares an exact mapped-test count and requires every mapped test to produce a
+distinct, started, non-skipped pass. The Runner rejects an explicit `GOROOT`,
+resolves Git once to one absolute path, and discloses the host OS, filesystem,
+initial Git selection, and Go and Git executables as trusted inputs. The P2.6
+release gate passes locally at implementation `3fe314a` and E2E lock refresh
+`ae476fed12e82f472b19ff78fda633c8d702561d`: the root and E2E race/shuffle and
+vet gates, Contract verifier, clean VCS-built 50-case local Runner, clean
+VCS-built six-case remote Runner against a separately started local mTLS
+Provider, parent-lock check, and all eight E2E `-check` commands pass. Docker
+reference run `20260907T044611.598221000Z`
+remains historical 15+5 evidence against its recorded `b8d4829`/`af8a505`
+harness/Provider identity; it is not relabeled as P2.6 evidence. Neither Suite
+proves interoperability with an independently implemented external caller,
+protected or mutating remote conformance, aggregate conformance, hostile
+multi-tenant safety, HA, deployment, or production readiness.
 
 Merge commit `a0cddf4` passes repository CI `34038556281`, Reference
 `34038556295`, Candidate `34038556284`, Browser `34038556297`, shared-capacity

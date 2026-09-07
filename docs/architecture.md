@@ -71,10 +71,20 @@ evidence required to answer the Provider API safely.
 
 The current Contract namespace is
 `urn:shell-echo:sandbox-runtime:provider-v1`, version `1.0.0`, and MIT licensed.
-The lock binds the Contract tree, manifest, OpenAPI digest, semantic rules,
-fixtures, and local Conformance Suite to an immutable Git revision. Contract
-resources are validated in place; no external checkout, source-root mount, or
-proprietary resource is required.
+The format-2 lock binds the Contract tree, manifest, OpenAPI digest, semantic
+rules, fixtures, and both Conformance Suites to immutable Git revision
+`9206e601f75a54db0b66969239d7e8cc5bcc8af9` and tree
+`c5e4221f2ceaaaad53c8038e1ebaacfe0c5a4daf`. Both Suite digests are derived by
+RFC 8785 canonicalization of the complete Suite object excluding only the
+top-level `suite_digest` member. Contract resources are validated in place; no
+external checkout, source-root mount, or proprietary resource is required.
+
+The local `sandbox-provider@1.0.0` profile
+`sandbox-runtime-provider-v1` retains 50 `repository-go-test` cases. The
+separate remote `sandbox-provider-remote@1.0.0` profile
+`sandbox-runtime-provider-remote-discovery-v1` contains six
+`remote-http-black-box` discovery cases. The remote profile does not redefine
+or execute the local profile.
 
 Compatibility rules:
 
@@ -575,6 +585,7 @@ advertisement, and optional-profile gates remain open:
 
 | Area | Current state | Required direction |
 | --- | --- | --- |
+| Conformance | ADR 0039 passes its local P2.6 release gate at implementation `3fe314a` and E2E lock refresh `ae476fe`: content-derived local and remote Suite identities, a clean-revision 50-case Go-test runner, and a separate six-case TLS 1.3 mTLS remote discovery runner. | Qualify independently implemented callers separately. Define cleanup authority and profile-specific evidence before adding protected or mutating remote cases; retain aggregate, multi-controller, multi-tenant, HA, deployment, and production gates. |
 | Protected admission | ADR 0038 requires one explicit issuer-scoped caller trust domain per listener, Provider-local audience/revision anchors, and 1..32 frozen verification keys. Its repository-local Contract, projection, configuration, conformance, E2E lock, overlap-key, and same-repository reference gates pass. | Retain exact authentication/authorization precedence. Treat multi-issuer admission and independently implemented external-caller interoperability as separate future gates. |
 | Backend abstraction | Local `instance.Driver` remains separate; the Provider lifecycle has its own fake and Docker development adapters, while exec and terminal use focused Provider-only runtime ports. | Add future snapshot capability ports without reusing `/instances` models and retain narrow optional interfaces. |
 | Lifecycle recovery | Provider file persistence and Docker observation reconcile pending/unknown create work for one controller. | Retain unknown-outcome evidence; add transactional production storage before multi-controller operation. |
@@ -596,7 +607,7 @@ advertisement, and optional-profile gates remain open:
 
 - record the independent Provider ownership decision;
 - pin the repository-owned Contract tree, manifest, OpenAPI, semantic rules,
-  fixtures, and Conformance Suite;
+  fixtures, and Conformance Suites;
 - verify the lock against this repository in CI;
 - keep the Contract MIT-licensed and versioned in this repository;
 - define development and compatibility change rules.
@@ -647,6 +658,34 @@ The repository's generic reference caller satisfies only the named reference
 gate; it does not establish interoperability with an independently implemented
 external platform.
 
+#### P2.6: portable Provider conformance
+
+- derive and lock the local and remote Suite digests from RFC 8785 canonical
+  content;
+- execute the local 50-case inventory from the verifier's immutable snapshot
+  against a bounded, read-only archive of the exact clean Runner revision;
+- require each local case to declare an exact mapped-test count and observe all
+  matching tests as distinct, started, non-skipped passes;
+- reject an explicit `GOROOT`, resolve Git once to one reused absolute path,
+  and disclose the host OS, filesystem, initial Git selection, and Go and Git
+  executables as trusted inputs;
+- execute the separate six-case discovery profile over TLS 1.3 mTLS with both
+  admitted and same-CA denied client identities;
+- emit bounded evidence that pins Contract, Suite, Runner, target, and observed
+  Provider revision without credentials or backend diagnostics. Set the unsafe
+  method-probe flag only after a POST, PUT, PATCH, or DELETE request is actually
+  written.
+
+The release gate passes locally at implementation `3fe314a` and E2E lock
+refresh `ae476fe`: the Contract verifier, clean VCS-built local and remote
+Runners, full repository and E2E race/shuffle and vet, parent-lock check, and
+all eight E2E `-check` commands pass. This closes only P2.6's local
+`repository-go-test` and remote discovery profiles. It does not establish an
+independently implemented caller, protected or
+mutating remote conformance, aggregate conformance, multi-controller
+reliability, hostile multi-tenant safety, HA, deployment, or production
+readiness.
+
 ### Phase 3: named-platform migration (retired)
 
 The former Agent Platform migration phase is retired by ADR 0037. This
@@ -684,7 +723,10 @@ Every provider revision must be tested for:
 - snapshots when supported: digest verification, incompatibility rejection,
   secret exclusion, and restore into a new identity.
 
-No provider revision is “compatible” based only on unit tests or a successful
-container launch. Compatibility is the tested combination of protocol version,
-capability set, runtime profile, architecture, driver, image digest, and security
-policy.
+No provider revision is “compatible” based only on unit tests, a successful
+container launch, or one discovery-profile report. Compatibility is the tested
+combination of protocol version, exact Contract revision/tree, Suite profile,
+capability set, runtime profile, architecture, driver, image digest, and
+security policy. Evidence from the 50-case repository profile, six-case remote
+discovery profile, reference callers, and profile-specific E2E tracks remains
+separate and must not be aggregated by inference.

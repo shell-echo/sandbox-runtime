@@ -135,8 +135,22 @@ conformance changes, also run:
 
 ```bash
 go run ./cmd/verify-contract -source-root .
-go run ./cmd/run-conformance -source-root . -race -shuffle
+runner_dir="$(mktemp -d)"
+go build -buildvcs=true -o "$runner_dir/run-conformance" ./cmd/run-conformance
+"$runner_dir/run-conformance" -source-root . -race -shuffle
 ```
+
+The local Suite runner requires a clean VCS-built binary, records its revision
+and Go version from build information, and executes a bounded read-only archive
+of that revision. Every case declares an exact mapped-test count and requires
+all matching tests to appear as distinct, started, non-skipped passes in `go
+test -json`. The Runner rejects an explicit `GOROOT`, resolves Git once to a
+single absolute executable path reused for verification and archive creation,
+and records that the host OS, filesystem, initial Git selection, and Go and Git
+executables remain trusted local inputs. `go run ./cmd/run-conformance` lacks
+the required VCS settings under Go 1.26.5 and correctly fails. The separate
+remote discovery prerequisites and command are documented in
+[`compatibility/sandbox-runtime/README.md`](../compatibility/sandbox-runtime/README.md).
 
 Record an unavailable environment separately from a failed test. Keep these
 evidence tiers distinct: component, Contract projection, CI, Provider
@@ -151,20 +165,22 @@ main workflows passed. The detailed component ledger below retains older
 per-gate commits and run IDs because those identify the exact evidence rather
 than the newest documentation commit.
 
-The ADR 0038 calling-standard slice is implemented and passes its coordinated
-repository-local gate. Implementation `034e647`, Contract lock `fd48de9`,
-projection regression fix `af8a505`, and active E2E lock `b8d4829` require one
-exact issuer, Provider-local audience and revision anchors, and a frozen bundle
-of at most 32 keys. The Contract verifier, 50-case conformance runner, root and
-E2E race/shuffle tests, vet, every E2E `-check` including the retained historical
-Candidate check, and Docker reference run `20260907T044611.598221000Z` pass.
-Rotation remains operator-driven: overlap old and new distinct `kid` values,
-restart, switch the caller, wait for old accepted tokens to expire, remove the
-old key, and restart again. The same-repository
-caller is reference evidence, not proof of interoperability with an
-independently implemented external platform. Multi-issuer admission,
-multi-tenant isolation, HA, deployment, production readiness, and independent
-external-caller interoperability remain open.
+The ADR 0038 calling-standard slice remains implemented. P2.6 hardening is now
+implemented at the active E2E Provider baseline
+`3fe314a012b808fe60dbd783d7c7c7121d3c548e`, Contract revision
+`9206e601f75a54db0b66969239d7e8cc5bcc8af9`, and tree
+`c5e4221f2ceaaaad53c8038e1ebaacfe0c5a4daf`. The P2.6 release gate passes
+locally at that implementation and E2E lock refresh
+`ae476fed12e82f472b19ff78fda633c8d702561d`: the clean VCS-built 50-case local
+Runner, clean VCS-built six-case remote discovery Runner against a separately
+started local mTLS Provider, full root and E2E race/shuffle and vet, Contract
+lock, parent-lock check, and all eight E2E checks pass. Docker
+reference run `20260907T044611.598221000Z` remains historical
+15+5 evidence against `b8d4829`/`af8a505`; it is not relabeled as P2.6 evidence.
+Rotation remains operator-driven. Neither P2.6 profile proves interoperability
+with an independently implemented external caller, protected or mutating
+remote conformance, aggregate conformance, multi-tenant safety, HA, deployment,
+or production readiness.
 
 This snapshot was audited on 2026-09-06 against browser Contract authority
 `5096e71fb84fbec22aa3487a0e55a1b49602ab8b`, Provider projection baseline
@@ -714,9 +730,17 @@ Contract identity:
 
 - namespace: `urn:shell-echo:sandbox-runtime:provider-v1`
 - version/license: `1.0.0` / MIT
-- revision: `034e6476ff508a0571e64de9ce923799717b902b`
-- Contract tree: `33f1926feb8e12f24a8f92b9e6879102e19c2173`
-- locked Conformance Suite: 50 cases
+- revision: `9206e601f75a54db0b66969239d7e8cc5bcc8af9`
+- Contract tree: `c5e4221f2ceaaaad53c8038e1ebaacfe0c5a4daf`
+- manifest digest:
+  `sha256:23405c62747b6c678d2fcc84dfd885e435ab12771befdb29499b2e7367404da1`
+- local Suite: `sandbox-provider@1.0.0`, profile
+  `sandbox-runtime-provider-v1`, `repository-go-test`, 50 cases, digest
+  `sha256:bf177a5bd2b4228605b3ebc311d25a1cc348d9548b2b5c2d333a0c69e71ca528`
+- remote Suite: `sandbox-provider-remote@1.0.0`, profile
+  `sandbox-runtime-provider-remote-discovery-v1`, `remote-http-black-box`, 6
+  cases, digest
+  `sha256:167922d972229a97a64bf22bc6a36ee20d4de19a023395d9f004f00c54cc49d0`
 
 | Phase | Verified maturity | Open gate |
 | --- | --- | --- |
@@ -724,7 +748,8 @@ Contract identity:
 | P1.1 | The DTO, mTLS discovery, JWS/digest/replay/fencing admission, and ADR 0038 repository-local coordinated gates pass. The listener has one explicit caller trust domain, Provider-local audience/revision anchors, and up to 32 frozen keys | Production identity infrastructure, multi-issuer admission, deployment-owned rotation, and independent external-caller interoperability remain unproven |
 | P1.2 | Passed for the bounded Contract-authorized lifecycle subset and development composition | Reserved lifecycle families and production gates remain open |
 | P2 components | P2.1-P2.5h local component, Contract projection, Docker, and recorded repository CI gates pass within their named boundaries | Retain single-controller/development constraints and exact Contract lock |
-| P2.5i | Current local run `20260907T044611.598221000Z` passed 15 initial plus 5 restart/resume coding/shell scenarios against harness/Provider lock `b8d4829`/`af8a505`; hosted regression `33970773414` remains historical evidence against `17ed6ca`/`b4d41c9` | Neither run contains a Browser scenario or proves interoperability with an independently implemented external caller, durable-revocation caller behavior, or production properties |
+| P2.5i | Latest completed local run `20260907T044611.598221000Z` passed 15 initial plus 5 restart/resume coding/shell scenarios against historical harness/Provider lock `b8d4829`/`af8a505`; hosted regression `33970773414` remains historical evidence against `17ed6ca`/`b4d41c9` | Neither run contains a Browser scenario or proves interoperability with an independently implemented external caller, durable-revocation caller behavior, or production properties |
+| P2.6 | Passed locally at implementation `3fe314a` and E2E lock refresh `ae476fe` for the content-derived local 50-case `repository-go-test` Suite and separate remote 6-case `remote-http-black-box` discovery profile | Independent third-party caller qualification, protected or mutating remote profiles, cleanup authority, and all broader readiness gates remain open |
 | P2 | Reference coding/shell caller release gate passed | Aggregate conformance, multi-controller, hostile multi-tenant isolation, deployment, and production gates remain open |
 | P3 | Retired by ADR 0037. Historical revision binding/shadow/metrics components and candidate runs retain their recorded evidence boundaries | No named-platform migration gate remains; external consumers adapt to the exact locked Provider Contract |
 | P4 | Browser Contract authority/projection, exact sandboxed signed amd64/arm64/v8 publication, Provider-local components, default-disabled command/runtime composition, process-local Gateway limits, the separately recorded Browser/shared-capacity/durable-revocation caller gates, ADR 0033 component/caller evidence, the ADR 0034 v2 local/hosted deletion and rollback-detection gates, the ADR 0035 PostgreSQL component gate, and the ADR 0036 hosted same-runner controlled-restore gate pass within their named boundaries | Production independent witness/storage and restore operations, production Browser advertisement/public Gateway, Valkey/PostgreSQL provenance and HA, production configuration/metrics, aggregate, multi-controller, multi-tenant, deployment, and production gates remain open |
@@ -928,20 +953,22 @@ Hosted harness `2cadc53` run `34013982796` passes the same scenarios on
 `20260906T052710.781616339Z` with exactly five sanitized files and has been
 inspected.
 
-1. Publish a content-derived Suite digest and provide a portable remote
-   black-box conformance runner. The same-repository generic reference caller is
-   reference evidence only and does not establish independent external-platform
-   interoperability.
-2. Preserve the Browser, coding/shell Reference, and historical Platform
+1. Qualify an independently implemented caller against the exact locked
+   standard. The P2.6 local 50-case and remote 6-case discovery profiles are
+   repository-owned evidence and do not establish that interoperability.
+2. Before adding protected or mutating remote profiles, define their explicit
+   cleanup authority, prerequisites, case-specific evidence, and incomplete-run
+   semantics; do not reinterpret the discovery profile.
+3. Preserve the Browser, coding/shell Reference, and historical Platform
    Candidate harnesses as separately named evidence modes. The candidate mode
    is historical and P3 is retired; future consumers own their adapters and
    rollout evidence.
-3. Prove independent PostgreSQL/Valkey failure and backup domains, HA, and
+4. Prove independent PostgreSQL/Valkey failure and backup domains, HA, and
    operator controls only in a deployment-owned environment. Retain hosted ADR
    0036 evidence as same-runner reference evidence.
-4. Start the Desktop Contract/authority audit only after the Browser readiness
+5. Start the Desktop Contract/authority audit only after the Browser readiness
    record is complete; do not reuse terminal or Browser routes as a shortcut.
-5. Keep multi-issuer admission, aggregate conformance, multi-controller,
+6. Keep multi-issuer admission, aggregate conformance, multi-controller,
    multi-tenant, HA, independent external-caller interoperability, deployment,
    and production-readiness claims blocked until their separately named gates
    have reproducible evidence.

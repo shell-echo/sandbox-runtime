@@ -30,20 +30,29 @@ or reopen that migration gate.
 
 | Item | Value |
 | --- | --- |
-| Provider implementation | `af8a505f8e5604ab4daaf33ce473c002210e16af` |
+| Provider implementation | `3fe314a012b808fe60dbd783d7c7c7121d3c548e` |
 | Contract namespace | `urn:shell-echo:sandbox-runtime:provider-v1` |
-| Contract revision | `034e6476ff508a0571e64de9ce923799717b902b` |
-| Contract tree | `33f1926feb8e12f24a8f92b9e6879102e19c2173` |
-| Suite | repository-owned Provider v1, 50 cases |
+| Contract revision | `9206e601f75a54db0b66969239d7e8cc5bcc8af9` |
+| Contract tree | `c5e4221f2ceaaaad53c8038e1ebaacfe0c5a4daf` |
+| Contract manifest | `sha256:23405c62747b6c678d2fcc84dfd885e435ab12771befdb29499b2e7367404da1` |
+| Local Suite | `sandbox-provider@1.0.0`; `sandbox-runtime-provider-v1`; `repository-go-test`; 50 cases; `sha256:bf177a5bd2b4228605b3ebc311d25a1cc348d9548b2b5c2d333a0c69e71ca528` |
+| Remote Suite | `sandbox-provider-remote@1.0.0`; `sandbox-runtime-provider-remote-discovery-v1`; `remote-http-black-box`; 6 cases; `sha256:167922d972229a97a64bf22bc6a36ee20d4de19a023395d9f004f00c54cc49d0` |
 
-Clean local reference run `20260907T044611.598221000Z` at harness
+The active E2E metadata lock refresh uses these identities at
+`ae476fed12e82f472b19ff78fda633c8d702561d`. Module race/shuffle, vet,
+parent-lock, and all eight `-check` commands pass from a clean checkout. Neither
+Suite is recorded as exercised by the E2E profiles; the local and remote Suites
+have their own passing P2.6 runners and evidence boundaries.
+
+The previous clean local reference run `20260907T044611.598221000Z` at harness
 `b8d482977cb4622ca578bd77c4eb8f7298af7273` passed all 15 initial and 5
 reconstruction/resume scenarios. Its manifest SHA-256 is
 `60bda2dae83053db447417cea5c5e38d4798e1e90b91fbb5cfc75d2991c6993e` and
 pins locally built `linux/amd64` runtime digest
 `sha256:60baefac927a0a77743aeca268b271b62b07079f31521f98fd3a4cb33474a999`.
-This is same-repository coding/shell reference evidence, not an independently
-implemented caller or a 50-case Suite execution.
+This remains same-repository coding/shell reference evidence against its
+recorded Provider `af8a505f8e5604ab4daaf33ce473c002210e16af`, not an
+independently implemented caller or a P2.6 Suite execution.
 
 `go.mod` points to the parent Provider checkout. The verifier rejects a
 different locked Provider baseline or Contract identity, and rejects changes
@@ -203,7 +212,7 @@ go run ./cmd/durable-revocation-e2e \
   -evidence-root evidence/durable-revocation
 ```
 
-The lock fixes Provider `b4d41c9`, the Valkey index and native platform
+The active lock fixes Provider `3fe314a`, the Valkey index and native platform
 manifests, 10-minute test grants, 100 ms revocation polling and operation
 timeouts, a 2-second propagation/outage bound, local capacity `16/8/4`, a
 one-reconnect upper bound with 10 ms backoff, and exactly seven scenarios. The
@@ -214,11 +223,13 @@ store-outage failure closure, recovery without resurrection, bounded
 propagation, no revocation/outage reconnect, and sanitized evidence.
 
 A passing run closes only ADR 0032's durable exact-grant caller gate. The
-private echo fixture is not Browser/CDP, and Contract/tree/48-case identity is
-metadata with `exercised=false`. The result does not establish downstream CDP
-fencing, Valkey provenance or HA/failover, ACL role separation, Provider API or
-real Agent Platform compatibility, Provider multi-controller reliability,
-hostile multi-tenant isolation, deployment readiness, or production readiness.
+private echo fixture is not Browser/CDP. Current Contract/tree metadata records
+the local 50-case and remote six-case Suite identities with
+`suite_exercised=false` and `remote_suite_exercised=false`. The result does not
+establish downstream CDP fencing, Valkey provenance or HA/failover, ACL role
+separation, Provider API interoperability with an independently implemented
+caller, Provider multi-controller reliability, hostile multi-tenant isolation,
+deployment readiness, or production readiness.
 
 ## Downstream-fencing runner
 
@@ -243,9 +254,11 @@ replacement success, terminal closure without reconnect, unaffected session
 and tenant scopes, fail-closed Valkey outage and recovery, retained high-water
 across ingress reconstruction, bypass exclusion, cleanup, and evidence
 sanitization. A passing run closes only the named ADR 0033 external-caller
-boundary for that platform. It does not execute the 48-case Contract Suite or
-establish exactly-once delivery, restored-snapshot consistency, Valkey
-provenance/HA/failover, real Agent Platform compatibility, Provider
+boundary for that platform. It executes neither the current 50-case local Suite
+nor the six-case remote Suite (`suite_exercised=false` and
+`remote_suite_exercised=false`) and does not establish exactly-once delivery,
+restored-snapshot consistency, Valkey provenance/HA/failover, independently
+implemented caller interoperability, Provider
 multi-controller reliability, hostile multi-tenant isolation, deployment, or
 production readiness.
 

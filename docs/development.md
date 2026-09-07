@@ -14,12 +14,66 @@ SANDBOX_RUNTIME_BROWSER_PROVENANCE_INTEGRATION=1 go test -tags=integration -coun
 SANDBOX_RUNTIME_BROWSER_NETWORK_INTEGRATION=1 SANDBOX_RUNTIME_BROWSER_GATEWAY_IMAGE=sha256:<local-image-id> go test -tags=integration -count=1 -run '^TestBrowserRestrictedEgressIntegration$' ./provider/browser/driver/docker
 SANDBOX_RUNTIME_ACTION_HISTORY_POSTGRES_ADMIN_URL=postgres://<migration-owner>@127.0.0.1/witness SANDBOX_RUNTIME_ACTION_HISTORY_POSTGRES_URL=postgres://<runtime-role>@127.0.0.1/witness SANDBOX_RUNTIME_ACTION_HISTORY_POSTGRES_DENIED_URL=postgres://<denied-role>@127.0.0.1/witness SANDBOX_RUNTIME_SHARED_CAPACITY_REDIS_URL=redis://127.0.0.1:6379/0 go test -tags=integration -race -shuffle=on -count=1 ./gateway/capacity/redis
 go run ./cmd/verify-contract -source-root .
-go run ./cmd/run-conformance -source-root . -race -shuffle
+runner_dir="$(mktemp -d)"
+go build -buildvcs=true -o "$runner_dir/run-conformance" ./cmd/run-conformance
+"$runner_dir/run-conformance" -source-root . -race -shuffle
 ```
 
 Format changed Go files with `gofmt`. Do not weaken or skip a gate to make a
 change pass. Record an unavailable integration environment separately from a
 code failure.
+
+The local Suite command requires a clean checkout and a clean VCS-built Runner.
+It reads the Runner revision and Go version from `debug.ReadBuildInfo`, rejects
+missing revision data and `vcs.modified=true`, and tests a bounded read-only
+`git archive` of that exact revision rather than mutable worktree source. `go
+run ./cmd/run-conformance` lacks the required VCS settings under Go 1.26.5 and
+correctly fails.
+
+Run the local runner with `GOROOT` unset. It rejects any explicit `GOROOT`, uses
+the default `runtime.GOROOT()/bin/go`, and checks `go env GOVERSION` against the
+build identity. It resolves Git once from the initial `PATH` to an absolute,
+symlink-resolved, regular executable, reuses that path for Contract verification
+and the runner-revision archive, and records Git's self-reported version. It
+also clears Go path overrides, sets `GOWORK=off`, `GOENV=off`,
+`GOTOOLCHAIN=local`, and an empty `GOFLAGS`, and passes `-mod=readonly`.
+
+The host OS, filesystem, initial Git selection, and Go and Git executables are
+trusted local inputs. Absolute-path, file-type, and self-reported version
+checks prevent specific environment substitution and resolution drift; they
+do not attest host-tool integrity. The runner prints this evidence boundary.
+Every Contract case mapping declares an exact expected pass count. The `go test
+-json` stream must show all matching tests as distinct, started, non-skipped
+passes and the observed count must equal that declaration. Zero or unexpected
+extra matches, a parent-only scaffold pass, skip, failure, malformed evidence,
+or cancellation fails closed.
+
+The separate remote discovery CLI also requires a clean VCS-built binary. Its
+inputs are an HTTPS Provider origin, server CA, client CA, admitted client
+certificate/key, denied client certificate/key rooted in the same client CA,
+TLS server name, and expected Provider revision. Build it with:
+
+```bash
+go build -buildvcs=true -o "$runner_dir/run-remote-conformance" ./cmd/run-remote-conformance
+```
+
+Pass those inputs with `-target`, `-ca`, `-client-ca`, `-client-cert`,
+`-client-key`, `-denied-client-cert`, `-denied-client-key`, `-server-name`, and
+`-provider-revision`, respectively. See
+[`compatibility/sandbox-runtime/README.md`](../compatibility/sandbox-runtime/README.md)
+for the complete command and exact local/remote Suite identities. The remote
+profile covers only six read-only discovery cases; it is not the local 50-case
+Suite, protected or mutating remote conformance, independent-caller
+interoperability, aggregate conformance, or production-readiness evidence. The
+report sets `unsafe_method_probes_sent=true` only after a POST, PUT, PATCH, or
+DELETE discovery-path probe is actually written; a written probe prevents a
+zero-side-effect claim for an arbitrary non-conforming target.
+
+The P2.6 release gate passes locally at implementation `3fe314a` and E2E lock
+refresh `ae476fe`, including both clean VCS-built Runners, the root and E2E
+race/shuffle and vet gates, Contract verification, parent-lock verification,
+and all eight E2E `-check` commands. Keep those checks separate from external
+caller, deployment, and production qualification.
 
 ## Package boundaries
 
