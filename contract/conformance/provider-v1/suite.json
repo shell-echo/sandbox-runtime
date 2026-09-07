@@ -1,9 +1,11 @@
 {
   "suite_id": "sandbox-provider",
   "suite_version": "1.0.0",
+  "suite_digest_profile": "rfc8785-full-document-excluding-suite-digest-v1",
   "profiles": [
     {
       "profile_id": "sandbox-runtime-provider-v1",
+      "execution_mode": "repository-go-test",
       "tests": [
         "capability-discovery-mtls-only",
         "capability-discovery-admitted-identity",
@@ -58,5 +60,5 @@
       ]
     }
   ],
-  "suite_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  "suite_digest": "sha256:29e907e2e1ac13f7d772f28679a4e3ee216f87a82e4f961a6be2f21f5eb41838"
 }

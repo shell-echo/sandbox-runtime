@@ -1,0 +1,21 @@
+{
+  "suite_id": "sandbox-provider-remote",
+  "suite_version": "1.0.0",
+  "suite_digest_profile": "rfc8785-full-document-excluding-suite-digest-v1",
+  "profiles": [
+    {
+      "profile_id": "sandbox-runtime-provider-remote-discovery-v1",
+      "execution_mode": "remote-http-black-box",
+      "mutations_performed": false,
+      "tests": [
+        "remote-capability-discovery-mtls-success",
+        "remote-capability-discovery-client-certificate-required",
+        "remote-capability-discovery-schema",
+        "remote-capability-discovery-immutable",
+        "remote-capability-discovery-empty-request",
+        "remote-capability-discovery-get-only"
+      ]
+    }
+  ],
+  "suite_digest": "sha256:edab2667bd0a5e32448482e1a6b3d1922fd2c75b43657a282334d44435881c78"
+}

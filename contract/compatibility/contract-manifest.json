@@ -71,6 +71,7 @@
     {"path": "fixtures/browser-session-rejections.json", "kind": "fixture", "id": "urn:shell-echo:sandbox-runtime:fixture:browser-session-rejections:v1"},
     {"path": "fixtures/browser-session-admission-bindings.json", "kind": "fixture", "id": "urn:shell-echo:sandbox-runtime:fixture:browser-session-admission-bindings:v1"},
     {"path": "fixtures/browser-session-security-matrix.json", "kind": "fixture", "id": "urn:shell-echo:sandbox-runtime:fixture:browser-session-security-matrix:v1"},
-    {"path": "conformance/provider-v1/suite.json", "kind": "conformance-suite", "id": "urn:shell-echo:sandbox-runtime:conformance:provider-v1"}
+    {"path": "conformance/provider-v1/suite.json", "kind": "conformance-suite", "id": "urn:shell-echo:sandbox-runtime:conformance:provider-v1"},
+    {"path": "conformance/provider-remote-v1/suite.json", "kind": "conformance-suite", "id": "urn:shell-echo:sandbox-runtime:conformance:provider-remote-v1"}
   ]
 }

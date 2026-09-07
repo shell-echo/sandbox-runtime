@@ -30,7 +30,8 @@ The Contract resources are cumulative constraints with distinct roles:
 | [`schemas/`](../schemas/) | Defines the closed request, response, operation, handoff, capability, error, and evidence document shapes. |
 | [`provider-v1.json`](../semantic-rules/provider-v1.json) | Defines cross-field, admission, ownership, lifecycle, profile, and evidence semantics that are not fully expressible in OpenAPI or JSON Schema. |
 | [`fixtures/`](../fixtures/) | Supplies canonical accepted documents and rejection matrices for the named schemas and semantic rules. |
-| [`suite.json`](../conformance/provider-v1/suite.json) | Names the executable Provider conformance cases for the required profile. Passing cases cannot authorize behavior absent from the other Contract resources. |
+| [`provider-v1/suite.json`](../conformance/provider-v1/suite.json) | Names the repository-executed Provider conformance cases for the required local profile. Passing cases cannot authorize behavior absent from the other Contract resources. |
+| [`provider-remote-v1/suite.json`](../conformance/provider-remote-v1/suite.json) | Names the portable, read-only remote discovery cases. It does not replace or execute the repository profile. |
 | This specification | Orders the existing resources into caller workflows and responsibility boundaries. |
 
 No resource silently overrides another. An inconsistency between Contract
@@ -333,8 +334,10 @@ revision.
 
 The Contract lock verifier establishes the identity and integrity of the
 consumed resource tree. JSON Schema or projection tests establish selected
-document behavior. The Conformance Suite maps every case ID in the required
-profile to executable repository tests. These evidence tiers remain distinct.
+document behavior. The local Conformance Suite maps every case ID in its
+required profile to executable repository tests. The remote Conformance Suite
+defines a separate, non-mutating HTTP black-box profile. These evidence tiers
+remain distinct; executing one profile never marks the other as exercised.
 
 A compatibility claim states the exact Contract revision/tree and Provider
 revision exercised, the selected profile, the Suite case inventory, and whether
@@ -344,10 +347,28 @@ E2E profiles cannot be combined into an aggregate, multi-controller,
 multi-tenant, deployment, or production claim without a separately named gate
 and reproducible evidence.
 
-The Suite's current declared `suite_digest` is a placeholder. The exact locked
-Git Contract tree protects the Suite file at the selected revision, but the
-declared value is not an independently content-derived Suite digest and is not
-presented as one.
+Every Suite declares
+`suite_digest_profile=rfc8785-full-document-excluding-suite-digest-v1`. A
+verifier MUST accept a bounded UTF-8 JSON document with exactly one top-level
+object, reject duplicate or unknown members, remove exactly the top-level
+`suite_digest` member, canonicalize the remaining object with RFC 8785 JCS, and
+compute SHA-256 over those canonical UTF-8 bytes. The result is encoded as
+lowercase `sha256:<64 hexadecimal characters>`. The digest-profile member is
+included in the canonical input. Object-member ordering and insignificant JSON
+whitespace therefore do not change the digest, while Suite identity, profile
+metadata, case identity, and array ordering do. The recomputed digest MUST
+equal both the Suite's embedded `suite_digest` and the selected Contract lock.
+
+The portable remote profile executes only the six case IDs declared in
+`sandbox-provider-remote`. It uses an explicitly configured HTTPS origin,
+server trust roots, and mTLS client identity. It performs no Provider mutation,
+does not mint protected-operation bearer tokens, and reports each case as
+passed or failed. A complete green report proves only the remote discovery
+profile against the exact target and locked Contract identity. It does not
+execute the 50-case repository profile, prove protected admission or lifecycle
+behavior, or establish an independently implemented caller, aggregate
+conformance, multi-controller reliability, multi-tenant isolation, deployment,
+or production readiness.
 
 ## Current implementation and deployment gaps
 
@@ -368,9 +389,9 @@ wire behavior:
   operator controls, hostile-tenant isolation, or deployment readiness;
 - file-backed Provider repositories remain single-controller development
   evidence rather than transactional multi-controller storage; and
-- the repository-owned Suite maps case IDs to this repository's tests; it is not
-  yet a language-neutral runner against an arbitrary remote Provider and does
-  not by itself prove an external product's business workflow, authorization,
+- the repository-owned 50-case Suite maps case IDs to this repository's tests;
+  the separate portable remote Suite currently covers discovery only and does
+  not prove an external product's protected business workflow, authorization,
   aggregate ledger, Gateway, deployment, or production behavior.
 
 These gaps do not weaken the locked wire Contract. They prevent broader
