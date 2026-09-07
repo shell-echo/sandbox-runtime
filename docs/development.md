@@ -57,14 +57,17 @@ when authentication, persistence, image pinning, or transport safety is absent.
 
 ## Provider Contract discipline
 
-The repository-owned MIT Contract under `contract/` defines wire behavior through
-its locked OpenAPI, JSON Schemas, semantic rules, fixtures, and Conformance
-Suite. Update `compatibility/sandbox-runtime/contract.lock.json` only as a
-reviewed protocol change, then update DTOs, mappings, fixtures, tests, and
-documentation together. Do not claim compatibility with an absent external
-Contract.
+The repository-owned MIT Contract under `contract/` defines wire behavior and
+caller obligations through its locked Provider Calling Standard, OpenAPI, JSON
+Schemas, semantic rules, fixtures, and Conformance Suite. Update
+`compatibility/sandbox-runtime/contract.lock.json` only as a reviewed protocol
+change, then update DTOs, mappings, fixtures, tests, and documentation together.
+Do not claim compatibility with an external Contract or add consumer-specific
+wire behavior.
 
-Contract lock verification proves only the identity of consumed inputs. Unit
+For v1, compatibility requires the exact Contract revision/tree and selected
+capability/runtime profile; the `/v1` path alone is insufficient. Contract
+lock verification proves only the identity of consumed inputs. Unit
 tests prove components. Conformance, multi-controller reliability, security,
 deployment, and production readiness remain separate evidence tiers.
 

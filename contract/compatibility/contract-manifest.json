@@ -4,6 +4,7 @@
   "license": "MIT",
   "resources": [
     {"path": "openapi/sandbox-runtime-provider-v1.yaml", "kind": "openapi", "id": "urn:shell-echo:sandbox-runtime:openapi:provider-v1"},
+    {"path": "specification/provider-calling-standard-v1.md", "kind": "specification", "id": "urn:shell-echo:sandbox-runtime:specification:provider-calling-standard-v1"},
     {"path": "schemas/provider-capabilities.schema.json", "kind": "json-schema", "id": "urn:shell-echo:sandbox-runtime:contract:provider-capabilities:v1"},
     {"path": "schemas/capability.schema.json", "kind": "json-schema", "id": "urn:shell-echo:sandbox-runtime:contract:capability:v1"},
     {"path": "schemas/runtime-profile.schema.json", "kind": "json-schema", "id": "urn:shell-echo:sandbox-runtime:contract:runtime-profile:v1"},

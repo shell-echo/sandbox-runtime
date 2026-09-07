@@ -27,6 +27,14 @@ const (
 var (
 	gitObjectPattern = regexp.MustCompile(`^[0-9a-f]{40}$`)
 	digestPattern    = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
+	manifestKinds    = map[string]struct{}{
+		"specification":     {},
+		"openapi":           {},
+		"json-schema":       {},
+		"semantic-rules":    {},
+		"fixture":           {},
+		"conformance-suite": {},
+	}
 )
 
 // Lock identifies one immutable local Contract input set.
@@ -68,6 +76,19 @@ type SandboxSuite struct {
 	SuiteVersion    string `json:"suite_version"`
 	SuiteDigest     string `json:"suite_digest"`
 	RequiredProfile string `json:"required_profile"`
+}
+
+type contractManifest struct {
+	Namespace string                     `json:"namespace"`
+	Version   string                     `json:"version"`
+	License   string                     `json:"license"`
+	Resources []contractManifestResource `json:"resources"`
+}
+
+type contractManifestResource struct {
+	Path string `json:"path"`
+	Kind string `json:"kind"`
+	ID   string `json:"id"`
 }
 
 // Report describes the verified checkout without claiming conformance.
@@ -232,16 +253,19 @@ func Verify(ctx context.Context, lock Lock, sourceRoot string) (Report, error) {
 	if err != nil {
 		return Report{}, err
 	}
-	var manifest struct {
-		Namespace string `json:"namespace"`
-		Version   string `json:"version"`
-		License   string `json:"license"`
-	}
-	if err := readMetadata(manifestPath, &manifest); err != nil {
+	manifest, err := readContractManifest(manifestPath)
+	if err != nil {
 		return Report{}, fmt.Errorf("read Contract manifest: %w", err)
 	}
 	if manifest.Namespace != lock.Contract.Namespace || manifest.Version != lock.Contract.Version || manifest.License != lock.Contract.License {
 		return Report{}, errors.New("Contract manifest identity does not match the contract lock")
+	}
+	contractRoot, err := securePath(root, lock.Contract.Root)
+	if err != nil {
+		return Report{}, fmt.Errorf("resolve Contract root: %w", err)
+	}
+	if err := validateContractManifestResources(contractRoot, manifest.Resources); err != nil {
+		return Report{}, err
 	}
 	manifestDigest, err := fileSHA256(manifestPath)
 	if err != nil {
@@ -333,6 +357,87 @@ func Verify(ctx context.Context, lock Lock, sourceRoot string) (Report, error) {
 		OpenAPISHA256:  openAPIDigest,
 		SuiteDigest:    suite.SuiteDigest,
 	}, nil
+}
+
+func readContractManifest(path string) (contractManifest, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return contractManifest{}, err
+	}
+	defer file.Close()
+	if err := checkFileSize(file, maxMetadataBytes); err != nil {
+		return contractManifest{}, err
+	}
+	decoder := json.NewDecoder(file)
+	decoder.DisallowUnknownFields()
+	var manifest contractManifest
+	if err := decoder.Decode(&manifest); err != nil {
+		return contractManifest{}, err
+	}
+	if err := ensureJSONEOF(decoder); err != nil {
+		return contractManifest{}, err
+	}
+	return manifest, nil
+}
+
+func validateContractManifestResources(contractRoot string, resources []contractManifestResource) error {
+	contractRoot, err := filepath.Abs(contractRoot)
+	if err != nil {
+		return fmt.Errorf("resolve Contract manifest root: %w", err)
+	}
+	contractRoot, err = filepath.EvalSymlinks(contractRoot)
+	if err != nil {
+		return fmt.Errorf("resolve Contract manifest root: %w", err)
+	}
+	if info, err := os.Stat(contractRoot); err != nil || !info.IsDir() {
+		if err == nil {
+			err = errors.New("not a directory")
+		}
+		return fmt.Errorf("inspect Contract manifest root: %w", err)
+	}
+	if len(resources) == 0 {
+		return errors.New("Contract manifest resources must not be empty")
+	}
+	paths := make(map[string]struct{}, len(resources))
+	ids := make(map[string]struct{}, len(resources))
+	for index, resource := range resources {
+		if strings.TrimSpace(resource.Path) == "" || strings.TrimSpace(resource.Kind) == "" || strings.TrimSpace(resource.ID) == "" {
+			return fmt.Errorf("Contract manifest resource %d path, kind, and id must not be empty", index)
+		}
+		if !fs.ValidPath(resource.Path) || resource.Path == "." {
+			return fmt.Errorf("Contract manifest resource %d path must be a clean relative slash path", index)
+		}
+		if _, ok := manifestKinds[resource.Kind]; !ok {
+			return fmt.Errorf("Contract manifest resource %d has unsupported kind %q", index, resource.Kind)
+		}
+		if _, duplicate := paths[resource.Path]; duplicate {
+			return fmt.Errorf("Contract manifest resource %d duplicates path %q", index, resource.Path)
+		}
+		paths[resource.Path] = struct{}{}
+		if _, duplicate := ids[resource.ID]; duplicate {
+			return fmt.Errorf("Contract manifest resource %d duplicates id %q", index, resource.ID)
+		}
+		ids[resource.ID] = struct{}{}
+
+		path, err := securePath(contractRoot, resource.Path)
+		if err != nil {
+			return fmt.Errorf("resolve Contract manifest resource %d: %w", index, err)
+		}
+		info, err := os.Lstat(filepath.Join(contractRoot, filepath.FromSlash(resource.Path)))
+		if err != nil {
+			return fmt.Errorf("inspect Contract manifest resource %d: %w", index, err)
+		}
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("Contract manifest resource %d is not a regular file", index)
+		}
+		if resolvedInfo, err := os.Stat(path); err != nil || !resolvedInfo.Mode().IsRegular() {
+			if err == nil {
+				err = errors.New("not a regular file")
+			}
+			return fmt.Errorf("inspect Contract manifest resource %d: %w", index, err)
+		}
+	}
+	return nil
 }
 
 func git(ctx context.Context, root string, arguments ...string) (string, error) {

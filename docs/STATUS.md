@@ -1,6 +1,6 @@
 # Project Status
 
-Updated: 2026-09-06
+Updated: 2026-09-07
 
 This document is the implementation ledger for the repository-owned MIT
 Provider Contract. It distinguishes local component evidence, Contract
@@ -12,11 +12,12 @@ production readiness.
 
 | Item | Evidence | Status |
 | --- | --- | --- |
+| Sandbox Provider Calling Standard decision | ADR 0037; `contract/specification/provider-calling-standard-v1.md`; repository-owned Contract manifest | External consumers adapt to the exact locked `sandbox-runtime` Provider Contract. The former named Agent Platform P3 migration route is retired, while caller/Provider ownership separation and historical candidate evidence remain. This standard slice adds no route, field, capability, or production-readiness claim. Generic protected-operation interoperability remains open because the implementation still fixes `iss=agent-platform` outside the locked Contract; issuer policy requires a separate reviewed protocol slice |
 | Latest downstream-fencing implementation and local/hosted caller evidence | Contract `5096e71`; projection/lock `24b2e36`; fencing component `b4d41c9`; Provider bootstrap `58488d7`; provisioning/process component `8a1049b`; current lock descriptor `b1d41f3`; local harness/run `550c785`/`20260906T050213.016063000Z`; hosted harness/run `2cadc53`/`34013982796` | The component and real-backend integration gates remain valid. The clean `linux/arm64` and hosted `linux/amd64` runs each pass all 13 scenarios through two independent mTLS/JWS caller processes, two Gateway processes, one authenticated unique ingress, retained Valkey state, and signed real Chromium. They exercise six protected Provider routes. The local run emits exactly five `0600` evidence files with all cleanup/sanitization checks true; the downloaded artifact contains evidence directory `20260906T052710.781616339Z` with exactly five sanitized files and pins the expected amd64 identities, topology, cleanup, and sanitization state. These close only the platform-specific ADR 0033 external-caller gates. Contract/tree/48-case identity is pinned but the Suite is not executed (`suite_exercised=false`). These v1 runs do not exercise ADR 0034 deletion/restore behavior. Valkey provenance/HA/failover, production advertisement/public Gateway, real Agent Platform, aggregate, multi-controller, hostile multi-tenant, deployment, and production readiness remain open |
 | ADR 0034 witnessed action-history component and local/hosted caller evidence | ADR 0034; witnessed v2 Redis adapter and Darwin/Linux file witness; pinned Valkey index `sha256:ccfa19b0d743e48927e1c8c14e39e0acb97b5cea347fef0bfe340247fea920cd`; Contract `5096e71fb84fbec22aa3487a0e55a1b49602ab8b`; tree `859f76dc0e855a0c8abdbbb5648df100dabb4328`; fixed harness `059357c`; local run `20260906T100233.295973000Z`; hosted run `34026680591` | Local focused/full race-shuffle, vet, Contract lock verification, unchanged 48-case Suite, and tagged pinned-Valkey package integration pass. V2 retains at most 4,096 fingerprint-only session records in one permanent hash, rejects missing/malformed history, and compares its sequence/token with an independent monotonic witness; only an exact Redis-ahead-one interrupted commit may reconcile forward. The clean `linux/arm64` and hosted `linux/amd64` fixed-harness runners each pass 18/18 through two Gateways, two independent callers, one unique ingress, real Chromium, a separate orchestrator fault credential, and a file witness outside the logical Valkey restore set. They prove the named deletion, restored-old-snapshot, witness-reconstruction, and checkpoint-mismatch behaviors before rejected actions open a new upstream dial. The local exact five-file set is `0600`; the inspected hosted artifact contains directory `20260906T101111.796974798Z` with exactly five sanitized files. Artifact ID `9987350368` has digest `sha256:3e68f1c4b5bd74e0ae0ff0fde2c9ffefc63852cf9fc82b3019bedfb228bf2c9a`. These close only the platform-specific ADR 0034 caller gates; the Suite remains unexercised. The file witness remains single-process component infrastructure, not production storage. Production witness/storage, Valkey provenance/HA/failover, production ACL separation, configuration/advertisement/deployment, aggregate, multi-controller, hostile multi-tenant, and production-readiness results remain absent |
 | ADR 0035 PostgreSQL witness candidate | ADR 0035; `PostgresActionHistoryWitness`; `pgx/v5 v5.9.2`; migration `gateway/capacity/redis/migrations/0001_action_history_witness.sql`; strict `VerifyRestoredState`; hosted workflow run `34031784793` at implementation `3ff58dc`; PostgreSQL digest `sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94` | Namespace/policy digest isolation, idempotent provision, atomic conditional CAS, primary-local synchronous commit, bounded contexts, error redaction, schema constraints, and least-privilege role shape are implemented. Local unit/full race-shuffle, vet, Contract lock, unchanged 48-case Suite, tagged-integration compilation, and the pinned-Valkey strict one-ahead non-mutation scenario pass. The hosted workflow passes the exact migration, role denial, concurrent CAS/reconnect, missing/malformed state, pool-starvation timeout, and combined real PostgreSQL/pinned-Valkey rollback cases. The initial tag pull resolved the digest now pinned by the workflow. The local PostgreSQL environment remained unavailable. Image provenance, independent failure/backup domains, deployment-owned controlled ingress operations, HA/failover, deployment, and production readiness remain unproved |
 | ADR 0036 PostgreSQL controlled-restore reference | ADR 0036; profile `browser-postgres-controlled-restore-e2e-v1`; locked PostgreSQL index and exact migration; PostgreSQL witnessed-v2 Provider/private-ingress composition; orchestrator-only Redis restore control; strict restored-state startup; PR #47 merge `a0cddf4`; hosted run `34038556283`; artifact `browser-postgres-controlled-restore-e2e-evidence-34038556283` | The post-merge `linux/amd64` hosted run passes all 18 same-runner scenarios around two Gateways, two independent callers, one unique ingress, Valkey, PostgreSQL, and real Chromium. It quarantines both listeners before restore, rejects an older Redis snapshot without PostgreSQL advance or listener exposure, repairs the exact current state, and resumes only after strict verification. The inspected artifact contains evidence directory `20260906T141526.647125530Z` with exactly five sanitized files; the report is 18/18, and the manifest pins `harness_commit=a0cddf4`, records three ingress reconstructions, all cleanup/sanitization flags true, no file-witness v2 field, PostgreSQL restore evidence, `same_runner=true`, `independent_failure_domain=false`, and `suite_exercised=false`. Artifact ID `9991028239` has digest `sha256:72d822c44c2ab5e91ed500f5ef549d8ec1c63268443a48fa293c93a3d24ca14e`. This closes only the hosted ADR 0036 same-runner operational reference gate. PostgreSQL and Valkey still share the runner, host, Docker engine, workflow, and operator; provenance, HA, independent failure/backup domains, deployment, and production readiness remain unproved |
-| Current hosted CI and evidence tracks | Merge commit `a0cddf4`; CI `34038556281`; Reference `34038556295`; Candidate `34038556284`; Browser `34038556297`; shared capacity `34038556314`; durable revocation `34038556293`; downstream fencing v1 `34038556291`; downstream fencing v2 `34038556299`; PostgreSQL witness `34038556301`; PostgreSQL controlled restore `34038556283` | All ten post-merge workflows pass for the same `main` commit. The controlled-restore run independently passes 18/18 on `linux/amd64`; artifact ID `9991028239` has GitHub digest `sha256:72d822c44c2ab5e91ed500f5ef549d8ec1c63268443a48fa293c93a3d24ca14e`. CI and all eight E2E profiles remain distinct evidence tracks; the PostgreSQL witness workflow remains a component/integration track. Their partial properties cannot be composed into aggregate conformance, real-platform compatibility, Provider multi-controller reliability, hostile multi-tenant security, deployment, or production readiness |
+| Current hosted CI and evidence tracks | Merge commit `cee6a3f`; CI `34076759102`; Reference `34076759139`; Candidate `34076759185`; Browser `34076759117`; shared capacity `34076759106`; durable revocation `34076759108`; downstream fencing v1 `34076759154`; downstream fencing v2 `34076759104`; PostgreSQL witness `34076759137`; PostgreSQL controlled restore `34076759112` | All ten main workflows pass for the same `main` commit. CI and all eight E2E profiles remain distinct evidence tracks; the PostgreSQL witness workflow remains a component/integration track. Their partial properties cannot be composed into aggregate conformance, generic-consumer compatibility, Provider multi-controller reliability, hostile multi-tenant security, deployment, or production readiness |
 | GitHub Actions runtime | Node 24 migration `6c1ddde`; E2E lock `e75869d`; CI `33850219645`; Reference `33850219700`; Candidate `33850219664`; Browser `33850219667` | All four workflows passed without the previous Node 20 or `punycode` warnings. This is CI infrastructure evidence only and adds no Provider behavior, external-caller compatibility, deployment, or production-readiness claim |
 | Browser-session release CI evidence | implementation/ledger baseline `df78739`; lock-refresh baseline `6163de1` | Repository CI runs `33712081491` and `33712412434` each passed `provider-contract`, `test`, and `docker-integration`. This is repository CI only, not browser external-caller or production evidence |
 | Browser publication baseline CI evidence | hosted harness baseline `e7e4d57`; Provider lock `83a7884` | Repository CI run `33725664862` passed `provider-contract`, `test`, and `docker-integration`. This remains repository CI; exact Browser image publication is separately evidenced by run `33724368530`, and neither run is browser caller E2E |
@@ -152,9 +153,9 @@ It does not clone, mount, or read an external source repository.
 | P2.5f7 | Terminal/Gateway vertical evidence gate | Local single-controller Docker/race/restart/reconnect gate passes in `0e8b284`; evidence baseline `cefbc74` passed repository CI `33134521467` | Retain same-repository test boundary and no-public-Gateway/no-external-caller claims; P2.5g artifact/usage evidence is recorded separately |
 | P2.5g | Artifact and usage vertical | Local gate passes in implementation `0e6e108`: default-disabled development composition, durable artifact/usage repositories, async recovery/shutdown, real Docker output confinement and private staging, partial exec-derived usage, operation aggregation, and restart evidence. Repository CI `33157119149` passed all three jobs | Retain development-only/single-controller boundaries; publication, billing, external caller, aggregate, reliability, tenancy, deployment, and production claims remain open |
 | P2.5h | Readiness-derived composition and exact advertisement | Local component/projection gate passes in implementation `2c55173`: explicit opt-in config, canonical IDs, complete dependency graph validation, empty-disabled behavior, and immutable exact Contract snapshot generation. Repository CI `33159099578` passed all three jobs. The Provider command graph still deliberately lacks caller-owned WebSocket/Gateway policy | Retain fail-closed Provider ownership. The reference stack supplies policy externally for P2.5i without adding an allow-all Provider default |
-| P2.5i | Independent reference caller release gate | Hosted run `33970773414` with harness/Provider `17ed6ca`/`b4d41c9` passed 15 initial and 5 restart/resume coding/shell scenarios; latest local pre-refresh run `20260905T080530.577843000Z` passes the same set on `59e08d5`/`c0a55d1` | Hosted artifact digest is `sha256:de2c6f2d31d9dd5a8323d82560bf0f314970c8e1825d815d224d48aac2dcba16`; the local run pins runtime digest `sha256:c1da999518ed8cf3c422142b705f3eeca5d60104be07bc28c15a7d527d2907fc`. Neither run contains a Browser scenario and neither may be promoted to Agent Platform, durable-revocation caller, aggregate, multi-controller, hostile multi-tenant, deployment, or production evidence |
-| P2 | Coding/remote-shell profile | Passed for the architecture's separately supplied reference caller gate. All earlier component/Contract gates retain their narrower evidence boundaries | Actual Agent Platform compatibility, aggregate conformance, multi-controller reliability, hostile multi-tenant security, deployment, and production gates remain open |
-| P3 | Migration readiness and platform integration | Local component evidence (`4212e88`), latest local pre-refresh candidate integration (`20260905T080623.861033000Z`, `59e08d5`/`c0a55d1` lock), and hosted candidate run `33970773345` (`17ed6ca`/`b4d41c9` lock) are present; the reference P2 caller gate passes | Supply a real platform migration target and prove locked-Suite/request shadow parity, new-run-only canary, rollback, old-run drain, metric parity, and unchanged platform-owned contracts |
+| P2.5i | Independent reference caller release gate | Hosted run `33970773414` with harness/Provider `17ed6ca`/`b4d41c9` passed 15 initial and 5 restart/resume coding/shell scenarios; latest local pre-refresh run `20260905T080530.577843000Z` passes the same set on `59e08d5`/`c0a55d1` | Hosted artifact digest is `sha256:de2c6f2d31d9dd5a8323d82560bf0f314970c8e1825d815d224d48aac2dcba16`; the local run pins runtime digest `sha256:c1da999518ed8cf3c422142b705f3eeca5d60104be07bc28c15a7d527d2907fc`. Neither run contains a Browser scenario and neither may be promoted to generic-consumer, durable-revocation caller, aggregate, multi-controller, hostile multi-tenant, deployment, or production evidence |
+| P2 | Coding/remote-shell profile | Passed for the architecture's separately supplied reference caller gate. All earlier component/Contract gates retain their narrower evidence boundaries | Aggregate conformance, multi-controller reliability, hostile multi-tenant security, deployment, and production gates remain open |
+| P3 | Named-platform migration | Retired by ADR 0037. Historical component evidence (`4212e88`), local candidate integration, and hosted candidate run `33970773345` remain under their original evidence identities | No release gate remains. Consumers adapt to the exact locked Provider Contract and own any shadow, canary, rollback, drain, and metric-comparison process |
 | Internal Block manifest | Declarative block configuration foundation | Passed as component evidence; no public API or runtime execution | Add a separately reviewed browser/desktop manifest and runtime image before enabling any optional capability |
 | P4 | Optional capability profiles | Browser Contract authority/projection, signed image publication, Provider-local components, separately named Browser/shared-capacity/durable-revocation caller gates, ADR 0033 component/caller evidence, ADR 0034 witnessed-v2 local/hosted caller evidence, the ADR 0035 PostgreSQL component gate, and the ADR 0036 hosted same-runner controlled-restore gate have passed within their tiers. Neither downstream profile nor the controlled-restore profile executes the Contract Suite | Production independent witness/storage and restore operations, Valkey/PostgreSQL provenance/HA, production configuration/metrics, hostile-tenant/operational evidence, deployment, and production advertisement remain later gates |
 | Production readiness | Independent evidence tier, not a shortcut from P4 | Not established | Deployment, multi-controller reliability, multi-tenant security, operations, and production gates |
@@ -791,45 +792,42 @@ Passed locally (authorized test environment):
 
 Open:
 
-- real Agent Platform integration and P3 migration evidence. The
-  2026-09-02 read-only re-audit of local and live-remote `veronica` found only
-  Blueprint/governance and TF00 feasibility material, not a runnable
-  Application service, sandbox caller/Gateway, WorkOrder/AgentRun mapping,
-  mTLS/JWS identity setup, endpoint, or migration harness.
-  The co-located `platform-e2e` run is a candidate integration harness and is
-  recorded separately; it does not substitute for real request shadow parity,
-  canary traffic, rollback, old-run drain, metric parity, or unchanged
-  platform contracts;
-- optional content-derived Suite digest enhancement;
+- lock and publish the Sandbox Provider Calling Standard as a Contract resource;
+- define a generic protected-admission issuer policy. Production code currently
+  fixes `iss=agent-platform`, while the locked Contract does not state or test
+  that exact behavior; do not claim generic protected-operation interoperability
+  until a reviewed Contract/Suite/implementation migration closes this gap;
+- publish a content-derived Suite digest and a remote black-box conformance
+  runner. The current Suite is a repository test mapping, not third-party
+  implementation certification;
+- complete the Provider lifecycle and session-management surface required by a
+  deployable consumer, including explicit resource termination/lease control and
+  standard Gateway lifecycle behavior; these routes remain unauthorized today;
 - Browser production advertisement and deployable
   authenticated unique-ingress/public caller-owned Gateway; a production
   independent witness and restore procedure; Valkey provenance and HA/failover
   consistency; production storage/configuration, ACLs, metrics, hostile-tenant,
   and operational evidence;
-- Agent Platform caller E2E, aggregate lifecycle conformance, reliability,
-  tenancy, deployment, and production gates.
+- generic-consumer black-box qualification, aggregate lifecycle conformance,
+  reliability, tenancy, deployment, and production gates.
 
-## Platform Integration Blocker
+## Retired Platform Integration Track
 
-P3 cannot start its real traffic evidence until the platform side supplies all
-of the following as a reproducible, non-secret test entrypoint:
-
-1. A real Agent Platform caller/service that owns WorkOrder/Run policy and
-   invokes the Provider Contract over the intended network boundary.
-2. The exact ProviderRevision, Contract/profile lock, capability/request mapping,
-   and platform-owned shadow comparison rules.
-3. Identity-bound mTLS/JWS PKI, caller/tenant bindings, and reachable Provider
-   and caller-owned Gateway endpoints.
-4. A harness that can generate shadow traffic, bind only new runs to a canary,
-   roll future selection back, drain old runs, and compare lifecycle, exec,
-   orphan, session, resource-evidence, and reconciliation metrics.
-
-Until those inputs exist, the candidate harness can provide only bounded
-integration evidence. The locked 48-case Suite and co-located `e2e/` run must
-not be relabeled as real Agent Platform E2E, aggregate conformance, or
-migration evidence.
+P3 is retired rather than blocked. The former platform audit and candidate
+harness remain historical evidence only. No missing named-platform repository,
+credential, endpoint, or migration harness is an input to future
+`sandbox-runtime` work. External consumers must conform to the exact locked
+Contract and own their adapter, business state, authorization, Gateway policy,
+and rollout process.
 
 ## Next Entry
+
+The immediate slice is the repository-owned Sandbox Provider Calling Standard:
+bind the specification into the Contract manifest and lock, refresh active E2E
+locks without rewriting historical evidence, and pass the verifier and current
+48-case Suite. Subsequent protocol slices must close the generic issuer,
+content-derived Suite digest, portable black-box runner, and lifecycle-closure
+gaps before broad third-party interoperability is claimed.
 
 P4 Browser authority is complete in Contract `5096e71` and projection
 `24b2e36`. ADR 0019 and publication run `33724368530` establish the exact

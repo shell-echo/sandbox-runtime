@@ -23,7 +23,7 @@ against harness/Provider `e7e7f03`/`44ea2ee`; artifact
 `sha256:b081ce8a3bf7e3e0c37e4bf036630483735c3812eeaf24d311048ff0a9122779`.
 This work does not close
 listener/TLS/HTTP limits, partition-aware shared capacity, distributed durable
-revocation, P3, real Agent Platform, aggregate conformance, multi-controller,
+revocation, generic-consumer interoperability, aggregate conformance, multi-controller,
 multi-tenant, deployment, or production gates.
 
 ADR 0029 and implementation `b8f8941` subsequently add a bounded
@@ -36,8 +36,8 @@ on `linux/amd64` against harness `7a20d9d`. Its inspected artifact
 `sha256:94bcdfa53b667d4a6bc17fd6714cc9895e8402b830b8c6425c604c835f9228f`.
 This closes only the listener/TLS/HTTP component and Browser reference-caller
 scenario. Partition-aware shared or distributed capacity, durable distributed
-revocation, production storage/configuration and metrics, P3, real Agent
-Platform, aggregate, multi-controller, multi-tenant, deployment, and
+revocation, production storage/configuration and metrics, generic-consumer
+interoperability, aggregate, multi-controller, multi-tenant, deployment, and
 production gates remain open.
 
 ADR 0030 and implementation `997fb0d` now add the required
@@ -67,7 +67,7 @@ failure closure and recovery, and evidence sanitization. It is local Gateway
 shared-capacity evidence only: Contract metadata is pinned but not exercised,
 and Valkey provenance, HA/failover consistency, durable distributed revocation,
 downstream fencing, real Browser/CDP, Provider multi-controller, hostile
-multi-tenant, real Agent Platform, deployment, and production gates remain
+multi-tenant, generic-consumer interoperability, deployment, and production gates remain
 open.
 
 Hosted Browser Shared Capacity E2E run `33949577876` independently passes the
@@ -85,7 +85,7 @@ and two `capacity_unavailable` records; observations contain 22 `resolve` and
 and `provenance_not_established=true`. This remains Gateway/Valkey-only
 evidence and does not add Provider API, Browser/CDP, image provenance,
 restricted-egress, Provider artifact/usage, HA, revocation, downstream fencing,
-multi-controller, multi-tenant, real-platform, aggregate, deployment, or
+multi-controller, multi-tenant, generic-consumer, aggregate, deployment, or
 production evidence.
 
 ADR 0032 and implementation `c0a55d1` add an atomic exact-grant,
@@ -421,8 +421,9 @@ evidence chain before it can be advertised.
   aggregate claim.
 - `blocks/` can validate an internal digest-pinned Block manifest, but it does
   not authorize a Provider capability or establish image provenance.
-- A real Agent Platform caller and migration traffic harness remain unavailable;
-  the co-located candidate harness is evidence only within its named boundary.
+- The former named-platform migration target is retired by ADR 0037; the
+  co-located candidate harness is historical evidence only within its named
+  boundary.
 
 ## Profile order and gates
 
@@ -557,7 +558,7 @@ internal Block manifest a wire resource or establishes production readiness.
   `sha256:b024225aa3545fa56a7cc5113f29c0817a86ebc70c3976e10d81bf3507546cba`.
   Hosted Reference/Candidate coding/shell regressions
   `33846603323`/`33846603454` also pass 15+5 against the same lock, but contain
-  no Browser scenario and do not add Browser or real-platform evidence. This is
+  no Browser scenario and do not add Browser or generic-consumer evidence. This is
   single-process capacity plus Browser reference external-caller evidence, not
   a distributed, hostile-tenant, deployment, or production result.
 - ADR 0028 and implementation `44ea2ee` add a required process-local global
@@ -742,7 +743,7 @@ storage/configuration and authenticated-ingress topology, hostile-tenant, ACL,
 and operational evidence as later independent gates before reviewing production
 advertisement. This repository currently has no deployment target that can
 truthfully supply those results.
-Keep Browser Reference E2E separate from coding/shell, real Agent Platform,
+Keep Browser Reference E2E separate from coding/shell, historical Platform Candidate,
 aggregate conformance, multi-controller, multi-tenant, deployment, and
 production evidence. After the Browser readiness record is complete, begin the
 Desktop Contract/authority audit as the next optional profile rather than

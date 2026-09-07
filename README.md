@@ -51,9 +51,11 @@ checks as true. PostgreSQL and Valkey still share one host, Docker engine,
 operator, and workflow, so this profile cannot establish independent failure or
 backup domains.
 Valkey provenance and HA/failover, production Browser
-advertisement/public Gateway composition, real Agent Platform migration,
-aggregate conformance, multi-controller, hostile multi-tenant, deployment, and
-production gates remain open. The ADR 0033, v2, and controlled-restore profiles
+advertisement/public Gateway composition, aggregate conformance,
+multi-controller, hostile multi-tenant, deployment, and production gates remain
+open. The former named Agent Platform migration track is retired; external
+consumers must implement the repository-owned Provider calling standard. The
+ADR 0033, v2, and controlled-restore profiles
 pin Contract identity but do not execute the Suite (`suite_exercised=false`).
 
 Merge commit `a0cddf4` passes repository CI `34038556281`, Reference
@@ -78,9 +80,11 @@ Start a new development session with
 [`docs/PROJECT_CONTEXT.md`](docs/PROJECT_CONTEXT.md). It summarizes the current
 architecture, engineering rules, verified maturity, blockers, and next work;
 the detailed implementation evidence ledger remains in
-[`docs/STATUS.md`](docs/STATUS.md). For the caller-facing Provider routes,
-ownership boundary, admission rules, and integration checklist, see the
-[`Provider Integration Profile`](docs/platform-integration-profile.md).
+[`docs/STATUS.md`](docs/STATUS.md). For normative caller obligations and the
+Provider call sequence, see the
+[`Sandbox Provider Calling Standard`](contract/specification/provider-calling-standard-v1.md).
+The [`Provider Integration Profile`](docs/platform-integration-profile.md)
+remains a non-normative implementation guide.
 
 Currently implemented:
 
@@ -328,8 +332,10 @@ Policy defines what an instance is allowed to do: resource limits, network acces
 The provider boundary, repository-owned Contract, security baseline, and
 authoritative phased delivery plan are defined in
 [the architecture document](docs/architecture.md). The independent-provider
-ownership decision is recorded in
-[ADR 0001](docs/adr/0001-agent-platform-provider-boundary.md).
+ownership decision is recorded in historical
+[ADR 0001](docs/adr/0001-agent-platform-provider-boundary.md) and its
+generic-caller successor,
+[ADR 0037](docs/adr/0037-sandbox-provider-calling-standard.md).
 
 The intended long-term architecture is:
 
@@ -745,7 +751,7 @@ visibility.
 - [x] pass the locked local lifecycle/security Suite mappings (component evidence only)
 - [x] compose durable terminal sessions and artifact/usage development verticals
 - [x] derive the exact nonempty advertisement from a complete externally supplied readiness graph
-- [x] pass the independent reference caller release gate (Agent Platform and production gates remain separate)
+- [x] pass the independent reference caller release gate (generic-consumer and production gates remain separate)
 
 ### Manifest and blocks
 

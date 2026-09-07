@@ -1,13 +1,15 @@
-# Provider Integration Profile
+# Provider Integration Guide
 
-This document is the handoff point for a calling Agent Platform, service, or
-integration adapter. It describes the stable boundary exposed by
-`sandbox-runtime` and the responsibilities that remain with the caller.
+This document is the non-normative handoff guide for any service or integration
+adapter calling `sandbox-runtime`. Consumers adapt to the repository-owned
+Provider Contract; this repository does not implement consumer-specific wire
+adapters.
 
 It is not a second Contract. The repository-owned MIT Provider Contract is the
-only wire authority. This document is a navigation and integration guide; the
-OpenAPI document, JSON Schemas, semantic rules, fixtures, Conformance Suite, and
-Contract lock take precedence over any summary here.
+only wire authority. Start with the normative
+[`Sandbox Provider Calling Standard`](../contract/specification/provider-calling-standard-v1.md).
+The calling standard, OpenAPI document, JSON Schemas, semantic rules, fixtures,
+Conformance Suite, and Contract lock take precedence over any summary here.
 
 ## Authority and identity
 
@@ -15,6 +17,7 @@ Use these files together:
 
 | Input | Role |
 | --- | --- |
+| [`contract/specification/provider-calling-standard-v1.md`](../contract/specification/provider-calling-standard-v1.md) | Normative caller sequence, ownership, and conformance obligations |
 | [`contract/openapi/sandbox-runtime-provider-v1.yaml`](../contract/openapi/sandbox-runtime-provider-v1.yaml) | Provider HTTP wire surface; terminal and Browser handoffs are projected separately |
 | [`contract/schemas/`](../contract/schemas/) | Closed request, response, operation, and evidence shapes |
 | [`contract/semantic-rules/provider-v1.json`](../contract/semantic-rules/provider-v1.json) | Cross-field, ownership, admission, and lifecycle semantics |
@@ -44,9 +47,9 @@ presented as independently content-derived.
 ## Ownership boundary
 
 The Provider is a provider-local execution and evidence service. The caller is
-the platform authority for business and end-user concerns.
+the authority for business and end-user concerns.
 
-| Concern | Provider owns | Calling platform owns |
+| Concern | Provider owns | Caller owns |
 | --- | --- | --- |
 | Capability discovery | Immutable capability snapshot and limits | Selecting a compatible Provider revision/profile |
 | Sandbox execution | Provider-local sandbox state, leases, runtime resources, operations, and bounded evidence | WorkOrder/Run business state and desired-state policy |
@@ -79,7 +82,7 @@ The route families are:
 | `GET /v1/operations/{operation_id}/exec-result` | Read an execution result projection | Keep result expiry and unknown outcomes explicit |
 | `GET /v1/operations/{operation_id}/runtime-session` | Read a successful session handoff projection | Treat the handoff as opaque and expiring |
 | `GET /v1/operations/{operation_id}/browser-session` | Read a successful Browser-session handoff projection | Pass the opaque, expiring handoff only to the caller-owned Browser Gateway |
-| `POST /v1/sandboxes/{sandbox_id}/artifacts:stage` | Accept provider-local artifact staging | Keep the returned reference private; publication remains platform-owned |
+| `POST /v1/sandboxes/{sandbox_id}/artifacts:stage` | Accept provider-local artifact staging | Keep the returned reference private; publication remains caller-owned |
 | `GET /v1/operations/{operation_id}/artifact-staging-evidence` | Read artifact staging evidence | Correlate it with the exact operation and sandbox attempt |
 | `GET /v1/operations/{operation_id}/usage-evidence` | Read usage evidence | Use it as provider evidence, not as billing truth |
 
@@ -164,17 +167,17 @@ record as a billing invoice.
 
 ## Caller implementation checklist
 
-A future platform caller should complete these items before claiming an
-external integration:
+Every external caller should complete these items before claiming an
+integration:
 
 - Pin the Contract namespace, revision, tree digest, Suite, and selected
   ProviderRevision/profile.
-- Implement mTLS identity validation and JWS/digest admission using platform-
-  owned credentials and key rotation policy.
-- Map WorkOrder/Run intent to Provider requests without moving business truth
+- Implement mTLS identity validation and JWS/digest admission using caller-owned
+  credentials and key rotation policy.
+- Map caller intent to Provider requests without moving business truth
   into the Provider.
 - Store Provider operation IDs, idempotency keys, attempts, generations, and
-  fencing values in a platform-owned correlation record.
+  fencing values in a caller-owned correlation record.
 - Implement bounded polling/reconciliation for pending, unknown, expired,
   rejected, and unavailable outcomes.
 - Supply Gateway authorization, revocation, recording, and public endpoint
@@ -185,9 +188,8 @@ external integration:
 - Keep artifact publication and billing outside the Provider evidence routes.
 - Run the locked Contract verifier, Conformance Suite, and a black-box caller
   against a separately started Provider process.
-- For migration, prove capability/request shadow parity, new-run-only canary
-  selection, rollback, old-run drain, and metric parity without changing
-  platform-owned contracts.
+- Own any consumer-side rollout, shadow, canary, rollback, drain, and metric
+  comparison process. These are not Provider compatibility requirements.
 
 ## Evidence boundary
 
@@ -224,16 +226,16 @@ go run ./cmd/run-conformance -source-root . -race -shuffle
 
 All E2E commands are documented in [`e2e/README.md`](../e2e/README.md). Each
 artifact must retain its named boundary; partial properties from separate
-profiles must not be combined into aggregate conformance, real Agent Platform,
+profiles must not be combined into aggregate conformance, generic-consumer,
 independent failure-domain, deployment, or production evidence.
 
 ## Change protocol
 
 When the Provider wire behavior changes, update the Contract resources and
 lock first, then update projections, fixtures, conformance cases, callers, and
-this guide in one reviewed slice. When a platform needs a new business field,
+this guide in one reviewed slice. When a caller needs a new business field,
 first decide whether it belongs to the caller or to the Provider Contract; do
-not add a platform-owned field to a Provider DTO merely to simplify mapping.
+not add a caller-owned field to a Provider DTO merely to simplify mapping.
 
 This document should be updated when the Contract identity, ownership boundary,
 route family, caller checklist, or evidence boundary changes. Commit-level

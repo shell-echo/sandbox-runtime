@@ -1,11 +1,12 @@
 # P3 Platform Candidate Caller
 
-Status: local and Hosted candidate integration complete; real P3 remains
-blocked. This slice adds a runnable Agent Platform
-candidate caller and process-level harness inside the independently versioned
-`e2e/` module. It consumes the Provider only through the Contract wire surface
-and records candidate integration evidence; it does not claim compatibility
-with a separately owned production Veronica Application.
+Status: **Retired / Superseded by ADR 0037.** Local and hosted candidate
+integration completed and its evidence is retained at the original boundary.
+This historical slice added a runnable Agent Platform candidate caller and
+process-level harness inside the independently versioned `e2e/` module. It
+consumed the Provider only through the Contract wire surface and recorded
+candidate integration evidence; it did not establish compatibility with a
+separately owned production application and is not generic caller evidence.
 
 ## Scope
 
@@ -41,7 +42,9 @@ test deployment, and a passing candidate run is not production evidence.
 - caller code imports no Provider implementation package; and
 - the e2e module's race/shuffle, vet, boundary, and Docker candidate run pass.
 
-The evidence boundary remains `Agent Platform candidate integration only`; it
-does not close the real-platform P3 gate until the candidate is replaced or
-validated by the separately owned platform Application and its authoritative
-contracts.
+The evidence boundary remains `Agent Platform candidate integration only`.
+It did not close the real-platform P3 gate before that program was retired, and
+it must not be relabeled as generic caller, aggregate conformance, deployment,
+or production evidence. Any future caller integration starts under ADR 0037
+with a new plan, evidence identity, and the coordinated generic issuer protocol
+slice required for protected admission.

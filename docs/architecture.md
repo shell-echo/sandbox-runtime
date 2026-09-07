@@ -8,16 +8,17 @@ backends are optional capabilities that can be added without changing the
 provider-facing control protocol.
 
 The Provider boundary is defined by the repository-owned MIT Contract under
-[`contract/`](../contract/). Its normative resources are the locked OpenAPI,
-JSON Schemas, semantic rules, fixtures, and Conformance Suite. The lock is
-recorded in [`compatibility/sandbox-runtime/contract.lock.json`](../compatibility/sandbox-runtime/contract.lock.json).
-This repository no longer consumes or claims compatibility with an external
-Agent Platform Contract. A future adapter may be added as a separate,
-explicitly versioned compatibility layer.
+[`contract/`](../contract/). Its normative resources are the locked Provider
+Calling Standard, OpenAPI, JSON Schemas, semantic rules, fixtures, and
+Conformance Suite. The lock is recorded in
+[`compatibility/sandbox-runtime/contract.lock.json`](../compatibility/sandbox-runtime/contract.lock.json).
+This repository does not consume or claim compatibility with an external
+platform Contract. External services conform to this Contract directly or own
+their adapter as a separate, explicitly versioned compatibility layer.
 
 ## Compatibility boundary
 
-A calling platform owns business and orchestration truth:
+A calling service owns business and orchestration truth:
 
 - tenant, user, authorization, `WorkOrder`, `Run`, and workflow state;
 - provider selection and immutable `ProviderRevision` binding for each run;
@@ -41,7 +42,7 @@ IDs, host paths, or any other provider implementation detail.
 
 ```mermaid
 flowchart LR
-    AP["Calling platform operation ledger"] -->|"Local Provider Contract v1"| PA["sandbox-runtime provider API"]
+    AP["Calling service operation ledger"] -->|"Sandbox Provider Contract v1"| PA["sandbox-runtime provider API"]
     AP --> RG["Runtime Gateway"]
     PA --> OS["Provider-local operations and reconciliation"]
     OS --> SS["Sandbox application service"]
@@ -58,9 +59,11 @@ Contract API. The current `instance.Service` may remain the internal
 application boundary and `instance.Driver` the backend port, but neither model
 should be serialized directly as the cross-project protocol.
 
-The accepted ownership decision is recorded in
-[`docs/adr/0001-agent-platform-provider-boundary.md`](adr/0001-agent-platform-provider-boundary.md).
-The calling platform owns its durable aggregate operation ledger and authorization
+The original ownership decision is recorded in
+[`docs/adr/0001-agent-platform-provider-boundary.md`](adr/0001-agent-platform-provider-boundary.md)
+and generalized by
+[`docs/adr/0037-sandbox-provider-calling-standard.md`](adr/0037-sandbox-provider-calling-standard.md).
+The caller owns its durable aggregate operation ledger and authorization
 decisions. This service owns only provider-local operation progress and backend
 evidence required to answer the Provider API safely.
 
@@ -75,8 +78,9 @@ proprietary resource is required.
 
 Compatibility rules:
 
-1. Protocol changes are additive within `v1`. A breaking semantic or schema
-   change requires a new protocol version and namespace revision.
+1. Compatibility is exact over Contract revision/tree for `v1`; route presence
+   or the major version alone is not a compatibility claim. A breaking semantic
+   or schema change requires a new protocol version and namespace revision.
 2. Capability negotiation, not provider-name checks, decides whether a workload
    may be scheduled.
 3. Provider revision identifiers remain immutable for the lifetime of an
@@ -139,7 +143,7 @@ Both shared-capacity runs use a private echo fixture and do not exercise the
 Provider Contract, a real Browser/CDP path, image provenance, restricted
 egress, or Provider artifact/usage behavior. Distributed durable revocation,
 downstream fencing, Valkey provenance, HA/failover consistency, Provider
-multi-controller, hostile multi-tenant, real Agent Platform, aggregate
+multi-controller, hostile multi-tenant, generic-consumer interoperability, aggregate
 conformance, production configuration, deployment, and production readiness
 remain open.
 
@@ -162,7 +166,7 @@ restart retention, exact-grant scope, outage failure closure, recovery without
 resurrection, bounded propagation, and sanitized evidence. Contract/tree/48
 cases remain metadata with `exercised=false`; the private echo fixture is not a
 real Browser/CDP path. These results do not establish downstream fencing,
-Valkey provenance or HA/failover, ACL role isolation, real Agent Platform,
+Valkey provenance or HA/failover, ACL role isolation, generic-consumer interoperability,
 multi-controller, hostile multi-tenant, deployment, or production readiness.
 
 ADR 0033 and implementation `b4d41c9` add downstream action-fence and
@@ -203,8 +207,8 @@ is pinned, but the Suite is not executed (`suite_exercised=false`). This closes
 only the named ADR 0033 caller gates on those platforms; the v1 topology does
 not exercise deleted history or restored snapshots. Valkey
 provenance/HA/failover, production metrics/configuration/deployment and ingress
-topology, multi-controller reliability, hostile multi-tenant isolation, real
-Agent Platform compatibility, aggregate conformance, and production readiness
+topology, multi-controller reliability, hostile multi-tenant isolation,
+generic-consumer interoperability, aggregate conformance, and production readiness
 remain unproved.
 
 ADR 0034 adds an explicit v2 action-fencing successor without changing ADR
@@ -417,7 +421,7 @@ resource evidence, and stdout/stderr references or bounded inline content.
 
 Runtime sessions return only opaque internal endpoint references with bounded
 expiry. Public clients never receive a container IP, Pod address, or backend
-token. The Agent Platform Runtime Gateway authorizes and proxies terminal,
+token. The caller-owned Runtime Gateway authorizes and proxies terminal,
 browser, desktop, and port-forward traffic and owns reconnect policy and
 recording metadata.
 
@@ -452,11 +456,11 @@ The default policy is deny. A container backend must start from this baseline:
   filesystem, and bounded writable mounts;
 - resource limits for CPU, memory, PIDs, ephemeral storage, execution time, and
   lease duration;
-- no Kubernetes API permission and no long-lived Agent Platform credential;
+- no Kubernetes API permission and no long-lived caller credential;
 - no public network egress by default.
 
 Restricted egress must pass through policy enforcement and block cloud metadata,
-Kubernetes and cluster-management endpoints, Agent Platform databases/Redis/
+Kubernetes and cluster-management endpoints, caller control-plane databases/Redis/
 Temporal, other tenants, unauthorized object storage, link-local/private-address
 redirects, and DNS-rebinding bypasses. Full egress is reserved for explicitly
 trusted profiles.
@@ -546,7 +550,7 @@ advertisement, and optional-profile gates remain open:
 | Persistence | Memory and atomically replaced file repository. | Retain for development; introduce transactional production storage before multi-controller operation. |
 | API | Local `/instances` and the protected Provider v1 surface are separate; authorized coding/shell lifecycle/session/artifact/usage routes have bounded projections, and development exec routes reach a real Docker executor. The default-disabled Browser command graph composes the protected Browser routes and runtime dependencies; the public caller-owned Browser Gateway exists only in the reference deployment. | Define a deployable caller-owned Gateway and production configuration without moving user/tenant authorization into the Provider. |
 | Capabilities | Empty, terminal-only, atomic coding/shell, and browser-only snapshots are locked. The Browser-only reference deployment advertises the exact locked shape for its caller test; production command startup still does not advertise Browser. | Advertise Browser in production only after the remaining profile-specific security, concurrency, deployment, and operational gates pass. |
-| Execution | P2.5e/g/h compose durable exec/cancel/result/operation handling, real Docker execution, private bounded capture, cancellation, expiry, reconciliation, bounded exec-derived usage, artifact staging, and readiness-derived exact advertisement for one development controller. The separately versioned coding/shell reference caller gate passes locally and hosted. | Replace development single-controller persistence and partial collectors with reviewed production storage, retention, and reconciliation while keeping Artifact publication, billing, and aggregate operation truth with the platform. |
+| Execution | P2.5e/g/h compose durable exec/cancel/result/operation handling, real Docker execution, private bounded capture, cancellation, expiry, reconciliation, bounded exec-derived usage, artifact staging, and readiness-derived exact advertisement for one development controller. The separately versioned coding/shell reference caller gate passes locally and hosted. | Replace development single-controller persistence and partial collectors with reviewed production storage, retention, and reconciliation while keeping Artifact publication, billing, and aggregate operation truth with the caller. |
 | Terminal | P2.5f1-f7 compose the backend-neutral terminal runtime, PTY-owning guest broker, Docker adapter, durable session/reference state, bounded WebSocket/private-stream adapters, caller-owned Gateway policy ports, default-disabled command graph, and same-shell process-reconstruction evidence. The separately versioned coding/shell reference caller gate passes locally and hosted. | Supply deployable caller-owned authorization, revocation, recording, Gateway configuration, and transactional multi-controller storage; do not promote the reference deployment to multi-tenant, deployment, or production evidence. |
 | Workspace | The Provider Docker development adapter supplies `/inputs`, `/workspace`, `/outputs`, and bounded tmpfs `/tmp` with owned cleanup; exec consumes that runtime without exposing host paths. | Add artifact consumers, capacity enforcement, and stronger isolation evidence. |
 | Security | Docker defaults already drop capabilities, use non-root/read-only root, disable networking, and limit resources. | Add policy enforcement, stronger isolation profiles, secret grants, egress controls, audit evidence, and production auth. |
@@ -603,19 +607,17 @@ conformance tests pass.
 Release gate: a separately supplied caller can run its coding and shell
 scenarios against this provider without endpoint leakage or cross-tenant access.
 
-### Phase 3: migration readiness
+### Phase 3: named-platform migration (retired)
 
-- run an external caller and `sandbox-runtime` against the same locked local
-  Conformance Suite;
-- shadow-validate capabilities and requests without serving production traffic;
-- canary only new runs and lock each run to its selected ProviderRevision;
-- prove rollback changes only new bindings and old-provider runs can drain;
-- compare lifecycle latency, exec success, orphan count, session stability,
-  resource evidence, and reconciliation backlog.
+The former Agent Platform migration phase is retired by ADR 0037. This
+repository does not implement a named consumer adapter or make a real-platform
+compatibility claim. A consumer may reuse the historical revision-binding,
+shadow, canary, rollback, drain, and metric components, but it owns that
+integration and must conform to the exact locked Provider Contract.
 
-Release gate: the caller can switch the matching capability profile by
-configuration without changing WorkOrder, Artifact, event, usage, gateway, or
-frontend contracts.
+Release gate: none. Historical candidate evidence remains evidence for its
+recorded harness only and is not relabeled as generic consumer, deployment, or
+production evidence.
 
 ### Phase 4: optional profiles
 

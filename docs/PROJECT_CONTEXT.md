@@ -1,6 +1,6 @@
 # Project Context
 
-Updated: 2026-09-06
+Updated: 2026-09-07
 
 This is the stable entry point for a new developer, AI agent, development
 device, or implementation session. It summarizes the system, engineering
@@ -25,9 +25,10 @@ assume that a recorded evidence baseline is the current `HEAD`.
 Use these sources in authority order:
 
 1. The repository-owned MIT Provider Contract under `contract/`, including its
-   OpenAPI, JSON Schemas, semantic rules, fixtures, Conformance Suite, and
+   Provider Calling Standard, OpenAPI, JSON Schemas, semantic rules, fixtures,
+   Conformance Suite, and
    `compatibility/sandbox-runtime/contract.lock.json`, defines authorized wire
-   behavior.
+   behavior and caller obligations.
 2. [`architecture.md`](architecture.md) and accepted
    [ADRs](adr/) define ownership, boundaries, delivery order, and release
    gates.
@@ -38,10 +39,11 @@ Use these sources in authority order:
 5. [`STATUS.md`](STATUS.md) is the detailed evidence ledger. Code, Git state,
    and reproducible test or CI results must still support every status claim.
 
-For a caller-facing summary of the locked Provider routes, ownership boundary,
-admission rules, and integration checklist, read the
-[`Provider Integration Profile`](platform-integration-profile.md). It is a
-navigation guide only; the Contract resources and lock remain authoritative.
+Start external integrations with the normative
+[`Sandbox Provider Calling Standard`](../contract/specification/provider-calling-standard-v1.md).
+The [`Provider Integration Guide`](platform-integration-profile.md) is a
+non-normative implementation summary; the Contract resources and lock remain
+authoritative.
 
 When sources disagree, do not silently blend them. Apply the higher-authority
 source, verify the implementation, and update the stale narrative document.
@@ -60,9 +62,11 @@ Two API surfaces must remain separate:
 | Local `/instances` API | Local instance management over fake or Docker drivers | Internal implementation; its DTOs and state are not Provider wire models |
 | Provider API v1 | mTLS/JWS-protected asynchronous Provider protocol | Repository Contract controls routes, documents, semantics, and projection |
 
-The calling Agent Platform owns WorkOrder, Run, desired business state,
-tenant/user authorization, ProviderRevision selection, Artifact publication,
-billing/accounting, its aggregate operation ledger, and public Gateway policy.
+The calling service owns its business correlation records, desired business
+state, tenant/user authorization, ProviderRevision selection, Artifact
+publication, billing/accounting, aggregate operation ledger, and public Gateway
+policy. It adapts to this repository's Contract; the Provider does not carry a
+consumer-specific adapter.
 This repository owns provider-local execution, durable Provider operations,
 runtime/session resources, and bounded evidence. Provider storage references
 and backend endpoints are never public artifact URLs or client endpoints.
@@ -133,6 +137,12 @@ admission, external caller E2E, aggregate conformance, multi-controller,
 multi-tenant, deployment, and production readiness.
 
 ## Current Snapshot
+
+The latest green `main` baseline before this calling-standard slice is
+`cee6a3f083622ba72a0bb40dab0d0032daf89ba6` from 2026-09-07. Its ten named
+main workflows passed. The detailed component ledger below retains older
+per-gate commits and run IDs because those identify the exact evidence rather
+than the newest documentation commit.
 
 This snapshot was audited on 2026-09-06 against browser Contract authority
 `5096e71fb84fbec22aa3487a0e55a1b49602ab8b`, Provider projection baseline
@@ -278,7 +288,7 @@ requests, observes ordinary `403` plus generic pre-upgrade `429` with bounded
 `revoked` events, with no `grant-browser-edge-*` identity.
 At that baseline, listener/TLS/HTTP-layer limits remained open, together with
 partition-aware shared or distributed capacity, durable distributed revocation,
-production advertisement, real Agent Platform, aggregate, multi-controller,
+production advertisement, generic-consumer interoperability, aggregate, multi-controller,
 hostile multi-tenant, deployment, and production gates.
 
 ADR 0029 and implementation `b8f8941` then add the bounded public TLS edge.
@@ -297,7 +307,7 @@ endpoint, credential, CDP, or payload field. This closes the listener/TLS/HTTP
 component and Browser reference-caller scenario only. Authenticated
 partition-aware shared or distributed capacity, durable distributed
 revocation, production storage/configuration and metrics, production
-advertisement, real Agent Platform, aggregate, multi-controller, hostile
+advertisement, generic-consumer interoperability, aggregate, multi-controller, hostile
 multi-tenant, deployment, and production gates remain open.
 
 ADR 0030 and implementation `997fb0d` then add the post-binding
@@ -343,7 +353,7 @@ Valkey provenance is explicitly not established. The Contract revision/tree
 and 48-case Suite are pinned as metadata with `exercised=false`; Provider API,
 real Browser/CDP, image provenance, restricted egress, artifact/usage, HA,
 durable distributed revocation, downstream fencing, Provider multi-controller,
-hostile multi-tenant, real Agent Platform, deployment, and production gates are
+hostile multi-tenant, generic-consumer interoperability, deployment, and production gates are
 not established by this local run.
 
 Hosted Browser Shared Capacity E2E run `33949577876` independently passes the
@@ -363,7 +373,7 @@ and `provenance_not_established=true`. This is hosted Gateway/Valkey
 shared-capacity evidence only; it does not exercise Provider API, real
 Browser/CDP, image provenance, restricted egress, Provider artifact/usage,
 HA/failover, durable distributed revocation, downstream fencing, Provider
-multi-controller, hostile multi-tenant, real Agent Platform, aggregate,
+multi-controller, hostile multi-tenant, generic-consumer interoperability, aggregate,
 deployment, or production behavior.
 
 ADR 0032 and implementation `c0a55d1` then replace the split revocation
@@ -454,7 +464,7 @@ files; artifact ID `9987350368` has digest
 This closes only the hosted ADR 0034 caller gate; the Suite remains unexercised.
 Production witness/storage, Valkey provenance/HA/failover, production
 metrics/configuration and topology, deployment, multi-controller, hostile
-multi-tenant, real Agent Platform, aggregate conformance, and production
+multi-tenant, generic-consumer interoperability, aggregate conformance, and production
 readiness remain unproved.
 
 ADR 0035 now adds a PostgreSQL production-candidate witness adapter and strict
@@ -683,9 +693,9 @@ Contract identity:
 | P1.1 | Passed for DTO, mTLS discovery, JWS/digest/replay/fencing admission | Production identity infrastructure remains unproven |
 | P1.2 | Passed for the bounded Contract-authorized lifecycle subset and development composition | Reserved lifecycle families and production gates remain open |
 | P2 components | P2.1-P2.5h local component, Contract projection, Docker, and recorded repository CI gates pass within their named boundaries | Retain single-controller/development constraints and exact Contract lock |
-| P2.5i | Hosted regression `33970773414` passed 15 initial plus 5 restart/resume coding/shell scenarios against harness/Provider lock `17ed6ca`/`b4d41c9`; latest local pre-refresh run `20260905T080530.577843000Z` passed against `59e08d5`/`c0a55d1` | Neither run contains a Browser scenario or implies Agent Platform, durable-revocation caller, or production properties |
-| P2 | Reference coding/shell caller release gate passed | Aggregate conformance, actual Agent Platform compatibility, multi-controller, hostile multi-tenant isolation, deployment, and production gates remain open |
-| P3 | Local revision binding/shadow/metrics component evidence plus latest local pre-refresh candidate integration (`20260905T080623.861033000Z`, `59e08d5`/`c0a55d1` lock) and hosted candidate regression `33970773345` against `17ed6ca`/`b4d41c9` | Real platform traffic shadow parity, canary, rollback, old-run drain, metric parity, and unchanged platform contracts remain open |
+| P2.5i | Hosted regression `33970773414` passed 15 initial plus 5 restart/resume coding/shell scenarios against harness/Provider lock `17ed6ca`/`b4d41c9`; latest local pre-refresh run `20260905T080530.577843000Z` passed against `59e08d5`/`c0a55d1` | Neither run contains a Browser scenario or implies generic-consumer, durable-revocation caller, or production properties |
+| P2 | Reference coding/shell caller release gate passed | Aggregate conformance, multi-controller, hostile multi-tenant isolation, deployment, and production gates remain open |
+| P3 | Retired by ADR 0037. Historical revision binding/shadow/metrics components and candidate runs retain their recorded evidence boundaries | No named-platform migration gate remains; external consumers adapt to the exact locked Provider Contract |
 | P4 | Browser Contract authority/projection, exact sandboxed signed amd64/arm64/v8 publication, Provider-local components, default-disabled command/runtime composition, process-local Gateway limits, the separately recorded Browser/shared-capacity/durable-revocation caller gates, ADR 0033 component/caller evidence, the ADR 0034 v2 local/hosted deletion and rollback-detection gates, the ADR 0035 PostgreSQL component gate, and the ADR 0036 hosted same-runner controlled-restore gate pass within their named boundaries | Production independent witness/storage and restore operations, production Browser advertisement/public Gateway, Valkey/PostgreSQL provenance and HA, production configuration/metrics, aggregate, multi-controller, multi-tenant, deployment, and production gates remain open |
 
 Production readiness is not a numbered phase shortcut. Aggregate conformance,
@@ -771,43 +781,19 @@ Neither manifest contains a browser scenario; the candidate manifest also
 remains explicitly bounded to candidate integration and does not represent real
 Veronica or production traffic.
 
-## Platform Candidate Audit
+## Retired Platform Candidate Track
 
-The 2026-09-02 read-only re-audit found no independently runnable Agent
-Platform caller or migration harness in the available adjacent projects:
+ADR 0037 retires the former named Agent Platform migration target. Earlier
+audits correctly established that no runnable platform caller or migration
+harness had been supplied, but that absence is no longer an active project
+blocker because this repository will not implement or wait for a
+consumer-specific adapter.
 
-- At that audit, `/Users/echo/Projects/shell-echo/veronica` was a
-  Blueprint/governance and TF00 feasibility repository. Its local `main` was
-  `17bb3855ba513b3a0e511f68f48c4e6aefbf265d` (90 commits ahead of `origin/main`
-  `a758c219fd9f14a015368ab95914ed7386c05afc`); a live GitHub `ls-remote`
-  confirmed that remote branch identity. Its working tree contains pre-existing
-  user changes that were preserved. The audit covered tracked and visible
-  untracked source plus build, deployment, and identity-material manifests. It
-  found only Blueprint/governance and Temporal/PostgreSQL feasibility Python
-  runners, with no Application service, Provider client, WorkOrder/AgentRun
-  mapping, Gateway, mTLS/JWS identity configuration, Provider endpoint,
-  shadow/canary traffic entrypoint, or rollback/drain harness. The bounded
-  Temporal dev-server runner explicitly forbids workers, workflows, T2/T3, and
-  external services, so it is not a platform caller.
-- A 2026-09-06 identity-only check found the dirty `veronica` checkout at
-  `main@22343bb92b74e5d6e0aaf17d671344dd8c1bc7f9`, 110 commits ahead of unchanged
-  `origin/main@a758c219fd9f14a015368ab95914ed7386c05afc`. Newer content was not
-  re-audited, so this identity observation makes no current platform-capability
-  claim. No runnable platform target has been independently supplied to this
-  repository; that environment gap, rather than an assumption about the
-  newer external commits, keeps the real P3 gate open.
-- `/Users/echo/Projects/shell-echo/sandbox-runtime-e2e` is an older independent
-  reference-caller checkout at `2981842` with no remote. Its README describes
-  future remote-checkout preparation and the canonical reference harness is
-  now the co-located `e2e/` module; it is not an Agent Platform caller.
-
-Therefore P3 remains blocked for real platform evidence. The candidate result
-is valid and complete within its named boundary, but it cannot establish real
-platform request shadow parity, canary traffic, rollback, old-run drain, metric
-parity, or unchanged platform-owned contracts. Resuming P3 requires a real
-platform caller/service, the locked Contract/profile and ProviderRevision,
-identity-bound mTLS/JWS PKI, reachable Provider/Gateway endpoints, and a
-platform-owned shadow/canary/rollback/drain and metrics comparison entrypoint.
+The historical `agent-platform-candidate` harness, commits, runs, and artifacts
+remain valid only within their recorded revision-binding, shadow, canary,
+rollback, drain, and metric-component boundaries. Their names and evidence are
+not rewritten. A future consumer owns its integration and rollout evidence and
+must conform to the exact locked Provider Contract.
 
 ## Next Implementation Order
 
@@ -911,23 +897,19 @@ Hosted harness `2cadc53` run `34013982796` passes the same scenarios on
 `20260906T052710.781616339Z` with exactly five sanitized files and has been
 inspected.
 
-1. Prove independent PostgreSQL/Valkey failure and backup domains, HA, and
-   operator controls in a deployment-owned environment. Retain hosted ADR 0036
-   run `34038556283` only as same-runner operational reference evidence; do not
-   call either the adapter tests or same-runner E2E a production witness.
-2. Keep `suite_exercised=false` for both downstream caller profiles and the
-   controlled-restore profile until a runner actually invokes the Contract Suite,
-   and do not relabel the ADR 0033 platform-specific v1 results as ADR 0034
-   evidence. Retain the local and hosted v2 artifacts as two platform-specific
-   results, not aggregate or production evidence.
-3. Preserve the Browser, coding/shell Reference, and Platform Candidate harnesses
-   as three separately named evidence modes. Do not relabel the Browser
-   reference deployment as production or the candidate mode as real platform
-   traffic.
-4. Begin real P3 only against a platform migration target: lock the same
-   Contract/profile, shadow capabilities and requests, canary only new runs,
-   prove rollback and old-run drain, and compare the required metrics without
-   changing platform-owned contracts.
+1. Lock the Provider Calling Standard into the repository-owned Contract and
+   refresh every active E2E Contract lock without relabeling historical evidence.
+2. Close the generic-adoption gaps as separately reviewed protocol slices:
+   define a neutral issuer trust policy, publish a content-derived Suite digest,
+   and provide a remote black-box conformance runner. The current fixed
+   `agent-platform` issuer is not generic interoperability evidence.
+3. Preserve the Browser, coding/shell Reference, and historical Platform
+   Candidate harnesses as separately named evidence modes. The candidate mode
+   is historical and P3 is retired; future consumers own their adapters and
+   rollout evidence.
+4. Prove independent PostgreSQL/Valkey failure and backup domains, HA, and
+   operator controls only in a deployment-owned environment. Retain hosted ADR
+   0036 evidence as same-runner reference evidence.
 5. Start the Desktop Contract/authority audit only after the Browser readiness
    record is complete; do not reuse terminal or Browser routes as a shortcut.
 6. Keep aggregate conformance, multi-controller, hostile multi-tenant,

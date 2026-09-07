@@ -6,14 +6,17 @@ Read `docs/PROJECT_CONTEXT.md` first when starting a new session, then read
 `README.md`, `docs/architecture.md`, the applicable ADRs, and
 `docs/development.md` before changing behavior. The project context is a
 handoff index, not an authority override. The architecture delivery plan
-defines order and release gates. For Agent Platform compatibility, the locked
-repository-owned OpenAPI, JSON Schemas, semantic rules, fixtures, and
-Conformance Suite outrank local narrative text.
+defines order and release gates. For Provider compatibility, the locked
+repository-owned calling standard, OpenAPI, JSON Schemas, semantic rules,
+fixtures, and Conformance Suite outrank local narrative text.
 
 Keep the Provider API separate from the local `/instances` management API.
-Provider wire DTOs must not reuse `instance` or Docker engine structs. The Agent
-Platform owns business truth, desired state, authorization, and its aggregate
-operation ledger; this service owns provider-local execution and evidence only.
+Provider wire DTOs must not reuse `instance` or Docker engine structs. A calling
+service must adapt to the repository-owned Provider Contract and owns business
+truth, desired state, end-user authorization, and its aggregate operation
+ledger; this service owns provider-local execution and evidence only. Do not add
+consumer-specific wire behavior or an in-repository platform adapter to the
+Provider surface.
 
 ## Engineering rules
 
@@ -39,7 +42,7 @@ go vet ./...
 ```
 
 Run the tagged Docker integration test for driver or lifecycle changes. Run the
-Agent Contract lock verifier for compatibility metadata, DTO, Provider API, or
+Provider Contract lock verifier for compatibility metadata, DTO, Provider API, or
 conformance changes. A green unit test is component evidence only; do not call a
 revision compatible, production-ready, or multi-tenant safe without its named
 release gate and reproducible evidence.
