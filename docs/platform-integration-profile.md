@@ -15,11 +15,11 @@ Use these files together:
 
 | Input | Role |
 | --- | --- |
-| [`contract/openapi/sandbox-runtime-provider-v1.yaml`](../contract/openapi/sandbox-runtime-provider-v1.yaml) | Provider HTTP wire surface; terminal handoff is projected separately |
+| [`contract/openapi/sandbox-runtime-provider-v1.yaml`](../contract/openapi/sandbox-runtime-provider-v1.yaml) | Provider HTTP wire surface; terminal and Browser handoffs are projected separately |
 | [`contract/schemas/`](../contract/schemas/) | Closed request, response, operation, and evidence shapes |
 | [`contract/semantic-rules/provider-v1.json`](../contract/semantic-rules/provider-v1.json) | Cross-field, ownership, admission, and lifecycle semantics |
 | [`contract/fixtures/`](../contract/fixtures/) | Canonical examples and negative cases |
-| [`contract/conformance/provider-v1/suite.json`](../contract/conformance/provider-v1/suite.json) | Locked 38-case Provider Suite |
+| [`contract/conformance/provider-v1/suite.json`](../contract/conformance/provider-v1/suite.json) | Locked 48-case Provider Suite |
 | [`compatibility/sandbox-runtime/contract.lock.json`](../compatibility/sandbox-runtime/contract.lock.json) | Contract revision and resource lock |
 | [`docs/architecture.md`](architecture.md) | Ownership boundaries and delivery gates |
 
@@ -30,14 +30,16 @@ The current Contract identity is:
 | Namespace | `urn:shell-echo:sandbox-runtime:provider-v1` |
 | Version | `1.0.0` |
 | License | `MIT` |
-| Revision | `22a148e2898477790512d5bb742605654ff00ebf` |
-| Contract tree | `1a967c9c6ce9646c8431f6ee48699ec9f406a589` |
-| Suite | Provider v1, 38 cases |
+| Revision | `5096e71fb84fbec22aa3487a0e55a1b49602ab8b` |
+| Contract tree | `859f76dc0e855a0c8abdbbb5648df100dabb4328` |
+| Suite | `sandbox-provider` / `sandbox-runtime-provider-v1`, 48 cases |
 
 An integration must pin this identity, the selected Provider revision, the
 runtime/profile identifiers, and the exact evidence or image digests it relies
 on. A repository commit or a passing local test does not replace the Contract
-lock.
+lock. The current declared Suite digest remains a placeholder; the locked Git
+Contract tree protects the consumed Suite content, but the digest must not be
+presented as independently content-derived.
 
 ## Ownership boundary
 
@@ -51,6 +53,7 @@ the platform authority for business and end-user concerns.
 | Authorization | Protected admission checks for the caller-supplied request context | End-user identity, tenant policy, user authorization, and Gateway policy |
 | Operations | Provider operation acceptance, idempotency, attempts, fencing, cancellation, and reconciliation | Aggregate operation ledger and product-level state transitions |
 | Terminal access | Opaque session handoff and private provider-side resolver | Public Gateway, grant issuance, revocation policy, and audit sink |
+| Browser access | Opaque Browser-session handoff, private resolver, runtime resources, and restricted-egress binding | Public Gateway, end-user grants, revocation, abuse controls, and audit policy |
 | Artifacts and usage | Staging and provider-local evidence correlated to an operation | Artifact publication, metadata, billing, accounting, and retention policy |
 | Secrets and endpoints | No stable exposure of backend IDs, host paths, daemon details, or raw endpoints | Public endpoint and credential lifecycle, if any |
 
@@ -71,9 +74,11 @@ The route families are:
 | `POST /v1/sandboxes/{sandbox_id}/exec` | Accept bounded asynchronous execution | Preserve operation, attempt, generation, and fencing correlation |
 | `POST /v1/sandboxes/{sandbox_id}/exec:cancel` | Accept an execution cancellation intent | Do not assume cancellation means the external process already stopped |
 | `POST /v1/sandboxes/{sandbox_id}/runtime-sessions` | Accept a terminal-session open request | Require an exactly advertised terminal/runtime profile |
+| `POST /v1/sandboxes/{sandbox_id}/browser-sessions` | Accept a Browser-session open request | Require the exact advertised Browser capability and runtime profile |
 | `GET /v1/operations/{operation_id}` | Read the provider operation projection | Poll or reconcile without inventing a platform operation state |
 | `GET /v1/operations/{operation_id}/exec-result` | Read an execution result projection | Keep result expiry and unknown outcomes explicit |
 | `GET /v1/operations/{operation_id}/runtime-session` | Read a successful session handoff projection | Treat the handoff as opaque and expiring |
+| `GET /v1/operations/{operation_id}/browser-session` | Read a successful Browser-session handoff projection | Pass the opaque, expiring handoff only to the caller-owned Browser Gateway |
 | `POST /v1/sandboxes/{sandbox_id}/artifacts:stage` | Accept provider-local artifact staging | Keep the returned reference private; publication remains platform-owned |
 | `GET /v1/operations/{operation_id}/artifact-staging-evidence` | Read artifact staging evidence | Correlate it with the exact operation and sandbox attempt |
 | `GET /v1/operations/{operation_id}/usage-evidence` | Read usage evidence | Use it as provider evidence, not as billing truth |
@@ -117,6 +122,28 @@ own authorization, revocation, connection admission, and recording. The
 Provider does not expose a Docker socket, host path, internal endpoint, or
 public Gateway URL through the handoff.
 
+## Browser profile
+
+Browser is an optional, atomic capability profile. A caller must not infer
+support from route presence: it may open a Browser session only when the
+immutable capability snapshot advertises the complete locked Browser shape and
+the selected deployment passes its separate readiness gates.
+
+A successful Browser-session operation returns only an opaque, expiring
+handoff. The caller-owned Browser Gateway must bind that handoff to the exact
+caller, tenant, Browser-session, grant, and freshly resolved endpoint; enforce
+authorization, revocation, connection and request capacity, and audit policy;
+and avoid recording CDP payloads. Provider responses expose no raw Chromium
+endpoint, backend identifier, host path, or credential.
+
+The reference profiles prove signed real-Chromium execution, restricted egress,
+Gateway denial and recovery, shared capacity, durable exact-grant revocation,
+downstream action fencing, and controlled-restore ordering within their named
+topologies. The production command still exposes no public Browser Gateway and
+does not advertise Browser. Independent PostgreSQL/Valkey failure and backup
+domains, HA/failover, production operator controls, hostile-tenant evidence,
+deployment, and production readiness remain separate gates.
+
 ## Artifact and usage boundary
 
 Artifact staging is provider-local evidence production. The Provider may
@@ -151,7 +178,10 @@ external integration:
 - Implement bounded polling/reconciliation for pending, unknown, expired,
   rejected, and unavailable outcomes.
 - Supply Gateway authorization, revocation, recording, and public endpoint
-  policy for terminal sessions.
+  policy for terminal and Browser sessions.
+- Before advertising Browser, supply deployment-owned shared capacity, durable
+  revocation, downstream fencing, independently operated witness/restore
+  domains, and fail-closed quarantine/resume controls.
 - Keep artifact publication and billing outside the Provider evidence routes.
 - Run the locked Contract verifier, Conformance Suite, and a black-box caller
   against a separately started Provider process.
@@ -161,12 +191,22 @@ external integration:
 
 ## Evidence boundary
 
-The repository's `e2e/` module contains two deliberately separate harnesses:
+The repository's `e2e/` module keeps eight deliberately separate profiles:
 
-- the independent reference caller, which proves the named Provider coding/shell
-  scenarios over real processes, sockets, mTLS/JWS, WebSocket, and Docker; and
-- the Agent Platform candidate caller, which models platform bindings and
-  migration policy but is not a separately owned production platform.
+- coding/shell Reference and Agent Platform Candidate;
+- Browser Reference;
+- Browser shared capacity and durable exact-grant revocation; and
+- Browser downstream fencing v1, witnessed v2, and PostgreSQL
+  controlled-restore.
+
+Reference and Candidate use real processes, sockets, mTLS/JWS, WebSocket, and
+Docker; Candidate models platform bindings and migration policy but is not a
+separately owned production platform. Browser Reference exercises the signed
+real Browser path. Shared-capacity and durable-revocation use narrower fixtures
+for their named distributed authority properties. The downstream-fencing and
+controlled-restore profiles use real Chromium but record the Contract Suite as
+unexercised (`suite_exercised=false`). The PostgreSQL witness workflow is a
+separate component/integration track rather than a ninth E2E profile.
 
 These results are useful integration evidence, not proof of aggregate
 conformance, multi-controller reliability, hostile multi-tenant isolation,
@@ -182,10 +222,10 @@ go run ./cmd/verify-contract -source-root .
 go run ./cmd/run-conformance -source-root . -race -shuffle
 ```
 
-The reference and candidate E2E commands are documented in
-[`e2e/README.md`](../e2e/README.md). Their evidence must retain its named
-boundary and must not be relabeled as real Agent Platform or production
-evidence.
+All E2E commands are documented in [`e2e/README.md`](../e2e/README.md). Each
+artifact must retain its named boundary; partial properties from separate
+profiles must not be combined into aggregate conformance, real Agent Platform,
+independent failure-domain, deployment, or production evidence.
 
 ## Change protocol
 
