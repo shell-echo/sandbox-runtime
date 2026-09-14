@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:shell-echo:sandbox-runtime:contract:runtime-session-handoff:v1",
-  "title": "Sandbox Runtime Terminal Session Handoff",
+  "$id": "urn:shell-echo:sandbox-runtime:contract:runtime-session-connect-descriptor:v1",
+  "title": "Sandbox Runtime Terminal Session Connect Descriptor",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -24,7 +24,7 @@
     "sandbox_id": {"$ref": "#/$defs/Identifier"},
     "runtime_session_id": {"$ref": "#/$defs/Identifier"},
     "runtime_type": {"const": "terminal"},
-    "capability_profile_id": {"$ref": "#/$defs/Identifier"},
+    "capability_profile_id": {"const": "terminal-v1"},
     "protocol": {"const": "websocket"},
     "internal_endpoint_reference": {"type": "string", "pattern": "^ref:session:[A-Za-z0-9][A-Za-z0-9._-]{0,199}$"},
     "connection_generation": {"type": "integer", "minimum": 1, "maximum": 9007199254740991},

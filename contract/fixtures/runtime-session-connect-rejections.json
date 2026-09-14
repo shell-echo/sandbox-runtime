@@ -1,0 +1,101 @@
+{
+  "cases": [
+    {
+      "name": "raw endpoint reference",
+      "document": {
+        "operation_id": "operation-session-1",
+        "attempt_id": "attempt-session-1",
+        "fencing_token": 1,
+        "sandbox_id": "sandbox-1",
+        "runtime_session_id": "session-1",
+        "runtime_type": "terminal",
+        "capability_profile_id": "terminal-v1",
+        "protocol": "websocket",
+        "internal_endpoint_reference": "wss://10.0.0.1:8443/terminal",
+        "connection_generation": 1,
+        "expires_at": "2026-08-21T00:04:00Z"
+      }
+    },
+    {
+      "name": "credential injection",
+      "document": {
+        "operation_id": "operation-session-1",
+        "attempt_id": "attempt-session-1",
+        "fencing_token": 1,
+        "sandbox_id": "sandbox-1",
+        "runtime_session_id": "session-1",
+        "runtime_type": "terminal",
+        "capability_profile_id": "terminal-v1",
+        "protocol": "websocket",
+        "internal_endpoint_reference": "ref:session:opaque-1",
+        "connection_generation": 1,
+        "expires_at": "2026-08-21T00:04:00Z",
+        "provider_token": "secret"
+      }
+    },
+    {
+      "name": "alternate terminal profile",
+      "document": {
+        "operation_id": "operation-session-1",
+        "attempt_id": "attempt-session-1",
+        "fencing_token": 1,
+        "sandbox_id": "sandbox-1",
+        "runtime_session_id": "session-1",
+        "runtime_type": "terminal",
+        "capability_profile_id": "terminal-v2",
+        "protocol": "websocket",
+        "internal_endpoint_reference": "ref:session:opaque-1",
+        "connection_generation": 1,
+        "expires_at": "2026-08-21T00:04:00Z"
+      }
+    },
+    {
+      "name": "zero connection generation",
+      "document": {
+        "operation_id": "operation-session-1",
+        "attempt_id": "attempt-session-1",
+        "fencing_token": 1,
+        "sandbox_id": "sandbox-1",
+        "runtime_session_id": "session-1",
+        "runtime_type": "terminal",
+        "capability_profile_id": "terminal-v1",
+        "protocol": "websocket",
+        "internal_endpoint_reference": "ref:session:opaque-1",
+        "connection_generation": 0,
+        "expires_at": "2026-08-21T00:04:00Z"
+      }
+    },
+    {
+      "name": "unsafe fencing token integer",
+      "document": {
+        "operation_id": "operation-session-1",
+        "attempt_id": "attempt-session-1",
+        "fencing_token": 9007199254740992,
+        "sandbox_id": "sandbox-1",
+        "runtime_session_id": "session-1",
+        "runtime_type": "terminal",
+        "capability_profile_id": "terminal-v1",
+        "protocol": "websocket",
+        "internal_endpoint_reference": "ref:session:opaque-1",
+        "connection_generation": 1,
+        "expires_at": "2026-08-21T00:04:00Z"
+      }
+    },
+    {
+      "name": "unsafe connection generation integer",
+      "document": {
+        "operation_id": "operation-session-1",
+        "attempt_id": "attempt-session-1",
+        "fencing_token": 1,
+        "sandbox_id": "sandbox-1",
+        "runtime_session_id": "session-1",
+        "runtime_type": "terminal",
+        "capability_profile_id": "terminal-v1",
+        "protocol": "websocket",
+        "internal_endpoint_reference": "ref:session:opaque-1",
+        "connection_generation": 9007199254740992,
+        "expires_at": "2026-08-21T00:04:00Z"
+      }
+    }
+  ]
+}

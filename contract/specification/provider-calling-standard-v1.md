@@ -30,7 +30,7 @@ The Contract resources are cumulative constraints with distinct roles:
 | [`schemas/`](../schemas/) | Defines the closed request, response, operation, handoff, capability, error, and evidence document shapes. |
 | [`provider-v1.json`](../semantic-rules/provider-v1.json) | Defines cross-field, admission, ownership, lifecycle, profile, and evidence semantics that are not fully expressible in OpenAPI or JSON Schema. |
 | [`fixtures/`](../fixtures/) | Supplies canonical accepted documents and rejection matrices for the named schemas and semantic rules. |
-| [`provider-v1/suite.json`](../conformance/provider-v1/suite.json) | Names the repository-executed Provider conformance cases for the required local profile. Passing cases cannot authorize behavior absent from the other Contract resources. |
+| [`provider-v1/suite.json`](../conformance/provider-v1/suite.json) | Names the repository-executed Provider conformance cases for the required local profile, including the optional terminal-connect definition cases. Passing cases cannot authorize behavior absent from the other Contract resources or prove that the production route is composed or exercised. |
 | [`provider-remote-v1/suite.json`](../conformance/provider-remote-v1/suite.json) | Names the portable, read-only remote discovery cases. It does not replace or execute the repository profile. |
 | This specification | Orders the existing resources into caller workflows and responsibility boundaries. |
 
@@ -119,6 +119,14 @@ performs its own user and tenant authorization, exact grant and session binding,
 revocation, connection admission, reconnect policy, and metadata-only audit,
 then resolves a fresh private endpoint through the Provider-owned resolver.
 
+An independent Gateway may use the optional
+`sandbox.terminal-connect@1.0.0`/`terminal-connect-v1` Provider capability. It
+authorizes the static controller data-plane route
+`GET /v1/runtime-sessions:connect`, derived from the already selected Provider
+origin. The route is not an end-user Gateway and does not move user, tenant,
+grant, or revocation authority into the Provider. A Provider that advertises
+only `sandbox.terminal@1.0.0` does not claim this network resolver.
+
 The Gateway does not expose or persist a Provider backend ID, host path,
 container or Pod name, raw terminal endpoint, Chromium debugging endpoint,
 backend token, or Provider credential. The Browser-specific boundary is further
@@ -127,6 +135,41 @@ defined by semantic rules `browser-session-gateway-handoff` and
 
 The Caller and Gateway may be implemented by the same product, but their
 authority remains outside the Provider.
+
+### Resolve a terminal handoff over the optional Provider route
+
+Before every connection or reconnect, the caller-owned Gateway authorizes its
+end user and tenant and constructs a terminal connect descriptor whose exact
+members and values equal the retained successful
+`runtime-session-handoff.schema.json` document. It serializes that closed
+descriptor, encodes it as unpadded base64url, and supplies exactly one
+`X-Sandbox-Runtime-Session-Handoff` header value. Query parameters, path
+correlation, redirects, resolver discovery, a Browser `Origin` header, and
+logging the handoff header are forbidden.
+
+The Caller computes the RFC 8785 full-document digest of that descriptor and
+uses operation `connect_runtime_session`, contract ID
+`urn:shell-echo:sandbox-runtime:descriptor:runtime-session-connect:v1`, and
+the static `GET /v1/runtime-sessions:connect` target in a fresh protected
+Admission Context and compact JWS. Reusing a consumed JTI is forbidden. The
+Provider completes mTLS and JWS admission and verifies all descriptor,
+Provider-revision, caller, tenant, policy, operation, attempt, fencing,
+deadline, committed-session, opaque-reference, expiry, revocation, and
+generation bindings before upgrading or attaching.
+`deadline_at` must not exceed the handoff expiry, and the current time must
+precede the token expiry, admission deadline, and handoff expiry.
+
+The HTTP/1.1 WebSocket handshake offers exactly
+`sandbox-runtime-terminal.v1`; the Provider selects that same subprotocol.
+Compression is forbidden. Only binary messages carry terminal bytes, each
+message is at most 65,536 bytes, byte order is preserved, and WebSocket message
+boundaries have no terminal semantics. A new connection or reconnect performs
+fresh protected admission, reference resolution, authority checks, and attach.
+An established connection MUST be closed no later than the retained handoff's
+`expires_at`; completing admission before expiry does not extend Provider
+authority for the active stream.
+Close reasons and pre-upgrade errors remain caller-safe and must not expose the
+opaque reference, backend identity, host path, raw endpoint, or credentials.
 
 ## Common calling flow
 
@@ -294,10 +337,16 @@ defined by the capability schemas, fixtures, and these semantic rules:
 - `capabilities-terminal-profile-advertisement` binds
   `sandbox.terminal@1.0.0`, `terminal-v1`, and
   `sandbox-runtime-terminal-v1`;
+- `capabilities-terminal-connect-profile-advertisement` optionally binds
+  `sandbox.terminal-connect@1.0.0`/`terminal-connect-v1` to a runtime profile
+  that also maps `sandbox.terminal@1.0.0`/`terminal-v1`;
 - `capabilities-coding-shell-profile-advertisement` atomically binds
   `sandbox.exec@1.0.0`/`exec-v1` and
   `sandbox.terminal@1.0.0`/`terminal-v1` to
-  `sandbox-runtime-coding-shell-v1`; and
+  `sandbox-runtime-coding-shell-v1`, and the separate
+  `capabilities-coding-shell-terminal-connect-advertisement` rule permits the
+  optional `sandbox.terminal-connect@1.0.0`/`terminal-connect-v1` only when all
+  three profiles map to that same runtime profile; and
 - `capabilities-browser-profile-advertisement` binds
   `sandbox.browser@1.0.0`, `browser-v1`, and
   `sandbox-runtime-browser-v1` and forbids combining that profile with the
@@ -318,6 +367,7 @@ The OpenAPI document currently authorizes these calling families:
   `GET /v1/operations/{operation_id}/exec-result`;
 - terminal: `POST /v1/sandboxes/{sandbox_id}/runtime-sessions` and
   `GET /v1/operations/{operation_id}/runtime-session`;
+- optional terminal connect: `GET /v1/runtime-sessions:connect`;
 - Browser: `POST /v1/sandboxes/{sandbox_id}/browser-sessions` and
   `GET /v1/operations/{operation_id}/browser-session`;
 - operation reconciliation: `GET /v1/operations/{operation_id}`; and
@@ -390,7 +440,7 @@ locally modified build identity fails closed.
 A complete green report proves only that the named remote discovery profile
 passed against the exact target, Provider revision, runner revision, and locked
 Contract identity. It reports `suite_exercised` and `profile_passed` without an
-unscoped `conformant` claim. It does not execute the 50-case repository profile,
+unscoped `conformant` claim. It does not execute the 53-case repository profile,
 prove protected admission or lifecycle behavior, or establish an independently
 implemented caller, aggregate conformance, multi-controller reliability,
 multi-tenant isolation, deployment, or production readiness.
@@ -404,7 +454,11 @@ wire behavior:
   terminate, desired-state, lease-renewal, snapshot, restore, or event routes;
   names reserved in admission documents do not close that lifecycle;
 - terminal and Browser handoffs require a caller-owned Gateway, but v1 does not
-  define public Gateway, close-session, resize, or revocation wire operations;
+  define a public end-user Gateway, close-session, resize, or revocation wire
+  operation; the optional terminal-connect route is only the protected
+  Provider resolver/data-plane boundary;
+- the production command does not yet advertise `sandbox.terminal-connect` or
+  expose `GET /v1/runtime-sessions:connect`;
 - capability discovery does not carry the full Contract revision/tree, so the
   caller obtains and verifies that identity out of band;
 - the production command does not currently advertise Browser or expose a
@@ -414,7 +468,7 @@ wire behavior:
   operator controls, hostile-tenant isolation, or deployment readiness;
 - file-backed Provider repositories remain single-controller development
   evidence rather than transactional multi-controller storage; and
-- the repository-owned 50-case Suite maps case IDs to this repository's tests;
+- the repository-owned 53-case Suite maps case IDs to this repository's tests;
   the separate portable remote Suite currently covers discovery only and does
   not prove an external product's protected business workflow, authorization,
   aggregate ledger, Gateway, deployment, or production behavior.

@@ -236,6 +236,18 @@ var testCases = map[string]testCase{
 		Package: "./providerapi/v1",
 		Run:     `^TestRuntimeSessionRejectionFixtures$`,
 	},
+	"terminal-connect-schema-and-fixtures": {
+		Package: "./providerapi/v1",
+		Run:     `^TestLocalTerminalConnectSchemaAndFixtures$`,
+	},
+	"terminal-connect-capability-advertisement": {
+		Package: "./providerapi/v1",
+		Run:     `^TestLocalTerminalConnectCapabilityAdvertisement$`,
+	},
+	"terminal-connect-admission-and-websocket-contract": {
+		Package: "./providerapi/v1",
+		Run:     `^TestLocalTerminalConnectAdmissionAndWebSocketContract$`,
+	},
 	"browser-session-open-schema": {
 		Package: "./providerapi/v1",
 		Run:     `^TestLockedBrowserSessionOpenRequestProjection$`,

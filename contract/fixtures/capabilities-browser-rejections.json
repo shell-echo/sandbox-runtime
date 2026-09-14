@@ -13,7 +13,7 @@
           {"id": "sandbox-runtime-browser-v1", "isolation_class": "container", "architecture": ["amd64"], "capability_profile_ids": ["browser-v1", "terminal-v1"]}
         ],
         "snapshot_restore_profiles": [
-          {"profile_id": "sandbox-snapshot-workspace-v1", "level": "workspace", "suite_id": "sandbox-provider", "suite_version": "1.0.0", "suite_digest": "sha256:bf177a5bd2b4228605b3ebc311d25a1cc348d9548b2b5c2d333a0c69e71ca528"}
+          {"profile_id": "sandbox-snapshot-workspace-v1", "level": "workspace", "suite_id": "sandbox-provider", "suite_version": "1.0.0", "suite_digest": "sha256:b40c932643f4a1e5fd6681e3abf9b64a607609866a6254456970f8b8034cf2a8"}
         ],
         "limits": {"max_cpu_millis": 2000, "max_memory_bytes": 2147483648, "max_ephemeral_storage_bytes": 2147483648, "max_lease_seconds": 3600, "max_exec_seconds": 300}
       }
@@ -30,7 +30,7 @@
           {"id": "sandbox-runtime-browser-v1", "isolation_class": "container", "architecture": ["amd64"], "capability_profile_ids": ["browser-v1"]}
         ],
         "snapshot_restore_profiles": [
-          {"profile_id": "sandbox-snapshot-workspace-v1", "level": "workspace", "suite_id": "sandbox-provider", "suite_version": "1.0.0", "suite_digest": "sha256:bf177a5bd2b4228605b3ebc311d25a1cc348d9548b2b5c2d333a0c69e71ca528"}
+          {"profile_id": "sandbox-snapshot-workspace-v1", "level": "workspace", "suite_id": "sandbox-provider", "suite_version": "1.0.0", "suite_digest": "sha256:b40c932643f4a1e5fd6681e3abf9b64a607609866a6254456970f8b8034cf2a8"}
         ],
         "limits": {"max_cpu_millis": 2000, "max_memory_bytes": 2147483648, "max_ephemeral_storage_bytes": 2147483648, "max_lease_seconds": 3600, "max_exec_seconds": 300}
       }
@@ -47,7 +47,7 @@
           {"id": "sandbox-runtime-browser-v1", "isolation_class": "container", "architecture": ["amd64"], "capability_profile_ids": ["browser-v1"]}
         ],
         "snapshot_restore_profiles": [
-          {"profile_id": "sandbox-snapshot-workspace-v1", "level": "workspace", "suite_id": "sandbox-provider", "suite_version": "1.0.0", "suite_digest": "sha256:bf177a5bd2b4228605b3ebc311d25a1cc348d9548b2b5c2d333a0c69e71ca528"}
+          {"profile_id": "sandbox-snapshot-workspace-v1", "level": "workspace", "suite_id": "sandbox-provider", "suite_version": "1.0.0", "suite_digest": "sha256:b40c932643f4a1e5fd6681e3abf9b64a607609866a6254456970f8b8034cf2a8"}
         ],
         "limits": {"max_cpu_millis": 2000, "max_memory_bytes": 2147483648, "max_ephemeral_storage_bytes": 2147483648, "max_lease_seconds": 3600, "max_exec_seconds": 300}
       }
@@ -64,7 +64,7 @@
           {"id": "sandbox-runtime-browser-v1", "isolation_class": "container", "architecture": ["amd64"], "capability_profile_ids": ["browser-experimental"]}
         ],
         "snapshot_restore_profiles": [
-          {"profile_id": "sandbox-snapshot-workspace-v1", "level": "workspace", "suite_id": "sandbox-provider", "suite_version": "1.0.0", "suite_digest": "sha256:bf177a5bd2b4228605b3ebc311d25a1cc348d9548b2b5c2d333a0c69e71ca528"}
+          {"profile_id": "sandbox-snapshot-workspace-v1", "level": "workspace", "suite_id": "sandbox-provider", "suite_version": "1.0.0", "suite_digest": "sha256:b40c932643f4a1e5fd6681e3abf9b64a607609866a6254456970f8b8034cf2a8"}
         ],
         "limits": {"max_cpu_millis": 2000, "max_memory_bytes": 2147483648, "max_ephemeral_storage_bytes": 2147483648, "max_lease_seconds": 3600, "max_exec_seconds": 300}
       }
@@ -81,7 +81,7 @@
           {"id": "sandbox-runtime-terminal-v1", "isolation_class": "container", "architecture": ["amd64"], "capability_profile_ids": ["browser-v1"]}
         ],
         "snapshot_restore_profiles": [
-          {"profile_id": "sandbox-snapshot-workspace-v1", "level": "workspace", "suite_id": "sandbox-provider", "suite_version": "1.0.0", "suite_digest": "sha256:bf177a5bd2b4228605b3ebc311d25a1cc348d9548b2b5c2d333a0c69e71ca528"}
+          {"profile_id": "sandbox-snapshot-workspace-v1", "level": "workspace", "suite_id": "sandbox-provider", "suite_version": "1.0.0", "suite_digest": "sha256:b40c932643f4a1e5fd6681e3abf9b64a607609866a6254456970f8b8034cf2a8"}
         ],
         "limits": {"max_cpu_millis": 2000, "max_memory_bytes": 2147483648, "max_ephemeral_storage_bytes": 2147483648, "max_lease_seconds": 3600, "max_exec_seconds": 300}
       }

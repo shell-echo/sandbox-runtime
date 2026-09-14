@@ -1,5 +1,5 @@
 {
-  "provider_revision_id": "provider-revision-local-v1",
+  "provider_revision_id": "provider-revision-coding-shell-terminal-connect-v1",
   "api_version": "v1",
   "capabilities": [
     {
@@ -11,6 +11,11 @@
       "id": "sandbox.terminal",
       "versions": ["1.0.0"],
       "profiles": ["terminal-v1"]
+    },
+    {
+      "id": "sandbox.terminal-connect",
+      "versions": ["1.0.0"],
+      "profiles": ["terminal-connect-v1"]
     }
   ],
   "runtime_profiles": [
@@ -19,7 +24,7 @@
       "isolation_class": "container",
       "runtime_class_name": "sandbox-runtime-coding-shell",
       "architecture": ["amd64"],
-      "capability_profile_ids": ["exec-v1", "terminal-v1"]
+      "capability_profile_ids": ["exec-v1", "terminal-v1", "terminal-connect-v1"]
     }
   ],
   "snapshot_restore_profiles": [

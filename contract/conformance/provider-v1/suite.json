@@ -41,6 +41,9 @@
         "runtime-session-handoff-schema",
         "runtime-session-semantic-bounds",
         "runtime-session-rejection-fixtures",
+        "terminal-connect-schema-and-fixtures",
+        "terminal-connect-capability-advertisement",
+        "terminal-connect-admission-and-websocket-contract",
         "browser-session-open-schema",
         "browser-session-operation-schema",
         "browser-session-handoff-schema",
@@ -60,5 +63,5 @@
       ]
     }
   ],
-  "suite_digest": "sha256:bf177a5bd2b4228605b3ebc311d25a1cc348d9548b2b5c2d333a0c69e71ca528"
+  "suite_digest": "sha256:b40c932643f4a1e5fd6681e3abf9b64a607609866a6254456970f8b8034cf2a8"
 }

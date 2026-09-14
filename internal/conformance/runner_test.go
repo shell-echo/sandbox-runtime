@@ -16,6 +16,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/shell-echo/sandbox-runtime/internal/suitedigest"
 )
 
 const conformanceHelperModeEnv = "SANDBOX_RUNTIME_CONFORMANCE_TEST_HELPER_MODE"
@@ -468,6 +470,9 @@ func TestLocalSuiteCasesHaveRunnerMappings(t *testing.T) {
 		"runtime-session-handoff-schema",
 		"runtime-session-semantic-bounds",
 		"runtime-session-rejection-fixtures",
+		"terminal-connect-schema-and-fixtures",
+		"terminal-connect-capability-advertisement",
+		"terminal-connect-admission-and-websocket-contract",
 		"browser-session-open-schema",
 		"browser-session-operation-schema",
 		"browser-session-handoff-schema",
@@ -487,6 +492,30 @@ func TestLocalSuiteCasesHaveRunnerMappings(t *testing.T) {
 	}
 	if err := validateCases(ids); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestTerminalConnectDefinitionSuiteCasesHaveRunnerMappings(t *testing.T) {
+	suite, err := suitedigest.Load(filepath.Join("..", "..", "contract", "conformance", "provider-v1", "suite.json"), suitedigest.DigestProfile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile, err := suite.RequiredProfile("sandbox-runtime-provider-v1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	suiteCases := make(map[string]struct{}, len(profile.Tests))
+	for _, id := range profile.Tests {
+		suiteCases[id] = struct{}{}
+	}
+	for _, id := range []string{"terminal-connect-schema-and-fixtures", "terminal-connect-capability-advertisement", "terminal-connect-admission-and-websocket-contract"} {
+		if _, ok := suiteCases[id]; !ok {
+			t.Fatalf("lock-selected local Suite is missing terminal-connect case %q", id)
+		}
+		mapping := testCases[id]
+		if mapping.Package != "./providerapi/v1" || mapping.Run == "" {
+			t.Fatalf("terminal-connect Suite case %q mapping = %#v", id, mapping)
+		}
 	}
 }
 

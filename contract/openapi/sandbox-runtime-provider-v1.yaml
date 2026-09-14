@@ -15,7 +15,7 @@ paths:
         - mutualTLS: []
       responses:
         '200':
-          description: Immutable empty, terminal-only, coding/shell, or browser-only capability snapshot
+          description: Immutable empty, terminal, terminal-connect, coding/shell, or browser capability snapshot
           content:
             application/json:
               schema:
@@ -867,6 +867,115 @@ paths:
             application/json:
               schema:
                 $ref: ../schemas/standard-error.schema.json
+  /v1/runtime-sessions:connect:
+    get:
+      operationId: connectTerminalRuntimeSession
+      summary: Resolve an opaque terminal handoff to a protected WebSocket byte stream
+      description: >-
+        Controller data-plane route used by a caller-owned Gateway after its
+        independent end-user and tenant authorization. This is not a public
+        end-user Gateway. HTTP/1.1 WebSocket upgrade is the v1 transport. An
+        established stream is closed no later than the retained handoff expiry.
+      x-required-capability:
+        id: sandbox.terminal-connect
+        version: 1.0.0
+        profile: terminal-connect-v1
+      x-websocket-protocol: sandbox-runtime-terminal.v1
+      x-websocket-compression: forbidden
+      x-websocket-message-mode: binary-ordered-bytes-message-boundaries-not-semantic
+      x-max-websocket-message-bytes: 65536
+      x-websocket-authority-deadline: handoff-expires-at
+      security:
+        - mutualTLS: []
+          bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/AdmissionContextHeader'
+        - $ref: '#/components/parameters/RuntimeSessionHandoffHeader'
+        - name: Sec-WebSocket-Protocol
+          in: header
+          required: true
+          description: Exactly one offered subprotocol, sandbox-runtime-terminal.v1.
+          schema:
+            type: string
+            const: sandbox-runtime-terminal.v1
+      responses:
+        '101':
+          description: >-
+            Terminal byte stream established only after protected admission,
+            descriptor binding, durable session authority, opaque reference,
+            expiry, revocation, generation, and fencing checks succeed.
+            Admission before expiry does not extend stream authority beyond
+            the retained handoff expiry.
+          headers:
+            Sec-WebSocket-Protocol:
+              required: true
+              schema:
+                type: string
+                const: sandbox-runtime-terminal.v1
+        '400':
+          description: Header, descriptor, WebSocket negotiation, or target is invalid
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '401':
+          description: Client certificate or bearer authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '403':
+          description: Controller, tenant, policy, Provider revision, or descriptor binding is not authorized
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '404':
+          description: Terminal operation or opaque handoff reference is unknown
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '409':
+          description: Attempt, fencing, session, profile, sandbox, or connection generation is stale or conflicting
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '410':
+          description: Terminal handoff has expired or its opaque reference was revoked
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '422':
+          description: Terminal-connect capability or profile is not supported by the selected sandbox runtime profile
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '429':
+          description: Provider terminal-connect capacity is temporarily exhausted
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '503':
+          description: Provider resolver or terminal attach is temporarily unavailable
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
   /v1/operations/{operation_id}/runtime-session:
     get:
       operationId: getRuntimeSessionHandoff
@@ -1017,6 +1126,24 @@ components:
       x-max-decoded-bytes: 16384
       x-decoded-schema:
         $ref: ../schemas/admission-context.schema.json
+    RuntimeSessionHandoffHeader:
+      name: X-Sandbox-Runtime-Session-Handoff
+      in: header
+      required: true
+      description: >-
+        Exactly one header field value containing the unpadded base64url
+        encoding of the closed terminal connect descriptor. The encoded value
+        is bounded to 5,462 characters and the decoded document to 4,096 bytes.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 5462
+        pattern: '^[A-Za-z0-9_-]+$'
+      x-exactly-one-value: true
+      x-content-encoding: base64url-unpadded
+      x-max-decoded-bytes: 4096
+      x-decoded-schema:
+        $ref: ../schemas/runtime-session-connect-descriptor.schema.json
   schemas:
     AdmissionContext:
       $ref: ../schemas/admission-context.schema.json
