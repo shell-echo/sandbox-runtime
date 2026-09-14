@@ -1,6 +1,63 @@
 # Project Context
 
-Updated: 2026-09-07
+P2.7c.2 is implemented through c2b.7: the producer builds the closed sanitized
+transcript and the report validator independently recomputes RFC 8785/SHA-256
+from `process-supervisor.json`'s `adapter_transcript_projection`. It binds the
+protocol, phases, invocations, processes, executables, configurations and field
+inventory, and checks message order, derived counts and status consistency.
+Physical byte counts, EOF/exit and process truth remain supervisor inputs, not
+independent observations made by this validator. No independent external-caller
+qualification result is claimed. c3.1 adds descriptor-backed, bounded executable
+preflight and rechecking without launching a process. The fixed 24-step plan
+has 21 completed and 3 unfinished steps. c3.2 implements the final static
+configuration commitment, exclusive custody transfer and one-shot logical phase
+admission with live descriptor rechecks. Reconstruction uses the existing
+protocol completion gate; outer-harness evidence remains open.
+c3.3 implements actual local spawn, endpoint handoff and bounded stop/reap.
+c3.4 exclusively decodes and binds the first stdout startup identity before any
+invocation or credential byte; Darwin/Linux tests execute repository helpers
+only, not an independent caller, and release identities remain assertions. c3.5
+validates the invocation against committed locations/startup requirements, then
+concurrently delivers bounded stdin and inherited-pipe payloads with EOF. c3.6
+starts one monotonic run budget before the first supervisor preflight read,
+preserves it across reconstruction, clips every case and operation deadline,
+drains bounded stderr concurrently, and accepts actual completion only after
+ordered output, terminal, stdout EOF and a clean reaped exit. c3.7 publishes
+sanitized evidence only after that completion, assigns opaque non-PID process
+identities, prevents external inputs from overriding observed adapter facts,
+and finalizes one canonical two-phase transcript. Real Darwin/arm64 and
+Linux/arm64 Lima helper tests pass. d1 now freezes a sanitized target identity,
+the exact profile-derived topology, 11 artifact requirements, all 10 ordered
+configuration identities, the numeric runtime/cleanup budget, and the 15+5
+scenario inventory before runtime setup. d2 now obtains target, artifact, and
+configuration identities only through a read-only observer, creates three
+descriptor-backed persistent stores, locks the authoritative inspector scope,
+and requires a complete zero-resource baseline before exposing prepared state.
+d3 releases mutation capability only after rechecking that state and baseline,
+passes the executor a closed identity-and-case directive with no request,
+endpoint, credential, correlation, or signing fields, and consumes exactly 15
+ordered progress results under clipped per-case and execution deadlines. It
+enforces dependencies, per-interaction wire-attempt bounds, and provisional
+transport/request counters while retaining cleanup after an unknown start.
+d4 admits reconstruction only after a terminal initial result and passes a
+closed eight-field directive containing only identities, ordered case IDs, and
+symbolic restart/preservation policy. It requires two distinct invocation IDs
+and eight unique opaque non-PID labels across the four old/new process pairs,
+rechecks persistent-store identity without reading entries, and consumes the
+five ordered reconstruction results under the original execution deadline.
+d5 adds four source-specific, read-only observer ports, binds their identities,
+41 interaction results and exact 66/17/7/1 fact projections to the locked
+profile and d2-d4 state, independently corroborates process replacement,
+transcript, shell-challenge and resource-scope facts, and derives scenario
+`passed`/`failed`/`incomplete`/`not_executed` plus conservative admission
+counters. Repository fixtures prove this component logic only; they are not
+independent caller evidence. d6 consumes the persistent cleanup obligation in a
+separate bounded context, binds the operator-owned teardown identity, closes
+local state descriptors, and requires exactly three same-scope, one-second-
+spaced zero-resource samples equal to the baseline before declaring cleanup
+successful. d7 now assembles and validates the closed evidence root as a local component. Next: e1 independently supplied caller and adapter identity and provenance, under separate approval.
+
+Updated: 2026-09-11
 
 This is the stable entry point for a new developer, AI agent, development
 device, or implementation session. It summarizes the system, engineering
@@ -750,7 +807,7 @@ Contract identity:
 | P2 components | P2.1-P2.5h local component, Contract projection, Docker, and recorded repository CI gates pass within their named boundaries | Retain single-controller/development constraints and exact Contract lock |
 | P2.5i | Latest completed local run `20260907T044611.598221000Z` passed 15 initial plus 5 restart/resume coding/shell scenarios against historical harness/Provider lock `b8d4829`/`af8a505`; hosted regression `33970773414` remains historical evidence against `17ed6ca`/`b4d41c9` | Neither run contains a Browser scenario or proves interoperability with an independently implemented external caller, durable-revocation caller behavior, or production properties |
 | P2.6 | Passed locally at implementation `3fe314a` and E2E lock refresh `ae476fe` for the content-derived local 50-case `repository-go-test` Suite and separate remote 6-case `remote-http-black-box` discovery profile | Independent third-party caller qualification, protected or mutating remote profiles, cleanup authority, and all broader readiness gates remain open |
-| P2.7 | P2.7a locks the verified `sandbox-runtime-external-caller-coding-shell-v1@1.0.0` machine-readable definition authority at `sha256:baee769c0acc395448af61faef99cd97fbb63ccb83c70eb51915952be519991a`, covering 15 initial plus 5 reconstruction cases, 41 interactions, and 91 per-observation source/actor/subject/correlation bindings. Overall P2.7 remains definition in progress and no external caller result exists | Add the closed report schema and report/evidence validator, then implement the external adapter process boundary, disposable harness, and independently supplied caller run |
+| P2.7 | P2.7a locks the verified `sandbox-runtime-external-caller-coding-shell-v1@1.0.0` definition authority at `sha256:baee769c0acc395448af61faef99cd97fbb63ccb83c70eb51915952be519991a`. P2.7b locks the report schema at `sha256:0fef4381588ace43c63ee6aaba0f9ddfa192af3c03353c1a13e00344bc416f3f` and validator semantics at `sha256:2cccf9502c1521ee3afe35478b0359fa9cf03eda6ef5b0c5130ed8ff6fd8daf2`. P2.7c.1 locks adapter protocol schema `sha256:0c3783bb4014d1e04d61f1987fa77f0c27a158c65552704f69f3f340bbaa6b20` and semantics `sha256:deeef0edf5cc63705d84e45a8f64f657e97346a3616259c2d8b718b1e38b0bd5`. P2.7c.2a implements the runtime-independent strict codec. P2.7c.2b.1 locks the complete per-process transition table, terminal/EOF/clean-exit rules, cross-phase startup equality, and closed transcript preimage schema `sha256:d2eb229f55528df8ba68426cc5b7da9d1bd6a78a412707d656b77c1effeff293`. P2.7c.2b.2-.7 and c3.1-.7 implement and execute the strict two-phase protocol and sanitized transcript path. d1-d4 freeze and execute the request-free harness. d5 binds four read-only observer sources to exact 41-interaction/91-fact evidence. d6 adds detached bounded teardown and exact stable zero-residue sampling. d7 consumes the d1-d6 snapshot once, accepts only closed transcript/timing/assertion/trusted-digest inputs, binds the runtime commitment through report/payloads/receipt, exclusively creates the exact five payloads and report at `0600`, closes the assembly descriptor, and lets the validator alone publish the receipt. Repository fixtures prove only local component logic, not external provenance, observer independence, actual external execution, or a P2.7 result. 21/24 steps are complete | Obtain e1 independently supplied caller/adapter identity and provenance next; e2 execution and e3 final archive/conclusion remain separately gated |
 | P2 | Reference coding/shell caller release gate passed | Aggregate conformance, multi-controller, hostile multi-tenant isolation, deployment, and production gates remain open |
 | P3 | Retired by ADR 0037. Historical revision binding/shadow/metrics components and candidate runs retain their recorded evidence boundaries | No named-platform migration gate remains; external consumers adapt to the exact locked Provider Contract |
 | P4 | Browser Contract authority/projection, exact sandboxed signed amd64/arm64/v8 publication, Provider-local components, default-disabled command/runtime composition, process-local Gateway limits, the separately recorded Browser/shared-capacity/durable-revocation caller gates, ADR 0033 component/caller evidence, the ADR 0034 v2 local/hosted deletion and rollback-detection gates, the ADR 0035 PostgreSQL component gate, and the ADR 0036 hosted same-runner controlled-restore gate pass within their named boundaries | Production independent witness/storage and restore operations, production Browser advertisement/public Gateway, Valkey/PostgreSQL provenance and HA, production configuration/metrics, aggregate, multi-controller, multi-tenant, deployment, and production gates remain open |
@@ -954,13 +1011,78 @@ Hosted harness `2cadc53` run `34013982796` passes the same scenarios on
 `20260906T052710.781616339Z` with exactly five sanitized files and has been
 inspected.
 
-1. Implement the P2.7 closed report schema and evidence-root validator against
-   the locked content-addressed
-   `sandbox-runtime-external-caller-coding-shell-v1` profile, then implement the
-   external adapter process boundary and disposable harness with independent
-   observations, actual executed-artifact digests, distinct-tenant cases,
-   authoritative zero-resource cleanup proof, and external receipts. Qualify an
-   independently supplied caller only after those gates pass. The P2.6 local
+P2.7b validation requires an operator-enforced writer handoff: the validator is
+the evidence root's exclusive writer from `Verify` entry through return,
+including against producers and other processes with the same UID. Its dirfd
+and TOCTOU checks fail closed on detected changes; they do not prove integrity
+against a continuously writable attacker. The validator stages its owned
+receipt, repeats the final evidence checks, and commits only if cancellation or
+a competing destination has not won; publication does not attest that reported
+interactions correspond to original request bodies. External packaging and
+archive digesting happen only after a successful return.
+
+P2.7c.1 locks the language-neutral adapter JSON schema and its
+first Darwin/Linux inherited-pipe transport semantics. Its protocol authority is
+bound through startup, process-supervisor, validator, and receipt evidence.
+All qualification Schema compilers use one ECMA-262 regexp engine and reject
+ASCII controls without POSIX-only classes. Invocation paths/endpoints now use
+closed canonical profiles. The definition requires digest-bound preflight
+commitment before the supervisor or harness acquires or generates credential or
+forbidden-correlation material, plus cross-phase byte identity; runtime proof
+awaits the supervisor and operator-upstream non-derivation remains trusted.
+Non-error output invocation IDs and phases now bind to the single validated
+inbound invocation, including scenario case-ID phase prefixes. Protocol-error
+branches now distinguish unbound `invalid_invocation` from
+bound post-acceptance terminal failures. Its monotonic deadline anchors retain
+one execution budget across reconstruction, clip each case to remaining global
+and parent time, prevent resets, and bound failure termination separately.
+P2.7c.2a adds the runtime-independent strict codec. Invocation bytes are counted
+through EOF; output record limits exclude the LF delimiter while the stdout
+total includes delimiters and invalid or truncated bytes. The codec rejects
+invalid UTF-8, duplicate members, invalid surrogate escapes, multiple values,
+unknown fields, wrong-direction messages, and mismatched startup protocol
+authority with stable sanitized failures. It deliberately does not validate
+message order, recompute transcripts, enforce deadlines, or launch a process.
+P2.7c.2b.1 now locks the exact transition table, terminal-to-EOF-to-clean-exit
+completion, cross-phase canonical startup equality, and the closed sanitized
+transcript preimage Schema at
+`sha256:d2eb229f55528df8ba68426cc5b7da9d1bd6a78a412707d656b77c1effeff293`.
+This is definition evidence only, not runtime state or transcript evidence.
+P2.7c.2b.2 adds the runtime-independent startup gate: it consumes the first
+strictly decoded adapter record, requires `startup_identity` sequence zero,
+rejects empty, duplicate, and out-of-order startup, preserves the first
+sanitized failure, and grants invocation-input authorization once. It neither
+performs I/O against a process nor advances into invocation acceptance.
+P2.7c.2b.3 records the invocation only after the startup gate authorized input,
+requires the invocation and output to originate from the same verified Codec
+and stdout decoder, rejects skipped output records, and accepts only sequence
+one with matching invocation ID and phase. A package-private document digest
+and revalidation prevent mutable decoded fields from changing the bound
+message; only a sanitized invocation reference is retained. P2.7c.2b.5 adds
+the valid pre-binding error branch.
+P2.7c.2b.4 obtains both phase case orders from that same verified profile
+result, copies them into the per-phase machine, and accepts exactly one result
+per case in order. `completed` requires an immediately preceding
+`scenario_started` for the same case; `not_executed` forbids a preceding start.
+Sequence, invocation, phase, Codec, stdout-stream, wire-byte, and decoded-record
+integrity remain bound for every accepted scenario message. The machine stops
+at `awaiting-terminal`. P2.7c.2b.5 accepts exactly one normal
+`invocation_finished` whose completion matches all observed dispositions, or
+the exact pre-/post-binding `protocol_error` branch. It rejects output after
+terminal, requires EOF on the bound decoder, and accepts a clean-exit event only
+after EOF. The pure state-machine slice neither launches nor waits on a process;
+c3.6 now supplies this event from the owned child's bounded real exit observation.
+A process boundary alone cannot prove caller source independence or exact
+PID-level request attribution.
+
+1. Obtain e1 independently supplied external caller/adapter identity and
+   provenance, then (under separate approvals) the execution and conclusion gates
+   against the locked content-addressed
+   `sandbox-runtime-external-caller-coding-shell-v1` profile and P2.7b closed
+   report/evidence validator, with independent observations, actual
+   executed-artifact digests, distinct-tenant cases, authoritative zero-resource
+   cleanup proof, and external receipts. Qualify an independently supplied
+   caller only after those gates pass. The P2.6 local
    50-case and remote 6-case discovery profiles are repository-owned evidence
    and do not establish that interoperability.
 2. Before adding protected or mutating remote profiles, define their explicit

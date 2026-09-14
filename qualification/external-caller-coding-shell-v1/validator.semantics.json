@@ -1,0 +1,155 @@
+{
+  "format_version": 1,
+  "semantics_id": "sandbox-runtime-external-caller-coding-shell-report-validator-v1",
+  "semantics_version": "1.0.0",
+  "report_schema": {
+    "path": "qualification/external-caller-coding-shell-v1/report.schema.json",
+    "digest": "sha256:0fef4381588ace43c63ee6aaba0f9ddfa192af3c03353c1a13e00344bc416f3f"
+  },
+  "adapter_protocol": {
+    "protocol_id": "sandbox-runtime-external-caller-adapter-v1",
+    "protocol_version": "1.0.0",
+    "schema": {
+      "path": "qualification/external-caller-coding-shell-v1/adapter-protocol.schema.json",
+      "digest": "sha256:0c3783bb4014d1e04d61f1987fa77f0c27a158c65552704f69f3f340bbaa6b20"
+    },
+    "semantics": {
+      "path": "qualification/external-caller-coding-shell-v1/adapter-protocol.semantics.json",
+      "digest": "sha256:deeef0edf5cc63705d84e45a8f64f657e97346a3616259c2d8b718b1e38b0bd5"
+    }
+  },
+  "transcript_projection_schema": {
+    "path": "qualification/external-caller-coding-shell-v1/adapter-transcript.schema.json",
+    "digest": "sha256:d2eb229f55528df8ba68426cc5b7da9d1bd6a78a412707d656b77c1effeff293"
+  },
+  "transcript_projection": {
+    "payload": "process-supervisor.json",
+    "field": "adapter_transcript_projection",
+    "presence": "non-null-iff-report-adapter-transcript-non-null",
+    "embedded_schema_matches_separate_locked_authority": true,
+    "digest_profile": "rfc8785-full-document-v1",
+    "digest_excludes_only": "nothing",
+    "binds_protocol_phase_invocation_process_executable_configuration_and_allowed_fields": true,
+    "credential_roles_equal_in_order_across_phases": true,
+    "message_counts_and_record_count_derived_from_ordered_types": true,
+    "channel_count_equals_role_count": true,
+    "message_types_replay_terminal_and_case_order": true,
+    "scenario_dispositions_constrain_status_not_determine_outcome": true,
+    "physical_byte_counts_eof_exit_and_process_truth_remain_supervisor_inputs": true
+  },
+  "payloads": [
+    {
+      "payload_id": "provider_observer",
+      "path": "provider-observer.json",
+      "schema_ref": "#/$defs/providerObserverPayload",
+      "observation_source": "provider_observer",
+      "interaction_surface": "provider_http"
+    },
+    {
+      "payload_id": "gateway_observer",
+      "path": "gateway-observer.json",
+      "schema_ref": "#/$defs/gatewayObserverPayload",
+      "observation_source": "gateway_observer",
+      "interaction_surface": "caller_gateway"
+    },
+    {
+      "payload_id": "process_supervisor",
+      "path": "process-supervisor.json",
+      "schema_ref": "#/$defs/processSupervisorPayload",
+      "observation_source": "process_supervisor",
+      "interaction_surface": null
+    },
+    {
+      "payload_id": "resource_inspector",
+      "path": "resource-inspector.json",
+      "schema_ref": "#/$defs/resourceInspectorPayload",
+      "observation_source": "resource_inspector",
+      "interaction_surface": null
+    },
+    {
+      "payload_id": "trusted_inputs",
+      "path": "trusted-inputs.json",
+      "schema_ref": "#/$defs/trustedInputsPayload",
+      "observation_source": null,
+      "interaction_surface": null
+    }
+  ],
+  "trusted_inputs": [
+    {
+      "input_id": "external-caller-ownership",
+      "source": "external_caller_owner"
+    },
+    {
+      "input_id": "source-hosting",
+      "source": "external_caller_owner"
+    },
+    {
+      "input_id": "build-system",
+      "source": "external_caller_owner"
+    },
+    {
+      "input_id": "operating-system",
+      "source": "qualification_operator"
+    },
+    {
+      "input_id": "network-path",
+      "source": "qualification_operator"
+    }
+  ],
+  "forbidden_material_markers": [
+    "-----begin",
+    "bearer ",
+    "authorization:",
+    "\"authorization\":",
+    "\"private_key\":",
+    "\"client_secret\":",
+    "/users/",
+    "/home/",
+    "\\users\\",
+    "/var/run/docker.sock",
+    "unix://",
+    "http://",
+    "https://",
+    "ws://",
+    "wss://",
+    "ref:"
+  ],
+  "rules": {
+    "transcript_projection_is_schema_valid_recomputed_and_bound_to_report": true,
+    "complete_identity_requires_all_payloads": true,
+    "passed_or_failed_requires_complete_identity": true,
+    "present_payloads_must_validate": true,
+    "observations_bind_source_payload_raw_digest": true,
+    "trusted_inputs_bind_payload_raw_digest": true,
+    "payload_inventory_allows_only_named_payloads": true,
+    "payload_files_must_be_singly_linked": true,
+    "runtime_commitment_binds_report_payloads_and_receipt": true,
+    "mutation_flags_follow_profile_counters": true,
+    "cleanup_required_is_conservative_and_implied_by_mutation_observation": true,
+    "resource_counts_include_profile_admissions_and_unexpected_resource_mutation_outcomes": true,
+    "cleanup_inventories_bind_query_scope_digest": true,
+  "cleanup_query_scope_digest_binds_target_namespace_selector_and_inspector": true,
+  "cleanup_query_scope_bindings_are_all_empty_or_complete": true,
+    "successful_cleanup_timestamps_cover_stability_samples": true,
+    "transient_outcomes_match_profile_wire_attempt_bound": true,
+    "configuration_identities_are_bound_by_process_supervisor": true,
+	"startup_identity_binds_adapter_protocol_authority": true,
+	"sandbox_resource_projection_is_bound_by_provider_observer": true,
+	"sandbox_resource_projection_is_present_iff_create_sandbox_is_observed": true,
+	"sandbox_resource_projection_matches_locked_profile": true,
+	"absent_payloads_cannot_leave_owned_positive_evidence": true,
+	"absent_process_supervisor_requires_not_executed_scenarios": true,
+	"absent_process_supervisor_suppresses_execution_timings": true,
+	"absent_process_supervisor_suppresses_shell_continuity_challenge": true,
+    "present_process_supervisor_requires_complete_execution_timings": true,
+    "passed_scenarios_require_all_required_observations": true,
+    "incomplete_scenarios_require_missing_evidence_without_observed_mismatch": true,
+    "absent_resource_inspector_allows_unknown_required_cleanup_without_positive_evidence": true,
+    "reconstruction_process_ids_must_change": true,
+    "scenario_timestamps_follow_profile_order": true,
+    "sanitization_scans_raw_and_decoded_json_for_locked_markers": true,
+	"receipt_is_staged_before_final_checks_and_committed_after_final_checks": true,
+    "receipt_binds_schema_and_semantics": true,
+    "receipt_binds_adapter_protocol_authority": true
+  }
+}

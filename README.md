@@ -1,5 +1,62 @@
 # sandbox-runtime
 
+P2.7c.2 is implemented through c2b.7: the producer builds the closed sanitized
+transcript and the report validator independently recomputes RFC 8785/SHA-256
+from `process-supervisor.json`'s `adapter_transcript_projection`. It binds the
+protocol, phases, invocations, processes, executables, configurations and field
+inventory, and checks message order, derived counts and status consistency.
+Physical byte counts, EOF/exit and process truth remain supervisor inputs, not
+independent observations made by this validator. No independent external-caller
+qualification result is claimed. c3.1 adds descriptor-backed, bounded executable
+preflight and rechecking without launching a process. The fixed 24-step plan
+has 21 completed and 3 unfinished steps. c3.2 implements the final static
+configuration commitment, exclusive custody transfer and one-shot logical phase
+admission with live descriptor rechecks. Reconstruction uses the existing
+protocol completion gate; outer-harness evidence remains open.
+c3.3 implements actual local spawn, endpoint handoff and bounded stop/reap.
+c3.4 exclusively decodes and binds the first stdout startup identity before any
+invocation or credential byte; Darwin/Linux tests execute repository helpers
+only, not an independent caller, and release identities remain assertions. c3.5
+validates the invocation against committed locations/startup requirements, then
+concurrently delivers bounded stdin and inherited-pipe payloads with EOF. c3.6
+starts one monotonic run budget before the first supervisor preflight read,
+preserves it across reconstruction, clips every case and operation deadline,
+drains bounded stderr concurrently, and accepts actual completion only after
+ordered output, terminal, stdout EOF and a clean reaped exit. c3.7 publishes
+sanitized evidence only after that completion, assigns opaque non-PID process
+identities, prevents external inputs from overriding observed adapter facts,
+and finalizes one canonical two-phase transcript. Real Darwin/arm64 and
+Linux/arm64 Lima helper tests pass. d1 now freezes a sanitized target identity,
+the exact profile-derived topology, 11 artifact requirements, all 10 ordered
+configuration identities, the numeric runtime/cleanup budget, and the 15+5
+scenario inventory before runtime setup. d2 now obtains target, artifact, and
+configuration identities only through a read-only observer, creates three
+descriptor-backed persistent stores, locks the authoritative inspector scope,
+and requires a complete zero-resource baseline before exposing prepared state.
+d3 releases mutation capability only after rechecking that state and baseline,
+passes the executor a closed identity-and-case directive with no request,
+endpoint, credential, correlation, or signing fields, and consumes exactly 15
+ordered progress results under clipped per-case and execution deadlines. It
+enforces dependencies, per-interaction wire-attempt bounds, and provisional
+transport/request counters while retaining cleanup after an unknown start.
+d4 admits reconstruction only after a terminal initial result and passes a
+closed eight-field directive containing only identities, ordered case IDs, and
+symbolic restart/preservation policy. It requires two distinct invocation IDs
+and eight unique opaque non-PID labels across the four old/new process pairs,
+rechecks persistent-store identity without reading entries, and consumes the
+five ordered reconstruction results under the original execution deadline.
+d5 adds four source-specific, read-only observer ports, binds their identities,
+41 interaction results and exact 66/17/7/1 fact projections to the locked
+profile and d2-d4 state, independently corroborates process replacement,
+transcript, shell-challenge and resource-scope facts, and derives scenario
+`passed`/`failed`/`incomplete`/`not_executed` plus conservative admission
+counters. Repository fixtures prove this component logic only; they are not
+independent caller evidence. d6 consumes the persistent cleanup obligation in a
+separate bounded context, binds the operator-owned teardown identity, closes
+local state descriptors, and requires exactly three same-scope, one-second-
+spaced zero-resource samples equal to the baseline before declaring cleanup
+successful. d7 now assembles and validates the closed evidence root as a local component. Next: e1 independently supplied caller and adapter identity and provenance, under separate approval.
+
 Composable Linux sandbox runtime for remote shells, desktops, browsers, and applications.
 
 `sandbox-runtime` is an early-stage runtime project for launching, accessing, and controlling remote workloads inside isolated Linux sandbox instances. It is designed to become a reusable foundation for products such as remote shells, cloud browsers, remote desktops, browser automation workers, AI-operated sandboxes, and embedded remote application environments.
@@ -787,9 +844,90 @@ visibility.
   ADR 0040 defines the boundary, and P2.7a locks the verified coding/shell
   machine-readable definition authority at
   `sha256:baee769c0acc395448af61faef99cd97fbb63ccb83c70eb51915952be519991a`.
-  Overall P2.7 remains definition in progress: its report schema, validator,
-  adapter/harness, and external execution remain open, and no external caller
-  has passed the gate
+  P2.7b locks the closed report schema at
+  `sha256:0fef4381588ace43c63ee6aaba0f9ddfa192af3c03353c1a13e00344bc416f3f`
+  and its validator semantics at
+  `sha256:2cccf9502c1521ee3afe35478b0359fa9cf03eda6ef5b0c5130ed8ff6fd8daf2`,
+  and adds the bounded evidence-root validator and sanitized receipt. The
+  validator enforces payload-owned nullable evidence and complete execution
+  timing, a 64-wire-attempt ceiling with fail-closed potential-resource
+  accounting, bound cleanup scope/baseline/stability samples, exact
+  create-sandbox resource projection, and receipt publication only after final
+  rechecks. This locks report-validation components only; it does not attest
+  producer truthfulness, original request bodies, or an external compatibility
+  result. P2.7c.1 locks the adapter protocol schema at
+  `sha256:0c3783bb4014d1e04d61f1987fa77f0c27a158c65552704f69f3f340bbaa6b20`
+  and operational semantics at
+  `sha256:deeef0edf5cc63705d84e45a8f64f657e97346a3616259c2d8b718b1e38b0bd5`.
+  P2.7c.2b.1 also locks the closed sanitized-transcript projection Schema at
+  `sha256:d2eb229f55528df8ba68426cc5b7da9d1bd6a78a412707d656b77c1effeff293`.
+  The identity-first, bounded protocol allows only the seven profile-owned
+  harness fields, keeps credentials on dedicated inherited channels, and treats
+  adapter progress as caller-owner assertions rather than final evidence. The
+  report startup identity, process-supervisor projection, validator semantics,
+  and receipt now bind the same exact protocol authority. P2.7c.2a implements a
+  runtime-independent strict codec for EOF-framed invocation input and
+  LF-delimited adapter output. It locks exact byte/record accounting, strict
+  UTF-8/JSON/Schema and message-direction checks, startup protocol-authority
+  matching, and sanitized terminal decode failures. The operational-semantics
+  digest was refreshed to bind those previously implicit count and precedence
+  rules. P2.7c.2b.1 machine-locks the complete per-process transition table,
+  terminal-to-EOF-to-clean-exit sequence, cross-phase startup equality, and
+  exact private-material-free transcript preimage shape. P2.7c.2b.2 implements
+  the first runtime-independent state gate: it consumes exactly one valid
+  sequence-zero startup record, rejects missing/duplicate/out-of-order startup,
+  retains the first sanitized failure, and grants invocation-input authorization
+  only once.
+  P2.7c.2b.3 binds the authorized, validated invocation to that same Codec and
+  stdout decoder, rejects skipped records or modified decoded envelopes, and
+  accepts only the next sequence-one `invocation_accepted` with byte-identical
+  invocation ID and exact phase. P2.7c.2b.4 then reads the exact ordered case
+  IDs from the verified profile, requires `scenario_started` before a
+  `completed` result, forbids it before `not_executed`, and advances to the
+  terminal boundary only after every phase case has one result. P2.7c.2b.5
+  enforces the disjoint normal/error terminal branches, rejects any
+  post-terminal byte, requires stdout EOF, and reaches `complete` only from a
+  clean-exit event after EOF. Actual bounded process
+  waiting, and process-execution enforcement remain later gates.
+  All qualification Schema compilers now use one ECMA-262 regexp engine, and
+  the locked text patterns reject ASCII controls without POSIX-only classes.
+  Invocation paths/endpoints now use closed canonical profiles, and the
+  definition requires a digest-bound preflight freeze before the supervisor or
+  harness acquires or generates credential or forbidden-correlation material,
+  plus byte identity across phases. Runtime proof awaits the process supervisor;
+  operator-upstream non-derivation remains trusted. Non-error output records now
+  bind their invocation ID and phase to the single validated inbound invocation,
+  and scenario case IDs bind to that phase. Protocol errors now have disjoint
+  pre-binding and post-binding branches with atomic nullable identity, contiguous
+  sequence, and terminal exclusivity. Monotonic deadline anchors now preserve one
+  shared 1,800-second execution budget across both phases, clip each case to the
+  remaining execution and parent deadline, forbid timer resets, and reserve a
+  separate five-second failure-termination budget. P2.7c.2a does not validate
+  phase/case order, enforce deadlines, launch an adapter, or recompute a
+  transcript; P2.7c.2b.1 defines those state and transcript rules, while
+  P2.7c.2b.2-.5 enforce startup, normal invocation acceptance, exact ordered
+  scenario state, terminal exclusivity, EOF, and supplied clean-exit state
+  without launching or waiting on a process. The c3.3 supervisor separately runs
+  local process probes. c3.4 binds the actual child's first stdout record to the
+  locked startup gate before any input, retains exclusive decoder ownership, and
+  fail-closes with process reclamation. c3.5 then verifies the private invocation
+  against the committed locations and exact startup channel requirements,
+  enforces channel/fd uniqueness plus per-channel/aggregate credential limits,
+  concurrently writes stdin and fd 3-10, closes every input for EOF, and advances
+  state only after exact byte completion. c3.6 then enforces the shared run/case
+  deadlines, bounded stderr, terminal-to-EOF order, and actual zero-exit reap.
+  c3.7 publishes defensive phase evidence only after that complete path and
+  binds its non-overridable adapter facts into one canonical two-phase
+  transcript. d1-d6 freeze and execute the request-free harness through
+  independently observed results and bounded cleanup. d7 now consumes that
+  sanitized state once, accepts only the closed transcript/timing/assertion/
+  trusted-digest projections, and creates the exact five payloads plus report
+  at `0600` through a pinned directory descriptor. It closes the assembly
+  writer before the validator alone publishes the receipt, with the same
+  runtime commitment bound across all seven files. Real Darwin/arm64 and
+  Linux/arm64 helpers pass. These repository probes do not establish release,
+  payload, caller, adapter, trusted-input, or observer provenance, and no
+  independent external caller has passed the gate.
 
 ### Provider lifecycle
 

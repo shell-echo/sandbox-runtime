@@ -1,5 +1,62 @@
 # Architecture
 
+P2.7c.2 is implemented through c2b.7: the producer builds the closed sanitized
+transcript and the report validator independently recomputes RFC 8785/SHA-256
+from `process-supervisor.json`'s `adapter_transcript_projection`. It binds the
+protocol, phases, invocations, processes, executables, configurations and field
+inventory, and checks message order, derived counts and status consistency.
+Physical byte counts, EOF/exit and process truth remain supervisor inputs, not
+independent observations made by this validator. No independent external-caller
+qualification result is claimed. c3.1 adds descriptor-backed, bounded executable
+preflight and rechecking without launching a process. The fixed 24-step plan
+has 21 completed and 3 unfinished steps. c3.2 implements the final static
+configuration commitment, exclusive custody transfer and one-shot logical phase
+admission with live descriptor rechecks. Reconstruction uses the existing
+protocol completion gate; outer-harness evidence remains open.
+c3.3 implements actual local spawn, endpoint handoff and bounded stop/reap.
+c3.4 exclusively decodes and binds the first stdout startup identity before any
+invocation or credential byte; Darwin/Linux tests execute repository helpers
+only, not an independent caller, and release identities remain assertions. c3.5
+validates the invocation against committed locations/startup requirements, then
+concurrently delivers bounded stdin and inherited-pipe payloads with EOF. c3.6
+starts one monotonic run budget before the first supervisor preflight read,
+preserves it across reconstruction, clips every case and operation deadline,
+drains bounded stderr concurrently, and accepts actual completion only after
+ordered output, terminal, stdout EOF and a clean reaped exit. c3.7 publishes
+sanitized evidence only after that completion, assigns opaque non-PID process
+identities, prevents external inputs from overriding observed adapter facts,
+and finalizes one canonical two-phase transcript. Real Darwin/arm64 and
+Linux/arm64 Lima helper tests pass. d1 now freezes a sanitized target identity,
+the exact profile-derived topology, 11 artifact requirements, all 10 ordered
+configuration identities, the numeric runtime/cleanup budget, and the 15+5
+scenario inventory before runtime setup. d2 now obtains target, artifact, and
+configuration identities only through a read-only observer, creates three
+descriptor-backed persistent stores, locks the authoritative inspector scope,
+and requires a complete zero-resource baseline before exposing prepared state.
+d3 releases mutation capability only after rechecking that state and baseline,
+passes the executor a closed identity-and-case directive with no request,
+endpoint, credential, correlation, or signing fields, and consumes exactly 15
+ordered progress results under clipped per-case and execution deadlines. It
+enforces dependencies, per-interaction wire-attempt bounds, and provisional
+transport/request counters while retaining cleanup after an unknown start.
+d4 admits reconstruction only after a terminal initial result and passes a
+closed eight-field directive containing only identities, ordered case IDs, and
+symbolic restart/preservation policy. It requires two distinct invocation IDs
+and eight unique opaque non-PID labels across the four old/new process pairs,
+rechecks persistent-store identity without reading entries, and consumes the
+five ordered reconstruction results under the original execution deadline.
+d5 adds four source-specific, read-only observer ports, binds their identities,
+41 interaction results and exact 66/17/7/1 fact projections to the locked
+profile and d2-d4 state, independently corroborates process replacement,
+transcript, shell-challenge and resource-scope facts, and derives scenario
+`passed`/`failed`/`incomplete`/`not_executed` plus conservative admission
+counters. Repository fixtures prove this component logic only; they are not
+independent caller evidence. d6 consumes the persistent cleanup obligation in a
+separate bounded context, binds the operator-owned teardown identity, closes
+local state descriptors, and requires exactly three same-scope, one-second-
+spaced zero-resource samples equal to the baseline before declaring cleanup
+successful. d7 now assembles and validates the closed evidence root as a local component. Next: e1 independently supplied caller and adapter identity and provenance, under separate approval.
+
 ## Purpose
 
 `sandbox-runtime` is a backend-independent sandbox provider. Its first useful
@@ -585,7 +642,7 @@ advertisement, and optional-profile gates remain open:
 
 | Area | Current state | Required direction |
 | --- | --- | --- |
-| Conformance | ADR 0039 passes its local P2.6 release gate at implementation `3fe314a` and E2E lock refresh `ae476fe`: content-derived local and remote Suite identities, a clean-revision 50-case Go-test runner, and a separate six-case TLS 1.3 mTLS remote discovery runner. ADR 0040 and the verified P2.7a profile lock the independent external-caller definition authority; no report or execution result exists. | Implement the closed report schema, evidence-root validator, independent observers, and external adapter boundary before running the profile with a separately supplied caller. Define Provider-level cleanup authority and profile-specific evidence before adding protected or mutating remote Suite cases; retain aggregate, multi-controller, multi-tenant, HA, deployment, and production gates. |
+| Conformance | ADR 0039 passes its local P2.6 release gate at implementation `3fe314a` and E2E lock refresh `ae476fe`: content-derived local and remote Suite identities, a clean-revision 50-case Go-test runner, and a separate six-case TLS 1.3 mTLS remote discovery runner. ADR 0040, the verified P2.7a profile, the P2.7b closed report schema/evidence validator, and the P2.7c.1 adapter protocol definition lock the external-caller profile, evidence format, and process-protocol authority. P2.7c.2a/b and c3.1-.7 implement the strict two-phase protocol and sanitized transcript path. d1-d4 implement frozen configuration, disposable runtime preparation, request-free initial orchestration, and correlation-free reconstruction. d5 implements four source-specific observer ports and exact 41-interaction/91-fact profile binding. d6 implements detached bounded operator teardown plus exact same-scope stable zero-residue sampling. d7 adds typed one-shot evidence assembly, runtime-commitment binding through the five payloads/report/receipt, descriptor-pinned exclusive `0600` publication, assembly-writer closure, and validator-only receipt publication. Real Darwin/arm64 and Linux/arm64 component tests plus earlier guest-local tagged Docker integrations pass; repository fixtures do not prove actual teardown, independent caller/observer provenance, or external execution. | Obtain e1 independently supplied caller/adapter identity and provenance next, then execute e2 and conclude e3 under separate approvals. Define Provider-level cleanup authority and profile-specific evidence before adding protected or mutating remote Suite cases; retain aggregate, multi-controller, multi-tenant, HA, deployment, and production gates. |
 | Protected admission | ADR 0038 requires one explicit issuer-scoped caller trust domain per listener, Provider-local audience/revision anchors, and 1..32 frozen verification keys. Its repository-local Contract, projection, configuration, conformance, E2E lock, overlap-key, and same-repository reference gates pass. | Retain exact authentication/authorization precedence. Treat multi-issuer admission and independently implemented external-caller interoperability as separate future gates. |
 | Backend abstraction | Local `instance.Driver` remains separate; the Provider lifecycle has its own fake and Docker development adapters, while exec and terminal use focused Provider-only runtime ports. | Add future snapshot capability ports without reusing `/instances` models and retain narrow optional interfaces. |
 | Lifecycle recovery | Provider file persistence and Docker observation reconcile pending/unknown create work for one controller. | Retain unknown-outcome evidence; add transactional production storage before multi-controller operation. |
@@ -694,7 +751,9 @@ readiness.
   reconciliation, authorization, and Gateway policy in that external caller;
 - define a content-addressed machine-readable
   `sandbox-runtime-external-caller-coding-shell-v1` profile with stable case IDs,
-  exact expectations and resource bounds, then add a closed report schema;
+  exact expectations and resource bounds, together with a closed report schema
+  and bounded evidence-root validator, plus a separate content-addressed adapter
+  process protocol that does not alter Provider wire behavior;
 - pin the actual executed Provider, caller, adapter, Gateway, and runtime
   artifacts by digest, together with their source/release, Contract, Suite,
   profile, topology, and configuration identities;
@@ -706,15 +765,88 @@ readiness.
 
 P2.7a locks the verified machine-readable definition authority at
 `sha256:baee769c0acc395448af61faef99cd97fbb63ccb83c70eb51915952be519991a`.
-Overall P2.7 definition remains in progress until the closed report schema and
-evidence validator exist, and no external caller has passed this gate. The
-same-repository reference caller cannot satisfy the independence requirement.
+P2.7b locks the closed report schema at
+`sha256:0fef4381588ace43c63ee6aaba0f9ddfa192af3c03353c1a13e00344bc416f3f`
+and validator semantics at
+`sha256:2cccf9502c1521ee3afe35478b0359fa9cf03eda6ef5b0c5130ed8ff6fd8daf2`,
+and implements the bounded evidence-root validator and non-overwriting sanitized
+receipt. P2.7b locks only this evidence definition, not an external compatibility
+result. P2.7c.1 locks the adapter protocol schema at
+`sha256:0c3783bb4014d1e04d61f1987fa77f0c27a158c65552704f69f3f340bbaa6b20`
+and operational semantics at
+`sha256:deeef0edf5cc63705d84e45a8f64f657e97346a3616259c2d8b718b1e38b0bd5`.
+It defines identity-first one-shot phase invocations, seven allowed harness
+fields, dedicated secret channels, bounded progress, and fail-closed process
+control, and binds its authority through startup, process-supervisor, validator,
+and receipt evidence. Its Schema compilers use one ECMA-262 regexp engine and
+reject ASCII controls without POSIX-only classes. Invocation paths/endpoints now
+use closed canonical profiles. The definition requires digest-bound preflight
+commitment before the supervisor or harness acquires or generates credential or
+forbidden-correlation material, plus cross-phase byte identity; runtime proof
+awaits the supervisor and operator-upstream non-derivation remains trusted.
+Non-error output records now bind their invocation ID and phase to the single
+validated inbound invocation, and scenario case IDs bind to that phase.
+Protocol errors now use disjoint pre-binding and post-binding terminal branches
+with atomic identity nullability and contiguous sequence. Monotonic deadline
+anchors preserve one run budget across reconstruction, clip case budgets to
+remaining run and parent time, prohibit resets, and bound failure termination
+with a separate cleanup context. P2.7c.2a implements a runtime-independent
+codec that enforces EOF/LF framing, exact byte and record ceilings, strict
+UTF-8/JSON/Schema and direction rules, startup authority equality, and
+sanitized terminal decode failures. P2.7c.2b.1 locks the exact state transitions,
+terminal/EOF/clean-exit rules, canonical equality of both phase startup records,
+and the closed transcript preimage Schema at
+`sha256:d2eb229f55528df8ba68426cc5b7da9d1bd6a78a412707d656b77c1effeff293`.
+P2.7c.2b.2 implements only the first two startup-boundary decisions: consuming
+one valid sequence-zero startup and granting invocation-input authorization
+once, with a sanitized absorbing failure otherwise. P2.7c.2b.3 binds the
+delivered invocation and sequence-one acceptance to the same Codec/stdout
+stream, ID, and phase, and rejects record skips or mutated decoded envelopes.
+P2.7c.2b.4 then enforces the verified profile's exact per-phase case order,
+requires a same-case start before `completed`, forbids a start before
+`not_executed`, and reaches only the terminal-wait boundary after the last case.
+P2.7c.2b.5 enforces a single normal/error terminal, rejects post-terminal
+output, requires stdout EOF, and completes only after a supplied clean-exit
+event. It does not perform the bounded wait, recompute the transcript, launch
+processes, or supply execution evidence.
+Adapter output remains a caller-owner assertion; final scenario status requires
+independent observations. Overall P2.7 remains in progress until the adapter
+runtime message-order state machine, process supervisor, disposable harness, and independently
+supplied execution exist, and no external caller has passed this gate. The
+same-repository reference caller
+cannot satisfy the independence requirement. The schema and semantics digests
+identify data authorities; they do not attest the validator executable,
+repository build, or host toolchain used for a particular run, which remain
+trust inputs unless separately provenanced.
+The Provider observer binds the fixed coding/shell sandbox-resource request
+projection to the observed `create-sandbox` interaction. That projection must
+match the profile and proves neither runtime allocation nor resource-limit
+enforcement. Complete outcomes also require the five payload identities and
+the process-supervisor timing projection to cross-bind the report; nullable
+partial evidence remains unknown rather than positive evidence.
+Executed scenarios with missing required evidence and no observed mismatch are
+explicitly `incomplete`; mutation with a missing inspector retains an unknown
+cleanup obligation without inventing teardown evidence.
+The qualification operator must finish the producer handoff and keep the
+validator as the evidence root's exclusive writer from `Verify` entry through
+return. Producers and other processes with the same UID may not write, rename,
+link, or remove entries during that interval. Directory-FD pinning and path,
+identity, digest, and inventory rechecks detect specified races and fail
+closed; they do not establish integrity against an attacker that retains
+continuous write access. External packaging and archive-digest recording occur
+only after a successful validator return.
+The evidence root is an operator-supplied healthy local filesystem. Context
+cancellation applies at stage boundaries and before commit, not inside a kernel-
+blocked filesystem syscall, so the validator does not claim a hard deadline for
+stuck FUSE or network-filesystem I/O.
 Because Provider v1 has no terminate or lease-control route, P2.7 cleanup is
 operator-owned run-namespace teardown within the disposable qualification
 target, not a new Provider wire behavior or lifecycle-closure result.
 
-Release gate: the content-addressed profile and closed report schema lock the 15
-initial and 5 reconstruction cases with stable IDs and exact expectations. The
+Release gate: the content-addressed profile locks the 15 initial and 5
+reconstruction cases with stable IDs and exact expectations; the closed report
+schema and validator semantics lock their evidence representation and cross-file
+bindings. The
 actual executed Provider, external caller, adapter, caller-owned Gateway, runtime
 image, cleanup implementation, and resource inspector are pinned by artifact
 digest; the caller's independently declared consumed Contract and profile

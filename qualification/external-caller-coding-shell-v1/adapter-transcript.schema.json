@@ -1,0 +1,290 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:shell-echo:sandbox-runtime:qualification:external-caller-adapter-transcript:v1",
+  "title": "Sandbox Runtime External Caller Adapter Sanitized Transcript Projection v1",
+  "description": "Closed digest preimage for a complete two-phase adapter protocol transcript. It contains bounded process and protocol metadata, never raw invocation values, credentials, requests, responses, endpoints, correlation values, or stderr.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format_version",
+    "transcript_type",
+    "transcript_version",
+    "protocol_id",
+    "protocol_version",
+    "protocol_schema_digest",
+    "protocol_semantics_digest",
+    "phase_order",
+    "invocation_ids",
+    "phases"
+  ],
+  "properties": {
+    "format_version": {"const": 1},
+    "transcript_type": {"const": "sandbox-runtime-external-caller-adapter-transcript"},
+    "transcript_version": {"const": "1.0.0"},
+    "protocol_id": {"const": "sandbox-runtime-external-caller-adapter-v1"},
+    "protocol_version": {"const": "1.0.0"},
+    "protocol_schema_digest": {"$ref": "#/$defs/digest"},
+    "protocol_semantics_digest": {"$ref": "#/$defs/digest"},
+    "phase_order": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "prefixItems": [
+        {"const": "initial"},
+        {"const": "reconstruction"}
+      ],
+      "items": false
+    },
+    "invocation_ids": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/id"}
+    },
+    "phases": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "prefixItems": [
+        {"$ref": "#/$defs/initialPhase"},
+        {"$ref": "#/$defs/reconstructionPhase"}
+      ],
+      "items": false
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "pattern": "^[a-z0-9][a-z0-9._:-]*$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "channelRole": {
+      "enum": [
+        "provider_credentials",
+        "provider_trust",
+        "gateway_credentials",
+        "gateway_trust"
+      ]
+    },
+    "processIdentities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "external_caller", "qualification_adapter", "caller_gateway"],
+      "properties": {
+        "provider": {"$ref": "#/$defs/id"},
+        "external_caller": {"$ref": "#/$defs/id"},
+        "qualification_adapter": {"$ref": "#/$defs/id"},
+        "caller_gateway": {"$ref": "#/$defs/id"}
+      }
+    },
+    "digestsByComponent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "external_caller", "qualification_adapter", "caller_gateway"],
+      "properties": {
+        "provider": {"$ref": "#/$defs/digest"},
+        "external_caller": {"$ref": "#/$defs/digest"},
+        "qualification_adapter": {"$ref": "#/$defs/digest"},
+        "caller_gateway": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "suppliedFieldNames": {
+      "type": "array",
+      "minItems": 7,
+      "maxItems": 7,
+      "prefixItems": [
+        {"const": "invocation_id"},
+        {"const": "phase"},
+        {"const": "profile_path"},
+        {"const": "provider_origin"},
+        {"const": "gateway_probe_endpoint"},
+        {"const": "credential_channel_descriptors"},
+        {"const": "caller_state_root"}
+      ],
+      "items": false
+    },
+    "messageType": {
+      "enum": [
+        "startup_identity",
+        "invocation_accepted",
+        "scenario_started",
+        "scenario_result",
+        "invocation_finished",
+        "protocol_error"
+      ]
+    },
+    "messageCounts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "startup_identity",
+        "invocation_accepted",
+        "scenario_started",
+        "scenario_result",
+        "invocation_finished",
+        "protocol_error"
+      ],
+      "properties": {
+        "startup_identity": {"const": 1},
+        "invocation_accepted": {"type": "integer", "minimum": 0, "maximum": 1},
+        "scenario_started": {"type": "integer", "minimum": 0, "maximum": 15},
+        "scenario_result": {"type": "integer", "minimum": 0, "maximum": 15},
+        "invocation_finished": {"type": "integer", "minimum": 0, "maximum": 1},
+        "protocol_error": {"type": "integer", "minimum": 0, "maximum": 1}
+      }
+    },
+    "boundedByteCounts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "invocation_wire_bytes",
+        "adapter_stdout_wire_bytes",
+        "adapter_stderr_wire_bytes",
+        "adapter_output_complete_records",
+        "credential_channel_count",
+        "credential_payload_total_bytes"
+      ],
+      "properties": {
+        "invocation_wire_bytes": {"type": "integer", "minimum": 1, "maximum": 32768},
+        "adapter_stdout_wire_bytes": {"type": "integer", "minimum": 1, "maximum": 2097152},
+        "adapter_stderr_wire_bytes": {"type": "integer", "minimum": 0, "maximum": 262144},
+        "adapter_output_complete_records": {"type": "integer", "minimum": 2, "maximum": 33},
+        "credential_channel_count": {"type": "integer", "minimum": 1, "maximum": 8},
+        "credential_payload_total_bytes": {"type": "integer", "minimum": 0, "maximum": 4194304}
+      }
+    },
+    "terminalState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "terminal_message_type",
+        "completion",
+        "error_code",
+        "stdout_eof_observed",
+        "clean_process_exit_observed"
+      ],
+      "properties": {
+        "terminal_message_type": {"enum": ["invocation_finished", "protocol_error"]},
+        "completion": {
+          "oneOf": [
+            {"enum": ["completed", "stopped"]},
+            {"type": "null"}
+          ]
+        },
+        "error_code": {
+          "oneOf": [
+            {
+              "enum": [
+                "invalid_invocation",
+                "credential_channel_failed",
+                "caller_start_failed",
+                "scenario_execution_failed",
+                "output_failed",
+                "internal_failure"
+              ]
+            },
+            {"type": "null"}
+          ]
+        },
+        "stdout_eof_observed": {"const": true},
+        "clean_process_exit_observed": {"const": true}
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "terminal_message_type": {"const": "invocation_finished"},
+            "completion": {"enum": ["completed", "stopped"]},
+            "error_code": {"type": "null"}
+          }
+        },
+        {
+          "properties": {
+            "terminal_message_type": {"const": "protocol_error"},
+            "completion": {"type": "null"},
+            "error_code": {
+              "enum": [
+                "invalid_invocation",
+                "credential_channel_failed",
+                "caller_start_failed",
+                "scenario_execution_failed",
+                "output_failed",
+                "internal_failure"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "phase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase_id",
+        "invocation_id",
+        "process_identities",
+        "executable_digests",
+        "configuration_digests",
+        "supplied_field_names",
+        "credential_channel_roles",
+        "message_types",
+        "message_counts",
+        "bounded_byte_counts",
+        "terminal_state"
+      ],
+      "properties": {
+        "phase_id": {"enum": ["initial", "reconstruction"]},
+        "invocation_id": {"$ref": "#/$defs/id"},
+        "process_identities": {"$ref": "#/$defs/processIdentities"},
+        "executable_digests": {"$ref": "#/$defs/digestsByComponent"},
+        "configuration_digests": {"$ref": "#/$defs/digestsByComponent"},
+        "supplied_field_names": {"$ref": "#/$defs/suppliedFieldNames"},
+        "credential_channel_roles": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "items": {"$ref": "#/$defs/channelRole"}
+        },
+        "message_types": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 33,
+          "prefixItems": [{"const": "startup_identity"}],
+          "items": {"$ref": "#/$defs/messageType"},
+          "allOf": [
+            {
+              "contains": {"const": "startup_identity"},
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "contains": {"enum": ["invocation_finished", "protocol_error"]},
+              "minContains": 1,
+              "maxContains": 1
+            }
+          ]
+        },
+        "message_counts": {"$ref": "#/$defs/messageCounts"},
+        "bounded_byte_counts": {"$ref": "#/$defs/boundedByteCounts"},
+        "terminal_state": {"$ref": "#/$defs/terminalState"}
+      }
+    },
+    "initialPhase": {
+      "allOf": [
+        {"$ref": "#/$defs/phase"},
+        {"properties": {"phase_id": {"const": "initial"}}}
+      ]
+    },
+    "reconstructionPhase": {
+      "allOf": [
+        {"$ref": "#/$defs/phase"},
+        {"properties": {"phase_id": {"const": "reconstruction"}}}
+      ]
+    }
+  }
+}
