@@ -21,6 +21,9 @@ func TestDefaultServerConfig(t *testing.T) {
 	if s.Provider.Transport.Enabled {
 		t.Error("Provider listener is enabled by default")
 	}
+	if s.Provider.Terminal.BrokerPath != ProviderCodingShellTerminalBrokerPath {
+		t.Fatalf("default terminal broker path = %q, want image path %q", s.Provider.Terminal.BrokerPath, ProviderCodingShellTerminalBrokerPath)
+	}
 	if err := s.Provider.Validate(); err != nil {
 		t.Errorf("disabled Provider defaults should be valid: %v", err)
 	}
@@ -861,6 +864,13 @@ func TestProviderTerminalConfigurationValidation(t *testing.T) {
 				t.Fatal("Validate() error = nil, want terminal configuration rejection")
 			}
 		})
+	}
+}
+
+func TestProviderTerminalConnectRequiresTerminal(t *testing.T) {
+	configuration := ProviderTerminalConfig{ConnectEnabled: true}
+	if err := configuration.Validate(); err == nil || !strings.Contains(err.Error(), "connect_enabled requires terminal") {
+		t.Fatalf("Validate() = %v", err)
 	}
 }
 

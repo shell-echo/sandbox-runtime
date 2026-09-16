@@ -124,6 +124,45 @@ func TestMapCapabilitiesProjectsTerminalAdvertisement(t *testing.T) {
 	}
 }
 
+func TestMapCapabilitiesProjectsCodingShellTerminalConnectAdvertisement(t *testing.T) {
+	capabilities, runtimeProfiles := providerCodingShellAdvertisements()
+	capabilities = append(capabilities, provider.Capability{
+		ID: "sandbox.terminal-connect", Versions: []string{"1.0.0"}, Profiles: []string{"terminal-connect-v1"},
+	})
+	runtimeProfiles[0].CapabilityProfileIDs = append(runtimeProfiles[0].CapabilityProfileIDs, "terminal-connect-v1")
+	snapshot, err := provider.NewCapabilitySnapshotWithAdvertisements("revision-1", provider.Limits{
+		MaxCPUMillis: 1000, MaxMemoryBytes: 1 << 30, MaxEphemeralStorageBytes: 1 << 30,
+		MaxLeaseSeconds: 3600, MaxExecSeconds: 300,
+	}, capabilities, runtimeProfiles, []provider.SnapshotRestoreProfile{{
+		ProfileID: "sandbox-snapshot-workspace-v1", Level: provider.SnapshotLevelWorkspace,
+		SuiteID: provider.CompatibilitySuiteSandboxProvider, SuiteVersion: "1.0.0",
+		SuiteDigest: provider.SHA256Digest("sha256:" + strings.Repeat("a", 64)),
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	document := mapCapabilities(snapshot)
+	if err := validateCapabilities(document); err != nil {
+		t.Fatalf("validateCapabilities() = %v", err)
+	}
+	if len(document.Capabilities) != 3 || document.Capabilities[2].ID != providerv1.CapabilityTerminalConnect ||
+		len(document.RuntimeProfiles) != 1 || len(document.RuntimeProfiles[0].CapabilityProfileIDs) != 3 {
+		t.Fatalf("terminal-connect document = %#v", document)
+	}
+	encoded, err := json.Marshal(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sourceRoot := localContractSourceRoot(t)
+	projection, err := providercontract.Load(context.Background(), filepath.Join(sourceRoot, "compatibility/sandbox-runtime/contract.lock.json"), sourceRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := projection.Validate("provider-capabilities.schema.json", encoded); err != nil {
+		t.Fatalf("terminal-connect projection = %v", err)
+	}
+}
+
 func TestMapCapabilitiesProjectsCodingShellAdvertisement(t *testing.T) {
 	capabilities, runtimeProfiles := providerCodingShellAdvertisements()
 	snapshot, err := provider.NewCapabilitySnapshotWithAdvertisements("revision-1", provider.Limits{

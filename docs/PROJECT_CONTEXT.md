@@ -62,6 +62,16 @@ at source commit `58a211f0c167af3ec117c8cb8247bfe268bbae40` passed the
 full tests, deterministic Linux/amd64 build, authority verification, artifact
 upload, and five-subject Sigstore attestation `47846951`; the downloaded
 three-artifact bundle and its strict manifest were independently reverified.
+The e2 preflight then found two real execution blockers rather than an
+executable qualification environment: the attested candidate pins a synthetic
+`registry.invalid` runtime image, and the production command had not composed
+the locked terminal-connect route. The current worktree closes the latter with
+opt-in protected WebSocket composition and adds a repository-owned
+`profiles/coding-shell/image` definition with locked amd64/arm64 base manifests
+and a local native-Docker reproducibility/runtime gate. This remains component
+evidence, not an e2 run: the image has not been published or attested, and the
+external candidate has not yet been corrected and rebuilt against its
+immutable release digest.
 All 15 initial and all 5 reconstruction cases are locally composed, but
 operator-owned resource teardown, stable zero-resource inspection, independent
 runtime observations, the actual supervised 15+5 run, and a qualification
@@ -1088,9 +1098,10 @@ c3.6 now supplies this event from the owned child's bounded real exit observatio
 A process boundary alone cannot prove caller source independence or exact
 PID-level request attribution.
 
-1. With the separate public external-caller e1 source/build provenance complete,
-   execute the e2 observation/run/teardown gate and then the e3 conclusion gate
-   under separate approvals
+1. Publish and attest the repository-owned coding/shell image, update the
+   separate external caller to its exact immutable digest, and refresh that
+   caller's source/build provenance. Then execute the e2
+   observation/run/teardown gate and the e3 conclusion gate under separate approvals
    against the locked content-addressed
    `sandbox-runtime-external-caller-coding-shell-v1` profile and P2.7b closed
    report/evidence validator, with independent observations, actual

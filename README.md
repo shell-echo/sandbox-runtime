@@ -62,6 +62,16 @@ at source commit `58a211f0c167af3ec117c8cb8247bfe268bbae40` passed the
 full tests, deterministic Linux/amd64 build, authority verification, artifact
 upload, and five-subject Sigstore attestation `47846951`; the downloaded
 three-artifact bundle and its strict manifest were independently reverified.
+The e2 preflight then found two real execution blockers rather than an
+executable qualification environment: the attested candidate pins a synthetic
+`registry.invalid` runtime image, and the production command had not composed
+the locked terminal-connect route. The current worktree closes the latter with
+opt-in protected WebSocket composition and adds a repository-owned
+[`coding/shell image definition`](profiles/coding-shell/image/) with locked
+amd64/arm64 base manifests and a local native-Docker reproducibility/runtime
+gate. This remains component evidence, not an e2 run: the image has not been
+published or attested, and the external candidate has not yet been corrected
+and rebuilt against its immutable release digest.
 All 15 initial and all 5 reconstruction cases are locally composed, but
 operator-owned resource teardown, stable zero-resource inspection, independent
 runtime observations, the actual supervised 15+5 run, and a qualification
@@ -504,8 +514,13 @@ backend data. A local Gateway composition requires caller-owned authorization,
 revocation, recording, and WebSocket admission before it can proxy that fresh
 attach. The Provider command root includes default-disabled development
 artifact/usage composition but deliberately does not supply caller-owned public
-Gateway policy. Default standalone startup therefore still advertises no
-runtime capability. The separately versioned reference E2E stack in
+Gateway policy. The new `provider.terminal.connect_enabled` opt-in composes
+only the controller-side protected resolver/WebSocket route; it advertises
+`sandbox.terminal-connect@1.0.0` only when that connector is present and never
+supplies public user authorization or revocation. Default configuration still
+advertises no runtime capability; an explicitly complete coding/shell graph
+may advertise exec/terminal without terminal-connect, or add terminal-connect
+when this opt-in is composed. The separately versioned reference E2E stack in
  [`e2e/`](e2e/) supplies those caller-owned dependencies as an independent Go
  module and process boundary, and its exact atomic coding/shell advertisement
  and full reference caller scenarios pass locally; this does not turn the

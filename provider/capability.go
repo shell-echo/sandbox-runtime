@@ -217,7 +217,7 @@ func validateCapabilityAdvertisements(capabilities []Capability, runtimeProfiles
 		}
 		versions := make(map[string]struct{}, len(capability.Versions))
 		for _, version := range capability.Versions {
-			if !identifierPattern.MatchString(version) || ((capability.ID == "sandbox.exec" || capability.ID == "sandbox.terminal" || capability.ID == "sandbox.browser") && !suiteVersionPattern.MatchString(version)) {
+			if !identifierPattern.MatchString(version) || ((capability.ID == "sandbox.exec" || capability.ID == "sandbox.terminal" || capability.ID == "sandbox.terminal-connect" || capability.ID == "sandbox.browser") && !suiteVersionPattern.MatchString(version)) {
 				return fmt.Errorf("capability %q has an invalid version %q", capability.ID, version)
 			}
 			if _, exists := versions[version]; exists {
@@ -242,7 +242,7 @@ func validateCapabilityAdvertisements(capabilities []Capability, runtimeProfiles
 			profiles[profileID] = struct{}{}
 			profileIDs[profileID] = struct{}{}
 		}
-		if (capability.ID == "sandbox.exec" || capability.ID == "sandbox.terminal" || capability.ID == "sandbox.browser") && (len(capability.Versions) == 0 || len(capability.Profiles) == 0) {
+		if (capability.ID == "sandbox.exec" || capability.ID == "sandbox.terminal" || capability.ID == "sandbox.terminal-connect" || capability.ID == "sandbox.browser") && (len(capability.Versions) == 0 || len(capability.Profiles) == 0) {
 			return fmt.Errorf("capability %q must advertise at least one version and profile", capability.ID)
 		}
 		capabilitiesByID[capability.ID] = capability
@@ -254,17 +254,26 @@ func validateCapabilityAdvertisements(capabilities []Capability, runtimeProfiles
 		return nil
 	}
 	_, execAdvertised := capabilitiesByID["sandbox.exec"]
-	_, terminalAdvertised := capabilitiesByID["sandbox.terminal"]
+	terminalCapability, terminalAdvertised := capabilitiesByID["sandbox.terminal"]
+	terminalConnectCapability, terminalConnectAdvertised := capabilitiesByID["sandbox.terminal-connect"]
 	browserCapability, browserAdvertised := capabilitiesByID["sandbox.browser"]
 	switch {
-	case len(capabilities) == 1 && terminalAdvertised && !execAdvertised && !browserAdvertised:
-	case len(capabilities) == 2 && terminalAdvertised && execAdvertised && !browserAdvertised:
-	case len(capabilities) == 1 && browserAdvertised && !terminalAdvertised && !execAdvertised:
+	case (len(capabilities) == 1 || len(capabilities) == 2) && terminalAdvertised && !execAdvertised && !browserAdvertised && (len(capabilities) == 2) == terminalConnectAdvertised:
+	case (len(capabilities) == 2 || len(capabilities) == 3) && terminalAdvertised && execAdvertised && !browserAdvertised && (len(capabilities) == 3) == terminalConnectAdvertised:
+	case len(capabilities) == 1 && browserAdvertised && !terminalAdvertised && !terminalConnectAdvertised && !execAdvertised:
 		if len(browserCapability.Versions) != 1 || browserCapability.Versions[0] != "1.0.0" || len(browserCapability.Profiles) != 1 || browserCapability.Profiles[0] != "browser-v1" {
 			return errors.New("browser capability must advertise exactly version 1.0.0 and profile browser-v1")
 		}
 	default:
 		return errors.New("Provider v1 permits only terminal-only, atomic coding/shell, or browser-only capability advertisements")
+	}
+	if terminalConnectAdvertised {
+		if len(terminalConnectCapability.Versions) != 1 || terminalConnectCapability.Versions[0] != "1.0.0" ||
+			len(terminalConnectCapability.Profiles) != 1 || terminalConnectCapability.Profiles[0] != "terminal-connect-v1" ||
+			len(terminalCapability.Versions) != 1 || terminalCapability.Versions[0] != "1.0.0" ||
+			len(terminalCapability.Profiles) != 1 || terminalCapability.Profiles[0] != "terminal-v1" {
+			return errors.New("terminal-connect capability requires terminal version 1.0.0 and profiles terminal-v1/terminal-connect-v1")
+		}
 	}
 	if len(runtimeProfiles) != 1 {
 		return errors.New("an advertised Provider v1 capability shape requires exactly one runtime profile")

@@ -112,6 +112,7 @@ type ProviderExecConfig struct {
 // capability advertisement.
 type ProviderTerminalConfig struct {
 	Enabled                  bool   `mapstructure:"enabled"`
+	ConnectEnabled           bool   `mapstructure:"connect_enabled"`
 	SessionRepositoryFile    string `mapstructure:"session_repository_file"`
 	ReferenceRegistryFile    string `mapstructure:"reference_registry_file"`
 	RuntimeProfileID         string `mapstructure:"runtime_profile_id"`
@@ -233,11 +234,14 @@ type ProviderCapabilityConfig struct {
 // Provider coding/shell identifiers are locked by the repository-owned
 // Provider v1 Contract. They are not operator-selectable advertisement IDs.
 const (
-	ProviderCodingShellRuntimeProfileID  = "sandbox-runtime-coding-shell-v1"
-	ProviderCodingShellRuntimeClassName  = "sandbox-runtime-coding-shell"
-	ProviderCodingShellExecProfileID     = "exec-v1"
-	ProviderCodingShellTerminalProfileID = "terminal-v1"
-	ProviderCodingShellCapabilityVersion = "1.0.0"
+	ProviderCodingShellRuntimeProfileID   = "sandbox-runtime-coding-shell-v1"
+	ProviderCodingShellRuntimeClassName   = "sandbox-runtime-coding-shell"
+	ProviderCodingShellExecProfileID      = "exec-v1"
+	ProviderCodingShellTerminalProfileID  = "terminal-v1"
+	ProviderTerminalConnectProfileID      = "terminal-connect-v1"
+	ProviderTerminalConnectCapabilityID   = "sandbox.terminal-connect"
+	ProviderCodingShellCapabilityVersion  = "1.0.0"
+	ProviderCodingShellTerminalBrokerPath = "/usr/local/libexec/sandbox-runtime/terminal-broker"
 )
 
 // ProviderProtectedAdmissionConfig controls the opt-in protected-operation
@@ -458,6 +462,9 @@ func (c ProviderExecConfig) Validate() error {
 
 func (c *ProviderTerminalConfig) validateEnabled() error {
 	if !c.Enabled {
+		if c.ConnectEnabled {
+			return errors.New("connect_enabled requires terminal to be enabled")
+		}
 		return nil
 	}
 	for _, path := range []struct {
@@ -899,7 +906,7 @@ func defaultServerConfig() *ServerConfig {
 			Terminal: ProviderTerminalConfig{
 				SessionRepositoryFile: "data/provider-terminal-sessions.json", ReferenceRegistryFile: "data/provider-terminal-references.json",
 				RuntimeProfileID: ProviderCodingShellRuntimeProfileID, CapabilityProfileID: ProviderCodingShellTerminalProfileID,
-				BrokerPath: "/workspace/.sandbox-runtime/terminal-broker", ShellPath: "/bin/sh",
+				BrokerPath: ProviderCodingShellTerminalBrokerPath, ShellPath: "/bin/sh",
 				MaxSessionsPerSandbox: 4, MaxSessionsPerController: 64, ShutdownCleanupSeconds: 10,
 			},
 			Lifecycle: ProviderLifecycleConfig{

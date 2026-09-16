@@ -18,6 +18,7 @@ type CapabilityID string
 const (
 	CapabilityExec                CapabilityID = "sandbox.exec"
 	CapabilityTerminal            CapabilityID = "sandbox.terminal"
+	CapabilityTerminalConnect     CapabilityID = "sandbox.terminal-connect"
 	CapabilityBrowser             CapabilityID = "sandbox.browser"
 	CapabilityDesktop             CapabilityID = "sandbox.desktop"
 	CapabilityPortForward         CapabilityID = "sandbox.port-forward"
@@ -162,7 +163,7 @@ func (v *APIVersion) UnmarshalJSON(data []byte) error {
 
 func (v *CapabilityID) UnmarshalJSON(data []byte) error {
 	return unmarshalEnum(data, "capability ID", v,
-		CapabilityExec, CapabilityTerminal, CapabilityBrowser, CapabilityDesktop,
+		CapabilityExec, CapabilityTerminal, CapabilityTerminalConnect, CapabilityBrowser, CapabilityDesktop,
 		CapabilityPortForward, CapabilityPersistentWorkspace,
 		CapabilityWorkspaceSnapshot, CapabilityFilesystemSnapshot,
 		CapabilityProcessSnapshot, CapabilityRestore, CapabilityNetworkPolicy,
