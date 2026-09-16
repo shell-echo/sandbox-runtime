@@ -1,7 +1,7 @@
 {
   "schema_version": 2,
   "evidence_profile": "browser-durable-revocation-e2e-v1",
-  "provider_commit": "3fe314a012b808fe60dbd783d7c7c7121d3c548e",
+  "provider_commit": "3fd79c8cfced390ff344563887e93eae3bbfe497",
   "contract": {
     "namespace": "urn:shell-echo:sandbox-runtime:provider-v1",
     "revision": "22ba6987ea5fbc37d53942720133c0acad199edd",

@@ -30,7 +30,7 @@ or reopen that migration gate.
 
 | Item | Value |
 | --- | --- |
-| Historical Provider implementation baseline | `3fe314a012b808fe60dbd783d7c7c7121d3c548e`; refresh pending after the current Provider changes are committed |
+| Provider implementation baseline | `3fd79c8cfced390ff344563887e93eae3bbfe497` |
 | Contract namespace | `urn:shell-echo:sandbox-runtime:provider-v1` |
 | Contract revision | `22ba6987ea5fbc37d53942720133c0acad199edd` |
 | Contract tree | `c9a7054d7c8e7f4b6e32f38175ceedddc48c2d38` |
@@ -38,13 +38,10 @@ or reopen that migration gate.
 | Local Suite | `sandbox-provider@1.0.0`; `sandbox-runtime-provider-v1`; `repository-go-test`; 53 cases; `sha256:b40c932643f4a1e5fd6681e3abf9b64a607609866a6254456970f8b8034cf2a8` |
 | Remote Suite | `sandbox-provider-remote@1.0.0`; `sandbox-runtime-provider-remote-discovery-v1`; `remote-http-black-box`; 6 cases; `sha256:167922d972229a97a64bf22bc6a36ee20d4de19a023395d9f004f00c54cc49d0` |
 
-The current E2E lock worktree uses these Contract identities. Module vet and all
-lock logic tests other than the clean-parent-checkout test pass; the full race
-run is blocked only by that intentional dirty-worktree gate. Parent-lock and
-all eight `-check` commands require a committed clean checkout and remain
-pending. The prior `ae476fed12e82f472b19ff78fda633c8d702561d` refresh passed
-those gates for the earlier authority and remains historical evidence. Neither
-Suite is recorded as exercised by the E2E profiles.
+The current E2E lock worktree uses these Contract identities. This lock refresh
+advances only the Provider implementation baseline; it does not relabel any
+historical E2E run or claim that either Suite was exercised. Parent-lock and
+all eight `-check` commands remain the required clean-checkout gates.
 
 The previous clean local reference run `20260907T044611.598221000Z` at harness
 `b8d482977cb4622ca578bd77c4eb8f7298af7273` passed all 15 initial and 5
@@ -216,7 +213,7 @@ go run ./cmd/durable-revocation-e2e \
   -evidence-root evidence/durable-revocation
 ```
 
-The active lock fixes Provider `3fe314a`, the Valkey index and native platform
+The active lock fixes Provider `3fd79c8`, the Valkey index and native platform
 manifests, 10-minute test grants, 100 ms revocation polling and operation
 timeouts, a 2-second propagation/outage bound, local capacity `16/8/4`, a
 one-reconnect upper bound with 10 ms backoff, and exactly seven scenarios. The
