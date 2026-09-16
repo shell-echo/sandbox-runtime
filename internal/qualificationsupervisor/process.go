@@ -275,9 +275,16 @@ func (p *processCore) resultError() error {
 	return p.cleanupErr
 }
 
-func (p *processCore) closeParentIO() error {
+func (p *processCore) closeParentIOExceptStderr() error {
 	var result error
-	for _, file := range p.parent {
+	for index, file := range p.parent {
+		// Keep the private stderr reader open until the child has been
+		// terminated and its buffered output has reached EOF. Closing it here
+		// races the drain goroutine and can silently discard already-written
+		// evidence bytes.
+		if index == 2 {
+			continue
+		}
 		if file != nil {
 			if err := file.Close(); err != nil && !errors.Is(err, os.ErrClosed) {
 				result = ErrProcessCleanup
@@ -285,6 +292,21 @@ func (p *processCore) closeParentIO() error {
 		}
 	}
 	return result
+}
+
+func (p *processCore) closeStderr() error {
+	file := p.parent[2]
+	if file == nil {
+		return nil
+	}
+	if err := file.Close(); err != nil && !errors.Is(err, os.ErrClosed) {
+		return ErrProcessCleanup
+	}
+	return nil
+}
+
+func (p *processCore) closeParentIO() error {
+	return errors.Join(p.closeParentIOExceptStderr(), p.closeStderr())
 }
 
 func (p *processCore) close() error {
@@ -295,7 +317,7 @@ func (p *processCore) close() error {
 	cleanup, cancel := context.WithTimeout(context.Background(), processCleanupLimit)
 	defer cancel()
 	deadline, _ := cleanup.Deadline()
-	result := p.closeParentIO()
+	result := p.closeParentIOExceptStderr()
 
 	p.procMu.Lock()
 	needsGroupAbsence := false
@@ -345,6 +367,7 @@ complete:
 	case <-cleanup.Done():
 		result = errors.Join(result, ErrProcessReapTimeout)
 	}
+	result = errors.Join(result, p.closeStderr())
 	p.publishCleanup(result)
 	return result
 }
