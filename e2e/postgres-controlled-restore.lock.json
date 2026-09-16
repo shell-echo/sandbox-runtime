@@ -2,8 +2,8 @@
   "schema_version": 2,
   "evidence_profile": "browser-postgres-controlled-restore-e2e-v1",
   "sources": {
-    "provider_revision": "1d5d9d6e567b1c2b612078c4e2390ad2234aba69",
-    "harness_baseline": "1d5d9d6e567b1c2b612078c4e2390ad2234aba69",
+    "provider_revision": "71b6eec706e8263a58e5a03b230d9db34f17bdbb",
+    "harness_baseline": "71b6eec706e8263a58e5a03b230d9db34f17bdbb",
     "gateway_component": {
       "path": "gateway/composition/browser.go",
       "revision": "b4d41c9a32b4ccf39edaba3fb8bf5ad239c1f945"
@@ -14,7 +14,7 @@
     },
     "action_history_component": {
       "path": "gateway/capacity/redis",
-      "revision": "1d5d9d6e567b1c2b612078c4e2390ad2234aba69"
+      "revision": "71b6eec706e8263a58e5a03b230d9db34f17bdbb"
     },
     "caller_substrate": {
       "path": "e2e/internal/caller",
@@ -23,7 +23,7 @@
   },
   "base_lock": {
     "path": "e2e/downstream-fencing-v2.lock.json",
-    "sha256": "sha256:7487f07d2f591401f55817f8e6d4914bc1fda278a0815bc0fa4704627f48b453",
+    "sha256": "sha256:541e0ee5d1eac65f5d6666776ccd4f33d8948d7d920d293343e332077d5e4faf",
     "evidence_profile": "browser-downstream-fencing-e2e-v2"
   },
   "contract": {
