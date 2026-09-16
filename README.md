@@ -56,19 +56,17 @@ separate bounded context, binds the operator-owned teardown identity, closes
 local state descriptors, and requires exactly three same-scope, one-second-
 spaced zero-resource samples equal to the baseline before declaring cleanup
 successful. d7 now assembles and validates the closed evidence root as a local
-component. A separate external-caller repository has completed 10 of its 13
-local candidate checkpoints through e1.7c: all 15 initial and all 5
-reconstruction cases are locally composed from durable `initial_complete`
-state without private correlation reinjection, and its candidate-owned process
-cleanup, failure mapping and output ordering/limits are locally closed. It pins
-the refreshed authority. Its e1.8a local builder now produces a deterministic
-source archive, archive-derived immutable startup identity, byte-identical
-double builds and a strict three-artifact manifest, but the manifest honestly
-records no independent source hosting or build attestation. Operator-owned resource teardown and stable
-zero-resource inspection remain unexecuted. External
-ownership/provenance, independent runtime interoperability and observations,
-the actual 15+5 run, and a qualification result remain open. The main P2.7
-plan therefore remains 21/24, with e1 in progress and e2/e3 pending.
+component. The separate public external-caller repository has completed 11 of
+its 13 candidate checkpoints through e1.8a. Public hosted run `35068957048`
+at source commit `58a211f0c167af3ec117c8cb8247bfe268bbae40` passed the
+full tests, deterministic Linux/amd64 build, authority verification, artifact
+upload, and five-subject Sigstore attestation `47846951`; the downloaded
+three-artifact bundle and its strict manifest were independently reverified.
+All 15 initial and all 5 reconstruction cases are locally composed, but
+operator-owned resource teardown, stable zero-resource inspection, independent
+runtime observations, the actual supervised 15+5 run, and a qualification
+result remain open. The main P2.7 plan is therefore 22/24, with e1 complete and
+e2/e3 pending.
 
 Composable Linux sandbox runtime for remote shells, desktops, browsers, and applications.
 

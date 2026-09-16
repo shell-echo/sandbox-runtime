@@ -56,13 +56,15 @@ separate bounded context, binds the operator-owned teardown identity, closes
 local state descriptors, and requires exactly three same-scope, one-second-
 spaced zero-resource samples equal to the baseline before declaring cleanup
 successful. d7 now assembles and validates the closed evidence root as a local
-component. A separate external-caller repository has completed 7 of its 13
-local candidate checkpoints and has begun e1.7a: 8 of 15 initial cases are
-locally composed in one Caller process through terminal handoff,
-while the other 7 remain `not_executed`. It pins the refreshed authority. External
-ownership/provenance, independent runtime interoperability and observations,
-the actual 15+5 run, and a qualification result remain open. The main P2.7
-plan therefore remains 21/24, with e1 in progress and e2/e3 pending.
+component. The public external-caller repository has completed 11 of its 13
+candidate checkpoints through e1.8a. Hosted run `35068957048` at source commit
+`58a211f0c167af3ec117c8cb8247bfe268bbae40` passed the full tests,
+deterministic Linux/amd64 build, authority verification and artifact upload.
+The downloaded strict three-artifact bundle and all five subjects in Sigstore
+attestation `47846951` verify. This closes e1 source/build provenance, but
+operator-owned resource teardown, independent runtime observations, the actual
+supervised 15+5 run, and a qualification result remain open. The main P2.7 plan
+is therefore 22/24, with e1 complete and e2/e3 pending.
 
 - Status: Accepted
 - Date: 2026-09-07

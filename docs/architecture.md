@@ -56,20 +56,17 @@ separate bounded context, binds the operator-owned teardown identity, closes
 local state descriptors, and requires exactly three same-scope, one-second-
 spaced zero-resource samples equal to the baseline before declaring cleanup
 successful. d7 now assembles and validates the closed evidence root as a local
-component. A separate external-caller repository has completed 10 of its 13
-local candidate checkpoints through e1.7c: all 15 initial and all 5
-reconstruction cases are locally composed with durable `initial_complete`
-binding, including retained handoff validation and a reconstructed-Gateway
-byte connection. Candidate-owned process cleanup, sanitized failure mapping and
-output ordering/limits are locally closed. The e1.8a local builder now creates a
-content-addressed source archive, archive-derived startup identity,
-byte-identical double builds and a strict three-artifact manifest; independent
-source hosting/build attestation remains absent. Operator-owned resource teardown
-and stable zero-resource inspection remain unexecuted.
-It pins the refreshed authority. External
-ownership/provenance, independent runtime interoperability and observations,
-the actual 15+5 run, and a qualification result remain open. The main P2.7
-plan therefore remains 21/24, with e1 in progress and e2/e3 pending.
+component. The separate public external-caller repository has completed 11 of
+its 13 candidate checkpoints through e1.8a. Public hosted run `35068957048`
+at source commit `58a211f0c167af3ec117c8cb8247bfe268bbae40` passed the
+full tests, deterministic Linux/amd64 build, authority verification, artifact
+upload, and five-subject Sigstore attestation `47846951`; the downloaded
+three-artifact bundle and its strict manifest were independently reverified.
+All 15 initial and all 5 reconstruction cases are locally composed, but
+operator-owned resource teardown, stable zero-resource inspection, independent
+runtime observations, the actual supervised 15+5 run, and a qualification
+result remain open. The main P2.7 plan is therefore 22/24, with e1 complete and
+e2/e3 pending.
 
 ## Purpose
 
@@ -656,7 +653,7 @@ advertisement, and optional-profile gates remain open:
 
 | Area | Current state | Required direction |
 | --- | --- | --- |
-| Conformance | Current Contract revision `22ba6987` contains a content-derived 53-case local Suite and unchanged six-case remote Suite. Contract verification, root tests/vet, and E2E lock logic pass in the worktree; clean VCS-built 53-case and E2E parent-lock/check gates remain pending. The prior P2.6 50-case pass at `3fe314a`/`ae476fe` remains historical evidence. ADR 0040 locks the refreshed P2.7 profile/report/protocol authorities; local harness d1-d7 is 21/24 complete. A separate external-caller repository has completed 10/13 local candidate checkpoints through e1.7c and the local 2/3 of e1.8a: content-addressed source, immutable startup identity, byte-identical double builds and a strict three-artifact manifest. There is no independent source/build provenance, operator-owned zero-resource teardown proof, or independent observer-backed scenario disposition. | Obtain separately authorized external source hosting/build attestation to close e1.8a before e2 execution and e3 conclusion. Run the current Contract/E2E gates from a clean committed checkout; retain aggregate, multi-controller, multi-tenant, HA, deployment, and production gates. |
+| Conformance | Current Contract revision `22ba6987` contains a content-derived 53-case local Suite and unchanged six-case remote Suite. Contract verification, root tests/vet, and E2E lock logic pass in the worktree; clean VCS-built 53-case and E2E parent-lock/check gates remain pending. The prior P2.6 50-case pass at `3fe314a`/`ae476fe` remains historical evidence. ADR 0040 locks the refreshed P2.7 profile/report/protocol authorities; local harness d1-d7 plus independently supplied e1 provenance are 22/24 complete. The public external-caller repository has completed 11/13 candidate checkpoints through e1.8a. Hosted run `35068957048` at source `58a211f0c167af3ec117c8cb8247bfe268bbae40` passed the full test/build/authority pipeline and produced verified five-subject Sigstore attestation `47846951`. Operator-owned zero-resource teardown proof and independent observer-backed scenario dispositions remain absent. | Execute the separately authorized e2 supervised 15+5 run and teardown before e3 validation and conclusion. Run the current Contract/E2E gates from a clean committed checkout; retain aggregate, multi-controller, multi-tenant, HA, deployment, and production gates. |
 | Protected admission | ADR 0038 requires one explicit issuer-scoped caller trust domain per listener, Provider-local audience/revision anchors, and 1..32 frozen verification keys. Its repository-local Contract, projection, configuration, conformance, E2E lock, overlap-key, and same-repository reference gates pass. | Retain exact authentication/authorization precedence. Treat multi-issuer admission and independently implemented external-caller interoperability as separate future gates. |
 | Backend abstraction | Local `instance.Driver` remains separate; the Provider lifecycle has its own fake and Docker development adapters, while exec and terminal use focused Provider-only runtime ports. | Add future snapshot capability ports without reusing `/instances` models and retain narrow optional interfaces. |
 | Lifecycle recovery | Provider file persistence and Docker observation reconcile pending/unknown create work for one controller. | Retain unknown-outcome evidence; add transactional production storage before multi-controller operation. |
