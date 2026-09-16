@@ -60,10 +60,13 @@ func main() {
 	}
 	_, err = unix.FcntlInt(64, unix.F_GETFD, 0)
 	report.WitnessClosed = errors.Is(err, unix.EBADF)
+	// Publish the private stderr evidence before the stdout report. Tests that
+	// consume the report can then know the evidence write happened without
+	// relying on scheduler ordering between the two independent pipes.
+	fmt.Fprintln(os.Stderr, "probe-stderr")
 	if json.NewEncoder(os.Stdout).Encode(report) != nil {
 		os.Exit(2)
 	}
-	fmt.Fprintln(os.Stderr, "probe-stderr")
 	if mode == "exit" {
 		return
 	}
