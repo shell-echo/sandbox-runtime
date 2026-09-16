@@ -30,7 +30,7 @@ or reopen that migration gate.
 
 | Item | Value |
 | --- | --- |
-| Provider implementation baseline | `3fd79c8cfced390ff344563887e93eae3bbfe497` |
+| Provider implementation baseline | `5e59e04032596c6a2915bf8be868af39fe599aec` |
 | Contract namespace | `urn:shell-echo:sandbox-runtime:provider-v1` |
 | Contract revision | `22ba6987ea5fbc37d53942720133c0acad199edd` |
 | Contract tree | `c9a7054d7c8e7f4b6e32f38175ceedddc48c2d38` |
@@ -213,7 +213,7 @@ go run ./cmd/durable-revocation-e2e \
   -evidence-root evidence/durable-revocation
 ```
 
-The active lock fixes Provider `3fd79c8`, the Valkey index and native platform
+The active lock fixes Provider `5e59e04`, the Valkey index and native platform
 manifests, 10-minute test grants, 100 ms revocation polling and operation
 timeouts, a 2-second propagation/outage bound, local capacity `16/8/4`, a
 one-reconnect upper bound with 10 ms backoff, and exactly seven scenarios. The
