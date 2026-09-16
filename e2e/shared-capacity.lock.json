@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "evidence_profile": "browser-shared-capacity-e2e-v1",
-  "provider_commit": "71b6eec706e8263a58e5a03b230d9db34f17bdbb",
+  "provider_commit": "9532a9ca58610c12c62675102d09474ce44c35f6",
   "valkey": {
     "image": "ghcr.io/valkey-io/valkey",
     "index_digest": "sha256:ccfa19b0d743e48927e1c8c14e39e0acb97b5cea347fef0bfe340247fea920cd",
