@@ -22,7 +22,7 @@ Use these files together:
 | [`contract/schemas/`](../contract/schemas/) | Closed request, response, operation, and evidence shapes |
 | [`contract/semantic-rules/provider-v1.json`](../contract/semantic-rules/provider-v1.json) | Cross-field, ownership, admission, and lifecycle semantics |
 | [`contract/fixtures/`](../contract/fixtures/) | Canonical examples and negative cases |
-| [`contract/conformance/provider-v1/suite.json`](../contract/conformance/provider-v1/suite.json) | Locked 50-case Provider Suite |
+| [`contract/conformance/provider-v1/suite.json`](../contract/conformance/provider-v1/suite.json) | Locked 53-case Provider Suite |
 | [`compatibility/sandbox-runtime/contract.lock.json`](../compatibility/sandbox-runtime/contract.lock.json) | Contract revision and resource lock |
 | [`docs/architecture.md`](architecture.md) | Ownership boundaries and delivery gates |
 
@@ -33,10 +33,10 @@ The current Contract identity is:
 | Namespace | `urn:shell-echo:sandbox-runtime:provider-v1` |
 | Version | `1.0.0` |
 | License | `MIT` |
-| Revision | `9206e601f75a54db0b66969239d7e8cc5bcc8af9` |
-| Contract tree | `c5e4221f2ceaaaad53c8038e1ebaacfe0c5a4daf` |
-| Manifest digest | `sha256:23405c62747b6c678d2fcc84dfd885e435ab12771befdb29499b2e7367404da1` |
-| Local Suite | `sandbox-provider@1.0.0` / `sandbox-runtime-provider-v1`; `repository-go-test`; 50 cases; `sha256:bf177a5bd2b4228605b3ebc311d25a1cc348d9548b2b5c2d333a0c69e71ca528` |
+| Revision | `22ba6987ea5fbc37d53942720133c0acad199edd` |
+| Contract tree | `c9a7054d7c8e7f4b6e32f38175ceedddc48c2d38` |
+| Manifest digest | `sha256:1e17e0ef4f86e03be1dac22c48e7b556a8600a4baa6252f4514390d339b8ba3f` |
+| Local Suite | `sandbox-provider@1.0.0` / `sandbox-runtime-provider-v1`; `repository-go-test`; 53 cases; `sha256:b40c932643f4a1e5fd6681e3abf9b64a607609866a6254456970f8b8034cf2a8` |
 | Remote Suite | `sandbox-provider-remote@1.0.0` / `sandbox-runtime-provider-remote-discovery-v1`; `remote-http-black-box`; 6 cases; `sha256:167922d972229a97a64bf22bc6a36ee20d4de19a023395d9f004f00c54cc49d0` |
 
 An integration must pin this identity, the selected Provider revision, the
@@ -237,7 +237,7 @@ integration:
   revocation, downstream fencing, independently operated witness/restore
   domains, and fail-closed quarantine/resume controls.
 - Keep artifact publication and billing outside the Provider evidence routes.
-- Run the locked Contract verifier and the clean VCS-built 50-case local Suite
+- Run the locked Contract verifier and the clean VCS-built 53-case local Suite
   Runner. Run the distinct six-case remote discovery profile against a
   separately started Provider, and qualify a separately implemented black-box
   caller as its own evidence gate.
@@ -248,7 +248,7 @@ integration:
 
 The repository's `e2e/` module keeps eight deliberately separate profiles:
 
-- coding/shell Reference and Agent Platform Candidate;
+- coding/shell Reference and historical Platform Candidate;
 - Browser Reference;
 - Browser shared capacity and durable exact-grant revocation; and
 - Browser downstream fencing v1, witnessed v2, and PostgreSQL
@@ -265,9 +265,11 @@ separate component/integration track rather than a ninth E2E profile.
 
 The generic reference caller in this repository remains reference evidence; it
 does not establish independently implemented external-caller interoperability.
-P2.6's repository-owned content-derived 50-case local profile and six-case
-remote discovery profile pass locally at implementation `3fe314a` and E2E lock
-refresh `ae476fe`. Those profiles do not convert the existing E2E tracks into
+The historical P2.6 repository-owned 50-case local profile and six-case remote
+discovery profile passed locally at implementation `3fe314a` and E2E lock
+refresh `ae476fe`. The current local profile has 53 cases and requires a fresh
+clean VCS-built run after the authority refresh is committed; no current P2.6
+pass is claimed. Those profiles do not convert the existing E2E tracks into
 aggregate evidence, and the remote profile does not cover protected or
 mutating routes.
 None of these results proves multi-issuer admission, aggregate conformance,

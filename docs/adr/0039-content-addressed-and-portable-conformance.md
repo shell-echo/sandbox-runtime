@@ -11,7 +11,7 @@ derive either value from Suite content. The exact Contract Git tree still
 protected the file, but consumers could not independently validate the
 advertised Suite identity with a defined content algorithm.
 
-The only executable runner mapped the 50 Contract case IDs to this repository's
+The only executable runner then mapped 50 Contract case IDs to this repository's
 Go tests. Those tests include source projections, cross-resource checks,
 startup configuration, fault injection, and internal dispatch observations.
 An arbitrary remote Provider cannot expose all of those facts through HTTP.
@@ -59,9 +59,11 @@ inputs to this repository-test evidence.
 
 ### Separate execution profiles
 
-The existing `sandbox-provider/sandbox-runtime-provider-v1` profile retains its
-50 repository Go-test cases and `repository-go-test` execution mode. It is not
-redefined as a remote protocol.
+At acceptance, the existing `sandbox-provider/sandbox-runtime-provider-v1`
+profile retained its 50 repository Go-test cases and `repository-go-test`
+execution mode. Later Contract additions may increase that inventory without
+relabeling the recorded 50-case evidence. It is not redefined as a remote
+protocol.
 
 A second Contract resource, `sandbox-provider-remote`, defines
 `sandbox-runtime-provider-remote-discovery-v1` with
@@ -102,7 +104,7 @@ semantics.
 - Suite content drift is independently detectable even outside Git, while the
   Git revision/tree remains the broader Contract identity.
 - A remote green report is useful black-box evidence for discovery, but it is
-  neither the 50-case local Suite nor independently implemented caller evidence.
+  neither the full local Suite nor independently implemented caller evidence.
 - Protected admission, lifecycle, exec, terminal, Browser, artifacts, usage,
   controlled faults, and cleanup remain outside the first portable profile.
 - Historical Suite counts, runs, and `suite_exercised=false` records retain

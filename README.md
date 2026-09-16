@@ -55,7 +55,20 @@ independent caller evidence. d6 consumes the persistent cleanup obligation in a
 separate bounded context, binds the operator-owned teardown identity, closes
 local state descriptors, and requires exactly three same-scope, one-second-
 spaced zero-resource samples equal to the baseline before declaring cleanup
-successful. d7 now assembles and validates the closed evidence root as a local component. Next: e1 independently supplied caller and adapter identity and provenance, under separate approval.
+successful. d7 now assembles and validates the closed evidence root as a local
+component. A separate external-caller repository has completed 10 of its 13
+local candidate checkpoints through e1.7c: all 15 initial and all 5
+reconstruction cases are locally composed from durable `initial_complete`
+state without private correlation reinjection, and its candidate-owned process
+cleanup, failure mapping and output ordering/limits are locally closed. It pins
+the refreshed authority. Its e1.8a local builder now produces a deterministic
+source archive, archive-derived immutable startup identity, byte-identical
+double builds and a strict three-artifact manifest, but the manifest honestly
+records no independent source hosting or build attestation. Operator-owned resource teardown and stable
+zero-resource inspection remain unexecuted. External
+ownership/provenance, independent runtime interoperability and observations,
+the actual 15+5 run, and a qualification result remain open. The main P2.7
+plan therefore remains 21/24, with e1 in progress and e2/e3 pending.
 
 Composable Linux sandbox runtime for remote shells, desktops, browsers, and applications.
 
@@ -115,21 +128,19 @@ consumers must implement the repository-owned Provider calling standard. The
 ADR 0033, v2, and controlled-restore profiles
 pin Contract identity but do not execute the Suite (`suite_exercised=false`).
 
-ADR 0038's listener-local caller trust domain remains implemented. P2.6 is now
-implemented at Provider baseline `3fe314a012b808fe60dbd783d7c7c7121d3c548e`
-against Contract revision `9206e601f75a54db0b66969239d7e8cc5bcc8af9`
-and tree `c5e4221f2ceaaaad53c8038e1ebaacfe0c5a4daf`. The lock contains a
-content-derived 50-case local `repository-go-test` Suite and a distinct
-content-derived 6-case `remote-http-black-box` discovery Suite. Each local case
-declares an exact mapped-test count and requires every mapped test to produce a
-distinct, started, non-skipped pass. The Runner rejects an explicit `GOROOT`,
-resolves Git once to one absolute path, and discloses the host OS, filesystem,
-initial Git selection, and Go and Git executables as trusted inputs. The P2.6
-release gate passes locally at implementation `3fe314a` and E2E lock refresh
-`ae476fed12e82f472b19ff78fda633c8d702561d`: the root and E2E race/shuffle and
-vet gates, Contract verifier, clean VCS-built 50-case local Runner, clean
-VCS-built six-case remote Runner against a separately started local mTLS
-Provider, parent-lock check, and all eight E2E `-check` commands pass. Docker
+ADR 0038's listener-local caller trust domain remains implemented. The current
+Contract authority is revision `22ba6987ea5fbc37d53942720133c0acad199edd`,
+tree `c9a7054d7c8e7f4b6e32f38175ceedddc48c2d38`, and manifest
+`sha256:1e17e0ef4f86e03be1dac22c48e7b556a8600a4baa6252f4514390d339b8ba3f`.
+It contains a content-derived 53-case local `repository-go-test` Suite at
+`sha256:b40c932643f4a1e5fd6681e3abf9b64a607609866a6254456970f8b8034cf2a8`
+and the unchanged 6-case `remote-http-black-box` discovery Suite. The refreshed
+Contract verifier, root tests/vet, and E2E lock logic pass in the current
+worktree. A clean VCS-built 53-case Runner, the E2E parent-lock gate, and all
+eight E2E `-check` commands remain pending until the refresh is committed and
+run from a clean checkout; no new P2.6 pass is claimed. The prior P2.6 release
+gate remains historical evidence at implementation `3fe314a` and E2E lock
+refresh `ae476fed12e82f472b19ff78fda633c8d702561d`. Docker
 reference run `20260907T044611.598221000Z`
 remains historical 15+5 evidence against its recorded `b8d4829`/`af8a505`
 harness/Provider identity; it is not relabeled as P2.6 evidence. Neither Suite
@@ -843,11 +854,11 @@ visibility.
   same-repository generic reference caller remains reference evidence only.
   ADR 0040 defines the boundary, and P2.7a locks the verified coding/shell
   machine-readable definition authority at
-  `sha256:baee769c0acc395448af61faef99cd97fbb63ccb83c70eb51915952be519991a`.
+  `sha256:4effea27fd3d7668b88eeb95c69e19b51556914b7949b1a39ce522b2aec46c14`.
   P2.7b locks the closed report schema at
-  `sha256:0fef4381588ace43c63ee6aaba0f9ddfa192af3c03353c1a13e00344bc416f3f`
+  `sha256:cd51ccf0aea0bc31b11ff4f288751fc7df0f0dd081860efc305182ea61f842e4`
   and its validator semantics at
-  `sha256:2cccf9502c1521ee3afe35478b0359fa9cf03eda6ef5b0c5130ed8ff6fd8daf2`,
+  `sha256:c724eaa9f3b52e1a5ba4aa5aaeb5e8b61a744818b2f56fd8ff52dfa5e1e584df`,
   and adds the bounded evidence-root validator and sanitized receipt. The
   validator enforces payload-owned nullable evidence and complete execution
   timing, a 64-wire-attempt ceiling with fail-closed potential-resource
@@ -856,9 +867,9 @@ visibility.
   rechecks. This locks report-validation components only; it does not attest
   producer truthfulness, original request bodies, or an external compatibility
   result. P2.7c.1 locks the adapter protocol schema at
-  `sha256:0c3783bb4014d1e04d61f1987fa77f0c27a158c65552704f69f3f340bbaa6b20`
+  `sha256:d12b477cd540e02c6a7e2f8eb77b0405b717c15e98a0f144b2d63f705ff95969`
   and operational semantics at
-  `sha256:deeef0edf5cc63705d84e45a8f64f657e97346a3616259c2d8b718b1e38b0bd5`.
+  `sha256:10cd42017aee60b620dbbb7394a20c2a387983468a865a8d12a572f861d07662`.
   P2.7c.2b.1 also locks the closed sanitized-transcript projection Schema at
   `sha256:d2eb229f55528df8ba68426cc5b7da9d1bd6a78a412707d656b77c1effeff293`.
   The identity-first, bounded protocol allows only the seven profile-owned

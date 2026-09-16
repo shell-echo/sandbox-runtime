@@ -55,9 +55,23 @@ independent caller evidence. d6 consumes the persistent cleanup obligation in a
 separate bounded context, binds the operator-owned teardown identity, closes
 local state descriptors, and requires exactly three same-scope, one-second-
 spaced zero-resource samples equal to the baseline before declaring cleanup
-successful. d7 now assembles and validates the closed evidence root as a local component. Next: e1 independently supplied caller and adapter identity and provenance, under separate approval.
+successful. d7 now assembles and validates the closed evidence root as a local
+component. A separate external-caller repository has completed 10 of its 13
+local candidate checkpoints through e1.7c: all 15 initial and all 5
+reconstruction cases are locally composed with durable `initial_complete`
+binding, including retained handoff validation and a reconstructed-Gateway
+byte connection. Candidate-owned process cleanup, sanitized failure mapping and
+output ordering/limits are locally closed. The e1.8a local builder now creates a
+content-addressed source archive, archive-derived startup identity,
+byte-identical double builds and a strict three-artifact manifest; independent
+source hosting/build attestation remains absent. Operator-owned resource teardown
+and stable zero-resource inspection remain unexecuted.
+It pins the refreshed authority. External
+ownership/provenance, independent runtime interoperability and observations,
+the actual 15+5 run, and a qualification result remain open. The main P2.7
+plan therefore remains 21/24, with e1 in progress and e2/e3 pending.
 
-Updated: 2026-09-11
+Updated: 2026-09-16
 
 This is the stable entry point for a new developer, AI agent, development
 device, or implementation session. It summarizes the system, engineering
@@ -222,16 +236,16 @@ main workflows passed. The detailed component ledger below retains older
 per-gate commits and run IDs because those identify the exact evidence rather
 than the newest documentation commit.
 
-The ADR 0038 calling-standard slice remains implemented. P2.6 hardening is now
-implemented at the active E2E Provider baseline
-`3fe314a012b808fe60dbd783d7c7c7121d3c548e`, Contract revision
-`9206e601f75a54db0b66969239d7e8cc5bcc8af9`, and tree
-`c5e4221f2ceaaaad53c8038e1ebaacfe0c5a4daf`. The P2.6 release gate passes
-locally at that implementation and E2E lock refresh
-`ae476fed12e82f472b19ff78fda633c8d702561d`: the clean VCS-built 50-case local
-Runner, clean VCS-built six-case remote discovery Runner against a separately
-started local mTLS Provider, full root and E2E race/shuffle and vet, Contract
-lock, parent-lock check, and all eight E2E checks pass. Docker
+The ADR 0038 calling-standard slice remains implemented. The current Contract
+authority is revision `22ba6987ea5fbc37d53942720133c0acad199edd`, tree
+`c9a7054d7c8e7f4b6e32f38175ceedddc48c2d38`, and a content-derived 53-case
+local Suite. Contract verification, root tests/vet, and E2E lock logic pass in
+the current worktree. The clean VCS-built local Runner, parent-lock gate, and
+all eight E2E checks remain pending until the refresh is committed and tested
+from a clean checkout. The prior P2.6 release gate remains historical evidence
+at Provider baseline `3fe314a012b808fe60dbd783d7c7c7121d3c548e` and E2E lock
+refresh `ae476fed12e82f472b19ff78fda633c8d702561d`; it must not be relabeled as
+a pass of the current 53-case authority. Docker
 reference run `20260907T044611.598221000Z` remains historical
 15+5 evidence against `b8d4829`/`af8a505`; it is not relabeled as P2.6 evidence.
 Rotation remains operator-driven. Neither P2.6 profile proves interoperability
@@ -319,16 +333,18 @@ production command still exposes no public Browser Gateway route and does not
 advertise Browser; only the reference stack advertises the exact locked Browser
 profile.
 
-The Contract verifier and locked 50-case Suite pass against the current
-projection. The `e2e/` module race/shuffle, vet, and all active lock checks also
-pass. Clean Docker reference run `20260907T044611.598221000Z` at harness
+The Contract verifier and root race/shuffle and vet gates pass against the
+current projection. E2E race/shuffle passes except for its intentional clean
+parent-checkout test, and E2E vet and all other lock tests pass. Clean Docker
+reference run `20260907T044611.598221000Z` at harness
 `b8d4829` and Provider baseline `af8a505` passed 15 initial and 5
 process-reconstruction/resume coding/shell scenarios over real mTLS/JWS HTTPS,
 WebSocket, separate caller/reference-stack processes, and Docker. Its manifest
 SHA-256 is `60bda2dae83053db447417cea5c5e38d4798e1e90b91fbb5cfc75d2991c6993e`
 and it pins locally built linux/amd64 runtime digest
 `sha256:60baefac927a0a77743aeca268b271b62b07079f31521f98fd3a4cb33474a999`.
-This is same-repository reference evidence; it does not execute the 50-case
+This is same-repository reference evidence; it does not execute the then-current
+50-case
 Suite or qualify an independently implemented caller. An earlier clean
 reference run `20260904T081521.464863000Z` passed 15 initial and 5
 process-reconstruction/resume coding/shell scenarios over real mTLS/JWS HTTPS,
@@ -787,13 +803,13 @@ Contract identity:
 
 - namespace: `urn:shell-echo:sandbox-runtime:provider-v1`
 - version/license: `1.0.0` / MIT
-- revision: `9206e601f75a54db0b66969239d7e8cc5bcc8af9`
-- Contract tree: `c5e4221f2ceaaaad53c8038e1ebaacfe0c5a4daf`
+- revision: `22ba6987ea5fbc37d53942720133c0acad199edd`
+- Contract tree: `c9a7054d7c8e7f4b6e32f38175ceedddc48c2d38`
 - manifest digest:
-  `sha256:23405c62747b6c678d2fcc84dfd885e435ab12771befdb29499b2e7367404da1`
+  `sha256:1e17e0ef4f86e03be1dac22c48e7b556a8600a4baa6252f4514390d339b8ba3f`
 - local Suite: `sandbox-provider@1.0.0`, profile
-  `sandbox-runtime-provider-v1`, `repository-go-test`, 50 cases, digest
-  `sha256:bf177a5bd2b4228605b3ebc311d25a1cc348d9548b2b5c2d333a0c69e71ca528`
+  `sandbox-runtime-provider-v1`, `repository-go-test`, 53 cases, digest
+  `sha256:b40c932643f4a1e5fd6681e3abf9b64a607609866a6254456970f8b8034cf2a8`
 - remote Suite: `sandbox-provider-remote@1.0.0`, profile
   `sandbox-runtime-provider-remote-discovery-v1`, `remote-http-black-box`, 6
   cases, digest
@@ -806,8 +822,8 @@ Contract identity:
 | P1.2 | Passed for the bounded Contract-authorized lifecycle subset and development composition | Reserved lifecycle families and production gates remain open |
 | P2 components | P2.1-P2.5h local component, Contract projection, Docker, and recorded repository CI gates pass within their named boundaries | Retain single-controller/development constraints and exact Contract lock |
 | P2.5i | Latest completed local run `20260907T044611.598221000Z` passed 15 initial plus 5 restart/resume coding/shell scenarios against historical harness/Provider lock `b8d4829`/`af8a505`; hosted regression `33970773414` remains historical evidence against `17ed6ca`/`b4d41c9` | Neither run contains a Browser scenario or proves interoperability with an independently implemented external caller, durable-revocation caller behavior, or production properties |
-| P2.6 | Passed locally at implementation `3fe314a` and E2E lock refresh `ae476fe` for the content-derived local 50-case `repository-go-test` Suite and separate remote 6-case `remote-http-black-box` discovery profile | Independent third-party caller qualification, protected or mutating remote profiles, cleanup authority, and all broader readiness gates remain open |
-| P2.7 | P2.7a locks the verified `sandbox-runtime-external-caller-coding-shell-v1@1.0.0` definition authority at `sha256:baee769c0acc395448af61faef99cd97fbb63ccb83c70eb51915952be519991a`. P2.7b locks the report schema at `sha256:0fef4381588ace43c63ee6aaba0f9ddfa192af3c03353c1a13e00344bc416f3f` and validator semantics at `sha256:2cccf9502c1521ee3afe35478b0359fa9cf03eda6ef5b0c5130ed8ff6fd8daf2`. P2.7c.1 locks adapter protocol schema `sha256:0c3783bb4014d1e04d61f1987fa77f0c27a158c65552704f69f3f340bbaa6b20` and semantics `sha256:deeef0edf5cc63705d84e45a8f64f657e97346a3616259c2d8b718b1e38b0bd5`. P2.7c.2a implements the runtime-independent strict codec. P2.7c.2b.1 locks the complete per-process transition table, terminal/EOF/clean-exit rules, cross-phase startup equality, and closed transcript preimage schema `sha256:d2eb229f55528df8ba68426cc5b7da9d1bd6a78a412707d656b77c1effeff293`. P2.7c.2b.2-.7 and c3.1-.7 implement and execute the strict two-phase protocol and sanitized transcript path. d1-d4 freeze and execute the request-free harness. d5 binds four read-only observer sources to exact 41-interaction/91-fact evidence. d6 adds detached bounded teardown and exact stable zero-residue sampling. d7 consumes the d1-d6 snapshot once, accepts only closed transcript/timing/assertion/trusted-digest inputs, binds the runtime commitment through report/payloads/receipt, exclusively creates the exact five payloads and report at `0600`, closes the assembly descriptor, and lets the validator alone publish the receipt. Repository fixtures prove only local component logic, not external provenance, observer independence, actual external execution, or a P2.7 result. 21/24 steps are complete | Obtain e1 independently supplied caller/adapter identity and provenance next; e2 execution and e3 final archive/conclusion remain separately gated |
+| P2.6 | Historical local pass at implementation `3fe314a` and E2E lock refresh `ae476fe` for the then-current 50-case local Suite and separate 6-case remote discovery profile | Re-run the current 53-case local authority from a clean committed checkout; independent third-party caller qualification, protected or mutating remote profiles, cleanup authority, and all broader readiness gates remain open |
+| P2.7 | P2.7a locks the verified `sandbox-runtime-external-caller-coding-shell-v1@1.0.0` definition authority at `sha256:4effea27fd3d7668b88eeb95c69e19b51556914b7949b1a39ce522b2aec46c14`. P2.7b locks the report schema at `sha256:cd51ccf0aea0bc31b11ff4f288751fc7df0f0dd081860efc305182ea61f842e4` and validator semantics at `sha256:c724eaa9f3b52e1a5ba4aa5aaeb5e8b61a744818b2f56fd8ff52dfa5e1e584df`. P2.7c.1 locks adapter protocol schema `sha256:d12b477cd540e02c6a7e2f8eb77b0405b717c15e98a0f144b2d63f705ff95969` and semantics `sha256:10cd42017aee60b620dbbb7394a20c2a387983468a865a8d12a572f861d07662`. P2.7c.2a implements the runtime-independent strict codec. P2.7c.2b.1 locks the complete per-process transition table, terminal/EOF/clean-exit rules, cross-phase startup equality, and closed transcript preimage schema `sha256:d2eb229f55528df8ba68426cc5b7da9d1bd6a78a412707d656b77c1effeff293`. P2.7c.2b.2-.7 and c3.1-.7 implement and execute the strict two-phase protocol and sanitized transcript path. d1-d4 freeze and execute the request-free harness. d5 binds four read-only observer sources to exact 41-interaction/91-fact evidence. d6 adds detached bounded teardown and exact stable zero-residue sampling. d7 completes local evidence assembly. A separate external-caller repository has completed 10/13 local checkpoints through e1.7c and the local 2/3 of e1.8a: content-addressed source, immutable startup identity, byte-identical double builds and a strict three-artifact manifest. Independent source/build provenance and operator-owned resource teardown evidence remain absent. The main plan remains 21/24 | Obtain separately authorized external source hosting/build attestation to close e1.8a; e2 execution and e3 final archive/conclusion remain separately gated |
 | P2 | Reference coding/shell caller release gate passed | Aggregate conformance, multi-controller, hostile multi-tenant isolation, deployment, and production gates remain open |
 | P3 | Retired by ADR 0037. Historical revision binding/shadow/metrics components and candidate runs retain their recorded evidence boundaries | No named-platform migration gate remains; external consumers adapt to the exact locked Provider Contract |
 | P4 | Browser Contract authority/projection, exact sandboxed signed amd64/arm64/v8 publication, Provider-local components, default-disabled command/runtime composition, process-local Gateway limits, the separately recorded Browser/shared-capacity/durable-revocation caller gates, ADR 0033 component/caller evidence, the ADR 0034 v2 local/hosted deletion and rollback-detection gates, the ADR 0035 PostgreSQL component gate, and the ADR 0036 hosted same-runner controlled-restore gate pass within their named boundaries | Production independent witness/storage and restore operations, production Browser advertisement/public Gateway, Valkey/PostgreSQL provenance and HA, production configuration/metrics, aggregate, multi-controller, multi-tenant, deployment, and production gates remain open |
@@ -1075,16 +1091,17 @@ c3.6 now supplies this event from the owned child's bounded real exit observatio
 A process boundary alone cannot prove caller source independence or exact
 PID-level request attribution.
 
-1. Obtain e1 independently supplied external caller/adapter identity and
-   provenance, then (under separate approvals) the execution and conclusion gates
+1. Continue the separate e1 external-caller candidate with e1.8a reproducible
+   artifacts and independent source/build provenance, then, under separate
+   approvals, execute the observation and conclusion gates
    against the locked content-addressed
    `sandbox-runtime-external-caller-coding-shell-v1` profile and P2.7b closed
    report/evidence validator, with independent observations, actual
    executed-artifact digests, distinct-tenant cases, authoritative zero-resource
    cleanup proof, and external receipts. Qualify an independently supplied
-   caller only after those gates pass. The P2.6 local
-   50-case and remote 6-case discovery profiles are repository-owned evidence
-   and do not establish that interoperability.
+   caller only after those gates pass. The current P2.6 local 53-case authority,
+   its historical 50-case evidence, and the remote 6-case discovery profile are
+   repository-owned and do not establish that interoperability.
 2. Before adding protected or mutating remote profiles, define their explicit
    cleanup authority, prerequisites, case-specific evidence, and incomplete-run
    semantics; do not reinterpret the discovery profile.

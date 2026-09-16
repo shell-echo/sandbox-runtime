@@ -10,18 +10,18 @@
   "contract": {
     "namespace": "urn:shell-echo:sandbox-runtime:provider-v1",
     "version": "1.0.0",
-    "revision": "9206e601f75a54db0b66969239d7e8cc5bcc8af9",
-    "tree": "c5e4221f2ceaaaad53c8038e1ebaacfe0c5a4daf",
-    "manifest_digest": "sha256:23405c62747b6c678d2fcc84dfd885e435ab12771befdb29499b2e7367404da1",
-    "openapi_digest": "sha256:08261369d39bb6837759ab4b95f460df3b6c3feb51fbc56d38fe393ce69be2ca",
-    "semantic_rules_digest": "sha256:b9d3706db2d5c6fa0cfe4a389bb2ad4718daecca076d660c2e7985795e6c1999",
+    "revision": "22ba6987ea5fbc37d53942720133c0acad199edd",
+    "tree": "c9a7054d7c8e7f4b6e32f38175ceedddc48c2d38",
+    "manifest_digest": "sha256:1e17e0ef4f86e03be1dac22c48e7b556a8600a4baa6252f4514390d339b8ba3f",
+    "openapi_digest": "sha256:64f0f8d93de39217f5d684758c1407ba62df16f274137d1855821df9dd004a1d",
+    "semantic_rules_digest": "sha256:8757107d5b44451bcb1bdae223262cb870f92b3a6c6fed0e6fef7ebf8f15587e",
     "local_suite": {
       "suite_id": "sandbox-provider",
       "suite_version": "1.0.0",
-      "suite_digest": "sha256:bf177a5bd2b4228605b3ebc311d25a1cc348d9548b2b5c2d333a0c69e71ca528",
+      "suite_digest": "sha256:b40c932643f4a1e5fd6681e3abf9b64a607609866a6254456970f8b8034cf2a8",
       "suite_digest_profile": "rfc8785-full-document-excluding-suite-digest-v1",
       "profile_id": "sandbox-runtime-provider-v1",
-      "case_count": 50,
+      "case_count": 53,
       "execution_required": false
     },
     "remote_discovery_suite": {
@@ -2892,5 +2892,5 @@
     "deployment-qualification",
     "production-readiness"
   ],
-  "profile_digest": "sha256:baee769c0acc395448af61faef99cd97fbb63ccb83c70eb51915952be519991a"
+  "profile_digest": "sha256:4effea27fd3d7668b88eeb95c69e19b51556914b7949b1a39ce522b2aec46c14"
 }

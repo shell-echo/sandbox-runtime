@@ -55,7 +55,14 @@ independent caller evidence. d6 consumes the persistent cleanup obligation in a
 separate bounded context, binds the operator-owned teardown identity, closes
 local state descriptors, and requires exactly three same-scope, one-second-
 spaced zero-resource samples equal to the baseline before declaring cleanup
-successful. d7 now assembles and validates the closed evidence root as a local component. Next: e1 independently supplied caller and adapter identity and provenance, under separate approval.
+successful. d7 now assembles and validates the closed evidence root as a local
+component. A separate external-caller repository has completed 7 of its 13
+local candidate checkpoints and has begun e1.7a: 10 of 15 initial cases are
+locally composed in one Caller process through acknowledged active Gateway
+revocation, while the other 3 remain `not_executed`. It pins the refreshed authority. External
+ownership/provenance, independent runtime interoperability and observations,
+the actual 15+5 run, and a qualification result remain open. The main P2.7
+plan therefore remains 21/24, with e1 in progress and e2/e3 pending.
 
 ## Toolchain and commands
 
@@ -103,15 +110,15 @@ exact Provider Contract projection. Its success proves only that the profile
 definition is locked; it does not validate a qualification report or claim that
 an external caller executed or passed the profile. P2.7b separately locks the
 closed report schema at
-`sha256:0fef4381588ace43c63ee6aaba0f9ddfa192af3c03353c1a13e00344bc416f3f`
+`sha256:cd51ccf0aea0bc31b11ff4f288751fc7df0f0dd081860efc305182ea61f842e4`
 and the validator semantics at
-`sha256:2cccf9502c1521ee3afe35478b0359fa9cf03eda6ef5b0c5130ed8ff6fd8daf2`,
+`sha256:c724eaa9f3b52e1a5ba4aa5aaeb5e8b61a744818b2f56fd8ff52dfa5e1e584df`,
 and tests the evidence-root, report validator, and command components. CI runs
 those component tests but does not fabricate an external qualification run.
 P2.7c.1 locks the adapter protocol schema at
-`sha256:0c3783bb4014d1e04d61f1987fa77f0c27a158c65552704f69f3f340bbaa6b20`
+`sha256:d12b477cd540e02c6a7e2f8eb77b0405b717c15e98a0f144b2d63f705ff95969`
 and operational semantics at
-`sha256:deeef0edf5cc63705d84e45a8f64f657e97346a3616259c2d8b718b1e38b0bd5`.
+`sha256:10cd42017aee60b620dbbb7394a20c2a387983468a865a8d12a572f861d07662`.
 Its startup/process-supervisor/validator/receipt authority binding is complete;
 all qualification Schema compilers use one ECMA-262 regexp engine and reject
 ASCII controls without POSIX-only classes. Invocation paths/endpoints use closed
@@ -285,18 +292,19 @@ Pass those inputs with `-target`, `-ca`, `-client-ca`, `-client-cert`,
 `-provider-revision`, respectively. See
 [`compatibility/sandbox-runtime/README.md`](../compatibility/sandbox-runtime/README.md)
 for the complete command and exact local/remote Suite identities. The remote
-profile covers only six read-only discovery cases; it is not the local 50-case
+profile covers only six read-only discovery cases; it is not the local 53-case
 Suite, protected or mutating remote conformance, independent-caller
 interoperability, aggregate conformance, or production-readiness evidence. The
 report sets `unsafe_method_probes_sent=true` only after a POST, PUT, PATCH, or
 DELETE discovery-path probe is actually written; a written probe prevents a
 zero-side-effect claim for an arbitrary non-conforming target.
 
-The P2.6 release gate passes locally at implementation `3fe314a` and E2E lock
-refresh `ae476fe`, including both clean VCS-built Runners, the root and E2E
-race/shuffle and vet gates, Contract verification, parent-lock verification,
-and all eight E2E `-check` commands. Keep those checks separate from external
-caller, deployment, and production qualification.
+The historical P2.6 release gate passed locally at implementation `3fe314a` and
+E2E lock refresh `ae476fe`, including both clean VCS-built Runners, the root and
+E2E race/shuffle and vet gates, Contract verification, parent-lock verification,
+and all eight E2E `-check` commands. The current 53-case authority requires a
+fresh clean-checkout run after the refresh is committed. Keep those checks
+separate from external caller, deployment, and production qualification.
 
 ## Package boundaries
 

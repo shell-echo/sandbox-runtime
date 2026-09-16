@@ -36,8 +36,8 @@ const (
 	TranscriptSchemaID    = "urn:shell-echo:sandbox-runtime:qualification:external-caller-adapter-transcript:v1"
 	TranscriptSchemaPath  = "qualification/external-caller-coding-shell-v1/adapter-transcript.schema.json"
 
-	ExpectedProtocolSchemaDigest    = "sha256:0c3783bb4014d1e04d61f1987fa77f0c27a158c65552704f69f3f340bbaa6b20"
-	ExpectedProtocolSemanticsDigest = "sha256:deeef0edf5cc63705d84e45a8f64f657e97346a3616259c2d8b718b1e38b0bd5"
+	ExpectedProtocolSchemaDigest    = "sha256:d12b477cd540e02c6a7e2f8eb77b0405b717c15e98a0f144b2d63f705ff95969"
+	ExpectedProtocolSemanticsDigest = "sha256:10cd42017aee60b620dbbb7394a20c2a387983468a865a8d12a572f861d07662"
 	ExpectedTranscriptSchemaDigest  = "sha256:d2eb229f55528df8ba68426cc5b7da9d1bd6a78a412707d656b77c1effeff293"
 
 	maxDefinitionBytes      = 2 << 20
@@ -597,7 +597,7 @@ func validateLockedExamples(schema *jsonschema.Schema) error {
 		"message_type": "startup_identity", "sequence": float64(0),
 		"protocol_schema_digest": ExpectedProtocolSchemaDigest, "protocol_semantics_digest": ExpectedProtocolSemanticsDigest,
 		"caller_release_identity": release, "adapter_release_identity": release,
-		"contract_revision": "9206e601f75a54db0b66969239d7e8cc5bcc8af9", "contract_tree": "c5e4221f2ceaaaad53c8038e1ebaacfe0c5a4daf",
+		"contract_revision": "22ba6987ea5fbc37d53942720133c0acad199edd", "contract_tree": "c9a7054d7c8e7f4b6e32f38175ceedddc48c2d38",
 		"profile_id": qualificationprofile.ProfileID, "profile_version": qualificationprofile.ProfileVersion,
 		"profile_digest": qualificationprofile.ExpectedProfileDigest, "expected_values_injected_by_harness": false,
 		"credential_channel_requirements": []any{requirement},

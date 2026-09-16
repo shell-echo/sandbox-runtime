@@ -598,7 +598,7 @@
       "properties": {
         "profile_id": {"const": "sandbox-runtime-external-caller-coding-shell-v1"},
         "profile_version": {"const": "1.0.0"},
-        "profile_digest": {"const": "sha256:baee769c0acc395448af61faef99cd97fbb63ccb83c70eb51915952be519991a"},
+        "profile_digest": {"const": "sha256:4effea27fd3d7668b88eeb95c69e19b51556914b7949b1a39ce522b2aec46c14"},
         "schema_digest": {"const": "sha256:2ad01731b69246399d6f04048593f31da9e4118b1dff99a81551b0c9b5972d77"},
         "schema_digest_profile": {"const": "sha256-raw-file-bytes-v1"}
       }
@@ -625,11 +625,11 @@
       "properties": {
         "namespace": {"const": "urn:shell-echo:sandbox-runtime:provider-v1"},
         "version": {"const": "1.0.0"},
-        "revision": {"const": "9206e601f75a54db0b66969239d7e8cc5bcc8af9"},
-        "tree": {"const": "c5e4221f2ceaaaad53c8038e1ebaacfe0c5a4daf"},
-        "manifest_digest": {"const": "sha256:23405c62747b6c678d2fcc84dfd885e435ab12771befdb29499b2e7367404da1"},
-        "openapi_digest": {"const": "sha256:08261369d39bb6837759ab4b95f460df3b6c3feb51fbc56d38fe393ce69be2ca"},
-        "semantic_rules_digest": {"const": "sha256:b9d3706db2d5c6fa0cfe4a389bb2ad4718daecca076d660c2e7985795e6c1999"},
+        "revision": {"const": "22ba6987ea5fbc37d53942720133c0acad199edd"},
+        "tree": {"const": "c9a7054d7c8e7f4b6e32f38175ceedddc48c2d38"},
+        "manifest_digest": {"const": "sha256:1e17e0ef4f86e03be1dac22c48e7b556a8600a4baa6252f4514390d339b8ba3f"},
+        "openapi_digest": {"const": "sha256:64f0f8d93de39217f5d684758c1407ba62df16f274137d1855821df9dd004a1d"},
+        "semantic_rules_digest": {"const": "sha256:8757107d5b44451bcb1bdae223262cb870f92b3a6c6fed0e6fef7ebf8f15587e"},
         "local_suite": {"$ref": "#/$defs/suiteIdentity"},
         "remote_discovery_suite": {"$ref": "#/$defs/suiteIdentity"}
       }
@@ -785,10 +785,10 @@
       "properties": {
         "caller_release_identity": {"oneOf": [{"$ref": "#/$defs/sourceIdentity"}, {"type": "null"}]},
         "adapter_release_identity": {"oneOf": [{"$ref": "#/$defs/sourceIdentity"}, {"type": "null"}]},
-        "contract_revision": {"const": "9206e601f75a54db0b66969239d7e8cc5bcc8af9"},
-        "contract_tree": {"const": "c5e4221f2ceaaaad53c8038e1ebaacfe0c5a4daf"},
+        "contract_revision": {"const": "22ba6987ea5fbc37d53942720133c0acad199edd"},
+        "contract_tree": {"const": "c9a7054d7c8e7f4b6e32f38175ceedddc48c2d38"},
         "profile_id": {"const": "sandbox-runtime-external-caller-coding-shell-v1"},
-        "profile_digest": {"const": "sha256:baee769c0acc395448af61faef99cd97fbb63ccb83c70eb51915952be519991a"},
+        "profile_digest": {"const": "sha256:4effea27fd3d7668b88eeb95c69e19b51556914b7949b1a39ce522b2aec46c14"},
         "adapter_protocol_id": {"const": "sandbox-runtime-external-caller-adapter-v1"},
         "adapter_protocol_version": {"const": "1.0.0"},
         "adapter_protocol_schema_digest": {"$ref": "#/$defs/digest"},

@@ -55,7 +55,21 @@ independent caller evidence. d6 consumes the persistent cleanup obligation in a
 separate bounded context, binds the operator-owned teardown identity, closes
 local state descriptors, and requires exactly three same-scope, one-second-
 spaced zero-resource samples equal to the baseline before declaring cleanup
-successful. d7 now assembles and validates the closed evidence root as a local component. Next: e1 independently supplied caller and adapter identity and provenance, under separate approval.
+successful. d7 now assembles and validates the closed evidence root as a local
+component. A separate external-caller repository has completed 10 of its 13
+local candidate checkpoints through e1.7c: all 15 initial and all 5
+reconstruction cases are locally composed with durable `initial_complete`
+binding, including retained handoff validation and a reconstructed-Gateway
+byte connection. Candidate-owned process cleanup, sanitized failure mapping and
+output ordering/limits are locally closed. The e1.8a local builder now creates a
+content-addressed source archive, archive-derived startup identity,
+byte-identical double builds and a strict three-artifact manifest; independent
+source hosting/build attestation remains absent. Operator-owned resource teardown
+and stable zero-resource inspection remain unexecuted.
+It pins the refreshed authority. External
+ownership/provenance, independent runtime interoperability and observations,
+the actual 15+5 run, and a qualification result remain open. The main P2.7
+plan therefore remains 21/24, with e1 in progress and e2/e3 pending.
 
 ## Purpose
 
@@ -130,14 +144,14 @@ The current Contract namespace is
 `urn:shell-echo:sandbox-runtime:provider-v1`, version `1.0.0`, and MIT licensed.
 The format-2 lock binds the Contract tree, manifest, OpenAPI digest, semantic
 rules, fixtures, and both Conformance Suites to immutable Git revision
-`9206e601f75a54db0b66969239d7e8cc5bcc8af9` and tree
-`c5e4221f2ceaaaad53c8038e1ebaacfe0c5a4daf`. Both Suite digests are derived by
+`22ba6987ea5fbc37d53942720133c0acad199edd` and tree
+`c9a7054d7c8e7f4b6e32f38175ceedddc48c2d38`. Both Suite digests are derived by
 RFC 8785 canonicalization of the complete Suite object excluding only the
 top-level `suite_digest` member. Contract resources are validated in place; no
 external checkout, source-root mount, or proprietary resource is required.
 
 The local `sandbox-provider@1.0.0` profile
-`sandbox-runtime-provider-v1` retains 50 `repository-go-test` cases. The
+`sandbox-runtime-provider-v1` contains 53 `repository-go-test` cases. The
 separate remote `sandbox-provider-remote@1.0.0` profile
 `sandbox-runtime-provider-remote-discovery-v1` contains six
 `remote-http-black-box` discovery cases. The remote profile does not redefine
@@ -642,7 +656,7 @@ advertisement, and optional-profile gates remain open:
 
 | Area | Current state | Required direction |
 | --- | --- | --- |
-| Conformance | ADR 0039 passes its local P2.6 release gate at implementation `3fe314a` and E2E lock refresh `ae476fe`: content-derived local and remote Suite identities, a clean-revision 50-case Go-test runner, and a separate six-case TLS 1.3 mTLS remote discovery runner. ADR 0040, the verified P2.7a profile, the P2.7b closed report schema/evidence validator, and the P2.7c.1 adapter protocol definition lock the external-caller profile, evidence format, and process-protocol authority. P2.7c.2a/b and c3.1-.7 implement the strict two-phase protocol and sanitized transcript path. d1-d4 implement frozen configuration, disposable runtime preparation, request-free initial orchestration, and correlation-free reconstruction. d5 implements four source-specific observer ports and exact 41-interaction/91-fact profile binding. d6 implements detached bounded operator teardown plus exact same-scope stable zero-residue sampling. d7 adds typed one-shot evidence assembly, runtime-commitment binding through the five payloads/report/receipt, descriptor-pinned exclusive `0600` publication, assembly-writer closure, and validator-only receipt publication. Real Darwin/arm64 and Linux/arm64 component tests plus earlier guest-local tagged Docker integrations pass; repository fixtures do not prove actual teardown, independent caller/observer provenance, or external execution. | Obtain e1 independently supplied caller/adapter identity and provenance next, then execute e2 and conclude e3 under separate approvals. Define Provider-level cleanup authority and profile-specific evidence before adding protected or mutating remote Suite cases; retain aggregate, multi-controller, multi-tenant, HA, deployment, and production gates. |
+| Conformance | Current Contract revision `22ba6987` contains a content-derived 53-case local Suite and unchanged six-case remote Suite. Contract verification, root tests/vet, and E2E lock logic pass in the worktree; clean VCS-built 53-case and E2E parent-lock/check gates remain pending. The prior P2.6 50-case pass at `3fe314a`/`ae476fe` remains historical evidence. ADR 0040 locks the refreshed P2.7 profile/report/protocol authorities; local harness d1-d7 is 21/24 complete. A separate external-caller repository has completed 10/13 local candidate checkpoints through e1.7c and the local 2/3 of e1.8a: content-addressed source, immutable startup identity, byte-identical double builds and a strict three-artifact manifest. There is no independent source/build provenance, operator-owned zero-resource teardown proof, or independent observer-backed scenario disposition. | Obtain separately authorized external source hosting/build attestation to close e1.8a before e2 execution and e3 conclusion. Run the current Contract/E2E gates from a clean committed checkout; retain aggregate, multi-controller, multi-tenant, HA, deployment, and production gates. |
 | Protected admission | ADR 0038 requires one explicit issuer-scoped caller trust domain per listener, Provider-local audience/revision anchors, and 1..32 frozen verification keys. Its repository-local Contract, projection, configuration, conformance, E2E lock, overlap-key, and same-repository reference gates pass. | Retain exact authentication/authorization precedence. Treat multi-issuer admission and independently implemented external-caller interoperability as separate future gates. |
 | Backend abstraction | Local `instance.Driver` remains separate; the Provider lifecycle has its own fake and Docker development adapters, while exec and terminal use focused Provider-only runtime ports. | Add future snapshot capability ports without reusing `/instances` models and retain narrow optional interfaces. |
 | Lifecycle recovery | Provider file persistence and Docker observation reconcile pending/unknown create work for one controller. | Retain unknown-outcome evidence; add transactional production storage before multi-controller operation. |
@@ -719,7 +733,7 @@ external platform.
 
 - derive and lock the local and remote Suite digests from RFC 8785 canonical
   content;
-- execute the local 50-case inventory from the verifier's immutable snapshot
+- execute the then-current local 50-case inventory from the verifier's immutable snapshot
   against a bounded, read-only archive of the exact clean Runner revision;
 - require each local case to declare an exact mapped-test count and observe all
   matching tests as distinct, started, non-skipped passes;
@@ -733,10 +747,10 @@ external platform.
   method-probe flag only after a POST, PUT, PATCH, or DELETE request is actually
   written.
 
-The release gate passes locally at implementation `3fe314a` and E2E lock
+The historical release gate passed locally at implementation `3fe314a` and E2E lock
 refresh `ae476fe`: the Contract verifier, clean VCS-built local and remote
 Runners, full repository and E2E race/shuffle and vet, parent-lock check, and
-all eight E2E `-check` commands pass. This closes only P2.6's local
+all eight E2E `-check` commands passed. This closes only that P2.6 local
 `repository-go-test` and remote discovery profiles. It does not establish an
 independently implemented caller, protected or
 mutating remote conformance, aggregate conformance, multi-controller
@@ -764,17 +778,17 @@ readiness.
   resources.
 
 P2.7a locks the verified machine-readable definition authority at
-`sha256:baee769c0acc395448af61faef99cd97fbb63ccb83c70eb51915952be519991a`.
+`sha256:4effea27fd3d7668b88eeb95c69e19b51556914b7949b1a39ce522b2aec46c14`.
 P2.7b locks the closed report schema at
-`sha256:0fef4381588ace43c63ee6aaba0f9ddfa192af3c03353c1a13e00344bc416f3f`
+`sha256:cd51ccf0aea0bc31b11ff4f288751fc7df0f0dd081860efc305182ea61f842e4`
 and validator semantics at
-`sha256:2cccf9502c1521ee3afe35478b0359fa9cf03eda6ef5b0c5130ed8ff6fd8daf2`,
+`sha256:c724eaa9f3b52e1a5ba4aa5aaeb5e8b61a744818b2f56fd8ff52dfa5e1e584df`,
 and implements the bounded evidence-root validator and non-overwriting sanitized
 receipt. P2.7b locks only this evidence definition, not an external compatibility
 result. P2.7c.1 locks the adapter protocol schema at
-`sha256:0c3783bb4014d1e04d61f1987fa77f0c27a158c65552704f69f3f340bbaa6b20`
+`sha256:d12b477cd540e02c6a7e2f8eb77b0405b717c15e98a0f144b2d63f705ff95969`
 and operational semantics at
-`sha256:deeef0edf5cc63705d84e45a8f64f657e97346a3616259c2d8b718b1e38b0bd5`.
+`sha256:10cd42017aee60b620dbbb7394a20c2a387983468a865a8d12a572f861d07662`.
 It defines identity-first one-shot phase invocations, seven allowed harness
 fields, dedicated secret channels, bounded progress, and fail-closed process
 control, and binds its authority through startup, process-supervisor, validator,
@@ -906,6 +920,7 @@ No provider revision is “compatible” based only on unit tests, a successful
 container launch, or one discovery-profile report. Compatibility is the tested
 combination of protocol version, exact Contract revision/tree, Suite profile,
 capability set, runtime profile, architecture, driver, image digest, and
-security policy. Evidence from the 50-case repository profile, six-case remote
-discovery profile, reference callers, and profile-specific E2E tracks remains
-separate and must not be aggregated by inference.
+security policy. Evidence from the historical 50-case repository profile, the
+current 53-case authority, six-case remote discovery profile, reference callers,
+and profile-specific E2E tracks remains separate and must not be aggregated by
+inference.

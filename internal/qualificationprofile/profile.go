@@ -37,7 +37,7 @@ const (
 
 	// These repository trust anchors are updated only after the complete profile
 	// and schema pass review and validation.
-	ExpectedProfileDigest = "sha256:baee769c0acc395448af61faef99cd97fbb63ccb83c70eb51915952be519991a"
+	ExpectedProfileDigest = "sha256:4effea27fd3d7668b88eeb95c69e19b51556914b7949b1a39ce522b2aec46c14"
 	ExpectedSchemaDigest  = "sha256:2ad01731b69246399d6f04048593f31da9e4118b1dff99a81551b0c9b5972d77"
 
 	maxProfileBytes = 2 << 20

@@ -138,8 +138,8 @@ func TestLocalContractProtectedAdmissionJWSProfile(t *testing.T) {
 			}
 		}
 	}
-	if protectedOperations != 13 {
-		t.Fatalf("protected OpenAPI operations = %d, want 13", protectedOperations)
+	if protectedOperations != 14 {
+		t.Fatalf("protected OpenAPI operations = %d, want 14", protectedOperations)
 	}
 
 	headerParameter := openAPI.Components.Parameters["AdmissionContextHeader"]

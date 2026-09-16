@@ -12,7 +12,7 @@ one real Redis-compatible authority; they pin Contract identity for context but
 do not call the Provider API. The downstream-fencing profile is different: it
 bootstraps Browser resources through six protected Provider routes and drives
 real Chromium through an authenticated unique ingress, while leaving the
-current 50-case Contract Suite unexercised.
+current 53-case Contract Suite unexercised.
 
 The black-box caller uses only mTLS, JWS, HTTPS, and WebSocket. A separate
 reference deployment process composes exported `sandbox-runtime` Provider and
@@ -30,19 +30,21 @@ or reopen that migration gate.
 
 | Item | Value |
 | --- | --- |
-| Provider implementation | `3fe314a012b808fe60dbd783d7c7c7121d3c548e` |
+| Historical Provider implementation baseline | `3fe314a012b808fe60dbd783d7c7c7121d3c548e`; refresh pending after the current Provider changes are committed |
 | Contract namespace | `urn:shell-echo:sandbox-runtime:provider-v1` |
-| Contract revision | `9206e601f75a54db0b66969239d7e8cc5bcc8af9` |
-| Contract tree | `c5e4221f2ceaaaad53c8038e1ebaacfe0c5a4daf` |
-| Contract manifest | `sha256:23405c62747b6c678d2fcc84dfd885e435ab12771befdb29499b2e7367404da1` |
-| Local Suite | `sandbox-provider@1.0.0`; `sandbox-runtime-provider-v1`; `repository-go-test`; 50 cases; `sha256:bf177a5bd2b4228605b3ebc311d25a1cc348d9548b2b5c2d333a0c69e71ca528` |
+| Contract revision | `22ba6987ea5fbc37d53942720133c0acad199edd` |
+| Contract tree | `c9a7054d7c8e7f4b6e32f38175ceedddc48c2d38` |
+| Contract manifest | `sha256:1e17e0ef4f86e03be1dac22c48e7b556a8600a4baa6252f4514390d339b8ba3f` |
+| Local Suite | `sandbox-provider@1.0.0`; `sandbox-runtime-provider-v1`; `repository-go-test`; 53 cases; `sha256:b40c932643f4a1e5fd6681e3abf9b64a607609866a6254456970f8b8034cf2a8` |
 | Remote Suite | `sandbox-provider-remote@1.0.0`; `sandbox-runtime-provider-remote-discovery-v1`; `remote-http-black-box`; 6 cases; `sha256:167922d972229a97a64bf22bc6a36ee20d4de19a023395d9f004f00c54cc49d0` |
 
-The active E2E metadata lock refresh uses these identities at
-`ae476fed12e82f472b19ff78fda633c8d702561d`. Module race/shuffle, vet,
-parent-lock, and all eight `-check` commands pass from a clean checkout. Neither
-Suite is recorded as exercised by the E2E profiles; the local and remote Suites
-have their own passing P2.6 runners and evidence boundaries.
+The current E2E lock worktree uses these Contract identities. Module vet and all
+lock logic tests other than the clean-parent-checkout test pass; the full race
+run is blocked only by that intentional dirty-worktree gate. Parent-lock and
+all eight `-check` commands require a committed clean checkout and remain
+pending. The prior `ae476fed12e82f472b19ff78fda633c8d702561d` refresh passed
+those gates for the earlier authority and remains historical evidence. Neither
+Suite is recorded as exercised by the E2E profiles.
 
 The previous clean local reference run `20260907T044611.598221000Z` at harness
 `b8d482977cb4622ca578bd77c4eb8f7298af7273` passed all 15 initial and 5
@@ -148,7 +150,8 @@ and cleanup paths. The Browser-only reference stack
 advertises the exact locked Browser profile required by lifecycle admission;
 the production command remains default-disabled and does not advertise it. A
 passing run is Browser reference external-caller evidence only; it is not
-aggregate conformance, real Agent Platform compatibility, hostile multi-tenant
+aggregate conformance, independently implemented external-caller
+interoperability, hostile multi-tenant
 isolation, deployment, or production readiness. ADR 0026 defines the exact
 boundary.
 
@@ -189,7 +192,8 @@ Provider routes, Contract cases, a Browser/CDP runtime, image provenance,
 restricted egress, artifacts, or usage. It also does not establish Valkey
 provenance, HA/failover consistency, durable distributed revocation, downstream
 fencing, Provider multi-controller reliability, hostile multi-tenant isolation,
-real Agent Platform compatibility, deployment readiness, or production
+independently implemented external-caller interoperability, deployment
+readiness, or production
 readiness. Hosted execution is isolated in
 `.github/workflows/shared-capacity-e2e.yml`; artifacts are uploaded only after
 the run's sanitization checks pass.
@@ -224,7 +228,7 @@ propagation, no revocation/outage reconnect, and sanitized evidence.
 
 A passing run closes only ADR 0032's durable exact-grant caller gate. The
 private echo fixture is not Browser/CDP. Current Contract/tree metadata records
-the local 50-case and remote six-case Suite identities with
+the local 53-case and remote six-case Suite identities with
 `suite_exercised=false` and `remote_suite_exercised=false`. The result does not
 establish downstream CDP fencing, Valkey provenance or HA/failover, ACL role
 separation, Provider API interoperability with an independently implemented
@@ -254,7 +258,7 @@ replacement success, terminal closure without reconnect, unaffected session
 and tenant scopes, fail-closed Valkey outage and recovery, retained high-water
 across ingress reconstruction, bypass exclusion, cleanup, and evidence
 sanitization. A passing run closes only the named ADR 0033 external-caller
-boundary for that platform. It executes neither the current 50-case local Suite
+boundary for that platform. It executes neither the current 53-case local Suite
 nor the six-case remote Suite (`suite_exercised=false` and
 `remote_suite_exercised=false`) and does not establish exactly-once delivery,
 restored-snapshot consistency, Valkey provenance/HA/failover, independently
@@ -304,7 +308,8 @@ cleanup. The Contract identity remains pinned, but the Suite is not executed
 `linux/arm64`; hosted run `34026680591` at the same checkout passes the same 18
 scenarios on `linux/amd64`. These platform-specific results do not establish a production
 monotonic witness, correlated Redis-and-witness rollback protection, Valkey
-provenance/HA/failover, real Agent Platform compatibility, hostile multi-tenant
+provenance/HA/failover, independently implemented external-caller
+interoperability, hostile multi-tenant
 isolation, deployment, or production readiness.
 
 The restore control still performs real Redis/Valkey `DUMP`/`RESTORE` fault
@@ -488,7 +493,8 @@ as HTTP `429`. This run uses a private echo resolver and does not exercise the
 Provider API, a real Browser/CDP runtime, image provenance, restricted egress,
 artifacts, or usage; it is not hosted, HA/failover, durable distributed
 revocation, downstream fencing, Provider multi-controller, hostile
-multi-tenant, real Agent Platform, deployment, or production evidence.
+multi-tenant, independently implemented external-caller, deployment, or
+production evidence.
 
 Hosted Browser Shared Capacity E2E run `33949577876` independently passed all
 10 scenarios on `linux/amd64` against harness/Gateway source `de297e7` and
@@ -531,7 +537,8 @@ Gateway audit keeps the existing six `authorized`, six `connected`, four
 or payload field. This is hosted Browser reference external-caller evidence for
 process-local service and listener/TLS/HTTP bounds only; partition-aware shared
 or distributed capacity, durable distributed revocation, production
-advertisement, real Agent Platform, aggregate conformance, multi-controller,
+advertisement, independently implemented external-caller interoperability,
+aggregate conformance, multi-controller,
 hostile multi-tenant, deployment, and production gates remain open. Artifact
 `browser-reference-e2e-evidence-33857739150` has digest
 `sha256:94bcdfa53b667d4a6bc17fd6714cc9895e8402b830b8c6425c604c835f9228f`;
@@ -563,7 +570,8 @@ otherwise contains the manifest, two reports, and bounded stack/caller logs.
 This is process-local post-authorization capacity plus Browser reference
 external-caller evidence, not the newer pre-upgrade edge scenario, distributed
 capacity/revocation, production
-advertisement, real Agent Platform, aggregate conformance, multi-controller,
+advertisement, independently implemented external-caller interoperability,
+aggregate conformance, multi-controller,
 hostile multi-tenant, deployment, or production evidence.
 
 Hosted coding/shell Reference run `33857739105` and Platform Candidate run
@@ -580,7 +588,8 @@ Reference run `20260904T081521.464863000Z` and Candidate run
 harness/Provider `249cdd4`/`44ea2ee`; both pin runtime digest
 `sha256:bcd5dbff8b2d108ee7dab464a85ee7d39ef74a8616a6af73a94ebb10ff8eaf75`.
 These remain reference coding/shell and candidate integration evidence,
-respectively, not Browser or real Agent Platform evidence.
+respectively, not Browser or independently implemented external-caller
+evidence.
 
 The preceding hosted Browser Reference E2E run `33838215924` passed harness
 `79fee2b` against Provider `f760369` with 10 initial and 5 reconstruction
@@ -771,7 +780,8 @@ The latest lock-refresh run `33857739105` passed Provider `b8f8941` with
 harness `7a20d9d` and uploaded `reference-e2e-evidence-33857739105` with digest
 `sha256:b9cbf768e7d7b1241643f309cd08cef69efe8c7d9b3a464c3da953f9d03adbb7`.
 A green run proves only the named reference caller scenarios;
-it does not prove Agent Platform compatibility, aggregate conformance,
+it does not prove independently implemented external-caller interoperability,
+aggregate conformance,
 multi-controller reliability, hostile tenant isolation, deployment readiness,
 or production readiness.
 
@@ -796,7 +806,8 @@ shared-capacity lock, runs the module race/vet gates, and executes the pinned
 Valkey plus two-Gateway black-box runner. It publishes
 `browser-shared-capacity-e2e-evidence-<run-id>` only after the E2E command and
 its sanitization checks succeed. A green run does not change the Provider
-Contract, real Agent Platform, HA, multi-controller, multi-tenant, deployment,
+Contract, independently implemented external-caller interoperability, HA,
+multi-controller, multi-tenant, deployment,
 or production-readiness status.
 Hosted run `33949577876` passed this workflow on `linux/amd64` and uploaded
 `browser-shared-capacity-e2e-evidence-33949577876` with digest

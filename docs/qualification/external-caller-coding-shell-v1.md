@@ -55,14 +55,21 @@ independent caller evidence. d6 consumes the persistent cleanup obligation in a
 separate bounded context, binds the operator-owned teardown identity, closes
 local state descriptors, and requires exactly three same-scope, one-second-
 spaced zero-resource samples equal to the baseline before declaring cleanup
-successful. d7 now assembles and validates the closed evidence root as a local component. Next: e1 independently supplied caller and adapter identity and provenance, under separate approval.
+successful. d7 now assembles and validates the closed evidence root as a local
+component. A separate external-caller repository has completed 7 of its 13
+local candidate checkpoints and has begun e1.7a: 8 of 15 initial cases are
+locally composed in one Caller process through terminal handoff,
+while the other 7 remain `not_executed`. It pins the refreshed authority. External
+ownership/provenance, independent runtime interoperability and observations,
+the actual 15+5 run, and a qualification result remain open. The main P2.7
+plan therefore remains 21/24, with e1 in progress and e2/e3 pending.
 
 Profile ID: `sandbox-runtime-external-caller-coding-shell-v1`
 
 Profile version: `1.0.0`
 
 Profile digest:
-`sha256:baee769c0acc395448af61faef99cd97fbb63ccb83c70eb51915952be519991a`
+`sha256:4effea27fd3d7668b88eeb95c69e19b51556914b7949b1a39ce522b2aec46c14`
 
 Status: P2.7a machine-readable definition authority, P2.7b closed report
 schema/evidence validator, and P2.7c.1 content-addressed protocol definition are
@@ -112,11 +119,11 @@ coordinated reference update.
 The closed adapter process
 [`schema`](../../qualification/external-caller-coding-shell-v1/adapter-protocol.schema.json)
 has raw digest
-`sha256:0c3783bb4014d1e04d61f1987fa77f0c27a158c65552704f69f3f340bbaa6b20`.
+`sha256:d12b477cd540e02c6a7e2f8eb77b0405b717c15e98a0f144b2d63f705ff95969`.
 Its locked
 [`semantics`](../../qualification/external-caller-coding-shell-v1/adapter-protocol.semantics.json)
 has raw digest
-`sha256:deeef0edf5cc63705d84e45a8f64f657e97346a3616259c2d8b718b1e38b0bd5`.
+`sha256:10cd42017aee60b620dbbb7394a20c2a387983468a865a8d12a572f861d07662`.
 These files define only the harness-to-adapter process protocol. They neither
 extend the Provider Contract nor show that any process executed it.
 The report validator compares the protocol ID, version, schema digest, and
@@ -230,11 +237,11 @@ selected authority; it does not claim that an adapter emitted startup identity.
 The closed qualification report authority is
 [`report.schema.json`](../../qualification/external-caller-coding-shell-v1/report.schema.json),
 with raw-byte digest
-`sha256:0fef4381588ace43c63ee6aaba0f9ddfa192af3c03353c1a13e00344bc416f3f`.
+`sha256:cd51ccf0aea0bc31b11ff4f288751fc7df0f0dd081860efc305182ea61f842e4`.
 The separate closed
 [`validator.semantics.json`](../../qualification/external-caller-coding-shell-v1/validator.semantics.json)
 has raw-byte digest
-`sha256:2cccf9502c1521ee3afe35478b0359fa9cf03eda6ef5b0c5130ed8ff6fd8daf2`.
+`sha256:c724eaa9f3b52e1a5ba4aa5aaeb5e8b61a744818b2f56fd8ff52dfa5e1e584df`.
 The standalone validator reads the complete evidence root, validates
 `report.json` against that schema and the locked profile semantics, checks the
 actual bounded payload inventory, stages a receipt candidate, and commits it as

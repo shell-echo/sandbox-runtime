@@ -155,7 +155,7 @@ func TestSuiteCheckSummaryIncludesCompleteIdentitiesAndClaims(t *testing.T) {
 		"suite_profile":               SuiteProfile,
 		"suite_digest_profile":        SuiteDigestProfile,
 		"suite_digest":                SuiteDigest,
-		"suite_cases":                 "50",
+		"suite_cases":                 "53",
 		"suite_exercised":             "false",
 		"remote_suite_id":             RemoteSuiteID,
 		"remote_suite_version":        RemoteSuiteVersion,

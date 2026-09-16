@@ -30,15 +30,15 @@ import (
 const (
 	ProviderCommit   = "3fe314a012b808fe60dbd783d7c7c7121d3c548e"
 	ContractNS       = "urn:shell-echo:sandbox-runtime:provider-v1"
-	ContractRevision = "9206e601f75a54db0b66969239d7e8cc5bcc8af9"
-	ContractTree     = "c5e4221f2ceaaaad53c8038e1ebaacfe0c5a4daf"
+	ContractRevision = "22ba6987ea5fbc37d53942720133c0acad199edd"
+	ContractTree     = "c9a7054d7c8e7f4b6e32f38175ceedddc48c2d38"
 
 	SuiteID            = "sandbox-provider"
 	SuiteVersion       = "1.0.0"
-	SuiteDigest        = "sha256:bf177a5bd2b4228605b3ebc311d25a1cc348d9548b2b5c2d333a0c69e71ca528"
+	SuiteDigest        = "sha256:b40c932643f4a1e5fd6681e3abf9b64a607609866a6254456970f8b8034cf2a8"
 	SuiteDigestProfile = "rfc8785-full-document-excluding-suite-digest-v1"
 	SuiteProfile       = "sandbox-runtime-provider-v1"
-	SuiteCases         = 50
+	SuiteCases         = 53
 
 	RemoteSuiteID            = "sandbox-provider-remote"
 	RemoteSuiteVersion       = "1.0.0"

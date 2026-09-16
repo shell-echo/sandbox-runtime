@@ -4,18 +4,18 @@
   "semantics_version": "1.0.0",
   "report_schema": {
     "path": "qualification/external-caller-coding-shell-v1/report.schema.json",
-    "digest": "sha256:0fef4381588ace43c63ee6aaba0f9ddfa192af3c03353c1a13e00344bc416f3f"
+    "digest": "sha256:cd51ccf0aea0bc31b11ff4f288751fc7df0f0dd081860efc305182ea61f842e4"
   },
   "adapter_protocol": {
     "protocol_id": "sandbox-runtime-external-caller-adapter-v1",
     "protocol_version": "1.0.0",
     "schema": {
       "path": "qualification/external-caller-coding-shell-v1/adapter-protocol.schema.json",
-      "digest": "sha256:0c3783bb4014d1e04d61f1987fa77f0c27a158c65552704f69f3f340bbaa6b20"
+      "digest": "sha256:d12b477cd540e02c6a7e2f8eb77b0405b717c15e98a0f144b2d63f705ff95969"
     },
     "semantics": {
       "path": "qualification/external-caller-coding-shell-v1/adapter-protocol.semantics.json",
-      "digest": "sha256:deeef0edf5cc63705d84e45a8f64f657e97346a3616259c2d8b718b1e38b0bd5"
+      "digest": "sha256:10cd42017aee60b620dbbb7394a20c2a387983468a865a8d12a572f861d07662"
     }
   },
   "transcript_projection_schema": {
