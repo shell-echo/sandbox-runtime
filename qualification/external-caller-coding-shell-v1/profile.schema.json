@@ -1,0 +1,1541 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:shell-echo:sandbox-runtime:qualification:external-caller-coding-shell-profile:v1",
+  "title": "Sandbox Runtime External Caller Coding/Shell Qualification Profile v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format_version",
+    "profile_id",
+    "profile_version",
+    "profile_digest_profile",
+    "profile_schema",
+    "contract",
+    "execution_mode",
+    "mutations_performed",
+    "capability_selection",
+    "topology",
+    "artifact_identity_requirements",
+    "observer_requirements",
+    "limits",
+    "reconstruction",
+    "scenario_statuses",
+    "run_outcomes",
+    "phases",
+    "cleanup",
+    "evidence",
+    "required_non_claims",
+    "profile_digest"
+  ],
+  "properties": {
+    "format_version": {
+      "const": 1
+    },
+    "profile_id": {
+      "const": "sandbox-runtime-external-caller-coding-shell-v1"
+    },
+    "profile_version": {
+      "const": "1.0.0"
+    },
+    "profile_digest_profile": {
+      "const": "rfc8785-full-document-excluding-profile-digest-v1"
+    },
+    "profile_schema": {
+      "$ref": "#/$defs/fileIdentity",
+      "properties": {
+        "path": {
+          "const": "qualification/external-caller-coding-shell-v1/profile.schema.json"
+        }
+      }
+    },
+    "contract": {
+      "$ref": "#/$defs/contractIdentity"
+    },
+    "execution_mode": {
+      "const": "independent-external-caller-black-box"
+    },
+    "mutations_performed": {
+      "const": true
+    },
+    "capability_selection": {
+      "$ref": "#/$defs/capabilitySelection"
+    },
+    "topology": {
+      "$ref": "#/$defs/topology"
+    },
+    "artifact_identity_requirements": {
+      "type": "array",
+      "minItems": 11,
+      "maxItems": 11,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/artifactIdentityRequirement"
+      }
+    },
+    "observer_requirements": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "provider_observer",
+          "gateway_observer",
+          "process_supervisor",
+          "resource_inspector"
+        ]
+      }
+    },
+    "limits": {
+      "$ref": "#/$defs/limits"
+    },
+    "reconstruction": {
+      "$ref": "#/$defs/reconstruction"
+    },
+    "scenario_statuses": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "prefixItems": [
+        {"const": "passed"},
+        {"const": "failed"},
+        {"const": "not_executed"}
+      ],
+      "items": false
+    },
+    "run_outcomes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "values",
+        "precedence",
+        "prerequisite_unavailable",
+        "executed_mismatch",
+        "cleanup_unknown_or_failed",
+        "missing_identity_or_evidence"
+      ],
+      "properties": {
+        "values": {
+          "const": ["passed", "failed", "incomplete", "not_executed"]
+        },
+        "precedence": {
+          "const": ["incomplete", "failed", "passed", "not_executed"]
+        },
+        "prerequisite_unavailable": {"const": "not_executed"},
+        "executed_mismatch": {"const": "failed"},
+        "cleanup_unknown_or_failed": {"const": "incomplete"},
+        "missing_identity_or_evidence": {"const": "incomplete"}
+      }
+    },
+    "phases": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "prefixItems": [
+        {"$ref": "#/$defs/initialPhase"},
+        {"$ref": "#/$defs/reconstructionPhase"}
+      ],
+      "items": false
+    },
+    "cleanup": {
+      "$ref": "#/$defs/cleanup"
+    },
+    "evidence": {
+      "$ref": "#/$defs/evidence"
+    },
+    "required_non_claims": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 8,
+      "prefixItems": [
+        {"const": "provider-suite-execution"},
+        {"const": "aggregate-conformance"},
+        {"const": "multi-issuer-admission"},
+        {"const": "multi-controller-reliability"},
+        {"const": "hostile-multi-tenant-isolation"},
+        {"const": "high-availability"},
+        {"const": "deployment-qualification"},
+        {"const": "production-readiness"}
+      ],
+      "items": false
+    },
+    "profile_digest": {
+      "$ref": "#/$defs/digest"
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "pattern": "^[a-z0-9][a-z0-9._:-]*$"
+    },
+    "requiredObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "observation_id",
+        "source",
+        "actor",
+        "subject",
+        "correlation"
+      ],
+      "properties": {
+        "observation_id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "source": {
+          "enum": [
+            "provider_observer",
+            "gateway_observer",
+            "process_supervisor",
+            "resource_inspector"
+          ]
+        },
+        "actor": {
+          "enum": [
+            "controller_a",
+            "controller_b",
+            "same_ca_unadmitted",
+            "unauthenticated_client",
+            "qualification_harness"
+          ]
+        },
+        "subject": {
+          "$ref": "#/$defs/identifier"
+        },
+        "correlation": {
+          "$ref": "#/$defs/identifier"
+        }
+      }
+    },
+    "fileIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "digest"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*(?:/[A-Za-z0-9][A-Za-z0-9._-]*)*$"
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "artifactIdentityRequirement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "owner",
+        "trust_domain",
+        "digest_subject",
+        "observed_by",
+        "source_identity_required"
+      ],
+      "properties": {
+        "artifact_id": {
+          "enum": [
+            "provider",
+            "external_caller",
+            "qualification_adapter",
+            "caller_gateway",
+            "runtime_image",
+            "qualification_harness",
+            "provider_observer",
+            "gateway_observer",
+            "process_supervisor",
+            "resource_inspector",
+            "teardown"
+          ]
+        },
+        "owner": {
+          "enum": [
+            "sandbox_runtime_repository",
+            "external_caller_owner",
+            "qualification_operator"
+          ]
+        },
+        "trust_domain": {
+          "enum": [
+            "provider_release",
+            "external_caller_release",
+            "qualification_operator"
+          ]
+        },
+        "digest_subject": {
+          "enum": [
+            "executable_raw_bytes",
+            "oci_manifest_or_index"
+          ]
+        },
+        "observed_by": {
+          "enum": [
+            "process_supervisor",
+            "resource_inspector"
+          ]
+        },
+        "source_identity_required": {
+          "const": true
+        }
+      }
+    },
+    "suiteIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "suite_id",
+        "suite_version",
+        "suite_digest",
+        "suite_digest_profile",
+        "profile_id",
+        "case_count",
+        "execution_required"
+      ],
+      "properties": {
+        "suite_id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "suite_version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "suite_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "suite_digest_profile": {
+          "const": "rfc8785-full-document-excluding-suite-digest-v1"
+        },
+        "profile_id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "case_count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "execution_required": {
+          "type": "boolean"
+        }
+      }
+    },
+    "contractIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "namespace",
+        "version",
+        "revision",
+        "tree",
+        "manifest_digest",
+        "openapi_digest",
+        "semantic_rules_digest",
+        "local_suite",
+        "remote_discovery_suite"
+      ],
+      "properties": {
+        "namespace": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "revision": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "tree": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "manifest_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "openapi_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "semantic_rules_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "local_suite": {
+          "$ref": "#/$defs/suiteIdentity"
+        },
+        "remote_discovery_suite": {
+          "$ref": "#/$defs/suiteIdentity"
+        }
+      }
+    },
+    "capabilitySelection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "api_version",
+        "runtime_profile_id",
+        "capabilities"
+      ],
+      "properties": {
+        "api_version": {
+          "const": "v1"
+        },
+        "runtime_profile_id": {
+          "const": "sandbox-runtime-coding-shell-v1"
+        },
+        "capabilities": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "prefixItems": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "version", "profile"],
+              "properties": {
+                "id": {"const": "sandbox.exec"},
+                "version": {"const": "1.0.0"},
+                "profile": {"const": "exec-v1"}
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "version", "profile"],
+              "properties": {
+                "id": {"const": "sandbox.terminal"},
+                "version": {"const": "1.0.0"},
+                "profile": {"const": "terminal-v1"}
+              }
+            }
+          ],
+          "items": false
+        }
+      }
+    },
+    "topology": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "dedicated_disposable_target",
+        "run_unique_namespace",
+        "admitted_controllers",
+        "distinct_tenants_required",
+        "same_ca_unadmitted_identity_count",
+        "actors",
+        "caller_process_separate_from_provider",
+        "caller_gateway_owned_by_caller",
+        "observer_control_domain",
+        "observer_control_domain_disjoint_from",
+        "process_isolation_groups"
+      ],
+      "properties": {
+        "dedicated_disposable_target": {
+          "const": true
+        },
+        "run_unique_namespace": {
+          "const": true
+        },
+        "admitted_controllers": {
+          "const": 2
+        },
+        "distinct_tenants_required": {
+          "const": true
+        },
+        "same_ca_unadmitted_identity_count": {
+          "const": 1
+        },
+        "actors": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "prefixItems": [
+            {
+              "const": {
+                "actor_id": "controller_a",
+                "admission": "admitted",
+                "tenant_binding": "tenant_a"
+              }
+            },
+            {
+              "const": {
+                "actor_id": "controller_b",
+                "admission": "admitted",
+                "tenant_binding": "tenant_b"
+              }
+            },
+            {
+              "const": {
+                "actor_id": "same_ca_unadmitted",
+                "admission": "same_ca_unadmitted",
+                "tenant_binding": null
+              }
+            },
+            {
+              "const": {
+                "actor_id": "unauthenticated_client",
+                "admission": "unauthenticated",
+                "tenant_binding": null
+              }
+            }
+          ],
+          "items": false
+        },
+        "caller_process_separate_from_provider": {
+          "const": true
+        },
+        "caller_gateway_owned_by_caller": {
+          "const": true
+        },
+        "observer_control_domain": {
+          "const": "qualification_operator"
+        },
+        "observer_control_domain_disjoint_from": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "external_caller",
+              "qualification_adapter",
+              "caller_gateway"
+            ]
+          }
+        },
+        "process_isolation_groups": {
+          "type": "array",
+          "minItems": 10,
+          "maxItems": 10,
+          "uniqueItems": true,
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 1,
+            "items": {
+              "enum": [
+                "provider",
+                "external_caller",
+                "qualification_adapter",
+                "caller_gateway",
+                "qualification_harness",
+                "provider_observer",
+                "gateway_observer",
+                "process_supervisor",
+                "resource_inspector",
+                "teardown"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_sandboxes",
+        "max_exec_requests",
+        "max_admitted_exec_operations",
+        "max_terminal_sessions",
+        "max_artifact_requests",
+        "max_admitted_artifact_operations",
+        "max_distinct_provider_mutations",
+        "max_provider_mutation_write_attempts",
+        "max_gateway_mutation_write_attempts",
+        "max_provider_http_requests",
+        "max_gateway_connection_attempts",
+        "max_case_seconds",
+        "max_execution_seconds",
+        "max_cleanup_seconds",
+        "max_total_wall_clock_seconds",
+        "case_deadline_policy",
+        "execution_clock_scope",
+        "total_wall_clock_scope",
+        "global_limits_preempt_interaction_limits",
+        "provider_http_request_counting_rule",
+        "provider_mutation_write_attempt_counting_rule",
+        "distinct_provider_mutation_counting_rule",
+        "gateway_attempt_counting_rule",
+        "sandbox_cpu_millis",
+        "sandbox_memory_bytes",
+        "sandbox_ephemeral_storage_bytes",
+        "sandbox_pids",
+        "max_evidence_files",
+        "max_evidence_file_bytes",
+        "max_evidence_total_bytes"
+      ],
+      "properties": {
+        "max_sandboxes": {"const": 1},
+        "max_exec_requests": {"const": 3},
+        "max_admitted_exec_operations": {"const": 2},
+        "max_terminal_sessions": {"const": 1},
+        "max_artifact_requests": {"const": 2},
+        "max_admitted_artifact_operations": {"const": 1},
+        "max_distinct_provider_mutations": {"const": 8},
+        "max_provider_mutation_write_attempts": {"const": 12},
+        "max_gateway_mutation_write_attempts": {"const": 1},
+        "max_provider_http_requests": {"const": 512},
+        "max_gateway_connection_attempts": {"const": 8},
+        "max_case_seconds": {"const": 120},
+        "max_execution_seconds": {"const": 1800},
+        "max_cleanup_seconds": {"const": 300},
+        "max_total_wall_clock_seconds": {"const": 2100},
+        "case_deadline_policy": {
+          "const": "minimum-of-case-and-remaining-execution-deadline"
+        },
+        "execution_clock_scope": {
+          "const": "first-preflight-start-through-last-scenario-finish-including-reconstruction"
+        },
+        "total_wall_clock_scope": {
+          "const": "first-preflight-start-through-cleanup-finish-excluding-receipt-validation"
+        },
+        "global_limits_preempt_interaction_limits": {"const": true},
+        "provider_http_request_counting_rule": {
+          "const": "count-when-request-bytes-may-have-been-written"
+        },
+        "provider_mutation_write_attempt_counting_rule": {
+          "const": "count-each-post-when-request-bytes-may-have-been-written-including-replays"
+        },
+        "distinct_provider_mutation_counting_rule": {
+          "const": "count-unique-logical-request-id-marked-distinct-provider-mutation"
+        },
+        "gateway_attempt_counting_rule": {
+          "const": "count-when-connect-or-control-bytes-may-have-been-written"
+        },
+        "sandbox_cpu_millis": {"const": 500},
+        "sandbox_memory_bytes": {"const": 268435456},
+        "sandbox_ephemeral_storage_bytes": {"const": 268435456},
+        "sandbox_pids": {"const": 64},
+        "max_evidence_files": {"const": 16},
+        "max_evidence_file_bytes": {"const": 2097152},
+        "max_evidence_total_bytes": {"const": 8388608}
+      }
+    },
+    "reconstruction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "restart_components",
+        "preserve_stores",
+        "caller_state_owner",
+        "harness_reinjection_forbidden",
+        "adapter_invocation",
+        "shell_continuity_challenge"
+      ],
+      "properties": {
+        "restart_components": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "provider",
+              "external_caller",
+              "qualification_adapter",
+              "caller_gateway"
+            ]
+          }
+        },
+        "preserve_stores": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "provider_local_state",
+              "caller_owned_correlation_state",
+              "runtime_resource_state"
+            ]
+          }
+        },
+        "caller_state_owner": {
+          "const": "external_caller"
+        },
+        "harness_reinjection_forbidden": {
+          "type": "array",
+          "minItems": 7,
+          "maxItems": 7,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "sandbox_id",
+              "operation_id",
+              "attempt_id",
+              "idempotency_key",
+              "fencing_token",
+              "runtime_session_id",
+              "handoff_reference"
+            ]
+          }
+        },
+        "adapter_invocation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "sanitized_transcript_required",
+            "transcript_digest_profile",
+            "allowed_harness_fields",
+            "forbidden_correlation_fields_match_harness_reinjection_forbidden",
+            "observed_by"
+          ],
+          "properties": {
+            "sanitized_transcript_required": {"const": true},
+            "transcript_digest_profile": {"const": "rfc8785-full-document-v1"},
+            "allowed_harness_fields": {
+              "type": "array",
+              "minItems": 7,
+              "maxItems": 7,
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "invocation_id",
+                  "phase",
+                  "profile_path",
+                  "provider_origin",
+                  "gateway_probe_endpoint",
+                  "credential_channel_descriptors",
+                  "caller_state_root"
+                ]
+              }
+            },
+            "forbidden_correlation_fields_match_harness_reinjection_forbidden": {"const": true},
+            "observed_by": {"const": "process_supervisor"}
+          }
+        },
+        "shell_continuity_challenge": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "established_in_case",
+            "verified_in_case",
+            "challenge_generated_by",
+            "challenge_digest_profile",
+            "raw_challenge_in_evidence"
+          ],
+          "properties": {
+            "established_in_case": {"$ref": "#/$defs/identifier"},
+            "verified_in_case": {"$ref": "#/$defs/identifier"},
+            "challenge_generated_by": {"const": "gateway_observer"},
+            "challenge_digest_profile": {"const": "sha256-raw-challenge-bytes-v1"},
+            "raw_challenge_in_evidence": {"const": false}
+          }
+        }
+      }
+    },
+    "phase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase_id",
+        "depends_on_phase",
+        "cases"
+      ],
+      "properties": {
+        "phase_id": {
+          "enum": [
+            "initial",
+            "reconstruction"
+          ]
+        },
+        "depends_on_phase": {
+          "type": ["string", "null"],
+          "enum": ["initial", null]
+        },
+        "cases": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "items": {
+            "$ref": "#/$defs/case"
+          }
+        }
+      }
+    },
+    "initialPhase": {
+      "$ref": "#/$defs/phase",
+      "properties": {
+        "phase_id": {"const": "initial"},
+        "depends_on_phase": {"const": null},
+        "cases": {
+          "minItems": 15,
+          "maxItems": 15,
+          "items": {
+            "$ref": "#/$defs/case",
+            "properties": {
+              "case_id": {
+                "pattern": "^initial\\.[a-z0-9][a-z0-9-]*$"
+              }
+            }
+          }
+        }
+      }
+    },
+    "reconstructionPhase": {
+      "$ref": "#/$defs/phase",
+      "properties": {
+        "phase_id": {"const": "reconstruction"},
+        "depends_on_phase": {"const": "initial"},
+        "cases": {
+          "minItems": 5,
+          "maxItems": 5,
+          "items": {
+            "$ref": "#/$defs/case",
+            "properties": {
+              "case_id": {
+                "pattern": "^reconstruction\\.[a-z0-9][a-z0-9-]*$"
+              }
+            }
+          }
+        }
+      }
+    },
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "case_id",
+        "title",
+        "timeout_seconds",
+        "depends_on",
+        "interactions",
+        "assertions",
+        "observation_sources"
+      ],
+      "properties": {
+        "case_id": {
+          "type": "string",
+          "pattern": "^(initial|reconstruction)\\.[a-z0-9][a-z0-9-]*$",
+          "maxLength": 120
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "timeout_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 120
+        },
+        "depends_on": {
+          "type": "array",
+          "maxItems": 20,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^(initial|reconstruction)\\.[a-z0-9][a-z0-9-]*$"
+          }
+        },
+        "interactions": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 12,
+          "items": {
+            "$ref": "#/$defs/interaction"
+          }
+        },
+        "assertions": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/identifier"
+          }
+        },
+        "observation_sources": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 5,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "caller_assertion",
+              "provider_observer",
+              "gateway_observer",
+              "process_supervisor",
+              "resource_inspector"
+            ]
+          }
+        }
+      }
+    },
+    "interaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "interaction_id",
+        "surface",
+        "method",
+        "route_template",
+        "actor",
+        "logical_request_id",
+        "replay_of",
+        "counts_toward",
+        "max_wire_attempts",
+        "transient_outcomes",
+        "outcomes",
+        "required_observations"
+      ],
+      "properties": {
+        "interaction_id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "surface": {
+          "enum": [
+            "provider_http",
+            "caller_gateway",
+            "harness_control"
+          ]
+        },
+        "method": {
+          "enum": [
+            "GET",
+            "POST",
+            "CONNECT",
+            "CONTROL",
+            "INSPECT"
+          ]
+        },
+        "route_template": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240
+        },
+        "actor": {
+          "enum": [
+            "controller_a",
+            "controller_b",
+            "same_ca_unadmitted",
+            "unauthenticated_client",
+            "qualification_harness"
+          ]
+        },
+        "logical_request_id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "replay_of": {
+          "oneOf": [
+            {"type": "null"},
+            {"$ref": "#/$defs/identifier"}
+          ]
+        },
+        "counts_toward": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "provider_http_requests",
+              "provider_mutation_write_attempts",
+              "distinct_provider_mutations",
+              "sandboxes",
+              "exec_requests",
+              "admitted_exec_operations",
+              "terminal_sessions",
+              "artifact_requests",
+              "admitted_artifact_operations",
+              "gateway_connection_attempts",
+              "gateway_mutation_write_attempts"
+            ]
+          }
+        },
+        "max_wire_attempts": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 512
+        },
+        "transient_outcomes": {
+          "type": "array",
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/transientOutcome"
+          }
+        },
+        "outcomes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/finalOutcome"
+          }
+        },
+        "required_observations": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/requiredObservation"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"surface": {"const": "provider_http"}},
+            "required": ["surface"]
+          },
+          "then": {
+            "properties": {
+              "method": {"enum": ["GET", "POST"]},
+              "route_template": {
+                "pattern": "^/v1/[A-Za-z0-9._:{}-]+(?:/[A-Za-z0-9._:{}-]+)*$"
+              },
+              "counts_toward": {
+                "contains": {"const": "provider_http_requests"}
+              },
+              "transient_outcomes": {
+                "items": {"$ref": "#/$defs/providerTransientOutcome"}
+              },
+              "outcomes": {
+                "items": {"$ref": "#/$defs/providerFinalOutcome"}
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "surface": {"const": "provider_http"},
+              "method": {"const": "GET"}
+            },
+            "required": ["surface", "method"]
+          },
+          "then": {
+            "properties": {
+              "replay_of": {"type": "null"},
+              "counts_toward": {
+                "const": ["provider_http_requests"]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "surface": {"const": "provider_http"},
+              "method": {"const": "POST"}
+            },
+            "required": ["surface", "method"]
+          },
+          "then": {
+            "properties": {
+              "counts_toward": {
+                "allOf": [
+                  {"contains": {"const": "provider_http_requests"}},
+                  {"contains": {"const": "provider_mutation_write_attempts"}}
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {"surface": {"const": "caller_gateway"}},
+            "required": ["surface"]
+          },
+          "then": {
+            "properties": {
+              "method": {"enum": ["CONNECT", "CONTROL"]},
+              "route_template": {
+                "pattern": "^consumer-defined:[a-z0-9][a-z0-9-]*$"
+              },
+              "replay_of": {"type": "null"},
+              "transient_outcomes": {
+                "items": {"$ref": "#/$defs/gatewayTransientOutcome"}
+              },
+              "outcomes": {
+                "items": {"$ref": "#/$defs/gatewayFinalOutcome"}
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "surface": {"const": "caller_gateway"},
+              "method": {"const": "CONNECT"}
+            },
+            "required": ["surface", "method"]
+          },
+          "then": {
+            "properties": {
+              "counts_toward": {"const": ["gateway_connection_attempts"]}
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "surface": {"const": "caller_gateway"},
+              "method": {"const": "CONTROL"}
+            },
+            "required": ["surface", "method"]
+          },
+          "then": {
+            "properties": {
+              "counts_toward": {"const": ["gateway_mutation_write_attempts"]}
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {"surface": {"const": "harness_control"}},
+            "required": ["surface"]
+          },
+          "then": {
+            "properties": {
+              "method": {"enum": ["CONTROL", "INSPECT"]},
+              "route_template": {
+                "pattern": "^harness:[a-z0-9][a-z0-9-]*$"
+              },
+              "replay_of": {"type": "null"}
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "transient_outcomes": {"minItems": 1}
+            },
+            "required": ["transient_outcomes"]
+          },
+          "then": {
+            "properties": {
+              "max_wire_attempts": {"minimum": 2}
+            }
+          }
+        }
+      ]
+    },
+    "outcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "transport",
+        "status_code",
+        "error_code_policy",
+        "error_codes",
+        "retryable",
+        "retry_after_required"
+      ],
+      "properties": {
+        "transport": {
+          "enum": [
+            "http-response",
+            "tls-rejected",
+            "authorized-byte-round-trip",
+            "gateway-upgrade-rejected",
+            "gateway-closed-before-data",
+            "gateway-closed-at-grant-expiry",
+            "revocation-acknowledged",
+            "transport-unavailable",
+            "deadline-exceeded"
+          ]
+        },
+        "status_code": {
+          "type": ["integer", "null"],
+          "minimum": 100,
+          "maximum": 599
+        },
+        "error_code_policy": {
+          "enum": [
+            "none",
+            "exact",
+            "one-of-exact",
+            "contract-unconstrained"
+          ]
+        },
+        "error_codes": {
+          "type": "array",
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9_]*$",
+            "maxLength": 100
+          }
+        },
+        "retryable": {"type": "boolean"},
+        "retry_after_required": {"type": "boolean"}
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"error_code_policy": {"enum": ["none", "contract-unconstrained"]}},
+            "required": ["error_code_policy"]
+          },
+          "then": {
+            "properties": {"error_codes": {"maxItems": 0}}
+          }
+        },
+        {
+          "if": {
+            "properties": {"error_code_policy": {"const": "exact"}},
+            "required": ["error_code_policy"]
+          },
+          "then": {
+            "properties": {"error_codes": {"minItems": 1, "maxItems": 1}}
+          }
+        },
+        {
+          "if": {
+            "properties": {"error_code_policy": {"const": "one-of-exact"}},
+            "required": ["error_code_policy"]
+          },
+          "then": {
+            "properties": {"error_codes": {"minItems": 1}}
+          }
+        },
+        {
+          "if": {
+            "properties": {"retry_after_required": {"const": true}},
+            "required": ["retry_after_required"]
+          },
+          "then": {
+            "properties": {
+              "transport": {"const": "http-response"},
+              "status_code": {"enum": [429, 503]}
+            }
+          }
+        }
+      ]
+    },
+    "finalOutcome": {
+      "$ref": "#/$defs/outcome",
+      "properties": {
+        "retryable": {"const": false},
+        "retry_after_required": {"const": false}
+      }
+    },
+    "transientOutcome": {
+      "$ref": "#/$defs/outcome",
+      "properties": {
+        "retryable": {"const": true}
+      }
+    },
+    "providerFinalOutcome": {
+      "allOf": [
+        {"$ref": "#/$defs/finalOutcome"},
+        {
+          "properties": {
+            "transport": {"enum": ["http-response", "tls-rejected"]}
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": {"transport": {"const": "http-response"}},
+                "required": ["transport"]
+              },
+              "then": {
+                "properties": {"status_code": {"type": "integer"}}
+              },
+              "else": {
+                "properties": {
+                  "status_code": {"type": "null"},
+                  "error_code_policy": {"const": "none"},
+                  "error_codes": {"maxItems": 0}
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "providerTransientOutcome": {
+      "allOf": [
+        {"$ref": "#/$defs/transientOutcome"},
+        {
+          "properties": {
+            "transport": {
+              "enum": ["http-response", "transport-unavailable", "deadline-exceeded"]
+            }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": {"transport": {"const": "http-response"}},
+                "required": ["transport"]
+              },
+              "then": {
+                "properties": {"status_code": {"type": "integer"}}
+              },
+              "else": {
+                "properties": {
+                  "status_code": {"type": "null"},
+                  "error_code_policy": {"const": "none"},
+                  "error_codes": {"maxItems": 0},
+                  "retry_after_required": {"const": false}
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "gatewayFinalOutcome": {
+      "$ref": "#/$defs/finalOutcome",
+      "properties": {
+        "transport": {
+          "enum": [
+            "authorized-byte-round-trip",
+            "gateway-upgrade-rejected",
+            "gateway-closed-before-data",
+            "gateway-closed-at-grant-expiry",
+            "revocation-acknowledged"
+          ]
+        },
+        "status_code": {"type": "null"},
+        "error_code_policy": {"const": "none"},
+        "error_codes": {"maxItems": 0},
+        "retry_after_required": {"const": false}
+      }
+    },
+    "gatewayTransientOutcome": {
+      "$ref": "#/$defs/transientOutcome",
+      "properties": {
+        "transport": {"enum": ["transport-unavailable", "deadline-exceeded"]},
+        "status_code": {"type": "null"},
+        "error_code_policy": {"const": "none"},
+        "error_codes": {"maxItems": 0}
+      }
+    },
+    "cleanup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "authority",
+        "trigger",
+        "context",
+        "pre_run_baseline_required",
+        "query_scope_identity_required",
+        "query_scope_digest_profile",
+        "query_scope_excludes_harness_control_plane",
+        "inspector_scope",
+        "inventory_digest_profile",
+        "inventory_order",
+        "pre_run_run_owned_resource_count",
+        "post_teardown_run_owned_resource_count",
+        "post_teardown_stability_samples",
+        "post_teardown_stability_interval_milliseconds",
+        "success_condition",
+        "unknown_or_failed_cleanup_outcome"
+      ],
+      "properties": {
+        "authority": {
+          "const": "operator-owned-run-namespace-teardown-within-disposable-target"
+        },
+        "trigger": {
+          "const": "after-any-provider-mutation-may-have-been-written"
+        },
+        "context": {
+          "const": "independent-bounded-context"
+        },
+        "pre_run_baseline_required": {
+          "const": true
+        },
+        "query_scope_identity_required": {"const": true},
+        "query_scope_digest_profile": {"const": "rfc8785-full-document-v1"},
+        "query_scope_excludes_harness_control_plane": {"const": true},
+        "inspector_scope": {
+          "type": "array",
+          "minItems": 5,
+          "maxItems": 5,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "runtime_allocations",
+              "compute_resources",
+              "network_resources",
+              "storage_resources",
+              "run_owned_processes"
+            ]
+          }
+        },
+        "inventory_digest_profile": {"const": "rfc8785-full-document-v1"},
+        "inventory_order": {
+          "const": "resource-type-then-stable-observer-id-lexicographic"
+        },
+        "pre_run_run_owned_resource_count": {"const": 0},
+        "post_teardown_run_owned_resource_count": {"const": 0},
+        "post_teardown_stability_samples": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 10
+        },
+        "post_teardown_stability_interval_milliseconds": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 10000
+        },
+        "success_condition": {
+          "const": "post-teardown-inventory-equals-baseline-with-zero-run-owned-resources"
+        },
+        "unknown_or_failed_cleanup_outcome": {
+          "const": "incomplete"
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "report_file",
+        "validator_receipt_file",
+        "external_artifact_envelope",
+        "payload_inventory_excludes",
+        "file_digest_profile",
+        "evidence_file_count_scope",
+        "payload_inventory_order",
+        "payload_inventory_serialization",
+        "payload_inventory_digest_profile",
+        "receipt_report_digest_profile",
+        "receipt_written_after_report_validation",
+        "caller_startup_identity",
+        "required_identity_inventories",
+        "configuration_digest_profile",
+        "sanitization_required",
+        "forbidden_material"
+      ],
+      "properties": {
+        "report_file": {
+          "const": "report.json"
+        },
+        "validator_receipt_file": {
+          "const": "receipt.json"
+        },
+        "external_artifact_envelope": {
+          "const": "required-outside-evidence-payload"
+        },
+        "payload_inventory_excludes": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "report.json",
+              "receipt.json"
+            ]
+          }
+        },
+        "file_digest_profile": {
+          "const": "sha256-raw-file-bytes-v1"
+        },
+        "evidence_file_count_scope": {
+          "const": "all-regular-files-including-report-and-receipt"
+        },
+        "payload_inventory_order": {
+          "const": "normalized-relative-posix-path-lexicographic"
+        },
+        "payload_inventory_serialization": {
+          "const": "rfc8785-json-array-v1"
+        },
+        "payload_inventory_digest_profile": {
+          "const": "sha256-rfc8785-json-array-v1"
+        },
+        "receipt_report_digest_profile": {
+          "const": "sha256-raw-file-bytes-v1"
+        },
+        "receipt_written_after_report_validation": {"const": true},
+        "caller_startup_identity": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "source",
+            "expected_values_injected_by_harness",
+            "required_fields"
+          ],
+          "properties": {
+            "source": {
+              "const": "caller-and-adapter-startup-output"
+            },
+            "expected_values_injected_by_harness": {
+              "const": false
+            },
+            "required_fields": {
+              "type": "array",
+              "minItems": 6,
+              "maxItems": 6,
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "caller_release_identity",
+                  "adapter_release_identity",
+                  "contract_revision",
+                  "contract_tree",
+                  "profile_id",
+                  "profile_digest"
+                ]
+              }
+            }
+          }
+        },
+        "required_identity_inventories": {
+          "type": "array",
+          "minItems": 10,
+          "maxItems": 10,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "architecture",
+              "provider_configuration",
+              "caller_configuration",
+              "adapter_configuration",
+              "gateway_configuration",
+              "observer_configuration",
+              "inspector_configuration",
+              "teardown_configuration",
+              "topology",
+              "scenario_inventory"
+            ]
+          }
+        },
+        "configuration_digest_profile": {"const": "rfc8785-full-document-v1"},
+        "sanitization_required": {
+          "const": true
+        },
+        "forbidden_material": {
+          "type": "array",
+          "minItems": 13,
+          "maxItems": 13,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "private-key",
+              "bearer-token",
+              "admission-context",
+              "certificate-body",
+              "raw-handoff-reference",
+              "raw-staging-reference",
+              "host-path",
+              "credential",
+              "secret",
+              "backend-id",
+              "daemon-diagnostic",
+              "command-output",
+              "raw-endpoint"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

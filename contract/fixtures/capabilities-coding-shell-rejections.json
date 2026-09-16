@@ -12,7 +12,7 @@
           {"id": "sandbox-runtime-coding-shell-v1", "isolation_class": "container", "capability_profile_ids": ["exec-v1"]}
         ],
         "snapshot_restore_profiles": [
-          {"profile_id": "sandbox-snapshot-workspace-v1", "level": "workspace", "suite_id": "sandbox-provider", "suite_version": "1.0.0", "suite_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+          {"profile_id": "sandbox-snapshot-workspace-v1", "level": "workspace", "suite_id": "sandbox-provider", "suite_version": "1.0.0", "suite_digest": "sha256:b40c932643f4a1e5fd6681e3abf9b64a607609866a6254456970f8b8034cf2a8"}
         ],
         "limits": {"max_cpu_millis": 1000, "max_memory_bytes": 1073741824, "max_ephemeral_storage_bytes": 1073741824, "max_lease_seconds": 3600, "max_exec_seconds": 300}
       }
@@ -30,7 +30,7 @@
           {"id": "sandbox-runtime-coding-shell-v1", "isolation_class": "container", "capability_profile_ids": ["terminal-v1"]}
         ],
         "snapshot_restore_profiles": [
-          {"profile_id": "sandbox-snapshot-workspace-v1", "level": "workspace", "suite_id": "sandbox-provider", "suite_version": "1.0.0", "suite_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+          {"profile_id": "sandbox-snapshot-workspace-v1", "level": "workspace", "suite_id": "sandbox-provider", "suite_version": "1.0.0", "suite_digest": "sha256:b40c932643f4a1e5fd6681e3abf9b64a607609866a6254456970f8b8034cf2a8"}
         ],
         "limits": {"max_cpu_millis": 1000, "max_memory_bytes": 1073741824, "max_ephemeral_storage_bytes": 1073741824, "max_lease_seconds": 3600, "max_exec_seconds": 300}
       }
@@ -49,7 +49,7 @@
           {"id": "sandbox-runtime-terminal-v1", "isolation_class": "container", "capability_profile_ids": ["terminal-v1"]}
         ],
         "snapshot_restore_profiles": [
-          {"profile_id": "sandbox-snapshot-workspace-v1", "level": "workspace", "suite_id": "sandbox-provider", "suite_version": "1.0.0", "suite_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+          {"profile_id": "sandbox-snapshot-workspace-v1", "level": "workspace", "suite_id": "sandbox-provider", "suite_version": "1.0.0", "suite_digest": "sha256:b40c932643f4a1e5fd6681e3abf9b64a607609866a6254456970f8b8034cf2a8"}
         ],
         "limits": {"max_cpu_millis": 1000, "max_memory_bytes": 1073741824, "max_ephemeral_storage_bytes": 1073741824, "max_lease_seconds": 3600, "max_exec_seconds": 300}
       }
@@ -68,7 +68,7 @@
           {"id": "sandbox-runtime-coding-shell-v1", "isolation_class": "container", "capability_profile_ids": ["exec-v1", "terminal-v1", "browser-v1"]}
         ],
         "snapshot_restore_profiles": [
-          {"profile_id": "sandbox-snapshot-workspace-v1", "level": "workspace", "suite_id": "sandbox-provider", "suite_version": "1.0.0", "suite_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+          {"profile_id": "sandbox-snapshot-workspace-v1", "level": "workspace", "suite_id": "sandbox-provider", "suite_version": "1.0.0", "suite_digest": "sha256:b40c932643f4a1e5fd6681e3abf9b64a607609866a6254456970f8b8034cf2a8"}
         ],
         "limits": {"max_cpu_millis": 1000, "max_memory_bytes": 1073741824, "max_ephemeral_storage_bytes": 1073741824, "max_lease_seconds": 3600, "max_exec_seconds": 300}
       }

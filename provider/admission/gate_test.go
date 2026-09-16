@@ -13,7 +13,7 @@ func TestProtectedOperationGateAdmitsBoundMutationAndReservesJTI(t *testing.T) {
 	fixture := newEdDSAFixture(t)
 	token, binding, document, clock := gateTokenAndBinding()
 	guard := &recordingMutationGuard{}
-	gate, err := NewProtectedOperationGate(fixture.keys, &clock, guard)
+	gate, err := NewProtectedOperationGate(fixture.keys, validAdmissionAuthorityForTest(), &clock, guard)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,7 +50,7 @@ func TestProtectedOperationGateRejectsBeforeGuardReservation(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			gate, err := NewProtectedOperationGate(fixture.keys, &clock, test.guard)
+			gate, err := NewProtectedOperationGate(fixture.keys, validAdmissionAuthorityForTest(), &clock, test.guard)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -80,7 +80,7 @@ func TestProtectedOperationGatePreservesInvalidDocumentCategory(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			guard := &recordingMutationGuard{}
-			gate, err := NewProtectedOperationGate(fixture.keys, &clock, guard)
+			gate, err := NewProtectedOperationGate(fixture.keys, validAdmissionAuthorityForTest(), &clock, guard)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -98,7 +98,8 @@ func TestProtectedOperationGatePreservesInvalidDocumentCategory(t *testing.T) {
 func TestProtectedOperationGateAuthenticatesBearerBeforeBindings(t *testing.T) {
 	fixture := newEdDSAFixture(t)
 	token, _, _, clock := gateTokenAndBinding()
-	gate, err := NewProtectedOperationGate(fixture.keys, &clock, &recordingMutationGuard{})
+	guard := &recordingMutationGuard{}
+	gate, err := NewProtectedOperationGate(fixture.keys, validAdmissionAuthorityForTest(), &clock, guard)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,6 +114,63 @@ func TestProtectedOperationGateAuthenticatesBearerBeforeBindings(t *testing.T) {
 	cancel()
 	if err := gate.AuthenticateBearer(canceled, compact); !errors.Is(err, context.Canceled) {
 		t.Fatalf("AuthenticateBearer(canceled) error = %v, want %v", err, context.Canceled)
+	}
+	if calls := len(guard.Requests()); calls != 0 {
+		t.Fatalf("guard calls = %d, want 0", calls)
+	}
+}
+
+func TestProtectedOperationGateRejectsTrustedIssuerSubstitutionAsUnauthenticated(t *testing.T) {
+	fixture := newEdDSAFixture(t)
+	token, _, _, clock := gateTokenAndBinding()
+	token.Claims.Issuer = "https://other-caller.example.invalid/sandbox-runtime"
+	compact := fixture.token(t, JWSHeader{Algorithm: fixture.algorithm, KeyID: fixture.keyID, Type: expectedJWSType}, token.Claims)
+	guard := &recordingMutationGuard{}
+	gate, err := NewProtectedOperationGate(fixture.keys, validAdmissionAuthorityForTest(), &clock, guard)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := gate.AuthenticateBearer(context.Background(), compact); err != ErrUnauthenticated {
+		t.Fatalf("AuthenticateBearer() error = %v, want exact %v", err, ErrUnauthenticated)
+	}
+	if calls := len(guard.Requests()); calls != 0 {
+		t.Fatalf("guard calls = %d, want 0", calls)
+	}
+}
+
+func TestProtectedOperationGateRejectsLocalAuthorityMismatchBeforeGuard(t *testing.T) {
+	fixture := newEdDSAFixture(t)
+	token, binding, document, clock := gateTokenAndBinding()
+	compact := fixture.token(t, JWSHeader{Algorithm: fixture.algorithm, KeyID: fixture.keyID, Type: expectedJWSType}, token.Claims)
+
+	for _, test := range []struct {
+		name     string
+		revision string
+		audience string
+	}{
+		{name: "provider revision", revision: "provider-revision-other", audience: testProviderAudience},
+		{name: "provider audience", revision: testProviderRevision, audience: "urn:shell-echo:sandbox-runtime:provider-instance:provider-other"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			authority, err := NewAdmissionAuthority(testAdmissionIssuer, test.revision, test.audience)
+			if err != nil {
+				t.Fatal(err)
+			}
+			guard := &recordingMutationGuard{}
+			gate, err := NewProtectedOperationGate(fixture.keys, authority, &clock, guard)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			request := ProtectedOperationRequest{CompactToken: compact, Binding: binding, Document: document}
+			if err := gate.Admit(context.Background(), request); err != ErrForbidden {
+				t.Fatalf("Admit() error = %v, want exact %v", err, ErrForbidden)
+			}
+			if calls := len(guard.Requests()); calls != 0 {
+				t.Fatalf("guard calls = %d, want 0", calls)
+			}
+		})
 	}
 }
 
@@ -147,7 +205,7 @@ func TestProtectedOperationGateRejectsInactiveBearerBeforeBindings(t *testing.T)
 			testToken := token
 			testClock := clock
 			test.mutate(&testToken.Claims, &testClock)
-			gate, err := NewProtectedOperationGate(fixture.keys, &testClock, &recordingMutationGuard{})
+			gate, err := NewProtectedOperationGate(fixture.keys, validAdmissionAuthorityForTest(), &testClock, &recordingMutationGuard{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -164,7 +222,7 @@ func TestProtectedOperationGateMapsBearerExpiryDuringAdmitToUnauthenticated(t *t
 	token, binding, document, clock := gateTokenAndBinding()
 	clock.now = time.Unix(token.Claims.ExpiresAt, 0).UTC()
 	guard := &recordingMutationGuard{}
-	gate, err := NewProtectedOperationGate(fixture.keys, &clock, guard)
+	gate, err := NewProtectedOperationGate(fixture.keys, validAdmissionAuthorityForTest(), &clock, guard)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -190,7 +248,7 @@ func TestProtectedOperationGateDoesNotConsumeReadJTI(t *testing.T) {
 	token.Claims.RequestDigest = digest
 	binding.RequestDigest = digest
 	guard := &recordingMutationGuard{err: errors.New("read must not reserve")}
-	gate, err := NewProtectedOperationGate(fixture.keys, &clock, guard)
+	gate, err := NewProtectedOperationGate(fixture.keys, validAdmissionAuthorityForTest(), &clock, guard)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -205,18 +263,22 @@ func TestProtectedOperationGateDoesNotConsumeReadJTI(t *testing.T) {
 
 func TestProtectedOperationGatePreservesCanceledContextAndRejectsIncompleteConstruction(t *testing.T) {
 	_, _, _, clock := gateTokenAndBinding()
-	if _, err := NewProtectedOperationGate(nil, &clock, &recordingMutationGuard{}); err == nil {
+	authority := validAdmissionAuthorityForTest()
+	if _, err := NewProtectedOperationGate(nil, authority, &clock, &recordingMutationGuard{}); err == nil {
 		t.Fatal("NewProtectedOperationGate accepted nil keys")
 	}
-	if _, err := NewProtectedOperationGate(keySource{}, nil, &recordingMutationGuard{}); err == nil {
+	if _, err := NewProtectedOperationGate(keySource{}, AdmissionAuthority{}, &clock, &recordingMutationGuard{}); err == nil {
+		t.Fatal("NewProtectedOperationGate accepted zero authority")
+	}
+	if _, err := NewProtectedOperationGate(keySource{}, authority, nil, &recordingMutationGuard{}); err == nil {
 		t.Fatal("NewProtectedOperationGate accepted nil clock")
 	}
-	if _, err := NewProtectedOperationGate(keySource{}, &clock, nil); err == nil {
+	if _, err := NewProtectedOperationGate(keySource{}, authority, &clock, nil); err == nil {
 		t.Fatal("NewProtectedOperationGate accepted nil guard")
 	}
 
 	fixture := newEdDSAFixture(t)
-	gate, err := NewProtectedOperationGate(fixture.keys, &clock, &recordingMutationGuard{})
+	gate, err := NewProtectedOperationGate(fixture.keys, authority, &clock, &recordingMutationGuard{})
 	if err != nil {
 		t.Fatal(err)
 	}

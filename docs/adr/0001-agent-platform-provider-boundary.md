@@ -1,6 +1,7 @@
 # ADR 0001: Agent Platform Provider Boundary
 
-- Status: Accepted (ownership model; external compatibility dependency superseded)
+- Status: Superseded in part by ADR 0037 (ownership separation retained;
+  concrete Agent Platform binding retired)
 - Date: 2026-07-30
 
 ## Context

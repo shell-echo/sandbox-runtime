@@ -371,7 +371,11 @@ func TestProtectedCreateProjectsAcceptedOperationAfterAdmission(t *testing.T) {
 		t.Fatal(err)
 	}
 	app := &projectionApplication{operation: lifecycle.Operation{ID: "operation-create-1", AttemptID: "attempt-1", FencingToken: 1, SandboxID: "sandbox-1", Type: lifecycle.OperationCreate, State: lifecycle.OperationAccepted, Deadline: now.Add(5 * time.Minute), ObservedAt: now}}
-	gate := newTestProtectedGateWithPublicKey(t, publicKey, &testAdmissionGuard{})
+	authority := mustTestAdmissionAuthorityFor(t, admitted.ProviderRevisionID, admitted.ProviderInstanceAudience)
+	gate, err := admission.NewProtectedOperationGate(mustTestTrustedKeySource(t, publicKey), authority, testAdmissionClock{now: time.Date(2026, 8, 20, 0, 1, 0, 0, time.UTC)}, &testAdmissionGuard{})
+	if err != nil {
+		t.Fatal(err)
+	}
 	handler, err := newProtectedHandler(identity, ProtectedTransportOptions{Gate: gate, Application: app, Now: func() time.Time { return now }})
 	if err != nil {
 		t.Fatal(err)
@@ -379,11 +383,11 @@ func TestProtectedCreateProjectsAcceptedOperationAfterAdmission(t *testing.T) {
 	claims := admissionTokenClaimsForTest(admitted)
 	claims["jti"] = "jti-projection-0001"
 	token := signTestAdmissionToken(t, privateKey, claims)
-	verified, err := admission.VerifyCompactJWS(context.Background(), token, mustTestTrustedKeySource(t, publicKey))
+	verified, err := admission.VerifyCompactJWS(context.Background(), token, mustTestTrustedKeySource(t, publicKey), authority)
 	if err != nil {
 		t.Fatalf("projection bearer verification failed: %v", err)
 	}
-	if err := admission.ValidateTokenBinding(verified, admitted.TokenBinding(testAllowedIdentity), testAdmissionClock{now: time.Date(2026, 8, 20, 0, 1, 0, 0, time.UTC)}); err != nil {
+	if err := admission.ValidateTokenBinding(verified, admitted.TokenBinding(testAllowedIdentity), authority, testAdmissionClock{now: time.Date(2026, 8, 20, 0, 1, 0, 0, time.UTC)}); err != nil {
 		t.Fatalf("projection bearer binding failed: %v claims=%#v binding=%#v", err, verified.Claims, admitted.TokenBinding(testAllowedIdentity))
 	}
 	httpRequest := httptest.NewRequest(http.MethodPost, "https://provider.test/v1/sandboxes", bytes.NewReader(document))

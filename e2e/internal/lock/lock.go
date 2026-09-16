@@ -21,17 +21,31 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gowebpki/jcs"
 	goredis "github.com/redis/go-redis/v9"
 	rediscapacity "github.com/shell-echo/sandbox-runtime/gateway/capacity/redis"
 	redisrevocation "github.com/shell-echo/sandbox-runtime/gateway/revocation/redis"
 )
 
 const (
-	ProviderCommit   = "3ff58dc556ebca78d96ad9f3700a1c2bb08942cd"
+	ProviderCommit   = "3fd79c8cfced390ff344563887e93eae3bbfe497"
 	ContractNS       = "urn:shell-echo:sandbox-runtime:provider-v1"
-	ContractRevision = "5096e71fb84fbec22aa3487a0e55a1b49602ab8b"
-	ContractTree     = "859f76dc0e855a0c8abdbbb5648df100dabb4328"
-	SuiteCases       = 48
+	ContractRevision = "22ba6987ea5fbc37d53942720133c0acad199edd"
+	ContractTree     = "c9a7054d7c8e7f4b6e32f38175ceedddc48c2d38"
+
+	SuiteID            = "sandbox-provider"
+	SuiteVersion       = "1.0.0"
+	SuiteDigest        = "sha256:b40c932643f4a1e5fd6681e3abf9b64a607609866a6254456970f8b8034cf2a8"
+	SuiteDigestProfile = "rfc8785-full-document-excluding-suite-digest-v1"
+	SuiteProfile       = "sandbox-runtime-provider-v1"
+	SuiteCases         = 53
+
+	RemoteSuiteID            = "sandbox-provider-remote"
+	RemoteSuiteVersion       = "1.0.0"
+	RemoteSuiteDigest        = "sha256:167922d972229a97a64bf22bc6a36ee20d4de19a023395d9f004f00c54cc49d0"
+	RemoteSuiteDigestProfile = "rfc8785-full-document-excluding-suite-digest-v1"
+	RemoteSuiteProfile       = "sandbox-runtime-provider-remote-discovery-v1"
+	RemoteSuiteCases         = 6
 
 	SharedCapacityLockPath        = "e2e/shared-capacity.lock.json"
 	SharedCapacityEvidenceProfile = "browser-shared-capacity-e2e-v1"
@@ -141,11 +155,23 @@ type SharedCapacityLock struct {
 }
 
 type DurableRevocationContract struct {
-	Namespace  string `json:"namespace"`
-	Revision   string `json:"revision"`
-	Tree       string `json:"tree"`
-	SuiteCases int    `json:"suite_cases"`
-	Exercised  bool   `json:"exercised"`
+	Namespace                string `json:"namespace"`
+	Revision                 string `json:"revision"`
+	Tree                     string `json:"tree"`
+	SuiteID                  string `json:"suite_id"`
+	SuiteVersion             string `json:"suite_version"`
+	SuiteDigest              string `json:"suite_digest"`
+	SuiteDigestProfile       string `json:"suite_digest_profile"`
+	SuiteProfile             string `json:"suite_profile"`
+	SuiteCases               int    `json:"suite_cases"`
+	RemoteSuiteID            string `json:"remote_suite_id"`
+	RemoteSuiteVersion       string `json:"remote_suite_version"`
+	RemoteSuiteDigest        string `json:"remote_suite_digest"`
+	RemoteSuiteDigestProfile string `json:"remote_suite_digest_profile"`
+	RemoteSuiteProfile       string `json:"remote_suite_profile"`
+	RemoteSuiteCases         int    `json:"remote_suite_cases"`
+	SuiteExercised           bool   `json:"suite_exercised"`
+	RemoteSuiteExercised     bool   `json:"remote_suite_exercised"`
 }
 
 // DurableRevocationValkey identifies the immutable retained backend selected
@@ -218,23 +244,50 @@ func DurableRevocationScenarioNames() []string {
 	return append([]string(nil), durableRevocationScenarioInventory[:]...)
 }
 
+// SuiteCheckSummary returns the complete local and remote Suite identities for
+// concise, consistent -check output. Callers supply only the execution claims.
+func SuiteCheckSummary(suiteExercised, remoteSuiteExercised bool) string {
+	return fmt.Sprintf(
+		"suite_id=%s suite_version=%s suite_profile=%s suite_digest_profile=%s suite_digest=%s suite_cases=%d suite_exercised=%t "+
+			"remote_suite_id=%s remote_suite_version=%s remote_suite_profile=%s remote_suite_digest_profile=%s remote_suite_digest=%s remote_suite_cases=%d remote_suite_exercised=%t",
+		SuiteID, SuiteVersion, SuiteProfile, SuiteDigestProfile, SuiteDigest, SuiteCases, suiteExercised,
+		RemoteSuiteID, RemoteSuiteVersion, RemoteSuiteProfile, RemoteSuiteDigestProfile, RemoteSuiteDigest, RemoteSuiteCases, remoteSuiteExercised,
+	)
+}
+
 type providerLock struct {
-	Source struct {
+	FormatVersion int `json:"format_version"`
+	Source        struct {
 		Revision     string `json:"revision"`
 		ContractTree string `json:"contract_tree"`
 	} `json:"source"`
 	Contract struct {
 		Namespace string `json:"namespace"`
 	} `json:"contract"`
-	SandboxSuite struct {
-		Path string `json:"path"`
-	} `json:"sandbox_suite"`
+	SandboxSuite        providerSuiteLock `json:"sandbox_suite"`
+	ProviderRemoteSuite providerSuiteLock `json:"provider_remote_suite"`
+}
+
+type providerSuiteLock struct {
+	Path               string `json:"path"`
+	SuiteID            string `json:"suite_id"`
+	SuiteVersion       string `json:"suite_version"`
+	SuiteDigest        string `json:"suite_digest"`
+	SuiteDigestProfile string `json:"suite_digest_profile"`
+	RequiredProfile    string `json:"required_profile"`
 }
 
 type suite struct {
-	Profiles []struct {
-		Tests []string `json:"tests"`
+	SuiteID            string `json:"suite_id"`
+	SuiteVersion       string `json:"suite_version"`
+	SuiteDigestProfile string `json:"suite_digest_profile"`
+	Profiles           []struct {
+		ProfileID          string   `json:"profile_id"`
+		ExecutionMode      string   `json:"execution_mode"`
+		MutationsPerformed *bool    `json:"mutations_performed,omitempty"`
+		Tests              []string `json:"tests"`
 	} `json:"profiles"`
+	SuiteDigest string `json:"suite_digest"`
 }
 
 type e2eProviderLock struct {
@@ -244,10 +297,23 @@ type e2eProviderLock struct {
 		Commit     string `json:"commit"`
 	} `json:"provider"`
 	Contract struct {
-		Namespace  string `json:"namespace"`
-		Revision   string `json:"revision"`
-		Tree       string `json:"tree"`
-		SuiteCases int    `json:"suite_cases"`
+		Namespace                string `json:"namespace"`
+		Revision                 string `json:"revision"`
+		Tree                     string `json:"tree"`
+		SuiteID                  string `json:"suite_id"`
+		SuiteVersion             string `json:"suite_version"`
+		SuiteDigest              string `json:"suite_digest"`
+		SuiteDigestProfile       string `json:"suite_digest_profile"`
+		SuiteProfile             string `json:"suite_profile"`
+		SuiteCases               int    `json:"suite_cases"`
+		RemoteSuiteID            string `json:"remote_suite_id"`
+		RemoteSuiteVersion       string `json:"remote_suite_version"`
+		RemoteSuiteDigest        string `json:"remote_suite_digest"`
+		RemoteSuiteDigestProfile string `json:"remote_suite_digest_profile"`
+		RemoteSuiteProfile       string `json:"remote_suite_profile"`
+		RemoteSuiteCases         int    `json:"remote_suite_cases"`
+		SuiteExercised           bool   `json:"suite_exercised"`
+		RemoteSuiteExercised     bool   `json:"remote_suite_exercised"`
 	} `json:"contract"`
 }
 
@@ -292,39 +358,151 @@ func Verify(providerRoot string) error {
 	if err := decodeFile(filepath.Join(root, "compatibility/sandbox-runtime/contract.lock.json"), &locked); err != nil {
 		return err
 	}
-	if locked.Source.Revision != ContractRevision || locked.Source.ContractTree != ContractTree || locked.Contract.Namespace != ContractNS {
+	if locked.FormatVersion != 2 || locked.Source.Revision != ContractRevision || locked.Source.ContractTree != ContractTree || locked.Contract.Namespace != ContractNS {
 		return errors.New("Provider Contract lock identity differs from the E2E lock")
 	}
-	var cases suite
-	if err := decodeFile(filepath.Join(root, locked.SandboxSuite.Path), &cases); err != nil {
+	if err := verifyProviderSuite(root, "local", locked.SandboxSuite, expectedLocalSuiteLock(), "repository-go-test", SuiteCases, false); err != nil {
 		return err
 	}
-	count := 0
-	for _, profile := range cases.Profiles {
-		count += len(profile.Tests)
-	}
-	if count != SuiteCases {
-		return fmt.Errorf("Provider Suite case count = %d, want %d", count, SuiteCases)
+	if err := verifyProviderSuite(root, "remote", locked.ProviderRemoteSuite, expectedRemoteSuiteLock(), "remote-http-black-box", RemoteSuiteCases, true); err != nil {
+		return err
 	}
 	return nil
 }
 
 func verifyE2EProviderLock(providerRoot string) error {
+	lockPath := filepath.Join(providerRoot, "e2e/contract.lock.json")
 	var locked e2eProviderLock
-	if err := decodeStrictFile(filepath.Join(providerRoot, "e2e/contract.lock.json"), &locked); err != nil {
+	if _, err := decodeRequiredStrictFile(lockPath, reflect.TypeOf(e2eProviderLock{}), &locked); err != nil {
 		return err
 	}
-	if locked.SchemaVersion != 1 || locked.Provider.Repository != "github.com/shell-echo/sandbox-runtime" ||
+	if locked.SchemaVersion != 2 || locked.Provider.Repository != "github.com/shell-echo/sandbox-runtime" ||
 		locked.Provider.Commit != ProviderCommit || locked.Contract.Namespace != ContractNS ||
 		locked.Contract.Revision != ContractRevision || locked.Contract.Tree != ContractTree ||
-		locked.Contract.SuiteCases != SuiteCases {
+		locked.Contract.SuiteID != SuiteID || locked.Contract.SuiteVersion != SuiteVersion ||
+		locked.Contract.SuiteDigest != SuiteDigest || locked.Contract.SuiteDigestProfile != SuiteDigestProfile ||
+		locked.Contract.SuiteProfile != SuiteProfile || locked.Contract.SuiteCases != SuiteCases ||
+		locked.Contract.RemoteSuiteID != RemoteSuiteID || locked.Contract.RemoteSuiteVersion != RemoteSuiteVersion ||
+		locked.Contract.RemoteSuiteDigest != RemoteSuiteDigest || locked.Contract.RemoteSuiteDigestProfile != RemoteSuiteDigestProfile ||
+		locked.Contract.RemoteSuiteProfile != RemoteSuiteProfile || locked.Contract.RemoteSuiteCases != RemoteSuiteCases ||
+		locked.Contract.SuiteExercised || locked.Contract.RemoteSuiteExercised {
 		return errors.New("E2E Provider lock identity differs from the compiled evidence baseline")
 	}
 	return nil
 }
 
+func expectedLocalSuiteLock() providerSuiteLock {
+	return providerSuiteLock{
+		Path: "contract/conformance/provider-v1/suite.json", SuiteID: SuiteID, SuiteVersion: SuiteVersion,
+		SuiteDigest: SuiteDigest, SuiteDigestProfile: SuiteDigestProfile, RequiredProfile: SuiteProfile,
+	}
+}
+
+func expectedRemoteSuiteLock() providerSuiteLock {
+	return providerSuiteLock{
+		Path: "contract/conformance/provider-remote-v1/suite.json", SuiteID: RemoteSuiteID, SuiteVersion: RemoteSuiteVersion,
+		SuiteDigest: RemoteSuiteDigest, SuiteDigestProfile: RemoteSuiteDigestProfile, RequiredProfile: RemoteSuiteProfile,
+	}
+}
+
+func verifyProviderSuite(
+	root, name string,
+	locked, expected providerSuiteLock,
+	executionMode string,
+	expectedCases int,
+	requireMutationBoundary bool,
+) error {
+	return verifyProviderSuiteWithReader(
+		root, name, locked, expected, executionMode, expectedCases, requireMutationBoundary, readBoundedFile,
+	)
+}
+
+func verifyProviderSuiteWithReader(
+	root, name string,
+	locked, expected providerSuiteLock,
+	executionMode string,
+	expectedCases int,
+	requireMutationBoundary bool,
+	readFile func(string) ([]byte, error),
+) error {
+	if locked != expected {
+		return fmt.Errorf("Provider %s Suite lock identity differs from the E2E lock", name)
+	}
+	suitePath := filepath.Join(root, locked.Path)
+	content, err := readFile(suitePath)
+	if err != nil {
+		return fmt.Errorf("read Provider %s Suite: %w", name, err)
+	}
+	var document suite
+	if err := decodeStrict(content, &document); err != nil {
+		return fmt.Errorf("decode %s: %w", suitePath, err)
+	}
+	if document.SuiteID != locked.SuiteID || document.SuiteVersion != locked.SuiteVersion ||
+		document.SuiteDigest != locked.SuiteDigest || document.SuiteDigestProfile != locked.SuiteDigestProfile {
+		return fmt.Errorf("Provider %s Suite document identity differs from the E2E lock", name)
+	}
+	computedDigest, err := computeProviderSuiteDigest(content)
+	if err != nil {
+		return fmt.Errorf("compute Provider %s Suite digest: %w", name, err)
+	}
+	if computedDigest != locked.SuiteDigest {
+		return fmt.Errorf("Provider %s Suite content digest = %s, want %s", name, computedDigest, locked.SuiteDigest)
+	}
+	matched := 0
+	caseCount := 0
+	for _, profile := range document.Profiles {
+		if profile.ProfileID != locked.RequiredProfile {
+			continue
+		}
+		matched++
+		caseCount = len(profile.Tests)
+		if profile.ExecutionMode != executionMode {
+			return fmt.Errorf("Provider %s Suite execution mode = %q, want %q", name, profile.ExecutionMode, executionMode)
+		}
+		if requireMutationBoundary {
+			if profile.MutationsPerformed == nil || *profile.MutationsPerformed {
+				return fmt.Errorf("Provider %s Suite must explicitly prohibit mutations", name)
+			}
+		} else if profile.MutationsPerformed != nil {
+			return fmt.Errorf("Provider %s Suite unexpectedly declares a mutation boundary", name)
+		}
+	}
+	if matched != 1 {
+		return fmt.Errorf("Provider %s Suite required profile matches = %d, want 1", name, matched)
+	}
+	if caseCount != expectedCases {
+		return fmt.Errorf("Provider %s Suite case count = %d, want %d", name, caseCount, expectedCases)
+	}
+	return nil
+}
+
+func computeProviderSuiteDigest(content []byte) (string, error) {
+	canonical, err := jcs.Transform(content)
+	if err != nil {
+		return "", err
+	}
+	var members map[string]json.RawMessage
+	if err := json.Unmarshal(canonical, &members); err != nil {
+		return "", err
+	}
+	if _, exists := members["suite_digest"]; !exists {
+		return "", errors.New("Suite digest member is required")
+	}
+	delete(members, "suite_digest")
+	withoutDigest, err := json.Marshal(members)
+	if err != nil {
+		return "", err
+	}
+	canonicalWithoutDigest, err := jcs.Transform(withoutDigest)
+	if err != nil {
+		return "", err
+	}
+	digest := sha256.Sum256(canonicalWithoutDigest)
+	return fmt.Sprintf("sha256:%x", digest), nil
+}
+
 func providerDocumentationPath(path string) bool {
-	return path == "README.md" || strings.HasPrefix(path, "docs/")
+	return path == "README.md" || path == "compatibility/sandbox-runtime/README.md" || strings.HasPrefix(path, "docs/")
 }
 
 func providerChangePath(changedPath string) bool {
@@ -350,8 +528,9 @@ func LoadDurableRevocation(providerRoot, platform string) (DurableRevocationLock
 	if err != nil {
 		return DurableRevocationLock{}, fmt.Errorf("resolve Provider root: %w", err)
 	}
+	lockPath := filepath.Join(root, DurableRevocationLockPath)
 	var locked DurableRevocationLock
-	if err := decodeStrictFile(filepath.Join(root, DurableRevocationLockPath), &locked); err != nil {
+	if _, err := decodeRequiredStrictFile(lockPath, reflect.TypeOf(DurableRevocationLock{}), &locked); err != nil {
 		return DurableRevocationLock{}, err
 	}
 	if err := validateDurableRevocationLock(locked); err != nil {
@@ -377,8 +556,8 @@ func VerifyDurableRevocation(providerRoot, platform string) error {
 }
 
 func validateDurableRevocationLock(locked DurableRevocationLock) error {
-	if locked.SchemaVersion != 1 {
-		return fmt.Errorf("durable-revocation schema version = %d, want 1", locked.SchemaVersion)
+	if locked.SchemaVersion != 2 {
+		return fmt.Errorf("durable-revocation schema version = %d, want 2", locked.SchemaVersion)
 	}
 	if locked.EvidenceProfile != DurableRevocationProfile {
 		return fmt.Errorf("durable-revocation evidence profile = %q, want %q", locked.EvidenceProfile, DurableRevocationProfile)
@@ -387,7 +566,12 @@ func validateDurableRevocationLock(locked DurableRevocationLock) error {
 		return fmt.Errorf("durable-revocation Provider commit = %q, want %q", locked.ProviderCommit, ProviderCommit)
 	}
 	expectedContract := DurableRevocationContract{
-		Namespace: ContractNS, Revision: ContractRevision, Tree: ContractTree, SuiteCases: SuiteCases, Exercised: false,
+		Namespace: ContractNS, Revision: ContractRevision, Tree: ContractTree,
+		SuiteID: SuiteID, SuiteVersion: SuiteVersion, SuiteDigest: SuiteDigest,
+		SuiteDigestProfile: SuiteDigestProfile, SuiteProfile: SuiteProfile, SuiteCases: SuiteCases,
+		RemoteSuiteID: RemoteSuiteID, RemoteSuiteVersion: RemoteSuiteVersion, RemoteSuiteDigest: RemoteSuiteDigest,
+		RemoteSuiteDigestProfile: RemoteSuiteDigestProfile, RemoteSuiteProfile: RemoteSuiteProfile, RemoteSuiteCases: RemoteSuiteCases,
+		SuiteExercised: false, RemoteSuiteExercised: false,
 	}
 	if locked.Contract != expectedContract {
 		return fmt.Errorf("durable-revocation Contract metadata = %#v, want %#v", locked.Contract, expectedContract)
@@ -701,26 +885,60 @@ func decodeFile(path string, target any) error {
 }
 
 func decodeStrictFile(path string, target any) error {
-	content, err := os.ReadFile(path)
+	content, err := readBoundedFile(path)
 	if err != nil {
-		return fmt.Errorf("read %s: %w", path, err)
+		return err
+	}
+	if err := decodeStrict(content, target); err != nil {
+		return fmt.Errorf("decode %s: %w", path, err)
+	}
+	return nil
+}
+
+func decodeRequiredStrictFile(path string, objectType reflect.Type, target any) ([]byte, error) {
+	content, err := readBoundedFile(path)
+	if err != nil {
+		return nil, err
+	}
+	if err := requireJSONStructFields(content, objectType, "$"); err != nil {
+		return nil, fmt.Errorf("decode %s: %w", path, err)
+	}
+	if err := decodeStrict(content, target); err != nil {
+		return nil, fmt.Errorf("decode %s: %w", path, err)
+	}
+	return content, nil
+}
+
+func readBoundedFile(path string) ([]byte, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", path, err)
+	}
+	defer func() { _ = file.Close() }()
+	content, err := io.ReadAll(io.LimitReader(file, maxLockBytes+1))
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", path, err)
 	}
 	if len(content) > maxLockBytes {
-		return fmt.Errorf("decode %s: lock exceeds %d bytes", path, maxLockBytes)
+		return nil, fmt.Errorf("decode %s: lock exceeds %d bytes", path, maxLockBytes)
 	}
+	return content, nil
+}
+
+func decodeStrict(content []byte, target any) error {
 	if err := rejectDuplicateJSONFields(content); err != nil {
-		return fmt.Errorf("decode %s: %w", path, err)
+		return err
 	}
 	decoder := json.NewDecoder(bytes.NewReader(content))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(target); err != nil {
-		return fmt.Errorf("decode %s: %w", path, err)
+		return err
 	}
 	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
 		if err == nil {
 			err = errors.New("multiple JSON values")
 		}
-		return fmt.Errorf("decode %s: trailing input: %w", path, err)
+		return fmt.Errorf("trailing input: %w", err)
 	}
 	return nil
 }

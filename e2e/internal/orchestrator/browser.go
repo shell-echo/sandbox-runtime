@@ -182,7 +182,7 @@ func RunBrowser(ctx context.Context, options Options) (_ Result, resultErr error
 			{ID: material.ControllerA.JWSKeyID, Algorithm: "EdDSA", Path: material.ControllerA.JWSPublicFile},
 			{ID: material.ControllerB.JWSKeyID, Algorithm: "EdDSA", Path: material.ControllerB.JWSPublicFile},
 		},
-		ProviderRevisionID: providerRevisionID, ProviderInstanceAudience: providerAudience,
+		JWSIssuer: referenceCallerJWSIssuer, ProviderRevisionID: providerRevisionID, ProviderInstanceAudience: providerAudience,
 		StateRoot: stateRoot, RuntimeDataRoot: filepath.Join(runRoot, "browser-runtime"), RuntimeImage: publication.Image(),
 		RuntimeControllerID: browserReferenceController,
 		GatewayPrincipals: []stack.GatewayPrincipal{
@@ -208,7 +208,8 @@ func RunBrowser(ctx context.Context, options Options) (_ Result, resultErr error
 	callerConfig := caller.Config{
 		Profile: caller.ProfileBrowser, Phase: caller.PhaseInitial,
 		ProviderBaseURL: "https://" + providerAddress, GatewayBaseURL: "https://" + gatewayAddress,
-		CAFile: material.CAFile, ProviderRevisionID: providerRevisionID, ProviderInstanceAudience: providerAudience,
+		CAFile: material.CAFile, JWSIssuer: referenceCallerJWSIssuer,
+		ProviderRevisionID: providerRevisionID, ProviderInstanceAudience: providerAudience,
 		RuntimeImageReference: publication.Repository, RuntimeImageDigest: publication.Digest, RuntimeArchitecture: architecture,
 		GatewayAdminToken:    adminToken,
 		GatewayListenerLimit: 32,
@@ -284,7 +285,6 @@ func RunBrowser(ctx context.Context, options Options) (_ Result, resultErr error
 	manifest := evidenceManifest{
 		CreatedAt: time.Now().UTC().Format(time.RFC3339Nano), CallerKind: "browser-reference",
 		HarnessCommit: harnessCommit, ProviderCommit: lock.ProviderCommit,
-		ContractRevision: lock.ContractRevision, ContractTree: lock.ContractTree, SuiteCases: lock.SuiteCases,
 		RuntimeImage: publication.Image(), RuntimePlatform: "linux/" + architecture,
 		RuntimePreparation: "locked signed Browser image with real GitHub OIDC/Sigstore verification",
 		SupportImages:      []string{gatewayImage}, VerifierDigest: ghDigest,
@@ -298,6 +298,7 @@ func RunBrowser(ctx context.Context, options Options) (_ Result, resultErr error
 		},
 		EvidenceBoundary: "Browser external-caller E2E including process-local pre-upgrade service and listener/TLS/HTTP bounds against an independent reference process; not partition-aware shared or distributed capacity, durable distributed revocation, production capability advertisement, aggregate conformance, real Agent Platform, multi-controller, hostile multi-tenant, deployment, or production readiness",
 	}
+	recordLockedSuites(&manifest)
 	if _, err := writeJSON(filepath.Join(evidenceDirectory, "manifest.json"), manifest); err != nil {
 		return Result{}, err
 	}

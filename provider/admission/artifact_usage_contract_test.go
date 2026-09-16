@@ -261,10 +261,10 @@ func assertArtifactUsageContextAndGuard(t *testing.T, binding artifactUsageAdmis
 	tokenClaims.AdmissionContextContractID = value.ContextContractID
 	tokenClaims.AdmissionContextDigestProfile = value.ContextDigestProfile
 	tokenClaims.AdmissionContextDigest = value.ContextDigest
-	token := fixture.token(t, JWSHeader{Algorithm: fixture.algorithm, KeyID: fixture.keyID, Type: expectedJWSAdmissionType}, tokenClaims)
+	token := fixture.token(t, JWSHeader{Algorithm: fixture.algorithm, KeyID: fixture.keyID, Type: expectedJWSType}, tokenClaims)
 	clock := fixedClock{now: time.Unix(150, 0).UTC()}
 	guard := &recordingMutationGuard{}
-	gate, err := NewProtectedOperationGate(fixture.keys, &clock, guard)
+	gate, err := NewProtectedOperationGate(fixture.keys, validAdmissionAuthorityForTest(), &clock, guard)
 	if err != nil {
 		t.Fatal(err)
 	}

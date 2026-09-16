@@ -1,0 +1,2896 @@
+{
+  "format_version": 1,
+  "profile_id": "sandbox-runtime-external-caller-coding-shell-v1",
+  "profile_version": "1.0.0",
+  "profile_digest_profile": "rfc8785-full-document-excluding-profile-digest-v1",
+  "profile_schema": {
+    "path": "qualification/external-caller-coding-shell-v1/profile.schema.json",
+    "digest": "sha256:2ad01731b69246399d6f04048593f31da9e4118b1dff99a81551b0c9b5972d77"
+  },
+  "contract": {
+    "namespace": "urn:shell-echo:sandbox-runtime:provider-v1",
+    "version": "1.0.0",
+    "revision": "22ba6987ea5fbc37d53942720133c0acad199edd",
+    "tree": "c9a7054d7c8e7f4b6e32f38175ceedddc48c2d38",
+    "manifest_digest": "sha256:1e17e0ef4f86e03be1dac22c48e7b556a8600a4baa6252f4514390d339b8ba3f",
+    "openapi_digest": "sha256:64f0f8d93de39217f5d684758c1407ba62df16f274137d1855821df9dd004a1d",
+    "semantic_rules_digest": "sha256:8757107d5b44451bcb1bdae223262cb870f92b3a6c6fed0e6fef7ebf8f15587e",
+    "local_suite": {
+      "suite_id": "sandbox-provider",
+      "suite_version": "1.0.0",
+      "suite_digest": "sha256:b40c932643f4a1e5fd6681e3abf9b64a607609866a6254456970f8b8034cf2a8",
+      "suite_digest_profile": "rfc8785-full-document-excluding-suite-digest-v1",
+      "profile_id": "sandbox-runtime-provider-v1",
+      "case_count": 53,
+      "execution_required": false
+    },
+    "remote_discovery_suite": {
+      "suite_id": "sandbox-provider-remote",
+      "suite_version": "1.0.0",
+      "suite_digest": "sha256:167922d972229a97a64bf22bc6a36ee20d4de19a023395d9f004f00c54cc49d0",
+      "suite_digest_profile": "rfc8785-full-document-excluding-suite-digest-v1",
+      "profile_id": "sandbox-runtime-provider-remote-discovery-v1",
+      "case_count": 6,
+      "execution_required": false
+    }
+  },
+  "execution_mode": "independent-external-caller-black-box",
+  "mutations_performed": true,
+  "capability_selection": {
+    "api_version": "v1",
+    "runtime_profile_id": "sandbox-runtime-coding-shell-v1",
+    "capabilities": [
+      {
+        "id": "sandbox.exec",
+        "version": "1.0.0",
+        "profile": "exec-v1"
+      },
+      {
+        "id": "sandbox.terminal",
+        "version": "1.0.0",
+        "profile": "terminal-v1"
+      }
+    ]
+  },
+  "topology": {
+    "dedicated_disposable_target": true,
+    "run_unique_namespace": true,
+    "admitted_controllers": 2,
+    "distinct_tenants_required": true,
+    "same_ca_unadmitted_identity_count": 1,
+    "actors": [
+      {
+        "actor_id": "controller_a",
+        "admission": "admitted",
+        "tenant_binding": "tenant_a"
+      },
+      {
+        "actor_id": "controller_b",
+        "admission": "admitted",
+        "tenant_binding": "tenant_b"
+      },
+      {
+        "actor_id": "same_ca_unadmitted",
+        "admission": "same_ca_unadmitted",
+        "tenant_binding": null
+      },
+      {
+        "actor_id": "unauthenticated_client",
+        "admission": "unauthenticated",
+        "tenant_binding": null
+      }
+    ],
+    "caller_process_separate_from_provider": true,
+    "caller_gateway_owned_by_caller": true,
+    "observer_control_domain": "qualification_operator",
+    "observer_control_domain_disjoint_from": [
+      "external_caller",
+      "qualification_adapter",
+      "caller_gateway"
+    ],
+    "process_isolation_groups": [
+      [
+        "provider"
+      ],
+      [
+        "external_caller"
+      ],
+      [
+        "qualification_adapter"
+      ],
+      [
+        "caller_gateway"
+      ],
+      [
+        "qualification_harness"
+      ],
+      [
+        "provider_observer"
+      ],
+      [
+        "gateway_observer"
+      ],
+      [
+        "process_supervisor"
+      ],
+      [
+        "resource_inspector"
+      ],
+      [
+        "teardown"
+      ]
+    ]
+  },
+  "artifact_identity_requirements": [
+    {
+      "artifact_id": "provider",
+      "owner": "sandbox_runtime_repository",
+      "trust_domain": "provider_release",
+      "digest_subject": "executable_raw_bytes",
+      "observed_by": "process_supervisor",
+      "source_identity_required": true
+    },
+    {
+      "artifact_id": "external_caller",
+      "owner": "external_caller_owner",
+      "trust_domain": "external_caller_release",
+      "digest_subject": "executable_raw_bytes",
+      "observed_by": "process_supervisor",
+      "source_identity_required": true
+    },
+    {
+      "artifact_id": "qualification_adapter",
+      "owner": "external_caller_owner",
+      "trust_domain": "external_caller_release",
+      "digest_subject": "executable_raw_bytes",
+      "observed_by": "process_supervisor",
+      "source_identity_required": true
+    },
+    {
+      "artifact_id": "caller_gateway",
+      "owner": "external_caller_owner",
+      "trust_domain": "external_caller_release",
+      "digest_subject": "executable_raw_bytes",
+      "observed_by": "process_supervisor",
+      "source_identity_required": true
+    },
+    {
+      "artifact_id": "runtime_image",
+      "owner": "sandbox_runtime_repository",
+      "trust_domain": "provider_release",
+      "digest_subject": "oci_manifest_or_index",
+      "observed_by": "resource_inspector",
+      "source_identity_required": true
+    },
+    {
+      "artifact_id": "qualification_harness",
+      "owner": "sandbox_runtime_repository",
+      "trust_domain": "qualification_operator",
+      "digest_subject": "executable_raw_bytes",
+      "observed_by": "process_supervisor",
+      "source_identity_required": true
+    },
+    {
+      "artifact_id": "provider_observer",
+      "owner": "sandbox_runtime_repository",
+      "trust_domain": "qualification_operator",
+      "digest_subject": "executable_raw_bytes",
+      "observed_by": "process_supervisor",
+      "source_identity_required": true
+    },
+    {
+      "artifact_id": "gateway_observer",
+      "owner": "sandbox_runtime_repository",
+      "trust_domain": "qualification_operator",
+      "digest_subject": "executable_raw_bytes",
+      "observed_by": "process_supervisor",
+      "source_identity_required": true
+    },
+    {
+      "artifact_id": "process_supervisor",
+      "owner": "sandbox_runtime_repository",
+      "trust_domain": "qualification_operator",
+      "digest_subject": "executable_raw_bytes",
+      "observed_by": "resource_inspector",
+      "source_identity_required": true
+    },
+    {
+      "artifact_id": "resource_inspector",
+      "owner": "sandbox_runtime_repository",
+      "trust_domain": "qualification_operator",
+      "digest_subject": "executable_raw_bytes",
+      "observed_by": "process_supervisor",
+      "source_identity_required": true
+    },
+    {
+      "artifact_id": "teardown",
+      "owner": "qualification_operator",
+      "trust_domain": "qualification_operator",
+      "digest_subject": "executable_raw_bytes",
+      "observed_by": "process_supervisor",
+      "source_identity_required": true
+    }
+  ],
+  "observer_requirements": [
+    "provider_observer",
+    "gateway_observer",
+    "process_supervisor",
+    "resource_inspector"
+  ],
+  "limits": {
+    "max_sandboxes": 1,
+    "max_exec_requests": 3,
+    "max_admitted_exec_operations": 2,
+    "max_terminal_sessions": 1,
+    "max_artifact_requests": 2,
+    "max_admitted_artifact_operations": 1,
+    "max_distinct_provider_mutations": 8,
+    "max_provider_mutation_write_attempts": 12,
+    "max_gateway_mutation_write_attempts": 1,
+    "max_provider_http_requests": 512,
+    "max_gateway_connection_attempts": 8,
+    "max_case_seconds": 120,
+    "max_execution_seconds": 1800,
+    "max_cleanup_seconds": 300,
+    "max_total_wall_clock_seconds": 2100,
+    "case_deadline_policy": "minimum-of-case-and-remaining-execution-deadline",
+    "execution_clock_scope": "first-preflight-start-through-last-scenario-finish-including-reconstruction",
+    "total_wall_clock_scope": "first-preflight-start-through-cleanup-finish-excluding-receipt-validation",
+    "global_limits_preempt_interaction_limits": true,
+    "provider_http_request_counting_rule": "count-when-request-bytes-may-have-been-written",
+    "provider_mutation_write_attempt_counting_rule": "count-each-post-when-request-bytes-may-have-been-written-including-replays",
+    "distinct_provider_mutation_counting_rule": "count-unique-logical-request-id-marked-distinct-provider-mutation",
+    "gateway_attempt_counting_rule": "count-when-connect-or-control-bytes-may-have-been-written",
+    "sandbox_cpu_millis": 500,
+    "sandbox_memory_bytes": 268435456,
+    "sandbox_ephemeral_storage_bytes": 268435456,
+    "sandbox_pids": 64,
+    "max_evidence_files": 16,
+    "max_evidence_file_bytes": 2097152,
+    "max_evidence_total_bytes": 8388608
+  },
+  "reconstruction": {
+    "restart_components": [
+      "provider",
+      "external_caller",
+      "qualification_adapter",
+      "caller_gateway"
+    ],
+    "preserve_stores": [
+      "provider_local_state",
+      "caller_owned_correlation_state",
+      "runtime_resource_state"
+    ],
+    "caller_state_owner": "external_caller",
+    "harness_reinjection_forbidden": [
+      "sandbox_id",
+      "operation_id",
+      "attempt_id",
+      "idempotency_key",
+      "fencing_token",
+      "runtime_session_id",
+      "handoff_reference"
+    ],
+    "adapter_invocation": {
+      "sanitized_transcript_required": true,
+      "transcript_digest_profile": "rfc8785-full-document-v1",
+      "allowed_harness_fields": [
+        "invocation_id",
+        "phase",
+        "profile_path",
+        "provider_origin",
+        "gateway_probe_endpoint",
+        "credential_channel_descriptors",
+        "caller_state_root"
+      ],
+      "forbidden_correlation_fields_match_harness_reinjection_forbidden": true,
+      "observed_by": "process_supervisor"
+    },
+    "shell_continuity_challenge": {
+      "established_in_case": "initial.gateway-terminal-byte-round-trip",
+      "verified_in_case": "reconstruction.same-shell-reconnect",
+      "challenge_generated_by": "gateway_observer",
+      "challenge_digest_profile": "sha256-raw-challenge-bytes-v1",
+      "raw_challenge_in_evidence": false
+    }
+  },
+  "scenario_statuses": [
+    "passed",
+    "failed",
+    "not_executed"
+  ],
+  "run_outcomes": {
+    "values": [
+      "passed",
+      "failed",
+      "incomplete",
+      "not_executed"
+    ],
+    "precedence": [
+      "incomplete",
+      "failed",
+      "passed",
+      "not_executed"
+    ],
+    "prerequisite_unavailable": "not_executed",
+    "executed_mismatch": "failed",
+    "cleanup_unknown_or_failed": "incomplete",
+    "missing_identity_or_evidence": "incomplete"
+  },
+  "phases": [
+    {
+      "phase_id": "initial",
+      "depends_on_phase": null,
+      "cases": [
+        {
+          "case_id": "initial.locked-capability-discovery",
+          "title": "Locked capability discovery and controller admission",
+          "timeout_seconds": 120,
+          "depends_on": [],
+          "interactions": [
+            {
+              "interaction_id": "controller-a-capabilities",
+              "surface": "provider_http",
+              "actor": "controller_a",
+              "method": "GET",
+              "route_template": "/v1/capabilities",
+              "logical_request_id": "controller-a-capabilities",
+              "replay_of": null,
+              "counts_toward": [
+                "provider_http_requests"
+              ],
+              "max_wire_attempts": 64,
+              "outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 200,
+                  "error_code_policy": "none",
+                  "error_codes": [],
+                  "retryable": false,
+                  "retry_after_required": false
+                }
+              ],
+              "transient_outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 503,
+                  "error_code_policy": "contract-unconstrained",
+                  "error_codes": [],
+                  "retryable": true,
+                  "retry_after_required": false
+                }
+              ],
+              "required_observations": [
+                {
+                  "observation_id": "schema-valid-capability-document",
+                  "source": "provider_observer",
+                  "actor": "controller_a",
+                  "subject": "controller-a-capabilities",
+                  "correlation": "controller-a-capabilities"
+                },
+                {
+                  "observation_id": "exact-provider-revision",
+                  "source": "provider_observer",
+                  "actor": "controller_a",
+                  "subject": "controller-a-capabilities",
+                  "correlation": "controller-a-capabilities"
+                },
+                {
+                  "observation_id": "exact-atomic-coding-shell-profile",
+                  "source": "provider_observer",
+                  "actor": "controller_a",
+                  "subject": "controller-a-capabilities",
+                  "correlation": "controller-a-capabilities"
+                },
+                {
+                  "observation_id": "caller-and-adapter-startup-identities-observed",
+                  "source": "process_supervisor",
+                  "actor": "controller_a",
+                  "subject": "controller-a-capabilities",
+                  "correlation": "controller-a-capabilities"
+                }
+              ]
+            },
+            {
+              "interaction_id": "controller-b-capabilities",
+              "surface": "provider_http",
+              "actor": "controller_b",
+              "method": "GET",
+              "route_template": "/v1/capabilities",
+              "logical_request_id": "controller-b-capabilities",
+              "replay_of": null,
+              "counts_toward": [
+                "provider_http_requests"
+              ],
+              "max_wire_attempts": 64,
+              "outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 200,
+                  "error_code_policy": "none",
+                  "error_codes": [],
+                  "retryable": false,
+                  "retry_after_required": false
+                }
+              ],
+              "transient_outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 503,
+                  "error_code_policy": "contract-unconstrained",
+                  "error_codes": [],
+                  "retryable": true,
+                  "retry_after_required": false
+                }
+              ],
+              "required_observations": [
+                {
+                  "observation_id": "distinct-controller-identity",
+                  "source": "provider_observer",
+                  "actor": "controller_b",
+                  "subject": "controller-b-capabilities",
+                  "correlation": "controller-b-capabilities"
+                },
+                {
+                  "observation_id": "distinct-tenant-binding",
+                  "source": "provider_observer",
+                  "actor": "controller_b",
+                  "subject": "controller-b-capabilities",
+                  "correlation": "controller-b-capabilities"
+                },
+                {
+                  "observation_id": "byte-identical-capability-snapshot",
+                  "source": "provider_observer",
+                  "actor": "controller_b",
+                  "subject": "controller-b-capabilities",
+                  "correlation": "controller-b-capabilities"
+                }
+              ]
+            },
+            {
+              "interaction_id": "same-ca-unadmitted-capabilities",
+              "surface": "provider_http",
+              "actor": "same_ca_unadmitted",
+              "method": "GET",
+              "route_template": "/v1/capabilities",
+              "logical_request_id": "same-ca-unadmitted-capabilities",
+              "replay_of": null,
+              "counts_toward": [
+                "provider_http_requests"
+              ],
+              "max_wire_attempts": 64,
+              "outcomes": [
+                {
+                  "transport": "tls-rejected",
+                  "status_code": null,
+                  "error_code_policy": "none",
+                  "error_codes": [],
+                  "retryable": false,
+                  "retry_after_required": false
+                },
+                {
+                  "transport": "http-response",
+                  "status_code": 403,
+                  "error_code_policy": "contract-unconstrained",
+                  "error_codes": [],
+                  "retryable": false,
+                  "retry_after_required": false
+                }
+              ],
+              "transient_outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 503,
+                  "error_code_policy": "contract-unconstrained",
+                  "error_codes": [],
+                  "retryable": true,
+                  "retry_after_required": false
+                }
+              ],
+              "required_observations": [
+                {
+                  "observation_id": "same-ca-distinct-uri-san",
+                  "source": "provider_observer",
+                  "actor": "same_ca_unadmitted",
+                  "subject": "same-ca-unadmitted-capabilities",
+                  "correlation": "same-ca-unadmitted-capabilities"
+                },
+                {
+                  "observation_id": "no-capability-document-returned",
+                  "source": "provider_observer",
+                  "actor": "same_ca_unadmitted",
+                  "subject": "same-ca-unadmitted-capabilities",
+                  "correlation": "same-ca-unadmitted-capabilities"
+                }
+              ]
+            }
+          ],
+          "assertions": [
+            "caller-consumed-embedded-contract-identity",
+            "caller-consumed-embedded-profile-identity",
+            "harness-expectations-not-used-as-caller-attestation"
+          ],
+          "observation_sources": [
+            "caller_assertion",
+            "provider_observer",
+            "process_supervisor"
+          ]
+        },
+        {
+          "case_id": "initial.protected-lifecycle-create",
+          "title": "Protected lifecycle create",
+          "timeout_seconds": 120,
+          "depends_on": [
+            "initial.locked-capability-discovery"
+          ],
+          "interactions": [
+            {
+              "interaction_id": "create-sandbox",
+              "surface": "provider_http",
+              "actor": "controller_a",
+              "method": "POST",
+              "route_template": "/v1/sandboxes",
+              "logical_request_id": "create-sandbox",
+              "replay_of": null,
+              "counts_toward": [
+                "provider_http_requests",
+                "provider_mutation_write_attempts",
+                "distinct_provider_mutations",
+                "sandboxes"
+              ],
+              "max_wire_attempts": 2,
+              "outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 202,
+                  "error_code_policy": "none",
+                  "error_codes": [],
+                  "retryable": false,
+                  "retry_after_required": false
+                }
+              ],
+              "transient_outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 429,
+                  "error_code_policy": "contract-unconstrained",
+                  "error_codes": [],
+                  "retryable": true,
+                  "retry_after_required": true
+                },
+                {
+                  "transport": "http-response",
+                  "status_code": 503,
+                  "error_code_policy": "contract-unconstrained",
+                  "error_codes": [],
+                  "retryable": true,
+                  "retry_after_required": true
+                }
+              ],
+              "required_observations": [
+                {
+                  "observation_id": "mutation-write-observed",
+                  "source": "provider_observer",
+                  "actor": "controller_a",
+                  "subject": "create-sandbox",
+                  "correlation": "create-sandbox"
+                },
+                {
+                  "observation_id": "operation-accepted",
+                  "source": "provider_observer",
+                  "actor": "controller_a",
+                  "subject": "create-sandbox",
+                  "correlation": "create-sandbox"
+                },
+                {
+                  "observation_id": "operation-correlation-exact",
+                  "source": "provider_observer",
+                  "actor": "controller_a",
+                  "subject": "create-sandbox",
+                  "correlation": "create-sandbox"
+                },
+                {
+                  "observation_id": "single-runtime-dispatch",
+                  "source": "provider_observer",
+                  "actor": "controller_a",
+                  "subject": "create-sandbox",
+                  "correlation": "create-sandbox"
+                },
+                {
+                  "observation_id": "run-owned-sandbox-resource-count-one",
+                  "source": "resource_inspector",
+                  "actor": "controller_a",
+                  "subject": "create-sandbox",
+                  "correlation": "create-sandbox"
+                }
+              ]
+            }
+          ],
+          "assertions": [
+            "caller-constructed-mtls-jws-and-admission-context",
+            "caller-retained-durable-correlation",
+            "run-owned-sandbox-id"
+          ],
+          "observation_sources": [
+            "caller_assertion",
+            "provider_observer",
+            "resource_inspector"
+          ]
+        },
+        {
+          "case_id": "initial.replay-semantics",
+          "title": "JTI replay rejection and idempotency replay",
+          "timeout_seconds": 120,
+          "depends_on": [
+            "initial.protected-lifecycle-create"
+          ],
+          "interactions": [
+            {
+              "interaction_id": "exact-jti-replay",
+              "surface": "provider_http",
+              "actor": "controller_a",
+              "method": "POST",
+              "route_template": "/v1/sandboxes",
+              "logical_request_id": "create-sandbox",
+              "replay_of": "create-sandbox",
+              "counts_toward": [
+                "provider_http_requests",
+                "provider_mutation_write_attempts"
+              ],
+              "max_wire_attempts": 2,
+              "outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 409,
+                  "error_code_policy": "contract-unconstrained",
+                  "error_codes": [],
+                  "retryable": false,
+                  "retry_after_required": false
+                }
+              ],
+              "transient_outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 429,
+                  "error_code_policy": "contract-unconstrained",
+                  "error_codes": [],
+                  "retryable": true,
+                  "retry_after_required": true
+                },
+                {
+                  "transport": "http-response",
+                  "status_code": 503,
+                  "error_code_policy": "contract-unconstrained",
+                  "error_codes": [],
+                  "retryable": true,
+                  "retry_after_required": true
+                }
+              ],
+              "required_observations": [
+                {
+                  "observation_id": "same-compact-jws-replayed",
+                  "source": "provider_observer",
+                  "actor": "controller_a",
+                  "subject": "exact-jti-replay",
+                  "correlation": "create-sandbox"
+                },
+                {
+                  "observation_id": "closed-standard-error",
+                  "source": "provider_observer",
+                  "actor": "controller_a",
+                  "subject": "exact-jti-replay",
+                  "correlation": "create-sandbox"
+                },
+                {
+                  "observation_id": "rejected-before-dispatch",
+                  "source": "provider_observer",
+                  "actor": "controller_a",
+                  "subject": "exact-jti-replay",
+                  "correlation": "create-sandbox"
+                }
+              ]
+            },
+            {
+              "interaction_id": "new-jti-idempotency-replay",
+              "surface": "provider_http",
+              "actor": "controller_a",
+              "method": "POST",
+              "route_template": "/v1/sandboxes",
+              "logical_request_id": "create-sandbox",
+              "replay_of": "create-sandbox",
+              "counts_toward": [
+                "provider_http_requests",
+                "provider_mutation_write_attempts"
+              ],
+              "max_wire_attempts": 2,
+              "outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 202,
+                  "error_code_policy": "none",
+                  "error_codes": [],
+                  "retryable": false,
+                  "retry_after_required": false
+                }
+              ],
+              "transient_outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 429,
+                  "error_code_policy": "contract-unconstrained",
+                  "error_codes": [],
+                  "retryable": true,
+                  "retry_after_required": true
+                },
+                {
+                  "transport": "http-response",
+                  "status_code": 503,
+                  "error_code_policy": "contract-unconstrained",
+                  "error_codes": [],
+                  "retryable": true,
+                  "retry_after_required": true
+                }
+              ],
+              "required_observations": [
+                {
+                  "observation_id": "new-jti-same-logical-request",
+                  "source": "provider_observer",
+                  "actor": "controller_a",
+                  "subject": "new-jti-idempotency-replay",
+                  "correlation": "create-sandbox"
+                },
+                {
+                  "observation_id": "same-logical-operation-returned",
+                  "source": "provider_observer",
+                  "actor": "controller_a",
+                  "subject": "new-jti-idempotency-replay",
+                  "correlation": "create-sandbox"
+                },
+                {
+                  "observation_id": "no-second-runtime-dispatch",
+                  "source": "provider_observer",
+                  "actor": "controller_a",
+                  "subject": "new-jti-idempotency-replay",
+                  "correlation": "create-sandbox"
+                }
+              ]
+            }
+          ],
+          "assertions": [
+            "jti-replay-is-not-idempotency-replay",
+            "idempotency-key-body-operation-and-fence-unchanged"
+          ],
+          "observation_sources": [
+            "caller_assertion",
+            "provider_observer"
+          ]
+        },
+        {
+          "case_id": "initial.lifecycle-completion-and-status",
+          "title": "Lifecycle completion and status",
+          "timeout_seconds": 120,
+          "depends_on": [
+            "initial.replay-semantics"
+          ],
+          "interactions": [
+            {
+              "interaction_id": "read-create-operation",
+              "surface": "provider_http",
+              "actor": "controller_a",
+              "method": "GET",
+              "route_template": "/v1/operations/{operation_id}",
+              "logical_request_id": "read-create-operation",
+              "replay_of": null,
+              "counts_toward": [
+                "provider_http_requests"
+              ],
+              "max_wire_attempts": 64,
+              "outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 200,
+                  "error_code_policy": "none",
+                  "error_codes": [],
+                  "retryable": false,
+                  "retry_after_required": false
+                }
+              ],
+              "transient_outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 503,
+                  "error_code_policy": "contract-unconstrained",
+                  "error_codes": [],
+                  "retryable": true,
+                  "retry_after_required": true
+                }
+              ],
+              "required_observations": [
+                {
+                  "observation_id": "operation-succeeded",
+                  "source": "provider_observer",
+                  "actor": "controller_a",
+                  "subject": "read-create-operation",
+                  "correlation": "read-create-operation"
+                }
+              ]
+            },
+            {
+              "interaction_id": "read-sandbox-status",
+              "surface": "provider_http",
+              "actor": "controller_a",
+              "method": "GET",
+              "route_template": "/v1/sandboxes/{sandbox_id}",
+              "logical_request_id": "read-sandbox-status",
+              "replay_of": null,
+              "counts_toward": [
+                "provider_http_requests"
+              ],
+              "max_wire_attempts": 64,
+              "outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 200,
+                  "error_code_policy": "none",
+                  "error_codes": [],
+                  "retryable": false,
+                  "retry_after_required": false
+                }
+              ],
+              "transient_outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 503,
+                  "error_code_policy": "contract-unconstrained",
+                  "error_codes": [],
+                  "retryable": true,
+                  "retry_after_required": true
+                }
+              ],
+              "required_observations": [
+                {
+                  "observation_id": "sandbox-ready",
+                  "source": "provider_observer",
+                  "actor": "controller_a",
+                  "subject": "read-sandbox-status",
+                  "correlation": "read-sandbox-status"
+                },
+                {
+                  "observation_id": "generation-one",
+                  "source": "provider_observer",
+                  "actor": "controller_a",
+                  "subject": "read-sandbox-status",
+                  "correlation": "read-sandbox-status"
+                },
+                {
+                  "observation_id": "tenant-a-binding",
+                  "source": "provider_observer",
+                  "actor": "controller_a",
+                  "subject": "read-sandbox-status",
+                  "correlation": "read-sandbox-status"
+                }
+              ]
+            }
+          ],
+          "assertions": [
+            "caller-reconciled-accepted-operation"
+          ],
+          "observation_sources": [
+            "caller_assertion",
+            "provider_observer"
+          ]
+        },
+        {
+          "case_id": "initial.exec-result-and-usage-evidence",
+          "title": "Exec result and usage evidence",
+          "timeout_seconds": 120,
+          "depends_on": [
+            "initial.lifecycle-completion-and-status"
+          ],
+          "interactions": [
+            {
+              "interaction_id": "start-output-exec",
+              "surface": "provider_http",
+              "actor": "controller_a",
+              "method": "POST",
+              "route_template": "/v1/sandboxes/{sandbox_id}/exec",
+              "logical_request_id": "start-output-exec",
+              "replay_of": null,
+              "counts_toward": [
+                "provider_http_requests",
+                "provider_mutation_write_attempts",
+                "distinct_provider_mutations",
+                "exec_requests",
+                "admitted_exec_operations"
+              ],
+              "max_wire_attempts": 2,
+              "outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 202,
+                  "error_code_policy": "none",
+                  "error_codes": [],
+                  "retryable": false,
+                  "retry_after_required": false
+                }
+              ],
+              "transient_outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 429,
+                  "error_code_policy": "contract-unconstrained",
+                  "error_codes": [],
+                  "retryable": true,
+                  "retry_after_required": true
+                },
+                {
+                  "transport": "http-response",
+                  "status_code": 503,
+                  "error_code_policy": "contract-unconstrained",
+                  "error_codes": [],
+                  "retryable": true,
+                  "retry_after_required": true
+                }
+              ],
+              "required_observations": [
+                {
+                  "observation_id": "exec-operation-accepted",
+                  "source": "provider_observer",
+                  "actor": "controller_a",
+                  "subject": "start-output-exec",
+                  "correlation": "start-output-exec"
+                },
+                {
+                  "observation_id": "single-exec-dispatch",
+                  "source": "provider_observer",
+                  "actor": "controller_a",
+                  "subject": "start-output-exec",
+                  "correlation": "start-output-exec"
+                }
+              ]
+            },
+            {
+              "interaction_id": "read-output-exec-operation",
+              "surface": "provider_http",
+              "actor": "controller_a",
+              "method": "GET",
+              "route_template": "/v1/operations/{operation_id}",
+              "logical_request_id": "read-output-exec-operation",
+              "replay_of": null,
+              "counts_toward": [
+                "provider_http_requests"
+              ],
+              "max_wire_attempts": 64,
+              "outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 200,
+                  "error_code_policy": "none",
+                  "error_codes": [],
+                  "retryable": false,
+                  "retry_after_required": false
+                }
+              ],
+              "transient_outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 503,
+                  "error_code_policy": "contract-unconstrained",
+                  "error_codes": [],
+                  "retryable": true,
+                  "retry_after_required": true
+                }
+              ],
+              "required_observations": [
+                {
+                  "observation_id": "operation-succeeded",
+                  "source": "provider_observer",
+                  "actor": "controller_a",
+                  "subject": "read-output-exec-operation",
+                  "correlation": "read-output-exec-operation"
+                }
+              ]
+            },
+            {
+              "interaction_id": "read-exec-result",
+              "surface": "provider_http",
+              "actor": "controller_a",
+              "method": "GET",
+              "route_template": "/v1/operations/{operation_id}/exec-result",
+              "logical_request_id": "read-exec-result",
+              "replay_of": null,
+              "counts_toward": [
+                "provider_http_requests"
+              ],
+              "max_wire_attempts": 64,
+              "outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 200,
+                  "error_code_policy": "none",
+                  "error_codes": [],
+                  "retryable": false,
+                  "retry_after_required": false
+                }
+              ],
+              "transient_outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 503,
+                  "error_code_policy": "contract-unconstrained",
+                  "error_codes": [],
+                  "retryable": true,
+                  "retry_after_required": true
+                }
+              ],
+              "required_observations": [
+                {
+                  "observation_id": "exec-completed-zero-exit",
+                  "source": "provider_observer",
+                  "actor": "controller_a",
+                  "subject": "read-exec-result",
+                  "correlation": "read-exec-result"
+                },
+                {
+                  "observation_id": "opaque-output-reference",
+                  "source": "provider_observer",
+                  "actor": "controller_a",
+                  "subject": "read-exec-result",
+                  "correlation": "read-exec-result"
+                }
+              ]
+            },
+            {
+              "interaction_id": "read-exec-usage",
+              "surface": "provider_http",
+              "actor": "controller_a",
+              "method": "GET",
+              "route_template": "/v1/operations/{operation_id}/usage-evidence",
+              "logical_request_id": "read-exec-usage",
+              "replay_of": null,
+              "counts_toward": [
+                "provider_http_requests"
+              ],
+              "max_wire_attempts": 64,
+              "outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 200,
+                  "error_code_policy": "none",
+                  "error_codes": [],
+                  "retryable": false,
+                  "retry_after_required": false
+                }
+              ],
+              "transient_outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 503,
+                  "error_code_policy": "contract-unconstrained",
+                  "error_codes": [],
+                  "retryable": true,
+                  "retry_after_required": true
+                }
+              ],
+              "required_observations": [
+                {
+                  "observation_id": "usage-entry-present",
+                  "source": "provider_observer",
+                  "actor": "controller_a",
+                  "subject": "read-exec-usage",
+                  "correlation": "read-exec-usage"
+                },
+                {
+                  "observation_id": "reconciliation-status-present",
+                  "source": "provider_observer",
+                  "actor": "controller_a",
+                  "subject": "read-exec-usage",
+                  "correlation": "read-exec-usage"
+                }
+              ]
+            }
+          ],
+          "assertions": [
+            "caller-consumed-only-stable-result-fields",
+            "command-output-not-in-evidence"
+          ],
+          "observation_sources": [
+            "caller_assertion",
+            "provider_observer"
+          ]
+        },
+        {
+          "case_id": "initial.stale-fencing-rejection",
+          "title": "Stale fencing rejection",
+          "timeout_seconds": 120,
+          "depends_on": [
+            "initial.exec-result-and-usage-evidence"
+          ],
+          "interactions": [
+            {
+              "interaction_id": "start-stale-fence-exec",
+              "surface": "provider_http",
+              "actor": "controller_a",
+              "method": "POST",
+              "route_template": "/v1/sandboxes/{sandbox_id}/exec",
+              "logical_request_id": "start-stale-fence-exec",
+              "replay_of": null,
+              "counts_toward": [
+                "provider_http_requests",
+                "provider_mutation_write_attempts",
+                "distinct_provider_mutations",
+                "exec_requests"
+              ],
+              "max_wire_attempts": 2,
+              "outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 409,
+                  "error_code_policy": "one-of-exact",
+                  "error_codes": [
+                    "SANDBOX_CONFLICT",
+                    "SANDBOX_STALE_FENCING_TOKEN"
+                  ],
+                  "retryable": false,
+                  "retry_after_required": false
+                }
+              ],
+              "transient_outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 429,
+                  "error_code_policy": "contract-unconstrained",
+                  "error_codes": [],
+                  "retryable": true,
+                  "retry_after_required": true
+                },
+                {
+                  "transport": "http-response",
+                  "status_code": 503,
+                  "error_code_policy": "contract-unconstrained",
+                  "error_codes": [],
+                  "retryable": true,
+                  "retry_after_required": true
+                }
+              ],
+              "required_observations": [
+                {
+                  "observation_id": "lower-fencing-token",
+                  "source": "provider_observer",
+                  "actor": "controller_a",
+                  "subject": "start-stale-fence-exec",
+                  "correlation": "start-stale-fence-exec"
+                },
+                {
+                  "observation_id": "rejected-before-dispatch",
+                  "source": "provider_observer",
+                  "actor": "controller_a",
+                  "subject": "start-stale-fence-exec",
+                  "correlation": "start-stale-fence-exec"
+                },
+                {
+                  "observation_id": "closed-standard-error",
+                  "source": "provider_observer",
+                  "actor": "controller_a",
+                  "subject": "start-stale-fence-exec",
+                  "correlation": "start-stale-fence-exec"
+                }
+              ]
+            }
+          ],
+          "assertions": [
+            "caller-did-not-retry-nonretryable-conflict"
+          ],
+          "observation_sources": [
+            "caller_assertion",
+            "provider_observer"
+          ]
+        },
+        {
+          "case_id": "initial.exec-cancellation",
+          "title": "Exec cancellation",
+          "timeout_seconds": 120,
+          "depends_on": [
+            "initial.stale-fencing-rejection"
+          ],
+          "interactions": [
+            {
+              "interaction_id": "start-cancellable-exec",
+              "surface": "provider_http",
+              "actor": "controller_a",
+              "method": "POST",
+              "route_template": "/v1/sandboxes/{sandbox_id}/exec",
+              "logical_request_id": "start-cancellable-exec",
+              "replay_of": null,
+              "counts_toward": [
+                "provider_http_requests",
+                "provider_mutation_write_attempts",
+                "distinct_provider_mutations",
+                "exec_requests",
+                "admitted_exec_operations"
+              ],
+              "max_wire_attempts": 2,
+              "outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 202,
+                  "error_code_policy": "none",
+                  "error_codes": [],
+                  "retryable": false,
+                  "retry_after_required": false
+                }
+              ],
+              "transient_outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 429,
+                  "error_code_policy": "contract-unconstrained",
+                  "error_codes": [],
+                  "retryable": true,
+                  "retry_after_required": true
+                },
+                {
+                  "transport": "http-response",
+                  "status_code": 503,
+                  "error_code_policy": "contract-unconstrained",
+                  "error_codes": [],
+                  "retryable": true,
+                  "retry_after_required": true
+                }
+              ],
+              "required_observations": [
+                {
+                  "observation_id": "exec-operation-accepted",
+                  "source": "provider_observer",
+                  "actor": "controller_a",
+                  "subject": "start-cancellable-exec",
+                  "correlation": "start-cancellable-exec"
+                }
+              ]
+            },
+            {
+              "interaction_id": "cancel-exec",
+              "surface": "provider_http",
+              "actor": "controller_a",
+              "method": "POST",
+              "route_template": "/v1/sandboxes/{sandbox_id}/exec:cancel",
+              "logical_request_id": "cancel-exec",
+              "replay_of": null,
+              "counts_toward": [
+                "provider_http_requests",
+                "provider_mutation_write_attempts",
+                "distinct_provider_mutations"
+              ],
+              "max_wire_attempts": 2,
+              "outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 202,
+                  "error_code_policy": "none",
+                  "error_codes": [],
+                  "retryable": false,
+                  "retry_after_required": false
+                }
+              ],
+              "transient_outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 503,
+                  "error_code_policy": "contract-unconstrained",
+                  "error_codes": [],
+                  "retryable": true,
+                  "retry_after_required": true
+                }
+              ],
+              "required_observations": [
+                {
+                  "observation_id": "cancellation-intent-accepted",
+                  "source": "provider_observer",
+                  "actor": "controller_a",
+                  "subject": "cancel-exec",
+                  "correlation": "cancel-exec"
+                }
+              ]
+            },
+            {
+              "interaction_id": "read-cancel-operation",
+              "surface": "provider_http",
+              "actor": "controller_a",
+              "method": "GET",
+              "route_template": "/v1/operations/{operation_id}",
+              "logical_request_id": "read-cancel-operation",
+              "replay_of": null,
+              "counts_toward": [
+                "provider_http_requests"
+              ],
+              "max_wire_attempts": 64,
+              "outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 200,
+                  "error_code_policy": "none",
+                  "error_codes": [],
+                  "retryable": false,
+                  "retry_after_required": false
+                }
+              ],
+              "transient_outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 503,
+                  "error_code_policy": "contract-unconstrained",
+                  "error_codes": [],
+                  "retryable": true,
+                  "retry_after_required": true
+                }
+              ],
+              "required_observations": [
+                {
+                  "observation_id": "cancel-operation-succeeded",
+                  "source": "provider_observer",
+                  "actor": "controller_a",
+                  "subject": "read-cancel-operation",
+                  "correlation": "read-cancel-operation"
+                }
+              ]
+            },
+            {
+              "interaction_id": "read-cancelled-operation",
+              "surface": "provider_http",
+              "actor": "controller_a",
+              "method": "GET",
+              "route_template": "/v1/operations/{operation_id}",
+              "logical_request_id": "read-cancelled-operation",
+              "replay_of": null,
+              "counts_toward": [
+                "provider_http_requests"
+              ],
+              "max_wire_attempts": 64,
+              "outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 200,
+                  "error_code_policy": "none",
+                  "error_codes": [],
+                  "retryable": false,
+                  "retry_after_required": false
+                }
+              ],
+              "transient_outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 503,
+                  "error_code_policy": "contract-unconstrained",
+                  "error_codes": [],
+                  "retryable": true,
+                  "retry_after_required": true
+                }
+              ],
+              "required_observations": [
+                {
+                  "observation_id": "target-exec-operation-cancelled",
+                  "source": "provider_observer",
+                  "actor": "controller_a",
+                  "subject": "read-cancelled-operation",
+                  "correlation": "read-cancelled-operation"
+                }
+              ]
+            },
+            {
+              "interaction_id": "read-cancelled-result",
+              "surface": "provider_http",
+              "actor": "controller_a",
+              "method": "GET",
+              "route_template": "/v1/operations/{operation_id}/exec-result",
+              "logical_request_id": "read-cancelled-result",
+              "replay_of": null,
+              "counts_toward": [
+                "provider_http_requests"
+              ],
+              "max_wire_attempts": 64,
+              "outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 200,
+                  "error_code_policy": "none",
+                  "error_codes": [],
+                  "retryable": false,
+                  "retry_after_required": false
+                }
+              ],
+              "transient_outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 503,
+                  "error_code_policy": "contract-unconstrained",
+                  "error_codes": [],
+                  "retryable": true,
+                  "retry_after_required": true
+                }
+              ],
+              "required_observations": [
+                {
+                  "observation_id": "exec-result-cancelled",
+                  "source": "provider_observer",
+                  "actor": "controller_a",
+                  "subject": "read-cancelled-result",
+                  "correlation": "read-cancelled-result"
+                }
+              ]
+            }
+          ],
+          "assertions": [
+            "acceptance-not-treated-as-final-cancellation",
+            "caller-reconciled-cancel-operation-and-target-exec"
+          ],
+          "observation_sources": [
+            "caller_assertion",
+            "provider_observer"
+          ]
+        },
+        {
+          "case_id": "initial.terminal-session-and-opaque-handoff",
+          "title": "Terminal session and opaque handoff",
+          "timeout_seconds": 120,
+          "depends_on": [
+            "initial.exec-cancellation"
+          ],
+          "interactions": [
+            {
+              "interaction_id": "open-terminal-session",
+              "surface": "provider_http",
+              "actor": "controller_a",
+              "method": "POST",
+              "route_template": "/v1/sandboxes/{sandbox_id}/runtime-sessions",
+              "logical_request_id": "open-terminal-session",
+              "replay_of": null,
+              "counts_toward": [
+                "provider_http_requests",
+                "provider_mutation_write_attempts",
+                "distinct_provider_mutations",
+                "terminal_sessions"
+              ],
+              "max_wire_attempts": 2,
+              "outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 202,
+                  "error_code_policy": "none",
+                  "error_codes": [],
+                  "retryable": false,
+                  "retry_after_required": false
+                }
+              ],
+              "transient_outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 429,
+                  "error_code_policy": "contract-unconstrained",
+                  "error_codes": [],
+                  "retryable": true,
+                  "retry_after_required": true
+                },
+                {
+                  "transport": "http-response",
+                  "status_code": 503,
+                  "error_code_policy": "contract-unconstrained",
+                  "error_codes": [],
+                  "retryable": true,
+                  "retry_after_required": true
+                }
+              ],
+              "required_observations": [
+                {
+                  "observation_id": "session-operation-accepted",
+                  "source": "provider_observer",
+                  "actor": "controller_a",
+                  "subject": "open-terminal-session",
+                  "correlation": "open-terminal-session"
+                }
+              ]
+            },
+            {
+              "interaction_id": "read-terminal-operation",
+              "surface": "provider_http",
+              "actor": "controller_a",
+              "method": "GET",
+              "route_template": "/v1/operations/{operation_id}",
+              "logical_request_id": "read-terminal-operation",
+              "replay_of": null,
+              "counts_toward": [
+                "provider_http_requests"
+              ],
+              "max_wire_attempts": 64,
+              "outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 200,
+                  "error_code_policy": "none",
+                  "error_codes": [],
+                  "retryable": false,
+                  "retry_after_required": false
+                }
+              ],
+              "transient_outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 503,
+                  "error_code_policy": "contract-unconstrained",
+                  "error_codes": [],
+                  "retryable": true,
+                  "retry_after_required": true
+                }
+              ],
+              "required_observations": [
+                {
+                  "observation_id": "operation-succeeded",
+                  "source": "provider_observer",
+                  "actor": "controller_a",
+                  "subject": "read-terminal-operation",
+                  "correlation": "read-terminal-operation"
+                }
+              ]
+            },
+            {
+              "interaction_id": "read-terminal-handoff",
+              "surface": "provider_http",
+              "actor": "controller_a",
+              "method": "GET",
+              "route_template": "/v1/operations/{operation_id}/runtime-session",
+              "logical_request_id": "read-terminal-handoff",
+              "replay_of": null,
+              "counts_toward": [
+                "provider_http_requests"
+              ],
+              "max_wire_attempts": 64,
+              "outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 200,
+                  "error_code_policy": "none",
+                  "error_codes": [],
+                  "retryable": false,
+                  "retry_after_required": false
+                }
+              ],
+              "transient_outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 503,
+                  "error_code_policy": "contract-unconstrained",
+                  "error_codes": [],
+                  "retryable": true,
+                  "retry_after_required": true
+                }
+              ],
+              "required_observations": [
+                {
+                  "observation_id": "websocket-protocol",
+                  "source": "provider_observer",
+                  "actor": "controller_a",
+                  "subject": "read-terminal-handoff",
+                  "correlation": "read-terminal-handoff"
+                },
+                {
+                  "observation_id": "opaque-reference",
+                  "source": "provider_observer",
+                  "actor": "controller_a",
+                  "subject": "read-terminal-handoff",
+                  "correlation": "read-terminal-handoff"
+                },
+                {
+                  "observation_id": "connection-generation-positive",
+                  "source": "provider_observer",
+                  "actor": "controller_a",
+                  "subject": "read-terminal-handoff",
+                  "correlation": "read-terminal-handoff"
+                }
+              ]
+            }
+          ],
+          "assertions": [
+            "caller-retained-session-correlation"
+          ],
+          "observation_sources": [
+            "caller_assertion",
+            "provider_observer"
+          ]
+        },
+        {
+          "case_id": "initial.gateway-terminal-byte-round-trip",
+          "title": "Caller Gateway terminal byte round trip",
+          "timeout_seconds": 120,
+          "depends_on": [
+            "initial.terminal-session-and-opaque-handoff"
+          ],
+          "interactions": [
+            {
+              "interaction_id": "gateway-terminal-round-trip",
+              "surface": "caller_gateway",
+              "actor": "controller_a",
+              "method": "CONNECT",
+              "route_template": "consumer-defined:terminal-connect",
+              "logical_request_id": "gateway-terminal-round-trip",
+              "replay_of": null,
+              "counts_toward": [
+                "gateway_connection_attempts"
+              ],
+              "max_wire_attempts": 1,
+              "outcomes": [
+                {
+                  "transport": "authorized-byte-round-trip",
+                  "status_code": null,
+                  "error_code_policy": "none",
+                  "error_codes": [],
+                  "retryable": false,
+                  "retry_after_required": false
+                }
+              ],
+              "transient_outcomes": [],
+              "required_observations": [
+                {
+                  "observation_id": "grant-bound-to-controller-a",
+                  "source": "gateway_observer",
+                  "actor": "controller_a",
+                  "subject": "gateway-terminal-round-trip",
+                  "correlation": "gateway-terminal-round-trip"
+                },
+                {
+                  "observation_id": "terminal-bytes-round-tripped",
+                  "source": "gateway_observer",
+                  "actor": "controller_a",
+                  "subject": "gateway-terminal-round-trip",
+                  "correlation": "gateway-terminal-round-trip"
+                },
+                {
+                  "observation_id": "shell-continuity-challenge-established",
+                  "source": "gateway_observer",
+                  "actor": "controller_a",
+                  "subject": "gateway-terminal-round-trip",
+                  "correlation": "gateway-terminal-round-trip"
+                },
+                {
+                  "observation_id": "shell-continuity-challenge-digest-recorded",
+                  "source": "gateway_observer",
+                  "actor": "controller_a",
+                  "subject": "gateway-terminal-round-trip",
+                  "correlation": "gateway-terminal-round-trip"
+                },
+                {
+                  "observation_id": "bounded-byte-count",
+                  "source": "gateway_observer",
+                  "actor": "controller_a",
+                  "subject": "gateway-terminal-round-trip",
+                  "correlation": "gateway-terminal-round-trip"
+                }
+              ]
+            }
+          ],
+          "assertions": [
+            "gateway-policy-owned-by-caller"
+          ],
+          "observation_sources": [
+            "caller_assertion",
+            "gateway_observer"
+          ]
+        },
+        {
+          "case_id": "initial.gateway-wrong-caller-and-cross-tenant-rejection",
+          "title": "Gateway wrong caller and cross-tenant rejection",
+          "timeout_seconds": 120,
+          "depends_on": [
+            "initial.gateway-terminal-byte-round-trip"
+          ],
+          "interactions": [
+            {
+              "interaction_id": "gateway-missing-caller-credential",
+              "surface": "caller_gateway",
+              "actor": "unauthenticated_client",
+              "method": "CONNECT",
+              "route_template": "consumer-defined:terminal-connect",
+              "logical_request_id": "gateway-missing-caller-credential",
+              "replay_of": null,
+              "counts_toward": [
+                "gateway_connection_attempts"
+              ],
+              "max_wire_attempts": 1,
+              "outcomes": [
+                {
+                  "transport": "gateway-upgrade-rejected",
+                  "status_code": null,
+                  "error_code_policy": "none",
+                  "error_codes": [],
+                  "retryable": false,
+                  "retry_after_required": false
+                }
+              ],
+              "transient_outcomes": [],
+              "required_observations": [
+                {
+                  "observation_id": "no-runtime-connection",
+                  "source": "gateway_observer",
+                  "actor": "unauthenticated_client",
+                  "subject": "gateway-missing-caller-credential",
+                  "correlation": "gateway-missing-caller-credential"
+                }
+              ]
+            },
+            {
+              "interaction_id": "gateway-cross-tenant",
+              "surface": "caller_gateway",
+              "actor": "controller_b",
+              "method": "CONNECT",
+              "route_template": "consumer-defined:terminal-connect",
+              "logical_request_id": "gateway-cross-tenant",
+              "replay_of": null,
+              "counts_toward": [
+                "gateway_connection_attempts"
+              ],
+              "max_wire_attempts": 1,
+              "outcomes": [
+                {
+                  "transport": "gateway-upgrade-rejected",
+                  "status_code": null,
+                  "error_code_policy": "none",
+                  "error_codes": [],
+                  "retryable": false,
+                  "retry_after_required": false
+                },
+                {
+                  "transport": "gateway-closed-before-data",
+                  "status_code": null,
+                  "error_code_policy": "none",
+                  "error_codes": [],
+                  "retryable": false,
+                  "retry_after_required": false
+                }
+              ],
+              "transient_outcomes": [],
+              "required_observations": [
+                {
+                  "observation_id": "tenant-b-cannot-use-tenant-a-session",
+                  "source": "gateway_observer",
+                  "actor": "controller_b",
+                  "subject": "gateway-cross-tenant",
+                  "correlation": "gateway-cross-tenant"
+                },
+                {
+                  "observation_id": "no-terminal-bytes-forwarded",
+                  "source": "gateway_observer",
+                  "actor": "controller_b",
+                  "subject": "gateway-cross-tenant",
+                  "correlation": "gateway-cross-tenant"
+                }
+              ]
+            }
+          ],
+          "assertions": [
+            "controllers-belong-to-distinct-tenants"
+          ],
+          "observation_sources": [
+            "caller_assertion",
+            "gateway_observer"
+          ]
+        },
+        {
+          "case_id": "initial.gateway-grant-expiry",
+          "title": "Gateway grant expiry",
+          "timeout_seconds": 120,
+          "depends_on": [
+            "initial.gateway-wrong-caller-and-cross-tenant-rejection"
+          ],
+          "interactions": [
+            {
+              "interaction_id": "gateway-expiring-grant",
+              "surface": "caller_gateway",
+              "actor": "controller_a",
+              "method": "CONNECT",
+              "route_template": "consumer-defined:terminal-connect",
+              "logical_request_id": "gateway-expiring-grant",
+              "replay_of": null,
+              "counts_toward": [
+                "gateway_connection_attempts"
+              ],
+              "max_wire_attempts": 1,
+              "outcomes": [
+                {
+                  "transport": "gateway-closed-at-grant-expiry",
+                  "status_code": null,
+                  "error_code_policy": "none",
+                  "error_codes": [],
+                  "retryable": false,
+                  "retry_after_required": false
+                }
+              ],
+              "transient_outcomes": [],
+              "required_observations": [
+                {
+                  "observation_id": "grant-initially-authorized",
+                  "source": "gateway_observer",
+                  "actor": "controller_a",
+                  "subject": "gateway-expiring-grant",
+                  "correlation": "gateway-expiring-grant"
+                },
+                {
+                  "observation_id": "connection-closed-after-expiry",
+                  "source": "gateway_observer",
+                  "actor": "controller_a",
+                  "subject": "gateway-expiring-grant",
+                  "correlation": "gateway-expiring-grant"
+                },
+                {
+                  "observation_id": "no-post-expiry-forwarding",
+                  "source": "gateway_observer",
+                  "actor": "controller_a",
+                  "subject": "gateway-expiring-grant",
+                  "correlation": "gateway-expiring-grant"
+                }
+              ]
+            }
+          ],
+          "assertions": [
+            "caller-enforced-grant-expiry"
+          ],
+          "observation_sources": [
+            "caller_assertion",
+            "gateway_observer"
+          ]
+        },
+        {
+          "case_id": "initial.gateway-revocation",
+          "title": "Gateway revocation",
+          "timeout_seconds": 120,
+          "depends_on": [
+            "initial.gateway-grant-expiry"
+          ],
+          "interactions": [
+            {
+              "interaction_id": "gateway-revocable-grant",
+              "surface": "caller_gateway",
+              "actor": "controller_a",
+              "method": "CONNECT",
+              "route_template": "consumer-defined:terminal-connect",
+              "logical_request_id": "gateway-revocable-grant",
+              "replay_of": null,
+              "counts_toward": [
+                "gateway_connection_attempts"
+              ],
+              "max_wire_attempts": 1,
+              "outcomes": [
+                {
+                  "transport": "authorized-byte-round-trip",
+                  "status_code": null,
+                  "error_code_policy": "none",
+                  "error_codes": [],
+                  "retryable": false,
+                  "retry_after_required": false
+                }
+              ],
+              "transient_outcomes": [],
+              "required_observations": [
+                {
+                  "observation_id": "grant-initially-authorized",
+                  "source": "gateway_observer",
+                  "actor": "controller_a",
+                  "subject": "gateway-revocable-grant",
+                  "correlation": "gateway-revocable-grant"
+                }
+              ]
+            },
+            {
+              "interaction_id": "gateway-revoke-grant",
+              "surface": "caller_gateway",
+              "actor": "controller_a",
+              "method": "CONTROL",
+              "route_template": "consumer-defined:revoke-grant",
+              "logical_request_id": "gateway-revoke-grant",
+              "replay_of": null,
+              "counts_toward": [
+                "gateway_mutation_write_attempts"
+              ],
+              "max_wire_attempts": 1,
+              "outcomes": [
+                {
+                  "transport": "revocation-acknowledged",
+                  "status_code": null,
+                  "error_code_policy": "none",
+                  "error_codes": [],
+                  "retryable": false,
+                  "retry_after_required": false
+                }
+              ],
+              "transient_outcomes": [],
+              "required_observations": [
+                {
+                  "observation_id": "connection-closed-after-revocation",
+                  "source": "gateway_observer",
+                  "actor": "controller_a",
+                  "subject": "gateway-revoke-grant",
+                  "correlation": "gateway-revoke-grant"
+                },
+                {
+                  "observation_id": "no-post-revocation-forwarding",
+                  "source": "gateway_observer",
+                  "actor": "controller_a",
+                  "subject": "gateway-revoke-grant",
+                  "correlation": "gateway-revoke-grant"
+                }
+              ]
+            }
+          ],
+          "assertions": [
+            "revocation-authority-owned-by-caller"
+          ],
+          "observation_sources": [
+            "caller_assertion",
+            "gateway_observer"
+          ]
+        },
+        {
+          "case_id": "initial.artifact-staging-and-evidence",
+          "title": "Artifact staging and evidence",
+          "timeout_seconds": 120,
+          "depends_on": [
+            "initial.gateway-revocation"
+          ],
+          "interactions": [
+            {
+              "interaction_id": "stage-artifact",
+              "surface": "provider_http",
+              "actor": "controller_a",
+              "method": "POST",
+              "route_template": "/v1/sandboxes/{sandbox_id}/artifacts:stage",
+              "logical_request_id": "stage-artifact",
+              "replay_of": null,
+              "counts_toward": [
+                "provider_http_requests",
+                "provider_mutation_write_attempts",
+                "distinct_provider_mutations",
+                "artifact_requests",
+                "admitted_artifact_operations"
+              ],
+              "max_wire_attempts": 2,
+              "outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 202,
+                  "error_code_policy": "none",
+                  "error_codes": [],
+                  "retryable": false,
+                  "retry_after_required": false
+                }
+              ],
+              "transient_outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 503,
+                  "error_code_policy": "contract-unconstrained",
+                  "error_codes": [],
+                  "retryable": true,
+                  "retry_after_required": true
+                }
+              ],
+              "required_observations": [
+                {
+                  "observation_id": "artifact-operation-accepted",
+                  "source": "provider_observer",
+                  "actor": "controller_a",
+                  "subject": "stage-artifact",
+                  "correlation": "stage-artifact"
+                }
+              ]
+            },
+            {
+              "interaction_id": "read-artifact-operation",
+              "surface": "provider_http",
+              "actor": "controller_a",
+              "method": "GET",
+              "route_template": "/v1/operations/{operation_id}",
+              "logical_request_id": "read-artifact-operation",
+              "replay_of": null,
+              "counts_toward": [
+                "provider_http_requests"
+              ],
+              "max_wire_attempts": 64,
+              "outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 200,
+                  "error_code_policy": "none",
+                  "error_codes": [],
+                  "retryable": false,
+                  "retry_after_required": false
+                }
+              ],
+              "transient_outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 503,
+                  "error_code_policy": "contract-unconstrained",
+                  "error_codes": [],
+                  "retryable": true,
+                  "retry_after_required": true
+                }
+              ],
+              "required_observations": [
+                {
+                  "observation_id": "operation-succeeded",
+                  "source": "provider_observer",
+                  "actor": "controller_a",
+                  "subject": "read-artifact-operation",
+                  "correlation": "read-artifact-operation"
+                }
+              ]
+            },
+            {
+              "interaction_id": "read-artifact-evidence",
+              "surface": "provider_http",
+              "actor": "controller_a",
+              "method": "GET",
+              "route_template": "/v1/operations/{operation_id}/artifact-staging-evidence",
+              "logical_request_id": "read-artifact-evidence",
+              "replay_of": null,
+              "counts_toward": [
+                "provider_http_requests"
+              ],
+              "max_wire_attempts": 64,
+              "outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 200,
+                  "error_code_policy": "none",
+                  "error_codes": [],
+                  "retryable": false,
+                  "retry_after_required": false
+                }
+              ],
+              "transient_outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 503,
+                  "error_code_policy": "contract-unconstrained",
+                  "error_codes": [],
+                  "retryable": true,
+                  "retry_after_required": true
+                }
+              ],
+              "required_observations": [
+                {
+                  "observation_id": "artifact-status-staged",
+                  "source": "provider_observer",
+                  "actor": "controller_a",
+                  "subject": "read-artifact-evidence",
+                  "correlation": "read-artifact-evidence"
+                },
+                {
+                  "observation_id": "content-digest-and-size-match",
+                  "source": "provider_observer",
+                  "actor": "controller_a",
+                  "subject": "read-artifact-evidence",
+                  "correlation": "read-artifact-evidence"
+                },
+                {
+                  "observation_id": "opaque-staging-reference",
+                  "source": "provider_observer",
+                  "actor": "controller_a",
+                  "subject": "read-artifact-evidence",
+                  "correlation": "read-artifact-evidence"
+                }
+              ]
+            }
+          ],
+          "assertions": [
+            "caller-kept-aggregate-artifact-truth"
+          ],
+          "observation_sources": [
+            "caller_assertion",
+            "provider_observer"
+          ]
+        },
+        {
+          "case_id": "initial.provider-cross-tenant-artifact-rejection",
+          "title": "Provider cross-tenant artifact rejection",
+          "timeout_seconds": 120,
+          "depends_on": [
+            "initial.artifact-staging-and-evidence"
+          ],
+          "interactions": [
+            {
+              "interaction_id": "cross-tenant-stage-artifact",
+              "surface": "provider_http",
+              "actor": "controller_b",
+              "method": "POST",
+              "route_template": "/v1/sandboxes/{sandbox_id}/artifacts:stage",
+              "logical_request_id": "cross-tenant-stage-artifact",
+              "replay_of": null,
+              "counts_toward": [
+                "provider_http_requests",
+                "provider_mutation_write_attempts",
+                "distinct_provider_mutations",
+                "artifact_requests"
+              ],
+              "max_wire_attempts": 2,
+              "outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 403,
+                  "error_code_policy": "exact",
+                  "error_codes": [
+                    "SANDBOX_FORBIDDEN"
+                  ],
+                  "retryable": false,
+                  "retry_after_required": false
+                }
+              ],
+              "transient_outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 503,
+                  "error_code_policy": "contract-unconstrained",
+                  "error_codes": [],
+                  "retryable": true,
+                  "retry_after_required": true
+                }
+              ],
+              "required_observations": [
+                {
+                  "observation_id": "controller-b-tenant-b-request",
+                  "source": "provider_observer",
+                  "actor": "controller_b",
+                  "subject": "cross-tenant-stage-artifact",
+                  "correlation": "cross-tenant-stage-artifact"
+                },
+                {
+                  "observation_id": "rejected-before-artifact-dispatch",
+                  "source": "provider_observer",
+                  "actor": "controller_b",
+                  "subject": "cross-tenant-stage-artifact",
+                  "correlation": "cross-tenant-stage-artifact"
+                },
+                {
+                  "observation_id": "no-backend-disclosure",
+                  "source": "provider_observer",
+                  "actor": "controller_b",
+                  "subject": "cross-tenant-stage-artifact",
+                  "correlation": "cross-tenant-stage-artifact"
+                }
+              ]
+            },
+            {
+              "interaction_id": "cross-tenant-read-artifact-operation",
+              "surface": "provider_http",
+              "actor": "controller_b",
+              "method": "GET",
+              "route_template": "/v1/operations/{operation_id}",
+              "logical_request_id": "cross-tenant-read-artifact-operation",
+              "replay_of": null,
+              "counts_toward": [
+                "provider_http_requests"
+              ],
+              "max_wire_attempts": 64,
+              "outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 404,
+                  "error_code_policy": "exact",
+                  "error_codes": [
+                    "SANDBOX_NOT_FOUND"
+                  ],
+                  "retryable": false,
+                  "retry_after_required": false
+                }
+              ],
+              "transient_outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 503,
+                  "error_code_policy": "contract-unconstrained",
+                  "error_codes": [],
+                  "retryable": true,
+                  "retry_after_required": true
+                }
+              ],
+              "required_observations": [
+                {
+                  "observation_id": "no-cross-tenant-operation-visible",
+                  "source": "provider_observer",
+                  "actor": "controller_b",
+                  "subject": "cross-tenant-read-artifact-operation",
+                  "correlation": "cross-tenant-read-artifact-operation"
+                }
+              ]
+            }
+          ],
+          "assertions": [
+            "distinct-tenant-negative-case"
+          ],
+          "observation_sources": [
+            "caller_assertion",
+            "provider_observer"
+          ]
+        },
+        {
+          "case_id": "initial.provider-mtls-caller-binding-rejection",
+          "title": "Provider mTLS caller binding rejection",
+          "timeout_seconds": 120,
+          "depends_on": [
+            "initial.provider-cross-tenant-artifact-rejection"
+          ],
+          "interactions": [
+            {
+              "interaction_id": "wrong-mtls-caller-read-sandbox",
+              "surface": "provider_http",
+              "actor": "controller_b",
+              "method": "GET",
+              "route_template": "/v1/sandboxes/{sandbox_id}",
+              "logical_request_id": "wrong-mtls-caller-read-sandbox",
+              "replay_of": null,
+              "counts_toward": [
+                "provider_http_requests"
+              ],
+              "max_wire_attempts": 64,
+              "outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 403,
+                  "error_code_policy": "exact",
+                  "error_codes": [
+                    "SANDBOX_FORBIDDEN"
+                  ],
+                  "retryable": false,
+                  "retry_after_required": false
+                }
+              ],
+              "transient_outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 503,
+                  "error_code_policy": "contract-unconstrained",
+                  "error_codes": [],
+                  "retryable": true,
+                  "retry_after_required": true
+                }
+              ],
+              "required_observations": [
+                {
+                  "observation_id": "admitted-controller-b-certificate",
+                  "source": "provider_observer",
+                  "actor": "controller_b",
+                  "subject": "wrong-mtls-caller-read-sandbox",
+                  "correlation": "wrong-mtls-caller-read-sandbox"
+                },
+                {
+                  "observation_id": "controller-a-signed-subject",
+                  "source": "provider_observer",
+                  "actor": "controller_b",
+                  "subject": "wrong-mtls-caller-read-sandbox",
+                  "correlation": "wrong-mtls-caller-read-sandbox"
+                },
+                {
+                  "observation_id": "rejected-before-state-read",
+                  "source": "provider_observer",
+                  "actor": "controller_b",
+                  "subject": "wrong-mtls-caller-read-sandbox",
+                  "correlation": "wrong-mtls-caller-read-sandbox"
+                }
+              ]
+            }
+          ],
+          "assertions": [
+            "mtls-and-jws-caller-must-match"
+          ],
+          "observation_sources": [
+            "caller_assertion",
+            "provider_observer"
+          ]
+        }
+      ]
+    },
+    {
+      "phase_id": "reconstruction",
+      "depends_on_phase": "initial",
+      "cases": [
+        {
+          "case_id": "reconstruction.locked-capability-discovery",
+          "title": "Locked capability discovery after reconstruction",
+          "timeout_seconds": 120,
+          "depends_on": [
+            "initial.provider-mtls-caller-binding-rejection"
+          ],
+          "interactions": [
+            {
+              "interaction_id": "reconstructed-capabilities",
+              "surface": "provider_http",
+              "actor": "controller_a",
+              "method": "GET",
+              "route_template": "/v1/capabilities",
+              "logical_request_id": "reconstructed-capabilities",
+              "replay_of": null,
+              "counts_toward": [
+                "provider_http_requests"
+              ],
+              "max_wire_attempts": 64,
+              "outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 200,
+                  "error_code_policy": "none",
+                  "error_codes": [],
+                  "retryable": false,
+                  "retry_after_required": false
+                }
+              ],
+              "transient_outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 503,
+                  "error_code_policy": "contract-unconstrained",
+                  "error_codes": [],
+                  "retryable": true,
+                  "retry_after_required": false
+                }
+              ],
+              "required_observations": [
+                {
+                  "observation_id": "byte-identical-capability-snapshot",
+                  "source": "provider_observer",
+                  "actor": "controller_a",
+                  "subject": "reconstructed-capabilities",
+                  "correlation": "reconstructed-capabilities"
+                },
+                {
+                  "observation_id": "new-provider-process",
+                  "source": "process_supervisor",
+                  "actor": "controller_a",
+                  "subject": "reconstructed-capabilities",
+                  "correlation": "reconstructed-capabilities"
+                },
+                {
+                  "observation_id": "new-caller-process",
+                  "source": "process_supervisor",
+                  "actor": "controller_a",
+                  "subject": "reconstructed-capabilities",
+                  "correlation": "reconstructed-capabilities"
+                },
+                {
+                  "observation_id": "new-adapter-process",
+                  "source": "process_supervisor",
+                  "actor": "controller_a",
+                  "subject": "reconstructed-capabilities",
+                  "correlation": "reconstructed-capabilities"
+                },
+                {
+                  "observation_id": "new-gateway-process",
+                  "source": "process_supervisor",
+                  "actor": "controller_a",
+                  "subject": "reconstructed-capabilities",
+                  "correlation": "reconstructed-capabilities"
+                }
+              ]
+            }
+          ],
+          "assertions": [
+            "caller-loaded-own-durable-correlation-state",
+            "harness-did-not-reinject-forbidden-bindings"
+          ],
+          "observation_sources": [
+            "caller_assertion",
+            "provider_observer",
+            "process_supervisor"
+          ]
+        },
+        {
+          "case_id": "reconstruction.durable-lifecycle",
+          "title": "Durable lifecycle after reconstruction",
+          "timeout_seconds": 120,
+          "depends_on": [
+            "reconstruction.locked-capability-discovery"
+          ],
+          "interactions": [
+            {
+              "interaction_id": "read-reconstructed-create-operation",
+              "surface": "provider_http",
+              "actor": "controller_a",
+              "method": "GET",
+              "route_template": "/v1/operations/{operation_id}",
+              "logical_request_id": "read-reconstructed-create-operation",
+              "replay_of": null,
+              "counts_toward": [
+                "provider_http_requests"
+              ],
+              "max_wire_attempts": 64,
+              "outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 200,
+                  "error_code_policy": "none",
+                  "error_codes": [],
+                  "retryable": false,
+                  "retry_after_required": false
+                }
+              ],
+              "transient_outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 503,
+                  "error_code_policy": "contract-unconstrained",
+                  "error_codes": [],
+                  "retryable": true,
+                  "retry_after_required": true
+                }
+              ],
+              "required_observations": [
+                {
+                  "observation_id": "same-create-operation-correlation",
+                  "source": "provider_observer",
+                  "actor": "controller_a",
+                  "subject": "read-reconstructed-create-operation",
+                  "correlation": "read-reconstructed-create-operation"
+                },
+                {
+                  "observation_id": "operation-succeeded",
+                  "source": "provider_observer",
+                  "actor": "controller_a",
+                  "subject": "read-reconstructed-create-operation",
+                  "correlation": "read-reconstructed-create-operation"
+                },
+                {
+                  "observation_id": "caller-correlation-load-without-harness-reinjection-observed",
+                  "source": "process_supervisor",
+                  "actor": "controller_a",
+                  "subject": "read-reconstructed-create-operation",
+                  "correlation": "read-reconstructed-create-operation"
+                }
+              ]
+            },
+            {
+              "interaction_id": "read-reconstructed-sandbox",
+              "surface": "provider_http",
+              "actor": "controller_a",
+              "method": "GET",
+              "route_template": "/v1/sandboxes/{sandbox_id}",
+              "logical_request_id": "read-reconstructed-sandbox",
+              "replay_of": null,
+              "counts_toward": [
+                "provider_http_requests"
+              ],
+              "max_wire_attempts": 64,
+              "outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 200,
+                  "error_code_policy": "none",
+                  "error_codes": [],
+                  "retryable": false,
+                  "retry_after_required": false
+                }
+              ],
+              "transient_outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 503,
+                  "error_code_policy": "contract-unconstrained",
+                  "error_codes": [],
+                  "retryable": true,
+                  "retry_after_required": true
+                }
+              ],
+              "required_observations": [
+                {
+                  "observation_id": "same-sandbox-correlation",
+                  "source": "provider_observer",
+                  "actor": "controller_a",
+                  "subject": "read-reconstructed-sandbox",
+                  "correlation": "read-reconstructed-sandbox"
+                },
+                {
+                  "observation_id": "sandbox-ready",
+                  "source": "provider_observer",
+                  "actor": "controller_a",
+                  "subject": "read-reconstructed-sandbox",
+                  "correlation": "read-reconstructed-sandbox"
+                },
+                {
+                  "observation_id": "generation-one",
+                  "source": "provider_observer",
+                  "actor": "controller_a",
+                  "subject": "read-reconstructed-sandbox",
+                  "correlation": "read-reconstructed-sandbox"
+                }
+              ]
+            }
+          ],
+          "assertions": [
+            "correlations-originated-in-caller-durable-store"
+          ],
+          "observation_sources": [
+            "caller_assertion",
+            "provider_observer",
+            "process_supervisor"
+          ]
+        },
+        {
+          "case_id": "reconstruction.retained-exec-usage-and-artifact-evidence",
+          "title": "Retained exec, usage, and artifact evidence",
+          "timeout_seconds": 120,
+          "depends_on": [
+            "reconstruction.durable-lifecycle"
+          ],
+          "interactions": [
+            {
+              "interaction_id": "read-retained-exec-result",
+              "surface": "provider_http",
+              "actor": "controller_a",
+              "method": "GET",
+              "route_template": "/v1/operations/{operation_id}/exec-result",
+              "logical_request_id": "read-retained-exec-result",
+              "replay_of": null,
+              "counts_toward": [
+                "provider_http_requests"
+              ],
+              "max_wire_attempts": 64,
+              "outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 200,
+                  "error_code_policy": "none",
+                  "error_codes": [],
+                  "retryable": false,
+                  "retry_after_required": false
+                }
+              ],
+              "transient_outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 503,
+                  "error_code_policy": "contract-unconstrained",
+                  "error_codes": [],
+                  "retryable": true,
+                  "retry_after_required": true
+                }
+              ],
+              "required_observations": [
+                {
+                  "observation_id": "same-exec-result-completed",
+                  "source": "provider_observer",
+                  "actor": "controller_a",
+                  "subject": "read-retained-exec-result",
+                  "correlation": "read-retained-exec-result"
+                }
+              ]
+            },
+            {
+              "interaction_id": "read-retained-usage",
+              "surface": "provider_http",
+              "actor": "controller_a",
+              "method": "GET",
+              "route_template": "/v1/operations/{operation_id}/usage-evidence",
+              "logical_request_id": "read-retained-usage",
+              "replay_of": null,
+              "counts_toward": [
+                "provider_http_requests"
+              ],
+              "max_wire_attempts": 64,
+              "outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 200,
+                  "error_code_policy": "none",
+                  "error_codes": [],
+                  "retryable": false,
+                  "retry_after_required": false
+                }
+              ],
+              "transient_outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 503,
+                  "error_code_policy": "contract-unconstrained",
+                  "error_codes": [],
+                  "retryable": true,
+                  "retry_after_required": true
+                }
+              ],
+              "required_observations": [
+                {
+                  "observation_id": "same-usage-evidence-digest",
+                  "source": "provider_observer",
+                  "actor": "controller_a",
+                  "subject": "read-retained-usage",
+                  "correlation": "read-retained-usage"
+                }
+              ]
+            },
+            {
+              "interaction_id": "read-retained-artifact-evidence",
+              "surface": "provider_http",
+              "actor": "controller_a",
+              "method": "GET",
+              "route_template": "/v1/operations/{operation_id}/artifact-staging-evidence",
+              "logical_request_id": "read-retained-artifact-evidence",
+              "replay_of": null,
+              "counts_toward": [
+                "provider_http_requests"
+              ],
+              "max_wire_attempts": 64,
+              "outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 200,
+                  "error_code_policy": "none",
+                  "error_codes": [],
+                  "retryable": false,
+                  "retry_after_required": false
+                }
+              ],
+              "transient_outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 503,
+                  "error_code_policy": "contract-unconstrained",
+                  "error_codes": [],
+                  "retryable": true,
+                  "retry_after_required": true
+                }
+              ],
+              "required_observations": [
+                {
+                  "observation_id": "same-artifact-evidence-digest",
+                  "source": "provider_observer",
+                  "actor": "controller_a",
+                  "subject": "read-retained-artifact-evidence",
+                  "correlation": "read-retained-artifact-evidence"
+                }
+              ]
+            }
+          ],
+          "assertions": [
+            "retained-evidence-correlations-loaded-by-caller"
+          ],
+          "observation_sources": [
+            "caller_assertion",
+            "provider_observer"
+          ]
+        },
+        {
+          "case_id": "reconstruction.durable-opaque-handoff",
+          "title": "Durable opaque handoff after reconstruction",
+          "timeout_seconds": 120,
+          "depends_on": [
+            "reconstruction.retained-exec-usage-and-artifact-evidence"
+          ],
+          "interactions": [
+            {
+              "interaction_id": "read-retained-terminal-handoff",
+              "surface": "provider_http",
+              "actor": "controller_a",
+              "method": "GET",
+              "route_template": "/v1/operations/{operation_id}/runtime-session",
+              "logical_request_id": "read-retained-terminal-handoff",
+              "replay_of": null,
+              "counts_toward": [
+                "provider_http_requests"
+              ],
+              "max_wire_attempts": 64,
+              "outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 200,
+                  "error_code_policy": "none",
+                  "error_codes": [],
+                  "retryable": false,
+                  "retry_after_required": false
+                }
+              ],
+              "transient_outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 503,
+                  "error_code_policy": "contract-unconstrained",
+                  "error_codes": [],
+                  "retryable": true,
+                  "retry_after_required": true
+                }
+              ],
+              "required_observations": [
+                {
+                  "observation_id": "same-handoff-reference-digest",
+                  "source": "provider_observer",
+                  "actor": "controller_a",
+                  "subject": "read-retained-terminal-handoff",
+                  "correlation": "read-retained-terminal-handoff"
+                },
+                {
+                  "observation_id": "same-runtime-session",
+                  "source": "provider_observer",
+                  "actor": "controller_a",
+                  "subject": "read-retained-terminal-handoff",
+                  "correlation": "read-retained-terminal-handoff"
+                },
+                {
+                  "observation_id": "opaque-reference",
+                  "source": "provider_observer",
+                  "actor": "controller_a",
+                  "subject": "read-retained-terminal-handoff",
+                  "correlation": "read-retained-terminal-handoff"
+                }
+              ]
+            }
+          ],
+          "assertions": [
+            "raw-handoff-reference-absent-from-evidence"
+          ],
+          "observation_sources": [
+            "caller_assertion",
+            "provider_observer"
+          ]
+        },
+        {
+          "case_id": "reconstruction.same-shell-reconnect",
+          "title": "Same-shell reconnect after reconstruction",
+          "timeout_seconds": 120,
+          "depends_on": [
+            "reconstruction.durable-opaque-handoff"
+          ],
+          "interactions": [
+            {
+              "interaction_id": "gateway-same-shell-reconnect",
+              "surface": "caller_gateway",
+              "actor": "controller_a",
+              "method": "CONNECT",
+              "route_template": "consumer-defined:terminal-connect",
+              "logical_request_id": "gateway-same-shell-reconnect",
+              "replay_of": null,
+              "counts_toward": [
+                "gateway_connection_attempts"
+              ],
+              "max_wire_attempts": 1,
+              "outcomes": [
+                {
+                  "transport": "authorized-byte-round-trip",
+                  "status_code": null,
+                  "error_code_policy": "none",
+                  "error_codes": [],
+                  "retryable": false,
+                  "retry_after_required": false
+                }
+              ],
+              "transient_outcomes": [],
+              "required_observations": [
+                {
+                  "observation_id": "same-runtime-session",
+                  "source": "gateway_observer",
+                  "actor": "controller_a",
+                  "subject": "gateway-same-shell-reconnect",
+                  "correlation": "gateway-same-shell-reconnect"
+                },
+                {
+                  "observation_id": "shell-continuity-challenge-digest-matched",
+                  "source": "gateway_observer",
+                  "actor": "controller_a",
+                  "subject": "gateway-same-shell-reconnect",
+                  "correlation": "gateway-same-shell-reconnect"
+                },
+                {
+                  "observation_id": "bounded-byte-count",
+                  "source": "gateway_observer",
+                  "actor": "controller_a",
+                  "subject": "gateway-same-shell-reconnect",
+                  "correlation": "gateway-same-shell-reconnect"
+                },
+                {
+                  "observation_id": "adapter-invocation-transcript-excludes-forbidden-correlations",
+                  "source": "process_supervisor",
+                  "actor": "controller_a",
+                  "subject": "gateway-same-shell-reconnect",
+                  "correlation": "gateway-same-shell-reconnect"
+                }
+              ]
+            }
+          ],
+          "assertions": [
+            "caller-loaded-handoff-from-own-durable-state",
+            "harness-did-not-reinject-handoff"
+          ],
+          "observation_sources": [
+            "caller_assertion",
+            "gateway_observer",
+            "process_supervisor"
+          ]
+        }
+      ]
+    }
+  ],
+  "cleanup": {
+    "authority": "operator-owned-run-namespace-teardown-within-disposable-target",
+    "trigger": "after-any-provider-mutation-may-have-been-written",
+    "context": "independent-bounded-context",
+    "pre_run_baseline_required": true,
+    "query_scope_identity_required": true,
+    "query_scope_digest_profile": "rfc8785-full-document-v1",
+    "query_scope_excludes_harness_control_plane": true,
+    "inspector_scope": [
+      "runtime_allocations",
+      "compute_resources",
+      "network_resources",
+      "storage_resources",
+      "run_owned_processes"
+    ],
+    "inventory_digest_profile": "rfc8785-full-document-v1",
+    "inventory_order": "resource-type-then-stable-observer-id-lexicographic",
+    "pre_run_run_owned_resource_count": 0,
+    "post_teardown_run_owned_resource_count": 0,
+    "post_teardown_stability_samples": 3,
+    "post_teardown_stability_interval_milliseconds": 1000,
+    "success_condition": "post-teardown-inventory-equals-baseline-with-zero-run-owned-resources",
+    "unknown_or_failed_cleanup_outcome": "incomplete"
+  },
+  "evidence": {
+    "report_file": "report.json",
+    "validator_receipt_file": "receipt.json",
+    "external_artifact_envelope": "required-outside-evidence-payload",
+    "payload_inventory_excludes": [
+      "report.json",
+      "receipt.json"
+    ],
+    "file_digest_profile": "sha256-raw-file-bytes-v1",
+    "evidence_file_count_scope": "all-regular-files-including-report-and-receipt",
+    "payload_inventory_order": "normalized-relative-posix-path-lexicographic",
+    "payload_inventory_serialization": "rfc8785-json-array-v1",
+    "payload_inventory_digest_profile": "sha256-rfc8785-json-array-v1",
+    "receipt_report_digest_profile": "sha256-raw-file-bytes-v1",
+    "receipt_written_after_report_validation": true,
+    "caller_startup_identity": {
+      "source": "caller-and-adapter-startup-output",
+      "expected_values_injected_by_harness": false,
+      "required_fields": [
+        "caller_release_identity",
+        "adapter_release_identity",
+        "contract_revision",
+        "contract_tree",
+        "profile_id",
+        "profile_digest"
+      ]
+    },
+    "required_identity_inventories": [
+      "architecture",
+      "provider_configuration",
+      "caller_configuration",
+      "adapter_configuration",
+      "gateway_configuration",
+      "observer_configuration",
+      "inspector_configuration",
+      "teardown_configuration",
+      "topology",
+      "scenario_inventory"
+    ],
+    "configuration_digest_profile": "rfc8785-full-document-v1",
+    "sanitization_required": true,
+    "forbidden_material": [
+      "private-key",
+      "bearer-token",
+      "admission-context",
+      "certificate-body",
+      "raw-handoff-reference",
+      "raw-staging-reference",
+      "host-path",
+      "credential",
+      "secret",
+      "backend-id",
+      "daemon-diagnostic",
+      "command-output",
+      "raw-endpoint"
+    ]
+  },
+  "required_non_claims": [
+    "provider-suite-execution",
+    "aggregate-conformance",
+    "multi-issuer-admission",
+    "multi-controller-reliability",
+    "hostile-multi-tenant-isolation",
+    "high-availability",
+    "deployment-qualification",
+    "production-readiness"
+  ],
+  "profile_digest": "sha256:4effea27fd3d7668b88eeb95c69e19b51556914b7949b1a39ce522b2aec46c14"
+}

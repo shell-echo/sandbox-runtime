@@ -1,0 +1,1318 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:shell-echo:sandbox-runtime:qualification:external-caller-coding-shell-report:v1",
+  "title": "Sandbox Runtime External Caller Coding/Shell Qualification Report v1",
+  "description": "Closed, sanitized evidence report for the independent external-caller qualification profile. The receipt shape is exposed under $defs/receipt and is written after this document is validated.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format_version",
+    "report_type",
+    "report_version",
+    "report_id",
+    "profile",
+    "contract",
+    "capability_selection",
+    "sandbox_resources",
+    "topology",
+    "artifacts",
+    "configurations",
+    "invocation",
+    "phases",
+    "scenario_results",
+    "observations",
+    "counters",
+    "cleanup",
+    "evidence",
+    "claims",
+    "run_outcome",
+    "timestamps"
+  ],
+  "properties": {
+    "format_version": {"const": 1},
+    "report_type": {"const": "sandbox-runtime-external-caller-qualification-report"},
+    "report_version": {"const": "1.0.0"},
+    "report_id": {"$ref": "#/$defs/id"},
+    "profile": {"$ref": "#/$defs/profileIdentity"},
+    "contract": {"$ref": "#/$defs/contractIdentity"},
+    "capability_selection": {"$ref": "#/$defs/capabilitySelection"},
+    "sandbox_resources": {"oneOf": [{"$ref": "#/$defs/sandboxResources"}, {"type": "null"}]},
+    "topology": {"$ref": "#/$defs/topology"},
+    "artifacts": {
+      "type": "array",
+      "minItems": 11,
+      "maxItems": 11,
+      "items": {"$ref": "#/$defs/artifactIdentity"}
+    },
+    "configurations": {
+      "type": "array",
+      "minItems": 10,
+      "maxItems": 10,
+      "items": {"$ref": "#/$defs/configurationIdentity"}
+    },
+    "invocation": {"$ref": "#/$defs/invocation"},
+    "phases": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "prefixItems": [
+        {"$ref": "#/$defs/initialPhase"},
+        {"$ref": "#/$defs/reconstructionPhase"}
+      ],
+      "items": false
+    },
+    "scenario_results": {
+      "type": "array",
+      "minItems": 20,
+      "maxItems": 20,
+      "items": {"$ref": "#/$defs/scenarioResult"}
+    },
+    "observations": {
+      "type": "array",
+      "maxItems": 91,
+      "items": {"$ref": "#/$defs/observation"}
+    },
+    "counters": {"$ref": "#/$defs/counters"},
+    "cleanup": {"$ref": "#/$defs/cleanup"},
+    "evidence": {"$ref": "#/$defs/evidence"},
+    "claims": {"$ref": "#/$defs/claims"},
+    "run_outcome": {"$ref": "#/$defs/runOutcome"},
+    "timestamps": {"$ref": "#/$defs/timestamps"}
+  },
+  "$defs": {
+    "adapterTranscriptProjection": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "$id": "urn:shell-echo:sandbox-runtime:qualification:external-caller-adapter-transcript:v1",
+      "title": "Sandbox Runtime External Caller Adapter Sanitized Transcript Projection v1",
+      "description": "Closed digest preimage for a complete two-phase adapter protocol transcript. It contains bounded process and protocol metadata, never raw invocation values, credentials, requests, responses, endpoints, correlation values, or stderr.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "format_version",
+        "transcript_type",
+        "transcript_version",
+        "protocol_id",
+        "protocol_version",
+        "protocol_schema_digest",
+        "protocol_semantics_digest",
+        "phase_order",
+        "invocation_ids",
+        "phases"
+      ],
+      "properties": {
+        "format_version": {
+          "const": 1
+        },
+        "transcript_type": {
+          "const": "sandbox-runtime-external-caller-adapter-transcript"
+        },
+        "transcript_version": {
+          "const": "1.0.0"
+        },
+        "protocol_id": {
+          "const": "sandbox-runtime-external-caller-adapter-v1"
+        },
+        "protocol_version": {
+          "const": "1.0.0"
+        },
+        "protocol_schema_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "protocol_semantics_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "phase_order": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "prefixItems": [
+            {
+              "const": "initial"
+            },
+            {
+              "const": "reconstruction"
+            }
+          ],
+          "items": false
+        },
+        "invocation_ids": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/id"
+          }
+        },
+        "phases": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "prefixItems": [
+            {
+              "$ref": "#/$defs/initialPhase"
+            },
+            {
+              "$ref": "#/$defs/reconstructionPhase"
+            }
+          ],
+          "items": false
+        }
+      },
+      "$defs": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "^[a-z0-9][a-z0-9._:-]*$"
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "channelRole": {
+          "enum": [
+            "provider_credentials",
+            "provider_trust",
+            "gateway_credentials",
+            "gateway_trust"
+          ]
+        },
+        "processIdentities": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "provider",
+            "external_caller",
+            "qualification_adapter",
+            "caller_gateway"
+          ],
+          "properties": {
+            "provider": {
+              "$ref": "#/$defs/id"
+            },
+            "external_caller": {
+              "$ref": "#/$defs/id"
+            },
+            "qualification_adapter": {
+              "$ref": "#/$defs/id"
+            },
+            "caller_gateway": {
+              "$ref": "#/$defs/id"
+            }
+          }
+        },
+        "digestsByComponent": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "provider",
+            "external_caller",
+            "qualification_adapter",
+            "caller_gateway"
+          ],
+          "properties": {
+            "provider": {
+              "$ref": "#/$defs/digest"
+            },
+            "external_caller": {
+              "$ref": "#/$defs/digest"
+            },
+            "qualification_adapter": {
+              "$ref": "#/$defs/digest"
+            },
+            "caller_gateway": {
+              "$ref": "#/$defs/digest"
+            }
+          }
+        },
+        "suppliedFieldNames": {
+          "type": "array",
+          "minItems": 7,
+          "maxItems": 7,
+          "prefixItems": [
+            {
+              "const": "invocation_id"
+            },
+            {
+              "const": "phase"
+            },
+            {
+              "const": "profile_path"
+            },
+            {
+              "const": "provider_origin"
+            },
+            {
+              "const": "gateway_probe_endpoint"
+            },
+            {
+              "const": "credential_channel_descriptors"
+            },
+            {
+              "const": "caller_state_root"
+            }
+          ],
+          "items": false
+        },
+        "messageType": {
+          "enum": [
+            "startup_identity",
+            "invocation_accepted",
+            "scenario_started",
+            "scenario_result",
+            "invocation_finished",
+            "protocol_error"
+          ]
+        },
+        "messageCounts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "startup_identity",
+            "invocation_accepted",
+            "scenario_started",
+            "scenario_result",
+            "invocation_finished",
+            "protocol_error"
+          ],
+          "properties": {
+            "startup_identity": {
+              "const": 1
+            },
+            "invocation_accepted": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "scenario_started": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 15
+            },
+            "scenario_result": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 15
+            },
+            "invocation_finished": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "protocol_error": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
+        },
+        "boundedByteCounts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "invocation_wire_bytes",
+            "adapter_stdout_wire_bytes",
+            "adapter_stderr_wire_bytes",
+            "adapter_output_complete_records",
+            "credential_channel_count",
+            "credential_payload_total_bytes"
+          ],
+          "properties": {
+            "invocation_wire_bytes": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 32768
+            },
+            "adapter_stdout_wire_bytes": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 2097152
+            },
+            "adapter_stderr_wire_bytes": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 262144
+            },
+            "adapter_output_complete_records": {
+              "type": "integer",
+              "minimum": 2,
+              "maximum": 33
+            },
+            "credential_channel_count": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 8
+            },
+            "credential_payload_total_bytes": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 4194304
+            }
+          }
+        },
+        "terminalState": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "terminal_message_type",
+            "completion",
+            "error_code",
+            "stdout_eof_observed",
+            "clean_process_exit_observed"
+          ],
+          "properties": {
+            "terminal_message_type": {
+              "enum": [
+                "invocation_finished",
+                "protocol_error"
+              ]
+            },
+            "completion": {
+              "oneOf": [
+                {
+                  "enum": [
+                    "completed",
+                    "stopped"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error_code": {
+              "oneOf": [
+                {
+                  "enum": [
+                    "invalid_invocation",
+                    "credential_channel_failed",
+                    "caller_start_failed",
+                    "scenario_execution_failed",
+                    "output_failed",
+                    "internal_failure"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "stdout_eof_observed": {
+              "const": true
+            },
+            "clean_process_exit_observed": {
+              "const": true
+            }
+          },
+          "oneOf": [
+            {
+              "properties": {
+                "terminal_message_type": {
+                  "const": "invocation_finished"
+                },
+                "completion": {
+                  "enum": [
+                    "completed",
+                    "stopped"
+                  ]
+                },
+                "error_code": {
+                  "type": "null"
+                }
+              }
+            },
+            {
+              "properties": {
+                "terminal_message_type": {
+                  "const": "protocol_error"
+                },
+                "completion": {
+                  "type": "null"
+                },
+                "error_code": {
+                  "enum": [
+                    "invalid_invocation",
+                    "credential_channel_failed",
+                    "caller_start_failed",
+                    "scenario_execution_failed",
+                    "output_failed",
+                    "internal_failure"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "phase": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "phase_id",
+            "invocation_id",
+            "process_identities",
+            "executable_digests",
+            "configuration_digests",
+            "supplied_field_names",
+            "credential_channel_roles",
+            "message_types",
+            "message_counts",
+            "bounded_byte_counts",
+            "terminal_state"
+          ],
+          "properties": {
+            "phase_id": {
+              "enum": [
+                "initial",
+                "reconstruction"
+              ]
+            },
+            "invocation_id": {
+              "$ref": "#/$defs/id"
+            },
+            "process_identities": {
+              "$ref": "#/$defs/processIdentities"
+            },
+            "executable_digests": {
+              "$ref": "#/$defs/digestsByComponent"
+            },
+            "configuration_digests": {
+              "$ref": "#/$defs/digestsByComponent"
+            },
+            "supplied_field_names": {
+              "$ref": "#/$defs/suppliedFieldNames"
+            },
+            "credential_channel_roles": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 8,
+              "items": {
+                "$ref": "#/$defs/channelRole"
+              }
+            },
+            "message_types": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 33,
+              "prefixItems": [
+                {
+                  "const": "startup_identity"
+                }
+              ],
+              "items": {
+                "$ref": "#/$defs/messageType"
+              },
+              "allOf": [
+                {
+                  "contains": {
+                    "const": "startup_identity"
+                  },
+                  "minContains": 1,
+                  "maxContains": 1
+                },
+                {
+                  "contains": {
+                    "enum": [
+                      "invocation_finished",
+                      "protocol_error"
+                    ]
+                  },
+                  "minContains": 1,
+                  "maxContains": 1
+                }
+              ]
+            },
+            "message_counts": {
+              "$ref": "#/$defs/messageCounts"
+            },
+            "bounded_byte_counts": {
+              "$ref": "#/$defs/boundedByteCounts"
+            },
+            "terminal_state": {
+              "$ref": "#/$defs/terminalState"
+            }
+          }
+        },
+        "initialPhase": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/phase"
+            },
+            {
+              "properties": {
+                "phase_id": {
+                  "const": "initial"
+                }
+              }
+            }
+          ]
+        },
+        "reconstructionPhase": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/phase"
+            },
+            {
+              "properties": {
+                "phase_id": {
+                  "const": "reconstruction"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "nullableDigest": {
+      "type": ["string", "null"],
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "pattern": "^[a-z0-9][a-z0-9._:-]*$"
+    },
+    "boundedText": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 240,
+      "not": {"pattern": "[\\x00-\\x1F\\x7F]"}
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    },
+    "nullableTimestamp": {
+      "oneOf": [{"$ref": "#/$defs/timestamp"}, {"type": "null"}]
+    },
+    "profileIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profile_id", "profile_version", "profile_digest", "schema_digest", "schema_digest_profile"],
+      "properties": {
+        "profile_id": {"const": "sandbox-runtime-external-caller-coding-shell-v1"},
+        "profile_version": {"const": "1.0.0"},
+        "profile_digest": {"const": "sha256:4effea27fd3d7668b88eeb95c69e19b51556914b7949b1a39ce522b2aec46c14"},
+        "schema_digest": {"const": "sha256:2ad01731b69246399d6f04048593f31da9e4118b1dff99a81551b0c9b5972d77"},
+        "schema_digest_profile": {"const": "sha256-raw-file-bytes-v1"}
+      }
+    },
+    "suiteIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["suite_id", "suite_version", "suite_digest", "suite_digest_profile", "profile_id", "case_count", "exercised", "outcome"],
+      "properties": {
+        "suite_id": {"$ref": "#/$defs/id"},
+        "suite_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+        "suite_digest": {"$ref": "#/$defs/digest"},
+        "suite_digest_profile": {"const": "rfc8785-full-document-excluding-suite-digest-v1"},
+        "profile_id": {"$ref": "#/$defs/id"},
+        "case_count": {"type": "integer", "minimum": 1, "maximum": 1000},
+        "exercised": {"type": "boolean"},
+        "outcome": {"enum": ["passed", "failed", "incomplete", "not_executed"]}
+      }
+    },
+    "contractIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["namespace", "version", "revision", "tree", "manifest_digest", "openapi_digest", "semantic_rules_digest", "local_suite", "remote_discovery_suite"],
+      "properties": {
+        "namespace": {"const": "urn:shell-echo:sandbox-runtime:provider-v1"},
+        "version": {"const": "1.0.0"},
+        "revision": {"const": "22ba6987ea5fbc37d53942720133c0acad199edd"},
+        "tree": {"const": "c9a7054d7c8e7f4b6e32f38175ceedddc48c2d38"},
+        "manifest_digest": {"const": "sha256:1e17e0ef4f86e03be1dac22c48e7b556a8600a4baa6252f4514390d339b8ba3f"},
+        "openapi_digest": {"const": "sha256:64f0f8d93de39217f5d684758c1407ba62df16f274137d1855821df9dd004a1d"},
+        "semantic_rules_digest": {"const": "sha256:8757107d5b44451bcb1bdae223262cb870f92b3a6c6fed0e6fef7ebf8f15587e"},
+        "local_suite": {"$ref": "#/$defs/suiteIdentity"},
+        "remote_discovery_suite": {"$ref": "#/$defs/suiteIdentity"}
+      }
+    },
+    "capability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version", "profile"],
+      "properties": {
+        "id": {"enum": ["sandbox.exec", "sandbox.terminal"]},
+        "version": {"const": "1.0.0"},
+        "profile": {"enum": ["exec-v1", "terminal-v1"]}
+      }
+    },
+    "capabilitySelection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["api_version", "runtime_profile_id", "capabilities"],
+      "properties": {
+        "api_version": {"const": "v1"},
+        "runtime_profile_id": {"const": "sandbox-runtime-coding-shell-v1"},
+        "capabilities": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"$ref": "#/$defs/capability"}}
+      }
+    },
+    "sandboxResources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cpu_millis", "memory_bytes", "ephemeral_storage_bytes", "pids"],
+      "properties": {
+        "cpu_millis": {"const": 500},
+        "memory_bytes": {"const": 268435456},
+        "ephemeral_storage_bytes": {"const": 268435456},
+        "pids": {"const": 64}
+      }
+    },
+    "actor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["actor_id", "admission", "tenant_binding"],
+      "properties": {
+        "actor_id": {"enum": ["controller_a", "controller_b", "same_ca_unadmitted", "unauthenticated_client"]},
+        "admission": {"enum": ["admitted", "same_ca_unadmitted", "unauthenticated"]},
+        "tenant_binding": {"type": ["string", "null"], "pattern": "^[a-z0-9][a-z0-9._:-]{0,79}$"}
+      }
+    },
+    "topology": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dedicated_disposable_target", "run_unique_namespace", "admitted_controllers", "distinct_tenants", "same_ca_unadmitted_identity_count", "actors", "caller_process_separate_from_provider", "caller_gateway_owned_by_caller", "observer_control_domain", "observer_control_domain_disjoint_from", "process_isolation_groups", "target_identity"],
+      "properties": {
+        "dedicated_disposable_target": {"const": true},
+        "run_unique_namespace": {"const": true},
+        "admitted_controllers": {"const": 2},
+        "distinct_tenants": {"const": true},
+        "same_ca_unadmitted_identity_count": {"const": 1},
+        "actors": {"type": "array", "minItems": 4, "maxItems": 4, "items": {"$ref": "#/$defs/actor"}},
+        "caller_process_separate_from_provider": {"const": true},
+        "caller_gateway_owned_by_caller": {"const": true},
+        "observer_control_domain": {"const": "qualification_operator"},
+        "observer_control_domain_disjoint_from": {"type": "array", "minItems": 3, "maxItems": 3, "uniqueItems": true, "items": {"enum": ["external_caller", "qualification_adapter", "caller_gateway"]}},
+        "process_isolation_groups": {"type": "array", "minItems": 10, "maxItems": 10, "items": {"type": "array", "minItems": 1, "maxItems": 1, "items": {"$ref": "#/$defs/id"}}},
+        "target_identity": {"oneOf": [{"$ref": "#/$defs/targetIdentity"}, {"type": "null"}]}
+      }
+    },
+    "targetIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target_digest", "target_digest_profile", "architecture", "run_namespace_digest", "run_namespace_digest_profile"],
+      "properties": {
+        "target_digest": {"$ref": "#/$defs/digest"},
+        "target_digest_profile": {"const": "sha256-canonical-target-description-v1"},
+        "architecture": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._/-]{0,63}$"},
+        "run_namespace_digest": {"$ref": "#/$defs/digest"},
+        "run_namespace_digest_profile": {"const": "sha256-run-namespace-v1"}
+      }
+    },
+    "sourceIdentity": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "value", "immutable"],
+          "properties": {
+            "kind": {"const": "source-revision"},
+            "value": {"type": "string", "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"},
+            "immutable": {"const": true}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "value", "immutable"],
+          "properties": {
+            "kind": {"enum": ["oci-digest", "build-attestation"]},
+            "value": {"$ref": "#/$defs/digest"},
+            "immutable": {"const": true}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "value", "immutable"],
+          "properties": {
+            "kind": {"enum": ["release-id", "operator-release"]},
+            "value": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._+-]*$"},
+            "immutable": {"const": true}
+          }
+        }
+      ]
+    },
+    "artifactIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_id", "owner", "trust_domain", "digest_subject", "digest", "observed_by", "source_identity"],
+      "properties": {
+        "artifact_id": {"enum": ["provider", "external_caller", "qualification_adapter", "caller_gateway", "runtime_image", "qualification_harness", "provider_observer", "gateway_observer", "process_supervisor", "resource_inspector", "teardown"]},
+        "owner": {"enum": ["sandbox_runtime_repository", "external_caller_owner", "qualification_operator"]},
+        "trust_domain": {"enum": ["provider_release", "external_caller_release", "qualification_operator"]},
+        "digest_subject": {"enum": ["executable_raw_bytes", "oci_manifest_or_index", "canonical_configuration"]},
+        "digest": {"$ref": "#/$defs/nullableDigest"},
+        "observed_by": {"enum": ["process_supervisor", "resource_inspector"]},
+        "source_identity": {"oneOf": [{"$ref": "#/$defs/sourceIdentity"}, {"type": "null"}]}
+      }
+    },
+    "configurationIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["configuration_id", "digest", "digest_profile", "sanitized", "observed_by"],
+      "properties": {
+        "configuration_id": {"enum": ["architecture", "provider_configuration", "caller_configuration", "adapter_configuration", "gateway_configuration", "observer_configuration", "inspector_configuration", "teardown_configuration", "topology", "scenario_inventory"]},
+        "digest": {"$ref": "#/$defs/nullableDigest"},
+        "digest_profile": {"const": "rfc8785-full-document-v1"},
+        "sanitized": {"type": "boolean"},
+        "observed_by": {"const": "process_supervisor"}
+      }
+    },
+    "processIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["component", "process_id", "executable_digest", "configuration_digest", "observed_by"],
+      "properties": {
+        "component": {"enum": ["provider", "external_caller", "qualification_adapter", "caller_gateway"]},
+        "process_id": {"$ref": "#/$defs/id"},
+        "executable_digest": {"$ref": "#/$defs/digest"},
+        "configuration_digest": {"$ref": "#/$defs/digest"},
+        "observed_by": {"const": "process_supervisor"}
+      }
+    },
+    "startupIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["caller_release_identity", "adapter_release_identity", "contract_revision", "contract_tree", "profile_id", "profile_digest", "adapter_protocol_id", "adapter_protocol_version", "adapter_protocol_schema_digest", "adapter_protocol_semantics_digest", "expected_values_injected_by_harness"],
+      "properties": {
+        "caller_release_identity": {"oneOf": [{"$ref": "#/$defs/sourceIdentity"}, {"type": "null"}]},
+        "adapter_release_identity": {"oneOf": [{"$ref": "#/$defs/sourceIdentity"}, {"type": "null"}]},
+        "contract_revision": {"const": "22ba6987ea5fbc37d53942720133c0acad199edd"},
+        "contract_tree": {"const": "c9a7054d7c8e7f4b6e32f38175ceedddc48c2d38"},
+        "profile_id": {"const": "sandbox-runtime-external-caller-coding-shell-v1"},
+        "profile_digest": {"const": "sha256:4effea27fd3d7668b88eeb95c69e19b51556914b7949b1a39ce522b2aec46c14"},
+        "adapter_protocol_id": {"const": "sandbox-runtime-external-caller-adapter-v1"},
+        "adapter_protocol_version": {"const": "1.0.0"},
+        "adapter_protocol_schema_digest": {"$ref": "#/$defs/digest"},
+        "adapter_protocol_semantics_digest": {"$ref": "#/$defs/digest"},
+        "expected_values_injected_by_harness": {"const": false}
+      }
+    },
+    "adapterTranscript": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["transcript_digest", "transcript_digest_profile", "invocation_ids", "allowed_fields", "forbidden_fields", "sanitized", "observed_by"],
+      "properties": {
+        "transcript_digest": {"$ref": "#/$defs/digest"},
+        "transcript_digest_profile": {"const": "rfc8785-full-document-v1"},
+        "invocation_ids": {"type": "array", "minItems": 2, "maxItems": 2, "uniqueItems": true, "items": {"$ref": "#/$defs/id"}},
+        "allowed_fields": {"type": "array", "minItems": 1, "maxItems": 16, "uniqueItems": true, "items": {"$ref": "#/$defs/id"}},
+        "forbidden_fields": {"type": "array", "minItems": 7, "maxItems": 7, "uniqueItems": true, "items": {"enum": ["sandbox_id", "operation_id", "attempt_id", "idempotency_key", "fencing_token", "runtime_session_id", "handoff_reference"]}},
+        "sanitized": {"const": true},
+        "observed_by": {"const": "process_supervisor"}
+      }
+    },
+    "shellChallenge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["challenge_digest", "challenge_digest_profile", "established_in_case", "verified_in_case", "raw_challenge_in_evidence"],
+      "properties": {
+        "challenge_digest": {"$ref": "#/$defs/digest"},
+        "challenge_digest_profile": {"const": "sha256-raw-challenge-bytes-v1"},
+        "established_in_case": {"const": "initial.gateway-terminal-byte-round-trip"},
+        "verified_in_case": {"const": "reconstruction.same-shell-reconnect"},
+        "raw_challenge_in_evidence": {"const": false}
+      }
+    },
+    "invocation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["invocation_id", "runtime_commitment_digest", "initial_invocation_id", "reconstruction_invocation_id", "harness_artifact_digest", "startup_identity", "initial_processes", "reconstruction_processes", "restarted_components", "preserved_stores", "harness_reinjected_forbidden_bindings", "adapter_transcript", "shell_continuity_challenge"],
+      "properties": {
+        "invocation_id": {"$ref": "#/$defs/id"},
+        "runtime_commitment_digest": {"$ref": "#/$defs/digest"},
+        "initial_invocation_id": {"type": ["string", "null"], "pattern": "^[a-z0-9][a-z0-9._:-]*$", "maxLength": 200},
+        "reconstruction_invocation_id": {"type": ["string", "null"], "pattern": "^[a-z0-9][a-z0-9._:-]*$", "maxLength": 200},
+        "harness_artifact_digest": {"$ref": "#/$defs/nullableDigest"},
+        "startup_identity": {"oneOf": [{"$ref": "#/$defs/startupIdentity"}, {"type": "null"}]},
+        "initial_processes": {"type": "array", "maxItems": 4, "items": {"$ref": "#/$defs/processIdentity"}},
+        "reconstruction_processes": {"type": "array", "maxItems": 4, "items": {"$ref": "#/$defs/processIdentity"}},
+        "restarted_components": {"type": "array", "maxItems": 4, "uniqueItems": true, "items": {"enum": ["provider", "external_caller", "qualification_adapter", "caller_gateway"]}},
+        "preserved_stores": {"type": "array", "maxItems": 3, "uniqueItems": true, "items": {"enum": ["provider_local_state", "caller_owned_correlation_state", "runtime_resource_state"]}},
+        "harness_reinjected_forbidden_bindings": {"oneOf": [{"const": false}, {"type": "null"}]},
+        "adapter_transcript": {"oneOf": [{"$ref": "#/$defs/adapterTranscript"}, {"type": "null"}]},
+        "shell_continuity_challenge": {"oneOf": [{"$ref": "#/$defs/shellChallenge"}, {"type": "null"}]}
+      }
+    },
+    "phase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["phase_id", "status", "scenario_ids", "started_at", "finished_at"],
+      "properties": {
+        "phase_id": {"enum": ["initial", "reconstruction"]},
+        "status": {"enum": ["passed", "failed", "incomplete", "not_executed"]},
+        "scenario_ids": {"type": "array", "minItems": 1, "maxItems": 15, "items": {"$ref": "#/$defs/id"}},
+        "started_at": {"$ref": "#/$defs/nullableTimestamp"},
+        "finished_at": {"$ref": "#/$defs/nullableTimestamp"}
+      }
+    },
+    "initialPhase": {
+      "allOf": [{"$ref": "#/$defs/phase"}, {"properties": {"phase_id": {"const": "initial"}, "scenario_ids": {"minItems": 15, "maxItems": 15}}}]
+    },
+    "reconstructionPhase": {
+      "allOf": [{"$ref": "#/$defs/phase"}, {"properties": {"phase_id": {"const": "reconstruction"}, "scenario_ids": {"minItems": 5, "maxItems": 5}}}]
+    },
+    "outcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["transport", "status_code", "error_code", "retryable", "retry_after_present"],
+      "properties": {
+        "transport": {"enum": ["http-response", "tls-rejected", "authorized-byte-round-trip", "gateway-upgrade-rejected", "gateway-closed-before-data", "gateway-closed-at-grant-expiry", "revocation-acknowledged", "transport-unavailable", "deadline-exceeded"]},
+        "status_code": {"type": ["integer", "null"], "minimum": 100, "maximum": 599},
+        "error_code": {"type": ["string", "null"], "pattern": "^[A-Z][A-Z0-9_]{0,99}$"},
+        "retryable": {"type": "boolean"},
+        "retry_after_present": {"type": "boolean"}
+      }
+    },
+    "interactionResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["interaction_id", "surface", "actor", "method", "route_template", "logical_request_id", "replay_of", "wire_attempts", "transient_outcomes", "final_outcome", "mutation_write_observed", "observation_ids"],
+      "properties": {
+        "interaction_id": {"$ref": "#/$defs/id"},
+        "surface": {"enum": ["provider_http", "caller_gateway"]},
+        "actor": {"enum": ["controller_a", "controller_b", "same_ca_unadmitted", "unauthenticated_client"]},
+        "method": {"enum": ["GET", "POST", "CONNECT", "CONTROL"]},
+        "route_template": {"type": "string", "minLength": 1, "maxLength": 240, "pattern": "^(?:/v1/[A-Za-z0-9._:{}-]+(?:/[A-Za-z0-9._:{}-]+)*|consumer-defined:[a-z0-9][a-z0-9-]*)$"},
+        "logical_request_id": {"$ref": "#/$defs/id"},
+        "replay_of": {"type": ["string", "null"], "pattern": "^[a-z0-9][a-z0-9._:-]*$"},
+        "wire_attempts": {"type": "integer", "minimum": 1, "maximum": 64},
+        "transient_outcomes": {"type": "array", "maxItems": 63, "items": {"$ref": "#/$defs/outcome"}},
+        "final_outcome": {"$ref": "#/$defs/outcome"},
+        "mutation_write_observed": {"type": "boolean"},
+        "observation_ids": {"type": "array", "minItems": 1, "maxItems": 20, "uniqueItems": true, "items": {"$ref": "#/$defs/id"}}
+      }
+    },
+    "assertionResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["assertion_id", "result"],
+      "properties": {
+        "assertion_id": {"$ref": "#/$defs/id"},
+        "result": {"enum": ["asserted", "not_asserted", "contradicted"]}
+      }
+    },
+    "scenarioResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["case_id", "phase_id", "status", "started_at", "finished_at", "interactions", "assertions", "observation_ids"],
+      "properties": {
+        "case_id": {"type": "string", "pattern": "^(?:initial|reconstruction)\\.[a-z0-9][a-z0-9-]*$", "maxLength": 120},
+        "phase_id": {"enum": ["initial", "reconstruction"]},
+        "status": {"enum": ["passed", "failed", "incomplete", "not_executed"]},
+        "started_at": {"$ref": "#/$defs/nullableTimestamp"},
+        "finished_at": {"$ref": "#/$defs/nullableTimestamp"},
+        "interactions": {"type": "array", "minItems": 0, "maxItems": 12, "items": {"$ref": "#/$defs/interactionResult"}},
+        "assertions": {"type": "array", "minItems": 0, "maxItems": 20, "uniqueItems": true, "items": {"$ref": "#/$defs/assertionResult"}},
+        "observation_ids": {"type": "array", "minItems": 0, "maxItems": 20, "uniqueItems": true, "items": {"$ref": "#/$defs/id"}}
+      }
+    },
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["observation_id", "source", "actor", "subject", "correlation", "result", "evidence_digest"],
+      "properties": {
+        "observation_id": {"$ref": "#/$defs/id"},
+        "source": {"enum": ["caller_assertion", "provider_observer", "gateway_observer", "process_supervisor", "resource_inspector"]},
+        "actor": {"enum": ["controller_a", "controller_b", "same_ca_unadmitted", "unauthenticated_client", "qualification_harness"]},
+        "subject": {"$ref": "#/$defs/id"},
+        "correlation": {"$ref": "#/$defs/id"},
+        "result": {"enum": ["observed", "missing", "contradicted"]},
+        "evidence_digest": {"$ref": "#/$defs/nullableDigest"}
+      }
+    },
+    "counterValue": {"type": "integer", "minimum": 0, "maximum": 512},
+    "counters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider_http_requests", "provider_mutation_write_attempts", "distinct_provider_mutations", "sandboxes", "exec_requests", "admitted_exec_operations", "terminal_sessions", "artifact_requests", "admitted_artifact_operations", "gateway_connection_attempts", "gateway_mutation_write_attempts"],
+      "properties": {
+        "provider_http_requests": {"$ref": "#/$defs/counterValue"},
+        "provider_mutation_write_attempts": {"$ref": "#/$defs/counterValue"},
+        "distinct_provider_mutations": {"$ref": "#/$defs/counterValue"},
+        "sandboxes": {"$ref": "#/$defs/counterValue"},
+        "exec_requests": {"$ref": "#/$defs/counterValue"},
+        "admitted_exec_operations": {"$ref": "#/$defs/counterValue"},
+        "terminal_sessions": {"$ref": "#/$defs/counterValue"},
+        "artifact_requests": {"$ref": "#/$defs/counterValue"},
+        "admitted_artifact_operations": {"$ref": "#/$defs/counterValue"},
+        "gateway_connection_attempts": {"$ref": "#/$defs/counterValue"},
+        "gateway_mutation_write_attempts": {"$ref": "#/$defs/counterValue"}
+      }
+    },
+    "inventoryEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "bytes", "sha256"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1, "maxLength": 240, "pattern": "^[^/][^\\\\]*$"},
+        "bytes": {"type": "integer", "minimum": 0, "maximum": 2097152},
+        "sha256": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "queryScope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scope_digest", "scope_digest_profile", "target_digest", "run_namespace_digest", "ownership_selector_digest", "resource_kinds", "inspector_artifact_digest", "inspector_configuration_digest", "excludes_harness_control_plane"],
+      "properties": {
+        "scope_digest": {"$ref": "#/$defs/nullableDigest"},
+        "scope_digest_profile": {"const": "rfc8785-full-document-v1"},
+        "target_digest": {"$ref": "#/$defs/nullableDigest"},
+        "run_namespace_digest": {"$ref": "#/$defs/nullableDigest"},
+        "ownership_selector_digest": {"$ref": "#/$defs/nullableDigest"},
+        "resource_kinds": {"type": "array", "minItems": 5, "maxItems": 5, "uniqueItems": true, "items": {"enum": ["runtime_allocations", "compute_resources", "network_resources", "storage_resources", "run_owned_processes"]}},
+        "inspector_artifact_digest": {"$ref": "#/$defs/nullableDigest"},
+        "inspector_configuration_digest": {"$ref": "#/$defs/nullableDigest"},
+        "excludes_harness_control_plane": {"const": true}
+      }
+    },
+    "resourceInventory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["query_scope_digest", "inventory_digest", "inventory_digest_profile", "run_owned_resource_count", "stable", "sampled_at"],
+      "properties": {
+        "query_scope_digest": {"$ref": "#/$defs/nullableDigest"},
+        "inventory_digest": {"$ref": "#/$defs/nullableDigest"},
+        "inventory_digest_profile": {"const": "rfc8785-full-document-v1"},
+        "run_owned_resource_count": {"type": "integer", "minimum": 0, "maximum": 512},
+        "stable": {"type": "boolean"},
+        "sampled_at": {"type": "array", "maxItems": 3, "items": {"$ref": "#/$defs/timestamp"}}
+      }
+    },
+    "cleanup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["authority", "mutation_write_observed", "cleanup_required", "query_scope", "baseline", "teardown_attempts", "teardown_completed", "post_teardown", "stability_samples", "stability_interval_milliseconds", "outcome"],
+      "properties": {
+        "authority": {"const": "operator-owned-run-namespace-teardown-within-disposable-target"},
+        "mutation_write_observed": {"type": "boolean"},
+        "cleanup_required": {"type": "boolean"},
+        "query_scope": {"oneOf": [{"$ref": "#/$defs/queryScope"}, {"type": "null"}]},
+        "baseline": {"oneOf": [{"$ref": "#/$defs/resourceInventory"}, {"type": "null"}]},
+        "teardown_attempts": {"type": "integer", "minimum": 0, "maximum": 32},
+        "teardown_completed": {"type": "boolean"},
+        "post_teardown": {"oneOf": [{"$ref": "#/$defs/resourceInventory"}, {"type": "null"}]},
+        "stability_samples": {"enum": [0, 3]},
+        "stability_interval_milliseconds": {"enum": [0, 1000]},
+        "outcome": {"enum": ["succeeded", "failed", "unknown", "not_required", "incomplete"]}
+      }
+    },
+    "sanitization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required", "status", "forbidden_material_detected", "scanner_identity"],
+      "properties": {
+        "required": {"const": true},
+        "status": {"enum": ["passed", "failed"]},
+        "forbidden_material_detected": {"const": false},
+        "scanner_identity": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["root_relative", "payload_inventory", "payload_inventory_digest", "payload_inventory_digest_profile", "file_count_including_report_and_receipt", "total_bytes_including_report_and_receipt", "sanitization", "boundary"],
+      "properties": {
+        "root_relative": {"const": "."},
+        "payload_inventory": {
+          "type": "array",
+          "maxItems": 5,
+          "items": {
+            "allOf": [
+              {"$ref": "#/$defs/inventoryEntry"},
+              {"properties": {"path": {"enum": ["provider-observer.json", "gateway-observer.json", "process-supervisor.json", "resource-inspector.json", "trusted-inputs.json"]}}}
+            ]
+          }
+        },
+        "payload_inventory_digest": {"$ref": "#/$defs/digest"},
+        "payload_inventory_digest_profile": {"const": "sha256-rfc8785-json-array-v1"},
+        "file_count_including_report_and_receipt": {"type": "integer", "minimum": 2, "maximum": 16},
+        "total_bytes_including_report_and_receipt": {"type": "integer", "minimum": 1, "maximum": 8388608},
+        "sanitization": {"$ref": "#/$defs/sanitization"},
+        "boundary": {"const": "sanitized-evidence-payload-excludes-private-material"}
+      }
+    },
+    "claimAssertion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["assertion_id", "owner", "result"],
+      "properties": {
+        "assertion_id": {"$ref": "#/$defs/id"},
+        "owner": {"const": "external_caller_owner"},
+        "result": {"enum": ["asserted", "not_asserted", "contradicted"]}
+      }
+    },
+    "trustedInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["input_id", "source", "digest"],
+      "properties": {
+        "input_id": {"$ref": "#/$defs/id"},
+        "source": {"enum": ["qualification_operator", "sandbox_runtime_repository", "external_caller_owner"]},
+        "digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["caller_assertions", "trusted_inputs", "suite_execution", "non_claims"],
+      "properties": {
+        "caller_assertions": {"type": "array", "maxItems": 64, "uniqueItems": true, "items": {"$ref": "#/$defs/claimAssertion"}},
+        "trusted_inputs": {"type": "array", "maxItems": 5, "uniqueItems": true, "items": {"$ref": "#/$defs/trustedInput"}},
+        "suite_execution": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["local_suite_exercised", "remote_discovery_suite_exercised"],
+          "properties": {
+            "local_suite_exercised": {"type": "boolean"},
+            "remote_discovery_suite_exercised": {"type": "boolean"}
+          }
+        },
+        "non_claims": {
+          "type": "array",
+          "minItems": 8,
+          "maxItems": 8,
+          "prefixItems": [
+            {"const": "provider-suite-execution"},
+            {"const": "aggregate-conformance"},
+            {"const": "multi-issuer-admission"},
+            {"const": "multi-controller-reliability"},
+            {"const": "hostile-multi-tenant-isolation"},
+            {"const": "high-availability"},
+            {"const": "deployment-qualification"},
+            {"const": "production-readiness"}
+          ],
+          "items": false
+        }
+      }
+    },
+    "runOutcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["outcome", "reason_codes", "scenario_counts", "cleanup_satisfied", "identity_complete", "sanitization_passed"],
+      "properties": {
+        "outcome": {"enum": ["passed", "failed", "incomplete", "not_executed"]},
+        "reason_codes": {"type": "array", "maxItems": 16, "uniqueItems": true, "items": {"enum": ["prerequisite_unavailable", "executed_mismatch", "cleanup_unknown_or_failed", "missing_identity_or_evidence", "sanitization_failed", "scenario_not_executed", "validation_failed"]}},
+        "scenario_counts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["passed", "failed", "incomplete", "not_executed"],
+          "properties": {
+            "passed": {"type": "integer", "minimum": 0, "maximum": 20},
+            "failed": {"type": "integer", "minimum": 0, "maximum": 20},
+            "incomplete": {"type": "integer", "minimum": 0, "maximum": 20},
+            "not_executed": {"type": "integer", "minimum": 0, "maximum": 20}
+          }
+        },
+        "cleanup_satisfied": {"type": "boolean"},
+        "identity_complete": {"type": "boolean"},
+        "sanitization_passed": {"type": "boolean"}
+      }
+    },
+    "timestamps": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["run_started_at", "execution_started_at", "execution_finished_at", "cleanup_started_at", "cleanup_finished_at", "run_finished_at"],
+      "properties": {
+        "run_started_at": {"$ref": "#/$defs/nullableTimestamp"},
+        "execution_started_at": {"$ref": "#/$defs/nullableTimestamp"},
+        "execution_finished_at": {"$ref": "#/$defs/nullableTimestamp"},
+        "cleanup_started_at": {"$ref": "#/$defs/nullableTimestamp"},
+        "cleanup_finished_at": {"$ref": "#/$defs/nullableTimestamp"},
+        "run_finished_at": {"$ref": "#/$defs/nullableTimestamp"}
+      }
+    },
+    "scenarioTiming": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["case_id", "phase_id", "started_at", "finished_at"],
+      "properties": {
+        "case_id": {"type": "string", "pattern": "^(?:initial|reconstruction)\\.[a-z0-9][a-z0-9-]*$", "maxLength": 120},
+        "phase_id": {"enum": ["initial", "reconstruction"]},
+        "started_at": {"$ref": "#/$defs/nullableTimestamp"},
+        "finished_at": {"$ref": "#/$defs/nullableTimestamp"}
+      }
+    },
+    "cleanupTimestamps": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["started_at", "finished_at"],
+      "properties": {
+        "started_at": {"$ref": "#/$defs/nullableTimestamp"},
+        "finished_at": {"$ref": "#/$defs/nullableTimestamp"}
+      }
+    },
+    "observerFact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["observation_id", "actor", "subject", "correlation", "result"],
+      "properties": {
+        "observation_id": {"$ref": "#/$defs/id"},
+        "actor": {"enum": ["controller_a", "controller_b", "same_ca_unadmitted", "unauthenticated_client", "qualification_harness"]},
+        "subject": {"$ref": "#/$defs/id"},
+        "correlation": {"$ref": "#/$defs/id"},
+        "result": {"enum": ["observed", "missing", "contradicted"]}
+      }
+    },
+    "trustedInputStatement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["input_id", "source", "subject_digest"],
+      "properties": {
+        "input_id": {"enum": ["external-caller-ownership", "source-hosting", "build-system", "operating-system", "network-path"]},
+        "source": {"enum": ["qualification_operator", "sandbox_runtime_repository", "external_caller_owner"]},
+        "subject_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "providerObserverPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["format_version", "payload_type", "payload_version", "invocation_id", "runtime_commitment_digest", "observer_artifact_digest", "observer_configuration_digest", "sandbox_resources", "interactions", "observations"],
+      "properties": {
+        "format_version": {"const": 1},
+        "payload_type": {"const": "sandbox-runtime-provider-observer-evidence"},
+        "payload_version": {"const": "1.0.0"},
+        "invocation_id": {"$ref": "#/$defs/id"},
+        "runtime_commitment_digest": {"$ref": "#/$defs/digest"},
+        "observer_artifact_digest": {"$ref": "#/$defs/nullableDigest"},
+        "observer_configuration_digest": {"$ref": "#/$defs/nullableDigest"},
+        "sandbox_resources": {"oneOf": [{"$ref": "#/$defs/sandboxResources"}, {"type": "null"}]},
+        "interactions": {"type": "array", "maxItems": 41, "items": {"allOf": [{"$ref": "#/$defs/interactionResult"}, {"properties": {"surface": {"const": "provider_http"}}}]}},
+        "observations": {"type": "array", "maxItems": 91, "items": {"$ref": "#/$defs/observerFact"}}
+      }
+    },
+    "gatewayObserverPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["format_version", "payload_type", "payload_version", "invocation_id", "runtime_commitment_digest", "observer_artifact_digest", "observer_configuration_digest", "interactions", "observations", "shell_continuity_challenge"],
+      "properties": {
+        "format_version": {"const": 1},
+        "payload_type": {"const": "sandbox-runtime-gateway-observer-evidence"},
+        "payload_version": {"const": "1.0.0"},
+        "invocation_id": {"$ref": "#/$defs/id"},
+        "runtime_commitment_digest": {"$ref": "#/$defs/digest"},
+        "observer_artifact_digest": {"$ref": "#/$defs/nullableDigest"},
+        "observer_configuration_digest": {"$ref": "#/$defs/nullableDigest"},
+        "interactions": {"type": "array", "maxItems": 8, "items": {"allOf": [{"$ref": "#/$defs/interactionResult"}, {"properties": {"surface": {"const": "caller_gateway"}}}]}},
+        "observations": {"type": "array", "maxItems": 91, "items": {"$ref": "#/$defs/observerFact"}},
+        "shell_continuity_challenge": {"oneOf": [{"$ref": "#/$defs/shellChallenge"}, {"type": "null"}]}
+      }
+    },
+    "processSupervisorPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["format_version", "payload_type", "payload_version", "invocation_id", "runtime_commitment_digest", "supervisor_artifact_digest", "supervisor_configuration_digest", "initial_invocation_id", "reconstruction_invocation_id", "startup_identity", "artifact_identities", "configuration_identities", "initial_processes", "reconstruction_processes", "adapter_transcript", "adapter_transcript_projection", "run_timestamps", "phases", "scenario_timings", "observations"],
+      "properties": {
+        "format_version": {"const": 1},
+        "payload_type": {"const": "sandbox-runtime-process-supervisor-evidence"},
+        "payload_version": {"const": "1.0.0"},
+        "invocation_id": {"$ref": "#/$defs/id"},
+        "runtime_commitment_digest": {"$ref": "#/$defs/digest"},
+        "supervisor_artifact_digest": {"$ref": "#/$defs/nullableDigest"},
+        "supervisor_configuration_digest": {"$ref": "#/$defs/nullableDigest"},
+        "initial_invocation_id": {"type": ["string", "null"], "pattern": "^[a-z0-9][a-z0-9._:-]*$", "maxLength": 200},
+        "reconstruction_invocation_id": {"type": ["string", "null"], "pattern": "^[a-z0-9][a-z0-9._:-]*$", "maxLength": 200},
+        "startup_identity": {"oneOf": [{"$ref": "#/$defs/startupIdentity"}, {"type": "null"}]},
+        "artifact_identities": {"type": "array", "maxItems": 11, "items": {"$ref": "#/$defs/artifactIdentity"}},
+        "configuration_identities": {"type": "array", "maxItems": 10, "items": {"$ref": "#/$defs/configurationIdentity"}},
+        "initial_processes": {"type": "array", "maxItems": 4, "items": {"$ref": "#/$defs/processIdentity"}},
+        "reconstruction_processes": {"type": "array", "maxItems": 4, "items": {"$ref": "#/$defs/processIdentity"}},
+        "adapter_transcript": {"oneOf": [{"$ref": "#/$defs/adapterTranscript"}, {"type": "null"}]},
+        "run_timestamps": {"$ref": "#/$defs/timestamps"},
+        "adapter_transcript_projection": {"oneOf": [{"$ref": "#/$defs/adapterTranscriptProjection"}, {"type": "null"}]},
+        "phases": {"type": "array", "minItems": 2, "maxItems": 2, "prefixItems": [{"$ref": "#/$defs/initialPhase"}, {"$ref": "#/$defs/reconstructionPhase"}], "items": false},
+        "scenario_timings": {"type": "array", "minItems": 20, "maxItems": 20, "items": {"$ref": "#/$defs/scenarioTiming"}},
+        "observations": {"type": "array", "maxItems": 91, "items": {"$ref": "#/$defs/observerFact"}}
+      }
+    },
+    "resourceInspectorPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["format_version", "payload_type", "payload_version", "invocation_id", "runtime_commitment_digest", "inspector_artifact_digest", "inspector_configuration_digest", "target_identity", "artifact_identities", "cleanup", "cleanup_timestamps", "observations"],
+      "properties": {
+        "format_version": {"const": 1},
+        "payload_type": {"const": "sandbox-runtime-resource-inspector-evidence"},
+        "payload_version": {"const": "1.0.0"},
+        "invocation_id": {"$ref": "#/$defs/id"},
+        "runtime_commitment_digest": {"$ref": "#/$defs/digest"},
+        "inspector_artifact_digest": {"$ref": "#/$defs/nullableDigest"},
+        "inspector_configuration_digest": {"$ref": "#/$defs/nullableDigest"},
+        "target_identity": {"oneOf": [{"$ref": "#/$defs/targetIdentity"}, {"type": "null"}]},
+        "artifact_identities": {"type": "array", "maxItems": 11, "items": {"$ref": "#/$defs/artifactIdentity"}},
+        "cleanup": {"$ref": "#/$defs/cleanup"},
+        "cleanup_timestamps": {"$ref": "#/$defs/cleanupTimestamps"},
+        "observations": {"type": "array", "maxItems": 91, "items": {"$ref": "#/$defs/observerFact"}}
+      }
+    },
+    "trustedInputsPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["format_version", "payload_type", "payload_version", "invocation_id", "runtime_commitment_digest", "trusted_inputs", "caller_assertions"],
+      "properties": {
+        "format_version": {"const": 1},
+        "payload_type": {"const": "sandbox-runtime-trusted-input-evidence"},
+        "payload_version": {"const": "1.0.0"},
+        "invocation_id": {"$ref": "#/$defs/id"},
+        "runtime_commitment_digest": {"$ref": "#/$defs/digest"},
+        "trusted_inputs": {"type": "array", "maxItems": 5, "items": {"$ref": "#/$defs/trustedInputStatement"}},
+        "caller_assertions": {"type": "array", "maxItems": 29, "items": {"$ref": "#/$defs/claimAssertion"}}
+      }
+    },
+    "authorityIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "digest"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1, "maxLength": 240, "pattern": "^[^/][^\\\\]*$"},
+        "digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "adapterProtocolAuthority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol_id", "protocol_version", "schema", "semantics"],
+      "properties": {
+        "protocol_id": {"const": "sandbox-runtime-external-caller-adapter-v1"},
+        "protocol_version": {"const": "1.0.0"},
+        "schema": {"$ref": "#/$defs/authorityIdentity"},
+        "semantics": {"$ref": "#/$defs/authorityIdentity"}
+      }
+    },
+    "receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["format_version", "receipt_type", "receipt_version", "receipt_id", "report_schema", "validator_semantics", "adapter_protocol", "report_sha256", "report_digest_profile", "payload_inventory_sha256", "payload_inventory_digest_profile", "profile", "invocation_id", "runtime_commitment_digest", "artifact_digests", "process_identity_digest", "phase_ordered_result_digest", "completion_state", "validation_outcome", "validated_at"],
+      "properties": {
+        "format_version": {"const": 1},
+        "receipt_type": {"const": "sandbox-runtime-external-caller-qualification-validator-receipt"},
+        "receipt_version": {"const": "1.0.0"},
+        "receipt_id": {"$ref": "#/$defs/id"},
+        "report_schema": {"$ref": "#/$defs/authorityIdentity"},
+        "validator_semantics": {"$ref": "#/$defs/authorityIdentity"},
+        "adapter_protocol": {"$ref": "#/$defs/adapterProtocolAuthority"},
+        "report_sha256": {"$ref": "#/$defs/digest"},
+        "report_digest_profile": {"const": "sha256-raw-file-bytes-v1"},
+        "payload_inventory_sha256": {"$ref": "#/$defs/digest"},
+        "payload_inventory_digest_profile": {"const": "sha256-rfc8785-json-array-v1"},
+        "profile": {"$ref": "#/$defs/profileIdentity"},
+        "invocation_id": {"$ref": "#/$defs/id"},
+        "runtime_commitment_digest": {"$ref": "#/$defs/digest"},
+        "artifact_digests": {"type": "array", "minItems": 11, "maxItems": 11, "items": {"type": "object", "additionalProperties": false, "required": ["artifact_id", "digest"], "properties": {"artifact_id": {"$ref": "#/$defs/id"}, "digest": {"$ref": "#/$defs/nullableDigest"}}}},
+        "process_identity_digest": {"$ref": "#/$defs/digest"},
+        "phase_ordered_result_digest": {"$ref": "#/$defs/digest"},
+        "completion_state": {"enum": ["passed", "failed", "incomplete", "not_executed"]},
+        "validation_outcome": {"const": "accepted"},
+        "validation_errors": {"type": "array", "maxItems": 16, "uniqueItems": true, "items": {"$ref": "#/$defs/id"}},
+        "validated_at": {"$ref": "#/$defs/timestamp"}
+      }
+    }
+  }
+}

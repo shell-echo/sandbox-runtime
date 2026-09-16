@@ -24,7 +24,11 @@ func main() {
 	if err != nil {
 		fail("verify Provider Contract", err)
 	}
-	fmt.Printf("verified local Provider Contract namespace %s version %s at revision %s (tree %s)\n", lock.Contract.Namespace, lock.Contract.Version, report.LockedRevision, report.ContractTree)
+	fmt.Printf(
+		"verified local Provider Contract namespace %s version %s at revision %s (tree %s; local Suite %s; remote Suite %s)\n",
+		lock.Contract.Namespace, lock.Contract.Version, report.LockedRevision, report.ContractTree,
+		report.SandboxSuite.Digest, report.RemoteSuite.Digest,
+	)
 }
 
 func fail(operation string, err error) {

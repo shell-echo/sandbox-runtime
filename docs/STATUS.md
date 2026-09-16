@@ -1,6 +1,84 @@
 # Project Status
 
-Updated: 2026-09-06
+P2.7c.2 is implemented through c2b.7: the producer builds the closed sanitized
+transcript and the report validator independently recomputes RFC 8785/SHA-256
+from `process-supervisor.json`'s `adapter_transcript_projection`. It binds the
+protocol, phases, invocations, processes, executables, configurations and field
+inventory, and checks message order, derived counts and status consistency.
+Physical byte counts, EOF/exit and process truth remain supervisor inputs, not
+independent observations made by this validator. No independent external-caller
+qualification result is claimed. c3.1 adds descriptor-backed, bounded executable
+preflight and rechecking without launching a process. The fixed 24-step plan
+has 21 completed and 3 unfinished steps. c3.2 implements the final static
+configuration commitment, exclusive custody transfer and one-shot logical phase
+admission with live descriptor rechecks. Reconstruction uses the existing
+protocol completion gate; outer-harness evidence remains open.
+c3.3 implements actual local spawn, endpoint handoff and bounded stop/reap.
+c3.4 exclusively decodes and binds the first stdout startup identity before any
+invocation or credential byte; Darwin/Linux tests execute repository helpers
+only, not an independent caller, and release identities remain assertions. c3.5
+validates the invocation against committed locations/startup requirements, then
+concurrently delivers bounded stdin and inherited-pipe payloads with EOF. c3.6
+starts one monotonic run budget before the first supervisor preflight read,
+preserves it across reconstruction, clips every case and operation deadline,
+drains bounded stderr concurrently, and accepts actual completion only after
+ordered output, terminal, stdout EOF and a clean reaped exit. c3.7 publishes
+sanitized evidence only after that completion, assigns opaque non-PID process
+identities, prevents external inputs from overriding observed adapter facts,
+and finalizes one canonical two-phase transcript. Real Darwin/arm64 and
+Linux/arm64 Lima helper tests pass. d1 now freezes a sanitized target identity,
+the exact profile-derived topology, 11 artifact requirements, all 10 ordered
+configuration identities, the numeric runtime/cleanup budget, and the 15+5
+scenario inventory before runtime setup. d2 now obtains target, artifact, and
+configuration identities only through a read-only observer, creates three
+descriptor-backed persistent stores, locks the authoritative inspector scope,
+and requires a complete zero-resource baseline before exposing prepared state.
+d3 releases mutation capability only after rechecking that state and baseline,
+passes the executor a closed identity-and-case directive with no request,
+endpoint, credential, correlation, or signing fields, and consumes exactly 15
+ordered progress results under clipped per-case and execution deadlines. It
+enforces dependencies, per-interaction wire-attempt bounds, and provisional
+transport/request counters while retaining cleanup after an unknown start.
+d4 admits reconstruction only after a terminal initial result and passes a
+closed eight-field directive containing only identities, ordered case IDs, and
+symbolic restart/preservation policy. It requires two distinct invocation IDs
+and eight unique opaque non-PID labels across the four old/new process pairs,
+rechecks persistent-store identity without reading entries, and consumes the
+five ordered reconstruction results under the original execution deadline.
+d5 adds four source-specific, read-only observer ports, binds their identities,
+41 interaction results and exact 66/17/7/1 fact projections to the locked
+profile and d2-d4 state, independently corroborates process replacement,
+transcript, shell-challenge and resource-scope facts, and derives scenario
+`passed`/`failed`/`incomplete`/`not_executed` plus conservative admission
+counters. Repository fixtures prove this component logic only; they are not
+independent caller evidence. d6 consumes the persistent cleanup obligation in a
+separate bounded context, binds the operator-owned teardown identity, closes
+local state descriptors, and requires exactly three same-scope, one-second-
+spaced zero-resource samples equal to the baseline before declaring cleanup
+successful. d7 now assembles and validates the closed evidence root as a local
+component. The separate public external-caller repository has completed 11 of
+its 13 candidate checkpoints through e1.8a. Public hosted run `35068957048`
+at source commit `58a211f0c167af3ec117c8cb8247bfe268bbae40` passed the
+full tests, deterministic Linux/amd64 build, authority verification, artifact
+upload, and five-subject Sigstore attestation `47846951`; the downloaded
+three-artifact bundle and its strict manifest were independently reverified.
+The e2 preflight then found two real execution blockers rather than an
+executable qualification environment: the attested candidate pins a synthetic
+`registry.invalid` runtime image, and the production command had not composed
+the locked terminal-connect route. The current worktree closes the latter with
+opt-in protected WebSocket composition and adds a repository-owned
+`profiles/coding-shell/image` definition with locked amd64/arm64 base manifests
+and a local native-Docker reproducibility/runtime gate. This remains component
+evidence, not an e2 run: the image has not been published or attested, and the
+external candidate has not yet been corrected and rebuilt against its
+immutable release digest.
+All 15 initial and all 5 reconstruction cases are locally composed, but
+operator-owned resource teardown, stable zero-resource inspection, independent
+runtime observations, the actual supervised 15+5 run, and a qualification
+result remain open. The main P2.7 plan is therefore 22/24, with e1 complete and
+e2/e3 pending.
+
+Updated: 2026-09-16
 
 This document is the implementation ledger for the repository-owned MIT
 Provider Contract. It distinguishes local component evidence, Contract
@@ -12,18 +90,23 @@ production readiness.
 
 | Item | Evidence | Status |
 | --- | --- | --- |
-| Latest downstream-fencing implementation and local/hosted caller evidence | Contract `5096e71`; projection/lock `24b2e36`; fencing component `b4d41c9`; Provider bootstrap `58488d7`; provisioning/process component `8a1049b`; current lock descriptor `b1d41f3`; local harness/run `550c785`/`20260906T050213.016063000Z`; hosted harness/run `2cadc53`/`34013982796` | The component and real-backend integration gates remain valid. The clean `linux/arm64` and hosted `linux/amd64` runs each pass all 13 scenarios through two independent mTLS/JWS caller processes, two Gateway processes, one authenticated unique ingress, retained Valkey state, and signed real Chromium. They exercise six protected Provider routes. The local run emits exactly five `0600` evidence files with all cleanup/sanitization checks true; the downloaded artifact contains evidence directory `20260906T052710.781616339Z` with exactly five sanitized files and pins the expected amd64 identities, topology, cleanup, and sanitization state. These close only the platform-specific ADR 0033 external-caller gates. Contract/tree/48-case identity is pinned but the Suite is not executed (`suite_exercised=false`). These v1 runs do not exercise ADR 0034 deletion/restore behavior. Valkey provenance/HA/failover, production advertisement/public Gateway, real Agent Platform, aggregate, multi-controller, hostile multi-tenant, deployment, and production readiness remain open |
+| Sandbox Provider Calling Standard decision | ADR 0037; `contract/specification/provider-calling-standard-v1.md`; repository-owned Contract manifest | External consumers adapt to the exact locked `sandbox-runtime` Provider Contract. The former named Agent Platform P3 migration route is retired, while caller/Provider ownership separation and historical candidate evidence remain. This standard slice adds no capability or production-readiness claim. ADR 0038 defines the generic issuer trust model, and its repository-local coordinated gate passes; independent caller and deployment qualification remain separate |
+| Current Provider Contract authority | Revision `22ba6987ea5fbc37d53942720133c0acad199edd`; tree `c9a7054d7c8e7f4b6e32f38175ceedddc48c2d38`; manifest `sha256:1e17e0ef4f86e03be1dac22c48e7b556a8600a4baa6252f4514390d339b8ba3f`; 53-case local Suite `sha256:b40c932643f4a1e5fd6681e3abf9b64a607609866a6254456970f8b8034cf2a8`; unchanged 6-case remote Suite | Contract verification, root tests/vet, and E2E lock logic pass in the current worktree. Clean VCS-built Suite execution, E2E parent-lock, and the eight E2E `-check` gates remain pending until a committed clean checkout exists; no current P2.6 or E2E result is claimed |
+| P2.7 independent external caller qualification definition | ADR 0040; profile `sandbox-runtime-external-caller-coding-shell-v1@1.0.0` at `sha256:4effea27fd3d7668b88eeb95c69e19b51556914b7949b1a39ce522b2aec46c14`; report schema `sha256:cd51ccf0aea0bc31b11ff4f288751fc7df0f0dd081860efc305182ea61f842e4` and validator semantics at `sha256:c724eaa9f3b52e1a5ba4aa5aaeb5e8b61a744818b2f56fd8ff52dfa5e1e584df`; adapter schema `sha256:d12b477cd540e02c6a7e2f8eb77b0405b717c15e98a0f144b2d63f705ff95969`; adapter semantics `sha256:10cd42017aee60b620dbbb7394a20c2a387983468a865a8d12a572f861d07662`; transcript projection schema `sha256:d2eb229f55528df8ba68426cc5b7da9d1bd6a78a412707d656b77c1effeff293` | P2.7a-b through d7 are complete as local harness components. The public external-caller repository has completed 11/13 candidate checkpoints through e1.8a; hosted run `35068957048` at source `58a211f0c167af3ec117c8cb8247bfe268bbae40` passed tests, deterministic build and authority verification, and its downloaded three-artifact bundle plus five-subject Sigstore attestation `47846951` were verified. The main plan is 22/24 and e1 is complete. Operator-owned zero-resource teardown proof, independent observer-backed 15+5 execution, and a qualification outcome remain absent; e2 and e3 remain open |
+| ADR 0038 caller issuer trust implementation | ADR 0038; implementation `034e647`; Contract lock `fd48de9`; projection regression fix `af8a505`; prior E2E lock `b8d4829`; local reference run `20260907T044611.598221000Z` | One protected listener has one explicit exact issuer with no default or fallback, Provider-local audience and revision anchors, issuer-scoped admitted URI SAN identities, and 1..32 frozen verification keys. Rotation overlaps distinct old/new `kid` values across a restart, stops old-key signing, waits 300 seconds, then removes the old key and restarts again. Issuer substitution remains an authentication failure; a verified wrong local audience or revision is forbidden before mutation reservation. Contract verification, 50-case conformance, root and E2E race/shuffle, vet, E2E lock checks, and the same-repository Docker reference run pass at their recorded identities. The run is 15 initial plus 5 reconstruction scenarios with manifest SHA-256 `60bda2dae83053db447417cea5c5e38d4798e1e90b91fbb5cfc75d2991c6993e`. It is reference evidence only; multi-issuer admission, independently implemented external-caller interoperability, multi-tenant isolation, HA, deployment, and production readiness remain open |
+| Historical P2.6 portable Provider conformance | ADR 0039; implementation `3fe314a012b808fe60dbd783d7c7c7121d3c548e`; E2E lock refresh `ae476fed12e82f472b19ff78fda633c8d702561d`; then-current 50-case local Suite and unchanged 6-case remote Suite | The clean VCS-built local and remote Runners, root/E2E race and vet, Contract verifier, parent-lock and eight E2E checks passed for that recorded authority. The current Contract has 53 local cases and needs a fresh clean-checkout release run; the historical result is not relabeled. Neither result proves independent third-party caller interoperability, protected or mutating remote conformance, aggregate conformance, hostile multi-tenant safety, HA, deployment, or production readiness |
+| Latest downstream-fencing implementation and local/hosted caller evidence | Contract `5096e71`; projection/lock `24b2e36`; fencing component `b4d41c9`; Provider bootstrap `58488d7`; provisioning/process component `8a1049b`; historical run lock descriptor `b1d41f3`; historical metadata lock refresh `b8d4829`; active metadata lock `ae476fe`; local harness/run `550c785`/`20260906T050213.016063000Z`; hosted harness/run `2cadc53`/`34013982796` | The component and real-backend integration gates remain valid. The clean `linux/arm64` and hosted `linux/amd64` runs each pass all 13 scenarios through two independent mTLS/JWS caller processes, two Gateway processes, one authenticated unique ingress, retained Valkey state, and signed real Chromium. They exercise six protected Provider routes. The local run emits exactly five `0600` evidence files with all cleanup/sanitization checks true; the downloaded artifact contains evidence directory `20260906T052710.781616339Z` with exactly five sanitized files and pins the expected amd64 identities, topology, cleanup, and sanitization state. These close only the platform-specific ADR 0033 external-caller gates. Their historical Contract/tree/48-case identity is pinned but the Suite is not executed (`suite_exercised=false`); refreshing current lock metadata does not relabel those runs. These v1 runs do not exercise ADR 0034 deletion/restore behavior. Valkey provenance/HA/failover, production advertisement/public Gateway, independently implemented external-caller interoperability, aggregate, multi-controller, hostile multi-tenant, deployment, and production readiness remain open |
 | ADR 0034 witnessed action-history component and local/hosted caller evidence | ADR 0034; witnessed v2 Redis adapter and Darwin/Linux file witness; pinned Valkey index `sha256:ccfa19b0d743e48927e1c8c14e39e0acb97b5cea347fef0bfe340247fea920cd`; Contract `5096e71fb84fbec22aa3487a0e55a1b49602ab8b`; tree `859f76dc0e855a0c8abdbbb5648df100dabb4328`; fixed harness `059357c`; local run `20260906T100233.295973000Z`; hosted run `34026680591` | Local focused/full race-shuffle, vet, Contract lock verification, unchanged 48-case Suite, and tagged pinned-Valkey package integration pass. V2 retains at most 4,096 fingerprint-only session records in one permanent hash, rejects missing/malformed history, and compares its sequence/token with an independent monotonic witness; only an exact Redis-ahead-one interrupted commit may reconcile forward. The clean `linux/arm64` and hosted `linux/amd64` fixed-harness runners each pass 18/18 through two Gateways, two independent callers, one unique ingress, real Chromium, a separate orchestrator fault credential, and a file witness outside the logical Valkey restore set. They prove the named deletion, restored-old-snapshot, witness-reconstruction, and checkpoint-mismatch behaviors before rejected actions open a new upstream dial. The local exact five-file set is `0600`; the inspected hosted artifact contains directory `20260906T101111.796974798Z` with exactly five sanitized files. Artifact ID `9987350368` has digest `sha256:3e68f1c4b5bd74e0ae0ff0fde2c9ffefc63852cf9fc82b3019bedfb228bf2c9a`. These close only the platform-specific ADR 0034 caller gates; the Suite remains unexercised. The file witness remains single-process component infrastructure, not production storage. Production witness/storage, Valkey provenance/HA/failover, production ACL separation, configuration/advertisement/deployment, aggregate, multi-controller, hostile multi-tenant, and production-readiness results remain absent |
 | ADR 0035 PostgreSQL witness candidate | ADR 0035; `PostgresActionHistoryWitness`; `pgx/v5 v5.9.2`; migration `gateway/capacity/redis/migrations/0001_action_history_witness.sql`; strict `VerifyRestoredState`; hosted workflow run `34031784793` at implementation `3ff58dc`; PostgreSQL digest `sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94` | Namespace/policy digest isolation, idempotent provision, atomic conditional CAS, primary-local synchronous commit, bounded contexts, error redaction, schema constraints, and least-privilege role shape are implemented. Local unit/full race-shuffle, vet, Contract lock, unchanged 48-case Suite, tagged-integration compilation, and the pinned-Valkey strict one-ahead non-mutation scenario pass. The hosted workflow passes the exact migration, role denial, concurrent CAS/reconnect, missing/malformed state, pool-starvation timeout, and combined real PostgreSQL/pinned-Valkey rollback cases. The initial tag pull resolved the digest now pinned by the workflow. The local PostgreSQL environment remained unavailable. Image provenance, independent failure/backup domains, deployment-owned controlled ingress operations, HA/failover, deployment, and production readiness remain unproved |
 | ADR 0036 PostgreSQL controlled-restore reference | ADR 0036; profile `browser-postgres-controlled-restore-e2e-v1`; locked PostgreSQL index and exact migration; PostgreSQL witnessed-v2 Provider/private-ingress composition; orchestrator-only Redis restore control; strict restored-state startup; PR #47 merge `a0cddf4`; hosted run `34038556283`; artifact `browser-postgres-controlled-restore-e2e-evidence-34038556283` | The post-merge `linux/amd64` hosted run passes all 18 same-runner scenarios around two Gateways, two independent callers, one unique ingress, Valkey, PostgreSQL, and real Chromium. It quarantines both listeners before restore, rejects an older Redis snapshot without PostgreSQL advance or listener exposure, repairs the exact current state, and resumes only after strict verification. The inspected artifact contains evidence directory `20260906T141526.647125530Z` with exactly five sanitized files; the report is 18/18, and the manifest pins `harness_commit=a0cddf4`, records three ingress reconstructions, all cleanup/sanitization flags true, no file-witness v2 field, PostgreSQL restore evidence, `same_runner=true`, `independent_failure_domain=false`, and `suite_exercised=false`. Artifact ID `9991028239` has digest `sha256:72d822c44c2ab5e91ed500f5ef549d8ec1c63268443a48fa293c93a3d24ca14e`. This closes only the hosted ADR 0036 same-runner operational reference gate. PostgreSQL and Valkey still share the runner, host, Docker engine, workflow, and operator; provenance, HA, independent failure/backup domains, deployment, and production readiness remain unproved |
-| Current hosted CI and evidence tracks | Merge commit `a0cddf4`; CI `34038556281`; Reference `34038556295`; Candidate `34038556284`; Browser `34038556297`; shared capacity `34038556314`; durable revocation `34038556293`; downstream fencing v1 `34038556291`; downstream fencing v2 `34038556299`; PostgreSQL witness `34038556301`; PostgreSQL controlled restore `34038556283` | All ten post-merge workflows pass for the same `main` commit. The controlled-restore run independently passes 18/18 on `linux/amd64`; artifact ID `9991028239` has GitHub digest `sha256:72d822c44c2ab5e91ed500f5ef549d8ec1c63268443a48fa293c93a3d24ca14e`. CI and all eight E2E profiles remain distinct evidence tracks; the PostgreSQL witness workflow remains a component/integration track. Their partial properties cannot be composed into aggregate conformance, real-platform compatibility, Provider multi-controller reliability, hostile multi-tenant security, deployment, or production readiness |
+| Current hosted CI and evidence tracks | Merge commit `cee6a3f`; CI `34076759102`; Reference `34076759139`; Candidate `34076759185`; Browser `34076759117`; shared capacity `34076759106`; durable revocation `34076759108`; downstream fencing v1 `34076759154`; downstream fencing v2 `34076759104`; PostgreSQL witness `34076759137`; PostgreSQL controlled restore `34076759112` | All ten main workflows pass for the same `main` commit. CI and all eight E2E profiles remain distinct evidence tracks; the PostgreSQL witness workflow remains a component/integration track. Their partial properties cannot be composed into aggregate conformance, independently implemented external-caller interoperability, Provider multi-controller reliability, hostile multi-tenant security, deployment, or production readiness |
 | GitHub Actions runtime | Node 24 migration `6c1ddde`; E2E lock `e75869d`; CI `33850219645`; Reference `33850219700`; Candidate `33850219664`; Browser `33850219667` | All four workflows passed without the previous Node 20 or `punycode` warnings. This is CI infrastructure evidence only and adds no Provider behavior, external-caller compatibility, deployment, or production-readiness claim |
 | Browser-session release CI evidence | implementation/ledger baseline `df78739`; lock-refresh baseline `6163de1` | Repository CI runs `33712081491` and `33712412434` each passed `provider-contract`, `test`, and `docker-integration`. This is repository CI only, not browser external-caller or production evidence |
 | Browser publication baseline CI evidence | hosted harness baseline `e7e4d57`; Provider lock `83a7884` | Repository CI run `33725664862` passed `provider-contract`, `test`, and `docker-integration`. This remains repository CI; exact Browser image publication is separately evidenced by run `33724368530`, and neither run is browser caller E2E |
 | Prior inspected reference regression artifact | hosted harness/Provider `17ed6ca`/`b4d41c9`, run `33970773414`; latest local pre-refresh harness/Provider `59e08d5`/`c0a55d1`, run `20260905T080530.577843000Z` | Hosted and local Reference E2E each passed all 15 initial and 5 process-reconstruction/resume coding/shell scenarios. Hosted artifact `reference-e2e-evidence-33970773414` has digest `sha256:de2c6f2d31d9dd5a8323d82560bf0f314970c8e1825d815d224d48aac2dcba16`; the local run pins runtime digest `sha256:c1da999518ed8cf3c422142b705f3eeca5d60104be07bc28c15a7d527d2907fc`. This is coding/shell regression evidence, not Browser E2E or durable-revocation caller evidence |
 | Prior inspected Agent Platform candidate artifact | hosted harness/Provider `17ed6ca`/`b4d41c9`, run `33970773345`; latest local pre-refresh harness/Provider `59e08d5`/`c0a55d1`, run `20260905T080623.861033000Z` | Hosted and local candidate E2E each passed all 15 initial plus 5 resume coding/shell scenarios, including candidate shadow/selection/rollback/drain policy and reconstruction. Hosted artifact `platform-candidate-e2e-evidence-33970773345` has digest `sha256:546c3ecd6f2cd23a629ab53eb61bbe23fa7361c8440297c0fb039886802d7bc0`; the local run pins runtime digest `sha256:c1da999518ed8cf3c422142b705f3eeca5d60104be07bc28c15a7d527d2907fc`. This is candidate integration only, not Browser evidence, real Veronica, durable-revocation caller evidence, or production evidence |
 | Internal Block manifest foundation | implementation in `blocks/manifest.go`; ADR 0016 and plan `block-manifest-loader.md` | Strict `sandbox.runtime/v1alpha1` YAML/JSON parsing, digest-pinned images, bounded command/capability/path validation, symlink/nested-path rejection, duplicate detection, deterministic read-only registry, and defensive-copy tests pass. This is internal component evidence only; no Provider Contract, route, advertisement, runtime image, or production claim |
-| P4 optional-profile authority | Contract `5096e71`; projection/lock `24b2e36`; 48-case Suite; command graph `66183b1`; Browser capacity `7b062e6`; Browser edge `44ea2ee`; Browser TLS edge `b8f8941`; authenticated capacity `997fb0d`; Redis-compatible capacity `9434540`; ADR 0032 revocation component `c0a55d1`; durable-revocation harness/Gateway `e952ef9`; ADR 0033 component `b4d41c9`; fixed v2 harness `059357c`; local v2 run `20260906T100233.295973000Z`; hosted v2 run `34026680591`; ADR 0035 witness component `3ff58dc`; ADR 0036 merge/run `a0cddf4`/`34038556283`; local downstream harness/run `550c785`/`20260906T050213.016063000Z`; hosted downstream harness/run `2cadc53`/`34013982796` | Browser authority and all named component/caller gates remain separate. ADR 0033 passes 13/13 on `linux/arm64` and `linux/amd64` for its locked v1 topology; its Contract Suite remains unexercised. ADR 0034 separately passes its witnessed-v2 component and pinned-Valkey adapter gates plus its `linux/arm64` and `linux/amd64` 18/18 caller/Chromium deletion-and-restore gates. ADR 0035 passes its real PostgreSQL component gate, and ADR 0036 passes its hosted same-runner 18/18 controlled-restore gate. Their Suites remain unexercised where recorded. Production independent witness/storage and restore operations, Valkey/PostgreSQL provenance/HA/failover, production configuration/metrics/deployment, aggregate, multi-controller, hostile multi-tenant, real Agent Platform, and production gates remain open |
+| P4 optional-profile authority | Contract `5096e71`; projection/lock `24b2e36`; 48-case Suite; command graph `66183b1`; Browser capacity `7b062e6`; Browser edge `44ea2ee`; Browser TLS edge `b8f8941`; authenticated capacity `997fb0d`; Redis-compatible capacity `9434540`; ADR 0032 revocation component `c0a55d1`; durable-revocation harness/Gateway `e952ef9`; ADR 0033 component `b4d41c9`; fixed v2 harness `059357c`; local v2 run `20260906T100233.295973000Z`; hosted v2 run `34026680591`; ADR 0035 witness component `3ff58dc`; ADR 0036 merge/run `a0cddf4`/`34038556283`; local downstream harness/run `550c785`/`20260906T050213.016063000Z`; hosted downstream harness/run `2cadc53`/`34013982796` | Browser authority and all named component/caller gates remain separate. ADR 0033 passes 13/13 on `linux/arm64` and `linux/amd64` for its locked v1 topology; its Contract Suite remains unexercised. ADR 0034 separately passes its witnessed-v2 component and pinned-Valkey adapter gates plus its `linux/arm64` and `linux/amd64` 18/18 caller/Chromium deletion-and-restore gates. ADR 0035 passes its real PostgreSQL component gate, and ADR 0036 passes its hosted same-runner 18/18 controlled-restore gate. Their Suites remain unexercised where recorded. Production independent witness/storage and restore operations, Valkey/PostgreSQL provenance/HA/failover, production configuration/metrics/deployment, aggregate, multi-controller, hostile multi-tenant, independently implemented external-caller interoperability, and production gates remain open |
 | P4 browser image sandbox and provenance | ADR `0018`/`0019`; implementation `6e02f1c`; native-runner correction `99b8d36`; exact-index correction `494401a`; publication run `33724368530`; attestation `44912296` | Local arm64/amd64 integration passed with Chromium `151.0.7922.109`, a sandboxed zygote, no `--no-sandbox`, and seccomp digest `sha256:3bdf2fd28636409951409621735f616997d0fd4851259851ac4c340dff90e05b`. GHCR index `sha256:87d3216c22ada0fea74b375a3ee5c2ddf021d3e1913569e2aeb4a316ed3b5c2f` has independently verified GitHub OIDC/Sigstore provenance for source `58ed009`. Independent inspection found only linux/amd64 and linux/arm64/v8 manifests. This closes the Browser image publication gate; command/caller evidence is recorded separately and production advertisement/deployment remains open |
 | P4 browser session component | implementation `9a5d225`; lock/CI baseline `6163de1`; CI `33712412434` | Independent `provider/browser` domain and runtime ports, durable memory/file authority, accept-before-allocation coordinator, restart reconciliation, expiry/cancellation/unknown-outcome cleanup, separate opaque reference memory/file registry and resolver, browser operation-family projection, and bounded duration usage evidence pass focused and full-repository race/shuffle plus vet. This row remains Provider-local component evidence only; command/runtime and Browser external-caller evidence are recorded separately and do not convert it into aggregate, multi-controller, tenant, deployment, or production evidence |
 | P4 browser Docker adapter component | implementation `cd33ba3`; E2E lock refresh `e1de512`; ADR 0020; CI `33731520938` and `33732133500` | The adapter requires injected provenance verification and restricted-egress provisioning, validates the exact signed image/seccomp/platform metadata, applies finite resources and four bounded stable guest mounts, persists private allocation/network identity, verifies owned restart state, and establishes a fresh non-TTY container-loopback CDP WebSocket relay. Focused/full race-shuffle, vet, the unchanged Contract verifier and 48-case Suite, the local tagged Docker driver matrix, and both three-job repository CI runs pass. The original live case used `network=none`, so this row is private-relay component evidence; complete composition and caller evidence are recorded separately and do not establish advertisement, aggregate, multi-controller, tenant, deployment, or production behavior |
@@ -31,16 +114,16 @@ production readiness.
 | P4 browser restricted-egress component | implementation `7e60340`; E2E lock refresh `7f15628`; ADR 0022; CI `33747803509`; local Gateway image `sha256:202bbf92fcbcce87e4b800f093d1df281125ab6fa43152906564cf8e0b7021d6` | A strict local policy registry, DNS/HTTP/TLS Gateway, per-allocation internal Docker bridge, explicitly owned uplink, immutable lifecycle/create policy binding, Browser-only DNS/network projection, policy/lease/ownership recovery, and exact cleanup pass focused/full race-shuffle, vet, unchanged Contract verification and 48-case Suite. The original combined tagged integration proved allowed HTTP/HTTPS, denied unlisted/metadata targets, reconstruction, and cleanup. `f760369` adds bounded EDNS0 compatibility and hosted Browser run `33838215924` passes the complete path. This row remains component/lifecycle evidence; Gateway image publication, advertisement, aggregate, multi-controller, tenant, deployment, and production gates remain open |
 | P4 browser protected transport component | implementation `b8423f5`; ADR 0023; harness lock `a2721ad`; CI `33760609353`; hosted regressions `33760609272`/`33760609231` | The two Contract-authorized Browser routes pass through mTLS/JWS/admission binding, bounded closed-JSON preflight, replay/fencing, application correlation, async operation projection, expiry, opaque handoff projection, and bounded error mapping. Nil application and malformed application identity fail closed; Browser operation-family aggregation is covered. Full race/shuffle, vet, Contract verification, and the 48-case Suite pass. This row remains Provider admission/transport component evidence; the default-disabled command and external Browser caller are recorded separately, while production advertisement, aggregate, multi-controller, tenant, deployment, and production gates remain open |
 | P4 caller-owned Browser Gateway component | implementation `5aae281`; ADR 0024; E2E lock `9eb32ba`; CI `33826813073`; hosted regressions `33826813099`/`33826813100` | The shared Gateway policy state machine enforces exclusive terminal/Browser session identity and reference namespaces and exact resolved endpoint binding. The Browser composition requires caller authorization, revocation, recording, WebSocket admission, Provider resolution, and bounded reconnect settings; its private adapter validates RFC 6455 framing without auditing CDP payloads. Focused/full race-shuffle, vet, Contract verification, and the 48-case Suite pass. Its composition in the reference caller is recorded separately; no production public route, advertisement, aggregate, multi-controller, tenant, deployment, or production evidence is claimed |
-| P4 initial browser command and external-caller evidence | ADR 0025/0026; command implementation `66183b1`; Provider DNS fix `f760369`; harness `79fee2b`; CI `33838215949`; hosted Browser run `33838215924` | The explicit default-disabled command graph binds the exact Browser runtime, provenance, restricted-egress/create-policy, durable session/reference, operation/usage, recovery, and shutdown dependencies without adding a public Gateway or production advertisement. Hosted `linux/amd64` Browser Reference E2E passed 10 initial plus 5 reconstruction scenarios over separate caller/reference processes, real mTLS/JWS HTTPS, WebSocket, signed-image provenance, Docker, CDP, allowed/denied egress, Gateway denial/expiry/revocation, partial/complete usage, mTLS caller rejection, recovery, and cleanup. Artifact `browser-reference-e2e-evidence-33838215924` has digest `sha256:4acfbc97c0c1f64e987b00870849a2244e33596918d08e659385c428310843ea`. This historical row closes only the Browser reference external-caller gate for its named lock; it contains no active capacity-rejection scenario and proves no production advertisement/public Gateway, real Agent Platform, aggregate, multi-controller, hostile multi-tenant, deployment, or production property |
-| P4 Browser Gateway local-capacity component and caller evidence | ADR 0027; implementation `7b062e6`; E2E lock `a219d29`; harness `28a9a5e`; CI `33846603580`; hosted Browser run `33846603547` | Non-blocking total/per-session capacity is acquired after exact authorization binding and before revocation, the `authorized` audit event, Provider resolution, and backend dial, then released on every connection exit. Focused concurrency/revocation tests, full local gates, four-job repository CI, and hosted `linux/amd64` Browser Reference E2E pass. The caller holds an admitted CDP connection, observes rejection of a second same-session grant without disrupting the first, and connects a replacement after release. All 11 initial and 5 reconstruction scenarios pass; artifact `browser-reference-e2e-evidence-33846603547` has digest `sha256:b024225aa3545fa56a7cc5113f29c0817a86ebc70c3976e10d81bf3507546cba`. This is single-process capacity plus Browser reference external-caller evidence only; WebSocket pre-upgrade load, authorization load, distributed capacity/revocation, production advertisement/public Gateway, real Agent Platform, aggregate, multi-controller, hostile multi-tenant, deployment, and production gates remain open |
-| P4 Browser pre-upgrade edge component and caller evidence | ADR 0028; implementation `44ea2ee`; E2E lock `3b63c76`; local harness/run `249cdd4`/`20260904T080946.250607000Z`; hosted harness/run `e7e7f03`/`33854020809`; CI `33854020951` | Browser composition requires a process-local global connection/fixed-window request gate before WebSocket admission and upgrade. Focused/full race-shuffle, vet, Contract verification, the unchanged 48-case Suite, independent E2E module gates, clean local `linux/arm64`, and hosted `linux/amd64` Browser runs pass. The added 16-request authenticated wrong-Origin burst observes ordinary `403`, generic pre-upgrade `429` with bounded `Retry-After`, and recovery. Hosted artifact `browser-reference-e2e-evidence-33854020809` has digest `sha256:b081ce8a3bf7e3e0c37e4bf036630483735c3812eeaf24d311048ff0a9122779`. All 12 initial and 5 reconstruction scenarios pass; the 20-record Gateway audit contains six `authorized`, six `connected`, four `client_closed`, and one each `capacity_rejected`, `denied`, `expired`, and `revoked`, with no `grant-browser-edge-*` identity. This is a process-local Browser service plus reference external-caller result only; listener/TLS/HTTP limits, partition-aware shared capacity, distributed durable revocation, production advertisement/public Gateway, real Agent Platform, aggregate, multi-controller, hostile multi-tenant, deployment, and production gates remain open |
-| P4 Browser listener/TLS/HTTP component and caller evidence | ADR 0029; implementation `b8f8941`; local harness/run `35cf068`/`20260904T091156.303717000Z`; hosted harness/run `7a20d9d`/`33857739150`; CI `33857739103` | The caller-owned reference edge loads bounded regular-file server-auth material before bind, freezes TLS 1.3 plus HTTP/1.1, caps accepted connections, and requires explicit header/read/write/idle limits with context-aware startup/shutdown. Focused/full race-shuffle, vet, Contract verification, the unchanged 48-case Suite, independent E2E module gates, clean local `linux/arm64`, and hosted `linux/amd64` Browser runs pass. The black-box caller rejects TLS 1.2, proves TLS 1.3/HTTP/1.1, rejects slow and oversized headers before the handler, saturates the accepted-connection limit, and observes recovery. All 13 initial and 5 reconstruction scenarios pass. Hosted artifact `browser-reference-e2e-evidence-33857739150` has digest `sha256:94bcdfa53b667d4a6bc17fd6714cc9895e8402b830b8c6425c604c835f9228f`; inspected directory `20260904T091942.992885726Z` pins Provider/Contract/tree/Suite/image/platform. Its 20-record Gateway audit preserves the previous type counts with no edge grant, endpoint, token, credential, CDP, or payload field. This is a process-local listener/TLS/HTTP component plus Browser reference external-caller result only; partition-aware shared/distributed capacity, durable distributed revocation, production storage/configuration and metrics, production advertisement/public Gateway, real Agent Platform, aggregate, multi-controller, hostile multi-tenant, deployment, and production gates remain open |
+| P4 initial browser command and external-caller evidence | ADR 0025/0026; command implementation `66183b1`; Provider DNS fix `f760369`; harness `79fee2b`; CI `33838215949`; hosted Browser run `33838215924` | The explicit default-disabled command graph binds the exact Browser runtime, provenance, restricted-egress/create-policy, durable session/reference, operation/usage, recovery, and shutdown dependencies without adding a public Gateway or production advertisement. Hosted `linux/amd64` Browser Reference E2E passed 10 initial plus 5 reconstruction scenarios over separate caller/reference processes, real mTLS/JWS HTTPS, WebSocket, signed-image provenance, Docker, CDP, allowed/denied egress, Gateway denial/expiry/revocation, partial/complete usage, mTLS caller rejection, recovery, and cleanup. Artifact `browser-reference-e2e-evidence-33838215924` has digest `sha256:4acfbc97c0c1f64e987b00870849a2244e33596918d08e659385c428310843ea`. This historical row closes only the Browser reference external-caller gate for its named lock; it contains no active capacity-rejection scenario and proves no production advertisement/public Gateway, independently implemented external-caller interoperability, aggregate, multi-controller, hostile multi-tenant, deployment, or production property |
+| P4 Browser Gateway local-capacity component and caller evidence | ADR 0027; implementation `7b062e6`; E2E lock `a219d29`; harness `28a9a5e`; CI `33846603580`; hosted Browser run `33846603547` | Non-blocking total/per-session capacity is acquired after exact authorization binding and before revocation, the `authorized` audit event, Provider resolution, and backend dial, then released on every connection exit. Focused concurrency/revocation tests, full local gates, four-job repository CI, and hosted `linux/amd64` Browser Reference E2E pass. The caller holds an admitted CDP connection, observes rejection of a second same-session grant without disrupting the first, and connects a replacement after release. All 11 initial and 5 reconstruction scenarios pass; artifact `browser-reference-e2e-evidence-33846603547` has digest `sha256:b024225aa3545fa56a7cc5113f29c0817a86ebc70c3976e10d81bf3507546cba`. This is single-process capacity plus Browser reference external-caller evidence only; WebSocket pre-upgrade load, authorization load, distributed capacity/revocation, production advertisement/public Gateway, independently implemented external-caller interoperability, aggregate, multi-controller, hostile multi-tenant, deployment, and production gates remain open |
+| P4 Browser pre-upgrade edge component and caller evidence | ADR 0028; implementation `44ea2ee`; E2E lock `3b63c76`; local harness/run `249cdd4`/`20260904T080946.250607000Z`; hosted harness/run `e7e7f03`/`33854020809`; CI `33854020951` | Browser composition requires a process-local global connection/fixed-window request gate before WebSocket admission and upgrade. Focused/full race-shuffle, vet, Contract verification, the unchanged 48-case Suite, independent E2E module gates, clean local `linux/arm64`, and hosted `linux/amd64` Browser runs pass. The added 16-request authenticated wrong-Origin burst observes ordinary `403`, generic pre-upgrade `429` with bounded `Retry-After`, and recovery. Hosted artifact `browser-reference-e2e-evidence-33854020809` has digest `sha256:b081ce8a3bf7e3e0c37e4bf036630483735c3812eeaf24d311048ff0a9122779`. All 12 initial and 5 reconstruction scenarios pass; the 20-record Gateway audit contains six `authorized`, six `connected`, four `client_closed`, and one each `capacity_rejected`, `denied`, `expired`, and `revoked`, with no `grant-browser-edge-*` identity. This is a process-local Browser service plus reference external-caller result only; listener/TLS/HTTP limits, partition-aware shared capacity, distributed durable revocation, production advertisement/public Gateway, independently implemented external-caller interoperability, aggregate, multi-controller, hostile multi-tenant, deployment, and production gates remain open |
+| P4 Browser listener/TLS/HTTP component and caller evidence | ADR 0029; implementation `b8f8941`; local harness/run `35cf068`/`20260904T091156.303717000Z`; hosted harness/run `7a20d9d`/`33857739150`; CI `33857739103` | The caller-owned reference edge loads bounded regular-file server-auth material before bind, freezes TLS 1.3 plus HTTP/1.1, caps accepted connections, and requires explicit header/read/write/idle limits with context-aware startup/shutdown. Focused/full race-shuffle, vet, Contract verification, the unchanged 48-case Suite, independent E2E module gates, clean local `linux/arm64`, and hosted `linux/amd64` Browser runs pass. The black-box caller rejects TLS 1.2, proves TLS 1.3/HTTP/1.1, rejects slow and oversized headers before the handler, saturates the accepted-connection limit, and observes recovery. All 13 initial and 5 reconstruction scenarios pass. Hosted artifact `browser-reference-e2e-evidence-33857739150` has digest `sha256:94bcdfa53b667d4a6bc17fd6714cc9895e8402b830b8c6425c604c835f9228f`; inspected directory `20260904T091942.992885726Z` pins Provider/Contract/tree/Suite/image/platform. Its 20-record Gateway audit preserves the previous type counts with no edge grant, endpoint, token, credential, CDP, or payload field. This is a process-local listener/TLS/HTTP component plus Browser reference external-caller result only; partition-aware shared/distributed capacity, durable distributed revocation, production storage/configuration and metrics, production advertisement/public Gateway, independently implemented external-caller interoperability, aggregate, multi-controller, hostile multi-tenant, deployment, and production gates remain open |
 | P4 Browser authenticated-capacity port, memory component, and reference regression | ADR 0030; implementation `997fb0d`; E2E lock `49d1c20`; harness `6b01b75`; CI `33940332882`; hosted Browser run `33940332911` | Browser composition now requires a caller-owned capacity authority after exact grant binding and before revocation, authorized audit, Provider resolution, or dial. Typed loss/unavailability terminates both streams without reconnect; release uses an independent bounded context; simultaneous causes resolve as revocation, expiry, capacity, then transport. The memory reference atomically enforces global, tenant, and exact tenant/sandbox/session limits without storing caller, grant, credential, handoff, endpoint, or backend identity. Local and hosted component/lock gates pass. Hosted `linux/amd64` Browser Reference E2E passed 13 initial plus 5 reconstruction scenarios against Provider `997fb0d`; artifact `browser-reference-e2e-evidence-33940332911` has digest `sha256:f4133967b6e573c701b82c72dc4d101febd4e6b28199e188fa0c8db049bff9ae`. Its active contention path uses the authenticated memory authority. This remains process-local reference external-caller evidence; no shared-store TTL/renewal, ownership, crash reclamation, stale-owner fencing, two-Gateway-process, distributed revocation, deployment, or production evidence is claimed |
-| P4 Browser Redis-compatible shared capacity and local two-Gateway evidence | ADR 0031; implementation `9434540`; Provider baseline `2ed5e68`; harness/Gateway source `ddbb2c4`; local run `20260905T061037.558537000Z` | The adapter verifies immutable policy, uses one bounded sorted-set record per lease, and implements atomic Lua acquire/renew/release, Redis server-time expiry, conservative renewal, TTL crash reclamation, and opaque-owner monotonic fencing. All 10 scenarios pass on `linux/arm64` through two independent Gateway OS processes and pinned Valkey. Rejection is post-`101` normal `1000` close, not HTTP `429`. The manifest pins Contract/tree/48-case metadata with `contract.exercised=false`, and pins Valkey index `sha256:ccfa19b0d743e48927e1c8c14e39e0acb97b5cea347fef0bfe340247fea920cd` with `provenance_not_established=true`. This is local Gateway shared-capacity evidence only, not hosted, Provider Contract E2E, Browser/CDP, HA/failover, durable distributed revocation, downstream fencing, Provider multi-controller, hostile multi-tenant, real Agent Platform, deployment, or production evidence |
-| P4 Browser shared capacity hosted two-Gateway evidence | workflow/run `Browser Shared Capacity E2E`/`33949577876`; harness/Gateway source `de297e7`; Provider baseline `2ed5e68`; artifact `browser-shared-capacity-e2e-evidence-33949577876` | The hosted `linux/amd64` run independently passes all 10 scenarios. GitHub artifact digest is `sha256:6e938a1549f3ffe3b7a08cf9aa7cd58639f3d058f935c6da1e57dad45ffeb423`; downloaded run `20260905T062246.271594332Z` contains exactly six sanitized files. Audits contain 22 `authorized`, 22 `connected`, 18 `client_closed`, five `capacity_rejected`, two `capacity_lost`, and two `capacity_unavailable`; observations contain 22 `resolve` and 22 `dial`. The manifest pins Valkey index `sha256:ccfa19b0d743e48927e1c8c14e39e0acb97b5cea347fef0bfe340247fea920cd`, amd64 child `sha256:dd021e69e0a204fbb25b39c332c3dd61d51853d0a67e34f523cf1e1ab15fe478`, Contract/tree/48-case metadata with `exercised=false`, and `provenance_not_established=true`. This is hosted Gateway/Valkey shared-capacity evidence only, not Provider Contract E2E, Browser/CDP, image provenance, restricted egress, Provider artifact/usage, Valkey provenance, HA/failover, durable distributed revocation, downstream fencing, Provider multi-controller, hostile multi-tenant, real Agent Platform, aggregate, deployment, or production evidence |
+| P4 Browser Redis-compatible shared capacity and local two-Gateway evidence | ADR 0031; implementation `9434540`; Provider baseline `2ed5e68`; harness/Gateway source `ddbb2c4`; local run `20260905T061037.558537000Z` | The adapter verifies immutable policy, uses one bounded sorted-set record per lease, and implements atomic Lua acquire/renew/release, Redis server-time expiry, conservative renewal, TTL crash reclamation, and opaque-owner monotonic fencing. All 10 scenarios pass on `linux/arm64` through two independent Gateway OS processes and pinned Valkey. Rejection is post-`101` normal `1000` close, not HTTP `429`. The manifest pins Contract/tree/48-case metadata with `contract.exercised=false`, and pins Valkey index `sha256:ccfa19b0d743e48927e1c8c14e39e0acb97b5cea347fef0bfe340247fea920cd` with `provenance_not_established=true`. This is local Gateway shared-capacity evidence only, not hosted, Provider Contract E2E, Browser/CDP, HA/failover, durable distributed revocation, downstream fencing, Provider multi-controller, hostile multi-tenant, independently implemented external-caller interoperability, deployment, or production evidence |
+| P4 Browser shared capacity hosted two-Gateway evidence | workflow/run `Browser Shared Capacity E2E`/`33949577876`; harness/Gateway source `de297e7`; Provider baseline `2ed5e68`; artifact `browser-shared-capacity-e2e-evidence-33949577876` | The hosted `linux/amd64` run independently passes all 10 scenarios. GitHub artifact digest is `sha256:6e938a1549f3ffe3b7a08cf9aa7cd58639f3d058f935c6da1e57dad45ffeb423`; downloaded run `20260905T062246.271594332Z` contains exactly six sanitized files. Audits contain 22 `authorized`, 22 `connected`, 18 `client_closed`, five `capacity_rejected`, two `capacity_lost`, and two `capacity_unavailable`; observations contain 22 `resolve` and 22 `dial`. The manifest pins Valkey index `sha256:ccfa19b0d743e48927e1c8c14e39e0acb97b5cea347fef0bfe340247fea920cd`, amd64 child `sha256:dd021e69e0a204fbb25b39c332c3dd61d51853d0a67e34f523cf1e1ab15fe478`, Contract/tree/48-case metadata with `exercised=false`, and `provenance_not_established=true`. This is hosted Gateway/Valkey shared-capacity evidence only, not Provider Contract E2E, Browser/CDP, image provenance, restricted egress, Provider artifact/usage, Valkey provenance, HA/failover, durable distributed revocation, downstream fencing, Provider multi-controller, hostile multi-tenant, independently implemented external-caller interoperability, aggregate, deployment, or production evidence |
 | P4 Browser exact-grant durable revocation component | ADR 0032; implementation `c0a55d1`; E2E lock `59e08d5`; hosted evidence `c7fe24d`; pinned Valkey index `sha256:ccfa19b0d743e48927e1c8c14e39e0acb97b5cea347fef0bfe340247fea920cd` | The Gateway now requires one atomic, level-triggered exact-grant revocation watch; nil, malformed, conflicting, or unavailable watches fail closed; revocation cancels blocked resolution/dial work and wins the documented stable termination priority. The memory adapter and Redis-compatible retained-tombstone source/writer pass focused/full race-shuffle, vet, Contract verification, the unchanged 48-case Suite, and tagged real-Valkey component integration. The Redis adapter verifies immutable policy, hashes namespace/grant identities, uses server time and bounded grant lifetime, retains the maximum tombstone expiry, bounds operations/polling, and rejects malformed or unavailable state. Pre-ADR0033 local and hosted Browser `13+5`, Reference/Candidate `15+5`, and shared-capacity `10/10` regressions pass; hosted run IDs are `33955436984`, `33955436969`/`33955437046`, and `33955436968`. This row is component and regression evidence only: those runners do not exercise the separately required two-Gateway/independent-revoker retained-backend scenario, downstream fencing, Valkey provenance/HA, multi-controller, multi-tenant, deployment, or production behavior |
-| P4 Browser durable-revocation local and hosted caller evidence | ADR 0032; harness/Gateway `e952ef9`; Provider `c0a55d1`; local `linux/arm64` run `20260905T095109.569973000Z`; hosted `linux/amd64` run `33959122456`; artifact `browser-durable-revocation-e2e-evidence-33959122456` | Both runs passed all seven locked scenarios through two independent Gateway OS processes, two independent black-box caller processes, one independent revoker process, and one pinned retained Valkey authority. Local A/B revoke-to-close propagation was 72/72 ms and hosted was 97/99 ms, below the 2-second bound. The runs prove active and pre-resolution exact-grant revocation on both Gateways, retained rejection after two Gateway reconstructions, unaffected same-session/other-tenant grants, outage failure closure, recovery without resurrection, and exactly seven sanitized evidence files. Hosted artifact digest is `sha256:1384a4504725c90717a3a8da058713fb1b8ed763f2c941b961811eb8370b8600`; its audit totals are nine each `authorized`/`connected`/`revoked`, four each `revocation_unavailable`/`client_closed`, nine each `resolve`/`dial`, and three `revoke_committed`. Contract/tree/48 cases are metadata with `exercised=false`; Valkey provenance is not established and `acl_role_separation_established=false`. This closes only the ADR 0032 caller-owned durable exact-grant revocation gate, not Provider API/Contract conformance, real Browser/CDP or downstream fencing, real Agent Platform, multi-controller, hostile multi-tenant, deployment, or production readiness |
-| P4 Browser downstream CDP fencing component and local/hosted external-caller evidence | ADR 0033; fencing implementation `b4d41c9`; Provider bootstrap `58488d7`; provisioning/process implementation `8a1049b`; lock descriptor `b1d41f3`; local harness/run `550c785`/`20260906T050213.016063000Z`; hosted harness/run `2cadc53`/`34013982796`; pinned Valkey index `sha256:ccfa19b0d743e48927e1c8c14e39e0acb97b5cea347fef0bfe340247fea920cd` | The action-fence/private-ingress/Redis adapter passes its component plus real-backend integration gate. The local arm64 and hosted amd64 runs each pass 13/13 through two independent mTLS/JWS callers, two Gateways, one authenticated unique ingress, retained Valkey, and signed real Chromium. They prove ordinary/replacement mutations, stale and pre-action lease-loss rejection before Chromium, terminal lower-fence closure without reconnect, unaffected scopes, outage recovery, retained high-water across ingress reconstruction, bypass exclusion, and cleanup/sanitization. The local run retains exactly five `0600` files; the downloaded artifact contains evidence directory `20260906T052710.781616339Z` with exactly five sanitized files. Manifest cleanup and sanitization booleans are all true. Six protected Provider routes are exercised, but the 48-case Suite is not (`suite_exercised=false`). These close only the platform-specific ADR 0033 caller gates. Deleted/restore-missing high-water detection, restored-snapshot consistency, Valkey provenance/HA/failover, production metrics/configuration/deployment, Provider multi-controller reliability, hostile multi-tenant isolation, real Agent Platform compatibility, aggregate conformance, and production readiness are not proved |
+| P4 Browser durable-revocation local and hosted caller evidence | ADR 0032; harness/Gateway `e952ef9`; Provider `c0a55d1`; local `linux/arm64` run `20260905T095109.569973000Z`; hosted `linux/amd64` run `33959122456`; artifact `browser-durable-revocation-e2e-evidence-33959122456` | Both runs passed all seven locked scenarios through two independent Gateway OS processes, two independent black-box caller processes, one independent revoker process, and one pinned retained Valkey authority. Local A/B revoke-to-close propagation was 72/72 ms and hosted was 97/99 ms, below the 2-second bound. The runs prove active and pre-resolution exact-grant revocation on both Gateways, retained rejection after two Gateway reconstructions, unaffected same-session/other-tenant grants, outage failure closure, recovery without resurrection, and exactly seven sanitized evidence files. Hosted artifact digest is `sha256:1384a4504725c90717a3a8da058713fb1b8ed763f2c941b961811eb8370b8600`; its audit totals are nine each `authorized`/`connected`/`revoked`, four each `revocation_unavailable`/`client_closed`, nine each `resolve`/`dial`, and three `revoke_committed`. Contract/tree/48 cases are metadata with `exercised=false`; Valkey provenance is not established and `acl_role_separation_established=false`. This closes only the ADR 0032 caller-owned durable exact-grant revocation gate, not Provider API/Contract conformance, real Browser/CDP or downstream fencing, independently implemented external-caller interoperability, multi-controller, hostile multi-tenant, deployment, or production readiness |
+| P4 Browser downstream CDP fencing component and local/hosted external-caller evidence | ADR 0033; fencing implementation `b4d41c9`; Provider bootstrap `58488d7`; provisioning/process implementation `8a1049b`; lock descriptor `b1d41f3`; local harness/run `550c785`/`20260906T050213.016063000Z`; hosted harness/run `2cadc53`/`34013982796`; pinned Valkey index `sha256:ccfa19b0d743e48927e1c8c14e39e0acb97b5cea347fef0bfe340247fea920cd` | The action-fence/private-ingress/Redis adapter passes its component plus real-backend integration gate. The local arm64 and hosted amd64 runs each pass 13/13 through two independent mTLS/JWS callers, two Gateways, one authenticated unique ingress, retained Valkey, and signed real Chromium. They prove ordinary/replacement mutations, stale and pre-action lease-loss rejection before Chromium, terminal lower-fence closure without reconnect, unaffected scopes, outage recovery, retained high-water across ingress reconstruction, bypass exclusion, and cleanup/sanitization. The local run retains exactly five `0600` files; the downloaded artifact contains evidence directory `20260906T052710.781616339Z` with exactly five sanitized files. Manifest cleanup and sanitization booleans are all true. Six protected Provider routes are exercised, but the 48-case Suite is not (`suite_exercised=false`). These close only the platform-specific ADR 0033 caller gates. Deleted/restore-missing high-water detection, restored-snapshot consistency, Valkey provenance/HA/failover, production metrics/configuration/deployment, Provider multi-controller reliability, hostile multi-tenant isolation, independently implemented external-caller interoperability, aggregate conformance, and production readiness are not proved |
 | P4 Browser witnessed action-history component and local/hosted caller evidence | ADR 0034; witnessed v2 implementation; pinned Valkey index `sha256:ccfa19b0d743e48927e1c8c14e39e0acb97b5cea347fef0bfe340247fea920cd`; fixed harness `059357c`; local run `20260906T100233.295973000Z`; hosted run `34026680591` | The explicit v2 successor adds permanent bounded fingerprint-only history, strict whole-hash validation, an independent monotonic checkpoint witness, exact one-step interrupted-CAS recovery, and stable fail-closed errors. Focused/full race-shuffle, vet, Contract verification, the unchanged 48-case Suite, and tagged real-Valkey adapter integration pass. It does not rewrite v1 or alter default composition. The separately locked real-Chromium caller harness passes 18/18 locally on `linux/arm64` and hosted on `linux/amd64`; the local set has exactly five `0600` evidence files, and the inspected hosted artifact has exactly five sanitized files with all cleanup/sanitization checks true. These close the platform-specific deletion/restore caller gates only; the Suite is not executed. The included file witness is local single-process infrastructure, not HA or production storage. Production witness, deployment-owned operational restore, deployment, and production gates remain open |
 | Review | PR [#17](https://github.com/shell-echo/sandbox-runtime/pull/17) merged as `43ff3d7`; PR [#18](https://github.com/shell-echo/sandbox-runtime/pull/18) merged as `4774c3a`; PR [#19](https://github.com/shell-echo/sandbox-runtime/pull/19) merged as `e2755f5`; PR [#21](https://github.com/shell-echo/sandbox-runtime/pull/21) merged as `c5a4a65`; PR [#22](https://github.com/shell-echo/sandbox-runtime/pull/22) merged as `44f39ec`; PR [#23](https://github.com/shell-echo/sandbox-runtime/pull/23) merged as `ac72eab`; PR [#24](https://github.com/shell-echo/sandbox-runtime/pull/24) merged as `2e3dde6`; PR [#25](https://github.com/shell-echo/sandbox-runtime/pull/25) merged as `88506d1`; PR [#26](https://github.com/shell-echo/sandbox-runtime/pull/26) merged as `4ccb107`; PR [#27](https://github.com/shell-echo/sandbox-runtime/pull/27) merged as `28076a7`; PR [#28](https://github.com/shell-echo/sandbox-runtime/pull/28) merged as `2b25f76`; PR [#29](https://github.com/shell-echo/sandbox-runtime/pull/29) merged as `83965a2`; PR [#30](https://github.com/shell-echo/sandbox-runtime/pull/30) merged as `9d00212`; PR [#31](https://github.com/shell-echo/sandbox-runtime/pull/31) merged as `67b64a9`; PR [#32](https://github.com/shell-echo/sandbox-runtime/pull/32) merged as `5883da9`; PR [#33](https://github.com/shell-echo/sandbox-runtime/pull/33) merged as `ba39053`; PR [#35](https://github.com/shell-echo/sandbox-runtime/pull/35) merged as `c467cd4`; PR [#36](https://github.com/shell-echo/sandbox-runtime/pull/36) merged as `3a980bd`; PR [#37](https://github.com/shell-echo/sandbox-runtime/pull/37) merged as `f9cfbc3`; PR [#38](https://github.com/shell-echo/sandbox-runtime/pull/38) merged as `7ebcc8f`; PR [#39](https://github.com/shell-echo/sandbox-runtime/pull/39) merged as `17072e6`; PR [#40](https://github.com/shell-echo/sandbox-runtime/pull/40) merged as `65a9ba3`; PR [#41](https://github.com/shell-echo/sandbox-runtime/pull/41) merged as `ac555619`; PR [#42](https://github.com/shell-echo/sandbox-runtime/pull/42) merged as `97fb429` | PR #42 CI `32465114377` and post-merge CI `32465443385` provider-contract, test, and docker-integration passed |
 | P2.2a release evidence | `2fa2e72` on PR #33, merged as `ba39053` | Local race/shuffle, vet, lock, Suite, PR CI, and post-merge CI passed |
@@ -82,15 +165,17 @@ production readiness.
 | P2.5f6 command composition evidence | implementation `c4c7cbc`; startup/locking regression `8a794c0`; evidence baseline `cefbc74`; CI `33134521467` | The command root accepts an explicit default-disabled development terminal configuration only with protected admission plus Docker lifecycle/file persistence. It opens distinct session/reference single-controller files, constructs the reconnectable terminal runtime, recovers lifecycle then exec then terminal state before assigning `SessionApplication`, and keeps startup capability advertisement empty. Handoff registration is idempotent for an exact running allocation, avoiding an unbounded sequence of unresolvable references after a retry. After the Provider listener stops, bounded shutdown revokes and cleans still-running uncommitted allocations before repository release; successful unexpired handoffs retain their durable reattachment semantics. Config, disabled/incomplete/enabled startup/locking, recovery, shutdown order, route absence, full race/shuffle, vet, Contract verification, 38-case Suite, and Docker regressions pass locally. Repository CI passed all three required jobs. No public Gateway listener, caller authorization/revocation/recording default, Contract change, external caller, aggregate, multi-controller, tenancy, deployment, or production evidence is claimed |
 | P2.5f7 terminal vertical evidence | implementation/test `0e8b284`; evidence baseline `cefbc74`; CI `33134521467` | The tagged `cmd` integration test uses the real Docker lifecycle and f6 terminal composition, obtains the durable opaque handoff, and injects f5 Gateway only with test-owned admission, authorization, revocation, and recorder ports. A first WebSocket connection sets shell state; after closing and reconstructing lifecycle, session/reference, terminal runtime, and resolver state, a fresh connection proves that state survives in the same shell. The CI Docker job includes `./cmd`, and repository CI passed `provider-contract`, `test`, and `docker-integration`. Focused race, full race/shuffle, vet, unchanged Contract/tree verification, the locked 38-case Suite, dependency checks, and the exact three-package Docker command pass locally. This does not add a public Gateway, real platform caller, production policy, capability advertisement, artifact/usage composition, aggregate conformance, multi-controller persistence, tenant isolation, deployment, or production readiness |
 | P2.5h readiness-derived composition and advertisement | implementation `2c55173` | `ProviderCapabilityConfig.CodingShellEnabled` is an explicit opt-in. The command root constructs a deterministic dependency graph only after lifecycle, admission, exec, usage, terminal, artifact, and operation readers are composed. The source advertises exactly `sandbox.exec@1.0.0`/`exec-v1`, `sandbox.terminal@1.0.0`/`terminal-v1`, and `sandbox-runtime-coding-shell-v1` only when every graph node is ready; otherwise explicit enablement returns a startup error and disabled configuration returns non-nil empty arrays. Config and per-node dependency-absence matrices, immutable snapshot projection, canonical terminal IDs, full race/shuffle, vet, lock verification, the 38-case Suite, fixed-digest Docker integration, and diff checks pass. The command graph intentionally marks the concrete WebSocket and caller-owned Gateway boundary unavailable, so this slice does not produce a runnable nonempty-profile deployment or external-caller evidence |
-| P3 local evidence | implementation commit `4212e88` | Revision identity validation, deterministic canary binding, rollback-only-new-run behavior, old-run draining, shadow validation bounds, and migration metric aggregation passed focused race/shuffle and vet; real platform traffic and migration evidence remain open |
+| P2.7 e2 terminal-connect prerequisite | current 2026-09-16 worktree; locked Contract remains `22ba6987` | Adds default-disabled `provider.terminal.connect_enabled`, requires exact agreement between immutable `sandbox.terminal-connect@1.0.0` advertisement and a composed connector, consumes the bounded base64url retained-handoff descriptor only after mTLS/JWS admission, rechecks exact durable session/reference/generation/expiry authority before every fresh attach, negotiates only `sandbox-runtime-terminal.v1`, disables compression, permits only binary messages up to 65,536 bytes, and closes the stream no later than handoff expiry. Positive full protected WebSocket byte round-trip plus malformed carrier, authority mismatch, composition/advertisement mismatch, capability projection, config, full race/shuffle, vet, locked Contract verification, diff checks, and the exact three-package Docker integration command with locally cached digest-pinned Alpine pass. The first Docker attempt was environmentally unavailable because Docker Hub token/manifest requests timed out; it made no code-failure claim. This closes one e2 prerequisite only: it is not an external run, does not supply the missing runtime image, does not refresh candidate provenance, and does not establish Gateway end-user policy, multi-controller, deployment, or production readiness |
+| P2.7 coding/shell runtime-image local component | current 2026-09-16 worktree; locked Alpine index `sha256:fd791d74b68913cbb027c6546007b3f0d3bc45125f797758156952bc2d6daf40` | Adds a strict repository-owned image manifest with exact amd64 and arm64/v8 source manifests and `go1.26.5`, a scratch-repacked build containing the statically built repository terminal broker at `/usr/local/libexec/sandbox-runtime/terminal-broker`, fixed UID/GID `65532:65532`, shell/command/mount/network policy, and a bounded build script. The Provider default broker path now matches that immutable image path. The native arm64 Docker gate proves two-build image-ID equality and runs with read-only root, dropped capabilities, no-new-privileges, network none, bounded resources, read-only `/inputs`, writable `/workspace` and `/outputs`, tmpfs `/tmp`, artifact output, and an actual broker PTY shell round trip. A manual-only workflow now defines native hosted amd64/arm64 gates, content-addressed platform pushes, exact two-platform index assembly, and GitHub OIDC attestation/verification. The final full race/shuffle suite, vet, locked Contract verifier, shell/gofmt/diff checks, and zero integration-container/image residue checks pass. This is local component evidence only: the workflow has not run, no GHCR image/index was published, no hosted amd64 build ran, no signature/source attestation exists, and the external caller still pins its synthetic image until the next separately approved step |
+| P3 local evidence | implementation commit `4212e88` | Revision identity validation, deterministic canary binding, rollback-only-new-run behavior, old-run draining, shadow validation bounds, and migration metric aggregation passed focused race/shuffle and vet. At that baseline, real-platform traffic and migration evidence remained open; ADR 0037 later retired the named P3 migration target |
 | P3 component release evidence | post-push CI run `32805284762` | CI run concluded success for `4212e88`; this remains local migration component evidence, not external caller, canary traffic, rollback E2E, or production readiness |
 | Historical external platform audit | 2026-08-30 review baseline `bba02a6`; platform checkout cached `origin/main@cf623ac` | The existing Agent Platform candidate then had no runnable sandbox caller, Gateway, lock, PKI/JWS, or scenario runner. This finding explains why the co-located candidate harness was added; it is not evidence about the real platform |
-| Latest completed real-platform content audit and later identity check | 2026-09-02 read-only content audit at `veronica` local `main@17bb3855ba513b3a0e511f68f48c4e6aefbf265d`, 90 commits ahead of live GitHub `origin/main@a758c219fd9f14a015368ab95914ed7386c05afc`; 2026-09-06 identity-only check at dirty local `main@22343bb92b74e5d6e0aaf17d671344dd8c1bc7f9`, 110 commits ahead of unchanged `origin/main`; old `sandbox-runtime-e2e@2981842` | The completed 2026-09-02 content audit found Blueprint/governance and Temporal/PostgreSQL TF00 feasibility material plus Python runners, but no runnable Application service, Provider client, WorkOrder/AgentRun mapping, Gateway, mTLS/JWS PKI, Provider endpoint, or migration traffic harness. Its bounded Temporal dev-server smoke explicitly forbade workers, workflows, T2/T3, and external services. The 2026-09-06 check did not inspect newer content and therefore makes no claim about current external-platform capabilities. No runnable platform target has been independently supplied to this repository, so the real P3 gate remains open. The old checkout has no remote and is reference-caller preparation only; pre-existing `veronica` changes were preserved. The co-located candidate harness is separate and does not close real platform evidence |
-| P3 candidate integration evidence | hosted harness/Provider `17ed6ca`/`b4d41c9`, run `33970773345`; latest local pre-refresh harness/Provider `59e08d5`/`c0a55d1`, evidence `e2e/evidence/platform-candidate/20260905T080623.861033000Z` | Hosted and local candidate regressions passed 15+5 coding/shell scenarios against Contract 48 cases. Hosted artifact digest is `sha256:546c3ecd6f2cd23a629ab53eb61bbe23fa7361c8440297c0fb039886802d7bc0`; local runtime digest is `sha256:c1da999518ed8cf3c422142b705f3eeca5d60104be07bc28c15a7d527d2907fc`. Boundary is `Agent Platform candidate integration only`; real platform shadow parity, canary traffic, rollback/drain, and platform-contract ownership remain open |
-| P2.5i reference external caller | hosted harness/Provider `17ed6ca`/`b4d41c9`, run `33970773414`; latest local pre-refresh harness/Provider `59e08d5`/`c0a55d1`, evidence `20260905T080530.577843000Z` | Hosted and local runs passed 15 initial plus 5 restart/resume coding/shell scenarios. Hosted artifact digest is `sha256:de2c6f2d31d9dd5a8323d82560bf0f314970c8e1825d815d224d48aac2dcba16`; local runtime digest is `sha256:c1da999518ed8cf3c422142b705f3eeca5d60104be07bc28c15a7d527d2907fc`. It contains no Browser scenario and proves no Agent Platform, durable-revocation caller, aggregate, multi-controller, hostile multi-tenant, deployment, or production property |
-| P4 browser Contract authority and reference callers | Contract `5096e71`; projection/lock `24b2e36`; command `66183b1`; downstream component `b4d41c9`; fixed v2 harness `059357c`; local v2 run `20260906T100233.295973000Z`; hosted v2 run `34026680591`; ADR 0035 witness component `3ff58dc`; ADR 0036 merge/run `a0cddf4`/`34038556283`; local downstream harness/run `550c785`/`20260906T050213.016063000Z`; hosted checkout/downstream run `2cadc53`/`34013982796` | Browser authority and the Browser reference, shared-capacity, durable-revocation, downstream-fencing, witnessed-v2, PostgreSQL witness, and controlled-restore tracks remain separate. The downstream track passes its 13-scenario v1 caller gate on local arm64 and hosted amd64; its 48-case Suite remains unexercised. ADR 0034 passes its deletion/rollback-detection component and pinned-Valkey adapter gates plus its locked 18-scenario local arm64 and hosted amd64 caller runners. ADR 0035 passes its PostgreSQL component gate, and ADR 0036 passes its hosted same-runner 18-scenario controlled-restore gate. Their Suites remain unexercised where recorded. Production independent witness/storage and restore operations, Valkey/PostgreSQL provenance/HA/failover, production configuration/metrics/deployment and topology, real platform, aggregate, multi-controller, hostile multi-tenant, and production evidence remain absent |
+| Latest completed real-platform content audit and later identity check | 2026-09-02 read-only content audit at `veronica` local `main@17bb3855ba513b3a0e511f68f48c4e6aefbf265d`, 90 commits ahead of live GitHub `origin/main@a758c219fd9f14a015368ab95914ed7386c05afc`; 2026-09-06 identity-only check at dirty local `main@22343bb92b74e5d6e0aaf17d671344dd8c1bc7f9`, 110 commits ahead of unchanged `origin/main`; old `sandbox-runtime-e2e@2981842` | The completed 2026-09-02 content audit found Blueprint/governance and Temporal/PostgreSQL TF00 feasibility material plus Python runners, but no runnable Application service, Provider client, WorkOrder/AgentRun mapping, Gateway, mTLS/JWS PKI, Provider endpoint, or migration traffic harness. Its bounded Temporal dev-server smoke explicitly forbade workers, workflows, T2/T3, and external services. The 2026-09-06 check did not inspect newer content and therefore made no claim about later external-platform capabilities. No runnable platform target had been independently supplied to this repository, so the then-defined real P3 gate was not closed. The old checkout had no remote and was reference-caller preparation only; pre-existing `veronica` changes were preserved. The co-located candidate harness was separate and did not close real-platform evidence. ADR 0037 later retired that named migration target |
+| P3 candidate integration evidence | hosted harness/Provider `17ed6ca`/`b4d41c9`, run `33970773345`; latest local pre-refresh harness/Provider `59e08d5`/`c0a55d1`, evidence `e2e/evidence/platform-candidate/20260905T080623.861033000Z` | Hosted and local candidate regressions passed 15+5 coding/shell scenarios against Contract 48 cases. Hosted artifact digest is `sha256:546c3ecd6f2cd23a629ab53eb61bbe23fa7361c8440297c0fb039886802d7bc0`; local runtime digest is `sha256:c1da999518ed8cf3c422142b705f3eeca5d60104be07bc28c15a7d527d2907fc`. Its recorded boundary is `Agent Platform candidate integration only`; real-platform shadow parity, canary traffic, rollback/drain, and platform-contract ownership were not established. ADR 0037 later retired the named P3 migration target without reclassifying this historical evidence |
+| P2.5i reference external caller | current local harness/Provider `b8d4829`/`af8a505`, run `20260907T044611.598221000Z`; historical hosted harness/Provider `17ed6ca`/`b4d41c9`, run `33970773414` | The current local run and historical hosted run each passed 15 initial plus 5 restart/resume coding/shell scenarios. The current manifest SHA-256 is `60bda2dae83053db447417cea5c5e38d4798e1e90b91fbb5cfc75d2991c6993e`; the hosted artifact digest is `sha256:de2c6f2d31d9dd5a8323d82560bf0f314970c8e1825d815d224d48aac2dcba16`. Neither contains a Browser scenario or proves independently implemented external-caller interoperability, durable-revocation caller behavior, aggregate, multi-controller, hostile multi-tenant, deployment, or production properties |
+| P4 browser Contract authority and reference callers | Contract `5096e71`; projection/lock `24b2e36`; command `66183b1`; downstream component `b4d41c9`; fixed v2 harness `059357c`; local v2 run `20260906T100233.295973000Z`; hosted v2 run `34026680591`; ADR 0035 witness component `3ff58dc`; ADR 0036 merge/run `a0cddf4`/`34038556283`; local downstream harness/run `550c785`/`20260906T050213.016063000Z`; hosted checkout/downstream run `2cadc53`/`34013982796` | Browser authority and the Browser reference, shared-capacity, durable-revocation, downstream-fencing, witnessed-v2, PostgreSQL witness, and controlled-restore tracks remain separate. The downstream track passes its 13-scenario v1 caller gate on local arm64 and hosted amd64; its 48-case Suite remains unexercised. ADR 0034 passes its deletion/rollback-detection component and pinned-Valkey adapter gates plus its locked 18-scenario local arm64 and hosted amd64 caller runners. ADR 0035 passes its PostgreSQL component gate, and ADR 0036 passes its hosted same-runner 18-scenario controlled-restore gate. Their Suites remain unexercised where recorded. Production independent witness/storage and restore operations, Valkey/PostgreSQL provenance/HA/failover, production configuration/metrics/deployment and topology, independently implemented external-caller interoperability, aggregate, multi-controller, hostile multi-tenant, and production evidence remain absent |
 | Contract resources | OpenAPI, admission, lifecycle, bounded exec, terminal-session, browser-session, artifact-staging, usage-evidence schemas, fixtures, semantic rules, and Suite | Local Contract authority is locked; browser user/tenant Gateway policy, artifact publication, billing, and tenant authority remain outside the Provider |
-| Contract lock | revision `5096e71fb84fbec22aa3487a0e55a1b49602ab8b`; tree `859f76dc0e855a0c8abdbbb5648df100dabb4328`; manifest `sha256:ec6379d18088e2ff2faac6e8e016aabefa94f793bcc3ed2e85da61fcde2e9356`; OpenAPI `sha256:e011c896904cc15dabf6039f9d7b1de73e441cf13c85eceb74af687a80b57da9`; semantic rules `sha256:138b5c65bdafa14eb5fe626c875fe5adc9270cb45c194c7d4cebb5d1f12d626b` | Local verifier and 48-case Conformance pass. Suite file SHA-256 is `c9279cdebdfc49c1e52d123ec352501deb3925db27b7d20d09a38bf5002e205d`; the declared Suite digest remains the existing placeholder and is not presented as content-derived |
+| Contract lock | format 2; revision `22ba6987ea5fbc37d53942720133c0acad199edd`; tree `c9a7054d7c8e7f4b6e32f38175ceedddc48c2d38`; manifest `sha256:1e17e0ef4f86e03be1dac22c48e7b556a8600a4baa6252f4514390d339b8ba3f`; OpenAPI `sha256:64f0f8d93de39217f5d684758c1407ba62df16f274137d1855821df9dd004a1d`; semantic rules `sha256:8757107d5b44451bcb1bdae223262cb870f92b3a6c6fed0e6fef7ebf8f15587e` | The Provider Calling Standard is a manifest resource. Both Suite digests are content-derived with `rfc8785-full-document-excluding-suite-digest-v1`. Local `sandbox-provider@1.0.0` / `sandbox-runtime-provider-v1` has 53 cases and digest `sha256:b40c932643f4a1e5fd6681e3abf9b64a607609866a6254456970f8b8034cf2a8`; remote `sandbox-provider-remote@1.0.0` / `sandbox-runtime-provider-remote-discovery-v1` has six cases and digest `sha256:167922d972229a97a64bf22bc6a36ee20d4de19a023395d9f004f00c54cc49d0` |
 | External Agent Contract | no longer consumed; old compatibility evidence is historical only | Removed from implementation |
 
 The lock verifier is intentionally bound to the repository-owned Contract tree.
@@ -109,6 +194,7 @@ It does not clone, mount, or read an external source repository.
 | P1.1b | mTLS-only capability discovery | Passed under local Contract through PR #18; post-merge run `32363581638` passed | No new slice; retain TLS/projection coverage |
 | P1.1c | Protected-operation admission primitives and transport composition | Passed under local Contract through PR #18; post-merge run `32363581638` passed | P1.1d release-gate review |
 | P1.1d | Admission release gate | Passed; Suite runner, race/shuffle matrix, PR CI, and post-merge CI all passed | Retain gate evidence; do not expand claim beyond P1.1 |
+| P1.1e | ADR 0038 listener-local caller trust domain | Passed the repository-local coordinated Contract, projection, configuration, Provider, conformance, E2E lock, and same-repository reference gates with explicit no-default issuer configuration, Provider-local audience/revision anchors, a maximum 32-key frozen bundle, and overlap rotation coverage | Qualify an independently implemented external caller separately. Do not claim multi-issuer, multi-tenant, HA, deployment, or production properties |
 | P1.2.0 | Lifecycle Contract and authority inventory | Passed; PR #21 and post-merge CI run `32368734877` passed | Retain Contract lock and projection regression |
 | P1.2.1 | Pure lifecycle domain | Passed; PR #22 and post-merge CI run `32370133083` passed | Retain domain transition regression |
 | P1.2.2 | Atomic repository ports and development adapters | Passed; PR #23 merge `ac72eab`, post-merge CI `32372662597` passed | Retain repository fault/restart evidence; no multi-controller claim |
@@ -152,9 +238,10 @@ It does not clone, mount, or read an external source repository.
 | P2.5f7 | Terminal/Gateway vertical evidence gate | Local single-controller Docker/race/restart/reconnect gate passes in `0e8b284`; evidence baseline `cefbc74` passed repository CI `33134521467` | Retain same-repository test boundary and no-public-Gateway/no-external-caller claims; P2.5g artifact/usage evidence is recorded separately |
 | P2.5g | Artifact and usage vertical | Local gate passes in implementation `0e6e108`: default-disabled development composition, durable artifact/usage repositories, async recovery/shutdown, real Docker output confinement and private staging, partial exec-derived usage, operation aggregation, and restart evidence. Repository CI `33157119149` passed all three jobs | Retain development-only/single-controller boundaries; publication, billing, external caller, aggregate, reliability, tenancy, deployment, and production claims remain open |
 | P2.5h | Readiness-derived composition and exact advertisement | Local component/projection gate passes in implementation `2c55173`: explicit opt-in config, canonical IDs, complete dependency graph validation, empty-disabled behavior, and immutable exact Contract snapshot generation. Repository CI `33159099578` passed all three jobs. The Provider command graph still deliberately lacks caller-owned WebSocket/Gateway policy | Retain fail-closed Provider ownership. The reference stack supplies policy externally for P2.5i without adding an allow-all Provider default |
-| P2.5i | Independent reference caller release gate | Hosted run `33970773414` with harness/Provider `17ed6ca`/`b4d41c9` passed 15 initial and 5 restart/resume coding/shell scenarios; latest local pre-refresh run `20260905T080530.577843000Z` passes the same set on `59e08d5`/`c0a55d1` | Hosted artifact digest is `sha256:de2c6f2d31d9dd5a8323d82560bf0f314970c8e1825d815d224d48aac2dcba16`; the local run pins runtime digest `sha256:c1da999518ed8cf3c422142b705f3eeca5d60104be07bc28c15a7d527d2907fc`. Neither run contains a Browser scenario and neither may be promoted to Agent Platform, durable-revocation caller, aggregate, multi-controller, hostile multi-tenant, deployment, or production evidence |
-| P2 | Coding/remote-shell profile | Passed for the architecture's separately supplied reference caller gate. All earlier component/Contract gates retain their narrower evidence boundaries | Actual Agent Platform compatibility, aggregate conformance, multi-controller reliability, hostile multi-tenant security, deployment, and production gates remain open |
-| P3 | Migration readiness and platform integration | Local component evidence (`4212e88`), latest local pre-refresh candidate integration (`20260905T080623.861033000Z`, `59e08d5`/`c0a55d1` lock), and hosted candidate run `33970773345` (`17ed6ca`/`b4d41c9` lock) are present; the reference P2 caller gate passes | Supply a real platform migration target and prove locked-Suite/request shadow parity, new-run-only canary, rollback, old-run drain, metric parity, and unchanged platform-owned contracts |
+| P2.5i | Independent reference caller release gate | Current local run `20260907T044611.598221000Z` with harness/Provider `b8d4829`/`af8a505` passed 15 initial and 5 restart/resume coding/shell scenarios; hosted run `33970773414` remains historical evidence against `17ed6ca`/`b4d41c9` | Current manifest SHA-256 is `60bda2dae83053db447417cea5c5e38d4798e1e90b91fbb5cfc75d2991c6993e`; hosted artifact digest is `sha256:de2c6f2d31d9dd5a8323d82560bf0f314970c8e1825d815d224d48aac2dcba16`. Neither run contains a Browser scenario, and neither is evidence of independently implemented external-caller interoperability, durable-revocation caller behavior, aggregate conformance, multi-controller reliability, hostile multi-tenant isolation, deployment qualification, or production readiness |
+| P2.6 | Content-derived and portable Provider conformance | Historical local pass at implementation `3fe314a` and E2E lock refresh `ae476fe` for the then-current 50-case local repository profile and separate six-case remote discovery profile | Re-run the current 53-case authority from a clean committed checkout. Qualify an independently implemented caller separately; broader gates remain open |
+| P2 | Coding/remote-shell profile | Passed for the architecture's separately supplied reference caller gate. All earlier component/Contract gates retain their narrower evidence boundaries | Aggregate conformance, multi-controller reliability, hostile multi-tenant security, deployment, and production gates remain open |
+| P3 | Named-platform migration | Retired by ADR 0037. Historical component evidence (`4212e88`), local candidate integration, and hosted candidate run `33970773345` remain under their original evidence identities | No release gate remains. Consumers adapt to the exact locked Provider Contract and own any shadow, canary, rollback, drain, and metric-comparison process |
 | Internal Block manifest | Declarative block configuration foundation | Passed as component evidence; no public API or runtime execution | Add a separately reviewed browser/desktop manifest and runtime image before enabling any optional capability |
 | P4 | Optional capability profiles | Browser Contract authority/projection, signed image publication, Provider-local components, separately named Browser/shared-capacity/durable-revocation caller gates, ADR 0033 component/caller evidence, ADR 0034 witnessed-v2 local/hosted caller evidence, the ADR 0035 PostgreSQL component gate, and the ADR 0036 hosted same-runner controlled-restore gate have passed within their tiers. Neither downstream profile nor the controlled-restore profile executes the Contract Suite | Production independent witness/storage and restore operations, Valkey/PostgreSQL provenance/HA, production configuration/metrics, hostile-tenant/operational evidence, deployment, and production advertisement remain later gates |
 | Production readiness | Independent evidence tier, not a shortcut from P4 | Not established | Deployment, multi-controller reliability, multi-tenant security, operations, and production gates |
@@ -171,29 +258,57 @@ run `32365284283` passed all required jobs.
 - local Go tests are component evidence only;
 - the local Contract verifier proves lock/resource identity, not protocol
   conformance;
-- the local Suite runner executes 48 locked admission, lifecycle, exec,
-  terminal-session, browser-session, coding/shell/browser capability,
-  artifact-staging, and usage-evidence case IDs with the `providerapi`,
-  `providerapi/v1`, and `provider/admission` test matrices; this remains Provider
-  component/Contract-suite evidence, not aggregate lifecycle conformance;
-- `suite_digest` is still a locked declared value and is not recomputed from
-  Suite contents by the verifier; Git Contract-tree binding protects the
-  consumed tree, but content-derived Suite digest remains an independent
-  enhancement and is not claimed here;
+- the historical P2.6 local Suite runner executed the verifier's immutable
+  50-case snapshot
+  from a bounded read-only archive of its exact clean Runner revision. It
+  requires each case to declare an exact mapped-test count and all matching
+  tests to appear as distinct, started, non-skipped passes in `go test -json`.
+  It rejects explicit `GOROOT`, resolves and reuses one absolute Git path, and
+  records the host OS, filesystem, initial Git selection, and Go and Git
+  executables as trusted local inputs. This remains Provider
+  repository/Contract-suite evidence, not aggregate lifecycle conformance;
+- both Suite digests are recomputed from RFC 8785 canonical content excluding
+  only the top-level `suite_digest`; the separate six-case remote profile is
+  black-box discovery evidence only and does not execute the local profile. Its
+  unsafe-method flag becomes true only after a POST, PUT, PATCH, or DELETE probe
+  is actually written;
 - Contract/Suite component evidence alone establishes no external-caller E2E or
   aggregate lifecycle conformance. Separately named Reference, Candidate,
   Browser, shared-capacity, and durable-revocation caller evidence is recorded
   below without establishing multi-controller reliability, multi-tenant safety,
   deployment readiness, or production readiness.
 
-The final full race/shuffle run includes the discovery operation's bounded
-handler `400` and parser-visible `501` transport tests under the corrected
-projection.
+The full race/shuffle gate includes the discovery operation's bounded handler
+`400` and parser-visible `501` transport tests under the corrected projection.
 
 ## Current Verification
 
-Passed locally (authorized test environment):
+For the current 53-case authority, Contract verification, root race/shuffle and
+vet, E2E vet, and all E2E lock tests except the clean-parent-checkout test pass
+in the worktree. The parent-lock and eight E2E `-check` commands correctly
+refuse the tracked changes. Clean VCS-built Suite execution and clean-checkout
+E2E verification remain pending; no current P2.6 pass is claimed.
 
+Historical P2.6 evidence remains at implementation
+`3fe314a012b808fe60dbd783d7c7c7121d3c548e` and E2E lock refresh
+`ae476fed12e82f472b19ff78fda633c8d702561d`: the then-current 50-case local
+Runner, six-case remote Runner, root/E2E race and vet, Contract lock,
+parent-lock, and all eight E2E checks passed from a clean checkout.
+
+Previously passed locally at their recorded identities (authorized test
+environment):
+
+- ADR 0038 implementation `034e647`, Contract lock `fd48de9`, projection
+  regression fix `af8a505`, and then-active E2E lock `b8d4829`; Contract revision
+  `034e6476ff508a0571e64de9ce923799717b902b`, tree
+  `33f1926feb8e12f24a8f92b9e6879102e19c2173`, and all 50 Suite cases;
+- root and E2E-module full race/shuffle tests and vet, the Contract verifier,
+  the race/shuffle conformance runner, and all eight E2E `-check` commands,
+  including the retained historical Candidate check;
+- same-repository Docker reference run `20260907T044611.598221000Z`, with all
+  15 initial and 5 reconstruction scenarios passing, zero retained managed
+  containers, and manifest SHA-256
+  `60bda2dae83053db447417cea5c5e38d4798e1e90b91fbb5cfc75d2991c6993e`;
 - JSON parsing of all newly added Contract resources;
 - `git diff --check`;
 - `internal/contractlock` unit tests;
@@ -205,7 +320,7 @@ Passed locally (authorized test environment):
 - P4 browser Contract verification, exact capability/create/session/handoff/
   usage projection, admission digest bindings, security/rejection fixtures,
   operation/meter component validation, protected handlers with fail-closed
-  absent-application behavior, and the locked 48-case Suite. The reference and
+  absent-application behavior, and the locked 50-case Suite. The reference and
   candidate 15+5 runs are coding/shell regression only and do not add browser
   E2E evidence.
 - P1.2.3 coordinator race/shuffle tests for idempotent accept, deadline
@@ -385,11 +500,13 @@ Passed locally (authorized test environment):
   bounded digest-pinned image and path validation, symlink/nested-path refusal,
   duplicate detection, deterministic registry ordering, defensive copies, and
   cancellation. The root full race/shuffle, vet, Contract verifier, locked
-  48-case Suite, and independent E2E module race/shuffle/vet/lock checks pass.
-  The latest local reference and candidate Docker runs passed against the
-  pre-refresh harness/Provider lock `59e08d5`/`c0a55d1`.
+  50-case Suite, and independent E2E module race/shuffle/vet/lock checks pass.
+  The current local reference Docker run passes against harness/Provider lock
+  `b8d4829`/`af8a505`; the latest local Candidate run remains historical
+  pre-refresh evidence against `59e08d5`/`c0a55d1`.
   This is component, reference-caller, and candidate evidence only; it does not
-  establish real Agent Platform compatibility or any production gate.
+  establish independently implemented external-caller interoperability or any
+  production gate.
 - P4 browser image verification covers immutable per-platform source pins,
   scratch repack, fixed loopback CDP, rejected argv overrides, numeric user,
   read-only root, stable `/workspace` and `/tmp` mounts, resource bounds, and
@@ -562,7 +679,8 @@ Passed locally (authorized test environment):
   expected type counts with no `grant-browser-edge-*`. The Browser result is
   process-local edge plus Browser reference external-caller evidence,
   not listener/TLS/HTTP, tenant-partitioned/shared capacity, distributed
-  revocation, production advertisement/public Gateway, real Agent Platform,
+  revocation, production advertisement/public Gateway, independently
+  implemented external-caller interoperability,
   aggregate, multi-controller, hostile multi-tenant, deployment, or production
   evidence. The Reference and Candidate runs retain their coding/shell and
   candidate-only boundaries.
@@ -649,7 +767,8 @@ Passed locally (authorized test environment):
   provenance is explicitly not established. The private echo fixture does not
   exercise Provider API, real Browser/CDP, image provenance, restricted egress,
   artifact/usage, HA/failover, durable distributed revocation, downstream
-  fencing, Provider multi-controller, hostile multi-tenant, real Agent Platform,
+  fencing, Provider multi-controller, hostile multi-tenant, independently
+  implemented external-caller interoperability,
   aggregate conformance, deployment, or production behavior. This is local,
   not hosted, evidence.
 
@@ -668,8 +787,8 @@ Passed locally (authorized test environment):
   does not exercise Provider API, real Browser/CDP, image provenance,
   restricted egress, Provider artifact/usage, HA/failover, durable distributed
   revocation, downstream fencing, Provider multi-controller, hostile
-  multi-tenant, real Agent Platform, aggregate, deployment, or production
-  behavior.
+  multi-tenant, independently implemented external-caller interoperability,
+  aggregate, deployment, or production behavior.
 
 - P4 Browser exact-grant revocation verification covers the atomic
   level-triggered watch contract, invalid and unavailable watch closure,
@@ -726,7 +845,8 @@ Passed locally (authorized test environment):
   files. Contract/tree/48 cases are metadata with `exercised=false`, Valkey
   provenance is unestablished, and ACL role separation is false. This closes
   only the caller-owned durable exact-grant revocation gate, not Provider API,
-  real Browser/CDP or downstream fencing, real Agent Platform,
+  real Browser/CDP or downstream fencing, independently implemented
+  external-caller interoperability,
   multi-controller, hostile multi-tenant, deployment, or production readiness.
 
 - ADR 0033 and implementation `b4d41c9` add narrow downstream action-fence and
@@ -752,7 +872,8 @@ Passed locally (authorized test environment):
   (`suite_exercised=false`). These close only the platform-specific named
   caller gates and do not exercise deleted history or restored snapshots.
   Valkey provenance/HA/failover, production metrics/configuration/deployment,
-  Provider multi-controller, hostile multi-tenant, real Agent Platform,
+  Provider multi-controller, hostile multi-tenant, independently implemented
+  external-caller interoperability,
   aggregate conformance, and production readiness remain unproved.
 - ADR 0034 adds an explicitly selected v2 successor without changing those v1
   identities or results. Its permanent Redis hash retains eight fixed
@@ -791,45 +912,201 @@ Passed locally (authorized test environment):
 
 Open:
 
-- real Agent Platform integration and P3 migration evidence. The
-  2026-09-02 read-only re-audit of local and live-remote `veronica` found only
-  Blueprint/governance and TF00 feasibility material, not a runnable
-  Application service, sandbox caller/Gateway, WorkOrder/AgentRun mapping,
-  mTLS/JWS identity setup, endpoint, or migration harness.
-  The co-located `platform-e2e` run is a candidate integration harness and is
-  recorded separately; it does not substitute for real request shadow parity,
-  canary traffic, rollback, old-run drain, metric parity, or unchanged
-  platform contracts;
-- optional content-derived Suite digest enhancement;
+- qualify an independently implemented caller against the exact locked
+  standard. The content-derived local and remote Suites and repository-owned
+  runners are complete, but are not third-party implementation certification;
+- define explicit cleanup authority, prerequisites, and evidence semantics
+  before adding protected or mutating remote conformance profiles;
+- complete the Provider lifecycle and session-management surface required by a
+  deployable consumer, including explicit resource termination/lease control and
+  standard Gateway lifecycle behavior; these routes remain unauthorized today;
 - Browser production advertisement and deployable
   authenticated unique-ingress/public caller-owned Gateway; a production
   independent witness and restore procedure; Valkey provenance and HA/failover
   consistency; production storage/configuration, ACLs, metrics, hostile-tenant,
   and operational evidence;
-- Agent Platform caller E2E, aggregate lifecycle conformance, reliability,
-  tenancy, deployment, and production gates.
+- independently implemented external-caller black-box qualification,
+  multi-issuer admission, aggregate lifecycle conformance, multi-controller
+  reliability, multi-tenant isolation, HA, deployment, and production gates.
 
-## Platform Integration Blocker
+## Retired Platform Integration Track
 
-P3 cannot start its real traffic evidence until the platform side supplies all
-of the following as a reproducible, non-secret test entrypoint:
-
-1. A real Agent Platform caller/service that owns WorkOrder/Run policy and
-   invokes the Provider Contract over the intended network boundary.
-2. The exact ProviderRevision, Contract/profile lock, capability/request mapping,
-   and platform-owned shadow comparison rules.
-3. Identity-bound mTLS/JWS PKI, caller/tenant bindings, and reachable Provider
-   and caller-owned Gateway endpoints.
-4. A harness that can generate shadow traffic, bind only new runs to a canary,
-   roll future selection back, drain old runs, and compare lifecycle, exec,
-   orphan, session, resource-evidence, and reconciliation metrics.
-
-Until those inputs exist, the candidate harness can provide only bounded
-integration evidence. The locked 48-case Suite and co-located `e2e/` run must
-not be relabeled as real Agent Platform E2E, aggregate conformance, or
-migration evidence.
+P3 is retired rather than blocked. The former platform audit and candidate
+harness remain historical evidence only. No missing named-platform repository,
+credential, endpoint, or migration harness is an input to future
+`sandbox-runtime` work. External consumers must conform to the exact locked
+Contract and own their adapter, business state, authorization, Gateway policy,
+and rollout process.
 
 ## Next Entry
+
+P2.6's local release gate is complete. ADR 0040 defines the independently
+implemented caller boundary, and P2.7a locks its verified machine-readable
+definition authority at
+`sha256:4effea27fd3d7668b88eeb95c69e19b51556914b7949b1a39ce522b2aec46c14`.
+Overall P2.7 remains in progress and no completed external-caller qualification
+result exists. P2.7b now locks the closed report schema at
+`sha256:cd51ccf0aea0bc31b11ff4f288751fc7df0f0dd081860efc305182ea61f842e4`
+and validator semantics at
+`sha256:c724eaa9f3b52e1a5ba4aa5aaeb5e8b61a744818b2f56fd8ff52dfa5e1e584df`,
+plus the bounded report/evidence validator. It rejects retained timing or owned
+positive evidence when its producer payload is absent; requires complete
+payload-backed execution timing when present; caps each interaction at 64 wire
+attempts; and counts every wire attempt as a potential resource when the
+interaction evidence is inconsistent. Cleanup rejects partial query-scope
+identities, digest-binds complete scopes, and enforces the baseline before first
+mutation, exact post-teardown samples, and authoritative-inspector bindings.
+Create-sandbox resources must be
+present exactly when observed and must match both observer evidence and the
+locked profile. Receipt bytes are staged and committed only after final checks,
+with cancellation and competing-destination races rejected. These are
+validator-component guarantees; they do not attest producer truthfulness,
+original request bodies, or an external caller result. Validation requires the
+qualification operator to stop
+producers and keep the validator as the evidence root's exclusive writer from
+`Verify` entry through return, including against other same-UID processes. The
+dirfd and TOCTOU checks detect changes and fail closed; they do not prove
+integrity against a continuously writable attacker. Only after a successful
+return may the external operator package the root and record its archive
+digest.
+
+P2.7c.1 locks the adapter protocol schema at
+`sha256:d12b477cd540e02c6a7e2f8eb77b0405b717c15e98a0f144b2d63f705ff95969`
+and operational semantics at
+`sha256:10cd42017aee60b620dbbb7394a20c2a387983468a865a8d12a572f861d07662`.
+The protocol authority is bound through startup, process-supervisor, validator,
+and receipt evidence. All qualification Schema compilers use one ECMA-262
+regexp engine and reject ASCII controls without POSIX-only classes. Invocation
+paths/endpoints now use closed canonical profiles. The definition requires a
+digest-bound preflight freeze before the supervisor or harness acquires or
+generates credential or forbidden-correlation material, plus cross-phase byte
+identity; runtime proof awaits the supervisor and operator-upstream
+non-derivation remains trusted. Non-error output invocation IDs and phases bind
+to the single validated inbound invocation, including scenario case-ID phase
+prefixes. Protocol errors now use disjoint pre-binding and post-binding terminal
+branches with atomic identity nullability. The monotonic deadline model starts
+once before first preflight, never resets across phase reconstruction, clips
+case budgets to the remaining run and parent deadlines, and gives failure
+termination a separate bounded five-second context. P2.7c.2a now enforces the
+locked EOF/LF framing and exact byte/record limits, strict UTF-8/JSON/Schema and
+direction rules, startup protocol-authority equality, and stable sanitized
+decode failures. It intentionally does not enforce message order or deadlines,
+recompute transcripts, or execute a process. P2.7c.2b.1 locks the complete
+transition table, terminal/EOF/clean-exit rules, cross-phase startup equality,
+and the closed transcript preimage Schema at
+`sha256:d2eb229f55528df8ba68426cc5b7da9d1bd6a78a412707d656b77c1effeff293`.
+P2.7c.2b.2 now enforces only the startup boundary: one validated first record,
+one post-startup invocation-input authorization, and first-failure absorption.
+It creates no transcript and launches no process. The subsequent work is
+P2.7c.2b.3 binds the one authorized, validated invocation to the same Codec
+and stdout stream, then accepts only the next sequence-one
+`invocation_accepted` with matching invocation ID and phase. It also rejects
+skipped records and mutated decoded projections/documents. P2.7c.2b.4 now
+loads the exact ordered 15+5 case IDs from the verified profile and enforces one
+result for each phase case: `completed` requires a same-case start, while
+`not_executed` forbids one. Every scenario record remains bound to the same
+Codec, stdout stream, invocation, phase, contiguous sequence, and observed wire
+count. It ends at the terminal boundary and claims no execution. The subsequent
+P2.7c.2b.5 now requires exactly one normal or error terminal. Normal completion
+must match the observed dispositions; protocol errors obey the disjoint
+pre-binding `invalid_invocation` and bound post-acceptance branches. Any
+post-terminal byte, early EOF, or non-clean/early process-exit event fails
+closed. Only terminal, EOF, then a supplied clean-exit event reaches `complete`.
+P2.7c.2b.6 gates fresh reconstruction and canonical startup equality; c2b.7
+produces and validates the sanitized transcript binding. c3.3 owns actual local
+process start/stop and c3.4 binds the first stdout startup record before input.
+c3.5 validates frozen locations and startup requirements, then concurrently
+EOF-delivers bounded stdin and inherited-pipe credential streams. c3.6 binds the
+shared monotonic run budget before the first supervisor preflight read, clips
+case and operation waits, drains bounded stderr concurrently, consumes ordered
+post-invocation stdout, and supplies the clean-exit event only after terminal,
+stdout EOF and actual zero-exit reap. c3.7 publishes defensive sanitized phase
+evidence only after that path, binds non-overridable adapter facts into one
+canonical two-phase transcript, and passes real Darwin/arm64 and Linux/arm64
+helper tests. d1 freezes the static target/topology, identity inventories,
+numeric budgets, cleanup policy, and 15+5 scenario order. d2 obtains identities
+through a read-only observer, creates and descriptor-rechecks the three private
+persistent stores, recomputes the closed inspector scope and inventory digests,
+and requires a complete zero-resource baseline before returning prepared state.
+d3 adds a one-shot initial execution port whose only harness directive is the
+runtime commitment, profile identity, phase ID, and ordered 15 case IDs. It
+rechecks persistent state before releasing mutation capability, retains a
+cleanup obligation across unknown start/cancellation/failure, clips each case
+to 120 seconds and the earlier caller/execution deadline, enforces dependencies
+and exact completed/not-executed progress, and derives fail-closed provisional
+attempt/request counters from the profile's minimal accounting projection. It
+does not expose request-construction fields, derive admission/resource truth,
+or assign final scenario status.
+d4 adds a separate one-shot reconstruction port that is unavailable until the
+initial session reaches terminal/EOF/clean-exit completion. Its closed directive
+adds only the four symbolic restart components and three symbolic preserved
+stores to the d3 identity/case fields; it contains no prior correlation value or
+state path. The executor supplies two distinct invocation IDs and exact ordered
+old/new opaque identities for Provider, external caller, adapter, and caller
+Gateway before any reconstruction result is accepted. All eight process labels
+must be unique and non-PID-shaped, but remain provisional within d4. d5 now
+requires a separately sourced process snapshot to corroborate them. The harness metadata-rechecks state before/after restart
+and after the terminal gate without reading caller-owned entries, seeds the
+five-case dependency chain from the stored initial dispositions, preserves the
+original execution deadline, and checks cumulative provisional usage. Active
+reconstruction blocks close; cancellation, malformed receipts, process reuse,
+state replacement, invalid progress, or terminal/close failures fail closed and
+retain cleanup. No final status or state-recovery/same-shell claim is produced.
+Darwin race tests, native Linux/arm64 package tests, and guest-local tagged
+Docker lifecycle/terminal/artifact integrations pass in the no-host-mount Lima
+environment. The tests still use repository-owned identity/inspector fixtures
+and mutable environment bootstrap inputs, so independent provenance and a
+qualification result remain absent.
+
+d5 now consumes separate Provider, Gateway, process-supervisor, and resource-
+inspector snapshots under the existing execution deadline. It requires exact
+observer artifact/configuration identity, completed-progress interaction order,
+91 ordered profile fact bindings split 66/17/7/1 by source, four initial plus
+four reconstructed process identities, a sanitized transcript, a digest-only
+shell challenge, and the locked resource query scope. It derives the four
+scenario states and conservative admission/resource counters without treating
+caller progress as independent truth. Focused race tests cover success,
+missing/contradicted evidence, outcome mismatch, not-executed propagation,
+identity/order/scope/process/transcript failures, one-shot behavior, and
+potential unexpected admissions. This remains repository-local component
+evidence; real independent observer provenance and actual external execution
+remain absent.
+
+d6 consumes that conservative obligation after idle, unknown-start, canceled,
+or descriptor-closed execution state. It detaches from execution cancellation,
+clips cleanup to both the 300-second budget and original total deadline, closes
+local state descriptors, and sends only six sanitized identity fields to the
+operator-owned teardown port. A bound receipt permits 1..32 internal attempts;
+success additionally requires exactly three unchanged-scope inspector samples
+at least one second apart, stable and equal to the zero-resource baseline.
+Residual/drifting resources, teardown non-completion, unavailable evidence,
+identity drift, and exhausted budgets remain `incomplete`, `failed`, or
+`unknown`. Focused race tests use repository fakes, so no actual operator
+teardown or independent inspector result is claimed. d7 now adds typed one-shot
+assembly, exact five-payload inventory binding, descriptor-pinned exclusive
+`0600` publication, assembly-writer closure, and validator-only receipt
+publication. Its synthetic seven-file test is local component evidence only.
+The public separate e1 candidate has completed 11/13 checkpoints through e1.8a:
+all 15 locked initial and all 5 reconstruction cases are locally composed from durable
+`initial_complete` state without private correlation reinjection. Retained
+handoff validation and a bounded reconstructed-Gateway byte connection are
+included. Candidate-owned process cleanup, sanitized failure mapping and output
+ordering/limits are locally closed; operator-owned teardown and stable
+zero-resource inspection remain unexecuted. Public hosted run `35068957048`
+builds source commit `58a211f0c167af3ec117c8cb8247bfe268bbae40`
+from its content-addressed source archive, reproduces byte-identical Linux/amd64
+artifacts, verifies the pinned authority, and publishes strict manifest digest
+`sha256:468b0f7bfd7e835ba5464033994739c28cec3b9985fbd24fb3ae375b8e7fb33b`.
+The downloaded bundle and all five subjects in Sigstore attestation `47846951`
+verify. This closes source/build provenance only; process-supervisor observation,
+the actual e2 execution, cleanup proof, and e3 conclusion remain open.
+Any protected or mutating remote Suite profile must first define
+cleanup authority, prerequisites, case-specific evidence, and incomplete-run
+semantics; the six-case discovery profile must not be stretched to cover it.
+The same-repository reference and P2.6 profiles are not that external
+qualification. Multi-issuer design, lifecycle-closure gaps, aggregate
+conformance, multi-controller, multi-tenant, HA, deployment, and production
+gates remain separate work before broad interoperability is claimed.
 
 P4 Browser authority is complete in Contract `5096e71` and projection
 `24b2e36`. ADR 0019 and publication run `33724368530` establish the exact
@@ -893,8 +1170,9 @@ listener/TLS/HTTP evidence. At that baseline, durable distributed revocation,
 downstream fencing,
 Valkey provenance, HA/failover consistency, production storage/configuration
 and metrics, production Browser advertisement and deployable caller-owned
-Gateway, real Agent Platform, aggregate conformance, multi-controller
-reliability, hostile multi-tenant security, deployment, and production
+Gateway, independently implemented external-caller interoperability, aggregate
+conformance, multi-controller reliability, hostile multi-tenant security,
+deployment, and production
 readiness remained independent open gates; later named evidence is recorded
 above.
 
@@ -1030,8 +1308,9 @@ iteration order, equal-cardinality field replacement, and string/zset changes.
 Valkey provenance and HA/failover, a production witness and restore procedure,
 production storage/configuration, ACLs and metrics, hostile-tenant and
 operational evidence, production Browser advertisement and deployable
-unique-ingress/public Gateway, real Agent Platform, aggregate, multi-controller,
-multi-tenant, deployment, and production gates remain separate.
+unique-ingress/public Gateway, independently implemented external-caller
+interoperability, aggregate, multi-controller, multi-tenant, deployment, and
+production gates remain separate.
 
 P1.1d is explicitly closed by the local Suite/security matrix, PR #19 CI, and
 post-merge run `32365284283`. P1.2.0 is closed by PR #21, its three successful
@@ -1192,12 +1471,11 @@ denial, and mTLS caller binding. The reconstructed stack retained lifecycle,
 exec/usage/artifact evidence, opaque handoff, and the same terminal shell.
 
 This is sufficient for the local and hosted reference P2.5i caller gate. The
-hosted artifact is recorded above. It is not evidence that the existing Agent
-real Veronica is compatible, and it does not prove
-aggregate conformance, distributed revocation, multi-controller reliability,
-hostile multi-tenant isolation, deployment, or production readiness. P3 still
-requires a real platform migration target and its separately named traffic
-evidence.
+hosted artifact is recorded above. It does not prove interoperability with an
+independently implemented external caller, aggregate conformance, distributed
+revocation, multi-controller reliability, hostile multi-tenant isolation,
+deployment, or production readiness. ADR 0037 later retired the named P3
+migration target without changing this historical evidence boundary.
 
 The 2026-08-28 P2.5g review was based on implementation `0e6e108` from
 `main@0e6e108`; its artifact/usage local and Docker gates pass, and repository

@@ -292,7 +292,7 @@ func (r *transportUsageReader) GetEvidence(_ context.Context, _ string, _ time.T
 
 func newArtifactTransportHandler(t *testing.T, identity *clientIdentityAdmission, publicKey ed25519.PublicKey, guard *releaseGateGuard, app ArtifactApplication, usageReader usage.EvidenceReader, operationReader provideroperation.Reader) http.Handler {
 	t.Helper()
-	gate, err := admission.NewProtectedOperationGate(mustTestTrustedKeySource(t, publicKey), testAdmissionClock{now: releaseGateTestTime()}, guard)
+	gate, err := admission.NewProtectedOperationGate(mustTestTrustedKeySource(t, publicKey), mustTestAdmissionAuthority(t), testAdmissionClock{now: releaseGateTestTime()}, guard)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,0 +1,71 @@
+{
+  "schema_version": "sandbox.runtime/coding-shell-image/v1",
+  "profile_id": "sandbox-runtime-coding-shell-v1",
+  "runtime_class_name": "sandbox-runtime-coding-shell",
+  "source": {
+    "repository": "docker.io/library/alpine",
+    "tag": "3.23",
+    "index_digest": "sha256:fd791d74b68913cbb027c6546007b3f0d3bc45125f797758156952bc2d6daf40",
+    "manifests": {
+      "linux/amd64": {
+        "digest": "sha256:1beb0dc0a51de7ff38e3b5274078a2e0b81113ba5c7535e1a03d5913a5edbda3",
+        "architecture": "amd64"
+      },
+      "linux/arm64/v8": {
+        "digest": "sha256:d858bb5442632a31bd4bca6c5e601dbe6b536fd7942092ea6a08a0a95805693c",
+        "architecture": "arm64",
+        "variant": "v8"
+      }
+    }
+  },
+  "runtime": {
+    "shell_path": "/bin/sh",
+    "terminal_broker_path": "/usr/local/libexec/sandbox-runtime/terminal-broker",
+    "command": [
+      "/bin/sh",
+      "-c",
+      "trap 'exit 0' TERM INT; while :; do sleep 3600 & wait $!; done"
+    ]
+  },
+  "security": {
+    "uid": 65532,
+    "gid": 65532,
+    "root_filesystem": "read_only",
+    "no_new_privileges": true,
+    "capabilities": "drop_all",
+    "container_isolation_required": true
+  },
+  "mounts": [
+    {
+      "path": "/inputs",
+      "mode": "ro",
+      "required": true
+    },
+    {
+      "path": "/workspace",
+      "mode": "rw",
+      "required": true
+    },
+    {
+      "path": "/outputs",
+      "mode": "rw",
+      "required": true
+    },
+    {
+      "path": "/tmp",
+      "mode": "rw",
+      "required": true
+    }
+  ],
+  "network": {
+    "mode": "none"
+  },
+  "provenance": {
+    "upstream_source": "https://github.com/alpinelinux/docker-alpine",
+    "upstream_index_digest": "sha256:fd791d74b68913cbb027c6546007b3f0d3bc45125f797758156952bc2d6daf40",
+    "build_context": "profiles/coding-shell/image",
+    "go_version": "go1.26.5",
+    "reproducible_inputs": true,
+    "attestation_required_before_qualification": true
+  }
+}

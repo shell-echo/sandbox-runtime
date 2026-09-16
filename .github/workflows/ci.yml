@@ -26,12 +26,22 @@ jobs:
           cache: true
       - name: Verify locked local Provider Contract
         run: go run ./cmd/verify-contract -source-root .
+      - name: Verify locked P2.7a qualification profile definition
+        run: go run ./cmd/verify-qualification-profile -source-root .
+      - name: Verify locked P2.7b report schema, validator, and CLI
+        run: go test -count=1 ./cmd/verify-qualification-report ./internal/evidencefiles ./internal/qualificationreport
+      - name: Verify locked P2.7c adapter protocol and transcript definitions
+        run: go run ./cmd/verify-qualification-adapter-protocol -source-root .
       - name: Validate Provider v1 DTO projection and fixtures
         run: go test -count=1 ./providerapi/v1 -run '^TestLockedContractProjection$'
       - name: Validate Provider capability response projection
         run: go test -count=1 ./providerapi -run '^TestLockedCapabilityResponseSchema$'
       - name: Execute local Provider Conformance Suite
-        run: go run ./cmd/run-conformance -source-root .
+        run: |
+          runner_dir="${RUNNER_TEMP}/provider-conformance"
+          mkdir -p "${runner_dir}"
+          go build -buildvcs=true -o "${runner_dir}/run-conformance" ./cmd/run-conformance
+          "${runner_dir}/run-conformance" -source-root .
 
   test:
     runs-on: ubuntu-latest
@@ -47,6 +57,26 @@ jobs:
       - run: go mod download
       - run: go test -race -shuffle=on -count=1 ./...
       - run: go vet ./...
+
+  qualification-supervisor-runtime:
+    name: qualification-supervisor-runtime (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: go mod download
+      - name: Run real adapter helper-process matrix
+        run: go test -race -shuffle=on -count=1 ./internal/qualificationsupervisor
 
   browser-provenance:
     runs-on: ubuntu-latest

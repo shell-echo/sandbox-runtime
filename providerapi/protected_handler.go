@@ -25,6 +25,7 @@ import (
 	provideroperation "github.com/shell-echo/sandbox-runtime/provider/operation"
 	"github.com/shell-echo/sandbox-runtime/provider/session"
 	sessionapplication "github.com/shell-echo/sandbox-runtime/provider/session/application"
+	"github.com/shell-echo/sandbox-runtime/provider/terminal"
 	"github.com/shell-echo/sandbox-runtime/provider/usage"
 	providerv1 "github.com/shell-echo/sandbox-runtime/providerapi/v1"
 )
@@ -40,6 +41,7 @@ type ProtectedTransportOptions struct {
 	Gate                *admission.ProtectedOperationGate
 	Application         LifecycleApplication
 	SessionApplication  RuntimeSessionApplication
+	SessionConnector    RuntimeSessionConnector
 	BrowserApplication  BrowserApplication
 	ArtifactApplication ArtifactApplication
 	ExecApplication     ExecApplication
@@ -63,6 +65,14 @@ type LifecycleApplication interface {
 type RuntimeSessionApplication interface {
 	Open(context.Context, session.OpenRequest) (sessionapplication.Operation, error)
 	GetHandoff(context.Context, string) (sessionapplication.Handoff, error)
+}
+
+// RuntimeSessionConnector is the narrow Provider controller data-plane port.
+// It receives only a fully admitted, transport-neutral handoff projection and
+// returns a fresh terminal attachment. Public end-user Gateway policy remains
+// outside this boundary.
+type RuntimeSessionConnector interface {
+	ConnectRuntimeSession(context.Context, sessionapplication.Handoff) (terminal.Stream, error)
 }
 
 // BrowserApplication is the narrow Provider-local Browser application
@@ -91,17 +101,18 @@ type ExecApplication interface {
 }
 
 type protectedHandler struct {
-	identity        *clientIdentityAdmission
-	gate            *admission.ProtectedOperationGate
-	application     LifecycleApplication
-	sessionApp      RuntimeSessionApplication
-	browserApp      BrowserApplication
-	artifactApp     ArtifactApplication
-	execApp         ExecApplication
-	usageReader     usage.EvidenceReader
-	operationReader provideroperation.Reader
-	capabilities    provider.CapabilitySnapshot
-	now             func() time.Time
+	identity         *clientIdentityAdmission
+	gate             *admission.ProtectedOperationGate
+	application      LifecycleApplication
+	sessionApp       RuntimeSessionApplication
+	sessionConnector RuntimeSessionConnector
+	browserApp       BrowserApplication
+	artifactApp      ArtifactApplication
+	execApp          ExecApplication
+	usageReader      usage.EvidenceReader
+	operationReader  provideroperation.Reader
+	capabilities     provider.CapabilitySnapshot
+	now              func() time.Time
 }
 
 type protectedRoute struct {
@@ -115,13 +126,17 @@ func newProtectedHandler(identity *clientIdentityAdmission, options ProtectedTra
 	if identity == nil || options.Gate == nil {
 		return nil, errors.New("protected Provider transport requires mTLS identity and admission gate")
 	}
+	connectAdvertised := terminalConnectAdvertised(options.capabilitySnapshot)
+	if connectAdvertised != (options.SessionConnector != nil) {
+		return nil, errors.New("terminal-connect advertisement and connector composition must agree")
+	}
 	now := options.Now
 	if now == nil {
 		now = func() time.Time { return time.Now().UTC() }
 	}
 	return &protectedHandler{
 		identity: identity, gate: options.Gate, application: options.Application,
-		sessionApp: options.SessionApplication, artifactApp: options.ArtifactApplication,
+		sessionApp: options.SessionApplication, sessionConnector: options.SessionConnector, artifactApp: options.ArtifactApplication,
 		browserApp: options.BrowserApplication, execApp: options.ExecApplication,
 		usageReader: options.UsageEvidenceReader, operationReader: options.OperationReader,
 		capabilities: options.capabilitySnapshot, now: now,
@@ -254,6 +269,14 @@ func (h *protectedHandler) ServeHTTP(response http.ResponseWriter, request *http
 			return
 		}
 	}
+	if h.sessionConnector != nil && route.operation == admission.OperationConnectRuntimeSession {
+		h.serveRuntimeSessionConnect(response, request, context, document)
+		return
+	}
+	if route.operation == admission.OperationConnectRuntimeSession {
+		writeStandardError(response, http.StatusUnprocessableEntity, "SANDBOX_CAPABILITY_UNSUPPORTED", false, "terminal session connection capability is not advertised")
+		return
+	}
 	if h.browserApp != nil {
 		switch route.operation {
 		case admission.OperationOpenBrowserSession:
@@ -297,6 +320,9 @@ func validateProtectedDocument(route protectedRoute, document []byte) error {
 	case admission.OperationCancelExec:
 		var request providerv1.CancelExecRequest
 		return providerv1.DecodeStrict(bytes.NewReader(document), providerv1.MaxCancelExecRequestBytes, &request)
+	case admission.OperationConnectRuntimeSession:
+		var descriptor providerv1.RuntimeSessionHandoff
+		return providerv1.DecodeStrict(bytes.NewReader(document), maxRuntimeSessionConnectDescriptorBytes, &descriptor)
 	default:
 		return nil
 	}
@@ -328,6 +354,9 @@ func newAdmissionTraceID() string {
 }
 
 func protectedDocument(request *http.Request, context admission.AdmissionContext, route protectedRoute, pathValues map[string]string) ([]byte, int) {
+	if route.operation == admission.OperationConnectRuntimeSession {
+		return runtimeSessionConnectDocument(request)
+	}
 	if request.Method == http.MethodGet {
 		if request.ContentLength != 0 || len(request.TransferEncoding) != 0 || !readBodyIsEmpty(request.Body) {
 			return nil, http.StatusBadRequest
@@ -401,6 +430,9 @@ func matchProtectedRoute(request *http.Request) (protectedRoute, map[string]stri
 		return protectedRoute{}, nil, false
 	}
 	path := strings.Trim(request.URL.Path, "/")
+	if path == "v1/runtime-sessions:connect" && request.Method == http.MethodGet {
+		return protectedRoute{operation: admission.OperationConnectRuntimeSession, allowUnavailable: true}, map[string]string{}, true
+	}
 	parts := strings.Split(path, "/")
 	if len(parts) == 2 && parts[0] == "v1" && parts[1] == "sandboxes" && request.Method == http.MethodPost {
 		return protectedRoute{operation: admission.OperationCreate, maxBodyBytes: providerv1.MaxCreateRequestBytes, allowUnavailable: true, oversizeStatus: http.StatusBadRequest}, map[string]string{}, true

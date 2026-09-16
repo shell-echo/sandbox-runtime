@@ -9,7 +9,7 @@ import (
 func TestValidateAllowlistBoundaries(t *testing.T) {
 	identities := make([]string, MaxAllowedIdentities)
 	for index := range identities {
-		identities[index] = fmt.Sprintf("spiffe://agent-platform/client-%d", index)
+		identities[index] = fmt.Sprintf("spiffe://reference-caller.sandbox-runtime.test/client-%d", index)
 	}
 	if err := ValidateAllowlist(identities); err != nil {
 		t.Fatalf("maximum allowlist rejected: %v", err)
@@ -17,7 +17,7 @@ func TestValidateAllowlistBoundaries(t *testing.T) {
 	if err := ValidateAllowlist(nil); err == nil {
 		t.Fatal("empty allowlist accepted")
 	}
-	identities = append(identities, "spiffe://agent-platform/overflow")
+	identities = append(identities, "spiffe://reference-caller.sandbox-runtime.test/overflow")
 	if err := ValidateAllowlist(identities); err == nil {
 		t.Fatal("oversized allowlist accepted")
 	}

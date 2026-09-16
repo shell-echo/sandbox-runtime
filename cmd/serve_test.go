@@ -660,7 +660,7 @@ func TestValidateServeConfigurationFailsClosedForInvalidProtectedAdmission(t *te
 
 func TestNewProviderProtectedTransportOptionsIsOptInAndReleasesGuard(t *testing.T) {
 	clock := fixedAdmissionClock{now: time.Unix(1_000, 0).UTC()}
-	disabled, closeDisabled, err := newProviderProtectedTransportOptions(config.ProviderProtectedAdmissionConfig{}, clock)
+	disabled, closeDisabled, err := newProviderProtectedTransportOptions(config.ProviderProtectedAdmissionConfig{}, "", clock)
 	if err != nil || disabled != nil {
 		t.Fatalf("disabled protected transport = %#v, %v", disabled, err)
 	}
@@ -672,13 +672,15 @@ func TestNewProviderProtectedTransportOptionsIsOptInAndReleasesGuard(t *testing.
 	keyPath := writeTrustedPublicKeyForServeTest(t, directory)
 	statePath := filepath.Join(directory, "guard", "admission.json")
 	protected := config.ProviderProtectedAdmissionConfig{
-		Enabled:        true,
-		GuardStateFile: statePath,
+		Enabled:                  true,
+		Issuer:                   "https://reference-caller.sandbox-runtime.test",
+		ProviderInstanceAudience: "urn:shell-echo:sandbox-runtime:provider-instance:provider-1",
+		GuardStateFile:           statePath,
 		TrustedVerificationKeys: []config.ProviderTrustedVerificationKeyConfig{{
-			ID: "agent-platform-ed25519", Algorithm: "EdDSA", PublicKeyFile: keyPath,
+			ID: "caller-ed25519", Algorithm: "EdDSA", PublicKeyFile: keyPath,
 		}},
 	}
-	options, closeProtected, err := newProviderProtectedTransportOptions(protected, clock)
+	options, closeProtected, err := newProviderProtectedTransportOptions(protected, "provider-revision-1", clock)
 	if err != nil || options == nil || options.Gate == nil || closeProtected == nil {
 		t.Fatalf("newProviderProtectedTransportOptions() = %#v, closer present %t, %v", options, closeProtected != nil, err)
 	}
@@ -700,13 +702,15 @@ func TestNewProviderProtectedTransportOptionsIsOptInAndReleasesGuard(t *testing.
 func TestNewProviderProtectedTransportOptionsFailsClosed(t *testing.T) {
 	clock := fixedAdmissionClock{now: time.Unix(1_000, 0).UTC()}
 	protected := config.ProviderProtectedAdmissionConfig{
-		Enabled:        true,
-		GuardStateFile: filepath.Join(t.TempDir(), "admission.json"),
+		Enabled:                  true,
+		Issuer:                   "https://reference-caller.sandbox-runtime.test",
+		ProviderInstanceAudience: "urn:shell-echo:sandbox-runtime:provider-instance:provider-1",
+		GuardStateFile:           filepath.Join(t.TempDir(), "admission.json"),
 		TrustedVerificationKeys: []config.ProviderTrustedVerificationKeyConfig{{
-			ID: "agent-platform-ed25519", Algorithm: "EdDSA", PublicKeyFile: "missing.pem",
+			ID: "caller-ed25519", Algorithm: "EdDSA", PublicKeyFile: "missing.pem",
 		}},
 	}
-	if options, closeProtected, err := newProviderProtectedTransportOptions(protected, clock); err == nil || options != nil {
+	if options, closeProtected, err := newProviderProtectedTransportOptions(protected, "provider-revision-1", clock); err == nil || options != nil {
 		t.Fatalf("missing trusted key = %#v, %v", options, err)
 	} else if closeErr := closeProtected(); closeErr != nil {
 		t.Fatalf("close failed protected transport: %v", closeErr)
@@ -715,7 +719,7 @@ func TestNewProviderProtectedTransportOptionsFailsClosed(t *testing.T) {
 	directory := t.TempDir()
 	protected.TrustedVerificationKeys[0].PublicKeyFile = writeTrustedPublicKeyForServeTest(t, directory)
 	protected.GuardStateFile = directory
-	if options, closeProtected, err := newProviderProtectedTransportOptions(protected, clock); err == nil || options != nil {
+	if options, closeProtected, err := newProviderProtectedTransportOptions(protected, "provider-revision-1", clock); err == nil || options != nil {
 		t.Fatalf("invalid guard state = %#v, %v", options, err)
 	} else if closeErr := closeProtected(); closeErr != nil {
 		t.Fatalf("close failed protected transport: %v", closeErr)
@@ -772,7 +776,7 @@ func TestNewProviderCapabilitySourceRejectsInvalidModel(t *testing.T) {
 	}
 }
 
-func TestNewProviderCapabilitySourceAdvertisesCanonicalCodingShellWhenReady(t *testing.T) {
+func TestNewProviderCapabilitySourceAdvertisesCanonicalCodingShellAndConnectWhenReady(t *testing.T) {
 	capability := validProviderCapabilityConfig(nil, nil)
 	capability.CodingShellEnabled = true
 	source, err := newProviderCapabilitySource(capability, completeProviderCapabilityReadiness())
@@ -783,13 +787,15 @@ func TestNewProviderCapabilitySourceAdvertisesCanonicalCodingShellWhenReady(t *t
 	if err != nil {
 		t.Fatalf("CapabilitySnapshot() = %v", err)
 	}
-	if len(snapshot.Capabilities) != 2 || snapshot.Capabilities[0].ID != "sandbox.exec" || snapshot.Capabilities[1].ID != "sandbox.terminal" {
+	if len(snapshot.Capabilities) != 3 || snapshot.Capabilities[0].ID != "sandbox.exec" || snapshot.Capabilities[1].ID != "sandbox.terminal" || snapshot.Capabilities[2].ID != "sandbox.terminal-connect" {
 		t.Fatalf("capabilities = %#v", snapshot.Capabilities)
 	}
 	if len(snapshot.Capabilities[0].Versions) != 1 || snapshot.Capabilities[0].Versions[0] != "1.0.0" ||
 		len(snapshot.Capabilities[0].Profiles) != 1 || snapshot.Capabilities[0].Profiles[0] != "exec-v1" ||
 		len(snapshot.Capabilities[1].Versions) != 1 || snapshot.Capabilities[1].Versions[0] != "1.0.0" ||
-		len(snapshot.Capabilities[1].Profiles) != 1 || snapshot.Capabilities[1].Profiles[0] != "terminal-v1" {
+		len(snapshot.Capabilities[1].Profiles) != 1 || snapshot.Capabilities[1].Profiles[0] != "terminal-v1" ||
+		len(snapshot.Capabilities[2].Versions) != 1 || snapshot.Capabilities[2].Versions[0] != "1.0.0" ||
+		len(snapshot.Capabilities[2].Profiles) != 1 || snapshot.Capabilities[2].Profiles[0] != "terminal-connect-v1" {
 		t.Fatalf("capability mappings = %#v", snapshot.Capabilities)
 	}
 	if len(snapshot.RuntimeProfiles) != 1 {
@@ -798,8 +804,26 @@ func TestNewProviderCapabilitySourceAdvertisesCanonicalCodingShellWhenReady(t *t
 	runtimeProfile := snapshot.RuntimeProfiles[0]
 	if runtimeProfile.ID != "sandbox-runtime-coding-shell-v1" || runtimeProfile.IsolationClass != "container" ||
 		runtimeProfile.RuntimeClassName != "sandbox-runtime-coding-shell" || len(runtimeProfile.Architecture) != 1 || runtimeProfile.Architecture[0] != "amd64" ||
-		len(runtimeProfile.CapabilityProfileIDs) != 2 || runtimeProfile.CapabilityProfileIDs[0] != "exec-v1" || runtimeProfile.CapabilityProfileIDs[1] != "terminal-v1" {
+		len(runtimeProfile.CapabilityProfileIDs) != 3 || runtimeProfile.CapabilityProfileIDs[0] != "exec-v1" || runtimeProfile.CapabilityProfileIDs[1] != "terminal-v1" || runtimeProfile.CapabilityProfileIDs[2] != "terminal-connect-v1" {
 		t.Fatalf("runtime profile = %#v", runtimeProfile)
+	}
+}
+
+func TestNewProviderCapabilitySourceOmitsTerminalConnectWithoutTransport(t *testing.T) {
+	capability := validProviderCapabilityConfig(nil, nil)
+	capability.CodingShellEnabled = true
+	readiness := completeProviderCapabilityReadiness()
+	readiness.TerminalWebSocket = false
+	source, err := newProviderCapabilitySource(capability, readiness)
+	if err != nil {
+		t.Fatalf("newProviderCapabilitySource() = %v", err)
+	}
+	snapshot, err := source.CapabilitySnapshot(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snapshot.Capabilities) != 2 || len(snapshot.RuntimeProfiles) != 1 || len(snapshot.RuntimeProfiles[0].CapabilityProfileIDs) != 2 {
+		t.Fatalf("capability snapshot = %#v", snapshot)
 	}
 }
 
@@ -826,8 +850,6 @@ func TestNewProviderCapabilitySourceRejectsEveryMissingCodingShellDependency(t *
 		{"terminal authority", func(r *providerCapabilityReadiness) { r.TerminalAuthority = false }, "terminal authority"},
 		{"terminal allocator", func(r *providerCapabilityReadiness) { r.TerminalAllocator = false }, "terminal allocator"},
 		{"opaque handoff", func(r *providerCapabilityReadiness) { r.OpaqueHandoff = false }, "opaque terminal handoff"},
-		{"terminal WebSocket", func(r *providerCapabilityReadiness) { r.TerminalWebSocket = false }, "terminal WebSocket"},
-		{"Gateway", func(r *providerCapabilityReadiness) { r.GatewayBoundary = false }, "caller-owned Gateway"},
 		{"artifact acceptance", func(r *providerCapabilityReadiness) { r.ArtifactAcceptance = false }, "artifact acceptance"},
 		{"output staging", func(r *providerCapabilityReadiness) { r.OutputStaging = false }, "real output staging"},
 		{"content checks", func(r *providerCapabilityReadiness) { r.ContentChecks = false }, "content checks"},
@@ -849,7 +871,7 @@ func completeProviderCapabilityReadiness() providerCapabilityReadiness {
 	return providerCapabilityReadiness{
 		ProtectedAdmission: true, MutationGuard: true, LifecyclePersistence: true, RuntimeLifecycle: true, StableMounts: true,
 		ExecAcceptance: true, ExecExecutor: true, ExecCancellation: true, ExecResultRetention: true, ExecReconciliation: true, UsageCollection: true,
-		TerminalAuthority: true, TerminalAllocator: true, OpaqueHandoff: true, TerminalWebSocket: true, GatewayBoundary: true,
+		TerminalAuthority: true, TerminalAllocator: true, OpaqueHandoff: true, TerminalWebSocket: true,
 		ArtifactAcceptance: true, OutputStaging: true, ContentChecks: true, RetainedEvidence: true, OperationAggregation: true,
 	}
 }
@@ -1032,7 +1054,7 @@ func validProviderConfigForServeTest() config.ProviderConfig {
 			ServerCertificateFile:      "provider.crt",
 			ServerPrivateKeyFile:       "provider.key",
 			ClientCABundleFile:         "client-ca.pem",
-			AllowedClientURIIdentities: []string{"spiffe://agent-platform/provider-client"},
+			AllowedClientURIIdentities: []string{"spiffe://reference-caller.sandbox-runtime.test/provider-client"},
 		},
 		Capability: config.ProviderCapabilityConfig{
 			ProviderRevisionID: "provider-revision-1",
@@ -1050,7 +1072,8 @@ func validProviderConfigForServeTest() config.ProviderConfig {
 
 func validProtectedAdmissionConfigForServeTest() config.ProviderProtectedAdmissionConfig {
 	return config.ProviderProtectedAdmissionConfig{
-		Enabled: true, GuardStateFile: "provider-admission.json",
+		Enabled: true, Issuer: "https://reference-caller.sandbox-runtime.test",
+		ProviderInstanceAudience: "urn:shell-echo:sandbox-runtime:provider-instance:provider-1", GuardStateFile: "provider-admission.json",
 		TrustedVerificationKeys: []config.ProviderTrustedVerificationKeyConfig{{ID: "key-1", Algorithm: "EdDSA", PublicKeyFile: "key.pem"}},
 	}
 }

@@ -234,8 +234,10 @@ func validConfig(t *testing.T) Config {
 				{ID: "controller-a-2026-08", Algorithm: "EdDSA", Path: filepath.Join(root, "controller-a.pem")},
 				{ID: "controller-b-2026-08", Algorithm: "EdDSA", Path: filepath.Join(root, "controller-b.pem")},
 			},
-			ProviderRevisionID: "provider-revision", StateRoot: filepath.Join(root, "state"),
-			RuntimeDataRoot: filepath.Join(root, "runtime"), RuntimeImage: "sha256:" + strings.Repeat("a", 64),
+			JWSIssuer: "https://reference-caller.sandbox-runtime.test", ProviderRevisionID: "provider-revision",
+			ProviderInstanceAudience: "urn:shell-echo:sandbox-runtime:provider-instance:downstream-fencing-test",
+			StateRoot:                filepath.Join(root, "state"),
+			RuntimeDataRoot:          filepath.Join(root, "runtime"), RuntimeImage: "sha256:" + strings.Repeat("a", 64),
 			RuntimeControllerID: "downstream-fencing-provider",
 			Browser: &basestack.BrowserConfig{
 				GatewayImage: "sha256:" + strings.Repeat("b", 64), UplinkNetwork: "bridge",

@@ -1959,6 +1959,7 @@ func downstreamProviderConfig(
 ) downstreamstack.Config {
 	actionProfile := downstreamstack.ActionFencingProfileV1
 	providerRevisionID := "provider-revision-downstream-fencing-e2e-v1"
+	providerAudience := "urn:shell-echo:sandbox-runtime:provider-instance:downstream-fencing-e2e"
 	if witnessedV2 {
 		actionProfile = downstreamstack.ActionFencingProfileWitnessedV2
 		providerRevisionID = "provider-revision-downstream-fencing-e2e-v2"
@@ -1978,6 +1979,7 @@ func downstreamProviderConfig(
 	if postgresURL != "" {
 		actionProfile = downstreamstack.ActionFencingProfilePostgresWitnessedV2
 		providerRevisionID = "provider-revision-postgres-controlled-restore-e2e-v1"
+		providerAudience = "urn:shell-echo:sandbox-runtime:provider-instance:postgres-controlled-restore-e2e"
 		authority.ActionFencingProfile = actionProfile
 		authority.ActionHistoryWitnessFile = ""
 		authority.ActionHistoryPostgresURL = postgresURL
@@ -1993,8 +1995,9 @@ func downstreamProviderConfig(
 				{ID: material.ControllerA.JWSKeyID, Algorithm: "EdDSA", Path: material.ControllerA.JWSPublicFile},
 				{ID: material.ControllerB.JWSKeyID, Algorithm: "EdDSA", Path: material.ControllerB.JWSPublicFile},
 			},
-			ProviderRevisionID: providerRevisionID,
-			StateRoot:          filepath.Join(stateRoot, "provider"), RuntimeDataRoot: filepath.Join(runRoot, "browser-runtime"),
+			JWSIssuer: referenceCallerJWSIssuer, ProviderRevisionID: providerRevisionID,
+			ProviderInstanceAudience: providerAudience,
+			StateRoot:                filepath.Join(stateRoot, "provider"), RuntimeDataRoot: filepath.Join(runRoot, "browser-runtime"),
 			RuntimeImage: browserReference, RuntimeControllerID: runtimeController,
 			Browser: &basestack.BrowserConfig{
 				GatewayImage: browserGatewayImage, UplinkNetwork: uplinkName, Namespace: runtimeNamespace,
@@ -2057,6 +2060,7 @@ func downstreamIdentities(
 		}
 		provider := providercaller.BrowserBootstrapConfig{
 			ProviderBaseURL: providerURL, CAFile: material.CAFile,
+			JWSIssuer:          referenceCallerJWSIssuer,
 			ProviderRevisionID: providerRevisionID, ProviderInstanceAudience: providerAudience,
 			RuntimeImageReference: imageReference, RuntimeImageDigest: imageDigest, RuntimeArchitecture: architecture,
 			Controller: providercaller.BrowserBootstrapController{
@@ -2651,7 +2655,7 @@ func validateDownstreamManifest(manifest downstreamFencingManifest) error {
 	}
 	if manifest.EvidenceName != expectedName ||
 		(manifest.EvidenceProfile != lock.DownstreamFencingProfile && !v2 && !postgresRestore) ||
-		manifest.Contract.SuiteExercised || manifest.Contract.ContractMetadataOnly ||
+		manifest.Contract.DownstreamFencingContract != lock.DownstreamFencingContractMetadata() ||
 		len(manifest.Contract.ProviderRoutesExercised) == 0 || (!v2 && !postgresRestore && manifest.ProcessReconstructions != 2) ||
 		(v2 && manifest.ProcessReconstructions != 5) || (postgresRestore && manifest.ProcessReconstructions != 3) ||
 		(!v2 && !postgresRestore && manifest.Adapters == nil) || ((v2 || postgresRestore) && manifest.Adapters != nil) ||

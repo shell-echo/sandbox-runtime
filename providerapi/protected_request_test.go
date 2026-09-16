@@ -9,8 +9,8 @@ import (
 )
 
 func TestClientIdentityAdmissionSelectsOneExactAllowedURI(t *testing.T) {
-	material := newTestMTLSMaterial(t, []string{testAllowedIdentity, "spiffe://agent-platform/other-client"})
-	admission, err := newClientIdentityAdmission([]string{testAllowedIdentity, "spiffe://agent-platform/other-client"})
+	material := newTestMTLSMaterial(t, []string{testAllowedIdentity, "spiffe://reference-caller.sandbox-runtime.test/other-client"})
+	admission, err := newClientIdentityAdmission([]string{testAllowedIdentity, "spiffe://reference-caller.sandbox-runtime.test/other-client"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -30,7 +30,7 @@ func TestClientIdentityAdmissionSelectsOneExactAllowedURI(t *testing.T) {
 	}
 
 	multipleEligible := issueTestCertificate(t, material.ca, testCertificateOptions{
-		uriStrings:  []string{testAllowedIdentity, "spiffe://agent-platform/other-client"},
+		uriStrings:  []string{testAllowedIdentity, "spiffe://reference-caller.sandbox-runtime.test/other-client"},
 		extKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
 	})
 	if _, err := admission.Caller(verifiedState(t, multipleEligible)); err == nil {
@@ -56,7 +56,7 @@ func TestClientIdentityAdmissionRejectsUnverifiedOrIneligibleState(t *testing.T)
 		t.Fatal("Caller() accepted no verified chain")
 	}
 	other := issueTestCertificate(t, material.ca, testCertificateOptions{
-		uriStrings:  []string{"spiffe://agent-platform/other-client"},
+		uriStrings:  []string{"spiffe://reference-caller.sandbox-runtime.test/other-client"},
 		extKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
 	})
 	if _, err := admission.Caller(verifiedState(t, other)); err == nil {

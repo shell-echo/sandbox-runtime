@@ -1,9 +1,9 @@
 {
-  "format_version": 1,
+  "format_version": 2,
   "source": {
     "repository": "https://github.com/shell-echo/sandbox-runtime.git",
-    "revision": "5096e71fb84fbec22aa3487a0e55a1b49602ab8b",
-    "contract_tree": "859f76dc0e855a0c8abdbbb5648df100dabb4328"
+    "revision": "22ba6987ea5fbc37d53942720133c0acad199edd",
+    "contract_tree": "c9a7054d7c8e7f4b6e32f38175ceedddc48c2d38"
   },
   "contract": {
     "root": "contract",
@@ -11,18 +11,27 @@
     "version": "1.0.0",
     "license": "MIT",
     "manifest_path": "contract/compatibility/contract-manifest.json",
-    "manifest_digest": "sha256:ec6379d18088e2ff2faac6e8e016aabefa94f793bcc3ed2e85da61fcde2e9356",
+    "manifest_digest": "sha256:1e17e0ef4f86e03be1dac22c48e7b556a8600a4baa6252f4514390d339b8ba3f",
     "openapi_path": "contract/openapi/sandbox-runtime-provider-v1.yaml",
-    "openapi_sha256": "sha256:e011c896904cc15dabf6039f9d7b1de73e441cf13c85eceb74af687a80b57da9",
+    "openapi_sha256": "sha256:64f0f8d93de39217f5d684758c1407ba62df16f274137d1855821df9dd004a1d",
     "semantic_rules_path": "contract/semantic-rules/provider-v1.json",
-    "semantic_rules_sha256": "sha256:138b5c65bdafa14eb5fe626c875fe5adc9270cb45c194c7d4cebb5d1f12d626b",
+    "semantic_rules_sha256": "sha256:8757107d5b44451bcb1bdae223262cb870f92b3a6c6fed0e6fef7ebf8f15587e",
     "fixtures_root": "contract/fixtures"
   },
   "sandbox_suite": {
     "path": "contract/conformance/provider-v1/suite.json",
     "suite_id": "sandbox-provider",
     "suite_version": "1.0.0",
-    "suite_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "suite_digest": "sha256:b40c932643f4a1e5fd6681e3abf9b64a607609866a6254456970f8b8034cf2a8",
+    "suite_digest_profile": "rfc8785-full-document-excluding-suite-digest-v1",
     "required_profile": "sandbox-runtime-provider-v1"
+  },
+  "provider_remote_suite": {
+    "path": "contract/conformance/provider-remote-v1/suite.json",
+    "suite_id": "sandbox-provider-remote",
+    "suite_version": "1.0.0",
+    "suite_digest": "sha256:167922d972229a97a64bf22bc6a36ee20d4de19a023395d9f004f00c54cc49d0",
+    "suite_digest_profile": "rfc8785-full-document-excluding-suite-digest-v1",
+    "required_profile": "sandbox-runtime-provider-remote-discovery-v1"
   }
 }

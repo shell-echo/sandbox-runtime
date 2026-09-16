@@ -31,10 +31,11 @@ import (
 )
 
 const (
-	referenceNamespace  = "reference-e2e"
-	referenceController = "reference-e2e-controller"
-	runRootPrefix       = "sandbox-runtime-e2e-"
-	registryImage       = "registry:2"
+	referenceNamespace       = "reference-e2e"
+	referenceController      = "reference-e2e-controller"
+	referenceCallerJWSIssuer = "https://reference-caller.sandbox-runtime.test"
+	runRootPrefix            = "sandbox-runtime-e2e-"
+	registryImage            = "registry:2"
 )
 
 type Options struct {
@@ -76,25 +77,57 @@ type Result struct {
 }
 
 type evidenceManifest struct {
-	CreatedAt           string   `json:"created_at"`
-	CallerKind          string   `json:"caller_kind"`
-	HarnessCommit       string   `json:"harness_commit"`
-	ProviderCommit      string   `json:"provider_commit"`
-	ContractRevision    string   `json:"contract_revision"`
-	ContractTree        string   `json:"contract_tree"`
-	SuiteCases          int      `json:"suite_cases"`
-	RuntimeImage        string   `json:"runtime_image"`
-	RuntimePlatform     string   `json:"runtime_platform"`
-	RuntimePreparation  string   `json:"runtime_preparation"`
-	SupportImages       []string `json:"support_images,omitempty"`
-	VerifierDigest      string   `json:"verifier_executable_digest,omitempty"`
-	StackConfigDigest   string   `json:"stack_config_digest"`
-	CallerConfigDigests []string `json:"caller_config_digests"`
-	Reports             []string `json:"reports"`
-	CandidateReports    []string `json:"candidate_reports,omitempty"`
-	CandidateBoundary   string   `json:"candidate_evidence_boundary,omitempty"`
-	Commands            []string `json:"commands"`
-	EvidenceBoundary    string   `json:"evidence_boundary"`
+	CreatedAt                string   `json:"created_at"`
+	CallerKind               string   `json:"caller_kind"`
+	HarnessCommit            string   `json:"harness_commit"`
+	ProviderCommit           string   `json:"provider_commit"`
+	ContractRevision         string   `json:"contract_revision"`
+	ContractTree             string   `json:"contract_tree"`
+	SuiteID                  string   `json:"suite_id"`
+	SuiteVersion             string   `json:"suite_version"`
+	SuiteDigest              string   `json:"suite_digest"`
+	SuiteDigestProfile       string   `json:"suite_digest_profile"`
+	SuiteProfile             string   `json:"suite_profile"`
+	SuiteCases               int      `json:"suite_cases"`
+	RemoteSuiteID            string   `json:"remote_suite_id"`
+	RemoteSuiteVersion       string   `json:"remote_suite_version"`
+	RemoteSuiteDigest        string   `json:"remote_suite_digest"`
+	RemoteSuiteDigestProfile string   `json:"remote_suite_digest_profile"`
+	RemoteSuiteProfile       string   `json:"remote_suite_profile"`
+	RemoteSuiteCases         int      `json:"remote_suite_cases"`
+	SuiteExercised           bool     `json:"suite_exercised"`
+	RemoteSuiteExercised     bool     `json:"remote_suite_exercised"`
+	RuntimeImage             string   `json:"runtime_image"`
+	RuntimePlatform          string   `json:"runtime_platform"`
+	RuntimePreparation       string   `json:"runtime_preparation"`
+	SupportImages            []string `json:"support_images,omitempty"`
+	VerifierDigest           string   `json:"verifier_executable_digest,omitempty"`
+	StackConfigDigest        string   `json:"stack_config_digest"`
+	CallerConfigDigests      []string `json:"caller_config_digests"`
+	Reports                  []string `json:"reports"`
+	CandidateReports         []string `json:"candidate_reports,omitempty"`
+	CandidateBoundary        string   `json:"candidate_evidence_boundary,omitempty"`
+	Commands                 []string `json:"commands"`
+	EvidenceBoundary         string   `json:"evidence_boundary"`
+}
+
+func recordLockedSuites(manifest *evidenceManifest) {
+	manifest.ContractRevision = lock.ContractRevision
+	manifest.ContractTree = lock.ContractTree
+	manifest.SuiteID = lock.SuiteID
+	manifest.SuiteVersion = lock.SuiteVersion
+	manifest.SuiteDigest = lock.SuiteDigest
+	manifest.SuiteDigestProfile = lock.SuiteDigestProfile
+	manifest.SuiteProfile = lock.SuiteProfile
+	manifest.SuiteCases = lock.SuiteCases
+	manifest.RemoteSuiteID = lock.RemoteSuiteID
+	manifest.RemoteSuiteVersion = lock.RemoteSuiteVersion
+	manifest.RemoteSuiteDigest = lock.RemoteSuiteDigest
+	manifest.RemoteSuiteDigestProfile = lock.RemoteSuiteDigestProfile
+	manifest.RemoteSuiteProfile = lock.RemoteSuiteProfile
+	manifest.RemoteSuiteCases = lock.RemoteSuiteCases
+	manifest.SuiteExercised = false
+	manifest.RemoteSuiteExercised = false
 }
 
 func Run(ctx context.Context, options Options) (_ Result, resultErr error) {
@@ -262,7 +295,7 @@ func Run(ctx context.Context, options Options) (_ Result, resultErr error) {
 			{ID: material.ControllerA.JWSKeyID, Algorithm: "EdDSA", Path: material.ControllerA.JWSPublicFile},
 			{ID: material.ControllerB.JWSKeyID, Algorithm: "EdDSA", Path: material.ControllerB.JWSPublicFile},
 		},
-		ProviderRevisionID: providerRevisionID, ProviderInstanceAudience: providerAudience,
+		JWSIssuer: referenceCallerJWSIssuer, ProviderRevisionID: providerRevisionID, ProviderInstanceAudience: providerAudience,
 		StateRoot: stateRoot, RuntimeDataRoot: runtimeDataRoot, RuntimeImage: runtimeImage,
 		RuntimeControllerID: referenceController, TerminalBrokerPath: "/inputs/terminal-broker",
 		GatewayPrincipals: []stack.GatewayPrincipal{
@@ -281,7 +314,8 @@ func Run(ctx context.Context, options Options) (_ Result, resultErr error) {
 		Profile:         caller.ProfileCodingShell,
 		Phase:           caller.PhaseInitial,
 		ProviderBaseURL: "https://" + providerAddress, GatewayBaseURL: "https://" + gatewayAddress,
-		CAFile: material.CAFile, ProviderRevisionID: providerRevisionID, ProviderInstanceAudience: providerAudience,
+		CAFile: material.CAFile, JWSIssuer: referenceCallerJWSIssuer,
+		ProviderRevisionID: providerRevisionID, ProviderInstanceAudience: providerAudience,
 		RuntimeImageReference: runtimeImageReference, RuntimeImageDigest: runtimeDigest, RuntimeArchitecture: "amd64", GatewayAdminToken: adminToken,
 		GatewayListenerLimit: 32,
 		ControllerA: caller.IdentityConfig{
@@ -342,7 +376,6 @@ func Run(ctx context.Context, options Options) (_ Result, resultErr error) {
 	}
 	manifest := evidenceManifest{
 		CreatedAt: time.Now().UTC().Format(time.RFC3339Nano), CallerKind: string(callerKind), HarnessCommit: harnessCommit, ProviderCommit: lock.ProviderCommit,
-		ContractRevision: lock.ContractRevision, ContractTree: lock.ContractTree, SuiteCases: lock.SuiteCases,
 		RuntimeImage: runtimeImage, RuntimePlatform: "linux/amd64", RuntimePreparation: runtimePreparation, StackConfigDigest: stackConfigDigest,
 		CallerConfigDigests: []string{initialConfigDigest, resumeConfigDigest},
 		Reports:             []string{filepath.Base(initialReportPath), filepath.Base(resumeReportPath)},
@@ -353,6 +386,7 @@ func Run(ctx context.Context, options Options) (_ Result, resultErr error) {
 		},
 		EvidenceBoundary: evidenceBoundary,
 	}
+	recordLockedSuites(&manifest)
 	if callerKind == CallerPlatformCandidate {
 		manifest.CandidateReports = []string{filepath.Base(initialReportPath), filepath.Base(resumeReportPath)}
 		manifest.CandidateBoundary = evidenceBoundary

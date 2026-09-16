@@ -1,0 +1,590 @@
+{
+  "format_version": 1,
+  "semantics_id": "sandbox-runtime-external-caller-adapter-protocol-semantics-v1",
+  "semantics_version": "1.0.0",
+  "protocol_schema": {
+    "path": "qualification/external-caller-coding-shell-v1/adapter-protocol.schema.json",
+    "digest": "sha256:d12b477cd540e02c6a7e2f8eb77b0405b717c15e98a0f144b2d63f705ff95969",
+    "digest_profile": "sha256-raw-file-bytes-v1",
+    "schema_id": "urn:shell-echo:sandbox-runtime:qualification:external-caller-adapter-protocol:v1"
+  },
+  "profile": {
+    "profile_id": "sandbox-runtime-external-caller-coding-shell-v1",
+    "profile_version": "1.0.0",
+    "profile_digest": "sha256:4effea27fd3d7668b88eeb95c69e19b51556914b7949b1a39ce522b2aec46c14",
+    "schema_digest": "sha256:2ad01731b69246399d6f04048593f31da9e4118b1dff99a81551b0c9b5972d77"
+  },
+  "report_schema": {
+    "path": "qualification/external-caller-coding-shell-v1/report.schema.json",
+    "digest": "sha256:cd51ccf0aea0bc31b11ff4f288751fc7df0f0dd081860efc305182ea61f842e4",
+    "digest_profile": "sha256-raw-file-bytes-v1",
+    "schema_id": "urn:shell-echo:sandbox-runtime:qualification:external-caller-coding-shell-report:v1"
+  },
+  "transport_profile": {
+    "transport_id": "darwin-linux-inherited-pipe-v1",
+    "protocol_data_language": "language-neutral-json",
+    "supported_platforms": ["darwin", "linux"],
+    "unsupported_platform_behavior": "fail-closed-before-process-start",
+    "invocation_framing": "one-strict-utf8-json-document-then-eof",
+    "adapter_output_framing": "strict-utf8-json-lines-with-lf",
+    "stderr_role": "bounded-untrusted-diagnostics-only",
+    "startup_before_harness_input": true,
+    "startup_before_credential_delivery": true,
+    "fixed_empty_argv": true,
+    "environment_policy": "supervisor-allowlist-without-expectations-secrets-or-correlation",
+    "working_directory_policy": "supervisor-owned-empty-directory",
+    "credential_transport": "dedicated-inherited-readable-anonymous-pipes",
+    "ephemeral_file_transport_supported": false
+  },
+  "limits": {
+    "max_invocation_bytes": 32768,
+    "max_adapter_output_record_bytes": 65536,
+    "max_adapter_output_records_per_process": 33,
+    "max_adapter_output_sequence": 32,
+    "max_adapter_stdout_bytes": 2097152,
+    "max_adapter_stderr_bytes": 262144,
+    "max_credential_channels": 8,
+    "max_credential_channel_bytes": 1048576,
+    "max_credential_total_bytes": 4194304,
+    "max_case_seconds": 120,
+    "max_execution_seconds": 1800,
+    "max_process_reap_seconds": 5
+  },
+  "codec": {
+    "harness_to_adapter_message_types": ["invocation"],
+    "adapter_to_harness_message_types": [
+      "startup_identity",
+      "invocation_accepted",
+      "scenario_started",
+      "scenario_result",
+      "invocation_finished",
+      "protocol_error"
+    ],
+    "invocation_framing": {
+      "document_count": 1,
+      "eof_required": true,
+      "byte_count": "all-wire-bytes-through-eof-including-json-whitespace",
+      "empty_input_allowed": false
+    },
+    "adapter_output_framing": {
+      "delimiter": "single-lf-byte",
+      "record_document_bytes_exclude_delimiter": true,
+      "stdout_total_bytes_include_delimiters_and_invalid_or_truncated_bytes": true,
+      "every_record_requires_delimiter": true,
+      "empty_records_allowed": false,
+      "carriage_return_bytes_allowed": false,
+      "crlf_allowed": false,
+      "complete_records_rejected_by_document_validation_count_toward_record_limit": true,
+      "record_limit_failure_occurs_on_first_byte_after_max_complete_records": true
+    },
+    "json": {
+      "utf8_required": true,
+      "duplicate_member_names_allowed": false,
+      "invalid_unicode_surrogate_escapes_allowed": false,
+      "multiple_values_per_document_allowed": false,
+      "schema_validation_required": true,
+      "unknown_message_fields_allowed": false
+    },
+    "startup_protocol_digests_must_match_locked_authority": true,
+    "invocation_failure_precedence": [
+      "invocation-byte-limit",
+      "stream-io-failure",
+      "json-encoding-or-structure",
+      "schema",
+      "message-direction"
+    ],
+    "adapter_output_failure_precedence": [
+      "stdout-byte-limit",
+      "record-count-limit",
+      "record-byte-limit",
+      "stream-io-failure",
+      "record-framing",
+      "json-encoding-or-structure",
+      "schema",
+      "message-direction",
+      "protocol-authority"
+    ],
+    "first_decode_failure_is_terminal": true,
+    "codec_validates_message_order": false,
+    "codec_launches_or_supervises_processes": false
+  },
+  "deadline_control": {
+    "clock_source": "process-supervisor-monotonic-elapsed-time",
+    "reported_wall_clock_timestamps_control_deadlines": false,
+    "run_execution": {
+      "start_anchor": "immediately-before-first-preflight-read",
+      "success_end_anchor": "immediately-after-final-reached-phase-clean-process-exit-following-terminal-and-stdout-eof",
+      "failure_end_anchor": "immediately-upon-terminal-supervisor-failure-classification-before-separate-termination-cleanup",
+      "deadline_policy": "minimum-of-locked-run-execution-and-parent-context-deadline",
+      "shared_across_phases": true,
+      "phase_process_start_resets_deadline": false,
+      "reconstruction_resets_deadline": false,
+      "included_waits": [
+        "startup-identity",
+        "invocation-and-credential-delivery",
+        "adapter-output",
+        "terminal-stdout-eof-and-clean-process-exit"
+      ]
+    },
+    "case": {
+      "start_anchor": "immediately-after-supervisor-validates-prior-case-boundary",
+      "first_case_prior_boundary_message_type": "invocation_accepted",
+      "later_case_prior_boundary_message_type": "scenario_result",
+      "timer_starts_before_waiting_for_expected_case_output": true,
+      "deadline_policy": "minimum-of-locked-case-remaining-run-execution-and-parent-context-deadline",
+      "applies_to_dispositions": ["completed", "not_executed"],
+      "scenario_started_resets_deadline": false,
+      "retries_or_transient_outcomes_reset_deadline": false
+    },
+    "expiry": {
+      "effective_deadline_expiry_failure": "deadline-exceeded",
+      "parent_cancellation_before_effective_deadline_failure": "context-canceled",
+      "simultaneous_event_policy": "deadline-preempts-events-observed-at-or-after-effective-deadline"
+    },
+    "termination": {
+      "start_anchor": "immediately-before-close-supervisor-owned-io",
+      "scope": [
+        "close-supervisor-owned-io",
+        "kill-process-group",
+        "bounded-wait-and-reap"
+      ],
+      "deadline_policy": "separate-cleanup-context-with-locked-process-reap-limit",
+      "timeout_result": "incomplete"
+    },
+    "definition_verifier_claims_runtime_deadline_enforcement": false
+  },
+  "startup_identity": {
+    "message_type": "startup_identity",
+    "sequence": 0,
+    "required_embedded_identities": [
+      "protocol_schema_digest",
+      "protocol_semantics_digest",
+      "caller_release_identity",
+      "adapter_release_identity",
+      "contract_revision",
+      "contract_tree",
+      "profile_id",
+      "profile_version",
+      "profile_digest"
+    ],
+    "expected_values_injected_by_harness": false,
+    "combined_frame_is_caller_owner_assertion": true,
+    "process_supervisor_must_independently_bind_actual_artifacts_and_processes": true,
+    "identity_mismatch_behavior": "reject-before-harness-input"
+  },
+  "invocation": {
+    "one_process_invocation_per_phase": true,
+    "run_phase_order": ["initial", "reconstruction"],
+    "phase_invocation_ids_must_differ": true,
+    "restart_processes_between_phases": [
+      "provider",
+      "external_caller",
+      "qualification_adapter",
+      "caller_gateway"
+    ],
+    "preserve_stores_between_phases": [
+      "provider_local_state",
+      "caller_owned_correlation_state",
+      "runtime_resource_state"
+    ],
+    "allowed_harness_fields": [
+      "invocation_id",
+      "phase",
+      "profile_path",
+      "provider_origin",
+      "gateway_probe_endpoint",
+      "credential_channel_descriptors",
+      "caller_state_root"
+    ],
+    "protocol_envelope_fields_are_not_harness_expectations": [
+      "format_version",
+      "protocol_id",
+      "protocol_version",
+      "message_type"
+    ],
+    "forbidden_correlation_fields": [
+      "sandbox_id",
+      "operation_id",
+      "attempt_id",
+      "idempotency_key",
+      "fencing_token",
+      "runtime_session_id",
+      "handoff_reference"
+    ],
+    "forbidden_correlation_applies_to": [
+      "argv",
+      "environment",
+      "working_directory",
+      "invocation",
+      "credential_payload",
+      "endpoint_query",
+      "caller_state_root_seed"
+    ],
+    "location_policy": {
+      "path_profile": "absolute-clean-posix-portable-filename-v1",
+      "uri_profile": "canonical-secure-uri-v1",
+      "profile_path_binding": "same-read-only-regular-file-opened-without-symlinks-and-verified-as-locked-profile",
+      "caller_state_root_binding": "same-private-directory-opened-without-symlinks-created-empty-before-initial-and-unread-unmodified-unreplaced-by-harness",
+      "provider_origin_policy": "https-origin-without-path-userinfo-query-fragment-percent-encoding-or-explicit-default-port",
+      "gateway_probe_endpoint_policy": "https-or-wss-endpoint-with-required-static-clean-path-without-userinfo-query-fragment-percent-encoding-or-explicit-default-port",
+      "host_policy": "lowercase-ldh-dns-not-ending-in-whatwg-ipv4-number-or-canonical-ip-literal",
+      "ipv4_policy": "four-shortest-decimal-octets",
+      "ipv6_policy": "non-ipv4-mapped-rfc5952-literal",
+      "port_policy": "omitted-or-nondefault-shortest-decimal-1-through-65535",
+      "gateway_scheme_rewrite_allowed": false,
+      "values_source": "qualification-operator-and-process-supervisor-static-preflight-only",
+      "values_commitment": "adapter-configuration-digest-finalized",
+      "values_commitment_configuration_id": "adapter_configuration",
+      "values_commitment_digest_profile": "rfc8785-full-document-v1",
+      "values_frozen_before": [
+        "credential-material-acquisition-or-generation",
+        "forbidden-correlation-material-acquisition-or-generation",
+        "adapter-process-start",
+        "provider-or-gateway-network-io"
+      ],
+      "values_identical_across_phases": [
+        "profile_path",
+        "provider_origin",
+        "gateway_probe_endpoint",
+        "caller_state_root"
+      ],
+      "values_derived_from_forbidden_correlation": false,
+      "values_derived_from_credential_payload": false,
+      "derivation_and_order_proof_observer": "process_supervisor",
+      "operator_upstream_non_derivation_is_trusted_input": true,
+      "definition_verifier_claims_derivation_or_order_proof": false,
+      "location_values_in_sanitized_transcript": false,
+      "runtime_binding_observer": "process_supervisor",
+      "runtime_location_overlap_forbidden": [
+        "profile_path:caller_state_root",
+        "profile_path:working_directory",
+        "profile_path:evidence_root",
+        "caller_state_root:working_directory",
+        "caller_state_root:evidence_root"
+      ]
+    },
+    "caller_state_root_policy": "created-empty-before-initial-and-unread-unmodified-by-harness-through-reconstruction",
+    "evidence_root_exposed_to_adapter": false
+  },
+  "credential_channels": {
+    "roles": [
+      "provider_credentials",
+      "provider_trust",
+      "gateway_credentials",
+      "gateway_trust"
+    ],
+    "requirement_descriptor_exact_match": true,
+    "unique_channel_ids": true,
+    "unique_file_descriptors": true,
+    "single_eof_framed_payload": true,
+    "close_on_exec_except_explicit_target": true,
+    "payload_is_private_and_not_evidence": true,
+    "payload_must_not_contain_correlation_reinjection": true,
+    "unknown_or_ambiguous_delivery_behavior": "terminate-and-reap"
+  },
+  "state_machine": {
+    "scope": "one-fresh-adapter-process-and-one-phase",
+    "initial_state": "awaiting-startup",
+    "states": [
+      "awaiting-startup",
+      "ready-for-invocation",
+      "awaiting-invocation-acceptance",
+      "awaiting-next-scenario",
+      "awaiting-started-result",
+      "awaiting-terminal",
+      "terminal-observed",
+      "terminal-eof-observed",
+      "complete",
+      "failed"
+    ],
+    "harness_input_event": "validated-invocation-delivered",
+    "transition_table": [
+      {
+        "from": ["awaiting-startup"],
+        "event": "startup_identity",
+        "guard": "sequence-zero-and-locked-startup-authority",
+        "to": "ready-for-invocation"
+      },
+      {
+        "from": ["ready-for-invocation"],
+        "event": "validated-invocation-delivered",
+        "guard": "single-schema-valid-invocation-delivered-and-supervisor-reference-captured",
+        "to": "awaiting-invocation-acceptance"
+      },
+      {
+        "from": ["awaiting-invocation-acceptance"],
+        "event": "invocation_accepted",
+        "guard": "sequence-one-and-reference-binding-valid",
+        "to": "awaiting-next-scenario"
+      },
+      {
+        "from": ["awaiting-invocation-acceptance"],
+        "event": "protocol_error",
+        "guard": "pre-binding-invalid-invocation-branch",
+        "to": "terminal-observed"
+      },
+      {
+        "from": ["awaiting-next-scenario"],
+        "event": "scenario_started",
+        "guard": "next-locked-profile-case",
+        "to": "awaiting-started-result"
+      },
+      {
+        "from": ["awaiting-next-scenario"],
+        "event": "scenario_result",
+        "guard": "next-locked-profile-case-not-executed-and-more-cases-remain",
+        "to": "awaiting-next-scenario"
+      },
+      {
+        "from": ["awaiting-next-scenario"],
+        "event": "scenario_result",
+        "guard": "final-locked-profile-case-not-executed",
+        "to": "awaiting-terminal"
+      },
+      {
+        "from": ["awaiting-started-result"],
+        "event": "scenario_result",
+        "guard": "same-locked-profile-case-completed-and-more-cases-remain",
+        "to": "awaiting-next-scenario"
+      },
+      {
+        "from": ["awaiting-started-result"],
+        "event": "scenario_result",
+        "guard": "same-final-locked-profile-case-completed",
+        "to": "awaiting-terminal"
+      },
+      {
+        "from": ["awaiting-next-scenario", "awaiting-started-result", "awaiting-terminal"],
+        "event": "protocol_error",
+        "guard": "post-binding-failure-branch-and-next-contiguous-sequence",
+        "to": "terminal-observed"
+      },
+      {
+        "from": ["awaiting-terminal"],
+        "event": "invocation_finished",
+        "guard": "next-contiguous-sequence-and-completion-matches-dispositions",
+        "to": "terminal-observed"
+      },
+      {
+        "from": ["terminal-observed"],
+        "event": "stdout_eof",
+        "guard": "no-post-terminal-byte-observed",
+        "to": "terminal-eof-observed"
+      },
+      {
+        "from": ["terminal-eof-observed"],
+        "event": "clean_process_exit",
+        "guard": "bounded-wait-reported-successful-process-exit",
+        "to": "complete"
+      }
+    ],
+    "undefined_transition_result": "failed",
+    "decode_failure_from_nonterminal_result": "failed",
+    "stdout_eof_before_terminal_result": "failed",
+    "byte_after_terminal_result": "failed",
+    "process_exit_event_source": "bounded-wait-after-stdout-eof-drain",
+    "non_clean_process_exit_result": "failed",
+    "complete_and_failed_states_are_absorbing": true,
+    "startup_identity_records_per_process": 1,
+    "startup_identity_records_per_complete_run": 2,
+    "startup_identity_cross_phase_equality": "rfc8785-canonical-complete-record-identical",
+    "report_startup_identity_projection": "locked-report-fields-from-both-canonical-equal-startup-records",
+    "reconstruction_start_precondition": "initial-state-machine-complete-and-initial-process-cleanly-exited",
+    "adapter_output_sequence_starts_at": 1,
+    "adapter_output_sequence_increment": 1,
+    "first_post_invocation_message": "invocation_accepted",
+    "output_binding_reference": "single-validated-inbound-invocation-document-for-process",
+    "output_binding_message_types": [
+      "invocation_accepted",
+      "scenario_started",
+      "scenario_result",
+      "invocation_finished"
+    ],
+    "output_invocation_id_binding": "byte-identical-to-reference-invocation-id",
+    "output_phase_binding": "exactly-equal-to-reference-invocation-phase",
+    "scenario_case_phase_binding": "case-id-prefix-equals-reference-invocation-phase",
+    "output_binding_mismatch_behavior": "invalid-or-out-of-order-message",
+    "protocol_error_binding": "branch-selected-by-error-code",
+    "definition_verifier_claims_runtime_output_binding": false,
+    "scenario_order_source": "locked-profile-phase-order",
+    "completed_scenario_requires_started_message": true,
+    "not_executed_scenario_forbids_started_message": true,
+    "normal_terminal_requires_exactly_one_result_per_phase_scenario": true,
+    "protocol_error_may_terminate_before_remaining_scenario_results": true,
+    "unreported_scenarios_after_protocol_error_are_not_adapter_not_executed_assertions": true,
+    "result_dispositions": ["completed", "not_executed"],
+    "invocation_finished_completion": {
+      "completed": "every-phase-scenario-disposition-completed",
+      "stopped": "at-least-one-phase-scenario-disposition-not-executed"
+    },
+    "terminal_message_types": ["invocation_finished", "protocol_error"],
+    "exactly_one_terminal_message": true,
+    "output_after_terminal_forbidden": true,
+    "stdout_eof_after_terminal_required": true,
+    "clean_process_exit_after_terminal_required": true,
+    "definition_verifier_claims_runtime_state_machine_enforcement": false
+  },
+  "protocol_error": {
+    "branch_selector": "error_code",
+    "invocation_id_and_phase_nullability": "both-null-or-both-non-null",
+    "pre_binding_invalid_invocation": {
+      "error_codes": ["invalid_invocation"],
+      "reference_invocation_bound": false,
+      "requires_invocation_accepted": false,
+      "sequence": 1,
+      "invocation_id": null,
+      "phase": null,
+      "prior_post_invocation_output_allowed": false
+    },
+    "post_binding_failure": {
+      "error_codes": [
+        "credential_channel_failed",
+        "caller_start_failed",
+        "scenario_execution_failed",
+        "output_failed",
+        "internal_failure"
+      ],
+      "reference_invocation_bound": true,
+      "requires_invocation_accepted": true,
+      "sequence": "next-contiguous-adapter-output-sequence",
+      "invocation_id": "byte-identical-to-reference-invocation-id",
+      "phase": "exactly-equal-to-reference-invocation-phase",
+      "prior_post_invocation_output_allowed": true
+    },
+    "complete_record_required": true,
+    "output_failed_emission_precondition": "no-bytes-of-failed-normal-record-written-and-complete-protocol-error-record-remains-writable",
+    "partial_record_or_write_failure_observation": "invalid-or-truncated-output-observed-by-process-supervisor",
+    "terminal": true,
+    "mutually_exclusive_with_invocation_finished": true,
+    "output_after_terminal_forbidden": true,
+    "adapter_assigns_report_status": false,
+    "adapter_assigns_run_outcome": false,
+    "definition_verifier_claims_runtime_protocol_error_handling": false
+  },
+  "progress_semantics": {
+    "message_types": [
+      "invocation_accepted",
+      "scenario_started",
+      "scenario_result",
+      "invocation_finished",
+      "protocol_error"
+    ],
+    "adapter_output_is_caller_owner_assertion": true,
+    "adapter_timestamps_are_evidence": false,
+    "adapter_assigns_report_scenario_status": false,
+    "adapter_assigns_run_outcome": false,
+    "adapter_incomplete_status_allowed": false,
+    "completed_disposition_is_not_passed_evidence": true,
+    "report_status_values": ["passed", "failed", "incomplete", "not_executed"],
+    "report_status_derived_from_adapter_and_independent_observers": true,
+    "missing_required_observation_without_observed_mismatch": "incomplete",
+    "observed_mismatch": "failed"
+  },
+  "process_control": {
+    "concurrent_stdout_stderr_drain_required": true,
+    "failure_conditions": [
+      "context-canceled",
+      "deadline-exceeded",
+      "invalid-or-out-of-order-message",
+      "duplicate-or-skipped-sequence",
+      "input-or-output-limit-exceeded",
+      "ambiguous-credential-delivery",
+      "unexpected-eof",
+      "unexpected-process-exit"
+    ],
+    "failure_sequence": [
+      "close-supervisor-owned-io",
+      "kill-process-group",
+      "bounded-wait-and-reap"
+    ],
+    "kill_or_reap_failure_result": "incomplete",
+    "cleanup_context_is_separate": true,
+    "descendant_reaping_not_proven_by_process_group": true
+  },
+  "sanitized_transcript": {
+    "projection_schema": {
+      "path": "qualification/external-caller-coding-shell-v1/adapter-transcript.schema.json",
+      "digest": "sha256:d2eb229f55528df8ba68426cc5b7da9d1bd6a78a412707d656b77c1effeff293",
+      "digest_profile": "sha256-raw-file-bytes-v1",
+      "schema_id": "urn:shell-echo:sandbox-runtime:qualification:external-caller-adapter-transcript:v1"
+    },
+    "digest_subject": "complete-projection-document",
+    "digest_profile": "rfc8785-full-document-v1",
+    "digest_excluded_from_preimage": true,
+    "protocol_identity_matches_locked_authority": true,
+    "projection_presence": "only-after-both-phase-streams-reach-valid-terminal-eof-and-clean-exit",
+    "phase_order": ["initial", "reconstruction"],
+    "invocation_ids_bind_phase_entries": true,
+    "process_identities_bind_report_phase_processes_by_component": true,
+    "executable_digests_bind_report_phase_processes_by_component": true,
+    "configuration_digests_bind_report_phase_processes_by_component": true,
+    "supplied_field_names": [
+      "invocation_id",
+      "phase",
+      "profile_path",
+      "provider_origin",
+      "gateway_probe_endpoint",
+      "credential_channel_descriptors",
+      "caller_state_root"
+    ],
+    "credential_channel_roles_order": "invocation-descriptor-array-order",
+    "credential_channel_roles_byte_identical_across_phases": true,
+    "message_types_order": "all-complete-decoded-adapter-output-records-in-wire-order-including-startup-and-terminal",
+    "message_counts_derived_from_message_types": true,
+    "adapter_output_complete_records_equals_message_types_length": true,
+    "bounded_byte_count_sources": {
+      "invocation_wire_bytes": "codec-invocation-wire-bytes",
+      "adapter_stdout_wire_bytes": "codec-adapter-stdout-total-wire-bytes",
+      "adapter_stderr_wire_bytes": "process-supervisor-bounded-stderr-wire-bytes",
+      "adapter_output_complete_records": "codec-complete-record-count",
+      "credential_channel_count": "validated-invocation-credential-descriptor-count",
+      "credential_payload_total_bytes": "process-supervisor-successfully-written-credential-payload-bytes"
+    },
+    "terminal_state_matches_final_message_and_supervisor_eof_exit_observations": true,
+    "definition_verifier_claims_runtime_transcript_recomputation": false,
+    "include": [
+      "protocol_id",
+      "protocol_version",
+      "protocol_schema_digest",
+      "protocol_semantics_digest",
+      "invocation_ids",
+      "phase_order",
+      "process_identities",
+      "executable_digests",
+      "configuration_digests",
+      "supplied_field_names",
+      "credential_channel_roles",
+      "message_types",
+      "message_counts",
+      "bounded_byte_counts",
+      "terminal_state"
+    ],
+    "exclude": [
+      "field_values",
+      "credential_payloads",
+      "provider_origin",
+      "gateway_probe_endpoint",
+      "profile_path",
+      "caller_state_root",
+      "raw_requests",
+      "raw_responses",
+      "raw_endpoints",
+      "raw_correlation_values",
+      "stderr"
+    ]
+  },
+  "non_claims": [
+    "provider-wire-contract-change",
+    "consumer-specific-adapter-implementation",
+    "caller-source-independence",
+    "request-process-attribution",
+    "external-caller-qualification-result",
+    "provider-suite-execution",
+    "aggregate-conformance",
+    "multi-controller-reliability",
+    "hostile-multi-tenant-isolation",
+    "high-availability",
+    "deployment-qualification",
+    "production-readiness"
+  ]
+}

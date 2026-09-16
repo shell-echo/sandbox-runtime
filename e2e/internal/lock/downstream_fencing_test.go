@@ -19,7 +19,10 @@ func TestDownstreamFencingLock(t *testing.T) {
 			t.Fatalf("LoadDownstreamFencing(%q): %v", platform, err)
 		}
 		if locked.Sources.ProviderRevision != ProviderCommit || locked.Sources.HarnessBaseline != DownstreamFencingHarnessBaseline ||
-			locked.Contract.SuiteExercised || locked.Contract.ContractMetadataOnly ||
+			locked.Contract.SuiteExercised || locked.Contract.RemoteSuiteExercised || locked.Contract.ContractMetadataOnly ||
+			locked.Contract.SuiteDigest != SuiteDigest || locked.Contract.SuiteProfile != SuiteProfile ||
+			locked.Contract.RemoteSuiteDigest != RemoteSuiteDigest || locked.Contract.RemoteSuiteProfile != RemoteSuiteProfile ||
+			locked.Contract.RemoteSuiteCases != RemoteSuiteCases ||
 			!locked.BrowserImage.Provenance.Established || !locked.Valkey.ProvenanceNotEstablished ||
 			locked.RevocationPolicy.OperationTimeoutMillis != 100 || locked.Adapters.Revocation.PolicyFingerprint == "" ||
 			!locked.PrivateWire.ResolveMetadataOnly || !locked.PrivateWire.HighWaterActivationOnly ||
@@ -54,7 +57,10 @@ func TestDownstreamFencingLockRequiresExplicitZeroValueFields(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, fieldPath := range [][]string{
+		{"contract", "suite_digest"},
+		{"contract", "remote_suite_profile"},
 		{"contract", "suite_exercised"},
+		{"contract", "remote_suite_exercised"},
 		{"valkey", "database_index"},
 		{"private_wire", "resolve_advances_high_water"},
 		{"private_wire", "url_query_allowed"},
@@ -167,6 +173,8 @@ func TestDownstreamFencingHarnessPathIsNarrow(t *testing.T) {
 		".github/workflows/postgres-controlled-restore-e2e.yml": true,
 		".github/workflows/browser-e2e.yml":                     false,
 		"README.md":                                             true,
+		"compatibility/sandbox-runtime/README.md":               true,
+		"compatibility/sandbox-runtime/contract.lock.json":      false,
 		"gateway/cdpfence/ingress.go":                           false,
 		"e2e/../gateway/cdpfence/ingress.go":                    false,
 	} {
@@ -180,6 +188,8 @@ func TestDownstreamFencingV2HarnessPathIsNarrow(t *testing.T) {
 	for path, want := range map[string]bool{
 		"e2e/cmd/downstream-fencing-v2-e2e/main.go":             true,
 		"docs/adr/0034-browser-downstream-fencing-v2.md":        true,
+		"compatibility/sandbox-runtime/README.md":               true,
+		"compatibility/sandbox-runtime/contract.lock.json":      false,
 		".github/workflows/downstream-fencing-v2-e2e.yml":       true,
 		".github/workflows/postgres-controlled-restore-e2e.yml": true,
 		".github/workflows/downstream-fencing-e2e.yml":          false,
@@ -197,6 +207,8 @@ func TestPostgresControlledRestoreHarnessPathIsNarrow(t *testing.T) {
 	for path, want := range map[string]bool{
 		"e2e/cmd/postgres-controlled-restore-e2e/main.go":                  true,
 		"docs/adr/0036-browser-postgresql-controlled-restore-reference.md": true,
+		"compatibility/sandbox-runtime/README.md":                          true,
+		"compatibility/sandbox-runtime/contract.lock.json":                 false,
 		".github/workflows/postgres-controlled-restore-e2e.yml":            true,
 		".github/workflows/downstream-fencing-v2-e2e.yml":                  false,
 		".github/workflows/downstream-fencing-e2e.yml":                     false,

@@ -19,7 +19,9 @@ func TestPostgresControlledRestoreLock(t *testing.T) {
 			t.Fatalf("LoadPostgresControlledRestore(%q): %v", platform, err)
 		}
 		if locked.EvidenceProfile != PostgresControlledRestoreProfile ||
-			locked.Base.EvidenceProfile != DownstreamFencingV2Profile || locked.Contract.SuiteExercised ||
+			locked.Base.EvidenceProfile != DownstreamFencingV2Profile || locked.Contract.SuiteExercised || locked.Contract.RemoteSuiteExercised ||
+			locked.Contract.SuiteDigest != SuiteDigest || locked.Contract.RemoteSuiteDigest != RemoteSuiteDigest ||
+			locked.Contract.RemoteSuiteCases != RemoteSuiteCases ||
 			locked.PostgreSQL.SelectedPlatform != platform || !locked.PostgreSQL.SameRunner ||
 			locked.PostgreSQL.IndependentFailureDomain || !locked.PostgreSQL.ProvenanceNotEstablished ||
 			locked.Witness.CredentialsExposedToGateways || locked.Witness.CredentialsExposedToCallers ||
@@ -48,6 +50,9 @@ func TestPostgresControlledRestoreLockRequiresExplicitBoundaryFields(t *testing.
 		t.Fatal(err)
 	}
 	for _, fieldPath := range [][]string{
+		{"contract", "suite_profile"},
+		{"contract", "remote_suite_digest"},
+		{"contract", "remote_suite_exercised"},
 		{"postgresql", "independent_failure_domain"},
 		{"witness", "credentials_exposed_to_gateways"},
 		{"restore_control", "verification_mutates_witness"},

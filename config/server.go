@@ -11,6 +11,7 @@ import (
 
 	"github.com/shell-echo/sandbox-runtime/internal/provideridentity"
 	"github.com/shell-echo/sandbox-runtime/option"
+	"github.com/shell-echo/sandbox-runtime/provider/admission"
 	"github.com/spf13/viper"
 )
 
@@ -111,6 +112,7 @@ type ProviderExecConfig struct {
 // capability advertisement.
 type ProviderTerminalConfig struct {
 	Enabled                  bool   `mapstructure:"enabled"`
+	ConnectEnabled           bool   `mapstructure:"connect_enabled"`
 	SessionRepositoryFile    string `mapstructure:"session_repository_file"`
 	ReferenceRegistryFile    string `mapstructure:"reference_registry_file"`
 	RuntimeProfileID         string `mapstructure:"runtime_profile_id"`
@@ -232,20 +234,25 @@ type ProviderCapabilityConfig struct {
 // Provider coding/shell identifiers are locked by the repository-owned
 // Provider v1 Contract. They are not operator-selectable advertisement IDs.
 const (
-	ProviderCodingShellRuntimeProfileID  = "sandbox-runtime-coding-shell-v1"
-	ProviderCodingShellRuntimeClassName  = "sandbox-runtime-coding-shell"
-	ProviderCodingShellExecProfileID     = "exec-v1"
-	ProviderCodingShellTerminalProfileID = "terminal-v1"
-	ProviderCodingShellCapabilityVersion = "1.0.0"
+	ProviderCodingShellRuntimeProfileID   = "sandbox-runtime-coding-shell-v1"
+	ProviderCodingShellRuntimeClassName   = "sandbox-runtime-coding-shell"
+	ProviderCodingShellExecProfileID      = "exec-v1"
+	ProviderCodingShellTerminalProfileID  = "terminal-v1"
+	ProviderTerminalConnectProfileID      = "terminal-connect-v1"
+	ProviderTerminalConnectCapabilityID   = "sandbox.terminal-connect"
+	ProviderCodingShellCapabilityVersion  = "1.0.0"
+	ProviderCodingShellTerminalBrokerPath = "/usr/local/libexec/sandbox-runtime/terminal-broker"
 )
 
 // ProviderProtectedAdmissionConfig controls the opt-in protected-operation
 // boundary. It is independent from mTLS-only capability discovery so an
 // omitted or disabled section cannot accidentally expose protected routes.
 type ProviderProtectedAdmissionConfig struct {
-	Enabled                 bool                                   `mapstructure:"enabled"`
-	GuardStateFile          string                                 `mapstructure:"guard_state_file"`
-	TrustedVerificationKeys []ProviderTrustedVerificationKeyConfig `mapstructure:"trusted_verification_keys"`
+	Enabled                  bool                                   `mapstructure:"enabled"`
+	Issuer                   string                                 `mapstructure:"issuer"`
+	ProviderInstanceAudience string                                 `mapstructure:"provider_instance_audience"`
+	GuardStateFile           string                                 `mapstructure:"guard_state_file"`
+	TrustedVerificationKeys  []ProviderTrustedVerificationKeyConfig `mapstructure:"trusted_verification_keys"`
 }
 
 // ProviderTrustedVerificationKeyConfig identifies one operator-managed SPKI
@@ -330,7 +337,7 @@ func (c *ProviderConfig) Validate() error {
 	if err := c.Capability.validateEnabled(); err != nil {
 		return fmt.Errorf("capability %w", err)
 	}
-	if err := c.ProtectedAdmission.validateEnabled(); err != nil {
+	if err := c.ProtectedAdmission.validateEnabled(c.Capability.ProviderRevisionID); err != nil {
 		return fmt.Errorf("protected admission %w", err)
 	}
 	if err := c.Lifecycle.validateEnabled(); err != nil {
@@ -455,6 +462,9 @@ func (c ProviderExecConfig) Validate() error {
 
 func (c *ProviderTerminalConfig) validateEnabled() error {
 	if !c.Enabled {
+		if c.ConnectEnabled {
+			return errors.New("connect_enabled requires terminal to be enabled")
+		}
 		return nil
 	}
 	for _, path := range []struct {
@@ -776,9 +786,12 @@ func (c *ProviderCapabilityConfig) validateEnabled() error {
 	return nil
 }
 
-func (c *ProviderProtectedAdmissionConfig) validateEnabled() error {
+func (c *ProviderProtectedAdmissionConfig) validateEnabled(providerRevisionID string) error {
 	if !c.Enabled {
 		return nil
+	}
+	if _, err := admission.NewAdmissionAuthority(c.Issuer, providerRevisionID, c.ProviderInstanceAudience); err != nil {
+		return fmt.Errorf("authority %w", err)
 	}
 	if strings.TrimSpace(c.GuardStateFile) == "" {
 		return errors.New("guard state file must not be empty")
@@ -893,7 +906,7 @@ func defaultServerConfig() *ServerConfig {
 			Terminal: ProviderTerminalConfig{
 				SessionRepositoryFile: "data/provider-terminal-sessions.json", ReferenceRegistryFile: "data/provider-terminal-references.json",
 				RuntimeProfileID: ProviderCodingShellRuntimeProfileID, CapabilityProfileID: ProviderCodingShellTerminalProfileID,
-				BrokerPath: "/workspace/.sandbox-runtime/terminal-broker", ShellPath: "/bin/sh",
+				BrokerPath: ProviderCodingShellTerminalBrokerPath, ShellPath: "/bin/sh",
 				MaxSessionsPerSandbox: 4, MaxSessionsPerController: 64, ShutdownCleanupSeconds: 10,
 			},
 			Lifecycle: ProviderLifecycleConfig{

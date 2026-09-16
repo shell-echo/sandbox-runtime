@@ -1,0 +1,65 @@
+{
+  "configured_authority": {
+    "issuer": "https://caller.example.test/sandbox-control-plane",
+    "provider_instance_audience": "urn:shell-echo:sandbox-runtime:provider-instance:provider-1",
+    "provider_revision_id": "provider-revision-1",
+    "admitted_controller_uri_sans": ["spiffe://provider/controller"],
+    "verification_key_ids": ["caller-key-2026-08"]
+  },
+  "cases": [
+    {
+      "name": "issuer substitution",
+      "presented": {"iss": "https://other-caller.example.test/sandbox-control-plane"},
+      "expected_status": 401,
+      "expected_class": "authentication"
+    },
+    {
+      "name": "legacy issuer without explicit legacy configuration",
+      "presented": {"iss": "agent-platform"},
+      "expected_status": 401,
+      "expected_class": "authentication"
+    },
+    {
+      "name": "fragment-bearing issuer",
+      "presented": {"iss": "https://caller.example.test/sandbox-control-plane#other"},
+      "expected_status": 401,
+      "expected_class": "authentication"
+    },
+    {
+      "name": "unknown issuer-scoped key",
+      "presented": {"kid": "unknown-key"},
+      "expected_status": 401,
+      "expected_class": "authentication"
+    },
+    {
+      "name": "invalid signature",
+      "presented": {"signature": "invalid"},
+      "expected_status": 401,
+      "expected_class": "authentication"
+    },
+    {
+      "name": "verified token subject differs from selected URI SAN",
+      "presented": {"sub": "spiffe://provider/other-controller"},
+      "expected_status": 403,
+      "expected_class": "authorization"
+    },
+    {
+      "name": "caller documents agree on non-local audience",
+      "presented": {
+        "aud": "urn:shell-echo:sandbox-runtime:provider-instance:provider-2",
+        "admission_context_provider_instance_audience": "urn:shell-echo:sandbox-runtime:provider-instance:provider-2"
+      },
+      "expected_status": 403,
+      "expected_class": "authorization"
+    },
+    {
+      "name": "caller documents agree on non-local provider revision",
+      "presented": {
+        "provider_revision_id": "provider-revision-2",
+        "admission_context_provider_revision_id": "provider-revision-2"
+      },
+      "expected_status": 403,
+      "expected_class": "authorization"
+    }
+  ]
+}

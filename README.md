@@ -1,5 +1,83 @@
 # sandbox-runtime
 
+P2.7c.2 is implemented through c2b.7: the producer builds the closed sanitized
+transcript and the report validator independently recomputes RFC 8785/SHA-256
+from `process-supervisor.json`'s `adapter_transcript_projection`. It binds the
+protocol, phases, invocations, processes, executables, configurations and field
+inventory, and checks message order, derived counts and status consistency.
+Physical byte counts, EOF/exit and process truth remain supervisor inputs, not
+independent observations made by this validator. No independent external-caller
+qualification result is claimed. c3.1 adds descriptor-backed, bounded executable
+preflight and rechecking without launching a process. The fixed 24-step plan
+has 21 completed and 3 unfinished steps. c3.2 implements the final static
+configuration commitment, exclusive custody transfer and one-shot logical phase
+admission with live descriptor rechecks. Reconstruction uses the existing
+protocol completion gate; outer-harness evidence remains open.
+c3.3 implements actual local spawn, endpoint handoff and bounded stop/reap.
+c3.4 exclusively decodes and binds the first stdout startup identity before any
+invocation or credential byte; Darwin/Linux tests execute repository helpers
+only, not an independent caller, and release identities remain assertions. c3.5
+validates the invocation against committed locations/startup requirements, then
+concurrently delivers bounded stdin and inherited-pipe payloads with EOF. c3.6
+starts one monotonic run budget before the first supervisor preflight read,
+preserves it across reconstruction, clips every case and operation deadline,
+drains bounded stderr concurrently, and accepts actual completion only after
+ordered output, terminal, stdout EOF and a clean reaped exit. c3.7 publishes
+sanitized evidence only after that completion, assigns opaque non-PID process
+identities, prevents external inputs from overriding observed adapter facts,
+and finalizes one canonical two-phase transcript. Real Darwin/arm64 and
+Linux/arm64 Lima helper tests pass. d1 now freezes a sanitized target identity,
+the exact profile-derived topology, 11 artifact requirements, all 10 ordered
+configuration identities, the numeric runtime/cleanup budget, and the 15+5
+scenario inventory before runtime setup. d2 now obtains target, artifact, and
+configuration identities only through a read-only observer, creates three
+descriptor-backed persistent stores, locks the authoritative inspector scope,
+and requires a complete zero-resource baseline before exposing prepared state.
+d3 releases mutation capability only after rechecking that state and baseline,
+passes the executor a closed identity-and-case directive with no request,
+endpoint, credential, correlation, or signing fields, and consumes exactly 15
+ordered progress results under clipped per-case and execution deadlines. It
+enforces dependencies, per-interaction wire-attempt bounds, and provisional
+transport/request counters while retaining cleanup after an unknown start.
+d4 admits reconstruction only after a terminal initial result and passes a
+closed eight-field directive containing only identities, ordered case IDs, and
+symbolic restart/preservation policy. It requires two distinct invocation IDs
+and eight unique opaque non-PID labels across the four old/new process pairs,
+rechecks persistent-store identity without reading entries, and consumes the
+five ordered reconstruction results under the original execution deadline.
+d5 adds four source-specific, read-only observer ports, binds their identities,
+41 interaction results and exact 66/17/7/1 fact projections to the locked
+profile and d2-d4 state, independently corroborates process replacement,
+transcript, shell-challenge and resource-scope facts, and derives scenario
+`passed`/`failed`/`incomplete`/`not_executed` plus conservative admission
+counters. Repository fixtures prove this component logic only; they are not
+independent caller evidence. d6 consumes the persistent cleanup obligation in a
+separate bounded context, binds the operator-owned teardown identity, closes
+local state descriptors, and requires exactly three same-scope, one-second-
+spaced zero-resource samples equal to the baseline before declaring cleanup
+successful. d7 now assembles and validates the closed evidence root as a local
+component. The separate public external-caller repository has completed 11 of
+its 13 candidate checkpoints through e1.8a. Public hosted run `35068957048`
+at source commit `58a211f0c167af3ec117c8cb8247bfe268bbae40` passed the
+full tests, deterministic Linux/amd64 build, authority verification, artifact
+upload, and five-subject Sigstore attestation `47846951`; the downloaded
+three-artifact bundle and its strict manifest were independently reverified.
+The e2 preflight then found two real execution blockers rather than an
+executable qualification environment: the attested candidate pins a synthetic
+`registry.invalid` runtime image, and the production command had not composed
+the locked terminal-connect route. The current worktree closes the latter with
+opt-in protected WebSocket composition and adds a repository-owned
+[`coding/shell image definition`](profiles/coding-shell/image/) with locked
+amd64/arm64 base manifests and a local native-Docker reproducibility/runtime
+gate. This remains component evidence, not an e2 run: the image has not been
+published or attested, and the external candidate has not yet been corrected
+and rebuilt against its immutable release digest.
+All 15 initial and all 5 reconstruction cases are locally composed, but
+operator-owned resource teardown, stable zero-resource inspection, independent
+runtime observations, the actual supervised 15+5 run, and a qualification
+result remain open. The main P2.7 plan is therefore 22/24, with e1 complete and
+e2/e3 pending.
+
 Composable Linux sandbox runtime for remote shells, desktops, browsers, and applications.
 
 `sandbox-runtime` is an early-stage runtime project for launching, accessing, and controlling remote workloads inside isolated Linux sandbox instances. It is designed to become a reusable foundation for products such as remote shells, cloud browsers, remote desktops, browser automation workers, AI-operated sandboxes, and embedded remote application environments.
@@ -51,10 +129,32 @@ checks as true. PostgreSQL and Valkey still share one host, Docker engine,
 operator, and workflow, so this profile cannot establish independent failure or
 backup domains.
 Valkey provenance and HA/failover, production Browser
-advertisement/public Gateway composition, real Agent Platform migration,
-aggregate conformance, multi-controller, hostile multi-tenant, deployment, and
-production gates remain open. The ADR 0033, v2, and controlled-restore profiles
+advertisement/public Gateway composition, aggregate conformance,
+multi-controller, hostile multi-tenant, deployment, and production gates remain
+open. The former named Agent Platform migration track is retired; external
+consumers must implement the repository-owned Provider calling standard. The
+ADR 0033, v2, and controlled-restore profiles
 pin Contract identity but do not execute the Suite (`suite_exercised=false`).
+
+ADR 0038's listener-local caller trust domain remains implemented. The current
+Contract authority is revision `22ba6987ea5fbc37d53942720133c0acad199edd`,
+tree `c9a7054d7c8e7f4b6e32f38175ceedddc48c2d38`, and manifest
+`sha256:1e17e0ef4f86e03be1dac22c48e7b556a8600a4baa6252f4514390d339b8ba3f`.
+It contains a content-derived 53-case local `repository-go-test` Suite at
+`sha256:b40c932643f4a1e5fd6681e3abf9b64a607609866a6254456970f8b8034cf2a8`
+and the unchanged 6-case `remote-http-black-box` discovery Suite. The refreshed
+Contract verifier, root tests/vet, and E2E lock logic pass in the current
+worktree. A clean VCS-built 53-case Runner, the E2E parent-lock gate, and all
+eight E2E `-check` commands remain pending until the refresh is committed and
+run from a clean checkout; no new P2.6 pass is claimed. The prior P2.6 release
+gate remains historical evidence at implementation `3fe314a` and E2E lock
+refresh `ae476fed12e82f472b19ff78fda633c8d702561d`. Docker
+reference run `20260907T044611.598221000Z`
+remains historical 15+5 evidence against its recorded `b8d4829`/`af8a505`
+harness/Provider identity; it is not relabeled as P2.6 evidence. Neither Suite
+proves interoperability with an independently implemented external caller,
+protected or mutating remote conformance, aggregate conformance, hostile
+multi-tenant safety, HA, deployment, or production readiness.
 
 Merge commit `a0cddf4` passes repository CI `34038556281`, Reference
 `34038556295`, Candidate `34038556284`, Browser `34038556297`, shared-capacity
@@ -78,9 +178,11 @@ Start a new development session with
 [`docs/PROJECT_CONTEXT.md`](docs/PROJECT_CONTEXT.md). It summarizes the current
 architecture, engineering rules, verified maturity, blockers, and next work;
 the detailed implementation evidence ledger remains in
-[`docs/STATUS.md`](docs/STATUS.md). For the caller-facing Provider routes,
-ownership boundary, admission rules, and integration checklist, see the
-[`Provider Integration Profile`](docs/platform-integration-profile.md).
+[`docs/STATUS.md`](docs/STATUS.md). For normative caller obligations and the
+Provider call sequence, see the
+[`Sandbox Provider Calling Standard`](contract/specification/provider-calling-standard-v1.md).
+The [`Provider Integration Profile`](docs/platform-integration-profile.md)
+remains a non-normative implementation guide.
 
 Currently implemented:
 
@@ -103,8 +205,11 @@ Currently implemented:
   `/instances`, with stable coding/shell mounts in the Docker development adapter
 - default-disabled Provider capability discovery on a separate mTLS-only HTTPS
   listener
-- default-disabled protected-operation admission with frozen public-key files
-  and a single-controller replay/fencing guard
+- default-disabled protected-operation admission with one explicit
+  listener-local caller issuer, a Provider-local instance audience and
+  revision, 1..32 frozen public-key files, and a single-controller
+  replay/fencing guard; the repository-local coordinated calling-standard gate
+  passes
 - default-disabled, development-only Provider exec composition over the Docker
   lifecycle runtime, a separate durable ledger, bounded private output capture,
   cancellation, result expiry, and restart reconciliation
@@ -251,6 +356,10 @@ Currently implemented:
 
 Planned but not yet implemented:
 
+- multi-issuer or multi-consumer admission on one protected listener; this
+  requires separate identity, key-ID, replay, fencing, and policy namespaces
+- independently implemented external-caller interoperability evidence beyond
+  the same-repository generic reference caller
 - use a deployment-owned environment to prove independent PostgreSQL/Valkey
   failure and backup domains, HA/failover, operator authorization, metrics, and
   rollback controls without promoting the passed same-runner reference to
@@ -328,8 +437,10 @@ Policy defines what an instance is allowed to do: resource limits, network acces
 The provider boundary, repository-owned Contract, security baseline, and
 authoritative phased delivery plan are defined in
 [the architecture document](docs/architecture.md). The independent-provider
-ownership decision is recorded in
-[ADR 0001](docs/adr/0001-agent-platform-provider-boundary.md).
+ownership decision is recorded in historical
+[ADR 0001](docs/adr/0001-agent-platform-provider-boundary.md) and its
+generic-caller successor,
+[ADR 0037](docs/adr/0037-sandbox-provider-calling-standard.md).
 
 The intended long-term architecture is:
 
@@ -377,6 +488,20 @@ metadata does not advertise or authorize snapshot, restore, or another runtime
 capability. The `protected_admission` configuration is independently disabled
 by default. When explicitly enabled with an immutable public-key bundle and a
 durable guard state file, it adds the protected-operation admission boundary.
+Startup also requires one exact issuer, one Provider-instance audience, and the
+same Provider revision used by the immutable capability snapshot. No issuer is
+defaulted from legacy behavior or selected from the bearer. The listener
+freezes 1..32 distinct verification keys and its admitted URI SAN identities
+inside that one caller trust domain.
+
+Rotation is an explicit restart procedure: install old and new public keys
+under distinct `kid` values, restart, move the caller to the new signing key,
+wait until every token accepted under the old key has expired, remove the old
+key, and restart again. There is no remote JWKS refresh or simultaneous
+multi-issuer listener. The component, Contract, conformance, and same-repository
+reference gates for these implementation properties pass; deployment-owned key
+rotation and independently implemented caller qualification remain separate.
+
 Individually enabled Provider lifecycle and exec applications may then compose
 only their locked routes. Exec requires the Provider Docker lifecycle runtime
 and its own file ledger; the development adapters remain rejected in production.
@@ -389,8 +514,13 @@ backend data. A local Gateway composition requires caller-owned authorization,
 revocation, recording, and WebSocket admission before it can proxy that fresh
 attach. The Provider command root includes default-disabled development
 artifact/usage composition but deliberately does not supply caller-owned public
-Gateway policy. Default standalone startup therefore still advertises no
-runtime capability. The separately versioned reference E2E stack in
+Gateway policy. The new `provider.terminal.connect_enabled` opt-in composes
+only the controller-side protected resolver/WebSocket route; it advertises
+`sandbox.terminal-connect@1.0.0` only when that connector is present and never
+supplies public user authorization or revocation. Default configuration still
+advertises no runtime capability; an explicitly complete coding/shell graph
+may advertise exec/terminal without terminal-connect, or add terminal-connect
+when this opt-in is composed. The separately versioned reference E2E stack in
  [`e2e/`](e2e/) supplies those caller-owned dependencies as an independent Go
  module and process boundary, and its exact atomic coding/shell advertisement
  and full reference caller scenarios pass locally; this does not turn the
@@ -730,6 +860,98 @@ visibility.
 - [x] implement mTLS-only capability discovery
 - [x] implement per-operation JWS and request/descriptor digest admission
   boundary across the individually composed Provider routes
+- [x] implement one explicit issuer-scoped caller trust domain per protected
+  listener, with Provider-local audience/revision anchors and bounded frozen
+  rotation keys, and pass its repository-local coordinated gate
+- [ ] qualify an independently implemented external caller; the
+  same-repository generic reference caller remains reference evidence only.
+  ADR 0040 defines the boundary, and P2.7a locks the verified coding/shell
+  machine-readable definition authority at
+  `sha256:4effea27fd3d7668b88eeb95c69e19b51556914b7949b1a39ce522b2aec46c14`.
+  P2.7b locks the closed report schema at
+  `sha256:cd51ccf0aea0bc31b11ff4f288751fc7df0f0dd081860efc305182ea61f842e4`
+  and its validator semantics at
+  `sha256:c724eaa9f3b52e1a5ba4aa5aaeb5e8b61a744818b2f56fd8ff52dfa5e1e584df`,
+  and adds the bounded evidence-root validator and sanitized receipt. The
+  validator enforces payload-owned nullable evidence and complete execution
+  timing, a 64-wire-attempt ceiling with fail-closed potential-resource
+  accounting, bound cleanup scope/baseline/stability samples, exact
+  create-sandbox resource projection, and receipt publication only after final
+  rechecks. This locks report-validation components only; it does not attest
+  producer truthfulness, original request bodies, or an external compatibility
+  result. P2.7c.1 locks the adapter protocol schema at
+  `sha256:d12b477cd540e02c6a7e2f8eb77b0405b717c15e98a0f144b2d63f705ff95969`
+  and operational semantics at
+  `sha256:10cd42017aee60b620dbbb7394a20c2a387983468a865a8d12a572f861d07662`.
+  P2.7c.2b.1 also locks the closed sanitized-transcript projection Schema at
+  `sha256:d2eb229f55528df8ba68426cc5b7da9d1bd6a78a412707d656b77c1effeff293`.
+  The identity-first, bounded protocol allows only the seven profile-owned
+  harness fields, keeps credentials on dedicated inherited channels, and treats
+  adapter progress as caller-owner assertions rather than final evidence. The
+  report startup identity, process-supervisor projection, validator semantics,
+  and receipt now bind the same exact protocol authority. P2.7c.2a implements a
+  runtime-independent strict codec for EOF-framed invocation input and
+  LF-delimited adapter output. It locks exact byte/record accounting, strict
+  UTF-8/JSON/Schema and message-direction checks, startup protocol-authority
+  matching, and sanitized terminal decode failures. The operational-semantics
+  digest was refreshed to bind those previously implicit count and precedence
+  rules. P2.7c.2b.1 machine-locks the complete per-process transition table,
+  terminal-to-EOF-to-clean-exit sequence, cross-phase startup equality, and
+  exact private-material-free transcript preimage shape. P2.7c.2b.2 implements
+  the first runtime-independent state gate: it consumes exactly one valid
+  sequence-zero startup record, rejects missing/duplicate/out-of-order startup,
+  retains the first sanitized failure, and grants invocation-input authorization
+  only once.
+  P2.7c.2b.3 binds the authorized, validated invocation to that same Codec and
+  stdout decoder, rejects skipped records or modified decoded envelopes, and
+  accepts only the next sequence-one `invocation_accepted` with byte-identical
+  invocation ID and exact phase. P2.7c.2b.4 then reads the exact ordered case
+  IDs from the verified profile, requires `scenario_started` before a
+  `completed` result, forbids it before `not_executed`, and advances to the
+  terminal boundary only after every phase case has one result. P2.7c.2b.5
+  enforces the disjoint normal/error terminal branches, rejects any
+  post-terminal byte, requires stdout EOF, and reaches `complete` only from a
+  clean-exit event after EOF. Actual bounded process
+  waiting, and process-execution enforcement remain later gates.
+  All qualification Schema compilers now use one ECMA-262 regexp engine, and
+  the locked text patterns reject ASCII controls without POSIX-only classes.
+  Invocation paths/endpoints now use closed canonical profiles, and the
+  definition requires a digest-bound preflight freeze before the supervisor or
+  harness acquires or generates credential or forbidden-correlation material,
+  plus byte identity across phases. Runtime proof awaits the process supervisor;
+  operator-upstream non-derivation remains trusted. Non-error output records now
+  bind their invocation ID and phase to the single validated inbound invocation,
+  and scenario case IDs bind to that phase. Protocol errors now have disjoint
+  pre-binding and post-binding branches with atomic nullable identity, contiguous
+  sequence, and terminal exclusivity. Monotonic deadline anchors now preserve one
+  shared 1,800-second execution budget across both phases, clip each case to the
+  remaining execution and parent deadline, forbid timer resets, and reserve a
+  separate five-second failure-termination budget. P2.7c.2a does not validate
+  phase/case order, enforce deadlines, launch an adapter, or recompute a
+  transcript; P2.7c.2b.1 defines those state and transcript rules, while
+  P2.7c.2b.2-.5 enforce startup, normal invocation acceptance, exact ordered
+  scenario state, terminal exclusivity, EOF, and supplied clean-exit state
+  without launching or waiting on a process. The c3.3 supervisor separately runs
+  local process probes. c3.4 binds the actual child's first stdout record to the
+  locked startup gate before any input, retains exclusive decoder ownership, and
+  fail-closes with process reclamation. c3.5 then verifies the private invocation
+  against the committed locations and exact startup channel requirements,
+  enforces channel/fd uniqueness plus per-channel/aggregate credential limits,
+  concurrently writes stdin and fd 3-10, closes every input for EOF, and advances
+  state only after exact byte completion. c3.6 then enforces the shared run/case
+  deadlines, bounded stderr, terminal-to-EOF order, and actual zero-exit reap.
+  c3.7 publishes defensive phase evidence only after that complete path and
+  binds its non-overridable adapter facts into one canonical two-phase
+  transcript. d1-d6 freeze and execute the request-free harness through
+  independently observed results and bounded cleanup. d7 now consumes that
+  sanitized state once, accepts only the closed transcript/timing/assertion/
+  trusted-digest projections, and creates the exact five payloads plus report
+  at `0600` through a pinned directory descriptor. It closes the assembly
+  writer before the validator alone publishes the receipt, with the same
+  runtime commitment bound across all seven files. Real Darwin/arm64 and
+  Linux/arm64 helpers pass. These repository probes do not establish release,
+  payload, caller, adapter, trusted-input, or observer provenance, and no
+  independent external caller has passed the gate.
 
 ### Provider lifecycle
 
@@ -745,7 +967,7 @@ visibility.
 - [x] pass the locked local lifecycle/security Suite mappings (component evidence only)
 - [x] compose durable terminal sessions and artifact/usage development verticals
 - [x] derive the exact nonempty advertisement from a complete externally supplied readiness graph
-- [x] pass the independent reference caller release gate (Agent Platform and production gates remain separate)
+- [x] pass the independent reference caller release gate (generic-consumer and production gates remain separate)
 
 ### Manifest and blocks
 

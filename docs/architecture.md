@@ -1,5 +1,83 @@
 # Architecture
 
+P2.7c.2 is implemented through c2b.7: the producer builds the closed sanitized
+transcript and the report validator independently recomputes RFC 8785/SHA-256
+from `process-supervisor.json`'s `adapter_transcript_projection`. It binds the
+protocol, phases, invocations, processes, executables, configurations and field
+inventory, and checks message order, derived counts and status consistency.
+Physical byte counts, EOF/exit and process truth remain supervisor inputs, not
+independent observations made by this validator. No independent external-caller
+qualification result is claimed. c3.1 adds descriptor-backed, bounded executable
+preflight and rechecking without launching a process. The fixed 24-step plan
+has 21 completed and 3 unfinished steps. c3.2 implements the final static
+configuration commitment, exclusive custody transfer and one-shot logical phase
+admission with live descriptor rechecks. Reconstruction uses the existing
+protocol completion gate; outer-harness evidence remains open.
+c3.3 implements actual local spawn, endpoint handoff and bounded stop/reap.
+c3.4 exclusively decodes and binds the first stdout startup identity before any
+invocation or credential byte; Darwin/Linux tests execute repository helpers
+only, not an independent caller, and release identities remain assertions. c3.5
+validates the invocation against committed locations/startup requirements, then
+concurrently delivers bounded stdin and inherited-pipe payloads with EOF. c3.6
+starts one monotonic run budget before the first supervisor preflight read,
+preserves it across reconstruction, clips every case and operation deadline,
+drains bounded stderr concurrently, and accepts actual completion only after
+ordered output, terminal, stdout EOF and a clean reaped exit. c3.7 publishes
+sanitized evidence only after that completion, assigns opaque non-PID process
+identities, prevents external inputs from overriding observed adapter facts,
+and finalizes one canonical two-phase transcript. Real Darwin/arm64 and
+Linux/arm64 Lima helper tests pass. d1 now freezes a sanitized target identity,
+the exact profile-derived topology, 11 artifact requirements, all 10 ordered
+configuration identities, the numeric runtime/cleanup budget, and the 15+5
+scenario inventory before runtime setup. d2 now obtains target, artifact, and
+configuration identities only through a read-only observer, creates three
+descriptor-backed persistent stores, locks the authoritative inspector scope,
+and requires a complete zero-resource baseline before exposing prepared state.
+d3 releases mutation capability only after rechecking that state and baseline,
+passes the executor a closed identity-and-case directive with no request,
+endpoint, credential, correlation, or signing fields, and consumes exactly 15
+ordered progress results under clipped per-case and execution deadlines. It
+enforces dependencies, per-interaction wire-attempt bounds, and provisional
+transport/request counters while retaining cleanup after an unknown start.
+d4 admits reconstruction only after a terminal initial result and passes a
+closed eight-field directive containing only identities, ordered case IDs, and
+symbolic restart/preservation policy. It requires two distinct invocation IDs
+and eight unique opaque non-PID labels across the four old/new process pairs,
+rechecks persistent-store identity without reading entries, and consumes the
+five ordered reconstruction results under the original execution deadline.
+d5 adds four source-specific, read-only observer ports, binds their identities,
+41 interaction results and exact 66/17/7/1 fact projections to the locked
+profile and d2-d4 state, independently corroborates process replacement,
+transcript, shell-challenge and resource-scope facts, and derives scenario
+`passed`/`failed`/`incomplete`/`not_executed` plus conservative admission
+counters. Repository fixtures prove this component logic only; they are not
+independent caller evidence. d6 consumes the persistent cleanup obligation in a
+separate bounded context, binds the operator-owned teardown identity, closes
+local state descriptors, and requires exactly three same-scope, one-second-
+spaced zero-resource samples equal to the baseline before declaring cleanup
+successful. d7 now assembles and validates the closed evidence root as a local
+component. The separate public external-caller repository has completed 11 of
+its 13 candidate checkpoints through e1.8a. Public hosted run `35068957048`
+at source commit `58a211f0c167af3ec117c8cb8247bfe268bbae40` passed the
+full tests, deterministic Linux/amd64 build, authority verification, artifact
+upload, and five-subject Sigstore attestation `47846951`; the downloaded
+three-artifact bundle and its strict manifest were independently reverified.
+The e2 preflight then found two real execution blockers rather than an
+executable qualification environment: the attested candidate pins a synthetic
+`registry.invalid` runtime image, and the production command had not composed
+the locked terminal-connect route. The current worktree closes the latter with
+opt-in protected WebSocket composition and adds a repository-owned
+`profiles/coding-shell/image` definition with locked amd64/arm64 base manifests
+and a local native-Docker reproducibility/runtime gate. This remains component
+evidence, not an e2 run: the image has not been published or attested, and the
+external candidate has not yet been corrected and rebuilt against its
+immutable release digest.
+All 15 initial and all 5 reconstruction cases are locally composed, but
+operator-owned resource teardown, stable zero-resource inspection, independent
+runtime observations, the actual supervised 15+5 run, and a qualification
+result remain open. The main P2.7 plan is therefore 22/24, with e1 complete and
+e2/e3 pending.
+
 ## Purpose
 
 `sandbox-runtime` is a backend-independent sandbox provider. Its first useful
@@ -8,16 +86,17 @@ backends are optional capabilities that can be added without changing the
 provider-facing control protocol.
 
 The Provider boundary is defined by the repository-owned MIT Contract under
-[`contract/`](../contract/). Its normative resources are the locked OpenAPI,
-JSON Schemas, semantic rules, fixtures, and Conformance Suite. The lock is
-recorded in [`compatibility/sandbox-runtime/contract.lock.json`](../compatibility/sandbox-runtime/contract.lock.json).
-This repository no longer consumes or claims compatibility with an external
-Agent Platform Contract. A future adapter may be added as a separate,
-explicitly versioned compatibility layer.
+[`contract/`](../contract/). Its normative resources are the locked Provider
+Calling Standard, OpenAPI, JSON Schemas, semantic rules, fixtures, and
+Conformance Suite. The lock is recorded in
+[`compatibility/sandbox-runtime/contract.lock.json`](../compatibility/sandbox-runtime/contract.lock.json).
+This repository does not consume or claim compatibility with an external
+platform Contract. External services conform to this Contract directly or own
+their adapter as a separate, explicitly versioned compatibility layer.
 
 ## Compatibility boundary
 
-A calling platform owns business and orchestration truth:
+A calling service owns business and orchestration truth:
 
 - tenant, user, authorization, `WorkOrder`, `Run`, and workflow state;
 - provider selection and immutable `ProviderRevision` binding for each run;
@@ -41,7 +120,7 @@ IDs, host paths, or any other provider implementation detail.
 
 ```mermaid
 flowchart LR
-    AP["Calling platform operation ledger"] -->|"Local Provider Contract v1"| PA["sandbox-runtime provider API"]
+    AP["Calling service operation ledger"] -->|"Sandbox Provider Contract v1"| PA["sandbox-runtime provider API"]
     AP --> RG["Runtime Gateway"]
     PA --> OS["Provider-local operations and reconciliation"]
     OS --> SS["Sandbox application service"]
@@ -58,9 +137,11 @@ Contract API. The current `instance.Service` may remain the internal
 application boundary and `instance.Driver` the backend port, but neither model
 should be serialized directly as the cross-project protocol.
 
-The accepted ownership decision is recorded in
-[`docs/adr/0001-agent-platform-provider-boundary.md`](adr/0001-agent-platform-provider-boundary.md).
-The calling platform owns its durable aggregate operation ledger and authorization
+The original ownership decision is recorded in
+[`docs/adr/0001-agent-platform-provider-boundary.md`](adr/0001-agent-platform-provider-boundary.md)
+and generalized by
+[`docs/adr/0037-sandbox-provider-calling-standard.md`](adr/0037-sandbox-provider-calling-standard.md).
+The caller owns its durable aggregate operation ledger and authorization
 decisions. This service owns only provider-local operation progress and backend
 evidence required to answer the Provider API safely.
 
@@ -68,21 +149,58 @@ evidence required to answer the Provider API safely.
 
 The current Contract namespace is
 `urn:shell-echo:sandbox-runtime:provider-v1`, version `1.0.0`, and MIT licensed.
-The lock binds the Contract tree, manifest, OpenAPI digest, semantic rules,
-fixtures, and local Conformance Suite to an immutable Git revision. Contract
-resources are validated in place; no external checkout, source-root mount, or
-proprietary resource is required.
+The format-2 lock binds the Contract tree, manifest, OpenAPI digest, semantic
+rules, fixtures, and both Conformance Suites to immutable Git revision
+`22ba6987ea5fbc37d53942720133c0acad199edd` and tree
+`c9a7054d7c8e7f4b6e32f38175ceedddc48c2d38`. Both Suite digests are derived by
+RFC 8785 canonicalization of the complete Suite object excluding only the
+top-level `suite_digest` member. Contract resources are validated in place; no
+external checkout, source-root mount, or proprietary resource is required.
+
+The local `sandbox-provider@1.0.0` profile
+`sandbox-runtime-provider-v1` contains 53 `repository-go-test` cases. The
+separate remote `sandbox-provider-remote@1.0.0` profile
+`sandbox-runtime-provider-remote-discovery-v1` contains six
+`remote-http-black-box` discovery cases. The remote profile does not redefine
+or execute the local profile.
 
 Compatibility rules:
 
-1. Protocol changes are additive within `v1`. A breaking semantic or schema
-   change requires a new protocol version and namespace revision.
+1. Compatibility is exact over Contract revision/tree for `v1`; route presence
+   or the major version alone is not a compatibility claim. A breaking semantic
+   or schema change requires a new protocol version and namespace revision.
 2. Capability negotiation, not provider-name checks, decides whether a workload
    may be scheduled.
 3. Provider revision identifiers remain immutable for the lifetime of an
    admitted workload.
 4. Local fixtures and conformance tests are release gates. Narrative
    documentation alone is not sufficient proof of Contract compatibility.
+
+### Protected-listener caller trust
+
+The current ADR 0038 implementation assigns exactly one caller trust domain to
+each protected Provider listener. Startup requires an explicit bounded issuer;
+there is no default, alias, fallback, or bearer-selected issuer. The listener
+also freezes the exact Provider-instance audience and the immutable Provider
+revision selected locally for capability advertisement. Bearer claims and the
+caller-supplied Admission Context must independently equal those local anchors;
+agreement between the two caller-controlled documents is not sufficient.
+
+The same listener freezes 1..32 public verification keys and its admitted URI
+SAN identities inside that issuer-scoped domain. A `kid` is unique in the
+bundle. Rotation is a bounded restart rollout: add old and new keys under
+distinct `kid` values, restart, switch the caller, wait for every old-key token
+accepted by that listener to expire, remove the old key, and restart again.
+There is no remote JWKS refresh or multi-issuer listener. Supporting multiple
+issuers or consumers on one listener requires separately designed key-ID,
+identity, replay, fencing, and policy namespaces.
+
+This implementation shape has passed its coordinated repository-local Contract,
+projection, configuration, conformance, E2E lock, and same-repository reference
+gate. That is not a completed interoperability claim: the reference caller
+cannot prove interoperability with an independently implemented external
+platform. Multi-issuer admission, multi-tenant isolation, HA, deployment, and
+production readiness remain separate open gates.
 
 ## Provider API v1
 
@@ -139,7 +257,7 @@ Both shared-capacity runs use a private echo fixture and do not exercise the
 Provider Contract, a real Browser/CDP path, image provenance, restricted
 egress, or Provider artifact/usage behavior. Distributed durable revocation,
 downstream fencing, Valkey provenance, HA/failover consistency, Provider
-multi-controller, hostile multi-tenant, real Agent Platform, aggregate
+multi-controller, hostile multi-tenant, generic-consumer interoperability, aggregate
 conformance, production configuration, deployment, and production readiness
 remain open.
 
@@ -162,7 +280,7 @@ restart retention, exact-grant scope, outage failure closure, recovery without
 resurrection, bounded propagation, and sanitized evidence. Contract/tree/48
 cases remain metadata with `exercised=false`; the private echo fixture is not a
 real Browser/CDP path. These results do not establish downstream fencing,
-Valkey provenance or HA/failover, ACL role isolation, real Agent Platform,
+Valkey provenance or HA/failover, ACL role isolation, generic-consumer interoperability,
 multi-controller, hostile multi-tenant, deployment, or production readiness.
 
 ADR 0033 and implementation `b4d41c9` add downstream action-fence and
@@ -203,8 +321,8 @@ is pinned, but the Suite is not executed (`suite_exercised=false`). This closes
 only the named ADR 0033 caller gates on those platforms; the v1 topology does
 not exercise deleted history or restored snapshots. Valkey
 provenance/HA/failover, production metrics/configuration/deployment and ingress
-topology, multi-controller reliability, hostile multi-tenant isolation, real
-Agent Platform compatibility, aggregate conformance, and production readiness
+topology, multi-controller reliability, hostile multi-tenant isolation,
+generic-consumer interoperability, aggregate conformance, and production readiness
 remain unproved.
 
 ADR 0034 adds an explicit v2 action-fencing successor without changing ADR
@@ -321,9 +439,13 @@ Expected protocol behavior includes:
   response instead of silently skipping history.
 
 Production transport uses mutual TLS plus short-lived bearer credentials bound
-to the ProviderRevision, operation/attempt, and policy scope. Loopback-only
-development mode may make authentication configurable, but production
-conformance must not rely on a trusted flat network.
+to the exact configured issuer, Provider-local audience and ProviderRevision,
+operation/attempt, and policy scope. An issuer or signature failure is an
+authentication failure; a verified token that misses the local audience or
+revision is an authorization failure before request digest verification or
+mutation-guard reservation. Loopback-only development mode may make
+authentication configurable, but production conformance must not rely on a
+trusted flat network.
 
 ## Capabilities and profiles
 
@@ -417,7 +539,7 @@ resource evidence, and stdout/stderr references or bounded inline content.
 
 Runtime sessions return only opaque internal endpoint references with bounded
 expiry. Public clients never receive a container IP, Pod address, or backend
-token. The Agent Platform Runtime Gateway authorizes and proxies terminal,
+token. The caller-owned Runtime Gateway authorizes and proxies terminal,
 browser, desktop, and port-forward traffic and owns reconnect policy and
 recording metadata.
 
@@ -452,11 +574,11 @@ The default policy is deny. A container backend must start from this baseline:
   filesystem, and bounded writable mounts;
 - resource limits for CPU, memory, PIDs, ephemeral storage, execution time, and
   lease duration;
-- no Kubernetes API permission and no long-lived Agent Platform credential;
+- no Kubernetes API permission and no long-lived caller credential;
 - no public network egress by default.
 
 Restricted egress must pass through policy enforcement and block cloud metadata,
-Kubernetes and cluster-management endpoints, Agent Platform databases/Redis/
+Kubernetes and cluster-management endpoints, caller control-plane databases/Redis/
 Temporal, other tenants, unauthorized object storage, link-local/private-address
 redirects, and DNS-rebinding bypasses. Full egress is reserved for explicitly
 trusted profiles.
@@ -541,15 +663,17 @@ advertisement, and optional-profile gates remain open:
 
 | Area | Current state | Required direction |
 | --- | --- | --- |
+| Conformance | Current Contract revision `22ba6987` contains a content-derived 53-case local Suite and unchanged six-case remote Suite. Contract verification, root tests/vet, and E2E lock logic pass in the worktree; clean VCS-built 53-case and E2E parent-lock/check gates remain pending. The prior P2.6 50-case pass at `3fe314a`/`ae476fe` remains historical evidence. ADR 0040 locks the refreshed P2.7 profile/report/protocol authorities; local harness d1-d7 plus independently supplied e1 provenance are 22/24 complete. The public external-caller repository has completed 11/13 candidate checkpoints through e1.8a. Hosted run `35068957048` at source `58a211f0c167af3ec117c8cb8247bfe268bbae40` passed the full test/build/authority pipeline and produced verified five-subject Sigstore attestation `47846951`. Operator-owned zero-resource teardown proof and independent observer-backed scenario dispositions remain absent. | Execute the separately authorized e2 supervised 15+5 run and teardown before e3 validation and conclusion. Run the current Contract/E2E gates from a clean committed checkout; retain aggregate, multi-controller, multi-tenant, HA, deployment, and production gates. |
+| Protected admission | ADR 0038 requires one explicit issuer-scoped caller trust domain per listener, Provider-local audience/revision anchors, and 1..32 frozen verification keys. Its repository-local Contract, projection, configuration, conformance, E2E lock, overlap-key, and same-repository reference gates pass. | Retain exact authentication/authorization precedence. Treat multi-issuer admission and independently implemented external-caller interoperability as separate future gates. |
 | Backend abstraction | Local `instance.Driver` remains separate; the Provider lifecycle has its own fake and Docker development adapters, while exec and terminal use focused Provider-only runtime ports. | Add future snapshot capability ports without reusing `/instances` models and retain narrow optional interfaces. |
 | Lifecycle recovery | Provider file persistence and Docker observation reconcile pending/unknown create work for one controller. | Retain unknown-outcome evidence; add transactional production storage before multi-controller operation. |
 | Persistence | Memory and atomically replaced file repository. | Retain for development; introduce transactional production storage before multi-controller operation. |
-| API | Local `/instances` and the protected Provider v1 surface are separate; authorized coding/shell lifecycle/session/artifact/usage routes have bounded projections, and development exec routes reach a real Docker executor. The default-disabled Browser command graph composes the protected Browser routes and runtime dependencies; the public caller-owned Browser Gateway exists only in the reference deployment. | Define a deployable caller-owned Gateway and production configuration without moving user/tenant authorization into the Provider. |
-| Capabilities | Empty, terminal-only, atomic coding/shell, and browser-only snapshots are locked. The Browser-only reference deployment advertises the exact locked shape for its caller test; production command startup still does not advertise Browser. | Advertise Browser in production only after the remaining profile-specific security, concurrency, deployment, and operational gates pass. |
-| Execution | P2.5e/g/h compose durable exec/cancel/result/operation handling, real Docker execution, private bounded capture, cancellation, expiry, reconciliation, bounded exec-derived usage, artifact staging, and readiness-derived exact advertisement for one development controller. The separately versioned coding/shell reference caller gate passes locally and hosted. | Replace development single-controller persistence and partial collectors with reviewed production storage, retention, and reconciliation while keeping Artifact publication, billing, and aggregate operation truth with the platform. |
-| Terminal | P2.5f1-f7 compose the backend-neutral terminal runtime, PTY-owning guest broker, Docker adapter, durable session/reference state, bounded WebSocket/private-stream adapters, caller-owned Gateway policy ports, default-disabled command graph, and same-shell process-reconstruction evidence. The separately versioned coding/shell reference caller gate passes locally and hosted. | Supply deployable caller-owned authorization, revocation, recording, Gateway configuration, and transactional multi-controller storage; do not promote the reference deployment to multi-tenant, deployment, or production evidence. |
-| Workspace | The Provider Docker development adapter supplies `/inputs`, `/workspace`, `/outputs`, and bounded tmpfs `/tmp` with owned cleanup; exec consumes that runtime without exposing host paths. | Add artifact consumers, capacity enforcement, and stronger isolation evidence. |
-| Security | Docker defaults already drop capabilities, use non-root/read-only root, disable networking, and limit resources. | Add policy enforcement, stronger isolation profiles, secret grants, egress controls, audit evidence, and production auth. |
+| API | Local `/instances` and the protected Provider v1 surface are separate; authorized coding/shell lifecycle/session/artifact/usage routes have bounded projections, and development exec routes reach a real Docker executor. The current worktree additionally composes the locked, controller-only `GET /v1/runtime-sessions:connect` route behind explicit terminal configuration; it is not a public end-user Gateway. The default-disabled Browser command graph composes the protected Browser routes and runtime dependencies; the public caller-owned Browser Gateway exists only in the reference deployment. | Finish the real e2 image/candidate/run prerequisites and define deployable caller-owned Gateway configuration without moving user/tenant authorization into the Provider. |
+| Capabilities | Empty, terminal-only, atomic coding/shell, their optional locked terminal-connect variants, and browser-only snapshots are accepted. The command advertises terminal-connect only when its protected resolver/WebSocket connector is composed. The Browser-only reference deployment advertises the exact locked shape for its caller test; production command startup still does not advertise Browser. | Retain fail-closed advertisement/composition equality; advertise Browser in production only after the remaining profile-specific security, concurrency, deployment, and operational gates pass. |
+| Execution | P2.5e/g/h compose durable exec/cancel/result/operation handling, real Docker execution, private bounded capture, cancellation, expiry, reconciliation, bounded exec-derived usage, artifact staging, and readiness-derived exact advertisement for one development controller. The separately versioned coding/shell reference caller gate passes locally and hosted. | Replace development single-controller persistence and partial collectors with reviewed production storage, retention, and reconciliation while keeping Artifact publication, billing, and aggregate operation truth with the caller. |
+| Terminal | P2.5f1-f7 compose the backend-neutral terminal runtime, PTY-owning guest broker, Docker adapter, durable session/reference state, bounded WebSocket/private-stream adapters, caller-owned Gateway policy ports, default-disabled command graph, and same-shell process-reconstruction evidence. The current e2 prerequisite worktree adds the optional protected Provider terminal-connect transport with exact retained-handoff equality, fresh resolver/attach checks, binary-only bounded forwarding, and expiry closure. The separately versioned coding/shell reference caller gate passes locally and hosted. | Supply the digest-pinned real runtime image, refreshed external candidate provenance, actual e2 observations/cleanup, deployable caller-owned authorization/revocation/recording configuration, and transactional multi-controller storage; do not promote component or reference evidence to deployment or production evidence. |
+| Workspace | The Provider Docker development adapter supplies `/inputs`, `/workspace`, `/outputs`, and bounded tmpfs `/tmp` with owned cleanup; exec consumes that runtime without exposing host paths. The repository-owned coding/shell image definition now locks those guest paths and locally exercises shell, artifact, and image-baked terminal-broker behavior. | Publish and attest the exact multi-platform image, then bind the external candidate and e2 resource observer to its immutable digest; add artifact consumers, capacity enforcement, and stronger isolation evidence. |
+| Security | Docker defaults already drop capabilities, use non-root/read-only root, disable networking, and limit resources. The coding/shell image local gate applies those controls as numeric `65532:65532` and verifies `network=none`; it is not hosted release or deployment evidence. | Add signed image provenance, policy enforcement, stronger isolation profiles, secret grants, egress controls, audit evidence, and production auth. |
 | Events and usage | Durable lifecycle events and bounded usage-evidence components exist without a complete runtime collector composition. | Complete collection/reconciliation while leaving platform accounting authority outside the Provider. |
 | Snapshots/browser/desktop | Browser Contract authority/projection, exact signed image, Provider-local session/application/reference/usage, Docker adapter, provenance verifier, restricted-egress provisioner, create-policy binding, protected handlers, caller-owned Gateway, default-disabled command graph, and hosted 13+5 Browser reference-caller path have named evidence. The Gateway has explicit process-local total/per-session post-authorization capacity, pre-upgrade service limits, bounded listener/TLS/HTTP behavior, and authenticated-capacity plus exact-grant revocation ports with process-local and Redis-compatible adapters. ADR 0031/`9434540` plus local arm64 run `20260905T080725.227680000Z` and hosted amd64 run `33955436968` add real Valkey plus two-independent-Gateway shared-capacity evidence. ADR 0032/`c0a55d1` adds durable revocation component evidence; harness/Gateway `e952ef9`, local arm64 run `20260905T095109.569973000Z`, and hosted amd64 run `33959122456` pass its separate seven-scenario two-Gateway/independent-revoker caller gate. ADR 0033/`b4d41c9` adds downstream action-fence/private-ingress/Redis adapter component evidence; harness/run `550c785`/`20260906T050213.016063000Z` and `2cadc53`/`34013982796` pass its separate 13-scenario v1 caller gate on arm64 and amd64. ADR 0034 separately adds witnessed-v2 deletion/rollback-detection component and pinned-Valkey adapter evidence; fixed harness `059357c` passes its independently locked 18-scenario real-Chromium caller gate in local run `20260906T100233.295973000Z` on arm64 and hosted run `34026680591` on amd64. ADR 0035/`3ff58dc` adds the PostgreSQL witness, exact least-privilege migration, and strict read-only restore-verification component; hosted run `34031784793` passes its real PostgreSQL and pinned-Valkey gate. ADR 0036 adds the separately locked same-runner controlled-restore caller profile; PR #47 merge `a0cddf4` and post-merge run `34038556283` pass all 18 scenarios with `same_runner=true`, `independent_failure_domain=false`, and `suite_exercised=false`. Contract identity remains pinned while the ADR 0033, ADR 0034, and ADR 0036 caller profiles leave the Suite unexercised, and the ADR 0032 echo fixture is not Browser/CDP. The restricted-egress Gateway remains distinct from the caller-owned Gateway. Production Browser advertisement/public Gateway and authenticated v2 ingress deployment, production independent witness/storage and restore operations, Valkey/PostgreSQL provenance and HA/failover, aggregate, multi-controller, hostile multi-tenant, deployment, and production gates remain open. Snapshots and desktop remain unauthorized optional behavior. | Prove independent PostgreSQL/Valkey failure and backup domains, HA/failover, production quarantine/restore controls, hostile-tenant behavior, ACLs, metrics, and deployable storage/configuration before production advertisement; begin the Desktop authority audit only after the Browser readiness record is complete. |
 
@@ -561,7 +685,7 @@ advertisement, and optional-profile gates remain open:
 
 - record the independent Provider ownership decision;
 - pin the repository-owned Contract tree, manifest, OpenAPI, semantic rules,
-  fixtures, and Conformance Suite;
+  fixtures, and Conformance Suites;
 - verify the lock against this repository in CI;
 - keep the Contract MIT-licensed and versioned in this repository;
 - define development and compatibility change rules.
@@ -578,10 +702,16 @@ Implementation slices and evidence boundaries are tracked in the
 - validate them against the locked local Schemas and fixtures;
 - implement mTLS-only capability discovery;
 - implement the closed JWS header, claims, operation, descriptor, and request
-  digest admission boundary for all protected operations.
+  digest admission boundary for all protected operations;
+- require one explicit issuer-scoped caller trust domain per protected listener,
+  anchor audience and Provider revision in local startup state, and freeze a
+  bounded overlap-capable verification-key bundle.
 
 Release gate: Schema/fixture compatibility, mTLS discovery, token binding,
-digest substitution, expiry, replay, and stale-fencing admission tests pass.
+issuer substitution, local audience/revision rejection, digest substitution,
+expiry, overlap rotation, replay, and stale-fencing admission tests pass. The
+ADR 0038 repository-local coordinated gate also passes; independent external
+caller and deployment qualification remain separate.
 
 #### P1.2: asynchronous lifecycle
 
@@ -602,20 +732,171 @@ conformance tests pass.
 
 Release gate: a separately supplied caller can run its coding and shell
 scenarios against this provider without endpoint leakage or cross-tenant access.
+The repository's generic reference caller satisfies only the named reference
+gate; it does not establish interoperability with an independently implemented
+external platform.
 
-### Phase 3: migration readiness
+#### P2.6: portable Provider conformance
 
-- run an external caller and `sandbox-runtime` against the same locked local
-  Conformance Suite;
-- shadow-validate capabilities and requests without serving production traffic;
-- canary only new runs and lock each run to its selected ProviderRevision;
-- prove rollback changes only new bindings and old-provider runs can drain;
-- compare lifecycle latency, exec success, orphan count, session stability,
-  resource evidence, and reconciliation backlog.
+- derive and lock the local and remote Suite digests from RFC 8785 canonical
+  content;
+- execute the then-current local 50-case inventory from the verifier's immutable snapshot
+  against a bounded, read-only archive of the exact clean Runner revision;
+- require each local case to declare an exact mapped-test count and observe all
+  matching tests as distinct, started, non-skipped passes;
+- reject an explicit `GOROOT`, resolve Git once to one reused absolute path,
+  and disclose the host OS, filesystem, initial Git selection, and Go and Git
+  executables as trusted inputs;
+- execute the separate six-case discovery profile over TLS 1.3 mTLS with both
+  admitted and same-CA denied client identities;
+- emit bounded evidence that pins Contract, Suite, Runner, target, and observed
+  Provider revision without credentials or backend diagnostics. Set the unsafe
+  method-probe flag only after a POST, PUT, PATCH, or DELETE request is actually
+  written.
 
-Release gate: the caller can switch the matching capability profile by
-configuration without changing WorkOrder, Artifact, event, usage, gateway, or
-frontend contracts.
+The historical release gate passed locally at implementation `3fe314a` and E2E lock
+refresh `ae476fe`: the Contract verifier, clean VCS-built local and remote
+Runners, full repository and E2E race/shuffle and vet, parent-lock check, and
+all eight E2E `-check` commands passed. This closes only that P2.6 local
+`repository-go-test` and remote discovery profiles. It does not establish an
+independently implemented caller, protected or
+mutating remote conformance, aggregate conformance, multi-controller
+reliability, hostile multi-tenant safety, HA, deployment, or production
+readiness.
+
+#### P2.7: independent external caller qualification
+
+- require an immutable caller implementation and qualification adapter supplied
+  from a source and release boundary outside this repository;
+- keep request signing, Admission Context construction, operation state, retry,
+  reconciliation, authorization, and Gateway policy in that external caller;
+- define a content-addressed machine-readable
+  `sandbox-runtime-external-caller-coding-shell-v1` profile with stable case IDs,
+  exact expectations and resource bounds, together with a closed report schema
+  and bounded evidence-root validator, plus a separate content-addressed adapter
+  process protocol that does not alter Provider wire behavior;
+- pin the actual executed Provider, caller, adapter, Gateway, and runtime
+  artifacts by digest, together with their source/release, Contract, Suite,
+  profile, topology, and configuration identities;
+- keep caller-owner assertions separate from observations made by an independent
+  repository-owned harness; and
+- use a dedicated disposable target, preserve cleanup obligations after unknown
+  outcomes, and require bounded teardown plus zero remaining run-owned runtime
+  resources.
+
+P2.7a locks the verified machine-readable definition authority at
+`sha256:4effea27fd3d7668b88eeb95c69e19b51556914b7949b1a39ce522b2aec46c14`.
+P2.7b locks the closed report schema at
+`sha256:cd51ccf0aea0bc31b11ff4f288751fc7df0f0dd081860efc305182ea61f842e4`
+and validator semantics at
+`sha256:c724eaa9f3b52e1a5ba4aa5aaeb5e8b61a744818b2f56fd8ff52dfa5e1e584df`,
+and implements the bounded evidence-root validator and non-overwriting sanitized
+receipt. P2.7b locks only this evidence definition, not an external compatibility
+result. P2.7c.1 locks the adapter protocol schema at
+`sha256:d12b477cd540e02c6a7e2f8eb77b0405b717c15e98a0f144b2d63f705ff95969`
+and operational semantics at
+`sha256:10cd42017aee60b620dbbb7394a20c2a387983468a865a8d12a572f861d07662`.
+It defines identity-first one-shot phase invocations, seven allowed harness
+fields, dedicated secret channels, bounded progress, and fail-closed process
+control, and binds its authority through startup, process-supervisor, validator,
+and receipt evidence. Its Schema compilers use one ECMA-262 regexp engine and
+reject ASCII controls without POSIX-only classes. Invocation paths/endpoints now
+use closed canonical profiles. The definition requires digest-bound preflight
+commitment before the supervisor or harness acquires or generates credential or
+forbidden-correlation material, plus cross-phase byte identity; runtime proof
+awaits the supervisor and operator-upstream non-derivation remains trusted.
+Non-error output records now bind their invocation ID and phase to the single
+validated inbound invocation, and scenario case IDs bind to that phase.
+Protocol errors now use disjoint pre-binding and post-binding terminal branches
+with atomic identity nullability and contiguous sequence. Monotonic deadline
+anchors preserve one run budget across reconstruction, clip case budgets to
+remaining run and parent time, prohibit resets, and bound failure termination
+with a separate cleanup context. P2.7c.2a implements a runtime-independent
+codec that enforces EOF/LF framing, exact byte and record ceilings, strict
+UTF-8/JSON/Schema and direction rules, startup authority equality, and
+sanitized terminal decode failures. P2.7c.2b.1 locks the exact state transitions,
+terminal/EOF/clean-exit rules, canonical equality of both phase startup records,
+and the closed transcript preimage Schema at
+`sha256:d2eb229f55528df8ba68426cc5b7da9d1bd6a78a412707d656b77c1effeff293`.
+P2.7c.2b.2 implements only the first two startup-boundary decisions: consuming
+one valid sequence-zero startup and granting invocation-input authorization
+once, with a sanitized absorbing failure otherwise. P2.7c.2b.3 binds the
+delivered invocation and sequence-one acceptance to the same Codec/stdout
+stream, ID, and phase, and rejects record skips or mutated decoded envelopes.
+P2.7c.2b.4 then enforces the verified profile's exact per-phase case order,
+requires a same-case start before `completed`, forbids a start before
+`not_executed`, and reaches only the terminal-wait boundary after the last case.
+P2.7c.2b.5 enforces a single normal/error terminal, rejects post-terminal
+output, requires stdout EOF, and completes only after a supplied clean-exit
+event. It does not perform the bounded wait, recompute the transcript, launch
+processes, or supply execution evidence.
+Adapter output remains a caller-owner assertion; final scenario status requires
+independent observations. Overall P2.7 remains in progress until the adapter
+runtime message-order state machine, process supervisor, disposable harness, and independently
+supplied execution exist, and no external caller has passed this gate. The
+same-repository reference caller
+cannot satisfy the independence requirement. The schema and semantics digests
+identify data authorities; they do not attest the validator executable,
+repository build, or host toolchain used for a particular run, which remain
+trust inputs unless separately provenanced.
+The Provider observer binds the fixed coding/shell sandbox-resource request
+projection to the observed `create-sandbox` interaction. That projection must
+match the profile and proves neither runtime allocation nor resource-limit
+enforcement. Complete outcomes also require the five payload identities and
+the process-supervisor timing projection to cross-bind the report; nullable
+partial evidence remains unknown rather than positive evidence.
+Executed scenarios with missing required evidence and no observed mismatch are
+explicitly `incomplete`; mutation with a missing inspector retains an unknown
+cleanup obligation without inventing teardown evidence.
+The qualification operator must finish the producer handoff and keep the
+validator as the evidence root's exclusive writer from `Verify` entry through
+return. Producers and other processes with the same UID may not write, rename,
+link, or remove entries during that interval. Directory-FD pinning and path,
+identity, digest, and inventory rechecks detect specified races and fail
+closed; they do not establish integrity against an attacker that retains
+continuous write access. External packaging and archive-digest recording occur
+only after a successful validator return.
+The evidence root is an operator-supplied healthy local filesystem. Context
+cancellation applies at stage boundaries and before commit, not inside a kernel-
+blocked filesystem syscall, so the validator does not claim a hard deadline for
+stuck FUSE or network-filesystem I/O.
+Because Provider v1 has no terminate or lease-control route, P2.7 cleanup is
+operator-owned run-namespace teardown within the disposable qualification
+target, not a new Provider wire behavior or lifecycle-closure result.
+
+Release gate: the content-addressed profile locks the 15 initial and 5
+reconstruction cases with stable IDs and exact expectations; the closed report
+schema and validator semantics lock their evidence representation and cross-file
+bindings. The
+actual executed Provider, external caller, adapter, caller-owned Gateway, runtime
+image, cleanup implementation, and resource inspector are pinned by artifact
+digest; the caller's independently declared consumed Contract and profile
+identities match the harness's expected identities. The topology contains two
+admitted controllers in different tenants and one same-CA unadmitted identity;
+each required interaction binds the exact actor and authorization context that
+its case needs. Repository-owned observers correlate safe Provider, Gateway,
+process, and authoritative resource observations with caller assertions and
+retain a bounded
+receipt for each external report that binds the invocation, external artifact
+and process, phase, ordered result digest, and completion state. Before mutation,
+the harness proves a dedicated run namespace and numeric resource/time/evidence
+bounds; after every success, failure, cancellation, or unknown outcome, bounded
+operator teardown and the pinned authoritative inspector prove zero run-owned
+runtime resources. The exact sanitized evidence set passes the closed validator.
+Missing external inputs or an unavailable environment leaves the gate without a
+result; it cannot be replaced by repository-owned caller evidence.
+
+### Phase 3: named-platform migration (retired)
+
+The former Agent Platform migration phase is retired by ADR 0037. This
+repository does not implement a named consumer adapter or make a real-platform
+compatibility claim. A consumer may reuse the historical revision-binding,
+shadow, canary, rollback, drain, and metric components, but it owns that
+integration and must conform to the exact locked Provider Contract.
+
+Release gate: none. Historical candidate evidence remains evidence for its
+recorded harness only and is not relabeled as generic consumer, deployment, or
+production evidence.
 
 ### Phase 4: optional profiles
 
@@ -642,7 +923,11 @@ Every provider revision must be tested for:
 - snapshots when supported: digest verification, incompatibility rejection,
   secret exclusion, and restore into a new identity.
 
-No provider revision is “compatible” based only on unit tests or a successful
-container launch. Compatibility is the tested combination of protocol version,
-capability set, runtime profile, architecture, driver, image digest, and security
-policy.
+No provider revision is “compatible” based only on unit tests, a successful
+container launch, or one discovery-profile report. Compatibility is the tested
+combination of protocol version, exact Contract revision/tree, Suite profile,
+capability set, runtime profile, architecture, driver, image digest, and
+security policy. Evidence from the historical 50-case repository profile, the
+current 53-case authority, six-case remote discovery profile, reference callers,
+and profile-specific E2E tracks remains separate and must not be aggregated by
+inference.

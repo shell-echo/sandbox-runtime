@@ -30,7 +30,9 @@ func main() {
 		os.Exit(1)
 	}
 	if *check {
-		fmt.Printf("provider=%s contract=%s tree=%s suite_cases=%d caller_kind=%s\n", lock.ProviderCommit, lock.ContractRevision, lock.ContractTree, lock.SuiteCases, orchestrator.CallerPlatformCandidate)
+		fmt.Printf("provider=%s contract=%s tree=%s %s caller_kind=%s\n",
+			lock.ProviderCommit, lock.ContractRevision, lock.ContractTree,
+			lock.SuiteCheckSummary(false, false), orchestrator.CallerPlatformCandidate)
 		return
 	}
 

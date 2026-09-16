@@ -140,7 +140,7 @@ func newProviderServer(ctx context.Context, providerConfig config.ProviderConfig
 		return nil, noOpProviderClose, errors.Join(err, closeProviderBrowserRuntime(browserRuntime))
 	}
 
-	protected, closeProtected, err := newProviderProtectedTransportOptions(providerConfig.ProtectedAdmission, systemAdmissionClock{})
+	protected, closeProtected, err := newProviderProtectedTransportOptions(providerConfig.ProtectedAdmission, providerConfig.Capability.ProviderRevisionID, systemAdmissionClock{})
 	if err != nil {
 		return nil, noOpProviderClose, errors.Join(err, closeLifecycle(), closeProviderBrowserRuntime(browserRuntime))
 	}
@@ -174,6 +174,9 @@ func newProviderServer(ctx context.Context, providerConfig config.ProviderConfig
 		protected.Application = lifecycleApp
 		protected.ExecApplication = execApp
 		protected.SessionApplication = terminalApp
+		if providerConfig.Terminal.ConnectEnabled {
+			protected.SessionConnector = terminalApp
+		}
 		protected.ArtifactApplication = artifactApp
 		protected.BrowserApplication = browserApp
 		protected.UsageEvidenceReader = usageReader
@@ -198,8 +201,7 @@ func newProviderServer(ctx context.Context, providerConfig config.ProviderConfig
 		TerminalAuthority:    terminalApp != nil,
 		TerminalAllocator:    terminalApp != nil,
 		OpaqueHandoff:        terminalApp != nil,
-		TerminalWebSocket:    false, // f4 is not command-composed; the caller owns the Gateway edge.
-		GatewayBoundary:      false, // f5 requires caller-owned authorization, revocation, and recording.
+		TerminalWebSocket:    terminalApp != nil && providerConfig.Terminal.ConnectEnabled,
 		ArtifactAcceptance:   artifactApp != nil,
 		OutputStaging:        artifactApp != nil && execRuntime != nil,
 		ContentChecks:        artifactApp != nil,
@@ -760,6 +762,7 @@ func browserRecordNeedsShutdownCleanup(record providerbrowser.Record, now time.T
 // advertisement is supplied here.
 type providerTerminalApplication struct {
 	vertical   *sessionapplication.Vertical
+	resolver   *sessionreference.Resolver
 	authority  session.CoordinationAuthority
 	runtime    providerterminal.Runtime
 	references sessionreference.Store
@@ -823,8 +826,12 @@ func newProviderTerminalApplication(ctx context.Context, terminalConfig config.P
 	if err != nil {
 		return nil, noOpProviderClose, errors.Join(fmt.Errorf("construct Provider terminal application: %w", err), references.Close(), sessions.Close())
 	}
+	resolver, err := sessionreference.NewResolver(references, sessions, terminalRuntime, systemAdmissionClock{})
+	if err != nil {
+		return nil, noOpProviderClose, errors.Join(fmt.Errorf("construct Provider terminal resolver: %w", err), references.Close(), sessions.Close())
+	}
 	application := &providerTerminalApplication{
-		vertical: vertical, authority: sessions, runtime: terminalRuntime, references: references, clock: systemAdmissionClock{},
+		vertical: vertical, resolver: resolver, authority: sessions, runtime: terminalRuntime, references: references, clock: systemAdmissionClock{},
 		shutdownCleanup: time.Duration(terminalConfig.ShutdownCleanupSeconds) * time.Second,
 		closeSession:    sessions.Close, closeReferences: references.Close,
 	}
@@ -853,6 +860,62 @@ func (a *providerTerminalApplication) GetOperation(ctx context.Context, operatio
 		return sessionapplication.Operation{}, sessionapplication.ErrInvalidApplication
 	}
 	return a.vertical.GetOperation(ctx, operationID)
+}
+
+func (a *providerTerminalApplication) ConnectRuntimeSession(ctx context.Context, requested sessionapplication.Handoff) (providerterminal.Stream, error) {
+	if a == nil || a.vertical == nil || a.resolver == nil {
+		return nil, providerapi.ErrRuntimeSessionConnectUnavailable
+	}
+	retained, err := a.vertical.GetHandoff(ctx, requested.OperationID)
+	if err != nil {
+		return nil, mapProviderTerminalConnectError(err)
+	}
+	if !sameProviderTerminalHandoff(retained, requested) {
+		return nil, providerapi.ErrRuntimeSessionConnectConflict
+	}
+	endpoint, err := a.resolver.Resolve(ctx, requested.InternalEndpointReference)
+	if err != nil {
+		return nil, mapProviderTerminalConnectError(err)
+	}
+	if endpoint.Reference != requested.InternalEndpointReference || endpoint.SandboxID != requested.SandboxID ||
+		endpoint.RuntimeSessionID != requested.RuntimeSessionID || endpoint.CapabilityProfileID != requested.CapabilityProfileID ||
+		endpoint.ConnectionGeneration != requested.ConnectionGeneration || !endpoint.ExpiresAt.Equal(requested.ExpiresAt) || endpoint.Dial == nil {
+		return nil, providerapi.ErrRuntimeSessionConnectConflict
+	}
+	stream, err := endpoint.Dial(ctx)
+	if err != nil {
+		return nil, mapProviderTerminalConnectError(err)
+	}
+	if stream == nil {
+		return nil, providerapi.ErrRuntimeSessionConnectUnavailable
+	}
+	return stream, nil
+}
+
+func sameProviderTerminalHandoff(left, right sessionapplication.Handoff) bool {
+	return left.OperationID == right.OperationID && left.AttemptID == right.AttemptID && left.FencingToken == right.FencingToken &&
+		left.SandboxID == right.SandboxID && left.RuntimeSessionID == right.RuntimeSessionID && left.RuntimeType == right.RuntimeType &&
+		left.CapabilityProfileID == right.CapabilityProfileID && left.Protocol == right.Protocol &&
+		left.InternalEndpointReference == right.InternalEndpointReference && left.ConnectionGeneration == right.ConnectionGeneration &&
+		left.ExpiresAt.Equal(right.ExpiresAt)
+}
+
+func mapProviderTerminalConnectError(err error) error {
+	switch {
+	case errors.Is(err, session.ErrNotFound), errors.Is(err, session.ErrHandoffUnavailable), errors.Is(err, sessionreference.ErrNotFound):
+		return providerapi.ErrRuntimeSessionConnectUnknown
+	case errors.Is(err, session.ErrHandoffExpired), errors.Is(err, sessionreference.ErrExpired), errors.Is(err, sessionreference.ErrRevoked), errors.Is(err, providerterminal.ErrTerminalExpired):
+		return providerapi.ErrRuntimeSessionConnectGone
+	case errors.Is(err, session.ErrConflict), errors.Is(err, session.ErrGenerationConflict), errors.Is(err, session.ErrStaleFencingToken),
+		errors.Is(err, sessionreference.ErrConflict), errors.Is(err, sessionreference.ErrStale), errors.Is(err, providerterminal.ErrTerminalConflict):
+		return providerapi.ErrRuntimeSessionConnectConflict
+	case errors.Is(err, providerterminal.ErrTerminalCapacity):
+		return providerapi.ErrRuntimeSessionConnectCapacity
+	case errors.Is(err, session.ErrCapabilityUnsupported), errors.Is(err, providerterminal.ErrTerminalUnsupported):
+		return providerapi.ErrRuntimeSessionConnectUnsupported
+	default:
+		return providerapi.ErrRuntimeSessionConnectUnavailable
+	}
 }
 
 // Close runs after server.RunE has stopped the Provider listener. It revokes
@@ -923,9 +986,13 @@ type systemAdmissionClock struct{}
 
 func (systemAdmissionClock) Now() time.Time { return time.Now().UTC() }
 
-func newProviderProtectedTransportOptions(protectedConfig config.ProviderProtectedAdmissionConfig, clock admission.Clock) (*providerapi.ProtectedTransportOptions, func() error, error) {
+func newProviderProtectedTransportOptions(protectedConfig config.ProviderProtectedAdmissionConfig, providerRevisionID string, clock admission.Clock) (*providerapi.ProtectedTransportOptions, func() error, error) {
 	if !protectedConfig.Enabled {
 		return nil, noOpProviderClose, nil
+	}
+	authority, err := admission.NewAdmissionAuthority(protectedConfig.Issuer, providerRevisionID, protectedConfig.ProviderInstanceAudience)
+	if err != nil {
+		return nil, noOpProviderClose, fmt.Errorf("construct Provider admission authority: %w", err)
 	}
 
 	files := make([]admissionfile.TrustedKeyFile, len(protectedConfig.TrustedVerificationKeys))
@@ -944,7 +1011,7 @@ func newProviderProtectedTransportOptions(protectedConfig config.ProviderProtect
 	if err != nil {
 		return nil, noOpProviderClose, fmt.Errorf("open Provider admission guard: %w", err)
 	}
-	gate, err := admission.NewProtectedOperationGate(keys, clock, guard)
+	gate, err := admission.NewProtectedOperationGate(keys, authority, clock, guard)
 	if err != nil {
 		return nil, noOpProviderClose, errors.Join(fmt.Errorf("construct Provider admission gate: %w", err), guard.Close())
 	}
@@ -970,7 +1037,6 @@ type providerCapabilityReadiness struct {
 	TerminalAllocator    bool
 	OpaqueHandoff        bool
 	TerminalWebSocket    bool
-	GatewayBoundary      bool
 	ArtifactAcceptance   bool
 	OutputStaging        bool
 	ContentChecks        bool
@@ -997,8 +1063,6 @@ func (r providerCapabilityReadiness) missingDependencies() []string {
 		{"terminal authority", r.TerminalAuthority},
 		{"terminal allocator", r.TerminalAllocator},
 		{"opaque terminal handoff", r.OpaqueHandoff},
-		{"concrete terminal WebSocket data plane", r.TerminalWebSocket},
-		{"trusted caller-owned Gateway boundary", r.GatewayBoundary},
 		{"artifact acceptance", r.ArtifactAcceptance},
 		{"real output staging", r.OutputStaging},
 		{"bounded artifact content checks", r.ContentChecks},
@@ -1046,12 +1110,19 @@ func newProviderCapabilitySource(capability config.ProviderCapabilityConfig, gra
 			{ID: "sandbox.exec", Versions: []string{config.ProviderCodingShellCapabilityVersion}, Profiles: []string{config.ProviderCodingShellExecProfileID}},
 			{ID: "sandbox.terminal", Versions: []string{config.ProviderCodingShellCapabilityVersion}, Profiles: []string{config.ProviderCodingShellTerminalProfileID}},
 		}
+		capabilityProfiles := []string{config.ProviderCodingShellExecProfileID, config.ProviderCodingShellTerminalProfileID}
+		if readiness.TerminalWebSocket {
+			capabilities = append(capabilities, provider.Capability{
+				ID: config.ProviderTerminalConnectCapabilityID, Versions: []string{config.ProviderCodingShellCapabilityVersion}, Profiles: []string{config.ProviderTerminalConnectProfileID},
+			})
+			capabilityProfiles = append(capabilityProfiles, config.ProviderTerminalConnectProfileID)
+		}
 		runtimeProfiles = []provider.RuntimeProfile{{
 			ID:                   config.ProviderCodingShellRuntimeProfileID,
 			IsolationClass:       "container",
 			RuntimeClassName:     config.ProviderCodingShellRuntimeClassName,
 			Architecture:         []string{"amd64"},
-			CapabilityProfileIDs: []string{config.ProviderCodingShellExecProfileID, config.ProviderCodingShellTerminalProfileID},
+			CapabilityProfileIDs: capabilityProfiles,
 		}}
 	}
 	snapshot, err := provider.NewCapabilitySnapshotWithAdvertisements(capability.ProviderRevisionID, provider.Limits{

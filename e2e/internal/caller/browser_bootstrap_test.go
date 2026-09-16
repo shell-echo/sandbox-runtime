@@ -623,6 +623,9 @@ func TestBrowserBootstrapConfigurationBindsCallerFencing(t *testing.T) {
 		{name: "oversized Controller subject", mutate: func(config *BrowserBootstrapConfig) {
 			config.Controller.ControllerSubject = maxSubject + "a"
 		}},
+		{name: "missing issuer", mutate: func(config *BrowserBootstrapConfig) { config.JWSIssuer = "" }},
+		{name: "legacy issuer", mutate: func(config *BrowserBootstrapConfig) { config.JWSIssuer = "agent-platform" }},
+		{name: "fragment issuer", mutate: func(config *BrowserBootstrapConfig) { config.JWSIssuer += "#fragment" }},
 		{name: "duplicate operation identity", mutate: func(config *BrowserBootstrapConfig) { config.OpenOperationID = config.CreateOperationID }},
 		{name: "non-loopback Provider", mutate: func(config *BrowserBootstrapConfig) { config.ProviderBaseURL = "https://example.com:443" }},
 	} {
@@ -984,7 +987,7 @@ func (p *browserBootstrapProvider) verifyProtectedRequest(request *http.Request,
 	wantContextDigest, err := contextDigest(admitted)
 	if err != nil || admitted.ContextDigest != wantContextDigest || claims.AdmissionContextDigest != wantContextDigest ||
 		claims.Operation != expectedOperation || admitted.Operation != expectedOperation || claims.Subject != p.config.Controller.ControllerSubject ||
-		claims.Audience != p.config.ProviderInstanceAudience || claims.ProviderRevisionID != p.config.ProviderRevisionID ||
+		claims.Issuer != p.config.JWSIssuer || claims.Audience != p.config.ProviderInstanceAudience || claims.ProviderRevisionID != p.config.ProviderRevisionID ||
 		claims.TenantID != p.config.TenantID || claims.WorkOrderID != p.config.WorkOrderID ||
 		admitted.HTTPTarget.Method != request.Method || admitted.HTTPTarget.Path != request.URL.Path {
 		p.t.Fatalf("protected admission binding differs from request")
@@ -1066,6 +1069,7 @@ func newBrowserBootstrapTestMaterial(t *testing.T, controllerSubject string) bro
 		serverCertificate: serverCertificate, clientRoots: roots, jwsPublic: jwsPublic,
 		config: BrowserBootstrapConfig{
 			ProviderBaseURL: "https://127.0.0.1:10443", CAFile: caFile,
+			JWSIssuer:                "https://reference-caller.sandbox-runtime.test",
 			ProviderRevisionID:       "provider-revision-downstream-v1",
 			ProviderInstanceAudience: "urn:shell-echo:sandbox-runtime:provider-instance:downstream-e2e",
 			RuntimeImageReference:    "ghcr.io/shell-echo/browser", RuntimeImageDigest: "sha256:" + strings.Repeat("d", 64), RuntimeArchitecture: "arm64",
