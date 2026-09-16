@@ -37,7 +37,11 @@ jobs:
       - name: Validate Provider capability response projection
         run: go test -count=1 ./providerapi -run '^TestLockedCapabilityResponseSchema$'
       - name: Execute local Provider Conformance Suite
-        run: go run ./cmd/run-conformance -source-root .
+        run: |
+          runner_dir="${RUNNER_TEMP}/provider-conformance"
+          mkdir -p "${runner_dir}"
+          go build -buildvcs=true -o "${runner_dir}/run-conformance" ./cmd/run-conformance
+          "${runner_dir}/run-conformance" -source-root .
 
   test:
     runs-on: ubuntu-latest
