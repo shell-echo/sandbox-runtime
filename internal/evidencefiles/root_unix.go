@@ -277,8 +277,8 @@ func (publication *Publication) Read(maximum int64) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if size != publication.size {
-		return nil, fmt.Errorf("published evidence file %q size changed", publication.path)
+	if size != publication.size || rawDigest(contents) != publication.digest {
+		return nil, fmt.Errorf("published evidence file %q identity changed", publication.path)
 	}
 	if err := publication.root.verifyPathLocked(); err != nil {
 		return nil, err
@@ -302,7 +302,7 @@ func (publication *Publication) Commit(destination string) (err error) {
 	committed := false
 	defer func() {
 		if !committed {
-			if cleanupErr := root.removeIdentityLocked(publication.path, publication.identity); cleanupErr != nil {
+			if cleanupErr := publication.removeLocked(); cleanupErr != nil {
 				err = errors.Join(err, fmt.Errorf("clean up staged evidence file %q: %w", publication.path, cleanupErr))
 			}
 		}
@@ -363,6 +363,10 @@ func (publication *Publication) Remove() error {
 	}
 	publication.root.mu.Lock()
 	defer publication.root.mu.Unlock()
+	return publication.removeLocked()
+}
+
+func (publication *Publication) removeLocked() error {
 	if err := publication.root.ensureOpenLocked(); err != nil {
 		return err
 	}
@@ -373,7 +377,11 @@ func (publication *Publication) Remove() error {
 		}
 		return fmt.Errorf("inspect published evidence file %q: %w", publication.path, err)
 	}
-	if !isRegular(&linked) || identityOf(&linked) != publication.identity || linkCount(&linked) != 1 {
+	if !isRegular(&linked) || identityOf(&linked) != publication.identity || linkCount(&linked) != 1 || linked.Size != publication.size {
+		return fmt.Errorf("published evidence file %q identity changed", publication.path)
+	}
+	contents, size, err := readRegularAt(publication.root.fd, publication.path, publication.path, publication.size, &publication.identity)
+	if err != nil || size != publication.size || rawDigest(contents) != publication.digest {
 		return fmt.Errorf("published evidence file %q identity changed", publication.path)
 	}
 	if err := unix.Unlinkat(publication.root.fd, publication.path, 0); err != nil {

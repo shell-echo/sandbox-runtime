@@ -304,7 +304,7 @@ func TestPublicationRejectsReplacedFinalEntryWithoutRemovingIt(t *testing.T) {
 	}
 }
 
-func TestCommitRejectsAndCleansStagingHardlink(t *testing.T) {
+func TestCommitRejectsAndPreservesSuspiciousStagingHardlink(t *testing.T) {
 	rootPath := t.TempDir()
 	root, err := OpenRoot(rootPath)
 	if err != nil {
@@ -318,12 +318,12 @@ func TestCommitRejectsAndCleansStagingHardlink(t *testing.T) {
 	if err := os.Link(filepath.Join(rootPath, publication.Path()), filepath.Join(rootPath, "receipt.json")); err != nil {
 		t.Skipf("hardlink unavailable: %v", err)
 	}
-	if err := publication.Commit("receipt.json"); err == nil {
-		t.Fatal("Commit() accepted a pre-linked staging inode")
+	if err := publication.Commit("receipt.json"); err == nil || !strings.Contains(err.Error(), "clean up staged evidence file") {
+		t.Fatalf("Commit() error = %v, want rejection without unlinking suspicious entries", err)
 	}
 	for _, name := range []string{publication.Path(), "receipt.json"} {
-		if _, statErr := os.Lstat(filepath.Join(rootPath, name)); !errors.Is(statErr, os.ErrNotExist) {
-			t.Fatalf("Commit() left %q after hardlink rejection: %v", name, statErr)
+		if _, statErr := os.Lstat(filepath.Join(rootPath, name)); statErr != nil {
+			t.Fatalf("Commit() removed suspicious hardlink %q: %v", name, statErr)
 		}
 	}
 }
@@ -439,7 +439,7 @@ func TestConcurrentCommitsPublishExactlyOneReceipt(t *testing.T) {
 	}
 }
 
-func TestCommitRejectsChangedStagingContentsAndCleansEntry(t *testing.T) {
+func TestCommitRejectsChangedStagingContentsAndPreservesEntry(t *testing.T) {
 	rootPath := t.TempDir()
 	root, err := OpenRoot(rootPath)
 	if err != nil {
@@ -454,13 +454,15 @@ func TestCommitRejectsChangedStagingContentsAndCleansEntry(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(rootPath, staging), []byte("tampered"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := publication.Commit("receipt.json"); err == nil || !strings.Contains(err.Error(), "contents changed") {
+	if err := publication.Commit("receipt.json"); err == nil || !strings.Contains(err.Error(), "contents changed") || !strings.Contains(err.Error(), "clean up staged evidence file") {
 		t.Fatalf("Commit() changed-content error = %v", err)
 	}
-	for _, name := range []string{staging, "receipt.json"} {
-		if _, err := os.Lstat(filepath.Join(rootPath, name)); !errors.Is(err, os.ErrNotExist) {
-			t.Fatalf("Commit() left %q after changed-content rejection: %v", name, err)
-		}
+	contents, readErr := os.ReadFile(filepath.Join(rootPath, staging))
+	if readErr != nil || string(contents) != "tampered" {
+		t.Fatalf("Commit() altered suspicious staging entry: %q, %v", contents, readErr)
+	}
+	if _, err := os.Lstat(filepath.Join(rootPath, "receipt.json")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("Commit() published receipt after changed-content rejection: %v", err)
 	}
 }
 
