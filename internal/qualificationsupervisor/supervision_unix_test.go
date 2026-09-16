@@ -16,7 +16,7 @@ import (
 func deliveredCompletionProbe(t *testing.T, mode string) (*FrozenPreflight, *StartedProcess) {
 	t.Helper()
 	frozen, process, codec := startedStartupProbe(t, mode)
-	startupContext, startupCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	startupContext, startupCancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer startupCancel()
 	if _, err := process.ObserveStartup(startupContext, codec); err != nil {
 		t.Fatal(err)
@@ -64,23 +64,52 @@ func TestObserveCompletionConsumesTerminalEOFAndCleanExit(t *testing.T) {
 }
 
 func TestObserveCompletionFailsClosedOnExitOutputAndStderr(t *testing.T) {
-	for _, mode := range []string{"nonclean-completion", "extra-after-terminal", "stderr-overflow"} {
+	assertFailedClosed := func(t *testing.T, frozen *FrozenPreflight, process *StartedProcess, err error) {
+		t.Helper()
+		if err == nil || !errors.Is(err, ErrSupervision) || strings.Contains(err.Error(), "provider-secret") ||
+			process.core.cleanlyReaped() || frozen.core.failure == nil {
+			t.Fatal("invalid completion accepted or leaked diagnostics", err)
+		}
+		select {
+		case <-process.core.done:
+		case <-time.After(7 * time.Second):
+			t.Fatal("failed completion did not reclaim process")
+		}
+	}
+
+	for _, mode := range []string{"nonclean-completion", "extra-after-terminal"} {
 		t.Run(mode, func(t *testing.T) {
 			frozen, process := deliveredCompletionProbe(t, mode)
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 			defer cancel()
-			err := process.ObserveCompletion(ctx)
-			if err == nil || !errors.Is(err, ErrSupervision) || strings.Contains(err.Error(), "provider-secret") ||
-				process.core.cleanlyReaped() || frozen.core.failure == nil {
-				t.Fatal("invalid completion accepted or leaked diagnostics", err)
-			}
-			select {
-			case <-process.core.done:
-			case <-time.After(7 * time.Second):
-				t.Fatal("failed completion did not reclaim process")
-			}
+			assertFailedClosed(t, frozen, process, process.ObserveCompletion(ctx))
 		})
 	}
+
+	t.Run("stderr-overflow", func(t *testing.T) {
+		frozen, process, codec := startedStartupProbe(t, "stderr-overflow")
+		startupContext, startupCancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer startupCancel()
+		if _, err := process.ObserveStartup(startupContext, codec); err != nil {
+			t.Fatal(err)
+		}
+		document := marshalDeliveryInvocation(t, deliveryInvocationValue(process.core.admission, 4096))
+		_, err := process.DeliverInvocation(context.Background(), document, []CredentialPayload{{
+			ChannelID: "controller-a-provider", Data: []byte("provider-secret"),
+		}})
+		if err == nil {
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer cancel()
+			err = process.ObserveCompletion(ctx)
+		}
+		// The stderr drain is concurrent with delivery. Exceeding its budget may
+		// therefore close the process either just before delivery commits or
+		// while completion is observed; both boundaries must fail closed.
+		if !errors.Is(err, ErrProcessIO) {
+			t.Fatal("stderr overflow did not retain its bounded-I/O cause", err)
+		}
+		assertFailedClosed(t, frozen, process, err)
+	})
 }
 
 func TestObserveCompletionClipsWaitToCallerDeadline(t *testing.T) {

@@ -37,6 +37,10 @@ func TestCodingShellImageIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	mountRoot, err = filepath.Abs(mountRoot)
+	if err != nil {
+		t.Fatalf("resolve integration mount root: %v", err)
+	}
 	for _, image := range []string{imageOne, imageTwo} {
 		run(t, ctx, nil, "./build.sh", platform, image, "integration-test")
 	}
