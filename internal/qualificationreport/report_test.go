@@ -1519,6 +1519,47 @@ func TestInteractionWireAttemptBoundsMatchReportAndProfile(t *testing.T) {
 	}
 }
 
+func TestValidateInteractionAcceptsLockedNonRetryablePollingTransient(t *testing.T) {
+	profile := loadTestProfile(t)
+	var expected profileInteraction
+	for _, phase := range profile.Phases {
+		for _, candidate := range phase.Cases {
+			for _, interaction := range candidate.Interactions {
+				if interaction.ID == "read-create-operation" {
+					expected = interaction
+				}
+			}
+		}
+	}
+	var polling *profileOutcome
+	for index := range expected.Transient {
+		candidate := &expected.Transient[index]
+		if candidate.StatusCode != nil && *candidate.StatusCode == 200 && candidate.Retryable != nil && !*candidate.Retryable {
+			polling = candidate
+			break
+		}
+	}
+	if expected.ID == "" || polling == nil {
+		t.Fatal("locked lifecycle interaction lacks a non-retryable 200 polling transient")
+	}
+	observationIDs := make([]string, len(expected.Observations))
+	observations := make(map[string]observation, len(expected.Observations))
+	for index, item := range expected.Observations {
+		observationIDs[index] = item.ID
+		digest := testDigest
+		observations[observationKey(item)] = observation{ID: item.ID, Source: item.Source, Actor: item.Actor, Subject: item.Subject, Correlation: item.Correlation, Result: "observed", EvidenceDigest: &digest}
+	}
+	actual := syntheticInteraction(expected, observationIDs)
+	actual.WireAttempts = 2
+	actual.TransientOutcomes = []reportOutcome{syntheticOutcome(*polling)}
+	if matched, err := validateInteraction(actual, expected); err != nil || !matched {
+		t.Fatalf("validateInteraction(non-retryable polling transient) = (%t, %v)", matched, err)
+	}
+	if !interactionMatchesExpectedEvidence(actual, expected, observations) {
+		t.Fatal("resource accounting rejected the locked non-retryable polling transient")
+	}
+}
+
 func TestReportSchemaEnforcesTransientAndWireAttemptBounds(t *testing.T) {
 	profile := loadTestProfile(t)
 	schema, err := os.ReadFile(filepath.Join("..", "..", filepath.FromSlash(ReportSchemaPath)))

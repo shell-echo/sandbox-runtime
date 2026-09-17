@@ -1498,7 +1498,10 @@ func validateInteraction(actual interactionResult, expected profileInteraction) 
 	}
 	matched := outcomeAllowed(actual.FinalOutcome, expected.Outcomes)
 	for _, outcome := range actual.TransientOutcomes {
-		if !outcomeAllowed(outcome, expected.Transient) || !outcome.Retryable {
+		// Polling can legitimately continue after a non-terminal 200 response
+		// whose locked outcome is retryable=false. outcomeAllowed already binds
+		// the exact retryable and Retry-After policy for each transient shape.
+		if !outcomeAllowed(outcome, expected.Transient) {
 			matched = false
 		}
 	}
@@ -1680,7 +1683,7 @@ func interactionMatchesExpectedEvidence(actual interactionResult, expected profi
 		return false
 	}
 	for _, outcome := range actual.TransientOutcomes {
-		if !outcomeAllowed(outcome, expected.Transient) || !outcome.Retryable {
+		if !outcomeAllowed(outcome, expected.Transient) {
 			return false
 		}
 	}
