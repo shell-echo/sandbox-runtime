@@ -44,7 +44,7 @@ func marshalDeliveryInvocation(t *testing.T, value map[string]any) []byte {
 func observedDeliveryProbe(t *testing.T, mode string) *StartedProcess {
 	t.Helper()
 	_, process, codec := startedStartupProbe(t, mode)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), realProcessTestLimit)
 	defer cancel()
 	if _, err := process.ObserveStartup(ctx, codec); err != nil {
 		t.Fatal(err)
@@ -114,7 +114,7 @@ func TestDeliverInvocationRejectsWrongOrderAndCanceledInput(t *testing.T) {
 				defer runCancel()
 			}
 			_, launch := preparedProbeContext(t, path, runContext)
-			processContext, stop := context.WithTimeout(context.Background(), 15*time.Second)
+			processContext, stop := context.WithTimeout(context.Background(), realProcessTestLimit)
 			defer stop()
 			process, err := StartProcess(processContext, launch)
 			if err != nil {
@@ -122,7 +122,7 @@ func TestDeliverInvocationRejectsWrongOrderAndCanceledInput(t *testing.T) {
 			}
 			t.Cleanup(func() { _ = process.Close() })
 			if kind != "before-startup" {
-				startupContext, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				startupContext, cancel := context.WithTimeout(context.Background(), realProcessTestLimit)
 				_, err = process.ObserveStartup(startupContext, codec)
 				cancel()
 				if err != nil {

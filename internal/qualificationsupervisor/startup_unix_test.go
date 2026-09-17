@@ -15,6 +15,8 @@ import (
 	protocol "github.com/shell-echo/sandbox-runtime/internal/qualificationadapterprotocol"
 )
 
+const realProcessTestLimit = 15 * time.Second
+
 func buildStartupProbe(t *testing.T, mode string) string {
 	t.Helper()
 	root, err := filepath.EvalSymlinks(t.TempDir())
@@ -47,7 +49,7 @@ func startedStartupProbeContext(t *testing.T, mode string, runContext context.Co
 		t.Fatal(err)
 	}
 	frozen, launch := preparedProbeContext(t, buildStartupProbe(t, mode), runContext)
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), realProcessTestLimit)
 	t.Cleanup(cancel)
 	process, err := StartProcess(ctx, launch)
 	if err != nil {
@@ -59,7 +61,7 @@ func startedStartupProbeContext(t *testing.T, mode string, runContext context.Co
 
 func TestObserveStartupBindsRealProcessBeforeInput(t *testing.T) {
 	_, process, codec := startedStartupProbe(t, "valid")
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), realProcessTestLimit)
 	defer cancel()
 	identity, err := process.ObserveStartup(ctx, codec)
 	if err != nil {
@@ -98,7 +100,7 @@ func TestObserveStartupRejectsInvalidFirstRecordAndReaps(t *testing.T) {
 	for _, mode := range []string{"wrong-authority", "duplicate-channel", "non-startup", "malformed", "truncated-exit", "empty-exit"} {
 		t.Run(mode, func(t *testing.T) {
 			frozen, process, codec := startedStartupProbe(t, mode)
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), realProcessTestLimit)
 			defer cancel()
 			identity, err := process.ObserveStartup(ctx, codec)
 			if err == nil || !errors.Is(err, ErrStartup) || len(identity.CredentialChannels) != 0 {

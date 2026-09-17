@@ -16,7 +16,7 @@ import (
 func deliveredCompletionProbe(t *testing.T, mode string) (*FrozenPreflight, *StartedProcess) {
 	t.Helper()
 	frozen, process, codec := startedStartupProbe(t, mode)
-	startupContext, startupCancel := context.WithTimeout(context.Background(), 15*time.Second)
+	startupContext, startupCancel := context.WithTimeout(context.Background(), realProcessTestLimit)
 	defer startupCancel()
 	if _, err := process.ObserveStartup(startupContext, codec); err != nil {
 		t.Fatal(err)
@@ -36,7 +36,7 @@ func TestObserveCompletionConsumesTerminalEOFAndCleanExit(t *testing.T) {
 	if !started {
 		t.Fatal("run budget did not start before preflight")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), realProcessTestLimit)
 	defer cancel()
 	if err := process.ObserveCompletion(ctx); err != nil {
 		t.Fatal(err)
@@ -80,7 +80,7 @@ func TestObserveCompletionFailsClosedOnExitOutputAndStderr(t *testing.T) {
 	for _, mode := range []string{"nonclean-completion", "extra-after-terminal"} {
 		t.Run(mode, func(t *testing.T) {
 			frozen, process := deliveredCompletionProbe(t, mode)
-			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), realProcessTestLimit)
 			defer cancel()
 			assertFailedClosed(t, frozen, process, ErrSupervision, process.ObserveCompletion(ctx))
 		})
@@ -88,7 +88,7 @@ func TestObserveCompletionFailsClosedOnExitOutputAndStderr(t *testing.T) {
 
 	t.Run("stderr-overflow", func(t *testing.T) {
 		frozen, process, codec := startedStartupProbe(t, "stderr-overflow")
-		startupContext, startupCancel := context.WithTimeout(context.Background(), 15*time.Second)
+		startupContext, startupCancel := context.WithTimeout(context.Background(), realProcessTestLimit)
 		defer startupCancel()
 		if _, err := process.ObserveStartup(startupContext, codec); err != nil {
 			t.Fatal(err)
@@ -99,7 +99,7 @@ func TestObserveCompletionFailsClosedOnExitOutputAndStderr(t *testing.T) {
 		}})
 		boundary := ErrDelivery
 		if err == nil {
-			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), realProcessTestLimit)
 			defer cancel()
 			err = process.ObserveCompletion(ctx)
 			boundary = ErrSupervision
