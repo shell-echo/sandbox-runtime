@@ -24,7 +24,10 @@ func TestRootAssemblerPublishesClosedEvidenceAndVerifierReceipt(t *testing.T) {
 	snapshot := syntheticEvidenceSnapshot(t, report)
 	input := syntheticAssemblyInput(report, projectionBytes)
 	root := t.TempDir()
-	assembler := RootAssembler{SourceRoot: "../..", EvidenceRoot: root, Input: input}
+	var stages []string
+	assembler := RootAssembler{SourceRoot: "../..", EvidenceRoot: root, Input: input, StageObserver: func(stage string) {
+		stages = append(stages, stage)
+	}}
 
 	result, err := assembler.AssembleAndVerify(context.Background(), snapshot)
 	if err != nil {
@@ -32,6 +35,9 @@ func TestRootAssemblerPublishesClosedEvidenceAndVerifierReceipt(t *testing.T) {
 	}
 	if result.RunOutcome != "passed" || result.ValidationOutcome != "accepted" || result.FileCount != 7 || result.RuntimeCommitmentDigest != snapshot.RuntimeCommitmentDigest || result.InitialInvocationID != snapshot.Reconstruction.InitialInvocationID || result.ReconstructionInvocationID != snapshot.Reconstruction.ReconstructionInvocationID {
 		t.Fatalf("AssembleAndVerify() result = %+v", result)
+	}
+	if len(stages) == 0 || stages[len(stages)-1] != "completed" {
+		t.Fatalf("safe assembly stages = %v", stages)
 	}
 	for _, name := range []string{"provider-observer.json", "gateway-observer.json", "process-supervisor.json", "resource-inspector.json", "trusted-inputs.json", ReportFileName, ReceiptFileName} {
 		info, err := os.Lstat(filepath.Join(root, name))

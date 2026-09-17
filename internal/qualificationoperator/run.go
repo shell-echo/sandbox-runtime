@@ -360,11 +360,13 @@ func Run(ctx context.Context, configuration RunConfiguration) (_ RunResult, resu
 	if err != nil {
 		return RunResult{}, qualificationStage("evidence-assembly-input", err)
 	}
+	finalizationStage := "not-started"
 	finalization, err := qualificationharness.FinalizeEvidence(ctx, prepared, qualificationreport.RootAssembler{
 		SourceRoot: configuration.SourceRoot, EvidenceRoot: paths.supervisorEvidence, Input: assemblyInput,
+		StageObserver: func(stage string) { finalizationStage = stage },
 	})
 	if err != nil || finalization.RunOutcome != qualificationharness.DerivedPassed || finalization.ValidationOutcome != "accepted" {
-		return RunResult{}, qualificationStage("evidence-finalization", err)
+		return RunResult{}, qualificationStage("evidence-finalization-"+finalizationStage, err)
 	}
 	retained, err := qualificationreport.VerifyRetained(ctx, paths.supervisorEvidence, configuration.SourceRoot)
 	if err != nil || !retainedMatchesFinalization(retained, finalization) {

@@ -59,12 +59,17 @@ type RootAssembler struct {
 	SourceRoot   string
 	EvidenceRoot string
 	Input        AssemblyInput
+	// StageObserver receives only a fixed, non-sensitive stage identifier. It
+	// exists so an outer operator can diagnose a failed hosted finalization
+	// without exposing the assembler's underlying error or evidence content.
+	StageObserver func(string)
 }
 
 // AssembleAndVerify implements qualificationharness.EvidenceAssembler. A
 // failed validator run intentionally leaves the assembled root for diagnosis;
 // failures before writer handoff remove only files created by this invocation.
 func (a RootAssembler) AssembleAndVerify(ctx context.Context, snapshot qualificationharness.EvidenceSnapshot) (qualificationharness.EvidenceFinalizationResult, error) {
+	a.observeStage("preflight")
 	if ctx == nil || a.SourceRoot == "" || a.EvidenceRoot == "" {
 		return qualificationharness.EvidenceFinalizationResult{}, ErrEvidenceAssembly
 	}
@@ -72,6 +77,7 @@ func (a RootAssembler) AssembleAndVerify(ctx context.Context, snapshot qualifica
 		return qualificationharness.EvidenceFinalizationResult{}, errors.Join(ErrEvidenceAssembly, err)
 	}
 
+	a.observeStage("definition-lock")
 	definition, err := qualificationprofile.VerifyCodingShellV1(ctx, a.SourceRoot)
 	if err != nil || definition.ProfileDigest != qualificationprofile.ExpectedProfileDigest {
 		return qualificationharness.EvidenceFinalizationResult{}, ErrEvidenceAssembly
@@ -93,10 +99,12 @@ func (a RootAssembler) AssembleAndVerify(ctx context.Context, snapshot qualifica
 		return qualificationharness.EvidenceFinalizationResult{}, ErrEvidenceAssembly
 	}
 
+	a.observeStage("input-normalization")
 	projection, timings, assertions, trusted, err := normalizeAssemblyInput(a.Input, snapshot, profile, schemaBytes, semantics)
 	if err != nil {
 		return qualificationharness.EvidenceFinalizationResult{}, ErrEvidenceAssembly
 	}
+	a.observeStage("report-model")
 	reportID, err := randomEvidenceID("qualification-report-")
 	if err != nil {
 		return qualificationharness.EvidenceFinalizationResult{}, ErrEvidenceAssembly
@@ -109,11 +117,13 @@ func (a RootAssembler) AssembleAndVerify(ctx context.Context, snapshot qualifica
 	if err != nil {
 		return qualificationharness.EvidenceFinalizationResult{}, ErrEvidenceAssembly
 	}
+	a.observeStage("payload-model")
 	payloadDocuments, payloadModels, err := assemblePayloads(report, projection, trusted)
 	if err != nil {
 		return qualificationharness.EvidenceFinalizationResult{}, ErrEvidenceAssembly
 	}
 
+	a.observeStage("evidence-root")
 	root, err := evidencefiles.OpenRoot(a.EvidenceRoot)
 	if err != nil {
 		return qualificationharness.EvidenceFinalizationResult{}, ErrEvidenceAssembly
@@ -132,6 +142,7 @@ func (a RootAssembler) AssembleAndVerify(ctx context.Context, snapshot qualifica
 	if err != nil || empty.FileCount != 0 || empty.TotalBytes != 0 || len(empty.Entries) != 0 {
 		return qualificationharness.EvidenceFinalizationResult{}, ErrEvidenceAssembly
 	}
+	a.observeStage("payload-publication")
 	for _, path := range []string{"provider-observer.json", "gateway-observer.json", "process-supervisor.json", "resource-inspector.json", "trusted-inputs.json"} {
 		document := payloadDocuments[path]
 		if len(document) == 0 || validateSanitizedBytes(document) != nil {
@@ -163,10 +174,12 @@ func (a RootAssembler) AssembleAndVerify(ctx context.Context, snapshot qualifica
 	report.Evidence.FileCount = inventory.FileCount + 2
 	report.RunOutcome.IdentityComplete = hasCompleteIdentity(report, semantics, payloadModels)
 	report.RunOutcome = deriveRunOutcome(report, profile, report.RunOutcome.IdentityComplete)
+	a.observeStage("semantic-validation")
 	if err := validateSemantic(report, profile, definition, semantics, payloadModels); err != nil {
 		return qualificationharness.EvidenceFinalizationResult{}, ErrEvidenceAssembly
 	}
 
+	a.observeStage("report-finalization")
 	reportBytes, err := finalizeReportBytes(report, inventory, semantics)
 	if err != nil || validateSanitizedBytes(reportBytes) != nil {
 		return qualificationharness.EvidenceFinalizationResult{}, ErrEvidenceAssembly
@@ -175,6 +188,7 @@ func (a RootAssembler) AssembleAndVerify(ctx context.Context, snapshot qualifica
 	if decodeStrictJSON(reportBytes, &reportValue) != nil || validateReportSchema(schemaBytes, reportValue) != nil {
 		return qualificationharness.EvidenceFinalizationResult{}, ErrEvidenceAssembly
 	}
+	a.observeStage("report-publication")
 	publication, err := root.Publish(ReportFileName, reportBytes, maxReportBytes)
 	if err != nil {
 		return qualificationharness.EvidenceFinalizationResult{}, ErrEvidenceAssembly
@@ -185,10 +199,12 @@ func (a RootAssembler) AssembleAndVerify(ctx context.Context, snapshot qualifica
 	}
 	handedOff = true
 
+	a.observeStage("receipt-validation")
 	verified, err := Verify(ctx, a.EvidenceRoot, a.SourceRoot)
 	if err != nil {
 		return qualificationharness.EvidenceFinalizationResult{}, ErrEvidenceAssembly
 	}
+	a.observeStage("completed")
 	return qualificationharness.EvidenceFinalizationResult{
 		ReportID: verified.ReportID, InvocationID: verified.InvocationID, RuntimeCommitmentDigest: verified.RuntimeCommitment,
 		ProfileID: snapshot.ProfileID, ProfileVersion: snapshot.ProfileVersion, ProfileDigest: snapshot.ProfileDigest,
@@ -196,6 +212,12 @@ func (a RootAssembler) AssembleAndVerify(ctx context.Context, snapshot qualifica
 		ReportDigest: verified.ReportDigest, PayloadInventoryDigest: verified.PayloadInventory, ReceiptFile: verified.ReceiptFile,
 		RunOutcome: verified.RunOutcome, ValidationOutcome: verified.ValidationOutcome, FileCount: verified.FileCount, TotalBytes: verified.TotalBytes,
 	}, nil
+}
+
+func (a RootAssembler) observeStage(stage string) {
+	if a.StageObserver != nil {
+		a.StageObserver(stage)
+	}
 }
 
 func normalizeAssemblyInput(input AssemblyInput, snapshot qualificationharness.EvidenceSnapshot, profile profileDocument, schema []byte, semantics validatorSemantics) (map[string]any, []scenarioTiming, []claimAssertion, []trustedInputStatement, error) {
