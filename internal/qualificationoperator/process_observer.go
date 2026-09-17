@@ -284,10 +284,6 @@ func (r *GatewayRouting) Arm(ctx context.Context) error {
 				cancel()
 				return
 			}
-			// A newly observed Gateway must resolve its advertised name to the
-			// private bind address. This is also a fallback for a prior service
-			// that terminated without completing an observed connection.
-			r.dns.UsePrivate()
 			for {
 				connection, err := net.DialTimeout("tcp", r.privateAddress, 100*time.Millisecond)
 				if err == nil {

@@ -4,14 +4,19 @@ import (
 	"encoding/binary"
 	"net"
 	"sync"
+	"time"
 )
 
 type RotatingDNS struct {
-	connection *net.UDPConn
-	name       []byte
-	mu         sync.RWMutex
-	private    bool
-	done       chan struct{}
+	connection          *net.UDPConn
+	name                []byte
+	mu                  sync.Mutex
+	private             bool
+	privateAnswerIssued bool
+	observerReady       chan struct{}
+	observerSignaled    bool
+	done, stopping      chan struct{}
+	stopOnce            sync.Once
 }
 
 func StartRotatingDNS(listenAddress, hostname string) (*RotatingDNS, error) {
@@ -23,7 +28,10 @@ func StartRotatingDNS(listenAddress, hostname string) (*RotatingDNS, error) {
 	if err != nil {
 		return nil, ErrObservationProxy
 	}
-	d := &RotatingDNS{connection: connection, name: encodeDNSName(hostname), private: true, done: make(chan struct{})}
+	d := &RotatingDNS{
+		connection: connection, name: encodeDNSName(hostname), private: true,
+		observerReady: make(chan struct{}), done: make(chan struct{}), stopping: make(chan struct{}),
+	}
 	if len(d.name) == 0 {
 		_ = connection.Close()
 		return nil, ErrObservationProxy
@@ -32,12 +40,18 @@ func StartRotatingDNS(listenAddress, hostname string) (*RotatingDNS, error) {
 	return d, nil
 }
 
-// UsePrivate makes every A lookup resolve to the candidate Gateway's private
-// loopback address. It is intentionally a mode rather than a one-shot answer:
-// resolvers may retry or issue parallel queries while the Gateway binds.
+// UsePrivate starts one Gateway generation. Its first A answer is the private
+// bind address. Later A lookups wait until UseObserver confirms that listener,
+// preventing the client from racing past the out-of-band observer.
 func (d *RotatingDNS) UsePrivate() {
 	d.mu.Lock()
+	if !d.observerSignaled {
+		close(d.observerReady)
+	}
 	d.private = true
+	d.privateAnswerIssued = false
+	d.observerReady = make(chan struct{})
+	d.observerSignaled = false
 	d.mu.Unlock()
 }
 
@@ -47,6 +61,10 @@ func (d *RotatingDNS) UsePrivate() {
 func (d *RotatingDNS) UseObserver() {
 	d.mu.Lock()
 	d.private = false
+	if !d.observerSignaled {
+		close(d.observerReady)
+		d.observerSignaled = true
+	}
 	d.mu.Unlock()
 }
 
@@ -54,6 +72,8 @@ func (d *RotatingDNS) Close() error {
 	if d == nil || d.connection == nil {
 		return nil
 	}
+	d.stopOnce.Do(func() { close(d.stopping) })
+	d.UseObserver()
 	err := d.connection.Close()
 	<-d.done
 	return err
@@ -93,12 +113,10 @@ func (d *RotatingDNS) answer(request []byte) ([]byte, bool) {
 	if qtype != 1 {
 		return response, true
 	}
-	d.mu.RLock()
-	ip := net.IPv4(127, 0, 0, 1)
-	if d.private {
-		ip = net.IPv4(127, 0, 0, 2)
+	ip, ok := d.aRecordAddress()
+	if !ok {
+		return nil, false
 	}
-	d.mu.RUnlock()
 	binary.BigEndian.PutUint16(response[6:8], 1)
 	answer := make([]byte, 16)
 	binary.BigEndian.PutUint16(answer[0:2], 0xc00c)
@@ -108,6 +126,32 @@ func (d *RotatingDNS) answer(request []byte) ([]byte, bool) {
 	binary.BigEndian.PutUint16(answer[10:12], 4)
 	copy(answer[12:16], ip.To4())
 	return append(response, answer...), true
+}
+
+func (d *RotatingDNS) aRecordAddress() (net.IP, bool) {
+	d.mu.Lock()
+	if !d.private {
+		d.mu.Unlock()
+		return net.IPv4(127, 0, 0, 1), true
+	}
+	if !d.privateAnswerIssued {
+		d.privateAnswerIssued = true
+		d.mu.Unlock()
+		return net.IPv4(127, 0, 0, 2), true
+	}
+	ready := d.observerReady
+	d.mu.Unlock()
+
+	timer := time.NewTimer(5 * time.Second)
+	defer timer.Stop()
+	select {
+	case <-ready:
+		return net.IPv4(127, 0, 0, 1), true
+	case <-d.stopping:
+		return nil, false
+	case <-timer.C:
+		return nil, false
+	}
 }
 
 func encodeDNSName(hostname string) []byte {
