@@ -955,8 +955,7 @@ func validateSemanticWithStage(report reportDocument, profile profileDocument, d
 	if err := validateInvocation(report, profile.Reconstruction, identityComplete); err != nil {
 		return err
 	}
-	stage("semantic-scenarios")
-	return validateScenarios(report, profile, definition, identityComplete)
+	return validateScenariosWithStage(report, profile, definition, identityComplete, observe)
 }
 
 func validateSandboxResources(report reportDocument, limits profileLimits) error {
@@ -1227,6 +1226,16 @@ func pointerValues(values ...*string) []string {
 }
 
 func validateScenarios(report reportDocument, profile profileDocument, definition qualificationprofile.Report, requireComplete bool) error {
+	return validateScenariosWithStage(report, profile, definition, requireComplete, nil)
+}
+
+func validateScenariosWithStage(report reportDocument, profile profileDocument, definition qualificationprofile.Report, requireComplete bool, observe func(string)) error {
+	stage := func(value string) {
+		if observe != nil {
+			observe(value)
+		}
+	}
+	stage("scenarios-inventory")
 	if len(profile.Phases) != 2 || len(profile.Phases[0].Cases) != 15 || len(profile.Phases[1].Cases) != 5 || len(report.Phases) != 2 || len(report.ScenarioResults) != 20 || len(report.Observations) > 91 || (requireComplete && len(report.Observations) != 91) {
 		return errors.New("qualification report scenario inventory has incorrect cardinality")
 	}
@@ -1256,6 +1265,7 @@ func validateScenarios(report reportDocument, profile profileDocument, definitio
 	if len(expectedObservations) != 91 {
 		return errors.New("qualification profile observation inventory is not 91")
 	}
+	stage("scenarios-observations")
 	seenObs := map[string]observation{}
 	nextExpectedObservation := 0
 	for _, item := range report.Observations {
@@ -1286,6 +1296,7 @@ func validateScenarios(report reportDocument, profile profileDocument, definitio
 	}
 	statusByCase := make(map[string]string, len(report.ScenarioResults))
 	for index, actual := range report.ScenarioResults {
+		stage(fmt.Sprintf("scenarios-case-%02d", index+1))
 		if actual.CaseID != expectedCaseIDs[index] || actual.PhaseID != caseByID[actual.CaseID].PhaseID() {
 			return fmt.Errorf("qualification report scenario %q is out of order", actual.CaseID)
 		}
@@ -1306,13 +1317,15 @@ func validateScenarios(report reportDocument, profile profileDocument, definitio
 	if len(seenInteractions) > definition.Interactions {
 		return fmt.Errorf("qualification report contains %d interactions, exceeds %d", len(seenInteractions), definition.Interactions)
 	}
+	stage("scenarios-phase-results")
 	if err := validatePhaseResults(report); err != nil {
 		return err
 	}
+	stage("scenarios-caller-assertions")
 	if err := validateCallerAssertions(report, allCases, requireComplete); err != nil {
 		return err
 	}
-	return validateOutcomeAndCleanup(report, profile, allCases)
+	return validateOutcomeAndCleanupWithStage(report, profile, allCases, observe)
 }
 
 func (c profileCase) PhaseID() string {
@@ -1526,6 +1539,16 @@ func outcomeAllowed(actual reportOutcome, allowed []profileOutcome) bool {
 }
 
 func validateOutcomeAndCleanup(report reportDocument, profile profileDocument, cases []profileCase) error {
+	return validateOutcomeAndCleanupWithStage(report, profile, cases, nil)
+}
+
+func validateOutcomeAndCleanupWithStage(report reportDocument, profile profileDocument, cases []profileCase, observe func(string)) error {
+	stage := func(value string) {
+		if observe != nil {
+			observe(value)
+		}
+	}
+	stage("scenarios-counters")
 	scenarioCounts := map[string]int{"passed": 0, "failed": 0, "incomplete": 0, "not_executed": 0}
 	for _, scenario := range report.ScenarioResults {
 		scenarioCounts[scenario.Status]++
@@ -1540,25 +1563,31 @@ func validateOutcomeAndCleanup(report reportDocument, profile profileDocument, c
 	if counts.Sandboxes > profile.Limits.MaxSandboxes || counts.ExecRequests > profile.Limits.MaxExecRequests || counts.AdmittedExecOperations > profile.Limits.MaxAdmittedExecOperations || counts.TerminalSessions > profile.Limits.MaxTerminalSessions || counts.ArtifactRequests > profile.Limits.MaxArtifactRequests || counts.AdmittedArtifactOperations > profile.Limits.MaxAdmittedArtifactOperations || counts.DistinctProviderMutations > profile.Limits.MaxDistinctProviderMutations {
 		return errors.New("qualification report exceeds a locked resource limit")
 	}
+	stage("scenarios-cleanup")
 	cleanupSatisfied, err := validateCleanup(report.Cleanup, profile.Cleanup, anyMutation)
 	if err != nil {
 		return err
 	}
+	stage("scenarios-cleanup-scope")
 	if err := validateCleanupScopeBindings(report); err != nil {
 		return err
 	}
+	stage("scenarios-outcome")
 	if err := validateRunOutcome(report, scenarioCounts, cleanupSatisfied); err != nil {
 		return err
 	}
 	if len(cases) != 20 {
 		return errors.New("qualification profile case inventory is incomplete")
 	}
+	stage("scenarios-run-timestamps")
 	if err := validateTimestamps(report.Timestamps, profile.Limits); err != nil {
 		return err
 	}
+	stage("scenarios-cleanup-timestamps")
 	if err := validateCleanupTiming(report, cases); err != nil {
 		return err
 	}
+	stage("scenarios-case-timestamps")
 	return validateScenarioTimestamps(report, cases)
 }
 
