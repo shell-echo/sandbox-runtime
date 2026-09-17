@@ -1,91 +1,31 @@
 # Project Status
 
-P2.7c.2 is implemented through c2b.7: the producer builds the closed sanitized
-transcript and the report validator independently recomputes RFC 8785/SHA-256
-from `process-supervisor.json`'s `adapter_transcript_projection`. It binds the
-protocol, phases, invocations, processes, executables, configurations and field
-inventory, and checks message order, derived counts and status consistency.
-Physical byte counts, EOF/exit and process truth remain supervisor inputs, not
-independent observations made by this validator. c3.1 adds descriptor-backed,
-bounded executable preflight and rechecking without launching a process. The
-fixed 24-step P2.7 plan is complete. c3.2 implements the final static
-configuration commitment, exclusive custody transfer and one-shot logical phase
-admission with live descriptor rechecks. Reconstruction uses the existing
-protocol completion gate; outer-harness evidence remains open.
-c3.3 implements actual local spawn, endpoint handoff and bounded stop/reap.
-c3.4 exclusively decodes and binds the first stdout startup identity before any
-invocation or credential byte; Darwin/Linux tests execute repository helpers
-only, not an independent caller, and release identities remain assertions. c3.5
-validates the invocation against committed locations/startup requirements, then
-concurrently delivers bounded stdin and inherited-pipe payloads with EOF. c3.6
-starts one monotonic run budget before the first supervisor preflight read,
-preserves it across reconstruction, clips every case and operation deadline,
-drains bounded stderr concurrently, and accepts actual completion only after
-ordered output, terminal, stdout EOF and a clean reaped exit. c3.7 publishes
-sanitized evidence only after that completion, assigns opaque non-PID process
-identities, prevents external inputs from overriding observed adapter facts,
-and finalizes one canonical two-phase transcript. Real Darwin/arm64 and
-Linux/arm64 Lima helper tests pass. d1 now freezes a sanitized target identity,
-the exact profile-derived topology, 11 artifact requirements, all 10 ordered
-configuration identities, the numeric runtime/cleanup budget, and the 15+5
-scenario inventory before runtime setup. d2 now obtains target, artifact, and
-configuration identities only through a read-only observer, creates three
-descriptor-backed persistent stores, locks the authoritative inspector scope,
-and requires a complete zero-resource baseline before exposing prepared state.
-d3 releases mutation capability only after rechecking that state and baseline,
-passes the executor a closed identity-and-case directive with no request,
-endpoint, credential, correlation, or signing fields, and consumes exactly 15
-ordered progress results under clipped per-case and execution deadlines. It
-enforces dependencies, per-interaction wire-attempt bounds, and provisional
-transport/request counters while retaining cleanup after an unknown start.
-d4 admits reconstruction only after a terminal initial result and passes a
-closed eight-field directive containing only identities, ordered case IDs, and
-symbolic restart/preservation policy. It requires two distinct invocation IDs
-and eight unique opaque non-PID labels across the four old/new process pairs,
-rechecks persistent-store identity without reading entries, and consumes the
-five ordered reconstruction results under the original execution deadline.
-d5 adds four source-specific, read-only observer ports, binds their identities,
-41 interaction results and exact 66/17/7/1 fact projections to the locked
-profile and d2-d4 state, independently corroborates process replacement,
-transcript, shell-challenge and resource-scope facts, and derives scenario
-`passed`/`failed`/`incomplete`/`not_executed` plus conservative admission
-counters. Repository fixtures prove this component logic only; they are not
-independent caller evidence. d6 consumes the persistent cleanup obligation in a
-separate bounded context, binds the operator-owned teardown identity, closes
-local state descriptors, and requires exactly three same-scope, one-second-
-spaced zero-resource samples equal to the baseline before declaring cleanup
-successful. d7 now assembles and validates the closed evidence root as a local
-component. The separate public external-caller repository has completed all 13
-candidate checkpoints through e1.8c. Public hosted run `35068957048`
-at source commit `58a211f0c167af3ec117c8cb8247bfe268bbae40` passed the
-full tests, deterministic Linux/amd64 build, authority verification, artifact
-upload, and five-subject Sigstore attestation `47846951`; the downloaded
-three-artifact bundle and its strict manifest were independently reverified.
-The e2 preflight then found two real execution blockers rather than an
-executable qualification environment: the attested candidate pins a synthetic
-`registry.invalid` runtime image, and the production command had not composed
-the locked terminal-connect route. The production command now closes the
-latter with opt-in protected WebSocket composition. The repository-owned
-coding/shell image was published from `cf1830e9` by run `35171475925` as exact
-two-platform OCI index
-`sha256:1996e44f8ddc464f22556bd57f1c69079fe6b1a821b65bd9be24f86619c31bb1`;
-attestation `48073123` and an independent verification bind the repository,
-workflow, source, `main` ref, GitHub-hosted runner and SLSA provenance. This is
-release evidence. The candidate was subsequently rebuilt against the immutable
-digest. Hosted run `35203241121` at Provider
-`170459266af5f4fad359ca8c63f2ae19741055c5` and caller
-`b3ebcc783e5db20395e29b029e0eb55f7819b49b` passed all 15+5 cases, all 91
-required observations, stable zero-resource cleanup, closed report/receipt
-assembly, deterministic archive creation and fresh-process retained verification.
+The fixed first-version P2.7 plan is **24/24 complete**, and the public
+independent external-caller plan is **13/13 complete**. There are no remaining
+steps in either fixed plan.
+
+Final hosted qualification run `35203241121` executed Provider revision
+`170459266af5f4fad359ca8c63f2ae19741055c5` and caller revision
+`b3ebcc783e5db20395e29b029e0eb55f7819b49b`. All 15 initial and 5
+reconstruction scenarios passed, all 91 required observations matched, and
+the exact run-owned resource scope returned to zero across three stable
+samples.
+
 Artifact `10488622806` binds checkpoint
 `sha256:ce8394c3f0213f89bfb01be027016bcbeb272a24c014030a9bc8007d9ab7536f`,
-archive `sha256:ada1cae128a41e6b694ff413aab179c0eff94b42663ece8233dbb358e319e9bd`
+seven-file archive
+`sha256:ada1cae128a41e6b694ff413aab179c0eff94b42663ece8233dbb358e319e9bd`,
 and result envelope
 `sha256:d5e6fd528f2302252a38f49aa466c85767106a8bcef430120f230a8127f96758`.
-The report is `passed`, validation is `accepted`, and disposition is `qualified`
-for only the named scope and revisions. The main P2.7 plan is 24/24; aggregate,
-multi-controller, hostile multi-tenant, HA, deployment and production gates
-remain separate.
+The report is `passed`, validation is `accepted`, and the bounded disposition
+is `qualified`.
+
+Documentation baseline `27081dfde4dfc726ba4df06d1f3b50012a04d2f2` passed
+core CI `35204434771`. The qualification and CI results apply only to their
+recorded Contract/profile, revisions, artifacts, topology, and scenarios.
+Aggregate conformance, other callers or profiles, multi-controller operation,
+hostile multi-tenant isolation, HA, deployment, and production readiness
+remain separate non-claims.
 
 Updated: 2026-09-17
 
@@ -100,15 +40,15 @@ production readiness.
 | Item | Evidence | Status |
 | --- | --- | --- |
 | Sandbox Provider Calling Standard decision | ADR 0037; `contract/specification/provider-calling-standard-v1.md`; repository-owned Contract manifest | External consumers adapt to the exact locked `sandbox-runtime` Provider Contract. The former named Agent Platform P3 migration route is retired, while caller/Provider ownership separation and historical candidate evidence remain. This standard slice adds no capability or production-readiness claim. ADR 0038 defines the generic issuer trust model; the named independent-caller qualification is recorded separately in P2.7 and deployment qualification remains open |
-| Current Provider Contract authority | Revision `22ba6987ea5fbc37d53942720133c0acad199edd`; tree `c9a7054d7c8e7f4b6e32f38175ceedddc48c2d38`; manifest `sha256:1e17e0ef4f86e03be1dac22c48e7b556a8600a4baa6252f4514390d339b8ba3f`; 53-case local Suite `sha256:b40c932643f4a1e5fd6681e3abf9b64a607609866a6254456970f8b8034cf2a8`; unchanged 6-case remote Suite | Contract verification, root tests/vet, and E2E lock logic pass in the current worktree. Clean VCS-built Suite execution, E2E parent-lock, and the eight E2E `-check` gates remain pending until a committed clean checkout exists; no current P2.6 or E2E result is claimed |
+| Current Provider Contract authority | Revision `22ba6987ea5fbc37d53942720133c0acad199edd`; tree `c9a7054d7c8e7f4b6e32f38175ceedddc48c2d38`; manifest `sha256:1e17e0ef4f86e03be1dac22c48e7b556a8600a4baa6252f4514390d339b8ba3f`; 53-case local Suite `sha256:b40c932643f4a1e5fd6681e3abf9b64a607609866a6254456970f8b8034cf2a8`; unchanged 6-case remote Suite | At documentation baseline `27081dfde4dfc726ba4df06d1f3b50012a04d2f2`, core CI `35204434771` passed Contract/profile/protocol verification, the clean VCS-built current 53-case local Suite, DTO projections, full race tests, vet, Docker integration, browser provenance, and Ubuntu/macOS supervisor matrices. A fresh current six-case remote discovery run and the historical E2E parent-lock/eight-check bundle are not relabeled by this CI result |
 | P2.7 independent external caller qualification | ADR 0040; profile `sandbox-runtime-external-caller-coding-shell-v1@1.0.0` at `sha256:ec113d31612dbb7cc0e9461925170f74f33722bb2efb237dbc68aa89f2d60231`; Provider/caller `170459266af5f4fad359ca8c63f2ae19741055c5`/`b3ebcc783e5db20395e29b029e0eb55f7819b49b`; hosted run `35203241121`; artifact `10488622806`; result envelope `sha256:d5e6fd528f2302252a38f49aa466c85767106a8bcef430120f230a8127f96758` | P2.7 is 24/24 and the public caller plan is 13/13. The run passed all 15+5 cases and 91 required observations, restored the zero-resource baseline across three stable samples, produced a seven-file accepted report/receipt archive, and passed a fresh-process verification after download. The bounded disposition is `qualified` only for the named caller, Provider revision, Contract/profile, artifacts, topology and scenarios. Aggregate conformance, multi-issuer, multi-controller, hostile multi-tenant isolation, HA, deployment and production readiness remain explicit non-claims |
 | ADR 0038 caller issuer trust implementation | ADR 0038; implementation `034e647`; Contract lock `fd48de9`; projection regression fix `af8a505`; prior E2E lock `b8d4829`; local reference run `20260907T044611.598221000Z` | One protected listener has one explicit exact issuer with no default or fallback, Provider-local audience and revision anchors, issuer-scoped admitted URI SAN identities, and 1..32 frozen verification keys. Rotation overlaps distinct old/new `kid` values across a restart, stops old-key signing, waits 300 seconds, then removes the old key and restarts again. Issuer substitution remains an authentication failure; a verified wrong local audience or revision is forbidden before mutation reservation. Contract verification, 50-case conformance, root and E2E race/shuffle, vet, E2E lock checks, and the same-repository Docker reference run pass at their recorded identities. The run is 15 initial plus 5 reconstruction scenarios with manifest SHA-256 `60bda2dae83053db447417cea5c5e38d4798e1e90b91fbb5cfc75d2991c6993e`. It is reference evidence only; the named independent-caller result is recorded in P2.7, while multi-issuer admission, multi-tenant isolation, HA, deployment, and production readiness remain open |
-| Historical P2.6 portable Provider conformance | ADR 0039; implementation `3fe314a012b808fe60dbd783d7c7c7121d3c548e`; E2E lock refresh `ae476fed12e82f472b19ff78fda633c8d702561d`; then-current 50-case local Suite and unchanged 6-case remote Suite | The clean VCS-built local and remote Runners, root/E2E race and vet, Contract verifier, parent-lock and eight E2E checks passed for that recorded authority. The current Contract has 53 local cases and needs a fresh clean-checkout release run; the historical result is not relabeled. Neither result proves independent third-party caller interoperability, protected or mutating remote conformance, aggregate conformance, hostile multi-tenant safety, HA, deployment, or production readiness |
+| Historical P2.6 portable Provider conformance | ADR 0039; implementation `3fe314a012b808fe60dbd783d7c7c7121d3c548e`; E2E lock refresh `ae476fed12e82f472b19ff78fda633c8d702561d`; then-current 50-case local Suite and unchanged 6-case remote Suite | The historical clean local/remote Runners, root/E2E race and vet, parent-lock, and eight E2E checks passed for their recorded authority. The current 53-case local Suite separately passed clean VCS-built core CI `35204434771`; no fresh remote run is claimed. Independent caller qualification is separately complete under P2.7. Protected/mutating remote, aggregate, hostile multi-tenant, HA, deployment, and production claims remain open |
 | Latest downstream-fencing implementation and local/hosted caller evidence | Contract `5096e71`; projection/lock `24b2e36`; fencing component `b4d41c9`; Provider bootstrap `58488d7`; provisioning/process component `8a1049b`; historical run lock descriptor `b1d41f3`; historical metadata lock refresh `b8d4829`; active metadata lock `ae476fe`; local harness/run `550c785`/`20260906T050213.016063000Z`; hosted harness/run `2cadc53`/`34013982796` | The component and real-backend integration gates remain valid. The clean `linux/arm64` and hosted `linux/amd64` runs each pass all 13 scenarios through two independent mTLS/JWS caller processes, two Gateway processes, one authenticated unique ingress, retained Valkey state, and signed real Chromium. They exercise six protected Provider routes. The local run emits exactly five `0600` evidence files with all cleanup/sanitization checks true; the downloaded artifact contains evidence directory `20260906T052710.781616339Z` with exactly five sanitized files and pins the expected amd64 identities, topology, cleanup, and sanitization state. These close only the platform-specific ADR 0033 external-caller gates. Their historical Contract/tree/48-case identity is pinned but the Suite is not executed (`suite_exercised=false`); refreshing current lock metadata does not relabel those runs. These v1 runs do not exercise ADR 0034 deletion/restore behavior. Valkey provenance/HA/failover, production advertisement/public Gateway, independently implemented external-caller interoperability, aggregate, multi-controller, hostile multi-tenant, deployment, and production readiness remain open |
 | ADR 0034 witnessed action-history component and local/hosted caller evidence | ADR 0034; witnessed v2 Redis adapter and Darwin/Linux file witness; pinned Valkey index `sha256:ccfa19b0d743e48927e1c8c14e39e0acb97b5cea347fef0bfe340247fea920cd`; Contract `5096e71fb84fbec22aa3487a0e55a1b49602ab8b`; tree `859f76dc0e855a0c8abdbbb5648df100dabb4328`; fixed harness `059357c`; local run `20260906T100233.295973000Z`; hosted run `34026680591` | Local focused/full race-shuffle, vet, Contract lock verification, unchanged 48-case Suite, and tagged pinned-Valkey package integration pass. V2 retains at most 4,096 fingerprint-only session records in one permanent hash, rejects missing/malformed history, and compares its sequence/token with an independent monotonic witness; only an exact Redis-ahead-one interrupted commit may reconcile forward. The clean `linux/arm64` and hosted `linux/amd64` fixed-harness runners each pass 18/18 through two Gateways, two independent callers, one unique ingress, real Chromium, a separate orchestrator fault credential, and a file witness outside the logical Valkey restore set. They prove the named deletion, restored-old-snapshot, witness-reconstruction, and checkpoint-mismatch behaviors before rejected actions open a new upstream dial. The local exact five-file set is `0600`; the inspected hosted artifact contains directory `20260906T101111.796974798Z` with exactly five sanitized files. Artifact ID `9987350368` has digest `sha256:3e68f1c4b5bd74e0ae0ff0fde2c9ffefc63852cf9fc82b3019bedfb228bf2c9a`. These close only the platform-specific ADR 0034 caller gates; the Suite remains unexercised. The file witness remains single-process component infrastructure, not production storage. Production witness/storage, Valkey provenance/HA/failover, production ACL separation, configuration/advertisement/deployment, aggregate, multi-controller, hostile multi-tenant, and production-readiness results remain absent |
 | ADR 0035 PostgreSQL witness candidate | ADR 0035; `PostgresActionHistoryWitness`; `pgx/v5 v5.9.2`; migration `gateway/capacity/redis/migrations/0001_action_history_witness.sql`; strict `VerifyRestoredState`; hosted workflow run `34031784793` at implementation `3ff58dc`; PostgreSQL digest `sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94` | Namespace/policy digest isolation, idempotent provision, atomic conditional CAS, primary-local synchronous commit, bounded contexts, error redaction, schema constraints, and least-privilege role shape are implemented. Local unit/full race-shuffle, vet, Contract lock, unchanged 48-case Suite, tagged-integration compilation, and the pinned-Valkey strict one-ahead non-mutation scenario pass. The hosted workflow passes the exact migration, role denial, concurrent CAS/reconnect, missing/malformed state, pool-starvation timeout, and combined real PostgreSQL/pinned-Valkey rollback cases. The initial tag pull resolved the digest now pinned by the workflow. The local PostgreSQL environment remained unavailable. Image provenance, independent failure/backup domains, deployment-owned controlled ingress operations, HA/failover, deployment, and production readiness remain unproved |
 | ADR 0036 PostgreSQL controlled-restore reference | ADR 0036; profile `browser-postgres-controlled-restore-e2e-v1`; locked PostgreSQL index and exact migration; PostgreSQL witnessed-v2 Provider/private-ingress composition; orchestrator-only Redis restore control; strict restored-state startup; PR #47 merge `a0cddf4`; hosted run `34038556283`; artifact `browser-postgres-controlled-restore-e2e-evidence-34038556283` | The post-merge `linux/amd64` hosted run passes all 18 same-runner scenarios around two Gateways, two independent callers, one unique ingress, Valkey, PostgreSQL, and real Chromium. It quarantines both listeners before restore, rejects an older Redis snapshot without PostgreSQL advance or listener exposure, repairs the exact current state, and resumes only after strict verification. The inspected artifact contains evidence directory `20260906T141526.647125530Z` with exactly five sanitized files; the report is 18/18, and the manifest pins `harness_commit=a0cddf4`, records three ingress reconstructions, all cleanup/sanitization flags true, no file-witness v2 field, PostgreSQL restore evidence, `same_runner=true`, `independent_failure_domain=false`, and `suite_exercised=false`. Artifact ID `9991028239` has digest `sha256:72d822c44c2ab5e91ed500f5ef549d8ec1c63268443a48fa293c93a3d24ca14e`. This closes only the hosted ADR 0036 same-runner operational reference gate. PostgreSQL and Valkey still share the runner, host, Docker engine, workflow, and operator; provenance, HA, independent failure/backup domains, deployment, and production readiness remain unproved |
-| Current hosted CI and evidence tracks | Merge commit `cee6a3f`; CI `34076759102`; Reference `34076759139`; Candidate `34076759185`; Browser `34076759117`; shared capacity `34076759106`; durable revocation `34076759108`; downstream fencing v1 `34076759154`; downstream fencing v2 `34076759104`; PostgreSQL witness `34076759137`; PostgreSQL controlled restore `34076759112` | All ten main workflows pass for the same `main` commit. CI and all eight E2E profiles remain distinct evidence tracks; the PostgreSQL witness workflow remains a component/integration track. Their partial properties cannot be composed into aggregate conformance, independently implemented external-caller interoperability, Provider multi-controller reliability, hostile multi-tenant security, deployment, or production readiness |
+| Current hosted CI and evidence tracks | Documentation baseline `27081dfde4dfc726ba4df06d1f3b50012a04d2f2`; core CI `35204434771`; final qualification run `35203241121`; historical Browser and specialized E2E runs retain their recorded identities | Core CI passed all six jobs, including current Contract/local Suite, race/vet, Docker integration, browser provenance, and Ubuntu/macOS supervisor matrices. Final qualification separately passed its exact 15+5 scope. Historical Browser, capacity, revocation, fencing, witness, and restore workflows remain distinct evidence tracks and are not composed into aggregate, multi-controller, hostile multi-tenant, deployment, or production claims |
 | GitHub Actions runtime | Node 24 migration `6c1ddde`; E2E lock `e75869d`; CI `33850219645`; Reference `33850219700`; Candidate `33850219664`; Browser `33850219667` | All four workflows passed without the previous Node 20 or `punycode` warnings. This is CI infrastructure evidence only and adds no Provider behavior, external-caller compatibility, deployment, or production-readiness claim |
 | Browser-session release CI evidence | implementation/ledger baseline `df78739`; lock-refresh baseline `6163de1` | Repository CI runs `33712081491` and `33712412434` each passed `provider-contract`, `test`, and `docker-integration`. This is repository CI only, not browser external-caller or production evidence |
 | Browser publication baseline CI evidence | hosted harness baseline `e7e4d57`; Provider lock `83a7884` | Repository CI run `33725664862` passed `provider-contract`, `test`, and `docker-integration`. This remains repository CI; exact Browser image publication is separately evidenced by run `33724368530`, and neither run is browser caller E2E |
@@ -231,25 +171,25 @@ It does not clone, mount, or read an external source repository.
 | P2.4a0 | Artifact/usage protected-admission authority reconciliation | Passed in direct-main commits `3a9d8b7`, `7e00715`, and `2aba87f`; CI `32819717542` passed | Retain 33-case Suite, lock, guard classification, descriptor digest, async outcome, safe error, and route-absence regression |
 | P2.4a1 | Operation aggregation and evidence-read authority reconciliation | Passed in direct-main commits `3846c9e`, `6f549c2`, and `dbea0e8`; CI `32823783136` passed | Retain 35-case Suite and locked pending/outcome-unknown/unavailable/expired state matrices; no runtime implementation claim |
 | P2.4a2 | Artifact/usage Provider application and operation-family component | Passed for bounded provider-local application/repository/reader evidence in direct-main commits `152033f`, `0440272`, and `4d0bb70`; CI `32827387303` passed | Retain durable accept-before-dispatch, CAS/generation/fencing, restart/expiry/corruption, usage operation correlation, all-family aggregation, and duplicate-ID fail-closed evidence; no HTTP composition |
-| P2.4a | Artifact/usage Provider transport composition | Passed for bounded component evidence; post-push CI `32838784395` passed | Retain the artifact-stage preflight evidence; create/session ordering is independently covered by P2.5c. Obtain separately supplied external-caller evidence; no aggregate, tenancy, deployment, or production claim |
+| P2.4a | Artifact/usage Provider transport composition | Passed for bounded component evidence; post-push CI `32838784395` passed | Retain artifact-stage preflight and create/session ordering regressions. The exact independently supplied caller result is recorded separately under P2.7; this slice makes no aggregate, tenancy, deployment, or production claim |
 | P2.5a | Coding/shell vertical-composition authority and delivery plan | Passed as design evidence in ADR 0015 and `docs/plan/p2.5-coding-shell-vertical-composition.md`; no Contract, config, runtime, route, or advertisement behavior changed | Retain the ownership and evidence boundaries through P2.5b-i |
 | P2.5b | Coding/shell Contract profile reconciliation | Contract authority committed as `22a148e`; projection/lock committed as `123d16a`; full local gates and CI `32924361132` passed | Retain Contract/profile regression. Runtime composition and startup advertisement remain disabled |
 | P2.5c | Create/session mutation preflight ordering | Transport correction `6c2962b`, Suite mapping `6340604`, and CI `32926181615` pass the slice gates | Retain admission-ordering regression through later verticals. This slice itself makes no dispatch, runtime, external-caller, or production claim |
 | P2.5d | Provider runtime foundation | Passed for single-controller development evidence in `de18787`; evidence commit `e3a8265` and post-push CI `32929140044` passed | Retain Provider/local `/instances` separation, real Docker integration, restart/unknown/cleanup evidence, empty advertisement, and production rejection through P2.5e-h |
-| P2.5e | Exec vertical composition | Passed in `5917a57`; evidence baseline `2f7a79b` and CI `32937530059` passed | Retain exec admission/runtime/recovery matrices and empty advertisement. Terminal runtime work continues under P2.5f; external caller, aggregate, reliability, tenancy, deployment, and production claims remain open |
+| P2.5e | Exec vertical composition | Passed in `5917a57`; evidence baseline `2f7a79b` and CI `32937530059` passed | Retain exec admission/runtime/recovery matrices and the slice's empty-advertisement boundary. P2.7 later exercised the exact external flow separately; aggregate, reliability, tenancy, deployment, and production claims remain open |
 | P2.5f0 | Terminal/Gateway authority, data-plane, recovery, and deployment audit | Complete as design evidence; no behavior or advertisement changed | Retain the reconnect and ownership boundaries through P2.5f1-f7 |
 | P2.5f1 | Reconnectable terminal runtime port and Docker adapter | Passed local and repository CI gates in implementation `6778d3c`, evidence baseline `66dd3d1`, and CI `33033284420` | Retain the runtime identity/reconnect boundary; do not promote runtime-adapter evidence to a terminal/Gateway vertical claim |
 | P2.5f2 | Durable session coordination and repository migration | Passed local and repository CI gates in implementation `ccffd52`, evidence baseline `3abefd4`, and CI `33045725476` | Retain the single-controller, separate-repository, no-command-composition boundary |
 | P2.5f3 | Opaque reference registry and resolver | Passed local and repository CI gates in implementation `b1acdd1`, evidence baseline `7138a4c`, and CI `33059304542` | Retain the separate non-atomic session/reference stores and no-command-composition boundary through f4-f7 |
 | P2.5f4 | WebSocket and terminal stream adapters | Local component/full regression gates and CI `33064864447` passed in implementation `14f14cc` and evidence baseline `1d9da67` | Compose f5 only with caller-owned authorization, revocation, and recorder ports. Retain no-command-composition/no-external-caller boundary |
 | P2.5f5 | Gateway composition | Local composition gate and CI `33067526022` passed in implementation `fdfc771` and evidence baseline `754c57d` | Retain caller-owned policy and no-public-Gateway/no-external-caller boundary; f6 command composition does not weaken that boundary |
-| P2.5f6 | Development terminal command configuration and process lifecycle | Local evidence passes in `c4c7cbc` and `8a794c0`; evidence baseline `cefbc74` passed repository CI `33134521467` | Retain default-disabled/single-controller/no-public-Gateway boundary; f7 and P2.5g evidence are recorded separately, while readiness-derived advertisement and independent caller E2E remain open |
+| P2.5f6 | Development terminal command configuration and process lifecycle | Local evidence passes in `c4c7cbc` and `8a794c0`; evidence baseline `cefbc74` passed repository CI `33134521467` | Retain default-disabled/single-controller/no-public-Gateway boundary. Later readiness and independent caller evidence are separate P2.5h/P2.7 results and do not broaden this slice |
 | P2.5f7 | Terminal/Gateway vertical evidence gate | Local single-controller Docker/race/restart/reconnect gate passes in `0e8b284`; evidence baseline `cefbc74` passed repository CI `33134521467` | Retain same-repository test boundary and no-public-Gateway/no-external-caller claims; P2.5g artifact/usage evidence is recorded separately |
-| P2.5g | Artifact and usage vertical | Local gate passes in implementation `0e6e108`: default-disabled development composition, durable artifact/usage repositories, async recovery/shutdown, real Docker output confinement and private staging, partial exec-derived usage, operation aggregation, and restart evidence. Repository CI `33157119149` passed all three jobs | Retain development-only/single-controller boundaries; publication, billing, external caller, aggregate, reliability, tenancy, deployment, and production claims remain open |
+| P2.5g | Artifact and usage vertical | Local gate passes in implementation `0e6e108`: default-disabled development composition, durable artifact/usage repositories, async recovery/shutdown, real Docker output confinement and private staging, partial exec-derived usage, operation aggregation, and restart evidence. Repository CI `33157119149` passed all three jobs | Retain development-only/single-controller boundaries. Exact external-caller evidence is recorded separately under P2.7; publication, billing, aggregate, reliability, tenancy, deployment, and production claims remain open |
 | P2.5h | Readiness-derived composition and exact advertisement | Local component/projection gate passes in implementation `2c55173`: explicit opt-in config, canonical IDs, complete dependency graph validation, empty-disabled behavior, and immutable exact Contract snapshot generation. Repository CI `33159099578` passed all three jobs. The Provider command graph still deliberately lacks caller-owned WebSocket/Gateway policy | Retain fail-closed Provider ownership. The reference stack supplies policy externally for P2.5i without adding an allow-all Provider default |
 | P2.5i | Independent reference caller release gate | Current local run `20260907T044611.598221000Z` with harness/Provider `b8d4829`/`af8a505` passed 15 initial and 5 restart/resume coding/shell scenarios; hosted run `33970773414` remains historical evidence against `17ed6ca`/`b4d41c9` | Current manifest SHA-256 is `60bda2dae83053db447417cea5c5e38d4798e1e90b91fbb5cfc75d2991c6993e`; hosted artifact digest is `sha256:de2c6f2d31d9dd5a8323d82560bf0f314970c8e1825d815d224d48aac2dcba16`. Neither run contains a Browser scenario, and neither is evidence of independently implemented external-caller interoperability, durable-revocation caller behavior, aggregate conformance, multi-controller reliability, hostile multi-tenant isolation, deployment qualification, or production readiness |
-| P2.6 | Content-derived and portable Provider conformance | Historical local pass at implementation `3fe314a` and E2E lock refresh `ae476fe` for the then-current 50-case local repository profile and separate six-case remote discovery profile | Re-run the current 53-case authority from a clean committed checkout. Qualify an independently implemented caller separately; broader gates remain open |
-| P2 | Coding/remote-shell profile | Passed for the architecture's separately supplied reference caller gate. All earlier component/Contract gates retain their narrower evidence boundaries | Aggregate conformance, multi-controller reliability, hostile multi-tenant security, deployment, and production gates remain open |
+| P2.6 | Content-derived and portable Provider conformance | Historical 50-case local and six-case remote profiles passed at `3fe314a`/`ae476fe`; the current clean VCS-built 53-case local Suite passed core CI `35204434771` | No fresh current remote/E2E bundle is claimed. Independent caller qualification is separately complete under P2.7; protected/mutating remote and broader gates remain open |
+| P2 | Coding/remote-shell profile | The component/Contract/reference gates retain their exact boundaries, and the separately supplied independent P2.7 caller qualification is complete for its recorded scope | Other callers/profiles, aggregate conformance, multi-controller reliability, hostile multi-tenant security, deployment, and production gates remain open |
 | P3 | Named-platform migration | Retired by ADR 0037. Historical component evidence (`4212e88`), local candidate integration, and hosted candidate run `33970773345` remain under their original evidence identities | No release gate remains. Consumers adapt to the exact locked Provider Contract and own any shadow, canary, rollback, drain, and metric-comparison process |
 | Internal Block manifest | Declarative block configuration foundation | Passed as component evidence; no public API or runtime execution | Add a separately reviewed browser/desktop manifest and runtime image before enabling any optional capability |
 | P4 | Optional capability profiles | Browser Contract authority/projection, signed image publication, Provider-local components, separately named Browser/shared-capacity/durable-revocation caller gates, ADR 0033 component/caller evidence, ADR 0034 witnessed-v2 local/hosted caller evidence, the ADR 0035 PostgreSQL component gate, and the ADR 0036 hosted same-runner controlled-restore gate have passed within their tiers. Neither downstream profile nor the controlled-restore profile executes the Contract Suite | Production independent witness/storage and restore operations, Valkey/PostgreSQL provenance/HA, production configuration/metrics, hostile-tenant/operational evidence, deployment, and production advertisement remain later gates |
@@ -402,7 +342,9 @@ environment):
   consistency, fail-closed application/wire projection, and three new Suite
   mappings. Full race/shuffle, vet, Contract lock verification, the 38-case
   Suite, diff checks, and post-push CI `32924361132` passed. Runtime dispatch,
-  nonempty command advertisement, and external-caller evidence remain pending.
+  nonempty command advertisement, and external-caller evidence were not
+  established by that slice; the exact independent result was later recorded
+  separately under P2.7.
 - P2.5c local verification covers create and runtime-session digest-consistent
   unknown-field rejection and encoded body limits before mutation guard
   reservation, plus unchanged valid replay and stale-fencing conflicts. The
@@ -410,7 +352,8 @@ environment):
   these preflight regressions. Focused and full race/shuffle, vet, unchanged
   Contract lock verification, the mapped 38-case Suite, diff checks, and
   post-push CI `32926181615` passed. Application dispatch, runtime composition,
-  and external-caller evidence remain pending.
+  and external-caller evidence were not established by that slice; later P2.7
+  evidence remains a separate result.
 - P2.5d local verification covers a Provider-specific Docker adapter without
   importing local `instance` models or repositories; exact ownership and
   immutable-spec digests; stable read-only `/inputs`, writable `/workspace`
@@ -921,9 +864,9 @@ environment):
 
 Open:
 
-- qualify an independently implemented caller against the exact locked
-  standard. The content-derived local and remote Suites and repository-owned
-  runners are complete, but are not third-party implementation certification;
+- retain regression coverage for the exact independently qualified caller and
+  require a fresh bounded qualification for any different caller, Provider
+  revision, Contract/profile, artifact set, topology, or scenario inventory;
 - define explicit cleanup authority, prerequisites, and evidence semantics
   before adding protected or mutating remote conformance profiles;
 - complete the Provider lifecycle and session-management surface required by a

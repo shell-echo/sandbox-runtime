@@ -1,68 +1,16 @@
 # Development Standards
 
-P2.7c.2 is implemented through c2b.7: the producer builds the closed sanitized
-transcript and the report validator independently recomputes RFC 8785/SHA-256
-from `process-supervisor.json`'s `adapter_transcript_projection`. It binds the
-protocol, phases, invocations, processes, executables, configurations and field
-inventory, and checks message order, derived counts and status consistency.
-Physical byte counts, EOF/exit and process truth remain supervisor inputs, not
-independent observations made by this validator. No independent external-caller
-qualification result is claimed. c3.1 adds descriptor-backed, bounded executable
-preflight and rechecking without launching a process. The fixed 24-step plan
-has 21 completed and 3 unfinished steps. c3.2 implements the final static
-configuration commitment, exclusive custody transfer and one-shot logical phase
-admission with live descriptor rechecks. Reconstruction uses the existing
-protocol completion gate; outer-harness evidence remains open.
-c3.3 implements actual local spawn, endpoint handoff and bounded stop/reap.
-c3.4 exclusively decodes and binds the first stdout startup identity before any
-invocation or credential byte; Darwin/Linux tests execute repository helpers
-only, not an independent caller, and release identities remain assertions. c3.5
-validates the invocation against committed locations/startup requirements, then
-concurrently delivers bounded stdin and inherited-pipe payloads with EOF. c3.6
-starts one monotonic run budget before the first supervisor preflight read,
-preserves it across reconstruction, clips every case and operation deadline,
-drains bounded stderr concurrently, and accepts actual completion only after
-ordered output, terminal, stdout EOF and a clean reaped exit. c3.7 publishes
-sanitized evidence only after that completion, assigns opaque non-PID process
-identities, prevents external inputs from overriding observed adapter facts,
-and finalizes one canonical two-phase transcript. Real Darwin/arm64 and
-Linux/arm64 Lima helper tests pass. d1 now freezes a sanitized target identity,
-the exact profile-derived topology, 11 artifact requirements, all 10 ordered
-configuration identities, the numeric runtime/cleanup budget, and the 15+5
-scenario inventory before runtime setup. d2 now obtains target, artifact, and
-configuration identities only through a read-only observer, creates three
-descriptor-backed persistent stores, locks the authoritative inspector scope,
-and requires a complete zero-resource baseline before exposing prepared state.
-d3 releases mutation capability only after rechecking that state and baseline,
-passes the executor a closed identity-and-case directive with no request,
-endpoint, credential, correlation, or signing fields, and consumes exactly 15
-ordered progress results under clipped per-case and execution deadlines. It
-enforces dependencies, per-interaction wire-attempt bounds, and provisional
-transport/request counters while retaining cleanup after an unknown start.
-d4 admits reconstruction only after a terminal initial result and passes a
-closed eight-field directive containing only identities, ordered case IDs, and
-symbolic restart/preservation policy. It requires two distinct invocation IDs
-and eight unique opaque non-PID labels across the four old/new process pairs,
-rechecks persistent-store identity without reading entries, and consumes the
-five ordered reconstruction results under the original execution deadline.
-d5 adds four source-specific, read-only observer ports, binds their identities,
-41 interaction results and exact 66/17/7/1 fact projections to the locked
-profile and d2-d4 state, independently corroborates process replacement,
-transcript, shell-challenge and resource-scope facts, and derives scenario
-`passed`/`failed`/`incomplete`/`not_executed` plus conservative admission
-counters. Repository fixtures prove this component logic only; they are not
-independent caller evidence. d6 consumes the persistent cleanup obligation in a
-separate bounded context, binds the operator-owned teardown identity, closes
-local state descriptors, and requires exactly three same-scope, one-second-
-spaced zero-resource samples equal to the baseline before declaring cleanup
-successful. d7 now assembles and validates the closed evidence root as a local
-component. A separate external-caller repository has completed 7 of its 13
-local candidate checkpoints and has begun e1.7a: 10 of 15 initial cases are
-locally composed in one Caller process through acknowledged active Gateway
-revocation, while the other 3 remain `not_executed`. It pins the refreshed authority. External
-ownership/provenance, independent runtime interoperability and observations,
-the actual 15+5 run, and a qualification result remain open. The main P2.7
-plan therefore remains 21/24, with e1 in progress and e2/e3 pending.
+The first-version P2.7 plan is complete at **24/24**, and the public
+independent external-caller plan is complete at **13/13**. Hosted
+qualification run `35203241121` produced an accepted report, receipt,
+seven-file archive, and bounded `qualified` disposition for the exact recorded
+coding/shell scope. Core CI run `35204434771` passed after documentation
+closure.
+
+These results do not relax the engineering rules below. Every future behavior,
+Contract, security, deployment, or compatibility change must pass its own
+named gates and must preserve the distinction between component evidence,
+Conformance evidence, external-caller qualification, and production readiness.
 
 ## Toolchain and commands
 
@@ -112,7 +60,7 @@ an external caller executed or passed the profile. P2.7b separately locks the
 closed report schema at
 `sha256:5d97e10c8b5b2f365e275e78868d5a35d78bbdffdec05ea2f18b5c947cd429f6`
 and the validator semantics at
-`sha256:c724eaa9f3b52e1a5ba4aa5aaeb5e8b61a744818b2f56fd8ff52dfa5e1e584df`,
+`sha256:bc0b5be7aefcebb6a71871d9724cd671235b6ef2bf453a1954313547ad379ed9`,
 and tests the evidence-root, report validator, and command components. CI runs
 those component tests but does not fabricate an external qualification run.
 P2.7c.1 locks the adapter protocol schema at

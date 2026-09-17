@@ -1,82 +1,16 @@
 # Architecture
 
-P2.7c.2 is implemented through c2b.7: the producer builds the closed sanitized
-transcript and the report validator independently recomputes RFC 8785/SHA-256
-from `process-supervisor.json`'s `adapter_transcript_projection`. It binds the
-protocol, phases, invocations, processes, executables, configurations and field
-inventory, and checks message order, derived counts and status consistency.
-Physical byte counts, EOF/exit and process truth remain supervisor inputs, not
-independent observations made by this validator. No independent external-caller
-qualification result is claimed. c3.1 adds descriptor-backed, bounded executable
-preflight and rechecking without launching a process. The fixed 24-step plan
-has 21 completed and 3 unfinished steps. c3.2 implements the final static
-configuration commitment, exclusive custody transfer and one-shot logical phase
-admission with live descriptor rechecks. Reconstruction uses the existing
-protocol completion gate; outer-harness evidence remains open.
-c3.3 implements actual local spawn, endpoint handoff and bounded stop/reap.
-c3.4 exclusively decodes and binds the first stdout startup identity before any
-invocation or credential byte; Darwin/Linux tests execute repository helpers
-only, not an independent caller, and release identities remain assertions. c3.5
-validates the invocation against committed locations/startup requirements, then
-concurrently delivers bounded stdin and inherited-pipe payloads with EOF. c3.6
-starts one monotonic run budget before the first supervisor preflight read,
-preserves it across reconstruction, clips every case and operation deadline,
-drains bounded stderr concurrently, and accepts actual completion only after
-ordered output, terminal, stdout EOF and a clean reaped exit. c3.7 publishes
-sanitized evidence only after that completion, assigns opaque non-PID process
-identities, prevents external inputs from overriding observed adapter facts,
-and finalizes one canonical two-phase transcript. Real Darwin/arm64 and
-Linux/arm64 Lima helper tests pass. d1 now freezes a sanitized target identity,
-the exact profile-derived topology, 11 artifact requirements, all 10 ordered
-configuration identities, the numeric runtime/cleanup budget, and the 15+5
-scenario inventory before runtime setup. d2 now obtains target, artifact, and
-configuration identities only through a read-only observer, creates three
-descriptor-backed persistent stores, locks the authoritative inspector scope,
-and requires a complete zero-resource baseline before exposing prepared state.
-d3 releases mutation capability only after rechecking that state and baseline,
-passes the executor a closed identity-and-case directive with no request,
-endpoint, credential, correlation, or signing fields, and consumes exactly 15
-ordered progress results under clipped per-case and execution deadlines. It
-enforces dependencies, per-interaction wire-attempt bounds, and provisional
-transport/request counters while retaining cleanup after an unknown start.
-d4 admits reconstruction only after a terminal initial result and passes a
-closed eight-field directive containing only identities, ordered case IDs, and
-symbolic restart/preservation policy. It requires two distinct invocation IDs
-and eight unique opaque non-PID labels across the four old/new process pairs,
-rechecks persistent-store identity without reading entries, and consumes the
-five ordered reconstruction results under the original execution deadline.
-d5 adds four source-specific, read-only observer ports, binds their identities,
-41 interaction results and exact 66/17/7/1 fact projections to the locked
-profile and d2-d4 state, independently corroborates process replacement,
-transcript, shell-challenge and resource-scope facts, and derives scenario
-`passed`/`failed`/`incomplete`/`not_executed` plus conservative admission
-counters. Repository fixtures prove this component logic only; they are not
-independent caller evidence. d6 consumes the persistent cleanup obligation in a
-separate bounded context, binds the operator-owned teardown identity, closes
-local state descriptors, and requires exactly three same-scope, one-second-
-spaced zero-resource samples equal to the baseline before declaring cleanup
-successful. d7 now assembles and validates the closed evidence root as a local
-component. The separate public external-caller repository has completed 11 of
-its 13 candidate checkpoints through e1.8a. Public hosted run `35068957048`
-at source commit `58a211f0c167af3ec117c8cb8247bfe268bbae40` passed the
-full tests, deterministic Linux/amd64 build, authority verification, artifact
-upload, and five-subject Sigstore attestation `47846951`; the downloaded
-three-artifact bundle and its strict manifest were independently reverified.
-The e2 preflight then found two real execution blockers rather than an
-executable qualification environment: the attested candidate pins a synthetic
-`registry.invalid` runtime image, and the production command had not composed
-the locked terminal-connect route. The current worktree closes the latter with
-opt-in protected WebSocket composition and adds a repository-owned
-`profiles/coding-shell/image` definition with locked amd64/arm64 base manifests
-and a local native-Docker reproducibility/runtime gate. This remains component
-evidence, not an e2 run: the image has not been published or attested, and the
-external candidate has not yet been corrected and rebuilt against its
-immutable release digest.
-All 15 initial and all 5 reconstruction cases are locally composed, but
-operator-owned resource teardown, stable zero-resource inspection, independent
-runtime observations, the actual supervised 15+5 run, and a qualification
-result remain open. The main P2.7 plan is therefore 22/24, with e1 complete and
-e2/e3 pending.
+The fixed P2.7 delivery plan is complete at **24/24**, and the independently
+owned external-caller plan is complete at **13/13**. Final hosted run
+`35203241121` qualified the exact coding/shell caller and Provider revisions,
+profile, topology, artifacts, 15 initial scenarios, 5 reconstruction
+scenarios, 91 required observations, and stable zero-resource cleanup.
+
+This result closes the named first-version interoperability gate. It does not
+establish aggregate conformance, multi-controller correctness, hostile
+multi-tenant isolation, HA, deployment readiness, or production readiness.
+Detailed identities and evidence are maintained in [`STATUS.md`](STATUS.md);
+the architectural ownership and release boundaries below remain authoritative.
 
 ## Purpose
 
@@ -663,17 +597,17 @@ advertisement, and optional-profile gates remain open:
 
 | Area | Current state | Required direction |
 | --- | --- | --- |
-| Conformance | Current Contract revision `22ba6987` contains a content-derived 53-case local Suite and unchanged six-case remote Suite. Contract verification, root tests/vet, and E2E lock logic pass in the worktree; clean VCS-built 53-case and E2E parent-lock/check gates remain pending. The prior P2.6 50-case pass at `3fe314a`/`ae476fe` remains historical evidence. ADR 0040 locks the refreshed P2.7 profile/report/protocol authorities; local harness d1-d7 plus independently supplied e1 provenance are 22/24 complete. The public external-caller repository has completed 11/13 candidate checkpoints through e1.8a. Hosted run `35068957048` at source `58a211f0c167af3ec117c8cb8247bfe268bbae40` passed the full test/build/authority pipeline and produced verified five-subject Sigstore attestation `47846951`. Operator-owned zero-resource teardown proof and independent observer-backed scenario dispositions remain absent. | Execute the separately authorized e2 supervised 15+5 run and teardown before e3 validation and conclusion. Run the current Contract/E2E gates from a clean committed checkout; retain aggregate, multi-controller, multi-tenant, HA, deployment, and production gates. |
-| Protected admission | ADR 0038 requires one explicit issuer-scoped caller trust domain per listener, Provider-local audience/revision anchors, and 1..32 frozen verification keys. Its repository-local Contract, projection, configuration, conformance, E2E lock, overlap-key, and same-repository reference gates pass. | Retain exact authentication/authorization precedence. Treat multi-issuer admission and independently implemented external-caller interoperability as separate future gates. |
+| Conformance | Contract revision `22ba6987` contains the content-derived 53-case local Suite and six-case remote discovery Suite. Contract verification, projections, the clean VCS-built local Suite, race tests, and vet passed core CI `35204434771`. P2.7 is **24/24**, the public external caller is **13/13**, and hosted run `35203241121` produced the accepted report, receipt, archive, and bounded disposition after all 15+5 scenarios, 91 observations, and stable cleanup passed. | Retain exact Contract and qualification regression. Define separate authority and evidence for protected/mutating remote profiles, other callers, aggregate conformance, multi-controller, hostile multi-tenant, HA, deployment, and production readiness. |
+| Protected admission | ADR 0038 requires one explicit issuer-scoped caller trust domain per listener, Provider-local audience/revision anchors, and 1..32 frozen verification keys. Its repository-local gates pass, and the exact P2.7 caller exercised the protected coding/shell flow successfully. | Retain exact authentication/authorization precedence. Treat multi-issuer admission, production identity operations, and qualification of other callers as separate future gates. |
 | Backend abstraction | Local `instance.Driver` remains separate; the Provider lifecycle has its own fake and Docker development adapters, while exec and terminal use focused Provider-only runtime ports. | Add future snapshot capability ports without reusing `/instances` models and retain narrow optional interfaces. |
 | Lifecycle recovery | Provider file persistence and Docker observation reconcile pending/unknown create work for one controller. | Retain unknown-outcome evidence; add transactional production storage before multi-controller operation. |
 | Persistence | Memory and atomically replaced file repository. | Retain for development; introduce transactional production storage before multi-controller operation. |
-| API | Local `/instances` and the protected Provider v1 surface are separate; authorized coding/shell lifecycle/session/artifact/usage routes have bounded projections, and development exec routes reach a real Docker executor. The current worktree additionally composes the locked, controller-only `GET /v1/runtime-sessions:connect` route behind explicit terminal configuration; it is not a public end-user Gateway. The default-disabled Browser command graph composes the protected Browser routes and runtime dependencies; the public caller-owned Browser Gateway exists only in the reference deployment. | Finish the real e2 image/candidate/run prerequisites and define deployable caller-owned Gateway configuration without moving user/tenant authorization into the Provider. |
+| API | Local `/instances` and the protected Provider v1 surface are separate. Authorized coding/shell lifecycle/session/artifact/usage routes and the locked controller-only `GET /v1/runtime-sessions:connect` route are composed; the latter was exercised by the exact qualified external caller and remains distinct from a public end-user Gateway. The default-disabled Browser command graph remains a separate profile. | Define deployable caller-owned Gateway configuration and production storage/operations without moving user or tenant authorization into the Provider. |
 | Capabilities | Empty, terminal-only, atomic coding/shell, their optional locked terminal-connect variants, and browser-only snapshots are accepted. The command advertises terminal-connect only when its protected resolver/WebSocket connector is composed. The Browser-only reference deployment advertises the exact locked shape for its caller test; production command startup still does not advertise Browser. | Retain fail-closed advertisement/composition equality; advertise Browser in production only after the remaining profile-specific security, concurrency, deployment, and operational gates pass. |
 | Execution | P2.5e/g/h compose durable exec/cancel/result/operation handling, real Docker execution, private bounded capture, cancellation, expiry, reconciliation, bounded exec-derived usage, artifact staging, and readiness-derived exact advertisement for one development controller. The separately versioned coding/shell reference caller gate passes locally and hosted. | Replace development single-controller persistence and partial collectors with reviewed production storage, retention, and reconciliation while keeping Artifact publication, billing, and aggregate operation truth with the caller. |
-| Terminal | P2.5f1-f7 compose the backend-neutral terminal runtime, PTY-owning guest broker, Docker adapter, durable session/reference state, bounded WebSocket/private-stream adapters, caller-owned Gateway policy ports, default-disabled command graph, and same-shell process-reconstruction evidence. The current e2 prerequisite worktree adds the optional protected Provider terminal-connect transport with exact retained-handoff equality, fresh resolver/attach checks, binary-only bounded forwarding, and expiry closure. The separately versioned coding/shell reference caller gate passes locally and hosted. | Supply the digest-pinned real runtime image, refreshed external candidate provenance, actual e2 observations/cleanup, deployable caller-owned authorization/revocation/recording configuration, and transactional multi-controller storage; do not promote component or reference evidence to deployment or production evidence. |
-| Workspace | The Provider Docker development adapter supplies `/inputs`, `/workspace`, `/outputs`, and bounded tmpfs `/tmp` with owned cleanup; exec consumes that runtime without exposing host paths. The repository-owned coding/shell image definition now locks those guest paths and locally exercises shell, artifact, and image-baked terminal-broker behavior. | Publish and attest the exact multi-platform image, then bind the external candidate and e2 resource observer to its immutable digest; add artifact consumers, capacity enforcement, and stronger isolation evidence. |
-| Security | Docker defaults already drop capabilities, use non-root/read-only root, disable networking, and limit resources. The coding/shell image local gate applies those controls as numeric `65532:65532` and verifies `network=none`; it is not hosted release or deployment evidence. | Add signed image provenance, policy enforcement, stronger isolation profiles, secret grants, egress controls, audit evidence, and production auth. |
+| Terminal | P2.5f1-f7 and the protected terminal-connect route compose the terminal runtime, durable session/reference state, fresh retained-handoff checks, binary-only bounded forwarding, expiry closure, and caller-owned Gateway boundary. Final P2.7 run `35203241121` exercised the independently owned caller/Gateway byte path and reconstruction within the exact qualified scope. | Add deployable production Gateway configuration and transactional multi-controller storage; do not generalize the bounded qualification to aggregate or production evidence. |
+| Workspace | The Provider Docker adapter supplies stable `/inputs`, `/workspace`, `/outputs`, and bounded tmpfs `/tmp` without exposing host paths. The dual-platform coding/shell image was published as OCI index `sha256:1996e44f8ddc464f22556bd57f1c69079fe6b1a821b65bd9be24f86619c31bb1`, attested, independently verified, pinned by the caller, and exercised in the final qualification. | Add production artifact consumers, capacity enforcement, lifecycle closure, and stronger isolation evidence as separate scopes. |
+| Security | The qualified Docker runtime used numeric non-root identity, read-only root, disabled networking, dropped capabilities, `no-new-privileges`, and bounded CPU, memory, swap, PIDs, and tmpfs; image provenance and the exact runtime observations are retained in the qualification evidence. | Add secrets policy, controlled egress where required, stronger isolation, production authentication, threat-model review, and hostile-tenant evidence before any production claim. |
 | Events and usage | Durable lifecycle events and bounded usage-evidence components exist without a complete runtime collector composition. | Complete collection/reconciliation while leaving platform accounting authority outside the Provider. |
 | Snapshots/browser/desktop | Browser Contract authority/projection, exact signed image, Provider-local session/application/reference/usage, Docker adapter, provenance verifier, restricted-egress provisioner, create-policy binding, protected handlers, caller-owned Gateway, default-disabled command graph, and hosted 13+5 Browser reference-caller path have named evidence. The Gateway has explicit process-local total/per-session post-authorization capacity, pre-upgrade service limits, bounded listener/TLS/HTTP behavior, and authenticated-capacity plus exact-grant revocation ports with process-local and Redis-compatible adapters. ADR 0031/`9434540` plus local arm64 run `20260905T080725.227680000Z` and hosted amd64 run `33955436968` add real Valkey plus two-independent-Gateway shared-capacity evidence. ADR 0032/`c0a55d1` adds durable revocation component evidence; harness/Gateway `e952ef9`, local arm64 run `20260905T095109.569973000Z`, and hosted amd64 run `33959122456` pass its separate seven-scenario two-Gateway/independent-revoker caller gate. ADR 0033/`b4d41c9` adds downstream action-fence/private-ingress/Redis adapter component evidence; harness/run `550c785`/`20260906T050213.016063000Z` and `2cadc53`/`34013982796` pass its separate 13-scenario v1 caller gate on arm64 and amd64. ADR 0034 separately adds witnessed-v2 deletion/rollback-detection component and pinned-Valkey adapter evidence; fixed harness `059357c` passes its independently locked 18-scenario real-Chromium caller gate in local run `20260906T100233.295973000Z` on arm64 and hosted run `34026680591` on amd64. ADR 0035/`3ff58dc` adds the PostgreSQL witness, exact least-privilege migration, and strict read-only restore-verification component; hosted run `34031784793` passes its real PostgreSQL and pinned-Valkey gate. ADR 0036 adds the separately locked same-runner controlled-restore caller profile; PR #47 merge `a0cddf4` and post-merge run `34038556283` pass all 18 scenarios with `same_runner=true`, `independent_failure_domain=false`, and `suite_exercised=false`. Contract identity remains pinned while the ADR 0033, ADR 0034, and ADR 0036 caller profiles leave the Suite unexercised, and the ADR 0032 echo fixture is not Browser/CDP. The restricted-egress Gateway remains distinct from the caller-owned Gateway. Production Browser advertisement/public Gateway and authenticated v2 ingress deployment, production independent witness/storage and restore operations, Valkey/PostgreSQL provenance and HA/failover, aggregate, multi-controller, hostile multi-tenant, deployment, and production gates remain open. Snapshots and desktop remain unauthorized optional behavior. | Prove independent PostgreSQL/Valkey failure and backup domains, HA/failover, production quarantine/restore controls, hostile-tenant behavior, ACLs, metrics, and deployable storage/configuration before production advertisement; begin the Desktop authority audit only after the Browser readiness record is complete. |
 
@@ -730,17 +664,18 @@ conformance tests pass.
 - implement terminal sessions through an opaque internal endpoint;
 - integrate artifact staging without making the provider the artifact authority.
 
-Release gate: a separately supplied caller can run its coding and shell
-scenarios against this provider without endpoint leakage or cross-tenant access.
-The repository's generic reference caller satisfies only the named reference
-gate; it does not establish interoperability with an independently implemented
-external platform.
+Release gate: satisfied for the exact P2.7 scope by independently supplied
+caller revision `b3ebcc783e5db20395e29b029e0eb55f7819b49b` against Provider
+revision `170459266af5f4fad359ca8c63f2ae19741055c5`. Hosted run `35203241121`
+passed all 15+5 scenarios without endpoint leakage or cross-tenant access and
+produced the accepted bounded qualification result. Other callers and broader
+reliability, tenancy, deployment, and production claims remain separate.
 
 #### P2.6: portable Provider conformance
 
 - derive and lock the local and remote Suite digests from RFC 8785 canonical
   content;
-- execute the then-current local 50-case inventory from the verifier's immutable snapshot
+- execute the lock-selected local Suite inventory from the verifier's immutable snapshot
   against a bounded, read-only archive of the exact clean Runner revision;
 - require each local case to declare an exact mapped-test count and observe all
   matching tests as distinct, started, non-skipped passes;
@@ -754,15 +689,14 @@ external platform.
   method-probe flag only after a POST, PUT, PATCH, or DELETE request is actually
   written.
 
-The historical release gate passed locally at implementation `3fe314a` and E2E lock
-refresh `ae476fe`: the Contract verifier, clean VCS-built local and remote
-Runners, full repository and E2E race/shuffle and vet, parent-lock check, and
-all eight E2E `-check` commands passed. This closes only that P2.6 local
-`repository-go-test` and remote discovery profiles. It does not establish an
-independently implemented caller, protected or
-mutating remote conformance, aggregate conformance, multi-controller
-reliability, hostile multi-tenant safety, HA, deployment, or production
-readiness.
+The historical 50-case local and six-case remote release gate passed at
+implementation `3fe314a` and E2E lock refresh `ae476fe`. The current
+content-derived 53-case local Suite, Contract verification, projections, race
+suite, and vet subsequently passed core CI `35204434771`. These results remain
+Suite evidence; the independently implemented caller result is recorded
+separately under P2.7, and protected/mutating remote, aggregate,
+multi-controller, hostile multi-tenant, HA, deployment, and production claims
+remain outside P2.6.
 
 #### P2.7: independent external caller qualification
 
@@ -789,7 +723,7 @@ P2.7a locks the verified machine-readable definition authority at
 P2.7b locks the closed report schema at
 `sha256:5d97e10c8b5b2f365e275e78868d5a35d78bbdffdec05ea2f18b5c947cd429f6`
 and validator semantics at
-`sha256:c724eaa9f3b52e1a5ba4aa5aaeb5e8b61a744818b2f56fd8ff52dfa5e1e584df`,
+`sha256:bc0b5be7aefcebb6a71871d9724cd671235b6ef2bf453a1954313547ad379ed9`,
 and implements the bounded evidence-root validator and non-overwriting sanitized
 receipt. P2.7b locks only this evidence definition, not an external compatibility
 result. P2.7c.1 locks the adapter protocol schema at
@@ -831,14 +765,13 @@ output, requires stdout EOF, and completes only after a supplied clean-exit
 event. It does not perform the bounded wait, recompute the transcript, launch
 processes, or supply execution evidence.
 Adapter output remains a caller-owner assertion; final scenario status requires
-independent observations. Overall P2.7 remains in progress until the adapter
-runtime message-order state machine, process supervisor, disposable harness, and independently
-supplied execution exist, and no external caller has passed this gate. The
-same-repository reference caller
-cannot satisfy the independence requirement. The schema and semantics digests
-identify data authorities; they do not attest the validator executable,
-repository build, or host toolchain used for a particular run, which remain
-trust inputs unless separately provenanced.
+independent observations. Those runtime, supervisor, disposable-harness, and
+independently supplied execution requirements were completed by hosted run
+`35203241121`. Its accepted evidence qualifies only the exact recorded caller,
+Provider, artifacts, topology, profile, and scenarios. The same-repository
+reference caller still cannot satisfy the independence requirement. Schema and
+semantics digests identify data authorities; they do not by themselves attest a
+validator executable, repository build, or host toolchain.
 The Provider observer binds the fixed coding/shell sandbox-resource request
 projection to the observed `create-sandbox` interaction. That projection must
 match the profile and proves neither runtime allocation nor resource-limit
@@ -864,7 +797,8 @@ Because Provider v1 has no terminate or lease-control route, P2.7 cleanup is
 operator-owned run-namespace teardown within the disposable qualification
 target, not a new Provider wire behavior or lifecycle-closure result.
 
-Release gate: the content-addressed profile locks the 15 initial and 5
+Release gate: **satisfied for the exact recorded P2.7 scope**. The
+content-addressed profile locks the 15 initial and 5
 reconstruction cases with stable IDs and exact expectations; the closed report
 schema and validator semantics lock their evidence representation and cross-file
 bindings. The
@@ -883,8 +817,13 @@ the harness proves a dedicated run namespace and numeric resource/time/evidence
 bounds; after every success, failure, cancellation, or unknown outcome, bounded
 operator teardown and the pinned authoritative inspector prove zero run-owned
 runtime resources. The exact sanitized evidence set passes the closed validator.
-Missing external inputs or an unavailable environment leaves the gate without a
-result; it cannot be replaced by repository-owned caller evidence.
+The accepted result is artifact `10488622806`, with evidence archive digest
+`sha256:ada1cae128a41e6b694ff413aab179c0eff94b42663ece8233dbb358e319e9bd`
+and result-envelope digest
+`sha256:d5e6fd528f2302252a38f49aa466c85767106a8bcef430120f230a8127f96758`.
+Missing inputs or an unavailable environment would still leave any different
+caller/profile gate without a result; repository-owned caller evidence cannot
+substitute for it.
 
 ### Phase 3: named-platform migration (retired)
 

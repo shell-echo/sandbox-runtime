@@ -58,4 +58,7 @@ side-effect-free admission reads that do not consume mutation guard state.
   operation Schema can carry the required reconciliation state.
 - This decision adds no application, repository, handler, router, staging
   dispatch, usage collection, publication, billing, or external integration.
-- P2.4a transport and the Phase 2 external-caller release gate remain open.
+- This decision left P2.4a transport and the Phase 2 external-caller release
+  gate open at the time. The exact coding/shell external-caller gate was later
+  satisfied separately by the bounded P2.7 result; this ADR does not inherit or
+  broaden that qualification.
