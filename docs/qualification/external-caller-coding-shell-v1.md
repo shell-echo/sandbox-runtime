@@ -69,7 +69,7 @@ Profile ID: `sandbox-runtime-external-caller-coding-shell-v1`
 Profile version: `1.0.0`
 
 Profile digest:
-`sha256:4effea27fd3d7668b88eeb95c69e19b51556914b7949b1a39ce522b2aec46c14`
+`sha256:ec113d31612dbb7cc0e9461925170f74f33722bb2efb237dbc68aa89f2d60231`
 
 Status: P2.7a machine-readable definition authority, P2.7b closed report
 schema/evidence validator, and P2.7c.1 content-addressed protocol definition are
@@ -109,7 +109,7 @@ expected statuses and error-code policies, dependencies, observations, resource
 bounds, cleanup, and non-claims. Its closed
 [`profile.schema.json`](../../qualification/external-caller-coding-shell-v1/profile.schema.json)
 has raw-byte digest
-`sha256:2ad01731b69246399d6f04048593f31da9e4118b1dff99a81551b0c9b5972d77`.
+`sha256:c98f77473ff110fc54ef6a08f66bbe1b0a36c41ee71bcce8d68b9430d22a1798`.
 The repository profile verifier validates the closed shape, semantic
 cross-field rules, exact 15+5 case, 41-interaction, and 91-observation inventory,
 schema digest, and content digest. This document explains the locked profile but
@@ -119,11 +119,11 @@ coordinated reference update.
 The closed adapter process
 [`schema`](../../qualification/external-caller-coding-shell-v1/adapter-protocol.schema.json)
 has raw digest
-`sha256:d12b477cd540e02c6a7e2f8eb77b0405b717c15e98a0f144b2d63f705ff95969`.
+`sha256:fdee270ca27003693b2ce504da769c9779825312e1dd4e06b5caf8578f5ee03c`.
 Its locked
 [`semantics`](../../qualification/external-caller-coding-shell-v1/adapter-protocol.semantics.json)
 has raw digest
-`sha256:10cd42017aee60b620dbbb7394a20c2a387983468a865a8d12a572f861d07662`.
+`sha256:997c49cd1a5b2c050d48333a973dd78b611221f869bf709cf6d1a8d771795a99`.
 These files define only the harness-to-adapter process protocol. They neither
 extend the Provider Contract nor show that any process executed it.
 The report validator compares the protocol ID, version, schema digest, and
@@ -237,7 +237,7 @@ selected authority; it does not claim that an adapter emitted startup identity.
 The closed qualification report authority is
 [`report.schema.json`](../../qualification/external-caller-coding-shell-v1/report.schema.json),
 with raw-byte digest
-`sha256:cd51ccf0aea0bc31b11ff4f288751fc7df0f0dd081860efc305182ea61f842e4`.
+`sha256:5d97e10c8b5b2f365e275e78868d5a35d78bbdffdec05ea2f18b5c947cd429f6`.
 The separate closed
 [`validator.semantics.json`](../../qualification/external-caller-coding-shell-v1/validator.semantics.json)
 has raw-byte digest
@@ -565,10 +565,14 @@ missing, contradicted, or unbound evidence cannot be hidden behind a passing
 scenario status.
 
 Provider polling evidence distinguishes the terminal response from every
-bounded transient response. A `404` or `503` is accepted only where the locked
-Contract authorizes it for that state; required `Retry-After`, retryability,
-deadline rechecks, and retry count are observed rather than collapsed into the
-eventual `200`. Cancellation evidence reconciles the accepted `cancel_exec`
+bounded intermediate response. A successful `200` operation or sandbox read
+may be intermediate only when the observed document remains in a
+Contract-defined nonterminal state; it is non-retryable at the HTTP layer even
+though the caller must continue semantic polling. A `404` or `503` is accepted
+only where the locked Contract authorizes it for that state; required
+`Retry-After`, retryability, deadline rechecks, and retry count are observed
+rather than collapsed into the eventual terminal `200`. Cancellation evidence
+reconciles the accepted `cancel_exec`
 operation as well as the target operation and retained exec result. An accepted
 cancel request alone is never a completed-cancellation observation.
 

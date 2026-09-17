@@ -339,7 +339,7 @@ func startupIdentityForCodecTest() map[string]any {
 		"contract_tree":                       "c9a7054d7c8e7f4b6e32f38175ceedddc48c2d38",
 		"profile_id":                          "sandbox-runtime-external-caller-coding-shell-v1",
 		"profile_version":                     "1.0.0",
-		"profile_digest":                      "sha256:4effea27fd3d7668b88eeb95c69e19b51556914b7949b1a39ce522b2aec46c14",
+		"profile_digest":                      "sha256:ec113d31612dbb7cc0e9461925170f74f33722bb2efb237dbc68aa89f2d60231",
 		"expected_values_injected_by_harness": false,
 		"credential_channel_requirements": []any{map[string]any{
 			"channel_id": "controller-a-provider", "role": "provider_credentials", "actor": "controller_a",

@@ -435,7 +435,7 @@ func validateObservedInteractions(source, surface string, expected []qualificati
 			if !validObservedOutcome(transient) {
 				return nil, nil, fmt.Errorf("%s interaction %q has an invalid transient outcome", source, candidate.InteractionID)
 			}
-			outcomesMatch = outcomesMatch && transient.Retryable && observedOutcomeAllowed(transient, want.TransientOutcomes)
+			outcomesMatch = outcomesMatch && observedOutcomeAllowed(transient, want.TransientOutcomes)
 		}
 		if _, duplicate := byID[candidate.InteractionID]; duplicate {
 			return nil, nil, fmt.Errorf("%s duplicates interaction %q", source, candidate.InteractionID)
@@ -713,7 +713,7 @@ func observedInteractionMatchesEvidence(actual ObservedInteraction, expected qua
 		return false
 	}
 	for _, outcome := range actual.TransientOutcomes {
-		if !outcome.Retryable || !observedOutcomeAllowed(outcome, expected.TransientOutcomes) {
+		if !observedOutcomeAllowed(outcome, expected.TransientOutcomes) {
 			return false
 		}
 	}

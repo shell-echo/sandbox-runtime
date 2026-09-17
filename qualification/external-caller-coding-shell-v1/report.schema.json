@@ -598,8 +598,8 @@
       "properties": {
         "profile_id": {"const": "sandbox-runtime-external-caller-coding-shell-v1"},
         "profile_version": {"const": "1.0.0"},
-        "profile_digest": {"const": "sha256:4effea27fd3d7668b88eeb95c69e19b51556914b7949b1a39ce522b2aec46c14"},
-        "schema_digest": {"const": "sha256:2ad01731b69246399d6f04048593f31da9e4118b1dff99a81551b0c9b5972d77"},
+        "profile_digest": {"const": "sha256:ec113d31612dbb7cc0e9461925170f74f33722bb2efb237dbc68aa89f2d60231"},
+        "schema_digest": {"const": "sha256:c98f77473ff110fc54ef6a08f66bbe1b0a36c41ee71bcce8d68b9430d22a1798"},
         "schema_digest_profile": {"const": "sha256-raw-file-bytes-v1"}
       }
     },
@@ -788,7 +788,7 @@
         "contract_revision": {"const": "22ba6987ea5fbc37d53942720133c0acad199edd"},
         "contract_tree": {"const": "c9a7054d7c8e7f4b6e32f38175ceedddc48c2d38"},
         "profile_id": {"const": "sandbox-runtime-external-caller-coding-shell-v1"},
-        "profile_digest": {"const": "sha256:4effea27fd3d7668b88eeb95c69e19b51556914b7949b1a39ce522b2aec46c14"},
+        "profile_digest": {"const": "sha256:ec113d31612dbb7cc0e9461925170f74f33722bb2efb237dbc68aa89f2d60231"},
         "adapter_protocol_id": {"const": "sandbox-runtime-external-caller-adapter-v1"},
         "adapter_protocol_version": {"const": "1.0.0"},
         "adapter_protocol_schema_digest": {"$ref": "#/$defs/digest"},

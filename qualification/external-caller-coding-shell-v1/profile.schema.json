@@ -1228,7 +1228,7 @@
     "transientOutcome": {
       "$ref": "#/$defs/outcome",
       "properties": {
-        "retryable": {"const": true}
+        "retryable": {"type": "boolean"}
       }
     },
     "providerFinalOutcome": {

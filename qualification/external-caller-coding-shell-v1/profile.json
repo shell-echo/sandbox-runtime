@@ -5,7 +5,7 @@
   "profile_digest_profile": "rfc8785-full-document-excluding-profile-digest-v1",
   "profile_schema": {
     "path": "qualification/external-caller-coding-shell-v1/profile.schema.json",
-    "digest": "sha256:2ad01731b69246399d6f04048593f31da9e4118b1dff99a81551b0c9b5972d77"
+    "digest": "sha256:c98f77473ff110fc54ef6a08f66bbe1b0a36c41ee71bcce8d68b9430d22a1798"
   },
   "contract": {
     "namespace": "urn:shell-echo:sandbox-runtime:provider-v1",
@@ -798,6 +798,14 @@
               "transient_outcomes": [
                 {
                   "transport": "http-response",
+                  "status_code": 200,
+                  "error_code_policy": "none",
+                  "error_codes": [],
+                  "retryable": false,
+                  "retry_after_required": false
+                },
+                {
+                  "transport": "http-response",
                   "status_code": 503,
                   "error_code_policy": "contract-unconstrained",
                   "error_codes": [],
@@ -838,6 +846,14 @@
                 }
               ],
               "transient_outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 200,
+                  "error_code_policy": "none",
+                  "error_codes": [],
+                  "retryable": false,
+                  "retry_after_required": false
+                },
                 {
                   "transport": "http-response",
                   "status_code": 503,
@@ -972,6 +988,14 @@
                 }
               ],
               "transient_outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 200,
+                  "error_code_policy": "none",
+                  "error_codes": [],
+                  "retryable": false,
+                  "retry_after_required": false
+                },
                 {
                   "transport": "http-response",
                   "status_code": 503,
@@ -1317,6 +1341,14 @@
               "transient_outcomes": [
                 {
                   "transport": "http-response",
+                  "status_code": 200,
+                  "error_code_policy": "none",
+                  "error_codes": [],
+                  "retryable": false,
+                  "retry_after_required": false
+                },
+                {
+                  "transport": "http-response",
                   "status_code": 503,
                   "error_code_policy": "contract-unconstrained",
                   "error_codes": [],
@@ -1357,6 +1389,14 @@
                 }
               ],
               "transient_outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 200,
+                  "error_code_policy": "none",
+                  "error_codes": [],
+                  "retryable": false,
+                  "retry_after_required": false
+                },
                 {
                   "transport": "http-response",
                   "status_code": 503,
@@ -1512,6 +1552,14 @@
                 }
               ],
               "transient_outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 200,
+                  "error_code_policy": "none",
+                  "error_codes": [],
+                  "retryable": false,
+                  "retry_after_required": false
+                },
                 {
                   "transport": "http-response",
                   "status_code": 503,
@@ -2005,6 +2053,14 @@
               "transient_outcomes": [
                 {
                   "transport": "http-response",
+                  "status_code": 200,
+                  "error_code_policy": "none",
+                  "error_codes": [],
+                  "retryable": false,
+                  "retry_after_required": false
+                },
+                {
+                  "transport": "http-response",
                   "status_code": 503,
                   "error_code_policy": "contract-unconstrained",
                   "error_codes": [],
@@ -2412,6 +2468,14 @@
               "transient_outcomes": [
                 {
                   "transport": "http-response",
+                  "status_code": 200,
+                  "error_code_policy": "none",
+                  "error_codes": [],
+                  "retryable": false,
+                  "retry_after_required": false
+                },
+                {
+                  "transport": "http-response",
                   "status_code": 503,
                   "error_code_policy": "contract-unconstrained",
                   "error_codes": [],
@@ -2466,6 +2530,14 @@
                 }
               ],
               "transient_outcomes": [
+                {
+                  "transport": "http-response",
+                  "status_code": 200,
+                  "error_code_policy": "none",
+                  "error_codes": [],
+                  "retryable": false,
+                  "retry_after_required": false
+                },
                 {
                   "transport": "http-response",
                   "status_code": 503,
@@ -2892,5 +2964,5 @@
     "deployment-qualification",
     "production-readiness"
   ],
-  "profile_digest": "sha256:4effea27fd3d7668b88eeb95c69e19b51556914b7949b1a39ce522b2aec46c14"
+  "profile_digest": "sha256:ec113d31612dbb7cc0e9461925170f74f33722bb2efb237dbc68aa89f2d60231"
 }

@@ -230,6 +230,9 @@ func projectProvider(expected []qualificationprofile.InteractionObservationRequi
 			if event.Actor != want.Actor || event.Method != want.Method || event.Route != want.RouteTemplate {
 				return nil, ErrObservationProjection
 			}
+			if !validProviderPollingState(event, index == len(group)-1) {
+				return nil, ErrObservationProjection
+			}
 			outcomes[index] = providerOutcome(event)
 		}
 		result = append(result, qualificationharness.ObservedInteraction{
@@ -243,6 +246,33 @@ func projectProvider(expected []qualificationprofile.InteractionObservationRequi
 		return nil, ErrObservationProjection
 	}
 	return result, nil
+}
+
+func validProviderPollingState(event HTTPObservation, final bool) bool {
+	if event.StatusCode != 200 {
+		return true
+	}
+	switch event.Route {
+	case "/v1/operations/{operation_id}":
+		status, ok := event.ResponseJSON["status"].(string)
+		if !ok {
+			return false
+		}
+		pending := status == "accepted" || status == "running"
+		return pending != final
+	case "/v1/sandboxes/{sandbox_id}":
+		observed, ok := event.ResponseJSON["observed_state"].(string)
+		if !ok {
+			return false
+		}
+		pending := observed == "requested" || observed == "provisioning"
+		if final {
+			return observed == "ready"
+		}
+		return pending
+	default:
+		return true
+	}
 }
 
 func projectGateway(expected []qualificationprofile.InteractionObservationRequirement, progress map[string]qualificationharness.InteractionProgress, raw []GatewayObservation) ([]qualificationharness.ObservedInteraction, string, error) {

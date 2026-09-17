@@ -37,7 +37,7 @@ func TestFreezeBindsCompleteProfileInventory(t *testing.T) {
 	}
 	id, version, profileDigest := frozen.ProfileIdentity()
 	if id != "sandbox-runtime-external-caller-coding-shell-v1" || version != "1.0.0" ||
-		profileDigest != "sha256:4effea27fd3d7668b88eeb95c69e19b51556914b7949b1a39ce522b2aec46c14" {
+		profileDigest != "sha256:ec113d31612dbb7cc0e9461925170f74f33722bb2efb237dbc68aa89f2d60231" {
 		t.Fatalf("unexpected profile identity: %q %q %q", id, version, profileDigest)
 	}
 	target := frozen.TargetIdentity()
@@ -96,7 +96,7 @@ func TestFreezeBindsCompleteProfileInventory(t *testing.T) {
 
 func TestFreezeHasStableKnownDigests(t *testing.T) {
 	frozen := freezeFixture(t)
-	if got, want := frozen.Digest(), "sha256:92d4f5c8ac88fa338fe2ad8d416e9443273376d71c87f6860f7f5777ae733b88"; got != want {
+	if got, want := frozen.Digest(), "sha256:b4193412b179d1f46ca8a0f11959153a6980395eab3e19fa66f963c83e756e15"; got != want {
 		t.Fatalf("commitment digest = %q, want %q", got, want)
 	}
 	configurations := frozen.ConfigurationExpectations()
@@ -106,7 +106,7 @@ func TestFreezeHasStableKnownDigests(t *testing.T) {
 	}{
 		{0, "sha256:a3432d314a98287ab4b7917cb390dea0f5daff4636c7ba01a2faf414d871b3a4"},
 		{8, "sha256:a8aaef7361bba05bd999d270a4c939302b292386223fddb6aa253ee23b392dcb"},
-		{9, "sha256:23e08e01345f8650c1d71c48d6b9d65abfa52b6ce6aaaf5ae504a46376a4e15f"},
+		{9, "sha256:af10ff02dc119add887cf016813f1f24e4f76fc8937aaa712a1f5cebe2e8f99c"},
 	} {
 		if got := configurations[test.index].Digest; got != test.want {
 			t.Fatalf("configuration %q digest = %q, want %q", configurations[test.index].ID, got, test.want)

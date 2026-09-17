@@ -110,15 +110,15 @@ exact Provider Contract projection. Its success proves only that the profile
 definition is locked; it does not validate a qualification report or claim that
 an external caller executed or passed the profile. P2.7b separately locks the
 closed report schema at
-`sha256:cd51ccf0aea0bc31b11ff4f288751fc7df0f0dd081860efc305182ea61f842e4`
+`sha256:5d97e10c8b5b2f365e275e78868d5a35d78bbdffdec05ea2f18b5c947cd429f6`
 and the validator semantics at
 `sha256:c724eaa9f3b52e1a5ba4aa5aaeb5e8b61a744818b2f56fd8ff52dfa5e1e584df`,
 and tests the evidence-root, report validator, and command components. CI runs
 those component tests but does not fabricate an external qualification run.
 P2.7c.1 locks the adapter protocol schema at
-`sha256:d12b477cd540e02c6a7e2f8eb77b0405b717c15e98a0f144b2d63f705ff95969`
+`sha256:fdee270ca27003693b2ce504da769c9779825312e1dd4e06b5caf8578f5ee03c`
 and operational semantics at
-`sha256:10cd42017aee60b620dbbb7394a20c2a387983468a865a8d12a572f861d07662`.
+`sha256:997c49cd1a5b2c050d48333a973dd78b611221f869bf709cf6d1a8d771795a99`.
 Its startup/process-supervisor/validator/receipt authority binding is complete;
 all qualification Schema compilers use one ECMA-262 regexp engine and reject
 ASCII controls without POSIX-only classes. Invocation paths/endpoints use closed

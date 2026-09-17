@@ -235,11 +235,11 @@ func startupIdentity() map[string]any {
 	channel := map[string]any{"channel_id": "controller-a-provider", "role": "provider_credentials", "actor": "controller_a", "media_type": "application/vnd.example.credentials+json", "max_bytes": maxBytes}
 	return map[string]any{
 		"format_version": 1, "protocol_id": "sandbox-runtime-external-caller-adapter-v1", "protocol_version": "1.0.0", "message_type": "startup_identity", "sequence": 0,
-		"protocol_schema_digest":    "sha256:d12b477cd540e02c6a7e2f8eb77b0405b717c15e98a0f144b2d63f705ff95969",
-		"protocol_semantics_digest": "sha256:10cd42017aee60b620dbbb7394a20c2a387983468a865a8d12a572f861d07662",
+		"protocol_schema_digest":    "sha256:fdee270ca27003693b2ce504da769c9779825312e1dd4e06b5caf8578f5ee03c",
+		"protocol_semantics_digest": "sha256:997c49cd1a5b2c050d48333a973dd78b611221f869bf709cf6d1a8d771795a99",
 		"caller_release_identity":   release, "adapter_release_identity": release,
 		"contract_revision": "22ba6987ea5fbc37d53942720133c0acad199edd", "contract_tree": "c9a7054d7c8e7f4b6e32f38175ceedddc48c2d38",
-		"profile_id": "sandbox-runtime-external-caller-coding-shell-v1", "profile_version": "1.0.0", "profile_digest": "sha256:4effea27fd3d7668b88eeb95c69e19b51556914b7949b1a39ce522b2aec46c14",
+		"profile_id": "sandbox-runtime-external-caller-coding-shell-v1", "profile_version": "1.0.0", "profile_digest": "sha256:ec113d31612dbb7cc0e9461925170f74f33722bb2efb237dbc68aa89f2d60231",
 		"expected_values_injected_by_harness": false, "credential_channel_requirements": []any{channel},
 	}
 }

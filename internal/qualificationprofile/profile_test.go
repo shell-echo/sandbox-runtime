@@ -330,6 +330,34 @@ func TestValidateProviderHTTPOutcomeClassification(t *testing.T) {
 	}
 }
 
+func TestValidateProviderPollingIntermediate(t *testing.T) {
+	t.Parallel()
+	openAPI := map[string]any{
+		"paths": map[string]any{
+			"/v1/operations/{operation_id}": map[string]any{
+				"get": map[string]any{"responses": map[string]any{"200": map[string]any{}}},
+			},
+		},
+	}
+	notRetryable, retryable, noRetryAfter := false, true, false
+	interaction := interaction{InteractionID: "read-operation", Method: "GET", RouteTemplate: "/v1/operations/{operation_id}"}
+	outcome := outcome{
+		Transport: "http-response", StatusCode: intPointer(200), ErrorCodePolicy: "none",
+		Retryable: &notRetryable, RetryAfterRequired: &noRetryAfter,
+	}
+	if err := validateProviderOutcome(interaction, outcome, true, openAPI); err != nil {
+		t.Fatalf("validateProviderOutcome(pending HTTP 200) = %v", err)
+	}
+	outcome.Retryable = &retryable
+	if err := validateProviderOutcome(interaction, outcome, true, openAPI); err == nil {
+		t.Fatal("validateProviderOutcome accepted retryable pending HTTP 200")
+	}
+	interaction.RouteTemplate = "/v1/capabilities"
+	if err := validateProviderOutcome(interaction, outcome, true, openAPI); err == nil {
+		t.Fatal("validateProviderOutcome accepted pending HTTP 200 outside polling routes")
+	}
+}
+
 func TestValidateInteractionAcceptsNonHTTPProviderTransients(t *testing.T) {
 	finalRetryable := false
 	transientRetryable := true

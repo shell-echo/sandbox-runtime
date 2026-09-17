@@ -36,8 +36,8 @@ const (
 	TranscriptSchemaID    = "urn:shell-echo:sandbox-runtime:qualification:external-caller-adapter-transcript:v1"
 	TranscriptSchemaPath  = "qualification/external-caller-coding-shell-v1/adapter-transcript.schema.json"
 
-	ExpectedProtocolSchemaDigest    = "sha256:d12b477cd540e02c6a7e2f8eb77b0405b717c15e98a0f144b2d63f705ff95969"
-	ExpectedProtocolSemanticsDigest = "sha256:10cd42017aee60b620dbbb7394a20c2a387983468a865a8d12a572f861d07662"
+	ExpectedProtocolSchemaDigest    = "sha256:fdee270ca27003693b2ce504da769c9779825312e1dd4e06b5caf8578f5ee03c"
+	ExpectedProtocolSemanticsDigest = "sha256:997c49cd1a5b2c050d48333a973dd78b611221f869bf709cf6d1a8d771795a99"
 	ExpectedTranscriptSchemaDigest  = "sha256:d2eb229f55528df8ba68426cc5b7da9d1bd6a78a412707d656b77c1effeff293"
 
 	maxDefinitionBytes      = 2 << 20

@@ -37,8 +37,8 @@ const (
 
 	// These repository trust anchors are updated only after the complete profile
 	// and schema pass review and validation.
-	ExpectedProfileDigest = "sha256:4effea27fd3d7668b88eeb95c69e19b51556914b7949b1a39ce522b2aec46c14"
-	ExpectedSchemaDigest  = "sha256:2ad01731b69246399d6f04048593f31da9e4118b1dff99a81551b0c9b5972d77"
+	ExpectedProfileDigest = "sha256:ec113d31612dbb7cc0e9461925170f74f33722bb2efb237dbc68aa89f2d60231"
+	ExpectedSchemaDigest  = "sha256:c98f77473ff110fc54ef6a08f66bbe1b0a36c41ee71bcce8d68b9430d22a1798"
 
 	maxProfileBytes = 2 << 20
 	maxSchemaBytes  = 2 << 20
@@ -1249,8 +1249,8 @@ func validateInteraction(interaction interaction, openAPI any) error {
 		}
 	}
 	for _, outcome := range interaction.TransientOutcomes {
-		if outcome.Retryable == nil || !*outcome.Retryable {
-			return fmt.Errorf("interaction %q has a non-retryable transient outcome", interaction.InteractionID)
+		if outcome.Retryable == nil {
+			return fmt.Errorf("interaction %q has a transient outcome without retryability", interaction.InteractionID)
 		}
 		if err := validateErrorPolicy(interaction.InteractionID, outcome); err != nil {
 			return err
@@ -1271,9 +1271,14 @@ func validateProviderOutcome(interaction interaction, outcome outcome, transient
 		return fmt.Errorf("interaction %q expects a response absent from locked OpenAPI", interaction.InteractionID)
 	}
 	status := *outcome.StatusCode
-	isTransientStatus := status == 429 || status == 503
-	if transient != isTransientStatus {
+	isRetryTransient := status == 429 || status == 503
+	isPollingTransient := status == 200 && interaction.Method == "GET" &&
+		(interaction.RouteTemplate == "/v1/operations/{operation_id}" || interaction.RouteTemplate == "/v1/sandboxes/{sandbox_id}")
+	if (transient && !isRetryTransient && !isPollingTransient) || (!transient && isRetryTransient) {
 		return fmt.Errorf("interaction %q misclassifies HTTP %d as a %s outcome", interaction.InteractionID, status, map[bool]string{true: "transient", false: "final"}[transient])
+	}
+	if transient && outcome.Retryable != nil && *outcome.Retryable != isRetryTransient {
+		return fmt.Errorf("interaction %q has incorrect retryability for transient HTTP %d", interaction.InteractionID, status)
 	}
 	if status >= 200 && status < 300 {
 		if outcome.ErrorCodePolicy != "none" {

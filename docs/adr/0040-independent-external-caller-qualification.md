@@ -113,7 +113,7 @@ rules, exact 15+5 case, 41-interaction, and 91-observation inventory, schema
 identity, and content digest. This locks the machine-readable definition
 authority, not a report or qualification result. P2.7b locks the closed report
 schema at
-`sha256:cd51ccf0aea0bc31b11ff4f288751fc7df0f0dd081860efc305182ea61f842e4`
+`sha256:5d97e10c8b5b2f365e275e78868d5a35d78bbdffdec05ea2f18b5c947cd429f6`
 and the separate validator semantics at
 `sha256:c724eaa9f3b52e1a5ba4aa5aaeb5e8b61a744818b2f56fd8ff52dfa5e1e584df`,
 and implements its bounded evidence-root validator. This locks the report,
@@ -121,9 +121,9 @@ payload-binding, and receipt evidence definition, not an external report or
 qualification result.
 
 P2.7c.1 locks the external adapter protocol schema at
-`sha256:d12b477cd540e02c6a7e2f8eb77b0405b717c15e98a0f144b2d63f705ff95969`
+`sha256:fdee270ca27003693b2ce504da769c9779825312e1dd4e06b5caf8578f5ee03c`
 and operational semantics at
-`sha256:10cd42017aee60b620dbbb7394a20c2a387983468a865a8d12a572f861d07662`.
+`sha256:997c49cd1a5b2c050d48333a973dd78b611221f869bf709cf6d1a8d771795a99`.
 The report startup identity and process-supervisor payload preserve the exact
 protocol ID, version, schema digest, and semantics digest. The validator checks
 those values against independent trust anchors and emits the selected protocol
