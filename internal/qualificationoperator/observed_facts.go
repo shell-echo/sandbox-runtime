@@ -72,6 +72,12 @@ func validateProviderSubject(id string, group []HTTPObservation, contract provid
 		return last.StatusCode >= 200 && last.StatusCode < 300 && schema("provider-operation.schema.json", last.ResponseJSON) &&
 			stringValue(last.ResponseJSON, "type") == operationType && stringValue(last.ResponseJSON, "status") == status && correlationFieldsPresent(last.ResponseJSON)
 	}
+	acceptedMutation := func(operationType string) bool {
+		status := stringValue(last.ResponseJSON, "status")
+		return last.MutationWriteObserved && last.StatusCode == http.StatusAccepted && schema("provider-operation.schema.json", last.ResponseJSON) &&
+			stringValue(last.ResponseJSON, "type") == operationType && correlationFieldsPresent(last.ResponseJSON) &&
+			(status == "accepted" || status == "running" || status == "succeeded")
+	}
 	standardError := func() bool {
 		return last.StatusCode >= 400 && schema("standard-error.schema.json", last.ResponseJSON) && stringValue(last.ResponseJSON, "code") != ""
 	}
@@ -81,12 +87,9 @@ func validateProviderSubject(id string, group []HTTPObservation, contract provid
 	case "same-ca-unadmitted-capabilities":
 		return (last.Transport == "tls-rejected" || last.StatusCode == http.StatusForbidden) && stringValue(last.ResponseJSON, "provider_revision_id") == ""
 	case "create-sandbox":
-		return last.MutationWriteObserved && operation("create", "accepted")
+		return acceptedMutation("create")
 	case "new-jti-idempotency-replay":
-		status := stringValue(last.ResponseJSON, "status")
-		return last.MutationWriteObserved && last.StatusCode == http.StatusAccepted && schema("provider-operation.schema.json", last.ResponseJSON) &&
-			stringValue(last.ResponseJSON, "type") == "create" && correlationFieldsPresent(last.ResponseJSON) &&
-			(status == "accepted" || status == "running" || status == "succeeded")
+		return acceptedMutation("create")
 	case "exact-jti-replay", "start-stale-fence-exec", "cross-tenant-stage-artifact", "cross-tenant-read-artifact-operation", "wrong-mtls-caller-read-sandbox":
 		return standardError()
 	case "read-create-operation", "read-reconstructed-create-operation":
@@ -95,7 +98,7 @@ func validateProviderSubject(id string, group []HTTPObservation, contract provid
 		return last.StatusCode == http.StatusOK && schema("sandbox-status.schema.json", last.ResponseJSON) &&
 			stringValue(last.ResponseJSON, "observed_state") == "ready" && integerValue(last.ResponseJSON, "generation") == 1
 	case "start-output-exec", "start-cancellable-exec":
-		return last.MutationWriteObserved && operation("exec", "accepted")
+		return acceptedMutation("exec")
 	case "read-output-exec-operation":
 		return operation("exec", "succeeded")
 	case "read-exec-result", "read-retained-exec-result":
@@ -107,7 +110,7 @@ func validateProviderSubject(id string, group []HTTPObservation, contract provid
 		entries, ok := last.ResponseJSON["entries"].([]any)
 		return last.StatusCode == http.StatusOK && schema("usage-evidence.schema.json", last.ResponseJSON) && ok && len(entries) > 0 && (status == "complete" || status == "partial")
 	case "cancel-exec":
-		return last.MutationWriteObserved && operation("cancel_exec", "accepted")
+		return acceptedMutation("cancel_exec")
 	case "read-cancel-operation":
 		return operation("cancel_exec", "succeeded")
 	case "read-cancelled-operation":
@@ -115,7 +118,7 @@ func validateProviderSubject(id string, group []HTTPObservation, contract provid
 	case "read-cancelled-result":
 		return last.StatusCode == http.StatusOK && schema("exec-result.schema.json", last.ResponseJSON) && stringValue(last.ResponseJSON, "status") == "cancelled"
 	case "open-terminal-session":
-		return last.MutationWriteObserved && operation("open_runtime_session", "accepted")
+		return acceptedMutation("open_runtime_session")
 	case "read-terminal-operation":
 		return operation("open_runtime_session", "succeeded")
 	case "read-terminal-handoff", "read-retained-terminal-handoff":
@@ -123,7 +126,7 @@ func validateProviderSubject(id string, group []HTTPObservation, contract provid
 			stringValue(last.ResponseJSON, "protocol") == "websocket" && strings.HasPrefix(stringValue(last.ResponseJSON, "internal_endpoint_reference"), "ref:session:") &&
 			integerValue(last.ResponseJSON, "connection_generation") > 0 && stringValue(last.ResponseJSON, "runtime_session_id") != ""
 	case "stage-artifact":
-		return last.MutationWriteObserved && operation("artifact_stage", "accepted")
+		return acceptedMutation("artifact_stage")
 	case "read-artifact-operation":
 		return operation("artifact_stage", "succeeded")
 	case "read-artifact-evidence", "read-retained-artifact-evidence":
