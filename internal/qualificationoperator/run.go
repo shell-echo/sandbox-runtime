@@ -328,7 +328,7 @@ func Run(ctx context.Context, configuration RunConfiguration) (_ RunResult, resu
 		Provider: bundle, Gateway: bundle, Processes: bundle, Resources: bundle,
 	})
 	if err != nil {
-		return RunResult{}, fmt.Errorf("%w: observation: %v; process_counts=%v; observations=%s", ErrQualificationRun, err, processes.Counts(), proxy.SafeSummary())
+		return RunResult{}, fmt.Errorf("%w: observation: %v; observation_stage=%s; process_counts=%v; observations=%s", ErrQualificationRun, err, bundle.SafeFailureStage(), processes.Counts(), proxy.SafeSummary())
 	}
 	cleanup, err := qualificationharness.RunCleanup(ctx, prepared, resources, resources)
 	if err != nil || cleanup.Outcome != qualificationharness.CleanupOutcomeSucceeded {

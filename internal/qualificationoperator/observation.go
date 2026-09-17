@@ -146,6 +146,17 @@ func (b *ObserverBundle) ensureBuilt(directive qualificationharness.ObservationD
 	return b.buildErr
 }
 
+func (b *ObserverBundle) SafeFailureStage() string {
+	if b == nil || b.buildErr == nil {
+		return "none"
+	}
+	message := b.buildErr.Error()
+	if strings.HasPrefix(message, ErrObservationProjection.Error()+": ") {
+		return strings.TrimPrefix(message, ErrObservationProjection.Error()+": ")
+	}
+	return "observation-projection"
+}
+
 func (b *ObserverBundle) build() error {
 	providerRaw, gatewayRaw := b.proxy.Snapshot()
 	providerExpected, gatewayExpected, progress, err := b.executedRequirements()
