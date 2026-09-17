@@ -109,7 +109,7 @@ func TestProcessRealHandoffAndConcurrentCleanup(t *testing.T) {
 	if witness != 64 {
 		t.Fatal("test witness fd unavailable")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), realProcessTestLimit)
 	defer cancel()
 	p, err := StartProcess(ctx, launch)
 	if err != nil {
@@ -166,7 +166,7 @@ func TestProcessContextCancellationAndNormalExit(t *testing.T) {
 	for _, mode := range []string{"hang", "exit"} {
 		t.Run(mode, func(t *testing.T) {
 			path := buildSpawnProbe(t, mode)
-			runContext, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			runContext, cancel := context.WithTimeout(context.Background(), realProcessTestLimit)
 			defer cancel()
 			frozen, launch := preparedProbeContext(t, path, runContext)
 			p, err := StartProcess(context.Background(), launch)
@@ -210,7 +210,7 @@ func TestProcessPreStartFailuresCloseTopology(t *testing.T) {
 			_, path, _ := executableFixture(t)
 			frozen, launch := preparedProbe(t, path)
 			childEnds, parentEnds := launch.core.child, launch.core.parent
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), realProcessTestLimit)
 			defer cancel()
 			switch kind {
 			case "nil-context":
@@ -265,7 +265,7 @@ func (c cancelAfterSpawnContext) Err() error {
 func TestProcessPostSpawnCancellationKeepsRecoveryOwner(t *testing.T) {
 	path := buildSpawnProbe(t, "hang")
 	frozen, launch := preparedProbe(t, path)
-	base, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	base, cancel := context.WithTimeout(context.Background(), realProcessTestLimit)
 	defer cancel()
 	ctx := cancelAfterSpawnContext{base, frozen.core, cancel}
 	p, err := StartProcess(ctx, launch)
