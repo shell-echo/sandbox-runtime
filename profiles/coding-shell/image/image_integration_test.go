@@ -68,6 +68,12 @@ func TestCodingShellImageIntegration(t *testing.T) {
 		if err := os.Mkdir(path, 0o777); err != nil {
 			t.Fatal(err)
 		}
+		// Mkdir applies the host umask. Make the bind-mounted test fixture
+		// explicitly writable by the image's fixed 65532:65532 identity on
+		// native Linux runners, where Docker preserves host permissions.
+		if err := os.Chmod(path, 0o777); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if err := os.WriteFile(filepath.Join(inputs, "input.txt"), []byte("locked-input\n"), 0o444); err != nil {
 		t.Fatal(err)
