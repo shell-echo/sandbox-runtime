@@ -80,8 +80,13 @@ func validateProviderSubject(id string, group []HTTPObservation, contract provid
 		return last.StatusCode == http.StatusOK && schema("provider-capabilities.schema.json", last.ResponseJSON) && validCodingShellCapabilities(last.ResponseJSON)
 	case "same-ca-unadmitted-capabilities":
 		return (last.Transport == "tls-rejected" || last.StatusCode == http.StatusForbidden) && stringValue(last.ResponseJSON, "provider_revision_id") == ""
-	case "create-sandbox", "new-jti-idempotency-replay":
+	case "create-sandbox":
 		return last.MutationWriteObserved && operation("create", "accepted")
+	case "new-jti-idempotency-replay":
+		status := stringValue(last.ResponseJSON, "status")
+		return last.MutationWriteObserved && last.StatusCode == http.StatusAccepted && schema("provider-operation.schema.json", last.ResponseJSON) &&
+			stringValue(last.ResponseJSON, "type") == "create" && correlationFieldsPresent(last.ResponseJSON) &&
+			(status == "accepted" || status == "running" || status == "succeeded")
 	case "exact-jti-replay", "start-stale-fence-exec", "cross-tenant-stage-artifact", "cross-tenant-read-artifact-operation", "wrong-mtls-caller-read-sandbox":
 		return standardError()
 	case "read-create-operation", "read-reconstructed-create-operation":

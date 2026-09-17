@@ -1,11 +1,32 @@
 package qualificationoperator
 
 import (
+	"net/http"
 	"testing"
 
 	"github.com/shell-echo/sandbox-runtime/internal/qualificationharness"
 	"github.com/shell-echo/sandbox-runtime/internal/qualificationprofile"
 )
+
+type acceptingProviderDocuments struct{}
+
+func (acceptingProviderDocuments) Validate(string, []byte) error { return nil }
+
+func TestNewJTIReplayAcceptsCurrentSuccessfulOperationState(t *testing.T) {
+	t.Parallel()
+	for _, status := range []string{"accepted", "running", "succeeded"} {
+		event := HTTPObservation{
+			StatusCode: http.StatusAccepted, MutationWriteObserved: true,
+			ResponseJSON: map[string]any{
+				"operation_id": "operation", "attempt_id": "attempt", "fencing_token": float64(1),
+				"sandbox_id": "sandbox", "type": "create", "status": status,
+			},
+		}
+		if !validateProviderSubject("new-jti-idempotency-replay", []HTTPObservation{event}, acceptingProviderDocuments{}) {
+			t.Fatalf("idempotent replay state %q was rejected", status)
+		}
+	}
+}
 
 func TestObservedSandboxResourcesComeFromEveryCreateRequest(t *testing.T) {
 	t.Parallel()
