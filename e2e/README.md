@@ -30,7 +30,7 @@ or reopen that migration gate.
 
 | Item | Value |
 | --- | --- |
-| Provider implementation baseline | `3912e39e64afa8670d94462c21f55cd027011746` |
+| Provider implementation baseline | `21b38a341506a4d3c17107ea99ccf8dde8e351e9` |
 | Contract namespace | `urn:shell-echo:sandbox-runtime:provider-v1` |
 | Contract revision | `22ba6987ea5fbc37d53942720133c0acad199edd` |
 | Contract tree | `c9a7054d7c8e7f4b6e32f38175ceedddc48c2d38` |

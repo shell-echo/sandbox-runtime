@@ -23,8 +23,8 @@ const (
 	DownstreamFencingLockPath = "e2e/downstream-fencing.lock.json"
 	DownstreamFencingProfile  = "browser-downstream-fencing-e2e-v1"
 
-	DownstreamFencingHarnessBaseline   = "3912e39e64afa8670d94462c21f55cd027011746"
-	DownstreamFencingV2HarnessBaseline = "3912e39e64afa8670d94462c21f55cd027011746"
+	DownstreamFencingHarnessBaseline   = "21b38a341506a4d3c17107ea99ccf8dde8e351e9"
+	DownstreamFencingV2HarnessBaseline = "21b38a341506a4d3c17107ea99ccf8dde8e351e9"
 	DownstreamFencingGatewayRevision   = "b4d41c9a32b4ccf39edaba3fb8bf5ad239c1f945"
 	DownstreamFencingIngressRevision   = "b4d41c9a32b4ccf39edaba3fb8bf5ad239c1f945"
 	DownstreamFencingCallerBaseline    = "fd48de93af5113d331c64f542c35f3934cc8229a"
@@ -37,7 +37,7 @@ const (
 
 	PostgresControlledRestoreLockPath        = "e2e/postgres-controlled-restore.lock.json"
 	PostgresControlledRestoreProfile         = "browser-postgres-controlled-restore-e2e-v1"
-	PostgresControlledRestoreHarnessBaseline = "3912e39e64afa8670d94462c21f55cd027011746"
+	PostgresControlledRestoreHarnessBaseline = "21b38a341506a4d3c17107ea99ccf8dde8e351e9"
 	PostgresWitnessImage                     = "postgres"
 	PostgresWitnessIndex                     = "sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94"
 	PostgresWitnessResolvedTag               = "17.6-alpine3.22"
