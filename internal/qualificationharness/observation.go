@@ -585,7 +585,7 @@ func deriveScenarios(plan []qualificationprofile.PhaseObservationPlan, progress 
 				if !outcomeMatched {
 					matched = false
 					contradicted = true
-					diagnosticsByCase[scenario.CaseID] = append(diagnosticsByCase[scenario.CaseID], "outcome:"+interaction.InteractionID)
+					diagnosticsByCase[scenario.CaseID] = append(diagnosticsByCase[scenario.CaseID], fmt.Sprintf("outcome:%s:%s:status=%s:error=%s:retryable=%t:retry_after=%t", interaction.InteractionID, observed.FinalOutcome.Transport, optionalInt(observed.FinalOutcome.StatusCode), optionalString(observed.FinalOutcome.ErrorCode), observed.FinalOutcome.Retryable, observed.FinalOutcome.RetryAfterPresent))
 				}
 				for _, requirement := range interaction.RequiredObservations {
 					fact := facts[requirementObservationKey(requirement)]
@@ -617,6 +617,20 @@ func deriveScenarios(plan []qualificationprofile.PhaseObservationPlan, progress 
 		}
 	}
 	return result, nil
+}
+
+func optionalInt(value *int) string {
+	if value == nil {
+		return "none"
+	}
+	return fmt.Sprint(*value)
+}
+
+func optionalString(value *string) string {
+	if value == nil {
+		return "none"
+	}
+	return *value
 }
 
 func deriveObservedUsage(scenarios []DerivedScenario, plan []qualificationprofile.PhaseObservationPlan, facts map[string]BoundObservation) ObservedUsage {
