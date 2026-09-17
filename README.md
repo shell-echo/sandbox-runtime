@@ -6,10 +6,9 @@ from `process-supervisor.json`'s `adapter_transcript_projection`. It binds the
 protocol, phases, invocations, processes, executables, configurations and field
 inventory, and checks message order, derived counts and status consistency.
 Physical byte counts, EOF/exit and process truth remain supervisor inputs, not
-independent observations made by this validator. No final external-caller
-qualification result is claimed. c3.1 adds descriptor-backed, bounded executable
-preflight and rechecking without launching a process. The fixed 24-step plan
-has 23 completed and 1 unfinished step. c3.2 implements the final static
+independent observations made by this validator. c3.1 adds descriptor-backed,
+bounded executable preflight and rechecking without launching a process. The
+fixed 24-step P2.7 plan is complete. c3.2 implements the final static
 configuration commitment, exclusive custody transfer and one-shot logical phase
 admission with live descriptor rechecks. Reconstruction uses the existing
 protocol completion gate; outer-harness evidence remains open.
@@ -56,8 +55,8 @@ separate bounded context, binds the operator-owned teardown identity, closes
 local state descriptors, and requires exactly three same-scope, one-second-
 spaced zero-resource samples equal to the baseline before declaring cleanup
 successful. d7 now assembles and validates the closed evidence root as a local
-component. The separate public external-caller repository has completed 12 of
-its 13 candidate checkpoints through e1.8b. Public hosted run `35068957048`
+component. The separate public external-caller repository has completed all 13
+candidate checkpoints through e1.8c. Public hosted run `35068957048`
 at source commit `58a211f0c167af3ec117c8cb8247bfe268bbae40` passed the
 full tests, deterministic Linux/amd64 build, authority verification, artifact
 upload, and five-subject Sigstore attestation `47846951`; the downloaded
@@ -77,8 +76,20 @@ and cross-restart shell continuity, and returned the run-owned resource scope
 to zero for all three stable samples. Checkpoint artifact `10486252703` has raw
 SHA-256
 `d540eb2ada42056ff22a8bde11508c27cd95b1f8f63c003e033761bd1a043200`.
-This closes e2 execution and cleanup, not the final qualification result. The
-main P2.7 plan is 23/24, with only e3 report/receipt/archive/disposition pending.
+Final hosted run `35203241121` at Provider source `170459266af5f4fad359ca8c63f2ae19741055c5`
+and external-caller source `b3ebcc783e5db20395e29b029e0eb55f7819b49b`
+then produced and independently reverified a closed seven-file evidence archive,
+validator receipt and bounded `qualified` disposition. Artifact `10488622806`
+retains checkpoint digest
+`sha256:ce8394c3f0213f89bfb01be027016bcbeb272a24c014030a9bc8007d9ab7536f`,
+archive digest
+`sha256:ada1cae128a41e6b694ff413aab179c0eff94b42663ece8233dbb358e319e9bd`,
+and result-envelope digest
+`sha256:d5e6fd528f2302252a38f49aa466c85767106a8bcef430120f230a8127f96758`.
+The report outcome is `passed`, validation is `accepted`, and the fixed P2.7
+plan is 24/24. This proves only the named caller/profile/revisions and scenarios;
+the recorded aggregate, multi-controller, hostile-tenant, HA, deployment and
+production non-claims remain open.
 
 Composable Linux sandbox runtime for remote shells, desktops, browsers, and applications.
 
@@ -865,15 +876,16 @@ visibility.
 - [x] implement one explicit issuer-scoped caller trust domain per protected
   listener, with Provider-local audience/revision anchors and bounded frozen
   rotation keys, and pass its repository-local coordinated gate
-- [ ] qualify an independently implemented external caller; the
-  same-repository generic reference caller remains reference evidence only.
+- [x] qualify the named independently implemented external caller for the
+  locked coding/shell profile; the same-repository generic reference caller
+  remains reference evidence only.
   ADR 0040 defines the boundary, and P2.7a locks the verified coding/shell
   machine-readable definition authority at
   `sha256:ec113d31612dbb7cc0e9461925170f74f33722bb2efb237dbc68aa89f2d60231`.
   P2.7b locks the closed report schema at
   `sha256:5d97e10c8b5b2f365e275e78868d5a35d78bbdffdec05ea2f18b5c947cd429f6`
   and its validator semantics at
-  `sha256:c724eaa9f3b52e1a5ba4aa5aaeb5e8b61a744818b2f56fd8ff52dfa5e1e584df`,
+  `sha256:bc0b5be7aefcebb6a71871d9724cd671235b6ef2bf453a1954313547ad379ed9`,
   and adds the bounded evidence-root validator and sanitized receipt. The
   validator enforces payload-owned nullable evidence and complete execution
   timing, a 64-wire-attempt ceiling with fail-closed potential-resource
@@ -951,9 +963,9 @@ visibility.
   at `0600` through a pinned directory descriptor. It closes the assembly
   writer before the validator alone publishes the receipt, with the same
   runtime commitment bound across all seven files. Real Darwin/arm64 and
-  Linux/arm64 helpers pass. These repository probes do not establish release,
-  payload, caller, adapter, trusted-input, or observer provenance, and no
-  independent external caller has passed the gate.
+  Linux/arm64 helpers pass. Hosted run `35203241121` separately binds the named
+  public caller, exact Provider revision, live observations, cleanup and closed
+  report/receipt/archive. It does not broaden the profile's explicit non-claims.
 
 ### Provider lifecycle
 

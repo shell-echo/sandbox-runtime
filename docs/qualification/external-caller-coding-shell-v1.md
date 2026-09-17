@@ -6,10 +6,9 @@ from `process-supervisor.json`'s `adapter_transcript_projection`. It binds the
 protocol, phases, invocations, processes, executables, configurations and field
 inventory, and checks message order, derived counts and status consistency.
 Physical byte counts, EOF/exit and process truth remain supervisor inputs, not
-independent observations made by this validator. No independent external-caller
-qualification result is claimed. c3.1 adds descriptor-backed, bounded executable
-preflight and rechecking without launching a process. The fixed 24-step plan
-has 21 completed and 3 unfinished steps. c3.2 implements the final static
+independent observations made by this validator. c3.1 adds descriptor-backed,
+bounded executable preflight and rechecking without launching a process. The
+fixed 24-step P2.7 plan is complete. c3.2 implements the final static
 configuration commitment, exclusive custody transfer and one-shot logical phase
 admission with live descriptor rechecks. Reconstruction uses the existing
 protocol completion gate; outer-harness evidence remains open.
@@ -56,13 +55,13 @@ separate bounded context, binds the operator-owned teardown identity, closes
 local state descriptors, and requires exactly three same-scope, one-second-
 spaced zero-resource samples equal to the baseline before declaring cleanup
 successful. d7 now assembles and validates the closed evidence root as a local
-component. A separate external-caller repository has completed 7 of its 13
-local candidate checkpoints and has begun e1.7a: 8 of 15 initial cases are
-locally composed in one Caller process through terminal handoff,
-while the other 7 remain `not_executed`. It pins the refreshed authority. External
-ownership/provenance, independent runtime interoperability and observations,
-the actual 15+5 run, and a qualification result remain open. The main P2.7
-plan therefore remains 21/24, with e1 in progress and e2/e3 pending.
+component. The separate public external-caller repository completed all 13
+candidate checkpoints. Hosted run `35203241121` executed the exact 15+5 profile,
+bound all 91 required observations, completed stable zero-resource cleanup,
+published the seven-file closed report/receipt evidence archive and passed an
+independent retained-bundle verification. The bounded result is `qualified`
+only for Provider `170459266af5f4fad359ca8c63f2ae19741055c5` and caller
+`b3ebcc783e5db20395e29b029e0eb55f7819b49b`; all profile non-claims remain.
 
 Profile ID: `sandbox-runtime-external-caller-coding-shell-v1`
 
@@ -87,8 +86,9 @@ and transcript recomputation are implemented through c2b.7. c3.3 runs local
 process probes, and c3.4 exclusively validates their first stdout startup frame
 before any input. c3.5 validates the exact frozen locations/startup channel
 requirements and performs bounded concurrent EOF delivery over stdin and fd
-3-10. Release identities and payload policy are still external obligations; no
-external caller has passed this profile.
+3-10. Release identities and payload policy remain external trust inputs. The
+named caller above has passed this exact profile; that result does not
+generalize to other callers, revisions, profiles or production deployment.
 
 ## Purpose
 
