@@ -270,21 +270,33 @@ func ObserveExecution(ctx context.Context, prepared *PreparedRuntime, observers 
 
 	provider, err := observers.Provider.ObserveProvider(operationContext, directive)
 	if err != nil || operationContext.Err() != nil {
+		if operationContext.Err() == nil {
+			return result, observationStage("provider-observer")
+		}
 		return result, observationContextError(operationContext)
 	}
 	provider = cloneProviderExecutionObservation(provider)
 	gateway, err := observers.Gateway.ObserveGateway(operationContext, directive)
 	if err != nil || operationContext.Err() != nil {
+		if operationContext.Err() == nil {
+			return result, observationStage("gateway-observer")
+		}
 		return result, observationContextError(operationContext)
 	}
 	gateway = cloneGatewayExecutionObservation(gateway)
 	processes, err := observers.Processes.ObserveProcesses(operationContext, directive)
 	if err != nil || operationContext.Err() != nil {
+		if operationContext.Err() == nil {
+			return result, observationStage("process-observer")
+		}
 		return result, observationContextError(operationContext)
 	}
 	processes = cloneProcessExecutionObservation(processes)
 	resources, err := observers.Resources.ObserveResources(operationContext, directive, cloneQueryScope(prepared.queryScope))
 	if err != nil || operationContext.Err() != nil {
+		if operationContext.Err() == nil {
+			return result, observationStage("resource-observer")
+		}
 		return result, observationContextError(operationContext)
 	}
 	resources = cloneResourceExecutionObservation(resources)
@@ -293,38 +305,38 @@ func ObserveExecution(ctx context.Context, prepared *PreparedRuntime, observers 
 	}
 
 	if err := validateObserverIdentities(prepared, directive, provider, gateway, processes, resources, reconstruction); err != nil {
-		return result, ErrExecutionObservation
+		return result, observationStage("observer-identities")
 	}
 
 	progressByCase, err := observationProgress(initial, reconstruction, plan)
 	if err != nil {
-		return result, ErrExecutionObservation
+		return result, observationStage("scenario-progress")
 	}
 	executedBySurface := expectedExecutedInteractions(plan, progressByCase)
 	providerByID, providerMatched, err := validateObservedInteractions(ProviderObserverSource, "provider_http", executedBySurface["provider_http"], provider.Interactions, progressByCase)
 	if err != nil {
-		return result, ErrExecutionObservation
+		return result, observationStage("provider-interactions")
 	}
 	gatewayByID, gatewayMatched, err := validateObservedInteractions(GatewayObserverSource, "caller_gateway", executedBySurface["caller_gateway"], gateway.Interactions, progressByCase)
 	if err != nil {
-		return result, ErrExecutionObservation
+		return result, observationStage("gateway-interactions")
 	}
 	factsByKey, observations, err := validateObserverFacts(plan, provider.Facts, gateway.Facts, processes.Facts, resources.Facts)
 	if err != nil {
-		return result, ErrExecutionObservation
+		return result, observationStage("observer-facts")
 	}
 
 	scenarios, err := deriveScenarios(plan, progressByCase, providerByID, gatewayByID, providerMatched, gatewayMatched, factsByKey)
 	if err != nil {
-		return result, ErrExecutionObservation
+		return result, observationStage("scenario-derivation")
 	}
 	usage := deriveObservedUsage(scenarios, plan, factsByKey)
 	if !observedUsageWithinLimits(usage, prepared.limits) {
-		return result, ErrExecutionObservation
+		return result, observationStage("observed-usage")
 	}
 	currentInventory, err := validateCurrentResourceObservation(prepared, resources, factsByKey, progressByCase)
 	if err != nil {
-		return result, ErrExecutionObservation
+		return result, observationStage("resource-inventory")
 	}
 
 	result = ExecutionObservationResult{
@@ -332,6 +344,10 @@ func ObserveExecution(ctx context.Context, prepared *PreparedRuntime, observers 
 		Provider: provider, Gateway: gateway, Processes: processes, Resources: resources,
 	}
 	return result, nil
+}
+
+func observationStage(stage string) error {
+	return fmt.Errorf("%w: %s", ErrExecutionObservation, stage)
 }
 
 func validObservationPlan(plan []qualificationprofile.PhaseObservationPlan) bool {
