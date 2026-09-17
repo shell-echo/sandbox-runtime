@@ -328,7 +328,10 @@ func ObserveExecution(ctx context.Context, prepared *PreparedRuntime, observers 
 
 	scenarios, err := deriveScenarios(plan, progressByCase, providerByID, gatewayByID, providerMatched, gatewayMatched, factsByKey)
 	if err != nil {
-		return result, observationStage("scenario-derivation")
+		// deriveScenarios only names immutable public profile case and
+		// interaction identifiers; retaining that bounded cause makes a failed
+		// qualification diagnosable without exposing payloads or credentials.
+		return result, fmt.Errorf("%w: scenario-derivation: %v", ErrExecutionObservation, err)
 	}
 	usage := deriveObservedUsage(scenarios, plan, factsByKey)
 	if !observedUsageWithinLimits(usage, prepared.limits) {
