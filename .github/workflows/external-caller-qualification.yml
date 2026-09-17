@@ -61,6 +61,13 @@ jobs:
           provider_revision=$(git -C provider rev-parse HEAD)
           external_revision=$(git -C external-caller rev-parse HEAD)
           run_root="$RUNNER_TEMP/qualification/run"
+          resolver_backup="$RUNNER_TEMP/qualification/resolv.conf"
+          sudo cp /etc/resolv.conf "$resolver_backup"
+          restore_resolver() {
+            sudo cp "$resolver_backup" /etc/resolv.conf
+          }
+          trap restore_resolver EXIT
+          printf 'nameserver 127.0.0.1\noptions ndots:1 timeout:1 attempts:1\n' | sudo tee /etc/resolv.conf > /dev/null
           sudo env PATH="$PATH" "$RUNNER_TEMP/qualification/build/operator" \
             -source-root "$GITHUB_WORKSPACE/provider" \
             -run-root "$run_root" \
@@ -70,6 +77,8 @@ jobs:
             -provider-source-revision "$provider_revision" \
             -external-source-revision "$external_revision" \
             -docker-socket /var/run/docker.sock
+          restore_resolver
+          trap - EXIT
           sudo test -f "$run_root/execution-checkpoint.json"
           sudo cp "$run_root/execution-checkpoint.json" "$RUNNER_TEMP/qualification/execution-checkpoint.json"
           sudo chown "$(id -u):$(id -g)" "$RUNNER_TEMP/qualification/execution-checkpoint.json"
