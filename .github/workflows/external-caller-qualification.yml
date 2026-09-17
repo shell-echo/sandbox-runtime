@@ -21,6 +21,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: provider
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Check out independent caller candidate
@@ -29,6 +30,7 @@ jobs:
           repository: shell-echo/sandbox-runtime-external-caller
           ref: ${{ inputs.external_caller_ref }}
           path: external-caller
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Set up Go
