@@ -64,9 +64,9 @@ func TestObserveCompletionConsumesTerminalEOFAndCleanExit(t *testing.T) {
 }
 
 func TestObserveCompletionFailsClosedOnExitOutputAndStderr(t *testing.T) {
-	assertFailedClosed := func(t *testing.T, frozen *FrozenPreflight, process *StartedProcess, err error) {
+	assertFailedClosed := func(t *testing.T, frozen *FrozenPreflight, process *StartedProcess, boundary, err error) {
 		t.Helper()
-		if err == nil || !errors.Is(err, ErrSupervision) || strings.Contains(err.Error(), "provider-secret") ||
+		if err == nil || !errors.Is(err, boundary) || strings.Contains(err.Error(), "provider-secret") ||
 			process.core.cleanlyReaped() || frozen.core.failure == nil {
 			t.Fatal("invalid completion accepted or leaked diagnostics", err)
 		}
@@ -82,7 +82,7 @@ func TestObserveCompletionFailsClosedOnExitOutputAndStderr(t *testing.T) {
 			frozen, process := deliveredCompletionProbe(t, mode)
 			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 			defer cancel()
-			assertFailedClosed(t, frozen, process, process.ObserveCompletion(ctx))
+			assertFailedClosed(t, frozen, process, ErrSupervision, process.ObserveCompletion(ctx))
 		})
 	}
 
@@ -97,10 +97,12 @@ func TestObserveCompletionFailsClosedOnExitOutputAndStderr(t *testing.T) {
 		_, err := process.DeliverInvocation(context.Background(), document, []CredentialPayload{{
 			ChannelID: "controller-a-provider", Data: []byte("provider-secret"),
 		}})
+		boundary := ErrDelivery
 		if err == nil {
 			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 			defer cancel()
 			err = process.ObserveCompletion(ctx)
+			boundary = ErrSupervision
 		}
 		// The stderr drain is concurrent with delivery. Exceeding its budget may
 		// therefore close the process either just before delivery commits or
@@ -108,7 +110,7 @@ func TestObserveCompletionFailsClosedOnExitOutputAndStderr(t *testing.T) {
 		if !errors.Is(err, ErrProcessIO) {
 			t.Fatal("stderr overflow did not retain its bounded-I/O cause", err)
 		}
-		assertFailedClosed(t, frozen, process, err)
+		assertFailedClosed(t, frozen, process, boundary, err)
 	})
 }
 
