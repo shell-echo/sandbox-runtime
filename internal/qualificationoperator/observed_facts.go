@@ -2,6 +2,7 @@ package qualificationoperator
 
 import (
 	"encoding/json"
+	"fmt"
 	"math"
 	"net/http"
 	"reflect"
@@ -41,13 +42,19 @@ func validateProviderEvidence(groups map[string][]HTTPObservation, contract prov
 	valid := map[string]bool{}
 	for id, group := range groups {
 		valid[id] = validateProviderSubject(id, group, contract)
+		if !valid[id] {
+			return nil, fmt.Errorf("%w: provider-subject-%s", ErrObservationProjection, id)
+		}
 	}
-	if !allTrue(valid) || !validateProviderCrossBindings(groups) {
-		return nil, ErrObservationProjection
+	if !allTrue(valid) {
+		return nil, fmt.Errorf("%w: provider-subject-coverage", ErrObservationProjection)
+	}
+	if !validateProviderCrossBindings(groups) {
+		return nil, fmt.Errorf("%w: provider-cross-bindings", ErrObservationProjection)
 	}
 	resources, ok := observedSandboxResources(groups, limits)
 	if !ok {
-		return nil, ErrObservationProjection
+		return nil, fmt.Errorf("%w: provider-create-resources", ErrObservationProjection)
 	}
 	return resources, nil
 }
