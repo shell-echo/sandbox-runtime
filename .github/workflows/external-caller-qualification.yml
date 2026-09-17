@@ -44,7 +44,6 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/qualification/build"
-          mkdir -p "$RUNNER_TEMP/qualification/candidate"
           CGO_ENABLED=0 go -C provider build -trimpath -o "$RUNNER_TEMP/qualification/build/provider" .
           CGO_ENABLED=0 go -C provider build -trimpath -o "$RUNNER_TEMP/qualification/build/operator" ./cmd/run-external-caller-qualification
           go -C external-caller run ./cmd/release-artifacts \
