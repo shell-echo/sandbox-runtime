@@ -534,6 +534,7 @@ func validateObserverFacts(plan []qualificationprofile.PhaseObservationPlan, pro
 func deriveScenarios(plan []qualificationprofile.PhaseObservationPlan, progress map[string]ScenarioProgress, providerByID, gatewayByID map[string]ObservedInteraction, providerMatched, gatewayMatched map[string]bool, facts map[string]BoundObservation) ([]DerivedScenario, error) {
 	result := make([]DerivedScenario, 0, 20)
 	statusByCase := make(map[string]string, 20)
+	diagnosticsByCase := make(map[string][]string, 20)
 	for _, phase := range plan {
 		for _, scenario := range phase.Cases {
 			actualProgress := progress[scenario.CaseID]
@@ -543,7 +544,13 @@ func deriveScenarios(plan []qualificationprofile.PhaseObservationPlan, progress 
 			}
 			if !dependenciesPassed {
 				if actualProgress.Disposition != ScenarioNotExecuted || actualProgress.ReasonCode == nil || *actualProgress.ReasonCode != "prerequisite_not_satisfied" {
-					return nil, fmt.Errorf("scenario %q executed after an independently unpassed dependency", scenario.CaseID)
+					var dependencyDiagnostics []string
+					for _, dependency := range scenario.DependsOn {
+						if statusByCase[dependency] != DerivedPassed {
+							dependencyDiagnostics = append(dependencyDiagnostics, dependency+":"+statusByCase[dependency]+":"+strings.Join(diagnosticsByCase[dependency], ","))
+						}
+					}
+					return nil, fmt.Errorf("scenario %q executed after an independently unpassed dependency (%s)", scenario.CaseID, strings.Join(dependencyDiagnostics, ";"))
 				}
 			} else if actualProgress.Disposition == ScenarioNotExecuted && actualProgress.ReasonCode != nil && *actualProgress.ReasonCode == "prerequisite_not_satisfied" {
 				return nil, fmt.Errorf("scenario %q claimed an independently satisfied dependency was unavailable", scenario.CaseID)
@@ -578,6 +585,7 @@ func deriveScenarios(plan []qualificationprofile.PhaseObservationPlan, progress 
 				if !outcomeMatched {
 					matched = false
 					contradicted = true
+					diagnosticsByCase[scenario.CaseID] = append(diagnosticsByCase[scenario.CaseID], "outcome:"+interaction.InteractionID)
 				}
 				for _, requirement := range interaction.RequiredObservations {
 					fact := facts[requirementObservationKey(requirement)]
@@ -586,9 +594,11 @@ func deriveScenarios(plan []qualificationprofile.PhaseObservationPlan, progress 
 					case "missing":
 						matched = false
 						missing = true
+						diagnosticsByCase[scenario.CaseID] = append(diagnosticsByCase[scenario.CaseID], "missing:"+requirement.ObservationID)
 					case "contradicted":
 						matched = false
 						contradicted = true
+						diagnosticsByCase[scenario.CaseID] = append(diagnosticsByCase[scenario.CaseID], "contradicted:"+requirement.ObservationID)
 					}
 				}
 			}
