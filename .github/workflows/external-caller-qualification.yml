@@ -61,6 +61,7 @@ jobs:
           provider_revision=$(git -C provider rev-parse HEAD)
           external_revision=$(git -C external-caller rev-parse HEAD)
           run_root="$RUNNER_TEMP/qualification/run"
+          docker pull ghcr.io/shell-echo/sandbox-runtime-coding-shell@sha256:1996e44f8ddc464f22556bd57f1c69079fe6b1a821b65bd9be24f86619c31bb1
           resolver_backup="$RUNNER_TEMP/qualification/resolv.conf"
           sudo cp /etc/resolv.conf "$resolver_backup"
           restore_resolver() {
