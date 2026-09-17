@@ -102,4 +102,19 @@ func TestScenarioProgressFromReturnsOnlyBoundedOrchestrationFields(t *testing.T)
 	if _, err := ScenarioProgressFrom(DecodedMessage{}); err != ErrScenarioProgress {
 		t.Fatalf("unvalidated message error = %v", err)
 	}
+	evidence, err := ScenarioEvidenceFrom(message)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if evidence.CaseID != progress.CaseID || evidence.Disposition != progress.Disposition ||
+		len(evidence.Assertions) != 1 || evidence.Assertions[0] != (CallerAssertion{AssertionID: "capability-a-valid", Result: "asserted"}) {
+		t.Fatalf("scenario evidence = %#v", evidence)
+	}
+	evidence.Assertions[0].Result = "changed"
+	if bytes.Contains(message.Document, []byte("changed")) {
+		t.Fatal("scenario evidence aliases decoded document")
+	}
+	if _, err := ScenarioEvidenceFrom(DecodedMessage{}); err != ErrScenarioEvidence {
+		t.Fatalf("unvalidated evidence error = %v", err)
+	}
 }

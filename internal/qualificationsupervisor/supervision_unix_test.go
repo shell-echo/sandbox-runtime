@@ -86,6 +86,29 @@ func TestObserveCompletionStreamsSanitizedScenarioProgress(t *testing.T) {
 	}
 }
 
+func TestObserveCompletionRetainsBoundedScenarioEvidence(t *testing.T) {
+	_, process := deliveredCompletionProbe(t, "completion")
+	ctx, cancel := context.WithTimeout(context.Background(), realProcessTestLimit)
+	defer cancel()
+	var observed []ScenarioEvidence
+	if err := process.ObserveCompletionWithEvidenceCallbacks(ctx, nil, nil, func(evidence ScenarioEvidence) error {
+		observed = append(observed, evidence)
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(observed) != 15 || observed[0].CaseID != "initial.locked-capability-discovery" ||
+		observed[14].CaseID != "initial.provider-mtls-caller-binding-rejection" {
+		t.Fatalf("evidence = %#v", observed)
+	}
+	for _, evidence := range observed {
+		if evidence.Disposition != "not_executed" || evidence.StartedAt.IsZero() ||
+			!evidence.StartedAt.Equal(evidence.FinishedAt) || len(evidence.CallerAssertions) != 0 {
+			t.Fatalf("unexpected evidence = %#v", evidence)
+		}
+	}
+}
+
 func TestObserveCompletionProgressCallbackFailsClosed(t *testing.T) {
 	frozen, process := deliveredCompletionProbe(t, "completion")
 	ctx, cancel := context.WithTimeout(context.Background(), realProcessTestLimit)

@@ -48,6 +48,7 @@ jobs:
           mkdir -p "$RUNNER_TEMP/qualification/build"
           CGO_ENABLED=0 go -C provider build -trimpath -o "$RUNNER_TEMP/qualification/build/provider" .
           CGO_ENABLED=0 go -C provider build -trimpath -o "$RUNNER_TEMP/qualification/build/operator" ./cmd/run-external-caller-qualification
+          CGO_ENABLED=0 go -C provider build -trimpath -o "$RUNNER_TEMP/qualification/build/archive-verifier" ./cmd/verify-qualification-archive
           go -C external-caller run ./cmd/release-artifacts \
             -source-root "$GITHUB_WORKSPACE/external-caller" \
             -output "$RUNNER_TEMP/qualification/candidate" \
@@ -81,13 +82,25 @@ jobs:
           restore_resolver
           trap - EXIT
           sudo test -f "$run_root/execution-checkpoint.json"
-          sudo cp "$run_root/execution-checkpoint.json" "$RUNNER_TEMP/qualification/execution-checkpoint.json"
-          sudo chown "$(id -u):$(id -g)" "$RUNNER_TEMP/qualification/execution-checkpoint.json"
+          sudo test -f "$run_root/qualification-evidence.tar"
+          sudo test -f "$run_root/qualification-result.json"
+          sudo "$RUNNER_TEMP/qualification/build/archive-verifier" \
+            -source-root "$GITHUB_WORKSPACE/provider" \
+            -checkpoint "$run_root/execution-checkpoint.json" \
+            -archive "$run_root/qualification-evidence.tar" \
+            -envelope "$run_root/qualification-result.json"
+          result_root="$RUNNER_TEMP/qualification/result"
+          mkdir -p "$result_root"
+          sudo cp "$run_root/execution-checkpoint.json" "$result_root/execution-checkpoint.json"
+          sudo cp "$run_root/qualification-evidence.tar" "$result_root/qualification-evidence.tar"
+          sudo cp "$run_root/qualification-result.json" "$result_root/qualification-result.json"
+          sudo chown -R "$(id -u):$(id -g)" "$result_root"
+          chmod 600 "$result_root"/*
 
-      - name: Upload execution checkpoint
+      - name: Upload closed qualification result
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: external-caller-execution-checkpoint
-          path: ${{ runner.temp }}/qualification/execution-checkpoint.json
+          name: external-caller-qualification-result
+          path: ${{ runner.temp }}/qualification/result/
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 30

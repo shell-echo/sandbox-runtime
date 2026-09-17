@@ -37,7 +37,18 @@ func main() {
 	output := struct {
 		CheckpointPath   string `json:"checkpoint_path"`
 		CheckpointDigest string `json:"checkpoint_digest"`
-	}{CheckpointPath: result.CheckpointPath, CheckpointDigest: result.CheckpointDigest}
+		ArchivePath      string `json:"archive_path"`
+		ArchiveDigest    string `json:"archive_digest"`
+		EnvelopePath     string `json:"envelope_path"`
+		EnvelopeDigest   string `json:"envelope_digest"`
+		RunOutcome       string `json:"run_outcome"`
+		Validation       string `json:"validation_outcome"`
+	}{
+		CheckpointPath: result.CheckpointPath, CheckpointDigest: result.CheckpointDigest,
+		ArchivePath: result.Archive.Path, ArchiveDigest: result.Archive.Digest,
+		EnvelopePath: result.EnvelopePath, EnvelopeDigest: result.EnvelopeDigest,
+		RunOutcome: result.Evidence.RunOutcome, Validation: result.Evidence.ValidationOutcome,
+	}
 	encoder := json.NewEncoder(os.Stdout)
 	encoder.SetEscapeHTML(false)
 	if err := encoder.Encode(output); err != nil {

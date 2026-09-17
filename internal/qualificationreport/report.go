@@ -655,6 +655,132 @@ func Verify(ctx context.Context, evidenceRoot, sourceRoot string) (Result, error
 	return Result{ReportID: report.ReportID, InvocationID: report.Invocation.InvocationID, RuntimeCommitment: report.Invocation.RuntimeCommitmentDigest, ReportDigest: evidencefiles.RawDigest(reportBytes), PayloadInventory: inventory.Digest, ReceiptFile: ReceiptFileName, RunOutcome: report.RunOutcome.Outcome, ValidationOutcome: "accepted", FileCount: finalInventory.FileCount, TotalBytes: finalInventory.TotalBytes}, nil
 }
 
+// VerifyRetained performs a read-only independent validation of a completed
+// evidence root that already contains receipt.json. It recomputes every report,
+// payload and receipt binding and requires the receipt's exact canonical bytes;
+// it never creates, replaces or removes an entry.
+func VerifyRetained(ctx context.Context, evidenceRoot, sourceRoot string) (Result, error) {
+	if ctx == nil {
+		return Result{}, errors.New("qualification retained verification requires context")
+	}
+	if err := ctx.Err(); err != nil {
+		return Result{}, err
+	}
+	definition, err := qualificationprofile.VerifyCodingShellV1(ctx, sourceRoot)
+	if err != nil || definition.ProfileDigest != qualificationprofile.ExpectedProfileDigest {
+		return Result{}, errors.New("qualification definition is not locked")
+	}
+	schemaBytes, err := readSourceFile(sourceRoot, ReportSchemaPath, 2<<20)
+	if err != nil {
+		return Result{}, fmt.Errorf("read qualification report schema: %w", err)
+	}
+	schemaDigest := evidencefiles.RawDigest(schemaBytes)
+	if schemaDigest != ExpectedReportSchemaDigest {
+		return Result{}, errors.New("qualification report schema identity mismatch")
+	}
+	semantics, err := loadValidatorSemantics(sourceRoot, schemaDigest)
+	if err != nil {
+		return Result{}, err
+	}
+	if err := validateEmbeddedTranscriptAuthority(sourceRoot, schemaBytes); err != nil {
+		return Result{}, err
+	}
+	root, err := evidencefiles.OpenRoot(evidenceRoot)
+	if err != nil {
+		return Result{}, fmt.Errorf("open qualification evidence root: %w", err)
+	}
+	defer root.Close()
+	reportBytes, err := root.ReadFile(ReportFileName, maxReportBytes)
+	if err != nil {
+		return Result{}, fmt.Errorf("read qualification report: %w", err)
+	}
+	receiptBytes, err := root.ReadFile(ReceiptFileName, evidencefiles.DefaultMaxFileBytes)
+	if err != nil {
+		return Result{}, fmt.Errorf("read qualification receipt: %w", err)
+	}
+	var reportValue any
+	if err := decodeStrictJSON(reportBytes, &reportValue); err != nil || validateReportSchema(schemaBytes, reportValue) != nil {
+		return Result{}, errors.New("qualification retained report is invalid")
+	}
+	encoded, err := json.Marshal(reportValue)
+	if err != nil {
+		return Result{}, errors.New("encode qualification retained report")
+	}
+	var report reportDocument
+	if err := json.Unmarshal(encoded, &report); err != nil {
+		return Result{}, errors.New("decode qualification retained report model")
+	}
+	profileBytes, err := readSourceFile(sourceRoot, qualificationprofile.ProfilePath, 2<<20)
+	if err != nil {
+		return Result{}, errors.New("read qualification profile")
+	}
+	locked, err := decodeLockedProfile(profileBytes)
+	if err != nil {
+		return Result{}, err
+	}
+	payloadInventory, err := root.Read([]string{ReportFileName, ReceiptFileName}, evidencefiles.DefaultOptions())
+	if err != nil {
+		return Result{}, fmt.Errorf("read qualification retained payload inventory: %w", err)
+	}
+	if payloadInventory.FileCount < 1 || payloadInventory.TotalBytes < int64(len(receiptBytes)) {
+		return Result{}, errors.New("qualification retained evidence inventory is incomplete")
+	}
+	// evidencefiles.Inventory counts excluded files in FileCount/TotalBytes but
+	// omits them from Entries/Digest. Reconstruct the validator's pre-receipt
+	// view while retaining the exact payload entries and digest.
+	payloadInventory.FileCount--
+	payloadInventory.TotalBytes -= int64(len(receiptBytes))
+	payloads, err := loadPayloads(root, payloadInventory, schemaBytes, semantics)
+	if err != nil {
+		return Result{}, err
+	}
+	if err := validateSemantic(report, locked, definition, semantics, payloads); err != nil {
+		return Result{}, err
+	}
+	if err := validateSanitizedBytes(reportBytes); err != nil {
+		return Result{}, err
+	}
+	if err := validateSanitizedPayload(root, payloadInventory); err != nil {
+		return Result{}, err
+	}
+	if err := validateSanitizedBytes(receiptBytes); err != nil {
+		return Result{}, err
+	}
+	if err := validateEvidence(report, payloadInventory, reportBytes, int64(len(receiptBytes))); err != nil {
+		return Result{}, err
+	}
+	var receipt map[string]any
+	if err := decodeStrictJSON(receiptBytes, &receipt); err != nil || validateReceiptSchema(schemaBytes, receipt) != nil {
+		return Result{}, errors.New("qualification retained receipt is invalid")
+	}
+	validatedAt, ok := receipt["validated_at"].(string)
+	if !ok {
+		return Result{}, errors.New("qualification retained receipt timestamp is missing")
+	}
+	receiptTime, err := time.Parse("2006-01-02T15:04:05.000000000Z", validatedAt)
+	if err != nil {
+		return Result{}, errors.New("qualification retained receipt timestamp is invalid")
+	}
+	expectedReceipt, _, err := makeReceiptAt(report, reportBytes, payloadInventory, semantics, receiptTime)
+	if err != nil || !bytes.Equal(expectedReceipt, receiptBytes) {
+		return Result{}, errors.New("qualification retained receipt bindings differ")
+	}
+	finalInventory, err := root.Read(nil, evidencefiles.DefaultOptions())
+	if err != nil || finalInventory.FileCount != report.Evidence.FileCount || finalInventory.TotalBytes != report.Evidence.TotalBytes {
+		return Result{}, errors.New("qualification retained evidence inventory differs")
+	}
+	if err := ctx.Err(); err != nil {
+		return Result{}, err
+	}
+	return Result{
+		ReportID: report.ReportID, InvocationID: report.Invocation.InvocationID,
+		RuntimeCommitment: report.Invocation.RuntimeCommitmentDigest,
+		ReportDigest:      evidencefiles.RawDigest(reportBytes), PayloadInventory: payloadInventory.Digest,
+		ReceiptFile: ReceiptFileName, RunOutcome: report.RunOutcome.Outcome,
+		ValidationOutcome: "accepted", FileCount: finalInventory.FileCount, TotalBytes: finalInventory.TotalBytes,
+	}, nil
+}
+
 func decodeLockedProfile(profileBytes []byte) (profileDocument, error) {
 	if err := qualificationprofile.VerifyCodingShellV1ProfileDocument(profileBytes); err != nil {
 		return profileDocument{}, fmt.Errorf("qualification profile changed after definition verification: %w", err)
@@ -1977,6 +2103,10 @@ func forbiddenMaterialMarkers() []string {
 }
 
 func makeReceipt(report reportDocument, reportBytes []byte, inventory evidencefiles.Inventory, semantics validatorSemantics) ([]byte, map[string]any, error) {
+	return makeReceiptAt(report, reportBytes, inventory, semantics, time.Now().UTC())
+}
+
+func makeReceiptAt(report reportDocument, reportBytes []byte, inventory evidencefiles.Inventory, semantics validatorSemantics, now time.Time) ([]byte, map[string]any, error) {
 	artifactDigests := make([]map[string]any, len(report.Artifacts))
 	for index, artifact := range report.Artifacts {
 		artifactDigests[index] = map[string]any{"artifact_id": artifact.ArtifactID, "digest": artifact.Digest}
@@ -1989,7 +2119,7 @@ func makeReceipt(report reportDocument, reportBytes []byte, inventory evidencefi
 	if err != nil {
 		return nil, nil, fmt.Errorf("digest qualification scenario results: %w", err)
 	}
-	now := time.Now().UTC()
+	now = now.UTC()
 	receipt := map[string]any{"format_version": 1, "receipt_type": "sandbox-runtime-external-caller-qualification-validator-receipt", "receipt_version": "1.0.0", "receipt_id": fmt.Sprintf("receipt-%016x", uint64(now.UnixNano())), "report_schema": semantics.ReportSchema, "validator_semantics": authorityIdentity{Path: ValidatorSemanticsPath, Digest: ExpectedValidatorSemanticsDigest}, "adapter_protocol": semantics.AdapterProtocol, "report_sha256": evidencefiles.RawDigest(reportBytes), "report_digest_profile": evidencefiles.FileDigestProfile, "payload_inventory_sha256": inventory.Digest, "payload_inventory_digest_profile": evidencefiles.DigestProfile, "profile": report.Profile, "invocation_id": report.Invocation.InvocationID, "runtime_commitment_digest": report.Invocation.RuntimeCommitmentDigest, "artifact_digests": artifactDigests, "process_identity_digest": processDigest, "phase_ordered_result_digest": phaseDigest, "completion_state": report.RunOutcome.Outcome, "validation_outcome": "accepted", "validated_at": now.Format("2006-01-02T15:04:05.000000000Z")}
 	encoded, err := json.Marshal(receipt)
 	if err != nil {

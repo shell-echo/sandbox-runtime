@@ -25,10 +25,32 @@ type InteractionProgress struct {
 	WireAttempts  int
 }
 
+// CallerAssertion is a closed copy of one schema-validated caller-owned
+// assertion. It remains separate from the request-free harness projection.
+type CallerAssertion struct {
+	AssertionID string
+	Result      string
+}
+
+// ScenarioEvidence binds one validated scenario_result to the supervisor's
+// observation interval. A not_executed case has an instantaneous interval
+// because the locked protocol correctly omits scenario_started for that path.
+type ScenarioEvidence struct {
+	CaseID           string
+	Disposition      string
+	StartedAt        time.Time
+	FinishedAt       time.Time
+	CallerAssertions []CallerAssertion
+}
+
 // ProgressObserver receives each accepted scenario result in locked order.
 // Returning an error fails closed and reclaims the process. Implementations
 // must not block beyond the context supplied to ObserveCompletionWithProgress.
 type ProgressObserver func(ScenarioProgress) error
+
+// EvidenceObserver receives only the bounded report-assembly projection after
+// the scenario result has passed the locked state machine.
+type EvidenceObserver func(ScenarioEvidence) error
 
 type outputReadResult struct {
 	message protocol.DecodedMessage
@@ -57,6 +79,13 @@ func (p *StartedProcess) ObserveCompletionWithProgress(ctx context.Context, obse
 // invocation_accepted boundary. The acceptance callback receives no adapter
 // data and is useful only to satisfy the harness start/session handoff.
 func (p *StartedProcess) ObserveCompletionWithCallbacks(ctx context.Context, accepted func() error, observer ProgressObserver) error {
+	return p.ObserveCompletionWithEvidenceCallbacks(ctx, accepted, observer, nil)
+}
+
+// ObserveCompletionWithEvidenceCallbacks additionally retains the exact
+// caller assertions and supervisor-observed case interval needed by the final
+// evidence assembler. It never exposes raw adapter output.
+func (p *StartedProcess) ObserveCompletionWithEvidenceCallbacks(ctx context.Context, accepted func() error, observer ProgressObserver, evidenceObserver EvidenceObserver) error {
 	if p == nil || p.core == nil {
 		return ErrSupervision
 	}
@@ -75,6 +104,8 @@ func (p *StartedProcess) ObserveCompletionWithCallbacks(ctx context.Context, acc
 
 	machine := core.admission.machine
 	var caseDeadline time.Time
+	var startedCase string
+	var startedAt time.Time
 	stderrDone := core.stderrDone
 	for machine.State() != protocol.PhaseStateTerminalObserved {
 		result, failure := core.nextOutput(operationContext, caseDeadline, stderrDone)
@@ -95,6 +126,7 @@ func (p *StartedProcess) ObserveCompletionWithCallbacks(ctx context.Context, acc
 		}
 
 		state := machine.State()
+		observedAt := time.Now().UTC()
 		switch result.message.MessageType {
 		case "invocation_accepted":
 			if state != protocol.PhaseStateAwaitingInvocationAcceptance {
@@ -106,16 +138,36 @@ func (p *StartedProcess) ObserveCompletionWithCallbacks(ctx context.Context, acc
 			}
 		case "scenario_started":
 			err = machine.AcceptScenarioStarted(result.message)
+			if err == nil && result.message.CaseID != nil {
+				startedCase = *result.message.CaseID
+				startedAt = observedAt
+			}
 		case "scenario_result":
 			err = machine.AcceptScenarioResult(result.message)
+			if err == nil {
+				evidence, projectionErr := protocol.ScenarioEvidenceFrom(result.message)
+				if projectionErr != nil {
+					err = projectionErr
+				} else if evidence.Disposition == "completed" && (startedCase != evidence.CaseID || startedAt.IsZero()) {
+					err = ErrSupervision
+				} else if evidenceObserver != nil {
+					caseStart := startedAt
+					if caseStart.IsZero() {
+						caseStart = observedAt
+					}
+					if evidenceObserver(projectScenarioEvidence(evidence, caseStart, observedAt)) != nil {
+						err = ErrSupervision
+					}
+				}
+				startedCase = ""
+				startedAt = time.Time{}
+			}
 			if err == nil && observer != nil {
 				progress, projectionErr := protocol.ScenarioProgressFrom(result.message)
 				if projectionErr != nil {
 					err = projectionErr
-				} else {
-					if observer(projectScenarioProgress(progress)) != nil {
-						err = ErrSupervision
-					}
+				} else if observer(projectScenarioProgress(progress)) != nil {
+					err = ErrSupervision
 				}
 			}
 		case "invocation_finished", "protocol_error":
@@ -143,6 +195,21 @@ func (p *StartedProcess) ObserveCompletionWithCallbacks(ctx context.Context, acc
 		return failSupervision(core, ErrSupervision)
 	}
 	return nil
+}
+
+func projectScenarioEvidence(source protocol.ScenarioEvidence, startedAt, finishedAt time.Time) ScenarioEvidence {
+	result := ScenarioEvidence{
+		CaseID: source.CaseID, Disposition: source.Disposition,
+		StartedAt: startedAt, FinishedAt: finishedAt,
+		CallerAssertions: make([]CallerAssertion, len(source.Assertions)),
+	}
+	for index, assertion := range source.Assertions {
+		result.CallerAssertions[index] = CallerAssertion{
+			AssertionID: assertion.AssertionID,
+			Result:      assertion.Result,
+		}
+	}
+	return result
 }
 
 func projectScenarioProgress(source protocol.ScenarioProgress) ScenarioProgress {

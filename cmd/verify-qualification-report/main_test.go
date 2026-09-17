@@ -60,6 +60,25 @@ func TestRunVerifiesEvidenceAndPrintsSanitizedResult(t *testing.T) {
 	}
 }
 
+func TestRunReadOnlyVerifiesRetainedReceipt(t *testing.T) {
+	original := verifyRetainedQualificationReport
+	t.Cleanup(func() { verifyRetainedQualificationReport = original })
+	called := false
+	verifyRetainedQualificationReport = func(ctx context.Context, evidenceRoot, sourceRoot string) (qualificationreport.Result, error) {
+		called = true
+		return qualificationreport.Result{
+			ReportID: "report-retained", ReportDigest: "sha256:report",
+			PayloadInventory: "sha256:inventory", ReceiptFile: "receipt.json",
+			RunOutcome: "passed", ValidationOutcome: "accepted", FileCount: 7, TotalBytes: 2048,
+		}, nil
+	}
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	if got := run([]string{"-retained", "-source-root", "/source", "-evidence-root", "/evidence"}, &stdout, &stderr); got != 0 || !called {
+		t.Fatalf("run() exit=%d called=%v stderr=%q", got, called, stderr.String())
+	}
+}
+
 func TestRunRequiresEvidenceRoot(t *testing.T) {
 	originalVerify := verifyQualificationReport
 	t.Cleanup(func() { verifyQualificationReport = originalVerify })

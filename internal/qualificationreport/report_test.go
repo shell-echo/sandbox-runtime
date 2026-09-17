@@ -214,6 +214,14 @@ func TestVerifyAcceptsConsistentSyntheticEvidenceAndWritesReceipt(t *testing.T) 
 	}) {
 		t.Fatal("receipt does not bind the report, validator, and adapter protocol authorities")
 	}
+	retained, err := VerifyRetained(context.Background(), root, sourceRoot)
+	if err != nil {
+		t.Fatalf("VerifyRetained() error = %v", err)
+	}
+	if retained.ReportDigest != result.ReportDigest || retained.PayloadInventory != result.PayloadInventory ||
+		retained.RunOutcome != "passed" || retained.ValidationOutcome != "accepted" || retained.FileCount != 7 {
+		t.Fatalf("VerifyRetained() result = %+v", retained)
+	}
 }
 
 func TestVerifyAcceptsHonestNotExecutedReportWithoutPayloads(t *testing.T) {

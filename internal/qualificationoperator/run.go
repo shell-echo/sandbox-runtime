@@ -17,8 +17,10 @@ import (
 
 	"github.com/shell-echo/sandbox-runtime/internal/providercontract"
 	protocol "github.com/shell-echo/sandbox-runtime/internal/qualificationadapterprotocol"
+	"github.com/shell-echo/sandbox-runtime/internal/qualificationarchive"
 	"github.com/shell-echo/sandbox-runtime/internal/qualificationharness"
 	"github.com/shell-echo/sandbox-runtime/internal/qualificationprofile"
+	"github.com/shell-echo/sandbox-runtime/internal/qualificationreport"
 	"github.com/shell-echo/sandbox-runtime/internal/qualificationsupervisor"
 )
 
@@ -47,6 +49,7 @@ type ExecutionCheckpoint struct {
 	Reconstruction          qualificationharness.ReconstructionPhaseResult  `json:"reconstruction_phase"`
 	Observation             qualificationharness.ExecutionObservationResult `json:"execution_observation"`
 	Cleanup                 qualificationharness.CleanupResult              `json:"cleanup"`
+	EvidenceFinalization    qualificationharness.EvidenceFinalizationResult `json:"evidence_finalization"`
 	AdapterTranscriptDigest string                                          `json:"adapter_transcript_digest"`
 	CompletedAt             time.Time                                       `json:"completed_at"`
 }
@@ -55,6 +58,11 @@ type RunResult struct {
 	CheckpointPath   string
 	CheckpointDigest string
 	Checkpoint       ExecutionCheckpoint
+	EvidenceRoot     string
+	Evidence         qualificationharness.EvidenceFinalizationResult
+	Archive          qualificationarchive.Result
+	EnvelopePath     string
+	EnvelopeDigest   string
 }
 
 type staticIdentityObserver struct {
@@ -142,6 +150,16 @@ func Run(ctx context.Context, configuration RunConfiguration) (_ RunResult, resu
 		"external_caller": callerPath, "caller_gateway": gatewayPath, "operator": configuration.OperatorExecutable,
 	} {
 		digest, _, digestErr := digestFile(path, qualificationsupervisor.MaxExecutableBytes)
+		if digestErr != nil {
+			return RunResult{}, ErrQualificationRun
+		}
+		digests[id] = digest
+	}
+	for id, path := range map[string]string{
+		"candidate_manifest": filepath.Join(filepath.Dir(configuration.CandidateDirectory), "release-manifest.json"),
+		"candidate_source":   filepath.Join(filepath.Dir(configuration.CandidateDirectory), "source.tar"),
+	} {
+		digest, _, digestErr := digestFile(path, 64<<20)
 		if digestErr != nil {
 			return RunResult{}, ErrQualificationRun
 		}
@@ -338,20 +356,59 @@ func Run(ctx context.Context, configuration RunConfiguration) (_ RunResult, resu
 	if processes.Emulated() {
 		return RunResult{}, qualificationStage("emulated-target-not-qualifying", nil)
 	}
+	assemblyInput, trustedInputs, err := finalAssemblyInput(configuration, transcript, executor, digests, static, frozen)
+	if err != nil {
+		return RunResult{}, qualificationStage("evidence-assembly-input", err)
+	}
+	finalization, err := qualificationharness.FinalizeEvidence(ctx, prepared, qualificationreport.RootAssembler{
+		SourceRoot: configuration.SourceRoot, EvidenceRoot: paths.supervisorEvidence, Input: assemblyInput,
+	})
+	if err != nil || finalization.RunOutcome != qualificationharness.DerivedPassed || finalization.ValidationOutcome != "accepted" {
+		return RunResult{}, qualificationStage("evidence-finalization", err)
+	}
+	retained, err := qualificationreport.VerifyRetained(ctx, paths.supervisorEvidence, configuration.SourceRoot)
+	if err != nil || !retainedMatchesFinalization(retained, finalization) {
+		return RunResult{}, qualificationStage("retained-evidence-verification", err)
+	}
 	profileID, profileVersion, profileDigest := frozen.ProfileIdentity()
 	checkpoint := ExecutionCheckpoint{
 		FormatVersion: 1, CheckpointType: "sandbox-runtime-external-caller-execution-checkpoint-v1",
 		ProfileID: profileID, ProfileVersion: profileVersion, ProfileDigest: profileDigest,
 		StaticConfiguration: frozen.Digest(), RuntimeCommitment: prepared.Digest(), Initial: initial,
-		Reconstruction: reconstruction, Observation: observed, Cleanup: cleanup,
+		Reconstruction: reconstruction, Observation: observed, Cleanup: cleanup, EvidenceFinalization: finalization,
 		AdapterTranscriptDigest: transcript.Digest, CompletedAt: time.Now().UTC(),
 	}
 	checkpointPath := filepath.Join(configuration.RunRoot, "execution-checkpoint.json")
 	document, err := json.MarshalIndent(checkpoint, "", "  ")
-	if err != nil || os.WriteFile(checkpointPath, append(document, '\n'), 0o600) != nil {
+	checkpointBytes := append(document, '\n')
+	if err != nil || writeExclusive(checkpointPath, checkpointBytes) != nil {
 		return RunResult{}, ErrQualificationRun
 	}
-	return RunResult{CheckpointPath: checkpointPath, CheckpointDigest: rawSHA256(document), Checkpoint: checkpoint}, nil
+	checkpointDigest := rawSHA256(checkpointBytes)
+	archivePath := filepath.Join(configuration.RunRoot, "qualification-evidence.tar")
+	archive, err := qualificationarchive.Create(ctx, paths.supervisorEvidence, archivePath)
+	if err != nil {
+		return RunResult{}, qualificationStage("evidence-archive", err)
+	}
+	envelopePath := filepath.Join(configuration.RunRoot, "qualification-result.json")
+	envelopeDigest, err := qualificationarchive.WriteEnvelope(envelopePath, qualificationarchive.EnvelopeInput{
+		ProfileID: profileID, ProfileVersion: profileVersion, ProfileDigest: profileDigest,
+		ProviderRevision: configuration.ProviderSourceRevision, ExternalRevision: configuration.ExternalSourceRevision,
+		CheckpointPath: checkpointPath, CheckpointDigest: checkpointDigest, Archive: archive, Evidence: retained,
+		TrustedInputs: trustedInputs, CompletedAt: time.Now().UTC(),
+	})
+	if err != nil {
+		return RunResult{}, qualificationStage("qualification-result-envelope", err)
+	}
+	verifiedBundle, err := qualificationarchive.VerifyBundle(ctx, configuration.SourceRoot, checkpointPath, archivePath, envelopePath)
+	if err != nil || verifiedBundle.EnvelopeDigest != envelopeDigest || verifiedBundle.ArchiveDigest != archive.Digest || verifiedBundle.Evidence != retained {
+		return RunResult{}, qualificationStage("qualification-bundle-verification", err)
+	}
+	return RunResult{
+		CheckpointPath: checkpointPath, CheckpointDigest: checkpointDigest, Checkpoint: checkpoint,
+		EvidenceRoot: paths.supervisorEvidence, Evidence: finalization, Archive: archive,
+		EnvelopePath: envelopePath, EnvelopeDigest: envelopeDigest,
+	}, nil
 }
 
 type runPaths struct {
@@ -478,6 +535,114 @@ func finalizeTranscript(preflight *qualificationsupervisor.FrozenPreflight, exec
 		return protocol.TranscriptProjection{}, err
 	}
 	return preflight.FinalizeTranscript(initial, reconstruction)
+}
+
+func finalAssemblyInput(configuration RunConfiguration, transcript protocol.TranscriptProjection, executor *PhaseExecutor, digests map[string]string, static qualificationharness.Configuration, frozen *qualificationharness.FrozenConfiguration) (qualificationreport.AssemblyInput, []qualificationarchive.TrustedInputSubject, error) {
+	if executor == nil || frozen == nil || len(transcript.Document) == 0 {
+		return qualificationreport.AssemblyInput{}, nil, ErrQualificationRun
+	}
+	timings := make([]qualificationreport.ScenarioTimingInput, 0, 20)
+	assertions := make([]qualificationreport.CallerAssertionInput, 0, 29)
+	for _, phase := range []struct {
+		id    string
+		count int
+	}{{id: "initial", count: 15}, {id: "reconstruction", count: 5}} {
+		evidence := executor.ScenarioEvidence(phase.id)
+		if len(evidence) != phase.count {
+			return qualificationreport.AssemblyInput{}, nil, ErrQualificationRun
+		}
+		for _, scenario := range evidence {
+			if scenario.Disposition != "completed" || scenario.StartedAt.IsZero() || scenario.FinishedAt.Before(scenario.StartedAt) {
+				return qualificationreport.AssemblyInput{}, nil, ErrQualificationRun
+			}
+			timings = append(timings, qualificationreport.ScenarioTimingInput{
+				CaseID: scenario.CaseID, PhaseID: phase.id,
+				StartedAt: scenario.StartedAt.UTC(), FinishedAt: scenario.FinishedAt.UTC(),
+			})
+			for _, assertion := range scenario.CallerAssertions {
+				assertions = append(assertions, qualificationreport.CallerAssertionInput{
+					AssertionID: assertion.AssertionID, Result: assertion.Result,
+				})
+			}
+		}
+	}
+	if len(assertions) != 29 {
+		return qualificationreport.AssemblyInput{}, nil, ErrQualificationRun
+	}
+	target := frozen.TargetIdentity()
+	topologyDigest, err := canonicalSHA256(frozen.Topology())
+	if err != nil {
+		return qualificationreport.AssemblyInput{}, nil, ErrQualificationRun
+	}
+	statements := []struct {
+		id        string
+		source    string
+		statement map[string]any
+	}{
+		{id: "external-caller-ownership", source: "external_caller_owner", statement: map[string]any{
+			"repository": "github.com/shell-echo/sandbox-runtime-external-caller", "source_revision": configuration.ExternalSourceRevision,
+			"external_caller_digest": digests["external_caller"], "qualification_adapter_digest": digests["qualification_adapter"], "caller_gateway_digest": digests["caller_gateway"],
+		}},
+		{id: "source-hosting", source: "external_caller_owner", statement: map[string]any{
+			"repository": "github.com/shell-echo/sandbox-runtime-external-caller", "source_revision": configuration.ExternalSourceRevision,
+			"source_archive_digest": digests["candidate_source"],
+		}},
+		{id: "build-system", source: "external_caller_owner", statement: map[string]any{
+			"release_manifest_digest": digests["candidate_manifest"], "source_archive_digest": digests["candidate_source"],
+			"qualification_adapter_digest": digests["qualification_adapter"], "external_caller_digest": digests["external_caller"], "caller_gateway_digest": digests["caller_gateway"],
+		}},
+		{id: "operating-system", source: "qualification_operator", statement: map[string]any{
+			"goos": runtime.GOOS, "goarch": runtime.GOARCH, "target_digest": target.TargetDigest,
+			"provider_source_revision": configuration.ProviderSourceRevision,
+		}},
+		{id: "network-path", source: "qualification_operator", statement: map[string]any{
+			"observer_configuration_digest": static.ComponentConfigurations.Observer,
+			"gateway_configuration_digest":  static.ComponentConfigurations.Gateway,
+			"topology_configuration_digest": topologyDigest,
+		}},
+	}
+	trusted := make([]qualificationreport.TrustedInputStatementInput, len(statements))
+	subjects := make([]qualificationarchive.TrustedInputSubject, len(statements))
+	for index, statement := range statements {
+		digest, err := canonicalSHA256(statement.statement)
+		if err != nil {
+			return qualificationreport.AssemblyInput{}, nil, ErrQualificationRun
+		}
+		trusted[index] = qualificationreport.TrustedInputStatementInput{
+			InputID: statement.id, Source: statement.source, SubjectDigest: digest,
+		}
+		subjects[index] = qualificationarchive.TrustedInputSubject{
+			InputID: statement.id, Source: statement.source, SubjectDigest: digest,
+			Statement: statement.statement,
+		}
+	}
+	return qualificationreport.AssemblyInput{
+		AdapterTranscriptProjection: append([]byte(nil), transcript.Document...),
+		ScenarioTimings:             timings, CallerAssertions: assertions, TrustedInputs: trusted,
+	}, subjects, nil
+}
+
+func retainedMatchesFinalization(retained qualificationreport.Result, final qualificationharness.EvidenceFinalizationResult) bool {
+	return retained.ReportID == final.ReportID && retained.InvocationID == final.InvocationID &&
+		retained.RuntimeCommitment == final.RuntimeCommitmentDigest && retained.ReportDigest == final.ReportDigest &&
+		retained.PayloadInventory == final.PayloadInventoryDigest && retained.ReceiptFile == final.ReceiptFile &&
+		retained.RunOutcome == final.RunOutcome && retained.ValidationOutcome == final.ValidationOutcome &&
+		retained.FileCount == final.FileCount && retained.TotalBytes == final.TotalBytes
+}
+
+func writeExclusive(path string, document []byte) error {
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		return err
+	}
+	written, writeErr := file.Write(document)
+	syncErr := file.Sync()
+	closeErr := file.Close()
+	if writeErr != nil || syncErr != nil || closeErr != nil || written != len(document) {
+		_ = os.Remove(path)
+		return ErrQualificationRun
+	}
+	return nil
 }
 
 func digestFile(path string, limit int64) (string, int64, error) {

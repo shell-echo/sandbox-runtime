@@ -8,6 +8,7 @@ import (
 var (
 	ErrInvocationDetails = errors.New("adapter invocation details rejected")
 	ErrScenarioProgress  = errors.New("adapter scenario progress rejected")
+	ErrScenarioEvidence  = errors.New("adapter scenario evidence rejected")
 	ErrTerminalStatus    = errors.New("adapter terminal status rejected")
 )
 
@@ -79,6 +80,23 @@ type ScenarioProgress struct {
 	Interactions []InteractionProgress
 }
 
+// CallerAssertion is the closed caller-owned assertion projection retained
+// for final report assembly. It contains no request, endpoint, credential or
+// caller correlation value.
+type CallerAssertion struct {
+	AssertionID string
+	Result      string
+}
+
+// ScenarioEvidence is available only after a scenario_result passed the
+// locked output schema. It is separate from ScenarioProgress so the execution
+// harness remains request- and assertion-free.
+type ScenarioEvidence struct {
+	CaseID      string
+	Disposition string
+	Assertions  []CallerAssertion
+}
+
 type scenarioProgressDocument struct {
 	CaseID       string  `json:"case_id"`
 	Disposition  string  `json:"disposition"`
@@ -87,6 +105,15 @@ type scenarioProgressDocument struct {
 		InteractionID string `json:"interaction_id"`
 		WireAttempts  int    `json:"wire_attempts"`
 	} `json:"interactions"`
+}
+
+type scenarioEvidenceDocument struct {
+	CaseID      string `json:"case_id"`
+	Disposition string `json:"disposition"`
+	Assertions  []struct {
+		AssertionID string `json:"assertion_id"`
+		Result      string `json:"result"`
+	} `json:"assertions"`
 }
 
 // ScenarioProgressFrom returns a defensive, sanitized projection only for a
@@ -112,6 +139,33 @@ func ScenarioProgressFrom(message DecodedMessage) (ScenarioProgress, error) {
 		result.Interactions[index] = InteractionProgress{
 			InteractionID: interaction.InteractionID,
 			WireAttempts:  interaction.WireAttempts,
+		}
+	}
+	return result, nil
+}
+
+// ScenarioEvidenceFrom returns only the locked case identity, disposition and
+// caller-owned assertion tuples from one validated scenario_result. The raw
+// adapter document never crosses the protocol boundary.
+func ScenarioEvidenceFrom(message DecodedMessage) (ScenarioEvidence, error) {
+	if message.validatedBy == nil || message.direction != decodedAdapterToHarness ||
+		message.MessageType != "scenario_result" || message.CaseID == nil ||
+		message.disposition == nil {
+		return ScenarioEvidence{}, ErrScenarioEvidence
+	}
+	var document scenarioEvidenceDocument
+	if err := json.Unmarshal(message.Document, &document); err != nil ||
+		document.CaseID != *message.CaseID || document.Disposition != *message.disposition {
+		return ScenarioEvidence{}, ErrScenarioEvidence
+	}
+	result := ScenarioEvidence{
+		CaseID: document.CaseID, Disposition: document.Disposition,
+		Assertions: make([]CallerAssertion, len(document.Assertions)),
+	}
+	for index, assertion := range document.Assertions {
+		result.Assertions[index] = CallerAssertion{
+			AssertionID: assertion.AssertionID,
+			Result:      assertion.Result,
 		}
 	}
 	return result, nil

@@ -16,6 +16,7 @@ import (
 )
 
 var verifyQualificationReport = qualificationreport.Verify
+var verifyRetainedQualificationReport = qualificationreport.VerifyRetained
 
 func main() {
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
@@ -26,8 +27,10 @@ func run(arguments []string, stdout, stderr io.Writer) int {
 	flags.SetOutput(stderr)
 	var sourceRoot string
 	var evidenceRoot string
+	var retained bool
 	flags.StringVar(&sourceRoot, "source-root", ".", "repository source root containing the locked qualification definition")
 	flags.StringVar(&evidenceRoot, "evidence-root", "", "required path to the complete sanitized qualification evidence root")
+	flags.BoolVar(&retained, "retained", false, "verify an existing receipt without modifying the evidence root")
 	if err := flags.Parse(arguments); err != nil {
 		return 2
 	}
@@ -42,7 +45,11 @@ func run(arguments []string, stdout, stderr io.Writer) int {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	result, err := verifyQualificationReport(ctx, evidenceRoot, sourceRoot)
+	verify := verifyQualificationReport
+	if retained {
+		verify = verifyRetainedQualificationReport
+	}
+	result, err := verify(ctx, evidenceRoot, sourceRoot)
 	if err != nil {
 		_, _ = fmt.Fprintln(stderr, "verify-qualification-report:", err)
 		return 1

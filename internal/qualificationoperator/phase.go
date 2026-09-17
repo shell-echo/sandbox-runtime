@@ -36,6 +36,7 @@ type PhaseExecutor struct {
 	phaseEvidence     map[string]qualificationsupervisor.PhaseEvidence
 	plannedProcesses  map[string]map[string]string
 	progressByPhase   map[string][]qualificationharness.ScenarioProgress
+	scenarioEvidence  map[string][]qualificationsupervisor.ScenarioEvidence
 	terminalByPhase   map[string]string
 }
 
@@ -48,6 +49,7 @@ func NewPhaseExecutor(preflight *qualificationsupervisor.FrozenPreflight, codec 
 		initialProcesses: map[string]string{"provider": initialProviderIdentity},
 		phaseEvidence:    make(map[string]qualificationsupervisor.PhaseEvidence, 2), plannedProcesses: make(map[string]map[string]string, 2),
 		progressByPhase: make(map[string][]qualificationharness.ScenarioProgress, 2), terminalByPhase: make(map[string]string, 2),
+		scenarioEvidence: make(map[string][]qualificationsupervisor.ScenarioEvidence, 2),
 	}, nil
 }
 
@@ -166,7 +168,7 @@ func (e *PhaseExecutor) start(ctx context.Context, phase, invocationID string) (
 	}
 	session := &phaseSession{owner: e, phase: phase, process: process, progress: make(chan qualificationharness.ScenarioProgress, 15), done: make(chan error, 1), accepted: make(chan struct{})}
 	go func() {
-		err := process.ObserveCompletionWithCallbacks(ctx, func() error {
+		err := process.ObserveCompletionWithEvidenceCallbacks(ctx, func() error {
 			close(session.accepted)
 			return nil
 		}, func(progress qualificationsupervisor.ScenarioProgress) error {
@@ -187,6 +189,11 @@ func (e *PhaseExecutor) start(ctx context.Context, phase, invocationID string) (
 			case <-ctx.Done():
 				return context.Cause(ctx)
 			}
+		}, func(evidence qualificationsupervisor.ScenarioEvidence) error {
+			e.mu.Lock()
+			e.scenarioEvidence[phase] = append(e.scenarioEvidence[phase], cloneScenarioEvidence(evidence))
+			e.mu.Unlock()
+			return nil
 		})
 		if code := process.TerminalErrorCode(); code != "" {
 			e.mu.Lock()
@@ -290,6 +297,25 @@ func (e *PhaseExecutor) Progress(phase string) []qualificationharness.ScenarioPr
 		result[index].Interactions = append([]qualificationharness.InteractionProgress(nil), values[index].Interactions...)
 	}
 	return result
+}
+
+// ScenarioEvidence returns the supervisor-observed timing and caller-assertion
+// projection for final report assembly. It is not exposed to the request-free
+// execution harness.
+func (e *PhaseExecutor) ScenarioEvidence(phase string) []qualificationsupervisor.ScenarioEvidence {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	values := e.scenarioEvidence[phase]
+	result := make([]qualificationsupervisor.ScenarioEvidence, len(values))
+	for index, value := range values {
+		result[index] = cloneScenarioEvidence(value)
+	}
+	return result
+}
+
+func cloneScenarioEvidence(value qualificationsupervisor.ScenarioEvidence) qualificationsupervisor.ScenarioEvidence {
+	value.CallerAssertions = append([]qualificationsupervisor.CallerAssertion(nil), value.CallerAssertions...)
+	return value
 }
 
 func randomLabel(prefix string) (string, error) {
