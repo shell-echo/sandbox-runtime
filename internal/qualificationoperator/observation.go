@@ -27,16 +27,18 @@ type ObserverBundle struct {
 	resources      *DockerResources
 	transcript     protocol.TranscriptProjection
 	reconstruction qualificationprofile.ReconstructionRequirements
+	contract       providerDocumentValidator
 
-	once            sync.Once
-	buildErr        error
-	provider        []qualificationharness.ObservedInteraction
-	gateway         []qualificationharness.ObservedInteraction
-	providerFacts   []qualificationharness.ObserverFact
-	gatewayFacts    []qualificationharness.ObserverFact
-	processFacts    []qualificationharness.ObserverFact
-	resourceFacts   []qualificationharness.ObserverFact
-	challengeDigest string
+	once             sync.Once
+	buildErr         error
+	provider         []qualificationharness.ObservedInteraction
+	gateway          []qualificationharness.ObservedInteraction
+	providerFacts    []qualificationharness.ObserverFact
+	gatewayFacts     []qualificationharness.ObserverFact
+	processFacts     []qualificationharness.ObserverFact
+	resourceFacts    []qualificationharness.ObserverFact
+	challengeDigest  string
+	sandboxResources *qualificationharness.SandboxResourceObservation
 }
 
 type ObserverBundleInput struct {
@@ -50,17 +52,18 @@ type ObserverBundleInput struct {
 	Processes      *ProcessObserver
 	Resources      *DockerResources
 	Transcript     protocol.TranscriptProjection
+	Contract       providerDocumentValidator
 }
 
 func NewObserverBundle(input ObserverBundleInput) (*ObserverBundle, error) {
 	if input.RuntimeDigest == "" || len(input.Observation.Artifacts) != 11 || len(input.Observation.Configurations) != 10 ||
-		len(input.Plan) != 2 || input.Proxy == nil || input.Executor == nil || input.Processes == nil || input.Resources == nil || input.Transcript.Digest == "" {
+		len(input.Plan) != 2 || input.Proxy == nil || input.Executor == nil || input.Processes == nil || input.Resources == nil || input.Transcript.Digest == "" || input.Contract == nil {
 		return nil, ErrObservationProjection
 	}
 	return &ObserverBundle{
 		runtimeDigest: input.RuntimeDigest, artifacts: input.Observation.Artifacts, configs: input.Observation.Configurations,
 		target: input.Observation.Target, limits: input.Limits, plan: input.Plan, reconstruction: input.Reconstruction,
-		proxy: input.Proxy, executor: input.Executor, processes: input.Processes, resources: input.Resources, transcript: input.Transcript,
+		proxy: input.Proxy, executor: input.Executor, processes: input.Processes, resources: input.Resources, transcript: input.Transcript, contract: input.Contract,
 	}, nil
 }
 
@@ -71,11 +74,8 @@ func (b *ObserverBundle) ObserveProvider(_ context.Context, directive qualificat
 	return qualificationharness.ProviderExecutionObservation{
 		RuntimeCommitmentDigest: b.runtimeDigest, ObserverArtifactDigest: b.artifactDigest(qualificationharness.ProviderObserverSource),
 		ObserverConfigurationDigest: b.configurationDigest("observer_configuration"),
-		SandboxResources: &qualificationharness.SandboxResourceObservation{
-			CPUMillis: b.limits.SandboxCPUMillis, MemoryBytes: b.limits.SandboxMemoryBytes,
-			EphemeralStorageBytes: b.limits.SandboxEphemeralStorageBytes, PIDs: b.limits.SandboxPIDs,
-		},
-		Interactions: cloneInteractions(b.provider), Facts: append([]qualificationharness.ObserverFact(nil), b.providerFacts...),
+		SandboxResources:            cloneSandboxResources(b.sandboxResources),
+		Interactions:                cloneInteractions(b.provider), Facts: append([]qualificationharness.ObserverFact(nil), b.providerFacts...),
 	}, nil
 }
 
@@ -173,10 +173,38 @@ func (b *ObserverBundle) build() error {
 	if !providerSemanticContinuity(b.provider, filteredProvider) {
 		return ErrObservationProjection
 	}
-	b.providerFacts = factsForSource(b.plan, qualificationharness.ProviderObserverSource)
-	b.gatewayFacts = factsForSource(b.plan, qualificationharness.GatewayObserverSource)
-	b.processFacts = factsForSource(b.plan, qualificationharness.ProcessSupervisorSource)
-	b.resourceFacts = factsForSource(b.plan, qualificationharness.ResourceInspectorSource)
+	providerGroups, err := providerEvidenceGroups(providerExpected, progress, filteredProvider)
+	if err != nil {
+		return err
+	}
+	b.sandboxResources, err = validateProviderEvidence(providerGroups, b.contract, b.limits)
+	if err != nil {
+		return err
+	}
+	b.providerFacts, err = validatedFactsForSource(b.plan, qualificationharness.ProviderObserverSource, func(requirement qualificationprofile.ObservationRequirement) bool {
+		return providerGroups[requirement.Subject] != nil
+	})
+	if err != nil {
+		return err
+	}
+	b.gatewayFacts, err = validatedFactsForSource(b.plan, qualificationharness.GatewayObserverSource, func(requirement qualificationprofile.ObservationRequirement) bool {
+		return gatewayFactObserved(requirement, b.gateway, gatewayRaw, b.challengeDigest)
+	})
+	if err != nil {
+		return err
+	}
+	b.processFacts, err = validatedFactsForSource(b.plan, qualificationharness.ProcessSupervisorSource, func(requirement qualificationprofile.ObservationRequirement) bool {
+		return processFactObserved(requirement, counts, b.executor, b.transcript)
+	})
+	if err != nil {
+		return err
+	}
+	b.resourceFacts, err = validatedFactsForSource(b.plan, qualificationharness.ResourceInspectorSource, func(requirement qualificationprofile.ObservationRequirement) bool {
+		return requirement.ObservationID == "run-owned-sandbox-resource-count-one" && requirement.Subject == "create-sandbox"
+	})
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -379,20 +407,31 @@ func providerSemanticContinuity(interactions []qualificationharness.ObservedInte
 	return true
 }
 
-func factsForSource(plan []qualificationprofile.PhaseObservationPlan, source string) []qualificationharness.ObserverFact {
+func validatedFactsForSource(plan []qualificationprofile.PhaseObservationPlan, source string, observed func(qualificationprofile.ObservationRequirement) bool) ([]qualificationharness.ObserverFact, error) {
 	var result []qualificationharness.ObserverFact
 	for _, phase := range plan {
 		for _, scenario := range phase.Cases {
 			for _, interaction := range scenario.Interactions {
 				for _, fact := range interaction.RequiredObservations {
 					if fact.Source == source {
+						if !observed(fact) {
+							return nil, ErrObservationProjection
+						}
 						result = append(result, qualificationharness.ObserverFact{ObservationID: fact.ObservationID, Actor: fact.Actor, Subject: fact.Subject, Correlation: fact.Correlation, Result: "observed"})
 					}
 				}
 			}
 		}
 	}
-	return result
+	return result, nil
+}
+
+func cloneSandboxResources(value *qualificationharness.SandboxResourceObservation) *qualificationharness.SandboxResourceObservation {
+	if value == nil {
+		return nil
+	}
+	copy := *value
+	return &copy
 }
 
 func (b *ObserverBundle) artifactDigest(id string) string {

@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/shell-echo/sandbox-runtime/internal/providercontract"
 	protocol "github.com/shell-echo/sandbox-runtime/internal/qualificationadapterprotocol"
 	"github.com/shell-echo/sandbox-runtime/internal/qualificationharness"
 	"github.com/shell-echo/sandbox-runtime/internal/qualificationprofile"
@@ -223,7 +224,7 @@ func Run(ctx context.Context, configuration RunConfiguration) (_ RunResult, resu
 	defer func() { resultErr = errors.Join(resultErr, processes.Close()) }()
 
 	manager := &providerManager{processes: processes}
-	resources, err := NewDockerResources(configuration.DockerSocket, namespace, controller, teardownArtifactDigest, teardownConfigurationDigest, manager.Stop)
+	resources, err := NewDockerResources(configuration.DockerSocket, namespace, controller, teardownArtifactDigest, teardownConfigurationDigest, frozen.RuntimeLimits(), manager.Stop)
 	if err != nil {
 		return RunResult{}, qualificationStage("resource-inspector-prepare", err)
 	}
@@ -311,10 +312,14 @@ func Run(ctx context.Context, configuration RunConfiguration) (_ RunResult, resu
 	if err != nil {
 		return RunResult{}, ErrQualificationRun
 	}
+	contract, err := providercontract.Load(ctx, filepath.Join(configuration.SourceRoot, "compatibility/sandbox-runtime/contract.lock.json"), configuration.SourceRoot)
+	if err != nil {
+		return RunResult{}, qualificationStage("provider-contract-projection", err)
+	}
 	bundle, err := NewObserverBundle(ObserverBundleInput{
 		RuntimeDigest: prepared.Digest(), Observation: prepared.Observation(), Limits: prepared.RuntimeLimits(),
 		Plan: report.ObservationPlan(), Reconstruction: report.Reconstruction(), Proxy: proxy, Executor: executor,
-		Processes: processes, Resources: resources, Transcript: transcript,
+		Processes: processes, Resources: resources, Transcript: transcript, Contract: contract,
 	})
 	if err != nil {
 		return RunResult{}, ErrQualificationRun
