@@ -6,10 +6,10 @@ from `process-supervisor.json`'s `adapter_transcript_projection`. It binds the
 protocol, phases, invocations, processes, executables, configurations and field
 inventory, and checks message order, derived counts and status consistency.
 Physical byte counts, EOF/exit and process truth remain supervisor inputs, not
-independent observations made by this validator. No independent external-caller
+independent observations made by this validator. No final external-caller
 qualification result is claimed. c3.1 adds descriptor-backed, bounded executable
 preflight and rechecking without launching a process. The fixed 24-step plan
-has 21 completed and 3 unfinished steps. c3.2 implements the final static
+has 23 completed and 1 unfinished step. c3.2 implements the final static
 configuration commitment, exclusive custody transfer and one-shot logical phase
 admission with live descriptor rechecks. Reconstruction uses the existing
 protocol completion gate; outer-harness evidence remains open.
@@ -56,29 +56,29 @@ separate bounded context, binds the operator-owned teardown identity, closes
 local state descriptors, and requires exactly three same-scope, one-second-
 spaced zero-resource samples equal to the baseline before declaring cleanup
 successful. d7 now assembles and validates the closed evidence root as a local
-component. The separate public external-caller repository has completed 11 of
-its 13 candidate checkpoints through e1.8a. Public hosted run `35068957048`
+component. The separate public external-caller repository has completed 12 of
+its 13 candidate checkpoints through e1.8b. Public hosted run `35068957048`
 at source commit `58a211f0c167af3ec117c8cb8247bfe268bbae40` passed the
 full tests, deterministic Linux/amd64 build, authority verification, artifact
 upload, and five-subject Sigstore attestation `47846951`; the downloaded
 three-artifact bundle and its strict manifest were independently reverified.
-The e2 preflight then found two real execution blockers rather than an
-executable qualification environment: the attested candidate pins a synthetic
-`registry.invalid` runtime image, and the production command had not composed
-the locked terminal-connect route. The production command now closes the
-latter with opt-in protected WebSocket composition. The repository-owned
+The e2 preflight found two real execution blockers: the candidate pinned a
+synthetic `registry.invalid` runtime image, and the production command had not
+composed the locked terminal-connect route. Both were corrected. The repository-owned
 [`coding/shell image`](profiles/coding-shell/image/) was published from
 `cf1830e9` by run `35171475925` as exact two-platform OCI index
 `sha256:1996e44f8ddc464f22556bd57f1c69079fe6b1a821b65bd9be24f86619c31bb1`;
 attestation `48073123` and an independent verification bind its repository,
-workflow, source, `main` ref, GitHub-hosted runner and SLSA provenance. This is
-release evidence, not an e2 run: the external candidate has not yet been
-corrected and rebuilt against this immutable digest.
-All 15 initial and all 5 reconstruction cases are locally composed, but
-operator-owned resource teardown, stable zero-resource inspection, independent
-runtime observations, the actual supervised 15+5 run, and a qualification
-result remain open. The main P2.7 plan is therefore 22/24, with e1 complete and
-e2/e3 pending.
+workflow, source, `main` ref, GitHub-hosted runner and SLSA provenance. The
+refreshed candidate provenance was verified, then hosted native Linux/Docker
+run `35198049461` completed all 15 initial and 5 reconstruction cases, matched
+the exact 91 required observation tuples, verified actual Docker restrictions
+and cross-restart shell continuity, and returned the run-owned resource scope
+to zero for all three stable samples. Checkpoint artifact `10486252703` has raw
+SHA-256
+`d540eb2ada42056ff22a8bde11508c27cd95b1f8f63c003e033761bd1a043200`.
+This closes e2 execution and cleanup, not the final qualification result. The
+main P2.7 plan is 23/24, with only e3 report/receipt/archive/disposition pending.
 
 Composable Linux sandbox runtime for remote shells, desktops, browsers, and applications.
 
