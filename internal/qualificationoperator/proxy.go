@@ -419,8 +419,20 @@ func (p *ObservationProxy) serveGateway(w http.ResponseWriter, r *http.Request) 
 	reader := bufio.NewReaderSize(connection, 32<<10)
 	response, err := http.ReadResponse(reader, r)
 	if err != nil {
-		w.WriteHeader(http.StatusBadGateway)
-		observation.Transport, observation.FailureStage = "transport-error", "upstream-connect-read"
+		status, transport := gatewayConnectReadFailure(actor)
+		if transport == "gateway-upgrade-rejected" {
+			// The observer deliberately accepts the missing-client-certificate
+			// probe so it can relay it to the real Gateway. With TLS 1.3 the
+			// server-side certificate rejection can surface on the first read
+			// rather than from DialWithDialer. This closed upstream connection is
+			// therefore the observed Gateway rejection; no CONNECT response or
+			// runtime bytes were manufactured.
+			w.WriteHeader(status)
+			observation.Transport, observation.StatusCode, observation.FailureStage = transport, status, "upstream-connect-read"
+			return
+		}
+		w.WriteHeader(status)
+		observation.Transport, observation.FailureStage = transport, "upstream-connect-read"
 		return
 	}
 	if response.StatusCode != http.StatusOK {
@@ -488,6 +500,13 @@ func (p *ObservationProxy) serveGateway(w http.ResponseWriter, r *http.Request) 
 	observation.BytesToGateway += <-toGateway
 	observation.BytesFromGateway += <-toClient
 	observation.Transport = "authorized-byte-round-trip"
+}
+
+func gatewayConnectReadFailure(actor string) (int, string) {
+	if actor == "" {
+		return http.StatusForbidden, "gateway-upgrade-rejected"
+	}
+	return http.StatusBadGateway, "transport-error"
 }
 
 func (p *ObservationProxy) nextAuthorizedGateway() int {
