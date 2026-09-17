@@ -70,6 +70,8 @@ sandbox-runtime Provider
 
 - Go 1.26，或 `go.mod` 指定的精确版本
 - 只有使用 Docker 后端或运行集成测试时才需要 Docker
+- Apple Container 仅在运行本地 OCI 应用 Smoke Test 时需要
+- `kubectl` 和集群仅在运行 Kubernetes 应用 Smoke Test 时需要
 
 ### 启动开发服务器
 
@@ -87,6 +89,50 @@ curl http://127.0.0.1:8080/health
 ```
 
 默认不会启用 Provider 监听器及受保护的 Provider 功能。
+
+### 使用 Docker 运行应用
+
+Docker Smoke Test 会构建根目录 Dockerfile，并在数字化非 root 用户、只读根
+文件系统和受限 Linux 权限下验证 `/health` 及最小本地 Instance 流程：
+
+```bash
+./scripts/docker-smoke.sh
+```
+
+详细说明参见[Docker 应用部署](docs/docker.zh-CN.md)。该测试验证使用 Fake
+Runtime 的应用打包，不验证 Docker 沙箱执行。
+
+### 使用 Apple Container 运行应用
+
+现有 Dockerfile 可以通过 Apple Container 构建并运行成 Linux OCI
+应用。仓库提供的 Smoke Test 会使用默认内存 Fake Runtime 验证
+`/health` 和最小本地实例 API 往返：
+
+```bash
+./scripts/apple-container-smoke.sh
+```
+
+环境准备、手动命令、清理行为和精确证据边界参见
+[Apple Container 文档](docs/apple-container.zh-CN.md)。该测试只证明应用打包和基础启动，
+不证明受保护 Provider 接口或依赖 Docker 的能力可以在 Apple Container 中运行。
+
+### 在 Kubernetes 上运行应用
+
+无需集群即可渲染开发 Kustomize Base：
+
+```bash
+./scripts/kubernetes-smoke.sh
+```
+
+如果可访问的集群已经预载 `sandbox-runtime:local`：
+
+```bash
+SANDBOX_RUNTIME_KUBERNETES_LIVE=1 \
+  ./scripts/kubernetes-smoke.sh
+```
+
+详细说明参见[Kubernetes 应用部署](docs/kubernetes.zh-CN.md)。这些开发资源
+使用 Fake Runtime，不是生产 Provider 部署。
 
 ### 使用配置文件
 
@@ -209,9 +255,10 @@ go test -tags=integration -count=1 \
 推荐阅读顺序：
 
 1. [架构](docs/architecture.md)
-2. [Provider 集成指南](docs/platform-integration-profile.md)
-3. [开发规范](docs/development.md)
-4. [项目状态与证据](docs/STATUS.md)
+2. [应用部署](docs/deployment.zh-CN.md)
+3. [Provider 集成指南](docs/platform-integration-profile.md)
+4. [开发规范](docs/development.md)
+5. [项目状态与证据](docs/STATUS.md)
 
 ## 参与开发
 

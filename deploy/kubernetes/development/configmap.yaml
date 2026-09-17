@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sandbox-runtime
+  labels:
+    app.kubernetes.io/name: sandbox-runtime
+    app.kubernetes.io/component: provider
+    app.kubernetes.io/part-of: sandbox-runtime
+data:
+  SANDBOX_RUNTIME_APPLICATION_MODE: development
+  SANDBOX_RUNTIME_SERVER_API_HOST: 0.0.0.0
+  SANDBOX_RUNTIME_SERVER_API_PORT: "8080"

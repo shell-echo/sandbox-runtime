@@ -17,6 +17,20 @@ Conformance evidence, external-caller qualification, and production readiness.
 Use the Go version declared in `go.mod`. Docker is optional for ordinary unit
 tests and required for the tagged Docker integration test.
 
+Apple Container is an optional application-packaging test environment. On a
+supported Apple silicon host, run `./scripts/apple-container-smoke.sh` to build
+the repository Dockerfile and exercise the local health/create/list path with
+the in-memory fake runtime. See [`apple-container.md`](apple-container.md) for
+kernel setup and the exact non-production evidence boundary. This is distinct
+from a Provider runtime driver or Docker-backed capability test.
+
+Run `./scripts/docker-smoke.sh` for the equivalent restricted Docker application
+path. Run `./scripts/kubernetes-smoke.sh` for offline Kustomize/security checks;
+set `SANDBOX_RUNTIME_KUBERNETES_LIVE=1` only after the selected image is
+available on every node of the current test cluster. These application smoke
+tests use the fake runtime and are not substitutes for Provider, backend, or
+deployment qualification gates. See [`deployment.md`](deployment.md).
+
 When Docker Desktop is unavailable, a Lima Docker VM may supply the daemon and
 mise may supply the exact Go version. If that VM deliberately has no host
 mounts, tests that create Docker bind mounts must execute inside the guest so

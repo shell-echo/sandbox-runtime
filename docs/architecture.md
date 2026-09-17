@@ -49,8 +49,8 @@ A calling service owns business and orchestration truth:
 
 It must not become authoritative for caller users, final work status,
 artifact records, billing, or public session credentials. Conversely, the
-calling platform must not depend on container IDs, Pod names, Apple Container
-IDs, host paths, or any other provider implementation detail.
+calling platform must not depend on container IDs, Pod names, VM IDs, host
+paths, or any other provider implementation detail.
 
 ```mermaid
 flowchart LR
@@ -59,12 +59,18 @@ flowchart LR
     PA --> OS["Provider-local operations and reconciliation"]
     OS --> SS["Sandbox application service"]
     SS --> DR["Runtime driver port"]
-    DR --> DO["Docker"]
-    DR --> AC["Apple Container"]
-    DR --> VM["Future hardened container or microVM"]
+    DR --> DO["Docker development adapters"]
+    DR --> FA["Fake development and test adapters"]
+    DR --> VM["Future reviewed isolation backends"]
     RG -->|"authorized proxy; opaque endpoint reference"| EP["Provider-local terminal/browser/desktop endpoint"]
     SS --> EP
 ```
+
+This diagram describes sandbox execution backends, not the environment that
+runs the `sandbox-runtime` service process. Docker, Apple Container, and
+Kubernetes may be application deployment environments without becoming
+Provider runtime drivers. See [Application Deployment](deployment.md) for the
+separate deployment boundary and current support matrix.
 
 The current `/instances` API is a local management API, not the Provider
 Contract API. The current `instance.Service` may remain the internal
@@ -553,8 +559,8 @@ SANDBOX_TERMINATION_FAILED
 ```
 
 Provider errors distinguish `known_failed` from `outcome_unknown`. Internal
-backend errors are translated at the adapter boundary; Docker/containerd/Apple
-Container error strings and identifiers must not leak into the stable contract.
+backend errors are translated at the adapter boundary; backend-specific error
+strings and identifiers must not leak into the stable contract.
 
 ## Internal component boundaries
 

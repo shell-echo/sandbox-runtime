@@ -91,6 +91,8 @@ boundary.
 
 - Go 1.26 or the exact version selected by `go.mod`
 - Docker only for Docker-backed operation and integration tests
+- Apple Container is optional for the local OCI application smoke test
+- `kubectl` and a cluster are optional for the Kubernetes application smoke test
 
 ### Run the development server
 
@@ -109,6 +111,52 @@ curl http://127.0.0.1:8080/health
 ```
 
 The default Provider listener and protected Provider features are disabled.
+
+### Run the application with Docker
+
+The Docker smoke test builds the root Dockerfile and exercises `/health` plus
+the minimal local instance flow under a numeric non-root user, read-only root
+filesystem, and restricted Linux privileges:
+
+```bash
+./scripts/docker-smoke.sh
+```
+
+See [Docker application deployment](docs/docker.md). This validates application
+packaging with the fake runtime, not Docker-backed sandbox execution.
+
+### Run the application with Apple Container
+
+The existing Dockerfile can be built and run as a Linux OCI application with
+Apple Container. The repository smoke test exercises `/health` and a minimal
+local instance API round trip with the default in-memory fake runtime:
+
+```bash
+./scripts/apple-container-smoke.sh
+```
+
+See [Apple Container](docs/apple-container.md) for prerequisites, manual
+commands, cleanup behavior, and the exact evidence boundary. This test proves
+application packaging and basic startup only; it does not prove the protected
+Provider surface or Docker-backed capabilities under Apple Container.
+
+### Run the application on Kubernetes
+
+The development Kustomize base can be rendered without a cluster:
+
+```bash
+./scripts/kubernetes-smoke.sh
+```
+
+With `sandbox-runtime:local` preloaded into a reachable cluster:
+
+```bash
+SANDBOX_RUNTIME_KUBERNETES_LIVE=1 \
+  ./scripts/kubernetes-smoke.sh
+```
+
+See [Kubernetes application deployment](docs/kubernetes.md). These development
+resources use the fake runtime and are not a production Provider deployment.
 
 ### Use a configuration file
 
@@ -253,9 +301,10 @@ Treat those as new, separately designed and evidenced project scopes.
 Recommended reading order:
 
 1. [Architecture](docs/architecture.md)
-2. [Provider integration guide](docs/platform-integration-profile.md)
-3. [Development standards](docs/development.md)
-4. [Project status and evidence](docs/STATUS.md)
+2. [Application deployment](docs/deployment.md)
+3. [Provider integration guide](docs/platform-integration-profile.md)
+4. [Development standards](docs/development.md)
+5. [Project status and evidence](docs/STATUS.md)
 
 ## Contributing
 

@@ -29,7 +29,7 @@ RUN set -eux; \
 
 COPY --from=builder /out/sandbox-runtime /usr/local/bin/sandbox-runtime
 
-USER ${USERNAME}
+USER ${USER_UID}:${USER_GID}
 
 ENTRYPOINT ["sandbox-runtime"]
 CMD ["serve"]
