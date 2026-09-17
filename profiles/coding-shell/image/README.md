@@ -50,6 +50,21 @@ qualification result. Those remain separate release and qualification gates.
 The manual-only `Coding Shell Image Publication` workflow runs the same gate on
 native GitHub-hosted amd64 and arm64 runners, pushes content-addressed platform
 manifests, creates an immutable `sha-<source-commit>` two-platform index, and
-signs and verifies its provenance with GitHub OIDC. Checking in the workflow is
-not publication evidence; its exact run, source, digest, descriptors and
-attestation must be recorded only after a successful invocation.
+signs and verifies its provenance with GitHub OIDC.
+
+The first accepted publication is source
+`cf1830e9bbfcd08d6f171e60f67d949d839e1069`, workflow run `35171475925`, and
+attestation `48073123`:
+
+- image: `ghcr.io/shell-echo/sandbox-runtime-coding-shell@sha256:1996e44f8ddc464f22556bd57f1c69079fe6b1a821b65bd9be24f86619c31bb1`;
+- linux/amd64: `sha256:a3559ade39fd86c9bb04f69a111d8da4e2f31951333b48bf6d59bd752c95aa4e`;
+- linux/arm64/v8: `sha256:a3d9567ee49482582baff67cc3b8679bbe08b79909f7375145004f1c92b4d5f3`;
+- registry attestation object: `sha256:bf31ce86deb5b7f6d2ba374753042e1e2a95c299bb5e6e025976249ddd4536a0`;
+- Sigstore transparency-log index: `2870923506`.
+
+Independent inspection confirmed an exact two-entry OCI index, and independent
+`gh attestation verify` enforcement confirmed the repository, workflow,
+source digest, `main` ref, GitHub-hosted runner, SLSA predicate and Rekor
+timestamp. `publication.go` is the machine-checked local authority for this
+exact evidence. This closes image publication only; it is not external-caller
+qualification or production-readiness evidence.

@@ -65,13 +65,15 @@ three-artifact bundle and its strict manifest were independently reverified.
 The e2 preflight then found two real execution blockers rather than an
 executable qualification environment: the attested candidate pins a synthetic
 `registry.invalid` runtime image, and the production command had not composed
-the locked terminal-connect route. The current worktree closes the latter with
-opt-in protected WebSocket composition and adds a repository-owned
-[`coding/shell image definition`](profiles/coding-shell/image/) with locked
-amd64/arm64 base manifests and a local native-Docker reproducibility/runtime
-gate. This remains component evidence, not an e2 run: the image has not been
-published or attested, and the external candidate has not yet been corrected
-and rebuilt against its immutable release digest.
+the locked terminal-connect route. The production command now closes the
+latter with opt-in protected WebSocket composition. The repository-owned
+[`coding/shell image`](profiles/coding-shell/image/) was published from
+`cf1830e9` by run `35171475925` as exact two-platform OCI index
+`sha256:1996e44f8ddc464f22556bd57f1c69079fe6b1a821b65bd9be24f86619c31bb1`;
+attestation `48073123` and an independent verification bind its repository,
+workflow, source, `main` ref, GitHub-hosted runner and SLSA provenance. This is
+release evidence, not an e2 run: the external candidate has not yet been
+corrected and rebuilt against this immutable digest.
 All 15 initial and all 5 reconstruction cases are locally composed, but
 operator-owned resource teardown, stable zero-resource inspection, independent
 runtime observations, the actual supervised 15+5 run, and a qualification
