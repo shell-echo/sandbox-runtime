@@ -63,6 +63,40 @@ func TestObserveCompletionConsumesTerminalEOFAndCleanExit(t *testing.T) {
 	}
 }
 
+func TestObserveCompletionStreamsSanitizedScenarioProgress(t *testing.T) {
+	_, process := deliveredCompletionProbe(t, "completion")
+	ctx, cancel := context.WithTimeout(context.Background(), realProcessTestLimit)
+	defer cancel()
+	var observed []ScenarioProgress
+	if err := process.ObserveCompletionWithProgress(ctx, func(progress ScenarioProgress) error {
+		observed = append(observed, progress)
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(observed) != 15 || observed[0].CaseID != "initial.locked-capability-discovery" ||
+		observed[14].CaseID != "initial.provider-mtls-caller-binding-rejection" {
+		t.Fatalf("progress = %#v", observed)
+	}
+	for _, progress := range observed {
+		if progress.Disposition != "not_executed" || progress.ReasonCode == nil ||
+			*progress.ReasonCode != "prerequisite_not_satisfied" || len(progress.Interactions) != 0 {
+			t.Fatalf("unexpected progress = %#v", progress)
+		}
+	}
+}
+
+func TestObserveCompletionProgressCallbackFailsClosed(t *testing.T) {
+	frozen, process := deliveredCompletionProbe(t, "completion")
+	ctx, cancel := context.WithTimeout(context.Background(), realProcessTestLimit)
+	defer cancel()
+	err := process.ObserveCompletionWithProgress(ctx, func(ScenarioProgress) error { return errors.New("private callback diagnostic") })
+	if !errors.Is(err, ErrSupervision) || strings.Contains(err.Error(), "private callback diagnostic") ||
+		process.core.cleanlyReaped() || frozen.core.failure == nil {
+		t.Fatalf("callback failure was not sanitized: %v", err)
+	}
+}
+
 func TestObserveCompletionFailsClosedOnExitOutputAndStderr(t *testing.T) {
 	assertFailedClosed := func(t *testing.T, frozen *FrozenPreflight, process *StartedProcess, boundary, err error) {
 		t.Helper()

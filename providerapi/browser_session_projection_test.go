@@ -316,7 +316,7 @@ func TestProtectedOperationReadAggregatesBrowserFamily(t *testing.T) {
 		t.Fatal(err)
 	}
 	handler, err := newProtectedHandler(identity, ProtectedTransportOptions{
-		Gate: newTestProtectedGateWithPublicKey(t, publicKey, &testAdmissionGuard{}), BrowserApplication: app,
+		Gate: newTestProtectedGateWithPublicKey(t, publicKey, &testAdmissionGuard{}), Application: operationReadAuthorizationApplication(), BrowserApplication: app,
 		OperationReader: aggregator, Now: releaseGateTestTime,
 	})
 	if err != nil {

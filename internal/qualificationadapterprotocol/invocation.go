@@ -5,7 +5,21 @@ import (
 	"errors"
 )
 
-var ErrInvocationDetails = errors.New("adapter invocation details rejected")
+var (
+	ErrInvocationDetails = errors.New("adapter invocation details rejected")
+	ErrScenarioProgress  = errors.New("adapter scenario progress rejected")
+	ErrTerminalStatus    = errors.New("adapter terminal status rejected")
+)
+
+// TerminalErrorCodeFrom returns only the locked, schema-validated public
+// protocol error classification. It never exposes adapter output bytes.
+func TerminalErrorCodeFrom(message DecodedMessage) (string, error) {
+	if message.validatedBy == nil || message.direction != decodedAdapterToHarness ||
+		message.MessageType != "protocol_error" || message.errorCode == nil {
+		return "", ErrTerminalStatus
+	}
+	return *message.errorCode, nil
+}
 
 type CredentialChannelDescriptor struct {
 	ChannelID      string
@@ -46,6 +60,61 @@ type credentialChannelDescriptorDocument struct {
 	MediaType      string  `json:"media_type"`
 	MaxBytes       float64 `json:"max_bytes"`
 	FileDescriptor float64 `json:"file_descriptor"`
+}
+
+// InteractionProgress is the bounded orchestration projection of one
+// adapter-reported interaction. It deliberately omits outcomes, assertions,
+// observation references, request material, and every caller correlation.
+type InteractionProgress struct {
+	InteractionID string
+	WireAttempts  int
+}
+
+// ScenarioProgress is the only scenario-result projection exposed to the
+// execution harness while the supervisor retains custody of raw stdout.
+type ScenarioProgress struct {
+	CaseID       string
+	Disposition  string
+	ReasonCode   *string
+	Interactions []InteractionProgress
+}
+
+type scenarioProgressDocument struct {
+	CaseID       string  `json:"case_id"`
+	Disposition  string  `json:"disposition"`
+	ReasonCode   *string `json:"reason_code"`
+	Interactions []struct {
+		InteractionID string `json:"interaction_id"`
+		WireAttempts  int    `json:"wire_attempts"`
+	} `json:"interactions"`
+}
+
+// ScenarioProgressFrom returns a defensive, sanitized projection only for a
+// schema-validated adapter-to-harness scenario_result. The raw document never
+// leaves the protocol/supervisor boundary.
+func ScenarioProgressFrom(message DecodedMessage) (ScenarioProgress, error) {
+	if message.validatedBy == nil || message.direction != decodedAdapterToHarness ||
+		message.MessageType != "scenario_result" || message.CaseID == nil ||
+		message.disposition == nil {
+		return ScenarioProgress{}, ErrScenarioProgress
+	}
+	var document scenarioProgressDocument
+	if err := json.Unmarshal(message.Document, &document); err != nil ||
+		document.CaseID != *message.CaseID || document.Disposition != *message.disposition {
+		return ScenarioProgress{}, ErrScenarioProgress
+	}
+	result := ScenarioProgress{
+		CaseID: document.CaseID, Disposition: document.Disposition,
+		ReasonCode:   cloneString(document.ReasonCode),
+		Interactions: make([]InteractionProgress, len(document.Interactions)),
+	}
+	for index, interaction := range document.Interactions {
+		result.Interactions[index] = InteractionProgress{
+			InteractionID: interaction.InteractionID,
+			WireAttempts:  interaction.WireAttempts,
+		}
+	}
+	return result, nil
 }
 
 // InvocationDetailsFrom accepts only an intact harness-to-adapter invocation

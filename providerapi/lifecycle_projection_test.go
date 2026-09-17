@@ -30,6 +30,12 @@ type projectionApplication struct {
 	sandbox   lifecycle.Sandbox
 }
 
+func operationReadAuthorizationApplication() *projectionApplication {
+	return &projectionApplication{sandbox: lifecycle.Sandbox{
+		ID: "sandbox-1", TenantID: "tenant-1", WorkOrderID: "work-order-1", ProviderRevisionID: "provider-revision-1",
+	}}
+}
+
 func (a *projectionApplication) AcceptCreate(_ context.Context, request lifecycle.CreateRequest) (repository.CreateResult, error) {
 	a.accepted = request
 	return repository.CreateResult{Operation: a.operation}, nil
@@ -84,6 +90,26 @@ func TestDecodeCreateRequestProjectsOnlyAdmittedProviderFields(t *testing.T) {
 	}
 	if projected.OperationID != request.OperationID || projected.Spec.SandboxID != request.Spec.SandboxID || projected.Spec.ProviderRevisionID != request.Spec.ProviderRevisionID || projected.Spec.SandboxSlotKey != string(request.Spec.SandboxSlotKey) {
 		t.Fatalf("projected request = %#v", projected)
+	}
+}
+
+func TestOperationReadRejectsCrossTenantAdmissionBeforeReadingOperation(t *testing.T) {
+	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	application := &projectionApplication{
+		sandbox: lifecycle.Sandbox{
+			ID: "sandbox-1", TenantID: "tenant-a", WorkOrderID: "work-a", ProviderRevisionID: "revision-1",
+		},
+		operation: lifecycle.Operation{ID: "operation-1"},
+	}
+	handler := &protectedHandler{application: application, now: func() time.Time { return now }}
+	admitted := admission.AdmissionContext{
+		SandboxID: "sandbox-1", TenantID: "tenant-b", WorkOrderID: "work-b", ProviderRevisionID: "revision-1",
+		OperationID: "operation-1", AttemptID: "attempt-1", FencingToken: 1,
+	}
+	response := httptest.NewRecorder()
+	handler.serveOperation(response, httptest.NewRequest(http.MethodGet, "/v1/operations/operation-1", nil), admitted)
+	if response.Code != http.StatusNotFound || !strings.Contains(response.Body.String(), `"code":"SANDBOX_NOT_FOUND"`) {
+		t.Fatalf("cross-tenant operation response = %d %s", response.Code, response.Body.String())
 	}
 }
 

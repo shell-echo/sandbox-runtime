@@ -72,3 +72,34 @@ func TestInvocationDetailsRejectsDuplicateChannelOrDescriptor(t *testing.T) {
 		})
 	}
 }
+
+func TestScenarioProgressFromReturnsOnlyBoundedOrchestrationFields(t *testing.T) {
+	codec := loadCodecForTest(t)
+	value := scenarioResultForStateTest(3, "initial", "initial.locked-capability-discovery", "completed")
+	value["interactions"] = []any{map[string]any{
+		"interaction_id": "controller-a-capabilities", "surface": "provider_http", "actor": "controller_a",
+		"method": "GET", "route_template": "/v1/capabilities", "logical_request_id": "capability-a",
+		"replay_of": nil, "wire_attempts": float64(2), "transient_outcomes": []any{},
+		"final_outcome":           map[string]any{"transport": "http-response", "status_code": float64(200), "error_code": nil, "retryable": false, "retry_after_present": false},
+		"mutation_write_observed": false, "observation_ids": []any{"provider-capability-a"},
+	}}
+	value["assertions"] = []any{map[string]any{"assertion_id": "capability-a-valid", "result": "asserted"}}
+	value["observation_ids"] = []any{"provider-capability-a"}
+	decoder := codec.NewOutputDecoder(bytes.NewReader(append(marshalProtocolValue(t, value), '\n')))
+	message, err := decoder.Next()
+	if err != nil {
+		t.Fatal(err)
+	}
+	progress, err := ScenarioProgressFrom(message)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if progress.CaseID != "initial.locked-capability-discovery" || progress.Disposition != "completed" ||
+		progress.ReasonCode != nil || len(progress.Interactions) != 1 ||
+		progress.Interactions[0].InteractionID != "controller-a-capabilities" || progress.Interactions[0].WireAttempts != 2 {
+		t.Fatalf("scenario progress = %#v", progress)
+	}
+	if _, err := ScenarioProgressFrom(DecodedMessage{}); err != ErrScenarioProgress {
+		t.Fatalf("unvalidated message error = %v", err)
+	}
+}

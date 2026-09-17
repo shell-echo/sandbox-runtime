@@ -53,12 +53,34 @@ type processCore struct {
 	invocationID                        string
 	evidence                            PhaseEvidence
 	evidenceReady                       bool
+	terminalErrorCode                   string
 }
 
 // StartedProcess owns an actual local child, not qualification evidence. Copies
 // share one lifetime. Close may race a blocked protocol operation; other
 // preflight/phase APIs retain their single-owner restriction.
 type StartedProcess struct{ core *processCore }
+
+// ProcessIdentity returns the supervisor-minted opaque label for this started
+// child. It is not an OS PID and becomes evidence only after successful
+// terminal/EOF/exit supervision.
+func (p *StartedProcess) ProcessIdentity() string {
+	if p == nil || p.core == nil {
+		return ""
+	}
+	return p.core.identity
+}
+
+// TerminalErrorCode returns the closed public adapter error classification
+// after supervision has observed a valid protocol_error terminal.
+func (p *StartedProcess) TerminalErrorCode() string {
+	if p == nil || p.core == nil {
+		return ""
+	}
+	p.core.protocolMu.Lock()
+	defer p.core.protocolMu.Unlock()
+	return p.core.terminalErrorCode
+}
 
 // StartProcess consumes a prepared topology exactly once. It rechecks custody,
 // uses explicit argv/env/cwd/files (no shell or inherited environment), creates

@@ -296,7 +296,7 @@ func newArtifactTransportHandler(t *testing.T, identity *clientIdentityAdmission
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler, err := newProtectedHandler(identity, ProtectedTransportOptions{Gate: gate, ArtifactApplication: app, UsageEvidenceReader: usageReader, OperationReader: operationReader, Now: func() time.Time { return releaseGateTestTime() }})
+	handler, err := newProtectedHandler(identity, ProtectedTransportOptions{Gate: gate, Application: operationReadAuthorizationApplication(), ArtifactApplication: app, UsageEvidenceReader: usageReader, OperationReader: operationReader, Now: func() time.Time { return releaseGateTestTime() }})
 	if err != nil {
 		t.Fatal(err)
 	}

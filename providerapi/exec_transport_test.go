@@ -203,7 +203,7 @@ func newExecTransportHandler(t *testing.T, identity *clientIdentityAdmission, pu
 		}
 	}
 	handler, err := newProtectedHandler(identity, ProtectedTransportOptions{
-		Gate: gate, ExecApplication: app, OperationReader: operationReader, Now: func() time.Time { return releaseGateTestTime() },
+		Gate: gate, Application: operationReadAuthorizationApplication(), ExecApplication: app, OperationReader: operationReader, Now: func() time.Time { return releaseGateTestTime() },
 	})
 	if err != nil {
 		t.Fatal(err)

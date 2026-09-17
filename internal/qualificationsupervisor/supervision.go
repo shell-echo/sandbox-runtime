@@ -10,6 +10,26 @@ import (
 
 var ErrSupervision = errors.New("adapter process supervision failed")
 
+// ScenarioProgress is a sanitized orchestration-only projection. It contains
+// no outcome, assertion, observation, request, endpoint, credential, or caller
+// correlation value.
+type ScenarioProgress struct {
+	CaseID       string
+	Disposition  string
+	ReasonCode   *string
+	Interactions []InteractionProgress
+}
+
+type InteractionProgress struct {
+	InteractionID string
+	WireAttempts  int
+}
+
+// ProgressObserver receives each accepted scenario result in locked order.
+// Returning an error fails closed and reclaims the process. Implementations
+// must not block beyond the context supplied to ObserveCompletionWithProgress.
+type ProgressObserver func(ScenarioProgress) error
+
 type outputReadResult struct {
 	message protocol.DecodedMessage
 	err     error
@@ -22,6 +42,21 @@ type outputReadResult struct {
 // retained. This returns protocol/process component evidence, not a scenario
 // result or external-caller qualification outcome.
 func (p *StartedProcess) ObserveCompletion(ctx context.Context) error {
+	return p.ObserveCompletionWithProgress(ctx, nil)
+}
+
+// ObserveCompletionWithProgress is ObserveCompletion plus a sanitized,
+// in-order callback after each scenario_result has passed the locked codec and
+// phase state machine. This lets the request-free harness account progress
+// without gaining access to raw adapter stdout.
+func (p *StartedProcess) ObserveCompletionWithProgress(ctx context.Context, observer ProgressObserver) error {
+	return p.ObserveCompletionWithCallbacks(ctx, nil, observer)
+}
+
+// ObserveCompletionWithCallbacks additionally reports the validated
+// invocation_accepted boundary. The acceptance callback receives no adapter
+// data and is useful only to satisfy the harness start/session handoff.
+func (p *StartedProcess) ObserveCompletionWithCallbacks(ctx context.Context, accepted func() error, observer ProgressObserver) error {
 	if p == nil || p.core == nil {
 		return ErrSupervision
 	}
@@ -66,12 +101,28 @@ func (p *StartedProcess) ObserveCompletion(ctx context.Context) error {
 				return failSupervision(core, ErrSupervision)
 			}
 			err = machine.AcceptInvocationAccepted(result.message)
+			if err == nil && accepted != nil && accepted() != nil {
+				err = ErrSupervision
+			}
 		case "scenario_started":
 			err = machine.AcceptScenarioStarted(result.message)
 		case "scenario_result":
 			err = machine.AcceptScenarioResult(result.message)
+			if err == nil && observer != nil {
+				progress, projectionErr := protocol.ScenarioProgressFrom(result.message)
+				if projectionErr != nil {
+					err = projectionErr
+				} else {
+					if observer(projectScenarioProgress(progress)) != nil {
+						err = ErrSupervision
+					}
+				}
+			}
 		case "invocation_finished", "protocol_error":
 			err = machine.AcceptTerminal(result.message)
+			if err == nil && result.message.MessageType == "protocol_error" {
+				core.terminalErrorCode, err = protocol.TerminalErrorCodeFrom(result.message)
+			}
 		default:
 			err = ErrSupervision
 		}
@@ -92,6 +143,24 @@ func (p *StartedProcess) ObserveCompletion(ctx context.Context) error {
 		return failSupervision(core, ErrSupervision)
 	}
 	return nil
+}
+
+func projectScenarioProgress(source protocol.ScenarioProgress) ScenarioProgress {
+	result := ScenarioProgress{
+		CaseID: source.CaseID, Disposition: source.Disposition,
+		Interactions: make([]InteractionProgress, len(source.Interactions)),
+	}
+	if source.ReasonCode != nil {
+		value := *source.ReasonCode
+		result.ReasonCode = &value
+	}
+	for index, interaction := range source.Interactions {
+		result.Interactions[index] = InteractionProgress{
+			InteractionID: interaction.InteractionID,
+			WireAttempts:  interaction.WireAttempts,
+		}
+	}
+	return result
 }
 
 func advanceCaseDeadline(messageType string, state protocol.PhaseState, current, boundary time.Time) time.Time {

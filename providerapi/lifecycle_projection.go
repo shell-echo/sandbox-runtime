@@ -52,6 +52,10 @@ func (h *protectedHandler) serveSandboxStatus(response http.ResponseWriter, requ
 		writeStandardError(response, status, code, retryable, lifecycleErrorMessage(code))
 		return
 	}
+	if !sandboxMatchesAdmission(sandbox, admitted) {
+		writeStandardError(response, http.StatusForbidden, "SANDBOX_FORBIDDEN", false, "sandbox access is forbidden")
+		return
+	}
 	status, err := sandboxProjection(sandbox)
 	if err != nil {
 		writeStandardError(response, http.StatusInternalServerError, "SANDBOX_PROVIDER_ERROR", false, "sandbox status could not be projected")
@@ -61,6 +65,20 @@ func (h *protectedHandler) serveSandboxStatus(response http.ResponseWriter, requ
 }
 
 func (h *protectedHandler) serveOperation(response http.ResponseWriter, request *http.Request, admitted admission.AdmissionContext) {
+	if h.application == nil {
+		writeStandardError(response, http.StatusServiceUnavailable, "SANDBOX_PROVIDER_UNAVAILABLE", true, "sandbox operation is unavailable")
+		return
+	}
+	sandbox, err := h.application.GetSandbox(request.Context(), admitted.SandboxID)
+	if err != nil {
+		status, code, retryable := mapLifecycleError(err)
+		writeStandardError(response, status, code, retryable, lifecycleErrorMessage(code))
+		return
+	}
+	if !sandboxMatchesAdmission(sandbox, admitted) {
+		writeStandardError(response, http.StatusNotFound, "SANDBOX_NOT_FOUND", false, "sandbox operation was not found")
+		return
+	}
 	if h.operationReader != nil {
 		view, err := h.operationReader.ReadOperation(request.Context(), admitted.OperationID)
 		if err != nil {
@@ -92,6 +110,10 @@ func (h *protectedHandler) serveOperation(response http.ResponseWriter, request 
 		return
 	}
 	writeJSON(response, http.StatusOK, projected)
+}
+
+func sandboxMatchesAdmission(sandbox lifecycle.Sandbox, admitted admission.AdmissionContext) bool {
+	return sandbox.ID == admitted.SandboxID && sandbox.TenantID == admitted.TenantID && sandbox.WorkOrderID == admitted.WorkOrderID && sandbox.ProviderRevisionID == admitted.ProviderRevisionID
 }
 
 func mapOperationReaderError(err error) (int, string, bool) {
