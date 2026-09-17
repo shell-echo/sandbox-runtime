@@ -174,8 +174,7 @@ func (a RootAssembler) AssembleAndVerify(ctx context.Context, snapshot qualifica
 	report.Evidence.FileCount = inventory.FileCount + 2
 	report.RunOutcome.IdentityComplete = hasCompleteIdentity(report, semantics, payloadModels)
 	report.RunOutcome = deriveRunOutcome(report, profile, report.RunOutcome.IdentityComplete)
-	a.observeStage("semantic-validation")
-	if err := validateSemantic(report, profile, definition, semantics, payloadModels); err != nil {
+	if err := validateSemanticWithStage(report, profile, definition, semantics, payloadModels, a.observeStage); err != nil {
 		return qualificationharness.EvidenceFinalizationResult{}, ErrEvidenceAssembly
 	}
 

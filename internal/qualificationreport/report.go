@@ -891,39 +891,59 @@ func validateSchemaReference(document []byte, reference string, value any) error
 }
 
 func validateSemantic(report reportDocument, profile profileDocument, definition qualificationprofile.Report, semantics validatorSemantics, payloads payloadSet) error {
+	return validateSemanticWithStage(report, profile, definition, semantics, payloads, nil)
+}
+
+func validateSemanticWithStage(report reportDocument, profile profileDocument, definition qualificationprofile.Report, semantics validatorSemantics, payloads payloadSet, observe func(string)) error {
+	stage := func(value string) {
+		if observe != nil {
+			observe(value)
+		}
+	}
+	stage("semantic-profile")
 	if report.Profile.ProfileID != qualificationprofile.ProfileID || report.Profile.ProfileVersion != qualificationprofile.ProfileVersion || report.Profile.ProfileDigest != qualificationprofile.ExpectedProfileDigest || report.Profile.SchemaDigest != qualificationprofile.ExpectedSchemaDigest {
 		return errors.New("qualification report profile identity does not match the locked profile")
 	}
+	stage("semantic-contract")
 	if err := validateContract(report.Contract, profile.Contract); err != nil {
 		return err
 	}
 	if report.Contract.LocalSuite.Exercised || report.Contract.RemoteSuite.Exercised || report.Claims.SuiteExecution.Local || report.Claims.SuiteExecution.Remote {
 		return errors.New("qualification report overclaims Provider Suite execution")
 	}
+	stage("semantic-capability")
 	if !reflect.DeepEqual(report.Capability, profile.CapabilitySelection) {
 		return errors.New("qualification report capability selection differs from the profile")
 	}
+	stage("semantic-resources")
 	if err := validateSandboxResources(report, profile.Limits); err != nil {
 		return err
 	}
+	stage("semantic-topology")
 	if err := validateTopology(report.Topology, profile.Topology); err != nil {
 		return err
 	}
+	stage("semantic-artifacts")
 	if err := validateArtifacts(report.Artifacts, profile.Artifacts); err != nil {
 		return err
 	}
+	stage("semantic-configurations")
 	if err := validateConfigurations(report.Configurations, profile.Evidence); err != nil {
 		return err
 	}
+	stage("semantic-nonclaims")
 	if !reflect.DeepEqual(report.Claims.NonClaims, profile.RequiredNonClaims) {
 		return errors.New("qualification report non-claims differ from the locked profile")
 	}
+	stage("semantic-bounds")
 	if profile.Limits.MaxEvidenceFiles != evidencefiles.DefaultMaxFiles || int64(profile.Limits.MaxEvidenceFileBytes) != evidencefiles.DefaultMaxFileBytes || int64(profile.Limits.MaxEvidenceTotalBytes) != evidencefiles.DefaultMaxTotalBytes || !reflect.DeepEqual(profile.Evidence.ExcludedFiles, []string{ReportFileName, ReceiptFileName}) || profile.Evidence.PayloadDigestProfile != evidencefiles.DigestProfile || profile.Evidence.FileDigestProfile != evidencefiles.FileDigestProfile {
 		return errors.New("qualification report validator bounds differ from the locked profile")
 	}
+	stage("semantic-payload-bindings")
 	if err := validatePayloadBindings(report, semantics, payloads); err != nil {
 		return err
 	}
+	stage("semantic-identity")
 	identityComplete := hasCompleteIdentity(report, semantics, payloads)
 	if report.RunOutcome.IdentityComplete != identityComplete {
 		return errors.New("qualification report identity_complete does not match payload-backed identity evidence")
@@ -931,9 +951,11 @@ func validateSemantic(report reportDocument, profile profileDocument, definition
 	if (report.RunOutcome.Outcome == "passed" || report.RunOutcome.Outcome == "failed") && !identityComplete {
 		return errors.New("qualification passed or failed outcome requires complete payload-backed identity")
 	}
+	stage("semantic-invocation")
 	if err := validateInvocation(report, profile.Reconstruction, identityComplete); err != nil {
 		return err
 	}
+	stage("semantic-scenarios")
 	return validateScenarios(report, profile, definition, identityComplete)
 }
 
