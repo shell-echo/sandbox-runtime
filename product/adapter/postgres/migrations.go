@@ -18,6 +18,20 @@ const migrationLockID int64 = 73462734190263101
 //go:embed migrations/0001_product_kernel.sql
 var productKernelMigration string
 
+//go:embed migrations/0002_product_phase3_authorities.sql
+var productPhase3AuthoritiesMigration string
+
+type migration struct {
+	version int64
+	name    string
+	sql     string
+}
+
+var productMigrations = []migration{
+	{version: 1, name: "product kernel", sql: productKernelMigration},
+	{version: 2, name: "phase 3 authorities", sql: productPhase3AuthoritiesMigration},
+}
+
 func ApplyMigrations(ctx context.Context, pool *pgxpool.Pool) error {
 	if ctx == nil || pool == nil {
 		return errors.New("product PostgreSQL migration context and pool are required")
@@ -47,27 +61,29 @@ REVOKE ALL ON TABLE sandbox_runtime_product.schema_migrations FROM PUBLIC;`); er
 		return fmt.Errorf("prepare product migration ledger: %w", err)
 	}
 
-	digestBytes := sha256.Sum256([]byte(productKernelMigration))
-	digest := "sha256:" + hex.EncodeToString(digestBytes[:])
-	var recorded string
-	err = tx.QueryRow(ctx, `SELECT digest FROM sandbox_runtime_product.schema_migrations WHERE version = 1`).Scan(&recorded)
-	switch {
-	case err == nil:
-		if recorded != digest {
-			return errors.New("product migration 1 digest mismatch")
+	for _, item := range productMigrations {
+		digestBytes := sha256.Sum256([]byte(item.sql))
+		digest := "sha256:" + hex.EncodeToString(digestBytes[:])
+		var recorded string
+		err = tx.QueryRow(ctx, `SELECT digest FROM sandbox_runtime_product.schema_migrations WHERE version = $1`, item.version).Scan(&recorded)
+		switch {
+		case err == nil:
+			if recorded != digest {
+				return fmt.Errorf("product migration %d digest mismatch", item.version)
+			}
+		case errors.Is(err, pgx.ErrNoRows):
+			if _, err := tx.Exec(ctx, item.sql); err != nil {
+				return fmt.Errorf("apply product migration %d (%s): %w", item.version, item.name, err)
+			}
+			if _, err := tx.Exec(ctx, `INSERT INTO sandbox_runtime_product.schema_migrations (version, digest) VALUES ($1, $2)`, item.version, digest); err != nil {
+				return fmt.Errorf("record product migration %d: %w", item.version, err)
+			}
+		default:
+			return fmt.Errorf("read product migration %d ledger: %w", item.version, err)
 		}
-	case errors.Is(err, pgx.ErrNoRows):
-		if _, err := tx.Exec(ctx, productKernelMigration); err != nil {
-			return fmt.Errorf("apply product migration 1: %w", err)
-		}
-		if _, err := tx.Exec(ctx, `INSERT INTO sandbox_runtime_product.schema_migrations (version, digest) VALUES (1, $1)`, digest); err != nil {
-			return fmt.Errorf("record product migration 1: %w", err)
-		}
-	default:
-		return fmt.Errorf("read product migration ledger: %w", err)
 	}
 	var later int
-	if err := tx.QueryRow(ctx, `SELECT count(*) FROM sandbox_runtime_product.schema_migrations WHERE version > 1`).Scan(&later); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT count(*) FROM sandbox_runtime_product.schema_migrations WHERE version > $1`, productMigrations[len(productMigrations)-1].version).Scan(&later); err != nil {
 		return fmt.Errorf("read product migration version: %w", err)
 	}
 	if later != 0 {

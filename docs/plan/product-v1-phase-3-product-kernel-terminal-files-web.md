@@ -1,6 +1,6 @@
 # Product v1 Phase 3: Product Kernel, Terminal, Files, and Web
 
-Status: Active; Slices 1-2 implemented as local component and real-PostgreSQL evidence
+Status: Active; Slices 1-4 implemented as local component and real-PostgreSQL evidence
 
 Started: 2026-09-18
 
@@ -35,8 +35,8 @@ operations remain separately named gates.
 | --- | --- | --- | --- |
 | 1 | Startup audit; production Go import guard; Product Contract content verifier; PostgreSQL schema and atomic primary-code Workspace acceptance transaction | Focused race tests; lock/resource/OpenAPI/Schema verification; real PostgreSQL migration/replay/concurrency/rollback test; full repository race/shuffle and vet | **Implemented; local gate passed** |
 | 2 | Contract-checked Product DTO projection; strict authenticated `POST /api/v1/workspaces`, Workspace read, and Product operation read | Closed input/body/header tests, auth precedence, tenant/actor nondisclosure, schema projection, HTTP black-box test, Contract fixture/conformance seed | **Implemented; local and real-PostgreSQL HTTP gates passed** |
-| 3 | Leased outbox dispatcher and exact-revision Provider adapter for discovery/admission | No dispatch before commit; exact Contract revision/tree and capability/profile selection; retry/dead-letter/timeout/unknown-result tests; fake network and protected Provider integration | Planned |
-| 4 | Primary-code slot reconciler, Provider operation evidence mapping, restart recovery, and Product event cursor/read model | Restart/duplicate/stale generation/ambiguous Provider outcome/event-contiguity tests; Workspace reaches a terminal Product decision only from retained evidence | Planned |
+| 3 | Leased outbox dispatcher and exact-revision Provider adapter for discovery/admission | No dispatch before commit; exact Contract revision/tree and capability/profile selection; retry/dead-letter/timeout/unknown-result tests; fake network and protected Provider integration | **Implemented; local and real-PostgreSQL gates passed** |
+| 4 | Primary-code slot reconciler, Provider operation evidence mapping, restart recovery, and Product event cursor/read model | Restart/duplicate/stale generation/ambiguous Provider outcome/event-contiguity tests; Workspace reaches a terminal Product decision only from retained evidence | **Implemented; local and real-PostgreSQL gates passed** |
 | 5 | Product authorization, resource filters, control leases/fences, quotas, and metadata audit | Cross-tenant nondisclosure, stale fence, concurrent controller, database-time expiry, quota race, audit failure/retention tests | Planned |
 | 6 | Product Terminal session control plane and Provider terminal-control adapter | Durable session-before-grant, exact Workspace/slot/fence binding, create/read/close/resize capability honesty, restart and close-race tests | Planned |
 | 7 | Public Terminal Gateway with one-use Product grants, bounded proxying, revocation, backpressure, reconnect, and metadata audit | Separate-process client/Product/Gateway/Provider test; no endpoint or ticket leakage; expiry/replay/revocation/capacity/backpressure/reconnect/cleanup cases | Planned |
@@ -49,7 +49,7 @@ operations remain separately named gates.
 
 Slices are dependency ordered. Later UI or data-plane work cannot substitute
 for an earlier authority, persistence, authentication, or recovery gate.
-After Slice 2, 11 slices remain.
+After Slice 4, 9 slices remain.
 
 ## Cross-cutting requirements
 
@@ -171,3 +171,29 @@ read flow pass. The capability response remains empty because Provider
 dispatch, reconciliation, Terminal, Files, Gateway, and recording dependency
 graphs are not yet complete. No deployable Product listener or readiness claim
 follows from this slice.
+
+## Slices 3-4 exact output
+
+- Migration 2 establishes separate private authorities for Product attempts,
+  Provider bindings, reconciliation checkpoints, control leases, sessions,
+  one-use grants, Guest bindings, revisions/transfers, catalogs, recording
+  segments, and metadata audit. It also adds database-time outbox leases.
+- `product/adapter/provider` is the only Product package that imports Provider
+  wire DTOs. It rejects every Provider revision/tree except the repository
+  lock, selects exact runtime/capability profiles from one discovery snapshot,
+  computes RFC 8785 request and descriptor digests, and independently creates
+  the Contract Admission Context and Ed25519 compact JWS.
+- The dispatcher uses stable Product operation/attempt/fence identities.
+  Known pre-dispatch retryable rejection returns to a bounded exponential
+  schedule, exhausted work dead-letters, and any possibly dispatched or
+  malformed accepted response becomes retained `outcome_unknown` evidence.
+- The level-triggered reconciler leases retained nonterminal attempts, performs
+  a fresh protected Provider operation read, rejects substituted correlations
+  and stale slot generations, and commits attempt/binding/operation/slot/
+  Workspace projections plus the next contiguous event atomically.
+
+Focused race/shuffle tests exercise exact discovery, signed protected create,
+revision drift, ambiguous responses, retry classification, and worker policy.
+A disposable PostgreSQL 16 adapter run applies and replays both migrations and
+proves the complete create/outbox/dispatch/observe/terminal-event path. These
+are component and real-adapter results, not a standalone deployment claim.

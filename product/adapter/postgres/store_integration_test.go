@@ -218,6 +218,86 @@ func TestIntegrationProductHTTPCreateAndReadUsesPostgresAuthority(t *testing.T) 
 	}
 }
 
+func TestIntegrationOutboxLeaseDispatchEvidenceAndEventAreAtomic(t *testing.T) {
+	pool := integrationProductPool(t)
+	applyProductMigrations(t, pool)
+	cleanupProductTenant(t, pool, "tenant-product-outbox")
+	store, _ := New(pool, 2*time.Second)
+	application, _ := product.NewApplication(store, allowPrimarySlot{}, product.CryptoIDGenerator{})
+	actor := product.ActorRef{Type: product.ActorHuman, ID: "owner-product-outbox"}
+	created, err := application.CreateWorkspace(context.Background(), "tenant-product-outbox", actor, "outbox-create-1", integrationCreateWorkspaceRequest("outbox workspace"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	leased, err := store.LeaseReconcileWork(context.Background(), "worker-product-1", 10*time.Second, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(leased) != 1 || leased[0].OperationID != created.Operation.ID || leased[0].AttemptID != leased[0].OutboxID {
+		t.Fatalf("leased = %#v", leased)
+	}
+	evidence := product.ProviderOperationEvidence{ProviderRevisionID: strings.Repeat("a", 40), SandboxID: "provider-sandbox-private-1",
+		ProviderOperationID: "provider-operation-private-1", RequestDigest: "sha256:" + strings.Repeat("b", 64),
+		State: "accepted", ObservedAt: time.Now().UTC()}
+	if err := store.RecordDispatchEvidence(context.Background(), leased[0], evidence); err != nil {
+		t.Fatal(err)
+	}
+	operation, err := application.GetOperation(context.Background(), "tenant-product-outbox", actor, created.Operation.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	workspace, err := application.GetWorkspace(context.Background(), "tenant-product-outbox", actor, created.Operation.WorkspaceID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if operation.State != "running" || operation.ReconciliationStatus != "reconciling" || workspace.ObservedState != "provisioning" ||
+		len(workspace.Slots) != 1 || workspace.Slots[0].ObservedState != "provisioning" {
+		t.Fatalf("operation=%#v workspace=%#v", operation, workspace)
+	}
+	var events, bindings, attempts, delivered int
+	if err := pool.QueryRow(context.Background(), `SELECT
+  (SELECT count(*) FROM sandbox_runtime_product.workspace_events WHERE tenant_id=$1),
+  (SELECT count(*) FROM sandbox_runtime_product.provider_bindings WHERE tenant_id=$1),
+  (SELECT count(*) FROM sandbox_runtime_product.product_operation_attempts WHERE tenant_id=$1),
+  (SELECT count(*) FROM sandbox_runtime_product.outbox WHERE tenant_id=$1 AND state='delivered')`, "tenant-product-outbox").Scan(&events, &bindings, &attempts, &delivered); err != nil {
+		t.Fatal(err)
+	}
+	if events != 2 || bindings != 1 || attempts != 1 || delivered != 1 {
+		t.Fatalf("events=%d bindings=%d attempts=%d delivered=%d", events, bindings, attempts, delivered)
+	}
+	observations, err := store.LeaseProviderObservations(context.Background(), "observer-product-1", 10*time.Second, 10)
+	if err != nil || len(observations) != 1 {
+		t.Fatalf("observations=%#v err=%v", observations, err)
+	}
+	terminal := evidence
+	terminal.State = "succeeded"
+	terminal.ObservedAt = time.Now().UTC()
+	if err := store.RecordProviderObservation(context.Background(), observations[0], terminal, "evt-product-provider-ready-1"); err != nil {
+		t.Fatal(err)
+	}
+	operation, err = application.GetOperation(context.Background(), "tenant-product-outbox", actor, created.Operation.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	workspace, err = application.GetWorkspace(context.Background(), "tenant-product-outbox", actor, created.Operation.WorkspaceID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if operation.State != "succeeded" || operation.ReconciliationStatus != "complete" || workspace.ObservedState != "active" || workspace.Slots[0].ObservedState != "ready" || workspace.Slots[0].ObservedGeneration != 1 {
+		t.Fatalf("terminal operation=%#v workspace=%#v", operation, workspace)
+	}
+	if err := pool.QueryRow(context.Background(), `SELECT count(*) FROM sandbox_runtime_product.workspace_events WHERE tenant_id=$1`, "tenant-product-outbox").Scan(&events); err != nil {
+		t.Fatal(err)
+	}
+	if events != 3 {
+		t.Fatalf("terminal events=%d", events)
+	}
+	again, err := store.LeaseReconcileWork(context.Background(), "worker-product-2", 10*time.Second, 10)
+	if err != nil || len(again) != 0 {
+		t.Fatalf("second lease=%#v err=%v", again, err)
+	}
+}
+
 func integrationProductPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	connectionString := os.Getenv(productPostgresURLVariable)
@@ -263,6 +343,21 @@ func cleanupProductTenant(t *testing.T, pool *pgxpool.Pool, tenantID string) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		for _, statement := range []string{
+			`DELETE FROM sandbox_runtime_product.recording_segments WHERE tenant_id = $1`,
+			`DELETE FROM sandbox_runtime_product.recordings WHERE tenant_id = $1`,
+			`DELETE FROM sandbox_runtime_product.artifacts WHERE tenant_id = $1`,
+			`DELETE FROM sandbox_runtime_product.blob_transfers WHERE tenant_id = $1`,
+			`DELETE FROM sandbox_runtime_product.file_changes WHERE tenant_id = $1`,
+			`DELETE FROM sandbox_runtime_product.workspace_heads WHERE tenant_id = $1`,
+			`DELETE FROM sandbox_runtime_product.workspace_revisions WHERE tenant_id = $1`,
+			`DELETE FROM sandbox_runtime_product.guest_bindings WHERE tenant_id = $1`,
+			`DELETE FROM sandbox_runtime_product.connection_grants WHERE tenant_id = $1`,
+			`DELETE FROM sandbox_runtime_product.control_leases WHERE tenant_id = $1`,
+			`DELETE FROM sandbox_runtime_product.control_lease_fences WHERE tenant_id = $1`,
+			`DELETE FROM sandbox_runtime_product.runtime_sessions WHERE tenant_id = $1`,
+			`DELETE FROM sandbox_runtime_product.provider_bindings WHERE tenant_id = $1`,
+			`DELETE FROM sandbox_runtime_product.product_operation_attempts WHERE tenant_id = $1`,
+			`DELETE FROM sandbox_runtime_product.security_audit WHERE tenant_id = $1`,
 			`DELETE FROM sandbox_runtime_product.idempotency_records WHERE tenant_id = $1`,
 			`DELETE FROM sandbox_runtime_product.outbox WHERE tenant_id = $1`,
 			`DELETE FROM sandbox_runtime_product.workspace_events WHERE tenant_id = $1`,
