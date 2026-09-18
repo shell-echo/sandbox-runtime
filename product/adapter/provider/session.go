@@ -123,6 +123,46 @@ func (c *Client) profileForRuntime(runtimeID string) (Profile, bool) {
 	}
 	return Profile{}, false
 }
+
+func (c *Client) readRuntimeSessionHandoff(ctx context.Context, work product.ProviderObservationWork, profile Profile) (providerv1.RuntimeSessionHandoff, error) {
+	descriptor := map[string]any{"operation": "read_runtime_session", "sandbox_id": work.SandboxID, "operation_id": work.OperationID, "attempt_id": work.AttemptID, "fencing_token": work.SlotGeneration}
+	digest, err := canonicalFullDigest(descriptor)
+	if err != nil {
+		return providerv1.RuntimeSessionHandoff{}, product.ErrInvalid
+	}
+	now := c.clock.Now().UTC()
+	deadline := now.Add(time.Minute)
+	path := "/v1/operations/" + url.PathEscape(work.OperationID) + "/runtime-session"
+	headers, err := c.signAdmission(now, admissionSigningInput{PolicyDigest: profile.PolicyDigest, TenantID: work.TenantID, WorkOrderID: work.OperationID,
+		Operation: "read_runtime_session", SandboxID: work.SandboxID, OperationID: work.OperationID, AttemptID: work.AttemptID,
+		FencingToken: work.SlotGeneration, Deadline: deadline, RequestContractID: "urn:shell-echo:sandbox-runtime:descriptor:runtime-session:v1",
+		RequestDigestProfile: "rfc8785-full-document-v1", RequestDigest: digest, Method: http.MethodGet, Path: path})
+	if err != nil {
+		return providerv1.RuntimeSessionHandoff{}, product.ErrStoreUnavailable
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, c.origin.String()+path, nil)
+	if err != nil {
+		return providerv1.RuntimeSessionHandoff{}, product.ErrInvalid
+	}
+	request.Header.Set("Authorization", "Bearer "+headers.Bearer)
+	request.Header.Set("X-Sandbox-Runtime-Admission-Context", headers.Context)
+	response, err := c.httpClient.Do(request)
+	if err != nil {
+		return providerv1.RuntimeSessionHandoff{}, product.ErrStoreUnavailable
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return providerv1.RuntimeSessionHandoff{}, product.ErrStoreUnavailable
+	}
+	var handoff providerv1.RuntimeSessionHandoff
+	if err := decodeBounded(response.Body, &handoff); err != nil || handoff.OperationID != work.OperationID || handoff.AttemptID != work.AttemptID ||
+		handoff.SandboxID != work.SandboxID || handoff.RuntimeSessionID != work.SessionID || handoff.FencingToken != work.SlotGeneration ||
+		handoff.ConnectionGeneration < 1 || handoff.InternalEndpointReference == "" {
+		return providerv1.RuntimeSessionHandoff{}, product.ErrStoreUnavailable
+	}
+	return handoff, nil
+}
+
 func providerCapabilityReady(snapshot providerv1.Capabilities, runtimeID, capabilityID, version, profileID string) bool {
 	profileMapped := false
 	for _, runtimeProfile := range snapshot.RuntimeProfiles {

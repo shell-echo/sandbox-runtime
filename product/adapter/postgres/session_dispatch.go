@@ -79,6 +79,9 @@ func (s *Store) RecordSessionDispatch(ctx context.Context, work product.SessionC
 	if state == "" {
 		state = "failed"
 	}
+	if work.Action == "open" && state == "succeeded" {
+		state = "running"
+	}
 	outcome := "pending"
 	if state == "outcome_unknown" {
 		outcome = "unknown"

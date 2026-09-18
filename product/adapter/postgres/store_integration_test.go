@@ -3,6 +3,7 @@
 package productpostgres
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -394,6 +395,7 @@ func TestIntegrationTerminalSessionIntentDispatchAndCloseAreDurable(t *testing.T
 	store, _ := New(pool, 2*time.Second)
 	application, _ := product.NewApplication(store, allowPrimarySlot{}, product.CryptoIDGenerator{})
 	sessions, _ := product.NewSessionService(store, allowTerminalSession{}, product.CryptoIDGenerator{})
+	controls, _ := product.NewControlService(store, product.CryptoIDGenerator{})
 	actor := product.ActorRef{Type: product.ActorHuman, ID: "owner-product-session"}
 	created, err := application.CreateWorkspace(context.Background(), "tenant-product-session", actor, "session-workspace", integrationCreateWorkspaceRequest("session workspace"))
 	if err != nil {
@@ -428,8 +430,61 @@ SELECT tenant_id,workspace_id,'primary-code',1,1,repeat('a',40),'coding-shell-v1
 		t.Fatal(err)
 	}
 	session, err := sessions.Get(context.Background(), "tenant-product-session", actor, operation.SessionID)
-	if err != nil || session.State != "ready" {
+	if err != nil || session.State != "provisioning" {
 		t.Fatalf("session=%#v err=%v", session, err)
+	}
+	observations, err := store.LeaseProviderObservations(context.Background(), "session-observer-1", 10*time.Second, 10)
+	if err != nil || len(observations) != 1 {
+		t.Fatalf("observations=%#v err=%v", observations, err)
+	}
+	evidence.HandoffReference = "ref:session:private-session-reference"
+	evidence.ConnectionGeneration = 1
+	evidence.HandoffExpiresAt = session.ExpiresAt
+	if err := store.RecordProviderObservation(context.Background(), observations[0], evidence, "evt-session-ready"); err != nil {
+		t.Fatal(err)
+	}
+	session, err = sessions.Get(context.Background(), "tenant-product-session", actor, operation.SessionID)
+	if err != nil || session.State != "ready" {
+		t.Fatalf("ready session=%#v err=%v", session, err)
+	}
+	workspace, err = application.GetWorkspace(context.Background(), "tenant-product-session", actor, created.Operation.WorkspaceID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	control, _, err := controls.Acquire(context.Background(), "tenant-product-session", actor, workspace.ID, "session-control-1", product.AcquireControlLeaseRequest{ExpectedWorkspaceVersion: workspace.Version, Scope: product.ControlScope{Type: "session", ID: session.ID}, DurationSeconds: 60})
+	if err != nil {
+		t.Fatal(err)
+	}
+	grantRepository, err := NewGrantRepository(store, "test-key-v1", bytes.Repeat([]byte{0x5a}, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	grants, err := product.NewGrantService(grantRepository, product.CryptoIDGenerator{}, product.CryptoTicketGenerator{}, "wss://gateway.example.test/connect", 30*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	connectionRequest := product.CreateConnectionRequest{ExpectedSessionVersion: session.Version, ProtocolProfile: session.ProtocolProfile, ControlLeaseID: control.ID, ControlFence: control.Fence}
+	grant, replay, err := grants.Create(context.Background(), "tenant-product-session", actor, session.ID, "connection-grant-1", connectionRequest)
+	if err != nil || replay || grant.Ticket == "" || grant.GatewayURI != "wss://gateway.example.test/connect" {
+		t.Fatalf("grant=%#v replay=%v err=%v", grant, replay, err)
+	}
+	replayedGrant, replay, err := grants.Create(context.Background(), "tenant-product-session", actor, session.ID, "connection-grant-1", connectionRequest)
+	if err != nil || !replay || replayedGrant.Ticket != grant.Ticket {
+		t.Fatalf("replayed grant=%#v replay=%v err=%v", replayedGrant, replay, err)
+	}
+	var ciphertext []byte
+	if err := pool.QueryRow(context.Background(), `SELECT ticket_ciphertext FROM sandbox_runtime_product.connection_grants WHERE tenant_id=$1 AND connection_id=$2`, "tenant-product-session", grant.ID).Scan(&ciphertext); err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(ciphertext, []byte(grant.Ticket)) {
+		t.Fatal("connection ticket stored in plaintext")
+	}
+	binding, err := grantRepository.ConsumeConnectionGrant(context.Background(), grant.Ticket)
+	if err != nil || binding.HandoffReference != evidence.HandoffReference || binding.ControlFence != control.Fence {
+		t.Fatalf("binding=%#v err=%v", binding, err)
+	}
+	if _, err := grantRepository.ConsumeConnectionGrant(context.Background(), grant.Ticket); !errors.Is(err, product.ErrControlStale) {
+		t.Fatalf("ticket replay err=%v", err)
 	}
 	closeOperation, _, err := sessions.Close(context.Background(), "tenant-product-session", actor, session.ID, "session-close-1", product.CloseSessionRequest{ExpectedVersion: session.Version, Reason: "done"})
 	if err != nil {
@@ -446,6 +501,9 @@ SELECT tenant_id,workspace_id,'primary-code',1,1,repeat('a',40),'coding-shell-v1
 	session, err = sessions.Get(context.Background(), "tenant-product-session", actor, session.ID)
 	if err != nil || session.State != "closed" {
 		t.Fatalf("closed session=%#v err=%v", session, err)
+	}
+	if err := grantRepository.CheckGatewayAuthority(context.Background(), binding); !errors.Is(err, product.ErrControlStale) {
+		t.Fatalf("closed session gateway authority err=%v", err)
 	}
 	final, err := application.GetOperation(context.Background(), "tenant-product-session", actor, closeOperation.ID)
 	if err != nil || final.State != "succeeded" {

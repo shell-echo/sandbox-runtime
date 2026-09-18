@@ -26,15 +26,18 @@ type ReconcileWork struct {
 }
 
 type ProviderOperationEvidence struct {
-	ProviderRevisionID  string
-	SandboxID           string
-	ProviderOperationID string
-	RequestDigest       string
-	State               string
-	ErrorCode           string
-	Retryable           bool
-	OutcomeUnknown      bool
-	ObservedAt          time.Time
+	ProviderRevisionID   string
+	SandboxID            string
+	ProviderOperationID  string
+	RequestDigest        string
+	State                string
+	ErrorCode            string
+	Retryable            bool
+	OutcomeUnknown       bool
+	ObservedAt           time.Time
+	HandoffReference     string
+	ConnectionGeneration int64
+	HandoffExpiresAt     time.Time
 }
 
 type ReconcileStore interface {

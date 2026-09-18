@@ -214,7 +214,16 @@ func recordSessionObservation(ctx context.Context, tx pgx.Tx, work product.Provi
 	if _, err := tx.Exec(ctx, `UPDATE sandbox_runtime_product.product_operations SET state=$1,reconciliation_status=$2,version=version+1,updated_at=$3 WHERE tenant_id=$4 AND operation_id=$5`, productState, reconciliation, now, work.TenantID, work.OperationID); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, `UPDATE sandbox_runtime_product.runtime_sessions SET state=$1,version=version+1,updated_at=$2 WHERE tenant_id=$3 AND session_id=$4`, sessionState, now, work.TenantID, work.SessionID); err != nil {
+	if state == "succeeded" && work.OperationType == "create_session" &&
+		(evidence.HandoffReference == "" || evidence.ConnectionGeneration < 1 || evidence.HandoffExpiresAt.IsZero()) {
+		return product.ErrStoreUnavailable
+	}
+	if _, err := tx.Exec(ctx, `UPDATE sandbox_runtime_product.runtime_sessions SET state=$1,version=version+1,
+provider_handoff_reference=CASE WHEN $2='' THEN provider_handoff_reference ELSE $2 END,
+provider_connection_generation=CASE WHEN $3<1 THEN provider_connection_generation ELSE $3 END,
+provider_handoff_expires_at=COALESCE($4::timestamptz,provider_handoff_expires_at),updated_at=$5
+WHERE tenant_id=$6 AND session_id=$7`, sessionState, evidence.HandoffReference, evidence.ConnectionGeneration,
+		nullableTime(evidence.HandoffExpiresAt), now, work.TenantID, work.SessionID); err != nil {
 		return err
 	}
 	if !terminal {

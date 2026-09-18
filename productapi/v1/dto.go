@@ -173,6 +173,30 @@ func toSession(session product.RuntimeSession) RuntimeSession {
 	return RuntimeSession{SessionID: session.ID, WorkspaceID: session.WorkspaceID, SlotKey: session.SlotKey, Kind: session.Kind, ProtocolProfile: session.ProtocolProfile, State: session.State, RequiresControlLease: session.RequiresControlLease, RecordingPolicy: session.RecordingPolicy, Version: session.Version, ExpiresAt: timestamp(session.ExpiresAt), CreatedAt: timestamp(session.CreatedAt), UpdatedAt: timestamp(session.UpdatedAt)}
 }
 
+type CreateConnectionRequest struct {
+	ExpectedSessionVersion int64  `json:"expected_session_version"`
+	ProtocolProfile        string `json:"protocol_profile"`
+	ControlLeaseID         string `json:"control_lease_id,omitempty"`
+	ControlFence           int64  `json:"control_fence,omitempty"`
+}
+
+type ConnectionGrant struct {
+	ConnectionID    string `json:"connection_id"`
+	SessionID       string `json:"session_id"`
+	ProtocolProfile string `json:"protocol_profile"`
+	GatewayURI      string `json:"gateway_uri"`
+	Ticket          string `json:"ticket"`
+	ExpiresAt       string `json:"expires_at"`
+}
+
+func toConnectionGrant(grant product.ConnectionGrant) ConnectionGrant {
+	return ConnectionGrant{
+		ConnectionID: grant.ID, SessionID: grant.SessionID,
+		ProtocolProfile: grant.ProtocolProfile, GatewayURI: grant.GatewayURI,
+		Ticket: grant.Ticket, ExpiresAt: timestamp(grant.ExpiresAt),
+	}
+}
+
 func toOperation(operation product.Operation) ProductOperation {
 	return ProductOperation{
 		OperationID: operation.ID, OperationType: operation.Type, WorkspaceID: operation.WorkspaceID,

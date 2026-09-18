@@ -370,6 +370,18 @@ func (c *Client) ObserveOperation(ctx context.Context, work product.ProviderObse
 		evidence.Retryable = operation.Error.Retryable
 		evidence.OutcomeUnknown = operation.Error.Outcome == providerv1.OutcomeUnknownFailure
 	}
+	if evidence.State == "succeeded" && work.SessionID != "" && work.OperationType == "create_session" {
+		handoff, err := c.readRuntimeSessionHandoff(ctx, work, profile)
+		if err != nil {
+			return product.ProviderOperationEvidence{}, err
+		}
+		evidence.HandoffReference = handoff.InternalEndpointReference
+		evidence.ConnectionGeneration = handoff.ConnectionGeneration
+		evidence.HandoffExpiresAt, err = time.Parse(time.RFC3339Nano, handoff.ExpiresAt)
+		if err != nil {
+			return product.ProviderOperationEvidence{}, product.ErrStoreUnavailable
+		}
+	}
 	return evidence, nil
 }
 

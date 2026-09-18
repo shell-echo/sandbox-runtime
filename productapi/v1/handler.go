@@ -22,6 +22,7 @@ type Handler struct {
 	requestIDs    product.IDGenerator
 	controls      *product.ControlService
 	sessions      *product.SessionService
+	grants        *product.GrantService
 }
 
 func NewHandler(application *product.Application, authenticator productapi.Authenticator, requestIDs product.IDGenerator) (*Handler, error) {
@@ -33,10 +34,14 @@ func NewHandlerWithControl(application *product.Application, controls *product.C
 }
 
 func NewHandlerWithServices(application *product.Application, controls *product.ControlService, sessions *product.SessionService, authenticator productapi.Authenticator, requestIDs product.IDGenerator) (*Handler, error) {
+	return NewCompleteHandler(application, controls, sessions, nil, authenticator, requestIDs)
+}
+
+func NewCompleteHandler(application *product.Application, controls *product.ControlService, sessions *product.SessionService, grants *product.GrantService, authenticator productapi.Authenticator, requestIDs product.IDGenerator) (*Handler, error) {
 	if application == nil || productapi.IsNilAuthenticator(authenticator) || requestIDs == nil {
 		return nil, product.ErrInvalid
 	}
-	return &Handler{application: application, controls: controls, sessions: sessions, authenticator: authenticator, requestIDs: requestIDs}, nil
+	return &Handler{application: application, controls: controls, sessions: sessions, grants: grants, authenticator: authenticator, requestIDs: requestIDs}, nil
 }
 
 func (h *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
@@ -139,6 +144,34 @@ func (h *Handler) sessionsRoute(writer http.ResponseWriter, request *http.Reques
 		return
 	}
 	value := strings.TrimPrefix(request.URL.Path, "/api/v1/sessions/")
+	if request.Method == http.MethodPost && strings.HasSuffix(value, "/connections") {
+		if principal.Role != productapi.RoleOwner || h.grants == nil {
+			writeError(writer, http.StatusForbidden, "PRODUCT_FORBIDDEN", "action is forbidden", false, requestID)
+			return
+		}
+		sessionID := strings.TrimSuffix(value, "/connections")
+		if sessionID == "" || strings.Contains(sessionID, "/") {
+			writeError(writer, http.StatusNotFound, "PRODUCT_NOT_FOUND", "resource not found", false, requestID)
+			return
+		}
+		key, ok := singleHeader(request, "Idempotency-Key")
+		if !ok || !jsonContentType(request.Header.Get("Content-Type")) {
+			writeError(writer, http.StatusBadRequest, "PRODUCT_INVALID_REQUEST", "invalid mutation metadata", false, requestID)
+			return
+		}
+		var input CreateConnectionRequest
+		if err := decodeStrict(request.Context(), writer, request.Body, 32768, &input); err != nil {
+			writeError(writer, http.StatusBadRequest, "PRODUCT_INVALID_REQUEST", "invalid request body", false, requestID)
+			return
+		}
+		grant, _, err := h.grants.Create(request.Context(), principal.TenantID, principal.Actor, sessionID, key, product.CreateConnectionRequest{ExpectedSessionVersion: input.ExpectedSessionVersion, ProtocolProfile: input.ProtocolProfile, ControlLeaseID: input.ControlLeaseID, ControlFence: input.ControlFence})
+		if err != nil {
+			writeApplicationError(writer, err, requestID)
+			return
+		}
+		writeJSON(writer, http.StatusCreated, toConnectionGrant(grant))
+		return
+	}
 	if request.Method == http.MethodGet && !strings.Contains(value, ":") {
 		session, err := h.sessions.Get(request.Context(), principal.TenantID, principal.Actor, value)
 		if err != nil {
