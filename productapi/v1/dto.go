@@ -67,6 +67,9 @@ type ProductOperation struct {
 	OperationID         string   `json:"operation_id"`
 	OperationType       string   `json:"operation_type"`
 	WorkspaceID         string   `json:"workspace_id"`
+	SlotKey             string   `json:"slot_key,omitempty"`
+	SessionID           string   `json:"session_id,omitempty"`
+	AgentRunID          string   `json:"agent_run_id,omitempty"`
 	SubmittedBy         ActorRef `json:"submitted_by"`
 	State               string   `json:"state"`
 	ReconciliationState string   `json:"reconciliation_status"`
@@ -128,9 +131,52 @@ func toControlLease(lease product.ControlLease) ControlLease {
 	return ControlLease{LeaseID: lease.ID, WorkspaceID: lease.WorkspaceID, Scope: ControlScope{ScopeType: lease.Scope.Type, ScopeID: lease.Scope.ID}, Controller: toActor(lease.Controller), Fence: lease.Fence, IssuedAt: timestamp(lease.IssuedAt), ExpiresAt: timestamp(lease.ExpiresAt)}
 }
 
+type CreateSessionRequest struct {
+	ExpectedWorkspaceVersion int64  `json:"expected_workspace_version"`
+	SlotKey                  string `json:"slot_key"`
+	Kind                     string `json:"kind"`
+	ProtocolProfile          string `json:"protocol_profile"`
+	ExpiresInSeconds         int64  `json:"expires_in_seconds"`
+	RecordingPolicy          string `json:"recording_policy"`
+}
+type CloseSessionRequest struct {
+	ExpectedVersion int64  `json:"expected_version"`
+	Reason          string `json:"reason"`
+}
+type ResizeSessionRequest struct {
+	ExpectedVersion int64  `json:"expected_version"`
+	Columns         int    `json:"columns"`
+	Rows            int    `json:"rows"`
+	ControlLeaseID  string `json:"control_lease_id"`
+	ControlFence    int64  `json:"control_fence"`
+}
+type RuntimeSession struct {
+	SessionID            string `json:"session_id"`
+	WorkspaceID          string `json:"workspace_id"`
+	SlotKey              string `json:"slot_key"`
+	Kind                 string `json:"kind"`
+	ProtocolProfile      string `json:"protocol_profile"`
+	State                string `json:"state"`
+	RequiresControlLease bool   `json:"requires_control_lease"`
+	RecordingPolicy      string `json:"recording_policy"`
+	Version              int64  `json:"version"`
+	ExpiresAt            string `json:"expires_at"`
+	CreatedAt            string `json:"created_at"`
+	UpdatedAt            string `json:"updated_at"`
+}
+type SessionPage struct {
+	Items      []RuntimeSession `json:"items"`
+	NextCursor string           `json:"next_cursor,omitempty"`
+}
+
+func toSession(session product.RuntimeSession) RuntimeSession {
+	return RuntimeSession{SessionID: session.ID, WorkspaceID: session.WorkspaceID, SlotKey: session.SlotKey, Kind: session.Kind, ProtocolProfile: session.ProtocolProfile, State: session.State, RequiresControlLease: session.RequiresControlLease, RecordingPolicy: session.RecordingPolicy, Version: session.Version, ExpiresAt: timestamp(session.ExpiresAt), CreatedAt: timestamp(session.CreatedAt), UpdatedAt: timestamp(session.UpdatedAt)}
+}
+
 func toOperation(operation product.Operation) ProductOperation {
 	return ProductOperation{
 		OperationID: operation.ID, OperationType: operation.Type, WorkspaceID: operation.WorkspaceID,
+		SlotKey: operation.SlotKey, SessionID: operation.SessionID, AgentRunID: operation.AgentRunID,
 		SubmittedBy: toActor(operation.SubmittedBy), State: operation.State,
 		ReconciliationState: operation.ReconciliationStatus, Version: operation.Version,
 		AcceptedAt: timestamp(operation.AcceptedAt), UpdatedAt: timestamp(operation.UpdatedAt),

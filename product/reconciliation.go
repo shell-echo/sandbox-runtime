@@ -58,6 +58,8 @@ type ProviderObservationWork struct {
 	SandboxID           string
 	ProviderOperationID string
 	ProviderRevisionID  string
+	SessionID           string
+	OperationType       string
 	LeaseOwner          string
 }
 

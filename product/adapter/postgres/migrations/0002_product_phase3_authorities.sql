@@ -9,12 +9,20 @@ ALTER TABLE sandbox_runtime_product.outbox
     ADD CONSTRAINT outbox_lease_owner CHECK (lease_owner IS NULL OR lease_owner ~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$'),
     ADD CONSTRAINT outbox_error_code CHECK (last_error_code IS NULL OR last_error_code ~ '^[a-z][a-z0-9_.-]{0,127}$');
 
+ALTER TABLE sandbox_runtime_product.product_operations
+    ADD COLUMN slot_key text,
+    ADD COLUMN session_id text,
+    ADD COLUMN agent_run_id text,
+    ADD COLUMN error_code text,
+    ADD COLUMN error_message text;
+
 CREATE TABLE sandbox_runtime_product.product_operation_attempts (
     tenant_id text NOT NULL,
     operation_id text NOT NULL,
     attempt_id text NOT NULL,
     workspace_id text NOT NULL,
     slot_key text NOT NULL,
+    session_id text,
     slot_generation bigint NOT NULL,
     fencing_token bigint NOT NULL,
     idempotency_key text NOT NULL,
@@ -161,6 +169,10 @@ CREATE TABLE sandbox_runtime_product.runtime_sessions (
     CONSTRAINT runtime_sessions_version CHECK (version >= 1 AND slot_generation >= 1),
     CONSTRAINT runtime_sessions_expiry CHECK (expires_at > created_at AND updated_at >= created_at)
 );
+
+ALTER TABLE sandbox_runtime_product.product_operation_attempts
+    ADD CONSTRAINT product_operation_attempts_session FOREIGN KEY (tenant_id,session_id)
+        REFERENCES sandbox_runtime_product.runtime_sessions (tenant_id,session_id) ON DELETE RESTRICT;
 
 CREATE TABLE sandbox_runtime_product.connection_grants (
     tenant_id text NOT NULL,

@@ -218,11 +218,11 @@ func (s *Store) GetOperation(ctx context.Context, tenantID, operationID string) 
 	defer cancel()
 	var operation product.Operation
 	var actorType string
-	err := s.pool.QueryRow(opCtx, `SELECT operation_id, operation_type, workspace_id,
+	err := s.pool.QueryRow(opCtx, `SELECT operation_id, operation_type, workspace_id,COALESCE(slot_key,''),COALESCE(session_id,''),COALESCE(agent_run_id,''),
        submitted_actor_type, submitted_actor_id, state, reconciliation_status, version,
        accepted_at, updated_at
 FROM sandbox_runtime_product.product_operations WHERE tenant_id = $1 AND operation_id = $2`, tenantID, operationID).Scan(
-		&operation.ID, &operation.Type, &operation.WorkspaceID, &actorType, &operation.SubmittedBy.ID,
+		&operation.ID, &operation.Type, &operation.WorkspaceID, &operation.SlotKey, &operation.SessionID, &operation.AgentRunID, &actorType, &operation.SubmittedBy.ID,
 		&operation.State, &operation.ReconciliationStatus, &operation.Version, &operation.AcceptedAt,
 		&operation.UpdatedAt,
 	)
@@ -272,7 +272,7 @@ func loadIdempotentResult(
 	var actorType string
 	var operation product.Operation
 	err := tx.QueryRow(ctx, `SELECT i.request_digest, i.result_workspace_id,
-       o.operation_id, o.operation_type, o.workspace_id, o.submitted_actor_type,
+       o.operation_id, o.operation_type, o.workspace_id,COALESCE(o.slot_key,''),COALESCE(o.session_id,''),COALESCE(o.agent_run_id,''),o.submitted_actor_type,
        o.submitted_actor_id, o.state, o.reconciliation_status, o.version, o.accepted_at, o.updated_at
 FROM sandbox_runtime_product.idempotency_records AS i
 JOIN sandbox_runtime_product.product_operations AS o
@@ -281,7 +281,7 @@ WHERE i.tenant_id = $1 AND i.actor_type = $2 AND i.actor_id = $3 AND i.method = 
   AND i.normalized_path = $5 AND i.idempotency_key = $6`,
 		command.TenantID, string(command.Actor.Type), command.Actor.ID, command.Method, command.Path,
 		command.IdempotencyKey).Scan(
-		&digest, &workspaceID, &operation.ID, &operation.Type, &operation.WorkspaceID,
+		&digest, &workspaceID, &operation.ID, &operation.Type, &operation.WorkspaceID, &operation.SlotKey, &operation.SessionID, &operation.AgentRunID,
 		&actorType, &operation.SubmittedBy.ID, &operation.State,
 		&operation.ReconciliationStatus, &operation.Version, &operation.AcceptedAt, &operation.UpdatedAt,
 	)

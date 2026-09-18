@@ -108,12 +108,41 @@ type Operation struct {
 	ID                   string
 	Type                 string
 	WorkspaceID          string
+	SlotKey              string
+	SessionID            string
+	AgentRunID           string
 	SubmittedBy          ActorRef
 	State                string
 	ReconciliationStatus string
 	Version              int64
 	AcceptedAt           time.Time
 	UpdatedAt            time.Time
+}
+
+type RuntimeSession struct {
+	ID                   string
+	WorkspaceID          string
+	SlotKey              string
+	Kind                 string
+	ProtocolProfile      string
+	State                string
+	RequiresControlLease bool
+	RecordingPolicy      string
+	Version              int64
+	ExpiresAt            time.Time
+	CreatedAt            time.Time
+	UpdatedAt            time.Time
+}
+
+type CreateSessionRequest struct {
+	ExpectedWorkspaceVersion       int64
+	SlotKey, Kind, ProtocolProfile string
+	ExpiresInSeconds               int64
+	RecordingPolicy                string
+}
+type CloseSessionRequest struct {
+	ExpectedVersion int64
+	Reason          string
 }
 
 type WorkspaceSlot struct {

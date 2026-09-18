@@ -1,0 +1,166 @@
+package productprovider
+
+import (
+	"bytes"
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"net/http"
+	"net/url"
+	"strings"
+	"time"
+
+	"github.com/gowebpki/jcs"
+	"github.com/shell-echo/sandbox-runtime/product"
+	providerv1 "github.com/shell-echo/sandbox-runtime/providerapi/v1"
+)
+
+func (c *Client) AuthorizeSession(ctx context.Context, kind, protocolProfile string) error {
+	if ctx == nil || kind != "terminal" || protocolProfile != "product-terminal.v1" {
+		return product.ErrCapabilityUnsupported
+	}
+	snapshot, err := c.discover(ctx)
+	if err != nil {
+		return err
+	}
+	for _, profile := range c.profiles {
+		if providerCapabilityReady(snapshot, profile.RuntimeProfileID, "sandbox.terminal", "1.0.0", "terminal-v1") &&
+			providerCapabilityReady(snapshot, profile.RuntimeProfileID, "sandbox.terminal-control", "1.0.0", "terminal-control-v1") {
+			return nil
+		}
+	}
+	return product.ErrCapabilityUnsupported
+}
+
+func (c *Client) ExecuteSessionControl(ctx context.Context, work product.SessionControlWork) (product.ProviderOperationEvidence, error) {
+	if ctx == nil || work.ProviderRevisionID != c.revisionID || work.SandboxID == "" || work.SessionID == "" || work.SlotGeneration < 1 {
+		return product.ProviderOperationEvidence{}, product.ErrInvalid
+	}
+	profile, ok := c.profileForRuntime(work.RuntimeProfileID)
+	if !ok {
+		return product.ProviderOperationEvidence{}, product.ErrCapabilityUnsupported
+	}
+	snapshot, err := c.discover(ctx)
+	if err != nil {
+		return product.ProviderOperationEvidence{}, err
+	}
+	capability, capabilityProfile, operation, contractID, path := "sandbox.terminal", "terminal-v1", "open_runtime_session", "urn:shell-echo:sandbox-runtime:request:open-runtime-session:v1", "/v1/sandboxes/"+url.PathEscape(work.SandboxID)+"/runtime-sessions"
+	var request any
+	deadline := c.clock.Now().UTC().Add(2 * time.Minute)
+	if work.ExpiresAt.Before(deadline) {
+		deadline = work.ExpiresAt
+	}
+	if work.Action == "open" {
+		request = &providerv1.RuntimeSessionOpenRequest{MutationEnvelope: providerv1.MutationEnvelope{OperationID: work.OperationID, AttemptID: work.AttemptID, FencingToken: work.SlotGeneration, IdempotencyKey: "product-" + work.AttemptID, DeadlineAt: deadline.Format(time.RFC3339Nano)}, ExpectedGeneration: work.SlotGeneration, RuntimeSessionID: work.SessionID, RuntimeType: providerv1.TerminalRuntimeTerminal, CapabilityProfileID: capabilityProfile, ExpiresAt: work.ExpiresAt.UTC().Format(time.RFC3339Nano)}
+	} else if work.Action == "close" {
+		capability, capabilityProfile, operation, contractID = "sandbox.terminal-control", "terminal-control-v1", "close_runtime_session", "urn:shell-echo:sandbox-runtime:request:close-runtime-session:v1"
+		path += "/" + url.PathEscape(work.SessionID) + ":close"
+		request = &providerv1.RuntimeSessionCloseRequest{MutationEnvelope: providerv1.MutationEnvelope{OperationID: work.OperationID, AttemptID: work.AttemptID, FencingToken: work.SlotGeneration, IdempotencyKey: "product-" + work.AttemptID, DeadlineAt: deadline.Format(time.RFC3339Nano)}, ExpectedGeneration: work.SlotGeneration, RuntimeSessionID: work.SessionID, ConnectionGeneration: work.ConnectionGeneration, Reason: work.Reason}
+	} else {
+		return product.ProviderOperationEvidence{}, product.ErrInvalid
+	}
+	if !providerCapabilityReady(snapshot, profile.RuntimeProfileID, capability, "1.0.0", capabilityProfile) {
+		return product.ProviderOperationEvidence{ErrorCode: "capability_unsupported"}, product.ErrDispatchRejected
+	}
+	digest, err := mutationDigest(request)
+	if err != nil {
+		return product.ProviderOperationEvidence{}, product.ErrInvalid
+	}
+	switch value := request.(type) {
+	case *providerv1.RuntimeSessionOpenRequest:
+		value.RequestDigest = providerv1.SHA256Digest(digest)
+	case *providerv1.RuntimeSessionCloseRequest:
+		value.RequestDigest = providerv1.SHA256Digest(digest)
+	}
+	body, err := json.Marshal(request)
+	if err != nil {
+		return product.ProviderOperationEvidence{}, product.ErrInvalid
+	}
+	now := c.clock.Now().UTC()
+	headers, err := c.signAdmission(now, admissionSigningInput{PolicyDigest: profile.PolicyDigest, TenantID: work.TenantID, WorkOrderID: work.OperationID, Operation: operation, SandboxID: work.SandboxID, OperationID: work.OperationID, AttemptID: work.AttemptID, FencingToken: work.SlotGeneration, Deadline: deadline, RequestContractID: contractID, RequestDigestProfile: "rfc8785-request-excluding-request-digest-v1", RequestDigest: digest, Method: http.MethodPost, Path: path})
+	if err != nil {
+		return product.ProviderOperationEvidence{}, product.ErrStoreUnavailable
+	}
+	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodPost, c.origin.String()+path, bytes.NewReader(body))
+	if err != nil {
+		return product.ProviderOperationEvidence{}, product.ErrInvalid
+	}
+	httpRequest.Header.Set("Content-Type", "application/json")
+	httpRequest.Header.Set("Authorization", "Bearer "+headers.Bearer)
+	httpRequest.Header.Set("X-Sandbox-Runtime-Admission-Context", headers.Context)
+	response, err := c.httpClient.Do(httpRequest)
+	if err != nil {
+		return product.ProviderOperationEvidence{ProviderRevisionID: c.revisionID, SandboxID: work.SandboxID, RequestDigest: digest, State: "outcome_unknown", ErrorCode: "transport_unknown", OutcomeUnknown: true, ObservedAt: c.clock.Now().UTC()}, product.ErrDispatchOutcomeUnknown
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusAccepted {
+		var standard providerv1.StandardError
+		_ = decodeBounded(response.Body, &standard)
+		retryable := response.StatusCode == http.StatusTooManyRequests || response.StatusCode == http.StatusServiceUnavailable
+		code := "provider_rejected"
+		if standard.Code != "" {
+			code = strings.ToLower(strings.ReplaceAll(standard.Code, "_", "-"))
+		}
+		return product.ProviderOperationEvidence{ProviderRevisionID: c.revisionID, SandboxID: work.SandboxID, RequestDigest: digest, State: "failed", ErrorCode: code, Retryable: retryable, ObservedAt: c.clock.Now().UTC()}, product.ErrDispatchRejected
+	}
+	var providerOperation providerv1.Operation
+	if err := decodeBounded(response.Body, &providerOperation); err != nil || providerOperation.OperationID != work.OperationID || providerOperation.AttemptID != work.AttemptID || providerOperation.SandboxID != work.SandboxID || providerOperation.FencingToken != work.SlotGeneration {
+		return product.ProviderOperationEvidence{ProviderRevisionID: c.revisionID, SandboxID: work.SandboxID, RequestDigest: digest, State: "outcome_unknown", ErrorCode: "invalid_provider_response", OutcomeUnknown: true, ObservedAt: c.clock.Now().UTC()}, product.ErrDispatchOutcomeUnknown
+	}
+	observed, err := time.Parse(time.RFC3339Nano, providerOperation.ObservedAt)
+	if err != nil {
+		observed = c.clock.Now().UTC()
+	}
+	return product.ProviderOperationEvidence{ProviderRevisionID: c.revisionID, SandboxID: work.SandboxID, ProviderOperationID: providerOperation.ProviderOperationID, RequestDigest: digest, State: string(providerOperation.Status), ObservedAt: observed}, nil
+}
+
+func (c *Client) profileForRuntime(runtimeID string) (Profile, bool) {
+	for _, profile := range c.profiles {
+		if profile.RuntimeProfileID == runtimeID {
+			return profile, true
+		}
+	}
+	return Profile{}, false
+}
+func providerCapabilityReady(snapshot providerv1.Capabilities, runtimeID, capabilityID, version, profileID string) bool {
+	profileMapped := false
+	for _, runtimeProfile := range snapshot.RuntimeProfiles {
+		if runtimeProfile.ID == runtimeID && contains(runtimeProfile.CapabilityProfileIDs, profileID) {
+			profileMapped = true
+		}
+	}
+	if !profileMapped {
+		return false
+	}
+	for _, capability := range snapshot.Capabilities {
+		if string(capability.ID) == capabilityID && contains(capability.Versions, version) && contains(capability.Profiles, profileID) {
+			return true
+		}
+	}
+	return false
+}
+func mutationDigest(request any) (string, error) {
+	document, err := json.Marshal(request)
+	if err != nil {
+		return "", err
+	}
+	var members map[string]any
+	if err := json.Unmarshal(document, &members); err != nil {
+		return "", err
+	}
+	delete(members, "request_digest")
+	return canonicalFullDigest(members)
+}
+func canonicalFullDigest(value any) (string, error) {
+	document, err := json.Marshal(value)
+	if err != nil {
+		return "", err
+	}
+	canonical, err := jcs.Transform(document)
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(canonical)
+	return "sha256:" + hex.EncodeToString(sum[:]), nil
+}

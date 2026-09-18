@@ -1,6 +1,6 @@
 # Product v1 Phase 3: Product Kernel, Terminal, Files, and Web
 
-Status: Active; Slices 1-5 implemented as local component and real-PostgreSQL evidence
+Status: Active; Slices 1-6 implemented as local component and real-PostgreSQL evidence
 
 Started: 2026-09-18
 
@@ -38,7 +38,7 @@ operations remain separately named gates.
 | 3 | Leased outbox dispatcher and exact-revision Provider adapter for discovery/admission | No dispatch before commit; exact Contract revision/tree and capability/profile selection; retry/dead-letter/timeout/unknown-result tests; fake network and protected Provider integration | **Implemented; local and real-PostgreSQL gates passed** |
 | 4 | Primary-code slot reconciler, Provider operation evidence mapping, restart recovery, and Product event cursor/read model | Restart/duplicate/stale generation/ambiguous Provider outcome/event-contiguity tests; Workspace reaches a terminal Product decision only from retained evidence | **Implemented; local and real-PostgreSQL gates passed** |
 | 5 | Product authorization, resource filters, control leases/fences, quotas, and metadata audit | Cross-tenant nondisclosure, stale fence, concurrent controller, database-time expiry, quota race, audit failure/retention tests | **Implemented; local and real-PostgreSQL gates passed** |
-| 6 | Product Terminal session control plane and Provider terminal-control adapter | Durable session-before-grant, exact Workspace/slot/fence binding, create/read/close/resize capability honesty, restart and close-race tests | Planned |
+| 6 | Product Terminal session control plane and Provider terminal-control adapter | Durable session-before-grant, exact Workspace/slot/fence binding, create/read/close/resize capability honesty, restart and close-race tests | **Implemented; local and real-PostgreSQL gates passed** |
 | 7 | Public Terminal Gateway with one-use Product grants, bounded proxying, revocation, backpressure, reconnect, and metadata audit | Separate-process client/Product/Gateway/Provider test; no endpoint or ticket leakage; expiry/replay/revocation/capacity/backpressure/reconnect/cleanup cases | Planned |
 | 8 | Outbound authenticated Guest Agent control channel and version/capability negotiation | Guest identity binding, replay protection, rotation, deadline/cancellation, reconnect, incompatible-version, and compromised/removed-guest tests | Planned |
 | 9 | Files list/stat/watch with confined paths and durable change state | Symlink/traversal/special-file/rename/watch-gap/cursor-expiry/large-directory/cross-tenant tests; no host path or backend identity exposure | Planned |
@@ -49,7 +49,7 @@ operations remain separately named gates.
 
 Slices are dependency ordered. Later UI or data-plane work cannot substitute
 for an earlier authority, persistence, authentication, or recovery gate.
-After Slice 5, 8 slices remain.
+After Slice 6, 7 slices remain.
 
 ## Cross-cutting requirements
 
@@ -221,3 +221,27 @@ acquire, live-controller conflict, stale fence rejection, renewal/release,
 event and audit counts, and concurrent quota admission. Collaboration roles,
 operator revocation, external identity-provider configuration, and hostile
 multi-tenant qualification remain outside this standalone slice.
+
+## Slice 6 exact output
+
+- Terminal session creation first commits a Product session, Product
+  operation, contiguous Workspace event, metadata audit, idempotency result,
+  and `session.open` outbox record. Close first commits `draining`, revocation
+  intent, a separate operation/event, and `session.close` work.
+- Session workers use the same database-time leased-outbox discipline and
+  stable attempt/fence identities as Workspace provisioning. Provider
+  `accepted` remains Product `provisioning`; only retained terminal evidence
+  can select `ready`, `closed`, or `failed`.
+- The caller-side Provider adapter independently signs the locked
+  `open_runtime_session` and `close_runtime_session` requests and requires the
+  exact terminal and terminal-control capability profiles on one selected
+  runtime profile.
+- Authenticated Product routes now create/list/read/close terminal sessions.
+  Resize is deliberately unavailable because the locked Provider Contract has
+  no terminal-resize operation; valid requests receive
+  `PRODUCT_CAPABILITY_UNSUPPORTED` rather than an in-process fallback.
+
+Focused race tests cover intent construction and capability failure. The real
+PostgreSQL test proves create-before-dispatch, terminal evidence projection,
+read/list authority, close-before-cleanup, and a terminal close decision. A
+public connection grant and data path do not exist until Slice 7.

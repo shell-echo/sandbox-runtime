@@ -26,6 +26,10 @@ type allowPrimarySlot struct{}
 
 func (allowPrimarySlot) AuthorizePrimarySlot(context.Context, product.SlotSpec) error { return nil }
 
+type allowTerminalSession struct{}
+
+func (allowTerminalSession) AuthorizeSession(context.Context, string, string) error { return nil }
+
 func TestIntegrationCreateWorkspaceTransactionReplayAndConflict(t *testing.T) {
 	pool := integrationProductPool(t)
 	applyProductMigrations(t, pool)
@@ -383,6 +387,72 @@ func TestIntegrationWorkspaceQuotaSerializesConcurrentAcceptance(t *testing.T) {
 	}
 }
 
+func TestIntegrationTerminalSessionIntentDispatchAndCloseAreDurable(t *testing.T) {
+	pool := integrationProductPool(t)
+	applyProductMigrations(t, pool)
+	cleanupProductTenant(t, pool, "tenant-product-session")
+	store, _ := New(pool, 2*time.Second)
+	application, _ := product.NewApplication(store, allowPrimarySlot{}, product.CryptoIDGenerator{})
+	sessions, _ := product.NewSessionService(store, allowTerminalSession{}, product.CryptoIDGenerator{})
+	actor := product.ActorRef{Type: product.ActorHuman, ID: "owner-product-session"}
+	created, err := application.CreateWorkspace(context.Background(), "tenant-product-session", actor, "session-workspace", integrationCreateWorkspaceRequest("session workspace"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, statement := range []string{
+		`UPDATE sandbox_runtime_product.workspaces SET observed_state='active' WHERE tenant_id=$1`,
+		`UPDATE sandbox_runtime_product.workspace_slots SET observed_state='ready',observed_generation=generation WHERE tenant_id=$1`,
+		`INSERT INTO sandbox_runtime_product.product_operation_attempts(tenant_id,operation_id,attempt_id,workspace_id,slot_key,slot_generation,fencing_token,idempotency_key,request_digest,provider_revision_id,provider_operation_id,state,outcome,deadline_at,dispatched_at,observed_at,created_at,updated_at)
+		SELECT tenant_id,operation_id,'bootstrap-attempt',workspace_id,'primary-code',1,1,'bootstrap','sha256:'||repeat('b',64),repeat('a',40),'bootstrap-provider-op','succeeded','known',clock_timestamp()+interval '1 hour',clock_timestamp(),clock_timestamp(),clock_timestamp(),clock_timestamp() FROM sandbox_runtime_product.product_operations WHERE tenant_id=$1`,
+		`INSERT INTO sandbox_runtime_product.provider_bindings(tenant_id,workspace_id,slot_key,slot_generation,binding_generation,provider_revision_id,runtime_profile_id,sandbox_id,create_operation_id,create_attempt_id,provider_operation_id,observed_state,current,last_observed_at,created_at,updated_at)
+SELECT tenant_id,workspace_id,'primary-code',1,1,repeat('a',40),'coding-shell-v1','provider-sandbox-session',operation_id,'bootstrap-attempt','bootstrap-provider-op','ready',true,clock_timestamp(),clock_timestamp(),clock_timestamp() FROM sandbox_runtime_product.product_operations WHERE tenant_id=$1`,
+	} {
+		if _, err := pool.Exec(context.Background(), statement, "tenant-product-session"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	workspace, err := application.GetWorkspace(context.Background(), "tenant-product-session", actor, created.Operation.WorkspaceID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	operation, _, err := sessions.Create(context.Background(), "tenant-product-session", actor, created.Operation.WorkspaceID, "session-create-1", product.CreateSessionRequest{ExpectedWorkspaceVersion: workspace.Version, SlotKey: product.PrimarySlotKey, Kind: "terminal", ProtocolProfile: "product-terminal.v1", ExpiresInSeconds: 3600, RecordingPolicy: "metadata_only"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	work, err := store.LeaseSessionWork(context.Background(), "session-worker-1", 10*time.Second, 10)
+	if err != nil || len(work) != 1 || work[0].Action != "open" {
+		t.Fatalf("work=%#v err=%v", work, err)
+	}
+	evidence := product.ProviderOperationEvidence{ProviderRevisionID: strings.Repeat("a", 40), SandboxID: "provider-sandbox-session", ProviderOperationID: "provider-session-open", RequestDigest: "sha256:" + strings.Repeat("c", 64), State: "succeeded", ObservedAt: time.Now().UTC()}
+	if err := store.RecordSessionDispatch(context.Background(), work[0], evidence); err != nil {
+		t.Fatal(err)
+	}
+	session, err := sessions.Get(context.Background(), "tenant-product-session", actor, operation.SessionID)
+	if err != nil || session.State != "ready" {
+		t.Fatalf("session=%#v err=%v", session, err)
+	}
+	closeOperation, _, err := sessions.Close(context.Background(), "tenant-product-session", actor, session.ID, "session-close-1", product.CloseSessionRequest{ExpectedVersion: session.Version, Reason: "done"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	work, err = store.LeaseSessionWork(context.Background(), "session-worker-2", 10*time.Second, 10)
+	if err != nil || len(work) != 1 || work[0].Action != "close" {
+		t.Fatalf("close work=%#v err=%v", work, err)
+	}
+	evidence.ProviderOperationID = "provider-session-close"
+	if err := store.RecordSessionDispatch(context.Background(), work[0], evidence); err != nil {
+		t.Fatal(err)
+	}
+	session, err = sessions.Get(context.Background(), "tenant-product-session", actor, session.ID)
+	if err != nil || session.State != "closed" {
+		t.Fatalf("closed session=%#v err=%v", session, err)
+	}
+	final, err := application.GetOperation(context.Background(), "tenant-product-session", actor, closeOperation.ID)
+	if err != nil || final.State != "succeeded" {
+		t.Fatalf("final=%#v err=%v", final, err)
+	}
+}
+
 func integrationProductPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	connectionString := os.Getenv(productPostgresURLVariable)
@@ -439,9 +509,9 @@ func cleanupProductTenant(t *testing.T, pool *pgxpool.Pool, tenantID string) {
 			`DELETE FROM sandbox_runtime_product.connection_grants WHERE tenant_id = $1`,
 			`DELETE FROM sandbox_runtime_product.control_leases WHERE tenant_id = $1`,
 			`DELETE FROM sandbox_runtime_product.control_lease_fences WHERE tenant_id = $1`,
-			`DELETE FROM sandbox_runtime_product.runtime_sessions WHERE tenant_id = $1`,
 			`DELETE FROM sandbox_runtime_product.provider_bindings WHERE tenant_id = $1`,
 			`DELETE FROM sandbox_runtime_product.product_operation_attempts WHERE tenant_id = $1`,
+			`DELETE FROM sandbox_runtime_product.runtime_sessions WHERE tenant_id = $1`,
 			`DELETE FROM sandbox_runtime_product.security_audit WHERE tenant_id = $1`,
 			`DELETE FROM sandbox_runtime_product.mutation_idempotency WHERE tenant_id = $1`,
 			`DELETE FROM sandbox_runtime_product.tenant_quotas WHERE tenant_id = $1`,

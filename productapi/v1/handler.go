@@ -21,6 +21,7 @@ type Handler struct {
 	authenticator productapi.Authenticator
 	requestIDs    product.IDGenerator
 	controls      *product.ControlService
+	sessions      *product.SessionService
 }
 
 func NewHandler(application *product.Application, authenticator productapi.Authenticator, requestIDs product.IDGenerator) (*Handler, error) {
@@ -28,10 +29,14 @@ func NewHandler(application *product.Application, authenticator productapi.Authe
 }
 
 func NewHandlerWithControl(application *product.Application, controls *product.ControlService, authenticator productapi.Authenticator, requestIDs product.IDGenerator) (*Handler, error) {
+	return NewHandlerWithServices(application, controls, nil, authenticator, requestIDs)
+}
+
+func NewHandlerWithServices(application *product.Application, controls *product.ControlService, sessions *product.SessionService, authenticator productapi.Authenticator, requestIDs product.IDGenerator) (*Handler, error) {
 	if application == nil || productapi.IsNilAuthenticator(authenticator) || requestIDs == nil {
 		return nil, product.ErrInvalid
 	}
-	return &Handler{application: application, controls: controls, authenticator: authenticator, requestIDs: requestIDs}, nil
+	return &Handler{application: application, controls: controls, sessions: sessions, authenticator: authenticator, requestIDs: requestIDs}, nil
 }
 
 func (h *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
@@ -62,6 +67,8 @@ func (h *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 		h.createWorkspace(writer, request, principal, requestID)
 	case request.Method == http.MethodPost && strings.Contains(request.URL.Path, "/control-leases"):
 		h.controlLease(writer, request, principal, requestID)
+	case (request.Method == http.MethodGet || request.Method == http.MethodPost) && strings.Contains(request.URL.Path, "/sessions"):
+		h.sessionsRoute(writer, request, principal, requestID)
 	case request.Method == http.MethodGet && strings.HasPrefix(request.URL.Path, "/api/v1/workspaces/"):
 		identifier, exact := singleIdentifier(request.URL.Path, "/api/v1/workspaces/")
 		if !exact {
@@ -79,6 +86,118 @@ func (h *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	default:
 		writeError(writer, http.StatusNotFound, "PRODUCT_NOT_FOUND", "resource not found", false, requestID)
 	}
+}
+
+func (h *Handler) sessionsRoute(writer http.ResponseWriter, request *http.Request, principal productapi.Principal, requestID string) {
+	if h.sessions == nil {
+		writeApplicationError(writer, product.ErrCapabilityUnsupported, requestID)
+		return
+	}
+	if strings.HasPrefix(request.URL.Path, "/api/v1/workspaces/") && strings.HasSuffix(request.URL.Path, "/sessions") {
+		workspaceID := strings.TrimSuffix(strings.TrimPrefix(request.URL.Path, "/api/v1/workspaces/"), "/sessions")
+		if workspaceID == "" || strings.Contains(workspaceID, "/") {
+			writeError(writer, http.StatusNotFound, "PRODUCT_NOT_FOUND", "resource not found", false, requestID)
+			return
+		}
+		if request.Method == http.MethodGet {
+			items, err := h.sessions.List(request.Context(), principal.TenantID, principal.Actor, workspaceID, 50)
+			if err != nil {
+				writeApplicationError(writer, err, requestID)
+				return
+			}
+			projected := make([]RuntimeSession, 0, len(items))
+			for _, item := range items {
+				projected = append(projected, toSession(item))
+			}
+			writeJSON(writer, http.StatusOK, SessionPage{Items: projected})
+			return
+		}
+		if principal.Role != productapi.RoleOwner {
+			writeError(writer, http.StatusForbidden, "PRODUCT_FORBIDDEN", "action is forbidden", false, requestID)
+			return
+		}
+		key, ok := singleHeader(request, "Idempotency-Key")
+		if !ok || !jsonContentType(request.Header.Get("Content-Type")) {
+			writeError(writer, http.StatusBadRequest, "PRODUCT_INVALID_REQUEST", "invalid mutation metadata", false, requestID)
+			return
+		}
+		var input CreateSessionRequest
+		if err := decodeStrict(request.Context(), writer, request.Body, 65536, &input); err != nil {
+			writeError(writer, http.StatusBadRequest, "PRODUCT_INVALID_REQUEST", "invalid request body", false, requestID)
+			return
+		}
+		operation, _, err := h.sessions.Create(request.Context(), principal.TenantID, principal.Actor, workspaceID, key, product.CreateSessionRequest{ExpectedWorkspaceVersion: input.ExpectedWorkspaceVersion, SlotKey: input.SlotKey, Kind: input.Kind, ProtocolProfile: input.ProtocolProfile, ExpiresInSeconds: input.ExpiresInSeconds, RecordingPolicy: input.RecordingPolicy})
+		if err != nil {
+			writeApplicationError(writer, err, requestID)
+			return
+		}
+		writeJSON(writer, http.StatusAccepted, toOperation(operation))
+		return
+	}
+	if !strings.HasPrefix(request.URL.Path, "/api/v1/sessions/") {
+		writeError(writer, http.StatusNotFound, "PRODUCT_NOT_FOUND", "resource not found", false, requestID)
+		return
+	}
+	value := strings.TrimPrefix(request.URL.Path, "/api/v1/sessions/")
+	if request.Method == http.MethodGet && !strings.Contains(value, ":") {
+		session, err := h.sessions.Get(request.Context(), principal.TenantID, principal.Actor, value)
+		if err != nil {
+			writeApplicationError(writer, err, requestID)
+			return
+		}
+		writeJSON(writer, http.StatusOK, toSession(session))
+		return
+	}
+	if request.Method != http.MethodPost || principal.Role != productapi.RoleOwner {
+		writeError(writer, http.StatusForbidden, "PRODUCT_FORBIDDEN", "action is forbidden", false, requestID)
+		return
+	}
+	key, ok := singleHeader(request, "Idempotency-Key")
+	if !ok || !jsonContentType(request.Header.Get("Content-Type")) {
+		writeError(writer, http.StatusBadRequest, "PRODUCT_INVALID_REQUEST", "invalid mutation metadata", false, requestID)
+		return
+	}
+	if strings.HasSuffix(value, ":close") {
+		sessionID := strings.TrimSuffix(value, ":close")
+		var input CloseSessionRequest
+		if err := decodeStrict(request.Context(), writer, request.Body, 32768, &input); err != nil {
+			writeError(writer, http.StatusBadRequest, "PRODUCT_INVALID_REQUEST", "invalid request body", false, requestID)
+			return
+		}
+		operation, _, err := h.sessions.Close(request.Context(), principal.TenantID, principal.Actor, sessionID, key, product.CloseSessionRequest{ExpectedVersion: input.ExpectedVersion, Reason: input.Reason})
+		if err != nil {
+			writeApplicationError(writer, err, requestID)
+			return
+		}
+		writeJSON(writer, http.StatusAccepted, toOperation(operation))
+		return
+	}
+	if strings.HasSuffix(value, ":resize") {
+		sessionID := strings.TrimSuffix(value, ":resize")
+		var input ResizeSessionRequest
+		if err := decodeStrict(request.Context(), writer, request.Body, 32768, &input); err != nil {
+			writeError(writer, http.StatusBadRequest, "PRODUCT_INVALID_REQUEST", "invalid request body", false, requestID)
+			return
+		}
+		operation, _, err := h.sessions.Resize(request.Context(), principal.TenantID, principal.Actor, sessionID, key, input.ExpectedVersion, input.Columns, input.Rows, input.ControlLeaseID, input.ControlFence)
+		if err != nil {
+			writeApplicationError(writer, err, requestID)
+			return
+		}
+		writeJSON(writer, http.StatusAccepted, toOperation(operation))
+		return
+	}
+	writeError(writer, http.StatusNotFound, "PRODUCT_NOT_FOUND", "resource not found", false, requestID)
+}
+
+func singleHeader(request *http.Request, name string) (string, bool) {
+	values := request.Header.Values(name)
+	return func() (string, bool) {
+		if len(values) != 1 {
+			return "", false
+		}
+		return values[0], true
+	}()
 }
 
 func (h *Handler) controlLease(writer http.ResponseWriter, request *http.Request, principal productapi.Principal, requestID string) {
