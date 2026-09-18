@@ -56,3 +56,56 @@ func TestSessionServiceFailsClosedOnCapabilityAndResize(t *testing.T) {
 		t.Fatalf("resize err=%v", err)
 	}
 }
+
+func TestSessionServiceAcceptsOnlyExactBrowserProfiles(t *testing.T) {
+	tests := []struct {
+		kind    string
+		profile string
+	}{
+		{kind: SessionKindBrowserAutomation, profile: SessionProfileBrowserAutomation},
+		{kind: SessionKindBrowserLive, profile: SessionProfileBrowserLive},
+	}
+	for _, test := range tests {
+		t.Run(test.kind, func(t *testing.T) {
+			store := &sessionStoreStub{operation: Operation{ID: "op_browser"}}
+			service, err := NewSessionService(store, sessionPolicyStub{}, &sequenceIDs{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			request := CreateSessionRequest{ExpectedWorkspaceVersion: 2, SlotKey: "browser-main", Kind: test.kind, ProtocolProfile: test.profile, ExpiresInSeconds: 900, RecordingPolicy: "required"}
+			operation, _, err := service.Create(context.Background(), "tenant-1", ActorRef{Type: ActorHuman, ID: "actor-1"}, "wrk-1", "browser-key", request)
+			if err != nil || operation.ID != "op_browser" || store.command.Kind != test.kind || store.command.ProtocolProfile != test.profile {
+				t.Fatalf("operation=%#v command=%#v err=%v", operation, store.command, err)
+			}
+		})
+	}
+
+	service, _ := NewSessionService(&sessionStoreStub{}, sessionPolicyStub{}, &sequenceIDs{})
+	request := CreateSessionRequest{ExpectedWorkspaceVersion: 1, SlotKey: "browser-main", Kind: SessionKindBrowserLive, ProtocolProfile: SessionProfileBrowserAutomation, ExpiresInSeconds: 900, RecordingPolicy: "metadata_only"}
+	if _, _, err := service.Create(context.Background(), "tenant-1", ActorRef{Type: ActorHuman, ID: "actor-1"}, "wrk-1", "browser-key", request); !errors.Is(err, ErrCapabilityUnsupported) {
+		t.Fatalf("mismatched browser profile err=%v", err)
+	}
+}
+
+func TestBrowserSessionStateMachineRejectsResurrection(t *testing.T) {
+	allowed := [][2]string{
+		{SessionStateRequested, SessionStateProvisioning},
+		{SessionStateProvisioning, SessionStateReady},
+		{SessionStateReady, SessionStateActive},
+		{SessionStateActive, SessionStateReady},
+		{SessionStateActive, SessionStateDraining},
+		{SessionStateDraining, SessionStateClosed},
+	}
+	for _, transition := range allowed {
+		if !CanTransitionSession(transition[0], transition[1]) {
+			t.Fatalf("transition %q -> %q rejected", transition[0], transition[1])
+		}
+	}
+	for _, terminal := range []string{SessionStateClosed, SessionStateExpired, SessionStateFailed} {
+		for _, next := range []string{SessionStateRequested, SessionStateProvisioning, SessionStateReady, SessionStateActive, SessionStateDraining} {
+			if CanTransitionSession(terminal, next) {
+				t.Fatalf("terminal transition %q -> %q accepted", terminal, next)
+			}
+		}
+	}
+}

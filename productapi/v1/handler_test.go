@@ -25,6 +25,7 @@ const testBearer = "product-api-test-token-0000000000000001"
 type handlerStore struct {
 	mu        sync.Mutex
 	commands  []product.CreateWorkspaceCommand
+	sessions  []product.SessionCommand
 	workspace product.Workspace
 	operation product.Operation
 }
@@ -48,9 +49,37 @@ func (s *handlerStore) GetOperation(context.Context, string, string) (product.Op
 	return s.operation, nil
 }
 
+func (s *handlerStore) CreateSession(_ context.Context, command product.SessionCommand) (product.Operation, bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.sessions = append(s.sessions, command)
+	operation := s.operation
+	operation.Type = "create_session"
+	operation.WorkspaceID = command.WorkspaceID
+	operation.SlotKey = command.SlotKey
+	operation.SessionID = command.SessionID
+	return operation, false, nil
+}
+
+func (s *handlerStore) CloseSession(context.Context, product.SessionCommand) (product.Operation, bool, error) {
+	return product.Operation{}, false, product.ErrCapabilityUnsupported
+}
+
+func (s *handlerStore) GetSession(context.Context, string, string) (product.RuntimeSession, error) {
+	return product.RuntimeSession{}, product.ErrNotFound
+}
+
+func (s *handlerStore) ListSessions(context.Context, string, string, product.ActorRef, int) ([]product.RuntimeSession, error) {
+	return nil, nil
+}
+
 type allowSlot struct{}
 
 func (allowSlot) AuthorizePrimarySlot(context.Context, product.SlotSpec) error { return nil }
+
+type allowProductSession struct{}
+
+func (allowProductSession) AuthorizeSession(context.Context, string, string) error { return nil }
 
 type catalogStoreStub struct {
 	artifact  product.Artifact
@@ -139,6 +168,71 @@ func TestHandlerCreateAndReadWorkspaceContractProjection(t *testing.T) {
 		t.Fatalf("operation status=%d body=%s", response.Code, response.Body.String())
 	}
 	validateDefinition(t, "ProductOperation", response.Body.Bytes())
+}
+
+func TestHandlerAcceptsStrictBrowserSessionAuthorityRequest(t *testing.T) {
+	base, store := newTestHandler(t)
+	sessions, err := product.NewSessionService(store, allowProductSession{}, &handlerIDs{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler, err := NewHandlerWithServices(base.application, nil, sessions, base.authenticator, &handlerIDs{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := authenticatedRequest(http.MethodPost, "/api/v1/workspaces/wrk_1/sessions", `{
+  "expected_workspace_version":1,
+  "slot_key":"browser-main",
+  "kind":"browser_automation",
+  "protocol_profile":"product-browser-automation.v1",
+  "expires_in_seconds":900,
+  "recording_policy":"metadata_only"
+}`)
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Idempotency-Key", "browser-session-create-1")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusAccepted {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	validateDefinition(t, "ProductOperation", response.Body.Bytes())
+	if len(store.sessions) != 1 || store.sessions[0].TenantID != "tenant-1" || store.sessions[0].Actor.ID != "actor-1" ||
+		store.sessions[0].Kind != product.SessionKindBrowserAutomation || store.sessions[0].ProtocolProfile != product.SessionProfileBrowserAutomation {
+		t.Fatalf("session commands=%#v", store.sessions)
+	}
+
+	request = authenticatedRequest(http.MethodPost, "/api/v1/workspaces/wrk_1/sessions", `{
+  "expected_workspace_version":1,
+  "slot_key":"browser-main",
+  "kind":"browser_live",
+  "protocol_profile":"product-browser-automation.v1",
+  "expires_in_seconds":900,
+  "recording_policy":"metadata_only"
+}`)
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Idempotency-Key", "browser-session-create-2")
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusUnprocessableEntity || len(store.sessions) != 1 {
+		t.Fatalf("mismatched profile status=%d calls=%d body=%s", response.Code, len(store.sessions), response.Body.String())
+	}
+
+	request = authenticatedRequest(http.MethodPost, "/api/v1/workspaces/wrk_1/sessions", `{
+  "expected_workspace_version":1,
+  "slot_key":"browser-main",
+  "kind":"browser_automation",
+  "protocol_profile":"product-browser-automation.v1",
+  "expires_in_seconds":900,
+  "recording_policy":"metadata_only",
+  "unexpected":true
+}`)
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Idempotency-Key", "browser-session-create-3")
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusBadRequest || len(store.sessions) != 1 {
+		t.Fatalf("unknown member status=%d calls=%d body=%s", response.Code, len(store.sessions), response.Body.String())
+	}
 }
 
 func TestHandlerAuthenticatesBeforeBodyAuthority(t *testing.T) {

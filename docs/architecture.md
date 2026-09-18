@@ -45,6 +45,17 @@ manifest. It remains same-repository process evidence using a locked-wire
 Provider fixture, not a deployable, independent-caller, HA, hostile-tenant, or
 production result.
 
+The [Product v1 Phase 4 Browser plan](plan/product-v1-phase-4-browser.md) is
+separate from the historical Provider optional-profile phase described later
+in this document. Product Phase 4 has 13 fixed slices. Slice 1 adds only
+Product-owned Browser session authority: exact kind/profile pairing, binding
+to a ready Product `browser` slot with the locked Provider Browser capability
+requirement, durable state transitions, and Browser-specific outbox isolation.
+The Product Browser capability remains unadvertised. Provider adaptation,
+public automation and visual data planes, controller/viewer policy, recovery,
+recording, Web, cleanup, and the independent-process release gate remain
+ordered later slices under ADR 0049.
+
 ## Purpose
 
 `sandbox-runtime` is a backend-independent sandbox provider. Its first useful
@@ -922,12 +933,15 @@ This retired Provider-plan label is unrelated to the active **Product v1 Phase
 3** plan. Product phase numbering is scoped to the Product architecture and
 does not revive a named consumer adapter.
 
-### Phase 4: optional profiles
+### Provider Phase 4: optional profiles (historical delivery label)
 
 Add browser, desktop, port forwarding, snapshots/restore, GPU, nested-container,
 and stronger isolation profiles one at a time. Each capability requires its own
 security, fault-injection, concurrency, session, and usage conformance tests
 before advertisement.
+
+This label predates and must not be confused with Product v1 Phase 4. Its
+Provider/reference Browser evidence is not Product Browser readiness evidence.
 
 ## Conformance matrix
 

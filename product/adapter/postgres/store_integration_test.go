@@ -41,6 +41,16 @@ type allowTerminalSession struct{}
 
 func (allowTerminalSession) AuthorizeSession(context.Context, string, string) error { return nil }
 
+type allowBrowserSession struct{}
+
+func (allowBrowserSession) AuthorizeSession(_ context.Context, kind, profile string) error {
+	if (kind == product.SessionKindBrowserAutomation && profile == product.SessionProfileBrowserAutomation) ||
+		(kind == product.SessionKindBrowserLive && profile == product.SessionProfileBrowserLive) {
+		return nil
+	}
+	return product.ErrCapabilityUnsupported
+}
+
 func TestIntegrationCreateWorkspaceTransactionReplayAndConflict(t *testing.T) {
 	pool := integrationProductPool(t)
 	applyProductMigrations(t, pool)
@@ -526,6 +536,79 @@ SELECT tenant_id,workspace_id,'primary-code',1,1,repeat('a',40),'coding-shell-v1
 	final, err := application.GetOperation(context.Background(), "tenant-product-session", actor, closeOperation.ID)
 	if err != nil || final.State != "succeeded" {
 		t.Fatalf("final=%#v err=%v", final, err)
+	}
+}
+
+func TestIntegrationBrowserSessionAuthorityIsDurableAndTerminalWorkerCannotConsumeIt(t *testing.T) {
+	pool := integrationProductPool(t)
+	applyProductMigrations(t, pool)
+	const tenantID = "tenant-product-browser-session"
+	cleanupProductTenant(t, pool, tenantID)
+	store, _ := New(pool, 2*time.Second)
+	application, _ := product.NewApplication(store, allowPrimarySlot{}, product.CryptoIDGenerator{})
+	sessions, _ := product.NewSessionService(store, allowBrowserSession{}, product.CryptoIDGenerator{})
+	actor := product.ActorRef{Type: product.ActorHuman, ID: "owner-product-browser-session"}
+	created, err := application.CreateWorkspace(context.Background(), tenantID, actor, "browser-workspace", integrationCreateWorkspaceRequest("browser session workspace"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(context.Background(), `INSERT INTO sandbox_runtime_product.workspace_slots
+    (tenant_id,workspace_id,slot_key,kind,profile_id,required_capabilities,desired_state,observed_state,generation,observed_generation,version,created_at,updated_at)
+VALUES ($1,$2,'browser-main','browser','sandbox-runtime-browser-v1',
+    '[{"capability_id":"sandbox.browser","version":"1.0.0","profile_id":"browser-v1"}]'::jsonb,
+    'ready','ready',1,1,1,clock_timestamp(),clock_timestamp())`, tenantID, created.Operation.WorkspaceID); err != nil {
+		t.Fatal(err)
+	}
+	workspace, err := application.GetWorkspace(context.Background(), tenantID, actor, created.Operation.WorkspaceID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := product.CreateSessionRequest{ExpectedWorkspaceVersion: workspace.Version, SlotKey: "browser-main", Kind: product.SessionKindBrowserLive, ProtocolProfile: product.SessionProfileBrowserLive, ExpiresInSeconds: 900, RecordingPolicy: "required"}
+	operation, replay, err := sessions.Create(context.Background(), tenantID, actor, workspace.ID, "browser-session-create-1", request)
+	if err != nil || replay || operation.SessionID == "" {
+		t.Fatalf("operation=%#v replay=%v err=%v", operation, replay, err)
+	}
+	replayed, replay, err := sessions.Create(context.Background(), tenantID, actor, workspace.ID, "browser-session-create-1", request)
+	if err != nil || !replay || replayed.ID != operation.ID {
+		t.Fatalf("replayed=%#v replay=%v err=%v", replayed, replay, err)
+	}
+	conflictingRequest := request
+	conflictingRequest.RecordingPolicy = "metadata_only"
+	if _, _, err := sessions.Create(context.Background(), tenantID, actor, workspace.ID, "browser-session-create-1", conflictingRequest); !errors.Is(err, product.ErrIdempotencyConflict) {
+		t.Fatalf("idempotency conflict err=%v", err)
+	}
+	session, err := sessions.Get(context.Background(), tenantID, actor, operation.SessionID)
+	if err != nil || session.Kind != product.SessionKindBrowserLive || session.ProtocolProfile != product.SessionProfileBrowserLive || session.State != product.SessionStateRequested {
+		t.Fatalf("session=%#v err=%v", session, err)
+	}
+	if _, err := sessions.Get(context.Background(), tenantID, product.ActorRef{Type: product.ActorHuman, ID: "other-owner"}, operation.SessionID); !errors.Is(err, product.ErrNotFound) {
+		t.Fatalf("cross-actor read err=%v", err)
+	}
+	if _, err := sessions.Get(context.Background(), "other-tenant", actor, operation.SessionID); !errors.Is(err, product.ErrNotFound) {
+		t.Fatalf("cross-tenant read err=%v", err)
+	}
+	var outboxType string
+	if err := pool.QueryRow(context.Background(), `SELECT message_type FROM sandbox_runtime_product.outbox WHERE tenant_id=$1 AND operation_id=$2`, tenantID, operation.ID).Scan(&outboxType); err != nil || outboxType != "browser_session.open" {
+		t.Fatalf("outbox type=%q err=%v", outboxType, err)
+	}
+	if work, err := store.LeaseSessionWork(context.Background(), "terminal-worker", 10*time.Second, 10); err != nil || len(work) != 0 {
+		t.Fatalf("terminal worker consumed browser work=%#v err=%v", work, err)
+	}
+	closeOperation, replay, err := sessions.Close(context.Background(), tenantID, actor, session.ID, "browser-session-close-1", product.CloseSessionRequest{ExpectedVersion: session.Version, Reason: "owner requested close"})
+	if err != nil || replay || closeOperation.SessionID != session.ID {
+		t.Fatalf("close=%#v replay=%v err=%v", closeOperation, replay, err)
+	}
+	session, err = sessions.Get(context.Background(), tenantID, actor, session.ID)
+	if err != nil || session.State != product.SessionStateDraining {
+		t.Fatalf("draining session=%#v err=%v", session, err)
+	}
+	if err := pool.QueryRow(context.Background(), `SELECT message_type FROM sandbox_runtime_product.outbox WHERE tenant_id=$1 AND operation_id=$2`, tenantID, closeOperation.ID).Scan(&outboxType); err != nil || outboxType != "browser_session.close" {
+		t.Fatalf("close outbox type=%q err=%v", outboxType, err)
+	}
+	if _, err := pool.Exec(context.Background(), `INSERT INTO sandbox_runtime_product.runtime_sessions
+    (tenant_id,session_id,workspace_id,slot_key,slot_generation,owner_actor_type,owner_actor_id,kind,protocol_profile,state,requires_control_lease,recording_policy,version,expires_at,created_at,updated_at)
+VALUES ($1,'ses-invalid-browser-profile',$2,'browser-main',1,'human',$3,'browser_live','product-browser-automation.v1','requested',true,'disabled',1,clock_timestamp()+interval '5 minutes',clock_timestamp(),clock_timestamp())`, tenantID, workspace.ID, actor.ID); err == nil {
+		t.Fatal("database accepted mismatched browser kind/profile")
 	}
 }
 

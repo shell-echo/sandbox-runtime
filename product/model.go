@@ -10,6 +10,23 @@ import (
 const (
 	PrimarySlotKey = "primary-code"
 
+	SessionKindTerminal          = "terminal"
+	SessionKindBrowserAutomation = "browser_automation"
+	SessionKindBrowserLive       = "browser_live"
+
+	SessionProfileTerminal          = "product-terminal.v1"
+	SessionProfileBrowserAutomation = "product-browser-automation.v1"
+	SessionProfileBrowserLive       = "product-browser-live.v1"
+
+	SessionStateRequested    = "requested"
+	SessionStateProvisioning = "provisioning"
+	SessionStateReady        = "ready"
+	SessionStateActive       = "active"
+	SessionStateDraining     = "draining"
+	SessionStateClosed       = "closed"
+	SessionStateExpired      = "expired"
+	SessionStateFailed       = "failed"
+
 	CreateWorkspaceMethod = "POST"
 	CreateWorkspacePath   = "/api/v1/workspaces"
 )

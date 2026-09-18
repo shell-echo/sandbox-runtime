@@ -107,8 +107,11 @@ func (s *SessionService) Create(ctx context.Context, tenantID string, actor Acto
 	if err := validateSessionInput(ctx, s, tenantID, actor, workspaceID, key); err != nil {
 		return Operation{}, false, err
 	}
-	if request.ExpectedWorkspaceVersion < 1 || !validIdentifier(request.SlotKey) || !validIdentifier(request.ProtocolProfile) || request.ExpiresInSeconds < 30 || request.ExpiresInSeconds > 86400 || request.Kind != "terminal" || (request.RecordingPolicy != "disabled" && request.RecordingPolicy != "metadata_only" && request.RecordingPolicy != "required") {
+	if request.ExpectedWorkspaceVersion < 1 || !validIdentifier(request.SlotKey) || !validIdentifier(request.Kind) || !validIdentifier(request.ProtocolProfile) || request.ExpiresInSeconds < 30 || request.ExpiresInSeconds > 86400 || (request.RecordingPolicy != "disabled" && request.RecordingPolicy != "metadata_only" && request.RecordingPolicy != "required") {
 		return Operation{}, false, ErrInvalid
+	}
+	if !supportedSessionProfile(request.Kind, request.ProtocolProfile) {
+		return Operation{}, false, ErrCapabilityUnsupported
 	}
 	if err := s.policy.AuthorizeSession(ctx, request.Kind, request.ProtocolProfile); err != nil {
 		return Operation{}, false, err
@@ -134,6 +137,38 @@ func (s *SessionService) Create(ctx context.Context, tenantID string, actor Acto
 		return Operation{}, false, ErrInvalid
 	}
 	return s.store.CreateSession(ctx, SessionCommand{TenantID: tenantID, Actor: actor, WorkspaceID: workspaceID, SlotKey: request.SlotKey, SessionID: sessionID, OperationID: operationID, EventID: eventID, OutboxID: outboxID, IdempotencyKey: key, RequestDigest: digest, Path: "/api/v1/workspaces/" + workspaceID + "/sessions", ExpectedVersion: request.ExpectedWorkspaceVersion, Kind: request.Kind, ProtocolProfile: request.ProtocolProfile, RecordingPolicy: request.RecordingPolicy, Lifetime: time.Duration(request.ExpiresInSeconds) * time.Second})
+}
+
+func supportedSessionProfile(kind, profile string) bool {
+	switch kind {
+	case SessionKindTerminal:
+		return profile == SessionProfileTerminal
+	case SessionKindBrowserAutomation:
+		return profile == SessionProfileBrowserAutomation
+	case SessionKindBrowserLive:
+		return profile == SessionProfileBrowserLive
+	default:
+		return false
+	}
+}
+
+// CanTransitionSession is the Product-owned durable session state machine.
+// External observations may request a transition, but they never redefine it.
+func CanTransitionSession(from, to string) bool {
+	switch from {
+	case SessionStateRequested:
+		return to == SessionStateProvisioning || to == SessionStateDraining || to == SessionStateExpired || to == SessionStateFailed
+	case SessionStateProvisioning:
+		return to == SessionStateReady || to == SessionStateDraining || to == SessionStateExpired || to == SessionStateFailed
+	case SessionStateReady:
+		return to == SessionStateActive || to == SessionStateDraining || to == SessionStateExpired || to == SessionStateFailed
+	case SessionStateActive:
+		return to == SessionStateReady || to == SessionStateDraining || to == SessionStateExpired || to == SessionStateFailed
+	case SessionStateDraining:
+		return to == SessionStateClosed || to == SessionStateFailed
+	default:
+		return false
+	}
 }
 func (s *SessionService) Close(ctx context.Context, tenantID string, actor ActorRef, sessionID, key string, request CloseSessionRequest) (Operation, bool, error) {
 	if err := validateSessionInput(ctx, s, tenantID, actor, sessionID, key); err != nil {

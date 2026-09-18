@@ -34,7 +34,11 @@ Current verified state:
   evidence manifest records complete process, schema, and container cleanup.
   This same-repository Provider-fixture topology is not deployment, HA,
   hostile-multitenant, independently implemented caller, or production
-  evidence.
+  evidence; and
+- Product v1 Phase 4 Browser is in progress at **1/13**. Slice 1 establishes
+  Product-owned Browser session authority and PostgreSQL outbox isolation only;
+  the capability remains unadvertised and twelve Provider/data-plane/policy/
+  recovery/recording/Web/release slices remain.
 
 The qualification applies only to Provider revision
 `170459266af5f4fad359ca8c63f2ae19741055c5`, external-caller revision
@@ -60,6 +64,9 @@ recorded in
 [`plan/product-v1-phase-3-product-kernel-terminal-files-web.md`](plan/product-v1-phase-3-product-kernel-terminal-files-web.md),
 with the accepted standalone run in
 [`audits/product-phase-3-standalone-completion.md`](audits/product-phase-3-standalone-completion.md).
+Product Phase 4 startup scope and slice order are recorded in
+[`audits/phase-4-product-browser-startup.md`](audits/phase-4-product-browser-startup.md)
+and [`plan/product-v1-phase-4-browser.md`](plan/product-v1-phase-4-browser.md).
 
 See [`STATUS.md`](STATUS.md) for the complete evidence ledger and
 [`qualification/external-caller-coding-shell-v1.md`](qualification/external-caller-coding-shell-v1.md)

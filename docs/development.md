@@ -339,6 +339,32 @@ runs in `internal/productboundary`; extend it whenever a new Product or Guest
 Agent root is added. ADR 0042 owns the complete dependency decision; local
 convenience is not an exception.
 
+## Product Phase 4 Browser discipline
+
+Follow the fixed order in
+[`plan/product-v1-phase-4-browser.md`](plan/product-v1-phase-4-browser.md) and
+the authority boundary in ADR 0049. The historical Provider "P4 Browser"
+packages and evidence are not Product Phase 4 composition or release evidence.
+
+Product Browser sessions must bind to a Product slot of kind `browser`; never
+reuse `primary-code` or a Terminal handoff. The Product control lease,
+Provider mutation fence, Browser connection generation, Gateway capacity
+lease, and downstream action fence are independent authorities. Browser
+outbox work uses a Browser-specific type and must not be leased by Terminal
+workers.
+
+Keep Product Browser capability advertisement empty until the exact Provider
+adapter, public automation/live Gateway, viewer/controller policy, revocation,
+network isolation, recording mode, recovery, cleanup, and Phase 4 release gate
+are all ready. Missing clipboard, upload, download, permission, recording, or
+egress policy denies the feature. A disconnected client is not proof that the
+durable session or Provider allocation is closed.
+
+For Slice 1 persistence changes, run the ordinary Product PostgreSQL command
+above. That result is real-adapter authority evidence only; it is not Browser
+runtime, public data-plane, independent-process, deployment, or production
+evidence.
+
 ## Go and API rules
 
 - accept `context.Context` on blocking or external operations and preserve

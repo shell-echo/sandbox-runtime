@@ -44,16 +44,20 @@ func (s *Store) CreateSession(ctx context.Context, command product.SessionComman
 		return product.Operation{}, false, product.ErrVersionConflict
 	}
 	var slotGeneration int64
-	var slotState string
-	err = tx.QueryRow(opCtx, `SELECT generation,observed_state FROM sandbox_runtime_product.workspace_slots WHERE tenant_id=$1 AND workspace_id=$2 AND slot_key=$3`, command.TenantID, command.WorkspaceID, command.SlotKey).Scan(&slotGeneration, &slotState)
+	var slotKind, slotDesiredState, slotState string
+	var slotCapabilities []byte
+	err = tx.QueryRow(opCtx, `SELECT generation,kind,desired_state,observed_state,required_capabilities FROM sandbox_runtime_product.workspace_slots WHERE tenant_id=$1 AND workspace_id=$2 AND slot_key=$3`, command.TenantID, command.WorkspaceID, command.SlotKey).Scan(&slotGeneration, &slotKind, &slotDesiredState, &slotState, &slotCapabilities)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return product.Operation{}, false, product.ErrNotFound
 	}
 	if err != nil {
 		return product.Operation{}, false, storeError(ctx, opCtx, err, false)
 	}
-	if slotState != "ready" {
+	if slotDesiredState != "ready" || slotState != "ready" {
 		return product.Operation{}, false, product.ErrControlConflict
+	}
+	if err := authorizeSessionSlot(command.Kind, slotKind, slotCapabilities); err != nil {
+		return product.Operation{}, false, err
 	}
 	if _, err := tx.Exec(opCtx, `SELECT pg_advisory_xact_lock(hashtextextended($1,7346273420))`, command.TenantID); err != nil {
 		return product.Operation{}, false, storeError(ctx, opCtx, err, false)
@@ -88,7 +92,7 @@ func (s *Store) CreateSession(ctx context.Context, command product.SessionComman
 		return product.Operation{}, false, storeError(ctx, opCtx, err, false)
 	}
 	payload, _ := json.Marshal(map[string]any{"session_id": command.SessionID, "workspace_id": command.WorkspaceID, "slot_key": command.SlotKey, "slot_generation": slotGeneration})
-	if err := insertSessionOutbox(opCtx, tx, command, "session.open", payload, now); err != nil {
+	if err := insertSessionOutbox(opCtx, tx, command, sessionOutboxType(command.Kind, "open"), payload, now); err != nil {
 		return product.Operation{}, false, storeError(ctx, opCtx, err, false)
 	}
 	if err := insertAudit(opCtx, tx, "aud-"+command.OperationID, command.TenantID, command.Actor, "session.create", "session", command.SessionID, "allowed", "authorized", now); err != nil {
@@ -132,7 +136,7 @@ func (s *Store) CloseSession(ctx context.Context, command product.SessionCommand
 	if session.Version != command.ExpectedVersion {
 		return product.Operation{}, false, product.ErrVersionConflict
 	}
-	if session.State == "closed" || session.State == "expired" {
+	if !product.CanTransitionSession(session.State, product.SessionStateDraining) {
 		return product.Operation{}, false, product.ErrControlStale
 	}
 	if _, err := tx.Exec(opCtx, `UPDATE sandbox_runtime_product.runtime_sessions SET state='draining',version=version+1,updated_at=$1 WHERE tenant_id=$2 AND session_id=$3`, now, command.TenantID, command.SessionID); err != nil {
@@ -144,6 +148,7 @@ func (s *Store) CloseSession(ctx context.Context, command product.SessionCommand
 	}
 	command.WorkspaceID = session.WorkspaceID
 	command.SlotKey = session.SlotKey
+	command.Kind = session.Kind
 	sequence, err := lockWorkspaceAndAdvance(opCtx, tx, command.TenantID, session.WorkspaceID, "", now)
 	if err != nil {
 		return product.Operation{}, false, storeError(ctx, opCtx, err, false)
@@ -153,7 +158,7 @@ func (s *Store) CloseSession(ctx context.Context, command product.SessionCommand
 		return product.Operation{}, false, storeError(ctx, opCtx, err, false)
 	}
 	payload, _ := json.Marshal(map[string]any{"session_id": session.ID, "workspace_id": session.WorkspaceID, "slot_key": session.SlotKey, "slot_generation": slotGeneration, "reason": command.Reason})
-	if err := insertSessionOutbox(opCtx, tx, command, "session.close", payload, now); err != nil {
+	if err := insertSessionOutbox(opCtx, tx, command, sessionOutboxType(command.Kind, "close"), payload, now); err != nil {
 		return product.Operation{}, false, storeError(ctx, opCtx, err, false)
 	}
 	if err := insertAudit(opCtx, tx, "aud-"+command.OperationID, command.TenantID, command.Actor, "session.close", "session", command.SessionID, "allowed", "authorized", now); err != nil {
@@ -243,4 +248,36 @@ func insertSessionOperation(ctx context.Context, tx pgx.Tx, operation product.Op
 func insertSessionOutbox(ctx context.Context, tx pgx.Tx, command product.SessionCommand, messageType string, payload []byte, now time.Time) error {
 	_, err := tx.Exec(ctx, `INSERT INTO sandbox_runtime_product.outbox(tenant_id,outbox_id,workspace_id,operation_id,message_type,payload,state,attempt_count,available_at,created_at,updated_at)VALUES($1,$2,$3,$4,$5,$6,'pending',0,$7,$7,$7)`, command.TenantID, command.OutboxID, command.WorkspaceID, command.OperationID, messageType, payload, now)
 	return err
+}
+
+func authorizeSessionSlot(sessionKind, slotKind string, encodedCapabilities []byte) error {
+	if sessionKind == product.SessionKindTerminal {
+		if slotKind != "code" {
+			return product.ErrCapabilityUnsupported
+		}
+		return nil
+	}
+	if sessionKind != product.SessionKindBrowserAutomation && sessionKind != product.SessionKindBrowserLive {
+		return product.ErrCapabilityUnsupported
+	}
+	if slotKind != "browser" {
+		return product.ErrCapabilityUnsupported
+	}
+	var capabilities []product.CapabilityRequirement
+	if err := json.Unmarshal(encodedCapabilities, &capabilities); err != nil {
+		return product.ErrStoreUnavailable
+	}
+	for _, capability := range capabilities {
+		if capability.CapabilityID == "sandbox.browser" && capability.Version == "1.0.0" && capability.ProfileID == "browser-v1" {
+			return nil
+		}
+	}
+	return product.ErrCapabilityUnsupported
+}
+
+func sessionOutboxType(kind, action string) string {
+	if kind == product.SessionKindBrowserAutomation || kind == product.SessionKindBrowserLive {
+		return "browser_session." + action
+	}
+	return "session." + action
 }

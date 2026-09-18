@@ -13,6 +13,7 @@
 | 主交付计划 | **24/24 已完成** |
 | 独立 External Caller | **13/13 已完成** |
 | Product v1 第三阶段 | 在有边界的 standalone 拓扑内 **13/13 已完成** |
+| Product v1 第四阶段 Browser | **1/13 进行中**；仅完成权威切片，能力尚未发布 |
 | 编程/Shell 资格验证 | 对下述精确调用方、Provider 版本、拓扑、Profile 和场景结果为 **Qualified** |
 | 最新核心 CI | [已通过](https://github.com/shell-echo/sandbox-runtime/actions/runs/35204434771) |
 
@@ -43,6 +44,12 @@ Guest Agent 或生产部署。
 PostgreSQL 上，以四个独立 OS 进程运行 Product、Gateway、Guest 与锁定 Contract
 的 Provider fixture，并通过 9 个黑盒场景。能力就绪状态现在按租户和完整依赖实时
 派生。该结论不等同于可部署拓扑、独立实现调用方、HA、恶意多租户隔离或生产就绪。
+
+[Product v1 第四阶段 Browser](docs/plan/product-v1-phase-4-browser.md)正在进行。
+首个切片只增加 Product 自有的 Browser 会话权威与 PostgreSQL outbox 隔离；
+Browser Slot 供应、Provider Browser 调度、公开自动化或可视数据面、Browser
+录制/Web 组合与发布门禁仍未完成。历史 Provider Browser 参考证据不会被改称为
+Product 就绪证据。
 
 ## 项目提供什么
 
