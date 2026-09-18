@@ -153,3 +153,29 @@ func TestBrowserSessionStateMachineRejectsResurrection(t *testing.T) {
 		}
 	}
 }
+
+type browserExpiryStoreStub struct {
+	candidates []BrowserExpiryCandidate
+	commands   []BrowserExpiryCommand
+	changed    bool
+}
+
+func (s *browserExpiryStoreStub) ListExpiredBrowserSessions(context.Context, int) ([]BrowserExpiryCandidate, error) {
+	return s.candidates, nil
+}
+func (s *browserExpiryStoreStub) ExpireBrowserSession(_ context.Context, c BrowserExpiryCommand) (bool, error) {
+	s.commands = append(s.commands, c)
+	return s.changed, nil
+}
+
+func TestBrowserExpiryWorkerAllocatesDurableCleanupIntent(t *testing.T) {
+	store := &browserExpiryStoreStub{candidates: []BrowserExpiryCandidate{{TenantID: "tenant-1", SessionID: "ses-1", Version: 4}}, changed: true}
+	worker, err := NewBrowserExpiryWorker(store, &sequenceIDs{}, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	count, err := worker.ExpireOnce(context.Background())
+	if err != nil || count != 1 || len(store.commands) != 1 || store.commands[0].OperationID != "op_1" || store.commands[0].EventID != "evt_2" || store.commands[0].OutboxID != "out_3" {
+		t.Fatalf("count=%d commands=%#v err=%v", count, store.commands, err)
+	}
+}

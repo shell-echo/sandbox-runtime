@@ -385,6 +385,9 @@ func (c *Client) ObserveOperation(ctx context.Context, work product.ProviderObse
 	if ctx == nil || work.ProviderRevisionID != c.revisionID || work.SandboxID == "" || work.OperationID == "" || work.AttemptID == "" || work.SlotGeneration < 1 {
 		return product.ProviderOperationEvidence{}, product.ErrInvalid
 	}
+	if work.FencingToken < 1 {
+		work.FencingToken = work.SlotGeneration
+	}
 	var profile Profile
 	found := false
 	for _, candidate := range c.profiles {
@@ -397,7 +400,7 @@ func (c *Client) ObserveOperation(ctx context.Context, work product.ProviderObse
 		return product.ProviderOperationEvidence{}, product.ErrCapabilityUnsupported
 	}
 	descriptor := map[string]any{"operation": "read_operation", "sandbox_id": work.SandboxID, "operation_id": work.OperationID,
-		"attempt_id": work.AttemptID, "fencing_token": work.SlotGeneration}
+		"attempt_id": work.AttemptID, "fencing_token": work.FencingToken}
 	descriptorJSON, err := json.Marshal(descriptor)
 	if err != nil {
 		return product.ProviderOperationEvidence{}, product.ErrInvalid
@@ -413,7 +416,7 @@ func (c *Client) ObserveOperation(ctx context.Context, work product.ProviderObse
 	path := "/v1/operations/" + url.PathEscape(work.OperationID)
 	headers, err := c.signAdmission(now, admissionSigningInput{PolicyDigest: profile.PolicyDigest, TenantID: work.TenantID,
 		WorkOrderID: work.OperationID, Operation: "read_operation", SandboxID: work.SandboxID, OperationID: work.OperationID,
-		AttemptID: work.AttemptID, FencingToken: work.SlotGeneration, Deadline: deadline,
+		AttemptID: work.AttemptID, FencingToken: work.FencingToken, Deadline: deadline,
 		RequestContractID: "urn:shell-echo:sandbox-runtime:descriptor:operation:v1", RequestDigestProfile: "rfc8785-full-document-v1",
 		RequestDigest: digest, Method: http.MethodGet, Path: path})
 	if err != nil {
@@ -436,7 +439,7 @@ func (c *Client) ObserveOperation(ctx context.Context, work product.ProviderObse
 	}
 	var operation providerv1.Operation
 	if err := decodeBounded(response.Body, &operation); err != nil || operation.OperationID != work.OperationID || operation.AttemptID != work.AttemptID ||
-		operation.FencingToken != work.SlotGeneration || operation.SandboxID != work.SandboxID || operation.Type != expectedProviderOperationType(work) {
+		operation.FencingToken != work.FencingToken || operation.SandboxID != work.SandboxID || operation.Type != expectedProviderOperationType(work) {
 		return product.ProviderOperationEvidence{}, product.ErrStoreUnavailable
 	}
 	observed, err := time.Parse(time.RFC3339Nano, operation.ObservedAt)
@@ -478,6 +481,22 @@ func (c *Client) ObserveOperation(ctx context.Context, work product.ProviderObse
 }
 
 func expectedProviderOperationType(work product.ProviderObservationWork) providerv1.OperationType {
+	switch work.ProviderAction {
+	case "create":
+		return providerv1.OperationCreate
+	case "suspend":
+		return providerv1.OperationSuspend
+	case "resume":
+		return providerv1.OperationResume
+	case "terminate", "terminate_browser_session":
+		return providerv1.OperationTerminate
+	case "open_runtime_session":
+		return providerv1.OperationOpenRuntimeSession
+	case "close_runtime_session":
+		return providerv1.OperationCloseRuntimeSession
+	case "open_browser_session":
+		return providerv1.OperationOpenBrowserSession
+	}
 	switch {
 	case work.OperationType == "create_session" && (work.SessionKind == product.SessionKindBrowserAutomation || work.SessionKind == product.SessionKindBrowserLive):
 		return providerv1.OperationOpenBrowserSession

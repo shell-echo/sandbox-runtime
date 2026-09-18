@@ -94,6 +94,7 @@ func (s *Store) LeaseBrowserSlotWork(ctx context.Context, workerID string, lease
     JOIN sandbox_runtime_product.workspace_slots s
       ON s.tenant_id=o.tenant_id AND s.workspace_id=o.workspace_id AND s.slot_key=o.payload->>'slot_key'
     WHERE o.message_type='slot.reconcile' AND s.kind='browser' AND s.desired_state='ready'
+      AND COALESCE(o.payload->>'action','provision')='provision'
       AND s.generation=(o.payload->>'generation')::bigint
       AND o.available_at<=clock_timestamp()
       AND (o.state='pending' OR (o.state='leased' AND o.lease_expires_at<=clock_timestamp()))
@@ -106,7 +107,8 @@ func (s *Store) LeaseBrowserSlotWork(ctx context.Context, workerID string, lease
     RETURNING o.tenant_id,o.outbox_id,o.workspace_id,o.operation_id,o.lease_owner,o.payload
 )
 SELECT l.tenant_id,l.outbox_id,l.workspace_id,l.operation_id,l.lease_owner,
-       s.slot_key,s.kind,s.profile_id,s.required_capabilities,s.desired_state,s.generation,w.lease_expires_at
+       s.slot_key,s.kind,s.profile_id,s.required_capabilities,s.desired_state,s.generation,w.lease_expires_at,
+       COALESCE((l.payload->>'previous_generation')::bigint,0),COALESCE(l.payload->>'action','provision')
 FROM leased l
 JOIN sandbox_runtime_product.workspaces w ON w.tenant_id=l.tenant_id AND w.workspace_id=l.workspace_id
 JOIN sandbox_runtime_product.workspace_slots s ON s.tenant_id=l.tenant_id AND s.workspace_id=l.workspace_id
@@ -122,7 +124,7 @@ ORDER BY l.outbox_id`, limit, workerID, lease.String())
 		var capabilities []byte
 		if err := rows.Scan(&item.TenantID, &item.OutboxID, &item.WorkspaceID, &item.OperationID, &item.LeaseOwner,
 			&item.Slot.SlotKey, &item.Slot.Kind, &item.Slot.ProfileID, &capabilities, &item.Slot.DesiredState,
-			&item.SlotGeneration, &item.WorkspaceExpiry); err != nil {
+			&item.SlotGeneration, &item.WorkspaceExpiry, &item.PreviousGeneration, &item.Action); err != nil {
 			return nil, storeError(ctx, opCtx, err, false)
 		}
 		if err := json.Unmarshal(capabilities, &item.Slot.RequiredCapabilities); err != nil {
@@ -130,6 +132,78 @@ ORDER BY l.outbox_id`, limit, workerID, lease.String())
 		}
 		item.SlotKey = item.Slot.SlotKey
 		item.AttemptID = item.OutboxID
+		item.FencingToken = item.SlotGeneration
+		result = append(result, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, storeError(ctx, opCtx, err, false)
+	}
+	if err := tx.Commit(opCtx); err != nil {
+		return nil, storeError(ctx, opCtx, err, true)
+	}
+	return result, nil
+}
+
+func (s *Store) LeaseBrowserLifecycleWork(ctx context.Context, workerID string, lease time.Duration, limit int) ([]product.ReconcileWork, error) {
+	if s == nil || s.pool == nil || ctx == nil || workerID == "" || lease < time.Second || lease > time.Minute || limit < 1 || limit > 100 {
+		return nil, product.ErrInvalid
+	}
+	opCtx, cancel := context.WithTimeout(ctx, s.operationTimeout)
+	defer cancel()
+	tx, err := s.pool.BeginTx(opCtx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted, AccessMode: pgx.ReadWrite})
+	if err != nil {
+		return nil, storeError(ctx, opCtx, err, false)
+	}
+	defer rollbackBounded(tx, s.operationTimeout)
+	rows, err := tx.Query(opCtx, `WITH candidates AS (
+ SELECT o.tenant_id,o.outbox_id
+ FROM sandbox_runtime_product.outbox o
+ JOIN sandbox_runtime_product.workspace_slots s
+   ON s.tenant_id=o.tenant_id AND s.workspace_id=o.workspace_id AND s.slot_key=o.payload->>'slot_key'
+ JOIN sandbox_runtime_product.provider_bindings b
+   ON b.tenant_id=s.tenant_id AND b.workspace_id=s.workspace_id AND b.slot_key=s.slot_key AND b.current
+ WHERE o.message_type='slot.reconcile' AND s.kind='browser'
+   AND o.payload->>'action' IN ('suspend','resume','terminate','replace')
+   AND s.generation=(o.payload->>'generation')::bigint
+   AND b.slot_generation=(o.payload->>'previous_generation')::bigint
+   AND o.available_at<=clock_timestamp()
+   AND (o.state='pending' OR (o.state='leased' AND o.lease_expires_at<=clock_timestamp()))
+ ORDER BY o.created_at,o.outbox_id FOR UPDATE OF o SKIP LOCKED LIMIT $1
+), leased AS (
+ UPDATE sandbox_runtime_product.outbox o
+ SET state='leased',lease_owner=$2,lease_expires_at=clock_timestamp()+$3::interval,
+     attempt_count=o.attempt_count+1,updated_at=clock_timestamp()
+ FROM candidates c WHERE o.tenant_id=c.tenant_id AND o.outbox_id=c.outbox_id
+ RETURNING o.tenant_id,o.outbox_id,o.workspace_id,o.operation_id,o.lease_owner,o.payload
+)
+SELECT l.tenant_id,l.outbox_id,l.workspace_id,l.operation_id,l.lease_owner,
+       s.slot_key,s.kind,s.profile_id,s.required_capabilities,s.desired_state,s.generation,w.lease_expires_at,
+       (l.payload->>'previous_generation')::bigint,l.payload->>'action',b.provider_revision_id,b.sandbox_id,b.provider_generation
+FROM leased l
+JOIN sandbox_runtime_product.workspaces w ON w.tenant_id=l.tenant_id AND w.workspace_id=l.workspace_id
+JOIN sandbox_runtime_product.workspace_slots s ON s.tenant_id=l.tenant_id AND s.workspace_id=l.workspace_id
+ AND s.slot_key=l.payload->>'slot_key' AND s.generation=(l.payload->>'generation')::bigint
+JOIN sandbox_runtime_product.provider_bindings b ON b.tenant_id=s.tenant_id AND b.workspace_id=s.workspace_id
+ AND b.slot_key=s.slot_key AND b.slot_generation=(l.payload->>'previous_generation')::bigint AND b.current
+ORDER BY l.outbox_id`, limit, workerID, lease.String())
+	if err != nil {
+		return nil, storeError(ctx, opCtx, err, false)
+	}
+	defer rows.Close()
+	var result []product.ReconcileWork
+	for rows.Next() {
+		var item product.ReconcileWork
+		var capabilities []byte
+		if err := rows.Scan(&item.TenantID, &item.OutboxID, &item.WorkspaceID, &item.OperationID, &item.LeaseOwner,
+			&item.Slot.SlotKey, &item.Slot.Kind, &item.Slot.ProfileID, &capabilities, &item.Slot.DesiredState,
+			&item.SlotGeneration, &item.WorkspaceExpiry, &item.PreviousGeneration, &item.Action,
+			&item.ProviderRevisionID, &item.SandboxID, &item.ProviderGeneration); err != nil {
+			return nil, storeError(ctx, opCtx, err, false)
+		}
+		if err := json.Unmarshal(capabilities, &item.Slot.RequiredCapabilities); err != nil {
+			return nil, product.ErrStoreUnavailable
+		}
+		item.SlotKey, item.AttemptID, item.FencingToken = item.Slot.SlotKey, item.OutboxID, item.SlotGeneration
 		result = append(result, item)
 	}
 	if err := rows.Err(); err != nil {
@@ -165,6 +239,11 @@ FOR UPDATE`, work.TenantID, work.OutboxID, work.LeaseOwner).Scan(&attemptCount, 
 		return storeError(ctx, opCtx, err, false)
 	}
 	attemptState, outcome := evidence.State, "pending"
+	providerAction := reconcileProviderAction(work)
+	fencingToken := work.FencingToken
+	if fencingToken < 1 {
+		fencingToken = work.SlotGeneration
+	}
 	if attemptState == "" {
 		attemptState = "failed"
 	}
@@ -181,23 +260,28 @@ FOR UPDATE`, work.TenantID, work.OutboxID, work.LeaseOwner).Scan(&attemptCount, 
 	if _, err := tx.Exec(opCtx, `INSERT INTO sandbox_runtime_product.product_operation_attempts
     (tenant_id, operation_id, attempt_id, workspace_id, slot_key, slot_generation, fencing_token,
      idempotency_key, request_digest, provider_revision_id, provider_operation_id, state, outcome,
-     error_code, deadline_at, dispatched_at, observed_at, created_at, updated_at)
-VALUES ($1,$2,$3,$4,$5,$6,$6,$7,$8,$9,NULLIF($10,''),$11,$12,NULLIF($13,''),$14,$15,$16,$15,$15)
+     error_code, deadline_at, dispatched_at, observed_at, created_at, updated_at,provider_action)
+VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NULLIF($11,''),$12,$13,NULLIF($14,''),$15,$16,$17,$16,$16,$18)
 ON CONFLICT (tenant_id, operation_id, attempt_id) DO UPDATE
 SET request_digest=EXCLUDED.request_digest, provider_revision_id=EXCLUDED.provider_revision_id,
     provider_operation_id=EXCLUDED.provider_operation_id, state=EXCLUDED.state, outcome=EXCLUDED.outcome,
-    error_code=EXCLUDED.error_code, observed_at=EXCLUDED.observed_at, updated_at=EXCLUDED.updated_at`,
-		work.TenantID, work.OperationID, work.AttemptID, work.WorkspaceID, work.SlotKey, work.SlotGeneration,
+    error_code=EXCLUDED.error_code, observed_at=EXCLUDED.observed_at, updated_at=EXCLUDED.updated_at,
+    provider_action=EXCLUDED.provider_action`,
+		work.TenantID, work.OperationID, work.AttemptID, work.WorkspaceID, work.SlotKey, work.SlotGeneration, fencingToken,
 		"product-"+work.AttemptID, nullable(evidence.RequestDigest), nullable(evidence.ProviderRevisionID), evidence.ProviderOperationID,
-		attemptState, outcome, evidence.ErrorCode, work.WorkspaceExpiry, now, evidence.ObservedAt); err != nil {
+		attemptState, outcome, evidence.ErrorCode, work.WorkspaceExpiry, now, evidence.ObservedAt, providerAction); err != nil {
 		return storeError(ctx, opCtx, err, false)
 	}
-	if evidence.SandboxID != "" && evidence.ProviderRevisionID != "" {
+	if providerAction == "create" && evidence.SandboxID != "" && evidence.ProviderRevisionID != "" {
+		if _, err := tx.Exec(opCtx, `UPDATE sandbox_runtime_product.provider_bindings SET current=false,updated_at=$1
+WHERE tenant_id=$2 AND workspace_id=$3 AND slot_key=$4 AND current`, now, work.TenantID, work.WorkspaceID, work.SlotKey); err != nil {
+			return storeError(ctx, opCtx, err, false)
+		}
 		if _, err := tx.Exec(opCtx, `INSERT INTO sandbox_runtime_product.provider_bindings
     (tenant_id,workspace_id,slot_key,slot_generation,binding_generation,provider_revision_id,
      runtime_profile_id,sandbox_id,create_operation_id,create_attempt_id,provider_operation_id,
-     observed_state,current,last_observed_at,created_at,updated_at)
-VALUES ($1,$2,$3,$4,1,$5,$6,$7,$8,$9,NULLIF($10,''),$11,true,$12,$13,$13)
+     observed_state,current,last_observed_at,created_at,updated_at,provider_generation)
+VALUES ($1,$2,$3,$4,$4,$5,$6,$7,$8,$9,NULLIF($10,''),$11,true,$12,$13,$13,1)
 ON CONFLICT (tenant_id,workspace_id,slot_key,binding_generation) DO UPDATE
 SET provider_operation_id=EXCLUDED.provider_operation_id, observed_state=EXCLUDED.observed_state,
     last_observed_at=EXCLUDED.last_observed_at, updated_at=EXCLUDED.updated_at`, work.TenantID, work.WorkspaceID,
@@ -205,8 +289,25 @@ SET provider_operation_id=EXCLUDED.provider_operation_id, observed_state=EXCLUDE
 			work.OperationID, work.AttemptID, evidence.ProviderOperationID, providerBindingState(attemptState), nullableTime(evidence.ObservedAt), now); err != nil {
 			return storeError(ctx, opCtx, err, false)
 		}
+	} else if providerAction != "create" && evidence.SandboxID != "" {
+		bindingState := lifecycleBindingState(work.Action, attemptState)
+		if _, err := tx.Exec(opCtx, `UPDATE sandbox_runtime_product.provider_bindings
+SET provider_operation_id=NULLIF($1,''),observed_state=$2,last_observed_at=$3,updated_at=$4
+WHERE tenant_id=$5 AND workspace_id=$6 AND slot_key=$7 AND slot_generation=$8 AND current`,
+			evidence.ProviderOperationID, bindingState, nullableTime(evidence.ObservedAt), now, work.TenantID, work.WorkspaceID,
+			work.SlotKey, work.PreviousGeneration); err != nil {
+			return storeError(ctx, opCtx, err, false)
+		}
 	}
 	productState, reconciliation, slotState, workspaceState, eventType := "running", "reconciling", "provisioning", "provisioning", "slot.dispatch_accepted"
+	switch work.Action {
+	case "suspend":
+		slotState, eventType = "suspending", "slot.suspend_dispatch_accepted"
+	case "resume":
+		slotState, eventType = "provisioning", "slot.resume_dispatch_accepted"
+	case "terminate", "replace":
+		slotState, eventType = "terminating", "slot.terminate_dispatch_accepted"
+	}
 	if work.SlotKey != product.PrimarySlotKey {
 		workspaceState = ""
 	}
@@ -250,6 +351,35 @@ WHERE tenant_id=$2 AND outbox_id=$3`, now, work.TenantID, work.OutboxID); err !=
 		return storeError(ctx, opCtx, err, true)
 	}
 	return nil
+}
+
+func reconcileProviderAction(work product.ReconcileWork) string {
+	switch work.Action {
+	case "suspend":
+		return "suspend"
+	case "resume":
+		return "resume"
+	case "terminate", "replace":
+		return "terminate"
+	default:
+		return "create"
+	}
+}
+
+func lifecycleBindingState(action, state string) string {
+	if state == "failed" || state == "cancelled" {
+		return "failed"
+	}
+	switch action {
+	case "suspend":
+		return "suspending"
+	case "resume":
+		return "resuming"
+	case "terminate", "replace":
+		return "terminating"
+	default:
+		return providerBindingState(state)
+	}
 }
 
 func (s *Store) RetryReconcileWork(ctx context.Context, work product.ReconcileWork, errorCode string, retryBase time.Duration, maxAttempts int) error {

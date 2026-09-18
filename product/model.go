@@ -10,6 +10,7 @@ import (
 const (
 	PrimarySlotKey           = "primary-code"
 	BrowserSlotProfile       = "sandbox-runtime-browser-v1"
+	BrowserSlotKind          = "browser"
 	BrowserCapabilityID      = "sandbox.browser"
 	BrowserCapabilityVersion = "1.0.0"
 	BrowserCapabilityProfile = "browser-v1"

@@ -42,6 +42,21 @@ type browserDispatchProvider struct {
 	err      error
 }
 
+type browserLifecycleStore struct{ dispatchStore }
+
+func (s *browserLifecycleStore) LeaseBrowserLifecycleWork(context.Context, string, time.Duration, int) ([]ReconcileWork, error) {
+	return s.work, s.err
+}
+
+type browserLifecycleProvider struct {
+	evidence ProviderOperationEvidence
+	err      error
+}
+
+func (p browserLifecycleProvider) ControlBrowserSlot(context.Context, ReconcileWork) (ProviderOperationEvidence, error) {
+	return p.evidence, p.err
+}
+
 func (p browserDispatchProvider) ProvisionBrowserSlot(context.Context, ReconcileWork) (ProviderOperationEvidence, error) {
 	return p.evidence, p.err
 }
@@ -106,6 +121,17 @@ func TestBrowserDispatcherUsesIsolatedLeaseAndOutcomeRules(t *testing.T) {
 	}
 	if _, err := NewBrowserDispatcher(nil, browserDispatchProvider{}, "browser-worker-1", time.Second, time.Millisecond, 3, 1); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("nil store err=%v", err)
+	}
+}
+
+func TestBrowserLifecycleDispatcherRetainsAmbiguousEvidence(t *testing.T) {
+	store := &browserLifecycleStore{dispatchStore: dispatchStore{work: []ReconcileWork{{OutboxID: "out-lifecycle", Action: "replace"}}}}
+	dispatcher, err := NewBrowserLifecycleDispatcher(store, browserLifecycleProvider{err: ErrDispatchOutcomeUnknown}, "browser-lifecycle-worker", time.Second, time.Millisecond, 3, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count, err := dispatcher.DispatchOnce(context.Background()); err != nil || count != 1 || len(store.recorded) != 1 || store.recorded[0].State != "outcome_unknown" {
+		t.Fatalf("count=%d store=%#v err=%v", count, store, err)
 	}
 }
 

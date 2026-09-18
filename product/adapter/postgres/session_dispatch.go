@@ -21,7 +21,7 @@ func (s *Store) LeaseSessionWork(ctx context.Context, workerID string, lease tim
 		return nil, storeError(ctx, opCtx, err, false)
 	}
 	defer rollbackBounded(tx, s.operationTimeout)
-	rows, err := tx.Query(opCtx, `WITH candidates AS(SELECT tenant_id,outbox_id FROM sandbox_runtime_product.outbox WHERE message_type IN('session.open','session.close') AND available_at<=clock_timestamp() AND(state='pending' OR(state='leased' AND lease_expires_at<=clock_timestamp()))ORDER BY created_at,outbox_id FOR UPDATE SKIP LOCKED LIMIT $1),leased AS(UPDATE sandbox_runtime_product.outbox o SET state='leased',lease_owner=$2,lease_expires_at=clock_timestamp()+$3::interval,attempt_count=o.attempt_count+1,updated_at=clock_timestamp() FROM candidates c WHERE o.tenant_id=c.tenant_id AND o.outbox_id=c.outbox_id RETURNING o.*)SELECT l.tenant_id,l.outbox_id,l.lease_owner,l.workspace_id,l.operation_id,l.message_type,l.payload,s.session_id,s.slot_key,s.slot_generation,s.expires_at,COALESCE(s.provider_connection_generation,0),b.runtime_profile_id,b.sandbox_id,b.provider_revision_id,s.kind,s.protocol_profile FROM leased l JOIN sandbox_runtime_product.runtime_sessions s ON s.tenant_id=l.tenant_id AND s.workspace_id=l.workspace_id AND s.session_id=l.payload->>'session_id' JOIN sandbox_runtime_product.provider_bindings b ON b.tenant_id=s.tenant_id AND b.workspace_id=s.workspace_id AND b.slot_key=s.slot_key AND b.slot_generation=s.slot_generation AND b.current ORDER BY l.outbox_id`, limit, workerID, lease.String())
+	rows, err := tx.Query(opCtx, `WITH candidates AS(SELECT tenant_id,outbox_id FROM sandbox_runtime_product.outbox WHERE message_type IN('session.open','session.close') AND available_at<=clock_timestamp() AND(state='pending' OR(state='leased' AND lease_expires_at<=clock_timestamp()))ORDER BY created_at,outbox_id FOR UPDATE SKIP LOCKED LIMIT $1),leased AS(UPDATE sandbox_runtime_product.outbox o SET state='leased',lease_owner=$2,lease_expires_at=clock_timestamp()+$3::interval,attempt_count=o.attempt_count+1,updated_at=clock_timestamp() FROM candidates c WHERE o.tenant_id=c.tenant_id AND o.outbox_id=c.outbox_id RETURNING o.*)SELECT l.tenant_id,l.outbox_id,l.lease_owner,l.workspace_id,l.operation_id,l.message_type,l.payload,s.session_id,s.slot_key,s.slot_generation,s.expires_at,COALESCE(s.provider_connection_generation,0),b.runtime_profile_id,b.sandbox_id,b.provider_revision_id,b.provider_generation,s.kind,s.protocol_profile FROM leased l JOIN sandbox_runtime_product.runtime_sessions s ON s.tenant_id=l.tenant_id AND s.workspace_id=l.workspace_id AND s.session_id=l.payload->>'session_id' JOIN sandbox_runtime_product.provider_bindings b ON b.tenant_id=s.tenant_id AND b.workspace_id=s.workspace_id AND b.slot_key=s.slot_key AND b.slot_generation=s.slot_generation AND b.current ORDER BY l.outbox_id`, limit, workerID, lease.String())
 	if err != nil {
 		return nil, storeError(ctx, opCtx, err, false)
 	}
@@ -31,7 +31,7 @@ func (s *Store) LeaseSessionWork(ctx context.Context, workerID string, lease tim
 		var item product.SessionControlWork
 		var messageType string
 		var payload []byte
-		if err := rows.Scan(&item.TenantID, &item.OutboxID, &item.LeaseOwner, &item.WorkspaceID, &item.OperationID, &messageType, &payload, &item.SessionID, &item.SlotKey, &item.SlotGeneration, &item.ExpiresAt, &item.ConnectionGeneration, &item.RuntimeProfileID, &item.SandboxID, &item.ProviderRevisionID, &item.Kind, &item.ProtocolProfile); err != nil {
+		if err := rows.Scan(&item.TenantID, &item.OutboxID, &item.LeaseOwner, &item.WorkspaceID, &item.OperationID, &messageType, &payload, &item.SessionID, &item.SlotKey, &item.SlotGeneration, &item.ExpiresAt, &item.ConnectionGeneration, &item.RuntimeProfileID, &item.SandboxID, &item.ProviderRevisionID, &item.ProviderGeneration, &item.Kind, &item.ProtocolProfile); err != nil {
 			return nil, storeError(ctx, opCtx, err, false)
 		}
 		item.AttemptID = item.OutboxID
@@ -71,7 +71,7 @@ func (s *Store) LeaseBrowserSessionWork(ctx context.Context, workerID string, le
  SELECT o.tenant_id,o.outbox_id
  FROM sandbox_runtime_product.outbox o
  JOIN sandbox_runtime_product.runtime_sessions s ON s.tenant_id=o.tenant_id AND s.session_id=o.payload->>'session_id'
- WHERE o.message_type='browser_session.open' AND s.kind IN ('browser_automation','browser_live')
+ WHERE o.message_type IN ('browser_session.open','browser_session.close') AND s.kind IN ('browser_automation','browser_live')
    AND o.available_at<=clock_timestamp()
    AND (o.state='pending' OR (o.state='leased' AND o.lease_expires_at<=clock_timestamp()))
  ORDER BY o.created_at,o.outbox_id FOR UPDATE OF o SKIP LOCKED LIMIT $1
@@ -81,9 +81,9 @@ func (s *Store) LeaseBrowserSessionWork(ctx context.Context, workerID string, le
      attempt_count=o.attempt_count+1,updated_at=clock_timestamp()
  FROM candidates c WHERE o.tenant_id=c.tenant_id AND o.outbox_id=c.outbox_id RETURNING o.*
 )
-SELECT l.tenant_id,l.outbox_id,l.lease_owner,l.workspace_id,l.operation_id,l.payload,
+SELECT l.tenant_id,l.outbox_id,l.lease_owner,l.workspace_id,l.operation_id,l.message_type,l.payload,
        s.session_id,s.slot_key,s.slot_generation,s.expires_at,COALESCE(s.provider_connection_generation,0),
-       b.runtime_profile_id,b.sandbox_id,b.provider_revision_id,s.kind,s.protocol_profile
+	       b.runtime_profile_id,b.sandbox_id,b.provider_revision_id,b.provider_generation,s.kind,s.protocol_profile
 FROM leased l
 JOIN sandbox_runtime_product.runtime_sessions s ON s.tenant_id=l.tenant_id AND s.session_id=l.payload->>'session_id'
 JOIN sandbox_runtime_product.provider_bindings b ON b.tenant_id=s.tenant_id AND b.workspace_id=s.workspace_id
@@ -96,14 +96,31 @@ ORDER BY l.outbox_id`, limit, workerID, lease.String())
 	var result []product.SessionControlWork
 	for rows.Next() {
 		var item product.SessionControlWork
+		var messageType string
 		var payload []byte
-		if err := rows.Scan(&item.TenantID, &item.OutboxID, &item.LeaseOwner, &item.WorkspaceID, &item.OperationID, &payload,
+		if err := rows.Scan(&item.TenantID, &item.OutboxID, &item.LeaseOwner, &item.WorkspaceID, &item.OperationID, &messageType, &payload,
 			&item.SessionID, &item.SlotKey, &item.SlotGeneration, &item.ExpiresAt, &item.ConnectionGeneration,
-			&item.RuntimeProfileID, &item.SandboxID, &item.ProviderRevisionID, &item.Kind, &item.ProtocolProfile); err != nil {
+			&item.RuntimeProfileID, &item.SandboxID, &item.ProviderRevisionID, &item.ProviderGeneration, &item.Kind, &item.ProtocolProfile); err != nil {
 			return nil, storeError(ctx, opCtx, err, false)
 		}
 		item.AttemptID = item.OutboxID
 		item.Action = "open"
+		item.FencingToken = item.SlotGeneration
+		if messageType == "browser_session.close" {
+			item.Action = "close"
+			item.FencingToken = item.SlotGeneration + 1
+			var values struct {
+				Reason     string `json:"reason"`
+				FinalState string `json:"final_state"`
+			}
+			if err := json.Unmarshal(payload, &values); err != nil {
+				return nil, product.ErrStoreUnavailable
+			}
+			item.Reason, item.FinalState = values.Reason, values.FinalState
+			if item.FinalState != "expired" {
+				item.FinalState = "closed"
+			}
+		}
 		result = append(result, item)
 	}
 	if err := rows.Err(); err != nil {
@@ -138,7 +155,8 @@ func (s *Store) RecordSessionDispatch(ctx context.Context, work product.SessionC
 	if state == "" {
 		state = "failed"
 	}
-	if work.Action == "open" && state == "succeeded" {
+	browserSession := work.Kind == product.SessionKindBrowserAutomation || work.Kind == product.SessionKindBrowserLive
+	if (work.Action == "open" || (work.Action == "close" && browserSession)) && state == "succeeded" {
 		state = "running"
 	}
 	outcome := "pending"
@@ -147,7 +165,25 @@ func (s *Store) RecordSessionDispatch(ctx context.Context, work product.SessionC
 	} else if state == "succeeded" || state == "failed" || state == "cancelled" {
 		outcome = "known"
 	}
-	if _, err := tx.Exec(opCtx, `INSERT INTO sandbox_runtime_product.product_operation_attempts(tenant_id,operation_id,attempt_id,workspace_id,slot_key,session_id,slot_generation,fencing_token,idempotency_key,request_digest,provider_revision_id,provider_operation_id,state,outcome,error_code,deadline_at,dispatched_at,observed_at,created_at,updated_at)VALUES($1,$2,$3,$4,$5,$6,$7,$7,$8,$9,$10,NULLIF($11,''),$12,$13,NULLIF($14,''),$15,$16,$17,$16,$16)ON CONFLICT(tenant_id,operation_id,attempt_id)DO UPDATE SET provider_operation_id=EXCLUDED.provider_operation_id,state=EXCLUDED.state,outcome=EXCLUDED.outcome,error_code=EXCLUDED.error_code,observed_at=EXCLUDED.observed_at,updated_at=EXCLUDED.updated_at`, work.TenantID, work.OperationID, work.AttemptID, work.WorkspaceID, work.SlotKey, work.SessionID, work.SlotGeneration, "product-"+work.AttemptID, nullable(evidence.RequestDigest), evidence.ProviderRevisionID, evidence.ProviderOperationID, state, outcome, evidence.ErrorCode, work.ExpiresAt, now, nullableTime(evidence.ObservedAt)); err != nil {
+	fencingToken := work.FencingToken
+	if fencingToken < 1 {
+		fencingToken = work.SlotGeneration
+	}
+	providerAction := "open_runtime_session"
+	if work.Kind == product.SessionKindBrowserAutomation || work.Kind == product.SessionKindBrowserLive {
+		providerAction = "open_browser_session"
+	}
+	if work.Action == "close" {
+		providerAction = "close_runtime_session"
+		if work.Kind != product.SessionKindTerminal {
+			providerAction = "terminate_browser_session"
+		}
+	}
+	deadline := work.ExpiresAt
+	if work.Action == "close" || !deadline.After(now) {
+		deadline = now.Add(2 * time.Minute)
+	}
+	if _, err := tx.Exec(opCtx, `INSERT INTO sandbox_runtime_product.product_operation_attempts(tenant_id,operation_id,attempt_id,workspace_id,slot_key,session_id,slot_generation,fencing_token,idempotency_key,request_digest,provider_revision_id,provider_operation_id,state,outcome,error_code,deadline_at,dispatched_at,observed_at,created_at,updated_at,provider_action)VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NULLIF($12,''),$13,$14,NULLIF($15,''),$16,$17,$18,$17,$17,$19)ON CONFLICT(tenant_id,operation_id,attempt_id)DO UPDATE SET provider_operation_id=EXCLUDED.provider_operation_id,state=EXCLUDED.state,outcome=EXCLUDED.outcome,error_code=EXCLUDED.error_code,observed_at=EXCLUDED.observed_at,updated_at=EXCLUDED.updated_at,provider_action=EXCLUDED.provider_action`, work.TenantID, work.OperationID, work.AttemptID, work.WorkspaceID, work.SlotKey, work.SessionID, work.SlotGeneration, fencingToken, "product-"+work.AttemptID, nullable(evidence.RequestDigest), evidence.ProviderRevisionID, evidence.ProviderOperationID, state, outcome, evidence.ErrorCode, deadline, now, nullableTime(evidence.ObservedAt), providerAction); err != nil {
 		return storeError(ctx, opCtx, err, false)
 	}
 	opState, reconciliation, sessionState := "running", "reconciling", "provisioning"

@@ -1,6 +1,6 @@
 # Product v1 Phase 4: Browser
 
-Status: In progress; Slices 1-3 implemented locally, 10 slices remain
+Status: In progress; Slices 1-4 implemented locally, 9 slices remain
 
 Started: 2026-09-18
 
@@ -25,7 +25,7 @@ until Slice 13 passes for the exact composed topology.
 | 1 | Startup audit; Product Browser session kind/profile authority; ready-browser-slot binding; absorbing state machine; Browser-specific outbox isolation; PostgreSQL migration constraint; strict authenticated API projection | Focused race tests; strict input/profile rejection; tenant/actor nondisclosure; idempotency; migration replay; real PostgreSQL transaction/outbox isolation; full race/shuffle, vet, and Contract verifiers | **Implemented; local and real-PostgreSQL gates passed** |
 | 2 | Auxiliary Browser slot create/read/update authority and reconciliation intent | Expected-version/idempotency/quota races; immutable key/kind; exact capability request; event/outbox atomicity; cross-tenant nondisclosure; restart-safe reads | **Implemented; local and real-PostgreSQL gates passed** |
 | 3 | Exact-revision Provider Browser readiness and network-only adapter for Browser sandbox plus session open/handoff observation | Locked capability/profile selection; mTLS/JWS; no private coordinate projection; timeout, cancellation, replay, stale generation, ambiguous outcome, and capability-drift tests | **Implemented; local and real-PostgreSQL gates passed** |
-| 4 | Browser lifecycle reconciliation, disconnect/expiry/close cleanup, unknown-outcome recovery, slot replacement, and retained evidence | Restart at every commit/dispatch/observe boundary; no duplicate current binding; no session resurrection; exact-owned cleanup; coordinated Contract decision for missing Provider close semantics | Not started |
+| 4 | Browser lifecycle reconciliation, disconnect/expiry/close cleanup, unknown-outcome recovery, slot replacement, and retained evidence | Restart at every commit/dispatch/observe boundary; no duplicate current binding; no session resurrection; exact-owned cleanup; coordinated Contract decision for missing Provider close semantics | **Implemented; local and real-PostgreSQL gates passed** |
 | 5 | Viewer/control authorization, single-controller Product lease/fence binding, one-use grants, revocation, and Browser quotas; multi-human collaboration remains deferred | Viewer cannot mutate; one live controller; stale fence/replay/revocation/expiry/limit races; database-time authority; nondisclosing errors | Not started |
 | 6 | Public Browser automation WSS data plane with closed action/result messages and downstream action fencing | Separate-process edge/Gateway/Provider test; bounded messages/queues; ordered actions; stale-owner suspension; reconnect; no raw CDP or endpoint exposure | Not started |
 | 7 | Public Browser live viewing/control data plane with authenticated signaling, bounded media/input channels, resolution/encoding negotiation, bitrate, and backpressure | Origin/TLS/authentication; unsupported codec/size rejection; slow-consumer closure; control fence per input; view-only admission; no unauthenticated upgrade | Not started |
@@ -140,6 +140,39 @@ non-dispatch. The complete repository and Contract gates are run at the slice
 commit gate. This is network-adapter and real-database component evidence, not
 a public Browser data plane, real Browser runtime, release topology,
 deployment, or production result.
+
+## Slice 4 exact boundary
+
+Browser slot intents now carry an explicit provision, suspend, resume,
+terminate, or replace action. Product stores Product slot fencing separately
+from the Provider sandbox generation, preserves exactly one current Provider
+binding per slot, and reconciles every ambiguous Provider operation from
+retained operation evidence. Replacement terminates and observes the old
+sandbox before a new deterministic Browser sandbox can become current.
+
+The locked Provider Contract has no Browser-session close mutation. Product
+therefore uses the existing protected sandbox terminate mutation for the
+exact-owned Browser sandbox. A close or database-time expiry reaches its
+absorbing session state only after termination is observed. If the slot is
+still desired ready and its generation has not been superseded, the same
+durable Product operation advances the slot generation and provisions a fresh
+sandbox. Concurrent slot mutation suppresses that automatic replacement.
+Late open observations cancel their superseded operation and cannot move a
+draining or terminal session back to ready.
+
+### Slice 4 local evidence
+
+Focused tests cover lifecycle dispatch outcome classification, separate
+Provider generation and Product fencing on signed suspend/resume/terminate
+requests, database-time expiry intent, and the absorbing session state
+machine. A fresh pinned PostgreSQL 16 database applies and replays migrations
+1-5 and proves close cleanup plus replacement, exactly one current binding,
+generation reset on a replacement Provider sandbox, expired-session cleanup
+intent, stale-generation filtering, and no resurrection when close wins a
+race with a retained open observation. Full repository race/shuffle, vet,
+Provider Contract, Product Contract, retained Phase 3 evidence, and diff
+checks pass. This remains control-plane lifecycle evidence; no public Browser
+data plane or release topology is claimed.
 
 ## Evidence rules
 

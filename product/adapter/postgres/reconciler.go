@@ -35,15 +35,16 @@ func (s *Store) LeaseProviderObservations(ctx context.Context, workerID string, 
  WHERE a.tenant_id=c.tenant_id AND a.operation_id=c.operation_id AND a.attempt_id=c.attempt_id
  RETURNING a.*
 )
-SELECT l.tenant_id,l.workspace_id,l.operation_id,l.attempt_id,l.slot_key,l.slot_generation,
+SELECT l.tenant_id,l.workspace_id,l.operation_id,l.attempt_id,l.slot_key,l.slot_generation,l.fencing_token,
        b.runtime_profile_id,b.sandbox_id,COALESCE(l.provider_operation_id,''),l.provider_revision_id,COALESCE(l.session_id,''),
-       o.operation_type,l.reconcile_lease_owner,COALESCE(s.kind,''),COALESCE(s.protocol_profile,''),
-       COALESCE(s.expires_at,'epoch'::timestamptz)
+       o.operation_type,l.reconcile_lease_owner,COALESCE(l.provider_action,''),COALESCE(s.kind,''),COALESCE(s.protocol_profile,''),
+       COALESCE(s.expires_at,'epoch'::timestamptz),COALESCE(ob.payload->>'final_state','')
 FROM leased AS l JOIN sandbox_runtime_product.provider_bindings AS b
  ON b.tenant_id=l.tenant_id AND b.workspace_id=l.workspace_id AND b.slot_key=l.slot_key
- AND b.slot_generation=l.slot_generation AND b.current
+ AND b.current AND (l.provider_action <> 'create' OR b.slot_generation=l.slot_generation)
 JOIN sandbox_runtime_product.product_operations AS o ON o.tenant_id=l.tenant_id AND o.operation_id=l.operation_id
 LEFT JOIN sandbox_runtime_product.runtime_sessions AS s ON s.tenant_id=l.tenant_id AND s.session_id=l.session_id
+LEFT JOIN sandbox_runtime_product.outbox AS ob ON ob.tenant_id=l.tenant_id AND ob.outbox_id=l.attempt_id
 ORDER BY l.operation_id,l.attempt_id`, limit, workerID, lease.String())
 	if err != nil {
 		return nil, storeError(ctx, opCtx, err, false)
@@ -52,9 +53,9 @@ ORDER BY l.operation_id,l.attempt_id`, limit, workerID, lease.String())
 	var result []product.ProviderObservationWork
 	for rows.Next() {
 		var item product.ProviderObservationWork
-		if err := rows.Scan(&item.TenantID, &item.WorkspaceID, &item.OperationID, &item.AttemptID, &item.SlotKey, &item.SlotGeneration,
+		if err := rows.Scan(&item.TenantID, &item.WorkspaceID, &item.OperationID, &item.AttemptID, &item.SlotKey, &item.SlotGeneration, &item.FencingToken,
 			&item.RuntimeProfileID, &item.SandboxID, &item.ProviderOperationID, &item.ProviderRevisionID, &item.SessionID, &item.OperationType, &item.LeaseOwner,
-			&item.SessionKind, &item.ProtocolProfile, &item.SessionExpiresAt); err != nil {
+			&item.ProviderAction, &item.SessionKind, &item.ProtocolProfile, &item.SessionExpiresAt, &item.SessionFinalState); err != nil {
 			return nil, storeError(ctx, opCtx, err, false)
 		}
 		result = append(result, item)
@@ -113,6 +114,15 @@ reconcile_lease_expires_at=NULL,updated_at=$5 WHERE tenant_id=$6 AND operation_i
 	}
 	if work.SessionID != "" {
 		if err := recordSessionObservation(opCtx, tx, work, evidence, eventID, state, now); err != nil {
+			return storeError(ctx, opCtx, err, false)
+		}
+		if err := tx.Commit(opCtx); err != nil {
+			return storeError(ctx, opCtx, err, true)
+		}
+		return nil
+	}
+	if work.ProviderAction == "suspend" || work.ProviderAction == "resume" || work.ProviderAction == "terminate" {
+		if err := recordBrowserLifecycleObservation(opCtx, tx, work, evidence, eventID, state, now); err != nil {
 			return storeError(ctx, opCtx, err, false)
 		}
 		if err := tx.Commit(opCtx); err != nil {
@@ -190,9 +200,93 @@ VALUES($1,$2,$3,$4,$5,'slot',$6,$7,'service','product-reconciler',$8,$9)`, work.
 	return nil
 }
 
+func recordBrowserLifecycleObservation(ctx context.Context, tx pgx.Tx, work product.ProviderObservationWork, evidence product.ProviderOperationEvidence, eventID, state string, now time.Time) error {
+	var operationState string
+	if err := tx.QueryRow(ctx, `SELECT state FROM sandbox_runtime_product.product_operations WHERE tenant_id=$1 AND operation_id=$2 FOR UPDATE`, work.TenantID, work.OperationID).Scan(&operationState); err != nil {
+		return err
+	}
+	if operationState == "succeeded" || operationState == "failed" || operationState == "cancelled" {
+		return nil
+	}
+	if state == "accepted" || state == "running" || state == "outcome_unknown" {
+		productState := "running"
+		if state == "outcome_unknown" {
+			productState = "outcome_unknown"
+		}
+		_, err := tx.Exec(ctx, `UPDATE sandbox_runtime_product.product_operations SET state=$1,reconciliation_status='reconciling',version=version+1,updated_at=$2 WHERE tenant_id=$3 AND operation_id=$4`, productState, now, work.TenantID, work.OperationID)
+		return err
+	}
+	if state != "succeeded" {
+		if _, err := tx.Exec(ctx, `UPDATE sandbox_runtime_product.product_operations SET state='failed',reconciliation_status='complete',error_code=NULLIF($1,''),version=version+1,updated_at=$2 WHERE tenant_id=$3 AND operation_id=$4`, evidence.ErrorCode, now, work.TenantID, work.OperationID); err != nil {
+			return err
+		}
+		_, err := tx.Exec(ctx, `UPDATE sandbox_runtime_product.workspace_slots SET observed_state='failed',version=version+1,updated_at=$1 WHERE tenant_id=$2 AND workspace_id=$3 AND slot_key=$4 AND generation=$5`, now, work.TenantID, work.WorkspaceID, work.SlotKey, work.SlotGeneration)
+		return err
+	}
+	var slotState, bindingState, eventType string
+	switch work.ProviderAction {
+	case "suspend":
+		slotState, bindingState, eventType = "suspended", "suspended", "slot.suspended"
+	case "resume":
+		slotState, bindingState, eventType = "ready", "ready", "slot.ready"
+	default:
+		slotState, bindingState, eventType = "terminated", "terminated", "slot.terminated"
+	}
+	if work.ProviderAction == "terminate" {
+		var desired string
+		if err := tx.QueryRow(ctx, `SELECT desired_state FROM sandbox_runtime_product.workspace_slots WHERE tenant_id=$1 AND workspace_id=$2 AND slot_key=$3 AND generation=$4 FOR UPDATE`, work.TenantID, work.WorkspaceID, work.SlotKey, work.SlotGeneration).Scan(&desired); err != nil {
+			return err
+		}
+		if desired == "ready" {
+			slotState, eventType = "requested", "slot.replacement_requested"
+			payload, _ := json.Marshal(map[string]any{"workspace_id": work.WorkspaceID, "operation_id": work.OperationID, "slot_key": work.SlotKey, "generation": work.SlotGeneration, "previous_generation": work.SlotGeneration - 1, "desired_state": "ready", "action": "provision"})
+			if _, err := tx.Exec(ctx, `INSERT INTO sandbox_runtime_product.outbox(tenant_id,outbox_id,workspace_id,operation_id,message_type,payload,state,attempt_count,available_at,created_at,updated_at)
+VALUES($1,$2,$3,$4,'slot.reconcile',$5,'pending',0,$6,$6,$6) ON CONFLICT(tenant_id,outbox_id) DO NOTHING`, work.TenantID, work.AttemptID+"-replacement", work.WorkspaceID, work.OperationID, payload, now); err != nil {
+				return err
+			}
+			operationState = "running"
+		} else {
+			operationState = "succeeded"
+		}
+	} else {
+		operationState = "succeeded"
+	}
+	current := work.ProviderAction != "terminate"
+	if _, err := tx.Exec(ctx, `UPDATE sandbox_runtime_product.provider_bindings SET slot_generation=CASE WHEN $1 THEN $2 ELSE slot_generation END,provider_generation=provider_generation+1,observed_state=$3,current=$1,last_observed_at=$4,updated_at=$5 WHERE tenant_id=$6 AND workspace_id=$7 AND slot_key=$8 AND current`, current, work.SlotGeneration, bindingState, evidence.ObservedAt, now, work.TenantID, work.WorkspaceID, work.SlotKey); err != nil {
+		return err
+	}
+	if work.ProviderAction == "terminate" {
+		if _, err := tx.Exec(ctx, `UPDATE sandbox_runtime_product.runtime_sessions SET state=CASE WHEN state='draining' THEN state ELSE 'closed' END,version=version+1,updated_at=$1 WHERE tenant_id=$2 AND workspace_id=$3 AND slot_key=$4 AND state IN ('requested','provisioning','ready','active')`, now, work.TenantID, work.WorkspaceID, work.SlotKey); err != nil {
+			return err
+		}
+	}
+	observedGeneration := work.SlotGeneration
+	if slotState == "requested" {
+		observedGeneration = work.SlotGeneration - 1
+	}
+	if _, err := tx.Exec(ctx, `UPDATE sandbox_runtime_product.workspace_slots SET observed_state=$1,observed_generation=$2,version=version+1,updated_at=$3 WHERE tenant_id=$4 AND workspace_id=$5 AND slot_key=$6 AND generation=$7`, slotState, observedGeneration, now, work.TenantID, work.WorkspaceID, work.SlotKey, work.SlotGeneration); err != nil {
+		return err
+	}
+	reconciliation := "complete"
+	if operationState == "running" {
+		reconciliation = "reconciling"
+	}
+	if _, err := tx.Exec(ctx, `UPDATE sandbox_runtime_product.product_operations SET state=$1,reconciliation_status=$2,version=version+1,updated_at=$3 WHERE tenant_id=$4 AND operation_id=$5`, operationState, reconciliation, now, work.TenantID, work.OperationID); err != nil {
+		return err
+	}
+	sequence, err := lockWorkspaceAndAdvance(ctx, tx, work.TenantID, work.WorkspaceID, "", now)
+	if err != nil {
+		return err
+	}
+	attributes, _ := json.Marshal(map[string]any{"slot_key": work.SlotKey, "generation": work.SlotGeneration, "provider_outcome": state})
+	_, err = tx.Exec(ctx, `INSERT INTO sandbox_runtime_product.workspace_events(tenant_id,workspace_id,sequence,event_id,event_type,subject_type,subject_id,operation_id,actor_type,actor_id,occurred_at,attributes) VALUES($1,$2,$3,$4,$5,'slot',$6,$7,'service','product-reconciler',$8,$9)`, work.TenantID, work.WorkspaceID, sequence, eventID, eventType, work.SlotKey, work.OperationID, now, attributes)
+	return err
+}
+
 func recordSessionObservation(ctx context.Context, tx pgx.Tx, work product.ProviderObservationWork, evidence product.ProviderOperationEvidence, eventID, state string, now time.Time) error {
 	productState, reconciliation := "running", "reconciling"
 	sessionState := "provisioning"
+	closingBrowser := work.ProviderAction == "terminate_browser_session"
 	if work.OperationType == "close_session" {
 		sessionState = "draining"
 	}
@@ -206,6 +300,9 @@ func recordSessionObservation(ctx context.Context, tx pgx.Tx, work product.Provi
 		terminal = true
 		if work.OperationType == "close_session" {
 			sessionState, eventType = "closed", "session.closed"
+			if work.SessionFinalState == "expired" {
+				sessionState, eventType = "expired", "session.expired"
+			}
 		} else {
 			sessionState, eventType = "ready", "session.ready"
 		}
@@ -221,6 +318,20 @@ func recordSessionObservation(ctx context.Context, tx pgx.Tx, work product.Provi
 	if current == "succeeded" || current == "failed" || current == "cancelled" {
 		return nil
 	}
+	var currentSessionState string
+	if err := tx.QueryRow(ctx, `SELECT state FROM sandbox_runtime_product.runtime_sessions WHERE tenant_id=$1 AND session_id=$2 FOR UPDATE`, work.TenantID, work.SessionID).Scan(&currentSessionState); err != nil {
+		return err
+	}
+	if work.OperationType == "create_session" && currentSessionState != "requested" && currentSessionState != "provisioning" {
+		_, err := tx.Exec(ctx, `UPDATE sandbox_runtime_product.product_operations SET state='cancelled',reconciliation_status='complete',error_code='session_superseded',version=version+1,updated_at=$1 WHERE tenant_id=$2 AND operation_id=$3`, now, work.TenantID, work.OperationID)
+		return err
+	}
+	if work.OperationType == "close_session" && currentSessionState != "draining" {
+		return nil
+	}
+	if closingBrowser && state == "succeeded" {
+		return recordBrowserSessionCleanup(ctx, tx, work, evidence, eventID, sessionState, eventType, now)
+	}
 	if _, err := tx.Exec(ctx, `UPDATE sandbox_runtime_product.product_operations SET state=$1,reconciliation_status=$2,version=version+1,updated_at=$3 WHERE tenant_id=$4 AND operation_id=$5`, productState, reconciliation, now, work.TenantID, work.OperationID); err != nil {
 		return err
 	}
@@ -232,8 +343,8 @@ func recordSessionObservation(ctx context.Context, tx pgx.Tx, work product.Provi
 provider_handoff_reference=CASE WHEN $2='' THEN provider_handoff_reference ELSE $2 END,
 provider_connection_generation=CASE WHEN $3<1 THEN provider_connection_generation ELSE $3 END,
 provider_handoff_expires_at=COALESCE($4::timestamptz,provider_handoff_expires_at),updated_at=$5
-WHERE tenant_id=$6 AND session_id=$7`, sessionState, evidence.HandoffReference, evidence.ConnectionGeneration,
-		nullableTime(evidence.HandoffExpiresAt), now, work.TenantID, work.SessionID); err != nil {
+	WHERE tenant_id=$6 AND session_id=$7 AND state=$8`, sessionState, evidence.HandoffReference, evidence.ConnectionGeneration,
+		nullableTime(evidence.HandoffExpiresAt), now, work.TenantID, work.SessionID, currentSessionState); err != nil {
 		return err
 	}
 	if !terminal {
@@ -245,6 +356,47 @@ WHERE tenant_id=$6 AND session_id=$7`, sessionState, evidence.HandoffReference, 
 	}
 	attributes, _ := json.Marshal(map[string]any{"provider_outcome": state})
 	_, err = tx.Exec(ctx, `INSERT INTO sandbox_runtime_product.workspace_events(tenant_id,workspace_id,sequence,event_id,event_type,subject_type,subject_id,operation_id,actor_type,actor_id,occurred_at,attributes)VALUES($1,$2,$3,$4,$5,'session',$6,$7,'service','product-reconciler',$8,$9)`, work.TenantID, work.WorkspaceID, sequence, eventID, eventType, work.SessionID, work.OperationID, now, attributes)
+	return err
+}
+
+func recordBrowserSessionCleanup(ctx context.Context, tx pgx.Tx, work product.ProviderObservationWork, evidence product.ProviderOperationEvidence, eventID, sessionState, eventType string, now time.Time) error {
+	if _, err := tx.Exec(ctx, `UPDATE sandbox_runtime_product.runtime_sessions SET state=$1,version=version+1,provider_handoff_reference=NULL,provider_handoff_expires_at=NULL,updated_at=$2 WHERE tenant_id=$3 AND session_id=$4 AND state='draining'`, sessionState, now, work.TenantID, work.SessionID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE sandbox_runtime_product.connection_grants SET state='revoked' WHERE tenant_id=$1 AND session_id=$2 AND state IN ('issued','consumed')`, work.TenantID, work.SessionID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE sandbox_runtime_product.provider_bindings SET observed_state='terminated',current=false,last_observed_at=$1,updated_at=$2 WHERE tenant_id=$3 AND workspace_id=$4 AND slot_key=$5 AND slot_generation=$6 AND current`, evidence.ObservedAt, now, work.TenantID, work.WorkspaceID, work.SlotKey, work.SlotGeneration); err != nil {
+		return err
+	}
+	operationState, reconciliation := "succeeded", "complete"
+	var desired string
+	var generation int64
+	err := tx.QueryRow(ctx, `SELECT desired_state,generation FROM sandbox_runtime_product.workspace_slots WHERE tenant_id=$1 AND workspace_id=$2 AND slot_key=$3 FOR UPDATE`, work.TenantID, work.WorkspaceID, work.SlotKey).Scan(&desired, &generation)
+	if err != nil {
+		return err
+	}
+	if desired == "ready" && generation == work.SlotGeneration {
+		generation++
+		if _, err := tx.Exec(ctx, `UPDATE sandbox_runtime_product.workspace_slots SET generation=$1,observed_state='requested',version=version+1,updated_at=$2 WHERE tenant_id=$3 AND workspace_id=$4 AND slot_key=$5`, generation, now, work.TenantID, work.WorkspaceID, work.SlotKey); err != nil {
+			return err
+		}
+		payload, _ := json.Marshal(map[string]any{"workspace_id": work.WorkspaceID, "operation_id": work.OperationID, "slot_key": work.SlotKey, "generation": generation, "previous_generation": work.SlotGeneration, "desired_state": "ready", "action": "provision"})
+		if _, err := tx.Exec(ctx, `INSERT INTO sandbox_runtime_product.outbox(tenant_id,outbox_id,workspace_id,operation_id,message_type,payload,state,attempt_count,available_at,created_at,updated_at)
+VALUES($1,$2,$3,$4,'slot.reconcile',$5,'pending',0,$6,$6,$6) ON CONFLICT(tenant_id,outbox_id) DO NOTHING`, work.TenantID, work.AttemptID+"-replacement", work.WorkspaceID, work.OperationID, payload, now); err != nil {
+			return err
+		}
+		operationState, reconciliation = "running", "reconciling"
+	}
+	if _, err := tx.Exec(ctx, `UPDATE sandbox_runtime_product.product_operations SET state=$1,reconciliation_status=$2,version=version+1,updated_at=$3 WHERE tenant_id=$4 AND operation_id=$5`, operationState, reconciliation, now, work.TenantID, work.OperationID); err != nil {
+		return err
+	}
+	sequence, err := lockWorkspaceAndAdvance(ctx, tx, work.TenantID, work.WorkspaceID, "", now)
+	if err != nil {
+		return err
+	}
+	attributes, _ := json.Marshal(map[string]any{"provider_outcome": "succeeded", "replacement_generation": generation})
+	_, err = tx.Exec(ctx, `INSERT INTO sandbox_runtime_product.workspace_events(tenant_id,workspace_id,sequence,event_id,event_type,subject_type,subject_id,operation_id,actor_type,actor_id,occurred_at,attributes) VALUES($1,$2,$3,$4,$5,'session',$6,$7,'service','product-reconciler',$8,$9)`, work.TenantID, work.WorkspaceID, sequence, eventID, eventType, work.SessionID, work.OperationID, now, attributes)
 	return err
 }
 

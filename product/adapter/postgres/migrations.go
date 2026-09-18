@@ -27,6 +27,9 @@ var productPhase4BrowserSessionAuthorityMigration string
 //go:embed migrations/0004_product_phase4_browser_slot_authority.sql
 var productPhase4BrowserSlotAuthorityMigration string
 
+//go:embed migrations/0005_product_phase4_browser_lifecycle.sql
+var productPhase4BrowserLifecycleMigration string
+
 type migration struct {
 	version int64
 	name    string
@@ -38,6 +41,7 @@ var productMigrations = []migration{
 	{version: 2, name: "phase 3 authorities", sql: productPhase3AuthoritiesMigration},
 	{version: 3, name: "phase 4 browser session authority", sql: productPhase4BrowserSessionAuthorityMigration},
 	{version: 4, name: "phase 4 browser slot authority", sql: productPhase4BrowserSlotAuthorityMigration},
+	{version: 5, name: "phase 4 browser lifecycle", sql: productPhase4BrowserLifecycleMigration},
 }
 
 func ApplyMigrations(ctx context.Context, pool *pgxpool.Pool) error {

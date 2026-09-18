@@ -333,6 +333,110 @@ func TestIntegrationBrowserSlotAndSessionDispatchIsolation(t *testing.T) {
 	if err := pool.QueryRow(context.Background(), `SELECT provider_handoff_reference FROM sandbox_runtime_product.runtime_sessions WHERE tenant_id=$1 AND session_id=$2`, tenantID, session.ID).Scan(&storedReference); err != nil || storedReference != evidence.HandoffReference {
 		t.Fatalf("stored handoff=%q err=%v", storedReference, err)
 	}
+	closeOperation, _, err := sessions.Close(context.Background(), tenantID, actor, session.ID, "browser-dispatch-close", product.CloseSessionRequest{ExpectedVersion: session.Version, Reason: "owner_requested_close"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	closeWork, err := store.LeaseBrowserSessionWork(context.Background(), "browser-close-worker", 10*time.Second, 10)
+	if err != nil || len(closeWork) != 1 || closeWork[0].Action != "close" || closeWork[0].FencingToken != 2 || closeWork[0].ProviderGeneration != 1 {
+		t.Fatalf("close work=%#v err=%v", closeWork, err)
+	}
+	evidence.ProviderOperationID = "provider-browser-terminate"
+	evidence.State = "accepted"
+	evidence.HandoffReference = ""
+	evidence.ConnectionGeneration = 0
+	evidence.HandoffExpiresAt = time.Time{}
+	if err := store.RecordSessionDispatch(context.Background(), closeWork[0], evidence); err != nil {
+		t.Fatal(err)
+	}
+	observations, err = store.LeaseProviderObservations(context.Background(), "browser-close-observer", 10*time.Second, 10)
+	if err != nil || len(observations) != 1 || observations[0].ProviderAction != "terminate_browser_session" || observations[0].FencingToken != 2 {
+		t.Fatalf("close observations=%#v err=%v", observations, err)
+	}
+	evidence.State = "succeeded"
+	evidence.ObservedAt = time.Now().UTC()
+	if err := store.RecordProviderObservation(context.Background(), observations[0], evidence, "evt-browser-session-closed"); err != nil {
+		t.Fatal(err)
+	}
+	session, err = sessions.Get(context.Background(), tenantID, actor, session.ID)
+	if err != nil || session.State != product.SessionStateClosed {
+		t.Fatalf("closed session=%#v err=%v", session, err)
+	}
+	replacement, err := store.LeaseBrowserSlotWork(context.Background(), "browser-replacement-worker", 10*time.Second, 10)
+	if err != nil || len(replacement) != 1 || replacement[0].OperationID != closeOperation.ID || replacement[0].SlotGeneration != 2 {
+		t.Fatalf("replacement=%#v err=%v", replacement, err)
+	}
+	evidence.ProviderOperationID = "provider-browser-replacement"
+	evidence.SandboxID = "provider-browser-sandbox-replacement"
+	evidence.State = "accepted"
+	if err := store.RecordDispatchEvidence(context.Background(), replacement[0], evidence); err != nil {
+		t.Fatal(err)
+	}
+	observations, err = store.LeaseProviderObservations(context.Background(), "browser-replacement-observer", 10*time.Second, 10)
+	if err != nil || len(observations) != 1 || observations[0].ProviderAction != "create" || observations[0].FencingToken != 2 {
+		t.Fatalf("replacement observations=%#v err=%v", observations, err)
+	}
+	evidence.State = "succeeded"
+	evidence.ObservedAt = time.Now().UTC()
+	if err := store.RecordProviderObservation(context.Background(), observations[0], evidence, "evt-browser-replacement-ready"); err != nil {
+		t.Fatal(err)
+	}
+	var currentBindings int
+	var productGeneration, providerGeneration int64
+	var operationState string
+	if err := pool.QueryRow(context.Background(), `SELECT count(*),max(slot_generation),max(provider_generation) FROM sandbox_runtime_product.provider_bindings WHERE tenant_id=$1 AND workspace_id=$2 AND slot_key='browser-main' AND current`, tenantID, workspace.ID).Scan(&currentBindings, &productGeneration, &providerGeneration); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(context.Background(), `SELECT state FROM sandbox_runtime_product.product_operations WHERE tenant_id=$1 AND operation_id=$2`, tenantID, closeOperation.ID).Scan(&operationState); err != nil {
+		t.Fatal(err)
+	}
+	if currentBindings != 1 || productGeneration != 2 || providerGeneration != 1 || operationState != "succeeded" {
+		t.Fatalf("current=%d product_generation=%d provider_generation=%d operation=%s", currentBindings, productGeneration, providerGeneration, operationState)
+	}
+	workspace, err = application.GetWorkspace(context.Background(), tenantID, actor, workspace.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	staleOpen, _, err := sessions.Create(context.Background(), tenantID, actor, workspace.ID, "browser-stale-open", product.CreateSessionRequest{ExpectedWorkspaceVersion: workspace.Version, SlotKey: "browser-main", Kind: product.SessionKindBrowserLive, ProtocolProfile: product.SessionProfileBrowserLive, ExpiresInSeconds: 900, RecordingPolicy: "metadata_only"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	openWork, err := store.LeaseBrowserSessionWork(context.Background(), "browser-stale-open-worker", 10*time.Second, 10)
+	if err != nil || len(openWork) != 1 {
+		t.Fatalf("stale open work=%#v err=%v", openWork, err)
+	}
+	evidence.ProviderOperationID = "provider-stale-open"
+	evidence.State = "accepted"
+	evidence.SandboxID = "provider-browser-sandbox-replacement"
+	if err := store.RecordSessionDispatch(context.Background(), openWork[0], evidence); err != nil {
+		t.Fatal(err)
+	}
+	openingSession, err := sessions.Get(context.Background(), tenantID, actor, staleOpen.SessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := sessions.Close(context.Background(), tenantID, actor, openingSession.ID, "browser-close-before-open-observe", product.CloseSessionRequest{ExpectedVersion: openingSession.Version, Reason: "close_before_open_observe"}); err != nil {
+		t.Fatal(err)
+	}
+	observations, err = store.LeaseProviderObservations(context.Background(), "browser-stale-open-observer", 10*time.Second, 10)
+	if err != nil || len(observations) != 1 || observations[0].OperationID != staleOpen.ID {
+		t.Fatalf("stale observations=%#v err=%v", observations, err)
+	}
+	evidence.State = "succeeded"
+	evidence.HandoffReference = "ref:browser-session:stale"
+	evidence.ConnectionGeneration = 1
+	evidence.HandoffExpiresAt = openWork[0].ExpiresAt
+	evidence.ObservedAt = time.Now().UTC()
+	if err := store.RecordProviderObservation(context.Background(), observations[0], evidence, "evt-browser-stale-open"); err != nil {
+		t.Fatal(err)
+	}
+	openingSession, err = sessions.Get(context.Background(), tenantID, actor, openingSession.ID)
+	if err != nil || openingSession.State != product.SessionStateDraining {
+		t.Fatalf("stale open resurrected session=%#v err=%v", openingSession, err)
+	}
+	if err := pool.QueryRow(context.Background(), `SELECT state FROM sandbox_runtime_product.product_operations WHERE tenant_id=$1 AND operation_id=$2`, tenantID, staleOpen.ID).Scan(&operationState); err != nil || operationState != "cancelled" {
+		t.Fatalf("stale open operation=%q err=%v", operationState, err)
+	}
 }
 
 func TestIntegrationBrowserSlotDispatcherSkipsStaleGeneration(t *testing.T) {
@@ -370,6 +474,46 @@ func TestIntegrationBrowserSlotDispatcherSkipsStaleGeneration(t *testing.T) {
 	var staleState string
 	if err := pool.QueryRow(context.Background(), `SELECT state FROM sandbox_runtime_product.outbox WHERE tenant_id=$1 AND operation_id=$2`, tenantID, stale.ID).Scan(&staleState); err != nil || staleState != "pending" {
 		t.Fatalf("stale outbox state=%q err=%v", staleState, err)
+	}
+}
+
+func TestIntegrationBrowserExpiryUsesDatabaseTimeAndDurableCleanupIntent(t *testing.T) {
+	pool := integrationProductPool(t)
+	applyProductMigrations(t, pool)
+	const tenantID = "tenant-browser-expiry"
+	cleanupProductTenant(t, pool, tenantID)
+	store, _ := New(pool, 5*time.Second)
+	application, _ := product.NewApplication(store, allowPrimarySlot{}, product.CryptoIDGenerator{})
+	actor := product.ActorRef{Type: product.ActorHuman, ID: "browser-expiry-owner"}
+	created, err := application.CreateWorkspace(context.Background(), tenantID, actor, "browser-expiry-workspace", integrationCreateWorkspaceRequest("browser expiry"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(context.Background(), `UPDATE sandbox_runtime_product.outbox SET state='delivered' WHERE tenant_id=$1`, tenantID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(context.Background(), `INSERT INTO sandbox_runtime_product.workspace_slots(tenant_id,workspace_id,slot_key,kind,profile_id,required_capabilities,desired_state,observed_state,generation,observed_generation,version,created_at,updated_at)
+VALUES($1,$2,'browser-main','browser','sandbox-runtime-browser-v1','[{"capability_id":"sandbox.browser","version":"1.0.0","profile_id":"browser-v1"}]','ready','ready',1,1,1,clock_timestamp()-interval '2 hours',clock_timestamp()-interval '2 hours');
+	`, tenantID, created.Operation.WorkspaceID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(context.Background(), `INSERT INTO sandbox_runtime_product.runtime_sessions(tenant_id,session_id,workspace_id,slot_key,slot_generation,owner_actor_type,owner_actor_id,kind,protocol_profile,state,requires_control_lease,recording_policy,version,expires_at,created_at,updated_at)
+VALUES($1,'ses-browser-expired',$2,'browser-main',1,'human',$3,'browser_live','product-browser-live.v1','active',true,'metadata_only',1,clock_timestamp()-interval '1 hour',clock_timestamp()-interval '2 hours',clock_timestamp()-interval '1 hour')`, tenantID, created.Operation.WorkspaceID, actor.ID); err != nil {
+		t.Fatal(err)
+	}
+	worker, err := product.NewBrowserExpiryWorker(store, product.CryptoIDGenerator{}, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count, err := worker.ExpireOnce(context.Background()); err != nil || count != 1 {
+		t.Fatalf("count=%d err=%v", count, err)
+	}
+	var state, messageType, finalState string
+	if err := pool.QueryRow(context.Background(), `SELECT s.state,o.message_type,o.payload->>'final_state' FROM sandbox_runtime_product.runtime_sessions s JOIN sandbox_runtime_product.outbox o ON o.tenant_id=s.tenant_id AND o.payload->>'session_id'=s.session_id WHERE s.tenant_id=$1 AND s.session_id='ses-browser-expired'`, tenantID).Scan(&state, &messageType, &finalState); err != nil {
+		t.Fatal(err)
+	}
+	if state != "draining" || messageType != "browser_session.close" || finalState != "expired" {
+		t.Fatalf("state=%s message=%s final=%s", state, messageType, finalState)
 	}
 }
 

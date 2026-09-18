@@ -58,13 +58,15 @@ WHERE tenant_id=$1 AND workspace_id=$2 FOR UPDATE`, command.TenantID, command.Wo
 		return product.Operation{}, false, product.ErrControlStale
 	}
 
-	var currentKind, currentProfile, currentDesired string
+	var currentKind, currentProfile, currentDesired, currentObserved string
 	var currentCapabilities []byte
 	var currentGeneration int64
-	err = tx.QueryRow(opCtx, `SELECT kind,profile_id,required_capabilities,desired_state,generation
-FROM sandbox_runtime_product.workspace_slots
+	var currentBinding bool
+	err = tx.QueryRow(opCtx, `SELECT kind,profile_id,required_capabilities,desired_state,observed_state,generation,
+EXISTS(SELECT 1 FROM sandbox_runtime_product.provider_bindings b WHERE b.tenant_id=s.tenant_id AND b.workspace_id=s.workspace_id AND b.slot_key=s.slot_key AND b.current)
+FROM sandbox_runtime_product.workspace_slots s
 WHERE tenant_id=$1 AND workspace_id=$2 AND slot_key=$3 FOR UPDATE`, command.TenantID, command.WorkspaceID, command.SlotKey).Scan(
-		&currentKind, &currentProfile, &currentCapabilities, &currentDesired, &currentGeneration,
+		&currentKind, &currentProfile, &currentCapabilities, &currentDesired, &currentObserved, &currentGeneration, &currentBinding,
 	)
 	newSlot := errors.Is(err, pgx.ErrNoRows)
 	if err != nil && !newSlot {
@@ -95,6 +97,28 @@ WHERE tenant_id=$1 AND workspace_id=$2 AND slot_key=$3 FOR UPDATE`, command.Tena
 
 	generation := currentGeneration + 1
 	observedState := slotTransitionState(command.Spec.DesiredState)
+	action := "provision"
+	if !newSlot {
+		switch command.Spec.DesiredState {
+		case "suspended":
+			action = "suspend"
+		case "terminated":
+			action = "terminate"
+		case "ready":
+			switch currentDesired {
+			case "suspended":
+				action = "resume"
+			case "ready":
+				if currentBinding {
+					action = "replace"
+				}
+			}
+		}
+	}
+	noop := newSlot && command.Spec.DesiredState != "ready"
+	if noop {
+		observedState = command.Spec.DesiredState
+	}
 	if newSlot {
 		generation = 1
 		if _, err := tx.Exec(opCtx, `INSERT INTO sandbox_runtime_product.workspace_slots
@@ -111,14 +135,18 @@ WHERE tenant_id=$4 AND workspace_id=$5 AND slot_key=$6`, command.Spec.DesiredSta
 		return product.Operation{}, false, storeError(ctx, opCtx, err, false)
 	}
 
+	operationState, reconciliation := "accepted", "pending"
+	if noop {
+		operationState, reconciliation = "succeeded", "complete"
+	}
 	operation := product.Operation{ID: command.OperationID, Type: "put_slot", WorkspaceID: command.WorkspaceID,
-		SlotKey: command.SlotKey, SubmittedBy: command.Actor, State: "accepted", ReconciliationStatus: "pending",
+		SlotKey: command.SlotKey, SubmittedBy: command.Actor, State: operationState, ReconciliationStatus: reconciliation,
 		Version: 1, AcceptedAt: now, UpdatedAt: now}
 	if _, err := tx.Exec(opCtx, `INSERT INTO sandbox_runtime_product.product_operations
     (tenant_id,operation_id,operation_type,workspace_id,slot_key,submitted_actor_type,submitted_actor_id,
      state,reconciliation_status,version,accepted_at,updated_at)
-VALUES($1,$2,'put_slot',$3,$4,$5,$6,'accepted','pending',1,$7,$7)`, command.TenantID, command.OperationID,
-		command.WorkspaceID, command.SlotKey, string(command.Actor.Type), command.Actor.ID, now); err != nil {
+VALUES($1,$2,'put_slot',$3,$4,$5,$6,$7,$8,1,$9,$9)`, command.TenantID, command.OperationID,
+		command.WorkspaceID, command.SlotKey, string(command.Actor.Type), command.Actor.ID, operationState, reconciliation, now); err != nil {
 		return product.Operation{}, false, storeError(ctx, opCtx, err, false)
 	}
 	sequence, err := lockWorkspaceAndAdvance(opCtx, tx, command.TenantID, command.WorkspaceID, "", now)
@@ -126,7 +154,7 @@ VALUES($1,$2,'put_slot',$3,$4,$5,$6,'accepted','pending',1,$7,$7)`, command.Tena
 		return product.Operation{}, false, storeError(ctx, opCtx, err, false)
 	}
 	attributes, _ := json.Marshal(map[string]any{"slot_key": command.SlotKey, "kind": command.Spec.Kind,
-		"profile_id": command.Spec.ProfileID, "desired_state": command.Spec.DesiredState, "generation": generation})
+		"profile_id": command.Spec.ProfileID, "desired_state": command.Spec.DesiredState, "generation": generation, "action": action})
 	if _, err := tx.Exec(opCtx, `INSERT INTO sandbox_runtime_product.workspace_events
     (tenant_id,workspace_id,sequence,event_id,event_type,subject_type,subject_id,operation_id,
      actor_type,actor_id,occurred_at,attributes)
@@ -134,13 +162,16 @@ VALUES($1,$2,$3,$4,'slot.put_accepted','slot',$5,$6,$7,$8,$9,$10)`, command.Tena
 		sequence, command.EventID, command.SlotKey, command.OperationID, string(command.Actor.Type), command.Actor.ID, now, attributes); err != nil {
 		return product.Operation{}, false, storeError(ctx, opCtx, err, false)
 	}
-	payload, _ := json.Marshal(map[string]any{"workspace_id": command.WorkspaceID, "operation_id": command.OperationID,
-		"slot_key": command.SlotKey, "generation": generation, "desired_state": command.Spec.DesiredState})
-	if _, err := tx.Exec(opCtx, `INSERT INTO sandbox_runtime_product.outbox
+	if !noop {
+		payload, _ := json.Marshal(map[string]any{"workspace_id": command.WorkspaceID, "operation_id": command.OperationID,
+			"slot_key": command.SlotKey, "generation": generation, "previous_generation": currentGeneration,
+			"desired_state": command.Spec.DesiredState, "action": action})
+		if _, err := tx.Exec(opCtx, `INSERT INTO sandbox_runtime_product.outbox
     (tenant_id,outbox_id,workspace_id,operation_id,message_type,payload,state,attempt_count,available_at,created_at,updated_at)
 VALUES($1,$2,$3,$4,'slot.reconcile',$5,'pending',0,$6,$6,$6)`, command.TenantID, command.OutboxID,
-		command.WorkspaceID, command.OperationID, payload, now); err != nil {
-		return product.Operation{}, false, storeError(ctx, opCtx, err, false)
+			command.WorkspaceID, command.OperationID, payload, now); err != nil {
+			return product.Operation{}, false, storeError(ctx, opCtx, err, false)
+		}
 	}
 	if err := insertAudit(opCtx, tx, "aud-"+command.OperationID, command.TenantID, command.Actor,
 		"slot.put", "slot", command.WorkspaceID+":"+command.SlotKey, "allowed", "authorized", now); err != nil {

@@ -49,11 +49,17 @@ func (c *Client) AuthorizeSession(ctx context.Context, kind, protocolProfile str
 }
 
 func (c *Client) ExecuteBrowserSessionControl(ctx context.Context, work product.SessionControlWork) (product.ProviderOperationEvidence, error) {
-	if ctx == nil || work.Action != "open" || work.ProviderRevisionID != c.revisionID || work.SandboxID == "" ||
+	if ctx == nil || (work.Action != "open" && work.Action != "close") || work.ProviderRevisionID != c.revisionID || work.SandboxID == "" ||
 		work.SessionID == "" || work.SlotGeneration < 1 || work.RuntimeProfileID != product.BrowserSlotProfile ||
 		!((work.Kind == product.SessionKindBrowserAutomation && work.ProtocolProfile == product.SessionProfileBrowserAutomation) ||
 			(work.Kind == product.SessionKindBrowserLive && work.ProtocolProfile == product.SessionProfileBrowserLive)) {
 		return product.ProviderOperationEvidence{}, product.ErrInvalid
+	}
+	if work.ProviderGeneration < 1 {
+		work.ProviderGeneration = work.SlotGeneration
+	}
+	if work.Action == "close" {
+		return c.terminateBrowserSession(ctx, work)
 	}
 	profile, ok := c.profileForRuntime(work.RuntimeProfileID)
 	if !ok {
@@ -73,7 +79,7 @@ func (c *Client) ExecuteBrowserSessionControl(ctx context.Context, work product.
 	request := &providerv1.BrowserSessionOpenRequest{
 		MutationEnvelope: providerv1.MutationEnvelope{OperationID: work.OperationID, AttemptID: work.AttemptID,
 			FencingToken: work.SlotGeneration, IdempotencyKey: "product-" + work.AttemptID, DeadlineAt: deadline.Format(time.RFC3339Nano)},
-		ExpectedGeneration: work.SlotGeneration, BrowserSessionID: work.SessionID,
+		ExpectedGeneration: work.ProviderGeneration, BrowserSessionID: work.SessionID,
 		CapabilityProfileID: product.BrowserCapabilityProfile, ExpiresAt: work.ExpiresAt.UTC().Format(time.RFC3339Nano),
 	}
 	digest, err := mutationDigest(request)
@@ -142,6 +148,9 @@ func (c *Client) ExecuteSessionControl(ctx context.Context, work product.Session
 	if ctx == nil || work.ProviderRevisionID != c.revisionID || work.SandboxID == "" || work.SessionID == "" || work.SlotGeneration < 1 {
 		return product.ProviderOperationEvidence{}, product.ErrInvalid
 	}
+	if work.ProviderGeneration < 1 {
+		work.ProviderGeneration = work.SlotGeneration
+	}
 	profile, ok := c.profileForRuntime(work.RuntimeProfileID)
 	if !ok {
 		return product.ProviderOperationEvidence{}, product.ErrCapabilityUnsupported
@@ -157,11 +166,11 @@ func (c *Client) ExecuteSessionControl(ctx context.Context, work product.Session
 		deadline = work.ExpiresAt
 	}
 	if work.Action == "open" {
-		request = &providerv1.RuntimeSessionOpenRequest{MutationEnvelope: providerv1.MutationEnvelope{OperationID: work.OperationID, AttemptID: work.AttemptID, FencingToken: work.SlotGeneration, IdempotencyKey: "product-" + work.AttemptID, DeadlineAt: deadline.Format(time.RFC3339Nano)}, ExpectedGeneration: work.SlotGeneration, RuntimeSessionID: work.SessionID, RuntimeType: providerv1.TerminalRuntimeTerminal, CapabilityProfileID: capabilityProfile, ExpiresAt: work.ExpiresAt.UTC().Format(time.RFC3339Nano)}
+		request = &providerv1.RuntimeSessionOpenRequest{MutationEnvelope: providerv1.MutationEnvelope{OperationID: work.OperationID, AttemptID: work.AttemptID, FencingToken: work.SlotGeneration, IdempotencyKey: "product-" + work.AttemptID, DeadlineAt: deadline.Format(time.RFC3339Nano)}, ExpectedGeneration: work.ProviderGeneration, RuntimeSessionID: work.SessionID, RuntimeType: providerv1.TerminalRuntimeTerminal, CapabilityProfileID: capabilityProfile, ExpiresAt: work.ExpiresAt.UTC().Format(time.RFC3339Nano)}
 	} else if work.Action == "close" {
 		capability, capabilityProfile, operation, contractID = "sandbox.terminal-control", "terminal-control-v1", "close_runtime_session", "urn:shell-echo:sandbox-runtime:request:close-runtime-session:v1"
 		path += "/" + url.PathEscape(work.SessionID) + ":close"
-		request = &providerv1.RuntimeSessionCloseRequest{MutationEnvelope: providerv1.MutationEnvelope{OperationID: work.OperationID, AttemptID: work.AttemptID, FencingToken: work.SlotGeneration, IdempotencyKey: "product-" + work.AttemptID, DeadlineAt: deadline.Format(time.RFC3339Nano)}, ExpectedGeneration: work.SlotGeneration, RuntimeSessionID: work.SessionID, ConnectionGeneration: work.ConnectionGeneration, Reason: work.Reason}
+		request = &providerv1.RuntimeSessionCloseRequest{MutationEnvelope: providerv1.MutationEnvelope{OperationID: work.OperationID, AttemptID: work.AttemptID, FencingToken: work.SlotGeneration, IdempotencyKey: "product-" + work.AttemptID, DeadlineAt: deadline.Format(time.RFC3339Nano)}, ExpectedGeneration: work.ProviderGeneration, RuntimeSessionID: work.SessionID, ConnectionGeneration: work.ConnectionGeneration, Reason: work.Reason}
 	} else {
 		return product.ProviderOperationEvidence{}, product.ErrInvalid
 	}
@@ -230,7 +239,7 @@ func (c *Client) profileForRuntime(runtimeID string) (Profile, bool) {
 }
 
 func (c *Client) readRuntimeSessionHandoff(ctx context.Context, work product.ProviderObservationWork, profile Profile) (providerv1.RuntimeSessionHandoff, error) {
-	descriptor := map[string]any{"operation": "read_runtime_session", "sandbox_id": work.SandboxID, "operation_id": work.OperationID, "attempt_id": work.AttemptID, "fencing_token": work.SlotGeneration}
+	descriptor := map[string]any{"operation": "read_runtime_session", "sandbox_id": work.SandboxID, "operation_id": work.OperationID, "attempt_id": work.AttemptID, "fencing_token": work.FencingToken}
 	digest, err := canonicalFullDigest(descriptor)
 	if err != nil {
 		return providerv1.RuntimeSessionHandoff{}, product.ErrInvalid
@@ -240,7 +249,7 @@ func (c *Client) readRuntimeSessionHandoff(ctx context.Context, work product.Pro
 	path := "/v1/operations/" + url.PathEscape(work.OperationID) + "/runtime-session"
 	headers, err := c.signAdmission(now, admissionSigningInput{PolicyDigest: profile.PolicyDigest, TenantID: work.TenantID, WorkOrderID: work.OperationID,
 		Operation: "read_runtime_session", SandboxID: work.SandboxID, OperationID: work.OperationID, AttemptID: work.AttemptID,
-		FencingToken: work.SlotGeneration, Deadline: deadline, RequestContractID: "urn:shell-echo:sandbox-runtime:descriptor:runtime-session:v1",
+		FencingToken: work.FencingToken, Deadline: deadline, RequestContractID: "urn:shell-echo:sandbox-runtime:descriptor:runtime-session:v1",
 		RequestDigestProfile: "rfc8785-full-document-v1", RequestDigest: digest, Method: http.MethodGet, Path: path})
 	if err != nil {
 		return providerv1.RuntimeSessionHandoff{}, product.ErrStoreUnavailable
@@ -261,7 +270,7 @@ func (c *Client) readRuntimeSessionHandoff(ctx context.Context, work product.Pro
 	}
 	var handoff providerv1.RuntimeSessionHandoff
 	if err := decodeBounded(response.Body, &handoff); err != nil || handoff.OperationID != work.OperationID || handoff.AttemptID != work.AttemptID ||
-		handoff.SandboxID != work.SandboxID || handoff.RuntimeSessionID != work.SessionID || handoff.FencingToken != work.SlotGeneration ||
+		handoff.SandboxID != work.SandboxID || handoff.RuntimeSessionID != work.SessionID || handoff.FencingToken != work.FencingToken ||
 		handoff.ConnectionGeneration < 1 || handoff.InternalEndpointReference == "" {
 		return providerv1.RuntimeSessionHandoff{}, product.ErrStoreUnavailable
 	}
@@ -270,7 +279,7 @@ func (c *Client) readRuntimeSessionHandoff(ctx context.Context, work product.Pro
 
 func (c *Client) readBrowserSessionHandoff(ctx context.Context, work product.ProviderObservationWork, profile Profile) (providerv1.BrowserSessionHandoff, error) {
 	descriptor := map[string]any{"operation": "read_browser_session", "sandbox_id": work.SandboxID,
-		"operation_id": work.OperationID, "attempt_id": work.AttemptID, "fencing_token": work.SlotGeneration}
+		"operation_id": work.OperationID, "attempt_id": work.AttemptID, "fencing_token": work.FencingToken}
 	digest, err := canonicalFullDigest(descriptor)
 	if err != nil {
 		return providerv1.BrowserSessionHandoff{}, product.ErrInvalid
@@ -280,7 +289,7 @@ func (c *Client) readBrowserSessionHandoff(ctx context.Context, work product.Pro
 	path := "/v1/operations/" + url.PathEscape(work.OperationID) + "/browser-session"
 	headers, err := c.signAdmission(now, admissionSigningInput{PolicyDigest: profile.PolicyDigest, TenantID: work.TenantID,
 		WorkOrderID: work.OperationID, Operation: "read_browser_session", SandboxID: work.SandboxID,
-		OperationID: work.OperationID, AttemptID: work.AttemptID, FencingToken: work.SlotGeneration, Deadline: deadline,
+		OperationID: work.OperationID, AttemptID: work.AttemptID, FencingToken: work.FencingToken, Deadline: deadline,
 		RequestContractID:    "urn:shell-echo:sandbox-runtime:descriptor:browser-session:v1",
 		RequestDigestProfile: "rfc8785-full-document-v1", RequestDigest: digest, Method: http.MethodGet, Path: path})
 	if err != nil {
@@ -303,7 +312,7 @@ func (c *Client) readBrowserSessionHandoff(ctx context.Context, work product.Pro
 	var handoff providerv1.BrowserSessionHandoff
 	if err := decodeBounded(response.Body, &handoff); err != nil || handoff.OperationID != work.OperationID ||
 		handoff.AttemptID != work.AttemptID || handoff.SandboxID != work.SandboxID || handoff.BrowserSessionID != work.SessionID ||
-		handoff.FencingToken != work.SlotGeneration || handoff.CapabilityProfileID != product.BrowserCapabilityProfile ||
+		handoff.FencingToken != work.FencingToken || handoff.CapabilityProfileID != product.BrowserCapabilityProfile ||
 		handoff.Protocol != providerv1.BrowserProtocolWebSocket || handoff.ConnectionGeneration < 1 ||
 		!browserEndpointReference(handoff.InternalEndpointReference) {
 		return providerv1.BrowserSessionHandoff{}, product.ErrStoreUnavailable

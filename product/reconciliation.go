@@ -13,16 +13,22 @@ var (
 )
 
 type ReconcileWork struct {
-	TenantID        string
-	OutboxID        string
-	LeaseOwner      string
-	WorkspaceID     string
-	OperationID     string
-	AttemptID       string
-	SlotKey         string
-	SlotGeneration  int64
-	WorkspaceExpiry time.Time
-	Slot            SlotSpec
+	TenantID           string
+	OutboxID           string
+	LeaseOwner         string
+	WorkspaceID        string
+	OperationID        string
+	AttemptID          string
+	SlotKey            string
+	SlotGeneration     int64
+	PreviousGeneration int64
+	FencingToken       int64
+	Action             string
+	ProviderRevisionID string
+	SandboxID          string
+	ProviderGeneration int64
+	WorkspaceExpiry    time.Time
+	Slot               SlotSpec
 }
 
 type ProviderOperationEvidence struct {
@@ -60,6 +66,16 @@ type BrowserSlotProvisioner interface {
 	ProvisionBrowserSlot(context.Context, ReconcileWork) (ProviderOperationEvidence, error)
 }
 
+type BrowserLifecycleStore interface {
+	LeaseBrowserLifecycleWork(context.Context, string, time.Duration, int) ([]ReconcileWork, error)
+	RecordDispatchEvidence(context.Context, ReconcileWork, ProviderOperationEvidence) error
+	RetryReconcileWork(context.Context, ReconcileWork, string, time.Duration, int) error
+}
+
+type BrowserLifecycleController interface {
+	ControlBrowserSlot(context.Context, ReconcileWork) (ProviderOperationEvidence, error)
+}
+
 type ProviderObservationWork struct {
 	TenantID            string
 	WorkspaceID         string
@@ -67,16 +83,67 @@ type ProviderObservationWork struct {
 	AttemptID           string
 	SlotKey             string
 	SlotGeneration      int64
+	FencingToken        int64
+	ProviderAction      string
 	RuntimeProfileID    string
 	SandboxID           string
 	ProviderOperationID string
 	ProviderRevisionID  string
+	ProviderGeneration  int64
 	SessionID           string
 	OperationType       string
 	LeaseOwner          string
 	SessionKind         string
 	ProtocolProfile     string
 	SessionExpiresAt    time.Time
+	SessionFinalState   string
+}
+
+type BrowserLifecycleDispatcher struct {
+	store       BrowserLifecycleStore
+	provider    BrowserLifecycleController
+	workerID    string
+	lease       time.Duration
+	retryBase   time.Duration
+	maxAttempts int
+	batchSize   int
+}
+
+func NewBrowserLifecycleDispatcher(store BrowserLifecycleStore, provider BrowserLifecycleController, workerID string, lease, retryBase time.Duration, maxAttempts, batchSize int) (*BrowserLifecycleDispatcher, error) {
+	if nilInterface(store) || nilInterface(provider) || !validIdentifier(workerID) || lease < time.Second || lease > time.Minute ||
+		retryBase < time.Millisecond || retryBase > time.Minute || maxAttempts < 1 || maxAttempts > 100 || batchSize < 1 || batchSize > 100 {
+		return nil, ErrInvalid
+	}
+	return &BrowserLifecycleDispatcher{store: store, provider: provider, workerID: workerID, lease: lease, retryBase: retryBase, maxAttempts: maxAttempts, batchSize: batchSize}, nil
+}
+
+func (d *BrowserLifecycleDispatcher) DispatchOnce(ctx context.Context) (int, error) {
+	if d == nil || ctx == nil {
+		return 0, ErrInvalid
+	}
+	work, err := d.store.LeaseBrowserLifecycleWork(ctx, d.workerID, d.lease, d.batchSize)
+	if err != nil {
+		return 0, err
+	}
+	completed := 0
+	for _, item := range work {
+		evidence, dispatchErr := d.provider.ControlBrowserSlot(ctx, item)
+		if dispatchErr == nil || errors.Is(dispatchErr, ErrDispatchOutcomeUnknown) || (errors.Is(dispatchErr, ErrDispatchRejected) && !evidence.Retryable) {
+			if errors.Is(dispatchErr, ErrDispatchOutcomeUnknown) {
+				evidence.OutcomeUnknown = true
+				evidence.State = "outcome_unknown"
+			}
+			if err := d.store.RecordDispatchEvidence(ctx, item, evidence); err != nil {
+				return completed, err
+			}
+			completed++
+			continue
+		}
+		if err := d.store.RetryReconcileWork(ctx, item, safeDispatchCode(evidence.ErrorCode), d.retryBase, d.maxAttempts); err != nil {
+			return completed, err
+		}
+	}
+	return completed, nil
 }
 
 type ProviderObserver interface {

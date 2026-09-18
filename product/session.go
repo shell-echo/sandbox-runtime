@@ -34,12 +34,77 @@ type SessionStore interface {
 type SessionControlWork struct {
 	TenantID, OutboxID, LeaseOwner, WorkspaceID, SlotKey, SessionID, OperationID, AttemptID string
 	SlotGeneration                                                                          int64
+	FencingToken                                                                            int64
 	RuntimeProfileID, SandboxID, ProviderRevisionID                                         string
+	ProviderGeneration                                                                      int64
 	Kind, ProtocolProfile                                                                   string
 	ConnectionGeneration                                                                    int64
 	ExpiresAt                                                                               time.Time
 	Action, Reason                                                                          string
+	FinalState                                                                              string
 }
+
+type BrowserExpiryCandidate struct {
+	TenantID, SessionID string
+	Version             int64
+}
+
+type BrowserExpiryCommand struct {
+	BrowserExpiryCandidate
+	OperationID, EventID, OutboxID string
+}
+
+type BrowserExpiryStore interface {
+	ListExpiredBrowserSessions(context.Context, int) ([]BrowserExpiryCandidate, error)
+	ExpireBrowserSession(context.Context, BrowserExpiryCommand) (bool, error)
+}
+
+type BrowserExpiryWorker struct {
+	store     BrowserExpiryStore
+	ids       IDGenerator
+	batchSize int
+}
+
+func NewBrowserExpiryWorker(store BrowserExpiryStore, ids IDGenerator, batchSize int) (*BrowserExpiryWorker, error) {
+	if nilInterface(store) || nilInterface(ids) || batchSize < 1 || batchSize > 100 {
+		return nil, ErrInvalid
+	}
+	return &BrowserExpiryWorker{store: store, ids: ids, batchSize: batchSize}, nil
+}
+
+func (w *BrowserExpiryWorker) ExpireOnce(ctx context.Context) (int, error) {
+	if w == nil || ctx == nil {
+		return 0, ErrInvalid
+	}
+	candidates, err := w.store.ListExpiredBrowserSessions(ctx, w.batchSize)
+	if err != nil {
+		return 0, err
+	}
+	count := 0
+	for _, candidate := range candidates {
+		operationID, err := w.ids.NewID("op")
+		if err != nil {
+			return count, ErrStoreUnavailable
+		}
+		eventID, err := w.ids.NewID("evt")
+		if err != nil {
+			return count, ErrStoreUnavailable
+		}
+		outboxID, err := w.ids.NewID("out")
+		if err != nil {
+			return count, ErrStoreUnavailable
+		}
+		changed, err := w.store.ExpireBrowserSession(ctx, BrowserExpiryCommand{BrowserExpiryCandidate: candidate, OperationID: operationID, EventID: eventID, OutboxID: outboxID})
+		if err != nil {
+			return count, err
+		}
+		if changed {
+			count++
+		}
+	}
+	return count, nil
+}
+
 type ProviderSessionController interface {
 	ExecuteSessionControl(context.Context, SessionControlWork) (ProviderOperationEvidence, error)
 }

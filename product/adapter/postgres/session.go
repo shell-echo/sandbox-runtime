@@ -157,7 +157,7 @@ func (s *Store) CloseSession(ctx context.Context, command product.SessionCommand
 	if _, err := tx.Exec(opCtx, `INSERT INTO sandbox_runtime_product.workspace_events(tenant_id,workspace_id,sequence,event_id,event_type,subject_type,subject_id,operation_id,actor_type,actor_id,occurred_at,attributes)VALUES($1,$2,$3,$4,'session.close_accepted','session',$5,$6,$7,$8,$9,$10)`, command.TenantID, session.WorkspaceID, sequence, command.EventID, session.ID, command.OperationID, string(command.Actor.Type), command.Actor.ID, now, attributes); err != nil {
 		return product.Operation{}, false, storeError(ctx, opCtx, err, false)
 	}
-	payload, _ := json.Marshal(map[string]any{"session_id": session.ID, "workspace_id": session.WorkspaceID, "slot_key": session.SlotKey, "slot_generation": slotGeneration, "reason": command.Reason})
+	payload, _ := json.Marshal(map[string]any{"session_id": session.ID, "workspace_id": session.WorkspaceID, "slot_key": session.SlotKey, "slot_generation": slotGeneration, "reason": command.Reason, "final_state": "closed"})
 	if err := insertSessionOutbox(opCtx, tx, command, sessionOutboxType(command.Kind, "close"), payload, now); err != nil {
 		return product.Operation{}, false, storeError(ctx, opCtx, err, false)
 	}

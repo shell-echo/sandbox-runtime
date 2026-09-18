@@ -261,6 +261,56 @@ func TestClientBrowserFailsClosedOnCapabilityDriftAndMissingPolicy(t *testing.T)
 	}
 }
 
+func TestClientBrowserLifecycleUsesSeparateProviderGenerationAndProductFence(t *testing.T) {
+	now := time.Date(2026, 9, 18, 6, 0, 0, 0, time.UTC)
+	_, key, _ := ed25519.GenerateKey(rand.Reader)
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/v1/capabilities":
+			writeJSON(t, writer, browserCapabilities())
+		case "/v1/sandboxes/browser-sandbox-1/desired-state":
+			var body providerv1.DesiredStateRequest
+			if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
+				t.Fatal(err)
+			}
+			if body.ExpectedGeneration != 3 || body.FencingToken != 8 || body.DesiredState != providerv1.RequestedStateReady {
+				t.Fatalf("resume body=%#v", body)
+			}
+			writer.WriteHeader(http.StatusAccepted)
+			writeJSON(t, writer, providerv1.Operation{OperationID: body.OperationID, AttemptID: body.AttemptID, FencingToken: body.FencingToken, SandboxID: "browser-sandbox-1", Type: providerv1.OperationResume, Status: providerv1.OperationAccepted, ProviderOperationID: "provider-resume", ObservedAt: now.Format(time.RFC3339Nano)})
+		case "/v1/sandboxes/browser-sandbox-1:terminate":
+			var body providerv1.TerminateRequest
+			if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
+				t.Fatal(err)
+			}
+			if body.ExpectedGeneration != 3 || body.FencingToken != 9 || body.PreserveWorkspaceSnapshot {
+				t.Fatalf("terminate body=%#v", body)
+			}
+			writer.WriteHeader(http.StatusAccepted)
+			writeJSON(t, writer, providerv1.Operation{OperationID: body.OperationID, AttemptID: body.AttemptID, FencingToken: body.FencingToken, SandboxID: "browser-sandbox-1", Type: providerv1.OperationTerminate, Status: providerv1.OperationAccepted, ProviderOperationID: "provider-terminate", ObservedAt: now.Format(time.RFC3339Nano)})
+		default:
+			http.NotFound(writer, request)
+		}
+	}))
+	defer server.Close()
+	client := newBrowserTestClient(t, server, key, now)
+	work := browserTestWork(now)
+	work.Action = "resume"
+	work.PreviousGeneration = 7
+	work.SlotGeneration = 8
+	work.FencingToken = 8
+	work.ProviderGeneration = 3
+	work.ProviderRevisionID = LockedProviderRevision
+	work.SandboxID = "browser-sandbox-1"
+	if evidence, err := client.ControlBrowserSlot(context.Background(), work); err != nil || evidence.ProviderOperationID != "provider-resume" {
+		t.Fatalf("resume=%#v err=%v", evidence, err)
+	}
+	session := product.SessionControlWork{TenantID: "tenant-1", WorkspaceID: "wrk-1", SlotKey: "browser-main", SessionID: "ses-browser", OperationID: "op-close", AttemptID: "out-close", SlotGeneration: 8, FencingToken: 9, ProviderGeneration: 3, RuntimeProfileID: product.BrowserSlotProfile, SandboxID: "browser-sandbox-1", ProviderRevisionID: LockedProviderRevision, Kind: product.SessionKindBrowserLive, ProtocolProfile: product.SessionProfileBrowserLive, ExpiresAt: now.Add(time.Minute), Action: "close", Reason: "owner_requested_close"}
+	if evidence, err := client.ExecuteBrowserSessionControl(context.Background(), session); err != nil || evidence.ProviderOperationID != "provider-terminate" {
+		t.Fatalf("terminate=%#v err=%v", evidence, err)
+	}
+}
+
 func newTestClient(t *testing.T, server *httptest.Server, key ed25519.PrivateKey, now time.Time) *Client {
 	t.Helper()
 	client, err := New(Config{Origin: server.URL, HTTPClient: server.Client(), ExpectedRevisionID: LockedProviderRevision,
