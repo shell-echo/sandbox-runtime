@@ -1,6 +1,6 @@
 # Product v1 Phase 4: Browser
 
-Status: In progress; Slices 1-11 implemented locally, 2 slices remain
+Status: In progress; Slices 1-12 implemented locally, 1 slice remains
 
 Started: 2026-09-18
 
@@ -33,7 +33,7 @@ until Slice 13 passes for the exact composed topology.
 | 9 | Browser network and runtime isolation composition | Exact restricted-egress policy; DNS/IP/metadata/private-network denial; immutable verified image; permission/device denial; resource bounds; cleanup and fault injection | **Implemented; local and real-Docker gates passed** |
 | 10 | Connection loss, Gateway/Provider restart, reconnect, visual resynchronization, resolution changes, and recovery UX | Fresh-grant reconnect; authority recheck; keyframe/resync bounds; no stale input; retained session recovery; dependency-loss fail-closed behavior | **Implemented; local real-WebRTC recovery gates passed** |
 | 11 | Browser metadata audit, media/control-event recording, Product catalog, retention/deletion, integrity, and quota composition | Consent and visible mode; required-recorder fail closed; encrypted chained segments; authorized replay; content excluded from logs/control-plane lists; quota races | **Implemented; local and real-PostgreSQL gates passed** |
-| 12 | Product Web Browser experience for slot/session lifecycle, live view, controller state, recovery, downloads/uploads, and recording catalog | Generated/checked client; authenticated browser E2E; CSP/CSRF/origin/accessibility; viewer/control UX; error/reconnect/cleanup cases; no private coordinates | Not started |
+| 12 | Product Web Browser experience for slot/session lifecycle, live view, controller state, recovery, downloads/uploads, and recording catalog | Generated/checked client; authenticated browser E2E; CSP/CSRF/origin/accessibility; viewer/control UX; error/reconnect/cleanup cases; no private coordinates | **Implemented; local and real-headless-Chrome gates passed** |
 | 13 | Product Phase 4 independent-process release gate and reproducible evidence bundle | Fresh PostgreSQL and required coordination/object storage; separate Product/Gateway/Provider/Browser roles; exact locked identities; restart/fault/security/backpressure/recording/cleanup matrix; strict independent validation | Not started |
 
 Slices are dependency ordered. A later data-plane demo cannot replace Product
@@ -427,6 +427,40 @@ tamper, ciphertext, retention, and deletion tests remain green. Full repository
 race/shuffle, vet, Contract, and retained evidence gates run at the slice commit
 gate. Web presentation and the final independent-process topology remain
 Slices 12 and 13.
+
+## Slice 12 exact boundary
+
+The authenticated Product Web BFF now presents Browser slot creation,
+suspend/resume/terminate intents, Browser-live session creation and close,
+explicit viewer or controller admission, and a same-origin HTTPS WebRTC client.
+The client creates only the closed `product-browser-control.v1` data channel,
+maps keyboard/pointer/navigation/resync actions into Product messages, shows the
+committed recording mode, and requires an explicit per-connection consent
+gesture for required recording. A failed live projection retries at most three
+times with a fresh one-use grant while retaining the durable session; manual
+disconnect releases its control lease and clears media and pending controls.
+
+The BFF exposes a narrow Browser transfer port rather than storage
+coordinates. Upload bodies are same-origin/CSRF protected, length-bounded to 64
+MiB, streamed to Product in 1 MiB chunks, digest-checked on completion, and
+project only safe transfer metadata. Downloads reauthorize each chunk and the
+Web client verifies the declared size and SHA-256 digest before saving. The
+recording tab reads only the Product metadata catalog. Gateway signaling must
+share the Web origin, avoiding an arbitrary credential-bearing cross-origin
+fetch and keeping the CSP closed.
+
+### Slice 12 local and real-browser evidence
+
+Race-enabled Web tests cover encrypted HttpOnly session authority, exact
+Origin and CSRF rejection, bounded streaming transfer authority, private
+storage nondisclosure, strict CSP including media policy, accessible Browser
+landmarks, and generated-client/profile use. The generated client is recreated
+from the locked Product OpenAPI and compared byte-for-byte. The JavaScript
+module passes syntax validation with the bundled runtime. A tagged headless
+Chrome gate performs a real HTTPS login, restores the HttpOnly session in the
+actual Product Web application, calls the Product API, and renders the Browser
+surface. This is local Web/BFF evidence; the complete separate-process Browser
+topology remains Slice 13.
 
 ## Evidence rules
 

@@ -47,17 +47,17 @@ production result.
 
 The [Product v1 Phase 4 Browser plan](plan/product-v1-phase-4-browser.md) is
 separate from the historical Provider optional-profile phase described later
-in this document. Product Phase 4 has 13 fixed slices. Slices 1-3 add
-Product-owned Browser session authority plus strict auxiliary Browser-slot
-create/read/update authority: exact kind/profile/capability pairing, bounded
-tenant quota, expected-version/idempotency fencing, durable generations, and
-Browser-specific outbox isolation. Slice 3 adds isolated Browser dispatch and
-the exact-revision protected Provider adapter for restricted sandbox creation
-and opaque session handoff observation. The Product Browser capability remains
-unadvertised. Lifecycle cleanup,
-public automation and visual data planes, controller/viewer policy, recovery,
-recording, Web, cleanup, and the independent-process release gate remain
-ordered later slices under ADR 0049.
+in this document. Product Phase 4 has 13 fixed slices. Slices 1-12 now add
+Product-owned Browser slot/session authority, exact-revision Provider
+adaptation and lifecycle recovery, public automation and WebRTC live data
+planes, viewer/controller fencing, deny-by-default interaction policy,
+immutable runtime and restricted-egress composition, reconnection and visual
+resynchronization, encrypted quota-bounded recording, plus the authenticated
+Product Web Browser/BFF experience. These are bounded component, real-adapter,
+same-repository separate-process, Docker, PostgreSQL, WebRTC, and headless
+browser results. The Product Browser capability remains unadvertised and
+incomplete until Slice 13 passes its exact independent-process composition and
+evidence gate under ADR 0049.
 
 ## Purpose
 

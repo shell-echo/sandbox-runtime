@@ -43,7 +43,7 @@ func TestBrowserAuthenticatedSessionAndProductRead(t *testing.T) {
 			_, _ = writer.Write([]byte(`<!doctype html><html><body><main id="result">RUNNING</main><script src="/browser-e2e.js"></script></body></html>`))
 		case "/browser-e2e.js":
 			writer.Header().Set("Content-Type", "text/javascript")
-			_, _ = fmt.Fprintf(writer, `(async()=>{try{const login=await fetch("/web/session",{method:"POST",credentials:"same-origin",headers:{Authorization:%q}});const session=await login.json();if(!login.ok||!session.csrf_token)throw new Error("login");const response=await fetch("/web/api/v1/workspaces?limit=1",{credentials:"same-origin"});const page=await response.json();if(!response.ok||!Array.isArray(page.items))throw new Error("api");document.querySelector("#result").textContent="BROWSER_E2E_PASS"}catch(error){document.querySelector("#result").textContent="BROWSER_E2E_FAIL:"+error.message}})();`, "Bearer "+webTestBearer)
+			_, _ = fmt.Fprintf(writer, `(async()=>{try{const login=await fetch("/web/session",{method:"POST",credentials:"same-origin",headers:{Authorization:%q}});const session=await login.json();if(!login.ok||!session.csrf_token)throw new Error("login");location.replace("/")}catch(error){document.querySelector("#result").textContent="BROWSER_E2E_FAIL:"+error.message}})();`, "Bearer "+webTestBearer)
 		default:
 			web.ServeHTTP(writer, request)
 		}
@@ -67,7 +67,7 @@ func TestBrowserAuthenticatedSessionAndProductRead(t *testing.T) {
 		"--virtual-time-budget=5000", "--dump-dom", testServer.URL+"/browser-e2e.html",
 	)
 	output, err := command.CombinedOutput()
-	if !strings.Contains(string(output), "BROWSER_E2E_PASS") {
+	if !strings.Contains(string(output), `id="browser-tab"`) || !strings.Contains(string(output), "browser-e2e · owner") {
 		t.Fatalf("headless Chrome failed: %v\n%s", err, output)
 	}
 	if api.calls != 1 || api.auth != "Bearer "+webTestBearer || api.cookies != "" {

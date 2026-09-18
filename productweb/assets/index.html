@@ -65,6 +65,8 @@
         <div class="tabs" role="tablist" aria-label="工作空间视图">
           <button id="terminal-tab" role="tab" aria-selected="true" aria-controls="terminal-panel">终端</button>
           <button id="files-tab" role="tab" aria-selected="false" aria-controls="files-panel">文件</button>
+          <button id="browser-tab" role="tab" aria-selected="false" aria-controls="browser-panel">浏览器</button>
+          <button id="recordings-tab" role="tab" aria-selected="false" aria-controls="recordings-panel">录制</button>
         </div>
 
         <section id="terminal-panel" role="tabpanel" aria-labelledby="terminal-tab">
@@ -93,6 +95,76 @@
             <caption class="sr-only">工作空间文件列表</caption>
             <thead><tr><th scope="col">名称</th><th scope="col">类型</th><th scope="col">大小</th><th scope="col">修改时间</th></tr></thead>
             <tbody id="file-list"><tr><td colspan="4" class="empty">选择工作空间后浏览文件</td></tr></tbody>
+          </table>
+        </section>
+
+        <section id="browser-panel" role="tabpanel" aria-labelledby="browser-tab" hidden>
+          <div class="browser-grid">
+            <div class="browser-stage">
+              <div class="toolbar browser-toolbar">
+                <span id="browser-slot-state" class="badge">尚未创建浏览器槽位</span>
+                <button id="create-browser-slot" type="button" disabled>创建槽位</button>
+                <button id="resume-browser-slot" class="quiet" type="button" disabled>恢复</button>
+                <button id="suspend-browser-slot" class="quiet" type="button" disabled>暂停</button>
+                <button id="terminate-browser-slot" class="quiet danger" type="button" disabled>终止</button>
+              </div>
+              <div class="toolbar">
+                <button id="new-browser" type="button" disabled>新建浏览器会话</button>
+                <label for="browser-recording-policy">录制</label>
+                <select id="browser-recording-policy" disabled>
+                  <option value="metadata_only">仅元数据</option>
+                  <option value="required">完整录制（需同意）</option>
+                  <option value="disabled">关闭</option>
+                </select>
+                <label for="browser-session-select">会话</label>
+                <select id="browser-session-select" disabled><option value="">暂无浏览器会话</option></select>
+                <label for="browser-access">访问</label>
+                <select id="browser-access" disabled><option value="view">查看</option><option value="control">控制</option></select>
+                <button id="connect-browser" type="button" disabled>连接</button>
+                <button id="disconnect-browser" class="quiet" type="button" disabled>断开</button>
+                <button id="close-browser" class="quiet danger" type="button" disabled>关闭会话</button>
+              </div>
+              <label id="recording-consent-row" class="consent"><input id="recording-consent" type="checkbox"> 我同意为当前连接录制媒体和最小化控制事件</label>
+              <div class="browser-statusbar" aria-live="polite">
+                <span id="browser-connection-state" class="badge">未连接</span>
+                <span id="recording-indicator" class="recording-indicator" data-mode="disabled">录制：未提交</span>
+                <span id="controller-state">查看者模式</span>
+              </div>
+              <div id="browser-screen" class="browser-screen">
+                <video id="browser-video" autoplay playsinline tabindex="0" aria-label="远程浏览器画面"></video>
+                <p id="browser-placeholder">建立浏览器会话后在此查看实时画面</p>
+              </div>
+              <div class="toolbar browser-actions">
+                <label for="browser-source-origin">当前来源</label><input id="browser-source-origin" type="url" placeholder="https://example.com" disabled>
+                <label for="browser-target-url">导航到</label><input id="browser-target-url" type="url" placeholder="https://example.com/docs" disabled>
+                <button id="browser-navigate" type="button" disabled>导航</button>
+                <button id="browser-resync" class="quiet" type="button" disabled>重新同步画面</button>
+              </div>
+            </div>
+            <aside class="transfer-card" aria-labelledby="transfer-title">
+              <h3 id="transfer-title">受控文件传输</h3>
+              <p class="muted">传输先由 Product 授权并校验摘要，再交给当前控制连接。</p>
+              <label for="browser-upload">上传文件</label>
+              <input id="browser-upload" type="file" disabled>
+              <button id="send-upload" type="button" disabled>上传并发送</button>
+              <hr>
+              <label for="download-transfer-id">下载传输 ID</label>
+              <input id="download-transfer-id" autocomplete="off" disabled>
+              <label for="download-digest">SHA-256 摘要</label>
+              <input id="download-digest" autocomplete="off" placeholder="sha256:…" disabled>
+              <label for="download-size">字节数</label>
+              <input id="download-size" type="number" min="0" max="67108864" disabled>
+              <button id="request-download" type="button" disabled>授权并下载</button>
+            </aside>
+          </div>
+        </section>
+
+        <section id="recordings-panel" role="tabpanel" aria-labelledby="recordings-tab" hidden>
+          <div class="toolbar"><button id="refresh-recordings" type="button" disabled>刷新录制目录</button></div>
+          <table class="files-table">
+            <caption class="sr-only">浏览器录制目录</caption>
+            <thead><tr><th scope="col">录制 ID</th><th scope="col">类型</th><th scope="col">状态</th><th scope="col">大小</th><th scope="col">开始时间</th><th scope="col">保留截止</th></tr></thead>
+            <tbody id="recording-list"><tr><td colspan="6" class="empty">选择工作空间后查看录制</td></tr></tbody>
           </table>
         </section>
       </section>

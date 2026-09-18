@@ -4,6 +4,7 @@
 package productweb
 
 import (
+	"context"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
@@ -28,8 +29,9 @@ import (
 )
 
 const (
-	sessionCookieName = "__Host-product_session"
-	maxLoginBodyBytes = 1024
+	sessionCookieName       = "__Host-product_session"
+	maxLoginBodyBytes       = 1024
+	maxBrowserTransferBytes = int64(64 << 20)
 )
 
 //go:embed assets/*
@@ -41,6 +43,7 @@ type Options struct {
 	ProductAPI           http.Handler
 	Authenticator        productapi.Authenticator
 	Files                *product.FileService
+	Transfers            BrowserTransferService
 	SessionEncryptionKey []byte
 	PublicOrigin         string
 	SessionTTL           time.Duration
@@ -50,10 +53,21 @@ type Options struct {
 	Random               io.Reader
 }
 
+// BrowserTransferService is the narrow Product data-plane port exposed by the
+// authenticated Web BFF. It deliberately excludes object-store references.
+type BrowserTransferService interface {
+	BeginUpload(context.Context, string, product.ActorRef, string, string, product.BeginUploadRequest) (product.BlobTransfer, bool, error)
+	Append(context.Context, string, product.ActorRef, string, int64, []byte) (product.BlobTransfer, error)
+	Complete(context.Context, string, product.ActorRef, string) (product.BlobTransfer, error)
+	Cancel(context.Context, string, product.ActorRef, string) error
+	ReadDownload(context.Context, string, product.ActorRef, string, int64, int) ([]byte, bool, error)
+}
+
 type Server struct {
 	productAPI    http.Handler
 	authenticator productapi.Authenticator
 	files         *product.FileService
+	transfers     BrowserTransferService
 	origin        string
 	clock         func() time.Time
 	sessionTTL    time.Duration
@@ -124,7 +138,7 @@ func New(options Options) (*Server, error) {
 		return nil, product.ErrStoreUnavailable
 	}
 	return &Server{
-		productAPI: options.ProductAPI, authenticator: options.Authenticator, files: options.Files,
+		productAPI: options.ProductAPI, authenticator: options.Authenticator, files: options.Files, transfers: options.Transfers,
 		origin: strings.TrimSuffix(options.PublicOrigin, "/"), clock: clock, random: randomSource,
 		sessionTTL: sessionTTL,
 		aead:       aead, sessions: &sessionStore{records: make(map[[32]byte]browserSession), maximum: maximum, idleTTL: idleTTL, clock: clock},
@@ -145,6 +159,8 @@ func (s *Server) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 		s.proxyProductAPI(writer, request)
 	case strings.HasPrefix(request.URL.Path, "/web/data/"):
 		s.fileRoute(writer, request)
+	case strings.HasPrefix(request.URL.Path, "/web/browser-transfers/"):
+		s.browserTransferRoute(writer, request)
 	case request.Method == http.MethodGet && (request.URL.Path == "/" || strings.HasPrefix(request.URL.Path, "/assets/")):
 		if request.URL.Path == "/" {
 			document, err := assets.ReadFile("assets/index.html")
@@ -168,7 +184,7 @@ func (s *Server) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 }
 
 func securityHeaders(header http.Header, tls bool) {
-	header.Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self' wss:; img-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'")
+	header.Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self' wss:; img-src 'self'; media-src 'self' blob:; base-uri 'none'; frame-ancestors 'none'; form-action 'self'")
 	header.Set("Cross-Origin-Opener-Policy", "same-origin")
 	header.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=()")
 	header.Set("Referrer-Policy", "no-referrer")
@@ -354,6 +370,176 @@ func (s *Server) fileRoute(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 	writeWebJSON(writer, http.StatusOK, result)
+}
+
+func (s *Server) browserTransferRoute(writer http.ResponseWriter, request *http.Request) {
+	if s.transfers == nil {
+		writeWebError(writer, http.StatusServiceUnavailable, "WEB_TRANSFERS_UNAVAILABLE", "transfer service is unavailable")
+		return
+	}
+	_, session, ok := s.requireSession(writer, request)
+	if !ok || !s.safeFetch(writer, request) {
+		return
+	}
+	if isMutation(request.Method) && !s.authorizeMutation(writer, request, session) {
+		return
+	}
+	parts := strings.Split(strings.Trim(request.URL.Path, "/"), "/")
+	switch {
+	case request.Method == http.MethodPost && len(parts) == 3 && parts[0] == "web" && parts[1] == "browser-transfers" && parts[2] == "uploads":
+		s.uploadBrowserTransfer(writer, request, session)
+	case request.Method == http.MethodGet && len(parts) == 3 && parts[0] == "web" && parts[1] == "browser-transfers":
+		s.downloadBrowserTransfer(writer, request, session, parts[2])
+	default:
+		writeWebError(writer, http.StatusNotFound, "WEB_NOT_FOUND", "resource not found")
+	}
+}
+
+func (s *Server) uploadBrowserTransfer(writer http.ResponseWriter, request *http.Request, session browserSession) { //nolint:cyclop
+	query := request.URL.Query()
+	workspaceID := query.Get("workspace_id")
+	digest := query.Get("digest")
+	expectedVersion, validVersion := boundedInt64(query.Get("expected_workspace_version"), 0, 1)
+	size, validSize := boundedInt64(query.Get("size_bytes"), -1, 0)
+	keys := request.Header.Values("Idempotency-Key")
+	if !onlyQuery(query, "workspace_id", "expected_workspace_version", "digest", "size_bytes") || !validVersion || !validSize || size > maxBrowserTransferBytes || request.ContentLength != size || len(keys) != 1 {
+		writeWebError(writer, http.StatusBadRequest, "WEB_INVALID_REQUEST", "invalid request")
+		return
+	}
+	transfer, _, err := s.transfers.BeginUpload(request.Context(), session.principal.TenantID, session.principal.Actor, workspaceID, keys[0], product.BeginUploadRequest{
+		ExpectedWorkspaceVersion: expectedVersion, Digest: digest, SizeBytes: size, ExpiresInSeconds: 600,
+	})
+	if err != nil {
+		writeTransferError(writer, err)
+		return
+	}
+	if !validUploadTransfer(transfer, workspaceID, digest, size) {
+		writeWebError(writer, http.StatusServiceUnavailable, "WEB_DEPENDENCY_UNAVAILABLE", "dependency unavailable")
+		return
+	}
+	if transfer.State == "complete" {
+		writeWebJSON(writer, http.StatusOK, projectTransfer(transfer))
+		return
+	}
+	completed := false
+	defer func() {
+		if !completed {
+			cleanupContext, cancel := context.WithTimeout(context.WithoutCancel(request.Context()), 2*time.Second)
+			defer cancel()
+			_ = s.transfers.Cancel(cleanupContext, session.principal.TenantID, session.principal.Actor, transfer.ID)
+		}
+	}()
+	reader := http.MaxBytesReader(writer, request.Body, size)
+	if transfer.CommittedBytes > 0 {
+		if _, err := io.CopyN(io.Discard, reader, transfer.CommittedBytes); err != nil {
+			writeWebError(writer, http.StatusBadRequest, "WEB_INVALID_REQUEST", "invalid request")
+			return
+		}
+	}
+	offset := transfer.CommittedBytes
+	buffer := make([]byte, product.MaxChunkBytes)
+	for offset < size {
+		want := len(buffer)
+		if remaining := size - offset; remaining < int64(want) {
+			want = int(remaining)
+		}
+		count, readErr := io.ReadFull(reader, buffer[:want])
+		if readErr != nil || count == 0 {
+			writeWebError(writer, http.StatusBadRequest, "WEB_INVALID_REQUEST", "invalid request")
+			return
+		}
+		transfer, err = s.transfers.Append(request.Context(), session.principal.TenantID, session.principal.Actor, transfer.ID, offset, buffer[:count])
+		if err != nil {
+			writeTransferError(writer, err)
+			return
+		}
+		if !validUploadTransfer(transfer, workspaceID, digest, size) || transfer.CommittedBytes != offset+int64(count) {
+			writeWebError(writer, http.StatusServiceUnavailable, "WEB_DEPENDENCY_UNAVAILABLE", "dependency unavailable")
+			return
+		}
+		offset = transfer.CommittedBytes
+	}
+	transfer, err = s.transfers.Complete(request.Context(), session.principal.TenantID, session.principal.Actor, transfer.ID)
+	if err != nil {
+		writeTransferError(writer, err)
+		return
+	}
+	if !validUploadTransfer(transfer, workspaceID, digest, size) || transfer.State != "complete" || transfer.CommittedBytes != size {
+		writeWebError(writer, http.StatusServiceUnavailable, "WEB_DEPENDENCY_UNAVAILABLE", "dependency unavailable")
+		return
+	}
+	completed = true
+	writeWebJSON(writer, http.StatusCreated, projectTransfer(transfer))
+}
+
+func (s *Server) downloadBrowserTransfer(writer http.ResponseWriter, request *http.Request, session browserSession, transferID string) {
+	if !onlyQuery(request.URL.Query()) || len(transferID) < 1 || len(transferID) > 128 {
+		writeWebError(writer, http.StatusBadRequest, "WEB_INVALID_REQUEST", "invalid request")
+		return
+	}
+	chunk, eof, err := s.transfers.ReadDownload(request.Context(), session.principal.TenantID, session.principal.Actor, transferID, 0, product.MaxChunkBytes)
+	if err != nil {
+		writeTransferError(writer, err)
+		return
+	}
+	if len(chunk) > product.MaxChunkBytes {
+		writeWebError(writer, http.StatusServiceUnavailable, "WEB_DEPENDENCY_UNAVAILABLE", "dependency unavailable")
+		return
+	}
+	writer.Header().Set("Content-Type", "application/octet-stream")
+	writer.Header().Set("Content-Disposition", `attachment; filename="browser-download.bin"`)
+	writer.Header().Set("Cache-Control", "no-store")
+	writer.WriteHeader(http.StatusOK)
+	offset, total := int64(0), int64(0)
+	for {
+		if total+int64(len(chunk)) > product.MaxTransferBytes {
+			return
+		}
+		if _, err := writer.Write(chunk); err != nil {
+			return
+		}
+		offset += int64(len(chunk))
+		total += int64(len(chunk))
+		if eof {
+			return
+		}
+		if len(chunk) == 0 {
+			return
+		}
+		chunk, eof, err = s.transfers.ReadDownload(request.Context(), session.principal.TenantID, session.principal.Actor, transferID, offset, product.MaxChunkBytes)
+		if err != nil || len(chunk) > product.MaxChunkBytes {
+			return
+		}
+	}
+}
+
+func validUploadTransfer(transfer product.BlobTransfer, workspaceID, digest string, size int64) bool {
+	return len(transfer.ID) >= 1 && len(transfer.ID) <= 128 && transfer.WorkspaceID == workspaceID && transfer.Direction == "upload" && transfer.Digest == digest && transfer.SizeBytes == size && transfer.CommittedBytes >= 0 && transfer.CommittedBytes <= size && (transfer.State == "pending" || transfer.State == "transferring" || transfer.State == "complete")
+}
+
+func projectTransfer(transfer product.BlobTransfer) map[string]any {
+	return map[string]any{
+		"transfer_id": transfer.ID, "workspace_id": transfer.WorkspaceID, "direction": transfer.Direction,
+		"digest": transfer.Digest, "size_bytes": transfer.SizeBytes, "committed_bytes": transfer.CommittedBytes,
+		"state": transfer.State, "expires_at": transfer.ExpiresAt.UTC().Format(time.RFC3339Nano),
+	}
+}
+
+func writeTransferError(writer http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, product.ErrInvalid):
+		writeWebError(writer, http.StatusBadRequest, "WEB_INVALID_REQUEST", "invalid request")
+	case errors.Is(err, product.ErrNotFound):
+		writeWebError(writer, http.StatusNotFound, "WEB_NOT_FOUND", "resource not found")
+	case errors.Is(err, product.ErrForbidden):
+		writeWebError(writer, http.StatusForbidden, "WEB_FORBIDDEN", "action is forbidden")
+	case errors.Is(err, product.ErrVersionConflict), errors.Is(err, product.ErrControlStale), errors.Is(err, product.ErrIdempotencyConflict):
+		writeWebError(writer, http.StatusConflict, "WEB_CONFLICT", "request conflicts with current state")
+	case errors.Is(err, product.ErrQuotaExceeded):
+		writeWebError(writer, http.StatusTooManyRequests, "WEB_QUOTA_EXCEEDED", "transfer quota exceeded")
+	default:
+		writeWebError(writer, http.StatusServiceUnavailable, "WEB_DEPENDENCY_UNAVAILABLE", "dependency unavailable")
+	}
 }
 
 func (s *Server) requireSession(writer http.ResponseWriter, request *http.Request) (string, browserSession, bool) {

@@ -3,11 +3,14 @@ package productweb
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"crypto/tls"
+	"encoding/hex"
 	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -187,11 +190,11 @@ func TestStaticUIHasStrictSecurityAndAccessibilityLandmarks(t *testing.T) {
 		t.Fatalf("static status=%d", response.Code)
 	}
 	csp := response.Header().Get("Content-Security-Policy")
-	if !strings.Contains(csp, "default-src 'none'") || strings.Contains(csp, "'unsafe-inline'") || response.Header().Get("Strict-Transport-Security") == "" || response.Header().Get("X-Frame-Options") != "DENY" {
+	if !strings.Contains(csp, "default-src 'none'") || !strings.Contains(csp, "media-src 'self' blob:") || strings.Contains(csp, "'unsafe-inline'") || response.Header().Get("Strict-Transport-Security") == "" || response.Header().Get("X-Frame-Options") != "DENY" {
 		t.Fatalf("security headers=%v", response.Header())
 	}
 	html := response.Body.String()
-	for _, required := range []string{`<main id="main">`, `role="status"`, `aria-live="polite"`, `for="bearer"`, `type="module" src="/assets/app.js"`} {
+	for _, required := range []string{`<main id="main">`, `role="status"`, `aria-live="polite"`, `for="bearer"`, `type="module" src="/assets/app.js"`, `id="browser-panel"`, `id="browser-video"`, `id="recording-indicator"`, `id="recordings-panel"`} {
 		if !strings.Contains(html, required) {
 			t.Fatalf("static UI missing %q", required)
 		}
@@ -199,6 +202,120 @@ func TestStaticUIHasStrictSecurityAndAccessibilityLandmarks(t *testing.T) {
 	if strings.Contains(html, "<script>") || strings.Contains(html, "style=") {
 		t.Fatal("static UI contains inline executable/style content")
 	}
+}
+
+func TestBrowserUIUsesGeneratedProductClientAndClosedPublicProfiles(t *testing.T) {
+	script, err := assets.ReadFile("assets/app.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	document := string(script)
+	for _, required := range []string{
+		`import { callProduct }`, `product-browser-live.v1`, `product-browser-control.v1`,
+		`new RTCPeerConnection()`, `gatewayURL.origin !== location.origin`, `recording_consent_reference`,
+		`listWorkspaceRecordings`, `/web/browser-transfers/uploads`, `crypto.subtle.digest`,
+	} {
+		if !strings.Contains(document, required) {
+			t.Fatalf("Browser UI missing %q", required)
+		}
+	}
+	for _, forbidden := range []string{"localStorage", "sessionStorage", ".innerHTML", "provider_handoff", "object_reference"} {
+		if strings.Contains(document, forbidden) {
+			t.Fatalf("Browser UI contains forbidden surface %q", forbidden)
+		}
+	}
+}
+
+func TestBrowserTransferBFFEnforcesSessionOriginCSRFAndStreamsAuthorizedBytes(t *testing.T) {
+	server, _, _ := newWebServer(t, nil)
+	transfers := &transferSpy{download: []byte("verified browser download")}
+	server.transfers = transfers
+	cookie, csrf := loginWebSession(t, server)
+	payload := []byte("verified browser upload")
+	digestValue := sha256.Sum256(payload)
+	digest := "sha256:" + hex.EncodeToString(digestValue[:])
+	target := "/web/browser-transfers/uploads?workspace_id=wrk-1&expected_workspace_version=3&digest=" + digest + "&size_bytes=" + strconv.Itoa(len(payload))
+
+	rejected := webRequest(http.MethodPost, target, string(payload))
+	rejected.AddCookie(cookie)
+	rejected.Header.Set("Origin", "https://product.example.test")
+	rejected.Header.Set("Idempotency-Key", "upload-rejected")
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, rejected)
+	if response.Code != http.StatusForbidden || transfers.beginCalls != 0 {
+		t.Fatalf("missing-CSRF upload status=%d calls=%d", response.Code, transfers.beginCalls)
+	}
+
+	upload := webRequest(http.MethodPost, target, string(payload))
+	upload.AddCookie(cookie)
+	upload.Header.Set("Origin", "https://product.example.test")
+	upload.Header.Set("X-CSRF-Token", csrf)
+	upload.Header.Set("Idempotency-Key", "upload-accepted")
+	upload.Header.Set("Content-Type", "application/octet-stream")
+	response = httptest.NewRecorder()
+	server.ServeHTTP(response, upload)
+	if response.Code != http.StatusCreated || transfers.beginCalls != 1 || transfers.cancelled || !bytes.Equal(transfers.upload, payload) {
+		t.Fatalf("upload status=%d spy=%#v body=%s", response.Code, transfers, response.Body.String())
+	}
+	if strings.Contains(response.Body.String(), "object") || strings.Contains(response.Body.String(), "staging") {
+		t.Fatalf("upload exposed private storage metadata: %s", response.Body.String())
+	}
+
+	download := webRequest(http.MethodGet, "/web/browser-transfers/xfer-download", "")
+	download.AddCookie(cookie)
+	response = httptest.NewRecorder()
+	server.ServeHTTP(response, download)
+	if response.Code != http.StatusOK || !bytes.Equal(response.Body.Bytes(), transfers.download) || response.Header().Get("Content-Type") != "application/octet-stream" {
+		t.Fatalf("download status=%d body=%q headers=%v", response.Code, response.Body.Bytes(), response.Header())
+	}
+	if transfers.tenantID != "tenant-1" || transfers.actor.ID != "actor-1" {
+		t.Fatalf("transfer authority=%q %#v", transfers.tenantID, transfers.actor)
+	}
+}
+
+type transferSpy struct {
+	beginCalls int
+	upload     []byte
+	download   []byte
+	cancelled  bool
+	tenantID   string
+	actor      product.ActorRef
+}
+
+func (s *transferSpy) BeginUpload(_ context.Context, tenantID string, actor product.ActorRef, workspaceID, key string, request product.BeginUploadRequest) (product.BlobTransfer, bool, error) {
+	s.beginCalls++
+	s.tenantID, s.actor = tenantID, actor
+	return product.BlobTransfer{ID: "xfer-upload", WorkspaceID: workspaceID, Direction: "upload", Digest: request.Digest, SizeBytes: request.SizeBytes, State: "pending", Version: 1, ExpiresAt: time.Now().Add(time.Minute)}, false, nil
+}
+
+func (s *transferSpy) Append(_ context.Context, tenantID string, actor product.ActorRef, transferID string, offset int64, chunk []byte) (product.BlobTransfer, error) {
+	s.tenantID, s.actor = tenantID, actor
+	if transferID != "xfer-upload" || offset != int64(len(s.upload)) {
+		return product.BlobTransfer{}, product.ErrVersionConflict
+	}
+	s.upload = append(s.upload, chunk...)
+	digestValue := sha256.Sum256(s.upload)
+	return product.BlobTransfer{ID: transferID, WorkspaceID: "wrk-1", Direction: "upload", Digest: "sha256:" + hex.EncodeToString(digestValue[:]), State: "transferring", SizeBytes: int64(len(s.upload)), CommittedBytes: int64(len(s.upload))}, nil
+}
+
+func (s *transferSpy) Complete(_ context.Context, tenantID string, actor product.ActorRef, transferID string) (product.BlobTransfer, error) {
+	s.tenantID, s.actor = tenantID, actor
+	digestValue := sha256.Sum256(s.upload)
+	return product.BlobTransfer{ID: transferID, WorkspaceID: "wrk-1", Direction: "upload", Digest: "sha256:" + hex.EncodeToString(digestValue[:]), State: "complete", SizeBytes: int64(len(s.upload)), CommittedBytes: int64(len(s.upload)), ExpiresAt: time.Now().Add(time.Minute)}, nil
+}
+
+func (s *transferSpy) Cancel(context.Context, string, product.ActorRef, string) error {
+	s.cancelled = true
+	return nil
+}
+
+func (s *transferSpy) ReadDownload(_ context.Context, tenantID string, actor product.ActorRef, transferID string, offset int64, limit int) ([]byte, bool, error) {
+	s.tenantID, s.actor = tenantID, actor
+	if transferID != "xfer-download" || offset < 0 || offset > int64(len(s.download)) {
+		return nil, false, product.ErrNotFound
+	}
+	end := min(len(s.download), int(offset)+limit)
+	return append([]byte(nil), s.download[int(offset):end]...), end == len(s.download), nil
 }
 
 func newWebServer(t *testing.T, controlledNow *time.Time) (*Server, *apiSpy, func(time.Duration)) {
