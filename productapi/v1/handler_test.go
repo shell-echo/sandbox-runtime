@@ -449,6 +449,13 @@ func TestConnectionGrantProjectionMatchesLockedContract(t *testing.T) {
 	validateDefinition(t, "ConnectionGrant", document)
 }
 
+func TestBrowserAutomationMessagesMatchLockedContract(t *testing.T) {
+	validateDefinition(t, "BrowserAutomationAction", []byte(`{"type":"action","action_id":"action-1","sequence":1,"name":"page.info","parameters":{}}`))
+	validateDefinition(t, "BrowserAutomationAction", []byte(`{"type":"action","action_id":"action-2","sequence":2,"name":"page.text","parameters":{"max_characters":4096}}`))
+	validateDefinition(t, "BrowserAutomationResult", []byte(`{"type":"result","action_id":"action-1","sequence":1,"ok":true,"value":{"title":"example","url":"https://example.test/"}}`))
+	validateDefinition(t, "BrowserAutomationResult", []byte(`{"type":"result","action_id":"action-2","sequence":2,"ok":false,"error":{"code":"AUTOMATION_ACTION_FAILED","message":"browser action failed"}}`))
+}
+
 func TestViewerCanOnlyMintViewConnectionGrant(t *testing.T) {
 	base, sessionStore := newTestHandler(t)
 	store := &handlerGrantStore{}

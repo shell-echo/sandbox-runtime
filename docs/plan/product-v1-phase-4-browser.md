@@ -1,6 +1,6 @@
 # Product v1 Phase 4: Browser
 
-Status: In progress; Slices 1-5 implemented locally, 8 slices remain
+Status: In progress; Slices 1-6 implemented locally, 7 slices remain
 
 Started: 2026-09-18
 
@@ -27,7 +27,7 @@ until Slice 13 passes for the exact composed topology.
 | 3 | Exact-revision Provider Browser readiness and network-only adapter for Browser sandbox plus session open/handoff observation | Locked capability/profile selection; mTLS/JWS; no private coordinate projection; timeout, cancellation, replay, stale generation, ambiguous outcome, and capability-drift tests | **Implemented; local and real-PostgreSQL gates passed** |
 | 4 | Browser lifecycle reconciliation, disconnect/expiry/close cleanup, unknown-outcome recovery, slot replacement, and retained evidence | Restart at every commit/dispatch/observe boundary; no duplicate current binding; no session resurrection; exact-owned cleanup; coordinated Contract decision for missing Provider close semantics | **Implemented; local and real-PostgreSQL gates passed** |
 | 5 | Viewer/control authorization, single-controller Product lease/fence binding, one-use grants, revocation, and Browser quotas; multi-human collaboration remains deferred | Viewer cannot mutate; one live controller; stale fence/replay/revocation/expiry/limit races; database-time authority; nondisclosing errors | **Implemented; local and real-PostgreSQL gates passed** |
-| 6 | Public Browser automation WSS data plane with closed action/result messages and downstream action fencing | Separate-process edge/Gateway/Provider test; bounded messages/queues; ordered actions; stale-owner suspension; reconnect; no raw CDP or endpoint exposure | Not started |
+| 6 | Public Browser automation WSS data plane with closed action/result messages and downstream action fencing | Separate-process edge/Gateway/Provider test; bounded messages/queues; ordered actions; stale-owner suspension; reconnect; no raw CDP or endpoint exposure | **Implemented; local and separate-process gates passed** |
 | 7 | Public Browser live viewing/control data plane with authenticated signaling, bounded media/input channels, resolution/encoding negotiation, bitrate, and backpressure | Origin/TLS/authentication; unsupported codec/size rejection; slow-consumer closure; control fence per input; view-only admission; no unauthenticated upgrade | Not started |
 | 8 | Explicit keyboard/pointer/touch, clipboard, upload, download, navigation, popup, and permission policy | Deny-by-default matrix; size/type/count/digest bounds; activation/consent; filename/path confinement; cross-origin and policy-change revocation tests | Not started |
 | 9 | Browser network and runtime isolation composition | Exact restricted-egress policy; DNS/IP/metadata/private-network denial; immutable verified image; permission/device denial; resource bounds; cleanup and fault injection | Not started |
@@ -206,6 +206,43 @@ admission. Full repository race/shuffle, vet, Provider Contract, Product
 Contract, retained Phase 3 evidence, and diff checks pass. The public Browser
 automation/live data planes, downstream action fence, and continuous open-socket
 watch are Slice 6 onward and are not claimed here.
+
+## Slice 6 exact boundary
+
+The public `product-browser-automation.v1` WSS edge accepts only Product
+one-use control grants and closed text messages. The initial action allowlist is
+`page.info` and bounded `page.text`; navigation, script execution, input,
+clipboard, and transfer remain denied until their later explicit policy slice.
+Action IDs are bounded, sequences start at one and increase without gaps, and
+the per-connection pending set and complete logical message size are bounded.
+Duplicate members, unknown members/actions, binary frames, raw CDP, oversized
+messages, and ambiguous or unmatched private results fail closed. Private CDP
+errors are reduced to stable Product errors before reaching the caller.
+
+The Product Gateway translates an admitted action to private CDP only after
+continuous Product authority, authenticated capacity, and downstream-fence
+checks. Its resolver carries the opaque handoff and fence over WSS to a
+separate private ingress; it never receives an endpoint address. Production
+private ingress construction requires TLS plus an explicit Gateway peer
+authorizer, and its unique action gate validates the fence on activation and
+every complete private action. A newer owner suspends the stale stream. Backend
+loss performs a fresh private resolution while the bounded public reader
+survives; reconnect does not bypass Product authority or fencing.
+
+### Slice 6 local evidence
+
+Race-enabled component tests prove closed translation, exact Browser identity,
+view-grant rejection, raw-CDP rejection, duplicate/unknown/order/queue/size
+bounds, authority revocation closure, fresh fenced reconnect, TLS private
+transport, and no private value in public results. Existing downstream-ingress
+race tests retain the stale-owner suspension and per-action fence evidence.
+The tagged Phase 4 Browser gate starts three independent test-binary processes:
+a public TLS Edge, Product Gateway, and mTLS-authenticated private
+ingress/Provider. It proves WSS upgrade, private reconnect after an initial
+backend loss, one-use ticket replay rejection, a closed action/result round
+trip, and public non-disclosure. This is same-repository separate-process
+evidence with a bounded fake CDP backend, not real Chromium, deployment, HA,
+hostile-multitenant, or production evidence.
 
 ## Evidence rules
 

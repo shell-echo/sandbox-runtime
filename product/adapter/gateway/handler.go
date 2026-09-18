@@ -1,4 +1,4 @@
-// Package productgateway exposes the Product-owned terminal WebSocket edge.
+// Package productgateway exposes Product-owned bounded data-plane edges.
 // Public callers present only a short-lived, single-use Product ticket. The
 // Provider sandbox identity and opaque handoff remain private to this adapter.
 package productgateway
@@ -179,6 +179,10 @@ func singleTicket(values []string) (string, bool) {
 }
 
 func websocketCredentials(authorizations, protocols []string) (ticket string, protocolOK bool) {
+	return websocketCredentialsFor(Subprotocol, authorizations, protocols)
+}
+
+func websocketCredentialsFor(requiredProtocol string, authorizations, protocols []string) (ticket string, protocolOK bool) {
 	if len(protocols) != 1 {
 		return "", false
 	}
@@ -186,11 +190,11 @@ func websocketCredentials(authorizations, protocols []string) (ticket string, pr
 	for index := range parts {
 		parts[index] = strings.TrimSpace(parts[index])
 	}
-	if len(parts) == 1 && parts[0] == Subprotocol {
+	if len(parts) == 1 && parts[0] == requiredProtocol {
 		ticket, ok := singleTicket(authorizations)
 		return ticket, ok
 	}
-	if len(parts) != 2 || parts[0] != Subprotocol || !strings.HasPrefix(parts[1], TicketSubprotocolPrefix) || len(authorizations) != 0 {
+	if len(parts) != 2 || parts[0] != requiredProtocol || !strings.HasPrefix(parts[1], TicketSubprotocolPrefix) || len(authorizations) != 0 {
 		return "", false
 	}
 	browserTicket := strings.TrimPrefix(parts[1], TicketSubprotocolPrefix)

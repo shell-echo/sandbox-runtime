@@ -293,8 +293,8 @@ func TestIntegrationBrowserSlotAndSessionDispatchIsolation(t *testing.T) {
 		t.Fatalf("browser slot=%#v", browserSlot)
 	}
 	sessionOperation, _, err := sessions.Create(context.Background(), tenantID, actor, workspace.ID, "browser-session-create", product.CreateSessionRequest{
-		ExpectedWorkspaceVersion: workspace.Version, SlotKey: "browser-main", Kind: product.SessionKindBrowserAutomation,
-		ProtocolProfile: product.SessionProfileBrowserAutomation, ExpiresInSeconds: 900, RecordingPolicy: "metadata_only",
+		ExpectedWorkspaceVersion: workspace.Version, SlotKey: "browser-main", Kind: product.SessionKindBrowserLive,
+		ProtocolProfile: product.SessionProfileBrowserLive, ExpiresInSeconds: 900, RecordingPolicy: "metadata_only",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -305,7 +305,7 @@ func TestIntegrationBrowserSlotAndSessionDispatchIsolation(t *testing.T) {
 	}
 	browserSessions, err := store.LeaseBrowserSessionWork(context.Background(), "browser-session-worker", 10*time.Second, 10)
 	if err != nil || len(browserSessions) != 1 || browserSessions[0].SessionID != sessionOperation.SessionID ||
-		browserSessions[0].Kind != product.SessionKindBrowserAutomation || browserSessions[0].ProtocolProfile != product.SessionProfileBrowserAutomation {
+		browserSessions[0].Kind != product.SessionKindBrowserLive || browserSessions[0].ProtocolProfile != product.SessionProfileBrowserLive {
 		t.Fatalf("browser session work=%#v err=%v", browserSessions, err)
 	}
 	evidence.ProviderOperationID = "provider-browser-session-open"
@@ -314,8 +314,8 @@ func TestIntegrationBrowserSlotAndSessionDispatchIsolation(t *testing.T) {
 		t.Fatal(err)
 	}
 	observations, err = store.LeaseProviderObservations(context.Background(), "browser-session-observer", 10*time.Second, 10)
-	if err != nil || len(observations) != 1 || observations[0].SessionKind != product.SessionKindBrowserAutomation ||
-		observations[0].ProtocolProfile != product.SessionProfileBrowserAutomation {
+	if err != nil || len(observations) != 1 || observations[0].SessionKind != product.SessionKindBrowserLive ||
+		observations[0].ProtocolProfile != product.SessionProfileBrowserLive {
 		t.Fatalf("session observations=%#v err=%v", observations, err)
 	}
 	evidence.State = "succeeded"

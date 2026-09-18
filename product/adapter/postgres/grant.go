@@ -86,6 +86,9 @@ func (r *GrantRepository) MintConnectionGrant(ctx context.Context, command produ
 	if !browser && command.Request.AccessMode != product.GrantAccessControl {
 		return product.ConnectionGrant{}, false, product.ErrCapabilityUnsupported
 	}
+	if kind == product.SessionKindBrowserAutomation && command.Request.AccessMode != product.GrantAccessControl {
+		return product.ConnectionGrant{}, false, product.ErrForbidden
+	}
 	if browser {
 		if _, err := tx.Exec(opCtx, `SELECT pg_advisory_xact_lock(hashtextextended($1,7346273422))`, command.TenantID); err != nil {
 			return product.ConnectionGrant{}, false, storeError(ctx, opCtx, err, false)

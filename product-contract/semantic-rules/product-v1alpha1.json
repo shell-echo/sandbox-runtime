@@ -161,6 +161,28 @@
       ]
     },
     {
+      "id": "browser-automation-data-plane",
+      "requires": [
+        "product-browser-automation-v1-subprotocol",
+        "closed-action-and-result-schemas",
+        "strictly-increasing-action-sequence",
+        "bounded-message-and-pending-action-count",
+        "current-product-control-lease-and-fence",
+        "continuous-product-authority-watch",
+        "downstream-action-fence-on-private-ingress",
+        "fresh-private-resolution-on-reconnect",
+        "tls-and-gateway-client-identity-on-private-ingress"
+      ],
+      "forbids": [
+        "raw-cdp-public-message",
+        "provider-handoff-public-message",
+        "provider-endpoint-public-message",
+        "unbounded-action-queue",
+        "view-grant-automation-admission",
+        "stale-owner-action"
+      ]
+    },
+    {
       "id": "catalog-metadata-only",
       "requires": [
         "product-owned-artifact-metadata",

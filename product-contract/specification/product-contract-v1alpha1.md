@@ -141,6 +141,24 @@ control grant carries the current session-scoped lease and fence. It MUST NOT
 contain a Provider handoff, Provider endpoint, backend ID, or storage
 credential.
 
+For `product-browser-automation.v1`, the public WebSocket subprotocol is the
+same profile identifier. A client sends only schema-valid
+`BrowserAutomationAction` text messages with a strictly increasing sequence;
+the Gateway returns only `BrowserAutomationResult` text messages. The initial
+closed action set is `page.info` and bounded `page.text`. Unknown members,
+unknown actions, binary messages, raw CDP messages, duplicate or skipped
+sequences, oversized messages, and excess pending actions close the connection.
+
+Browser automation requires a `control` grant carrying the current
+session-scoped Product lease and fence. Product authority is watched for the
+connection lifetime. The Product Gateway translates the closed public action
+inside its trusted boundary and reaches Browser execution only through a
+TLS-protected, Gateway-authenticated private ingress. That ingress validates a
+downstream action fence on activation and every complete private action. A
+reconnect performs fresh private resolution; neither the opaque Provider
+handoff, the private endpoint, raw CDP, nor downstream-fence credentials may
+appear in public messages, errors, audit events, or logs.
+
 ## 10. Agent runs
 
 An Agent run is a delegated Product actor execution bound to one Workspace and

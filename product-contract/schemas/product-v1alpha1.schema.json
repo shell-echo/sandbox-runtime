@@ -541,6 +541,61 @@
         "expires_at": {"$ref": "#/$defs/RFC3339Timestamp"}
       }
     },
+    "BrowserAutomationAction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "action_id", "sequence", "name"],
+      "properties": {
+        "type": {"const": "action"},
+        "action_id": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"},
+        "sequence": {"type": "integer", "minimum": 1, "maximum": 9007199254740991},
+        "name": {"enum": ["page.info", "page.text"]},
+        "parameters": {"type": "object"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"name": {"const": "page.info"}}},
+          "then": {"properties": {"parameters": {"type": "object", "additionalProperties": false, "maxProperties": 0}}}
+        },
+        {
+          "if": {"properties": {"name": {"const": "page.text"}}},
+          "then": {
+            "properties": {
+              "parameters": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {"max_characters": {"type": "integer", "minimum": 1, "maximum": 32768}}
+              }
+            }
+          }
+        }
+      ]
+    },
+    "BrowserAutomationResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "action_id", "sequence", "ok"],
+      "properties": {
+        "type": {"const": "result"},
+        "action_id": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"},
+        "sequence": {"type": "integer", "minimum": 1, "maximum": 9007199254740991},
+        "ok": {"type": "boolean"},
+        "value": {},
+        "error": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["code", "message"],
+          "properties": {
+            "code": {"enum": ["AUTOMATION_ACTION_FAILED", "AUTOMATION_PROTOCOL_ERROR"]},
+            "message": {"enum": ["browser action failed", "browser response was invalid"]}
+          }
+        }
+      },
+      "oneOf": [
+        {"properties": {"ok": {"const": true}}, "required": ["value"], "not": {"required": ["error"]}},
+        {"properties": {"ok": {"const": false}}, "required": ["error"], "not": {"required": ["value"]}}
+      ]
+    },
     "Artifact": {
       "type": "object",
       "additionalProperties": false,
