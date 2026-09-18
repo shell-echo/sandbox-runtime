@@ -260,6 +260,7 @@ CREATE TABLE sandbox_runtime_product.workspace_revisions (
     workspace_id text NOT NULL,
     parent_revision_id text,
     manifest_digest text NOT NULL,
+    manifest_size_bytes bigint NOT NULL,
     object_reference text NOT NULL,
     file_count integer NOT NULL,
     size_bytes bigint NOT NULL,
@@ -267,11 +268,14 @@ CREATE TABLE sandbox_runtime_product.workspace_revisions (
     created_actor_id text NOT NULL,
     created_at timestamp with time zone NOT NULL,
     CONSTRAINT workspace_revisions_primary_key PRIMARY KEY (tenant_id, revision_id),
+    CONSTRAINT workspace_revisions_workspace_identity UNIQUE (tenant_id,workspace_id,revision_id),
     CONSTRAINT workspace_revisions_public_id UNIQUE (revision_id),
     CONSTRAINT workspace_revisions_workspace FOREIGN KEY (tenant_id, workspace_id)
         REFERENCES sandbox_runtime_product.workspaces (tenant_id, workspace_id) ON DELETE RESTRICT,
+    CONSTRAINT workspace_revisions_parent FOREIGN KEY (tenant_id,workspace_id,parent_revision_id)
+        REFERENCES sandbox_runtime_product.workspace_revisions (tenant_id,workspace_id,revision_id) ON DELETE RESTRICT,
     CONSTRAINT workspace_revisions_digest CHECK (manifest_digest ~ '^sha256:[0-9a-f]{64}$'),
-    CONSTRAINT workspace_revisions_bounds CHECK (file_count >= 0 AND file_count <= 100000 AND size_bytes >= 0),
+    CONSTRAINT workspace_revisions_bounds CHECK (file_count >= 0 AND file_count <= 100000 AND size_bytes >= 0 AND manifest_size_bytes >= 0),
     CONSTRAINT workspace_revisions_actor CHECK (created_actor_type IN ('human', 'agent', 'service'))
 );
 
@@ -339,10 +343,13 @@ CREATE TABLE sandbox_runtime_product.blob_transfers (
     size_bytes bigint NOT NULL,
     committed_bytes bigint NOT NULL,
     state text NOT NULL,
+    version bigint NOT NULL,
     object_reference text NOT NULL,
+    error_code text,
     expires_at timestamp with time zone NOT NULL,
     created_at timestamp with time zone NOT NULL,
     updated_at timestamp with time zone NOT NULL,
+    completed_at timestamp with time zone,
     CONSTRAINT blob_transfers_primary_key PRIMARY KEY (tenant_id, transfer_id),
     CONSTRAINT blob_transfers_public_id UNIQUE (transfer_id),
     CONSTRAINT blob_transfers_workspace FOREIGN KEY (tenant_id, workspace_id)
@@ -351,7 +358,9 @@ CREATE TABLE sandbox_runtime_product.blob_transfers (
     CONSTRAINT blob_transfers_direction CHECK (direction IN ('upload', 'download')),
     CONSTRAINT blob_transfers_digest CHECK (digest ~ '^sha256:[0-9a-f]{64}$'),
     CONSTRAINT blob_transfers_bounds CHECK (size_bytes >= 0 AND committed_bytes >= 0 AND committed_bytes <= size_bytes),
-    CONSTRAINT blob_transfers_state CHECK (state IN ('pending', 'transferring', 'complete', 'cancelled', 'expired', 'failed')),
+    CONSTRAINT blob_transfers_state CHECK (state IN ('pending', 'transferring', 'complete', 'cleanup_pending', 'cancelled', 'expired', 'failed')),
+    CONSTRAINT blob_transfers_version CHECK (version >= 1),
+    CONSTRAINT blob_transfers_error CHECK (error_code IS NULL OR error_code ~ '^[a-z][a-z0-9_.-]{0,127}$'),
     CONSTRAINT blob_transfers_expiry CHECK (expires_at > created_at AND updated_at >= created_at)
 );
 

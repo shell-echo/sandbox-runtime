@@ -9,6 +9,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -22,6 +23,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/shell-echo/sandbox-runtime/guestagent"
 	"github.com/shell-echo/sandbox-runtime/product"
+	productbloblocal "github.com/shell-echo/sandbox-runtime/product/adapter/blob/local"
 	productguest "github.com/shell-echo/sandbox-runtime/product/adapter/guest"
 	"github.com/shell-echo/sandbox-runtime/productapi"
 	productapiv1 "github.com/shell-echo/sandbox-runtime/productapi/v1"
@@ -615,6 +617,149 @@ func TestIntegrationGuestBindingChallengeRotationAndRevocation(t *testing.T) {
 	}
 	if _, err := store.ApplyFileSnapshot(context.Background(), product.FileSnapshotCommand{TenantID: "tenant-product-guest", WorkspaceID: workspace.ID, SlotKey: product.PrimarySlotKey, Actor: actor, Snapshot: renamedSnapshot}); !errors.Is(err, product.ErrControlStale) {
 		t.Fatalf("stale file snapshot err=%v", err)
+	}
+}
+
+func TestIntegrationResumableTransferDigestRevisionCASAndCleanup(t *testing.T) {
+	pool := integrationProductPool(t)
+	applyProductMigrations(t, pool)
+	cleanupProductTenant(t, pool, "tenant-product-transfer")
+	store, _ := New(pool, 3*time.Second)
+	application, _ := product.NewApplication(store, allowPrimarySlot{}, product.CryptoIDGenerator{})
+	blobs, err := productbloblocal.New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	transfers, _ := product.NewTransferService(store, blobs, product.CryptoIDGenerator{})
+	actor := product.ActorRef{Type: product.ActorHuman, ID: "owner-product-transfer"}
+	created, err := application.CreateWorkspace(context.Background(), "tenant-product-transfer", actor, "transfer-workspace", integrationCreateWorkspaceRequest("transfer workspace"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(context.Background(), `INSERT INTO sandbox_runtime_product.tenant_quotas(tenant_id,max_workspaces,max_sessions,max_active_transfers,updated_at)VALUES($1,10,10,1,clock_timestamp())`, "tenant-product-transfer"); err != nil {
+		t.Fatal(err)
+	}
+	manifest := product.RevisionManifest{Entries: []product.RevisionManifestEntry{{Path: "README.md", Type: "file", Mode: 0o644, SizeBytes: 5, Digest: "sha256:" + strings.Repeat("a", 64)}, {Path: "src", Type: "directory", Mode: 0o755}}}
+	document, _ := json.Marshal(manifest)
+	digestBytes := sha256.Sum256(document)
+	digest := "sha256:" + hex.EncodeToString(digestBytes[:])
+	beginRequest := product.BeginUploadRequest{ExpectedWorkspaceVersion: 1, Digest: digest, SizeBytes: int64(len(document)), ExpiresInSeconds: 600}
+	upload, replay, err := transfers.BeginUpload(context.Background(), "tenant-product-transfer", actor, created.Operation.WorkspaceID, "upload-manifest-1", beginRequest)
+	if err != nil || replay || upload.State != "pending" {
+		t.Fatalf("upload=%#v replay=%v err=%v", upload, replay, err)
+	}
+	workspace, _ := application.GetWorkspace(context.Background(), "tenant-product-transfer", actor, created.Operation.WorkspaceID)
+	if _, _, err := transfers.BeginUpload(context.Background(), "tenant-product-transfer", actor, workspace.ID, "upload-over-quota", product.BeginUploadRequest{ExpectedWorkspaceVersion: workspace.Version, Digest: digest, SizeBytes: int64(len(document)), ExpiresInSeconds: 600}); !errors.Is(err, product.ErrQuotaExceeded) {
+		t.Fatalf("quota err=%v", err)
+	}
+	half := len(document) / 2
+	progress, err := transfers.Append(context.Background(), "tenant-product-transfer", actor, upload.ID, 0, document[:half])
+	if err != nil || progress.CommittedBytes != int64(half) {
+		t.Fatalf("progress=%#v err=%v", progress, err)
+	}
+	privateRecord, err := store.GetTransfer(context.Background(), "tenant-product-transfer", actor, upload.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := blobs.Append(context.Background(), privateRecord.ObjectReference, int64(half), document[half:]); err != nil {
+		t.Fatal(err)
+	}
+	resumed, err := transfers.Resume(context.Background(), "tenant-product-transfer", actor, upload.ID)
+	if err != nil || resumed.CommittedBytes != int64(len(document)) {
+		t.Fatalf("resumed=%#v err=%v", resumed, err)
+	}
+	completed, err := transfers.Complete(context.Background(), "tenant-product-transfer", actor, upload.ID)
+	if err != nil || completed.State != "complete" || completed.Digest != digest {
+		t.Fatalf("completed=%#v err=%v", completed, err)
+	}
+	replayedUpload, replay, err := transfers.BeginUpload(context.Background(), "tenant-product-transfer", actor, created.Operation.WorkspaceID, "upload-manifest-1", beginRequest)
+	if err != nil || !replay || replayedUpload.ID != upload.ID || replayedUpload.State != "complete" {
+		t.Fatalf("replayed upload=%#v replay=%v err=%v", replayedUpload, replay, err)
+	}
+	commitRequest := product.CommitRevisionRequest{ExpectedWorkspaceVersion: workspace.Version, UploadTransferID: upload.ID}
+	revision, replay, err := transfers.CommitRevision(context.Background(), "tenant-product-transfer", actor, workspace.ID, "commit-revision-1", commitRequest)
+	if err != nil || replay || revision.ParentRevisionID != "" || revision.FileCount != 1 || revision.SizeBytes != 5 {
+		t.Fatalf("revision=%#v replay=%v err=%v", revision, replay, err)
+	}
+	replayedRevision, replay, err := transfers.CommitRevision(context.Background(), "tenant-product-transfer", actor, workspace.ID, "commit-revision-1", commitRequest)
+	if err != nil || !replay || replayedRevision.ID != revision.ID {
+		t.Fatalf("replayed revision=%#v replay=%v err=%v", replayedRevision, replay, err)
+	}
+	download, err := transfers.BeginRevisionDownload(context.Background(), "tenant-product-transfer", actor, workspace.ID, revision.ID)
+	if err != nil || download.Direction != "download" {
+		t.Fatalf("download=%#v err=%v", download, err)
+	}
+	read, eof, err := transfers.ReadDownload(context.Background(), "tenant-product-transfer", actor, download.ID, 0, product.MaxChunkBytes)
+	if err != nil || !eof || !bytes.Equal(read, document) {
+		t.Fatalf("download read=%q eof=%v err=%v", read, eof, err)
+	}
+	workspace, _ = application.GetWorkspace(context.Background(), "tenant-product-transfer", actor, workspace.ID)
+	badDigest := "sha256:" + strings.Repeat("0", 64)
+	bad, _, err := transfers.BeginUpload(context.Background(), "tenant-product-transfer", actor, workspace.ID, "upload-bad-digest", product.BeginUploadRequest{ExpectedWorkspaceVersion: workspace.Version, Digest: badDigest, SizeBytes: int64(len(document)), ExpiresInSeconds: 600})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := transfers.Append(context.Background(), "tenant-product-transfer", actor, bad.ID, 0, document); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := transfers.Complete(context.Background(), "tenant-product-transfer", actor, bad.ID); !errors.Is(err, product.ErrInvalid) {
+		t.Fatalf("digest mismatch complete err=%v", err)
+	}
+	badRecord, _ := store.GetTransfer(context.Background(), "tenant-product-transfer", actor, bad.ID)
+	if err := transfers.Cancel(context.Background(), "tenant-product-transfer", actor, bad.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := blobs.Inspect(context.Background(), badRecord.ObjectReference); err == nil {
+		t.Fatal("cancelled staging object was not removed")
+	}
+	workspace, _ = application.GetWorkspace(context.Background(), "tenant-product-transfer", actor, workspace.ID)
+	concurrentRequest := product.CommitRevisionRequest{ExpectedWorkspaceVersion: workspace.Version, ExpectedHeadRevisionID: revision.ID, UploadTransferID: upload.ID}
+	start := make(chan struct{})
+	results := make(chan error, 2)
+	for _, key := range []string{"commit-race-a", "commit-race-b"} {
+		key := key
+		go func() {
+			<-start
+			_, _, err := transfers.CommitRevision(context.Background(), "tenant-product-transfer", actor, workspace.ID, key, concurrentRequest)
+			results <- err
+		}()
+	}
+	close(start)
+	var success, conflicts int
+	for range 2 {
+		err := <-results
+		if err == nil {
+			success++
+		} else if errors.Is(err, product.ErrVersionConflict) {
+			conflicts++
+		} else {
+			t.Fatalf("concurrent revision err=%v", err)
+		}
+	}
+	if success != 1 || conflicts != 1 {
+		t.Fatalf("revision race success=%d conflicts=%d", success, conflicts)
+	}
+	workspace, _ = application.GetWorkspace(context.Background(), "tenant-product-transfer", actor, workspace.ID)
+	abandonedDigestBytes := sha256.Sum256([]byte("abandoned"))
+	abandonedDigest := "sha256:" + hex.EncodeToString(abandonedDigestBytes[:])
+	abandoned, _, err := transfers.BeginUpload(context.Background(), "tenant-product-transfer", actor, workspace.ID, "upload-abandoned", product.BeginUploadRequest{ExpectedWorkspaceVersion: workspace.Version, Digest: abandonedDigest, SizeBytes: int64(len("abandoned")), ExpiresInSeconds: 60})
+	if err != nil {
+		t.Fatal(err)
+	}
+	abandonedRecord, _ := store.GetTransfer(context.Background(), "tenant-product-transfer", actor, abandoned.ID)
+	if _, err := pool.Exec(context.Background(), `UPDATE sandbox_runtime_product.blob_transfers SET created_at=clock_timestamp()-interval '2 minutes',expires_at=clock_timestamp()-interval '1 minute' WHERE tenant_id=$1 AND transfer_id=$2`, "tenant-product-transfer", abandoned.ID); err != nil {
+		t.Fatal(err)
+	}
+	cleaned, err := transfers.CleanupExpired(context.Background(), 10)
+	if err != nil || cleaned != 1 {
+		t.Fatalf("CleanupExpired()=%d, %v", cleaned, err)
+	}
+	expired, err := store.GetTransfer(context.Background(), "tenant-product-transfer", actor, abandoned.ID)
+	if err != nil || expired.State != "expired" {
+		t.Fatalf("expired transfer=%#v err=%v", expired, err)
+	}
+	if _, _, err := blobs.Inspect(context.Background(), abandonedRecord.ObjectReference); err == nil {
+		t.Fatal("expired staging object was not removed")
 	}
 }
 

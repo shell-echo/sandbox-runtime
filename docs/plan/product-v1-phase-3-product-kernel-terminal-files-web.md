@@ -1,6 +1,6 @@
 # Product v1 Phase 3: Product Kernel, Terminal, Files, and Web
 
-Status: Active; Slices 1-9 implemented as local component and real-PostgreSQL evidence
+Status: Active; Slices 1-10 implemented as local component and real-PostgreSQL evidence
 
 Started: 2026-09-18
 
@@ -42,14 +42,14 @@ operations remain separately named gates.
 | 7 | Public Terminal Gateway with one-use Product grants, bounded proxying, revocation, backpressure, reconnect, and metadata audit | Separate-process client/Product/Gateway/Provider test; no endpoint or ticket leakage; expiry/replay/revocation/capacity/backpressure/reconnect/cleanup cases | **Implemented; local and real-PostgreSQL gates passed; standalone process matrix retained for Slice 13** |
 | 8 | Outbound authenticated Guest Agent control channel and version/capability negotiation | Guest identity binding, replay protection, rotation, deadline/cancellation, reconnect, incompatible-version, and compromised/removed-guest tests | **Implemented; local and real-PostgreSQL gates passed** |
 | 9 | Files list/stat/watch with confined paths and durable change state | Symlink/traversal/special-file/rename/watch-gap/cursor-expiry/large-directory/cross-tenant tests; no host path or backend identity exposure | **Implemented; local and real-PostgreSQL gates passed** |
-| 10 | Digest-addressed upload/download, resumable transfer, revision staging, and compare-and-swap commit | Digest mismatch, partial/resume, cancellation, quota/backpressure, concurrent commit, crash recovery, retention and exact cleanup tests | Planned |
+| 10 | Digest-addressed upload/download, resumable transfer, revision staging, and compare-and-swap commit | Digest mismatch, partial/resume, cancellation, quota/backpressure, concurrent commit, crash recovery, retention and exact cleanup tests | **Implemented; local and real-PostgreSQL gates passed** |
 | 11 | Product Web control plane and client for Workspace, Terminal, and Files | Generated/checked client; authenticated browser E2E; CSP/CSRF/origin/session/accessibility/error/recovery tests; no private endpoint exposure | Planned |
 | 12 | Product recording content pipeline and artifact/recording catalogs | Explicit policy/consent; encryption/redaction/integrity; retention/deletion; tenant-authorized replay/catalog tests; content remains outside control-plane list responses | Planned |
 | 13 | Standalone integrated Phase 3 release gate and reproducible evidence bundle | Fresh PostgreSQL plus separate Product/Gateway/Guest/Provider processes; fixed Contract identities; restart/fault/security/cleanup matrix; exact evidence manifest and independent validation | Planned |
 
 Slices are dependency ordered. Later UI or data-plane work cannot substitute
 for an earlier authority, persistence, authentication, or recovery gate.
-After Slice 9, 4 slices remain.
+After Slice 10, 3 slices remain.
 
 ## Cross-cutting requirements
 
@@ -326,3 +326,33 @@ changes, rename, and the full Hub/Agent/Product projection. Fresh PostgreSQL
 evidence covers create/rename/modify sequences, cross-tenant nondisclosure,
 and stale Guest rejection. Files are not yet durable Workspace content; upload,
 revision CAS, and transfer cleanup belong to Slice 10.
+
+## Slice 10 exact output
+
+- Upload acceptance first commits a tenant/actor/Workspace-bound transfer,
+  expected digest and size, expiry, quota decision, contiguous event, audit,
+  and idempotency result. Only then does the adapter create the private staging
+  object. Public transfer state never contains its object reference or path.
+- Chunks are bounded to 1 MiB and require the exact committed offset. The
+  local standalone adapter uses no-follow private files, advisory file locking,
+  durable sync, SHA-256 inspection, hard-link content-addressed commit, and
+  digest-safe deduplication. Resume reconciles the authoritative object length
+  back into a lagging Product transfer after a crash boundary.
+- Completion requires exact size and digest. Mismatch becomes durable failure;
+  cancellation and expiry move through `cleanup_pending` until the precise
+  staging object is absent, then settle as `cancelled` or `expired`. Cleanup is
+  bounded and restartable.
+- A Workspace revision accepts only a complete upload containing an exact
+  canonical, sorted, bounded manifest. PostgreSQL locks the Workspace and
+  `main` head, requires the caller's expected head and Workspace version,
+  creates an immutable parent-linked revision, and advances the branch with
+  CAS. Concurrent stale commits cannot overwrite the winner.
+- Revision-manifest download creates an actor-filtered short-lived transfer and
+  streams bounded chunks from the private content-addressed reference.
+
+Race tests cover private storage offset checks, resume, digest validation,
+deduplication, download, symlink-root rejection, and exact deletion. Fresh
+PostgreSQL evidence covers active-transfer quota, storage-ahead crash recovery,
+idempotent completion and revision commit, digest mismatch, cancellation,
+download, concurrent CAS, expiry, and restartable cleanup. This is a bounded
+standalone storage adapter, not a claim about external object-store HA.
