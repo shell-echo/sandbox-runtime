@@ -88,8 +88,16 @@ type containerInfo struct {
 	securityOptions             []string
 	memoryBytes, memorySwap     int64
 	nanoCPUs, pidsLimit         int64
+	deviceMappings              int
+	deviceCgroupRules           int
+	deviceRequests              int
+	dnsOptions, dnsSearch       int
+	extraHosts, groupAdd, links int
+	sysctls                     int
 	networkMode                 string
 	pidMode, ipcMode            string
+	cgroupnsMode                string
+	usernsMode, utsMode         string
 	restartPolicy               string
 	logType                     string
 	logConfig                   map[string]string
@@ -193,9 +201,11 @@ func (e *mobyEngine) create(ctx context.Context, request createRequest) (string,
 			Labels: cloneStrings(request.labels), StopTimeout: &request.stopTimeout,
 		},
 		HostConfig: &container.HostConfig{
-			NetworkMode: container.NetworkMode(request.networkName),
-			DNS:         []netip.Addr{dnsResolver},
-			CapDrop:     []string{"ALL"}, SecurityOpt: []string{"no-new-privileges:true", "seccomp=" + request.seccompProfile},
+			NetworkMode:  container.NetworkMode(request.networkName),
+			DNS:          []netip.Addr{dnsResolver},
+			CgroupnsMode: container.CgroupnsModePrivate,
+			IpcMode:      container.IPCModePrivate,
+			CapDrop:      []string{"ALL"}, SecurityOpt: []string{"no-new-privileges:true", "seccomp=" + request.seccompProfile},
 			AutoRemove: false, ReadonlyRootfs: true,
 			Tmpfs: map[string]string{
 				"/inputs":    fmt.Sprintf("ro,noexec,nosuid,nodev,size=%d,mode=0555", request.inputsBytes),
@@ -240,7 +250,11 @@ func (e *mobyEngine) inspect(ctx context.Context, id string) (containerInfo, err
 		capAdd: append([]string(nil), response.HostConfig.CapAdd...), capDrop: append([]string(nil), response.HostConfig.CapDrop...),
 		securityOptions: append([]string(nil), response.HostConfig.SecurityOpt...), memoryBytes: response.HostConfig.Memory,
 		memorySwap: response.HostConfig.MemorySwap, nanoCPUs: response.HostConfig.NanoCPUs,
+		deviceMappings: len(response.HostConfig.Devices), deviceCgroupRules: len(response.HostConfig.DeviceCgroupRules), deviceRequests: len(response.HostConfig.DeviceRequests),
+		dnsOptions: len(response.HostConfig.DNSOptions), dnsSearch: len(response.HostConfig.DNSSearch), extraHosts: len(response.HostConfig.ExtraHosts),
+		groupAdd: len(response.HostConfig.GroupAdd), links: len(response.HostConfig.Links), sysctls: len(response.HostConfig.Sysctls),
 		networkMode: string(response.HostConfig.NetworkMode), pidMode: string(response.HostConfig.PidMode), ipcMode: string(response.HostConfig.IpcMode),
+		cgroupnsMode: string(response.HostConfig.CgroupnsMode), usernsMode: string(response.HostConfig.UsernsMode), utsMode: string(response.HostConfig.UTSMode),
 		restartPolicy: string(response.HostConfig.RestartPolicy.Name), logType: response.HostConfig.LogConfig.Type,
 		logConfig: cloneStrings(response.HostConfig.LogConfig.Config), networks: make(map[string]netip.Addr, len(response.NetworkSettings.Networks)),
 	}

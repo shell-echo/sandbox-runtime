@@ -193,6 +193,26 @@ revision before every forwarded input. SDP responses, messages, errors, and
 logs never project the Provider handoff, Browser endpoint, relay credentials,
 storage reference, or backend identity.
 
+Browser slot admission is also bound to an immutable image reference whose
+digest exactly matches the selected Product profile, a bounded CPU, memory,
+ephemeral-storage, and PID shape, the locked Browser runtime profile, and one
+exact restricted-egress policy reference. Product requests an unprivileged,
+read-only-root, no-service-account, seccomp-confined Provider sandbox with a
+mandatory egress gateway. The Provider advertises Browser readiness only after
+revalidating the pinned image/provenance and restricted-network dependencies.
+The runtime uses private PID, IPC, cgroup, UTS, and user namespaces, no mapped
+or requested devices, no added capabilities, no published ports, no host or
+default bridge, no extra hosts or DNS search path, and bounded writable tmpfs
+mounts. Device permissions remain denied unless separately admitted through
+the Product Browser policy; policy admission never adds a runtime device.
+
+The restricted egress path resolves every destination independently and
+rejects IP literals, DNS rebinding to non-public addresses, metadata,
+loopback, link-local, private, carrier-grade NAT, benchmark, documentation,
+multicast, unspecified, and reserved ranges. HTTP Host and TLS SNI must match
+the exact hostname policy. Cleanup removes only resources carrying the exact
+sandbox/session/network ownership tuple.
+
 ## 10. Agent runs
 
 An Agent run is a delegated Product actor execution bound to one Workspace and

@@ -58,6 +58,12 @@ func TestMobyEngineProjectsBrowserIsolation(t *testing.T) {
 		len(host.SecurityOpt) != 2 || host.SecurityOpt[0] != "no-new-privileges:true" || host.SecurityOpt[1] != "seccomp="+seccomp {
 		t.Fatalf("privilege controls = %#v", host)
 	}
+	if host.CgroupnsMode != container.CgroupnsModePrivate || host.IpcMode != container.IPCModePrivate ||
+		len(host.Devices) != 0 || len(host.DeviceCgroupRules) != 0 || len(host.DeviceRequests) != 0 ||
+		len(host.ExtraHosts) != 0 || len(host.GroupAdd) != 0 || len(host.Links) != 0 || len(host.Sysctls) != 0 ||
+		len(host.DNSOptions) != 0 || len(host.DNSSearch) != 0 {
+		t.Fatalf("namespace/device controls = %#v", host)
+	}
 	if host.Memory != 1<<30 || host.MemorySwap != 1<<30 || host.NanoCPUs != 1_000_000_000 ||
 		host.PidsLimit == nil || *host.PidsLimit != 256 {
 		t.Fatalf("resource controls = %#v", host.Resources)

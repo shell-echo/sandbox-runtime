@@ -142,7 +142,11 @@ func TestClientBrowserSlotUsesLockedRestrictedProviderShape(t *testing.T) {
 				body.Spec.RequiredCapabilities[0] != (providerv1.CapabilityRequirement{ID: product.BrowserCapabilityID, Version: product.BrowserCapabilityVersion, Profile: product.BrowserCapabilityProfile}) ||
 				body.Spec.Network.Mode != providerv1.NetworkRestricted || body.Spec.Network.PolicyReference != "browser-egress-policy-1" ||
 				body.Spec.Network.EgressGatewayRequired == nil || !*body.Spec.Network.EgressGatewayRequired ||
-				body.Spec.PlacementConstraints == nil || body.Spec.PlacementConstraints.ResourceClass != providerv1.ResourceBrowser {
+				body.Spec.PlacementConstraints == nil || body.Spec.PlacementConstraints.ResourceClass != providerv1.ResourceBrowser ||
+				!strings.HasSuffix(body.Spec.Image.Reference, "@"+string(body.Spec.Image.Digest)) ||
+				body.Spec.Security.PrivilegeLevel != providerv1.PrivilegeUnprivileged || body.Spec.Security.RootFilesystem != providerv1.RootFilesystemReadOnly ||
+				body.Spec.Security.ServiceAccountMode != providerv1.ServiceAccountNone || body.Spec.Security.SeccompProfile != providerv1.SeccompRuntimeDefault ||
+				body.Spec.Resources.CPUMillis != 2000 || body.Spec.Resources.MemoryBytes != 2<<30 || body.Spec.Resources.EphemeralStorageBytes != 2<<30 || body.Spec.Resources.PIDsLimit != 256 {
 				t.Fatalf("browser create shape=%#v", body.Spec)
 			}
 			writer.WriteHeader(http.StatusAccepted)
@@ -162,6 +166,31 @@ func TestClientBrowserSlotUsesLockedRestrictedProviderShape(t *testing.T) {
 	evidence, err := client.ProvisionBrowserSlot(context.Background(), work)
 	if err != nil || !sawCreate || evidence.State != "accepted" || evidence.ProviderOperationID != "provider-browser-create-1" {
 		t.Fatalf("evidence=%#v sawCreate=%v err=%v", evidence, sawCreate, err)
+	}
+}
+
+func TestClientRejectsUnpinnedOrUnboundedBrowserIsolationProfile(t *testing.T) {
+	now := time.Date(2026, 9, 18, 5, 30, 0, 0, time.UTC)
+	_, key, _ := ed25519.GenerateKey(rand.Reader)
+	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	defer server.Close()
+	tests := map[string]func(*Profile){
+		"mutable image":      func(profile *Profile) { profile.ImageReference = "registry.invalid/sandbox-browser:latest" },
+		"digest mismatch":    func(profile *Profile) { profile.ImageDigest = "sha256:" + strings.Repeat("a", 64) },
+		"cpu over limit":     func(profile *Profile) { profile.CPUMillis = maxBrowserCPUMillis + 1 },
+		"memory under limit": func(profile *Profile) { profile.MemoryBytes = minBrowserMemoryBytes - 1 },
+		"storage over limit": func(profile *Profile) { profile.EphemeralBytes = maxBrowserEphemeralBytes + 1 },
+		"pids over limit":    func(profile *Profile) { profile.PIDsLimit = maxBrowserPIDs + 1 },
+		"architecture":       func(profile *Profile) { profile.Architecture = "riscv64" },
+	}
+	for name, mutate := range tests {
+		t.Run(name, func(t *testing.T) {
+			config := browserTestConfig(server, key, now)
+			mutate(&config.Profiles[0])
+			if _, err := New(config); !errorsIs(err, product.ErrInvalid) {
+				t.Fatalf("unsafe profile err=%v", err)
+			}
+		})
 	}
 }
 
@@ -341,7 +370,7 @@ func browserTestConfig(server *httptest.Server, key ed25519.PrivateKey, now time
 		Authority: Authority{Issuer: "https://product.example.test/controller", Subject: "spiffe://product/controller",
 			Audience: "urn:shell-echo:sandbox-runtime:provider-instance:test", KeyID: "product-key-1", PrivateKey: key},
 		Profiles: []Profile{{ProductProfileID: product.BrowserSlotProfile, RuntimeProfileID: product.BrowserSlotProfile,
-			ImageReference: "registry.invalid/sandbox-browser", ImageDigest: "sha256:" + strings.Repeat("d", 64),
+			ImageReference: "registry.invalid/sandbox-browser@sha256:" + strings.Repeat("d", 64), ImageDigest: "sha256:" + strings.Repeat("d", 64),
 			Architecture: providerv1.ArchitectureAMD64, CPUMillis: 2000, MemoryBytes: 2 << 30, EphemeralBytes: 2 << 30, PIDsLimit: 256,
 			BaseRevisionID: "revision-empty", BaseRevisionDigest: "sha256:" + strings.Repeat("e", 64),
 			PolicyDigest: "sha256:" + strings.Repeat("b", 64), NetworkPolicyReference: "browser-egress-policy-1"}}}

@@ -158,7 +158,7 @@ func (e *fakeEngine) create(_ context.Context, request createRequest) (string, e
 		dns: []netip.Addr{resolver}, capDrop: []string{"ALL"},
 		securityOptions: []string{"no-new-privileges:true", "seccomp=" + request.seccompProfile},
 		memoryBytes:     request.memoryBytes, memorySwap: request.memoryBytes, nanoCPUs: request.nanoCPUs, pidsLimit: request.pidsLimit,
-		networkMode: request.networkName, restartPolicy: "no", logType: "local",
+		networkMode: request.networkName, ipcMode: "private", cgroupnsMode: "private", restartPolicy: "no", logType: "local",
 		logConfig: map[string]string{"max-size": "10m", "max-file": "3"},
 		networks:  map[string]netip.Addr{request.networkName: netip.MustParseAddr("10.88.0.3")},
 	}
@@ -319,7 +319,7 @@ func validImageInfo(t *testing.T) imageInfo {
 	}
 }
 
-func TestRestartRejectsBrowserNetworkAndDNSDrift(t *testing.T) {
+func TestRestartRejectsBrowserNetworkDNSAndDeviceDrift(t *testing.T) {
 	clock := &fakeClock{now: browserDriverTestTime}
 	root := t.TempDir()
 	backend := &fakeEngine{}
@@ -343,6 +343,14 @@ func TestRestartRejectsBrowserNetworkAndDNSDrift(t *testing.T) {
 	restarted = testDriver(t, backend, newFakeNetwork(), options)
 	if _, err := restarted.Allocate(context.Background(), want); !errors.Is(err, providerbrowser.ErrBrowserConflict) {
 		t.Fatalf("DNS drift = %v", err)
+	}
+	backend.mu.Lock()
+	backend.container.dns = []netip.Addr{netip.MustParseAddr("10.88.0.2")}
+	backend.container.deviceRequests = 1
+	backend.mu.Unlock()
+	restarted = testDriver(t, backend, newFakeNetwork(), options)
+	if _, err := restarted.Allocate(context.Background(), want); !errors.Is(err, providerbrowser.ErrBrowserConflict) {
+		t.Fatalf("device drift = %v", err)
 	}
 }
 

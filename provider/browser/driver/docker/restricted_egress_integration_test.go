@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/netip"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -21,6 +22,8 @@ import (
 	"time"
 
 	cerrdefs "github.com/containerd/errdefs"
+	"github.com/moby/moby/api/types/container"
+	mobynetwork "github.com/moby/moby/api/types/network"
 	"github.com/moby/moby/client"
 
 	browserimage "github.com/shell-echo/sandbox-runtime/profiles/browser/image"
@@ -34,6 +37,7 @@ import (
 const (
 	combinedIntegrationEnvironment = "SANDBOX_RUNTIME_BROWSER_NETWORK_INTEGRATION"
 	gatewayImageEnvironment        = "SANDBOX_RUNTIME_BROWSER_GATEWAY_IMAGE"
+	fixtureImageEnvironment        = "SANDBOX_RUNTIME_BROWSER_FIXTURE_IMAGE"
 	managedLabel                   = "io.github.shell-echo.sandbox-runtime.managed"
 	ownerLabel                     = "io.github.shell-echo.sandbox-runtime.owner"
 	namespaceLabel                 = "io.github.shell-echo.sandbox-runtime.namespace"
@@ -50,6 +54,10 @@ func TestBrowserRestrictedEgressIntegration(t *testing.T) {
 	gatewayImage := os.Getenv(gatewayImageEnvironment)
 	if !strings.HasPrefix(gatewayImage, "sha256:") || len(gatewayImage) != len("sha256:")+64 {
 		t.Fatal("set " + gatewayImageEnvironment + " to the immutable local Gateway image ID")
+	}
+	fixtureImage := os.Getenv(fixtureImageEnvironment)
+	if !strings.HasPrefix(fixtureImage, "sha256:") || len(fixtureImage) != len("sha256:")+64 {
+		t.Fatal("set " + fixtureImageEnvironment + " to the immutable local fixture image ID")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
@@ -79,11 +87,14 @@ func TestBrowserRestrictedEgressIntegration(t *testing.T) {
 	if err := createOwnedUplink(ctx, apiClient, uplinkName, namespace); err != nil {
 		t.Fatal(err)
 	}
+	if err := startOwnedUpstream(ctx, apiClient, fixtureImage, uplinkName, namespace, controllerID); err != nil {
+		t.Fatal(err)
+	}
 	verifier, err := realProvenanceVerifier()
 	if err != nil {
 		t.Fatal(err)
 	}
-	policy := gateway.Policy{Reference: policyReference, AllowedHosts: []string{"example.com"}}
+	policy := gateway.Policy{Reference: policyReference, AllowedHosts: []string{"allowed.test"}}
 	networkOptions := networkdocker.Options{
 		Host: os.Getenv("DOCKER_HOST"), GatewayImage: gatewayImage, UplinkNetwork: uplinkName,
 		Namespace: namespace, ControllerID: controllerID, Policies: []gateway.Policy{policy},
@@ -155,9 +166,12 @@ func TestBrowserRestrictedEgressIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	cdp := &cdpClient{stream: stream}
-	assertNavigationContains(t, ctx, cdp, "http://example.com/", "Example Domain")
-	assertNavigationContains(t, ctx, cdp, "https://example.com/", "Example Domain")
-	assertNavigationDenied(t, ctx, cdp, "http://example.net/")
+	assertNavigationContains(t, ctx, cdp, "http://allowed.test/", "sandbox runtime browser egress fixture")
+	if err := cdp.call(ctx, "", "Security.setIgnoreCertificateErrors", map[string]any{"ignore": true}, nil); err != nil {
+		t.Fatal(err)
+	}
+	assertNavigationContains(t, ctx, cdp, "https://allowed.test/", "sandbox runtime browser egress fixture")
+	assertNavigationDenied(t, ctx, cdp, "http://denied.test/")
 	assertNavigationDenied(t, ctx, cdp, "http://169.254.169.254/latest/meta-data/")
 	if err := stream.Close(); err != nil {
 		t.Fatal(err)
@@ -239,8 +253,37 @@ func createOwnedUplink(ctx context.Context, apiClient *client.Client, name, name
 	enableIPv4, enableIPv6 := true, false
 	_, err := apiClient.NetworkCreate(ctx, name, client.NetworkCreateOptions{
 		Driver: "bridge", Scope: "local", EnableIPv4: &enableIPv4, EnableIPv6: &enableIPv6,
+		IPAM: &mobynetwork.IPAM{Config: []mobynetwork.IPAMConfig{{
+			Subnet: netip.MustParsePrefix("11.254.0.0/24"), Gateway: netip.MustParseAddr("11.254.0.1"),
+		}}},
 		Labels: map[string]string{managedLabel: "true", ownerLabel: networkdocker.UplinkRole, namespaceLabel: namespace},
 	})
+	return err
+}
+
+func startOwnedUpstream(ctx context.Context, apiClient *client.Client, image, uplink, namespace, controller string) error {
+	name := "sandbox-runtime-browser-upstream-" + strings.TrimPrefix(namespace, "browser-egress-integration-")
+	stopTimeout := 5
+	pidsLimit := int64(32)
+	result, err := apiClient.ContainerCreate(ctx, client.ContainerCreateOptions{
+		Name: name,
+		Config: &container.Config{Image: image, StopTimeout: &stopTimeout, Labels: map[string]string{
+			managedLabel: "true", ownerLabel: "browser-egress-integration-fixture", namespaceLabel: namespace, controllerLabel: controller,
+		}},
+		HostConfig: &container.HostConfig{
+			NetworkMode: container.NetworkMode(uplink), ReadonlyRootfs: true, CapDrop: []string{"ALL"},
+			SecurityOpt: []string{"no-new-privileges:true"}, Sysctls: map[string]string{"net.ipv4.ip_unprivileged_port_start": "0"},
+			LogConfig: container.LogConfig{Type: "local", Config: map[string]string{"max-size": "1m", "max-file": "2"}},
+			Resources: container.Resources{Memory: 64 << 20, MemorySwap: 64 << 20, NanoCPUs: 250_000_000, PidsLimit: &pidsLimit},
+		},
+		NetworkingConfig: &mobynetwork.NetworkingConfig{EndpointsConfig: map[string]*mobynetwork.EndpointSettings{
+			uplink: {Aliases: []string{"allowed.test"}, IPAMConfig: &mobynetwork.EndpointIPAMConfig{IPv4Address: netip.MustParseAddr("11.254.0.10")}},
+		}},
+	})
+	if err != nil {
+		return err
+	}
+	_, err = apiClient.ContainerStart(ctx, result.ID, client.ContainerStartOptions{})
 	return err
 }
 
@@ -461,21 +504,25 @@ func assertNavigationContains(t *testing.T, parent context.Context, cdp *cdpClie
 	if navigation.ErrorText != "" {
 		t.Fatalf("navigation to %s failed: %s", targetURL, navigation.ErrorText)
 	}
+	lastValue := ""
 	for {
 		var evaluated struct {
 			Result struct {
-				Value string `json:"value"`
+				Value map[string]string `json:"value"`
 			} `json:"result"`
 		}
 		err := cdp.call(ctx, sessionID, "Runtime.evaluate", map[string]any{
-			"expression": "document.body ? document.body.innerText : ''", "returnByValue": true,
+			"expression": "({url: location.href, title: document.title, text: document.body ? document.body.innerText : ''})", "returnByValue": true,
 		}, &evaluated)
-		if err == nil && strings.Contains(evaluated.Result.Value, expected) {
+		if err == nil {
+			lastValue = fmt.Sprintf("url=%q title=%q text=%q", evaluated.Result.Value["url"], evaluated.Result.Value["title"], evaluated.Result.Value["text"])
+		}
+		if err == nil && strings.Contains(evaluated.Result.Value["text"], expected) {
 			return
 		}
 		select {
 		case <-ctx.Done():
-			t.Fatalf("navigation to %s did not expose expected content: %v", targetURL, err)
+			t.Fatalf("navigation to %s did not expose expected content: %v; %s", targetURL, err, lastValue)
 		case <-time.After(100 * time.Millisecond):
 		}
 	}

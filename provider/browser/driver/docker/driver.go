@@ -613,7 +613,9 @@ func validateContainerRuntime(info containerInfo, request createRequest, image i
 		len(info.capAdd) != 0 || strings.Join(info.capDrop, "\x00") != "ALL" || len(info.securityOptions) != 2 ||
 		info.securityOptions[0] != "no-new-privileges:true" || info.securityOptions[1] != "seccomp="+request.seccompProfile ||
 		info.memoryBytes != request.memoryBytes || info.memorySwap != request.memoryBytes || info.nanoCPUs != request.nanoCPUs ||
-		info.pidsLimit != request.pidsLimit || info.networkMode != request.networkName || !privateNamespaceMode(info.pidMode) || !privateNamespaceMode(info.ipcMode) ||
+		info.pidsLimit != request.pidsLimit || info.deviceMappings != 0 || info.deviceCgroupRules != 0 || info.deviceRequests != 0 ||
+		info.dnsOptions != 0 || info.dnsSearch != 0 || info.extraHosts != 0 || info.groupAdd != 0 || info.links != 0 || info.sysctls != 0 ||
+		info.networkMode != request.networkName || info.pidMode != "" || info.ipcMode != "private" || info.cgroupnsMode != "private" || info.usernsMode == "host" || info.utsMode == "host" ||
 		(info.restartPolicy != "" && info.restartPolicy != "no") || info.logType != "local" ||
 		!stringMapEqual(info.logConfig, map[string]string{"max-size": "10m", "max-file": "3"}) ||
 		len(info.networks) != 1 || !validRuntimeAddress {
@@ -621,8 +623,6 @@ func validateContainerRuntime(info containerInfo, request createRequest, image i
 	}
 	return nil
 }
-
-func privateNamespaceMode(value string) bool { return value == "" || value == "private" }
 
 func stringMapEqual(left, right map[string]string) bool {
 	if len(left) != len(right) {

@@ -1,6 +1,6 @@
 # Product v1 Phase 4: Browser
 
-Status: In progress; Slices 1-8 implemented locally, 5 slices remain
+Status: In progress; Slices 1-9 implemented locally, 4 slices remain
 
 Started: 2026-09-18
 
@@ -30,7 +30,7 @@ until Slice 13 passes for the exact composed topology.
 | 6 | Public Browser automation WSS data plane with closed action/result messages and downstream action fencing | Separate-process edge/Gateway/Provider test; bounded messages/queues; ordered actions; stale-owner suspension; reconnect; no raw CDP or endpoint exposure | **Implemented; local and separate-process gates passed** |
 | 7 | Public Browser live viewing/control data plane with authenticated signaling, bounded media/input channels, resolution/encoding negotiation, bitrate, and backpressure | Origin/TLS/authentication; unsupported codec/size rejection; slow-consumer closure; control fence per input; view-only admission; no unauthenticated upgrade | **Implemented; local real-WebRTC gates passed** |
 | 8 | Explicit keyboard/pointer/touch, clipboard, upload, download, navigation, popup, and permission policy | Deny-by-default matrix; size/type/count/digest bounds; activation/consent; filename/path confinement; cross-origin and policy-change revocation tests | **Implemented; local policy/data-plane gates passed** |
-| 9 | Browser network and runtime isolation composition | Exact restricted-egress policy; DNS/IP/metadata/private-network denial; immutable verified image; permission/device denial; resource bounds; cleanup and fault injection | Not started |
+| 9 | Browser network and runtime isolation composition | Exact restricted-egress policy; DNS/IP/metadata/private-network denial; immutable verified image; permission/device denial; resource bounds; cleanup and fault injection | **Implemented; local and real-Docker gates passed** |
 | 10 | Connection loss, Gateway/Provider restart, reconnect, visual resynchronization, resolution changes, and recovery UX | Fresh-grant reconnect; authority recheck; keyframe/resync bounds; no stale input; retained session recovery; dependency-loss fail-closed behavior | Not started |
 | 11 | Browser metadata audit, media/control-event recording, Product catalog, retention/deletion, integrity, and quota composition | Consent and visible mode; required-recorder fail closed; encrypted chained segments; authorized replay; content excluded from logs/control-plane lists; quota races | Not started |
 | 12 | Product Web Browser experience for slot/session lifecycle, live view, controller state, recovery, downloads/uploads, and recording catalog | Generated/checked client; authenticated browser E2E; CSP/CSRF/origin/accessibility; viewer/control UX; error/reconnect/cleanup cases; no private coordinates | Not started |
@@ -317,6 +317,45 @@ Contract, retained Phase 3 evidence, and diff checks run at the slice commit
 gate. This is Product policy and adapter evidence; runtime/network isolation,
 recovery, recording, Web UX, and the final independent-process composition
 remain Slices 9-13.
+
+## Slice 9 exact boundary
+
+The Product Provider profile now refuses a Browser dependency unless its image
+reference is immutable and ends in the exact configured SHA-256 digest, its
+architecture is in the locked Provider matrix, and CPU, memory, ephemeral
+storage, and PID values stay inside explicit Browser bounds. Browser creates
+remain locked to restricted networking, one opaque policy reference, mandatory
+egress Gateway, Browser placement, read-only ephemeral Workspace, unprivileged
+execution, no service account, read-only root, and runtime-default seccomp.
+
+The Provider Docker adapter now explicitly creates private IPC and cgroup
+namespaces and re-inspects those values after restart. It additionally rejects
+PID/UTS/user namespace sharing, device mappings, device cgroup rules, device
+requests, extra hosts, additional groups, links, DNS options/search paths, and
+sysctls, while retaining drop-all capabilities, no-new-privileges, the pinned
+Chromium seccomp policy, no ports/binds/mounts, bounded tmpfs volumes, memory
+without swap expansion, CPU/PID limits, and exactly one private network. The
+dedicated egress Gateway continues to enforce normalized host policy, bounded
+DNS, HTTP Host and TLS SNI, independent address resolution, and denial of
+metadata, private, link-local, loopback, CGNAT, benchmark, documentation,
+multicast, unspecified, and reserved addresses.
+
+### Slice 9 local and real-Docker evidence
+
+Race-enabled tests prove immutable Product profile selection, resource-bound
+rejection, exact protected Provider create projection, device/namespace drift
+rejection after restart, network/DNS ownership drift, rollback, dependency
+failure, and exact cleanup. The tagged private-relay test runs the locked
+published Chromium image with its real seccomp and runtime controls. The tagged
+restricted-egress test builds immutable local Gateway and deterministic
+upstream fixture images, creates a temporary public-looking uplink plus a
+dedicated internal Browser network, proves allowed HTTP and TLS navigation,
+denied unlisted and metadata destinations, process reconstruction, idempotent
+recovery, and absence of all exact-owned resources after cleanup. The fixture
+avoids host DNS interception without weakening the non-public-address deny
+list. Full repository race/shuffle, vet, Contract, and retained evidence gates
+run at the slice commit gate. Connection recovery, recording, Web UX, and the
+final independent-process composition remain Slices 10-13.
 
 ## Evidence rules
 

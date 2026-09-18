@@ -6,7 +6,7 @@
   "digest_algorithm": "sha256",
   "tree_digest_profile": "sorted-path-tab-prefixed-sha256-newline-v1",
   "manifest_digest": "sha256:7f7c5264693f4f01c47fcda6e27f0add609b4bec9549bc2a10338517dcef7cba",
-  "tree_digest": "sha256:9bf1b35f343fb2a19574c064ad6a7ad29f29216ee22305665ad98f89a414fd7f",
+  "tree_digest": "sha256:9fb707a51e4f5bdce98ce0cf63295a18f1df95fc1cc49f33621e57c8a0f68d25",
   "resources": [
     {
       "path": "conformance/product-v1alpha1-suite.json",
@@ -38,11 +38,11 @@
     },
     {
       "path": "semantic-rules/product-v1alpha1.json",
-      "sha256": "6cf6be94dd23abf6532b4034214466b7ce02f208c941603589c188ce4d83ccf4"
+      "sha256": "b14bd45f6934c7224d3526b13d1e9bdec3bb534884d69679df14099da3bf6ac3"
     },
     {
       "path": "specification/product-contract-v1alpha1.md",
-      "sha256": "d36b59d51e05d5c2a631f9d7e31c384f2f64364a34e0d6f995ed57eea31a3fbb"
+      "sha256": "e2a24c2a1912d97420df0fc93b486d58772a6ace484181c4744bfae193804d3c"
     }
   ]
 }

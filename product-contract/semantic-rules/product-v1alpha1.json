@@ -234,6 +234,30 @@
       ]
     },
     {
+      "id": "browser-isolation-composition",
+      "requires": [
+        "immutable-image-reference-matches-digest",
+        "bounded-browser-cpu-memory-storage-and-pids",
+        "unprivileged-read-only-seccomp-runtime",
+        "private-process-ipc-cgroup-uts-and-user-namespaces",
+        "zero-runtime-device-mappings-or-requests",
+        "dedicated-internal-browser-network",
+        "mandatory-owned-egress-gateway",
+        "exact-host-and-sni-policy",
+        "public-address-revalidation-per-upstream-connection",
+        "exact-owned-resource-cleanup"
+      ],
+      "forbids": [
+        "mutable-browser-image",
+        "host-default-or-public-browser-network",
+        "published-browser-port",
+        "extra-host-or-dns-search-bypass",
+        "metadata-private-link-local-or-reserved-egress",
+        "runtime-device-from-browser-permission-policy",
+        "foreign-resource-cleanup"
+      ]
+    },
+    {
       "id": "agent-run-delegation-boundary",
       "requires": [
         "workspace-and-slot-binding",

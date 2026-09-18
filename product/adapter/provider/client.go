@@ -50,6 +50,17 @@ type Profile struct {
 	NetworkPolicyReference string
 }
 
+const (
+	minBrowserCPUMillis      = int64(250)
+	maxBrowserCPUMillis      = int64(4_000)
+	minBrowserMemoryBytes    = int64(256 << 20)
+	maxBrowserMemoryBytes    = int64(8 << 30)
+	minBrowserEphemeralBytes = int64(512 << 20)
+	maxBrowserEphemeralBytes = int64(16 << 30)
+	minBrowserPIDs           = int64(32)
+	maxBrowserPIDs           = int64(512)
+)
+
 type Authority struct {
 	Issuer     string
 	Subject    string
@@ -101,6 +112,9 @@ func New(config Config) (*Client, error) {
 		if profile.RuntimeProfileID == product.BrowserSlotProfile && !providerIdentifier(profile.NetworkPolicyReference) {
 			return nil, product.ErrInvalid
 		}
+		if profile.RuntimeProfileID == product.BrowserSlotProfile && !validBrowserIsolationProfile(profile) {
+			return nil, product.ErrInvalid
+		}
 		if _, exists := profiles[profile.ProductProfileID]; exists {
 			return nil, product.ErrInvalid
 		}
@@ -117,6 +131,28 @@ func New(config Config) (*Client, error) {
 	}
 	return &Client{origin: origin, httpClient: &clientCopy, revisionID: config.ExpectedRevisionID, tree: config.ExpectedTree,
 		resolutionID: config.ProviderResolutionID, profiles: profiles, authority: config.Authority, clock: clock}, nil
+}
+
+func validBrowserIsolationProfile(profile Profile) bool {
+	if profile.ProductProfileID != product.BrowserSlotProfile ||
+		(profile.Architecture != providerv1.ArchitectureAMD64 && profile.Architecture != providerv1.ArchitectureARM64) ||
+		profile.CPUMillis < minBrowserCPUMillis || profile.CPUMillis > maxBrowserCPUMillis ||
+		profile.MemoryBytes < minBrowserMemoryBytes || profile.MemoryBytes > maxBrowserMemoryBytes ||
+		profile.EphemeralBytes < minBrowserEphemeralBytes || profile.EphemeralBytes > maxBrowserEphemeralBytes ||
+		profile.PIDsLimit < minBrowserPIDs || profile.PIDsLimit > maxBrowserPIDs ||
+		!validSHA256(profile.ImageDigest) || !validSHA256(profile.BaseRevisionDigest) || !validSHA256(profile.PolicyDigest) ||
+		strings.Count(profile.ImageReference, "@") != 1 || !strings.HasSuffix(profile.ImageReference, "@"+profile.ImageDigest) {
+		return false
+	}
+	return true
+}
+
+func validSHA256(value string) bool {
+	if len(value) != 71 || !strings.HasPrefix(value, "sha256:") {
+		return false
+	}
+	_, err := hex.DecodeString(strings.TrimPrefix(value, "sha256:"))
+	return err == nil
 }
 
 func (c *Client) AuthorizePrimarySlot(ctx context.Context, slot product.SlotSpec) error {
