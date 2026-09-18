@@ -12,6 +12,7 @@
 | --- | --- |
 | 主交付计划 | **24/24 已完成** |
 | 独立 External Caller | **13/13 已完成** |
+| Product v1 第三阶段 | 在有边界的 standalone 拓扑内 **13/13 已完成** |
 | 编程/Shell 资格验证 | 对下述精确调用方、Provider 版本、拓扑、Profile 和场景结果为 **Qualified** |
 | 最新核心 CI | [已通过](https://github.com/shell-echo/sandbox-runtime/actions/runs/35204434771) |
 
@@ -34,9 +35,14 @@ Workspace/Slot 持久化、身份与 Agent 委托、Runtime Gateway 与录制，
 Guest Agent 或生产部署。
 
 独立的 [Product v1 第二阶段 Provider 生命周期计划](docs/plan/product-v1-phase-2-provider-lifecycle.md)
-目前已形成实现完整的源码候选，覆盖终止、暂停/恢复、租约过期、有限事件读取和终端
-会话关闭。但它还不是已选定的 Provider 权威：在候选内容形成不可变版本并通过干净
-VCS 的 Contract 与 Conformance 门禁之前，已发布锁保持不变。
+已经完成其固定九步范围，覆盖终止、暂停/恢复、租约过期、有限事件读取和终端
+会话关闭，并通过锁定 Contract、Conformance、Docker 生命周期和独立进程参考门禁。
+
+[Product v1 第三阶段](docs/plan/product-v1-phase-3-product-kernel-terminal-files-web.md)
+已在有边界的 standalone 范围内完成 **13/13**。最终门禁在全新固定摘要
+PostgreSQL 上，以四个独立 OS 进程运行 Product、Gateway、Guest 与锁定 Contract
+的 Provider fixture，并通过 9 个黑盒场景。能力就绪状态现在按租户和完整依赖实时
+派生。该结论不等同于可部署拓扑、独立实现调用方、HA、恶意多租户隔离或生产就绪。
 
 ## 项目提供什么
 
@@ -58,7 +64,7 @@ VCS 的 Contract 与 Conformance 门禁之前，已发布锁保持不变。
 | --- | --- | --- |
 | 本地 `/health` 和 `/instances` API | 操作单个本地运行时控制器 | 内部应用模型和配置 |
 | Provider `/v1/*` API | 跨服务沙箱协议 | 锁定的仓库自有 Provider Contract |
-| 目标 Product `/api/v1/*` API | 面向最终用户的 Workspace 控制面 | 独立锁定的 Product Contract；当前仅为设计 |
+| Product `/api/v1/*` API | 面向最终用户的 Workspace 控制面 | 独立锁定的 Product Contract；已有组件与 tagged standalone 门禁，但没有通过部署资格验证的监听器组合 |
 
 ```text
 调用服务

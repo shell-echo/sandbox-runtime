@@ -1,0 +1,94 @@
+{
+  "schema_version": 1,
+  "run_id": "20260918T111903.806694000Z",
+  "result": "passed",
+  "evidence_tier": "same-repository-separate-process",
+  "source_revision": "04c2755bec125db7e2c04df3f4e2f8cfedb6ec1d",
+  "started_at": "2026-09-18T11:19:03.806694Z",
+  "completed_at": "2026-09-18T11:19:07.264938Z",
+  "provider_contract": {
+    "revision": "98995384c60a924f25ca58d3b7e561207bfa5be8",
+    "tree": "0a627baed11c8a6ddbe8a24bbc1869e4f85edc16"
+  },
+  "product_contract": {
+    "tree": "sha256:a5c9cfa4fdfcdb481336732b4b33de39b57ef6e30dc668b95a0cf524b143b4d1",
+    "resource_count": 9,
+    "operation_count": 27,
+    "conformance_cases": 3
+  },
+  "postgresql": {
+    "image": "postgres:16-alpine@sha256:866efe7070b471f3a5397edac0e5edd65c23ff056587c6e47c07d008caaedd28",
+    "fresh_schema": true
+  },
+  "processes": [
+    {
+      "role": "product",
+      "executable_digest": "sha256:0f8632c216e6bc241ca5959d5a4e3384bd0b2b501f28137aff18f571d5322878",
+      "independent_os_process": true
+    },
+    {
+      "role": "gateway",
+      "executable_digest": "sha256:0f8632c216e6bc241ca5959d5a4e3384bd0b2b501f28137aff18f571d5322878",
+      "independent_os_process": true
+    },
+    {
+      "role": "guest",
+      "executable_digest": "sha256:0f8632c216e6bc241ca5959d5a4e3384bd0b2b501f28137aff18f571d5322878",
+      "independent_os_process": true
+    },
+    {
+      "role": "provider",
+      "executable_digest": "sha256:0f8632c216e6bc241ca5959d5a4e3384bd0b2b501f28137aff18f571d5322878",
+      "independent_os_process": true
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "capability-readiness",
+      "status": "passed"
+    },
+    {
+      "id": "guest-file-boundary",
+      "status": "passed"
+    },
+    {
+      "id": "process-cleanup",
+      "status": "passed"
+    },
+    {
+      "id": "product-authentication",
+      "status": "passed"
+    },
+    {
+      "id": "product-restart-recovery",
+      "status": "passed"
+    },
+    {
+      "id": "provider-fault-closure",
+      "status": "passed"
+    },
+    {
+      "id": "terminal-ticket-replay",
+      "status": "passed"
+    },
+    {
+      "id": "terminal-websocket-roundtrip",
+      "status": "passed"
+    },
+    {
+      "id": "tenant-nondisclosure",
+      "status": "passed"
+    }
+  ],
+  "cleanup": {
+    "child_processes_reaped": true,
+    "container_removed": true,
+    "scoped_rows_removed": true
+  },
+  "non_claims": [
+    "deployment-qualified",
+    "ha-qualified",
+    "hostile-multi-tenant-qualified",
+    "production-ready"
+  ]
+}

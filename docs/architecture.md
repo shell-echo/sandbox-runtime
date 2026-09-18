@@ -17,16 +17,17 @@ defines a target Product that may live in this repository only as a caller of
 the Provider. Its independent design authority is the content-locked
 [`product-contract/`](../product-contract/), with repository, state, identity,
 Gateway/recording, and deployment decisions in ADRs 0042-0047. This is target
-architecture authority. Product Phase 3 Slices 1-12 now implement the Product
+architecture authority. Product Phase 3 Slices 1-13 now implement the Product
 import boundary and Contract verifier, PostgreSQL authority, authenticated
 Workspace/control/session API, locked network-only Provider reconciliation,
 encrypted one-use terminal grants, a bounded Product Terminal Gateway, an
 outbound challenge-authenticated Guest Agent channel, confined file
 observation, durable file-change cursors, resumable content-addressed
 transfers, Workspace revision CAS, a secure browser BFF/Web client, artifact
-catalogs, and encrypted/redacted recording content with retention cleanup.
-There is still no deployable Product process topology or advertised Product
-capability today.
+catalogs, encrypted/redacted recording content with retention cleanup, and a
+tenant-aware dependency-derived capability source. The bounded tagged
+standalone gate passed through four separate role processes and fresh pinned
+PostgreSQL. There is still no deployment-qualified Product process topology.
 
 The [Product v1 Phase 2 Provider lifecycle plan](plan/product-v1-phase-2-provider-lifecycle.md)
 is complete for its fixed nine-step scope. Implementation
@@ -36,11 +37,13 @@ tagged Docker lifecycle gate, and repository-owned 15+5+9 independent-process
 reference run pass within their recorded boundaries.
 
 The [Product v1 Phase 3 plan](plan/product-v1-phase-3-product-kernel-terminal-files-web.md)
-is active. Its 13 dependency-ordered slices start with Product authority and
+is complete for its bounded standalone scope. Its 13 dependency-ordered slices start with Product authority and
 persistence, then add Provider reconciliation, authorization, Terminal,
 Gateway, Guest Agent/Files, Web, recording, and a standalone integrated gate.
-Slices 1-12 are repository-local browser/component and real-adapter evidence,
-not a Product-ready surface. Slice 13 remains the standalone integrated gate.
+Slice 13 passed nine exact scenarios with cleanup and a strictly validated
+manifest. It remains same-repository process evidence using a locked-wire
+Provider fixture, not a deployable, independent-caller, HA, hostile-tenant, or
+production result.
 
 ## Purpose
 

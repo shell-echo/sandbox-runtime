@@ -43,6 +43,8 @@ and artifact provenance are separately pinned.
 go test -race -shuffle=on -count=1 ./...
 go vet ./...
 go run ./cmd/verify-product-contract -source-root .
+go test -race -v -tags=phase3gate -count=1 -run '^TestStandalonePhase3ReleaseGate$' ./productphase3gate
+go run ./cmd/verify-product-phase3-evidence -manifest docs/audits/product-phase-3-standalone-evidence.json
 SANDBOX_RUNTIME_DOCKER_INTEGRATION=1 go test -tags=integration -count=1 ./driver/docker ./provider/lifecycle/driver/docker
 SANDBOX_RUNTIME_BROWSER_ADAPTER_INTEGRATION=1 go test -tags=integration -count=1 ./provider/browser/driver/docker
 SANDBOX_RUNTIME_BROWSER_PROVENANCE_INTEGRATION=1 go test -tags=integration -count=1 ./provider/browser/provenance/ghcli
@@ -59,6 +61,12 @@ go build -buildvcs=true -o "$runner_dir/run-conformance" ./cmd/run-conformance
 Format changed Go files with `gofmt`. Do not weaken or skip a gate to make a
 change pass. Record an unavailable integration environment separately from a
 code failure.
+
+The Product Phase 3 tagged gate requires Docker. It creates and removes one
+exact disposable PostgreSQL container and starts four child OS processes from
+the tagged test executable. Its checked-in manifest is historical evidence for
+the recorded source revision; a new run does not overwrite it automatically.
+Validate a newly selected manifest independently before updating the audit.
 
 The local Suite command requires a clean checkout and a clean VCS-built Runner.
 It reads the Runner revision and Go version from `debug.ReadBuildInfo`, rejects

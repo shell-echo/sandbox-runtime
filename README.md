@@ -17,6 +17,7 @@ general production readiness.
 | --- | --- |
 | Main delivery plan | **24/24 complete** |
 | Independent external caller | **13/13 complete** |
+| Product v1 Phase 3 | **13/13 complete** for the bounded standalone topology |
 | Coding/shell qualification | **Qualified** for the exact caller, Provider revisions, topology, profile, and scenarios recorded below |
 | Latest core CI | [Passed](https://github.com/shell-echo/sandbox-runtime/actions/runs/35204434771) |
 
@@ -54,16 +55,15 @@ separately implemented external-caller, deployment, or production-readiness
 claim.
 
 [Product v1 Phase 3](docs/plan/product-v1-phase-3-product-kernel-terminal-files-web.md)
-is now active. Its first twelve of 13 slices establish the Product Contract and
-import boundaries, PostgreSQL Product authority, authenticated Workspace,
-control, and Terminal APIs, locked network-only Provider reconciliation,
-encrypted one-use connection grants, a bounded Terminal Gateway, and an
-outbound challenge-authenticated Guest Agent channel, confined file
-observation, durable file-change cursors, resumable content-addressed
-transfers, Workspace revision CAS, a secure browser BFF/Web client, artifact
-catalogs, and encrypted/redacted recording content with retention cleanup.
-Capabilities remain empty, and there is still no deployable Product process
-topology, standalone phase gate, deployment, or production-readiness result.
+is complete at **13/13** for its bounded standalone scope. In addition to the
+Product authority, API, Gateway, Guest/Files, transfer, Web, catalog, and
+recording components, the final tagged gate passed nine black-box scenarios
+through separate Product, Gateway, Guest, and locked-Contract Provider-fixture
+OS processes plus fresh pinned PostgreSQL. Capability readiness is now
+tenant-aware and dependency-derived. The accepted evidence is independently
+validated and retains explicit non-claims: this is not a deployable topology,
+independently implemented caller result, HA, hostile-multitenant, or production
+readiness.
 
 ## What the project provides
 
@@ -92,7 +92,7 @@ The local management API and Provider API are deliberately separate:
 | --- | --- | --- |
 | Local `/health` and `/instances` API | Operate one local runtime controller | Internal application models and configuration |
 | Provider `/v1/*` API | Cross-service sandbox protocol | The locked repository-owned Provider Contract |
-| Target Product `/api/v1/*` API | End-user Workspace control plane | The independently locked Product Contract; kernel persistence component only, with no API listener today |
+| Product `/api/v1/*` API | End-user Workspace control plane | The independently locked Product Contract; implemented components and tagged standalone gate, but no deployment-qualified listener composition |
 
 ```text
 Calling service

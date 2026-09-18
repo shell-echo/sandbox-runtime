@@ -1,6 +1,6 @@
 # Product v1 Phase 3: Product Kernel, Terminal, Files, and Web
 
-Status: Active; Slices 1-12 implemented with local, browser, and real-PostgreSQL evidence
+Status: Complete; all 13 slices implemented and the bounded standalone gate passed
 
 Started: 2026-09-18
 
@@ -45,11 +45,12 @@ operations remain separately named gates.
 | 10 | Digest-addressed upload/download, resumable transfer, revision staging, and compare-and-swap commit | Digest mismatch, partial/resume, cancellation, quota/backpressure, concurrent commit, crash recovery, retention and exact cleanup tests | **Implemented; local and real-PostgreSQL gates passed** |
 | 11 | Product Web control plane and client for Workspace, Terminal, and Files | Generated/checked client; authenticated browser E2E; CSP/CSRF/origin/session/accessibility/error/recovery tests; no private endpoint exposure | **Implemented; local, headless-browser, and real-PostgreSQL gates passed** |
 | 12 | Product recording content pipeline and artifact/recording catalogs | Explicit policy/consent; encryption/redaction/integrity; retention/deletion; tenant-authorized replay/catalog tests; content remains outside control-plane list responses | **Implemented; local and real-PostgreSQL gates passed** |
-| 13 | Standalone integrated Phase 3 release gate and reproducible evidence bundle | Fresh PostgreSQL plus separate Product/Gateway/Guest/Provider processes; fixed Contract identities; restart/fault/security/cleanup matrix; exact evidence manifest and independent validation | Planned |
+| 13 | Standalone integrated Phase 3 release gate and reproducible evidence bundle | Fresh PostgreSQL plus separate Product/Gateway/Guest/Provider processes; fixed Contract identities; restart/fault/security/cleanup matrix; exact evidence manifest and independent validation | **Implemented; local same-repository separate-process gate passed** |
 
 Slices are dependency ordered. Later UI or data-plane work cannot substitute
 for an earlier authority, persistence, authentication, or recovery gate.
-After Slice 12, 1 slice remains.
+All 13 slices are complete. Deployment and production promotion remain separate
+future scopes.
 
 ## Cross-cutting requirements
 
@@ -114,8 +115,8 @@ same-repository separate-process, independently implemented caller, deployment,
 multi-controller, hostile multi-tenant, HA, and production readiness are never
 inferred from one another.
 
-Phase 3 completion requires Slice 13. It will still be a bounded standalone
-Product result, not production readiness. Production promotion requires a
+Phase 3 completion includes the passed Slice 13 gate. It is still a bounded
+standalone Product result, not production readiness. Production promotion requires a
 separate plan for deployable identity, secrets, database roles/migrations,
 backups/restores, HA/failover, capacity, monitoring, incident response,
 hostile-tenant security, rollout/rollback, SLOs, and independently retained
@@ -434,3 +435,35 @@ multi-segment redacted replay and integrity, catalog reads, database-time
 expiry, exact encrypted-content deletion, and retained deleted metadata. This
 is a standalone local encrypted-content adapter, not KMS/HSM, external object
 store, legal-consent, or production retention qualification.
+
+## Slice 13 exact output
+
+- `productapi/v1` now accepts a tenant-aware capability snapshot source and
+  projects the locked `protocol_profiles` and optional
+  `max_session_seconds` fields. The old singular profile/opaque limits shape,
+  which remained latent while the list was empty, is rejected by a Schema
+  projection test. Dependency-read failures fail closed.
+- The tagged `productphase3gate` runner creates a fresh database in the pinned
+  PostgreSQL 16 image and starts Product, public Gateway, outbound Guest Agent,
+  and a locked-Contract Provider fixture as four separate OS processes. Product
+  readiness is derived at request time from Provider identity/capabilities,
+  Gateway health, PostgreSQL authority, and tenant Guest connectivity.
+- The black-box matrix passes authentication precedence, tenant
+  nondisclosure, Workspace reconciliation, Product-process restart recovery,
+  authenticated Guest file listing and traversal rejection, Terminal
+  Client→Gateway→Provider binary round trip, single-use ticket replay
+  rejection, and Provider-loss readiness closure.
+- Cleanup drops the run-owned Product schema, reaps every child process,
+  removes the exact disposable PostgreSQL container, and confirms it is
+  absent before a passing manifest may be written.
+- `internal/productphase3evidence` and
+  `cmd/verify-product-phase3-evidence` strictly validate the exact four roles,
+  nine scenarios, locked Provider/Product identities, database image, cleanup
+  state, explicit non-claims, and absence of known credential/private-field
+  markers. The accepted run is recorded in
+  [`product-phase-3-standalone-completion.md`](../audits/product-phase-3-standalone-completion.md).
+
+The Provider role in this gate is a same-repository locked-wire fixture, so
+this result composes Product behavior without relabeling the separately passed
+real-Provider Phase 2 evidence. It is not an independently implemented caller,
+deployment, hostile-multitenant, HA/failover, or production-readiness result.

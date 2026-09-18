@@ -24,17 +24,17 @@ Current verified state:
   revision `3caf38c6bc0b62d2eeb2c1e1c4ed473fae5baab1`, the clean-VCS 60-case
   Suite and all required release gates pass, and the repository-owned
   independent-process reference run passes 15+5+9 scenarios; and
-- Product v1 Phase 3 is active with Slices 1-12 of 13 implemented. The current
-  branch adds the Product authority and authenticated API, locked Provider
-  dispatch/reconciliation, database-time control fences and quotas, durable
-  Terminal sessions, encrypted one-use connection grants, the bounded Product
-  Terminal Gateway, an outbound challenge-authenticated Guest Agent channel,
-  confined file observation, durable file-change state, resumable
-  content-addressed transfers, Workspace revision CAS, a secure browser BFF
-  and Web client, artifact catalogs, and encrypted/redacted recording content
-  with retention cleanup as repository-local browser/component and
-  real-PostgreSQL evidence only. The standalone multi-process release gate is
-  still open.
+- Product v1 Phase 3 is complete at **13/13** for its bounded standalone scope.
+  In addition to the Product authority, authenticated API, locked Provider
+  reconciliation, control, Terminal/Gateway, Guest/Files, transfer/revision,
+  Web, catalog, and recording components, run
+  `20260918T111903.806694000Z` at implementation
+  `04c2755bec125db7e2c04df3f4e2f8cfedb6ec1d` passed nine black-box scenarios
+  through four separate role processes and fresh pinned PostgreSQL. Its strict
+  evidence manifest records complete process, schema, and container cleanup.
+  This same-repository Provider-fixture topology is not deployment, HA,
+  hostile-multitenant, independently implemented caller, or production
+  evidence.
 
 The qualification applies only to Provider revision
 `170459266af5f4fad359ca8c63f2ae19741055c5`, external-caller revision
