@@ -142,7 +142,7 @@ func TestLocalContractArtifactUsageReadStateMatrix(t *testing.T) {
 
 func assertEvidenceReadFixture(t *testing.T, fixture evidenceReadMatrix) {
 	t.Helper()
-	wantOperationTypes := []string{"create", "exec", "cancel_exec", "open_runtime_session", "open_browser_session", "artifact_stage"}
+	wantOperationTypes := []string{"create", "extend_lease", "exec", "cancel_exec", "suspend", "resume", "terminate", "open_runtime_session", "close_runtime_session", "open_browser_session", "artifact_stage"}
 	if fixture.ProviderOperationRead.Route != "GET /v1/operations/{operation_id}" ||
 		!slices.Equal(fixture.ProviderOperationRead.OperationTypes, wantOperationTypes) ||
 		fixture.ProviderOperationRead.ArtifactStageKnownStatus != http.StatusOK ||

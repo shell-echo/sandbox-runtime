@@ -23,11 +23,11 @@ const (
 	DownstreamFencingLockPath = "e2e/downstream-fencing.lock.json"
 	DownstreamFencingProfile  = "browser-downstream-fencing-e2e-v1"
 
-	DownstreamFencingHarnessBaseline   = "21b38a341506a4d3c17107ea99ccf8dde8e351e9"
-	DownstreamFencingV2HarnessBaseline = "21b38a341506a4d3c17107ea99ccf8dde8e351e9"
+	DownstreamFencingHarnessBaseline   = "98995384c60a924f25ca58d3b7e561207bfa5be8"
+	DownstreamFencingV2HarnessBaseline = "98995384c60a924f25ca58d3b7e561207bfa5be8"
 	DownstreamFencingGatewayRevision   = "b4d41c9a32b4ccf39edaba3fb8bf5ad239c1f945"
 	DownstreamFencingIngressRevision   = "b4d41c9a32b4ccf39edaba3fb8bf5ad239c1f945"
-	DownstreamFencingCallerBaseline    = "fd48de93af5113d331c64f542c35f3934cc8229a"
+	DownstreamFencingCallerBaseline    = "98995384c60a924f25ca58d3b7e561207bfa5be8"
 
 	DownstreamFencingValkeyImage = "ghcr.io/valkey-io/valkey"
 	DownstreamFencingValkeyIndex = "sha256:ccfa19b0d743e48927e1c8c14e39e0acb97b5cea347fef0bfe340247fea920cd"
@@ -37,7 +37,7 @@ const (
 
 	PostgresControlledRestoreLockPath        = "e2e/postgres-controlled-restore.lock.json"
 	PostgresControlledRestoreProfile         = "browser-postgres-controlled-restore-e2e-v1"
-	PostgresControlledRestoreHarnessBaseline = "21b38a341506a4d3c17107ea99ccf8dde8e351e9"
+	PostgresControlledRestoreHarnessBaseline = "98995384c60a924f25ca58d3b7e561207bfa5be8"
 	PostgresWitnessImage                     = "postgres"
 	PostgresWitnessIndex                     = "sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94"
 	PostgresWitnessResolvedTag               = "17.6-alpine3.22"
@@ -1085,7 +1085,7 @@ func downstreamFencingHarnessPath(path string) bool {
 	if filepath.ToSlash(filepath.Clean(path)) != path {
 		return false
 	}
-	return providerDocumentationPath(path) || path == "e2e" || strings.HasPrefix(path, "e2e/") ||
+	return providerDocumentationPath(path) || providerLockRefreshPath(path) || path == "e2e" || strings.HasPrefix(path, "e2e/") ||
 		path == ".github/workflows/downstream-fencing-e2e.yml" ||
 		path == ".github/workflows/downstream-fencing-v2-e2e.yml" ||
 		path == ".github/workflows/postgres-controlled-restore-e2e.yml"
@@ -1095,7 +1095,7 @@ func downstreamFencingV2HarnessPath(path string) bool {
 	if filepath.ToSlash(filepath.Clean(path)) != path {
 		return false
 	}
-	return providerDocumentationPath(path) || path == "e2e" || strings.HasPrefix(path, "e2e/") ||
+	return providerDocumentationPath(path) || providerLockRefreshPath(path) || path == "e2e" || strings.HasPrefix(path, "e2e/") ||
 		path == ".github/workflows/downstream-fencing-v2-e2e.yml" ||
 		path == ".github/workflows/postgres-controlled-restore-e2e.yml"
 }
@@ -1104,7 +1104,7 @@ func postgresControlledRestoreHarnessPath(path string) bool {
 	if filepath.ToSlash(filepath.Clean(path)) != path {
 		return false
 	}
-	return providerDocumentationPath(path) || path == "e2e" || strings.HasPrefix(path, "e2e/") ||
+	return providerDocumentationPath(path) || providerLockRefreshPath(path) || path == "e2e" || strings.HasPrefix(path, "e2e/") ||
 		path == ".github/workflows/postgres-controlled-restore-e2e.yml"
 }
 

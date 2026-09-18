@@ -33,10 +33,14 @@ func TestLockedContractProjection(t *testing.T) {
 		"browser-session-open-request.schema.json":       func() any { return &BrowserSessionOpenRequest{} },
 		"cancel-exec-request.schema.json":                func() any { return &CancelExecRequest{} },
 		"create-sandbox-request.schema.json":             func() any { return &CreateRequest{} },
+		"desired-state-request.schema.json":              func() any { return &DesiredStateRequest{} },
 		"exec-request.schema.json":                       func() any { return &ExecRequest{} },
 		"exec-result.schema.json":                        func() any { return &ExecResult{} },
+		"lease-request.schema.json":                      func() any { return &LeaseRequest{} },
+		"lifecycle-event-page.schema.json":               func() any { return &LifecycleEventPage{} },
 		"protected-operation-jws-claims.schema.json":     func() any { return &map[string]any{} },
 		"protected-operation-jws-header.schema.json":     func() any { return &map[string]any{} },
+		"runtime-session-close-request.schema.json":      func() any { return &RuntimeSessionCloseRequest{} },
 		"runtime-session-connect-descriptor.schema.json": func() any { return &RuntimeSessionHandoff{} },
 		"runtime-session-handoff.schema.json":            func() any { return &RuntimeSessionHandoff{} },
 		"runtime-session-open-request.schema.json":       func() any { return &RuntimeSessionOpenRequest{} },
@@ -46,6 +50,7 @@ func TestLockedContractProjection(t *testing.T) {
 		"provider-operation.schema.json":                 func() any { return &Operation{} },
 		"sandbox-status.schema.json":                     func() any { return &Status{} },
 		"standard-error.schema.json":                     func() any { return &StandardError{} },
+		"terminate-request.schema.json":                  func() any { return &TerminateRequest{} },
 	}
 	expectedNames := make([]string, 0, len(factories))
 	for name := range factories {
@@ -56,12 +61,16 @@ func TestLockedContractProjection(t *testing.T) {
 		t.Fatalf("Provider projection = %v, want %v", names, expectedNames)
 	}
 	if limits := projection.RequestBodyLimits(); !reflect.DeepEqual(limits, map[string]int64{
-		"cancel-exec-request.schema.json":          65536,
-		"create-sandbox-request.schema.json":       1 << 20,
-		"exec-request.schema.json":                 262144,
-		"artifact-staging-request.schema.json":     65536,
-		"browser-session-open-request.schema.json": 65536,
-		"runtime-session-open-request.schema.json": 65536,
+		"cancel-exec-request.schema.json":           65536,
+		"create-sandbox-request.schema.json":        1 << 20,
+		"desired-state-request.schema.json":         65536,
+		"exec-request.schema.json":                  262144,
+		"lease-request.schema.json":                 65536,
+		"artifact-staging-request.schema.json":      65536,
+		"browser-session-open-request.schema.json":  65536,
+		"runtime-session-close-request.schema.json": 65536,
+		"runtime-session-open-request.schema.json":  65536,
+		"terminate-request.schema.json":             65536,
 	}) {
 		t.Fatalf("Provider request body limits = %v, want create request limit", limits)
 	}
@@ -75,8 +84,12 @@ func TestLockedContractProjection(t *testing.T) {
 		"browser-session-open-request.schema.json":       "browser-session-open-request.json",
 		"cancel-exec-request.schema.json":                "cancel-exec-request.json",
 		"create-sandbox-request.schema.json":             "create-sandbox-request.json",
+		"desired-state-request.schema.json":              "desired-state-request.json",
 		"exec-request.schema.json":                       "exec-request.json",
 		"exec-result.schema.json":                        "exec-result.json",
+		"lease-request.schema.json":                      "lease-request.json",
+		"lifecycle-event-page.schema.json":               "lifecycle-event-page.json",
+		"runtime-session-close-request.schema.json":      "runtime-session-close-request.json",
 		"runtime-session-connect-descriptor.schema.json": "runtime-session-connect-descriptor.json",
 		"runtime-session-handoff.schema.json":            "runtime-session-handoff.json",
 		"runtime-session-open-request.schema.json":       "runtime-session-open-request.json",
@@ -86,6 +99,7 @@ func TestLockedContractProjection(t *testing.T) {
 		"provider-operation.schema.json":                 "provider-operation.json",
 		"sandbox-status.schema.json":                     "sandbox-status.json",
 		"standard-error.schema.json":                     "standard-error.json",
+		"terminate-request.schema.json":                  "terminate-request.json",
 	}
 	for schemaName, fixtureName := range fixtures {
 		t.Run("fixture/"+fixtureName, func(t *testing.T) {

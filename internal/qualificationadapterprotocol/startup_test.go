@@ -27,9 +27,9 @@ func TestStartupIdentityStructuredCopyAndUniqueChannels(t *testing.T) {
 		identity.ProtocolSchemaDigest != ExpectedProtocolSchemaDigest || identity.ProtocolSemanticsDigest != ExpectedProtocolSemanticsDigest ||
 		identity.CallerRelease.Kind != "source-revision" || identity.CallerRelease.Value != strings.Repeat("a", 40) || !identity.CallerRelease.Immutable ||
 		identity.AdapterRelease.Kind != "source-revision" || identity.AdapterRelease.Value != strings.Repeat("a", 40) || !identity.AdapterRelease.Immutable ||
-		identity.ContractRevision != "22ba6987ea5fbc37d53942720133c0acad199edd" || identity.ContractTree != "c9a7054d7c8e7f4b6e32f38175ceedddc48c2d38" ||
+		identity.ContractRevision != "98995384c60a924f25ca58d3b7e561207bfa5be8" || identity.ContractTree != "0a627baed11c8a6ddbe8a24bbc1869e4f85edc16" ||
 		identity.ProfileID != "sandbox-runtime-external-caller-coding-shell-v1" || identity.ProfileVersion != "1.0.0" ||
-		identity.ProfileDigest != "sha256:ec113d31612dbb7cc0e9461925170f74f33722bb2efb237dbc68aa89f2d60231" || identity.ExpectedValuesInjectedByHarness ||
+		identity.ProfileDigest != "sha256:ed57cfcb72c60d3efe6aca872e50c38033200e0f1cb8d2ae076bf6593a0afce6" || identity.ExpectedValuesInjectedByHarness ||
 		len(identity.CredentialChannels) != 2 || identity.CredentialChannels[0].Actor == nil || identity.CredentialChannels[1].Actor != nil {
 		t.Fatal(identity)
 	}

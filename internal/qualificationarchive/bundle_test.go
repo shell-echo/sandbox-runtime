@@ -60,7 +60,7 @@ func testEnvelopeInput(t *testing.T) EnvelopeInput {
 	}
 	return EnvelopeInput{
 		ProfileID: "sandbox-runtime-external-caller-coding-shell-v1", ProfileVersion: "1.0.0",
-		ProfileDigest:    "sha256:ec113d31612dbb7cc0e9461925170f74f33722bb2efb237dbc68aa89f2d60231",
+		ProfileDigest:    "sha256:ed57cfcb72c60d3efe6aca872e50c38033200e0f1cb8d2ae076bf6593a0afce6",
 		ProviderRevision: provider, ExternalRevision: external,
 		CheckpointPath: "/result/execution-checkpoint.json", CheckpointDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		Archive:       Result{Path: "/result/qualification-evidence.tar", Digest: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", Bytes: 1024, Files: 7},

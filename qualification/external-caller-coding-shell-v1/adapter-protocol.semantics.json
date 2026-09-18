@@ -4,19 +4,19 @@
   "semantics_version": "1.0.0",
   "protocol_schema": {
     "path": "qualification/external-caller-coding-shell-v1/adapter-protocol.schema.json",
-    "digest": "sha256:fdee270ca27003693b2ce504da769c9779825312e1dd4e06b5caf8578f5ee03c",
+    "digest": "sha256:7948265be2f90f8c695c62340ab57f451b0771c104e9505d01d778063fca23a6",
     "digest_profile": "sha256-raw-file-bytes-v1",
     "schema_id": "urn:shell-echo:sandbox-runtime:qualification:external-caller-adapter-protocol:v1"
   },
   "profile": {
     "profile_id": "sandbox-runtime-external-caller-coding-shell-v1",
     "profile_version": "1.0.0",
-    "profile_digest": "sha256:ec113d31612dbb7cc0e9461925170f74f33722bb2efb237dbc68aa89f2d60231",
+    "profile_digest": "sha256:ed57cfcb72c60d3efe6aca872e50c38033200e0f1cb8d2ae076bf6593a0afce6",
     "schema_digest": "sha256:c98f77473ff110fc54ef6a08f66bbe1b0a36c41ee71bcce8d68b9430d22a1798"
   },
   "report_schema": {
     "path": "qualification/external-caller-coding-shell-v1/report.schema.json",
-    "digest": "sha256:5d97e10c8b5b2f365e275e78868d5a35d78bbdffdec05ea2f18b5c947cd429f6",
+    "digest": "sha256:9e9d75c021534d1b0ad49ad230031bad8cc578c163ac7f5626471899b0991c7c",
     "digest_profile": "sha256-raw-file-bytes-v1",
     "schema_id": "urn:shell-echo:sandbox-runtime:qualification:external-caller-coding-shell-report:v1"
   },

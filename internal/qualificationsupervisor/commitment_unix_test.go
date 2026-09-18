@@ -212,7 +212,7 @@ func completeSyntheticInitial(t *testing.T, a *PhaseAdmission) {
 		"format_version": 1, "protocol_id": protocol.ProtocolID, "protocol_version": protocol.ProtocolVersion, "message_type": "startup_identity", "sequence": 0,
 		"protocol_schema_digest": protocol.ExpectedProtocolSchemaDigest, "protocol_semantics_digest": protocol.ExpectedProtocolSemanticsDigest,
 		"caller_release_identity": release, "adapter_release_identity": release,
-		"contract_revision": "22ba6987ea5fbc37d53942720133c0acad199edd", "contract_tree": "c9a7054d7c8e7f4b6e32f38175ceedddc48c2d38",
+		"contract_revision": "98995384c60a924f25ca58d3b7e561207bfa5be8", "contract_tree": "0a627baed11c8a6ddbe8a24bbc1869e4f85edc16",
 		"profile_id": qualificationprofile.ProfileID, "profile_version": qualificationprofile.ProfileVersion, "profile_digest": qualificationprofile.ExpectedProfileDigest,
 		"expected_values_injected_by_harness": false, "credential_channel_requirements": []any{channel},
 	}

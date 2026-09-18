@@ -166,17 +166,19 @@ func TestDownstreamFencingActionTimeoutFitsCapacitySafetyWindow(t *testing.T) {
 
 func TestDownstreamFencingHarnessPathIsNarrow(t *testing.T) {
 	for path, want := range map[string]bool{
-		"e2e/cmd/downstream-fencing-e2e/main.go":                true,
-		"docs/STATUS.md":                                        true,
-		".github/workflows/downstream-fencing-e2e.yml":          true,
-		".github/workflows/downstream-fencing-v2-e2e.yml":       true,
-		".github/workflows/postgres-controlled-restore-e2e.yml": true,
-		".github/workflows/browser-e2e.yml":                     false,
-		"README.md":                                             true,
-		"compatibility/sandbox-runtime/README.md":               true,
-		"compatibility/sandbox-runtime/contract.lock.json":      false,
-		"gateway/cdpfence/ingress.go":                           false,
-		"e2e/../gateway/cdpfence/ingress.go":                    false,
+		"e2e/cmd/downstream-fencing-e2e/main.go":                     true,
+		"docs/STATUS.md":                                             true,
+		".github/workflows/downstream-fencing-e2e.yml":               true,
+		".github/workflows/downstream-fencing-v2-e2e.yml":            true,
+		".github/workflows/postgres-controlled-restore-e2e.yml":      true,
+		".github/workflows/browser-e2e.yml":                          false,
+		"README.md":                                                  true,
+		"compatibility/sandbox-runtime/README.md":                    true,
+		"compatibility/sandbox-runtime/contract.lock.json":           true,
+		"qualification/external-caller-coding-shell-v1/profile.json": true,
+		"providerapi/v1/dto.go":                                      false,
+		"gateway/cdpfence/ingress.go":                                false,
+		"e2e/../gateway/cdpfence/ingress.go":                         false,
 	} {
 		if got := downstreamFencingHarnessPath(path); got != want {
 			t.Errorf("downstreamFencingHarnessPath(%q) = %t, want %t", path, got, want)
@@ -186,16 +188,18 @@ func TestDownstreamFencingHarnessPathIsNarrow(t *testing.T) {
 
 func TestDownstreamFencingV2HarnessPathIsNarrow(t *testing.T) {
 	for path, want := range map[string]bool{
-		"e2e/cmd/downstream-fencing-v2-e2e/main.go":             true,
-		"docs/adr/0034-browser-downstream-fencing-v2.md":        true,
-		"compatibility/sandbox-runtime/README.md":               true,
-		"compatibility/sandbox-runtime/contract.lock.json":      false,
-		".github/workflows/downstream-fencing-v2-e2e.yml":       true,
-		".github/workflows/postgres-controlled-restore-e2e.yml": true,
-		".github/workflows/downstream-fencing-e2e.yml":          false,
-		".github/workflows/browser-e2e.yml":                     false,
-		"gateway/capacity/redis/action_history.go":              false,
-		"e2e/../gateway/capacity/redis/action_history.go":       false,
+		"e2e/cmd/downstream-fencing-v2-e2e/main.go":                  true,
+		"docs/adr/0034-browser-downstream-fencing-v2.md":             true,
+		"compatibility/sandbox-runtime/README.md":                    true,
+		"compatibility/sandbox-runtime/contract.lock.json":           true,
+		"qualification/external-caller-coding-shell-v1/profile.json": true,
+		"providerapi/v1/dto.go":                                      false,
+		".github/workflows/downstream-fencing-v2-e2e.yml":            true,
+		".github/workflows/postgres-controlled-restore-e2e.yml":      true,
+		".github/workflows/downstream-fencing-e2e.yml":               false,
+		".github/workflows/browser-e2e.yml":                          false,
+		"gateway/capacity/redis/action_history.go":                   false,
+		"e2e/../gateway/capacity/redis/action_history.go":            false,
 	} {
 		if got := downstreamFencingV2HarnessPath(path); got != want {
 			t.Errorf("downstreamFencingV2HarnessPath(%q) = %t, want %t", path, got, want)
@@ -208,7 +212,9 @@ func TestPostgresControlledRestoreHarnessPathIsNarrow(t *testing.T) {
 		"e2e/cmd/postgres-controlled-restore-e2e/main.go":                  true,
 		"docs/adr/0036-browser-postgresql-controlled-restore-reference.md": true,
 		"compatibility/sandbox-runtime/README.md":                          true,
-		"compatibility/sandbox-runtime/contract.lock.json":                 false,
+		"compatibility/sandbox-runtime/contract.lock.json":                 true,
+		"qualification/external-caller-coding-shell-v1/profile.json":       true,
+		"providerapi/v1/dto.go":                                            false,
 		".github/workflows/postgres-controlled-restore-e2e.yml":            true,
 		".github/workflows/downstream-fencing-v2-e2e.yml":                  false,
 		".github/workflows/downstream-fencing-e2e.yml":                     false,

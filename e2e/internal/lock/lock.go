@@ -28,17 +28,17 @@ import (
 )
 
 const (
-	ProviderCommit   = "21b38a341506a4d3c17107ea99ccf8dde8e351e9"
+	ProviderCommit   = "98995384c60a924f25ca58d3b7e561207bfa5be8"
 	ContractNS       = "urn:shell-echo:sandbox-runtime:provider-v1"
-	ContractRevision = "22ba6987ea5fbc37d53942720133c0acad199edd"
-	ContractTree     = "c9a7054d7c8e7f4b6e32f38175ceedddc48c2d38"
+	ContractRevision = "98995384c60a924f25ca58d3b7e561207bfa5be8"
+	ContractTree     = "0a627baed11c8a6ddbe8a24bbc1869e4f85edc16"
 
 	SuiteID            = "sandbox-provider"
 	SuiteVersion       = "1.0.0"
-	SuiteDigest        = "sha256:b40c932643f4a1e5fd6681e3abf9b64a607609866a6254456970f8b8034cf2a8"
+	SuiteDigest        = "sha256:7db1d28d35ca193632c395247cc71eeaaff48b027964b9ea9da247eaad5e3991"
 	SuiteDigestProfile = "rfc8785-full-document-excluding-suite-digest-v1"
 	SuiteProfile       = "sandbox-runtime-provider-v1"
-	SuiteCases         = 53
+	SuiteCases         = 60
 
 	RemoteSuiteID            = "sandbox-provider-remote"
 	RemoteSuiteVersion       = "1.0.0"
@@ -505,11 +505,25 @@ func providerDocumentationPath(path string) bool {
 	return path == "README.md" || path == "compatibility/sandbox-runtime/README.md" || strings.HasPrefix(path, "docs/")
 }
 
+func providerLockRefreshPath(path string) bool {
+	return path == "compatibility/sandbox-runtime/contract.lock.json" ||
+		path == "providerapi/v1/artifact_usage_contract_test.go" ||
+		path == "providerapi/v1/contract_test.go" ||
+		strings.HasPrefix(path, "qualification/external-caller-coding-shell-v1/") ||
+		strings.HasPrefix(path, "internal/qualificationadapterprotocol/") ||
+		strings.HasPrefix(path, "internal/qualificationarchive/") ||
+		strings.HasPrefix(path, "internal/qualificationharness/") ||
+		strings.HasPrefix(path, "internal/qualificationoperator/") ||
+		strings.HasPrefix(path, "internal/qualificationprofile/") ||
+		strings.HasPrefix(path, "internal/qualificationreport/") ||
+		strings.HasPrefix(path, "internal/qualificationsupervisor/")
+}
+
 func providerChangePath(changedPath string) bool {
 	if pathpkg.Clean(changedPath) != changedPath {
 		return false
 	}
-	return providerDocumentationPath(changedPath) || changedPath == ".github/workflows/reference-e2e.yml" ||
+	return providerDocumentationPath(changedPath) || providerLockRefreshPath(changedPath) || changedPath == ".github/workflows/reference-e2e.yml" ||
 		changedPath == ".github/workflows/platform-candidate-e2e.yml" ||
 		changedPath == ".github/workflows/browser-e2e.yml" ||
 		changedPath == ".github/workflows/shared-capacity-e2e.yml" ||

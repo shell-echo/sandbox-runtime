@@ -2,8 +2,8 @@
   "schema_version": 2,
   "evidence_profile": "browser-downstream-fencing-e2e-v2",
   "sources": {
-    "provider_revision": "21b38a341506a4d3c17107ea99ccf8dde8e351e9",
-    "harness_baseline": "21b38a341506a4d3c17107ea99ccf8dde8e351e9",
+    "provider_revision": "98995384c60a924f25ca58d3b7e561207bfa5be8",
+    "harness_baseline": "98995384c60a924f25ca58d3b7e561207bfa5be8",
     "gateway_component": {
       "path": "gateway/composition/browser.go",
       "revision": "b4d41c9a32b4ccf39edaba3fb8bf5ad239c1f945"
@@ -14,28 +14,28 @@
     },
     "action_history_component": {
       "path": "gateway/capacity/redis",
-      "revision": "21b38a341506a4d3c17107ea99ccf8dde8e351e9"
+      "revision": "98995384c60a924f25ca58d3b7e561207bfa5be8"
     },
     "caller_substrate": {
       "path": "e2e/internal/caller",
-      "baseline_revision": "fd48de93af5113d331c64f542c35f3934cc8229a"
+      "baseline_revision": "98995384c60a924f25ca58d3b7e561207bfa5be8"
     }
   },
   "base_lock": {
     "path": "e2e/downstream-fencing.lock.json",
-    "sha256": "sha256:666b45d25b8575771552805a9a1426b653073340eb7e935e675bf7166c5c8c6f",
+    "sha256": "sha256:dca1773b714bef8e724bf5f3d60dad49767bbbb0a5cb4c9a9bf647c782afac90",
     "evidence_profile": "browser-downstream-fencing-e2e-v1"
   },
   "contract": {
     "namespace": "urn:shell-echo:sandbox-runtime:provider-v1",
-    "revision": "22ba6987ea5fbc37d53942720133c0acad199edd",
-    "tree": "c9a7054d7c8e7f4b6e32f38175ceedddc48c2d38",
+    "revision": "98995384c60a924f25ca58d3b7e561207bfa5be8",
+    "tree": "0a627baed11c8a6ddbe8a24bbc1869e4f85edc16",
     "suite_id": "sandbox-provider",
     "suite_version": "1.0.0",
-    "suite_digest": "sha256:b40c932643f4a1e5fd6681e3abf9b64a607609866a6254456970f8b8034cf2a8",
+    "suite_digest": "sha256:7db1d28d35ca193632c395247cc71eeaaff48b027964b9ea9da247eaad5e3991",
     "suite_digest_profile": "rfc8785-full-document-excluding-suite-digest-v1",
     "suite_profile": "sandbox-runtime-provider-v1",
-    "suite_cases": 53,
+    "suite_cases": 60,
     "remote_suite_id": "sandbox-provider-remote",
     "remote_suite_version": "1.0.0",
     "remote_suite_digest": "sha256:167922d972229a97a64bf22bc6a36ee20d4de19a023395d9f004f00c54cc49d0",
