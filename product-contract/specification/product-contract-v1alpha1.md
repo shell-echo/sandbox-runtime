@@ -171,12 +171,27 @@ consumers fail closed.
 
 A view grant creates a receive-only media session and cannot negotiate the
 control data channel. A control grant may negotiate only the
-`product-browser-control.v1` channel. Its initial closed input set is
-`BrowserLivePointerMove`; sequences start at one and increase without gaps,
-and coordinates are further bounded by the negotiated viewport. Product
-rechecks the exact session control lease and fence before every forwarded
-input. SDP responses, messages, errors, and logs never project the Provider
-handoff, Browser endpoint, relay credentials, or backend identity.
+`product-browser-control.v1` channel. It carries closed
+`BrowserLiveControlMessage` and `BrowserLiveControlResult` documents for
+keyboard, pointer, touch, clipboard read/write, Product-bound upload/download,
+navigation, popup, and permission actions. Sequences start at one and increase
+without gaps; coordinates are further bounded by the negotiated viewport.
+
+The immutable policy snapshot taken at admission denies every action that is
+not explicitly enabled. Clipboard, transfer, popup, and permission actions may
+require recent user activation and explicit consent. Clipboard bytes, file
+count, per-file and total bytes, media type, transfer identity, digest,
+filename, popup count, origins, and permission names are bounded. Filenames
+are single path components. Navigation targets must be in the exact origin
+allowlist, and cross-origin navigation is separately disabled unless enabled.
+Product binds transfers to the same tenant, actor, Workspace, direction,
+digest, size, and completed Product transfer. A policy revision change revokes
+the existing control connection; it never broadens a retained connection.
+
+Product rechecks the exact session control lease, fence, and unchanged policy
+revision before every forwarded input. SDP responses, messages, errors, and
+logs never project the Provider handoff, Browser endpoint, relay credentials,
+storage reference, or backend identity.
 
 ## 10. Agent runs
 

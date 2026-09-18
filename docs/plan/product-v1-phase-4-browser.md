@@ -1,6 +1,6 @@
 # Product v1 Phase 4: Browser
 
-Status: In progress; Slices 1-7 implemented locally, 6 slices remain
+Status: In progress; Slices 1-8 implemented locally, 5 slices remain
 
 Started: 2026-09-18
 
@@ -29,7 +29,7 @@ until Slice 13 passes for the exact composed topology.
 | 5 | Viewer/control authorization, single-controller Product lease/fence binding, one-use grants, revocation, and Browser quotas; multi-human collaboration remains deferred | Viewer cannot mutate; one live controller; stale fence/replay/revocation/expiry/limit races; database-time authority; nondisclosing errors | **Implemented; local and real-PostgreSQL gates passed** |
 | 6 | Public Browser automation WSS data plane with closed action/result messages and downstream action fencing | Separate-process edge/Gateway/Provider test; bounded messages/queues; ordered actions; stale-owner suspension; reconnect; no raw CDP or endpoint exposure | **Implemented; local and separate-process gates passed** |
 | 7 | Public Browser live viewing/control data plane with authenticated signaling, bounded media/input channels, resolution/encoding negotiation, bitrate, and backpressure | Origin/TLS/authentication; unsupported codec/size rejection; slow-consumer closure; control fence per input; view-only admission; no unauthenticated upgrade | **Implemented; local real-WebRTC gates passed** |
-| 8 | Explicit keyboard/pointer/touch, clipboard, upload, download, navigation, popup, and permission policy | Deny-by-default matrix; size/type/count/digest bounds; activation/consent; filename/path confinement; cross-origin and policy-change revocation tests | Not started |
+| 8 | Explicit keyboard/pointer/touch, clipboard, upload, download, navigation, popup, and permission policy | Deny-by-default matrix; size/type/count/digest bounds; activation/consent; filename/path confinement; cross-origin and policy-change revocation tests | **Implemented; local policy/data-plane gates passed** |
 | 9 | Browser network and runtime isolation composition | Exact restricted-egress policy; DNS/IP/metadata/private-network denial; immutable verified image; permission/device denial; resource bounds; cleanup and fault injection | Not started |
 | 10 | Connection loss, Gateway/Provider restart, reconnect, visual resynchronization, resolution changes, and recovery UX | Fresh-grant reconnect; authority recheck; keyframe/resync bounds; no stale input; retained session recovery; dependency-loss fail-closed behavior | Not started |
 | 11 | Browser metadata audit, media/control-event recording, Product catalog, retention/deletion, integrity, and quota composition | Consent and visible mode; required-recorder fail closed; encrypted chained segments; authorized replay; content excluded from logs/control-plane lists; quota races | Not started |
@@ -280,6 +280,43 @@ run at the slice commit gate. The fake media source is component evidence; real
 Chromium capture/input, complete input and content policy, reconnect/resync,
 recording, Web UX, and the independent-process release topology remain Slices
 8-13.
+
+## Slice 8 exact boundary
+
+Browser live control now uses one closed, ordered Product envelope whose action
+union contains keyboard, pointer, touch, clipboard read/write, upload,
+download, navigation, popup, and permission requests. Each shape rejects
+unknown or duplicate members and carries bounded action-specific data. The
+private media port receives the admitted Product action plus the current
+controller lease and fence, and returns only a closed bounded result. Raw CDP,
+backend input messages, storage references, and arbitrary permission names are
+not accepted or projected.
+
+An immutable Product policy snapshot is loaded at connection admission. Its
+zero-value capabilities deny all mutations. Explicit policy independently
+bounds keyboard/pointer/touch enablement, clipboard bytes, activation and
+consent, transfer file count/per-file/total bytes/media types, canonical
+single-component filenames, exact completed Product transfer identity and
+digest, navigation origins, cross-origin behavior, popup count, and a closed
+permission allowlist. Every input rechecks the current Product authority and
+policy revision; any revision change closes the retained peer instead of
+broadening it in place. Upload/download metadata is rebound to the same
+tenant, actor, Workspace, direction, digest, size, and completed transfer
+before it reaches the media adapter.
+
+### Slice 8 local evidence
+
+Race-enabled domain tests prove the deny-by-default matrix, activation and
+consent requirements, clipboard bounds, origin and permission denial, transfer
+count/type/size/digest bounds, duplicate filename rejection, and path
+confinement. Gateway tests cover every closed action shape, viewport/touch/key
+bounds, unknown-member/raw-action rejection, exact transfer rebinding, ordered
+fenced forwarding, bounded result delivery, and active-peer revocation after a
+policy revision. Full repository race/shuffle, vet, Provider Contract, Product
+Contract, retained Phase 3 evidence, and diff checks run at the slice commit
+gate. This is Product policy and adapter evidence; runtime/network isolation,
+recovery, recording, Web UX, and the final independent-process composition
+remain Slices 9-13.
 
 ## Evidence rules
 

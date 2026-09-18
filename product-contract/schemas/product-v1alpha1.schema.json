@@ -648,15 +648,156 @@
         "video": {"$ref": "#/$defs/BrowserLiveVideoPolicy"}
       }
     },
-    "BrowserLivePointerMove": {
+    "BrowserLiveTouchPoint": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["type", "sequence", "x", "y"],
+      "required": ["id", "x", "y"],
       "properties": {
-        "type": {"const": "pointer.move"},
-        "sequence": {"type": "integer", "minimum": 1, "maximum": 9007199254740991},
+        "id": {"type": "integer", "minimum": 0, "maximum": 31},
         "x": {"type": "integer", "minimum": 0, "maximum": 1919},
         "y": {"type": "integer", "minimum": 0, "maximum": 1079}
+      }
+    },
+    "BrowserLiveTransferFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["transfer_id", "name", "media_type", "digest", "size_bytes"],
+      "properties": {
+        "transfer_id": {"$ref": "#/$defs/Identifier"},
+        "name": {"type": "string", "minLength": 1, "maxLength": 255, "pattern": "^[^/\\\\\\u0000\\r\\n]+$"},
+        "media_type": {"type": "string", "minLength": 3, "maxLength": 127, "pattern": "^[^/ ;\\t\\r\\n]+/[^/ ;\\t\\r\\n]+$"},
+        "digest": {"$ref": "#/$defs/SHA256Digest"},
+        "size_bytes": {"type": "integer", "minimum": 0, "maximum": 1073741824}
+      }
+    },
+    "BrowserLiveControlAction": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "event", "code", "key", "modifiers", "user_activation"],
+          "properties": {
+            "kind": {"const": "keyboard"},
+            "event": {"enum": ["down", "up"]},
+            "code": {"type": "string", "minLength": 1, "maxLength": 32, "pattern": "^[A-Za-z][A-Za-z0-9]{0,31}$"},
+            "key": {"type": "string", "minLength": 1, "maxLength": 16},
+            "modifiers": {"type": "array", "maxItems": 4, "uniqueItems": true, "items": {"enum": ["alt", "control", "meta", "shift"]}},
+            "user_activation": {"type": "boolean"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "event", "x", "y", "button", "delta_x", "delta_y", "user_activation"],
+          "properties": {
+            "kind": {"const": "pointer"},
+            "event": {"enum": ["move", "down", "up", "wheel"]},
+            "x": {"type": "integer", "minimum": 0, "maximum": 1919},
+            "y": {"type": "integer", "minimum": 0, "maximum": 1079},
+            "button": {"type": "integer", "minimum": 0, "maximum": 4},
+            "delta_x": {"type": "integer", "minimum": -4096, "maximum": 4096},
+            "delta_y": {"type": "integer", "minimum": -4096, "maximum": 4096},
+            "user_activation": {"type": "boolean"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "event", "points", "user_activation"],
+          "properties": {
+            "kind": {"const": "touch"},
+            "event": {"enum": ["start", "move", "end"]},
+            "points": {"type": "array", "minItems": 1, "maxItems": 10, "items": {"$ref": "#/$defs/BrowserLiveTouchPoint"}},
+            "user_activation": {"type": "boolean"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "user_activation", "consent"],
+          "properties": {
+            "kind": {"const": "clipboard.read"},
+            "user_activation": {"type": "boolean"},
+            "consent": {"type": "boolean"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "text", "user_activation", "consent"],
+          "properties": {
+            "kind": {"const": "clipboard.write"},
+            "text": {"type": "string", "maxLength": 65536},
+            "user_activation": {"type": "boolean"},
+            "consent": {"type": "boolean"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "files", "user_activation", "consent"],
+          "properties": {
+            "kind": {"enum": ["upload", "download"]},
+            "files": {"type": "array", "minItems": 1, "maxItems": 16, "items": {"$ref": "#/$defs/BrowserLiveTransferFile"}},
+            "user_activation": {"type": "boolean"},
+            "consent": {"type": "boolean"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "source_origin", "target_url", "user_activation"],
+          "properties": {
+            "kind": {"const": "navigate"},
+            "source_origin": {"type": "string", "format": "uri", "maxLength": 2048},
+            "target_url": {"type": "string", "format": "uri", "maxLength": 2048},
+            "user_activation": {"type": "boolean"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "source_origin", "target_url", "open_popup_count", "user_activation"],
+          "properties": {
+            "kind": {"const": "popup"},
+            "source_origin": {"type": "string", "format": "uri", "maxLength": 2048},
+            "target_url": {"type": "string", "format": "uri", "maxLength": 2048},
+            "open_popup_count": {"type": "integer", "minimum": 0, "maximum": 15},
+            "user_activation": {"type": "boolean"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "permission", "user_activation", "consent"],
+          "properties": {
+            "kind": {"const": "permission"},
+            "permission": {"enum": ["camera", "clipboard-read", "clipboard-write", "geolocation", "microphone", "notifications"]},
+            "user_activation": {"type": "boolean"},
+            "consent": {"type": "boolean"}
+          }
+        }
+      ]
+    },
+    "BrowserLiveControlMessage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "sequence", "action"],
+      "properties": {
+        "type": {"const": "input"},
+        "sequence": {"type": "integer", "minimum": 1, "maximum": 9007199254740991},
+        "action": {"$ref": "#/$defs/BrowserLiveControlAction"}
+      }
+    },
+    "BrowserLiveControlResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "sequence", "ok"],
+      "properties": {
+        "type": {"const": "input.result"},
+        "sequence": {"type": "integer", "minimum": 1, "maximum": 9007199254740991},
+        "ok": {"const": true},
+        "text": {"type": "string", "maxLength": 65536}
       }
     },
     "Artifact": {

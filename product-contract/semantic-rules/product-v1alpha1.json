@@ -194,7 +194,15 @@
         "bounded-media-and-input-queues",
         "continuous-product-authority-watch",
         "view-grant-receive-only-admission",
-        "current-product-control-fence-per-input"
+        "current-product-control-fence-per-input",
+        "deny-by-default-versioned-browser-policy",
+        "closed-keyboard-pointer-touch-actions",
+        "activation-and-consent-bounded-clipboard",
+        "product-bound-digest-checked-transfer",
+        "filename-single-component-confinement",
+        "exact-origin-navigation-and-popup-policy",
+        "closed-device-permission-policy",
+        "policy-change-connection-revocation"
       ],
       "forbids": [
         "unauthenticated-signaling",
@@ -202,6 +210,10 @@
         "unsupported-codec-or-size",
         "view-grant-control-channel",
         "unbounded-media-or-input-queue",
+        "unbound-or-unverified-transfer",
+        "cross-origin-policy-bypass",
+        "permission-without-explicit-policy",
+        "retained-connection-policy-broadening",
         "provider-handoff-public-message",
         "provider-endpoint-public-message",
         "relay-credential-public-message",

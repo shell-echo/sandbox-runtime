@@ -76,16 +76,26 @@ func TestBrowserLiveHandlerCarriesBoundedMediaAndFencedInput(t *testing.T) {
 				case <-time.After(3 * time.Second):
 					t.Fatal("control data channel did not open")
 				}
-				if err := dataChannel.SendText(`{"type":"pointer.move","sequence":1,"x":20,"y":30}`); err != nil {
+				results := make(chan webrtc.DataChannelMessage, 1)
+				dataChannel.OnMessage(func(message webrtc.DataChannelMessage) { results <- message })
+				if err := dataChannel.SendText(`{"type":"input","sequence":1,"action":{"kind":"pointer","event":"move","x":20,"y":30,"button":0,"delta_x":0,"delta_y":0,"user_activation":true}}`); err != nil {
 					t.Fatal(err)
 				}
 				select {
 				case input := <-source.session.inputs:
-					if input.Kind != "pointer.move" || input.X != 20 || input.Y != 30 || input.ControlLeaseID != binding.ControlLeaseID || input.ControlFence != binding.ControlFence {
+					if input.Action.Kind != product.BrowserActionPointer || input.X != 20 || input.Y != 30 || input.ControlLeaseID != binding.ControlLeaseID || input.ControlFence != binding.ControlFence {
 						t.Fatalf("input=%#v", input)
 					}
 				case <-time.After(3 * time.Second):
 					t.Fatal("fenced input was not forwarded")
+				}
+				select {
+				case result := <-results:
+					if !result.IsString || string(result.Data) != `{"type":"input.result","sequence":1,"ok":true}` {
+						t.Fatalf("input result=%s", result.Data)
+					}
+				case <-time.After(3 * time.Second):
+					t.Fatal("input result was not returned")
 				}
 			}
 			if source.policy.Codec != "video/VP8" || source.policy.Width != 640 || source.policy.Height != 480 {
@@ -214,7 +224,7 @@ func TestBrowserLiveMediaQueueClosesSlowConsumer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	state := newBrowserLivePeer(handler, peer, source, binding, BrowserLiveVideoPolicy{MaxBitrateKbps: 4000})
+	state := newBrowserLivePeer(handler, peer, source, binding, BrowserLiveVideoPolicy{MaxBitrateKbps: 4000}, testGatewayBrowserPolicy())
 	writer := &blockingRTPWriter{entered: make(chan struct{}), release: make(chan struct{})}
 	go state.mediaLoop(writer)
 	packet, _ := (&rtp.Packet{Header: rtp.Header{Version: 2, PayloadType: 96}}).Marshal()
@@ -235,7 +245,7 @@ func TestBrowserLiveMediaQueueClosesSlowConsumer(t *testing.T) {
 }
 
 func TestBrowserLiveProductionRequiresEncryptedRelay(t *testing.T) {
-	base := BrowserLiveOptions{Grants: &grantStoreSpy{}, Media: &browserLiveMediaSourceSpy{}, AllowedOrigins: []string{"https://app.example"}}
+	base := BrowserLiveOptions{Grants: &grantStoreSpy{}, Media: &browserLiveMediaSourceSpy{}, Policy: &browserPolicySourceSpy{policy: testGatewayBrowserPolicy()}, Transfers: denyBrowserTransferAuthority{}, AllowedOrigins: []string{"https://app.example"}}
 	if _, err := NewBrowserLiveHandler(base); !errors.Is(err, product.ErrInvalid) {
 		t.Fatalf("missing relay err=%v", err)
 	}
@@ -252,13 +262,39 @@ func TestBrowserLiveProductionRequiresEncryptedRelay(t *testing.T) {
 func mustBrowserLiveHandler(t *testing.T, store product.ConnectionGrantStore, source BrowserLiveMediaSource) *BrowserLiveHandler {
 	t.Helper()
 	handler, err := NewBrowserLiveHandler(BrowserLiveOptions{
-		Grants: store, Media: source, AllowedOrigins: []string{"https://app.example"},
+		Grants: store, Media: source, Policy: &browserPolicySourceSpy{policy: testGatewayBrowserPolicy()}, Transfers: denyBrowserTransferAuthority{}, AllowedOrigins: []string{"https://app.example"},
 		AllowHostCandidatesForTests: true, AuthorityPollInterval: 10 * time.Millisecond,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	return handler
+}
+
+func testGatewayBrowserPolicy() product.BrowserPolicy {
+	return product.BrowserPolicy{
+		Revision:  1,
+		Input:     product.BrowserInputPolicy{Keyboard: true, Pointer: true, Touch: true},
+		Clipboard: product.BrowserClipboardPolicy{MaxBytes: product.MaxBrowserClipboardBytes},
+	}
+}
+
+type browserPolicySourceSpy struct {
+	mu     sync.RWMutex
+	policy product.BrowserPolicy
+	err    error
+}
+
+func (s *browserPolicySourceSpy) CurrentBrowserPolicy(context.Context, product.GatewayBinding) (product.BrowserPolicy, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.policy, s.err
+}
+
+func (s *browserPolicySourceSpy) setRevision(revision int64) {
+	s.mu.Lock()
+	s.policy.Revision = revision
+	s.mu.Unlock()
 }
 
 func testBrowserLiveBinding(access string) product.GatewayBinding {
@@ -403,12 +439,12 @@ func (s *browserLiveMediaSessionSpy) ReadRTP(ctx context.Context) ([]byte, error
 	}
 }
 
-func (s *browserLiveMediaSessionSpy) HandleInput(ctx context.Context, input BrowserLiveInput) error {
+func (s *browserLiveMediaSessionSpy) HandleInput(ctx context.Context, input BrowserLiveInput) (BrowserLiveInputResult, error) {
 	select {
 	case <-ctx.Done():
-		return ctx.Err()
+		return BrowserLiveInputResult{}, ctx.Err()
 	case s.inputs <- input:
-		return nil
+		return BrowserLiveInputResult{}, nil
 	}
 }
 
