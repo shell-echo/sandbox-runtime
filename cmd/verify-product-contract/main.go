@@ -18,6 +18,6 @@ func main() {
 		fmt.Fprintf(os.Stderr, "verify Product Contract: %v\n", err)
 		os.Exit(1)
 	}
-	fmt.Printf("verified Product Contract namespace %s version %s (%d resources; %d operations; tree %s)\n",
-		report.Namespace, report.Version, report.ResourceCount, report.OperationCount, report.TreeDigest)
+	fmt.Printf("verified Product Contract namespace %s version %s (%d resources; %d operations; %d conformance cases; tree %s)\n",
+		report.Namespace, report.Version, report.ResourceCount, report.OperationCount, report.ConformanceCases, report.TreeDigest)
 }

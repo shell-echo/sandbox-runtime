@@ -1,0 +1,140 @@
+package productapiv1
+
+import (
+	"time"
+
+	"github.com/shell-echo/sandbox-runtime/product"
+)
+
+const APIVersion = "product.sandbox-runtime/v1alpha1"
+
+type ActorRef struct {
+	ActorType string `json:"actor_type"`
+	ActorID   string `json:"actor_id"`
+}
+
+type CapabilityRequirement struct {
+	CapabilityID string `json:"capability_id"`
+	Version      string `json:"version"`
+	ProfileID    string `json:"profile_id"`
+}
+
+type SlotSpec struct {
+	SlotKey              string                  `json:"slot_key"`
+	Kind                 string                  `json:"kind"`
+	ProfileID            string                  `json:"profile_id"`
+	RequiredCapabilities []CapabilityRequirement `json:"required_capabilities"`
+	DesiredState         string                  `json:"desired_state"`
+}
+
+type CreateWorkspaceRequest struct {
+	DisplayName     string   `json:"display_name"`
+	LifetimeSeconds int64    `json:"lifetime_seconds"`
+	PrimarySlot     SlotSpec `json:"primary_slot"`
+}
+
+type WorkspaceSlot struct {
+	SlotKey              string                  `json:"slot_key"`
+	Kind                 string                  `json:"kind"`
+	ProfileID            string                  `json:"profile_id"`
+	RequiredCapabilities []CapabilityRequirement `json:"required_capabilities"`
+	DesiredState         string                  `json:"desired_state"`
+	ObservedState        string                  `json:"observed_state"`
+	Generation           int64                   `json:"generation"`
+	ObservedGeneration   int64                   `json:"observed_generation"`
+	Version              int64                   `json:"version"`
+	CreatedAt            string                  `json:"created_at"`
+	UpdatedAt            string                  `json:"updated_at"`
+}
+
+type Workspace struct {
+	APIVersion     string          `json:"api_version"`
+	WorkspaceID    string          `json:"workspace_id"`
+	TenantID       string          `json:"tenant_id"`
+	Owner          ActorRef        `json:"owner"`
+	DisplayName    string          `json:"display_name"`
+	PrimarySlotKey string          `json:"primary_slot_key"`
+	DesiredState   string          `json:"desired_state"`
+	ObservedState  string          `json:"observed_state"`
+	Version        int64           `json:"version"`
+	LeaseExpiresAt string          `json:"lease_expires_at"`
+	Slots          []WorkspaceSlot `json:"slots"`
+	CreatedAt      string          `json:"created_at"`
+	UpdatedAt      string          `json:"updated_at"`
+}
+
+type ProductOperation struct {
+	OperationID         string   `json:"operation_id"`
+	OperationType       string   `json:"operation_type"`
+	WorkspaceID         string   `json:"workspace_id"`
+	SubmittedBy         ActorRef `json:"submitted_by"`
+	State               string   `json:"state"`
+	ReconciliationState string   `json:"reconciliation_status"`
+	Version             int64    `json:"version"`
+	AcceptedAt          string   `json:"accepted_at"`
+	UpdatedAt           string   `json:"updated_at"`
+}
+
+type CapabilityDocument struct {
+	ContractNamespace string              `json:"contract_namespace"`
+	ContractVersion   string              `json:"contract_version"`
+	Capabilities      []ProductCapability `json:"capabilities"`
+	MaxPageSize       int                 `json:"max_page_size"`
+}
+
+type ProductCapability struct {
+	CapabilityID    string         `json:"capability_id"`
+	Version         string         `json:"version"`
+	ProtocolProfile string         `json:"protocol_profile"`
+	Readiness       string         `json:"readiness"`
+	Limits          map[string]any `json:"limits"`
+}
+
+type ProductError struct {
+	Code      string `json:"code"`
+	Message   string `json:"message"`
+	Retryable bool   `json:"retryable"`
+	RequestID string `json:"request_id"`
+}
+
+func toOperation(operation product.Operation) ProductOperation {
+	return ProductOperation{
+		OperationID: operation.ID, OperationType: operation.Type, WorkspaceID: operation.WorkspaceID,
+		SubmittedBy: toActor(operation.SubmittedBy), State: operation.State,
+		ReconciliationState: operation.ReconciliationStatus, Version: operation.Version,
+		AcceptedAt: timestamp(operation.AcceptedAt), UpdatedAt: timestamp(operation.UpdatedAt),
+	}
+}
+
+func toWorkspace(workspace product.Workspace) Workspace {
+	projected := Workspace{
+		APIVersion: APIVersion, WorkspaceID: workspace.ID, TenantID: workspace.TenantID,
+		Owner: toActor(workspace.Owner), DisplayName: workspace.DisplayName,
+		PrimarySlotKey: workspace.PrimarySlotKey, DesiredState: workspace.DesiredState,
+		ObservedState: workspace.ObservedState, Version: workspace.Version,
+		LeaseExpiresAt: timestamp(workspace.LeaseExpiresAt), CreatedAt: timestamp(workspace.CreatedAt),
+		UpdatedAt: timestamp(workspace.UpdatedAt), Slots: make([]WorkspaceSlot, 0, len(workspace.Slots)),
+	}
+	for _, slot := range workspace.Slots {
+		capabilities := make([]CapabilityRequirement, 0, len(slot.RequiredCapabilities))
+		for _, capability := range slot.RequiredCapabilities {
+			capabilities = append(capabilities, CapabilityRequirement{
+				CapabilityID: capability.CapabilityID, Version: capability.Version, ProfileID: capability.ProfileID,
+			})
+		}
+		projected.Slots = append(projected.Slots, WorkspaceSlot{
+			SlotKey: slot.SlotKey, Kind: slot.Kind, ProfileID: slot.ProfileID,
+			RequiredCapabilities: capabilities, DesiredState: slot.DesiredState,
+			ObservedState: slot.ObservedState, Generation: slot.Generation,
+			ObservedGeneration: slot.ObservedGeneration, Version: slot.Version,
+			CreatedAt: timestamp(slot.CreatedAt), UpdatedAt: timestamp(slot.UpdatedAt),
+		})
+	}
+	return projected
+}
+
+func toActor(actor product.ActorRef) ActorRef {
+	return ActorRef{ActorType: string(actor.Type), ActorID: actor.ID}
+}
+
+func timestamp(value time.Time) string { return value.UTC().Format(time.RFC3339Nano) }

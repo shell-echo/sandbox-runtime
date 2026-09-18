@@ -102,6 +102,47 @@ func (a *Application) CreateWorkspace(
 	})
 }
 
+func (a *Application) GetWorkspace(ctx context.Context, tenantID string, actor ActorRef, workspaceID string) (Workspace, error) {
+	if err := validateRead(ctx, a, tenantID, actor, workspaceID); err != nil {
+		return Workspace{}, err
+	}
+	workspace, err := a.store.GetWorkspace(ctx, tenantID, workspaceID)
+	if err != nil {
+		return Workspace{}, err
+	}
+	if workspace.Owner != actor {
+		return Workspace{}, ErrNotFound
+	}
+	return workspace, nil
+}
+
+func (a *Application) GetOperation(ctx context.Context, tenantID string, actor ActorRef, operationID string) (Operation, error) {
+	if err := validateRead(ctx, a, tenantID, actor, operationID); err != nil {
+		return Operation{}, err
+	}
+	operation, err := a.store.GetOperation(ctx, tenantID, operationID)
+	if err != nil {
+		return Operation{}, err
+	}
+	if operation.SubmittedBy != actor {
+		return Operation{}, ErrNotFound
+	}
+	return operation, nil
+}
+
+func validateRead(ctx context.Context, application *Application, tenantID string, actor ActorRef, resourceID string) error {
+	if application == nil || application.store == nil {
+		return ErrStoreUnavailable
+	}
+	if ctx == nil || !validIdentifier(tenantID) || actor.Validate() != nil || !validIdentifier(resourceID) {
+		return ErrInvalid
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return nil
+}
+
 func validIdempotencyKey(value string) bool {
 	if len(value) < 1 || len(value) > 128 {
 		return false

@@ -1,0 +1,22 @@
+{
+  "suite_id": "sandbox-runtime-product-v1alpha1",
+  "suite_version": "0.1.0",
+  "execution_mode": "repository-go-test",
+  "cases": [
+    {
+      "case_id": "product-authentication-precedes-body-authority",
+      "package": "./productapi/v1",
+      "test": "TestHandlerAuthenticatesBeforeBodyAuthority"
+    },
+    {
+      "case_id": "product-create-workspace-strict-bounds",
+      "package": "./productapi/v1",
+      "test": "TestHandlerRejectsMalformedCreateWithoutMutation"
+    },
+    {
+      "case_id": "product-workspace-operation-contract-projection",
+      "package": "./productapi/v1",
+      "test": "TestHandlerCreateAndReadWorkspaceContractProjection"
+    }
+  ]
+}

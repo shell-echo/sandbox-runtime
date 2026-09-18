@@ -4,6 +4,31 @@
   "maturity": "phase-1-design-authority",
   "resources": [
     {
+      "path": "conformance/product-v1alpha1-suite.json",
+      "kind": "conformance-suite",
+      "id": "urn:shell-echo:sandbox-runtime:product-conformance:v1alpha1"
+    },
+    {
+      "path": "fixtures/create-workspace-request.json",
+      "kind": "fixture",
+      "id": "urn:shell-echo:sandbox-runtime:product-fixture:create-workspace-request:v1alpha1"
+    },
+    {
+      "path": "fixtures/product-error.json",
+      "kind": "fixture",
+      "id": "urn:shell-echo:sandbox-runtime:product-fixture:product-error:v1alpha1"
+    },
+    {
+      "path": "fixtures/product-operation.json",
+      "kind": "fixture",
+      "id": "urn:shell-echo:sandbox-runtime:product-fixture:product-operation:v1alpha1"
+    },
+    {
+      "path": "fixtures/workspace.json",
+      "kind": "fixture",
+      "id": "urn:shell-echo:sandbox-runtime:product-fixture:workspace:v1alpha1"
+    },
+    {
       "path": "openapi/sandbox-runtime-product-v1alpha1.yaml",
       "kind": "openapi",
       "id": "urn:shell-echo:sandbox-runtime:product-openapi:v1alpha1"

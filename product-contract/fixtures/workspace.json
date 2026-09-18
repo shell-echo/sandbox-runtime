@@ -1,0 +1,38 @@
+{
+  "api_version": "product.sandbox-runtime/v1alpha1",
+  "workspace_id": "wrk_example",
+  "tenant_id": "tenant_example",
+  "owner": {
+    "actor_type": "human",
+    "actor_id": "actor_example"
+  },
+  "display_name": "example workspace",
+  "primary_slot_key": "primary-code",
+  "desired_state": "active",
+  "observed_state": "requested",
+  "version": 1,
+  "lease_expires_at": "2026-09-18T01:00:00Z",
+  "slots": [
+    {
+      "slot_key": "primary-code",
+      "kind": "code",
+      "profile_id": "coding-shell-v1",
+      "required_capabilities": [
+        {
+          "capability_id": "sandbox.exec",
+          "version": "1.0.0",
+          "profile_id": "exec-v1"
+        }
+      ],
+      "desired_state": "ready",
+      "observed_state": "requested",
+      "generation": 1,
+      "observed_generation": 0,
+      "version": 1,
+      "created_at": "2026-09-18T00:00:00Z",
+      "updated_at": "2026-09-18T00:00:00Z"
+    }
+  ],
+  "created_at": "2026-09-18T00:00:00Z",
+  "updated_at": "2026-09-18T00:00:00Z"
+}

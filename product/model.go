@@ -20,6 +20,8 @@ var (
 	ErrIdempotencyConflict   = errors.New("product idempotency conflict")
 	ErrStoreUnavailable      = errors.New("product store is unavailable")
 	ErrStoreOutcomeUnknown   = errors.New("product store outcome is unknown")
+	ErrNotFound              = errors.New("product resource not found")
+	ErrForbidden             = errors.New("product action is forbidden")
 
 	identifierPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$`)
 	versionPattern    = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+$`)
@@ -108,6 +110,35 @@ type Operation struct {
 	Version              int64
 	AcceptedAt           time.Time
 	UpdatedAt            time.Time
+}
+
+type WorkspaceSlot struct {
+	SlotKey              string
+	Kind                 string
+	ProfileID            string
+	RequiredCapabilities []CapabilityRequirement
+	DesiredState         string
+	ObservedState        string
+	Generation           int64
+	ObservedGeneration   int64
+	Version              int64
+	CreatedAt            time.Time
+	UpdatedAt            time.Time
+}
+
+type Workspace struct {
+	ID             string
+	TenantID       string
+	Owner          ActorRef
+	DisplayName    string
+	PrimarySlotKey string
+	DesiredState   string
+	ObservedState  string
+	Version        int64
+	LeaseExpiresAt time.Time
+	Slots          []WorkspaceSlot
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
 }
 
 type CreateWorkspaceResult struct {

@@ -47,11 +47,7 @@ func (s *Store) CreateWorkspace(ctx context.Context, command product.CreateWorks
 	if err != nil {
 		return product.CreateWorkspaceResult{}, storeError(ctx, opCtx, err, false)
 	}
-	defer func() {
-		rollbackCtx, rollbackCancel := context.WithTimeout(context.Background(), s.operationTimeout)
-		defer rollbackCancel()
-		_ = tx.Rollback(rollbackCtx)
-	}()
+	defer rollbackBounded(tx, s.operationTimeout)
 
 	var now time.Time
 	if err := tx.QueryRow(opCtx, `SELECT clock_timestamp()`).Scan(&now); err != nil {
@@ -135,6 +131,99 @@ VALUES ($1, $2, $3, $4, 'workspace.reconcile', $5, 'pending', 0, $6, $6, $6)`,
 		return product.CreateWorkspaceResult{}, storeError(ctx, opCtx, err, true)
 	}
 	return product.CreateWorkspaceResult{Operation: operation}, nil
+}
+
+func (s *Store) GetWorkspace(ctx context.Context, tenantID, workspaceID string) (product.Workspace, error) {
+	if s == nil || s.pool == nil || ctx == nil {
+		return product.Workspace{}, product.ErrStoreUnavailable
+	}
+	opCtx, cancel := context.WithTimeout(ctx, s.operationTimeout)
+	defer cancel()
+	tx, err := s.pool.BeginTx(opCtx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
+	if err != nil {
+		return product.Workspace{}, storeError(ctx, opCtx, err, false)
+	}
+	defer rollbackBounded(tx, s.operationTimeout)
+	var workspace product.Workspace
+	var actorType string
+	err = tx.QueryRow(opCtx, `SELECT workspace_id, tenant_id, owner_actor_type, owner_actor_id,
+       display_name, primary_slot_key, desired_state, observed_state, version, lease_expires_at,
+       created_at, updated_at
+FROM sandbox_runtime_product.workspaces WHERE tenant_id = $1 AND workspace_id = $2`, tenantID, workspaceID).Scan(
+		&workspace.ID, &workspace.TenantID, &actorType, &workspace.Owner.ID,
+		&workspace.DisplayName, &workspace.PrimarySlotKey, &workspace.DesiredState, &workspace.ObservedState,
+		&workspace.Version, &workspace.LeaseExpiresAt, &workspace.CreatedAt, &workspace.UpdatedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return product.Workspace{}, product.ErrNotFound
+	}
+	if err != nil {
+		return product.Workspace{}, storeError(ctx, opCtx, err, false)
+	}
+	workspace.Owner.Type = product.ActorType(actorType)
+	rows, err := tx.Query(opCtx, `SELECT slot_key, kind, profile_id, required_capabilities,
+       desired_state, observed_state, generation, observed_generation, version, created_at, updated_at
+FROM sandbox_runtime_product.workspace_slots
+WHERE tenant_id = $1 AND workspace_id = $2 ORDER BY slot_key`, tenantID, workspaceID)
+	if err != nil {
+		return product.Workspace{}, storeError(ctx, opCtx, err, false)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var slot product.WorkspaceSlot
+		var capabilities []byte
+		if err := rows.Scan(&slot.SlotKey, &slot.Kind, &slot.ProfileID, &capabilities, &slot.DesiredState,
+			&slot.ObservedState, &slot.Generation, &slot.ObservedGeneration, &slot.Version,
+			&slot.CreatedAt, &slot.UpdatedAt); err != nil {
+			return product.Workspace{}, storeError(ctx, opCtx, err, false)
+		}
+		if err := json.Unmarshal(capabilities, &slot.RequiredCapabilities); err != nil {
+			return product.Workspace{}, product.ErrStoreUnavailable
+		}
+		workspace.Slots = append(workspace.Slots, slot)
+	}
+	if err := rows.Err(); err != nil {
+		return product.Workspace{}, storeError(ctx, opCtx, err, false)
+	}
+	if len(workspace.Slots) == 0 {
+		return product.Workspace{}, product.ErrStoreUnavailable
+	}
+	if err := tx.Commit(opCtx); err != nil {
+		return product.Workspace{}, storeError(ctx, opCtx, err, false)
+	}
+	return workspace, nil
+}
+
+func (s *Store) GetOperation(ctx context.Context, tenantID, operationID string) (product.Operation, error) {
+	if s == nil || s.pool == nil || ctx == nil {
+		return product.Operation{}, product.ErrStoreUnavailable
+	}
+	opCtx, cancel := context.WithTimeout(ctx, s.operationTimeout)
+	defer cancel()
+	var operation product.Operation
+	var actorType string
+	err := s.pool.QueryRow(opCtx, `SELECT operation_id, operation_type, workspace_id,
+       submitted_actor_type, submitted_actor_id, state, reconciliation_status, version,
+       accepted_at, updated_at
+FROM sandbox_runtime_product.product_operations WHERE tenant_id = $1 AND operation_id = $2`, tenantID, operationID).Scan(
+		&operation.ID, &operation.Type, &operation.WorkspaceID, &actorType, &operation.SubmittedBy.ID,
+		&operation.State, &operation.ReconciliationStatus, &operation.Version, &operation.AcceptedAt,
+		&operation.UpdatedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return product.Operation{}, product.ErrNotFound
+	}
+	if err != nil {
+		return product.Operation{}, storeError(ctx, opCtx, err, false)
+	}
+	operation.SubmittedBy.Type = product.ActorType(actorType)
+	return operation, nil
+}
+
+func rollbackBounded(tx pgx.Tx, timeout time.Duration) {
+	rollbackCtx, rollbackCancel := context.WithTimeout(context.Background(), timeout)
+	defer rollbackCancel()
+	_ = tx.Rollback(rollbackCtx)
 }
 
 func reserveIdempotency(

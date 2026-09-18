@@ -1,0 +1,235 @@
+package productapiv1
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/shell-echo/sandbox-runtime/internal/jsonschemaecma"
+	"github.com/shell-echo/sandbox-runtime/product"
+	"github.com/shell-echo/sandbox-runtime/productapi"
+)
+
+const testBearer = "product-api-test-token-0000000000000001"
+
+type handlerStore struct {
+	mu        sync.Mutex
+	commands  []product.CreateWorkspaceCommand
+	workspace product.Workspace
+	operation product.Operation
+}
+
+func (s *handlerStore) CreateWorkspace(_ context.Context, command product.CreateWorkspaceCommand) (product.CreateWorkspaceResult, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.commands = append(s.commands, command)
+	return product.CreateWorkspaceResult{Operation: s.operation}, nil
+}
+
+func (s *handlerStore) GetWorkspace(context.Context, string, string) (product.Workspace, error) {
+	return s.workspace, nil
+}
+
+func (s *handlerStore) GetOperation(context.Context, string, string) (product.Operation, error) {
+	return s.operation, nil
+}
+
+type allowSlot struct{}
+
+func (allowSlot) AuthorizePrimarySlot(context.Context, product.SlotSpec) error { return nil }
+
+type handlerIDs struct {
+	mu   sync.Mutex
+	next int
+}
+
+func (g *handlerIDs) NewID(prefix string) (string, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.next++
+	return fmt.Sprintf("%s_%d", prefix, g.next), nil
+}
+
+func TestHandlerCreateAndReadWorkspaceContractProjection(t *testing.T) {
+	handler, store := newTestHandler(t)
+	request := authenticatedRequest(http.MethodPost, "/api/v1/workspaces", `{
+  "display_name":"contract workspace",
+  "lifetime_seconds":3600,
+  "primary_slot":{"slot_key":"primary-code","kind":"code","profile_id":"coding-shell-v1","required_capabilities":[{"capability_id":"sandbox.exec","version":"1.0.0","profile_id":"exec-v1"}],"desired_state":"ready"}
+}`)
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Idempotency-Key", "create-1")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusAccepted || response.Header().Get("X-Request-ID") == "" {
+		t.Fatalf("create status=%d headers=%v body=%s", response.Code, response.Header(), response.Body.String())
+	}
+	validateDefinition(t, "ProductOperation", response.Body.Bytes())
+	if len(store.commands) != 1 || store.commands[0].TenantID != "tenant-1" || store.commands[0].Actor.ID != "actor-1" {
+		t.Fatalf("commands = %#v", store.commands)
+	}
+
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, authenticatedRequest(http.MethodGet, "/api/v1/workspaces/wrk_1", ""))
+	if response.Code != http.StatusOK {
+		t.Fatalf("workspace status=%d body=%s", response.Code, response.Body.String())
+	}
+	validateDefinition(t, "Workspace", response.Body.Bytes())
+
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, authenticatedRequest(http.MethodGet, "/api/v1/operations/op_1", ""))
+	if response.Code != http.StatusOK {
+		t.Fatalf("operation status=%d body=%s", response.Code, response.Body.String())
+	}
+	validateDefinition(t, "ProductOperation", response.Body.Bytes())
+}
+
+func TestHandlerAuthenticatesBeforeBodyAuthority(t *testing.T) {
+	handler, store := newTestHandler(t)
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces", strings.NewReader(`{"unknown":true}`))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Idempotency-Key", "create-1")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusUnauthorized || len(store.commands) != 0 {
+		t.Fatalf("status=%d commands=%d body=%s", response.Code, len(store.commands), response.Body.String())
+	}
+	validateDefinition(t, "ProductError", response.Body.Bytes())
+}
+
+func TestHandlerRejectsMalformedCreateWithoutMutation(t *testing.T) {
+	handler, store := newTestHandler(t)
+	tests := []struct {
+		name string
+		body string
+	}{
+		{"unknown", `{"display_name":"x","unknown":true}`},
+		{"duplicate", `{"display_name":"x","display_name":"y"}`},
+		{"trailing", `{}` + `{}`},
+		{"oversized", `{"display_name":"` + strings.Repeat("x", int(maxCreateWorkspaceBytes)) + `"}`},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			request := authenticatedRequest(http.MethodPost, "/api/v1/workspaces", test.body)
+			request.Header.Set("Content-Type", "application/json")
+			request.Header.Set("Idempotency-Key", "create-1")
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+			if response.Code != http.StatusBadRequest {
+				t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+			}
+			validateDefinition(t, "ProductError", response.Body.Bytes())
+		})
+	}
+	if len(store.commands) != 0 {
+		t.Fatalf("invalid requests produced %d commands", len(store.commands))
+	}
+}
+
+func TestHandlerRejectsDuplicateSecurityHeaders(t *testing.T) {
+	handler, store := newTestHandler(t)
+	request := authenticatedRequest(http.MethodPost, "/api/v1/workspaces", `{}`)
+	request.Header.Add("Authorization", "Bearer "+testBearer)
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Add("Idempotency-Key", "one")
+	request.Header.Add("Idempotency-Key", "two")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusUnauthorized || len(store.commands) != 0 {
+		t.Fatalf("status=%d commands=%d", response.Code, len(store.commands))
+	}
+}
+
+func newTestHandler(t *testing.T) (*Handler, *handlerStore) {
+	t.Helper()
+	now := time.Date(2026, 9, 18, 1, 2, 3, 0, time.UTC)
+	actor := product.ActorRef{Type: product.ActorHuman, ID: "actor-1"}
+	capability := product.CapabilityRequirement{CapabilityID: "sandbox.exec", Version: "1.0.0", ProfileID: "exec-v1"}
+	store := &handlerStore{
+		operation: product.Operation{
+			ID: "op_1", Type: "create_workspace", WorkspaceID: "wrk_1", SubmittedBy: actor,
+			State: "accepted", ReconciliationStatus: "pending", Version: 1, AcceptedAt: now, UpdatedAt: now,
+		},
+		workspace: product.Workspace{
+			ID: "wrk_1", TenantID: "tenant-1", Owner: actor, DisplayName: "contract workspace",
+			PrimarySlotKey: "primary-code", DesiredState: "active", ObservedState: "requested", Version: 1,
+			LeaseExpiresAt: now.Add(time.Hour), CreatedAt: now, UpdatedAt: now,
+			Slots: []product.WorkspaceSlot{{
+				SlotKey: "primary-code", Kind: "code", ProfileID: "coding-shell-v1",
+				RequiredCapabilities: []product.CapabilityRequirement{capability}, DesiredState: "ready",
+				ObservedState: "requested", Generation: 1, ObservedGeneration: 0, Version: 1,
+				CreatedAt: now, UpdatedAt: now,
+			}},
+		},
+	}
+	application, err := product.NewApplication(store, allowSlot{}, &handlerIDs{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	authenticator, err := productapi.NewStaticAuthenticator([]productapi.StaticToken{{
+		Token: testBearer, Principal: productapi.Principal{TenantID: "tenant-1", Actor: actor},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler, err := NewHandler(application, authenticator, &handlerIDs{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return handler, store
+}
+
+func authenticatedRequest(method, target, body string) *http.Request {
+	request := httptest.NewRequest(method, target, strings.NewReader(body))
+	request.Header.Set("Authorization", "Bearer "+testBearer)
+	return request
+}
+
+func validateDefinition(t *testing.T, definition string, document []byte) {
+	t.Helper()
+	schemaPath := filepath.Join(repositoryRoot(t), "product-contract", "schemas", "product-v1alpha1.schema.json")
+	schemaDocument, err := os.ReadFile(schemaPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decodedSchema any
+	if err := json.Unmarshal(schemaDocument, &decodedSchema); err != nil {
+		t.Fatal(err)
+	}
+	compiler := jsonschemaecma.NewCompiler()
+	const schemaID = "urn:shell-echo:sandbox-runtime:contract:product-v1alpha1"
+	if err := compiler.AddResource(schemaID, decodedSchema); err != nil {
+		t.Fatal(err)
+	}
+	compiled, err := compiler.Compile(schemaID + "#/$defs/" + definition)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var value any
+	decoder := json.NewDecoder(bytes.NewReader(document))
+	if err := decoder.Decode(&value); err != nil {
+		t.Fatal(err)
+	}
+	if err := compiled.Validate(value); err != nil {
+		t.Fatalf("%s does not validate as %s: %v", document, definition, err)
+	}
+}
+
+func repositoryRoot(t *testing.T) string {
+	t.Helper()
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("resolve test file")
+	}
+	return filepath.Clean(filepath.Join(filepath.Dir(filename), "..", ".."))
+}

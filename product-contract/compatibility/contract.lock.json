@@ -5,9 +5,29 @@
   "maturity": "phase-1-design-authority",
   "digest_algorithm": "sha256",
   "tree_digest_profile": "sorted-path-tab-prefixed-sha256-newline-v1",
-  "manifest_digest": "sha256:fa933c55b9025ba5d0d6661eb023d76de075676089342cab83bab9bacfbda007",
-  "tree_digest": "sha256:3cbd422e7753768be6ed6510d62b0b78f63abd4c383179c91bd3a5ab73375562",
+  "manifest_digest": "sha256:7f7c5264693f4f01c47fcda6e27f0add609b4bec9549bc2a10338517dcef7cba",
+  "tree_digest": "sha256:a5c9cfa4fdfcdb481336732b4b33de39b57ef6e30dc668b95a0cf524b143b4d1",
   "resources": [
+    {
+      "path": "conformance/product-v1alpha1-suite.json",
+      "sha256": "257455e099d1e695f870496be5b1859324f2fb3a8999d2b07bbf9d7433fa02f5"
+    },
+    {
+      "path": "fixtures/create-workspace-request.json",
+      "sha256": "e3c3e50cb201ad8202db28b1822852fd29b0322935f837c0f5c71776706dc8b9"
+    },
+    {
+      "path": "fixtures/product-error.json",
+      "sha256": "5848ec29883efa3b301bd6f0048d09d3abe8a66a10f6bbc78427c49256875383"
+    },
+    {
+      "path": "fixtures/product-operation.json",
+      "sha256": "b7315f7d17387e7861a83fd5fee989a62b4b8d294c802a18c0ec356b8fe192b4"
+    },
+    {
+      "path": "fixtures/workspace.json",
+      "sha256": "5fedb4209a2606b7791500bd8463ddb40fd09a508ed253d8d24a6c3b456d6d37"
+    },
     {
       "path": "openapi/sandbox-runtime-product-v1alpha1.yaml",
       "sha256": "5ebc3ea2ae91931cb16ef9809685d0172cf33f968ab28206bae70c158bb8a8e2"

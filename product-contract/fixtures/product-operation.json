@@ -1,0 +1,14 @@
+{
+  "operation_id": "op_example",
+  "operation_type": "create_workspace",
+  "workspace_id": "wrk_example",
+  "submitted_by": {
+    "actor_type": "human",
+    "actor_id": "actor_example"
+  },
+  "state": "accepted",
+  "reconciliation_status": "pending",
+  "version": 1,
+  "accepted_at": "2026-09-18T00:00:00Z",
+  "updated_at": "2026-09-18T00:00:00Z"
+}

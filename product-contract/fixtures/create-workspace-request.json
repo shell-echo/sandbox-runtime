@@ -1,0 +1,17 @@
+{
+  "display_name": "example workspace",
+  "lifetime_seconds": 3600,
+  "primary_slot": {
+    "slot_key": "primary-code",
+    "kind": "code",
+    "profile_id": "coding-shell-v1",
+    "required_capabilities": [
+      {
+        "capability_id": "sandbox.exec",
+        "version": "1.0.0",
+        "profile_id": "exec-v1"
+      }
+    ],
+    "desired_state": "ready"
+  }
+}

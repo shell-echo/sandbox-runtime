@@ -4,14 +4,20 @@ package productpostgres
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/shell-echo/sandbox-runtime/product"
+	"github.com/shell-echo/sandbox-runtime/productapi"
+	productapiv1 "github.com/shell-echo/sandbox-runtime/productapi/v1"
 )
 
 const productPostgresURLVariable = "SANDBOX_RUNTIME_PRODUCT_POSTGRES_URL"
@@ -40,6 +46,21 @@ func TestIntegrationCreateWorkspaceTransactionReplayAndConflict(t *testing.T) {
 	}
 	if first.Replay || first.Operation.State != "accepted" || first.Operation.ReconciliationStatus != "pending" {
 		t.Fatalf("first result = %#v", first)
+	}
+	workspace, err := application.GetWorkspace(context.Background(), "tenant-product-kernel", actor, first.Operation.WorkspaceID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if workspace.ID != first.Operation.WorkspaceID || len(workspace.Slots) != 1 ||
+		workspace.Slots[0].SlotKey != product.PrimarySlotKey || workspace.Owner != actor {
+		t.Fatalf("workspace = %#v", workspace)
+	}
+	operation, err := application.GetOperation(context.Background(), "tenant-product-kernel", actor, first.Operation.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if operation.ID != first.Operation.ID || operation.SubmittedBy != actor {
+		t.Fatalf("operation = %#v", operation)
 	}
 	assertProductKernelCounts(t, pool, "tenant-product-kernel", 1)
 
@@ -126,6 +147,75 @@ func TestIntegrationCreateWorkspaceRollbackLeavesNoPartialAuthority(t *testing.T
 		t.Fatalf("CreateWorkspace() error = %v", err)
 	}
 	assertProductKernelCounts(t, pool, "tenant-product-rollback", 0)
+}
+
+func TestIntegrationProductHTTPCreateAndReadUsesPostgresAuthority(t *testing.T) {
+	pool := integrationProductPool(t)
+	applyProductMigrations(t, pool)
+	cleanupProductTenant(t, pool, "tenant-product-http")
+	store, err := New(pool, 2*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	application, err := product.NewApplication(store, allowPrimarySlot{}, product.CryptoIDGenerator{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	const token = "product-http-integration-token-00000001"
+	authenticator, err := productapi.NewStaticAuthenticator([]productapi.StaticToken{{
+		Token: token,
+		Principal: productapi.Principal{
+			TenantID: "tenant-product-http",
+			Actor:    product.ActorRef{Type: product.ActorHuman, ID: "actor-product-http"},
+		},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler, err := productapiv1.NewHandler(application, authenticator, product.CryptoIDGenerator{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(handler)
+	t.Cleanup(server.Close)
+	body := `{"display_name":"HTTP workspace","lifetime_seconds":3600,"primary_slot":{"slot_key":"primary-code","kind":"code","profile_id":"coding-shell-v1","required_capabilities":[{"capability_id":"sandbox.exec","version":"1.0.0","profile_id":"exec-v1"}],"desired_state":"ready"}}`
+	request, _ := http.NewRequest(http.MethodPost, server.URL+"/api/v1/workspaces", strings.NewReader(body))
+	request.Header.Set("Authorization", "Bearer "+token)
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Idempotency-Key", "http-create-1")
+	response, err := server.Client().Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusAccepted {
+		t.Fatalf("POST status = %d", response.StatusCode)
+	}
+	var operation productapiv1.ProductOperation
+	if err := json.NewDecoder(response.Body).Decode(&operation); err != nil {
+		t.Fatal(err)
+	}
+	if operation.WorkspaceID == "" || operation.OperationID == "" {
+		t.Fatalf("operation = %#v", operation)
+	}
+
+	request, _ = http.NewRequest(http.MethodGet, server.URL+"/api/v1/workspaces/"+operation.WorkspaceID, nil)
+	request.Header.Set("Authorization", "Bearer "+token)
+	response, err = server.Client().Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("GET status = %d", response.StatusCode)
+	}
+	var workspace productapiv1.Workspace
+	if err := json.NewDecoder(response.Body).Decode(&workspace); err != nil {
+		t.Fatal(err)
+	}
+	if workspace.WorkspaceID != operation.WorkspaceID || workspace.TenantID != "tenant-product-http" {
+		t.Fatalf("workspace = %#v", workspace)
+	}
 }
 
 func integrationProductPool(t *testing.T) *pgxpool.Pool {

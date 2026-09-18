@@ -14,7 +14,7 @@ func TestVerifyRepositoryProductContract(t *testing.T) {
 		t.Fatal(err)
 	}
 	if report.Namespace != "urn:shell-echo:sandbox-runtime:product-v1alpha1" || report.Version != "0.1.0" ||
-		report.ResourceCount != 4 || report.OperationCount != 27 {
+		report.ResourceCount != 9 || report.OperationCount != 27 || report.ConformanceCases != 3 {
 		t.Fatalf("report = %#v", report)
 	}
 }

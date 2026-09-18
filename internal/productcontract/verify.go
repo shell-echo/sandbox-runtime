@@ -75,15 +75,29 @@ type semanticRule struct {
 	Forbids  []string `json:"forbids"`
 }
 
+type conformanceSuite struct {
+	SuiteID       string            `json:"suite_id"`
+	SuiteVersion  string            `json:"suite_version"`
+	ExecutionMode string            `json:"execution_mode"`
+	Cases         []conformanceCase `json:"cases"`
+}
+
+type conformanceCase struct {
+	CaseID  string `json:"case_id"`
+	Package string `json:"package"`
+	Test    string `json:"test"`
+}
+
 // Report identifies the exact local Product Contract content that was verified.
 type Report struct {
-	Namespace      string
-	Version        string
-	Maturity       string
-	ManifestDigest string
-	TreeDigest     string
-	ResourceCount  int
-	OperationCount int
+	Namespace        string
+	Version          string
+	Maturity         string
+	ManifestDigest   string
+	TreeDigest       string
+	ResourceCount    int
+	OperationCount   int
+	ConformanceCases int
 }
 
 // Verify validates the closed content lock, every locked byte resource, and
@@ -151,14 +165,14 @@ func Verify(sourceRoot string) (Report, error) {
 		return Report{}, err
 	}
 
-	operationCount, err := validateDocuments(manifest, resourceData)
+	operationCount, conformanceCases, err := validateDocuments(manifest, resourceData)
 	if err != nil {
 		return Report{}, err
 	}
 	return Report{
 		Namespace: lock.ContractNamespace, Version: lock.ContractVersion, Maturity: lock.Maturity,
 		ManifestDigest: lock.ManifestDigest, TreeDigest: lock.TreeDigest,
-		ResourceCount: len(resources), OperationCount: operationCount,
+		ResourceCount: len(resources), OperationCount: operationCount, ConformanceCases: conformanceCases,
 	}, nil
 }
 
@@ -188,7 +202,10 @@ func validateManifest(manifest manifestDocument, locked map[string]lockResource)
 	if len(manifest.Resources) != len(locked) {
 		return errors.New("Product Contract manifest and lock resource counts differ")
 	}
-	kinds := map[string]bool{"openapi": true, "json-schema": true, "semantic-rules": true, "specification": true}
+	kinds := map[string]bool{
+		"openapi": true, "json-schema": true, "semantic-rules": true, "specification": true,
+		"fixture": true, "conformance-suite": true,
+	}
 	seenPaths := make(map[string]bool, len(manifest.Resources))
 	seenIDs := make(map[string]bool, len(manifest.Resources))
 	for _, resource := range manifest.Resources {
@@ -206,7 +223,7 @@ func validateManifest(manifest manifestDocument, locked map[string]lockResource)
 	return nil
 }
 
-func validateDocuments(manifest manifestDocument, documents map[string][]byte) (int, error) {
+func validateDocuments(manifest manifestDocument, documents map[string][]byte) (int, int, error) {
 	byPath := make(map[string]manifestResource, len(manifest.Resources))
 	var openAPI manifestResource
 	var schema manifestResource
@@ -215,74 +232,101 @@ func validateDocuments(manifest manifestDocument, documents map[string][]byte) (
 		switch resource.Kind {
 		case "openapi":
 			if openAPI.Path != "" {
-				return 0, errors.New("Product Contract contains multiple OpenAPI resources")
+				return 0, 0, errors.New("Product Contract contains multiple OpenAPI resources")
 			}
 			openAPI = resource
 		case "json-schema":
 			if schema.Path != "" {
-				return 0, errors.New("Product Contract contains multiple JSON Schema resources")
+				return 0, 0, errors.New("Product Contract contains multiple JSON Schema resources")
 			}
 			schema = resource
 		case "semantic-rules":
 			var semantic semanticDocument
 			if err := decodeStrictJSON(documents[resource.Path], &semantic); err != nil {
-				return 0, fmt.Errorf("decode semantic rules: %w", err)
+				return 0, 0, fmt.Errorf("decode semantic rules: %w", err)
 			}
 			if err := validateSemanticDocument(semantic, manifest); err != nil {
-				return 0, err
+				return 0, 0, err
 			}
 		}
 	}
 	if openAPI.Path == "" || schema.Path == "" {
-		return 0, errors.New("Product Contract requires exactly one OpenAPI and JSON Schema resource")
+		return 0, 0, errors.New("Product Contract requires exactly one OpenAPI and JSON Schema resource")
 	}
 
 	var schemaDocument any
 	if err := decodeStrictJSON(documents[schema.Path], &schemaDocument); err != nil {
-		return 0, fmt.Errorf("decode Product JSON Schema: %w", err)
+		return 0, 0, fmt.Errorf("decode Product JSON Schema: %w", err)
 	}
 	schemaObject, ok := schemaDocument.(map[string]any)
 	if !ok || schemaObject["$id"] != schema.ID {
-		return 0, errors.New("Product JSON Schema ID does not match manifest")
+		return 0, 0, errors.New("Product JSON Schema ID does not match manifest")
 	}
 	compiler := jsonschemaecma.NewCompiler()
 	if err := compiler.AddResource(schema.ID, schemaDocument); err != nil {
-		return 0, fmt.Errorf("register Product JSON Schema: %w", err)
+		return 0, 0, fmt.Errorf("register Product JSON Schema: %w", err)
 	}
 	if _, err := compiler.Compile(schema.ID); err != nil {
-		return 0, fmt.Errorf("compile Product JSON Schema: %w", err)
+		return 0, 0, fmt.Errorf("compile Product JSON Schema: %w", err)
+	}
+	fixtureDefinitions := map[string]string{
+		"fixtures/create-workspace-request.json": "CreateWorkspaceRequest",
+		"fixtures/product-error.json":            "ProductError",
+		"fixtures/product-operation.json":        "ProductOperation",
+		"fixtures/workspace.json":                "Workspace",
+	}
+	for fixturePath, definition := range fixtureDefinitions {
+		resource, ok := byPath[fixturePath]
+		if !ok || resource.Kind != "fixture" {
+			return 0, 0, fmt.Errorf("required Product fixture %q is absent", fixturePath)
+		}
+		var value any
+		if err := decodeStrictJSON(documents[fixturePath], &value); err != nil {
+			return 0, 0, fmt.Errorf("decode Product fixture %s: %w", fixturePath, err)
+		}
+		compiled, err := compiler.Compile(schema.ID + "#/$defs/" + definition)
+		if err != nil {
+			return 0, 0, fmt.Errorf("compile Product fixture definition %s: %w", definition, err)
+		}
+		if err := compiled.Validate(value); err != nil {
+			return 0, 0, fmt.Errorf("validate Product fixture %s: %w", fixturePath, err)
+		}
+	}
+	conformanceCases, err := validateConformanceSuite(manifest, documents)
+	if err != nil {
+		return 0, 0, err
 	}
 
 	var openAPIDocument any
 	decoder := yaml.NewDecoder(bytes.NewReader(documents[openAPI.Path]))
 	if err := decoder.Decode(&openAPIDocument); err != nil {
-		return 0, fmt.Errorf("decode Product OpenAPI: %w", err)
+		return 0, 0, fmt.Errorf("decode Product OpenAPI: %w", err)
 	}
 	var trailing any
 	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
-		return 0, errors.New("Product OpenAPI contains trailing YAML documents")
+		return 0, 0, errors.New("Product OpenAPI contains trailing YAML documents")
 	}
 	root, ok := openAPIDocument.(map[string]any)
 	if !ok || root["openapi"] != "3.1.0" {
-		return 0, errors.New("Product OpenAPI must be an OpenAPI 3.1.0 object")
+		return 0, 0, errors.New("Product OpenAPI must be an OpenAPI 3.1.0 object")
 	}
 	info, ok := root["info"].(map[string]any)
 	if !ok || info["version"] != manifest.ContractVersion {
-		return 0, errors.New("Product OpenAPI version does not match manifest")
+		return 0, 0, errors.New("Product OpenAPI version does not match manifest")
 	}
 	paths, ok := root["paths"].(map[string]any)
 	if !ok || len(paths) == 0 {
-		return 0, errors.New("Product OpenAPI paths are required")
+		return 0, 0, errors.New("Product OpenAPI paths are required")
 	}
 	operationIDs := make(map[string]bool)
 	operationCount := 0
 	for route, value := range paths {
 		if !strings.HasPrefix(route, "/api/v1/") {
-			return 0, fmt.Errorf("Product route %q is outside /api/v1", route)
+			return 0, 0, fmt.Errorf("Product route %q is outside /api/v1", route)
 		}
 		item, ok := value.(map[string]any)
 		if !ok {
-			return 0, fmt.Errorf("Product route %q is not an object", route)
+			return 0, 0, fmt.Errorf("Product route %q is not an object", route)
 		}
 		for method, value := range item {
 			if !map[string]bool{"get": true, "post": true, "put": true, "patch": true, "delete": true, "options": true, "head": true, "trace": true}[method] {
@@ -290,11 +334,11 @@ func validateDocuments(manifest manifestDocument, documents map[string][]byte) (
 			}
 			operation, ok := value.(map[string]any)
 			if !ok {
-				return 0, fmt.Errorf("Product operation %s %s is not an object", method, route)
+				return 0, 0, fmt.Errorf("Product operation %s %s is not an object", method, route)
 			}
 			operationID, ok := operation["operationId"].(string)
 			if !ok || strings.TrimSpace(operationID) == "" || operationIDs[operationID] {
-				return 0, fmt.Errorf("Product operation %s %s has missing or duplicate operationId", method, route)
+				return 0, 0, fmt.Errorf("Product operation %s %s has missing or duplicate operationId", method, route)
 			}
 			operationIDs[operationID] = true
 			operationCount++
@@ -311,13 +355,45 @@ func validateDocuments(manifest manifestDocument, documents map[string][]byte) (
 		resolved := path.Clean(path.Join(path.Dir(openAPI.Path), base))
 		dependency, ok := byPath[resolved]
 		if !ok || dependency.Kind != "json-schema" {
-			return 0, fmt.Errorf("Product OpenAPI reference %q is not a manifested JSON Schema", ref)
+			return 0, 0, fmt.Errorf("Product OpenAPI reference %q is not a manifested JSON Schema", ref)
 		}
 		if _, err := compiler.Compile(dependency.ID + "#" + fragment); err != nil {
-			return 0, fmt.Errorf("compile Product OpenAPI schema reference %q: %w", ref, err)
+			return 0, 0, fmt.Errorf("compile Product OpenAPI schema reference %q: %w", ref, err)
 		}
 	}
-	return operationCount, nil
+	return operationCount, conformanceCases, nil
+}
+
+func validateConformanceSuite(manifest manifestDocument, documents map[string][]byte) (int, error) {
+	var suiteResource manifestResource
+	for _, resource := range manifest.Resources {
+		if resource.Kind == "conformance-suite" {
+			if suiteResource.Path != "" {
+				return 0, errors.New("Product Contract contains multiple conformance suites")
+			}
+			suiteResource = resource
+		}
+	}
+	if suiteResource.Path == "" {
+		return 0, errors.New("Product Contract conformance suite is required")
+	}
+	var suite conformanceSuite
+	if err := decodeStrictJSON(documents[suiteResource.Path], &suite); err != nil {
+		return 0, fmt.Errorf("decode Product conformance suite: %w", err)
+	}
+	if suite.SuiteID != "sandbox-runtime-product-v1alpha1" || suite.SuiteVersion != manifest.ContractVersion ||
+		suite.ExecutionMode != "repository-go-test" || len(suite.Cases) == 0 {
+		return 0, errors.New("invalid Product conformance suite identity")
+	}
+	seen := make(map[string]bool, len(suite.Cases))
+	for _, candidate := range suite.Cases {
+		if strings.TrimSpace(candidate.CaseID) == "" || seen[candidate.CaseID] ||
+			!strings.HasPrefix(candidate.Package, "./product") || !strings.HasPrefix(candidate.Test, "Test") {
+			return 0, fmt.Errorf("invalid Product conformance case %q", candidate.CaseID)
+		}
+		seen[candidate.CaseID] = true
+	}
+	return len(suite.Cases), nil
 }
 
 func validateSemanticDocument(document semanticDocument, manifest manifestDocument) error {

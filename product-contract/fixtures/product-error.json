@@ -1,0 +1,6 @@
+{
+  "code": "PRODUCT_INVALID_REQUEST",
+  "message": "invalid request",
+  "retryable": false,
+  "request_id": "req_example"
+}

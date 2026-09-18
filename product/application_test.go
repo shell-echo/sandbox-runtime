@@ -10,10 +10,12 @@ import (
 )
 
 type testStore struct {
-	mu       sync.Mutex
-	commands []CreateWorkspaceCommand
-	result   CreateWorkspaceResult
-	err      error
+	mu        sync.Mutex
+	commands  []CreateWorkspaceCommand
+	result    CreateWorkspaceResult
+	err       error
+	workspace Workspace
+	operation Operation
 }
 
 func (s *testStore) CreateWorkspace(_ context.Context, command CreateWorkspaceCommand) (CreateWorkspaceResult, error) {
@@ -21,6 +23,14 @@ func (s *testStore) CreateWorkspace(_ context.Context, command CreateWorkspaceCo
 	defer s.mu.Unlock()
 	s.commands = append(s.commands, command)
 	return s.result, s.err
+}
+
+func (s *testStore) GetWorkspace(context.Context, string, string) (Workspace, error) {
+	return s.workspace, s.err
+}
+
+func (s *testStore) GetOperation(context.Context, string, string) (Operation, error) {
+	return s.operation, s.err
 }
 
 type testPolicy struct{ err error }
@@ -169,6 +179,28 @@ func TestCryptoIDGeneratorProducesBoundedDistinctIDs(t *testing.T) {
 	}
 	if first == second || !validIdentifier(first) || !validIdentifier(second) {
 		t.Fatalf("IDs = %q, %q", first, second)
+	}
+}
+
+func TestApplicationReadsAreTenantActorScoped(t *testing.T) {
+	actor := ActorRef{Type: ActorHuman, ID: "actor-1"}
+	store := &testStore{
+		workspace: Workspace{ID: "wrk_1", TenantID: "tenant-1", Owner: actor},
+		operation: Operation{ID: "op_1", SubmittedBy: actor},
+	}
+	application, _ := NewApplication(store, testPolicy{}, &sequenceIDs{})
+	if _, err := application.GetWorkspace(context.Background(), "tenant-1", actor, "wrk_1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := application.GetOperation(context.Background(), "tenant-1", actor, "op_1"); err != nil {
+		t.Fatal(err)
+	}
+	other := ActorRef{Type: ActorHuman, ID: "actor-2"}
+	if _, err := application.GetWorkspace(context.Background(), "tenant-1", other, "wrk_1"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("cross-actor workspace error = %v", err)
+	}
+	if _, err := application.GetOperation(context.Background(), "tenant-1", other, "op_1"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("cross-actor operation error = %v", err)
 	}
 }
 

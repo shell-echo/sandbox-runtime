@@ -1,6 +1,6 @@
 # Product v1 Phase 3: Product Kernel, Terminal, Files, and Web
 
-Status: Active; Slice 1 implemented as local component evidence
+Status: Active; Slices 1-2 implemented as local component and real-PostgreSQL evidence
 
 Started: 2026-09-18
 
@@ -34,7 +34,7 @@ operations remain separately named gates.
 | Slice | Deliverable | Required acceptance gate | Status |
 | --- | --- | --- | --- |
 | 1 | Startup audit; production Go import guard; Product Contract content verifier; PostgreSQL schema and atomic primary-code Workspace acceptance transaction | Focused race tests; lock/resource/OpenAPI/Schema verification; real PostgreSQL migration/replay/concurrency/rollback test; full repository race/shuffle and vet | **Implemented; local gate passed** |
-| 2 | Contract-checked Product DTO projection; strict authenticated `POST /api/v1/workspaces`, Workspace read, and Product operation read | Closed input/body/header tests, auth precedence, tenant/actor nondisclosure, schema projection, HTTP black-box test, Contract fixture/conformance seed | Planned |
+| 2 | Contract-checked Product DTO projection; strict authenticated `POST /api/v1/workspaces`, Workspace read, and Product operation read | Closed input/body/header tests, auth precedence, tenant/actor nondisclosure, schema projection, HTTP black-box test, Contract fixture/conformance seed | **Implemented; local and real-PostgreSQL HTTP gates passed** |
 | 3 | Leased outbox dispatcher and exact-revision Provider adapter for discovery/admission | No dispatch before commit; exact Contract revision/tree and capability/profile selection; retry/dead-letter/timeout/unknown-result tests; fake network and protected Provider integration | Planned |
 | 4 | Primary-code slot reconciler, Provider operation evidence mapping, restart recovery, and Product event cursor/read model | Restart/duplicate/stale generation/ambiguous Provider outcome/event-contiguity tests; Workspace reaches a terminal Product decision only from retained evidence | Planned |
 | 5 | Product authorization, resource filters, control leases/fences, quotas, and metadata audit | Cross-tenant nondisclosure, stale fence, concurrent controller, database-time expiry, quota race, audit failure/retention tests | Planned |
@@ -49,7 +49,7 @@ operations remain separately named gates.
 
 Slices are dependency ordered. Later UI or data-plane work cannot substitute
 for an earlier authority, persistence, authentication, or recovery gate.
-After Slice 1, 12 slices remain.
+After Slice 2, 11 slices remain.
 
 ## Cross-cutting requirements
 
@@ -148,3 +148,26 @@ That run applies and replays migration 1, proves same-result concurrent
 idempotency, rejects a different digest, rolls back a constraint failure
 without partial authority, and removes its exact temporary container. This is
 real-adapter component evidence, not image provenance or deployment evidence.
+
+## Slice 2 exact output
+
+- `productapi` owns the bearer-authentication port and a bounded static-token
+  development adapter; verified identity is projected to one tenant and actor.
+- `productapi/v1` owns Product wire DTOs and authenticated handlers for
+  capability discovery, Workspace creation/read, and Product-operation read.
+- Authentication runs before body or resource authority. Duplicate security
+  headers, duplicate JSON members, unknown fields, trailing values, oversized
+  bodies, invalid content types, and malformed Product values fail before the
+  command store is called.
+- PostgreSQL provides consistent tenant-scoped Workspace/slot and operation
+  reads; application policy returns nondisclosing not-found results across
+  actors.
+- Product Contract lock `sha256:a5c9cfa4fdfcdb481336732b4b33de39b57ef6e30dc668b95a0cf524b143b4d1`
+  now contains four schema-valid fixtures and a three-case repository-Go-test
+  conformance seed in addition to the original four resources.
+
+Focused race/shuffle tests and a real-PostgreSQL `httptest` black-box create and
+read flow pass. The capability response remains empty because Provider
+dispatch, reconciliation, Terminal, Files, Gateway, and recording dependency
+graphs are not yet complete. No deployable Product listener or readiness claim
+follows from this slice.

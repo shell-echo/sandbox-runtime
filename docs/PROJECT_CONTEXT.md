@@ -24,10 +24,11 @@ Current verified state:
   revision `3caf38c6bc0b62d2eeb2c1e1c4ed473fae5baab1`, the clean-VCS 60-case
   Suite and all required release gates pass, and the repository-owned
   independent-process reference run passes 15+5+9 scenarios; and
-- Product v1 Phase 3 is active at Slice 1 of 13. The current branch adds the
-  Product/Provider import guard, executable Product Contract content verifier,
-  and atomic PostgreSQL primary-code Workspace command kernel as component
-  evidence only.
+- Product v1 Phase 3 is active with Slices 1-2 of 13 implemented. The current
+  branch adds the Product/Provider import guard, executable Product Contract
+  verifier/fixtures/conformance seed, atomic PostgreSQL primary-code Workspace
+  command kernel, and strict authenticated Workspace/operation handlers as
+  component and real-PostgreSQL evidence only.
 
 The qualification applies only to Provider revision
 `170459266af5f4fad359ca8c63f2ae19741055c5`, external-caller revision
@@ -113,7 +114,7 @@ Three API surfaces must remain separate:
 | --- | --- | --- |
 | Local `/instances` API | Local instance management over fake or Docker drivers | Internal implementation; its DTOs and state are not Provider wire models |
 | Provider API v1 | mTLS/JWS-protected asynchronous Provider protocol | Repository Contract controls routes, documents, semantics, and projection |
-| Target Product API v1alpha1 | End-user Workspace control plane | Independent Product Contract; Slice 1 persistence kernel only, with no server implementation today |
+| Target Product API v1alpha1 | End-user Workspace control plane | Independent Product Contract; Slice 2 handler subset with empty capabilities and no deployable listener |
 
 The calling service owns its business correlation records, desired business
 state, tenant/user authorization, ProviderRevision selection, Artifact

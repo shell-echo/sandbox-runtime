@@ -33,4 +33,6 @@ type CreateWorkspaceCommand struct {
 
 type WorkspaceCommandStore interface {
 	CreateWorkspace(context.Context, CreateWorkspaceCommand) (CreateWorkspaceResult, error)
+	GetWorkspace(context.Context, string, string) (Workspace, error)
+	GetOperation(context.Context, string, string) (Operation, error)
 }

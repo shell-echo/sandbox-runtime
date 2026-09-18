@@ -17,10 +17,11 @@ defines a target Product that may live in this repository only as a caller of
 the Provider. Its independent design authority is the content-locked
 [`product-contract/`](../product-contract/), with repository, state, identity,
 Gateway/recording, and deployment decisions in ADRs 0042-0047. This is target
-architecture authority. Product Phase 3 Slice 1 now implements only the
-Product import boundary, Contract content verifier, and PostgreSQL atomic
-Workspace command kernel. No Product service listener, Provider dispatch,
-public Gateway, Guest Agent, or Product capability is implemented or
+architecture authority. Product Phase 3 Slices 1-2 now implement the Product
+import boundary, nine-resource Contract content verifier/conformance seed,
+PostgreSQL atomic Workspace command kernel, and strict authenticated
+Workspace/operation handler subset. No Product service listener, Provider
+dispatch, public Gateway, Guest Agent, or Product capability is implemented or
 advertised today.
 
 The [Product v1 Phase 2 Provider lifecycle plan](plan/product-v1-phase-2-provider-lifecycle.md)
