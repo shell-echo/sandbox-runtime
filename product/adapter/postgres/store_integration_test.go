@@ -5,6 +5,10 @@ package productpostgres
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -16,7 +20,9 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/shell-echo/sandbox-runtime/guestagent"
 	"github.com/shell-echo/sandbox-runtime/product"
+	productguest "github.com/shell-echo/sandbox-runtime/product/adapter/guest"
 	"github.com/shell-echo/sandbox-runtime/productapi"
 	productapiv1 "github.com/shell-echo/sandbox-runtime/productapi/v1"
 )
@@ -509,6 +515,81 @@ SELECT tenant_id,workspace_id,'primary-code',1,1,repeat('a',40),'coding-shell-v1
 	if err != nil || final.State != "succeeded" {
 		t.Fatalf("final=%#v err=%v", final, err)
 	}
+}
+
+func TestIntegrationGuestBindingChallengeRotationAndRevocation(t *testing.T) {
+	pool := integrationProductPool(t)
+	applyProductMigrations(t, pool)
+	cleanupProductTenant(t, pool, "tenant-product-guest")
+	store, _ := New(pool, 2*time.Second)
+	application, _ := product.NewApplication(store, allowPrimarySlot{}, product.CryptoIDGenerator{})
+	guests, _ := product.NewGuestService(store, product.CryptoIDGenerator{})
+	authenticator, _ := productguest.NewAuthenticator(store)
+	actor := product.ActorRef{Type: product.ActorHuman, ID: "owner-product-guest"}
+	created, err := application.CreateWorkspace(context.Background(), "tenant-product-guest", actor, "guest-workspace", integrationCreateWorkspaceRequest("guest workspace"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(context.Background(), `UPDATE sandbox_runtime_product.workspace_slots SET observed_state='ready',observed_generation=generation WHERE tenant_id=$1`, "tenant-product-guest"); err != nil {
+		t.Fatal(err)
+	}
+	workspace, _ := application.GetWorkspace(context.Background(), "tenant-product-guest", actor, created.Operation.WorkspaceID)
+	publicKey, privateKey, _ := ed25519.GenerateKey(rand.Reader)
+	request := product.ProvisionGuestRequest{ExpectedWorkspaceVersion: workspace.Version, SlotKey: product.PrimarySlotKey, ProtocolVersion: guestagent.ProtocolVersion, Capabilities: []string{"guest.health", "files.list"}, PublicKey: publicKey, LifetimeSeconds: 600}
+	binding, replay, err := guests.Provision(context.Background(), "tenant-product-guest", actor, workspace.ID, "guest-provision-1", request)
+	if err != nil || replay || binding.BindingGeneration != 1 {
+		t.Fatalf("binding=%#v replay=%v err=%v", binding, replay, err)
+	}
+	replayed, replay, err := guests.Provision(context.Background(), "tenant-product-guest", actor, workspace.ID, "guest-provision-1", request)
+	if err != nil || !replay || replayed.GuestID != binding.GuestID {
+		t.Fatalf("replayed=%#v replay=%v err=%v", replayed, replay, err)
+	}
+	authRequest := signedGuestAuth(t, binding, privateKey, "challenge-a")
+	identity, err := authenticator.Authenticate(context.Background(), authRequest)
+	if err != nil || identity.TenantID != "tenant-product-guest" || len(identity.Capabilities) != 2 {
+		t.Fatalf("identity=%#v err=%v", identity, err)
+	}
+	if err := authenticator.CheckAuthority(context.Background(), identity); err != nil {
+		t.Fatal(err)
+	}
+	if err := authenticator.Disconnected(context.Background(), identity); err != nil {
+		t.Fatal(err)
+	}
+	workspace, _ = application.GetWorkspace(context.Background(), "tenant-product-guest", actor, workspace.ID)
+	newPublicKey, newPrivateKey, _ := ed25519.GenerateKey(rand.Reader)
+	rotated, _, err := guests.Provision(context.Background(), "tenant-product-guest", actor, workspace.ID, "guest-provision-2", product.ProvisionGuestRequest{ExpectedWorkspaceVersion: workspace.Version, SlotKey: product.PrimarySlotKey, ProtocolVersion: guestagent.ProtocolVersion, Capabilities: []string{"guest.health"}, PublicKey: newPublicKey, LifetimeSeconds: 600})
+	if err != nil || rotated.BindingGeneration != 2 || rotated.GuestID == binding.GuestID {
+		t.Fatalf("rotated=%#v err=%v", rotated, err)
+	}
+	if _, err := authenticator.Authenticate(context.Background(), signedGuestAuth(t, binding, privateKey, "challenge-old")); !errors.Is(err, guestagent.ErrUnauthorized) {
+		t.Fatalf("old credential err=%v", err)
+	}
+	newIdentity, err := authenticator.Authenticate(context.Background(), signedGuestAuth(t, rotated, newPrivateKey, "challenge-new"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RevokeGuest(context.Background(), "tenant-product-guest", rotated.GuestID, "removed"); err != nil {
+		t.Fatal(err)
+	}
+	if err := authenticator.CheckAuthority(context.Background(), newIdentity); !errors.Is(err, guestagent.ErrUnauthorized) {
+		t.Fatalf("revoked authority err=%v", err)
+	}
+}
+
+func signedGuestAuth(t *testing.T, binding product.GuestBinding, privateKey ed25519.PrivateKey, label string) guestagent.AuthRequest {
+	t.Helper()
+	digest := sha256.Sum256([]byte(label))
+	clientDigest := sha256.Sum256([]byte(label + "-client"))
+	request := guestagent.AuthRequest{
+		Challenge: guestagent.Challenge{Type: "challenge", Nonce: base64.RawURLEncoding.EncodeToString(digest[:]), ExpiresAt: time.Now().Add(20 * time.Second).UTC().Format(time.RFC3339Nano)},
+		Hello:     guestagent.Hello{Type: "hello", GuestID: binding.GuestID, BindingGeneration: binding.BindingGeneration, ProtocolVersion: binding.ProtocolVersion, Capabilities: append([]string(nil), binding.Capabilities...), ClientNonce: base64.RawURLEncoding.EncodeToString(clientDigest[:])},
+	}
+	signing, err := request.SigningBytes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Hello.Signature = base64.RawURLEncoding.EncodeToString(ed25519.Sign(privateKey, signing))
+	return request
 }
 
 func integrationProductPool(t *testing.T) *pgxpool.Pool {

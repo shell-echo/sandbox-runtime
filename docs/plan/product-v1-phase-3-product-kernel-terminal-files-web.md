@@ -1,6 +1,6 @@
 # Product v1 Phase 3: Product Kernel, Terminal, Files, and Web
 
-Status: Active; Slices 1-7 implemented as local component and real-PostgreSQL evidence
+Status: Active; Slices 1-8 implemented as local component and real-PostgreSQL evidence
 
 Started: 2026-09-18
 
@@ -40,7 +40,7 @@ operations remain separately named gates.
 | 5 | Product authorization, resource filters, control leases/fences, quotas, and metadata audit | Cross-tenant nondisclosure, stale fence, concurrent controller, database-time expiry, quota race, audit failure/retention tests | **Implemented; local and real-PostgreSQL gates passed** |
 | 6 | Product Terminal session control plane and Provider terminal-control adapter | Durable session-before-grant, exact Workspace/slot/fence binding, create/read/close/resize capability honesty, restart and close-race tests | **Implemented; local and real-PostgreSQL gates passed** |
 | 7 | Public Terminal Gateway with one-use Product grants, bounded proxying, revocation, backpressure, reconnect, and metadata audit | Separate-process client/Product/Gateway/Provider test; no endpoint or ticket leakage; expiry/replay/revocation/capacity/backpressure/reconnect/cleanup cases | **Implemented; local and real-PostgreSQL gates passed; standalone process matrix retained for Slice 13** |
-| 8 | Outbound authenticated Guest Agent control channel and version/capability negotiation | Guest identity binding, replay protection, rotation, deadline/cancellation, reconnect, incompatible-version, and compromised/removed-guest tests | Planned |
+| 8 | Outbound authenticated Guest Agent control channel and version/capability negotiation | Guest identity binding, replay protection, rotation, deadline/cancellation, reconnect, incompatible-version, and compromised/removed-guest tests | **Implemented; local and real-PostgreSQL gates passed** |
 | 9 | Files list/stat/watch with confined paths and durable change state | Symlink/traversal/special-file/rename/watch-gap/cursor-expiry/large-directory/cross-tenant tests; no host path or backend identity exposure | Planned |
 | 10 | Digest-addressed upload/download, resumable transfer, revision staging, and compare-and-swap commit | Digest mismatch, partial/resume, cancellation, quota/backpressure, concurrent commit, crash recovery, retention and exact cleanup tests | Planned |
 | 11 | Product Web control plane and client for Workspace, Terminal, and Files | Generated/checked client; authenticated browser E2E; CSP/CSRF/origin/session/accessibility/error/recovery tests; no private endpoint exposure | Planned |
@@ -49,7 +49,7 @@ operations remain separately named gates.
 
 Slices are dependency ordered. Later UI or data-plane work cannot substitute
 for an earlier authority, persistence, authentication, or recovery gate.
-After Slice 7, 6 slices remain.
+After Slice 8, 5 slices remain.
 
 ## Cross-cutting requirements
 
@@ -271,3 +271,31 @@ encrypted retained ticket replay, single-use consumption, exact control and
 handoff binding, and revocation after session close. The final fresh-database,
 separate-process client/Product/Gateway/Guest/Provider matrix remains the
 Slice 13 phase gate; no deployment or production-readiness claim follows.
+
+## Slice 8 exact output
+
+- `guestagent` is a repository-enforced neutral protocol package: it cannot
+  import Product, Provider, Gateway, driver, or local-instance authority. A
+  Guest makes the outbound WebSocket connection; no inbound guest port or
+  control-plane credential is required.
+- Authentication uses a fresh 256-bit server challenge and a Guest-held
+  Ed25519 key. The signature binds challenge and expiry, client nonce, guest
+  identity, binding generation, exact protocol version, and sorted offered
+  capabilities. Captured hellos therefore cannot authenticate a later
+  challenge.
+- Product PostgreSQL retains only the registered public key and its digest,
+  exact Workspace/slot generation, monotonically increasing binding
+  generation, configured capabilities, connection nonce, state, and expiry.
+  Rotation revokes the prior live binding before the new generation becomes
+  usable; a stale disconnect cannot clear a newer connection.
+- The channel enforces exact version negotiation, bounded messages and
+  in-flight work, capability-scoped calls, propagated deadlines and explicit
+  cancellation. Product continuously checks durable Guest authority; removal,
+  expiry, slot-generation drift, or lost readiness closes the channel. A
+  transport-only disconnect permits a fresh-nonce reconnect.
+
+Race tests cover authenticated calls, replay resistance, operation
+cancellation, reconnect, live revocation, and rotated-key rejection. A fresh
+PostgreSQL integration run proves idempotent registration, challenge proof,
+generation rotation, old-key rejection, and removal. Runtime image injection,
+deployment identity, and hostile-guest isolation remain later release gates.

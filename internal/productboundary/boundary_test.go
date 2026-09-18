@@ -77,8 +77,8 @@ func forbiddenProductionImport(file string, imported string) bool {
 		)
 	case strings.HasPrefix(file, "guestagent/"):
 		return hasAnyPackage(imported,
-			modulePath+"product/adapter", modulePath+"provider", modulePath+"providerapi",
-			modulePath+"driver", modulePath+"instance",
+			modulePath+"product", modulePath+"productapi", modulePath+"provider", modulePath+"providerapi",
+			modulePath+"driver", modulePath+"instance", modulePath+"gateway",
 		)
 	case hasAnyPrefix(file, "provider/", "providerapi/", "driver/", "instance/", "gateway/"):
 		return hasAnyPackage(imported, modulePath+"product", modulePath+"productapi", modulePath+"guestagent")
@@ -137,6 +137,7 @@ func TestForbiddenProductionImportRules(t *testing.T) {
 		{"provider/model.go", modulePath + "product", true},
 		{"gateway/model.go", modulePath + "product/session", true},
 		{"guestagent/client.go", modulePath + "providerapi", true},
+		{"guestagent/agent.go", modulePath + "product", true},
 	}
 	for _, test := range tests {
 		if got := forbiddenProductionImport(test.file, test.imported); got != test.want {

@@ -16,6 +16,14 @@ ALTER TABLE sandbox_runtime_product.product_operations
     ADD COLUMN error_code text,
     ADD COLUMN error_message text;
 
+ALTER TABLE sandbox_runtime_product.workspace_events
+    DROP CONSTRAINT workspace_events_subject_type,
+    ADD CONSTRAINT workspace_events_subject_type CHECK (subject_type IN (
+        'workspace', 'slot', 'operation', 'control_lease', 'session',
+        'connection_grant', 'guest_binding', 'revision', 'file_change',
+        'transfer', 'artifact', 'recording', 'agent_run'
+    ));
+
 CREATE TABLE sandbox_runtime_product.product_operation_attempts (
     tenant_id text NOT NULL,
     operation_id text NOT NULL,
@@ -213,9 +221,13 @@ CREATE TABLE sandbox_runtime_product.guest_bindings (
     tenant_id text NOT NULL,
     workspace_id text NOT NULL,
     slot_key text NOT NULL,
+    slot_profile_id text NOT NULL,
+    slot_generation bigint NOT NULL,
     binding_generation bigint NOT NULL,
     guest_id text NOT NULL,
     credential_digest bytea NOT NULL,
+    public_key bytea NOT NULL,
+    connection_nonce text,
     protocol_version text NOT NULL,
     capabilities jsonb NOT NULL,
     state text NOT NULL,
@@ -226,11 +238,21 @@ CREATE TABLE sandbox_runtime_product.guest_bindings (
     CONSTRAINT guest_bindings_primary_key PRIMARY KEY (tenant_id, workspace_id, slot_key, binding_generation),
     CONSTRAINT guest_bindings_slot FOREIGN KEY (tenant_id, workspace_id, slot_key)
         REFERENCES sandbox_runtime_product.workspace_slots (tenant_id, workspace_id, slot_key) ON DELETE RESTRICT,
+    CONSTRAINT guest_bindings_generation CHECK (slot_generation >= 1 AND binding_generation >= 1),
     CONSTRAINT guest_bindings_digest CHECK (octet_length(credential_digest) = 32),
+    CONSTRAINT guest_bindings_public_key CHECK (octet_length(public_key) = 32),
+    CONSTRAINT guest_bindings_nonce CHECK (connection_nonce IS NULL OR connection_nonce ~ '^[A-Za-z0-9_-]{43}$'),
     CONSTRAINT guest_bindings_capabilities CHECK (jsonb_typeof(capabilities) = 'array' AND jsonb_array_length(capabilities) <= 32),
     CONSTRAINT guest_bindings_state CHECK (state IN ('issued', 'connected', 'disconnected', 'revoked', 'expired')),
     CONSTRAINT guest_bindings_expiry CHECK (expires_at > created_at AND updated_at >= created_at)
 );
+
+CREATE UNIQUE INDEX guest_bindings_guest_id
+    ON sandbox_runtime_product.guest_bindings (guest_id);
+
+CREATE UNIQUE INDEX guest_bindings_one_live_slot
+    ON sandbox_runtime_product.guest_bindings (tenant_id, workspace_id, slot_key)
+    WHERE state IN ('issued', 'connected', 'disconnected');
 
 CREATE TABLE sandbox_runtime_product.workspace_revisions (
     tenant_id text NOT NULL,
