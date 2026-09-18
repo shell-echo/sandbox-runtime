@@ -39,7 +39,7 @@ operations remain separately named gates.
 | 4 | Primary-code slot reconciler, Provider operation evidence mapping, restart recovery, and Product event cursor/read model | Restart/duplicate/stale generation/ambiguous Provider outcome/event-contiguity tests; Workspace reaches a terminal Product decision only from retained evidence | **Implemented; local and real-PostgreSQL gates passed** |
 | 5 | Product authorization, resource filters, control leases/fences, quotas, and metadata audit | Cross-tenant nondisclosure, stale fence, concurrent controller, database-time expiry, quota race, audit failure/retention tests | **Implemented; local and real-PostgreSQL gates passed** |
 | 6 | Product Terminal session control plane and Provider terminal-control adapter | Durable session-before-grant, exact Workspace/slot/fence binding, create/read/close/resize capability honesty, restart and close-race tests | **Implemented; local and real-PostgreSQL gates passed** |
-| 7 | Public Terminal Gateway with one-use Product grants, bounded proxying, revocation, backpressure, reconnect, and metadata audit | Separate-process client/Product/Gateway/Provider test; no endpoint or ticket leakage; expiry/replay/revocation/capacity/backpressure/reconnect/cleanup cases | **Implemented; local and real-PostgreSQL gates passed; standalone process matrix retained for Slice 13** |
+| 7 | Public Terminal Gateway with one-use Product grants, bounded proxying, revocation, backpressure, reconnect, and metadata audit | Separate-process client/Product/Gateway/Provider test; no endpoint or ticket leakage; expiry/replay/revocation/capacity/backpressure/reconnect/cleanup cases | **Implemented; local and real-PostgreSQL gates passed; standalone process matrix later exercised by Slice 13** |
 | 8 | Outbound authenticated Guest Agent control channel and version/capability negotiation | Guest identity binding, replay protection, rotation, deadline/cancellation, reconnect, incompatible-version, and compromised/removed-guest tests | **Implemented; local and real-PostgreSQL gates passed** |
 | 9 | Files list/stat/watch with confined paths and durable change state | Symlink/traversal/special-file/rename/watch-gap/cursor-expiry/large-directory/cross-tenant tests; no host path or backend identity exposure | **Implemented; local and real-PostgreSQL gates passed** |
 | 10 | Digest-addressed upload/download, resumable transfer, revision staging, and compare-and-swap commit | Digest mismatch, partial/resume, cancellation, quota/backpressure, concurrent commit, crash recovery, retention and exact cleanup tests | **Implemented; local and real-PostgreSQL gates passed** |
@@ -269,9 +269,10 @@ public connection grant and data path do not exist until Slice 7.
 Focused race tests cover binary proxying, ticket replay, protocol rejection,
 and live authority revocation. A fresh disposable PostgreSQL 16 run proves
 encrypted retained ticket replay, single-use consumption, exact control and
-handoff binding, and revocation after session close. The final fresh-database,
-separate-process client/Product/Gateway/Guest/Provider matrix remains the
-Slice 13 phase gate; no deployment or production-readiness claim follows.
+handoff binding, and revocation after session close. The later Slice 13 gate
+passed the final fresh-database, separate-process
+client/Product/Gateway/Guest/Provider matrix; no deployment or
+production-readiness claim follows.
 
 ## Slice 8 exact output
 

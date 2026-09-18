@@ -54,10 +54,12 @@ state, lease renewal/expiry, resumable events, and terminal-session close; they
 exclude resize and snapshot/restore from Phase 2. See
 [`audits/phase-2-provider-lifecycle-completion.md`](audits/phase-2-provider-lifecycle-completion.md)
 for the selected authority, release evidence, and exact non-claims.
-The Phase 3 startup inventory and fixed remaining order are recorded in
+The Phase 3 startup inventory, fixed slice order, and completion evidence are
+recorded in
 [`audits/phase-3-product-surface-startup.md`](audits/phase-3-product-surface-startup.md)
-and
-[`plan/product-v1-phase-3-product-kernel-terminal-files-web.md`](plan/product-v1-phase-3-product-kernel-terminal-files-web.md).
+[`plan/product-v1-phase-3-product-kernel-terminal-files-web.md`](plan/product-v1-phase-3-product-kernel-terminal-files-web.md),
+with the accepted standalone run in
+[`audits/product-phase-3-standalone-completion.md`](audits/product-phase-3-standalone-completion.md).
 
 See [`STATUS.md`](STATUS.md) for the complete evidence ledger and
 [`qualification/external-caller-coding-shell-v1.md`](qualification/external-caller-coding-shell-v1.md)

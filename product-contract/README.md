@@ -7,20 +7,29 @@ Current identity:
 
 - namespace: `urn:shell-echo:sandbox-runtime:product-v1alpha1`
 - design version: `0.1.0`
-- maturity: Phase 1 design authority; implementation incomplete
+- maturity: Phase 1 design-definition authority; Phase 3 implementation
+  evidence is recorded separately
 - manifest: `sha256:7f7c5264693f4f01c47fcda6e27f0add609b4bec9549bc2a10338517dcef7cba`
 - resource tree: `sha256:a5c9cfa4fdfcdb481336732b4b33de39b57ef6e30dc668b95a0cf524b143b4d1`
 
 Normative resources are listed by
 `compatibility/contract-manifest.json` and content-addressed by
 `compatibility/contract.lock.json`. A route or schema in this design does not
-claim that the Product, Gateway, Guest Agent, or a backing Provider currently
-implements it. Product Phase 3 Slice 2 implements only the authenticated
-capability, Workspace-create/read, and operation-read handler subset; it has no
-deployable listener and advertises no Product capability. Runtime advertisement
-must remain empty for incomplete capabilities. The locked fixture and three-case conformance seed
-cover only the first Product transport slice and are not a complete Phase 3
-or compatibility claim.
+by itself claim implementation, availability, compatibility, or readiness.
+Product Phase 3 is complete at 13/13 for its separately recorded bounded
+standalone scope: Product, Gateway, Guest, and a locked-wire Provider fixture
+ran as separate OS processes against fresh pinned PostgreSQL, and the exact
+nine-scenario matrix plus strict evidence validation passed. Capability
+advertisement in that gate is tenant-aware and dependency-derived; incomplete
+dependency graphs remain unavailable rather than being promoted by schema or
+configuration alone.
+
+That result does not change this Contract's v1alpha1 version or Phase 1
+design-definition maturity. The locked fixtures and three-case conformance
+seed remain definition and initial transport evidence, not a complete Product
+compatibility suite. The Phase 3 gate supplies no deployable listener
+configuration, independently implemented caller, HA, hostile-multitenant,
+deployment, or production-readiness claim.
 
 The Provider compatibility lock and Provider Conformance Suite remain wholly
 separate.
