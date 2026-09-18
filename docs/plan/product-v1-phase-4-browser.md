@@ -1,6 +1,6 @@
 # Product v1 Phase 4: Browser
 
-Status: In progress; Slices 1-6 implemented locally, 7 slices remain
+Status: In progress; Slices 1-7 implemented locally, 6 slices remain
 
 Started: 2026-09-18
 
@@ -28,7 +28,7 @@ until Slice 13 passes for the exact composed topology.
 | 4 | Browser lifecycle reconciliation, disconnect/expiry/close cleanup, unknown-outcome recovery, slot replacement, and retained evidence | Restart at every commit/dispatch/observe boundary; no duplicate current binding; no session resurrection; exact-owned cleanup; coordinated Contract decision for missing Provider close semantics | **Implemented; local and real-PostgreSQL gates passed** |
 | 5 | Viewer/control authorization, single-controller Product lease/fence binding, one-use grants, revocation, and Browser quotas; multi-human collaboration remains deferred | Viewer cannot mutate; one live controller; stale fence/replay/revocation/expiry/limit races; database-time authority; nondisclosing errors | **Implemented; local and real-PostgreSQL gates passed** |
 | 6 | Public Browser automation WSS data plane with closed action/result messages and downstream action fencing | Separate-process edge/Gateway/Provider test; bounded messages/queues; ordered actions; stale-owner suspension; reconnect; no raw CDP or endpoint exposure | **Implemented; local and separate-process gates passed** |
-| 7 | Public Browser live viewing/control data plane with authenticated signaling, bounded media/input channels, resolution/encoding negotiation, bitrate, and backpressure | Origin/TLS/authentication; unsupported codec/size rejection; slow-consumer closure; control fence per input; view-only admission; no unauthenticated upgrade | Not started |
+| 7 | Public Browser live viewing/control data plane with authenticated signaling, bounded media/input channels, resolution/encoding negotiation, bitrate, and backpressure | Origin/TLS/authentication; unsupported codec/size rejection; slow-consumer closure; control fence per input; view-only admission; no unauthenticated upgrade | **Implemented; local real-WebRTC gates passed** |
 | 8 | Explicit keyboard/pointer/touch, clipboard, upload, download, navigation, popup, and permission policy | Deny-by-default matrix; size/type/count/digest bounds; activation/consent; filename/path confinement; cross-origin and policy-change revocation tests | Not started |
 | 9 | Browser network and runtime isolation composition | Exact restricted-egress policy; DNS/IP/metadata/private-network denial; immutable verified image; permission/device denial; resource bounds; cleanup and fault injection | Not started |
 | 10 | Connection loss, Gateway/Provider restart, reconnect, visual resynchronization, resolution changes, and recovery UX | Fresh-grant reconnect; authority recheck; keyframe/resync bounds; no stale input; retained session recovery; dependency-loss fail-closed behavior | Not started |
@@ -243,6 +243,43 @@ backend loss, one-use ticket replay rejection, a closed action/result round
 trip, and public non-disclosure. This is same-repository separate-process
 evidence with a bounded fake CDP backend, not real Chromium, deployment, HA,
 hostile-multitenant, or production evidence.
+
+## Slice 7 exact boundary
+
+The public `product-browser-live.v1` edge now performs a closed HTTPS
+offer/answer exchange only after TLS, exact HTTPS Origin, strict body, and
+one-use Product-ticket checks. Production construction requires encrypted
+TURN credentials and relay-only ICE, preventing the Product edge from
+advertising host candidates. The initial negotiated media contract is VP8 with
+explicit width, height, frame-rate, and bitrate ceilings. SDP, RTP packets,
+media queues, input messages, input queues, peer totals, per-session totals,
+and connection establishment time are bounded.
+
+View grants create receive-only media sessions and cannot request or smuggle a
+control data channel. Control grants carry the current Product lease and fence;
+the initial closed `pointer.move` message is ordered and viewport-bounded, and
+Product authority is rechecked before every forwarded input. Product authority
+is also watched for the entire peer lifetime. Media queue overflow, invalid
+RTP, bitrate excess, invalid or out-of-order input, authority loss, connection
+failure, and establishment timeout close both the peer and its media source.
+The media source is a trusted port bound to the exact Product/Provider handoff;
+no Provider endpoint, handoff, backend identity, or relay credential appears
+in public signaling.
+
+### Slice 7 local evidence
+
+Race-enabled tests use two real Pion WebRTC peers to exchange gathered
+offer/answer SDP, establish DTLS/SRTP, receive an RTP video packet, open the
+exact control data channel, and forward an input carrying the Product lease
+and fence. Additional tests prove pre-consumption Origin/TLS/authentication,
+viewer-control denial, unsupported codec/dimension/bitrate rejection,
+production encrypted-relay construction, and deterministic slow-consumer
+closure through a bounded RTP queue. Full repository race/shuffle, vet,
+Provider Contract, Product Contract, retained Phase 3 evidence, and diff checks
+run at the slice commit gate. The fake media source is component evidence; real
+Chromium capture/input, complete input and content policy, reconnect/resync,
+recording, Web UX, and the independent-process release topology remain Slices
+8-13.
 
 ## Evidence rules
 

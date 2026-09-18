@@ -596,6 +596,69 @@
         {"properties": {"ok": {"const": false}}, "required": ["error"], "not": {"required": ["value"]}}
       ]
     },
+    "BrowserLiveVideoPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["codec", "width", "height", "max_fps", "max_bitrate_kbps"],
+      "properties": {
+        "codec": {"const": "video/VP8"},
+        "width": {"type": "integer", "minimum": 320, "maximum": 1920},
+        "height": {"type": "integer", "minimum": 240, "maximum": 1080},
+        "max_fps": {"type": "integer", "minimum": 1, "maximum": 60},
+        "max_bitrate_kbps": {"type": "integer", "minimum": 128, "maximum": 4000}
+      }
+    },
+    "BrowserLiveDescription": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "sdp"],
+      "properties": {
+        "type": {"enum": ["offer", "answer"]},
+        "sdp": {"type": "string", "minLength": 1, "maxLength": 81920}
+      }
+    },
+    "BrowserLiveSignalRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["offer", "video", "control_data_channel"],
+      "properties": {
+        "offer": {
+          "allOf": [
+            {"$ref": "#/$defs/BrowserLiveDescription"},
+            {"properties": {"type": {"const": "offer"}}}
+          ]
+        },
+        "video": {"$ref": "#/$defs/BrowserLiveVideoPolicy"},
+        "control_data_channel": {"type": "boolean"}
+      }
+    },
+    "BrowserLiveSignalResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["answer", "connection_id", "access_mode", "video"],
+      "properties": {
+        "answer": {
+          "allOf": [
+            {"$ref": "#/$defs/BrowserLiveDescription"},
+            {"properties": {"type": {"const": "answer"}}}
+          ]
+        },
+        "connection_id": {"$ref": "#/$defs/Identifier"},
+        "access_mode": {"enum": ["view", "control"]},
+        "video": {"$ref": "#/$defs/BrowserLiveVideoPolicy"}
+      }
+    },
+    "BrowserLivePointerMove": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "sequence", "x", "y"],
+      "properties": {
+        "type": {"const": "pointer.move"},
+        "sequence": {"type": "integer", "minimum": 1, "maximum": 9007199254740991},
+        "x": {"type": "integer", "minimum": 0, "maximum": 1919},
+        "y": {"type": "integer", "minimum": 0, "maximum": 1079}
+      }
+    },
     "Artifact": {
       "type": "object",
       "additionalProperties": false,

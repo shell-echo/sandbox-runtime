@@ -183,6 +183,32 @@
       ]
     },
     {
+      "id": "browser-live-data-plane",
+      "requires": [
+        "authenticated-https-signaling",
+        "exact-allowlisted-https-origin",
+        "one-use-product-ticket",
+        "closed-offer-answer-and-video-policy-schemas",
+        "vp8-resolution-frame-rate-and-bitrate-bounds",
+        "encrypted-turn-relay-only-production-ice",
+        "bounded-media-and-input-queues",
+        "continuous-product-authority-watch",
+        "view-grant-receive-only-admission",
+        "current-product-control-fence-per-input"
+      ],
+      "forbids": [
+        "unauthenticated-signaling",
+        "host-candidate-production-admission",
+        "unsupported-codec-or-size",
+        "view-grant-control-channel",
+        "unbounded-media-or-input-queue",
+        "provider-handoff-public-message",
+        "provider-endpoint-public-message",
+        "relay-credential-public-message",
+        "stale-owner-input"
+      ]
+    },
+    {
       "id": "catalog-metadata-only",
       "requires": [
         "product-owned-artifact-metadata",

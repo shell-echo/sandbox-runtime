@@ -159,6 +159,25 @@ reconnect performs fresh private resolution; neither the opaque Provider
 handoff, the private endpoint, raw CDP, nor downstream-fence credentials may
 appear in public messages, errors, audit events, or logs.
 
+For `product-browser-live.v1`, a client exchanges the closed
+`BrowserLiveSignalRequest` and `BrowserLiveSignalResponse` documents over an
+authenticated HTTPS endpoint before WebRTC connectivity. Production admission
+requires TLS, one exact allowlisted HTTPS Origin, a one-use Product ticket,
+continuous Product authority, and relay-only ICE through configured encrypted
+TURN. The initial negotiated video profile is bounded VP8 with explicit
+resolution, frame-rate, and bitrate ceilings. Unsupported codecs, dimensions,
+oversized signaling or media packets, excess media/input queues, and slow
+consumers fail closed.
+
+A view grant creates a receive-only media session and cannot negotiate the
+control data channel. A control grant may negotiate only the
+`product-browser-control.v1` channel. Its initial closed input set is
+`BrowserLivePointerMove`; sequences start at one and increase without gaps,
+and coordinates are further bounded by the negotiated viewport. Product
+rechecks the exact session control lease and fence before every forwarded
+input. SDP responses, messages, errors, and logs never project the Provider
+handoff, Browser endpoint, relay credentials, or backend identity.
+
 ## 10. Agent runs
 
 An Agent run is a delegated Product actor execution bound to one Workspace and
