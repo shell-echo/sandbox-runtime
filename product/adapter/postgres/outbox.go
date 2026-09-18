@@ -77,6 +77,70 @@ ORDER BY l.outbox_id`, limit, workerID, lease.String())
 	return result, nil
 }
 
+func (s *Store) LeaseBrowserSlotWork(ctx context.Context, workerID string, lease time.Duration, limit int) ([]product.ReconcileWork, error) {
+	if s == nil || s.pool == nil || ctx == nil || workerID == "" || lease < time.Second || lease > time.Minute || limit < 1 || limit > 100 {
+		return nil, product.ErrInvalid
+	}
+	opCtx, cancel := context.WithTimeout(ctx, s.operationTimeout)
+	defer cancel()
+	tx, err := s.pool.BeginTx(opCtx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted, AccessMode: pgx.ReadWrite})
+	if err != nil {
+		return nil, storeError(ctx, opCtx, err, false)
+	}
+	defer rollbackBounded(tx, s.operationTimeout)
+	rows, err := tx.Query(opCtx, `WITH candidates AS (
+    SELECT o.tenant_id,o.outbox_id
+    FROM sandbox_runtime_product.outbox o
+    JOIN sandbox_runtime_product.workspace_slots s
+      ON s.tenant_id=o.tenant_id AND s.workspace_id=o.workspace_id AND s.slot_key=o.payload->>'slot_key'
+    WHERE o.message_type='slot.reconcile' AND s.kind='browser' AND s.desired_state='ready'
+      AND s.generation=(o.payload->>'generation')::bigint
+      AND o.available_at<=clock_timestamp()
+      AND (o.state='pending' OR (o.state='leased' AND o.lease_expires_at<=clock_timestamp()))
+    ORDER BY o.created_at,o.outbox_id FOR UPDATE OF o SKIP LOCKED LIMIT $1
+), leased AS (
+    UPDATE sandbox_runtime_product.outbox o
+    SET state='leased',lease_owner=$2,lease_expires_at=clock_timestamp()+$3::interval,
+        attempt_count=o.attempt_count+1,updated_at=clock_timestamp()
+    FROM candidates c WHERE o.tenant_id=c.tenant_id AND o.outbox_id=c.outbox_id
+    RETURNING o.tenant_id,o.outbox_id,o.workspace_id,o.operation_id,o.lease_owner,o.payload
+)
+SELECT l.tenant_id,l.outbox_id,l.workspace_id,l.operation_id,l.lease_owner,
+       s.slot_key,s.kind,s.profile_id,s.required_capabilities,s.desired_state,s.generation,w.lease_expires_at
+FROM leased l
+JOIN sandbox_runtime_product.workspaces w ON w.tenant_id=l.tenant_id AND w.workspace_id=l.workspace_id
+JOIN sandbox_runtime_product.workspace_slots s ON s.tenant_id=l.tenant_id AND s.workspace_id=l.workspace_id
+ AND s.slot_key=l.payload->>'slot_key' AND s.generation=(l.payload->>'generation')::bigint
+ORDER BY l.outbox_id`, limit, workerID, lease.String())
+	if err != nil {
+		return nil, storeError(ctx, opCtx, err, false)
+	}
+	defer rows.Close()
+	var result []product.ReconcileWork
+	for rows.Next() {
+		var item product.ReconcileWork
+		var capabilities []byte
+		if err := rows.Scan(&item.TenantID, &item.OutboxID, &item.WorkspaceID, &item.OperationID, &item.LeaseOwner,
+			&item.Slot.SlotKey, &item.Slot.Kind, &item.Slot.ProfileID, &capabilities, &item.Slot.DesiredState,
+			&item.SlotGeneration, &item.WorkspaceExpiry); err != nil {
+			return nil, storeError(ctx, opCtx, err, false)
+		}
+		if err := json.Unmarshal(capabilities, &item.Slot.RequiredCapabilities); err != nil {
+			return nil, product.ErrStoreUnavailable
+		}
+		item.SlotKey = item.Slot.SlotKey
+		item.AttemptID = item.OutboxID
+		result = append(result, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, storeError(ctx, opCtx, err, false)
+	}
+	if err := tx.Commit(opCtx); err != nil {
+		return nil, storeError(ctx, opCtx, err, true)
+	}
+	return result, nil
+}
+
 func (s *Store) RecordDispatchEvidence(ctx context.Context, work product.ReconcileWork, evidence product.ProviderOperationEvidence) error {
 	if s == nil || s.pool == nil || ctx == nil {
 		return product.ErrInvalid
@@ -143,10 +207,16 @@ SET provider_operation_id=EXCLUDED.provider_operation_id, observed_state=EXCLUDE
 		}
 	}
 	productState, reconciliation, slotState, workspaceState, eventType := "running", "reconciling", "provisioning", "provisioning", "slot.dispatch_accepted"
+	if work.SlotKey != product.PrimarySlotKey {
+		workspaceState = ""
+	}
 	if attemptState == "outcome_unknown" {
 		productState, reconciliation, eventType = "outcome_unknown", "reconciling", "slot.dispatch_outcome_unknown"
 	} else if attemptState == "failed" || attemptState == "cancelled" {
 		productState, reconciliation, slotState, workspaceState, eventType = "failed", "complete", "failed", "failed", "slot.dispatch_failed"
+		if work.SlotKey != product.PrimarySlotKey {
+			workspaceState = ""
+		}
 	}
 	if _, err := tx.Exec(opCtx, `UPDATE sandbox_runtime_product.product_operations
 SET state=$1,reconciliation_status=$2,version=version+1,updated_at=$3

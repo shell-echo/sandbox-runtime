@@ -222,6 +222,157 @@ VALUES($1,100,1000,100,1,clock_timestamp())`, tenantID); err != nil {
 	}
 }
 
+func TestIntegrationBrowserSlotAndSessionDispatchIsolation(t *testing.T) {
+	pool := integrationProductPool(t)
+	applyProductMigrations(t, pool)
+	const tenantID = "tenant-browser-dispatch"
+	cleanupProductTenant(t, pool, tenantID)
+	store, _ := New(pool, 5*time.Second)
+	ids := product.CryptoIDGenerator{}
+	application, _ := product.NewApplication(store, allowPrimarySlot{}, ids)
+	slots, _ := product.NewSlotService(store, allowBrowserSlot{}, ids)
+	sessions, _ := product.NewSessionService(store, allowBrowserSession{}, ids)
+	actor := product.ActorRef{Type: product.ActorHuman, ID: "browser-dispatch-owner"}
+	created, err := application.CreateWorkspace(context.Background(), tenantID, actor, "browser-dispatch-workspace", integrationCreateWorkspaceRequest("browser dispatch"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, statement := range []string{
+		`UPDATE sandbox_runtime_product.workspaces SET observed_state='active' WHERE tenant_id=$1`,
+		`UPDATE sandbox_runtime_product.workspace_slots SET observed_state='ready',observed_generation=generation WHERE tenant_id=$1 AND slot_key='primary-code'`,
+		`UPDATE sandbox_runtime_product.outbox SET state='delivered' WHERE tenant_id=$1 AND message_type='workspace.reconcile'`,
+	} {
+		if _, err := pool.Exec(context.Background(), statement, tenantID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	request := product.PutSlotRequest{ExpectedWorkspaceVersion: 1, Kind: "browser", ProfileID: product.BrowserSlotProfile,
+		RequiredCapabilities: []product.CapabilityRequirement{{CapabilityID: product.BrowserCapabilityID, Version: product.BrowserCapabilityVersion, ProfileID: product.BrowserCapabilityProfile}}, DesiredState: "ready"}
+	putOperation, _, err := slots.Put(context.Background(), tenantID, actor, created.Operation.WorkspaceID, "browser-main", "browser-dispatch-slot", request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	terminalWork, err := store.LeaseReconcileWork(context.Background(), "terminal-slot-worker", 10*time.Second, 10)
+	if err != nil || len(terminalWork) != 0 {
+		t.Fatalf("terminal leased Browser slot work=%#v err=%v", terminalWork, err)
+	}
+	browserWork, err := store.LeaseBrowserSlotWork(context.Background(), "browser-slot-worker", 10*time.Second, 10)
+	if err != nil || len(browserWork) != 1 || browserWork[0].OperationID != putOperation.ID || browserWork[0].Slot.ProfileID != product.BrowserSlotProfile {
+		t.Fatalf("browser work=%#v err=%v", browserWork, err)
+	}
+	evidence := product.ProviderOperationEvidence{ProviderRevisionID: strings.Repeat("a", 40), SandboxID: "provider-browser-sandbox",
+		ProviderOperationID: "provider-browser-create", RequestDigest: "sha256:" + strings.Repeat("b", 64),
+		State: "accepted", ObservedAt: time.Now().UTC()}
+	if err := store.RecordDispatchEvidence(context.Background(), browserWork[0], evidence); err != nil {
+		t.Fatal(err)
+	}
+	workspace, err := application.GetWorkspace(context.Background(), tenantID, actor, created.Operation.WorkspaceID)
+	if err != nil || workspace.ObservedState != "active" {
+		t.Fatalf("workspace after Browser dispatch=%#v err=%v", workspace, err)
+	}
+	observations, err := store.LeaseProviderObservations(context.Background(), "browser-slot-observer", 10*time.Second, 10)
+	if err != nil || len(observations) != 1 || observations[0].SlotKey != "browser-main" {
+		t.Fatalf("slot observations=%#v err=%v", observations, err)
+	}
+	evidence.State = "succeeded"
+	evidence.ObservedAt = time.Now().UTC()
+	if err := store.RecordProviderObservation(context.Background(), observations[0], evidence, "evt-browser-slot-ready"); err != nil {
+		t.Fatal(err)
+	}
+	workspace, err = application.GetWorkspace(context.Background(), tenantID, actor, created.Operation.WorkspaceID)
+	if err != nil || workspace.ObservedState != "active" {
+		t.Fatalf("workspace after Browser ready=%#v err=%v", workspace, err)
+	}
+	var browserSlot product.WorkspaceSlot
+	for _, slot := range workspace.Slots {
+		if slot.SlotKey == "browser-main" {
+			browserSlot = slot
+		}
+	}
+	if browserSlot.ObservedState != "ready" || browserSlot.ObservedGeneration != 1 {
+		t.Fatalf("browser slot=%#v", browserSlot)
+	}
+	sessionOperation, _, err := sessions.Create(context.Background(), tenantID, actor, workspace.ID, "browser-session-create", product.CreateSessionRequest{
+		ExpectedWorkspaceVersion: workspace.Version, SlotKey: "browser-main", Kind: product.SessionKindBrowserAutomation,
+		ProtocolProfile: product.SessionProfileBrowserAutomation, ExpiresInSeconds: 900, RecordingPolicy: "metadata_only",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	terminalSessions, err := store.LeaseSessionWork(context.Background(), "terminal-session-worker", 10*time.Second, 10)
+	if err != nil || len(terminalSessions) != 0 {
+		t.Fatalf("terminal leased Browser session work=%#v err=%v", terminalSessions, err)
+	}
+	browserSessions, err := store.LeaseBrowserSessionWork(context.Background(), "browser-session-worker", 10*time.Second, 10)
+	if err != nil || len(browserSessions) != 1 || browserSessions[0].SessionID != sessionOperation.SessionID ||
+		browserSessions[0].Kind != product.SessionKindBrowserAutomation || browserSessions[0].ProtocolProfile != product.SessionProfileBrowserAutomation {
+		t.Fatalf("browser session work=%#v err=%v", browserSessions, err)
+	}
+	evidence.ProviderOperationID = "provider-browser-session-open"
+	evidence.State = "accepted"
+	if err := store.RecordSessionDispatch(context.Background(), browserSessions[0], evidence); err != nil {
+		t.Fatal(err)
+	}
+	observations, err = store.LeaseProviderObservations(context.Background(), "browser-session-observer", 10*time.Second, 10)
+	if err != nil || len(observations) != 1 || observations[0].SessionKind != product.SessionKindBrowserAutomation ||
+		observations[0].ProtocolProfile != product.SessionProfileBrowserAutomation {
+		t.Fatalf("session observations=%#v err=%v", observations, err)
+	}
+	evidence.State = "succeeded"
+	evidence.HandoffReference = "ref:browser-session:opaque-integration-1"
+	evidence.ConnectionGeneration = 1
+	evidence.HandoffExpiresAt = browserSessions[0].ExpiresAt
+	if err := store.RecordProviderObservation(context.Background(), observations[0], evidence, "evt-browser-session-ready"); err != nil {
+		t.Fatal(err)
+	}
+	session, err := sessions.Get(context.Background(), tenantID, actor, sessionOperation.SessionID)
+	if err != nil || session.State != product.SessionStateReady {
+		t.Fatalf("session=%#v err=%v", session, err)
+	}
+	var storedReference string
+	if err := pool.QueryRow(context.Background(), `SELECT provider_handoff_reference FROM sandbox_runtime_product.runtime_sessions WHERE tenant_id=$1 AND session_id=$2`, tenantID, session.ID).Scan(&storedReference); err != nil || storedReference != evidence.HandoffReference {
+		t.Fatalf("stored handoff=%q err=%v", storedReference, err)
+	}
+}
+
+func TestIntegrationBrowserSlotDispatcherSkipsStaleGeneration(t *testing.T) {
+	pool := integrationProductPool(t)
+	applyProductMigrations(t, pool)
+	const tenantID = "tenant-browser-stale-generation"
+	cleanupProductTenant(t, pool, tenantID)
+	store, _ := New(pool, 5*time.Second)
+	ids := product.CryptoIDGenerator{}
+	application, _ := product.NewApplication(store, allowPrimarySlot{}, ids)
+	slots, _ := product.NewSlotService(store, allowBrowserSlot{}, ids)
+	actor := product.ActorRef{Type: product.ActorHuman, ID: "browser-stale-owner"}
+	created, err := application.CreateWorkspace(context.Background(), tenantID, actor, "browser-stale-workspace", integrationCreateWorkspaceRequest("browser stale"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(context.Background(), `UPDATE sandbox_runtime_product.outbox SET state='delivered' WHERE tenant_id=$1`, tenantID); err != nil {
+		t.Fatal(err)
+	}
+	request := product.PutSlotRequest{ExpectedWorkspaceVersion: 1, Kind: "browser", ProfileID: product.BrowserSlotProfile,
+		RequiredCapabilities: []product.CapabilityRequirement{{CapabilityID: product.BrowserCapabilityID, Version: product.BrowserCapabilityVersion, ProfileID: product.BrowserCapabilityProfile}}, DesiredState: "ready"}
+	stale, _, err := slots.Put(context.Background(), tenantID, actor, created.Operation.WorkspaceID, "browser-main", "browser-stale-generation-1", request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.ExpectedWorkspaceVersion = 2
+	current, _, err := slots.Put(context.Background(), tenantID, actor, created.Operation.WorkspaceID, "browser-main", "browser-stale-generation-2", request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	work, err := store.LeaseBrowserSlotWork(context.Background(), "browser-stale-worker", 10*time.Second, 10)
+	if err != nil || len(work) != 1 || work[0].OperationID != current.ID || work[0].SlotGeneration != 2 {
+		t.Fatalf("work=%#v stale=%s current=%s err=%v", work, stale.ID, current.ID, err)
+	}
+	var staleState string
+	if err := pool.QueryRow(context.Background(), `SELECT state FROM sandbox_runtime_product.outbox WHERE tenant_id=$1 AND operation_id=$2`, tenantID, stale.ID).Scan(&staleState); err != nil || staleState != "pending" {
+		t.Fatalf("stale outbox state=%q err=%v", staleState, err)
+	}
+}
+
 func TestIntegrationCreateWorkspaceTransactionReplayAndConflict(t *testing.T) {
 	pool := integrationProductPool(t)
 	applyProductMigrations(t, pool)

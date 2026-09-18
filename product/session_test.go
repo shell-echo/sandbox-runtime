@@ -4,7 +4,51 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 )
+
+type browserSessionDispatchStoreStub struct {
+	work     []SessionControlWork
+	recorded []ProviderOperationEvidence
+	retries  int
+}
+
+func (s *browserSessionDispatchStoreStub) LeaseBrowserSessionWork(context.Context, string, time.Duration, int) ([]SessionControlWork, error) {
+	return s.work, nil
+}
+func (s *browserSessionDispatchStoreStub) RecordSessionDispatch(_ context.Context, _ SessionControlWork, evidence ProviderOperationEvidence) error {
+	s.recorded = append(s.recorded, evidence)
+	return nil
+}
+func (s *browserSessionDispatchStoreStub) RetrySessionWork(context.Context, SessionControlWork, string, time.Duration, int) error {
+	s.retries++
+	return nil
+}
+
+type browserSessionControllerStub struct {
+	evidence ProviderOperationEvidence
+	err      error
+}
+
+func (s browserSessionControllerStub) ExecuteBrowserSessionControl(context.Context, SessionControlWork) (ProviderOperationEvidence, error) {
+	return s.evidence, s.err
+}
+
+func TestBrowserSessionDispatcherIsolatedOutcomeHandling(t *testing.T) {
+	store := &browserSessionDispatchStoreStub{work: []SessionControlWork{{SessionID: "browser-session-1"}}}
+	dispatcher, err := NewBrowserSessionDispatcher(store, browserSessionControllerStub{err: ErrDispatchOutcomeUnknown}, "browser-session-worker", time.Second, time.Millisecond, 3, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count, err := dispatcher.DispatchOnce(context.Background()); err != nil || count != 1 || len(store.recorded) != 1 || store.recorded[0].State != "outcome_unknown" {
+		t.Fatalf("count=%d store=%#v err=%v", count, store, err)
+	}
+	store = &browserSessionDispatchStoreStub{work: []SessionControlWork{{SessionID: "browser-session-2"}}}
+	dispatcher, _ = NewBrowserSessionDispatcher(store, browserSessionControllerStub{evidence: ProviderOperationEvidence{Retryable: true}, err: ErrDispatchRejected}, "browser-session-worker", time.Second, time.Millisecond, 3, 1)
+	if count, err := dispatcher.DispatchOnce(context.Background()); err != nil || count != 0 || store.retries != 1 {
+		t.Fatalf("count=%d retries=%d err=%v", count, store.retries, err)
+	}
+}
 
 type sessionStoreStub struct {
 	command   SessionCommand

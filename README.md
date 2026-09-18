@@ -18,7 +18,7 @@ general production readiness.
 | Main delivery plan | **24/24 complete** |
 | Independent external caller | **13/13 complete** |
 | Product v1 Phase 3 | **13/13 complete** for the bounded standalone topology |
-| Product v1 Phase 4 Browser | **2/13 in progress**; session and auxiliary-slot authority only, capability unadvertised |
+| Product v1 Phase 4 Browser | **3/13 in progress**; Provider Browser control-plane adapter added, capability unadvertised |
 | Coding/shell qualification | **Qualified** for the exact caller, Provider revisions, topology, profile, and scenarios recorded below |
 | Latest core CI | [Passed](https://github.com/shell-echo/sandbox-runtime/actions/runs/35204434771) |
 
@@ -67,12 +67,13 @@ independently implemented caller result, HA, hostile-multitenant, or production
 readiness.
 
 [Product v1 Phase 4 Browser](docs/plan/product-v1-phase-4-browser.md) is in
-progress. Its first two slices add Product-owned Browser session authority,
-strict auxiliary Browser-slot mutation/read authority, tenant quota, and
-PostgreSQL outbox isolation. They do not yet add Provider Browser dispatch, a
-Browser runtime, a public automation or visual data plane, Browser recording/
-Web composition, or a release result. Historical Provider Browser reference
-evidence is kept separate and is not Product readiness evidence.
+progress. Its first three slices add Product-owned Browser session/slot
+authority, tenant quota, isolated dispatch, and an exact-revision network-only
+Provider adapter for restricted Browser sandbox creation and opaque session
+handoff observation. They do not yet add lifecycle cleanup, a public automation
+or visual data plane, Browser recording/Web composition, or a release result.
+Historical Provider Browser reference evidence is kept separate and is not
+Product readiness evidence.
 
 ## What the project provides
 

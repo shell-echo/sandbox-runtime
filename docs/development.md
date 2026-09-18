@@ -366,6 +366,13 @@ tenant-quota cases. That result is real-adapter authority evidence only; it is
 not Browser runtime, public data-plane, independent-process, deployment, or
 production evidence.
 
+Slice 3 Browser Provider tests must use a network server boundary and the
+locked Provider DTOs. Require a fresh exact Browser-only capability snapshot
+for every authorization/dispatch, restricted network plus an explicit egress
+policy reference for sandbox create, and an opaque Browser handoff reference
+for session observation. Run the tagged PostgreSQL package to prove Browser
+and Terminal workers cannot lease each other's outbox work.
+
 ## Go and API rules
 
 - accept `context.Context` on blocking or external operations and preserve

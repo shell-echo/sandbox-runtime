@@ -35,6 +35,7 @@ type SessionControlWork struct {
 	TenantID, OutboxID, LeaseOwner, WorkspaceID, SlotKey, SessionID, OperationID, AttemptID string
 	SlotGeneration                                                                          int64
 	RuntimeProfileID, SandboxID, ProviderRevisionID                                         string
+	Kind, ProtocolProfile                                                                   string
 	ConnectionGeneration                                                                    int64
 	ExpiresAt                                                                               time.Time
 	Action, Reason                                                                          string
@@ -42,8 +43,16 @@ type SessionControlWork struct {
 type ProviderSessionController interface {
 	ExecuteSessionControl(context.Context, SessionControlWork) (ProviderOperationEvidence, error)
 }
+type BrowserSessionController interface {
+	ExecuteBrowserSessionControl(context.Context, SessionControlWork) (ProviderOperationEvidence, error)
+}
 type SessionDispatchStore interface {
 	LeaseSessionWork(context.Context, string, time.Duration, int) ([]SessionControlWork, error)
+	RecordSessionDispatch(context.Context, SessionControlWork, ProviderOperationEvidence) error
+	RetrySessionWork(context.Context, SessionControlWork, string, time.Duration, int) error
+}
+type BrowserSessionDispatchStore interface {
+	LeaseBrowserSessionWork(context.Context, string, time.Duration, int) ([]SessionControlWork, error)
 	RecordSessionDispatch(context.Context, SessionControlWork, ProviderOperationEvidence) error
 	RetrySessionWork(context.Context, SessionControlWork, string, time.Duration, int) error
 }
@@ -74,6 +83,50 @@ func (d *SessionDispatcher) DispatchOnce(ctx context.Context) (int, error) {
 		evidence, dispatchErr := d.provider.ExecuteSessionControl(ctx, item)
 		if dispatchErr == nil || errors.Is(dispatchErr, ErrDispatchOutcomeUnknown) || (errors.Is(dispatchErr, ErrDispatchRejected) && !evidence.Retryable) {
 			if dispatchErr != nil && errors.Is(dispatchErr, ErrDispatchOutcomeUnknown) {
+				evidence.State = "outcome_unknown"
+				evidence.OutcomeUnknown = true
+			}
+			if err := d.store.RecordSessionDispatch(ctx, item, evidence); err != nil {
+				return complete, err
+			}
+			complete++
+			continue
+		}
+		if err := d.store.RetrySessionWork(ctx, item, safeDispatchCode(evidence.ErrorCode), d.retry, d.maxAttempts); err != nil {
+			return complete, err
+		}
+	}
+	return complete, nil
+}
+
+type BrowserSessionDispatcher struct {
+	store                  BrowserSessionDispatchStore
+	provider               BrowserSessionController
+	workerID               string
+	lease, retry           time.Duration
+	maxAttempts, batchSize int
+}
+
+func NewBrowserSessionDispatcher(store BrowserSessionDispatchStore, provider BrowserSessionController, workerID string, lease, retry time.Duration, maxAttempts, batchSize int) (*BrowserSessionDispatcher, error) {
+	if nilInterface(store) || nilInterface(provider) || !validIdentifier(workerID) || lease < time.Second || lease > time.Minute || retry < time.Millisecond || retry > time.Minute || maxAttempts < 1 || maxAttempts > 100 || batchSize < 1 || batchSize > 100 {
+		return nil, ErrInvalid
+	}
+	return &BrowserSessionDispatcher{store: store, provider: provider, workerID: workerID, lease: lease, retry: retry, maxAttempts: maxAttempts, batchSize: batchSize}, nil
+}
+
+func (d *BrowserSessionDispatcher) DispatchOnce(ctx context.Context) (int, error) {
+	if d == nil || ctx == nil {
+		return 0, ErrInvalid
+	}
+	work, err := d.store.LeaseBrowserSessionWork(ctx, d.workerID, d.lease, d.batchSize)
+	if err != nil {
+		return 0, err
+	}
+	complete := 0
+	for _, item := range work {
+		evidence, dispatchErr := d.provider.ExecuteBrowserSessionControl(ctx, item)
+		if dispatchErr == nil || errors.Is(dispatchErr, ErrDispatchOutcomeUnknown) || (errors.Is(dispatchErr, ErrDispatchRejected) && !evidence.Retryable) {
+			if errors.Is(dispatchErr, ErrDispatchOutcomeUnknown) {
 				evidence.State = "outcome_unknown"
 				evidence.OutcomeUnknown = true
 			}

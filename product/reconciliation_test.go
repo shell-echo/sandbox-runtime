@@ -31,6 +31,21 @@ type dispatchProvider struct {
 	err      error
 }
 
+type browserDispatchStore struct{ dispatchStore }
+
+func (s *browserDispatchStore) LeaseBrowserSlotWork(context.Context, string, time.Duration, int) ([]ReconcileWork, error) {
+	return s.work, s.err
+}
+
+type browserDispatchProvider struct {
+	evidence ProviderOperationEvidence
+	err      error
+}
+
+func (p browserDispatchProvider) ProvisionBrowserSlot(context.Context, ReconcileWork) (ProviderOperationEvidence, error) {
+	return p.evidence, p.err
+}
+
 func (p dispatchProvider) ProvisionPrimarySlot(context.Context, ReconcileWork) (ProviderOperationEvidence, error) {
 	return p.evidence, p.err
 }
@@ -77,6 +92,20 @@ func TestDispatcherRejectsInvalidConfigurationAndPropagatesLeaseFailure(t *testi
 	dispatcher, _ := NewDispatcher(store, dispatchProvider{}, "worker", time.Second, time.Second, 1, 1)
 	if _, err := dispatcher.DispatchOnce(context.Background()); !errors.Is(err, ErrStoreUnavailable) {
 		t.Fatalf("err=%v", err)
+	}
+}
+
+func TestBrowserDispatcherUsesIsolatedLeaseAndOutcomeRules(t *testing.T) {
+	store := &browserDispatchStore{dispatchStore: dispatchStore{work: []ReconcileWork{{OutboxID: "browser-out-1"}}}}
+	dispatcher, err := NewBrowserDispatcher(store, browserDispatchProvider{evidence: ProviderOperationEvidence{}, err: ErrDispatchOutcomeUnknown}, "browser-worker-1", time.Second, time.Millisecond, 3, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count, err := dispatcher.DispatchOnce(context.Background()); err != nil || count != 1 || len(store.recorded) != 1 || store.recorded[0].State != "outcome_unknown" {
+		t.Fatalf("count=%d store=%#v err=%v", count, store, err)
+	}
+	if _, err := NewBrowserDispatcher(nil, browserDispatchProvider{}, "browser-worker-1", time.Second, time.Millisecond, 3, 1); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("nil store err=%v", err)
 	}
 }
 

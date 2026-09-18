@@ -36,11 +36,14 @@ func (s *Store) LeaseProviderObservations(ctx context.Context, workerID string, 
  RETURNING a.*
 )
 SELECT l.tenant_id,l.workspace_id,l.operation_id,l.attempt_id,l.slot_key,l.slot_generation,
-       b.runtime_profile_id,b.sandbox_id,COALESCE(l.provider_operation_id,''),l.provider_revision_id,COALESCE(l.session_id,''),o.operation_type,l.reconcile_lease_owner
+       b.runtime_profile_id,b.sandbox_id,COALESCE(l.provider_operation_id,''),l.provider_revision_id,COALESCE(l.session_id,''),
+       o.operation_type,l.reconcile_lease_owner,COALESCE(s.kind,''),COALESCE(s.protocol_profile,''),
+       COALESCE(s.expires_at,'epoch'::timestamptz)
 FROM leased AS l JOIN sandbox_runtime_product.provider_bindings AS b
  ON b.tenant_id=l.tenant_id AND b.workspace_id=l.workspace_id AND b.slot_key=l.slot_key
  AND b.slot_generation=l.slot_generation AND b.current
 JOIN sandbox_runtime_product.product_operations AS o ON o.tenant_id=l.tenant_id AND o.operation_id=l.operation_id
+LEFT JOIN sandbox_runtime_product.runtime_sessions AS s ON s.tenant_id=l.tenant_id AND s.session_id=l.session_id
 ORDER BY l.operation_id,l.attempt_id`, limit, workerID, lease.String())
 	if err != nil {
 		return nil, storeError(ctx, opCtx, err, false)
@@ -50,7 +53,8 @@ ORDER BY l.operation_id,l.attempt_id`, limit, workerID, lease.String())
 	for rows.Next() {
 		var item product.ProviderObservationWork
 		if err := rows.Scan(&item.TenantID, &item.WorkspaceID, &item.OperationID, &item.AttemptID, &item.SlotKey, &item.SlotGeneration,
-			&item.RuntimeProfileID, &item.SandboxID, &item.ProviderOperationID, &item.ProviderRevisionID, &item.SessionID, &item.OperationType, &item.LeaseOwner); err != nil {
+			&item.RuntimeProfileID, &item.SandboxID, &item.ProviderOperationID, &item.ProviderRevisionID, &item.SessionID, &item.OperationType, &item.LeaseOwner,
+			&item.SessionKind, &item.ProtocolProfile, &item.SessionExpiresAt); err != nil {
 			return nil, storeError(ctx, opCtx, err, false)
 		}
 		result = append(result, item)
@@ -146,8 +150,14 @@ version=version+1,updated_at=$2 WHERE tenant_id=$3 AND operation_id=$4 AND state
 		return nil
 	}
 	productState, slotState, workspaceState, eventType := "succeeded", "ready", "active", "slot.ready"
+	if work.SlotKey != product.PrimarySlotKey {
+		workspaceState = ""
+	}
 	if state != "succeeded" {
 		productState, slotState, workspaceState, eventType = "failed", "failed", "failed", "slot.failed"
+		if work.SlotKey != product.PrimarySlotKey {
+			workspaceState = ""
+		}
 	}
 	tag, err := tx.Exec(opCtx, `UPDATE sandbox_runtime_product.workspace_slots SET observed_state=$1,observed_generation=$2,
 version=version+1,updated_at=$3 WHERE tenant_id=$4 AND workspace_id=$5 AND slot_key=$6 AND generation=$2`, slotState, work.SlotGeneration, now, work.TenantID, work.WorkspaceID, work.SlotKey)

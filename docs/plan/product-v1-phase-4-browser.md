@@ -1,6 +1,6 @@
 # Product v1 Phase 4: Browser
 
-Status: In progress; Slices 1-2 implemented locally, 11 slices remain
+Status: In progress; Slices 1-3 implemented locally, 10 slices remain
 
 Started: 2026-09-18
 
@@ -24,7 +24,7 @@ until Slice 13 passes for the exact composed topology.
 | --- | --- | --- | --- |
 | 1 | Startup audit; Product Browser session kind/profile authority; ready-browser-slot binding; absorbing state machine; Browser-specific outbox isolation; PostgreSQL migration constraint; strict authenticated API projection | Focused race tests; strict input/profile rejection; tenant/actor nondisclosure; idempotency; migration replay; real PostgreSQL transaction/outbox isolation; full race/shuffle, vet, and Contract verifiers | **Implemented; local and real-PostgreSQL gates passed** |
 | 2 | Auxiliary Browser slot create/read/update authority and reconciliation intent | Expected-version/idempotency/quota races; immutable key/kind; exact capability request; event/outbox atomicity; cross-tenant nondisclosure; restart-safe reads | **Implemented; local and real-PostgreSQL gates passed** |
-| 3 | Exact-revision Provider Browser readiness and network-only adapter for Browser sandbox plus session open/handoff observation | Locked capability/profile selection; mTLS/JWS; no private coordinate projection; timeout, cancellation, replay, stale generation, ambiguous outcome, and capability-drift tests | Not started |
+| 3 | Exact-revision Provider Browser readiness and network-only adapter for Browser sandbox plus session open/handoff observation | Locked capability/profile selection; mTLS/JWS; no private coordinate projection; timeout, cancellation, replay, stale generation, ambiguous outcome, and capability-drift tests | **Implemented; local and real-PostgreSQL gates passed** |
 | 4 | Browser lifecycle reconciliation, disconnect/expiry/close cleanup, unknown-outcome recovery, slot replacement, and retained evidence | Restart at every commit/dispatch/observe boundary; no duplicate current binding; no session resurrection; exact-owned cleanup; coordinated Contract decision for missing Provider close semantics | Not started |
 | 5 | Viewer/control authorization, single-controller Product lease/fence binding, one-use grants, revocation, and Browser quotas; multi-human collaboration remains deferred | Viewer cannot mutate; one live controller; stale fence/replay/revocation/expiry/limit races; database-time authority; nondisclosing errors | Not started |
 | 6 | Public Browser automation WSS data plane with closed action/result messages and downstream action fencing | Separate-process edge/Gateway/Provider test; bounded messages/queues; ordered actions; stale-owner suspension; reconnect; no raw CDP or endpoint exposure | Not started |
@@ -104,6 +104,42 @@ full repository race/shuffle and vet gates, and Contract verifiers are run at
 the slice commit gate. No Provider dispatch, Browser runtime, public data
 plane, capability advertisement, frontend, deployment, or production claim
 follows from this slice.
+
+## Slice 3 exact boundary
+
+The Product Provider adapter now accepts a Browser dependency only when the
+fresh Provider discovery response has the locked revision, the exact
+Browser-only `sandbox.browser@1.0.0` / `browser-v1` advertisement, the canonical
+`sandbox-runtime-browser-v1` container profile, and the configured
+architecture. Discovery is re-read for every authorization/dispatch boundary,
+so capability drift fails closed rather than surviving in a process cache.
+
+Browser sandbox create uses only the protected Provider network Contract. It
+pins the image, runtime profile, resources, base revision, restricted network,
+explicit egress policy reference, mandatory egress Gateway, Browser placement,
+lease, and unprivileged security shape. Dedicated Browser slot and Browser
+session dispatchers lease only their own outbox types. Terminal workers cannot
+lease either. Browser session open uses the locked mutation document; operation
+observation reads the locked Browser handoff document and persists only its
+opaque `ref:browser-session:*` reference, connection generation, and expiry.
+
+Provider Browser session close is not present in the locked Provider Contract.
+Accordingly Slice 3 does not lease `browser_session.close`; Slice 4 owns the
+coordinated lifecycle/cleanup decision instead of inventing a wire route.
+
+### Slice 3 local evidence
+
+Focused race tests cover exact discovery/profile selection, restricted-network
+create projection, protected signed requests, Browser session open and opaque
+handoff observation, cancellation, capability drift, ambiguous response
+classification, and isolated retry rules. Fresh pinned PostgreSQL integration
+proves Terminal/Browser worker isolation, atomic dispatch evidence and binding,
+slot observation without corrupting Workspace readiness, Browser session
+handoff persistence, restart-safe observation leases, and stale-generation
+non-dispatch. The complete repository and Contract gates are run at the slice
+commit gate. This is network-adapter and real-database component evidence, not
+a public Browser data plane, real Browser runtime, release topology,
+deployment, or production result.
 
 ## Evidence rules
 

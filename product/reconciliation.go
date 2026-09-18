@@ -50,6 +50,16 @@ type ProviderProvisioner interface {
 	ProvisionPrimarySlot(context.Context, ReconcileWork) (ProviderOperationEvidence, error)
 }
 
+type BrowserReconcileStore interface {
+	LeaseBrowserSlotWork(context.Context, string, time.Duration, int) ([]ReconcileWork, error)
+	RecordDispatchEvidence(context.Context, ReconcileWork, ProviderOperationEvidence) error
+	RetryReconcileWork(context.Context, ReconcileWork, string, time.Duration, int) error
+}
+
+type BrowserSlotProvisioner interface {
+	ProvisionBrowserSlot(context.Context, ReconcileWork) (ProviderOperationEvidence, error)
+}
+
 type ProviderObservationWork struct {
 	TenantID            string
 	WorkspaceID         string
@@ -64,6 +74,9 @@ type ProviderObservationWork struct {
 	SessionID           string
 	OperationType       string
 	LeaseOwner          string
+	SessionKind         string
+	ProtocolProfile     string
+	SessionExpiresAt    time.Time
 }
 
 type ProviderObserver interface {
@@ -164,6 +177,53 @@ func (d *Dispatcher) DispatchOnce(ctx context.Context) (int, error) {
 			continue
 		}
 		if errors.Is(dispatchErr, ErrDispatchRejected) && !evidence.Retryable {
+			if err := d.store.RecordDispatchEvidence(ctx, item, evidence); err != nil {
+				return completed, err
+			}
+			completed++
+			continue
+		}
+		if err := d.store.RetryReconcileWork(ctx, item, safeDispatchCode(evidence.ErrorCode), d.retryBase, d.maxAttempts); err != nil {
+			return completed, err
+		}
+	}
+	return completed, nil
+}
+
+type BrowserDispatcher struct {
+	store       BrowserReconcileStore
+	provider    BrowserSlotProvisioner
+	workerID    string
+	lease       time.Duration
+	retryBase   time.Duration
+	maxAttempts int
+	batchSize   int
+}
+
+func NewBrowserDispatcher(store BrowserReconcileStore, provider BrowserSlotProvisioner, workerID string, lease, retryBase time.Duration, maxAttempts, batchSize int) (*BrowserDispatcher, error) {
+	if nilInterface(store) || nilInterface(provider) || !validIdentifier(workerID) || lease < time.Second || lease > time.Minute ||
+		retryBase < time.Millisecond || retryBase > time.Minute || maxAttempts < 1 || maxAttempts > 100 || batchSize < 1 || batchSize > 100 {
+		return nil, ErrInvalid
+	}
+	return &BrowserDispatcher{store: store, provider: provider, workerID: workerID, lease: lease, retryBase: retryBase, maxAttempts: maxAttempts, batchSize: batchSize}, nil
+}
+
+func (d *BrowserDispatcher) DispatchOnce(ctx context.Context) (int, error) {
+	if d == nil || ctx == nil {
+		return 0, ErrInvalid
+	}
+	work, err := d.store.LeaseBrowserSlotWork(ctx, d.workerID, d.lease, d.batchSize)
+	if err != nil {
+		return 0, err
+	}
+	completed := 0
+	for _, item := range work {
+		evidence, dispatchErr := d.provider.ProvisionBrowserSlot(ctx, item)
+		if dispatchErr == nil || errors.Is(dispatchErr, ErrDispatchOutcomeUnknown) || (errors.Is(dispatchErr, ErrDispatchRejected) && !evidence.Retryable) {
+			if errors.Is(dispatchErr, ErrDispatchOutcomeUnknown) {
+				evidence.OutcomeUnknown = true
+				evidence.State = "outcome_unknown"
+			}
 			if err := d.store.RecordDispatchEvidence(ctx, item, evidence); err != nil {
 				return completed, err
 			}

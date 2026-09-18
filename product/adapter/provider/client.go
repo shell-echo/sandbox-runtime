@@ -15,7 +15,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/gowebpki/jcs"
@@ -36,18 +35,19 @@ type systemClock struct{}
 func (systemClock) Now() time.Time { return time.Now() }
 
 type Profile struct {
-	ProductProfileID   string
-	RuntimeProfileID   string
-	ImageReference     string
-	ImageDigest        string
-	Architecture       providerv1.Architecture
-	CPUMillis          int64
-	MemoryBytes        int64
-	EphemeralBytes     int64
-	PIDsLimit          int64
-	BaseRevisionID     string
-	BaseRevisionDigest string
-	PolicyDigest       string
+	ProductProfileID       string
+	RuntimeProfileID       string
+	ImageReference         string
+	ImageDigest            string
+	Architecture           providerv1.Architecture
+	CPUMillis              int64
+	MemoryBytes            int64
+	EphemeralBytes         int64
+	PIDsLimit              int64
+	BaseRevisionID         string
+	BaseRevisionDigest     string
+	PolicyDigest           string
+	NetworkPolicyReference string
 }
 
 type Authority struct {
@@ -79,8 +79,6 @@ type Client struct {
 	profiles     map[string]Profile
 	authority    Authority
 	clock        Clock
-	mu           sync.RWMutex
-	discovery    *providerv1.Capabilities
 }
 
 func New(config Config) (*Client, error) {
@@ -98,6 +96,9 @@ func New(config Config) (*Client, error) {
 			!strings.HasPrefix(profile.ImageDigest, "sha256:") || !strings.HasPrefix(profile.BaseRevisionDigest, "sha256:") ||
 			!strings.HasPrefix(profile.PolicyDigest, "sha256:") || profile.CPUMillis < 1 || profile.MemoryBytes < 1 ||
 			profile.EphemeralBytes < 1 || profile.PIDsLimit < 1 {
+			return nil, product.ErrInvalid
+		}
+		if profile.RuntimeProfileID == product.BrowserSlotProfile && !providerIdentifier(profile.NetworkPolicyReference) {
 			return nil, product.ErrInvalid
 		}
 		if _, exists := profiles[profile.ProductProfileID]; exists {
@@ -136,14 +137,34 @@ func (c *Client) AuthorizePrimarySlot(ctx context.Context, slot product.SlotSpec
 	return nil
 }
 
-func (c *Client) discover(ctx context.Context) (providerv1.Capabilities, error) {
-	c.mu.RLock()
-	if c.discovery != nil {
-		value := *c.discovery
-		c.mu.RUnlock()
-		return value, nil
+func (c *Client) AuthorizeSlot(ctx context.Context, slot product.SlotSpec) error {
+	if ctx == nil {
+		return product.ErrInvalid
 	}
-	c.mu.RUnlock()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if slot.SlotKey == product.PrimarySlotKey || slot.Kind != "browser" || slot.ProfileID != product.BrowserSlotProfile ||
+		len(slot.RequiredCapabilities) != 1 || slot.RequiredCapabilities[0] != (product.CapabilityRequirement{
+		CapabilityID: product.BrowserCapabilityID, Version: product.BrowserCapabilityVersion, ProfileID: product.BrowserCapabilityProfile,
+	}) {
+		return product.ErrCapabilityUnsupported
+	}
+	profile, ok := c.profiles[slot.ProfileID]
+	if !ok || profile.RuntimeProfileID != product.BrowserSlotProfile || !providerIdentifier(profile.NetworkPolicyReference) {
+		return product.ErrCapabilityUnsupported
+	}
+	snapshot, err := c.discover(ctx)
+	if err != nil {
+		return err
+	}
+	if !exactBrowserReady(snapshot, profile) {
+		return product.ErrCapabilityUnsupported
+	}
+	return nil
+}
+
+func (c *Client) discover(ctx context.Context) (providerv1.Capabilities, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.origin.String()+"/v1/capabilities", nil)
 	if err != nil {
 		return providerv1.Capabilities{}, product.ErrStoreUnavailable
@@ -161,10 +182,30 @@ func (c *Client) discover(ctx context.Context) (providerv1.Capabilities, error) 
 	if err := decodeBounded(resp.Body, &snapshot); err != nil || snapshot.ProviderRevisionID != c.revisionID || snapshot.APIVersion != providerv1.APIVersionV1 {
 		return providerv1.Capabilities{}, product.ErrStoreUnavailable
 	}
-	c.mu.Lock()
-	c.discovery = &snapshot
-	c.mu.Unlock()
 	return snapshot, nil
+}
+
+func exactBrowserReady(snapshot providerv1.Capabilities, profile Profile) bool {
+	if profile.RuntimeProfileID != product.BrowserSlotProfile || len(snapshot.Capabilities) != 1 || len(snapshot.RuntimeProfiles) != 1 {
+		return false
+	}
+	capability := snapshot.Capabilities[0]
+	runtimeProfile := snapshot.RuntimeProfiles[0]
+	return capability.ID == providerv1.CapabilityBrowser && len(capability.Versions) == 1 &&
+		capability.Versions[0] == product.BrowserCapabilityVersion && len(capability.Profiles) == 1 &&
+		capability.Profiles[0] == product.BrowserCapabilityProfile && runtimeProfile.ID == product.BrowserSlotProfile &&
+		runtimeProfile.IsolationClass == providerv1.IsolationContainer && len(runtimeProfile.Architecture) == 1 &&
+		len(runtimeProfile.CapabilityProfileIDs) == 1 && runtimeProfile.CapabilityProfileIDs[0] == product.BrowserCapabilityProfile &&
+		containsArchitecture(runtimeProfile.Architecture, profile.Architecture)
+}
+
+func containsArchitecture(values []providerv1.Architecture, wanted providerv1.Architecture) bool {
+	for _, value := range values {
+		if value == wanted {
+			return true
+		}
+	}
+	return false
 }
 
 func profileReady(snapshot providerv1.Capabilities, profile Profile, required []product.CapabilityRequirement) bool {
@@ -215,6 +256,20 @@ func (c *Client) ProvisionPrimarySlot(ctx context.Context, work product.Reconcil
 	if err := c.AuthorizePrimarySlot(ctx, work.Slot); err != nil {
 		return product.ProviderOperationEvidence{ErrorCode: "capability_unsupported"}, product.ErrDispatchRejected
 	}
+	return c.provisionSlot(ctx, work, false)
+}
+
+func (c *Client) ProvisionBrowserSlot(ctx context.Context, work product.ReconcileWork) (product.ProviderOperationEvidence, error) {
+	if ctx == nil || work.SlotKey == product.PrimarySlotKey || work.SlotGeneration < 1 || work.Slot.SlotKey != work.SlotKey {
+		return product.ProviderOperationEvidence{}, product.ErrInvalid
+	}
+	if err := c.AuthorizeSlot(ctx, work.Slot); err != nil {
+		return product.ProviderOperationEvidence{ErrorCode: "capability_unsupported"}, product.ErrDispatchRejected
+	}
+	return c.provisionSlot(ctx, work, true)
+}
+
+func (c *Client) provisionSlot(ctx context.Context, work product.ReconcileWork, browser bool) (product.ProviderOperationEvidence, error) {
 	profile := c.profiles[work.Slot.ProfileID]
 	now := c.clock.Now().UTC()
 	deadline := now.Add(2 * time.Minute)
@@ -222,6 +277,13 @@ func (c *Client) ProvisionPrimarySlot(ctx context.Context, work product.Reconcil
 		deadline = work.WorkspaceExpiry
 	}
 	sandboxID := deterministicSandboxID(work)
+	network := providerv1.NetworkPolicy{Mode: providerv1.NetworkNone}
+	var placement *providerv1.PlacementConstraints
+	if browser {
+		required := true
+		network = providerv1.NetworkPolicy{Mode: providerv1.NetworkRestricted, PolicyReference: profile.NetworkPolicyReference, EgressGatewayRequired: &required}
+		placement = &providerv1.PlacementConstraints{ResourceClass: providerv1.ResourceBrowser, Architecture: profile.Architecture}
+	}
 	request := providerv1.CreateRequest{
 		MutationEnvelope: providerv1.MutationEnvelope{OperationID: work.OperationID, AttemptID: work.AttemptID,
 			FencingToken: work.SlotGeneration, IdempotencyKey: "product-" + work.AttemptID, DeadlineAt: deadline.Format(time.RFC3339Nano)},
@@ -233,11 +295,12 @@ func (c *Client) ProvisionPrimarySlot(ctx context.Context, work product.Reconcil
 			RuntimeProfile:       profile.RuntimeProfileID,
 			Resources:            providerv1.SandboxResources{CPUMillis: profile.CPUMillis, MemoryBytes: profile.MemoryBytes, EphemeralStorageBytes: profile.EphemeralBytes, PIDsLimit: profile.PIDsLimit},
 			RequiredCapabilities: providerRequirements(work.Slot.RequiredCapabilities),
-			Network:              providerv1.NetworkPolicy{Mode: providerv1.NetworkNone},
+			Network:              network,
 			Workspace: providerv1.WorkspacePolicy{Mode: providerv1.WorkspaceEphemeral, BaseRevisionID: profile.BaseRevisionID,
 				BaseRevisionDigest: providerv1.SHA256Digest(profile.BaseRevisionDigest), BaseWorkspaceHeadVersion: 0,
 				CommitMode: providerv1.WorkspaceReadOnly, MountPath: providerv1.WorkspaceMount},
-			Lease: providerv1.LeasePolicy{ExpiresAt: work.WorkspaceExpiry.UTC().Format(time.RFC3339Nano), MaxExtensionSeconds: 3600},
+			Lease:                providerv1.LeasePolicy{ExpiresAt: work.WorkspaceExpiry.UTC().Format(time.RFC3339Nano), MaxExtensionSeconds: 3600},
+			PlacementConstraints: placement,
 			Security: providerv1.SecurityPolicy{PrivilegeLevel: providerv1.PrivilegeUnprivileged, RootFilesystem: providerv1.RootFilesystemReadOnly,
 				ServiceAccountMode: providerv1.ServiceAccountNone, SeccompProfile: providerv1.SeccompRuntimeDefault},
 			SandboxSlotKey: providerv1.SandboxSlotKey(work.SlotKey),
@@ -283,7 +346,7 @@ func (c *Client) ProvisionPrimarySlot(ctx context.Context, work product.Reconcil
 	}
 	var operation providerv1.Operation
 	if err := decodeBounded(resp.Body, &operation); err != nil || operation.OperationID != work.OperationID || operation.AttemptID != work.AttemptID ||
-		operation.SandboxID != sandboxID || operation.FencingToken != work.SlotGeneration {
+		operation.SandboxID != sandboxID || operation.FencingToken != work.SlotGeneration || operation.Type != providerv1.OperationCreate {
 		return product.ProviderOperationEvidence{ProviderRevisionID: c.revisionID, SandboxID: sandboxID, RequestDigest: digest,
 			State: "outcome_unknown", ErrorCode: "invalid_provider_response", OutcomeUnknown: true, ObservedAt: c.clock.Now().UTC()}, product.ErrDispatchOutcomeUnknown
 	}
@@ -299,6 +362,23 @@ func (c *Client) ProvisionPrimarySlot(ctx context.Context, work product.Reconcil
 		evidence.OutcomeUnknown = operation.Error.Outcome == providerv1.OutcomeUnknownFailure
 	}
 	return evidence, nil
+}
+
+func providerIdentifier(value string) bool {
+	if len(value) < 1 || len(value) > 200 || !asciiAlphaNumeric(value[0]) {
+		return false
+	}
+	for index := 1; index < len(value); index++ {
+		character := value[index]
+		if !asciiAlphaNumeric(character) && character != '.' && character != '_' && character != ':' && character != '-' {
+			return false
+		}
+	}
+	return true
+}
+
+func asciiAlphaNumeric(value byte) bool {
+	return value >= 'a' && value <= 'z' || value >= 'A' && value <= 'Z' || value >= '0' && value <= '9'
 }
 
 func (c *Client) ObserveOperation(ctx context.Context, work product.ProviderObservationWork) (product.ProviderOperationEvidence, error) {
@@ -356,7 +436,7 @@ func (c *Client) ObserveOperation(ctx context.Context, work product.ProviderObse
 	}
 	var operation providerv1.Operation
 	if err := decodeBounded(response.Body, &operation); err != nil || operation.OperationID != work.OperationID || operation.AttemptID != work.AttemptID ||
-		operation.FencingToken != work.SlotGeneration || operation.SandboxID != work.SandboxID {
+		operation.FencingToken != work.SlotGeneration || operation.SandboxID != work.SandboxID || operation.Type != expectedProviderOperationType(work) {
 		return product.ProviderOperationEvidence{}, product.ErrStoreUnavailable
 	}
 	observed, err := time.Parse(time.RFC3339Nano, operation.ObservedAt)
@@ -371,18 +451,43 @@ func (c *Client) ObserveOperation(ctx context.Context, work product.ProviderObse
 		evidence.OutcomeUnknown = operation.Error.Outcome == providerv1.OutcomeUnknownFailure
 	}
 	if evidence.State == "succeeded" && work.SessionID != "" && work.OperationType == "create_session" {
-		handoff, err := c.readRuntimeSessionHandoff(ctx, work, profile)
-		if err != nil {
-			return product.ProviderOperationEvidence{}, err
+		var expiresAt string
+		if work.SessionKind == product.SessionKindBrowserAutomation || work.SessionKind == product.SessionKindBrowserLive {
+			handoff, handoffErr := c.readBrowserSessionHandoff(ctx, work, profile)
+			if handoffErr != nil {
+				return product.ProviderOperationEvidence{}, handoffErr
+			}
+			evidence.HandoffReference = handoff.InternalEndpointReference
+			evidence.ConnectionGeneration = handoff.ConnectionGeneration
+			expiresAt = handoff.ExpiresAt
+		} else {
+			handoff, handoffErr := c.readRuntimeSessionHandoff(ctx, work, profile)
+			if handoffErr != nil {
+				return product.ProviderOperationEvidence{}, handoffErr
+			}
+			evidence.HandoffReference = handoff.InternalEndpointReference
+			evidence.ConnectionGeneration = handoff.ConnectionGeneration
+			expiresAt = handoff.ExpiresAt
 		}
-		evidence.HandoffReference = handoff.InternalEndpointReference
-		evidence.ConnectionGeneration = handoff.ConnectionGeneration
-		evidence.HandoffExpiresAt, err = time.Parse(time.RFC3339Nano, handoff.ExpiresAt)
-		if err != nil {
+		evidence.HandoffExpiresAt, err = time.Parse(time.RFC3339Nano, expiresAt)
+		if err != nil || !evidence.HandoffExpiresAt.After(now) || work.SessionExpiresAt.IsZero() || evidence.HandoffExpiresAt.After(work.SessionExpiresAt) {
 			return product.ProviderOperationEvidence{}, product.ErrStoreUnavailable
 		}
 	}
 	return evidence, nil
+}
+
+func expectedProviderOperationType(work product.ProviderObservationWork) providerv1.OperationType {
+	switch {
+	case work.OperationType == "create_session" && (work.SessionKind == product.SessionKindBrowserAutomation || work.SessionKind == product.SessionKindBrowserLive):
+		return providerv1.OperationOpenBrowserSession
+	case work.OperationType == "create_session":
+		return providerv1.OperationOpenRuntimeSession
+	case work.OperationType == "close_session":
+		return providerv1.OperationCloseRuntimeSession
+	default:
+		return providerv1.OperationCreate
+	}
 }
 
 func providerRequirements(input []product.CapabilityRequirement) []providerv1.CapabilityRequirement {
