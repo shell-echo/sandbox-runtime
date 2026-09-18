@@ -333,6 +333,112 @@ func TestIntegrationBrowserSlotAndSessionDispatchIsolation(t *testing.T) {
 	if err := pool.QueryRow(context.Background(), `SELECT provider_handoff_reference FROM sandbox_runtime_product.runtime_sessions WHERE tenant_id=$1 AND session_id=$2`, tenantID, session.ID).Scan(&storedReference); err != nil || storedReference != evidence.HandoffReference {
 		t.Fatalf("stored handoff=%q err=%v", storedReference, err)
 	}
+	grantRepository, err := NewGrantRepository(store, "browser-grant-key", bytes.Repeat([]byte{0x6b}, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	grants, err := product.NewGrantService(grantRepository, product.CryptoIDGenerator{}, product.CryptoTicketGenerator{}, "wss://browser-gateway.example.test/connect", 30*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	viewerGrant, _, err := grants.Create(context.Background(), tenantID, actor, session.ID, "browser-viewer-grant", product.CreateConnectionRequest{ExpectedSessionVersion: session.Version, ProtocolProfile: session.ProtocolProfile, AccessMode: product.GrantAccessView})
+	if err != nil || viewerGrant.AccessMode != product.GrantAccessView {
+		t.Fatalf("viewer grant=%#v err=%v", viewerGrant, err)
+	}
+	replayedViewerGrant, replayed, err := grants.Create(context.Background(), tenantID, actor, session.ID, "browser-viewer-grant", product.CreateConnectionRequest{ExpectedSessionVersion: session.Version, ProtocolProfile: session.ProtocolProfile, AccessMode: product.GrantAccessView})
+	if err != nil || !replayed || replayedViewerGrant.ID != viewerGrant.ID || replayedViewerGrant.Ticket != viewerGrant.Ticket {
+		t.Fatalf("replayed viewer grant=%#v replayed=%t err=%v", replayedViewerGrant, replayed, err)
+	}
+	if _, _, err := grants.Create(context.Background(), tenantID, product.ActorRef{Type: product.ActorHuman, ID: "other-browser-actor"}, session.ID, "browser-viewer-cross-owner", product.CreateConnectionRequest{ExpectedSessionVersion: session.Version, ProtocolProfile: session.ProtocolProfile, AccessMode: product.GrantAccessView}); !errors.Is(err, product.ErrNotFound) {
+		t.Fatalf("cross-owner grant err=%v", err)
+	}
+	viewerBinding, err := grantRepository.ConsumeConnectionGrant(context.Background(), viewerGrant.Ticket)
+	if err != nil || viewerBinding.AccessMode != product.GrantAccessView || viewerBinding.ControlLeaseID != "" {
+		t.Fatalf("viewer binding=%#v err=%v", viewerBinding, err)
+	}
+	if err := grantRepository.CheckGatewayAuthority(context.Background(), viewerBinding); err != nil {
+		t.Fatal(err)
+	}
+	tamperedViewerBinding := viewerBinding
+	tamperedViewerBinding.SessionID = "ses-tampered"
+	if err := grantRepository.CheckGatewayAuthority(context.Background(), tamperedViewerBinding); !errors.Is(err, product.ErrControlStale) {
+		t.Fatalf("tampered viewer authority err=%v", err)
+	}
+	if _, err := pool.Exec(context.Background(), `UPDATE sandbox_runtime_product.connection_grants SET issued_at=clock_timestamp()-interval '2 seconds',expires_at=clock_timestamp()-interval '1 second' WHERE tenant_id=$1 AND connection_id=$2`, tenantID, viewerBinding.ConnectionID); err != nil {
+		t.Fatal(err)
+	}
+	if err := grantRepository.CheckGatewayAuthority(context.Background(), viewerBinding); !errors.Is(err, product.ErrControlStale) {
+		t.Fatalf("expired viewer authority err=%v", err)
+	}
+	controls, err := product.NewControlService(store, product.CryptoIDGenerator{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	workspace, err = application.GetWorkspace(context.Background(), tenantID, actor, workspace.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	control, _, err := controls.Acquire(context.Background(), tenantID, actor, workspace.ID, "browser-control-acquire", product.AcquireControlLeaseRequest{ExpectedWorkspaceVersion: workspace.Version, Scope: product.ControlScope{Type: "session", ID: session.ID}, DurationSeconds: 60})
+	if err != nil {
+		t.Fatal(err)
+	}
+	controlRequest := product.CreateConnectionRequest{ExpectedSessionVersion: session.Version, ProtocolProfile: session.ProtocolProfile, AccessMode: product.GrantAccessControl, ControlLeaseID: control.ID, ControlFence: control.Fence}
+	controlGrant, _, err := grants.Create(context.Background(), tenantID, actor, session.ID, "browser-control-grant", controlRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	controlBinding, err := grantRepository.ConsumeConnectionGrant(context.Background(), controlGrant.Ticket)
+	if err != nil || controlBinding.AccessMode != product.GrantAccessControl || controlBinding.ControlFence != control.Fence {
+		t.Fatalf("control binding=%#v err=%v", controlBinding, err)
+	}
+	if _, _, err := grants.Create(context.Background(), tenantID, actor, session.ID, "browser-control-grant-conflict", controlRequest); !errors.Is(err, product.ErrControlConflict) {
+		t.Fatalf("second controller err=%v", err)
+	}
+	if _, err := controls.Release(context.Background(), tenantID, actor, workspace.ID, control.ID, "browser-control-release", control.Fence, "controller_released"); err != nil {
+		t.Fatal(err)
+	}
+	if err := grantRepository.CheckGatewayAuthority(context.Background(), controlBinding); !errors.Is(err, product.ErrControlStale) {
+		t.Fatalf("released controller authority err=%v", err)
+	}
+	workspace, err = application.GetWorkspace(context.Background(), tenantID, actor, workspace.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	replacementControl, _, err := controls.Acquire(context.Background(), tenantID, actor, workspace.ID, "browser-control-reacquire", product.AcquireControlLeaseRequest{ExpectedWorkspaceVersion: workspace.Version, Scope: product.ControlScope{Type: "session", ID: session.ID}, DurationSeconds: 60})
+	if err != nil || replacementControl.Fence <= control.Fence {
+		t.Fatalf("replacement control=%#v err=%v", replacementControl, err)
+	}
+	controlRequest.ControlLeaseID, controlRequest.ControlFence = replacementControl.ID, replacementControl.Fence
+	type grantRaceResult struct {
+		grant product.ConnectionGrant
+		err   error
+	}
+	results := make(chan grantRaceResult, 2)
+	var grantRace sync.WaitGroup
+	for index := 0; index < 2; index++ {
+		grantRace.Add(1)
+		go func(index int) {
+			defer grantRace.Done()
+			grant, _, err := grants.Create(context.Background(), tenantID, actor, session.ID, "browser-control-grant-race-"+string(rune('a'+index)), controlRequest)
+			results <- grantRaceResult{grant: grant, err: err}
+		}(index)
+	}
+	grantRace.Wait()
+	close(results)
+	var successful, conflicted int
+	for result := range results {
+		switch {
+		case result.err == nil && result.grant.AccessMode == product.GrantAccessControl:
+			successful++
+		case errors.Is(result.err, product.ErrControlConflict):
+			conflicted++
+		default:
+			t.Fatalf("controller race result=%#v", result)
+		}
+	}
+	if successful != 1 || conflicted != 1 {
+		t.Fatalf("controller race successful=%d conflicted=%d", successful, conflicted)
+	}
 	closeOperation, _, err := sessions.Close(context.Background(), tenantID, actor, session.ID, "browser-dispatch-close", product.CloseSessionRequest{ExpectedVersion: session.Version, Reason: "owner_requested_close"})
 	if err != nil {
 		t.Fatal(err)

@@ -146,6 +146,9 @@
         "public-product-gateway-uri",
         "one-use-opaque-ticket",
         "tenant-actor-workspace-slot-session-protocol-binding",
+        "explicit-view-or-control-access-mode",
+        "viewer-grant-has-no-control-fence",
+        "control-grant-has-current-control-fence",
         "bounded-expiry",
         "no-store-response"
       ],

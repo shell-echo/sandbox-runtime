@@ -244,12 +244,14 @@ type CreateConnectionRequest struct {
 	ProtocolProfile        string `json:"protocol_profile"`
 	ControlLeaseID         string `json:"control_lease_id,omitempty"`
 	ControlFence           int64  `json:"control_fence,omitempty"`
+	AccessMode             string `json:"access_mode,omitempty"`
 }
 
 type ConnectionGrant struct {
 	ConnectionID     string `json:"connection_id"`
 	SessionID        string `json:"session_id"`
 	ProtocolProfile  string `json:"protocol_profile"`
+	AccessMode       string `json:"access_mode"`
 	GatewayURI       string `json:"gateway_uri"`
 	ConnectionTicket string `json:"connection_ticket"`
 	ExpiresAt        string `json:"expires_at"`
@@ -258,7 +260,7 @@ type ConnectionGrant struct {
 func toConnectionGrant(grant product.ConnectionGrant) ConnectionGrant {
 	return ConnectionGrant{
 		ConnectionID: grant.ID, SessionID: grant.SessionID,
-		ProtocolProfile: grant.ProtocolProfile, GatewayURI: grant.GatewayURI,
+		ProtocolProfile: grant.ProtocolProfile, AccessMode: grant.AccessMode, GatewayURI: grant.GatewayURI,
 		ConnectionTicket: grant.Ticket, ExpiresAt: timestamp(grant.ExpiresAt),
 	}
 }

@@ -133,10 +133,13 @@ operations. A closed, expired, or revoked session cannot issue a connection
 grant.
 
 A connection grant contains only a public Product Gateway URI, a protocol
-profile, an opaque one-use ticket, and bounded expiry. It is bound to tenant,
-actor, Workspace, slot, session, requested protocol, and any required control
-lease fence. It MUST NOT contain a Provider handoff, Provider endpoint, backend
-ID, or storage credential.
+profile, explicit `view` or `control` access mode, an opaque one-use ticket,
+and bounded expiry. It is bound to tenant, actor, Workspace, slot, session,
+requested protocol, and any required control lease fence. A viewer grant has
+no control lease or fence and cannot authorize a mutating data-plane action. A
+control grant carries the current session-scoped lease and fence. It MUST NOT
+contain a Provider handoff, Provider endpoint, backend ID, or storage
+credential.
 
 ## 10. Agent runs
 

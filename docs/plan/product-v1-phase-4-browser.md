@@ -1,6 +1,6 @@
 # Product v1 Phase 4: Browser
 
-Status: In progress; Slices 1-4 implemented locally, 9 slices remain
+Status: In progress; Slices 1-5 implemented locally, 8 slices remain
 
 Started: 2026-09-18
 
@@ -26,7 +26,7 @@ until Slice 13 passes for the exact composed topology.
 | 2 | Auxiliary Browser slot create/read/update authority and reconciliation intent | Expected-version/idempotency/quota races; immutable key/kind; exact capability request; event/outbox atomicity; cross-tenant nondisclosure; restart-safe reads | **Implemented; local and real-PostgreSQL gates passed** |
 | 3 | Exact-revision Provider Browser readiness and network-only adapter for Browser sandbox plus session open/handoff observation | Locked capability/profile selection; mTLS/JWS; no private coordinate projection; timeout, cancellation, replay, stale generation, ambiguous outcome, and capability-drift tests | **Implemented; local and real-PostgreSQL gates passed** |
 | 4 | Browser lifecycle reconciliation, disconnect/expiry/close cleanup, unknown-outcome recovery, slot replacement, and retained evidence | Restart at every commit/dispatch/observe boundary; no duplicate current binding; no session resurrection; exact-owned cleanup; coordinated Contract decision for missing Provider close semantics | **Implemented; local and real-PostgreSQL gates passed** |
-| 5 | Viewer/control authorization, single-controller Product lease/fence binding, one-use grants, revocation, and Browser quotas; multi-human collaboration remains deferred | Viewer cannot mutate; one live controller; stale fence/replay/revocation/expiry/limit races; database-time authority; nondisclosing errors | Not started |
+| 5 | Viewer/control authorization, single-controller Product lease/fence binding, one-use grants, revocation, and Browser quotas; multi-human collaboration remains deferred | Viewer cannot mutate; one live controller; stale fence/replay/revocation/expiry/limit races; database-time authority; nondisclosing errors | **Implemented; local and real-PostgreSQL gates passed** |
 | 6 | Public Browser automation WSS data plane with closed action/result messages and downstream action fencing | Separate-process edge/Gateway/Provider test; bounded messages/queues; ordered actions; stale-owner suspension; reconnect; no raw CDP or endpoint exposure | Not started |
 | 7 | Public Browser live viewing/control data plane with authenticated signaling, bounded media/input channels, resolution/encoding negotiation, bitrate, and backpressure | Origin/TLS/authentication; unsupported codec/size rejection; slow-consumer closure; control fence per input; view-only admission; no unauthenticated upgrade | Not started |
 | 8 | Explicit keyboard/pointer/touch, clipboard, upload, download, navigation, popup, and permission policy | Deny-by-default matrix; size/type/count/digest bounds; activation/consent; filename/path confinement; cross-origin and policy-change revocation tests | Not started |
@@ -173,6 +173,39 @@ race with a retained open observation. Full repository race/shuffle, vet,
 Provider Contract, Product Contract, retained Phase 3 evidence, and diff
 checks pass. This remains control-plane lifecycle evidence; no public Browser
 data plane or release topology is claimed.
+
+## Slice 5 exact boundary
+
+The locked Product connection-grant request and response now carry an explicit
+`view` or `control` access mode. View grants never contain a control lease or
+fence and cannot authorize mutating Browser traffic. Control grants require the
+current session-scoped Product lease and its monotonic fence. Static viewer
+principals may request view grants only; controller and owner principals may
+request a control grant only after separately acquiring the lease. This is
+role vocabulary and connection authority, not multi-human sharing or handoff.
+
+Connection tickets remain encrypted at rest, one-use, and bounded by the
+session, Provider handoff, and any control-lease expiry. PostgreSQL database
+time decides grant and lease validity. Lease release or expiry revokes attached
+grants, and the Gateway authority check continuously matches the complete
+tenant, actor, Workspace, slot generation, session, profile, Provider binding,
+handoff generation, access mode, lease, and fence tuple. A tenant advisory lock
+serializes Browser connection quota admission; a partial unique index and the
+session-scoped lease preserve one live controller connection per Browser
+session. Viewer and controller totals have separate bounded tenant quotas.
+
+### Slice 5 local evidence
+
+Focused race tests cover strict access-mode projection, viewer mutation denial,
+view/control separation, and malformed combinations. A pinned PostgreSQL 16
+adapter run applies and replays migrations 1-6 and proves idempotent ticket
+replay, one-use consumption, cross-owner nondisclosure, database-time expiry,
+lease-release revocation, stale-fence rejection, monotonic reacquisition, exact
+binding tamper rejection, and one winner under concurrent controller-grant
+admission. Full repository race/shuffle, vet, Provider Contract, Product
+Contract, retained Phase 3 evidence, and diff checks pass. The public Browser
+automation/live data planes, downstream action fence, and continuous open-socket
+watch are Slice 6 onward and are not claimed here.
 
 ## Evidence rules
 

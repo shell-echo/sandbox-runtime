@@ -518,6 +518,7 @@
       "properties": {
         "expected_session_version": {"type": "integer", "minimum": 1},
         "protocol_profile": {"$ref": "#/$defs/ProfileID"},
+        "access_mode": {"enum": ["view", "control"]},
         "control_lease_id": {"$ref": "#/$defs/Identifier"},
         "control_fence": {"type": "integer", "minimum": 1}
       },
@@ -529,11 +530,12 @@
     "ConnectionGrant": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["connection_id", "session_id", "protocol_profile", "gateway_uri", "connection_ticket", "expires_at"],
+      "required": ["connection_id", "session_id", "protocol_profile", "access_mode", "gateway_uri", "connection_ticket", "expires_at"],
       "properties": {
         "connection_id": {"$ref": "#/$defs/Identifier"},
         "session_id": {"$ref": "#/$defs/Identifier"},
         "protocol_profile": {"$ref": "#/$defs/ProfileID"},
+        "access_mode": {"enum": ["view", "control"]},
         "gateway_uri": {"type": "string", "format": "uri", "maxLength": 2048, "pattern": "^(wss|https)://"},
         "connection_ticket": {"type": "string", "minLength": 32, "maxLength": 4096, "pattern": "^[A-Za-z0-9._~-]+$"},
         "expires_at": {"$ref": "#/$defs/RFC3339Timestamp"}

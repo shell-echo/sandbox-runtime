@@ -43,7 +43,28 @@ func (s *Store) AcquireControlLease(ctx context.Context, command product.Control
 	if version != command.ExpectedWorkspaceVersion {
 		return product.ControlLease{}, false, product.ErrVersionConflict
 	}
+	authorityExpiry := workspaceExpiry
+	if command.Scope.Type == "session" {
+		var sessionWorkspace, ownerSessionType, ownerSessionID, sessionState string
+		var sessionExpiry time.Time
+		err = tx.QueryRow(opCtx, `SELECT workspace_id,owner_actor_type,owner_actor_id,state,expires_at FROM sandbox_runtime_product.runtime_sessions WHERE tenant_id=$1 AND session_id=$2 FOR UPDATE`, command.TenantID, command.Scope.ID).Scan(&sessionWorkspace, &ownerSessionType, &ownerSessionID, &sessionState, &sessionExpiry)
+		if errors.Is(err, pgx.ErrNoRows) || err == nil && (sessionWorkspace != command.WorkspaceID || ownerSessionType != string(command.Actor.Type) || ownerSessionID != command.Actor.ID) {
+			return product.ControlLease{}, false, product.ErrNotFound
+		}
+		if err != nil {
+			return product.ControlLease{}, false, storeError(ctx, opCtx, err, false)
+		}
+		if sessionState != "ready" && sessionState != "active" {
+			return product.ControlLease{}, false, product.ErrControlStale
+		}
+		if sessionExpiry.Before(authorityExpiry) {
+			authorityExpiry = sessionExpiry
+		}
+	}
 	if _, err := tx.Exec(opCtx, `UPDATE sandbox_runtime_product.control_leases SET state='expired',updated_at=$1 WHERE tenant_id=$2 AND workspace_id=$3 AND scope_type=$4 AND scope_id=$5 AND state='active' AND expires_at<=$1`, now, command.TenantID, command.WorkspaceID, command.Scope.Type, command.Scope.ID); err != nil {
+		return product.ControlLease{}, false, storeError(ctx, opCtx, err, false)
+	}
+	if _, err := tx.Exec(opCtx, `UPDATE sandbox_runtime_product.connection_grants SET state='revoked' WHERE tenant_id=$1 AND control_lease_id IN (SELECT lease_id FROM sandbox_runtime_product.control_leases WHERE tenant_id=$1 AND state<>'active') AND state IN ('issued','consumed')`, command.TenantID); err != nil {
 		return product.ControlLease{}, false, storeError(ctx, opCtx, err, false)
 	}
 	var active int
@@ -60,8 +81,8 @@ VALUES($1,$2,$3,$4,1,$5) ON CONFLICT(tenant_id,workspace_id,scope_type,scope_id)
 		return product.ControlLease{}, false, storeError(ctx, opCtx, err, false)
 	}
 	expires := now.Add(command.Duration)
-	if workspaceExpiry.Before(expires) {
-		expires = workspaceExpiry
+	if authorityExpiry.Before(expires) {
+		expires = authorityExpiry
 	}
 	if !expires.After(now) {
 		return product.ControlLease{}, false, product.ErrControlStale
@@ -156,6 +177,9 @@ func (s *Store) ReleaseControlLease(ctx context.Context, command product.Control
 	if _, err := tx.Exec(opCtx, `UPDATE sandbox_runtime_product.control_leases SET state='released',updated_at=$1 WHERE tenant_id=$2 AND lease_id=$3`, now, command.TenantID, command.LeaseID); err != nil {
 		return false, storeError(ctx, opCtx, err, false)
 	}
+	if _, err := tx.Exec(opCtx, `UPDATE sandbox_runtime_product.connection_grants SET state='revoked' WHERE tenant_id=$1 AND control_lease_id=$2 AND state IN ('issued','consumed')`, command.TenantID, command.LeaseID); err != nil {
+		return false, storeError(ctx, opCtx, err, false)
+	}
 	if err := appendControlEvent(opCtx, tx, command, "control_lease.released", command.Fence, now); err != nil {
 		return false, storeError(ctx, opCtx, err, false)
 	}
@@ -216,17 +240,30 @@ func lockCurrentControlLease(ctx context.Context, tx pgx.Tx, command product.Con
 		return product.ControlLease{}, time.Time{}, product.ErrControlStale
 	}
 	var state string
-	var workspaceExpiry time.Time
+	var authorityExpiry time.Time
 	if err := tx.QueryRow(ctx, `SELECT state FROM sandbox_runtime_product.control_leases WHERE tenant_id=$1 AND lease_id=$2`, command.TenantID, command.LeaseID).Scan(&state); err != nil {
 		return product.ControlLease{}, time.Time{}, err
 	}
 	if state != "active" {
 		return product.ControlLease{}, time.Time{}, product.ErrControlStale
 	}
-	if err := tx.QueryRow(ctx, `SELECT lease_expires_at FROM sandbox_runtime_product.workspaces WHERE tenant_id=$1 AND workspace_id=$2`, command.TenantID, command.WorkspaceID).Scan(&workspaceExpiry); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT lease_expires_at FROM sandbox_runtime_product.workspaces WHERE tenant_id=$1 AND workspace_id=$2`, command.TenantID, command.WorkspaceID).Scan(&authorityExpiry); err != nil {
 		return product.ControlLease{}, time.Time{}, err
 	}
-	return lease, workspaceExpiry, nil
+	if lease.Scope.Type == "session" {
+		var sessionWorkspace, sessionState string
+		var sessionExpiry time.Time
+		if err := tx.QueryRow(ctx, `SELECT workspace_id,state,expires_at FROM sandbox_runtime_product.runtime_sessions WHERE tenant_id=$1 AND session_id=$2`, command.TenantID, lease.Scope.ID).Scan(&sessionWorkspace, &sessionState, &sessionExpiry); err != nil {
+			return product.ControlLease{}, time.Time{}, err
+		}
+		if sessionWorkspace != command.WorkspaceID || (sessionState != "ready" && sessionState != "active") {
+			return product.ControlLease{}, time.Time{}, product.ErrControlStale
+		}
+		if sessionExpiry.Before(authorityExpiry) {
+			authorityExpiry = sessionExpiry
+		}
+	}
+	return lease, authorityExpiry, nil
 }
 
 type rowScanner interface{ Scan(...any) error }

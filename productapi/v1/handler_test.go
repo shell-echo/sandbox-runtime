@@ -103,6 +103,31 @@ type allowBrowserSlot struct{}
 
 func (allowBrowserSlot) AuthorizeSlot(context.Context, product.SlotSpec) error { return nil }
 
+type handlerGrantStore struct {
+	commands []product.ConnectionGrantCommand
+}
+
+func (s *handlerGrantStore) MintConnectionGrant(_ context.Context, command product.ConnectionGrantCommand) (product.ConnectionGrant, bool, error) {
+	s.commands = append(s.commands, command)
+	return product.ConnectionGrant{
+		ID:              command.ConnectionID,
+		SessionID:       command.SessionID,
+		ProtocolProfile: command.Request.ProtocolProfile,
+		AccessMode:      command.Request.AccessMode,
+		GatewayURI:      command.GatewayURI,
+		Ticket:          command.Ticket,
+		ExpiresAt:       time.Now().UTC().Add(command.Lifetime),
+	}, false, nil
+}
+
+func (*handlerGrantStore) ConsumeConnectionGrant(context.Context, string) (product.GatewayBinding, error) {
+	return product.GatewayBinding{}, product.ErrNotFound
+}
+
+func (*handlerGrantStore) CheckGatewayAuthority(context.Context, product.GatewayBinding) error {
+	return nil
+}
+
 type catalogStoreStub struct {
 	artifact  product.Artifact
 	recording product.RecordingRecord
@@ -413,7 +438,7 @@ func TestConnectionGrantProjectionMatchesLockedContract(t *testing.T) {
 	now := time.Date(2026, 9, 18, 1, 2, 3, 0, time.UTC)
 	document, err := json.Marshal(toConnectionGrant(product.ConnectionGrant{
 		ID: "con_1", SessionID: "ses_1", ProtocolProfile: "product-terminal.v1",
-		GatewayURI: "wss://gateway.example.test/connect", Ticket: strings.Repeat("a", 43), ExpiresAt: now,
+		AccessMode: product.GrantAccessControl, GatewayURI: "wss://gateway.example.test/connect", Ticket: strings.Repeat("a", 43), ExpiresAt: now,
 	}))
 	if err != nil {
 		t.Fatal(err)
@@ -422,6 +447,56 @@ func TestConnectionGrantProjectionMatchesLockedContract(t *testing.T) {
 		t.Fatalf("connection grant fields = %s", document)
 	}
 	validateDefinition(t, "ConnectionGrant", document)
+}
+
+func TestViewerCanOnlyMintViewConnectionGrant(t *testing.T) {
+	base, sessionStore := newTestHandler(t)
+	store := &handlerGrantStore{}
+	grants, err := product.NewGrantService(store, &handlerIDs{}, product.CryptoTicketGenerator{}, "wss://gateway.example.test/connect", 30*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sessions, err := product.NewSessionService(sessionStore, allowProductSession{}, &handlerIDs{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	const viewerToken = "product-viewer-test-token-000000000000001"
+	authenticator, err := productapi.NewStaticAuthenticator([]productapi.StaticToken{{
+		Token: viewerToken,
+		Principal: productapi.Principal{
+			TenantID: "tenant-1",
+			Actor:    product.ActorRef{Type: product.ActorHuman, ID: "actor-1"},
+			Role:     productapi.RoleViewer,
+		},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler, err := NewCompleteHandler(base.application, nil, sessions, grants, authenticator, &handlerIDs{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/sessions/ses_1/connections", strings.NewReader(`{"expected_session_version":1,"protocol_profile":"product-browser-live.v1","access_mode":"view"}`))
+	request.Header.Set("Authorization", "Bearer "+viewerToken)
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Idempotency-Key", "viewer-grant-1")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusCreated || len(store.commands) != 1 || store.commands[0].Request.AccessMode != product.GrantAccessView {
+		t.Fatalf("view status=%d commands=%#v body=%s", response.Code, store.commands, response.Body.String())
+	}
+	validateDefinition(t, "ConnectionGrant", response.Body.Bytes())
+
+	request = httptest.NewRequest(http.MethodPost, "/api/v1/sessions/ses_1/connections", strings.NewReader(`{"expected_session_version":1,"protocol_profile":"product-browser-live.v1","access_mode":"control","control_lease_id":"ctl_1","control_fence":1}`))
+	request.Header.Set("Authorization", "Bearer "+viewerToken)
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Idempotency-Key", "viewer-grant-2")
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusForbidden || len(store.commands) != 1 {
+		t.Fatalf("control status=%d commands=%#v body=%s", response.Code, store.commands, response.Body.String())
+	}
 }
 
 func TestCatalogRoutesMatchLockedContract(t *testing.T) {

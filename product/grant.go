@@ -15,10 +15,11 @@ type CreateConnectionRequest struct {
 	ExpectedSessionVersion          int64
 	ProtocolProfile, ControlLeaseID string
 	ControlFence                    int64
+	AccessMode                      string
 }
 type ConnectionGrant struct {
-	ID, SessionID, ProtocolProfile, GatewayURI, Ticket string
-	ExpiresAt                                          time.Time
+	ID, SessionID, ProtocolProfile, AccessMode, GatewayURI, Ticket string
+	ExpiresAt                                                      time.Time
 }
 type GatewayBinding struct {
 	ConnectionID, TenantID                           string
@@ -27,6 +28,7 @@ type GatewayBinding struct {
 	SlotGeneration                                   int64
 	ControlLeaseID                                   string
 	ControlFence                                     int64
+	AccessMode                                       string
 	ExpiresAt                                        time.Time
 	ProviderRevisionID, SandboxID, HandoffReference  string
 	ConnectionGeneration                             int64
@@ -73,8 +75,17 @@ func NewGrantService(store ConnectionGrantStore, ids IDGenerator, tickets Ticket
 	return &GrantService{store: store, ids: ids, tickets: tickets, gatewayURI: gatewayURI, lifetime: lifetime}, nil
 }
 func (s *GrantService) Create(ctx context.Context, tenantID string, actor ActorRef, sessionID, key string, request CreateConnectionRequest) (ConnectionGrant, bool, error) {
+	if request.AccessMode == "" {
+		request.AccessMode = GrantAccessControl
+	}
 	if s == nil || ctx == nil || !validIdentifier(tenantID) || actor.Validate() != nil || !validIdentifier(sessionID) || !validIdempotencyKey(key) || request.ExpectedSessionVersion < 1 || !validIdentifier(request.ProtocolProfile) || (request.ControlLeaseID == "") != (request.ControlFence == 0) {
 		return ConnectionGrant{}, false, ErrInvalid
+	}
+	if request.AccessMode != GrantAccessView && request.AccessMode != GrantAccessControl {
+		return ConnectionGrant{}, false, ErrInvalid
+	}
+	if request.AccessMode == GrantAccessView && request.ControlLeaseID != "" {
+		return ConnectionGrant{}, false, ErrForbidden
 	}
 	if request.ControlLeaseID != "" && (!validIdentifier(request.ControlLeaseID) || request.ControlFence < 1) {
 		return ConnectionGrant{}, false, ErrInvalid

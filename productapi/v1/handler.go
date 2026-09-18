@@ -387,7 +387,7 @@ func (h *Handler) sessionsRoute(writer http.ResponseWriter, request *http.Reques
 	}
 	value := strings.TrimPrefix(request.URL.Path, "/api/v1/sessions/")
 	if request.Method == http.MethodPost && strings.HasSuffix(value, "/connections") {
-		if principal.Role != productapi.RoleOwner || h.grants == nil {
+		if h.grants == nil {
 			writeError(writer, http.StatusForbidden, "PRODUCT_FORBIDDEN", "action is forbidden", false, requestID)
 			return
 		}
@@ -406,7 +406,15 @@ func (h *Handler) sessionsRoute(writer http.ResponseWriter, request *http.Reques
 			writeError(writer, http.StatusBadRequest, "PRODUCT_INVALID_REQUEST", "invalid request body", false, requestID)
 			return
 		}
-		grant, _, err := h.grants.Create(request.Context(), principal.TenantID, principal.Actor, sessionID, key, product.CreateConnectionRequest{ExpectedSessionVersion: input.ExpectedSessionVersion, ProtocolProfile: input.ProtocolProfile, ControlLeaseID: input.ControlLeaseID, ControlFence: input.ControlFence})
+		if input.AccessMode == "" {
+			input.AccessMode = product.GrantAccessControl
+		}
+		if (principal.Role == productapi.RoleViewer && input.AccessMode != product.GrantAccessView) ||
+			(principal.Role == productapi.RoleController && input.AccessMode != product.GrantAccessView && input.AccessMode != product.GrantAccessControl) {
+			writeError(writer, http.StatusForbidden, "PRODUCT_FORBIDDEN", "action is forbidden", false, requestID)
+			return
+		}
+		grant, _, err := h.grants.Create(request.Context(), principal.TenantID, principal.Actor, sessionID, key, product.CreateConnectionRequest{ExpectedSessionVersion: input.ExpectedSessionVersion, ProtocolProfile: input.ProtocolProfile, ControlLeaseID: input.ControlLeaseID, ControlFence: input.ControlFence, AccessMode: input.AccessMode})
 		if err != nil {
 			writeApplicationError(writer, err, requestID)
 			return
@@ -476,7 +484,7 @@ func singleHeader(request *http.Request, name string) (string, bool) {
 }
 
 func (h *Handler) controlLease(writer http.ResponseWriter, request *http.Request, principal productapi.Principal, requestID string) {
-	if principal.Role != productapi.RoleOwner || h.controls == nil {
+	if principal.Role == productapi.RoleViewer || h.controls == nil {
 		writeError(writer, http.StatusForbidden, "PRODUCT_FORBIDDEN", "action is forbidden", false, requestID)
 		return
 	}

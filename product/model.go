@@ -23,6 +23,9 @@ const (
 	SessionProfileBrowserAutomation = "product-browser-automation.v1"
 	SessionProfileBrowserLive       = "product-browser-live.v1"
 
+	GrantAccessView    = "view"
+	GrantAccessControl = "control"
+
 	SessionStateRequested    = "requested"
 	SessionStateProvisioning = "provisioning"
 	SessionStateReady        = "ready"
