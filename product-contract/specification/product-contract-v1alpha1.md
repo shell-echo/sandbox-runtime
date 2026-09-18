@@ -188,6 +188,19 @@ Product binds transfers to the same tenant, actor, Workspace, direction,
 digest, size, and completed Product transfer. A policy revision change revokes
 the existing control connection; it never broadens a retained connection.
 
+After a live peer first connects or recovers inside the bounded disconnect
+grace period, Product rechecks the complete Gateway authority before media or
+control resumes and requests a rate-limited keyframe. RTCP loss and full-intra
+requests, plus the closed ordered `stream.resync` control message, share the
+same keyframe limiter. The closed ordered `stream.resize` message may change
+only to another bounded VP8 video policy through the trusted media adapter.
+Control messages received while the peer is disconnected are stale and close
+the peer. An expired disconnect grace, media dependency loss, or failed
+resynchronization closes the connection; reconnecting then requires a new
+one-use Product grant and repeats signaling, policy, authority, and private
+resolution. The durable Browser session is not closed merely because a client
+connection is lost.
+
 Product rechecks the exact session control lease, fence, and unchanged policy
 revision before every forwarded input. SDP responses, messages, errors, and
 logs never project the Provider handoff, Browser endpoint, relay credentials,

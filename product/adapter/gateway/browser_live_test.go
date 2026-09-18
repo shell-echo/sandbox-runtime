@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -97,11 +98,112 @@ func TestBrowserLiveHandlerCarriesBoundedMediaAndFencedInput(t *testing.T) {
 				case <-time.After(3 * time.Second):
 					t.Fatal("input result was not returned")
 				}
+				resized := BrowserLiveVideoPolicy{Codec: "video/VP8", Width: 800, Height: 600, MaxFPS: 24, MaxBitrateKbps: 1200}
+				resize, _ := json.Marshal(browserLiveResizeMessage{Type: "stream.resize", Sequence: 2, Video: resized})
+				if err := dataChannel.SendText(string(resize)); err != nil {
+					t.Fatal(err)
+				}
+				select {
+				case got := <-source.session.videoPolicies:
+					if got != resized {
+						t.Fatalf("resized policy=%#v", got)
+					}
+				case <-time.After(3 * time.Second):
+					t.Fatal("video policy was not updated")
+				}
+				select {
+				case result := <-results:
+					if string(result.Data) != `{"type":"stream.resize.result","sequence":2,"ok":true}` {
+						t.Fatalf("resize result=%s", result.Data)
+					}
+				case <-time.After(3 * time.Second):
+					t.Fatal("resize result was not returned")
+				}
+				if err := dataChannel.SendText(`{"type":"stream.resync","sequence":3}`); err != nil {
+					t.Fatal(err)
+				}
+				select {
+				case result := <-results:
+					if string(result.Data) != `{"type":"stream.resync.result","sequence":3,"ok":true}` {
+						t.Fatalf("resync result=%s", result.Data)
+					}
+				case <-time.After(3 * time.Second):
+					t.Fatal("resync result was not returned")
+				}
 			}
 			if source.policy.Codec != "video/VP8" || source.policy.Width != 640 || source.policy.Height != 480 {
 				t.Fatalf("policy=%#v", source.policy)
 			}
 		})
+	}
+}
+
+func TestBrowserLivePeerDisconnectGraceAndKeyframeBounds(t *testing.T) {
+	binding := testBrowserLiveBinding(product.GrantAccessView)
+	store := &grantStoreSpy{binding: binding, active: true}
+	media := newBrowserLiveMediaSessionSpy()
+	handler := &BrowserLiveHandler{
+		grants: store, policy: &browserPolicySourceSpy{policy: testGatewayBrowserPolicy()}, disconnectGrace: 80 * time.Millisecond,
+		minKeyframeInterval: 20 * time.Millisecond, maxInputQueue: 1, sessions: map[string]int{binding.SessionID: 1}, peers: 1,
+	}
+	peer, err := webrtc.NewPeerConnection(webrtc.Configuration{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	state := newBrowserLivePeer(handler, peer, media, binding, BrowserLiveVideoPolicy{Codec: "video/VP8", Width: 640, Height: 480, MaxFPS: 30, MaxBitrateKbps: 1000}, testGatewayBrowserPolicy())
+	state.onConnectionState(webrtc.PeerConnectionStateConnected)
+	state.onConnectionState(webrtc.PeerConnectionStateDisconnected)
+	time.Sleep(20 * time.Millisecond)
+	state.onConnectionState(webrtc.PeerConnectionStateConnected)
+	time.Sleep(90 * time.Millisecond)
+	select {
+	case <-state.ctx.Done():
+		t.Fatal("recovered peer was closed by stale disconnect timer")
+	default:
+	}
+	if media.keyframes.Load() != 2 {
+		t.Fatalf("keyframes after recovery=%d", media.keyframes.Load())
+	}
+	before := media.keyframes.Load()
+	state.requestKeyframe()
+	state.requestKeyframe()
+	if media.keyframes.Load() != before+1 {
+		t.Fatalf("keyframe requests were not bounded: %d", media.keyframes.Load())
+	}
+	state.onConnectionState(webrtc.PeerConnectionStateDisconnected)
+	select {
+	case <-state.ctx.Done():
+	case <-time.After(time.Second):
+		t.Fatal("disconnect grace did not close peer")
+	}
+}
+
+func TestBrowserLivePeerRejectsControlWhileDisconnected(t *testing.T) {
+	binding := testBrowserLiveBinding(product.GrantAccessControl)
+	media := newBrowserLiveMediaSessionSpy()
+	handler := &BrowserLiveHandler{
+		grants: &grantStoreSpy{binding: binding, active: true}, policy: &browserPolicySourceSpy{policy: testGatewayBrowserPolicy()},
+		disconnectGrace: time.Second, maxInputQueue: 1, sessions: map[string]int{binding.SessionID: 1}, peers: 1,
+	}
+	peer, err := webrtc.NewPeerConnection(webrtc.Configuration{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	state := newBrowserLivePeer(handler, peer, media, binding, BrowserLiveVideoPolicy{Codec: "video/VP8", Width: 640, Height: 480, MaxFPS: 30, MaxBitrateKbps: 1000}, testGatewayBrowserPolicy())
+	state.onConnectionState(webrtc.PeerConnectionStateDisconnected)
+	go state.inputLoop()
+	state.controls <- browserLiveQueuedControl{kind: "input", sequence: 1, input: BrowserLiveInput{
+		Sequence: 1, Action: product.BrowserPolicyAction{Kind: product.BrowserActionPointer}, ControlLeaseID: binding.ControlLeaseID, ControlFence: binding.ControlFence,
+	}}
+	select {
+	case <-state.ctx.Done():
+	case <-time.After(time.Second):
+		t.Fatal("stale disconnected control did not close peer")
+	}
+	select {
+	case input := <-media.inputs:
+		t.Fatalf("stale input reached media: %#v", input)
+	default:
 	}
 }
 
@@ -418,14 +520,16 @@ func (s *browserLiveMediaSourceSpy) Open(_ context.Context, binding product.Gate
 }
 
 type browserLiveMediaSessionSpy struct {
-	rtp       chan []byte
-	inputs    chan BrowserLiveInput
-	closed    chan struct{}
-	closeOnce sync.Once
+	rtp           chan []byte
+	inputs        chan BrowserLiveInput
+	videoPolicies chan BrowserLiveVideoPolicy
+	closed        chan struct{}
+	closeOnce     sync.Once
+	keyframes     atomic.Int32
 }
 
 func newBrowserLiveMediaSessionSpy() *browserLiveMediaSessionSpy {
-	return &browserLiveMediaSessionSpy{rtp: make(chan []byte, 16), inputs: make(chan BrowserLiveInput, 4), closed: make(chan struct{})}
+	return &browserLiveMediaSessionSpy{rtp: make(chan []byte, 16), inputs: make(chan BrowserLiveInput, 4), videoPolicies: make(chan BrowserLiveVideoPolicy, 4), closed: make(chan struct{})}
 }
 
 func (s *browserLiveMediaSessionSpy) ReadRTP(ctx context.Context) ([]byte, error) {
@@ -448,7 +552,19 @@ func (s *browserLiveMediaSessionSpy) HandleInput(ctx context.Context, input Brow
 	}
 }
 
-func (*browserLiveMediaSessionSpy) RequestKeyframe(context.Context) error { return nil }
+func (s *browserLiveMediaSessionSpy) UpdateVideoPolicy(ctx context.Context, policy BrowserLiveVideoPolicy) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case s.videoPolicies <- policy:
+		return nil
+	}
+}
+
+func (s *browserLiveMediaSessionSpy) RequestKeyframe(context.Context) error {
+	s.keyframes.Add(1)
+	return nil
+}
 func (s *browserLiveMediaSessionSpy) Close() error {
 	s.closeOnce.Do(func() { close(s.closed) })
 	return nil

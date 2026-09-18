@@ -1,6 +1,6 @@
 # Product v1 Phase 4: Browser
 
-Status: In progress; Slices 1-9 implemented locally, 4 slices remain
+Status: In progress; Slices 1-10 implemented locally, 3 slices remain
 
 Started: 2026-09-18
 
@@ -31,7 +31,7 @@ until Slice 13 passes for the exact composed topology.
 | 7 | Public Browser live viewing/control data plane with authenticated signaling, bounded media/input channels, resolution/encoding negotiation, bitrate, and backpressure | Origin/TLS/authentication; unsupported codec/size rejection; slow-consumer closure; control fence per input; view-only admission; no unauthenticated upgrade | **Implemented; local real-WebRTC gates passed** |
 | 8 | Explicit keyboard/pointer/touch, clipboard, upload, download, navigation, popup, and permission policy | Deny-by-default matrix; size/type/count/digest bounds; activation/consent; filename/path confinement; cross-origin and policy-change revocation tests | **Implemented; local policy/data-plane gates passed** |
 | 9 | Browser network and runtime isolation composition | Exact restricted-egress policy; DNS/IP/metadata/private-network denial; immutable verified image; permission/device denial; resource bounds; cleanup and fault injection | **Implemented; local and real-Docker gates passed** |
-| 10 | Connection loss, Gateway/Provider restart, reconnect, visual resynchronization, resolution changes, and recovery UX | Fresh-grant reconnect; authority recheck; keyframe/resync bounds; no stale input; retained session recovery; dependency-loss fail-closed behavior | Not started |
+| 10 | Connection loss, Gateway/Provider restart, reconnect, visual resynchronization, resolution changes, and recovery UX | Fresh-grant reconnect; authority recheck; keyframe/resync bounds; no stale input; retained session recovery; dependency-loss fail-closed behavior | **Implemented; local real-WebRTC recovery gates passed** |
 | 11 | Browser metadata audit, media/control-event recording, Product catalog, retention/deletion, integrity, and quota composition | Consent and visible mode; required-recorder fail closed; encrypted chained segments; authorized replay; content excluded from logs/control-plane lists; quota races | Not started |
 | 12 | Product Web Browser experience for slot/session lifecycle, live view, controller state, recovery, downloads/uploads, and recording catalog | Generated/checked client; authenticated browser E2E; CSP/CSRF/origin/accessibility; viewer/control UX; error/reconnect/cleanup cases; no private coordinates | Not started |
 | 13 | Product Phase 4 independent-process release gate and reproducible evidence bundle | Fresh PostgreSQL and required coordination/object storage; separate Product/Gateway/Provider/Browser roles; exact locked identities; restart/fault/security/backpressure/recording/cleanup matrix; strict independent validation | Not started |
@@ -356,6 +356,37 @@ avoids host DNS interception without weakening the non-public-address deny
 list. Full repository race/shuffle, vet, Contract, and retained evidence gates
 run at the slice commit gate. Connection recovery, recording, Web UX, and the
 final independent-process composition remain Slices 10-13.
+
+## Slice 10 exact boundary
+
+The live Gateway distinguishes transient WebRTC transport loss from durable
+Product session state. A disconnect starts one bounded grace timer. A peer that
+recovers before expiry rechecks its complete Product authority before resuming
+and requests a keyframe; a stale timer cannot close that recovered peer.
+Disconnect expiry, failed/closed peer state, media-source loss, authority loss,
+or keyframe failure closes the live connection without closing or resurrecting
+the durable Browser session. A subsequent connection therefore consumes a new
+one-use Product grant and repeats the full admission and media-source open.
+
+RTCP PLI/FIR, initial connection, recovery, and the closed ordered
+`stream.resync` command share one bounded keyframe request limiter. Controllers
+may also send a closed ordered `stream.resize` command, but only another
+contract-bounded VP8 policy reaches the media adapter; bitrate enforcement and
+input coordinate bounds switch atomically to the accepted viewport. Every
+control command rechecks the current Product binding and immutable policy
+revision. Control arriving while disconnected is stale and fails closed.
+
+### Slice 10 local evidence
+
+Race-enabled real-Pion tests recover a peer before an obsolete disconnect timer
+fires, prove disconnect expiry closes the connection, bound repeated keyframe
+requests, and exercise ordered resize/resync results over the actual WebRTC
+data channel. Existing tests retain one-use ticket replay denial, continuous
+authority and policy-revision revocation, dependency-loss closure, bounded
+queues, and new media-source creation per admitted connection. Full repository
+race/shuffle, vet, Contract, and retained evidence gates run at the slice commit
+gate. Recovery UX presentation remains Slice 12; recording and the final
+independent-process topology remain Slices 11 and 13.
 
 ## Evidence rules
 

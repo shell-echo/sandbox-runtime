@@ -202,7 +202,12 @@
         "filename-single-component-confinement",
         "exact-origin-navigation-and-popup-policy",
         "closed-device-permission-policy",
-        "policy-change-connection-revocation"
+        "policy-change-connection-revocation",
+        "bounded-disconnect-grace",
+        "fresh-grant-reconnect",
+        "authority-recheck-before-recovery",
+        "rate-limited-keyframe-resynchronization",
+        "closed-bounded-video-resize"
       ],
       "forbids": [
         "unauthenticated-signaling",
@@ -217,7 +222,10 @@
         "provider-handoff-public-message",
         "provider-endpoint-public-message",
         "relay-credential-public-message",
-        "stale-owner-input"
+        "stale-owner-input",
+        "input-while-peer-disconnected",
+        "connection-loss-as-session-close",
+        "reconnect-with-consumed-ticket"
       ]
     },
     {

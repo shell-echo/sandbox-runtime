@@ -780,21 +780,44 @@
       ]
     },
     "BrowserLiveControlMessage": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["type", "sequence", "action"],
-      "properties": {
-        "type": {"const": "input"},
-        "sequence": {"type": "integer", "minimum": 1, "maximum": 9007199254740991},
-        "action": {"$ref": "#/$defs/BrowserLiveControlAction"}
-      }
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "sequence", "action"],
+          "properties": {
+            "type": {"const": "input"},
+            "sequence": {"type": "integer", "minimum": 1, "maximum": 9007199254740991},
+            "action": {"$ref": "#/$defs/BrowserLiveControlAction"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "sequence"],
+          "properties": {
+            "type": {"const": "stream.resync"},
+            "sequence": {"type": "integer", "minimum": 1, "maximum": 9007199254740991}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "sequence", "video"],
+          "properties": {
+            "type": {"const": "stream.resize"},
+            "sequence": {"type": "integer", "minimum": 1, "maximum": 9007199254740991},
+            "video": {"$ref": "#/$defs/BrowserLiveVideoPolicy"}
+          }
+        }
+      ]
     },
     "BrowserLiveControlResult": {
       "type": "object",
       "additionalProperties": false,
       "required": ["type", "sequence", "ok"],
       "properties": {
-        "type": {"const": "input.result"},
+        "type": {"enum": ["input.result", "stream.resync.result", "stream.resize.result"]},
         "sequence": {"type": "integer", "minimum": 1, "maximum": 9007199254740991},
         "ok": {"const": true},
         "text": {"type": "string", "maxLength": 65536}

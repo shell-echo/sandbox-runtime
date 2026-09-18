@@ -13,6 +13,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v4"
 	"github.com/shell-echo/sandbox-runtime/product"
@@ -24,6 +25,8 @@ const (
 	defaultLiveRTPQueue          = 32
 	defaultLiveInputQueue        = 16
 	defaultLiveAuthorityInterval = 250 * time.Millisecond
+	defaultLiveDisconnectGrace   = 5 * time.Second
+	defaultLiveKeyframeInterval  = 250 * time.Millisecond
 	maxLiveRTPPacketBytes        = 16 << 10
 	maxLiveControlMessageBytes   = 96 << 10
 )
@@ -63,6 +66,7 @@ type BrowserLiveTouchPoint struct {
 type BrowserLiveMediaSession interface {
 	ReadRTP(context.Context) ([]byte, error)
 	HandleInput(context.Context, BrowserLiveInput) (BrowserLiveInputResult, error)
+	UpdateVideoPolicy(context.Context, BrowserLiveVideoPolicy) error
 	RequestKeyframe(context.Context) error
 	Close() error
 }
@@ -93,6 +97,8 @@ type BrowserLiveOptions struct {
 	MaxPeersPerSession          int
 	AuthorityPollInterval       time.Duration
 	ConnectionTimeout           time.Duration
+	DisconnectGrace             time.Duration
+	MinKeyframeInterval         time.Duration
 	AllowInsecureHTTPForTests   bool
 	AllowHostCandidatesForTests bool
 }
@@ -111,6 +117,8 @@ type BrowserLiveHandler struct {
 	maxPeersPerSession   int
 	pollInterval         time.Duration
 	connectionTimeout    time.Duration
+	disconnectGrace      time.Duration
+	minKeyframeInterval  time.Duration
 	allowInsecureForTest bool
 
 	mu       sync.Mutex
@@ -142,6 +150,22 @@ type browserLiveControlMessage struct {
 	Action   json.RawMessage `json:"action"`
 }
 
+type browserLiveControlEnvelope struct {
+	Type     string `json:"type"`
+	Sequence int64  `json:"sequence"`
+}
+
+type browserLiveResyncMessage struct {
+	Type     string `json:"type"`
+	Sequence int64  `json:"sequence"`
+}
+
+type browserLiveResizeMessage struct {
+	Type     string                 `json:"type"`
+	Sequence int64                  `json:"sequence"`
+	Video    BrowserLiveVideoPolicy `json:"video"`
+}
+
 type browserLiveInputResponse struct {
 	Type     string `json:"type"`
 	Sequence int64  `json:"sequence"`
@@ -149,9 +173,12 @@ type browserLiveInputResponse struct {
 	Text     string `json:"text,omitempty"`
 }
 
-type browserLiveQueuedInput struct {
-	input   BrowserLiveInput
-	channel *webrtc.DataChannel
+type browserLiveQueuedControl struct {
+	kind     string
+	sequence int64
+	input    BrowserLiveInput
+	video    BrowserLiveVideoPolicy
+	channel  *webrtc.DataChannel
 }
 
 func NewBrowserLiveHandler(options BrowserLiveOptions) (*BrowserLiveHandler, error) { //nolint:cyclop
@@ -194,7 +221,15 @@ func NewBrowserLiveHandler(options BrowserLiveOptions) (*BrowserLiveHandler, err
 	if connectTimeout == 0 {
 		connectTimeout = 15 * time.Second
 	}
-	if limit < 1024 || limit > 256<<10 || rtpQueue < 1 || rtpQueue > 256 || inputQueue < 1 || inputQueue > 64 || maxPeers < 1 || maxPeers > 10000 || maxPerSession < 1 || maxPerSession > 64 || poll < 10*time.Millisecond || poll > 5*time.Second || connectTimeout < time.Second || connectTimeout > time.Minute {
+	disconnectGrace := options.DisconnectGrace
+	if disconnectGrace == 0 {
+		disconnectGrace = defaultLiveDisconnectGrace
+	}
+	keyframeInterval := options.MinKeyframeInterval
+	if keyframeInterval == 0 {
+		keyframeInterval = defaultLiveKeyframeInterval
+	}
+	if limit < 1024 || limit > 256<<10 || rtpQueue < 1 || rtpQueue > 256 || inputQueue < 1 || inputQueue > 64 || maxPeers < 1 || maxPeers > 10000 || maxPerSession < 1 || maxPerSession > 64 || poll < 10*time.Millisecond || poll > 5*time.Second || connectTimeout < time.Second || connectTimeout > time.Minute || disconnectGrace < 100*time.Millisecond || disconnectGrace > 30*time.Second || keyframeInterval < 50*time.Millisecond || keyframeInterval > 5*time.Second {
 		return nil, product.ErrInvalid
 	}
 	configuration := webrtc.Configuration{ICEServers: append([]webrtc.ICEServer(nil), options.ICEServers...)}
@@ -210,8 +245,9 @@ func NewBrowserLiveHandler(options BrowserLiveOptions) (*BrowserLiveHandler, err
 		grants: options.Grants, media: options.Media, policy: options.Policy, transfers: options.Transfers, origins: origins, configuration: configuration,
 		maxSignalingBytes: limit, maxRTPQueue: rtpQueue, maxInputQueue: inputQueue,
 		maxPeers: maxPeers, maxPeersPerSession: maxPerSession, pollInterval: poll,
-		connectionTimeout: connectTimeout, allowInsecureForTest: options.AllowInsecureHTTPForTests,
-		sessions: make(map[string]int),
+		connectionTimeout: connectTimeout, disconnectGrace: disconnectGrace, minKeyframeInterval: keyframeInterval,
+		allowInsecureForTest: options.AllowInsecureHTTPForTests,
+		sessions:             make(map[string]int),
 	}, nil
 }
 
@@ -397,7 +433,7 @@ func decodeBrowserLiveSignal(reader io.Reader, limit int64) (browserLiveSignalRe
 	if err := decoder.Decode(&signal); err != nil {
 		return signal, product.ErrInvalid
 	}
-	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) || signal.Offer.Type != "offer" || len(signal.Offer.SDP) < 1 || len(signal.Offer.SDP) > 80<<10 || signal.Video.Codec != "video/VP8" || signal.Video.Width < 320 || signal.Video.Width > 1920 || signal.Video.Height < 240 || signal.Video.Height > 1080 || signal.Video.MaxFPS < 1 || signal.Video.MaxFPS > 60 || signal.Video.MaxBitrateKbps < 128 || signal.Video.MaxBitrateKbps > 4000 {
+	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) || signal.Offer.Type != "offer" || len(signal.Offer.SDP) < 1 || len(signal.Offer.SDP) > 80<<10 || !validBrowserLiveVideoPolicy(signal.Video) {
 		return signal, product.ErrInvalid
 	}
 	return signal, nil
@@ -415,12 +451,18 @@ type browserLivePeer struct {
 	stopOnce      sync.Once
 	connected     chan struct{}
 	connectedOnce sync.Once
-	inputs        chan browserLiveQueuedInput
+	controls      chan browserLiveQueuedControl
+	stateMu       sync.RWMutex
+	state         webrtc.PeerConnectionState
+	stateEpoch    uint64
+	videoMu       sync.RWMutex
+	keyframeMu    sync.Mutex
+	nextKeyframe  time.Time
 }
 
 func newBrowserLivePeer(handler *BrowserLiveHandler, peer *webrtc.PeerConnection, media BrowserLiveMediaSession, binding product.GatewayBinding, video BrowserLiveVideoPolicy, policy product.BrowserPolicy) *browserLivePeer {
 	ctx, cancel := context.WithCancel(context.Background())
-	return &browserLivePeer{handler: handler, peer: peer, media: media, binding: binding, video: video, policy: policy, ctx: ctx, cancel: cancel, connected: make(chan struct{}), inputs: make(chan browserLiveQueuedInput, handler.maxInputQueue)}
+	return &browserLivePeer{handler: handler, peer: peer, media: media, binding: binding, video: video, policy: policy, ctx: ctx, cancel: cancel, connected: make(chan struct{}), controls: make(chan browserLiveQueuedControl, handler.maxInputQueue), state: webrtc.PeerConnectionStateNew}
 }
 
 func (p *browserLivePeer) start(track *webrtc.TrackLocalStaticRTP) {
@@ -472,7 +514,8 @@ func (p *browserLivePeer) mediaLoop(track browserLiveRTPWriter) {
 			windowStart, bytesInWindow = now, 0
 		}
 		bytesInWindow += len(packet)
-		if bytesInWindow*8 > p.video.MaxBitrateKbps*1000 {
+		video := p.currentVideo()
+		if bytesInWindow*8 > video.MaxBitrateKbps*1000 {
 			p.stop()
 			return
 		}
@@ -486,8 +529,15 @@ func (p *browserLivePeer) mediaLoop(track browserLiveRTPWriter) {
 
 func (p *browserLivePeer) readRTCP(sender *webrtc.RTPSender) {
 	for {
-		if _, _, err := sender.ReadRTCP(); err != nil {
+		packets, _, err := sender.ReadRTCP()
+		if err != nil {
 			return
+		}
+		for _, packet := range packets {
+			switch packet.(type) {
+			case *rtcp.PictureLossIndication, *rtcp.FullIntraRequest:
+				p.requestKeyframe()
+			}
 		}
 	}
 }
@@ -517,22 +567,52 @@ func (p *browserLivePeer) installControlChannel() {
 			return
 		}
 		channel.OnMessage(func(message webrtc.DataChannelMessage) {
-			if !message.IsString || len(message.Data) > maxLiveControlMessageBytes {
+			if !message.IsString || len(message.Data) > maxLiveControlMessageBytes || !p.isConnected() {
 				p.stop()
 				return
 			}
-			input, err := decodeBrowserLiveInput(message.Data, p.video, p.binding)
+			control, err := decodeBrowserLiveControl(message.Data, p.currentVideo(), p.binding)
 			if err != nil {
 				p.stop()
 				return
 			}
+			control.channel = channel
 			select {
-			case p.inputs <- browserLiveQueuedInput{input: input, channel: channel}:
+			case p.controls <- control:
 			default:
 				p.stop()
 			}
 		})
 	})
+}
+
+func decodeBrowserLiveControl(payload []byte, video BrowserLiveVideoPolicy, binding product.GatewayBinding) (browserLiveQueuedControl, error) {
+	if len(payload) == 0 || rejectDuplicateAutomationMembers(payload) != nil {
+		return browserLiveQueuedControl{}, product.ErrInvalid
+	}
+	var envelope browserLiveControlEnvelope
+	if err := json.Unmarshal(payload, &envelope); err != nil || envelope.Sequence < 1 || envelope.Sequence > maxAutomationSequence {
+		return browserLiveQueuedControl{}, product.ErrInvalid
+	}
+	switch envelope.Type {
+	case "input":
+		input, err := decodeBrowserLiveInput(payload, video, binding)
+		return browserLiveQueuedControl{kind: envelope.Type, sequence: envelope.Sequence, input: input}, err
+	case "stream.resync":
+		var message browserLiveResyncMessage
+		if decodeStrictRaw(payload, &message) != nil {
+			return browserLiveQueuedControl{}, product.ErrInvalid
+		}
+		return browserLiveQueuedControl{kind: envelope.Type, sequence: envelope.Sequence}, nil
+	case "stream.resize":
+		var message browserLiveResizeMessage
+		if decodeStrictRaw(payload, &message) != nil || !validBrowserLiveVideoPolicy(message.Video) {
+			return browserLiveQueuedControl{}, product.ErrInvalid
+		}
+		return browserLiveQueuedControl{kind: envelope.Type, sequence: envelope.Sequence, video: message.Video}, nil
+	default:
+		return browserLiveQueuedControl{}, product.ErrInvalid
+	}
 }
 
 func decodeBrowserLiveInput(payload []byte, video BrowserLiveVideoPolicy, binding product.GatewayBinding) (BrowserLiveInput, error) {
@@ -561,28 +641,52 @@ func (p *browserLivePeer) inputLoop() {
 		select {
 		case <-p.ctx.Done():
 			return
-		case queued := <-p.inputs:
-			input := queued.input
+		case queued := <-p.controls:
 			currentPolicy, policyErr := p.handler.policy.CurrentBrowserPolicy(p.ctx, p.binding)
-			if input.Sequence != lastSequence+1 || p.handler.grants.CheckGatewayAuthority(p.ctx, p.binding) != nil || policyErr != nil || currentPolicy.Revision != p.policy.Revision || p.policy.Authorize(input.Action) != nil {
+			if queued.sequence != lastSequence+1 || !p.isConnected() || p.handler.grants.CheckGatewayAuthority(p.ctx, p.binding) != nil || policyErr != nil || currentPolicy.Revision != p.policy.Revision {
 				p.stop()
 				return
 			}
-			if (input.Action.Kind == product.BrowserActionUpload || input.Action.Kind == product.BrowserActionDownload) && p.handler.transfers.AuthorizeBrowserTransfer(p.ctx, p.binding, input.Action) != nil {
+			response := browserLiveInputResponse{Sequence: queued.sequence, OK: true}
+			switch queued.kind {
+			case "input":
+				input := queued.input
+				if p.policy.Authorize(input.Action) != nil || ((input.Action.Kind == product.BrowserActionUpload || input.Action.Kind == product.BrowserActionDownload) && p.handler.transfers.AuthorizeBrowserTransfer(p.ctx, p.binding, input.Action) != nil) {
+					p.stop()
+					return
+				}
+				result, err := p.media.HandleInput(p.ctx, input)
+				if err != nil || !validBrowserLiveInputResult(p.policy, input.Action, result) {
+					p.stop()
+					return
+				}
+				response.Type, response.Text = "input.result", result.Text
+			case "stream.resync":
+				response.Type = "stream.resync.result"
+				if !p.requestKeyframe() {
+					p.stop()
+					return
+				}
+			case "stream.resize":
+				response.Type = "stream.resize.result"
+				if p.media.UpdateVideoPolicy(p.ctx, queued.video) != nil {
+					p.stop()
+					return
+				}
+				p.videoMu.Lock()
+				p.video = queued.video
+				p.videoMu.Unlock()
+				p.requestKeyframe()
+			default:
 				p.stop()
 				return
 			}
-			result, err := p.media.HandleInput(p.ctx, input)
-			if err != nil || !validBrowserLiveInputResult(p.policy, input.Action, result) {
-				p.stop()
-				return
-			}
-			encoded, err := json.Marshal(browserLiveInputResponse{Type: "input.result", Sequence: input.Sequence, OK: true, Text: result.Text})
+			encoded, err := json.Marshal(response)
 			if err != nil || len(encoded) > maxLiveControlMessageBytes || queued.channel.SendText(string(encoded)) != nil {
 				p.stop()
 				return
 			}
-			lastSequence = input.Sequence
+			lastSequence = queued.sequence
 		}
 	}
 }
@@ -595,12 +699,69 @@ func validBrowserLiveInputResult(policy product.BrowserPolicy, action product.Br
 }
 
 func (p *browserLivePeer) onConnectionState(state webrtc.PeerConnectionState) {
+	p.stateMu.Lock()
+	p.state, p.stateEpoch = state, p.stateEpoch+1
+	epoch := p.stateEpoch
+	p.stateMu.Unlock()
 	switch state {
 	case webrtc.PeerConnectionStateConnected:
+		if p.handler.grants.CheckGatewayAuthority(p.ctx, p.binding) != nil {
+			p.stop()
+			return
+		}
 		p.connectedOnce.Do(func() { close(p.connected) })
+		if !p.requestKeyframe() {
+			p.stop()
+		}
+	case webrtc.PeerConnectionStateDisconnected:
+		go p.disconnectTimer(epoch)
 	case webrtc.PeerConnectionStateFailed, webrtc.PeerConnectionStateClosed:
 		p.stop()
 	}
+}
+
+func (p *browserLivePeer) disconnectTimer(epoch uint64) {
+	timer := time.NewTimer(p.handler.disconnectGrace)
+	defer timer.Stop()
+	select {
+	case <-p.ctx.Done():
+		return
+	case <-timer.C:
+	}
+	p.stateMu.RLock()
+	stale := p.stateEpoch != epoch || p.state != webrtc.PeerConnectionStateDisconnected
+	p.stateMu.RUnlock()
+	if !stale {
+		p.stop()
+	}
+}
+
+func (p *browserLivePeer) isConnected() bool {
+	p.stateMu.RLock()
+	defer p.stateMu.RUnlock()
+	return p.state == webrtc.PeerConnectionStateConnected
+}
+
+func (p *browserLivePeer) currentVideo() BrowserLiveVideoPolicy {
+	p.videoMu.RLock()
+	defer p.videoMu.RUnlock()
+	return p.video
+}
+
+func (p *browserLivePeer) requestKeyframe() bool {
+	p.keyframeMu.Lock()
+	now := time.Now()
+	if now.Before(p.nextKeyframe) {
+		p.keyframeMu.Unlock()
+		return true
+	}
+	p.nextKeyframe = now.Add(p.handler.minKeyframeInterval)
+	p.keyframeMu.Unlock()
+	return p.media.RequestKeyframe(p.ctx) == nil
+}
+
+func validBrowserLiveVideoPolicy(video BrowserLiveVideoPolicy) bool {
+	return video.Codec == "video/VP8" && video.Width >= 320 && video.Width <= 1920 && video.Height >= 240 && video.Height <= 1080 && video.MaxFPS >= 1 && video.MaxFPS <= 60 && video.MaxBitrateKbps >= 128 && video.MaxBitrateKbps <= 4000
 }
 
 func (p *browserLivePeer) stop() {
