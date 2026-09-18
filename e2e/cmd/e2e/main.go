@@ -45,5 +45,5 @@ func main() {
 		_, _ = fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	fmt.Printf("evidence=%s image=%s initial_scenarios=%d resume_scenarios=%d\n", result.EvidenceDirectory, result.RuntimeImage, result.InitialScenarios, result.ResumeScenarios)
+	fmt.Printf("evidence=%s image=%s initial_scenarios=%d resume_scenarios=%d lifecycle_scenarios=%d\n", result.EvidenceDirectory, result.RuntimeImage, result.InitialScenarios, result.ResumeScenarios, result.LifecycleScenarios)
 }

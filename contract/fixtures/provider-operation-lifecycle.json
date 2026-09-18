@@ -1,0 +1,10 @@
+{
+  "operation_id": "operation-suspend-1",
+  "attempt_id": "attempt-suspend-1",
+  "fencing_token": 2,
+  "sandbox_id": "sandbox-1",
+  "type": "suspend",
+  "status": "succeeded",
+  "provider_operation_id": "operation-suspend-1",
+  "observed_at": "2026-09-18T12:00:02Z"
+}

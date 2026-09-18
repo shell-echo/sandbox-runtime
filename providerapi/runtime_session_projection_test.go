@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/gowebpki/jcs"
+	"github.com/shell-echo/sandbox-runtime/provider"
 	"github.com/shell-echo/sandbox-runtime/provider/admission"
 	"github.com/shell-echo/sandbox-runtime/provider/session"
 	sessionapplication "github.com/shell-echo/sandbox-runtime/provider/session/application"
@@ -21,11 +22,13 @@ import (
 )
 
 type runtimeSessionApplicationSpy struct {
-	operation sessionapplication.Operation
-	handoff   sessionapplication.Handoff
-	err       error
-	open      session.OpenRequest
-	openCalls int
+	operation  sessionapplication.Operation
+	handoff    sessionapplication.Handoff
+	err        error
+	open       session.OpenRequest
+	openCalls  int
+	close      session.CloseRequest
+	closeCalls int
 }
 
 func (s *runtimeSessionApplicationSpy) Open(_ context.Context, request session.OpenRequest) (sessionapplication.Operation, error) {
@@ -44,7 +47,19 @@ func (s *runtimeSessionApplicationSpy) GetHandoff(context.Context, string) (sess
 	return s.handoff, nil
 }
 
+func (s *runtimeSessionApplicationSpy) CloseRuntimeSession(_ context.Context, request session.CloseRequest) (sessionapplication.Operation, error) {
+	s.closeCalls++
+	s.close = request
+	if s.err != nil {
+		return sessionapplication.Operation{}, s.err
+	}
+	operation := s.operation
+	operation.Type = sessionapplication.OperationCloseRuntimeSession
+	return operation, nil
+}
+
 var _ RuntimeSessionApplication = (*runtimeSessionApplicationSpy)(nil)
+var _ RuntimeSessionControlApplication = (*runtimeSessionApplicationSpy)(nil)
 
 func TestProtectedRuntimeSessionOpenProjectsAcceptedOperation(t *testing.T) {
 	material := newTestMTLSMaterial(t, []string{testAllowedIdentity})
@@ -107,6 +122,63 @@ func TestProtectedRuntimeSessionOpenRejectsUnknownFieldsBeforeApplication(t *tes
 	if response.Code != http.StatusBadRequest || app.openCalls != 0 {
 		t.Fatalf("response=%d open_calls=%d body=%s", response.Code, app.openCalls, response.Body.String())
 	}
+}
+
+func TestProtectedRuntimeSessionCloseProjectsAcceptedOperation(t *testing.T) {
+	material := newTestMTLSMaterial(t, []string{testAllowedIdentity})
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	app := &runtimeSessionApplicationSpy{operation: sessionapplication.Operation{
+		OperationID: "operation-1", AttemptID: "attempt-1", FencingToken: 1, SandboxID: "sandbox-1",
+		Status: session.StatusSucceeded, ObservedAt: releaseGateTestTime(), Type: sessionapplication.OperationCloseRuntimeSession,
+	}}
+	identity, err := newClientIdentityAdmission([]string{testAllowedIdentity})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler, err := newProtectedHandler(identity, ProtectedTransportOptions{
+		Gate: newTestProtectedGateWithPublicKey(t, publicKey, &testAdmissionGuard{}), SessionApplication: app,
+		Now: func() time.Time { return releaseGateTestTime() }, capabilitySnapshot: validTerminalControlSnapshot(t),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, digest := releaseMutationDocument(t, admission.OperationCloseRuntimeSession)
+	request := newRuntimeSessionRequest(t, material.client, privateKey, http.MethodPost, "/v1/sandboxes/sandbox-1/runtime-sessions/session-1:close", admission.OperationCloseRuntimeSession, body, digest)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusAccepted || app.closeCalls != 1 {
+		t.Fatalf("response=%d close_calls=%d body=%s", response.Code, app.closeCalls, response.Body.String())
+	}
+	if app.close.RuntimeSessionID != "session-1" || app.close.ConnectionGeneration != 1 || app.close.ExpectedGeneration != 1 || app.close.Reason != "caller_complete" {
+		t.Fatalf("close request=%#v", app.close)
+	}
+	var operation providerv1.Operation
+	if err := json.Unmarshal(response.Body.Bytes(), &operation); err != nil {
+		t.Fatal(err)
+	}
+	if operation.Type != providerv1.OperationCloseRuntimeSession || operation.Status != providerv1.OperationSucceeded {
+		t.Fatalf("operation=%#v", operation)
+	}
+}
+
+func validTerminalControlSnapshot(t *testing.T) provider.CapabilitySnapshot {
+	t.Helper()
+	base := validSnapshot(t, nil, nil)
+	capabilities, runtimeProfiles := providerCodingShellAdvertisements()
+	capabilities = append(capabilities, provider.Capability{
+		ID: "sandbox.terminal-control", Versions: []string{"1.0.0"}, Profiles: []string{"terminal-control-v1"},
+	})
+	runtimeProfiles[0].CapabilityProfileIDs = append(runtimeProfiles[0].CapabilityProfileIDs, "terminal-control-v1")
+	snapshot, err := provider.NewCapabilitySnapshotWithAdvertisements(
+		base.ProviderRevisionID, base.Limits, capabilities, runtimeProfiles, base.SnapshotRestoreProfiles,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return snapshot
 }
 
 func TestProtectedRuntimeSessionHandoffProjectsOpaqueDocument(t *testing.T) {

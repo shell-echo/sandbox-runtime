@@ -190,6 +190,24 @@ func TestProviderDockerLifecycleIntegration(t *testing.T) {
 	if err != nil || cancelled.Status != providerexec.ResultCancelled {
 		t.Fatalf("Observe cancelled exec = %#v, %v", cancelled, err)
 	}
+	if err := restarted.Suspend(ctx, sandbox.ID); err != nil {
+		t.Fatalf("Suspend: %v", err)
+	}
+	if observation, err := restarted.Inspect(ctx, sandbox.ID); err != nil || observation.State != coordinator.RuntimeSuspended {
+		t.Fatalf("Inspect suspended = %#v, %v", observation, err)
+	}
+	if err := restarted.Suspend(ctx, sandbox.ID); err != nil {
+		t.Fatalf("idempotent Suspend: %v", err)
+	}
+	if err := restarted.Resume(ctx, sandbox.ID); err != nil {
+		t.Fatalf("Resume: %v", err)
+	}
+	if observation, err := restarted.Inspect(ctx, sandbox.ID); err != nil || observation.State != coordinator.RuntimeReady {
+		t.Fatalf("Inspect resumed = %#v, %v", observation, err)
+	}
+	if err := restarted.Resume(ctx, sandbox.ID); err != nil {
+		t.Fatalf("idempotent Resume: %v", err)
+	}
 	if err := restarted.Create(ctx, sandbox); err != nil {
 		t.Fatalf("idempotent Create after restart: %v", err)
 	}

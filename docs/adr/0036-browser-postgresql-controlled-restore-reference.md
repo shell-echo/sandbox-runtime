@@ -3,6 +3,15 @@
 - Status: Accepted for a same-runner reference operational E2E
 - Date: 2026-09-06
 
+Latest canonical evidence: main run `34069851741` at
+`838d3bb2dea52c10fdc1ddf3136641709fedcb20` passes 18/18. Inspected artifact
+`browser-postgres-controlled-restore-e2e-evidence-34069851741`, ID
+`10000177842`, digest
+`sha256:96817b74f3faabb0226d7dee1f2ac8128901865a3834f9bcadcaae6459b76032`,
+contains exactly five sanitized files under
+`20260907T002737.609312407Z`. It retains `same_runner=true`,
+`independent_failure_domain=false`, and `suite_exercised=false`.
+
 ## Context
 
 ADR 0035 supplies a PostgreSQL action-history witness and the strict,
@@ -126,9 +135,9 @@ It does not establish:
   distribution, monitoring, alerting, capacity, or latency under load;
 - protection from coherent rollback of both authorities or a trusted writer;
 - CDP exactly-once execution, hostile multi-tenant isolation, Provider
-  multi-controller behavior, real Agent Platform compatibility, aggregate
-  conformance, production Browser advertisement, deployment readiness, or
-  production readiness.
+  multi-controller behavior, compatibility with a separately owned production
+  caller, aggregate conformance, production Browser advertisement, deployment
+  readiness, or production readiness.
 
 Independent failure and backup domains remain the next deployment-owned gate.
 

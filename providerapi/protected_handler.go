@@ -9,6 +9,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -60,11 +61,22 @@ type LifecycleApplication interface {
 	GetOperation(context.Context, string) (lifecycle.Operation, error)
 }
 
+type LifecycleControlApplication interface {
+	AcceptDesiredState(context.Context, string, lifecycle.DesiredStateRequest) (repository.MutationResult, error)
+	AcceptLease(context.Context, string, lifecycle.LeaseRequest, int64) (repository.MutationResult, error)
+	AcceptTerminate(context.Context, string, lifecycle.TerminateRequest) (repository.MutationResult, error)
+	ReadEvents(context.Context, string, uint64) (repository.EventPage, error)
+}
+
 // RuntimeSessionApplication is the narrow terminal-session application
 // boundary. It returns bounded projections rather than repository records.
 type RuntimeSessionApplication interface {
 	Open(context.Context, session.OpenRequest) (sessionapplication.Operation, error)
 	GetHandoff(context.Context, string) (sessionapplication.Handoff, error)
+}
+
+type RuntimeSessionControlApplication interface {
+	CloseRuntimeSession(context.Context, session.CloseRequest) (sessionapplication.Operation, error)
 }
 
 // RuntimeSessionConnector is the narrow Provider controller data-plane port.
@@ -230,7 +242,32 @@ func (h *protectedHandler) ServeHTTP(response http.ResponseWriter, request *http
 		case admission.OperationReadSandbox:
 			h.serveSandboxStatus(response, request, context)
 			return
+		case admission.OperationSetDesiredState, admission.OperationExtendLease, admission.OperationTerminate:
+			if capabilityAdvertised(h.capabilities, "sandbox.lifecycle-control", "1.0.0", "lifecycle-control-v1") {
+				application, ok := h.application.(LifecycleControlApplication)
+				if !ok {
+					writeStandardError(response, http.StatusServiceUnavailable, "SANDBOX_PROVIDER_UNAVAILABLE", true, "sandbox lifecycle control is unavailable")
+					return
+				}
+				h.serveLifecycleMutation(response, request, context, document, route.operation, application)
+				return
+			}
+		case admission.OperationReadEvents:
+			if capabilityAdvertised(h.capabilities, "sandbox.lifecycle-control", "1.0.0", "lifecycle-control-v1") {
+				application, ok := h.application.(LifecycleControlApplication)
+				if !ok {
+					writeStandardError(response, http.StatusServiceUnavailable, "SANDBOX_PROVIDER_UNAVAILABLE", true, "sandbox lifecycle events are unavailable")
+					return
+				}
+				h.serveLifecycleEvents(response, request, context, application)
+				return
+			}
 		}
+	}
+	if route.operation == admission.OperationSetDesiredState || route.operation == admission.OperationExtendLease ||
+		route.operation == admission.OperationTerminate || route.operation == admission.OperationReadEvents {
+		writeStandardError(response, http.StatusUnprocessableEntity, "SANDBOX_CAPABILITY_UNSUPPORTED", false, "sandbox lifecycle-control capability is not advertised")
+		return
 	}
 	if h.artifactApp != nil {
 		switch route.operation {
@@ -267,7 +304,21 @@ func (h *protectedHandler) ServeHTTP(response http.ResponseWriter, request *http
 		case admission.OperationReadRuntimeSession:
 			h.serveRuntimeSessionHandoff(response, request, context)
 			return
+		case admission.OperationCloseRuntimeSession:
+			if capabilityAdvertised(h.capabilities, "sandbox.terminal-control", "1.0.0", "terminal-control-v1") {
+				application, ok := h.sessionApp.(RuntimeSessionControlApplication)
+				if !ok {
+					writeStandardError(response, http.StatusServiceUnavailable, "SANDBOX_PROVIDER_UNAVAILABLE", true, "terminal session control is unavailable")
+					return
+				}
+				h.serveRuntimeSessionClose(response, request, context, document, application)
+				return
+			}
 		}
+	}
+	if route.operation == admission.OperationCloseRuntimeSession {
+		writeStandardError(response, http.StatusUnprocessableEntity, "SANDBOX_CAPABILITY_UNSUPPORTED", false, "terminal session control capability is not advertised")
+		return
 	}
 	if h.sessionConnector != nil && route.operation == admission.OperationConnectRuntimeSession {
 		h.serveRuntimeSessionConnect(response, request, context, document)
@@ -297,6 +348,15 @@ func (h *protectedHandler) ServeHTTP(response http.ResponseWriter, request *http
 	}
 }
 
+func capabilityAdvertised(snapshot provider.CapabilitySnapshot, id, version, profile string) bool {
+	for _, capability := range snapshot.Capabilities {
+		if capability.ID == id && len(capability.Versions) == 1 && capability.Versions[0] == version && len(capability.Profiles) == 1 && capability.Profiles[0] == profile {
+			return true
+		}
+	}
+	return false
+}
+
 // validateProtectedDocument performs the route schema check before mutation
 // admission can consume replay/fencing state. It intentionally does not check
 // token bindings or semantic correlation; those remain the gate's authority.
@@ -308,6 +368,18 @@ func validateProtectedDocument(route protectedRoute, document []byte) error {
 	case admission.OperationOpenRuntimeSession:
 		var request providerv1.RuntimeSessionOpenRequest
 		return providerv1.DecodeStrict(bytes.NewReader(document), providerv1.MaxRuntimeSessionOpenRequestBytes, &request)
+	case admission.OperationCloseRuntimeSession:
+		var request providerv1.RuntimeSessionCloseRequest
+		return providerv1.DecodeStrict(bytes.NewReader(document), providerv1.MaxRuntimeSessionCloseRequestBytes, &request)
+	case admission.OperationSetDesiredState:
+		var request providerv1.DesiredStateRequest
+		return providerv1.DecodeStrict(bytes.NewReader(document), providerv1.MaxDesiredStateRequestBytes, &request)
+	case admission.OperationExtendLease:
+		var request providerv1.LeaseRequest
+		return providerv1.DecodeStrict(bytes.NewReader(document), providerv1.MaxLeaseRequestBytes, &request)
+	case admission.OperationTerminate:
+		var request providerv1.TerminateRequest
+		return providerv1.DecodeStrict(bytes.NewReader(document), providerv1.MaxTerminateRequestBytes, &request)
 	case admission.OperationOpenBrowserSession:
 		var request providerv1.BrowserSessionOpenRequest
 		return providerv1.DecodeStrict(bytes.NewReader(document), providerv1.MaxBrowserSessionOpenRequestBytes, &request)
@@ -333,6 +405,10 @@ func writeAdmissionError(response http.ResponseWriter, status int, code string, 
 }
 
 func writeStandardError(response http.ResponseWriter, status int, code string, retryable bool, message string) {
+	writeStandardErrorWithDetails(response, status, code, retryable, message, nil)
+}
+
+func writeStandardErrorWithDetails(response http.ResponseWriter, status int, code string, retryable bool, message string, details providerv1.BoundedDetails) {
 	traceID := newAdmissionTraceID()
 	response.Header().Set("Content-Type", "application/json")
 	response.Header().Set("X-Request-ID", traceID)
@@ -341,7 +417,7 @@ func writeStandardError(response http.ResponseWriter, status int, code string, r
 	}
 	response.WriteHeader(status)
 	_ = json.NewEncoder(response).Encode(providerv1.StandardError{
-		Code: code, Message: message, Retryable: retryable, TraceID: traceID,
+		Code: code, Message: message, Retryable: retryable, TraceID: traceID, Details: details,
 	})
 }
 
@@ -408,13 +484,9 @@ func readDescriptor(context admission.AdmissionContext, request *http.Request, p
 		document["operation_id"] = operationID
 	}
 	if context.Operation == admission.OperationReadEvents {
-		sequence := int64(0)
-		if value := request.URL.Query().Get("after_sequence"); value != "" {
-			parsed, err := strconv.ParseInt(value, 10, 64)
-			if err != nil || parsed < 0 || parsed > 9007199254740991 {
-				return nil, http.StatusBadRequest
-			}
-			sequence = parsed
+		sequence, err := parseLifecycleEventCursor(request.URL.RawQuery)
+		if err != nil {
+			return nil, http.StatusBadRequest
 		}
 		document["after_sequence"] = sequence
 	}
@@ -423,6 +495,25 @@ func readDescriptor(context admission.AdmissionContext, request *http.Request, p
 		return nil, http.StatusBadRequest
 	}
 	return encoded, 0
+}
+
+func parseLifecycleEventCursor(rawQuery string) (uint64, error) {
+	if rawQuery == "" {
+		return 0, nil
+	}
+	query, err := url.ParseQuery(rawQuery)
+	if err != nil || len(query) != 1 {
+		return 0, errors.New("invalid lifecycle event query")
+	}
+	values, ok := query["after_sequence"]
+	if !ok || len(values) != 1 || values[0] == "" {
+		return 0, errors.New("invalid lifecycle event cursor")
+	}
+	sequence, err := strconv.ParseUint(values[0], 10, 53)
+	if err != nil {
+		return 0, errors.New("invalid lifecycle event cursor")
+	}
+	return sequence, nil
 }
 
 func matchProtectedRoute(request *http.Request) (protectedRoute, map[string]string, bool) {
@@ -474,6 +565,12 @@ func matchProtectedRoute(request *http.Request) (protectedRoute, map[string]stri
 					oversizeStatus = http.StatusBadRequest
 				}
 				return protectedRoute{operation: candidate.operation, maxBodyBytes: candidate.maxBody, allowUnavailable: candidate.unavailable, oversizeStatus: oversizeStatus}, values, true
+			}
+		}
+		if len(parts) == 5 && parts[3] == "runtime-sessions" && request.Method == http.MethodPost && strings.HasSuffix(parts[4], ":close") {
+			sessionID := strings.TrimSuffix(parts[4], ":close")
+			if sessionID != "" {
+				return protectedRoute{operation: admission.OperationCloseRuntimeSession, maxBodyBytes: providerv1.MaxRuntimeSessionCloseRequestBytes, allowUnavailable: true, oversizeStatus: http.StatusBadRequest}, map[string]string{"sandbox_id": parts[2], "runtime_session_id": sessionID}, true
 			}
 		}
 		if len(parts) == 4 && parts[3] == "events" && request.Method == http.MethodGet {

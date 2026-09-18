@@ -2,6 +2,7 @@ package repository
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -143,6 +144,49 @@ func TestStateEventsAreMonotonicAndReplaySafe(t *testing.T) {
 	if _, err := state.ListEvents(sandbox.ID, 3, 10); !errors.Is(err, ErrInvalidCursor) {
 		t.Fatalf("invalid cursor = %v", err)
 	}
+	legacy := state.Export()
+	legacy.Version = legacySnapshotVersion
+	legacy.EventCursors = nil
+	restarted := NewState()
+	if err := restarted.Import(legacy); err != nil {
+		t.Fatalf("import legacy event snapshot: %v", err)
+	}
+	legacyEvents, err := restarted.ListEvents(sandbox.ID, 0, 10)
+	if err != nil || len(legacyEvents) != 2 || legacyEvents[1].Sequence != 2 {
+		t.Fatalf("legacy events = %#v, %v", legacyEvents, err)
+	}
+}
+
+func TestStateEventRetentionExposesExplicitCursorGapAcrossRestart(t *testing.T) {
+	state := NewState()
+	sandbox, operation := validRecords(t)
+	if _, err := state.ReserveCreate("create-key-1", "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", sandbox, operation); err != nil {
+		t.Fatal(err)
+	}
+	for index := 1; index <= maxRetainedEvents+1; index++ {
+		event := lifecycle.Event{
+			ID: fmt.Sprintf("event-%d", index), SandboxID: sandbox.ID, OperationID: operation.ID,
+			Generation: 1, FencingToken: 1, Kind: "observation", OccurredAt: repositoryTestTime.Add(time.Duration(index) * time.Second),
+		}
+		if _, err := state.AppendEvent(event); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := state.ReadEvents(sandbox.ID, 0, 100); !errors.Is(err, ErrCursorExpired) {
+		t.Fatalf("retired cursor error = %v", err)
+	}
+	page, err := state.ReadEvents(sandbox.ID, 1, 100)
+	if err != nil || page.FirstAvailableSequence != 2 || page.LatestSequence != maxRetainedEvents+1 || len(page.Events) != 100 || page.Events[0].Sequence != 2 {
+		t.Fatalf("retained page = %#v, %v", page, err)
+	}
+	restarted := NewState()
+	if err := restarted.Import(state.Export()); err != nil {
+		t.Fatal(err)
+	}
+	page, err = restarted.ReadEvents(sandbox.ID, maxRetainedEvents, 100)
+	if err != nil || len(page.Events) != 1 || page.Events[0].Sequence != maxRetainedEvents+1 || page.NextSequence != maxRetainedEvents+1 {
+		t.Fatalf("restart page = %#v, %v", page, err)
+	}
 }
 
 func TestStateExportImportRejectsCorruption(t *testing.T) {
@@ -164,5 +208,10 @@ func TestStateExportImportRejectsCorruption(t *testing.T) {
 	snapshot.Events = append(snapshot.Events, lifecycle.Event{ID: "event-1", SandboxID: sandbox.ID, OperationID: operation.ID, Sequence: 2, Generation: 1, FencingToken: 1, Kind: "sandbox.requested", OccurredAt: repositoryTestTime})
 	if err := copyState.Import(snapshot); !errors.Is(err, ErrCorrupt) {
 		t.Fatalf("event sequence corruption = %v", err)
+	}
+	snapshot = state.Export()
+	snapshot.Events = append(snapshot.Events, lifecycle.Event{ID: "event-zero", SandboxID: sandbox.ID, OperationID: operation.ID, Sequence: 0, Generation: 1, FencingToken: 1, Kind: "sandbox.requested", OccurredAt: repositoryTestTime})
+	if err := copyState.Import(snapshot); !errors.Is(err, ErrCorrupt) {
+		t.Fatalf("zero event sequence corruption = %v", err)
 	}
 }

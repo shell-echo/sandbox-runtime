@@ -144,8 +144,11 @@ func candidateCapabilities() caller.Capabilities {
 		Capabilities: []caller.Capability{
 			{ID: capabilityIDExec, Versions: []string{contractVersion}, Profiles: []string{"exec-v1"}},
 			{ID: capabilityIDTTY, Versions: []string{contractVersion}, Profiles: []string{"terminal-v1"}},
+			{ID: capabilityIDLifecycleControl, Versions: []string{contractVersion}, Profiles: []string{"lifecycle-control-v1"}},
+			{ID: capabilityIDTerminalControl, Versions: []string{contractVersion}, Profiles: []string{"terminal-control-v1"}},
+			{ID: capabilityIDTerminalConnect, Versions: []string{contractVersion}, Profiles: []string{"terminal-connect-v1"}},
 		},
-		RuntimeProfiles: []caller.RuntimeProfile{{ID: runtimeProfile, IsolationClass: "container", Architecture: []string{"amd64"}, CapabilityProfileIDs: []string{"exec-v1", "terminal-v1"}}},
+		RuntimeProfiles: []caller.RuntimeProfile{{ID: runtimeProfile, IsolationClass: "container", Architecture: []string{"amd64"}, CapabilityProfileIDs: []string{"exec-v1", "terminal-v1", "lifecycle-control-v1", "terminal-control-v1", "terminal-connect-v1"}}},
 	}
 }
 

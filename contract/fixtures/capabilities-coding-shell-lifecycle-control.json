@@ -1,0 +1,38 @@
+{
+  "provider_revision_id": "provider-revision-1",
+  "api_version": "v1",
+  "capabilities": [
+    {"id": "sandbox.exec", "versions": ["1.0.0"], "profiles": ["exec-v1"]},
+    {"id": "sandbox.terminal", "versions": ["1.0.0"], "profiles": ["terminal-v1"]},
+    {"id": "sandbox.lifecycle-control", "versions": ["1.0.0"], "profiles": ["lifecycle-control-v1"]},
+    {"id": "sandbox.terminal-control", "versions": ["1.0.0"], "profiles": ["terminal-control-v1"]},
+    {"id": "sandbox.terminal-connect", "versions": ["1.0.0"], "profiles": ["terminal-connect-v1"]}
+  ],
+  "runtime_profiles": [
+    {
+      "id": "sandbox-runtime-coding-shell-v1",
+      "isolation_class": "container",
+      "runtime_class_name": "sandbox-runtime-coding-shell",
+      "architecture": ["amd64"],
+      "capability_profile_ids": ["exec-v1", "terminal-v1", "lifecycle-control-v1", "terminal-control-v1", "terminal-connect-v1"]
+    }
+  ],
+  "snapshot_restore_profiles": [
+    {
+      "profile_id": "sandbox-snapshot-workspace-v1",
+      "level": "workspace",
+      "suite_id": "sandbox-provider",
+      "suite_version": "1.0.0",
+      "suite_digest": "sha256:7db1d28d35ca193632c395247cc71eeaaff48b027964b9ea9da247eaad5e3991"
+    }
+  ],
+  "limits": {
+    "max_cpu_millis": 4000,
+    "max_memory_bytes": 8589934592,
+    "max_ephemeral_storage_bytes": 21474836480,
+    "max_workspace_bytes": 107374182400,
+    "max_gpu_count": 0,
+    "max_lease_seconds": 86400,
+    "max_exec_seconds": 3600
+  }
+}

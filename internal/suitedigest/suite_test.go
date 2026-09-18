@@ -59,7 +59,7 @@ func TestComputeRepositorySuiteGoldenDigests(t *testing.T) {
 	}{
 		{
 			path: "../../contract/conformance/provider-v1/suite.json",
-			want: "sha256:b40c932643f4a1e5fd6681e3abf9b64a607609866a6254456970f8b8034cf2a8",
+			want: "sha256:7db1d28d35ca193632c395247cc71eeaaff48b027964b9ea9da247eaad5e3991",
 		},
 		{
 			path: "../../contract/conformance/provider-remote-v1/suite.json",

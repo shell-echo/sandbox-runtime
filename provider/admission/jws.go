@@ -51,6 +51,7 @@ const (
 	OperationExec                        Operation = "exec"
 	OperationCancelExec                  Operation = "cancel_exec"
 	OperationOpenRuntimeSession          Operation = "open_runtime_session"
+	OperationCloseRuntimeSession         Operation = "close_runtime_session"
 	OperationConnectRuntimeSession       Operation = "connect_runtime_session"
 	OperationOpenBrowserSession          Operation = "open_browser_session"
 	OperationStageArtifact               Operation = "stage_artifact"
@@ -72,7 +73,7 @@ func (operation Operation) Supported() bool {
 	switch operation {
 	case OperationCreate, OperationRestore, OperationSetDesiredState,
 		OperationExtendLease, OperationExec, OperationCancelExec,
-		OperationOpenRuntimeSession, OperationConnectRuntimeSession, OperationOpenBrowserSession, OperationStageArtifact, OperationSnapshot, OperationTerminate,
+		OperationOpenRuntimeSession, OperationCloseRuntimeSession, OperationConnectRuntimeSession, OperationOpenBrowserSession, OperationStageArtifact, OperationSnapshot, OperationTerminate,
 		OperationReadSandbox, OperationReadOperation, OperationReadResult,
 		OperationReadRuntimeSession, OperationReadBrowserSession, OperationReadArtifactStagingEvidence,
 		OperationReadUsageEvidence, OperationReadSnapshotManifest, OperationReadEvents:
@@ -270,6 +271,7 @@ var requestBindings = map[Operation]requestBinding{
 	OperationExec:                        {contractID: "urn:shell-echo:sandbox-runtime:request:exec:v1", profile: DigestProfileRequestExcludingDigest},
 	OperationCancelExec:                  {contractID: "urn:shell-echo:sandbox-runtime:request:cancel-exec:v1", profile: DigestProfileRequestExcludingDigest},
 	OperationOpenRuntimeSession:          {contractID: "urn:shell-echo:sandbox-runtime:request:open-runtime-session:v1", profile: DigestProfileRequestExcludingDigest},
+	OperationCloseRuntimeSession:         {contractID: "urn:shell-echo:sandbox-runtime:request:close-runtime-session:v1", profile: DigestProfileRequestExcludingDigest},
 	OperationConnectRuntimeSession:       {contractID: "urn:shell-echo:sandbox-runtime:descriptor:runtime-session-connect:v1", profile: DigestProfileFullDocument},
 	OperationOpenBrowserSession:          {contractID: "urn:shell-echo:sandbox-runtime:request:open-browser-session:v1", profile: DigestProfileRequestExcludingDigest},
 	OperationStageArtifact:               {contractID: "urn:shell-echo:sandbox-runtime:request:stage-artifact:v1", profile: DigestProfileRequestExcludingDigest},

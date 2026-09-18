@@ -91,6 +91,47 @@ func TestNewCapabilitySnapshotWithAdvertisementsAcceptsCodingShellProfileMapping
 	}
 }
 
+func TestNewCapabilitySnapshotWithAdvertisementsAcceptsLifecycleAndTerminalControls(t *testing.T) {
+	capabilities, runtimeProfiles := validCodingShellAdvertisements()
+	capabilities = append(capabilities,
+		Capability{ID: "sandbox.lifecycle-control", Versions: []string{"1.0.0"}, Profiles: []string{"lifecycle-control-v1"}},
+		Capability{ID: "sandbox.terminal-control", Versions: []string{"1.0.0"}, Profiles: []string{"terminal-control-v1"}},
+	)
+	runtimeProfiles[0].CapabilityProfileIDs = append(runtimeProfiles[0].CapabilityProfileIDs, "lifecycle-control-v1", "terminal-control-v1")
+	snapshot, err := NewCapabilitySnapshotWithAdvertisements("revision-1", validLimits(nil, nil), capabilities, runtimeProfiles, validProfiles())
+	if err != nil {
+		t.Fatalf("NewCapabilitySnapshotWithAdvertisements() error = %v", err)
+	}
+	if len(snapshot.Capabilities) != 4 || len(snapshot.RuntimeProfiles) != 1 || len(snapshot.RuntimeProfiles[0].CapabilityProfileIDs) != 4 {
+		t.Fatalf("control capability snapshot = %#v", snapshot)
+	}
+}
+
+func TestNewCapabilitySnapshotWithAdvertisementsRejectsInvalidControlMappings(t *testing.T) {
+	tests := map[string]func(*[]Capability, *[]RuntimeProfile){
+		"terminal control without terminal": func(capabilities *[]Capability, runtimeProfiles *[]RuntimeProfile) {
+			*capabilities = []Capability{{ID: "sandbox.browser", Versions: []string{"1.0.0"}, Profiles: []string{"browser-v1"}}, {ID: "sandbox.terminal-control", Versions: []string{"1.0.0"}, Profiles: []string{"terminal-control-v1"}}}
+			*runtimeProfiles = []RuntimeProfile{{ID: "sandbox-runtime-browser-v1", IsolationClass: "container", Architecture: []string{"amd64"}, CapabilityProfileIDs: []string{"browser-v1", "terminal-control-v1"}}}
+		},
+		"wrong lifecycle version": func(capabilities *[]Capability, runtimeProfiles *[]RuntimeProfile) {
+			*capabilities = append(*capabilities, Capability{ID: "sandbox.lifecycle-control", Versions: []string{"2.0.0"}, Profiles: []string{"lifecycle-control-v1"}})
+			(*runtimeProfiles)[0].CapabilityProfileIDs = append((*runtimeProfiles)[0].CapabilityProfileIDs, "lifecycle-control-v1")
+		},
+		"unmapped terminal control": func(capabilities *[]Capability, _ *[]RuntimeProfile) {
+			*capabilities = append(*capabilities, Capability{ID: "sandbox.terminal-control", Versions: []string{"1.0.0"}, Profiles: []string{"terminal-control-v1"}})
+		},
+	}
+	for name, mutate := range tests {
+		t.Run(name, func(t *testing.T) {
+			capabilities, runtimeProfiles := validCodingShellAdvertisements()
+			mutate(&capabilities, &runtimeProfiles)
+			if _, err := NewCapabilitySnapshotWithAdvertisements("revision-1", validLimits(nil, nil), capabilities, runtimeProfiles, validProfiles()); err == nil {
+				t.Fatal("NewCapabilitySnapshotWithAdvertisements() error = nil")
+			}
+		})
+	}
+}
+
 func TestNewCapabilitySnapshotWithAdvertisementsAcceptsBrowserProfileMapping(t *testing.T) {
 	capabilities, runtimeProfiles := validBrowserAdvertisements()
 	snapshot, err := NewCapabilitySnapshotWithAdvertisements("revision-1", validLimits(nil, nil), capabilities, runtimeProfiles, validProfiles())

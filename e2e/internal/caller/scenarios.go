@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -27,6 +28,16 @@ const (
 	runtimeSessionID   = "e2e-session-1"
 	artifactOperation  = "e2e-operation-artifact-1"
 	artifactAttempt    = "e2e-attempt-artifact-1"
+	suspendOperation   = "e2e-operation-suspend-1"
+	suspendAttempt     = "e2e-attempt-suspend-1"
+	resumeOperation    = "e2e-operation-resume-1"
+	resumeAttempt      = "e2e-attempt-resume-1"
+	leaseOperation     = "e2e-operation-lease-1"
+	leaseAttempt       = "e2e-attempt-lease-1"
+	closeOperation     = "e2e-operation-session-close-1"
+	closeAttempt       = "e2e-attempt-session-close-1"
+	terminateOperation = "e2e-operation-terminate-1"
+	terminateAttempt   = "e2e-attempt-terminate-1"
 )
 
 var artifactContent = []byte("{\"ok\":true}\n")
@@ -84,7 +95,11 @@ func Run(ctx context.Context, config Config) (Report, error) {
 			return r.report, err
 		}
 	} else {
-		if config.Phase == PhaseResume {
+		if config.Phase == PhaseLifecycle {
+			if err := r.runLifecycle(ctx); err != nil {
+				return r.report, err
+			}
+		} else if config.Phase == PhaseResume {
 			if err := r.runResume(ctx); err != nil {
 				return r.report, err
 			}
@@ -244,6 +259,227 @@ func (r *runner) runResume(ctx context.Context) error {
 	})
 }
 
+func (r *runner) runLifecycle(ctx context.Context) error {
+	var baseline LifecycleEventPage
+	if err := r.step(ctx, "retained lifecycle events after stack reconstruction", func(ctx context.Context) error {
+		status, err := r.readSandbox(ctx)
+		if err != nil {
+			return err
+		}
+		if status.DesiredState != "ready" || status.ObservedState != "ready" || status.Generation != 1 || status.ObservedGeneration != 1 {
+			return fmt.Errorf("pre-control sandbox status = %#v", status)
+		}
+		baseline, err = r.readLifecycleEvents(ctx, 0)
+		if err != nil {
+			return err
+		}
+		return validateEventPage(baseline, 0, createOperation)
+	}); err != nil {
+		return err
+	}
+
+	if err := r.step(ctx, "suspend reconciliation and runtime observation", func(ctx context.Context) error {
+		ref := suspendRef()
+		deadline := time.Now().UTC().Add(2 * time.Minute)
+		body := mutationEnvelope(ref.OperationID, ref.AttemptID, ref.FencingToken, "e2e-suspend-idempotency-1", deadline)
+		body["expected_generation"] = 1
+		body["desired_state"] = "suspended"
+		body["reason"] = "phase_2_black_box"
+		prepared, err := r.a.prepare(http.MethodPost, "/v1/sandboxes/"+sandboxID+"/desired-state", body, r.binding("set_desired_state", ref, deadline))
+		if err != nil {
+			return err
+		}
+		operation, err := r.sendOperation(ctx, r.a, prepared, http.StatusAccepted)
+		if err != nil {
+			return err
+		}
+		if err := validateOperation(operation, ref, "suspend", "accepted"); err != nil {
+			return err
+		}
+		operation, err = r.waitOperation(ctx, ref)
+		if err != nil || operation.Status != "succeeded" {
+			return errors.Join(err, fmt.Errorf("suspend operation = %#v", operation))
+		}
+		status, err := r.readSandbox(ctx)
+		if err != nil {
+			return err
+		}
+		if status.DesiredState != "suspended" || status.ObservedState != "suspended" || status.Generation != 2 || status.ObservedGeneration != 2 {
+			return fmt.Errorf("suspended sandbox status = %#v", status)
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	var suspendedEvents LifecycleEventPage
+	if err := r.step(ctx, "lifecycle event cursor continuation", func(ctx context.Context) error {
+		var err error
+		suspendedEvents, err = r.readLifecycleEvents(ctx, baseline.NextSequence)
+		if err != nil {
+			return err
+		}
+		if err := validateEventPage(suspendedEvents, baseline.NextSequence, suspendOperation); err != nil {
+			return err
+		}
+		return requireEventKinds(suspendedEvents, "desired-state-requested", "suspending", "suspended")
+	}); err != nil {
+		return err
+	}
+
+	if err := r.step(ctx, "resume reconciliation and runtime observation", func(ctx context.Context) error {
+		ref := resumeRef()
+		deadline := time.Now().UTC().Add(2 * time.Minute)
+		body := mutationEnvelope(ref.OperationID, ref.AttemptID, ref.FencingToken, "e2e-resume-idempotency-1", deadline)
+		body["expected_generation"] = 2
+		body["desired_state"] = "ready"
+		body["reason"] = "phase_2_black_box"
+		prepared, err := r.a.prepare(http.MethodPost, "/v1/sandboxes/"+sandboxID+"/desired-state", body, r.binding("set_desired_state", ref, deadline))
+		if err != nil {
+			return err
+		}
+		operation, err := r.sendOperation(ctx, r.a, prepared, http.StatusAccepted)
+		if err != nil {
+			return err
+		}
+		if err := validateOperation(operation, ref, "resume", "accepted"); err != nil {
+			return err
+		}
+		operation, err = r.waitOperation(ctx, ref)
+		if err != nil || operation.Status != "succeeded" {
+			return errors.Join(err, fmt.Errorf("resume operation = %#v", operation))
+		}
+		status, err := r.readSandbox(ctx)
+		if err != nil {
+			return err
+		}
+		if status.DesiredState != "ready" || status.ObservedState != "ready" || status.Generation != 3 || status.ObservedGeneration != 3 {
+			return fmt.Errorf("resumed sandbox status = %#v", status)
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	if err := r.step(ctx, "lease extension without generation drift", func(ctx context.Context) error {
+		before, err := r.readSandbox(ctx)
+		if err != nil {
+			return err
+		}
+		beforeExpiry, err := time.Parse(time.RFC3339Nano, before.LeaseExpiresAt)
+		if err != nil {
+			return err
+		}
+		ref := leaseRef()
+		deadline := time.Now().UTC().Add(2 * time.Minute)
+		body := mutationEnvelope(ref.OperationID, ref.AttemptID, ref.FencingToken, "e2e-lease-idempotency-1", deadline)
+		body["expected_generation"] = 3
+		body["extend_seconds"] = 60
+		prepared, err := r.a.prepare(http.MethodPost, "/v1/sandboxes/"+sandboxID+"/lease", body, r.binding("extend_lease", ref, deadline))
+		if err != nil {
+			return err
+		}
+		if _, err := r.sendOperation(ctx, r.a, prepared, http.StatusAccepted); err != nil {
+			return err
+		}
+		operation, err := r.waitOperation(ctx, ref)
+		if err != nil || operation.Status != "succeeded" || operation.Type != "extend_lease" {
+			return errors.Join(err, fmt.Errorf("lease operation = %#v", operation))
+		}
+		after, err := r.readSandbox(ctx)
+		if err != nil {
+			return err
+		}
+		afterExpiry, err := time.Parse(time.RFC3339Nano, after.LeaseExpiresAt)
+		if err != nil {
+			return err
+		}
+		if after.Generation != 3 || after.ObservedGeneration != 3 || !afterExpiry.Equal(beforeExpiry.Add(time.Minute)) {
+			return fmt.Errorf("lease extension status before=%#v after=%#v", before, after)
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	var closedHandoff RuntimeSessionHandoff
+	if err := r.step(ctx, "durable terminal session close", func(ctx context.Context) error {
+		var err error
+		closedHandoff, err = r.readHandoff(ctx)
+		if err != nil {
+			return err
+		}
+		ref := closeRef()
+		deadline := time.Now().UTC().Add(2 * time.Minute)
+		body := mutationEnvelope(ref.OperationID, ref.AttemptID, ref.FencingToken, "e2e-session-close-idempotency-1", deadline)
+		body["expected_generation"] = 3
+		body["runtime_session_id"] = runtimeSessionID
+		body["connection_generation"] = closedHandoff.ConnectionGeneration
+		body["reason"] = "caller_complete"
+		path := "/v1/sandboxes/" + sandboxID + "/runtime-sessions/" + runtimeSessionID + ":close"
+		prepared, err := r.a.prepare(http.MethodPost, path, body, r.binding("close_runtime_session", ref, deadline))
+		if err != nil {
+			return err
+		}
+		operation, err := r.sendOperation(ctx, r.a, prepared, http.StatusAccepted)
+		if err != nil || operation.Type != "close_runtime_session" || (operation.Status != "accepted" && operation.Status != "succeeded") {
+			return errors.Join(err, fmt.Errorf("close operation acceptance = %#v", operation))
+		}
+		operation, err = r.waitOperation(ctx, ref)
+		if err != nil || operation.Status != "succeeded" {
+			return errors.Join(err, fmt.Errorf("close operation = %#v", operation))
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	if err := r.step(ctx, "Gateway reconnect denied after terminal close", func(ctx context.Context) error {
+		return verifyClosedSessionReconnectDenied(ctx, r.a.http, r.config, closedHandoff)
+	}); err != nil {
+		return err
+	}
+
+	return r.step(ctx, "termination cleanup and final lifecycle events", func(ctx context.Context) error {
+		ref := terminateRef()
+		deadline := time.Now().UTC().Add(2 * time.Minute)
+		body := mutationEnvelope(ref.OperationID, ref.AttemptID, ref.FencingToken, "e2e-terminate-idempotency-1", deadline)
+		body["expected_generation"] = 3
+		body["reason"] = "work_order_complete"
+		body["preserve_workspace_snapshot"] = false
+		prepared, err := r.a.prepare(http.MethodPost, "/v1/sandboxes/"+sandboxID+":terminate", body, r.binding("terminate", ref, deadline))
+		if err != nil {
+			return err
+		}
+		operation, err := r.sendOperation(ctx, r.a, prepared, http.StatusAccepted)
+		if err != nil {
+			return err
+		}
+		if err := validateOperation(operation, ref, "terminate", "accepted"); err != nil {
+			return err
+		}
+		operation, err = r.waitOperation(ctx, ref)
+		if err != nil || operation.Status != "succeeded" {
+			return errors.Join(err, fmt.Errorf("terminate operation = %#v error=%#v", operation, operation.Error))
+		}
+		status, err := r.readSandbox(ctx)
+		if err != nil {
+			return err
+		}
+		if status.DesiredState != "terminated" || status.ObservedState != "terminated" || status.Generation != 4 || status.ObservedGeneration != 4 {
+			return fmt.Errorf("terminated sandbox status = %#v", status)
+		}
+		finalEvents, err := r.readLifecycleEvents(ctx, suspendedEvents.NextSequence)
+		if err != nil {
+			return err
+		}
+		if err := validateEventPage(finalEvents, suspendedEvents.NextSequence, resumeOperation, leaseOperation, terminateOperation); err != nil {
+			return err
+		}
+		return requireEventKinds(finalEvents, "resuming", "ready", "lease-extended", "terminating", "terminated")
+	})
+}
+
 func (r *runner) verifyCapabilities(ctx context.Context) error {
 	capabilities, _, err := r.a.capabilities(ctx)
 	if err != nil {
@@ -270,13 +506,67 @@ func (r *runner) verifyCapabilities(ctx context.Context) error {
 	wantCapabilities := []Capability{
 		{ID: "sandbox.exec", Versions: []string{"1.0.0"}, Profiles: []string{"exec-v1"}},
 		{ID: "sandbox.terminal", Versions: []string{"1.0.0"}, Profiles: []string{"terminal-v1"}},
+		{ID: "sandbox.lifecycle-control", Versions: []string{"1.0.0"}, Profiles: []string{"lifecycle-control-v1"}},
+		{ID: "sandbox.terminal-control", Versions: []string{"1.0.0"}, Profiles: []string{"terminal-control-v1"}},
+		{ID: "sandbox.terminal-connect", Versions: []string{"1.0.0"}, Profiles: []string{"terminal-connect-v1"}},
 	}
-	if capabilities.ProviderRevisionID != r.config.ProviderRevisionID || capabilities.APIVersion != "v1" || !reflect.DeepEqual(capabilities.Capabilities, wantCapabilities) || len(capabilities.RuntimeProfiles) != 1 {
+	wantSnapshotProfiles := []SnapshotRestoreProfile{{
+		ProfileID: "sandbox-snapshot-workspace-v1", Level: "workspace", SuiteID: "sandbox-provider",
+		SuiteVersion: "1.0.0", SuiteDigest: "sha256:7db1d28d35ca193632c395247cc71eeaaff48b027964b9ea9da247eaad5e3991",
+	}}
+	if capabilities.ProviderRevisionID != r.config.ProviderRevisionID || capabilities.APIVersion != "v1" || !reflect.DeepEqual(capabilities.Capabilities, wantCapabilities) || len(capabilities.RuntimeProfiles) != 1 || !reflect.DeepEqual(capabilities.SnapshotRestoreProfiles, wantSnapshotProfiles) {
 		return fmt.Errorf("capability snapshot differs from lock: %#v", capabilities)
 	}
 	profile := capabilities.RuntimeProfiles[0]
-	if profile.ID != "sandbox-runtime-coding-shell-v1" || !reflect.DeepEqual(profile.Architecture, []string{"amd64"}) || !reflect.DeepEqual(profile.CapabilityProfileIDs, []string{"exec-v1", "terminal-v1"}) {
+	if profile.ID != "sandbox-runtime-coding-shell-v1" || !reflect.DeepEqual(profile.Architecture, []string{"amd64"}) || !reflect.DeepEqual(profile.CapabilityProfileIDs, []string{"exec-v1", "terminal-v1", "lifecycle-control-v1", "terminal-control-v1", "terminal-connect-v1"}) {
 		return fmt.Errorf("runtime profile differs from lock: %#v", profile)
+	}
+	return nil
+}
+
+func (r *runner) readLifecycleEvents(ctx context.Context, after int64) (LifecycleEventPage, error) {
+	path := "/v1/sandboxes/" + sandboxID + "/events"
+	if after > 0 {
+		path += "?after_sequence=" + strconv.FormatInt(after, 10)
+	}
+	var page LifecycleEventPage
+	err := r.readJSON(ctx, r.a, http.MethodGet, path, "read_events", createRef(), &page)
+	return page, err
+}
+
+func validateEventPage(page LifecycleEventPage, after int64, operationIDs ...string) error {
+	if len(page.Events) == 0 || page.FirstAvailableSequence < 1 || page.LatestSequence < page.FirstAvailableSequence || page.NextSequence != page.Events[len(page.Events)-1].Sequence || page.NextSequence > page.LatestSequence {
+		return fmt.Errorf("invalid lifecycle event page = %#v", page)
+	}
+	found := make(map[string]bool, len(operationIDs))
+	previous := after
+	for _, event := range page.Events {
+		if event.Sequence != previous+1 || event.SandboxID != sandboxID || event.Generation < 1 || event.FencingToken < 1 || event.Kind == "" || event.OccurredAt == "" {
+			return fmt.Errorf("invalid lifecycle event after %d = %#v", previous, event)
+		}
+		if event.DataDigest != "" && !isDigest(event.DataDigest) {
+			return fmt.Errorf("invalid lifecycle event digest = %#v", event)
+		}
+		found[event.OperationID] = true
+		previous = event.Sequence
+	}
+	for _, operationID := range operationIDs {
+		if !found[operationID] {
+			return fmt.Errorf("lifecycle event page lacks operation %q", operationID)
+		}
+	}
+	return nil
+}
+
+func requireEventKinds(page LifecycleEventPage, kinds ...string) error {
+	found := make(map[string]bool, len(page.Events))
+	for _, event := range page.Events {
+		found[event.Kind] = true
+	}
+	for _, kind := range kinds {
+		if !found[kind] {
+			return fmt.Errorf("lifecycle event page lacks kind %q", kind)
+		}
 	}
 	return nil
 }
@@ -296,6 +586,9 @@ func (r *runner) prepareCreate() (preparedRequest, error) {
 		"required_capabilities": []any{
 			map[string]any{"id": "sandbox.exec", "version": "1.0.0", "profile": "exec-v1"},
 			map[string]any{"id": "sandbox.terminal", "version": "1.0.0", "profile": "terminal-v1"},
+			map[string]any{"id": "sandbox.lifecycle-control", "version": "1.0.0", "profile": "lifecycle-control-v1"},
+			map[string]any{"id": "sandbox.terminal-control", "version": "1.0.0", "profile": "terminal-control-v1"},
+			map[string]any{"id": "sandbox.terminal-connect", "version": "1.0.0", "profile": "terminal-connect-v1"},
 		},
 		"network": map[string]any{"mode": "none"},
 		"workspace": map[string]any{
@@ -705,6 +998,26 @@ func sessionRef() operationReference {
 
 func artifactRef() operationReference {
 	return operationReference{SandboxID: sandboxID, OperationID: artifactOperation, AttemptID: artifactAttempt, FencingToken: 6}
+}
+
+func suspendRef() operationReference {
+	return operationReference{SandboxID: sandboxID, OperationID: suspendOperation, AttemptID: suspendAttempt, FencingToken: 7}
+}
+
+func resumeRef() operationReference {
+	return operationReference{SandboxID: sandboxID, OperationID: resumeOperation, AttemptID: resumeAttempt, FencingToken: 8}
+}
+
+func leaseRef() operationReference {
+	return operationReference{SandboxID: sandboxID, OperationID: leaseOperation, AttemptID: leaseAttempt, FencingToken: 9}
+}
+
+func closeRef() operationReference {
+	return operationReference{SandboxID: sandboxID, OperationID: closeOperation, AttemptID: closeAttempt, FencingToken: 10}
+}
+
+func terminateRef() operationReference {
+	return operationReference{SandboxID: sandboxID, OperationID: terminateOperation, AttemptID: terminateAttempt, FencingToken: 11}
 }
 
 func (r *runner) fillAuthority(reference operationReference) operationReference {

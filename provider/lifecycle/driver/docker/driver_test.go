@@ -127,6 +127,15 @@ func TestDriverLifecycleUsesStableProviderMounts(t *testing.T) {
 	if backend.ensureCalls != 1 || backend.createCalls != 1 || backend.startCalls != 1 {
 		t.Fatalf("idempotent ensure/create/start calls = %d/%d/%d", backend.ensureCalls, backend.createCalls, backend.startCalls)
 	}
+	if err := os.Chmod(paths.inputs, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(paths.inputs, "runtime-tool"), []byte("tool"), 0o555); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(paths.inputs, 0o555); err != nil {
+		t.Fatal(err)
+	}
 	if err := driver.Remove(context.Background(), sandbox.ID); err != nil {
 		t.Fatalf("Remove: %v", err)
 	}

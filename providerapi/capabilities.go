@@ -153,7 +153,7 @@ func validateCapabilityAdvertisements(capabilities []providerv1.Capability, runt
 		}
 		versions := make(map[string]struct{}, len(capability.Versions))
 		for _, version := range capability.Versions {
-			if !identifierPattern.MatchString(version) || ((capability.ID == providerv1.CapabilityExec || capability.ID == providerv1.CapabilityTerminal || capability.ID == providerv1.CapabilityTerminalConnect || capability.ID == providerv1.CapabilityBrowser) && !suiteVersionPattern.MatchString(version)) {
+			if !identifierPattern.MatchString(version) || ((capability.ID == providerv1.CapabilityExec || capability.ID == providerv1.CapabilityTerminal || capability.ID == providerv1.CapabilityTerminalConnect || capability.ID == providerv1.CapabilityBrowser || capability.ID == providerv1.CapabilityLifecycleControl || capability.ID == providerv1.CapabilityTerminalControl) && !suiteVersionPattern.MatchString(version)) {
 				return fmt.Errorf("capability %q has an invalid version %q", capability.ID, version)
 			}
 			if _, exists := versions[version]; exists {
@@ -178,7 +178,7 @@ func validateCapabilityAdvertisements(capabilities []providerv1.Capability, runt
 			profiles[profileID] = struct{}{}
 			profileIDs[profileID] = struct{}{}
 		}
-		if (capability.ID == providerv1.CapabilityExec || capability.ID == providerv1.CapabilityTerminal || capability.ID == providerv1.CapabilityTerminalConnect || capability.ID == providerv1.CapabilityBrowser) && (len(capability.Versions) == 0 || len(capability.Profiles) == 0) {
+		if (capability.ID == providerv1.CapabilityExec || capability.ID == providerv1.CapabilityTerminal || capability.ID == providerv1.CapabilityTerminalConnect || capability.ID == providerv1.CapabilityBrowser || capability.ID == providerv1.CapabilityLifecycleControl || capability.ID == providerv1.CapabilityTerminalControl) && (len(capability.Versions) == 0 || len(capability.Profiles) == 0) {
 			return fmt.Errorf("capability %q must advertise at least one version and profile", capability.ID)
 		}
 		capabilitiesByID[capability.ID] = capability
@@ -193,10 +193,26 @@ func validateCapabilityAdvertisements(capabilities []providerv1.Capability, runt
 	terminalCapability, terminalAdvertised := capabilitiesByID[providerv1.CapabilityTerminal]
 	terminalConnectCapability, terminalConnectAdvertised := capabilitiesByID[providerv1.CapabilityTerminalConnect]
 	browserCapability, browserAdvertised := capabilitiesByID[providerv1.CapabilityBrowser]
+	lifecycleControl, lifecycleControlAdvertised := capabilitiesByID[providerv1.CapabilityLifecycleControl]
+	terminalControl, terminalControlAdvertised := capabilitiesByID[providerv1.CapabilityTerminalControl]
+	controlCount := 0
+	if lifecycleControlAdvertised {
+		controlCount++
+		if len(lifecycleControl.Versions) != 1 || lifecycleControl.Versions[0] != "1.0.0" || len(lifecycleControl.Profiles) != 1 || lifecycleControl.Profiles[0] != "lifecycle-control-v1" {
+			return errors.New("lifecycle-control capability must advertise exactly version 1.0.0 and profile lifecycle-control-v1")
+		}
+	}
+	if terminalControlAdvertised {
+		controlCount++
+		if !terminalAdvertised || len(terminalControl.Versions) != 1 || terminalControl.Versions[0] != "1.0.0" || len(terminalControl.Profiles) != 1 || terminalControl.Profiles[0] != "terminal-control-v1" {
+			return errors.New("terminal-control capability requires terminal and must advertise exactly version 1.0.0 and profile terminal-control-v1")
+		}
+	}
+	baseCapabilityCount := len(capabilities) - controlCount
 	switch {
-	case (len(capabilities) == 1 || len(capabilities) == 2) && terminalAdvertised && !execAdvertised && !browserAdvertised && (len(capabilities) == 2) == terminalConnectAdvertised:
-	case (len(capabilities) == 2 || len(capabilities) == 3) && terminalAdvertised && execAdvertised && !browserAdvertised && (len(capabilities) == 3) == terminalConnectAdvertised:
-	case len(capabilities) == 1 && browserAdvertised && !terminalAdvertised && !terminalConnectAdvertised && !execAdvertised:
+	case (baseCapabilityCount == 1 || baseCapabilityCount == 2) && terminalAdvertised && !execAdvertised && !browserAdvertised && (baseCapabilityCount == 2) == terminalConnectAdvertised:
+	case (baseCapabilityCount == 2 || baseCapabilityCount == 3) && terminalAdvertised && execAdvertised && !browserAdvertised && (baseCapabilityCount == 3) == terminalConnectAdvertised:
+	case baseCapabilityCount == 1 && browserAdvertised && !terminalAdvertised && !terminalConnectAdvertised && !execAdvertised && !terminalControlAdvertised:
 		if len(browserCapability.Versions) != 1 || browserCapability.Versions[0] != "1.0.0" || len(browserCapability.Profiles) != 1 || browserCapability.Profiles[0] != "browser-v1" {
 			return errors.New("browser capability must advertise exactly version 1.0.0 and profile browser-v1")
 		}
@@ -214,7 +230,11 @@ func validateCapabilityAdvertisements(capabilities []providerv1.Capability, runt
 	if len(runtimeProfiles) != 1 {
 		return errors.New("an advertised Provider v1 capability shape requires exactly one runtime profile")
 	}
-	if browserAdvertised && (runtimeProfiles[0].ID != "sandbox-runtime-browser-v1" || len(runtimeProfiles[0].CapabilityProfileIDs) != 1 || runtimeProfiles[0].CapabilityProfileIDs[0] != "browser-v1") {
+	expectedBrowserProfiles := 1
+	if lifecycleControlAdvertised {
+		expectedBrowserProfiles++
+	}
+	if browserAdvertised && (runtimeProfiles[0].ID != "sandbox-runtime-browser-v1" || len(runtimeProfiles[0].CapabilityProfileIDs) != expectedBrowserProfiles || runtimeProfiles[0].CapabilityProfileIDs[0] != "browser-v1") {
 		return errors.New("browser capability must map only to runtime profile sandbox-runtime-browser-v1")
 	}
 

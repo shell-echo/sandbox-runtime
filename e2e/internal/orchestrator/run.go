@@ -70,10 +70,11 @@ func selectCaller(kind CallerKind) (CallerKind, string, string, string, error) {
 }
 
 type Result struct {
-	EvidenceDirectory string
-	RuntimeImage      string
-	InitialScenarios  int
-	ResumeScenarios   int
+	EvidenceDirectory  string
+	RuntimeImage       string
+	InitialScenarios   int
+	ResumeScenarios    int
+	LifecycleScenarios int
 }
 
 type evidenceManifest struct {
@@ -367,6 +368,19 @@ func Run(ctx context.Context, options Options) (_ Result, resultErr error) {
 	}
 	resumeReportPath := filepath.Join(evidenceDirectory, "caller-resume.json")
 	resumeReport, err := runCaller(ctx, callerBinary, callerConfigPath, resumeReportPath, filepath.Join(evidenceDirectory, "caller-resume.log"))
+	if err != nil {
+		_ = resumeStack.Stop()
+		return Result{}, err
+	}
+
+	callerConfig.Phase = caller.PhaseLifecycle
+	lifecycleConfigDigest, err := writeJSON(callerConfigPath, callerConfig)
+	if err != nil {
+		_ = resumeStack.Stop()
+		return Result{}, err
+	}
+	lifecycleReportPath := filepath.Join(evidenceDirectory, "caller-lifecycle.json")
+	lifecycleReport, err := runCaller(ctx, callerBinary, callerConfigPath, lifecycleReportPath, filepath.Join(evidenceDirectory, "caller-lifecycle.log"))
 	stopErr = resumeStack.Stop()
 	if err != nil || stopErr != nil {
 		return Result{}, errors.Join(err, stopErr)
@@ -377,18 +391,19 @@ func Run(ctx context.Context, options Options) (_ Result, resultErr error) {
 	manifest := evidenceManifest{
 		CreatedAt: time.Now().UTC().Format(time.RFC3339Nano), CallerKind: string(callerKind), HarnessCommit: harnessCommit, ProviderCommit: lock.ProviderCommit,
 		RuntimeImage: runtimeImage, RuntimePlatform: "linux/amd64", RuntimePreparation: runtimePreparation, StackConfigDigest: stackConfigDigest,
-		CallerConfigDigests: []string{initialConfigDigest, resumeConfigDigest},
-		Reports:             []string{filepath.Base(initialReportPath), filepath.Base(resumeReportPath)},
+		CallerConfigDigests: []string{initialConfigDigest, resumeConfigDigest, lifecycleConfigDigest},
+		Reports:             []string{filepath.Base(initialReportPath), filepath.Base(resumeReportPath), filepath.Base(lifecycleReportPath)},
 		Commands: []string{
 			"go build ./cmd/reference-stack", "go build " + callerPackage, "GOOS=linux GOARCH=amd64 go build ./cmd/terminal-broker", "GOOS=linux GOARCH=amd64 go build ./cmd/reference-runtime",
 			"reference-stack -config <ephemeral>", callerBinaryName + " -config <ephemeral> (initial)",
 			"reference-stack -config <same-state> (reconstructed)", callerBinaryName + " -config <ephemeral> (resume)",
+			callerBinaryName + " -config <ephemeral> (lifecycle control and cleanup)",
 		},
 		EvidenceBoundary: evidenceBoundary,
 	}
 	recordLockedSuites(&manifest)
 	if callerKind == CallerPlatformCandidate {
-		manifest.CandidateReports = []string{filepath.Base(initialReportPath), filepath.Base(resumeReportPath)}
+		manifest.CandidateReports = []string{filepath.Base(initialReportPath), filepath.Base(resumeReportPath), filepath.Base(lifecycleReportPath)}
 		manifest.CandidateBoundary = evidenceBoundary
 	}
 	if _, err := writeJSON(filepath.Join(evidenceDirectory, "manifest.json"), manifest); err != nil {
@@ -396,7 +411,7 @@ func Run(ctx context.Context, options Options) (_ Result, resultErr error) {
 	}
 	return Result{
 		EvidenceDirectory: evidenceDirectory, RuntimeImage: runtimeImage,
-		InitialScenarios: len(initialReport.Scenarios), ResumeScenarios: len(resumeReport.Scenarios),
+		InitialScenarios: len(initialReport.Scenarios), ResumeScenarios: len(resumeReport.Scenarios), LifecycleScenarios: len(lifecycleReport.Scenarios),
 	}, nil
 }
 

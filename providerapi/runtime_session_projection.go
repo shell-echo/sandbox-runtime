@@ -7,6 +7,7 @@ import (
 	"math"
 	"net/http"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/shell-echo/sandbox-runtime/provider/admission"
@@ -55,6 +56,55 @@ func (h *protectedHandler) serveRuntimeSessionHandoff(response http.ResponseWrit
 		return
 	}
 	writeJSON(response, http.StatusOK, projected)
+}
+
+func (h *protectedHandler) serveRuntimeSessionClose(response http.ResponseWriter, request *http.Request, admitted admission.AdmissionContext, document []byte, application RuntimeSessionControlApplication) {
+	closeRequest, err := decodeRuntimeSessionCloseRequest(document, admitted, request.URL.Path, h.now().UTC())
+	if err != nil {
+		writeStandardError(response, http.StatusBadRequest, "SANDBOX_INVALID_REQUEST", false, "terminal session close request is invalid")
+		return
+	}
+	operation, err := application.CloseRuntimeSession(request.Context(), closeRequest)
+	if err != nil {
+		status, code, retryable := mapRuntimeSessionError(err)
+		writeStandardError(response, status, code, retryable, runtimeSessionErrorMessage(code))
+		return
+	}
+	projected, err := runtimeSessionOperationProjection(operation)
+	if err != nil {
+		writeStandardError(response, http.StatusInternalServerError, "SANDBOX_PROVIDER_ERROR", false, "terminal session close operation could not be projected")
+		return
+	}
+	writeJSON(response, http.StatusAccepted, projected)
+}
+
+func decodeRuntimeSessionCloseRequest(document []byte, admitted admission.AdmissionContext, path string, now time.Time) (session.CloseRequest, error) {
+	var request providerv1.RuntimeSessionCloseRequest
+	if err := providerv1.DecodeStrict(bytes.NewReader(document), providerv1.MaxRuntimeSessionCloseRequestBytes, &request); err != nil {
+		return session.CloseRequest{}, err
+	}
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) != 5 || parts[3] != "runtime-sessions" || !strings.HasSuffix(parts[4], ":close") {
+		return session.CloseRequest{}, errors.New("terminal session close path is invalid")
+	}
+	runtimeSessionID := strings.TrimSuffix(parts[4], ":close")
+	deadline, err := time.Parse(time.RFC3339Nano, request.DeadlineAt)
+	if err != nil || !deadline.Equal(parseAdmissionTime(admitted.DeadlineAt)) || admitted.Operation != admission.OperationCloseRuntimeSession ||
+		request.OperationID != admitted.OperationID || request.AttemptID != admitted.AttemptID || request.FencingToken != admitted.FencingToken ||
+		string(request.RequestDigest) != admitted.RequestDigest || request.ExpectedGeneration < 1 || request.RuntimeSessionID != runtimeSessionID {
+		return session.CloseRequest{}, errors.New("terminal session close request does not match admitted context")
+	}
+	closeRequest := session.CloseRequest{
+		SandboxID: admitted.SandboxID, ProviderRevisionID: admitted.ProviderRevisionID,
+		OperationID: request.OperationID, AttemptID: request.AttemptID, FencingToken: request.FencingToken,
+		IdempotencyKey: request.IdempotencyKey, RequestDigest: string(request.RequestDigest), Deadline: deadline,
+		ExpectedGeneration: request.ExpectedGeneration, RuntimeSessionID: request.RuntimeSessionID,
+		ConnectionGeneration: request.ConnectionGeneration, Reason: request.Reason,
+	}
+	if err := closeRequest.Validate(now); err != nil {
+		return session.CloseRequest{}, err
+	}
+	return closeRequest, nil
 }
 
 func decodeRuntimeSessionOpenRequest(document []byte, admitted admission.AdmissionContext, now time.Time) (session.OpenRequest, error) {
@@ -117,12 +167,18 @@ func runtimeSessionOperationProjection(operation sessionapplication.Operation) (
 	default:
 		return providerv1.Operation{}, errors.New("invalid terminal session operation status")
 	}
+	operationType := providerv1.OperationOpenRuntimeSession
+	if operation.Type == sessionapplication.OperationCloseRuntimeSession {
+		operationType = providerv1.OperationCloseRuntimeSession
+	} else if operation.Type != "" && operation.Type != sessionapplication.OperationOpenRuntimeSession {
+		return providerv1.Operation{}, errors.New("invalid terminal session operation type")
+	}
 	return providerv1.Operation{
 		OperationID:         operation.OperationID,
 		AttemptID:           operation.AttemptID,
 		FencingToken:        operation.FencingToken,
 		SandboxID:           operation.SandboxID,
-		Type:                providerv1.OperationOpenRuntimeSession,
+		Type:                operationType,
 		Status:              providerv1.OperationState(operation.Status),
 		ProviderOperationID: operation.OperationID,
 		ObservedAt:          operation.ObservedAt.UTC().Format(time.RFC3339Nano),

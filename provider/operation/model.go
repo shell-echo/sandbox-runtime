@@ -21,12 +21,17 @@ var (
 type Type string
 
 const (
-	TypeCreate         Type = "create"
-	TypeExec           Type = "exec"
-	TypeCancelExec     Type = "cancel_exec"
-	TypeRuntimeSession Type = "open_runtime_session"
-	TypeBrowserSession Type = "open_browser_session"
-	TypeArtifactStage  Type = "artifact_stage"
+	TypeCreate              Type = "create"
+	TypeExtendLease         Type = "extend_lease"
+	TypeExec                Type = "exec"
+	TypeCancelExec          Type = "cancel_exec"
+	TypeSuspend             Type = "suspend"
+	TypeResume              Type = "resume"
+	TypeTerminate           Type = "terminate"
+	TypeRuntimeSession      Type = "open_runtime_session"
+	TypeCloseRuntimeSession Type = "close_runtime_session"
+	TypeBrowserSession      Type = "open_browser_session"
+	TypeArtifactStage       Type = "artifact_stage"
 )
 
 type Status string
@@ -78,7 +83,8 @@ func (v View) Validate() error {
 		return ErrInvalidView
 	}
 	switch v.Type {
-	case TypeCreate, TypeExec, TypeCancelExec, TypeRuntimeSession, TypeBrowserSession, TypeArtifactStage:
+	case TypeCreate, TypeExtendLease, TypeExec, TypeCancelExec, TypeSuspend, TypeResume, TypeTerminate,
+		TypeRuntimeSession, TypeCloseRuntimeSession, TypeBrowserSession, TypeArtifactStage:
 	default:
 		return ErrInvalidView
 	}

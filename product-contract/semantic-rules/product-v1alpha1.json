@@ -1,0 +1,218 @@
+{
+  "contract_namespace": "urn:shell-echo:sandbox-runtime:product-v1alpha1",
+  "contract_version": "0.1.0",
+  "maturity": "phase-1-design-authority",
+  "rules": [
+    {
+      "id": "separate-product-listener",
+      "requires": [
+        "product-routes-use-api-v1-prefix",
+        "product-listener-is-separate-from-provider-listener",
+        "product-listener-is-separate-from-local-management-listener"
+      ],
+      "forbids": [
+        "instances-route-alias",
+        "provider-route-alias",
+        "provider-dto-as-product-resource"
+      ]
+    },
+    {
+      "id": "authenticated-tenant-actor-context",
+      "requires": [
+        "bearer-authentication-before-resource-authority",
+        "tenant-derived-from-authentication",
+        "actor-derived-from-authentication"
+      ],
+      "forbids": [
+        "request-body-tenant-override",
+        "request-body-actor-override",
+        "cross-tenant-existence-disclosure"
+      ]
+    },
+    {
+      "id": "strict-bounded-input",
+      "requires": [
+        "closed-json-objects",
+        "unknown-field-rejection",
+        "trailing-data-rejection",
+        "request-and-header-bounds",
+        "normalized-query-validation"
+      ],
+      "forbids": [
+        "unbounded-body",
+        "unbounded-page",
+        "duplicate-single-value-security-header"
+      ]
+    },
+    {
+      "id": "mutation-idempotency",
+      "requires": [
+        "exactly-one-idempotency-key",
+        "canonical-request-digest",
+        "tenant-actor-method-path-scope",
+        "same-digest-replay-returns-retained-result",
+        "different-digest-replay-conflicts"
+      ],
+      "forbids": [
+        "external-dispatch-before-idempotency-reservation",
+        "key-only-global-deduplication"
+      ]
+    },
+    {
+      "id": "optimistic-aggregate-version",
+      "requires": [
+        "expected-version-on-versioned-mutation",
+        "version-check-before-external-work",
+        "atomic-version-event-and-outbox-commit"
+      ],
+      "forbids": [
+        "last-write-wins-product-mutation"
+      ]
+    },
+    {
+      "id": "workspace-composite-aggregate",
+      "requires": [
+        "exactly-one-primary-code-slot",
+        "immutable-slot-key",
+        "unique-slot-key-per-workspace",
+        "independent-slot-generation",
+        "workspace-observed-state-is-product-projection"
+      ],
+      "forbids": [
+        "provider-sandbox-status-as-workspace-status",
+        "public-provider-binding",
+        "cross-slot-atomic-provider-claim"
+      ]
+    },
+    {
+      "id": "product-operation-authority",
+      "requires": [
+        "product-operation-retained-before-dispatch",
+        "provider-operation-recorded-as-private-evidence",
+        "outcome-unknown-remains-reconcilable",
+        "terminal-product-decision-is-product-owned"
+      ],
+      "forbids": [
+        "provider-operation-returned-as-product-operation",
+        "accepted-provider-work-reported-as-product-success"
+      ]
+    },
+    {
+      "id": "workspace-event-sequence",
+      "requires": [
+        "positive-contiguous-sequence-per-workspace",
+        "event-committed-with-aggregate-change",
+        "poll-and-stream-share-sequence",
+        "expired-cursor-requires-snapshot-refresh"
+      ],
+      "forbids": [
+        "silent-sequence-gap",
+        "credential-or-private-reference-in-event"
+      ]
+    },
+    {
+      "id": "control-lease-authority",
+      "requires": [
+        "one-unexpired-lease-per-scope",
+        "database-time",
+        "monotonic-fence-per-scope",
+        "actor-bound-acquire-renew-release",
+        "stale-fence-rejection-before-data-plane-work"
+      ],
+      "forbids": [
+        "provider-fence-as-product-control-fence",
+        "gateway-capacity-lease-as-product-control-lease",
+        "silent-live-controller-takeover"
+      ]
+    },
+    {
+      "id": "session-capability-honesty",
+      "requires": [
+        "advertised-product-capability",
+        "advertised-protocol-profile",
+        "ready-product-gateway",
+        "ready-provider-or-guest-authority",
+        "durable-session-before-connection-grant"
+      ],
+      "forbids": [
+        "schema-enum-as-readiness",
+        "route-presence-as-readiness",
+        "private-provider-resolver-fallback"
+      ]
+    },
+    {
+      "id": "connection-grant-nondisclosure",
+      "requires": [
+        "public-product-gateway-uri",
+        "one-use-opaque-ticket",
+        "tenant-actor-workspace-slot-session-protocol-binding",
+        "bounded-expiry",
+        "no-store-response"
+      ],
+      "forbids": [
+        "provider-handoff-disclosure",
+        "provider-endpoint-disclosure",
+        "backend-identity-disclosure",
+        "storage-credential-disclosure",
+        "connection-ticket-logging"
+      ]
+    },
+    {
+      "id": "catalog-metadata-only",
+      "requires": [
+        "product-owned-artifact-metadata",
+        "product-owned-recording-metadata",
+        "tenant-authorization-before-read"
+      ],
+      "forbids": [
+        "provider-staging-reference-disclosure",
+        "direct-object-store-credential",
+        "raw-content-in-control-plane-list"
+      ]
+    },
+    {
+      "id": "agent-run-delegation-boundary",
+      "requires": [
+        "workspace-and-slot-binding",
+        "immutable-task-reference",
+        "bounded-tool-profile",
+        "short-lived-agent-identity",
+        "asynchronous-cancellation"
+      ],
+      "forbids": [
+        "reusable-human-credential",
+        "private-model-reasoning-recording-requirement"
+      ]
+    },
+    {
+      "id": "caller-safe-errors",
+      "requires": [
+        "stable-product-error-code",
+        "bounded-safe-message",
+        "request-correlation",
+        "retryability-classification"
+      ],
+      "forbids": [
+        "credential-in-error",
+        "private-endpoint-in-error",
+        "database-diagnostic-in-error",
+        "host-path-in-error",
+        "provider-private-reference-in-error"
+      ]
+    },
+    {
+      "id": "capability-readiness-derived",
+      "requires": [
+        "complete-product-dependency-graph",
+        "exact-provider-capability-discovery",
+        "gateway-protocol-readiness",
+        "persistence-and-policy-readiness"
+      ],
+      "forbids": [
+        "operator-forced-ready",
+        "partial-capability-advertisement",
+        "provider-capability-inference"
+      ]
+    }
+  ]
+}

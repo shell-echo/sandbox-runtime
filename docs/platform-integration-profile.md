@@ -267,11 +267,11 @@ The generic reference caller in this repository remains reference evidence; it
 does not establish independently implemented external-caller interoperability.
 The historical P2.6 repository-owned 50-case local profile and six-case remote
 discovery profile passed locally at implementation `3fe314a` and E2E lock
-refresh `ae476fe`. The current local profile has 53 cases and requires a fresh
-clean VCS-built run after the authority refresh is committed; no current P2.6
-pass is claimed. Those profiles do not convert the existing E2E tracks into
-aggregate evidence, and the remote profile does not cover protected or
-mutating routes.
+refresh `ae476fe`. The current 53-case local profile later passed as a clean
+VCS-built Runner in core CI `35204434771`. No fresh current remote run or
+relabeled historical E2E bundle is claimed. Those profiles do not convert the
+existing E2E tracks into aggregate evidence, and the remote profile does not
+cover protected or mutating routes.
 None of these results proves multi-issuer admission, aggregate conformance,
 multi-controller reliability, multi-tenant isolation, HA, deployment
 qualification, or production readiness. Those gates require their own

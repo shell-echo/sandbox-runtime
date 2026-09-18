@@ -124,6 +124,50 @@ func (r *Repository) ObserveAllocation(ctx context.Context, operationID string, 
 	return result, err
 }
 
+func (r *Repository) ReserveClose(ctx context.Context, request session.CloseRequest, acceptedAt time.Time) (session.CloseReservation, error) {
+	if err := repository.ContextError(ctx); err != nil {
+		return session.CloseReservation{}, err
+	}
+	var result session.CloseReservation
+	err := r.mutate(ctx, func() error {
+		var err error
+		result, err = r.state.ReserveCloseAt(request, acceptedAt)
+		return err
+	})
+	return result, err
+}
+
+func (r *Repository) GetClose(ctx context.Context, operationID string) (session.CloseRecord, error) {
+	if err := repository.ContextError(ctx); err != nil {
+		return session.CloseRecord{}, err
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if r.closed {
+		return session.CloseRecord{}, repository.ErrClosed
+	}
+	return r.state.GetClose(operationID)
+}
+
+func (r *Repository) ListClose(ctx context.Context) ([]session.CloseRecord, error) {
+	if err := repository.ContextError(ctx); err != nil {
+		return nil, err
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if r.closed {
+		return nil, repository.ErrClosed
+	}
+	return r.state.ListClose(), nil
+}
+
+func (r *Repository) UpdateClose(ctx context.Context, record session.CloseRecord, expectedStatus session.Status) error {
+	if err := repository.ContextError(ctx); err != nil {
+		return err
+	}
+	return r.mutate(ctx, func() error { return r.state.UpdateCloseAt(record, expectedStatus) })
+}
+
 func (r *Repository) UpdateOpen(ctx context.Context, record session.Record, expectedStatus session.Status) error {
 	return r.UpdateOpenAt(ctx, record, expectedStatus, time.Now().UTC())
 }

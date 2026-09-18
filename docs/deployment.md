@@ -6,6 +6,11 @@ This document defines the deployment boundary for the `sandbox-runtime`
 application. It deliberately separates the environment that runs the service
 from the backend that the service uses to execute sandbox workloads.
 
+[ADR 0047](adr/0047-deployment-levels-slos-and-release-gates.md) additionally
+defines the `development`, `standalone`, `production`, and future
+`hostile-multitenant` assurance levels. Every current asset and result in this
+document is `development` packaging evidence only.
+
 ## Two independent concerns
 
 | Concern | Question | Current examples |

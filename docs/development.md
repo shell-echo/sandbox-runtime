@@ -264,9 +264,11 @@ zero-side-effect claim for an arbitrary non-conforming target.
 The historical P2.6 release gate passed locally at implementation `3fe314a` and
 E2E lock refresh `ae476fe`, including both clean VCS-built Runners, the root and
 E2E race/shuffle and vet gates, Contract verification, parent-lock verification,
-and all eight E2E `-check` commands. The current 53-case authority requires a
-fresh clean-checkout run after the refresh is committed. Keep those checks
-separate from external caller, deployment, and production qualification.
+and all eight E2E `-check` commands. The current 53-case local authority later
+passed as a clean VCS-built Runner in core CI `35204434771`; no fresh current
+remote Runner or relabeled historical E2E bundle follows from that result. Keep
+those checks separate from external caller, deployment, and production
+qualification.
 
 ## Package boundaries
 
@@ -284,6 +286,34 @@ separate from external caller, deployment, and production qualification.
 
 Dependencies point inward. Export the minimum surface and keep cross-package
 calls on public contracts rather than implementation structs.
+
+## Product package and import boundaries
+
+The accepted Product architecture is design-only until implementation slices
+are separately approved. When Product code begins, use these roots and
+directions:
+
+- `productapi` owns Product HTTP/SSE transport and Product wire DTOs only;
+- `product` owns Product domain/application policy and ports;
+- `product/adapter/postgres`, `product/adapter/gateway`, and
+  `product/adapter/provider` implement those ports;
+- `guestagent` is a separate guest-side protocol and process boundary;
+- existing `provider`, `providerapi`, `gateway`, `instance`, `driver`, and
+  backend packages remain separate authorities.
+
+Product application/domain packages must not import `provider`, `providerapi`,
+`instance`, `driver`, backend adapters, or existing Gateway implementation
+packages. `product/adapter/provider` may consume generated or neutral DTOs for
+the locked Provider Contract and translate them into Product port values; it
+must not import Provider repositories, services, command composition, private
+references, or backend identities. All Product runtime operations cross the
+protected Provider network Contract even when processes are co-deployed.
+
+Product transport DTOs must be generated from or checked against
+`product-contract/` and cannot reuse PostgreSQL rows, Product aggregates,
+Provider DTOs, or driver structs. The first Product implementation change must
+add a non-test Go import-boundary check before adding behavior. ADR 0042 owns
+the complete dependency decision; local convenience is not an exception.
 
 ## Go and API rules
 

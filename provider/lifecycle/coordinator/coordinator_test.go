@@ -31,6 +31,70 @@ type testDriver struct {
 	inspectErr error
 }
 
+type controlDriver struct {
+	mu          sync.Mutex
+	states      map[string]RuntimeState
+	removeCalls int
+	removeErr   error
+}
+
+func newControlDriver() *controlDriver { return &controlDriver{states: make(map[string]RuntimeState)} }
+
+func (d *controlDriver) Create(ctx context.Context, sandbox lifecycle.Sandbox) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	d.mu.Lock()
+	d.states[sandbox.ID] = RuntimeReady
+	d.mu.Unlock()
+	return nil
+}
+
+func (d *controlDriver) Inspect(ctx context.Context, id string) (RuntimeObservation, error) {
+	if err := ctx.Err(); err != nil {
+		return RuntimeObservation{}, err
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	state, ok := d.states[id]
+	if !ok {
+		return RuntimeObservation{State: RuntimeAbsent}, nil
+	}
+	return RuntimeObservation{State: state}, nil
+}
+
+func (d *controlDriver) Suspend(ctx context.Context, id string) error {
+	return d.transition(ctx, id, RuntimeReady, RuntimeSuspended)
+}
+
+func (d *controlDriver) Resume(ctx context.Context, id string) error {
+	return d.transition(ctx, id, RuntimeSuspended, RuntimeReady)
+}
+
+func (d *controlDriver) transition(ctx context.Context, id string, from, to RuntimeState) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.states[id] != from {
+		return errors.New("unexpected runtime state")
+	}
+	d.states[id] = to
+	return nil
+}
+
+func (d *controlDriver) Remove(ctx context.Context, id string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.removeCalls++
+	delete(d.states, id)
+	return d.removeErr
+}
+
 func (d *testDriver) Create(ctx context.Context, _ lifecycle.Sandbox) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -109,6 +173,204 @@ func TestAcceptCreateIsDurableAndIdempotent(t *testing.T) {
 	driver.mu.Unlock()
 	if creates != 0 {
 		t.Fatalf("AcceptCreate dispatched %d backend calls", creates)
+	}
+}
+
+func TestLifecycleControlMutationsAndEventsReconcileExactRuntime(t *testing.T) {
+	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	clock := &testClock{now: now}
+	repo := memory.NewRepository()
+	driver := newControlDriver()
+	c, err := New(repo, driver, clock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = repo.Close() })
+	create := validRequest(now)
+	if _, err := c.AcceptCreate(context.Background(), create); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.ReconcileOperation(context.Background(), create.OperationID); err != nil {
+		t.Fatal(err)
+	}
+
+	suspend := lifecycle.DesiredStateRequest{MutationRequest: mutationRequest(now, "suspend", 2, 1), DesiredState: lifecycle.DesiredSuspended}
+	accepted, err := c.AcceptDesiredState(context.Background(), create.Spec.SandboxID, suspend)
+	if err != nil || accepted.Sandbox.Generation != 2 {
+		t.Fatalf("AcceptDesiredState() = %#v, %v", accepted, err)
+	}
+	result, err := c.ReconcileOperation(context.Background(), suspend.OperationID)
+	if err != nil || result.Sandbox.ObservedState != lifecycle.ObservedSuspended || result.Operation.State != lifecycle.OperationSucceeded {
+		t.Fatalf("suspend reconcile = %#v, %v", result, err)
+	}
+
+	resume := lifecycle.DesiredStateRequest{MutationRequest: mutationRequest(now, "resume", 3, 2), DesiredState: lifecycle.DesiredReady}
+	if _, err := c.AcceptDesiredState(context.Background(), create.Spec.SandboxID, resume); err != nil {
+		t.Fatal(err)
+	}
+	result, err = c.ReconcileOperation(context.Background(), resume.OperationID)
+	if err != nil || result.Sandbox.ObservedState != lifecycle.ObservedReady || result.Sandbox.Generation != 3 {
+		t.Fatalf("resume reconcile = %#v, %v", result, err)
+	}
+
+	lease := lifecycle.LeaseRequest{MutationRequest: mutationRequest(now, "lease", 4, 3), ExtendSeconds: 60}
+	leaseResult, err := c.AcceptLease(context.Background(), create.Spec.SandboxID, lease, 7200)
+	if err != nil || leaseResult.Sandbox.Generation != 3 || !leaseResult.Sandbox.LeaseExpiresAt.Equal(create.Spec.LeaseExpiresAt.Add(time.Minute)) {
+		t.Fatalf("lease accept = %#v, %v", leaseResult, err)
+	}
+	if _, err := c.ReconcileOperation(context.Background(), lease.OperationID); err != nil {
+		t.Fatal(err)
+	}
+
+	terminate := lifecycle.TerminateRequest{MutationRequest: mutationRequest(now, "terminate", 5, 3), Reason: "complete"}
+	if _, err := c.AcceptTerminate(context.Background(), create.Spec.SandboxID, terminate); err != nil {
+		t.Fatal(err)
+	}
+	result, err = c.ReconcileOperation(context.Background(), terminate.OperationID)
+	if err != nil || result.Sandbox.ObservedState != lifecycle.ObservedTerminated || result.Operation.State != lifecycle.OperationSucceeded {
+		t.Fatalf("terminate reconcile = %#v, %v", result, err)
+	}
+	page, err := c.ReadEvents(context.Background(), create.Spec.SandboxID, 0)
+	if err != nil || len(page.Events) < 9 || page.NextSequence != page.LatestSequence {
+		t.Fatalf("event page = %#v, %v", page, err)
+	}
+	for index, event := range page.Events {
+		if event.Sequence != uint64(index+1) {
+			t.Fatalf("event sequence at %d = %d", index, event.Sequence)
+		}
+	}
+}
+
+func TestTerminationOutcomeUnknownReconcilesByObservationWithoutRedispatch(t *testing.T) {
+	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	clock := &testClock{now: now}
+	repo := memory.NewRepository()
+	driver := newControlDriver()
+	c, err := New(repo, driver, clock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = repo.Close() })
+	create := validRequest(now)
+	if _, err := c.AcceptCreate(context.Background(), create); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.ReconcileOperation(context.Background(), create.OperationID); err != nil {
+		t.Fatal(err)
+	}
+	driver.removeErr = ErrUnknownRuntime
+	terminate := lifecycle.TerminateRequest{MutationRequest: mutationRequest(now, "terminate-unknown", 2, 1), Reason: "complete"}
+	if _, err := c.AcceptTerminate(context.Background(), create.Spec.SandboxID, terminate); err != nil {
+		t.Fatal(err)
+	}
+	first, err := c.ReconcileOperation(context.Background(), terminate.OperationID)
+	if err == nil || first.Operation.State != lifecycle.OperationOutcomeUnknown {
+		t.Fatalf("first reconcile = %#v, %v", first, err)
+	}
+	driver.removeErr = nil
+	second, err := c.ReconcileOperation(context.Background(), terminate.OperationID)
+	if err != nil || second.Operation.State != lifecycle.OperationOutcomeUnknown || second.Sandbox.ObservedState != lifecycle.ObservedTerminated {
+		t.Fatalf("second reconcile = %#v, %v", second, err)
+	}
+	driver.mu.Lock()
+	removeCalls := driver.removeCalls
+	driver.mu.Unlock()
+	if removeCalls != 1 {
+		t.Fatalf("unknown termination was redispatched %d times", removeCalls)
+	}
+	before, err := c.ReadEvents(context.Background(), create.Spec.SandboxID, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pending, err := c.ReconcilePending(context.Background())
+	if err != nil || len(pending) != 0 {
+		t.Fatalf("observed unknown remained pending: %#v, %v", pending, err)
+	}
+	after, err := c.ReadEvents(context.Background(), create.Spec.SandboxID, 0)
+	if err != nil || len(after.Events) != len(before.Events) {
+		t.Fatalf("observed unknown appended duplicate events: before=%d after=%d err=%v", len(before.Events), len(after.Events), err)
+	}
+}
+
+func TestExpiredLeaseCreatesDurableTerminationAndCleansRuntime(t *testing.T) {
+	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	clock := &testClock{now: now}
+	repo := memory.NewRepository()
+	driver := newControlDriver()
+	c, err := New(repo, driver, clock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = repo.Close() })
+	create := validRequest(now)
+	create.Spec.LeaseExpiresAt = now.Add(time.Minute)
+	if _, err := c.AcceptCreate(context.Background(), create); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.ReconcileOperation(context.Background(), create.OperationID); err != nil {
+		t.Fatal(err)
+	}
+	clock.mu.Lock()
+	clock.now = now.Add(2 * time.Minute)
+	clock.mu.Unlock()
+	results, err := c.ProcessExpiredLeases(context.Background())
+	if err != nil || len(results) != 1 || results[0].Operation.Type != lifecycle.OperationTerminate || results[0].Operation.State != lifecycle.OperationSucceeded || results[0].Sandbox.ObservedState != lifecycle.ObservedTerminated {
+		t.Fatalf("ProcessExpiredLeases() = %#v, %v", results, err)
+	}
+	page, err := c.ReadEvents(context.Background(), create.Spec.SandboxID, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, event := range page.Events {
+		found = found || event.Kind == "lease-expired"
+	}
+	if !found {
+		t.Fatalf("lease-expired event missing: %#v", page.Events)
+	}
+}
+
+func TestExpiredLeaseCleansAfterEarlierTerminationFailedBeforeDispatch(t *testing.T) {
+	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	clock := &testClock{now: now}
+	repo := memory.NewRepository()
+	driver := newControlDriver()
+	c, err := New(repo, driver, clock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = repo.Close() })
+	create := validRequest(now)
+	create.Spec.LeaseExpiresAt = now.Add(time.Minute)
+	if _, err := c.AcceptCreate(context.Background(), create); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.ReconcileOperation(context.Background(), create.OperationID); err != nil {
+		t.Fatal(err)
+	}
+	terminate := lifecycle.TerminateRequest{MutationRequest: mutationRequest(now, "terminate-expiring", 2, 1), Reason: "complete"}
+	terminate.Deadline = now.Add(time.Second)
+	if _, err := c.AcceptTerminate(context.Background(), create.Spec.SandboxID, terminate); err != nil {
+		t.Fatal(err)
+	}
+	clock.mu.Lock()
+	clock.now = now.Add(2 * time.Minute)
+	clock.mu.Unlock()
+	failed, err := c.ReconcileOperation(context.Background(), terminate.OperationID)
+	if err == nil || failed.Operation.State != lifecycle.OperationFailed {
+		t.Fatalf("expired explicit termination = %#v, %v", failed, err)
+	}
+	results, err := c.ProcessExpiredLeases(context.Background())
+	if err != nil || len(results) != 1 || results[0].Operation.State != lifecycle.OperationSucceeded || results[0].Sandbox.ObservedState != lifecycle.ObservedTerminated {
+		t.Fatalf("expiry cleanup after failed termination = %#v, %v", results, err)
+	}
+}
+
+func mutationRequest(now time.Time, suffix string, fencing, generation uint64) lifecycle.MutationRequest {
+	digest := "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	return lifecycle.MutationRequest{
+		OperationID: "operation-" + suffix, AttemptID: "attempt-" + suffix, FencingToken: fencing,
+		IdempotencyKey: "key-" + suffix, RequestDigest: digest, Deadline: now.Add(10 * time.Minute), ExpectedGeneration: generation,
 	}
 }
 

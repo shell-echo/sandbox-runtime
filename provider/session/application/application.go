@@ -34,7 +34,15 @@ type Operation struct {
 	SandboxID    string
 	Status       session.Status
 	ObservedAt   time.Time
+	Type         OperationType
 }
+
+type OperationType string
+
+const (
+	OperationOpenRuntimeSession  OperationType = "open_runtime_session"
+	OperationCloseRuntimeSession OperationType = "close_runtime_session"
+)
 
 // Handoff is the provider-local opaque handoff projection. The endpoint
 // reference is validated by the domain and is never interpreted here.
@@ -169,6 +177,7 @@ func operationProjection(record session.Record) (Operation, error) {
 		SandboxID:    record.Request.SandboxID,
 		Status:       record.Status,
 		ObservedAt:   record.ObservedAt.UTC(),
+		Type:         OperationOpenRuntimeSession,
 	}, nil
 }
 

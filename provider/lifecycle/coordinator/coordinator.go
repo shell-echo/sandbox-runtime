@@ -30,6 +30,7 @@ const (
 	RuntimeAbsent       RuntimeState = "absent"
 	RuntimeProvisioning RuntimeState = "provisioning"
 	RuntimeReady        RuntimeState = "ready"
+	RuntimeSuspended    RuntimeState = "suspended"
 )
 
 // RuntimeObservation is an authoritative point-in-time provider observation.
@@ -49,10 +50,17 @@ type Driver interface {
 	Inspect(context.Context, string) (RuntimeObservation, error)
 }
 
-// OrphanCleaner is intentionally separate from Driver until the orphan
-// cleanup policy and its Contract projection have their own release gate.
+// OrphanCleaner is a focused optional lifecycle capability. Composition must
+// not advertise lifecycle control unless the selected driver implements it.
 type OrphanCleaner interface {
 	Remove(context.Context, string) error
+}
+
+// StateController is an optional lifecycle capability. Composition must not
+// advertise lifecycle control unless the selected driver implements it.
+type StateController interface {
+	Suspend(context.Context, string) error
+	Resume(context.Context, string) error
 }
 
 // Clock makes deadline and transition tests deterministic.
@@ -136,6 +144,15 @@ func (c *Coordinator) ReconcilePending(ctx context.Context) ([]Result, error) {
 		if terminalOperation(operation.State) {
 			continue
 		}
+		if operation.State == lifecycle.OperationOutcomeUnknown {
+			sandbox, sandboxErr := c.repository.GetSandbox(ctx, operation.SandboxID)
+			if sandboxErr != nil {
+				return results, sandboxErr
+			}
+			if unknownOutcomeObserved(operation.Type, sandbox) {
+				continue
+			}
+		}
 		result, reconcileErr := c.ReconcileOperation(ctx, operation.ID)
 		if reconcileErr != nil {
 			if result.Operation.ID != "" {
@@ -146,6 +163,22 @@ func (c *Coordinator) ReconcilePending(ctx context.Context) ([]Result, error) {
 		results = append(results, result)
 	}
 	return results, nil
+}
+
+func unknownOutcomeObserved(operationType lifecycle.OperationType, sandbox lifecycle.Sandbox) bool {
+	if sandbox.ObservedGeneration != sandbox.Generation {
+		return false
+	}
+	switch operationType {
+	case lifecycle.OperationCreate, lifecycle.OperationResume:
+		return sandbox.ObservedState == lifecycle.ObservedReady
+	case lifecycle.OperationSuspend:
+		return sandbox.ObservedState == lifecycle.ObservedSuspended
+	case lifecycle.OperationTerminate:
+		return sandbox.ObservedState == lifecycle.ObservedTerminated
+	default:
+		return false
+	}
 }
 
 // ReconcileOperation advances one provider-local create operation. Running
@@ -173,13 +206,24 @@ func (c *Coordinator) reconcileOperation(ctx context.Context, operationID string
 		return Result{Operation: operation, Sandbox: sandbox}, nil
 	}
 
+	switch operation.Type {
+	case lifecycle.OperationCreate:
+		switch operation.State {
+		case lifecycle.OperationAccepted:
+			return c.dispatchCreate(ctx, operation, sandbox)
+		case lifecycle.OperationRunning, lifecycle.OperationOutcomeUnknown:
+			return c.reconcileCreate(ctx, operation, sandbox)
+		}
+	case lifecycle.OperationExtendLease:
+		return c.reconcileLease(ctx, operation, sandbox)
+	case lifecycle.OperationSuspend, lifecycle.OperationResume:
+		return c.reconcileDesiredState(ctx, operation, sandbox)
+	case lifecycle.OperationTerminate:
+		return c.reconcileTerminate(ctx, operation, sandbox)
+	}
 	switch operation.State {
-	case lifecycle.OperationAccepted:
-		return c.dispatchCreate(ctx, operation, sandbox)
-	case lifecycle.OperationRunning, lifecycle.OperationOutcomeUnknown:
-		return c.reconcileRunning(ctx, operation, sandbox)
 	default:
-		return Result{}, fmt.Errorf("%w: unsupported operation state %q", ErrInvalidCoordinator, operation.State)
+		return Result{}, fmt.Errorf("%w: unsupported operation %q in state %q", ErrInvalidCoordinator, operation.Type, operation.State)
 	}
 }
 
@@ -227,7 +271,7 @@ func (c *Coordinator) dispatchCreate(ctx context.Context, operation lifecycle.Op
 	return c.markReady(ctx, updatedOperation, provisioning, true)
 }
 
-func (c *Coordinator) reconcileRunning(ctx context.Context, operation lifecycle.Operation, sandbox lifecycle.Sandbox) (Result, error) {
+func (c *Coordinator) reconcileCreate(ctx context.Context, operation lifecycle.Operation, sandbox lifecycle.Sandbox) (Result, error) {
 	operationContext, cancel := c.operationContext(ctx, operation.Deadline)
 	defer cancel()
 	if err := contextError(operationContext); err != nil {
@@ -296,6 +340,9 @@ func (c *Coordinator) markReady(ctx context.Context, operation lifecycle.Operati
 }
 
 func (c *Coordinator) markSandboxReady(ctx context.Context, operation lifecycle.Operation, sandbox lifecycle.Sandbox) (Result, error) {
+	if sandbox.ObservedState == lifecycle.ObservedReady && sandbox.ObservedGeneration == sandbox.Generation {
+		return Result{Operation: operation, Sandbox: sandbox}, nil
+	}
 	writeCtx, cancel := c.persistenceContext(ctx)
 	defer cancel()
 	ready, err := lifecycle.ApplyObservedTransition(sandbox, lifecycle.ObservedReady, sandbox.Generation, c.clock.Now())

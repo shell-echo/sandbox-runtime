@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/moby/moby/client"
@@ -197,6 +196,7 @@ func Open(ctx context.Context, config Config) (_ *Stack, result error) {
 	protected.Application = lifecycleApp
 	protected.ExecApplication = execApp
 	protected.SessionApplication = terminalApp
+	protected.SessionConnector = terminalConnector{sessions: terminalApp, resolver: resolver}
 	protected.ArtifactApplication = artifactApp
 	protected.UsageEvidenceReader = usageReader
 	protected.OperationReader = operationReader
@@ -265,11 +265,87 @@ func (s *Stack) Close() error {
 
 func (s *Stack) addCloser(closer func() error) { s.closers = append(s.closers, closer) }
 
-type terminalRegistrar struct{ registrar *sessionreference.Registrar }
+type terminalRegistrar struct {
+	registrar *sessionreference.Registrar
+	store     sessionreference.Store
+}
+
+type terminalHandoffReader interface {
+	GetHandoff(context.Context, string) (sessionapplication.Handoff, error)
+}
+
+type terminalEndpointResolver interface {
+	Resolve(context.Context, string) (sessionreference.Endpoint, error)
+}
+
+type terminalConnector struct {
+	sessions terminalHandoffReader
+	resolver terminalEndpointResolver
+}
+
+func (c terminalConnector) ConnectRuntimeSession(ctx context.Context, requested sessionapplication.Handoff) (providerterminal.Stream, error) {
+	if c.sessions == nil || c.resolver == nil {
+		return nil, providerapi.ErrRuntimeSessionConnectUnavailable
+	}
+	retained, err := c.sessions.GetHandoff(ctx, requested.OperationID)
+	if err != nil {
+		return nil, mapTerminalConnectError(err)
+	}
+	if !sameTerminalHandoff(retained, requested) {
+		return nil, providerapi.ErrRuntimeSessionConnectConflict
+	}
+	endpoint, err := c.resolver.Resolve(ctx, requested.InternalEndpointReference)
+	if err != nil {
+		return nil, mapTerminalConnectError(err)
+	}
+	if endpoint.Reference != requested.InternalEndpointReference || endpoint.SandboxID != requested.SandboxID ||
+		endpoint.RuntimeSessionID != requested.RuntimeSessionID || endpoint.CapabilityProfileID != requested.CapabilityProfileID ||
+		endpoint.ConnectionGeneration != requested.ConnectionGeneration || !endpoint.ExpiresAt.Equal(requested.ExpiresAt) || endpoint.Dial == nil {
+		return nil, providerapi.ErrRuntimeSessionConnectConflict
+	}
+	stream, err := endpoint.Dial(ctx)
+	if err != nil {
+		return nil, mapTerminalConnectError(err)
+	}
+	if stream == nil {
+		return nil, providerapi.ErrRuntimeSessionConnectUnavailable
+	}
+	return stream, nil
+}
+
+func sameTerminalHandoff(left, right sessionapplication.Handoff) bool {
+	return left.OperationID == right.OperationID && left.AttemptID == right.AttemptID && left.FencingToken == right.FencingToken &&
+		left.SandboxID == right.SandboxID && left.RuntimeSessionID == right.RuntimeSessionID && left.RuntimeType == right.RuntimeType &&
+		left.CapabilityProfileID == right.CapabilityProfileID && left.Protocol == right.Protocol &&
+		left.InternalEndpointReference == right.InternalEndpointReference && left.ConnectionGeneration == right.ConnectionGeneration &&
+		left.ExpiresAt.Equal(right.ExpiresAt)
+}
+
+func mapTerminalConnectError(err error) error {
+	switch {
+	case errors.Is(err, session.ErrNotFound), errors.Is(err, session.ErrHandoffUnavailable), errors.Is(err, sessionreference.ErrNotFound):
+		return providerapi.ErrRuntimeSessionConnectUnknown
+	case errors.Is(err, session.ErrHandoffExpired), errors.Is(err, sessionreference.ErrExpired), errors.Is(err, sessionreference.ErrRevoked), errors.Is(err, providerterminal.ErrTerminalExpired):
+		return providerapi.ErrRuntimeSessionConnectGone
+	case errors.Is(err, session.ErrConflict), errors.Is(err, session.ErrGenerationConflict), errors.Is(err, session.ErrStaleFencingToken),
+		errors.Is(err, sessionreference.ErrConflict), errors.Is(err, sessionreference.ErrStale), errors.Is(err, providerterminal.ErrTerminalConflict):
+		return providerapi.ErrRuntimeSessionConnectConflict
+	case errors.Is(err, providerterminal.ErrTerminalCapacity):
+		return providerapi.ErrRuntimeSessionConnectCapacity
+	case errors.Is(err, session.ErrCapabilityUnsupported), errors.Is(err, providerterminal.ErrTerminalUnsupported):
+		return providerapi.ErrRuntimeSessionConnectUnsupported
+	default:
+		return providerapi.ErrRuntimeSessionConnectUnavailable
+	}
+}
 
 func (r terminalRegistrar) RegisterHandoff(ctx context.Context, source session.Record) (session.EndpointEvidence, error) {
 	registration, err := r.registrar.Register(ctx, source)
 	return registration.Evidence, err
+}
+
+func (r terminalRegistrar) RevokeHandoff(ctx context.Context, source session.Record, now time.Time) error {
+	return sessionreference.RevokeSucceededHandoff(ctx, r.store, source, now)
 }
 
 func openTerminal(ctx context.Context, config Config, sandboxes *lifecycleapplication.Application, runtime *lifecycledocker.Driver) (*sessionapplication.Vertical, *sessionreference.Resolver, []func() error, error) {
@@ -295,9 +371,10 @@ func openTerminal(ctx context.Context, config Config, sandboxes *lifecycleapplic
 		_ = errors.Join(references.Close(), sessions.Close())
 		return nil, nil, nil, err
 	}
-	vertical, err := sessionapplication.NewVerticalWithHandoffRegistrar(sessions, terminalRuntime, sandboxes, sessionapplication.TerminalProfile{
+	handoffLifecycle := terminalRegistrar{registrar: registrar, store: references}
+	vertical, err := sessionapplication.NewVerticalWithHandoffLifecycle(sessions, terminalRuntime, sandboxes, sessionapplication.TerminalProfile{
 		RuntimeProfileID: "sandbox-runtime-coding-shell-v1", CapabilityProfileID: "terminal-v1", WorkingDirectory: "/workspace",
-	}, terminalRegistrar{registrar: registrar}, clock{})
+	}, handoffLifecycle, handoffLifecycle, clock{})
 	if err != nil {
 		_ = errors.Join(references.Close(), sessions.Close())
 		return nil, nil, nil, err
@@ -391,13 +468,16 @@ func capabilitySource(providerRevisionID string) (*provider.StaticCapabilitySour
 	}, []provider.Capability{
 		{ID: "sandbox.exec", Versions: []string{"1.0.0"}, Profiles: []string{"exec-v1"}},
 		{ID: "sandbox.terminal", Versions: []string{"1.0.0"}, Profiles: []string{"terminal-v1"}},
+		{ID: "sandbox.lifecycle-control", Versions: []string{"1.0.0"}, Profiles: []string{"lifecycle-control-v1"}},
+		{ID: "sandbox.terminal-control", Versions: []string{"1.0.0"}, Profiles: []string{"terminal-control-v1"}},
+		{ID: "sandbox.terminal-connect", Versions: []string{"1.0.0"}, Profiles: []string{"terminal-connect-v1"}},
 	}, []provider.RuntimeProfile{{
 		ID: "sandbox-runtime-coding-shell-v1", IsolationClass: "container", RuntimeClassName: "sandbox-runtime-coding-shell",
-		Architecture: []string{"amd64"}, CapabilityProfileIDs: []string{"exec-v1", "terminal-v1"},
+		Architecture: []string{"amd64"}, CapabilityProfileIDs: []string{"exec-v1", "terminal-v1", "lifecycle-control-v1", "terminal-control-v1", "terminal-connect-v1"},
 	}}, []provider.SnapshotRestoreProfile{{
 		ProfileID: "sandbox-snapshot-workspace-v1", Level: provider.SnapshotLevelWorkspace,
 		SuiteID: provider.CompatibilitySuiteSandboxProvider, SuiteVersion: "1.0.0",
-		SuiteDigest: provider.SHA256Digest("sha256:" + strings.Repeat("a", 64)),
+		SuiteDigest: provider.SHA256Digest("sha256:7db1d28d35ca193632c395247cc71eeaaff48b027964b9ea9da247eaad5e3991"),
 	}})
 	if err != nil {
 		return nil, err
@@ -439,3 +519,4 @@ func verifyRuntimeImage(ctx context.Context, image string) error {
 var _ usage.EvidenceReader = (*usageapplication.Reader)(nil)
 var _ providerexec.ResultObserver = (*usageapplication.ResultCollector)(nil)
 var _ providerterminal.Runtime = (*lifecycledocker.TerminalRuntime)(nil)
+var _ sessionapplication.HandoffRevoker = terminalRegistrar{}

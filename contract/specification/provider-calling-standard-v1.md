@@ -30,7 +30,7 @@ The Contract resources are cumulative constraints with distinct roles:
 | [`schemas/`](../schemas/) | Defines the closed request, response, operation, handoff, capability, error, and evidence document shapes. |
 | [`provider-v1.json`](../semantic-rules/provider-v1.json) | Defines cross-field, admission, ownership, lifecycle, profile, and evidence semantics that are not fully expressible in OpenAPI or JSON Schema. |
 | [`fixtures/`](../fixtures/) | Supplies canonical accepted documents and rejection matrices for the named schemas and semantic rules. |
-| [`provider-v1/suite.json`](../conformance/provider-v1/suite.json) | Names the repository-executed Provider conformance cases for the required local profile, including the optional terminal-connect definition cases. Passing cases cannot authorize behavior absent from the other Contract resources or prove that the production route is composed or exercised. |
+| [`provider-v1/suite.json`](../conformance/provider-v1/suite.json) | Names the repository-executed Provider conformance cases for the required local profile, including optional terminal-connect, lifecycle-control, and terminal-control definition cases. Passing cases cannot authorize behavior absent from the other Contract resources or prove that the production route is composed or exercised. |
 | [`provider-remote-v1/suite.json`](../conformance/provider-remote-v1/suite.json) | Names the portable, read-only remote discovery cases. It does not replace or execute the repository profile. |
 | This specification | Orders the existing resources into caller workflows and responsibility boundaries. |
 
@@ -67,13 +67,15 @@ new revision deliberately. A breaking wire or semantic change requires a new
 protocol version and namespace revision, as recorded by the architecture's
 Contract versioning rules.
 
-At the time this specification was introduced, the published lock still named
-revision `5096e71fb84fbec22aa3487a0e55a1b49602ab8b` and Contract tree
-`859f76dc0e855a0c8abdbbb5648df100dabb4328`. That tree predates this resource.
-Consequently, this specification is not part of an effective locked Contract
-until a later reviewed lock refresh names the commit and tree that contain it.
-No compatibility or conformance result for the earlier tree may be relabeled as
-evidence for the later exact Contract identity.
+At the time the lifecycle-control candidate was authored, the published lock
+still named revision `22ba6987ea5fbc37d53942720133c0acad199edd` and Contract
+tree `c9a7054d7c8e7f4b6e32f38175ceedddc48c2d38`. That tree contains the
+earlier 53-case surface and predates the lifecycle and terminal-control
+extension in this source candidate. Consequently, the extension is not part
+of an effective locked Contract until a later reviewed lock refresh names the
+immutable commit and tree that contain it. No compatibility or conformance
+result for the earlier tree may be relabeled as evidence for the later exact
+Contract identity.
 
 ## Roles and responsibility boundaries
 
@@ -249,6 +251,56 @@ handoff for the caller-owned Gateway. Artifact and usage routes yield bounded
 Provider evidence, not public artifacts, prices, invoices, or final product
 state.
 
+### Lifecycle-control workflow
+
+A Caller uses the lifecycle-control family only when the selected immutable
+snapshot advertises `sandbox.lifecycle-control@1.0.0` with profile
+`lifecycle-control-v1` on the selected runtime profile. The capability is
+all-or-nothing: it covers desired-state, lease, explicit termination, and
+finite event reads. Route presence without that advertisement is not authority.
+
+`POST /v1/sandboxes/{sandbox_id}/desired-state` accepts only `ready` or
+`suspended`. Each request binds the exact expected generation and mutation
+envelope. A successful operation means the requested runtime state was
+observed; acceptance alone does not. `terminated` is not a reversible desired
+state and is requested only through the termination route.
+
+`POST /v1/sandboxes/{sandbox_id}/lease` moves the lease expiry forward within
+the advertised `max_lease_seconds` horizon without incrementing desired
+generation. An elapsed lease invokes the same reconciled cleanup authority as
+explicit termination. It is not satisfied by changing only a database state
+while leaving an owned runtime present.
+
+`POST /v1/sandboxes/{sandbox_id}:terminate` is irreversible. The Provider may
+report success only after the exact owned runtime is observed absent and its
+deterministic ephemeral state is removed. An uncertain dispatch remains
+`outcome_unknown` for that attempt; recovery observes before acting and does
+not blindly redispatch the same unknown attempt.
+
+`GET /v1/sandboxes/{sandbox_id}/events` is bounded polling, not SSE or long
+polling. `after_sequence=N` is exclusive. Pages contain at most 100 contiguous
+events plus the retained floor, latest sequence, and next checkpoint. A cursor
+ahead of latest returns `409`. A cursor whose successor was retired returns
+`410` with only `first_available_sequence` and `latest_sequence` in the closed
+error details; the Provider never silently rewinds it.
+
+### Terminal-control workflow
+
+A Caller closes a terminal session only when the selected snapshot advertises
+`sandbox.terminal-control@1.0.0`/`terminal-control-v1` on the same runtime
+profile as `sandbox.terminal@1.0.0`/`terminal-v1`. It sends
+`POST /v1/sandboxes/{sandbox_id}/runtime-sessions/{runtime_session_id}:close`
+with the exact sandbox generation, runtime-session identity, connection
+generation, and mutation envelope.
+
+The Provider durably accepts a separate close attempt, revokes future handoff
+resolution, terminates attachment authority, cleans the exact retained
+allocation receipt, and confirms absence before success. Replays return the
+same logical close operation. A close attempt with an uncertain outcome
+remains immutable evidence and recovery observes it without blind cleanup
+redispatch. Terminal resize and Browser-session close are not part of this
+capability.
+
 ## Authentication and admission
 
 Capability discovery uses the admitted certificate identity and does not use a
@@ -347,6 +399,13 @@ defined by the capability schemas, fixtures, and these semantic rules:
   `capabilities-coding-shell-terminal-connect-advertisement` rule permits the
   optional `sandbox.terminal-connect@1.0.0`/`terminal-connect-v1` only when all
   three profiles map to that same runtime profile; and
+- `capabilities-lifecycle-control-profile-advertisement` optionally binds
+  `sandbox.lifecycle-control@1.0.0`/`lifecycle-control-v1` to a runtime profile
+  only when the complete desired-state, lease, termination, reconciliation,
+  and finite-event dependency graph is composed;
+- `capabilities-terminal-control-profile-advertisement` optionally binds
+  `sandbox.terminal-control@1.0.0`/`terminal-control-v1` only beside
+  `sandbox.terminal@1.0.0`/`terminal-v1` on the same runtime profile; and
 - `capabilities-browser-profile-advertisement` binds
   `sandbox.browser@1.0.0`, `browser-v1`, and
   `sandbox-runtime-browser-v1` and forbids combining that profile with the
@@ -360,13 +419,19 @@ snapshot or restore route.
 The OpenAPI document currently authorizes these calling families:
 
 - discovery: `GET /v1/capabilities`;
-- lifecycle: `POST /v1/sandboxes` and
-  `GET /v1/sandboxes/{sandbox_id}`;
+- lifecycle: `POST /v1/sandboxes`, `GET /v1/sandboxes/{sandbox_id}`,
+  optional lifecycle control through
+  `POST /v1/sandboxes/{sandbox_id}/desired-state`,
+  `POST /v1/sandboxes/{sandbox_id}/lease`,
+  `POST /v1/sandboxes/{sandbox_id}:terminate`, and
+  `GET /v1/sandboxes/{sandbox_id}/events`;
 - exec: `POST /v1/sandboxes/{sandbox_id}/exec`,
   `POST /v1/sandboxes/{sandbox_id}/exec:cancel`, and
   `GET /v1/operations/{operation_id}/exec-result`;
-- terminal: `POST /v1/sandboxes/{sandbox_id}/runtime-sessions` and
-  `GET /v1/operations/{operation_id}/runtime-session`;
+- terminal: `POST /v1/sandboxes/{sandbox_id}/runtime-sessions`,
+  `GET /v1/operations/{operation_id}/runtime-session`, and optional terminal
+  control through
+  `POST /v1/sandboxes/{sandbox_id}/runtime-sessions/{runtime_session_id}:close`;
 - optional terminal connect: `GET /v1/runtime-sessions:connect`;
 - Browser: `POST /v1/sandboxes/{sandbox_id}/browser-sessions` and
   `GET /v1/operations/{operation_id}/browser-session`;
@@ -440,7 +505,7 @@ locally modified build identity fails closed.
 A complete green report proves only that the named remote discovery profile
 passed against the exact target, Provider revision, runner revision, and locked
 Contract identity. It reports `suite_exercised` and `profile_passed` without an
-unscoped `conformant` claim. It does not execute the 53-case repository profile,
+unscoped `conformant` claim. It does not execute the lock-selected repository profile,
 prove protected admission or lifecycle behavior, or establish an independently
 implemented caller, aggregate conformance, multi-controller reliability,
 multi-tenant isolation, deployment, or production readiness.
@@ -450,15 +515,14 @@ multi-tenant isolation, deployment, or production readiness.
 The following are non-normative maturity boundaries, not additions to Provider
 wire behavior:
 
-- the current OpenAPI authorizes sandbox create/read but not explicit
-  terminate, desired-state, lease-renewal, snapshot, restore, or event routes;
-  names reserved in admission documents do not close that lifecycle;
-- terminal and Browser handoffs require a caller-owned Gateway, but v1 does not
-  define a public end-user Gateway, close-session, resize, or revocation wire
-  operation; the optional terminal-connect route is only the protected
-  Provider resolver/data-plane boundary;
-- the production command does not yet advertise `sandbox.terminal-connect` or
-  expose `GET /v1/runtime-sessions:connect`;
+- the lifecycle/terminal-control source candidate required a later immutable
+  lock refresh and clean-VCS gate before those routes and its 60-case Suite
+  could become selected compatibility authority;
+- snapshot, restore, resize, and Browser-session close remain outside the
+  candidate control families;
+- terminal and Browser handoffs still require a caller-owned public Gateway;
+  the optional terminal-connect route is only the protected Provider
+  resolver/data-plane boundary;
 - capability discovery does not carry the full Contract revision/tree, so the
   caller obtains and verifies that identity out of band;
 - the production command does not currently advertise Browser or expose a
@@ -468,7 +532,9 @@ wire behavior:
   operator controls, hostile-tenant isolation, or deployment readiness;
 - file-backed Provider repositories remain single-controller development
   evidence rather than transactional multi-controller storage; and
-- the repository-owned 53-case Suite maps case IDs to this repository's tests;
+- the repository-owned 60-case Suite maps case IDs to this repository's tests;
+  historical results against its 53-case predecessor retain that older exact
+  identity;
   the separate portable remote Suite currently covers discovery only and does
   not prove an external product's protected business workflow, authorization,
   aggregate ledger, Gateway, deployment, or production behavior.

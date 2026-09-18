@@ -2,8 +2,16 @@
 
 ## Status
 
-Accepted as a Contract-change candidate. It is not effective until a reviewed
-Contract lock selects the revision and tree containing the normative resources.
+Accepted and effective in locked Provider Contract revision
+`22ba6987ea5fbc37d53942720133c0acad199edd`, tree
+`c9a7054d7c8e7f4b6e32f38175ceedddc48c2d38`. It was originally accepted as a
+Contract-change candidate; the reviewed Contract lock subsequently selected
+the coordinated OpenAPI, schema, fixture, semantic-rule, capability, and
+Conformance Suite resources.
+
+This status records protocol authority only. Command composition, caller
+qualification, deployment, and production readiness remain separate evidence
+tiers.
 
 ## Context
 
@@ -64,6 +72,7 @@ boundary, not a public end-user Gateway.
 - The Contract schema, fixture, OpenAPI route, semantic rules, and the named
   cases in the lock-selected local Conformance Suite must agree before the lock
   is refreshed.
-- This ADR and candidate resources are definition evidence only. They do not
-  prove that the production command serves the route or that an external
-  caller has completed a terminal byte round trip.
+- Contract selection alone is definition evidence. Later command composition
+  and the bounded independent-caller qualification are recorded under their
+  own exact revisions and runs; they do not establish a general public Gateway,
+  multi-controller behavior, deployment, or production readiness.

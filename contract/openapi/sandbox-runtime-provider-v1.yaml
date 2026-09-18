@@ -188,6 +188,295 @@ paths:
             application/json:
               schema:
                 $ref: ../schemas/standard-error.schema.json
+  /v1/sandboxes/{sandbox_id}/desired-state:
+    post:
+      operationId: setSandboxDesiredState
+      summary: Accept an idempotent suspend or resume request
+      x-required-capability:
+        id: sandbox.lifecycle-control
+        version: 1.0.0
+        profile: lifecycle-control-v1
+      security:
+        - mutualTLS: []
+          bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/AdmissionContextHeader'
+        - name: sandbox_id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/desired-state-request.schema.json
+      x-max-encoded-body-bytes: 65536
+      responses:
+        '202':
+          description: Desired-state operation accepted
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/provider-operation.schema.json
+        '400':
+          description: Request document or metadata is invalid
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '401':
+          description: Client certificate or bearer authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '403':
+          description: Request is not authorized by the admitted context
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '409':
+          description: Idempotency, generation, or fencing conflict
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '422':
+          description: Lifecycle control is not advertised or the transition is unsupported
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '503':
+          description: Provider cannot safely accept or reconcile the request
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+  /v1/sandboxes/{sandbox_id}/lease:
+    post:
+      operationId: extendSandboxLease
+      summary: Accept a bounded execution-lease extension
+      x-required-capability:
+        id: sandbox.lifecycle-control
+        version: 1.0.0
+        profile: lifecycle-control-v1
+      security:
+        - mutualTLS: []
+          bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/AdmissionContextHeader'
+        - name: sandbox_id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/lease-request.schema.json
+      x-max-encoded-body-bytes: 65536
+      responses:
+        '202':
+          description: Lease-extension operation accepted
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/provider-operation.schema.json
+        '400':
+          description: Request document or metadata is invalid
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '401':
+          description: Client certificate or bearer authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '403':
+          description: Request is not authorized by the admitted context
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '409':
+          description: Idempotency, generation, or fencing conflict
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '422':
+          description: Lifecycle control is not advertised or the extension exceeds Provider limits
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '503':
+          description: Provider cannot safely accept the request
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+  /v1/sandboxes/{sandbox_id}:terminate:
+    post:
+      operationId: terminateSandbox
+      summary: Accept an irreversible sandbox termination request
+      x-required-capability:
+        id: sandbox.lifecycle-control
+        version: 1.0.0
+        profile: lifecycle-control-v1
+      security:
+        - mutualTLS: []
+          bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/AdmissionContextHeader'
+        - name: sandbox_id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/terminate-request.schema.json
+      x-max-encoded-body-bytes: 65536
+      responses:
+        '202':
+          description: Termination operation accepted
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/provider-operation.schema.json
+        '400':
+          description: Request document or metadata is invalid
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '401':
+          description: Client certificate or bearer authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '403':
+          description: Request is not authorized by the admitted context
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '409':
+          description: Idempotency, generation, or fencing conflict
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '422':
+          description: Lifecycle control is not advertised or the target cannot be terminated
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '503':
+          description: Provider cannot safely accept or reconcile cleanup
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+  /v1/sandboxes/{sandbox_id}/events:
+    get:
+      operationId: getSandboxLifecycleEvents
+      summary: Read one finite page of retained lifecycle events
+      x-required-capability:
+        id: sandbox.lifecycle-control
+        version: 1.0.0
+        profile: lifecycle-control-v1
+      security:
+        - mutualTLS: []
+          bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/AdmissionContextHeader'
+        - name: sandbox_id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$'
+        - name: after_sequence
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 9007199254740991
+            default: 0
+      responses:
+        '200':
+          description: Finite event page after the exclusive cursor
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/lifecycle-event-page.schema.json
+        '400':
+          description: Request metadata, path, or cursor is malformed
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '401':
+          description: Client certificate or bearer authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '403':
+          description: Request is not authorized by the admitted context
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '404':
+          description: Sandbox is not known to this Provider revision
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '409':
+          description: Cursor is ahead of the latest retained sequence
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '410':
+          description: Cursor is behind the first retained sequence
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '422':
+          description: Lifecycle control is not advertised
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '503':
+          description: Provider cannot safely read retained events
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
   /v1/sandboxes/{sandbox_id}/exec:
     post:
       operationId: startSandboxExec
@@ -498,6 +787,93 @@ paths:
               schema:
                 type: integer
                 minimum: 1
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+  /v1/sandboxes/{sandbox_id}/runtime-sessions/{runtime_session_id}:close:
+    post:
+      operationId: closeTerminalRuntimeSession
+      summary: Accept an idempotent terminal-session close request
+      x-required-capability:
+        id: sandbox.terminal-control
+        version: 1.0.0
+        profile: terminal-control-v1
+      security:
+        - mutualTLS: []
+          bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/AdmissionContextHeader'
+        - name: sandbox_id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$'
+        - name: runtime_session_id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/runtime-session-close-request.schema.json
+      x-max-encoded-body-bytes: 65536
+      responses:
+        '202':
+          description: Terminal-session close operation accepted
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/provider-operation.schema.json
+        '400':
+          description: Close request document, metadata, or path is invalid
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '401':
+          description: Client certificate or bearer authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '403':
+          description: Close is not authorized by the admitted context
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '404':
+          description: Runtime session is not known to this Provider revision
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '409':
+          description: Idempotency, sandbox generation, connection generation, or fencing conflict
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '410':
+          description: Retained terminal-session authority has expired
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '422':
+          description: Terminal control is not advertised or supported
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '503':
+          description: Close outcome is unknown or cleanup is temporarily unavailable
           content:
             application/json:
               schema:

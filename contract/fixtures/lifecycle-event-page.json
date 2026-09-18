@@ -1,0 +1,18 @@
+{
+  "events": [
+    {
+      "event_id": "event-suspend-accepted-1",
+      "sandbox_id": "sandbox-1",
+      "operation_id": "operation-suspend-1",
+      "sequence": 1,
+      "generation": 2,
+      "fencing_token": 2,
+      "kind": "desired-state-requested",
+      "data_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "occurred_at": "2026-09-18T12:00:00Z"
+    }
+  ],
+  "first_available_sequence": 1,
+  "latest_sequence": 1,
+  "next_sequence": 1
+}

@@ -10,16 +10,19 @@ import (
 )
 
 const (
-	legacySnapshotVersion = 1
-	snapshotVersion       = 2
+	legacySnapshotVersion     = 1
+	allocationSnapshotVersion = 2
+	snapshotVersion           = 3
 )
 
 // State is the adapter-independent mutable snapshot. Adapters must hold their
 // own lock while calling its methods.
 type State struct {
-	Sessions    map[string]session.Record
-	Idempotency map[string]IdempotencyRecord
-	Authorities map[string]session.SandboxAuthority
+	Sessions         map[string]session.Record
+	Closes           map[string]session.CloseRecord
+	Idempotency      map[string]IdempotencyRecord
+	CloseIdempotency map[string]IdempotencyRecord
+	Authorities      map[string]session.SandboxAuthority
 }
 
 type IdempotencyRecord struct {
@@ -30,17 +33,21 @@ type IdempotencyRecord struct {
 }
 
 type PersistedState struct {
-	Version     int                        `json:"version"`
-	Sessions    []session.Record           `json:"sessions"`
-	Idempotency []IdempotencyRecord        `json:"idempotency"`
-	Authorities []session.SandboxAuthority `json:"authorities"`
+	Version          int                        `json:"version"`
+	Sessions         []session.Record           `json:"sessions"`
+	Closes           []session.CloseRecord      `json:"closes,omitempty"`
+	Idempotency      []IdempotencyRecord        `json:"idempotency"`
+	CloseIdempotency []IdempotencyRecord        `json:"close_idempotency,omitempty"`
+	Authorities      []session.SandboxAuthority `json:"authorities"`
 }
 
 func NewState() State {
 	return State{
-		Sessions:    make(map[string]session.Record),
-		Idempotency: make(map[string]IdempotencyRecord),
-		Authorities: make(map[string]session.SandboxAuthority),
+		Sessions:         make(map[string]session.Record),
+		Closes:           make(map[string]session.CloseRecord),
+		Idempotency:      make(map[string]IdempotencyRecord),
+		CloseIdempotency: make(map[string]IdempotencyRecord),
+		Authorities:      make(map[string]session.SandboxAuthority),
 	}
 }
 
@@ -48,8 +55,14 @@ func (s *State) ensureMaps() {
 	if s.Sessions == nil {
 		s.Sessions = make(map[string]session.Record)
 	}
+	if s.Closes == nil {
+		s.Closes = make(map[string]session.CloseRecord)
+	}
 	if s.Idempotency == nil {
 		s.Idempotency = make(map[string]IdempotencyRecord)
+	}
+	if s.CloseIdempotency == nil {
+		s.CloseIdempotency = make(map[string]IdempotencyRecord)
 	}
 	if s.Authorities == nil {
 		s.Authorities = make(map[string]session.SandboxAuthority)
@@ -155,6 +168,9 @@ func (s *State) ReserveOpenAt(request session.OpenRequest, acceptedAt time.Time)
 		return session.Reservation{}, err
 	}
 	scope := idempotencyScope(request)
+	if _, exists := s.CloseIdempotency[scope]; exists {
+		return session.Reservation{}, ErrIdempotencyConflict
+	}
 	if existing, ok := s.Idempotency[scope]; ok {
 		if existing.RequestDigest != request.RequestDigest {
 			return session.Reservation{}, ErrIdempotencyConflict
@@ -169,6 +185,9 @@ func (s *State) ReserveOpenAt(request session.OpenRequest, acceptedAt time.Time)
 		return session.Reservation{Record: record.Clone(), Replayed: true}, nil
 	}
 	if _, exists := s.Sessions[request.OperationID]; exists {
+		return session.Reservation{}, ErrAlreadyExists
+	}
+	if _, exists := s.Closes[request.OperationID]; exists {
 		return session.Reservation{}, ErrAlreadyExists
 	}
 	record, err := session.NewRecord(request, acceptedAt)
@@ -315,6 +334,112 @@ func (s *State) UpdateOpenAt(record session.Record, expectedStatus session.Statu
 	return nil
 }
 
+func (s *State) ReserveCloseAt(request session.CloseRequest, acceptedAt time.Time) (session.CloseReservation, error) {
+	s.ensureMaps()
+	acceptedAt = acceptedAt.UTC()
+	if err := request.Validate(acceptedAt); err != nil {
+		return session.CloseReservation{}, err
+	}
+	authority, err := s.GetSandboxAuthority(request.SandboxID)
+	if err != nil {
+		return session.CloseReservation{}, err
+	}
+	if err := checkCloseAuthority(authority, request); err != nil {
+		return session.CloseReservation{}, err
+	}
+	scope := closeIdempotencyScope(request)
+	if _, exists := s.Idempotency[scope]; exists {
+		return session.CloseReservation{}, ErrIdempotencyConflict
+	}
+	if existing, ok := s.CloseIdempotency[scope]; ok {
+		if existing.RequestDigest != request.RequestDigest || existing.OperationID != request.OperationID {
+			return session.CloseReservation{}, ErrIdempotencyConflict
+		}
+		record, ok := s.Closes[existing.OperationID]
+		if !ok {
+			return session.CloseReservation{}, fmt.Errorf("%w: close idempotency references missing operation", ErrCorrupt)
+		}
+		if !sameCloseRequest(record.Request, request) {
+			return session.CloseReservation{}, ErrConflict
+		}
+		return session.CloseReservation{Record: record.Clone(), Replayed: true}, nil
+	}
+	if _, exists := s.Sessions[request.OperationID]; exists {
+		return session.CloseReservation{}, ErrAlreadyExists
+	}
+	if _, exists := s.Closes[request.OperationID]; exists {
+		return session.CloseReservation{}, ErrAlreadyExists
+	}
+	var source *session.Record
+	for _, candidate := range s.Sessions {
+		if candidate.Request.SandboxID == request.SandboxID && candidate.Request.RuntimeSessionID == request.RuntimeSessionID {
+			if source != nil {
+				return session.CloseReservation{}, ErrConflict
+			}
+			copy := candidate.Clone()
+			source = &copy
+		}
+	}
+	if source == nil {
+		return session.CloseReservation{}, fmt.Errorf("%w: runtime session %s", ErrNotFound, request.RuntimeSessionID)
+	}
+	record, err := session.NewCloseRecord(request, *source, acceptedAt)
+	if err != nil {
+		return session.CloseReservation{}, err
+	}
+	s.Closes[request.OperationID] = record.Clone()
+	s.CloseIdempotency[scope] = IdempotencyRecord{Scope: scope, Key: request.IdempotencyKey, RequestDigest: request.RequestDigest, OperationID: request.OperationID}
+	return session.CloseReservation{Record: record.Clone()}, nil
+}
+
+func (s *State) GetClose(operationID string) (session.CloseRecord, error) {
+	s.ensureMaps()
+	record, ok := s.Closes[operationID]
+	if !ok {
+		return session.CloseRecord{}, fmt.Errorf("%w: close operation %s", ErrNotFound, operationID)
+	}
+	if err := record.Validate(); err != nil {
+		return session.CloseRecord{}, fmt.Errorf("%w: persisted close operation: %v", ErrCorrupt, err)
+	}
+	return record.Clone(), nil
+}
+
+func (s *State) ListClose() []session.CloseRecord {
+	s.ensureMaps()
+	operationIDs := make([]string, 0, len(s.Closes))
+	for operationID := range s.Closes {
+		operationIDs = append(operationIDs, operationID)
+	}
+	sort.Strings(operationIDs)
+	result := make([]session.CloseRecord, 0, len(operationIDs))
+	for _, operationID := range operationIDs {
+		result = append(result, s.Closes[operationID].Clone())
+	}
+	return result
+}
+
+func (s *State) UpdateCloseAt(record session.CloseRecord, expectedStatus session.Status) error {
+	s.ensureMaps()
+	current, ok := s.Closes[record.Request.OperationID]
+	if !ok {
+		return fmt.Errorf("%w: close operation %s", ErrNotFound, record.Request.OperationID)
+	}
+	if current.Status != expectedStatus || !sameCloseRequest(current.Request, record.Request) ||
+		current.SourceOpenOperationID != record.SourceOpenOperationID || current.Receipt != record.Receipt ||
+		!current.AcceptedAt.Equal(record.AcceptedAt) {
+		return ErrConflict
+	}
+	updated, err := session.TransitionClose(current, record.Status, record.ObservedAt)
+	if err != nil {
+		return err
+	}
+	if updated != record {
+		return ErrConflict
+	}
+	s.Closes[record.Request.OperationID] = record.Clone()
+	return nil
+}
+
 func checkAuthority(authority session.SandboxAuthority, request session.OpenRequest, now time.Time) error {
 	if err := authority.Validate(); err != nil {
 		return fmt.Errorf("%w: authority: %v", ErrCorrupt, err)
@@ -340,8 +465,36 @@ func checkAuthority(authority session.SandboxAuthority, request session.OpenRequ
 	return nil
 }
 
+func checkCloseAuthority(authority session.SandboxAuthority, request session.CloseRequest) error {
+	if err := authority.Validate(); err != nil {
+		return fmt.Errorf("%w: authority: %v", ErrCorrupt, err)
+	}
+	if authority.ProviderRevisionID != request.ProviderRevisionID {
+		return session.ErrProviderRevisionConflict
+	}
+	if authority.Generation != request.ExpectedGeneration {
+		return session.ErrGenerationConflict
+	}
+	if authority.FencingToken != request.FencingToken {
+		return session.ErrStaleFencingToken
+	}
+	return nil
+}
+
 func idempotencyScope(request session.OpenRequest) string {
 	return request.SandboxID + "\x00" + request.ProviderRevisionID + "\x00" + request.IdempotencyKey
+}
+
+func closeIdempotencyScope(request session.CloseRequest) string {
+	return request.SandboxID + "\x00" + request.ProviderRevisionID + "\x00" + request.IdempotencyKey
+}
+
+func sameCloseRequest(left, right session.CloseRequest) bool {
+	return left.SandboxID == right.SandboxID && left.ProviderRevisionID == right.ProviderRevisionID &&
+		left.OperationID == right.OperationID && left.AttemptID == right.AttemptID && left.FencingToken == right.FencingToken &&
+		left.IdempotencyKey == right.IdempotencyKey && left.RequestDigest == right.RequestDigest && left.Deadline.Equal(right.Deadline) &&
+		left.ExpectedGeneration == right.ExpectedGeneration && left.RuntimeSessionID == right.RuntimeSessionID &&
+		left.ConnectionGeneration == right.ConnectionGeneration && left.Reason == right.Reason
 }
 
 func sameOpenRequest(left, right session.OpenRequest) bool {
@@ -367,8 +520,14 @@ func (s State) Export() PersistedState {
 	for _, record := range s.Sessions {
 		result.Sessions = append(result.Sessions, record.Clone())
 	}
+	for _, record := range s.Closes {
+		result.Closes = append(result.Closes, record.Clone())
+	}
 	for _, record := range s.Idempotency {
 		result.Idempotency = append(result.Idempotency, record)
+	}
+	for _, record := range s.CloseIdempotency {
+		result.CloseIdempotency = append(result.CloseIdempotency, record)
 	}
 	for _, authority := range s.Authorities {
 		result.Authorities = append(result.Authorities, authority.Clone())
@@ -376,13 +535,17 @@ func (s State) Export() PersistedState {
 	sort.Slice(result.Sessions, func(i, j int) bool {
 		return result.Sessions[i].Request.OperationID < result.Sessions[j].Request.OperationID
 	})
+	sort.Slice(result.Closes, func(i, j int) bool {
+		return result.Closes[i].Request.OperationID < result.Closes[j].Request.OperationID
+	})
 	sort.Slice(result.Idempotency, func(i, j int) bool { return result.Idempotency[i].Scope < result.Idempotency[j].Scope })
+	sort.Slice(result.CloseIdempotency, func(i, j int) bool { return result.CloseIdempotency[i].Scope < result.CloseIdempotency[j].Scope })
 	sort.Slice(result.Authorities, func(i, j int) bool { return result.Authorities[i].SandboxID < result.Authorities[j].SandboxID })
 	return result
 }
 
 func (s *State) Import(snapshot PersistedState) error {
-	if snapshot.Version != legacySnapshotVersion && snapshot.Version != snapshotVersion {
+	if snapshot.Version != legacySnapshotVersion && snapshot.Version != allocationSnapshotVersion && snapshot.Version != snapshotVersion {
 		return fmt.Errorf("%w: unsupported state version %d", ErrCorrupt, snapshot.Version)
 	}
 	loaded := NewState()
@@ -429,6 +592,28 @@ func (s *State) Import(snapshot PersistedState) error {
 		}
 		loaded.Sessions[operationID] = record.Clone()
 	}
+	for _, record := range snapshot.Closes {
+		if snapshot.Version != snapshotVersion || record.Validate() != nil {
+			return fmt.Errorf("%w: invalid close operation", ErrCorrupt)
+		}
+		operationID := record.Request.OperationID
+		if _, exists := loaded.Sessions[operationID]; exists {
+			return fmt.Errorf("%w: operation identity reused by open and close", ErrCorrupt)
+		}
+		if _, exists := loaded.Closes[operationID]; exists {
+			return fmt.Errorf("%w: duplicate close operation %q", ErrCorrupt, operationID)
+		}
+		source, exists := loaded.Sessions[record.SourceOpenOperationID]
+		if !exists || source.Allocation == nil || source.Allocation.Receipt != record.Receipt ||
+			source.Request.SandboxID != record.Request.SandboxID || source.Request.RuntimeSessionID != record.Request.RuntimeSessionID {
+			return fmt.Errorf("%w: close operation %q references invalid open operation", ErrCorrupt, operationID)
+		}
+		authority, exists := loaded.Authorities[record.Request.SandboxID]
+		if !exists || authority.ProviderRevisionID != record.Request.ProviderRevisionID {
+			return fmt.Errorf("%w: close operation %q references missing authority", ErrCorrupt, operationID)
+		}
+		loaded.Closes[operationID] = record.Clone()
+	}
 	for _, record := range snapshot.Idempotency {
 		if record.Scope == "" || record.Key == "" || record.RequestDigest == "" || record.OperationID == "" {
 			return fmt.Errorf("%w: invalid idempotency record", ErrCorrupt)
@@ -445,9 +630,31 @@ func (s *State) Import(snapshot PersistedState) error {
 		}
 		loaded.Idempotency[record.Scope] = record
 	}
+	for _, record := range snapshot.CloseIdempotency {
+		if record.Scope == "" || record.Key == "" || record.RequestDigest == "" || record.OperationID == "" {
+			return fmt.Errorf("%w: invalid close idempotency record", ErrCorrupt)
+		}
+		closeRecord, exists := loaded.Closes[record.OperationID]
+		if !exists || record.RequestDigest != closeRecord.Request.RequestDigest || record.Key != closeRecord.Request.IdempotencyKey ||
+			record.Scope != closeIdempotencyScope(closeRecord.Request) {
+			return fmt.Errorf("%w: invalid close idempotency binding", ErrCorrupt)
+		}
+		if _, exists := loaded.Idempotency[record.Scope]; exists {
+			return fmt.Errorf("%w: idempotency scope reused by open and close", ErrCorrupt)
+		}
+		if _, exists := loaded.CloseIdempotency[record.Scope]; exists {
+			return fmt.Errorf("%w: duplicate close idempotency scope %q", ErrCorrupt, record.Scope)
+		}
+		loaded.CloseIdempotency[record.Scope] = record
+	}
 	for operationID, record := range loaded.Sessions {
 		if _, exists := loaded.Idempotency[idempotencyScope(record.Request)]; !exists {
 			return fmt.Errorf("%w: session %q has no idempotency record", ErrCorrupt, operationID)
+		}
+	}
+	for operationID, record := range loaded.Closes {
+		if _, exists := loaded.CloseIdempotency[closeIdempotencyScope(record.Request)]; !exists {
+			return fmt.Errorf("%w: close operation %q has no idempotency record", ErrCorrupt, operationID)
 		}
 	}
 	*s = loaded

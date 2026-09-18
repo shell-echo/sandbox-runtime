@@ -52,3 +52,12 @@ type CoordinationAuthority interface {
 	ObserveAllocation(context.Context, string, AllocationEvidence) (Record, error)
 	ListOpen(context.Context) ([]Record, error)
 }
+
+// CloseAuthority owns terminal-session close attempts separately from their
+// immutable open attempts.
+type CloseAuthority interface {
+	ReserveClose(context.Context, CloseRequest, time.Time) (CloseReservation, error)
+	GetClose(context.Context, string) (CloseRecord, error)
+	UpdateClose(context.Context, CloseRecord, Status) error
+	ListClose(context.Context) ([]CloseRecord, error)
+}

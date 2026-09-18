@@ -37,6 +37,9 @@ func (r *SessionReader) ReadOperation(ctx context.Context, operationID string) (
 		Type: TypeRuntimeSession, Status: Status(operation.Status),
 		ProviderOperationID: operation.OperationID, ObservedAt: operation.ObservedAt.UTC(),
 	}
+	if operation.Type == sessionapplication.OperationCloseRuntimeSession {
+		view.Type = TypeCloseRuntimeSession
+	}
 	if err := view.Validate(); err != nil {
 		return View{}, errors.Join(ErrUnavailable, err)
 	}

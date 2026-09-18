@@ -11,7 +11,9 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/gowebpki/jcs"
@@ -37,6 +39,10 @@ var operationContracts = map[string]struct {
 	"open_runtime_session":           {"urn:shell-echo:sandbox-runtime:request:open-runtime-session:v1", requestDigestExcluding, true},
 	"open_browser_session":           {"urn:shell-echo:sandbox-runtime:request:open-browser-session:v1", requestDigestExcluding, true},
 	"stage_artifact":                 {"urn:shell-echo:sandbox-runtime:request:stage-artifact:v1", requestDigestExcluding, true},
+	"set_desired_state":              {"urn:shell-echo:sandbox-runtime:request:set-desired-state:v1", requestDigestExcluding, true},
+	"extend_lease":                   {"urn:shell-echo:sandbox-runtime:request:extend-lease:v1", requestDigestExcluding, true},
+	"close_runtime_session":          {"urn:shell-echo:sandbox-runtime:request:close-runtime-session:v1", requestDigestExcluding, true},
+	"terminate":                      {"urn:shell-echo:sandbox-runtime:request:terminate:v1", requestDigestExcluding, true},
 	"read_sandbox":                   {"urn:shell-echo:sandbox-runtime:descriptor:status:v1", requestDigestFull, false},
 	"read_operation":                 {"urn:shell-echo:sandbox-runtime:descriptor:operation:v1", requestDigestFull, false},
 	"read_result":                    {"urn:shell-echo:sandbox-runtime:descriptor:exec-result:v1", requestDigestFull, false},
@@ -44,6 +50,7 @@ var operationContracts = map[string]struct {
 	"read_browser_session":           {"urn:shell-echo:sandbox-runtime:descriptor:browser-session:v1", requestDigestFull, false},
 	"read_artifact_staging_evidence": {"urn:shell-echo:sandbox-runtime:descriptor:artifact-staging-evidence:v1", requestDigestFull, false},
 	"read_usage_evidence":            {"urn:shell-echo:sandbox-runtime:descriptor:usage-evidence:v1", requestDigestFull, false},
+	"read_events":                    {"urn:shell-echo:sandbox-runtime:descriptor:events:v1", requestDigestFull, false},
 }
 
 type signer struct {
@@ -182,6 +189,10 @@ func prepareAdmission(authority admissionAuthority, private ed25519.PrivateKey, 
 	if binding.Deadline.IsZero() || !binding.Deadline.After(time.Now().UTC()) || binding.FencingToken < 1 {
 		return preparedRequest{}, errors.New("invalid admission binding")
 	}
+	target, query, targetErr := parseAdmissionTarget(method, path)
+	if targetErr != nil {
+		return preparedRequest{}, targetErr
+	}
 	var document []byte
 	var err error
 	if operation.mutation {
@@ -204,6 +215,13 @@ func prepareAdmission(authority admissionAuthority, private ed25519.PrivateKey, 
 			"operation_id": binding.OperationID, "attempt_id": binding.AttemptID,
 			"fencing_token": binding.FencingToken,
 		}
+		if binding.Operation == "read_events" {
+			after, cursorErr := queryAfterSequence(query)
+			if cursorErr != nil {
+				return preparedRequest{}, cursorErr
+			}
+			descriptor["after_sequence"] = after
+		}
 		document, err = json.Marshal(descriptor)
 	}
 	if err != nil {
@@ -224,7 +242,7 @@ func prepareAdmission(authority admissionAuthority, private ed25519.PrivateKey, 
 		SandboxID: binding.SandboxID, OperationID: binding.OperationID, AttemptID: binding.AttemptID,
 		FencingToken: binding.FencingToken, DeadlineAt: deadline.Format(time.RFC3339Nano),
 		RequestContractID: operation.contractID, RequestDigestProfile: operation.profile, RequestDigest: requestDigest,
-		HTTPTarget: admissionTarget{Method: method, Path: path, NormalizedQuery: []admissionQuery{}},
+		HTTPTarget: target,
 	}
 	contextDigest, err := contextDigest(admitted)
 	if err != nil {
@@ -269,6 +287,39 @@ func prepareAdmission(authority admissionAuthority, private ed25519.PrivateKey, 
 		Method: method, Path: path, Body: requestBody, Authorization: "Bearer " + compact,
 		AdmissionContext: base64.RawURLEncoding.EncodeToString(contextJSON),
 	}, nil
+}
+
+func parseAdmissionTarget(method, requestTarget string) (admissionTarget, url.Values, error) {
+	parsed, err := url.ParseRequestURI(requestTarget)
+	if err != nil || parsed.Path == "" || parsed.Fragment != "" {
+		return admissionTarget{}, nil, errors.New("invalid admission HTTP target")
+	}
+	query := parsed.Query()
+	normalized := make([]admissionQuery, 0)
+	for name, values := range query {
+		for _, value := range values {
+			normalized = append(normalized, admissionQuery{Name: name, Value: value})
+		}
+	}
+	if len(normalized) > 1 {
+		return admissionTarget{}, nil, errors.New("admission HTTP target query is ambiguous")
+	}
+	return admissionTarget{Method: method, Path: parsed.Path, NormalizedQuery: normalized}, query, nil
+}
+
+func queryAfterSequence(query url.Values) (int64, error) {
+	if len(query) == 0 {
+		return 0, nil
+	}
+	values := query["after_sequence"]
+	if len(query) != 1 || len(values) != 1 {
+		return 0, errors.New("invalid lifecycle event cursor query")
+	}
+	sequence, err := strconv.ParseInt(values[0], 10, 64)
+	if err != nil || sequence < 0 {
+		return 0, errors.New("invalid lifecycle event cursor query")
+	}
+	return sequence, nil
 }
 
 func (s *signer) sign(claims tokenClaims) (string, error) {

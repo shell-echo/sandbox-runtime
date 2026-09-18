@@ -31,6 +31,13 @@ type HandoffRegistrar interface {
 	RegisterHandoff(context.Context, session.Record) (session.EndpointEvidence, error)
 }
 
+// HandoffRevoker makes an existing handoff unavailable before terminal
+// cleanup. Implementations must be idempotent for an already-revoked or
+// already-absent registration.
+type HandoffRevoker interface {
+	RevokeHandoff(context.Context, session.Record, time.Time) error
+}
+
 // TerminalProfile binds one configured lifecycle runtime profile to the
 // terminal capability profile and its fixed guest working directory.
 type TerminalProfile struct {
@@ -58,6 +65,7 @@ type Vertical struct {
 	profile   TerminalProfile
 	clock     Clock
 	registrar HandoffRegistrar
+	revoker   HandoffRevoker
 }
 
 func NewVertical(authority session.CoordinationAuthority, runtime terminal.Runtime, sandboxes SandboxReader, profile TerminalProfile, clock Clock) (*Vertical, error) {
@@ -68,10 +76,14 @@ func NewVertical(authority session.CoordinationAuthority, runtime terminal.Runti
 // completion step after a running allocation is persisted. A nil registrar
 // preserves the f2 component boundary: callers can commit a handoff later.
 func NewVerticalWithHandoffRegistrar(authority session.CoordinationAuthority, runtime terminal.Runtime, sandboxes SandboxReader, profile TerminalProfile, registrar HandoffRegistrar, clock Clock) (*Vertical, error) {
+	return NewVerticalWithHandoffLifecycle(authority, runtime, sandboxes, profile, registrar, nil, clock)
+}
+
+func NewVerticalWithHandoffLifecycle(authority session.CoordinationAuthority, runtime terminal.Runtime, sandboxes SandboxReader, profile TerminalProfile, registrar HandoffRegistrar, revoker HandoffRevoker, clock Clock) (*Vertical, error) {
 	if authority == nil || runtime == nil || sandboxes == nil || clock == nil || profile.validate() != nil {
 		return nil, ErrInvalidApplication
 	}
-	return &Vertical{authority: authority, runtime: runtime, sandboxes: sandboxes, profile: profile, registrar: registrar, clock: clock}, nil
+	return &Vertical{authority: authority, runtime: runtime, sandboxes: sandboxes, profile: profile, registrar: registrar, revoker: revoker, clock: clock}, nil
 }
 
 // Open durably reserves before allocation. Replays reconcile the same
@@ -152,6 +164,13 @@ func (a *Vertical) Recover(ctx context.Context) ([]Operation, error) {
 		}
 		results = append(results, operation)
 	}
+	if _, ok := a.authority.(session.CloseAuthority); ok && a.revoker != nil {
+		closeResults, closeErr := a.recoverCloses(ctx)
+		results = append(results, closeResults...)
+		if closeErr != nil {
+			return results, closeErr
+		}
+	}
 	return results, nil
 }
 
@@ -220,7 +239,19 @@ func (a *Vertical) GetOperation(ctx context.Context, operationID string) (Operat
 		return Operation{}, ErrInvalidApplication
 	}
 	base := &Application{authority: a.authority, clock: a.clock}
-	return base.GetOperation(ctx, operationID)
+	operation, err := base.GetOperation(ctx, operationID)
+	if !errors.Is(err, session.ErrNotFound) {
+		return operation, err
+	}
+	closeAuthority, ok := a.authority.(session.CloseAuthority)
+	if !ok {
+		return Operation{}, err
+	}
+	record, closeErr := closeAuthority.GetClose(ctx, operationID)
+	if closeErr != nil {
+		return Operation{}, closeErr
+	}
+	return closeOperationProjection(record)
 }
 
 func (a *Vertical) progress(ctx context.Context, record session.Record) (session.Record, error) {
@@ -519,5 +550,6 @@ func persistenceContext(ctx context.Context) (context.Context, context.CancelFun
 
 var _ interface {
 	Open(context.Context, session.OpenRequest) (Operation, error)
+	CloseRuntimeSession(context.Context, session.CloseRequest) (Operation, error)
 	GetHandoff(context.Context, string) (Handoff, error)
 } = (*Vertical)(nil)

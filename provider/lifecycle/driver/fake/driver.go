@@ -57,6 +57,44 @@ func (d *Driver) Inspect(ctx context.Context, id string) (coordinator.RuntimeObs
 	return coordinator.RuntimeObservation{State: state}, nil
 }
 
+func (d *Driver) Suspend(ctx context.Context, id string) error {
+	return d.transition(ctx, id, coordinator.RuntimeReady, coordinator.RuntimeSuspended)
+}
+
+func (d *Driver) Resume(ctx context.Context, id string) error {
+	return d.transition(ctx, id, coordinator.RuntimeSuspended, coordinator.RuntimeReady)
+}
+
+func (d *Driver) Remove(ctx context.Context, id string) error {
+	if err := contextError(ctx); err != nil {
+		return err
+	}
+	if d == nil || id == "" {
+		return ErrInvalidDriver
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	delete(d.states, id)
+	return contextError(ctx)
+}
+
+func (d *Driver) transition(ctx context.Context, id string, from, to coordinator.RuntimeState) error {
+	if err := contextError(ctx); err != nil {
+		return err
+	}
+	if d == nil || id == "" {
+		return ErrInvalidDriver
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	state, ok := d.states[id]
+	if !ok || state != from {
+		return ErrInvalidDriver
+	}
+	d.states[id] = to
+	return contextError(ctx)
+}
+
 func contextError(ctx context.Context) error {
 	if ctx == nil {
 		return context.Canceled
@@ -65,3 +103,5 @@ func contextError(ctx context.Context) error {
 }
 
 var _ coordinator.Driver = (*Driver)(nil)
+var _ coordinator.StateController = (*Driver)(nil)
+var _ coordinator.OrphanCleaner = (*Driver)(nil)

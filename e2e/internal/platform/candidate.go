@@ -19,6 +19,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strings"
 	"sync"
@@ -28,17 +29,20 @@ import (
 )
 
 const (
-	contractNamespace = "urn:shell-echo:sandbox-runtime:provider-v1"
-	contractVersion   = "1.0.0"
-	capabilityIDExec  = "sandbox.exec"
-	capabilityIDTTY   = "sandbox.terminal"
-	capabilityProfile = "sandbox-runtime-coding-shell-v1"
-	runtimeProfile    = "sandbox-runtime-coding-shell-v1"
-	stateVersion      = 1
-	maxResponseBytes  = 2 << 20
-	maxStateBytes     = 64 << 10
-	platformRunID     = "platform-candidate-coding-shell-run"
-	platformPolicyID  = "platform-candidate-policy-v1"
+	contractNamespace            = "urn:shell-echo:sandbox-runtime:provider-v1"
+	contractVersion              = "1.0.0"
+	capabilityIDExec             = "sandbox.exec"
+	capabilityIDTTY              = "sandbox.terminal"
+	capabilityIDLifecycleControl = "sandbox.lifecycle-control"
+	capabilityIDTerminalControl  = "sandbox.terminal-control"
+	capabilityIDTerminalConnect  = "sandbox.terminal-connect"
+	capabilityProfile            = "sandbox-runtime-coding-shell-v1"
+	runtimeProfile               = "sandbox-runtime-coding-shell-v1"
+	stateVersion                 = 1
+	maxResponseBytes             = 2 << 20
+	maxStateBytes                = 64 << 10
+	platformRunID                = "platform-candidate-coding-shell-run"
+	platformPolicyID             = "platform-candidate-policy-v1"
 )
 
 var (
@@ -441,21 +445,33 @@ func newMTLSClient(caFile, certificateFile, privateKeyFile string) (*http.Client
 }
 
 func validateCapabilities(capabilities caller.Capabilities, revision Revision) error {
-	if capabilities.ProviderRevisionID != revision.ID || capabilities.APIVersion != "v1" || len(capabilities.Capabilities) != 2 || len(capabilities.RuntimeProfiles) != 1 {
+	if capabilities.ProviderRevisionID != revision.ID || capabilities.APIVersion != "v1" || len(capabilities.Capabilities) != 5 || len(capabilities.RuntimeProfiles) != 1 {
 		return errors.New("capability identity or shape does not match the candidate profile")
+	}
+	wantProfiles := map[string]string{
+		capabilityIDExec: "exec-v1", capabilityIDTTY: "terminal-v1",
+		capabilityIDLifecycleControl: "lifecycle-control-v1", capabilityIDTerminalControl: "terminal-control-v1",
+		capabilityIDTerminalConnect: "terminal-connect-v1",
 	}
 	seen := map[string]bool{}
 	for _, capability := range capabilities.Capabilities {
 		if len(capability.Versions) != 1 || capability.Versions[0] != contractVersion || len(capability.Profiles) != 1 {
 			return errors.New("capability version/profile mismatch")
 		}
-		seen[capability.ID] = capability.Profiles[0] == "exec-v1" && capability.ID == capabilityIDExec || capability.Profiles[0] == "terminal-v1" && capability.ID == capabilityIDTTY
+		profile, ok := wantProfiles[capability.ID]
+		if !ok || capability.Profiles[0] != profile || seen[capability.ID] {
+			return errors.New("capability set does not match the coding/shell control profile")
+		}
+		seen[capability.ID] = true
 	}
-	if !seen[capabilityIDExec] || !seen[capabilityIDTTY] {
-		return errors.New("coding/shell capability pair is incomplete")
+	for capabilityID := range wantProfiles {
+		if !seen[capabilityID] {
+			return errors.New("coding/shell capability set is incomplete")
+		}
 	}
 	profile := capabilities.RuntimeProfiles[0]
-	if profile.ID != runtimeProfile || profile.IsolationClass != "container" || len(profile.Architecture) != 1 || profile.Architecture[0] != "amd64" || len(profile.CapabilityProfileIDs) != 2 || profile.CapabilityProfileIDs[0] != "exec-v1" || profile.CapabilityProfileIDs[1] != "terminal-v1" {
+	wantCapabilityProfiles := []string{"exec-v1", "terminal-v1", "lifecycle-control-v1", "terminal-control-v1", "terminal-connect-v1"}
+	if profile.ID != runtimeProfile || profile.IsolationClass != "container" || len(profile.Architecture) != 1 || profile.Architecture[0] != "amd64" || !reflect.DeepEqual(profile.CapabilityProfileIDs, wantCapabilityProfiles) {
 		return errors.New("runtime profile does not match coding/shell")
 	}
 	return nil

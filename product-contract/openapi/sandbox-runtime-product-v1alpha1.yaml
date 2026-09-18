@@ -1,0 +1,739 @@
+openapi: 3.1.0
+info:
+  title: Sandbox Runtime Product API
+  version: 0.1.0
+  description: >-
+    Phase 1 design authority for the authenticated Product control plane. This
+    document is not an implementation or availability claim. Provider and
+    local management APIs are separate surfaces.
+  license:
+    name: MIT
+paths:
+  /api/v1/capabilities:
+    get:
+      operationId: getProductCapabilities
+      summary: Read tenant-aware Product capability readiness
+      responses:
+        '200':
+          description: Product capability snapshot
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/product-v1alpha1.schema.json#/$defs/CapabilityDocument
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /api/v1/workspaces:
+    get:
+      operationId: listWorkspaces
+      summary: List authorized Workspaces
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Bounded Workspace page
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/product-v1alpha1.schema.json#/$defs/WorkspacePage
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+    post:
+      operationId: createWorkspace
+      summary: Accept asynchronous Workspace creation
+      x-max-body-bytes: 65536
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/product-v1alpha1.schema.json#/$defs/CreateWorkspaceRequest
+      responses:
+        '202':
+          description: Product operation accepted
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/product-v1alpha1.schema.json#/$defs/ProductOperation
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/Unsupported'}
+        '429': {$ref: '#/components/responses/RateLimited'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /api/v1/workspaces/{workspace_id}:
+    get:
+      operationId: getWorkspace
+      summary: Read one authorized Workspace aggregate projection
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceID'
+      responses:
+        '200':
+          description: Workspace projection
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/product-v1alpha1.schema.json#/$defs/Workspace
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /api/v1/workspaces/{workspace_id}/desired-state:
+    post:
+      operationId: setWorkspaceDesiredState
+      summary: Accept a Workspace desired-state change
+      x-max-body-bytes: 65536
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceID'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/product-v1alpha1.schema.json#/$defs/SetWorkspaceDesiredStateRequest
+      responses:
+        '202':
+          description: Product operation accepted
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/product-v1alpha1.schema.json#/$defs/ProductOperation
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /api/v1/workspaces/{workspace_id}/slots/{slot_key}:
+    get:
+      operationId: getWorkspaceSlot
+      summary: Read one Workspace slot projection
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceID'
+        - $ref: '#/components/parameters/SlotKey'
+      responses:
+        '200':
+          description: Workspace slot projection
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/product-v1alpha1.schema.json#/$defs/WorkspaceSlot
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+    put:
+      operationId: putWorkspaceSlot
+      summary: Accept creation or desired-state replacement of a named slot
+      x-max-body-bytes: 131072
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceID'
+        - $ref: '#/components/parameters/SlotKey'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/product-v1alpha1.schema.json#/$defs/PutSlotRequest
+      responses:
+        '202':
+          description: Product operation accepted
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/product-v1alpha1.schema.json#/$defs/ProductOperation
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/Unsupported'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /api/v1/workspaces/{workspace_id}/operations:
+    get:
+      operationId: listWorkspaceOperations
+      summary: List Product operations for one Workspace
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceID'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Bounded operation page
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/product-v1alpha1.schema.json#/$defs/OperationPage
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /api/v1/operations/{operation_id}:
+    get:
+      operationId: getProductOperation
+      summary: Read one Product operation
+      parameters:
+        - $ref: '#/components/parameters/OperationID'
+      responses:
+        '200':
+          description: Product operation
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/product-v1alpha1.schema.json#/$defs/ProductOperation
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /api/v1/workspaces/{workspace_id}/events:
+    get:
+      operationId: listWorkspaceEvents
+      summary: Read durable Workspace events after a sequence
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceID'
+        - $ref: '#/components/parameters/AfterSequence'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Bounded event page
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/product-v1alpha1.schema.json#/$defs/EventPage
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '410': {$ref: '#/components/responses/Gone'}
+  /api/v1/workspaces/{workspace_id}/events:stream:
+    get:
+      operationId: streamWorkspaceEvents
+      summary: Resume a bounded Server-Sent Event stream
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceID'
+        - name: Last-Event-ID
+          in: header
+          required: false
+          schema: {type: integer, minimum: 0}
+      responses:
+        '200':
+          description: Server-Sent Events whose id is the Workspace sequence
+          content:
+            text/event-stream:
+              schema: {type: string}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '410': {$ref: '#/components/responses/Gone'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /api/v1/workspaces/{workspace_id}/control-leases:
+    post:
+      operationId: acquireControlLease
+      summary: Acquire one Product control lease if the scope is free
+      x-max-body-bytes: 32768
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceID'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/product-v1alpha1.schema.json#/$defs/AcquireControlLeaseRequest
+      responses:
+        '201':
+          description: Control lease acquired
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/product-v1alpha1.schema.json#/$defs/ControlLease
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '429': {$ref: '#/components/responses/RateLimited'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /api/v1/workspaces/{workspace_id}/control-leases/{lease_id}:renew:
+    post:
+      operationId: renewControlLease
+      summary: Renew the exact current control lease
+      x-max-body-bytes: 32768
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceID'
+        - $ref: '#/components/parameters/LeaseID'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/product-v1alpha1.schema.json#/$defs/RenewControlLeaseRequest
+      responses:
+        '200':
+          description: Renewed control lease
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/product-v1alpha1.schema.json#/$defs/ControlLease
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /api/v1/workspaces/{workspace_id}/control-leases/{lease_id}:release:
+    post:
+      operationId: releaseControlLease
+      summary: Release the exact current control lease
+      x-max-body-bytes: 32768
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceID'
+        - $ref: '#/components/parameters/LeaseID'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/product-v1alpha1.schema.json#/$defs/ReleaseControlLeaseRequest
+      responses:
+        '204': {description: Control lease released}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /api/v1/workspaces/{workspace_id}/sessions:
+    get:
+      operationId: listWorkspaceSessions
+      summary: List runtime sessions for one Workspace
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceID'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Bounded session page
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/product-v1alpha1.schema.json#/$defs/SessionPage
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+    post:
+      operationId: createRuntimeSession
+      summary: Accept asynchronous creation of a Product runtime session
+      x-max-body-bytes: 65536
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceID'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/product-v1alpha1.schema.json#/$defs/CreateSessionRequest
+      responses:
+        '202':
+          description: Product operation accepted
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/product-v1alpha1.schema.json#/$defs/ProductOperation
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/Unsupported'}
+        '429': {$ref: '#/components/responses/RateLimited'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /api/v1/sessions/{session_id}:
+    get:
+      operationId: getRuntimeSession
+      summary: Read one Product runtime session
+      parameters:
+        - $ref: '#/components/parameters/SessionID'
+      responses:
+        '200':
+          description: Product runtime session
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/product-v1alpha1.schema.json#/$defs/RuntimeSession
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /api/v1/sessions/{session_id}:close:
+    post:
+      operationId: closeRuntimeSession
+      summary: Accept asynchronous Product session closure
+      x-max-body-bytes: 32768
+      parameters:
+        - $ref: '#/components/parameters/SessionID'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/product-v1alpha1.schema.json#/$defs/CloseSessionRequest
+      responses:
+        '202':
+          description: Product operation accepted
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/product-v1alpha1.schema.json#/$defs/ProductOperation
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /api/v1/sessions/{session_id}:resize:
+    post:
+      operationId: resizeRuntimeSession
+      summary: Accept a fenced terminal resize intent
+      x-max-body-bytes: 32768
+      parameters:
+        - $ref: '#/components/parameters/SessionID'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/product-v1alpha1.schema.json#/$defs/ResizeSessionRequest
+      responses:
+        '202':
+          description: Product operation accepted
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/product-v1alpha1.schema.json#/$defs/ProductOperation
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/Unsupported'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /api/v1/sessions/{session_id}/connections:
+    post:
+      operationId: createSessionConnectionGrant
+      summary: Mint one short-lived Product Gateway connection grant
+      x-max-body-bytes: 32768
+      parameters:
+        - $ref: '#/components/parameters/SessionID'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/product-v1alpha1.schema.json#/$defs/CreateConnectionRequest
+      responses:
+        '201':
+          description: One-use connection grant
+          headers:
+            Cache-Control:
+              required: true
+              schema: {type: string, const: no-store}
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/product-v1alpha1.schema.json#/$defs/ConnectionGrant
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/Unsupported'}
+        '429': {$ref: '#/components/responses/RateLimited'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /api/v1/workspaces/{workspace_id}/artifacts:
+    get:
+      operationId: listWorkspaceArtifacts
+      summary: List Product artifact catalog entries
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceID'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Bounded artifact page
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/product-v1alpha1.schema.json#/$defs/ArtifactPage
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /api/v1/artifacts/{artifact_id}:
+    get:
+      operationId: getArtifact
+      summary: Read one Product artifact catalog entry
+      parameters:
+        - $ref: '#/components/parameters/ArtifactID'
+      responses:
+        '200':
+          description: Product artifact metadata
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/product-v1alpha1.schema.json#/$defs/Artifact
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /api/v1/workspaces/{workspace_id}/recordings:
+    get:
+      operationId: listWorkspaceRecordings
+      summary: List Product recording catalog entries
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceID'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Bounded recording page
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/product-v1alpha1.schema.json#/$defs/RecordingPage
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /api/v1/recordings/{recording_id}:
+    get:
+      operationId: getRecording
+      summary: Read one Product recording catalog entry
+      parameters:
+        - $ref: '#/components/parameters/RecordingID'
+      responses:
+        '200':
+          description: Product recording metadata
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/product-v1alpha1.schema.json#/$defs/Recording
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /api/v1/workspaces/{workspace_id}/agent-runs:
+    post:
+      operationId: createAgentRun
+      summary: Accept asynchronous Agent-run creation
+      x-max-body-bytes: 65536
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceID'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/product-v1alpha1.schema.json#/$defs/CreateAgentRunRequest
+      responses:
+        '202':
+          description: Product operation accepted
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/product-v1alpha1.schema.json#/$defs/ProductOperation
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/Unsupported'}
+        '429': {$ref: '#/components/responses/RateLimited'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /api/v1/agent-runs/{agent_run_id}:
+    get:
+      operationId: getAgentRun
+      summary: Read one Agent run
+      parameters:
+        - $ref: '#/components/parameters/AgentRunID'
+      responses:
+        '200':
+          description: Agent run projection
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/product-v1alpha1.schema.json#/$defs/AgentRun
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /api/v1/agent-runs/{agent_run_id}:cancel:
+    post:
+      operationId: cancelAgentRun
+      summary: Accept asynchronous Agent-run cancellation
+      x-max-body-bytes: 32768
+      parameters:
+        - $ref: '#/components/parameters/AgentRunID'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/product-v1alpha1.schema.json#/$defs/CancelAgentRunRequest
+      responses:
+        '202':
+          description: Product operation accepted
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/product-v1alpha1.schema.json#/$defs/ProductOperation
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+security:
+  - bearerAuth: []
+components:
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 128
+        pattern: '^[!-~]+$'
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      schema: {type: string, minLength: 1, maxLength: 1024}
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema: {type: integer, minimum: 1, maximum: 200, default: 50}
+    AfterSequence:
+      name: after_sequence
+      in: query
+      required: false
+      schema: {type: integer, minimum: 0, default: 0}
+    WorkspaceID: {$ref: '#/components/parameters/WorkspaceIDValue'}
+    WorkspaceIDValue:
+      name: workspace_id
+      in: path
+      required: true
+      schema: {$ref: ../schemas/product-v1alpha1.schema.json#/$defs/Identifier}
+    SlotKey:
+      name: slot_key
+      in: path
+      required: true
+      schema: {$ref: ../schemas/product-v1alpha1.schema.json#/$defs/SlotKey}
+    OperationID:
+      name: operation_id
+      in: path
+      required: true
+      schema: {$ref: ../schemas/product-v1alpha1.schema.json#/$defs/Identifier}
+    LeaseID:
+      name: lease_id
+      in: path
+      required: true
+      schema: {$ref: ../schemas/product-v1alpha1.schema.json#/$defs/Identifier}
+    SessionID:
+      name: session_id
+      in: path
+      required: true
+      schema: {$ref: ../schemas/product-v1alpha1.schema.json#/$defs/Identifier}
+    ArtifactID:
+      name: artifact_id
+      in: path
+      required: true
+      schema: {$ref: ../schemas/product-v1alpha1.schema.json#/$defs/Identifier}
+    RecordingID:
+      name: recording_id
+      in: path
+      required: true
+      schema: {$ref: ../schemas/product-v1alpha1.schema.json#/$defs/Identifier}
+    AgentRunID:
+      name: agent_run_id
+      in: path
+      required: true
+      schema: {$ref: ../schemas/product-v1alpha1.schema.json#/$defs/Identifier}
+  responses:
+    BadRequest:
+      description: Request syntax, schema, bounds, or metadata is invalid
+      content:
+        application/json:
+          schema: {$ref: ../schemas/product-v1alpha1.schema.json#/$defs/ProductError}
+    Unauthorized:
+      description: Product authentication failed
+      content:
+        application/json:
+          schema: {$ref: ../schemas/product-v1alpha1.schema.json#/$defs/ProductError}
+    Forbidden:
+      description: Authenticated actor is not authorized
+      content:
+        application/json:
+          schema: {$ref: ../schemas/product-v1alpha1.schema.json#/$defs/ProductError}
+    NotFound:
+      description: Authorized resource is not found
+      content:
+        application/json:
+          schema: {$ref: ../schemas/product-v1alpha1.schema.json#/$defs/ProductError}
+    Conflict:
+      description: Version, idempotency, state, or control authority conflicts
+      content:
+        application/json:
+          schema: {$ref: ../schemas/product-v1alpha1.schema.json#/$defs/ProductError}
+    Gone:
+      description: Requested retained cursor or resource has expired
+      content:
+        application/json:
+          schema: {$ref: ../schemas/product-v1alpha1.schema.json#/$defs/ProductError}
+    Unsupported:
+      description: Capability or protocol is not currently advertised
+      content:
+        application/json:
+          schema: {$ref: ../schemas/product-v1alpha1.schema.json#/$defs/ProductError}
+    RateLimited:
+      description: Product or Gateway capacity is temporarily exhausted
+      headers:
+        Retry-After:
+          required: true
+          schema: {type: integer, minimum: 1}
+      content:
+        application/json:
+          schema: {$ref: ../schemas/product-v1alpha1.schema.json#/$defs/ProductError}
+    Unavailable:
+      description: Required Product dependency is temporarily unavailable
+      headers:
+        Retry-After:
+          required: false
+          schema: {type: integer, minimum: 1}
+      content:
+        application/json:
+          schema: {$ref: ../schemas/product-v1alpha1.schema.json#/$defs/ProductError}
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: short-lived-access-token

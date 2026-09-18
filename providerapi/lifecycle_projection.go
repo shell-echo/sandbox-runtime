@@ -64,6 +64,156 @@ func (h *protectedHandler) serveSandboxStatus(response http.ResponseWriter, requ
 	writeJSON(response, http.StatusOK, status)
 }
 
+func (h *protectedHandler) serveLifecycleMutation(response http.ResponseWriter, request *http.Request, admitted admission.AdmissionContext, document []byte, operation admission.Operation, application LifecycleControlApplication) {
+	var result repository.MutationResult
+	var err error
+	switch operation {
+	case admission.OperationSetDesiredState:
+		var desired lifecycle.DesiredStateRequest
+		desired, err = decodeDesiredStateRequest(document, admitted, h.now().UTC())
+		if err == nil {
+			result, err = application.AcceptDesiredState(request.Context(), admitted.SandboxID, desired)
+		}
+	case admission.OperationExtendLease:
+		var lease lifecycle.LeaseRequest
+		lease, err = decodeLeaseRequest(document, admitted, h.now().UTC())
+		if err == nil {
+			result, err = application.AcceptLease(request.Context(), admitted.SandboxID, lease, h.capabilities.Limits.MaxLeaseSeconds)
+		}
+	case admission.OperationTerminate:
+		var terminate lifecycle.TerminateRequest
+		terminate, err = decodeTerminateRequest(document, admitted, h.now().UTC())
+		if err == nil {
+			result, err = application.AcceptTerminate(request.Context(), admitted.SandboxID, terminate)
+		}
+	default:
+		err = errors.New("unsupported lifecycle mutation")
+	}
+	if err != nil {
+		status, code, retryable := mapLifecycleError(err)
+		writeStandardError(response, status, code, retryable, lifecycleErrorMessage(code))
+		return
+	}
+	projected, err := operationProjection(result.Operation)
+	if err != nil {
+		writeStandardError(response, http.StatusInternalServerError, "SANDBOX_PROVIDER_ERROR", false, "sandbox lifecycle operation could not be projected")
+		return
+	}
+	writeJSON(response, http.StatusAccepted, projected)
+}
+
+func (h *protectedHandler) serveLifecycleEvents(response http.ResponseWriter, request *http.Request, admitted admission.AdmissionContext, application LifecycleControlApplication) {
+	sandbox, err := h.application.GetSandbox(request.Context(), admitted.SandboxID)
+	if err != nil || !sandboxMatchesAdmission(sandbox, admitted) {
+		status, code, retryable := mapLifecycleError(err)
+		if err == nil {
+			status, code, retryable = http.StatusForbidden, "SANDBOX_FORBIDDEN", false
+		}
+		writeStandardError(response, status, code, retryable, lifecycleErrorMessage(code))
+		return
+	}
+	after, err := parseLifecycleEventCursor(request.URL.RawQuery)
+	if err != nil {
+		writeStandardError(response, http.StatusBadRequest, "SANDBOX_INVALID_REQUEST", false, lifecycleErrorMessage("SANDBOX_INVALID_REQUEST"))
+		return
+	}
+	page, err := application.ReadEvents(request.Context(), admitted.SandboxID, after)
+	if err != nil {
+		status, code, retryable := mapLifecycleError(err)
+		var cursorError *repository.CursorError
+		if errors.As(err, &cursorError) {
+			writeStandardErrorWithDetails(response, status, code, retryable, lifecycleErrorMessage(code), providerv1.BoundedDetails{
+				"first_available_sequence": cursorError.FirstAvailableSequence,
+				"latest_sequence":          cursorError.LatestSequence,
+			})
+			return
+		}
+		writeStandardError(response, status, code, retryable, lifecycleErrorMessage(code))
+		return
+	}
+	projected, err := eventPageProjection(page)
+	if err != nil {
+		writeStandardError(response, http.StatusInternalServerError, "SANDBOX_PROVIDER_ERROR", false, "sandbox events could not be projected")
+		return
+	}
+	writeJSON(response, http.StatusOK, projected)
+}
+
+func decodeMutationEnvelope(envelope providerv1.MutationEnvelope, expectedGeneration int64, admitted admission.AdmissionContext, now time.Time, expectedOperation admission.Operation) (lifecycle.MutationRequest, error) {
+	deadline, err := time.Parse(time.RFC3339Nano, envelope.DeadlineAt)
+	if err != nil || !deadline.Equal(parseAdmissionTime(admitted.DeadlineAt)) || admitted.Operation != expectedOperation ||
+		envelope.OperationID != admitted.OperationID || envelope.AttemptID != admitted.AttemptID || envelope.FencingToken != admitted.FencingToken ||
+		string(envelope.RequestDigest) != admitted.RequestDigest || expectedGeneration < 1 || envelope.FencingToken < 1 {
+		return lifecycle.MutationRequest{}, errors.New("lifecycle mutation does not match admitted context")
+	}
+	result := lifecycle.MutationRequest{
+		OperationID: envelope.OperationID, AttemptID: envelope.AttemptID, FencingToken: uint64(envelope.FencingToken),
+		IdempotencyKey: envelope.IdempotencyKey, RequestDigest: string(envelope.RequestDigest), Deadline: deadline,
+		ExpectedGeneration: uint64(expectedGeneration),
+	}
+	if err := result.Validate(now); err != nil {
+		return lifecycle.MutationRequest{}, err
+	}
+	return result, nil
+}
+
+func decodeDesiredStateRequest(document []byte, admitted admission.AdmissionContext, now time.Time) (lifecycle.DesiredStateRequest, error) {
+	var request providerv1.DesiredStateRequest
+	if err := providerv1.DecodeStrict(bytes.NewReader(document), providerv1.MaxDesiredStateRequestBytes, &request); err != nil {
+		return lifecycle.DesiredStateRequest{}, err
+	}
+	envelope, err := decodeMutationEnvelope(request.MutationEnvelope, request.ExpectedGeneration, admitted, now, admission.OperationSetDesiredState)
+	if err != nil || len(request.Reason) > 256 {
+		return lifecycle.DesiredStateRequest{}, errors.Join(err, lifecycle.ErrInvalidSpec)
+	}
+	return lifecycle.DesiredStateRequest{MutationRequest: envelope, DesiredState: lifecycle.DesiredState(request.DesiredState)}, nil
+}
+
+func decodeLeaseRequest(document []byte, admitted admission.AdmissionContext, now time.Time) (lifecycle.LeaseRequest, error) {
+	var request providerv1.LeaseRequest
+	if err := providerv1.DecodeStrict(bytes.NewReader(document), providerv1.MaxLeaseRequestBytes, &request); err != nil {
+		return lifecycle.LeaseRequest{}, err
+	}
+	envelope, err := decodeMutationEnvelope(request.MutationEnvelope, request.ExpectedGeneration, admitted, now, admission.OperationExtendLease)
+	if err != nil {
+		return lifecycle.LeaseRequest{}, err
+	}
+	return lifecycle.LeaseRequest{MutationRequest: envelope, ExtendSeconds: request.ExtendSeconds}, nil
+}
+
+func decodeTerminateRequest(document []byte, admitted admission.AdmissionContext, now time.Time) (lifecycle.TerminateRequest, error) {
+	var request providerv1.TerminateRequest
+	if err := providerv1.DecodeStrict(bytes.NewReader(document), providerv1.MaxTerminateRequestBytes, &request); err != nil {
+		return lifecycle.TerminateRequest{}, err
+	}
+	envelope, err := decodeMutationEnvelope(request.MutationEnvelope, request.ExpectedGeneration, admitted, now, admission.OperationTerminate)
+	if err != nil || request.PreserveWorkspaceSnapshot {
+		return lifecycle.TerminateRequest{}, errors.Join(err, lifecycle.ErrInvalidSpec)
+	}
+	return lifecycle.TerminateRequest{MutationRequest: envelope, Reason: request.Reason}, nil
+}
+
+func eventPageProjection(page repository.EventPage) (providerv1.LifecycleEventPage, error) {
+	if page.FirstAvailableSequence > math.MaxInt64 || page.LatestSequence > math.MaxInt64 || page.NextSequence > math.MaxInt64 {
+		return providerv1.LifecycleEventPage{}, errors.New("event sequence exceeds wire range")
+	}
+	result := providerv1.LifecycleEventPage{
+		Events: make([]providerv1.LifecycleEvent, 0, len(page.Events)), FirstAvailableSequence: int64(page.FirstAvailableSequence),
+		LatestSequence: int64(page.LatestSequence), NextSequence: int64(page.NextSequence),
+	}
+	for _, event := range page.Events {
+		if err := event.Validate(); err != nil || event.Sequence == 0 || event.Sequence > math.MaxInt64 || event.Generation > math.MaxInt64 || event.FencingToken > math.MaxInt64 {
+			return providerv1.LifecycleEventPage{}, errors.New("invalid lifecycle event projection")
+		}
+		result.Events = append(result.Events, providerv1.LifecycleEvent{
+			EventID: event.ID, SandboxID: event.SandboxID, OperationID: event.OperationID,
+			Sequence: int64(event.Sequence), Generation: int64(event.Generation), FencingToken: int64(event.FencingToken),
+			Kind: event.Kind, DataDigest: providerv1.SHA256Digest(event.DataDigest), OccurredAt: event.OccurredAt.UTC().Format(time.RFC3339Nano),
+		})
+	}
+	return result, nil
+}
+
 func (h *protectedHandler) serveOperation(response http.ResponseWriter, request *http.Request, admitted admission.AdmissionContext) {
 	if h.application == nil {
 		writeStandardError(response, http.StatusServiceUnavailable, "SANDBOX_PROVIDER_UNAVAILABLE", true, "sandbox operation is unavailable")
@@ -358,6 +508,10 @@ func parseAdmissionTime(value string) time.Time {
 
 func mapLifecycleError(err error) (int, string, bool) {
 	switch {
+	case errors.Is(err, repository.ErrCursorExpired):
+		return http.StatusGone, "SANDBOX_EVENT_CURSOR_EXPIRED", false
+	case errors.Is(err, repository.ErrCursorAhead):
+		return http.StatusConflict, "SANDBOX_EVENT_CURSOR_AHEAD", false
 	case errors.Is(err, repository.ErrNotFound), errors.Is(err, repository.ErrAlreadyExists):
 		if errors.Is(err, repository.ErrAlreadyExists) {
 			return http.StatusConflict, "SANDBOX_CONFLICT", false
@@ -371,6 +525,8 @@ func mapLifecycleError(err error) (int, string, bool) {
 		return http.StatusConflict, "SANDBOX_STALE_FENCING_TOKEN", false
 	case errors.Is(err, repository.ErrConflict):
 		return http.StatusConflict, "SANDBOX_CONFLICT", false
+	case errors.Is(err, lifecycle.ErrInvalidTransition), errors.Is(err, lifecycle.ErrInvalidLease), errors.Is(err, lifecycle.ErrInvalidState):
+		return http.StatusUnprocessableEntity, "SANDBOX_LIFECYCLE_UNSUPPORTED", false
 	case errors.Is(err, repository.ErrClosed), errors.Is(err, repository.ErrDurability), errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
 		return http.StatusServiceUnavailable, "SANDBOX_PROVIDER_UNAVAILABLE", true
 	default:
@@ -392,8 +548,14 @@ func lifecycleErrorMessage(code string) string {
 		return "sandbox resource was not found"
 	case "SANDBOX_PROVIDER_UNAVAILABLE":
 		return "sandbox provider is temporarily unavailable"
+	case "SANDBOX_EVENT_CURSOR_EXPIRED":
+		return "sandbox event cursor is behind the retained event floor"
+	case "SANDBOX_EVENT_CURSOR_AHEAD":
+		return "sandbox event cursor is ahead of the latest event"
 	case "SANDBOX_CAPABILITY_UNSUPPORTED":
 		return "requested sandbox capability is unsupported"
+	case "SANDBOX_LIFECYCLE_UNSUPPORTED":
+		return "requested sandbox lifecycle transition is unsupported"
 	default:
 		return "sandbox request is invalid"
 	}

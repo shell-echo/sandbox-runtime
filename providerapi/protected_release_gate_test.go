@@ -42,6 +42,7 @@ func allProtectedReleaseRoutes() []protectedReleaseRoute {
 		{name: "execute", method: http.MethodPost, path: "/v1/sandboxes/sandbox-1/exec", operation: admission.OperationExec, allowUnavailable: true},
 		{name: "cancel execute", method: http.MethodPost, path: "/v1/sandboxes/sandbox-1/exec:cancel", operation: admission.OperationCancelExec},
 		{name: "open runtime session", method: http.MethodPost, path: "/v1/sandboxes/sandbox-1/runtime-sessions", operation: admission.OperationOpenRuntimeSession, allowUnavailable: true},
+		{name: "close runtime session", method: http.MethodPost, path: "/v1/sandboxes/sandbox-1/runtime-sessions/session-1:close", operation: admission.OperationCloseRuntimeSession, allowUnavailable: true},
 		{name: "open browser session", method: http.MethodPost, path: "/v1/sandboxes/sandbox-1/browser-sessions", operation: admission.OperationOpenBrowserSession, allowUnavailable: true},
 		{name: "create snapshot", method: http.MethodPost, path: "/v1/sandboxes/sandbox-1/snapshots", operation: admission.OperationSnapshot, allowUnavailable: true},
 		{name: "terminate sandbox", method: http.MethodPost, path: "/v1/sandboxes/sandbox-1:terminate", operation: admission.OperationTerminate, allowUnavailable: true},
@@ -81,10 +82,16 @@ func TestProtectedHandlerReleaseGateCoversAllProtectedRoutes(t *testing.T) {
 			if route.allowUnavailable {
 				wantStatus = http.StatusServiceUnavailable
 			}
+			if route.operation == admission.OperationSetDesiredState || route.operation == admission.OperationExtendLease ||
+				route.operation == admission.OperationTerminate || route.operation == admission.OperationReadEvents ||
+				route.operation == admission.OperationCloseRuntimeSession {
+				wantStatus = http.StatusUnprocessableEntity
+			}
 			if response.Code != wantStatus {
 				t.Fatalf("valid %s response=%d, want %d body=%s", route.operation, response.Code, wantStatus, response.Body.String())
 			}
-			assertAdmissionErrorHeaders(t, response, route.allowUnavailable)
+			retryable := route.allowUnavailable && wantStatus == http.StatusServiceUnavailable
+			assertAdmissionErrorHeaders(t, response, retryable)
 			wantGuardCalls := 0
 			if route.operation.Mutation() {
 				wantGuardCalls = 1
@@ -360,6 +367,11 @@ func TestProtectedHandlerConcurrentAdmissionMatrix(t *testing.T) {
 			if route.allowUnavailable {
 				wantStatus = http.StatusServiceUnavailable
 			}
+			if route.operation == admission.OperationSetDesiredState || route.operation == admission.OperationExtendLease ||
+				route.operation == admission.OperationTerminate || route.operation == admission.OperationReadEvents ||
+				route.operation == admission.OperationCloseRuntimeSession {
+				wantStatus = http.StatusUnprocessableEntity
+			}
 			for range workers {
 				if got := <-results; got != wantStatus {
 					t.Fatalf("concurrent %s response=%d, want %d", route.operation, got, wantStatus)
@@ -495,17 +507,18 @@ func protectedReleaseRequestBinding(operation admission.Operation) (string, admi
 		return "urn:shell-echo:sandbox-runtime:descriptor:usage-evidence:v1", admission.DigestProfileFullDocument
 	}
 	contractIDs := map[admission.Operation]string{
-		admission.OperationCreate:             "urn:shell-echo:sandbox-runtime:request:create:v1",
-		admission.OperationRestore:            "urn:shell-echo:sandbox-runtime:request:restore:v1",
-		admission.OperationSetDesiredState:    "urn:shell-echo:sandbox-runtime:request:set-desired-state:v1",
-		admission.OperationExtendLease:        "urn:shell-echo:sandbox-runtime:request:extend-lease:v1",
-		admission.OperationExec:               "urn:shell-echo:sandbox-runtime:request:exec:v1",
-		admission.OperationCancelExec:         "urn:shell-echo:sandbox-runtime:request:cancel-exec:v1",
-		admission.OperationOpenRuntimeSession: "urn:shell-echo:sandbox-runtime:request:open-runtime-session:v1",
-		admission.OperationOpenBrowserSession: "urn:shell-echo:sandbox-runtime:request:open-browser-session:v1",
-		admission.OperationSnapshot:           "urn:shell-echo:sandbox-runtime:request:snapshot:v1",
-		admission.OperationTerminate:          "urn:shell-echo:sandbox-runtime:request:terminate:v1",
-		admission.OperationStageArtifact:      "urn:shell-echo:sandbox-runtime:request:stage-artifact:v1",
+		admission.OperationCreate:              "urn:shell-echo:sandbox-runtime:request:create:v1",
+		admission.OperationRestore:             "urn:shell-echo:sandbox-runtime:request:restore:v1",
+		admission.OperationSetDesiredState:     "urn:shell-echo:sandbox-runtime:request:set-desired-state:v1",
+		admission.OperationExtendLease:         "urn:shell-echo:sandbox-runtime:request:extend-lease:v1",
+		admission.OperationExec:                "urn:shell-echo:sandbox-runtime:request:exec:v1",
+		admission.OperationCancelExec:          "urn:shell-echo:sandbox-runtime:request:cancel-exec:v1",
+		admission.OperationOpenRuntimeSession:  "urn:shell-echo:sandbox-runtime:request:open-runtime-session:v1",
+		admission.OperationCloseRuntimeSession: "urn:shell-echo:sandbox-runtime:request:close-runtime-session:v1",
+		admission.OperationOpenBrowserSession:  "urn:shell-echo:sandbox-runtime:request:open-browser-session:v1",
+		admission.OperationSnapshot:            "urn:shell-echo:sandbox-runtime:request:snapshot:v1",
+		admission.OperationTerminate:           "urn:shell-echo:sandbox-runtime:request:terminate:v1",
+		admission.OperationStageArtifact:       "urn:shell-echo:sandbox-runtime:request:stage-artifact:v1",
 	}
 	return contractIDs[operation], admission.DigestProfileRequestExcludingDigest
 }
@@ -534,6 +547,30 @@ func releaseMutationDocument(t *testing.T, operation admission.Operation) ([]byt
 			t.Fatal(err)
 		}
 		delete(document, "request_digest")
+	case admission.OperationCloseRuntimeSession:
+		document = map[string]any{
+			"operation_id": "operation-1", "attempt_id": "attempt-1", "fencing_token": int64(1),
+			"idempotency_key": "close-idempotency-1", "deadline_at": releaseGateTestTime().Add(4 * time.Minute).Format(time.RFC3339Nano),
+			"expected_generation": int64(1), "runtime_session_id": "session-1", "connection_generation": int64(1), "reason": "caller_complete",
+		}
+	case admission.OperationSetDesiredState:
+		document = map[string]any{
+			"operation_id": "operation-1", "attempt_id": "attempt-1", "fencing_token": int64(1),
+			"idempotency_key": "suspend-idempotency-1", "deadline_at": releaseGateTestTime().Add(4 * time.Minute).Format(time.RFC3339Nano),
+			"expected_generation": int64(1), "desired_state": "suspended", "reason": "idle",
+		}
+	case admission.OperationExtendLease:
+		document = map[string]any{
+			"operation_id": "operation-1", "attempt_id": "attempt-1", "fencing_token": int64(1),
+			"idempotency_key": "lease-idempotency-1", "deadline_at": releaseGateTestTime().Add(4 * time.Minute).Format(time.RFC3339Nano),
+			"expected_generation": int64(1), "extend_seconds": int64(60),
+		}
+	case admission.OperationTerminate:
+		document = map[string]any{
+			"operation_id": "operation-1", "attempt_id": "attempt-1", "fencing_token": int64(1),
+			"idempotency_key": "terminate-idempotency-1", "deadline_at": releaseGateTestTime().Add(4 * time.Minute).Format(time.RFC3339Nano),
+			"expected_generation": int64(1), "reason": "complete", "preserve_workspace_snapshot": false,
+		}
 	case admission.OperationOpenBrowserSession:
 		encoded, _ := validBrowserSessionOpenDocument(t)
 		if err := json.Unmarshal(encoded, &document); err != nil {

@@ -201,6 +201,36 @@ func TestMapCapabilitiesProjectsCodingShellAdvertisement(t *testing.T) {
 	}
 }
 
+func TestMapCapabilitiesProjectsLifecycleAndTerminalControls(t *testing.T) {
+	capabilities, runtimeProfiles := providerCodingShellAdvertisements()
+	capabilities = append(capabilities,
+		provider.Capability{ID: "sandbox.lifecycle-control", Versions: []string{"1.0.0"}, Profiles: []string{"lifecycle-control-v1"}},
+		provider.Capability{ID: "sandbox.terminal-control", Versions: []string{"1.0.0"}, Profiles: []string{"terminal-control-v1"}},
+	)
+	runtimeProfiles[0].CapabilityProfileIDs = append(runtimeProfiles[0].CapabilityProfileIDs, "lifecycle-control-v1", "terminal-control-v1")
+	snapshot, err := provider.NewCapabilitySnapshotWithAdvertisements("revision-1", provider.Limits{
+		MaxCPUMillis: 1000, MaxMemoryBytes: 1 << 30, MaxEphemeralStorageBytes: 1 << 30,
+		MaxLeaseSeconds: 3600, MaxExecSeconds: 300,
+	}, capabilities, runtimeProfiles, []provider.SnapshotRestoreProfile{{
+		ProfileID: "sandbox-snapshot-workspace-v1", Level: provider.SnapshotLevelWorkspace,
+		SuiteID: provider.CompatibilitySuiteSandboxProvider, SuiteVersion: "1.0.0",
+		SuiteDigest: provider.SHA256Digest("sha256:" + strings.Repeat("a", 64)),
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	document := mapCapabilities(snapshot)
+	if err := validateCapabilities(document); err != nil {
+		t.Fatalf("validate control projection: %v", err)
+	}
+	if len(document.Capabilities) != 4 || document.Capabilities[2].ID != "sandbox.lifecycle-control" || document.Capabilities[3].ID != "sandbox.terminal-control" {
+		t.Fatalf("control capability projection = %#v", document.Capabilities)
+	}
+	if len(document.RuntimeProfiles) != 1 || len(document.RuntimeProfiles[0].CapabilityProfileIDs) != 4 {
+		t.Fatalf("control runtime projection = %#v", document.RuntimeProfiles)
+	}
+}
+
 func TestMapCapabilitiesProjectsBrowserAdvertisement(t *testing.T) {
 	capabilities, runtimeProfiles := providerBrowserAdvertisements()
 	snapshot, err := provider.NewCapabilitySnapshotWithAdvertisements("revision-1", provider.Limits{

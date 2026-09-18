@@ -359,6 +359,28 @@ func TestProtectedDocumentAcceptsHTTP2EmptyBodyAndRejectsData(t *testing.T) {
 	}
 }
 
+func TestProtectedDocumentRejectsAmbiguousLifecycleEventQuery(t *testing.T) {
+	contextValue := admission.AdmissionContext{
+		Operation: admission.OperationReadEvents, SandboxID: "sandbox-1",
+		OperationID: "operation-1", AttemptID: "attempt-1", FencingToken: 1,
+	}
+	route := protectedRoute{operation: admission.OperationReadEvents}
+	for _, rawQuery := range []string{
+		"after_sequence=",
+		"after_sequence=2&after_sequence=3",
+		"after_sequence=2&unexpected=1",
+		"unexpected=1",
+		"after_sequence=%zz",
+	} {
+		t.Run(rawQuery, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodGet, "https://provider.test/v1/sandboxes/sandbox-1/events?"+rawQuery, nil)
+			if _, status := protectedDocument(request, contextValue, route, map[string]string{"sandbox_id": "sandbox-1"}); status != http.StatusBadRequest {
+				t.Fatalf("status = %d, want %d", status, http.StatusBadRequest)
+			}
+		})
+	}
+}
+
 func assertAdmissionErrorHeaders(t *testing.T, response *httptest.ResponseRecorder, retryable bool) {
 	t.Helper()
 	var document providerv1.StandardError

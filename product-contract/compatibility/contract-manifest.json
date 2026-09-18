@@ -1,0 +1,27 @@
+{
+  "contract_namespace": "urn:shell-echo:sandbox-runtime:product-v1alpha1",
+  "contract_version": "0.1.0",
+  "maturity": "phase-1-design-authority",
+  "resources": [
+    {
+      "path": "openapi/sandbox-runtime-product-v1alpha1.yaml",
+      "kind": "openapi",
+      "id": "urn:shell-echo:sandbox-runtime:product-openapi:v1alpha1"
+    },
+    {
+      "path": "schemas/product-v1alpha1.schema.json",
+      "kind": "json-schema",
+      "id": "urn:shell-echo:sandbox-runtime:contract:product-v1alpha1"
+    },
+    {
+      "path": "semantic-rules/product-v1alpha1.json",
+      "kind": "semantic-rules",
+      "id": "urn:shell-echo:sandbox-runtime:product-semantic-rules:v1alpha1"
+    },
+    {
+      "path": "specification/product-contract-v1alpha1.md",
+      "kind": "specification",
+      "id": "urn:shell-echo:sandbox-runtime:product-specification:v1alpha1"
+    }
+  ]
+}

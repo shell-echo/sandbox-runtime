@@ -35,6 +35,22 @@ See [Project status](docs/STATUS.md) for the full evidence ledger and
 [External caller qualification](docs/qualification/external-caller-coding-shell-v1.md)
 for the exact claim boundary.
 
+The separate [Product v1 architecture Phase 1](docs/plan/product-v1-phase-1.md)
+is also complete as design and Product Contract definition. It permits future
+Product modules in this repository while preserving the Provider as a locked
+network boundary, and defines Workspace/slot persistence, identity and Agent
+delegation, Runtime Gateway and recording, and deployment levels. No Product
+service, Product database migration, public Gateway, Guest Agent, or production
+deployment has been implemented or qualified by that work.
+
+The separate [Product v1 Phase 2 Provider lifecycle plan](docs/plan/product-v1-phase-2-provider-lifecycle.md)
+now has an implementation-complete source candidate for termination,
+suspend/resume, lease expiry, finite event reads, and terminal-session close.
+It is not yet selected Provider authority: the published lock remains unchanged
+until the candidate exists as an immutable revision and passes the clean-VCS
+Contract and Conformance gates plus the planned independent-process
+coding/shell lifecycle black-box gate.
+
 ## What the project provides
 
 - A local instance-management API with in-memory and Docker runtime drivers.
@@ -62,6 +78,7 @@ The local management API and Provider API are deliberately separate:
 | --- | --- | --- |
 | Local `/health` and `/instances` API | Operate one local runtime controller | Internal application models and configuration |
 | Provider `/v1/*` API | Cross-service sandbox protocol | The locked repository-owned Provider Contract |
+| Target Product `/api/v1/*` API | End-user Workspace control plane | The independently locked Product Contract; design-only today |
 
 ```text
 Calling service

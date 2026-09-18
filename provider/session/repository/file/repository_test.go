@@ -196,7 +196,7 @@ func TestRepositoryMigratesVersionOneSnapshotOnNextMutation(t *testing.T) {
 		t.Fatal(err)
 	}
 	var rewritten repository.PersistedState
-	if err := json.Unmarshal(content, &rewritten); err != nil || rewritten.Version != 2 || len(rewritten.Sessions) != 1 {
+	if err := json.Unmarshal(content, &rewritten); err != nil || rewritten.Version != 3 || len(rewritten.Sessions) != 1 {
 		t.Fatalf("rewritten snapshot = %#v, %v", rewritten, err)
 	}
 }

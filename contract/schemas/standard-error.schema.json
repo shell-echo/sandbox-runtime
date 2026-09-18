@@ -8,6 +8,15 @@
     "code": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{2,63}$"},
     "message": {"type": "string", "minLength": 1, "maxLength": 512},
     "retryable": {"type": "boolean"},
-    "trace_id": {"type": "string", "minLength": 1, "maxLength": 200}
+    "trace_id": {"type": "string", "minLength": 1, "maxLength": 200},
+    "details": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["first_available_sequence", "latest_sequence"],
+      "properties": {
+        "first_available_sequence": {"type": "integer", "minimum": 1, "maximum": 9007199254740991},
+        "latest_sequence": {"type": "integer", "minimum": 1, "maximum": 9007199254740991}
+      }
+    }
   }
 }

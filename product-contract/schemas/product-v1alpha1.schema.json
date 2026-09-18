@@ -1,0 +1,672 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:shell-echo:sandbox-runtime:contract:product-v1alpha1",
+  "title": "Sandbox Runtime Product Contract v1alpha1",
+  "$defs": {
+    "Identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$"
+    },
+    "SlotKey": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[a-z0-9][a-z0-9-]{0,127}$"
+    },
+    "ProfileID": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$"
+    },
+    "RFC3339Timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "maxLength": 40
+    },
+    "SHA256Digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "ActorRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["actor_type", "actor_id"],
+      "properties": {
+        "actor_type": {"enum": ["human", "agent", "service"]},
+        "actor_id": {"$ref": "#/$defs/Identifier"}
+      }
+    },
+    "FieldViolation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["field", "reason"],
+      "properties": {
+        "field": {"type": "string", "minLength": 1, "maxLength": 256},
+        "reason": {"type": "string", "minLength": 1, "maxLength": 256}
+      }
+    },
+    "ProductError": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message", "retryable", "request_id"],
+      "properties": {
+        "code": {
+          "enum": [
+            "PRODUCT_INVALID_REQUEST",
+            "PRODUCT_UNAUTHENTICATED",
+            "PRODUCT_FORBIDDEN",
+            "PRODUCT_NOT_FOUND",
+            "PRODUCT_VERSION_CONFLICT",
+            "PRODUCT_IDEMPOTENCY_CONFLICT",
+            "PRODUCT_CONTROL_CONFLICT",
+            "PRODUCT_CONTROL_STALE",
+            "PRODUCT_CAPABILITY_UNSUPPORTED",
+            "PRODUCT_EVENT_CURSOR_EXPIRED",
+            "PRODUCT_RATE_LIMITED",
+            "PRODUCT_DEPENDENCY_UNAVAILABLE",
+            "PRODUCT_OUTCOME_UNKNOWN",
+            "PRODUCT_INTERNAL"
+          ]
+        },
+        "message": {"type": "string", "minLength": 1, "maxLength": 512},
+        "retryable": {"type": "boolean"},
+        "request_id": {"$ref": "#/$defs/Identifier"},
+        "violations": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {"$ref": "#/$defs/FieldViolation"}
+        }
+      }
+    },
+    "CapabilityRequirement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["capability_id", "version", "profile_id"],
+      "properties": {
+        "capability_id": {"$ref": "#/$defs/Identifier"},
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32,
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "profile_id": {"$ref": "#/$defs/ProfileID"}
+      }
+    },
+    "ProductCapability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["capability_id", "version", "readiness", "protocol_profiles"],
+      "properties": {
+        "capability_id": {"$ref": "#/$defs/Identifier"},
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32,
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "readiness": {"enum": ["ready", "unavailable"]},
+        "protocol_profiles": {
+          "type": "array",
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/ProfileID"}
+        },
+        "max_session_seconds": {"type": "integer", "minimum": 1, "maximum": 86400}
+      }
+    },
+    "CapabilityDocument": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["contract_namespace", "contract_version", "capabilities", "max_page_size"],
+      "properties": {
+        "contract_namespace": {"const": "urn:shell-echo:sandbox-runtime:product-v1alpha1"},
+        "contract_version": {"const": "0.1.0"},
+        "capabilities": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {"$ref": "#/$defs/ProductCapability"}
+        },
+        "max_page_size": {"type": "integer", "const": 200}
+      }
+    },
+    "SlotSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["slot_key", "kind", "profile_id", "required_capabilities", "desired_state"],
+      "properties": {
+        "slot_key": {"$ref": "#/$defs/SlotKey"},
+        "kind": {"enum": ["code", "browser", "desktop", "subagent", "isolated"]},
+        "profile_id": {"$ref": "#/$defs/ProfileID"},
+        "required_capabilities": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "items": {"$ref": "#/$defs/CapabilityRequirement"}
+        },
+        "desired_state": {"enum": ["ready", "suspended", "terminated"]}
+      }
+    },
+    "WorkspaceSlot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "slot_key",
+        "kind",
+        "profile_id",
+        "required_capabilities",
+        "desired_state",
+        "observed_state",
+        "generation",
+        "observed_generation",
+        "version",
+        "created_at",
+        "updated_at"
+      ],
+      "properties": {
+        "slot_key": {"$ref": "#/$defs/SlotKey"},
+        "kind": {"enum": ["code", "browser", "desktop", "subagent", "isolated"]},
+        "profile_id": {"$ref": "#/$defs/ProfileID"},
+        "required_capabilities": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "items": {"$ref": "#/$defs/CapabilityRequirement"}
+        },
+        "desired_state": {"enum": ["ready", "suspended", "terminated"]},
+        "observed_state": {
+          "enum": [
+            "requested",
+            "provisioning",
+            "ready",
+            "degraded",
+            "suspending",
+            "suspended",
+            "terminating",
+            "terminated",
+            "failed"
+          ]
+        },
+        "generation": {"type": "integer", "minimum": 1},
+        "observed_generation": {"type": "integer", "minimum": 0},
+        "version": {"type": "integer", "minimum": 1},
+        "created_at": {"$ref": "#/$defs/RFC3339Timestamp"},
+        "updated_at": {"$ref": "#/$defs/RFC3339Timestamp"}
+      }
+    },
+    "Workspace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "api_version",
+        "workspace_id",
+        "tenant_id",
+        "owner",
+        "display_name",
+        "primary_slot_key",
+        "desired_state",
+        "observed_state",
+        "version",
+        "lease_expires_at",
+        "slots",
+        "created_at",
+        "updated_at"
+      ],
+      "properties": {
+        "api_version": {"const": "product.sandbox-runtime/v1alpha1"},
+        "workspace_id": {"$ref": "#/$defs/Identifier"},
+        "tenant_id": {"$ref": "#/$defs/Identifier"},
+        "owner": {"$ref": "#/$defs/ActorRef"},
+        "display_name": {"type": "string", "minLength": 1, "maxLength": 128},
+        "primary_slot_key": {"const": "primary-code"},
+        "desired_state": {"enum": ["active", "suspended", "terminated"]},
+        "observed_state": {
+          "enum": [
+            "requested",
+            "provisioning",
+            "active",
+            "degraded",
+            "suspending",
+            "suspended",
+            "terminating",
+            "terminated",
+            "failed"
+          ]
+        },
+        "version": {"type": "integer", "minimum": 1},
+        "lease_expires_at": {"$ref": "#/$defs/RFC3339Timestamp"},
+        "slots": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "items": {"$ref": "#/$defs/WorkspaceSlot"}
+        },
+        "created_at": {"$ref": "#/$defs/RFC3339Timestamp"},
+        "updated_at": {"$ref": "#/$defs/RFC3339Timestamp"}
+      }
+    },
+    "CreateWorkspaceRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["display_name", "lifetime_seconds", "primary_slot"],
+      "properties": {
+        "display_name": {"type": "string", "minLength": 1, "maxLength": 128},
+        "lifetime_seconds": {"type": "integer", "minimum": 60, "maximum": 604800},
+        "primary_slot": {
+          "allOf": [
+            {"$ref": "#/$defs/SlotSpec"},
+            {
+              "type": "object",
+              "properties": {
+                "slot_key": {"const": "primary-code"},
+                "kind": {"const": "code"},
+                "desired_state": {"const": "ready"}
+              }
+            }
+          ]
+        }
+      }
+    },
+    "SetWorkspaceDesiredStateRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["expected_version", "desired_state", "reason"],
+      "properties": {
+        "expected_version": {"type": "integer", "minimum": 1},
+        "desired_state": {"enum": ["active", "suspended", "terminated"]},
+        "reason": {"type": "string", "minLength": 1, "maxLength": 256}
+      }
+    },
+    "PutSlotRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["expected_workspace_version", "kind", "profile_id", "required_capabilities", "desired_state"],
+      "properties": {
+        "expected_workspace_version": {"type": "integer", "minimum": 1},
+        "kind": {"enum": ["code", "browser", "desktop", "subagent", "isolated"]},
+        "profile_id": {"$ref": "#/$defs/ProfileID"},
+        "required_capabilities": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "items": {"$ref": "#/$defs/CapabilityRequirement"}
+        },
+        "desired_state": {"enum": ["ready", "suspended", "terminated"]}
+      }
+    },
+    "OperationError": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message", "retryable"],
+      "properties": {
+        "code": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "^PRODUCT_[A-Z0-9_]+$"},
+        "message": {"type": "string", "minLength": 1, "maxLength": 512},
+        "retryable": {"type": "boolean"}
+      }
+    },
+    "ProductOperation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation_id",
+        "operation_type",
+        "workspace_id",
+        "submitted_by",
+        "state",
+        "reconciliation_status",
+        "version",
+        "accepted_at",
+        "updated_at"
+      ],
+      "properties": {
+        "operation_id": {"$ref": "#/$defs/Identifier"},
+        "operation_type": {
+          "enum": [
+            "create_workspace",
+            "set_workspace_desired_state",
+            "put_slot",
+            "create_session",
+            "close_session",
+            "resize_session",
+            "start_agent_run",
+            "cancel_agent_run"
+          ]
+        },
+        "workspace_id": {"$ref": "#/$defs/Identifier"},
+        "slot_key": {"$ref": "#/$defs/SlotKey"},
+        "session_id": {"$ref": "#/$defs/Identifier"},
+        "agent_run_id": {"$ref": "#/$defs/Identifier"},
+        "submitted_by": {"$ref": "#/$defs/ActorRef"},
+        "state": {"enum": ["accepted", "running", "succeeded", "failed", "cancelled", "outcome_unknown"]},
+        "reconciliation_status": {"enum": ["pending", "reconciling", "complete", "manual_review"]},
+        "version": {"type": "integer", "minimum": 1},
+        "error": {"$ref": "#/$defs/OperationError"},
+        "accepted_at": {"$ref": "#/$defs/RFC3339Timestamp"},
+        "started_at": {"$ref": "#/$defs/RFC3339Timestamp"},
+        "completed_at": {"$ref": "#/$defs/RFC3339Timestamp"},
+        "updated_at": {"$ref": "#/$defs/RFC3339Timestamp"}
+      }
+    },
+    "EventScalar": {
+      "anyOf": [
+        {"type": "string", "maxLength": 512},
+        {"type": "integer"},
+        {"type": "number"},
+        {"type": "boolean"},
+        {"type": "null"}
+      ]
+    },
+    "WorkspaceEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "event_id",
+        "workspace_id",
+        "sequence",
+        "event_type",
+        "subject_type",
+        "subject_id",
+        "actor",
+        "occurred_at",
+        "attributes"
+      ],
+      "properties": {
+        "event_id": {"$ref": "#/$defs/Identifier"},
+        "workspace_id": {"$ref": "#/$defs/Identifier"},
+        "sequence": {"type": "integer", "minimum": 1},
+        "event_type": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-z][a-z0-9_.-]{0,127}$"},
+        "subject_type": {"enum": ["workspace", "slot", "operation", "control_lease", "session", "artifact", "recording", "agent_run"]},
+        "subject_id": {"$ref": "#/$defs/Identifier"},
+        "operation_id": {"$ref": "#/$defs/Identifier"},
+        "actor": {"$ref": "#/$defs/ActorRef"},
+        "occurred_at": {"$ref": "#/$defs/RFC3339Timestamp"},
+        "attributes": {
+          "type": "object",
+          "maxProperties": 32,
+          "propertyNames": {"pattern": "^[a-z][a-z0-9_]{0,63}$"},
+          "additionalProperties": {"$ref": "#/$defs/EventScalar"}
+        }
+      }
+    },
+    "ControlScope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scope_type", "scope_id"],
+      "properties": {
+        "scope_type": {"enum": ["workspace", "session"]},
+        "scope_id": {"$ref": "#/$defs/Identifier"}
+      }
+    },
+    "ControlLease": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lease_id", "workspace_id", "scope", "controller", "fence", "issued_at", "expires_at"],
+      "properties": {
+        "lease_id": {"$ref": "#/$defs/Identifier"},
+        "workspace_id": {"$ref": "#/$defs/Identifier"},
+        "scope": {"$ref": "#/$defs/ControlScope"},
+        "controller": {"$ref": "#/$defs/ActorRef"},
+        "fence": {"type": "integer", "minimum": 1},
+        "issued_at": {"$ref": "#/$defs/RFC3339Timestamp"},
+        "expires_at": {"$ref": "#/$defs/RFC3339Timestamp"}
+      }
+    },
+    "AcquireControlLeaseRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["expected_workspace_version", "scope", "duration_seconds"],
+      "properties": {
+        "expected_workspace_version": {"type": "integer", "minimum": 1},
+        "scope": {"$ref": "#/$defs/ControlScope"},
+        "duration_seconds": {"type": "integer", "minimum": 5, "maximum": 120}
+      }
+    },
+    "RenewControlLeaseRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fence", "duration_seconds"],
+      "properties": {
+        "fence": {"type": "integer", "minimum": 1},
+        "duration_seconds": {"type": "integer", "minimum": 5, "maximum": 120}
+      }
+    },
+    "ReleaseControlLeaseRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fence", "reason"],
+      "properties": {
+        "fence": {"type": "integer", "minimum": 1},
+        "reason": {"type": "string", "minLength": 1, "maxLength": 256}
+      }
+    },
+    "SessionKind": {
+      "enum": ["terminal", "browser_automation", "browser_live", "desktop", "editor", "notebook", "preview", "files", "mcp"]
+    },
+    "RuntimeSession": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "session_id",
+        "workspace_id",
+        "slot_key",
+        "kind",
+        "protocol_profile",
+        "state",
+        "requires_control_lease",
+        "recording_policy",
+        "version",
+        "expires_at",
+        "created_at",
+        "updated_at"
+      ],
+      "properties": {
+        "session_id": {"$ref": "#/$defs/Identifier"},
+        "workspace_id": {"$ref": "#/$defs/Identifier"},
+        "slot_key": {"$ref": "#/$defs/SlotKey"},
+        "kind": {"$ref": "#/$defs/SessionKind"},
+        "protocol_profile": {"$ref": "#/$defs/ProfileID"},
+        "state": {"enum": ["requested", "provisioning", "ready", "active", "draining", "closed", "expired", "failed"]},
+        "requires_control_lease": {"type": "boolean"},
+        "recording_policy": {"enum": ["disabled", "metadata_only", "required"]},
+        "version": {"type": "integer", "minimum": 1},
+        "expires_at": {"$ref": "#/$defs/RFC3339Timestamp"},
+        "created_at": {"$ref": "#/$defs/RFC3339Timestamp"},
+        "updated_at": {"$ref": "#/$defs/RFC3339Timestamp"}
+      }
+    },
+    "CreateSessionRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["expected_workspace_version", "slot_key", "kind", "protocol_profile", "expires_in_seconds", "recording_policy"],
+      "properties": {
+        "expected_workspace_version": {"type": "integer", "minimum": 1},
+        "slot_key": {"$ref": "#/$defs/SlotKey"},
+        "kind": {"$ref": "#/$defs/SessionKind"},
+        "protocol_profile": {"$ref": "#/$defs/ProfileID"},
+        "expires_in_seconds": {"type": "integer", "minimum": 30, "maximum": 86400},
+        "recording_policy": {"enum": ["disabled", "metadata_only", "required"]}
+      }
+    },
+    "CloseSessionRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["expected_version", "reason"],
+      "properties": {
+        "expected_version": {"type": "integer", "minimum": 1},
+        "reason": {"type": "string", "minLength": 1, "maxLength": 256}
+      }
+    },
+    "ResizeSessionRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["expected_version", "columns", "rows", "control_lease_id", "control_fence"],
+      "properties": {
+        "expected_version": {"type": "integer", "minimum": 1},
+        "columns": {"type": "integer", "minimum": 1, "maximum": 1000},
+        "rows": {"type": "integer", "minimum": 1, "maximum": 1000},
+        "control_lease_id": {"$ref": "#/$defs/Identifier"},
+        "control_fence": {"type": "integer", "minimum": 1}
+      }
+    },
+    "CreateConnectionRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["expected_session_version", "protocol_profile"],
+      "properties": {
+        "expected_session_version": {"type": "integer", "minimum": 1},
+        "protocol_profile": {"$ref": "#/$defs/ProfileID"},
+        "control_lease_id": {"$ref": "#/$defs/Identifier"},
+        "control_fence": {"type": "integer", "minimum": 1}
+      },
+      "dependentRequired": {
+        "control_lease_id": ["control_fence"],
+        "control_fence": ["control_lease_id"]
+      }
+    },
+    "ConnectionGrant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["connection_id", "session_id", "protocol_profile", "gateway_uri", "connection_ticket", "expires_at"],
+      "properties": {
+        "connection_id": {"$ref": "#/$defs/Identifier"},
+        "session_id": {"$ref": "#/$defs/Identifier"},
+        "protocol_profile": {"$ref": "#/$defs/ProfileID"},
+        "gateway_uri": {"type": "string", "format": "uri", "maxLength": 2048, "pattern": "^(wss|https)://"},
+        "connection_ticket": {"type": "string", "minLength": 32, "maxLength": 4096, "pattern": "^[A-Za-z0-9._~-]+$"},
+        "expires_at": {"$ref": "#/$defs/RFC3339Timestamp"}
+      }
+    },
+    "Artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_id", "workspace_id", "name", "media_type", "size_bytes", "digest", "state", "created_by", "created_at"],
+      "properties": {
+        "artifact_id": {"$ref": "#/$defs/Identifier"},
+        "workspace_id": {"$ref": "#/$defs/Identifier"},
+        "slot_key": {"$ref": "#/$defs/SlotKey"},
+        "name": {"type": "string", "minLength": 1, "maxLength": 256},
+        "media_type": {"type": "string", "minLength": 1, "maxLength": 256},
+        "size_bytes": {"type": "integer", "minimum": 0},
+        "digest": {"$ref": "#/$defs/SHA256Digest"},
+        "state": {"enum": ["available", "quarantined", "expired", "deleted"]},
+        "created_by": {"$ref": "#/$defs/ActorRef"},
+        "created_at": {"$ref": "#/$defs/RFC3339Timestamp"}
+      }
+    },
+    "Recording": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["recording_id", "workspace_id", "recording_type", "state", "started_at", "retention_expires_at"],
+      "properties": {
+        "recording_id": {"$ref": "#/$defs/Identifier"},
+        "workspace_id": {"$ref": "#/$defs/Identifier"},
+        "session_id": {"$ref": "#/$defs/Identifier"},
+        "agent_run_id": {"$ref": "#/$defs/Identifier"},
+        "recording_type": {"enum": ["audit", "terminal", "media", "agent_trace"]},
+        "state": {"enum": ["recording", "finalizing", "available", "failed", "expired", "deleted"]},
+        "digest": {"$ref": "#/$defs/SHA256Digest"},
+        "size_bytes": {"type": "integer", "minimum": 0},
+        "started_at": {"$ref": "#/$defs/RFC3339Timestamp"},
+        "completed_at": {"$ref": "#/$defs/RFC3339Timestamp"},
+        "retention_expires_at": {"$ref": "#/$defs/RFC3339Timestamp"}
+      }
+    },
+    "AgentRun": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["agent_run_id", "workspace_id", "slot_key", "actor", "task_reference", "tool_profile_id", "state", "version", "expires_at", "created_at", "updated_at"],
+      "properties": {
+        "agent_run_id": {"$ref": "#/$defs/Identifier"},
+        "workspace_id": {"$ref": "#/$defs/Identifier"},
+        "slot_key": {"$ref": "#/$defs/SlotKey"},
+        "actor": {"$ref": "#/$defs/ActorRef"},
+        "task_reference": {"$ref": "#/$defs/Identifier"},
+        "tool_profile_id": {"$ref": "#/$defs/ProfileID"},
+        "state": {"enum": ["requested", "running", "waiting", "succeeded", "failed", "cancelled", "expired"]},
+        "version": {"type": "integer", "minimum": 1},
+        "expires_at": {"$ref": "#/$defs/RFC3339Timestamp"},
+        "created_at": {"$ref": "#/$defs/RFC3339Timestamp"},
+        "updated_at": {"$ref": "#/$defs/RFC3339Timestamp"}
+      }
+    },
+    "CreateAgentRunRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["expected_workspace_version", "slot_key", "task_reference", "tool_profile_id", "expires_in_seconds"],
+      "properties": {
+        "expected_workspace_version": {"type": "integer", "minimum": 1},
+        "slot_key": {"$ref": "#/$defs/SlotKey"},
+        "task_reference": {"$ref": "#/$defs/Identifier"},
+        "tool_profile_id": {"$ref": "#/$defs/ProfileID"},
+        "expires_in_seconds": {"type": "integer", "minimum": 30, "maximum": 86400}
+      }
+    },
+    "CancelAgentRunRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["expected_version", "reason"],
+      "properties": {
+        "expected_version": {"type": "integer", "minimum": 1},
+        "reason": {"type": "string", "minLength": 1, "maxLength": 256}
+      }
+    },
+    "WorkspacePage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["items"],
+      "properties": {
+        "items": {"type": "array", "maxItems": 200, "items": {"$ref": "#/$defs/Workspace"}},
+        "next_cursor": {"type": "string", "minLength": 1, "maxLength": 1024}
+      }
+    },
+    "OperationPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["items"],
+      "properties": {
+        "items": {"type": "array", "maxItems": 200, "items": {"$ref": "#/$defs/ProductOperation"}},
+        "next_cursor": {"type": "string", "minLength": 1, "maxLength": 1024}
+      }
+    },
+    "EventPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["items", "latest_sequence"],
+      "properties": {
+        "items": {"type": "array", "maxItems": 200, "items": {"$ref": "#/$defs/WorkspaceEvent"}},
+        "latest_sequence": {"type": "integer", "minimum": 0},
+        "next_after_sequence": {"type": "integer", "minimum": 0}
+      }
+    },
+    "SessionPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["items"],
+      "properties": {
+        "items": {"type": "array", "maxItems": 200, "items": {"$ref": "#/$defs/RuntimeSession"}},
+        "next_cursor": {"type": "string", "minLength": 1, "maxLength": 1024}
+      }
+    },
+    "ArtifactPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["items"],
+      "properties": {
+        "items": {"type": "array", "maxItems": 200, "items": {"$ref": "#/$defs/Artifact"}},
+        "next_cursor": {"type": "string", "minLength": 1, "maxLength": 1024}
+      }
+    },
+    "RecordingPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["items"],
+      "properties": {
+        "items": {"type": "array", "maxItems": 200, "items": {"$ref": "#/$defs/Recording"}},
+        "next_cursor": {"type": "string", "minLength": 1, "maxLength": 1024}
+      }
+    }
+  }
+}

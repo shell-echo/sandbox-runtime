@@ -11,17 +11,18 @@ import (
 var ErrBodyTooLarge = errors.New("provider request body too large")
 
 const (
-	MaxCreateRequestBytes             int64 = 1 << 20
-	MaxRestoreRequestBytes            int64 = 1 << 20
-	MaxDesiredStateRequestBytes       int64 = 64 << 10
-	MaxLeaseRequestBytes              int64 = 64 << 10
-	MaxExecRequestBytes               int64 = 256 << 10
-	MaxCancelExecRequestBytes         int64 = 64 << 10
-	MaxRuntimeSessionOpenRequestBytes int64 = 64 << 10
-	MaxBrowserSessionOpenRequestBytes int64 = 64 << 10
-	MaxArtifactStagingRequestBytes    int64 = 64 << 10
-	MaxSnapshotRequestBytes           int64 = 256 << 10
-	MaxTerminateRequestBytes          int64 = 64 << 10
+	MaxCreateRequestBytes              int64 = 1 << 20
+	MaxRestoreRequestBytes             int64 = 1 << 20
+	MaxDesiredStateRequestBytes        int64 = 64 << 10
+	MaxLeaseRequestBytes               int64 = 64 << 10
+	MaxExecRequestBytes                int64 = 256 << 10
+	MaxCancelExecRequestBytes          int64 = 64 << 10
+	MaxRuntimeSessionOpenRequestBytes  int64 = 64 << 10
+	MaxRuntimeSessionCloseRequestBytes int64 = 64 << 10
+	MaxBrowserSessionOpenRequestBytes  int64 = 64 << 10
+	MaxArtifactStagingRequestBytes     int64 = 64 << 10
+	MaxSnapshotRequestBytes            int64 = 256 << 10
+	MaxTerminateRequestBytes           int64 = 64 << 10
 )
 
 // DecodeStrict decodes one bounded Provider API JSON document. Contract-level

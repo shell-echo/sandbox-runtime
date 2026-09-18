@@ -26,6 +26,18 @@
 
 完整证据账本参见[项目状态](docs/STATUS.md)，精确的结论边界参见[外部调用方资格验证](docs/qualification/external-caller-coding-shell-v1.md)。
 
+独立的 [Product v1 架构第一阶段](docs/plan/product-v1-phase-1.md)也已经完成，
+但其结论仅限于设计与 Product Contract 定义。它允许本仓库未来承载 Product
+模块，同时保持 Provider 是受锁定网络 Contract 约束的独立边界，并定义了
+Workspace/Slot 持久化、身份与 Agent 委托、Runtime Gateway 与录制，以及部署
+等级。该阶段没有实现或验证 Product 服务、Product 数据库迁移、公开 Gateway、
+Guest Agent 或生产部署。
+
+独立的 [Product v1 第二阶段 Provider 生命周期计划](docs/plan/product-v1-phase-2-provider-lifecycle.md)
+目前已形成实现完整的源码候选，覆盖终止、暂停/恢复、租约过期、有限事件读取和终端
+会话关闭。但它还不是已选定的 Provider 权威：在候选内容形成不可变版本并通过干净
+VCS 的 Contract 与 Conformance 门禁之前，已发布锁保持不变。
+
 ## 项目提供什么
 
 - 本地实例管理 API，以及内存 Fake 驱动和 Docker 运行时驱动。
@@ -46,6 +58,7 @@
 | --- | --- | --- |
 | 本地 `/health` 和 `/instances` API | 操作单个本地运行时控制器 | 内部应用模型和配置 |
 | Provider `/v1/*` API | 跨服务沙箱协议 | 锁定的仓库自有 Provider Contract |
+| 目标 Product `/api/v1/*` API | 面向最终用户的 Workspace 控制面 | 独立锁定的 Product Contract；当前仅为设计 |
 
 ```text
 调用服务

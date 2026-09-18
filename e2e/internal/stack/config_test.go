@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -107,6 +108,31 @@ func TestBrowserCapabilitySourceAdvertisesExactReferenceProfile(t *testing.T) {
 		len(snapshot.RuntimeProfiles[0].CapabilityProfileIDs) != 1 || snapshot.RuntimeProfiles[0].CapabilityProfileIDs[0] != "browser-v1" ||
 		len(snapshot.SnapshotRestoreProfiles) != 1 {
 		t.Fatalf("Browser reference snapshot = %#v", snapshot)
+	}
+}
+
+func TestCodingShellCapabilitySourceAdvertisesLifecycleControls(t *testing.T) {
+	t.Parallel()
+	source, err := capabilitySource("provider-revision-e2e-v1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := source.CapabilitySnapshot(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantIDs := []string{"sandbox.exec", "sandbox.terminal", "sandbox.lifecycle-control", "sandbox.terminal-control", "sandbox.terminal-connect"}
+	if len(snapshot.Capabilities) != len(wantIDs) || len(snapshot.RuntimeProfiles) != 1 {
+		t.Fatalf("coding/shell capability snapshot = %#v", snapshot)
+	}
+	for index, want := range wantIDs {
+		if snapshot.Capabilities[index].ID != want {
+			t.Fatalf("capability[%d] = %q, want %q", index, snapshot.Capabilities[index].ID, want)
+		}
+	}
+	wantProfiles := []string{"exec-v1", "terminal-v1", "lifecycle-control-v1", "terminal-control-v1", "terminal-connect-v1"}
+	if !reflect.DeepEqual(snapshot.RuntimeProfiles[0].CapabilityProfileIDs, wantProfiles) {
+		t.Fatalf("coding/shell capability profiles = %v, want %v", snapshot.RuntimeProfiles[0].CapabilityProfileIDs, wantProfiles)
 	}
 }
 

@@ -25,6 +25,11 @@ type engine interface {
 	close() error
 }
 
+type lifecycleControlEngine interface {
+	pause(context.Context, string) error
+	unpause(context.Context, string) error
+}
+
 type bindMount struct {
 	source   string
 	target   string
@@ -206,6 +211,16 @@ func (e *mobyEngine) remove(ctx context.Context, id string) error {
 	return err
 }
 
+func (e *mobyEngine) pause(ctx context.Context, id string) error {
+	_, err := e.client.ContainerPause(ctx, id, client.ContainerPauseOptions{})
+	return err
+}
+
+func (e *mobyEngine) unpause(ctx context.Context, id string) error {
+	_, err := e.client.ContainerUnpause(ctx, id, client.ContainerUnpauseOptions{})
+	return err
+}
+
 func (e *mobyEngine) execCreate(ctx context.Context, containerID string, request execCreateRequest) (string, error) {
 	result, err := e.client.ExecCreate(ctx, containerID, client.ExecCreateOptions{
 		User: request.user, Privileged: false, TTY: request.tty,
@@ -290,6 +305,7 @@ func (s *hijackedTerminalStream) Close() error {
 func (e *mobyEngine) close() error { return e.client.Close() }
 
 var (
-	errorsIncompleteInspect        = errors.New("incomplete Docker inspection")
-	_                       engine = (*mobyEngine)(nil)
+	errorsIncompleteInspect                        = errors.New("incomplete Docker inspection")
+	_                       engine                 = (*mobyEngine)(nil)
+	_                       lifecycleControlEngine = (*mobyEngine)(nil)
 )

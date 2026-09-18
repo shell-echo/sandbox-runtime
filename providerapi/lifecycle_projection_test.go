@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -25,9 +26,15 @@ import (
 )
 
 type projectionApplication struct {
-	accepted  lifecycle.CreateRequest
-	operation lifecycle.Operation
-	sandbox   lifecycle.Sandbox
+	accepted          lifecycle.CreateRequest
+	acceptedDesired   lifecycle.DesiredStateRequest
+	acceptedLease     lifecycle.LeaseRequest
+	acceptedTerminate lifecycle.TerminateRequest
+	eventAfter        uint64
+	eventPage         repository.EventPage
+	eventErr          error
+	operation         lifecycle.Operation
+	sandbox           lifecycle.Sandbox
 }
 
 func operationReadAuthorizationApplication() *projectionApplication {
@@ -45,6 +52,32 @@ func (a *projectionApplication) GetSandbox(context.Context, string) (lifecycle.S
 }
 func (a *projectionApplication) GetOperation(context.Context, string) (lifecycle.Operation, error) {
 	return a.operation, nil
+}
+func (a *projectionApplication) AcceptDesiredState(_ context.Context, _ string, request lifecycle.DesiredStateRequest) (repository.MutationResult, error) {
+	a.acceptedDesired = request
+	operation := a.operation
+	if request.DesiredState == lifecycle.DesiredSuspended {
+		operation.Type = lifecycle.OperationSuspend
+	} else {
+		operation.Type = lifecycle.OperationResume
+	}
+	return repository.MutationResult{Operation: operation}, nil
+}
+func (a *projectionApplication) AcceptLease(_ context.Context, _ string, request lifecycle.LeaseRequest, _ int64) (repository.MutationResult, error) {
+	a.acceptedLease = request
+	operation := a.operation
+	operation.Type = lifecycle.OperationExtendLease
+	return repository.MutationResult{Operation: operation}, nil
+}
+func (a *projectionApplication) AcceptTerminate(_ context.Context, _ string, request lifecycle.TerminateRequest) (repository.MutationResult, error) {
+	a.acceptedTerminate = request
+	operation := a.operation
+	operation.Type = lifecycle.OperationTerminate
+	return repository.MutationResult{Operation: operation}, nil
+}
+func (a *projectionApplication) ReadEvents(_ context.Context, _ string, after uint64) (repository.EventPage, error) {
+	a.eventAfter = after
+	return a.eventPage, a.eventErr
 }
 
 func validProjectionCreateRequest(now time.Time) (providerv1.CreateRequest, admission.AdmissionContext) {
@@ -291,6 +324,23 @@ func validCodingShellSnapshot(t *testing.T) provider.CapabilitySnapshot {
 	return snapshot
 }
 
+func validLifecycleControlSnapshot(t *testing.T) provider.CapabilitySnapshot {
+	t.Helper()
+	base := validSnapshot(t, nil, nil)
+	capabilities, runtimeProfiles := providerCodingShellAdvertisements()
+	capabilities = append(capabilities, provider.Capability{
+		ID: "sandbox.lifecycle-control", Versions: []string{"1.0.0"}, Profiles: []string{"lifecycle-control-v1"},
+	})
+	runtimeProfiles[0].CapabilityProfileIDs = append(runtimeProfiles[0].CapabilityProfileIDs, "lifecycle-control-v1")
+	snapshot, err := provider.NewCapabilitySnapshotWithAdvertisements(
+		base.ProviderRevisionID, base.Limits, capabilities, runtimeProfiles, base.SnapshotRestoreProfiles,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return snapshot
+}
+
 func TestLifecycleProjectionsAreBoundedAndOpaque(t *testing.T) {
 	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	sandbox := lifecycle.Sandbox{ID: "sandbox-1", TenantID: "tenant-1", WorkOrderID: "work-1", WorkspaceID: "workspace-1", ProviderRevisionID: "revision-1", RuntimeProfile: "profile-1", SandboxSlotKey: "primary", DesiredState: lifecycle.DesiredReady, ObservedState: lifecycle.ObservedReady, Generation: 1, ObservedGeneration: 1, LeaseExpiresAt: now.Add(time.Hour), CreatedAt: now, UpdatedAt: now}
@@ -430,6 +480,74 @@ func TestProtectedCreateProjectsAcceptedOperationAfterAdmission(t *testing.T) {
 	handler.ServeHTTP(response, httpRequest)
 	if response.Code != http.StatusAccepted || app.accepted.OperationID != request.OperationID {
 		t.Fatalf("create response=%d accepted=%#v body=%s", response.Code, app.accepted, response.Body.String())
+	}
+}
+
+func TestProtectedLifecycleControlsProjectAfterAdmission(t *testing.T) {
+	material := newTestMTLSMaterial(t, []string{testAllowedIdentity})
+	identity, err := newClientIdentityAdmission([]string{testAllowedIdentity})
+	if err != nil {
+		t.Fatal(err)
+	}
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := releaseGateTestTime()
+	app := &projectionApplication{
+		sandbox: lifecycle.Sandbox{
+			ID: "sandbox-1", TenantID: "tenant-1", WorkOrderID: "work-order-1", WorkspaceID: "workspace-1",
+			ProviderRevisionID: "provider-revision-1", RuntimeProfile: "sandbox-runtime-coding-shell-v1", SandboxSlotKey: "primary",
+			DesiredState: lifecycle.DesiredReady, ObservedState: lifecycle.ObservedReady, Generation: 1, ObservedGeneration: 1,
+			LeaseExpiresAt: now.Add(time.Hour), CreatedAt: now, UpdatedAt: now,
+		},
+		operation: lifecycle.Operation{
+			ID: "operation-1", AttemptID: "attempt-1", FencingToken: 1, SandboxID: "sandbox-1",
+			Type: lifecycle.OperationSuspend, State: lifecycle.OperationAccepted, Deadline: now.Add(4 * time.Minute), ObservedAt: now,
+		},
+		eventPage: repository.EventPage{
+			Events: []lifecycle.Event{{
+				ID: "event-3", SandboxID: "sandbox-1", OperationID: "operation-1", Sequence: 3,
+				Generation: 1, FencingToken: 1, Kind: "suspended", OccurredAt: now,
+			}},
+			FirstAvailableSequence: 1, LatestSequence: 3, NextSequence: 3,
+		},
+	}
+	handler, err := newProtectedHandler(identity, ProtectedTransportOptions{
+		Gate: newTestProtectedGateWithPublicKey(t, publicKey, &testAdmissionGuard{}), Application: app,
+		Now: func() time.Time { return now }, capabilitySnapshot: validLifecycleControlSnapshot(t),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	routes := []protectedReleaseRoute{
+		{name: "desired", method: http.MethodPost, path: "/v1/sandboxes/sandbox-1/desired-state", operation: admission.OperationSetDesiredState, allowUnavailable: true},
+		{name: "lease", method: http.MethodPost, path: "/v1/sandboxes/sandbox-1/lease", operation: admission.OperationExtendLease, allowUnavailable: true},
+		{name: "terminate", method: http.MethodPost, path: "/v1/sandboxes/sandbox-1:terminate", operation: admission.OperationTerminate, allowUnavailable: true},
+		{name: "events", method: http.MethodGet, path: "/v1/sandboxes/sandbox-1/events", query: "?after_sequence=2", operation: admission.OperationReadEvents, allowUnavailable: true},
+	}
+	for index, route := range routes {
+		request := newProtectedReleaseRequest(t, route, privateKey, material.client, fmt.Sprintf("jti-control-%d-0001", index))
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		want := http.StatusAccepted
+		if route.operation == admission.OperationReadEvents {
+			want = http.StatusOK
+		}
+		if response.Code != want {
+			t.Fatalf("%s response=%d want=%d body=%s", route.name, response.Code, want, response.Body.String())
+		}
+	}
+	if app.acceptedDesired.DesiredState != lifecycle.DesiredSuspended || app.acceptedLease.ExtendSeconds != 60 || app.acceptedTerminate.Reason != "complete" || app.eventAfter != 2 {
+		t.Fatalf("projected lifecycle controls = desired %#v lease %#v terminate %#v after %d", app.acceptedDesired, app.acceptedLease, app.acceptedTerminate, app.eventAfter)
+	}
+
+	app.eventErr = &repository.CursorError{Kind: repository.ErrCursorExpired, FirstAvailableSequence: 7, LatestSequence: 12}
+	request := newProtectedReleaseRequest(t, routes[3], privateKey, material.client, "jti-control-cursor-0001")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusGone || !strings.Contains(response.Body.String(), `"first_available_sequence":7`) || !strings.Contains(response.Body.String(), `"latest_sequence":12`) {
+		t.Fatalf("cursor gap response=%d body=%s", response.Code, response.Body.String())
 	}
 }
 

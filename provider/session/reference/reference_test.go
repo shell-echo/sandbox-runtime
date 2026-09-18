@@ -285,6 +285,45 @@ func TestRegistrarReusesExactRunningSessionReference(t *testing.T) {
 	}
 }
 
+func TestRevokeSucceededHandoffValidatesCommittedBindingAndIsIdempotent(t *testing.T) {
+	clock := &testClock{now: referenceTestTime}
+	store := newTestStore()
+	registrar, err := NewRegistrar(store, clock, func() (string, error) {
+		return "ref:session:44444444444444444444444444444444", nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	running := runningSession(t)
+	registration, err := registrar.Register(context.Background(), running)
+	if err != nil {
+		t.Fatal(err)
+	}
+	succeeded := succeededSession(t, running, registration.Evidence)
+	revokedAt := referenceTestTime.Add(2 * time.Second)
+	if err := RevokeSucceededHandoff(context.Background(), store, succeeded, revokedAt); err != nil {
+		t.Fatalf("RevokeSucceededHandoff() error = %v", err)
+	}
+	retained, err := store.Get(context.Background(), registration.Record.Reference)
+	if err != nil || retained.RevokedAt == nil || !retained.RevokedAt.Equal(revokedAt) {
+		t.Fatalf("revoked record = %#v, %v", retained, err)
+	}
+	if err := RevokeSucceededHandoff(context.Background(), store, succeeded, revokedAt.Add(time.Second)); err != nil {
+		t.Fatalf("idempotent RevokeSucceededHandoff() error = %v", err)
+	}
+
+	otherRequest := testRequest()
+	otherRequest.OperationID = "operation-reference-other"
+	otherRequest.AttemptID = "attempt-reference-other"
+	otherRequest.RuntimeSessionID = "session-reference-other"
+	otherRequest.IdempotencyKey = "reference-key-other"
+	other := runningSessionForRequest(t, otherRequest)
+	otherSucceeded := succeededSession(t, other, registration.Evidence)
+	if err := RevokeSucceededHandoff(context.Background(), store, otherSucceeded, revokedAt); !errors.Is(err, ErrStale) {
+		t.Fatalf("mismatched RevokeSucceededHandoff() error = %v, want ErrStale", err)
+	}
+}
+
 func TestRegistrarRejectsTerminalSessionThatCannotMintReference(t *testing.T) {
 	clock := &testClock{now: referenceTestTime}
 	store := newTestStore()

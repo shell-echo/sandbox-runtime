@@ -176,6 +176,32 @@ func verifyGatewayRevocation(ctx context.Context, client *http.Client, config Co
 	})
 }
 
+func verifyClosedSessionReconnectDenied(ctx context.Context, client *http.Client, config Config, handoff RuntimeSessionHandoff) error {
+	request := gatewayRequest{
+		GrantID: "grant-closed-session-1", CallerID: config.ControllerA.GatewayCallerID, TenantID: config.ControllerA.TenantID,
+		SandboxID: handoff.SandboxID, RuntimeSessionID: handoff.RuntimeSessionID,
+		CapabilityProfileID: handoff.CapabilityProfileID, HandoffReference: handoff.InternalEndpointReference,
+		ConnectionGeneration: handoff.ConnectionGeneration, ExpiresAt: time.Now().UTC().Add(time.Minute),
+		Bearer: config.ControllerA.GatewayToken,
+	}
+	connection, response, err := gatewayConnect(ctx, client, config.GatewayBaseURL, request)
+	if err != nil {
+		if response != nil && response.Body != nil {
+			_ = response.Body.Close()
+		}
+		return nil
+	}
+	defer connection.CloseNow()
+	readCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	if _, _, readErr := connection.Read(readCtx); readErr == nil {
+		return errors.New("closed terminal session accepted a Gateway reconnect")
+	} else if errors.Is(readErr, context.DeadlineExceeded) {
+		return errors.New("closed terminal session Gateway reconnect remained open")
+	}
+	return nil
+}
+
 func revokeGatewayGrant(ctx context.Context, client *http.Client, config Config, grantID string, expiresAt time.Time) (*http.Response, error) {
 	endpoint, err := url.Parse(config.GatewayBaseURL + "/v1/revoke/" + url.PathEscape(grantID))
 	if err != nil {

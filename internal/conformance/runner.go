@@ -196,6 +196,26 @@ var testCases = map[string]testCase{
 		Run:             `^(TestKnownFailureAndDeadlineDoNotDispatch|TestCanceledContextDoesNotDispatch|TestCreateUnknownOutcomeIsNotRetriedBlindlyAndReconcilesByInspection|TestRestartedRunningOperationIsReconciledWithoutDuplicateCreate)$`,
 		ExpectedMatches: 4,
 	},
+	"lifecycle-control-capability-advertisement": {
+		Package: "./providerapi/v1",
+		Run:     `^TestLocalLifecycleControlCapabilityAdvertisement$`,
+	},
+	"lifecycle-desired-state-schema-and-semantics": {
+		Package: "./providerapi/v1",
+		Run:     `^TestLocalLifecycleDesiredStateSchemaAndSemantics$`,
+	},
+	"lifecycle-lease-schema-and-semantics": {
+		Package: "./providerapi/v1",
+		Run:     `^TestLocalLifecycleLeaseSchemaAndSemantics$`,
+	},
+	"lifecycle-termination-cleanup-and-reconciliation": {
+		Package: "./providerapi/v1",
+		Run:     `^TestLocalLifecycleTerminationCleanupAndReconciliation$`,
+	},
+	"lifecycle-events-polling-and-cursors": {
+		Package: "./providerapi/v1",
+		Run:     `^TestLocalLifecycleEventsPollingAndCursors$`,
+	},
 	"exec-request-schema": {
 		Package: "./providerapi/v1",
 		Run:     `^TestLockedExecRequestProjection$`,
@@ -247,6 +267,14 @@ var testCases = map[string]testCase{
 	"terminal-connect-admission-and-websocket-contract": {
 		Package: "./providerapi/v1",
 		Run:     `^TestLocalTerminalConnectAdmissionAndWebSocketContract$`,
+	},
+	"terminal-control-capability-advertisement": {
+		Package: "./providerapi/v1",
+		Run:     `^TestLocalTerminalControlCapabilityAdvertisement$`,
+	},
+	"runtime-session-close-schema-and-semantics": {
+		Package: "./providerapi/v1",
+		Run:     `^TestLocalRuntimeSessionCloseSchemaAndSemantics$`,
 	},
 	"browser-session-open-schema": {
 		Package: "./providerapi/v1",

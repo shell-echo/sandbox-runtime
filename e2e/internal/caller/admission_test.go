@@ -132,3 +132,39 @@ func TestBackendDisclosureCheckAllowsOpaqueReferenceOnly(t *testing.T) {
 		}
 	}
 }
+
+func TestPrepareLifecycleEventReadBindsCursorQuery(t *testing.T) {
+	t.Parallel()
+	_, private, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().UTC().Add(time.Minute)
+	prepared, err := prepareAdmission(admissionAuthority{
+		ControllerSubject: "spiffe://reference-caller/controller-a", JWSKeyID: "controller-a-key",
+		JWSIssuer: "https://reference-caller.sandbox-runtime.test", ProviderRevisionID: "provider-revision-e2e-v1",
+		ProviderInstanceAudience: "urn:shell-echo:sandbox-runtime:provider-instance:e2e",
+	}, private, "GET", "/v1/sandboxes/sandbox-1/events?after_sequence=7", nil, admissionBinding{
+		Operation: "read_events", SandboxID: "sandbox-1", OperationID: "operation-create-1", AttemptID: "attempt-create-1",
+		FencingToken: 1, TenantID: "tenant-1", WorkOrderID: "work-order-1", Deadline: deadline,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	carrier, err := base64.RawURLEncoding.DecodeString(prepared.AdmissionContext)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var admitted admissionContext
+	if err := decodeStrict(carrier, &admitted); err != nil {
+		t.Fatal(err)
+	}
+	if admitted.HTTPTarget.Path != "/v1/sandboxes/sandbox-1/events" || len(admitted.HTTPTarget.NormalizedQuery) != 1 ||
+		admitted.HTTPTarget.NormalizedQuery[0] != (admissionQuery{Name: "after_sequence", Value: "7"}) ||
+		admitted.RequestContractID != "urn:shell-echo:sandbox-runtime:descriptor:events:v1" || admitted.RequestDigestProfile != requestDigestFull {
+		t.Fatalf("lifecycle event admission = %#v", admitted)
+	}
+	if prepared.Path != "/v1/sandboxes/sandbox-1/events?after_sequence=7" || prepared.Body != nil {
+		t.Fatalf("prepared lifecycle event request = %#v", prepared)
+	}
+}

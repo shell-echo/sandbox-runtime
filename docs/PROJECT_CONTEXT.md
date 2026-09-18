@@ -1,6 +1,6 @@
 # Project Context
 
-Updated: 2026-09-17
+Updated: 2026-09-18
 
 This is the stable handoff index for a new developer, AI agent, development
 device, or implementation session. It summarizes the system, engineering
@@ -16,7 +16,14 @@ Current verified state:
   run-owned resource scope to zero across three stable samples;
 - artifact `10488622806` contains the accepted seven-file evidence archive,
   validator receipt, and bounded `qualified` result envelope; and
-- post-documentation core CI run `35204434771` passed every required job.
+- post-documentation core CI run `35204434771` passed every required job; and
+- Product v1 architecture Phase 1 is complete as uncommitted design and
+  Product Contract-definition work in the current worktree; and
+- Product v1 Phase 2 has an implementation-complete uncommitted candidate for
+  lifecycle/terminal control and a coordinated 60-case Contract source
+  candidate; the historical published lock remains authoritative because an
+  exact replacement requires a committed immutable revision, and the planned
+  independent-process coding/shell lifecycle black-box gate remains open.
 
 The qualification applies only to Provider revision
 `170459266af5f4fad359ca8c63f2ae19741055c5`, external-caller revision
@@ -24,6 +31,18 @@ The qualification applies only to Provider revision
 profile, artifacts, topology, and scenarios. Aggregate conformance,
 multi-controller reliability, hostile multi-tenant isolation, HA, deployment,
 and production readiness remain separate non-claims.
+
+The Product Phase 1 result adds no implemented Product API, database migration,
+public Gateway, Guest Agent, capability advertisement, deployment, or SLO
+attainment claim. See
+[`plan/product-v1-phase-1.md`](plan/product-v1-phase-1.md) for its exact output
+and [`plan/product-v1-phase-2-provider-lifecycle.md`](plan/product-v1-phase-2-provider-lifecycle.md)
+for the fixed nine-step Provider lifecycle closure plan. ADR 0048 and the
+Step 1 audit and completion record include termination, reversible desired
+state, lease renewal/expiry, resumable events, and terminal-session close; they
+exclude resize and snapshot/restore from Phase 2. See
+[`audits/phase-2-provider-lifecycle-completion.md`](audits/phase-2-provider-lifecycle-completion.md)
+for the candidate evidence and remaining immutable-lock gate.
 
 See [`STATUS.md`](STATUS.md) for the complete evidence ledger and
 [`qualification/external-caller-coding-shell-v1.md`](qualification/external-caller-coding-shell-v1.md)
@@ -51,14 +70,17 @@ Use these sources in authority order:
    Conformance Suite, and
    `compatibility/sandbox-runtime/contract.lock.json`, defines authorized wire
    behavior and caller obligations.
-2. [`architecture.md`](architecture.md) and accepted
+2. The independent Product Contract under `product-contract/` defines the
+   target client-to-Product control protocol. It is Phase 1 design authority,
+   not implementation or readiness evidence.
+3. [`architecture.md`](architecture.md) and accepted
    [ADRs](adr/) define ownership, boundaries, delivery order, and release
    gates.
-3. [`development.md`](development.md) and `AGENTS.md` define engineering and
+4. [`development.md`](development.md) and `AGENTS.md` define engineering and
    validation rules.
-4. [Phase plans](plan/README.md) refine implementation slices without relaxing
+5. [Phase plans](plan/README.md) refine implementation slices without relaxing
    architecture gates.
-5. [`STATUS.md`](STATUS.md) is the detailed evidence ledger. Code, Git state,
+6. [`STATUS.md`](STATUS.md) is the detailed evidence ledger. Code, Git state,
    and reproducible test or CI results must still support every status claim.
 
 Start external integrations with the normative
@@ -77,19 +99,23 @@ control plane. The first intended compatibility profile is coding and remote
 shell. Browser, desktop, snapshots, GPU, and stronger isolation remain optional
 until their own Contract and evidence gates pass.
 
-Two API surfaces must remain separate:
+Three API surfaces must remain separate:
 
 | Surface | Purpose | Ownership boundary |
 | --- | --- | --- |
 | Local `/instances` API | Local instance management over fake or Docker drivers | Internal implementation; its DTOs and state are not Provider wire models |
 | Provider API v1 | mTLS/JWS-protected asynchronous Provider protocol | Repository Contract controls routes, documents, semantics, and projection |
+| Target Product API v1alpha1 | End-user Workspace control plane | Independent Product Contract; no server implementation today |
 
 The calling service owns its business correlation records, desired business
 state, tenant/user authorization, ProviderRevision selection, Artifact
 publication, billing/accounting, aggregate operation ledger, and public Gateway
 policy. It adapts to this repository's Contract; the Provider does not carry a
 consumer-specific adapter.
-This repository owns provider-local execution, durable Provider operations,
+The target Product is the calling service defined by ADRs 0042-0047. It owns
+Workspace aggregates, user/Agent authorization, Product operations, outbox,
+reconciliation, sessions, public Gateway policy, and catalogs. This repository
+owns provider-local execution, durable Provider operations,
 runtime/session resources, and bounded evidence. Provider storage references
 and backend endpoints are never public artifact URLs or client endpoints.
 
@@ -181,7 +207,13 @@ multi-tenant, deployment, and production readiness.
 
 ## Current Snapshot
 
-The latest verified documentation baseline is
+The current checked-out code snapshot is
+`e5bc9bd7039e01a1898f90fbd77684a1cb6699ad`, which adds the portable
+application-packaging profiles. The Product Phase 1 design set dated
+2026-09-18 is intentionally uncommitted in this worktree; do not assign it a
+revision or remote CI result until it is committed and run.
+
+The latest remotely verified documentation baseline remains
 `27081dfde4dfc726ba4df06d1f3b50012a04d2f2`. Core CI run `35204434771`
 passed all six jobs, including the current Contract and clean VCS-built local
 Suite, full race tests, vet, Docker integration, Browser provenance, and the
@@ -243,7 +275,13 @@ v2 harness `059357cdd1f6f4ecd78ccbbaf9923add0fcd2230`, local run
 `20260906T100233.295973000Z`, and hosted run `34026680591`, plus PostgreSQL
 controlled-restore implementation `ffa40d643605e51d4ea1baebab1bd3f8bd710b5f`,
 PR #47 merge `a0cddf40d07f9ad81b02d3eb028f141aeb424228`, and post-merge run
-`34038556283`. Merge commit `a0cddf4` also passes repository CI `34038556281`,
+`34038556283`. The later main run `34069851741` at
+`838d3bb2dea52c10fdc1ddf3136641709fedcb20` is the current canonical ADR 0036
+run and passes the same 18/18 profile. Its independently inspected artifact is
+`browser-postgres-controlled-restore-e2e-evidence-34069851741`, ID
+`10000177842`, digest
+`sha256:96817b74f3faabb0226d7dee1f2ac8128901865a3834f9bcadcaae6459b76032`.
+Merge commit `a0cddf4` also passes repository CI `34038556281`,
 Reference `34038556295`, Candidate `34038556284`, Browser `34038556297`,
 shared-capacity `34038556314`, durable-revocation `34038556293`,
 downstream-fencing v1 `34038556291`, downstream-fencing v2 `34038556299`, and
@@ -563,15 +601,17 @@ without advancing PostgreSQL or opening a listener. It then restores the exact
 current Redis state, verifies without mutation, resumes the listeners, and
 performs a real-CDP read and write. The runner uses an orchestrator-only Redis
 restore credential and a PostgreSQL runtime role available only to the
-orchestrator and Provider/private-ingress process. PR #47 merged as `a0cddf4`;
-post-merge `linux/amd64` run `34038556283` passes all 18 scenarios. Its
-independently inspected artifact pins the exact merge harness and contains
-evidence directory `20260906T141526.647125530Z` with exactly five sanitized
+orchestrator and Provider/private-ingress process. The latest canonical
+`linux/amd64` main run is `34069851741` at
+`838d3bb2dea52c10fdc1ddf3136641709fedcb20`; all 18 scenarios pass. Its
+independently inspected artifact
+`browser-postgres-controlled-restore-e2e-evidence-34069851741` contains
+evidence directory `20260907T002737.609312407Z` with exactly five sanitized
 files; the report is 18/18, and the manifest records three ingress
 reconstructions, every cleanup and sanitization flag true, no file-witness v2
 field, PostgreSQL restore evidence, and an unexercised Contract Suite. Artifact
-ID `9991028239` has GitHub digest
-`sha256:72d822c44c2ab5e91ed500f5ef549d8ec1c63268443a48fa293c93a3d24ca14e`.
+ID `10000177842` has GitHub digest
+`sha256:96817b74f3faabb0226d7dee1f2ac8128901865a3834f9bcadcaae6459b76032`.
 This closes only the hosted same-runner ADR 0036 operational reference gate.
 The lock and manifest record `same_runner=true` and
 `independent_failure_domain=false`; this adds no independent host, storage,
@@ -1044,18 +1084,11 @@ c3.6 now supplies this event from the owned child's bounded real exit observatio
 A process boundary alone cannot prove caller source independence or exact
 PID-level request attribution.
 
-1. Publish and attest the repository-owned coding/shell image, update the
-   separate external caller to its exact immutable digest, and refresh that
-   caller's source/build provenance. Then execute the e2
-   observation/run/teardown gate and the e3 conclusion gate under separate approvals
-   against the locked content-addressed
-   `sandbox-runtime-external-caller-coding-shell-v1` profile and P2.7b closed
-   report/evidence validator, with independent observations, actual
-   executed-artifact digests, distinct-tenant cases, authoritative zero-resource
-   cleanup proof, and external receipts. Qualify an independently supplied
-   caller only after those gates pass. The current P2.6 local 53-case authority,
-   its historical 50-case evidence, and the remote 6-case discovery profile are
-   repository-owned and do not establish that interoperability.
+1. Retain the completed P2.7 publication, 24/24 qualification, and public
+   caller 13/13 evidence at their exact recorded identities. The next overall
+   Product phase is a separately reviewed Provider lifecycle Contract expansion
+   for terminate, desired-state, renewal, events, and session close/resize;
+   reserved DTOs or private methods are not authority for those operations.
 2. Before adding protected or mutating remote profiles, define their explicit
    cleanup authority, prerequisites, case-specific evidence, and incomplete-run
    semantics; do not reinterpret the discovery profile.

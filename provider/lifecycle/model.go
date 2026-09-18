@@ -82,9 +82,22 @@ func (s ObservedState) terminal() bool {
 
 type OperationType string
 
-const OperationCreate OperationType = "create"
+const (
+	OperationCreate      OperationType = "create"
+	OperationExtendLease OperationType = "extend_lease"
+	OperationSuspend     OperationType = "suspend"
+	OperationResume      OperationType = "resume"
+	OperationTerminate   OperationType = "terminate"
+)
 
-func (t OperationType) valid() bool { return t == OperationCreate }
+func (t OperationType) valid() bool {
+	switch t {
+	case OperationCreate, OperationExtendLease, OperationSuspend, OperationResume, OperationTerminate:
+		return true
+	default:
+		return false
+	}
+}
 
 type OperationState string
 
@@ -230,6 +243,86 @@ type CreateRequest struct {
 	Spec           SandboxSpec `json:"spec"`
 }
 
+// MutationRequest is the common immutable authority envelope for an accepted
+// sandbox lifecycle mutation. Caller business state remains outside Provider
+// lifecycle storage.
+type MutationRequest struct {
+	OperationID        string    `json:"operation_id"`
+	AttemptID          string    `json:"attempt_id"`
+	FencingToken       uint64    `json:"fencing_token"`
+	IdempotencyKey     string    `json:"idempotency_key"`
+	RequestDigest      string    `json:"request_digest"`
+	Deadline           time.Time `json:"deadline"`
+	ExpectedGeneration uint64    `json:"expected_generation"`
+}
+
+func (r MutationRequest) Validate(now time.Time) error {
+	if err := ValidateIdentifier(r.OperationID); err != nil {
+		return fmt.Errorf("%w: operation_id: %w", ErrInvalidSpec, err)
+	}
+	if err := ValidateIdentifier(r.AttemptID); err != nil {
+		return fmt.Errorf("%w: attempt_id: %w", ErrInvalidSpec, err)
+	}
+	if r.FencingToken == 0 || r.ExpectedGeneration == 0 {
+		return fmt.Errorf("%w: fencing token and expected generation must be positive", ErrInvalidSpec)
+	}
+	if strings.TrimSpace(r.IdempotencyKey) == "" || len(r.IdempotencyKey) > MaxIdentifierLength {
+		return fmt.Errorf("%w: idempotency key must contain 1-%d characters", ErrInvalidSpec, MaxIdentifierLength)
+	}
+	if err := ValidateDigest(r.RequestDigest); err != nil {
+		return fmt.Errorf("%w: request_digest: %w", ErrInvalidSpec, err)
+	}
+	if err := ValidateDeadline(now, r.Deadline); err != nil {
+		return fmt.Errorf("%w: %w", ErrInvalidSpec, err)
+	}
+	return nil
+}
+
+type DesiredStateRequest struct {
+	MutationRequest
+	DesiredState DesiredState `json:"desired_state"`
+}
+
+func (r DesiredStateRequest) Validate(now time.Time) error {
+	if err := r.MutationRequest.Validate(now); err != nil {
+		return err
+	}
+	if r.DesiredState != DesiredReady && r.DesiredState != DesiredSuspended {
+		return ErrInvalidState
+	}
+	return nil
+}
+
+type LeaseRequest struct {
+	MutationRequest
+	ExtendSeconds int64 `json:"extend_seconds"`
+}
+
+func (r LeaseRequest) Validate(now time.Time, maxLeaseSeconds int64) error {
+	if err := r.MutationRequest.Validate(now); err != nil {
+		return err
+	}
+	if r.ExtendSeconds <= 0 || maxLeaseSeconds <= 0 || r.ExtendSeconds > maxLeaseSeconds {
+		return ErrInvalidLease
+	}
+	return nil
+}
+
+type TerminateRequest struct {
+	MutationRequest
+	Reason string `json:"reason"`
+}
+
+func (r TerminateRequest) Validate(now time.Time) error {
+	if err := r.MutationRequest.Validate(now); err != nil {
+		return err
+	}
+	if strings.TrimSpace(r.Reason) == "" || len(r.Reason) > 256 {
+		return ErrInvalidSpec
+	}
+	return nil
+}
+
 func (r CreateRequest) Validate(now time.Time) error {
 	if err := ValidateIdentifier(r.OperationID); err != nil {
 		return fmt.Errorf("%w: operation_id: %w", ErrInvalidSpec, err)
@@ -344,6 +437,8 @@ type Operation struct {
 	ObservedAt      time.Time      `json:"observed_at"`
 	CancelRequested bool           `json:"cancel_requested"`
 	Failure         *Failure       `json:"failure,omitempty"`
+	IdempotencyKey  string         `json:"idempotency_key,omitempty"`
+	RequestDigest   string         `json:"request_digest,omitempty"`
 }
 
 func (o Operation) Validate() error {
@@ -358,6 +453,14 @@ func (o Operation) Validate() error {
 	}
 	if o.FencingToken == 0 || !o.Type.valid() || !o.State.valid() || o.Deadline.IsZero() || o.ObservedAt.IsZero() {
 		return ErrInvalidSpec
+	}
+	if (o.IdempotencyKey == "") != (o.RequestDigest == "") {
+		return ErrInvalidSpec
+	}
+	if o.IdempotencyKey != "" {
+		if strings.TrimSpace(o.IdempotencyKey) == "" || len(o.IdempotencyKey) > MaxIdentifierLength || ValidateDigest(o.RequestDigest) != nil {
+			return ErrInvalidSpec
+		}
 	}
 	if o.State == OperationFailed && (o.Failure == nil || o.Failure.Outcome != FailureKnown) {
 		return ErrInvalidSpec

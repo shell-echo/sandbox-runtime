@@ -1,0 +1,11 @@
+{
+  "operation_id": "operation-terminate-1",
+  "attempt_id": "attempt-terminate-1",
+  "fencing_token": 3,
+  "idempotency_key": "terminate-sandbox-1",
+  "request_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+  "deadline_at": "2026-09-18T12:05:00Z",
+  "expected_generation": 2,
+  "reason": "work_order_complete",
+  "preserve_workspace_snapshot": false
+}

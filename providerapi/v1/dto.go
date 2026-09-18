@@ -19,6 +19,8 @@ const (
 	CapabilityExec                CapabilityID = "sandbox.exec"
 	CapabilityTerminal            CapabilityID = "sandbox.terminal"
 	CapabilityTerminalConnect     CapabilityID = "sandbox.terminal-connect"
+	CapabilityLifecycleControl    CapabilityID = "sandbox.lifecycle-control"
+	CapabilityTerminalControl     CapabilityID = "sandbox.terminal-control"
 	CapabilityBrowser             CapabilityID = "sandbox.browser"
 	CapabilityDesktop             CapabilityID = "sandbox.desktop"
 	CapabilityPortForward         CapabilityID = "sandbox.port-forward"
@@ -91,18 +93,19 @@ const (
 type OperationType string
 
 const (
-	OperationCreate             OperationType = "create"
-	OperationExtendLease        OperationType = "extend_lease"
-	OperationExec               OperationType = "exec"
-	OperationCancelExec         OperationType = "cancel_exec"
-	OperationSnapshot           OperationType = "snapshot"
-	OperationRestore            OperationType = "restore"
-	OperationSuspend            OperationType = "suspend"
-	OperationResume             OperationType = "resume"
-	OperationTerminate          OperationType = "terminate"
-	OperationOpenRuntimeSession OperationType = "open_runtime_session"
-	OperationOpenBrowserSession OperationType = "open_browser_session"
-	OperationArtifactStage      OperationType = "artifact_stage"
+	OperationCreate              OperationType = "create"
+	OperationExtendLease         OperationType = "extend_lease"
+	OperationExec                OperationType = "exec"
+	OperationCancelExec          OperationType = "cancel_exec"
+	OperationSnapshot            OperationType = "snapshot"
+	OperationRestore             OperationType = "restore"
+	OperationSuspend             OperationType = "suspend"
+	OperationResume              OperationType = "resume"
+	OperationTerminate           OperationType = "terminate"
+	OperationOpenRuntimeSession  OperationType = "open_runtime_session"
+	OperationCloseRuntimeSession OperationType = "close_runtime_session"
+	OperationOpenBrowserSession  OperationType = "open_browser_session"
+	OperationArtifactStage       OperationType = "artifact_stage"
 )
 
 type OperationState string
@@ -163,7 +166,7 @@ func (v *APIVersion) UnmarshalJSON(data []byte) error {
 
 func (v *CapabilityID) UnmarshalJSON(data []byte) error {
 	return unmarshalEnum(data, "capability ID", v,
-		CapabilityExec, CapabilityTerminal, CapabilityTerminalConnect, CapabilityBrowser, CapabilityDesktop,
+		CapabilityExec, CapabilityTerminal, CapabilityTerminalConnect, CapabilityLifecycleControl, CapabilityTerminalControl, CapabilityBrowser, CapabilityDesktop,
 		CapabilityPortForward, CapabilityPersistentWorkspace,
 		CapabilityWorkspaceSnapshot, CapabilityFilesystemSnapshot,
 		CapabilityProcessSnapshot, CapabilityRestore, CapabilityNetworkPolicy,
@@ -206,7 +209,7 @@ func (v *OperationType) UnmarshalJSON(data []byte) error {
 	return unmarshalEnum(data, "operation type", v, OperationCreate,
 		OperationExtendLease, OperationExec, OperationCancelExec, OperationSnapshot,
 		OperationRestore, OperationSuspend, OperationResume, OperationTerminate,
-		OperationOpenRuntimeSession, OperationOpenBrowserSession, OperationArtifactStage)
+		OperationOpenRuntimeSession, OperationCloseRuntimeSession, OperationOpenBrowserSession, OperationArtifactStage)
 }
 
 func (v *OperationState) UnmarshalJSON(data []byte) error {
@@ -391,6 +394,14 @@ type RuntimeSessionOpenRequest struct {
 	RuntimeType         TerminalRuntimeType `json:"runtime_type"`
 	CapabilityProfileID string              `json:"capability_profile_id"`
 	ExpiresAt           string              `json:"expires_at"`
+}
+
+type RuntimeSessionCloseRequest struct {
+	MutationEnvelope
+	ExpectedGeneration   int64  `json:"expected_generation"`
+	RuntimeSessionID     string `json:"runtime_session_id"`
+	ConnectionGeneration int64  `json:"connection_generation"`
+	Reason               string `json:"reason"`
 }
 
 type BrowserSessionOpenRequest struct {
@@ -792,6 +803,25 @@ type RuntimeSessionHandoff struct {
 	InternalEndpointReference string              `json:"internal_endpoint_reference"`
 	ConnectionGeneration      int64               `json:"connection_generation"`
 	ExpiresAt                 string              `json:"expires_at"`
+}
+
+type LifecycleEvent struct {
+	EventID      string       `json:"event_id"`
+	SandboxID    string       `json:"sandbox_id"`
+	OperationID  string       `json:"operation_id"`
+	Sequence     int64        `json:"sequence"`
+	Generation   int64        `json:"generation"`
+	FencingToken int64        `json:"fencing_token"`
+	Kind         string       `json:"kind"`
+	DataDigest   SHA256Digest `json:"data_digest,omitempty"`
+	OccurredAt   string       `json:"occurred_at"`
+}
+
+type LifecycleEventPage struct {
+	Events                 []LifecycleEvent `json:"events"`
+	FirstAvailableSequence int64            `json:"first_available_sequence"`
+	LatestSequence         int64            `json:"latest_sequence"`
+	NextSequence           int64            `json:"next_sequence"`
 }
 
 type BrowserSessionHandoff struct {

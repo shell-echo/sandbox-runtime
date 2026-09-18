@@ -11,6 +11,8 @@ in [`docs/STATUS.md`](../STATUS.md).
 
 | Phase | Plan | Status |
 | --- | --- | --- |
+| Product v1 architecture Phase 1 | [Product governance, Contract, state, identity, Gateway, recording, and deployment decisions](product-v1-phase-1.md) | **Complete as design and Product Contract-definition evidence.** No Product service, migration, public Gateway, Guest Agent, standalone/production deployment, or capability-readiness claim follows. Phase 2 Provider lifecycle closure is tracked separately below |
+| Product v1 Phase 2 | [Provider lifecycle closure](product-v1-phase-2-provider-lifecycle.md) | **Implementation-complete candidate.** Steps 3-8 and the coordinated 60-case Contract source candidate are complete; the published exact lock, clean-VCS Suite, and coding/shell lifecycle black-box gate remain open until an immutable revision is authorized and selected. No external-caller or production claim follows |
 | P0 | [Local Provider Contract migration](p0-local-provider-contract.md) | PR #17-#19 merged; post-merge CI passed; P0.4 closed |
 | P1.1 | [Provider API admission](p1.1-provider-api-admission.md) | P1.1d release gate passed; lifecycle remains unclaimed |
 | P1.1b | [mTLS capability discovery](p1.1b-capability-discovery.md) | Passed under local Contract with PR/post-merge evidence |

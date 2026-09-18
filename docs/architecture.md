@@ -12,6 +12,22 @@ multi-tenant isolation, HA, deployment readiness, or production readiness.
 Detailed identities and evidence are maintained in [`STATUS.md`](STATUS.md);
 the architectural ownership and release boundaries below remain authoritative.
 
+The [Product v1 architecture Phase 1](plan/product-v1-phase-1.md) separately
+defines a target Product that may live in this repository only as a caller of
+the Provider. Its independent design authority is the content-locked
+[`product-contract/`](../product-contract/), with repository, state, identity,
+Gateway/recording, and deployment decisions in ADRs 0042-0047. This is target
+architecture only: no Product service, persistence, public Gateway, Guest
+Agent, or Product capability is implemented or advertised today.
+
+The [Product v1 Phase 2 Provider lifecycle plan](plan/product-v1-phase-2-provider-lifecycle.md)
+has an implementation-complete source candidate. ADR 0048 freezes its
+authority boundary and dependency order. The published exact Provider lock
+still predates the candidate, so no new route or advertisement is selected
+compatibility authority until an immutable lock refresh and clean-VCS release
+gate. The planned independent-process coding/shell lifecycle black-box gate
+also remains open.
+
 ## Purpose
 
 `sandbox-runtime` is a backend-independent sandbox provider. Its first useful
@@ -334,17 +350,48 @@ shared capacity and durable revocation have two Gateways but use private echo
 fixtures and do not exercise downstream CDP actions. Their results therefore
 cannot be aggregated into the ADR 0033 caller gate.
 
-| Method and path | Responsibility |
+### Effective locked routes and target lifecycle inventory
+
+The effective Provider HTTP surface is exactly the OpenAPI selected by the
+current Provider Contract lock. It currently contains these operations:
+
+| Effective locked operation |
+| --- |
+| `GET /v1/capabilities` |
+| `POST /v1/sandboxes` |
+| `GET /v1/sandboxes/{sandbox_id}` |
+| `POST /v1/sandboxes/{sandbox_id}/exec` |
+| `POST /v1/sandboxes/{sandbox_id}/exec:cancel` |
+| `POST /v1/sandboxes/{sandbox_id}/artifacts:stage` |
+| `POST /v1/sandboxes/{sandbox_id}/runtime-sessions` |
+| `POST /v1/sandboxes/{sandbox_id}/browser-sessions` |
+| `GET /v1/operations/{operation_id}` |
+| `GET /v1/operations/{operation_id}/exec-result` |
+| `GET /v1/operations/{operation_id}/artifact-staging-evidence` |
+| `GET /v1/operations/{operation_id}/usage-evidence` |
+| `GET /v1/operations/{operation_id}/runtime-session` |
+| `GET /v1/operations/{operation_id}/browser-session` |
+| `GET /v1/runtime-sessions:connect` |
+
+The following table is the target Provider lifecycle inventory. Rows absent
+from the effective table—restore, desired-state, lease renewal, snapshot,
+terminate, runtime-session close, snapshot manifest, and events—are not
+authorized wire operations.
+Reserved DTOs, semantic names, internal methods, or cleanup harness behavior
+cannot substitute for a coordinated Contract change and lock.
+
+| Target method and path | Responsibility |
 | --- | --- |
 | `GET /v1/capabilities` | Return provider revision, runtime profiles, limits, and supported capability versions. |
 | `POST /v1/sandboxes` | Idempotently request sandbox creation. |
 | `POST /v1/sandboxes:restore` | Create a new sandbox from a compatible snapshot. |
 | `GET /v1/sandboxes/{sandbox_id}` | Read desired/observed state, generations, lease, and opaque references. |
-| `POST /v1/sandboxes/{sandbox_id}/desired-state` | Request `ready`, `suspended`, or `terminated`. |
+| `POST /v1/sandboxes/{sandbox_id}/desired-state` | Request reversible `ready` or `suspended`; irreversible termination uses the dedicated command. |
 | `POST /v1/sandboxes/{sandbox_id}/lease` | Renew the bounded sandbox lease. |
 | `POST /v1/sandboxes/{sandbox_id}/exec` | Start an asynchronous process execution. |
 | `POST /v1/sandboxes/{sandbox_id}/exec:cancel` | Record cancellation intent for an execution. |
 | `POST /v1/sandboxes/{sandbox_id}/runtime-sessions` | Open an internal terminal session. Browser authority does not reuse this route. |
+| `POST /v1/sandboxes/{sandbox_id}/runtime-sessions/{runtime_session_id}:close` | Idempotently revoke and clean up one exact terminal session when the separate control capability is advertised. |
 | `POST /v1/sandboxes/{sandbox_id}/browser-sessions` | Contract-authorized asynchronous browser session request; the protected handler is registered, while the default-disabled command supplies a Browser application only after the exact Browser graph is enabled and validated. |
 | `POST /v1/sandboxes/{sandbox_id}/snapshots` | Start snapshot creation at a declared level. |
 | `POST /v1/sandboxes/{sandbox_id}:terminate` | Idempotently request teardown. |
@@ -354,6 +401,12 @@ cannot be aggregated into the ADR 0033 caller gate.
 | `GET /v1/operations/{operation_id}/exec-result` | Read a retained execution result. |
 | `GET /v1/operations/{operation_id}/snapshot-manifest` | Read a completed snapshot manifest. |
 | `GET /v1/sandboxes/{sandbox_id}/events` | Resume a sequenced provider event stream. |
+
+ADR 0048 freezes termination, reversible desired state, lease renewal and
+expiry cleanup, finite event polling, and terminal-session close as the Phase 2
+minimum. Resize, snapshot/restore, and Browser-session close remain outside
+that phase. None of these additions is effective wire authority until a later
+exact Contract revision is selected by the lock.
 
 Mutation requests carry an operation envelope with at least `operation_id`,
 `attempt_id`, `fencing_token`, `idempotency_key`, deadline, trace context, and a
@@ -389,12 +442,16 @@ trusted flat network.
 
 ## Capabilities and profiles
 
-The Contract capability vocabulary currently includes:
+The target capability vocabulary includes the following names. Effective
+capabilities remain only those selected by the locked Contract and advertised
+by a complete configured dependency graph:
 
 | Capability | Meaning in this project |
 | --- | --- |
+| `sandbox.lifecycle-control` | Capability-gated termination, reversible suspend/resume, lease renewal/expiry cleanup, and resumable lifecycle event reads after the complete Phase 2 graph passes. |
 | `sandbox.exec` | Run a bounded process and retain a structured result. |
 | `sandbox.terminal` | Open an interactive shell through an authorized gateway. |
+| `sandbox.terminal-control` | Close and clean up an exact terminal session without silently expanding `sandbox.terminal`; resize is not implied. |
 | `sandbox.browser` | Expose a browser session when a browser runtime exists. |
 | `sandbox.desktop` | Expose a desktop session when a desktop runtime exists. |
 | `sandbox.port-forward` | Create an authorized, bounded internal forwarding session. |
@@ -425,7 +482,7 @@ For this repository, the first compatibility profile should require lifecycle,
 Browser, desktop, snapshots, GPU, and nested containers remain optional until
 their implementations and conformance suites exist. Therefore, “drop-in
 replacement” means replacement for a declared capability profile; it must not
-claim compatibility with every DeerFlow workload merely because lifecycle
+claim compatibility with every possible workload merely because lifecycle
 creation works.
 
 ## Sandbox model and lifecycle
@@ -615,7 +672,7 @@ advertisement, and optional-profile gates remain open:
 | Workspace | The Provider Docker adapter supplies stable `/inputs`, `/workspace`, `/outputs`, and bounded tmpfs `/tmp` without exposing host paths. The dual-platform coding/shell image was published as OCI index `sha256:1996e44f8ddc464f22556bd57f1c69079fe6b1a821b65bd9be24f86619c31bb1`, attested, independently verified, pinned by the caller, and exercised in the final qualification. | Add production artifact consumers, capacity enforcement, lifecycle closure, and stronger isolation evidence as separate scopes. |
 | Security | The qualified Docker runtime used numeric non-root identity, read-only root, disabled networking, dropped capabilities, `no-new-privileges`, and bounded CPU, memory, swap, PIDs, and tmpfs; image provenance and the exact runtime observations are retained in the qualification evidence. | Add secrets policy, controlled egress where required, stronger isolation, production authentication, threat-model review, and hostile-tenant evidence before any production claim. |
 | Events and usage | Durable lifecycle events and bounded usage-evidence components exist without a complete runtime collector composition. | Complete collection/reconciliation while leaving platform accounting authority outside the Provider. |
-| Snapshots/browser/desktop | Browser Contract authority/projection, exact signed image, Provider-local session/application/reference/usage, Docker adapter, provenance verifier, restricted-egress provisioner, create-policy binding, protected handlers, caller-owned Gateway, default-disabled command graph, and hosted 13+5 Browser reference-caller path have named evidence. The Gateway has explicit process-local total/per-session post-authorization capacity, pre-upgrade service limits, bounded listener/TLS/HTTP behavior, and authenticated-capacity plus exact-grant revocation ports with process-local and Redis-compatible adapters. ADR 0031/`9434540` plus local arm64 run `20260905T080725.227680000Z` and hosted amd64 run `33955436968` add real Valkey plus two-independent-Gateway shared-capacity evidence. ADR 0032/`c0a55d1` adds durable revocation component evidence; harness/Gateway `e952ef9`, local arm64 run `20260905T095109.569973000Z`, and hosted amd64 run `33959122456` pass its separate seven-scenario two-Gateway/independent-revoker caller gate. ADR 0033/`b4d41c9` adds downstream action-fence/private-ingress/Redis adapter component evidence; harness/run `550c785`/`20260906T050213.016063000Z` and `2cadc53`/`34013982796` pass its separate 13-scenario v1 caller gate on arm64 and amd64. ADR 0034 separately adds witnessed-v2 deletion/rollback-detection component and pinned-Valkey adapter evidence; fixed harness `059357c` passes its independently locked 18-scenario real-Chromium caller gate in local run `20260906T100233.295973000Z` on arm64 and hosted run `34026680591` on amd64. ADR 0035/`3ff58dc` adds the PostgreSQL witness, exact least-privilege migration, and strict read-only restore-verification component; hosted run `34031784793` passes its real PostgreSQL and pinned-Valkey gate. ADR 0036 adds the separately locked same-runner controlled-restore caller profile; PR #47 merge `a0cddf4` and post-merge run `34038556283` pass all 18 scenarios with `same_runner=true`, `independent_failure_domain=false`, and `suite_exercised=false`. Contract identity remains pinned while the ADR 0033, ADR 0034, and ADR 0036 caller profiles leave the Suite unexercised, and the ADR 0032 echo fixture is not Browser/CDP. The restricted-egress Gateway remains distinct from the caller-owned Gateway. Production Browser advertisement/public Gateway and authenticated v2 ingress deployment, production independent witness/storage and restore operations, Valkey/PostgreSQL provenance and HA/failover, aggregate, multi-controller, hostile multi-tenant, deployment, and production gates remain open. Snapshots and desktop remain unauthorized optional behavior. | Prove independent PostgreSQL/Valkey failure and backup domains, HA/failover, production quarantine/restore controls, hostile-tenant behavior, ACLs, metrics, and deployable storage/configuration before production advertisement; begin the Desktop authority audit only after the Browser readiness record is complete. |
+| Snapshots/browser/desktop | Browser Contract authority/projection, exact signed image, Provider-local session/application/reference/usage, Docker adapter, provenance verifier, restricted-egress provisioner, create-policy binding, protected handlers, caller-owned Gateway, default-disabled command graph, and hosted 13+5 Browser reference-caller path have named evidence. The Gateway has explicit process-local total/per-session post-authorization capacity, pre-upgrade service limits, bounded listener/TLS/HTTP behavior, and authenticated-capacity plus exact-grant revocation ports with process-local and Redis-compatible adapters. ADR 0031/`9434540` plus local arm64 run `20260905T080725.227680000Z` and hosted amd64 run `33955436968` add real Valkey plus two-independent-Gateway shared-capacity evidence. ADR 0032/`c0a55d1` adds durable revocation component evidence; harness/Gateway `e952ef9`, local arm64 run `20260905T095109.569973000Z`, and hosted amd64 run `33959122456` pass its separate seven-scenario two-Gateway/independent-revoker caller gate. ADR 0033/`b4d41c9` adds downstream action-fence/private-ingress/Redis adapter component evidence; harness/run `550c785`/`20260906T050213.016063000Z` and `2cadc53`/`34013982796` pass its separate 13-scenario v1 caller gate on arm64 and amd64. ADR 0034 separately adds witnessed-v2 deletion/rollback-detection component and pinned-Valkey adapter evidence; fixed harness `059357c` passes its independently locked 18-scenario real-Chromium caller gate in local run `20260906T100233.295973000Z` on arm64 and hosted run `34026680591` on amd64. ADR 0035/`3ff58dc` adds the PostgreSQL witness, exact least-privilege migration, and strict read-only restore-verification component; hosted run `34031784793` passes its real PostgreSQL and pinned-Valkey gate. ADR 0036 adds the separately locked same-runner controlled-restore caller profile; latest main run `34069851741` at `838d3bb` passes all 18 scenarios with `same_runner=true`, `independent_failure_domain=false`, and `suite_exercised=false`. Contract identity remains pinned while the ADR 0033, ADR 0034, and ADR 0036 caller profiles leave the Suite unexercised, and the ADR 0032 echo fixture is not Browser/CDP. The restricted-egress Gateway remains distinct from the caller-owned Gateway. Production Browser advertisement/public Gateway and authenticated v2 ingress deployment, production independent witness/storage and restore operations, Valkey/PostgreSQL provenance and HA/failover, aggregate, multi-controller, hostile multi-tenant, deployment, and production gates remain open. Snapshots and desktop remain unauthorized optional behavior. | Prove independent PostgreSQL/Valkey failure and backup domains, HA/failover, production quarantine/restore controls, hostile-tenant behavior, ACLs, metrics, and deployable storage/configuration before production advertisement; begin the Desktop authority audit only after the Browser readiness record is complete. |
 
 ## Delivery plan and release gates
 

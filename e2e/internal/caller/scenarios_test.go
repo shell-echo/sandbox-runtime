@@ -51,3 +51,21 @@ func TestOperationPollWindowAllowsBoundedBrowserProvenance(t *testing.T) {
 		t.Fatalf("coding/shell operation poll window = %v", got)
 	}
 }
+
+func TestValidateEventPageRequiresContiguousCursorAndOperations(t *testing.T) {
+	t.Parallel()
+	page := LifecycleEventPage{
+		FirstAvailableSequence: 1, LatestSequence: 3, NextSequence: 3,
+		Events: []LifecycleEvent{
+			{EventID: "event-2", SandboxID: sandboxID, OperationID: suspendOperation, Sequence: 2, Generation: 2, FencingToken: 7, Kind: "suspending", OccurredAt: time.Now().UTC().Format(time.RFC3339Nano)},
+			{EventID: "event-3", SandboxID: sandboxID, OperationID: suspendOperation, Sequence: 3, Generation: 2, FencingToken: 7, Kind: "suspended", OccurredAt: time.Now().UTC().Format(time.RFC3339Nano)},
+		},
+	}
+	if err := validateEventPage(page, 1, suspendOperation); err != nil {
+		t.Fatal(err)
+	}
+	page.Events[1].Sequence = 4
+	if err := validateEventPage(page, 1, suspendOperation); err == nil {
+		t.Fatal("non-contiguous lifecycle event page was accepted")
+	}
+}

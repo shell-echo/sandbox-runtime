@@ -60,6 +60,19 @@ func (r *Repository) ReserveCreate(ctx context.Context, key, digest string, sand
 	return result, err
 }
 
+func (r *Repository) ReserveMutation(ctx context.Context, key, digest string, expectedGeneration uint64, sandbox lifecycle.Sandbox, operation lifecycle.Operation, event lifecycle.Event) (repository.MutationResult, error) {
+	if err := contextError(ctx); err != nil {
+		return repository.MutationResult{}, err
+	}
+	var result repository.MutationResult
+	err := r.mutate(ctx, func() error {
+		var err error
+		result, err = r.state.ReserveMutation(key, digest, expectedGeneration, sandbox, operation, event)
+		return err
+	})
+	return result, err
+}
+
 func (r *Repository) GetSandbox(ctx context.Context, id string) (lifecycle.Sandbox, error) {
 	if err := contextError(ctx); err != nil {
 		return lifecycle.Sandbox{}, err
@@ -152,6 +165,18 @@ func (r *Repository) ListEvents(ctx context.Context, sandboxID string, after uin
 		return nil, repository.ErrClosed
 	}
 	return r.state.ListEvents(sandboxID, after, limit)
+}
+
+func (r *Repository) ReadEvents(ctx context.Context, sandboxID string, after uint64, limit int) (repository.EventPage, error) {
+	if err := contextError(ctx); err != nil {
+		return repository.EventPage{}, err
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if r.closed {
+		return repository.EventPage{}, repository.ErrClosed
+	}
+	return r.state.ReadEvents(sandboxID, after, limit)
 }
 
 func (r *Repository) Close() error {

@@ -5,6 +5,11 @@
 本文定义 `sandbox-runtime` 应用自身的部署边界，并明确区分“运行服务的环境”
 和“服务执行沙箱工作负载所使用的后端”。
 
+[ADR 0047](adr/0047-deployment-levels-slos-and-release-gates.md) 进一步定义了
+`development`、`standalone`、`production` 和未来
+`hostile-multitenant` 四个保障等级。本文现有的全部资源和结果都只属于
+`development` 应用打包证据。
+
 ## 两个相互独立的问题
 
 | 问题 | 含义 | 当前示例 |

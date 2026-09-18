@@ -94,3 +94,12 @@ func TestBrowserSessionOperationTypeIsContractValid(t *testing.T) {
 		t.Fatalf("unknown browser operation type error = %v, want ErrInvalidView", err)
 	}
 }
+
+func TestLifecycleControlOperationTypesAreContractValid(t *testing.T) {
+	for _, operationType := range []Type{TypeCreate, TypeExtendLease, TypeSuspend, TypeResume, TypeTerminate} {
+		view := operationView("lifecycle-operation-1", operationType)
+		if err := view.Validate(); err != nil {
+			t.Errorf("operation type %q is invalid: %v", operationType, err)
+		}
+	}
+}

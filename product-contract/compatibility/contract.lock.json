@@ -1,0 +1,28 @@
+{
+  "lock_format": 1,
+  "contract_namespace": "urn:shell-echo:sandbox-runtime:product-v1alpha1",
+  "contract_version": "0.1.0",
+  "maturity": "phase-1-design-authority",
+  "digest_algorithm": "sha256",
+  "tree_digest_profile": "sorted-path-tab-prefixed-sha256-newline-v1",
+  "manifest_digest": "sha256:fa933c55b9025ba5d0d6661eb023d76de075676089342cab83bab9bacfbda007",
+  "tree_digest": "sha256:3cbd422e7753768be6ed6510d62b0b78f63abd4c383179c91bd3a5ab73375562",
+  "resources": [
+    {
+      "path": "openapi/sandbox-runtime-product-v1alpha1.yaml",
+      "sha256": "5ebc3ea2ae91931cb16ef9809685d0172cf33f968ab28206bae70c158bb8a8e2"
+    },
+    {
+      "path": "schemas/product-v1alpha1.schema.json",
+      "sha256": "c210b7a538721f8543475548ea3a49559134d3ac699a875b125e823970d67346"
+    },
+    {
+      "path": "semantic-rules/product-v1alpha1.json",
+      "sha256": "4214901313c1a3fb87de5a5a88e7fe0ddd80398473fd3304109a0d6117b5a8cb"
+    },
+    {
+      "path": "specification/product-contract-v1alpha1.md",
+      "sha256": "7edbb9ed94f7df6c2b70474f73e50402e4b6360d74008e25670b2ad67d65c605"
+    }
+  ]
+}

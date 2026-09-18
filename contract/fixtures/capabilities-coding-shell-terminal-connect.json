@@ -33,7 +33,7 @@
       "level": "workspace",
       "suite_id": "sandbox-provider",
       "suite_version": "1.0.0",
-      "suite_digest": "sha256:b40c932643f4a1e5fd6681e3abf9b64a607609866a6254456970f8b8034cf2a8"
+      "suite_digest": "sha256:7db1d28d35ca193632c395247cc71eeaaff48b027964b9ea9da247eaad5e3991"
     }
   ],
   "limits": {

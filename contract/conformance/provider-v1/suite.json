@@ -31,6 +31,11 @@
         "lifecycle-operation-state-schema",
         "lifecycle-idempotency-generation-fencing",
         "lifecycle-deadline-outcome",
+        "lifecycle-control-capability-advertisement",
+        "lifecycle-desired-state-schema-and-semantics",
+        "lifecycle-lease-schema-and-semantics",
+        "lifecycle-termination-cleanup-and-reconciliation",
+        "lifecycle-events-polling-and-cursors",
         "exec-request-schema",
         "exec-cancel-schema",
         "exec-result-schema",
@@ -44,6 +49,8 @@
         "terminal-connect-schema-and-fixtures",
         "terminal-connect-capability-advertisement",
         "terminal-connect-admission-and-websocket-contract",
+        "terminal-control-capability-advertisement",
+        "runtime-session-close-schema-and-semantics",
         "browser-session-open-schema",
         "browser-session-operation-schema",
         "browser-session-handoff-schema",
@@ -63,5 +70,5 @@
       ]
     }
   ],
-  "suite_digest": "sha256:b40c932643f4a1e5fd6681e3abf9b64a607609866a6254456970f8b8034cf2a8"
+  "suite_digest": "sha256:7db1d28d35ca193632c395247cc71eeaaff48b027964b9ea9da247eaad5e3991"
 }

@@ -136,6 +136,25 @@ type RuntimeSessionHandoff struct {
 	ExpiresAt                 string `json:"expires_at"`
 }
 
+type LifecycleEvent struct {
+	EventID      string `json:"event_id"`
+	SandboxID    string `json:"sandbox_id"`
+	OperationID  string `json:"operation_id"`
+	Sequence     int64  `json:"sequence"`
+	Generation   int64  `json:"generation"`
+	FencingToken int64  `json:"fencing_token"`
+	Kind         string `json:"kind"`
+	DataDigest   string `json:"data_digest,omitempty"`
+	OccurredAt   string `json:"occurred_at"`
+}
+
+type LifecycleEventPage struct {
+	Events                 []LifecycleEvent `json:"events"`
+	FirstAvailableSequence int64            `json:"first_available_sequence"`
+	LatestSequence         int64            `json:"latest_sequence"`
+	NextSequence           int64            `json:"next_sequence"`
+}
+
 type BrowserSessionHandoff struct {
 	OperationID               string `json:"operation_id"`
 	AttemptID                 string `json:"attempt_id"`

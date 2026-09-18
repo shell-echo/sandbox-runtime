@@ -29,6 +29,7 @@ var (
 // coordinator's aggregate state.
 type Repository interface {
 	session.CoordinationAuthority
+	session.CloseAuthority
 	PutSandboxAuthority(context.Context, session.SandboxAuthority) error
 	ReplaceSandboxAuthority(context.Context, session.SandboxAuthority, int64, int64) error
 	GetSandboxAuthority(context.Context, string) (session.SandboxAuthority, error)

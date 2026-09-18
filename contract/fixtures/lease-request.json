@@ -1,0 +1,10 @@
+{
+  "operation_id": "operation-lease-1",
+  "attempt_id": "attempt-lease-1",
+  "fencing_token": 2,
+  "idempotency_key": "extend-sandbox-1",
+  "request_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+  "deadline_at": "2026-09-18T12:05:00Z",
+  "expected_generation": 1,
+  "extend_seconds": 600
+}

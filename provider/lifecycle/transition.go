@@ -40,6 +40,82 @@ func StartCreate(request CreateRequest, now time.Time) (Sandbox, Operation, erro
 	return sandbox, operation, nil
 }
 
+// StartDesiredState records a reversible desired-state request and one
+// accepted operation without dispatching runtime work.
+func StartDesiredState(sandbox Sandbox, request DesiredStateRequest, now time.Time) (Sandbox, Operation, error) {
+	if err := request.Validate(now); err != nil {
+		return Sandbox{}, Operation{}, err
+	}
+	if request.DesiredState == DesiredSuspended && sandbox.ObservedState != ObservedReady {
+		return Sandbox{}, Operation{}, fmt.Errorf("%w: suspend requires ready sandbox", ErrInvalidTransition)
+	}
+	if request.DesiredState == DesiredReady && sandbox.ObservedState != ObservedSuspended {
+		return Sandbox{}, Operation{}, fmt.Errorf("%w: resume requires suspended sandbox", ErrInvalidTransition)
+	}
+	updated, err := RequestDesiredState(sandbox, request.DesiredState, request.ExpectedGeneration, now)
+	if err != nil {
+		return Sandbox{}, Operation{}, err
+	}
+	operationType := OperationSuspend
+	if request.DesiredState == DesiredReady {
+		operationType = OperationResume
+	}
+	operation := mutationOperation(request.MutationRequest, sandbox.ID, operationType, now)
+	return updated, operation, nil
+}
+
+// StartLeaseRenewal extends the current lease from its retained expiry. The
+// caller-supplied extension and resulting horizon are both bounded.
+func StartLeaseRenewal(sandbox Sandbox, request LeaseRequest, maxLeaseSeconds int64, now time.Time) (Sandbox, Lease, Operation, error) {
+	if err := sandbox.Validate(); err != nil {
+		return Sandbox{}, Lease{}, Operation{}, err
+	}
+	if err := request.Validate(now, maxLeaseSeconds); err != nil {
+		return Sandbox{}, Lease{}, Operation{}, err
+	}
+	if request.ExpectedGeneration != sandbox.Generation {
+		return Sandbox{}, Lease{}, Operation{}, fmt.Errorf("%w: expected %d, current %d", ErrGenerationConflict, request.ExpectedGeneration, sandbox.Generation)
+	}
+	if sandbox.ObservedState.terminal() || !sandbox.LeaseExpiresAt.After(now) {
+		return Sandbox{}, Lease{}, Operation{}, ErrInvalidLease
+	}
+	newExpiry := sandbox.LeaseExpiresAt.Add(time.Duration(request.ExtendSeconds) * time.Second)
+	if !newExpiry.After(sandbox.LeaseExpiresAt) || newExpiry.After(now.Add(time.Duration(maxLeaseSeconds)*time.Second)) {
+		return Sandbox{}, Lease{}, Operation{}, ErrInvalidLease
+	}
+	updated := sandbox
+	updated.LeaseExpiresAt = newExpiry
+	updated.UpdatedAt = now
+	lease := Lease{SandboxID: sandbox.ID, ExpiresAt: newExpiry, Generation: sandbox.Generation, FencingToken: request.FencingToken}
+	operation := mutationOperation(request.MutationRequest, sandbox.ID, OperationExtendLease, now)
+	return updated, lease, operation, nil
+}
+
+// StartTerminate records irreversible termination intent. Repeating the same
+// desired state does not advance generation, allowing a higher-fenced cleanup
+// attempt to reconcile an already terminating sandbox.
+func StartTerminate(sandbox Sandbox, request TerminateRequest, now time.Time) (Sandbox, Operation, error) {
+	if err := request.Validate(now); err != nil {
+		return Sandbox{}, Operation{}, err
+	}
+	updated, err := RequestDesiredState(sandbox, DesiredTerminated, request.ExpectedGeneration, now)
+	if err != nil {
+		return Sandbox{}, Operation{}, err
+	}
+	operation := mutationOperation(request.MutationRequest, sandbox.ID, OperationTerminate, now)
+	return updated, operation, nil
+}
+
+func mutationOperation(request MutationRequest, sandboxID string, operationType OperationType, now time.Time) Operation {
+	return Operation{
+		ID: request.OperationID, AttemptID: request.AttemptID,
+		FencingToken: request.FencingToken, SandboxID: sandboxID,
+		Type: operationType, State: OperationAccepted,
+		Deadline: request.Deadline, ObservedAt: now,
+		IdempotencyKey: request.IdempotencyKey, RequestDigest: request.RequestDigest,
+	}
+}
+
 // CanTransitionObserved reports whether a provider observation can follow the
 // current observation. Equal states are idempotent observations.
 func CanTransitionObserved(from, to ObservedState) bool {
@@ -54,11 +130,13 @@ func CanTransitionObserved(from, to ObservedState) bool {
 	case ObservedReady:
 		return to == ObservedSuspending || to == ObservedTerminating || to == ObservedExpired
 	case ObservedSuspending:
-		return to == ObservedSuspended || to == ObservedReady || to == ObservedFailed
+		return to == ObservedSuspended || to == ObservedReady || to == ObservedFailed || to == ObservedTerminating
 	case ObservedSuspended:
 		return to == ObservedResuming || to == ObservedTerminating || to == ObservedExpired
 	case ObservedResuming:
-		return to == ObservedReady || to == ObservedFailed
+		return to == ObservedReady || to == ObservedFailed || to == ObservedTerminating
+	case ObservedFailed:
+		return to == ObservedTerminating
 	case ObservedTerminating:
 		return to == ObservedTerminated || to == ObservedFailed
 	default:

@@ -787,15 +787,17 @@ func TestNewProviderCapabilitySourceAdvertisesCanonicalCodingShellAndConnectWhen
 	if err != nil {
 		t.Fatalf("CapabilitySnapshot() = %v", err)
 	}
-	if len(snapshot.Capabilities) != 3 || snapshot.Capabilities[0].ID != "sandbox.exec" || snapshot.Capabilities[1].ID != "sandbox.terminal" || snapshot.Capabilities[2].ID != "sandbox.terminal-connect" {
+	if len(snapshot.Capabilities) != 5 || snapshot.Capabilities[0].ID != "sandbox.exec" || snapshot.Capabilities[1].ID != "sandbox.terminal" || snapshot.Capabilities[2].ID != "sandbox.lifecycle-control" || snapshot.Capabilities[3].ID != "sandbox.terminal-control" || snapshot.Capabilities[4].ID != "sandbox.terminal-connect" {
 		t.Fatalf("capabilities = %#v", snapshot.Capabilities)
 	}
 	if len(snapshot.Capabilities[0].Versions) != 1 || snapshot.Capabilities[0].Versions[0] != "1.0.0" ||
 		len(snapshot.Capabilities[0].Profiles) != 1 || snapshot.Capabilities[0].Profiles[0] != "exec-v1" ||
 		len(snapshot.Capabilities[1].Versions) != 1 || snapshot.Capabilities[1].Versions[0] != "1.0.0" ||
 		len(snapshot.Capabilities[1].Profiles) != 1 || snapshot.Capabilities[1].Profiles[0] != "terminal-v1" ||
-		len(snapshot.Capabilities[2].Versions) != 1 || snapshot.Capabilities[2].Versions[0] != "1.0.0" ||
-		len(snapshot.Capabilities[2].Profiles) != 1 || snapshot.Capabilities[2].Profiles[0] != "terminal-connect-v1" {
+		len(snapshot.Capabilities[2].Profiles) != 1 || snapshot.Capabilities[2].Profiles[0] != "lifecycle-control-v1" ||
+		len(snapshot.Capabilities[3].Profiles) != 1 || snapshot.Capabilities[3].Profiles[0] != "terminal-control-v1" ||
+		len(snapshot.Capabilities[4].Versions) != 1 || snapshot.Capabilities[4].Versions[0] != "1.0.0" ||
+		len(snapshot.Capabilities[4].Profiles) != 1 || snapshot.Capabilities[4].Profiles[0] != "terminal-connect-v1" {
 		t.Fatalf("capability mappings = %#v", snapshot.Capabilities)
 	}
 	if len(snapshot.RuntimeProfiles) != 1 {
@@ -804,7 +806,7 @@ func TestNewProviderCapabilitySourceAdvertisesCanonicalCodingShellAndConnectWhen
 	runtimeProfile := snapshot.RuntimeProfiles[0]
 	if runtimeProfile.ID != "sandbox-runtime-coding-shell-v1" || runtimeProfile.IsolationClass != "container" ||
 		runtimeProfile.RuntimeClassName != "sandbox-runtime-coding-shell" || len(runtimeProfile.Architecture) != 1 || runtimeProfile.Architecture[0] != "amd64" ||
-		len(runtimeProfile.CapabilityProfileIDs) != 3 || runtimeProfile.CapabilityProfileIDs[0] != "exec-v1" || runtimeProfile.CapabilityProfileIDs[1] != "terminal-v1" || runtimeProfile.CapabilityProfileIDs[2] != "terminal-connect-v1" {
+		len(runtimeProfile.CapabilityProfileIDs) != 5 || runtimeProfile.CapabilityProfileIDs[0] != "exec-v1" || runtimeProfile.CapabilityProfileIDs[1] != "terminal-v1" || runtimeProfile.CapabilityProfileIDs[2] != "lifecycle-control-v1" || runtimeProfile.CapabilityProfileIDs[3] != "terminal-control-v1" || runtimeProfile.CapabilityProfileIDs[4] != "terminal-connect-v1" {
 		t.Fatalf("runtime profile = %#v", runtimeProfile)
 	}
 }
@@ -822,7 +824,7 @@ func TestNewProviderCapabilitySourceOmitsTerminalConnectWithoutTransport(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(snapshot.Capabilities) != 2 || len(snapshot.RuntimeProfiles) != 1 || len(snapshot.RuntimeProfiles[0].CapabilityProfileIDs) != 2 {
+	if len(snapshot.Capabilities) != 4 || len(snapshot.RuntimeProfiles) != 1 || len(snapshot.RuntimeProfiles[0].CapabilityProfileIDs) != 4 {
 		t.Fatalf("capability snapshot = %#v", snapshot)
 	}
 }
@@ -840,6 +842,9 @@ func TestNewProviderCapabilitySourceRejectsEveryMissingCodingShellDependency(t *
 		{"mutation guard", func(r *providerCapabilityReadiness) { r.MutationGuard = false }, "durable mutation guard"},
 		{"lifecycle persistence", func(r *providerCapabilityReadiness) { r.LifecyclePersistence = false }, "lifecycle persistence"},
 		{"runtime lifecycle", func(r *providerCapabilityReadiness) { r.RuntimeLifecycle = false }, "real runtime lifecycle adapter"},
+		{"lifecycle control", func(r *providerCapabilityReadiness) { r.LifecycleControl = false }, "lifecycle control reconciliation"},
+		{"lease expiry", func(r *providerCapabilityReadiness) { r.LeaseExpiry = false }, "lease-expiry reconciliation"},
+		{"lifecycle events", func(r *providerCapabilityReadiness) { r.LifecycleEventReads = false }, "bounded lifecycle event reads"},
 		{"stable mounts", func(r *providerCapabilityReadiness) { r.StableMounts = false }, "stable /inputs"},
 		{"exec acceptance", func(r *providerCapabilityReadiness) { r.ExecAcceptance = false }, "durable exec acceptance"},
 		{"exec executor", func(r *providerCapabilityReadiness) { r.ExecExecutor = false }, "exec executor"},
@@ -850,6 +855,7 @@ func TestNewProviderCapabilitySourceRejectsEveryMissingCodingShellDependency(t *
 		{"terminal authority", func(r *providerCapabilityReadiness) { r.TerminalAuthority = false }, "terminal authority"},
 		{"terminal allocator", func(r *providerCapabilityReadiness) { r.TerminalAllocator = false }, "terminal allocator"},
 		{"opaque handoff", func(r *providerCapabilityReadiness) { r.OpaqueHandoff = false }, "opaque terminal handoff"},
+		{"terminal control", func(r *providerCapabilityReadiness) { r.TerminalControl = false }, "runtime-session close control"},
 		{"artifact acceptance", func(r *providerCapabilityReadiness) { r.ArtifactAcceptance = false }, "artifact acceptance"},
 		{"output staging", func(r *providerCapabilityReadiness) { r.OutputStaging = false }, "real output staging"},
 		{"content checks", func(r *providerCapabilityReadiness) { r.ContentChecks = false }, "content checks"},
@@ -869,9 +875,9 @@ func TestNewProviderCapabilitySourceRejectsEveryMissingCodingShellDependency(t *
 
 func completeProviderCapabilityReadiness() providerCapabilityReadiness {
 	return providerCapabilityReadiness{
-		ProtectedAdmission: true, MutationGuard: true, LifecyclePersistence: true, RuntimeLifecycle: true, StableMounts: true,
+		ProtectedAdmission: true, MutationGuard: true, LifecyclePersistence: true, RuntimeLifecycle: true, LifecycleControl: true, LeaseExpiry: true, LifecycleEventReads: true, StableMounts: true,
 		ExecAcceptance: true, ExecExecutor: true, ExecCancellation: true, ExecResultRetention: true, ExecReconciliation: true, UsageCollection: true,
-		TerminalAuthority: true, TerminalAllocator: true, OpaqueHandoff: true, TerminalWebSocket: true,
+		TerminalAuthority: true, TerminalAllocator: true, OpaqueHandoff: true, TerminalControl: true, TerminalWebSocket: true,
 		ArtifactAcceptance: true, OutputStaging: true, ContentChecks: true, RetainedEvidence: true, OperationAggregation: true,
 	}
 }

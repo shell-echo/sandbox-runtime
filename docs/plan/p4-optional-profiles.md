@@ -726,12 +726,16 @@ adapter gates; its separately locked v2 caller runner passes 18/18 locally on
 in run `34026680591`, both at fixed harness `059357c`. ADR 0035 passes its
 PostgreSQL migration, least-privilege role, atomic witness, timeout, and strict
 read-only restore-verification component gate. ADR 0036 then composes that
-candidate into the same-runner controlled-restore reference. PR #47 merged as
-`a0cddf4`, and post-merge run `34038556283` passes 18/18; artifact `9991028239`
-contains the exact five sanitized files under `20260906T141526.647125530Z`,
-pins the merge as its harness, records three ingress reconstructions and all
-cleanup/sanitization checks true, and retains `same_runner=true`,
-`independent_failure_domain=false`, and `suite_exercised=false`.
+candidate into the same-runner controlled-restore reference. The latest main
+run `34069851741` at `838d3bb2dea52c10fdc1ddf3136641709fedcb20` passes
+18/18; artifact `10000177842` with digest
+`sha256:96817b74f3faabb0226d7dee1f2ac8128901865a3834f9bcadcaae6459b76032`
+contains the exact five sanitized files under `20260907T002737.609312407Z`,
+pins that revision as its harness, records three ingress reconstructions and
+all cleanup/sanitization checks true, and retains `same_runner=true`,
+`independent_failure_domain=false`, and `suite_exercised=false`. The earlier
+post-merge run remains historical evidence rather than the canonical latest
+record.
 
 Keep `suite_exercised=false` for both downstream caller profiles and the
 controlled-restore profile until a runner actually invokes the Contract Suite.

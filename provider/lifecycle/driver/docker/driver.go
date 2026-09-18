@@ -275,6 +275,8 @@ func (d *Driver) Inspect(ctx context.Context, sandboxID string) (coordinator.Run
 	switch {
 	case info.running && info.status == "running" && !info.paused && !info.restarting && !info.dead:
 		return coordinator.RuntimeObservation{State: coordinator.RuntimeReady}, nil
+	case info.running && info.paused && !info.restarting && !info.dead:
+		return coordinator.RuntimeObservation{State: coordinator.RuntimeSuspended}, nil
 	case !info.running && info.status == "created":
 		return coordinator.RuntimeObservation{State: coordinator.RuntimeProvisioning}, nil
 	case info.restarting:
@@ -282,6 +284,61 @@ func (d *Driver) Inspect(ctx context.Context, sandboxID string) (coordinator.Run
 	default:
 		return coordinator.RuntimeObservation{}, ErrInvalidRuntime
 	}
+}
+
+func (d *Driver) Suspend(ctx context.Context, sandboxID string) error {
+	return d.controlState(ctx, sandboxID, true)
+}
+
+func (d *Driver) Resume(ctx context.Context, sandboxID string) error {
+	return d.controlState(ctx, sandboxID, false)
+}
+
+func (d *Driver) controlState(ctx context.Context, sandboxID string, suspend bool) error {
+	if err := contextError(ctx); err != nil {
+		return err
+	}
+	if d == nil || d.engine == nil {
+		return ErrInvalidDriver
+	}
+	if err := lifecycle.ValidateIdentifier(sandboxID); err != nil {
+		return err
+	}
+	controller, ok := d.engine.(lifecycleControlEngine)
+	if !ok {
+		return ErrInvalidDriver
+	}
+	operationCtx, cancel := d.operationContext(ctx)
+	defer cancel()
+	info, found, err := d.inspectOwnedID(operationCtx, sandboxID)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return ErrInvalidRuntime
+	}
+	if suspend && info.running && info.paused {
+		return nil
+	}
+	if !suspend && info.running && !info.paused && info.status == "running" {
+		return nil
+	}
+	if !info.running || info.dead || info.restarting || (suspend && info.paused) || (!suspend && !info.paused) {
+		return ErrInvalidRuntime
+	}
+	if suspend {
+		err = controller.pause(operationCtx, info.id)
+	} else {
+		err = controller.unpause(operationCtx, info.id)
+	}
+	if err != nil {
+		return unknownRuntime(operationCtx)
+	}
+	confirmed, found, err := d.inspectOwnedID(operationCtx, sandboxID)
+	if err != nil || !found || !confirmed.running || confirmed.dead || confirmed.restarting || confirmed.paused != suspend {
+		return unknownRuntime(operationCtx)
+	}
+	return nil
 }
 
 // Remove is idempotent and deletes only a resource with the exact Provider
@@ -352,10 +409,39 @@ func (d *Driver) removeMounts(sandboxID string) error {
 	if err != nil {
 		return err
 	}
+	if err := makeMountTreeRemovable(paths.root); err != nil {
+		return fmt.Errorf("prepare Provider mounts for removal: %w", err)
+	}
 	if err := os.RemoveAll(paths.root); err != nil {
 		return fmt.Errorf("remove Provider mounts: %w", err)
 	}
 	return nil
+}
+
+func makeMountTreeRemovable(root string) error {
+	info, err := os.Lstat(root)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		return errors.New("Provider mount root is not a real directory")
+	}
+	return filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if !entry.IsDir() {
+			return nil
+		}
+		entryInfo, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		return os.Chmod(path, entryInfo.Mode().Perm()|0o700)
+	})
 }
 
 func (d *Driver) mountPaths(sandboxID string) (mountPaths, error) {

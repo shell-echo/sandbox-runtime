@@ -1,0 +1,11 @@
+{
+  "operation_id": "operation-suspend-1",
+  "attempt_id": "attempt-suspend-1",
+  "fencing_token": 2,
+  "idempotency_key": "suspend-sandbox-1",
+  "request_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+  "deadline_at": "2026-09-18T12:05:00Z",
+  "expected_generation": 1,
+  "desired_state": "suspended",
+  "reason": "idle"
+}

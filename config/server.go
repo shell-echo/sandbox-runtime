@@ -240,6 +240,10 @@ const (
 	ProviderCodingShellTerminalProfileID  = "terminal-v1"
 	ProviderTerminalConnectProfileID      = "terminal-connect-v1"
 	ProviderTerminalConnectCapabilityID   = "sandbox.terminal-connect"
+	ProviderLifecycleControlProfileID     = "lifecycle-control-v1"
+	ProviderLifecycleControlCapabilityID  = "sandbox.lifecycle-control"
+	ProviderTerminalControlProfileID      = "terminal-control-v1"
+	ProviderTerminalControlCapabilityID   = "sandbox.terminal-control"
 	ProviderCodingShellCapabilityVersion  = "1.0.0"
 	ProviderCodingShellTerminalBrokerPath = "/usr/local/libexec/sandbox-runtime/terminal-broker"
 )

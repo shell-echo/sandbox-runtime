@@ -1,0 +1,12 @@
+{
+  "operation_id": "operation-close-session-1",
+  "attempt_id": "attempt-close-session-1",
+  "fencing_token": 4,
+  "idempotency_key": "close-session-1",
+  "request_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+  "deadline_at": "2026-09-18T12:05:00Z",
+  "expected_generation": 2,
+  "runtime_session_id": "runtime-session-1",
+  "connection_generation": 1,
+  "reason": "caller_complete"
+}

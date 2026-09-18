@@ -15,6 +15,7 @@ import (
 const (
 	PhaseInitial       = "initial"
 	PhaseResume        = "resume"
+	PhaseLifecycle     = "lifecycle"
 	ProfileCodingShell = "coding-shell"
 	ProfileBrowser     = "browser"
 )
@@ -74,8 +75,11 @@ func (c Config) Validate() error {
 	if c.Profile != ProfileCodingShell && c.Profile != ProfileBrowser {
 		return errors.New("caller profile must be coding-shell or browser")
 	}
-	if c.Phase != PhaseInitial && c.Phase != PhaseResume {
-		return errors.New("caller phase must be initial or resume")
+	if c.Phase != PhaseInitial && c.Phase != PhaseResume && c.Phase != PhaseLifecycle {
+		return errors.New("caller phase must be initial, resume, or lifecycle")
+	}
+	if c.Profile == ProfileBrowser && c.Phase == PhaseLifecycle {
+		return errors.New("lifecycle caller phase requires the coding-shell profile")
 	}
 	for name, value := range map[string]string{
 		"provider_base_url": c.ProviderBaseURL, "gateway_base_url": c.GatewayBaseURL,

@@ -30,6 +30,21 @@ func TestConfigValidateRequiresExplicitProfileAndArchitecture(t *testing.T) {
 	}
 }
 
+func TestConfigValidateScopesLifecyclePhaseToCodingShell(t *testing.T) {
+	t.Parallel()
+	coding := validCallerConfig()
+	coding.Profile = ProfileCodingShell
+	coding.Phase = PhaseLifecycle
+	if err := coding.Validate(); err != nil {
+		t.Fatalf("coding/shell lifecycle phase rejected: %v", err)
+	}
+	browser := validCallerConfig()
+	browser.Phase = PhaseLifecycle
+	if err := browser.Validate(); err == nil {
+		t.Fatal("Browser lifecycle phase was accepted")
+	}
+}
+
 func validCallerConfig() Config {
 	return Config{
 		Profile: ProfileBrowser, Phase: PhaseInitial,

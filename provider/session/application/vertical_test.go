@@ -135,7 +135,16 @@ type handoffRegistrarSpy struct {
 	evidence session.EndpointEvidence
 	err      error
 	calls    int
+	revokes  int
 	sources  []session.Record
+}
+
+func (r *handoffRegistrarSpy) RevokeHandoff(_ context.Context, source session.Record, _ time.Time) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.revokes++
+	r.sources = append(r.sources, source.Clone())
+	return r.err
 }
 
 func (r *handoffRegistrarSpy) RegisterHandoff(_ context.Context, source session.Record) (session.EndpointEvidence, error) {
@@ -150,6 +159,12 @@ func (r *handoffRegistrarSpy) Calls() int {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.calls
+}
+
+func (r *handoffRegistrarSpy) Revokes() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.revokes
 }
 
 func (a *failAttachAuthority) AttachAllocation(ctx context.Context, receipt session.AllocationReceipt) (session.Reservation, error) {
@@ -263,6 +278,87 @@ func TestVerticalHandoffRegistrarCommitsOnceAndRecoveryCompletesRunningRecord(t 
 	}
 	if recoveredRegistrar.Calls() != 1 {
 		t.Fatalf("recovery registrar calls = %d, want 1", recoveredRegistrar.Calls())
+	}
+}
+
+func TestVerticalCloseRevokesCleansAndReplaysWithoutRedispatch(t *testing.T) {
+	now := applicationTestTime
+	clock := &verticalClock{now: now}
+	repository := sessionmemory.NewRepository()
+	reader := &sessionSandboxReader{sandbox: verticalSandbox(now)}
+	runtime := newSessionRuntime(clock)
+	handoff := &handoffRegistrarSpy{evidence: session.EndpointEvidence{InternalEndpointReference: "ref:session:cccccccccccccccccccccccccccccccc", ConnectionGeneration: 1}}
+	vertical, err := NewVerticalWithHandoffLifecycle(repository, runtime, reader, verticalProfile(), handoff, handoff, clock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	openRequest := validApplicationRequest()
+	opened, err := vertical.Open(context.Background(), openRequest)
+	if err != nil || opened.Status != session.StatusSucceeded {
+		t.Fatalf("Open() = %#v, %v", opened, err)
+	}
+	runtime.observationState = terminal.ObservationAbsent
+	closeRequest := session.CloseRequest{
+		SandboxID: openRequest.SandboxID, ProviderRevisionID: openRequest.ProviderRevisionID,
+		OperationID: "operation-close-1", AttemptID: "attempt-close-1", FencingToken: openRequest.FencingToken,
+		IdempotencyKey: "close-key-1", RequestDigest: "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+		Deadline: now.Add(20 * time.Minute), ExpectedGeneration: openRequest.ExpectedGeneration,
+		RuntimeSessionID: openRequest.RuntimeSessionID, ConnectionGeneration: 1, Reason: "caller_complete",
+	}
+	closed, err := vertical.CloseRuntimeSession(context.Background(), closeRequest)
+	if err != nil || closed.Status != session.StatusSucceeded || closed.Type != OperationCloseRuntimeSession {
+		t.Fatalf("CloseRuntimeSession() = %#v, %v", closed, err)
+	}
+	_, _, observe, cleanup := runtime.counts()
+	if handoff.Revokes() != 1 || cleanup != 1 || observe != 1 {
+		t.Fatalf("close effects revokes=%d cleanup=%d observe=%d", handoff.Revokes(), cleanup, observe)
+	}
+	replayed, err := vertical.CloseRuntimeSession(context.Background(), closeRequest)
+	if err != nil || replayed.Status != session.StatusSucceeded {
+		t.Fatalf("close replay = %#v, %v", replayed, err)
+	}
+	_, _, observe, cleanup = runtime.counts()
+	if handoff.Revokes() != 1 || cleanup != 1 || observe != 1 {
+		t.Fatalf("close replay repeated effects revokes=%d cleanup=%d observe=%d", handoff.Revokes(), cleanup, observe)
+	}
+}
+
+func TestVerticalUnknownCloseIsImmutableAndRecoveryOnlyObserves(t *testing.T) {
+	now := applicationTestTime
+	clock := &verticalClock{now: now}
+	repository := sessionmemory.NewRepository()
+	reader := &sessionSandboxReader{sandbox: verticalSandbox(now)}
+	runtime := newSessionRuntime(clock)
+	handoff := &handoffRegistrarSpy{evidence: session.EndpointEvidence{InternalEndpointReference: "ref:session:dddddddddddddddddddddddddddddddd", ConnectionGeneration: 1}}
+	vertical, err := NewVerticalWithHandoffLifecycle(repository, runtime, reader, verticalProfile(), handoff, handoff, clock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	openRequest := validApplicationRequest()
+	if _, err := vertical.Open(context.Background(), openRequest); err != nil {
+		t.Fatal(err)
+	}
+	runtime.cleanupErr = errors.New("cleanup response lost")
+	closeRequest := session.CloseRequest{
+		SandboxID: openRequest.SandboxID, ProviderRevisionID: openRequest.ProviderRevisionID,
+		OperationID: "operation-close-unknown", AttemptID: "attempt-close-unknown", FencingToken: openRequest.FencingToken,
+		IdempotencyKey: "close-key-unknown", RequestDigest: "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+		Deadline: now.Add(20 * time.Minute), ExpectedGeneration: openRequest.ExpectedGeneration,
+		RuntimeSessionID: openRequest.RuntimeSessionID, ConnectionGeneration: 1, Reason: "caller_complete",
+	}
+	unknown, err := vertical.CloseRuntimeSession(context.Background(), closeRequest)
+	if err != nil || unknown.Status != session.StatusOutcomeUnknown {
+		t.Fatalf("unknown close = %#v, %v", unknown, err)
+	}
+	runtime.cleanupErr = nil
+	runtime.observationState = terminal.ObservationRunning
+	recovered, err := vertical.recoverCloses(context.Background())
+	if err != nil || len(recovered) != 1 || recovered[0].Status != session.StatusOutcomeUnknown {
+		t.Fatalf("Recover() = %#v, %v", recovered, err)
+	}
+	_, _, _, cleanup := runtime.counts()
+	if cleanup != 1 {
+		t.Fatalf("unknown close cleanup was redispatched %d times", cleanup)
 	}
 }
 

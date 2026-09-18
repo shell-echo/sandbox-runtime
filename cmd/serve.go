@@ -191,6 +191,9 @@ func newProviderServer(ctx context.Context, providerConfig config.ProviderConfig
 		MutationGuard:        protected != nil && protected.Gate != nil,
 		LifecyclePersistence: lifecycleApp != nil && providerConfig.Lifecycle.Repository.Driver == config.ProviderLifecycleFileRepository,
 		RuntimeLifecycle:     execRuntime != nil,
+		LifecycleControl:     lifecycleApp != nil && execRuntime != nil,
+		LeaseExpiry:          lifecycleApp != nil,
+		LifecycleEventReads:  lifecycleApp != nil,
 		StableMounts:         execRuntime != nil,
 		ExecAcceptance:       execApp != nil,
 		ExecExecutor:         execApp != nil && execRuntime != nil,
@@ -201,6 +204,7 @@ func newProviderServer(ctx context.Context, providerConfig config.ProviderConfig
 		TerminalAuthority:    terminalApp != nil,
 		TerminalAllocator:    terminalApp != nil,
 		OpaqueHandoff:        terminalApp != nil,
+		TerminalControl:      terminalApp != nil,
 		TerminalWebSocket:    terminalApp != nil && providerConfig.Terminal.ConnectEnabled,
 		ArtifactAcceptance:   artifactApp != nil,
 		OutputStaging:        artifactApp != nil && execRuntime != nil,
@@ -775,7 +779,10 @@ type providerTerminalApplication struct {
 	closeErr        error
 }
 
-type providerTerminalHandoffRegistrar struct{ registrar *sessionreference.Registrar }
+type providerTerminalHandoffRegistrar struct {
+	registrar *sessionreference.Registrar
+	store     sessionreference.Store
+}
 
 func (r providerTerminalHandoffRegistrar) RegisterHandoff(ctx context.Context, source session.Record) (session.EndpointEvidence, error) {
 	if r.registrar == nil {
@@ -786,6 +793,10 @@ func (r providerTerminalHandoffRegistrar) RegisterHandoff(ctx context.Context, s
 		return session.EndpointEvidence{}, err
 	}
 	return registration.Evidence, nil
+}
+
+func (r providerTerminalHandoffRegistrar) RevokeHandoff(ctx context.Context, source session.Record, now time.Time) error {
+	return sessionreference.RevokeSucceededHandoff(ctx, r.store, source, now)
 }
 
 func newProviderTerminalApplication(ctx context.Context, terminalConfig config.ProviderTerminalConfig, lifecycleApp *lifecycleapplication.Application, runtime *lifecycledocker.Driver) (*providerTerminalApplication, func() error, error) {
@@ -818,10 +829,11 @@ func newProviderTerminalApplication(ctx context.Context, terminalConfig config.P
 	if err != nil {
 		return nil, noOpProviderClose, errors.Join(fmt.Errorf("construct Provider terminal handoff registrar: %w", err), references.Close(), sessions.Close())
 	}
-	vertical, err := sessionapplication.NewVerticalWithHandoffRegistrar(
+	handoffLifecycle := providerTerminalHandoffRegistrar{registrar: registrar, store: references}
+	vertical, err := sessionapplication.NewVerticalWithHandoffLifecycle(
 		sessions, terminalRuntime, lifecycleApp,
 		sessionapplication.TerminalProfile{RuntimeProfileID: terminalConfig.RuntimeProfileID, CapabilityProfileID: terminalConfig.CapabilityProfileID, WorkingDirectory: "/workspace"},
-		providerTerminalHandoffRegistrar{registrar: registrar}, systemAdmissionClock{},
+		handoffLifecycle, handoffLifecycle, systemAdmissionClock{},
 	)
 	if err != nil {
 		return nil, noOpProviderClose, errors.Join(fmt.Errorf("construct Provider terminal application: %w", err), references.Close(), sessions.Close())
@@ -860,6 +872,13 @@ func (a *providerTerminalApplication) GetOperation(ctx context.Context, operatio
 		return sessionapplication.Operation{}, sessionapplication.ErrInvalidApplication
 	}
 	return a.vertical.GetOperation(ctx, operationID)
+}
+
+func (a *providerTerminalApplication) CloseRuntimeSession(ctx context.Context, request session.CloseRequest) (sessionapplication.Operation, error) {
+	if a == nil || a.vertical == nil {
+		return sessionapplication.Operation{}, sessionapplication.ErrInvalidApplication
+	}
+	return a.vertical.CloseRuntimeSession(ctx, request)
 }
 
 func (a *providerTerminalApplication) ConnectRuntimeSession(ctx context.Context, requested sessionapplication.Handoff) (providerterminal.Stream, error) {
@@ -1026,6 +1045,9 @@ type providerCapabilityReadiness struct {
 	MutationGuard        bool
 	LifecyclePersistence bool
 	RuntimeLifecycle     bool
+	LifecycleControl     bool
+	LeaseExpiry          bool
+	LifecycleEventReads  bool
 	StableMounts         bool
 	ExecAcceptance       bool
 	ExecExecutor         bool
@@ -1036,6 +1058,7 @@ type providerCapabilityReadiness struct {
 	TerminalAuthority    bool
 	TerminalAllocator    bool
 	OpaqueHandoff        bool
+	TerminalControl      bool
 	TerminalWebSocket    bool
 	ArtifactAcceptance   bool
 	OutputStaging        bool
@@ -1053,6 +1076,9 @@ func (r providerCapabilityReadiness) missingDependencies() []string {
 		{"durable mutation guard", r.MutationGuard},
 		{"lifecycle persistence", r.LifecyclePersistence},
 		{"real runtime lifecycle adapter", r.RuntimeLifecycle},
+		{"lifecycle control reconciliation", r.LifecycleControl},
+		{"lease-expiry reconciliation", r.LeaseExpiry},
+		{"bounded lifecycle event reads", r.LifecycleEventReads},
 		{"stable /inputs,/workspace,/outputs,/tmp mounts", r.StableMounts},
 		{"durable exec acceptance", r.ExecAcceptance},
 		{"exec executor", r.ExecExecutor},
@@ -1063,6 +1089,7 @@ func (r providerCapabilityReadiness) missingDependencies() []string {
 		{"terminal authority", r.TerminalAuthority},
 		{"terminal allocator", r.TerminalAllocator},
 		{"opaque terminal handoff", r.OpaqueHandoff},
+		{"runtime-session close control", r.TerminalControl},
 		{"artifact acceptance", r.ArtifactAcceptance},
 		{"real output staging", r.OutputStaging},
 		{"bounded artifact content checks", r.ContentChecks},
@@ -1109,8 +1136,10 @@ func newProviderCapabilitySource(capability config.ProviderCapabilityConfig, gra
 		capabilities = []provider.Capability{
 			{ID: "sandbox.exec", Versions: []string{config.ProviderCodingShellCapabilityVersion}, Profiles: []string{config.ProviderCodingShellExecProfileID}},
 			{ID: "sandbox.terminal", Versions: []string{config.ProviderCodingShellCapabilityVersion}, Profiles: []string{config.ProviderCodingShellTerminalProfileID}},
+			{ID: config.ProviderLifecycleControlCapabilityID, Versions: []string{config.ProviderCodingShellCapabilityVersion}, Profiles: []string{config.ProviderLifecycleControlProfileID}},
+			{ID: config.ProviderTerminalControlCapabilityID, Versions: []string{config.ProviderCodingShellCapabilityVersion}, Profiles: []string{config.ProviderTerminalControlProfileID}},
 		}
-		capabilityProfiles := []string{config.ProviderCodingShellExecProfileID, config.ProviderCodingShellTerminalProfileID}
+		capabilityProfiles := []string{config.ProviderCodingShellExecProfileID, config.ProviderCodingShellTerminalProfileID, config.ProviderLifecycleControlProfileID, config.ProviderTerminalControlProfileID}
 		if readiness.TerminalWebSocket {
 			capabilities = append(capabilities, provider.Capability{
 				ID: config.ProviderTerminalConnectCapabilityID, Versions: []string{config.ProviderCodingShellCapabilityVersion}, Profiles: []string{config.ProviderTerminalConnectProfileID},

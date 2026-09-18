@@ -1,0 +1,10 @@
+{
+  "operation_id": "operation-close-session-1",
+  "attempt_id": "attempt-close-session-1",
+  "fencing_token": 4,
+  "sandbox_id": "sandbox-1",
+  "type": "close_runtime_session",
+  "status": "succeeded",
+  "provider_operation_id": "operation-close-session-1",
+  "observed_at": "2026-09-18T12:00:03Z"
+}
