@@ -25,6 +25,7 @@ type Handler struct {
 	sessions      *product.SessionService
 	grants        *product.GrantService
 	catalog       *product.CatalogService
+	slots         *product.SlotService
 	capabilities  CapabilitySource
 }
 
@@ -62,10 +63,14 @@ func NewHandlerWithCatalog(application *product.Application, controls *product.C
 }
 
 func NewHandlerWithCapabilities(application *product.Application, controls *product.ControlService, sessions *product.SessionService, grants *product.GrantService, catalog *product.CatalogService, capabilities CapabilitySource, authenticator productapi.Authenticator, requestIDs product.IDGenerator) (*Handler, error) {
+	return NewHandlerWithSlots(application, controls, sessions, grants, catalog, nil, capabilities, authenticator, requestIDs)
+}
+
+func NewHandlerWithSlots(application *product.Application, controls *product.ControlService, sessions *product.SessionService, grants *product.GrantService, catalog *product.CatalogService, slots *product.SlotService, capabilities CapabilitySource, authenticator productapi.Authenticator, requestIDs product.IDGenerator) (*Handler, error) {
 	if application == nil || productapi.IsNilAuthenticator(authenticator) || requestIDs == nil {
 		return nil, product.ErrInvalid
 	}
-	return &Handler{application: application, controls: controls, sessions: sessions, grants: grants, catalog: catalog, capabilities: capabilities, authenticator: authenticator, requestIDs: requestIDs}, nil
+	return &Handler{application: application, controls: controls, sessions: sessions, grants: grants, catalog: catalog, slots: slots, capabilities: capabilities, authenticator: authenticator, requestIDs: requestIDs}, nil
 }
 
 func (h *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
@@ -113,6 +118,8 @@ func (h *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 		h.sessionsRoute(writer, request, principal, requestID)
 	case request.Method == http.MethodGet && (strings.Contains(request.URL.Path, "/artifacts") || strings.Contains(request.URL.Path, "/recordings")):
 		h.catalogRoute(writer, request, principal, requestID)
+	case (request.Method == http.MethodGet || request.Method == http.MethodPut) && strings.Contains(request.URL.Path, "/slots/"):
+		h.slotRoute(writer, request, principal, requestID)
 	case request.Method == http.MethodGet && strings.HasPrefix(request.URL.Path, "/api/v1/workspaces/"):
 		identifier, exact := singleIdentifier(request.URL.Path, "/api/v1/workspaces/")
 		if !exact {
@@ -130,6 +137,58 @@ func (h *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	default:
 		writeError(writer, http.StatusNotFound, "PRODUCT_NOT_FOUND", "resource not found", false, requestID)
 	}
+}
+
+func (h *Handler) slotRoute(writer http.ResponseWriter, request *http.Request, principal productapi.Principal, requestID string) {
+	if h.slots == nil {
+		writeApplicationError(writer, product.ErrCapabilityUnsupported, requestID)
+		return
+	}
+	workspaceID, slotKey, exact := slotPath(request.URL.Path)
+	if !exact {
+		writeError(writer, http.StatusNotFound, "PRODUCT_NOT_FOUND", "resource not found", false, requestID)
+		return
+	}
+	if request.Method == http.MethodGet {
+		slot, err := h.slots.Get(request.Context(), principal.TenantID, principal.Actor, workspaceID, slotKey)
+		if err != nil {
+			writeApplicationError(writer, err, requestID)
+			return
+		}
+		writeJSON(writer, http.StatusOK, toWorkspaceSlot(slot))
+		return
+	}
+	if principal.Role != productapi.RoleOwner {
+		writeError(writer, http.StatusForbidden, "PRODUCT_FORBIDDEN", "action is forbidden", false, requestID)
+		return
+	}
+	if !jsonContentType(request.Header.Get("Content-Type")) {
+		writeError(writer, http.StatusBadRequest, "PRODUCT_INVALID_REQUEST", "content type must be application/json", false, requestID)
+		return
+	}
+	keys := request.Header.Values("Idempotency-Key")
+	if len(keys) != 1 {
+		writeError(writer, http.StatusBadRequest, "PRODUCT_INVALID_REQUEST", "exactly one idempotency key is required", false, requestID)
+		return
+	}
+	var input PutSlotRequest
+	if err := decodeStrict(request.Context(), writer, request.Body, maxCreateWorkspaceBytes, &input); err != nil {
+		writeError(writer, http.StatusBadRequest, "PRODUCT_INVALID_REQUEST", "invalid request body", false, requestID)
+		return
+	}
+	capabilities := make([]product.CapabilityRequirement, 0, len(input.RequiredCapabilities))
+	for _, capability := range input.RequiredCapabilities {
+		capabilities = append(capabilities, product.CapabilityRequirement{CapabilityID: capability.CapabilityID, Version: capability.Version, ProfileID: capability.ProfileID})
+	}
+	operation, _, err := h.slots.Put(request.Context(), principal.TenantID, principal.Actor, workspaceID, slotKey, keys[0], product.PutSlotRequest{
+		ExpectedWorkspaceVersion: input.ExpectedWorkspaceVersion, Kind: input.Kind, ProfileID: input.ProfileID,
+		RequiredCapabilities: capabilities, DesiredState: input.DesiredState,
+	})
+	if err != nil {
+		writeApplicationError(writer, err, requestID)
+		return
+	}
+	writeJSON(writer, http.StatusAccepted, toOperation(operation))
 }
 
 func (h *Handler) catalogRoute(writer http.ResponseWriter, request *http.Request, principal productapi.Principal, requestID string) {
@@ -615,6 +674,19 @@ func singleIdentifier(value, prefix string) (string, bool) {
 		return "", false
 	}
 	return identifier, true
+}
+
+func slotPath(path string) (string, string, bool) {
+	const prefix = "/api/v1/workspaces/"
+	if !strings.HasPrefix(path, prefix) {
+		return "", "", false
+	}
+	parts := strings.Split(strings.TrimPrefix(path, prefix), "/")
+	if len(parts) != 3 || parts[0] == "" || parts[1] != "slots" || parts[2] == "" ||
+		strings.ContainsAny(parts[0], "?#") || strings.ContainsAny(parts[2], "?#") {
+		return "", "", false
+	}
+	return parts[0], parts[2], true
 }
 
 func validRequestID(value string) bool {

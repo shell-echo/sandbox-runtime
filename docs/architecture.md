@@ -47,11 +47,12 @@ production result.
 
 The [Product v1 Phase 4 Browser plan](plan/product-v1-phase-4-browser.md) is
 separate from the historical Provider optional-profile phase described later
-in this document. Product Phase 4 has 13 fixed slices. Slice 1 adds only
-Product-owned Browser session authority: exact kind/profile pairing, binding
-to a ready Product `browser` slot with the locked Provider Browser capability
-requirement, durable state transitions, and Browser-specific outbox isolation.
-The Product Browser capability remains unadvertised. Provider adaptation,
+in this document. Product Phase 4 has 13 fixed slices. Slices 1-2 add
+Product-owned Browser session authority plus strict auxiliary Browser-slot
+create/read/update authority: exact kind/profile/capability pairing, bounded
+tenant quota, expected-version/idempotency fencing, durable generations, and
+Browser-specific outbox isolation. The Product Browser capability remains
+unadvertised. Provider adaptation,
 public automation and visual data planes, controller/viewer policy, recovery,
 recording, Web, cleanup, and the independent-process release gate remain
 ordered later slices under ADR 0049.

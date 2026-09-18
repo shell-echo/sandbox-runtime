@@ -8,7 +8,11 @@ import (
 )
 
 const (
-	PrimarySlotKey = "primary-code"
+	PrimarySlotKey           = "primary-code"
+	BrowserSlotProfile       = "sandbox-runtime-browser-v1"
+	BrowserCapabilityID      = "sandbox.browser"
+	BrowserCapabilityVersion = "1.0.0"
+	BrowserCapabilityProfile = "browser-v1"
 
 	SessionKindTerminal          = "terminal"
 	SessionKindBrowserAutomation = "browser_automation"

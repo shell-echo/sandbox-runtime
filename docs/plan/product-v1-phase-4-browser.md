@@ -1,6 +1,6 @@
 # Product v1 Phase 4: Browser
 
-Status: In progress; Slice 1 implemented locally, 12 slices remain
+Status: In progress; Slices 1-2 implemented locally, 11 slices remain
 
 Started: 2026-09-18
 
@@ -23,7 +23,7 @@ until Slice 13 passes for the exact composed topology.
 | Slice | Deliverable | Required acceptance gate | Status |
 | --- | --- | --- | --- |
 | 1 | Startup audit; Product Browser session kind/profile authority; ready-browser-slot binding; absorbing state machine; Browser-specific outbox isolation; PostgreSQL migration constraint; strict authenticated API projection | Focused race tests; strict input/profile rejection; tenant/actor nondisclosure; idempotency; migration replay; real PostgreSQL transaction/outbox isolation; full race/shuffle, vet, and Contract verifiers | **Implemented; local and real-PostgreSQL gates passed** |
-| 2 | Auxiliary Browser slot create/read/update authority and reconciliation intent | Expected-version/idempotency/quota races; immutable key/kind; exact capability request; event/outbox atomicity; cross-tenant nondisclosure; restart-safe reads | Not started |
+| 2 | Auxiliary Browser slot create/read/update authority and reconciliation intent | Expected-version/idempotency/quota races; immutable key/kind; exact capability request; event/outbox atomicity; cross-tenant nondisclosure; restart-safe reads | **Implemented; local and real-PostgreSQL gates passed** |
 | 3 | Exact-revision Provider Browser readiness and network-only adapter for Browser sandbox plus session open/handoff observation | Locked capability/profile selection; mTLS/JWS; no private coordinate projection; timeout, cancellation, replay, stale generation, ambiguous outcome, and capability-drift tests | Not started |
 | 4 | Browser lifecycle reconciliation, disconnect/expiry/close cleanup, unknown-outcome recovery, slot replacement, and retained evidence | Restart at every commit/dispatch/observe boundary; no duplicate current binding; no session resurrection; exact-owned cleanup; coordinated Contract decision for missing Provider close semantics | Not started |
 | 5 | Viewer/control authorization, single-controller Product lease/fence binding, one-use grants, revocation, and Browser quotas; multi-human collaboration remains deferred | Viewer cannot mutate; one live controller; stale fence/replay/revocation/expiry/limit races; database-time authority; nondisclosing errors | Not started |
@@ -72,6 +72,38 @@ This is local component and real-adapter evidence. No Browser runtime or
 public data-plane integration was applicable to Slice 1, and no frontend was
 changed. Docker Browser-driver and frontend build results are therefore not
 claimed.
+
+## Slice 2 exact boundary
+
+The existing Product Contract `PUT` and `GET` slot routes now expose only an
+auxiliary Browser slot shape. The slot key cannot be `primary-code`; kind,
+runtime profile, and the single required capability are locked to `browser`,
+`sandbox-runtime-browser-v1`, and `sandbox.browser@1.0.0` / `browser-v1`.
+Product owns expected-Workspace-version admission, immutable slot identity and
+shape, desired generation, tenant Browser-slot quota, operation/event/audit
+records, and `slot.reconcile` intent. Tenant/owner mismatches remain
+nondisclosing.
+
+The migration adds a bounded per-tenant Browser-slot quota and an active-slot
+index. A PUT atomically updates the Workspace and slot generations with the
+operation, event, audit, idempotency record, and outbox message. Replaying the
+same mutation returns the retained operation; reusing its key with a changed
+request fails closed. New runtime allocation and Provider observation remain
+Slice 3 work, so an accepted slot stays in a transitional observed state.
+
+### Slice 2 local evidence
+
+Focused domain and transport tests prove closed JSON, exact Browser shape,
+policy-before-ID behavior, cancellation, and schema-valid projections. A
+fresh disposable PostgreSQL 16 database applies and replays migrations 1-4;
+race-enabled integration tests prove one retained operation under concurrent
+idempotent PUTs, one winner under a one-slot concurrent tenant quota, exact
+quota release after termination, cross-owner nondisclosure, event/outbox/audit
+atomicity, and restart-safe reads. The complete tagged PostgreSQL package,
+full repository race/shuffle and vet gates, and Contract verifiers are run at
+the slice commit gate. No Provider dispatch, Browser runtime, public data
+plane, capability advertisement, frontend, deployment, or production claim
+follows from this slice.
 
 ## Evidence rules
 

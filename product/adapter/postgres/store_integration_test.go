@@ -51,6 +51,177 @@ func (allowBrowserSession) AuthorizeSession(_ context.Context, kind, profile str
 	return product.ErrCapabilityUnsupported
 }
 
+type allowBrowserSlot struct{}
+
+func (allowBrowserSlot) AuthorizeSlot(context.Context, product.SlotSpec) error { return nil }
+
+func TestIntegrationBrowserSlotAuthorityReplayQuotaAndNondisclosure(t *testing.T) {
+	pool := integrationProductPool(t)
+	applyProductMigrations(t, pool)
+	const tenantID = "tenant-browser-slot"
+	cleanupProductTenant(t, pool, tenantID)
+	store, err := New(pool, 5*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids := product.CryptoIDGenerator{}
+	application, err := product.NewApplication(store, allowPrimarySlot{}, ids)
+	if err != nil {
+		t.Fatal(err)
+	}
+	slots, err := product.NewSlotService(store, allowBrowserSlot{}, ids)
+	if err != nil {
+		t.Fatal(err)
+	}
+	actor := product.ActorRef{Type: product.ActorHuman, ID: "browser-slot-owner"}
+	firstWorkspace, err := application.CreateWorkspace(context.Background(), tenantID, actor, "browser-slot-workspace-1", integrationCreateWorkspaceRequest("browser slot one"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondWorkspace, err := application.CreateWorkspace(context.Background(), tenantID, actor, "browser-slot-workspace-2", integrationCreateWorkspaceRequest("browser slot two"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(context.Background(), `INSERT INTO sandbox_runtime_product.tenant_quotas
+    (tenant_id,max_workspaces,max_sessions,max_active_transfers,max_browser_slots,updated_at)
+VALUES($1,100,1000,100,1,clock_timestamp())`, tenantID); err != nil {
+		t.Fatal(err)
+	}
+	request := product.PutSlotRequest{ExpectedWorkspaceVersion: 1, Kind: "browser", ProfileID: product.BrowserSlotProfile,
+		RequiredCapabilities: []product.CapabilityRequirement{{CapabilityID: product.BrowserCapabilityID, Version: product.BrowserCapabilityVersion, ProfileID: product.BrowserCapabilityProfile}}, DesiredState: "ready"}
+	operation, replay, err := slots.Put(context.Background(), tenantID, actor, firstWorkspace.Operation.WorkspaceID, "browser-main", "browser-slot-put-1", request)
+	if err != nil || replay || operation.Type != "put_slot" || operation.SlotKey != "browser-main" {
+		t.Fatalf("put operation=%#v replay=%v err=%v", operation, replay, err)
+	}
+	slot, err := slots.Get(context.Background(), tenantID, actor, firstWorkspace.Operation.WorkspaceID, "browser-main")
+	if err != nil || slot.Generation != 1 || slot.DesiredState != "ready" || slot.ObservedState != "requested" {
+		t.Fatalf("slot=%#v err=%v", slot, err)
+	}
+	replayed, replay, err := slots.Put(context.Background(), tenantID, actor, firstWorkspace.Operation.WorkspaceID, "browser-main", "browser-slot-put-1", request)
+	if err != nil || !replay || replayed.ID != operation.ID {
+		t.Fatalf("replay=%#v replayed=%v err=%v", replayed, replay, err)
+	}
+	conflict := request
+	conflict.DesiredState = "suspended"
+	if _, _, err := slots.Put(context.Background(), tenantID, actor, firstWorkspace.Operation.WorkspaceID, "browser-main", "browser-slot-put-1", conflict); !errors.Is(err, product.ErrIdempotencyConflict) {
+		t.Fatalf("idempotency conflict err=%v", err)
+	}
+	if _, err := slots.Get(context.Background(), tenantID, product.ActorRef{Type: product.ActorHuman, ID: "other-owner"}, firstWorkspace.Operation.WorkspaceID, "browser-main"); !errors.Is(err, product.ErrNotFound) {
+		t.Fatalf("cross-owner read err=%v", err)
+	}
+	if _, _, err := slots.Put(context.Background(), tenantID, actor, secondWorkspace.Operation.WorkspaceID, "browser-main", "browser-slot-put-2", request); !errors.Is(err, product.ErrQuotaExceeded) {
+		t.Fatalf("quota err=%v", err)
+	}
+
+	terminate := request
+	terminate.ExpectedWorkspaceVersion = 2
+	terminate.DesiredState = "terminated"
+	if _, _, err := slots.Put(context.Background(), tenantID, actor, firstWorkspace.Operation.WorkspaceID, "browser-main", "browser-slot-terminate-1", terminate); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := slots.Put(context.Background(), tenantID, actor, secondWorkspace.Operation.WorkspaceID, "browser-main", "browser-slot-put-2", request); err != nil {
+		t.Fatalf("quota was not released after termination: %v", err)
+	}
+	for table, want := range map[string]int{"outbox": 5, "workspace_events": 5, "product_operations": 5, "security_audit": 5} {
+		var count int
+		if err := pool.QueryRow(context.Background(), `SELECT count(*) FROM sandbox_runtime_product.`+table+` WHERE tenant_id=$1`, tenantID).Scan(&count); err != nil {
+			t.Fatal(err)
+		}
+		if count != want {
+			t.Fatalf("%s count=%d want=%d", table, count, want)
+		}
+	}
+	var messageType string
+	if err := pool.QueryRow(context.Background(), `SELECT message_type FROM sandbox_runtime_product.outbox
+WHERE tenant_id=$1 AND operation_id=$2`, tenantID, operation.ID).Scan(&messageType); err != nil || messageType != "slot.reconcile" {
+		t.Fatalf("outbox message=%q err=%v", messageType, err)
+	}
+}
+
+func TestIntegrationBrowserSlotConcurrentQuotaAndIdempotency(t *testing.T) {
+	pool := integrationProductPool(t)
+	applyProductMigrations(t, pool)
+	const tenantID = "tenant-browser-slot-races"
+	cleanupProductTenant(t, pool, tenantID)
+	store, _ := New(pool, 5*time.Second)
+	ids := product.CryptoIDGenerator{}
+	application, _ := product.NewApplication(store, allowPrimarySlot{}, ids)
+	slots, _ := product.NewSlotService(store, allowBrowserSlot{}, ids)
+	actor := product.ActorRef{Type: product.ActorHuman, ID: "browser-slot-race-owner"}
+	first, err := application.CreateWorkspace(context.Background(), tenantID, actor, "slot-race-workspace-1", integrationCreateWorkspaceRequest("slot race one"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := application.CreateWorkspace(context.Background(), tenantID, actor, "slot-race-workspace-2", integrationCreateWorkspaceRequest("slot race two"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(context.Background(), `INSERT INTO sandbox_runtime_product.tenant_quotas
+    (tenant_id,max_workspaces,max_sessions,max_active_transfers,max_browser_slots,updated_at)
+VALUES($1,100,1000,100,1,clock_timestamp())`, tenantID); err != nil {
+		t.Fatal(err)
+	}
+	request := product.PutSlotRequest{ExpectedWorkspaceVersion: 1, Kind: "browser", ProfileID: product.BrowserSlotProfile,
+		RequiredCapabilities: []product.CapabilityRequirement{{CapabilityID: product.BrowserCapabilityID, Version: product.BrowserCapabilityVersion, ProfileID: product.BrowserCapabilityProfile}}, DesiredState: "ready"}
+
+	type result struct {
+		operation product.Operation
+		replay    bool
+		err       error
+	}
+	results := make(chan result, 2)
+	start := make(chan struct{})
+	for index := 0; index < 2; index++ {
+		go func() {
+			<-start
+			operation, replay, err := slots.Put(context.Background(), tenantID, actor, first.Operation.WorkspaceID, "browser-main", "slot-idempotency-race", request)
+			results <- result{operation: operation, replay: replay, err: err}
+		}()
+	}
+	close(start)
+	firstResult, secondResult := <-results, <-results
+	if firstResult.err != nil || secondResult.err != nil || firstResult.operation.ID != secondResult.operation.ID || firstResult.replay == secondResult.replay {
+		t.Fatalf("idempotency race first=%#v second=%#v", firstResult, secondResult)
+	}
+
+	terminate := request
+	terminate.ExpectedWorkspaceVersion = 2
+	terminate.DesiredState = "terminated"
+	if _, _, err := slots.Put(context.Background(), tenantID, actor, first.Operation.WorkspaceID, "browser-main", "slot-idempotency-race-terminate", terminate); err != nil {
+		t.Fatal(err)
+	}
+	third, err := application.CreateWorkspace(context.Background(), tenantID, actor, "slot-race-workspace-3", integrationCreateWorkspaceRequest("slot race three"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	start = make(chan struct{})
+	results = make(chan result, 2)
+	for index, workspaceID := range []string{second.Operation.WorkspaceID, third.Operation.WorkspaceID} {
+		index, workspaceID := index, workspaceID
+		go func() {
+			<-start
+			operation, replay, err := slots.Put(context.Background(), tenantID, actor, workspaceID, "browser-main", "slot-quota-race-"+string(rune('a'+index)), request)
+			results <- result{operation: operation, replay: replay, err: err}
+		}()
+	}
+	close(start)
+	firstResult, secondResult = <-results, <-results
+	successes, quotas := 0, 0
+	for _, item := range []result{firstResult, secondResult} {
+		switch {
+		case item.err == nil:
+			successes++
+		case errors.Is(item.err, product.ErrQuotaExceeded):
+			quotas++
+		default:
+			t.Fatalf("quota race unexpected result=%#v", item)
+		}
+	}
+	if successes != 1 || quotas != 1 {
+		t.Fatalf("quota race successes=%d quotas=%d first=%#v second=%#v", successes, quotas, firstResult, secondResult)
+	}
+}
+
 func TestIntegrationCreateWorkspaceTransactionReplayAndConflict(t *testing.T) {
 	pool := integrationProductPool(t)
 	applyProductMigrations(t, pool)

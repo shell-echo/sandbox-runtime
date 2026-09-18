@@ -26,6 +26,7 @@ type handlerStore struct {
 	mu        sync.Mutex
 	commands  []product.CreateWorkspaceCommand
 	sessions  []product.SessionCommand
+	slots     []product.SlotCommand
 	workspace product.Workspace
 	operation product.Operation
 }
@@ -73,6 +74,23 @@ func (s *handlerStore) ListSessions(context.Context, string, string, product.Act
 	return nil, nil
 }
 
+func (s *handlerStore) PutSlot(_ context.Context, command product.SlotCommand) (product.Operation, bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.slots = append(s.slots, command)
+	operation := s.operation
+	operation.Type = "put_slot"
+	operation.WorkspaceID = command.WorkspaceID
+	operation.SlotKey = command.SlotKey
+	return operation, false, nil
+}
+
+func (s *handlerStore) GetSlot(context.Context, string, product.ActorRef, string, string) (product.WorkspaceSlot, error) {
+	return product.WorkspaceSlot{SlotKey: "browser-main", Kind: "browser", ProfileID: product.BrowserSlotProfile,
+		RequiredCapabilities: []product.CapabilityRequirement{{CapabilityID: product.BrowserCapabilityID, Version: product.BrowserCapabilityVersion, ProfileID: product.BrowserCapabilityProfile}},
+		DesiredState:         "ready", ObservedState: "requested", Generation: 1, Version: 1, CreatedAt: s.workspace.CreatedAt, UpdatedAt: s.workspace.UpdatedAt}, nil
+}
+
 type allowSlot struct{}
 
 func (allowSlot) AuthorizePrimarySlot(context.Context, product.SlotSpec) error { return nil }
@@ -80,6 +98,10 @@ func (allowSlot) AuthorizePrimarySlot(context.Context, product.SlotSpec) error {
 type allowProductSession struct{}
 
 func (allowProductSession) AuthorizeSession(context.Context, string, string) error { return nil }
+
+type allowBrowserSlot struct{}
+
+func (allowBrowserSlot) AuthorizeSlot(context.Context, product.SlotSpec) error { return nil }
 
 type catalogStoreStub struct {
 	artifact  product.Artifact
@@ -232,6 +254,49 @@ func TestHandlerAcceptsStrictBrowserSessionAuthorityRequest(t *testing.T) {
 	handler.ServeHTTP(response, request)
 	if response.Code != http.StatusBadRequest || len(store.sessions) != 1 {
 		t.Fatalf("unknown member status=%d calls=%d body=%s", response.Code, len(store.sessions), response.Body.String())
+	}
+}
+
+func TestHandlerPutAndGetStrictBrowserSlot(t *testing.T) {
+	base, store := newTestHandler(t)
+	slots, err := product.NewSlotService(store, allowBrowserSlot{}, &handlerIDs{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler, err := NewHandlerWithSlots(base.application, nil, nil, nil, nil, slots, nil, base.authenticator, &handlerIDs{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := authenticatedRequest(http.MethodPut, "/api/v1/workspaces/wrk_1/slots/browser-main", `{
+  "expected_workspace_version":1,
+  "kind":"browser",
+  "profile_id":"sandbox-runtime-browser-v1",
+  "required_capabilities":[{"capability_id":"sandbox.browser","version":"1.0.0","profile_id":"browser-v1"}],
+  "desired_state":"ready"
+}`)
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Idempotency-Key", "slot-put-1")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusAccepted || len(store.slots) != 1 {
+		t.Fatalf("status=%d body=%s slots=%#v", response.Code, response.Body.String(), store.slots)
+	}
+	validateDefinition(t, "ProductOperation", response.Body.Bytes())
+
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, authenticatedRequest(http.MethodGet, "/api/v1/workspaces/wrk_1/slots/browser-main", ""))
+	if response.Code != http.StatusOK {
+		t.Fatalf("get status=%d body=%s", response.Code, response.Body.String())
+	}
+	validateDefinition(t, "WorkspaceSlot", response.Body.Bytes())
+
+	request = authenticatedRequest(http.MethodPut, "/api/v1/workspaces/wrk_1/slots/browser-main", `{"unknown":true}`)
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Idempotency-Key", "slot-put-2")
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusBadRequest || len(store.slots) != 1 {
+		t.Fatalf("unknown status=%d calls=%d body=%s", response.Code, len(store.slots), response.Body.String())
 	}
 }
 

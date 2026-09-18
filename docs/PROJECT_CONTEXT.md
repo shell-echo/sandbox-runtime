@@ -35,10 +35,11 @@ Current verified state:
   This same-repository Provider-fixture topology is not deployment, HA,
   hostile-multitenant, independently implemented caller, or production
   evidence; and
-- Product v1 Phase 4 Browser is in progress at **1/13**. Slice 1 establishes
-  Product-owned Browser session authority and PostgreSQL outbox isolation only;
-  the capability remains unadvertised and twelve Provider/data-plane/policy/
-  recovery/recording/Web/release slices remain.
+- Product v1 Phase 4 Browser is in progress at **2/13**. Slices 1-2 establish
+  Product-owned Browser session and strict auxiliary-slot authority, bounded
+  tenant quota, and PostgreSQL outbox isolation only; the capability remains
+  unadvertised and eleven Provider/data-plane/policy/recovery/recording/Web/
+  release slices remain.
 
 The qualification applies only to Provider revision
 `170459266af5f4fad359ca8c63f2ae19741055c5`, external-caller revision

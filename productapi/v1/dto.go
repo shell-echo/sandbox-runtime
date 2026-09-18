@@ -47,6 +47,14 @@ type WorkspaceSlot struct {
 	UpdatedAt            string                  `json:"updated_at"`
 }
 
+type PutSlotRequest struct {
+	ExpectedWorkspaceVersion int64                   `json:"expected_workspace_version"`
+	Kind                     string                  `json:"kind"`
+	ProfileID                string                  `json:"profile_id"`
+	RequiredCapabilities     []CapabilityRequirement `json:"required_capabilities"`
+	DesiredState             string                  `json:"desired_state"`
+}
+
 type Workspace struct {
 	APIVersion     string          `json:"api_version"`
 	WorkspaceID    string          `json:"workspace_id"`
@@ -275,21 +283,25 @@ func toWorkspace(workspace product.Workspace) Workspace {
 		UpdatedAt: timestamp(workspace.UpdatedAt), Slots: make([]WorkspaceSlot, 0, len(workspace.Slots)),
 	}
 	for _, slot := range workspace.Slots {
-		capabilities := make([]CapabilityRequirement, 0, len(slot.RequiredCapabilities))
-		for _, capability := range slot.RequiredCapabilities {
-			capabilities = append(capabilities, CapabilityRequirement{
-				CapabilityID: capability.CapabilityID, Version: capability.Version, ProfileID: capability.ProfileID,
-			})
-		}
-		projected.Slots = append(projected.Slots, WorkspaceSlot{
-			SlotKey: slot.SlotKey, Kind: slot.Kind, ProfileID: slot.ProfileID,
-			RequiredCapabilities: capabilities, DesiredState: slot.DesiredState,
-			ObservedState: slot.ObservedState, Generation: slot.Generation,
-			ObservedGeneration: slot.ObservedGeneration, Version: slot.Version,
-			CreatedAt: timestamp(slot.CreatedAt), UpdatedAt: timestamp(slot.UpdatedAt),
-		})
+		projected.Slots = append(projected.Slots, toWorkspaceSlot(slot))
 	}
 	return projected
+}
+
+func toWorkspaceSlot(slot product.WorkspaceSlot) WorkspaceSlot {
+	capabilities := make([]CapabilityRequirement, 0, len(slot.RequiredCapabilities))
+	for _, capability := range slot.RequiredCapabilities {
+		capabilities = append(capabilities, CapabilityRequirement{
+			CapabilityID: capability.CapabilityID, Version: capability.Version, ProfileID: capability.ProfileID,
+		})
+	}
+	return WorkspaceSlot{
+		SlotKey: slot.SlotKey, Kind: slot.Kind, ProfileID: slot.ProfileID,
+		RequiredCapabilities: capabilities, DesiredState: slot.DesiredState,
+		ObservedState: slot.ObservedState, Generation: slot.Generation,
+		ObservedGeneration: slot.ObservedGeneration, Version: slot.Version,
+		CreatedAt: timestamp(slot.CreatedAt), UpdatedAt: timestamp(slot.UpdatedAt),
+	}
 }
 
 func toActor(actor product.ActorRef) ActorRef {

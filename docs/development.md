@@ -360,10 +360,11 @@ are all ready. Missing clipboard, upload, download, permission, recording, or
 egress policy denies the feature. A disconnected client is not proof that the
 durable session or Provider allocation is closed.
 
-For Slice 1 persistence changes, run the ordinary Product PostgreSQL command
-above. That result is real-adapter authority evidence only; it is not Browser
-runtime, public data-plane, independent-process, deployment, or production
-evidence.
+For Slice 1-2 persistence changes, run the ordinary Product PostgreSQL command
+above. Slice 2 additionally requires the concurrent idempotency and one-slot
+tenant-quota cases. That result is real-adapter authority evidence only; it is
+not Browser runtime, public data-plane, independent-process, deployment, or
+production evidence.
 
 ## Go and API rules
 
