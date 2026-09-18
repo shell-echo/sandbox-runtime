@@ -25,6 +25,20 @@ type Handler struct {
 	sessions      *product.SessionService
 	grants        *product.GrantService
 	catalog       *product.CatalogService
+	capabilities  CapabilitySource
+}
+
+// CapabilitySource returns one request-frozen, tenant-aware readiness
+// snapshot. Implementations must derive ready state from the complete wired
+// dependency graph; route registration or configuration alone is insufficient.
+type CapabilitySource interface {
+	Snapshot(context.Context, productapi.Principal) ([]ProductCapability, error)
+}
+
+type CapabilitySourceFunc func(context.Context, productapi.Principal) ([]ProductCapability, error)
+
+func (f CapabilitySourceFunc) Snapshot(ctx context.Context, principal productapi.Principal) ([]ProductCapability, error) {
+	return f(ctx, principal)
 }
 
 func NewHandler(application *product.Application, authenticator productapi.Authenticator, requestIDs product.IDGenerator) (*Handler, error) {
@@ -44,10 +58,14 @@ func NewCompleteHandler(application *product.Application, controls *product.Cont
 }
 
 func NewHandlerWithCatalog(application *product.Application, controls *product.ControlService, sessions *product.SessionService, grants *product.GrantService, catalog *product.CatalogService, authenticator productapi.Authenticator, requestIDs product.IDGenerator) (*Handler, error) {
+	return NewHandlerWithCapabilities(application, controls, sessions, grants, catalog, nil, authenticator, requestIDs)
+}
+
+func NewHandlerWithCapabilities(application *product.Application, controls *product.ControlService, sessions *product.SessionService, grants *product.GrantService, catalog *product.CatalogService, capabilities CapabilitySource, authenticator productapi.Authenticator, requestIDs product.IDGenerator) (*Handler, error) {
 	if application == nil || productapi.IsNilAuthenticator(authenticator) || requestIDs == nil {
 		return nil, product.ErrInvalid
 	}
-	return &Handler{application: application, controls: controls, sessions: sessions, grants: grants, catalog: catalog, authenticator: authenticator, requestIDs: requestIDs}, nil
+	return &Handler{application: application, controls: controls, sessions: sessions, grants: grants, catalog: catalog, capabilities: capabilities, authenticator: authenticator, requestIDs: requestIDs}, nil
 }
 
 func (h *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
@@ -70,9 +88,20 @@ func (h *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 
 	switch {
 	case request.Method == http.MethodGet && request.URL.Path == "/api/v1/capabilities":
+		capabilities := []ProductCapability{}
+		if h.capabilities != nil {
+			capabilities, err = h.capabilities.Snapshot(request.Context(), principal)
+			if err != nil {
+				writeApplicationError(writer, product.ErrStoreUnavailable, requestID)
+				return
+			}
+			if capabilities == nil {
+				capabilities = []ProductCapability{}
+			}
+		}
 		writeJSON(writer, http.StatusOK, CapabilityDocument{
 			ContractNamespace: "urn:shell-echo:sandbox-runtime:product-v1alpha1",
-			ContractVersion:   "0.1.0", Capabilities: []ProductCapability{}, MaxPageSize: 200,
+			ContractVersion:   "0.1.0", Capabilities: capabilities, MaxPageSize: 200,
 		})
 	case request.Method == http.MethodPost && request.URL.Path == "/api/v1/workspaces":
 		h.createWorkspace(writer, request, principal, requestID)

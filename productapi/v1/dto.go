@@ -91,11 +91,11 @@ type CapabilityDocument struct {
 }
 
 type ProductCapability struct {
-	CapabilityID    string         `json:"capability_id"`
-	Version         string         `json:"version"`
-	ProtocolProfile string         `json:"protocol_profile"`
-	Readiness       string         `json:"readiness"`
-	Limits          map[string]any `json:"limits"`
+	CapabilityID      string   `json:"capability_id"`
+	Version           string   `json:"version"`
+	Readiness         string   `json:"readiness"`
+	ProtocolProfiles  []string `json:"protocol_profiles"`
+	MaxSessionSeconds int64    `json:"max_session_seconds,omitempty"`
 }
 
 type ProductError struct {

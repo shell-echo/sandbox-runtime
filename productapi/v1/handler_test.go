@@ -197,6 +197,59 @@ func TestHandlerRejectsDuplicateSecurityHeaders(t *testing.T) {
 	}
 }
 
+func TestCapabilityProjectionMatchesLockedContract(t *testing.T) {
+	base, _ := newTestHandler(t)
+	authenticator, err := productapi.NewStaticAuthenticator([]productapi.StaticToken{{
+		Token:     testBearer,
+		Principal: productapi.Principal{TenantID: "tenant-1", Actor: product.ActorRef{Type: product.ActorHuman, ID: "actor-1"}},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := CapabilitySourceFunc(func(_ context.Context, principal productapi.Principal) ([]ProductCapability, error) {
+		if principal.TenantID != "tenant-1" {
+			t.Fatalf("principal = %#v", principal)
+		}
+		return []ProductCapability{{
+			CapabilityID: "product.terminal", Version: "1.0.0", Readiness: "ready",
+			ProtocolProfiles: []string{"product-terminal.v1"}, MaxSessionSeconds: 3600,
+		}}, nil
+	})
+	handler, err := NewHandlerWithCapabilities(base.application, nil, nil, nil, nil, source, authenticator, &handlerIDs{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, authenticatedRequest(http.MethodGet, "/api/v1/capabilities", ""))
+	if response.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	validateDefinition(t, "CapabilityDocument", response.Body.Bytes())
+	if strings.Contains(response.Body.String(), "protocol_profile\"") || strings.Contains(response.Body.String(), "limits") {
+		t.Fatalf("legacy capability fields leaked: %s", response.Body.String())
+	}
+}
+
+func TestCapabilityDependencyFailureFailsClosed(t *testing.T) {
+	base, _ := newTestHandler(t)
+	authenticator, _ := productapi.NewStaticAuthenticator([]productapi.StaticToken{{
+		Token:     testBearer,
+		Principal: productapi.Principal{TenantID: "tenant-1", Actor: product.ActorRef{Type: product.ActorHuman, ID: "actor-1"}},
+	}})
+	handler, err := NewHandlerWithCapabilities(base.application, nil, nil, nil, nil, CapabilitySourceFunc(func(context.Context, productapi.Principal) ([]ProductCapability, error) {
+		return nil, product.ErrStoreUnavailable
+	}), authenticator, &handlerIDs{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, authenticatedRequest(http.MethodGet, "/api/v1/capabilities", ""))
+	if response.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	validateDefinition(t, "ProductError", response.Body.Bytes())
+}
+
 func TestConnectionGrantProjectionMatchesLockedContract(t *testing.T) {
 	now := time.Date(2026, 9, 18, 1, 2, 3, 0, time.UTC)
 	document, err := json.Marshal(toConnectionGrant(product.ConnectionGrant{
