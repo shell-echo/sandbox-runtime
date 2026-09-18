@@ -60,7 +60,7 @@ func (a *Authenticator) Disconnected(ctx context.Context, current guestagent.Ide
 func identity(binding product.GuestBinding) guestagent.Identity {
 	return guestagent.Identity{
 		TenantID: binding.TenantID, WorkspaceID: binding.WorkspaceID, SlotKey: binding.SlotKey,
-		GuestID: binding.GuestID, BindingGeneration: binding.BindingGeneration,
+		GuestID: binding.GuestID, SlotGeneration: binding.SlotGeneration, BindingGeneration: binding.BindingGeneration,
 		ProtocolVersion: binding.ProtocolVersion, Capabilities: append([]string(nil), binding.Capabilities...),
 		ClientNonce: binding.ClientNonce, ExpiresAt: binding.ExpiresAt,
 	}
@@ -70,6 +70,7 @@ func binding(identity guestagent.Identity) product.GuestBinding {
 	return product.GuestBinding{
 		TenantID: identity.TenantID, WorkspaceID: identity.WorkspaceID, SlotKey: identity.SlotKey,
 		GuestID: identity.GuestID, BindingGeneration: identity.BindingGeneration,
+		SlotGeneration:  identity.SlotGeneration,
 		ProtocolVersion: identity.ProtocolVersion, Capabilities: append([]string(nil), identity.Capabilities...),
 		ClientNonce: identity.ClientNonce, ExpiresAt: identity.ExpiresAt, State: "connected",
 	}

@@ -295,6 +295,7 @@ CREATE TABLE sandbox_runtime_product.file_changes (
     slot_key text NOT NULL,
     sequence bigint NOT NULL,
     path text NOT NULL,
+    previous_path text,
     change_type text NOT NULL,
     revision text NOT NULL,
     occurred_at timestamp with time zone NOT NULL,
@@ -303,7 +304,28 @@ CREATE TABLE sandbox_runtime_product.file_changes (
         REFERENCES sandbox_runtime_product.workspace_slots (tenant_id, workspace_id, slot_key) ON DELETE RESTRICT,
     CONSTRAINT file_changes_sequence CHECK (sequence >= 1),
     CONSTRAINT file_changes_path CHECK (char_length(path) BETWEEN 1 AND 4096 AND path !~ '(^|/)\.\.(/|$)'),
+    CONSTRAINT file_changes_previous_path CHECK (previous_path IS NULL OR (char_length(previous_path) BETWEEN 1 AND 4096 AND previous_path !~ '(^|/)\.\.(/|$)')),
     CONSTRAINT file_changes_type CHECK (change_type IN ('create', 'modify', 'remove', 'rename'))
+);
+
+CREATE TABLE sandbox_runtime_product.file_entries (
+    tenant_id text NOT NULL,
+    workspace_id text NOT NULL,
+    slot_key text NOT NULL,
+    path text NOT NULL,
+    entry_type text NOT NULL,
+    mode integer NOT NULL,
+    size_bytes bigint NOT NULL,
+    modified_at timestamp with time zone NOT NULL,
+    revision text NOT NULL,
+    updated_at timestamp with time zone NOT NULL,
+    CONSTRAINT file_entries_primary_key PRIMARY KEY (tenant_id,workspace_id,slot_key,path),
+    CONSTRAINT file_entries_slot FOREIGN KEY (tenant_id,workspace_id,slot_key)
+        REFERENCES sandbox_runtime_product.workspace_slots (tenant_id,workspace_id,slot_key) ON DELETE RESTRICT,
+    CONSTRAINT file_entries_path CHECK (char_length(path) BETWEEN 1 AND 4096 AND path !~ '(^|/)\.\.(/|$)'),
+    CONSTRAINT file_entries_type CHECK (entry_type IN ('file','directory')),
+    CONSTRAINT file_entries_bounds CHECK (mode BETWEEN 0 AND 4095 AND size_bytes >= 0),
+    CONSTRAINT file_entries_revision CHECK (revision ~ '^sha256:[0-9a-f]{64}$')
 );
 
 CREATE TABLE sandbox_runtime_product.blob_transfers (

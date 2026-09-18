@@ -24,12 +24,13 @@ Current verified state:
   revision `3caf38c6bc0b62d2eeb2c1e1c4ed473fae5baab1`, the clean-VCS 60-case
   Suite and all required release gates pass, and the repository-owned
   independent-process reference run passes 15+5+9 scenarios; and
-- Product v1 Phase 3 is active with Slices 1-8 of 13 implemented. The current
+- Product v1 Phase 3 is active with Slices 1-9 of 13 implemented. The current
   branch adds the Product authority and authenticated API, locked Provider
   dispatch/reconciliation, database-time control fences and quotas, durable
   Terminal sessions, encrypted one-use connection grants, and the bounded
   Product Terminal Gateway, and an outbound challenge-authenticated Guest
-  Agent channel as component and real-PostgreSQL evidence only.
+  Agent channel plus confined list/stat/snapshot and durable file-change state
+  as component and real-PostgreSQL evidence only.
 
 The qualification applies only to Provider revision
 `170459266af5f4fad359ca8c63f2ae19741055c5`, external-caller revision

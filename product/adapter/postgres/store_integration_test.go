@@ -557,7 +557,7 @@ func TestIntegrationGuestBindingChallengeRotationAndRevocation(t *testing.T) {
 	}
 	workspace, _ = application.GetWorkspace(context.Background(), "tenant-product-guest", actor, workspace.ID)
 	newPublicKey, newPrivateKey, _ := ed25519.GenerateKey(rand.Reader)
-	rotated, _, err := guests.Provision(context.Background(), "tenant-product-guest", actor, workspace.ID, "guest-provision-2", product.ProvisionGuestRequest{ExpectedWorkspaceVersion: workspace.Version, SlotKey: product.PrimarySlotKey, ProtocolVersion: guestagent.ProtocolVersion, Capabilities: []string{"guest.health"}, PublicKey: newPublicKey, LifetimeSeconds: 600})
+	rotated, _, err := guests.Provision(context.Background(), "tenant-product-guest", actor, workspace.ID, "guest-provision-2", product.ProvisionGuestRequest{ExpectedWorkspaceVersion: workspace.Version, SlotKey: product.PrimarySlotKey, ProtocolVersion: guestagent.ProtocolVersion, Capabilities: []string{"guest.health", "files.list", "files.stat", "files.snapshot"}, PublicKey: newPublicKey, LifetimeSeconds: 600})
 	if err != nil || rotated.BindingGeneration != 2 || rotated.GuestID == binding.GuestID {
 		t.Fatalf("rotated=%#v err=%v", rotated, err)
 	}
@@ -568,11 +568,53 @@ func TestIntegrationGuestBindingChallengeRotationAndRevocation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	fileAuthority := product.FileAuthority{TenantID: newIdentity.TenantID, WorkspaceID: newIdentity.WorkspaceID, SlotKey: newIdentity.SlotKey, GuestID: newIdentity.GuestID, SlotGeneration: newIdentity.SlotGeneration, BindingGeneration: newIdentity.BindingGeneration}
+	firstSnapshot := product.FileSnapshot{Authority: fileAuthority, Entries: []product.FileEntry{
+		{Path: "src", Name: "src", Type: "directory", Mode: 0o755, ModifiedAt: time.Now().UTC(), Revision: "sha256:" + strings.Repeat("1", 64)},
+		{Path: "src/a.txt", Name: "a.txt", Type: "file", Mode: 0o640, SizeBytes: 3, ModifiedAt: time.Now().UTC(), Revision: "sha256:" + strings.Repeat("2", 64)},
+	}}
+	changes, err := store.ApplyFileSnapshot(context.Background(), product.FileSnapshotCommand{TenantID: "tenant-product-guest", WorkspaceID: workspace.ID, SlotKey: product.PrimarySlotKey, Actor: actor, Snapshot: firstSnapshot})
+	if err != nil || len(changes) != 2 || changes[0].Sequence != 1 {
+		t.Fatalf("first changes=%#v err=%v", changes, err)
+	}
+	renamedSnapshot := firstSnapshot
+	renamedSnapshot.Entries = append([]product.FileEntry(nil), firstSnapshot.Entries...)
+	renamedSnapshot.Entries[1].Path = "src/b.txt"
+	renamedSnapshot.Entries[1].Name = "b.txt"
+	changes, err = store.ApplyFileSnapshot(context.Background(), product.FileSnapshotCommand{TenantID: "tenant-product-guest", WorkspaceID: workspace.ID, SlotKey: product.PrimarySlotKey, Actor: actor, Snapshot: renamedSnapshot})
+	if err != nil || len(changes) != 1 || changes[0].Type != "rename" || changes[0].PreviousPath != "src/a.txt" || changes[0].Path != "src/b.txt" {
+		t.Fatalf("rename changes=%#v err=%v", changes, err)
+	}
+	renamedSnapshot.Entries[1].Revision = "sha256:" + strings.Repeat("3", 64)
+	changes, err = store.ApplyFileSnapshot(context.Background(), product.FileSnapshotCommand{TenantID: "tenant-product-guest", WorkspaceID: workspace.ID, SlotKey: product.PrimarySlotKey, Actor: actor, Snapshot: renamedSnapshot})
+	if err != nil || len(changes) != 1 || changes[0].Type != "modify" {
+		t.Fatalf("modify changes=%#v err=%v", changes, err)
+	}
+	page, err := store.ListFileChanges(context.Background(), "tenant-product-guest", actor, workspace.ID, product.PrimarySlotKey, 0, 10)
+	if err != nil || len(page) != 4 || page[3].Sequence != 4 {
+		t.Fatalf("change page=%#v err=%v", page, err)
+	}
+	if _, err := store.ListFileChanges(context.Background(), "tenant-other", actor, workspace.ID, product.PrimarySlotKey, 0, 10); !errors.Is(err, product.ErrNotFound) {
+		t.Fatalf("cross-tenant file changes err=%v", err)
+	}
+	if _, err := pool.Exec(context.Background(), `INSERT INTO sandbox_runtime_product.file_changes(tenant_id,workspace_id,slot_key,sequence,path,change_type,revision,occurred_at) SELECT $1,$2,$3,value,'retained/'||value,'modify','sha256:'||repeat('4',64),clock_timestamp() FROM generate_series(5,1002) AS value`, "tenant-product-guest", workspace.ID, product.PrimarySlotKey); err != nil {
+		t.Fatal(err)
+	}
+	changes, err = store.ApplyFileSnapshot(context.Background(), product.FileSnapshotCommand{TenantID: "tenant-product-guest", WorkspaceID: workspace.ID, SlotKey: product.PrimarySlotKey, Actor: actor, Snapshot: renamedSnapshot})
+	if err != nil || len(changes) != 0 {
+		t.Fatalf("retention refresh changes=%#v err=%v", changes, err)
+	}
+	if _, err := store.ListFileChanges(context.Background(), "tenant-product-guest", actor, workspace.ID, product.PrimarySlotKey, 1, 10); !errors.Is(err, product.ErrCursorExpired) {
+		t.Fatalf("expired file cursor err=%v", err)
+	}
 	if err := store.RevokeGuest(context.Background(), "tenant-product-guest", rotated.GuestID, "removed"); err != nil {
 		t.Fatal(err)
 	}
 	if err := authenticator.CheckAuthority(context.Background(), newIdentity); !errors.Is(err, guestagent.ErrUnauthorized) {
 		t.Fatalf("revoked authority err=%v", err)
+	}
+	if _, err := store.ApplyFileSnapshot(context.Background(), product.FileSnapshotCommand{TenantID: "tenant-product-guest", WorkspaceID: workspace.ID, SlotKey: product.PrimarySlotKey, Actor: actor, Snapshot: renamedSnapshot}); !errors.Is(err, product.ErrControlStale) {
+		t.Fatalf("stale file snapshot err=%v", err)
 	}
 }
 
@@ -641,6 +683,7 @@ func cleanupProductTenant(t *testing.T, pool *pgxpool.Pool, tenantID string) {
 			`DELETE FROM sandbox_runtime_product.recordings WHERE tenant_id = $1`,
 			`DELETE FROM sandbox_runtime_product.artifacts WHERE tenant_id = $1`,
 			`DELETE FROM sandbox_runtime_product.blob_transfers WHERE tenant_id = $1`,
+			`DELETE FROM sandbox_runtime_product.file_entries WHERE tenant_id = $1`,
 			`DELETE FROM sandbox_runtime_product.file_changes WHERE tenant_id = $1`,
 			`DELETE FROM sandbox_runtime_product.workspace_heads WHERE tenant_id = $1`,
 			`DELETE FROM sandbox_runtime_product.workspace_revisions WHERE tenant_id = $1`,

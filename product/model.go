@@ -26,6 +26,7 @@ var (
 	ErrControlConflict       = errors.New("product control conflict")
 	ErrControlStale          = errors.New("product control authority is stale")
 	ErrQuotaExceeded         = errors.New("product quota exceeded")
+	ErrCursorExpired         = errors.New("product cursor has expired")
 
 	identifierPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$`)
 	versionPattern    = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+$`)

@@ -17,13 +17,14 @@ defines a target Product that may live in this repository only as a caller of
 the Provider. Its independent design authority is the content-locked
 [`product-contract/`](../product-contract/), with repository, state, identity,
 Gateway/recording, and deployment decisions in ADRs 0042-0047. This is target
-architecture authority. Product Phase 3 Slices 1-8 now implement the Product
+architecture authority. Product Phase 3 Slices 1-9 now implement the Product
 import boundary and Contract verifier, PostgreSQL authority, authenticated
 Workspace/control/session API, locked network-only Provider reconciliation,
 encrypted one-use terminal grants, a bounded Product Terminal Gateway, and an
-outbound challenge-authenticated Guest Agent channel. There is still no
-Product service listener, Files/Web surface, or advertised Product capability
-today.
+outbound challenge-authenticated Guest Agent channel, confined file
+observation, and durable file-change cursors. There is still no Product
+service listener, upload/revision commit, Web surface, or advertised Product
+capability today.
 
 The [Product v1 Phase 2 Provider lifecycle plan](plan/product-v1-phase-2-provider-lifecycle.md)
 is complete for its fixed nine-step scope. Implementation
@@ -36,7 +37,7 @@ The [Product v1 Phase 3 plan](plan/product-v1-phase-3-product-kernel-terminal-fi
 is active. Its 13 dependency-ordered slices start with Product authority and
 persistence, then add Provider reconciliation, authorization, Terminal,
 Gateway, Guest Agent/Files, Web, recording, and a standalone integrated gate.
-Slices 1-8 are component and real-adapter evidence, not a Product-ready surface.
+Slices 1-9 are component and real-adapter evidence, not a Product-ready surface.
 
 ## Purpose
 

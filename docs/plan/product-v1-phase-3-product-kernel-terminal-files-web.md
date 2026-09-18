@@ -1,6 +1,6 @@
 # Product v1 Phase 3: Product Kernel, Terminal, Files, and Web
 
-Status: Active; Slices 1-8 implemented as local component and real-PostgreSQL evidence
+Status: Active; Slices 1-9 implemented as local component and real-PostgreSQL evidence
 
 Started: 2026-09-18
 
@@ -41,7 +41,7 @@ operations remain separately named gates.
 | 6 | Product Terminal session control plane and Provider terminal-control adapter | Durable session-before-grant, exact Workspace/slot/fence binding, create/read/close/resize capability honesty, restart and close-race tests | **Implemented; local and real-PostgreSQL gates passed** |
 | 7 | Public Terminal Gateway with one-use Product grants, bounded proxying, revocation, backpressure, reconnect, and metadata audit | Separate-process client/Product/Gateway/Provider test; no endpoint or ticket leakage; expiry/replay/revocation/capacity/backpressure/reconnect/cleanup cases | **Implemented; local and real-PostgreSQL gates passed; standalone process matrix retained for Slice 13** |
 | 8 | Outbound authenticated Guest Agent control channel and version/capability negotiation | Guest identity binding, replay protection, rotation, deadline/cancellation, reconnect, incompatible-version, and compromised/removed-guest tests | **Implemented; local and real-PostgreSQL gates passed** |
-| 9 | Files list/stat/watch with confined paths and durable change state | Symlink/traversal/special-file/rename/watch-gap/cursor-expiry/large-directory/cross-tenant tests; no host path or backend identity exposure | Planned |
+| 9 | Files list/stat/watch with confined paths and durable change state | Symlink/traversal/special-file/rename/watch-gap/cursor-expiry/large-directory/cross-tenant tests; no host path or backend identity exposure | **Implemented; local and real-PostgreSQL gates passed** |
 | 10 | Digest-addressed upload/download, resumable transfer, revision staging, and compare-and-swap commit | Digest mismatch, partial/resume, cancellation, quota/backpressure, concurrent commit, crash recovery, retention and exact cleanup tests | Planned |
 | 11 | Product Web control plane and client for Workspace, Terminal, and Files | Generated/checked client; authenticated browser E2E; CSP/CSRF/origin/session/accessibility/error/recovery tests; no private endpoint exposure | Planned |
 | 12 | Product recording content pipeline and artifact/recording catalogs | Explicit policy/consent; encryption/redaction/integrity; retention/deletion; tenant-authorized replay/catalog tests; content remains outside control-plane list responses | Planned |
@@ -49,7 +49,7 @@ operations remain separately named gates.
 
 Slices are dependency ordered. Later UI or data-plane work cannot substitute
 for an earlier authority, persistence, authentication, or recovery gate.
-After Slice 8, 5 slices remain.
+After Slice 9, 4 slices remain.
 
 ## Cross-cutting requirements
 
@@ -299,3 +299,30 @@ cancellation, reconnect, live revocation, and rotated-key rejection. A fresh
 PostgreSQL integration run proves idempotent registration, challenge proof,
 generation rotation, old-key rejection, and removal. Runtime image injection,
 deployment identity, and hostile-guest isolation remain later release gates.
+
+## Slice 9 exact output
+
+- `guestagent/files` resolves every guest-relative component from a retained
+  root directory descriptor with `openat`, `O_NOFOLLOW`, and directory checks.
+  Absolute paths, traversal, non-canonical paths, symlink roots/components,
+  and direct stat of special files fail closed; no host path is projected.
+- List and stat are bounded and sorted. Regular-file revisions are SHA-256
+  content digests from the already confined descriptor. Recursive snapshots
+  skip symlinks and special files, enforce entry/per-file/aggregate byte
+  limits, propagate cancellation, and contain only regular files/directories.
+- The Product Guest adapter returns the exact authenticated Guest ID, slot
+  generation, and Guest binding generation with each result. Product
+  PostgreSQL rechecks that authority after list/stat and atomically before
+  accepting a snapshot, preventing a rotated or rebuilt Guest from committing
+  stale observations.
+- Current file metadata and a continuous per-slot change sequence are durable.
+  Snapshot diff emits create/modify/remove and unambiguous content-preserving
+  rename events, retains a bounded 1,000-change window, and reports expired
+  cursors rather than silently skipping gaps. Reads remain owner- and
+  tenant-filtered.
+
+Race tests cover traversal, symlinks, FIFO handling, pagination, content
+changes, rename, and the full Hub/Agent/Product projection. Fresh PostgreSQL
+evidence covers create/rename/modify sequences, cross-tenant nondisclosure,
+and stale Guest rejection. Files are not yet durable Workspace content; upload,
+revision CAS, and transfer cleanup belong to Slice 10.

@@ -16,7 +16,7 @@ import (
 
 type Identity struct {
 	TenantID, WorkspaceID, SlotKey, GuestID string
-	BindingGeneration                       int64
+	SlotGeneration, BindingGeneration       int64
 	ProtocolVersion                         string
 	Capabilities                            []string
 	ClientNonce                             string
@@ -99,19 +99,25 @@ func (h *Hub) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 }
 
 func (h *Hub) Call(ctx context.Context, tenantID, workspaceID, slotKey, operation string, payload any) (json.RawMessage, error) {
+	result, _, err := h.CallWithIdentity(ctx, tenantID, workspaceID, slotKey, operation, payload)
+	return result, err
+}
+
+func (h *Hub) CallWithIdentity(ctx context.Context, tenantID, workspaceID, slotKey, operation string, payload any) (json.RawMessage, Identity, error) {
 	if h == nil || ctx == nil || !validID(tenantID) || !validID(workspaceID) || !validID(slotKey) || !validID(operation) {
-		return nil, ErrInvalid
+		return nil, Identity{}, ErrInvalid
 	}
 	h.mu.RLock()
 	p := h.peers[peerKey{tenantID, workspaceID, slotKey}]
 	h.mu.RUnlock()
 	if p == nil {
-		return nil, ErrUnavailable
+		return nil, Identity{}, ErrUnavailable
 	}
 	if !p.hasCapability(operation) {
-		return nil, ErrCapabilityMissing
+		return nil, Identity{}, ErrCapabilityMissing
 	}
-	return p.call(ctx, operation, payload)
+	result, err := p.call(ctx, operation, payload)
+	return result, p.identity, err
 }
 
 // Disconnect terminates only the current transport. Product authority remains
