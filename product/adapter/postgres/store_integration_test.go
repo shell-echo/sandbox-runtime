@@ -68,6 +68,14 @@ func TestIntegrationCreateWorkspaceTransactionReplayAndConflict(t *testing.T) {
 		workspace.Slots[0].SlotKey != product.PrimarySlotKey || workspace.Owner != actor {
 		t.Fatalf("workspace = %#v", workspace)
 	}
+	page, next, err := application.ListWorkspaces(context.Background(), "tenant-product-kernel", actor, "", 1)
+	if err != nil || len(page) != 1 || page[0].ID != workspace.ID || next != "" {
+		t.Fatalf("ListWorkspaces() = %#v, %q, %v", page, next, err)
+	}
+	otherPage, _, err := application.ListWorkspaces(context.Background(), "tenant-product-kernel", product.ActorRef{Type: product.ActorHuman, ID: "other-owner"}, "", 50)
+	if err != nil || len(otherPage) != 0 {
+		t.Fatalf("cross-owner ListWorkspaces() = %#v, %v", otherPage, err)
+	}
 	operation, err := application.GetOperation(context.Background(), "tenant-product-kernel", actor, first.Operation.ID)
 	if err != nil {
 		t.Fatal(err)

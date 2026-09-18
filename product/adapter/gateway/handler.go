@@ -17,9 +17,10 @@ import (
 )
 
 const (
-	Subprotocol          = "product-terminal.v1"
-	defaultMaxFrameBytes = int64(32 << 10)
-	maxFrameBytes        = int64(64 << 10)
+	Subprotocol             = "product-terminal.v1"
+	TicketSubprotocolPrefix = "product-ticket."
+	defaultMaxFrameBytes    = int64(32 << 10)
+	maxFrameBytes           = int64(64 << 10)
 )
 
 // AuditStore is the durable Product audit boundary. It receives metadata only;
@@ -98,15 +99,20 @@ func NewHandler(options Options) (*Handler, error) {
 
 func (h *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	writer.Header().Set("Cache-Control", "no-store")
-	if h == nil || request == nil || request.Method != http.MethodGet || !offersOnlySubprotocol(request.Header.Values("Sec-WebSocket-Protocol")) {
+	if h == nil || request == nil || request.Method != http.MethodGet {
 		http.Error(writer, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return
 	}
-	ticket, ok := singleTicket(request.Header.Values("Authorization"))
+	ticket, protocolOK := websocketCredentials(request.Header.Values("Authorization"), request.Header.Values("Sec-WebSocket-Protocol"))
 	request.Header.Del("Authorization")
-	if !ok {
+	request.Header.Set("Sec-WebSocket-Protocol", Subprotocol)
+	if !protocolOK || ticket == "" {
 		writer.Header().Set("WWW-Authenticate", "Ticket")
-		http.Error(writer, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		status := http.StatusUnauthorized
+		if !protocolOK {
+			status = http.StatusBadRequest
+		}
+		http.Error(writer, http.StatusText(status), status)
 		return
 	}
 	binding, err := h.grants.ConsumeConnectionGrant(request.Context(), ticket)
@@ -172,12 +178,26 @@ func singleTicket(values []string) (string, bool) {
 	return ticket, len(ticket) >= 32 && len(ticket) <= 512 && !strings.ContainsAny(ticket, " \t\r\n,")
 }
 
-func offersOnlySubprotocol(values []string) bool {
-	if len(values) != 1 {
-		return false
+func websocketCredentials(authorizations, protocols []string) (ticket string, protocolOK bool) {
+	if len(protocols) != 1 {
+		return "", false
 	}
-	parts := strings.Split(values[0], ",")
-	return len(parts) == 1 && strings.TrimSpace(parts[0]) == Subprotocol
+	parts := strings.Split(protocols[0], ",")
+	for index := range parts {
+		parts[index] = strings.TrimSpace(parts[index])
+	}
+	if len(parts) == 1 && parts[0] == Subprotocol {
+		ticket, ok := singleTicket(authorizations)
+		return ticket, ok
+	}
+	if len(parts) != 2 || parts[0] != Subprotocol || !strings.HasPrefix(parts[1], TicketSubprotocolPrefix) || len(authorizations) != 0 {
+		return "", false
+	}
+	browserTicket := strings.TrimPrefix(parts[1], TicketSubprotocolPrefix)
+	if len(browserTicket) < 32 || len(browserTicket) > 512 || strings.ContainsAny(browserTicket, " \t\r\n,") {
+		return "", false
+	}
+	return browserTicket, true
 }
 
 type oneShotAuthorizer struct {

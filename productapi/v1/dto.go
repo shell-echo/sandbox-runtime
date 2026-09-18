@@ -63,6 +63,11 @@ type Workspace struct {
 	UpdatedAt      string          `json:"updated_at"`
 }
 
+type WorkspacePage struct {
+	Items      []Workspace `json:"items"`
+	NextCursor string      `json:"next_cursor,omitempty"`
+}
+
 type ProductOperation struct {
 	OperationID         string   `json:"operation_id"`
 	OperationType       string   `json:"operation_type"`
@@ -181,19 +186,19 @@ type CreateConnectionRequest struct {
 }
 
 type ConnectionGrant struct {
-	ConnectionID    string `json:"connection_id"`
-	SessionID       string `json:"session_id"`
-	ProtocolProfile string `json:"protocol_profile"`
-	GatewayURI      string `json:"gateway_uri"`
-	Ticket          string `json:"ticket"`
-	ExpiresAt       string `json:"expires_at"`
+	ConnectionID     string `json:"connection_id"`
+	SessionID        string `json:"session_id"`
+	ProtocolProfile  string `json:"protocol_profile"`
+	GatewayURI       string `json:"gateway_uri"`
+	ConnectionTicket string `json:"connection_ticket"`
+	ExpiresAt        string `json:"expires_at"`
 }
 
 func toConnectionGrant(grant product.ConnectionGrant) ConnectionGrant {
 	return ConnectionGrant{
 		ConnectionID: grant.ID, SessionID: grant.SessionID,
 		ProtocolProfile: grant.ProtocolProfile, GatewayURI: grant.GatewayURI,
-		Ticket: grant.Ticket, ExpiresAt: timestamp(grant.ExpiresAt),
+		ConnectionTicket: grant.Ticket, ExpiresAt: timestamp(grant.ExpiresAt),
 	}
 }
 

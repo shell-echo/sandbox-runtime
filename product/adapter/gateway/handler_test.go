@@ -56,6 +56,42 @@ func TestHandlerConsumesTicketProxiesBinaryFramesAndRejectsReplay(t *testing.T) 
 	}
 }
 
+func TestHandlerAcceptsBrowserTicketSubprotocolWithoutAuthorization(t *testing.T) {
+	now := time.Now().UTC()
+	store := &grantStoreSpy{ticket: strings.Repeat("b", 43), active: true, binding: testBinding(now)}
+	handler, err := NewHandler(Options{Grants: store, Resolver: &echoResolver{}, Audit: &auditStoreSpy{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(handler)
+	defer server.Close()
+	address := "ws" + strings.TrimPrefix(server.URL, "http")
+	connection, response, err := websocket.Dial(context.Background(), address, &websocket.DialOptions{Subprotocols: []string{Subprotocol, TicketSubprotocolPrefix + store.ticket}})
+	if err != nil {
+		t.Fatalf("Dial() = %v, response=%v", err, response)
+	}
+	defer connection.CloseNow()
+	if connection.Subprotocol() != Subprotocol || store.consumeCalls != 1 {
+		t.Fatalf("subprotocol=%q consume=%d", connection.Subprotocol(), store.consumeCalls)
+	}
+}
+
+func TestHandlerRejectsAmbiguousBrowserCredentialsBeforeConsume(t *testing.T) {
+	store := &grantStoreSpy{ticket: strings.Repeat("b", 43), active: true, binding: testBinding(time.Now().UTC())}
+	handler, err := NewHandler(Options{Grants: store, Resolver: &echoResolver{}, Audit: &auditStoreSpy{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodGet, "https://gateway.example.test/connect", nil)
+	request.Header.Set("Authorization", "Ticket "+store.ticket)
+	request.Header.Set("Sec-WebSocket-Protocol", Subprotocol+", "+TicketSubprotocolPrefix+store.ticket)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusBadRequest || store.consumeCalls != 0 {
+		t.Fatalf("response=%d consume=%d", response.Code, store.consumeCalls)
+	}
+}
+
 func TestHandlerRevokesActiveConnectionWhenProductAuthorityIsLost(t *testing.T) {
 	now := time.Now().UTC()
 	store := &grantStoreSpy{ticket: strings.Repeat("r", 43), active: true, binding: testBinding(now)}

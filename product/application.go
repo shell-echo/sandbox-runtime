@@ -116,6 +116,19 @@ func (a *Application) GetWorkspace(ctx context.Context, tenantID string, actor A
 	return workspace, nil
 }
 
+func (a *Application) ListWorkspaces(ctx context.Context, tenantID string, actor ActorRef, cursor string, limit int) ([]Workspace, string, error) {
+	if a == nil || a.store == nil {
+		return nil, "", ErrStoreUnavailable
+	}
+	if ctx == nil || !validIdentifier(tenantID) || actor.Validate() != nil || len(cursor) > 1024 || limit < 1 || limit > 200 {
+		return nil, "", ErrInvalid
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, "", err
+	}
+	return a.store.ListWorkspaces(ctx, tenantID, actor, cursor, limit)
+}
+
 func (a *Application) GetOperation(ctx context.Context, tenantID string, actor ActorRef, operationID string) (Operation, error) {
 	if err := validateRead(ctx, a, tenantID, actor, operationID); err != nil {
 		return Operation{}, err

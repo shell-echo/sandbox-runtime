@@ -1,6 +1,6 @@
 # Product v1 Phase 3: Product Kernel, Terminal, Files, and Web
 
-Status: Active; Slices 1-10 implemented as local component and real-PostgreSQL evidence
+Status: Active; Slices 1-11 implemented with local, browser, and real-PostgreSQL evidence
 
 Started: 2026-09-18
 
@@ -43,13 +43,13 @@ operations remain separately named gates.
 | 8 | Outbound authenticated Guest Agent control channel and version/capability negotiation | Guest identity binding, replay protection, rotation, deadline/cancellation, reconnect, incompatible-version, and compromised/removed-guest tests | **Implemented; local and real-PostgreSQL gates passed** |
 | 9 | Files list/stat/watch with confined paths and durable change state | Symlink/traversal/special-file/rename/watch-gap/cursor-expiry/large-directory/cross-tenant tests; no host path or backend identity exposure | **Implemented; local and real-PostgreSQL gates passed** |
 | 10 | Digest-addressed upload/download, resumable transfer, revision staging, and compare-and-swap commit | Digest mismatch, partial/resume, cancellation, quota/backpressure, concurrent commit, crash recovery, retention and exact cleanup tests | **Implemented; local and real-PostgreSQL gates passed** |
-| 11 | Product Web control plane and client for Workspace, Terminal, and Files | Generated/checked client; authenticated browser E2E; CSP/CSRF/origin/session/accessibility/error/recovery tests; no private endpoint exposure | Planned |
+| 11 | Product Web control plane and client for Workspace, Terminal, and Files | Generated/checked client; authenticated browser E2E; CSP/CSRF/origin/session/accessibility/error/recovery tests; no private endpoint exposure | **Implemented; local, headless-browser, and real-PostgreSQL gates passed** |
 | 12 | Product recording content pipeline and artifact/recording catalogs | Explicit policy/consent; encryption/redaction/integrity; retention/deletion; tenant-authorized replay/catalog tests; content remains outside control-plane list responses | Planned |
 | 13 | Standalone integrated Phase 3 release gate and reproducible evidence bundle | Fresh PostgreSQL plus separate Product/Gateway/Guest/Provider processes; fixed Contract identities; restart/fault/security/cleanup matrix; exact evidence manifest and independent validation | Planned |
 
 Slices are dependency ordered. Later UI or data-plane work cannot substitute
 for an earlier authority, persistence, authentication, or recovery gate.
-After Slice 10, 3 slices remain.
+After Slice 11, 2 slices remain.
 
 ## Cross-cutting requirements
 
@@ -356,3 +356,41 @@ PostgreSQL evidence covers active-transfer quota, storage-ahead crash recovery,
 idempotent completion and revision commit, digest mismatch, cancellation,
 download, concurrent CAS, expiry, and restartable cleanup. This is a bounded
 standalone storage adapter, not a claim about external object-store HA.
+
+## Slice 11 exact output
+
+- `productweb` is a Product-owned browser BFF and embedded application shell.
+  A bearer is accepted only on same-origin session establishment, immediately
+  re-authenticated, encrypted with AES-256-GCM in a bounded server-side session
+  store, and represented in the browser only by a `Secure`, `HttpOnly`,
+  `SameSite=Strict`, host-only cookie. Absolute and idle expiry are enforced.
+- Every browser mutation requires both the exact configured HTTPS Origin and a
+  session-bound CSRF token. Duplicate cookies/security headers, cross-site
+  fetch metadata, stale CSRF state, session expiry, and capacity exhaustion
+  fail closed. Static responses carry a no-inline CSP, clickjacking, MIME,
+  referrer, permissions, opener, and HSTS policy.
+- The checked-in ES module client is deterministically generated from all 27
+  locked Product OpenAPI operations. A repository test regenerates it in memory
+  and rejects drift. The Workspace UI lists and creates authorized Workspaces;
+  Terminal creates/lists sessions, acquires control when required, mints a
+  connection grant, and connects; Files lists and refreshes guest-relative
+  state through an authenticated BFF route.
+- Browser WebSocket clients cannot set `Authorization`. The public Product
+  Gateway therefore also accepts one ticket-bearing WebSocket subprotocol
+  alongside `product-terminal.v1`, rejects ambiguous header/subprotocol
+  credentials before consumption, selects only the stable public protocol,
+  and clears credentials before proxy work. Tickets remain absent from URLs.
+- `GET /api/v1/workspaces` now implements the Contract-declared bounded,
+  tenant/owner-filtered page needed by the UI. The connection grant projection
+  now uses the locked `connection_ticket` member; its schema test prevents the
+  former `ticket` spelling from returning.
+
+Race/shuffle tests cover session encryption, CSRF rotation, Origin rejection,
+ambiguous cookies, expiry/logout, proxy credential stripping, CSP and static
+accessibility landmarks, generated-client drift, gateway browser credential
+handling, and Product Schema projection. A tagged headless Chrome test executes
+an authenticated cookie session and Product read against a TLS black box. A
+fresh PostgreSQL adapter run covers the added Workspace list authority together
+with all earlier Phase 3 state. This remains repository-local Web and browser
+evidence; deployment identity, external issuer configuration, browser matrix,
+and production accessibility review remain outside this slice.

@@ -18,6 +18,10 @@ type testStore struct {
 	operation Operation
 }
 
+func (s *testStore) ListWorkspaces(context.Context, string, ActorRef, string, int) ([]Workspace, string, error) {
+	return []Workspace{s.workspace}, "", s.err
+}
+
 func (s *testStore) CreateWorkspace(_ context.Context, command CreateWorkspaceCommand) (CreateWorkspaceResult, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

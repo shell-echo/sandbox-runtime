@@ -8,6 +8,7 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/shell-echo/sandbox-runtime/product"
@@ -70,6 +71,8 @@ func (h *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 		})
 	case request.Method == http.MethodPost && request.URL.Path == "/api/v1/workspaces":
 		h.createWorkspace(writer, request, principal, requestID)
+	case request.Method == http.MethodGet && request.URL.Path == "/api/v1/workspaces":
+		h.listWorkspaces(writer, request, principal, requestID)
 	case request.Method == http.MethodPost && strings.Contains(request.URL.Path, "/control-leases"):
 		h.controlLease(writer, request, principal, requestID)
 	case (request.Method == http.MethodGet || request.Method == http.MethodPost) && strings.Contains(request.URL.Path, "/sessions"):
@@ -91,6 +94,55 @@ func (h *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	default:
 		writeError(writer, http.StatusNotFound, "PRODUCT_NOT_FOUND", "resource not found", false, requestID)
 	}
+}
+
+func (h *Handler) listWorkspaces(writer http.ResponseWriter, request *http.Request, principal productapi.Principal, requestID string) {
+	query := request.URL.Query()
+	for name := range query {
+		if name != "cursor" && name != "limit" {
+			writeError(writer, http.StatusBadRequest, "PRODUCT_INVALID_REQUEST", "invalid query parameter", false, requestID)
+			return
+		}
+	}
+	cursor, ok := singleQuery(query, "cursor")
+	if !ok || len(cursor) > 1024 {
+		writeError(writer, http.StatusBadRequest, "PRODUCT_INVALID_REQUEST", "invalid cursor", false, requestID)
+		return
+	}
+	limit := 50
+	if value, present := query["limit"]; present {
+		if len(value) != 1 {
+			writeError(writer, http.StatusBadRequest, "PRODUCT_INVALID_REQUEST", "invalid limit", false, requestID)
+			return
+		}
+		parsed, err := strconv.Atoi(value[0])
+		if err != nil || parsed < 1 || parsed > 200 {
+			writeError(writer, http.StatusBadRequest, "PRODUCT_INVALID_REQUEST", "invalid limit", false, requestID)
+			return
+		}
+		limit = parsed
+	}
+	items, next, err := h.application.ListWorkspaces(request.Context(), principal.TenantID, principal.Actor, cursor, limit)
+	if err != nil {
+		writeApplicationError(writer, err, requestID)
+		return
+	}
+	projected := make([]Workspace, 0, len(items))
+	for _, item := range items {
+		projected = append(projected, toWorkspace(item))
+	}
+	writeJSON(writer, http.StatusOK, WorkspacePage{Items: projected, NextCursor: next})
+}
+
+func singleQuery(query map[string][]string, name string) (string, bool) {
+	values, present := query[name]
+	if !present {
+		return "", true
+	}
+	if len(values) != 1 || values[0] == "" {
+		return "", false
+	}
+	return values[0], true
 }
 
 func (h *Handler) sessionsRoute(writer http.ResponseWriter, request *http.Request, principal productapi.Principal, requestID string) {

@@ -210,6 +210,69 @@ WHERE tenant_id = $1 AND workspace_id = $2 ORDER BY slot_key`, tenantID, workspa
 	return workspace, nil
 }
 
+func (s *Store) ListWorkspaces(ctx context.Context, tenantID string, actor product.ActorRef, cursor string, limit int) ([]product.Workspace, string, error) {
+	if s == nil || s.pool == nil || ctx == nil || limit < 1 || limit > 200 {
+		return nil, "", product.ErrInvalid
+	}
+	opCtx, cancel := context.WithTimeout(ctx, s.operationTimeout)
+	defer cancel()
+	query := `SELECT workspace_id FROM sandbox_runtime_product.workspaces
+WHERE tenant_id=$1 AND owner_actor_type=$2 AND owner_actor_id=$3
+ORDER BY created_at DESC, workspace_id DESC LIMIT $4`
+	arguments := []any{tenantID, string(actor.Type), actor.ID, limit + 1}
+	if cursor != "" {
+		query = `SELECT workspace_id FROM sandbox_runtime_product.workspaces
+WHERE tenant_id=$1 AND owner_actor_type=$2 AND owner_actor_id=$3
+  AND (created_at,workspace_id) < (
+    SELECT created_at,workspace_id FROM sandbox_runtime_product.workspaces
+    WHERE tenant_id=$1 AND owner_actor_type=$2 AND owner_actor_id=$3 AND workspace_id=$4)
+ORDER BY created_at DESC, workspace_id DESC LIMIT $5`
+		arguments = []any{tenantID, string(actor.Type), actor.ID, cursor, limit + 1}
+	}
+	rows, err := s.pool.Query(opCtx, query, arguments...)
+	if err != nil {
+		return nil, "", storeError(ctx, opCtx, err, false)
+	}
+	var identifiers []string
+	for rows.Next() {
+		var identifier string
+		if err := rows.Scan(&identifier); err != nil {
+			rows.Close()
+			return nil, "", storeError(ctx, opCtx, err, false)
+		}
+		identifiers = append(identifiers, identifier)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, "", storeError(ctx, opCtx, err, false)
+	}
+	rows.Close()
+	if cursor != "" && len(identifiers) == 0 {
+		var exists bool
+		err := s.pool.QueryRow(opCtx, `SELECT EXISTS(SELECT 1 FROM sandbox_runtime_product.workspaces WHERE tenant_id=$1 AND owner_actor_type=$2 AND owner_actor_id=$3 AND workspace_id=$4)`, tenantID, string(actor.Type), actor.ID, cursor).Scan(&exists)
+		if err != nil {
+			return nil, "", storeError(ctx, opCtx, err, false)
+		}
+		if !exists {
+			return nil, "", product.ErrInvalid
+		}
+	}
+	next := ""
+	if len(identifiers) > limit {
+		next = identifiers[limit-1]
+		identifiers = identifiers[:limit]
+	}
+	workspaces := make([]product.Workspace, 0, len(identifiers))
+	for _, identifier := range identifiers {
+		workspace, err := s.GetWorkspace(opCtx, tenantID, identifier)
+		if err != nil {
+			return nil, "", err
+		}
+		workspaces = append(workspaces, workspace)
+	}
+	return workspaces, next, nil
+}
+
 func (s *Store) GetOperation(ctx context.Context, tenantID, operationID string) (product.Operation, error) {
 	if s == nil || s.pool == nil || ctx == nil {
 		return product.Operation{}, product.ErrStoreUnavailable

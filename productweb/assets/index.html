@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Sandbox Runtime</title>
+  <link rel="stylesheet" href="/assets/app.css">
+</head>
+<body>
+  <a class="skip" href="#main">跳到主要内容</a>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">PRODUCT CONTROL PLANE</p>
+      <h1>Sandbox Runtime</h1>
+    </div>
+    <div class="identity">
+      <span id="identity">未登录</span>
+      <button id="logout" class="quiet" type="button" hidden>退出</button>
+    </div>
+  </header>
+
+  <main id="main">
+    <section id="login-panel" class="login-panel" aria-labelledby="login-title">
+      <div>
+        <p class="eyebrow">SECURE SESSION</p>
+        <h2 id="login-title">连接你的工作空间</h2>
+        <p class="muted">Bearer 凭证只用于建立加密的服务端会话，不会写入浏览器存储。</p>
+      </div>
+      <form id="login-form">
+        <label for="bearer">访问凭证</label>
+        <input id="bearer" name="bearer" type="password" autocomplete="off" required minlength="32">
+        <button type="submit">建立会话</button>
+      </form>
+    </section>
+
+    <div id="app" class="shell" hidden>
+      <aside class="rail" aria-label="工作空间导航">
+        <div class="rail-heading">
+          <h2>工作空间</h2>
+          <button id="refresh-workspaces" class="icon" type="button" aria-label="刷新工作空间">↻</button>
+        </div>
+        <ol id="workspace-list" class="workspace-list"></ol>
+        <details class="create-card">
+          <summary>新建工作空间</summary>
+          <form id="create-workspace-form">
+            <label for="display-name">名称</label>
+            <input id="display-name" required maxlength="128" value="My workspace">
+            <label for="lifetime">有效时间（秒）</label>
+            <input id="lifetime" type="number" min="60" max="604800" value="3600" required>
+            <button type="submit">创建</button>
+          </form>
+        </details>
+      </aside>
+
+      <section class="workspace" aria-labelledby="workspace-title">
+        <div class="workspace-heading">
+          <div>
+            <p id="workspace-state" class="eyebrow">SELECT A WORKSPACE</p>
+            <h2 id="workspace-title">选择一个工作空间</h2>
+          </div>
+          <button id="reload-workspace" class="quiet" type="button" disabled>重新载入</button>
+        </div>
+
+        <div class="tabs" role="tablist" aria-label="工作空间视图">
+          <button id="terminal-tab" role="tab" aria-selected="true" aria-controls="terminal-panel">终端</button>
+          <button id="files-tab" role="tab" aria-selected="false" aria-controls="files-panel">文件</button>
+        </div>
+
+        <section id="terminal-panel" role="tabpanel" aria-labelledby="terminal-tab">
+          <div class="toolbar">
+            <button id="new-terminal" type="button" disabled>新建终端</button>
+            <label for="session-select">会话</label>
+            <select id="session-select" disabled><option value="">暂无会话</option></select>
+            <button id="connect-terminal" type="button" disabled>连接</button>
+            <button id="disconnect-terminal" class="quiet" type="button" disabled>断开</button>
+          </div>
+          <pre id="terminal" class="terminal" tabindex="0" aria-label="终端输出"></pre>
+          <form id="terminal-input-form" class="terminal-input">
+            <label for="terminal-input">发送到终端</label>
+            <div><input id="terminal-input" autocomplete="off" disabled><button type="submit" disabled>发送</button></div>
+          </form>
+        </section>
+
+        <section id="files-panel" role="tabpanel" aria-labelledby="files-tab" hidden>
+          <div class="toolbar">
+            <label for="file-path">路径</label>
+            <input id="file-path" value="" placeholder="项目根目录">
+            <button id="browse-files" type="button" disabled>浏览</button>
+            <button id="refresh-files" class="quiet" type="button" disabled>同步快照</button>
+          </div>
+          <table class="files-table">
+            <caption class="sr-only">工作空间文件列表</caption>
+            <thead><tr><th scope="col">名称</th><th scope="col">类型</th><th scope="col">大小</th><th scope="col">修改时间</th></tr></thead>
+            <tbody id="file-list"><tr><td colspan="4" class="empty">选择工作空间后浏览文件</td></tr></tbody>
+          </table>
+        </section>
+      </section>
+    </div>
+  </main>
+
+  <div id="status" class="status" role="status" aria-live="polite"></div>
+  <script type="module" src="/assets/app.js"></script>
+</body>
+</html>

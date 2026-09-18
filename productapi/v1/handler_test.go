@@ -40,6 +40,10 @@ func (s *handlerStore) GetWorkspace(context.Context, string, string) (product.Wo
 	return s.workspace, nil
 }
 
+func (s *handlerStore) ListWorkspaces(context.Context, string, product.ActorRef, string, int) ([]product.Workspace, string, error) {
+	return []product.Workspace{s.workspace}, "", nil
+}
+
 func (s *handlerStore) GetOperation(context.Context, string, string) (product.Operation, error) {
 	return s.operation, nil
 }
@@ -85,6 +89,13 @@ func TestHandlerCreateAndReadWorkspaceContractProjection(t *testing.T) {
 		t.Fatalf("workspace status=%d body=%s", response.Code, response.Body.String())
 	}
 	validateDefinition(t, "Workspace", response.Body.Bytes())
+
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, authenticatedRequest(http.MethodGet, "/api/v1/workspaces?limit=50", ""))
+	if response.Code != http.StatusOK {
+		t.Fatalf("workspace list status=%d body=%s", response.Code, response.Body.String())
+	}
+	validateDefinition(t, "WorkspacePage", response.Body.Bytes())
 
 	response = httptest.NewRecorder()
 	handler.ServeHTTP(response, authenticatedRequest(http.MethodGet, "/api/v1/operations/op_1", ""))
@@ -148,6 +159,21 @@ func TestHandlerRejectsDuplicateSecurityHeaders(t *testing.T) {
 	if response.Code != http.StatusUnauthorized || len(store.commands) != 0 {
 		t.Fatalf("status=%d commands=%d", response.Code, len(store.commands))
 	}
+}
+
+func TestConnectionGrantProjectionMatchesLockedContract(t *testing.T) {
+	now := time.Date(2026, 9, 18, 1, 2, 3, 0, time.UTC)
+	document, err := json.Marshal(toConnectionGrant(product.ConnectionGrant{
+		ID: "con_1", SessionID: "ses_1", ProtocolProfile: "product-terminal.v1",
+		GatewayURI: "wss://gateway.example.test/connect", Ticket: strings.Repeat("a", 43), ExpiresAt: now,
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(document, []byte(`"ticket"`)) || !bytes.Contains(document, []byte(`"connection_ticket"`)) {
+		t.Fatalf("connection grant fields = %s", document)
+	}
+	validateDefinition(t, "ConnectionGrant", document)
 }
 
 func newTestHandler(t *testing.T) (*Handler, *handlerStore) {
