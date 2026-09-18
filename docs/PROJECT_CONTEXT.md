@@ -19,11 +19,11 @@ Current verified state:
 - post-documentation core CI run `35204434771` passed every required job; and
 - Product v1 architecture Phase 1 is complete as uncommitted design and
   Product Contract-definition work in the current worktree; and
-- Product v1 Phase 2 has an implementation-complete uncommitted candidate for
-  lifecycle/terminal control and a coordinated 60-case Contract source
-  candidate; the historical published lock remains authoritative because an
-  exact replacement requires a committed immutable revision, and the planned
-  independent-process coding/shell lifecycle black-box gate remains open.
+- Product v1 Phase 2 is complete for its fixed nine-step scope: implementation
+  revision `98995384c60a924f25ca58d3b7e561207bfa5be8` is selected by lock
+  revision `3caf38c6bc0b62d2eeb2c1e1c4ed473fae5baab1`, the clean-VCS 60-case
+  Suite and all required release gates pass, and the repository-owned
+  independent-process reference run passes 15+5+9 scenarios.
 
 The qualification applies only to Provider revision
 `170459266af5f4fad359ca8c63f2ae19741055c5`, external-caller revision
@@ -42,7 +42,7 @@ Step 1 audit and completion record include termination, reversible desired
 state, lease renewal/expiry, resumable events, and terminal-session close; they
 exclude resize and snapshot/restore from Phase 2. See
 [`audits/phase-2-provider-lifecycle-completion.md`](audits/phase-2-provider-lifecycle-completion.md)
-for the candidate evidence and remaining immutable-lock gate.
+for the selected authority, release evidence, and exact non-claims.
 
 See [`STATUS.md`](STATUS.md) for the complete evidence ledger and
 [`qualification/external-caller-coding-shell-v1.md`](qualification/external-caller-coding-shell-v1.md)
@@ -207,11 +207,11 @@ multi-tenant, deployment, and production readiness.
 
 ## Current Snapshot
 
-The current checked-out code snapshot is
-`e5bc9bd7039e01a1898f90fbd77684a1cb6699ad`, which adds the portable
-application-packaging profiles. The Product Phase 1 design set dated
-2026-09-18 is intentionally uncommitted in this worktree; do not assign it a
-revision or remote CI result until it is committed and run.
+The selected Product Phase 2 implementation snapshot is
+`98995384c60a924f25ca58d3b7e561207bfa5be8`; lock-selection revision
+`3caf38c6bc0b62d2eeb2c1e1c4ed473fae5baab1` binds its exact Provider Contract
+tree and E2E metadata. No remote CI result is assigned to these local release
+revisions.
 
 The latest remotely verified documentation baseline remains
 `27081dfde4dfc726ba4df06d1f3b50012a04d2f2`. Core CI run `35204434771`
@@ -222,11 +222,12 @@ below retains older per-gate commits and run IDs because those identify exact
 historical evidence rather than the newest documentation commit.
 
 The ADR 0038 calling-standard slice remains implemented. The current Contract
-authority is revision `22ba6987ea5fbc37d53942720133c0acad199edd`, tree
-`c9a7054d7c8e7f4b6e32f38175ceedddc48c2d38`, and a content-derived 53-case
-local Suite. Core CI `35204434771` passed that clean VCS-built local Runner;
-the historical six-case remote Runner, parent-lock, and eight E2E-check bundle
-retain their recorded P2.6 identities and are not relabeled as current runs.
+authority is revision `98995384c60a924f25ca58d3b7e561207bfa5be8`, tree
+`0a627baed11c8a6ddbe8a24bbc1869e4f85edc16`, and a content-derived 60-case
+local Suite. A clean VCS-built Runner at lock-selection revision
+`3caf38c6bc0b62d2eeb2c1e1c4ed473fae5baab1` passed all 60 cases with race
+detection and shuffle. The historical remote Runner and hosted CI results
+retain their recorded identities and are not relabeled as current runs.
 The independently implemented caller result is instead the separate bounded
 P2.7 qualification recorded above. Rotation remains operator-driven, and
 protected/mutating remote conformance, aggregate conformance, multi-controller,
@@ -791,13 +792,17 @@ Contract identity:
 
 - namespace: `urn:shell-echo:sandbox-runtime:provider-v1`
 - version/license: `1.0.0` / MIT
-- revision: `22ba6987ea5fbc37d53942720133c0acad199edd`
-- Contract tree: `c9a7054d7c8e7f4b6e32f38175ceedddc48c2d38`
+- revision: `98995384c60a924f25ca58d3b7e561207bfa5be8`
+- Contract tree: `0a627baed11c8a6ddbe8a24bbc1869e4f85edc16`
 - manifest digest:
-  `sha256:1e17e0ef4f86e03be1dac22c48e7b556a8600a4baa6252f4514390d339b8ba3f`
+  `sha256:f1a4e787f5dc5fecc85c6f6ed54385925686dfc1ced749caca5522805320c799`
+- OpenAPI digest:
+  `sha256:f4301829d52969516d8551e14b7aee064628bec01e1d7d3613be3fa89579efdb`
+- semantic-rules digest:
+  `sha256:0bf737c9dc242a0a7e32a1a86261fa1fc96b3124eeb2510738af274de53a2026`
 - local Suite: `sandbox-provider@1.0.0`, profile
-  `sandbox-runtime-provider-v1`, `repository-go-test`, 53 cases, digest
-  `sha256:b40c932643f4a1e5fd6681e3abf9b64a607609866a6254456970f8b8034cf2a8`
+  `sandbox-runtime-provider-v1`, `repository-go-test`, 60 cases, digest
+  `sha256:7db1d28d35ca193632c395247cc71eeaaff48b027964b9ea9da247eaad5e3991`
 - remote Suite: `sandbox-provider-remote@1.0.0`, profile
   `sandbox-runtime-provider-remote-discovery-v1`, `remote-http-black-box`, 6
   cases, digest
@@ -807,12 +812,12 @@ Contract identity:
 | --- | --- | --- |
 | P0 | Passed: repository-owned MIT Contract migration and lock | Retain lock and projection regression |
 | P1.1 | The DTO, mTLS discovery, JWS/digest/replay/fencing admission, ADR 0038 repository-local gates, and the exact P2.7 independent external-caller qualification pass. The listener has one explicit caller trust domain, Provider-local audience/revision anchors, and up to 32 frozen keys | Production identity infrastructure, multi-issuer admission, deployment-owned rotation, and qualification of other callers remain unproven |
-| P1.2 | Passed for the bounded Contract-authorized lifecycle subset and development composition | Reserved lifecycle families and production gates remain open |
+| P1.2 | Passed for the selected Contract-authorized lifecycle subset and development composition | Snapshot/restore, resize, and production gates remain open |
 | P2 components | P2.1-P2.5h local component, Contract projection, Docker, and recorded repository CI gates pass within their named boundaries | Retain single-controller/development constraints and exact Contract lock |
 | P2.5i | Latest completed local run `20260907T044611.598221000Z` passed 15 initial plus 5 restart/resume coding/shell scenarios against historical harness/Provider lock `b8d4829`/`af8a505`; hosted regression `33970773414` remains historical evidence against `17ed6ca`/`b4d41c9` | Neither run contains a Browser scenario or proves interoperability with an independently implemented external caller, durable-revocation caller behavior, or production properties |
-| P2.6 | The historical 50-case local and separate 6-case remote profiles passed at `3fe314a`/`ae476fe`. The current content-derived 53-case local Suite, Contract verification, projection checks, race suite, and vet passed core CI `35204434771` | Protected or mutating remote profiles, Provider-level cleanup authority, and broader aggregate/reliability/deployment gates remain separate |
+| P2.6 | The historical 50-case local and separate 6-case remote profiles passed at `3fe314a`/`ae476fe`. The current content-derived 60-case local Suite passed from a clean VCS-built Runner at lock-selection revision `3caf38c6bc0b62d2eeb2c1e1c4ed473fae5baab1`; Contract verification, projection checks, race suite, and vet also pass | Protected or mutating remote profiles and broader aggregate/reliability/deployment gates remain separate |
 | P2.7 | Complete at **24/24**; the public independent caller is **13/13**. Hosted run `35203241121` executed all 15+5 cases against Provider `170459266af5f4fad359ca8c63f2ae19741055c5` and caller `b3ebcc783e5db20395e29b029e0eb55f7819b49b`, matched all 91 required observations, completed stable zero-resource teardown, and produced accepted seven-file artifact `10488622806` with result-envelope digest `sha256:d5e6fd528f2302252a38f49aa466c85767106a8bcef430120f230a8127f96758` | No step remains in the fixed first-version plan. Other callers/profiles, aggregate conformance, multi-controller, hostile multi-tenant, HA, deployment, and production readiness require new scopes and evidence |
-| P2 | Reference coding/shell caller release gate passed | Aggregate conformance, multi-controller, hostile multi-tenant isolation, deployment, and production gates remain open |
+| P2 | Reference coding/shell caller and Product Phase 2 lifecycle release gates passed; the latter includes a repository-owned independent-process 15+5+9 black-box run | Independently implemented external-caller lifecycle interoperability, aggregate conformance, multi-controller, hostile multi-tenant isolation, deployment, and production gates remain open |
 | P3 | Retired by ADR 0037. Historical revision binding/shadow/metrics components and candidate runs retain their recorded evidence boundaries | No named-platform migration gate remains; external consumers adapt to the exact locked Provider Contract |
 | P4 | Browser Contract authority/projection, exact sandboxed signed amd64/arm64/v8 publication, Provider-local components, default-disabled command/runtime composition, process-local Gateway limits, the separately recorded Browser/shared-capacity/durable-revocation caller gates, ADR 0033 component/caller evidence, the ADR 0034 v2 local/hosted deletion and rollback-detection gates, the ADR 0035 PostgreSQL component gate, and the ADR 0036 hosted same-runner controlled-restore gate pass within their named boundaries | Production independent witness/storage and restore operations, production Browser advertisement/public Gateway, Valkey/PostgreSQL provenance and HA, production configuration/metrics, aggregate, multi-controller, multi-tenant, deployment, and production gates remain open |
 

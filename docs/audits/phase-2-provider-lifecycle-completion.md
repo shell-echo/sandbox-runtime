@@ -1,14 +1,14 @@
-# Phase 2 Provider Lifecycle Candidate Completion
+# Phase 2 Provider Lifecycle Completion
 
 - Date: 2026-09-18
-- Status: implementation-complete source candidate; not yet an exact locked
-  Provider revision
+- Status: complete for the fixed nine-step Phase 2 scope
 - Scope authority: ADR 0048 and the nine-step Phase 2 plan
+- Implementation revision: `98995384c60a924f25ca58d3b7e561207bfa5be8`
+- Lock-selection revision: `3caf38c6bc0b62d2eeb2c1e1c4ed473fae5baab1`
 
 ## Result
 
-The current worktree completes the planned implementation and Contract-source
-families for Provider lifecycle closure:
+Phase 2 completes the planned Provider lifecycle closure:
 
 - reversible `ready`/`suspended` desired-state control;
 - bounded lease renewal and reconciled expiry cleanup;
@@ -21,95 +21,78 @@ families for Provider lifecycle closure:
 - optional all-or-nothing `sandbox.lifecycle-control@1.0.0` and
   `sandbox.terminal-control@1.0.0` capability composition.
 
-The implementation keeps Provider wire DTOs separate from lifecycle,
-repository, terminal, and Docker types. It retains caller ownership of business
-desired state, end-user authorization, aggregate operations, public Gateway
-policy, and final workflow decisions.
+Provider wire DTOs remain separate from lifecycle, repository, terminal, and
+Docker types. The calling service continues to own business desired state,
+end-user authorization, aggregate operations, public Gateway policy, and final
+workflow decisions.
 
-## Contract candidate
+## Selected Contract authority
 
-The coordinated source candidate includes five OpenAPI operations, five closed
-request/response schemas, fixtures, admission-operation enums and bindings,
-semantic rules, capability identities, operation types, manifest resources,
-DTO projections, Calling Standard choreography, and seven additional local
-Suite cases. The local Suite candidate contains 60 cases with content-derived
-digest
-`sha256:7db1d28d35ca193632c395247cc71eeaaff48b027964b9ea9da247eaad5e3991`.
+The exact lock selects Provider and Contract revision
+`98995384c60a924f25ca58d3b7e561207bfa5be8` with Contract tree
+`0a627baed11c8a6ddbe8a24bbc1869e4f85edc16`.
 
-Candidate projection tests compile and validate the new schemas, fixtures,
-routes, semantic requirements, manifest inventory, cursor error details, and
-Suite membership directly from the source tree. This is candidate evidence,
-not a substitute for the exact Contract lock.
+- manifest:
+  `sha256:f1a4e787f5dc5fecc85c6f6ed54385925686dfc1ced749caca5522805320c799`
+- OpenAPI:
+  `sha256:f4301829d52969516d8551e14b7aee064628bec01e1d7d3613be3fa89579efdb`
+- semantic rules:
+  `sha256:0bf737c9dc242a0a7e32a1a86261fa1fc96b3124eeb2510738af274de53a2026`
+- local Suite: 60 cases, digest
+  `sha256:7db1d28d35ca193632c395247cc71eeaaff48b027964b9ea9da247eaad5e3991`
+- remote Suite: unchanged 6 cases, digest
+  `sha256:167922d972229a97a64bf22bc6a36ee20d4de19a023395d9f004f00c54cc49d0`
+
+The coordinated authority includes five Provider operations, five closed
+request/response schemas, fixtures, admission-operation bindings, semantic
+rules, capability identities, operation types, Calling Standard choreography,
+DTO projections, and seven additional local Suite cases.
 
 ## Implementation evidence
 
-The candidate adds:
+The selected implementation adds atomic durable mutation reservation; durable
+event high-water marks and bounded retention; exact-owned fake and Docker
+lifecycle controls; pending-operation and lease-expiry reconciliation; a
+versioned terminal-close record family; protected strict transport; and
+fail-closed readiness before capability advertisement.
 
-- atomic durable mutation reservation with idempotency, digest, generation,
-  fencing, lease, operation, and event updates across memory and file stores;
-- restart-stable per-sandbox event high-water marks and a 1,000-event retained
-  body window;
-- fake and Docker suspend, resume, inspect, and exact-owned remove controls;
-- lifecycle application recovery plus periodic pending-operation and expired-
-  lease reconciliation;
-- a separate versioned terminal-close record family and migration path;
-- close reconciliation that never blindly repeats cleanup for an immutable
-  `outcome_unknown` attempt;
-- protected strict decoding and admission binding for every new mutation and
-  read route; and
-- fail-closed command readiness nodes for lifecycle control, expiry, event
-  reads, and terminal close before capability advertisement.
+The root and E2E modules pass full race/shuffle and vet. All eight E2E lock
+checks pass. The Provider Contract and qualification-profile verifiers pass,
+as do the qualification report/evidence tests. The clean VCS-built local
+Conformance Runner executed all 60 cases with race detection and shuffle. The
+tagged Docker lifecycle integration passes, including suspend/resume
+observation, terminal and exec cleanup, exact removal, and mount-root cleanup.
 
-Focused repository, coordinator, application, transport, capability, command,
-and candidate-Contract tests pass under `-race -shuffle=on -count=1`. Event
-reads reject bodies, unknown or duplicate query parameters, empty cursors, bad
-encoding, negative values, and values beyond the JSON exact-integer range. The
-tagged Docker integration passes on Docker Engine 29.7.2/Linux and now
-exercises pause, suspended observation, idempotent pause, resume, ready
-observation, idempotent resume, terminal and exec cleanup, exact removal, and
-mount-root removal.
+## Independent-process lifecycle evidence
 
-`go vet ./...`, `git diff --check`, JSON parsing, OpenAPI YAML parsing, and
-manifest-path existence checks also pass. The required full-repository race
-command was run; its only failing packages are the eight qualification,
-remote-conformance, and locked-projection packages whose setup deliberately
-invokes the exact Contract lock verifier. The verifier itself fails at the
-intended clean-checkout boundary because this candidate changes tracked and
-untracked files below `contract/`. No unrelated failure appeared before or
-after that boundary.
+The repository-owned reference caller and reference stack ran as independent
+OS processes through the protected Provider wire surface. Evidence directory
+`e2e/evidence/20260918T074038.371995000Z` records:
 
-## Formal completion blocker
+- 15 initial coding/shell scenarios;
+- 5 restart/reconstruction scenarios; and
+- 9 lifecycle scenarios.
 
-The published compatibility lock still selects revision
-`22ba6987ea5fbc37d53942720133c0acad199edd` and Contract tree
-`c9a7054d7c8e7f4b6e32f38175ceedddc48c2d38`. A replacement lock must name the
-actual immutable commit and its Contract subtree. The current dirty worktree
-has neither identity, and inventing one would invalidate the lock.
+The lifecycle phase proves five-capability discovery, retained events after
+restart, suspend and resume observation, cursor continuation, lease extension
+without generation drift, durable terminal close, reconnect denial, explicit
+termination, runtime absence, and final lifecycle events. The run used runtime
+image digest
+`sha256:9e99f925546b9acdaf858da4d11f162e0121e6d12cd2d52bde4c022ae1819dfc`.
 
-Therefore these final release gates remain deliberately open until commit
-authority exists:
+This is independent-process black-box evidence from a repository-owned
+reference caller. It is not evidence from a separately implemented external
+caller and does not relabel the earlier independent external-caller
+qualification.
 
-1. create the immutable revision containing the complete candidate;
-2. refresh the Provider lock to that exact revision/tree and resource digests;
-3. run the Provider Contract verifier against that lock;
-4. build the Conformance Runner with clean VCS metadata and execute the 60-case
-   local Suite from the revision archive; and
-5. run the planned independent-process coding/shell lifecycle black-box
-   scenarios through the protected wire surface, including restart and exact
-   cleanup checks; the seven new Suite cases are Contract/schema/semantic
-   projections and do not substitute for this gate; and
-6. record any resulting CI or external-caller evidence under its exact
-   identities.
+## Claim boundary
 
-The historical lock, 53-case Suite result, and prior external-caller
-qualification remain valid only for their recorded surface. This candidate
-does not claim a new independent external caller, multi-controller storage,
-deployment qualification, hostile-multitenant isolation, HA, or production
-readiness.
+Phase 2 remains single-controller development and reference evidence. It does
+not establish independently implemented external-caller interoperability for
+the new lifecycle operations, multi-controller storage, hostile-multitenant
+isolation, HA, deployment qualification, or production readiness.
 
-## Exclusions retained
-
-Phase 2 still excludes snapshot/restore, terminal resize, Browser-session
-close, Product persistence and APIs, a public Gateway, Guest Agent work,
-deployment changes, and production readiness. Reserved names or existing
-runtime primitives do not authorize any of those families.
+Phase 2 also excludes snapshot/restore, terminal resize, Browser-session close,
+Product persistence and APIs, a public Gateway, Guest Agent work, and
+deployment changes. Reserved names or existing runtime primitives do not
+authorize any of those families.

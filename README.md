@@ -44,12 +44,14 @@ service, Product database migration, public Gateway, Guest Agent, or production
 deployment has been implemented or qualified by that work.
 
 The separate [Product v1 Phase 2 Provider lifecycle plan](docs/plan/product-v1-phase-2-provider-lifecycle.md)
-now has an implementation-complete source candidate for termination,
-suspend/resume, lease expiry, finite event reads, and terminal-session close.
-It is not yet selected Provider authority: the published lock remains unchanged
-until the candidate exists as an immutable revision and passes the clean-VCS
-Contract and Conformance gates plus the planned independent-process
-coding/shell lifecycle black-box gate.
+is complete for termination, suspend/resume, lease expiry, finite event reads,
+and terminal-session close. Implementation revision
+`98995384c60a924f25ca58d3b7e561207bfa5be8` is selected by lock revision
+`3caf38c6bc0b62d2eeb2c1e1c4ed473fae5baab1`; the clean-VCS 60-case Suite,
+full repository gates, tagged Docker lifecycle integration, and the 15+5+9
+independent-process reference black-box run pass. This does not add a new
+separately implemented external-caller, deployment, or production-readiness
+claim.
 
 ## What the project provides
 

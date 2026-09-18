@@ -72,15 +72,15 @@ exact Provider Contract projection. Its success proves only that the profile
 definition is locked; it does not validate a qualification report or claim that
 an external caller executed or passed the profile. P2.7b separately locks the
 closed report schema at
-`sha256:5d97e10c8b5b2f365e275e78868d5a35d78bbdffdec05ea2f18b5c947cd429f6`
+`sha256:9e9d75c021534d1b0ad49ad230031bad8cc578c163ac7f5626471899b0991c7c`
 and the validator semantics at
-`sha256:bc0b5be7aefcebb6a71871d9724cd671235b6ef2bf453a1954313547ad379ed9`,
+`sha256:dd15969eb171575db0dd3883701c1f788ed338bdffcbec343a6455b00ed2c227`,
 and tests the evidence-root, report validator, and command components. CI runs
 those component tests but does not fabricate an external qualification run.
 P2.7c.1 locks the adapter protocol schema at
-`sha256:fdee270ca27003693b2ce504da769c9779825312e1dd4e06b5caf8578f5ee03c`
+`sha256:7948265be2f90f8c695c62340ab57f451b0771c104e9505d01d778063fca23a6`
 and operational semantics at
-`sha256:997c49cd1a5b2c050d48333a973dd78b611221f869bf709cf6d1a8d771795a99`.
+`sha256:5e0521ff6df2451384c717fd62c0335d3e726164f7488ac191430b263affe82c`.
 Its startup/process-supervisor/validator/receipt authority binding is complete;
 all qualification Schema compilers use one ECMA-262 regexp engine and reject
 ASCII controls without POSIX-only classes. Invocation paths/endpoints use closed
@@ -254,7 +254,7 @@ Pass those inputs with `-target`, `-ca`, `-client-ca`, `-client-cert`,
 `-provider-revision`, respectively. See
 [`compatibility/sandbox-runtime/README.md`](../compatibility/sandbox-runtime/README.md)
 for the complete command and exact local/remote Suite identities. The remote
-profile covers only six read-only discovery cases; it is not the local 53-case
+profile covers only six read-only discovery cases; it is not the local 60-case
 Suite, protected or mutating remote conformance, independent-caller
 interoperability, aggregate conformance, or production-readiness evidence. The
 report sets `unsafe_method_probes_sent=true` only after a POST, PUT, PATCH, or
@@ -264,11 +264,13 @@ zero-side-effect claim for an arbitrary non-conforming target.
 The historical P2.6 release gate passed locally at implementation `3fe314a` and
 E2E lock refresh `ae476fe`, including both clean VCS-built Runners, the root and
 E2E race/shuffle and vet gates, Contract verification, parent-lock verification,
-and all eight E2E `-check` commands. The current 53-case local authority later
-passed as a clean VCS-built Runner in core CI `35204434771`; no fresh current
-remote Runner or relabeled historical E2E bundle follows from that result. Keep
-those checks separate from external caller, deployment, and production
-qualification.
+and all eight E2E `-check` commands. The later 53-case local authority passed as
+a clean VCS-built Runner in core CI `35204434771`. The current 60-case authority
+passes from a clean VCS-built, race-enabled, shuffled Runner at lock-selection
+revision `3caf38c6bc0b62d2eeb2c1e1c4ed473fae5baab1`; no fresh current remote
+Runner or relabeled historical hosted result follows from that local release
+gate. Keep those checks separate from external caller, deployment, and
+production qualification.
 
 ## Package boundaries
 
