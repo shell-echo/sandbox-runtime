@@ -13,7 +13,7 @@
 | 主交付计划 | **24/24 已完成** |
 | 独立 External Caller | **13/13 已完成** |
 | Product v1 第三阶段 | 在有边界的 standalone 拓扑内 **13/13 已完成** |
-| Product v1 第四阶段 Browser | **1/13 进行中**；仅完成权威切片，能力尚未发布 |
+| Product v1 第四阶段 Browser | 在有边界的同仓库独立进程拓扑内 **13/13 已完成** |
 | 编程/Shell 资格验证 | 对下述精确调用方、Provider 版本、拓扑、Profile 和场景结果为 **Qualified** |
 | 最新核心 CI | [已通过](https://github.com/shell-echo/sandbox-runtime/actions/runs/35204434771) |
 
@@ -45,11 +45,12 @@ PostgreSQL 上，以四个独立 OS 进程运行 Product、Gateway、Guest 与�
 的 Provider fixture，并通过 9 个黑盒场景。能力就绪状态现在按租户和完整依赖实时
 派生。该结论不等同于可部署拓扑、独立实现调用方、HA、恶意多租户隔离或生产就绪。
 
-[Product v1 第四阶段 Browser](docs/plan/product-v1-phase-4-browser.md)正在进行。
-首个切片只增加 Product 自有的 Browser 会话权威与 PostgreSQL outbox 隔离；
-Browser Slot 供应、Provider Browser 调度、公开自动化或可视数据面、Browser
-录制/Web 组合与发布门禁仍未完成。历史 Provider Browser 参考证据不会被改称为
-Product 就绪证据。
+[Product v1 第四阶段 Browser](docs/plan/product-v1-phase-4-browser.md)已在有边界的
+发布拓扑内完成 **13/13**。最终标签门禁以独立的 Product、Gateway、Provider 和
+Browser OS 进程，配合全新固定摘要 PostgreSQL、Valkey 与加密录制存储，通过了
+12 个精确场景。严格证据清单覆盖重启、故障、认证、租户信息不泄露、自动化、
+真实 WebRTC 查看/控制、录制完整性、背压、生命周期和精确清理。该结论不等同于
+通过部署资格验证、独立实现调用方、HA、恶意多租户隔离或生产就绪。
 
 ## 项目提供什么
 

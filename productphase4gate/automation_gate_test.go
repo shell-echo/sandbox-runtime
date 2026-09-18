@@ -46,8 +46,17 @@ const (
 
 type nodeConfig struct {
 	ProviderAddress string    `json:"provider_address"`
+	ProviderAPI     string    `json:"provider_api_address,omitempty"`
 	GatewayAddress  string    `json:"gateway_address"`
 	EdgeAddress     string    `json:"edge_address"`
+	ProductAddress  string    `json:"product_address,omitempty"`
+	DSN             string    `json:"dsn,omitempty"`
+	RedisAddress    string    `json:"redis_address,omitempty"`
+	ProviderSigning string    `json:"provider_signing_key,omitempty"`
+	GrantKey        string    `json:"grant_key,omitempty"`
+	RecordingKey    string    `json:"recording_key,omitempty"`
+	RecordingRoot   string    `json:"recording_root,omitempty"`
+	GateKey         string    `json:"gate_key,omitempty"`
 	CACertificate   string    `json:"ca_certificate"`
 	ProviderCert    string    `json:"provider_certificate"`
 	ProviderKey     string    `json:"provider_key"`
@@ -59,9 +68,12 @@ type nodeConfig struct {
 }
 
 type childNode struct {
-	role string
-	cmd  *exec.Cmd
-	log  bytes.Buffer
+	role    string
+	cmd     *exec.Cmd
+	log     bytes.Buffer
+	done    chan struct{}
+	waitMu  sync.Mutex
+	waitErr error
 }
 
 func TestPhase4AutomationNode(t *testing.T) {
@@ -84,6 +96,14 @@ func TestPhase4AutomationNode(t *testing.T) {
 		err = runGatewayNode(config)
 	case "edge":
 		err = runEdgeNode(config)
+	case "release-provider":
+		err = runReleaseProviderNode(config)
+	case "release-product":
+		err = runReleaseProductNode(config)
+	case "release-gateway":
+		err = runReleaseGatewayNode(config)
+	case "release-browser":
+		err = runReleaseBrowserNode(config)
 	default:
 		err = fmt.Errorf("unknown phase 4 node role %q", role)
 	}
@@ -423,13 +443,20 @@ func serveUntilSignal(address string, handler http.Handler, tlsConfig *tls.Confi
 
 func startNode(t *testing.T, role, configPath string) *childNode {
 	t.Helper()
-	node := &childNode{role: role}
+	node := &childNode{role: role, done: make(chan struct{})}
 	node.cmd = exec.Command(os.Args[0], "-test.run=^TestPhase4AutomationNode$")
 	node.cmd.Env = append(os.Environ(), phase4NodeRole+"="+role, phase4NodeFile+"="+configPath)
 	node.cmd.Stdout, node.cmd.Stderr = &node.log, &node.log
 	if err := node.cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
+	go func() {
+		err := node.cmd.Wait()
+		node.waitMu.Lock()
+		node.waitErr = err
+		node.waitMu.Unlock()
+		close(node.done)
+	}()
 	return node
 }
 
@@ -437,20 +464,33 @@ func stopNode(node *childNode) {
 	if node == nil || node.cmd == nil || node.cmd.Process == nil {
 		return
 	}
-	_ = node.cmd.Process.Signal(os.Interrupt)
-	done := make(chan struct{})
-	go func() { _ = node.cmd.Wait(); close(done) }()
 	select {
-	case <-done:
+	case <-node.done:
+		return
+	default:
+	}
+	_ = node.cmd.Process.Signal(os.Interrupt)
+	select {
+	case <-node.done:
 	case <-time.After(3 * time.Second):
 		_ = node.cmd.Process.Kill()
-		<-done
+		<-node.done
 	}
 }
 
 func waitHTTP(t *testing.T, ctx context.Context, client *http.Client, target string, status int, node *childNode) {
 	t.Helper()
 	for {
+		if node != nil && node.done != nil {
+			select {
+			case <-node.done:
+				node.waitMu.Lock()
+				err := node.waitErr
+				node.waitMu.Unlock()
+				t.Fatalf("%s exited before %s became healthy: %v; log=%s", node.role, target, err, node.log.String())
+			default:
+			}
+		}
 		request, _ := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
 		response, err := client.Do(request)
 		if err == nil {

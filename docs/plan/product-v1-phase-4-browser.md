@@ -1,6 +1,6 @@
 # Product v1 Phase 4: Browser
 
-Status: In progress; Slices 1-12 implemented locally, 1 slice remains
+Status: Complete at 13/13 for the bounded same-repository separate-process scope
 
 Started: 2026-09-18
 
@@ -34,7 +34,7 @@ until Slice 13 passes for the exact composed topology.
 | 10 | Connection loss, Gateway/Provider restart, reconnect, visual resynchronization, resolution changes, and recovery UX | Fresh-grant reconnect; authority recheck; keyframe/resync bounds; no stale input; retained session recovery; dependency-loss fail-closed behavior | **Implemented; local real-WebRTC recovery gates passed** |
 | 11 | Browser metadata audit, media/control-event recording, Product catalog, retention/deletion, integrity, and quota composition | Consent and visible mode; required-recorder fail closed; encrypted chained segments; authorized replay; content excluded from logs/control-plane lists; quota races | **Implemented; local and real-PostgreSQL gates passed** |
 | 12 | Product Web Browser experience for slot/session lifecycle, live view, controller state, recovery, downloads/uploads, and recording catalog | Generated/checked client; authenticated browser E2E; CSP/CSRF/origin/accessibility; viewer/control UX; error/reconnect/cleanup cases; no private coordinates | **Implemented; local and real-headless-Chrome gates passed** |
-| 13 | Product Phase 4 independent-process release gate and reproducible evidence bundle | Fresh PostgreSQL and required coordination/object storage; separate Product/Gateway/Provider/Browser roles; exact locked identities; restart/fault/security/backpressure/recording/cleanup matrix; strict independent validation | Not started |
+| 13 | Product Phase 4 independent-process release gate and reproducible evidence bundle | Fresh PostgreSQL and required coordination/object storage; separate Product/Gateway/Provider/Browser roles; exact locked identities; restart/fault/security/backpressure/recording/cleanup matrix; strict independent validation | **Implemented; 12-scenario separate-process gate and strict evidence validation passed** |
 
 Slices are dependency ordered. A later data-plane demo cannot replace Product
 authority, exact Provider selection, recovery, policy, or cleanup gates.
@@ -462,6 +462,38 @@ actual Product Web application, calls the Product API, and renders the Browser
 surface. This is local Web/BFF evidence; the complete separate-process Browser
 topology remains Slice 13.
 
+## Slice 13 exact boundary
+
+The tagged release gate starts fresh digest-pinned PostgreSQL and Valkey
+containers plus fresh encrypted recording storage. Four child OS processes
+own the Product, Gateway, Provider, and Browser roles. Product uses its real
+PostgreSQL repository and network-only Provider adapter; Gateway uses the real
+PostgreSQL grant/audit repository, Redis-compatible capacity authority,
+automation WSS, WebRTC live transport, and encrypted recorder; Browser exposes
+only the private mTLS/fenced ingress and network media source; Provider remains
+the exact locked-wire same-repository fixture for the selected Contract.
+
+The gate passes the exact `contract-identities`, `product-authentication`,
+`browser-slot-session-lifecycle`, `tenant-nondisclosure`,
+`automation-roundtrip`, `viewer-controller-fencing`,
+`browser-live-recording-integrity`, `product-restart-recovery`,
+`gateway-restart-recovery`, `provider-fault-closure`,
+`bounded-backpressure`, and `exact-cleanup` scenarios. Cleanup reaps all child
+processes, removes the run-owned containers and recording objects, drains
+coordination state, and removes scoped Product rows.
+
+Run `20260918T152110.677058000Z` records source baseline
+`322eb342650d2ade838f1b3a24e0d5bc0bfbb3e1`, the locked Provider revision and
+tree, Product Contract tree, four process roles and executable digests, the
+12/12 scenario result, exact cleanup, and explicit non-claims. The checked-in
+manifest is independently parsed and semantically validated by
+`cmd/verify-product-phase4-evidence`.
+
+This closes the fixed Product Phase 4 plan only at the
+same-repository-separate-process evidence tier. It is not a deployable topology,
+independently implemented caller result, HA result, hostile multi-tenant result,
+or production-readiness result.
+
 ## Evidence rules
 
 Every slice records the lowest evidence tier it actually passed: unit,
@@ -470,6 +502,7 @@ independently implemented caller, deployment, multi-controller, hostile
 multi-tenant, HA, or production. Historical Provider Browser evidence is cited
 only as historical Provider/reference evidence.
 
-Phase completion requires Slice 13. It will still not imply production, HA,
-hostile-multitenant isolation, or multi-human collaboration without their
-separate named gates.
+Phase 4 is complete because Slice 13 passed its named bounded gate. Completion
+does not imply production, HA, hostile-multitenant isolation, independently
+implemented caller interoperability, or multi-human collaboration without
+their separate named gates.

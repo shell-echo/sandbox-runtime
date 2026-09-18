@@ -45,6 +45,8 @@ go vet ./...
 go run ./cmd/verify-product-contract -source-root .
 go test -race -v -tags=phase3gate -count=1 -run '^TestStandalonePhase3ReleaseGate$' ./productphase3gate
 go run ./cmd/verify-product-phase3-evidence -manifest docs/audits/product-phase-3-standalone-evidence.json
+go test -v -count=1 -tags=phase4browsergate ./productphase4gate
+go run ./cmd/verify-product-phase4-evidence -manifest docs/audits/product-phase-4-browser-evidence.json
 SANDBOX_RUNTIME_DOCKER_INTEGRATION=1 go test -tags=integration -count=1 ./driver/docker ./provider/lifecycle/driver/docker
 SANDBOX_RUNTIME_BROWSER_ADAPTER_INTEGRATION=1 go test -tags=integration -count=1 ./provider/browser/driver/docker
 SANDBOX_RUNTIME_BROWSER_PROVENANCE_INTEGRATION=1 go test -tags=integration -count=1 ./provider/browser/provenance/ghcli
@@ -353,12 +355,14 @@ lease, and downstream action fence are independent authorities. Browser
 outbox work uses a Browser-specific type and must not be leased by Terminal
 workers.
 
-Keep Product Browser capability advertisement empty until the exact Provider
-adapter, public automation/live Gateway, viewer/controller policy, revocation,
-network isolation, recording mode, recovery, cleanup, and Phase 4 release gate
-are all ready. Missing clipboard, upload, download, permission, recording, or
-egress policy denies the feature. A disconnected client is not proof that the
-durable session or Provider allocation is closed.
+Product Browser capability readiness may be derived only when the exact
+Provider adapter, public automation/live Gateway, viewer/controller policy,
+revocation, network isolation, recording mode, recovery, and cleanup graph is
+ready. The Phase 4 release gate proves that graph only in its bounded
+same-repository separate-process topology; it does not authorize production
+advertisement or deployment claims. Missing clipboard, upload, download,
+permission, recording, or egress policy denies the feature. A disconnected
+client is not proof that the durable session or Provider allocation is closed.
 
 For Slice 1-2 persistence changes, run the ordinary Product PostgreSQL command
 above. Slice 2 additionally requires the concurrent idempotency and one-slot
@@ -372,6 +376,13 @@ for every authorization/dispatch, restricted network plus an explicit egress
 policy reference for sandbox create, and an opaque Browser handoff reference
 for session observation. Run the tagged PostgreSQL package to prove Browser
 and Terminal workers cannot lease each other's outbox work.
+
+The final Phase 4 tagged gate requires Docker. It creates and removes exact
+fresh PostgreSQL and Valkey containers, starts four child OS processes, and
+uses fresh encrypted local recording storage. The checked-in evidence manifest
+is historical evidence for its recorded source baseline; validate it with the
+separate verifier before selecting it. Passing this gate is not deployment,
+independent-caller, HA, hostile-multitenant, or production evidence.
 
 ## Go and API rules
 

@@ -35,12 +35,16 @@ Current verified state:
   This same-repository Provider-fixture topology is not deployment, HA,
   hostile-multitenant, independently implemented caller, or production
   evidence; and
-- Product v1 Phase 4 Browser is in progress at **3/13**. Slices 1-3 establish
-  Product-owned Browser session/slot authority, bounded tenant quota, isolated
-  dispatch, and an exact-revision network-only Provider adapter for restricted
-  Browser sandbox create plus opaque handoff observation; the capability
-  remains unadvertised and ten lifecycle/data-plane/policy/recovery/recording/
-  Web/release slices remain.
+- Product v1 Phase 4 Browser is complete at **13/13** for its bounded
+  same-repository separate-process scope. Run
+  `20260918T152110.677058000Z` at source baseline
+  `322eb342650d2ade838f1b3a24e0d5bc0bfbb3e1` passed 12 exact scenarios
+  through separate Product, Gateway, Provider, and Browser OS processes with
+  fresh digest-pinned PostgreSQL and Valkey plus fresh encrypted recording
+  storage. Strict evidence validation confirms the locked Contract identities,
+  four roles, scenario set, and cleanup. Deployment, HA, hostile multi-tenant,
+  independently implemented caller, and production readiness remain explicit
+  non-claims.
 
 The qualification applies only to Provider revision
 `170459266af5f4fad359ca8c63f2ae19741055c5`, external-caller revision
@@ -68,7 +72,9 @@ with the accepted standalone run in
 [`audits/product-phase-3-standalone-completion.md`](audits/product-phase-3-standalone-completion.md).
 Product Phase 4 startup scope and slice order are recorded in
 [`audits/phase-4-product-browser-startup.md`](audits/phase-4-product-browser-startup.md)
-and [`plan/product-v1-phase-4-browser.md`](plan/product-v1-phase-4-browser.md).
+and [`plan/product-v1-phase-4-browser.md`](plan/product-v1-phase-4-browser.md),
+with the bounded release result in
+[`audits/product-phase-4-browser-completion.md`](audits/product-phase-4-browser-completion.md).
 
 See [`STATUS.md`](STATUS.md) for the complete evidence ledger and
 [`qualification/external-caller-coding-shell-v1.md`](qualification/external-caller-coding-shell-v1.md)

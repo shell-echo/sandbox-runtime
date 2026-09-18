@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "run_id": "20260918T152110.677058000Z",
+  "result": "passed",
+  "evidence_tier": "same-repository-separate-process",
+  "source_revision": "322eb342650d2ade838f1b3a24e0d5bc0bfbb3e1",
+  "started_at": "2026-09-18T15:21:10.677058Z",
+  "completed_at": "2026-09-18T15:21:13.588385Z",
+  "provider_contract": {
+    "revision": "98995384c60a924f25ca58d3b7e561207bfa5be8",
+    "tree": "0a627baed11c8a6ddbe8a24bbc1869e4f85edc16"
+  },
+  "product_contract": {
+    "tree": "sha256:9490513228774da2e06cc3d01bc65192d37adea89d12d4ad83efdd6ce0f14560",
+    "resource_count": 9,
+    "operation_count": 27,
+    "conformance_cases": 3
+  },
+  "postgresql": {
+    "profile": "postgres:16-alpine@sha256:866efe7070b471f3a5397edac0e5edd65c23ff056587c6e47c07d008caaedd28",
+    "fresh": true
+  },
+  "coordination": {
+    "profile": "ghcr.io/valkey-io/valkey@sha256:ccfa19b0d743e48927e1c8c14e39e0acb97b5cea347fef0bfe340247fea920cd",
+    "fresh": true
+  },
+  "object_storage": {
+    "profile": "encrypted-local-recording-store-v1",
+    "fresh": true
+  },
+  "processes": [
+    {
+      "role": "browser",
+      "executable_digest": "sha256:029c61c7498baff7e28c74cca136dd58a8f0177b84f9dfa6cbbf08782daaa4d1",
+      "independent_os_process": true
+    },
+    {
+      "role": "gateway",
+      "executable_digest": "sha256:029c61c7498baff7e28c74cca136dd58a8f0177b84f9dfa6cbbf08782daaa4d1",
+      "independent_os_process": true
+    },
+    {
+      "role": "product",
+      "executable_digest": "sha256:029c61c7498baff7e28c74cca136dd58a8f0177b84f9dfa6cbbf08782daaa4d1",
+      "independent_os_process": true
+    },
+    {
+      "role": "provider",
+      "executable_digest": "sha256:029c61c7498baff7e28c74cca136dd58a8f0177b84f9dfa6cbbf08782daaa4d1",
+      "independent_os_process": true
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "automation-roundtrip",
+      "status": "passed"
+    },
+    {
+      "id": "bounded-backpressure",
+      "status": "passed"
+    },
+    {
+      "id": "browser-live-recording-integrity",
+      "status": "passed"
+    },
+    {
+      "id": "browser-slot-session-lifecycle",
+      "status": "passed"
+    },
+    {
+      "id": "contract-identities",
+      "status": "passed"
+    },
+    {
+      "id": "exact-cleanup",
+      "status": "passed"
+    },
+    {
+      "id": "gateway-restart-recovery",
+      "status": "passed"
+    },
+    {
+      "id": "product-authentication",
+      "status": "passed"
+    },
+    {
+      "id": "product-restart-recovery",
+      "status": "passed"
+    },
+    {
+      "id": "provider-fault-closure",
+      "status": "passed"
+    },
+    {
+      "id": "tenant-nondisclosure",
+      "status": "passed"
+    },
+    {
+      "id": "viewer-controller-fencing",
+      "status": "passed"
+    }
+  ],
+  "cleanup": {
+    "child_processes_reaped": true,
+    "containers_removed": true,
+    "scoped_rows_removed": true,
+    "object_content_removed": true,
+    "coordination_drained": true
+  },
+  "non_claims": [
+    "deployment-qualified",
+    "ha-qualified",
+    "hostile-multi-tenant-qualified",
+    "independent-caller-qualified",
+    "production-ready"
+  ]
+}

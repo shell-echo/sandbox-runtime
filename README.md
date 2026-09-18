@@ -18,7 +18,7 @@ general production readiness.
 | Main delivery plan | **24/24 complete** |
 | Independent external caller | **13/13 complete** |
 | Product v1 Phase 3 | **13/13 complete** for the bounded standalone topology |
-| Product v1 Phase 4 Browser | **3/13 in progress**; Provider Browser control-plane adapter added, capability unadvertised |
+| Product v1 Phase 4 Browser | **13/13 complete** for the bounded same-repository separate-process topology |
 | Coding/shell qualification | **Qualified** for the exact caller, Provider revisions, topology, profile, and scenarios recorded below |
 | Latest core CI | [Passed](https://github.com/shell-echo/sandbox-runtime/actions/runs/35204434771) |
 
@@ -66,14 +66,16 @@ validated and retains explicit non-claims: this is not a deployable topology,
 independently implemented caller result, HA, hostile-multitenant, or production
 readiness.
 
-[Product v1 Phase 4 Browser](docs/plan/product-v1-phase-4-browser.md) is in
-progress. Its first three slices add Product-owned Browser session/slot
-authority, tenant quota, isolated dispatch, and an exact-revision network-only
-Provider adapter for restricted Browser sandbox creation and opaque session
-handoff observation. They do not yet add lifecycle cleanup, a public automation
-or visual data plane, Browser recording/Web composition, or a release result.
-Historical Provider Browser reference evidence is kept separate and is not
-Product readiness evidence.
+[Product v1 Phase 4 Browser](docs/plan/product-v1-phase-4-browser.md) is complete
+at **13/13** for its bounded release topology. Its final tagged gate passed 12
+exact scenarios through separate Product, Gateway, Provider, and Browser OS
+processes with fresh digest-pinned PostgreSQL and Valkey plus fresh encrypted
+recording storage. The strict evidence manifest records restart, fault,
+authentication, nondisclosure, automation, real-WebRTC viewer/controller,
+recording-integrity, backpressure, lifecycle, and exact-cleanup results.
+This is same-repository separate-process evidence, not deployment-qualified,
+independently implemented caller, HA, hostile-multitenant, or production
+evidence.
 
 ## What the project provides
 
