@@ -22,6 +22,10 @@ var (
 	ErrStoreOutcomeUnknown   = errors.New("product store outcome is unknown")
 	ErrNotFound              = errors.New("product resource not found")
 	ErrForbidden             = errors.New("product action is forbidden")
+	ErrVersionConflict       = errors.New("product version conflict")
+	ErrControlConflict       = errors.New("product control conflict")
+	ErrControlStale          = errors.New("product control authority is stale")
+	ErrQuotaExceeded         = errors.New("product quota exceeded")
 
 	identifierPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$`)
 	versionPattern    = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+$`)
@@ -144,6 +148,41 @@ type Workspace struct {
 type CreateWorkspaceResult struct {
 	Operation Operation
 	Replay    bool
+}
+
+type ControlScope struct {
+	Type string
+	ID   string
+}
+
+func (s ControlScope) Validate(workspaceID string) error {
+	if (s.Type != "workspace" && s.Type != "session") || !validIdentifier(s.ID) {
+		return ErrInvalid
+	}
+	if s.Type == "workspace" && s.ID != workspaceID {
+		return ErrInvalid
+	}
+	return nil
+}
+
+type ControlLease struct {
+	ID          string
+	WorkspaceID string
+	Scope       ControlScope
+	Controller  ActorRef
+	Fence       int64
+	IssuedAt    time.Time
+	ExpiresAt   time.Time
+}
+
+type AcquireControlLeaseRequest struct {
+	ExpectedWorkspaceVersion int64
+	Scope                    ControlScope
+	DurationSeconds          int64
+}
+type RenewControlLeaseRequest struct {
+	Fence           int64
+	DurationSeconds int64
 }
 
 func validIdentifier(value string) bool {

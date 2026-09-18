@@ -14,7 +14,16 @@ var ErrUnauthenticated = errors.New("product authentication failed")
 type Principal struct {
 	TenantID string
 	Actor    product.ActorRef
+	Role     Role
 }
+
+type Role string
+
+const (
+	RoleOwner      Role = "owner"
+	RoleController Role = "controller"
+	RoleViewer     Role = "viewer"
+)
 
 type Authenticator interface {
 	Authenticate(context.Context, string) (Principal, error)
@@ -35,7 +44,14 @@ func NewStaticAuthenticator(bindings []StaticToken) (*StaticAuthenticator, error
 	}
 	copyBindings := append([]StaticToken(nil), bindings...)
 	for index, binding := range copyBindings {
+		if binding.Principal.Role == "" {
+			binding.Principal.Role = RoleOwner
+			copyBindings[index].Principal.Role = RoleOwner
+		}
 		if len(binding.Token) < 32 || len(binding.Token) > 4096 || binding.Principal.Actor.Validate() != nil || binding.Principal.TenantID == "" {
+			return nil, product.ErrInvalid
+		}
+		if binding.Principal.Role != RoleOwner && binding.Principal.Role != RoleController && binding.Principal.Role != RoleViewer {
 			return nil, product.ErrInvalid
 		}
 		for prior := 0; prior < index; prior++ {

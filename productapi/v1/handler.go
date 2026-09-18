@@ -20,13 +20,18 @@ type Handler struct {
 	application   *product.Application
 	authenticator productapi.Authenticator
 	requestIDs    product.IDGenerator
+	controls      *product.ControlService
 }
 
 func NewHandler(application *product.Application, authenticator productapi.Authenticator, requestIDs product.IDGenerator) (*Handler, error) {
+	return NewHandlerWithControl(application, nil, authenticator, requestIDs)
+}
+
+func NewHandlerWithControl(application *product.Application, controls *product.ControlService, authenticator productapi.Authenticator, requestIDs product.IDGenerator) (*Handler, error) {
 	if application == nil || productapi.IsNilAuthenticator(authenticator) || requestIDs == nil {
 		return nil, product.ErrInvalid
 	}
-	return &Handler{application: application, authenticator: authenticator, requestIDs: requestIDs}, nil
+	return &Handler{application: application, controls: controls, authenticator: authenticator, requestIDs: requestIDs}, nil
 }
 
 func (h *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
@@ -55,6 +60,8 @@ func (h *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 		})
 	case request.Method == http.MethodPost && request.URL.Path == "/api/v1/workspaces":
 		h.createWorkspace(writer, request, principal, requestID)
+	case request.Method == http.MethodPost && strings.Contains(request.URL.Path, "/control-leases"):
+		h.controlLease(writer, request, principal, requestID)
 	case request.Method == http.MethodGet && strings.HasPrefix(request.URL.Path, "/api/v1/workspaces/"):
 		identifier, exact := singleIdentifier(request.URL.Path, "/api/v1/workspaces/")
 		if !exact {
@@ -74,6 +81,86 @@ func (h *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	}
 }
 
+func (h *Handler) controlLease(writer http.ResponseWriter, request *http.Request, principal productapi.Principal, requestID string) {
+	if principal.Role != productapi.RoleOwner || h.controls == nil {
+		writeError(writer, http.StatusForbidden, "PRODUCT_FORBIDDEN", "action is forbidden", false, requestID)
+		return
+	}
+	keyValues := request.Header.Values("Idempotency-Key")
+	if len(keyValues) != 1 {
+		writeError(writer, http.StatusBadRequest, "PRODUCT_INVALID_REQUEST", "exactly one idempotency key is required", false, requestID)
+		return
+	}
+	if !jsonContentType(request.Header.Get("Content-Type")) {
+		writeError(writer, http.StatusBadRequest, "PRODUCT_INVALID_REQUEST", "content type must be application/json", false, requestID)
+		return
+	}
+	workspaceID, leaseID, action, ok := parseControlPath(request.URL.Path)
+	if !ok {
+		writeError(writer, http.StatusNotFound, "PRODUCT_NOT_FOUND", "resource not found", false, requestID)
+		return
+	}
+	switch action {
+	case "acquire":
+		var input AcquireControlLeaseRequest
+		if err := decodeStrict(request.Context(), writer, request.Body, 32768, &input); err != nil {
+			writeError(writer, http.StatusBadRequest, "PRODUCT_INVALID_REQUEST", "invalid request body", false, requestID)
+			return
+		}
+		lease, _, err := h.controls.Acquire(request.Context(), principal.TenantID, principal.Actor, workspaceID, keyValues[0], product.AcquireControlLeaseRequest{ExpectedWorkspaceVersion: input.ExpectedWorkspaceVersion, Scope: product.ControlScope{Type: input.Scope.ScopeType, ID: input.Scope.ScopeID}, DurationSeconds: input.DurationSeconds})
+		if err != nil {
+			writeApplicationError(writer, err, requestID)
+			return
+		}
+		writeJSON(writer, http.StatusCreated, toControlLease(lease))
+	case "renew":
+		var input RenewControlLeaseRequest
+		if err := decodeStrict(request.Context(), writer, request.Body, 32768, &input); err != nil {
+			writeError(writer, http.StatusBadRequest, "PRODUCT_INVALID_REQUEST", "invalid request body", false, requestID)
+			return
+		}
+		lease, _, err := h.controls.Renew(request.Context(), principal.TenantID, principal.Actor, workspaceID, leaseID, keyValues[0], product.RenewControlLeaseRequest{Fence: input.Fence, DurationSeconds: input.DurationSeconds})
+		if err != nil {
+			writeApplicationError(writer, err, requestID)
+			return
+		}
+		writeJSON(writer, http.StatusOK, toControlLease(lease))
+	case "release":
+		var input ReleaseControlLeaseRequest
+		if err := decodeStrict(request.Context(), writer, request.Body, 32768, &input); err != nil {
+			writeError(writer, http.StatusBadRequest, "PRODUCT_INVALID_REQUEST", "invalid request body", false, requestID)
+			return
+		}
+		if _, err := h.controls.Release(request.Context(), principal.TenantID, principal.Actor, workspaceID, leaseID, keyValues[0], input.Fence, input.Reason); err != nil {
+			writeApplicationError(writer, err, requestID)
+			return
+		}
+		writer.WriteHeader(http.StatusNoContent)
+	}
+}
+
+func parseControlPath(path string) (workspaceID, leaseID, action string, ok bool) {
+	prefix := "/api/v1/workspaces/"
+	if !strings.HasPrefix(path, prefix) {
+		return "", "", "", false
+	}
+	remaining := strings.TrimPrefix(path, prefix)
+	parts := strings.Split(remaining, "/")
+	if len(parts) == 2 && parts[0] != "" && parts[1] == "control-leases" {
+		return parts[0], "", "acquire", true
+	}
+	if len(parts) != 3 || parts[0] == "" || parts[1] != "control-leases" {
+		return "", "", "", false
+	}
+	switch {
+	case strings.HasSuffix(parts[2], ":renew"):
+		return parts[0], strings.TrimSuffix(parts[2], ":renew"), "renew", strings.TrimSuffix(parts[2], ":renew") != ""
+	case strings.HasSuffix(parts[2], ":release"):
+		return parts[0], strings.TrimSuffix(parts[2], ":release"), "release", strings.TrimSuffix(parts[2], ":release") != ""
+	}
+	return "", "", "", false
+}
+
 func (h *Handler) authenticate(request *http.Request) (productapi.Principal, bool) {
 	values := request.Header.Values("Authorization")
 	if len(values) != 1 || !strings.HasPrefix(values[0], "Bearer ") {
@@ -88,6 +175,10 @@ func (h *Handler) authenticate(request *http.Request) (productapi.Principal, boo
 }
 
 func (h *Handler) createWorkspace(writer http.ResponseWriter, request *http.Request, principal productapi.Principal, requestID string) {
+	if principal.Role != productapi.RoleOwner {
+		writeError(writer, http.StatusForbidden, "PRODUCT_FORBIDDEN", "action is forbidden", false, requestID)
+		return
+	}
 	if !jsonContentType(request.Header.Get("Content-Type")) {
 		writeError(writer, http.StatusBadRequest, "PRODUCT_INVALID_REQUEST", "content type must be application/json", false, requestID)
 		return
@@ -154,6 +245,15 @@ func writeApplicationError(writer http.ResponseWriter, err error, requestID stri
 		writeError(writer, http.StatusUnprocessableEntity, "PRODUCT_CAPABILITY_UNSUPPORTED", "requested capability is unavailable", false, requestID)
 	case errors.Is(err, product.ErrStoreOutcomeUnknown):
 		writeError(writer, http.StatusServiceUnavailable, "PRODUCT_OUTCOME_UNKNOWN", "command outcome requires reconciliation", true, requestID)
+	case errors.Is(err, product.ErrVersionConflict):
+		writeError(writer, http.StatusConflict, "PRODUCT_VERSION_CONFLICT", "resource version conflicts with retained state", false, requestID)
+	case errors.Is(err, product.ErrControlConflict):
+		writeError(writer, http.StatusConflict, "PRODUCT_CONTROL_CONFLICT", "control scope is already held", false, requestID)
+	case errors.Is(err, product.ErrControlStale):
+		writeError(writer, http.StatusConflict, "PRODUCT_CONTROL_STALE", "control authority is stale", false, requestID)
+	case errors.Is(err, product.ErrQuotaExceeded):
+		writer.Header().Set("Retry-After", "1")
+		writeError(writer, http.StatusTooManyRequests, "PRODUCT_RATE_LIMITED", "product quota is exhausted", true, requestID)
 	default:
 		writeError(writer, http.StatusServiceUnavailable, "PRODUCT_DEPENDENCY_UNAVAILABLE", "product dependency is unavailable", true, requestID)
 	}

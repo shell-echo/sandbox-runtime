@@ -239,8 +239,14 @@ func lockWorkspaceAndAdvance(ctx context.Context, tx pgx.Tx, tenantID, workspace
 WHERE tenant_id=$1 AND workspace_id=$2 FOR UPDATE`, tenantID, workspaceID).Scan(&sequence); err != nil {
 		return 0, err
 	}
-	_, err := tx.Exec(ctx, `UPDATE sandbox_runtime_product.workspaces SET observed_state=$1,version=version+1,
+	var err error
+	if observedState == "" {
+		_, err = tx.Exec(ctx, `UPDATE sandbox_runtime_product.workspaces SET version=version+1,
+next_event_sequence=next_event_sequence+1,updated_at=$1 WHERE tenant_id=$2 AND workspace_id=$3`, now, tenantID, workspaceID)
+	} else {
+		_, err = tx.Exec(ctx, `UPDATE sandbox_runtime_product.workspaces SET observed_state=$1,version=version+1,
 next_event_sequence=next_event_sequence+1,updated_at=$2 WHERE tenant_id=$3 AND workspace_id=$4`, observedState, now, tenantID, workspaceID)
+	}
 	return sequence, err
 }
 

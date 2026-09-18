@@ -97,6 +97,37 @@ type ProductError struct {
 	RequestID string `json:"request_id"`
 }
 
+type ControlScope struct {
+	ScopeType string `json:"scope_type"`
+	ScopeID   string `json:"scope_id"`
+}
+type AcquireControlLeaseRequest struct {
+	ExpectedWorkspaceVersion int64        `json:"expected_workspace_version"`
+	Scope                    ControlScope `json:"scope"`
+	DurationSeconds          int64        `json:"duration_seconds"`
+}
+type RenewControlLeaseRequest struct {
+	Fence           int64 `json:"fence"`
+	DurationSeconds int64 `json:"duration_seconds"`
+}
+type ReleaseControlLeaseRequest struct {
+	Fence  int64  `json:"fence"`
+	Reason string `json:"reason"`
+}
+type ControlLease struct {
+	LeaseID     string       `json:"lease_id"`
+	WorkspaceID string       `json:"workspace_id"`
+	Scope       ControlScope `json:"scope"`
+	Controller  ActorRef     `json:"controller"`
+	Fence       int64        `json:"fence"`
+	IssuedAt    string       `json:"issued_at"`
+	ExpiresAt   string       `json:"expires_at"`
+}
+
+func toControlLease(lease product.ControlLease) ControlLease {
+	return ControlLease{LeaseID: lease.ID, WorkspaceID: lease.WorkspaceID, Scope: ControlScope{ScopeType: lease.Scope.Type, ScopeID: lease.Scope.ID}, Controller: toActor(lease.Controller), Fence: lease.Fence, IssuedAt: timestamp(lease.IssuedAt), ExpiresAt: timestamp(lease.ExpiresAt)}
+}
+
 func toOperation(operation product.Operation) ProductOperation {
 	return ProductOperation{
 		OperationID: operation.ID, OperationType: operation.Type, WorkspaceID: operation.WorkspaceID,

@@ -1,6 +1,6 @@
 # Product v1 Phase 3: Product Kernel, Terminal, Files, and Web
 
-Status: Active; Slices 1-4 implemented as local component and real-PostgreSQL evidence
+Status: Active; Slices 1-5 implemented as local component and real-PostgreSQL evidence
 
 Started: 2026-09-18
 
@@ -37,7 +37,7 @@ operations remain separately named gates.
 | 2 | Contract-checked Product DTO projection; strict authenticated `POST /api/v1/workspaces`, Workspace read, and Product operation read | Closed input/body/header tests, auth precedence, tenant/actor nondisclosure, schema projection, HTTP black-box test, Contract fixture/conformance seed | **Implemented; local and real-PostgreSQL HTTP gates passed** |
 | 3 | Leased outbox dispatcher and exact-revision Provider adapter for discovery/admission | No dispatch before commit; exact Contract revision/tree and capability/profile selection; retry/dead-letter/timeout/unknown-result tests; fake network and protected Provider integration | **Implemented; local and real-PostgreSQL gates passed** |
 | 4 | Primary-code slot reconciler, Provider operation evidence mapping, restart recovery, and Product event cursor/read model | Restart/duplicate/stale generation/ambiguous Provider outcome/event-contiguity tests; Workspace reaches a terminal Product decision only from retained evidence | **Implemented; local and real-PostgreSQL gates passed** |
-| 5 | Product authorization, resource filters, control leases/fences, quotas, and metadata audit | Cross-tenant nondisclosure, stale fence, concurrent controller, database-time expiry, quota race, audit failure/retention tests | Planned |
+| 5 | Product authorization, resource filters, control leases/fences, quotas, and metadata audit | Cross-tenant nondisclosure, stale fence, concurrent controller, database-time expiry, quota race, audit failure/retention tests | **Implemented; local and real-PostgreSQL gates passed** |
 | 6 | Product Terminal session control plane and Provider terminal-control adapter | Durable session-before-grant, exact Workspace/slot/fence binding, create/read/close/resize capability honesty, restart and close-race tests | Planned |
 | 7 | Public Terminal Gateway with one-use Product grants, bounded proxying, revocation, backpressure, reconnect, and metadata audit | Separate-process client/Product/Gateway/Provider test; no endpoint or ticket leakage; expiry/replay/revocation/capacity/backpressure/reconnect/cleanup cases | Planned |
 | 8 | Outbound authenticated Guest Agent control channel and version/capability negotiation | Guest identity binding, replay protection, rotation, deadline/cancellation, reconnect, incompatible-version, and compromised/removed-guest tests | Planned |
@@ -49,7 +49,7 @@ operations remain separately named gates.
 
 Slices are dependency ordered. Later UI or data-plane work cannot substitute
 for an earlier authority, persistence, authentication, or recovery gate.
-After Slice 4, 9 slices remain.
+After Slice 5, 8 slices remain.
 
 ## Cross-cutting requirements
 
@@ -197,3 +197,27 @@ revision drift, ambiguous responses, retry classification, and worker policy.
 A disposable PostgreSQL 16 adapter run applies and replays both migrations and
 proves the complete create/outbox/dispatch/observe/terminal-event path. These
 are component and real-adapter results, not a standalone deployment claim.
+
+## Slice 5 exact output
+
+- Authenticated principals now carry the reserved Product role vocabulary.
+  Workspace creation and control authority require the owner role before body
+  parsing; all resource reads remain tenant- and owner-filtered with
+  nondisclosing not-found behavior.
+- Product control leases are PostgreSQL authority. Acquire expires elapsed
+  rows using database time, refuses live takeover, allocates a monotonic
+  per-scope fence, and commits the lease, Workspace version, contiguous event,
+  metadata audit, and scoped idempotency result together. Renew and release
+  require the exact actor, lease, and fence.
+- Tenant Workspace quota admission is serialized by a tenant-scoped database
+  lock. A configured limit cannot be exceeded by concurrent acceptance; the
+  conservative default remains bounded.
+- Security audit stores only safe metadata identifiers and reason classes.
+  Audit insertion is part of the mutation transaction, so audit storage
+  failure cannot leave an unaudited successful authority change.
+
+Focused race tests and disposable PostgreSQL evidence cover idempotent control
+acquire, live-controller conflict, stale fence rejection, renewal/release,
+event and audit counts, and concurrent quota admission. Collaboration roles,
+operator revocation, external identity-provider configuration, and hostile
+multi-tenant qualification remain outside this standalone slice.

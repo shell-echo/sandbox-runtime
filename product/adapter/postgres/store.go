@@ -68,6 +68,18 @@ func (s *Store) CreateWorkspace(ctx context.Context, command product.CreateWorks
 		result.Replay = true
 		return result, nil
 	}
+	if _, err := tx.Exec(opCtx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 7346273419))`, command.TenantID); err != nil {
+		return product.CreateWorkspaceResult{}, storeError(ctx, opCtx, err, false)
+	}
+	var workspaceCount, workspaceLimit int
+	if err := tx.QueryRow(opCtx, `SELECT
+    (SELECT count(*) FROM sandbox_runtime_product.workspaces WHERE tenant_id=$1 AND desired_state <> 'terminated'),
+    COALESCE((SELECT max_workspaces FROM sandbox_runtime_product.tenant_quotas WHERE tenant_id=$1),100)`, command.TenantID).Scan(&workspaceCount, &workspaceLimit); err != nil {
+		return product.CreateWorkspaceResult{}, storeError(ctx, opCtx, err, false)
+	}
+	if workspaceCount >= workspaceLimit {
+		return product.CreateWorkspaceResult{}, product.ErrQuotaExceeded
+	}
 
 	capabilities, err := json.Marshal(command.PrimarySlot.RequiredCapabilities)
 	if err != nil {
@@ -126,6 +138,10 @@ VALUES ($1, $2, $3, $4, 'workspace.reconcile', $5, 'pending', 0, $6, $6, $6)`,
 		ID: command.OperationID, Type: "create_workspace", WorkspaceID: command.WorkspaceID,
 		SubmittedBy: command.Actor, State: "accepted", ReconciliationStatus: "pending", Version: 1,
 		AcceptedAt: now, UpdatedAt: now,
+	}
+	if err := insertAudit(opCtx, tx, "aud-"+command.OperationID, command.TenantID, command.Actor,
+		"workspace.create", "workspace", command.WorkspaceID, "allowed", "authorized", now); err != nil {
+		return product.CreateWorkspaceResult{}, storeError(ctx, opCtx, err, false)
 	}
 	if err := tx.Commit(opCtx); err != nil {
 		return product.CreateWorkspaceResult{}, storeError(ctx, opCtx, err, true)

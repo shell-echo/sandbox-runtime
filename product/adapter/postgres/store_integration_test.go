@@ -298,6 +298,91 @@ func TestIntegrationOutboxLeaseDispatchEvidenceAndEventAreAtomic(t *testing.T) {
 	}
 }
 
+func TestIntegrationControlLeaseUsesDatabaseTimeFenceIdempotencyAndAudit(t *testing.T) {
+	pool := integrationProductPool(t)
+	applyProductMigrations(t, pool)
+	cleanupProductTenant(t, pool, "tenant-product-control")
+	store, _ := New(pool, 2*time.Second)
+	application, _ := product.NewApplication(store, allowPrimarySlot{}, product.CryptoIDGenerator{})
+	controls, _ := product.NewControlService(store, product.CryptoIDGenerator{})
+	actor := product.ActorRef{Type: product.ActorHuman, ID: "owner-product-control"}
+	created, err := application.CreateWorkspace(context.Background(), "tenant-product-control", actor, "control-workspace", integrationCreateWorkspaceRequest("control workspace"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := product.AcquireControlLeaseRequest{ExpectedWorkspaceVersion: 1, Scope: product.ControlScope{Type: "workspace", ID: created.Operation.WorkspaceID}, DurationSeconds: 30}
+	lease, replay, err := controls.Acquire(context.Background(), "tenant-product-control", actor, created.Operation.WorkspaceID, "control-acquire-1", request)
+	if err != nil || replay || lease.Fence != 1 {
+		t.Fatalf("lease=%#v replay=%v err=%v", lease, replay, err)
+	}
+	replayed, replay, err := controls.Acquire(context.Background(), "tenant-product-control", actor, created.Operation.WorkspaceID, "control-acquire-1", request)
+	if err != nil || !replay || replayed.ID != lease.ID {
+		t.Fatalf("replayed=%#v replay=%v err=%v", replayed, replay, err)
+	}
+	workspace, err := application.GetWorkspace(context.Background(), "tenant-product-control", actor, created.Operation.WorkspaceID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conflictRequest := request
+	conflictRequest.ExpectedWorkspaceVersion = workspace.Version
+	if _, _, err := controls.Acquire(context.Background(), "tenant-product-control", actor, created.Operation.WorkspaceID, "control-acquire-2", conflictRequest); !errors.Is(err, product.ErrControlConflict) {
+		t.Fatalf("conflict err=%v", err)
+	}
+	renewed, _, err := controls.Renew(context.Background(), "tenant-product-control", actor, created.Operation.WorkspaceID, lease.ID, "control-renew-1", product.RenewControlLeaseRequest{Fence: lease.Fence, DurationSeconds: 60})
+	if err != nil || !renewed.ExpiresAt.After(lease.ExpiresAt) {
+		t.Fatalf("renewed=%#v err=%v", renewed, err)
+	}
+	if _, _, err := controls.Renew(context.Background(), "tenant-product-control", actor, created.Operation.WorkspaceID, lease.ID, "control-renew-stale", product.RenewControlLeaseRequest{Fence: lease.Fence + 1, DurationSeconds: 60}); !errors.Is(err, product.ErrControlStale) {
+		t.Fatalf("stale err=%v", err)
+	}
+	if replay, err := controls.Release(context.Background(), "tenant-product-control", actor, created.Operation.WorkspaceID, lease.ID, "control-release-1", lease.Fence, "done"); err != nil || replay {
+		t.Fatalf("release replay=%v err=%v", replay, err)
+	}
+	var auditCount, eventCount int
+	if err := pool.QueryRow(context.Background(), `SELECT (SELECT count(*) FROM sandbox_runtime_product.security_audit WHERE tenant_id=$1),(SELECT count(*) FROM sandbox_runtime_product.workspace_events WHERE tenant_id=$1)`, "tenant-product-control").Scan(&auditCount, &eventCount); err != nil {
+		t.Fatal(err)
+	}
+	if auditCount != 4 || eventCount != 4 {
+		t.Fatalf("audit=%d events=%d", auditCount, eventCount)
+	}
+}
+
+func TestIntegrationWorkspaceQuotaSerializesConcurrentAcceptance(t *testing.T) {
+	pool := integrationProductPool(t)
+	applyProductMigrations(t, pool)
+	cleanupProductTenant(t, pool, "tenant-product-quota")
+	if _, err := pool.Exec(context.Background(), `INSERT INTO sandbox_runtime_product.tenant_quotas(tenant_id,max_workspaces,max_sessions,max_active_transfers,updated_at)VALUES($1,1,10,10,clock_timestamp())`, "tenant-product-quota"); err != nil {
+		t.Fatal(err)
+	}
+	store, _ := New(pool, 5*time.Second)
+	application, _ := product.NewApplication(store, allowPrimarySlot{}, product.CryptoIDGenerator{})
+	actor := product.ActorRef{Type: product.ActorHuman, ID: "owner-product-quota"}
+	start := make(chan struct{})
+	results := make(chan error, 2)
+	for index := 0; index < 2; index++ {
+		go func(index int) {
+			<-start
+			_, err := application.CreateWorkspace(context.Background(), "tenant-product-quota", actor, "quota-"+string(rune('a'+index)), integrationCreateWorkspaceRequest("quota workspace"))
+			results <- err
+		}(index)
+	}
+	close(start)
+	accepted, limited := 0, 0
+	for range 2 {
+		err := <-results
+		if err == nil {
+			accepted++
+		} else if errors.Is(err, product.ErrQuotaExceeded) {
+			limited++
+		} else {
+			t.Fatalf("unexpected err=%v", err)
+		}
+	}
+	if accepted != 1 || limited != 1 {
+		t.Fatalf("accepted=%d limited=%d", accepted, limited)
+	}
+}
+
 func integrationProductPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	connectionString := os.Getenv(productPostgresURLVariable)
@@ -358,6 +443,8 @@ func cleanupProductTenant(t *testing.T, pool *pgxpool.Pool, tenantID string) {
 			`DELETE FROM sandbox_runtime_product.provider_bindings WHERE tenant_id = $1`,
 			`DELETE FROM sandbox_runtime_product.product_operation_attempts WHERE tenant_id = $1`,
 			`DELETE FROM sandbox_runtime_product.security_audit WHERE tenant_id = $1`,
+			`DELETE FROM sandbox_runtime_product.mutation_idempotency WHERE tenant_id = $1`,
+			`DELETE FROM sandbox_runtime_product.tenant_quotas WHERE tenant_id = $1`,
 			`DELETE FROM sandbox_runtime_product.idempotency_records WHERE tenant_id = $1`,
 			`DELETE FROM sandbox_runtime_product.outbox WHERE tenant_id = $1`,
 			`DELETE FROM sandbox_runtime_product.workspace_events WHERE tenant_id = $1`,

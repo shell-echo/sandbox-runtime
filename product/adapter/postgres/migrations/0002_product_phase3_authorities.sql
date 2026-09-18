@@ -381,6 +381,36 @@ CREATE TABLE sandbox_runtime_product.security_audit (
     CONSTRAINT security_audit_reason CHECK (reason_code ~ '^[a-z][a-z0-9_.-]{0,127}$')
 );
 
+CREATE TABLE sandbox_runtime_product.mutation_idempotency (
+    tenant_id text NOT NULL,
+    actor_type text NOT NULL,
+    actor_id text NOT NULL,
+    method text NOT NULL,
+    normalized_path text NOT NULL,
+    idempotency_key text NOT NULL,
+    request_digest bytea NOT NULL,
+    result_type text NOT NULL,
+    result_id text NOT NULL,
+    created_at timestamp with time zone NOT NULL,
+    expires_at timestamp with time zone NOT NULL,
+    CONSTRAINT mutation_idempotency_primary_key PRIMARY KEY (tenant_id,actor_type,actor_id,method,normalized_path,idempotency_key),
+    CONSTRAINT mutation_idempotency_actor CHECK (actor_type IN ('human','agent','service')),
+    CONSTRAINT mutation_idempotency_method CHECK (method IN ('POST','PUT','PATCH','DELETE')),
+    CONSTRAINT mutation_idempotency_key CHECK (octet_length(idempotency_key) BETWEEN 1 AND 128 AND idempotency_key ~ '^[!-~]+$'),
+    CONSTRAINT mutation_idempotency_digest CHECK (octet_length(request_digest)=32),
+    CONSTRAINT mutation_idempotency_result CHECK (result_type ~ '^[a-z][a-z0-9_.-]{0,127}$'),
+    CONSTRAINT mutation_idempotency_expiry CHECK (expires_at >= created_at + interval '24 hours')
+);
+
+CREATE TABLE sandbox_runtime_product.tenant_quotas (
+    tenant_id text PRIMARY KEY,
+    max_workspaces integer NOT NULL,
+    max_sessions integer NOT NULL,
+    max_active_transfers integer NOT NULL,
+    updated_at timestamp with time zone NOT NULL,
+    CONSTRAINT tenant_quotas_bounds CHECK (max_workspaces BETWEEN 1 AND 10000 AND max_sessions BETWEEN 1 AND 100000 AND max_active_transfers BETWEEN 1 AND 10000)
+);
+
 CREATE INDEX product_operation_attempts_reconcile_index
     ON sandbox_runtime_product.product_operation_attempts (state, updated_at)
     WHERE state IN ('dispatched', 'accepted', 'running', 'outcome_unknown');
