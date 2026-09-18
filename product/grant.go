@@ -29,6 +29,7 @@ type GatewayBinding struct {
 	ControlLeaseID                                   string
 	ControlFence                                     int64
 	AccessMode                                       string
+	RecordingPolicy                                  string
 	ExpiresAt                                        time.Time
 	ProviderRevisionID, SandboxID, HandoffReference  string
 	ConnectionGeneration                             int64
@@ -47,6 +48,10 @@ type ConnectionGrantStore interface {
 	MintConnectionGrant(context.Context, ConnectionGrantCommand) (ConnectionGrant, bool, error)
 	ConsumeConnectionGrant(context.Context, string) (GatewayBinding, error)
 	CheckGatewayAuthority(context.Context, GatewayBinding) error
+}
+
+type GatewayConnectionCloser interface {
+	CloseGatewayConnection(context.Context, GatewayBinding) error
 }
 type TicketGenerator interface{ NewTicket() (string, error) }
 type CryptoTicketGenerator struct{}

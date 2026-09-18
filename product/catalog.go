@@ -96,6 +96,7 @@ type CatalogStore interface {
 	ListRecordings(context.Context, string, ActorRef, string, string, int) (RecordingPage, error)
 	AppendRecordingSegment(context.Context, string, string, int64, string, string, string, int64, time.Time, time.Time) (RecordingRecord, error)
 	FinalizeRecording(context.Context, string, string, string, int64, time.Time) (RecordingRecord, error)
+	FailRecording(context.Context, string, ActorRef, string, time.Time) error
 	LeaseExpiredRecordings(context.Context, int) ([]RecordingCleanup, error)
 	MarkRecordingDeleted(context.Context, string, string, time.Time) error
 }
@@ -187,7 +188,7 @@ func NewRecordingService(store CatalogStore, content RecordingContentStore, reda
 }
 
 func (s *RecordingService) Start(ctx context.Context, tenantID string, actor ActorRef, workspaceID string, request StartRecordingRequest) (Recording, error) {
-	if s == nil || ctx == nil || !validIdentifier(tenantID) || actor.Validate() != nil || !validIdentifier(workspaceID) || !validIdentifier(request.SessionID) || request.RecordingType != "terminal" || !validIdentifier(request.ConsentReference) || request.RetentionSeconds < 60 || request.RetentionSeconds > 30*24*3600 {
+	if s == nil || ctx == nil || !validIdentifier(tenantID) || actor.Validate() != nil || !validIdentifier(workspaceID) || !validIdentifier(request.SessionID) || (request.RecordingType != "terminal" && request.RecordingType != "media") || !validIdentifier(request.ConsentReference) || request.RetentionSeconds < 60 || request.RetentionSeconds > 30*24*3600 {
 		return Recording{}, ErrInvalid
 	}
 	recordingID, err := s.ids.NewID("rec")
@@ -250,6 +251,13 @@ func (s *RecordingService) Finalize(ctx context.Context, tenantID string, actor 
 	last := record.Segments[len(record.Segments)-1]
 	updated, err := s.store.FinalizeRecording(ctx, tenantID, recordingID, last.Digest, record.SizeBytes, s.clock().UTC())
 	return updated.Recording, err
+}
+
+func (s *RecordingService) Fail(ctx context.Context, tenantID string, actor ActorRef, recordingID string) error {
+	if s == nil || ctx == nil || !validIdentifier(tenantID) || actor.Validate() != nil || !validIdentifier(recordingID) {
+		return ErrInvalid
+	}
+	return s.store.FailRecording(ctx, tenantID, actor, recordingID, s.clock().UTC())
 }
 
 func (s *RecordingService) Replay(ctx context.Context, tenantID string, actor ActorRef, recordingID string) ([][]byte, error) {

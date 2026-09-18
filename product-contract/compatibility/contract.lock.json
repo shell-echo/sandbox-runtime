@@ -6,7 +6,7 @@
   "digest_algorithm": "sha256",
   "tree_digest_profile": "sorted-path-tab-prefixed-sha256-newline-v1",
   "manifest_digest": "sha256:7f7c5264693f4f01c47fcda6e27f0add609b4bec9549bc2a10338517dcef7cba",
-  "tree_digest": "sha256:08f6fe38d7f4aa3e7b65d1f7583142fd782e88098aeef4a5505efbf0ecc21461",
+  "tree_digest": "sha256:9490513228774da2e06cc3d01bc65192d37adea89d12d4ad83efdd6ce0f14560",
   "resources": [
     {
       "path": "conformance/product-v1alpha1-suite.json",
@@ -34,15 +34,15 @@
     },
     {
       "path": "schemas/product-v1alpha1.schema.json",
-      "sha256": "b95a9c5ec9cc2d408f0a8e699c6eaf9ddf6c6c1c2a84180b111ebe0d207b7a63"
+      "sha256": "4a5fcdfed797988d587174ded31e5ef1d14e05edbe458d228c21ebd32375238a"
     },
     {
       "path": "semantic-rules/product-v1alpha1.json",
-      "sha256": "969184384dd2279b99d92c785753171c735558e0434a968c43d69ed606a853ea"
+      "sha256": "7ffbc5f48ba5ab5cb57035c8e2d2a640efe2312d4b13055e829787cf2d48d457"
     },
     {
       "path": "specification/product-contract-v1alpha1.md",
-      "sha256": "7a3491d8315deee9fe0fd961cccded18df52906d3ec9eb29ec1697f4eb05f962"
+      "sha256": "b9a3c532808f8e1d2cc01733520e8fcf682d0a0be2f2e7521697c8213c648aec"
     }
   ]
 }

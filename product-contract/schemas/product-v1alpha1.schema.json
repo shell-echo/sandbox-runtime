@@ -629,13 +629,14 @@
           ]
         },
         "video": {"$ref": "#/$defs/BrowserLiveVideoPolicy"},
-        "control_data_channel": {"type": "boolean"}
+        "control_data_channel": {"type": "boolean"},
+        "recording_consent_reference": {"$ref": "#/$defs/Identifier"}
       }
     },
     "BrowserLiveSignalResponse": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["answer", "connection_id", "access_mode", "video"],
+      "required": ["answer", "connection_id", "access_mode", "video", "recording_mode"],
       "properties": {
         "answer": {
           "allOf": [
@@ -645,7 +646,8 @@
         },
         "connection_id": {"$ref": "#/$defs/Identifier"},
         "access_mode": {"enum": ["view", "control"]},
-        "video": {"$ref": "#/$defs/BrowserLiveVideoPolicy"}
+        "video": {"$ref": "#/$defs/BrowserLiveVideoPolicy"},
+        "recording_mode": {"enum": ["disabled", "metadata_only", "required"]}
       }
     },
     "BrowserLiveTouchPoint": {

@@ -59,7 +59,7 @@ func TestBrowserLivePolicyRevisionChangeRevokesPeer(t *testing.T) {
 	binding := testBrowserLiveBinding(product.GrantAccessControl)
 	policySource := &browserPolicySourceSpy{policy: testGatewayBrowserPolicy()}
 	handler := &BrowserLiveHandler{
-		grants: &grantStoreSpy{binding: binding, active: true}, policy: policySource, transfers: denyBrowserTransferAuthority{},
+		grants: &grantStoreSpy{binding: binding, active: true}, policy: policySource, transfers: denyBrowserTransferAuthority{}, audit: &auditStoreSpy{},
 		maxRTPQueue: 1, maxInputQueue: 1, pollInterval: 10 * time.Millisecond, connectionTimeout: time.Second,
 		sessions: map[string]int{binding.SessionID: 1}, peers: 1,
 	}
@@ -68,7 +68,7 @@ func TestBrowserLivePolicyRevisionChangeRevokesPeer(t *testing.T) {
 		t.Fatal(err)
 	}
 	media := newBrowserLiveMediaSessionSpy()
-	state := newBrowserLivePeer(handler, peer, media, binding, BrowserLiveVideoPolicy{}, testGatewayBrowserPolicy())
+	state := newBrowserLivePeer(handler, peer, media, nil, binding, BrowserLiveVideoPolicy{}, testGatewayBrowserPolicy())
 	go state.authorityLoop()
 	policySource.setRevision(2)
 	select {

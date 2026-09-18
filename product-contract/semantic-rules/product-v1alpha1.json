@@ -205,6 +205,7 @@
         "policy-change-connection-revocation",
         "bounded-disconnect-grace",
         "fresh-grant-reconnect",
+        "closed-live-binding-releases-controller-admission",
         "authority-recheck-before-recovery",
         "rate-limited-keyframe-resynchronization",
         "closed-bounded-video-resize"
@@ -233,12 +234,21 @@
       "requires": [
         "product-owned-artifact-metadata",
         "product-owned-recording-metadata",
-        "tenant-authorization-before-read"
+        "tenant-authorization-before-read",
+        "visible-committed-recording-mode",
+        "explicit-browser-recording-consent",
+        "required-recorder-fail-closed",
+        "encrypted-content-segments",
+        "ordered-segment-integrity-chain",
+        "tenant-recording-count-and-byte-quotas",
+        "retention-content-delete-before-catalog-delete"
       ],
       "forbids": [
         "provider-staging-reference-disclosure",
         "direct-object-store-credential",
-        "raw-content-in-control-plane-list"
+        "raw-content-in-control-plane-list",
+        "recorded-content-in-ordinary-log",
+        "silent-required-recording-downgrade"
       ]
     },
     {

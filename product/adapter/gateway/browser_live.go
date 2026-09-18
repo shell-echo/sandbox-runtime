@@ -16,6 +16,7 @@ import (
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v4"
+	"github.com/shell-echo/sandbox-runtime/gateway"
 	"github.com/shell-echo/sandbox-runtime/product"
 )
 
@@ -83,11 +84,23 @@ type BrowserLiveTransferAuthority interface {
 	AuthorizeBrowserTransfer(context.Context, product.GatewayBinding, product.BrowserPolicyAction) error
 }
 
+type BrowserLiveRecordingSession interface {
+	RecordMedia(context.Context, time.Time, []byte) error
+	RecordControl(context.Context, time.Time, string, BrowserLiveInput, BrowserLiveVideoPolicy) error
+	Close(context.Context, bool) error
+}
+
+type BrowserLiveRecorder interface {
+	Start(context.Context, product.GatewayBinding, string, BrowserLiveVideoPolicy) (BrowserLiveRecordingSession, error)
+}
+
 type BrowserLiveOptions struct {
 	Grants                      product.ConnectionGrantStore
 	Media                       BrowserLiveMediaSource
 	Policy                      product.BrowserPolicySource
 	Transfers                   BrowserLiveTransferAuthority
+	Audit                       AuditStore
+	Recorder                    BrowserLiveRecorder
 	AllowedOrigins              []string
 	ICEServers                  []webrtc.ICEServer
 	MaxSignalingBytes           int64
@@ -108,6 +121,8 @@ type BrowserLiveHandler struct {
 	media                BrowserLiveMediaSource
 	policy               product.BrowserPolicySource
 	transfers            BrowserLiveTransferAuthority
+	audit                AuditStore
+	recorder             BrowserLiveRecorder
 	origins              map[string]struct{}
 	configuration        webrtc.Configuration
 	maxSignalingBytes    int64
@@ -127,16 +142,18 @@ type BrowserLiveHandler struct {
 }
 
 type browserLiveSignalRequest struct {
-	Offer              browserLiveDescription `json:"offer"`
-	Video              BrowserLiveVideoPolicy `json:"video"`
-	ControlDataChannel bool                   `json:"control_data_channel"`
+	Offer                     browserLiveDescription `json:"offer"`
+	Video                     BrowserLiveVideoPolicy `json:"video"`
+	ControlDataChannel        bool                   `json:"control_data_channel"`
+	RecordingConsentReference string                 `json:"recording_consent_reference,omitempty"`
 }
 
 type browserLiveSignalResponse struct {
-	Answer       browserLiveDescription `json:"answer"`
-	ConnectionID string                 `json:"connection_id"`
-	AccessMode   string                 `json:"access_mode"`
-	Video        BrowserLiveVideoPolicy `json:"video"`
+	Answer        browserLiveDescription `json:"answer"`
+	ConnectionID  string                 `json:"connection_id"`
+	AccessMode    string                 `json:"access_mode"`
+	Video         BrowserLiveVideoPolicy `json:"video"`
+	RecordingMode string                 `json:"recording_mode"`
 }
 
 type browserLiveDescription struct {
@@ -182,7 +199,7 @@ type browserLiveQueuedControl struct {
 }
 
 func NewBrowserLiveHandler(options BrowserLiveOptions) (*BrowserLiveHandler, error) { //nolint:cyclop
-	if nilInterface(options.Grants) || nilInterface(options.Media) || nilInterface(options.Policy) || nilInterface(options.Transfers) || len(options.AllowedOrigins) == 0 || len(options.AllowedOrigins) > 32 {
+	if nilInterface(options.Grants) || nilInterface(options.Media) || nilInterface(options.Policy) || nilInterface(options.Transfers) || nilInterface(options.Audit) || len(options.AllowedOrigins) == 0 || len(options.AllowedOrigins) > 32 {
 		return nil, product.ErrInvalid
 	}
 	origins := make(map[string]struct{}, len(options.AllowedOrigins))
@@ -242,7 +259,7 @@ func NewBrowserLiveHandler(options BrowserLiveOptions) (*BrowserLiveHandler, err
 		configuration.ICETransportPolicy = webrtc.ICETransportPolicyRelay
 	}
 	return &BrowserLiveHandler{
-		grants: options.Grants, media: options.Media, policy: options.Policy, transfers: options.Transfers, origins: origins, configuration: configuration,
+		grants: options.Grants, media: options.Media, policy: options.Policy, transfers: options.Transfers, audit: options.Audit, recorder: options.Recorder, origins: origins, configuration: configuration,
 		maxSignalingBytes: limit, maxRTPQueue: rtpQueue, maxInputQueue: inputQueue,
 		maxPeers: maxPeers, maxPeersPerSession: maxPerSession, pollInterval: poll,
 		connectionTimeout: connectTimeout, disconnectGrace: disconnectGrace, minKeyframeInterval: keyframeInterval,
@@ -312,26 +329,56 @@ func (h *BrowserLiveHandler) ServeHTTP(writer http.ResponseWriter, request *http
 		http.Error(writer, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
 		return
 	}
+	if binding.RecordingPolicy != "disabled" && binding.RecordingPolicy != "metadata_only" && binding.RecordingPolicy != "required" {
+		h.release(binding.SessionID)
+		http.Error(writer, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
+		return
+	}
+	if h.recordLiveAudit(request.Context(), binding, gateway.AuditAuthorized, "") != nil {
+		h.release(binding.SessionID)
+		http.Error(writer, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
+		return
+	}
 	policy, err := h.policy.CurrentBrowserPolicy(request.Context(), binding)
 	if err != nil || policy.Validate() != nil {
 		h.release(binding.SessionID)
 		http.Error(writer, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
 		return
 	}
+	var recording BrowserLiveRecordingSession
+	if binding.RecordingPolicy == "required" {
+		if nilInterface(h.recorder) || !validBrowserConsentReference(signal.RecordingConsentReference) {
+			h.release(binding.SessionID)
+			http.Error(writer, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
+			return
+		}
+		recording, err = h.recorder.Start(request.Context(), binding, signal.RecordingConsentReference, signal.Video)
+		if err != nil || nilInterface(recording) {
+			h.release(binding.SessionID)
+			http.Error(writer, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
+			return
+		}
+	} else if signal.RecordingConsentReference != "" {
+		h.release(binding.SessionID)
+		http.Error(writer, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		return
+	}
 	media, err := h.media.Open(request.Context(), binding, signal.Video)
 	if err != nil {
+		closeBrowserLiveRecording(recording, true)
 		h.release(binding.SessionID)
 		http.Error(writer, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
 		return
 	}
 	peer, err := webrtc.NewPeerConnection(h.configuration)
 	if err != nil {
+		closeBrowserLiveRecording(recording, true)
 		_ = media.Close()
 		h.release(binding.SessionID)
 		http.Error(writer, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
 		return
 	}
-	state := newBrowserLivePeer(h, peer, media, binding, signal.Video, policy)
+	state := newBrowserLivePeer(h, peer, media, recording, binding, signal.Video, policy)
 	if signal.ControlDataChannel {
 		state.installControlChannel()
 	} else {
@@ -384,10 +431,18 @@ func (h *BrowserLiveHandler) ServeHTTP(writer http.ResponseWriter, request *http
 	response := browserLiveSignalResponse{
 		Answer: browserLiveDescription{Type: "answer", SDP: local.SDP}, ConnectionID: binding.ConnectionID,
 		AccessMode: binding.AccessMode, Video: signal.Video,
+		RecordingMode: binding.RecordingPolicy,
 	}
 	if err := json.NewEncoder(writer).Encode(response); err != nil {
 		state.stop()
 	}
+}
+
+func (h *BrowserLiveHandler) recordLiveAudit(ctx context.Context, binding product.GatewayBinding, eventType gateway.AuditEventType, reason string) error {
+	return h.audit.RecordGatewayEvent(ctx, binding, gateway.AuditEvent{
+		Type: eventType, At: time.Now().UTC(), GrantID: binding.ConnectionID, CallerID: binding.Actor.ID,
+		TenantID: binding.TenantID, RuntimeSessionID: binding.SessionID, ConnectionGeneration: binding.ConnectionGeneration, Reason: reason,
+	})
 }
 
 func (h *BrowserLiveHandler) originAllowed(values []string) bool {
@@ -440,29 +495,31 @@ func decodeBrowserLiveSignal(reader io.Reader, limit int64) (browserLiveSignalRe
 }
 
 type browserLivePeer struct {
-	handler       *BrowserLiveHandler
-	peer          *webrtc.PeerConnection
-	media         BrowserLiveMediaSession
-	binding       product.GatewayBinding
-	video         BrowserLiveVideoPolicy
-	policy        product.BrowserPolicy
-	ctx           context.Context
-	cancel        context.CancelFunc
-	stopOnce      sync.Once
-	connected     chan struct{}
-	connectedOnce sync.Once
-	controls      chan browserLiveQueuedControl
-	stateMu       sync.RWMutex
-	state         webrtc.PeerConnectionState
-	stateEpoch    uint64
-	videoMu       sync.RWMutex
-	keyframeMu    sync.Mutex
-	nextKeyframe  time.Time
+	handler         *BrowserLiveHandler
+	peer            *webrtc.PeerConnection
+	media           BrowserLiveMediaSession
+	recording       BrowserLiveRecordingSession
+	binding         product.GatewayBinding
+	video           BrowserLiveVideoPolicy
+	policy          product.BrowserPolicy
+	ctx             context.Context
+	cancel          context.CancelFunc
+	stopOnce        sync.Once
+	connected       chan struct{}
+	connectedOnce   sync.Once
+	controls        chan browserLiveQueuedControl
+	stateMu         sync.RWMutex
+	state           webrtc.PeerConnectionState
+	stateEpoch      uint64
+	videoMu         sync.RWMutex
+	keyframeMu      sync.Mutex
+	nextKeyframe    time.Time
+	recordingFailed bool
 }
 
-func newBrowserLivePeer(handler *BrowserLiveHandler, peer *webrtc.PeerConnection, media BrowserLiveMediaSession, binding product.GatewayBinding, video BrowserLiveVideoPolicy, policy product.BrowserPolicy) *browserLivePeer {
+func newBrowserLivePeer(handler *BrowserLiveHandler, peer *webrtc.PeerConnection, media BrowserLiveMediaSession, recording BrowserLiveRecordingSession, binding product.GatewayBinding, video BrowserLiveVideoPolicy, policy product.BrowserPolicy) *browserLivePeer {
 	ctx, cancel := context.WithCancel(context.Background())
-	return &browserLivePeer{handler: handler, peer: peer, media: media, binding: binding, video: video, policy: policy, ctx: ctx, cancel: cancel, connected: make(chan struct{}), controls: make(chan browserLiveQueuedControl, handler.maxInputQueue), state: webrtc.PeerConnectionStateNew}
+	return &browserLivePeer{handler: handler, peer: peer, media: media, recording: recording, binding: binding, video: video, policy: policy, ctx: ctx, cancel: cancel, connected: make(chan struct{}), controls: make(chan browserLiveQueuedControl, handler.maxInputQueue), state: webrtc.PeerConnectionStateNew}
 }
 
 func (p *browserLivePeer) start(track *webrtc.TrackLocalStaticRTP) {
@@ -496,6 +553,11 @@ func (p *browserLivePeer) mediaLoop(track browserLiveRTPWriter) {
 				return
 			}
 			copyPacket := append([]byte(nil), packet...)
+			if p.recording != nil && p.recording.RecordMedia(p.ctx, time.Now().UTC(), copyPacket) != nil {
+				p.markRecordingFailed()
+				p.stop()
+				return
+			}
 			select {
 			case queue <- copyPacket:
 			case <-p.ctx.Done():
@@ -681,6 +743,11 @@ func (p *browserLivePeer) inputLoop() {
 				p.stop()
 				return
 			}
+			if p.recording != nil && p.recording.RecordControl(p.ctx, time.Now().UTC(), queued.kind, queued.input, queued.video) != nil {
+				p.markRecordingFailed()
+				p.stop()
+				return
+			}
 			encoded, err := json.Marshal(response)
 			if err != nil || len(encoded) > maxLiveControlMessageBytes || queued.channel.SendText(string(encoded)) != nil {
 				p.stop()
@@ -710,6 +777,10 @@ func (p *browserLivePeer) onConnectionState(state webrtc.PeerConnectionState) {
 			return
 		}
 		p.connectedOnce.Do(func() { close(p.connected) })
+		if p.handler.recordLiveAudit(p.ctx, p.binding, gateway.AuditConnected, "") != nil {
+			p.stop()
+			return
+		}
 		if !p.requestKeyframe() {
 			p.stop()
 		}
@@ -764,13 +835,52 @@ func validBrowserLiveVideoPolicy(video BrowserLiveVideoPolicy) bool {
 	return video.Codec == "video/VP8" && video.Width >= 320 && video.Width <= 1920 && video.Height >= 240 && video.Height <= 1080 && video.MaxFPS >= 1 && video.MaxFPS <= 60 && video.MaxBitrateKbps >= 128 && video.MaxBitrateKbps <= 4000
 }
 
+func validBrowserConsentReference(value string) bool {
+	if len(value) < 1 || len(value) > 200 {
+		return false
+	}
+	for _, character := range value {
+		if !(character >= 'a' && character <= 'z') && !(character >= 'A' && character <= 'Z') && !(character >= '0' && character <= '9') && !strings.ContainsRune("._:-", character) {
+			return false
+		}
+	}
+	return true
+}
+
+func (p *browserLivePeer) markRecordingFailed() {
+	p.keyframeMu.Lock()
+	p.recordingFailed = true
+	p.keyframeMu.Unlock()
+}
+
 func (p *browserLivePeer) stop() {
 	p.stopOnce.Do(func() {
 		p.cancel()
 		_ = p.peer.Close()
 		_ = p.media.Close()
+		p.keyframeMu.Lock()
+		recordingFailed := p.recordingFailed
+		p.keyframeMu.Unlock()
+		closeBrowserLiveRecording(p.recording, recordingFailed)
+		if closer, ok := p.handler.grants.(product.GatewayConnectionCloser); ok {
+			closeCtx, closeCancel := context.WithTimeout(context.Background(), 2*time.Second)
+			_ = closer.CloseGatewayConnection(closeCtx, p.binding)
+			closeCancel()
+		}
+		auditCtx, auditCancel := context.WithTimeout(context.Background(), 2*time.Second)
+		_ = p.handler.recordLiveAudit(auditCtx, p.binding, gateway.AuditClientClosed, "connection closed")
+		auditCancel()
 		p.handler.release(p.binding.SessionID)
 	})
+}
+
+func closeBrowserLiveRecording(recording BrowserLiveRecordingSession, failed bool) {
+	if nilInterface(recording) {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	_ = recording.Close(ctx, failed)
 }
 
 var _ http.Handler = (*BrowserLiveHandler)(nil)

@@ -10,7 +10,7 @@ Current identity:
 - maturity: Phase 1 design-definition authority; Phase 3 implementation
   evidence is recorded separately
 - manifest: `sha256:7f7c5264693f4f01c47fcda6e27f0add609b4bec9549bc2a10338517dcef7cba`
-- resource tree: `sha256:08f6fe38d7f4aa3e7b65d1f7583142fd782e88098aeef4a5505efbf0ecc21461`
+- resource tree: `sha256:9490513228774da2e06cc3d01bc65192d37adea89d12d4ad83efdd6ce0f14560`
 
 Normative resources are listed by
 `compatibility/contract-manifest.json` and content-addressed by

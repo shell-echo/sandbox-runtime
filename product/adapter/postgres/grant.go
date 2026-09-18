@@ -177,7 +177,7 @@ func (r *GrantRepository) ConsumeConnectionGrant(ctx context.Context, ticket str
 	var controlLeaseID string
 	var controlFence int64
 	var now time.Time
-	err = tx.QueryRow(opCtx, `SELECT g.connection_id,g.tenant_id,g.actor_type,g.actor_id,g.workspace_id,g.slot_key,g.slot_generation,g.session_id,g.protocol_profile,g.access_mode,g.expires_at,g.state,COALESCE(g.control_lease_id,''),COALESCE(g.control_fence,0),s.state,b.provider_revision_id,b.sandbox_id,COALESCE(s.provider_handoff_reference,''),COALESCE(s.provider_connection_generation,0),s.provider_handoff_expires_at,clock_timestamp() FROM sandbox_runtime_product.connection_grants g JOIN sandbox_runtime_product.runtime_sessions s ON s.tenant_id=g.tenant_id AND s.session_id=g.session_id JOIN sandbox_runtime_product.provider_bindings b ON b.tenant_id=g.tenant_id AND b.workspace_id=g.workspace_id AND b.slot_key=g.slot_key AND b.slot_generation=g.slot_generation AND b.current WHERE g.ticket_digest=$1 FOR UPDATE OF g`, digest[:]).Scan(&binding.ConnectionID, &binding.TenantID, &actorType, &binding.Actor.ID, &binding.WorkspaceID, &binding.SlotKey, &binding.SlotGeneration, &binding.SessionID, &binding.ProtocolProfile, &binding.AccessMode, &binding.ExpiresAt, &grantState, &controlLeaseID, &controlFence, &state, &binding.ProviderRevisionID, &binding.SandboxID, &binding.HandoffReference, &binding.ConnectionGeneration, &binding.HandoffExpiresAt, &now)
+	err = tx.QueryRow(opCtx, `SELECT g.connection_id,g.tenant_id,g.actor_type,g.actor_id,g.workspace_id,g.slot_key,g.slot_generation,g.session_id,g.protocol_profile,g.access_mode,g.expires_at,g.state,COALESCE(g.control_lease_id,''),COALESCE(g.control_fence,0),s.state,s.recording_policy,b.provider_revision_id,b.sandbox_id,COALESCE(s.provider_handoff_reference,''),COALESCE(s.provider_connection_generation,0),s.provider_handoff_expires_at,clock_timestamp() FROM sandbox_runtime_product.connection_grants g JOIN sandbox_runtime_product.runtime_sessions s ON s.tenant_id=g.tenant_id AND s.session_id=g.session_id JOIN sandbox_runtime_product.provider_bindings b ON b.tenant_id=g.tenant_id AND b.workspace_id=g.workspace_id AND b.slot_key=g.slot_key AND b.slot_generation=g.slot_generation AND b.current WHERE g.ticket_digest=$1 FOR UPDATE OF g`, digest[:]).Scan(&binding.ConnectionID, &binding.TenantID, &actorType, &binding.Actor.ID, &binding.WorkspaceID, &binding.SlotKey, &binding.SlotGeneration, &binding.SessionID, &binding.ProtocolProfile, &binding.AccessMode, &binding.ExpiresAt, &grantState, &controlLeaseID, &controlFence, &state, &binding.RecordingPolicy, &binding.ProviderRevisionID, &binding.SandboxID, &binding.HandoffReference, &binding.ConnectionGeneration, &binding.HandoffExpiresAt, &now)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return product.GatewayBinding{}, product.ErrNotFound
 	}
@@ -215,7 +215,7 @@ func (r *GrantRepository) CheckGatewayAuthority(ctx context.Context, binding pro
 	opCtx, cancel := context.WithTimeout(ctx, r.store.operationTimeout)
 	defer cancel()
 	var valid bool
-	err := r.store.pool.QueryRow(opCtx, `SELECT EXISTS(SELECT 1 FROM sandbox_runtime_product.connection_grants g JOIN sandbox_runtime_product.runtime_sessions s ON s.tenant_id=g.tenant_id AND s.session_id=g.session_id JOIN sandbox_runtime_product.provider_bindings b ON b.tenant_id=g.tenant_id AND b.workspace_id=g.workspace_id AND b.slot_key=g.slot_key AND b.slot_generation=g.slot_generation AND b.current WHERE g.tenant_id=$1 AND g.connection_id=$2 AND g.actor_type=$3 AND g.actor_id=$4 AND g.workspace_id=$5 AND g.slot_key=$6 AND g.slot_generation=$7 AND g.session_id=$8 AND g.protocol_profile=$9 AND g.state='consumed' AND g.expires_at>clock_timestamp() AND s.state IN('ready','active') AND s.provider_connection_generation=$10 AND s.provider_handoff_reference=$11 AND s.provider_handoff_expires_at>clock_timestamp() AND b.provider_revision_id=$12 AND b.sandbox_id=$13 AND g.access_mode=$14 AND COALESCE(g.control_lease_id,'')=$15 AND COALESCE(g.control_fence,0)=$16)`, binding.TenantID, binding.ConnectionID, string(binding.Actor.Type), binding.Actor.ID, binding.WorkspaceID, binding.SlotKey, binding.SlotGeneration, binding.SessionID, binding.ProtocolProfile, binding.ConnectionGeneration, binding.HandoffReference, binding.ProviderRevisionID, binding.SandboxID, binding.AccessMode, binding.ControlLeaseID, binding.ControlFence).Scan(&valid)
+	err := r.store.pool.QueryRow(opCtx, `SELECT EXISTS(SELECT 1 FROM sandbox_runtime_product.connection_grants g JOIN sandbox_runtime_product.runtime_sessions s ON s.tenant_id=g.tenant_id AND s.session_id=g.session_id JOIN sandbox_runtime_product.provider_bindings b ON b.tenant_id=g.tenant_id AND b.workspace_id=g.workspace_id AND b.slot_key=g.slot_key AND b.slot_generation=g.slot_generation AND b.current WHERE g.tenant_id=$1 AND g.connection_id=$2 AND g.actor_type=$3 AND g.actor_id=$4 AND g.workspace_id=$5 AND g.slot_key=$6 AND g.slot_generation=$7 AND g.session_id=$8 AND g.protocol_profile=$9 AND g.state='consumed' AND g.expires_at>clock_timestamp() AND s.state IN('ready','active') AND s.provider_connection_generation=$10 AND s.provider_handoff_reference=$11 AND s.provider_handoff_expires_at>clock_timestamp() AND b.provider_revision_id=$12 AND b.sandbox_id=$13 AND g.access_mode=$14 AND COALESCE(g.control_lease_id,'')=$15 AND COALESCE(g.control_fence,0)=$16 AND s.recording_policy=$17)`, binding.TenantID, binding.ConnectionID, string(binding.Actor.Type), binding.Actor.ID, binding.WorkspaceID, binding.SlotKey, binding.SlotGeneration, binding.SessionID, binding.ProtocolProfile, binding.ConnectionGeneration, binding.HandoffReference, binding.ProviderRevisionID, binding.SandboxID, binding.AccessMode, binding.ControlLeaseID, binding.ControlFence, binding.RecordingPolicy).Scan(&valid)
 	if err != nil {
 		return product.ErrStoreUnavailable
 	}
@@ -232,6 +232,29 @@ func (r *GrantRepository) CheckGatewayAuthority(ctx context.Context, binding pro
 		}
 	}
 	if binding.AccessMode == product.GrantAccessControl && binding.ControlLeaseID == "" {
+		return product.ErrControlStale
+	}
+	return nil
+}
+
+func (r *GrantRepository) CloseGatewayConnection(ctx context.Context, binding product.GatewayBinding) error {
+	if r == nil || r.store == nil || ctx == nil {
+		return product.ErrStoreUnavailable
+	}
+	opCtx, cancel := context.WithTimeout(ctx, r.store.operationTimeout)
+	defer cancel()
+	tag, err := r.store.pool.Exec(opCtx, `UPDATE sandbox_runtime_product.connection_grants
+SET state='revoked'
+WHERE tenant_id=$1 AND connection_id=$2 AND actor_type=$3 AND actor_id=$4
+AND workspace_id=$5 AND slot_key=$6 AND slot_generation=$7 AND session_id=$8
+AND protocol_profile=$9 AND access_mode=$10 AND COALESCE(control_lease_id,'')=$11
+AND COALESCE(control_fence,0)=$12 AND state='consumed'`, binding.TenantID, binding.ConnectionID,
+		string(binding.Actor.Type), binding.Actor.ID, binding.WorkspaceID, binding.SlotKey, binding.SlotGeneration,
+		binding.SessionID, binding.ProtocolProfile, binding.AccessMode, binding.ControlLeaseID, binding.ControlFence)
+	if err != nil {
+		return storeError(ctx, opCtx, err, false)
+	}
+	if tag.RowsAffected() != 1 {
 		return product.ErrControlStale
 	}
 	return nil
@@ -263,6 +286,9 @@ func (r *GrantRepository) loadRetainedGrant(ctx context.Context, tx pgx.Tx, comm
 	grant.Ticket = ticket
 	return grant, nil
 }
+
+var _ product.GatewayConnectionCloser = (*GrantRepository)(nil)
+
 func (r *GrantRepository) encrypt(tenantID, connectionID, ticket string) ([]byte, error) {
 	nonce := make([]byte, r.aead.NonceSize())
 	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {

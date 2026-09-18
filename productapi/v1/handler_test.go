@@ -157,6 +157,9 @@ func (s *catalogStoreStub) AppendRecordingSegment(context.Context, string, strin
 func (s *catalogStoreStub) FinalizeRecording(context.Context, string, string, string, int64, time.Time) (product.RecordingRecord, error) {
 	return s.recording, nil
 }
+func (*catalogStoreStub) FailRecording(context.Context, string, product.ActorRef, string, time.Time) error {
+	return nil
+}
 func (*catalogStoreStub) LeaseExpiredRecordings(context.Context, int) ([]product.RecordingCleanup, error) {
 	return nil, nil
 }

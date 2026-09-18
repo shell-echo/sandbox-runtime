@@ -25,6 +25,7 @@ import (
 	"github.com/shell-echo/sandbox-runtime/guestagent"
 	"github.com/shell-echo/sandbox-runtime/product"
 	productbloblocal "github.com/shell-echo/sandbox-runtime/product/adapter/blob/local"
+	productgateway "github.com/shell-echo/sandbox-runtime/product/adapter/gateway"
 	productguest "github.com/shell-echo/sandbox-runtime/product/adapter/guest"
 	productrecordinglocal "github.com/shell-echo/sandbox-runtime/product/adapter/recording/local"
 	"github.com/shell-echo/sandbox-runtime/productapi"
@@ -393,6 +394,20 @@ func TestIntegrationBrowserSlotAndSessionDispatchIsolation(t *testing.T) {
 	}
 	if _, _, err := grants.Create(context.Background(), tenantID, actor, session.ID, "browser-control-grant-conflict", controlRequest); !errors.Is(err, product.ErrControlConflict) {
 		t.Fatalf("second controller err=%v", err)
+	}
+	if err := grantRepository.CloseGatewayConnection(context.Background(), controlBinding); err != nil {
+		t.Fatalf("close consumed controller grant: %v", err)
+	}
+	if err := grantRepository.CheckGatewayAuthority(context.Background(), controlBinding); !errors.Is(err, product.ErrControlStale) {
+		t.Fatalf("closed controller authority err=%v", err)
+	}
+	reconnectGrant, _, err := grants.Create(context.Background(), tenantID, actor, session.ID, "browser-control-grant-reconnect", controlRequest)
+	if err != nil {
+		t.Fatalf("fresh reconnect grant err=%v", err)
+	}
+	reconnectBinding, err := grantRepository.ConsumeConnectionGrant(context.Background(), reconnectGrant.Ticket)
+	if err != nil || reconnectBinding.ConnectionID == controlBinding.ConnectionID {
+		t.Fatalf("reconnect binding=%#v err=%v", reconnectBinding, err)
 	}
 	if _, err := controls.Release(context.Background(), tenantID, actor, workspace.ID, control.ID, "browser-control-release", control.Fence, "controller_released"); err != nil {
 		t.Fatal(err)
@@ -1535,6 +1550,146 @@ func TestIntegrationArtifactCatalogAndEncryptedRecordingLifecycle(t *testing.T) 
 	entries, err := os.ReadDir(filepath.Join(recordingRoot, "recordings"))
 	if err != nil || len(entries) != 0 {
 		t.Fatalf("retained encrypted segments=%v err=%v", entries, err)
+	}
+}
+
+func TestIntegrationBrowserRecordingQuotaIntegrityAndAuthorization(t *testing.T) {
+	pool := integrationProductPool(t)
+	applyProductMigrations(t, pool)
+	const tenantID = "tenant-browser-recording"
+	cleanupProductTenant(t, pool, tenantID)
+	store, _ := New(pool, 3*time.Second)
+	application, _ := product.NewApplication(store, allowPrimarySlot{}, product.CryptoIDGenerator{})
+	actor := product.ActorRef{Type: product.ActorHuman, ID: "owner-browser-recording"}
+	created, err := application.CreateWorkspace(context.Background(), tenantID, actor, "browser-recording-create", integrationCreateWorkspaceRequest("browser recording"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	workspaceID := created.Operation.WorkspaceID
+	for _, slotKey := range []string{"browser-a", "browser-b"} {
+		if _, err := pool.Exec(context.Background(), `INSERT INTO sandbox_runtime_product.workspace_slots(tenant_id,workspace_id,slot_key,kind,profile_id,required_capabilities,desired_state,observed_state,generation,observed_generation,version,created_at,updated_at)
+VALUES($1,$2,$3,'browser','sandbox-runtime-browser-v1','[{"name":"sandbox.browser","version":"1.0.0","profile":"browser-v1"}]'::jsonb,'ready','ready',1,1,1,clock_timestamp(),clock_timestamp())`, tenantID, workspaceID, slotKey); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for index, sessionID := range []string{"ses_browser_recording_a", "ses_browser_recording_b"} {
+		if _, err := pool.Exec(context.Background(), `INSERT INTO sandbox_runtime_product.runtime_sessions(tenant_id,session_id,workspace_id,slot_key,slot_generation,owner_actor_type,owner_actor_id,kind,protocol_profile,state,requires_control_lease,recording_policy,version,expires_at,created_at,updated_at)
+VALUES($1,$2,$3,$4,1,$5,$6,'browser_live','product-browser-live.v1','active',true,'required',1,clock_timestamp()+interval '1 hour',clock_timestamp(),clock_timestamp())`, tenantID, sessionID, workspaceID, []string{"browser-a", "browser-b"}[index], string(actor.Type), actor.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := pool.Exec(context.Background(), `INSERT INTO sandbox_runtime_product.tenant_quotas(tenant_id,max_workspaces,max_sessions,max_active_transfers,max_browser_slots,max_browser_viewers,max_browser_controllers,max_active_recordings,max_recording_bytes,updated_at)
+VALUES($1,10,10,10,4,16,16,1,1048576,clock_timestamp())`, tenantID); err != nil {
+		t.Fatal(err)
+	}
+	content, err := productrecordinglocal.New(t.TempDir(), bytes.Repeat([]byte{0x71}, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	redactor, _ := product.NewPatternRedactor([]string{"SECRET"})
+	recordings, _ := product.NewRecordingService(store, content, redactor, product.CryptoIDGenerator{}, nil)
+	type startResult struct {
+		recording product.Recording
+		err       error
+	}
+	results := make(chan startResult, 2)
+	var wait sync.WaitGroup
+	for index, sessionID := range []string{"ses_browser_recording_a", "ses_browser_recording_b"} {
+		wait.Add(1)
+		go func(index int, sessionID string) {
+			defer wait.Done()
+			recording, err := recordings.Start(context.Background(), tenantID, actor, workspaceID, product.StartRecordingRequest{
+				SessionID: sessionID, RecordingType: "media", ConsentReference: "consent_browser_" + string(rune('a'+index)), RetentionSeconds: 3600,
+			})
+			results <- startResult{recording: recording, err: err}
+		}(index, sessionID)
+	}
+	wait.Wait()
+	close(results)
+	var active product.Recording
+	var started, quota int
+	for result := range results {
+		switch {
+		case result.err == nil:
+			active, started = result.recording, started+1
+		case errors.Is(result.err, product.ErrQuotaExceeded):
+			quota++
+		default:
+			t.Fatalf("recording start err=%v", result.err)
+		}
+	}
+	if started != 1 || quota != 1 {
+		t.Fatalf("recording quota race started=%d quota=%d", started, quota)
+	}
+	followupSessionID := "ses_browser_recording_a"
+	if active.SessionID == followupSessionID {
+		followupSessionID = "ses_browser_recording_b"
+	}
+	segment := bytes.Repeat([]byte("x"), product.MaxRecordingSegmentBytes)
+	for index := 0; index < 16; index++ {
+		if _, err := recordings.Append(context.Background(), tenantID, actor, active.ID, segment); err != nil {
+			t.Fatalf("append %d: %v", index, err)
+		}
+	}
+	if _, err := recordings.Append(context.Background(), tenantID, actor, active.ID, segment); !errors.Is(err, product.ErrQuotaExceeded) {
+		t.Fatalf("byte quota err=%v", err)
+	}
+	final, err := recordings.Finalize(context.Background(), tenantID, actor, active.ID)
+	if err != nil || final.State != "available" || final.Type != "media" || final.Digest == "" {
+		t.Fatalf("final recording=%#v err=%v", final, err)
+	}
+	replay, err := recordings.Replay(context.Background(), tenantID, actor, active.ID)
+	if err != nil || len(replay) != 16 {
+		t.Fatalf("replay segments=%d err=%v", len(replay), err)
+	}
+	other := product.ActorRef{Type: product.ActorHuman, ID: "other-browser-recording"}
+	if _, err := recordings.Replay(context.Background(), tenantID, other, active.ID); !errors.Is(err, product.ErrNotFound) {
+		t.Fatalf("cross-owner replay err=%v", err)
+	}
+	catalog, _ := product.NewCatalogService(store, product.CryptoIDGenerator{})
+	page, err := catalog.ListRecordings(context.Background(), tenantID, actor, workspaceID, "", 10)
+	encodedPage, _ := json.Marshal(page)
+	if err != nil || len(page.Items) != 1 || page.Items[0].ID != active.ID || strings.Contains(string(encodedPage), "frame-") {
+		t.Fatalf("catalog page=%#v err=%v", page, err)
+	}
+	if _, err := pool.Exec(context.Background(), `UPDATE sandbox_runtime_product.tenant_quotas SET max_recording_bytes=2097152 WHERE tenant_id=$1`, tenantID); err != nil {
+		t.Fatal(err)
+	}
+	browserRecorder, err := productgateway.NewProductBrowserLiveRecorder(recordings, 3600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	video := productgateway.BrowserLiveVideoPolicy{Codec: "video/VP8", Width: 640, Height: 480, MaxFPS: 30, MaxBitrateKbps: 1000}
+	recordingSession, err := browserRecorder.Start(context.Background(), product.GatewayBinding{
+		TenantID: tenantID, Actor: actor, WorkspaceID: workspaceID, SessionID: followupSessionID,
+		ProtocolProfile: product.SessionProfileBrowserLive, RecordingPolicy: "required",
+	}, "consent_browser_visible", video)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := recordingSession.RecordMedia(context.Background(), time.Now(), []byte{0x80, 0x60, 0, 1}); err != nil {
+		t.Fatal(err)
+	}
+	if err := recordingSession.RecordControl(context.Background(), time.Now(), "input", productgateway.BrowserLiveInput{Sequence: 1, Action: product.BrowserPolicyAction{Kind: product.BrowserActionPointer}, Event: "move"}, video); err != nil {
+		t.Fatal(err)
+	}
+	if err := recordingSession.Close(context.Background(), false); err != nil {
+		t.Fatal(err)
+	}
+	page, err = catalog.ListRecordings(context.Background(), tenantID, actor, workspaceID, "", 10)
+	if err != nil || len(page.Items) != 2 {
+		t.Fatalf("browser recording catalog=%#v err=%v", page, err)
+	}
+	var browserRecordingID string
+	for _, item := range page.Items {
+		if item.SessionID == followupSessionID {
+			browserRecordingID = item.ID
+		}
+	}
+	browserReplay, err := recordings.Replay(context.Background(), tenantID, actor, browserRecordingID)
+	joined := bytes.Join(browserReplay, nil)
+	if err != nil || !bytes.Contains(joined, []byte(`"type":"stream.start"`)) || !bytes.Contains(joined, []byte(`"type":"media.rtp"`)) || !bytes.Contains(joined, []byte(`"type":"input"`)) || !bytes.Contains(joined, []byte(`"type":"stream.end"`)) {
+		t.Fatalf("browser replay=%q err=%v", joined, err)
 	}
 }
 

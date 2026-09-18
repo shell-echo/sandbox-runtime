@@ -117,10 +117,13 @@ func (s *Store) StartRecording(ctx context.Context, command product.StartRecordi
 	if _, err := tx.Exec(opCtx, `SELECT pg_advisory_xact_lock(hashtextextended($1,7346273419))`, command.TenantID+":"+command.Request.SessionID); err != nil {
 		return product.RecordingRecord{}, storeError(ctx, opCtx, err, false)
 	}
-	var policy string
+	if _, err := tx.Exec(opCtx, `SELECT pg_advisory_xact_lock(hashtextextended($1,7346273423))`, command.TenantID); err != nil {
+		return product.RecordingRecord{}, storeError(ctx, opCtx, err, false)
+	}
+	var policy, kind string
 	var now time.Time
-	err = tx.QueryRow(opCtx, `SELECT s.recording_policy,clock_timestamp() FROM sandbox_runtime_product.runtime_sessions s JOIN sandbox_runtime_product.workspaces w ON w.tenant_id=s.tenant_id AND w.workspace_id=s.workspace_id
-WHERE s.tenant_id=$1 AND s.workspace_id=$2 AND s.session_id=$3 AND w.owner_actor_type=$4 AND w.owner_actor_id=$5 FOR UPDATE OF s,w`, command.TenantID, command.WorkspaceID, command.Request.SessionID, string(command.Actor.Type), command.Actor.ID).Scan(&policy, &now)
+	err = tx.QueryRow(opCtx, `SELECT s.recording_policy,s.kind,clock_timestamp() FROM sandbox_runtime_product.runtime_sessions s JOIN sandbox_runtime_product.workspaces w ON w.tenant_id=s.tenant_id AND w.workspace_id=s.workspace_id
+WHERE s.tenant_id=$1 AND s.workspace_id=$2 AND s.session_id=$3 AND w.owner_actor_type=$4 AND w.owner_actor_id=$5 FOR UPDATE OF s,w`, command.TenantID, command.WorkspaceID, command.Request.SessionID, string(command.Actor.Type), command.Actor.ID).Scan(&policy, &kind, &now)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return product.RecordingRecord{}, product.ErrNotFound
 	}
@@ -129,6 +132,21 @@ WHERE s.tenant_id=$1 AND s.workspace_id=$2 AND s.session_id=$3 AND w.owner_actor
 	}
 	if policy != "required" {
 		return product.RecordingRecord{}, product.ErrForbidden
+	}
+	if (command.Request.RecordingType == "media") != (kind == product.SessionKindBrowserLive) || command.Request.RecordingType == "terminal" && kind != product.SessionKindTerminal {
+		return product.RecordingRecord{}, product.ErrCapabilityUnsupported
+	}
+	var activeCount, activeLimit int
+	var retainedBytes, byteLimit int64
+	if err := tx.QueryRow(opCtx, `SELECT
+    (SELECT count(*) FROM sandbox_runtime_product.recordings WHERE tenant_id=$1 AND state IN('recording','finalizing')),
+    COALESCE((SELECT max_active_recordings FROM sandbox_runtime_product.tenant_quotas WHERE tenant_id=$1),16),
+    COALESCE((SELECT sum(COALESCE(size_bytes,0)) FROM sandbox_runtime_product.recordings WHERE tenant_id=$1 AND state IN('recording','finalizing','available')),0),
+    COALESCE((SELECT max_recording_bytes FROM sandbox_runtime_product.tenant_quotas WHERE tenant_id=$1),1073741824)`, command.TenantID).Scan(&activeCount, &activeLimit, &retainedBytes, &byteLimit); err != nil {
+		return product.RecordingRecord{}, storeError(ctx, opCtx, err, false)
+	}
+	if activeCount >= activeLimit || retainedBytes >= byteLimit {
+		return product.RecordingRecord{}, product.ErrQuotaExceeded
 	}
 	var active bool
 	if err := tx.QueryRow(opCtx, `SELECT EXISTS(SELECT 1 FROM sandbox_runtime_product.recordings WHERE tenant_id=$1 AND session_id=$2 AND state IN('recording','finalizing','available'))`, command.TenantID, command.Request.SessionID).Scan(&active); err != nil {
@@ -208,6 +226,9 @@ func (s *Store) AppendRecordingSegment(ctx context.Context, tenantID, recordingI
 		return product.RecordingRecord{}, storeError(ctx, opCtx, err, false)
 	}
 	defer rollbackBounded(tx, s.operationTimeout)
+	if _, err := tx.Exec(opCtx, `SELECT pg_advisory_xact_lock(hashtextextended($1,7346273423))`, tenantID); err != nil {
+		return product.RecordingRecord{}, storeError(ctx, opCtx, err, false)
+	}
 	var state string
 	var count int64
 	var retainedPrevious string
@@ -223,6 +244,15 @@ func (s *Store) AppendRecordingSegment(ctx context.Context, tenantID, recordingI
 	}
 	if state != "recording" || sequence != count+1 || previous != retainedPrevious || retainedSize+size > product.MaxRecordingBytes {
 		return product.RecordingRecord{}, product.ErrVersionConflict
+	}
+	var tenantBytes, tenantLimit int64
+	if err := tx.QueryRow(opCtx, `SELECT
+    COALESCE((SELECT sum(COALESCE(size_bytes,0)) FROM sandbox_runtime_product.recordings WHERE tenant_id=$1 AND state IN('recording','finalizing','available')),0),
+    COALESCE((SELECT max_recording_bytes FROM sandbox_runtime_product.tenant_quotas WHERE tenant_id=$1),1073741824)`, tenantID).Scan(&tenantBytes, &tenantLimit); err != nil {
+		return product.RecordingRecord{}, storeError(ctx, opCtx, err, false)
+	}
+	if tenantBytes+size > tenantLimit {
+		return product.RecordingRecord{}, product.ErrQuotaExceeded
 	}
 	_, err = tx.Exec(opCtx, `INSERT INTO sandbox_runtime_product.recording_segments(tenant_id,recording_id,sequence,object_reference,digest,previous_digest,size_bytes,started_at,completed_at) VALUES($1,$2,$3,$4,$5,NULLIF($6,''),$7,$8,$9)`, tenantID, recordingID, sequence, reference, digest, previous, size, startedAt, completedAt)
 	if err != nil {
@@ -248,6 +278,22 @@ func (s *Store) FinalizeRecording(ctx context.Context, tenantID, recordingID, di
 		return product.RecordingRecord{}, product.ErrControlStale
 	}
 	return s.getRecordingInternal(ctx, tenantID, recordingID)
+}
+
+func (s *Store) FailRecording(ctx context.Context, tenantID string, actor product.ActorRef, recordingID string, completedAt time.Time) error {
+	opCtx, cancel := context.WithTimeout(ctx, s.operationTimeout)
+	defer cancel()
+	tag, err := s.pool.Exec(opCtx, `UPDATE sandbox_runtime_product.recordings r SET state='failed',completed_at=$5
+FROM sandbox_runtime_product.workspaces w
+WHERE r.tenant_id=$1 AND r.recording_id=$2 AND r.state IN('recording','finalizing')
+AND w.tenant_id=r.tenant_id AND w.workspace_id=r.workspace_id AND w.owner_actor_type=$3 AND w.owner_actor_id=$4`, tenantID, recordingID, string(actor.Type), actor.ID, completedAt)
+	if err != nil {
+		return storeError(ctx, opCtx, err, false)
+	}
+	if tag.RowsAffected() != 1 {
+		return product.ErrNotFound
+	}
+	return nil
 }
 
 func (s *Store) LeaseExpiredRecordings(ctx context.Context, limit int) ([]product.RecordingCleanup, error) {

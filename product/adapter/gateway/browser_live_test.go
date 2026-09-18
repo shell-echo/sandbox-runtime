@@ -143,14 +143,14 @@ func TestBrowserLivePeerDisconnectGraceAndKeyframeBounds(t *testing.T) {
 	store := &grantStoreSpy{binding: binding, active: true}
 	media := newBrowserLiveMediaSessionSpy()
 	handler := &BrowserLiveHandler{
-		grants: store, policy: &browserPolicySourceSpy{policy: testGatewayBrowserPolicy()}, disconnectGrace: 80 * time.Millisecond,
+		grants: store, policy: &browserPolicySourceSpy{policy: testGatewayBrowserPolicy()}, audit: &auditStoreSpy{}, disconnectGrace: 80 * time.Millisecond,
 		minKeyframeInterval: 20 * time.Millisecond, maxInputQueue: 1, sessions: map[string]int{binding.SessionID: 1}, peers: 1,
 	}
 	peer, err := webrtc.NewPeerConnection(webrtc.Configuration{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	state := newBrowserLivePeer(handler, peer, media, binding, BrowserLiveVideoPolicy{Codec: "video/VP8", Width: 640, Height: 480, MaxFPS: 30, MaxBitrateKbps: 1000}, testGatewayBrowserPolicy())
+	state := newBrowserLivePeer(handler, peer, media, nil, binding, BrowserLiveVideoPolicy{Codec: "video/VP8", Width: 640, Height: 480, MaxFPS: 30, MaxBitrateKbps: 1000}, testGatewayBrowserPolicy())
 	state.onConnectionState(webrtc.PeerConnectionStateConnected)
 	state.onConnectionState(webrtc.PeerConnectionStateDisconnected)
 	time.Sleep(20 * time.Millisecond)
@@ -182,14 +182,14 @@ func TestBrowserLivePeerRejectsControlWhileDisconnected(t *testing.T) {
 	binding := testBrowserLiveBinding(product.GrantAccessControl)
 	media := newBrowserLiveMediaSessionSpy()
 	handler := &BrowserLiveHandler{
-		grants: &grantStoreSpy{binding: binding, active: true}, policy: &browserPolicySourceSpy{policy: testGatewayBrowserPolicy()},
+		grants: &grantStoreSpy{binding: binding, active: true}, policy: &browserPolicySourceSpy{policy: testGatewayBrowserPolicy()}, audit: &auditStoreSpy{},
 		disconnectGrace: time.Second, maxInputQueue: 1, sessions: map[string]int{binding.SessionID: 1}, peers: 1,
 	}
 	peer, err := webrtc.NewPeerConnection(webrtc.Configuration{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	state := newBrowserLivePeer(handler, peer, media, binding, BrowserLiveVideoPolicy{Codec: "video/VP8", Width: 640, Height: 480, MaxFPS: 30, MaxBitrateKbps: 1000}, testGatewayBrowserPolicy())
+	state := newBrowserLivePeer(handler, peer, media, nil, binding, BrowserLiveVideoPolicy{Codec: "video/VP8", Width: 640, Height: 480, MaxFPS: 30, MaxBitrateKbps: 1000}, testGatewayBrowserPolicy())
 	state.onConnectionState(webrtc.PeerConnectionStateDisconnected)
 	go state.inputLoop()
 	state.controls <- browserLiveQueuedControl{kind: "input", sequence: 1, input: BrowserLiveInput{
@@ -317,16 +317,86 @@ func TestBrowserLiveHandlerRejectsUnsupportedNegotiationAndViewerControl(t *test
 	}
 }
 
-func TestBrowserLiveMediaQueueClosesSlowConsumer(t *testing.T) {
+func TestBrowserLiveRequiredRecordingFailsClosed(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		recorder BrowserLiveRecorder
+	}{
+		{name: "missing recorder"},
+		{name: "recorder unavailable", recorder: &browserLiveRecorderSpy{err: errors.New("object store unavailable")}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			binding := testBrowserLiveBinding(product.GrantAccessView)
+			binding.RecordingPolicy = "required"
+			store := &grantStoreSpy{ticket: strings.Repeat("r", 43), binding: binding, active: true}
+			source := &browserLiveMediaSourceSpy{opened: make(chan struct{}), session: newBrowserLiveMediaSessionSpy()}
+			handler, err := NewBrowserLiveHandler(BrowserLiveOptions{
+				Grants: store, Media: source, Policy: &browserPolicySourceSpy{policy: testGatewayBrowserPolicy()}, Transfers: denyBrowserTransferAuthority{},
+				Audit: &auditStoreSpy{}, Recorder: test.recorder, AllowedOrigins: []string{"https://app.example"}, AllowHostCandidatesForTests: true,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			server := httptest.NewTLSServer(handler)
+			defer server.Close()
+			peer, _, offer := newBrowserLiveClientOffer(t, false)
+			defer peer.Close()
+			request, _ := http.NewRequest(http.MethodPost, server.URL, bytes.NewReader(encodeBrowserLiveOfferWithConsent(t, offer, false, "consent-live-visible")))
+			request.Header.Set("Origin", "https://app.example")
+			request.Header.Set("Authorization", "Ticket "+store.ticket)
+			response, err := server.Client().Do(request)
+			if err != nil {
+				t.Fatal(err)
+			}
+			response.Body.Close()
+			if response.StatusCode != http.StatusServiceUnavailable {
+				t.Fatalf("status=%d", response.StatusCode)
+			}
+			select {
+			case <-source.opened:
+				t.Fatal("media opened after required recorder failure")
+			default:
+			}
+		})
+	}
+}
+
+func TestBrowserLiveRequiredRecorderLossClosesPeer(t *testing.T) {
 	binding := testBrowserLiveBinding(product.GrantAccessView)
-	store := &grantStoreSpy{binding: binding, active: true}
-	source := newBrowserLiveMediaSessionSpy()
-	handler := &BrowserLiveHandler{grants: store, media: &browserLiveMediaSourceSpy{}, maxRTPQueue: 1, maxInputQueue: 1, pollInterval: time.Second, connectionTimeout: time.Second, sessions: map[string]int{binding.SessionID: 1}, peers: 1}
+	binding.RecordingPolicy = "required"
+	media := newBrowserLiveMediaSessionSpy()
+	recording := &browserLiveRecordingSessionSpy{mediaErr: errors.New("recorder lost"), closed: make(chan bool, 1)}
+	handler := &BrowserLiveHandler{grants: &grantStoreSpy{binding: binding, active: true}, audit: &auditStoreSpy{}, maxRTPQueue: 1, maxInputQueue: 1, sessions: map[string]int{binding.SessionID: 1}, peers: 1}
 	peer, err := webrtc.NewPeerConnection(webrtc.Configuration{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	state := newBrowserLivePeer(handler, peer, source, binding, BrowserLiveVideoPolicy{MaxBitrateKbps: 4000}, testGatewayBrowserPolicy())
+	state := newBrowserLivePeer(handler, peer, media, recording, binding, BrowserLiveVideoPolicy{Codec: "video/VP8", Width: 640, Height: 480, MaxFPS: 30, MaxBitrateKbps: 1000}, testGatewayBrowserPolicy())
+	writer := &blockingRTPWriter{release: make(chan struct{})}
+	go state.mediaLoop(writer)
+	packet, _ := (&rtp.Packet{Header: rtp.Header{Version: 2, PayloadType: 96}}).Marshal()
+	media.rtp <- packet
+	select {
+	case failed := <-recording.closed:
+		if !failed {
+			t.Fatal("recorder loss was finalized as successful")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("recorder loss did not close peer")
+	}
+	close(writer.release)
+}
+
+func TestBrowserLiveMediaQueueClosesSlowConsumer(t *testing.T) {
+	binding := testBrowserLiveBinding(product.GrantAccessView)
+	store := &grantStoreSpy{binding: binding, active: true}
+	source := newBrowserLiveMediaSessionSpy()
+	handler := &BrowserLiveHandler{grants: store, media: &browserLiveMediaSourceSpy{}, audit: &auditStoreSpy{}, maxRTPQueue: 1, maxInputQueue: 1, pollInterval: time.Second, connectionTimeout: time.Second, sessions: map[string]int{binding.SessionID: 1}, peers: 1}
+	peer, err := webrtc.NewPeerConnection(webrtc.Configuration{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	state := newBrowserLivePeer(handler, peer, source, nil, binding, BrowserLiveVideoPolicy{MaxBitrateKbps: 4000}, testGatewayBrowserPolicy())
 	writer := &blockingRTPWriter{entered: make(chan struct{}), release: make(chan struct{})}
 	go state.mediaLoop(writer)
 	packet, _ := (&rtp.Packet{Header: rtp.Header{Version: 2, PayloadType: 96}}).Marshal()
@@ -347,7 +417,7 @@ func TestBrowserLiveMediaQueueClosesSlowConsumer(t *testing.T) {
 }
 
 func TestBrowserLiveProductionRequiresEncryptedRelay(t *testing.T) {
-	base := BrowserLiveOptions{Grants: &grantStoreSpy{}, Media: &browserLiveMediaSourceSpy{}, Policy: &browserPolicySourceSpy{policy: testGatewayBrowserPolicy()}, Transfers: denyBrowserTransferAuthority{}, AllowedOrigins: []string{"https://app.example"}}
+	base := BrowserLiveOptions{Grants: &grantStoreSpy{}, Media: &browserLiveMediaSourceSpy{}, Policy: &browserPolicySourceSpy{policy: testGatewayBrowserPolicy()}, Transfers: denyBrowserTransferAuthority{}, Audit: &auditStoreSpy{}, AllowedOrigins: []string{"https://app.example"}}
 	if _, err := NewBrowserLiveHandler(base); !errors.Is(err, product.ErrInvalid) {
 		t.Fatalf("missing relay err=%v", err)
 	}
@@ -364,7 +434,7 @@ func TestBrowserLiveProductionRequiresEncryptedRelay(t *testing.T) {
 func mustBrowserLiveHandler(t *testing.T, store product.ConnectionGrantStore, source BrowserLiveMediaSource) *BrowserLiveHandler {
 	t.Helper()
 	handler, err := NewBrowserLiveHandler(BrowserLiveOptions{
-		Grants: store, Media: source, Policy: &browserPolicySourceSpy{policy: testGatewayBrowserPolicy()}, Transfers: denyBrowserTransferAuthority{}, AllowedOrigins: []string{"https://app.example"},
+		Grants: store, Media: source, Policy: &browserPolicySourceSpy{policy: testGatewayBrowserPolicy()}, Transfers: denyBrowserTransferAuthority{}, Audit: &auditStoreSpy{}, AllowedOrigins: []string{"https://app.example"},
 		AllowHostCandidatesForTests: true, AuthorityPollInterval: 10 * time.Millisecond,
 	})
 	if err != nil {
@@ -404,7 +474,7 @@ func testBrowserLiveBinding(access string) product.GatewayBinding {
 	binding := product.GatewayBinding{
 		ConnectionID: "con-live", TenantID: "tenant-1", Actor: product.ActorRef{Type: product.ActorHuman, ID: "actor-1"},
 		WorkspaceID: "wrk-1", SlotKey: "browser-main", SessionID: "ses-live", ProtocolProfile: product.SessionProfileBrowserLive,
-		SlotGeneration: 1, AccessMode: access, ExpiresAt: now.Add(time.Minute), ProviderRevisionID: "provider-v1",
+		SlotGeneration: 1, AccessMode: access, RecordingPolicy: "metadata_only", ExpiresAt: now.Add(time.Minute), ProviderRevisionID: "provider-v1",
 		SandboxID: "sandbox-live", HandoffReference: "ref:browser-session:opaque", ConnectionGeneration: 1, HandoffExpiresAt: now.Add(time.Minute),
 	}
 	if access == product.GrantAccessControl {
@@ -447,15 +517,48 @@ func newBrowserLiveClientOffer(t *testing.T, control bool) (*webrtc.PeerConnecti
 }
 
 func encodeBrowserLiveOffer(t *testing.T, offer webrtc.SessionDescription, control bool) []byte {
+	return encodeBrowserLiveOfferWithConsent(t, offer, control, "")
+}
+
+func encodeBrowserLiveOfferWithConsent(t *testing.T, offer webrtc.SessionDescription, control bool, consentReference string) []byte {
 	t.Helper()
 	encoded, err := json.Marshal(browserLiveSignalRequest{
 		Offer: browserLiveDescription{Type: "offer", SDP: offer.SDP}, ControlDataChannel: control,
-		Video: BrowserLiveVideoPolicy{Codec: "video/VP8", Width: 640, Height: 480, MaxFPS: 30, MaxBitrateKbps: 1000},
+		Video:                     BrowserLiveVideoPolicy{Codec: "video/VP8", Width: 640, Height: 480, MaxFPS: 30, MaxBitrateKbps: 1000},
+		RecordingConsentReference: consentReference,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	return encoded
+}
+
+type browserLiveRecorderSpy struct {
+	session BrowserLiveRecordingSession
+	err     error
+}
+
+func (s *browserLiveRecorderSpy) Start(context.Context, product.GatewayBinding, string, BrowserLiveVideoPolicy) (BrowserLiveRecordingSession, error) {
+	return s.session, s.err
+}
+
+type browserLiveRecordingSessionSpy struct {
+	mediaErr   error
+	controlErr error
+	closed     chan bool
+}
+
+func (s *browserLiveRecordingSessionSpy) RecordMedia(context.Context, time.Time, []byte) error {
+	return s.mediaErr
+}
+func (s *browserLiveRecordingSessionSpy) RecordControl(context.Context, time.Time, string, BrowserLiveInput, BrowserLiveVideoPolicy) error {
+	return s.controlErr
+}
+func (s *browserLiveRecordingSessionSpy) Close(_ context.Context, failed bool) error {
+	if s.closed != nil {
+		s.closed <- failed
+	}
+	return nil
 }
 
 func postBrowserLiveOffer(t *testing.T, server *httptest.Server, ticket string, offer webrtc.SessionDescription, control bool) browserLiveSignalResponse {

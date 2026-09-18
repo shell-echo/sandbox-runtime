@@ -1,6 +1,6 @@
 # Product v1 Phase 4: Browser
 
-Status: In progress; Slices 1-10 implemented locally, 3 slices remain
+Status: In progress; Slices 1-11 implemented locally, 2 slices remain
 
 Started: 2026-09-18
 
@@ -32,7 +32,7 @@ until Slice 13 passes for the exact composed topology.
 | 8 | Explicit keyboard/pointer/touch, clipboard, upload, download, navigation, popup, and permission policy | Deny-by-default matrix; size/type/count/digest bounds; activation/consent; filename/path confinement; cross-origin and policy-change revocation tests | **Implemented; local policy/data-plane gates passed** |
 | 9 | Browser network and runtime isolation composition | Exact restricted-egress policy; DNS/IP/metadata/private-network denial; immutable verified image; permission/device denial; resource bounds; cleanup and fault injection | **Implemented; local and real-Docker gates passed** |
 | 10 | Connection loss, Gateway/Provider restart, reconnect, visual resynchronization, resolution changes, and recovery UX | Fresh-grant reconnect; authority recheck; keyframe/resync bounds; no stale input; retained session recovery; dependency-loss fail-closed behavior | **Implemented; local real-WebRTC recovery gates passed** |
-| 11 | Browser metadata audit, media/control-event recording, Product catalog, retention/deletion, integrity, and quota composition | Consent and visible mode; required-recorder fail closed; encrypted chained segments; authorized replay; content excluded from logs/control-plane lists; quota races | Not started |
+| 11 | Browser metadata audit, media/control-event recording, Product catalog, retention/deletion, integrity, and quota composition | Consent and visible mode; required-recorder fail closed; encrypted chained segments; authorized replay; content excluded from logs/control-plane lists; quota races | **Implemented; local and real-PostgreSQL gates passed** |
 | 12 | Product Web Browser experience for slot/session lifecycle, live view, controller state, recovery, downloads/uploads, and recording catalog | Generated/checked client; authenticated browser E2E; CSP/CSRF/origin/accessibility; viewer/control UX; error/reconnect/cleanup cases; no private coordinates | Not started |
 | 13 | Product Phase 4 independent-process release gate and reproducible evidence bundle | Fresh PostgreSQL and required coordination/object storage; separate Product/Gateway/Provider/Browser roles; exact locked identities; restart/fault/security/backpressure/recording/cleanup matrix; strict independent validation | Not started |
 
@@ -387,6 +387,46 @@ queues, and new media-source creation per admitted connection. Full repository
 race/shuffle, vet, Contract, and retained evidence gates run at the slice commit
 gate. Recovery UX presentation remains Slice 12; recording and the final
 independent-process topology remain Slices 11 and 13.
+
+## Slice 11 exact boundary
+
+Browser live signaling now projects the exact committed `disabled`,
+`metadata_only`, or `required` mode. Required recording consumes an explicit
+bounded consent reference and initializes the recorder before opening the
+private media source. Missing initialization, segment persistence loss, or
+recorder loss closes admission or the active peer; the mode is never silently
+downgraded. Metadata audit is a separate mandatory port and receives only safe
+connection identifiers, counts, timestamps, and closed reasons.
+
+The Browser media recorder writes an initial visible-mode record, accepted RTP,
+content-minimized control events, viewport changes, and a final record as
+bounded newline-delimited segments through the Product recording service.
+Segments are encrypted at rest under a per-recording derived key, carry AEAD
+additional-data binding, and form an ordered SHA-256 chain whose final digest
+is the Product catalog integrity value. Replay reauthorizes the tenant actor
+and verifies every size, predecessor, segment digest, final digest, and total.
+Catalog projections omit media, control payloads, consent, object references,
+key references, and host paths. Retention deletes encrypted content before the
+catalog reaches `deleted`.
+
+Migration 7 adds bounded per-tenant active-recording and retained-byte quotas.
+Tenant advisory locking serializes both start and append accounting, so races
+across sessions cannot exceed either limit. Media recordings are accepted only
+for Browser-live sessions whose committed policy is `required`; terminal and
+Browser recording types cannot be interchanged.
+
+### Slice 11 local and real-PostgreSQL evidence
+
+Race-enabled Gateway tests prove missing/failed required recorders reject before
+media open and active recorder loss closes and marks the stream failed. A fresh
+PostgreSQL migration replay plus encrypted local content store proves one
+winner in a two-session active-recording quota race, byte-quota enforcement,
+media/control/start/end capture, finalization and authorized integrity replay,
+cross-owner nondisclosure, and metadata-only catalog projection. Existing
+tamper, ciphertext, retention, and deletion tests remain green. Full repository
+race/shuffle, vet, Contract, and retained evidence gates run at the slice commit
+gate. Web presentation and the final independent-process topology remain
+Slices 12 and 13.
 
 ## Evidence rules
 

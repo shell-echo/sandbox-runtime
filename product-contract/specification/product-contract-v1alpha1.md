@@ -199,7 +199,21 @@ the peer. An expired disconnect grace, media dependency loss, or failed
 resynchronization closes the connection; reconnecting then requires a new
 one-use Product grant and repeats signaling, policy, authority, and private
 resolution. The durable Browser session is not closed merely because a client
-connection is lost.
+connection is lost. Closing the live projection revokes its exact consumed
+gateway binding so controller admission is released without making the ticket
+reusable.
+
+Signaling returns the exact committed recording mode so the client can keep a
+visible recording indicator. A `required` Browser media recording additionally
+requires an explicit bounded consent reference and a ready recorder before the
+private media source opens; missing or lost recording storage fails closed.
+Accepted RTP plus a content-minimized control-event timeline is serialized into
+bounded encrypted segments. Segment digests form an ordered chain through the
+final catalog digest. Product serializes per-tenant active-recording admission
+and byte accounting, authorizes replay through Workspace ownership, and deletes
+encrypted content before marking an expired catalog entry deleted. Catalog and
+ordinary log projections contain metadata only, never captured media, control
+payloads, object references, encryption-key references, or consent material.
 
 Product rechecks the exact session control lease, fence, and unchanged policy
 revision before every forwarded input. SDP responses, messages, errors, and
