@@ -17,13 +17,17 @@ Current verified state:
 - artifact `10488622806` contains the accepted seven-file evidence archive,
   validator receipt, and bounded `qualified` result envelope; and
 - post-documentation core CI run `35204434771` passed every required job; and
-- Product v1 architecture Phase 1 is complete as uncommitted design and
-  Product Contract-definition work in the current worktree; and
+- Product v1 architecture Phase 1 is complete as committed design and
+  Product Contract-definition authority; and
 - Product v1 Phase 2 is complete for its fixed nine-step scope: implementation
   revision `98995384c60a924f25ca58d3b7e561207bfa5be8` is selected by lock
   revision `3caf38c6bc0b62d2eeb2c1e1c4ed473fae5baab1`, the clean-VCS 60-case
   Suite and all required release gates pass, and the repository-owned
-  independent-process reference run passes 15+5+9 scenarios.
+  independent-process reference run passes 15+5+9 scenarios; and
+- Product v1 Phase 3 is active at Slice 1 of 13. The current branch adds the
+  Product/Provider import guard, executable Product Contract content verifier,
+  and atomic PostgreSQL primary-code Workspace command kernel as component
+  evidence only.
 
 The qualification applies only to Provider revision
 `170459266af5f4fad359ca8c63f2ae19741055c5`, external-caller revision
@@ -43,6 +47,10 @@ state, lease renewal/expiry, resumable events, and terminal-session close; they
 exclude resize and snapshot/restore from Phase 2. See
 [`audits/phase-2-provider-lifecycle-completion.md`](audits/phase-2-provider-lifecycle-completion.md)
 for the selected authority, release evidence, and exact non-claims.
+The Phase 3 startup inventory and fixed remaining order are recorded in
+[`audits/phase-3-product-surface-startup.md`](audits/phase-3-product-surface-startup.md)
+and
+[`plan/product-v1-phase-3-product-kernel-terminal-files-web.md`](plan/product-v1-phase-3-product-kernel-terminal-files-web.md).
 
 See [`STATUS.md`](STATUS.md) for the complete evidence ledger and
 [`qualification/external-caller-coding-shell-v1.md`](qualification/external-caller-coding-shell-v1.md)
@@ -105,7 +113,7 @@ Three API surfaces must remain separate:
 | --- | --- | --- |
 | Local `/instances` API | Local instance management over fake or Docker drivers | Internal implementation; its DTOs and state are not Provider wire models |
 | Provider API v1 | mTLS/JWS-protected asynchronous Provider protocol | Repository Contract controls routes, documents, semantics, and projection |
-| Target Product API v1alpha1 | End-user Workspace control plane | Independent Product Contract; no server implementation today |
+| Target Product API v1alpha1 | End-user Workspace control plane | Independent Product Contract; Slice 1 persistence kernel only, with no server implementation today |
 
 The calling service owns its business correlation records, desired business
 state, tenant/user authorization, ProviderRevision selection, Artifact

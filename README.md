@@ -53,6 +53,14 @@ independent-process reference black-box run pass. This does not add a new
 separately implemented external-caller, deployment, or production-readiness
 claim.
 
+[Product v1 Phase 3](docs/plan/product-v1-phase-3-product-kernel-terminal-files-web.md)
+is now active. Its first of 13 slices establishes an executable Product
+Contract content lock, enforced Product/Provider import boundaries, and a real
+PostgreSQL Product command transaction for primary-code Workspace acceptance.
+This is Product-kernel component evidence only: there is still no Product HTTP
+service, Provider dispatch, public Gateway, Guest Agent, Terminal/Files/Web
+product path, deployment, or production-readiness result.
+
 ## What the project provides
 
 - A local instance-management API with in-memory and Docker runtime drivers.
@@ -80,7 +88,7 @@ The local management API and Provider API are deliberately separate:
 | --- | --- | --- |
 | Local `/health` and `/instances` API | Operate one local runtime controller | Internal application models and configuration |
 | Provider `/v1/*` API | Cross-service sandbox protocol | The locked repository-owned Provider Contract |
-| Target Product `/api/v1/*` API | End-user Workspace control plane | The independently locked Product Contract; design-only today |
+| Target Product `/api/v1/*` API | End-user Workspace control plane | The independently locked Product Contract; kernel persistence component only, with no API listener today |
 
 ```text
 Calling service

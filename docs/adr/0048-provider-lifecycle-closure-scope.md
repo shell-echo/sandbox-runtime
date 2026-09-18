@@ -1,15 +1,16 @@
 # ADR 0048: Provider Lifecycle Closure Scope
 
-- Status: Accepted; implementation candidate complete, while the published
-  exact Contract lock remains the authority until a later immutable refresh
+- Status: Accepted and implemented for the selected Phase 2 scope; exact
+  authority selected by lock revision `3caf38c6bc0b62d2eeb2c1e1c4ed473fae5baab1`
 - Date: 2026-09-18
 
 ## Context
 
-The locked Provider Contract authorizes sandbox creation and status reads but
-does not authorize sandbox termination, desired-state mutation, lease renewal,
-or lifecycle event reads. It authorizes terminal-session open, handoff read,
-and an optional protected connection route, but not session close or resize.
+At decision time, the locked Provider Contract authorized sandbox creation and
+status reads but not sandbox termination, desired-state mutation, lease
+renewal, lifecycle event reads, or terminal-session close. The selected Phase
+2 authority now includes the five families below. Terminal resize remains
+absent.
 
 The implementation contains reserved admission names, route matchers, DTOs,
 domain values, repository methods, and some runtime cleanup primitives for
@@ -22,9 +23,11 @@ Provider packages or treating cleanup harnesses as API authority.
 
 ### In-scope wire families
 
-The Phase 2 candidate adds the following families through a coordinated
-Provider Contract revision and implementation. They do not become selected
-wire authority until the exact lock is refreshed to an immutable revision:
+Phase 2 added the following families through a coordinated Provider Contract
+revision and implementation. They are selected wire authority only for exact
+revision `98995384c60a924f25ca58d3b7e561207bfa5be8`, tree
+`0a627baed11c8a6ddbe8a24bbc1869e4f85edc16`, and the capabilities/profiles
+advertised by that revision:
 
 | Method and path | Decision |
 | --- | --- |
@@ -164,5 +167,7 @@ independently reviewable steps are authoritative in the Phase 2 plan.
   cleanup, observation, and bounded evidence.
 - The local `/instances` API, Provider DTOs, lifecycle domain, and runtime
   drivers remain separate types and packages.
-- Accepting this ADR closes only scope ambiguity. It is not a Contract,
-  implementation, compatibility, deployment, or production-readiness result.
+- The selected Phase 2 release closes the fixed local implementation and
+  compatibility gate recorded in its plan. It is not independently implemented
+  external-caller lifecycle interoperability, deployment, hostile multi-tenant,
+  HA, or production-readiness evidence.

@@ -42,6 +42,7 @@ and artifact provenance are separately pinned.
 ```bash
 go test -race -shuffle=on -count=1 ./...
 go vet ./...
+go run ./cmd/verify-product-contract -source-root .
 SANDBOX_RUNTIME_DOCKER_INTEGRATION=1 go test -tags=integration -count=1 ./driver/docker ./provider/lifecycle/driver/docker
 SANDBOX_RUNTIME_BROWSER_ADAPTER_INTEGRATION=1 go test -tags=integration -count=1 ./provider/browser/driver/docker
 SANDBOX_RUNTIME_BROWSER_PROVENANCE_INTEGRATION=1 go test -tags=integration -count=1 ./provider/browser/provenance/ghcli
@@ -289,11 +290,22 @@ production qualification.
 Dependencies point inward. Export the minimum surface and keep cross-package
 calls on public contracts rather than implementation structs.
 
+For Product persistence changes, run a disposable PostgreSQL instance and then:
+
+```bash
+SANDBOX_RUNTIME_PRODUCT_POSTGRES_URL=postgres://<user>:<password>@127.0.0.1:<port>/<database>?sslmode=disable \
+  go test -tags=integration -race -shuffle=on -count=1 ./product/adapter/postgres
+```
+
+This is real-adapter component evidence. It does not establish database image
+provenance, least-privilege deployment roles, backup/restore, HA, or production
+readiness.
+
 ## Product package and import boundaries
 
-The accepted Product architecture is design-only until implementation slices
-are separately approved. When Product code begins, use these roots and
-directions:
+The accepted Product architecture is being implemented through the fixed Phase
+3 slices. Slice 1 adds only the Product domain/application port, PostgreSQL
+adapter, import guard, and Contract verifier. Use these roots and directions:
 
 - `productapi` owns Product HTTP/SSE transport and Product wire DTOs only;
 - `product` owns Product domain/application policy and ports;
@@ -314,8 +326,10 @@ protected Provider network Contract even when processes are co-deployed.
 Product transport DTOs must be generated from or checked against
 `product-contract/` and cannot reuse PostgreSQL rows, Product aggregates,
 Provider DTOs, or driver structs. The first Product implementation change must
-add a non-test Go import-boundary check before adding behavior. ADR 0042 owns
-the complete dependency decision; local convenience is not an exception.
+add a non-test Go import-boundary check before adding behavior. That guard now
+runs in `internal/productboundary`; extend it whenever a new Product or Guest
+Agent root is added. ADR 0042 owns the complete dependency decision; local
+convenience is not an exception.
 
 ## Go and API rules
 

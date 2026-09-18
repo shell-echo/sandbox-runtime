@@ -17,16 +17,24 @@ defines a target Product that may live in this repository only as a caller of
 the Provider. Its independent design authority is the content-locked
 [`product-contract/`](../product-contract/), with repository, state, identity,
 Gateway/recording, and deployment decisions in ADRs 0042-0047. This is target
-architecture only: no Product service, persistence, public Gateway, Guest
-Agent, or Product capability is implemented or advertised today.
+architecture authority. Product Phase 3 Slice 1 now implements only the
+Product import boundary, Contract content verifier, and PostgreSQL atomic
+Workspace command kernel. No Product service listener, Provider dispatch,
+public Gateway, Guest Agent, or Product capability is implemented or
+advertised today.
 
 The [Product v1 Phase 2 Provider lifecycle plan](plan/product-v1-phase-2-provider-lifecycle.md)
-has an implementation-complete source candidate. ADR 0048 freezes its
-authority boundary and dependency order. The published exact Provider lock
-still predates the candidate, so no new route or advertisement is selected
-compatibility authority until an immutable lock refresh and clean-VCS release
-gate. The planned independent-process coding/shell lifecycle black-box gate
-also remains open.
+is complete for its fixed nine-step scope. Implementation
+`98995384c60a924f25ca58d3b7e561207bfa5be8` is selected by lock revision
+`3caf38c6bc0b62d2eeb2c1e1c4ed473fae5baab1`; the clean-VCS 60-case Suite,
+tagged Docker lifecycle gate, and repository-owned 15+5+9 independent-process
+reference run pass within their recorded boundaries.
+
+The [Product v1 Phase 3 plan](plan/product-v1-phase-3-product-kernel-terminal-files-web.md)
+is active. Its 13 dependency-ordered slices start with Product authority and
+persistence, then add Provider reconciliation, authorization, Terminal,
+Gateway, Guest Agent/Files, Web, recording, and a standalone integrated gate.
+Slice 1 is component evidence, not a Product-ready surface.
 
 ## Purpose
 
@@ -660,7 +668,7 @@ advertisement, and optional-profile gates remain open:
 
 | Area | Current state | Required direction |
 | --- | --- | --- |
-| Conformance | Contract revision `22ba6987` contains the content-derived 53-case local Suite and six-case remote discovery Suite. Contract verification, projections, the clean VCS-built local Suite, race tests, and vet passed core CI `35204434771`. P2.7 is **24/24**, the public external caller is **13/13**, and hosted run `35203241121` produced the accepted report, receipt, archive, and bounded disposition after all 15+5 scenarios, 91 observations, and stable cleanup passed. | Retain exact Contract and qualification regression. Define separate authority and evidence for protected/mutating remote profiles, other callers, aggregate conformance, multi-controller, hostile multi-tenant, HA, deployment, and production readiness. |
+| Conformance | The current Provider authority is implementation `98995384c60a924f25ca58d3b7e561207bfa5be8`, tree `0a627baed11c8a6ddbe8a24bbc1869e4f85edc16`, and content-derived 60-case local Suite selected by `3caf38c6bc0b62d2eeb2c1e1c4ed473fae5baab1`; its local release gates pass. P2.7 is **24/24**, the public external caller is **13/13**, and hosted run `35203241121` produced the accepted report, receipt, archive, and bounded disposition after all 15+5 scenarios, 91 observations, and stable cleanup passed. | Retain exact Contract and qualification regression. Define separate authority and evidence for protected/mutating remote profiles, other callers, aggregate conformance, multi-controller, hostile multi-tenant, HA, deployment, and production readiness. |
 | Protected admission | ADR 0038 requires one explicit issuer-scoped caller trust domain per listener, Provider-local audience/revision anchors, and 1..32 frozen verification keys. Its repository-local gates pass, and the exact P2.7 caller exercised the protected coding/shell flow successfully. | Retain exact authentication/authorization precedence. Treat multi-issuer admission, production identity operations, and qualification of other callers as separate future gates. |
 | Backend abstraction | Local `instance.Driver` remains separate; the Provider lifecycle has its own fake and Docker development adapters, while exec and terminal use focused Provider-only runtime ports. | Add future snapshot capability ports without reusing `/instances` models and retain narrow optional interfaces. |
 | Lifecycle recovery | Provider file persistence and Docker observation reconcile pending/unknown create work for one controller. | Retain unknown-outcome evidence; add transactional production storage before multi-controller operation. |
@@ -754,10 +762,11 @@ reliability, tenancy, deployment, and production claims remain separate.
 
 The historical 50-case local and six-case remote release gate passed at
 implementation `3fe314a` and E2E lock refresh `ae476fe`. The current
-content-derived 53-case local Suite, Contract verification, projections, race
-suite, and vet subsequently passed core CI `35204434771`. These results remain
-Suite evidence; the independently implemented caller result is recorded
-separately under P2.7, and protected/mutating remote, aggregate,
+content-derived 60-case local Suite and Phase 2 release gates pass at lock
+selection `3caf38c6bc0b62d2eeb2c1e1c4ed473fae5baab1`; the earlier 53-case
+authority passed core CI `35204434771` and remains historical evidence. These
+results remain Suite evidence; the independently implemented caller result is
+recorded separately under P2.7, and protected/mutating remote, aggregate,
 multi-controller, hostile multi-tenant, HA, deployment, and production claims
 remain outside P2.6.
 
@@ -900,6 +909,10 @@ Release gate: none. Historical candidate evidence remains evidence for its
 recorded harness only and is not relabeled as generic consumer, deployment, or
 production evidence.
 
+This retired Provider-plan label is unrelated to the active **Product v1 Phase
+3** plan. Product phase numbering is scoped to the Product architecture and
+does not revive a named consumer adapter.
+
 ### Phase 4: optional profiles
 
 Add browser, desktop, port forwarding, snapshots/restore, GPU, nested-container,
@@ -930,6 +943,6 @@ container launch, or one discovery-profile report. Compatibility is the tested
 combination of protocol version, exact Contract revision/tree, Suite profile,
 capability set, runtime profile, architecture, driver, image digest, and
 security policy. Evidence from the historical 50-case repository profile, the
-current 53-case authority, six-case remote discovery profile, reference callers,
+current 60-case authority, six-case remote discovery profile, reference callers,
 and profile-specific E2E tracks remains separate and must not be aggregated by
 inference.
