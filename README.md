@@ -54,16 +54,16 @@ separately implemented external-caller, deployment, or production-readiness
 claim.
 
 [Product v1 Phase 3](docs/plan/product-v1-phase-3-product-kernel-terminal-files-web.md)
-is now active. Its first ten of 13 slices establish the Product Contract and
+is now active. Its first twelve of 13 slices establish the Product Contract and
 import boundaries, PostgreSQL Product authority, authenticated Workspace,
 control, and Terminal APIs, locked network-only Provider reconciliation,
 encrypted one-use connection grants, a bounded Terminal Gateway, and an
 outbound challenge-authenticated Guest Agent channel, confined file
 observation, durable file-change cursors, resumable content-addressed
-transfers, and Workspace revision CAS.
-Capabilities remain empty, and there is still no deployable Product listener,
-Web path, standalone phase gate, deployment, or
-production-readiness result.
+transfers, Workspace revision CAS, a secure browser BFF/Web client, artifact
+catalogs, and encrypted/redacted recording content with retention cleanup.
+Capabilities remain empty, and there is still no deployable Product process
+topology, standalone phase gate, deployment, or production-readiness result.
 
 ## What the project provides
 

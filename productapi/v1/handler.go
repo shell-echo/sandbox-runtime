@@ -24,6 +24,7 @@ type Handler struct {
 	controls      *product.ControlService
 	sessions      *product.SessionService
 	grants        *product.GrantService
+	catalog       *product.CatalogService
 }
 
 func NewHandler(application *product.Application, authenticator productapi.Authenticator, requestIDs product.IDGenerator) (*Handler, error) {
@@ -39,10 +40,14 @@ func NewHandlerWithServices(application *product.Application, controls *product.
 }
 
 func NewCompleteHandler(application *product.Application, controls *product.ControlService, sessions *product.SessionService, grants *product.GrantService, authenticator productapi.Authenticator, requestIDs product.IDGenerator) (*Handler, error) {
+	return NewHandlerWithCatalog(application, controls, sessions, grants, nil, authenticator, requestIDs)
+}
+
+func NewHandlerWithCatalog(application *product.Application, controls *product.ControlService, sessions *product.SessionService, grants *product.GrantService, catalog *product.CatalogService, authenticator productapi.Authenticator, requestIDs product.IDGenerator) (*Handler, error) {
 	if application == nil || productapi.IsNilAuthenticator(authenticator) || requestIDs == nil {
 		return nil, product.ErrInvalid
 	}
-	return &Handler{application: application, controls: controls, sessions: sessions, grants: grants, authenticator: authenticator, requestIDs: requestIDs}, nil
+	return &Handler{application: application, controls: controls, sessions: sessions, grants: grants, catalog: catalog, authenticator: authenticator, requestIDs: requestIDs}, nil
 }
 
 func (h *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
@@ -77,6 +82,8 @@ func (h *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 		h.controlLease(writer, request, principal, requestID)
 	case (request.Method == http.MethodGet || request.Method == http.MethodPost) && strings.Contains(request.URL.Path, "/sessions"):
 		h.sessionsRoute(writer, request, principal, requestID)
+	case request.Method == http.MethodGet && (strings.Contains(request.URL.Path, "/artifacts") || strings.Contains(request.URL.Path, "/recordings")):
+		h.catalogRoute(writer, request, principal, requestID)
 	case request.Method == http.MethodGet && strings.HasPrefix(request.URL.Path, "/api/v1/workspaces/"):
 		identifier, exact := singleIdentifier(request.URL.Path, "/api/v1/workspaces/")
 		if !exact {
@@ -94,6 +101,101 @@ func (h *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	default:
 		writeError(writer, http.StatusNotFound, "PRODUCT_NOT_FOUND", "resource not found", false, requestID)
 	}
+}
+
+func (h *Handler) catalogRoute(writer http.ResponseWriter, request *http.Request, principal productapi.Principal, requestID string) {
+	if h.catalog == nil {
+		writeApplicationError(writer, product.ErrCapabilityUnsupported, requestID)
+		return
+	}
+	if identifier, exact := singleIdentifier(request.URL.Path, "/api/v1/artifacts/"); exact {
+		item, err := h.catalog.GetArtifact(request.Context(), principal.TenantID, principal.Actor, identifier)
+		if err != nil {
+			writeApplicationError(writer, err, requestID)
+			return
+		}
+		writeJSON(writer, http.StatusOK, toArtifact(item))
+		return
+	}
+	if identifier, exact := singleIdentifier(request.URL.Path, "/api/v1/recordings/"); exact {
+		item, err := h.catalog.GetRecording(request.Context(), principal.TenantID, principal.Actor, identifier)
+		if err != nil {
+			writeApplicationError(writer, err, requestID)
+			return
+		}
+		writeJSON(writer, http.StatusOK, toRecording(item))
+		return
+	}
+	workspaceID, kind, ok := parseCatalogListPath(request.URL.Path)
+	if !ok {
+		writeError(writer, http.StatusNotFound, "PRODUCT_NOT_FOUND", "resource not found", false, requestID)
+		return
+	}
+	cursor, limit, ok := catalogPagination(request)
+	if !ok {
+		writeError(writer, http.StatusBadRequest, "PRODUCT_INVALID_REQUEST", "invalid pagination", false, requestID)
+		return
+	}
+	if kind == "artifacts" {
+		page, err := h.catalog.ListArtifacts(request.Context(), principal.TenantID, principal.Actor, workspaceID, cursor, limit)
+		if err != nil {
+			writeApplicationError(writer, err, requestID)
+			return
+		}
+		items := make([]Artifact, 0, len(page.Items))
+		for _, item := range page.Items {
+			items = append(items, toArtifact(item))
+		}
+		writeJSON(writer, http.StatusOK, ArtifactPage{Items: items, NextCursor: page.NextCursor})
+		return
+	}
+	page, err := h.catalog.ListRecordings(request.Context(), principal.TenantID, principal.Actor, workspaceID, cursor, limit)
+	if err != nil {
+		writeApplicationError(writer, err, requestID)
+		return
+	}
+	items := make([]Recording, 0, len(page.Items))
+	for _, item := range page.Items {
+		items = append(items, toRecording(item))
+	}
+	writeJSON(writer, http.StatusOK, RecordingPage{Items: items, NextCursor: page.NextCursor})
+}
+
+func parseCatalogListPath(value string) (string, string, bool) {
+	prefix := "/api/v1/workspaces/"
+	if !strings.HasPrefix(value, prefix) {
+		return "", "", false
+	}
+	parts := strings.Split(strings.TrimPrefix(value, prefix), "/")
+	if len(parts) != 2 || parts[0] == "" || (parts[1] != "artifacts" && parts[1] != "recordings") {
+		return "", "", false
+	}
+	return parts[0], parts[1], true
+}
+
+func catalogPagination(request *http.Request) (string, int, bool) {
+	query := request.URL.Query()
+	for name := range query {
+		if name != "cursor" && name != "limit" {
+			return "", 0, false
+		}
+	}
+	cursor, ok := singleQuery(query, "cursor")
+	if !ok || len(cursor) > 1024 {
+		return "", 0, false
+	}
+	limit := 50
+	if values, present := query["limit"]; present {
+		if len(values) != 1 {
+			return "", 0, false
+		}
+		parsed, err := strconv.Atoi(values[0])
+		if err != nil || parsed < 1 || parsed > 200 {
+			return "", 0, false
+		}
+		limit = parsed
+	}
+	return cursor, limit, true
 }
 
 func (h *Handler) listWorkspaces(writer http.ResponseWriter, request *http.Request, principal productapi.Principal, requestID string) {

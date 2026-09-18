@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -25,6 +26,7 @@ import (
 	"github.com/shell-echo/sandbox-runtime/product"
 	productbloblocal "github.com/shell-echo/sandbox-runtime/product/adapter/blob/local"
 	productguest "github.com/shell-echo/sandbox-runtime/product/adapter/guest"
+	productrecordinglocal "github.com/shell-echo/sandbox-runtime/product/adapter/recording/local"
 	"github.com/shell-echo/sandbox-runtime/productapi"
 	productapiv1 "github.com/shell-echo/sandbox-runtime/productapi/v1"
 )
@@ -768,6 +770,116 @@ func TestIntegrationResumableTransferDigestRevisionCASAndCleanup(t *testing.T) {
 	}
 	if _, _, err := blobs.Inspect(context.Background(), abandonedRecord.ObjectReference); err == nil {
 		t.Fatal("expired staging object was not removed")
+	}
+}
+
+func TestIntegrationArtifactCatalogAndEncryptedRecordingLifecycle(t *testing.T) {
+	pool := integrationProductPool(t)
+	applyProductMigrations(t, pool)
+	const tenantID = "tenant-product-catalog"
+	cleanupProductTenant(t, pool, tenantID)
+	store, _ := New(pool, 3*time.Second)
+	application, _ := product.NewApplication(store, allowPrimarySlot{}, product.CryptoIDGenerator{})
+	actor := product.ActorRef{Type: product.ActorHuman, ID: "owner-product-catalog"}
+	created, err := application.CreateWorkspace(context.Background(), tenantID, actor, "catalog-workspace", integrationCreateWorkspaceRequest("catalog workspace"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	blobRoot := t.TempDir()
+	blobs, err := productbloblocal.New(blobRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	transfers, _ := product.NewTransferService(store, blobs, product.CryptoIDGenerator{})
+	payload := []byte("artifact body")
+	payloadDigest := sha256.Sum256(payload)
+	workspace, _ := application.GetWorkspace(context.Background(), tenantID, actor, created.Operation.WorkspaceID)
+	upload, _, err := transfers.BeginUpload(context.Background(), tenantID, actor, workspace.ID, "artifact-upload", product.BeginUploadRequest{ExpectedWorkspaceVersion: workspace.Version, Digest: "sha256:" + hex.EncodeToString(payloadDigest[:]), SizeBytes: int64(len(payload)), ExpiresInSeconds: 600})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := transfers.Append(context.Background(), tenantID, actor, upload.ID, 0, payload); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := transfers.Complete(context.Background(), tenantID, actor, upload.ID); err != nil {
+		t.Fatal(err)
+	}
+	workspace, _ = application.GetWorkspace(context.Background(), tenantID, actor, workspace.ID)
+	catalog, _ := product.NewCatalogService(store, product.CryptoIDGenerator{})
+	artifact, err := catalog.PublishArtifact(context.Background(), tenantID, actor, workspace.ID, product.PublishArtifactRequest{ExpectedWorkspaceVersion: workspace.Version, UploadTransferID: upload.ID, SlotKey: product.PrimarySlotKey, Name: "result.txt", MediaType: "text/plain"})
+	if err != nil || artifact.Digest != upload.Digest || artifact.State != "available" {
+		t.Fatalf("artifact=%#v err=%v", artifact, err)
+	}
+	artifactPage, err := catalog.ListArtifacts(context.Background(), tenantID, actor, workspace.ID, "", 50)
+	if err != nil || len(artifactPage.Items) != 1 || artifactPage.Items[0].ID != artifact.ID {
+		t.Fatalf("artifact page=%#v err=%v", artifactPage, err)
+	}
+	other := product.ActorRef{Type: product.ActorHuman, ID: "other-catalog-owner"}
+	if _, err := catalog.GetArtifact(context.Background(), tenantID, other, artifact.ID); !errors.Is(err, product.ErrNotFound) {
+		t.Fatalf("cross-owner artifact error=%v", err)
+	}
+
+	const sessionID = "ses_catalog_recording"
+	if _, err := pool.Exec(context.Background(), `INSERT INTO sandbox_runtime_product.runtime_sessions(tenant_id,session_id,workspace_id,slot_key,slot_generation,owner_actor_type,owner_actor_id,kind,protocol_profile,state,requires_control_lease,recording_policy,version,expires_at,created_at,updated_at) VALUES($1,$2,$3,'primary-code',1,$4,$5,'terminal','product-terminal.v1','active',true,'required',1,clock_timestamp()+interval '1 hour',clock_timestamp(),clock_timestamp())`, tenantID, sessionID, workspace.ID, string(actor.Type), actor.ID); err != nil {
+		t.Fatal(err)
+	}
+	recordingRoot := t.TempDir()
+	content, err := productrecordinglocal.New(recordingRoot, bytes.Repeat([]byte{0x33}, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	redactor, _ := product.NewPatternRedactor([]string{"SECRET-VALUE"})
+	recordings, _ := product.NewRecordingService(store, content, redactor, product.CryptoIDGenerator{}, nil)
+	const disabledSessionID = "ses_catalog_disabled"
+	if _, err := pool.Exec(context.Background(), `INSERT INTO sandbox_runtime_product.runtime_sessions(tenant_id,session_id,workspace_id,slot_key,slot_generation,owner_actor_type,owner_actor_id,kind,protocol_profile,state,requires_control_lease,recording_policy,version,expires_at,created_at,updated_at) VALUES($1,$2,$3,'primary-code',1,$4,$5,'terminal','product-terminal.v1','active',true,'disabled',1,clock_timestamp()+interval '1 hour',clock_timestamp(),clock_timestamp())`, tenantID, disabledSessionID, workspace.ID, string(actor.Type), actor.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := recordings.Start(context.Background(), tenantID, actor, workspace.ID, product.StartRecordingRequest{SessionID: disabledSessionID, RecordingType: "terminal", ConsentReference: "consent_catalog_disabled", RetentionSeconds: 3600}); !errors.Is(err, product.ErrForbidden) {
+		t.Fatalf("disabled recording policy error=%v", err)
+	}
+	recording, err := recordings.Start(context.Background(), tenantID, actor, workspace.ID, product.StartRecordingRequest{SessionID: sessionID, RecordingType: "terminal", ConsentReference: "consent_catalog_1", RetentionSeconds: 3600})
+	if err != nil || recording.State != "recording" {
+		t.Fatalf("recording=%#v err=%v", recording, err)
+	}
+	if _, err := recordings.Append(context.Background(), tenantID, actor, recording.ID, []byte("token=SECRET-VALUE\n")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := recordings.Append(context.Background(), tenantID, actor, recording.ID, []byte("done\n")); err != nil {
+		t.Fatal(err)
+	}
+	recording, err = recordings.Finalize(context.Background(), tenantID, actor, recording.ID)
+	if err != nil || recording.State != "available" || recording.Digest == "" || recording.SizeBytes == 0 {
+		t.Fatalf("final recording=%#v err=%v", recording, err)
+	}
+	replay, err := recordings.Replay(context.Background(), tenantID, actor, recording.ID)
+	if err != nil || len(replay) != 2 || strings.Contains(string(bytes.Join(replay, nil)), "SECRET-VALUE") || !strings.Contains(string(replay[0]), "[REDACTED]") {
+		t.Fatalf("replay=%q err=%v", replay, err)
+	}
+	recordingPage, err := catalog.ListRecordings(context.Background(), tenantID, actor, workspace.ID, "", 50)
+	if err != nil || len(recordingPage.Items) != 1 || recordingPage.Items[0].ID != recording.ID {
+		t.Fatalf("recording page=%#v err=%v", recordingPage, err)
+	}
+	if _, err := catalog.GetRecording(context.Background(), tenantID, other, recording.ID); !errors.Is(err, product.ErrNotFound) {
+		t.Fatalf("cross-owner recording error=%v", err)
+	}
+	if _, err := pool.Exec(context.Background(), `UPDATE sandbox_runtime_product.recordings SET started_at=clock_timestamp()-interval '2 hours',retention_expires_at=clock_timestamp()-interval '1 second' WHERE tenant_id=$1 AND recording_id=$2`, tenantID, recording.ID); err != nil {
+		t.Fatal(err)
+	}
+	cleaned, err := recordings.CleanupExpired(context.Background(), 10)
+	if err != nil || cleaned != 1 {
+		t.Fatalf("CleanupExpired()=%d,%v", cleaned, err)
+	}
+	deleted, err := catalog.GetRecording(context.Background(), tenantID, actor, recording.ID)
+	if err != nil || deleted.State != "deleted" {
+		t.Fatalf("deleted recording=%#v err=%v", deleted, err)
+	}
+	if _, err := recordings.Replay(context.Background(), tenantID, actor, recording.ID); !errors.Is(err, product.ErrControlStale) {
+		t.Fatalf("deleted replay error=%v", err)
+	}
+	entries, err := os.ReadDir(filepath.Join(recordingRoot, "recordings"))
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("retained encrypted segments=%v err=%v", entries, err)
 	}
 }
 

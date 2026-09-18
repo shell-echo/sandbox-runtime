@@ -1,6 +1,6 @@
 # Product v1 Phase 3: Product Kernel, Terminal, Files, and Web
 
-Status: Active; Slices 1-11 implemented with local, browser, and real-PostgreSQL evidence
+Status: Active; Slices 1-12 implemented with local, browser, and real-PostgreSQL evidence
 
 Started: 2026-09-18
 
@@ -44,12 +44,12 @@ operations remain separately named gates.
 | 9 | Files list/stat/watch with confined paths and durable change state | Symlink/traversal/special-file/rename/watch-gap/cursor-expiry/large-directory/cross-tenant tests; no host path or backend identity exposure | **Implemented; local and real-PostgreSQL gates passed** |
 | 10 | Digest-addressed upload/download, resumable transfer, revision staging, and compare-and-swap commit | Digest mismatch, partial/resume, cancellation, quota/backpressure, concurrent commit, crash recovery, retention and exact cleanup tests | **Implemented; local and real-PostgreSQL gates passed** |
 | 11 | Product Web control plane and client for Workspace, Terminal, and Files | Generated/checked client; authenticated browser E2E; CSP/CSRF/origin/session/accessibility/error/recovery tests; no private endpoint exposure | **Implemented; local, headless-browser, and real-PostgreSQL gates passed** |
-| 12 | Product recording content pipeline and artifact/recording catalogs | Explicit policy/consent; encryption/redaction/integrity; retention/deletion; tenant-authorized replay/catalog tests; content remains outside control-plane list responses | Planned |
+| 12 | Product recording content pipeline and artifact/recording catalogs | Explicit policy/consent; encryption/redaction/integrity; retention/deletion; tenant-authorized replay/catalog tests; content remains outside control-plane list responses | **Implemented; local and real-PostgreSQL gates passed** |
 | 13 | Standalone integrated Phase 3 release gate and reproducible evidence bundle | Fresh PostgreSQL plus separate Product/Gateway/Guest/Provider processes; fixed Contract identities; restart/fault/security/cleanup matrix; exact evidence manifest and independent validation | Planned |
 
 Slices are dependency ordered. Later UI or data-plane work cannot substitute
 for an earlier authority, persistence, authentication, or recovery gate.
-After Slice 11, 2 slices remain.
+After Slice 12, 1 slice remains.
 
 ## Cross-cutting requirements
 
@@ -394,3 +394,43 @@ fresh PostgreSQL adapter run covers the added Workspace list authority together
 with all earlier Phase 3 state. This remains repository-local Web and browser
 evidence; deployment identity, external issuer configuration, browser matrix,
 and production accessibility review remain outside this slice.
+
+## Slice 12 exact output
+
+- `product.CatalogService` publishes an artifact only from an actor-owned,
+  complete upload bound to the same Workspace and expected Workspace version.
+  PostgreSQL retains its private object reference but Product catalog DTOs
+  expose only Contract metadata. Artifact list/get reads are tenant,
+  Workspace, and owner filtered.
+- `product.RecordingService` starts terminal content capture only for a
+  session whose durable policy is `required`, with an explicit bounded consent
+  reference and retention interval. Disabled and metadata-only sessions cannot
+  enter the content path. One active/available recording per session is fenced
+  with a database advisory lock.
+- A required redactor runs before persistence. The standalone content adapter
+  derives a per-recording AES-256-GCM key from a process-held master key and a
+  random non-secret key reference, writes bounded no-follow segment files, and
+  uses recording ID and sequence as authenticated data. Plaintext, encryption
+  keys, object references, and host paths do not enter catalog responses.
+- Every retained segment commits a digest chained to its predecessor. Finalize
+  binds the catalog digest and size to the terminal chain head; replay decrypts
+  and revalidates sequence, previous digest, per-segment size/digest, final
+  digest, and aggregate size before returning content to the authorized
+  application caller. Ciphertext tampering fails closed.
+- Database-time retention moves expired recordings to `expired`; exact
+  per-recording storage deletion removes both committed and possible
+  storage-ahead orphan segments before the durable catalog settles on
+  `deleted`. The metadata row remains as deletion evidence.
+- The Product API now serves the four Contract-declared artifact/recording
+  list/get routes. DTO Schema tests prove that only catalog metadata is
+  projected; replay bytes and all private storage/encryption fields remain off
+  the control plane.
+
+Race tests cover encrypted local storage, same-segment idempotency, conflicting
+content, tamper rejection, no-follow roots, redaction, and Product Schema
+projection. Fresh PostgreSQL evidence covers completed-upload publication,
+cross-owner nondisclosure, required versus disabled recording policy, consent,
+multi-segment redacted replay and integrity, catalog reads, database-time
+expiry, exact encrypted-content deletion, and retained deleted metadata. This
+is a standalone local encrypted-content adapter, not KMS/HSM, external object
+store, legal-consent, or production retention qualification.

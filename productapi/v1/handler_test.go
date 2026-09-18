@@ -52,6 +52,42 @@ type allowSlot struct{}
 
 func (allowSlot) AuthorizePrimarySlot(context.Context, product.SlotSpec) error { return nil }
 
+type catalogStoreStub struct {
+	artifact  product.Artifact
+	recording product.RecordingRecord
+}
+
+func (s *catalogStoreStub) PublishArtifact(context.Context, product.PublishArtifactCommand) (product.Artifact, error) {
+	return s.artifact, nil
+}
+func (s *catalogStoreStub) ListArtifacts(context.Context, string, product.ActorRef, string, string, int) (product.ArtifactPage, error) {
+	return product.ArtifactPage{Items: []product.Artifact{s.artifact}}, nil
+}
+func (s *catalogStoreStub) GetArtifact(context.Context, string, product.ActorRef, string) (product.Artifact, error) {
+	return s.artifact, nil
+}
+func (s *catalogStoreStub) StartRecording(context.Context, product.StartRecordingCommand) (product.RecordingRecord, error) {
+	return s.recording, nil
+}
+func (s *catalogStoreStub) GetRecording(context.Context, string, product.ActorRef, string) (product.RecordingRecord, error) {
+	return s.recording, nil
+}
+func (s *catalogStoreStub) ListRecordings(context.Context, string, product.ActorRef, string, string, int) (product.RecordingPage, error) {
+	return product.RecordingPage{Items: []product.Recording{s.recording.Recording}}, nil
+}
+func (s *catalogStoreStub) AppendRecordingSegment(context.Context, string, string, int64, string, string, string, int64, time.Time, time.Time) (product.RecordingRecord, error) {
+	return s.recording, nil
+}
+func (s *catalogStoreStub) FinalizeRecording(context.Context, string, string, string, int64, time.Time) (product.RecordingRecord, error) {
+	return s.recording, nil
+}
+func (*catalogStoreStub) LeaseExpiredRecordings(context.Context, int) ([]product.RecordingCleanup, error) {
+	return nil, nil
+}
+func (*catalogStoreStub) MarkRecordingDeleted(context.Context, string, string, time.Time) error {
+	return nil
+}
+
 type handlerIDs struct {
 	mu   sync.Mutex
 	next int
@@ -174,6 +210,40 @@ func TestConnectionGrantProjectionMatchesLockedContract(t *testing.T) {
 		t.Fatalf("connection grant fields = %s", document)
 	}
 	validateDefinition(t, "ConnectionGrant", document)
+}
+
+func TestCatalogRoutesMatchLockedContract(t *testing.T) {
+	base, store := newTestHandler(t)
+	now := time.Date(2026, 9, 18, 1, 2, 3, 0, time.UTC)
+	actor := product.ActorRef{Type: product.ActorHuman, ID: "actor-1"}
+	catalogStore := &catalogStoreStub{
+		artifact:  product.Artifact{ID: "art_1", WorkspaceID: "wrk_1", SlotKey: product.PrimarySlotKey, Name: "result.txt", MediaType: "text/plain", SizeBytes: 12, Digest: "sha256:" + strings.Repeat("a", 64), State: "available", CreatedBy: actor, CreatedAt: now},
+		recording: product.RecordingRecord{Recording: product.Recording{ID: "rec_1", WorkspaceID: "wrk_1", SessionID: "ses_1", Type: "terminal", State: "available", Digest: "sha256:" + strings.Repeat("b", 64), SizeBytes: 20, StartedAt: now, CompletedAt: now.Add(time.Minute), RetentionExpiresAt: now.Add(time.Hour)}},
+	}
+	catalog, err := product.NewCatalogService(catalogStore, &handlerIDs{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	authenticator, _ := productapi.NewStaticAuthenticator([]productapi.StaticToken{{Token: testBearer, Principal: productapi.Principal{TenantID: "tenant-1", Actor: actor}}})
+	handler, err := NewHandlerWithCatalog(base.application, nil, nil, nil, catalog, authenticator, &handlerIDs{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = store
+	tests := []struct{ path, definition string }{
+		{"/api/v1/workspaces/wrk_1/artifacts", "ArtifactPage"},
+		{"/api/v1/artifacts/art_1", "Artifact"},
+		{"/api/v1/workspaces/wrk_1/recordings", "RecordingPage"},
+		{"/api/v1/recordings/rec_1", "Recording"},
+	}
+	for _, test := range tests {
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, authenticatedRequest(http.MethodGet, test.path, ""))
+		if response.Code != http.StatusOK {
+			t.Fatalf("%s status=%d body=%s", test.path, response.Code, response.Body.String())
+		}
+		validateDefinition(t, test.definition, response.Body.Bytes())
+	}
 }
 
 func newTestHandler(t *testing.T) (*Handler, *handlerStore) {

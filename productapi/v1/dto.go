@@ -174,6 +174,59 @@ type SessionPage struct {
 	NextCursor string           `json:"next_cursor,omitempty"`
 }
 
+type Artifact struct {
+	ArtifactID  string   `json:"artifact_id"`
+	WorkspaceID string   `json:"workspace_id"`
+	SlotKey     string   `json:"slot_key,omitempty"`
+	Name        string   `json:"name"`
+	MediaType   string   `json:"media_type"`
+	SizeBytes   int64    `json:"size_bytes"`
+	Digest      string   `json:"digest"`
+	State       string   `json:"state"`
+	CreatedBy   ActorRef `json:"created_by"`
+	CreatedAt   string   `json:"created_at"`
+}
+
+type ArtifactPage struct {
+	Items      []Artifact `json:"items"`
+	NextCursor string     `json:"next_cursor,omitempty"`
+}
+
+type Recording struct {
+	RecordingID        string `json:"recording_id"`
+	WorkspaceID        string `json:"workspace_id"`
+	SessionID          string `json:"session_id,omitempty"`
+	AgentRunID         string `json:"agent_run_id,omitempty"`
+	RecordingType      string `json:"recording_type"`
+	State              string `json:"state"`
+	Digest             string `json:"digest,omitempty"`
+	SizeBytes          *int64 `json:"size_bytes,omitempty"`
+	StartedAt          string `json:"started_at"`
+	CompletedAt        string `json:"completed_at,omitempty"`
+	RetentionExpiresAt string `json:"retention_expires_at"`
+}
+
+type RecordingPage struct {
+	Items      []Recording `json:"items"`
+	NextCursor string      `json:"next_cursor,omitempty"`
+}
+
+func toArtifact(value product.Artifact) Artifact {
+	return Artifact{ArtifactID: value.ID, WorkspaceID: value.WorkspaceID, SlotKey: value.SlotKey, Name: value.Name, MediaType: value.MediaType, SizeBytes: value.SizeBytes, Digest: value.Digest, State: value.State, CreatedBy: toActor(value.CreatedBy), CreatedAt: timestamp(value.CreatedAt)}
+}
+
+func toRecording(value product.Recording) Recording {
+	projected := Recording{RecordingID: value.ID, WorkspaceID: value.WorkspaceID, SessionID: value.SessionID, AgentRunID: value.AgentRunID, RecordingType: value.Type, State: value.State, Digest: value.Digest, StartedAt: timestamp(value.StartedAt), RetentionExpiresAt: timestamp(value.RetentionExpiresAt)}
+	if value.State == "available" || value.State == "expired" || value.State == "deleted" {
+		size := value.SizeBytes
+		projected.SizeBytes = &size
+	}
+	if !value.CompletedAt.IsZero() && value.CompletedAt.Unix() > 1 {
+		projected.CompletedAt = timestamp(value.CompletedAt)
+	}
+	return projected
+}
+
 func toSession(session product.RuntimeSession) RuntimeSession {
 	return RuntimeSession{SessionID: session.ID, WorkspaceID: session.WorkspaceID, SlotKey: session.SlotKey, Kind: session.Kind, ProtocolProfile: session.ProtocolProfile, State: session.State, RequiresControlLease: session.RequiresControlLease, RecordingPolicy: session.RecordingPolicy, Version: session.Version, ExpiresAt: timestamp(session.ExpiresAt), CreatedAt: timestamp(session.CreatedAt), UpdatedAt: timestamp(session.UpdatedAt)}
 }
