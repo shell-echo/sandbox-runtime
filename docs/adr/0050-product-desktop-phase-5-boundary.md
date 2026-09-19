@@ -1,6 +1,7 @@
 # ADR 0050: Product Desktop Phase 5 Boundary
 
-- Status: Accepted for Product Phase 5 scope; Slices 1-14 are complete
+- Status: Accepted; Product Phase 5 is complete at 15/15 for the bounded
+  same-repository independent-process scope
 - Date: 2026-09-19
 
 ## Context
@@ -43,6 +44,12 @@ Slice 13 adds the capability-derived authenticated unified Product Web/BFF.
 Slice 14 adds the private Provider/Gateway Desktop transport and the composed
 real-store fault/security/cleanup gate while leaving independent-process
 release evidence and advertisement disabled.
+Slice 15 adds the exact five-process release topology, real display/control
+and Guest development materialization, restart/fault/security/recording and
+cleanup matrix, dependency-derived topology-specific advertisement, and a
+strict reproducible evidence verifier. Production command composition and the
+deployment/HA/hostile-tenant/independent-caller/production gates remain
+outside Phase 5.
 
 Starting with Product persistence would require Product code to invent a
 Provider wire shape. Starting with a runtime image or driver would create an
@@ -91,6 +98,11 @@ requires Product persistence/reconciliation, exact Provider adaptation,
 public Gateway, grants/leases/policy, recovery, recording/catalog, Web
 experience, and the final release gate. Until those dependencies pass,
 advertisement remains empty.
+
+The Slice 15 topology satisfies that conjunction only inside the tagged
+release gate and continuously withdraws readiness when a required dependency
+is absent. It does not change the production command's startup composition or
+advertisement.
 
 ## Slice 1 authority
 
@@ -401,6 +413,33 @@ real display/control and development scenarios, the strict release evidence
 bundle, and topology-specific advertisement remain Slice 15. No deployment,
 HA, hostile-multitenant, or production-readiness conclusion follows.
 
+## Slice 15 independent-process release gate
+
+The final gate starts Product, Gateway, Provider, Desktop, and Guest as five
+separate OS processes against fresh digest-pinned PostgreSQL and fresh object
+and Guest state. It selects both exact locked Provider identities, the signed
+Desktop image and native platform manifest, and the locked development
+template. The public Desktop path crosses Product authority, HTTPS WebRTC,
+the Product Gateway, private mTLS, and the Desktop runtime; controller input
+changes the real X11 pointer position and the gate captures the real root
+display. The Guest process materializes digest-checked revisions before and
+after reconstruction.
+
+Run `20260919T200125.484855000Z` at implementation
+`024a768d51965f8949bacf3c97e499fb26a6e648` passes the exact 14-scenario
+matrix, including Product/Gateway/Guest restart, Provider dependency loss,
+Origin/ticket/tenant denial, encrypted recording replay, capability withdrawal,
+and exact process/row/object/Guest/runtime/container cleanup. The strict
+manifest binds the five roles, scenario set, Contract/runtime/template
+identities, and explicit non-claims, and rejects unknown or private material.
+
+This is same-repository, single-host, single-controller release evidence. The
+roles use one repository-built test executable and the Provider is a
+repository-owned fixture for the locked Contracts. Topology-specific
+advertisement is authorized only by this gate. Deployment qualification, HA,
+hostile multi-tenant isolation, independently implemented caller
+interoperability, and general production readiness are not established.
+
 ## Consequences
 
 - Product Desktop persistence begins only after the Provider wire authority is
@@ -440,7 +479,7 @@ HA, hostile-multitenant, or production-readiness conclusion follows.
 - Slice 12 proves immutable template selection and exact Guest workspace
   materialization/rollback/recovery only; it does not compose unified Web or
   advertise Desktop.
-- Phase 5 completion requires the named independent-process Slice 15 gate.
-  It still does not establish multi-user collaboration, HA, hostile
+- Phase 5 completion is established only for the named independent-process
+  Slice 15 topology. It still does not establish multi-user collaboration, HA, hostile
   multi-tenant isolation, production deployment, or general production
   readiness. Those remain later scopes.

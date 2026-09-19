@@ -1,0 +1,146 @@
+{
+  "schema_version": 1,
+  "run_id": "20260919T200125.484855000Z",
+  "result": "passed",
+  "evidence_tier": "same-repository-independent-process",
+  "source_revision": "024a768d51965f8949bacf3c97e499fb26a6e648",
+  "started_at": "2026-09-19T20:01:25.484855Z",
+  "completed_at": "2026-09-19T20:01:41.312334Z",
+  "base_provider_contract": {
+    "revision": "98995384c60a924f25ca58d3b7e561207bfa5be8",
+    "tree": "0a627baed11c8a6ddbe8a24bbc1869e4f85edc16"
+  },
+  "desktop_provider_contract": {
+    "revision": "720ad15c343e71f36615dc4499edd5e764178bca",
+    "tree": "343ffde0819207cf99c005096c336735dd33a735"
+  },
+  "product_contract": {
+    "tree": "sha256:9490513228774da2e06cc3d01bc65192d37adea89d12d4ad83efdd6ce0f14560",
+    "resource_count": 9,
+    "operation_count": 27,
+    "conformance_cases": 3
+  },
+  "postgresql": {
+    "profile": "postgres:16-alpine@sha256:866efe7070b471f3a5397edac0e5edd65c23ff056587c6e47c07d008caaedd28",
+    "fresh": true
+  },
+  "object_storage": {
+    "profile": "encrypted-local-recording-plus-content-addressed-local-v1",
+    "fresh": true
+  },
+  "desktop_runtime": {
+    "profile": "sandbox-runtime-desktop-v1",
+    "image": "ghcr.io/shell-echo/sandbox-runtime-desktop@sha256:638e97c694ad4c9b9d750ae30dc6088ff5011af570ba1b12fdf3f0e35ffa0300",
+    "index_digest": "sha256:638e97c694ad4c9b9d750ae30dc6088ff5011af570ba1b12fdf3f0e35ffa0300",
+    "platform": "linux/arm64/v8",
+    "platform_digest": "sha256:e5d01e272f87df8dc693ba81d85bce2a154ae541ac0166177a9290a005928505",
+    "source_revision": "e4a940bda6c5172a78d0dbe40963ca1a99911976",
+    "signed": true
+  },
+  "development_template": {
+    "template_id": "coding-shell-base-v1",
+    "image": "ghcr.io/shell-echo/sandbox-runtime-coding-shell@sha256:1996e44f8ddc464f22556bd57f1c69079fe6b1a821b65bd9be24f86619c31bb1",
+    "index_digest": "sha256:1996e44f8ddc464f22556bd57f1c69079fe6b1a821b65bd9be24f86619c31bb1",
+    "selected": true
+  },
+  "processes": [
+    {
+      "role": "desktop",
+      "executable_digest": "sha256:14e6dfc0ff6add97b30132651b124027c5970f2cbe41f7ab615d00da38c8425d",
+      "independent_os_process": true
+    },
+    {
+      "role": "gateway",
+      "executable_digest": "sha256:14e6dfc0ff6add97b30132651b124027c5970f2cbe41f7ab615d00da38c8425d",
+      "independent_os_process": true
+    },
+    {
+      "role": "guest",
+      "executable_digest": "sha256:14e6dfc0ff6add97b30132651b124027c5970f2cbe41f7ab615d00da38c8425d",
+      "independent_os_process": true
+    },
+    {
+      "role": "product",
+      "executable_digest": "sha256:14e6dfc0ff6add97b30132651b124027c5970f2cbe41f7ab615d00da38c8425d",
+      "independent_os_process": true
+    },
+    {
+      "role": "provider",
+      "executable_digest": "sha256:14e6dfc0ff6add97b30132651b124027c5970f2cbe41f7ab615d00da38c8425d",
+      "independent_os_process": true
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "capability-advertisement",
+      "status": "passed"
+    },
+    {
+      "id": "contract-identities",
+      "status": "passed"
+    },
+    {
+      "id": "desktop-recording-integrity",
+      "status": "passed"
+    },
+    {
+      "id": "desktop-slot-session-lifecycle",
+      "status": "passed"
+    },
+    {
+      "id": "desktop-ticket-replay-origin-denial",
+      "status": "passed"
+    },
+    {
+      "id": "exact-cleanup",
+      "status": "passed"
+    },
+    {
+      "id": "gateway-restart-recovery",
+      "status": "passed"
+    },
+    {
+      "id": "guest-development-materialization",
+      "status": "passed"
+    },
+    {
+      "id": "guest-restart-recovery",
+      "status": "passed"
+    },
+    {
+      "id": "product-authentication",
+      "status": "passed"
+    },
+    {
+      "id": "product-restart-recovery",
+      "status": "passed"
+    },
+    {
+      "id": "provider-dependency-fault-closure",
+      "status": "passed"
+    },
+    {
+      "id": "real-desktop-display-control",
+      "status": "passed"
+    },
+    {
+      "id": "tenant-nondisclosure",
+      "status": "passed"
+    }
+  ],
+  "cleanup": {
+    "child_processes_reaped": true,
+    "containers_removed": true,
+    "scoped_rows_removed": true,
+    "object_content_removed": true,
+    "guest_state_removed": true,
+    "runtime_removed": true
+  },
+  "non_claims": [
+    "deployment-qualified",
+    "ha-qualified",
+    "hostile-multi-tenant-qualified",
+    "independent-caller-qualified",
+    "production-ready"
+  ]
+}

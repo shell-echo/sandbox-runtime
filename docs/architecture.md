@@ -63,7 +63,8 @@ establish a deployment-qualified topology, independently implemented caller,
 HA, hostile multi-tenant isolation, or production readiness.
 
 The [Product v1 Phase 5 Desktop plan](plan/product-v1-phase-5-desktop-development-unified-product.md)
-is now **14/15** complete. Slice 1 is deliberately Contract-first: it adds a
+is now **15/15 complete** for its bounded same-repository
+independent-process topology. Slice 1 is deliberately Contract-first: it adds a
 separate Provider Desktop capability/profile/runtime, open/read/opaque-handoff/
 close lifecycle, expiry and revocation, usage evidence, strict admission and
 security semantics, fixtures, and executable local Conformance mappings. The
@@ -164,9 +165,19 @@ closed media/control traffic. Its real-PostgreSQL composed gate crosses public
 WebRTC, the private bridge, fenced input, durable policy, required encrypted
 recording, security attacks, retention deletion, and exact tenant cleanup.
 This is same-repository same-process composition evidence with a bounded
-reference media executor. Slice 15 independent roles, real display/control and
-development scenarios, strict evidence validation, and topology-specific
-advertisement remain absent.
+reference media executor.
+
+Slice 15 implementation `024a768d51965f8949bacf3c97e499fb26a6e648`
+adds the strict tagged release topology. Run
+`20260919T200125.484855000Z` passes 14 exact scenarios through separate
+Product, Gateway, Provider, Desktop, and Guest processes with fresh pinned
+PostgreSQL, the signed locked Desktop runtime, real X11 capture and fenced
+pointer control, public WebRTC/private mTLS composition, encrypted recording,
+actual Guest development materialization, Product/Gateway/Guest restarts,
+Provider dependency-loss closure, and exact cleanup. Capability readiness is
+derived only inside that exact topology. The production command remains
+uncomposed; deployment, HA, hostile multi-tenant, independently implemented
+caller, and production-readiness evidence remain absent.
 
 ## Purpose
 
@@ -806,13 +817,13 @@ advertisement, and optional-profile gates remain open:
 | Lifecycle recovery | Provider file persistence and Docker observation reconcile pending/unknown create work for one controller. | Retain unknown-outcome evidence; add transactional production storage before multi-controller operation. |
 | Persistence | Memory and atomically replaced file repository. | Retain for development; introduce transactional production storage before multi-controller operation. |
 | API | Local `/instances` and the protected Provider v1 surface are separate. Authorized coding/shell lifecycle/session/artifact/usage routes and the locked controller-only `GET /v1/runtime-sessions:connect` route are composed; the latter was exercised by the exact qualified external caller and remains distinct from a public end-user Gateway. The default-disabled Browser command graph remains a separate profile. | Define deployable caller-owned Gateway configuration and production storage/operations without moving user or tenant authorization into the Provider. |
-| Capabilities | Empty, terminal-only, atomic coding/shell, their optional locked terminal-connect variants, browser-only, and Desktop-only Contract snapshots are accepted. The command advertises terminal-connect only when its protected resolver/WebSocket connector is composed. The Browser-only reference deployment advertises its exact locked shape for its caller test; production command startup advertises neither Browser nor Desktop. | Retain fail-closed advertisement/composition equality. Desktop advertisement requires the later Phase 5 Provider graph and release gates; Browser production advertisement retains its separate open gates. |
+| Capabilities | Empty, terminal-only, atomic coding/shell, their optional locked terminal-connect variants, browser-only, and Desktop-only Contract snapshots are accepted. The command advertises terminal-connect only when its protected resolver/WebSocket connector is composed. The Browser-only reference deployment and Phase 5 Desktop release topology advertise only their exact locked dependency-derived shapes; production command startup advertises neither Browser nor Desktop. | Retain fail-closed advertisement/composition equality. Desktop production-command advertisement and Browser production advertisement retain their separate deployment gates. |
 | Execution | P2.5e/g/h compose durable exec/cancel/result/operation handling, real Docker execution, private bounded capture, cancellation, expiry, reconciliation, bounded exec-derived usage, artifact staging, and readiness-derived exact advertisement for one development controller. The separately versioned coding/shell reference caller gate passes locally and hosted. | Replace development single-controller persistence and partial collectors with reviewed production storage, retention, and reconciliation while keeping Artifact publication, billing, and aggregate operation truth with the caller. |
 | Terminal | P2.5f1-f7 and the protected terminal-connect route compose the terminal runtime, durable session/reference state, fresh retained-handoff checks, binary-only bounded forwarding, expiry closure, and caller-owned Gateway boundary. Final P2.7 run `35203241121` exercised the independently owned caller/Gateway byte path and reconstruction within the exact qualified scope. | Add deployable production Gateway configuration and transactional multi-controller storage; do not generalize the bounded qualification to aggregate or production evidence. |
 | Workspace | The Provider Docker adapter supplies stable `/inputs`, `/workspace`, `/outputs`, and bounded tmpfs `/tmp` without exposing host paths. The dual-platform coding/shell image was published as OCI index `sha256:1996e44f8ddc464f22556bd57f1c69079fe6b1a821b65bd9be24f86619c31bb1`, attested, independently verified, pinned by the caller, and exercised in the final qualification. | Add production artifact consumers, capacity enforcement, lifecycle closure, and stronger isolation evidence as separate scopes. |
 | Security | The qualified Docker runtime used numeric non-root identity, read-only root, disabled networking, dropped capabilities, `no-new-privileges`, and bounded CPU, memory, swap, PIDs, and tmpfs; image provenance and the exact runtime observations are retained in the qualification evidence. | Add secrets policy, controlled egress where required, stronger isolation, production authentication, threat-model review, and hostile-tenant evidence before any production claim. |
 | Events and usage | Durable lifecycle events and bounded usage-evidence components exist without a complete runtime collector composition. | Complete collection/reconciliation while leaving platform accounting authority outside the Provider. |
-| Snapshots/browser/desktop | Browser Contract, component, and historical reference tracks retain their exact recorded evidence and open production gates. Product Phase 4 separately provides bounded Product Browser evidence. Product Phase 5 Slices 1-14 authorize the separate Desktop Contract/projection, Product intent, Provider application/runtime/private resolver, Product network reconciliation and grants, bounded public Desktop WebRTC and policy, reconnect/recovery/replacement, encrypted recording/replay/retention, immutable development templates, the capability-derived authenticated unified Product Web/BFF, and the private Desktop bridge with composed real-store fault/security/cleanup evidence. No independent-process Phase 5 release evidence or Desktop capability advertisement exists. Snapshots remain unauthorized optional behavior. | Execute Slice 15 with the exact independent Product/Gateway/Provider/Desktop/Guest topology, real display/control and development scenarios, strict evidence validation, and cleanup. Keep Desktop advertisement off until that exact gate passes, and do not infer production readiness. |
+| Snapshots/browser/desktop | Browser Contract, component, and historical reference tracks retain their exact recorded evidence and open production gates. Product Phase 4 separately provides bounded Product Browser evidence. Product Phase 5 is 15/15 complete for its bounded same-repository independent-process topology: separate Product/Gateway/Provider/Desktop/Guest roles pass real display/control, development materialization, restart/fault/security/recording, strict evidence validation, dependency-derived exact-topology advertisement, and exact cleanup. Snapshots remain unauthorized optional behavior. | Preserve the Phase 5 evidence boundary. Production command composition, deployment qualification, HA, hostile multi-tenant isolation, independently implemented caller interoperability, and general production readiness remain later gates. |
 
 ## Delivery plan and release gates
 

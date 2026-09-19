@@ -1,6 +1,6 @@
 # Product v1 Phase 5: Desktop Development and Unified Product
 
-Status: 14/15 complete
+Status: 15/15 complete for the bounded same-repository independent-process scope
 
 Started: 2026-09-19
 
@@ -16,10 +16,12 @@ input and transfer policy, recovery, recording/catalog, development templates,
 and one Web shell across Workspace, Terminal, Files, Browser, Desktop, and
 recordings.
 
-Capability advertisement remains unavailable until the complete dependency
-graph and Slice 15 gate pass for an exact topology. Historical Terminal and
-Browser evidence remains valid only for its recorded identities and cannot be
-relabeled as Desktop evidence.
+The exact Slice 15 topology now derives `product.desktop` and
+`product.development` readiness from its locked dependencies. This does not
+enable the repository's production command or create a deployment, HA,
+hostile-multitenant, independently implemented caller, or production-readiness
+claim. Historical Terminal and Browser evidence remains valid only for its
+recorded identities and cannot be relabeled as Desktop evidence.
 
 ## Fixed slice order
 
@@ -39,7 +41,7 @@ relabeled as Desktop evidence.
 | 12 | Development-environment templates, startup, toolchains, workspace materialization, and Guest health | Immutable template selection; bounded startup; exact workspace mounts; health/liveness/readiness; failure rollback; restart persistence; no host-path or credential disclosure | **Complete: Product/Guest protocol, local content-store, and real-PostgreSQL component evidence only; no unified Web or production composition** |
 | 13 | Unified Product Web shell integrating Workspace, Terminal, Files, Browser, Desktop, and recordings | Generated checked client; authenticated end-to-end flows; capability-derived navigation; origin/request-forgery/content policy; accessibility; recovery/error UX; no private coordinates | **Complete: authenticated Web/BFF and real-headless-browser component evidence only; production Desktop advertisement remains off** |
 | 14 | Exact cleanup, quota, fault, security, and regression gates for the composed Desktop product | Cross-layer fault matrix; restart and dependency loss; stale/replay/tenant attacks; capacity recovery; row/object/process/runtime cleanup; retained Phase 3/4 regressions | **Complete: private Provider/Gateway bridge and same-process real-store composition evidence; independent-process release gate remains** |
-| 15 | Product Phase 5 independent-process release gate and reproducible evidence bundle | Fresh stores; separate Product/Gateway/Provider/Desktop/Guest roles as required; exact locked identities; real display/control and development scenarios; restart/fault/security/recording/cleanup matrix; strict independent validation | Planned |
+| 15 | Product Phase 5 independent-process release gate and reproducible evidence bundle | Fresh stores; separate Product/Gateway/Provider/Desktop/Guest roles as required; exact locked identities; real display/control and development scenarios; restart/fault/security/recording/cleanup matrix; strict independent validation | **Complete:** run `20260919T200125.484855000Z` at implementation `024a768d51965f8949bacf3c97e499fb26a6e648` passed 14 exact scenarios through five independent OS processes and strict evidence validation |
 
 Slices are dependency ordered. A visual demo, runtime image, or public route
 cannot replace durable authority, exact Provider selection, policy, recovery,
@@ -605,6 +607,46 @@ restart/fault matrix, strict evidence bundle, exact release-topology
 advertisement, deployment, HA, hostile-multitenant qualification, and
 production-readiness claims remain Slice 15 or later. Desktop advertisement
 therefore remains off.
+
+## Slice 15 independent-process release boundary
+
+Implementation revision `024a768d51965f8949bacf3c97e499fb26a6e648`
+adds the final tagged release gate and strict evidence verifier. Run
+`20260919T200125.484855000Z` starts fresh digest-pinned PostgreSQL, separate
+Product, Gateway, Provider, Desktop, and Guest OS processes, fresh encrypted
+recording and content-addressed content stores, and the exact signed Desktop
+runtime index selected by Slice 4.
+
+The gate passes 14 exact scenarios: Product authentication and tenant
+nondisclosure; both locked Provider Contract identities; dependency-derived
+Desktop/development capability advertisement; Desktop slot/session lifecycle;
+real X11 display capture and fenced pointer control through public WebRTC and
+the private mTLS bridge; Origin and one-use-ticket denial; encrypted recording
+integrity and replay; Product, Gateway, and Guest restart recovery; actual
+Guest revision materialization before and after restart; Provider-dependency
+fault closure; and exact process, row, object, Guest-state, runtime, and
+container cleanup.
+
+The retained manifest is
+[`../audits/product-phase-5-desktop-evidence.json`](../audits/product-phase-5-desktop-evidence.json)
+and its completion record is
+[`../audits/product-phase-5-desktop-completion.md`](../audits/product-phase-5-desktop-completion.md).
+The verifier requires the exact five roles and 14 scenarios, locked base and
+Desktop Provider identities, Product Contract identity, signed runtime and
+platform digest, development template, all cleanup flags, and explicit
+non-claims; it rejects unknown fields, drift, private coordinates, and secret
+material.
+
+### Slice 15 evidence boundary
+
+This closes Phase 5 only for the recorded same-repository independent-process
+topology. The five roles use one repository-built test executable, the
+Provider is a repository-owned locked-Contract fixture, and the run is local
+single-host/single-controller evidence. Exact-topology capability
+advertisement is exercised, but the production command is not composed or
+enabled. Deployment qualification, HA, hostile multi-tenant isolation,
+independently implemented caller interoperability, and general production
+readiness remain outside Phase 5.
 
 ## Deferred beyond Phase 5
 
