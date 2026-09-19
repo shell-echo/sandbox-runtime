@@ -8,16 +8,16 @@ Provider Contract authority: revision
 `720ad15c343e71f36615dc4499edd5e764178bca`, tree
 `343ffde0819207cf99c005096c336735dd33a735`
 
-Status: local implementation and native arm64 component gate passed; immutable
-hosted publication and independent provenance verification pending
+Status: historical local-candidate checkpoint; subsequently closed by
+[`product-phase-5-desktop-slice-4-publication.md`](product-phase-5-desktop-slice-4-publication.md)
 
 ## Result
 
-The repository now contains a reproducible Desktop runtime-image candidate and
-a private display/session broker. This is not yet a completed Slice 4 result:
-the required native amd64/arm64 publication workflow has not run, no published
-multi-platform index or attestation identity has been recorded, and no fresh
-verification job has independently accepted those hosted outputs.
+At this checkpoint the repository contained a reproducible Desktop
+runtime-image candidate and a private display/session broker. The required
+native amd64/arm64 publication had not yet run. Publication run `35447651328`
+subsequently closed that gate; its immutable identities and independent
+verification are recorded in the separate publication evidence document.
 
 Desktop capability advertisement and production command composition remain
 unchanged. The image, broker, and publication workflow are not wired to the
@@ -61,8 +61,9 @@ builds recorded:
   produced after the native double-build and smoke gate.
 
 Hosted publication uses the exact source commit as its revision label, so its
-content and index digests are intentionally distinct and remain unknown until
-that workflow runs.
+content and index digests are intentionally distinct from these candidate
+image IDs. The subsequently accepted identities are not retroactively treated
+as local candidate outputs.
 
 ## Broker boundary
 
@@ -107,7 +108,7 @@ The native amd64 gate is not claimed locally. The Docker integration removes
 its test containers and images. The retained candidate image IDs are evidence
 values, not selected runtime inputs.
 
-## Hosted publication gate still open
+## Hosted publication gate at this checkpoint
 
 The manual-only `Desktop Image Publication` workflow is defined to:
 
@@ -120,11 +121,10 @@ The manual-only `Desktop Image Publication` workflow is defined to:
    signer workflow, source commit, hosted-runner policy, and the exact
    architecture matrix.
 
-Checking in this workflow is component evidence only. Slice 4 remains open
-until a named successful run, source revision, immutable index digest, both
-platform-manifest digests, attestation identity, and independent verification
-result are recorded in repository authority. Slice 5 must not select the image
-before that closure.
+Checking in this workflow was component evidence only. The gate remained open
+at this checkpoint until the later named successful run, source revision,
+immutable index digest, both platform-manifest digests, attestation identity,
+and independent verification result were recorded in repository authority.
 
 ## Non-claims
 
@@ -133,5 +133,6 @@ real open/attach/reconnect/close/expiry composition, usage collection, Product
 dispatch, public signaling/media/control, audio, GPU acceleration, end-user
 authorization, input or transfer policy, recording, unified Web, capability
 advertisement, independently implemented caller, deployment, HA, hostile-
-multitenant isolation, or production readiness. Phase 5 remains **3/15
-complete** while the Slice 4 hosted publication gate is open.
+multitenant isolation, or production readiness. The later publication evidence
+closes only Slice 4 and advances Phase 5 to **4/15 complete**; all of these
+non-claims remain.

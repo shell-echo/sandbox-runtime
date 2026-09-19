@@ -1,6 +1,6 @@
 # Product v1 Phase 5: Desktop Development and Unified Product
 
-Status: 3/15 complete
+Status: 4/15 complete
 
 Started: 2026-09-19
 
@@ -28,7 +28,7 @@ relabeled as Desktop evidence.
 | 1 | Startup audit; ADR 0050; separate Provider Desktop capability/profile/runtime authority; Desktop open/read/handoff/close/expiry/revocation and usage semantics; OpenAPI/schemas/rules/fixtures/manifest/Suite; Go DTO, strict decode, admission, projection, and executable case mappings | Exact immutable Contract revision/tree and derived lock; all 71 Suite cases mapped to tests; focused/full race-shuffle, vet, both Contract verifiers, clean-VCS local Conformance, retained Phase 3/4 evidence regressions, structured-data parse, diff, and status checks | **Complete: Contract/projection authority only; advertisement remains off** |
 | 2 | Product Desktop slot/session authority and relational-store state/outbox isolation | Strict authenticated API; exact immutable Desktop kind/profile; expected-version/idempotency/quota races; absorbing states; atomic operation/event/audit/outbox; cross-tenant nondisclosure; migration replay and restart-safe reads | **Complete: Product intent authority only; dispatch and advertisement remain off** |
 | 3 | Provider Desktop domain, application policy, persistence, reconciliation, and protected handlers with capability still unadvertised | State/fence/replay/deadline/cancellation matrices; restart at every commit/effect boundary; exact-owned cleanup; unknown-outcome reconciliation; safe-error and nondisclosure tests | **Complete: Provider-local component authority only; no runtime or advertisement** |
-| 4 | Reproducible immutable Desktop runtime image plus display/session broker protocol and provenance | Locked inputs and outputs; architecture matrix; unprivileged process/device policy; broker protocol bounds; native smoke; independent provenance verification; no mutable tag selection | **Local candidate implemented; native arm64 gate passed; hosted native publication and independent provenance verification pending** |
+| 4 | Reproducible immutable Desktop runtime image plus display/session broker protocol and provenance | Locked inputs and outputs; architecture matrix; unprivileged process/device policy; broker protocol bounds; native smoke; independent provenance verification; no mutable tag selection | **Complete:** native amd64/arm64/v8 run `35447651328` published signed index `sha256:638e97c694ad4c9b9d750ae30dc6088ff5011af570ba1b12fdf3f0e35ffa0300`; independent verification passed |
 | 5 | Provider Desktop runtime adapter, private resolver, lifecycle, usage, revocation, and cleanup composition | Real runtime open/attach/reconnect/close/expiry; generation fencing; no private-coordinate projection; revoke-before-cleanup; absence confirmation; duration evidence; fault injection | Planned |
 | 6 | Product network-only Provider adapter with exact readiness, Desktop dispatch/observation, close, and cleanup | Locked discovery/profile selection; protected requests; timeout/cancellation/replay/drift; retained operation recovery; Product/Provider generation separation; real store integration | Planned |
 | 7 | Product view/control grants, one-controller fencing, quotas, revocation, and metadata audit | Viewer mutation denial; one live controller; database-time expiry; one-use grants; stale-fence and quota races; continuous authority checks; nondisclosing failures | Planned |
@@ -168,7 +168,7 @@ independent-process run, deployment, HA, hostile-multitenant, or production
 claim follows. Twelve slices remain, beginning with the immutable Desktop
 runtime image and broker protocol in Slice 4.
 
-## Slice 4 candidate boundary
+## Slice 4 publication boundary
 
 Implementation revision `163dd8a258a24cf4727169b1cbd8ed7c0fe29292`
 adds the repository-owned Desktop image manifest/build, fixed display/session
@@ -192,22 +192,30 @@ capture, fixed process tree, policy inspection, and cleanup. The amd64
 candidate output was reproduced by cross-build only and is not relabeled as a
 native amd64 smoke.
 
-The checked-in workflow requires separate native amd64 and arm64/v8 hosted
-runners, an immutable commit-qualified OCI index, GitHub OIDC/Sigstore
-provenance, and a fresh independent verification job. It has not run. No
-published index, platform-manifest, or attestation identity is therefore
-selected by the repository.
+The checked-in workflow ran from `main` source
+`e4a940bda6c5172a78d0dbe40963ca1a99911976` as run `35447651328`. Separate
+native amd64 and arm64/v8 hosted runners passed the image gate and published
+platform manifests `sha256:ae1b71855f879066caf73f1056039d52b796d936a19f4b34a58a5565dd89609b`
+and `sha256:e5d01e272f87df8dc693ba81d85bce2a154ae541ac0166177a9290a005928505`.
+The immutable index is
+`sha256:638e97c694ad4c9b9d750ae30dc6088ff5011af570ba1b12fdf3f0e35ffa0300`.
+GitHub OIDC/Sigstore attestation `48643717`, registry attestation object
+`sha256:2abf3a1c0304bac70f3118d4b16c193cc1cf2abaa83c144efdd15a365998faf8`,
+and Rekor entry `2892645362` bind the repository, signer workflow, source,
+`main` ref, and GitHub-hosted runner.
 
 ### Slice 4 evidence boundary
 
-Slice 4 remains open because its required hosted native publication and
-independent provenance verification have not occurred. The local
-implementation and arm64 smoke are candidate/component evidence only. Slice 5
-must not select this image, the production command must not compose it, and
-Desktop capability advertisement must remain empty until the missing
-publication identities and verification result are recorded. The detailed
-candidate record is in
-[`../audits/product-phase-5-desktop-slice-4-candidate.md`](../audits/product-phase-5-desktop-slice-4-candidate.md).
+Slice 4 is complete within its immutable image/provenance boundary. The fresh
+independent job verified the attestation constraints and exact two-platform
+matrix; a constrained development-host verification returned the same signed
+identity. `profiles/desktop/image/publication.go` is the fail-closed repository
+authority that Slice 5 may select. The production command still must not
+compose Desktop and capability advertisement remains empty until later gates.
+The local candidate and accepted publication records are in
+[`../audits/product-phase-5-desktop-slice-4-candidate.md`](../audits/product-phase-5-desktop-slice-4-candidate.md)
+and
+[`../audits/product-phase-5-desktop-slice-4-publication.md`](../audits/product-phase-5-desktop-slice-4-publication.md).
 
 ## Deferred beyond Phase 5
 

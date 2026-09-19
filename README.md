@@ -19,7 +19,7 @@ general production readiness.
 | Independent external caller | **13/13 complete** |
 | Product v1 Phase 3 | **13/13 complete** for the bounded standalone topology |
 | Product v1 Phase 4 Browser | **13/13 complete** for the bounded same-repository separate-process topology |
-| Product v1 Phase 5 Desktop | **3/15 complete**; Slice 4 local image/broker candidate passes native arm64, hosted publication/provenance pending, advertisement disabled |
+| Product v1 Phase 5 Desktop | **4/15 complete**; Slice 4 exact signed amd64/arm64/v8 image publication and independent provenance verification pass, adapter work is next, advertisement disabled |
 | Coding/shell qualification | **Qualified** for the exact caller, Provider revisions, topology, profile, and scenarios recorded below |
 | Latest core CI | [Passed](https://github.com/shell-echo/sandbox-runtime/actions/runs/35204434771) |
 

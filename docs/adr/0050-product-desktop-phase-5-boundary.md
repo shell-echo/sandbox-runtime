@@ -1,6 +1,6 @@
 # ADR 0050: Product Desktop Phase 5 Boundary
 
-- Status: Accepted for Product Phase 5 scope; Slices 1-3 are complete; Slice 4 local candidate is implemented with hosted publication/provenance pending
+- Status: Accepted for Product Phase 5 scope; Slices 1-4 are complete
 - Date: 2026-09-19
 
 ## Context
@@ -12,9 +12,9 @@ Desktop, and the repository lacked a Desktop runtime image, display/input
 broker, Provider application and adapter, Product persistence and
 reconciliation, public data plane, recording composition, and unified Product
 experience. Slices 1-3 have since added the Contract, Product intent, and
-Provider-local application authorities. Slice 4 now has a local image and
-observation-only broker candidate, but no hosted immutable publication or
-independently verified provenance.
+Provider-local application authorities. Slice 4 adds a separately published,
+immutable, signed Desktop image and observation-only broker; its hosted native
+publication and independent provenance gate now pass.
 
 Starting with Product persistence would require Product code to invent a
 Provider wire shape. Starting with a runtime image or driver would create an
@@ -121,9 +121,9 @@ handoff projection. The production command does not inject this application,
 and capability discovery remains unchanged. At the Slice 3 boundary the
 runtime image, broker, adapter, private resolver, usage collector, Product
 dispatcher, and public data plane all remained later work; the following
-section records the local Slice 4 candidate without broadening composition.
+section records the Slice 4 image publication without broadening composition.
 
-## Slice 4 image and broker candidate
+## Slice 4 image and broker publication
 
 Slice 4 locks a separate Desktop runtime image definition for native amd64 and
 arm64/v8. Source manifests, exact package versions, recursive package archives,
@@ -140,12 +140,15 @@ Openbox and exposes strict bounded `probe`/`describe` observation through one
 public signaling, Product authorization, and arbitrary child-process control
 remain outside this slice.
 
-Local native arm64 reproducibility/runtime smoke passes. The checked-in
-manual publication workflow requires native hosted amd64 and arm64/v8 builds,
-an immutable commit-qualified OCI index, GitHub OIDC/Sigstore provenance, and
-a separate fresh verification job. That workflow has not run, so the candidate
-does not yet satisfy Slice 4's independent provenance acceptance gate and must
-not be selected by Slice 5.
+Local native arm64 reproducibility/runtime smoke passes. Manual publication
+run `35447651328` from source
+`e4a940bda6c5172a78d0dbe40963ca1a99911976` also passes native hosted amd64
+and arm64/v8 builds, publishes immutable index
+`sha256:638e97c694ad4c9b9d750ae30dc6088ff5011af570ba1b12fdf3f0e35ffa0300`,
+creates GitHub OIDC/Sigstore attestation `48643717`, and passes a separate
+fresh verification job for repository, workflow, source, hosted-runner policy,
+and exact platform matrix. Slice 5 may select only the fail-closed publication
+authority recorded in `profiles/desktop/image/publication.go`.
 
 ## Consequences
 
@@ -161,9 +164,10 @@ not be selected by Slice 5.
 - Historical qualification definitions retain dedicated immutable-revision
   locks; they are not silently rebound to the current Desktop-extended
   authority.
-- Local image reproducibility and native smoke are component evidence. A
-  workflow definition is not a published artifact or verified attestation;
-  those exact identities must be recorded before Slice 4 closes.
+- Local image reproducibility and native smoke remain component evidence.
+  Slice 4 closes only because the exact hosted index, platform manifests,
+  attestation, transparency-log identity, and independent verification are
+  recorded separately; this is not adapter or production evidence.
 - Phase 5 completion requires the named independent-process Slice 15 gate.
   It still does not establish multi-user collaboration, HA, hostile
   multi-tenant isolation, production deployment, or general production

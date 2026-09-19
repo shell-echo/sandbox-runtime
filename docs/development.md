@@ -432,13 +432,14 @@ Desktop domain/application/repository/transport race-shuffle tests in addition
 to the full repository race/shuffle and vet gates. Provider API or compatibility
 changes also require the Provider Contract verifier.
 
-The Slice 4 image/broker implementation is a candidate until the manual
-`Desktop Image Publication` workflow passes on native amd64 and arm64/v8
-GitHub-hosted runners and its immutable index, platform manifests, attestation,
-source revision, and independent-verification result are recorded. A local
-cross-build is not a native architecture smoke, and a checked-in workflow is
-not provenance evidence. Do not select the image in a runtime adapter or
-advance the phase count while that gate is open.
+The Slice 4 image/broker publication is locked by
+`profiles/desktop/image.LockedPublication`. Manual run `35447651328` passes on
+native amd64 and arm64/v8 GitHub-hosted runners, publishes exact immutable
+index and platform manifests, and passes attestation plus independent
+verification. A local cross-build is not a native architecture smoke, and a
+checked-in workflow is not provenance evidence. Runtime adapters must select
+only this fail-closed publication authority; any replacement requires a new
+named publication and repository-authority update.
 
 For image/broker changes, keep `profiles/desktop/image/manifest.json`, its Go
 validator, the Dockerfile, build script, broker constants, integration policy,
