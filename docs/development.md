@@ -432,6 +432,32 @@ Desktop domain/application/repository/transport race-shuffle tests in addition
 to the full repository race/shuffle and vet gates. Provider API or compatibility
 changes also require the Provider Contract verifier.
 
+The Slice 4 image/broker implementation is a candidate until the manual
+`Desktop Image Publication` workflow passes on native amd64 and arm64/v8
+GitHub-hosted runners and its immutable index, platform manifests, attestation,
+source revision, and independent-verification result are recorded. A local
+cross-build is not a native architecture smoke, and a checked-in workflow is
+not provenance evidence. Do not select the image in a runtime adapter or
+advance the phase count while that gate is open.
+
+For image/broker changes, keep `profiles/desktop/image/manifest.json`, its Go
+validator, the Dockerfile, build script, broker constants, integration policy,
+and publication matrix aligned. Run the focused race/shuffle tests plus the
+full repository gates. On each native architecture, run:
+
+```bash
+SANDBOX_RUNTIME_DESKTOP_IMAGE_INTEGRATION=1 \
+SANDBOX_RUNTIME_DESKTOP_PLATFORM=linux/arm64/v8 \
+go test -v -tags=integration -count=1 \
+  -run '^TestDesktopImageNativeIntegration$' ./profiles/desktop/image
+```
+
+Use `linux/amd64` on a native amd64 runner. Never substitute emulation, a
+mutable tag, or an image config ID for the required native runtime and
+published OCI manifest/index identities. The broker is private Unix-only
+observation at this slice: adding input execution, media, public signaling,
+authorization, or arbitrary process control requires its later owning slice.
+
 ## Go and API rules
 
 - accept `context.Context` on blocking or external operations and preserve

@@ -1,6 +1,6 @@
 # ADR 0050: Product Desktop Phase 5 Boundary
 
-- Status: Accepted for Product Phase 5 scope; Slices 1-3 are implemented
+- Status: Accepted for Product Phase 5 scope; Slices 1-3 are complete; Slice 4 local candidate is implemented with hosted publication/provenance pending
 - Date: 2026-09-19
 
 ## Context
@@ -8,10 +8,13 @@
 Product design already reserves a Desktop slot, Desktop session kind, and
 `product-desktop.v1`, but those names are not an implementation or readiness
 claim. At the Phase 5 baseline the locked Provider Contract did not authorize
-Desktop. The repository also lacked a Desktop runtime image, display/input
+Desktop, and the repository lacked a Desktop runtime image, display/input
 broker, Provider application and adapter, Product persistence and
 reconciliation, public data plane, recording composition, and unified Product
-experience.
+experience. Slices 1-3 have since added the Contract, Product intent, and
+Provider-local application authorities. Slice 4 now has a local image and
+observation-only broker candidate, but no hosted immutable publication or
+independently verified provenance.
 
 Starting with Product persistence would require Product code to invent a
 Provider wire shape. Starting with a runtime image or driver would create an
@@ -115,9 +118,34 @@ are reconciled by observation and are not repeated.
 The optional protected open/close/operation/handoff handlers use the existing
 admission boundary, strict bounded documents, safe error mapping, and opaque
 handoff projection. The production command does not inject this application,
-and capability discovery remains unchanged. Runtime image, broker, adapter,
-private resolver, usage collector, Product dispatcher, and public data plane
-remain later slices.
+and capability discovery remains unchanged. At the Slice 3 boundary the
+runtime image, broker, adapter, private resolver, usage collector, Product
+dispatcher, and public data plane all remained later work; the following
+section records the local Slice 4 candidate without broadening composition.
+
+## Slice 4 image and broker candidate
+
+Slice 4 locks a separate Desktop runtime image definition for native amd64 and
+arm64/v8. Source manifests, exact package versions, recursive package archives,
+the installed package set, build toolchain, runtime mounts, numeric identity,
+device policy, broker protocol, fixed display shape, and candidate outputs are
+strict manifest authority. The final image is repacked from scratch and has no
+public port metadata. Its required execution policy is non-root, read-only,
+drop-all, `no-new-privileges`, runtime-default seccomp, private IPC, finite
+resources, no host device requests, and restricted egress when later composed.
+
+The image entrypoint starts only the fixed broker. The broker owns Xvfb and
+Openbox and exposes strict bounded `probe`/`describe` observation through one
+`0600` Unix socket. The returned reference is opaque. Input execution, media,
+public signaling, Product authorization, and arbitrary child-process control
+remain outside this slice.
+
+Local native arm64 reproducibility/runtime smoke passes. The checked-in
+manual publication workflow requires native hosted amd64 and arm64/v8 builds,
+an immutable commit-qualified OCI index, GitHub OIDC/Sigstore provenance, and
+a separate fresh verification job. That workflow has not run, so the candidate
+does not yet satisfy Slice 4's independent provenance acceptance gate and must
+not be selected by Slice 5.
 
 ## Consequences
 
@@ -133,6 +161,9 @@ remain later slices.
 - Historical qualification definitions retain dedicated immutable-revision
   locks; they are not silently rebound to the current Desktop-extended
   authority.
+- Local image reproducibility and native smoke are component evidence. A
+  workflow definition is not a published artifact or verified attestation;
+  those exact identities must be recorded before Slice 4 closes.
 - Phase 5 completion requires the named independent-process Slice 15 gate.
   It still does not establish multi-user collaboration, HA, hostile
   multi-tenant isolation, production deployment, or general production

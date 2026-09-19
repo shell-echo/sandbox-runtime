@@ -75,9 +75,13 @@ closure, nondisclosure, and restart-safe reads. Slice 3 adds a separate
 Provider-local Desktop domain, durable memory/atomic-file authority,
 fencing/replay/deadline policy, restart and unknown-outcome reconciliation,
 operation aggregation, and optional protected handlers. It adds no Desktop
-runtime image, adapter, broker, private resolver, dispatcher, production
-startup composition, public data plane, Web feature, advertisement,
-deployment, or production evidence.
+runtime adapter, private resolver, dispatcher, production startup composition,
+public data plane, Web feature, advertisement, deployment, or production
+evidence. Slice 4 now has a local locked image/broker candidate at
+`163dd8a258a24cf4727169b1cbd8ed7c0fe29292` and a passing native arm64 smoke.
+Its native amd64/arm64 hosted publication, immutable index identity, signed
+provenance, and fresh independent verification are still absent, so Slice 4 is
+not complete and the plan remains **3/15**.
 
 ## Purpose
 
@@ -723,7 +727,7 @@ advertisement, and optional-profile gates remain open:
 | Workspace | The Provider Docker adapter supplies stable `/inputs`, `/workspace`, `/outputs`, and bounded tmpfs `/tmp` without exposing host paths. The dual-platform coding/shell image was published as OCI index `sha256:1996e44f8ddc464f22556bd57f1c69079fe6b1a821b65bd9be24f86619c31bb1`, attested, independently verified, pinned by the caller, and exercised in the final qualification. | Add production artifact consumers, capacity enforcement, lifecycle closure, and stronger isolation evidence as separate scopes. |
 | Security | The qualified Docker runtime used numeric non-root identity, read-only root, disabled networking, dropped capabilities, `no-new-privileges`, and bounded CPU, memory, swap, PIDs, and tmpfs; image provenance and the exact runtime observations are retained in the qualification evidence. | Add secrets policy, controlled egress where required, stronger isolation, production authentication, threat-model review, and hostile-tenant evidence before any production claim. |
 | Events and usage | Durable lifecycle events and bounded usage-evidence components exist without a complete runtime collector composition. | Complete collection/reconciliation while leaving platform accounting authority outside the Provider. |
-| Snapshots/browser/desktop | Browser Contract, component, and historical reference tracks retain their exact recorded evidence and open production gates. Product Phase 4 separately provides bounded Product Browser evidence. Product Phase 5 Slice 1 authorizes a separate Desktop Contract shape, complete session lifecycle, opaque handoff, usage semantics, and Go projection with a 71-case local Suite. Slice 2 adds Product Desktop slot/session PostgreSQL intent, exact profiles, quotas, audit/outbox isolation, races, nondisclosure, and restart-safe reads. Slice 3 adds Provider-local Desktop application/persistence/reconciliation, operation aggregation, and optional protected handlers. No Desktop runtime image, driver/adapter, broker, private resolver, Product dispatcher, production startup composition, public Gateway, Web UI, or capability advertisement exists. Snapshots remain unauthorized optional behavior. | Execute the fixed Phase 5 slices in dependency order. Keep Desktop advertisement off until the complete Provider and Product graphs plus release gate pass; retain Browser and Desktop evidence as separate profiles and do not infer production readiness. |
+| Snapshots/browser/desktop | Browser Contract, component, and historical reference tracks retain their exact recorded evidence and open production gates. Product Phase 4 separately provides bounded Product Browser evidence. Product Phase 5 Slices 1-3 authorize the separate Desktop Contract/projection, Product intent, and Provider-local application/persistence/reconciliation. Slice 4 has a locked local image/broker candidate and passing native arm64 smoke, but no hosted immutable index or independently verified provenance. No Desktop driver/adapter, private resolver, Product dispatcher, production startup composition, public Gateway, Web UI, or capability advertisement exists. Snapshots remain unauthorized optional behavior. | Close the Slice 4 native hosted publication/provenance gate before selecting an image in Slice 5. Execute the remaining Phase 5 slices in dependency order, keep Desktop advertisement off until the complete Provider and Product graphs plus release gate pass, and do not infer production readiness. |
 
 ## Delivery plan and release gates
 
@@ -969,8 +973,10 @@ Provider/reference Browser evidence is not Product Browser readiness evidence.
 The Product Phase 5 Slice 1 Desktop Contract is now authorized separately,
 Slice 2 adds Product slot/session persistence authority, and Slice 3 adds
 Provider-local application/persistence/reconciliation plus optional protected
-handlers. Runtime image/broker, adapter/private resolver, production startup
-composition, dispatch, advertisement, and Product release gates remain open.
+handlers. Slice 4 has a local image/broker candidate and native arm64 component
+evidence, but its hosted native publication and independent provenance gate
+remain open. Adapter/private resolver, production startup composition,
+dispatch, advertisement, and Product release gates remain open.
 
 ## Conformance matrix
 

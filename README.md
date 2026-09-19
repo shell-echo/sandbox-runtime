@@ -19,7 +19,7 @@ general production readiness.
 | Independent external caller | **13/13 complete** |
 | Product v1 Phase 3 | **13/13 complete** for the bounded standalone topology |
 | Product v1 Phase 4 Browser | **13/13 complete** for the bounded same-repository separate-process topology |
-| Product v1 Phase 5 Desktop | **3/15 complete**; Contract, Product intent, and Provider-local authority/handlers complete, advertisement disabled |
+| Product v1 Phase 5 Desktop | **3/15 complete**; Slice 4 local image/broker candidate passes native arm64, hosted publication/provenance pending, advertisement disabled |
 | Coding/shell qualification | **Qualified** for the exact caller, Provider revisions, topology, profile, and scenarios recorded below |
 | Latest core CI | [Passed](https://github.com/shell-echo/sandbox-runtime/actions/runs/35204434771) |
 
@@ -93,9 +93,15 @@ work, and real-database concurrency/restart evidence at implementation
 `f96c06c3a50ade031e8ffbb4d8ea15e6ca8be7d5` adds Provider-local Desktop
 domain/application policy, memory and atomic-file persistence, restart-safe
 reconciliation, operation aggregation, and optional protected handlers. It
-does not add a runtime adapter, broker, private resolver, production startup
+does not add a runtime adapter, private resolver, production startup
 composition, outbox consumer, public data plane, Web experience, or capability
-advertisement.
+advertisement. Slice 4 candidate implementation
+`163dd8a258a24cf4727169b1cbd8ed7c0fe29292` adds locked dual-architecture
+image inputs, a bounded Unix-only display/session broker, reproducible local
+outputs, a passing native arm64 smoke, and a manual native publication/
+attestation workflow. That workflow has not run, so no published immutable
+index or independently verified provenance is claimed and Phase 5 remains
+3/15 complete.
 
 ## What the project provides
 
@@ -114,6 +120,9 @@ advertisement.
   PostgreSQL persistence, quotas, audit, and isolated pending outbox work.
 - Provider-local Desktop operation authority with durable replay/fencing,
   exact-owned close/expiry cleanup policy, and unadvertised protected handlers.
+- A local Desktop image/broker candidate with locked inputs, non-root runtime
+  policy, native arm64 smoke, and a still-open hosted publication/provenance
+  gate; it is not selected by an adapter or advertised.
 - Deterministic qualification tooling for an independently implemented caller.
 - Optional Browser reference components and evidence tracks, kept separate from
   the qualified coding/shell profile.
