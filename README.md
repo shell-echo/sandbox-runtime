@@ -19,7 +19,7 @@ general production readiness.
 | Independent external caller | **13/13 complete** |
 | Product v1 Phase 3 | **13/13 complete** for the bounded standalone topology |
 | Product v1 Phase 4 Browser | **13/13 complete** for the bounded same-repository separate-process topology |
-| Product v1 Phase 5 Desktop | **12/15 complete**; immutable development templates, exact Guest materialization, rollback/restart recovery, and real-store persistence pass; unified Web is next, advertisement disabled |
+| Product v1 Phase 5 Desktop | **13/15 complete**; capability-derived unified Product Web/BFF and real-headless-browser evidence pass; composed security/fault cleanup is next, advertisement disabled |
 | Coding/shell qualification | **Qualified** for the exact caller, Provider revisions, topology, profile, and scenarios recorded below |
 | Latest core CI | [Passed](https://github.com/shell-echo/sandbox-runtime/actions/runs/35204434771) |
 
@@ -79,7 +79,7 @@ independently implemented caller, HA, hostile-multitenant, or production
 evidence.
 
 [Product v1 Phase 5 Desktop](docs/plan/product-v1-phase-5-desktop-development-unified-product.md)
-has completed **12/15** dependency-ordered slices. Slice 1 locks a separate
+has completed **13/15** dependency-ordered slices. Slice 1 locks a separate
 Provider Desktop capability/profile/runtime shape and complete session
 open/read/handoff/close/expiry/revocation, usage, admission, security, and
 cleanup semantics. Exact authority is Contract revision
@@ -164,6 +164,17 @@ and runtime coordinates remain outside public health and audit/event data. A
 real Provider media/input bridge, unified Web, production composition, and
 capability advertisement remain later gates.
 
+Slice 13 implementation `84698c371d35edb862ffc81b484a3e31cc8120d9`
+adds one capability-derived authenticated Product Web shell for Workspace,
+Terminal, Files, Browser, Desktop, and recordings. Desktop view/control uses
+fresh public grants, same-origin HTTPS WebRTC, ordered fenced input, visible
+recording/controller state, bounded reconnect, stream configuration,
+clipboard consent, and digest-checked Product transfers without exposing
+Provider handoffs or private coordinates. Generated-client, full race/vet,
+Contract/evidence, and real headless-Chrome gates pass. A real Provider media/
+input bridge, production composition/advertisement, the composed Slice 14
+fault/security gate, and the independent-process Slice 15 release gate remain.
+
 ## What the project provides
 
 - A local instance-management API with in-memory and Docker runtime drivers.
@@ -201,6 +212,9 @@ capability advertisement remain later gates.
 - Immutable development templates with digest-checked workspace materialization,
   exact Guest readiness, failure rollback, restart recovery, and durable
   PostgreSQL attempt/revision state; this remains component evidence.
+- A capability-derived authenticated Product Web/BFF for Workspace, Terminal,
+  Files, Browser, Desktop, and recordings, with fresh Desktop grants, bounded
+  recovery, accessible controls, and no private runtime-coordinate projection.
 - Provider-local Desktop operation authority with durable replay/fencing,
   exact-owned close/expiry cleanup policy, and unadvertised protected handlers.
 - An exact signed Desktop image plus Provider-local Docker adapter, private

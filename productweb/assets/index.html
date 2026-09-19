@@ -63,13 +63,14 @@
         </div>
 
         <div class="tabs" role="tablist" aria-label="工作空间视图">
-          <button id="terminal-tab" role="tab" aria-selected="true" aria-controls="terminal-panel">终端</button>
-          <button id="files-tab" role="tab" aria-selected="false" aria-controls="files-panel">文件</button>
-          <button id="browser-tab" role="tab" aria-selected="false" aria-controls="browser-panel">浏览器</button>
-          <button id="recordings-tab" role="tab" aria-selected="false" aria-controls="recordings-panel">录制</button>
+          <button id="terminal-tab" role="tab" aria-selected="true" aria-controls="terminal-panel" aria-disabled="true" tabindex="0" disabled>终端</button>
+          <button id="files-tab" role="tab" aria-selected="false" aria-controls="files-panel" aria-disabled="true" tabindex="-1" disabled>文件</button>
+          <button id="browser-tab" role="tab" aria-selected="false" aria-controls="browser-panel" aria-disabled="true" tabindex="-1" disabled>浏览器</button>
+          <button id="desktop-tab" role="tab" aria-selected="false" aria-controls="desktop-panel" aria-disabled="true" tabindex="-1" disabled>桌面</button>
+          <button id="recordings-tab" role="tab" aria-selected="false" aria-controls="recordings-panel" aria-disabled="true" tabindex="-1" disabled>录制</button>
         </div>
 
-        <section id="terminal-panel" role="tabpanel" aria-labelledby="terminal-tab">
+        <section id="terminal-panel" role="tabpanel" aria-labelledby="terminal-tab" tabindex="0">
           <div class="toolbar">
             <button id="new-terminal" type="button" disabled>新建终端</button>
             <label for="session-select">会话</label>
@@ -84,7 +85,7 @@
           </form>
         </section>
 
-        <section id="files-panel" role="tabpanel" aria-labelledby="files-tab" hidden>
+        <section id="files-panel" role="tabpanel" aria-labelledby="files-tab" tabindex="0" hidden>
           <div class="toolbar">
             <label for="file-path">路径</label>
             <input id="file-path" value="" placeholder="项目根目录">
@@ -98,7 +99,7 @@
           </table>
         </section>
 
-        <section id="browser-panel" role="tabpanel" aria-labelledby="browser-tab" hidden>
+        <section id="browser-panel" role="tabpanel" aria-labelledby="browser-tab" tabindex="0" hidden>
           <div class="browser-grid">
             <div class="browser-stage">
               <div class="toolbar browser-toolbar">
@@ -159,10 +160,86 @@
           </div>
         </section>
 
-        <section id="recordings-panel" role="tabpanel" aria-labelledby="recordings-tab" hidden>
+        <section id="desktop-panel" role="tabpanel" aria-labelledby="desktop-tab" tabindex="0" hidden>
+          <div class="browser-grid">
+            <div class="browser-stage">
+              <div class="toolbar browser-toolbar">
+                <span id="desktop-slot-state" class="badge">尚未创建桌面槽位</span>
+                <button id="create-desktop-slot" type="button" disabled>创建槽位</button>
+                <button id="resume-desktop-slot" class="quiet" type="button" disabled>恢复</button>
+                <button id="suspend-desktop-slot" class="quiet" type="button" disabled>暂停</button>
+                <button id="terminate-desktop-slot" class="quiet danger" type="button" disabled>终止</button>
+              </div>
+              <div class="toolbar">
+                <button id="new-desktop" type="button" disabled>新建桌面会话</button>
+                <label for="desktop-recording-policy">录制</label>
+                <select id="desktop-recording-policy" disabled>
+                  <option value="metadata_only">仅元数据</option>
+                  <option value="required">完整录制（需同意）</option>
+                  <option value="disabled">关闭</option>
+                </select>
+                <label for="desktop-session-select">会话</label>
+                <select id="desktop-session-select" disabled><option value="">暂无桌面会话</option></select>
+                <label for="desktop-access">访问</label>
+                <select id="desktop-access" disabled><option value="view">查看</option><option value="control">控制</option></select>
+                <button id="connect-desktop" type="button" disabled>连接</button>
+                <button id="disconnect-desktop" class="quiet" type="button" disabled>断开</button>
+                <button id="close-desktop" class="quiet danger" type="button" disabled>关闭会话</button>
+              </div>
+              <label id="desktop-recording-consent-row" class="consent" hidden><input id="desktop-recording-consent" type="checkbox"> 我同意为当前桌面连接录制媒体和最小化控制事件</label>
+              <div class="browser-statusbar" aria-live="polite">
+                <span id="desktop-connection-state" class="badge">未连接</span>
+                <span id="desktop-recording-indicator" class="recording-indicator" data-mode="disabled">录制：未提交</span>
+                <span id="desktop-controller-state">查看者模式</span>
+              </div>
+              <div id="desktop-screen" class="browser-screen">
+                <video id="desktop-video" autoplay playsinline tabindex="0" aria-label="远程桌面画面"></video>
+                <audio id="desktop-audio" autoplay aria-label="远程桌面音频"></audio>
+                <p id="desktop-placeholder">建立桌面会话后在此查看实时画面</p>
+              </div>
+              <div class="toolbar browser-actions">
+                <label for="desktop-width">宽度</label><input id="desktop-width" type="number" min="320" max="2560" value="1280" disabled>
+                <label for="desktop-height">高度</label><input id="desktop-height" type="number" min="240" max="1440" value="720" disabled>
+                <label for="desktop-fps">帧率</label><input id="desktop-fps" type="number" min="1" max="60" value="30" disabled>
+                <label for="desktop-audio-output">音频输出</label>
+                <select id="desktop-audio-output" disabled><option value="disabled">关闭</option><option value="default">默认设备</option></select>
+                <button id="desktop-configure" type="button" disabled>应用显示设置</button>
+                <button id="desktop-resync" class="quiet" type="button" disabled>重新同步画面</button>
+              </div>
+              <div class="toolbar browser-actions">
+                <label for="desktop-clipboard">剪贴板文本</label>
+                <textarea id="desktop-clipboard" rows="2" maxlength="65536" disabled></textarea>
+                <label class="consent" for="desktop-clipboard-consent"><input id="desktop-clipboard-consent" type="checkbox" disabled> 我同意本次剪贴板操作</label>
+                <button id="desktop-clipboard-read" class="quiet" type="button" disabled>读取</button>
+                <button id="desktop-clipboard-write" type="button" disabled>写入</button>
+              </div>
+            </div>
+            <aside class="transfer-card" aria-labelledby="desktop-transfer-title">
+              <h3 id="desktop-transfer-title">受控桌面传输</h3>
+              <p class="muted">路径必须位于来宾工作区，内容先通过 Product 摘要校验和策略授权。</p>
+              <label for="desktop-upload">上传文件</label>
+              <input id="desktop-upload" type="file" disabled>
+              <label for="desktop-upload-path">来宾目标路径</label>
+              <input id="desktop-upload-path" value="/workspace/upload.bin" disabled>
+              <button id="desktop-send-upload" type="button" disabled>上传并发送</button>
+              <hr>
+              <label for="desktop-download-transfer-id">下载传输 ID</label>
+              <input id="desktop-download-transfer-id" autocomplete="off" disabled>
+              <label for="desktop-download-path">来宾源路径</label>
+              <input id="desktop-download-path" value="/workspace/download.bin" disabled>
+              <label for="desktop-download-digest">SHA-256 摘要</label>
+              <input id="desktop-download-digest" autocomplete="off" placeholder="sha256:…" disabled>
+              <label for="desktop-download-size">字节数</label>
+              <input id="desktop-download-size" type="number" min="0" max="67108864" disabled>
+              <button id="desktop-request-download" type="button" disabled>授权并下载</button>
+            </aside>
+          </div>
+        </section>
+
+        <section id="recordings-panel" role="tabpanel" aria-labelledby="recordings-tab" tabindex="0" hidden>
           <div class="toolbar"><button id="refresh-recordings" type="button" disabled>刷新录制目录</button></div>
           <table class="files-table">
-            <caption class="sr-only">浏览器录制目录</caption>
+            <caption class="sr-only">会话录制目录</caption>
             <thead><tr><th scope="col">录制 ID</th><th scope="col">类型</th><th scope="col">状态</th><th scope="col">大小</th><th scope="col">开始时间</th><th scope="col">保留截止</th></tr></thead>
             <tbody id="recording-list"><tr><td colspan="6" class="empty">选择工作空间后查看录制</td></tr></tbody>
           </table>

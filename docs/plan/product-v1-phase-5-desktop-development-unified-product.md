@@ -1,6 +1,6 @@
 # Product v1 Phase 5: Desktop Development and Unified Product
 
-Status: 12/15 complete
+Status: 13/15 complete
 
 Started: 2026-09-19
 
@@ -37,7 +37,7 @@ relabeled as Desktop evidence.
 | 10 | Recovery, reconnect, resynchronization, resolution/audio-device changes, and session/slot replacement | Fresh-grant reconnect; authority and generation recheck; visual/audio resync bounds; no stale input; restart recovery; deterministic replacement and exact cleanup | **Complete: Product Gateway/repository recovery and replacement component evidence only; no real Provider media bridge or production composition** |
 | 11 | Desktop recording/replay/catalog/retention/quota/integrity composition | Visible consent/mode; required-recorder fail closed; encrypted integrity-linked media/control segments; authorized replay; retention/deletion and quota races; content excluded from logs | **Complete: Product recording/Gateway/PostgreSQL component evidence only; no real Provider media bridge or production composition** |
 | 12 | Development-environment templates, startup, toolchains, workspace materialization, and Guest health | Immutable template selection; bounded startup; exact workspace mounts; health/liveness/readiness; failure rollback; restart persistence; no host-path or credential disclosure | **Complete: Product/Guest protocol, local content-store, and real-PostgreSQL component evidence only; no unified Web or production composition** |
-| 13 | Unified Product Web shell integrating Workspace, Terminal, Files, Browser, Desktop, and recordings | Generated checked client; authenticated end-to-end flows; capability-derived navigation; origin/request-forgery/content policy; accessibility; recovery/error UX; no private coordinates | Planned |
+| 13 | Unified Product Web shell integrating Workspace, Terminal, Files, Browser, Desktop, and recordings | Generated checked client; authenticated end-to-end flows; capability-derived navigation; origin/request-forgery/content policy; accessibility; recovery/error UX; no private coordinates | **Complete: authenticated Web/BFF and real-headless-browser component evidence only; production Desktop advertisement remains off** |
 | 14 | Exact cleanup, quota, fault, security, and regression gates for the composed Desktop product | Cross-layer fault matrix; restart and dependency loss; stale/replay/tenant attacks; capacity recovery; row/object/process/runtime cleanup; retained Phase 3/4 regressions | Planned |
 | 15 | Product Phase 5 independent-process release gate and reproducible evidence bundle | Fresh stores; separate Product/Gateway/Provider/Desktop/Guest roles as required; exact locked identities; real display/control and development scenarios; restart/fault/security/recording/cleanup matrix; strict independent validation | Planned |
 
@@ -526,6 +526,42 @@ component evidence. No real Provider Desktop media bridge, unified Web,
 production startup, capability advertisement, independent-process release
 evidence, deployment, HA, hostile-multitenant, or production-readiness claim
 follows.
+
+## Slice 13 unified Product Web boundary
+
+Implementation revision `84698c371d35edb862ffc81b484a3e31cc8120d9`
+extends the authenticated Product Web/BFF without adding consumer-specific
+Provider behavior or exposing private runtime coordinates:
+
+- the generated checked client reads and strictly selects exact ready Product
+  capabilities before enabling Workspace, Terminal, Files, Browser, Desktop,
+  or recording navigation;
+- the Desktop experience composes the public slot/session DTOs, fresh view or
+  controller grants, same-origin HTTPS WebRTC signaling, ordered fenced input,
+  controller state, recording consent/mode, bounded reconnect, stream
+  resynchronization/configuration, clipboard consent, and Product-bound
+  transfer flows;
+- the neutral shared transfer route retains authenticated session,
+  Origin/CSRF, size/digest, and nondisclosure controls while preserving the
+  previous Browser route; and
+- labeled controls, ARIA tab keyboard navigation, live status/recovery state,
+  reduced-motion behavior, strict no-inline CSP, and browser-storage exclusion
+  retain the Web security and accessibility boundary.
+
+### Slice 13 evidence boundary
+
+The generated-client lock, focused and full race/shuffle, vet, real headless
+Chrome authentication/capability navigation, Product and Provider Contract
+verification, and retained Phase 3/4 evidence verification pass. Exact
+evidence and non-claims are in
+[`../audits/product-phase-5-desktop-slice-13.md`](../audits/product-phase-5-desktop-slice-13.md).
+
+This is Product Web/BFF and real-headless-browser component evidence. Desktop
+advertisement remains off until the real Provider media/input bridge and exact
+production startup graph are composed and pass the later gates. No Slice 14
+composed fault/security result, independent-process release evidence,
+deployment, HA, hostile-multitenant qualification, or production-readiness
+claim follows.
 
 ## Deferred beyond Phase 5
 

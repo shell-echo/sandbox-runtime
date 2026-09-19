@@ -14,7 +14,7 @@
 | 独立 External Caller | **13/13 已完成** |
 | Product v1 第三阶段 | 在有边界的 standalone 拓扑内 **13/13 已完成** |
 | Product v1 第四阶段 Browser | 在有边界的同仓库独立进程拓扑内 **13/13 已完成** |
-| Product v1 第五阶段 Desktop | **12/15 已完成**；不可变开发模板、精确 Guest 工作区物化、失败回滚/重启恢复与真实存储持久化门禁已通过，下一步为统一 Web，能力广告仍关闭 |
+| Product v1 第五阶段 Desktop | **13/15 已完成**；能力派生的统一 Product Web/BFF 与真实无头浏览器门禁已通过，下一步为组合安全/故障/清理门禁，能力广告仍关闭 |
 | 编程/Shell 资格验证 | 对下述精确调用方、Provider 版本、拓扑、Profile 和场景结果为 **Qualified** |
 | 最新核心 CI | [已通过](https://github.com/shell-echo/sandbox-runtime/actions/runs/35204434771) |
 
@@ -54,7 +54,7 @@ Browser OS 进程，配合全新固定摘要 PostgreSQL、Valkey 与加密录制
 通过部署资格验证、独立实现调用方、HA、恶意多租户隔离或生产就绪。
 
 [Product v1 第五阶段 Desktop](docs/plan/product-v1-phase-5-desktop-development-unified-product.md)
-已完成 **12/15** 个依赖有序切片。切片 1 锁定了独立的 Provider Desktop
+已完成 **13/15** 个依赖有序切片。切片 1 锁定了独立的 Provider Desktop
 能力/Profile/运行时形状，以及完整的会话打开、读取、交接、关闭、过期、撤销、
 用量、准入、安全和清理语义。精确权威为 Contract 版本
 `720ad15c343e71f36615dc4499edd5e764178bca`、树
@@ -118,6 +118,14 @@ Guest 回滚与重启恢复。主机路径、对象路径、凭据、Guest ID �
 公开 health 或审计/事件数据。真实 Provider 媒体/输入桥接、统一 Web、生产组合与
 能力广告仍是后续门禁。
 
+切片 13 实现 `84698c371d35edb862ffc81b484a3e31cc8120d9` 加入由能力快照派生的
+统一认证 Product Web/BFF，覆盖 Workspace、Terminal、Files、Browser、Desktop
+和录制。Desktop 查看/控制使用新鲜公开 grant、同源 HTTPS WebRTC、有序 fenced
+输入、可见录制/控制状态、有界重连、流配置、剪贴板同意和摘要校验 Product 传输，
+且不暴露 Provider handoff 或私有坐标。生成客户端、全仓 race/vet、Contract/历史
+证据以及真实无头 Chrome 门禁均通过。真实 Provider 媒体/输入桥接、生产组合和
+广告、切片 14 组合故障/安全门禁及切片 15 独立进程发布门禁仍未完成。
+
 ## 项目提供什么
 
 - 本地实例管理 API，以及内存 Fake 驱动和 Docker 运行时驱动。
@@ -134,6 +142,7 @@ Guest 回滚与重启恢复。主机路径、对象路径、凭据、Guest ID �
 - 使用新 grant 的有界 Desktop 重连与视觉/音频重同步、重启安全的 Gateway 租约回收、陈旧输入拒绝和确定性 slot replacement 清理。
 - 带显式同意/模式的必需 Desktop 媒体/控制录制，包括加密完整性链式分段、owner 授权回放、有界配额、保留期删除，以及内容最小化的目录/审计元数据。
 - 不可变开发模板与摘要校验的工作区物化、精确 Guest readiness、失败回滚、重启恢复，以及持久 PostgreSQL 尝试/修订状态；当前仍为组件证据。
+- 能力派生的统一认证 Product Web/BFF，覆盖 Workspace、Terminal、Files、Browser、Desktop 和录制，提供新鲜 Desktop grant、有界恢复、无障碍控制且不投影私有运行时坐标。
 - Provider 本地 Desktop operation 权威，包括持久化 replay/fencing、精确所有权的关闭/过期清理策略，以及尚未广告的受保护处理器。
 - 精确签名的 Desktop 镜像，以及 Provider 本地 Docker adapter、private resolver、lifecycle、撤销/清理和时长用量组件；它们尚未进入生产启动组合或能力广告。
 - 面向独立实现调用方的确定性资格验证工具。
