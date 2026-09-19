@@ -26,7 +26,7 @@ const (
 	DownstreamFencingHarnessBaseline   = "49ea205c1abf125f7e9b8e6ce002a2af34ff5ebf"
 	DownstreamFencingV2HarnessBaseline = "49ea205c1abf125f7e9b8e6ce002a2af34ff5ebf"
 	DownstreamFencingGatewayRevision   = "b4d41c9a32b4ccf39edaba3fb8bf5ad239c1f945"
-	DownstreamFencingIngressRevision   = "b4d41c9a32b4ccf39edaba3fb8bf5ad239c1f945"
+	DownstreamFencingIngressRevision   = "602d1dcd73b9eac087ec067795566f551ece1f90"
 	DownstreamFencingCallerBaseline    = "49ea205c1abf125f7e9b8e6ce002a2af34ff5ebf"
 
 	DownstreamFencingValkeyImage = "ghcr.io/valkey-io/valkey"
