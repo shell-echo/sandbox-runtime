@@ -14,7 +14,7 @@
 | 独立 External Caller | **13/13 已完成** |
 | Product v1 第三阶段 | 在有边界的 standalone 拓扑内 **13/13 已完成** |
 | Product v1 第四阶段 Browser | 在有边界的同仓库独立进程拓扑内 **13/13 已完成** |
-| Product v1 第五阶段 Desktop | **11/15 已完成**；必需加密录制、授权完整性回放、保留期清理与配额竞态门禁已通过，下一步为开发环境模板，能力广告仍关闭 |
+| Product v1 第五阶段 Desktop | **12/15 已完成**；不可变开发模板、精确 Guest 工作区物化、失败回滚/重启恢复与真实存储持久化门禁已通过，下一步为统一 Web，能力广告仍关闭 |
 | 编程/Shell 资格验证 | 对下述精确调用方、Provider 版本、拓扑、Profile 和场景结果为 **Qualified** |
 | 最新核心 CI | [已通过](https://github.com/shell-echo/sandbox-runtime/actions/runs/35204434771) |
 
@@ -54,7 +54,7 @@ Browser OS 进程，配合全新固定摘要 PostgreSQL、Valkey 与加密录制
 通过部署资格验证、独立实现调用方、HA、恶意多租户隔离或生产就绪。
 
 [Product v1 第五阶段 Desktop](docs/plan/product-v1-phase-5-desktop-development-unified-product.md)
-已完成 **11/15** 个依赖有序切片。切片 1 锁定了独立的 Provider Desktop
+已完成 **12/15** 个依赖有序切片。切片 1 锁定了独立的 Provider Desktop
 能力/Profile/运行时形状，以及完整的会话打开、读取、交接、关闭、过期、撤销、
 用量、准入、安全和清理语义。精确权威为 Contract 版本
 `720ad15c343e71f36615dc4499edd5e764178bca`、树
@@ -109,7 +109,14 @@ provision。在该边界，真实 Provider 媒体/输入桥接、录制、统一
 初始化失败或录制器丢失都会失效关闭。VP8/Opus RTP 与最小化的控制/同步事件复用
 现有加密、配额有界、完整性链式的 Product 录制服务，并支持仅限 Workspace owner
 的回放和保留期删除。剪贴板文本、传输路径/身份和内容不会进入目录或元数据审计。
-真实 Provider 媒体/输入桥接、开发环境模板、统一 Web、生产组合和能力广告仍未完成。
+真实 Provider 媒体/输入桥接、统一 Web、生产组合和能力广告仍未完成。
+
+切片 12 实现 `490c2db96d6ba7a851d7846bc9e5f818dae2be77` 加入不可变的
+`coding-shell-base-v1` 目录、迁移 13 的修订/开发环境持久化、受限的内容寻址
+工作区流式物化、精确 Guest authority/health/mount/toolchain 校验，以及私有两阶段
+Guest 回滚与重启恢复。主机路径、对象路径、凭据、Guest ID 和运行时坐标不会进入
+公开 health 或审计/事件数据。真实 Provider 媒体/输入桥接、统一 Web、生产组合与
+能力广告仍是后续门禁。
 
 ## 项目提供什么
 
@@ -126,6 +133,7 @@ provision。在该边界，真实 Provider 媒体/输入桥接、录制、统一
 - 持久且版本化的 Product Desktop 输入/剪贴板/传输策略，包括精确 Product transfer 绑定和在线版本撤销；麦克风、摄像头和设备转发继续被拒绝。
 - 使用新 grant 的有界 Desktop 重连与视觉/音频重同步、重启安全的 Gateway 租约回收、陈旧输入拒绝和确定性 slot replacement 清理。
 - 带显式同意/模式的必需 Desktop 媒体/控制录制，包括加密完整性链式分段、owner 授权回放、有界配额、保留期删除，以及内容最小化的目录/审计元数据。
+- 不可变开发模板与摘要校验的工作区物化、精确 Guest readiness、失败回滚、重启恢复，以及持久 PostgreSQL 尝试/修订状态；当前仍为组件证据。
 - Provider 本地 Desktop operation 权威，包括持久化 replay/fencing、精确所有权的关闭/过期清理策略，以及尚未广告的受保护处理器。
 - 精确签名的 Desktop 镜像，以及 Provider 本地 Docker adapter、private resolver、lifecycle、撤销/清理和时长用量组件；它们尚未进入生产启动组合或能力广告。
 - 面向独立实现调用方的确定性资格验证工具。

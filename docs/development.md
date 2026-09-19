@@ -618,6 +618,27 @@ integrity/tamper rejection, replay authorization, content minimization,
 retention deletion, and object cleanup. This remains component evidence while
 the Provider media source is injected and startup composition is absent.
 
+Slice 12 development startup must keep Product policy, private content storage,
+and Guest filesystem execution as separate ports. Select only the immutable
+repository template; bind each attempt to the current primary slot and exact
+Guest generation/capabilities; stream only validated manifest entries in
+bounded chunks; and require exact authority, template/workspace revisions,
+mounts, toolchains, liveness, and readiness before persisting success.
+
+Guest materialization must reject traversal, links, unordered/oversized
+manifests, offset drift, and size/digest mismatch. Keep a private rollback
+journal through the Product ready commit, finalize it afterward, and recover an
+interrupted swap deterministically on reconstruction. Stable health, event,
+audit, and error data must not contain host paths, object paths, credentials,
+Guest IDs, raw endpoints, or runtime diagnostics.
+
+For development-environment changes, run focused Product/Guest/catalog/blob
+race-shuffle and vet, plus the complete tagged Product PostgreSQL package
+against a fresh disposable database. Cover ready-store failure rollback,
+restart recovery, owner/tenant isolation, idempotency conflict, capability and
+generation drift, revision persistence, and exact cleanup. This is component
+evidence until the later independent-process release gate passes.
+
 ## Go and API rules
 
 - accept `context.Context` on blocking or external operations and preserve

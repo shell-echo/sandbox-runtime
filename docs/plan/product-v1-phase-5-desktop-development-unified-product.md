@@ -1,6 +1,6 @@
 # Product v1 Phase 5: Desktop Development and Unified Product
 
-Status: 11/15 complete
+Status: 12/15 complete
 
 Started: 2026-09-19
 
@@ -36,7 +36,7 @@ relabeled as Desktop evidence.
 | 9 | Keyboard, pointer, touch, clipboard, and Product-bound transfer policy | Deny-by-default matrix; activation/consent; size/type/count/digest/path bounds; exact transfer identity; policy-revision revocation; microphone/camera/device denial | **Complete: durable Product policy and real-store component evidence only; recovery and production composition remain off** |
 | 10 | Recovery, reconnect, resynchronization, resolution/audio-device changes, and session/slot replacement | Fresh-grant reconnect; authority and generation recheck; visual/audio resync bounds; no stale input; restart recovery; deterministic replacement and exact cleanup | **Complete: Product Gateway/repository recovery and replacement component evidence only; no real Provider media bridge or production composition** |
 | 11 | Desktop recording/replay/catalog/retention/quota/integrity composition | Visible consent/mode; required-recorder fail closed; encrypted integrity-linked media/control segments; authorized replay; retention/deletion and quota races; content excluded from logs | **Complete: Product recording/Gateway/PostgreSQL component evidence only; no real Provider media bridge or production composition** |
-| 12 | Development-environment templates, startup, toolchains, workspace materialization, and Guest health | Immutable template selection; bounded startup; exact workspace mounts; health/liveness/readiness; failure rollback; restart persistence; no host-path or credential disclosure | Planned |
+| 12 | Development-environment templates, startup, toolchains, workspace materialization, and Guest health | Immutable template selection; bounded startup; exact workspace mounts; health/liveness/readiness; failure rollback; restart persistence; no host-path or credential disclosure | **Complete: Product/Guest protocol, local content-store, and real-PostgreSQL component evidence only; no unified Web or production composition** |
 | 13 | Unified Product Web shell integrating Workspace, Terminal, Files, Browser, Desktop, and recordings | Generated checked client; authenticated end-to-end flows; capability-derived navigation; origin/request-forgery/content policy; accessibility; recovery/error UX; no private coordinates | Planned |
 | 14 | Exact cleanup, quota, fault, security, and regression gates for the composed Desktop product | Cross-layer fault matrix; restart and dependency loss; stale/replay/tenant attacks; capacity recovery; row/object/process/runtime cleanup; retained Phase 3/4 regressions | Planned |
 | 15 | Product Phase 5 independent-process release gate and reproducible evidence bundle | Fresh stores; separate Product/Gateway/Provider/Desktop/Guest roles as required; exact locked identities; real display/control and development scenarios; restart/fault/security/recording/cleanup matrix; strict independent validation | Planned |
@@ -492,6 +492,40 @@ injected; no real Provider bridge, development template/toolchain/Guest health,
 unified Web, production startup, capability advertisement, independent-process
 release evidence, deployment, HA, hostile-multitenant, or production-readiness
 claim follows.
+
+## Slice 12 development-environment boundary
+
+Implementation revision `490c2db96d6ba7a851d7846bc9e5f818dae2be77`
+adds the Product development startup authority and the Guest workspace
+materialization protocol without changing the Provider Contract:
+
+- `coding-shell-base-v1` selects only the immutable repository publication,
+  exact runtime profile, ordered `/inputs`, `/workspace`, `/outputs`, and
+  `/tmp` mounts, and digest-bound toolchain metadata;
+- migration 13 persists validated revision manifests and development attempts
+  bound to the current primary code slot and exact connected Guest generation;
+- Product streams private content-addressed objects in bounded chunks and
+  requires exact file sizes/digests, Guest authority, template/workspace
+  revisions, mounts, toolchains, and health before committing readiness;
+- Guest rejects unsafe paths, links, manifest/size/offset/digest drift, and uses
+  a private two-phase transaction journal so Product persistence failure rolls
+  back the visible workspace while restart deterministically recovers; and
+- public health and audit/event projections exclude host paths, credentials,
+  object paths, raw endpoints, Guest identity, and runtime coordinates.
+
+### Slice 12 evidence boundary
+
+Focused race/shuffle and vet, exact Guest protocol and rollback/restart cases,
+the complete tagged Product PostgreSQL package against fresh PostgreSQL 16,
+and the clean E2E parent-lock regression pass. Exact evidence and non-claims
+are in
+[`../audits/product-phase-5-desktop-slice-12.md`](../audits/product-phase-5-desktop-slice-12.md).
+
+This is Product/Guest protocol, local content-store, and real-PostgreSQL
+component evidence. No real Provider Desktop media bridge, unified Web,
+production startup, capability advertisement, independent-process release
+evidence, deployment, HA, hostile-multitenant, or production-readiness claim
+follows.
 
 ## Deferred beyond Phase 5
 
