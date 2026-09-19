@@ -71,6 +71,47 @@ type Cleaner interface {
 	Cleanup(context.Context, AllocationReceipt) error
 }
 
+// Attachment is the bounded Provider-private description returned by a fresh
+// runtime attach. It deliberately carries no container identity, network
+// coordinate, host path, socket path, credential, or public signaling data.
+// Public media and input are composed by later Product/Gateway layers.
+type Attachment struct {
+	DesktopSessionID     string
+	ConnectionGeneration int64
+	MediaProfileID       string
+	ControlProfileID     string
+	DisplayReference     string
+	Width                int
+	Height               int
+	Depth                int
+	AudioOutput          bool
+	PrivateInputModes    []string
+	AttachedAt           time.Time
+}
+
+func (a Attachment) Validate(receipt AllocationReceipt) error {
+	if err := receipt.Validate(); err != nil || a.DesktopSessionID != receipt.DesktopSessionID ||
+		a.ConnectionGeneration != receipt.ConnectionGeneration || a.MediaProfileID != MediaProfileID ||
+		a.ControlProfileID != ControlProfileID || a.DisplayReference != "ref:desktop-display:primary" ||
+		a.Width != 1280 || a.Height != 720 || a.Depth != 24 || a.AudioOutput || a.AttachedAt.IsZero() ||
+		a.AttachedAt.Before(receipt.AllocatedAt) || !a.AttachedAt.Before(receipt.ExpiresAt) ||
+		len(a.PrivateInputModes) != 2 || a.PrivateInputModes[0] != "keyboard" || a.PrivateInputModes[1] != "pointer" {
+		return ErrInvalidAllocation
+	}
+	return nil
+}
+
+func (a Attachment) Clone() Attachment {
+	a.PrivateInputModes = append([]string(nil), a.PrivateInputModes...)
+	return a
+}
+
+type Attacher interface {
+	// Attach creates a fresh Provider-private observation after the caller has
+	// revalidated the durable opaque handoff authority.
+	Attach(context.Context, AllocationReceipt) (Attachment, error)
+}
+
 type Runtime interface {
 	Allocator
 	Observer
