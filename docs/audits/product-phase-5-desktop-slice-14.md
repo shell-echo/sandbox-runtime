@@ -5,6 +5,9 @@ Date: 2026-09-20
 Implementation revision:
 `13385f6fdba2f78ff3bd7a7b9d1d2a2ea670271d`
 
+E2E baseline lock:
+`65d514622405e69f9accfc50d09d207263c961cb`
+
 Result: passed for the bounded Slice 14 same-repository composition scope.
 
 ## Implemented boundary
@@ -34,6 +37,7 @@ and tuple substitution fail closed.
 | Capacity and quota recovery | `TestPrivateDesktopMediaBridgeRejectsSubstitutionAndRecoversCapacity` proves release after private-session exhaustion; tagged PostgreSQL viewer/controller, slot/session, recording, and development quotas retain concurrent admission coverage. |
 | Cleanup | The composed gate closes the private media session, expires and removes encrypted recording objects, deletes the exact tenant row graph, and observes zero Workspace/session/grant/policy/recording/audit rows. The retained tagged Desktop Docker adapter verifies exact owned runtime cleanup; disposable PostgreSQL process cleanup is part of the invocation below. |
 | Retained regressions | Full repository race/shuffle and vet, current Provider and Product Contract verifiers, and the immutable Phase 3 and Phase 4 evidence verifiers pass. |
+| Parent locks | All eight clean-checkout reference, candidate, Browser, capacity, revocation, downstream-fencing v1/v2, and PostgreSQL controlled-restore checks bind to the exact implementation revision. |
 
 ## Commands run
 
@@ -50,6 +54,16 @@ go run ./cmd/verify-product-phase3-evidence \
   -manifest docs/audits/product-phase-3-standalone-evidence.json
 go run ./cmd/verify-product-phase4-evidence \
   -manifest docs/audits/product-phase-4-browser-evidence.json
+
+cd e2e
+go run ./cmd/e2e -check
+go run ./cmd/platform-e2e -check
+go run ./cmd/browser-e2e -check
+go run ./cmd/shared-capacity-e2e -check
+go run ./cmd/durable-revocation-e2e -check
+go run ./cmd/downstream-fencing-e2e -check
+go run ./cmd/downstream-fencing-v2-e2e -check
+go run ./cmd/postgres-controlled-restore-e2e -check
 ```
 
 The PostgreSQL run used a fresh digest-pinned
