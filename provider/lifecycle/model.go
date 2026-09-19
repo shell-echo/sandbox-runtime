@@ -15,6 +15,7 @@ const (
 	MaxIdentifierLength   = 200
 	MaxSlotKeyLength      = 128
 	BrowserRuntimeProfile = "sandbox-runtime-browser-v1"
+	DesktopRuntimeProfile = "sandbox-runtime-desktop-v1"
 )
 
 var (
@@ -413,12 +414,12 @@ type NetworkPolicy struct {
 func (p NetworkPolicy) Validate(runtimeProfile string) error {
 	switch p.Mode {
 	case "", NetworkNone:
-		if p.PolicyReference != "" || p.EgressGatewayRequired || runtimeProfile == BrowserRuntimeProfile {
+		if p.PolicyReference != "" || p.EgressGatewayRequired || runtimeProfile == BrowserRuntimeProfile || runtimeProfile == DesktopRuntimeProfile {
 			return fmt.Errorf("%w: invalid network-none policy", ErrInvalidSpec)
 		}
 	case NetworkRestricted:
-		if runtimeProfile != BrowserRuntimeProfile || !p.EgressGatewayRequired || ValidateIdentifier(p.PolicyReference) != nil {
-			return fmt.Errorf("%w: invalid Browser restricted-network policy", ErrInvalidSpec)
+		if runtimeProfile != BrowserRuntimeProfile && runtimeProfile != DesktopRuntimeProfile || !p.EgressGatewayRequired || ValidateIdentifier(p.PolicyReference) != nil {
+			return fmt.Errorf("%w: invalid restricted-network policy", ErrInvalidSpec)
 		}
 	default:
 		return fmt.Errorf("%w: unsupported network policy", ErrInvalidSpec)

@@ -101,6 +101,25 @@ func TestBrowserCreateRequiresRestrictedGatewayPolicy(t *testing.T) {
 	}
 }
 
+func TestDesktopCreateRequiresRestrictedGatewayPolicy(t *testing.T) {
+	request := validCreateRequest()
+	request.Spec.RuntimeProfile = DesktopRuntimeProfile
+	request.Spec.Network = NetworkPolicy{
+		Mode: NetworkRestricted, PolicyReference: "desktop-egress-policy-1", EgressGatewayRequired: true,
+	}
+	sandbox, _, err := StartCreate(request, lifecycleTestTime)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sandbox.Network != request.Spec.Network {
+		t.Fatalf("network policy = %#v", sandbox.Network)
+	}
+	request.Spec.Network = NetworkPolicy{Mode: NetworkNone}
+	if _, _, err := StartCreate(request, lifecycleTestTime); !errors.Is(err, ErrInvalidSpec) {
+		t.Fatalf("network-none desktop error = %v", err)
+	}
+}
+
 func TestObservedTransitionsEnforceGenerationAndStateOrder(t *testing.T) {
 	sandbox, _, err := StartCreate(validCreateRequest(), lifecycleTestTime)
 	if err != nil {
