@@ -19,7 +19,7 @@ general production readiness.
 | Independent external caller | **13/13 complete** |
 | Product v1 Phase 3 | **13/13 complete** for the bounded standalone topology |
 | Product v1 Phase 4 Browser | **13/13 complete** for the bounded same-repository separate-process topology |
-| Product v1 Phase 5 Desktop | **9/15 complete**; durable versioned input/clipboard/transfer policy, exact Product transfer binding, and policy-revision revocation pass; recovery is next, advertisement disabled |
+| Product v1 Phase 5 Desktop | **10/15 complete**; bounded reconnect/resynchronization, restart grant recovery, and deterministic replacement cleanup pass; recording is next, advertisement disabled |
 | Coding/shell qualification | **Qualified** for the exact caller, Provider revisions, topology, profile, and scenarios recorded below |
 | Latest core CI | [Passed](https://github.com/shell-echo/sandbox-runtime/actions/runs/35204434771) |
 
@@ -79,7 +79,7 @@ independently implemented caller, HA, hostile-multitenant, or production
 evidence.
 
 [Product v1 Phase 5 Desktop](docs/plan/product-v1-phase-5-desktop-development-unified-product.md)
-has completed **9/15** dependency-ordered slices. Slice 1 locks a separate
+has completed **10/15** dependency-ordered slices. Slice 1 locks a separate
 Provider Desktop capability/profile/runtime shape and complete session
 open/read/handoff/close/expiry/revocation, usage, admission, security, and
 cleanup semantics. Exact authority is Contract revision
@@ -135,6 +135,15 @@ revocation. A real Provider media/input bridge, reconnect/recovery, recording,
 unified Web, production composition, and capability advertisement remain later
 gates.
 
+Slice 10 implementation `f23b16130c97e99d5d28008b01346779a0c681ee`
+adds fresh-grant reconnect recovery with a database-time Desktop Gateway lease,
+full authority/generation rechecks, bounded visual/audio resynchronization,
+closed resolution and audio-output changes, connection-epoch rejection of
+pre-disconnect input, and transactional grant/handoff/session cleanup during
+deterministic slot replacement. A real Provider media/input bridge, recording,
+unified Web, production composition, and capability advertisement remain later
+gates.
+
 ## What the project provides
 
 - A local instance-management API with in-memory and Docker runtime drivers.
@@ -163,6 +172,9 @@ gates.
 - Durable versioned Product Desktop input/clipboard/transfer policy with exact
   Product transfer binding and live revision revocation; microphone, camera,
   and device forwarding remain denied.
+- Bounded Desktop reconnect and visual/audio resynchronization with fresh
+  grants, restart-safe Gateway lease reclamation, stale-input rejection, and
+  deterministic slot-replacement cleanup.
 - Provider-local Desktop operation authority with durable replay/fencing,
   exact-owned close/expiry cleanup policy, and unadvertised protected handlers.
 - An exact signed Desktop image plus Provider-local Docker adapter, private

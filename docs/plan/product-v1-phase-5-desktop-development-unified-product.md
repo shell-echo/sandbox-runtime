@@ -1,6 +1,6 @@
 # Product v1 Phase 5: Desktop Development and Unified Product
 
-Status: 9/15 complete
+Status: 10/15 complete
 
 Started: 2026-09-19
 
@@ -34,7 +34,7 @@ relabeled as Desktop evidence.
 | 7 | Product view/control grants, one-controller fencing, quotas, revocation, and metadata audit | Viewer mutation denial; one live controller; database-time expiry; one-use grants; stale-fence and quota races; continuous authority checks; nondisclosing failures | **Complete: Product connection authority and real-store component evidence only; no public data plane** |
 | 8 | Public Desktop display/audio/signaling/input plane with bounded negotiation and backpressure | Authenticated encrypted signaling; exact origin; supported codec/resolution/bitrate matrix; viewer/control separation; ordered input; slow-consumer closure; no private handoff disclosure | **Complete: same-process public-handler and real-WebRTC component evidence only; policy and production composition remain off** |
 | 9 | Keyboard, pointer, touch, clipboard, and Product-bound transfer policy | Deny-by-default matrix; activation/consent; size/type/count/digest/path bounds; exact transfer identity; policy-revision revocation; microphone/camera/device denial | **Complete: durable Product policy and real-store component evidence only; recovery and production composition remain off** |
-| 10 | Recovery, reconnect, resynchronization, resolution/audio-device changes, and session/slot replacement | Fresh-grant reconnect; authority and generation recheck; visual/audio resync bounds; no stale input; restart recovery; deterministic replacement and exact cleanup | Planned |
+| 10 | Recovery, reconnect, resynchronization, resolution/audio-device changes, and session/slot replacement | Fresh-grant reconnect; authority and generation recheck; visual/audio resync bounds; no stale input; restart recovery; deterministic replacement and exact cleanup | **Complete: Product Gateway/repository recovery and replacement component evidence only; no real Provider media bridge or production composition** |
 | 11 | Desktop recording/replay/catalog/retention/quota/integrity composition | Visible consent/mode; required-recorder fail closed; encrypted integrity-linked media/control segments; authorized replay; retention/deletion and quota races; content excluded from logs | Planned |
 | 12 | Development-environment templates, startup, toolchains, workspace materialization, and Guest health | Immutable template selection; bounded startup; exact workspace mounts; health/liveness/readiness; failure rollback; restart persistence; no host-path or credential disclosure | Planned |
 | 13 | Unified Product Web shell integrating Workspace, Terminal, Files, Browser, Desktop, and recordings | Generated checked client; authenticated end-to-end flows; capability-derived navigation; origin/request-forgery/content policy; accessibility; recovery/error UX; no private coordinates | Planned |
@@ -405,6 +405,49 @@ evidence. A real Provider media/input bridge, reconnect/resynchronization,
 restart recovery, recording, development templates, unified Web, production
 startup, advertisement, deployment, and production readiness remain later
 gates.
+
+## Slice 10 recovery and replacement boundary
+
+Implementation revision `f23b16130c97e99d5d28008b01346779a0c681ee`
+adds Product-owned reconnect and replacement behavior without treating an old
+WebRTC transport as a reusable authority:
+
+- every reconnect consumes a new encrypted one-use grant and rebinds the exact
+  tenant, actor, Workspace, slot/session generation, Provider revision,
+  sandbox, opaque handoff, connection generation, access mode, lease, and
+  fence;
+- PostgreSQL migration 12 gives consumed Desktop grants a five-second
+  database-time Gateway lease. Continuous authority checks renew only an exact
+  current binding; a crashed Gateway's expired lease is revoked before quota
+  or one-controller admission, allowing bounded restart recovery;
+- each initial connection and in-grace transport recovery requests a complete
+  media-source resynchronization plus a keyframe. Ordered `stream.resync` and
+  `stream.configure` controls share a fail-closed rate bound;
+- stream changes retain fixed negotiated VP8/optional-Opus codecs and bitrate
+  ceilings while bounding resolution/frame rate and exposing only the closed
+  audio-output aliases `default` and `disabled`;
+- every queued control carries its connection epoch, and input payloads are
+  decoded again against the current display dimensions before private
+  execution, so pre-disconnect or pre-resize input cannot execute later; and
+- successful slot termination/replacement revokes all live grants, clears
+  opaque handoff authority, closes affected sessions, retires the old Provider
+  binding, and creates exactly one next-generation provision intent in the
+  same transaction. Explicit Desktop session close also revokes all grants.
+
+### Slice 10 evidence boundary
+
+Focused ten-run race tests cover WebRTC reconnect timers, resynchronization,
+closed configuration, current-dimension input validation, and rate bounds. A
+fresh disposable PostgreSQL 16 gate covers migration replay, crashed-Gateway
+lease reclamation, fresh-grant reconnect, generation substitution denial,
+restart from a reconstructed repository, deterministic replacement, and exact
+grant/handoff/session/binding cleanup. Exact evidence and non-claims are in
+[`../audits/product-phase-5-desktop-slice-10.md`](../audits/product-phase-5-desktop-slice-10.md).
+
+This is Product Gateway and PostgreSQL component evidence. The media/input
+source remains injected; no real Provider bridge, recording, development
+template, unified Web, production startup, capability advertisement,
+deployment, HA, hostile-multitenant, or production-readiness claim follows.
 
 ## Deferred beyond Phase 5
 
