@@ -559,24 +559,27 @@ func TestViewerCanOnlyMintViewConnectionGrant(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	request := httptest.NewRequest(http.MethodPost, "/api/v1/sessions/ses_1/connections", strings.NewReader(`{"expected_session_version":1,"protocol_profile":"product-browser-live.v1","access_mode":"view"}`))
+	for index, profile := range []string{product.SessionProfileBrowserLive, product.SessionProfileDesktop} {
+		body := fmt.Sprintf(`{"expected_session_version":1,"protocol_profile":%q,"access_mode":"view"}`, profile)
+		request := httptest.NewRequest(http.MethodPost, "/api/v1/sessions/ses_1/connections", strings.NewReader(body))
+		request.Header.Set("Authorization", "Bearer "+viewerToken)
+		request.Header.Set("Content-Type", "application/json")
+		request.Header.Set("Idempotency-Key", fmt.Sprintf("viewer-grant-%d", index+1))
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		if response.Code != http.StatusCreated || len(store.commands) != index+1 || store.commands[index].Request.AccessMode != product.GrantAccessView || store.commands[index].Request.ProtocolProfile != profile {
+			t.Fatalf("view profile=%q status=%d commands=%#v body=%s", profile, response.Code, store.commands, response.Body.String())
+		}
+		validateDefinition(t, "ConnectionGrant", response.Body.Bytes())
+	}
+
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/sessions/ses_1/connections", strings.NewReader(`{"expected_session_version":1,"protocol_profile":"product-desktop.v1","access_mode":"control","control_lease_id":"ctl_1","control_fence":1}`))
 	request.Header.Set("Authorization", "Bearer "+viewerToken)
 	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Idempotency-Key", "viewer-grant-1")
+	request.Header.Set("Idempotency-Key", "viewer-desktop-control")
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
-	if response.Code != http.StatusCreated || len(store.commands) != 1 || store.commands[0].Request.AccessMode != product.GrantAccessView {
-		t.Fatalf("view status=%d commands=%#v body=%s", response.Code, store.commands, response.Body.String())
-	}
-	validateDefinition(t, "ConnectionGrant", response.Body.Bytes())
-
-	request = httptest.NewRequest(http.MethodPost, "/api/v1/sessions/ses_1/connections", strings.NewReader(`{"expected_session_version":1,"protocol_profile":"product-browser-live.v1","access_mode":"control","control_lease_id":"ctl_1","control_fence":1}`))
-	request.Header.Set("Authorization", "Bearer "+viewerToken)
-	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Idempotency-Key", "viewer-grant-2")
-	response = httptest.NewRecorder()
-	handler.ServeHTTP(response, request)
-	if response.Code != http.StatusForbidden || len(store.commands) != 1 {
+	if response.Code != http.StatusForbidden || len(store.commands) != 2 {
 		t.Fatalf("control status=%d commands=%#v body=%s", response.Code, store.commands, response.Body.String())
 	}
 }

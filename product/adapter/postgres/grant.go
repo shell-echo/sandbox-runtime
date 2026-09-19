@@ -83,13 +83,14 @@ func (r *GrantRepository) MintConnectionGrant(ctx context.Context, command produ
 		return product.ConnectionGrant{}, false, product.ErrControlStale
 	}
 	browser := kind == product.SessionKindBrowserAutomation || kind == product.SessionKindBrowserLive
-	if !browser && command.Request.AccessMode != product.GrantAccessControl {
+	desktop := kind == product.SessionKindDesktop
+	if !browser && !desktop && command.Request.AccessMode != product.GrantAccessControl {
 		return product.ConnectionGrant{}, false, product.ErrCapabilityUnsupported
 	}
 	if kind == product.SessionKindBrowserAutomation && command.Request.AccessMode != product.GrantAccessControl {
 		return product.ConnectionGrant{}, false, product.ErrForbidden
 	}
-	if browser {
+	if browser || desktop {
 		if _, err := tx.Exec(opCtx, `SELECT pg_advisory_xact_lock(hashtextextended($1,7346273422))`, command.TenantID); err != nil {
 			return product.ConnectionGrant{}, false, storeError(ctx, opCtx, err, false)
 		}
@@ -103,11 +104,17 @@ func (r *GrantRepository) MintConnectionGrant(ctx context.Context, command produ
 				return product.ConnectionGrant{}, false, product.ErrControlConflict
 			}
 		}
-		column := "max_browser_viewers"
+		column, kindPredicate := "max_browser_viewers", "s.kind IN ('browser_automation','browser_live')"
+		if desktop {
+			column, kindPredicate = "max_desktop_viewers", "s.kind='desktop'"
+		}
 		if command.Request.AccessMode == product.GrantAccessControl {
 			column = "max_browser_controllers"
+			if desktop {
+				column = "max_desktop_controllers"
+			}
 		}
-		query := `SELECT (SELECT count(*) FROM sandbox_runtime_product.connection_grants g JOIN sandbox_runtime_product.runtime_sessions s ON s.tenant_id=g.tenant_id AND s.session_id=g.session_id WHERE g.tenant_id=$1 AND s.kind IN ('browser_automation','browser_live') AND g.access_mode=$2 AND g.state IN ('issued','consumed') AND g.expires_at>$3),COALESCE((SELECT ` + column + ` FROM sandbox_runtime_product.tenant_quotas WHERE tenant_id=$1),16)`
+		query := `SELECT (SELECT count(*) FROM sandbox_runtime_product.connection_grants g JOIN sandbox_runtime_product.runtime_sessions s ON s.tenant_id=g.tenant_id AND s.session_id=g.session_id WHERE g.tenant_id=$1 AND ` + kindPredicate + ` AND g.access_mode=$2 AND g.state IN ('issued','consumed') AND g.expires_at>$3),COALESCE((SELECT ` + column + ` FROM sandbox_runtime_product.tenant_quotas WHERE tenant_id=$1),16)`
 		if err := tx.QueryRow(opCtx, query, command.TenantID, command.Request.AccessMode, now).Scan(&count, &limit); err != nil {
 			return product.ConnectionGrant{}, false, storeError(ctx, opCtx, err, false)
 		}
