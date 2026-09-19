@@ -190,6 +190,10 @@ func (h *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	defer cancel()
 	bridge := &connectionBridge{connection: connection, session: session, authority: authority, handler: h}
 	bridge.run(ctx)
+	// Close the Provider media session before ServeHTTP returns and its deferred
+	// WebSocket close becomes observable to the Product Gateway. Keeping the
+	// defer above still covers handshake failures after Media.Open.
+	_ = session.Close()
 }
 
 type requestAuthority struct {
