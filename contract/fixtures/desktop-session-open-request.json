@@ -3,7 +3,7 @@
   "attempt_id": "desktop-session-attempt-1",
   "fencing_token": 3,
   "idempotency_key": "open-desktop-session-1",
-  "request_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+  "request_digest": "sha256:264897bc50447a5ff6a6eb8481db0e3284e6b13871cc354d28ac09be9341e5ef",
   "deadline_at": "2026-09-19T10:05:00Z",
   "expected_generation": 1,
   "desktop_session_id": "desktop-session-1",
