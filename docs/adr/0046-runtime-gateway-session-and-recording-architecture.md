@@ -159,13 +159,16 @@ ready for the selected deployment level:
 - selected audit/recording mode and durable storage; and
 - the profile's named component, integration, security, and deployment gates.
 
-The current Provider Contract does not expose complete session close or resize
-semantics. Its terminal profile has a bounded connect path but not the Product
-session lifecycle described here. Browser has reference controller/Gateway
-components but no general production Product resolver and public deployment.
-Desktop and the Guest Agent protocols are absent. These are dependencies for
-later Contract and implementation phases, not permission for private package
-imports, raw endpoints, or in-process fallback.
+The implementation state has advanced since this ADR was accepted. The current
+Provider Contract now defines terminal close plus separate Browser and Desktop
+session lifecycle authority; Product Phase 4 implements Browser within its
+bounded release topology, and Product Phase 5 Slice 2 implements Desktop intent
+and PostgreSQL authority only. Resize remains unavailable, and no Desktop
+Provider runtime, public Gateway, or complete deployment graph is composed.
+Guest Agent support exists for the bounded Phase 3 Files flow but not yet for
+the Phase 5 Desktop development environment. These remaining dependencies are
+not permission for private package imports, raw endpoints, or in-process
+fallback.
 
 ## Invariants
 

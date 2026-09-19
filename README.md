@@ -19,7 +19,7 @@ general production readiness.
 | Independent external caller | **13/13 complete** |
 | Product v1 Phase 3 | **13/13 complete** for the bounded standalone topology |
 | Product v1 Phase 4 Browser | **13/13 complete** for the bounded same-repository separate-process topology |
-| Product v1 Phase 5 Desktop | **1/15 complete**; Provider Contract/projection authority only, advertisement disabled |
+| Product v1 Phase 5 Desktop | **2/15 complete**; Provider Contract plus Product slot/session persistence authority, advertisement disabled |
 | Coding/shell qualification | **Qualified** for the exact caller, Provider revisions, topology, profile, and scenarios recorded below |
 | Latest core CI | [Passed](https://github.com/shell-echo/sandbox-runtime/actions/runs/35204434771) |
 
@@ -79,15 +79,18 @@ independently implemented caller, HA, hostile-multitenant, or production
 evidence.
 
 [Product v1 Phase 5 Desktop](docs/plan/product-v1-phase-5-desktop-development-unified-product.md)
-has completed **1/15** dependency-ordered slices. Slice 1 locks a separate
+has completed **2/15** dependency-ordered slices. Slice 1 locks a separate
 Provider Desktop capability/profile/runtime shape and complete session
 open/read/handoff/close/expiry/revocation, usage, admission, security, and
 cleanup semantics. Exact authority is Contract revision
 `720ad15c343e71f36615dc4499edd5e764178bca`, tree
 `343ffde0819207cf99c005096c336735dd33a735`, and a 71-case local Suite with
 digest `sha256:78e01cc5eb176083896baf8507c551d2ee88e56b93197321702748a88949e89d`.
-This is Contract and Go projection evidence only: no Desktop runtime, Product
-Desktop state, public data plane, Web experience, route composition, or
+Slice 2 adds strict Product Desktop slot/session intent, PostgreSQL migration
+8, atomic operation/event/audit/outbox persistence, isolated Desktop session
+work, and real-database concurrency/restart evidence at implementation
+`d2e7943f704e2eed6ea7b61a44ed2b6fa5510e00`. No Desktop Provider runtime,
+outbox consumer, public data plane, Web experience, route composition, or
 capability advertisement exists yet.
 
 ## What the project provides
@@ -103,6 +106,8 @@ capability advertisement exists yet.
   and remote Conformance Suites.
 - A locked, separately modeled Provider Desktop Contract surface whose runtime
   and capability advertisement remain disabled pending later Phase 5 slices.
+- Product-owned Desktop slot/session intent with exact profiles, transactional
+  PostgreSQL persistence, quotas, audit, and isolated pending outbox work.
 - Deterministic qualification tooling for an independently implemented caller.
 - Optional Browser reference components and evidence tracks, kept separate from
   the qualified coding/shell profile.

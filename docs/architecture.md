@@ -63,14 +63,17 @@ establish a deployment-qualified topology, independently implemented caller,
 HA, hostile multi-tenant isolation, or production readiness.
 
 The [Product v1 Phase 5 Desktop plan](plan/product-v1-phase-5-desktop-development-unified-product.md)
-is now **1/15** complete. Slice 1 is deliberately Contract-first: it adds a
+is now **2/15** complete. Slice 1 is deliberately Contract-first: it adds a
 separate Provider Desktop capability/profile/runtime, open/read/opaque-handoff/
 close lifecycle, expiry and revocation, usage evidence, strict admission and
 security semantics, fixtures, and executable local Conformance mappings. The
 selected authority is revision `720ad15c343e71f36615dc4499edd5e764178bca`,
 tree `343ffde0819207cf99c005096c336735dd33a735`, with a 71-case local Suite.
-It adds no Desktop runtime, Product Desktop state, route composition, public
-data plane, Web feature, advertisement, deployment, or production evidence.
+Slice 2 adds Product-owned Desktop slot/session intent and PostgreSQL
+state/outbox isolation with exact profiles, quotas, atomic audit, concurrency
+closure, nondisclosure, and restart-safe reads. It adds no Desktop Provider
+runtime, dispatcher, route composition, public data plane, Web feature,
+advertisement, deployment, or production evidence.
 
 ## Purpose
 
@@ -716,7 +719,7 @@ advertisement, and optional-profile gates remain open:
 | Workspace | The Provider Docker adapter supplies stable `/inputs`, `/workspace`, `/outputs`, and bounded tmpfs `/tmp` without exposing host paths. The dual-platform coding/shell image was published as OCI index `sha256:1996e44f8ddc464f22556bd57f1c69079fe6b1a821b65bd9be24f86619c31bb1`, attested, independently verified, pinned by the caller, and exercised in the final qualification. | Add production artifact consumers, capacity enforcement, lifecycle closure, and stronger isolation evidence as separate scopes. |
 | Security | The qualified Docker runtime used numeric non-root identity, read-only root, disabled networking, dropped capabilities, `no-new-privileges`, and bounded CPU, memory, swap, PIDs, and tmpfs; image provenance and the exact runtime observations are retained in the qualification evidence. | Add secrets policy, controlled egress where required, stronger isolation, production authentication, threat-model review, and hostile-tenant evidence before any production claim. |
 | Events and usage | Durable lifecycle events and bounded usage-evidence components exist without a complete runtime collector composition. | Complete collection/reconciliation while leaving platform accounting authority outside the Provider. |
-| Snapshots/browser/desktop | Browser Contract, component, and historical reference tracks retain their exact recorded evidence and open production gates. Product Phase 4 separately provides bounded Product Browser evidence. Product Phase 5 Slice 1 now authorizes a separate Desktop Contract shape, complete session lifecycle, opaque handoff, usage semantics, and Go projection with a 71-case local Suite. No Desktop application, repository, runtime image, driver, broker, private resolver, protected route composition, Product authority, public Gateway, Web UI, or capability advertisement exists. Snapshots remain unauthorized optional behavior. | Execute the fixed Phase 5 slices in dependency order. Keep Desktop advertisement off until the complete Provider and Product graphs plus release gate pass; retain Browser and Desktop evidence as separate profiles and do not infer production readiness. |
+| Snapshots/browser/desktop | Browser Contract, component, and historical reference tracks retain their exact recorded evidence and open production gates. Product Phase 4 separately provides bounded Product Browser evidence. Product Phase 5 Slice 1 authorizes a separate Desktop Contract shape, complete session lifecycle, opaque handoff, usage semantics, and Go projection with a 71-case local Suite. Slice 2 adds Product Desktop slot/session PostgreSQL intent, exact profiles, quotas, audit/outbox isolation, races, nondisclosure, and restart-safe reads. No Desktop Provider application, runtime image, driver, broker, private resolver, dispatcher, protected route composition, public Gateway, Web UI, or capability advertisement exists. Snapshots remain unauthorized optional behavior. | Execute the fixed Phase 5 slices in dependency order. Keep Desktop advertisement off until the complete Provider and Product graphs plus release gate pass; retain Browser and Desktop evidence as separate profiles and do not infer production readiness. |
 
 ## Delivery plan and release gates
 
@@ -959,8 +962,9 @@ before advertisement.
 
 This label predates and must not be confused with Product v1 Phase 4. Its
 Provider/reference Browser evidence is not Product Browser readiness evidence.
-The Product Phase 5 Slice 1 Desktop Contract is now authorized separately, but
-its runtime, composition, advertisement, and Product release gates remain open.
+The Product Phase 5 Slice 1 Desktop Contract is now authorized separately, and
+Slice 2 adds Product slot/session persistence authority. Provider runtime,
+dispatch, composition, advertisement, and Product release gates remain open.
 
 ## Conformance matrix
 

@@ -113,3 +113,9 @@ Desktop runtime, image, driver, protected route composition, Product Desktop
 authority, Guest protocol, public Gateway, Web experience, independent caller,
 deployment, multi-controller, hostile-multitenant, HA, or production-readiness
 claim. Desktop capability advertisement remains empty by default.
+
+Slice 2 subsequently implements the Product Desktop intent and PostgreSQL
+authority described in
+[`product-phase-5-desktop-slice-2.md`](product-phase-5-desktop-slice-2.md).
+That later result does not alter this startup baseline or the Slice 1 Contract
+identity.

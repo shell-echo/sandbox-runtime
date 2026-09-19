@@ -63,14 +63,18 @@ and records exact row, object, coordination, process, and container cleanup.
 This does not establish a deployable topology, independently implemented
 caller, HA, hostile multi-tenant isolation, or production readiness.
 
-Product v1 Phase 5 Desktop has completed **1/15** dependency-ordered slices.
+Product v1 Phase 5 Desktop has completed **2/15** dependency-ordered slices.
 Slice 1 establishes only the separate Provider Desktop Contract and Go
 projection authority. It selects exact Contract revision
 `720ad15c343e71f36615dc4499edd5e764178bca`, tree
 `343ffde0819207cf99c005096c336735dd33a735`, and a content-derived 71-case
-local Suite. Desktop runtime/application composition, Product Desktop state,
-public media/control, unified Web, capability advertisement, and release
-evidence remain absent.
+local Suite. Slice 2 implementation
+`d2e7943f704e2eed6ea7b61a44ed2b6fa5510e00` adds Product-owned Desktop
+slot/session intent, exact profile constraints, PostgreSQL migration 8,
+transactional audit/outbox persistence, quotas, race closure, nondisclosure,
+and restart-safe reads. Provider Desktop runtime/application composition,
+dispatch, public media/control, unified Web, capability advertisement, and
+release evidence remain absent.
 
 Updated: 2026-09-19
 
@@ -94,6 +98,7 @@ production readiness.
 | Product v1 Phase 4 Browser Slice 3 | [Fixed 13-slice plan](plan/product-v1-phase-4-browser.md); ADR 0049; locked Provider revision/tree | Exact Browser-only Provider discovery, restricted-network sandbox create, Browser-specific slot/session dispatch, signed protected mutations/reads, and opaque Browser handoff observation are implemented through the Provider network Contract. Focused race tests and fresh pinned-PostgreSQL integration prove capability drift closure, stale-generation non-dispatch, Terminal/Browser worker isolation, atomic retained evidence, and no private endpoint projection. Provider Browser close is intentionally deferred to Slice 4 because the locked Contract has no close route. Public data planes, release evidence, advertisement, deployment, and production remain absent |
 | Product v1 Phase 4 Browser completion | [Fixed 13-slice plan](plan/product-v1-phase-4-browser.md); [completion audit](audits/product-phase-4-browser-completion.md); [strict evidence manifest](audits/product-phase-4-browser-evidence.json); source baseline `322eb342650d2ade838f1b3a24e0d5bc0bfbb3e1`; run `20260918T152110.677058000Z` | Complete for the bounded same-repository separate-process scope. Four separate Product/Gateway/Provider/Browser OS processes, fresh pinned PostgreSQL and Valkey, and fresh encrypted recording storage passed all 12 exact identity, authentication, nondisclosure, lifecycle, automation, viewer/controller, real-WebRTC recording, restart, Provider-fault, backpressure, and cleanup scenarios. Strict validation confirms locked Provider/Product identities, 4/4 roles, 12/12 scenarios, executable digests, and complete cleanup. This is not deployment-qualified, independent-caller, HA, hostile-multitenant, or production evidence |
 | Product v1 Phase 5 Desktop Slice 1 | [Fixed 15-slice plan](plan/product-v1-phase-5-desktop-development-unified-product.md); [startup audit](audits/product-phase-5-desktop-startup.md); ADR 0050; Contract revision `720ad15c343e71f36615dc4499edd5e764178bca`; tree `343ffde0819207cf99c005096c336735dd33a735` | Complete as Provider Contract and Go projection authority only. Separate Desktop capability/profile/runtime discovery, create binding, open/read/opaque-handoff/close, expiry/revocation, usage, admission, state, security, quota/error, and exact-cleanup semantics are locked. All 71 local Suite cases map to executable tests. No Desktop runtime, driver, image, protected route composition, Product authority, public Gateway, Guest protocol, Web experience, advertisement, deployment, HA, hostile-multitenant, or production claim follows |
+| Product v1 Phase 5 Desktop Slice 2 | [Slice 2 evidence](audits/product-phase-5-desktop-slice-2.md); [fixed 15-slice plan](plan/product-v1-phase-5-desktop-development-unified-product.md); ADR 0050; implementation `d2e7943f704e2eed6ea7b61a44ed2b6fa5510e00`; migration 8 | Complete as Product intent and real-PostgreSQL component evidence. Strict authenticated routes accept only exact Desktop slot/session shapes; expected-version, idempotency, slot/session quota races, absorbing states, atomic operation/event/audit/outbox, worker isolation, nondisclosure, migration replay, and reconstructed-Store reads pass. No Desktop dispatcher, Provider implementation, runtime, public Gateway, Web UI, advertisement, independent-process, deployment, HA, hostile-multitenant, or production claim follows |
 | Sandbox Provider Calling Standard decision | ADR 0037; `contract/specification/provider-calling-standard-v1.md`; repository-owned Contract manifest | External consumers adapt to the exact locked `sandbox-runtime` Provider Contract. The former named Agent Platform P3 migration route is retired, while caller/Provider ownership separation and historical candidate evidence remain. This standard slice adds no capability or production-readiness claim. ADR 0038 defines the generic issuer trust model; the named independent-caller qualification is recorded separately in P2.7 and deployment qualification remains open |
 | Current Provider Contract authority | Revision `720ad15c343e71f36615dc4499edd5e764178bca`; tree `343ffde0819207cf99c005096c336735dd33a735`; manifest `sha256:483111511a588b41bd40d3fef686f0b21f465bb65d3215450ebb2ccf37a5de89`; OpenAPI `sha256:5a3da5d239f83e94eff09fc75438755f834e77bce8cd1c0f91c25055bf0cba2a`; semantic rules `sha256:7953d05e65f00c68e0428b6dd4fcebef1af103f2cab2fa6b214905b2496c8785`; 71-case local Suite `sha256:78e01cc5eb176083896baf8507c551d2ee88e56b93197321702748a88949e89d`; unchanged 6-case remote Suite | Product Phase 5 Slice 1 adds Desktop Contract/projection authority only. Exact lock verification, executable Suite mapping, race/shuffle, vet, retained Product evidence, and clean-VCS Conformance are the local acceptance gates. Historical Phase 2/3/4, hosted CI, external-caller, and remote-discovery evidence retains its recorded authority and is not relabeled |
 | Application-container development deployment | Root `Dockerfile`; Docker, Apple Container, and Kubernetes bilingual guides; development Kustomize base; three smoke scripts; local runs on 2026-09-17 | Docker Engine 29.7.2 on Linux/arm64, Apple Container 1.4.1 on macOS/arm64, and kind 0.33.0 with Kubernetes 1.37.0 each passed the bounded health/create/list path with the in-memory fake runtime. Docker and Kubernetes additionally exercised numeric non-root and restricted filesystem/privilege settings; the Kubernetes run created and removed an isolated namespace, and its disposable kind cluster was removed. No application image was published. This is current-worktree application-packaging evidence only; hosted release gates, immutable multi-platform publication, protected Provider deployment, HA, hostile multi-tenancy, deployment qualification, and production readiness remain open |
@@ -249,7 +254,8 @@ It does not clone, mount, or read an external source repository.
 | P3 | Named-platform migration | Retired by ADR 0037. Historical component evidence (`4212e88`), local candidate integration, and hosted candidate run `33970773345` remain under their original evidence identities | No release gate remains. Consumers adapt to the exact locked Provider Contract and own any shadow, canary, rollback, drain, and metric-comparison process |
 | Internal Block manifest | Declarative block configuration foundation | Passed as component evidence; no public API or runtime execution | Add a separately reviewed browser/desktop manifest and runtime image before enabling any optional capability |
 | P4 | Optional capability profiles | Browser Contract authority/projection, signed image publication, Provider-local components, separately named Browser/shared-capacity/durable-revocation caller gates, ADR 0033 component/caller evidence, ADR 0034 witnessed-v2 local/hosted caller evidence, the ADR 0035 PostgreSQL component gate, and the ADR 0036 hosted same-runner controlled-restore gate have passed within their tiers. Neither downstream profile nor the controlled-restore profile executes the Contract Suite | Production independent witness/storage and restore operations, Valkey/PostgreSQL provenance/HA, production configuration/metrics, hostile-tenant/operational evidence, deployment, and production advertisement remain later gates |
-| Product Phase 5 Slice 1 | Provider Desktop Contract and Go projection authority | Passed for exact revision `720ad15c343e71f36615dc4499edd5e764178bca`, tree `343ffde0819207cf99c005096c336735dd33a735`, and 71-case local Suite | Continue with Product Desktop authority and persistence in Slice 2; no runtime, route composition, capability advertisement, or release claim |
+| Product Phase 5 Slice 1 | Provider Desktop Contract and Go projection authority | Passed for exact revision `720ad15c343e71f36615dc4499edd5e764178bca`, tree `343ffde0819207cf99c005096c336735dd33a735`, and 71-case local Suite | Retain exact Contract projection and historical-evidence separation |
+| Product Phase 5 Slice 2 | Product Desktop slot/session and PostgreSQL intent authority | Passed at implementation `d2e7943f704e2eed6ea7b61a44ed2b6fa5510e00`, including fresh pinned-PostgreSQL migration replay and concurrent race cases | Continue with Provider Desktop application/persistence in Slice 3; no dispatch, runtime, public route, advertisement, or release claim |
 | Production readiness | Independent evidence tier, not a shortcut from P4 | Not established | Deployment, multi-controller reliability, multi-tenant security, operations, and production gates |
 
 ## Evidence Boundary
@@ -305,6 +311,15 @@ verification, full race/shuffle, vet, Product Contract verification, retained
 Phase 3/4 evidence validation, structured-data parsing, and a clean VCS-built
 race-enabled shuffled Suite. This remains Contract/projection evidence only;
 no Desktop runtime or advertisement is exercised.
+
+Product Phase 5 Slice 2 adds Product Desktop intent at implementation
+`d2e7943f704e2eed6ea7b61a44ed2b6fa5510e00`. Focused tests, full repository
+race/shuffle, vet, both Contract verifiers, retained evidence verifiers, and
+the complete tagged PostgreSQL package pass. The real-adapter run uses fresh
+PostgreSQL 16 pinned to
+`sha256:866efe7070b471f3a5397edac0e5edd65c23ff056587c6e47c07d008caaedd28`
+and removes its disposable container. This is persistence/component evidence;
+it does not dispatch Desktop work or establish runtime or release readiness.
 
 Historical P2.6 evidence remains at implementation
 `3fe314a012b808fe60dbd783d7c7c7121d3c548e` and E2E lock refresh

@@ -1,6 +1,6 @@
 # Product v1 Phase 5: Desktop Development and Unified Product
 
-Status: 1/15 complete
+Status: 2/15 complete
 
 Started: 2026-09-19
 
@@ -26,7 +26,7 @@ relabeled as Desktop evidence.
 | Slice | Deliverable | Required acceptance gate | Status |
 | --- | --- | --- | --- |
 | 1 | Startup audit; ADR 0050; separate Provider Desktop capability/profile/runtime authority; Desktop open/read/handoff/close/expiry/revocation and usage semantics; OpenAPI/schemas/rules/fixtures/manifest/Suite; Go DTO, strict decode, admission, projection, and executable case mappings | Exact immutable Contract revision/tree and derived lock; all 71 Suite cases mapped to tests; focused/full race-shuffle, vet, both Contract verifiers, clean-VCS local Conformance, retained Phase 3/4 evidence regressions, structured-data parse, diff, and status checks | **Complete: Contract/projection authority only; advertisement remains off** |
-| 2 | Product Desktop slot/session authority and relational-store state/outbox isolation | Strict authenticated API; exact immutable Desktop kind/profile; expected-version/idempotency/quota races; absorbing states; atomic operation/event/audit/outbox; cross-tenant nondisclosure; migration replay and restart-safe reads | Planned |
+| 2 | Product Desktop slot/session authority and relational-store state/outbox isolation | Strict authenticated API; exact immutable Desktop kind/profile; expected-version/idempotency/quota races; absorbing states; atomic operation/event/audit/outbox; cross-tenant nondisclosure; migration replay and restart-safe reads | **Complete: Product intent authority only; dispatch and advertisement remain off** |
 | 3 | Provider Desktop domain, application policy, persistence, reconciliation, and protected handlers with capability still unadvertised | State/fence/replay/deadline/cancellation matrices; restart at every commit/effect boundary; exact-owned cleanup; unknown-outcome reconciliation; safe-error and nondisclosure tests | Planned |
 | 4 | Reproducible immutable Desktop runtime image plus display/session broker protocol and provenance | Locked inputs and outputs; architecture matrix; unprivileged process/device policy; broker protocol bounds; native smoke; independent provenance verification; no mutable tag selection | Planned |
 | 5 | Provider Desktop runtime adapter, private resolver, lifecycle, usage, revocation, and cleanup composition | Real runtime open/attach/reconnect/close/expiry; generation fencing; no private-coordinate projection; revoke-before-cleanup; absence confirmation; duration evidence; fault injection | Planned |
@@ -90,6 +90,45 @@ Product Desktop state, public data plane, Web UI, deployment, independently
 implemented caller, multi-controller, hostile-multitenant, HA, or production
 evidence follows. Product Phase 3 and Phase 4 evidence retains its original
 Provider identities and is used only as a regression check.
+
+## Slice 2 exact boundary
+
+Implementation revision `d2e7943f704e2eed6ea7b61a44ed2b6fa5510e00`
+adds Product-owned Desktop intent authority without calling Provider or
+advertising Desktop readiness:
+
+- auxiliary Desktop slots accept only kind `desktop`, Product runtime profile
+  `sandbox-runtime-desktop-v1`, and the single exact Provider requirement
+  `sandbox.desktop@1.0.0` / `desktop-v1`;
+- Product Desktop sessions accept only kind `desktop` and public protocol
+  profile `product-desktop.v1`, require a current ready Desktop slot, and use
+  the existing absorbing Product session state machine;
+- PostgreSQL migration 8 locks both shapes, adds bounded per-tenant Desktop
+  slot/session quotas and supporting indexes, and permits at most one live
+  Desktop session for a slot;
+- authenticated strict Product routes commit slot/session state, operation,
+  contiguous event, security audit, idempotency result, and outbox intent in
+  one transaction with expected-version checks;
+- Desktop session work uses `desktop_session.open` and
+  `desktop_session.close`; Terminal and Browser workers cannot lease it, and
+  Browser slot workers reject Desktop `slot.reconcile` work by kind; and
+- fresh-store reads and idempotent replay use only committed PostgreSQL state.
+
+The real-adapter gate replays all eight migrations against fresh pinned
+PostgreSQL and covers concurrent slot and session idempotency, expected-version
+and quota races, exact database constraints, absorbing terminal states,
+transactional row counts, cross-tenant/owner nondisclosure, worker isolation,
+and reconstructed-Store reads. Focused tests, the complete tagged PostgreSQL
+package with race/shuffle, the full repository race/shuffle gate, vet, both
+Contract verifiers, and retained Phase 3/4 evidence verification pass.
+
+### Slice 2 evidence boundary
+
+Slice 2 creates durable Product intent only. No Desktop outbox consumer,
+Provider Desktop application, runtime image, broker, adapter, handoff
+resolution, public Gateway, connection grant, input policy, recording, Web UI,
+capability advertisement, independent-process run, deployment, HA,
+hostile-multitenant, or production evidence follows.
 
 ## Deferred beyond Phase 5
 

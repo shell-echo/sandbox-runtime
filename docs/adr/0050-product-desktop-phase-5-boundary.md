@@ -1,6 +1,6 @@
 # ADR 0050: Product Desktop Phase 5 Boundary
 
-- Status: Accepted for Product Phase 5 scope; Slice 1 is implemented
+- Status: Accepted for Product Phase 5 scope; Slices 1-2 are implemented
 - Date: 2026-09-19
 
 ## Context
@@ -72,6 +72,28 @@ mapped to an executable repository test.
 
 No runtime, driver, image, Guest protocol, public route composition, Product
 state, or Web feature is enabled by this slice.
+
+## Slice 2 Product authority
+
+Product Desktop intent is now a separate durable authority. A Desktop slot has
+the immutable exact shape `desktop` / `sandbox-runtime-desktop-v1` /
+`sandbox.desktop@1.0.0` / `desktop-v1`. A Product Desktop session has the exact
+kind/profile pair `desktop` / `product-desktop.v1`, is bound to one current
+ready Desktop slot generation, and follows the Product-owned absorbing session
+state machine.
+
+The authenticated Product API remains generic at its Contract-authorized slot
+and session routes, but strict application validation and PostgreSQL migration
+8 reject every alternate Desktop shape. Expected versions, mutation digests,
+tenant quotas, and database serialization resolve concurrent commands. One
+transaction commits Product state, operation, event, security audit,
+idempotency result, and external-work intent.
+
+Desktop session intents use the separate `desktop_session.open` and
+`desktop_session.close` outbox family. Existing Terminal and Browser workers
+cannot lease them; Browser slot workers also filter `slot.reconcile` by slot
+kind. There is deliberately no Desktop dispatcher until the Provider and
+network adapter slices exist. Capability advertisement remains empty.
 
 ## Consequences
 

@@ -390,6 +390,29 @@ is historical evidence for its recorded source baseline; validate it with the
 separate verifier before selecting it. Passing this gate is not deployment,
 independent-caller, HA, hostile-multitenant, or production evidence.
 
+## Product Phase 5 Desktop discipline
+
+Follow the fixed order in
+[`plan/product-v1-phase-5-desktop-development-unified-product.md`](plan/product-v1-phase-5-desktop-development-unified-product.md)
+and ADR 0050. Desktop must not reuse Terminal or Browser slot profiles,
+session profiles, outbox families, Provider routes, handoffs, runtime
+repositories, or release evidence.
+
+The Product Desktop slot shape is exactly `desktop` /
+`sandbox-runtime-desktop-v1` / `sandbox.desktop@1.0.0` / `desktop-v1`. The
+Product session shape is exactly `desktop` / `product-desktop.v1`. Keep both
+application validation and PostgreSQL constraints aligned. A Product command
+must commit state, operation, contiguous event, security audit, idempotency
+result, and outbox intent atomically before external work.
+
+Run the ordinary tagged Product PostgreSQL gate for every Desktop persistence
+change. Preserve concurrent same-key idempotency, expected-version, Desktop
+slot quota, and Desktop session quota cases; migration replay; terminal-state
+absorption; cross-tenant nondisclosure; and fresh-Store reads. Desktop session
+outbox types are `desktop_session.open` and `desktop_session.close`. Until the
+later adapter slice provides a dedicated consumer, no existing worker may
+lease them and capability advertisement remains empty.
+
 ## Go and API rules
 
 - accept `context.Context` on blocking or external operations and preserve
