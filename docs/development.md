@@ -482,6 +482,36 @@ it is not restricted-egress deployment evidence. The production driver still
 requires a fail-closed restricted-network provisioner. Do not weaken that port
 or advertise Desktop because the transport-focused gate passes.
 
+Slice 6 Product adapter changes must use `product/adapter/provider.NewDesktop`
+and select only the current Desktop Contract revision/tree, the locked signed
+image, one exact runtime profile, bounded resources, and an explicit
+restricted-network policy. Do not change the legacy Product Provider lock to
+retroactively relabel Phase 3 or Phase 4 evidence. Product slot generation is
+the Product fence; `provider_bindings.provider_generation` is the independent
+Provider expected generation.
+
+Keep Desktop slot, lifecycle, session, expiry, and observation leases separate
+from generic, Terminal, and Browser workers. Desktop close clears the Product
+handoff and terminalizes the session while retaining the slot; never reuse the
+Browser terminate-and-replace path. Dispatch close/expiry only with a retained
+positive connection generation. Preserve accepted and outcome-unknown attempts
+for observation after Store/client reconstruction.
+
+For Product Desktop adapter or migration changes, run the focused adapter
+tests, full repository gates, Contract/evidence verifiers, existing tagged
+Docker lifecycle regression, and the real PostgreSQL gate:
+
+```bash
+SANDBOX_RUNTIME_PRODUCT_POSTGRES_URL=postgres://<user>:<password>@127.0.0.1:<port>/<database>?sslmode=disable \
+  go test -tags=integration -race -shuffle=on -count=1 \
+  ./product/adapter/postgres
+```
+
+This proves the Product network adapter and real Store boundary against the
+test Provider peer. It is not production process composition, an independently
+implemented Provider deployment, a public Desktop Gateway, or advertisement
+evidence.
+
 ## Go and API rules
 
 - accept `context.Context` on blocking or external operations and preserve

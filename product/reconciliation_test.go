@@ -53,6 +53,36 @@ type browserLifecycleProvider struct {
 	err      error
 }
 
+type desktopDispatchStore struct{ dispatchStore }
+
+func (s *desktopDispatchStore) LeaseDesktopSlotWork(context.Context, string, time.Duration, int) ([]ReconcileWork, error) {
+	return s.work, s.err
+}
+
+type desktopDispatchProvider struct {
+	evidence ProviderOperationEvidence
+	err      error
+}
+
+func (p desktopDispatchProvider) ProvisionDesktopSlot(context.Context, ReconcileWork) (ProviderOperationEvidence, error) {
+	return p.evidence, p.err
+}
+
+type desktopLifecycleStore struct{ dispatchStore }
+
+func (s *desktopLifecycleStore) LeaseDesktopLifecycleWork(context.Context, string, time.Duration, int) ([]ReconcileWork, error) {
+	return s.work, s.err
+}
+
+type desktopLifecycleProvider struct {
+	evidence ProviderOperationEvidence
+	err      error
+}
+
+func (p desktopLifecycleProvider) ControlDesktopSlot(context.Context, ReconcileWork) (ProviderOperationEvidence, error) {
+	return p.evidence, p.err
+}
+
 func (p browserLifecycleProvider) ControlBrowserSlot(context.Context, ReconcileWork) (ProviderOperationEvidence, error) {
 	return p.evidence, p.err
 }
@@ -135,10 +165,42 @@ func TestBrowserLifecycleDispatcherRetainsAmbiguousEvidence(t *testing.T) {
 	}
 }
 
+func TestDesktopDispatchersUseIsolatedLeasesAndRetainAmbiguousEvidence(t *testing.T) {
+	slotStore := &desktopDispatchStore{dispatchStore: dispatchStore{work: []ReconcileWork{{OutboxID: "desktop-slot-out"}}}}
+	slotDispatcher, err := NewDesktopDispatcher(slotStore, desktopDispatchProvider{err: ErrDispatchOutcomeUnknown}, "desktop-slot-worker", time.Second, time.Millisecond, 3, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count, err := slotDispatcher.DispatchOnce(context.Background()); err != nil || count != 1 || len(slotStore.recorded) != 1 || slotStore.recorded[0].State != "outcome_unknown" {
+		t.Fatalf("slot count=%d store=%#v err=%v", count, slotStore, err)
+	}
+
+	lifecycleStore := &desktopLifecycleStore{dispatchStore: dispatchStore{work: []ReconcileWork{{OutboxID: "desktop-lifecycle-out", Action: "resume"}}}}
+	lifecycleDispatcher, err := NewDesktopLifecycleDispatcher(lifecycleStore, desktopLifecycleProvider{err: ErrDispatchOutcomeUnknown}, "desktop-lifecycle-worker", time.Second, time.Millisecond, 3, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count, err := lifecycleDispatcher.DispatchOnce(context.Background()); err != nil || count != 1 || len(lifecycleStore.recorded) != 1 || lifecycleStore.recorded[0].State != "outcome_unknown" {
+		t.Fatalf("lifecycle count=%d store=%#v err=%v", count, lifecycleStore, err)
+	}
+
+	retryStore := &desktopDispatchStore{dispatchStore: dispatchStore{work: []ReconcileWork{{OutboxID: "desktop-retry-out"}}}}
+	retryDispatcher, _ := NewDesktopDispatcher(retryStore, desktopDispatchProvider{evidence: ProviderOperationEvidence{Retryable: true}, err: ErrDispatchRejected}, "desktop-slot-worker", time.Second, time.Millisecond, 3, 1)
+	if count, err := retryDispatcher.DispatchOnce(context.Background()); err != nil || count != 0 || retryStore.retries != 1 {
+		t.Fatalf("retry count=%d retries=%d err=%v", count, retryStore.retries, err)
+	}
+}
+
 type observationStore struct {
 	work              []ProviderObservationWork
 	recorded, retried int
 	state             string
+}
+
+type desktopObservationStore struct{ observationStore }
+
+func (s *desktopObservationStore) LeaseDesktopProviderObservations(context.Context, string, time.Duration, int) ([]ProviderObservationWork, error) {
+	return s.work, nil
 }
 
 func (s *observationStore) LeaseProviderObservations(context.Context, string, time.Duration, int) ([]ProviderObservationWork, error) {
@@ -178,6 +240,24 @@ func TestReconcilerRecordsEvidenceAndRetriesReadFailures(t *testing.T) {
 	}
 	store = &observationStore{work: work}
 	reconciler, _ = NewReconciler(store, observationProvider{err: ErrStoreUnavailable}, &sequenceIDs{}, "worker-1", time.Second, time.Millisecond, 1)
+	if count, err := reconciler.ReconcileOnce(context.Background()); err != nil || count != 0 || store.retried != 1 {
+		t.Fatalf("count=%d retries=%d err=%v", count, store.retried, err)
+	}
+}
+
+func TestDesktopReconcilerUsesIsolatedObservationLease(t *testing.T) {
+	work := []ProviderObservationWork{{OperationID: "desktop-op-1"}}
+	store := &desktopObservationStore{observationStore: observationStore{work: work}}
+	reconciler, err := NewDesktopReconciler(store, observationProvider{evidence: ProviderOperationEvidence{State: "succeeded"}}, &sequenceIDs{}, "desktop-observer", time.Second, time.Millisecond, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count, err := reconciler.ReconcileOnce(context.Background()); err != nil || count != 1 || store.recorded != 1 || store.state != "succeeded" {
+		t.Fatalf("count=%d store=%#v err=%v", count, store, err)
+	}
+
+	store = &desktopObservationStore{observationStore: observationStore{work: work}}
+	reconciler, _ = NewDesktopReconciler(store, observationProvider{err: ErrStoreUnavailable}, &sequenceIDs{}, "desktop-observer", time.Second, time.Millisecond, 1)
 	if count, err := reconciler.ReconcileOnce(context.Background()); err != nil || count != 0 || store.retried != 1 {
 		t.Fatalf("count=%d retries=%d err=%v", count, store.retried, err)
 	}

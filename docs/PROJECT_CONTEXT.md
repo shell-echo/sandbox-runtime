@@ -45,7 +45,7 @@ Current verified state:
   four roles, scenario set, and cleanup. Deployment, HA, hostile multi-tenant,
   independently implemented caller, and production readiness remain explicit
   non-claims; and
-- Product v1 Phase 5 Desktop is **5/15** complete. Slice 1 establishes the
+- Product v1 Phase 5 Desktop is **6/15** complete. Slice 1 establishes the
   separate Provider Desktop Contract and Go projection authority at revision
   `720ad15c343e71f36615dc4499edd5e764178bca`, tree
   `343ffde0819207cf99c005096c336735dd33a735`, with a content-derived 71-case
@@ -67,8 +67,12 @@ Current verified state:
   Slice 5 implementation `0c30d6f5e6e0c6227069b8689668a1a0dcfb940b`
   adds the Provider-local Docker adapter, durable opaque reference authority,
   fresh attach/reconnect checks, lifecycle readiness, exact duration usage,
-  and revoke/cleanup/absence composition. Production startup composition,
-  Product dispatch, public media/control, unified Web, capability
+  and revoke/cleanup/absence composition. Slice 6 implementation
+  `2d5bbaee2db2ab5c2a85f67e39acf2dd7b82a240` adds the locked network-only
+  Product adapter, isolated Desktop slot/lifecycle/session/observation workers,
+  retained operation recovery, separate Product/Provider generations, and
+  Desktop-specific close cleanup with a real-PostgreSQL gate. Production
+  startup composition, end-user grants, public media/control, unified Web, capability
   advertisement, and release evidence remain absent.
 
 The qualification applies only to Provider revision
@@ -108,6 +112,7 @@ recorded in
 [`audits/product-phase-5-desktop-slice-4-candidate.md`](audits/product-phase-5-desktop-slice-4-candidate.md),
 [`audits/product-phase-5-desktop-slice-4-publication.md`](audits/product-phase-5-desktop-slice-4-publication.md),
 [`audits/product-phase-5-desktop-slice-5.md`](audits/product-phase-5-desktop-slice-5.md),
+[`audits/product-phase-5-desktop-slice-6.md`](audits/product-phase-5-desktop-slice-6.md),
 [`adr/0050-product-desktop-phase-5-boundary.md`](adr/0050-product-desktop-phase-5-boundary.md),
 and
 [`plan/product-v1-phase-5-desktop-development-unified-product.md`](plan/product-v1-phase-5-desktop-development-unified-product.md).
@@ -894,7 +899,7 @@ Contract identity:
 | P2 | Reference coding/shell caller and Product Phase 2 lifecycle release gates passed; the latter includes a repository-owned independent-process 15+5+9 black-box run | Independently implemented external-caller lifecycle interoperability, aggregate conformance, multi-controller, hostile multi-tenant isolation, deployment, and production gates remain open |
 | P3 | Retired by ADR 0037. Historical revision binding/shadow/metrics components and candidate runs retain their recorded evidence boundaries | No named-platform migration gate remains; external consumers adapt to the exact locked Provider Contract |
 | P4 | Browser Contract authority/projection, exact sandboxed signed amd64/arm64/v8 publication, Provider-local components, default-disabled command/runtime composition, process-local Gateway limits, the separately recorded Browser/shared-capacity/durable-revocation caller gates, ADR 0033 component/caller evidence, the ADR 0034 v2 local/hosted deletion and rollback-detection gates, the ADR 0035 PostgreSQL component gate, and the ADR 0036 hosted same-runner controlled-restore gate pass within their named boundaries | Production independent witness/storage and restore operations, production Browser advertisement/public Gateway, Valkey/PostgreSQL provenance and HA, production configuration/metrics, aggregate, multi-controller, multi-tenant, deployment, and production gates remain open |
-| Product Phase 5 | Slices 1-5/15 lock the separate Provider Desktop Contract/projection, Product Desktop slot/session PostgreSQL intent, Provider application/persistence/protected handlers, exact signed image, and Provider-local runtime/private-resolver/lifecycle/usage composition. Desktop advertisement remains empty | Execute Slices 6-15 in order: Product adapter, grants, public data plane, policy, recovery, recording, development environment, unified Web, and independent-process release evidence |
+| Product Phase 5 | Slices 1-6/15 lock the separate Provider Desktop Contract/projection, Product Desktop slot/session PostgreSQL intent, Provider application/persistence/protected handlers, exact signed image, Provider-local runtime/private-resolver/lifecycle/usage composition, and the Product network-only adapter with isolated durable recovery. Desktop advertisement remains empty | Execute Slices 7-15 in order: grants, public data plane, policy, recovery, recording, development environment, unified Web, and independent-process release evidence |
 
 Production readiness is not a numbered phase shortcut. Aggregate conformance,
 multi-controller reliability, hostile multi-tenant security, deployment, and
@@ -1179,10 +1184,11 @@ PID-level request attribution.
 4. Prove independent PostgreSQL/Valkey failure and backup domains, HA, and
    operator controls only in a deployment-owned environment. Retain hosted ADR
    0036 evidence as same-runner reference evidence.
-5. Execute Product Phase 5 Slice 6 with the exact network-only Provider
-   adapter, retained Desktop outbox recovery, and Product/Provider generation
-   separation; keep production composition and advertisement disabled. Do not
-   reuse Terminal or Browser routes, repositories, or handoffs as a shortcut.
+5. Execute Product Phase 5 Slice 7 with Product-owned Desktop view/control
+   grants, one-controller fencing, quotas, revocation, metadata-only audit, and
+   continuous authority checks; keep production composition and advertisement
+   disabled. Do not expose the Provider opaque handoff or reuse Terminal or
+   Browser grant semantics without the Desktop policy gate.
 6. Keep multi-issuer admission, aggregate conformance, multi-controller,
    multi-tenant, HA, independent external-caller interoperability, deployment,
    and production-readiness claims blocked until their separately named gates

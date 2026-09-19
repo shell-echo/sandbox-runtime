@@ -19,13 +19,18 @@ import (
 
 	"github.com/gowebpki/jcs"
 	"github.com/shell-echo/sandbox-runtime/product"
+	desktopimage "github.com/shell-echo/sandbox-runtime/profiles/desktop/image"
 	providerv1 "github.com/shell-echo/sandbox-runtime/providerapi/v1"
 )
 
 const (
-	LockedProviderRevision = "98995384c60a924f25ca58d3b7e561207bfa5be8"
-	LockedProviderTree     = "0a627baed11c8a6ddbe8a24bbc1869e4f85edc16"
-	maxProviderBody        = 1 << 20
+	LockedProviderRevision        = "98995384c60a924f25ca58d3b7e561207bfa5be8"
+	LockedProviderTree            = "0a627baed11c8a6ddbe8a24bbc1869e4f85edc16"
+	LockedDesktopProviderRevision = "720ad15c343e71f36615dc4499edd5e764178bca"
+	LockedDesktopProviderTree     = "343ffde0819207cf99c005096c336735dd33a735"
+	maxProviderBody               = 1 << 20
+	defaultRequestTimeout         = 30 * time.Second
+	maxRequestTimeout             = 2 * time.Minute
 )
 
 type Clock interface{ Now() time.Time }
@@ -43,6 +48,7 @@ type Profile struct {
 	CPUMillis              int64
 	MemoryBytes            int64
 	EphemeralBytes         int64
+	WorkspaceBytes         int64
 	PIDsLimit              int64
 	BaseRevisionID         string
 	BaseRevisionDigest     string
@@ -59,6 +65,16 @@ const (
 	maxBrowserEphemeralBytes = int64(16 << 30)
 	minBrowserPIDs           = int64(32)
 	maxBrowserPIDs           = int64(512)
+	minDesktopCPUMillis      = int64(500)
+	maxDesktopCPUMillis      = int64(16_000)
+	minDesktopMemoryBytes    = int64(512 << 20)
+	maxDesktopMemoryBytes    = int64(16 << 30)
+	minDesktopEphemeralBytes = int64(512 << 20)
+	maxDesktopEphemeralBytes = int64(32 << 30)
+	minDesktopWorkspaceBytes = int64(512 << 20)
+	maxDesktopWorkspaceBytes = int64(16 << 30)
+	minDesktopPIDs           = int64(64)
+	maxDesktopPIDs           = int64(1_024)
 )
 
 type Authority struct {
@@ -78,6 +94,7 @@ type Config struct {
 	Profiles             []Profile
 	Authority            Authority
 	Clock                Clock
+	RequestTimeout       time.Duration
 	AllowHTTPForTests    bool
 }
 
@@ -93,10 +110,25 @@ type Client struct {
 }
 
 func New(config Config) (*Client, error) {
+	return newClient(config, false)
+}
+
+// NewDesktop constructs the independently locked Phase 5 network-only
+// Product-to-Provider adapter. It does not enable Provider discovery or
+// Product capability advertisement.
+func NewDesktop(config Config) (*Client, error) {
+	return newClient(config, true)
+}
+
+func newClient(config Config, desktopOnly bool) (*Client, error) {
 	origin, err := url.Parse(config.Origin)
+	wantRevision, wantTree := LockedProviderRevision, LockedProviderTree
+	if desktopOnly {
+		wantRevision, wantTree = LockedDesktopProviderRevision, LockedDesktopProviderTree
+	}
 	if err != nil || origin.Host == "" || origin.RawQuery != "" || origin.Fragment != "" || origin.Path != "" ||
 		(origin.Scheme != "https" && !(config.AllowHTTPForTests && origin.Scheme == "http")) || config.HTTPClient == nil ||
-		config.ExpectedRevisionID != LockedProviderRevision || config.ExpectedTree != LockedProviderTree ||
+		config.ExpectedRevisionID != wantRevision || config.ExpectedTree != wantTree ||
 		config.ProviderResolutionID == "" || config.Authority.Issuer == "" || config.Authority.Subject == "" ||
 		config.Authority.Audience == "" || config.Authority.KeyID == "" || len(config.Authority.PrivateKey) != ed25519.PrivateKeySize {
 		return nil, product.ErrInvalid
@@ -115,22 +147,49 @@ func New(config Config) (*Client, error) {
 		if profile.RuntimeProfileID == product.BrowserSlotProfile && !validBrowserIsolationProfile(profile) {
 			return nil, product.ErrInvalid
 		}
+		if desktopOnly && !validDesktopIsolationProfile(profile) {
+			return nil, product.ErrInvalid
+		}
 		if _, exists := profiles[profile.ProductProfileID]; exists {
 			return nil, product.ErrInvalid
 		}
 		profiles[profile.ProductProfileID] = profile
 	}
-	if len(profiles) == 0 {
+	if len(profiles) == 0 || desktopOnly && len(profiles) != 1 {
 		return nil, product.ErrInvalid
 	}
 	clientCopy := *config.HTTPClient
 	clientCopy.CheckRedirect = func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }
+	requestTimeout := config.RequestTimeout
+	if requestTimeout == 0 {
+		requestTimeout = defaultRequestTimeout
+	}
+	if requestTimeout < time.Millisecond || requestTimeout > maxRequestTimeout {
+		return nil, product.ErrInvalid
+	}
+	if clientCopy.Timeout == 0 || clientCopy.Timeout > requestTimeout {
+		clientCopy.Timeout = requestTimeout
+	}
 	clock := config.Clock
 	if clock == nil {
 		clock = systemClock{}
 	}
 	return &Client{origin: origin, httpClient: &clientCopy, revisionID: config.ExpectedRevisionID, tree: config.ExpectedTree,
 		resolutionID: config.ProviderResolutionID, profiles: profiles, authority: config.Authority, clock: clock}, nil
+}
+
+func validDesktopIsolationProfile(profile Profile) bool {
+	publication := desktopimage.LockedPublication()
+	return profile.ProductProfileID == product.DesktopSlotProfile && profile.RuntimeProfileID == product.DesktopSlotProfile &&
+		(profile.Architecture == providerv1.ArchitectureAMD64 || profile.Architecture == providerv1.ArchitectureARM64) &&
+		profile.ImageReference == publication.Image() && profile.ImageDigest == publication.Digest &&
+		profile.CPUMillis >= minDesktopCPUMillis && profile.CPUMillis <= maxDesktopCPUMillis &&
+		profile.MemoryBytes >= minDesktopMemoryBytes && profile.MemoryBytes <= maxDesktopMemoryBytes &&
+		profile.EphemeralBytes >= minDesktopEphemeralBytes && profile.EphemeralBytes <= maxDesktopEphemeralBytes &&
+		profile.WorkspaceBytes >= minDesktopWorkspaceBytes && profile.WorkspaceBytes <= maxDesktopWorkspaceBytes &&
+		profile.PIDsLimit >= minDesktopPIDs && profile.PIDsLimit <= maxDesktopPIDs &&
+		validSHA256(profile.BaseRevisionDigest) && validSHA256(profile.PolicyDigest) &&
+		providerIdentifier(profile.NetworkPolicyReference)
 }
 
 func validBrowserIsolationProfile(profile Profile) bool {
@@ -174,6 +233,9 @@ func (c *Client) AuthorizePrimarySlot(ctx context.Context, slot product.SlotSpec
 }
 
 func (c *Client) AuthorizeSlot(ctx context.Context, slot product.SlotSpec) error {
+	if slot.Kind == product.DesktopSlotKind {
+		return c.AuthorizeDesktopSlot(ctx, slot)
+	}
 	if ctx == nil {
 		return product.ErrInvalid
 	}
@@ -235,6 +297,41 @@ func exactBrowserReady(snapshot providerv1.Capabilities, profile Profile) bool {
 		containsArchitecture(runtimeProfile.Architecture, profile.Architecture)
 }
 
+func exactDesktopReady(snapshot providerv1.Capabilities, profile Profile) bool {
+	if !validDesktopIsolationProfile(profile) || snapshot.ProviderRevisionID != LockedDesktopProviderRevision ||
+		snapshot.APIVersion != providerv1.APIVersionV1 || snapshot.Limits.MaxCPUMillis < profile.CPUMillis ||
+		snapshot.Limits.MaxMemoryBytes < profile.MemoryBytes || snapshot.Limits.MaxEphemeralStorageBytes < profile.EphemeralBytes ||
+		snapshot.Limits.MaxWorkspaceBytes == nil || *snapshot.Limits.MaxWorkspaceBytes < profile.WorkspaceBytes ||
+		snapshot.Limits.MaxLeaseSeconds < 1 {
+		return false
+	}
+	capabilityMatches := 0
+	for _, capability := range snapshot.Capabilities {
+		if capability.ID != providerv1.CapabilityDesktop {
+			continue
+		}
+		capabilityMatches++
+		if len(capability.Versions) != 1 || capability.Versions[0] != product.DesktopCapabilityVersion ||
+			len(capability.Profiles) != 1 || capability.Profiles[0] != product.DesktopCapabilityProfile {
+			return false
+		}
+	}
+	runtimeMatches := 0
+	for _, runtimeProfile := range snapshot.RuntimeProfiles {
+		if runtimeProfile.ID != product.DesktopSlotProfile {
+			continue
+		}
+		runtimeMatches++
+		if runtimeProfile.IsolationClass != providerv1.IsolationContainer ||
+			runtimeProfile.RuntimeClassName != desktopimage.RuntimeClassName ||
+			len(runtimeProfile.CapabilityProfileIDs) != 1 || runtimeProfile.CapabilityProfileIDs[0] != product.DesktopCapabilityProfile ||
+			!containsArchitecture(runtimeProfile.Architecture, profile.Architecture) {
+			return false
+		}
+	}
+	return capabilityMatches == 1 && runtimeMatches == 1
+}
+
 func containsArchitecture(values []providerv1.Architecture, wanted providerv1.Architecture) bool {
 	for _, value := range values {
 		if value == wanted {
@@ -292,7 +389,7 @@ func (c *Client) ProvisionPrimarySlot(ctx context.Context, work product.Reconcil
 	if err := c.AuthorizePrimarySlot(ctx, work.Slot); err != nil {
 		return product.ProviderOperationEvidence{ErrorCode: "capability_unsupported"}, product.ErrDispatchRejected
 	}
-	return c.provisionSlot(ctx, work, false)
+	return c.provisionSlot(ctx, work, "")
 }
 
 func (c *Client) ProvisionBrowserSlot(ctx context.Context, work product.ReconcileWork) (product.ProviderOperationEvidence, error) {
@@ -302,10 +399,47 @@ func (c *Client) ProvisionBrowserSlot(ctx context.Context, work product.Reconcil
 	if err := c.AuthorizeSlot(ctx, work.Slot); err != nil {
 		return product.ProviderOperationEvidence{ErrorCode: "capability_unsupported"}, product.ErrDispatchRejected
 	}
-	return c.provisionSlot(ctx, work, true)
+	return c.provisionSlot(ctx, work, providerv1.ResourceBrowser)
 }
 
-func (c *Client) provisionSlot(ctx context.Context, work product.ReconcileWork, browser bool) (product.ProviderOperationEvidence, error) {
+func (c *Client) AuthorizeDesktopSlot(ctx context.Context, slot product.SlotSpec) error {
+	if ctx == nil {
+		return product.ErrInvalid
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if slot.SlotKey == product.PrimarySlotKey || slot.Kind != product.DesktopSlotKind || slot.ProfileID != product.DesktopSlotProfile ||
+		len(slot.RequiredCapabilities) != 1 || slot.RequiredCapabilities[0] != (product.CapabilityRequirement{
+		CapabilityID: product.DesktopCapabilityID, Version: product.DesktopCapabilityVersion, ProfileID: product.DesktopCapabilityProfile,
+	}) {
+		return product.ErrCapabilityUnsupported
+	}
+	profile, ok := c.profiles[slot.ProfileID]
+	if !ok || !validDesktopIsolationProfile(profile) {
+		return product.ErrCapabilityUnsupported
+	}
+	snapshot, err := c.discover(ctx)
+	if err != nil {
+		return err
+	}
+	if !exactDesktopReady(snapshot, profile) {
+		return product.ErrCapabilityUnsupported
+	}
+	return nil
+}
+
+func (c *Client) ProvisionDesktopSlot(ctx context.Context, work product.ReconcileWork) (product.ProviderOperationEvidence, error) {
+	if ctx == nil || work.SlotKey == product.PrimarySlotKey || work.SlotGeneration < 1 || work.Slot.SlotKey != work.SlotKey {
+		return product.ProviderOperationEvidence{}, product.ErrInvalid
+	}
+	if err := c.AuthorizeDesktopSlot(ctx, work.Slot); err != nil {
+		return product.ProviderOperationEvidence{ErrorCode: "capability_unsupported"}, product.ErrDispatchRejected
+	}
+	return c.provisionSlot(ctx, work, providerv1.ResourceDesktop)
+}
+
+func (c *Client) provisionSlot(ctx context.Context, work product.ReconcileWork, resourceClass providerv1.ResourceClass) (product.ProviderOperationEvidence, error) {
 	profile := c.profiles[work.Slot.ProfileID]
 	now := c.clock.Now().UTC()
 	deadline := now.Add(2 * time.Minute)
@@ -315,10 +449,15 @@ func (c *Client) provisionSlot(ctx context.Context, work product.ReconcileWork, 
 	sandboxID := deterministicSandboxID(work)
 	network := providerv1.NetworkPolicy{Mode: providerv1.NetworkNone}
 	var placement *providerv1.PlacementConstraints
-	if browser {
+	if resourceClass != "" {
 		required := true
 		network = providerv1.NetworkPolicy{Mode: providerv1.NetworkRestricted, PolicyReference: profile.NetworkPolicyReference, EgressGatewayRequired: &required}
-		placement = &providerv1.PlacementConstraints{ResourceClass: providerv1.ResourceBrowser, Architecture: profile.Architecture}
+		placement = &providerv1.PlacementConstraints{ResourceClass: resourceClass, Architecture: profile.Architecture}
+	}
+	var workspaceBytes *int64
+	if profile.WorkspaceBytes > 0 {
+		value := profile.WorkspaceBytes
+		workspaceBytes = &value
 	}
 	request := providerv1.CreateRequest{
 		MutationEnvelope: providerv1.MutationEnvelope{OperationID: work.OperationID, AttemptID: work.AttemptID,
@@ -329,7 +468,7 @@ func (c *Client) provisionSlot(ctx context.Context, work product.ReconcileWork, 
 			BranchID: "main", ProviderResolutionID: c.resolutionID, ProviderRevisionID: c.revisionID,
 			Image:                providerv1.SandboxImage{Reference: profile.ImageReference, Digest: providerv1.SHA256Digest(profile.ImageDigest), Architecture: profile.Architecture},
 			RuntimeProfile:       profile.RuntimeProfileID,
-			Resources:            providerv1.SandboxResources{CPUMillis: profile.CPUMillis, MemoryBytes: profile.MemoryBytes, EphemeralStorageBytes: profile.EphemeralBytes, PIDsLimit: profile.PIDsLimit},
+			Resources:            providerv1.SandboxResources{CPUMillis: profile.CPUMillis, MemoryBytes: profile.MemoryBytes, EphemeralStorageBytes: profile.EphemeralBytes, WorkspaceBytes: workspaceBytes, PIDsLimit: profile.PIDsLimit},
 			RequiredCapabilities: providerRequirements(work.Slot.RequiredCapabilities),
 			Network:              network,
 			Workspace: providerv1.WorkspacePolicy{Mode: providerv1.WorkspaceEphemeral, BaseRevisionID: profile.BaseRevisionID,
@@ -491,7 +630,15 @@ func (c *Client) ObserveOperation(ctx context.Context, work product.ProviderObse
 	}
 	if evidence.State == "succeeded" && work.SessionID != "" && work.OperationType == "create_session" {
 		var expiresAt string
-		if work.SessionKind == product.SessionKindBrowserAutomation || work.SessionKind == product.SessionKindBrowserLive {
+		if work.SessionKind == product.SessionKindDesktop {
+			handoff, handoffErr := c.readDesktopSessionHandoff(ctx, work, profile)
+			if handoffErr != nil {
+				return product.ProviderOperationEvidence{}, handoffErr
+			}
+			evidence.HandoffReference = handoff.InternalEndpointReference
+			evidence.ConnectionGeneration = handoff.ConnectionGeneration
+			expiresAt = handoff.ExpiresAt
+		} else if work.SessionKind == product.SessionKindBrowserAutomation || work.SessionKind == product.SessionKindBrowserLive {
 			handoff, handoffErr := c.readBrowserSessionHandoff(ctx, work, profile)
 			if handoffErr != nil {
 				return product.ProviderOperationEvidence{}, handoffErr
@@ -532,8 +679,16 @@ func expectedProviderOperationType(work product.ProviderObservationWork) provide
 		return providerv1.OperationCloseRuntimeSession
 	case "open_browser_session":
 		return providerv1.OperationOpenBrowserSession
+	case "open_desktop_session":
+		return providerv1.OperationOpenDesktopSession
+	case "close_desktop_session":
+		return providerv1.OperationCloseDesktopSession
 	}
 	switch {
+	case work.OperationType == "create_session" && work.SessionKind == product.SessionKindDesktop:
+		return providerv1.OperationOpenDesktopSession
+	case work.OperationType == "close_session" && work.SessionKind == product.SessionKindDesktop:
+		return providerv1.OperationCloseDesktopSession
 	case work.OperationType == "create_session" && (work.SessionKind == product.SessionKindBrowserAutomation || work.SessionKind == product.SessionKindBrowserLive):
 		return providerv1.OperationOpenBrowserSession
 	case work.OperationType == "create_session":

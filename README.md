@@ -19,7 +19,7 @@ general production readiness.
 | Independent external caller | **13/13 complete** |
 | Product v1 Phase 3 | **13/13 complete** for the bounded standalone topology |
 | Product v1 Phase 4 Browser | **13/13 complete** for the bounded same-repository separate-process topology |
-| Product v1 Phase 5 Desktop | **5/15 complete**; locked image plus Provider runtime/private-reference/lifecycle/usage composition pass, Product dispatch is next, advertisement disabled |
+| Product v1 Phase 5 Desktop | **6/15 complete**; the exact Product network adapter, isolated Desktop workers, retained recovery, and real-store gate pass; grants are next, advertisement disabled |
 | Coding/shell qualification | **Qualified** for the exact caller, Provider revisions, topology, profile, and scenarios recorded below |
 | Latest core CI | [Passed](https://github.com/shell-echo/sandbox-runtime/actions/runs/35204434771) |
 
@@ -79,7 +79,7 @@ independently implemented caller, HA, hostile-multitenant, or production
 evidence.
 
 [Product v1 Phase 5 Desktop](docs/plan/product-v1-phase-5-desktop-development-unified-product.md)
-has completed **5/15** dependency-ordered slices. Slice 1 locks a separate
+has completed **6/15** dependency-ordered slices. Slice 1 locks a separate
 Provider Desktop capability/profile/runtime shape and complete session
 open/read/handoff/close/expiry/revocation, usage, admission, security, and
 cleanup semantics. Exact authority is Contract revision
@@ -105,7 +105,13 @@ adds the fail-closed Docker adapter, durable opaque private resolver, fresh
 attach/reconnect checks, lifecycle readiness, revoke-before-cleanup/absence
 composition, and exact Desktop duration evidence. Production startup, Product
 dispatch, public data planes, Web experience, and capability advertisement
-remain later gates.
+were still later gates at that boundary. Slice 6 implementation
+`2d5bbaee2db2ab5c2a85f67e39acf2dd7b82a240` adds the exact-revision
+network-only Product adapter, isolated Desktop dispatch and observation,
+retained operation recovery, independent Product/Provider generations, and
+Desktop-specific close cleanup. Its real PostgreSQL plus HTTP Provider-fixture
+gate passes; production composition, end-user grants, public data planes, Web
+experience, and capability advertisement remain later gates.
 
 ## What the project provides
 
@@ -122,6 +128,9 @@ remain later gates.
   and capability advertisement remain disabled pending later Phase 5 slices.
 - Product-owned Desktop slot/session intent with exact profiles, transactional
   PostgreSQL persistence, quotas, audit, and isolated pending outbox work.
+- A locked network-only Product Desktop Provider adapter with separate
+  generation authorities, durable dispatch/observation recovery, and
+  Desktop-specific session cleanup; it is not production-composed.
 - Provider-local Desktop operation authority with durable replay/fencing,
   exact-owned close/expiry cleanup policy, and unadvertised protected handlers.
 - An exact signed Desktop image plus Provider-local Docker adapter, private

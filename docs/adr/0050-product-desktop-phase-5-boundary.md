@@ -1,6 +1,6 @@
 # ADR 0050: Product Desktop Phase 5 Boundary
 
-- Status: Accepted for Product Phase 5 scope; Slices 1-5 are complete
+- Status: Accepted for Product Phase 5 scope; Slices 1-6 are complete
 - Date: 2026-09-19
 
 ## Context
@@ -18,6 +18,9 @@ publication and independent provenance gate now pass.
 Slice 5 adds the Provider-local runtime adapter, private resolver, lifecycle,
 usage, revocation, and cleanup composition while leaving startup and
 advertisement disabled.
+Slice 6 adds the Product network-only Provider adapter, isolated Desktop
+dispatch/observation and close cleanup, and real-PostgreSQL recovery evidence
+while leaving production composition and advertisement disabled.
 
 Starting with Product persistence would require Product code to invent a
 Provider wire shape. Starting with a runtime image or driver would create an
@@ -178,6 +181,34 @@ This is Provider-local component authority. Production command composition,
 Product dispatch, public signaling/media/input, grants and policy, recording,
 Web integration, and capability advertisement remain later slices.
 
+## Slice 6 Product network adapter
+
+The Product selects the exact Desktop Contract revision and tree through a
+separate network-client constructor and accepts one exact
+`sandbox-runtime-desktop-v1` profile backed by the signed Slice 4 image,
+bounded resources, a selected architecture, and explicit restricted-network
+policy. Readiness is re-evaluated from Provider discovery before authorization
+or mutation; a revision, capability, profile, runtime class, isolation,
+architecture, or limit drift fails closed.
+
+Desktop create, lifecycle, open, close, retained-operation, and handoff reads
+use only protected Provider routes and exact Desktop DTOs. The Product slot
+generation is carried as the Product fence. Provider generation remains a
+separate retained value and is never inferred from Product generation.
+
+Dedicated PostgreSQL lease paths isolate Desktop slot, lifecycle, session,
+expiry, and observation work from existing generic, Terminal, and Browser
+workers. Desktop close revokes the Product handoff and terminalizes the
+session but retains the current ready Desktop slot binding; it does not reuse
+Browser's sandbox termination and replacement semantics. Dispatch remains
+asynchronous, and outcome-unknown attempts are recovered by retained
+operation observation after process reconstruction.
+
+This is Product network-adapter and real-store component authority only. The
+Provider peer in the real-store gate is a same-repository HTTP fixture.
+Production process composition, end-user grants, public data planes, policy,
+recording, Web integration, and advertisement remain later slices.
+
 ## Consequences
 
 - Product Desktop persistence begins only after the Provider wire authority is
@@ -198,6 +229,9 @@ Web integration, and capability advertisement remain later slices.
   recorded separately; this is not adapter or production evidence.
 - Slice 5 real-image broker and cleanup evidence plus composed fault tests are
   not a deployed restricted-egress topology or a public Desktop data plane.
+- Slice 6 real-store recovery proves the Product adapter and durable worker
+  boundary, not production process composition or an independently
+  implemented Provider deployment.
 - Phase 5 completion requires the named independent-process Slice 15 gate.
   It still does not establish multi-user collaboration, HA, hostile
   multi-tenant isolation, production deployment, or general production

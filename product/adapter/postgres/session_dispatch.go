@@ -156,7 +156,8 @@ func (s *Store) RecordSessionDispatch(ctx context.Context, work product.SessionC
 		state = "failed"
 	}
 	browserSession := work.Kind == product.SessionKindBrowserAutomation || work.Kind == product.SessionKindBrowserLive
-	if (work.Action == "open" || (work.Action == "close" && browserSession)) && state == "succeeded" {
+	desktopSession := work.Kind == product.SessionKindDesktop
+	if (work.Action == "open" || (work.Action == "close" && (browserSession || desktopSession))) && state == "succeeded" {
 		state = "running"
 	}
 	outcome := "pending"
@@ -170,13 +171,19 @@ func (s *Store) RecordSessionDispatch(ctx context.Context, work product.SessionC
 		fencingToken = work.SlotGeneration
 	}
 	providerAction := "open_runtime_session"
-	if work.Kind == product.SessionKindBrowserAutomation || work.Kind == product.SessionKindBrowserLive {
+	switch {
+	case browserSession:
 		providerAction = "open_browser_session"
+	case desktopSession:
+		providerAction = "open_desktop_session"
 	}
 	if work.Action == "close" {
 		providerAction = "close_runtime_session"
-		if work.Kind != product.SessionKindTerminal {
+		switch {
+		case browserSession:
 			providerAction = "terminate_browser_session"
+		case desktopSession:
+			providerAction = "close_desktop_session"
 		}
 	}
 	deadline := work.ExpiresAt

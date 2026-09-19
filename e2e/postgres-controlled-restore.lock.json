@@ -2,8 +2,8 @@
   "schema_version": 2,
   "evidence_profile": "browser-postgres-controlled-restore-e2e-v1",
   "sources": {
-    "provider_revision": "0c30d6f5e6e0c6227069b8689668a1a0dcfb940b",
-    "harness_baseline": "0c30d6f5e6e0c6227069b8689668a1a0dcfb940b",
+    "provider_revision": "2d5bbaee2db2ab5c2a85f67e39acf2dd7b82a240",
+    "harness_baseline": "2d5bbaee2db2ab5c2a85f67e39acf2dd7b82a240",
     "gateway_component": {
       "path": "gateway/composition/browser.go",
       "revision": "b4d41c9a32b4ccf39edaba3fb8bf5ad239c1f945"
@@ -23,7 +23,7 @@
   },
   "base_lock": {
     "path": "e2e/downstream-fencing-v2.lock.json",
-    "sha256": "sha256:6cad16be6552982d03dbed5d42b610a8fe5d689f678451da840b3f7f1f699f93",
+    "sha256": "sha256:486752f00aaee5bc0426a63e850e3bd2f0358bec15bc905abb1147d5397b1e2d",
     "evidence_profile": "browser-downstream-fencing-e2e-v2"
   },
   "contract": {

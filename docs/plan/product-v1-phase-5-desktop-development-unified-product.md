@@ -1,6 +1,6 @@
 # Product v1 Phase 5: Desktop Development and Unified Product
 
-Status: 5/15 complete
+Status: 6/15 complete
 
 Started: 2026-09-19
 
@@ -30,7 +30,7 @@ relabeled as Desktop evidence.
 | 3 | Provider Desktop domain, application policy, persistence, reconciliation, and protected handlers with capability still unadvertised | State/fence/replay/deadline/cancellation matrices; restart at every commit/effect boundary; exact-owned cleanup; unknown-outcome reconciliation; safe-error and nondisclosure tests | **Complete: Provider-local component authority only; no runtime or advertisement** |
 | 4 | Reproducible immutable Desktop runtime image plus display/session broker protocol and provenance | Locked inputs and outputs; architecture matrix; unprivileged process/device policy; broker protocol bounds; native smoke; independent provenance verification; no mutable tag selection | **Complete:** native amd64/arm64/v8 run `35447651328` published signed index `sha256:638e97c694ad4c9b9d750ae30dc6088ff5011af570ba1b12fdf3f0e35ffa0300`; independent verification passed |
 | 5 | Provider Desktop runtime adapter, private resolver, lifecycle, usage, revocation, and cleanup composition | Real runtime open/attach/reconnect/close/expiry; generation fencing; no private-coordinate projection; revoke-before-cleanup; absence confirmation; duration evidence; fault injection | **Complete: Provider-local runtime/component authority only; production composition and advertisement remain off** |
-| 6 | Product network-only Provider adapter with exact readiness, Desktop dispatch/observation, close, and cleanup | Locked discovery/profile selection; protected requests; timeout/cancellation/replay/drift; retained operation recovery; Product/Provider generation separation; real store integration | Planned |
+| 6 | Product network-only Provider adapter with exact readiness, Desktop dispatch/observation, close, and cleanup | Locked discovery/profile selection; protected requests; timeout/cancellation/replay/drift; retained operation recovery; Product/Provider generation separation; real store integration | **Complete: Product network adapter and real-store component authority only; production composition and advertisement remain off** |
 | 7 | Product view/control grants, one-controller fencing, quotas, revocation, and metadata audit | Viewer mutation denial; one live controller; database-time expiry; one-use grants; stale-fence and quota races; continuous authority checks; nondisclosing failures | Planned |
 | 8 | Public Desktop display/audio/signaling/input plane with bounded negotiation and backpressure | Authenticated encrypted signaling; exact origin; supported codec/resolution/bitrate matrix; viewer/control separation; ordered input; slow-consumer closure; no private handoff disclosure | Planned |
 | 9 | Keyboard, pointer, touch, clipboard, and Product-bound transfer policy | Deny-by-default matrix; activation/consent; size/type/count/digest/path bounds; exact transfer identity; policy-revision revocation; microphone/camera/device denial | Planned |
@@ -253,6 +253,46 @@ gates retain that responsibility. The exact evidence and non-claims are in
 The production command still does not compose Desktop, discovery remains
 unchanged, and no Product dispatcher, public data plane, grant/policy,
 recording, unified Web, deployment, or production claim follows.
+
+## Slice 6 Product Provider-adapter boundary
+
+Implementation revision `2d5bbaee2db2ab5c2a85f67e39acf2dd7b82a240`
+adds the Product-owned network-only Desktop Provider client, isolated Desktop
+slot/lifecycle/session/observation workers, PostgreSQL migration 9, retained
+attempt recovery, and Desktop-specific close cleanup.
+
+The client accepts only the current Desktop Contract revision/tree, one exact
+signed-image runtime profile, bounded resources and request timeout, and an
+explicit restricted-network policy. Each authorization or dispatch rechecks
+the exact Desktop discovery entry, runtime class, isolation, selected
+architecture, and Provider limits. All mutations and retained reads use the
+protected Provider HTTP surface with exact Contract identities, correlation,
+fencing, deterministic digest/idempotency, bounded strict decoding, and
+outcome-unknown preservation.
+
+Product slot generation is the Product fence; the separately stored Provider
+generation is the Provider expected generation. Dedicated leases prevent the
+generic, Terminal, or Browser workers from consuming Desktop work. Successful
+Desktop close clears only the Product handoff and terminalizes the Desktop
+session while keeping its current slot binding; Browser's terminate-and-
+replace policy is not reused.
+
+### Slice 6 evidence boundary
+
+Focused tests cover lock/profile/readiness drift, timeout, cancellation,
+replay, protected requests, ambiguity, retry, generation separation, and
+worker isolation. The real PostgreSQL gate runs create, reconstructed
+observation, open, opaque handoff recovery, reconstructed close, and exact
+session cleanup through the network adapter while retaining the slot. Full
+race/shuffle, vet, Contract/evidence verifiers, and existing Docker lifecycle
+integration pass. Exact evidence and non-claims are in
+[`../audits/product-phase-5-desktop-slice-6.md`](../audits/product-phase-5-desktop-slice-6.md).
+
+This remains same-repository component evidence. Production startup,
+end-user grants, public signaling/media/input, policy, recording, development
+templates, unified Web, capability advertisement, independent-process release
+evidence, deployment, HA, hostile-multitenant, and production readiness remain
+open.
 
 ## Deferred beyond Phase 5
 

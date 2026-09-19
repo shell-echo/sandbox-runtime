@@ -11,6 +11,14 @@ import (
 )
 
 func (s *Store) LeaseProviderObservations(ctx context.Context, workerID string, lease time.Duration, limit int) ([]product.ProviderObservationWork, error) {
+	return s.leaseProviderObservations(ctx, workerID, lease, limit, false)
+}
+
+func (s *Store) LeaseDesktopProviderObservations(ctx context.Context, workerID string, lease time.Duration, limit int) ([]product.ProviderObservationWork, error) {
+	return s.leaseProviderObservations(ctx, workerID, lease, limit, true)
+}
+
+func (s *Store) leaseProviderObservations(ctx context.Context, workerID string, lease time.Duration, limit int, desktopOnly bool) ([]product.ProviderObservationWork, error) {
 	if s == nil || s.pool == nil || ctx == nil || workerID == "" || lease < time.Second || lease > time.Minute || limit < 1 || limit > 100 {
 		return nil, product.ErrInvalid
 	}
@@ -25,6 +33,14 @@ func (s *Store) LeaseProviderObservations(ctx context.Context, workerID string, 
  SELECT a.tenant_id,a.operation_id,a.attempt_id
  FROM sandbox_runtime_product.product_operation_attempts AS a
  WHERE a.state IN ('dispatched','accepted','running','outcome_unknown')
+   AND CASE WHEN $4::boolean THEN
+       EXISTS (SELECT 1 FROM sandbox_runtime_product.workspace_slots AS ws
+               WHERE ws.tenant_id=a.tenant_id AND ws.workspace_id=a.workspace_id
+                 AND ws.slot_key=a.slot_key AND ws.kind='desktop')
+       ELSE NOT EXISTS (SELECT 1 FROM sandbox_runtime_product.workspace_slots AS ws
+                        WHERE ws.tenant_id=a.tenant_id AND ws.workspace_id=a.workspace_id
+                          AND ws.slot_key=a.slot_key AND ws.kind='desktop')
+       END
    AND a.updated_at <= clock_timestamp()
    AND (a.reconcile_lease_owner IS NULL OR a.reconcile_lease_expires_at <= clock_timestamp())
  ORDER BY a.updated_at,a.operation_id,a.attempt_id FOR UPDATE SKIP LOCKED LIMIT $1
@@ -36,7 +52,7 @@ func (s *Store) LeaseProviderObservations(ctx context.Context, workerID string, 
  RETURNING a.*
 )
 SELECT l.tenant_id,l.workspace_id,l.operation_id,l.attempt_id,l.slot_key,l.slot_generation,l.fencing_token,
-       b.runtime_profile_id,b.sandbox_id,COALESCE(l.provider_operation_id,''),l.provider_revision_id,COALESCE(l.session_id,''),
+       b.runtime_profile_id,b.sandbox_id,COALESCE(l.provider_operation_id,''),l.provider_revision_id,b.provider_generation,COALESCE(l.session_id,''),
        o.operation_type,l.reconcile_lease_owner,COALESCE(l.provider_action,''),COALESCE(s.kind,''),COALESCE(s.protocol_profile,''),
        COALESCE(s.expires_at,'epoch'::timestamptz),COALESCE(ob.payload->>'final_state','')
 FROM leased AS l JOIN sandbox_runtime_product.provider_bindings AS b
@@ -45,7 +61,7 @@ FROM leased AS l JOIN sandbox_runtime_product.provider_bindings AS b
 JOIN sandbox_runtime_product.product_operations AS o ON o.tenant_id=l.tenant_id AND o.operation_id=l.operation_id
 LEFT JOIN sandbox_runtime_product.runtime_sessions AS s ON s.tenant_id=l.tenant_id AND s.session_id=l.session_id
 LEFT JOIN sandbox_runtime_product.outbox AS ob ON ob.tenant_id=l.tenant_id AND ob.outbox_id=l.attempt_id
-ORDER BY l.operation_id,l.attempt_id`, limit, workerID, lease.String())
+ORDER BY l.operation_id,l.attempt_id`, limit, workerID, lease.String(), desktopOnly)
 	if err != nil {
 		return nil, storeError(ctx, opCtx, err, false)
 	}
@@ -54,7 +70,7 @@ ORDER BY l.operation_id,l.attempt_id`, limit, workerID, lease.String())
 	for rows.Next() {
 		var item product.ProviderObservationWork
 		if err := rows.Scan(&item.TenantID, &item.WorkspaceID, &item.OperationID, &item.AttemptID, &item.SlotKey, &item.SlotGeneration, &item.FencingToken,
-			&item.RuntimeProfileID, &item.SandboxID, &item.ProviderOperationID, &item.ProviderRevisionID, &item.SessionID, &item.OperationType, &item.LeaseOwner,
+			&item.RuntimeProfileID, &item.SandboxID, &item.ProviderOperationID, &item.ProviderRevisionID, &item.ProviderGeneration, &item.SessionID, &item.OperationType, &item.LeaseOwner,
 			&item.ProviderAction, &item.SessionKind, &item.ProtocolProfile, &item.SessionExpiresAt, &item.SessionFinalState); err != nil {
 			return nil, storeError(ctx, opCtx, err, false)
 		}
@@ -122,7 +138,7 @@ reconcile_lease_expires_at=NULL,updated_at=$5 WHERE tenant_id=$6 AND operation_i
 		return nil
 	}
 	if work.ProviderAction == "suspend" || work.ProviderAction == "resume" || work.ProviderAction == "terminate" {
-		if err := recordBrowserLifecycleObservation(opCtx, tx, work, evidence, eventID, state, now); err != nil {
+		if err := recordAuxiliaryLifecycleObservation(opCtx, tx, work, evidence, eventID, state, now); err != nil {
 			return storeError(ctx, opCtx, err, false)
 		}
 		if err := tx.Commit(opCtx); err != nil {
@@ -200,7 +216,7 @@ VALUES($1,$2,$3,$4,$5,'slot',$6,$7,'service','product-reconciler',$8,$9)`, work.
 	return nil
 }
 
-func recordBrowserLifecycleObservation(ctx context.Context, tx pgx.Tx, work product.ProviderObservationWork, evidence product.ProviderOperationEvidence, eventID, state string, now time.Time) error {
+func recordAuxiliaryLifecycleObservation(ctx context.Context, tx pgx.Tx, work product.ProviderObservationWork, evidence product.ProviderOperationEvidence, eventID, state string, now time.Time) error {
 	var operationState string
 	if err := tx.QueryRow(ctx, `SELECT state FROM sandbox_runtime_product.product_operations WHERE tenant_id=$1 AND operation_id=$2 FOR UPDATE`, work.TenantID, work.OperationID).Scan(&operationState); err != nil {
 		return err
@@ -287,6 +303,7 @@ func recordSessionObservation(ctx context.Context, tx pgx.Tx, work product.Provi
 	productState, reconciliation := "running", "reconciling"
 	sessionState := "provisioning"
 	closingBrowser := work.ProviderAction == "terminate_browser_session"
+	closingDesktop := work.ProviderAction == "close_desktop_session"
 	if work.OperationType == "close_session" {
 		sessionState = "draining"
 	}
@@ -332,6 +349,9 @@ func recordSessionObservation(ctx context.Context, tx pgx.Tx, work product.Provi
 	if closingBrowser && state == "succeeded" {
 		return recordBrowserSessionCleanup(ctx, tx, work, evidence, eventID, sessionState, eventType, now)
 	}
+	if closingDesktop && state == "succeeded" {
+		return recordDesktopSessionCleanup(ctx, tx, work, eventID, sessionState, eventType, now)
+	}
 	if _, err := tx.Exec(ctx, `UPDATE sandbox_runtime_product.product_operations SET state=$1,reconciliation_status=$2,version=version+1,updated_at=$3 WHERE tenant_id=$4 AND operation_id=$5`, productState, reconciliation, now, work.TenantID, work.OperationID); err != nil {
 		return err
 	}
@@ -356,6 +376,29 @@ provider_handoff_expires_at=COALESCE($4::timestamptz,provider_handoff_expires_at
 	}
 	attributes, _ := json.Marshal(map[string]any{"provider_outcome": state})
 	_, err = tx.Exec(ctx, `INSERT INTO sandbox_runtime_product.workspace_events(tenant_id,workspace_id,sequence,event_id,event_type,subject_type,subject_id,operation_id,actor_type,actor_id,occurred_at,attributes)VALUES($1,$2,$3,$4,$5,'session',$6,$7,'service','product-reconciler',$8,$9)`, work.TenantID, work.WorkspaceID, sequence, eventID, eventType, work.SessionID, work.OperationID, now, attributes)
+	return err
+}
+
+func recordDesktopSessionCleanup(ctx context.Context, tx pgx.Tx, work product.ProviderObservationWork, eventID, sessionState, eventType string, now time.Time) error {
+	if _, err := tx.Exec(ctx, `UPDATE sandbox_runtime_product.runtime_sessions
+SET state=$1,version=version+1,provider_handoff_reference=NULL,provider_handoff_expires_at=NULL,updated_at=$2
+WHERE tenant_id=$3 AND session_id=$4 AND state='draining'`, sessionState, now, work.TenantID, work.SessionID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE sandbox_runtime_product.product_operations
+SET state='succeeded',reconciliation_status='complete',version=version+1,updated_at=$1
+WHERE tenant_id=$2 AND operation_id=$3`, now, work.TenantID, work.OperationID); err != nil {
+		return err
+	}
+	sequence, err := lockWorkspaceAndAdvance(ctx, tx, work.TenantID, work.WorkspaceID, "", now)
+	if err != nil {
+		return err
+	}
+	attributes, _ := json.Marshal(map[string]any{"provider_outcome": "succeeded"})
+	_, err = tx.Exec(ctx, `INSERT INTO sandbox_runtime_product.workspace_events
+(tenant_id,workspace_id,sequence,event_id,event_type,subject_type,subject_id,operation_id,actor_type,actor_id,occurred_at,attributes)
+VALUES($1,$2,$3,$4,$5,'session',$6,$7,'service','product-reconciler',$8,$9)`, work.TenantID, work.WorkspaceID,
+		sequence, eventID, eventType, work.SessionID, work.OperationID, now, attributes)
 	return err
 }
 
