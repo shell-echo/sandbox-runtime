@@ -152,7 +152,7 @@
       "additionalProperties": false,
       "properties": {
         "region_id": {"$ref": "#/$defs/Identifier"},
-        "resource_class": {"enum": ["standard", "browser", "office", "video", "gpu"]},
+        "resource_class": {"enum": ["standard", "browser", "desktop", "office", "video", "gpu"]},
         "architecture": {"enum": ["amd64", "arm64"]}
       }
     },

@@ -1,0 +1,26 @@
+{
+  "gateway_ownership": {
+    "end_user_authorization": "caller-owned",
+    "tenant_authorization": "caller-owned",
+    "control_lease": "caller-owned",
+    "revocation": "caller-owned-and-provider-enforced",
+    "audit": "caller-owned",
+    "reconnect_policy": "caller-owned"
+  },
+  "cases": [
+    {"name": "wrong controller identity", "boundary": "provider-admission", "result": "deny-before-dispatch", "status": 403},
+    {"name": "cross tenant context", "boundary": "provider-and-gateway", "result": "deny-before-resolution", "status": 403},
+    {"name": "stale sandbox generation", "boundary": "provider-admission", "result": "deny-before-dispatch", "status": 409},
+    {"name": "replayed mutation token", "boundary": "provider-admission", "result": "deny-before-dispatch", "status": 409},
+    {"name": "expired handoff", "boundary": "provider-and-gateway", "result": "deny-before-resolution", "status": 410},
+    {"name": "revoked handoff", "boundary": "provider-and-gateway", "result": "deny-before-resolution", "status": 410},
+    {"name": "stale connection generation", "boundary": "provider-and-gateway", "result": "deny-before-resolution", "status": 409},
+    {"name": "sandbox rebuild generation mismatch", "boundary": "provider-and-gateway", "result": "deny-before-resolution", "status": 409},
+    {"name": "raw endpoint disclosure", "boundary": "provider-projection", "result": "reject-document"},
+    {"name": "provider credential disclosure", "boundary": "provider-projection", "result": "reject-document"},
+    {"name": "session policy override", "boundary": "provider-schema", "result": "reject-document"},
+    {"name": "session secret injection", "boundary": "provider-schema", "result": "reject-document"},
+    {"name": "desktop session capacity exhausted", "boundary": "provider-admission", "result": "safe-retryable-error", "status": 429},
+    {"name": "microphone or camera pass through", "boundary": "desktop-profile", "result": "deny-device-access", "status": 422}
+  ]
+}

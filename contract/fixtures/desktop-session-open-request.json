@@ -1,0 +1,12 @@
+{
+  "operation_id": "desktop-session-operation-1",
+  "attempt_id": "desktop-session-attempt-1",
+  "fencing_token": 3,
+  "idempotency_key": "open-desktop-session-1",
+  "request_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+  "deadline_at": "2026-09-19T10:05:00Z",
+  "expected_generation": 1,
+  "desktop_session_id": "desktop-session-1",
+  "capability_profile_id": "desktop-v1",
+  "expires_at": "2026-09-19T10:30:00Z"
+}

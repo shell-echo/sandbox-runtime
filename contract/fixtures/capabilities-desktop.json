@@ -1,25 +1,20 @@
 {
-  "provider_revision_id": "provider-revision-terminal-connect-v1",
+  "provider_revision_id": "provider-revision-local-v1",
   "api_version": "v1",
   "capabilities": [
     {
-      "id": "sandbox.terminal",
+      "id": "sandbox.desktop",
       "versions": ["1.0.0"],
-      "profiles": ["terminal-v1"]
-    },
-    {
-      "id": "sandbox.terminal-connect",
-      "versions": ["1.0.0"],
-      "profiles": ["terminal-connect-v1"]
+      "profiles": ["desktop-v1"]
     }
   ],
   "runtime_profiles": [
     {
-      "id": "sandbox-runtime-terminal-connect-v1",
+      "id": "sandbox-runtime-desktop-v1",
       "isolation_class": "container",
-      "runtime_class_name": "sandbox-runtime-terminal-connect",
+      "runtime_class_name": "sandbox-runtime-desktop",
       "architecture": ["amd64"],
-      "capability_profile_ids": ["terminal-v1", "terminal-connect-v1"]
+      "capability_profile_ids": ["desktop-v1"]
     }
   ],
   "snapshot_restore_profiles": [
@@ -32,9 +27,10 @@
     }
   ],
   "limits": {
-    "max_cpu_millis": 1000,
-    "max_memory_bytes": 1073741824,
-    "max_ephemeral_storage_bytes": 1073741824,
+    "max_cpu_millis": 4000,
+    "max_memory_bytes": 4294967296,
+    "max_ephemeral_storage_bytes": 4294967296,
+    "max_workspace_bytes": 2147483648,
     "max_lease_seconds": 3600,
     "max_exec_seconds": 300
   }

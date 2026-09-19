@@ -1,0 +1,12 @@
+{
+  "operation_id": "desktop-session-close-operation-1",
+  "attempt_id": "desktop-session-close-attempt-1",
+  "fencing_token": 4,
+  "idempotency_key": "close-desktop-session-1",
+  "request_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+  "deadline_at": "2026-09-19T10:25:00Z",
+  "expected_generation": 1,
+  "desktop_session_id": "desktop-session-1",
+  "connection_generation": 1,
+  "reason": "caller_complete"
+}

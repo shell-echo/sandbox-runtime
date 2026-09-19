@@ -1,0 +1,85 @@
+{
+  "cases": [
+    {
+      "name": "terminal route shape injection",
+      "schema": "desktop-session-open-request.schema.json",
+      "document": {
+        "operation_id": "desktop-session-operation-1", "attempt_id": "desktop-session-attempt-1", "fencing_token": 3,
+        "idempotency_key": "open-desktop-session-1", "request_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+        "deadline_at": "2026-09-19T10:05:00Z", "expected_generation": 1, "desktop_session_id": "desktop-session-1",
+        "capability_profile_id": "desktop-v1", "expires_at": "2026-09-19T10:30:00Z", "runtime_type": "desktop"
+      }
+    },
+    {
+      "name": "gateway scope injection",
+      "schema": "desktop-session-open-request.schema.json",
+      "document": {
+        "operation_id": "desktop-session-operation-1", "attempt_id": "desktop-session-attempt-1", "fencing_token": 3,
+        "idempotency_key": "open-desktop-session-1", "request_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+        "deadline_at": "2026-09-19T10:05:00Z", "expected_generation": 1, "desktop_session_id": "desktop-session-1",
+        "capability_profile_id": "desktop-v1", "expires_at": "2026-09-19T10:30:00Z", "scopes": ["desktop.control"]
+      }
+    },
+    {
+      "name": "display preference injection",
+      "schema": "desktop-session-open-request.schema.json",
+      "document": {
+        "operation_id": "desktop-session-operation-1", "attempt_id": "desktop-session-attempt-1", "fencing_token": 3,
+        "idempotency_key": "open-desktop-session-1", "request_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+        "deadline_at": "2026-09-19T10:05:00Z", "expected_generation": 1, "desktop_session_id": "desktop-session-1",
+        "capability_profile_id": "desktop-v1", "expires_at": "2026-09-19T10:30:00Z", "width": 1920
+      }
+    },
+    {
+      "name": "raw endpoint handoff",
+      "schema": "desktop-session-handoff.schema.json",
+      "document": {
+        "operation_id": "desktop-session-operation-1", "attempt_id": "desktop-session-attempt-1", "fencing_token": 3,
+        "sandbox_id": "desktop-sandbox-1", "desktop_session_id": "desktop-session-1", "capability_profile_id": "desktop-v1",
+        "protocol": "webrtc", "media_profile_id": "desktop-media-v1", "control_profile_id": "desktop-control-v1",
+        "internal_endpoint_reference": "https://10.0.0.1/session", "connection_generation": 1, "expires_at": "2026-09-19T10:30:00Z"
+      }
+    },
+    {
+      "name": "browser reference handoff",
+      "schema": "desktop-session-handoff.schema.json",
+      "document": {
+        "operation_id": "desktop-session-operation-1", "attempt_id": "desktop-session-attempt-1", "fencing_token": 3,
+        "sandbox_id": "desktop-sandbox-1", "desktop_session_id": "desktop-session-1", "capability_profile_id": "desktop-v1",
+        "protocol": "webrtc", "media_profile_id": "desktop-media-v1", "control_profile_id": "desktop-control-v1",
+        "internal_endpoint_reference": "ref:browser-session:opaque-1", "connection_generation": 1, "expires_at": "2026-09-19T10:30:00Z"
+      }
+    },
+    {
+      "name": "provider credential handoff",
+      "schema": "desktop-session-handoff.schema.json",
+      "document": {
+        "operation_id": "desktop-session-operation-1", "attempt_id": "desktop-session-attempt-1", "fencing_token": 3,
+        "sandbox_id": "desktop-sandbox-1", "desktop_session_id": "desktop-session-1", "capability_profile_id": "desktop-v1",
+        "protocol": "webrtc", "media_profile_id": "desktop-media-v1", "control_profile_id": "desktop-control-v1",
+        "internal_endpoint_reference": "ref:desktop-session:opaque-1", "connection_generation": 1, "expires_at": "2026-09-19T10:30:00Z",
+        "provider_access_token_reference": "token:provider-1"
+      }
+    },
+    {
+      "name": "unapproved protocol handoff",
+      "schema": "desktop-session-handoff.schema.json",
+      "document": {
+        "operation_id": "desktop-session-operation-1", "attempt_id": "desktop-session-attempt-1", "fencing_token": 3,
+        "sandbox_id": "desktop-sandbox-1", "desktop_session_id": "desktop-session-1", "capability_profile_id": "desktop-v1",
+        "protocol": "websocket", "media_profile_id": "desktop-media-v1", "control_profile_id": "desktop-control-v1",
+        "internal_endpoint_reference": "ref:desktop-session:opaque-1", "connection_generation": 1, "expires_at": "2026-09-19T10:30:00Z"
+      }
+    },
+    {
+      "name": "stale close identity",
+      "schema": "desktop-session-close-request.schema.json",
+      "document": {
+        "operation_id": "desktop-session-close-operation-1", "attempt_id": "desktop-session-close-attempt-1", "fencing_token": 4,
+        "idempotency_key": "close-desktop-session-1", "request_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+        "deadline_at": "2026-09-19T10:25:00Z", "expected_generation": 1, "desktop_session_id": "desktop-session-1",
+        "connection_generation": 0, "reason": "caller_complete"
+      }
+    }
+  ]
+}

@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:shell-echo:sandbox-runtime:contract:desktop-session-handoff:v1",
+  "title": "Sandbox Runtime Desktop Session Handoff",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "operation_id",
+    "attempt_id",
+    "fencing_token",
+    "sandbox_id",
+    "desktop_session_id",
+    "capability_profile_id",
+    "protocol",
+    "media_profile_id",
+    "control_profile_id",
+    "internal_endpoint_reference",
+    "connection_generation",
+    "expires_at"
+  ],
+  "properties": {
+    "operation_id": {"$ref": "#/$defs/Identifier"},
+    "attempt_id": {"$ref": "#/$defs/Identifier"},
+    "fencing_token": {"type": "integer", "minimum": 1, "maximum": 9007199254740991},
+    "sandbox_id": {"$ref": "#/$defs/Identifier"},
+    "desktop_session_id": {"$ref": "#/$defs/Identifier"},
+    "capability_profile_id": {"const": "desktop-v1"},
+    "protocol": {"const": "webrtc"},
+    "media_profile_id": {"const": "desktop-media-v1"},
+    "control_profile_id": {"const": "desktop-control-v1"},
+    "internal_endpoint_reference": {
+      "type": "string",
+      "pattern": "^ref:desktop-session:[A-Za-z0-9][A-Za-z0-9._-]{0,199}$"
+    },
+    "connection_generation": {"type": "integer", "minimum": 1, "maximum": 9007199254740991},
+    "expires_at": {"type": "string", "format": "date-time"}
+  },
+  "$defs": {
+    "Identifier": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$"}
+  }
+}

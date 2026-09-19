@@ -1,0 +1,14 @@
+{
+  "operation_id": "desktop-session-operation-1",
+  "attempt_id": "desktop-session-attempt-1",
+  "fencing_token": 3,
+  "sandbox_id": "desktop-sandbox-1",
+  "desktop_session_id": "desktop-session-1",
+  "capability_profile_id": "desktop-v1",
+  "protocol": "webrtc",
+  "media_profile_id": "desktop-media-v1",
+  "control_profile_id": "desktop-control-v1",
+  "internal_endpoint_reference": "ref:desktop-session:opaque-1",
+  "connection_generation": 1,
+  "expires_at": "2026-09-19T10:30:00Z"
+}
