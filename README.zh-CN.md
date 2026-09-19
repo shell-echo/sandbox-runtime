@@ -14,7 +14,7 @@
 | 独立 External Caller | **13/13 已完成** |
 | Product v1 第三阶段 | 在有边界的 standalone 拓扑内 **13/13 已完成** |
 | Product v1 第四阶段 Browser | 在有边界的同仓库独立进程拓扑内 **13/13 已完成** |
-| Product v1 第五阶段 Desktop | **5/15 已完成**；锁定镜像及 Provider runtime/private resolver/lifecycle/usage 组合已通过，Product dispatch 尚待完成，能力广告仍关闭 |
+| Product v1 第五阶段 Desktop | **6/15 已完成**；精确 Product 网络适配器、隔离 Desktop worker、保留恢复与真实数据库门禁已通过，下一步为授权，能力广告仍关闭 |
 | 编程/Shell 资格验证 | 对下述精确调用方、Provider 版本、拓扑、Profile 和场景结果为 **Qualified** |
 | 最新核心 CI | [已通过](https://github.com/shell-echo/sandbox-runtime/actions/runs/35204434771) |
 
@@ -54,7 +54,7 @@ Browser OS 进程，配合全新固定摘要 PostgreSQL、Valkey 与加密录制
 通过部署资格验证、独立实现调用方、HA、恶意多租户隔离或生产就绪。
 
 [Product v1 第五阶段 Desktop](docs/plan/product-v1-phase-5-desktop-development-unified-product.md)
-已完成 **5/15** 个依赖有序切片。切片 1 锁定了独立的 Provider Desktop
+已完成 **6/15** 个依赖有序切片。切片 1 锁定了独立的 Provider Desktop
 能力/Profile/运行时形状，以及完整的会话打开、读取、交接、关闭、过期、撤销、
 用量、准入、安全和清理语义。精确权威为 Contract 版本
 `720ad15c343e71f36615dc4499edd5e764178bca`、树
@@ -76,7 +76,11 @@ arm64/v8 上通过并发布签名索引
 切片 5 实现 `0c30d6f5e6e0c6227069b8689668a1a0dcfb940b` 加入失效关闭的
 Docker adapter、持久不透明 private resolver、每次 attach/reconnect 重新校验、
 lifecycle readiness、先撤销后清理并确认缺席，以及精确 Desktop 时长用量。
-生产启动组合、Product outbox 消费者、公开数据面、Web 体验和能力广告仍未完成。
+切片 6 实现 `2d5bbaee2db2ab5c2a85f67e39acf2dd7b82a240` 加入锁定精确
+版本的 Product 网络适配器、隔离的 Desktop 调度/观察、保留 operation 恢复、
+独立 Product/Provider generation 和 Desktop 专属关闭清理；真实 PostgreSQL 与
+HTTP Provider fixture 门禁已通过。生产启动组合、终端用户授权、公开数据面、Web
+体验和能力广告仍未完成。
 
 ## 项目提供什么
 
@@ -87,6 +91,7 @@ lifecycle readiness、先撤销后清理并确认缺席，以及精确 Desktop �
 - 仓库自有的 OpenAPI、JSON Schema、语义规则、Fixtures，以及本地和远程 Conformance Suite。
 - 独立建模并锁定的 Provider Desktop Contract 表面；其运行时与能力广告在后续第五阶段切片完成前保持关闭。
 - Product 自有的 Desktop slot/session 意图，包括精确 Profile、事务型 PostgreSQL 持久化、配额、审计和隔离的待处理 outbox 工作。
+- 锁定且仅通过网络访问的 Product Desktop Provider adapter，包括独立 generation 权威、持久调度/观察恢复和 Desktop 专属会话清理；它尚未进入生产组合。
 - Provider 本地 Desktop operation 权威，包括持久化 replay/fencing、精确所有权的关闭/过期清理策略，以及尚未广告的受保护处理器。
 - 精确签名的 Desktop 镜像，以及 Provider 本地 Docker adapter、private resolver、lifecycle、撤销/清理和时长用量组件；它们尚未进入生产启动组合或能力广告。
 - 面向独立实现调用方的确定性资格验证工具。
