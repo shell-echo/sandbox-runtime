@@ -45,7 +45,7 @@ Current verified state:
   four roles, scenario set, and cleanup. Deployment, HA, hostile multi-tenant,
   independently implemented caller, and production readiness remain explicit
   non-claims; and
-- Product v1 Phase 5 Desktop is **10/15** complete. Slice 1 establishes the
+- Product v1 Phase 5 Desktop is **11/15** complete. Slice 1 establishes the
   separate Provider Desktop Contract and Go projection authority at revision
   `720ad15c343e71f36615dc4499edd5e764178bca`, tree
   `343ffde0819207cf99c005096c336735dd33a735`, with a content-derived 71-case
@@ -105,6 +105,19 @@ Current verified state:
   plus one-generation replacement for a replaced Desktop slot. A real Provider
   media/input bridge, recording, production composition, unified Web,
   capability advertisement, and release evidence remain absent.
+
+  Slice 11 implementation `c5b045abc5192b76b7d615ddbb0858b998ef98d5`
+  composes required Desktop content recording into the public Gateway. The
+  client supplies an explicit bounded consent reference and receives the exact
+  selected recording mode; missing initialization or live recorder loss closes
+  admission/connection. Encrypted immutable segments retain bounded VP8/Opus
+  RTP plus minimized control/synchronization metadata, monotonic timestamps,
+  and digest linkage. Existing Product authorization, quotas, integrity replay,
+  retention, and deletion apply to Desktop media. Clipboard text, transfer
+  paths/identities, private coordinates, and content are absent from public
+  catalog and metadata audit. A real Provider media/input bridge, development
+  templates, production composition, unified Web, capability advertisement,
+  and release evidence remain absent.
 
 The qualification applies only to Provider revision
 `170459266af5f4fad359ca8c63f2ae19741055c5`, external-caller revision
@@ -933,7 +946,7 @@ Contract identity:
 | P2 | Reference coding/shell caller and Product Phase 2 lifecycle release gates passed; the latter includes a repository-owned independent-process 15+5+9 black-box run | Independently implemented external-caller lifecycle interoperability, aggregate conformance, multi-controller, hostile multi-tenant isolation, deployment, and production gates remain open |
 | P3 | Retired by ADR 0037. Historical revision binding/shadow/metrics components and candidate runs retain their recorded evidence boundaries | No named-platform migration gate remains; external consumers adapt to the exact locked Provider Contract |
 | P4 | Browser Contract authority/projection, exact sandboxed signed amd64/arm64/v8 publication, Provider-local components, default-disabled command/runtime composition, process-local Gateway limits, the separately recorded Browser/shared-capacity/durable-revocation caller gates, ADR 0033 component/caller evidence, the ADR 0034 v2 local/hosted deletion and rollback-detection gates, the ADR 0035 PostgreSQL component gate, and the ADR 0036 hosted same-runner controlled-restore gate pass within their named boundaries | Production independent witness/storage and restore operations, production Browser advertisement/public Gateway, Valkey/PostgreSQL provenance and HA, production configuration/metrics, aggregate, multi-controller, multi-tenant, deployment, and production gates remain open |
-| Product Phase 5 | Slices 1-10/15 lock the separate Provider Desktop Contract/projection, Product Desktop intent, Provider application/runtime/private resolver, Product network reconciliation and grants, the bounded public WebRTC plane, durable versioned input/clipboard/transfer policy, and bounded reconnect/recovery/replacement semantics. Desktop advertisement remains empty | Execute Slices 11-15 in order: recording, development environment, unified Web, composed security gates, and independent-process release evidence |
+| Product Phase 5 | Slices 1-11/15 lock the separate Provider Desktop Contract/projection, Product Desktop intent, Provider application/runtime/private resolver, Product network reconciliation and grants, the bounded public WebRTC plane, durable versioned input/clipboard/transfer policy, bounded reconnect/recovery/replacement semantics, and encrypted integrity-linked recording/replay/retention composition. Desktop advertisement remains empty | Execute Slices 12-15 in order: development environment, unified Web, composed security gates, and independent-process release evidence |
 
 Production readiness is not a numbered phase shortcut. Aggregate conformance,
 multi-controller reliability, hostile multi-tenant security, deployment, and

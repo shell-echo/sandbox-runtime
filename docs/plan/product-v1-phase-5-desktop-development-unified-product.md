@@ -1,6 +1,6 @@
 # Product v1 Phase 5: Desktop Development and Unified Product
 
-Status: 10/15 complete
+Status: 11/15 complete
 
 Started: 2026-09-19
 
@@ -35,7 +35,7 @@ relabeled as Desktop evidence.
 | 8 | Public Desktop display/audio/signaling/input plane with bounded negotiation and backpressure | Authenticated encrypted signaling; exact origin; supported codec/resolution/bitrate matrix; viewer/control separation; ordered input; slow-consumer closure; no private handoff disclosure | **Complete: same-process public-handler and real-WebRTC component evidence only; policy and production composition remain off** |
 | 9 | Keyboard, pointer, touch, clipboard, and Product-bound transfer policy | Deny-by-default matrix; activation/consent; size/type/count/digest/path bounds; exact transfer identity; policy-revision revocation; microphone/camera/device denial | **Complete: durable Product policy and real-store component evidence only; recovery and production composition remain off** |
 | 10 | Recovery, reconnect, resynchronization, resolution/audio-device changes, and session/slot replacement | Fresh-grant reconnect; authority and generation recheck; visual/audio resync bounds; no stale input; restart recovery; deterministic replacement and exact cleanup | **Complete: Product Gateway/repository recovery and replacement component evidence only; no real Provider media bridge or production composition** |
-| 11 | Desktop recording/replay/catalog/retention/quota/integrity composition | Visible consent/mode; required-recorder fail closed; encrypted integrity-linked media/control segments; authorized replay; retention/deletion and quota races; content excluded from logs | Planned |
+| 11 | Desktop recording/replay/catalog/retention/quota/integrity composition | Visible consent/mode; required-recorder fail closed; encrypted integrity-linked media/control segments; authorized replay; retention/deletion and quota races; content excluded from logs | **Complete: Product recording/Gateway/PostgreSQL component evidence only; no real Provider media bridge or production composition** |
 | 12 | Development-environment templates, startup, toolchains, workspace materialization, and Guest health | Immutable template selection; bounded startup; exact workspace mounts; health/liveness/readiness; failure rollback; restart persistence; no host-path or credential disclosure | Planned |
 | 13 | Unified Product Web shell integrating Workspace, Terminal, Files, Browser, Desktop, and recordings | Generated checked client; authenticated end-to-end flows; capability-derived navigation; origin/request-forgery/content policy; accessibility; recovery/error UX; no private coordinates | Planned |
 | 14 | Exact cleanup, quota, fault, security, and regression gates for the composed Desktop product | Cross-layer fault matrix; restart and dependency loss; stale/replay/tenant attacks; capacity recovery; row/object/process/runtime cleanup; retained Phase 3/4 regressions | Planned |
@@ -448,6 +448,50 @@ This is Product Gateway and PostgreSQL component evidence. The media/input
 source remains injected; no real Provider bridge, recording, development
 template, unified Web, production startup, capability advertisement,
 deployment, HA, hostile-multitenant, or production-readiness claim follows.
+
+## Slice 11 Desktop recording boundary
+
+Implementation revision `c5b045abc5192b76b7d615ddbb0858b998ef98d5`
+composes the existing Product recording authority into the Desktop Gateway
+without changing the Provider Contract or reusing metadata audit as content
+recording:
+
+- required mode admits only an explicit bounded consent reference, reports the
+  exact selected mode in signaling, initializes recording before opening the
+  private media source, and fails closed on initialization or live recorder
+  loss;
+- the Desktop recorder writes bounded VP8 and optional Opus RTP plus ordered,
+  minimized input, stream-configuration, and resynchronization events. It
+  preserves monotonic event time under concurrent audio/video/control calls;
+- immutable encrypted segments use the existing sequence and previous-digest
+  chain, tenant active/byte quotas, owner-authorized catalog/replay, replay
+  integrity validation, and retention expiry/deletion;
+- control recording retains only closed action kind/event/touch count and
+  public display/audio aliases. Clipboard content, transfer paths, transfer
+  identities, digests, private Provider coordinates, and result text are not
+  recorded as control metadata or written to ordinary audit; and
+- PostgreSQL recording admission now accepts `media` only for Browser Live or
+  Desktop sessions and continues to reject unknown recording types.
+
+### Slice 11 evidence boundary
+
+Focused Gateway race tests cover consent/mode visibility, pre-media fail-closed
+admission, live-recorder loss, and the retained real-WebRTC transport matrix. A
+fresh disposable PostgreSQL 16 gate covers concurrent one-winner quota
+admission, encrypted at-rest Desktop segments, digest linkage and tamper
+rejection, owner-only replay, public catalog/audit content exclusion, expiry,
+row deletion, and exact encrypted-object cleanup. The complete tagged Product
+PostgreSQL package, ten shuffled Gateway race repetitions, full repository
+race/shuffle, vet, Contract verifiers, and retained Phase 3/4 evidence
+verification pass. Exact evidence and non-claims are in
+[`../audits/product-phase-5-desktop-slice-11.md`](../audits/product-phase-5-desktop-slice-11.md).
+
+This is Product recording service, local encrypted-store, PostgreSQL, and
+same-process Gateway component evidence. The Desktop media/input source remains
+injected; no real Provider bridge, development template/toolchain/Guest health,
+unified Web, production startup, capability advertisement, independent-process
+release evidence, deployment, HA, hostile-multitenant, or production-readiness
+claim follows.
 
 ## Deferred beyond Phase 5
 

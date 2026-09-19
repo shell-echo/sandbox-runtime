@@ -63,7 +63,7 @@ establish a deployment-qualified topology, independently implemented caller,
 HA, hostile multi-tenant isolation, or production readiness.
 
 The [Product v1 Phase 5 Desktop plan](plan/product-v1-phase-5-desktop-development-unified-product.md)
-is now **10/15** complete. Slice 1 is deliberately Contract-first: it adds a
+is now **11/15** complete. Slice 1 is deliberately Contract-first: it adds a
 separate Provider Desktop capability/profile/runtime, open/read/opaque-handoff/
 close lifecycle, expiry and revocation, usage evidence, strict admission and
 security semantics, fixtures, and executable local Conformance mappings. The
@@ -122,6 +122,19 @@ closed resolution/audio-output changes, connection-epoch stale-input denial,
 and transactional grant/handoff/session cleanup with deterministic single
 replacement generation. A real Provider media/input bridge, recording,
 production composition, and discovery remain absent.
+
+Slice 11 implementation `c5b045abc5192b76b7d615ddbb0858b998ef98d5`
+adds the Desktop `MediaRecorder` composition without merging metadata audit and
+content recording. Required mode accepts only an explicit bounded consent
+reference, reports the exact mode to the client, initializes before opening
+media, and closes on live recorder failure. The profile-specific recorder writes
+bounded video/audio RTP plus minimized input/configuration/resynchronization
+events into the existing encrypted immutable segment store with chained
+digests, owner-authorized replay, tenant quotas, and retention deletion.
+Clipboard text, transfer paths/identities, private coordinates, and frame
+content are excluded from public catalog and metadata audit. A real Provider
+media/input bridge, development templates, production composition, and
+discovery remain absent.
 
 ## Purpose
 
@@ -767,7 +780,7 @@ advertisement, and optional-profile gates remain open:
 | Workspace | The Provider Docker adapter supplies stable `/inputs`, `/workspace`, `/outputs`, and bounded tmpfs `/tmp` without exposing host paths. The dual-platform coding/shell image was published as OCI index `sha256:1996e44f8ddc464f22556bd57f1c69079fe6b1a821b65bd9be24f86619c31bb1`, attested, independently verified, pinned by the caller, and exercised in the final qualification. | Add production artifact consumers, capacity enforcement, lifecycle closure, and stronger isolation evidence as separate scopes. |
 | Security | The qualified Docker runtime used numeric non-root identity, read-only root, disabled networking, dropped capabilities, `no-new-privileges`, and bounded CPU, memory, swap, PIDs, and tmpfs; image provenance and the exact runtime observations are retained in the qualification evidence. | Add secrets policy, controlled egress where required, stronger isolation, production authentication, threat-model review, and hostile-tenant evidence before any production claim. |
 | Events and usage | Durable lifecycle events and bounded usage-evidence components exist without a complete runtime collector composition. | Complete collection/reconciliation while leaving platform accounting authority outside the Provider. |
-| Snapshots/browser/desktop | Browser Contract, component, and historical reference tracks retain their exact recorded evidence and open production gates. Product Phase 4 separately provides bounded Product Browser evidence. Product Phase 5 Slices 1-10 authorize the separate Desktop Contract/projection, Product intent, Provider application/runtime/private resolver, Product network reconciliation and grants, bounded public Desktop WebRTC and policy, plus fresh-grant reconnect, resynchronization, restart lease recovery, and deterministic replacement cleanup. No real Provider media bridge, recording composition, production startup composition, Web UI, or capability advertisement exists. Snapshots remain unauthorized optional behavior. | Execute the remaining Phase 5 slices in dependency order, beginning with recording in Slice 11. Keep Desktop advertisement off until the complete Provider and Product graphs plus release gate pass, and do not infer production readiness. |
+| Snapshots/browser/desktop | Browser Contract, component, and historical reference tracks retain their exact recorded evidence and open production gates. Product Phase 4 separately provides bounded Product Browser evidence. Product Phase 5 Slices 1-11 authorize the separate Desktop Contract/projection, Product intent, Provider application/runtime/private resolver, Product network reconciliation and grants, bounded public Desktop WebRTC and policy, fresh-grant reconnect/recovery/replacement, and encrypted integrity-linked recording/replay/retention composition. No real Provider media bridge, development-environment composition, production startup composition, Web UI, or capability advertisement exists. Snapshots remain unauthorized optional behavior. | Execute the remaining Phase 5 slices in dependency order, beginning with development-environment templates in Slice 12. Keep Desktop advertisement off until the complete Provider and Product graphs plus release gate pass, and do not infer production readiness. |
 
 ## Delivery plan and release gates
 

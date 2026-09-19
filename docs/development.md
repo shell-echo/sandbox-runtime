@@ -594,6 +594,30 @@ focused Desktop Gateway race loop and the complete tagged Product PostgreSQL
 race/shuffle gate, then the full repository and Contract/evidence gates. This
 does not establish a real Provider media/input bridge or production recovery.
 
+Slice 11 Desktop recording must remain a separate content port from Gateway
+metadata audit. For `required` mode, accept an explicit bounded consent
+reference, report the exact recording mode in the signaling response, and
+initialize the recorder before opening the private media source. Missing
+initialization or any live media/control append failure closes the connection;
+never downgrade to `metadata_only` or `disabled`.
+
+Record only bounded VP8/optional-Opus RTP and closed minimized control events.
+Input recording may retain action kind, event, touch count, sequence, and event
+time; configuration may retain bounded public display and audio-output aliases.
+Do not retain clipboard text/results, transfer paths/IDs/digests, tickets,
+handoffs, backend coordinates, or recorded content in ordinary logs, metadata
+audit, or public catalog projection. Use the Product encrypted immutable
+segment store, previous-digest chain, owner-authorized replay, quotas, and
+retention cleanup rather than a Desktop-specific storage authority.
+
+For Desktop recording changes, run focused Gateway race/shuffle tests, the full
+repository race/shuffle and vet gates, Contract/evidence verifiers, and the
+complete tagged Product PostgreSQL package against a fresh disposable store.
+The real-store gate must cover concurrent quota admission, encryption,
+integrity/tamper rejection, replay authorization, content minimization,
+retention deletion, and object cleanup. This remains component evidence while
+the Provider media source is injected and startup composition is absent.
+
 ## Go and API rules
 
 - accept `context.Context` on blocking or external operations and preserve
