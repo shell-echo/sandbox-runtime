@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"syscall"
@@ -223,10 +224,7 @@ func waitForSharedGatewayStopped(ctx context.Context, child *childProcess, timeo
 			return errors.New("shared-capacity Gateway exited while awaiting stopped state")
 		default:
 		}
-		probeCtx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
-		output, err := exec.CommandContext(probeCtx, "ps", "-o", "stat=", "-p", fmt.Sprint(child.command.Process.Pid)).Output()
-		cancel()
-		if err == nil && strings.HasPrefix(strings.TrimSpace(string(output)), "T") {
+		if sharedGatewayStopped(ctx, child.command.Process.Pid) {
 			return nil
 		}
 		select {
@@ -237,6 +235,24 @@ func waitForSharedGatewayStopped(ctx context.Context, child *childProcess, timeo
 		case <-ticker.C:
 		}
 	}
+}
+
+func sharedGatewayStopped(ctx context.Context, pid int) bool {
+	if runtime.GOOS == "linux" {
+		status, err := os.ReadFile(fmt.Sprintf("/proc/%d/status", pid))
+		if err == nil {
+			for _, line := range strings.Split(string(status), "\n") {
+				fields := strings.Fields(line)
+				if len(fields) >= 2 && fields[0] == "State:" {
+					return strings.HasPrefix(fields[1], "T") || strings.HasPrefix(fields[1], "t")
+				}
+			}
+		}
+	}
+	probeCtx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+	defer cancel()
+	output, err := exec.CommandContext(probeCtx, "ps", "-o", "stat=", "-p", fmt.Sprint(pid)).Output()
+	return err == nil && strings.HasPrefix(strings.TrimSpace(string(output)), "T")
 }
 
 func killSharedGateway(child *childProcess) error {
