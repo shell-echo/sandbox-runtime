@@ -528,6 +528,28 @@ tagged Product PostgreSQL race/shuffle gate above for every Desktop grant,
 control, quota, audit, or migration change. This slice does not authorize a
 public Desktop signaling/media/input handler; that begins in Slice 8.
 
+Slice 8 Desktop data-plane changes must keep a distinct Desktop signaling DTO
+and control protocol. Production construction requires HTTPS, an exact HTTPS
+Origin allowlist, password-authenticated `turns:` relays, a bounded closed JSON
+offer, and the consumed `product-desktop.v1` grant. Accept exactly one
+receive-only VP8 video section and optional receive-only Opus audio section;
+never accept upstream microphone/camera media.
+
+Viewer bindings must not create a control channel. Controller bindings require
+the current lease and fence plus one reliable ordered
+`product-desktop-control.v1` channel. Decode only bounded keyboard, pointer,
+and touch shapes, require sequence `n+1`, recheck continuous grant authority,
+and call the injected Product input-authority port before private execution.
+Keep signaling, peer, per-session, RTP, bitrate, input, and control-output
+queues bounded and close on overflow or slow consumption. Public responses and
+audit remain metadata-only and exclude tickets, Provider handoffs, media, and
+input. Required recording fails closed until the recording slice is composed.
+
+For each Desktop signaling/media/input change, run focused Desktop WebRTC race
+tests plus the full repository gates and Contract/evidence verifiers. This
+handler-level result is not a real Provider media bridge, durable policy,
+production startup, advertisement, deployment, or production evidence.
+
 ## Go and API rules
 
 - accept `context.Context` on blocking or external operations and preserve

@@ -1,6 +1,6 @@
 # ADR 0050: Product Desktop Phase 5 Boundary
 
-- Status: Accepted for Product Phase 5 scope; Slices 1-7 are complete
+- Status: Accepted for Product Phase 5 scope; Slices 1-8 are complete
 - Date: 2026-09-19
 
 ## Context
@@ -24,6 +24,10 @@ while leaving production composition and advertisement disabled.
 Slice 7 adds Product-owned Desktop viewer/controller grants, one-controller
 fencing, independent quotas, revocation, continuous authority, and
 metadata-only audit while leaving the public Desktop data plane absent.
+Slice 8 adds the separate bounded public Desktop WebRTC handler, display and
+optional audio output, viewer/control separation, ordered fenced input,
+continuous authority, and backpressure closure while leaving durable Desktop
+policy and production composition absent.
 
 Starting with Product persistence would require Product code to invent a
 Provider wire shape. Starting with a runtime image or driver would create an
@@ -239,6 +243,32 @@ This is Product authorization and real-store component authority only. It does
 not compose a public signaling, display/audio, or input path and does not
 enable Desktop advertisement.
 
+## Slice 8 public Desktop data plane
+
+The public Desktop edge is a separate Product WebRTC handler. It consumes the
+one-use Product ticket, continuously checks the exact Desktop grant binding,
+and gives the opaque Provider handoff only to an injected private media port.
+Its public response contains no handoff, endpoint, backend identity,
+credential, ticket, media, or input payload.
+
+Production signaling requires HTTPS, one exact configured HTTPS Origin, and
+relay-only password-authenticated `turns:` ICE. The initial matrix is one
+receive-only VP8 display at bounded resolution/frame-rate/bitrate with optional
+receive-only Opus output. Upstream microphone/camera media is invalid. Viewers
+cannot negotiate control; controllers require the current lease/fence and one
+reliable ordered data channel.
+
+Only bounded keyboard, pointer, and touch shapes enter the private input port,
+strictly in sequence and only after fresh grant plus injected Product-policy
+authorization. Clipboard, file, microphone, camera, and device messages are
+closed at this boundary. Signaling, peer/session capacity, RTP packets,
+bitrate, and media/input/control queues are bounded; overflow or slow
+consumption closes the peer. Required recording fails closed until Slice 11.
+
+This is same-process public-handler and real-WebRTC component authority. It is
+not a real Provider media bridge, the durable Slice 9 policy, production
+composition, advertisement, or release evidence.
+
 ## Consequences
 
 - Product Desktop persistence begins only after the Provider wire authority is
@@ -264,6 +294,9 @@ enable Desktop advertisement.
   implemented Provider deployment.
 - Slice 7 grants authorize Product access metadata only. They do not prove or
   compose the public Desktop signaling/media/input data plane.
+- Slice 8 real-WebRTC evidence proves the separate public handler and bounded
+  data-plane mechanics, not a real Provider media bridge, durable Desktop
+  policy, production composition, or deployment.
 - Phase 5 completion requires the named independent-process Slice 15 gate.
   It still does not establish multi-user collaboration, HA, hostile
   multi-tenant isolation, production deployment, or general production

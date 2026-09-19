@@ -1,6 +1,6 @@
 # Product v1 Phase 5: Desktop Development and Unified Product
 
-Status: 7/15 complete
+Status: 8/15 complete
 
 Started: 2026-09-19
 
@@ -32,7 +32,7 @@ relabeled as Desktop evidence.
 | 5 | Provider Desktop runtime adapter, private resolver, lifecycle, usage, revocation, and cleanup composition | Real runtime open/attach/reconnect/close/expiry; generation fencing; no private-coordinate projection; revoke-before-cleanup; absence confirmation; duration evidence; fault injection | **Complete: Provider-local runtime/component authority only; production composition and advertisement remain off** |
 | 6 | Product network-only Provider adapter with exact readiness, Desktop dispatch/observation, close, and cleanup | Locked discovery/profile selection; protected requests; timeout/cancellation/replay/drift; retained operation recovery; Product/Provider generation separation; real store integration | **Complete: Product network adapter and real-store component authority only; production composition and advertisement remain off** |
 | 7 | Product view/control grants, one-controller fencing, quotas, revocation, and metadata audit | Viewer mutation denial; one live controller; database-time expiry; one-use grants; stale-fence and quota races; continuous authority checks; nondisclosing failures | **Complete: Product connection authority and real-store component evidence only; no public data plane** |
-| 8 | Public Desktop display/audio/signaling/input plane with bounded negotiation and backpressure | Authenticated encrypted signaling; exact origin; supported codec/resolution/bitrate matrix; viewer/control separation; ordered input; slow-consumer closure; no private handoff disclosure | Planned |
+| 8 | Public Desktop display/audio/signaling/input plane with bounded negotiation and backpressure | Authenticated encrypted signaling; exact origin; supported codec/resolution/bitrate matrix; viewer/control separation; ordered input; slow-consumer closure; no private handoff disclosure | **Complete: same-process public-handler and real-WebRTC component evidence only; policy and production composition remain off** |
 | 9 | Keyboard, pointer, touch, clipboard, and Product-bound transfer policy | Deny-by-default matrix; activation/consent; size/type/count/digest/path bounds; exact transfer identity; policy-revision revocation; microphone/camera/device denial | Planned |
 | 10 | Recovery, reconnect, resynchronization, resolution/audio-device changes, and session/slot replacement | Fresh-grant reconnect; authority and generation recheck; visual/audio resync bounds; no stale input; restart recovery; deterministic replacement and exact cleanup | Planned |
 | 11 | Desktop recording/replay/catalog/retention/quota/integrity composition | Visible consent/mode; required-recorder fail closed; encrypted integrity-linked media/control segments; authorized replay; retention/deletion and quota races; content excluded from logs | Planned |
@@ -329,10 +329,46 @@ regressions. Full race/shuffle, vet, Contract verifiers, and retained Phase 3/4
 evidence verification pass. Exact evidence and non-claims are in
 [`../audits/product-phase-5-desktop-slice-7.md`](../audits/product-phase-5-desktop-slice-7.md).
 
-There is still no public Desktop signaling, media, audio, or input plane.
-Production startup composition, policy, recovery, recording, development
-templates, unified Web, advertisement, deployment, and production readiness
-remain later gates.
+At the Slice 7 boundary there was still no public Desktop signaling, media,
+audio, or input plane. Production startup composition, policy, recovery,
+recording, development templates, unified Web, advertisement, deployment, and
+production readiness remained later gates.
+
+## Slice 8 public Desktop data-plane boundary
+
+Implementation revision `040c560f3701b7c972c25f05928dd435d9f55c20`
+adds a separate Product Desktop WebRTC handler behind the exact Slice 7 grant
+binding. Signaling is bounded closed JSON over HTTPS with an exact Origin and
+one-use ticket. Production options require relay-only `turns:` ICE. Offers may
+contain exactly one receive-only VP8 display and optional receive-only Opus
+audio section; upstream camera or microphone media is rejected.
+
+The selected matrix bounds resolution, frame rate, video/audio bitrate, RTP
+packet size, signaling size, peer count, per-session count, and video/audio/
+input/control queues. Viewers cannot negotiate control. Controllers require
+the current lease/fence and exactly one reliable ordered data channel. Each
+strictly sequenced keyboard, pointer, or touch message rechecks grant authority
+and a required injected Product input-authority port before private execution.
+Overflow, slow consumption, malformed input, authority loss, expiry, or a
+second channel closes the peer.
+
+The public response returns only the Product connection ID, access mode,
+selected media matrix, and WebRTC answer. The Provider handoff is supplied
+only to the injected private media source and is excluded from responses and
+metadata audit. Required recording fails closed until Slice 11.
+
+### Slice 8 evidence boundary
+
+Real in-process WebRTC tests carry VP8, optional Opus, and fenced ordered input
+for viewer/controller bindings. Focused ten-run race, full race/shuffle, vet,
+Contract verifiers, and retained Phase 3/4 evidence verification pass. Exact
+evidence and non-claims are in
+[`../audits/product-phase-5-desktop-slice-8.md`](../audits/product-phase-5-desktop-slice-8.md).
+
+This is same-process handler/component evidence. The durable Desktop policy,
+real Provider media bridge, recovery, recording, development templates,
+unified Web, production startup, advertisement, deployment, and production
+readiness remain later gates.
 
 ## Deferred beyond Phase 5
 
