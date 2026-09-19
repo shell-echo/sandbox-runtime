@@ -1,6 +1,6 @@
 # ADR 0050: Product Desktop Phase 5 Boundary
 
-- Status: Accepted for Product Phase 5 scope; Slices 1-8 are complete
+- Status: Accepted for Product Phase 5 scope; Slices 1-9 are complete
 - Date: 2026-09-19
 
 ## Context
@@ -269,6 +269,29 @@ This is same-process public-handler and real-WebRTC component authority. It is
 not a real Provider media bridge, the durable Slice 9 policy, production
 composition, advertisement, or release evidence.
 
+## Slice 9 durable Product policy
+
+Desktop policy is a separate immutable Product authority, not Browser policy
+reuse and not a Provider concern. PostgreSQL retains every Workspace-scoped
+revision. Owner-scoped idempotent updates require the exact prior revision;
+missing, malformed, stale, or unreadable policy denies access.
+
+The policy independently controls keyboard, pointer, touch, clipboard read and
+write, and Product-bound upload/download. It enforces configured activation
+and consent, UTF-8 clipboard size, canonical media types, SHA-256 digest,
+file-count and byte bounds, and confined `/workspace/...` paths. Microphone,
+camera, and device forwarding are permanently outside this policy surface.
+
+The public Desktop handler pins the admitted revision and continuously closes
+on replacement or policy-source failure. Transfer authorization additionally
+matches the exact current tenant, actor, Workspace, transfer ID, direction,
+complete state, digest, and size in Product transfer authority. Backend object
+references remain private.
+
+This is durable Product policy and real-PostgreSQL component authority. It does
+not provide the Slice 10 reconnect/recovery path, a real Provider media/input
+bridge, production composition, advertisement, or release evidence.
+
 ## Consequences
 
 - Product Desktop persistence begins only after the Provider wire authority is
@@ -297,6 +320,10 @@ composition, advertisement, or release evidence.
 - Slice 8 real-WebRTC evidence proves the separate public handler and bounded
   data-plane mechanics, not a real Provider media bridge, durable Desktop
   policy, production composition, or deployment.
+- Slice 9 durable-policy evidence proves versioned Product authorization,
+  exact Product transfer binding, and live revision revocation, not a real
+  Provider media/input bridge, reconnect/recovery, production composition, or
+  deployment.
 - Phase 5 completion requires the named independent-process Slice 15 gate.
   It still does not establish multi-user collaboration, HA, hostile
   multi-tenant isolation, production deployment, or general production

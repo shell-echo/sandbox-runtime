@@ -550,6 +550,28 @@ tests plus the full repository gates and Contract/evidence verifiers. This
 handler-level result is not a real Provider media bridge, durable policy,
 production startup, advertisement, deployment, or production evidence.
 
+Slice 9 Desktop policy changes must use `product.DesktopPolicy`; do not reuse
+Browser actions or persistence. Policies are immutable positive revisions
+scoped to the Product Workspace. Updates require owner authority, one exact
+expected revision, idempotency, metadata-only audit, and retained historical
+results. Absence, corruption, store failure, or a revision change fails closed
+and terminates an established Desktop peer.
+
+Keep the action matrix deny by default. Independently gate keyboard, pointer,
+touch, clipboard read/write, Product-bound upload/download, activation, and
+consent. Enforce clipboard, count, per-file, aggregate-size, canonical media
+type, SHA-256 digest, and confined `/workspace/...` path bounds. Match every
+transfer to the exact Product tenant, actor, Workspace, ID, direction,
+completed state, digest, and byte count. Never project object references.
+Microphone, camera, and host-device forwarding remain denied.
+
+For Desktop policy or migration changes run focused Desktop policy/Gateway
+race tests, the full repository gates and Contract/evidence verifiers, plus the
+complete tagged Product PostgreSQL race/shuffle gate. This is policy and
+same-process Gateway component evidence, not a real Provider media/input
+bridge, recovery, production startup, advertisement, deployment, or production
+evidence.
+
 ## Go and API rules
 
 - accept `context.Context` on blocking or external operations and preserve

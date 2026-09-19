@@ -19,7 +19,7 @@ general production readiness.
 | Independent external caller | **13/13 complete** |
 | Product v1 Phase 3 | **13/13 complete** for the bounded standalone topology |
 | Product v1 Phase 4 Browser | **13/13 complete** for the bounded same-repository separate-process topology |
-| Product v1 Phase 5 Desktop | **8/15 complete**; the bounded public Desktop WebRTC handler, display/optional-audio, ordered fenced input, continuous authority, and backpressure gates pass; durable policy is next, advertisement disabled |
+| Product v1 Phase 5 Desktop | **9/15 complete**; durable versioned input/clipboard/transfer policy, exact Product transfer binding, and policy-revision revocation pass; recovery is next, advertisement disabled |
 | Coding/shell qualification | **Qualified** for the exact caller, Provider revisions, topology, profile, and scenarios recorded below |
 | Latest core CI | [Passed](https://github.com/shell-echo/sandbox-runtime/actions/runs/35204434771) |
 
@@ -79,7 +79,7 @@ independently implemented caller, HA, hostile-multitenant, or production
 evidence.
 
 [Product v1 Phase 5 Desktop](docs/plan/product-v1-phase-5-desktop-development-unified-product.md)
-has completed **8/15** dependency-ordered slices. Slice 1 locks a separate
+has completed **9/15** dependency-ordered slices. Slice 1 locks a separate
 Provider Desktop capability/profile/runtime shape and complete session
 open/read/handoff/close/expiry/revocation, usage, admission, security, and
 cleanup semantics. Exact authority is Contract revision
@@ -126,6 +126,15 @@ checks, and slow-consumer closure. Durable Desktop policy, a real Provider
 media bridge, recovery, recording, unified Web, production composition, and
 capability advertisement remain later gates.
 
+Slice 9 implementation `24f5c741eb605614f77f8d9d546708b9993e42dd`
+adds immutable versioned Desktop policy snapshots, PostgreSQL migration 11,
+deny-by-default keyboard/pointer/touch/clipboard/transfer authorization,
+activation and consent gates, bounded workspace paths and transfer metadata,
+exact Product transfer-record binding, and continuous policy-revision
+revocation. A real Provider media/input bridge, reconnect/recovery, recording,
+unified Web, production composition, and capability advertisement remain later
+gates.
+
 ## What the project provides
 
 - A local instance-management API with in-memory and Docker runtime drivers.
@@ -151,6 +160,9 @@ capability advertisement remain later gates.
 - A separate bounded Product Desktop WebRTC handler for display, optional
   output audio, and ordered controller input; it is component evidence and is
   not production-composed.
+- Durable versioned Product Desktop input/clipboard/transfer policy with exact
+  Product transfer binding and live revision revocation; microphone, camera,
+  and device forwarding remain denied.
 - Provider-local Desktop operation authority with durable replay/fencing,
   exact-owned close/expiry cleanup policy, and unadvertised protected handlers.
 - An exact signed Desktop image plus Provider-local Docker adapter, private
