@@ -65,6 +65,67 @@ type BrowserExpiryWorker struct {
 	batchSize int
 }
 
+type DesktopExpiryCandidate struct {
+	TenantID, SessionID string
+	Version             int64
+}
+
+type DesktopExpiryCommand struct {
+	DesktopExpiryCandidate
+	OperationID, EventID, OutboxID string
+}
+
+type DesktopExpiryStore interface {
+	ListExpiredDesktopSessions(context.Context, int) ([]DesktopExpiryCandidate, error)
+	ExpireDesktopSession(context.Context, DesktopExpiryCommand) (bool, error)
+}
+
+type DesktopExpiryWorker struct {
+	store     DesktopExpiryStore
+	ids       IDGenerator
+	batchSize int
+}
+
+func NewDesktopExpiryWorker(store DesktopExpiryStore, ids IDGenerator, batchSize int) (*DesktopExpiryWorker, error) {
+	if nilInterface(store) || nilInterface(ids) || batchSize < 1 || batchSize > 100 {
+		return nil, ErrInvalid
+	}
+	return &DesktopExpiryWorker{store: store, ids: ids, batchSize: batchSize}, nil
+}
+
+func (w *DesktopExpiryWorker) ExpireOnce(ctx context.Context) (int, error) {
+	if w == nil || ctx == nil {
+		return 0, ErrInvalid
+	}
+	candidates, err := w.store.ListExpiredDesktopSessions(ctx, w.batchSize)
+	if err != nil {
+		return 0, err
+	}
+	count := 0
+	for _, candidate := range candidates {
+		operationID, err := w.ids.NewID("op")
+		if err != nil {
+			return count, ErrStoreUnavailable
+		}
+		eventID, err := w.ids.NewID("evt")
+		if err != nil {
+			return count, ErrStoreUnavailable
+		}
+		outboxID, err := w.ids.NewID("out")
+		if err != nil {
+			return count, ErrStoreUnavailable
+		}
+		changed, err := w.store.ExpireDesktopSession(ctx, DesktopExpiryCommand{DesktopExpiryCandidate: candidate, OperationID: operationID, EventID: eventID, OutboxID: outboxID})
+		if err != nil {
+			return count, err
+		}
+		if changed {
+			count++
+		}
+	}
+	return count, nil
+}
+
 func NewBrowserExpiryWorker(store BrowserExpiryStore, ids IDGenerator, batchSize int) (*BrowserExpiryWorker, error) {
 	if nilInterface(store) || nilInterface(ids) || batchSize < 1 || batchSize > 100 {
 		return nil, ErrInvalid
@@ -111,6 +172,9 @@ type ProviderSessionController interface {
 type BrowserSessionController interface {
 	ExecuteBrowserSessionControl(context.Context, SessionControlWork) (ProviderOperationEvidence, error)
 }
+type DesktopSessionController interface {
+	ExecuteDesktopSessionControl(context.Context, SessionControlWork) (ProviderOperationEvidence, error)
+}
 type SessionDispatchStore interface {
 	LeaseSessionWork(context.Context, string, time.Duration, int) ([]SessionControlWork, error)
 	RecordSessionDispatch(context.Context, SessionControlWork, ProviderOperationEvidence) error
@@ -118,6 +182,11 @@ type SessionDispatchStore interface {
 }
 type BrowserSessionDispatchStore interface {
 	LeaseBrowserSessionWork(context.Context, string, time.Duration, int) ([]SessionControlWork, error)
+	RecordSessionDispatch(context.Context, SessionControlWork, ProviderOperationEvidence) error
+	RetrySessionWork(context.Context, SessionControlWork, string, time.Duration, int) error
+}
+type DesktopSessionDispatchStore interface {
+	LeaseDesktopSessionWork(context.Context, string, time.Duration, int) ([]SessionControlWork, error)
 	RecordSessionDispatch(context.Context, SessionControlWork, ProviderOperationEvidence) error
 	RetrySessionWork(context.Context, SessionControlWork, string, time.Duration, int) error
 }
@@ -190,6 +259,50 @@ func (d *BrowserSessionDispatcher) DispatchOnce(ctx context.Context) (int, error
 	complete := 0
 	for _, item := range work {
 		evidence, dispatchErr := d.provider.ExecuteBrowserSessionControl(ctx, item)
+		if dispatchErr == nil || errors.Is(dispatchErr, ErrDispatchOutcomeUnknown) || (errors.Is(dispatchErr, ErrDispatchRejected) && !evidence.Retryable) {
+			if errors.Is(dispatchErr, ErrDispatchOutcomeUnknown) {
+				evidence.State = "outcome_unknown"
+				evidence.OutcomeUnknown = true
+			}
+			if err := d.store.RecordSessionDispatch(ctx, item, evidence); err != nil {
+				return complete, err
+			}
+			complete++
+			continue
+		}
+		if err := d.store.RetrySessionWork(ctx, item, safeDispatchCode(evidence.ErrorCode), d.retry, d.maxAttempts); err != nil {
+			return complete, err
+		}
+	}
+	return complete, nil
+}
+
+type DesktopSessionDispatcher struct {
+	store                  DesktopSessionDispatchStore
+	provider               DesktopSessionController
+	workerID               string
+	lease, retry           time.Duration
+	maxAttempts, batchSize int
+}
+
+func NewDesktopSessionDispatcher(store DesktopSessionDispatchStore, provider DesktopSessionController, workerID string, lease, retry time.Duration, maxAttempts, batchSize int) (*DesktopSessionDispatcher, error) {
+	if nilInterface(store) || nilInterface(provider) || !validIdentifier(workerID) || lease < time.Second || lease > time.Minute || retry < time.Millisecond || retry > time.Minute || maxAttempts < 1 || maxAttempts > 100 || batchSize < 1 || batchSize > 100 {
+		return nil, ErrInvalid
+	}
+	return &DesktopSessionDispatcher{store: store, provider: provider, workerID: workerID, lease: lease, retry: retry, maxAttempts: maxAttempts, batchSize: batchSize}, nil
+}
+
+func (d *DesktopSessionDispatcher) DispatchOnce(ctx context.Context) (int, error) {
+	if d == nil || ctx == nil {
+		return 0, ErrInvalid
+	}
+	work, err := d.store.LeaseDesktopSessionWork(ctx, d.workerID, d.lease, d.batchSize)
+	if err != nil {
+		return 0, err
+	}
+	complete := 0
+	for _, item := range work {
+		evidence, dispatchErr := d.provider.ExecuteDesktopSessionControl(ctx, item)
 		if dispatchErr == nil || errors.Is(dispatchErr, ErrDispatchOutcomeUnknown) || (errors.Is(dispatchErr, ErrDispatchRejected) && !evidence.Retryable) {
 			if errors.Is(dispatchErr, ErrDispatchOutcomeUnknown) {
 				evidence.State = "outcome_unknown"

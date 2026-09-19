@@ -29,6 +29,8 @@ func (c *Client) AuthorizeSession(ctx context.Context, kind, protocolProfile str
 	case kind == product.SessionKindBrowserAutomation && protocolProfile == product.SessionProfileBrowserAutomation,
 		kind == product.SessionKindBrowserLive && protocolProfile == product.SessionProfileBrowserLive:
 		capability, capabilityProfile = product.BrowserCapabilityID, product.BrowserCapabilityProfile
+	case kind == product.SessionKindDesktop && protocolProfile == product.SessionProfileDesktop:
+		capability, capabilityProfile = product.DesktopCapabilityID, product.DesktopCapabilityProfile
 	default:
 		return product.ErrCapabilityUnsupported
 	}
@@ -37,6 +39,9 @@ func (c *Client) AuthorizeSession(ctx context.Context, kind, protocolProfile str
 		return err
 	}
 	for _, profile := range c.profiles {
+		if capability == product.DesktopCapabilityID && exactDesktopReady(snapshot, profile) {
+			return nil
+		}
 		if capability == product.BrowserCapabilityID && exactBrowserReady(snapshot, profile) {
 			return nil
 		}
@@ -46,6 +51,68 @@ func (c *Client) AuthorizeSession(ctx context.Context, kind, protocolProfile str
 		}
 	}
 	return product.ErrCapabilityUnsupported
+}
+
+func (c *Client) readDesktopSessionHandoff(ctx context.Context, work product.ProviderObservationWork, profile Profile) (providerv1.DesktopSessionHandoff, error) {
+	descriptor := map[string]any{"operation": "read_desktop_session", "sandbox_id": work.SandboxID,
+		"operation_id": work.OperationID, "attempt_id": work.AttemptID, "fencing_token": work.FencingToken}
+	digest, err := canonicalFullDigest(descriptor)
+	if err != nil {
+		return providerv1.DesktopSessionHandoff{}, product.ErrInvalid
+	}
+	now := c.clock.Now().UTC()
+	deadline := now.Add(time.Minute)
+	path := "/v1/operations/" + url.PathEscape(work.OperationID) + "/desktop-session"
+	headers, err := c.signAdmission(now, admissionSigningInput{PolicyDigest: profile.PolicyDigest, TenantID: work.TenantID,
+		WorkOrderID: work.OperationID, Operation: "read_desktop_session", SandboxID: work.SandboxID,
+		OperationID: work.OperationID, AttemptID: work.AttemptID, FencingToken: work.FencingToken, Deadline: deadline,
+		RequestContractID:    "urn:shell-echo:sandbox-runtime:descriptor:desktop-session:v1",
+		RequestDigestProfile: "rfc8785-full-document-v1", RequestDigest: digest, Method: http.MethodGet, Path: path})
+	if err != nil {
+		return providerv1.DesktopSessionHandoff{}, product.ErrStoreUnavailable
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, c.origin.String()+path, nil)
+	if err != nil {
+		return providerv1.DesktopSessionHandoff{}, product.ErrInvalid
+	}
+	request.Header.Set("Authorization", "Bearer "+headers.Bearer)
+	request.Header.Set("X-Sandbox-Runtime-Admission-Context", headers.Context)
+	response, err := c.httpClient.Do(request)
+	if err != nil {
+		return providerv1.DesktopSessionHandoff{}, product.ErrStoreUnavailable
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return providerv1.DesktopSessionHandoff{}, product.ErrStoreUnavailable
+	}
+	var handoff providerv1.DesktopSessionHandoff
+	if err := decodeBounded(response.Body, &handoff); err != nil || handoff.OperationID != work.OperationID ||
+		handoff.AttemptID != work.AttemptID || handoff.SandboxID != work.SandboxID || handoff.DesktopSessionID != work.SessionID ||
+		handoff.FencingToken != work.FencingToken || handoff.CapabilityProfileID != product.DesktopCapabilityProfile ||
+		handoff.Protocol != providerv1.DesktopProtocolWebRTC || handoff.MediaProfileID != "desktop-media-v1" ||
+		handoff.ControlProfileID != "desktop-control-v1" || handoff.ConnectionGeneration < 1 ||
+		!desktopEndpointReference(handoff.InternalEndpointReference) {
+		return providerv1.DesktopSessionHandoff{}, product.ErrStoreUnavailable
+	}
+	return handoff, nil
+}
+
+func desktopEndpointReference(value string) bool {
+	const prefix = "ref:desktop-session:"
+	if !strings.HasPrefix(value, prefix) || len(value) > len(prefix)+200 {
+		return false
+	}
+	suffix := strings.TrimPrefix(value, prefix)
+	if len(suffix) < 1 || !asciiAlphaNumeric(suffix[0]) {
+		return false
+	}
+	for index := 1; index < len(suffix); index++ {
+		character := suffix[index]
+		if !asciiAlphaNumeric(character) && character != '.' && character != '_' && character != '-' {
+			return false
+		}
+	}
+	return true
 }
 
 func (c *Client) ExecuteBrowserSessionControl(ctx context.Context, work product.SessionControlWork) (product.ProviderOperationEvidence, error) {

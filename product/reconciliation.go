@@ -66,6 +66,16 @@ type BrowserSlotProvisioner interface {
 	ProvisionBrowserSlot(context.Context, ReconcileWork) (ProviderOperationEvidence, error)
 }
 
+type DesktopReconcileStore interface {
+	LeaseDesktopSlotWork(context.Context, string, time.Duration, int) ([]ReconcileWork, error)
+	RecordDispatchEvidence(context.Context, ReconcileWork, ProviderOperationEvidence) error
+	RetryReconcileWork(context.Context, ReconcileWork, string, time.Duration, int) error
+}
+
+type DesktopSlotProvisioner interface {
+	ProvisionDesktopSlot(context.Context, ReconcileWork) (ProviderOperationEvidence, error)
+}
+
 type BrowserLifecycleStore interface {
 	LeaseBrowserLifecycleWork(context.Context, string, time.Duration, int) ([]ReconcileWork, error)
 	RecordDispatchEvidence(context.Context, ReconcileWork, ProviderOperationEvidence) error
@@ -74,6 +84,16 @@ type BrowserLifecycleStore interface {
 
 type BrowserLifecycleController interface {
 	ControlBrowserSlot(context.Context, ReconcileWork) (ProviderOperationEvidence, error)
+}
+
+type DesktopLifecycleStore interface {
+	LeaseDesktopLifecycleWork(context.Context, string, time.Duration, int) ([]ReconcileWork, error)
+	RecordDispatchEvidence(context.Context, ReconcileWork, ProviderOperationEvidence) error
+	RetryReconcileWork(context.Context, ReconcileWork, string, time.Duration, int) error
+}
+
+type DesktopLifecycleController interface {
+	ControlDesktopSlot(context.Context, ReconcileWork) (ProviderOperationEvidence, error)
 }
 
 type ProviderObservationWork struct {
@@ -156,6 +176,12 @@ type ObservationStore interface {
 	RetryProviderObservation(context.Context, ProviderObservationWork, time.Duration) error
 }
 
+type DesktopObservationStore interface {
+	LeaseDesktopProviderObservations(context.Context, string, time.Duration, int) ([]ProviderObservationWork, error)
+	RecordProviderObservation(context.Context, ProviderObservationWork, ProviderOperationEvidence, string) error
+	RetryProviderObservation(context.Context, ProviderObservationWork, time.Duration) error
+}
+
 type Reconciler struct {
 	store     ObservationStore
 	provider  ProviderObserver
@@ -179,6 +205,53 @@ func (r *Reconciler) ReconcileOnce(ctx context.Context) (int, error) {
 		return 0, ErrInvalid
 	}
 	work, err := r.store.LeaseProviderObservations(ctx, r.workerID, r.lease, r.batchSize)
+	if err != nil {
+		return 0, err
+	}
+	completed := 0
+	for _, item := range work {
+		evidence, observeErr := r.provider.ObserveOperation(ctx, item)
+		if observeErr != nil {
+			if err := r.store.RetryProviderObservation(ctx, item, r.retry); err != nil {
+				return completed, err
+			}
+			continue
+		}
+		eventID, err := r.ids.NewID("evt")
+		if err != nil {
+			return completed, ErrStoreUnavailable
+		}
+		if err := r.store.RecordProviderObservation(ctx, item, evidence, eventID); err != nil {
+			return completed, err
+		}
+		completed++
+	}
+	return completed, nil
+}
+
+type DesktopReconciler struct {
+	store     DesktopObservationStore
+	provider  ProviderObserver
+	ids       IDGenerator
+	workerID  string
+	lease     time.Duration
+	retry     time.Duration
+	batchSize int
+}
+
+func NewDesktopReconciler(store DesktopObservationStore, provider ProviderObserver, ids IDGenerator, workerID string, lease, retry time.Duration, batchSize int) (*DesktopReconciler, error) {
+	if nilInterface(store) || nilInterface(provider) || nilInterface(ids) || !validIdentifier(workerID) || lease < time.Second || lease > time.Minute ||
+		retry < time.Millisecond || retry > time.Minute || batchSize < 1 || batchSize > 100 {
+		return nil, ErrInvalid
+	}
+	return &DesktopReconciler{store: store, provider: provider, ids: ids, workerID: workerID, lease: lease, retry: retry, batchSize: batchSize}, nil
+}
+
+func (r *DesktopReconciler) ReconcileOnce(ctx context.Context) (int, error) {
+	if r == nil || ctx == nil {
+		return 0, ErrInvalid
+	}
+	work, err := r.store.LeaseDesktopProviderObservations(ctx, r.workerID, r.lease, r.batchSize)
 	if err != nil {
 		return 0, err
 	}
@@ -265,6 +338,100 @@ type BrowserDispatcher struct {
 	retryBase   time.Duration
 	maxAttempts int
 	batchSize   int
+}
+
+type DesktopDispatcher struct {
+	store       DesktopReconcileStore
+	provider    DesktopSlotProvisioner
+	workerID    string
+	lease       time.Duration
+	retryBase   time.Duration
+	maxAttempts int
+	batchSize   int
+}
+
+func NewDesktopDispatcher(store DesktopReconcileStore, provider DesktopSlotProvisioner, workerID string, lease, retryBase time.Duration, maxAttempts, batchSize int) (*DesktopDispatcher, error) {
+	if nilInterface(store) || nilInterface(provider) || !validIdentifier(workerID) || lease < time.Second || lease > time.Minute ||
+		retryBase < time.Millisecond || retryBase > time.Minute || maxAttempts < 1 || maxAttempts > 100 || batchSize < 1 || batchSize > 100 {
+		return nil, ErrInvalid
+	}
+	return &DesktopDispatcher{store: store, provider: provider, workerID: workerID, lease: lease, retryBase: retryBase, maxAttempts: maxAttempts, batchSize: batchSize}, nil
+}
+
+func (d *DesktopDispatcher) DispatchOnce(ctx context.Context) (int, error) {
+	if d == nil || ctx == nil {
+		return 0, ErrInvalid
+	}
+	work, err := d.store.LeaseDesktopSlotWork(ctx, d.workerID, d.lease, d.batchSize)
+	if err != nil {
+		return 0, err
+	}
+	completed := 0
+	for _, item := range work {
+		evidence, dispatchErr := d.provider.ProvisionDesktopSlot(ctx, item)
+		if dispatchErr == nil || errors.Is(dispatchErr, ErrDispatchOutcomeUnknown) || (errors.Is(dispatchErr, ErrDispatchRejected) && !evidence.Retryable) {
+			if errors.Is(dispatchErr, ErrDispatchOutcomeUnknown) {
+				evidence.OutcomeUnknown = true
+				evidence.State = "outcome_unknown"
+			}
+			if err := d.store.RecordDispatchEvidence(ctx, item, evidence); err != nil {
+				return completed, err
+			}
+			completed++
+			continue
+		}
+		if err := d.store.RetryReconcileWork(ctx, item, safeDispatchCode(evidence.ErrorCode), d.retryBase, d.maxAttempts); err != nil {
+			return completed, err
+		}
+	}
+	return completed, nil
+}
+
+type DesktopLifecycleDispatcher struct {
+	store       DesktopLifecycleStore
+	provider    DesktopLifecycleController
+	workerID    string
+	lease       time.Duration
+	retryBase   time.Duration
+	maxAttempts int
+	batchSize   int
+}
+
+func NewDesktopLifecycleDispatcher(store DesktopLifecycleStore, provider DesktopLifecycleController, workerID string, lease, retryBase time.Duration, maxAttempts, batchSize int) (*DesktopLifecycleDispatcher, error) {
+	if nilInterface(store) || nilInterface(provider) || !validIdentifier(workerID) || lease < time.Second || lease > time.Minute ||
+		retryBase < time.Millisecond || retryBase > time.Minute || maxAttempts < 1 || maxAttempts > 100 || batchSize < 1 || batchSize > 100 {
+		return nil, ErrInvalid
+	}
+	return &DesktopLifecycleDispatcher{store: store, provider: provider, workerID: workerID, lease: lease, retryBase: retryBase, maxAttempts: maxAttempts, batchSize: batchSize}, nil
+}
+
+func (d *DesktopLifecycleDispatcher) DispatchOnce(ctx context.Context) (int, error) {
+	if d == nil || ctx == nil {
+		return 0, ErrInvalid
+	}
+	work, err := d.store.LeaseDesktopLifecycleWork(ctx, d.workerID, d.lease, d.batchSize)
+	if err != nil {
+		return 0, err
+	}
+	completed := 0
+	for _, item := range work {
+		evidence, dispatchErr := d.provider.ControlDesktopSlot(ctx, item)
+		if dispatchErr == nil || errors.Is(dispatchErr, ErrDispatchOutcomeUnknown) || (errors.Is(dispatchErr, ErrDispatchRejected) && !evidence.Retryable) {
+			if errors.Is(dispatchErr, ErrDispatchOutcomeUnknown) {
+				evidence.OutcomeUnknown = true
+				evidence.State = "outcome_unknown"
+			}
+			if err := d.store.RecordDispatchEvidence(ctx, item, evidence); err != nil {
+				return completed, err
+			}
+			completed++
+			continue
+		}
+		if err := d.store.RetryReconcileWork(ctx, item, safeDispatchCode(evidence.ErrorCode), d.retryBase, d.maxAttempts); err != nil {
+			return completed, err
+		}
+	}
+	return completed, nil
 }
 
 func NewBrowserDispatcher(store BrowserReconcileStore, provider BrowserSlotProvisioner, workerID string, lease, retryBase time.Duration, maxAttempts, batchSize int) (*BrowserDispatcher, error) {

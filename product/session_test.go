@@ -30,6 +30,33 @@ type browserSessionControllerStub struct {
 	err      error
 }
 
+type desktopSessionDispatchStoreStub struct {
+	work     []SessionControlWork
+	recorded []ProviderOperationEvidence
+	retries  int
+}
+
+func (s *desktopSessionDispatchStoreStub) LeaseDesktopSessionWork(context.Context, string, time.Duration, int) ([]SessionControlWork, error) {
+	return s.work, nil
+}
+func (s *desktopSessionDispatchStoreStub) RecordSessionDispatch(_ context.Context, _ SessionControlWork, evidence ProviderOperationEvidence) error {
+	s.recorded = append(s.recorded, evidence)
+	return nil
+}
+func (s *desktopSessionDispatchStoreStub) RetrySessionWork(context.Context, SessionControlWork, string, time.Duration, int) error {
+	s.retries++
+	return nil
+}
+
+type desktopSessionControllerStub struct {
+	evidence ProviderOperationEvidence
+	err      error
+}
+
+func (s desktopSessionControllerStub) ExecuteDesktopSessionControl(context.Context, SessionControlWork) (ProviderOperationEvidence, error) {
+	return s.evidence, s.err
+}
+
 func (s browserSessionControllerStub) ExecuteBrowserSessionControl(context.Context, SessionControlWork) (ProviderOperationEvidence, error) {
 	return s.evidence, s.err
 }
@@ -45,6 +72,22 @@ func TestBrowserSessionDispatcherIsolatedOutcomeHandling(t *testing.T) {
 	}
 	store = &browserSessionDispatchStoreStub{work: []SessionControlWork{{SessionID: "browser-session-2"}}}
 	dispatcher, _ = NewBrowserSessionDispatcher(store, browserSessionControllerStub{evidence: ProviderOperationEvidence{Retryable: true}, err: ErrDispatchRejected}, "browser-session-worker", time.Second, time.Millisecond, 3, 1)
+	if count, err := dispatcher.DispatchOnce(context.Background()); err != nil || count != 0 || store.retries != 1 {
+		t.Fatalf("count=%d retries=%d err=%v", count, store.retries, err)
+	}
+}
+
+func TestDesktopSessionDispatcherIsolatedOutcomeHandling(t *testing.T) {
+	store := &desktopSessionDispatchStoreStub{work: []SessionControlWork{{SessionID: "desktop-session-1"}}}
+	dispatcher, err := NewDesktopSessionDispatcher(store, desktopSessionControllerStub{err: ErrDispatchOutcomeUnknown}, "desktop-session-worker", time.Second, time.Millisecond, 3, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count, err := dispatcher.DispatchOnce(context.Background()); err != nil || count != 1 || len(store.recorded) != 1 || store.recorded[0].State != "outcome_unknown" {
+		t.Fatalf("count=%d store=%#v err=%v", count, store, err)
+	}
+	store = &desktopSessionDispatchStoreStub{work: []SessionControlWork{{SessionID: "desktop-session-2"}}}
+	dispatcher, _ = NewDesktopSessionDispatcher(store, desktopSessionControllerStub{evidence: ProviderOperationEvidence{Retryable: true}, err: ErrDispatchRejected}, "desktop-session-worker", time.Second, time.Millisecond, 3, 1)
 	if count, err := dispatcher.DispatchOnce(context.Background()); err != nil || count != 0 || store.retries != 1 {
 		t.Fatalf("count=%d retries=%d err=%v", count, store.retries, err)
 	}
@@ -187,6 +230,20 @@ type browserExpiryStoreStub struct {
 	changed    bool
 }
 
+type desktopExpiryStoreStub struct {
+	candidates []DesktopExpiryCandidate
+	commands   []DesktopExpiryCommand
+	changed    bool
+}
+
+func (s *desktopExpiryStoreStub) ListExpiredDesktopSessions(context.Context, int) ([]DesktopExpiryCandidate, error) {
+	return s.candidates, nil
+}
+func (s *desktopExpiryStoreStub) ExpireDesktopSession(_ context.Context, c DesktopExpiryCommand) (bool, error) {
+	s.commands = append(s.commands, c)
+	return s.changed, nil
+}
+
 func (s *browserExpiryStoreStub) ListExpiredBrowserSessions(context.Context, int) ([]BrowserExpiryCandidate, error) {
 	return s.candidates, nil
 }
@@ -198,6 +255,18 @@ func (s *browserExpiryStoreStub) ExpireBrowserSession(_ context.Context, c Brows
 func TestBrowserExpiryWorkerAllocatesDurableCleanupIntent(t *testing.T) {
 	store := &browserExpiryStoreStub{candidates: []BrowserExpiryCandidate{{TenantID: "tenant-1", SessionID: "ses-1", Version: 4}}, changed: true}
 	worker, err := NewBrowserExpiryWorker(store, &sequenceIDs{}, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	count, err := worker.ExpireOnce(context.Background())
+	if err != nil || count != 1 || len(store.commands) != 1 || store.commands[0].OperationID != "op_1" || store.commands[0].EventID != "evt_2" || store.commands[0].OutboxID != "out_3" {
+		t.Fatalf("count=%d commands=%#v err=%v", count, store.commands, err)
+	}
+}
+
+func TestDesktopExpiryWorkerAllocatesDurableCleanupIntent(t *testing.T) {
+	store := &desktopExpiryStoreStub{candidates: []DesktopExpiryCandidate{{TenantID: "tenant-1", SessionID: "ses-desktop-1", Version: 4}}, changed: true}
+	worker, err := NewDesktopExpiryWorker(store, &sequenceIDs{}, 10)
 	if err != nil {
 		t.Fatal(err)
 	}
