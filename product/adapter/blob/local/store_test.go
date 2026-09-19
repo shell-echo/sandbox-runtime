@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -44,6 +45,18 @@ func TestStoreResumesCommitsDeduplicatesAndReadsByDigest(t *testing.T) {
 	chunk, eof, err := store.Read(context.Background(), final, 6, 10)
 	if err != nil || !eof || string(chunk) != "world" {
 		t.Fatalf("Read() = %q, %v, %v", chunk, eof, err)
+	}
+	opened, err := store.Open(context.Background(), "tenant-test", "wrk-test", "rev-test", digest, size)
+	if err != nil {
+		t.Fatal(err)
+	}
+	materialized, err := io.ReadAll(opened)
+	closeErr := opened.Close()
+	if err != nil || closeErr != nil || string(materialized) != "hello world" {
+		t.Fatalf("Open() = %q, read=%v close=%v", materialized, err, closeErr)
+	}
+	if _, err := store.Open(context.Background(), "tenant-test", "wrk-test", "rev-test", digest, size+1); !errors.Is(err, product.ErrStoreUnavailable) {
+		t.Fatalf("Open(wrong size) err=%v", err)
 	}
 	second := "staging:xfer_second"
 	_ = store.EnsureStaging(context.Background(), second)
