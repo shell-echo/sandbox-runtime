@@ -48,6 +48,9 @@ var productPhase5DesktopGrantsMigration string
 //go:embed migrations/0011_product_phase5_desktop_policy.sql
 var productPhase5DesktopPolicyMigration string
 
+//go:embed migrations/0012_product_phase5_desktop_recovery.sql
+var productPhase5DesktopRecoveryMigration string
+
 type migration struct {
 	version int64
 	name    string
@@ -66,6 +69,7 @@ var productMigrations = []migration{
 	{version: 9, name: "phase 5 desktop reconciliation", sql: productPhase5DesktopReconciliationMigration},
 	{version: 10, name: "phase 5 desktop grants", sql: productPhase5DesktopGrantsMigration},
 	{version: 11, name: "phase 5 desktop policy", sql: productPhase5DesktopPolicyMigration},
+	{version: 12, name: "phase 5 desktop recovery", sql: productPhase5DesktopRecoveryMigration},
 }
 
 func ApplyMigrations(ctx context.Context, pool *pgxpool.Pool) error {

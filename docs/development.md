@@ -572,6 +572,28 @@ same-process Gateway component evidence, not a real Provider media/input
 bridge, recovery, production startup, advertisement, deployment, or production
 evidence.
 
+Slice 10 Desktop reconnect must always use a new one-use Product grant after a
+Gateway peer closes. Do not revive an old consumed ticket or carry a private
+media handle across Gateway restart. A consumed Desktop grant has a bounded
+database-time Gateway lease; the continuous exact-binding authority check is
+its only renewer. Expired Gateway leases are revoked before controller/quota
+admission so a crashed process cannot hold capacity for the full grant life.
+
+Treat resynchronization and stream configuration as closed, ordered control
+messages sharing the controller sequence. Recheck grant, lease/fence, policy
+revision, connection epoch, and current display dimensions before execution.
+Keep negotiated codecs and bitrate ceilings immutable; expose only bounded
+display dimensions/frame rate and the public audio-output aliases `default`
+and `disabled`. Initial connect and in-grace recovery require media resync plus
+a keyframe; repeated client requests are rate bounded and fail closed.
+
+Slot replacement cleanup is transactional: revoke affected issued/consumed
+grants, clear session handoffs, close live sessions, retire the exact old
+Provider binding, and enqueue exactly one next-generation provision. Run the
+focused Desktop Gateway race loop and the complete tagged Product PostgreSQL
+race/shuffle gate, then the full repository and Contract/evidence gates. This
+does not establish a real Provider media/input bridge or production recovery.
+
 ## Go and API rules
 
 - accept `context.Context` on blocking or external operations and preserve
