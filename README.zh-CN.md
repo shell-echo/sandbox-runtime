@@ -14,7 +14,7 @@
 | 独立 External Caller | **13/13 已完成** |
 | Product v1 第三阶段 | 在有边界的 standalone 拓扑内 **13/13 已完成** |
 | Product v1 第四阶段 Browser | 在有边界的同仓库独立进程拓扑内 **13/13 已完成** |
-| Product v1 第五阶段 Desktop | **14/15 已完成**；私有 Provider/Gateway Desktop 桥和真实 PostgreSQL 组合安全/故障/清理门禁已通过，下一步为独立进程发布门禁，能力广告仍关闭 |
+| Product v1 第五阶段 Desktop | **15/15 已完成**（有边界的同仓库独立进程拓扑）；5 个角色、14 个严格场景及精确拓扑的依赖派生能力广告均通过 |
 | 编程/Shell 资格验证 | 对下述精确调用方、Provider 版本、拓扑、Profile 和场景结果为 **Qualified** |
 | 最新核心 CI | [已通过](https://github.com/shell-echo/sandbox-runtime/actions/runs/35204434771) |
 
@@ -54,7 +54,7 @@ Browser OS 进程，配合全新固定摘要 PostgreSQL、Valkey 与加密录制
 通过部署资格验证、独立实现调用方、HA、恶意多租户隔离或生产就绪。
 
 [Product v1 第五阶段 Desktop](docs/plan/product-v1-phase-5-desktop-development-unified-product.md)
-已完成 **14/15** 个依赖有序切片。切片 1 锁定了独立的 Provider Desktop
+已完成 **15/15** 个依赖有序切片（限有边界的发布拓扑）。切片 1 锁定了独立的 Provider Desktop
 能力/Profile/运行时形状，以及完整的会话打开、读取、交接、关闭、过期、撤销、
 用量、准入、安全和清理语义。精确权威为 Contract 版本
 `720ad15c343e71f36615dc4499edd5e764178bca`、树
@@ -133,8 +133,17 @@ Provider 权威包的依赖边界。真实 PostgreSQL 组合门禁把一次性 g
 重放/跨租户/跨 Origin 拒绝、容量恢复、保留期对象删除和精确租户行清理连接起来。
 全仓 race/vet、双方 Contract 与保留的第三/第四阶段证据门禁均通过。独立的
 Product/Gateway/Provider/Desktop/Guest 进程拓扑、真实显示/控制和开发场景、严格
-发布证据包、部署、HA、恶意多租户隔离和生产就绪仍属于切片 15 或更晚门禁，Desktop
-能力广告因此仍关闭。
+发布证据包、部署、HA、恶意多租户隔离和生产就绪在该边界仍未成立。
+
+切片 15 实现 `024a768d51965f8949bacf3c97e499fb26a6e648` 加入严格的独立
+进程发布门禁。运行 `20260919T200125.484855000Z` 通过 14 个精确场景，分别以
+Product、Gateway、Provider、Desktop 和 Guest 五个独立 OS 进程运行，使用全新固定
+摘要 PostgreSQL、精确签名 Desktop 镜像、真实 X11 画面捕获与 fenced 指针控制、
+公开 WebRTC/私有 mTLS 传输、加密录制回放、真实 Guest 开发工作区物化、Product/
+Gateway/Guest 重启恢复、Provider 依赖丢失的失效关闭以及精确清理。只有该精确门禁
+拓扑会根据在线依赖派生 Desktop/开发能力就绪；生产命令没有因此被组合或启用。
+严格清单和结论边界见[第五阶段完成审计](docs/audits/product-phase-5-desktop-completion.md)。
+该结果不等同于部署、HA、恶意多租户、独立实现调用方互操作或生产就绪证据。
 
 ## 项目提供什么
 
@@ -143,7 +152,7 @@ Product/Gateway/Provider/Desktop/Guest 进程拓扑、真实显示/控制和开�
 - 异步生命周期、受限命令执行、保留结果、用量证据、制品暂存、终端会话和受保护终端连接。
 - 不透明且会过期的运行时会话交接信息；后端 ID、主机路径和原始运行时端点不会进入公开 Provider 协议。
 - 仓库自有的 OpenAPI、JSON Schema、语义规则、Fixtures，以及本地和远程 Conformance Suite。
-- 独立建模并锁定的 Provider Desktop Contract 表面；其运行时与能力广告在后续第五阶段切片完成前保持关闭。
+- 独立建模并锁定的 Provider Desktop Contract 表面；有边界的第五阶段发布拓扑已执行它，生产命令组合仍关闭。
 - Product 自有的 Desktop slot/session 意图，包括精确 Profile、事务型 PostgreSQL 持久化、配额、审计和隔离的待处理 outbox 工作。
 - 锁定且仅通过网络访问的 Product Desktop Provider adapter，包括独立 generation 权威、持久调度/观察恢复和 Desktop 专属会话清理；它尚未进入生产组合。
 - Product 自有的 Desktop viewer/controller 连接权威，包括加密一次性 ticket、会话级 controller fencing、独立配额、撤销和仅元数据审计；该授权层不暴露 Provider 私有坐标。

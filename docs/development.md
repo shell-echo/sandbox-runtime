@@ -47,6 +47,8 @@ go test -race -v -tags=phase3gate -count=1 -run '^TestStandalonePhase3ReleaseGat
 go run ./cmd/verify-product-phase3-evidence -manifest docs/audits/product-phase-3-standalone-evidence.json
 go test -v -count=1 -tags=phase4browsergate ./productphase4gate
 go run ./cmd/verify-product-phase4-evidence -manifest docs/audits/product-phase-4-browser-evidence.json
+PRODUCT_PHASE5_EVIDENCE_OUTPUT="$PWD/docs/audits" go test -race -tags=phase5desktopgate -run '^TestProductPhase5DesktopReleaseGate$' -count=1 -v ./productphase5gate
+go run ./cmd/verify-product-phase5-evidence -manifest docs/audits/product-phase-5-desktop-evidence.json
 SANDBOX_RUNTIME_DOCKER_INTEGRATION=1 go test -tags=integration -count=1 ./driver/docker ./provider/lifecycle/driver/docker
 SANDBOX_RUNTIME_BROWSER_ADAPTER_INTEGRATION=1 go test -tags=integration -count=1 ./provider/browser/driver/docker
 SANDBOX_RUNTIME_BROWSER_PROVENANCE_INTEGRATION=1 go test -tags=integration -count=1 ./provider/browser/provenance/ghcli
@@ -664,6 +666,34 @@ and retained Phase 3/4 evidence verifiers. This is same-repository
 same-process composition evidence; independent Desktop/Guest roles, real
 display/control, startup advertisement, and the strict evidence bundle remain
 the Slice 15 gate.
+
+Slice 15 changes must keep Product, Gateway, Provider, Desktop, and Guest as
+separate OS processes; start with fresh pinned PostgreSQL and fresh object/
+Guest state; select the exact locked base and Desktop Provider identities,
+signed Desktop image, native platform digest, and development template; and
+derive capability readiness from live dependencies. The gate must cover real
+display capture and controller input, development materialization, Product/
+Gateway/Guest restart, Provider dependency loss, Origin/ticket/tenant denial,
+recording integrity, and exact process/row/object/runtime/container cleanup.
+
+Run the final release gate and strict manifest verifier with:
+
+```bash
+PRODUCT_PHASE5_EVIDENCE_OUTPUT="$PWD/docs/audits" \
+  go test -race -tags=phase5desktopgate \
+  -run '^TestProductPhase5DesktopReleaseGate$' -count=1 -v \
+  ./productphase5gate
+
+go run ./cmd/verify-product-phase5-evidence \
+  -manifest docs/audits/product-phase-5-desktop-evidence.json
+```
+
+The Go test package runs from its own directory, so callers that set an output
+path programmatically must pass an absolute path. A passing Slice 15 gate
+authorizes capability advertisement only in that exact topology; it does not
+authorize production command composition, deployment, HA, hostile
+multi-tenant, independently implemented caller, or production-readiness
+claims.
 
 ## Go and API rules
 

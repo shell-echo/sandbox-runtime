@@ -57,6 +57,8 @@ jobs:
       - run: go mod download
       - run: go test -race -shuffle=on -count=1 ./...
       - run: go vet ./...
+      - name: Verify retained Product Phase 5 Desktop evidence
+        run: go run ./cmd/verify-product-phase5-evidence -manifest docs/audits/product-phase-5-desktop-evidence.json
 
   qualification-supervisor-runtime:
     name: qualification-supervisor-runtime (${{ matrix.os }})

@@ -19,7 +19,7 @@ general production readiness.
 | Independent external caller | **13/13 complete** |
 | Product v1 Phase 3 | **13/13 complete** for the bounded standalone topology |
 | Product v1 Phase 4 Browser | **13/13 complete** for the bounded same-repository separate-process topology |
-| Product v1 Phase 5 Desktop | **14/15 complete**; private Desktop bridge and composed real-store fault/security/cleanup gate pass; independent-process release gate is next, advertisement disabled |
+| Product v1 Phase 5 Desktop | **15/15 complete** for the bounded same-repository independent-process topology; 5 roles and 14 strict scenarios pass, with exact-topology dependency-derived advertisement |
 | Coding/shell qualification | **Qualified** for the exact caller, Provider revisions, topology, profile, and scenarios recorded below |
 | Latest core CI | [Passed](https://github.com/shell-echo/sandbox-runtime/actions/runs/35204434771) |
 
@@ -79,7 +79,8 @@ independently implemented caller, HA, hostile-multitenant, or production
 evidence.
 
 [Product v1 Phase 5 Desktop](docs/plan/product-v1-phase-5-desktop-development-unified-product.md)
-has completed **14/15** dependency-ordered slices. Slice 1 locks a separate
+has completed **15/15** dependency-ordered slices for its bounded release
+topology. Slice 1 locks a separate
 Provider Desktop capability/profile/runtime shape and complete session
 open/read/handoff/close/expiry/revocation, usage, admission, security, and
 cleanup semantics. Exact authority is Contract revision
@@ -182,10 +183,22 @@ and fenced input, durable policy, required encrypted recording, continuous
 revocation, Origin/ticket/owner attacks, capacity recovery, and exact
 row/object/session cleanup. Full race/vet, Contract, tagged store, and retained
 Phase 3/4 evidence regressions pass. This remains same-repository same-process
-composition evidence with a reference media executor; independent
-Product/Gateway/Provider/Desktop/Guest processes, real display/control and
-development scenarios, the strict Slice 15 evidence bundle, deployment, and
-production readiness remain unproven. Desktop advertisement stays disabled.
+composition evidence with a reference media executor.
+
+Slice 15 implementation `024a768d51965f8949bacf3c97e499fb26a6e648`
+adds the strict independent-process release gate. Run
+`20260919T200125.484855000Z` passes 14 exact scenarios through separate
+Product, Gateway, Provider, Desktop, and Guest OS processes with fresh pinned
+PostgreSQL, the exact signed Desktop image, real X11 display capture and
+fenced pointer control, public WebRTC/private mTLS transport, encrypted
+recording replay, actual Guest development materialization, Product/Gateway/
+Guest restart recovery, Provider dependency-loss closure, and exact cleanup.
+The exact gate topology derives Desktop/development capability readiness from
+live dependencies. The retained strict manifest and completion record are in
+[the Phase 5 completion audit](docs/audits/product-phase-5-desktop-completion.md).
+This does not compose the production command or establish deployment, HA,
+hostile multi-tenant, independently implemented caller, or production
+readiness.
 
 ## What the project provides
 
@@ -198,8 +211,9 @@ production readiness remain unproven. Desktop advertisement stays disabled.
   runtime endpoints are not part of the public Provider protocol.
 - Repository-owned OpenAPI, JSON Schemas, semantic rules, fixtures, and local
   and remote Conformance Suites.
-- A locked, separately modeled Provider Desktop Contract surface whose runtime
-  and capability advertisement remain disabled pending later Phase 5 slices.
+- A locked, separately modeled Provider Desktop Contract surface exercised by
+  the bounded Phase 5 release topology; production command composition remains
+  disabled.
 - Product-owned Desktop slot/session intent with exact profiles, transactional
   PostgreSQL persistence, quotas, audit, and isolated pending outbox work.
 - A locked network-only Product Desktop Provider adapter with separate
@@ -222,16 +236,18 @@ production readiness remain unproven. Desktop advertisement stays disabled.
   encrypted integrity-linked segments, owner-authorized replay, bounded quotas,
   retention deletion, and content-minimized catalog/audit metadata.
 - Immutable development templates with digest-checked workspace materialization,
-  exact Guest readiness, failure rollback, restart recovery, and durable
-  PostgreSQL attempt/revision state; this remains component evidence.
+  exact Guest readiness, failure rollback, restart recovery, durable
+  PostgreSQL attempt/revision state, and independent-process release evidence.
 - A capability-derived authenticated Product Web/BFF for Workspace, Terminal,
   Files, Browser, Desktop, and recordings, with fresh Desktop grants, bounded
   recovery, accessible controls, and no private runtime-coordinate projection.
-- Provider-local Desktop operation authority with durable replay/fencing,
-  exact-owned close/expiry cleanup policy, and unadvertised protected handlers.
+- Provider-local Desktop operation authority with durable replay/fencing and
+  exact-owned close/expiry cleanup policy; its protected handlers are selected
+  only by explicit topologies.
 - An exact signed Desktop image plus Provider-local Docker adapter, private
   reference resolver, lifecycle readiness, revocation/cleanup, and duration
-  usage components; they are not composed into production startup or advertised.
+  usage components; the release gate composes them without enabling production
+  startup.
 - Deterministic qualification tooling for an independently implemented caller.
 - Optional Browser reference components and evidence tracks, kept separate from
   the qualified coding/shell profile.

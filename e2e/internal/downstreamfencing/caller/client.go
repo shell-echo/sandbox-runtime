@@ -192,12 +192,12 @@ func (c *Caller) open(ctx context.Context, command Command, response Response) R
 		}
 		c.remove(command.ConnectionID, nil)
 		response.ErrorCode = ErrorUpgradeFailed
-		if httpResponse != nil {
-			response.ErrorCode = ErrorNotUpgraded
-		} else if errors.Is(dialContextErr, context.DeadlineExceeded) {
+		if errors.Is(dialContextErr, context.DeadlineExceeded) {
 			response.ErrorCode = ErrorOperationTimeout
 		} else if errors.Is(dialContextErr, context.Canceled) {
 			response.ErrorCode = ErrorOperationCanceled
+		} else if httpResponse != nil {
+			response.ErrorCode = ErrorNotUpgraded
 		}
 		return response
 	}
