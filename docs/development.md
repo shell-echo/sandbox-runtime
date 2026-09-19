@@ -459,6 +459,29 @@ published OCI manifest/index identities. The broker is private Unix-only
 observation at this slice: adding input execution, media, public signaling,
 authorization, or arbitrary process control requires its later owning slice.
 
+Slice 5 runtime changes must keep `provider/desktop/driver`, `reference`,
+`lifecycle`, `usage`, and application policy separate. The driver may persist
+backend identity only in its private state. Every attach/reconnect must resolve
+the durable opaque reference again; never retain a closure that bypasses
+revocation, expiry, source-operation, receipt, or generation checks. Close and
+expiry order is durable revoke, exact receipt cleanup, then absence
+confirmation. Usage starts at successful handoff commit and stops at the
+earliest revocation, endpoint/sandbox termination, or expiry.
+
+Run the real private-broker adapter gate on a native Docker host:
+
+```bash
+SANDBOX_RUNTIME_DESKTOP_ADAPTER_INTEGRATION=1 \
+go test -tags=integration -count=1 \
+  -run '^TestDesktopBrokerTransportIntegration$' \
+  ./provider/desktop/driver/docker
+```
+
+This gate uses `network=none` to isolate real image/broker/container behavior;
+it is not restricted-egress deployment evidence. The production driver still
+requires a fail-closed restricted-network provisioner. Do not weaken that port
+or advertise Desktop because the transport-focused gate passes.
+
 ## Go and API rules
 
 - accept `context.Context` on blocking or external operations and preserve

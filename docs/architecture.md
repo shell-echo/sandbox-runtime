@@ -63,7 +63,7 @@ establish a deployment-qualified topology, independently implemented caller,
 HA, hostile multi-tenant isolation, or production readiness.
 
 The [Product v1 Phase 5 Desktop plan](plan/product-v1-phase-5-desktop-development-unified-product.md)
-is now **4/15** complete. Slice 1 is deliberately Contract-first: it adds a
+is now **5/15** complete. Slice 1 is deliberately Contract-first: it adds a
 separate Provider Desktop capability/profile/runtime, open/read/opaque-handoff/
 close lifecycle, expiry and revocation, usage evidence, strict admission and
 security semantics, fixtures, and executable local Conformance mappings. The
@@ -84,6 +84,11 @@ Publication run `35447651328` at source
 amd64/arm64/v8 gates, publishes exact signed index
 `sha256:638e97c694ad4c9b9d750ae30dc6088ff5011af570ba1b12fdf3f0e35ffa0300`,
 and passes fresh independent provenance and platform-matrix verification.
+Slice 5 implementation `0c30d6f5e6e0c6227069b8689668a1a0dcfb940b`
+adds the Provider-local fail-closed Docker adapter, signed-publication
+selection, durable opaque reference authority, fresh attach/reconnect checks,
+Desktop lifecycle readiness, revocation/cleanup/absence ordering, and exact
+duration usage. It remains uncomposed in production startup and discovery.
 
 ## Purpose
 
@@ -729,7 +734,7 @@ advertisement, and optional-profile gates remain open:
 | Workspace | The Provider Docker adapter supplies stable `/inputs`, `/workspace`, `/outputs`, and bounded tmpfs `/tmp` without exposing host paths. The dual-platform coding/shell image was published as OCI index `sha256:1996e44f8ddc464f22556bd57f1c69079fe6b1a821b65bd9be24f86619c31bb1`, attested, independently verified, pinned by the caller, and exercised in the final qualification. | Add production artifact consumers, capacity enforcement, lifecycle closure, and stronger isolation evidence as separate scopes. |
 | Security | The qualified Docker runtime used numeric non-root identity, read-only root, disabled networking, dropped capabilities, `no-new-privileges`, and bounded CPU, memory, swap, PIDs, and tmpfs; image provenance and the exact runtime observations are retained in the qualification evidence. | Add secrets policy, controlled egress where required, stronger isolation, production authentication, threat-model review, and hostile-tenant evidence before any production claim. |
 | Events and usage | Durable lifecycle events and bounded usage-evidence components exist without a complete runtime collector composition. | Complete collection/reconciliation while leaving platform accounting authority outside the Provider. |
-| Snapshots/browser/desktop | Browser Contract, component, and historical reference tracks retain their exact recorded evidence and open production gates. Product Phase 4 separately provides bounded Product Browser evidence. Product Phase 5 Slices 1-4 authorize the separate Desktop Contract/projection, Product intent, Provider-local application/persistence/reconciliation, and exact signed immutable Desktop image publication. No Desktop driver/adapter, private resolver, Product dispatcher, production startup composition, public Gateway, Web UI, or capability advertisement exists. Snapshots remain unauthorized optional behavior. | Execute the remaining Phase 5 slices in dependency order, beginning with Slice 5 selection of only the locked publication. Keep Desktop advertisement off until the complete Provider and Product graphs plus release gate pass, and do not infer production readiness. |
+| Snapshots/browser/desktop | Browser Contract, component, and historical reference tracks retain their exact recorded evidence and open production gates. Product Phase 4 separately provides bounded Product Browser evidence. Product Phase 5 Slices 1-5 authorize the separate Desktop Contract/projection, Product intent, Provider application/persistence/reconciliation, exact signed image, and Provider-local adapter/private resolver/lifecycle/usage composition. No Product dispatcher, production startup composition, public Gateway, Web UI, or capability advertisement exists. Snapshots remain unauthorized optional behavior. | Execute the remaining Phase 5 slices in dependency order, beginning with the Product network-only Provider adapter in Slice 6. Keep Desktop advertisement off until the complete Provider and Product graphs plus release gate pass, and do not infer production readiness. |
 
 ## Delivery plan and release gates
 
@@ -977,8 +982,10 @@ Slice 2 adds Product slot/session persistence authority, and Slice 3 adds
 Provider-local application/persistence/reconciliation plus optional protected
 handlers. Slice 4 adds the exact immutable signed Desktop image and broker;
 publication run `35447651328` passes both native architectures and independent
-provenance/matrix verification. Adapter/private resolver, production startup
-composition, dispatch, advertisement, and Product release gates remain open.
+provenance/matrix verification. Slice 5 adds the Provider-local adapter,
+durable private resolver, fresh attach/reconnect, lifecycle, usage, revocation,
+and cleanup composition. Production startup, Product dispatch, public data
+planes, advertisement, and release gates remain open.
 
 ## Conformance matrix
 
