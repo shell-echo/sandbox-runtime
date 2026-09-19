@@ -19,7 +19,7 @@ general production readiness.
 | Independent external caller | **13/13 complete** |
 | Product v1 Phase 3 | **13/13 complete** for the bounded standalone topology |
 | Product v1 Phase 4 Browser | **13/13 complete** for the bounded same-repository separate-process topology |
-| Product v1 Phase 5 Desktop | **11/15 complete**; required encrypted recording, authorized integrity replay, retention cleanup, and quota races pass; development templates are next, advertisement disabled |
+| Product v1 Phase 5 Desktop | **12/15 complete**; immutable development templates, exact Guest materialization, rollback/restart recovery, and real-store persistence pass; unified Web is next, advertisement disabled |
 | Coding/shell qualification | **Qualified** for the exact caller, Provider revisions, topology, profile, and scenarios recorded below |
 | Latest core CI | [Passed](https://github.com/shell-echo/sandbox-runtime/actions/runs/35204434771) |
 
@@ -79,7 +79,7 @@ independently implemented caller, HA, hostile-multitenant, or production
 evidence.
 
 [Product v1 Phase 5 Desktop](docs/plan/product-v1-phase-5-desktop-development-unified-product.md)
-has completed **11/15** dependency-ordered slices. Slice 1 locks a separate
+has completed **12/15** dependency-ordered slices. Slice 1 locks a separate
 Provider Desktop capability/profile/runtime shape and complete session
 open/read/handoff/close/expiry/revocation, usage, admission, security, and
 cleanup semantics. Exact authority is Contract revision
@@ -152,8 +152,17 @@ minimized control/synchronization events use the existing encrypted,
 quota-bounded, integrity-linked Product recording service with owner-authorized
 replay and retention deletion. Clipboard text, transfer paths/identities, and
 content remain excluded from catalog and metadata audit. A real Provider
-media/input bridge, development templates, unified Web, production composition,
-and capability advertisement remain later gates.
+media/input bridge, unified Web, production composition, and capability
+advertisement remain later gates.
+
+Slice 12 implementation `490c2db96d6ba7a851d7846bc9e5f818dae2be77`
+adds the immutable `coding-shell-base-v1` catalog, migration 13 revision/
+development persistence, bounded content-addressed workspace streaming, exact
+Guest authority/health/mount/toolchain checks, and private two-phase Guest
+rollback/restart recovery. Host paths, object paths, credentials, Guest IDs,
+and runtime coordinates remain outside public health and audit/event data. A
+real Provider media/input bridge, unified Web, production composition, and
+capability advertisement remain later gates.
 
 ## What the project provides
 
@@ -189,6 +198,9 @@ and capability advertisement remain later gates.
 - Required Desktop media/control recording with explicit consent/mode,
   encrypted integrity-linked segments, owner-authorized replay, bounded quotas,
   retention deletion, and content-minimized catalog/audit metadata.
+- Immutable development templates with digest-checked workspace materialization,
+  exact Guest readiness, failure rollback, restart recovery, and durable
+  PostgreSQL attempt/revision state; this remains component evidence.
 - Provider-local Desktop operation authority with durable replay/fencing,
   exact-owned close/expiry cleanup policy, and unadvertised protected handlers.
 - An exact signed Desktop image plus Provider-local Docker adapter, private

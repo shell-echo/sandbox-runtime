@@ -247,6 +247,13 @@ func (s *Store) CommitRevision(ctx context.Context, command product.CommitRevisi
 	if _, err := tx.Exec(opCtx, `INSERT INTO sandbox_runtime_product.workspace_revisions(tenant_id,revision_id,workspace_id,parent_revision_id,manifest_digest,manifest_size_bytes,object_reference,file_count,size_bytes,created_actor_type,created_actor_id,created_at)VALUES($1,$2,$3,NULLIF($4,''),$5,$6,$7,$8,$9,$10,$11,$12)`, command.TenantID, command.RevisionID, command.WorkspaceID, currentHead, manifestDigest, manifestSize, objectReference, fileCount, contentSize, string(command.Actor.Type), command.Actor.ID, now); err != nil {
 		return product.WorkspaceRevision{}, false, product.ErrStoreUnavailable
 	}
+	manifestDocument, err := json.Marshal(command.Manifest)
+	if err != nil {
+		return product.WorkspaceRevision{}, false, product.ErrInvalid
+	}
+	if _, err := tx.Exec(opCtx, `INSERT INTO sandbox_runtime_product.workspace_revision_manifests(tenant_id,revision_id,workspace_id,manifest,created_at)VALUES($1,$2,$3,$4,$5)`, command.TenantID, command.RevisionID, command.WorkspaceID, manifestDocument, now); err != nil {
+		return product.WorkspaceRevision{}, false, product.ErrStoreUnavailable
+	}
 	if currentHead == "" {
 		_, err = tx.Exec(opCtx, `INSERT INTO sandbox_runtime_product.workspace_heads(tenant_id,workspace_id,branch_id,revision_id,version,updated_at)VALUES($1,$2,'main',$3,1,$4)`, command.TenantID, command.WorkspaceID, command.RevisionID, now)
 	} else {

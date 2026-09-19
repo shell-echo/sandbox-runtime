@@ -177,6 +177,32 @@ func (s *Store) Read(ctx context.Context, reference string, offset int64, limit 
 	return buffer[:n], errors.Is(readErr, io.EOF), nil
 }
 
+// Open resolves only a content digest in the adapter-private object directory.
+// Tenant/workspace/revision authorization is completed by the Product store
+// before this port is called; no filesystem path crosses the boundary.
+func (s *Store) Open(ctx context.Context, tenantID, workspaceID, revisionID, digest string, size int64) (io.ReadCloser, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if tenantID == "" || workspaceID == "" || revisionID == "" || !validDigest(digest) || size < 0 || size > product.MaxTransferBytes {
+		return nil, product.ErrInvalid
+	}
+	filePath, ok := s.objectPath("blob:" + digest)
+	if !ok {
+		return nil, product.ErrInvalid
+	}
+	file, err := openNoFollow(filePath)
+	if err != nil {
+		return nil, err
+	}
+	info, err := file.Stat()
+	if err != nil || !info.Mode().IsRegular() || info.Size() != size {
+		_ = file.Close()
+		return nil, product.ErrStoreUnavailable
+	}
+	return file, nil
+}
+
 func (s *Store) Delete(ctx context.Context, reference string) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -258,3 +284,4 @@ func validDigest(value string) bool {
 }
 
 var _ product.BlobStore = (*Store)(nil)
+var _ product.WorkspaceContentSource = (*Store)(nil)

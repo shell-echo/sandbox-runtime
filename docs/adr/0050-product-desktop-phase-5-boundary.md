@@ -35,6 +35,10 @@ replacement cleanup. Slice 11 composes required encrypted Desktop recording,
 owner-authorized integrity replay, quotas, and retention deletion while
 leaving the real Provider media bridge, development environment, startup, and
 advertisement disabled.
+Slice 12 adds immutable coding-shell development templates, validated revision
+manifests, exact Guest health/authority, bounded digest-checked workspace
+materialization, and two-phase rollback/restart recovery while leaving unified
+Web, production composition, and advertisement disabled.
 
 Starting with Product persistence would require Product code to invent a
 Provider wire shape. Starting with a runtime image or driver would create an
@@ -334,6 +338,26 @@ Gateway component evidence. It is not a real Provider media bridge,
 development-environment composition, production startup, advertisement, or
 release evidence.
 
+## Slice 12 development environment
+
+The Product selects only the immutable `coding-shell-base-v1` descriptor and
+persists each startup against the exact current primary code slot, Guest
+generation, template revision, and validated workspace revision manifest.
+Content remains in the private content-addressed store and crosses the Guest
+protocol only in bounded digest-checked chunks.
+
+Guest owns filesystem truth. It accepts only the four exact public mount
+points, locked toolchain identities, safe ordered relative paths, and matching
+size/digest writes. Its private transaction journal retains the prior workspace
+until Product commits readiness, allowing database failure rollback and
+deterministic reconstruction of an interrupted swap. Public health returns only
+liveness/readiness and locked public identities; host/object paths,
+credentials, Guest identity, and runtime coordinates remain private.
+
+This is Product/Guest protocol, local content-store, and PostgreSQL component
+evidence. It is not a real Provider media bridge, unified Web, production
+startup composition, advertisement, or release evidence.
+
 ## Consequences
 
 - Product Desktop persistence begins only after the Provider wire authority is
@@ -370,6 +394,9 @@ release evidence.
   does not compose the injected media source into a production process graph.
 - Slice 11 proves fail-closed encrypted recording/replay/retention composition
   only; it does not provide a real Provider media bridge or advertise Desktop.
+- Slice 12 proves immutable template selection and exact Guest workspace
+  materialization/rollback/recovery only; it does not compose unified Web or
+  advertise Desktop.
 - Phase 5 completion requires the named independent-process Slice 15 gate.
   It still does not establish multi-user collaboration, HA, hostile
   multi-tenant isolation, production deployment, or general production
