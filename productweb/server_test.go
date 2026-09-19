@@ -40,6 +40,10 @@ func (s *apiSpy) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	s.auth = request.Header.Get("Authorization")
 	s.cookies = request.Header.Get("Cookie")
 	writer.Header().Set("Content-Type", "application/json")
+	if request.URL.Path == "/api/v1/capabilities" {
+		_, _ = io.WriteString(writer, `{"contract_namespace":"urn:shell-echo:sandbox-runtime:product-v1alpha1","contract_version":"0.1.0","capabilities":[{"capability_id":"product.workspace","version":"1.0.0","readiness":"ready","protocol_profiles":["coding-shell-v1"],"max_session_seconds":0},{"capability_id":"product.terminal","version":"1.0.0","readiness":"ready","protocol_profiles":["product-terminal.v1"],"max_session_seconds":3600},{"capability_id":"product.files","version":"1.0.0","readiness":"ready","protocol_profiles":["guest-files.v1"],"max_session_seconds":0},{"capability_id":"product.browser","version":"1.0.0","readiness":"ready","protocol_profiles":["product-browser-live.v1"],"max_session_seconds":3600},{"capability_id":"product.desktop","version":"1.0.0","readiness":"ready","protocol_profiles":["product-desktop.v1"],"max_session_seconds":3600}],"max_page_size":200}`)
+		return
+	}
 	_, _ = io.WriteString(writer, `{"items":[]}`)
 }
 
@@ -194,7 +198,7 @@ func TestStaticUIHasStrictSecurityAndAccessibilityLandmarks(t *testing.T) {
 		t.Fatalf("security headers=%v", response.Header())
 	}
 	html := response.Body.String()
-	for _, required := range []string{`<main id="main">`, `role="status"`, `aria-live="polite"`, `for="bearer"`, `type="module" src="/assets/app.js"`, `id="browser-panel"`, `id="browser-video"`, `id="recording-indicator"`, `id="recordings-panel"`} {
+	for _, required := range []string{`<main id="main">`, `role="status"`, `aria-live="polite"`, `for="bearer"`, `type="module" src="/assets/app.js"`, `id="browser-panel"`, `id="browser-video"`, `id="recording-indicator"`, `id="desktop-panel"`, `id="desktop-video"`, `id="desktop-audio"`, `id="desktop-recording-indicator"`, `id="recordings-panel"`} {
 		if !strings.Contains(html, required) {
 			t.Fatalf("static UI missing %q", required)
 		}
@@ -204,24 +208,26 @@ func TestStaticUIHasStrictSecurityAndAccessibilityLandmarks(t *testing.T) {
 	}
 }
 
-func TestBrowserUIUsesGeneratedProductClientAndClosedPublicProfiles(t *testing.T) {
+func TestUnifiedProductUIUsesGeneratedClientAndClosedPublicProfiles(t *testing.T) {
 	script, err := assets.ReadFile("assets/app.js")
 	if err != nil {
 		t.Fatal(err)
 	}
 	document := string(script)
 	for _, required := range []string{
-		`import { callProduct }`, `product-browser-live.v1`, `product-browser-control.v1`,
+		`import { callProduct }`, `getProductCapabilities`, `product-browser-live.v1`, `product-browser-control.v1`,
 		`new RTCPeerConnection()`, `gatewayURL.origin !== location.origin`, `recording_consent_reference`,
 		`listWorkspaceRecordings`, `/web/browser-transfers/uploads`, `crypto.subtle.digest`,
+		`product-desktop.v1`, `product-desktop-control.v1`, `stream.configure`, `stream.resync`,
+		`clipboard.read`, `clipboard.write`, `transfer.upload`, `transfer.download`, `/web/transfers/uploads`,
 	} {
 		if !strings.Contains(document, required) {
-			t.Fatalf("Browser UI missing %q", required)
+			t.Fatalf("unified Product UI missing %q", required)
 		}
 	}
 	for _, forbidden := range []string{"localStorage", "sessionStorage", ".innerHTML", "provider_handoff", "object_reference"} {
 		if strings.Contains(document, forbidden) {
-			t.Fatalf("Browser UI contains forbidden surface %q", forbidden)
+			t.Fatalf("unified Product UI contains forbidden surface %q", forbidden)
 		}
 	}
 }
@@ -234,7 +240,7 @@ func TestBrowserTransferBFFEnforcesSessionOriginCSRFAndStreamsAuthorizedBytes(t 
 	payload := []byte("verified browser upload")
 	digestValue := sha256.Sum256(payload)
 	digest := "sha256:" + hex.EncodeToString(digestValue[:])
-	target := "/web/browser-transfers/uploads?workspace_id=wrk-1&expected_workspace_version=3&digest=" + digest + "&size_bytes=" + strconv.Itoa(len(payload))
+	target := "/web/transfers/uploads?workspace_id=wrk-1&expected_workspace_version=3&digest=" + digest + "&size_bytes=" + strconv.Itoa(len(payload))
 
 	rejected := webRequest(http.MethodPost, target, string(payload))
 	rejected.AddCookie(cookie)
@@ -261,7 +267,7 @@ func TestBrowserTransferBFFEnforcesSessionOriginCSRFAndStreamsAuthorizedBytes(t 
 		t.Fatalf("upload exposed private storage metadata: %s", response.Body.String())
 	}
 
-	download := webRequest(http.MethodGet, "/web/browser-transfers/xfer-download", "")
+	download := webRequest(http.MethodGet, "/web/transfers/xfer-download", "")
 	download.AddCookie(cookie)
 	response = httptest.NewRecorder()
 	server.ServeHTTP(response, download)

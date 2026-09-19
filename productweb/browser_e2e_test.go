@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"testing"
@@ -67,10 +68,12 @@ func TestBrowserAuthenticatedSessionAndProductRead(t *testing.T) {
 		"--virtual-time-budget=5000", "--dump-dom", testServer.URL+"/browser-e2e.html",
 	)
 	output, err := command.CombinedOutput()
-	if !strings.Contains(string(output), `id="browser-tab"`) || !strings.Contains(string(output), "browser-e2e · owner") {
+	document := string(output)
+	desktopTab := regexp.MustCompile(`<button id="desktop-tab"[^>]*>`).FindString(document)
+	if !strings.Contains(document, `id="browser-tab"`) || desktopTab == "" || !strings.Contains(desktopTab, `data-capability-ready="true"`) || strings.Contains(desktopTab, " disabled") || !strings.Contains(document, "browser-e2e · owner") {
 		t.Fatalf("headless Chrome failed: %v\n%s", err, output)
 	}
-	if api.calls != 1 || api.auth != "Bearer "+webTestBearer || api.cookies != "" {
+	if api.calls != 2 || api.auth != "Bearer "+webTestBearer || api.cookies != "" {
 		t.Fatalf("browser Product call = %#v", api)
 	}
 }

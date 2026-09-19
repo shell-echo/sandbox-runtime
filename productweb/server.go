@@ -29,9 +29,9 @@ import (
 )
 
 const (
-	sessionCookieName       = "__Host-product_session"
-	maxLoginBodyBytes       = 1024
-	maxBrowserTransferBytes = int64(64 << 20)
+	sessionCookieName   = "__Host-product_session"
+	maxLoginBodyBytes   = 1024
+	maxWebTransferBytes = int64(64 << 20)
 )
 
 //go:embed assets/*
@@ -43,7 +43,7 @@ type Options struct {
 	ProductAPI           http.Handler
 	Authenticator        productapi.Authenticator
 	Files                *product.FileService
-	Transfers            BrowserTransferService
+	Transfers            ProductTransferService
 	SessionEncryptionKey []byte
 	PublicOrigin         string
 	SessionTTL           time.Duration
@@ -53,9 +53,9 @@ type Options struct {
 	Random               io.Reader
 }
 
-// BrowserTransferService is the narrow Product data-plane port exposed by the
+// ProductTransferService is the narrow Product data-plane port exposed by the
 // authenticated Web BFF. It deliberately excludes object-store references.
-type BrowserTransferService interface {
+type ProductTransferService interface {
 	BeginUpload(context.Context, string, product.ActorRef, string, string, product.BeginUploadRequest) (product.BlobTransfer, bool, error)
 	Append(context.Context, string, product.ActorRef, string, int64, []byte) (product.BlobTransfer, error)
 	Complete(context.Context, string, product.ActorRef, string) (product.BlobTransfer, error)
@@ -63,11 +63,15 @@ type BrowserTransferService interface {
 	ReadDownload(context.Context, string, product.ActorRef, string, int64, int) ([]byte, bool, error)
 }
 
+// BrowserTransferService is retained as a source-compatible name for clients
+// created before the Product Web transfer endpoint became shared with Desktop.
+type BrowserTransferService = ProductTransferService
+
 type Server struct {
 	productAPI    http.Handler
 	authenticator productapi.Authenticator
 	files         *product.FileService
-	transfers     BrowserTransferService
+	transfers     ProductTransferService
 	origin        string
 	clock         func() time.Time
 	sessionTTL    time.Duration
@@ -160,7 +164,9 @@ func (s *Server) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	case strings.HasPrefix(request.URL.Path, "/web/data/"):
 		s.fileRoute(writer, request)
 	case strings.HasPrefix(request.URL.Path, "/web/browser-transfers/"):
-		s.browserTransferRoute(writer, request)
+		s.transferRoute(writer, request)
+	case strings.HasPrefix(request.URL.Path, "/web/transfers/"):
+		s.transferRoute(writer, request)
 	case request.Method == http.MethodGet && (request.URL.Path == "/" || strings.HasPrefix(request.URL.Path, "/assets/")):
 		if request.URL.Path == "/" {
 			document, err := assets.ReadFile("assets/index.html")
@@ -372,7 +378,7 @@ func (s *Server) fileRoute(writer http.ResponseWriter, request *http.Request) {
 	writeWebJSON(writer, http.StatusOK, result)
 }
 
-func (s *Server) browserTransferRoute(writer http.ResponseWriter, request *http.Request) {
+func (s *Server) transferRoute(writer http.ResponseWriter, request *http.Request) {
 	if s.transfers == nil {
 		writeWebError(writer, http.StatusServiceUnavailable, "WEB_TRANSFERS_UNAVAILABLE", "transfer service is unavailable")
 		return
@@ -386,23 +392,23 @@ func (s *Server) browserTransferRoute(writer http.ResponseWriter, request *http.
 	}
 	parts := strings.Split(strings.Trim(request.URL.Path, "/"), "/")
 	switch {
-	case request.Method == http.MethodPost && len(parts) == 3 && parts[0] == "web" && parts[1] == "browser-transfers" && parts[2] == "uploads":
-		s.uploadBrowserTransfer(writer, request, session)
-	case request.Method == http.MethodGet && len(parts) == 3 && parts[0] == "web" && parts[1] == "browser-transfers":
-		s.downloadBrowserTransfer(writer, request, session, parts[2])
+	case request.Method == http.MethodPost && len(parts) == 3 && parts[0] == "web" && (parts[1] == "browser-transfers" || parts[1] == "transfers") && parts[2] == "uploads":
+		s.uploadTransfer(writer, request, session)
+	case request.Method == http.MethodGet && len(parts) == 3 && parts[0] == "web" && (parts[1] == "browser-transfers" || parts[1] == "transfers"):
+		s.downloadTransfer(writer, request, session, parts[2])
 	default:
 		writeWebError(writer, http.StatusNotFound, "WEB_NOT_FOUND", "resource not found")
 	}
 }
 
-func (s *Server) uploadBrowserTransfer(writer http.ResponseWriter, request *http.Request, session browserSession) { //nolint:cyclop
+func (s *Server) uploadTransfer(writer http.ResponseWriter, request *http.Request, session browserSession) { //nolint:cyclop
 	query := request.URL.Query()
 	workspaceID := query.Get("workspace_id")
 	digest := query.Get("digest")
 	expectedVersion, validVersion := boundedInt64(query.Get("expected_workspace_version"), 0, 1)
 	size, validSize := boundedInt64(query.Get("size_bytes"), -1, 0)
 	keys := request.Header.Values("Idempotency-Key")
-	if !onlyQuery(query, "workspace_id", "expected_workspace_version", "digest", "size_bytes") || !validVersion || !validSize || size > maxBrowserTransferBytes || request.ContentLength != size || len(keys) != 1 {
+	if !onlyQuery(query, "workspace_id", "expected_workspace_version", "digest", "size_bytes") || !validVersion || !validSize || size > maxWebTransferBytes || request.ContentLength != size || len(keys) != 1 {
 		writeWebError(writer, http.StatusBadRequest, "WEB_INVALID_REQUEST", "invalid request")
 		return
 	}
@@ -472,7 +478,7 @@ func (s *Server) uploadBrowserTransfer(writer http.ResponseWriter, request *http
 	writeWebJSON(writer, http.StatusCreated, projectTransfer(transfer))
 }
 
-func (s *Server) downloadBrowserTransfer(writer http.ResponseWriter, request *http.Request, session browserSession, transferID string) {
+func (s *Server) downloadTransfer(writer http.ResponseWriter, request *http.Request, session browserSession, transferID string) {
 	if !onlyQuery(request.URL.Query()) || len(transferID) < 1 || len(transferID) > 128 {
 		writeWebError(writer, http.StatusBadRequest, "WEB_INVALID_REQUEST", "invalid request")
 		return
@@ -487,7 +493,7 @@ func (s *Server) downloadBrowserTransfer(writer http.ResponseWriter, request *ht
 		return
 	}
 	writer.Header().Set("Content-Type", "application/octet-stream")
-	writer.Header().Set("Content-Disposition", `attachment; filename="browser-download.bin"`)
+	writer.Header().Set("Content-Disposition", `attachment; filename="product-download.bin"`)
 	writer.Header().Set("Cache-Control", "no-store")
 	writer.WriteHeader(http.StatusOK)
 	offset, total := int64(0), int64(0)
