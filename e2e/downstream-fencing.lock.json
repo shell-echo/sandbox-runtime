@@ -6,11 +6,11 @@
     "harness_baseline": "49ea205c1abf125f7e9b8e6ce002a2af34ff5ebf",
     "gateway_component": {
       "path": "gateway/composition/browser.go",
-      "revision": "602d1dcd73b9eac087ec067795566f551ece1f90"
+      "revision": "b4d41c9a32b4ccf39edaba3fb8bf5ad239c1f945"
     },
     "ingress_component": {
       "path": "gateway/cdpfence",
-      "revision": "b4d41c9a32b4ccf39edaba3fb8bf5ad239c1f945"
+      "revision": "602d1dcd73b9eac087ec067795566f551ece1f90"
     },
     "caller_substrate": {
       "path": "e2e/internal/caller",

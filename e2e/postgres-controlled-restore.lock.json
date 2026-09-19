@@ -6,11 +6,11 @@
     "harness_baseline": "49ea205c1abf125f7e9b8e6ce002a2af34ff5ebf",
     "gateway_component": {
       "path": "gateway/composition/browser.go",
-      "revision": "602d1dcd73b9eac087ec067795566f551ece1f90"
+      "revision": "b4d41c9a32b4ccf39edaba3fb8bf5ad239c1f945"
     },
     "ingress_component": {
       "path": "gateway/cdpfence",
-      "revision": "b4d41c9a32b4ccf39edaba3fb8bf5ad239c1f945"
+      "revision": "602d1dcd73b9eac087ec067795566f551ece1f90"
     },
     "action_history_component": {
       "path": "gateway/capacity/redis",
@@ -23,7 +23,7 @@
   },
   "base_lock": {
     "path": "e2e/downstream-fencing-v2.lock.json",
-    "sha256": "sha256:63b8fb0bf285e742fb8ba347e529918e20523fca9a4dcd9f74e45bc5e9e703c0",
+    "sha256": "sha256:8442ac11b8489eda348001bac7bc6f8319e9725e36d073871c8f0da1177c70cc",
     "evidence_profile": "browser-downstream-fencing-e2e-v2"
   },
   "contract": {
