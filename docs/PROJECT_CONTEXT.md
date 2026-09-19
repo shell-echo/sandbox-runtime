@@ -45,15 +45,19 @@ Current verified state:
   four roles, scenario set, and cleanup. Deployment, HA, hostile multi-tenant,
   independently implemented caller, and production readiness remain explicit
   non-claims; and
-- Product v1 Phase 5 Desktop is **2/15** complete. Slice 1 establishes the
+- Product v1 Phase 5 Desktop is **3/15** complete. Slice 1 establishes the
   separate Provider Desktop Contract and Go projection authority at revision
   `720ad15c343e71f36615dc4499edd5e764178bca`, tree
   `343ffde0819207cf99c005096c336735dd33a735`, with a content-derived 71-case
   local Suite. Slice 2 implementation
   `d2e7943f704e2eed6ea7b61a44ed2b6fa5510e00` adds exact Product Desktop
   slot/session intent, PostgreSQL migration 8, atomic audit/outbox persistence,
-  quotas, concurrency closure, nondisclosure, and restart-safe reads. Desktop
-  Provider runtime/application composition, dispatch, public media/control,
+  quotas, concurrency closure, nondisclosure, and restart-safe reads. Slice 3
+  implementation `f96c06c3a50ade031e8ffbb4d8ea15e6ca8be7d5` adds the separate
+  Provider Desktop domain, application policy, memory/atomic-file authority,
+  restart and unknown-outcome reconciliation, operation projection, and
+  optional protected handlers. Desktop runtime/image/adapter/broker/private
+  resolver, production startup composition, dispatch, public media/control,
   unified Web, capability advertisement, and release evidence remain absent.
 
 The qualification applies only to Provider revision
@@ -89,6 +93,7 @@ Product Phase 5 startup findings, boundary decision, and fixed slice order are
 recorded in
 [`audits/product-phase-5-desktop-startup.md`](audits/product-phase-5-desktop-startup.md),
 [`audits/product-phase-5-desktop-slice-2.md`](audits/product-phase-5-desktop-slice-2.md),
+[`audits/product-phase-5-desktop-slice-3.md`](audits/product-phase-5-desktop-slice-3.md),
 [`adr/0050-product-desktop-phase-5-boundary.md`](adr/0050-product-desktop-phase-5-boundary.md),
 and
 [`plan/product-v1-phase-5-desktop-development-unified-product.md`](plan/product-v1-phase-5-desktop-development-unified-product.md).
@@ -278,8 +283,11 @@ tests and keeps Desktop advertisement disabled. The historical Phase 2
 60-case Runner, remote Runner, hosted CI, Product Phase 3/4, and external-caller
 results retain their recorded identities and are not relabeled as current
 runs. Product Phase 5 Slice 2 separately adds Product Desktop intent at
-implementation `d2e7943f704e2eed6ea7b61a44ed2b6fa5510e00`; it does not change
-the Provider Contract identity or any historical result.
+implementation `d2e7943f704e2eed6ea7b61a44ed2b6fa5510e00`. Slice 3 adds
+Provider-local Desktop authority and optional protected handlers at
+`f96c06c3a50ade031e8ffbb4d8ea15e6ca8be7d5`; neither slice changes the
+Provider Contract identity or any historical result, and Slice 3 is not
+production startup composition or capability advertisement.
 The independently implemented caller result is instead the separate bounded
 P2.7 qualification recorded above. Rotation remains operator-driven, and
 protected/mutating remote conformance, aggregate conformance, multi-controller,
@@ -872,7 +880,7 @@ Contract identity:
 | P2 | Reference coding/shell caller and Product Phase 2 lifecycle release gates passed; the latter includes a repository-owned independent-process 15+5+9 black-box run | Independently implemented external-caller lifecycle interoperability, aggregate conformance, multi-controller, hostile multi-tenant isolation, deployment, and production gates remain open |
 | P3 | Retired by ADR 0037. Historical revision binding/shadow/metrics components and candidate runs retain their recorded evidence boundaries | No named-platform migration gate remains; external consumers adapt to the exact locked Provider Contract |
 | P4 | Browser Contract authority/projection, exact sandboxed signed amd64/arm64/v8 publication, Provider-local components, default-disabled command/runtime composition, process-local Gateway limits, the separately recorded Browser/shared-capacity/durable-revocation caller gates, ADR 0033 component/caller evidence, the ADR 0034 v2 local/hosted deletion and rollback-detection gates, the ADR 0035 PostgreSQL component gate, and the ADR 0036 hosted same-runner controlled-restore gate pass within their named boundaries | Production independent witness/storage and restore operations, production Browser advertisement/public Gateway, Valkey/PostgreSQL provenance and HA, production configuration/metrics, aggregate, multi-controller, multi-tenant, deployment, and production gates remain open |
-| Product Phase 5 | Slices 1-2/15 lock separate Provider Desktop Contract/projection authority and Product Desktop slot/session PostgreSQL intent; Desktop advertisement remains empty | Slices 3-15: Provider implementation, runtime/broker, adapters, public data plane, policy, recovery, recording, development environment, unified Web, and independent-process release evidence |
+| Product Phase 5 | Slices 1-3/15 lock the separate Provider Desktop Contract/projection, Product Desktop slot/session PostgreSQL intent, and Provider-local application/persistence/protected-handler authority; Desktop advertisement remains empty | Slices 4-15: immutable runtime/broker, adapters, public data plane, policy, recovery, recording, development environment, unified Web, and independent-process release evidence |
 
 Production readiness is not a numbered phase shortcut. Aggregate conformance,
 multi-controller reliability, hostile multi-tenant security, deployment, and

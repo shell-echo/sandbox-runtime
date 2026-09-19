@@ -413,6 +413,25 @@ outbox types are `desktop_session.open` and `desktop_session.close`. Until the
 later adapter slice provides a dedicated consumer, no existing worker may
 lease them and capability advertisement remains empty.
 
+Provider Desktop Slice 3 changes must preserve the separate `provider/desktop`
+domain and coordination authority. Commit open intent before allocating;
+persist the immutable allocation receipt before publishing an opaque handoff.
+After a restart, an already-running or outcome-unknown open is observation
+only: never blindly allocate again. Close and expiry durably revoke the source
+handoff before external effects, then revoke, clean only the exact retained
+allocation receipt, and observe absence. An outcome-unknown close may only
+observe revocation and allocation state; it must not repeat cleanup. Keep
+memory and atomic-file adapters behaviorally equivalent, retain operation
+records after handoff expiry, reject stale fencing/generation/revision, and
+map internal failures to safe transport errors.
+
+The Slice 3 protected handlers are optional application injection only. Do not
+compose them into production startup or advertise Desktop until the later
+runtime, adapter, resolver, readiness, and release slices pass. Run focused
+Desktop domain/application/repository/transport race-shuffle tests in addition
+to the full repository race/shuffle and vet gates. Provider API or compatibility
+changes also require the Provider Contract verifier.
+
 ## Go and API rules
 
 - accept `context.Context` on blocking or external operations and preserve

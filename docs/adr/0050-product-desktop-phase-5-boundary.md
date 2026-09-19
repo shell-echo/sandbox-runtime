@@ -1,6 +1,6 @@
 # ADR 0050: Product Desktop Phase 5 Boundary
 
-- Status: Accepted for Product Phase 5 scope; Slices 1-2 are implemented
+- Status: Accepted for Product Phase 5 scope; Slices 1-3 are implemented
 - Date: 2026-09-19
 
 ## Context
@@ -94,6 +94,30 @@ Desktop session intents use the separate `desktop_session.open` and
 cannot lease them; Browser slot workers also filter `slot.reconcile` by slot
 kind. There is deliberately no Desktop dispatcher until the Provider and
 network adapter slices exist. Capability advertisement remains empty.
+
+## Slice 3 Provider authority
+
+Provider Desktop execution policy is implemented as a separate domain,
+application service, coordination authority, and protected transport
+projection. It does not reuse Browser sessions, lifecycle repositories,
+runtime-driver structs, or Product DTOs. The memory and atomically replaced
+file repositories retain open/close operation, idempotency, fencing,
+allocation receipt, handoff revocation, and exact source-operation linkage.
+
+An open commits accepted/running state before an external allocation and
+commits the immutable allocation receipt before handoff publication. Restart
+from a running or outcome-unknown state observes the exact allocation identity
+instead of redispatching it. Close and expiry use one policy: durably revoke
+the source handoff, revoke the private handoff authority, clean only the exact
+retained allocation, and observe absence before success. Unknown close effects
+are reconciled by observation and are not repeated.
+
+The optional protected open/close/operation/handoff handlers use the existing
+admission boundary, strict bounded documents, safe error mapping, and opaque
+handoff projection. The production command does not inject this application,
+and capability discovery remains unchanged. Runtime image, broker, adapter,
+private resolver, usage collector, Product dispatcher, and public data plane
+remain later slices.
 
 ## Consequences
 

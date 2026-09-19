@@ -1,6 +1,6 @@
 # Product v1 Phase 5: Desktop Development and Unified Product
 
-Status: 2/15 complete
+Status: 3/15 complete
 
 Started: 2026-09-19
 
@@ -27,7 +27,7 @@ relabeled as Desktop evidence.
 | --- | --- | --- | --- |
 | 1 | Startup audit; ADR 0050; separate Provider Desktop capability/profile/runtime authority; Desktop open/read/handoff/close/expiry/revocation and usage semantics; OpenAPI/schemas/rules/fixtures/manifest/Suite; Go DTO, strict decode, admission, projection, and executable case mappings | Exact immutable Contract revision/tree and derived lock; all 71 Suite cases mapped to tests; focused/full race-shuffle, vet, both Contract verifiers, clean-VCS local Conformance, retained Phase 3/4 evidence regressions, structured-data parse, diff, and status checks | **Complete: Contract/projection authority only; advertisement remains off** |
 | 2 | Product Desktop slot/session authority and relational-store state/outbox isolation | Strict authenticated API; exact immutable Desktop kind/profile; expected-version/idempotency/quota races; absorbing states; atomic operation/event/audit/outbox; cross-tenant nondisclosure; migration replay and restart-safe reads | **Complete: Product intent authority only; dispatch and advertisement remain off** |
-| 3 | Provider Desktop domain, application policy, persistence, reconciliation, and protected handlers with capability still unadvertised | State/fence/replay/deadline/cancellation matrices; restart at every commit/effect boundary; exact-owned cleanup; unknown-outcome reconciliation; safe-error and nondisclosure tests | Planned |
+| 3 | Provider Desktop domain, application policy, persistence, reconciliation, and protected handlers with capability still unadvertised | State/fence/replay/deadline/cancellation matrices; restart at every commit/effect boundary; exact-owned cleanup; unknown-outcome reconciliation; safe-error and nondisclosure tests | **Complete: Provider-local component authority only; no runtime or advertisement** |
 | 4 | Reproducible immutable Desktop runtime image plus display/session broker protocol and provenance | Locked inputs and outputs; architecture matrix; unprivileged process/device policy; broker protocol bounds; native smoke; independent provenance verification; no mutable tag selection | Planned |
 | 5 | Provider Desktop runtime adapter, private resolver, lifecycle, usage, revocation, and cleanup composition | Real runtime open/attach/reconnect/close/expiry; generation fencing; no private-coordinate projection; revoke-before-cleanup; absence confirmation; duration evidence; fault injection | Planned |
 | 6 | Product network-only Provider adapter with exact readiness, Desktop dispatch/observation, close, and cleanup | Locked discovery/profile selection; protected requests; timeout/cancellation/replay/drift; retained operation recovery; Product/Provider generation separation; real store integration | Planned |
@@ -129,6 +129,44 @@ Provider Desktop application, runtime image, broker, adapter, handoff
 resolution, public Gateway, connection grant, input policy, recording, Web UI,
 capability advertisement, independent-process run, deployment, HA,
 hostile-multitenant, or production evidence follows.
+
+## Slice 3 exact boundary
+
+Implementation revision `f96c06c3a50ade031e8ffbb4d8ea15e6ca8be7d5`
+adds the separate `provider/desktop` domain and application boundary:
+
+- open and close operations have independent durable identities, replay keys,
+  fences, deadlines, states, and exact source-operation linkage;
+- sandbox revision/generation/profile/network/lease authority is checked before
+  mutation, while higher valid close fences can advance authority;
+- accepted/running state is committed before an external effect, immutable
+  allocation evidence is committed before handoff publication, and restart
+  from every commit/effect boundary either resumes a safe commit or observes
+  the exact allocation without blindly redispatching it;
+- close and expiry durably revoke the source handoff, revoke private handoff
+  authority, clean only the retained allocation receipt, and confirm absence;
+  outcome-unknown reconciliation observes revocation/allocation state only;
+- memory and exclusive-lock atomic-file repositories preserve the same
+  idempotency, transition, fencing, snapshot, corruption, and restart rules;
+  retained operation reads survive handoff expiry; and
+- the protected transport optionally exposes the locked Desktop open, close,
+  operation, and handoff routes with strict bounded decoding, existing
+  admission, correlation checks, safe errors, and opaque output only.
+
+The operation aggregator recognizes both Desktop operation families. The
+Desktop lifecycle profile accepts only restricted networking with an explicit
+egress policy. No runtime implementation is supplied by Slice 3; allocation,
+handoff registration/revocation, and observation remain narrow injected ports.
+
+### Slice 3 evidence boundary
+
+Slice 3 is Provider-local component and protected-handler evidence. The
+production command does not inject the Desktop application, discovery remains
+unchanged, and no Desktop runtime image, broker, adapter, private resolver,
+usage collector, Product dispatcher, public display/control Gateway, Web UI,
+independent-process run, deployment, HA, hostile-multitenant, or production
+claim follows. Twelve slices remain, beginning with the immutable Desktop
+runtime image and broker protocol in Slice 4.
 
 ## Deferred beyond Phase 5
 
