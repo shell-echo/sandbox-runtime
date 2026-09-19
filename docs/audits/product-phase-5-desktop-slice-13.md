@@ -4,6 +4,8 @@ Date: 2026-09-20
 
 Implementation: `84698c371d35edb862ffc81b484a3e31cc8120d9`
 
+E2E baseline lock: `25283420377baebd9aaac8c1199068fb90735403`
+
 ## Accepted boundary
 
 Slice 13 extends the authenticated Product Web BFF and embedded application
@@ -62,7 +64,10 @@ The implementation passed:
 - the real Chrome `browser` tagged Product Web test;
 - full `go test -race -shuffle=on -count=1 ./...` and `go vet ./...`;
 - Product and Provider Contract lock verification; and
-- retained Product Phase 3 and Phase 4 evidence verification.
+- retained Product Phase 3 and Phase 4 evidence verification; and
+- all eight parent-checkout E2E lock checks against the exact implementation
+  revision, including reference, candidate, Browser, capacity, revocation,
+  downstream fencing v1/v2, and PostgreSQL controlled restore.
 
 ## Evidence boundary
 
