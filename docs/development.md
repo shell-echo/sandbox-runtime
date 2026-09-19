@@ -512,6 +512,22 @@ test Provider peer. It is not production process composition, an independently
 implemented Provider deployment, a public Desktop Gateway, or advertisement
 evidence.
 
+Slice 7 Product grant changes may authorize `view` and `control` only for an
+exact ready `desktop` / `product-desktop.v1` session. Viewer grants have no
+control lease or fence. Controller grants require the current actor-bound,
+session-scoped lease and fence. Keep Desktop viewer/controller quotas separate
+from Browser quotas and preserve the one-live-controller index for every
+session family. Quota admission, expiry, consume, and continuous authority
+must use PostgreSQL time and the complete retained binding tuple.
+
+Public grant responses and security audit rows must not contain a Provider
+handoff, endpoint, backend identity, connection ticket, or payload. A ticket is
+stored only as its lookup digest plus authenticated ciphertext for exact
+idempotent replay, and first consumption makes it unusable. Run the complete
+tagged Product PostgreSQL race/shuffle gate above for every Desktop grant,
+control, quota, audit, or migration change. This slice does not authorize a
+public Desktop signaling/media/input handler; that begins in Slice 8.
+
 ## Go and API rules
 
 - accept `context.Context` on blocking or external operations and preserve

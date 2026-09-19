@@ -1,6 +1,6 @@
 # ADR 0050: Product Desktop Phase 5 Boundary
 
-- Status: Accepted for Product Phase 5 scope; Slices 1-6 are complete
+- Status: Accepted for Product Phase 5 scope; Slices 1-7 are complete
 - Date: 2026-09-19
 
 ## Context
@@ -21,6 +21,9 @@ advertisement disabled.
 Slice 6 adds the Product network-only Provider adapter, isolated Desktop
 dispatch/observation and close cleanup, and real-PostgreSQL recovery evidence
 while leaving production composition and advertisement disabled.
+Slice 7 adds Product-owned Desktop viewer/controller grants, one-controller
+fencing, independent quotas, revocation, continuous authority, and
+metadata-only audit while leaving the public Desktop data plane absent.
 
 Starting with Product persistence would require Product code to invent a
 Provider wire shape. Starting with a runtime image or driver would create an
@@ -209,6 +212,33 @@ Provider peer in the real-store gate is a same-repository HTTP fixture.
 Production process composition, end-user grants, public data planes, policy,
 recording, Web integration, and advertisement remain later slices.
 
+## Slice 7 Product connection authority
+
+Only an exact ready `desktop` / `product-desktop.v1` session with a current
+slot binding, positive Provider connection generation, live opaque handoff,
+and unexpired Product authority may mint a Desktop connection grant. View
+grants contain no control lease or fence. Control grants require the current
+actor-bound session lease and monotonic fence; at most one live controller
+grant may exist for a session.
+
+The public grant contains only a Product Gateway URI, public protocol profile,
+access mode, opaque one-use ticket, and bounded expiry. Tickets are retained as
+a SHA-256 lookup digest plus AES-256-GCM ciphertext solely for exact
+idempotent replay. The internal consumed binding may carry the Provider opaque
+handoff to a trusted later Gateway composition, but neither the public response
+nor metadata audit may expose it.
+
+PostgreSQL database time decides grant, session, handoff, and lease expiry.
+Migration 10 adds separate Desktop viewer/controller tenant quotas and a live
+admission index. Tenant-scoped locking closes quota races, while the
+session-wide partial unique index and control lease close controller races.
+Continuous checks fail closed on release, expiry, closure, state change,
+binding/handoff replacement, generation drift, or any tuple substitution.
+
+This is Product authorization and real-store component authority only. It does
+not compose a public signaling, display/audio, or input path and does not
+enable Desktop advertisement.
+
 ## Consequences
 
 - Product Desktop persistence begins only after the Provider wire authority is
@@ -232,6 +262,8 @@ recording, Web integration, and advertisement remain later slices.
 - Slice 6 real-store recovery proves the Product adapter and durable worker
   boundary, not production process composition or an independently
   implemented Provider deployment.
+- Slice 7 grants authorize Product access metadata only. They do not prove or
+  compose the public Desktop signaling/media/input data plane.
 - Phase 5 completion requires the named independent-process Slice 15 gate.
   It still does not establish multi-user collaboration, HA, hostile
   multi-tenant isolation, production deployment, or general production
