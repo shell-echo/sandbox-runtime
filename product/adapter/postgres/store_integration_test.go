@@ -1693,6 +1693,205 @@ VALUES($1,10,10,10,4,16,16,1,1048576,clock_timestamp())`, tenantID); err != nil 
 	}
 }
 
+func TestIntegrationDesktopRecordingQuotaIntegrityAuthorizationAndRetention(t *testing.T) {
+	pool := integrationProductPool(t)
+	applyProductMigrations(t, pool)
+	const tenantID = "tenant-desktop-recording"
+	cleanupProductTenant(t, pool, tenantID)
+	store, _ := New(pool, 3*time.Second)
+	application, _ := product.NewApplication(store, allowPrimarySlot{}, product.CryptoIDGenerator{})
+	actor := product.ActorRef{Type: product.ActorHuman, ID: "owner-desktop-recording"}
+	created, err := application.CreateWorkspace(context.Background(), tenantID, actor, "desktop-recording-create", integrationCreateWorkspaceRequest("desktop recording"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	workspaceID := created.Operation.WorkspaceID
+	for _, slotKey := range []string{"desktop-a", "desktop-b"} {
+		if _, err := pool.Exec(context.Background(), `INSERT INTO sandbox_runtime_product.workspace_slots(tenant_id,workspace_id,slot_key,kind,profile_id,required_capabilities,desired_state,observed_state,generation,observed_generation,version,created_at,updated_at)
+VALUES($1,$2,$3,'desktop','sandbox-runtime-desktop-v1','[{"capability_id":"sandbox.desktop","version":"1.0.0","profile_id":"desktop-v1"}]'::jsonb,'ready','ready',1,1,1,clock_timestamp(),clock_timestamp())`, tenantID, workspaceID, slotKey); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sessionIDs := []string{"ses_desktop_recording_a", "ses_desktop_recording_b"}
+	for index, sessionID := range sessionIDs {
+		if _, err := pool.Exec(context.Background(), `INSERT INTO sandbox_runtime_product.runtime_sessions(tenant_id,session_id,workspace_id,slot_key,slot_generation,owner_actor_type,owner_actor_id,kind,protocol_profile,state,requires_control_lease,recording_policy,version,expires_at,created_at,updated_at)
+VALUES($1,$2,$3,$4,1,$5,$6,'desktop','product-desktop.v1','active',true,'required',1,clock_timestamp()+interval '1 hour',clock_timestamp(),clock_timestamp())`, tenantID, sessionID, workspaceID, []string{"desktop-a", "desktop-b"}[index], string(actor.Type), actor.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := pool.Exec(context.Background(), `INSERT INTO sandbox_runtime_product.tenant_quotas(tenant_id,max_workspaces,max_sessions,max_active_transfers,max_browser_slots,max_browser_viewers,max_browser_controllers,max_active_recordings,max_recording_bytes,updated_at)
+VALUES($1,10,10,10,4,16,16,1,1048576,clock_timestamp())`, tenantID); err != nil {
+		t.Fatal(err)
+	}
+	recordingRoot := t.TempDir()
+	content, err := productrecordinglocal.New(recordingRoot, bytes.Repeat([]byte{0x72}, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	redactor, _ := product.NewPatternRedactor([]string{"MASK-ME"})
+	recordings, _ := product.NewRecordingService(store, content, redactor, product.CryptoIDGenerator{}, nil)
+	desktopRecorder, err := productgateway.NewProductDesktopLiveRecorder(recordings, 3600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	media := productgateway.DesktopLiveMediaPolicy{
+		VideoCodec: "video/VP8", Width: 1280, Height: 720, MaxFPS: 30, MaxVideoBitrateKbps: 2000,
+		AudioCodec: "audio/opus", MaxAudioBitrateKbps: 64,
+	}
+	type startResult struct {
+		session   productgateway.DesktopLiveRecordingSession
+		sessionID string
+		err       error
+	}
+	results := make(chan startResult, len(sessionIDs))
+	var wait sync.WaitGroup
+	for index, sessionID := range sessionIDs {
+		wait.Add(1)
+		go func(index int, sessionID string) {
+			defer wait.Done()
+			session, err := desktopRecorder.Start(context.Background(), product.GatewayBinding{
+				TenantID: tenantID, Actor: actor, WorkspaceID: workspaceID, SessionID: sessionID,
+				ProtocolProfile: product.SessionProfileDesktop, RecordingPolicy: "required",
+			}, "consent_desktop_"+string(rune('a'+index)), media)
+			results <- startResult{session: session, sessionID: sessionID, err: err}
+		}(index, sessionID)
+	}
+	wait.Wait()
+	close(results)
+	var active productgateway.DesktopLiveRecordingSession
+	var activeSessionID string
+	var started, quota int
+	for result := range results {
+		switch {
+		case result.err == nil:
+			active, activeSessionID, started = result.session, result.sessionID, started+1
+		case errors.Is(result.err, product.ErrQuotaExceeded):
+			quota++
+		default:
+			t.Fatalf("Desktop recording start err=%v", result.err)
+		}
+	}
+	if started != 1 || quota != 1 || active == nil {
+		t.Fatalf("Desktop recording quota race started=%d quota=%d", started, quota)
+	}
+	videoPacket := []byte{0x80, 0x60, 0, 1, 0, 0, 0, 1}
+	audioPacket := []byte{0x80, 0x6f, 0, 1, 0, 0, 0, 1}
+	if err := active.RecordMedia(context.Background(), time.Now(), "video.rtp", videoPacket); err != nil {
+		t.Fatal(err)
+	}
+	if err := active.RecordMedia(context.Background(), time.Now(), "audio.rtp", audioPacket); err != nil {
+		t.Fatal(err)
+	}
+	const clipboardSecret = "DESKTOP-CONTENT-SECRET"
+	if err := active.RecordControl(context.Background(), time.Now(), "input", 1, productgateway.DesktopLiveInput{
+		Action: product.DesktopPolicyAction{Kind: product.DesktopActionClipboardWrite, Text: clipboardSecret}, Kind: product.DesktopActionClipboardWrite,
+	}, productgateway.DesktopLiveDisplayPolicy{}, ""); err != nil {
+		t.Fatal(err)
+	}
+	const privatePath = "/workspace/private/customer-list.txt"
+	if err := active.RecordControl(context.Background(), time.Now(), "input", 2, productgateway.DesktopLiveInput{
+		Action: product.DesktopPolicyAction{Kind: product.DesktopActionUpload, Files: []product.DesktopTransferFile{{TransferID: "xfer-private", Path: privatePath, Digest: "sha256:" + strings.Repeat("a", 64)}}}, Kind: product.DesktopActionUpload,
+	}, productgateway.DesktopLiveDisplayPolicy{}, ""); err != nil {
+		t.Fatal(err)
+	}
+	display := productgateway.DesktopLiveDisplayPolicy{Width: 1024, Height: 768, MaxFPS: 24}
+	if err := active.RecordControl(context.Background(), time.Now(), "stream.configure", 3, productgateway.DesktopLiveInput{}, display, "default"); err != nil {
+		t.Fatal(err)
+	}
+	if err := active.RecordControl(context.Background(), time.Now(), "stream.resync", 4, productgateway.DesktopLiveInput{}, productgateway.DesktopLiveDisplayPolicy{}, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := active.Close(context.Background(), false); err != nil {
+		t.Fatal(err)
+	}
+	catalog, _ := product.NewCatalogService(store, product.CryptoIDGenerator{})
+	page, err := catalog.ListRecordings(context.Background(), tenantID, actor, workspaceID, "", 10)
+	if err != nil || len(page.Items) != 1 || page.Items[0].SessionID != activeSessionID || page.Items[0].State != "available" || page.Items[0].Type != "media" || page.Items[0].Digest == "" {
+		t.Fatalf("Desktop recording catalog=%#v err=%v", page, err)
+	}
+	recordingID := page.Items[0].ID
+	record, err := store.GetRecording(context.Background(), tenantID, actor, recordingID)
+	if err != nil || len(record.Segments) < 2 || record.ConsentReference == "" || record.Segments[0].PreviousDigest != "" {
+		t.Fatalf("Desktop recording record=%#v err=%v", record, err)
+	}
+	for index := 1; index < len(record.Segments); index++ {
+		if record.Segments[index].PreviousDigest != record.Segments[index-1].Digest {
+			t.Fatalf("segment %d previous digest=%q want=%q", index+1, record.Segments[index].PreviousDigest, record.Segments[index-1].Digest)
+		}
+	}
+	replay, err := recordings.Replay(context.Background(), tenantID, actor, recordingID)
+	joined := bytes.Join(replay, nil)
+	for _, marker := range []string{`"type":"stream.start"`, `"type":"video.rtp"`, `"type":"audio.rtp"`, `"type":"input"`, `"type":"stream.configure"`, `"type":"stream.resync"`, `"type":"stream.end"`} {
+		if !bytes.Contains(joined, []byte(marker)) {
+			t.Fatalf("Desktop replay missing %s: %q", marker, joined)
+		}
+	}
+	if err != nil || bytes.Contains(joined, []byte(clipboardSecret)) || bytes.Contains(joined, []byte(privatePath)) || bytes.Contains(joined, []byte("xfer-private")) {
+		t.Fatalf("Desktop replay content minimization replay=%q err=%v", joined, err)
+	}
+	other := product.ActorRef{Type: product.ActorHuman, ID: "other-desktop-recording"}
+	if _, err := recordings.Replay(context.Background(), tenantID, other, recordingID); !errors.Is(err, product.ErrNotFound) {
+		t.Fatalf("cross-owner Desktop replay err=%v", err)
+	}
+	encodedPage, _ := json.Marshal(page)
+	if bytes.Contains(encodedPage, []byte(clipboardSecret)) || bytes.Contains(encodedPage, []byte(privatePath)) || bytes.Contains(encodedPage, []byte(record.ConsentReference)) {
+		t.Fatalf("public Desktop catalog disclosed private recording metadata: %s", encodedPage)
+	}
+	for _, segment := range record.Segments {
+		originalDigest := segment.Digest
+		if _, err := pool.Exec(context.Background(), `UPDATE sandbox_runtime_product.recording_segments SET digest=$3 WHERE tenant_id=$1 AND recording_id=$2 AND sequence=$4`, tenantID, recordingID, "sha256:"+strings.Repeat("0", 64), segment.Sequence); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := recordings.Replay(context.Background(), tenantID, actor, recordingID); !errors.Is(err, product.ErrStoreUnavailable) {
+			t.Fatalf("tampered Desktop replay err=%v", err)
+		}
+		if _, err := pool.Exec(context.Background(), `UPDATE sandbox_runtime_product.recording_segments SET digest=$3 WHERE tenant_id=$1 AND recording_id=$2 AND sequence=$4`, tenantID, recordingID, originalDigest, segment.Sequence); err != nil {
+			t.Fatal(err)
+		}
+		break
+	}
+	if err := filepath.Walk(recordingRoot, func(path string, info os.FileInfo, walkErr error) error {
+		if walkErr != nil || info == nil || !info.Mode().IsRegular() {
+			return walkErr
+		}
+		document, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return readErr
+		}
+		if bytes.Contains(document, []byte("stream.start")) || bytes.Contains(document, videoPacket) || bytes.Contains(document, audioPacket) {
+			return errors.New("Desktop recording content stored without encryption")
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var auditDocument string
+	if err := pool.QueryRow(context.Background(), `SELECT COALESCE(string_agg(action||':'||resource_type||':'||resource_id||':'||reason_code,'|'),'') FROM sandbox_runtime_product.security_audit WHERE tenant_id=$1`, tenantID).Scan(&auditDocument); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(auditDocument, clipboardSecret) || strings.Contains(auditDocument, privatePath) {
+		t.Fatalf("Desktop content disclosed through audit: %s", auditDocument)
+	}
+	if _, err := pool.Exec(context.Background(), `UPDATE sandbox_runtime_product.recordings SET started_at=clock_timestamp()-interval '2 hours',retention_expires_at=clock_timestamp()-interval '1 second' WHERE tenant_id=$1 AND recording_id=$2`, tenantID, recordingID); err != nil {
+		t.Fatal(err)
+	}
+	cleaned, err := recordings.CleanupExpired(context.Background(), 10)
+	if err != nil || cleaned != 1 {
+		t.Fatalf("Desktop CleanupExpired()=%d,%v", cleaned, err)
+	}
+	deleted, err := catalog.GetRecording(context.Background(), tenantID, actor, recordingID)
+	if err != nil || deleted.State != "deleted" {
+		t.Fatalf("deleted Desktop recording=%#v err=%v", deleted, err)
+	}
+	if _, err := recordings.Replay(context.Background(), tenantID, actor, recordingID); !errors.Is(err, product.ErrControlStale) {
+		t.Fatalf("deleted Desktop replay err=%v", err)
+	}
+	entries, err := os.ReadDir(filepath.Join(recordingRoot, "recordings"))
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("retained Desktop encrypted segments=%v err=%v", entries, err)
+	}
+}
+
 func signedGuestAuth(t *testing.T, binding product.GuestBinding, privateKey ed25519.PrivateKey, label string) guestagent.AuthRequest {
 	t.Helper()
 	digest := sha256.Sum256([]byte(label))

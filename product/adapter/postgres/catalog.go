@@ -133,7 +133,16 @@ WHERE s.tenant_id=$1 AND s.workspace_id=$2 AND s.session_id=$3 AND w.owner_actor
 	if policy != "required" {
 		return product.RecordingRecord{}, product.ErrForbidden
 	}
-	if (command.Request.RecordingType == "media") != (kind == product.SessionKindBrowserLive) || command.Request.RecordingType == "terminal" && kind != product.SessionKindTerminal {
+	switch command.Request.RecordingType {
+	case "media":
+		if kind != product.SessionKindBrowserLive && kind != product.SessionKindDesktop {
+			return product.RecordingRecord{}, product.ErrCapabilityUnsupported
+		}
+	case "terminal":
+		if kind != product.SessionKindTerminal {
+			return product.RecordingRecord{}, product.ErrCapabilityUnsupported
+		}
+	default:
 		return product.RecordingRecord{}, product.ErrCapabilityUnsupported
 	}
 	var activeCount, activeLimit int

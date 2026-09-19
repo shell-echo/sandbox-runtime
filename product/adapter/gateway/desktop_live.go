@@ -104,12 +104,23 @@ type DesktopLiveTransferAuthority interface {
 	AuthorizeDesktopTransfer(context.Context, product.GatewayBinding, product.DesktopPolicyAction) error
 }
 
+type DesktopLiveRecordingSession interface {
+	RecordMedia(context.Context, time.Time, string, []byte) error
+	RecordControl(context.Context, time.Time, string, int64, DesktopLiveInput, DesktopLiveDisplayPolicy, string) error
+	Close(context.Context, bool) error
+}
+
+type DesktopLiveRecorder interface {
+	Start(context.Context, product.GatewayBinding, string, DesktopLiveMediaPolicy) (DesktopLiveRecordingSession, error)
+}
+
 type DesktopLiveOptions struct {
 	Grants                      product.ConnectionGrantStore
 	Media                       DesktopLiveMediaSource
 	Policy                      product.DesktopPolicySource
 	Transfers                   DesktopLiveTransferAuthority
 	Audit                       AuditStore
+	Recorder                    DesktopLiveRecorder
 	AllowedOrigins              []string
 	ICEServers                  []webrtc.ICEServer
 	MaxSignalingBytes           int64
@@ -133,6 +144,7 @@ type DesktopLiveHandler struct {
 	policy               product.DesktopPolicySource
 	transfers            DesktopLiveTransferAuthority
 	audit                AuditStore
+	recorder             DesktopLiveRecorder
 	origins              map[string]struct{}
 	configuration        webrtc.Configuration
 	maxSignalingBytes    int64
@@ -154,16 +166,18 @@ type DesktopLiveHandler struct {
 }
 
 type desktopLiveSignalRequest struct {
-	Offer              desktopLiveDescription `json:"offer"`
-	Media              DesktopLiveMediaPolicy `json:"media"`
-	ControlDataChannel bool                   `json:"control_data_channel"`
+	Offer                     desktopLiveDescription `json:"offer"`
+	Media                     DesktopLiveMediaPolicy `json:"media"`
+	ControlDataChannel        bool                   `json:"control_data_channel"`
+	RecordingConsentReference string                 `json:"recording_consent_reference,omitempty"`
 }
 
 type desktopLiveSignalResponse struct {
-	Answer       desktopLiveDescription `json:"answer"`
-	ConnectionID string                 `json:"connection_id"`
-	AccessMode   string                 `json:"access_mode"`
-	Media        DesktopLiveMediaPolicy `json:"media"`
+	Answer        desktopLiveDescription `json:"answer"`
+	ConnectionID  string                 `json:"connection_id"`
+	AccessMode    string                 `json:"access_mode"`
+	Media         DesktopLiveMediaPolicy `json:"media"`
+	RecordingMode string                 `json:"recording_mode"`
 }
 
 type desktopLiveDescription struct {
@@ -277,7 +291,8 @@ func NewDesktopLiveHandler(options DesktopLiveOptions) (*DesktopLiveHandler, err
 	}
 	return &DesktopLiveHandler{
 		grants: options.Grants, media: options.Media, policy: options.Policy, transfers: options.Transfers, audit: options.Audit,
-		origins: origins, configuration: configuration, maxSignalingBytes: limit,
+		recorder: options.Recorder,
+		origins:  origins, configuration: configuration, maxSignalingBytes: limit,
 		maxVideoQueue: videoQueue, maxAudioQueue: audioQueue, maxInputQueue: inputQueue,
 		maxPeers: maxPeers, maxPeersPerSession: maxPerSession, pollInterval: poll,
 		connectionTimeout: connectTimeout, disconnectGrace: disconnectGrace,
@@ -347,9 +362,7 @@ func (h *DesktopLiveHandler) ServeHTTP(writer http.ResponseWriter, request *http
 		http.Error(writer, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
 		return
 	}
-	// Recording composition is a later slice. A required recording policy must
-	// fail closed until a Desktop recorder is present.
-	if binding.RecordingPolicy != "disabled" && binding.RecordingPolicy != "metadata_only" {
+	if binding.RecordingPolicy != "disabled" && binding.RecordingPolicy != "metadata_only" && binding.RecordingPolicy != "required" {
 		h.release(binding.SessionID)
 		http.Error(writer, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
 		return
@@ -365,20 +378,40 @@ func (h *DesktopLiveHandler) ServeHTTP(writer http.ResponseWriter, request *http
 		http.Error(writer, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
 		return
 	}
+	var recording DesktopLiveRecordingSession
+	if binding.RecordingPolicy == "required" {
+		if nilInterface(h.recorder) || !validDesktopConsentReference(signal.RecordingConsentReference) {
+			h.release(binding.SessionID)
+			http.Error(writer, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
+			return
+		}
+		recording, err = h.recorder.Start(request.Context(), binding, signal.RecordingConsentReference, signal.Media)
+		if err != nil || nilInterface(recording) {
+			h.release(binding.SessionID)
+			http.Error(writer, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
+			return
+		}
+	} else if signal.RecordingConsentReference != "" {
+		h.release(binding.SessionID)
+		http.Error(writer, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		return
+	}
 	media, err := h.media.Open(request.Context(), binding, signal.Media)
 	if err != nil || nilInterface(media) {
+		closeDesktopLiveRecording(recording, true)
 		h.release(binding.SessionID)
 		http.Error(writer, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
 		return
 	}
 	peer, err := webrtc.NewPeerConnection(h.configuration)
 	if err != nil {
+		closeDesktopLiveRecording(recording, true)
 		_ = media.Close()
 		h.release(binding.SessionID)
 		http.Error(writer, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
 		return
 	}
-	state := newDesktopLivePeer(h, peer, media, binding, signal.Media, policy)
+	state := newDesktopLivePeer(h, peer, media, recording, binding, signal.Media, policy)
 	if signal.ControlDataChannel {
 		state.installControlChannel()
 	} else {
@@ -437,7 +470,7 @@ func (h *DesktopLiveHandler) ServeHTTP(writer http.ResponseWriter, request *http
 	state.start(video, audio)
 	response := desktopLiveSignalResponse{
 		Answer: desktopLiveDescription{Type: "answer", SDP: local.SDP}, ConnectionID: binding.ConnectionID,
-		AccessMode: binding.AccessMode, Media: signal.Media,
+		AccessMode: binding.AccessMode, Media: signal.Media, RecordingMode: binding.RecordingPolicy,
 	}
 	if err := json.NewEncoder(writer).Encode(response); err != nil {
 		state.stop()
@@ -570,39 +603,42 @@ func validDesktopLiveMediaPolicy(media DesktopLiveMediaPolicy) bool {
 }
 
 type desktopLivePeer struct {
-	handler        *DesktopLiveHandler
-	peer           *webrtc.PeerConnection
-	media          DesktopLiveMediaSession
-	binding        product.GatewayBinding
-	mediaPolicy    DesktopLiveMediaPolicy
-	desktopPolicy  product.DesktopPolicy
-	ctx            context.Context
-	cancel         context.CancelFunc
-	stopOnce       sync.Once
-	connected      chan struct{}
-	connectedOnce  sync.Once
-	inputs         chan desktopLiveQueuedInput
-	stateMu        sync.RWMutex
-	state          webrtc.PeerConnectionState
-	stateEpoch     uint64
-	mediaMu        sync.RWMutex
-	keyframeMu     sync.Mutex
-	nextKeyframe   time.Time
-	resyncMu       sync.Mutex
-	nextResync     time.Time
-	controlMu      sync.Mutex
-	controlClaimed bool
+	handler         *DesktopLiveHandler
+	peer            *webrtc.PeerConnection
+	media           DesktopLiveMediaSession
+	recording       DesktopLiveRecordingSession
+	binding         product.GatewayBinding
+	mediaPolicy     DesktopLiveMediaPolicy
+	desktopPolicy   product.DesktopPolicy
+	ctx             context.Context
+	cancel          context.CancelFunc
+	stopOnce        sync.Once
+	connected       chan struct{}
+	connectedOnce   sync.Once
+	inputs          chan desktopLiveQueuedInput
+	stateMu         sync.RWMutex
+	state           webrtc.PeerConnectionState
+	stateEpoch      uint64
+	mediaMu         sync.RWMutex
+	keyframeMu      sync.Mutex
+	nextKeyframe    time.Time
+	resyncMu        sync.Mutex
+	nextResync      time.Time
+	controlMu       sync.Mutex
+	controlClaimed  bool
+	recordingMu     sync.Mutex
+	recordingFailed bool
 }
 
-func newDesktopLivePeer(handler *DesktopLiveHandler, peer *webrtc.PeerConnection, media DesktopLiveMediaSession, binding product.GatewayBinding, mediaPolicy DesktopLiveMediaPolicy, desktopPolicy product.DesktopPolicy) *desktopLivePeer {
+func newDesktopLivePeer(handler *DesktopLiveHandler, peer *webrtc.PeerConnection, media DesktopLiveMediaSession, recording DesktopLiveRecordingSession, binding product.GatewayBinding, mediaPolicy DesktopLiveMediaPolicy, desktopPolicy product.DesktopPolicy) *desktopLivePeer {
 	ctx, cancel := context.WithCancel(context.Background())
-	return &desktopLivePeer{handler: handler, peer: peer, media: media, binding: binding, mediaPolicy: mediaPolicy, desktopPolicy: desktopPolicy, ctx: ctx, cancel: cancel, connected: make(chan struct{}), inputs: make(chan desktopLiveQueuedInput, handler.maxInputQueue), state: webrtc.PeerConnectionStateNew}
+	return &desktopLivePeer{handler: handler, peer: peer, media: media, recording: recording, binding: binding, mediaPolicy: mediaPolicy, desktopPolicy: desktopPolicy, ctx: ctx, cancel: cancel, connected: make(chan struct{}), inputs: make(chan desktopLiveQueuedInput, handler.maxInputQueue), state: webrtc.PeerConnectionStateNew}
 }
 
 func (p *desktopLivePeer) start(video, audio *webrtc.TrackLocalStaticRTP) {
-	go p.streamLoop(p.media.ReadVideoRTP, video, p.handler.maxVideoQueue, maxDesktopVideoRTPPacketBytes, p.mediaPolicy.MaxVideoBitrateKbps)
+	go p.streamLoop("video.rtp", p.media.ReadVideoRTP, video, p.handler.maxVideoQueue, maxDesktopVideoRTPPacketBytes, p.mediaPolicy.MaxVideoBitrateKbps)
 	if audio != nil {
-		go p.streamLoop(p.media.ReadAudioRTP, audio, p.handler.maxAudioQueue, maxDesktopAudioRTPPacketBytes, p.mediaPolicy.MaxAudioBitrateKbps)
+		go p.streamLoop("audio.rtp", p.media.ReadAudioRTP, audio, p.handler.maxAudioQueue, maxDesktopAudioRTPPacketBytes, p.mediaPolicy.MaxAudioBitrateKbps)
 	}
 	go p.inputLoop()
 	go p.authorityLoop()
@@ -622,7 +658,7 @@ type desktopLiveRTPWriter interface {
 	WriteRTP(*rtp.Packet) error
 }
 
-func (p *desktopLivePeer) streamLoop(read func(context.Context) ([]byte, error), track desktopLiveRTPWriter, queueSize, maxPacketBytes, maxBitrateKbps int) {
+func (p *desktopLivePeer) streamLoop(kind string, read func(context.Context) ([]byte, error), track desktopLiveRTPWriter, queueSize, maxPacketBytes, maxBitrateKbps int) {
 	queue := make(chan []byte, queueSize)
 	go func() {
 		defer close(queue)
@@ -633,6 +669,11 @@ func (p *desktopLivePeer) streamLoop(read func(context.Context) ([]byte, error),
 				return
 			}
 			copyPacket := append([]byte(nil), packet...)
+			if p.recording != nil && p.recording.RecordMedia(p.ctx, time.Now().UTC(), kind, copyPacket) != nil {
+				p.markRecordingFailed()
+				p.stop()
+				return
+			}
 			select {
 			case queue <- copyPacket:
 			case <-p.ctx.Done():
@@ -844,6 +885,11 @@ func (p *desktopLivePeer) inputLoop() {
 				p.stop()
 				return
 			}
+			if p.recording != nil && p.recording.RecordControl(p.ctx, time.Now().UTC(), kind, sequence, queued.input, queued.display, queued.audioDevice) != nil {
+				p.markRecordingFailed()
+				p.stop()
+				return
+			}
 			encoded, err := json.Marshal(response)
 			if err != nil || len(encoded) > maxDesktopControlMessageBytes || queued.channel == nil || queued.channel.BufferedAmount()+uint64(len(encoded)) > maxDesktopControlBufferedBytes || queued.channel.SendText(string(encoded)) != nil {
 				p.stop()
@@ -952,11 +998,33 @@ func (p *desktopLivePeer) requestKeyframeForce() bool {
 	return p.media.RequestKeyframe(p.ctx) == nil
 }
 
+func validDesktopConsentReference(value string) bool {
+	if len(value) < 1 || len(value) > 200 {
+		return false
+	}
+	for _, character := range value {
+		if !(character >= 'a' && character <= 'z') && !(character >= 'A' && character <= 'Z') && !(character >= '0' && character <= '9') && !strings.ContainsRune("._:-", character) {
+			return false
+		}
+	}
+	return true
+}
+
+func (p *desktopLivePeer) markRecordingFailed() {
+	p.recordingMu.Lock()
+	p.recordingFailed = true
+	p.recordingMu.Unlock()
+}
+
 func (p *desktopLivePeer) stop() {
 	p.stopOnce.Do(func() {
 		p.cancel()
 		_ = p.peer.Close()
 		_ = p.media.Close()
+		p.recordingMu.Lock()
+		recordingFailed := p.recordingFailed
+		p.recordingMu.Unlock()
+		closeDesktopLiveRecording(p.recording, recordingFailed)
 		if closer, ok := p.handler.grants.(product.GatewayConnectionCloser); ok {
 			closeCtx, closeCancel := context.WithTimeout(context.Background(), 2*time.Second)
 			_ = closer.CloseGatewayConnection(closeCtx, p.binding)
@@ -967,6 +1035,15 @@ func (p *desktopLivePeer) stop() {
 		auditCancel()
 		p.handler.release(p.binding.SessionID)
 	})
+}
+
+func closeDesktopLiveRecording(recording DesktopLiveRecordingSession, failed bool) {
+	if nilInterface(recording) {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	_ = recording.Close(ctx, failed)
 }
 
 var _ http.Handler = (*DesktopLiveHandler)(nil)

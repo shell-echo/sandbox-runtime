@@ -1,6 +1,6 @@
 # ADR 0050: Product Desktop Phase 5 Boundary
 
-- Status: Accepted for Product Phase 5 scope; Slices 1-9 are complete
+- Status: Accepted for Product Phase 5 scope; Slices 1-11 are complete
 - Date: 2026-09-19
 
 ## Context
@@ -28,6 +28,13 @@ Slice 8 adds the separate bounded public Desktop WebRTC handler, display and
 optional audio output, viewer/control separation, ordered fenced input,
 continuous authority, and backpressure closure while leaving durable Desktop
 policy and production composition absent.
+Slice 9 adds durable versioned Desktop input/clipboard/transfer policy and
+exact Product transfer binding. Slice 10 adds fresh-grant reconnect,
+resynchronization, bounded Gateway crash recovery, and deterministic slot
+replacement cleanup. Slice 11 composes required encrypted Desktop recording,
+owner-authorized integrity replay, quotas, and retention deletion while
+leaving the real Provider media bridge, development environment, startup, and
+advertisement disabled.
 
 Starting with Product persistence would require Product code to invent a
 Provider wire shape. Starting with a runtime image or driver would create an
@@ -292,6 +299,41 @@ This is durable Product policy and real-PostgreSQL component authority. It does
 not provide the Slice 10 reconnect/recovery path, a real Provider media/input
 bridge, production composition, advertisement, or release evidence.
 
+## Slice 10 reconnect and replacement recovery
+
+Every reconnect consumes a new Product grant and revalidates the complete
+Product/Provider binding. A bounded database-time lease on consumed Desktop
+grants permits restart reclamation without reviving the old ticket. Initial
+connect and in-grace recovery require media resynchronization plus a keyframe;
+ordered resync/configuration controls retain fixed codec/bitrate ceilings and
+reject stale connection-epoch input.
+
+Desktop session close and slot replacement revoke grants and handoff authority.
+Replacement closes affected sessions, retires the old binding, and creates one
+next-generation provision intent transactionally. This remains Product Gateway
+and PostgreSQL component evidence, not a real Provider media bridge or
+production recovery topology.
+
+## Slice 11 required Desktop recording
+
+Content recording remains separate from metadata audit. Required mode needs an
+explicit bounded consent reference, reports the exact mode to the client, and
+initializes before the private media source opens. Initialization or live
+recorder failure closes admission/connection and cannot silently downgrade.
+
+The Desktop recorder writes bounded VP8/optional-Opus RTP and only closed,
+minimized control/synchronization metadata to the existing encrypted immutable
+Product segment store. Sequence and previous-digest linkage, owner-only catalog
+and replay, integrity validation, tenant quotas, and retention deletion remain
+Product authorities. Clipboard content/results, transfer paths/identities/
+digests, tickets, handoffs, and backend coordinates are excluded from control
+metadata, public catalog, and ordinary audit.
+
+This is Product recording/local encrypted-store/PostgreSQL and same-process
+Gateway component evidence. It is not a real Provider media bridge,
+development-environment composition, production startup, advertisement, or
+release evidence.
+
 ## Consequences
 
 - Product Desktop persistence begins only after the Provider wire authority is
@@ -324,6 +366,10 @@ bridge, production composition, advertisement, or release evidence.
   exact Product transfer binding, and live revision revocation, not a real
   Provider media/input bridge, reconnect/recovery, production composition, or
   deployment.
+- Slice 10 proves bounded reconnect/recovery and replacement cleanup only; it
+  does not compose the injected media source into a production process graph.
+- Slice 11 proves fail-closed encrypted recording/replay/retention composition
+  only; it does not provide a real Provider media bridge or advertise Desktop.
 - Phase 5 completion requires the named independent-process Slice 15 gate.
   It still does not establish multi-user collaboration, HA, hostile
   multi-tenant isolation, production deployment, or general production

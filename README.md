@@ -19,7 +19,7 @@ general production readiness.
 | Independent external caller | **13/13 complete** |
 | Product v1 Phase 3 | **13/13 complete** for the bounded standalone topology |
 | Product v1 Phase 4 Browser | **13/13 complete** for the bounded same-repository separate-process topology |
-| Product v1 Phase 5 Desktop | **10/15 complete**; bounded reconnect/resynchronization, restart grant recovery, and deterministic replacement cleanup pass; recording is next, advertisement disabled |
+| Product v1 Phase 5 Desktop | **11/15 complete**; required encrypted recording, authorized integrity replay, retention cleanup, and quota races pass; development templates are next, advertisement disabled |
 | Coding/shell qualification | **Qualified** for the exact caller, Provider revisions, topology, profile, and scenarios recorded below |
 | Latest core CI | [Passed](https://github.com/shell-echo/sandbox-runtime/actions/runs/35204434771) |
 
@@ -79,7 +79,7 @@ independently implemented caller, HA, hostile-multitenant, or production
 evidence.
 
 [Product v1 Phase 5 Desktop](docs/plan/product-v1-phase-5-desktop-development-unified-product.md)
-has completed **10/15** dependency-ordered slices. Slice 1 locks a separate
+has completed **11/15** dependency-ordered slices. Slice 1 locks a separate
 Provider Desktop capability/profile/runtime shape and complete session
 open/read/handoff/close/expiry/revocation, usage, admission, security, and
 cleanup semantics. Exact authority is Contract revision
@@ -140,9 +140,20 @@ adds fresh-grant reconnect recovery with a database-time Desktop Gateway lease,
 full authority/generation rechecks, bounded visual/audio resynchronization,
 closed resolution and audio-output changes, connection-epoch rejection of
 pre-disconnect input, and transactional grant/handoff/session cleanup during
-deterministic slot replacement. A real Provider media/input bridge, recording,
-unified Web, production composition, and capability advertisement remain later
-gates.
+deterministic slot replacement. At that boundary a real Provider media/input
+bridge, recording, unified Web, production composition, and capability
+advertisement remained later gates.
+
+Slice 11 implementation `c5b045abc5192b76b7d615ddbb0858b998ef98d5`
+composes required Desktop recording into Gateway admission and live media/
+control handling. Explicit consent and the selected mode are visible in
+signaling; initialization and recorder loss fail closed. VP8/Opus RTP and
+minimized control/synchronization events use the existing encrypted,
+quota-bounded, integrity-linked Product recording service with owner-authorized
+replay and retention deletion. Clipboard text, transfer paths/identities, and
+content remain excluded from catalog and metadata audit. A real Provider
+media/input bridge, development templates, unified Web, production composition,
+and capability advertisement remain later gates.
 
 ## What the project provides
 
@@ -175,6 +186,9 @@ gates.
 - Bounded Desktop reconnect and visual/audio resynchronization with fresh
   grants, restart-safe Gateway lease reclamation, stale-input rejection, and
   deterministic slot-replacement cleanup.
+- Required Desktop media/control recording with explicit consent/mode,
+  encrypted integrity-linked segments, owner-authorized replay, bounded quotas,
+  retention deletion, and content-minimized catalog/audit metadata.
 - Provider-local Desktop operation authority with durable replay/fencing,
   exact-owned close/expiry cleanup policy, and unadvertised protected handlers.
 - An exact signed Desktop image plus Provider-local Docker adapter, private

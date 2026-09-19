@@ -53,7 +53,7 @@ func TestDesktopLivePolicyRevisionChangeRevokesPeer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	state := newDesktopLivePeer(handler, peer, newDesktopLiveMediaSessionSpy(), binding, testDesktopLiveMediaPolicy(false), testDesktopPolicy())
+	state := newDesktopLivePeer(handler, peer, newDesktopLiveMediaSessionSpy(), nil, binding, testDesktopLiveMediaPolicy(false), testDesktopPolicy())
 	go state.authorityLoop()
 	policySource.setRevision(2)
 	select {
