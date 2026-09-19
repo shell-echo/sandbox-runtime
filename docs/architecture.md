@@ -63,7 +63,7 @@ establish a deployment-qualified topology, independently implemented caller,
 HA, hostile multi-tenant isolation, or production readiness.
 
 The [Product v1 Phase 5 Desktop plan](plan/product-v1-phase-5-desktop-development-unified-product.md)
-is now **7/15** complete. Slice 1 is deliberately Contract-first: it adds a
+is now **8/15** complete. Slice 1 is deliberately Contract-first: it adds a
 separate Provider Desktop capability/profile/runtime, open/read/opaque-handoff/
 close lifecycle, expiry and revocation, usage evidence, strict admission and
 security semantics, fixtures, and executable local Conformance mappings. The
@@ -96,8 +96,16 @@ real PostgreSQL evidence. Slice 7 implementation
 `0649d62911abb89229de40136347286736152ec6` adds Product-owned Desktop
 viewer/controller grants, encrypted one-use tickets, session-scoped controller
 fencing, independent quotas, revocation, continuous full-binding authority
-checks, and metadata-only audit. It remains uncomposed in production startup
-and discovery, and no public Desktop signaling/media/input path exists.
+checks, and metadata-only audit. At that boundary it remained uncomposed in
+production startup and discovery, and no public Desktop signaling/media/input
+path existed.
+
+Slice 8 implementation `040c560f3701b7c972c25f05928dd435d9f55c20`
+adds a separate bounded Product Desktop WebRTC handler with authenticated
+encrypted signaling, receive-only VP8 and optional Opus, viewer/controller
+separation, reliable ordered fenced input, continuous grant checks, and
+backpressure closure. Durable Desktop policy, a real Provider media bridge,
+recovery, recording, production composition, and discovery remain absent.
 
 ## Purpose
 
@@ -743,7 +751,7 @@ advertisement, and optional-profile gates remain open:
 | Workspace | The Provider Docker adapter supplies stable `/inputs`, `/workspace`, `/outputs`, and bounded tmpfs `/tmp` without exposing host paths. The dual-platform coding/shell image was published as OCI index `sha256:1996e44f8ddc464f22556bd57f1c69079fe6b1a821b65bd9be24f86619c31bb1`, attested, independently verified, pinned by the caller, and exercised in the final qualification. | Add production artifact consumers, capacity enforcement, lifecycle closure, and stronger isolation evidence as separate scopes. |
 | Security | The qualified Docker runtime used numeric non-root identity, read-only root, disabled networking, dropped capabilities, `no-new-privileges`, and bounded CPU, memory, swap, PIDs, and tmpfs; image provenance and the exact runtime observations are retained in the qualification evidence. | Add secrets policy, controlled egress where required, stronger isolation, production authentication, threat-model review, and hostile-tenant evidence before any production claim. |
 | Events and usage | Durable lifecycle events and bounded usage-evidence components exist without a complete runtime collector composition. | Complete collection/reconciliation while leaving platform accounting authority outside the Provider. |
-| Snapshots/browser/desktop | Browser Contract, component, and historical reference tracks retain their exact recorded evidence and open production gates. Product Phase 4 separately provides bounded Product Browser evidence. Product Phase 5 Slices 1-7 authorize the separate Desktop Contract/projection, Product intent, Provider application/persistence/reconciliation, exact signed image, Provider-local adapter/private resolver/lifecycle/usage composition, Product network-only dispatch/observation with real-store recovery, and Product-owned Desktop view/control grants with fencing, quotas, revocation, and continuous checks. No production startup composition, public Desktop data plane, Web UI, or capability advertisement exists. Snapshots remain unauthorized optional behavior. | Execute the remaining Phase 5 slices in dependency order, beginning with the public Desktop signaling/media/input data plane in Slice 8. Keep Desktop advertisement off until the complete Provider and Product graphs plus release gate pass, and do not infer production readiness. |
+| Snapshots/browser/desktop | Browser Contract, component, and historical reference tracks retain their exact recorded evidence and open production gates. Product Phase 4 separately provides bounded Product Browser evidence. Product Phase 5 Slices 1-8 authorize the separate Desktop Contract/projection, Product intent, Provider application/runtime/private resolver, Product network reconciliation and grants, plus the bounded public Desktop WebRTC handler with display/optional-audio, ordered fenced input, continuous authority, and backpressure closure. No durable Desktop policy, real Provider media bridge, production startup composition, Web UI, or capability advertisement exists. Snapshots remain unauthorized optional behavior. | Execute the remaining Phase 5 slices in dependency order, beginning with deny-by-default Desktop input/clipboard/transfer policy in Slice 9. Keep Desktop advertisement off until the complete Provider and Product graphs plus release gate pass, and do not infer production readiness. |
 
 ## Delivery plan and release gates
 
@@ -998,8 +1006,14 @@ isolated durable workers, retained operation recovery, generation separation,
 and Desktop-specific Product cleanup. Slice 7 adds Product-owned Desktop
 viewer/controller grants, one-use encrypted tickets, controller fencing,
 independent quotas, revocation, continuous authority checks, and metadata-only
-audit. Production startup, public signaling/media/input, policy, advertisement,
-and release gates remain open.
+audit. At the Slice 7 boundary, production startup, public
+signaling/media/input, policy, advertisement, and release gates remained open.
+
+Slice 8 adds the separate bounded public Desktop WebRTC handler, receive-only
+display/optional-audio, viewer/controller separation, ordered fenced input,
+continuous grant checks, and slow-consumer closure. Durable Desktop policy, a
+real Provider media bridge, recovery, recording, production startup,
+advertisement, and release gates remain open.
 
 ## Conformance matrix
 
