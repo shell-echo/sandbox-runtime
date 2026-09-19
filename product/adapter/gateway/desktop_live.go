@@ -29,6 +29,7 @@ const (
 	defaultDesktopAuthorityInterval = 250 * time.Millisecond
 	defaultDesktopDisconnectGrace   = 5 * time.Second
 	defaultDesktopKeyframeInterval  = 250 * time.Millisecond
+	defaultDesktopResyncInterval    = 250 * time.Millisecond
 	maxDesktopVideoRTPPacketBytes   = 16 << 10
 	maxDesktopAudioRTPPacketBytes   = 4 << 10
 	maxDesktopControlMessageBytes   = 32 << 10
@@ -52,6 +53,14 @@ type DesktopLiveTouchPoint struct {
 	ID int `json:"id"`
 	X  int `json:"x"`
 	Y  int `json:"y"`
+}
+
+// DesktopLiveDisplayPolicy is the mutable subset of the negotiated stream.
+// Codecs and bitrate ceilings remain fixed for the lifetime of a peer.
+type DesktopLiveDisplayPolicy struct {
+	Width  int `json:"width"`
+	Height int `json:"height"`
+	MaxFPS int `json:"max_fps"`
 }
 
 // DesktopLiveInput is a closed, ordered Desktop action already bound to the
@@ -81,6 +90,8 @@ type DesktopLiveMediaSession interface {
 	ReadVideoRTP(context.Context) ([]byte, error)
 	ReadAudioRTP(context.Context) ([]byte, error)
 	HandleInput(context.Context, DesktopLiveInput) (DesktopLiveInputResult, error)
+	UpdateStream(context.Context, DesktopLiveDisplayPolicy, string) error
+	Resynchronize(context.Context) error
 	RequestKeyframe(context.Context) error
 	Close() error
 }
@@ -111,6 +122,7 @@ type DesktopLiveOptions struct {
 	ConnectionTimeout           time.Duration
 	DisconnectGrace             time.Duration
 	MinKeyframeInterval         time.Duration
+	MinResyncInterval           time.Duration
 	AllowInsecureHTTPForTests   bool
 	AllowHostCandidatesForTests bool
 }
@@ -133,6 +145,7 @@ type DesktopLiveHandler struct {
 	connectionTimeout    time.Duration
 	disconnectGrace      time.Duration
 	minKeyframeInterval  time.Duration
+	minResyncInterval    time.Duration
 	allowInsecureForTest bool
 
 	mu       sync.Mutex
@@ -164,6 +177,18 @@ type desktopLiveControlEnvelope struct {
 	Action   json.RawMessage `json:"action"`
 }
 
+type desktopLiveResyncMessage struct {
+	Type     string `json:"type"`
+	Sequence int64  `json:"sequence"`
+}
+
+type desktopLiveConfigureMessage struct {
+	Type        string                   `json:"type"`
+	Sequence    int64                    `json:"sequence"`
+	Display     DesktopLiveDisplayPolicy `json:"display"`
+	AudioDevice string                   `json:"audio_device"`
+}
+
 type desktopLiveInputResponse struct {
 	Type     string `json:"type"`
 	Sequence int64  `json:"sequence"`
@@ -172,8 +197,14 @@ type desktopLiveInputResponse struct {
 }
 
 type desktopLiveQueuedInput struct {
-	input   DesktopLiveInput
-	channel *webrtc.DataChannel
+	kind        string
+	sequence    int64
+	input       DesktopLiveInput
+	display     DesktopLiveDisplayPolicy
+	audioDevice string
+	payload     []byte
+	epoch       uint64
+	channel     *webrtc.DataChannel
 }
 
 func NewDesktopLiveHandler(options DesktopLiveOptions) (*DesktopLiveHandler, error) { //nolint:cyclop
@@ -228,7 +259,11 @@ func NewDesktopLiveHandler(options DesktopLiveOptions) (*DesktopLiveHandler, err
 	if keyframeInterval == 0 {
 		keyframeInterval = defaultDesktopKeyframeInterval
 	}
-	if limit < 1024 || limit > 256<<10 || videoQueue < 1 || videoQueue > 256 || audioQueue < 1 || audioQueue > 512 || inputQueue < 1 || inputQueue > 64 || maxPeers < 1 || maxPeers > 10000 || maxPerSession < 1 || maxPerSession > 64 || poll < 10*time.Millisecond || poll > 5*time.Second || connectTimeout < time.Second || connectTimeout > time.Minute || disconnectGrace < 100*time.Millisecond || disconnectGrace > 30*time.Second || keyframeInterval < 50*time.Millisecond || keyframeInterval > 5*time.Second {
+	resyncInterval := options.MinResyncInterval
+	if resyncInterval == 0 {
+		resyncInterval = defaultDesktopResyncInterval
+	}
+	if limit < 1024 || limit > 256<<10 || videoQueue < 1 || videoQueue > 256 || audioQueue < 1 || audioQueue > 512 || inputQueue < 1 || inputQueue > 64 || maxPeers < 1 || maxPeers > 10000 || maxPerSession < 1 || maxPerSession > 64 || poll < 10*time.Millisecond || poll > 5*time.Second || connectTimeout < time.Second || connectTimeout > time.Minute || disconnectGrace < 100*time.Millisecond || disconnectGrace > 30*time.Second || keyframeInterval < 50*time.Millisecond || keyframeInterval > 5*time.Second || resyncInterval < 50*time.Millisecond || resyncInterval > 5*time.Second {
 		return nil, product.ErrInvalid
 	}
 	configuration := webrtc.Configuration{ICEServers: append([]webrtc.ICEServer(nil), options.ICEServers...)}
@@ -246,7 +281,7 @@ func NewDesktopLiveHandler(options DesktopLiveOptions) (*DesktopLiveHandler, err
 		maxVideoQueue: videoQueue, maxAudioQueue: audioQueue, maxInputQueue: inputQueue,
 		maxPeers: maxPeers, maxPeersPerSession: maxPerSession, pollInterval: poll,
 		connectionTimeout: connectTimeout, disconnectGrace: disconnectGrace,
-		minKeyframeInterval: keyframeInterval, allowInsecureForTest: options.AllowInsecureHTTPForTests,
+		minKeyframeInterval: keyframeInterval, minResyncInterval: resyncInterval, allowInsecureForTest: options.AllowInsecureHTTPForTests,
 		sessions: make(map[string]int),
 	}, nil
 }
@@ -550,8 +585,11 @@ type desktopLivePeer struct {
 	stateMu        sync.RWMutex
 	state          webrtc.PeerConnectionState
 	stateEpoch     uint64
+	mediaMu        sync.RWMutex
 	keyframeMu     sync.Mutex
 	nextKeyframe   time.Time
+	resyncMu       sync.Mutex
+	nextResync     time.Time
 	controlMu      sync.Mutex
 	controlClaimed bool
 }
@@ -669,14 +707,56 @@ func (p *desktopLivePeer) installControlChannel() {
 				p.stop()
 				return
 			}
-			input, err := decodeDesktopLiveInput(message.Data, p.mediaPolicy, p.binding)
+			control, err := decodeDesktopLiveControl(message.Data, p.currentMediaPolicy(), p.binding)
 			if err != nil {
 				p.stop()
 				return
 			}
-			p.enqueueInput(desktopLiveQueuedInput{input: input, channel: channel})
+			control.channel = channel
+			control.epoch = p.currentStateEpoch()
+			p.enqueueInput(control)
 		})
 	})
+}
+
+func decodeDesktopLiveControl(payload []byte, media DesktopLiveMediaPolicy, binding product.GatewayBinding) (desktopLiveQueuedInput, error) {
+	if len(payload) == 0 || rejectDuplicateAutomationMembers(payload) != nil {
+		return desktopLiveQueuedInput{}, product.ErrInvalid
+	}
+	var envelope desktopLiveControlEnvelope
+	if json.Unmarshal(payload, &envelope) != nil || envelope.Sequence < 1 || envelope.Sequence > maxAutomationSequence {
+		return desktopLiveQueuedInput{}, product.ErrInvalid
+	}
+	switch envelope.Type {
+	case "input":
+		input, err := decodeDesktopLiveInput(payload, media, binding)
+		return desktopLiveQueuedInput{kind: "input", sequence: envelope.Sequence, input: input, payload: append([]byte(nil), payload...)}, err
+	case "stream.resync":
+		var message desktopLiveResyncMessage
+		if decodeStrictRaw(payload, &message) != nil {
+			return desktopLiveQueuedInput{}, product.ErrInvalid
+		}
+		return desktopLiveQueuedInput{kind: envelope.Type, sequence: envelope.Sequence}, nil
+	case "stream.configure":
+		var message desktopLiveConfigureMessage
+		if decodeStrictRaw(payload, &message) != nil || !validDesktopDisplayPolicy(message.Display) || !validDesktopAudioDevice(message.AudioDevice, media) {
+			return desktopLiveQueuedInput{}, product.ErrInvalid
+		}
+		return desktopLiveQueuedInput{kind: envelope.Type, sequence: envelope.Sequence, display: message.Display, audioDevice: message.AudioDevice}, nil
+	default:
+		return desktopLiveQueuedInput{}, product.ErrInvalid
+	}
+}
+
+func validDesktopDisplayPolicy(display DesktopLiveDisplayPolicy) bool {
+	return display.Width >= 320 && display.Width <= 2560 && display.Height >= 240 && display.Height <= 1440 && display.MaxFPS >= 1 && display.MaxFPS <= 60
+}
+
+func validDesktopAudioDevice(device string, media DesktopLiveMediaPolicy) bool {
+	if media.AudioCodec == "" {
+		return device == "disabled"
+	}
+	return device == "default" || device == "disabled"
 }
 
 func (p *desktopLivePeer) claimControlChannel() bool {
@@ -707,25 +787,69 @@ func (p *desktopLivePeer) inputLoop() {
 			return
 		case queued := <-p.inputs:
 			currentPolicy, policyErr := p.handler.policy.CurrentDesktopPolicy(p.ctx, p.binding)
-			if queued.input.Sequence != lastSequence+1 || !p.isConnected() || p.handler.grants.CheckGatewayAuthority(p.ctx, p.binding) != nil || policyErr != nil || currentPolicy.Revision != p.desktopPolicy.Revision || p.desktopPolicy.Authorize(queued.input.Action) != nil {
+			sequence := queued.sequence
+			if sequence == 0 {
+				sequence = queued.input.Sequence
+			}
+			kind := queued.kind
+			if kind == "" {
+				kind = "input"
+			}
+			if sequence != lastSequence+1 || !p.connectedAtEpoch(queued.epoch) || p.handler.grants.CheckGatewayAuthority(p.ctx, p.binding) != nil || policyErr != nil || currentPolicy.Revision != p.desktopPolicy.Revision {
 				p.stop()
 				return
 			}
-			if (queued.input.Action.Kind == product.DesktopActionUpload || queued.input.Action.Kind == product.DesktopActionDownload) && p.handler.transfers.AuthorizeDesktopTransfer(p.ctx, p.binding, queued.input.Action) != nil {
+			response := desktopLiveInputResponse{Sequence: sequence, OK: true}
+			switch kind {
+			case "input":
+				input := queued.input
+				if len(queued.payload) != 0 {
+					var err error
+					input, err = decodeDesktopLiveInput(queued.payload, p.currentMediaPolicy(), p.binding)
+					if err != nil {
+						p.stop()
+						return
+					}
+				}
+				if p.desktopPolicy.Authorize(input.Action) != nil || ((input.Action.Kind == product.DesktopActionUpload || input.Action.Kind == product.DesktopActionDownload) && p.handler.transfers.AuthorizeDesktopTransfer(p.ctx, p.binding, input.Action) != nil) {
+					p.stop()
+					return
+				}
+				result, err := p.media.HandleInput(p.ctx, input)
+				if err != nil || !validDesktopLiveInputResult(p.desktopPolicy, input.Action, result) {
+					p.stop()
+					return
+				}
+				response.Type, response.Text = "input.result", result.Text
+			case "stream.resync":
+				response.Type = "stream.resync.result"
+				if !p.resynchronize(false) {
+					p.stop()
+					return
+				}
+			case "stream.configure":
+				response.Type = "stream.configure.result"
+				if p.media.UpdateStream(p.ctx, queued.display, queued.audioDevice) != nil {
+					p.stop()
+					return
+				}
+				p.mediaMu.Lock()
+				p.mediaPolicy.Width, p.mediaPolicy.Height, p.mediaPolicy.MaxFPS = queued.display.Width, queued.display.Height, queued.display.MaxFPS
+				p.mediaMu.Unlock()
+				if !p.resynchronize(false) {
+					p.stop()
+					return
+				}
+			default:
 				p.stop()
 				return
 			}
-			result, err := p.media.HandleInput(p.ctx, queued.input)
-			if err != nil || !validDesktopLiveInputResult(p.desktopPolicy, queued.input.Action, result) {
+			encoded, err := json.Marshal(response)
+			if err != nil || len(encoded) > maxDesktopControlMessageBytes || queued.channel == nil || queued.channel.BufferedAmount()+uint64(len(encoded)) > maxDesktopControlBufferedBytes || queued.channel.SendText(string(encoded)) != nil {
 				p.stop()
 				return
 			}
-			response, err := json.Marshal(desktopLiveInputResponse{Type: "input.result", Sequence: queued.input.Sequence, OK: true, Text: result.Text})
-			if err != nil || len(response) > maxDesktopControlMessageBytes || queued.channel == nil || queued.channel.BufferedAmount()+uint64(len(response)) > maxDesktopControlBufferedBytes || queued.channel.SendText(string(response)) != nil {
-				p.stop()
-				return
-			}
-			lastSequence = queued.input.Sequence
+			lastSequence = sequence
 		}
 	}
 }
@@ -742,7 +866,7 @@ func (p *desktopLivePeer) onConnectionState(state webrtc.PeerConnectionState) {
 			return
 		}
 		p.connectedOnce.Do(func() { close(p.connected) })
-		if p.handler.recordAudit(p.ctx, p.binding, gateway.AuditConnected, "") != nil || !p.requestKeyframe() {
+		if p.handler.recordAudit(p.ctx, p.binding, gateway.AuditConnected, "") != nil || !p.resynchronize(true) {
 			p.stop()
 		}
 	case webrtc.PeerConnectionStateDisconnected:
@@ -774,6 +898,41 @@ func (p *desktopLivePeer) isConnected() bool {
 	return p.state == webrtc.PeerConnectionStateConnected
 }
 
+func (p *desktopLivePeer) currentStateEpoch() uint64 {
+	p.stateMu.RLock()
+	defer p.stateMu.RUnlock()
+	return p.stateEpoch
+}
+
+func (p *desktopLivePeer) connectedAtEpoch(epoch uint64) bool {
+	p.stateMu.RLock()
+	defer p.stateMu.RUnlock()
+	return p.state == webrtc.PeerConnectionStateConnected && (epoch == 0 || p.stateEpoch == epoch)
+}
+
+func (p *desktopLivePeer) currentMediaPolicy() DesktopLiveMediaPolicy {
+	p.mediaMu.RLock()
+	defer p.mediaMu.RUnlock()
+	return p.mediaPolicy
+}
+
+func (p *desktopLivePeer) resynchronize(force bool) bool {
+	if !force {
+		p.resyncMu.Lock()
+		now := time.Now()
+		if now.Before(p.nextResync) {
+			p.resyncMu.Unlock()
+			return false
+		}
+		p.nextResync = now.Add(p.handler.minResyncInterval)
+		p.resyncMu.Unlock()
+	}
+	if p.media.Resynchronize(p.ctx) != nil {
+		return false
+	}
+	return p.requestKeyframeForce()
+}
+
 func (p *desktopLivePeer) requestKeyframe() bool {
 	p.keyframeMu.Lock()
 	now := time.Now()
@@ -782,6 +941,13 @@ func (p *desktopLivePeer) requestKeyframe() bool {
 		return true
 	}
 	p.nextKeyframe = now.Add(p.handler.minKeyframeInterval)
+	p.keyframeMu.Unlock()
+	return p.media.RequestKeyframe(p.ctx) == nil
+}
+
+func (p *desktopLivePeer) requestKeyframeForce() bool {
+	p.keyframeMu.Lock()
+	p.nextKeyframe = time.Now().Add(p.handler.minKeyframeInterval)
 	p.keyframeMu.Unlock()
 	return p.media.RequestKeyframe(p.ctx) == nil
 }

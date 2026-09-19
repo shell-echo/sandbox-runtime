@@ -17,6 +17,10 @@ import (
 func TestIntegrationDesktopGrantAuthorityFencingQuotasAndRevocation(t *testing.T) {
 	pool := integrationProductPool(t)
 	applyProductMigrations(t, pool)
+	var recoveryMigrationCount int
+	if err := pool.QueryRow(context.Background(), `SELECT count(*) FROM sandbox_runtime_product.schema_migrations WHERE version=12`).Scan(&recoveryMigrationCount); err != nil || recoveryMigrationCount != 1 {
+		t.Fatalf("Desktop recovery migration count=%d err=%v", recoveryMigrationCount, err)
+	}
 	const tenantID = "tenant-desktop-grants"
 	cleanupProductTenant(t, pool, tenantID)
 
@@ -124,6 +128,37 @@ func TestIntegrationDesktopGrantAuthorityFencingQuotasAndRevocation(t *testing.T
 	if _, _, err := grants.Create(context.Background(), tenantID, actor, firstSession.ID, "desktop-second-controller", controlRequest); !errors.Is(err, product.ErrControlConflict) {
 		t.Fatalf("second Desktop controller err=%v", err)
 	}
+	if _, err := pool.Exec(context.Background(), `UPDATE sandbox_runtime_product.connection_grants
+SET gateway_lease_expires_at=clock_timestamp()-interval '1 second'
+WHERE tenant_id=$1 AND connection_id=$2`, tenantID, controlBinding.ConnectionID); err != nil {
+		t.Fatal(err)
+	}
+	restartedGrantRepository, err := NewGrantRepository(store, "desktop-grant-key-v1", bytes.Repeat([]byte{0x7d}, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := restartedGrantRepository.CheckGatewayAuthority(context.Background(), controlBinding); !errors.Is(err, product.ErrControlStale) {
+		t.Fatalf("crashed Desktop gateway lease remained authoritative: %v", err)
+	}
+	reconnectGrant, _, err := grants.Create(context.Background(), tenantID, actor, firstSession.ID, "desktop-control-reconnect", controlRequest)
+	if err != nil || reconnectGrant.ID == controlGrant.ID || reconnectGrant.Ticket == controlGrant.Ticket {
+		t.Fatalf("fresh Desktop reconnect grant=%#v err=%v", reconnectGrant, err)
+	}
+	reconnectBinding, err := restartedGrantRepository.ConsumeConnectionGrant(context.Background(), reconnectGrant.Ticket)
+	if err != nil || reconnectBinding.ConnectionID != reconnectGrant.ID || reconnectBinding.HandoffReference != controlBinding.HandoffReference || reconnectBinding.ConnectionGeneration != controlBinding.ConnectionGeneration || reconnectBinding.SlotGeneration != controlBinding.SlotGeneration {
+		t.Fatalf("fresh Desktop reconnect binding=%#v err=%v", reconnectBinding, err)
+	}
+	if err := restartedGrantRepository.CheckGatewayAuthority(context.Background(), reconnectBinding); err != nil {
+		t.Fatal(err)
+	}
+	tamperedReconnect := reconnectBinding
+	tamperedReconnect.SlotGeneration++
+	if err := restartedGrantRepository.CheckGatewayAuthority(context.Background(), tamperedReconnect); !errors.Is(err, product.ErrControlStale) {
+		t.Fatalf("reconnected Desktop generation substitution err=%v", err)
+	}
+	if err := restartedGrantRepository.CloseGatewayConnection(context.Background(), reconnectBinding); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := controls.Release(context.Background(), tenantID, actor, workspace.ID, firstLease.ID, "desktop-control-release", firstLease.Fence, "controller_released"); err != nil {
 		t.Fatal(err)
 	}
@@ -192,8 +227,117 @@ WHERE tenant_id=$1 AND lease_id=$2`, tenantID, controllerBinding.ControlLeaseID)
 FROM sandbox_runtime_product.security_audit WHERE tenant_id=$1 AND action='connection_grant.issue'`, tenantID).Scan(&issueAudits, &auditMetadata); err != nil {
 		t.Fatal(err)
 	}
-	if issueAudits != 4 || strings.Contains(auditMetadata, viewGrant.Ticket) || strings.Contains(auditMetadata, viewBinding.HandoffReference) {
+	if issueAudits != 5 || strings.Contains(auditMetadata, viewGrant.Ticket) || strings.Contains(auditMetadata, viewBinding.HandoffReference) {
 		t.Fatalf("Desktop grant audit count=%d metadata=%q", issueAudits, auditMetadata)
+	}
+}
+
+func TestIntegrationDesktopSlotReplacementRevokesConnectionsAndCleansHandoff(t *testing.T) {
+	pool := integrationProductPool(t)
+	applyProductMigrations(t, pool)
+	const tenantID = "tenant-desktop-replacement"
+	cleanupProductTenant(t, pool, tenantID)
+	store, err := New(pool, 5*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids := product.CryptoIDGenerator{}
+	application, _ := product.NewApplication(store, allowPrimarySlot{}, ids)
+	slots, _ := product.NewSlotService(store, allowDesktopSlot{}, ids)
+	sessions, _ := product.NewSessionService(store, allowDesktopSession{}, ids)
+	actor := product.ActorRef{Type: product.ActorHuman, ID: "desktop-replacement-owner"}
+	created, err := application.CreateWorkspace(context.Background(), tenantID, actor, "desktop-replacement-workspace", integrationCreateWorkspaceRequest("desktop replacement"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, statement := range []string{
+		`UPDATE sandbox_runtime_product.workspaces SET observed_state='active' WHERE tenant_id=$1`,
+		`UPDATE sandbox_runtime_product.workspace_slots SET observed_state='ready',observed_generation=generation WHERE tenant_id=$1 AND slot_key='primary-code'`,
+		`UPDATE sandbox_runtime_product.outbox SET state='delivered' WHERE tenant_id=$1 AND message_type='workspace.reconcile'`,
+	} {
+		if _, err := pool.Exec(context.Background(), statement, tenantID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ready := prepareReadyDesktopGrantSession(t, store, application, slots, sessions, tenantID, actor, created.Operation.WorkspaceID, "desktop-main", "replacement")
+	grantRepository, _ := NewGrantRepository(store, "desktop-replacement-key-v1", bytes.Repeat([]byte{0x4d}, 32))
+	grantService, _ := product.NewGrantService(grantRepository, ids, product.CryptoTicketGenerator{}, "wss://desktop-gateway.example.test/connect", 60*time.Second)
+	grant, _, err := grantService.Create(context.Background(), tenantID, actor, ready.ID, "desktop-replacement-view", product.CreateConnectionRequest{
+		ExpectedSessionVersion: ready.Version, ProtocolProfile: product.SessionProfileDesktop, AccessMode: product.GrantAccessView,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	binding, err := grantRepository.ConsumeConnectionGrant(context.Background(), grant.Ticket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	workspace, err := application.GetWorkspace(context.Background(), tenantID, actor, created.Operation.WorkspaceID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	replaceOperation, _, err := slots.Put(context.Background(), tenantID, actor, workspace.ID, "desktop-main", "desktop-slot-replace", desktopSlotRequest(workspace.Version))
+	if err != nil {
+		t.Fatal(err)
+	}
+	lifecycle, err := store.LeaseDesktopLifecycleWork(context.Background(), "desktop-replacement-lifecycle", 10*time.Second, 10)
+	if err != nil || len(lifecycle) != 1 || lifecycle[0].Action != "replace" || lifecycle[0].PreviousGeneration != 1 || lifecycle[0].SlotGeneration != 2 {
+		t.Fatalf("Desktop replacement lifecycle=%#v err=%v", lifecycle, err)
+	}
+	now := time.Now().UTC()
+	evidence := product.ProviderOperationEvidence{ProviderRevisionID: strings.Repeat("d", 40), SandboxID: "provider-desktop-grant-replacement",
+		ProviderOperationID: "provider-desktop-replace-terminate", RequestDigest: "sha256:" + strings.Repeat("c", 64), State: "accepted", ObservedAt: now}
+	if err := store.RecordDispatchEvidence(context.Background(), lifecycle[0], evidence); err != nil {
+		t.Fatal(err)
+	}
+	observations, err := store.LeaseDesktopProviderObservations(context.Background(), "desktop-replacement-observer", 10*time.Second, 10)
+	if err != nil || len(observations) != 1 || observations[0].ProviderAction != "terminate" {
+		t.Fatalf("Desktop replacement observations=%#v err=%v", observations, err)
+	}
+	evidence.State, evidence.ObservedAt = "succeeded", now.Add(time.Millisecond)
+	if err := store.RecordProviderObservation(context.Background(), observations[0], evidence, "evt-desktop-replacement-terminated"); err != nil {
+		t.Fatal(err)
+	}
+	var sessionState, grantState string
+	var handoff *string
+	if err := pool.QueryRow(context.Background(), `SELECT state,provider_handoff_reference FROM sandbox_runtime_product.runtime_sessions WHERE tenant_id=$1 AND session_id=$2`, tenantID, ready.ID).Scan(&sessionState, &handoff); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(context.Background(), `SELECT state FROM sandbox_runtime_product.connection_grants WHERE tenant_id=$1 AND connection_id=$2`, tenantID, grant.ID).Scan(&grantState); err != nil {
+		t.Fatal(err)
+	}
+	if sessionState != "closed" || handoff != nil || grantState != "revoked" {
+		t.Fatalf("replacement cleanup session=%q handoff=%v grant=%q", sessionState, handoff, grantState)
+	}
+	if err := grantRepository.CheckGatewayAuthority(context.Background(), binding); !errors.Is(err, product.ErrControlStale) {
+		t.Fatalf("replaced Desktop binding remained authoritative: %v", err)
+	}
+	replacement, err := store.LeaseDesktopSlotWork(context.Background(), "desktop-replacement-provision", 10*time.Second, 10)
+	if err != nil || len(replacement) != 1 || replacement[0].OperationID != replaceOperation.ID || replacement[0].SlotGeneration != 2 || replacement[0].PreviousGeneration != 1 {
+		t.Fatalf("Desktop deterministic replacement=%#v err=%v", replacement, err)
+	}
+	if duplicate, err := store.LeaseDesktopSlotWork(context.Background(), "desktop-replacement-duplicate", 10*time.Second, 10); err != nil || len(duplicate) != 0 {
+		t.Fatalf("duplicate Desktop replacement=%#v err=%v", duplicate, err)
+	}
+	evidence.ProviderOperationID, evidence.SandboxID, evidence.State, evidence.ObservedAt = "provider-desktop-replacement-create", "provider-desktop-replacement-new", "accepted", now.Add(2*time.Millisecond)
+	if err := store.RecordDispatchEvidence(context.Background(), replacement[0], evidence); err != nil {
+		t.Fatal(err)
+	}
+	observations, err = store.LeaseDesktopProviderObservations(context.Background(), "desktop-replacement-ready-observer", 10*time.Second, 10)
+	if err != nil || len(observations) != 1 || observations[0].ProviderAction != "create" {
+		t.Fatalf("Desktop replacement create observations=%#v err=%v", observations, err)
+	}
+	evidence.State, evidence.ObservedAt = "succeeded", now.Add(3*time.Millisecond)
+	if err := store.RecordProviderObservation(context.Background(), observations[0], evidence, "evt-desktop-replacement-ready"); err != nil {
+		t.Fatal(err)
+	}
+	var currentCount int
+	var currentGeneration int64
+	if err := pool.QueryRow(context.Background(), `SELECT count(*),COALESCE(max(slot_generation),0) FROM sandbox_runtime_product.provider_bindings WHERE tenant_id=$1 AND workspace_id=$2 AND slot_key='desktop-main' AND current`, tenantID, workspace.ID).Scan(&currentCount, &currentGeneration); err != nil {
+		t.Fatal(err)
+	}
+	if currentCount != 1 || currentGeneration != 2 {
+		t.Fatalf("Desktop replacement current bindings=%d generation=%d", currentCount, currentGeneration)
 	}
 }
 

@@ -21,6 +21,8 @@ type GrantRepository struct {
 	keyID string
 }
 
+const desktopGatewayLease = 5 * time.Second
+
 func NewGrantRepository(store *Store, keyID string, key []byte) (*GrantRepository, error) {
 	if store == nil || keyID == "" || len(key) != 32 {
 		return nil, product.ErrInvalid
@@ -52,6 +54,13 @@ func (r *GrantRepository) MintConnectionGrant(ctx context.Context, command produ
 		return product.ConnectionGrant{}, false, storeError(ctx, opCtx, err, false)
 	}
 	if _, err := tx.Exec(opCtx, `UPDATE sandbox_runtime_product.connection_grants SET state='expired' WHERE tenant_id=$1 AND state IN ('issued','consumed') AND expires_at<=$2`, command.TenantID, now); err != nil {
+		return product.ConnectionGrant{}, false, storeError(ctx, opCtx, err, false)
+	}
+	if _, err := tx.Exec(opCtx, `UPDATE sandbox_runtime_product.connection_grants g
+SET state='revoked'
+FROM sandbox_runtime_product.runtime_sessions s
+WHERE g.tenant_id=$1 AND g.state='consumed' AND g.gateway_lease_expires_at<=$2
+  AND s.tenant_id=g.tenant_id AND s.session_id=g.session_id AND s.kind='desktop'`, command.TenantID, now); err != nil {
 		return product.ConnectionGrant{}, false, storeError(ctx, opCtx, err, false)
 	}
 	if _, err := tx.Exec(opCtx, `UPDATE sandbox_runtime_product.connection_grants SET state='revoked' WHERE tenant_id=$1 AND control_lease_id IS NOT NULL AND state IN ('issued','consumed') AND NOT EXISTS(SELECT 1 FROM sandbox_runtime_product.control_leases l WHERE l.tenant_id=connection_grants.tenant_id AND l.lease_id=connection_grants.control_lease_id AND l.state='active' AND l.expires_at>$2)`, command.TenantID, now); err != nil {
@@ -194,7 +203,15 @@ func (r *GrantRepository) ConsumeConnectionGrant(ctx context.Context, ticket str
 	binding.Actor.Type = product.ActorType(actorType)
 	binding.ControlLeaseID = controlLeaseID
 	binding.ControlFence = controlFence
-	if _, err := tx.Exec(opCtx, `UPDATE sandbox_runtime_product.connection_grants SET state='consumed',consumed_at=$1 WHERE connection_id=$2`, now, binding.ConnectionID); err != nil {
+	gatewayLeaseExpiry := any(nil)
+	if binding.ProtocolProfile == product.SessionProfileDesktop {
+		leaseExpiry := now.Add(desktopGatewayLease)
+		if binding.ExpiresAt.Before(leaseExpiry) {
+			leaseExpiry = binding.ExpiresAt
+		}
+		gatewayLeaseExpiry = leaseExpiry
+	}
+	if _, err := tx.Exec(opCtx, `UPDATE sandbox_runtime_product.connection_grants SET state='consumed',consumed_at=$1,gateway_lease_expires_at=$2 WHERE connection_id=$3`, now, gatewayLeaseExpiry, binding.ConnectionID); err != nil {
 		return product.GatewayBinding{}, storeError(ctx, opCtx, err, false)
 	}
 	valid := grantState == "issued" && binding.ExpiresAt.After(now) && (state == "ready" || state == "active") && binding.HandoffReference != "" && binding.ConnectionGeneration >= 1 && binding.HandoffExpiresAt.After(now)
@@ -221,25 +238,39 @@ func (r *GrantRepository) CheckGatewayAuthority(ctx context.Context, binding pro
 	}
 	opCtx, cancel := context.WithTimeout(ctx, r.store.operationTimeout)
 	defer cancel()
-	var valid bool
-	err := r.store.pool.QueryRow(opCtx, `SELECT EXISTS(SELECT 1 FROM sandbox_runtime_product.connection_grants g JOIN sandbox_runtime_product.runtime_sessions s ON s.tenant_id=g.tenant_id AND s.session_id=g.session_id JOIN sandbox_runtime_product.provider_bindings b ON b.tenant_id=g.tenant_id AND b.workspace_id=g.workspace_id AND b.slot_key=g.slot_key AND b.slot_generation=g.slot_generation AND b.current WHERE g.tenant_id=$1 AND g.connection_id=$2 AND g.actor_type=$3 AND g.actor_id=$4 AND g.workspace_id=$5 AND g.slot_key=$6 AND g.slot_generation=$7 AND g.session_id=$8 AND g.protocol_profile=$9 AND g.state='consumed' AND g.expires_at>clock_timestamp() AND s.state IN('ready','active') AND s.provider_connection_generation=$10 AND s.provider_handoff_reference=$11 AND s.provider_handoff_expires_at>clock_timestamp() AND b.provider_revision_id=$12 AND b.sandbox_id=$13 AND g.access_mode=$14 AND COALESCE(g.control_lease_id,'')=$15 AND COALESCE(g.control_fence,0)=$16 AND s.recording_policy=$17)`, binding.TenantID, binding.ConnectionID, string(binding.Actor.Type), binding.Actor.ID, binding.WorkspaceID, binding.SlotKey, binding.SlotGeneration, binding.SessionID, binding.ProtocolProfile, binding.ConnectionGeneration, binding.HandoffReference, binding.ProviderRevisionID, binding.SandboxID, binding.AccessMode, binding.ControlLeaseID, binding.ControlFence, binding.RecordingPolicy).Scan(&valid)
-	if err != nil {
-		return product.ErrStoreUnavailable
-	}
-	if !valid {
-		return product.ErrControlStale
-	}
-	if binding.ControlLeaseID != "" {
-		err = r.store.pool.QueryRow(opCtx, `SELECT EXISTS(SELECT 1 FROM sandbox_runtime_product.control_leases WHERE tenant_id=$1 AND lease_id=$2 AND state='active' AND fence=$3 AND controller_actor_type=$4 AND controller_actor_id=$5 AND expires_at>clock_timestamp())`, binding.TenantID, binding.ControlLeaseID, binding.ControlFence, string(binding.Actor.Type), binding.Actor.ID).Scan(&valid)
-		if err != nil {
-			return product.ErrStoreUnavailable
-		}
-		if !valid {
-			return product.ErrControlStale
-		}
-	}
 	if binding.AccessMode == product.GrantAccessControl && binding.ControlLeaseID == "" {
 		return product.ErrControlStale
+	}
+	leaseRequired := binding.ProtocolProfile == product.SessionProfileDesktop
+	var connectionID string
+	err := r.store.pool.QueryRow(opCtx, `UPDATE sandbox_runtime_product.connection_grants g
+SET gateway_lease_expires_at=CASE WHEN $18 THEN LEAST(g.expires_at,clock_timestamp()+$19::interval) ELSE g.gateway_lease_expires_at END
+FROM sandbox_runtime_product.runtime_sessions s,sandbox_runtime_product.provider_bindings b
+WHERE g.tenant_id=$1 AND g.connection_id=$2 AND g.actor_type=$3 AND g.actor_id=$4
+  AND g.workspace_id=$5 AND g.slot_key=$6 AND g.slot_generation=$7 AND g.session_id=$8
+  AND g.protocol_profile=$9 AND g.state='consumed' AND g.expires_at>clock_timestamp()
+  AND s.tenant_id=g.tenant_id AND s.session_id=g.session_id AND s.state IN('ready','active')
+  AND s.provider_connection_generation=$10 AND s.provider_handoff_reference=$11
+  AND s.provider_handoff_expires_at>clock_timestamp() AND s.recording_policy=$17
+  AND b.tenant_id=g.tenant_id AND b.workspace_id=g.workspace_id AND b.slot_key=g.slot_key
+  AND b.slot_generation=g.slot_generation AND b.current AND b.provider_revision_id=$12 AND b.sandbox_id=$13
+  AND g.access_mode=$14 AND COALESCE(g.control_lease_id,'')=$15 AND COALESCE(g.control_fence,0)=$16
+  AND (NOT $18 OR g.gateway_lease_expires_at>clock_timestamp())
+  AND (g.control_lease_id IS NULL OR EXISTS(
+    SELECT 1 FROM sandbox_runtime_product.control_leases l
+    WHERE l.tenant_id=g.tenant_id AND l.lease_id=g.control_lease_id AND l.state='active'
+      AND l.fence=g.control_fence AND l.controller_actor_type=g.actor_type
+      AND l.controller_actor_id=g.actor_id AND l.expires_at>clock_timestamp()))
+RETURNING g.connection_id`, binding.TenantID, binding.ConnectionID, string(binding.Actor.Type), binding.Actor.ID,
+		binding.WorkspaceID, binding.SlotKey, binding.SlotGeneration, binding.SessionID, binding.ProtocolProfile,
+		binding.ConnectionGeneration, binding.HandoffReference, binding.ProviderRevisionID, binding.SandboxID,
+		binding.AccessMode, binding.ControlLeaseID, binding.ControlFence, binding.RecordingPolicy, leaseRequired,
+		desktopGatewayLease.String()).Scan(&connectionID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return product.ErrControlStale
+	}
+	if err != nil {
+		return product.ErrStoreUnavailable
 	}
 	return nil
 }

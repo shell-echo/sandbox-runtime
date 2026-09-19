@@ -272,7 +272,20 @@ VALUES($1,$2,$3,$4,'slot.reconcile',$5,'pending',0,$6,$6,$6) ON CONFLICT(tenant_
 		return err
 	}
 	if work.ProviderAction == "terminate" {
-		if _, err := tx.Exec(ctx, `UPDATE sandbox_runtime_product.runtime_sessions SET state=CASE WHEN state='draining' THEN state ELSE 'closed' END,version=version+1,updated_at=$1 WHERE tenant_id=$2 AND workspace_id=$3 AND slot_key=$4 AND state IN ('requested','provisioning','ready','active')`, now, work.TenantID, work.WorkspaceID, work.SlotKey); err != nil {
+		if _, err := tx.Exec(ctx, `UPDATE sandbox_runtime_product.connection_grants g
+SET state='revoked'
+WHERE g.tenant_id=$1 AND g.state IN ('issued','consumed') AND EXISTS(
+  SELECT 1 FROM sandbox_runtime_product.runtime_sessions s
+  WHERE s.tenant_id=g.tenant_id AND s.session_id=g.session_id
+    AND s.workspace_id=$2 AND s.slot_key=$3
+    AND s.state IN ('requested','provisioning','ready','active','draining'))`, work.TenantID, work.WorkspaceID, work.SlotKey); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `UPDATE sandbox_runtime_product.runtime_sessions
+SET state=CASE WHEN state='draining' THEN state ELSE 'closed' END,version=version+1,
+    provider_handoff_reference=NULL,provider_handoff_expires_at=NULL,updated_at=$1
+WHERE tenant_id=$2 AND workspace_id=$3 AND slot_key=$4
+  AND state IN ('requested','provisioning','ready','active','draining')`, now, work.TenantID, work.WorkspaceID, work.SlotKey); err != nil {
 			return err
 		}
 	}
@@ -383,6 +396,10 @@ func recordDesktopSessionCleanup(ctx context.Context, tx pgx.Tx, work product.Pr
 	if _, err := tx.Exec(ctx, `UPDATE sandbox_runtime_product.runtime_sessions
 SET state=$1,version=version+1,provider_handoff_reference=NULL,provider_handoff_expires_at=NULL,updated_at=$2
 WHERE tenant_id=$3 AND session_id=$4 AND state='draining'`, sessionState, now, work.TenantID, work.SessionID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE sandbox_runtime_product.connection_grants
+SET state='revoked' WHERE tenant_id=$1 AND session_id=$2 AND state IN ('issued','consumed')`, work.TenantID, work.SessionID); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(ctx, `UPDATE sandbox_runtime_product.product_operations

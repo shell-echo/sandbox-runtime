@@ -115,11 +115,133 @@ func TestDesktopLiveHandlerCarriesBoundedVideoAudioAndOrderedInput(t *testing.T)
 				case <-time.After(3 * time.Second):
 					t.Fatal("Desktop input result was not returned")
 				}
+				if err := channel.SendText(`{"type":"stream.configure","sequence":2,"display":{"width":1024,"height":768,"max_fps":24},"audio_device":"default"}`); err != nil {
+					t.Fatal(err)
+				}
+				select {
+				case update := <-session.updates:
+					if update.display.Width != 1024 || update.display.Height != 768 || update.display.MaxFPS != 24 || update.audioDevice != "default" {
+						t.Fatalf("stream update=%#v", update)
+					}
+				case <-time.After(3 * time.Second):
+					t.Fatal("Desktop stream update was not forwarded")
+				}
+				select {
+				case result := <-results:
+					if string(result.Data) != `{"type":"stream.configure.result","sequence":2,"ok":true}` {
+						t.Fatalf("stream update result=%s", result.Data)
+					}
+				case <-time.After(3 * time.Second):
+					t.Fatal("Desktop stream update result was not returned")
+				}
+				time.Sleep(defaultDesktopResyncInterval)
+				if err := channel.SendText(`{"type":"stream.resync","sequence":3}`); err != nil {
+					t.Fatal(err)
+				}
+				select {
+				case result := <-results:
+					if string(result.Data) != `{"type":"stream.resync.result","sequence":3,"ok":true}` {
+						t.Fatalf("stream resync result=%s", result.Data)
+					}
+				case <-time.After(3 * time.Second):
+					t.Fatal("Desktop stream resync result was not returned")
+				}
+				if session.resyncs.Load() < 3 || session.keyframes.Load() < 3 {
+					t.Fatalf("resyncs=%d keyframes=%d", session.resyncs.Load(), session.keyframes.Load())
+				}
 				if authority.calls.Load() < 2 {
 					t.Fatalf("input authority calls=%d", authority.calls.Load())
 				}
 			}
 		})
+	}
+}
+
+func TestDesktopLiveReconnectWithinGraceResynchronizesAndRejectsOldEpochInput(t *testing.T) {
+	binding := testDesktopLiveBinding(product.GrantAccessControl)
+	store := &grantStoreSpy{binding: binding, active: true}
+	media := newDesktopLiveMediaSessionSpy()
+	handler := &DesktopLiveHandler{
+		grants: store, policy: &desktopPolicySourceSpy{policy: testDesktopPolicy()}, transfers: denyDesktopTransferAuthority{}, audit: &auditStoreSpy{},
+		maxInputQueue: 2, disconnectGrace: 20 * time.Millisecond, minKeyframeInterval: time.Millisecond,
+		minResyncInterval: time.Millisecond, sessions: map[string]int{binding.SessionID: 1}, peers: 1,
+	}
+	peer, err := webrtc.NewPeerConnection(webrtc.Configuration{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	state := newDesktopLivePeer(handler, peer, media, binding, testDesktopLiveMediaPolicy(true), testDesktopPolicy())
+	state.onConnectionState(webrtc.PeerConnectionStateConnected)
+	oldEpoch := state.currentStateEpoch()
+	state.onConnectionState(webrtc.PeerConnectionStateDisconnected)
+	state.onConnectionState(webrtc.PeerConnectionStateConnected)
+	time.Sleep(2 * handler.disconnectGrace)
+	select {
+	case <-state.ctx.Done():
+		t.Fatal("recovered Desktop connection was closed by a stale disconnect timer")
+	default:
+	}
+	if media.resyncs.Load() != 2 || media.keyframes.Load() != 2 {
+		t.Fatalf("reconnect resyncs=%d keyframes=%d", media.resyncs.Load(), media.keyframes.Load())
+	}
+	go state.inputLoop()
+	state.inputs <- desktopLiveQueuedInput{kind: "input", sequence: 1, epoch: oldEpoch, input: DesktopLiveInput{
+		Sequence: 1, Kind: product.DesktopActionPointer, Action: product.DesktopPolicyAction{Kind: product.DesktopActionPointer},
+		ControlLeaseID: binding.ControlLeaseID, ControlFence: binding.ControlFence,
+	}}
+	select {
+	case <-state.ctx.Done():
+	case <-time.After(time.Second):
+		t.Fatal("pre-disconnect Desktop input was not rejected after reconnect")
+	}
+	select {
+	case input := <-media.inputs:
+		t.Fatalf("stale input reached Desktop media: %#v", input)
+	default:
+	}
+}
+
+func TestDesktopLiveControlResyncAndResizeBounds(t *testing.T) {
+	binding := testDesktopLiveBinding(product.GrantAccessControl)
+	mediaPolicy := testDesktopLiveMediaPolicy(true)
+	valid, err := decodeDesktopLiveControl([]byte(`{"type":"stream.configure","sequence":1,"display":{"width":800,"height":600,"max_fps":30},"audio_device":"disabled"}`), mediaPolicy, binding)
+	if err != nil || valid.kind != "stream.configure" || valid.display.Width != 800 || valid.audioDevice != "disabled" {
+		t.Fatalf("valid stream configuration=%#v err=%v", valid, err)
+	}
+	for _, document := range []string{
+		`{"type":"stream.configure","sequence":1,"display":{"width":319,"height":600,"max_fps":30},"audio_device":"default"}`,
+		`{"type":"stream.configure","sequence":1,"display":{"width":800,"height":600,"max_fps":61},"audio_device":"host-device-1"}`,
+		`{"type":"stream.resync","sequence":1,"extra":true}`,
+	} {
+		if _, err := decodeDesktopLiveControl([]byte(document), mediaPolicy, binding); !errors.Is(err, product.ErrInvalid) {
+			t.Fatalf("unbounded Desktop control %s err=%v", document, err)
+		}
+	}
+	oldMedia := mediaPolicy
+	oldMedia.Width = 1280
+	stale := []byte(`{"type":"input","sequence":2,"action":{"kind":"pointer","event":"move","x":1100,"y":300,"button":0,"delta_x":0,"delta_y":0}}`)
+	if _, err := decodeDesktopLiveInput(stale, oldMedia, binding); err != nil {
+		t.Fatalf("input should fit old display: %v", err)
+	}
+	resized := oldMedia
+	resized.Width = 800
+	if _, err := decodeDesktopLiveInput(stale, resized, binding); !errors.Is(err, product.ErrInvalid) {
+		t.Fatalf("pre-resize coordinates survived current-display revalidation: %v", err)
+	}
+
+	media := newDesktopLiveMediaSessionSpy()
+	handler := &DesktopLiveHandler{minResyncInterval: time.Hour, minKeyframeInterval: time.Hour}
+	peer, err := webrtc.NewPeerConnection(webrtc.Configuration{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer peer.Close()
+	state := newDesktopLivePeer(handler, peer, media, binding, mediaPolicy, testDesktopPolicy())
+	if !state.resynchronize(false) || state.resynchronize(false) {
+		t.Fatal("Desktop control resynchronization limiter was not fail closed")
+	}
+	if media.resyncs.Load() != 1 || media.keyframes.Load() != 1 {
+		t.Fatalf("bounded resyncs=%d keyframes=%d", media.resyncs.Load(), media.keyframes.Load())
 	}
 }
 
@@ -612,13 +734,20 @@ type desktopLiveMediaSessionSpy struct {
 	video     chan []byte
 	audio     chan []byte
 	inputs    chan DesktopLiveInput
+	updates   chan desktopLiveStreamUpdate
 	closed    chan struct{}
 	closeOnce sync.Once
 	keyframes atomic.Int32
+	resyncs   atomic.Int32
+}
+
+type desktopLiveStreamUpdate struct {
+	display     DesktopLiveDisplayPolicy
+	audioDevice string
 }
 
 func newDesktopLiveMediaSessionSpy() *desktopLiveMediaSessionSpy {
-	return &desktopLiveMediaSessionSpy{video: make(chan []byte, 16), audio: make(chan []byte, 16), inputs: make(chan DesktopLiveInput, 4), closed: make(chan struct{})}
+	return &desktopLiveMediaSessionSpy{video: make(chan []byte, 16), audio: make(chan []byte, 16), inputs: make(chan DesktopLiveInput, 4), updates: make(chan desktopLiveStreamUpdate, 4), closed: make(chan struct{})}
 }
 
 func (s *desktopLiveMediaSessionSpy) ReadVideoRTP(ctx context.Context) ([]byte, error) {
@@ -647,6 +776,20 @@ func (s *desktopLiveMediaSessionSpy) HandleInput(ctx context.Context, input Desk
 	case s.inputs <- input:
 		return DesktopLiveInputResult{}, nil
 	}
+}
+
+func (s *desktopLiveMediaSessionSpy) UpdateStream(ctx context.Context, display DesktopLiveDisplayPolicy, audioDevice string) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case s.updates <- desktopLiveStreamUpdate{display: display, audioDevice: audioDevice}:
+		return nil
+	}
+}
+
+func (s *desktopLiveMediaSessionSpy) Resynchronize(context.Context) error {
+	s.resyncs.Add(1)
+	return nil
 }
 
 func (s *desktopLiveMediaSessionSpy) RequestKeyframe(context.Context) error {
