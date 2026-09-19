@@ -163,9 +163,12 @@ Current verified state:
   incomplete cleanup, secrets, private coordinates, and host paths. This does
   not compose the production command or establish deployment, HA, hostile
   multi-tenant, independently implemented caller, or production readiness.
-  E2E lock `b0d52ce427e9b8e8d6b1f6f8e96a43c5c186d37e` binds all eight
+  Corrective commit `59de37d5ee22776305dfaab866c25ea6bd5406bc`
+  deterministically closes the Provider media session before its private
+  WebSocket closure becomes observable. E2E lock
+  `d5d6ed1a815b49625a054d9931a8cec2234d8e7e` binds all eight
   parent checks to evidence/CI baseline
-  `e6b831c16518b750895065e6f572868c623e3279`; full E2E race/shuffle, vet,
+  `59de37d5ee22776305dfaab866c25ea6bd5406bc`; full E2E race/shuffle, vet,
   and all eight clean-checkout checks pass.
 
 The qualification applies only to Provider revision

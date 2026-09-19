@@ -18,9 +18,13 @@ image index
 with native `linux/arm64/v8` platform digest
 `sha256:e5d01e272f87df8dc693ba81d85bce2a154ae541ac0166177a9290a005928505`.
 
-E2E lock commit `b0d52ce427e9b8e8d6b1f6f8e96a43c5c186d37e`
+Corrective commit `59de37d5ee22776305dfaab866c25ea6bd5406bc` makes
+Provider media-session closure happen before the private WebSocket close is
+observable, removing a release-CI shutdown-order race without weakening the
+revocation check. E2E lock commit
+`d5d6ed1a815b49625a054d9931a8cec2234d8e7e`
 binds all eight parent checks to the Phase 5 evidence/CI baseline
-`e6b831c16518b750895065e6f572868c623e3279`; the E2E module race/shuffle,
+`59de37d5ee22776305dfaab866c25ea6bd5406bc`; the E2E module race/shuffle,
 vet, and all eight clean-checkout `-check` commands pass.
 
 The strict manifest is
