@@ -23,11 +23,12 @@ const (
 	DownstreamFencingLockPath = "e2e/downstream-fencing.lock.json"
 	DownstreamFencingProfile  = "browser-downstream-fencing-e2e-v1"
 
-	DownstreamFencingHarnessBaseline   = "49ea205c1abf125f7e9b8e6ce002a2af34ff5ebf"
-	DownstreamFencingV2HarnessBaseline = "49ea205c1abf125f7e9b8e6ce002a2af34ff5ebf"
-	DownstreamFencingGatewayRevision   = "b4d41c9a32b4ccf39edaba3fb8bf5ad239c1f945"
-	DownstreamFencingIngressRevision   = "602d1dcd73b9eac087ec067795566f551ece1f90"
-	DownstreamFencingCallerBaseline    = "49ea205c1abf125f7e9b8e6ce002a2af34ff5ebf"
+	DownstreamFencingHarnessBaseline       = ProviderCommit
+	DownstreamFencingV2HarnessBaseline     = ProviderCommit
+	DownstreamFencingGatewayRevision       = "b4d41c9a32b4ccf39edaba3fb8bf5ad239c1f945"
+	DownstreamFencingIngressRevision       = "602d1dcd73b9eac087ec067795566f551ece1f90"
+	DownstreamFencingActionHistoryRevision = "6b17d809fbaafccece06ff037416dc5f520b9e72"
+	DownstreamFencingCallerBaseline        = "49ea205c1abf125f7e9b8e6ce002a2af34ff5ebf"
 
 	DownstreamFencingValkeyImage = "ghcr.io/valkey-io/valkey"
 	DownstreamFencingValkeyIndex = "sha256:ccfa19b0d743e48927e1c8c14e39e0acb97b5cea347fef0bfe340247fea920cd"
@@ -37,7 +38,7 @@ const (
 
 	PostgresControlledRestoreLockPath        = "e2e/postgres-controlled-restore.lock.json"
 	PostgresControlledRestoreProfile         = "browser-postgres-controlled-restore-e2e-v1"
-	PostgresControlledRestoreHarnessBaseline = "49ea205c1abf125f7e9b8e6ce002a2af34ff5ebf"
+	PostgresControlledRestoreHarnessBaseline = ProviderCommit
 	PostgresWitnessImage                     = "postgres"
 	PostgresWitnessIndex                     = "sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94"
 	PostgresWitnessResolvedTag               = "17.6-alpine3.22"
@@ -574,7 +575,7 @@ func validatePostgresControlledRestoreLock(
 		ProviderRevision: ProviderCommit, HarnessBaseline: PostgresControlledRestoreHarnessBaseline,
 		GatewayComponent:       DownstreamFencingComponentSource{Path: "gateway/composition/browser.go", Revision: DownstreamFencingGatewayRevision},
 		IngressComponent:       DownstreamFencingComponentSource{Path: "gateway/cdpfence", Revision: DownstreamFencingIngressRevision},
-		ActionHistoryComponent: DownstreamFencingComponentSource{Path: "gateway/capacity/redis", Revision: ProviderCommit},
+		ActionHistoryComponent: DownstreamFencingComponentSource{Path: "gateway/capacity/redis", Revision: DownstreamFencingActionHistoryRevision},
 		CallerSubstrate:        DownstreamFencingBaselineSource{Path: "e2e/internal/caller", BaselineRevision: DownstreamFencingCallerBaseline},
 	}
 	if locked.Sources != expectedSources {
@@ -632,7 +633,7 @@ func validateDownstreamFencingV2Lock(
 		ProviderRevision: ProviderCommit, HarnessBaseline: DownstreamFencingV2HarnessBaseline,
 		GatewayComponent:       DownstreamFencingComponentSource{Path: "gateway/composition/browser.go", Revision: DownstreamFencingGatewayRevision},
 		IngressComponent:       DownstreamFencingComponentSource{Path: "gateway/cdpfence", Revision: DownstreamFencingIngressRevision},
-		ActionHistoryComponent: DownstreamFencingComponentSource{Path: "gateway/capacity/redis", Revision: ProviderCommit},
+		ActionHistoryComponent: DownstreamFencingComponentSource{Path: "gateway/capacity/redis", Revision: DownstreamFencingActionHistoryRevision},
 		CallerSubstrate:        DownstreamFencingBaselineSource{Path: "e2e/internal/caller", BaselineRevision: DownstreamFencingCallerBaseline},
 	}
 	if locked.Sources != expectedSources {
