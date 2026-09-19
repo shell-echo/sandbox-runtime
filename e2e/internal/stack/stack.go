@@ -477,7 +477,7 @@ func capabilitySource(providerRevisionID string) (*provider.StaticCapabilitySour
 	}}, []provider.SnapshotRestoreProfile{{
 		ProfileID: "sandbox-snapshot-workspace-v1", Level: provider.SnapshotLevelWorkspace,
 		SuiteID: provider.CompatibilitySuiteSandboxProvider, SuiteVersion: "1.0.0",
-		SuiteDigest: provider.SHA256Digest("sha256:7db1d28d35ca193632c395247cc71eeaaff48b027964b9ea9da247eaad5e3991"),
+		SuiteDigest: provider.SHA256Digest("sha256:78e01cc5eb176083896baf8507c551d2ee88e56b93197321702748a88949e89d"),
 	}})
 	if err != nil {
 		return nil, err
