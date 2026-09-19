@@ -45,7 +45,7 @@ Current verified state:
   four roles, scenario set, and cleanup. Deployment, HA, hostile multi-tenant,
   independently implemented caller, and production readiness remain explicit
   non-claims; and
-- Product v1 Phase 5 Desktop is **3/15** complete. Slice 1 establishes the
+- Product v1 Phase 5 Desktop is **5/15** complete. Slice 1 establishes the
   separate Provider Desktop Contract and Go projection authority at revision
   `720ad15c343e71f36615dc4499edd5e764178bca`, tree
   `343ffde0819207cf99c005096c336735dd33a735`, with a content-derived 71-case
@@ -59,11 +59,17 @@ Current verified state:
   optional protected handlers. Slice 4 candidate implementation
   `163dd8a258a24cf4727169b1cbd8ed7c0fe29292` adds the locked Desktop image
   inputs, fixed Unix-only broker, reproducible local outputs, passing native
-  arm64 smoke, and a manual native publication/provenance workflow. The
-  workflow has not run, so no immutable hosted index or independently verified
-  attestation is selected and Slice 4 remains open. Runtime adapter/private
-  resolver, production startup composition, dispatch, public media/control,
-  unified Web, capability advertisement, and release evidence remain absent.
+  arm64 smoke, and a manual native publication/provenance workflow. Run
+  `35447651328` at source `e4a940bda6c5172a78d0dbe40963ca1a99911976`
+  passes native amd64/arm64/v8 gates, publishes exact signed index
+  `sha256:638e97c694ad4c9b9d750ae30dc6088ff5011af570ba1b12fdf3f0e35ffa0300`,
+  and passes fresh independent provenance and architecture verification.
+  Slice 5 implementation `0c30d6f5e6e0c6227069b8689668a1a0dcfb940b`
+  adds the Provider-local Docker adapter, durable opaque reference authority,
+  fresh attach/reconnect checks, lifecycle readiness, exact duration usage,
+  and revoke/cleanup/absence composition. Production startup composition,
+  Product dispatch, public media/control, unified Web, capability
+  advertisement, and release evidence remain absent.
 
 The qualification applies only to Provider revision
 `170459266af5f4fad359ca8c63f2ae19741055c5`, external-caller revision
@@ -100,6 +106,8 @@ recorded in
 [`audits/product-phase-5-desktop-slice-2.md`](audits/product-phase-5-desktop-slice-2.md),
 [`audits/product-phase-5-desktop-slice-3.md`](audits/product-phase-5-desktop-slice-3.md),
 [`audits/product-phase-5-desktop-slice-4-candidate.md`](audits/product-phase-5-desktop-slice-4-candidate.md),
+[`audits/product-phase-5-desktop-slice-4-publication.md`](audits/product-phase-5-desktop-slice-4-publication.md),
+[`audits/product-phase-5-desktop-slice-5.md`](audits/product-phase-5-desktop-slice-5.md),
 [`adr/0050-product-desktop-phase-5-boundary.md`](adr/0050-product-desktop-phase-5-boundary.md),
 and
 [`plan/product-v1-phase-5-desktop-development-unified-product.md`](plan/product-v1-phase-5-desktop-development-unified-product.md).
@@ -886,7 +894,7 @@ Contract identity:
 | P2 | Reference coding/shell caller and Product Phase 2 lifecycle release gates passed; the latter includes a repository-owned independent-process 15+5+9 black-box run | Independently implemented external-caller lifecycle interoperability, aggregate conformance, multi-controller, hostile multi-tenant isolation, deployment, and production gates remain open |
 | P3 | Retired by ADR 0037. Historical revision binding/shadow/metrics components and candidate runs retain their recorded evidence boundaries | No named-platform migration gate remains; external consumers adapt to the exact locked Provider Contract |
 | P4 | Browser Contract authority/projection, exact sandboxed signed amd64/arm64/v8 publication, Provider-local components, default-disabled command/runtime composition, process-local Gateway limits, the separately recorded Browser/shared-capacity/durable-revocation caller gates, ADR 0033 component/caller evidence, the ADR 0034 v2 local/hosted deletion and rollback-detection gates, the ADR 0035 PostgreSQL component gate, and the ADR 0036 hosted same-runner controlled-restore gate pass within their named boundaries | Production independent witness/storage and restore operations, production Browser advertisement/public Gateway, Valkey/PostgreSQL provenance and HA, production configuration/metrics, aggregate, multi-controller, multi-tenant, deployment, and production gates remain open |
-| Product Phase 5 | Slices 1-3/15 lock the separate Provider Desktop Contract/projection, Product Desktop slot/session PostgreSQL intent, and Provider-local application/persistence/protected-handler authority. The Slice 4 local image/broker candidate and native arm64 smoke pass, but hosted native publication and independent provenance verification remain open; Desktop advertisement remains empty | Close the Slice 4 immutable publication gate, then execute Slices 5-15: adapters, public data plane, policy, recovery, recording, development environment, unified Web, and independent-process release evidence |
+| Product Phase 5 | Slices 1-5/15 lock the separate Provider Desktop Contract/projection, Product Desktop slot/session PostgreSQL intent, Provider application/persistence/protected handlers, exact signed image, and Provider-local runtime/private-resolver/lifecycle/usage composition. Desktop advertisement remains empty | Execute Slices 6-15 in order: Product adapter, grants, public data plane, policy, recovery, recording, development environment, unified Web, and independent-process release evidence |
 
 Production readiness is not a numbered phase shortcut. Aggregate conformance,
 multi-controller reliability, hostile multi-tenant security, deployment, and
@@ -1171,12 +1179,10 @@ PID-level request attribution.
 4. Prove independent PostgreSQL/Valkey failure and backup domains, HA, and
    operator controls only in a deployment-owned environment. Retain hosted ADR
    0036 evidence as same-runner reference evidence.
-5. Close Product Phase 5 Slice 4 by running the manual native amd64/arm64
-   publication workflow from an authorized main revision and recording the
-   immutable index, platform-manifest, attestation, and independent-verification
-   identities. Do not begin Slice 5 image selection before that evidence
-   exists. Keep capability advertisement off and do not reuse Terminal or
-   Browser routes, repositories, or handoffs as a shortcut.
+5. Execute Product Phase 5 Slice 6 with the exact network-only Provider
+   adapter, retained Desktop outbox recovery, and Product/Provider generation
+   separation; keep production composition and advertisement disabled. Do not
+   reuse Terminal or Browser routes, repositories, or handoffs as a shortcut.
 6. Keep multi-issuer admission, aggregate conformance, multi-controller,
    multi-tenant, HA, independent external-caller interoperability, deployment,
    and production-readiness claims blocked until their separately named gates

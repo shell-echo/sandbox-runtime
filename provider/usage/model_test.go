@@ -68,3 +68,21 @@ func TestBrowserSessionMeterRequiresMilliseconds(t *testing.T) {
 		t.Fatal("browser session meter accepted a non-Contract unit")
 	}
 }
+
+func TestDesktopSessionMeterRequiresMilliseconds(t *testing.T) {
+	evidence := validUsageEvidence()
+	evidence.OperationID = "desktop-operation-1"
+	evidence.AttemptID = "desktop-attempt-1"
+	evidence.Entries = []Entry{{
+		EntryID: "desktop-duration-1", SandboxID: evidence.SandboxID, OperationID: evidence.OperationID,
+		Meter: MeterDesktopSession, Quantity: 180000, Unit: "milliseconds", MeterSource: SourceRuntime,
+		EvidenceReference: "ref:usage/desktop-session-1", OccurredAt: usageTestNow,
+	}}
+	if err := evidence.Validate(usageTestNow); err != nil {
+		t.Fatalf("desktop session meter is invalid: %v", err)
+	}
+	evidence.Entries[0].Unit = "seconds"
+	if err := evidence.Validate(usageTestNow); err == nil {
+		t.Fatal("desktop session meter accepted a non-Contract unit")
+	}
+}

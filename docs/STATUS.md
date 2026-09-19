@@ -63,7 +63,7 @@ and records exact row, object, coordination, process, and container cleanup.
 This does not establish a deployable topology, independently implemented
 caller, HA, hostile multi-tenant isolation, or production readiness.
 
-Product v1 Phase 5 Desktop has completed **3/15** dependency-ordered slices.
+Product v1 Phase 5 Desktop has completed **5/15** dependency-ordered slices.
 Slice 1 establishes only the separate Provider Desktop Contract and Go
 projection authority. It selects exact Contract revision
 `720ad15c343e71f36615dc4499edd5e764178bca`, tree
@@ -79,12 +79,18 @@ unknown-outcome reconciliation, operation aggregation, and optional protected
 handlers. Slice 4 candidate implementation
 `163dd8a258a24cf4727169b1cbd8ed7c0fe29292` adds a locked dual-architecture
 image definition, fixed private broker, local reproducibility outputs, passing
-native arm64 smoke, and a manual native publication/provenance workflow. That
-workflow has not run, so no published immutable index or independently
-verified attestation is claimed and Slice 4 remains open. Runtime adapter/
-private resolver, production startup composition, dispatch, public media/
-control, unified Web, capability advertisement, and release evidence remain
-absent.
+native arm64 smoke, and a manual native publication/provenance workflow.
+Publication run `35447651328` at source
+`e4a940bda6c5172a78d0dbe40963ca1a99911976` passes native amd64/arm64/v8
+gates, publishes exact signed index
+`sha256:638e97c694ad4c9b9d750ae30dc6088ff5011af570ba1b12fdf3f0e35ffa0300`,
+and passes fresh independent provenance and platform-matrix verification.
+Slice 5 implementation `0c30d6f5e6e0c6227069b8689668a1a0dcfb940b`
+adds the Provider-local Docker adapter, durable opaque resolver, fresh
+attach/reconnect, lifecycle readiness, revoke/cleanup/absence composition, and
+exact Desktop duration usage. Production startup composition, Product
+dispatch, public media/control, unified Web, capability advertisement, and
+release evidence remain absent.
 
 Updated: 2026-09-19
 
@@ -110,7 +116,8 @@ production readiness.
 | Product v1 Phase 5 Desktop Slice 1 | [Fixed 15-slice plan](plan/product-v1-phase-5-desktop-development-unified-product.md); [startup audit](audits/product-phase-5-desktop-startup.md); ADR 0050; Contract revision `720ad15c343e71f36615dc4499edd5e764178bca`; tree `343ffde0819207cf99c005096c336735dd33a735` | Complete as Provider Contract and Go projection authority only. Separate Desktop capability/profile/runtime discovery, create binding, open/read/opaque-handoff/close, expiry/revocation, usage, admission, state, security, quota/error, and exact-cleanup semantics are locked. All 71 local Suite cases map to executable tests. No Desktop runtime, driver, image, protected route composition, Product authority, public Gateway, Guest protocol, Web experience, advertisement, deployment, HA, hostile-multitenant, or production claim follows |
 | Product v1 Phase 5 Desktop Slice 2 | [Slice 2 evidence](audits/product-phase-5-desktop-slice-2.md); [fixed 15-slice plan](plan/product-v1-phase-5-desktop-development-unified-product.md); ADR 0050; implementation `d2e7943f704e2eed6ea7b61a44ed2b6fa5510e00`; migration 8 | Complete as Product intent and real-PostgreSQL component evidence. Strict authenticated routes accept only exact Desktop slot/session shapes; expected-version, idempotency, slot/session quota races, absorbing states, atomic operation/event/audit/outbox, worker isolation, nondisclosure, migration replay, and reconstructed-Store reads pass. No Desktop dispatcher, Provider implementation, runtime, public Gateway, Web UI, advertisement, independent-process, deployment, HA, hostile-multitenant, or production claim follows |
 | Product v1 Phase 5 Desktop Slice 3 | [Slice 3 evidence](audits/product-phase-5-desktop-slice-3.md); [fixed 15-slice plan](plan/product-v1-phase-5-desktop-development-unified-product.md); ADR 0050; implementation `f96c06c3a50ade031e8ffbb4d8ea15e6ca8be7d5` | Complete as Provider-local component and protected-handler evidence. Separate open/close authority, fences/replay/deadlines, memory and exclusive atomic-file persistence, restart at commit/effect boundaries, observation-only unknown reconciliation, revoke-before-exact-cleanup, retained operation reads, strict protected routes, safe errors, and nondisclosure pass. No runtime image, adapter, broker, private resolver, usage collector, production startup composition, Product dispatch, public Gateway, advertisement, independent-process, deployment, HA, hostile-multitenant, or production claim follows |
-| Product v1 Phase 5 Desktop Slice 4 candidate | [Candidate evidence](audits/product-phase-5-desktop-slice-4-candidate.md); [fixed 15-slice plan](plan/product-v1-phase-5-desktop-development-unified-product.md); ADR 0050; implementation `163dd8a258a24cf4727169b1cbd8ed7c0fe29292` | Local component implementation only: exact dual-architecture source/package locks, scratch repack, numeric non-root security policy, bounded Unix-only broker, reproducible candidate outputs, and native arm64 double-build/runtime smoke pass. The manual native hosted publication workflow has not run; no immutable OCI index/platform manifests or independently verified signed provenance are recorded. Slice 4 and Phase 5 therefore remain open at 3/15; no adapter selection, composition, or advertisement follows |
+| Product v1 Phase 5 Desktop Slice 4 | [Candidate evidence](audits/product-phase-5-desktop-slice-4-candidate.md); [publication evidence](audits/product-phase-5-desktop-slice-4-publication.md); [fixed 15-slice plan](plan/product-v1-phase-5-desktop-development-unified-product.md); ADR 0050; implementation `163dd8a258a24cf4727169b1cbd8ed7c0fe29292`; run `35447651328` | Exact dual-architecture source/package locks, scratch repack, numeric non-root security policy, bounded Unix-only broker, reproducible candidate outputs, and native arm64 component gate pass. Native hosted amd64/arm64/v8 publication, immutable index/platform manifests, GitHub OIDC/Sigstore attestation `48643717`, and fresh independent source/runner/matrix verification pass at source `e4a940b`. Slice 4 is complete at 4/15; no adapter composition or advertisement follows |
+| Product v1 Phase 5 Desktop Slice 5 | [Slice 5 evidence](audits/product-phase-5-desktop-slice-5.md); [fixed 15-slice plan](plan/product-v1-phase-5-desktop-development-unified-product.md); ADR 0050; implementation `0c30d6f5e6e0c6227069b8689668a1a0dcfb940b` | Fail-closed locked-image Docker adapter, provenance and restricted-network dependencies, durable private state, opaque reference registry, fresh attach/reconnect checks, Desktop lifecycle readiness, revoke-before-cleanup/absence composition, exact duration usage, restart/fault matrices, and native arm64/v8 real-image broker/removal gate pass. Production startup, Product dispatch, public data planes, advertisement, deployment, and production readiness remain absent |
 | Sandbox Provider Calling Standard decision | ADR 0037; `contract/specification/provider-calling-standard-v1.md`; repository-owned Contract manifest | External consumers adapt to the exact locked `sandbox-runtime` Provider Contract. The former named Agent Platform P3 migration route is retired, while caller/Provider ownership separation and historical candidate evidence remain. This standard slice adds no capability or production-readiness claim. ADR 0038 defines the generic issuer trust model; the named independent-caller qualification is recorded separately in P2.7 and deployment qualification remains open |
 | Current Provider Contract authority | Revision `720ad15c343e71f36615dc4499edd5e764178bca`; tree `343ffde0819207cf99c005096c336735dd33a735`; manifest `sha256:483111511a588b41bd40d3fef686f0b21f465bb65d3215450ebb2ccf37a5de89`; OpenAPI `sha256:5a3da5d239f83e94eff09fc75438755f834e77bce8cd1c0f91c25055bf0cba2a`; semantic rules `sha256:7953d05e65f00c68e0428b6dd4fcebef1af103f2cab2fa6b214905b2496c8785`; 71-case local Suite `sha256:78e01cc5eb176083896baf8507c551d2ee88e56b93197321702748a88949e89d`; unchanged 6-case remote Suite | Product Phase 5 Slice 1 adds Desktop Contract/projection authority only. Exact lock verification, executable Suite mapping, race/shuffle, vet, retained Product evidence, and clean-VCS Conformance are the local acceptance gates. Historical Phase 2/3/4, hosted CI, external-caller, and remote-discovery evidence retains its recorded authority and is not relabeled |
 | Application-container development deployment | Root `Dockerfile`; Docker, Apple Container, and Kubernetes bilingual guides; development Kustomize base; three smoke scripts; local runs on 2026-09-17 | Docker Engine 29.7.2 on Linux/arm64, Apple Container 1.4.1 on macOS/arm64, and kind 0.33.0 with Kubernetes 1.37.0 each passed the bounded health/create/list path with the in-memory fake runtime. Docker and Kubernetes additionally exercised numeric non-root and restricted filesystem/privilege settings; the Kubernetes run created and removed an isolated namespace, and its disposable kind cluster was removed. No application image was published. This is current-worktree application-packaging evidence only; hosted release gates, immutable multi-platform publication, protected Provider deployment, HA, hostile multi-tenancy, deployment qualification, and production readiness remain open |
@@ -269,7 +276,8 @@ It does not clone, mount, or read an external source repository.
 | Product Phase 5 Slice 1 | Provider Desktop Contract and Go projection authority | Passed for exact revision `720ad15c343e71f36615dc4499edd5e764178bca`, tree `343ffde0819207cf99c005096c336735dd33a735`, and 71-case local Suite | Retain exact Contract projection and historical-evidence separation |
 | Product Phase 5 Slice 2 | Product Desktop slot/session and PostgreSQL intent authority | Passed at implementation `d2e7943f704e2eed6ea7b61a44ed2b6fa5510e00`, including fresh pinned-PostgreSQL migration replay and concurrent race cases | Retain Product intent/worker isolation while later slices add dispatch; no runtime, public route, advertisement, or release claim follows |
 | Product Phase 5 Slice 3 | Provider Desktop domain, application, persistence, reconciliation, operation aggregation, and optional protected handlers | Passed at implementation `f96c06c3a50ade031e8ffbb4d8ea15e6ca8be7d5`, including focused/full race-shuffle, vet, Contract/evidence verifiers, tagged existing-lifecycle Docker integration, restart-boundary and unknown-outcome matrices, exact cleanup, safe errors, and nondisclosure | Continue with the immutable Desktop runtime image and broker protocol in Slice 4; no runtime adapter, production composition, dispatch, advertisement, or release claim |
-| Product Phase 5 Slice 4 | Reproducible immutable Desktop runtime image, private broker, and provenance | Local candidate implementation `163dd8a258a24cf4727169b1cbd8ed7c0fe29292` and native arm64 gate pass; hosted publication/independent provenance acceptance is not yet run | Run the manual workflow from an authorized main revision, record the immutable index/platform/attestation identities and successful independent verification, then and only then select the image in Slice 5 |
+| Product Phase 5 Slice 4 | Reproducible immutable Desktop runtime image, private broker, and provenance | Passed: local candidate `163dd8a258a24cf4727169b1cbd8ed7c0fe29292`; publication run `35447651328` at source `e4a940b`; index `sha256:638e97c694ad4c9b9d750ae30dc6088ff5011af570ba1b12fdf3f0e35ffa0300`; attestation `48643717`; exact native platform and independent verification gates pass | Slice 5 may select only `profiles/desktop/image.LockedPublication`; no adapter, production composition, advertisement, deployment, or production-readiness claim follows |
+| Product Phase 5 Slice 5 | Provider Desktop runtime adapter, private resolver, lifecycle, usage, revocation, and cleanup composition | Passed at implementation `0c30d6f5e6e0c6227069b8689668a1a0dcfb940b`: focused/full race-shuffle, vet, lock/evidence regressions, restart/fault/generation matrices, and native arm64/v8 immutable-image broker attach/reconnect/removal pass | Continue with the Product network-only Provider adapter in Slice 6; no production startup composition, public data plane, advertisement, deployment, or production-readiness claim follows |
 | Production readiness | Independent evidence tier, not a shortcut from P4 | Not established | Deployment, multi-controller reliability, multi-tenant security, operations, and production gates |
 
 ## Evidence Boundary
@@ -355,10 +363,29 @@ two identical builds and exercises the numeric non-root, read-only, drop-all,
 `no-new-privileges`, private-IPC, no-network, no-device, bounded-resource
 runtime; strict broker probe/describe; `xdpyinfo`; nonempty `xwd` capture;
 process/image/container policy; and cleanup. The amd64 candidate was reproduced
-by cross-build only and is not a native smoke. The manual publication workflow
-has not run, so its two native hosted builds, immutable multi-platform index,
-signed attestation, and fresh independent verification remain pending. This is
-why the phase count remains 3/15.
+by cross-build only and is not a native smoke. Manual publication run
+`35447651328` at main source `e4a940bda6c5172a78d0dbe40963ca1a99911976`
+subsequently passed the native amd64 and arm64/v8 gates. It published platform
+manifests `sha256:ae1b71855f879066caf73f1056039d52b796d936a19f4b34a58a5565dd89609b`
+and `sha256:e5d01e272f87df8dc693ba81d85bce2a154ae541ac0166177a9290a005928505`
+under index `sha256:638e97c694ad4c9b9d750ae30dc6088ff5011af570ba1b12fdf3f0e35ffa0300`.
+Attestation `48643717`, registry object
+`sha256:2abf3a1c0304bac70f3118d4b16c193cc1cf2abaa83c144efdd15a365998faf8`,
+Rekor index `2892645362`, and the fresh independent job verify repository,
+workflow, source, hosted runner, and exact matrix. This closes Slice 4 only and
+advanced the phase count to 4/15.
+
+Product Phase 5 Slice 5 implementation
+`0c30d6f5e6e0c6227069b8689668a1a0dcfb940b` passes focused/full repository
+race/shuffle, vet, Contract/evidence regressions, restart/fault/generation
+matrices, and the native linux/arm64/v8 real-image broker transport gate. The
+runtime adapter selects only the locked publication, requires provenance and
+restricted-network dependencies, persists private ownership state, and exposes
+only a bounded private attachment after fresh resolver checks. The composed
+close path durably revokes, cleans the exact receipt, and confirms absence;
+usage stops at the earliest revocation. The transport gate deliberately uses
+`network=none`, so it is not deployed restricted-egress evidence. This closes
+Slice 5 at 5/15 without enabling production composition or advertisement.
 
 Historical P2.6 evidence remains at implementation
 `3fe314a012b808fe60dbd783d7c7c7121d3c548e` and E2E lock refresh

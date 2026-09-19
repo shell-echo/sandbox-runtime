@@ -62,12 +62,22 @@ has distinct content digests that must be recorded after the hosted run.
 The manual-only `Desktop Image Publication` workflow builds and smokes both
 architectures on native GitHub-hosted runners, publishes only an immutable
 `sha-<source-commit>` index, creates a GitHub OIDC/Sigstore SLSA provenance
-attestation, and passes its digest to a separate fresh verification job. That
-job verifies repository, signer workflow, source commit, hosted-runner policy,
-and the exact two-platform matrix. A checked-in workflow is not publication
-evidence: Slice 5 must not accept this image until a named workflow run and its
-immutable index/platform/attestation identities are recorded in repository
-authority. Mutable tags are never runtime inputs.
+attestation, and passes its digest to a separate fresh verification job. The
+first accepted publication is source
+`e4a940bda6c5172a78d0dbe40963ca1a99911976`, workflow run `35447651328`, and
+attestation `48643717`:
+
+- image: `ghcr.io/shell-echo/sandbox-runtime-desktop@sha256:638e97c694ad4c9b9d750ae30dc6088ff5011af570ba1b12fdf3f0e35ffa0300`;
+- linux/amd64: `sha256:ae1b71855f879066caf73f1056039d52b796d936a19f4b34a58a5565dd89609b`;
+- linux/arm64/v8: `sha256:e5d01e272f87df8dc693ba81d85bce2a154ae541ac0166177a9290a005928505`;
+- registry attestation object: `sha256:2abf3a1c0304bac70f3118d4b16c193cc1cf2abaa83c144efdd15a365998faf8`;
+- Sigstore transparency-log index: `2892645362`.
+
+Independent verification enforced the repository, signer workflow, source
+commit, `main` ref, GitHub-hosted runner, SLSA predicate, and the exact
+linux/amd64 plus linux/arm64/v8 matrix. `publication.go` is the machine-checked
+authority for this exact immutable evidence. Mutable tags are never runtime
+inputs.
 
 The local image and protocol gates are component evidence only. They do not
 establish a WebRTC media path, control authorization, audio, GPU acceleration,

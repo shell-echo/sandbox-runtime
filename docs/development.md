@@ -432,13 +432,14 @@ Desktop domain/application/repository/transport race-shuffle tests in addition
 to the full repository race/shuffle and vet gates. Provider API or compatibility
 changes also require the Provider Contract verifier.
 
-The Slice 4 image/broker implementation is a candidate until the manual
-`Desktop Image Publication` workflow passes on native amd64 and arm64/v8
-GitHub-hosted runners and its immutable index, platform manifests, attestation,
-source revision, and independent-verification result are recorded. A local
-cross-build is not a native architecture smoke, and a checked-in workflow is
-not provenance evidence. Do not select the image in a runtime adapter or
-advance the phase count while that gate is open.
+The Slice 4 image/broker publication is locked by
+`profiles/desktop/image.LockedPublication`. Manual run `35447651328` passes on
+native amd64 and arm64/v8 GitHub-hosted runners, publishes exact immutable
+index and platform manifests, and passes attestation plus independent
+verification. A local cross-build is not a native architecture smoke, and a
+checked-in workflow is not provenance evidence. Runtime adapters must select
+only this fail-closed publication authority; any replacement requires a new
+named publication and repository-authority update.
 
 For image/broker changes, keep `profiles/desktop/image/manifest.json`, its Go
 validator, the Dockerfile, build script, broker constants, integration policy,
@@ -457,6 +458,29 @@ mutable tag, or an image config ID for the required native runtime and
 published OCI manifest/index identities. The broker is private Unix-only
 observation at this slice: adding input execution, media, public signaling,
 authorization, or arbitrary process control requires its later owning slice.
+
+Slice 5 runtime changes must keep `provider/desktop/driver`, `reference`,
+`lifecycle`, `usage`, and application policy separate. The driver may persist
+backend identity only in its private state. Every attach/reconnect must resolve
+the durable opaque reference again; never retain a closure that bypasses
+revocation, expiry, source-operation, receipt, or generation checks. Close and
+expiry order is durable revoke, exact receipt cleanup, then absence
+confirmation. Usage starts at successful handoff commit and stops at the
+earliest revocation, endpoint/sandbox termination, or expiry.
+
+Run the real private-broker adapter gate on a native Docker host:
+
+```bash
+SANDBOX_RUNTIME_DESKTOP_ADAPTER_INTEGRATION=1 \
+go test -tags=integration -count=1 \
+  -run '^TestDesktopBrokerTransportIntegration$' \
+  ./provider/desktop/driver/docker
+```
+
+This gate uses `network=none` to isolate real image/broker/container behavior;
+it is not restricted-egress deployment evidence. The production driver still
+requires a fail-closed restricted-network provisioner. Do not weaken that port
+or advertise Desktop because the transport-focused gate passes.
 
 ## Go and API rules
 

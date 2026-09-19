@@ -28,7 +28,7 @@ import (
 )
 
 const (
-	ProviderCommit   = "6b17d809fbaafccece06ff037416dc5f520b9e72"
+	ProviderCommit   = "0c30d6f5e6e0c6227069b8689668a1a0dcfb940b"
 	ContractNS       = "urn:shell-echo:sandbox-runtime:provider-v1"
 	ContractRevision = "720ad15c343e71f36615dc4499edd5e764178bca"
 	ContractTree     = "343ffde0819207cf99c005096c336735dd33a735"
@@ -502,7 +502,7 @@ func computeProviderSuiteDigest(content []byte) (string, error) {
 }
 
 func providerDocumentationPath(path string) bool {
-	return path == "README.md" || path == "compatibility/sandbox-runtime/README.md" || strings.HasPrefix(path, "docs/")
+	return path == "README.md" || path == "README.zh-CN.md" || path == "compatibility/sandbox-runtime/README.md" || strings.HasPrefix(path, "docs/")
 }
 
 func providerLockRefreshPath(path string) bool {

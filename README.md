@@ -19,7 +19,7 @@ general production readiness.
 | Independent external caller | **13/13 complete** |
 | Product v1 Phase 3 | **13/13 complete** for the bounded standalone topology |
 | Product v1 Phase 4 Browser | **13/13 complete** for the bounded same-repository separate-process topology |
-| Product v1 Phase 5 Desktop | **3/15 complete**; Slice 4 local image/broker candidate passes native arm64, hosted publication/provenance pending, advertisement disabled |
+| Product v1 Phase 5 Desktop | **5/15 complete**; locked image plus Provider runtime/private-reference/lifecycle/usage composition pass, Product dispatch is next, advertisement disabled |
 | Coding/shell qualification | **Qualified** for the exact caller, Provider revisions, topology, profile, and scenarios recorded below |
 | Latest core CI | [Passed](https://github.com/shell-echo/sandbox-runtime/actions/runs/35204434771) |
 
@@ -79,7 +79,7 @@ independently implemented caller, HA, hostile-multitenant, or production
 evidence.
 
 [Product v1 Phase 5 Desktop](docs/plan/product-v1-phase-5-desktop-development-unified-product.md)
-has completed **3/15** dependency-ordered slices. Slice 1 locks a separate
+has completed **5/15** dependency-ordered slices. Slice 1 locks a separate
 Provider Desktop capability/profile/runtime shape and complete session
 open/read/handoff/close/expiry/revocation, usage, admission, security, and
 cleanup semantics. Exact authority is Contract revision
@@ -92,16 +92,20 @@ work, and real-database concurrency/restart evidence at implementation
 `d2e7943f704e2eed6ea7b61a44ed2b6fa5510e00`. Slice 3 implementation
 `f96c06c3a50ade031e8ffbb4d8ea15e6ca8be7d5` adds Provider-local Desktop
 domain/application policy, memory and atomic-file persistence, restart-safe
-reconciliation, operation aggregation, and optional protected handlers. It
-does not add a runtime adapter, private resolver, production startup
-composition, outbox consumer, public data plane, Web experience, or capability
-advertisement. Slice 4 candidate implementation
+reconciliation, operation aggregation, and optional protected handlers. Slice
+4 candidate implementation
 `163dd8a258a24cf4727169b1cbd8ed7c0fe29292` adds locked dual-architecture
 image inputs, a bounded Unix-only display/session broker, reproducible local
 outputs, a passing native arm64 smoke, and a manual native publication/
-attestation workflow. That workflow has not run, so no published immutable
-index or independently verified provenance is claimed and Phase 5 remains
-3/15 complete.
+attestation workflow. Publication run `35447651328` passes native amd64 and
+arm64/v8 and selects signed index
+`sha256:638e97c694ad4c9b9d750ae30dc6088ff5011af570ba1b12fdf3f0e35ffa0300`.
+Slice 5 implementation `0c30d6f5e6e0c6227069b8689668a1a0dcfb940b`
+adds the fail-closed Docker adapter, durable opaque private resolver, fresh
+attach/reconnect checks, lifecycle readiness, revoke-before-cleanup/absence
+composition, and exact Desktop duration evidence. Production startup, Product
+dispatch, public data planes, Web experience, and capability advertisement
+remain later gates.
 
 ## What the project provides
 
@@ -120,9 +124,9 @@ index or independently verified provenance is claimed and Phase 5 remains
   PostgreSQL persistence, quotas, audit, and isolated pending outbox work.
 - Provider-local Desktop operation authority with durable replay/fencing,
   exact-owned close/expiry cleanup policy, and unadvertised protected handlers.
-- A local Desktop image/broker candidate with locked inputs, non-root runtime
-  policy, native arm64 smoke, and a still-open hosted publication/provenance
-  gate; it is not selected by an adapter or advertised.
+- An exact signed Desktop image plus Provider-local Docker adapter, private
+  reference resolver, lifecycle readiness, revocation/cleanup, and duration
+  usage components; they are not composed into production startup or advertised.
 - Deterministic qualification tooling for an independently implemented caller.
 - Optional Browser reference components and evidence tracks, kept separate from
   the qualified coding/shell profile.
