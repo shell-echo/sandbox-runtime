@@ -639,6 +639,32 @@ restart recovery, owner/tenant isolation, idempotency conflict, capability and
 generation drift, revision persistence, and exact cleanup. This is component
 evidence until the later independent-process release gate passes.
 
+Slice 13 unified-Web changes must remain capability-derived and use only the
+public Product API plus the public Desktop signaling route. Keep generated
+client drift, exact Origin/CSRF/CSP, storage exclusion, accessible keyboard and
+status behavior, bounded reconnect, recording consent, and private-coordinate
+nondisclosure in the real-browser gate. Web navigation does not advertise or
+prove a Provider media bridge.
+
+Slice 14 private Desktop bridge changes must preserve the neutral closed wire
+protocol under `internal/desktopmedia`. Product adapters must not import
+Provider authority and Provider adapters must not import Product authority.
+The Product side may carry only an already-consumed exact binding. The
+Provider side must require an explicit trusted-peer authorizer, freshly
+resolve and attach the handoff, compare the sandbox/session/profile/generation/
+expiry tuple, continuously re-resolve authority, and close on any drift,
+dependency loss, malformed input, timeout, overflow, or slow consumption.
+
+Run focused private-bridge race tests and the complete tagged Product
+PostgreSQL race/shuffle package. The composed real-store gate must cover public
+WebRTC through the private bridge, ordered fenced input, required recording,
+policy replacement, Origin/ticket/owner attacks, object deletion, and exact
+tenant-row cleanup. Also run full race/shuffle, vet, both Contract verifiers,
+and retained Phase 3/4 evidence verifiers. This is same-repository
+same-process composition evidence; independent Desktop/Guest roles, real
+display/control, startup advertisement, and the strict evidence bundle remain
+the Slice 15 gate.
+
 ## Go and API rules
 
 - accept `context.Context` on blocking or external operations and preserve

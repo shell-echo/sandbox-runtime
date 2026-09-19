@@ -1,6 +1,6 @@
 # Product v1 Phase 5: Desktop Development and Unified Product
 
-Status: 13/15 complete
+Status: 14/15 complete
 
 Started: 2026-09-19
 
@@ -38,7 +38,7 @@ relabeled as Desktop evidence.
 | 11 | Desktop recording/replay/catalog/retention/quota/integrity composition | Visible consent/mode; required-recorder fail closed; encrypted integrity-linked media/control segments; authorized replay; retention/deletion and quota races; content excluded from logs | **Complete: Product recording/Gateway/PostgreSQL component evidence only; no real Provider media bridge or production composition** |
 | 12 | Development-environment templates, startup, toolchains, workspace materialization, and Guest health | Immutable template selection; bounded startup; exact workspace mounts; health/liveness/readiness; failure rollback; restart persistence; no host-path or credential disclosure | **Complete: Product/Guest protocol, local content-store, and real-PostgreSQL component evidence only; no unified Web or production composition** |
 | 13 | Unified Product Web shell integrating Workspace, Terminal, Files, Browser, Desktop, and recordings | Generated checked client; authenticated end-to-end flows; capability-derived navigation; origin/request-forgery/content policy; accessibility; recovery/error UX; no private coordinates | **Complete: authenticated Web/BFF and real-headless-browser component evidence only; production Desktop advertisement remains off** |
-| 14 | Exact cleanup, quota, fault, security, and regression gates for the composed Desktop product | Cross-layer fault matrix; restart and dependency loss; stale/replay/tenant attacks; capacity recovery; row/object/process/runtime cleanup; retained Phase 3/4 regressions | Planned |
+| 14 | Exact cleanup, quota, fault, security, and regression gates for the composed Desktop product | Cross-layer fault matrix; restart and dependency loss; stale/replay/tenant attacks; capacity recovery; row/object/process/runtime cleanup; retained Phase 3/4 regressions | **Complete: private Provider/Gateway bridge and same-process real-store composition evidence; independent-process release gate remains** |
 | 15 | Product Phase 5 independent-process release gate and reproducible evidence bundle | Fresh stores; separate Product/Gateway/Provider/Desktop/Guest roles as required; exact locked identities; real display/control and development scenarios; restart/fault/security/recording/cleanup matrix; strict independent validation | Planned |
 
 Slices are dependency ordered. A visual demo, runtime image, or public route
@@ -562,6 +562,49 @@ production startup graph are composed and pass the later gates. No Slice 14
 composed fault/security result, independent-process release evidence,
 deployment, HA, hostile-multitenant qualification, or production-readiness
 claim follows.
+
+## Slice 14 composed fault/security boundary
+
+Implementation revision `13385f6fdba2f78ff3bd7a7b9d1d2a2ea670271d`
+adds a separate private Provider-to-Product-Gateway Desktop bridge without
+moving Product authority into Provider packages or importing Provider
+authority into Product packages:
+
+- the closed repository-private protocol binds every connection to the exact
+  opaque handoff, sandbox, Desktop session, capability profile, connection
+  generation, handoff expiry, and negotiated VP8/optional-Opus bounds;
+- the Provider handler requires an explicit trusted-peer authorizer outside
+  tests, freshly resolves and attaches the durable handoff before opening
+  media, continuously re-resolves it, bounds sessions and RTP/control traffic,
+  and closes on revocation, dependency failure, malformed input, timeout, or
+  backpressure;
+- the Product network source carries the already-consumed binding only over
+  the private WebSocket and maps the closed keyboard/pointer/touch/clipboard/
+  Product-transfer protocol without projecting the handoff publicly; and
+- the real-PostgreSQL composition gate joins grants, policy, public WebRTC,
+  the private bridge, ordered fenced input, required encrypted recording,
+  continuous policy revocation, ticket replay denial, cross-origin and
+  cross-owner denial, retention object deletion, and exact tenant-row cleanup.
+
+Focused bridge races also prove sandbox/generation substitution denial,
+continuous Provider handoff revocation, private-session capacity exhaustion
+and recovery, typed-nil/dependency fail-closed construction, and closed input
+shapes. The complete tagged Product PostgreSQL package retains quota,
+reconciliation/restart, replacement, recording, and development cleanup
+coverage; full race/shuffle, vet, both Contract verifiers, and retained Phase
+3/4 evidence verifiers pass. Exact commands and non-claims are recorded in
+[`../audits/product-phase-5-desktop-slice-14.md`](../audits/product-phase-5-desktop-slice-14.md).
+
+### Slice 14 evidence boundary
+
+This is same-repository bridge, same-process Product/Gateway/Provider
+composition, and real-store evidence. The Provider media executor used by the
+composition gate is a bounded reference implementation; the independent
+Desktop and Guest roles, real display/control development scenario, complete
+restart/fault matrix, strict evidence bundle, exact release-topology
+advertisement, deployment, HA, hostile-multitenant qualification, and
+production-readiness claims remain Slice 15 or later. Desktop advertisement
+therefore remains off.
 
 ## Deferred beyond Phase 5
 

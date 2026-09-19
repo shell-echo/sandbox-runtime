@@ -1,6 +1,6 @@
 # ADR 0050: Product Desktop Phase 5 Boundary
 
-- Status: Accepted for Product Phase 5 scope; Slices 1-11 are complete
+- Status: Accepted for Product Phase 5 scope; Slices 1-14 are complete
 - Date: 2026-09-19
 
 ## Context
@@ -39,6 +39,10 @@ Slice 12 adds immutable coding-shell development templates, validated revision
 manifests, exact Guest health/authority, bounded digest-checked workspace
 materialization, and two-phase rollback/restart recovery while leaving unified
 Web, production composition, and advertisement disabled.
+Slice 13 adds the capability-derived authenticated unified Product Web/BFF.
+Slice 14 adds the private Provider/Gateway Desktop transport and the composed
+real-store fault/security/cleanup gate while leaving independent-process
+release evidence and advertisement disabled.
 
 Starting with Product persistence would require Product code to invent a
 Provider wire shape. Starting with a runtime image or driver would create an
@@ -357,6 +361,45 @@ credentials, Guest identity, and runtime coordinates remain private.
 This is Product/Guest protocol, local content-store, and PostgreSQL component
 evidence. It is not a real Provider media bridge, unified Web, production
 startup composition, advertisement, or release evidence.
+
+## Slice 13 unified Product Web
+
+The generated checked client enables Workspace, Terminal, Files, Browser,
+Desktop, and recording navigation only from exact ready capabilities. The
+Desktop experience uses public Product slot/session/grant DTOs and the public
+same-origin WebRTC route, with ordered fenced control, bounded reconnect and
+stream reconfiguration, explicit clipboard/recording consent, Product-bound
+transfers, strict browser security, and accessible recovery state. Provider
+handoffs and private coordinates remain outside the browser.
+
+This is authenticated Web/BFF and real-headless-browser component evidence.
+It is not a Provider media bridge, composed fault/security result,
+independent-process release gate, or advertisement authority.
+
+## Slice 14 private bridge and composed gates
+
+The private Desktop transport is a closed repository-owned protocol shared as
+neutral wire shapes, not Product or Provider business authority. The Product
+Gateway opens it only from an already-consumed exact Desktop binding. The
+Provider handler requires a trusted peer, freshly resolves and attaches the
+opaque durable handoff, compares the complete private tuple, and continuously
+re-resolves authority. RTP, control messages, sessions, deadlines, and queues
+are bounded; revocation, dependency loss, stale tuple substitution, malformed
+input, timeout, and backpressure close the connection.
+
+The same-process composed gate joins real PostgreSQL grants/policy, public
+WebRTC, the private bridge, ordered fenced input, required encrypted recording,
+continuous policy revocation, Origin/ticket/owner attack denial, retention
+object deletion, and exact tenant-row cleanup. Focused tests add private
+capacity recovery and handoff/generation substitution coverage, while the
+complete tagged store and retained Phase 3/4 gates preserve quota, restart,
+replacement, runtime cleanup, and regression evidence.
+
+This remains same-repository composition evidence with a bounded reference
+media executor. Independent Product/Gateway/Provider/Desktop/Guest processes,
+real display/control and development scenarios, the strict release evidence
+bundle, and topology-specific advertisement remain Slice 15. No deployment,
+HA, hostile-multitenant, or production-readiness conclusion follows.
 
 ## Consequences
 
