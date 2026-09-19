@@ -1,6 +1,6 @@
 # Product v1 Phase 5: Desktop Development and Unified Product
 
-Status: 6/15 complete
+Status: 7/15 complete
 
 Started: 2026-09-19
 
@@ -31,7 +31,7 @@ relabeled as Desktop evidence.
 | 4 | Reproducible immutable Desktop runtime image plus display/session broker protocol and provenance | Locked inputs and outputs; architecture matrix; unprivileged process/device policy; broker protocol bounds; native smoke; independent provenance verification; no mutable tag selection | **Complete:** native amd64/arm64/v8 run `35447651328` published signed index `sha256:638e97c694ad4c9b9d750ae30dc6088ff5011af570ba1b12fdf3f0e35ffa0300`; independent verification passed |
 | 5 | Provider Desktop runtime adapter, private resolver, lifecycle, usage, revocation, and cleanup composition | Real runtime open/attach/reconnect/close/expiry; generation fencing; no private-coordinate projection; revoke-before-cleanup; absence confirmation; duration evidence; fault injection | **Complete: Provider-local runtime/component authority only; production composition and advertisement remain off** |
 | 6 | Product network-only Provider adapter with exact readiness, Desktop dispatch/observation, close, and cleanup | Locked discovery/profile selection; protected requests; timeout/cancellation/replay/drift; retained operation recovery; Product/Provider generation separation; real store integration | **Complete: Product network adapter and real-store component authority only; production composition and advertisement remain off** |
-| 7 | Product view/control grants, one-controller fencing, quotas, revocation, and metadata audit | Viewer mutation denial; one live controller; database-time expiry; one-use grants; stale-fence and quota races; continuous authority checks; nondisclosing failures | Planned |
+| 7 | Product view/control grants, one-controller fencing, quotas, revocation, and metadata audit | Viewer mutation denial; one live controller; database-time expiry; one-use grants; stale-fence and quota races; continuous authority checks; nondisclosing failures | **Complete: Product connection authority and real-store component evidence only; no public data plane** |
 | 8 | Public Desktop display/audio/signaling/input plane with bounded negotiation and backpressure | Authenticated encrypted signaling; exact origin; supported codec/resolution/bitrate matrix; viewer/control separation; ordered input; slow-consumer closure; no private handoff disclosure | Planned |
 | 9 | Keyboard, pointer, touch, clipboard, and Product-bound transfer policy | Deny-by-default matrix; activation/consent; size/type/count/digest/path bounds; exact transfer identity; policy-revision revocation; microphone/camera/device denial | Planned |
 | 10 | Recovery, reconnect, resynchronization, resolution/audio-device changes, and session/slot replacement | Fresh-grant reconnect; authority and generation recheck; visual/audio resync bounds; no stale input; restart recovery; deterministic replacement and exact cleanup | Planned |
@@ -293,6 +293,46 @@ end-user grants, public signaling/media/input, policy, recording, development
 templates, unified Web, capability advertisement, independent-process release
 evidence, deployment, HA, hostile-multitenant, and production readiness remain
 open.
+
+## Slice 7 Product connection-authority boundary
+
+Implementation revision `0649d62911abb89229de40136347286736152ec6`
+extends the existing Product grant and control-lease authority only for an
+exact ready `desktop` / `product-desktop.v1` session. A viewer grant carries no
+control lease or fence. A controller grant requires the current actor-bound,
+session-scoped lease and monotonic fence, and at most one live controller grant
+may exist for a session.
+
+Tickets remain public Product tickets: random, at most 60 seconds, encrypted
+at rest for exact idempotent replay, and one-use on consume. The internal
+Gateway binding includes the opaque Provider handoff only after consumption;
+the public grant response and metadata audit do not. Database time bounds the
+grant by session, handoff, and control-lease expiry. Continuous checks match
+the complete actor, Workspace, slot generation, session, profile, Provider
+binding, handoff generation, access mode, lease, fence, and recording-policy
+tuple.
+
+PostgreSQL migration 10 adds independent Desktop viewer and controller tenant
+quotas and the live-grant admission index. A tenant advisory lock closes quota
+races. The existing partial unique controller index is renamed to its actual
+session-wide scope and continues to protect Terminal and Browser behavior
+without changing their grant semantics.
+
+### Slice 7 evidence boundary
+
+Focused API tests prove viewer control denial. The real PostgreSQL gate proves
+encrypted retained replay, one-use consumption, cross-owner nondisclosure,
+one-controller fencing, release and database-time expiry revocation, complete
+binding tamper rejection, concurrent viewer/controller quota admission, safe
+metadata audit, and migration replay while retaining Terminal and Browser
+regressions. Full race/shuffle, vet, Contract verifiers, and retained Phase 3/4
+evidence verification pass. Exact evidence and non-claims are in
+[`../audits/product-phase-5-desktop-slice-7.md`](../audits/product-phase-5-desktop-slice-7.md).
+
+There is still no public Desktop signaling, media, audio, or input plane.
+Production startup composition, policy, recovery, recording, development
+templates, unified Web, advertisement, deployment, and production readiness
+remain later gates.
 
 ## Deferred beyond Phase 5
 

@@ -19,7 +19,7 @@ general production readiness.
 | Independent external caller | **13/13 complete** |
 | Product v1 Phase 3 | **13/13 complete** for the bounded standalone topology |
 | Product v1 Phase 4 Browser | **13/13 complete** for the bounded same-repository separate-process topology |
-| Product v1 Phase 5 Desktop | **6/15 complete**; the exact Product network adapter, isolated Desktop workers, retained recovery, and real-store gate pass; grants are next, advertisement disabled |
+| Product v1 Phase 5 Desktop | **7/15 complete**; Product-owned Desktop view/control grants, one-controller fencing, independent quotas, revocation, and real-store authority checks pass; the public data plane is next, advertisement disabled |
 | Coding/shell qualification | **Qualified** for the exact caller, Provider revisions, topology, profile, and scenarios recorded below |
 | Latest core CI | [Passed](https://github.com/shell-echo/sandbox-runtime/actions/runs/35204434771) |
 
@@ -79,7 +79,7 @@ independently implemented caller, HA, hostile-multitenant, or production
 evidence.
 
 [Product v1 Phase 5 Desktop](docs/plan/product-v1-phase-5-desktop-development-unified-product.md)
-has completed **6/15** dependency-ordered slices. Slice 1 locks a separate
+has completed **7/15** dependency-ordered slices. Slice 1 locks a separate
 Provider Desktop capability/profile/runtime shape and complete session
 open/read/handoff/close/expiry/revocation, usage, admission, security, and
 cleanup semantics. Exact authority is Contract revision
@@ -110,8 +110,13 @@ were still later gates at that boundary. Slice 6 implementation
 network-only Product adapter, isolated Desktop dispatch and observation,
 retained operation recovery, independent Product/Provider generations, and
 Desktop-specific close cleanup. Its real PostgreSQL plus HTTP Provider-fixture
-gate passes; production composition, end-user grants, public data planes, Web
-experience, and capability advertisement remain later gates.
+gate passes. Slice 7 implementation
+`0649d62911abb89229de40136347286736152ec6` adds Product-owned Desktop
+viewer/controller grants, encrypted one-use tickets, session-scoped controller
+fencing, independent viewer/controller quotas, revocation, continuous authority
+checks, and metadata-only audit. Public signaling/media/input, policy, Web
+experience, production composition, and capability advertisement remain later
+gates.
 
 ## What the project provides
 
@@ -131,6 +136,9 @@ experience, and capability advertisement remain later gates.
 - A locked network-only Product Desktop Provider adapter with separate
   generation authorities, durable dispatch/observation recovery, and
   Desktop-specific session cleanup; it is not production-composed.
+- Product-owned Desktop viewer/controller connection authority with encrypted
+  one-use tickets, session-scoped controller fencing, independent quotas,
+  revocation, and metadata-only audit; no public Desktop data plane is exposed.
 - Provider-local Desktop operation authority with durable replay/fencing,
   exact-owned close/expiry cleanup policy, and unadvertised protected handlers.
 - An exact signed Desktop image plus Provider-local Docker adapter, private
