@@ -20,6 +20,8 @@ const (
 	MaxRuntimeSessionOpenRequestBytes  int64 = 64 << 10
 	MaxRuntimeSessionCloseRequestBytes int64 = 64 << 10
 	MaxBrowserSessionOpenRequestBytes  int64 = 64 << 10
+	MaxDesktopSessionOpenRequestBytes  int64 = 64 << 10
+	MaxDesktopSessionCloseRequestBytes int64 = 64 << 10
 	MaxArtifactStagingRequestBytes     int64 = 64 << 10
 	MaxSnapshotRequestBytes            int64 = 256 << 10
 	MaxTerminateRequestBytes           int64 = 64 << 10

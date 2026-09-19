@@ -79,9 +79,13 @@ correctly fails.
 
 The qualification-profile verifier separately checks the P2.7a coding/shell
 definition's repository trust anchors, closed schema, semantic invariants, and
-exact Provider Contract projection. Its success proves only that the profile
-definition is locked; it does not validate a qualification report or claim that
-an external caller executed or passed the profile. P2.7b separately locks the
+exact historical Provider Contract projection selected by
+`qualification/external-caller-coding-shell-v1/contract.lock.json`. That
+retained lock is verified from its immutable Git revision and must not be
+replaced by the current Provider lock or used for a new compatibility claim.
+Its success proves only that the historical profile definition is locked; it
+does not validate a qualification report or claim that an external caller
+executed or passed the profile. P2.7b separately locks the
 closed report schema at
 `sha256:9e9d75c021534d1b0ad49ad230031bad8cc578c163ac7f5626471899b0991c7c`
 and the validator semantics at
@@ -265,7 +269,7 @@ Pass those inputs with `-target`, `-ca`, `-client-ca`, `-client-cert`,
 `-provider-revision`, respectively. See
 [`compatibility/sandbox-runtime/README.md`](../compatibility/sandbox-runtime/README.md)
 for the complete command and exact local/remote Suite identities. The remote
-profile covers only six read-only discovery cases; it is not the local 60-case
+profile covers only six read-only discovery cases; it is not the local 71-case
 Suite, protected or mutating remote conformance, independent-caller
 interoperability, aggregate conformance, or production-readiness evidence. The
 report sets `unsafe_method_probes_sent=true` only after a POST, PUT, PATCH, or
@@ -276,12 +280,14 @@ The historical P2.6 release gate passed locally at implementation `3fe314a` and
 E2E lock refresh `ae476fe`, including both clean VCS-built Runners, the root and
 E2E race/shuffle and vet gates, Contract verification, parent-lock verification,
 and all eight E2E `-check` commands. The later 53-case local authority passed as
-a clean VCS-built Runner in core CI `35204434771`. The current 60-case authority
+a clean VCS-built Runner in core CI `35204434771`. The Phase 2 60-case authority
 passes from a clean VCS-built, race-enabled, shuffled Runner at lock-selection
-revision `3caf38c6bc0b62d2eeb2c1e1c4ed473fae5baab1`; no fresh current remote
-Runner or relabeled historical hosted result follows from that local release
-gate. Keep those checks separate from external caller, deployment, and
-production qualification.
+revision `3caf38c6bc0b62d2eeb2c1e1c4ed473fae5baab1`. Product Phase 5 Slice 1
+selects the current 71-case Desktop-extended authority and requires the same
+clean VCS-built, race-enabled, shuffled local Runner. No fresh remote Runner or
+relabeled historical hosted result follows from either local release gate.
+Keep those checks separate from external caller, deployment, and production
+qualification.
 
 ## Package boundaries
 
@@ -383,6 +389,74 @@ uses fresh encrypted local recording storage. The checked-in evidence manifest
 is historical evidence for its recorded source baseline; validate it with the
 separate verifier before selecting it. Passing this gate is not deployment,
 independent-caller, HA, hostile-multitenant, or production evidence.
+
+## Product Phase 5 Desktop discipline
+
+Follow the fixed order in
+[`plan/product-v1-phase-5-desktop-development-unified-product.md`](plan/product-v1-phase-5-desktop-development-unified-product.md)
+and ADR 0050. Desktop must not reuse Terminal or Browser slot profiles,
+session profiles, outbox families, Provider routes, handoffs, runtime
+repositories, or release evidence.
+
+The Product Desktop slot shape is exactly `desktop` /
+`sandbox-runtime-desktop-v1` / `sandbox.desktop@1.0.0` / `desktop-v1`. The
+Product session shape is exactly `desktop` / `product-desktop.v1`. Keep both
+application validation and PostgreSQL constraints aligned. A Product command
+must commit state, operation, contiguous event, security audit, idempotency
+result, and outbox intent atomically before external work.
+
+Run the ordinary tagged Product PostgreSQL gate for every Desktop persistence
+change. Preserve concurrent same-key idempotency, expected-version, Desktop
+slot quota, and Desktop session quota cases; migration replay; terminal-state
+absorption; cross-tenant nondisclosure; and fresh-Store reads. Desktop session
+outbox types are `desktop_session.open` and `desktop_session.close`. Until the
+later adapter slice provides a dedicated consumer, no existing worker may
+lease them and capability advertisement remains empty.
+
+Provider Desktop Slice 3 changes must preserve the separate `provider/desktop`
+domain and coordination authority. Commit open intent before allocating;
+persist the immutable allocation receipt before publishing an opaque handoff.
+After a restart, an already-running or outcome-unknown open is observation
+only: never blindly allocate again. Close and expiry durably revoke the source
+handoff before external effects, then revoke, clean only the exact retained
+allocation receipt, and observe absence. An outcome-unknown close may only
+observe revocation and allocation state; it must not repeat cleanup. Keep
+memory and atomic-file adapters behaviorally equivalent, retain operation
+records after handoff expiry, reject stale fencing/generation/revision, and
+map internal failures to safe transport errors.
+
+The Slice 3 protected handlers are optional application injection only. Do not
+compose them into production startup or advertise Desktop until the later
+runtime, adapter, resolver, readiness, and release slices pass. Run focused
+Desktop domain/application/repository/transport race-shuffle tests in addition
+to the full repository race/shuffle and vet gates. Provider API or compatibility
+changes also require the Provider Contract verifier.
+
+The Slice 4 image/broker implementation is a candidate until the manual
+`Desktop Image Publication` workflow passes on native amd64 and arm64/v8
+GitHub-hosted runners and its immutable index, platform manifests, attestation,
+source revision, and independent-verification result are recorded. A local
+cross-build is not a native architecture smoke, and a checked-in workflow is
+not provenance evidence. Do not select the image in a runtime adapter or
+advance the phase count while that gate is open.
+
+For image/broker changes, keep `profiles/desktop/image/manifest.json`, its Go
+validator, the Dockerfile, build script, broker constants, integration policy,
+and publication matrix aligned. Run the focused race/shuffle tests plus the
+full repository gates. On each native architecture, run:
+
+```bash
+SANDBOX_RUNTIME_DESKTOP_IMAGE_INTEGRATION=1 \
+SANDBOX_RUNTIME_DESKTOP_PLATFORM=linux/arm64/v8 \
+go test -v -tags=integration -count=1 \
+  -run '^TestDesktopImageNativeIntegration$' ./profiles/desktop/image
+```
+
+Use `linux/amd64` on a native amd64 runner. Never substitute emulation, a
+mutable tag, or an image config ID for the required native runtime and
+published OCI manifest/index identities. The broker is private Unix-only
+observation at this slice: adding input execution, media, public signaling,
+authorization, or arbitrary process control requires its later owning slice.
 
 ## Go and API rules
 

@@ -30,7 +30,7 @@ The Contract resources are cumulative constraints with distinct roles:
 | [`schemas/`](../schemas/) | Defines the closed request, response, operation, handoff, capability, error, and evidence document shapes. |
 | [`provider-v1.json`](../semantic-rules/provider-v1.json) | Defines cross-field, admission, ownership, lifecycle, profile, and evidence semantics that are not fully expressible in OpenAPI or JSON Schema. |
 | [`fixtures/`](../fixtures/) | Supplies canonical accepted documents and rejection matrices for the named schemas and semantic rules. |
-| [`provider-v1/suite.json`](../conformance/provider-v1/suite.json) | Names the repository-executed Provider conformance cases for the required local profile, including optional terminal-connect, lifecycle-control, and terminal-control definition cases. Passing cases cannot authorize behavior absent from the other Contract resources or prove that the production route is composed or exercised. |
+| [`provider-v1/suite.json`](../conformance/provider-v1/suite.json) | Names the repository-executed Provider conformance cases for the required local profile, including terminal-connect, lifecycle-control, terminal-control, Browser, and Desktop definition cases. Passing cases cannot authorize behavior absent from the other Contract resources or prove that a production route is composed or exercised. |
 | [`provider-remote-v1/suite.json`](../conformance/provider-remote-v1/suite.json) | Names the portable, read-only remote discovery cases. It does not replace or execute the repository profile. |
 | This specification | Orders the existing resources into caller workflows and responsibility boundaries. |
 
@@ -67,15 +67,10 @@ new revision deliberately. A breaking wire or semantic change requires a new
 protocol version and namespace revision, as recorded by the architecture's
 Contract versioning rules.
 
-At the time the lifecycle-control candidate was authored, the published lock
-still named revision `22ba6987ea5fbc37d53942720133c0acad199edd` and Contract
-tree `c9a7054d7c8e7f4b6e32f38175ceedddc48c2d38`. That tree contains the
-earlier 53-case surface and predates the lifecycle and terminal-control
-extension in this source candidate. Consequently, the extension is not part
-of an effective locked Contract until a later reviewed lock refresh names the
-immutable commit and tree that contain it. No compatibility or conformance
-result for the earlier tree may be relabeled as evidence for the later exact
-Contract identity.
+An extension is not effective compatibility authority until a reviewed lock
+names the immutable commit and Contract tree that contain it. A candidate tree
+may be validated before that lock refresh, but results for an earlier tree may
+not be relabeled as evidence for the later exact Contract identity.
 
 ## Roles and responsibility boundaries
 
@@ -86,7 +81,7 @@ The Provider owns provider-local execution and evidence:
 - the immutable capability snapshot it returns;
 - provider-local sandbox state, runtime resources, leases, operations,
   reconciliation, retained results, and bounded evidence;
-- internal terminal and Browser endpoint resolution; and
+- internal terminal, Browser, and Desktop endpoint resolution; and
 - backend provisioning, observation, execution, and cleanup.
 
 The Provider performs the protected admission checks bound by
@@ -115,7 +110,8 @@ URL from a Provider projection.
 
 ### Runtime Gateway
 
-Terminal and Browser data planes are caller-owned Gateway responsibilities.
+Terminal, Browser, and Desktop data planes are caller-owned Gateway
+responsibilities.
 The Provider returns only an opaque, expiring handoff reference. The Gateway
 performs its own user and tenant authorization, exact grant and session binding,
 revocation, connection admission, reconnect policy, and metadata-only audit,
@@ -130,10 +126,13 @@ grant, or revocation authority into the Provider. A Provider that advertises
 only `sandbox.terminal@1.0.0` does not claim this network resolver.
 
 The Gateway does not expose or persist a Provider backend ID, host path,
-container or Pod name, raw terminal endpoint, Chromium debugging endpoint,
-backend token, or Provider credential. The Browser-specific boundary is further
-defined by semantic rules `browser-session-gateway-handoff` and
-`browser-session-security-boundary` and their named fixtures.
+container or Pod name, raw terminal endpoint, Browser debugging endpoint,
+Desktop signaling material, backend token, or Provider credential. The
+Browser-specific boundary is further defined by semantic rules
+`browser-session-gateway-handoff` and `browser-session-security-boundary`.
+The Desktop boundary is defined by `desktop-session-gateway-handoff`,
+`desktop-session-authority-state-machine`, and
+`desktop-session-security-boundary` and their named fixtures.
 
 The Caller and Gateway may be implemented by the same product, but their
 authority remains outside the Provider.
@@ -246,10 +245,10 @@ outcome instead of assuming failure or issuing an unbounded duplicate mutation.
 ### 6. Consume only the selected projection
 
 The Caller consumes only fields authorized by the relevant response schema. A
-successful runtime-session or Browser-session operation yields an opaque
-handoff for the caller-owned Gateway. Artifact and usage routes yield bounded
-Provider evidence, not public artifacts, prices, invoices, or final product
-state.
+successful runtime-session, Browser-session, or Desktop-session operation
+yields an opaque handoff for the caller-owned Gateway. Artifact and usage
+routes yield bounded Provider evidence, not public artifacts, prices, invoices,
+or final product state.
 
 ### Lifecycle-control workflow
 
@@ -300,6 +299,58 @@ same logical close operation. A close attempt with an uncertain outcome
 remains immutable evidence and recovery observes it without blind cleanup
 redispatch. Terminal resize and Browser-session close are not part of this
 capability.
+
+### Desktop-session workflow
+
+A Caller uses Desktop sessions only when the selected immutable snapshot
+advertises the atomic `sandbox.desktop@1.0.0`/`desktop-v1` capability on
+`sandbox-runtime-desktop-v1`. Route presence, a schema enum, or a compiled DTO
+does not advertise Desktop. The capability may be advertised only when open,
+close, operation read, opaque handoff resolution, expiry/revocation cleanup,
+and usage evidence are composed together.
+
+The Caller creates an exact Desktop sandbox using the fixed runtime and
+capability profile, then sends
+`POST /v1/sandboxes/{sandbox_id}/desktop-sessions`. The open request carries
+only Provider execution identity, generation, fencing, idempotency, deadline,
+session identity, profile, and expiry. End-user grants, display preferences,
+input events, clipboard content, file content, device grants, network policy,
+and secrets are not control-plane request fields.
+
+After successful open reconciliation, the Caller reads
+`GET /v1/operations/{operation_id}/desktop-session`. The closed handoff fixes
+`webrtc`, `desktop-media-v1`, and `desktop-control-v1`, but contains only an
+opaque `ref:desktop-session:*` resolver reference, connection generation, and
+expiry. It never contains SDP, ICE candidates, relay credentials, addresses,
+ports, backend identities, or credentials. The caller-owned Gateway performs
+fresh end-user and tenant authorization plus reference resolution for each
+connect or reconnect. Provider admission remains controller-to-Provider
+authorization and does not become end-user authorization.
+
+The media profile is video output with optional audio output. The control
+profile is the private carrier for caller-policy-authorized keyboard, pointer,
+touch, and clipboard operations. The control-plane Contract does not transport
+their content. Microphone input, camera input, and host-device pass-through are
+denied by this profile. Product-level control leases, consent, clipboard and
+transfer policy, quotas, recording, and audit remain Caller responsibilities.
+
+The Caller closes through
+`POST /v1/sandboxes/{sandbox_id}/desktop-sessions/{desktop_session_id}:close`
+with the exact sandbox, session, connection generation, and mutation binding.
+Expiry invokes the same durable revocation and cleanup path. The Provider
+revokes future resolution before terminating active media/control authority,
+cleans the exact retained allocation, and confirms absence before reporting
+success. Close and expiry may remain `outcome_unknown` while recovery observes;
+they are never blindly redispatched. Closed, expired, and failed session states
+are absorbing, and a stale connection generation returns `409` while an
+expired or revoked handoff returns `410` without disclosing which internal
+comparison failed.
+
+`sandbox.desktop_session_milliseconds` is Provider-local evidence correlated
+to the successful open operation. Measurement starts only after the successful
+handoff commit and stops at the earliest revocation, endpoint termination,
+sandbox termination, or handoff expiry. The close operation does not create a
+second duration. This evidence is neither price nor billing authority.
 
 ## Authentication and admission
 
@@ -383,7 +434,7 @@ projections to reconcile the final outcome.
 ## Profiles and route families
 
 The capability snapshot may be empty or may advertise only a Contract-valid
-terminal, atomic coding/shell, or Browser profile shape. The exact shapes are
+terminal, atomic coding/shell, Browser, or Desktop profile shape. The exact shapes are
 defined by the capability schemas, fixtures, and these semantic rules:
 
 - `capabilities-terminal-profile-advertisement` binds
@@ -409,10 +460,14 @@ defined by the capability schemas, fixtures, and these semantic rules:
 - `capabilities-browser-profile-advertisement` binds
   `sandbox.browser@1.0.0`, `browser-v1`, and
   `sandbox-runtime-browser-v1` and forbids combining that profile with the
-  coding/shell profile.
+  coding/shell profile; and
+- `capabilities-desktop-profile-advertisement` atomically binds
+  `sandbox.desktop@1.0.0`, `desktop-v1`, and
+  `sandbox-runtime-desktop-v1`, including the complete open, close, handoff,
+  revocation/expiry, operation-read, and usage-evidence route family.
 
-Coding/shell and Browser create requests retain stable guest paths `/inputs`,
-`/workspace`, `/outputs`, and `/tmp` as defined by their semantic rules. A
+Coding/shell, Browser, and Desktop create requests retain stable guest paths
+`/inputs`, `/workspace`, `/outputs`, and `/tmp` as defined by their semantic rules. A
 snapshot/restore profile in capability metadata does not authorize an absent
 snapshot or restore route.
 
@@ -435,6 +490,9 @@ The OpenAPI document currently authorizes these calling families:
 - optional terminal connect: `GET /v1/runtime-sessions:connect`;
 - Browser: `POST /v1/sandboxes/{sandbox_id}/browser-sessions` and
   `GET /v1/operations/{operation_id}/browser-session`;
+- Desktop: `POST /v1/sandboxes/{sandbox_id}/desktop-sessions`,
+  `POST /v1/sandboxes/{sandbox_id}/desktop-sessions/{desktop_session_id}:close`,
+  and `GET /v1/operations/{operation_id}/desktop-session`;
 - operation reconciliation: `GET /v1/operations/{operation_id}`; and
 - evidence: `POST /v1/sandboxes/{sandbox_id}/artifacts:stage`,
   `GET /v1/operations/{operation_id}/artifact-staging-evidence`, and
@@ -515,26 +573,25 @@ multi-tenant isolation, deployment, or production readiness.
 The following are non-normative maturity boundaries, not additions to Provider
 wire behavior:
 
-- the lifecycle/terminal-control source candidate required a later immutable
-  lock refresh and clean-VCS gate before those routes and its 60-case Suite
-  could become selected compatibility authority;
 - snapshot, restore, resize, and Browser-session close remain outside the
-  candidate control families;
-- terminal and Browser handoffs still require a caller-owned public Gateway;
+  authorized control families;
+- terminal, Browser, and Desktop handoffs still require a caller-owned public Gateway;
   the optional terminal-connect route is only the protected Provider
   resolver/data-plane boundary;
 - capability discovery does not carry the full Contract revision/tree, so the
   caller obtains and verifies that identity out of band;
 - the production command does not currently advertise Browser or expose a
   public Browser Gateway;
+- the production command does not advertise Desktop and does not compose the
+  Desktop routes, runtime, resolver, Gateway, image, or Guest Agent;
 - current Browser controlled-restore evidence does not establish independent
   PostgreSQL and Valkey failure or backup domains, HA/failover, production
   operator controls, hostile-tenant isolation, or deployment readiness;
 - file-backed Provider repositories remain single-controller development
   evidence rather than transactional multi-controller storage; and
-- the repository-owned 60-case Suite maps case IDs to this repository's tests;
-  historical results against its 53-case predecessor retain that older exact
-  identity;
+- the repository-owned 71-case Suite maps case IDs to this repository's tests;
+  historical results against earlier Suite digests retain their older exact
+  identities;
   the separate portable remote Suite currently covers discovery only and does
   not prove an external product's protected business workflow, authorization,
   aggregate ledger, Gateway, deployment, or production behavior.
@@ -551,12 +608,11 @@ This specification does not:
   models for a particular calling product;
 - define a multi-issuer listener, issuer selected by bearer input, remote JWKS
   discovery, or a multi-consumer trust namespace;
-- expose a Provider-owned public terminal or Browser Gateway;
+- expose a Provider-owned public terminal, Browser, or Desktop Gateway;
 - standardize backend IDs, daemon APIs, host paths, raw endpoints, credentials,
   or implementation diagnostics;
-- authorize desktop, GPU, port-forward, nested-container, snapshot, restore, or
-  other operation families absent from the locked OpenAPI and advertised
-  profile;
+- authorize GPU, port-forward, nested-container, snapshot, restore, or other
+  operation families absent from the locked OpenAPI and advertised profile;
 - establish a production PKI, storage topology, HA/failover procedure,
   deployment, hostile multi-tenant isolation, or production readiness; or
 - replace the exact OpenAPI, schemas, semantic rules, fixtures, Suite, or lock.

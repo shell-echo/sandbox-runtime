@@ -1,0 +1,37 @@
+{
+  "format_version": 2,
+  "source": {
+    "repository": "https://github.com/shell-echo/sandbox-runtime.git",
+    "revision": "98995384c60a924f25ca58d3b7e561207bfa5be8",
+    "contract_tree": "0a627baed11c8a6ddbe8a24bbc1869e4f85edc16"
+  },
+  "contract": {
+    "root": "contract",
+    "namespace": "urn:shell-echo:sandbox-runtime:provider-v1",
+    "version": "1.0.0",
+    "license": "MIT",
+    "manifest_path": "contract/compatibility/contract-manifest.json",
+    "manifest_digest": "sha256:f1a4e787f5dc5fecc85c6f6ed54385925686dfc1ced749caca5522805320c799",
+    "openapi_path": "contract/openapi/sandbox-runtime-provider-v1.yaml",
+    "openapi_sha256": "sha256:f4301829d52969516d8551e14b7aee064628bec01e1d7d3613be3fa89579efdb",
+    "semantic_rules_path": "contract/semantic-rules/provider-v1.json",
+    "semantic_rules_sha256": "sha256:0bf737c9dc242a0a7e32a1a86261fa1fc96b3124eeb2510738af274de53a2026",
+    "fixtures_root": "contract/fixtures"
+  },
+  "sandbox_suite": {
+    "path": "contract/conformance/provider-v1/suite.json",
+    "suite_id": "sandbox-provider",
+    "suite_version": "1.0.0",
+    "suite_digest": "sha256:7db1d28d35ca193632c395247cc71eeaaff48b027964b9ea9da247eaad5e3991",
+    "suite_digest_profile": "rfc8785-full-document-excluding-suite-digest-v1",
+    "required_profile": "sandbox-runtime-provider-v1"
+  },
+  "provider_remote_suite": {
+    "path": "contract/conformance/provider-remote-v1/suite.json",
+    "suite_id": "sandbox-provider-remote",
+    "suite_version": "1.0.0",
+    "suite_digest": "sha256:167922d972229a97a64bf22bc6a36ee20d4de19a023395d9f004f00c54cc49d0",
+    "suite_digest_profile": "rfc8785-full-document-excluding-suite-digest-v1",
+    "required_profile": "sandbox-runtime-provider-remote-discovery-v1"
+  }
+}

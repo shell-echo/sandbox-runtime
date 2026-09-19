@@ -14,6 +14,7 @@
 | 独立 External Caller | **13/13 已完成** |
 | Product v1 第三阶段 | 在有边界的 standalone 拓扑内 **13/13 已完成** |
 | Product v1 第四阶段 Browser | 在有边界的同仓库独立进程拓扑内 **13/13 已完成** |
+| Product v1 第五阶段 Desktop | **3/15 已完成**；切片 4 本地镜像/broker 候选已通过原生 arm64，托管发布与来源验证待完成，能力广告仍关闭 |
 | 编程/Shell 资格验证 | 对下述精确调用方、Provider 版本、拓扑、Profile 和场景结果为 **Qualified** |
 | 最新核心 CI | [已通过](https://github.com/shell-echo/sandbox-runtime/actions/runs/35204434771) |
 
@@ -52,6 +53,28 @@ Browser OS 进程，配合全新固定摘要 PostgreSQL、Valkey 与加密录制
 真实 WebRTC 查看/控制、录制完整性、背压、生命周期和精确清理。该结论不等同于
 通过部署资格验证、独立实现调用方、HA、恶意多租户隔离或生产就绪。
 
+[Product v1 第五阶段 Desktop](docs/plan/product-v1-phase-5-desktop-development-unified-product.md)
+已完成 **3/15** 个依赖有序切片。切片 1 锁定了独立的 Provider Desktop
+能力/Profile/运行时形状，以及完整的会话打开、读取、交接、关闭、过期、撤销、
+用量、准入、安全和清理语义。精确权威为 Contract 版本
+`720ad15c343e71f36615dc4499edd5e764178bca`、树
+`343ffde0819207cf99c005096c336735dd33a735`，以及摘要为
+`sha256:78e01cc5eb176083896baf8507c551d2ee88e56b93197321702748a88949e89d`
+的 71 项本地 Suite。切片 2 在实现
+`d2e7943f704e2eed6ea7b61a44ed2b6fa5510e00` 中加入严格的
+Product Desktop slot/session 意图、PostgreSQL 迁移 8、原子的
+operation/event/audit/outbox 持久化、独立 Desktop session 工作类型，以及
+真实数据库的并发和重启证据。切片 3 的实现
+`f96c06c3a50ade031e8ffbb4d8ea15e6ca8be7d5` 加入 Provider 本地 Desktop
+领域/应用策略、内存与原子文件持久化、重启安全的协调恢复、operation 聚合和可选
+受保护处理器。切片 4 候选实现
+`163dd8a258a24cf4727169b1cbd8ed7c0fe29292` 加入锁定的双架构镜像输入、仅限
+Unix 的有界 display/session broker、可复现的本地输出、已通过的原生 arm64
+冒烟，以及手动原生发布/证明工作流。该工作流尚未运行，因此目前没有已发布的
+不可变索引或经独立验证的来源证明，Phase 5 仍为 3/15。当前仍没有 Desktop
+runtime adapter、private resolver、生产启动组合、outbox 消费者、公开数据面、
+Web 体验或能力广告。
+
 ## 项目提供什么
 
 - 本地实例管理 API，以及内存 Fake 驱动和 Docker 运行时驱动。
@@ -59,6 +82,10 @@ Browser OS 进程，配合全新固定摘要 PostgreSQL、Valkey 与加密录制
 - 异步生命周期、受限命令执行、保留结果、用量证据、制品暂存、终端会话和受保护终端连接。
 - 不透明且会过期的运行时会话交接信息；后端 ID、主机路径和原始运行时端点不会进入公开 Provider 协议。
 - 仓库自有的 OpenAPI、JSON Schema、语义规则、Fixtures，以及本地和远程 Conformance Suite。
+- 独立建模并锁定的 Provider Desktop Contract 表面；其运行时与能力广告在后续第五阶段切片完成前保持关闭。
+- Product 自有的 Desktop slot/session 意图，包括精确 Profile、事务型 PostgreSQL 持久化、配额、审计和隔离的待处理 outbox 工作。
+- Provider 本地 Desktop operation 权威，包括持久化 replay/fencing、精确所有权的关闭/过期清理策略，以及尚未广告的受保护处理器。
+- 本地 Desktop 镜像/broker 候选，包括锁定输入、非 root 运行策略和原生 arm64 冒烟；托管发布/来源验证门禁仍未关闭，适配器也尚未选择或广告该镜像。
 - 面向独立实现调用方的确定性资格验证工具。
 - 可选的 Browser 参考组件和证据轨道；它们与已通过验证的编程/Shell Profile 分开管理。
 

@@ -59,7 +59,7 @@ func (s *SlotService) Put(ctx context.Context, tenantID string, actor ActorRef, 
 		return Operation{}, false, ErrInvalid
 	}
 	spec := SlotSpec{SlotKey: slotKey, Kind: request.Kind, ProfileID: request.ProfileID, RequiredCapabilities: request.RequiredCapabilities, DesiredState: request.DesiredState}
-	if request.ExpectedWorkspaceVersion < 1 || spec.validateAuxiliaryBrowser() != nil {
+	if request.ExpectedWorkspaceVersion < 1 || spec.validateAuxiliary() != nil {
 		return Operation{}, false, ErrInvalid
 	}
 	if err := s.policy.AuthorizeSlot(ctx, spec); err != nil {
@@ -120,15 +120,24 @@ func validateSlotInput(ctx context.Context, service *SlotService, tenantID strin
 	return ctx.Err()
 }
 
-func (s SlotSpec) validateAuxiliaryBrowser() error {
-	if !auxiliarySlotKeyPattern.MatchString(s.SlotKey) || s.SlotKey == PrimarySlotKey || s.Kind != "browser" ||
-		s.ProfileID != BrowserSlotProfile || (s.DesiredState != "ready" && s.DesiredState != "suspended" && s.DesiredState != "terminated") ||
+func (s SlotSpec) validateAuxiliary() error {
+	if !auxiliarySlotKeyPattern.MatchString(s.SlotKey) || s.SlotKey == PrimarySlotKey ||
+		(s.DesiredState != "ready" && s.DesiredState != "suspended" && s.DesiredState != "terminated") ||
 		len(s.RequiredCapabilities) != 1 {
 		return ErrInvalid
 	}
 	requirement := s.RequiredCapabilities[0]
-	if requirement.CapabilityID != BrowserCapabilityID || requirement.Version != BrowserCapabilityVersion || requirement.ProfileID != BrowserCapabilityProfile {
-		return ErrInvalid
+	switch s.Kind {
+	case BrowserSlotKind:
+		if s.ProfileID == BrowserSlotProfile && requirement.CapabilityID == BrowserCapabilityID &&
+			requirement.Version == BrowserCapabilityVersion && requirement.ProfileID == BrowserCapabilityProfile {
+			return nil
+		}
+	case DesktopSlotKind:
+		if s.ProfileID == DesktopSlotProfile && requirement.CapabilityID == DesktopCapabilityID &&
+			requirement.Version == DesktopCapabilityVersion && requirement.ProfileID == DesktopCapabilityProfile {
+			return nil
+		}
 	}
-	return nil
+	return ErrInvalid
 }

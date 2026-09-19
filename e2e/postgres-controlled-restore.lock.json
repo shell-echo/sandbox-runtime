@@ -2,40 +2,40 @@
   "schema_version": 2,
   "evidence_profile": "browser-postgres-controlled-restore-e2e-v1",
   "sources": {
-    "provider_revision": "98995384c60a924f25ca58d3b7e561207bfa5be8",
-    "harness_baseline": "98995384c60a924f25ca58d3b7e561207bfa5be8",
+    "provider_revision": "6b17d809fbaafccece06ff037416dc5f520b9e72",
+    "harness_baseline": "49ea205c1abf125f7e9b8e6ce002a2af34ff5ebf",
     "gateway_component": {
       "path": "gateway/composition/browser.go",
       "revision": "b4d41c9a32b4ccf39edaba3fb8bf5ad239c1f945"
     },
     "ingress_component": {
       "path": "gateway/cdpfence",
-      "revision": "b4d41c9a32b4ccf39edaba3fb8bf5ad239c1f945"
+      "revision": "602d1dcd73b9eac087ec067795566f551ece1f90"
     },
     "action_history_component": {
       "path": "gateway/capacity/redis",
-      "revision": "98995384c60a924f25ca58d3b7e561207bfa5be8"
+      "revision": "6b17d809fbaafccece06ff037416dc5f520b9e72"
     },
     "caller_substrate": {
       "path": "e2e/internal/caller",
-      "baseline_revision": "98995384c60a924f25ca58d3b7e561207bfa5be8"
+      "baseline_revision": "49ea205c1abf125f7e9b8e6ce002a2af34ff5ebf"
     }
   },
   "base_lock": {
     "path": "e2e/downstream-fencing-v2.lock.json",
-    "sha256": "sha256:83dc97ff5abad2c59324868b15be063b09b4204551ab597967117bf0c3e84977",
+    "sha256": "sha256:8442ac11b8489eda348001bac7bc6f8319e9725e36d073871c8f0da1177c70cc",
     "evidence_profile": "browser-downstream-fencing-e2e-v2"
   },
   "contract": {
     "namespace": "urn:shell-echo:sandbox-runtime:provider-v1",
-    "revision": "98995384c60a924f25ca58d3b7e561207bfa5be8",
-    "tree": "0a627baed11c8a6ddbe8a24bbc1869e4f85edc16",
+    "revision": "720ad15c343e71f36615dc4499edd5e764178bca",
+    "tree": "343ffde0819207cf99c005096c336735dd33a735",
     "suite_id": "sandbox-provider",
     "suite_version": "1.0.0",
-    "suite_digest": "sha256:7db1d28d35ca193632c395247cc71eeaaff48b027964b9ea9da247eaad5e3991",
+    "suite_digest": "sha256:78e01cc5eb176083896baf8507c551d2ee88e56b93197321702748a88949e89d",
     "suite_digest_profile": "rfc8785-full-document-excluding-suite-digest-v1",
     "suite_profile": "sandbox-runtime-provider-v1",
-    "suite_cases": 60,
+    "suite_cases": 71,
     "remote_suite_id": "sandbox-provider-remote",
     "remote_suite_version": "1.0.0",
     "remote_suite_digest": "sha256:167922d972229a97a64bf22bc6a36ee20d4de19a023395d9f004f00c54cc49d0",

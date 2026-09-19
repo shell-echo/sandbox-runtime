@@ -54,6 +54,8 @@ const (
 	OperationCloseRuntimeSession         Operation = "close_runtime_session"
 	OperationConnectRuntimeSession       Operation = "connect_runtime_session"
 	OperationOpenBrowserSession          Operation = "open_browser_session"
+	OperationOpenDesktopSession          Operation = "open_desktop_session"
+	OperationCloseDesktopSession         Operation = "close_desktop_session"
 	OperationStageArtifact               Operation = "stage_artifact"
 	OperationSnapshot                    Operation = "snapshot"
 	OperationTerminate                   Operation = "terminate"
@@ -62,6 +64,7 @@ const (
 	OperationReadResult                  Operation = "read_result"
 	OperationReadRuntimeSession          Operation = "read_runtime_session"
 	OperationReadBrowserSession          Operation = "read_browser_session"
+	OperationReadDesktopSession          Operation = "read_desktop_session"
 	OperationReadArtifactStagingEvidence Operation = "read_artifact_staging_evidence"
 	OperationReadUsageEvidence           Operation = "read_usage_evidence"
 	OperationReadSnapshotManifest        Operation = "read_snapshot_manifest"
@@ -73,9 +76,12 @@ func (operation Operation) Supported() bool {
 	switch operation {
 	case OperationCreate, OperationRestore, OperationSetDesiredState,
 		OperationExtendLease, OperationExec, OperationCancelExec,
-		OperationOpenRuntimeSession, OperationCloseRuntimeSession, OperationConnectRuntimeSession, OperationOpenBrowserSession, OperationStageArtifact, OperationSnapshot, OperationTerminate,
+		OperationOpenRuntimeSession, OperationCloseRuntimeSession, OperationConnectRuntimeSession,
+		OperationOpenBrowserSession, OperationOpenDesktopSession, OperationCloseDesktopSession,
+		OperationStageArtifact, OperationSnapshot, OperationTerminate,
 		OperationReadSandbox, OperationReadOperation, OperationReadResult,
-		OperationReadRuntimeSession, OperationReadBrowserSession, OperationReadArtifactStagingEvidence,
+		OperationReadRuntimeSession, OperationReadBrowserSession, OperationReadDesktopSession,
+		OperationReadArtifactStagingEvidence,
 		OperationReadUsageEvidence, OperationReadSnapshotManifest, OperationReadEvents:
 		return true
 	default:
@@ -274,6 +280,8 @@ var requestBindings = map[Operation]requestBinding{
 	OperationCloseRuntimeSession:         {contractID: "urn:shell-echo:sandbox-runtime:request:close-runtime-session:v1", profile: DigestProfileRequestExcludingDigest},
 	OperationConnectRuntimeSession:       {contractID: "urn:shell-echo:sandbox-runtime:descriptor:runtime-session-connect:v1", profile: DigestProfileFullDocument},
 	OperationOpenBrowserSession:          {contractID: "urn:shell-echo:sandbox-runtime:request:open-browser-session:v1", profile: DigestProfileRequestExcludingDigest},
+	OperationOpenDesktopSession:          {contractID: "urn:shell-echo:sandbox-runtime:request:open-desktop-session:v1", profile: DigestProfileRequestExcludingDigest},
+	OperationCloseDesktopSession:         {contractID: "urn:shell-echo:sandbox-runtime:request:close-desktop-session:v1", profile: DigestProfileRequestExcludingDigest},
 	OperationStageArtifact:               {contractID: "urn:shell-echo:sandbox-runtime:request:stage-artifact:v1", profile: DigestProfileRequestExcludingDigest},
 	OperationSnapshot:                    {contractID: "urn:shell-echo:sandbox-runtime:request:snapshot:v1", profile: DigestProfileRequestExcludingDigest},
 	OperationTerminate:                   {contractID: "urn:shell-echo:sandbox-runtime:request:terminate:v1", profile: DigestProfileRequestExcludingDigest},
@@ -282,6 +290,7 @@ var requestBindings = map[Operation]requestBinding{
 	OperationReadResult:                  {contractID: "urn:shell-echo:sandbox-runtime:descriptor:exec-result:v1", profile: DigestProfileFullDocument},
 	OperationReadRuntimeSession:          {contractID: "urn:shell-echo:sandbox-runtime:descriptor:runtime-session:v1", profile: DigestProfileFullDocument},
 	OperationReadBrowserSession:          {contractID: "urn:shell-echo:sandbox-runtime:descriptor:browser-session:v1", profile: DigestProfileFullDocument},
+	OperationReadDesktopSession:          {contractID: "urn:shell-echo:sandbox-runtime:descriptor:desktop-session:v1", profile: DigestProfileFullDocument},
 	OperationReadArtifactStagingEvidence: {contractID: "urn:shell-echo:sandbox-runtime:descriptor:artifact-staging-evidence:v1", profile: DigestProfileFullDocument},
 	OperationReadUsageEvidence:           {contractID: "urn:shell-echo:sandbox-runtime:descriptor:usage-evidence:v1", profile: DigestProfileFullDocument},
 	OperationReadSnapshotManifest:        {contractID: "urn:shell-echo:sandbox-runtime:descriptor:snapshot-manifest:v1", profile: DigestProfileFullDocument},

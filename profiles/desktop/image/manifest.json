@@ -1,0 +1,109 @@
+{
+  "schema_version": "sandbox.runtime/desktop-image/v1",
+  "profile_id": "sandbox-runtime-desktop-v1",
+  "runtime_class_name": "sandbox-runtime-desktop",
+  "source": {
+    "repository": "docker.io/library/alpine",
+    "release": "3.23",
+    "index_digest": "sha256:fd791d74b68913cbb027c6546007b3f0d3bc45125f797758156952bc2d6daf40",
+    "manifests": {
+      "linux/amd64": {
+        "digest": "sha256:1beb0dc0a51de7ff38e3b5274078a2e0b81113ba5c7535e1a03d5913a5edbda3",
+        "architecture": "amd64",
+        "package_archive_set_digest": "sha256:591fef77f3bdbac861ef71ad7cfca7ef6e86a0ac092a7c10084118af10f40097"
+      },
+      "linux/arm64/v8": {
+        "digest": "sha256:d858bb5442632a31bd4bca6c5e601dbe6b536fd7942092ea6a08a0a95805693c",
+        "architecture": "arm64",
+        "variant": "v8",
+        "package_archive_set_digest": "sha256:28468a7b60dc3228ae95f738e7083f6c41b02d381aa1ae6f42afe8424e9a4727"
+      }
+    }
+  },
+  "packages": {
+    "repositories": [
+      "https://dl-cdn.alpinelinux.org/alpine/v3.23/main",
+      "https://dl-cdn.alpinelinux.org/alpine/v3.23/community"
+    ],
+    "required": [
+      {"name": "xvfb", "version": "21.1.23-r0"},
+      {"name": "openbox", "version": "3.6.1-r8"},
+      {"name": "xterm", "version": "403-r0"},
+      {"name": "xdotool", "version": "4.20251130.1-r0"},
+      {"name": "xdpyinfo", "version": "1.4.0-r0"},
+      {"name": "xset", "version": "1.2.5-r1"},
+      {"name": "xwd", "version": "1.0.9-r2"},
+      {"name": "font-dejavu", "version": "2.37-r6"}
+    ],
+    "installed_set_digest": "sha256:6b5fc1ece685456ed20f474c9af9547c597210f9105f7f12e9cf21d8377db4b5"
+  },
+  "broker": {
+    "path": "/usr/local/libexec/sandbox-runtime/desktop-broker",
+    "socket": "/tmp/sandbox-runtime-desktop-broker.sock",
+    "protocol": "sandbox.runtime/desktop-broker/v1",
+    "methods": ["probe", "describe"],
+    "max_request_bytes": 4096,
+    "max_response_bytes": 8192,
+    "max_connections": 16
+  },
+  "display": {
+    "server": "/usr/bin/Xvfb",
+    "window_manager": "/usr/bin/openbox",
+    "display": ":99",
+    "reference": "ref:desktop-display:primary",
+    "width": 1280,
+    "height": 720,
+    "depth": 24,
+    "tcp_listen": false,
+    "audio_output": false,
+    "user_launch_overrides": "rejected"
+  },
+  "security": {
+    "uid": 1000,
+    "gid": 1000,
+    "root_filesystem": "read_only",
+    "no_new_privileges": true,
+    "capabilities": "drop_all",
+    "privileged": false,
+    "seccomp": "runtime_default",
+    "ipc": "private",
+    "devices": [],
+    "device_requests": "none",
+    "container_isolation_required": true
+  },
+  "mounts": [
+    {"path": "/inputs", "mode": "ro", "required": true},
+    {"path": "/workspace", "mode": "rw", "required": true},
+    {"path": "/outputs", "mode": "rw", "required": true},
+    {"path": "/tmp", "mode": "rw", "required": true}
+  ],
+  "network": {
+    "mode": "restricted",
+    "egress_gateway_required": true,
+    "broker_unix_only": true,
+    "listening_tcp_ports": 0
+  },
+  "reproducible_outputs": {
+    "vcs_reference": "slice4-output",
+    "platforms": {
+      "linux/amd64": {
+        "image_digest": "sha256:47999b3fb061fee77a1d1ab53d8bc9045d5082dc00cc6e9626ff6e0e113721d6",
+        "evidence": "double_cross_build"
+      },
+      "linux/arm64/v8": {
+        "image_digest": "sha256:ec8da6b3e48d145a960d1faa3a5a7202c43221de0f3a7d73e6f62783cc92efe6",
+        "evidence": "native_build_after_double_build_and_smoke"
+      }
+    }
+  },
+  "provenance": {
+    "upstream_source": "https://github.com/alpinelinux/docker-alpine",
+    "upstream_index_digest": "sha256:fd791d74b68913cbb027c6546007b3f0d3bc45125f797758156952bc2d6daf40",
+    "build_context": "profiles/desktop/image",
+    "go_version": "go1.26.5",
+    "reproducible_inputs": true,
+    "native_double_build_required": true,
+    "signed_attestation_required_for_adapter": true,
+    "independent_verification_workflow_path": "github.com/shell-echo/sandbox-runtime/.github/workflows/desktop-image.yml"
+  }
+}

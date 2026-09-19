@@ -1,0 +1,40 @@
+{
+  "bindings": [
+    {
+      "operation": "open_desktop_session",
+      "method": "POST",
+      "path": "/v1/sandboxes/desktop-sandbox-1/desktop-sessions",
+      "request_contract_id": "urn:shell-echo:sandbox-runtime:request:open-desktop-session:v1",
+      "request_digest_profile": "rfc8785-request-excluding-request-digest-v1",
+      "request_fixture": "desktop-session-open-request.json",
+      "request_digest": "sha256:264897bc50447a5ff6a6eb8481db0e3284e6b13871cc354d28ac09be9341e5ef",
+      "mutation": true
+    },
+    {
+      "operation": "close_desktop_session",
+      "method": "POST",
+      "path": "/v1/sandboxes/desktop-sandbox-1/desktop-sessions/desktop-session-1:close",
+      "request_contract_id": "urn:shell-echo:sandbox-runtime:request:close-desktop-session:v1",
+      "request_digest_profile": "rfc8785-request-excluding-request-digest-v1",
+      "request_fixture": "desktop-session-close-request.json",
+      "request_digest": "sha256:b33aa89643a327630273ed7ef95e7270a36d41da745d2318025c5109d7c8c1d4",
+      "mutation": true
+    },
+    {
+      "operation": "read_desktop_session",
+      "method": "GET",
+      "path": "/v1/operations/desktop-session-operation-1/desktop-session",
+      "request_contract_id": "urn:shell-echo:sandbox-runtime:descriptor:desktop-session:v1",
+      "request_digest_profile": "rfc8785-full-document-v1",
+      "descriptor_document": {
+        "operation": "read_desktop_session",
+        "sandbox_id": "desktop-sandbox-1",
+        "operation_id": "desktop-session-operation-1",
+        "attempt_id": "desktop-session-attempt-1",
+        "fencing_token": 3
+      },
+      "request_digest": "sha256:c59d9be6fc72d73a48d0709729d300eb0e66e5e1aff0134641b0972abc060803",
+      "mutation": false
+    }
+  ]
+}

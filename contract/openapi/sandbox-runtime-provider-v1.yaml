@@ -963,6 +963,183 @@ paths:
             application/json:
               schema:
                 $ref: ../schemas/standard-error.schema.json
+  /v1/sandboxes/{sandbox_id}/desktop-sessions:
+    post:
+      operationId: openDesktopSession
+      summary: Accept an asynchronous desktop session request
+      x-required-capability:
+        id: sandbox.desktop
+        version: 1.0.0
+        profile: desktop-v1
+      security:
+        - mutualTLS: []
+          bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/AdmissionContextHeader'
+        - name: sandbox_id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/desktop-session-open-request.schema.json
+      x-max-encoded-body-bytes: 65536
+      responses:
+        '202':
+          description: Desktop-session open operation accepted
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/provider-operation.schema.json
+        '400':
+          description: Desktop session request document or metadata is invalid
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '401':
+          description: Client certificate or bearer authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '403':
+          description: Desktop session is not authorized by the admitted controller and tenant context
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '409':
+          description: Idempotency, attempt, generation, or fencing conflict
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '422':
+          description: Desktop capability, profile, or sandbox state is unsupported
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '429':
+          description: Provider desktop-session capacity is temporarily exhausted
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '503':
+          description: Provider is draining or temporarily unavailable
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+  /v1/sandboxes/{sandbox_id}/desktop-sessions/{desktop_session_id}:close:
+    post:
+      operationId: closeDesktopSession
+      summary: Accept an idempotent desktop-session close request
+      x-required-capability:
+        id: sandbox.desktop
+        version: 1.0.0
+        profile: desktop-v1
+      security:
+        - mutualTLS: []
+          bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/AdmissionContextHeader'
+        - name: sandbox_id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$'
+        - name: desktop_session_id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/desktop-session-close-request.schema.json
+      x-max-encoded-body-bytes: 65536
+      responses:
+        '202':
+          description: Desktop-session close operation accepted
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/provider-operation.schema.json
+        '400':
+          description: Close request document, metadata, or path is invalid
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '401':
+          description: Client certificate or bearer authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '403':
+          description: Close is not authorized by the admitted controller and tenant context
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '404':
+          description: Desktop session is not known to this Provider revision
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '409':
+          description: Idempotency, sandbox generation, connection generation, or fencing conflict
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '410':
+          description: Retained desktop-session authority has expired or was revoked
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '422':
+          description: Desktop capability or profile is not advertised or supported
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '503':
+          description: Close outcome is unknown or cleanup is temporarily unavailable
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
   /v1/operations/{operation_id}:
     get:
       operationId: getOperation
@@ -980,7 +1157,7 @@ paths:
             pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$'
       responses:
         '200':
-          description: Current provider-local operation state from the owning operation family, including artifact_stage and open_browser_session when their operation families are composed
+          description: Current provider-local operation state from the owning operation family, including artifact_stage, Browser-session, and Desktop-session operations when their operation families are composed
           content:
             application/json:
               schema:
@@ -1467,6 +1644,79 @@ paths:
                 $ref: ../schemas/standard-error.schema.json
         '410':
           description: Browser session handoff has expired or its sandbox generation is no longer current
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '503':
+          description: Provider is draining or temporarily unavailable
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+  /v1/operations/{operation_id}/desktop-session:
+    get:
+      operationId: getDesktopSessionHandoff
+      summary: Read a bounded desktop session handoff document
+      x-required-capability:
+        id: sandbox.desktop
+        version: 1.0.0
+        profile: desktop-v1
+      security:
+        - mutualTLS: []
+          bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/AdmissionContextHeader'
+        - name: operation_id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$'
+      responses:
+        '200':
+          description: Opaque desktop session handoff for caller-owned Gateway resolution
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/desktop-session-handoff.schema.json
+        '400':
+          description: Request metadata or path is invalid
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '401':
+          description: Client certificate or bearer authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '403':
+          description: Request is not authorized by the admitted controller and tenant context
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '404':
+          description: Desktop session operation is not known to this Provider revision
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '409':
+          description: Attempt, fencing, session, sandbox, or connection generation is stale or conflicting
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/standard-error.schema.json
+        '410':
+          description: Desktop session handoff has expired or was revoked
           content:
             application/json:
               schema:

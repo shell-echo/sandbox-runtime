@@ -98,7 +98,51 @@ func TestSlotServiceFailsClosedOnPolicyAndPreservesCancellation(t *testing.T) {
 	}
 }
 
+func TestSlotServiceBuildsOnlyExactDesktopAuthority(t *testing.T) {
+	store := &slotStoreStub{}
+	service, err := NewSlotService(store, slotPolicyStub{}, &sequenceIDs{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := validDesktopPutSlotRequest()
+	operation, replay, err := service.Put(context.Background(), "tenant-1", ActorRef{Type: ActorHuman, ID: "actor-1"}, "wrk-1", "desktop-main", "desktop-put-1", request)
+	if err != nil || replay || operation.ID != "op_1" || len(store.commands) != 1 {
+		t.Fatalf("operation=%#v replay=%v err=%v commands=%d", operation, replay, err, len(store.commands))
+	}
+	command := store.commands[0]
+	if command.Spec.Kind != DesktopSlotKind || command.Spec.ProfileID != DesktopSlotProfile ||
+		command.Spec.RequiredCapabilities[0].CapabilityID != DesktopCapabilityID || command.RequestDigest == [32]byte{} {
+		t.Fatalf("command=%#v", command)
+	}
+
+	mutations := []func(*PutSlotRequest){
+		func(r *PutSlotRequest) { r.Kind = BrowserSlotKind },
+		func(r *PutSlotRequest) { r.ProfileID = BrowserSlotProfile },
+		func(r *PutSlotRequest) { r.RequiredCapabilities[0].CapabilityID = BrowserCapabilityID },
+		func(r *PutSlotRequest) { r.RequiredCapabilities[0].Version = "1.0.1" },
+		func(r *PutSlotRequest) { r.RequiredCapabilities[0].ProfileID = BrowserCapabilityProfile },
+		func(r *PutSlotRequest) {
+			r.RequiredCapabilities = append(r.RequiredCapabilities, r.RequiredCapabilities[0])
+		},
+	}
+	for index, mutate := range mutations {
+		invalid := validDesktopPutSlotRequest()
+		mutate(&invalid)
+		if _, _, err := service.Put(context.Background(), "tenant-1", ActorRef{Type: ActorHuman, ID: "actor-1"}, "wrk-1", "desktop-main", "desktop-invalid", invalid); !errors.Is(err, ErrInvalid) {
+			t.Fatalf("mutation %d err=%v", index, err)
+		}
+	}
+	if len(store.commands) != 1 {
+		t.Fatalf("invalid Desktop shapes reached store: commands=%d", len(store.commands))
+	}
+}
+
 func validPutSlotRequest() PutSlotRequest {
 	return PutSlotRequest{ExpectedWorkspaceVersion: 1, Kind: "browser", ProfileID: BrowserSlotProfile,
 		RequiredCapabilities: []CapabilityRequirement{{CapabilityID: BrowserCapabilityID, Version: BrowserCapabilityVersion, ProfileID: BrowserCapabilityProfile}}, DesiredState: "ready"}
+}
+
+func validDesktopPutSlotRequest() PutSlotRequest {
+	return PutSlotRequest{ExpectedWorkspaceVersion: 1, Kind: DesktopSlotKind, ProfileID: DesktopSlotProfile,
+		RequiredCapabilities: []CapabilityRequirement{{CapabilityID: DesktopCapabilityID, Version: DesktopCapabilityVersion, ProfileID: DesktopCapabilityProfile}}, DesiredState: "ready"}
 }

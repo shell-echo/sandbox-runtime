@@ -19,6 +19,7 @@ general production readiness.
 | Independent external caller | **13/13 complete** |
 | Product v1 Phase 3 | **13/13 complete** for the bounded standalone topology |
 | Product v1 Phase 4 Browser | **13/13 complete** for the bounded same-repository separate-process topology |
+| Product v1 Phase 5 Desktop | **3/15 complete**; Slice 4 local image/broker candidate passes native arm64, hosted publication/provenance pending, advertisement disabled |
 | Coding/shell qualification | **Qualified** for the exact caller, Provider revisions, topology, profile, and scenarios recorded below |
 | Latest core CI | [Passed](https://github.com/shell-echo/sandbox-runtime/actions/runs/35204434771) |
 
@@ -77,6 +78,31 @@ This is same-repository separate-process evidence, not deployment-qualified,
 independently implemented caller, HA, hostile-multitenant, or production
 evidence.
 
+[Product v1 Phase 5 Desktop](docs/plan/product-v1-phase-5-desktop-development-unified-product.md)
+has completed **3/15** dependency-ordered slices. Slice 1 locks a separate
+Provider Desktop capability/profile/runtime shape and complete session
+open/read/handoff/close/expiry/revocation, usage, admission, security, and
+cleanup semantics. Exact authority is Contract revision
+`720ad15c343e71f36615dc4499edd5e764178bca`, tree
+`343ffde0819207cf99c005096c336735dd33a735`, and a 71-case local Suite with
+digest `sha256:78e01cc5eb176083896baf8507c551d2ee88e56b93197321702748a88949e89d`.
+Slice 2 adds strict Product Desktop slot/session intent, PostgreSQL migration
+8, atomic operation/event/audit/outbox persistence, isolated Desktop session
+work, and real-database concurrency/restart evidence at implementation
+`d2e7943f704e2eed6ea7b61a44ed2b6fa5510e00`. Slice 3 implementation
+`f96c06c3a50ade031e8ffbb4d8ea15e6ca8be7d5` adds Provider-local Desktop
+domain/application policy, memory and atomic-file persistence, restart-safe
+reconciliation, operation aggregation, and optional protected handlers. It
+does not add a runtime adapter, private resolver, production startup
+composition, outbox consumer, public data plane, Web experience, or capability
+advertisement. Slice 4 candidate implementation
+`163dd8a258a24cf4727169b1cbd8ed7c0fe29292` adds locked dual-architecture
+image inputs, a bounded Unix-only display/session broker, reproducible local
+outputs, a passing native arm64 smoke, and a manual native publication/
+attestation workflow. That workflow has not run, so no published immutable
+index or independently verified provenance is claimed and Phase 5 remains
+3/15 complete.
+
 ## What the project provides
 
 - A local instance-management API with in-memory and Docker runtime drivers.
@@ -88,6 +114,15 @@ evidence.
   runtime endpoints are not part of the public Provider protocol.
 - Repository-owned OpenAPI, JSON Schemas, semantic rules, fixtures, and local
   and remote Conformance Suites.
+- A locked, separately modeled Provider Desktop Contract surface whose runtime
+  and capability advertisement remain disabled pending later Phase 5 slices.
+- Product-owned Desktop slot/session intent with exact profiles, transactional
+  PostgreSQL persistence, quotas, audit, and isolated pending outbox work.
+- Provider-local Desktop operation authority with durable replay/fencing,
+  exact-owned close/expiry cleanup policy, and unadvertised protected handlers.
+- A local Desktop image/broker candidate with locked inputs, non-root runtime
+  policy, native arm64 smoke, and a still-open hosted publication/provenance
+  gate; it is not selected by an adapter or advertised.
 - Deterministic qualification tooling for an independently implemented caller.
 - Optional Browser reference components and evidence tracks, kept separate from
   the qualified coding/shell profile.

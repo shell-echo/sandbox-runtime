@@ -71,6 +71,25 @@ func TestVerifyAcceptsEquivalentCleanContractTree(t *testing.T) {
 	}
 }
 
+func TestVerifyHistoricalRevisionPreservesOlderAuthority(t *testing.T) {
+	source, lock, revision := prepareContractRepository(t, testContractManifest("conformance-suite", true, "conformance-suite"))
+	writeTestFile(t, source, "contract/openapi/sandbox-provider-v1.yaml", "openapi: 3.1.1\ninfo:\n  title: later additive authority\n")
+	runGit(t, source, "add", "contract/openapi/sandbox-provider-v1.yaml")
+	runGit(t, source, "commit", "-m", "extend contract")
+	laterRevision := runGit(t, source, "rev-parse", "HEAD")
+
+	if _, err := Verify(context.Background(), lock, source); err == nil || !strings.Contains(err.Error(), "checkout Contract tree") {
+		t.Fatalf("Verify changed current Contract = %v", err)
+	}
+	report, err := VerifyHistoricalRevision(context.Background(), lock, source)
+	if err != nil {
+		t.Fatalf("VerifyHistoricalRevision: %v", err)
+	}
+	if report.LockedRevision != revision || report.ContractTree != lock.Source.ContractTree || report.CheckoutHead != laterRevision {
+		t.Fatalf("historical report = %+v", report)
+	}
+}
+
 func TestVerifyWithGitExecutableRequiresAbsoluteRegularExecutable(t *testing.T) {
 	for name, executable := range map[string]string{
 		"relative":  "git",

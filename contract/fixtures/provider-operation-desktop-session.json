@@ -1,0 +1,9 @@
+{
+  "operation_id": "desktop-session-operation-1",
+  "attempt_id": "desktop-session-attempt-1",
+  "fencing_token": 3,
+  "sandbox_id": "desktop-sandbox-1",
+  "type": "open_desktop_session",
+  "status": "accepted",
+  "observed_at": "2026-09-19T10:00:01Z"
+}

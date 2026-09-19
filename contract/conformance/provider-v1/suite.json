@@ -18,6 +18,9 @@
         "capability-discovery-browser-profile-advertisement",
         "capability-discovery-browser-contract-consistency",
         "capability-discovery-browser-rejection-fixtures",
+        "capability-discovery-desktop-profile-advertisement",
+        "capability-discovery-desktop-contract-consistency",
+        "capability-discovery-desktop-rejection-fixtures",
         "capability-discovery-empty-request",
         "capability-discovery-no-mutation-routes",
         "protected-admission-context-schema",
@@ -58,6 +61,14 @@
         "browser-session-rejection-fixtures",
         "browser-session-usage-evidence",
         "browser-session-protected-admission-bindings",
+        "desktop-session-open-schema",
+        "desktop-session-close-schema",
+        "desktop-session-operation-schema",
+        "desktop-session-handoff-schema",
+        "desktop-session-semantic-bounds",
+        "desktop-session-rejection-fixtures",
+        "desktop-session-usage-evidence",
+        "desktop-session-protected-admission-bindings",
         "artifact-staging-request-schema",
         "artifact-staging-evidence-schema",
         "artifact-staging-semantic-bounds",
@@ -70,5 +81,5 @@
       ]
     }
   ],
-  "suite_digest": "sha256:7db1d28d35ca193632c395247cc71eeaaff48b027964b9ea9da247eaad5e3991"
+  "suite_digest": "sha256:78e01cc5eb176083896baf8507c551d2ee88e56b93197321702748a88949e89d"
 }

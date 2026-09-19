@@ -85,9 +85,20 @@ WHERE tenant_id=$1 AND workspace_id=$2 AND slot_key=$3 FOR UPDATE`, command.Tena
 			return product.Operation{}, false, storeError(ctx, opCtx, err, false)
 		}
 		var count, limit int
-		if err := tx.QueryRow(opCtx, `SELECT
+		var quotaQuery string
+		switch command.Spec.Kind {
+		case product.BrowserSlotKind:
+			quotaQuery = `SELECT
     (SELECT count(*) FROM sandbox_runtime_product.workspace_slots WHERE tenant_id=$1 AND kind='browser' AND desired_state <> 'terminated'),
-    COALESCE((SELECT max_browser_slots FROM sandbox_runtime_product.tenant_quotas WHERE tenant_id=$1),4)`, command.TenantID).Scan(&count, &limit); err != nil {
+    COALESCE((SELECT max_browser_slots FROM sandbox_runtime_product.tenant_quotas WHERE tenant_id=$1),4)`
+		case product.DesktopSlotKind:
+			quotaQuery = `SELECT
+    (SELECT count(*) FROM sandbox_runtime_product.workspace_slots WHERE tenant_id=$1 AND kind='desktop' AND desired_state <> 'terminated'),
+    COALESCE((SELECT max_desktop_slots FROM sandbox_runtime_product.tenant_quotas WHERE tenant_id=$1),4)`
+		default:
+			return product.Operation{}, false, product.ErrCapabilityUnsupported
+		}
+		if err := tx.QueryRow(opCtx, quotaQuery, command.TenantID).Scan(&count, &limit); err != nil {
 			return product.Operation{}, false, storeError(ctx, opCtx, err, false)
 		}
 		if count >= limit {

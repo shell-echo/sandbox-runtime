@@ -285,6 +285,78 @@ func TestHandlerAcceptsStrictBrowserSessionAuthorityRequest(t *testing.T) {
 	}
 }
 
+func TestHandlerAuthenticatesAndStrictlyDecodesDesktopAuthority(t *testing.T) {
+	base, store := newTestHandler(t)
+	sessions, err := product.NewSessionService(store, allowProductSession{}, &handlerIDs{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	slots, err := product.NewSlotService(store, allowBrowserSlot{}, &handlerIDs{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler, err := NewHandlerWithSlots(base.application, nil, sessions, nil, nil, slots, nil, base.authenticator, &handlerIDs{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	unauthenticated := httptest.NewRequest(http.MethodPut, "/api/v1/workspaces/wrk_1/slots/desktop-main", strings.NewReader(`{"unknown":true}`))
+	unauthenticated.Header.Set("Content-Type", "application/json")
+	unauthenticated.Header.Set("Idempotency-Key", "desktop-slot-unauthenticated")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, unauthenticated)
+	if response.Code != http.StatusUnauthorized || len(store.slots) != 0 {
+		t.Fatalf("unauthenticated status=%d slots=%d body=%s", response.Code, len(store.slots), response.Body.String())
+	}
+
+	request := authenticatedRequest(http.MethodPut, "/api/v1/workspaces/wrk_1/slots/desktop-main", `{
+  "expected_workspace_version":1,
+  "kind":"desktop",
+  "profile_id":"sandbox-runtime-desktop-v1",
+  "required_capabilities":[{"capability_id":"sandbox.desktop","version":"1.0.0","profile_id":"desktop-v1"}],
+  "desired_state":"ready"
+}`)
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Idempotency-Key", "desktop-slot-1")
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusAccepted || len(store.slots) != 1 || store.slots[0].Spec.Kind != product.DesktopSlotKind {
+		t.Fatalf("Desktop slot status=%d slots=%#v body=%s", response.Code, store.slots, response.Body.String())
+	}
+
+	request = authenticatedRequest(http.MethodPost, "/api/v1/workspaces/wrk_1/sessions", `{
+  "expected_workspace_version":2,
+  "slot_key":"desktop-main",
+  "kind":"desktop",
+  "protocol_profile":"product-desktop.v1",
+  "expires_in_seconds":900,
+  "recording_policy":"metadata_only"
+}`)
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Idempotency-Key", "desktop-session-1")
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusAccepted || len(store.sessions) != 1 || store.sessions[0].Kind != product.SessionKindDesktop {
+		t.Fatalf("Desktop session status=%d sessions=%#v body=%s", response.Code, store.sessions, response.Body.String())
+	}
+
+	request = authenticatedRequest(http.MethodPost, "/api/v1/workspaces/wrk_1/sessions", `{
+  "expected_workspace_version":2,
+  "slot_key":"desktop-main",
+  "kind":"desktop",
+  "protocol_profile":"product-browser-live.v1",
+  "expires_in_seconds":900,
+  "recording_policy":"metadata_only"
+}`)
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Idempotency-Key", "desktop-session-invalid")
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusUnprocessableEntity || len(store.sessions) != 1 {
+		t.Fatalf("mismatched Desktop status=%d sessions=%d body=%s", response.Code, len(store.sessions), response.Body.String())
+	}
+}
+
 func TestHandlerPutAndGetStrictBrowserSlot(t *testing.T) {
 	base, store := newTestHandler(t)
 	slots, err := product.NewSlotService(store, allowBrowserSlot{}, &handlerIDs{})

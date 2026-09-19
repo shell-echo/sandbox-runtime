@@ -33,7 +33,9 @@ const (
 
 	ProfilePath       = "qualification/external-caller-coding-shell-v1/profile.json"
 	ProfileSchemaPath = "qualification/external-caller-coding-shell-v1/profile.schema.json"
-	ContractLockPath  = "compatibility/sandbox-runtime/contract.lock.json"
+	// ContractLockPath retains the exact historical authority qualified by this
+	// profile. It must not follow the repository's current Provider lock.
+	ContractLockPath = "qualification/external-caller-coding-shell-v1/contract.lock.json"
 
 	// These repository trust anchors are updated only after the complete profile
 	// and schema pass review and validation.
@@ -561,7 +563,7 @@ func VerifyCodingShellV1(ctx context.Context, sourceRoot string) (Report, error)
 	if err != nil {
 		return Report{}, fmt.Errorf("load Provider Contract lock: %w", err)
 	}
-	contractReport, err := contractlock.Verify(ctx, lock, sourceRoot)
+	contractReport, err := contractlock.VerifyHistoricalRevision(ctx, lock, sourceRoot)
 	if err != nil {
 		return Report{}, fmt.Errorf("verify Provider Contract before qualification profile: %w", err)
 	}

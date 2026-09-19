@@ -1,0 +1,24 @@
+{
+  "evidence_id": "desktop-usage-evidence-1",
+  "sandbox_id": "desktop-sandbox-1",
+  "operation_id": "desktop-session-operation-1",
+  "attempt_id": "desktop-session-attempt-1",
+  "fencing_token": 3,
+  "entries": [
+    {
+      "entry_id": "desktop-session-duration-1",
+      "sandbox_id": "desktop-sandbox-1",
+      "operation_id": "desktop-session-operation-1",
+      "meter": "sandbox.desktop_session_milliseconds",
+      "quantity": 1200000,
+      "unit": "milliseconds",
+      "meter_source": "runtime_metered",
+      "evidence_reference": "ref:usage/desktop-session-1",
+      "occurred_at": "2026-09-19T10:20:00Z"
+    }
+  ],
+  "reconciliation_status": "complete",
+  "observed_at": "2026-09-19T10:20:01Z",
+  "retained_until": "2026-09-19T11:20:01Z",
+  "evidence_digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666"
+}

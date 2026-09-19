@@ -1,0 +1,28 @@
+{
+  "initial_state": "requested",
+  "states": ["requested", "opening", "active", "open_outcome_unknown", "closing", "close_outcome_unknown", "closed", "expired", "failed"],
+  "terminal_states": ["closed", "expired", "failed"],
+  "transitions": [
+    {"from": "requested", "to": "opening", "cause": "durable-open-accept"},
+    {"from": "opening", "to": "active", "cause": "successful-handoff-commit"},
+    {"from": "opening", "to": "failed", "cause": "known-open-failure"},
+    {"from": "opening", "to": "open_outcome_unknown", "cause": "uncertain-open-dispatch"},
+    {"from": "open_outcome_unknown", "to": "active", "cause": "observed-handoff-commit"},
+    {"from": "open_outcome_unknown", "to": "failed", "cause": "observed-open-absence-or-failure"},
+    {"from": "active", "to": "closing", "cause": "durable-close-intent"},
+    {"from": "active", "to": "closing", "cause": "expiry-intent"},
+    {"from": "closing", "to": "closed", "cause": "revoked-and-absence-confirmed"},
+    {"from": "closing", "to": "expired", "cause": "expiry-revoked-and-absence-confirmed"},
+    {"from": "closing", "to": "close_outcome_unknown", "cause": "uncertain-close-dispatch"},
+    {"from": "close_outcome_unknown", "to": "closed", "cause": "observed-revocation-and-absence"},
+    {"from": "close_outcome_unknown", "to": "expired", "cause": "observed-expiry-revocation-and-absence"}
+  ],
+  "authority": {
+    "handoff_readable_only_in": ["active"],
+    "fresh_resolution_required": true,
+    "expired_or_revoked_resolution_status": 410,
+    "generation_mismatch_status": 409,
+    "terminal_states_absorbing": true,
+    "unknown_outcome_blind_redispatch": false
+  }
+}

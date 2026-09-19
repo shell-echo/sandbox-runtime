@@ -1,0 +1,68 @@
+{
+  "operation_id": "desktop-create-operation-1",
+  "attempt_id": "desktop-create-attempt-1",
+  "fencing_token": 1,
+  "idempotency_key": "create-desktop-sandbox-1",
+  "request_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+  "deadline_at": "2026-09-19T10:05:00Z",
+  "protocol_version": "v1",
+  "spec": {
+    "sandbox_id": "desktop-sandbox-1",
+    "tenant_id": "tenant-1",
+    "work_order_id": "desktop-work-order-1",
+    "workspace_id": "workspace-1",
+    "branch_id": "branch-1",
+    "provider_resolution_id": "provider-resolution-desktop-1",
+    "provider_revision_id": "provider-revision-local-v1",
+    "image": {
+      "reference": "registry.invalid/sandbox/desktop",
+      "digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "architecture": "amd64"
+    },
+    "runtime_profile": "sandbox-runtime-desktop-v1",
+    "resources": {
+      "cpu_millis": 4000,
+      "memory_bytes": 4294967296,
+      "ephemeral_storage_bytes": 4294967296,
+      "workspace_bytes": 2147483648,
+      "pids_limit": 512
+    },
+    "required_capabilities": [
+      {
+        "id": "sandbox.desktop",
+        "version": "1.0.0",
+        "profile": "desktop-v1"
+      }
+    ],
+    "network": {
+      "mode": "restricted",
+      "policy_reference": "desktop-egress-policy-1",
+      "egress_gateway_required": true
+    },
+    "workspace": {
+      "mode": "ephemeral",
+      "base_revision_id": "workspace-revision-1",
+      "base_revision_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      "base_workspace_head_version": 0,
+      "commit_mode": "read_only",
+      "mount_path": "/workspace"
+    },
+    "lease": {
+      "expires_at": "2026-09-19T11:00:00Z",
+      "max_extension_seconds": 3600
+    },
+    "placement_constraints": {
+      "resource_class": "desktop",
+      "architecture": "amd64"
+    },
+    "security": {
+      "privilege_level": "unprivileged",
+      "root_filesystem": "read_only",
+      "service_account_mode": "none",
+      "allow_privilege_escalation": false,
+      "host_namespace_access": false,
+      "seccomp_profile": "runtime-default"
+    },
+    "sandbox_slot_key": "desktop"
+  }
+}

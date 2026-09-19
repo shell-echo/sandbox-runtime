@@ -31,6 +31,8 @@ const (
 	TypeRuntimeSession      Type = "open_runtime_session"
 	TypeCloseRuntimeSession Type = "close_runtime_session"
 	TypeBrowserSession      Type = "open_browser_session"
+	TypeDesktopSession      Type = "open_desktop_session"
+	TypeCloseDesktopSession Type = "close_desktop_session"
 	TypeArtifactStage       Type = "artifact_stage"
 )
 
@@ -84,7 +86,7 @@ func (v View) Validate() error {
 	}
 	switch v.Type {
 	case TypeCreate, TypeExtendLease, TypeExec, TypeCancelExec, TypeSuspend, TypeResume, TypeTerminate,
-		TypeRuntimeSession, TypeCloseRuntimeSession, TypeBrowserSession, TypeArtifactStage:
+		TypeRuntimeSession, TypeCloseRuntimeSession, TypeBrowserSession, TypeDesktopSession, TypeCloseDesktopSession, TypeArtifactStage:
 	default:
 		return ErrInvalidView
 	}

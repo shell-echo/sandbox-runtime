@@ -105,6 +105,8 @@ const (
 	OperationOpenRuntimeSession  OperationType = "open_runtime_session"
 	OperationCloseRuntimeSession OperationType = "close_runtime_session"
 	OperationOpenBrowserSession  OperationType = "open_browser_session"
+	OperationOpenDesktopSession  OperationType = "open_desktop_session"
+	OperationCloseDesktopSession OperationType = "close_desktop_session"
 	OperationArtifactStage       OperationType = "artifact_stage"
 )
 
@@ -209,7 +211,8 @@ func (v *OperationType) UnmarshalJSON(data []byte) error {
 	return unmarshalEnum(data, "operation type", v, OperationCreate,
 		OperationExtendLease, OperationExec, OperationCancelExec, OperationSnapshot,
 		OperationRestore, OperationSuspend, OperationResume, OperationTerminate,
-		OperationOpenRuntimeSession, OperationCloseRuntimeSession, OperationOpenBrowserSession, OperationArtifactStage)
+		OperationOpenRuntimeSession, OperationCloseRuntimeSession, OperationOpenBrowserSession,
+		OperationOpenDesktopSession, OperationCloseDesktopSession, OperationArtifactStage)
 }
 
 func (v *OperationState) UnmarshalJSON(data []byte) error {
@@ -412,6 +415,22 @@ type BrowserSessionOpenRequest struct {
 	ExpiresAt           string `json:"expires_at"`
 }
 
+type DesktopSessionOpenRequest struct {
+	MutationEnvelope
+	ExpectedGeneration  int64  `json:"expected_generation"`
+	DesktopSessionID    string `json:"desktop_session_id"`
+	CapabilityProfileID string `json:"capability_profile_id"`
+	ExpiresAt           string `json:"expires_at"`
+}
+
+type DesktopSessionCloseRequest struct {
+	MutationEnvelope
+	ExpectedGeneration   int64  `json:"expected_generation"`
+	DesktopSessionID     string `json:"desktop_session_id"`
+	ConnectionGeneration int64  `json:"connection_generation"`
+	Reason               string `json:"reason"`
+}
+
 type SnapshotConsistency string
 
 const (
@@ -549,13 +568,14 @@ type ResourceClass string
 const (
 	ResourceStandard ResourceClass = "standard"
 	ResourceBrowser  ResourceClass = "browser"
+	ResourceDesktop  ResourceClass = "desktop"
 	ResourceOffice   ResourceClass = "office"
 	ResourceVideo    ResourceClass = "video"
 	ResourceGPU      ResourceClass = "gpu"
 )
 
 func (v *ResourceClass) UnmarshalJSON(data []byte) error {
-	return unmarshalEnum(data, "resource class", v, ResourceStandard, ResourceBrowser,
+	return unmarshalEnum(data, "resource class", v, ResourceStandard, ResourceBrowser, ResourceDesktop,
 		ResourceOffice, ResourceVideo, ResourceGPU)
 }
 
@@ -761,6 +781,7 @@ const (
 	MeterWorkspacePeak    MeterID     = "sandbox.workspace_peak_bytes"
 	MeterExecCount        MeterID     = "sandbox.exec_count"
 	MeterBrowserSession   MeterID     = "sandbox.browser_session_milliseconds"
+	MeterDesktopSession   MeterID     = "sandbox.desktop_session_milliseconds"
 	MeterSourcePlatform   MeterSource = "platform_metered"
 	MeterSourceRuntime    MeterSource = "runtime_metered"
 	MeterSourceReconciled MeterSource = "reconciled"
@@ -769,7 +790,7 @@ const (
 func (v *MeterID) UnmarshalJSON(data []byte) error {
 	return unmarshalEnum(data, "meter ID", v, MeterWallTime, MeterCPU, MeterMemory,
 		MeterNetworkIngress, MeterNetworkEgress, MeterStorageRead, MeterStorageWrite,
-		MeterWorkspacePeak, MeterExecCount, MeterBrowserSession)
+		MeterWorkspacePeak, MeterExecCount, MeterBrowserSession, MeterDesktopSession)
 }
 
 func (v *MeterSource) UnmarshalJSON(data []byte) error {
@@ -835,6 +856,29 @@ type BrowserSessionHandoff struct {
 	InternalEndpointReference string          `json:"internal_endpoint_reference"`
 	ConnectionGeneration      int64           `json:"connection_generation"`
 	ExpiresAt                 string          `json:"expires_at"`
+}
+
+type DesktopSessionHandoff struct {
+	OperationID               string          `json:"operation_id"`
+	AttemptID                 string          `json:"attempt_id"`
+	FencingToken              int64           `json:"fencing_token"`
+	SandboxID                 string          `json:"sandbox_id"`
+	DesktopSessionID          string          `json:"desktop_session_id"`
+	CapabilityProfileID       string          `json:"capability_profile_id"`
+	Protocol                  DesktopProtocol `json:"protocol"`
+	MediaProfileID            string          `json:"media_profile_id"`
+	ControlProfileID          string          `json:"control_profile_id"`
+	InternalEndpointReference string          `json:"internal_endpoint_reference"`
+	ConnectionGeneration      int64           `json:"connection_generation"`
+	ExpiresAt                 string          `json:"expires_at"`
+}
+
+type DesktopProtocol string
+
+const DesktopProtocolWebRTC DesktopProtocol = "webrtc"
+
+func (v *DesktopProtocol) UnmarshalJSON(data []byte) error {
+	return unmarshalEnum(data, "desktop protocol", v, DesktopProtocolWebRTC)
 }
 
 type BrowserProtocol string

@@ -512,7 +512,7 @@ func (r *runner) verifyCapabilities(ctx context.Context) error {
 	}
 	wantSnapshotProfiles := []SnapshotRestoreProfile{{
 		ProfileID: "sandbox-snapshot-workspace-v1", Level: "workspace", SuiteID: "sandbox-provider",
-		SuiteVersion: "1.0.0", SuiteDigest: "sha256:7db1d28d35ca193632c395247cc71eeaaff48b027964b9ea9da247eaad5e3991",
+		SuiteVersion: "1.0.0", SuiteDigest: "sha256:78e01cc5eb176083896baf8507c551d2ee88e56b93197321702748a88949e89d",
 	}}
 	if capabilities.ProviderRevisionID != r.config.ProviderRevisionID || capabilities.APIVersion != "v1" || !reflect.DeepEqual(capabilities.Capabilities, wantCapabilities) || len(capabilities.RuntimeProfiles) != 1 || !reflect.DeepEqual(capabilities.SnapshotRestoreProfiles, wantSnapshotProfiles) {
 		return fmt.Errorf("capability snapshot differs from lock: %#v", capabilities)

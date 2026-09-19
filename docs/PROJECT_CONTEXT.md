@@ -1,6 +1,6 @@
 # Project Context
 
-Updated: 2026-09-18
+Updated: 2026-09-19
 
 This is the stable handoff index for a new developer, AI agent, development
 device, or implementation session. It summarizes the system, engineering
@@ -44,7 +44,26 @@ Current verified state:
   storage. Strict evidence validation confirms the locked Contract identities,
   four roles, scenario set, and cleanup. Deployment, HA, hostile multi-tenant,
   independently implemented caller, and production readiness remain explicit
-  non-claims.
+  non-claims; and
+- Product v1 Phase 5 Desktop is **3/15** complete. Slice 1 establishes the
+  separate Provider Desktop Contract and Go projection authority at revision
+  `720ad15c343e71f36615dc4499edd5e764178bca`, tree
+  `343ffde0819207cf99c005096c336735dd33a735`, with a content-derived 71-case
+  local Suite. Slice 2 implementation
+  `d2e7943f704e2eed6ea7b61a44ed2b6fa5510e00` adds exact Product Desktop
+  slot/session intent, PostgreSQL migration 8, atomic audit/outbox persistence,
+  quotas, concurrency closure, nondisclosure, and restart-safe reads. Slice 3
+  implementation `f96c06c3a50ade031e8ffbb4d8ea15e6ca8be7d5` adds the separate
+  Provider Desktop domain, application policy, memory/atomic-file authority,
+  restart and unknown-outcome reconciliation, operation projection, and
+  optional protected handlers. Slice 4 candidate implementation
+  `163dd8a258a24cf4727169b1cbd8ed7c0fe29292` adds the locked Desktop image
+  inputs, fixed Unix-only broker, reproducible local outputs, passing native
+  arm64 smoke, and a manual native publication/provenance workflow. The
+  workflow has not run, so no immutable hosted index or independently verified
+  attestation is selected and Slice 4 remains open. Runtime adapter/private
+  resolver, production startup composition, dispatch, public media/control,
+  unified Web, capability advertisement, and release evidence remain absent.
 
 The qualification applies only to Provider revision
 `170459266af5f4fad359ca8c63f2ae19741055c5`, external-caller revision
@@ -75,6 +94,15 @@ Product Phase 4 startup scope and slice order are recorded in
 and [`plan/product-v1-phase-4-browser.md`](plan/product-v1-phase-4-browser.md),
 with the bounded release result in
 [`audits/product-phase-4-browser-completion.md`](audits/product-phase-4-browser-completion.md).
+Product Phase 5 startup findings, boundary decision, and fixed slice order are
+recorded in
+[`audits/product-phase-5-desktop-startup.md`](audits/product-phase-5-desktop-startup.md),
+[`audits/product-phase-5-desktop-slice-2.md`](audits/product-phase-5-desktop-slice-2.md),
+[`audits/product-phase-5-desktop-slice-3.md`](audits/product-phase-5-desktop-slice-3.md),
+[`audits/product-phase-5-desktop-slice-4-candidate.md`](audits/product-phase-5-desktop-slice-4-candidate.md),
+[`adr/0050-product-desktop-phase-5-boundary.md`](adr/0050-product-desktop-phase-5-boundary.md),
+and
+[`plan/product-v1-phase-5-desktop-development-unified-product.md`](plan/product-v1-phase-5-desktop-development-unified-product.md).
 
 See [`STATUS.md`](STATUS.md) for the complete evidence ledger and
 [`qualification/external-caller-coding-shell-v1.md`](qualification/external-caller-coding-shell-v1.md)
@@ -254,12 +282,18 @@ below retains older per-gate commits and run IDs because those identify exact
 historical evidence rather than the newest documentation commit.
 
 The ADR 0038 calling-standard slice remains implemented. The current Contract
-authority is revision `98995384c60a924f25ca58d3b7e561207bfa5be8`, tree
-`0a627baed11c8a6ddbe8a24bbc1869e4f85edc16`, and a content-derived 60-case
-local Suite. A clean VCS-built Runner at lock-selection revision
-`3caf38c6bc0b62d2eeb2c1e1c4ed473fae5baab1` passed all 60 cases with race
-detection and shuffle. The historical remote Runner and hosted CI results
-retain their recorded identities and are not relabeled as current runs.
+authority is revision `720ad15c343e71f36615dc4499edd5e764178bca`, tree
+`343ffde0819207cf99c005096c336735dd33a735`, and a content-derived 71-case
+local Suite. Product Phase 5 Slice 1 maps every case to executable repository
+tests and keeps Desktop advertisement disabled. The historical Phase 2
+60-case Runner, remote Runner, hosted CI, Product Phase 3/4, and external-caller
+results retain their recorded identities and are not relabeled as current
+runs. Product Phase 5 Slice 2 separately adds Product Desktop intent at
+implementation `d2e7943f704e2eed6ea7b61a44ed2b6fa5510e00`. Slice 3 adds
+Provider-local Desktop authority and optional protected handlers at
+`f96c06c3a50ade031e8ffbb4d8ea15e6ca8be7d5`; neither slice changes the
+Provider Contract identity or any historical result, and Slice 3 is not
+production startup composition or capability advertisement.
 The independently implemented caller result is instead the separate bounded
 P2.7 qualification recorded above. Rotation remains operator-driven, and
 protected/mutating remote conformance, aggregate conformance, multi-controller,
@@ -824,17 +858,17 @@ Contract identity:
 
 - namespace: `urn:shell-echo:sandbox-runtime:provider-v1`
 - version/license: `1.0.0` / MIT
-- revision: `98995384c60a924f25ca58d3b7e561207bfa5be8`
-- Contract tree: `0a627baed11c8a6ddbe8a24bbc1869e4f85edc16`
+- revision: `720ad15c343e71f36615dc4499edd5e764178bca`
+- Contract tree: `343ffde0819207cf99c005096c336735dd33a735`
 - manifest digest:
-  `sha256:f1a4e787f5dc5fecc85c6f6ed54385925686dfc1ced749caca5522805320c799`
+  `sha256:483111511a588b41bd40d3fef686f0b21f465bb65d3215450ebb2ccf37a5de89`
 - OpenAPI digest:
-  `sha256:f4301829d52969516d8551e14b7aee064628bec01e1d7d3613be3fa89579efdb`
+  `sha256:5a3da5d239f83e94eff09fc75438755f834e77bce8cd1c0f91c25055bf0cba2a`
 - semantic-rules digest:
-  `sha256:0bf737c9dc242a0a7e32a1a86261fa1fc96b3124eeb2510738af274de53a2026`
+  `sha256:7953d05e65f00c68e0428b6dd4fcebef1af103f2cab2fa6b214905b2496c8785`
 - local Suite: `sandbox-provider@1.0.0`, profile
-  `sandbox-runtime-provider-v1`, `repository-go-test`, 60 cases, digest
-  `sha256:7db1d28d35ca193632c395247cc71eeaaff48b027964b9ea9da247eaad5e3991`
+  `sandbox-runtime-provider-v1`, `repository-go-test`, 71 cases, digest
+  `sha256:78e01cc5eb176083896baf8507c551d2ee88e56b93197321702748a88949e89d`
 - remote Suite: `sandbox-provider-remote@1.0.0`, profile
   `sandbox-runtime-provider-remote-discovery-v1`, `remote-http-black-box`, 6
   cases, digest
@@ -847,11 +881,12 @@ Contract identity:
 | P1.2 | Passed for the selected Contract-authorized lifecycle subset and development composition | Snapshot/restore, resize, and production gates remain open |
 | P2 components | P2.1-P2.5h local component, Contract projection, Docker, and recorded repository CI gates pass within their named boundaries | Retain single-controller/development constraints and exact Contract lock |
 | P2.5i | Latest completed local run `20260907T044611.598221000Z` passed 15 initial plus 5 restart/resume coding/shell scenarios against historical harness/Provider lock `b8d4829`/`af8a505`; hosted regression `33970773414` remains historical evidence against `17ed6ca`/`b4d41c9` | Neither run contains a Browser scenario or proves interoperability with an independently implemented external caller, durable-revocation caller behavior, or production properties |
-| P2.6 | The historical 50-case local and separate 6-case remote profiles passed at `3fe314a`/`ae476fe`. The current content-derived 60-case local Suite passed from a clean VCS-built Runner at lock-selection revision `3caf38c6bc0b62d2eeb2c1e1c4ed473fae5baab1`; Contract verification, projection checks, race suite, and vet also pass | Protected or mutating remote profiles and broader aggregate/reliability/deployment gates remain separate |
+| P2.6 | The historical 50-case local and separate 6-case remote profiles passed at `3fe314a`/`ae476fe`. The later content-derived 60-case local Suite passed from a clean VCS-built Runner at lock-selection revision `3caf38c6bc0b62d2eeb2c1e1c4ed473fae5baab1`; Product Phase 5 separately selects the current 71-case authority | Protected or mutating remote profiles and broader aggregate/reliability/deployment gates remain separate |
 | P2.7 | Complete at **24/24**; the public independent caller is **13/13**. Hosted run `35203241121` executed all 15+5 cases against Provider `170459266af5f4fad359ca8c63f2ae19741055c5` and caller `b3ebcc783e5db20395e29b029e0eb55f7819b49b`, matched all 91 required observations, completed stable zero-resource teardown, and produced accepted seven-file artifact `10488622806` with result-envelope digest `sha256:d5e6fd528f2302252a38f49aa466c85767106a8bcef430120f230a8127f96758` | No step remains in the fixed first-version plan. Other callers/profiles, aggregate conformance, multi-controller, hostile multi-tenant, HA, deployment, and production readiness require new scopes and evidence |
 | P2 | Reference coding/shell caller and Product Phase 2 lifecycle release gates passed; the latter includes a repository-owned independent-process 15+5+9 black-box run | Independently implemented external-caller lifecycle interoperability, aggregate conformance, multi-controller, hostile multi-tenant isolation, deployment, and production gates remain open |
 | P3 | Retired by ADR 0037. Historical revision binding/shadow/metrics components and candidate runs retain their recorded evidence boundaries | No named-platform migration gate remains; external consumers adapt to the exact locked Provider Contract |
 | P4 | Browser Contract authority/projection, exact sandboxed signed amd64/arm64/v8 publication, Provider-local components, default-disabled command/runtime composition, process-local Gateway limits, the separately recorded Browser/shared-capacity/durable-revocation caller gates, ADR 0033 component/caller evidence, the ADR 0034 v2 local/hosted deletion and rollback-detection gates, the ADR 0035 PostgreSQL component gate, and the ADR 0036 hosted same-runner controlled-restore gate pass within their named boundaries | Production independent witness/storage and restore operations, production Browser advertisement/public Gateway, Valkey/PostgreSQL provenance and HA, production configuration/metrics, aggregate, multi-controller, multi-tenant, deployment, and production gates remain open |
+| Product Phase 5 | Slices 1-3/15 lock the separate Provider Desktop Contract/projection, Product Desktop slot/session PostgreSQL intent, and Provider-local application/persistence/protected-handler authority. The Slice 4 local image/broker candidate and native arm64 smoke pass, but hosted native publication and independent provenance verification remain open; Desktop advertisement remains empty | Close the Slice 4 immutable publication gate, then execute Slices 5-15: adapters, public data plane, policy, recovery, recording, development environment, unified Web, and independent-process release evidence |
 
 Production readiness is not a numbered phase shortcut. Aggregate conformance,
 multi-controller reliability, hostile multi-tenant security, deployment, and
@@ -1122,10 +1157,10 @@ A process boundary alone cannot prove caller source independence or exact
 PID-level request attribution.
 
 1. Retain the completed P2.7 publication, 24/24 qualification, and public
-   caller 13/13 evidence at their exact recorded identities. The next overall
-   Product phase is a separately reviewed Provider lifecycle Contract expansion
-   for terminate, desired-state, renewal, events, and session close/resize;
-   reserved DTOs or private methods are not authority for those operations.
+   caller 13/13 evidence at their exact recorded identities. Retain the
+   completed Product Phase 2, Phase 3, and Phase 4 results at their exact
+   historical Contract and topology identities; the current Desktop-extended
+   Contract lock does not relabel them.
 2. Before adding protected or mutating remote profiles, define their explicit
    cleanup authority, prerequisites, case-specific evidence, and incomplete-run
    semantics; do not reinterpret the discovery profile.
@@ -1136,8 +1171,12 @@ PID-level request attribution.
 4. Prove independent PostgreSQL/Valkey failure and backup domains, HA, and
    operator controls only in a deployment-owned environment. Retain hosted ADR
    0036 evidence as same-runner reference evidence.
-5. Start the Desktop Contract/authority audit only after the Browser readiness
-   record is complete; do not reuse terminal or Browser routes as a shortcut.
+5. Close Product Phase 5 Slice 4 by running the manual native amd64/arm64
+   publication workflow from an authorized main revision and recording the
+   immutable index, platform-manifest, attestation, and independent-verification
+   identities. Do not begin Slice 5 image selection before that evidence
+   exists. Keep capability advertisement off and do not reuse Terminal or
+   Browser routes, repositories, or handoffs as a shortcut.
 6. Keep multi-issuer admission, aggregate conformance, multi-controller,
    multi-tenant, HA, independent external-caller interoperability, deployment,
    and production-readiness claims blocked until their separately named gates
