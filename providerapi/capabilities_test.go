@@ -308,6 +308,123 @@ func TestBrowserCapabilityRejectionFixtures(t *testing.T) {
 	}
 }
 
+func TestMapCapabilitiesProjectsDesktopAdvertisement(t *testing.T) {
+	capabilities, runtimeProfiles := providerDesktopAdvertisements()
+	snapshot, err := provider.NewCapabilitySnapshotWithAdvertisements("revision-1", provider.Limits{
+		MaxCPUMillis: 4000, MaxMemoryBytes: 4 << 30, MaxEphemeralStorageBytes: 4 << 30,
+		MaxLeaseSeconds: 3600, MaxExecSeconds: 300,
+	}, capabilities, runtimeProfiles, []provider.SnapshotRestoreProfile{{
+		ProfileID: "sandbox-snapshot-workspace-v1", Level: provider.SnapshotLevelWorkspace,
+		SuiteID: provider.CompatibilitySuiteSandboxProvider, SuiteVersion: "1.0.0",
+		SuiteDigest: provider.SHA256Digest("sha256:" + strings.Repeat("a", 64)),
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	document := mapCapabilities(snapshot)
+	if err := validateCapabilities(document); err != nil {
+		t.Fatalf("validate desktop projection: %v", err)
+	}
+	if len(document.Capabilities) != 1 || document.Capabilities[0].ID != providerv1.CapabilityDesktop ||
+		!reflect.DeepEqual(document.Capabilities[0].Versions, []string{"1.0.0"}) ||
+		!reflect.DeepEqual(document.Capabilities[0].Profiles, []string{"desktop-v1"}) {
+		t.Fatalf("desktop capability projection = %#v", document.Capabilities)
+	}
+	if len(document.RuntimeProfiles) != 1 || document.RuntimeProfiles[0].ID != "sandbox-runtime-desktop-v1" ||
+		!reflect.DeepEqual(document.RuntimeProfiles[0].CapabilityProfileIDs, []string{"desktop-v1"}) {
+		t.Fatalf("desktop runtime projection = %#v", document.RuntimeProfiles)
+	}
+	encoded, err := json.Marshal(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	projection, err := providercontract.Load(context.Background(), filepath.Join(localContractSourceRoot(t), "compatibility/sandbox-runtime/contract.lock.json"), localContractSourceRoot(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := projection.Validate("provider-capabilities.schema.json", encoded); err != nil {
+		t.Fatalf("desktop projection is not Contract-valid: %v", err)
+	}
+}
+
+func TestMapCapabilitiesProjectsDesktopLifecycleControl(t *testing.T) {
+	capabilities, runtimeProfiles := providerDesktopAdvertisements()
+	capabilities = append(capabilities, provider.Capability{
+		ID:       "sandbox.lifecycle-control",
+		Versions: []string{"1.0.0"},
+		Profiles: []string{"lifecycle-control-v1"},
+	})
+	runtimeProfiles[0].CapabilityProfileIDs = append(runtimeProfiles[0].CapabilityProfileIDs, "lifecycle-control-v1")
+	snapshot, err := provider.NewCapabilitySnapshotWithAdvertisements("revision-1", provider.Limits{
+		MaxCPUMillis: 4000, MaxMemoryBytes: 4 << 30, MaxEphemeralStorageBytes: 4 << 30,
+		MaxLeaseSeconds: 3600, MaxExecSeconds: 300,
+	}, capabilities, runtimeProfiles, []provider.SnapshotRestoreProfile{{
+		ProfileID: "sandbox-snapshot-workspace-v1", Level: provider.SnapshotLevelWorkspace,
+		SuiteID: provider.CompatibilitySuiteSandboxProvider, SuiteVersion: "1.0.0",
+		SuiteDigest: provider.SHA256Digest("sha256:" + strings.Repeat("a", 64)),
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	document := mapCapabilities(snapshot)
+	if err := validateCapabilities(document); err != nil {
+		t.Fatalf("validate desktop lifecycle-control projection: %v", err)
+	}
+	if len(document.Capabilities) != 2 || document.Capabilities[0].ID != providerv1.CapabilityDesktop ||
+		document.Capabilities[1].ID != providerv1.CapabilityLifecycleControl || len(document.RuntimeProfiles) != 1 ||
+		!reflect.DeepEqual(document.RuntimeProfiles[0].CapabilityProfileIDs, []string{"desktop-v1", "lifecycle-control-v1"}) {
+		t.Fatalf("desktop lifecycle-control projection = %#v", document)
+	}
+	encoded, err := json.Marshal(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	projection, err := providercontract.Load(context.Background(), filepath.Join(localContractSourceRoot(t), "compatibility/sandbox-runtime/contract.lock.json"), localContractSourceRoot(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := projection.Validate("provider-capabilities.schema.json", encoded); err != nil {
+		t.Fatalf("desktop lifecycle-control projection is not Contract-valid: %v", err)
+	}
+}
+
+func TestDesktopCapabilityRejectionFixtures(t *testing.T) {
+	projection, err := providercontract.Load(context.Background(), filepath.Join(localContractSourceRoot(t), "compatibility/sandbox-runtime/contract.lock.json"), localContractSourceRoot(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	document, err := projection.ReadExample("capabilities-desktop-rejections.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fixture struct {
+		Cases []struct {
+			Name     string                  `json:"name"`
+			Document providerv1.Capabilities `json:"document"`
+		} `json:"cases"`
+	}
+	if err := json.Unmarshal(document, &fixture); err != nil {
+		t.Fatalf("decode desktop rejection fixtures: %v", err)
+	}
+	if len(fixture.Cases) < 5 {
+		t.Fatalf("desktop rejection fixture count = %d, want at least 5", len(fixture.Cases))
+	}
+	for _, test := range fixture.Cases {
+		t.Run(test.Name, func(t *testing.T) {
+			encoded, err := json.Marshal(test.Document)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := projection.Validate("provider-capabilities.schema.json", encoded); err != nil {
+				t.Fatalf("semantic rejection fixture must remain Schema-valid: %v", err)
+			}
+			if err := validateCapabilities(test.Document); err == nil {
+				t.Fatal("validateCapabilities() error = nil")
+			}
+		})
+	}
+}
+
 func TestCodingShellCapabilityRejectionFixtures(t *testing.T) {
 	projection, err := providercontract.Load(context.Background(), filepath.Join(localContractSourceRoot(t), "compatibility/sandbox-runtime/contract.lock.json"), localContractSourceRoot(t))
 	if err != nil {
@@ -551,5 +668,14 @@ func providerBrowserAdvertisements() ([]provider.Capability, []provider.RuntimeP
 		}}, []provider.RuntimeProfile{{
 			ID: "sandbox-runtime-browser-v1", IsolationClass: "container", RuntimeClassName: "sandbox-runtime-browser",
 			Architecture: []string{"amd64"}, CapabilityProfileIDs: []string{"browser-v1"},
+		}}
+}
+
+func providerDesktopAdvertisements() ([]provider.Capability, []provider.RuntimeProfile) {
+	return []provider.Capability{{
+			ID: "sandbox.desktop", Versions: []string{"1.0.0"}, Profiles: []string{"desktop-v1"},
+		}}, []provider.RuntimeProfile{{
+			ID: "sandbox-runtime-desktop-v1", IsolationClass: "container", RuntimeClassName: "sandbox-runtime-desktop",
+			Architecture: []string{"amd64"}, CapabilityProfileIDs: []string{"desktop-v1"},
 		}}
 }

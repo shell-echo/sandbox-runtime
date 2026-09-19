@@ -133,6 +133,18 @@ var testCases = map[string]testCase{
 		Package: "./providerapi",
 		Run:     `^TestBrowserCapabilityRejectionFixtures$`,
 	},
+	"capability-discovery-desktop-profile-advertisement": {
+		Package: "./providerapi",
+		Run:     `^TestMapCapabilitiesProjectsDesktopAdvertisement$`,
+	},
+	"capability-discovery-desktop-contract-consistency": {
+		Package: "./providerapi/v1",
+		Run:     `^TestLockedDesktopCapabilityContractConsistency$`,
+	},
+	"capability-discovery-desktop-rejection-fixtures": {
+		Package: "./providerapi",
+		Run:     `^TestDesktopCapabilityRejectionFixtures$`,
+	},
 	"capability-discovery-empty-request": {
 		Package:         "./providerapi",
 		Run:             `^(TestCapabilitiesHandlerRejectsRequestsWithoutADocumentBeforeDispatch|TestProviderServerReconcilesHTTP11CapabilityInputTransport)$`,
@@ -304,6 +316,39 @@ var testCases = map[string]testCase{
 	"browser-session-protected-admission-bindings": {
 		Package: "./provider/admission",
 		Run:     `^TestLocalContractBrowserSessionAdmissionBindings$`,
+	},
+	"desktop-session-open-schema": {
+		Package: "./providerapi/v1",
+		Run:     `^TestLockedDesktopSessionOpenRequestProjection$`,
+	},
+	"desktop-session-close-schema": {
+		Package: "./providerapi/v1",
+		Run:     `^TestLockedDesktopSessionCloseRequestProjection$`,
+	},
+	"desktop-session-operation-schema": {
+		Package: "./providerapi/v1",
+		Run:     `^TestLockedDesktopSessionOperationProjection$`,
+	},
+	"desktop-session-handoff-schema": {
+		Package: "./providerapi/v1",
+		Run:     `^TestLockedDesktopSessionHandoffProjection$`,
+	},
+	"desktop-session-semantic-bounds": {
+		Package:         "./providerapi/v1",
+		Run:             `^(TestLocalContractDesktopSessionSemanticRules|TestLocalContractDesktopSessionStateAndSecurity)$`,
+		ExpectedMatches: 2,
+	},
+	"desktop-session-rejection-fixtures": {
+		Package: "./providerapi/v1",
+		Run:     `^TestDesktopSessionRejectionFixtures$`,
+	},
+	"desktop-session-usage-evidence": {
+		Package: "./providerapi/v1",
+		Run:     `^TestLockedDesktopSessionUsageEvidenceProjection$`,
+	},
+	"desktop-session-protected-admission-bindings": {
+		Package: "./provider/admission",
+		Run:     `^TestLocalContractDesktopSessionAdmissionBindings$`,
 	},
 	"artifact-staging-request-schema": {
 		Package: "./providerapi/v1",

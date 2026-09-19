@@ -261,13 +261,29 @@ func Verify(ctx context.Context, lock Lock, sourceRoot string) (Report, error) {
 	if err != nil {
 		return Report{}, err
 	}
-	return VerifyWithGitExecutable(ctx, lock, sourceRoot, gitExecutable)
+	return verifyWithGitExecutable(ctx, lock, sourceRoot, gitExecutable, true)
 }
 
 // VerifyWithGitExecutable is Verify with one caller-selected Git executable.
 // The executable is resolved to a regular absolute path once and reused for
 // every Git operation in this verification.
 func VerifyWithGitExecutable(ctx context.Context, lock Lock, sourceRoot, gitExecutable string) (Report, error) {
+	return verifyWithGitExecutable(ctx, lock, sourceRoot, gitExecutable, true)
+}
+
+// VerifyHistoricalRevision verifies an immutable Contract revision without
+// requiring the current checkout's Contract tree to be identical. It is for
+// retained evidence definitions that deliberately pin an older authority; new
+// compatibility claims must use Verify against the current checkout instead.
+func VerifyHistoricalRevision(ctx context.Context, lock Lock, sourceRoot string) (Report, error) {
+	gitExecutable, err := resolveGitExecutable()
+	if err != nil {
+		return Report{}, err
+	}
+	return verifyWithGitExecutable(ctx, lock, sourceRoot, gitExecutable, false)
+}
+
+func verifyWithGitExecutable(ctx context.Context, lock Lock, sourceRoot, gitExecutable string, requireCheckoutMatch bool) (Report, error) {
 	if ctx == nil {
 		return Report{}, errors.New("contract verification context is required")
 	}
@@ -318,26 +334,28 @@ func VerifyWithGitExecutable(ctx context.Context, lock Lock, sourceRoot, gitExec
 	if err != nil {
 		return Report{}, err
 	}
-	checkoutTree, err := git(ctx, gitExecutable, root, "rev-parse", "HEAD:"+lock.Contract.Root)
-	if err != nil {
-		return Report{}, err
-	}
-	if checkoutTree != lock.Source.ContractTree {
-		return Report{}, fmt.Errorf("checkout Contract tree %s, want %s", checkoutTree, lock.Source.ContractTree)
-	}
-	dirty, err := git(ctx, gitExecutable, root, "status", "--porcelain", "--untracked-files=all", "--", lock.Contract.Root)
-	if err != nil {
-		return Report{}, err
-	}
-	if dirty != "" {
-		return Report{}, fmt.Errorf("checkout Contract path has uncommitted changes: %s", strings.ReplaceAll(dirty, "\n", "; "))
+	if requireCheckoutMatch {
+		checkoutTree, err := git(ctx, gitExecutable, root, "rev-parse", "HEAD:"+lock.Contract.Root)
+		if err != nil {
+			return Report{}, err
+		}
+		if checkoutTree != lock.Source.ContractTree {
+			return Report{}, fmt.Errorf("checkout Contract tree %s, want %s", checkoutTree, lock.Source.ContractTree)
+		}
+		dirty, err := git(ctx, gitExecutable, root, "status", "--porcelain", "--untracked-files=all", "--", lock.Contract.Root)
+		if err != nil {
+			return Report{}, err
+		}
+		if dirty != "" {
+			return Report{}, fmt.Errorf("checkout Contract path has uncommitted changes: %s", strings.ReplaceAll(dirty, "\n", "; "))
+		}
 	}
 
 	lockedResources, err := readLockedContractTree(ctx, gitExecutable, root, lock.Source.Revision, lock.Contract.Root)
 	if err != nil {
 		return Report{}, fmt.Errorf("read locked Contract tree: %w", err)
 	}
-	manifestData, err := readLockedResource(root, lock.Contract.ManifestPath, maxMetadataBytes, lockedResources)
+	manifestData, err := readLockedResource(root, lock.Contract.ManifestPath, maxMetadataBytes, lockedResources, requireCheckoutMatch)
 	if err != nil {
 		return Report{}, fmt.Errorf("read locked Contract manifest: %w", err)
 	}
@@ -348,14 +366,18 @@ func VerifyWithGitExecutable(ctx context.Context, lock Lock, sourceRoot, gitExec
 	if manifest.Namespace != lock.Contract.Namespace || manifest.Version != lock.Contract.Version || manifest.License != lock.Contract.License {
 		return Report{}, errors.New("Contract manifest identity does not match the contract lock")
 	}
-	contractRoot, err := securePath(root, lock.Contract.Root)
-	if err != nil {
-		return Report{}, fmt.Errorf("resolve Contract root: %w", err)
-	}
-	if err := validateContractManifestResources(contractRoot, manifest.Resources); err != nil {
+	if requireCheckoutMatch {
+		contractRoot, err := securePath(root, lock.Contract.Root)
+		if err != nil {
+			return Report{}, fmt.Errorf("resolve Contract root: %w", err)
+		}
+		if err := validateContractManifestResources(contractRoot, manifest.Resources); err != nil {
+			return Report{}, err
+		}
+	} else if err := validateContractManifestResourceDefinitions(manifest.Resources); err != nil {
 		return Report{}, err
 	}
-	resources, err := readLockedManifestResources(root, lock, manifest.Resources, lockedResources)
+	resources, err := readLockedManifestResources(root, lock, manifest.Resources, lockedResources, requireCheckoutMatch)
 	if err != nil {
 		return Report{}, err
 	}
@@ -399,15 +421,17 @@ func VerifyWithGitExecutable(ctx context.Context, lock Lock, sourceRoot, gitExec
 	if semanticRules.Namespace != lock.Contract.Namespace || semanticRules.Version != lock.Contract.Version || len(semanticRules.Rules) == 0 {
 		return Report{}, errors.New("semantic rules identity or rules are invalid")
 	}
-	fixturesRoot, err := securePath(root, lock.Contract.FixturesRoot)
-	if err != nil {
-		return Report{}, err
-	}
-	if info, err := os.Stat(fixturesRoot); err != nil || !info.IsDir() {
-		if err == nil {
-			err = errors.New("not a directory")
+	if requireCheckoutMatch {
+		fixturesRoot, err := securePath(root, lock.Contract.FixturesRoot)
+		if err != nil {
+			return Report{}, err
 		}
-		return Report{}, fmt.Errorf("inspect Contract fixtures: %w", err)
+		if info, err := os.Stat(fixturesRoot); err != nil || !info.IsDir() {
+			if err == nil {
+				err = errors.New("not a directory")
+			}
+			return Report{}, fmt.Errorf("inspect Contract fixtures: %w", err)
+		}
 	}
 
 	sandboxSuiteData, ok := resources[lock.SandboxSuite.Path]
@@ -430,7 +454,7 @@ func VerifyWithGitExecutable(ctx context.Context, lock Lock, sourceRoot, gitExec
 	return Report{
 		LockedRevision:    lockedRevision,
 		CheckoutHead:      checkoutHead,
-		ContractTree:      checkoutTree,
+		ContractTree:      lockedTree,
 		ContractNamespace: lock.Contract.Namespace,
 		ContractVersion:   lock.Contract.Version,
 		ManifestDigest:    manifestDigest,
@@ -527,12 +551,12 @@ func decodeContractManifest(document []byte) (contractManifest, error) {
 	return manifest, nil
 }
 
-func readLockedManifestResources(root string, lock Lock, resources []contractManifestResource, lockedResources map[string][]byte) (map[string][]byte, error) {
+func readLockedManifestResources(root string, lock Lock, resources []contractManifestResource, lockedResources map[string][]byte, verifyWorking bool) (map[string][]byte, error) {
 	result := make(map[string][]byte, len(resources)+1)
 	total := 0
 	for index, resource := range resources {
 		relative := lock.Contract.Root + "/" + resource.Path
-		document, err := readLockedResource(root, relative, maxMetadataBytes, lockedResources)
+		document, err := readLockedResource(root, relative, maxMetadataBytes, lockedResources, verifyWorking)
 		if err != nil {
 			return nil, fmt.Errorf("verify Contract manifest resource %d: %w", index, err)
 		}
@@ -545,13 +569,16 @@ func readLockedManifestResources(root string, lock Lock, resources []contractMan
 	return result, nil
 }
 
-func readLockedResource(root, relative string, maximum int64, lockedResources map[string][]byte) ([]byte, error) {
+func readLockedResource(root, relative string, maximum int64, lockedResources map[string][]byte, verifyWorking bool) ([]byte, error) {
 	expected, ok := lockedResources[relative]
 	if !ok {
 		return nil, fmt.Errorf("resource %s is absent from the locked Git tree", relative)
 	}
 	if int64(len(expected)) > maximum {
 		return nil, fmt.Errorf("locked resource %s exceeds %d bytes", relative, maximum)
+	}
+	if !verifyWorking {
+		return append([]byte(nil), expected...), nil
 	}
 	original := filepath.Join(root, filepath.FromSlash(relative))
 	info, err := os.Lstat(original)
@@ -647,6 +674,32 @@ func validateContractManifestResources(contractRoot string, resources []contract
 		}
 		return fmt.Errorf("inspect Contract manifest root: %w", err)
 	}
+	if err := validateContractManifestResourceDefinitions(resources); err != nil {
+		return err
+	}
+	for index, resource := range resources {
+		path, err := securePath(contractRoot, resource.Path)
+		if err != nil {
+			return fmt.Errorf("resolve Contract manifest resource %d: %w", index, err)
+		}
+		info, err := os.Lstat(filepath.Join(contractRoot, filepath.FromSlash(resource.Path)))
+		if err != nil {
+			return fmt.Errorf("inspect Contract manifest resource %d: %w", index, err)
+		}
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("Contract manifest resource %d is not a regular file", index)
+		}
+		if resolvedInfo, err := os.Stat(path); err != nil || !resolvedInfo.Mode().IsRegular() {
+			if err == nil {
+				err = errors.New("not a regular file")
+			}
+			return fmt.Errorf("inspect Contract manifest resource %d: %w", index, err)
+		}
+	}
+	return nil
+}
+
+func validateContractManifestResourceDefinitions(resources []contractManifestResource) error {
 	if len(resources) == 0 {
 		return errors.New("Contract manifest resources must not be empty")
 	}
@@ -670,24 +723,6 @@ func validateContractManifestResources(contractRoot string, resources []contract
 			return fmt.Errorf("Contract manifest resource %d duplicates id %q", index, resource.ID)
 		}
 		ids[resource.ID] = struct{}{}
-
-		path, err := securePath(contractRoot, resource.Path)
-		if err != nil {
-			return fmt.Errorf("resolve Contract manifest resource %d: %w", index, err)
-		}
-		info, err := os.Lstat(filepath.Join(contractRoot, filepath.FromSlash(resource.Path)))
-		if err != nil {
-			return fmt.Errorf("inspect Contract manifest resource %d: %w", index, err)
-		}
-		if !info.Mode().IsRegular() {
-			return fmt.Errorf("Contract manifest resource %d is not a regular file", index)
-		}
-		if resolvedInfo, err := os.Stat(path); err != nil || !resolvedInfo.Mode().IsRegular() {
-			if err == nil {
-				err = errors.New("not a regular file")
-			}
-			return fmt.Errorf("inspect Contract manifest resource %d: %w", index, err)
-		}
 	}
 	return nil
 }

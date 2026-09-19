@@ -19,6 +19,7 @@ general production readiness.
 | Independent external caller | **13/13 complete** |
 | Product v1 Phase 3 | **13/13 complete** for the bounded standalone topology |
 | Product v1 Phase 4 Browser | **13/13 complete** for the bounded same-repository separate-process topology |
+| Product v1 Phase 5 Desktop | **1/15 complete**; Provider Contract/projection authority only, advertisement disabled |
 | Coding/shell qualification | **Qualified** for the exact caller, Provider revisions, topology, profile, and scenarios recorded below |
 | Latest core CI | [Passed](https://github.com/shell-echo/sandbox-runtime/actions/runs/35204434771) |
 
@@ -77,6 +78,18 @@ This is same-repository separate-process evidence, not deployment-qualified,
 independently implemented caller, HA, hostile-multitenant, or production
 evidence.
 
+[Product v1 Phase 5 Desktop](docs/plan/product-v1-phase-5-desktop-development-unified-product.md)
+has completed **1/15** dependency-ordered slices. Slice 1 locks a separate
+Provider Desktop capability/profile/runtime shape and complete session
+open/read/handoff/close/expiry/revocation, usage, admission, security, and
+cleanup semantics. Exact authority is Contract revision
+`720ad15c343e71f36615dc4499edd5e764178bca`, tree
+`343ffde0819207cf99c005096c336735dd33a735`, and a 71-case local Suite with
+digest `sha256:78e01cc5eb176083896baf8507c551d2ee88e56b93197321702748a88949e89d`.
+This is Contract and Go projection evidence only: no Desktop runtime, Product
+Desktop state, public data plane, Web experience, route composition, or
+capability advertisement exists yet.
+
 ## What the project provides
 
 - A local instance-management API with in-memory and Docker runtime drivers.
@@ -88,6 +101,8 @@ evidence.
   runtime endpoints are not part of the public Provider protocol.
 - Repository-owned OpenAPI, JSON Schemas, semantic rules, fixtures, and local
   and remote Conformance Suites.
+- A locked, separately modeled Provider Desktop Contract surface whose runtime
+  and capability advertisement remain disabled pending later Phase 5 slices.
 - Deterministic qualification tooling for an independently implemented caller.
 - Optional Browser reference components and evidence tracks, kept separate from
   the qualified coding/shell profile.

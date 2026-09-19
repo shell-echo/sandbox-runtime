@@ -109,7 +109,7 @@ func NewCapabilitySnapshot(providerRevisionID string, limits Limits, profiles []
 
 // NewCapabilitySnapshotWithAdvertisements validates and freezes a capability
 // snapshot. The locked v1 shapes are empty, terminal-only, atomic coding/shell,
-// or browser-only. Every advertised capability profile must map to the single
+// browser-only, or desktop-only. Every advertised capability profile must map to the single
 // advertised runtime profile.
 func NewCapabilitySnapshotWithAdvertisements(providerRevisionID string, limits Limits, capabilities []Capability, runtimeProfiles []RuntimeProfile, profiles []SnapshotRestoreProfile) (CapabilitySnapshot, error) {
 	snapshot := CapabilitySnapshot{
@@ -217,7 +217,7 @@ func validateCapabilityAdvertisements(capabilities []Capability, runtimeProfiles
 		}
 		versions := make(map[string]struct{}, len(capability.Versions))
 		for _, version := range capability.Versions {
-			if !identifierPattern.MatchString(version) || ((capability.ID == "sandbox.exec" || capability.ID == "sandbox.terminal" || capability.ID == "sandbox.terminal-connect" || capability.ID == "sandbox.browser" || capability.ID == "sandbox.lifecycle-control" || capability.ID == "sandbox.terminal-control") && !suiteVersionPattern.MatchString(version)) {
+			if !identifierPattern.MatchString(version) || ((capability.ID == "sandbox.exec" || capability.ID == "sandbox.terminal" || capability.ID == "sandbox.terminal-connect" || capability.ID == "sandbox.browser" || capability.ID == "sandbox.desktop" || capability.ID == "sandbox.lifecycle-control" || capability.ID == "sandbox.terminal-control") && !suiteVersionPattern.MatchString(version)) {
 				return fmt.Errorf("capability %q has an invalid version %q", capability.ID, version)
 			}
 			if _, exists := versions[version]; exists {
@@ -242,7 +242,7 @@ func validateCapabilityAdvertisements(capabilities []Capability, runtimeProfiles
 			profiles[profileID] = struct{}{}
 			profileIDs[profileID] = struct{}{}
 		}
-		if (capability.ID == "sandbox.exec" || capability.ID == "sandbox.terminal" || capability.ID == "sandbox.terminal-connect" || capability.ID == "sandbox.browser" || capability.ID == "sandbox.lifecycle-control" || capability.ID == "sandbox.terminal-control") && (len(capability.Versions) == 0 || len(capability.Profiles) == 0) {
+		if (capability.ID == "sandbox.exec" || capability.ID == "sandbox.terminal" || capability.ID == "sandbox.terminal-connect" || capability.ID == "sandbox.browser" || capability.ID == "sandbox.desktop" || capability.ID == "sandbox.lifecycle-control" || capability.ID == "sandbox.terminal-control") && (len(capability.Versions) == 0 || len(capability.Profiles) == 0) {
 			return fmt.Errorf("capability %q must advertise at least one version and profile", capability.ID)
 		}
 		capabilitiesByID[capability.ID] = capability
@@ -257,6 +257,7 @@ func validateCapabilityAdvertisements(capabilities []Capability, runtimeProfiles
 	terminalCapability, terminalAdvertised := capabilitiesByID["sandbox.terminal"]
 	terminalConnectCapability, terminalConnectAdvertised := capabilitiesByID["sandbox.terminal-connect"]
 	browserCapability, browserAdvertised := capabilitiesByID["sandbox.browser"]
+	desktopCapability, desktopAdvertised := capabilitiesByID["sandbox.desktop"]
 	lifecycleControl, lifecycleControlAdvertised := capabilitiesByID["sandbox.lifecycle-control"]
 	terminalControl, terminalControlAdvertised := capabilitiesByID["sandbox.terminal-control"]
 	controlCount := 0
@@ -274,14 +275,18 @@ func validateCapabilityAdvertisements(capabilities []Capability, runtimeProfiles
 	}
 	baseCapabilityCount := len(capabilities) - controlCount
 	switch {
-	case (baseCapabilityCount == 1 || baseCapabilityCount == 2) && terminalAdvertised && !execAdvertised && !browserAdvertised && (baseCapabilityCount == 2) == terminalConnectAdvertised:
-	case (baseCapabilityCount == 2 || baseCapabilityCount == 3) && terminalAdvertised && execAdvertised && !browserAdvertised && (baseCapabilityCount == 3) == terminalConnectAdvertised:
-	case baseCapabilityCount == 1 && browserAdvertised && !terminalAdvertised && !terminalConnectAdvertised && !execAdvertised && !terminalControlAdvertised:
+	case (baseCapabilityCount == 1 || baseCapabilityCount == 2) && terminalAdvertised && !execAdvertised && !browserAdvertised && !desktopAdvertised && (baseCapabilityCount == 2) == terminalConnectAdvertised:
+	case (baseCapabilityCount == 2 || baseCapabilityCount == 3) && terminalAdvertised && execAdvertised && !browserAdvertised && !desktopAdvertised && (baseCapabilityCount == 3) == terminalConnectAdvertised:
+	case baseCapabilityCount == 1 && browserAdvertised && !desktopAdvertised && !terminalAdvertised && !terminalConnectAdvertised && !execAdvertised && !terminalControlAdvertised:
 		if len(browserCapability.Versions) != 1 || browserCapability.Versions[0] != "1.0.0" || len(browserCapability.Profiles) != 1 || browserCapability.Profiles[0] != "browser-v1" {
 			return errors.New("browser capability must advertise exactly version 1.0.0 and profile browser-v1")
 		}
+	case baseCapabilityCount == 1 && desktopAdvertised && !browserAdvertised && !terminalAdvertised && !terminalConnectAdvertised && !execAdvertised && !terminalControlAdvertised:
+		if len(desktopCapability.Versions) != 1 || desktopCapability.Versions[0] != "1.0.0" || len(desktopCapability.Profiles) != 1 || desktopCapability.Profiles[0] != "desktop-v1" {
+			return errors.New("desktop capability must advertise exactly version 1.0.0 and profile desktop-v1")
+		}
 	default:
-		return errors.New("Provider v1 permits only terminal-only, atomic coding/shell, or browser-only capability advertisements")
+		return errors.New("Provider v1 permits only terminal-only, atomic coding/shell, browser-only, or desktop-only capability advertisements")
 	}
 	if terminalConnectAdvertised {
 		if len(terminalConnectCapability.Versions) != 1 || terminalConnectCapability.Versions[0] != "1.0.0" ||
@@ -300,6 +305,13 @@ func validateCapabilityAdvertisements(capabilities []Capability, runtimeProfiles
 	}
 	if browserAdvertised && (runtimeProfiles[0].ID != "sandbox-runtime-browser-v1" || len(runtimeProfiles[0].CapabilityProfileIDs) != expectedBrowserProfiles || runtimeProfiles[0].CapabilityProfileIDs[0] != "browser-v1") {
 		return errors.New("browser capability must map only to runtime profile sandbox-runtime-browser-v1")
+	}
+	expectedDesktopProfiles := 1
+	if lifecycleControlAdvertised {
+		expectedDesktopProfiles++
+	}
+	if desktopAdvertised && (runtimeProfiles[0].ID != "sandbox-runtime-desktop-v1" || len(runtimeProfiles[0].CapabilityProfileIDs) != expectedDesktopProfiles || runtimeProfiles[0].CapabilityProfileIDs[0] != "desktop-v1") {
+		return errors.New("desktop capability must map only to runtime profile sandbox-runtime-desktop-v1")
 	}
 
 	mappedProfiles := make(map[string]struct{})

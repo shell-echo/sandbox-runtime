@@ -62,6 +62,16 @@ Docker, PostgreSQL, WebRTC, and headless-browser results. The result does not
 establish a deployment-qualified topology, independently implemented caller,
 HA, hostile multi-tenant isolation, or production readiness.
 
+The [Product v1 Phase 5 Desktop plan](plan/product-v1-phase-5-desktop-development-unified-product.md)
+is now **1/15** complete. Slice 1 is deliberately Contract-first: it adds a
+separate Provider Desktop capability/profile/runtime, open/read/opaque-handoff/
+close lifecycle, expiry and revocation, usage evidence, strict admission and
+security semantics, fixtures, and executable local Conformance mappings. The
+selected authority is revision `720ad15c343e71f36615dc4499edd5e764178bca`,
+tree `343ffde0819207cf99c005096c336735dd33a735`, with a 71-case local Suite.
+It adds no Desktop runtime, Product Desktop state, route composition, public
+data plane, Web feature, advertisement, deployment, or production evidence.
+
 ## Purpose
 
 `sandbox-runtime` is a backend-independent sandbox provider. Its first useful
@@ -694,19 +704,19 @@ advertisement, and optional-profile gates remain open:
 
 | Area | Current state | Required direction |
 | --- | --- | --- |
-| Conformance | The current Provider authority is implementation `98995384c60a924f25ca58d3b7e561207bfa5be8`, tree `0a627baed11c8a6ddbe8a24bbc1869e4f85edc16`, and content-derived 60-case local Suite selected by `3caf38c6bc0b62d2eeb2c1e1c4ed473fae5baab1`; its local release gates pass. P2.7 is **24/24**, the public external caller is **13/13**, and hosted run `35203241121` produced the accepted report, receipt, archive, and bounded disposition after all 15+5 scenarios, 91 observations, and stable cleanup passed. | Retain exact Contract and qualification regression. Define separate authority and evidence for protected/mutating remote profiles, other callers, aggregate conformance, multi-controller, hostile multi-tenant, HA, deployment, and production readiness. |
+| Conformance | The current Provider authority is Contract revision `720ad15c343e71f36615dc4499edd5e764178bca`, tree `343ffde0819207cf99c005096c336735dd33a735`, and a content-derived 71-case local Suite. Product Phase 5 Slice 1 maps every case to executable tests but establishes only Contract/projection evidence. P2.7 remains **24/24**, the public external caller remains **13/13**, and hosted run `35203241121` retains its accepted report, receipt, archive, and bounded disposition against its own recorded authority. | Retain exact current Contract/projection regression without relabeling historical qualification evidence. Define separate authority and evidence for protected/mutating remote profiles, other callers, aggregate conformance, multi-controller, hostile multi-tenant, HA, deployment, and production readiness. |
 | Protected admission | ADR 0038 requires one explicit issuer-scoped caller trust domain per listener, Provider-local audience/revision anchors, and 1..32 frozen verification keys. Its repository-local gates pass, and the exact P2.7 caller exercised the protected coding/shell flow successfully. | Retain exact authentication/authorization precedence. Treat multi-issuer admission, production identity operations, and qualification of other callers as separate future gates. |
 | Backend abstraction | Local `instance.Driver` remains separate; the Provider lifecycle has its own fake and Docker development adapters, while exec and terminal use focused Provider-only runtime ports. | Add future snapshot capability ports without reusing `/instances` models and retain narrow optional interfaces. |
 | Lifecycle recovery | Provider file persistence and Docker observation reconcile pending/unknown create work for one controller. | Retain unknown-outcome evidence; add transactional production storage before multi-controller operation. |
 | Persistence | Memory and atomically replaced file repository. | Retain for development; introduce transactional production storage before multi-controller operation. |
 | API | Local `/instances` and the protected Provider v1 surface are separate. Authorized coding/shell lifecycle/session/artifact/usage routes and the locked controller-only `GET /v1/runtime-sessions:connect` route are composed; the latter was exercised by the exact qualified external caller and remains distinct from a public end-user Gateway. The default-disabled Browser command graph remains a separate profile. | Define deployable caller-owned Gateway configuration and production storage/operations without moving user or tenant authorization into the Provider. |
-| Capabilities | Empty, terminal-only, atomic coding/shell, their optional locked terminal-connect variants, and browser-only snapshots are accepted. The command advertises terminal-connect only when its protected resolver/WebSocket connector is composed. The Browser-only reference deployment advertises the exact locked shape for its caller test; production command startup still does not advertise Browser. | Retain fail-closed advertisement/composition equality; advertise Browser in production only after the remaining profile-specific security, concurrency, deployment, and operational gates pass. |
+| Capabilities | Empty, terminal-only, atomic coding/shell, their optional locked terminal-connect variants, browser-only, and Desktop-only Contract snapshots are accepted. The command advertises terminal-connect only when its protected resolver/WebSocket connector is composed. The Browser-only reference deployment advertises its exact locked shape for its caller test; production command startup advertises neither Browser nor Desktop. | Retain fail-closed advertisement/composition equality. Desktop advertisement requires the later Phase 5 Provider graph and release gates; Browser production advertisement retains its separate open gates. |
 | Execution | P2.5e/g/h compose durable exec/cancel/result/operation handling, real Docker execution, private bounded capture, cancellation, expiry, reconciliation, bounded exec-derived usage, artifact staging, and readiness-derived exact advertisement for one development controller. The separately versioned coding/shell reference caller gate passes locally and hosted. | Replace development single-controller persistence and partial collectors with reviewed production storage, retention, and reconciliation while keeping Artifact publication, billing, and aggregate operation truth with the caller. |
 | Terminal | P2.5f1-f7 and the protected terminal-connect route compose the terminal runtime, durable session/reference state, fresh retained-handoff checks, binary-only bounded forwarding, expiry closure, and caller-owned Gateway boundary. Final P2.7 run `35203241121` exercised the independently owned caller/Gateway byte path and reconstruction within the exact qualified scope. | Add deployable production Gateway configuration and transactional multi-controller storage; do not generalize the bounded qualification to aggregate or production evidence. |
 | Workspace | The Provider Docker adapter supplies stable `/inputs`, `/workspace`, `/outputs`, and bounded tmpfs `/tmp` without exposing host paths. The dual-platform coding/shell image was published as OCI index `sha256:1996e44f8ddc464f22556bd57f1c69079fe6b1a821b65bd9be24f86619c31bb1`, attested, independently verified, pinned by the caller, and exercised in the final qualification. | Add production artifact consumers, capacity enforcement, lifecycle closure, and stronger isolation evidence as separate scopes. |
 | Security | The qualified Docker runtime used numeric non-root identity, read-only root, disabled networking, dropped capabilities, `no-new-privileges`, and bounded CPU, memory, swap, PIDs, and tmpfs; image provenance and the exact runtime observations are retained in the qualification evidence. | Add secrets policy, controlled egress where required, stronger isolation, production authentication, threat-model review, and hostile-tenant evidence before any production claim. |
 | Events and usage | Durable lifecycle events and bounded usage-evidence components exist without a complete runtime collector composition. | Complete collection/reconciliation while leaving platform accounting authority outside the Provider. |
-| Snapshots/browser/desktop | Browser Contract authority/projection, exact signed image, Provider-local session/application/reference/usage, Docker adapter, provenance verifier, restricted-egress provisioner, create-policy binding, protected handlers, caller-owned Gateway, default-disabled command graph, and hosted 13+5 Browser reference-caller path have named evidence. The Gateway has explicit process-local total/per-session post-authorization capacity, pre-upgrade service limits, bounded listener/TLS/HTTP behavior, and authenticated-capacity plus exact-grant revocation ports with process-local and Redis-compatible adapters. ADR 0031/`9434540` plus local arm64 run `20260905T080725.227680000Z` and hosted amd64 run `33955436968` add real Valkey plus two-independent-Gateway shared-capacity evidence. ADR 0032/`c0a55d1` adds durable revocation component evidence; harness/Gateway `e952ef9`, local arm64 run `20260905T095109.569973000Z`, and hosted amd64 run `33959122456` pass its separate seven-scenario two-Gateway/independent-revoker caller gate. ADR 0033/`b4d41c9` adds downstream action-fence/private-ingress/Redis adapter component evidence; harness/run `550c785`/`20260906T050213.016063000Z` and `2cadc53`/`34013982796` pass its separate 13-scenario v1 caller gate on arm64 and amd64. ADR 0034 separately adds witnessed-v2 deletion/rollback-detection component and pinned-Valkey adapter evidence; fixed harness `059357c` passes its independently locked 18-scenario real-Chromium caller gate in local run `20260906T100233.295973000Z` on arm64 and hosted run `34026680591` on amd64. ADR 0035/`3ff58dc` adds the PostgreSQL witness, exact least-privilege migration, and strict read-only restore-verification component; hosted run `34031784793` passes its real PostgreSQL and pinned-Valkey gate. ADR 0036 adds the separately locked same-runner controlled-restore caller profile; latest main run `34069851741` at `838d3bb` passes all 18 scenarios with `same_runner=true`, `independent_failure_domain=false`, and `suite_exercised=false`. Contract identity remains pinned while the ADR 0033, ADR 0034, and ADR 0036 caller profiles leave the Suite unexercised, and the ADR 0032 echo fixture is not Browser/CDP. The restricted-egress Gateway remains distinct from the caller-owned Gateway. Production Browser advertisement/public Gateway and authenticated v2 ingress deployment, production independent witness/storage and restore operations, Valkey/PostgreSQL provenance and HA/failover, aggregate, multi-controller, hostile multi-tenant, deployment, and production gates remain open. Snapshots and desktop remain unauthorized optional behavior. | Prove independent PostgreSQL/Valkey failure and backup domains, HA/failover, production quarantine/restore controls, hostile-tenant behavior, ACLs, metrics, and deployable storage/configuration before production advertisement; begin the Desktop authority audit only after the Browser readiness record is complete. |
+| Snapshots/browser/desktop | Browser Contract, component, and historical reference tracks retain their exact recorded evidence and open production gates. Product Phase 4 separately provides bounded Product Browser evidence. Product Phase 5 Slice 1 now authorizes a separate Desktop Contract shape, complete session lifecycle, opaque handoff, usage semantics, and Go projection with a 71-case local Suite. No Desktop application, repository, runtime image, driver, broker, private resolver, protected route composition, Product authority, public Gateway, Web UI, or capability advertisement exists. Snapshots remain unauthorized optional behavior. | Execute the fixed Phase 5 slices in dependency order. Keep Desktop advertisement off until the complete Provider and Product graphs plus release gate pass; retain Browser and Desktop evidence as separate profiles and do not infer production readiness. |
 
 ## Delivery plan and release gates
 
@@ -788,13 +798,14 @@ reliability, tenancy, deployment, and production claims remain separate.
 
 The historical 50-case local and six-case remote release gate passed at
 implementation `3fe314a` and E2E lock refresh `ae476fe`. The current
-content-derived 60-case local Suite and Phase 2 release gates pass at lock
+Phase 2 content-derived 60-case local Suite and release gates pass at lock
 selection `3caf38c6bc0b62d2eeb2c1e1c4ed473fae5baab1`; the earlier 53-case
-authority passed core CI `35204434771` and remains historical evidence. These
-results remain Suite evidence; the independently implemented caller result is
-recorded separately under P2.7, and protected/mutating remote, aggregate,
-multi-controller, hostile multi-tenant, HA, deployment, and production claims
-remain outside P2.6.
+authority passed core CI `35204434771`. Product Phase 5 Slice 1 supersedes the
+current repository lock with its 71-case Desktop-extended authority without
+relabeling any of those historical results. The independently implemented
+caller result remains separately recorded under P2.7, and protected/mutating
+remote, aggregate, multi-controller, hostile multi-tenant, HA, deployment, and
+production claims remain outside P2.6.
 
 #### P2.7: independent external caller qualification
 
@@ -948,6 +959,8 @@ before advertisement.
 
 This label predates and must not be confused with Product v1 Phase 4. Its
 Provider/reference Browser evidence is not Product Browser readiness evidence.
+The Product Phase 5 Slice 1 Desktop Contract is now authorized separately, but
+its runtime, composition, advertisement, and Product release gates remain open.
 
 ## Conformance matrix
 
@@ -971,7 +984,7 @@ No provider revision is “compatible” based only on unit tests, a successful
 container launch, or one discovery-profile report. Compatibility is the tested
 combination of protocol version, exact Contract revision/tree, Suite profile,
 capability set, runtime profile, architecture, driver, image digest, and
-security policy. Evidence from the historical 50-case repository profile, the
-current 60-case authority, six-case remote discovery profile, reference callers,
-and profile-specific E2E tracks remains separate and must not be aggregated by
-inference.
+security policy. Evidence from the historical 50- and 60-case repository
+profiles, the current 71-case Desktop-extended authority, six-case remote
+discovery profile, reference callers, and profile-specific E2E tracks remains
+separate and must not be aggregated by inference.

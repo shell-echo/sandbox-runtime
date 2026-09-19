@@ -79,9 +79,13 @@ correctly fails.
 
 The qualification-profile verifier separately checks the P2.7a coding/shell
 definition's repository trust anchors, closed schema, semantic invariants, and
-exact Provider Contract projection. Its success proves only that the profile
-definition is locked; it does not validate a qualification report or claim that
-an external caller executed or passed the profile. P2.7b separately locks the
+exact historical Provider Contract projection selected by
+`qualification/external-caller-coding-shell-v1/contract.lock.json`. That
+retained lock is verified from its immutable Git revision and must not be
+replaced by the current Provider lock or used for a new compatibility claim.
+Its success proves only that the historical profile definition is locked; it
+does not validate a qualification report or claim that an external caller
+executed or passed the profile. P2.7b separately locks the
 closed report schema at
 `sha256:9e9d75c021534d1b0ad49ad230031bad8cc578c163ac7f5626471899b0991c7c`
 and the validator semantics at
@@ -265,7 +269,7 @@ Pass those inputs with `-target`, `-ca`, `-client-ca`, `-client-cert`,
 `-provider-revision`, respectively. See
 [`compatibility/sandbox-runtime/README.md`](../compatibility/sandbox-runtime/README.md)
 for the complete command and exact local/remote Suite identities. The remote
-profile covers only six read-only discovery cases; it is not the local 60-case
+profile covers only six read-only discovery cases; it is not the local 71-case
 Suite, protected or mutating remote conformance, independent-caller
 interoperability, aggregate conformance, or production-readiness evidence. The
 report sets `unsafe_method_probes_sent=true` only after a POST, PUT, PATCH, or
@@ -276,12 +280,14 @@ The historical P2.6 release gate passed locally at implementation `3fe314a` and
 E2E lock refresh `ae476fe`, including both clean VCS-built Runners, the root and
 E2E race/shuffle and vet gates, Contract verification, parent-lock verification,
 and all eight E2E `-check` commands. The later 53-case local authority passed as
-a clean VCS-built Runner in core CI `35204434771`. The current 60-case authority
+a clean VCS-built Runner in core CI `35204434771`. The Phase 2 60-case authority
 passes from a clean VCS-built, race-enabled, shuffled Runner at lock-selection
-revision `3caf38c6bc0b62d2eeb2c1e1c4ed473fae5baab1`; no fresh current remote
-Runner or relabeled historical hosted result follows from that local release
-gate. Keep those checks separate from external caller, deployment, and
-production qualification.
+revision `3caf38c6bc0b62d2eeb2c1e1c4ed473fae5baab1`. Product Phase 5 Slice 1
+selects the current 71-case Desktop-extended authority and requires the same
+clean VCS-built, race-enabled, shuffled local Runner. No fresh remote Runner or
+relabeled historical hosted result follows from either local release gate.
+Keep those checks separate from external caller, deployment, and production
+qualification.
 
 ## Package boundaries
 

@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -180,6 +181,72 @@ func TestNewCapabilitySnapshotWithAdvertisementsRejectsInvalidBrowserMappings(t 
 	for name, mutate := range tests {
 		t.Run(name, func(t *testing.T) {
 			capabilities, runtimeProfiles := validBrowserAdvertisements()
+			mutate(&capabilities, &runtimeProfiles)
+			if _, err := NewCapabilitySnapshotWithAdvertisements("revision-1", validLimits(nil, nil), capabilities, runtimeProfiles, validProfiles()); err == nil {
+				t.Fatal("NewCapabilitySnapshotWithAdvertisements() error = nil")
+			}
+		})
+	}
+}
+
+func TestNewCapabilitySnapshotWithAdvertisementsAcceptsDesktopProfileMapping(t *testing.T) {
+	capabilities, runtimeProfiles := validDesktopAdvertisements()
+	snapshot, err := NewCapabilitySnapshotWithAdvertisements("revision-1", validLimits(nil, nil), capabilities, runtimeProfiles, validProfiles())
+	if err != nil {
+		t.Fatalf("NewCapabilitySnapshotWithAdvertisements() error = %v", err)
+	}
+	if len(snapshot.Capabilities) != 1 || snapshot.Capabilities[0].ID != "sandbox.desktop" ||
+		len(snapshot.Capabilities[0].Versions) != 1 || snapshot.Capabilities[0].Versions[0] != "1.0.0" ||
+		len(snapshot.Capabilities[0].Profiles) != 1 || snapshot.Capabilities[0].Profiles[0] != "desktop-v1" {
+		t.Fatalf("desktop capability = %#v", snapshot.Capabilities)
+	}
+	if len(snapshot.RuntimeProfiles) != 1 || snapshot.RuntimeProfiles[0].ID != "sandbox-runtime-desktop-v1" ||
+		len(snapshot.RuntimeProfiles[0].CapabilityProfileIDs) != 1 || snapshot.RuntimeProfiles[0].CapabilityProfileIDs[0] != "desktop-v1" {
+		t.Fatalf("desktop runtime profile = %#v", snapshot.RuntimeProfiles)
+	}
+}
+
+func TestNewCapabilitySnapshotWithAdvertisementsAcceptsDesktopLifecycleControl(t *testing.T) {
+	capabilities, runtimeProfiles := validDesktopAdvertisements()
+	capabilities = append(capabilities, Capability{
+		ID:       "sandbox.lifecycle-control",
+		Versions: []string{"1.0.0"},
+		Profiles: []string{"lifecycle-control-v1"},
+	})
+	runtimeProfiles[0].CapabilityProfileIDs = append(runtimeProfiles[0].CapabilityProfileIDs, "lifecycle-control-v1")
+
+	snapshot, err := NewCapabilitySnapshotWithAdvertisements("revision-1", validLimits(nil, nil), capabilities, runtimeProfiles, validProfiles())
+	if err != nil {
+		t.Fatalf("NewCapabilitySnapshotWithAdvertisements() error = %v", err)
+	}
+	if len(snapshot.Capabilities) != 2 || snapshot.Capabilities[0].ID != "sandbox.desktop" || snapshot.Capabilities[1].ID != "sandbox.lifecycle-control" ||
+		len(snapshot.RuntimeProfiles) != 1 || !reflect.DeepEqual(snapshot.RuntimeProfiles[0].CapabilityProfileIDs, []string{"desktop-v1", "lifecycle-control-v1"}) {
+		t.Fatalf("desktop lifecycle-control snapshot = %#v", snapshot)
+	}
+}
+
+func TestNewCapabilitySnapshotWithAdvertisementsRejectsInvalidDesktopMappings(t *testing.T) {
+	tests := map[string]func(*[]Capability, *[]RuntimeProfile){
+		"mixed with terminal": func(capabilities *[]Capability, _ *[]RuntimeProfile) {
+			*capabilities = append(*capabilities, Capability{ID: "sandbox.terminal", Versions: []string{"1.0.0"}, Profiles: []string{"terminal-v1"}})
+		},
+		"missing version": func(capabilities *[]Capability, _ *[]RuntimeProfile) {
+			(*capabilities)[0].Versions = nil
+		},
+		"wrong version": func(capabilities *[]Capability, _ *[]RuntimeProfile) {
+			(*capabilities)[0].Versions = []string{"2.0.0"}
+		},
+		"wrong capability profile": func(capabilities *[]Capability, runtimeProfiles *[]RuntimeProfile) {
+			(*capabilities)[0].Profiles = []string{"desktop-experimental"}
+			(*runtimeProfiles)[0].CapabilityProfileIDs = []string{"desktop-experimental"}
+		},
+		"wrong runtime profile": func(_ *[]Capability, runtimeProfiles *[]RuntimeProfile) {
+			(*runtimeProfiles)[0].ID = "sandbox-runtime-browser-v1"
+		},
+	}
+	for name, mutate := range tests {
+		t.Run(name, func(t *testing.T) {
+			capabilities, runtimeProfiles := validDesktopAdvertisements()
 			mutate(&capabilities, &runtimeProfiles)
 			if _, err := NewCapabilitySnapshotWithAdvertisements("revision-1", validLimits(nil, nil), capabilities, runtimeProfiles, validProfiles()); err == nil {
 				t.Fatal("NewCapabilitySnapshotWithAdvertisements() error = nil")
@@ -555,6 +622,20 @@ func validBrowserAdvertisements() ([]Capability, []RuntimeProfile) {
 			RuntimeClassName:     "sandbox-runtime-browser",
 			Architecture:         []string{"amd64"},
 			CapabilityProfileIDs: []string{"browser-v1"},
+		}}
+}
+
+func validDesktopAdvertisements() ([]Capability, []RuntimeProfile) {
+	return []Capability{{
+			ID:       "sandbox.desktop",
+			Versions: []string{"1.0.0"},
+			Profiles: []string{"desktop-v1"},
+		}}, []RuntimeProfile{{
+			ID:                   "sandbox-runtime-desktop-v1",
+			IsolationClass:       "container",
+			RuntimeClassName:     "sandbox-runtime-desktop",
+			Architecture:         []string{"amd64"},
+			CapabilityProfileIDs: []string{"desktop-v1"},
 		}}
 }
 
