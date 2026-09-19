@@ -14,14 +14,21 @@ const (
 	BrowserCapabilityID      = "sandbox.browser"
 	BrowserCapabilityVersion = "1.0.0"
 	BrowserCapabilityProfile = "browser-v1"
+	DesktopSlotProfile       = "sandbox-runtime-desktop-v1"
+	DesktopSlotKind          = "desktop"
+	DesktopCapabilityID      = "sandbox.desktop"
+	DesktopCapabilityVersion = "1.0.0"
+	DesktopCapabilityProfile = "desktop-v1"
 
 	SessionKindTerminal          = "terminal"
 	SessionKindBrowserAutomation = "browser_automation"
 	SessionKindBrowserLive       = "browser_live"
+	SessionKindDesktop           = "desktop"
 
 	SessionProfileTerminal          = "product-terminal.v1"
 	SessionProfileBrowserAutomation = "product-browser-automation.v1"
 	SessionProfileBrowserLive       = "product-browser-live.v1"
+	SessionProfileDesktop           = "product-desktop.v1"
 
 	GrantAccessView    = "view"
 	GrantAccessControl = "control"

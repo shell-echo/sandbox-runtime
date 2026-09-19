@@ -69,6 +69,18 @@ func (s *Store) CreateSession(ctx context.Context, command product.SessionComman
 	if count >= limit {
 		return product.Operation{}, false, product.ErrQuotaExceeded
 	}
+	if command.Kind == product.SessionKindDesktop {
+		var desktopCount, desktopLimit int
+		if err := tx.QueryRow(opCtx, `SELECT
+    (SELECT count(*) FROM sandbox_runtime_product.runtime_sessions
+     WHERE tenant_id=$1 AND kind='desktop' AND state NOT IN ('closed','expired','failed')),
+    COALESCE((SELECT max_desktop_sessions FROM sandbox_runtime_product.tenant_quotas WHERE tenant_id=$1),16)`, command.TenantID).Scan(&desktopCount, &desktopLimit); err != nil {
+			return product.Operation{}, false, storeError(ctx, opCtx, err, false)
+		}
+		if desktopCount >= desktopLimit {
+			return product.Operation{}, false, product.ErrQuotaExceeded
+		}
+	}
 	expires := now.Add(command.Lifetime)
 	if workspaceExpiry.Before(expires) {
 		expires = workspaceExpiry
@@ -257,10 +269,19 @@ func authorizeSessionSlot(sessionKind, slotKind string, encodedCapabilities []by
 		}
 		return nil
 	}
-	if sessionKind != product.SessionKindBrowserAutomation && sessionKind != product.SessionKindBrowserLive {
-		return product.ErrCapabilityUnsupported
-	}
-	if slotKind != "browser" {
+	capabilityID, capabilityVersion, capabilityProfile := "", "", ""
+	switch sessionKind {
+	case product.SessionKindBrowserAutomation, product.SessionKindBrowserLive:
+		if slotKind != product.BrowserSlotKind {
+			return product.ErrCapabilityUnsupported
+		}
+		capabilityID, capabilityVersion, capabilityProfile = product.BrowserCapabilityID, product.BrowserCapabilityVersion, product.BrowserCapabilityProfile
+	case product.SessionKindDesktop:
+		if slotKind != product.DesktopSlotKind {
+			return product.ErrCapabilityUnsupported
+		}
+		capabilityID, capabilityVersion, capabilityProfile = product.DesktopCapabilityID, product.DesktopCapabilityVersion, product.DesktopCapabilityProfile
+	default:
 		return product.ErrCapabilityUnsupported
 	}
 	var capabilities []product.CapabilityRequirement
@@ -268,7 +289,7 @@ func authorizeSessionSlot(sessionKind, slotKind string, encodedCapabilities []by
 		return product.ErrStoreUnavailable
 	}
 	for _, capability := range capabilities {
-		if capability.CapabilityID == "sandbox.browser" && capability.Version == "1.0.0" && capability.ProfileID == "browser-v1" {
+		if capability.CapabilityID == capabilityID && capability.Version == capabilityVersion && capability.ProfileID == capabilityProfile {
 			return nil
 		}
 	}
@@ -278,6 +299,9 @@ func authorizeSessionSlot(sessionKind, slotKind string, encodedCapabilities []by
 func sessionOutboxType(kind, action string) string {
 	if kind == product.SessionKindBrowserAutomation || kind == product.SessionKindBrowserLive {
 		return "browser_session." + action
+	}
+	if kind == product.SessionKindDesktop {
+		return "desktop_session." + action
 	}
 	return "session." + action
 }

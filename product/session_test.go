@@ -131,6 +131,23 @@ func TestSessionServiceAcceptsOnlyExactBrowserProfiles(t *testing.T) {
 	}
 }
 
+func TestSessionServiceAcceptsOnlyExactDesktopProfile(t *testing.T) {
+	store := &sessionStoreStub{operation: Operation{ID: "op_desktop"}}
+	service, err := NewSessionService(store, sessionPolicyStub{}, &sequenceIDs{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := CreateSessionRequest{ExpectedWorkspaceVersion: 2, SlotKey: "desktop-main", Kind: SessionKindDesktop, ProtocolProfile: SessionProfileDesktop, ExpiresInSeconds: 900, RecordingPolicy: "required"}
+	operation, _, err := service.Create(context.Background(), "tenant-1", ActorRef{Type: ActorHuman, ID: "actor-1"}, "wrk-1", "desktop-key", request)
+	if err != nil || operation.ID != "op_desktop" || store.command.Kind != SessionKindDesktop || store.command.ProtocolProfile != SessionProfileDesktop {
+		t.Fatalf("operation=%#v command=%#v err=%v", operation, store.command, err)
+	}
+	request.ProtocolProfile = SessionProfileBrowserLive
+	if _, _, err := service.Create(context.Background(), "tenant-1", ActorRef{Type: ActorHuman, ID: "actor-1"}, "wrk-1", "desktop-key-2", request); !errors.Is(err, ErrCapabilityUnsupported) {
+		t.Fatalf("mismatched Desktop profile err=%v", err)
+	}
+}
+
 func TestBrowserSessionStateMachineRejectsResurrection(t *testing.T) {
 	allowed := [][2]string{
 		{SessionStateRequested, SessionStateProvisioning},
@@ -149,6 +166,16 @@ func TestBrowserSessionStateMachineRejectsResurrection(t *testing.T) {
 		for _, next := range []string{SessionStateRequested, SessionStateProvisioning, SessionStateReady, SessionStateActive, SessionStateDraining} {
 			if CanTransitionSession(terminal, next) {
 				t.Fatalf("terminal transition %q -> %q accepted", terminal, next)
+			}
+		}
+	}
+}
+
+func TestDesktopSessionTerminalStatesAreAbsorbing(t *testing.T) {
+	for _, terminal := range []string{SessionStateClosed, SessionStateExpired, SessionStateFailed} {
+		for _, next := range []string{SessionStateRequested, SessionStateProvisioning, SessionStateReady, SessionStateActive, SessionStateDraining} {
+			if CanTransitionSession(terminal, next) {
+				t.Fatalf("Desktop terminal transition %q -> %q accepted", terminal, next)
 			}
 		}
 	}

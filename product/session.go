@@ -265,6 +265,8 @@ func supportedSessionProfile(kind, profile string) bool {
 		return profile == SessionProfileBrowserAutomation
 	case SessionKindBrowserLive:
 		return profile == SessionProfileBrowserLive
+	case SessionKindDesktop:
+		return profile == SessionProfileDesktop
 	default:
 		return false
 	}
