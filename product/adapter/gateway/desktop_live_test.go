@@ -54,7 +54,7 @@ func TestDesktopLiveHandlerCarriesBoundedVideoAudioAndOrderedInput(t *testing.T)
 				}
 			})
 			response, raw := postDesktopLiveOffer(t, server, store.ticket, offer, test.control, test.audio)
-			if response.ConnectionID != binding.ConnectionID || response.AccessMode != test.access || response.Answer.Type != "answer" || bytes.Contains(raw, []byte(binding.HandoffReference)) {
+			if response.ConnectionID != binding.ConnectionID || response.AccessMode != test.access || response.Answer.Type != "answer" || response.RecordingMode != binding.RecordingPolicy || bytes.Contains(raw, []byte(binding.HandoffReference)) {
 				t.Fatalf("response=%#v raw=%s", response, raw)
 			}
 			if err := client.SetRemoteDescription(webrtc.SessionDescription{Type: webrtc.SDPTypeAnswer, SDP: response.Answer.SDP}); err != nil {
@@ -170,7 +170,7 @@ func TestDesktopLiveReconnectWithinGraceResynchronizesAndRejectsOldEpochInput(t 
 	if err != nil {
 		t.Fatal(err)
 	}
-	state := newDesktopLivePeer(handler, peer, media, binding, testDesktopLiveMediaPolicy(true), testDesktopPolicy())
+	state := newDesktopLivePeer(handler, peer, media, nil, binding, testDesktopLiveMediaPolicy(true), testDesktopPolicy())
 	state.onConnectionState(webrtc.PeerConnectionStateConnected)
 	oldEpoch := state.currentStateEpoch()
 	state.onConnectionState(webrtc.PeerConnectionStateDisconnected)
@@ -236,7 +236,7 @@ func TestDesktopLiveControlResyncAndResizeBounds(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer peer.Close()
-	state := newDesktopLivePeer(handler, peer, media, binding, mediaPolicy, testDesktopPolicy())
+	state := newDesktopLivePeer(handler, peer, media, nil, binding, mediaPolicy, testDesktopPolicy())
 	if !state.resynchronize(false) || state.resynchronize(false) {
 		t.Fatal("Desktop control resynchronization limiter was not fail closed")
 	}
@@ -440,7 +440,7 @@ func TestDesktopLiveRejectsOutOfOrderRevokedOrDeniedInput(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			state := newDesktopLivePeer(handler, peer, media, binding, testDesktopLiveMediaPolicy(false), testDesktopPolicy())
+			state := newDesktopLivePeer(handler, peer, media, nil, binding, testDesktopLiveMediaPolicy(false), testDesktopPolicy())
 			state.state = webrtc.PeerConnectionStateConnected
 			go state.inputLoop()
 			state.inputs <- desktopLiveQueuedInput{input: DesktopLiveInput{Sequence: test.sequence, Kind: "pointer", Action: product.DesktopPolicyAction{Kind: product.DesktopActionPointer}, ControlLeaseID: binding.ControlLeaseID, ControlFence: binding.ControlFence}}
@@ -467,7 +467,7 @@ func TestDesktopLiveContinuousAuthorityClosesRevokedPeer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	state := newDesktopLivePeer(handler, peer, media, binding, testDesktopLiveMediaPolicy(false), testDesktopPolicy())
+	state := newDesktopLivePeer(handler, peer, media, nil, binding, testDesktopLiveMediaPolicy(false), testDesktopPolicy())
 	go state.authorityLoop()
 	store.revoke()
 	select {
@@ -485,7 +485,7 @@ func TestDesktopLiveAllowsOnlyOneReliableOrderedControlChannel(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer peer.Close()
-	state := newDesktopLivePeer(handler, peer, newDesktopLiveMediaSessionSpy(), binding, testDesktopLiveMediaPolicy(false), testDesktopPolicy())
+	state := newDesktopLivePeer(handler, peer, newDesktopLiveMediaSessionSpy(), nil, binding, testDesktopLiveMediaPolicy(false), testDesktopPolicy())
 	if !state.claimControlChannel() || state.claimControlChannel() {
 		t.Fatal("Desktop peer did not enforce one control data channel")
 	}
@@ -503,9 +503,9 @@ func TestDesktopLiveClosesOnInputBackpressureAndMediaSlowConsumer(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	state := newDesktopLivePeer(handler, peer, media, binding, testDesktopLiveMediaPolicy(false), testDesktopPolicy())
+	state := newDesktopLivePeer(handler, peer, media, nil, binding, testDesktopLiveMediaPolicy(false), testDesktopPolicy())
 	writer := &desktopBlockingRTPWriter{entered: make(chan struct{}), release: make(chan struct{})}
-	go state.streamLoop(media.ReadVideoRTP, writer, 1, maxDesktopVideoRTPPacketBytes, 8000)
+	go state.streamLoop("video.rtp", media.ReadVideoRTP, writer, 1, maxDesktopVideoRTPPacketBytes, 8000)
 	packet := desktopRTPPacket(t, 96, 1, 1, 1, []byte{0x01})
 	media.video <- packet
 	select {
@@ -528,7 +528,7 @@ func TestDesktopLiveClosesOnInputBackpressureAndMediaSlowConsumer(t *testing.T) 
 	}
 	media2 := newDesktopLiveMediaSessionSpy()
 	handler2 := &DesktopLiveHandler{grants: store, policy: &desktopPolicySourceSpy{policy: testDesktopPolicy()}, transfers: denyDesktopTransferAuthority{}, audit: &auditStoreSpy{}, maxInputQueue: 1, sessions: map[string]int{binding.SessionID: 1}, peers: 1}
-	state2 := newDesktopLivePeer(handler2, peer2, media2, binding, testDesktopLiveMediaPolicy(false), testDesktopPolicy())
+	state2 := newDesktopLivePeer(handler2, peer2, media2, nil, binding, testDesktopLiveMediaPolicy(false), testDesktopPolicy())
 	state2.state = webrtc.PeerConnectionStateConnected
 	if !state2.enqueueInput(desktopLiveQueuedInput{input: DesktopLiveInput{Sequence: 1}}) {
 		t.Fatal("first Desktop input did not fit")
@@ -540,6 +540,128 @@ func TestDesktopLiveClosesOnInputBackpressureAndMediaSlowConsumer(t *testing.T) 
 	case <-state2.ctx.Done():
 	case <-time.After(time.Second):
 		t.Fatal("Desktop input backpressure did not close peer")
+	}
+}
+
+func TestDesktopLiveRequiredRecordingFailsClosedBeforeMediaOpen(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		recorder DesktopLiveRecorder
+		consent  string
+	}{
+		{name: "missing recorder", consent: "consent-desktop-visible"},
+		{name: "recorder unavailable", recorder: &desktopLiveRecorderSpy{err: errors.New("object store unavailable")}, consent: "consent-desktop-visible"},
+		{name: "missing visible consent", recorder: &desktopLiveRecorderSpy{session: &desktopLiveRecordingSessionSpy{}}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			binding := testDesktopLiveBinding(product.GrantAccessView)
+			binding.RecordingPolicy = "required"
+			store := &grantStoreSpy{ticket: strings.Repeat("r", 43), binding: binding, active: true}
+			source := &desktopLiveMediaSourceSpy{opened: make(chan struct{}), session: newDesktopLiveMediaSessionSpy()}
+			handler, err := NewDesktopLiveHandler(DesktopLiveOptions{
+				Grants: store, Media: source, Policy: &desktopPolicySourceSpy{policy: testDesktopPolicy()}, Transfers: denyDesktopTransferAuthority{},
+				Audit: &auditStoreSpy{}, Recorder: test.recorder, AllowedOrigins: []string{"https://app.example"}, AllowHostCandidatesForTests: true,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			server := httptest.NewTLSServer(handler)
+			defer server.Close()
+			peer, _, offer := newDesktopLiveClientOffer(t, false, false)
+			defer peer.Close()
+			request, _ := http.NewRequest(http.MethodPost, server.URL, bytes.NewReader(encodeDesktopLiveOfferWithConsent(t, offer, false, false, test.consent)))
+			request.Header.Set("Origin", "https://app.example")
+			request.Header.Set("Authorization", "Ticket "+store.ticket)
+			response, err := server.Client().Do(request)
+			if err != nil {
+				t.Fatal(err)
+			}
+			response.Body.Close()
+			if response.StatusCode != http.StatusServiceUnavailable {
+				t.Fatalf("status=%d", response.StatusCode)
+			}
+			select {
+			case <-source.opened:
+				t.Fatal("media opened after required recorder admission failure")
+			default:
+			}
+		})
+	}
+}
+
+func TestDesktopLiveRequiredRecordingReportsModeAndVisibleConsent(t *testing.T) {
+	binding := testDesktopLiveBinding(product.GrantAccessView)
+	binding.RecordingPolicy = "required"
+	store := &grantStoreSpy{ticket: strings.Repeat("v", 43), binding: binding, active: true}
+	source := &desktopLiveMediaSourceSpy{session: newDesktopLiveMediaSessionSpy()}
+	recording := &desktopLiveRecordingSessionSpy{closed: make(chan bool, 1)}
+	recorder := &desktopLiveRecorderSpy{session: recording}
+	handler, err := NewDesktopLiveHandler(DesktopLiveOptions{
+		Grants: store, Media: source, Policy: &desktopPolicySourceSpy{policy: testDesktopPolicy()}, Transfers: denyDesktopTransferAuthority{},
+		Audit: &auditStoreSpy{}, Recorder: recorder, AllowedOrigins: []string{"https://app.example"}, AllowHostCandidatesForTests: true,
+		AuthorityPollInterval: 10 * time.Millisecond, ConnectionTimeout: 2 * time.Second, DisconnectGrace: 100 * time.Millisecond,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewTLSServer(handler)
+	defer server.Close()
+	client, _, offer := newDesktopLiveClientOffer(t, false, false)
+	const consent = "consent-desktop-visible"
+	request, _ := http.NewRequest(http.MethodPost, server.URL, bytes.NewReader(encodeDesktopLiveOfferWithConsent(t, offer, false, false, consent)))
+	request.Header.Set("Origin", "https://app.example")
+	request.Header.Set("Authorization", "Ticket "+store.ticket)
+	response, err := server.Client().Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	var signal desktopLiveSignalResponse
+	if response.StatusCode != http.StatusOK || json.NewDecoder(response.Body).Decode(&signal) != nil || signal.RecordingMode != "required" || recorder.consent != consent {
+		t.Fatalf("status=%d signal=%#v recorder consent=%q", response.StatusCode, signal, recorder.consent)
+	}
+	if err := client.SetRemoteDescription(webrtc.SessionDescription{Type: webrtc.SDPTypeAnswer, SDP: signal.Answer.SDP}); err != nil {
+		t.Fatal(err)
+	}
+	waitForPeerState(t, client, webrtc.PeerConnectionStateConnected)
+	if err := client.Close(); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case failed := <-recording.closed:
+		if failed {
+			t.Fatal("healthy required Desktop recording was marked failed")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("closed Desktop peer did not finalize required recording")
+	}
+}
+
+func TestDesktopLiveRequiredRecorderLossClosesPeer(t *testing.T) {
+	binding := testDesktopLiveBinding(product.GrantAccessView)
+	binding.RecordingPolicy = "required"
+	media := newDesktopLiveMediaSessionSpy()
+	recording := &desktopLiveRecordingSessionSpy{mediaErr: errors.New("recorder lost"), closed: make(chan bool, 1)}
+	handler := &DesktopLiveHandler{
+		grants: &grantStoreSpy{binding: binding, active: true}, audit: &auditStoreSpy{}, maxVideoQueue: 1, maxInputQueue: 1,
+		sessions: map[string]int{binding.SessionID: 1}, peers: 1,
+	}
+	peer, err := webrtc.NewPeerConnection(webrtc.Configuration{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	state := newDesktopLivePeer(handler, peer, media, recording, binding, testDesktopLiveMediaPolicy(false), testDesktopPolicy())
+	release := make(chan struct{})
+	defer close(release)
+	go state.streamLoop("video.rtp", media.ReadVideoRTP, &desktopBlockingRTPWriter{release: release}, 1, maxDesktopVideoRTPPacketBytes, 8000)
+	media.video <- desktopRTPPacket(t, 96, 1, 1, 1, []byte{0x01})
+	select {
+	case failed := <-recording.closed:
+		if !failed {
+			t.Fatal("recorder loss was finalized as successful")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("recorder loss did not close Desktop peer")
 	}
 }
 
@@ -645,9 +767,14 @@ func newDesktopLiveClientOffer(t *testing.T, control, audio bool) (*webrtc.PeerC
 }
 
 func encodeDesktopLiveOffer(t *testing.T, offer webrtc.SessionDescription, control, audio bool) []byte {
+	return encodeDesktopLiveOfferWithConsent(t, offer, control, audio, "")
+}
+
+func encodeDesktopLiveOfferWithConsent(t *testing.T, offer webrtc.SessionDescription, control, audio bool, consentReference string) []byte {
 	t.Helper()
 	encoded, err := json.Marshal(desktopLiveSignalRequest{
 		Offer: desktopLiveDescription{Type: "offer", SDP: offer.SDP}, Media: testDesktopLiveMediaPolicy(audio), ControlDataChannel: control,
+		RecordingConsentReference: consentReference,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -806,6 +933,38 @@ type desktopBlockingRTPWriter struct {
 	entered chan struct{}
 	once    sync.Once
 	release chan struct{}
+}
+
+type desktopLiveRecorderSpy struct {
+	session DesktopLiveRecordingSession
+	err     error
+	consent string
+}
+
+func (s *desktopLiveRecorderSpy) Start(_ context.Context, _ product.GatewayBinding, consent string, _ DesktopLiveMediaPolicy) (DesktopLiveRecordingSession, error) {
+	s.consent = consent
+	return s.session, s.err
+}
+
+type desktopLiveRecordingSessionSpy struct {
+	mediaErr   error
+	controlErr error
+	closed     chan bool
+}
+
+func (s *desktopLiveRecordingSessionSpy) RecordMedia(context.Context, time.Time, string, []byte) error {
+	return s.mediaErr
+}
+
+func (s *desktopLiveRecordingSessionSpy) RecordControl(context.Context, time.Time, string, int64, DesktopLiveInput, DesktopLiveDisplayPolicy, string) error {
+	return s.controlErr
+}
+
+func (s *desktopLiveRecordingSessionSpy) Close(_ context.Context, failed bool) error {
+	if s.closed != nil {
+		s.closed <- failed
+	}
+	return nil
 }
 
 func (w *desktopBlockingRTPWriter) WriteRTP(*rtp.Packet) error {
