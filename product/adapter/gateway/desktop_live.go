@@ -55,11 +55,11 @@ type DesktopLiveTouchPoint struct {
 }
 
 // DesktopLiveInput is a closed, ordered Desktop action already bound to the
-// current Product controller lease and fence. Clipboard, file, microphone,
-// camera, device-forwarding, and private broker messages are not part of this
-// type.
+// current Product controller lease, fence, and immutable policy snapshot.
+// Private broker messages are never part of this type.
 type DesktopLiveInput struct {
 	Sequence       int64
+	Action         product.DesktopPolicyAction
 	Kind           string
 	Event          string
 	Code           string
@@ -73,7 +73,9 @@ type DesktopLiveInput struct {
 	ControlFence   int64
 }
 
-type DesktopLiveInputResult struct{}
+type DesktopLiveInputResult struct {
+	Text string
+}
 
 type DesktopLiveMediaSession interface {
 	ReadVideoRTP(context.Context) ([]byte, error)
@@ -87,17 +89,15 @@ type DesktopLiveMediaSource interface {
 	Open(context.Context, product.GatewayBinding, DesktopLiveMediaPolicy) (DesktopLiveMediaSession, error)
 }
 
-// DesktopLiveInputAuthority is the explicit Product policy gate for private
-// input execution. Slice 8 requires this port and denies when it is absent;
-// Slice 9 supplies the full durable Desktop policy implementation.
-type DesktopLiveInputAuthority interface {
-	AuthorizeDesktopInput(context.Context, product.GatewayBinding, DesktopLiveInput) error
+type DesktopLiveTransferAuthority interface {
+	AuthorizeDesktopTransfer(context.Context, product.GatewayBinding, product.DesktopPolicyAction) error
 }
 
 type DesktopLiveOptions struct {
 	Grants                      product.ConnectionGrantStore
 	Media                       DesktopLiveMediaSource
-	Input                       DesktopLiveInputAuthority
+	Policy                      product.DesktopPolicySource
+	Transfers                   DesktopLiveTransferAuthority
 	Audit                       AuditStore
 	AllowedOrigins              []string
 	ICEServers                  []webrtc.ICEServer
@@ -118,7 +118,8 @@ type DesktopLiveOptions struct {
 type DesktopLiveHandler struct {
 	grants               product.ConnectionGrantStore
 	media                DesktopLiveMediaSource
-	input                DesktopLiveInputAuthority
+	policy               product.DesktopPolicySource
+	transfers            DesktopLiveTransferAuthority
 	audit                AuditStore
 	origins              map[string]struct{}
 	configuration        webrtc.Configuration
@@ -167,6 +168,7 @@ type desktopLiveInputResponse struct {
 	Type     string `json:"type"`
 	Sequence int64  `json:"sequence"`
 	OK       bool   `json:"ok"`
+	Text     string `json:"text,omitempty"`
 }
 
 type desktopLiveQueuedInput struct {
@@ -175,7 +177,7 @@ type desktopLiveQueuedInput struct {
 }
 
 func NewDesktopLiveHandler(options DesktopLiveOptions) (*DesktopLiveHandler, error) { //nolint:cyclop
-	if nilInterface(options.Grants) || nilInterface(options.Media) || nilInterface(options.Input) || nilInterface(options.Audit) || len(options.AllowedOrigins) == 0 || len(options.AllowedOrigins) > 32 {
+	if nilInterface(options.Grants) || nilInterface(options.Media) || nilInterface(options.Policy) || nilInterface(options.Transfers) || nilInterface(options.Audit) || len(options.AllowedOrigins) == 0 || len(options.AllowedOrigins) > 32 {
 		return nil, product.ErrInvalid
 	}
 	origins := make(map[string]struct{}, len(options.AllowedOrigins))
@@ -239,7 +241,7 @@ func NewDesktopLiveHandler(options DesktopLiveOptions) (*DesktopLiveHandler, err
 		configuration.ICETransportPolicy = webrtc.ICETransportPolicyRelay
 	}
 	return &DesktopLiveHandler{
-		grants: options.Grants, media: options.Media, input: options.Input, audit: options.Audit,
+		grants: options.Grants, media: options.Media, policy: options.Policy, transfers: options.Transfers, audit: options.Audit,
 		origins: origins, configuration: configuration, maxSignalingBytes: limit,
 		maxVideoQueue: videoQueue, maxAudioQueue: audioQueue, maxInputQueue: inputQueue,
 		maxPeers: maxPeers, maxPeersPerSession: maxPerSession, pollInterval: poll,
@@ -317,6 +319,12 @@ func (h *DesktopLiveHandler) ServeHTTP(writer http.ResponseWriter, request *http
 		http.Error(writer, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
 		return
 	}
+	policy, err := h.policy.CurrentDesktopPolicy(request.Context(), binding)
+	if err != nil || policy.Validate() != nil {
+		h.release(binding.SessionID)
+		http.Error(writer, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
+		return
+	}
 	if h.recordAudit(request.Context(), binding, gateway.AuditAuthorized, "") != nil {
 		h.release(binding.SessionID)
 		http.Error(writer, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
@@ -335,7 +343,7 @@ func (h *DesktopLiveHandler) ServeHTTP(writer http.ResponseWriter, request *http
 		http.Error(writer, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
 		return
 	}
-	state := newDesktopLivePeer(h, peer, media, binding, signal.Media)
+	state := newDesktopLivePeer(h, peer, media, binding, signal.Media, policy)
 	if signal.ControlDataChannel {
 		state.installControlChannel()
 	} else {
@@ -531,7 +539,8 @@ type desktopLivePeer struct {
 	peer           *webrtc.PeerConnection
 	media          DesktopLiveMediaSession
 	binding        product.GatewayBinding
-	policy         DesktopLiveMediaPolicy
+	mediaPolicy    DesktopLiveMediaPolicy
+	desktopPolicy  product.DesktopPolicy
 	ctx            context.Context
 	cancel         context.CancelFunc
 	stopOnce       sync.Once
@@ -547,15 +556,15 @@ type desktopLivePeer struct {
 	controlClaimed bool
 }
 
-func newDesktopLivePeer(handler *DesktopLiveHandler, peer *webrtc.PeerConnection, media DesktopLiveMediaSession, binding product.GatewayBinding, policy DesktopLiveMediaPolicy) *desktopLivePeer {
+func newDesktopLivePeer(handler *DesktopLiveHandler, peer *webrtc.PeerConnection, media DesktopLiveMediaSession, binding product.GatewayBinding, mediaPolicy DesktopLiveMediaPolicy, desktopPolicy product.DesktopPolicy) *desktopLivePeer {
 	ctx, cancel := context.WithCancel(context.Background())
-	return &desktopLivePeer{handler: handler, peer: peer, media: media, binding: binding, policy: policy, ctx: ctx, cancel: cancel, connected: make(chan struct{}), inputs: make(chan desktopLiveQueuedInput, handler.maxInputQueue), state: webrtc.PeerConnectionStateNew}
+	return &desktopLivePeer{handler: handler, peer: peer, media: media, binding: binding, mediaPolicy: mediaPolicy, desktopPolicy: desktopPolicy, ctx: ctx, cancel: cancel, connected: make(chan struct{}), inputs: make(chan desktopLiveQueuedInput, handler.maxInputQueue), state: webrtc.PeerConnectionStateNew}
 }
 
 func (p *desktopLivePeer) start(video, audio *webrtc.TrackLocalStaticRTP) {
-	go p.streamLoop(p.media.ReadVideoRTP, video, p.handler.maxVideoQueue, maxDesktopVideoRTPPacketBytes, p.policy.MaxVideoBitrateKbps)
+	go p.streamLoop(p.media.ReadVideoRTP, video, p.handler.maxVideoQueue, maxDesktopVideoRTPPacketBytes, p.mediaPolicy.MaxVideoBitrateKbps)
 	if audio != nil {
-		go p.streamLoop(p.media.ReadAudioRTP, audio, p.handler.maxAudioQueue, maxDesktopAudioRTPPacketBytes, p.policy.MaxAudioBitrateKbps)
+		go p.streamLoop(p.media.ReadAudioRTP, audio, p.handler.maxAudioQueue, maxDesktopAudioRTPPacketBytes, p.mediaPolicy.MaxAudioBitrateKbps)
 	}
 	go p.inputLoop()
 	go p.authorityLoop()
@@ -640,7 +649,8 @@ func (p *desktopLivePeer) authorityLoop() {
 		case <-p.ctx.Done():
 			return
 		case <-ticker.C:
-			if !deadline.After(time.Now()) || p.handler.grants.CheckGatewayAuthority(p.ctx, p.binding) != nil {
+			currentPolicy, policyErr := p.handler.policy.CurrentDesktopPolicy(p.ctx, p.binding)
+			if !deadline.After(time.Now()) || p.handler.grants.CheckGatewayAuthority(p.ctx, p.binding) != nil || policyErr != nil || currentPolicy.Revision != p.desktopPolicy.Revision {
 				p.stop()
 				return
 			}
@@ -659,7 +669,7 @@ func (p *desktopLivePeer) installControlChannel() {
 				p.stop()
 				return
 			}
-			input, err := decodeDesktopLiveInput(message.Data, p.policy, p.binding)
+			input, err := decodeDesktopLiveInput(message.Data, p.mediaPolicy, p.binding)
 			if err != nil {
 				p.stop()
 				return
@@ -696,15 +706,21 @@ func (p *desktopLivePeer) inputLoop() {
 		case <-p.ctx.Done():
 			return
 		case queued := <-p.inputs:
-			if queued.input.Sequence != lastSequence+1 || !p.isConnected() || p.handler.grants.CheckGatewayAuthority(p.ctx, p.binding) != nil || p.handler.input.AuthorizeDesktopInput(p.ctx, p.binding, queued.input) != nil {
+			currentPolicy, policyErr := p.handler.policy.CurrentDesktopPolicy(p.ctx, p.binding)
+			if queued.input.Sequence != lastSequence+1 || !p.isConnected() || p.handler.grants.CheckGatewayAuthority(p.ctx, p.binding) != nil || policyErr != nil || currentPolicy.Revision != p.desktopPolicy.Revision || p.desktopPolicy.Authorize(queued.input.Action) != nil {
 				p.stop()
 				return
 			}
-			if _, err := p.media.HandleInput(p.ctx, queued.input); err != nil {
+			if (queued.input.Action.Kind == product.DesktopActionUpload || queued.input.Action.Kind == product.DesktopActionDownload) && p.handler.transfers.AuthorizeDesktopTransfer(p.ctx, p.binding, queued.input.Action) != nil {
 				p.stop()
 				return
 			}
-			response, err := json.Marshal(desktopLiveInputResponse{Type: "input.result", Sequence: queued.input.Sequence, OK: true})
+			result, err := p.media.HandleInput(p.ctx, queued.input)
+			if err != nil || !validDesktopLiveInputResult(p.desktopPolicy, queued.input.Action, result) {
+				p.stop()
+				return
+			}
+			response, err := json.Marshal(desktopLiveInputResponse{Type: "input.result", Sequence: queued.input.Sequence, OK: true, Text: result.Text})
 			if err != nil || len(response) > maxDesktopControlMessageBytes || queued.channel == nil || queued.channel.BufferedAmount()+uint64(len(response)) > maxDesktopControlBufferedBytes || queued.channel.SendText(string(response)) != nil {
 				p.stop()
 				return

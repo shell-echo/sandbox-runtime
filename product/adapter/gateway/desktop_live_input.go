@@ -19,27 +19,50 @@ type desktopLiveActionKind struct {
 }
 
 type desktopLiveKeyboardAction struct {
-	Kind      string   `json:"kind"`
-	Event     string   `json:"event"`
-	Code      string   `json:"code"`
-	Key       string   `json:"key"`
-	Modifiers []string `json:"modifiers"`
+	Kind              string   `json:"kind"`
+	Event             string   `json:"event"`
+	Code              string   `json:"code"`
+	Key               string   `json:"key"`
+	Modifiers         []string `json:"modifiers"`
+	HasUserActivation bool     `json:"user_activation"`
 }
 
 type desktopLivePointerAction struct {
-	Kind   string `json:"kind"`
-	Event  string `json:"event"`
-	X      int    `json:"x"`
-	Y      int    `json:"y"`
-	Button int    `json:"button"`
-	DeltaX int    `json:"delta_x"`
-	DeltaY int    `json:"delta_y"`
+	Kind              string `json:"kind"`
+	Event             string `json:"event"`
+	X                 int    `json:"x"`
+	Y                 int    `json:"y"`
+	Button            int    `json:"button"`
+	DeltaX            int    `json:"delta_x"`
+	DeltaY            int    `json:"delta_y"`
+	HasUserActivation bool   `json:"user_activation"`
 }
 
 type desktopLiveTouchAction struct {
-	Kind   string                  `json:"kind"`
-	Event  string                  `json:"event"`
-	Points []DesktopLiveTouchPoint `json:"points"`
+	Kind              string                  `json:"kind"`
+	Event             string                  `json:"event"`
+	Points            []DesktopLiveTouchPoint `json:"points"`
+	HasUserActivation bool                    `json:"user_activation"`
+}
+
+type desktopLiveClipboardReadAction struct {
+	Kind              string `json:"kind"`
+	HasUserActivation bool   `json:"user_activation"`
+	Consent           bool   `json:"consent"`
+}
+
+type desktopLiveClipboardWriteAction struct {
+	Kind              string `json:"kind"`
+	Text              string `json:"text"`
+	HasUserActivation bool   `json:"user_activation"`
+	Consent           bool   `json:"consent"`
+}
+
+type desktopLiveTransferAction struct {
+	Kind              string                        `json:"kind"`
+	Files             []product.DesktopTransferFile `json:"files"`
+	HasUserActivation bool                          `json:"user_activation"`
+	Consent           bool                          `json:"consent"`
 }
 
 func decodeDesktopLiveInput(payload []byte, media DesktopLiveMediaPolicy, binding product.GatewayBinding) (DesktopLiveInput, error) {
@@ -66,19 +89,45 @@ func decodeDesktopLiveInput(payload []byte, media DesktopLiveMediaPolicy, bindin
 		if decodeStrictRaw(envelope.Action, &action) != nil || (action.Event != "down" && action.Event != "up") || !desktopKeyCodePattern.MatchString(action.Code) || !utf8.ValidString(action.Key) || utf8.RuneCountInString(action.Key) < 1 || utf8.RuneCountInString(action.Key) > 16 || !validDesktopModifiers(action.Modifiers) {
 			return DesktopLiveInput{}, product.ErrInvalid
 		}
+		input.Action = product.DesktopPolicyAction{Kind: product.DesktopActionKeyboard, HasUserActivation: action.HasUserActivation}
 		input.Kind, input.Event, input.Code, input.Key, input.Modifiers = action.Kind, action.Event, action.Code, action.Key, append([]string(nil), action.Modifiers...)
 	case "pointer":
 		var action desktopLivePointerAction
 		if decodeStrictRaw(envelope.Action, &action) != nil || !slices.Contains([]string{"move", "down", "up", "wheel"}, action.Event) || action.X < 0 || action.X >= media.Width || action.Y < 0 || action.Y >= media.Height || action.Button < 0 || action.Button > 4 || action.DeltaX < -4096 || action.DeltaX > 4096 || action.DeltaY < -4096 || action.DeltaY > 4096 || (action.Event != "wheel" && (action.DeltaX != 0 || action.DeltaY != 0)) {
 			return DesktopLiveInput{}, product.ErrInvalid
 		}
+		input.Action = product.DesktopPolicyAction{Kind: product.DesktopActionPointer, HasUserActivation: action.HasUserActivation}
 		input.Kind, input.Event, input.X, input.Y, input.Button, input.DeltaX, input.DeltaY = action.Kind, action.Event, action.X, action.Y, action.Button, action.DeltaX, action.DeltaY
 	case "touch":
 		var action desktopLiveTouchAction
 		if decodeStrictRaw(envelope.Action, &action) != nil || !slices.Contains([]string{"start", "move", "end"}, action.Event) || len(action.Points) < 1 || len(action.Points) > 10 || !validDesktopTouchPoints(action.Points, media) {
 			return DesktopLiveInput{}, product.ErrInvalid
 		}
+		input.Action = product.DesktopPolicyAction{Kind: product.DesktopActionTouch, TouchPoints: len(action.Points), HasUserActivation: action.HasUserActivation}
 		input.Kind, input.Event, input.Touches = action.Kind, action.Event, append([]DesktopLiveTouchPoint(nil), action.Points...)
+	case product.DesktopActionClipboardRead:
+		var action desktopLiveClipboardReadAction
+		if decodeStrictRaw(envelope.Action, &action) != nil {
+			return DesktopLiveInput{}, product.ErrInvalid
+		}
+		input.Kind = action.Kind
+		input.Action = product.DesktopPolicyAction{Kind: action.Kind, HasUserActivation: action.HasUserActivation, Consent: action.Consent}
+	case product.DesktopActionClipboardWrite:
+		var action desktopLiveClipboardWriteAction
+		if decodeStrictRaw(envelope.Action, &action) != nil || !utf8.ValidString(action.Text) {
+			return DesktopLiveInput{}, product.ErrInvalid
+		}
+		input.Kind = action.Kind
+		input.Action = product.DesktopPolicyAction{Kind: action.Kind, Text: action.Text, HasUserActivation: action.HasUserActivation, Consent: action.Consent}
+	case product.DesktopActionUpload, product.DesktopActionDownload:
+		var action desktopLiveTransferAction
+		if decodeStrictRaw(envelope.Action, &action) != nil || len(action.Files) > product.MaxDesktopTransferFiles {
+			return DesktopLiveInput{}, product.ErrInvalid
+		}
+		input.Kind = action.Kind
+		input.Action = product.DesktopPolicyAction{Kind: action.Kind, Files: append([]product.DesktopTransferFile(nil), action.Files...), HasUserActivation: action.HasUserActivation, Consent: action.Consent}
+	case product.DesktopActionMicrophone, product.DesktopActionCamera, product.DesktopActionDevice:
+		return DesktopLiveInput{}, product.ErrForbidden
 	default:
 		return DesktopLiveInput{}, product.ErrInvalid
 	}

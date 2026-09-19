@@ -14,7 +14,7 @@
 | 独立 External Caller | **13/13 已完成** |
 | Product v1 第三阶段 | 在有边界的 standalone 拓扑内 **13/13 已完成** |
 | Product v1 第四阶段 Browser | 在有边界的同仓库独立进程拓扑内 **13/13 已完成** |
-| Product v1 第五阶段 Desktop | **8/15 已完成**；有界公开 Desktop WebRTC handler、显示/可选音频、有序 fenced 输入、持续权威与背压门禁已通过，下一步为持久策略，能力广告仍关闭 |
+| Product v1 第五阶段 Desktop | **9/15 已完成**；持久版本化输入/剪贴板/传输策略、精确 Product transfer 绑定和策略版本撤销门禁已通过，下一步为恢复，能力广告仍关闭 |
 | 编程/Shell 资格验证 | 对下述精确调用方、Provider 版本、拓扑、Profile 和场景结果为 **Qualified** |
 | 最新核心 CI | [已通过](https://github.com/shell-echo/sandbox-runtime/actions/runs/35204434771) |
 
@@ -54,7 +54,7 @@ Browser OS 进程，配合全新固定摘要 PostgreSQL、Valkey 与加密录制
 通过部署资格验证、独立实现调用方、HA、恶意多租户隔离或生产就绪。
 
 [Product v1 第五阶段 Desktop](docs/plan/product-v1-phase-5-desktop-development-unified-product.md)
-已完成 **8/15** 个依赖有序切片。切片 1 锁定了独立的 Provider Desktop
+已完成 **9/15** 个依赖有序切片。切片 1 锁定了独立的 Provider Desktop
 能力/Profile/运行时形状，以及完整的会话打开、读取、交接、关闭、过期、撤销、
 用量、准入、安全和清理语义。精确权威为 Contract 版本
 `720ad15c343e71f36615dc4499edd5e764178bca`、树
@@ -91,6 +91,12 @@ TURN/TLS relay、仅接收 VP8 和可选 Opus、viewer/controller 分离、可�
 fenced 输入、持续 grant 校验和慢消费者关闭。持久 Desktop 策略、真实 Provider
 媒体桥接、恢复、录制、统一 Web、生产组合和能力广告仍未完成。
 
+切片 9 实现 `24f5c741eb605614f77f8d9d546708b9993e42dd` 加入不可变且版本化的
+Desktop 策略快照、PostgreSQL 迁移 11、默认拒绝的键盘/指针/触摸/剪贴板/传输
+授权、激活与同意门禁、有界 workspace 路径和传输元数据、精确 Product transfer
+记录绑定，以及持续策略版本撤销。真实 Provider 媒体/输入桥接、重连/恢复、录制、
+统一 Web、生产组合和能力广告仍未完成。
+
 ## 项目提供什么
 
 - 本地实例管理 API，以及内存 Fake 驱动和 Docker 运行时驱动。
@@ -103,6 +109,7 @@ fenced 输入、持续 grant 校验和慢消费者关闭。持久 Desktop 策略
 - 锁定且仅通过网络访问的 Product Desktop Provider adapter，包括独立 generation 权威、持久调度/观察恢复和 Desktop 专属会话清理；它尚未进入生产组合。
 - Product 自有的 Desktop viewer/controller 连接权威，包括加密一次性 ticket、会话级 controller fencing、独立配额、撤销和仅元数据审计；该授权层不暴露 Provider 私有坐标。
 - 独立且有界的 Product Desktop WebRTC handler，提供显示、可选输出音频和有序 controller 输入；当前仅为组件证据，尚未进入生产组合。
+- 持久且版本化的 Product Desktop 输入/剪贴板/传输策略，包括精确 Product transfer 绑定和在线版本撤销；麦克风、摄像头和设备转发继续被拒绝。
 - Provider 本地 Desktop operation 权威，包括持久化 replay/fencing、精确所有权的关闭/过期清理策略，以及尚未广告的受保护处理器。
 - 精确签名的 Desktop 镜像，以及 Provider 本地 Docker adapter、private resolver、lifecycle、撤销/清理和时长用量组件；它们尚未进入生产启动组合或能力广告。
 - 面向独立实现调用方的确定性资格验证工具。

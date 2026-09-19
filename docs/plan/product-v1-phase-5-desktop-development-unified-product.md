@@ -1,6 +1,6 @@
 # Product v1 Phase 5: Desktop Development and Unified Product
 
-Status: 8/15 complete
+Status: 9/15 complete
 
 Started: 2026-09-19
 
@@ -33,7 +33,7 @@ relabeled as Desktop evidence.
 | 6 | Product network-only Provider adapter with exact readiness, Desktop dispatch/observation, close, and cleanup | Locked discovery/profile selection; protected requests; timeout/cancellation/replay/drift; retained operation recovery; Product/Provider generation separation; real store integration | **Complete: Product network adapter and real-store component authority only; production composition and advertisement remain off** |
 | 7 | Product view/control grants, one-controller fencing, quotas, revocation, and metadata audit | Viewer mutation denial; one live controller; database-time expiry; one-use grants; stale-fence and quota races; continuous authority checks; nondisclosing failures | **Complete: Product connection authority and real-store component evidence only; no public data plane** |
 | 8 | Public Desktop display/audio/signaling/input plane with bounded negotiation and backpressure | Authenticated encrypted signaling; exact origin; supported codec/resolution/bitrate matrix; viewer/control separation; ordered input; slow-consumer closure; no private handoff disclosure | **Complete: same-process public-handler and real-WebRTC component evidence only; policy and production composition remain off** |
-| 9 | Keyboard, pointer, touch, clipboard, and Product-bound transfer policy | Deny-by-default matrix; activation/consent; size/type/count/digest/path bounds; exact transfer identity; policy-revision revocation; microphone/camera/device denial | Planned |
+| 9 | Keyboard, pointer, touch, clipboard, and Product-bound transfer policy | Deny-by-default matrix; activation/consent; size/type/count/digest/path bounds; exact transfer identity; policy-revision revocation; microphone/camera/device denial | **Complete: durable Product policy and real-store component evidence only; recovery and production composition remain off** |
 | 10 | Recovery, reconnect, resynchronization, resolution/audio-device changes, and session/slot replacement | Fresh-grant reconnect; authority and generation recheck; visual/audio resync bounds; no stale input; restart recovery; deterministic replacement and exact cleanup | Planned |
 | 11 | Desktop recording/replay/catalog/retention/quota/integrity composition | Visible consent/mode; required-recorder fail closed; encrypted integrity-linked media/control segments; authorized replay; retention/deletion and quota races; content excluded from logs | Planned |
 | 12 | Development-environment templates, startup, toolchains, workspace materialization, and Guest health | Immutable template selection; bounded startup; exact workspace mounts; health/liveness/readiness; failure rollback; restart persistence; no host-path or credential disclosure | Planned |
@@ -369,6 +369,42 @@ This is same-process handler/component evidence. The durable Desktop policy,
 real Provider media bridge, recovery, recording, development templates,
 unified Web, production startup, advertisement, deployment, and production
 readiness remain later gates.
+
+## Slice 9 durable Desktop policy boundary
+
+Implementation revision `24f5c741eb605614f77f8d9d546708b9993e42dd`
+adds a separate immutable Product Desktop policy model and PostgreSQL migration
+11. Workspace-owner updates are idempotent and expected-revision guarded;
+every revision is retained so an old idempotency key returns its exact original
+result after later updates. Missing or invalid policy fails closed.
+
+The zero-permission matrix denies keyboard, pointer, touch, clipboard, upload,
+and download. Explicit policy independently enables each input family and
+bounds clipboard bytes, transfer file count, per-file and aggregate bytes,
+canonical media types, SHA-256 digests, and UTF-8 `/workspace/...` paths.
+Configured activation and consent are mandatory. Microphone, camera, and
+device forwarding remain unconditionally denied.
+
+The Desktop Gateway fixes one policy revision at connection admission, checks
+that revision during continuous authority polling and before every input, and
+closes the peer on change or read failure. Clipboard results are UTF-8 and
+size bounded. Each transfer descriptor must also match an existing complete
+Product transfer for the exact tenant, actor, Workspace, transfer ID,
+direction, digest, and byte count; object references never reach the Gateway.
+
+### Slice 9 evidence boundary
+
+Focused ten-run Desktop race tests, full race/shuffle, vet, Contract and
+retained-evidence verifiers, migration replay, concurrent update, historical
+idempotency replay, cross-owner nondisclosure, audit minimization, and
+reconstructed-Store reads pass. Exact evidence and non-claims are in
+[`../audits/product-phase-5-desktop-slice-9.md`](../audits/product-phase-5-desktop-slice-9.md).
+
+This is Product policy, PostgreSQL, and same-process Gateway component
+evidence. A real Provider media/input bridge, reconnect/resynchronization,
+restart recovery, recording, development templates, unified Web, production
+startup, advertisement, deployment, and production readiness remain later
+gates.
 
 ## Deferred beyond Phase 5
 

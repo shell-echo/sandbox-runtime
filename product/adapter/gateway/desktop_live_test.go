@@ -33,7 +33,7 @@ func TestDesktopLiveHandlerCarriesBoundedVideoAudioAndOrderedInput(t *testing.T)
 			store := &grantStoreSpy{ticket: strings.Repeat(string(test.name[0]), 43), binding: binding, active: true}
 			session := newDesktopLiveMediaSessionSpy()
 			source := &desktopLiveMediaSourceSpy{opened: make(chan struct{}), session: session}
-			authority := &desktopLiveInputAuthoritySpy{}
+			authority := &desktopPolicySourceSpy{policy: testDesktopPolicy()}
 			handler := mustDesktopLiveHandler(t, store, source, authority)
 			server := httptest.NewTLSServer(handler)
 			defer server.Close()
@@ -115,7 +115,7 @@ func TestDesktopLiveHandlerCarriesBoundedVideoAudioAndOrderedInput(t *testing.T)
 				case <-time.After(3 * time.Second):
 					t.Fatal("Desktop input result was not returned")
 				}
-				if authority.calls.Load() != 1 {
+				if authority.calls.Load() < 2 {
 					t.Fatalf("input authority calls=%d", authority.calls.Load())
 				}
 			}
@@ -126,7 +126,7 @@ func TestDesktopLiveHandlerCarriesBoundedVideoAudioAndOrderedInput(t *testing.T)
 func TestDesktopLiveAuthenticatesBeforeGrantConsumptionAndMediaOpen(t *testing.T) {
 	store := &grantStoreSpy{ticket: strings.Repeat("a", 43), binding: testDesktopLiveBinding(product.GrantAccessView), active: true}
 	source := &desktopLiveMediaSourceSpy{opened: make(chan struct{}), session: newDesktopLiveMediaSessionSpy()}
-	handler := mustDesktopLiveHandler(t, store, source, &desktopLiveInputAuthoritySpy{})
+	handler := mustDesktopLiveHandler(t, store, source, &desktopPolicySourceSpy{policy: testDesktopPolicy()})
 	server := httptest.NewTLSServer(handler)
 	defer server.Close()
 	peer, _, offer := newDesktopLiveClientOffer(t, false, false)
@@ -241,7 +241,7 @@ func TestDesktopLiveRejectsUnsupportedNegotiationViewerControlAndRequiredRecordi
 		t.Run(test.name, func(t *testing.T) {
 			store := &grantStoreSpy{ticket: strings.Repeat("v", 43), binding: test.binding, active: true}
 			source := &desktopLiveMediaSourceSpy{opened: make(chan struct{}), session: newDesktopLiveMediaSessionSpy()}
-			handler := mustDesktopLiveHandler(t, store, source, &desktopLiveInputAuthoritySpy{})
+			handler := mustDesktopLiveHandler(t, store, source, &desktopPolicySourceSpy{policy: testDesktopPolicy()})
 			server := httptest.NewTLSServer(handler)
 			defer server.Close()
 			peer, _, offer := newDesktopLiveClientOffer(t, test.control, false)
@@ -281,7 +281,7 @@ func TestDesktopLiveInputDecoderIsClosedAndFenceBound(t *testing.T) {
 		}
 	}
 	invalid := []string{
-		`{"type":"input","sequence":1,"action":{"kind":"clipboard.read"}}`,
+		`{"type":"input","sequence":1,"action":{"kind":"clipboard.read","text":"not-allowed"}}`,
 		`{"type":"input","sequence":1,"action":{"kind":"microphone"}}`,
 		`{"type":"input","sequence":1,"action":{"kind":"pointer","event":"move","x":640,"y":1,"button":0,"delta_x":0,"delta_y":0}}`,
 		`{"type":"input","sequence":1,"sequence":2,"action":{"kind":"keyboard","event":"down","code":"KeyA","key":"a","modifiers":[]}}`,
@@ -311,17 +311,17 @@ func TestDesktopLiveRejectsOutOfOrderRevokedOrDeniedInput(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			binding := testDesktopLiveBinding(product.GrantAccessControl)
 			store := &grantStoreSpy{binding: binding, active: !test.revoked}
-			authority := &desktopLiveInputAuthoritySpy{err: test.policyErr}
+			authority := &desktopPolicySourceSpy{policy: testDesktopPolicy(), err: test.policyErr}
 			media := newDesktopLiveMediaSessionSpy()
-			handler := &DesktopLiveHandler{grants: store, input: authority, audit: &auditStoreSpy{}, maxInputQueue: 1, sessions: map[string]int{binding.SessionID: 1}, peers: 1}
+			handler := &DesktopLiveHandler{grants: store, policy: authority, transfers: denyDesktopTransferAuthority{}, audit: &auditStoreSpy{}, maxInputQueue: 1, sessions: map[string]int{binding.SessionID: 1}, peers: 1}
 			peer, err := webrtc.NewPeerConnection(webrtc.Configuration{})
 			if err != nil {
 				t.Fatal(err)
 			}
-			state := newDesktopLivePeer(handler, peer, media, binding, testDesktopLiveMediaPolicy(false))
+			state := newDesktopLivePeer(handler, peer, media, binding, testDesktopLiveMediaPolicy(false), testDesktopPolicy())
 			state.state = webrtc.PeerConnectionStateConnected
 			go state.inputLoop()
-			state.inputs <- desktopLiveQueuedInput{input: DesktopLiveInput{Sequence: test.sequence, Kind: "pointer", ControlLeaseID: binding.ControlLeaseID, ControlFence: binding.ControlFence}}
+			state.inputs <- desktopLiveQueuedInput{input: DesktopLiveInput{Sequence: test.sequence, Kind: "pointer", Action: product.DesktopPolicyAction{Kind: product.DesktopActionPointer}, ControlLeaseID: binding.ControlLeaseID, ControlFence: binding.ControlFence}}
 			select {
 			case <-state.ctx.Done():
 			case <-time.After(time.Second):
@@ -340,12 +340,12 @@ func TestDesktopLiveContinuousAuthorityClosesRevokedPeer(t *testing.T) {
 	binding := testDesktopLiveBinding(product.GrantAccessView)
 	store := &grantStoreSpy{binding: binding, active: true}
 	media := newDesktopLiveMediaSessionSpy()
-	handler := &DesktopLiveHandler{grants: store, audit: &auditStoreSpy{}, pollInterval: 10 * time.Millisecond, sessions: map[string]int{binding.SessionID: 1}, peers: 1}
+	handler := &DesktopLiveHandler{grants: store, policy: &desktopPolicySourceSpy{policy: testDesktopPolicy()}, audit: &auditStoreSpy{}, pollInterval: 10 * time.Millisecond, sessions: map[string]int{binding.SessionID: 1}, peers: 1}
 	peer, err := webrtc.NewPeerConnection(webrtc.Configuration{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	state := newDesktopLivePeer(handler, peer, media, binding, testDesktopLiveMediaPolicy(false))
+	state := newDesktopLivePeer(handler, peer, media, binding, testDesktopLiveMediaPolicy(false), testDesktopPolicy())
 	go state.authorityLoop()
 	store.revoke()
 	select {
@@ -363,7 +363,7 @@ func TestDesktopLiveAllowsOnlyOneReliableOrderedControlChannel(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer peer.Close()
-	state := newDesktopLivePeer(handler, peer, newDesktopLiveMediaSessionSpy(), binding, testDesktopLiveMediaPolicy(false))
+	state := newDesktopLivePeer(handler, peer, newDesktopLiveMediaSessionSpy(), binding, testDesktopLiveMediaPolicy(false), testDesktopPolicy())
 	if !state.claimControlChannel() || state.claimControlChannel() {
 		t.Fatal("Desktop peer did not enforce one control data channel")
 	}
@@ -374,14 +374,14 @@ func TestDesktopLiveClosesOnInputBackpressureAndMediaSlowConsumer(t *testing.T) 
 	store := &grantStoreSpy{binding: binding, active: true}
 	media := newDesktopLiveMediaSessionSpy()
 	handler := &DesktopLiveHandler{
-		grants: store, input: &desktopLiveInputAuthoritySpy{}, audit: &auditStoreSpy{}, maxVideoQueue: 1, maxAudioQueue: 1, maxInputQueue: 1,
+		grants: store, policy: &desktopPolicySourceSpy{policy: testDesktopPolicy()}, transfers: denyDesktopTransferAuthority{}, audit: &auditStoreSpy{}, maxVideoQueue: 1, maxAudioQueue: 1, maxInputQueue: 1,
 		pollInterval: time.Second, connectionTimeout: time.Second, sessions: map[string]int{binding.SessionID: 1}, peers: 1,
 	}
 	peer, err := webrtc.NewPeerConnection(webrtc.Configuration{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	state := newDesktopLivePeer(handler, peer, media, binding, testDesktopLiveMediaPolicy(false))
+	state := newDesktopLivePeer(handler, peer, media, binding, testDesktopLiveMediaPolicy(false), testDesktopPolicy())
 	writer := &desktopBlockingRTPWriter{entered: make(chan struct{}), release: make(chan struct{})}
 	go state.streamLoop(media.ReadVideoRTP, writer, 1, maxDesktopVideoRTPPacketBytes, 8000)
 	packet := desktopRTPPacket(t, 96, 1, 1, 1, []byte{0x01})
@@ -405,8 +405,8 @@ func TestDesktopLiveClosesOnInputBackpressureAndMediaSlowConsumer(t *testing.T) 
 		t.Fatal(err)
 	}
 	media2 := newDesktopLiveMediaSessionSpy()
-	handler2 := &DesktopLiveHandler{grants: store, input: &desktopLiveInputAuthoritySpy{}, audit: &auditStoreSpy{}, maxInputQueue: 1, sessions: map[string]int{binding.SessionID: 1}, peers: 1}
-	state2 := newDesktopLivePeer(handler2, peer2, media2, binding, testDesktopLiveMediaPolicy(false))
+	handler2 := &DesktopLiveHandler{grants: store, policy: &desktopPolicySourceSpy{policy: testDesktopPolicy()}, transfers: denyDesktopTransferAuthority{}, audit: &auditStoreSpy{}, maxInputQueue: 1, sessions: map[string]int{binding.SessionID: 1}, peers: 1}
+	state2 := newDesktopLivePeer(handler2, peer2, media2, binding, testDesktopLiveMediaPolicy(false), testDesktopPolicy())
 	state2.state = webrtc.PeerConnectionStateConnected
 	if !state2.enqueueInput(desktopLiveQueuedInput{input: DesktopLiveInput{Sequence: 1}}) {
 		t.Fatal("first Desktop input did not fit")
@@ -422,7 +422,7 @@ func TestDesktopLiveClosesOnInputBackpressureAndMediaSlowConsumer(t *testing.T) 
 }
 
 func TestDesktopLiveProductionRequiresEncryptedRelay(t *testing.T) {
-	base := DesktopLiveOptions{Grants: &grantStoreSpy{}, Media: &desktopLiveMediaSourceSpy{}, Input: &desktopLiveInputAuthoritySpy{}, Audit: &auditStoreSpy{}, AllowedOrigins: []string{"https://app.example"}}
+	base := DesktopLiveOptions{Grants: &grantStoreSpy{}, Media: &desktopLiveMediaSourceSpy{}, Policy: &desktopPolicySourceSpy{policy: testDesktopPolicy()}, Transfers: denyDesktopTransferAuthority{}, Audit: &auditStoreSpy{}, AllowedOrigins: []string{"https://app.example"}}
 	if _, err := NewDesktopLiveHandler(base); !errors.Is(err, product.ErrInvalid) {
 		t.Fatalf("missing relay err=%v", err)
 	}
@@ -436,10 +436,10 @@ func TestDesktopLiveProductionRequiresEncryptedRelay(t *testing.T) {
 	}
 }
 
-func mustDesktopLiveHandler(t *testing.T, store product.ConnectionGrantStore, source DesktopLiveMediaSource, authority DesktopLiveInputAuthority) *DesktopLiveHandler {
+func mustDesktopLiveHandler(t *testing.T, store product.ConnectionGrantStore, source DesktopLiveMediaSource, policy product.DesktopPolicySource) *DesktopLiveHandler {
 	t.Helper()
 	handler, err := NewDesktopLiveHandler(DesktopLiveOptions{
-		Grants: store, Media: source, Input: authority, Audit: &auditStoreSpy{}, AllowedOrigins: []string{"https://app.example"},
+		Grants: store, Media: source, Policy: policy, Transfers: denyDesktopTransferAuthority{}, Audit: &auditStoreSpy{}, AllowedOrigins: []string{"https://app.example"},
 		AllowHostCandidatesForTests: true, AuthorityPollInterval: 10 * time.Millisecond,
 	})
 	if err != nil {
@@ -470,6 +470,19 @@ func testDesktopLiveMediaPolicy(audio bool) DesktopLiveMediaPolicy {
 		policy.MaxAudioBitrateKbps = 64
 	}
 	return policy
+}
+
+func testDesktopPolicy() product.DesktopPolicy {
+	transfer := product.DesktopTransferPolicy{
+		Enabled: true, MaxFiles: 4, MaxFileBytes: 1 << 20, MaxTotalBytes: 4 << 20,
+		AllowedMediaTypes: []string{"application/json", "text/plain"}, RequireActivation: true, RequireConsent: true,
+	}
+	return product.DesktopPolicy{
+		Revision:  1,
+		Input:     product.DesktopInputPolicy{Keyboard: true, Pointer: true, Touch: true},
+		Clipboard: product.DesktopClipboardPolicy{Read: true, Write: true, MaxBytes: product.MaxDesktopClipboardBytes, RequireActivation: true, RequireConsent: true},
+		Upload:    transfer, Download: transfer,
+	}
 }
 
 func newDesktopLiveClientOffer(t *testing.T, control, audio bool) (*webrtc.PeerConnection, *webrtc.DataChannel, webrtc.SessionDescription) {
@@ -556,14 +569,18 @@ func desktopRTPPacket(t *testing.T, payloadType uint8, sequence uint16, timestam
 	return encoded
 }
 
-type desktopLiveInputAuthoritySpy struct {
-	calls atomic.Int32
-	err   error
+type desktopPolicySourceSpy struct {
+	calls  atomic.Int32
+	mu     sync.RWMutex
+	policy product.DesktopPolicy
+	err    error
 }
 
-func (s *desktopLiveInputAuthoritySpy) AuthorizeDesktopInput(context.Context, product.GatewayBinding, DesktopLiveInput) error {
+func (s *desktopPolicySourceSpy) CurrentDesktopPolicy(context.Context, product.GatewayBinding) (product.DesktopPolicy, error) {
 	s.calls.Add(1)
-	return s.err
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.policy, s.err
 }
 
 type desktopLiveMediaSourceSpy struct {
@@ -654,6 +671,6 @@ func (w *desktopBlockingRTPWriter) WriteRTP(*rtp.Packet) error {
 	return nil
 }
 
-var _ DesktopLiveInputAuthority = (*desktopLiveInputAuthoritySpy)(nil)
+var _ product.DesktopPolicySource = (*desktopPolicySourceSpy)(nil)
 var _ DesktopLiveMediaSource = (*desktopLiveMediaSourceSpy)(nil)
 var _ DesktopLiveMediaSession = (*desktopLiveMediaSessionSpy)(nil)
