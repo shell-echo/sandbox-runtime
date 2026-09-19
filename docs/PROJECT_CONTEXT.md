@@ -45,7 +45,7 @@ Current verified state:
   four roles, scenario set, and cleanup. Deployment, HA, hostile multi-tenant,
   independently implemented caller, and production readiness remain explicit
   non-claims; and
-- Product v1 Phase 5 Desktop is **13/15** complete. Slice 1 establishes the
+- Product v1 Phase 5 Desktop is **14/15** complete. Slice 1 establishes the
   separate Provider Desktop Contract and Go projection authority at revision
   `720ad15c343e71f36615dc4499edd5e764178bca`, tree
   `343ffde0819207cf99c005096c336735dd33a735`, with a content-derived 71-case
@@ -139,6 +139,17 @@ Current verified state:
   real headless-Chrome gates. Desktop advertisement remains off pending the
   real Provider media/input bridge, production startup composition, Slice 14
   composed security/fault cleanup, and Slice 15 independent-process release.
+
+  Slice 14 implementation `13385f6fdba2f78ff3bd7a7b9d1d2a2ea670271d`
+  adds the closed neutral private Desktop media/control protocol, Product
+  network source, Provider trusted-peer handler, fresh attach and continuous
+  handoff authority, capacity/backpressure bounds, and a real-PostgreSQL
+  composed public-WebRTC/private-bridge/recording/security/cleanup gate. Full
+  race/vet, tagged store, Contract, and retained Phase 3/4 evidence regressions
+  pass. This is same-repository same-process composition evidence with a
+  reference media executor. Slice 15 independent roles, real display/control
+  and development scenarios, strict evidence validation, and exact-topology
+  advertisement remain open.
 
 The qualification applies only to Provider revision
 `170459266af5f4fad359ca8c63f2ae19741055c5`, external-caller revision
@@ -970,7 +981,7 @@ Contract identity:
 | P2 | Reference coding/shell caller and Product Phase 2 lifecycle release gates passed; the latter includes a repository-owned independent-process 15+5+9 black-box run | Independently implemented external-caller lifecycle interoperability, aggregate conformance, multi-controller, hostile multi-tenant isolation, deployment, and production gates remain open |
 | P3 | Retired by ADR 0037. Historical revision binding/shadow/metrics components and candidate runs retain their recorded evidence boundaries | No named-platform migration gate remains; external consumers adapt to the exact locked Provider Contract |
 | P4 | Browser Contract authority/projection, exact sandboxed signed amd64/arm64/v8 publication, Provider-local components, default-disabled command/runtime composition, process-local Gateway limits, the separately recorded Browser/shared-capacity/durable-revocation caller gates, ADR 0033 component/caller evidence, the ADR 0034 v2 local/hosted deletion and rollback-detection gates, the ADR 0035 PostgreSQL component gate, and the ADR 0036 hosted same-runner controlled-restore gate pass within their named boundaries | Production independent witness/storage and restore operations, production Browser advertisement/public Gateway, Valkey/PostgreSQL provenance and HA, production configuration/metrics, aggregate, multi-controller, multi-tenant, deployment, and production gates remain open |
-| Product Phase 5 | Slices 1-13/15 lock the separate Provider Desktop Contract/projection, Product Desktop intent, Provider application/runtime/private resolver, Product network reconciliation and grants, the bounded public WebRTC plane, durable policy/recovery/recording, immutable development templates, and the capability-derived authenticated unified Product Web/BFF. Desktop advertisement remains empty | Execute Slices 14-15 in order: composed security/fault/cleanup gates and independent-process release evidence |
+| Product Phase 5 | Slices 1-14/15 lock the separate Provider Desktop Contract/projection, Product Desktop intent, Provider application/runtime/private resolver, Product network reconciliation and grants, the bounded public WebRTC plane, durable policy/recovery/recording, immutable development templates, the capability-derived authenticated unified Product Web/BFF, and the private Desktop bridge with composed real-store fault/security/cleanup evidence. Desktop advertisement remains empty | Execute Slice 15: exact independent Product/Gateway/Provider/Desktop/Guest processes, real display/control and development scenarios, strict evidence validation, and cleanup |
 
 Production readiness is not a numbered phase shortcut. Aggregate conformance,
 multi-controller reliability, hostile multi-tenant security, deployment, and

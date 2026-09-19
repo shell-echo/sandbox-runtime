@@ -19,7 +19,7 @@ general production readiness.
 | Independent external caller | **13/13 complete** |
 | Product v1 Phase 3 | **13/13 complete** for the bounded standalone topology |
 | Product v1 Phase 4 Browser | **13/13 complete** for the bounded same-repository separate-process topology |
-| Product v1 Phase 5 Desktop | **13/15 complete**; capability-derived unified Product Web/BFF and real-headless-browser evidence pass; composed security/fault cleanup is next, advertisement disabled |
+| Product v1 Phase 5 Desktop | **14/15 complete**; private Desktop bridge and composed real-store fault/security/cleanup gate pass; independent-process release gate is next, advertisement disabled |
 | Coding/shell qualification | **Qualified** for the exact caller, Provider revisions, topology, profile, and scenarios recorded below |
 | Latest core CI | [Passed](https://github.com/shell-echo/sandbox-runtime/actions/runs/35204434771) |
 
@@ -79,7 +79,7 @@ independently implemented caller, HA, hostile-multitenant, or production
 evidence.
 
 [Product v1 Phase 5 Desktop](docs/plan/product-v1-phase-5-desktop-development-unified-product.md)
-has completed **13/15** dependency-ordered slices. Slice 1 locks a separate
+has completed **14/15** dependency-ordered slices. Slice 1 locks a separate
 Provider Desktop capability/profile/runtime shape and complete session
 open/read/handoff/close/expiry/revocation, usage, admission, security, and
 cleanup semantics. Exact authority is Contract revision
@@ -171,9 +171,21 @@ fresh public grants, same-origin HTTPS WebRTC, ordered fenced input, visible
 recording/controller state, bounded reconnect, stream configuration,
 clipboard consent, and digest-checked Product transfers without exposing
 Provider handoffs or private coordinates. Generated-client, full race/vet,
-Contract/evidence, and real headless-Chrome gates pass. A real Provider media/
-input bridge, production composition/advertisement, the composed Slice 14
-fault/security gate, and the independent-process Slice 15 release gate remain.
+Contract/evidence, and real headless-Chrome gates pass. At that boundary the
+private Provider bridge, composed Slice 14 fault/security gate, and the
+independent-process Slice 15 release gate remained.
+
+Slice 14 implementation `13385f6fdba2f78ff3bd7a7b9d1d2a2ea670271d`
+adds the closed private Provider-to-Product-Gateway Desktop media/control
+bridge and a real-PostgreSQL composed gate spanning public WebRTC, private RTP
+and fenced input, durable policy, required encrypted recording, continuous
+revocation, Origin/ticket/owner attacks, capacity recovery, and exact
+row/object/session cleanup. Full race/vet, Contract, tagged store, and retained
+Phase 3/4 evidence regressions pass. This remains same-repository same-process
+composition evidence with a reference media executor; independent
+Product/Gateway/Provider/Desktop/Guest processes, real display/control and
+development scenarios, the strict Slice 15 evidence bundle, deployment, and
+production readiness remain unproven. Desktop advertisement stays disabled.
 
 ## What the project provides
 

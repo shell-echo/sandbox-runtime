@@ -14,7 +14,7 @@
 | 独立 External Caller | **13/13 已完成** |
 | Product v1 第三阶段 | 在有边界的 standalone 拓扑内 **13/13 已完成** |
 | Product v1 第四阶段 Browser | 在有边界的同仓库独立进程拓扑内 **13/13 已完成** |
-| Product v1 第五阶段 Desktop | **13/15 已完成**；能力派生的统一 Product Web/BFF 与真实无头浏览器门禁已通过，下一步为组合安全/故障/清理门禁，能力广告仍关闭 |
+| Product v1 第五阶段 Desktop | **14/15 已完成**；私有 Provider/Gateway Desktop 桥和真实 PostgreSQL 组合安全/故障/清理门禁已通过，下一步为独立进程发布门禁，能力广告仍关闭 |
 | 编程/Shell 资格验证 | 对下述精确调用方、Provider 版本、拓扑、Profile 和场景结果为 **Qualified** |
 | 最新核心 CI | [已通过](https://github.com/shell-echo/sandbox-runtime/actions/runs/35204434771) |
 
@@ -54,7 +54,7 @@ Browser OS 进程，配合全新固定摘要 PostgreSQL、Valkey 与加密录制
 通过部署资格验证、独立实现调用方、HA、恶意多租户隔离或生产就绪。
 
 [Product v1 第五阶段 Desktop](docs/plan/product-v1-phase-5-desktop-development-unified-product.md)
-已完成 **13/15** 个依赖有序切片。切片 1 锁定了独立的 Provider Desktop
+已完成 **14/15** 个依赖有序切片。切片 1 锁定了独立的 Provider Desktop
 能力/Profile/运行时形状，以及完整的会话打开、读取、交接、关闭、过期、撤销、
 用量、准入、安全和清理语义。精确权威为 Contract 版本
 `720ad15c343e71f36615dc4499edd5e764178bca`、树
@@ -123,8 +123,18 @@ Guest 回滚与重启恢复。主机路径、对象路径、凭据、Guest ID �
 和录制。Desktop 查看/控制使用新鲜公开 grant、同源 HTTPS WebRTC、有序 fenced
 输入、可见录制/控制状态、有界重连、流配置、剪贴板同意和摘要校验 Product 传输，
 且不暴露 Provider handoff 或私有坐标。生成客户端、全仓 race/vet、Contract/历史
-证据以及真实无头 Chrome 门禁均通过。真实 Provider 媒体/输入桥接、生产组合和
-广告、切片 14 组合故障/安全门禁及切片 15 独立进程发布门禁仍未完成。
+证据以及真实无头 Chrome 门禁均通过。在该切片边界，真实 Provider 媒体/输入桥接、
+生产组合和广告、切片 14 组合故障/安全门禁及切片 15 独立进程发布门禁尚未完成。
+
+切片 14 实现 `13385f6fdba2f78ff3bd7a7b9d1d2a2ea670271d` 加入封闭且有界的
+私有 Provider 到 Product Gateway Desktop 媒体/控制桥，并保持 Product 与
+Provider 权威包的依赖边界。真实 PostgreSQL 组合门禁把一次性 grant、持久策略、
+公开 WebRTC、私有桥、VP8/可选 Opus、有序 fenced 输入、必需的加密录制、持续撤销、
+重放/跨租户/跨 Origin 拒绝、容量恢复、保留期对象删除和精确租户行清理连接起来。
+全仓 race/vet、双方 Contract 与保留的第三/第四阶段证据门禁均通过。独立的
+Product/Gateway/Provider/Desktop/Guest 进程拓扑、真实显示/控制和开发场景、严格
+发布证据包、部署、HA、恶意多租户隔离和生产就绪仍属于切片 15 或更晚门禁，Desktop
+能力广告因此仍关闭。
 
 ## 项目提供什么
 

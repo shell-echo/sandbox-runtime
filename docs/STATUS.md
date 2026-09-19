@@ -63,7 +63,7 @@ and records exact row, object, coordination, process, and container cleanup.
 This does not establish a deployable topology, independently implemented
 caller, HA, hostile multi-tenant isolation, or production readiness.
 
-Product v1 Phase 5 Desktop has completed **13/15** dependency-ordered slices.
+Product v1 Phase 5 Desktop has completed **14/15** dependency-ordered slices.
 Slice 1 establishes only the separate Provider Desktop Contract and Go
 projection authority. It selects exact Contract revision
 `720ad15c343e71f36615dc4499edd5e764178bca`, tree
@@ -159,6 +159,20 @@ gates. A real Provider media/input bridge, production composition and Desktop
 advertisement, composed Slice 14 security/fault evidence, and the Slice 15
 independent-process release gate remain absent.
 
+Slice 14 implementation `13385f6fdba2f78ff3bd7a7b9d1d2a2ea670271d`
+adds the closed private Provider-to-Product-Gateway Desktop bridge, fresh and
+continuous handoff authority checks, bounded VP8/optional-Opus and ordered
+control transport, and strict tuple/input substitution rejection. The real
+PostgreSQL composition gate joins one-use grants, durable policy, public
+WebRTC, the private bridge, fenced input, required encrypted recording,
+revocation, replay/cross-origin/cross-owner denial, capacity recovery,
+retention object deletion, and exact tenant-row cleanup. Full race/shuffle,
+vet, both Contract verifiers, and retained Phase 3/4 evidence verification
+pass. The separate Product/Gateway/Provider/Desktop/Guest process topology,
+real display/control and development scenarios, strict release evidence
+bundle, exact release-topology advertisement, deployment, HA, hostile
+multi-tenant isolation, and production readiness remain absent.
+
 Updated: 2026-09-20
 
 This document is the implementation ledger for the repository-owned MIT
@@ -193,6 +207,7 @@ production readiness.
 | Product v1 Phase 5 Desktop Slice 11 | [Slice 11 evidence](audits/product-phase-5-desktop-slice-11.md); [fixed 15-slice plan](plan/product-v1-phase-5-desktop-development-unified-product.md); ADRs 0046/0050; implementation `c5b045abc5192b76b7d615ddbb0858b998ef98d5` | Explicit consent and visible mode, fail-closed required recorder, bounded Desktop RTP/control capture, encrypted immutable digest-linked segments, owner-only integrity replay, active-recording quota race closure, retention deletion/object cleanup, and catalog/audit content minimization pass focused Gateway and fresh real-PostgreSQL gates. No real Provider media/input bridge, development template, production composition, advertisement, deployment, or production-readiness claim follows |
 | Product v1 Phase 5 Desktop Slice 12 | [Slice 12 evidence](audits/product-phase-5-desktop-slice-12.md); [fixed 15-slice plan](plan/product-v1-phase-5-desktop-development-unified-product.md); ADR 0050; implementation `490c2db96d6ba7a851d7846bc9e5f818dae2be77`; migration 13 | Immutable signed-image template selection, validated revision manifests, exact primary-slot/Guest authority and health, bounded digest-checked workspace materialization, two-phase rollback/finalization, interrupted-swap recovery, idempotency, owner isolation, and nondisclosure pass focused and fresh full PostgreSQL gates. No real Provider media/input bridge, unified Web, production composition, advertisement, deployment, or production-readiness claim follows |
 | Product v1 Phase 5 Desktop Slice 13 | [Slice 13 evidence](audits/product-phase-5-desktop-slice-13.md); [fixed 15-slice plan](plan/product-v1-phase-5-desktop-development-unified-product.md); ADR 0050; implementation `84698c371d35edb862ffc81b484a3e31cc8120d9` | Capability-derived authenticated unified Product Web/BFF, exact Desktop public slot/session/grant profiles, same-origin WebRTC, viewer/controller UX, bounded reconnect/configuration, clipboard and recording consent, digest-checked shared transfers, accessible navigation, strict CSP/Origin/CSRF, and nondisclosure pass focused/full and real-headless-Chrome gates. No real Provider media bridge, production composition/advertisement, composed Slice 14 security/fault result, independent-process release, deployment, or production-readiness claim follows |
+| Product v1 Phase 5 Desktop Slice 14 | [Slice 14 evidence](audits/product-phase-5-desktop-slice-14.md); [fixed 15-slice plan](plan/product-v1-phase-5-desktop-development-unified-product.md); ADR 0050; implementation `13385f6fdba2f78ff3bd7a7b9d1d2a2ea670271d` | Closed private Provider/Gateway Desktop protocol, fresh and continuous handoff binding, bounded VP8/optional-Opus and ordered control transport, strict substitution/input rejection, and a real-PostgreSQL composition of grant, policy, public WebRTC, private bridge, recording, revocation, attack denial, capacity recovery, object deletion, and exact tenant-row cleanup pass focused/full gates. The independent-process Product/Gateway/Provider/Desktop/Guest release topology, real display/control and development scenarios, strict release evidence bundle, exact topology advertisement, deployment, HA, hostile multi-tenant isolation, and production readiness remain absent |
 | Sandbox Provider Calling Standard decision | ADR 0037; `contract/specification/provider-calling-standard-v1.md`; repository-owned Contract manifest | External consumers adapt to the exact locked `sandbox-runtime` Provider Contract. The former named Agent Platform P3 migration route is retired, while caller/Provider ownership separation and historical candidate evidence remain. This standard slice adds no capability or production-readiness claim. ADR 0038 defines the generic issuer trust model; the named independent-caller qualification is recorded separately in P2.7 and deployment qualification remains open |
 | Current Provider Contract authority | Revision `720ad15c343e71f36615dc4499edd5e764178bca`; tree `343ffde0819207cf99c005096c336735dd33a735`; manifest `sha256:483111511a588b41bd40d3fef686f0b21f465bb65d3215450ebb2ccf37a5de89`; OpenAPI `sha256:5a3da5d239f83e94eff09fc75438755f834e77bce8cd1c0f91c25055bf0cba2a`; semantic rules `sha256:7953d05e65f00c68e0428b6dd4fcebef1af103f2cab2fa6b214905b2496c8785`; 71-case local Suite `sha256:78e01cc5eb176083896baf8507c551d2ee88e56b93197321702748a88949e89d`; unchanged 6-case remote Suite | Product Phase 5 Slice 1 adds Desktop Contract/projection authority only. Exact lock verification, executable Suite mapping, race/shuffle, vet, retained Product evidence, and clean-VCS Conformance are the local acceptance gates. Historical Phase 2/3/4, hosted CI, external-caller, and remote-discovery evidence retains its recorded authority and is not relabeled |
 | Application-container development deployment | Root `Dockerfile`; Docker, Apple Container, and Kubernetes bilingual guides; development Kustomize base; three smoke scripts; local runs on 2026-09-17 | Docker Engine 29.7.2 on Linux/arm64, Apple Container 1.4.1 on macOS/arm64, and kind 0.33.0 with Kubernetes 1.37.0 each passed the bounded health/create/list path with the in-memory fake runtime. Docker and Kubernetes additionally exercised numeric non-root and restricted filesystem/privilege settings; the Kubernetes run created and removed an isolated namespace, and its disposable kind cluster was removed. No application image was published. This is current-worktree application-packaging evidence only; hosted release gates, immutable multi-platform publication, protected Provider deployment, HA, hostile multi-tenancy, deployment qualification, and production readiness remain open |
@@ -361,6 +376,7 @@ It does not clone, mount, or read an external source repository.
 | Product Phase 5 Slice 11 | Required Desktop recording, replay, catalog, retention, quota, and integrity composition | Passed at implementation `c5b045abc5192b76b7d615ddbb0858b998ef98d5`: consent/mode and fail-closed Gateway cases, ten-run Gateway race, full race/shuffle, vet, Contract/evidence verifiers, and fresh full tagged PostgreSQL quota/encryption/integrity/authorization/retention gates | Continue with Desktop development-environment templates in Slice 12; no real Provider media/input bridge, production startup composition, advertisement, deployment, or production-readiness claim follows |
 | Product Phase 5 Slice 12 | Immutable development templates, exact Guest workspace materialization, health, rollback, and restart persistence | Passed at implementation `490c2db96d6ba7a851d7846bc9e5f818dae2be77`: focused race/shuffle and vet, exact Guest transport/materialization/fault/restart tests, fresh complete tagged PostgreSQL migration/replay/authority/isolation package, and clean E2E parent lock | Continue with unified Product Web in Slice 13; no real Provider media/input bridge, production startup composition, advertisement, deployment, or production-readiness claim follows |
 | Product Phase 5 Slice 13 | Unified capability-derived authenticated Product Web/BFF for Workspace, Terminal, Files, Browser, Desktop, and recordings | Passed at implementation `84698c371d35edb862ffc81b484a3e31cc8120d9` and E2E lock `25283420377baebd9aaac8c1199068fb90735403`: generated-client regeneration, focused/full race-shuffle, vet, real headless Chrome authentication/capability navigation, both Contract verifiers, retained Phase 3/4 evidence verification, and all eight parent-lock checks | Continue with the composed cleanup/quota/fault/security regression gate in Slice 14; no real Provider media bridge, production startup composition/advertisement, independent-process release, deployment, or production-readiness claim follows |
+| Product Phase 5 Slice 14 | Private Provider/Gateway Desktop bridge and composed cleanup/quota/fault/security regression gate | Passed at implementation `13385f6fdba2f78ff3bd7a7b9d1d2a2ea670271d` and E2E lock `65d514622405e69f9accfc50d09d207263c961cb`: focused/full race-shuffle, vet, fresh full tagged PostgreSQL composition/cleanup, both Contract verifiers, retained Phase 3/4 evidence verification, and all eight parent-lock checks | Continue with the independent-process release topology in Slice 15; no exact release-topology advertisement, deployment, HA, hostile multi-tenant, or production-readiness claim follows |
 | Production readiness | Independent evidence tier, not a shortcut from P4 | Not established | Deployment, multi-controller reliability, multi-tenant security, operations, and production gates |
 
 ## Evidence Boundary
@@ -583,7 +599,21 @@ real-headless-browser component evidence without a real Provider media/input
 bridge, production composition/advertisement, composed Slice 14 evidence, or
 the independent-process Slice 15 release result.
 
-E2E baseline lock `25283420377baebd9aaac8c1199068fb90735403`
+Product Phase 5 Slice 14 implementation
+`13385f6fdba2f78ff3bd7a7b9d1d2a2ea670271d` passes focused private-bridge
+race/shuffle, the full repository race/shuffle and vet gates, both Contract
+verifiers, retained Phase 3/4 evidence verification, and the complete fresh
+tagged PostgreSQL package. The composed gate proves the one-use control grant,
+durable policy, public WebRTC, private Provider bridge, VP8/optional-Opus RTP,
+ordered fenced input, required encrypted recording, continuous revocation,
+replay/origin/owner denial, private capacity recovery, retention deletion, and
+exact tenant-row cleanup. This closes Slice 14 at 14/15 as same-repository
+bridge, same-process composition, and real-store evidence without the separate
+Product/Gateway/Provider/Desktop/Guest release topology, real display/control
+and development scenarios, strict Slice 15 evidence bundle, deployment, or
+production-readiness result. Desktop capability advertisement remains off.
+
+E2E baseline lock `65d514622405e69f9accfc50d09d207263c961cb`
 advances the reference, candidate, Browser, shared-capacity, durable-revocation,
 downstream-fencing v1/v2, and PostgreSQL controlled-restore parent checks to
 the exact implementation revision; all eight local `-check` commands pass.
