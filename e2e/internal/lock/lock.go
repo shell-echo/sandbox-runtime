@@ -28,7 +28,7 @@ import (
 )
 
 const (
-	ProviderCommit   = "0649d62911abb89229de40136347286736152ec6"
+	ProviderCommit   = "040c560f3701b7c972c25f05928dd435d9f55c20"
 	ContractNS       = "urn:shell-echo:sandbox-runtime:provider-v1"
 	ContractRevision = "720ad15c343e71f36615dc4499edd5e764178bca"
 	ContractTree     = "343ffde0819207cf99c005096c336735dd33a735"
