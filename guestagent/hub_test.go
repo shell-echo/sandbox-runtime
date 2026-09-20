@@ -48,6 +48,12 @@ func TestOutboundAgentAuthenticatesCallsCancelsAndReconnects(t *testing.T) {
 	go func() { result <- agent.Run(ctx) }()
 
 	response := waitForCall(t, hub, "guest.health", map[string]any{"probe": true})
+	readyContext, readyCancel := context.WithTimeout(context.Background(), time.Second)
+	if err := waitForAgentReady(readyContext, agent); err != nil {
+		readyCancel()
+		t.Fatalf("Agent.Ready() = %v", err)
+	}
+	readyCancel()
 	var health struct {
 		Ready bool `json:"ready"`
 	}
@@ -81,6 +87,17 @@ func TestOutboundAgentAuthenticatesCallsCancelsAndReconnects(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("Agent.Run() did not stop")
+	}
+}
+
+func waitForAgentReady(ctx context.Context, agent *Agent) error {
+	for {
+		if err := agent.Ready(ctx); err == nil {
+			return nil
+		} else if ctx.Err() != nil {
+			return err
+		}
+		time.Sleep(time.Millisecond)
 	}
 }
 

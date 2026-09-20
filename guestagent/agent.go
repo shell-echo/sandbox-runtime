@@ -28,6 +28,8 @@ type AgentOptions struct {
 type Agent struct {
 	options      AgentOptions
 	capabilities []string
+	mu           sync.RWMutex
+	connected    bool
 }
 
 func NewAgent(options AgentOptions) (*Agent, error) {
@@ -58,6 +60,7 @@ func (a *Agent) Run(ctx context.Context) error {
 	if a == nil || ctx == nil {
 		return ErrInvalid
 	}
+	a.setConnected(false)
 	for {
 		err := a.connect(ctx)
 		if errors.Is(err, ErrIncompatible) || errors.Is(err, ErrUnauthorized) {
@@ -74,6 +77,25 @@ func (a *Agent) Run(ctx context.Context) error {
 		case <-timer.C:
 		}
 	}
+}
+
+// Ready reports whether the Guest has an authenticated, currently serving
+// connection. A configured outbound URL or a successful process start is not
+// sufficient for role readiness.
+func (a *Agent) Ready(ctx context.Context) error {
+	if a == nil || ctx == nil {
+		return ErrInvalid
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	a.mu.RLock()
+	connected := a.connected
+	a.mu.RUnlock()
+	if !connected {
+		return ErrUnavailable
+	}
+	return nil
 }
 
 func (a *Agent) connect(ctx context.Context) error {
@@ -111,7 +133,15 @@ func (a *Agent) connect(ctx context.Context) error {
 	if welcome.Type != "welcome" || welcome.ProtocolVersion != ProtocolVersion || welcome.BindingGeneration != a.options.BindingGeneration || !subset(welcome.Capabilities, a.capabilities) {
 		return ErrIncompatible
 	}
+	a.setConnected(true)
+	defer a.setConnected(false)
 	return a.serve(ctx, connection, welcome.Capabilities)
+}
+
+func (a *Agent) setConnected(value bool) {
+	a.mu.Lock()
+	a.connected = value
+	a.mu.Unlock()
 }
 
 func (a *Agent) serve(ctx context.Context, connection *websocket.Conn, selected []string) error {
