@@ -43,6 +43,10 @@ hostile multi-tenant isolation, or operator acceptance.
 - A disposable kind cluster (`sandbox-runtime-phase6`) passed the live
   development Kubernetes smoke using image `sandbox-runtime:phase6-local`:
   health, create-instance, list-instance, rollout, and cleanup checks passed.
+- Apple Container 1.4.1 passed the local arm64 application smoke with the
+  digest-pinned Dockerfile. Docker Engine 29.7.2 passed the non-root,
+  read-only-root, capability-drop application smoke after the smoke harness
+  was hardened to retry transient startup `curl` errors.
 
 ## Boundary and remaining gates
 

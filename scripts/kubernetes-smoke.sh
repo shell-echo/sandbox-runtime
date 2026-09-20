@@ -168,6 +168,7 @@ curl \
   --show-error \
   --retry 30 \
   --retry-connrefused \
+  --retry-all-errors \
   --retry-delay 1 \
   --connect-timeout 2 \
   --max-time 5 \
