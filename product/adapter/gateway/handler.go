@@ -33,6 +33,7 @@ type AuditStore interface {
 type Options struct {
 	Grants                   product.ConnectionGrantStore
 	Resolver                 gateway.ReferenceResolver
+	BoundResolver            gateway.BoundReferenceResolver
 	Audit                    AuditStore
 	OriginPatterns           []string
 	MaxFrameBytes            int64
@@ -48,6 +49,7 @@ type Options struct {
 type Handler struct {
 	grants           product.ConnectionGrantStore
 	resolver         gateway.ReferenceResolver
+	boundResolver    gateway.BoundReferenceResolver
 	audit            AuditStore
 	originPatterns   []string
 	maxFrameBytes    int64
@@ -67,8 +69,11 @@ func NewHandler(options Options) (*Handler, error) {
 	if poll == 0 {
 		poll = 250 * time.Millisecond
 	}
-	if nilInterface(options.Grants) || nilInterface(options.Resolver) || nilInterface(options.Audit) ||
+	if nilInterface(options.Grants) || nilInterface(options.Audit) ||
 		limit < 1 || limit > maxFrameBytes || poll < 10*time.Millisecond || poll > 5*time.Second {
+		return nil, product.ErrInvalid
+	}
+	if nilInterface(options.Resolver) && nilInterface(options.BoundResolver) {
 		return nil, product.ErrInvalid
 	}
 	capacity := options.Capacity
@@ -90,7 +95,7 @@ func NewHandler(options Options) (*Handler, error) {
 		return nil, product.ErrInvalid
 	}
 	return &Handler{
-		grants: options.Grants, resolver: options.Resolver, audit: options.Audit,
+		grants: options.Grants, resolver: options.Resolver, boundResolver: options.BoundResolver, audit: options.Audit,
 		originPatterns: append([]string(nil), options.OriginPatterns...), maxFrameBytes: limit,
 		pollInterval: poll, maxReconnects: options.MaxReconnects, reconnectBackoff: options.ReconnectBackoff,
 		capacity: capacity, clock: options.Clock,
@@ -138,7 +143,7 @@ func (h *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	stream := &webSocketStream{connection: connection, maxFrameBytes: h.maxFrameBytes}
 	requestBinding, grant := gatewayValues(binding)
 	proxy, err := gateway.New(gateway.Options{
-		Authorizer: &oneShotAuthorizer{grant: grant}, Resolver: h.resolver,
+		Authorizer: &oneShotAuthorizer{grant: grant}, Resolver: h.resolver, BoundResolver: h.boundResolver,
 		Revocations: &authoritySource{store: h.grants, binding: binding, pollInterval: h.pollInterval},
 		Recorder:    &bindingRecorder{store: h.audit, binding: binding}, Clock: h.clock,
 		MaxReconnects: h.maxReconnects, ReconnectBackoff: h.reconnectBackoff,

@@ -34,11 +34,12 @@ type ProviderResolver interface {
 // usable. Authorization, revocation, recording, and WebSocket admission are
 // caller-owned. This package deliberately supplies no defaults for them.
 type Options struct {
-	Authorizer  gateway.Authorizer
-	Revocations gateway.RevocationSource
-	Recorder    gateway.Recorder
-	Resolver    ProviderResolver
-	WebSocket   adapter.WebSocketOptions
+	Authorizer    gateway.Authorizer
+	Revocations   gateway.RevocationSource
+	Recorder      gateway.Recorder
+	Resolver      ProviderResolver
+	BoundResolver gateway.BoundReferenceResolver
+	WebSocket     adapter.WebSocketOptions
 
 	Clock            gateway.Clock
 	MaxReconnects    int
@@ -63,12 +64,14 @@ func New(options Options) (*Service, error) {
 		{"authorizer", options.Authorizer},
 		{"revocations", options.Revocations},
 		{"recorder", options.Recorder},
-		{"provider resolver", options.Resolver},
 		{"WebSocket admission", options.WebSocket.Admission},
 	} {
 		if nilDependency(dependency.value) {
 			return nil, fmt.Errorf("%w: %s is required", ErrInvalidOptions, dependency.name)
 		}
+	}
+	if nilDependency(options.Resolver) && nilDependency(options.BoundResolver) {
+		return nil, fmt.Errorf("%w: provider resolver is required", ErrInvalidOptions)
 	}
 
 	webSocket, err := adapter.NewWebSocketServer(options.WebSocket)
@@ -78,6 +81,7 @@ func New(options Options) (*Service, error) {
 	proxy, err := gateway.New(gateway.Options{
 		Authorizer:       options.Authorizer,
 		Resolver:         providerResolver{resolver: options.Resolver, maxFrameBytes: options.WebSocket.MaxFrameBytes},
+		BoundResolver:    options.BoundResolver,
 		Revocations:      options.Revocations,
 		Recorder:         options.Recorder,
 		Clock:            options.Clock,

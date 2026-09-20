@@ -65,6 +65,14 @@ type ReferenceResolver interface {
 	Resolve(context.Context, string) (Endpoint, error)
 }
 
+// BoundReferenceResolver is the private handoff adapter used when Provider
+// resolution must be bound to the exact authorized tenant/session/connection
+// grant. It receives the already-validated Gateway grant and returns only the
+// same opaque Endpoint projection; it never exposes Provider DTOs or URLs.
+type BoundReferenceResolver interface {
+	ResolveBound(context.Context, Grant) (Endpoint, error)
+}
+
 // FencedReferenceResolver resolves only to a private ingress that independently
 // validates the opaque capacity claim for every downstream Browser action. It
 // must never return a direct Chromium or raw Provider attachment.

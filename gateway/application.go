@@ -23,6 +23,7 @@ func (f ClockFunc) Now() time.Time { return f() }
 type Options struct {
 	Authorizer       Authorizer
 	Resolver         ReferenceResolver
+	BoundResolver    BoundReferenceResolver
 	FencedResolver   FencedReferenceResolver
 	Revocations      RevocationSource
 	Recorder         Recorder
@@ -51,6 +52,7 @@ type Options struct {
 type Gateway struct {
 	authorizer             Authorizer
 	resolver               ReferenceResolver
+	boundResolver          BoundReferenceResolver
 	fencedResolver         FencedReferenceResolver
 	requireDownstreamFence bool
 	revocations            RevocationSource
@@ -74,8 +76,8 @@ func New(options Options) (*Gateway, error) {
 		if options.Resolver != nil || options.FencedResolver == nil || isTypedNil(options.FencedResolver) || options.Capacity == nil {
 			return nil, fmt.Errorf("%w: downstream-fenced resolver and capacity are required", ErrProxyUnavailable)
 		}
-	} else if options.Resolver == nil || isTypedNil(options.Resolver) || options.FencedResolver != nil {
-		return nil, fmt.Errorf("%w: ordinary resolver is required", ErrProxyUnavailable)
+	} else if (options.Resolver == nil || isTypedNil(options.Resolver)) && (options.BoundResolver == nil || isTypedNil(options.BoundResolver)) || options.FencedResolver != nil {
+		return nil, fmt.Errorf("%w: ordinary or bound resolver is required", ErrProxyUnavailable)
 	}
 	clock := options.Clock
 	if clock == nil {
@@ -107,7 +109,7 @@ func New(options Options) (*Gateway, error) {
 		return nil, fmt.Errorf("%w: connection capacity", err)
 	}
 	return &Gateway{
-		authorizer: options.Authorizer, resolver: options.Resolver, fencedResolver: options.FencedResolver,
+		authorizer: options.Authorizer, resolver: options.Resolver, boundResolver: options.BoundResolver, fencedResolver: options.FencedResolver,
 		revocations: options.Revocations, recorder: options.Recorder,
 		clock: clock, maxReconnects: maxReconnects, reconnectBackoff: backoff,
 		capacity: capacity, authenticatedCapacity: options.Capacity,
@@ -856,6 +858,12 @@ func downstreamFenceSubjectForGrant(grant Grant) DownstreamFenceSubject {
 func (g *Gateway) resolve(ctx context.Context, grant Grant, fence DownstreamFence) (Endpoint, error) {
 	if g.requireDownstreamFence {
 		return g.fencedResolver.ResolveFenced(ctx, grant.HandoffReference, downstreamFenceSubjectForGrant(grant), fence)
+	}
+	if g.boundResolver != nil {
+		return g.boundResolver.ResolveBound(ctx, grant)
+	}
+	if g.resolver == nil {
+		return Endpoint{}, ErrReferenceUnavailable
 	}
 	return g.resolver.Resolve(ctx, grant.HandoffReference)
 }
