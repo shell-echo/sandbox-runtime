@@ -21,15 +21,58 @@ import (
 	"github.com/shell-echo/sandbox-runtime/server"
 )
 
-type readinessFunc func(context.Context) error
+// ReadinessFunc is the dependency-derived readiness callback supplied by the
+// owning application graph.
+type ReadinessFunc func(context.Context) error
 
-func (f readinessFunc) Ready(ctx context.Context) error { return f(ctx) }
+func (f ReadinessFunc) Ready(ctx context.Context) error { return f(ctx) }
+
+// ApplicationGraph is the explicit application-owned contract behind one
+// data-plane role. The transport package never fabricates these dependencies:
+// callers must provide the role handler, a dependency-derived readiness check,
+// and (for outbound roles) a bounded lifecycle function.
+//
+// Public is valid only for Gateway, Private only for Browser/Desktop, and
+// Start is required for Guest. Shutdown is optional when Start owns no
+// independent resources, but must be supplied for resources that outlive a
+// single Start call.
+type ApplicationGraph struct {
+	Public   http.Handler
+	Private  http.Handler
+	Ready    ReadinessFunc
+	Start    func(context.Context) error
+	Shutdown func(context.Context) error
+}
+
+func (g ApplicationGraph) validate(role config.DataPlaneRole) error {
+	if g.Ready == nil {
+		return errors.New("application graph readiness is required")
+	}
+	switch role {
+	case config.DataPlaneGateway:
+		if g.Public == nil || g.Private != nil || g.Start != nil {
+			return errors.New("Gateway application graph requires only a public handler")
+		}
+	case config.DataPlaneGuest:
+		if g.Public != nil || g.Private != nil || g.Start == nil {
+			return errors.New("Guest application graph requires an outbound lifecycle")
+		}
+	case config.DataPlaneBrowser, config.DataPlaneDesktop:
+		if g.Private == nil || g.Public != nil || g.Start != nil {
+			return errors.New("private application graph requires only a private handler")
+		}
+	default:
+		return errors.New("unsupported data-plane role")
+	}
+	return nil
+}
 
 type Composition struct {
 	cfg     *config.DataPlaneProcessConfig
 	public  server.Server
 	private server.Server
 	probe   server.Server
+	graph   server.Server
 }
 
 // New constructs only the listener/probe graph. Role applications are supplied
@@ -37,8 +80,20 @@ type Composition struct {
 // Every non-probe route is a bodyless 404 until a role-specific handler is
 // explicitly composed by the owning command.
 func New(ctx context.Context, cfg *config.DataPlaneProcessConfig) (*Composition, error) {
+	return NewWithGraph(ctx, cfg, ApplicationGraph{})
+}
+
+// NewWithGraph composes a caller-owned application graph behind the role's
+// transport. The graph is validated before any listener is constructed, and a
+// missing graph retains the fail-closed probe-only behavior of New.
+func NewWithGraph(ctx context.Context, cfg *config.DataPlaneProcessConfig, graph ApplicationGraph) (*Composition, error) {
 	if ctx == nil || cfg == nil || !cfg.Enabled {
 		return nil, errors.New("enabled data-plane role configuration is required")
+	}
+	if graph.Public != nil || graph.Private != nil || graph.Ready != nil || graph.Start != nil || graph.Shutdown != nil {
+		if err := graph.validate(cfg.Role); err != nil {
+			return nil, err
+		}
 	}
 	if err := cfg.Validate(); err != nil {
 		return nil, err
@@ -46,7 +101,7 @@ func New(ctx context.Context, cfg *config.DataPlaneProcessConfig) (*Composition,
 	frozen := *cfg
 	frozen.TLS.AllowedClientIdentity = append([]string(nil), cfg.TLS.AllowedClientIdentity...)
 	cfg = &frozen
-	ready := readinessFunc(func(checkContext context.Context) error { return checkReadiness(checkContext, cfg) })
+	ready := ReadinessFunc(func(checkContext context.Context) error { return checkReadiness(checkContext, cfg, graph) })
 	probe, err := providerprocess.NewServer(cfg.Probe, ready)
 	if err != nil {
 		return nil, err
@@ -56,10 +111,17 @@ func New(ctx context.Context, cfg *config.DataPlaneProcessConfig) (*Composition,
 		writer.Header().Set("Cache-Control", "no-store")
 		writer.WriteHeader(http.StatusNotFound)
 	})
+	publicHandler, privateHandler := http.Handler(missing), http.Handler(missing)
+	if graph.Public != nil {
+		publicHandler = graph.Public
+	}
+	if graph.Private != nil {
+		privateHandler = graph.Private
+	}
 	switch cfg.Role {
 	case config.DataPlaneGateway:
 		public, publicErr := edge.NewTLSServer(edge.ServerOptions{
-			Address: cfg.Public.Addr(), Handler: missing,
+			Address: cfg.Public.Addr(), Handler: publicHandler,
 			ServerCertificateFile: cfg.TLS.CertificateFile, ServerPrivateKeyFile: cfg.TLS.PrivateKeyFile,
 			MaxConnections: 1000, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second,
 			WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 << 10,
@@ -69,7 +131,7 @@ func New(ctx context.Context, cfg *config.DataPlaneProcessConfig) (*Composition,
 		}
 		composition.public = public
 	case config.DataPlaneBrowser, config.DataPlaneDesktop:
-		private, privateErr := newPrivateTLSServer(cfg.Private.Addr(), missing, cfg.TLS)
+		private, privateErr := newPrivateTLSServer(cfg.Private.Addr(), privateHandler, cfg.TLS)
 		if privateErr != nil {
 			return nil, privateErr
 		}
@@ -79,6 +141,9 @@ func New(ctx context.Context, cfg *config.DataPlaneProcessConfig) (*Composition,
 	default:
 		return nil, errors.New("unsupported data-plane role")
 	}
+	if graph.Start != nil {
+		composition.graph = graphServer{start: graph.Start, shutdown: graph.Shutdown}
+	}
 	return composition, nil
 }
 
@@ -86,7 +151,7 @@ func New(ctx context.Context, cfg *config.DataPlaneProcessConfig) (*Composition,
 // not claim that a complete Gateway/Guest/Browser/Desktop application graph
 // exists: those role-specific adapters must replace the bounded route before
 // a deployment can advertise readiness.
-func checkReadiness(ctx context.Context, cfg *config.DataPlaneProcessConfig) error {
+func checkReadiness(ctx context.Context, cfg *config.DataPlaneProcessConfig, graph ...ApplicationGraph) error {
 	if ctx == nil || cfg == nil {
 		return errors.New("role readiness is not configured")
 	}
@@ -125,7 +190,10 @@ func checkReadiness(ctx context.Context, cfg *config.DataPlaneProcessConfig) err
 	if err := config.Phase6Dependencies.Validate(); err != nil {
 		return errors.New("role dependencies are unavailable")
 	}
-	return errors.New("role application graph is not composed")
+	if len(graph) != 1 || graph[0].Ready == nil {
+		return errors.New("role application graph is not composed")
+	}
+	return graph[0].Ready(ctx)
 }
 
 func (c *Composition) Startup(ctx context.Context) error {
@@ -139,6 +207,9 @@ func (c *Composition) Startup(ctx context.Context) error {
 	if c.private != nil {
 		servers["private"] = c.private
 	}
+	if c.graph != nil {
+		servers["application"] = c.graph
+	}
 	return server.RunE(servers)
 }
 
@@ -147,12 +218,31 @@ func (c *Composition) Shutdown(ctx context.Context) error {
 		return nil
 	}
 	var result error
-	for _, srv := range []server.Server{c.public, c.private, c.probe} {
+	for _, srv := range []server.Server{c.public, c.private, c.probe, c.graph} {
 		if srv != nil {
 			result = errors.Join(result, srv.Shutdown(ctx))
 		}
 	}
 	return result
+}
+
+type graphServer struct {
+	start    func(context.Context) error
+	shutdown func(context.Context) error
+}
+
+func (s graphServer) Startup(ctx context.Context) error {
+	if s.start == nil {
+		return errors.New("application graph lifecycle is not configured")
+	}
+	return s.start(ctx)
+}
+
+func (s graphServer) Shutdown(ctx context.Context) error {
+	if s.shutdown == nil {
+		return nil
+	}
+	return s.shutdown(ctx)
 }
 
 type privateTLSServer struct {
