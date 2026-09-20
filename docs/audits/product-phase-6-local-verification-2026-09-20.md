@@ -26,6 +26,14 @@ hostile multi-tenant isolation, or operator acceptance.
   PostgreSQL, readiness loss/recovery, separated migration/runtime roles,
   restart, authentication, capability-unavailable mutation rejection, and
   protected-material log checks.
+- Real Valkey-compatible coordination plus PostgreSQL action-history witness
+  integration passed with `-race -shuffle=on`, covering concurrent capacity
+  CAS, reconnect, runtime-role privilege denial, bounded operation timeout,
+  and rejection of a restored coordination snapshot. The test used a
+  disposable `redis:7-alpine` container and a disposable `postgres:16-alpine`
+  container with distinct migration, runtime, and denied roles; both
+  containers were removed after the run. Existing user containers were not
+  used or modified.
 
 ## Image and deployment checks
 
