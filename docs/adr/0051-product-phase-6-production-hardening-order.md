@@ -40,6 +40,14 @@ bindings, but it must advertise no runtime capability and reject Workspace
 creation until a later slice composes exact Provider readiness. Standalone and
 production configuration fail at startup.
 
+Phase 6 Slice 2 may enable `deployment_level=production` only for the separate
+Product command with TLS 1.3, closed signed Product identity, exact schema
+compatibility, distinct migration/runtime PostgreSQL roles, and a continuously
+refreshed dependency monitor. The DDL-capable pool must close before listener
+bind. Because the Provider and public data planes are later slices, Product
+runtime capability remains explicitly unavailable and mutation still fails
+before persistence.
+
 Production readiness can be stated only after Slice 15 accepts an immutable
 release candidate with reproducible evidence. Hostile-multitenant readiness is
 not implied by that result and retains its separate gate.

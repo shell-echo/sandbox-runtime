@@ -2,7 +2,7 @@
 
 Date: 2026-09-20
 
-Status: **1/15 complete**. The order is fixed by ADR 0051.
+Status: **2/15 complete**. The order is fixed by ADR 0051.
 
 ## Goal and claim boundary
 
@@ -60,6 +60,11 @@ standalone/production path.
 
 Gate: key overlap/revocation, auth precedence, migration/runtime privilege
 denial, pool exhaustion, database loss/recovery, restart and nondisclosure.
+
+Status: complete within the production-kernel/process evidence boundary. The
+Provider and public data-plane roles are deliberately absent, so the exact
+capability snapshot reports `product.workspace` as unavailable and mutations
+remain rejected before persistence.
 
 ### Slice 3 — deployable Provider control plane
 
@@ -193,5 +198,7 @@ an earlier claim.
 
 ## Current stop point
 
-Slice 1 is implemented. Slice 2 is next. No Phase 6 production, standalone,
-HA, hostile-multitenant, SLO-attainment or deployment qualification is claimed.
+Slices 1-2 are implemented. Slice 3, the deployable Provider control plane, is
+next. The production Product kernel result is local process/component evidence;
+no complete Phase 6 production, standalone topology, HA, hostile-multitenant,
+SLO-attainment or deployment qualification is claimed.

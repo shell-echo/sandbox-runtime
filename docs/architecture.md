@@ -180,7 +180,7 @@ uncomposed; deployment, HA, hostile multi-tenant, independently implemented
 caller, and production-readiness evidence remain absent.
 
 The [Product v1 Phase 6 production-hardening plan](plan/product-v1-phase-6-production-hardening.md)
-is now **1/15 complete**. ADR 0051 fixes a dependency order from deployable
+is now **2/15 complete**. ADR 0051 fixes a dependency order from deployable
 process boundaries through identity, storage, network, supply chain,
 observability, recovery, deployment, release candidate, and final release
 gates. Slice 1 adds only an independent development Product command, strict
@@ -190,6 +190,17 @@ capability and denies primary-slot mutations. Product still reaches runtime
 execution only through a later locked Provider adapter composition; the local
 API and Provider command do not host Product authority. No standalone,
 production, deployment, HA, hostile-multitenant, or SLO claim follows.
+
+Slice 2 adds the production Product kernel without crossing into the later
+Provider role: TLS 1.3 terminates at the Product listener; a closed Ed25519 JWT
+key ring binds issuer, audience, tenant, actor and Product role; migration and
+runtime PostgreSQL identities are exact and disjoint; runtime performs only a
+read-only migration-ledger compatibility check; and an independent monitor
+drives readiness through dependency loss and recovery. With no Provider or
+Gateway composed, the complete capability result is
+`product.workspace=unavailable` and the application policy denies mutation
+before any durable command. This is production-mode process evidence, not a
+complete production topology or release result.
 
 ## Purpose
 

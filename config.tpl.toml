@@ -24,11 +24,12 @@ compress = true         # gzip rotated files
 host = '127.0.0.1' # explicitly change only behind a trusted network boundary
 port = 8080
 
-# Phase 6 Slice 1 adds an independent Product development process. Start it
-# with `sandbox-runtime product serve -c /absolute/path/to/config.toml` only
-# after creating the two distinct mode-0600 secret files below. This slice is
-# loopback-only, advertises no runtime capability, and rejects standalone or
-# production mode until later Phase 6 gates are complete.
+# Phase 6 Slices 1-2 add independent development and production-kernel Product
+# modes. Start with `sandbox-runtime product serve -c /absolute/config.toml`.
+# Every populated authority path below must be absolute, distinct, mode-0600,
+# regular, non-symlink storage. Development uses dsn_file/bindings_file and is
+# loopback-only. Production leaves those two fields empty and requires TLS,
+# separate migration/runtime DSNs, exact role names and the signed key ring.
 [product_process]
 enabled = false
 deployment_level = 'development'
@@ -37,18 +38,34 @@ deployment_level = 'development'
 host = '127.0.0.1'
 port = 8082
 
+[product_process.tls]
+certificate_file = '' # production only; exact PEM certificate chain
+private_key_file = ''  # production only; exact PKCS#8 PRIVATE KEY PEM
+
 [product_process.postgres]
-dsn_file = '' # absolute path; contains one postgres:// or postgresql:// DSN
+dsn_file = ''           # development only
+migration_dsn_file = '' # production only
+runtime_dsn_file = ''   # production only
+migration_role = ''     # production exact current_user
+runtime_role = ''       # production exact current_user; must differ
 startup_timeout_seconds = 10
 operation_timeout_seconds = 3
+migration_max_connections = 1
 max_connections = 8
 min_connections = 1
 
 [product_process.identity]
-# Absolute path to the strict sandbox-runtime-product-static-identities-v1 JSON
-# document. This frozen bearer binding is development-only and rotation needs a
-# process restart.
+# Development-only strict sandbox-runtime-product-static-identities-v1 JSON.
 bindings_file = ''
+# Production-only closed signed identity policy. The key ring version is
+# sandbox-runtime-product-access-key-ring-v1 and contains 1..32 Ed25519 public
+# keys, explicit validity windows and revoked_key_ids. Rotation/revocation use
+# process replacement; no network discovery or fallback key exists.
+issuer = ''
+audience = ''
+key_ring_file = ''
+clock_skew_seconds = 30
+max_token_lifetime_seconds = 900
 
 # The Provider API is a separate, default-disabled mTLS listener. Enabling it
 # requires replacing every placeholder below. Its port must differ from

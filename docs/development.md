@@ -743,6 +743,48 @@ database-loss readiness closure, signal shutdown and complete container/
 temporary-secret cleanup. That smoke remains local process/dependency evidence,
 not deployment or production qualification.
 
+Slice 2 production-kernel mode removes static identity from the production
+path. It requires a TLS 1.3 server key pair, the strict
+`sandbox-runtime-product-access-key-ring-v1` document, exact issuer/audience,
+and separate mode-`0600` migration/runtime DSN files. The key ring contains
+1..32 Ed25519 public keys with explicit UTC validity windows and an exact
+revoked-key list. Rotation uses an overlapping ring and process replacement;
+revocation requires a subsequent ring revision and process replacement.
+
+The configured migration and runtime role names must be distinct and match
+`current_user`. The migration role applies the exact ledger and must own schema
+DDL. Before listener bind its pool closes. The runtime role must have schema
+usage, read-only migration-ledger access, application-table DML, and no schema
+create authority. Runtime startup and the dependency worker perform the exact
+read-only 13-migration digest/version check. Missing, modified, or newer schema
+state fails closed.
+
+Production `/livez` proves only the TLS process is serving. `/readyz` follows
+the dependency worker and closes on PostgreSQL or schema loss, then recovers
+only after a complete successful check. The authenticated capability snapshot
+reports `product.workspace=unavailable` because Slice 3 Provider and Slice 4
+public data planes do not yet exist; Workspace mutation is rejected before any
+row/outbox write.
+
+For Slice 2 changes, run the ordinary full race/shuffle, vet, both Contract
+verifiers, and retained Phase 3-5 evidence verifiers. Also run:
+
+```bash
+go vet -tags=integration ./cmd
+SANDBOX_RUNTIME_PRODUCT_PROCESS_INTEGRATION=1 \
+  go test -race -tags=integration -count=1 \
+  -run '^TestProductProcess(Development|ProductionKernel)Integration$' -v ./cmd
+```
+
+The production process gate uses a pinned disposable PostgreSQL 16 container
+and a real built binary. It proves key policy in focused tests plus auth
+precedence, exact schema compatibility, runtime DDL/ledger-write denial,
+bounded pool exhaustion, TLS downgrade denial, unavailable capability
+projection, pre-persistence mutation rejection, database loss/recovery,
+process restart, migration-connection release, nondisclosure, signal shutdown,
+and exact container cleanup. This remains local process/component evidence,
+not a role-specific deployment or production-readiness result.
+
 ## Go and API rules
 
 - accept `context.Context` on blocking or external operations and preserve

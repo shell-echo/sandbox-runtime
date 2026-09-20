@@ -4,6 +4,7 @@ package process
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -34,10 +35,24 @@ type ReadinessFunc func(context.Context) error
 func (f ReadinessFunc) Ready(ctx context.Context) error { return f(ctx) }
 
 type Server struct {
-	http *http.Server
+	http      *http.Server
+	tlsConfig *tls.Config
 }
 
 func NewServer(address option.HTTP, api http.Handler, readiness Readiness) (*Server, error) {
+	return newServer(address, api, readiness, nil)
+}
+
+// NewTLSServer constructs the production Product transport. The supplied TLS
+// configuration is cloned and must already contain a validated certificate.
+func NewTLSServer(address option.HTTP, api http.Handler, readiness Readiness, tlsConfig *tls.Config) (*Server, error) {
+	if tlsConfig == nil || len(tlsConfig.Certificates) != 1 || tlsConfig.MinVersion != tls.VersionTLS13 || tlsConfig.MaxVersion != tls.VersionTLS13 {
+		return nil, errors.New("Product TLS configuration is required")
+	}
+	return newServer(address, api, readiness, tlsConfig.Clone())
+}
+
+func newServer(address option.HTTP, api http.Handler, readiness Readiness, tlsConfig *tls.Config) (*Server, error) {
 	if err := address.Validate(); err != nil {
 		return nil, fmt.Errorf("Product API address: %w", err)
 	}
@@ -64,13 +79,16 @@ func NewServer(address option.HTTP, api http.Handler, readiness Readiness) (*Ser
 	})
 	handler := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Cache-Control", "no-store")
+		if tlsConfig != nil {
+			writer.Header().Set("Strict-Transport-Security", "max-age=31536000")
+		}
 		mux.ServeHTTP(writer, request)
 	})
 	return &Server{http: &http.Server{
 		Addr: address.Addr(), Handler: handler, ReadHeaderTimeout: readHeaderTimeout,
 		ReadTimeout: readTimeout, WriteTimeout: writeTimeout, IdleTimeout: idleTimeout,
-		MaxHeaderBytes: maxHeaderBytes,
-	}}, nil
+		MaxHeaderBytes: maxHeaderBytes, TLSConfig: tlsConfig,
+	}, tlsConfig: tlsConfig}, nil
 }
 
 func (s *Server) Startup(ctx context.Context) error {
@@ -86,7 +104,11 @@ func (s *Server) Startup(ctx context.Context) error {
 	}
 	stopClosing := context.AfterFunc(ctx, func() { _ = listener.Close() })
 	defer stopClosing()
-	if err := s.http.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) && !(ctx.Err() != nil && errors.Is(err, net.ErrClosed)) {
+	serveListener := listener
+	if s.tlsConfig != nil {
+		serveListener = tls.NewListener(listener, s.tlsConfig.Clone())
+	}
+	if err := s.http.Serve(serveListener); err != nil && !errors.Is(err, http.ErrServerClosed) && !(ctx.Err() != nil && errors.Is(err, net.ErrClosed)) {
 		return fmt.Errorf("serve Product API: %w", err)
 	}
 	return nil

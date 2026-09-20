@@ -76,6 +76,10 @@ var productMigrations = []migration{
 	{version: 13, name: "phase 5 development environment", sql: productPhase5DevelopmentEnvironmentMigration},
 }
 
+// CurrentSchemaVersion is the newest Product migration understood by this
+// binary. Runtime processes accept neither missing nor newer migrations.
+func CurrentSchemaVersion() int64 { return productMigrations[len(productMigrations)-1].version }
+
 func ApplyMigrations(ctx context.Context, pool *pgxpool.Pool) error {
 	if ctx == nil || pool == nil {
 		return errors.New("product PostgreSQL migration context and pool are required")
@@ -135,6 +139,39 @@ REVOKE ALL ON TABLE sandbox_runtime_product.schema_migrations FROM PUBLIC;`); er
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit product migration: %w", err)
+	}
+	return nil
+}
+
+// VerifySchemaCompatibility performs a read-only exact ledger check suitable
+// for the unprivileged runtime role. It rejects missing, modified, duplicate,
+// or newer migrations without attempting DDL.
+func VerifySchemaCompatibility(ctx context.Context, pool *pgxpool.Pool) error {
+	if ctx == nil || pool == nil {
+		return errors.New("product PostgreSQL schema context and pool are required")
+	}
+	rows, err := pool.Query(ctx, `SELECT version, digest FROM sandbox_runtime_product.schema_migrations ORDER BY version`)
+	if err != nil {
+		return errors.New("read product schema compatibility ledger")
+	}
+	defer rows.Close()
+	index := 0
+	for rows.Next() {
+		var version int64
+		var digest string
+		if err := rows.Scan(&version, &digest); err != nil || index >= len(productMigrations) {
+			return errors.New("database product schema is incompatible with this binary")
+		}
+		expected := productMigrations[index]
+		digestBytes := sha256.Sum256([]byte(expected.sql))
+		expectedDigest := "sha256:" + hex.EncodeToString(digestBytes[:])
+		if version != expected.version || digest != expectedDigest {
+			return errors.New("database product schema is incompatible with this binary")
+		}
+		index++
+	}
+	if rows.Err() != nil || index != len(productMigrations) {
+		return errors.New("database product schema is incompatible with this binary")
 	}
 	return nil
 }

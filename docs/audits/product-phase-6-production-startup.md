@@ -2,8 +2,9 @@
 
 Date: 2026-09-20
 
-Status: startup authority and gap audit complete; implementation begins with
-the fixed Phase 6 plan at **1/15**.
+Status: startup authority and gap audit complete. This document records the
+Slice 1 baseline; current implementation progress is **2/15** after the
+separate Slice 2 production-kernel gate.
 
 ## Question audited
 

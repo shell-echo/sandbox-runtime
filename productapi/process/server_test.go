@@ -2,6 +2,7 @@ package process
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -41,6 +42,27 @@ func TestNewServerRequiresDependencies(t *testing.T) {
 	}
 	if _, err := NewServer(address, http.NotFoundHandler(), nil); err == nil {
 		t.Fatal("accepted nil readiness")
+	}
+}
+
+func TestNewTLSServerRequiresTLS13Certificate(t *testing.T) {
+	address := option.HTTP{Host: "127.0.0.1", Port: 8082}
+	ready := ReadinessFunc(func(context.Context) error { return nil })
+	if _, err := NewTLSServer(address, http.NotFoundHandler(), ready, nil); err == nil {
+		t.Fatal("accepted nil TLS")
+	}
+	if _, err := NewTLSServer(address, http.NotFoundHandler(), ready, &tls.Config{MinVersion: tls.VersionTLS12, MaxVersion: tls.VersionTLS13, Certificates: []tls.Certificate{{}}}); err == nil {
+		t.Fatal("accepted TLS 1.2")
+	}
+	server, err := NewTLSServer(address, http.NotFoundHandler(), ready, &tls.Config{MinVersion: tls.VersionTLS13, MaxVersion: tls.VersionTLS13, Certificates: []tls.Certificate{{}}})
+	if err != nil {
+		t.Fatalf("NewTLSServer: %v", err)
+	}
+	request := httptest.NewRequest(http.MethodGet, "/livez", nil)
+	response := httptest.NewRecorder()
+	server.http.Handler.ServeHTTP(response, request)
+	if response.Header().Get("Strict-Transport-Security") == "" {
+		t.Fatal("TLS response missing HSTS")
 	}
 }
 
