@@ -1,7 +1,9 @@
 # syntax=docker/dockerfile:1
 
 ARG GO_VERSION=1.26
-FROM golang:${GO_VERSION}-alpine AS builder
+# Pin the multi-platform base indexes. Updating either digest is a reviewed
+# supply-chain change and must regenerate the release profile/SBOM.
+FROM golang:${GO_VERSION}-alpine@sha256:51a7c389a5ddaf82f527191a1e9bff9928655130a44e4975dd1d7e0acf59f1ae AS builder
 
 WORKDIR /src
 
@@ -12,7 +14,7 @@ COPY . .
 
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/sandbox-runtime .
 
-FROM alpine:3
+FROM alpine:3@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
 
 WORKDIR /app
 
