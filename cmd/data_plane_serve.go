@@ -50,7 +50,22 @@ func runDataPlaneServe(ctx context.Context, role config.DataPlaneRole, section s
 	if err := cfg.Validate(); err != nil {
 		return err
 	}
-	composition, err := roleprocess.New(ctx, cfg)
+	var err error
+	var graph roleprocess.ApplicationGraph
+	switch role {
+	case config.DataPlaneGateway:
+		graph, err = roleprocess.NewGatewayApplicationGraph(ctx, cfg)
+	case config.DataPlaneGuest:
+		graph, err = roleprocess.NewGuestApplicationGraph(ctx, cfg)
+	default:
+		// Browser and Desktop remain explicitly unavailable until their
+		// private role graphs have a typed Provider handoff/media authority.
+		graph, err = roleprocess.ApplicationGraph{}, errors.New(string(role)+" application graph is not composed")
+	}
+	if err != nil {
+		return err
+	}
+	composition, err := roleprocess.NewWithGraph(ctx, cfg, graph)
 	if err != nil {
 		return err
 	}
