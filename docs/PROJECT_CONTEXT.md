@@ -192,8 +192,10 @@ Current verified state:
   loopback probes, and exact single-profile coding-shell or Desktop
   advertisement. Real PostgreSQL concurrency/fault/restart, process restart,
   coding-shell Docker lifecycle, and signed Desktop broker gates pass locally.
-  Product dispatch and public data-plane roles remain uncomposed, so
-  `product.workspace` is still explicitly unavailable. Slice 4 is next.
+  Product dispatch and public data-plane application graphs remain uncomposed,
+  so `product.workspace` is still explicitly unavailable. Slice 4 now has
+  separate Gateway/Guest/Browser/Desktop role boundaries and probes, but its
+  complete independent-process gate is still open.
 
 The qualification applies only to Provider revision
 `170459266af5f4fad359ca8c63f2ae19741055c5`, external-caller revision

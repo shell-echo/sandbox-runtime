@@ -2,7 +2,10 @@
 
 Date: 2026-09-20
 
-Status: **3/15 complete**. The order is fixed by ADR 0051.
+Status: **3/15 complete**. Repository-side hardening foundations for Slices
+4-10 and release-profile checks for Slices 7/11/14 are present, but their
+deployment and independent-observation gates remain open. The order is fixed
+by ADR 0051.
 
 ## Goal and claim boundary
 
@@ -90,6 +93,12 @@ authorization, relay, capacity, revocation, recording and shutdown graphs.
 
 Gate: independent process starts, dependency loss, reconnect, bounded drain,
 least-authority credentials and no private-coordinate projection.
+
+Status: boundary implementation in progress. Separate Gateway, Guest, Browser,
+and Desktop commands/configuration and loopback-only probes now exist, with
+public/private TLS role validation and mixed-authority rejection. The complete
+Gateway/Guest/Browser/Desktop application graph and independent-process gate
+remain open. See [`product-phase-6-slice-4.md`](../audits/product-phase-6-slice-4.md).
 
 ### Slice 5 — secret references, KMS and rotation
 

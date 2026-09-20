@@ -426,6 +426,163 @@ stop_timeout_seconds = 10
 reference = 'browser-egress-policy-1'
 allowed_hosts = []
 
+# Phase 6 Slice 4 role processes. Each command accepts exactly one enabled
+# section. Gateway is public TLS, Guest is outbound-only, and Browser/Desktop
+# bind only private TLS 1.3 mTLS listeners. These sections do not configure
+# Product, Provider, or the local /instances API.
+[gateway_process]
+enabled = false
+deployment_level = 'production'
+public = { host = '127.0.0.1', port = 8445 }
+private = { host = '127.0.0.1', port = 8445 }
+outbound_url = ''
+
+[gateway_process.probe]
+host = '127.0.0.1'
+port = 8085
+
+[gateway_process.tls]
+certificate_file = ''
+private_key_file = ''
+client_ca_bundle_file = ''
+client_certificate_file = ''
+client_private_key_file = ''
+allowed_client_identities = []
+
+[gateway_process.authority]
+credential_file = ''
+dependency_file = ''
+policy_file = ''
+recording_key_reference = ''
+release_profile_file = '' # optional mode-0600 signed Phase 6 role profile
+
+[gateway_process.drain]
+grace_seconds = 30
+reconnect_seconds = 30
+dependency_timeout_seconds = 5
+
+[guest_process]
+enabled = false
+deployment_level = 'production'
+public = { host = '127.0.0.1', port = 0 }
+private = { host = '127.0.0.1', port = 0 }
+outbound_url = ''
+
+[guest_process.probe]
+host = '127.0.0.1'
+port = 8086
+
+[guest_process.tls]
+certificate_file = ''
+private_key_file = ''
+client_ca_bundle_file = ''
+client_certificate_file = ''
+client_private_key_file = ''
+allowed_client_identities = []
+
+[guest_process.authority]
+credential_file = ''
+dependency_file = ''
+policy_file = ''
+recording_key_reference = ''
+release_profile_file = ''
+
+[guest_process.drain]
+grace_seconds = 30
+reconnect_seconds = 30
+dependency_timeout_seconds = 5
+
+[browser_process]
+enabled = false
+deployment_level = 'production'
+public = { host = '127.0.0.1', port = 8446 }
+private = { host = '127.0.0.1', port = 8446 }
+outbound_url = ''
+
+[browser_process.probe]
+host = '127.0.0.1'
+port = 8087
+
+[browser_process.tls]
+certificate_file = ''
+private_key_file = ''
+client_ca_bundle_file = ''
+client_certificate_file = ''
+client_private_key_file = ''
+allowed_client_identities = []
+
+[browser_process.authority]
+credential_file = ''
+dependency_file = ''
+policy_file = ''
+recording_key_reference = ''
+release_profile_file = ''
+
+[browser_process.drain]
+grace_seconds = 30
+reconnect_seconds = 30
+dependency_timeout_seconds = 5
+
+[desktop_process]
+enabled = false
+deployment_level = 'production'
+public = { host = '127.0.0.1', port = 8447 }
+private = { host = '127.0.0.1', port = 8447 }
+outbound_url = ''
+
+[desktop_process.probe]
+host = '127.0.0.1'
+port = 8088
+
+[desktop_process.tls]
+certificate_file = ''
+private_key_file = ''
+client_ca_bundle_file = ''
+client_certificate_file = ''
+client_private_key_file = ''
+allowed_client_identities = []
+
+[desktop_process.authority]
+credential_file = ''
+dependency_file = ''
+policy_file = ''
+recording_key_reference = ''
+release_profile_file = ''
+
+[desktop_process.drain]
+grace_seconds = 30
+reconnect_seconds = 30
+dependency_timeout_seconds = 5
+
+# Phase 6 external dependency references. Values are opaque secret:// or
+# kms:// references only; endpoint URLs, tokens, and key bytes are never inline.
+[phase6_dependencies.coordination]
+enabled = false
+endpoint_reference = ''
+ca_reference = ''
+identity_reference = ''
+namespace = 'sandbox-runtime'
+operation_timeout_seconds = 3
+max_connections = 16
+
+[phase6_dependencies.object_store]
+enabled = false
+endpoint_reference = ''
+ca_reference = ''
+identity_reference = ''
+bucket = ''
+prefix = 'sandbox-runtime'
+operation_timeout_seconds = 10
+max_object_bytes = 1073741824
+
+[phase6_dependencies.kms]
+enabled = false
+endpoint_reference = ''
+identity_reference = ''
+key_reference = ''
+cache_seconds = 30
+operation_timeout_seconds = 5
+
 [runtime]
 driver = 'fake' # fake | docker
 

@@ -222,6 +222,12 @@ single-profile capability advertisement without a local API. The
 database, backend, and non-claim boundary. Public data-plane roles and later
 topology/operations/release gates remain later slices.
 
+The next implementation pass also adds the Slice 4 role-boundary commands
+(`gateway serve`, `guest serve`, `browser serve`, and `desktop serve`) plus
+strict secret-reference, egress-policy, artifact-verification, restore-plan,
+and low-cardinality telemetry foundations. These are not counted as completed
+Phase 6 slices until the real role graphs and independent-process gates pass.
+
 ## What the project provides
 
 - A local instance-management API with in-memory and Docker runtime drivers.

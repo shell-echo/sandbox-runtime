@@ -46,6 +46,11 @@ PostgreSQL、TLS 1.3、签名身份、分离数据库角色、精确 Schema 检�
 并发/故障/重启、真实进程重启、coding-shell Docker 生命周期和签名 Desktop broker
 门禁均已通过。Product dispatch、公开数据面、部署、HA 与生产发布仍属于后续切片。
 
+后续实现已补充 Slice 4 的独立 `gateway serve`、`guest serve`、`browser serve`
+和 `desktop serve` 角色边界，以及严格的秘密引用、出站策略、制品摘要/签名、
+隔离恢复顺序和低基数遥测基础。这些基础在真实角色图和独立进程门禁通过前，
+不会被计入已完成切片。
+
 独立的 [Product v1 第二阶段 Provider 生命周期计划](docs/plan/product-v1-phase-2-provider-lifecycle.md)
 已经完成其固定九步范围，覆盖终止、暂停/恢复、租约过期、有限事件读取和终端
 会话关闭，并通过锁定 Contract、Conformance、Docker 生命周期和独立进程参考门禁。

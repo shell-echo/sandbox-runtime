@@ -31,6 +31,13 @@ func loadMTLSConfig(certPath, keyPath, clientCAPath string, allowedURIIdentities
 	return tlsConfig, err
 }
 
+// LoadMTLSConfig exposes the frozen TLS policy to role-specific private
+// transports. It returns only a transport configuration; Provider Contract
+// handlers remain reachable through NewServer and cannot be mounted here.
+func LoadMTLSConfig(certPath, keyPath, clientCAPath string, allowedURIIdentities []string) (*tls.Config, error) {
+	return loadMTLSConfig(certPath, keyPath, clientCAPath, allowedURIIdentities)
+}
+
 func loadMTLSConfigWithIdentity(certPath, keyPath, clientCAPath string, allowedURIIdentities []string) (*tls.Config, *clientIdentityAdmission, error) {
 	if certPath == "" || keyPath == "" || clientCAPath == "" {
 		return nil, nil, errors.New("provider mTLS certificate, key, and client CA paths are required")

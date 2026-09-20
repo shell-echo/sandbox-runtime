@@ -843,6 +843,13 @@ does not qualify PostgreSQL HA/TLS, throughput, independent failure domains,
 deployment assets, public data planes, complete Product dispatch, SLOs,
 hostile-multitenant safety, or production readiness.
 
+Phase 6 continuation foundations are covered by the focused packages
+`internal/secretref`, `internal/netpolicy`, `internal/artifactverify`,
+`internal/backup`, `internal/phase6profile`, and `internal/telemetry`. Their tests prove only bounded
+reference, policy, manifest, restore, and metric semantics. They do not replace
+real KMS/HSM, certificate issuance, independent coordination/object storage,
+published signed images, backup drills, deployment, SLO, or release gates.
+
 ## Go and API rules
 
 - accept `context.Context` on blocking or external operations and preserve
