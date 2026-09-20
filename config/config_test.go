@@ -17,6 +17,7 @@ func snapshotGlobals(t *testing.T) {
 	lg := Logger
 	srv := Server
 	productProcess := ProductProcess
+	providerProcess := ProviderProcess
 	runtimeConfig := Runtime
 	repository := Repository
 	loc := time.Local
@@ -25,6 +26,7 @@ func snapshotGlobals(t *testing.T) {
 		Logger = lg
 		Server = srv
 		ProductProcess = productProcess
+		ProviderProcess = providerProcess
 		Runtime = runtimeConfig
 		Repository = repository
 		time.Local = loc

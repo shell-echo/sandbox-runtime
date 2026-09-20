@@ -63,7 +63,7 @@ func loadMTLSConfigWithIdentity(certPath, keyPath, clientCAPath string, allowedU
 	}
 
 	return &tls.Config{
-		MinVersion:       tls.VersionTLS12,
+		MinVersion:       tls.VersionTLS13,
 		Certificates:     []tls.Certificate{certificate},
 		ClientAuth:       tls.RequireAndVerifyClientCert,
 		ClientCAs:        clientCAs,

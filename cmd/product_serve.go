@@ -41,6 +41,9 @@ func runProductServe(cmd *cobra.Command, _ []string) error {
 	if productConfig == nil || !productConfig.Enabled {
 		return errors.New("product_process.enabled must be true for product serve")
 	}
+	if config.ProviderProcess != nil && config.ProviderProcess.Enabled {
+		return errors.New("Product and Provider process authorities cannot share one command")
+	}
 	if config.Application == nil {
 		return errors.New("application configuration is required")
 	}

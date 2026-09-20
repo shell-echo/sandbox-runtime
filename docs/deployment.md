@@ -39,13 +39,15 @@ There is currently no published general-purpose `sandbox-runtime` application
 image. The repository-specific coding/shell and Browser runtime images are
 different artifacts and must not be used as the application image.
 
-Phase 6 Slices 1-2 add independently runnable development and production-kernel
-`product serve` modes, but no Docker, Apple Container, or Kubernetes
-role-specific Product deployment asset or qualification. The production kernel
-proves TLS, signed identity and database-role boundaries only in a local
-process gate. The existing image can execute a different subcommand only as
-local operator experimentation; that does not widen the support matrix below
-or make the default `serve` packaging smoke a Product deployment result.
+Phase 6 Slices 1-3 add independently runnable development/production-kernel
+`product serve` modes and a production-only `provider serve` role, but no
+Docker, Apple Container, or Kubernetes role-specific Product/Provider
+deployment asset or qualification. The current gates prove TLS, identity,
+database-role, transactional Provider-state, reconciliation, and real-backend
+boundaries only in local processes. The existing image can execute a different
+subcommand only as local operator experimentation; that does not widen the
+support matrix below or make the default `serve` packaging smoke a
+Product/Provider deployment result.
 
 Local development evidence on 2026-09-17 passed the Docker smoke path with
 Docker Engine 29.7.2 on Linux/arm64, the Apple Container path with Apple
@@ -93,8 +95,8 @@ starting the application container is not that deployment gate.
   availability evidence.
 - The current Apple Container evidence uses the in-memory fake runtime.
 - The Docker and Kubernetes application smoke paths also use that fake runtime.
-- The Phase 6 Product process has no role-specific published image or
-  deployment profile yet.
+- The Phase 6 Product and Provider processes have no role-specific published
+  application images or deployment profiles yet.
 - Multi-controller, high availability, hostile multi-tenant isolation,
   deployment qualification, and production readiness remain separate open
   gates.

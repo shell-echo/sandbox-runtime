@@ -467,8 +467,8 @@ func TestLoadMTLSConfigRejectsSemanticallyInvalidMaterial(t *testing.T) {
 func TestLoadMTLSConfigPolicyAndFrozenAllowlist(t *testing.T) {
 	identities := []string{testAllowedIdentity}
 	material := newTestMTLSMaterial(t, identities)
-	if material.serverConfig.MinVersion != tls.VersionTLS12 {
-		t.Fatalf("MinVersion = %d, want TLS 1.2", material.serverConfig.MinVersion)
+	if material.serverConfig.MinVersion != tls.VersionTLS13 {
+		t.Fatalf("MinVersion = %d, want TLS 1.3", material.serverConfig.MinVersion)
 	}
 	if material.serverConfig.ClientAuth != tls.RequireAndVerifyClientCert {
 		t.Fatalf("ClientAuth = %v, want RequireAndVerifyClientCert", material.serverConfig.ClientAuth)

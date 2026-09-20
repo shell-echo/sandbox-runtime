@@ -2,7 +2,7 @@
 
 Date: 2026-09-20
 
-Status: **2/15 complete**. The order is fixed by ADR 0051.
+Status: **3/15 complete**. The order is fixed by ADR 0051.
 
 ## Goal and claim boundary
 
@@ -74,6 +74,13 @@ artifact/usage/Desktop readiness, bounded reconciliation and no local API.
 
 Gate: real backend plus database restart/fault/concurrency tests, locked
 Contract verification and exact capability advertisement.
+
+Status: complete as local role-process, transactional PostgreSQL, and real
+Docker backend evidence. The production-only `provider serve` command selects
+one exact coding-shell or Desktop Contract profile, retains Provider-local
+state behind separated database roles, closes readiness on schema or bounded
+reconciliation failure, and exposes no local API. See
+[`product-phase-6-slice-3.md`](../audits/product-phase-6-slice-3.md).
 
 ### Slice 4 — deployable Gateway, Guest, Browser and Desktop roles
 
@@ -198,7 +205,7 @@ an earlier claim.
 
 ## Current stop point
 
-Slices 1-2 are implemented. Slice 3, the deployable Provider control plane, is
-next. The production Product kernel result is local process/component evidence;
-no complete Phase 6 production, standalone topology, HA, hostile-multitenant,
-SLO-attainment or deployment qualification is claimed.
+Slices 1-3 are implemented. Slice 4, the deployable Gateway, Guest, Browser,
+and Desktop roles, is next. The Product and Provider results are local
+role-process/component evidence; no complete Phase 6 production topology, HA,
+hostile-multitenant, SLO-attainment, or deployment qualification is claimed.

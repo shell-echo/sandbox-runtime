@@ -180,7 +180,7 @@ uncomposed; deployment, HA, hostile multi-tenant, independently implemented
 caller, and production-readiness evidence remain absent.
 
 The [Product v1 Phase 6 production-hardening plan](plan/product-v1-phase-6-production-hardening.md)
-is now **2/15 complete**. ADR 0051 fixes a dependency order from deployable
+is now **3/15 complete**. ADR 0051 fixes a dependency order from deployable
 process boundaries through identity, storage, network, supply chain,
 observability, recovery, deployment, release candidate, and final release
 gates. Slice 1 adds only an independent development Product command, strict
@@ -201,6 +201,20 @@ Gateway composed, the complete capability result is
 `product.workspace=unavailable` and the application policy denies mutation
 before any durable command. This is production-mode process evidence, not a
 complete production topology or release result.
+
+Slice 3 adds a separate production-only `provider serve` process. It never
+hosts the Product API or local `/instances` service. Exact mTLS/JWS admission,
+the one-use fencing guard, lifecycle, exec, Terminal, artifact, usage, Desktop,
+and opaque-reference state use a role-separated PostgreSQL aggregate row; a
+row lock serializes cross-controller mutation and strict bounded snapshots are
+stored byte-exact inside JSONB. Coding-shell and Desktop remain separate
+single-profile Provider processes because the locked Provider v1 capability
+shape forbids combining them in one snapshot. Startup recovery and a bounded
+reconciler drive loopback readiness through database/schema and operation
+recovery failure. Real PostgreSQL concurrency/restart/fault, real process, real
+coding-shell Docker, and signed Desktop broker gates pass locally. This does
+not yet compose Product dispatch, Gateway, Guest, Browser/Desktop public data
+planes, deployment, HA, or production release authority.
 
 ## Purpose
 

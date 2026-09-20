@@ -15,6 +15,7 @@
 | Product v1 第三阶段 | 在有边界的 standalone 拓扑内 **13/13 已完成** |
 | Product v1 第四阶段 Browser | 在有边界的同仓库独立进程拓扑内 **13/13 已完成** |
 | Product v1 第五阶段 Desktop | **15/15 已完成**（有边界的同仓库独立进程拓扑）；5 个角色、14 个严格场景及精确拓扑的依赖派生能力广告均通过 |
+| Product v1 第六阶段生产加固 | **3/15 已完成**；Product 与 Provider 已具备独立的生产模式进程、TLS 1.3、分离数据库角色、事务化 Provider 状态、有界协调恢复和精确单 Profile 能力广告；尚不代表完整拓扑、部署或生产就绪 |
 | 编程/Shell 资格验证 | 对下述精确调用方、Provider 版本、拓扑、Profile 和场景结果为 **Qualified** |
 | 最新核心 CI | [已通过](https://github.com/shell-echo/sandbox-runtime/actions/runs/35204434771) |
 
@@ -35,6 +36,15 @@
 Workspace/Slot 持久化、身份与 Agent 委托、Runtime Gateway 与录制，以及部署
 等级。该阶段没有实现或验证 Product 服务、Product 数据库迁移、公开 Gateway、
 Guest Agent 或生产部署。
+
+[Product v1 第六阶段](docs/plan/product-v1-phase-6-production-hardening.md)
+当前完成 **3/15**。切片 1-2 提供独立的开发/生产内核 `product serve`，包括真实
+PostgreSQL、TLS 1.3、签名身份、分离数据库角色、精确 Schema 检查及失败关闭的
+就绪状态。切片 3 提供生产专用的独立 `provider serve`：TLS 1.3 mTLS、精确 JWS
+准入、事务化 lifecycle/exec/Terminal/artifact/usage/Desktop 状态、有界协调恢复，
+并且按锁定 Contract 只广告一个 `coding_shell` 或 `desktop` Profile。真实数据库
+并发/故障/重启、真实进程重启、coding-shell Docker 生命周期和签名 Desktop broker
+门禁均已通过。Product dispatch、公开数据面、部署、HA 与生产发布仍属于后续切片。
 
 独立的 [Product v1 第二阶段 Provider 生命周期计划](docs/plan/product-v1-phase-2-provider-lifecycle.md)
 已经完成其固定九步范围，覆盖终止、暂停/恢复、租约过期、有限事件读取和终端
@@ -221,6 +231,20 @@ curl http://127.0.0.1:8080/health
 ```
 
 默认不会启用 Provider 监听器及受保护的 Provider 功能。
+
+### 启动独立 Product 或 Provider 进程
+
+第六阶段的角色进程使用各自独立配置启动：
+
+```bash
+go run . product serve -c /absolute/path/to/config.toml
+go run . provider serve -c /absolute/path/to/config.toml
+```
+
+`provider serve` 的回环探针只提供 `/livez` 和 `/readyz`；mTLS 监听器只提供锁定的
+Provider Contract，不提供 `/instances` 或 Product API。根 `serve`、`product serve`
+和 `provider serve` 会拒绝混合角色 authority。精确配置与证据边界参见
+[切片 3 记录](docs/audits/product-phase-6-slice-3.md)。
 
 ### 使用 Docker 运行应用
 

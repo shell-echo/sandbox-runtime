@@ -20,7 +20,7 @@ general production readiness.
 | Product v1 Phase 3 | **13/13 complete** for the bounded standalone topology |
 | Product v1 Phase 4 Browser | **13/13 complete** for the bounded same-repository separate-process topology |
 | Product v1 Phase 5 Desktop | **15/15 complete** for the bounded same-repository independent-process topology; 5 roles and 14 strict scenarios pass, with exact-topology dependency-derived advertisement |
-| Product v1 Phase 6 production hardening | **2/15 complete**; development and production-kernel Product modes now have strict private configuration, TLS 1.3, signed rotating identity, separated PostgreSQL roles, exact schema checks, and fail-closed readiness; no complete topology, deployment, or production-readiness claim |
+| Product v1 Phase 6 production hardening | **3/15 complete**; independent Product and Provider production-mode processes now have strict private configuration, TLS 1.3, separated PostgreSQL roles, transactional Provider state, bounded reconciliation, and exact coding-shell/Desktop advertisement; no complete topology, deployment, or production-readiness claim |
 | Coding/shell qualification | **Qualified** for the exact caller, Provider revisions, topology, profile, and scenarios recorded below |
 | Latest core CI | [Passed](https://github.com/shell-echo/sandbox-runtime/actions/runs/35204434771) |
 
@@ -202,7 +202,7 @@ hostile multi-tenant, independently implemented caller, or production
 readiness.
 
 [Product v1 Phase 6](docs/plan/product-v1-phase-6-production-hardening.md) is
-now **2/15 complete**. Slice 1 adds the independently runnable
+now **3/15 complete**. Slice 1 adds the independently runnable
 `sandbox-runtime product serve` process with strict development-only
 configuration, private PostgreSQL/identity files, real Product migrations and
 store, separate liveness/readiness, empty capability advertisement, and
@@ -214,8 +214,13 @@ Ed25519 JWT key ring with overlap/revocation, distinct migration/runtime
 PostgreSQL roles, exact schema checks, bounded dependency monitoring and an
 explicit unavailable capability snapshot. The
 [Slice 2 record](docs/audits/product-phase-6-slice-2.md) retains its gate and
-non-claims. The deployable Provider and later topology/operations/release gates
-remain later slices.
+non-claims. Slice 3 adds the independent production-only `provider serve`
+control plane, role-separated transactional PostgreSQL state, exact protected
+admission, bounded reconciliation, real coding-shell/Desktop backends, and
+single-profile capability advertisement without a local API. The
+[Slice 3 record](docs/audits/product-phase-6-slice-3.md) retains its real-process,
+database, backend, and non-claim boundary. Public data-plane roles and later
+topology/operations/release gates remain later slices.
 
 ## What the project provides
 
@@ -347,10 +352,29 @@ go run . product serve -c /absolute/path/to/config.toml
 Use `GET /livez` for process liveness and `GET /readyz` for the currently
 composed PostgreSQL/schema dependency. Development advertises an empty
 capability list. Production reports `product.workspace` as unavailable because
-the Provider remains a later role. Workspace creation is denied before
-persistence in both modes. See the [Slice 1](docs/audits/product-phase-6-slice-1.md)
+the separate Provider is not yet composed through a production Product worker
+or public data plane. Workspace creation is denied before persistence in both
+modes. See the [Slice 1](docs/audits/product-phase-6-slice-1.md)
 and [Slice 2](docs/audits/product-phase-6-slice-2.md) records for exact formats
 and evidence boundaries.
+
+### Run the independent Provider process
+
+Phase 6 Slice 3 adds a production-only Provider role backed by PostgreSQL and
+real Docker adapters. It requires separate migration/runtime DSN files, exact
+role names, TLS 1.3 mTLS material, frozen JWS verification keys, bounded
+reconciliation, and exactly one `coding_shell` or `desktop` profile:
+
+```bash
+go run . provider serve -c /absolute/path/to/config.toml
+```
+
+Its loopback probe exposes only `GET /livez` and `GET /readyz`; the mTLS
+listener exposes the locked Provider Contract and never `/instances` or the
+Product API. The root `serve` and `product serve` commands reject an enabled
+`provider_process` section. See the
+[Slice 3 record](docs/audits/product-phase-6-slice-3.md) for the exact
+configuration, evidence, and non-claims.
 
 ### Run the application with Docker
 

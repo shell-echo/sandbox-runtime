@@ -763,8 +763,8 @@ Production `/livez` proves only the TLS process is serving. `/readyz` follows
 the dependency worker and closes on PostgreSQL or schema loss, then recovers
 only after a complete successful check. The authenticated capability snapshot
 reports `product.workspace=unavailable` because Slice 3 Provider and Slice 4
-public data planes do not yet exist; Workspace mutation is rejected before any
-row/outbox write.
+public data planes are not composed into the Product process; Workspace
+mutation is rejected before any row/outbox write.
 
 For Slice 2 changes, run the ordinary full race/shuffle, vet, both Contract
 verifiers, and retained Phase 3-5 evidence verifiers. Also run:
@@ -784,6 +784,64 @@ projection, pre-persistence mutation rejection, database loss/recovery,
 process restart, migration-connection release, nondisclosure, signal shutdown,
 and exact container cleanup. This remains local process/component evidence,
 not a role-specific deployment or production-readiness result.
+
+Slice 3 `provider serve` is a separate production-only role. Never enable its
+`provider_process` section for root `serve` or `product serve`; all three
+commands reject mixed authority. The Provider listener requires TLS 1.3 mTLS,
+an exact URI-SAN allowlist, one frozen protected-admission issuer/audience and
+1..32 SPKI verification-key files. Its loopback listener contains only bodyless
+`/livez` and `/readyz`; it must not grow `/instances`, Provider Contract,
+Product, diagnostics, or private-coordinate routes.
+
+The Provider migration/runtime DSN files and configured roles are exact and
+distinct. The migration role owns DDL and closes before bind. The runtime role
+has schema usage, ledger read, and control-row select/update only; it must not
+create schema objects, mutate the ledger, insert a replacement singleton, or
+delete state. Runtime startup and readiness verify the exact Provider migration
+ledger read-only.
+
+Provider-local lifecycle, exec, Terminal, artifact, usage, Desktop, opaque
+reference and admission-guard documents share one PostgreSQL aggregate-row
+lock. This is a correctness-first transactional boundary for Slice 3. Preserve
+the established strict repository snapshots; because they may contain private
+NUL-separated scope keys that PostgreSQL JSONB rejects, store their bounded raw
+JSON bytes as base64 JSON strings and decode before strict import. Do not expose
+the encoded document or database diagnostics through stable APIs or probes.
+
+Select exactly one Provider profile per process. `coding_shell` must compose
+the complete Docker lifecycle, exec, Terminal connect/control, artifact, usage,
+operation aggregation and protected admission graph before advertising the
+five locked capabilities. `desktop` must use the locked publication,
+architecture, provenance verifier, restricted egress, lifecycle/session/
+reference/usage graph and advertise only `sandbox.desktop`. The Provider v1
+Contract forbids combining those shapes in one snapshot.
+
+For Slice 3 changes, run the ordinary full race/shuffle, vet, both Contract
+verifiers and retained Phase 3-5 evidence verifiers. Also run:
+
+```bash
+go vet -tags=integration ./cmd ./provider/adapter/postgres
+SANDBOX_RUNTIME_PROVIDER_PROCESS_INTEGRATION=1 \
+  go test -race -tags=integration -count=1 \
+  -run '^TestProviderTransactionalStateIntegration$' -v \
+  ./provider/adapter/postgres
+SANDBOX_RUNTIME_PROVIDER_PROCESS_INTEGRATION=1 \
+  go test -race -tags=integration -count=1 \
+  -run '^TestProviderProcessProductionIntegration$' -v ./cmd
+SANDBOX_RUNTIME_DOCKER_INTEGRATION=1 \
+  go test -race -tags=integration -count=1 \
+  -run '^TestProviderDockerLifecycleIntegration$' -v \
+  ./provider/lifecycle/driver/docker
+SANDBOX_RUNTIME_DESKTOP_ADAPTER_INTEGRATION=1 \
+  go test -race -tags=integration -count=1 \
+  -run '^TestDesktopBrokerTransportIntegration$' -v \
+  ./provider/desktop/driver/docker
+```
+
+These gates are local role-process, database, and backend evidence. Slice 3
+does not qualify PostgreSQL HA/TLS, throughput, independent failure domains,
+deployment assets, public data planes, complete Product dispatch, SLOs,
+hostile-multitenant safety, or production readiness.
 
 ## Go and API rules
 
