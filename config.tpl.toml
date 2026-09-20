@@ -24,6 +24,32 @@ compress = true         # gzip rotated files
 host = '127.0.0.1' # explicitly change only behind a trusted network boundary
 port = 8080
 
+# Phase 6 Slice 1 adds an independent Product development process. Start it
+# with `sandbox-runtime product serve -c /absolute/path/to/config.toml` only
+# after creating the two distinct mode-0600 secret files below. This slice is
+# loopback-only, advertises no runtime capability, and rejects standalone or
+# production mode until later Phase 6 gates are complete.
+[product_process]
+enabled = false
+deployment_level = 'development'
+
+[product_process.api]
+host = '127.0.0.1'
+port = 8082
+
+[product_process.postgres]
+dsn_file = '' # absolute path; contains one postgres:// or postgresql:// DSN
+startup_timeout_seconds = 10
+operation_timeout_seconds = 3
+max_connections = 8
+min_connections = 1
+
+[product_process.identity]
+# Absolute path to the strict sandbox-runtime-product-static-identities-v1 JSON
+# document. This frozen bearer binding is development-only and rotation needs a
+# process restart.
+bindings_file = ''
+
 # The Provider API is a separate, default-disabled mTLS listener. Enabling it
 # requires replacing every placeholder below. Its port must differ from
 # server.api.port. TLS files are bounded to 64 KiB for the certificate, 64 KiB

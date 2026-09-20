@@ -695,6 +695,54 @@ authorize production command composition, deployment, HA, hostile
 multi-tenant, independently implemented caller, or production-readiness
 claims.
 
+## Product Phase 6 production-hardening discipline
+
+Follow the exact order in
+[`plan/product-v1-phase-6-production-hardening.md`](plan/product-v1-phase-6-production-hardening.md)
+and ADR 0051. Do not turn Phase 3-5 tagged role processes into operator
+configuration by copying test fixtures or generated credentials into a command.
+Product, Provider, Gateway, Guest, Browser, Desktop, and the local API remain
+separate roles with separate configuration and readiness.
+
+Slice 1 `product serve` is development-only. Its `product_process` section is
+explicitly enabled, loopback-only and strict about unknown file keys. The
+PostgreSQL DSN and frozen identity document must be distinct absolute,
+non-empty, bounded, mode-`0600` regular files without symlinks. The identity
+document uses the exact `sandbox-runtime-product-static-identities-v1` version
+and at most 128 bindings. Static identity is not allowed in later standalone or
+production composition.
+
+Run PostgreSQL migrations and a startup ping before binding the Product
+listener. `/livez` proves only that the process transport is serving;
+`/readyz` rechecks only the currently composed process dependencies. Product
+capability readiness remains the authenticated tenant-aware capability
+document and must stay empty in Slice 1. The unavailable primary-slot policy
+must reject mutation before any outbox or external work.
+
+For Slice 1 changes, run:
+
+```bash
+go test -race -shuffle=on -count=1 \
+  ./config ./internal/secretfile ./productapi/identityfile \
+  ./productapi/process ./cmd
+go test -race -shuffle=on -count=1 ./...
+go vet ./...
+go run ./cmd/verify-contract -source-root .
+go run ./cmd/verify-product-contract -source-root .
+go run ./cmd/verify-product-phase3-evidence \
+  -manifest docs/audits/product-phase-3-standalone-evidence.json
+go run ./cmd/verify-product-phase4-evidence \
+  -manifest docs/audits/product-phase-4-browser-evidence.json
+go run ./cmd/verify-product-phase5-evidence \
+  -manifest docs/audits/product-phase-5-desktop-evidence.json
+```
+
+Also run one disposable real-PostgreSQL smoke of `product serve`, including
+authenticated empty capability discovery, rejected Workspace mutation,
+database-loss readiness closure, signal shutdown and complete container/
+temporary-secret cleanup. That smoke remains local process/dependency evidence,
+not deployment or production qualification.
+
 ## Go and API rules
 
 - accept `context.Context` on blocking or external operations and preserve

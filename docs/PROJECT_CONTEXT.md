@@ -169,7 +169,20 @@ Current verified state:
   `d5d6ed1a815b49625a054d9931a8cec2234d8e7e` binds all eight
   parent checks to evidence/CI baseline
   `59de37d5ee22776305dfaab866c25ea6bd5406bc`; full E2E race/shuffle, vet,
-  and all eight clean-checkout checks pass.
+  and all eight clean-checkout checks pass; and
+- Product v1 Phase 6 production hardening is **1/15 complete** under ADR 0051
+  and the fixed Phase 6 plan. The startup audit distinguishes existing
+  components and same-repository gates from deployable/operable/production
+  authority. Slice 1 adds `sandbox-runtime product serve`, strict
+  development-only `product_process` configuration, bounded private
+  PostgreSQL and frozen identity files, real Product migrations/store,
+  independent liveness/readiness, empty capability advertisement, and
+  fail-closed primary-slot authorization. The root `serve` command refuses an
+  enabled Product section, so the Product, Provider, and local API roles remain
+  separate. This is source/component evidence for a runnable development
+  Product process, not a published deployment, standalone/production
+  qualification, HA, hostile-multitenant safety, SLO attainment, or production
+  readiness.
 
 The qualification applies only to Provider revision
 `170459266af5f4fad359ca8c63f2ae19741055c5`, external-caller revision
@@ -219,6 +232,11 @@ recorded in
 [`adr/0050-product-desktop-phase-5-boundary.md`](adr/0050-product-desktop-phase-5-boundary.md),
 and
 [`plan/product-v1-phase-5-desktop-development-unified-product.md`](plan/product-v1-phase-5-desktop-development-unified-product.md).
+Product Phase 6 authority, ordering, startup gaps, and the first slice are in
+[`adr/0051-product-phase-6-production-hardening-order.md`](adr/0051-product-phase-6-production-hardening-order.md),
+[`plan/product-v1-phase-6-production-hardening.md`](plan/product-v1-phase-6-production-hardening.md),
+[`audits/product-phase-6-production-startup.md`](audits/product-phase-6-production-startup.md),
+and [`audits/product-phase-6-slice-1.md`](audits/product-phase-6-slice-1.md).
 
 See [`STATUS.md`](STATUS.md) for the complete evidence ledger and
 [`qualification/external-caller-coding-shell-v1.md`](qualification/external-caller-coding-shell-v1.md)
@@ -281,7 +299,7 @@ Three API surfaces must remain separate:
 | --- | --- | --- |
 | Local `/instances` API | Local instance management over fake or Docker drivers | Internal implementation; its DTOs and state are not Provider wire models |
 | Provider API v1 | mTLS/JWS-protected asynchronous Provider protocol | Repository Contract controls routes, documents, semantics, and projection |
-| Target Product API v1alpha1 | End-user Workspace control plane | Independent Product Contract; Slice 2 handler subset with empty capabilities and no deployable listener |
+| Product API v1alpha1 | End-user Workspace control plane | Independent Product Contract; Phase 6 Slice 1 adds a development-only deployable listener with real PostgreSQL, frozen development identity, empty capabilities, and fail-closed runtime mutation; production composition remains absent |
 
 The calling service owns its business correlation records, desired business
 state, tenant/user authorization, ProviderRevision selection, Artifact

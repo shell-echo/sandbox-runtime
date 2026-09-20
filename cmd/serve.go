@@ -77,6 +77,9 @@ var serveCmd = &cobra.Command{
 }
 
 func runServe(cmd *cobra.Command, _ []string) (result error) {
+	if config.ProductProcess != nil && config.ProductProcess.Enabled {
+		return errors.New("product_process.enabled requires the independent `product serve` command")
+	}
 	if err := validateServeConfiguration(config.Application, config.Server, config.Runtime, config.Repository); err != nil {
 		return err
 	}

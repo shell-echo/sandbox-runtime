@@ -20,6 +20,7 @@ general production readiness.
 | Product v1 Phase 3 | **13/13 complete** for the bounded standalone topology |
 | Product v1 Phase 4 Browser | **13/13 complete** for the bounded same-repository separate-process topology |
 | Product v1 Phase 5 Desktop | **15/15 complete** for the bounded same-repository independent-process topology; 5 roles and 14 strict scenarios pass, with exact-topology dependency-derived advertisement |
+| Product v1 Phase 6 production hardening | **1/15 complete**; an independent development-only Product process, strict private configuration, real PostgreSQL startup, and fail-closed readiness are implemented; no deployment or production claim |
 | Coding/shell qualification | **Qualified** for the exact caller, Provider revisions, topology, profile, and scenarios recorded below |
 | Latest core CI | [Passed](https://github.com/shell-echo/sandbox-runtime/actions/runs/35204434771) |
 
@@ -200,6 +201,18 @@ This does not compose the production command or establish deployment, HA,
 hostile multi-tenant, independently implemented caller, or production
 readiness.
 
+[Product v1 Phase 6](docs/plan/product-v1-phase-6-production-hardening.md) is
+now **1/15 complete**. Slice 1 adds the independently runnable
+`sandbox-runtime product serve` process with strict development-only
+configuration, private PostgreSQL/identity files, real Product migrations and
+store, separate liveness/readiness, empty capability advertisement, and
+fail-closed runtime mutation. The
+[startup audit](docs/audits/product-phase-6-production-startup.md) and
+[Slice 1 record](docs/audits/product-phase-6-slice-1.md) retain the full gap
+inventory and non-claims. Standalone/production identity, TLS, role-separated
+storage, the other deployable roles, HA, backup/restore, SLO and release gates
+remain later slices.
+
 ## What the project provides
 
 - A local instance-management API with in-memory and Docker runtime drivers.
@@ -314,6 +327,23 @@ curl http://127.0.0.1:8080/health
 ```
 
 The default Provider listener and protected Provider features are disabled.
+
+### Run the independent Product development process
+
+Phase 6 Slice 1 includes a real Product process backed by PostgreSQL. It
+requires explicit `product_process` configuration and two distinct absolute
+mode-`0600` secret files, then starts with:
+
+```bash
+go run . product serve -c /absolute/path/to/config.toml
+```
+
+Use `GET /livez` for process liveness and `GET /readyz` for the currently
+composed PostgreSQL dependency. The Product capability document is empty and
+Workspace creation is denied until a later Phase 6 slice composes exact
+Provider readiness. See the
+[Slice 1 record](docs/audits/product-phase-6-slice-1.md) for the closed identity
+file shape and evidence boundary.
 
 ### Run the application with Docker
 

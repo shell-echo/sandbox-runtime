@@ -39,6 +39,13 @@ There is currently no published general-purpose `sandbox-runtime` application
 image. The repository-specific coding/shell and Browser runtime images are
 different artifacts and must not be used as the application image.
 
+Phase 6 Slice 1 adds an independently runnable `product serve` development
+process, but no Docker, Apple Container, or Kubernetes role-specific Product
+deployment asset or qualification. The existing image can execute a different
+subcommand only as local operator experimentation; that does not widen the
+support matrix below or make the default `serve` packaging smoke a Product
+deployment result.
+
 Local development evidence on 2026-09-17 passed the Docker smoke path with
 Docker Engine 29.7.2 on Linux/arm64, the Apple Container path with Apple
 Container 1.4.1 on macOS/arm64, and the Kubernetes live path with kind 0.33.0
@@ -85,6 +92,8 @@ starting the application container is not that deployment gate.
   availability evidence.
 - The current Apple Container evidence uses the in-memory fake runtime.
 - The Docker and Kubernetes application smoke paths also use that fake runtime.
+- The Phase 6 Product process has no role-specific published image or
+  deployment profile yet.
 - Multi-controller, high availability, hostile multi-tenant isolation,
   deployment qualification, and production readiness remain separate open
   gates.
