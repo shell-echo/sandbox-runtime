@@ -48,17 +48,21 @@ func writePhase6Evidence(t *testing.T, environment *gateEnvironment) {
 	scenarios := observedScenarios(t, environment, roleDigests)
 	manifest := productphase6evidence.Manifest{
 		Identity: productphase6evidence.Identity{
-			SourceRevision:                 environment.candidate.SourceRevision,
-			SourceTreeDigest:               environment.candidate.SourceTreeDigest,
-			ConfigDigest:                   gateConfigDigest(t, environment),
-			ObservedAt:                     time.Now().UTC().Format(time.RFC3339Nano),
-			CandidateClassification:        environment.candidate.Classification,
-			DesktopCandidateManifestDigest: environment.candidate.ManifestDigest,
-			DesktopCandidateImageDigest:    environment.candidate.ImageDigest,
-			DesktopCandidatePlatform:       environment.candidate.Platform,
+			RuntimeImplementationRevision:   environment.repository.RuntimeImplementationRevision,
+			RuntimeImplementationTreeDigest: environment.repository.RuntimeImplementationTreeDigest,
+			EvidenceToolRevision:            environment.repository.EvidenceToolRevision,
+			EvidenceToolTreeDigest:          environment.repository.EvidenceToolTreeDigest,
+			ConfigDigest:                    gateConfigDigest(t, environment),
+			ObservedAt:                      time.Now().UTC().Format(time.RFC3339Nano),
+			CandidateClassification:         environment.candidate.Classification,
+			DesktopCandidateManifestDigest:  environment.candidate.ManifestDigest,
+			DesktopCandidateImageDigest:     environment.candidate.ImageDigest,
+			DesktopCandidatePlatform:        environment.candidate.Platform,
 		},
-		Roles:     roles,
-		Scenarios: scenarios,
+		Roles:        roles,
+		Scenarios:    scenarios,
+		Stress:       environment.stress,
+		DesktopMedia: environment.desktopMedia,
 		Cleanup: productphase6evidence.Cleanup{
 			ZeroResources:  true,
 			Teardown:       cleanup,
@@ -70,6 +74,8 @@ func writePhase6Evidence(t *testing.T, environment *gateEnvironment) {
 			"evidence proves role boundaries and internal executor data paths only",
 			"complete Product-to-Gateway-to-Provider public E2E remains unproven",
 			"production readiness remains unproven",
+			"measured bitrate upper-bound does not prove visual quality",
+			"thirty-second first-frame limit is a test safety bound, not a production SLO",
 		},
 	}
 	sealed, err := productphase6evidence.Seal(manifest)

@@ -15,7 +15,13 @@ import (
 
 func validManifest() Manifest {
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	manifest := Manifest{ID: ManifestID, Version: ManifestVersion, Identity: Identity{SourceRevision: strings.Repeat("a", 40), SourceTreeDigest: digest("tree"), ConfigDigest: digest("config"), ObservedAt: now, CandidateClassification: "local-candidate-non-release", DesktopCandidateManifestDigest: digest("candidate-manifest"), DesktopCandidateImageDigest: digest("candidate-image"), DesktopCandidatePlatform: "linux/arm64/v8"}, NonClaims: []string{"deployment", "production readiness", "hostile multi-tenant isolation", "local-candidate OCI is not a published or signed artifact", "local-candidate evidence is not production release qualification", "evidence proves role boundaries and internal executor data paths only", "complete Product-to-Gateway-to-Provider public E2E remains unproven", "production readiness remains unproven"}}
+	stress := StressMeasurements{Harness: "phase6-desktop-mux-stress-v2", Runs50: 50, Runs100: 100, TotalRuns: 150, InputsPerRun: 5, TotalInputs: 750, TerminalCauses: []string{}}
+	stress.CommandDigest = StressCommandDigest(stress)
+	stress.EvidenceDigest = StressEvidenceDigest(stress)
+	media := DesktopMediaMeasurements{Harness: "phase6-desktop-media-v2", Sessions: 20, FirstFrameP95Microseconds: 150_000, FirstFrameMaxMicroseconds: 200_000, FirstFrameLimitMilliseconds: 30_000, WindowMilliseconds: 2_000, RTPPackets: 1_200, RTPMarkerFrames: 1_180, RTPBytes: 120_000, FPSLimitMilli: 30_000, MaxFPSMilli: 30_000, MaxBitrateBPS: 30_000, BitrateLimitBPS: 2_000_000, ConcurrentInputs: 201, MaxInputRoundtripMicroseconds: 5_000, InputProcessDeadlineMilliseconds: 1_000, BackpressureStage: "media_reader", BackpressureCause: "backpressure_limit", Recovery: true, GoroutinesBaseline: 2, GoroutinesFinal: 2}
+	media.CommandDigest = DesktopMediaCommandDigest(media)
+	media.EvidenceDigest = DesktopMediaEvidenceDigest(media)
+	manifest := Manifest{ID: ManifestID, Version: ManifestVersion, Identity: Identity{RuntimeImplementationRevision: strings.Repeat("a", 40), RuntimeImplementationTreeDigest: digest("runtime-tree"), EvidenceToolRevision: strings.Repeat("b", 40), EvidenceToolTreeDigest: digest("evidence-tree"), ConfigDigest: digest("config"), ObservedAt: now, CandidateClassification: "local-candidate-non-release", DesktopCandidateManifestDigest: digest("candidate-manifest"), DesktopCandidateImageDigest: digest("candidate-image"), DesktopCandidatePlatform: "linux/arm64/v8"}, Stress: stress, DesktopMedia: media, NonClaims: []string{"deployment", "production readiness", "hostile multi-tenant isolation", "local-candidate OCI is not a published or signed artifact", "local-candidate evidence is not production release qualification", "evidence proves role boundaries and internal executor data paths only", "complete Product-to-Gateway-to-Provider public E2E remains unproven", "production readiness remains unproven", "measured bitrate upper-bound does not prove visual quality", "thirty-second first-frame limit is a test safety bound, not a production SLO"}}
 	for _, role := range []string{"product", "gateway", "provider", "guest", "browser", "desktop"} {
 		manifest.Roles = append(manifest.Roles, Role{Name: role, Command: "sandbox-runtime " + role + " serve", ImageDigest: digest(role), ProcessIdentity: role + "-process", StartedAt: now, FinishedAt: now, EvidenceDigest: digest(role + "-evidence"), Ready: true})
 	}
@@ -41,10 +47,14 @@ func TestVerifyRejectsEvidenceDrift(t *testing.T) {
 		t.Fatal(err)
 	}
 	for name, mutate := range map[string]func(*Manifest){
-		"unknown field": func(value *Manifest) { value.NonClaims = append(value.NonClaims, "x") },
-		"role exit":     func(value *Manifest) { value.Roles[0].ExitCode = 1 },
-		"cleanup count": func(value *Manifest) { value.Cleanup.Teardown[0].Count = 1 },
-		"scenario":      func(value *Manifest) { value.Scenarios[0].Outcome = "failed" },
+		"unknown field":      func(value *Manifest) { value.NonClaims = append(value.NonClaims, "x") },
+		"role exit":          func(value *Manifest) { value.Roles[0].ExitCode = 1 },
+		"cleanup count":      func(value *Manifest) { value.Cleanup.Teardown[0].Count = 1 },
+		"scenario":           func(value *Manifest) { value.Scenarios[0].Outcome = "failed" },
+		"stress input":       func(value *Manifest) { value.Stress.InputTimeouts = 1 },
+		"media first frame":  func(value *Manifest) { value.DesktopMedia.FirstFrameMaxMicroseconds = 30_000_001 },
+		"media sequence gap": func(value *Manifest) { value.DesktopMedia.RTPSequenceGaps = 1 },
+		"media goroutine":    func(value *Manifest) { value.DesktopMedia.GoroutinesFinal++ },
 	} {
 		t.Run(name, func(t *testing.T) {
 			candidate := valid
@@ -108,7 +118,7 @@ func TestSealBindsAndVerifiesObservedManifest(t *testing.T) {
 	}
 }
 
-func TestVerifyRepositoryAllowsOnlyCleanDocumentationAfterImplementation(t *testing.T) {
+func TestVerifyRepositoryAllowsOnlyClosedEvidenceToolsAndThenDocumentation(t *testing.T) {
 	root := t.TempDir()
 	runGit(t, root, "init", "-q")
 	runGit(t, root, "config", "user.name", "Phase 6 Gate")
@@ -116,16 +126,26 @@ func TestVerifyRepositoryAllowsOnlyCleanDocumentationAfterImplementation(t *test
 	writeRepositoryFile(t, root, "implementation.go", "package implementation\n")
 	runGit(t, root, "add", ".")
 	runGit(t, root, "commit", "-q", "-m", "implementation")
-	revision := runGit(t, root, "rev-parse", "HEAD")
-	treeDigest, err := desktopcandidate.SourceTreeDigestAtRevision(root, revision)
+	runtimeRevision := runGit(t, root, "rev-parse", "HEAD")
+	runtimeTreeDigest, err := desktopcandidate.SourceTreeDigestAtRevision(root, runtimeRevision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeRepositoryFile(t, root, "internal/productphase6evidence/verify.go", "package productphase6evidence\n")
+	runGit(t, root, "add", ".")
+	runGit(t, root, "commit", "-q", "-m", "evidence tools")
+	evidenceRevision := runGit(t, root, "rev-parse", "HEAD")
+	evidenceTreeDigest, err := desktopcandidate.SourceTreeDigestAtRevision(root, evidenceRevision)
 	if err != nil {
 		t.Fatal(err)
 	}
 	manifest := validManifest()
-	manifest.Identity.SourceRevision = revision
-	manifest.Identity.SourceTreeDigest = treeDigest
+	manifest.Identity.RuntimeImplementationRevision = runtimeRevision
+	manifest.Identity.RuntimeImplementationTreeDigest = runtimeTreeDigest
+	manifest.Identity.EvidenceToolRevision = evidenceRevision
+	manifest.Identity.EvidenceToolTreeDigest = evidenceTreeDigest
 	if err := VerifyRepository(manifest, root); err != nil {
-		t.Fatalf("implementation revision rejected: %v", err)
+		t.Fatalf("evidence-tool revision rejected: %v", err)
 	}
 
 	writeRepositoryFile(t, root, "docs/evidence.md", "verified\n")

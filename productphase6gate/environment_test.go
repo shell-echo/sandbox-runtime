@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/shell-echo/sandbox-runtime/internal/desktopcandidate"
+	"github.com/shell-echo/sandbox-runtime/internal/productphase6evidence"
 	"github.com/shell-echo/sandbox-runtime/provider/browser/network/docker"
 	"github.com/shell-echo/sandbox-runtime/roleprocess"
 )
@@ -102,6 +103,9 @@ type gateEnvironment struct {
 	roles         map[string]*gateProcess
 	roleHistory   map[string][]*gateProcess
 	scenarios     map[string]scenarioObservation
+	repository    productphase6evidence.RepositoryBinding
+	stress        productphase6evidence.StressMeasurements
+	desktopMedia  productphase6evidence.DesktopMediaMeasurements
 }
 
 func prepareGateEnvironment(t *testing.T, ctx context.Context) *gateEnvironment { //nolint:maintidx
@@ -115,8 +119,9 @@ func prepareGateEnvironment(t *testing.T, ctx context.Context) *gateEnvironment 
 	if err != nil {
 		t.Fatalf("load current local Desktop candidate %q: %v", candidatePath, err)
 	}
-	if err := candidate.VerifySource(root); err != nil {
-		t.Fatalf("verify current local Desktop candidate %q: %v", candidatePath, err)
+	repository, err := productphase6evidence.BindRuntimeCandidate(candidate, root)
+	if err != nil {
+		t.Fatalf("bind local Desktop candidate to evidence tools %q: %v", candidatePath, err)
 	}
 	runID := fmt.Sprintf("%d-%d", time.Now().UnixNano(), os.Getpid())
 	directory := t.TempDir()
@@ -129,7 +134,7 @@ func prepareGateEnvironment(t *testing.T, ctx context.Context) *gateEnvironment 
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(brokerDirectory) })
 	environment := &gateEnvironment{
-		runID: runID, root: root, candidate: candidate, roles: make(map[string]*gateProcess), roleHistory: make(map[string][]*gateProcess), scenarios: make(map[string]scenarioObservation),
+		runID: runID, root: root, candidate: candidate, repository: repository, roles: make(map[string]*gateProcess), roleHistory: make(map[string][]*gateProcess), scenarios: make(map[string]scenarioObservation),
 		paths: gatePaths{directory: directory, binary: filepath.Join(directory, "sandbox-runtime"), browserBackendBin: filepath.Join(directory, "browser-executor-backend"), desktopBackendBin: filepath.Join(directory, "desktop-executor-backend"), brokerDirectory: brokerDirectory, brokerSocket: filepath.Join(brokerDirectory, "desktop-broker-11111111111111111111111111111111.sock")},
 		ports: rolePorts{product: freePort(t), provider: freePort(t), providerPrivate: freePort(t), providerProbe: freePort(t), gateway: freePort(t), gatewayProbe: freePort(t), guestProbe: freePort(t), browser: freePort(t), browserProbe: freePort(t), browserBackend: freePort(t), desktop: freePort(t), desktopProbe: freePort(t), desktopBackend: freePort(t)},
 	}

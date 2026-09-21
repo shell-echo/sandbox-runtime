@@ -60,6 +60,7 @@ func TestPhase6Slice4ReleaseGate(t *testing.T) {
 	} {
 		recordScenario(environment, name, []string{"provider", "desktop"}, desktopStarted, desktopFinished, detail)
 	}
+	runDesktopEvidenceMeasurements(t, ctx, environment)
 
 	drainOpen := newBrowserOpen(t, "drain", 4*time.Second)
 	drainConnection, drainResponse := dialBrowserExecutor(t, ctx, environment, drainOpen)
