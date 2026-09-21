@@ -46,7 +46,9 @@ const (
 	SessionErrorType       = "error"
 	SessionAcceptedType    = "accepted"
 	SessionClosedType      = "closed"
+	SessionTerminalType    = "session.terminal"
 	SessionProtocolVersion = 1
+	SessionTerminalVersion = 1
 )
 
 var (
@@ -125,15 +127,18 @@ func referenceDigest(reference string) string {
 }
 
 type SessionMessage struct {
-	Protocol  string `json:"protocol"`
-	Type      string `json:"type"`
-	RequestID string `json:"request_id,omitempty"`
-	Sequence  int64  `json:"sequence,omitempty"`
-	Timestamp int64  `json:"timestamp_unix_nano,omitempty"`
-	Payload   string `json:"payload,omitempty"`
-	OK        bool   `json:"ok,omitempty"`
-	ErrorCode string `json:"error_code,omitempty"`
-	Text      string `json:"text,omitempty"`
+	Protocol  string                   `json:"protocol"`
+	Version   int                      `json:"version,omitempty"`
+	Type      string                   `json:"type"`
+	RequestID string                   `json:"request_id,omitempty"`
+	Sequence  int64                    `json:"sequence,omitempty"`
+	Timestamp int64                    `json:"timestamp_unix_nano,omitempty"`
+	Payload   string                   `json:"payload,omitempty"`
+	OK        bool                     `json:"ok,omitempty"`
+	ErrorCode string                   `json:"error_code,omitempty"`
+	Text      string                   `json:"text,omitempty"`
+	Stage     sessiontermination.Stage `json:"stage,omitempty"`
+	Cause     sessiontermination.Cause `json:"cause,omitempty"`
 }
 
 func (m SessionMessage) Validate() error {
@@ -146,9 +151,12 @@ func (m SessionMessage) ValidateFor(protocol string) error {
 	}
 	switch m.Type {
 	case SessionAcceptedType:
+		if m.Version != 0 || m.Stage != "" || m.Cause != "" {
+			return ErrInvalidSession
+		}
 		return m.validateRequest()
 	case SessionFrameType:
-		if m.Sequence < 1 || m.Timestamp < 1 || m.Payload == "" || len(m.Payload) > base64.StdEncoding.EncodedLen(SessionMaxFrame) {
+		if m.Version != 0 || m.Stage != "" || m.Cause != "" || m.Sequence < 1 || m.Timestamp < 1 || m.Payload == "" || len(m.Payload) > base64.StdEncoding.EncodedLen(SessionMaxFrame) {
 			return ErrInvalidSession
 		}
 		decoded, err := base64.StdEncoding.DecodeString(m.Payload)
@@ -157,16 +165,26 @@ func (m SessionMessage) ValidateFor(protocol string) error {
 		}
 		return nil
 	case SessionResultType:
-		if m.RequestID == "" || m.Sequence < 1 || !m.OK && m.ErrorCode == "" {
+		if m.Version != 0 || m.Stage != "" || m.Cause != "" || m.RequestID == "" || m.Sequence < 1 || !m.OK && m.ErrorCode == "" {
 			return ErrInvalidSession
 		}
 		return nil
 	case SessionErrorType:
-		if m.ErrorCode == "" || len(m.ErrorCode) > 64 || strings.ContainsAny(m.ErrorCode, "\r\n\x00") {
+		if m.Version != 0 || m.Stage != "" || m.Cause != "" || m.ErrorCode == "" || len(m.ErrorCode) > 64 || strings.ContainsAny(m.ErrorCode, "\r\n\x00") {
 			return ErrInvalidSession
 		}
 		return nil
 	case SessionClosedType:
+		if m.Version != 0 || m.Stage != "" || m.Cause != "" {
+			return ErrInvalidSession
+		}
+		return nil
+	case SessionTerminalType:
+		record := sessiontermination.Record{Stage: m.Stage, Cause: m.Cause}
+		if protocol != SessionProtocolV2ID || m.Version != SessionTerminalVersion || !record.Valid() ||
+			m.RequestID != "" || m.Sequence != 0 || m.Timestamp != 0 || m.Payload != "" || m.OK || m.ErrorCode != "" || m.Text != "" {
+			return ErrInvalidSession
+		}
 		return nil
 	default:
 		return ErrInvalidSession
@@ -353,17 +371,43 @@ func (s *sessionRuntime) write(value SessionMessage, protocol ...string) error {
 	if len(protocol) == 1 {
 		messageProtocol = protocol[0]
 	}
-	if err := value.ValidateFor(messageProtocol); err != nil {
-		return err
-	}
-	data, err := encodeSession(value)
-	if err != nil {
-		return err
+	return s.writeBatch(messageProtocol, value)
+}
+
+func (s *sessionRuntime) writeBatch(protocol string, values ...SessionMessage) error {
+	documents := make([][]byte, 0, len(values))
+	for _, value := range values {
+		if err := value.ValidateFor(protocol); err != nil {
+			return err
+		}
+		data, err := encodeSession(value)
+		if err != nil {
+			return err
+		}
+		documents = append(documents, data)
 	}
 	s.writerMu.Lock()
 	defer s.writerMu.Unlock()
-	_, err = s.conn.Write(data)
-	return err
+	for _, document := range documents {
+		written, err := s.conn.Write(document)
+		if err != nil || written != len(document) {
+			return io.ErrShortWrite
+		}
+	}
+	return nil
+}
+
+func (s *sessionRuntime) terminalMessage(protocol string, stage sessiontermination.Stage, cause sessiontermination.Cause) (SessionMessage, bool) {
+	if !s.termination.Observe(stage, cause) || protocol != SessionProtocolV2ID {
+		return SessionMessage{}, false
+	}
+	return SessionMessage{Protocol: protocol, Version: SessionTerminalVersion, Type: SessionTerminalType, Stage: stage, Cause: cause}, true
+}
+
+func (s *sessionRuntime) publishTerminal(protocol string, stage sessiontermination.Stage, cause sessiontermination.Cause) {
+	if message, ok := s.terminalMessage(protocol, stage, cause); ok && s.conn != nil {
+		_ = s.writeBatch(protocol, message)
+	}
 }
 
 func serveSession(ctx context.Context, connection net.Conn, open SessionOpen) error {
@@ -426,16 +470,16 @@ func serveSessionProtocol(ctx context.Context, connection net.Conn, open Session
 			if errors.Is(sessionCtx.Err(), context.DeadlineExceeded) {
 				cause = sessiontermination.CauseExpiry
 			}
-			runtime.termination.Observe(sessiontermination.StageBrokerRuntime, cause)
+			runtime.publishTerminal(protocol, sessiontermination.StageBrokerRuntime, cause)
 			return sessionCtx.Err()
 		case <-runtime.closed:
-			runtime.termination.Observe(sessiontermination.StageBrokerRuntime, sessiontermination.CauseRuntimeFailure)
+			runtime.publishTerminal(protocol, sessiontermination.StageBrokerRuntime, sessiontermination.CauseRuntimeFailure)
 			return ErrSessionClosed
 		case err := <-readErr:
-			return observeSessionReadError(runtime, err)
+			return observeSessionReadError(runtime, protocol, err)
 		case frame := <-runtime.frames:
 			if len(frame) == 0 {
-				runtime.termination.Observe(sessiontermination.StageMediaReader, sessiontermination.CauseRuntimeFailure)
+				runtime.publishTerminal(protocol, sessiontermination.StageMediaReader, sessiontermination.CauseRuntimeFailure)
 				return ErrSessionClosed
 			}
 			payload := base64.StdEncoding.EncodeToString(frame)
@@ -446,7 +490,7 @@ func serveSessionProtocol(ctx context.Context, connection net.Conn, open Session
 			}
 		case command := <-commands:
 			if err := command.ValidateFor(open.MediaPolicy, previousSequence, protocol); err != nil {
-				runtime.termination.Observe(sessiontermination.StageInputWriter, sessiontermination.CauseProtocolViolation)
+				runtime.publishTerminal(protocol, sessiontermination.StageInputWriter, sessiontermination.CauseProtocolViolation)
 				return err
 			}
 			previousSequence = command.Sequence
@@ -457,8 +501,12 @@ func serveSessionProtocol(ctx context.Context, connection net.Conn, open Session
 			}
 			if command.Type == "input" {
 				if err := executeInput(sessionCtx, *command.Input, open.MediaPolicy); err != nil {
-					runtime.termination.Observe(sessiontermination.StageInputWriter, inputTerminationCause(err))
-					_ = runtime.write(SessionMessage{Protocol: protocol, Type: SessionResultType, RequestID: command.RequestID, Sequence: command.Sequence, ErrorCode: "input_rejected"}, protocol)
+					result := SessionMessage{Protocol: protocol, Type: SessionResultType, RequestID: command.RequestID, Sequence: command.Sequence, ErrorCode: "input_rejected"}
+					if terminal, ok := runtime.terminalMessage(protocol, sessiontermination.StageInputWriter, inputTerminationCause(err)); ok {
+						_ = runtime.writeBatch(protocol, terminal, result)
+						return err
+					}
+					_ = runtime.write(result, protocol)
 					continue
 				}
 			}
@@ -470,12 +518,12 @@ func serveSessionProtocol(ctx context.Context, connection net.Conn, open Session
 	}
 }
 
-func observeSessionReadError(runtime *sessionRuntime, err error) error {
+func observeSessionReadError(runtime *sessionRuntime, protocol string, err error) error {
 	if errors.Is(err, io.EOF) {
-		runtime.termination.Observe(sessiontermination.StageMuxExec, sessiontermination.CauseTransportClosed)
+		runtime.publishTerminal(protocol, sessiontermination.StageMuxExec, sessiontermination.CauseTransportClosed)
 		return io.EOF
 	}
-	runtime.termination.Observe(sessiontermination.StageInputWriter, sessiontermination.CauseProtocolViolation)
+	runtime.publishTerminal(protocol, sessiontermination.StageInputWriter, sessiontermination.CauseProtocolViolation)
 	return err
 }
 
@@ -514,7 +562,7 @@ func startSessionRuntime(ctx context.Context, connection net.Conn, open SessionO
 			select {
 			case runtime.frames <- frame:
 			default:
-				runtime.termination.Observe(sessiontermination.StageMediaReader, sessiontermination.CauseBackpressure)
+				runtime.publishTerminal(runtime.open.Protocol, sessiontermination.StageMediaReader, sessiontermination.CauseBackpressure)
 				runtime.close()
 				return
 			}

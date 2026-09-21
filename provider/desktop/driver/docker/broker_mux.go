@@ -230,29 +230,32 @@ func (m *BrokerMux) serveOpen(parent, operationCtx context.Context, connection *
 		}
 	} else {
 		record := muxTerminationRecord(first)
-		record = arbitrateMuxTermination(sessionCtx, m.options.OperationTimeout, record, stream)
+		var peerConsumed bool
+		record, peerConsumed = arbitrateMuxTermination(sessionCtx, m.options.OperationTimeout, record, results, stream)
 		termination.Observe(record.Stage, record.Cause)
 		cancel()
 		_ = connection.Close()
 		_ = stream.Close()
-		<-results
+		if !peerConsumed {
+			<-results
+		}
 	}
 	if record, ok := termination.Load(); ok {
 		log.Printf("desktop_provider_mux_session_terminal %s", record.String())
 	}
 }
 
-func arbitrateMuxTermination(ctx context.Context, operationTimeout time.Duration, first sessiontermination.Record, stream io.ReadWriteCloser) sessiontermination.Record {
+func arbitrateMuxTermination(ctx context.Context, operationTimeout time.Duration, first sessiontermination.Record, results <-chan muxDirectionResult, stream io.ReadWriteCloser) (sessiontermination.Record, bool) {
 	reporter, ok := stream.(brokerTerminalStream)
-	if !ok || first.Cause != sessiontermination.CauseTransportClosed || ctx == nil {
-		return first
+	if first.Cause != sessiontermination.CauseTransportClosed || ctx == nil {
+		return first, false
 	}
 	if ctx.Err() != nil {
 		policy := sessiontermination.FromError(ctx.Err(), sessiontermination.StageCloseOrdering, sessiontermination.CauseTransportClosed)
 		if muxTerminationPriority(policy) > muxTerminationPriority(first) {
-			return policy
+			return policy, false
 		}
-		return first
+		return first, false
 	}
 	limit := brokerTerminalDrainDeadline
 	if operationTimeout < limit {
@@ -261,44 +264,79 @@ func arbitrateMuxTermination(ctx context.Context, operationTimeout time.Duration
 	if deadline, ok := ctx.Deadline(); ok {
 		remaining := time.Until(deadline)
 		if remaining <= 0 {
-			return first
+			return first, false
 		}
 		if remaining < limit {
 			limit = remaining
 		}
 	}
 	if limit <= 0 {
-		return first
+		return first, false
 	}
-	_ = reporter.CloseWrite()
+	var terminal <-chan sessiontermination.Record
+	if ok {
+		_ = reporter.CloseWrite()
+		terminal = reporter.Terminal()
+	}
 	timer := time.NewTimer(limit)
 	defer timer.Stop()
 	select {
-	case record := <-reporter.Terminal():
+	case result := <-results:
+		best := strongerMuxTermination(first, muxTerminationRecord(result))
+		if ctx.Err() != nil {
+			best = strongerMuxTermination(best, sessiontermination.FromError(ctx.Err(), sessiontermination.StageCloseOrdering, sessiontermination.CauseTransportClosed))
+		}
+		select {
+		case record := <-terminal:
+			best = strongerMuxTermination(best, record)
+		default:
+		}
+		return best, true
+	case record := <-terminal:
 		best := strongerMuxTermination(first, record)
 		if ctx.Err() != nil {
 			best = strongerMuxTermination(best, sessiontermination.FromError(ctx.Err(), sessiontermination.StageCloseOrdering, sessiontermination.CauseTransportClosed))
 		}
-		return best
+		select {
+		case result := <-results:
+			best = strongerMuxTermination(best, muxTerminationRecord(result))
+			return best, true
+		default:
+		}
+		return best, false
 	case <-ctx.Done():
 		best := strongerMuxTermination(first, sessiontermination.FromError(ctx.Err(), sessiontermination.StageCloseOrdering, sessiontermination.CauseTransportClosed))
+		consumed := false
 		select {
-		case record := <-reporter.Terminal():
+		case result := <-results:
+			best = strongerMuxTermination(best, muxTerminationRecord(result))
+			consumed = true
+		default:
+		}
+		select {
+		case record := <-terminal:
 			best = strongerMuxTermination(best, record)
 		default:
 		}
-		return best
+		return best, consumed
 	case <-timer.C:
 		best := first
+		consumed := false
 		if ctx.Err() != nil {
 			best = strongerMuxTermination(best, sessiontermination.FromError(ctx.Err(), sessiontermination.StageCloseOrdering, sessiontermination.CauseTransportClosed))
 		}
 		select {
-		case record := <-reporter.Terminal():
+		case result := <-results:
+			best = strongerMuxTermination(best, muxTerminationRecord(result))
+			consumed = true
+		default:
+		}
+		select {
+		case record := <-terminal:
 			best = strongerMuxTermination(best, record)
 		default:
 		}
-		return best
+		return best, consumed
 	}
 }
 
@@ -455,12 +493,39 @@ func proxyMuxCommands(ctx context.Context, reader *bufio.Reader, stream io.Write
 }
 
 func proxyMuxMessages(ctx context.Context, reader *bufio.Reader, connection io.Writer) error {
+	var terminal *sessiontermination.Record
 	for {
 		message, document, err := readMuxMessage(reader)
 		if err != nil {
+			if terminal != nil && errors.Is(err, io.EOF) {
+				return sessiontermination.Error{Record: *terminal}
+			}
 			return err
 		}
+		if message.Type == desktopbroker.SessionTerminalType {
+			if terminal != nil {
+				return desktopbroker.ErrInvalidSession
+			}
+			record := sessiontermination.Record{Stage: message.Stage, Cause: message.Cause}
+			if !record.Valid() {
+				return desktopbroker.ErrInvalidSession
+			}
+			terminal = &record
+			continue
+		}
+		if terminal != nil {
+			if message.Type != desktopbroker.SessionResultType || message.OK || message.ErrorCode != "input_rejected" {
+				return desktopbroker.ErrInvalidSession
+			}
+			if writeFull(connection, document) != nil {
+				return sessiontermination.Error{Record: *terminal}
+			}
+			return sessiontermination.Error{Record: *terminal}
+		}
 		if message.Type == desktopbroker.SessionAcceptedType {
+			return desktopbroker.ErrInvalidSession
+		}
+		if message.Type == desktopbroker.SessionResultType && !message.OK && message.ErrorCode == "input_rejected" {
 			return desktopbroker.ErrInvalidSession
 		}
 		if writeFull(connection, document) != nil {

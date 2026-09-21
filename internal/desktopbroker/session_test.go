@@ -1,11 +1,13 @@
 package desktopbroker
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"reflect"
 	"strings"
 	"testing"
@@ -63,6 +65,80 @@ func TestSessionOpenAndMessagesAreClosedAndBound(t *testing.T) {
 	frame := SessionMessage{Protocol: SessionProtocolID, Type: SessionFrameType, Sequence: 1, Timestamp: time.Now().UnixNano(), Payload: "gICAgICAgICAgICAgAA="}
 	if err := frame.Validate(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestSessionTerminalMessageIsV2OnlyAndClosed(t *testing.T) {
+	message := SessionMessage{Protocol: SessionProtocolV2ID, Version: SessionTerminalVersion, Type: SessionTerminalType, Stage: sessiontermination.StageInputWriter, Cause: sessiontermination.CauseInputTimeout}
+	if err := message.ValidateFor(SessionProtocolV2ID); err != nil {
+		t.Fatal(err)
+	}
+	for name, mutate := range map[string]func(*SessionMessage){
+		"legacy protocol": func(value *SessionMessage) { value.Protocol = SessionProtocolID },
+		"wrong version":   func(value *SessionMessage) { value.Version++ },
+		"unknown stage":   func(value *SessionMessage) { value.Stage = "raw_stage" },
+		"unknown cause":   func(value *SessionMessage) { value.Cause = "raw_error" },
+		"identifier":      func(value *SessionMessage) { value.RequestID = "session-1" },
+		"free text":       func(value *SessionMessage) { value.Text = "private detail" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			candidate := message
+			mutate(&candidate)
+			if candidate.ValidateFor(candidate.Protocol) == nil {
+				t.Fatal("invalid session terminal accepted")
+			}
+		})
+	}
+}
+
+func TestSessionTerminalAndInputResultWriteAtomicallyBeforeConcurrentFrame(t *testing.T) {
+	broker, client := net.Pipe()
+	defer broker.Close()
+	defer client.Close()
+	runtime := &sessionRuntime{conn: broker}
+	terminal := SessionMessage{Protocol: SessionProtocolV2ID, Version: SessionTerminalVersion, Type: SessionTerminalType, Stage: sessiontermination.StageInputWriter, Cause: sessiontermination.CauseInputNonzeroExit}
+	result := SessionMessage{Protocol: SessionProtocolV2ID, Type: SessionResultType, RequestID: "input-1", Sequence: 1, ErrorCode: "input_rejected"}
+	frame := SessionMessage{Protocol: SessionProtocolV2ID, Type: SessionFrameType, Sequence: 1, Timestamp: 1, Payload: "gICAgICAgICAgICAgAA="}
+	errorsSeen := make(chan error, 2)
+	go func() { errorsSeen <- runtime.writeBatch(SessionProtocolV2ID, terminal, result) }()
+	go func() { errorsSeen <- runtime.write(frame, SessionProtocolV2ID) }()
+	reader := bufio.NewReaderSize(client, SessionMaxDocument)
+	types := make([]string, 0, 3)
+	for range 3 {
+		line, err := reader.ReadBytes('\n')
+		if err != nil {
+			t.Fatal(err)
+		}
+		var message SessionMessage
+		if DecodeSession(line, &message) != nil || message.ValidateFor(SessionProtocolV2ID) != nil {
+			t.Fatalf("invalid emitted message: %s", line)
+		}
+		types = append(types, message.Type)
+	}
+	for range 2 {
+		if err := <-errorsSeen; err != nil {
+			t.Fatal(err)
+		}
+	}
+	terminalIndex := -1
+	for index, messageType := range types {
+		if messageType == SessionTerminalType {
+			terminalIndex = index
+		}
+	}
+	if terminalIndex < 0 || terminalIndex+1 >= len(types) || types[terminalIndex+1] != SessionResultType {
+		t.Fatalf("terminal/result order = %v", types)
+	}
+}
+
+func TestSessionTerminalWriteFailureIsFailClosed(t *testing.T) {
+	broker, client := net.Pipe()
+	_ = client.Close()
+	defer broker.Close()
+	runtime := &sessionRuntime{conn: broker}
+	terminal := SessionMessage{Protocol: SessionProtocolV2ID, Version: SessionTerminalVersion, Type: SessionTerminalType, Stage: sessiontermination.StageBrokerRuntime, Cause: sessiontermination.CauseRuntimeFailure}
+	if err := runtime.writeBatch(SessionProtocolV2ID, terminal); err == nil {
+		t.Fatal("terminal write unexpectedly succeeded after transport close")
 	}
 }
 
@@ -197,13 +273,18 @@ func TestInputFailureClassificationIsClosed(t *testing.T) {
 		if got := inputTerminationCause(test.err); got != test.cause {
 			t.Fatalf("input failure %v = %s, want %s", test.err, got, test.cause)
 		}
+		runtime := &sessionRuntime{}
+		message, ok := runtime.terminalMessage(SessionProtocolV2ID, sessiontermination.StageInputWriter, test.cause)
+		if !ok || message.Type != SessionTerminalType || message.Cause != test.cause || message.ValidateFor(SessionProtocolV2ID) != nil {
+			t.Fatalf("input terminal %v = %#v, %t", test.err, message, ok)
+		}
 	}
 }
 
 func TestSessionCommandEOFTerminatesWithoutOverwritingTypedCause(t *testing.T) {
 	runtime := &sessionRuntime{}
 	runtime.termination.Observe(sessiontermination.StageInputWriter, sessiontermination.CauseInputTimeout)
-	if err := observeSessionReadError(runtime, io.EOF); !errors.Is(err, io.EOF) {
+	if err := observeSessionReadError(runtime, SessionProtocolV2ID, io.EOF); !errors.Is(err, io.EOF) {
 		t.Fatalf("EOF result = %v", err)
 	}
 	record, ok := runtime.termination.Load()
@@ -215,7 +296,7 @@ func TestSessionCommandEOFTerminatesWithoutOverwritingTypedCause(t *testing.T) {
 
 func TestSessionCommandEOFOwnsTransportCauseWhenNoPriorTerminal(t *testing.T) {
 	runtime := &sessionRuntime{}
-	if err := observeSessionReadError(runtime, io.EOF); !errors.Is(err, io.EOF) {
+	if err := observeSessionReadError(runtime, SessionProtocolV2ID, io.EOF); !errors.Is(err, io.EOF) {
 		t.Fatalf("EOF result = %v", err)
 	}
 	record, ok := runtime.termination.Load()
@@ -228,7 +309,7 @@ func TestSessionCommandEOFOwnsTransportCauseWhenNoPriorTerminal(t *testing.T) {
 func TestSessionExplicitCloseCausePrecedesConcurrentEOF(t *testing.T) {
 	runtime := &sessionRuntime{}
 	runtime.termination.Observe(sessiontermination.StageCloseOrdering, sessiontermination.CauseCleanClose)
-	_ = observeSessionReadError(runtime, io.EOF)
+	_ = observeSessionReadError(runtime, SessionProtocolV2ID, io.EOF)
 	record, ok := runtime.termination.Load()
 	want := sessiontermination.Record{Stage: sessiontermination.StageCloseOrdering, Cause: sessiontermination.CauseCleanClose}
 	if !ok || record != want {

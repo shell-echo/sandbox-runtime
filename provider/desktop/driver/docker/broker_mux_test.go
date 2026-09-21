@@ -2,6 +2,7 @@ package docker
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
@@ -446,10 +447,22 @@ func TestMuxTerminationArbitrationPrefersBoundTypedCause(t *testing.T) {
 					stream.terminal <- want
 				}()
 			}
-			if got := arbitrateMuxTermination(context.Background(), 100*time.Millisecond, first, stream); got != want {
+			if got, consumed := arbitrateMuxTermination(context.Background(), 100*time.Millisecond, first, nil, stream); got != want || consumed {
 				t.Fatalf("arbitrated record = %#v, want %#v", got, want)
 			}
 		})
+	}
+}
+
+func TestMuxTerminationArbitrationPrefersTypedPeerDirection(t *testing.T) {
+	first := sessiontermination.Record{Stage: sessiontermination.StageInputWriter, Cause: sessiontermination.CauseTransportClosed}
+	want := sessiontermination.Record{Stage: sessiontermination.StageInputWriter, Cause: sessiontermination.CauseInputNonzeroExit}
+	results := make(chan muxDirectionResult, 1)
+	results <- muxDirectionResult{err: sessiontermination.Error{Record: want}}
+	stream := &terminalMuxTestStream{terminal: make(chan sessiontermination.Record)}
+	got, consumed := arbitrateMuxTermination(context.Background(), 100*time.Millisecond, first, results, stream)
+	if got != want || !consumed {
+		t.Fatalf("peer arbitration = %#v consumed=%t, want %#v", got, consumed, want)
 	}
 }
 
@@ -459,14 +472,14 @@ func TestMuxTerminationArbitrationIsBoundedAndSessionLocal(t *testing.T) {
 	other.terminal <- sessiontermination.Record{Stage: sessiontermination.StageInputWriter, Cause: sessiontermination.CauseInputNonzeroExit}
 	stream := &terminalMuxTestStream{terminal: make(chan sessiontermination.Record, 1)}
 	started := time.Now()
-	if got := arbitrateMuxTermination(context.Background(), 20*time.Millisecond, first, stream); got != first {
+	if got, consumed := arbitrateMuxTermination(context.Background(), 20*time.Millisecond, first, nil, stream); got != first || consumed {
 		t.Fatalf("cross-session or absent terminal replaced first cause: %#v", got)
 	}
 	if elapsed := time.Since(started); elapsed < 15*time.Millisecond || elapsed > 250*time.Millisecond {
 		t.Fatalf("bounded arbitration elapsed=%s", elapsed)
 	}
 	stream.terminal <- sessiontermination.Record{Stage: "forged", Cause: sessiontermination.CauseInputTimeout}
-	if got := arbitrateMuxTermination(context.Background(), 20*time.Millisecond, first, stream); got != first {
+	if got, consumed := arbitrateMuxTermination(context.Background(), 20*time.Millisecond, first, nil, stream); got != first || consumed {
 		t.Fatalf("forged terminal replaced first cause: %#v", got)
 	}
 }
@@ -489,7 +502,7 @@ func TestMuxTerminationArbitrationPreservesPolicyPriority(t *testing.T) {
 			defer cancel()
 			stream := &terminalMuxTestStream{terminal: make(chan sessiontermination.Record, 1)}
 			stream.terminal <- sessiontermination.Record{Stage: sessiontermination.StageInputWriter, Cause: sessiontermination.CauseInputTimeout}
-			got := arbitrateMuxTermination(ctx, 100*time.Millisecond, first, stream)
+			got, _ := arbitrateMuxTermination(ctx, 100*time.Millisecond, first, nil, stream)
 			if got.Cause != cause {
 				t.Fatalf("policy cause = %#v, want %q", got, cause)
 			}
@@ -513,6 +526,61 @@ func TestMuxTerminationPriorityIsClosed(t *testing.T) {
 	}
 	if muxTerminationPriority(sessiontermination.Record{Stage: "forged", Cause: sessiontermination.CauseExpiry}) != -1 {
 		t.Fatal("invalid record acquired priority")
+	}
+}
+
+func TestProxyMuxConsumesTerminalAndForwardsOnlyInputRejected(t *testing.T) {
+	terminal := desktopbroker.SessionMessage{Protocol: desktopbroker.SessionProtocolV2ID, Version: desktopbroker.SessionTerminalVersion, Type: desktopbroker.SessionTerminalType, Stage: sessiontermination.StageInputWriter, Cause: sessiontermination.CauseInputTimeout}
+	result := desktopbroker.SessionMessage{Protocol: desktopbroker.SessionProtocolV2ID, Type: desktopbroker.SessionResultType, RequestID: "input-1", Sequence: 1, ErrorCode: "input_rejected"}
+	terminalDocument, _ := desktopbroker.EncodeSession(terminal)
+	resultDocument, _ := desktopbroker.EncodeSession(result)
+	reader := bufio.NewReaderSize(bytes.NewReader(append(terminalDocument, resultDocument...)), desktopbroker.SessionMaxDocument)
+	var forwarded bytes.Buffer
+	err := proxyMuxMessages(context.Background(), reader, &forwarded)
+	var classified sessiontermination.Error
+	if !errors.As(err, &classified) || classified.Record != (sessiontermination.Record{Stage: terminal.Stage, Cause: terminal.Cause}) {
+		t.Fatalf("terminal classification = %#v, %v", classified, err)
+	}
+	if !bytes.Equal(forwarded.Bytes(), resultDocument) {
+		t.Fatalf("executor wire = %q, want only %q", forwarded.Bytes(), resultDocument)
+	}
+}
+
+func TestProxyMuxTerminalOnlyReturnsBoundCauseWithoutForwarding(t *testing.T) {
+	terminal := desktopbroker.SessionMessage{Protocol: desktopbroker.SessionProtocolV2ID, Version: desktopbroker.SessionTerminalVersion, Type: desktopbroker.SessionTerminalType, Stage: sessiontermination.StageMediaReader, Cause: sessiontermination.CauseRuntimeFailure}
+	document, _ := desktopbroker.EncodeSession(terminal)
+	reader := bufio.NewReaderSize(bytes.NewReader(document), desktopbroker.SessionMaxDocument)
+	var forwarded bytes.Buffer
+	err := proxyMuxMessages(context.Background(), reader, &forwarded)
+	var classified sessiontermination.Error
+	if !errors.As(err, &classified) || classified.Record != (sessiontermination.Record{Stage: terminal.Stage, Cause: terminal.Cause}) || forwarded.Len() != 0 {
+		t.Fatalf("terminal-only classification=%#v err=%v wire=%q", classified, err, forwarded.Bytes())
+	}
+}
+
+func TestProxyMuxRejectsTerminalProtocolViolations(t *testing.T) {
+	validTerminal := desktopbroker.SessionMessage{Protocol: desktopbroker.SessionProtocolV2ID, Version: desktopbroker.SessionTerminalVersion, Type: desktopbroker.SessionTerminalType, Stage: sessiontermination.StageInputWriter, Cause: sessiontermination.CauseInputStartFailure}
+	validDocument, _ := desktopbroker.EncodeSession(validTerminal)
+	inputResult, _ := desktopbroker.EncodeSession(desktopbroker.SessionMessage{Protocol: desktopbroker.SessionProtocolV2ID, Type: desktopbroker.SessionResultType, RequestID: "input-1", Sequence: 1, ErrorCode: "input_rejected"})
+	frame, _ := desktopbroker.EncodeSession(desktopbroker.SessionMessage{Protocol: desktopbroker.SessionProtocolV2ID, Type: desktopbroker.SessionFrameType, Sequence: 1, Timestamp: 1, Payload: "gICAgICAgICAgICAgAA="})
+	unknown := bytes.Replace(validDocument, []byte(`"cause":"input_start_failure"`), []byte(`"cause":"raw_error"`), 1)
+	for name, stream := range map[string][]byte{
+		"duplicate":             append(append([]byte(nil), validDocument...), append(validDocument, inputResult...)...),
+		"frame after terminal":  append(append([]byte(nil), validDocument...), frame...),
+		"unknown enum":          unknown,
+		"missing terminal":      inputResult,
+		"cross stream terminal": inputResult,
+	} {
+		t.Run(name, func(t *testing.T) {
+			var forwarded bytes.Buffer
+			err := proxyMuxMessages(context.Background(), bufio.NewReaderSize(bytes.NewReader(stream), desktopbroker.SessionMaxDocument), &forwarded)
+			if !errors.Is(err, desktopbroker.ErrInvalidSession) {
+				t.Fatalf("protocol violation = %v", err)
+			}
+			if forwarded.Len() != 0 {
+				t.Fatalf("protocol violation reached executor: %q", forwarded.Bytes())
+			}
+		})
 	}
 }
 
