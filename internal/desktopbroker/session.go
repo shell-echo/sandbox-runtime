@@ -532,7 +532,7 @@ func startSessionRuntime(ctx context.Context, connection net.Conn, open SessionO
 	if err != nil {
 		return nil, ErrInvalidSession
 	}
-	args := []string{"-hide_banner", "-loglevel", "error", "-f", "x11grab", "-video_size", fmt.Sprintf("%dx%d", open.MediaPolicy.Width, open.MediaPolicy.Height), "-framerate", fmt.Sprint(open.MediaPolicy.MaxFPS), "-draw_mouse", "1", "-i", DefaultDisplay, "-an", "-c:v", "libvpx", "-deadline", "realtime", "-cpu-used", "8", "-b:v", fmt.Sprintf("%dk", open.MediaPolicy.MaxVideoBitrateKbps), "-f", "rtp", fmt.Sprintf("rtp://127.0.0.1:%d?pkt_size=1200", udp.LocalAddr().(*net.UDPAddr).Port)}
+	args := sessionFFmpegArguments(open.MediaPolicy, udp.LocalAddr().(*net.UDPAddr).Port)
 	process := exec.CommandContext(ctx, "/usr/bin/ffmpeg", args...)
 	process.Stdout = io.Discard
 	process.Stderr = io.Discard
@@ -569,6 +569,25 @@ func startSessionRuntime(ctx context.Context, connection net.Conn, open SessionO
 		}
 	}()
 	return runtime, nil
+}
+
+func sessionFFmpegArguments(policy desktopmedia.MediaPolicy, port int) []string {
+	return []string{
+		"-hide_banner", "-loglevel", "error",
+		"-f", "x11grab",
+		"-video_size", fmt.Sprintf("%dx%d", policy.Width, policy.Height),
+		"-framerate", fmt.Sprint(policy.MaxFPS),
+		"-draw_mouse", "1",
+		"-i", DefaultDisplay,
+		"-an",
+		"-c:v", "libvpx",
+		"-deadline", "realtime",
+		"-cpu-used", "8",
+		"-threads", "1",
+		"-b:v", fmt.Sprintf("%dk", policy.MaxVideoBitrateKbps),
+		"-f", "rtp",
+		fmt.Sprintf("rtp://127.0.0.1:%d?pkt_size=1200", port),
+	}
 }
 
 func executeInput(ctx context.Context, input desktopmedia.Input, policy desktopmedia.MediaPolicy) error {

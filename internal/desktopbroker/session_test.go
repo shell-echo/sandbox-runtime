@@ -223,6 +223,29 @@ func TestPointerMovesUseFixedArgumentsAndAllowRepeatedCoordinates(t *testing.T) 
 	}
 }
 
+func TestSessionFFmpegArgumentsFixEncoderThreadCount(t *testing.T) {
+	policy := validSessionOpen().MediaPolicy
+	want := []string{
+		"-hide_banner", "-loglevel", "error",
+		"-f", "x11grab",
+		"-video_size", "1280x720",
+		"-framerate", "30",
+		"-draw_mouse", "1",
+		"-i", DefaultDisplay,
+		"-an",
+		"-c:v", "libvpx",
+		"-deadline", "realtime",
+		"-cpu-used", "8",
+		"-threads", "1",
+		"-b:v", "2000k",
+		"-f", "rtp",
+		"rtp://127.0.0.1:43210?pkt_size=1200",
+	}
+	if got := sessionFFmpegArguments(policy, 43210); !reflect.DeepEqual(got, want) {
+		t.Fatalf("ffmpeg arguments = %#v, want %#v", got, want)
+	}
+}
+
 func TestInputRunnerCancellationIsBounded(t *testing.T) {
 	policy := validSessionOpen().MediaPolicy
 	input := desktopmedia.Input{Sequence: 1, Kind: "pointer", Event: "move", X: 1, Y: 2, ControlLeaseID: "lease-1", ControlFence: 1}
