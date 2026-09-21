@@ -202,6 +202,7 @@ func measureDesktopMedia(t *testing.T, ctx context.Context, environment *gateEnv
 	measurement := productphase6evidence.DesktopMediaMeasurements{Harness: "phase6-desktop-media-v2", Sessions: mediaMeasurementSessions, FirstFrameLimitMilliseconds: 30_000, WindowMilliseconds: mediaMeasurementWindow.Milliseconds(), FPSLimitMilli: int64(policy.MaxFPS * 1000), BitrateLimitBPS: int64(policy.MaxVideoBitrateKbps * 1000), InputProcessDeadlineMilliseconds: inputProcessDeadline.Milliseconds()}
 	measurement.CommandDigest = productphase6evidence.DesktopMediaCommandDigest(measurement)
 	latencies := make([]time.Duration, 0, measurement.Sessions)
+	httpClient.CloseIdleConnections()
 	time.Sleep(250 * time.Millisecond)
 	measurement.GoroutinesBaseline = stableGoroutineCount()
 	sequence := int64(10_000)
