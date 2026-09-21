@@ -44,6 +44,10 @@ type inputBatchResult struct {
 func runDesktopEvidenceMeasurements(t *testing.T, ctx context.Context, environment *gateEnvironment) {
 	t.Helper()
 	client := newGateProtectedClient(environment)
+	// The earlier Desktop scenario client owns the low JTI sequence range.
+	// Use a disjoint deterministic range so this evidence pass cannot replay
+	// an admission token after the Provider restart.
+	client.sequence = 10_000
 	state := openDesktopMeasurementSession(t, client)
 	state.open = desktopPrivateOpen(t, state.handoff, "desktop-media-measurement-bind")
 	handoffExpiry, err := time.Parse(time.RFC3339Nano, state.handoff.ExpiresAt)
