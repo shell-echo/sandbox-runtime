@@ -63,8 +63,11 @@ func runDesktopEvidenceMeasurements(t *testing.T, ctx context.Context, environme
 	waitForDesktopSessionProcesses(t, environment, 0, 10*time.Second)
 
 	driver, httpClient, authority, attachment, policy := measuredDesktopDriver(t, ctx, environment, state)
+	httpClient.CloseIdleConnections()
+	time.Sleep(250 * time.Millisecond)
+	goroutinesBaseline := stableGoroutineCount()
 	environment.stress = measureDesktopStress(t, ctx, environment, driver, authority, attachment, policy)
-	environment.desktopMedia = measureDesktopMedia(t, ctx, environment, driver, httpClient, authority, attachment, policy)
+	environment.desktopMedia = measureDesktopMedia(t, ctx, environment, driver, httpClient, authority, attachment, policy, goroutinesBaseline)
 
 	closeDesktopSession(t, environment, client, state.handoff, "desktop-close-measurement", "desktop-close-measurement-attempt", 7)
 	waitForDesktopResources(t, environment, 0, 45*time.Second)
@@ -197,14 +200,12 @@ func measureDesktopStress(t *testing.T, ctx context.Context, environment *gateEn
 	return measurement
 }
 
-func measureDesktopMedia(t *testing.T, ctx context.Context, environment *gateEnvironment, driver *desktopremote.Driver, httpClient interface{ CloseIdleConnections() }, authority providerdesktop.MediaAuthority, attachment providerdesktop.Attachment, policy desktopmedia.MediaPolicy) productphase6evidence.DesktopMediaMeasurements {
+func measureDesktopMedia(t *testing.T, ctx context.Context, environment *gateEnvironment, driver *desktopremote.Driver, httpClient interface{ CloseIdleConnections() }, authority providerdesktop.MediaAuthority, attachment providerdesktop.Attachment, policy desktopmedia.MediaPolicy, goroutinesBaseline int) productphase6evidence.DesktopMediaMeasurements {
 	t.Helper()
 	measurement := productphase6evidence.DesktopMediaMeasurements{Harness: "phase6-desktop-media-v2", Sessions: mediaMeasurementSessions, FirstFrameLimitMilliseconds: 30_000, WindowMilliseconds: mediaMeasurementWindow.Milliseconds(), FPSLimitMilli: int64(policy.MaxFPS * 1000), BitrateLimitBPS: int64(policy.MaxVideoBitrateKbps * 1000), InputProcessDeadlineMilliseconds: inputProcessDeadline.Milliseconds()}
 	measurement.CommandDigest = productphase6evidence.DesktopMediaCommandDigest(measurement)
 	latencies := make([]time.Duration, 0, measurement.Sessions)
-	httpClient.CloseIdleConnections()
-	time.Sleep(250 * time.Millisecond)
-	measurement.GoroutinesBaseline = stableGoroutineCount()
+	measurement.GoroutinesBaseline = goroutinesBaseline
 	sequence := int64(10_000)
 	for sessionIndex := 0; sessionIndex < measurement.Sessions; sessionIndex++ {
 		started := time.Now()
