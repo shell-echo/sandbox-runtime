@@ -95,3 +95,24 @@ func TestBrokerSessionTerminationStderrIsClosedAndSanitized(t *testing.T) {
 		}
 	}
 }
+
+func TestExecSessionPublishesExactlyOneClosedTerminalRecord(t *testing.T) {
+	stream := &execSession{terminal: make(chan sessiontermination.Record, 1)}
+	first := sessiontermination.Record{Stage: sessiontermination.StageInputWriter, Cause: sessiontermination.CauseInputTimeout}
+	stream.publishTerminal(first)
+	stream.publishTerminal(sessiontermination.Record{Stage: sessiontermination.StageBrokerRuntime, Cause: sessiontermination.CauseRuntimeFailure})
+	stream.publishTerminal(sessiontermination.Record{Stage: "forged", Cause: sessiontermination.CauseInputTimeout})
+	select {
+	case got := <-stream.Terminal():
+		if got != first {
+			t.Fatalf("terminal record = %#v, want %#v", got, first)
+		}
+	default:
+		t.Fatal("terminal record was not published")
+	}
+	select {
+	case extra := <-stream.Terminal():
+		t.Fatalf("extra terminal record = %#v", extra)
+	default:
+	}
+}

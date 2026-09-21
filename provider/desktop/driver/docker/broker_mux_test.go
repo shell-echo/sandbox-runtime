@@ -24,8 +24,27 @@ import (
 	"github.com/shell-echo/sandbox-runtime/internal/desktopcandidate"
 	"github.com/shell-echo/sandbox-runtime/internal/desktopmedia"
 	"github.com/shell-echo/sandbox-runtime/internal/handoff"
+	"github.com/shell-echo/sandbox-runtime/internal/sessiontermination"
 	providerdesktop "github.com/shell-echo/sandbox-runtime/provider/desktop"
 )
+
+type terminalMuxTestStream struct {
+	terminal   chan sessiontermination.Record
+	closeWrite func()
+}
+
+func (s *terminalMuxTestStream) Read([]byte) (int, error) { return 0, io.EOF }
+func (s *terminalMuxTestStream) Write(value []byte) (int, error) {
+	return len(value), nil
+}
+func (s *terminalMuxTestStream) Close() error { return nil }
+func (s *terminalMuxTestStream) CloseWrite() error {
+	if s.closeWrite != nil {
+		s.closeWrite()
+	}
+	return nil
+}
+func (s *terminalMuxTestStream) Terminal() <-chan sessiontermination.Record { return s.terminal }
 
 type muxTestEngine struct {
 	*fakeEngine
@@ -407,6 +426,94 @@ func waitMuxSocket(t *testing.T, socket string) {
 		runtime.Gosched()
 	}
 	t.Fatal("mux socket was not created")
+}
+
+func TestMuxTerminationArbitrationPrefersBoundTypedCause(t *testing.T) {
+	first := sessiontermination.Record{Stage: sessiontermination.StageInputWriter, Cause: sessiontermination.CauseTransportClosed}
+	want := sessiontermination.Record{Stage: sessiontermination.StageInputWriter, Cause: sessiontermination.CauseInputTimeout}
+	for _, test := range []struct {
+		name  string
+		delay time.Duration
+	}{
+		{name: "typed already available"},
+		{name: "generic arrives before typed", delay: 10 * time.Millisecond},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			stream := &terminalMuxTestStream{terminal: make(chan sessiontermination.Record, 1)}
+			stream.closeWrite = func() {
+				go func() {
+					time.Sleep(test.delay)
+					stream.terminal <- want
+				}()
+			}
+			if got := arbitrateMuxTermination(context.Background(), 100*time.Millisecond, first, stream); got != want {
+				t.Fatalf("arbitrated record = %#v, want %#v", got, want)
+			}
+		})
+	}
+}
+
+func TestMuxTerminationArbitrationIsBoundedAndSessionLocal(t *testing.T) {
+	first := sessiontermination.Record{Stage: sessiontermination.StageInputWriter, Cause: sessiontermination.CauseTransportClosed}
+	other := &terminalMuxTestStream{terminal: make(chan sessiontermination.Record, 1)}
+	other.terminal <- sessiontermination.Record{Stage: sessiontermination.StageInputWriter, Cause: sessiontermination.CauseInputNonzeroExit}
+	stream := &terminalMuxTestStream{terminal: make(chan sessiontermination.Record, 1)}
+	started := time.Now()
+	if got := arbitrateMuxTermination(context.Background(), 20*time.Millisecond, first, stream); got != first {
+		t.Fatalf("cross-session or absent terminal replaced first cause: %#v", got)
+	}
+	if elapsed := time.Since(started); elapsed < 15*time.Millisecond || elapsed > 250*time.Millisecond {
+		t.Fatalf("bounded arbitration elapsed=%s", elapsed)
+	}
+	stream.terminal <- sessiontermination.Record{Stage: "forged", Cause: sessiontermination.CauseInputTimeout}
+	if got := arbitrateMuxTermination(context.Background(), 20*time.Millisecond, first, stream); got != first {
+		t.Fatalf("forged terminal replaced first cause: %#v", got)
+	}
+}
+
+func TestMuxTerminationArbitrationPreservesPolicyPriority(t *testing.T) {
+	first := sessiontermination.Record{Stage: sessiontermination.StageInputWriter, Cause: sessiontermination.CauseTransportClosed}
+	for name, makeContext := range map[string]func() (context.Context, context.CancelFunc, sessiontermination.Cause){
+		"caller cancel": func() (context.Context, context.CancelFunc, sessiontermination.Cause) {
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+			return ctx, func() {}, sessiontermination.CauseCallerCancel
+		},
+		"expiry": func() (context.Context, context.CancelFunc, sessiontermination.Cause) {
+			ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+			return ctx, cancel, sessiontermination.CauseExpiry
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx, cancel, cause := makeContext()
+			defer cancel()
+			stream := &terminalMuxTestStream{terminal: make(chan sessiontermination.Record, 1)}
+			stream.terminal <- sessiontermination.Record{Stage: sessiontermination.StageInputWriter, Cause: sessiontermination.CauseInputTimeout}
+			got := arbitrateMuxTermination(ctx, 100*time.Millisecond, first, stream)
+			if got.Cause != cause {
+				t.Fatalf("policy cause = %#v, want %q", got, cause)
+			}
+		})
+	}
+}
+
+func TestMuxTerminationPriorityIsClosed(t *testing.T) {
+	ordered := []sessiontermination.Record{
+		{Stage: sessiontermination.StageCloseOrdering, Cause: sessiontermination.CauseCleanClose},
+		{Stage: sessiontermination.StageInputWriter, Cause: sessiontermination.CauseTransportClosed},
+		{Stage: sessiontermination.StageCloseOrdering, Cause: sessiontermination.CauseCallerCancel},
+		{Stage: sessiontermination.StageBrokerRuntime, Cause: sessiontermination.CauseRuntimeFailure},
+		{Stage: sessiontermination.StageInputWriter, Cause: sessiontermination.CauseInputNonzeroExit},
+		{Stage: sessiontermination.StageAuthorityWatcher, Cause: sessiontermination.CauseExpiry},
+	}
+	for index := 1; index < len(ordered); index++ {
+		if muxTerminationPriority(ordered[index]) <= muxTerminationPriority(ordered[index-1]) {
+			t.Fatalf("priority did not increase at %d", index)
+		}
+	}
+	if muxTerminationPriority(sessiontermination.Record{Stage: "forged", Cause: sessiontermination.CauseExpiry}) != -1 {
+		t.Fatal("invalid record acquired priority")
+	}
 }
 
 func dialMux(t *testing.T, socket string) *net.UnixConn {

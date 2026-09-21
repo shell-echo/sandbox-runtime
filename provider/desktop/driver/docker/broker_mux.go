@@ -19,7 +19,10 @@ import (
 	"github.com/shell-echo/sandbox-runtime/internal/sessiontermination"
 )
 
-const brokerMuxMaxSessions = 256
+const (
+	brokerMuxMaxSessions        = 256
+	brokerTerminalDrainDeadline = 500 * time.Millisecond
+)
 
 var brokerMuxSocketPattern = regexp.MustCompile(`^desktop-broker-[0-9a-f]{32}\.sock$`)
 
@@ -35,6 +38,12 @@ type BrokerMuxOptions struct {
 	MaxSessions      int
 	OperationTimeout time.Duration
 	Authority        BrokerMuxAuthority
+}
+
+type brokerTerminalStream interface {
+	io.ReadWriteCloser
+	CloseWrite() error
+	Terminal() <-chan sessiontermination.Record
 }
 
 // BrokerMux is the Provider-owned, host-side adapter between an opaque Unix
@@ -221,6 +230,7 @@ func (m *BrokerMux) serveOpen(parent, operationCtx context.Context, connection *
 		}
 	} else {
 		record := muxTerminationRecord(first)
+		record = arbitrateMuxTermination(sessionCtx, m.options.OperationTimeout, record, stream)
 		termination.Observe(record.Stage, record.Cause)
 		cancel()
 		_ = connection.Close()
@@ -229,6 +239,96 @@ func (m *BrokerMux) serveOpen(parent, operationCtx context.Context, connection *
 	}
 	if record, ok := termination.Load(); ok {
 		log.Printf("desktop_provider_mux_session_terminal %s", record.String())
+	}
+}
+
+func arbitrateMuxTermination(ctx context.Context, operationTimeout time.Duration, first sessiontermination.Record, stream io.ReadWriteCloser) sessiontermination.Record {
+	reporter, ok := stream.(brokerTerminalStream)
+	if !ok || first.Cause != sessiontermination.CauseTransportClosed || ctx == nil {
+		return first
+	}
+	if ctx.Err() != nil {
+		policy := sessiontermination.FromError(ctx.Err(), sessiontermination.StageCloseOrdering, sessiontermination.CauseTransportClosed)
+		if muxTerminationPriority(policy) > muxTerminationPriority(first) {
+			return policy
+		}
+		return first
+	}
+	limit := brokerTerminalDrainDeadline
+	if operationTimeout < limit {
+		limit = operationTimeout
+	}
+	if deadline, ok := ctx.Deadline(); ok {
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			return first
+		}
+		if remaining < limit {
+			limit = remaining
+		}
+	}
+	if limit <= 0 {
+		return first
+	}
+	_ = reporter.CloseWrite()
+	timer := time.NewTimer(limit)
+	defer timer.Stop()
+	select {
+	case record := <-reporter.Terminal():
+		best := strongerMuxTermination(first, record)
+		if ctx.Err() != nil {
+			best = strongerMuxTermination(best, sessiontermination.FromError(ctx.Err(), sessiontermination.StageCloseOrdering, sessiontermination.CauseTransportClosed))
+		}
+		return best
+	case <-ctx.Done():
+		best := strongerMuxTermination(first, sessiontermination.FromError(ctx.Err(), sessiontermination.StageCloseOrdering, sessiontermination.CauseTransportClosed))
+		select {
+		case record := <-reporter.Terminal():
+			best = strongerMuxTermination(best, record)
+		default:
+		}
+		return best
+	case <-timer.C:
+		best := first
+		if ctx.Err() != nil {
+			best = strongerMuxTermination(best, sessiontermination.FromError(ctx.Err(), sessiontermination.StageCloseOrdering, sessiontermination.CauseTransportClosed))
+		}
+		select {
+		case record := <-reporter.Terminal():
+			best = strongerMuxTermination(best, record)
+		default:
+		}
+		return best
+	}
+}
+
+func strongerMuxTermination(current, candidate sessiontermination.Record) sessiontermination.Record {
+	if candidate.Valid() && muxTerminationPriority(candidate) > muxTerminationPriority(current) {
+		return candidate
+	}
+	return current
+}
+
+func muxTerminationPriority(record sessiontermination.Record) int {
+	if !record.Valid() {
+		return -1
+	}
+	switch record.Cause {
+	case sessiontermination.CauseExpiry, sessiontermination.CauseAuthorityDrift, sessiontermination.CauseAuthorityUnavailable:
+		return 5
+	case sessiontermination.CauseInputTimeout, sessiontermination.CauseInputNonzeroExit, sessiontermination.CauseInputStartFailure:
+		return 4
+	case sessiontermination.CauseBackpressure, sessiontermination.CauseProtocolViolation, sessiontermination.CauseRuntimeFailure,
+		sessiontermination.CauseCapacity, sessiontermination.CauseReplay, sessiontermination.CauseBrokerUnavailable:
+		return 3
+	case sessiontermination.CauseCallerCancel:
+		return 2
+	case sessiontermination.CauseTransportClosed:
+		return 1
+	case sessiontermination.CauseCleanClose:
+		return 0
+	default:
+		return -1
 	}
 }
 

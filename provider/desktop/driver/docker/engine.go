@@ -325,7 +325,7 @@ func (e *mobyEngine) openSession(ctx context.Context, containerID string) (io.Re
 		return nil, err
 	}
 	reader, writer := io.Pipe()
-	stream := &execSession{response: response, reader: reader, writer: writer}
+	stream := &execSession{response: response, reader: reader, writer: writer, terminal: make(chan sessiontermination.Record, 1)}
 	go stream.copyOutput()
 	return stream, nil
 }
@@ -335,10 +335,16 @@ type execSession struct {
 	reader    *io.PipeReader
 	writer    *io.PipeWriter
 	closeOnce sync.Once
+	terminal  chan sessiontermination.Record
+	termOnce  sync.Once
 }
 
 func (s *execSession) Read(value []byte) (int, error)  { return s.reader.Read(value) }
 func (s *execSession) Write(value []byte) (int, error) { return s.response.Conn.Write(value) }
+func (s *execSession) CloseWrite() error               { return s.response.CloseWrite() }
+func (s *execSession) Terminal() <-chan sessiontermination.Record {
+	return s.terminal
+}
 func (s *execSession) Close() error {
 	s.closeOnce.Do(func() {
 		_ = s.writer.Close()
@@ -353,12 +359,20 @@ func (s *execSession) copyOutput() {
 	if stderr.Len() != 0 {
 		record, ok := parseBrokerSessionTermination(stderr.String())
 		if ok {
+			s.publishTerminal(record)
 			err = sessiontermination.Error{Record: record}
 		} else if err == nil {
 			err = errors.New("desktop broker session wrote diagnostics")
 		}
 	}
 	_ = s.writer.CloseWithError(err)
+}
+
+func (s *execSession) publishTerminal(record sessiontermination.Record) {
+	if s == nil || s.terminal == nil || !record.Valid() {
+		return
+	}
+	s.termOnce.Do(func() { s.terminal <- record })
 }
 
 func parseBrokerSessionTermination(value string) (sessiontermination.Record, bool) {
