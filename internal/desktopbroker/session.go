@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -26,6 +27,7 @@ import (
 	"github.com/shell-echo/sandbox-runtime/internal/desktopbridge"
 	"github.com/shell-echo/sandbox-runtime/internal/desktophandoff"
 	"github.com/shell-echo/sandbox-runtime/internal/desktopmedia"
+	"github.com/shell-echo/sandbox-runtime/internal/sessiontermination"
 )
 
 const (
@@ -322,14 +324,15 @@ func scanUniqueJSON(decoder *json.Decoder) error {
 }
 
 type sessionRuntime struct {
-	open      SessionOpen
-	conn      net.Conn
-	writerMu  sync.Mutex
-	closeOnce sync.Once
-	closed    chan struct{}
-	frames    chan []byte
-	process   *exec.Cmd
-	udp       *net.UDPConn
+	open        SessionOpen
+	conn        net.Conn
+	writerMu    sync.Mutex
+	closeOnce   sync.Once
+	closed      chan struct{}
+	frames      chan []byte
+	process     *exec.Cmd
+	udp         *net.UDPConn
+	termination sessiontermination.First
 }
 
 func (s *sessionRuntime) close() {
@@ -379,15 +382,21 @@ func serveSessionProtocol(ctx context.Context, connection net.Conn, open Session
 	if err != nil {
 		return err
 	}
-	defer runtime.close()
+	defer func() {
+		runtime.close()
+		if record, ok := runtime.termination.Load(); ok {
+			_, _ = fmt.Fprintf(os.Stderr, "desktop_broker_session_terminal %s\n", record.String())
+		}
+	}()
 	expires, _ := time.Parse(time.RFC3339Nano, open.AuthorityExpiresAt)
 	sessionCtx, cancelSession := context.WithDeadline(ctx, expires)
 	defer cancelSession()
 	if err := runtime.write(SessionMessage{Protocol: protocol, Type: SessionAcceptedType, RequestID: open.RequestID, OK: true}, protocol); err != nil {
+		runtime.termination.Observe(sessiontermination.StageMuxExec, sessiontermination.CauseTransportClosed)
 		return err
 	}
 	reader := bufio.NewReaderSize(connection, SessionMaxDocument)
-	commands := make(chan SessionCommand, 4)
+	commands := make(chan SessionCommand, open.MediaPolicy.MaxQueuedInputs)
 	readErr := make(chan error, 1)
 	go func() {
 		for {
@@ -413,8 +422,14 @@ func serveSessionProtocol(ctx context.Context, connection net.Conn, open Session
 	for {
 		select {
 		case <-sessionCtx.Done():
+			cause := sessiontermination.CauseCallerCancel
+			if errors.Is(sessionCtx.Err(), context.DeadlineExceeded) {
+				cause = sessiontermination.CauseExpiry
+			}
+			runtime.termination.Observe(sessiontermination.StageBrokerRuntime, cause)
 			return sessionCtx.Err()
 		case <-runtime.closed:
+			runtime.termination.Observe(sessiontermination.StageBrokerRuntime, sessiontermination.CauseRuntimeFailure)
 			return ErrSessionClosed
 		case err := <-readErr:
 			if errors.Is(err, io.EOF) {
@@ -425,32 +440,39 @@ func serveSessionProtocol(ctx context.Context, connection net.Conn, open Session
 				readErr = nil
 				continue
 			}
+			runtime.termination.Observe(sessiontermination.StageInputWriter, sessiontermination.CauseProtocolViolation)
 			return err
 		case frame := <-runtime.frames:
 			if len(frame) == 0 {
+				runtime.termination.Observe(sessiontermination.StageMediaReader, sessiontermination.CauseRuntimeFailure)
 				return ErrSessionClosed
 			}
 			payload := base64.StdEncoding.EncodeToString(frame)
 			frameSequence++
 			if err := runtime.write(SessionMessage{Protocol: protocol, Type: SessionFrameType, Sequence: frameSequence, Timestamp: time.Now().UnixNano(), Payload: payload}, protocol); err != nil {
+				runtime.termination.Observe(sessiontermination.StageMuxExec, sessiontermination.CauseTransportClosed)
 				return err
 			}
 		case command := <-commands:
 			if err := command.ValidateFor(open.MediaPolicy, previousSequence, protocol); err != nil {
+				runtime.termination.Observe(sessiontermination.StageInputWriter, sessiontermination.CauseProtocolViolation)
 				return err
 			}
 			previousSequence = command.Sequence
 			if command.Type == "close" {
+				runtime.termination.Observe(sessiontermination.StageCloseOrdering, sessiontermination.CauseCleanClose)
 				_ = runtime.write(SessionMessage{Protocol: protocol, Type: SessionClosedType}, protocol)
 				return nil
 			}
 			if command.Type == "input" {
 				if err := executeInput(sessionCtx, *command.Input, open.MediaPolicy); err != nil {
+					runtime.termination.Observe(sessiontermination.StageInputWriter, inputTerminationCause(err))
 					_ = runtime.write(SessionMessage{Protocol: protocol, Type: SessionResultType, RequestID: command.RequestID, Sequence: command.Sequence, ErrorCode: "input_rejected"}, protocol)
 					continue
 				}
 			}
 			if err := runtime.write(SessionMessage{Protocol: protocol, Type: SessionResultType, RequestID: command.RequestID, Sequence: command.Sequence, OK: true}, protocol); err != nil {
+				runtime.termination.Observe(sessiontermination.StageInputResultReader, sessiontermination.CauseTransportClosed)
 				return err
 			}
 		}
@@ -470,7 +492,7 @@ func startSessionRuntime(ctx context.Context, connection net.Conn, open SessionO
 		_ = udp.Close()
 		return nil, ErrInvalidSession
 	}
-	runtime := &sessionRuntime{open: open, conn: connection, closed: make(chan struct{}), frames: make(chan []byte, SessionMaxQueue), process: process, udp: udp}
+	runtime := &sessionRuntime{open: open, conn: connection, closed: make(chan struct{}), frames: make(chan []byte, open.MediaPolicy.MaxQueuedFrames), process: process, udp: udp}
 	go func() {
 		buffer := make([]byte, SessionMaxFrame+1)
 		for {
@@ -492,6 +514,7 @@ func startSessionRuntime(ctx context.Context, connection net.Conn, open SessionO
 			select {
 			case runtime.frames <- frame:
 			default:
+				runtime.termination.Observe(sessiontermination.StageMediaReader, sessiontermination.CauseBackpressure)
 				runtime.close()
 				return
 			}
@@ -550,7 +573,13 @@ func executeInputWithRunner(ctx context.Context, input desktopmedia.Input, polic
 	commandCtx, cancel := context.WithTimeout(ctx, time.Second)
 	defer cancel()
 	if err := run(commandCtx, args); err != nil {
-		return ErrInvalidSession
+		if errors.Is(commandCtx.Err(), context.DeadlineExceeded) || errors.Is(err, context.DeadlineExceeded) {
+			return errors.Join(ErrInvalidSession, errInputTimeout)
+		}
+		if errors.Is(err, errInputNonzeroExit) {
+			return errors.Join(ErrInvalidSession, errInputNonzeroExit)
+		}
+		return errors.Join(ErrInvalidSession, errInputStartFailure)
 	}
 	return nil
 }
@@ -559,7 +588,35 @@ func runInputCommand(ctx context.Context, args []string) error {
 	command := exec.CommandContext(ctx, "/usr/bin/xdotool", args...)
 	command.Stdout = io.Discard
 	command.Stderr = io.Discard
-	return command.Run()
+	err := command.Run()
+	if err == nil {
+		return nil
+	}
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return errInputTimeout
+	}
+	var exitError *exec.ExitError
+	if errors.As(err, &exitError) {
+		return errInputNonzeroExit
+	}
+	return errInputStartFailure
+}
+
+var (
+	errInputTimeout      = errors.New("Desktop input command timeout")
+	errInputNonzeroExit  = errors.New("Desktop input command nonzero exit")
+	errInputStartFailure = errors.New("Desktop input command start failure")
+)
+
+func inputTerminationCause(err error) sessiontermination.Cause {
+	switch {
+	case errors.Is(err, errInputTimeout):
+		return sessiontermination.CauseInputTimeout
+	case errors.Is(err, errInputNonzeroExit):
+		return sessiontermination.CauseInputNonzeroExit
+	default:
+		return sessiontermination.CauseInputStartFailure
+	}
 }
 
 func min(left, right int) int {

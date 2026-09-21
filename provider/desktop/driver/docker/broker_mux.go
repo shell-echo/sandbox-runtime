@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"log"
 	"net"
 	"os"
 	"path/filepath"
@@ -15,6 +16,7 @@ import (
 	"time"
 
 	"github.com/shell-echo/sandbox-runtime/internal/desktopbroker"
+	"github.com/shell-echo/sandbox-runtime/internal/sessiontermination"
 )
 
 const brokerMuxMaxSessions = 256
@@ -206,18 +208,42 @@ func (m *BrokerMux) serveOpen(parent, operationCtx context.Context, connection *
 		results <- muxDirectionResult{commands: true, err: proxyMuxCommands(sessionCtx, bufio.NewReaderSize(connection, desktopbroker.SessionMaxDocument), stream, open)}
 	}()
 	go func() { results <- muxDirectionResult{err: proxyMuxMessages(sessionCtx, streamReader, connection)} }()
+	var termination sessiontermination.First
 	first := <-results
 	if first.commands && errors.Is(first.err, errMuxCloseRequested) {
 		select {
-		case <-results:
+		case second := <-results:
+			record := muxTerminationRecord(second)
+			termination.Observe(record.Stage, record.Cause)
 		case <-sessionCtx.Done():
+			record := sessiontermination.FromError(sessionCtx.Err(), sessiontermination.StageCloseOrdering, sessiontermination.CauseTransportClosed)
+			termination.Observe(record.Stage, record.Cause)
 		}
 	} else {
+		record := muxTerminationRecord(first)
+		termination.Observe(record.Stage, record.Cause)
 		cancel()
 		_ = connection.Close()
 		_ = stream.Close()
 		<-results
 	}
+	if record, ok := termination.Load(); ok {
+		log.Printf("desktop_provider_mux_session_terminal %s", record.String())
+	}
+}
+
+func muxTerminationRecord(result muxDirectionResult) sessiontermination.Record {
+	stage := sessiontermination.StageMuxExec
+	if result.commands {
+		stage = sessiontermination.StageInputWriter
+	}
+	if result.err == nil || errors.Is(result.err, errMuxCloseRequested) {
+		return sessiontermination.Record{Stage: sessiontermination.StageCloseOrdering, Cause: sessiontermination.CauseCleanClose}
+	}
+	if errors.Is(result.err, desktopbroker.ErrInvalidSession) {
+		return sessiontermination.Record{Stage: stage, Cause: sessiontermination.CauseProtocolViolation}
+	}
+	return sessiontermination.FromError(result.err, stage, sessiontermination.CauseTransportClosed)
 }
 
 func (m *BrokerMux) serveProbe(ctx context.Context, connection *net.UnixConn, request desktopbroker.Request) {

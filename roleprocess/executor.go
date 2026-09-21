@@ -8,6 +8,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -18,6 +19,7 @@ import (
 	"github.com/shell-echo/sandbox-runtime/config"
 	"github.com/shell-echo/sandbox-runtime/internal/executorprotocol"
 	"github.com/shell-echo/sandbox-runtime/internal/secretfile"
+	"github.com/shell-echo/sandbox-runtime/internal/sessiontermination"
 )
 
 const (
@@ -189,13 +191,27 @@ func (h *ExecutorHandler) ServeHTTP(writer http.ResponseWriter, request *http.Re
 	}
 	ctx, cancelBridge := context.WithDeadline(request.Context(), openExpiry(open))
 	defer cancelBridge()
-	results := make(chan error, 2)
-	go func() { results <- copyExecutorToBackend(ctx, connection, session) }()
-	go func() { results <- copyBackendToExecutor(ctx, session, connection) }()
+	var termination sessiontermination.First
+	results := make(chan struct{}, 2)
+	go func() {
+		err := copyExecutorToBackend(ctx, connection, session)
+		record := sessiontermination.FromError(err, sessiontermination.StageInputWriter, sessiontermination.CauseTransportClosed)
+		termination.Observe(record.Stage, record.Cause)
+		results <- struct{}{}
+	}()
+	go func() {
+		err := copyBackendToExecutor(ctx, session, connection)
+		record := sessiontermination.FromError(err, sessiontermination.StageExecutorTransport, sessiontermination.CauseTransportClosed)
+		termination.Observe(record.Stage, record.Cause)
+		results <- struct{}{}
+	}()
 	<-results
 	cancelBridge()
 	_ = session.Close()
 	<-results
+	if record, ok := termination.Load(); ok {
+		log.Printf("%s_role_session_terminal %s", h.role, record.String())
+	}
 }
 
 func (h *ExecutorHandler) claim(requestID string, now, expires time.Time) bool {
@@ -235,7 +251,7 @@ func copyExecutorToBackend(ctx context.Context, source *websocket.Conn, target E
 			return err
 		}
 		if len(payload) == 0 || len(payload) > executorprotocol.MaxMessageBytes {
-			return errors.New("invalid executor frame")
+			return sessiontermination.Error{Record: sessiontermination.Record{Stage: sessiontermination.StageInputWriter, Cause: sessiontermination.CauseProtocolViolation}}
 		}
 		if err := target.Write(ctx, kind, payload); err != nil {
 			return err
@@ -250,7 +266,7 @@ func copyBackendToExecutor(ctx context.Context, source ExecutorSession, target *
 			return err
 		}
 		if len(payload) == 0 || len(payload) > executorprotocol.MaxMessageBytes {
-			return errors.New("invalid executor frame")
+			return sessiontermination.Error{Record: sessiontermination.Record{Stage: sessiontermination.StageExecutorTransport, Cause: sessiontermination.CauseProtocolViolation}}
 		}
 		if err := target.Write(ctx, kind, payload); err != nil {
 			return err

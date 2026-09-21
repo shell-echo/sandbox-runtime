@@ -9,6 +9,7 @@ import (
 
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/client"
+	"github.com/shell-echo/sandbox-runtime/internal/sessiontermination"
 )
 
 func TestMobyEngineProjectsDesktopIsolation(t *testing.T) {
@@ -75,5 +76,22 @@ func TestMobyEngineProjectsDesktopIsolation(t *testing.T) {
 	}
 	if host.LogConfig.Type != "local" || host.LogConfig.Config["max-size"] != "10m" || host.LogConfig.Config["max-file"] != "3" {
 		t.Fatalf("log bounds = %#v", host.LogConfig)
+	}
+}
+
+func TestBrokerSessionTerminationStderrIsClosedAndSanitized(t *testing.T) {
+	want := sessiontermination.Record{Stage: sessiontermination.StageMediaReader, Cause: sessiontermination.CauseBackpressure}
+	got, ok := parseBrokerSessionTermination("desktop_broker_session_terminal " + want.String() + "\n")
+	if !ok || got != want {
+		t.Fatalf("parsed broker termination = %#v, %v", got, ok)
+	}
+	for _, value := range []string{
+		"desktop_broker_session_terminal " + want.String(),
+		"desktop_broker_session_terminal " + want.String() + "\nsecret\n",
+		"desktop_broker_session_terminal stage=/tmp/socket cause=runtime_failure\n",
+	} {
+		if _, accepted := parseBrokerSessionTermination(value); accepted {
+			t.Fatalf("unsafe broker stderr accepted: %q", value)
+		}
 	}
 }

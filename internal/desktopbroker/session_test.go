@@ -13,6 +13,7 @@ import (
 	"github.com/shell-echo/sandbox-runtime/internal/desktophandoff"
 	"github.com/shell-echo/sandbox-runtime/internal/desktopmedia"
 	"github.com/shell-echo/sandbox-runtime/internal/handoff"
+	"github.com/shell-echo/sandbox-runtime/internal/sessiontermination"
 )
 
 func validSessionOpen() SessionOpen {
@@ -177,8 +178,23 @@ func TestInputRunnerTimeoutAndNonzeroExitFailClosed(t *testing.T) {
 		t.Fatalf("timed out input = %v", err)
 	}
 	if err := executeInputWithRunner(context.Background(), input, policy, func(context.Context, []string) error {
-		return errors.New("fixed runner exit")
+		return errInputNonzeroExit
 	}); !errors.Is(err, ErrInvalidSession) {
 		t.Fatalf("nonzero input command = %v", err)
+	}
+}
+
+func TestInputFailureClassificationIsClosed(t *testing.T) {
+	for _, test := range []struct {
+		err   error
+		cause sessiontermination.Cause
+	}{
+		{errInputTimeout, sessiontermination.CauseInputTimeout},
+		{errInputNonzeroExit, sessiontermination.CauseInputNonzeroExit},
+		{errInputStartFailure, sessiontermination.CauseInputStartFailure},
+	} {
+		if got := inputTerminationCause(test.err); got != test.cause {
+			t.Fatalf("input failure %v = %s, want %s", test.err, got, test.cause)
+		}
 	}
 }

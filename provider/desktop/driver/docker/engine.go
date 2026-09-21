@@ -7,12 +7,14 @@ import (
 	"fmt"
 	"io"
 	"net/netip"
+	"strings"
 	"sync"
 
 	cerrdefs "github.com/containerd/errdefs"
 	"github.com/moby/moby/api/pkg/stdcopy"
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/client"
+	"github.com/shell-echo/sandbox-runtime/internal/sessiontermination"
 )
 
 type engine interface {
@@ -348,10 +350,23 @@ func (s *execSession) Close() error {
 func (s *execSession) copyOutput() {
 	stderr := &limitedBuffer{limit: maxBrokerExecBytes}
 	_, err := stdcopy.StdCopy(s.writer, stderr, s.response.Reader)
-	if err == nil && stderr.Len() != 0 {
-		err = errors.New("desktop broker session wrote diagnostics")
+	if stderr.Len() != 0 {
+		record, ok := parseBrokerSessionTermination(stderr.String())
+		if ok {
+			err = sessiontermination.Error{Record: record}
+		} else if err == nil {
+			err = errors.New("desktop broker session wrote diagnostics")
+		}
 	}
 	_ = s.writer.CloseWithError(err)
+}
+
+func parseBrokerSessionTermination(value string) (sessiontermination.Record, bool) {
+	const prefix = "desktop_broker_session_terminal "
+	if !strings.HasSuffix(value, "\n") || strings.Count(value, "\n") != 1 || !strings.HasPrefix(value, prefix) {
+		return sessiontermination.Record{}, false
+	}
+	return sessiontermination.Parse(strings.TrimSuffix(strings.TrimPrefix(value, prefix), "\n"))
 }
 
 func (e *mobyEngine) close() error { return e.client.Close() }

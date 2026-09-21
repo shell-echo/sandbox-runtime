@@ -19,6 +19,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -142,6 +143,10 @@ func TestDesktopMuxRealCandidateExecutorChain(t *testing.T) { //nolint:cyclop
 	cleaned := false
 	defer func() {
 		if !cleaned {
+			if t.Failed() {
+				output, _ := exec.Command("docker", "logs", "--tail", "80", containerName(allocation.Request.SandboxID, allocation.Request.DesktopSessionID)).CombinedOutput()
+				t.Logf("sanitized Desktop candidate diagnostics: %s", output)
+			}
 			cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cleanupCancel()
 			_ = driver.Cleanup(cleanupCtx, receipt)
@@ -201,11 +206,13 @@ func TestDesktopMuxRealCandidateExecutorChain(t *testing.T) { //nolint:cyclop
 	if err != nil || len(frame) < 12 || frame[0]>>6 != 2 {
 		t.Fatalf("real mux RTP len=%d err=%v", len(frame), err)
 	}
-	inputContext, cancelInput := context.WithTimeout(ctx, 10*time.Second)
-	_, err = session.HandleInput(inputContext, desktopmedia.Input{Sequence: 1, Kind: "pointer", Event: "move", X: 123, Y: 234, ControlLeaseID: "lease-1", ControlFence: 1})
-	cancelInput()
-	if err != nil {
-		t.Fatalf("real mux input: %v", err)
+	for sequence := int64(1); sequence <= 5; sequence++ {
+		inputContext, cancelInput := context.WithTimeout(ctx, 10*time.Second)
+		_, err = session.HandleInput(inputContext, desktopmedia.Input{Sequence: sequence, Kind: "pointer", Event: "move", X: 123, Y: 234, ControlLeaseID: "lease-1", ControlFence: sequence})
+		cancelInput()
+		if err != nil {
+			t.Fatalf("real mux repeated-coordinate input %d: %v", sequence, err)
+		}
 	}
 	_ = session.Close()
 	readyContext, cancelReady := context.WithTimeout(ctx, 30*time.Second)
@@ -329,13 +336,16 @@ func freeRealMuxAddress(t *testing.T) string {
 func waitRealMuxSocket(t *testing.T, ctx context.Context, path string) {
 	t.Helper()
 	for {
-		if info, err := os.Lstat(path); err == nil && info.Mode()&os.ModeSocket != 0 {
+		connection, err := net.DialTimeout("unix", path, 50*time.Millisecond)
+		if err == nil {
+			_ = connection.Close()
 			return
 		}
 		select {
 		case <-ctx.Done():
 			t.Fatal(ctx.Err())
-		case <-time.After(25 * time.Millisecond):
+		default:
+			runtime.Gosched()
 		}
 	}
 }

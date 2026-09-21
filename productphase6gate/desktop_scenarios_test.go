@@ -99,7 +99,7 @@ func runProviderDesktopScenarios(t *testing.T, ctx context.Context, environment 
 	assertDesktopMediaAndInput(t, ctx, environment, restartedMedia, 3, "Desktop role restart")
 	_ = restartedMedia.Close(websocket.StatusNormalClosure, "executor restart verified")
 
-	closeDesktopSession(t, client, first.handoff, "desktop-close-1", "desktop-close-attempt-1", 3)
+	closeDesktopSession(t, environment, client, first.handoff, "desktop-close-1", "desktop-close-attempt-1", 3)
 	waitForDesktopResources(t, environment, 0, 45*time.Second)
 
 	restartProvider(t, ctx, environment)
@@ -109,7 +109,7 @@ func runProviderDesktopScenarios(t *testing.T, ctx context.Context, environment 
 	second.open = acceptedSecondOpen
 	assertDesktopMediaAndInput(t, ctx, environment, secondMedia, 4, "Provider restart")
 	_ = secondMedia.Close(websocket.StatusNormalClosure, "Provider restart verified")
-	closeDesktopSession(t, client, second.handoff, "desktop-close-2", "desktop-close-attempt-2", 5)
+	closeDesktopSession(t, environment, client, second.handoff, "desktop-close-2", "desktop-close-attempt-2", 5)
 	waitForDesktopResources(t, environment, 0, 45*time.Second)
 }
 
@@ -406,7 +406,7 @@ func assertDesktopMediaAndInput(t *testing.T, ctx context.Context, environment *
 	}
 }
 
-func closeDesktopSession(t *testing.T, client *protectedClient, handoffDocument providerv1.DesktopSessionHandoff, operationID, attemptID string, fence int64) {
+func closeDesktopSession(t *testing.T, environment *gateEnvironment, client *protectedClient, handoffDocument providerv1.DesktopSessionHandoff, operationID, attemptID string, fence int64) {
 	t.Helper()
 	deadline := time.Now().UTC().Add(2 * time.Minute)
 	body := map[string]any{
@@ -418,12 +418,50 @@ func closeDesktopSession(t *testing.T, client *protectedClient, handoffDocument 
 	path := "/v1/sandboxes/" + gateSandboxID + "/desktop-sessions/" + handoffDocument.DesktopSessionID + ":close"
 	status, document := client.do(t, protectedRequest{Method: http.MethodPost, Path: path, Operation: admission.OperationCloseDesktopSession, SandboxID: gateSandboxID, OperationID: operationID, AttemptID: attemptID, Fence: fence, Deadline: deadline, Body: body})
 	if status != http.StatusAccepted {
-		t.Fatalf("Desktop close status=%d body=%s", status, document)
+		t.Fatalf("Desktop close status=%d body=%s authority=%s diagnostics=%s", status, document, desktopCloseAuthorityDiagnostics(environment, handoffDocument), desktopGateDiagnostics(environment))
 	}
 	var operation providerv1.Operation
 	if json.Unmarshal(document, &operation) != nil || operation.Status != providerv1.OperationSucceeded {
 		t.Fatalf("Desktop close operation=%s", document)
 	}
+}
+
+func desktopCloseAuthorityDiagnostics(environment *gateEnvironment, handoffDocument providerv1.DesktopSessionHandoff) string {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	store, err := providerpostgres.New(environment.providerDB.admin, 2*time.Second)
+	if err != nil {
+		return "store=unavailable"
+	}
+	defer store.Close()
+	repository, err := providerpostgres.NewDesktopRepository(store)
+	if err != nil {
+		return "repository=unavailable"
+	}
+	records, err := repository.ListOpen(ctx)
+	if err != nil {
+		return "records=unavailable"
+	}
+	authority, authorityErr := repository.GetSandboxAuthority(ctx, gateSandboxID)
+	matching := 0
+	status, revoked, closed := "none", false, false
+	openGeneration, receiptGeneration, openFence := int64(0), int64(0), int64(0)
+	for _, record := range records {
+		if record.Request.DesktopSessionID != handoffDocument.DesktopSessionID {
+			continue
+		}
+		matching++
+		status = string(record.Status)
+		revoked, closed = record.RevokedAt != nil, record.ClosedAt != nil
+		openGeneration, openFence = record.Request.ExpectedGeneration, record.Request.FencingToken
+		if record.Allocation != nil {
+			receiptGeneration = record.Allocation.Receipt.ConnectionGeneration
+		}
+	}
+	if authorityErr != nil {
+		return fmt.Sprintf("matching=%d status=%s revoked=%t closed=%t open_generation=%d receipt_generation=%d handoff_generation=%d open_fence=%d authority=unavailable", matching, status, revoked, closed, openGeneration, receiptGeneration, handoffDocument.ConnectionGeneration, openFence)
+	}
+	return fmt.Sprintf("matching=%d status=%s revoked=%t closed=%t open_generation=%d authority_generation=%d receipt_generation=%d handoff_generation=%d open_fence=%d authority_fence=%d", matching, status, revoked, closed, openGeneration, authority.Generation, receiptGeneration, handoffDocument.ConnectionGeneration, openFence, authority.FencingToken)
 }
 
 func waitProviderOperation(t *testing.T, client *protectedClient, sandboxID, operationID, attemptID string, fence int64, wanted providerv1.OperationState) providerv1.Operation {

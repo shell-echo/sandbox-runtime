@@ -15,6 +15,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -28,6 +29,7 @@ import (
 	"github.com/shell-echo/sandbox-runtime/internal/desktopmedia"
 	"github.com/shell-echo/sandbox-runtime/internal/executorprotocol"
 	"github.com/shell-echo/sandbox-runtime/internal/secretfile"
+	"github.com/shell-echo/sandbox-runtime/internal/sessiontermination"
 	providerdesktop "github.com/shell-echo/sandbox-runtime/provider/desktop"
 )
 
@@ -145,53 +147,75 @@ func (d *Driver) OpenMedia(ctx context.Context, authority providerdesktop.MediaA
 		connection.CloseNow()
 		return nil, providerdesktop.ErrDesktopUnsupported
 	}
-	result := &session{connection: connection, frames: make(chan []byte, mediaPolicy.MaxQueuedFrames), done: make(chan struct{}), results: make(map[string]chan desktopbroker.SessionMessage)}
+	lifecycleContext, lifecycleCancel := context.WithDeadline(context.Background(), authority.AuthorityExpiresAt)
+	result := &session{connection: connection, frames: make(chan []byte, mediaPolicy.MaxQueuedFrames), done: make(chan struct{}), results: make(map[string]chan desktopbroker.SessionMessage), lifecycleContext: lifecycleContext, lifecycleCancel: lifecycleCancel}
 	go result.readLoop()
 	return result, nil
 }
 
 type session struct {
-	connection *websocket.Conn
-	frames     chan []byte
-	done       chan struct{}
-	writeMu    sync.Mutex
-	resultMu   sync.Mutex
-	results    map[string]chan desktopbroker.SessionMessage
-	sequence   atomic.Int64
-	closeOnce  sync.Once
+	connection       *websocket.Conn
+	frames           chan []byte
+	done             chan struct{}
+	writeMu          sync.Mutex
+	resultMu         sync.Mutex
+	results          map[string]chan desktopbroker.SessionMessage
+	sequence         atomic.Int64
+	closeOnce        sync.Once
+	lifecycleContext context.Context
+	lifecycleCancel  context.CancelFunc
+	termination      sessiontermination.First
 }
 
 func (s *session) readLoop() {
-	defer close(s.done)
+	defer func() {
+		if _, ok := s.termination.Load(); !ok {
+			s.termination.Observe(sessiontermination.StageExecutorTransport, sessiontermination.CauseTransportClosed)
+		}
+		if record, ok := s.termination.Load(); ok {
+			log.Printf("desktop_remote_session_terminal %s", record.String())
+		}
+		if s.lifecycleCancel != nil {
+			s.lifecycleCancel()
+		}
+		close(s.done)
+	}()
 	for {
-		kind, payload, err := s.connection.Read(context.Background())
+		kind, payload, err := s.connection.Read(s.lifecycleContext)
 		if err != nil {
+			s.observeReadError(err)
 			return
 		}
 		switch kind {
 		case websocket.MessageBinary:
 			if len(payload) == 0 || len(payload) > desktopbroker.SessionMaxFrame {
+				s.termination.Observe(sessiontermination.StageMediaReader, sessiontermination.CauseProtocolViolation)
 				return
 			}
 			frame := append([]byte(nil), payload...)
 			select {
 			case s.frames <- frame:
 			default:
+				s.termination.Observe(sessiontermination.StageMediaReader, sessiontermination.CauseBackpressure)
 				return
 			}
 		case websocket.MessageText:
 			var message desktopbroker.SessionMessage
 			if len(payload) == 0 || len(payload) >= desktopbroker.SessionMaxDocument || bytes.ContainsAny(payload, "\r\n") {
+				s.termination.Observe(sessiontermination.StageInputResultReader, sessiontermination.CauseProtocolViolation)
 				return
 			}
 			document := append(append([]byte(nil), payload...), '\n')
 			if desktopbroker.DecodeSession(document, &message) != nil || message.ValidateFor(desktopbroker.SessionProtocolV2ID) != nil {
+				s.termination.Observe(sessiontermination.StageInputResultReader, sessiontermination.CauseProtocolViolation)
 				return
 			}
 			if message.Type == desktopbroker.SessionClosedType {
+				s.termination.Observe(sessiontermination.StageCloseOrdering, sessiontermination.CauseCleanClose)
 				return
 			}
 			if message.Type != desktopbroker.SessionResultType && message.Type != desktopbroker.SessionErrorType {
+				s.termination.Observe(sessiontermination.StageInputResultReader, sessiontermination.CauseProtocolViolation)
 				return
 			}
 			s.resultMu.Lock()
@@ -204,9 +228,29 @@ func (s *session) readLoop() {
 				}
 			}
 		default:
+			s.termination.Observe(sessiontermination.StageExecutorTransport, sessiontermination.CauseProtocolViolation)
 			return
 		}
 	}
+}
+
+func (s *session) observeReadError(err error) {
+	cause := sessiontermination.CauseTransportClosed
+	if errors.Is(s.lifecycleContext.Err(), context.DeadlineExceeded) {
+		cause = sessiontermination.CauseExpiry
+	} else if errors.Is(s.lifecycleContext.Err(), context.Canceled) {
+		cause = sessiontermination.CauseCallerCancel
+	} else if websocket.CloseStatus(err) == websocket.StatusNormalClosure {
+		cause = sessiontermination.CauseCleanClose
+	}
+	s.termination.Observe(sessiontermination.StageExecutorTransport, cause)
+}
+
+func (s *session) terminalError() error {
+	if err := s.termination.Err(); err != nil {
+		return err
+	}
+	return io.EOF
 }
 
 func (s *session) ReadVideoRTP(ctx context.Context) ([]byte, error) {
@@ -217,7 +261,7 @@ func (s *session) ReadVideoRTP(ctx context.Context) ([]byte, error) {
 	case frame := <-s.frames:
 		return frame, nil
 	case <-s.done:
-		return nil, io.EOF
+		return nil, s.terminalError()
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
@@ -274,11 +318,13 @@ func (s *session) command(ctx context.Context, method string, value any) (deskto
 	err = s.connection.Write(ctx, websocket.MessageText, document)
 	s.writeMu.Unlock()
 	if err != nil {
+		s.termination.Observe(sessiontermination.StageInputWriter, sessiontermination.CauseTransportClosed)
 		return desktopmedia.InputResult{}, providerdesktop.ErrDesktopUnsupported
 	}
 	select {
 	case result := <-response:
 		if result.Type != desktopbroker.SessionResultType || !result.OK {
+			s.termination.Observe(sessiontermination.StageInputResultReader, sessiontermination.CauseRuntimeFailure)
 			return desktopmedia.InputResult{}, providerdesktop.ErrDesktopUnsupported
 		}
 		return desktopmedia.InputResult{Text: result.Text}, nil
@@ -290,7 +336,7 @@ func (s *session) command(ctx context.Context, method string, value any) (deskto
 			}
 		default:
 		}
-		return desktopmedia.InputResult{}, providerdesktop.ErrDesktopUnsupported
+		return desktopmedia.InputResult{}, s.terminalError()
 	case <-ctx.Done():
 		return desktopmedia.InputResult{}, ctx.Err()
 	}
@@ -300,7 +346,13 @@ func (s *session) Close() error {
 	if s == nil || s.connection == nil {
 		return nil
 	}
-	s.closeOnce.Do(func() { _ = s.connection.CloseNow() })
+	s.closeOnce.Do(func() {
+		s.termination.Observe(sessiontermination.StageCloseOrdering, sessiontermination.CauseCleanClose)
+		if s.lifecycleCancel != nil {
+			s.lifecycleCancel()
+		}
+		_ = s.connection.CloseNow()
+	})
 	return nil
 }
 

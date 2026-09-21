@@ -13,6 +13,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -398,10 +399,12 @@ func waitMuxSocket(t *testing.T, socket string) {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
-		if info, err := os.Lstat(socket); err == nil && info.Mode()&os.ModeSocket != 0 {
+		connection, err := net.DialTimeout("unix", socket, 50*time.Millisecond)
+		if err == nil {
+			_ = connection.Close()
 			return
 		}
-		time.Sleep(10 * time.Millisecond)
+		runtime.Gosched()
 	}
 	t.Fatal("mux socket was not created")
 }

@@ -10,6 +10,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"io"
+	"log"
 	"net/http"
 	"reflect"
 	"regexp"
@@ -22,6 +23,7 @@ import (
 	"github.com/shell-echo/sandbox-runtime/internal/desktophandoff"
 	"github.com/shell-echo/sandbox-runtime/internal/desktopmedia"
 	"github.com/shell-echo/sandbox-runtime/internal/handoff"
+	"github.com/shell-echo/sandbox-runtime/internal/sessiontermination"
 	providerdesktop "github.com/shell-echo/sandbox-runtime/provider/desktop"
 	desktopreference "github.com/shell-echo/sandbox-runtime/provider/desktop/reference"
 )
@@ -381,17 +383,34 @@ func (h *Handler) resolve(ctx context.Context, authority requestAuthority) (desk
 }
 
 func (h *Handler) check(ctx context.Context, authority requestAuthority) error {
+	if _, ok := h.checkCause(ctx, authority); !ok {
+		return nil
+	}
+	return providerdesktop.ErrDesktopNotFound
+}
+
+func (h *Handler) checkCause(ctx context.Context, authority requestAuthority) (sessiontermination.Cause, bool) {
+	now, trusted := h.now()
+	if !trusted {
+		return sessiontermination.CauseAuthorityUnavailable, true
+	}
+	if !authority.expiresAt.After(now) || !authority.handoffExpiresAt.After(now) {
+		return sessiontermination.CauseExpiry, true
+	}
 	endpoint, err := h.resolver.Resolve(ctx, authority.reference)
-	if err != nil || endpoint.Reference != authority.reference || endpoint.SandboxID != authority.sandboxID ||
+	if err != nil {
+		return sessiontermination.CauseAuthorityUnavailable, true
+	}
+	if endpoint.Reference != authority.reference || endpoint.SandboxID != authority.sandboxID ||
 		endpoint.DesktopSessionID != authority.sessionID || endpoint.CapabilityProfileID != authority.profileID ||
 		endpoint.ConnectionGeneration != authority.generation || !endpoint.ExpiresAt.Equal(authority.handoffExpiresAt) ||
 		(authority.providerRevision != "" && endpoint.ProviderRevisionID != authority.providerRevision) ||
 		(authority.tenantDigest != "" && endpoint.TenantBindingDigest != authority.tenantDigest) ||
 		(authority.allocationReference != "" && endpoint.AllocationReference != authority.allocationReference) ||
 		(authority.binding != nil && (endpoint.Binding == nil || *endpoint.Binding != *authority.binding)) {
-		return providerdesktop.ErrDesktopNotFound
+		return sessiontermination.CauseAuthorityDrift, true
 	}
-	return nil
+	return "", false
 }
 
 func (h *Handler) now() (time.Time, bool) {
@@ -454,25 +473,37 @@ type command = desktopmedia.Command
 type result = desktopmedia.Result
 
 type connectionBridge struct {
-	connection *websocket.Conn
-	session    Session
-	authority  requestAuthority
-	handler    *Handler
-	writeMu    sync.Mutex
+	connection  *websocket.Conn
+	session     Session
+	authority   requestAuthority
+	handler     *Handler
+	writeMu     sync.Mutex
+	termination sessiontermination.First
 }
 
 func (b *connectionBridge) run(ctx context.Context) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	done := make(chan struct{}, 4)
+	active := 3
 	go func() { defer func() { done <- struct{}{} }(); b.stream(ctx, videoPacket, b.session.ReadVideoRTP) }()
 	if b.authority.policy.AudioCodec != "" {
+		active++
 		go func() { defer func() { done <- struct{}{} }(); b.stream(ctx, audioPacket, b.session.ReadAudioRTP) }()
 	}
 	go func() { defer func() { done <- struct{}{} }(); b.readCommands(ctx) }()
 	go func() { defer func() { done <- struct{}{} }(); b.watchAuthority(ctx) }()
 	<-done
 	cancel()
+	for remaining := active - 1; remaining > 0; remaining-- {
+		<-done
+	}
+	if _, ok := b.termination.Load(); !ok {
+		b.termination.Observe(sessiontermination.StageCloseOrdering, sessiontermination.CauseCallerCancel)
+	}
+	if record, ok := b.termination.Load(); ok {
+		log.Printf("desktop_provider_bridge_terminal %s", record.String())
+	}
 }
 
 func (b *connectionBridge) stream(ctx context.Context, packetType byte, read func(context.Context) ([]byte, error)) {
@@ -482,13 +513,20 @@ func (b *connectionBridge) stream(ctx context.Context, packetType byte, read fun
 	}
 	for {
 		packet, err := read(ctx)
-		if err != nil || len(packet) == 0 || len(packet) > packetLimit || int64(len(packet)+1) > b.handler.maxMessageBytes {
+		if err != nil {
+			record := sessiontermination.FromError(err, sessiontermination.StageMediaReader, sessiontermination.CauseRuntimeFailure)
+			b.termination.Observe(record.Stage, record.Cause)
+			return
+		}
+		if len(packet) == 0 || len(packet) > packetLimit || int64(len(packet)+1) > b.handler.maxMessageBytes {
+			b.termination.Observe(sessiontermination.StageMediaReader, sessiontermination.CauseProtocolViolation)
 			return
 		}
 		payload := make([]byte, len(packet)+1)
 		payload[0] = packetType
 		copy(payload[1:], packet)
 		if b.write(ctx, websocket.MessageBinary, payload) != nil {
+			b.termination.Observe(sessiontermination.StageCallerTransport, sessiontermination.CauseTransportClosed)
 			return
 		}
 	}
@@ -497,13 +535,24 @@ func (b *connectionBridge) stream(ctx context.Context, packetType byte, read fun
 func (b *connectionBridge) readCommands(ctx context.Context) {
 	for {
 		kind, payload, err := b.connection.Read(ctx)
-		if err != nil || kind != websocket.MessageText || int64(len(payload)) > b.handler.maxMessageBytes {
+		if err != nil {
+			record := sessiontermination.FromError(err, sessiontermination.StageCallerTransport, sessiontermination.CauseTransportClosed)
+			b.termination.Observe(record.Stage, record.Cause)
+			return
+		}
+		if kind != websocket.MessageText || int64(len(payload)) > b.handler.maxMessageBytes {
+			b.termination.Observe(sessiontermination.StageInputWriter, sessiontermination.CauseProtocolViolation)
 			return
 		}
 		var command command
 		decoder := json.NewDecoder(bytes.NewReader(payload))
 		decoder.DisallowUnknownFields()
-		if decoder.Decode(&command) != nil || decoder.Decode(&struct{}{}) != io.EOF || command.RequestID < 1 || b.handler.check(ctx, b.authority) != nil {
+		if decoder.Decode(&command) != nil || decoder.Decode(&struct{}{}) != io.EOF || command.RequestID < 1 {
+			b.termination.Observe(sessiontermination.StageInputWriter, sessiontermination.CauseProtocolViolation)
+			return
+		}
+		if cause, failed := b.handler.checkCause(ctx, b.authority); failed {
+			b.termination.Observe(sessiontermination.StageAuthorityWatcher, cause)
 			return
 		}
 		response := result{Type: "result", RequestID: command.RequestID, OK: true}
@@ -512,6 +561,7 @@ func (b *connectionBridge) readCommands(ctx context.Context) {
 		case "input":
 			if command.Input == nil || command.Display != nil || command.AudioDevice != "" || !desktopmedia.ValidInput(*command.Input, b.authority.policy) {
 				cancel()
+				b.termination.Observe(sessiontermination.StageInputWriter, sessiontermination.CauseProtocolViolation)
 				return
 			}
 			inputResult, inputErr := b.session.HandleInput(operationCtx, *command.Input)
@@ -519,30 +569,37 @@ func (b *connectionBridge) readCommands(ctx context.Context) {
 		case "stream.configure":
 			if command.Input != nil || command.Display == nil || command.Display.Width < 320 || command.Display.Width > b.authority.policy.Width || command.Display.Height < 240 || command.Display.Height > b.authority.policy.Height || command.Display.MaxFPS < 1 || command.Display.MaxFPS > b.authority.policy.MaxFPS || len(command.AudioDevice) > 64 {
 				cancel()
+				b.termination.Observe(sessiontermination.StageInputWriter, sessiontermination.CauseProtocolViolation)
 				return
 			}
 			err = b.session.UpdateStream(operationCtx, *command.Display, command.AudioDevice)
 		case "stream.resync":
 			if command.Input != nil || command.Display != nil || command.AudioDevice != "" {
 				cancel()
+				b.termination.Observe(sessiontermination.StageInputWriter, sessiontermination.CauseProtocolViolation)
 				return
 			}
 			err = b.session.Resynchronize(operationCtx)
 		case "keyframe":
 			if command.Input != nil || command.Display != nil || command.AudioDevice != "" {
 				cancel()
+				b.termination.Observe(sessiontermination.StageInputWriter, sessiontermination.CauseProtocolViolation)
 				return
 			}
 			err = b.session.RequestKeyframe(operationCtx)
 		default:
 			cancel()
+			b.termination.Observe(sessiontermination.StageInputWriter, sessiontermination.CauseProtocolViolation)
 			return
 		}
 		cancel()
 		if err != nil {
+			record := sessiontermination.FromError(err, sessiontermination.StageInputResultReader, sessiontermination.CauseRuntimeFailure)
+			b.termination.Observe(record.Stage, record.Cause)
 			return
 		}
 		if b.writeJSON(ctx, response) != nil {
+			b.termination.Observe(sessiontermination.StageCallerTransport, sessiontermination.CauseTransportClosed)
 			return
 		}
 	}
@@ -554,12 +611,14 @@ func (b *connectionBridge) watchAuthority(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
+			b.termination.Observe(sessiontermination.StageAuthorityWatcher, sessiontermination.CauseCallerCancel)
 			return
 		case <-ticker.C:
 			checkCtx, cancel := context.WithTimeout(ctx, b.handler.operationTimeout)
-			err := b.handler.check(checkCtx, b.authority)
+			cause, failed := b.handler.checkCause(checkCtx, b.authority)
 			cancel()
-			if err != nil {
+			if failed {
+				b.termination.Observe(sessiontermination.StageAuthorityWatcher, cause)
 				return
 			}
 		}

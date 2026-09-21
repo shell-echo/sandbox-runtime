@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"os"
@@ -24,6 +25,7 @@ import (
 	"github.com/shell-echo/sandbox-runtime/internal/desktopbroker"
 	"github.com/shell-echo/sandbox-runtime/internal/desktopmedia"
 	"github.com/shell-echo/sandbox-runtime/internal/executorprotocol"
+	"github.com/shell-echo/sandbox-runtime/internal/sessiontermination"
 	"github.com/shell-echo/sandbox-runtime/providerapi"
 )
 
@@ -196,14 +198,28 @@ func (b *DesktopBackend) handle(writer http.ResponseWriter, request *http.Reques
 	}
 	ctx, cancel := context.WithDeadline(request.Context(), openExpiry(open))
 	defer cancel()
-	results := make(chan error, 2)
-	go func() { results <- desktopToExecutor(ctx, brokerReader, connection) }()
-	go func() { results <- executorToDesktop(ctx, connection, broker, open) }()
+	var termination sessiontermination.First
+	results := make(chan struct{}, 2)
+	go func() {
+		err := desktopToExecutor(ctx, brokerReader, connection)
+		record := sessiontermination.FromError(err, sessiontermination.StageMuxExec, sessiontermination.CauseTransportClosed)
+		termination.Observe(record.Stage, record.Cause)
+		results <- struct{}{}
+	}()
+	go func() {
+		err := executorToDesktop(ctx, connection, broker, open)
+		record := sessiontermination.FromError(err, sessiontermination.StageInputWriter, sessiontermination.CauseTransportClosed)
+		termination.Observe(record.Stage, record.Cause)
+		results <- struct{}{}
+	}()
 	<-results
 	cancel()
 	_ = connection.CloseNow()
 	_ = broker.Close()
 	<-results
+	if record, ok := termination.Load(); ok {
+		log.Printf("desktop_executor_backend_session_terminal %s", record.String())
+	}
 }
 
 func (b *DesktopBackend) reject(connection *websocket.Conn, code string) {
@@ -339,13 +355,13 @@ func desktopToExecutor(ctx context.Context, reader *bufio.Reader, executor *webs
 		}
 		var message desktopbroker.SessionMessage
 		if desktopbroker.DecodeSession(line, &message) != nil || message.ValidateFor(desktopbroker.SessionProtocolV2ID) != nil {
-			return errors.New("invalid Desktop broker message")
+			return sessiontermination.Error{Record: sessiontermination.Record{Stage: sessiontermination.StageMuxExec, Cause: sessiontermination.CauseProtocolViolation}}
 		}
 		switch message.Type {
 		case desktopbroker.SessionFrameType:
 			payload, err := decodeRTP(message.Payload)
 			if err != nil {
-				return err
+				return sessiontermination.Error{Record: sessiontermination.Record{Stage: sessiontermination.StageMediaReader, Cause: sessiontermination.CauseProtocolViolation}}
 			}
 			if err := executor.Write(ctx, websocket.MessageBinary, payload); err != nil {
 				return err
@@ -355,10 +371,10 @@ func desktopToExecutor(ctx context.Context, reader *bufio.Reader, executor *webs
 				return err
 			}
 			if message.Type == desktopbroker.SessionClosedType {
-				return io.EOF
+				return sessiontermination.Error{Record: sessiontermination.Record{Stage: sessiontermination.StageCloseOrdering, Cause: sessiontermination.CauseCleanClose}}
 			}
 		default:
-			return errors.New("unexpected Desktop broker message")
+			return sessiontermination.Error{Record: sessiontermination.Record{Stage: sessiontermination.StageMuxExec, Cause: sessiontermination.CauseProtocolViolation}}
 		}
 	}
 }
@@ -371,7 +387,7 @@ func executorToDesktop(ctx context.Context, executor *websocket.Conn, broker net
 			return err
 		}
 		if kind != websocket.MessageText || len(document) == 0 || len(document) > executorprotocol.MaxDocumentBytes {
-			return errors.New("invalid Desktop executor command")
+			return sessiontermination.Error{Record: sessiontermination.Record{Stage: sessiontermination.StageInputWriter, Cause: sessiontermination.CauseProtocolViolation}}
 		}
 		var command struct {
 			Protocol string          `json:"protocol"`
@@ -380,11 +396,11 @@ func executorToDesktop(ctx context.Context, executor *websocket.Conn, broker net
 			Value    json.RawMessage `json:"value,omitempty"`
 		}
 		if executorprotocol.Decode(document, &command) != nil || command.Protocol != executorprotocol.ProtocolID || command.Sequence <= previousSequence || command.Sequence > 1<<53-1 {
-			return errors.New("invalid Desktop executor command")
+			return sessiontermination.Error{Record: sessiontermination.Record{Stage: sessiontermination.StageInputWriter, Cause: sessiontermination.CauseProtocolViolation}}
 		}
 		brokerCommand, err := decodeExecutorCommand(command, open, command.Sequence)
 		if err != nil {
-			return err
+			return sessiontermination.Error{Record: sessiontermination.Record{Stage: sessiontermination.StageInputWriter, Cause: sessiontermination.CauseProtocolViolation}}
 		}
 		previousSequence = command.Sequence
 		encoded, err := desktopbroker.EncodeSession(brokerCommand)

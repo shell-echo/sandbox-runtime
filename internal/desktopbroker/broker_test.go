@@ -10,6 +10,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -160,10 +161,12 @@ func waitForSocket(t *testing.T, path string) {
 	t.Helper()
 	deadline := time.Now().Add(3 * time.Second)
 	for time.Now().Before(deadline) {
-		if info, err := os.Stat(path); err == nil && info.Mode()&os.ModeSocket != 0 {
+		connection, err := net.DialTimeout("unix", path, 50*time.Millisecond)
+		if err == nil {
+			_ = connection.Close()
 			return
 		}
-		time.Sleep(10 * time.Millisecond)
+		runtime.Gosched()
 	}
 	t.Fatal("broker socket did not appear")
 }
