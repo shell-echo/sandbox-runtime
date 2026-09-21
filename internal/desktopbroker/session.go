@@ -432,16 +432,7 @@ func serveSessionProtocol(ctx context.Context, connection net.Conn, open Session
 			runtime.termination.Observe(sessiontermination.StageBrokerRuntime, sessiontermination.CauseRuntimeFailure)
 			return ErrSessionClosed
 		case err := <-readErr:
-			if errors.Is(err, io.EOF) {
-				// The exec client half-closes stdin after sending the open
-				// document. Media output remains live until authority expiry or
-				// the transport closes, so stop reading commands but keep the
-				// encoder and frame stream alive.
-				readErr = nil
-				continue
-			}
-			runtime.termination.Observe(sessiontermination.StageInputWriter, sessiontermination.CauseProtocolViolation)
-			return err
+			return observeSessionReadError(runtime, err)
 		case frame := <-runtime.frames:
 			if len(frame) == 0 {
 				runtime.termination.Observe(sessiontermination.StageMediaReader, sessiontermination.CauseRuntimeFailure)
@@ -477,6 +468,15 @@ func serveSessionProtocol(ctx context.Context, connection net.Conn, open Session
 			}
 		}
 	}
+}
+
+func observeSessionReadError(runtime *sessionRuntime, err error) error {
+	if errors.Is(err, io.EOF) {
+		runtime.termination.Observe(sessiontermination.StageMuxExec, sessiontermination.CauseTransportClosed)
+		return io.EOF
+	}
+	runtime.termination.Observe(sessiontermination.StageInputWriter, sessiontermination.CauseProtocolViolation)
+	return err
 }
 
 func startSessionRuntime(ctx context.Context, connection net.Conn, open SessionOpen) (*sessionRuntime, error) {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"reflect"
 	"strings"
 	"testing"
@@ -196,5 +197,41 @@ func TestInputFailureClassificationIsClosed(t *testing.T) {
 		if got := inputTerminationCause(test.err); got != test.cause {
 			t.Fatalf("input failure %v = %s, want %s", test.err, got, test.cause)
 		}
+	}
+}
+
+func TestSessionCommandEOFTerminatesWithoutOverwritingTypedCause(t *testing.T) {
+	runtime := &sessionRuntime{}
+	runtime.termination.Observe(sessiontermination.StageInputWriter, sessiontermination.CauseInputTimeout)
+	if err := observeSessionReadError(runtime, io.EOF); !errors.Is(err, io.EOF) {
+		t.Fatalf("EOF result = %v", err)
+	}
+	record, ok := runtime.termination.Load()
+	want := sessiontermination.Record{Stage: sessiontermination.StageInputWriter, Cause: sessiontermination.CauseInputTimeout}
+	if !ok || record != want {
+		t.Fatalf("EOF overwrote typed cause: %#v, %v", record, ok)
+	}
+}
+
+func TestSessionCommandEOFOwnsTransportCauseWhenNoPriorTerminal(t *testing.T) {
+	runtime := &sessionRuntime{}
+	if err := observeSessionReadError(runtime, io.EOF); !errors.Is(err, io.EOF) {
+		t.Fatalf("EOF result = %v", err)
+	}
+	record, ok := runtime.termination.Load()
+	want := sessiontermination.Record{Stage: sessiontermination.StageMuxExec, Cause: sessiontermination.CauseTransportClosed}
+	if !ok || record != want {
+		t.Fatalf("EOF cause = %#v, %v", record, ok)
+	}
+}
+
+func TestSessionExplicitCloseCausePrecedesConcurrentEOF(t *testing.T) {
+	runtime := &sessionRuntime{}
+	runtime.termination.Observe(sessiontermination.StageCloseOrdering, sessiontermination.CauseCleanClose)
+	_ = observeSessionReadError(runtime, io.EOF)
+	record, ok := runtime.termination.Load()
+	want := sessiontermination.Record{Stage: sessiontermination.StageCloseOrdering, Cause: sessiontermination.CauseCleanClose}
+	if !ok || record != want {
+		t.Fatalf("explicit close cause = %#v, %v", record, ok)
 	}
 }
