@@ -2,8 +2,8 @@
 
 Date: 2026-09-21
 
-Status: **complete within the bounded local independent-process evidence
-boundary; Phase 6 is 4/15 complete**.
+Status: **implementation present; corrective immutable candidate and final
+evidence rerun pending; Phase 6 remains 3/15 complete**.
 
 ## Implemented repository scope
 
@@ -56,7 +56,7 @@ independent Browser/Desktop processes are restricted media/input executors
 using a versioned opaque-only private mTLS protocol. They must not copy state,
 write Provider databases, or hold Docker control authority.
 
-## Acceptance evidence
+## Pending acceptance evidence
 
 The tagged Slice 4 gate starts Product, Gateway, Provider, Guest, Browser and
 Desktop as six independent OS processes, plus independently runnable Browser
@@ -74,17 +74,17 @@ manifest verifier accepts exactly six roles and twelve scenarios:
 - Desktop close plus exact zero process, listener, socket, container, network
   and temporary Gateway-image cleanup.
 
-The accepted local candidate is `linux/arm64/v8` image
-`sha256:ad7dc53bbd97f470be1c4824dce480e5556eb215b1ff9f7d0549bd9365d7b31e`.
-The gate writes evidence outside the source tree and immediately re-verifies it
-with `cmd/verify-product-phase6-evidence`; the manifest binds the then-current
-source tree and configuration, so later source changes require a fresh run.
+Earlier local candidates are investigation inputs only and are not accepted
+evidence. The corrective gate must write evidence outside the source tree and
+immediately re-verify it with `cmd/verify-product-phase6-evidence`; the manifest
+must bind the final clean implementation revision, source tree and
+configuration.
 
 ## Claim boundary
 
-This closes Slice 4 only. The Desktop image remains
+This does not close Slice 4 yet. The Desktop image remains
 `local-candidate-non-release`: it is not published, signed or production
 qualified. The result proves role boundaries and internal executor data paths,
 not complete public Product-to-Gateway-to-Provider E2E, deployment, HA,
 hostile-multitenant isolation, SLO attainment or production readiness. Slice 5
-secret-reference/KMS/rotation work is next.
+must not begin until the Slice 4 evidence gate closes.

@@ -20,7 +20,7 @@ general production readiness.
 | Product v1 Phase 3 | **13/13 complete** for the bounded standalone topology |
 | Product v1 Phase 4 Browser | **13/13 complete** for the bounded same-repository separate-process topology |
 | Product v1 Phase 5 Desktop | **15/15 complete** for the bounded same-repository independent-process topology; 5 roles and 14 strict scenarios pass, with exact-topology dependency-derived advertisement |
-| Product v1 Phase 6 production hardening | **4/15 complete**; independent Product, Provider, Gateway, Guest, Browser and Desktop role processes now pass the bounded local Slice 4 gate with real Chromium/Desktop media-input paths, restart/fault checks and exact cleanup; the Desktop OCI remains a non-release local candidate, and public E2E, deployment and production readiness remain unproved |
+| Product v1 Phase 6 production hardening | **3/15 complete**; Slice 4 independent Product, Provider, Gateway, Guest, Browser and Desktop role boundaries are implemented, but the corrective immutable candidate, six-process gate and strict evidence rerun remain pending; public E2E, deployment and production readiness remain unproved |
 | Coding/shell qualification | **Qualified** for the exact caller, Provider revisions, topology, profile, and scenarios recorded below |
 | Latest core CI | [Passed](https://github.com/shell-echo/sandbox-runtime/actions/runs/35204434771) |
 
@@ -202,7 +202,7 @@ hostile multi-tenant, independently implemented caller, or production
 readiness.
 
 [Product v1 Phase 6](docs/plan/product-v1-phase-6-production-hardening.md) is
-now **4/15 complete**. Slice 1 adds the independently runnable
+remains **3/15 complete** while Slice 4 corrective evidence is rebuilt. Slice 1 adds the independently runnable
 `sandbox-runtime product serve` process with strict development-only
 configuration, private PostgreSQL/identity files, real Product migrations and
 store, separate liveness/readiness, empty capability advertisement, and

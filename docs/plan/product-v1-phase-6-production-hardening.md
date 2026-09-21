@@ -2,10 +2,11 @@
 
 Date: 2026-09-20
 
-Status: **4/15 complete**. Repository-side hardening foundations for Slices
-5-10 and release-profile checks for Slices 7/11/14 are present, but their
-deployment and independent-observation gates remain open. The order is fixed
-by ADR 0051.
+Status: **3/15 complete**. Slice 4 implementation is present, but its
+corrective immutable candidate, six-process gate and strict evidence rerun are
+still required. Repository-side hardening foundations for Slices 5-10 and
+release-profile checks for Slices 7/11/14 are present, but their deployment and
+independent-observation gates remain open. The order is fixed by ADR 0051.
 
 ## Goal and claim boundary
 

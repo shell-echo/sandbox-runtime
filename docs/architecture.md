@@ -180,7 +180,7 @@ uncomposed; deployment, HA, hostile multi-tenant, independently implemented
 caller, and production-readiness evidence remain absent.
 
 The [Product v1 Phase 6 production-hardening plan](plan/product-v1-phase-6-production-hardening.md)
-is now **4/15 complete**. ADR 0051 fixes a dependency order from deployable
+remains **3/15 complete** while Slice 4 corrective evidence is rebuilt. ADR 0051 fixes a dependency order from deployable
 process boundaries through identity, storage, network, supply chain,
 observability, recovery, deployment, release candidate, and final release
 gates. Slice 1 adds only an independent development Product command, strict

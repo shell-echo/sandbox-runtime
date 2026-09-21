@@ -170,7 +170,7 @@ Current verified state:
   parent checks to evidence/CI baseline
   `59de37d5ee22776305dfaab866c25ea6bd5406bc`; full E2E race/shuffle, vet,
   and all eight clean-checkout checks pass; and
-- Product v1 Phase 6 production hardening is **4/15 complete** under ADR 0051
+- Product v1 Phase 6 production hardening remains **3/15 complete** under ADR 0051
   and the fixed Phase 6 plan. The startup audit distinguishes existing
   components and same-repository gates from deployable/operable/production
   authority. Slice 1 adds `sandbox-runtime product serve`, strict
@@ -195,10 +195,11 @@ Current verified state:
   Product dispatch remains uncomposed, so `product.workspace` is still
   explicitly unavailable. Slice 4 adds separate Gateway/Guest/Browser/Desktop
   roles, restricted executor v2 backends, sealed Browser/Desktop egress
-  identity, a Provider-owned signed Desktop broker mux, and a passing local
-  six-role/twelve-scenario gate with exact cleanup. Its Desktop OCI remains a
-  non-release local candidate; public Product E2E, deployment and production
-  readiness remain open.
+  identity, and a Provider-owned signed Desktop broker mux. Its corrective
+  immutable candidate, six-role/twelve-scenario gate and strict evidence rerun
+  remain pending after a repeated-pointer injection race was found. The
+  Desktop OCI remains a non-release local candidate; public Product E2E,
+  deployment and production readiness remain open.
 
 The qualification applies only to Provider revision
 `170459266af5f4fad359ca8c63f2ae19741055c5`, external-caller revision
