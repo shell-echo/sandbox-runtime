@@ -285,10 +285,11 @@ func measureDesktopMedia(t *testing.T, ctx context.Context, environment *gateEnv
 		t.Fatalf("Desktop media bounds first_max_us=%d gaps=%d input_max_us=%d", measurement.FirstFrameMaxMicroseconds, measurement.RTPSequenceGaps, measurement.MaxInputRoundtripMicroseconds)
 	}
 
-	backpressurePolicy := policy
-	backpressurePolicy.MaxQueuedFrames = 1
-	backpressureSession := openMeasuredMedia(t, ctx, driver, authority, attachment, backpressurePolicy)
-	time.Sleep(750 * time.Millisecond)
+	backpressureSession := openMeasuredMedia(t, ctx, driver, authority, attachment, policy)
+	// Preserve the Provider-signed queue policy. A stopped consumer fills the
+	// bounded queue naturally; changing MaxQueuedFrames would correctly fail
+	// the media-policy authority binding before backpressure could be tested.
+	time.Sleep(2 * time.Second)
 	var terminal sessiontermination.Error
 	for attempts := 0; attempts < 4; attempts++ {
 		readContext, cancelRead := context.WithTimeout(ctx, 2*time.Second)
