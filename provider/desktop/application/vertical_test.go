@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -41,6 +42,7 @@ type desktopRuntimeSpy struct {
 	allocates         int
 	observes          int
 	cleanups          int
+	cleanupEffects    int
 	lastCleanup       desktop.AllocationReceipt
 	trace             *effectTrace
 }
@@ -126,13 +128,19 @@ func (r *desktopRuntimeSpy) Cleanup(_ context.Context, receipt desktop.Allocatio
 	r.trace.add("cleanup")
 	r.lastCleanup = receipt
 	if r.cleanupThenError {
+		if _, exists := r.receipts[receipt.OperationID]; exists {
+			r.cleanupEffects++
+		}
 		delete(r.receipts, receipt.OperationID)
 		return r.cleanupErr
 	}
 	if r.cleanupErr != nil {
 		return r.cleanupErr
 	}
-	delete(r.receipts, receipt.OperationID)
+	if _, exists := r.receipts[receipt.OperationID]; exists {
+		r.cleanupEffects++
+		delete(r.receipts, receipt.OperationID)
+	}
 	r.nextState = desktop.AllocationAbsent
 	return nil
 }
@@ -141,6 +149,12 @@ func (r *desktopRuntimeSpy) counts() (int, int, int) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.allocates, r.observes, r.cleanups
+}
+
+func (r *desktopRuntimeSpy) cleanupEffectCount() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.cleanupEffects
 }
 
 type desktopRegistrar struct {
@@ -159,6 +173,7 @@ type desktopRevoker struct {
 	mu       sync.Mutex
 	revoked  map[string]bool
 	revokes  int
+	effects  int
 	observes int
 	err      error
 	trace    *effectTrace
@@ -174,8 +189,43 @@ func (r *desktopRevoker) RevokeHandoff(_ context.Context, record desktop.Record,
 	if r.err != nil {
 		return r.err
 	}
+	if !r.revoked[record.Request.OperationID] {
+		r.effects++
+	}
 	r.revoked[record.Request.OperationID] = true
 	return nil
+}
+
+type closeBarrierAuthority struct {
+	desktop.CoordinationAuthority
+	expected desktop.Status
+	target   desktop.Status
+	entered  chan struct{}
+	release  chan struct{}
+}
+
+func (a *closeBarrierAuthority) UpdateClose(ctx context.Context, record desktop.CloseRecord, expected desktop.Status, source desktop.Record) error {
+	if expected == a.expected && record.Status == a.target {
+		a.entered <- struct{}{}
+		select {
+		case <-a.release:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	return a.CoordinationAuthority.UpdateClose(ctx, record, expected, source)
+}
+
+func (a *closeBarrierAuthority) GetOpenAt(ctx context.Context, operationID string, now time.Time) (desktop.Record, error) {
+	return a.CoordinationAuthority.(interface {
+		GetOpenAt(context.Context, string, time.Time) (desktop.Record, error)
+	}).GetOpenAt(ctx, operationID, now)
+}
+
+func (a *closeBarrierAuthority) UpdateOpenAt(ctx context.Context, record desktop.Record, expected desktop.Status, now time.Time) error {
+	return a.CoordinationAuthority.(interface {
+		UpdateOpenAt(context.Context, desktop.Record, desktop.Status, time.Time) error
+	}).UpdateOpenAt(ctx, record, expected, now)
 }
 
 func (r *desktopRevoker) ObserveHandoffRevoked(_ context.Context, record desktop.Record) (bool, error) {
@@ -334,6 +384,304 @@ func TestVerticalCloseRevokesCleansAndConfirmsAbsence(t *testing.T) {
 	if err != nil || len(records) != 1 || records[0].SessionState() != desktop.SessionClosed {
 		t.Fatalf("source state = %#v, %v", records, err)
 	}
+}
+
+func TestCloseCASConvergenceRequiresExactImmutableAttempt(t *testing.T) {
+	now := time.Date(2026, 9, 19, 10, 0, 0, 0, time.UTC)
+	record := closeRecordFixture(t, now)
+	mutations := map[string]func(*desktop.CloseRecord){
+		"request digest": func(value *desktop.CloseRecord) { value.Request.RequestDigest = "sha256:" + strings.Repeat("c", 64) },
+		"receipt": func(value *desktop.CloseRecord) {
+			value.Receipt.Reference = "ref:desktop/00000000000000000000000000000002"
+		},
+		"source":     func(value *desktop.CloseRecord) { value.SourceOpenOperationID = "open-operation-2" },
+		"session":    func(value *desktop.CloseRecord) { value.Request.DesktopSessionID = "desktop-session-2" },
+		"generation": func(value *desktop.CloseRecord) { value.Request.ExpectedGeneration++ },
+		"operation":  func(value *desktop.CloseRecord) { value.Request.OperationID = "close-operation-2" },
+		"fence":      func(value *desktop.CloseRecord) { value.Request.FencingToken++ },
+	}
+	if !sameCloseAttempt(record, record.Clone()) {
+		t.Fatal("exact close attempt did not match itself")
+	}
+	for name, mutate := range mutations {
+		t.Run(name, func(t *testing.T) {
+			changed := record.Clone()
+			mutate(&changed)
+			if sameCloseAttempt(record, changed) {
+				t.Fatal("different immutable close attempt converged")
+			}
+		})
+	}
+}
+
+func TestCloseCASConvergenceAcceptsOnlyMonotonicSameBranchState(t *testing.T) {
+	tests := []struct {
+		name                string
+		expected, attempted desktop.Status
+		persisted           desktop.Status
+		want                bool
+	}{
+		{"accepted unchanged", desktop.StatusAccepted, desktop.StatusRunning, desktop.StatusAccepted, true},
+		{"accepted to running", desktop.StatusAccepted, desktop.StatusRunning, desktop.StatusRunning, true},
+		{"accepted to unknown", desktop.StatusAccepted, desktop.StatusRunning, desktop.StatusOutcomeUnknown, true},
+		{"accepted to succeeded", desktop.StatusAccepted, desktop.StatusRunning, desktop.StatusSucceeded, true},
+		{"running unchanged", desktop.StatusRunning, desktop.StatusOutcomeUnknown, desktop.StatusRunning, true},
+		{"running to unknown", desktop.StatusRunning, desktop.StatusOutcomeUnknown, desktop.StatusOutcomeUnknown, true},
+		{"unknown to succeeded", desktop.StatusOutcomeUnknown, desktop.StatusSucceeded, desktop.StatusSucceeded, true},
+		{"terminal outcome mismatch", desktop.StatusRunning, desktop.StatusSucceeded, desktop.StatusOutcomeUnknown, false},
+		{"terminal failure mismatch", desktop.StatusRunning, desktop.StatusFailed, desktop.StatusSucceeded, false},
+		{"illegal regression", desktop.StatusRunning, desktop.StatusOutcomeUnknown, desktop.StatusAccepted, false},
+		{"illegal terminal branch", desktop.StatusAccepted, desktop.StatusRunning, desktop.StatusFailed, false},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := closeStatusConverges(test.expected, test.attempted, test.persisted); got != test.want {
+				t.Fatalf("closeStatusConverges() = %t, want %t", got, test.want)
+			}
+		})
+	}
+}
+
+func TestVerticalConcurrentCloseAndRecoverConvergeAfterAcceptedCAS(t *testing.T) {
+	now := time.Date(2026, 9, 19, 10, 0, 0, 0, time.UTC)
+	runtime := newDesktopRuntimeSpy()
+	revoker := newDesktopRevoker()
+	base := desktopmemory.NewRepository()
+	authority := &closeBarrierAuthority{
+		CoordinationAuthority: base, expected: desktop.StatusAccepted, target: desktop.StatusRunning,
+		entered: make(chan struct{}, 2), release: make(chan struct{}),
+	}
+	clock := &desktopClock{now: now}
+	vertical, err := NewVerticalWithHandoffLifecycle(authority, runtime, desktopSandboxReader{sandbox: desktopSandbox(now)}, desktopProfile(), &desktopRegistrar{}, revoker, clock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := vertical.Open(context.Background(), desktopOpenRequest(now)); err != nil {
+		t.Fatal(err)
+	}
+	clock.Set(now.Add(time.Minute))
+	type closeResult struct {
+		operations []Operation
+		operation  Operation
+		err        error
+	}
+	results := make(chan closeResult, 2)
+	go func() {
+		operation, closeErr := vertical.CloseDesktopSession(context.Background(), desktopCloseRequest(now.Add(time.Minute)))
+		results <- closeResult{operation: operation, err: closeErr}
+	}()
+	select {
+	case <-authority.entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Close did not reach accepted CAS barrier")
+	}
+	go func() {
+		operations, recoverErr := vertical.Recover(context.Background())
+		results <- closeResult{operations: operations, err: recoverErr}
+	}()
+	select {
+	case <-authority.entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Recover did not reach accepted CAS barrier")
+	}
+	close(authority.release)
+	statuses := make([]desktop.Status, 0, 2)
+	for range 2 {
+		select {
+		case result := <-results:
+			if result.err != nil {
+				t.Fatalf("concurrent close/recover = %v", result.err)
+			}
+			if len(result.operations) != 0 {
+				statuses = append(statuses, result.operations[0].Status)
+			} else {
+				statuses = append(statuses, result.operation.Status)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("concurrent close/recover did not finish")
+		}
+	}
+	terminal := 0
+	for _, status := range statuses {
+		if status == desktop.StatusSucceeded {
+			terminal++
+		} else if status != desktop.StatusRunning {
+			t.Fatalf("unexpected converged status %q", status)
+		}
+	}
+	if terminal != 1 {
+		t.Fatalf("terminal owners=%d statuses=%v", terminal, statuses)
+	}
+	_, observes, cleanups := runtime.counts()
+	if cleanups != 1 || runtime.cleanupEffectCount() != 1 || observes != 1 || revoker.revokes != 1 || revoker.effects != 1 {
+		t.Fatalf("effects revoke=%d/%d cleanup=%d/%d observe=%d", revoker.revokes, revoker.effects, cleanups, runtime.cleanupEffectCount(), observes)
+	}
+}
+
+func TestVerticalConcurrentRunningCloseConvergesAtTerminalCAS(t *testing.T) {
+	now := time.Date(2026, 9, 19, 10, 0, 0, 0, time.UTC)
+	runtime := newDesktopRuntimeSpy()
+	revoker := newDesktopRevoker()
+	base := desktopmemory.NewRepository()
+	clock := &desktopClock{now: now}
+	setup, err := NewVerticalWithHandoffLifecycle(base, runtime, desktopSandboxReader{sandbox: desktopSandbox(now)}, desktopProfile(), &desktopRegistrar{}, revoker, clock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := setup.Open(context.Background(), desktopOpenRequest(now)); err != nil {
+		t.Fatal(err)
+	}
+	request := desktopCloseRequest(now.Add(time.Minute))
+	clock.Set(now.Add(time.Minute))
+	if err := setup.synchronizeCloseAuthority(context.Background(), request); err != nil {
+		t.Fatal(err)
+	}
+	reservation, err := base.ReserveClose(context.Background(), request, now.Add(time.Minute), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	running, err := desktop.TransitionClose(reservation.Record, desktop.StatusRunning, now.Add(time.Minute))
+	if err != nil {
+		t.Fatal(err)
+	}
+	source, err := setup.retainedOpen(context.Background(), running.SourceOpenOperationID)
+	if err != nil || base.UpdateClose(context.Background(), running, desktop.StatusAccepted, source) != nil {
+		t.Fatalf("prepare running close: %v", err)
+	}
+	authority := &closeBarrierAuthority{
+		CoordinationAuthority: base, expected: desktop.StatusRunning, target: desktop.StatusSucceeded,
+		entered: make(chan struct{}, 2), release: make(chan struct{}),
+	}
+	vertical, err := NewVerticalWithHandoffLifecycle(authority, runtime, desktopSandboxReader{sandbox: desktopSandbox(now)}, desktopProfile(), &desktopRegistrar{}, revoker, clock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	results := make(chan error, 2)
+	for range 2 {
+		go func() {
+			operation, reconcileErr := vertical.Reconcile(context.Background(), request.OperationID)
+			if reconcileErr == nil && operation.Status != desktop.StatusSucceeded {
+				reconcileErr = fmt.Errorf("status=%s", operation.Status)
+			}
+			results <- reconcileErr
+		}()
+	}
+	for range 2 {
+		select {
+		case <-authority.entered:
+		case <-time.After(5 * time.Second):
+			t.Fatal("reconciler did not reach terminal CAS barrier")
+		}
+	}
+	close(authority.release)
+	for range 2 {
+		if err := <-results; err != nil {
+			t.Fatalf("terminal reconciliation = %v", err)
+		}
+	}
+	if runtime.cleanupEffectCount() != 1 || revoker.effects != 1 {
+		t.Fatalf("idempotent effects cleanup=%d revoke=%d", runtime.cleanupEffectCount(), revoker.effects)
+	}
+}
+
+func TestVerticalConcurrentCloseAndRecoverPreserveOutcomeUnknown(t *testing.T) {
+	now := time.Date(2026, 9, 19, 10, 0, 0, 0, time.UTC)
+	runtime := newDesktopRuntimeSpy()
+	runtime.cleanupErr = errors.New("cleanup outcome is unknown")
+	revoker := newDesktopRevoker()
+	base := desktopmemory.NewRepository()
+	authority := &closeBarrierAuthority{
+		CoordinationAuthority: base, expected: desktop.StatusAccepted, target: desktop.StatusRunning,
+		entered: make(chan struct{}, 2), release: make(chan struct{}),
+	}
+	clock := &desktopClock{now: now}
+	vertical, err := NewVerticalWithHandoffLifecycle(authority, runtime, desktopSandboxReader{sandbox: desktopSandbox(now)}, desktopProfile(), &desktopRegistrar{}, revoker, clock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := vertical.Open(context.Background(), desktopOpenRequest(now)); err != nil {
+		t.Fatal(err)
+	}
+	clock.Set(now.Add(time.Minute))
+	results := make(chan Operation, 2)
+	errorsSeen := make(chan error, 2)
+	go func() {
+		operation, closeErr := vertical.CloseDesktopSession(context.Background(), desktopCloseRequest(now.Add(time.Minute)))
+		results <- operation
+		errorsSeen <- closeErr
+	}()
+	select {
+	case <-authority.entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Close did not reach accepted CAS barrier")
+	}
+	go func() {
+		operations, recoverErr := vertical.Recover(context.Background())
+		if len(operations) == 0 {
+			results <- Operation{}
+		} else {
+			results <- operations[0]
+		}
+		errorsSeen <- recoverErr
+	}()
+	select {
+	case <-authority.entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Recover did not reach accepted CAS barrier")
+	}
+	close(authority.release)
+	unknown := 0
+	for range 2 {
+		if err := <-errorsSeen; err != nil {
+			t.Fatalf("concurrent unknown close/recover = %v", err)
+		}
+		status := (<-results).Status
+		if status == desktop.StatusOutcomeUnknown {
+			unknown++
+		} else if status != desktop.StatusRunning {
+			t.Fatalf("unexpected unknown convergence status %q", status)
+		}
+	}
+	if unknown != 1 {
+		t.Fatalf("outcome-unknown owners=%d", unknown)
+	}
+	_, observes, cleanups := runtime.counts()
+	if cleanups != 1 || runtime.cleanupEffectCount() != 0 || observes != 0 || revoker.revokes != 1 || revoker.effects != 1 {
+		t.Fatalf("unknown effects revoke=%d/%d cleanup=%d/%d observe=%d", revoker.revokes, revoker.effects, cleanups, runtime.cleanupEffectCount(), observes)
+	}
+}
+
+func closeRecordFixture(t *testing.T, now time.Time) desktop.CloseRecord {
+	t.Helper()
+	authority := desktopmemory.NewRepository()
+	if err := authority.SynchronizeSandboxAuthority(context.Background(), desktop.SandboxAuthority{
+		SandboxID: "sandbox-1", ProviderRevisionID: "revision-1", Ready: true, Generation: 1,
+		LeaseExpiresAt: now.Add(2 * time.Hour), FencingToken: 3, CapabilityProfileID: desktop.CapabilityProfileID,
+		NetworkPolicyReference: "desktop-egress-policy-1",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	runtime := newDesktopRuntimeSpy()
+	vertical, err := NewVerticalWithHandoffLifecycle(authority, runtime, desktopSandboxReader{sandbox: desktopSandbox(now)}, desktopProfile(), &desktopRegistrar{}, newDesktopRevoker(), &desktopClock{now: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := vertical.Open(context.Background(), desktopOpenRequest(now)); err != nil {
+		t.Fatal(err)
+	}
+	request := desktopCloseRequest(now.Add(time.Minute))
+	if err := authority.SynchronizeSandboxAuthority(context.Background(), desktop.SandboxAuthority{
+		SandboxID: "sandbox-1", ProviderRevisionID: "revision-1", Ready: true, Generation: 1,
+		LeaseExpiresAt: now.Add(2 * time.Hour), FencingToken: request.FencingToken, CapabilityProfileID: desktop.CapabilityProfileID,
+		NetworkPolicyReference: "desktop-egress-policy-1",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	reservation, err := authority.ReserveClose(context.Background(), request, now.Add(time.Minute), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return reservation.Record
 }
 
 func TestVerticalUnknownCloseObservesWithoutRepeatingEffects(t *testing.T) {

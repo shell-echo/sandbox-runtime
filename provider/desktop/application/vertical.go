@@ -374,13 +374,17 @@ func (a *Vertical) progressClose(ctx context.Context, record desktop.CloseRecord
 		if err != nil {
 			return desktop.CloseRecord{}, err
 		}
-		writeCtx, cancel := persistenceContext(ctx)
-		err = a.authority.UpdateClose(writeCtx, running, desktop.StatusAccepted, source)
-		cancel()
+		var won bool
+		running, won, err = a.persistCloseTransition(ctx, running, desktop.StatusAccepted, source)
 		if err != nil {
 			return desktop.CloseRecord{}, err
 		}
 		record = running
+		if !won {
+			// A concurrent Close or Recover owns the transition and its effects.
+			// Return the exact durable projection without redispatching cleanup.
+			return record.Clone(), nil
+		}
 	}
 	source, err := a.retainedOpen(ctx, record.SourceOpenOperationID)
 	if err != nil {
@@ -444,13 +448,71 @@ func (a *Vertical) finishCloseAt(ctx context.Context, record desktop.CloseRecord
 	if err != nil {
 		return desktop.CloseRecord{}, err
 	}
+	persisted, _, err := a.persistCloseTransition(ctx, updated, record.Status, updatedSource)
+	return persisted, err
+}
+
+// persistCloseTransition is shared by admitted Close and background Recover.
+// A failed compare-and-swap gets one bounded re-read. It converges only when
+// the persisted record is the exact same immutable close attempt and its state
+// is a legal monotonic peer or successor of the attempted transition.
+func (a *Vertical) persistCloseTransition(ctx context.Context, attempted desktop.CloseRecord, expected desktop.Status, source desktop.Record) (desktop.CloseRecord, bool, error) {
 	writeCtx, cancel := persistenceContext(ctx)
-	err = a.authority.UpdateClose(writeCtx, updated, record.Status, updatedSource)
+	updateErr := a.authority.UpdateClose(writeCtx, attempted, expected, source)
 	cancel()
-	if err != nil {
-		return desktop.CloseRecord{}, err
+	if updateErr == nil {
+		return attempted, true, nil
 	}
-	return updated, nil
+	readCtx, cancel := persistenceContext(ctx)
+	persisted, readErr := a.authority.GetClose(readCtx, attempted.Request.OperationID)
+	cancel()
+	if readErr == nil && sameCloseAttempt(attempted, persisted) && closeStatusConverges(expected, attempted.Status, persisted.Status) {
+		return persisted, false, nil
+	}
+	return desktop.CloseRecord{}, false, updateErr
+}
+
+func sameCloseAttempt(left, right desktop.CloseRecord) bool {
+	return sameCloseRequest(left.Request, right.Request) &&
+		left.SourceOpenOperationID == right.SourceOpenOperationID &&
+		sameAllocationReceipt(left.Receipt, right.Receipt) &&
+		left.Expiration == right.Expiration && left.AcceptedAt.Equal(right.AcceptedAt)
+}
+
+func sameCloseRequest(left, right desktop.CloseRequest) bool {
+	return left.SandboxID == right.SandboxID && left.ProviderRevisionID == right.ProviderRevisionID &&
+		left.OperationID == right.OperationID && left.AttemptID == right.AttemptID &&
+		left.FencingToken == right.FencingToken && left.IdempotencyKey == right.IdempotencyKey &&
+		left.RequestDigest == right.RequestDigest && left.Deadline.Equal(right.Deadline) &&
+		left.ExpectedGeneration == right.ExpectedGeneration && left.DesktopSessionID == right.DesktopSessionID &&
+		left.ConnectionGeneration == right.ConnectionGeneration && left.Reason == right.Reason
+}
+
+func sameAllocationReceipt(left, right desktop.AllocationReceipt) bool {
+	return left.Reference == right.Reference && left.SandboxID == right.SandboxID &&
+		left.DesktopSessionID == right.DesktopSessionID && left.OperationID == right.OperationID &&
+		left.AttemptID == right.AttemptID && left.FencingToken == right.FencingToken &&
+		left.ExpectedGeneration == right.ExpectedGeneration && left.ConnectionGeneration == right.ConnectionGeneration &&
+		left.AllocatedAt.Equal(right.AllocatedAt) && left.ExpiresAt.Equal(right.ExpiresAt)
+}
+
+func closeStatusConverges(expected, attempted, persisted desktop.Status) bool {
+	switch attempted {
+	case desktop.StatusSucceeded, desktop.StatusFailed, desktop.StatusCancelled:
+		return persisted == attempted
+	}
+	switch expected {
+	case desktop.StatusAccepted:
+		return persisted == desktop.StatusAccepted || persisted == desktop.StatusRunning ||
+			persisted == desktop.StatusOutcomeUnknown || persisted == desktop.StatusSucceeded
+	case desktop.StatusRunning:
+		return persisted == desktop.StatusRunning || persisted == desktop.StatusOutcomeUnknown ||
+			persisted == desktop.StatusSucceeded
+	case desktop.StatusOutcomeUnknown:
+		return persisted == desktop.StatusOutcomeUnknown || persisted == desktop.StatusSucceeded
+	default:
+		return false
+	}
 }
 
 func (a *Vertical) expire(ctx context.Context, source desktop.Record) (Operation, error) {

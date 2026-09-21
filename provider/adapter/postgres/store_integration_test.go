@@ -5,6 +5,7 @@ package providerpostgres
 import (
 	"context"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -19,6 +20,7 @@ import (
 	"github.com/shell-echo/sandbox-runtime/provider/admission"
 	"github.com/shell-echo/sandbox-runtime/provider/artifact"
 	"github.com/shell-echo/sandbox-runtime/provider/desktop"
+	desktoprepository "github.com/shell-echo/sandbox-runtime/provider/desktop/repository"
 	providerexec "github.com/shell-echo/sandbox-runtime/provider/exec"
 	"github.com/shell-echo/sandbox-runtime/provider/lifecycle"
 	"github.com/shell-echo/sandbox-runtime/provider/session"
@@ -309,6 +311,77 @@ func exerciseProviderRepositories(t *testing.T, ctx context.Context, writer, rea
 	}
 	if retained, err := desktopReader.GetOpenAt(ctx, desktopRequest.OperationID, now.Add(time.Second)); err != nil || retained.Request.DesktopSessionID != desktopRequest.DesktopSessionID {
 		t.Fatalf("transactional Desktop read = %#v, %v", retained, err)
+	}
+	desktopOpen, err := desktopWriter.GetOpenAt(ctx, desktopRequest.OperationID, now.Add(time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	desktopOpening, err := desktop.Transition(desktopOpen, desktop.StatusRunning, now.Add(time.Second), nil)
+	if err != nil || desktopWriter.UpdateOpenAt(ctx, desktopOpening, desktop.StatusAccepted, now.Add(time.Second)) != nil {
+		t.Fatalf("Desktop opening transition = %#v, %v", desktopOpening, err)
+	}
+	desktopReceipt := desktop.AllocationReceipt{
+		Reference: "ref:desktop/00000000000000000000000000000001", SandboxID: desktopRequest.SandboxID,
+		DesktopSessionID: desktopRequest.DesktopSessionID, OperationID: desktopRequest.OperationID, AttemptID: desktopRequest.AttemptID,
+		FencingToken: desktopRequest.FencingToken, ExpectedGeneration: desktopRequest.ExpectedGeneration, ConnectionGeneration: 1,
+		AllocatedAt: now.Add(time.Second), ExpiresAt: desktopRequest.ExpiresAt,
+	}
+	desktopAttached, err := desktopWriter.AttachAllocation(ctx, desktopReceipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	desktopActive, err := desktop.Transition(desktopAttached.Record, desktop.StatusSucceeded, now.Add(2*time.Second), &desktop.EndpointEvidence{InternalEndpointReference: "ref:desktop-session:postgres-concurrency", ConnectionGeneration: 1})
+	if err != nil || desktopWriter.UpdateOpenAt(ctx, desktopActive, desktop.StatusRunning, now.Add(2*time.Second)) != nil {
+		t.Fatalf("Desktop active transition = %#v, %v", desktopActive, err)
+	}
+	desktopAuthority.FencingToken = 4
+	if err := desktopWriter.SynchronizeSandboxAuthority(ctx, desktopAuthority); err != nil {
+		t.Fatal(err)
+	}
+	desktopCloseRequest := desktop.CloseRequest{
+		SandboxID: desktopRequest.SandboxID, ProviderRevisionID: desktopRequest.ProviderRevisionID,
+		OperationID: "desktop-close-operation-1", AttemptID: "desktop-close-attempt-1", FencingToken: 4,
+		IdempotencyKey: "desktop-close-key-1", RequestDigest: "sha256:" + strings.Repeat("7", 64),
+		Deadline: now.Add(time.Hour), ExpectedGeneration: 1, DesktopSessionID: desktopRequest.DesktopSessionID,
+		ConnectionGeneration: 1, Reason: "caller_complete",
+	}
+	desktopClose, err := desktopWriter.ReserveClose(ctx, desktopCloseRequest, now.Add(3*time.Second), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	desktopRunningClose, err := desktop.TransitionClose(desktopClose.Record, desktop.StatusRunning, now.Add(4*time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	desktopSources, err := desktopWriter.ListOpen(ctx)
+	if err != nil || len(desktopSources) != 1 {
+		t.Fatalf("Desktop close source = %#v, %v", desktopSources, err)
+	}
+	startDesktopCAS := make(chan struct{})
+	desktopCASErrors := make(chan error, 2)
+	for _, repository := range []*DesktopRepository{desktopWriter, desktopReader} {
+		go func(repository *DesktopRepository) {
+			<-startDesktopCAS
+			desktopCASErrors <- repository.UpdateClose(ctx, desktopRunningClose, desktop.StatusAccepted, desktopSources[0])
+		}(repository)
+	}
+	close(startDesktopCAS)
+	winners, conflicts := 0, 0
+	for range 2 {
+		switch updateErr := <-desktopCASErrors; {
+		case updateErr == nil:
+			winners++
+		case errors.Is(updateErr, desktoprepository.ErrConflict):
+			conflicts++
+		default:
+			t.Fatalf("Desktop concurrent close CAS = %v", updateErr)
+		}
+	}
+	if winners != 1 || conflicts != 1 {
+		t.Fatalf("Desktop concurrent close CAS winners=%d conflicts=%d", winners, conflicts)
+	}
+	if persisted, err := desktopReader.GetClose(ctx, desktopCloseRequest.OperationID); err != nil || persisted.Status != desktop.StatusRunning || !persisted.ObservedAt.Equal(desktopRunningClose.ObservedAt) {
+		t.Fatalf("Desktop concurrent close projection = %#v, %v", persisted, err)
 	}
 }
 

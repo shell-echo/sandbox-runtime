@@ -421,8 +421,11 @@ func closeDesktopSession(t *testing.T, environment *gateEnvironment, client *pro
 		t.Fatalf("Desktop close status=%d body=%s authority=%s diagnostics=%s", status, document, desktopCloseAuthorityDiagnostics(environment, handoffDocument), desktopGateDiagnostics(environment))
 	}
 	var operation providerv1.Operation
-	if json.Unmarshal(document, &operation) != nil || operation.Status != providerv1.OperationSucceeded {
+	if json.Unmarshal(document, &operation) != nil {
 		t.Fatalf("Desktop close operation=%s", document)
+	}
+	if operation.Status != providerv1.OperationSucceeded {
+		operation = waitProviderOperation(t, client, gateSandboxID, operationID, attemptID, fence, providerv1.OperationSucceeded)
 	}
 }
 
