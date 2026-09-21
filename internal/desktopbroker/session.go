@@ -501,13 +501,20 @@ func startSessionRuntime(ctx context.Context, connection net.Conn, open SessionO
 }
 
 func executeInput(ctx context.Context, input desktopmedia.Input, policy desktopmedia.MediaPolicy) error {
+	return executeInputWithRunner(ctx, input, policy, runInputCommand)
+}
+
+func executeInputWithRunner(ctx context.Context, input desktopmedia.Input, policy desktopmedia.MediaPolicy, run func(context.Context, []string) error) error {
 	if !desktopmedia.ValidInput(input, policy) {
 		return ErrInvalidSession
 	}
 	var args []string
 	switch input.Kind {
 	case "pointer":
-		args = []string{"mousemove", "--sync", fmt.Sprint(input.X), fmt.Sprint(input.Y)}
+		// Process completion acknowledges that xdotool submitted the move to X.
+		// --sync waits for a subsequent pointer movement and can therefore time
+		// out when a reconnect legitimately repeats the current coordinates.
+		args = []string{"mousemove", fmt.Sprint(input.X), fmt.Sprint(input.Y)}
 		if input.Event == "down" {
 			args = []string{"mousedown", fmt.Sprint(input.Button)}
 		}
@@ -537,15 +544,22 @@ func executeInput(ctx context.Context, input desktopmedia.Input, policy desktopm
 	default:
 		return ErrInvalidSession
 	}
+	if run == nil {
+		return ErrInvalidSession
+	}
 	commandCtx, cancel := context.WithTimeout(ctx, time.Second)
 	defer cancel()
-	command := exec.CommandContext(commandCtx, "/usr/bin/xdotool", args...)
-	command.Stdout = io.Discard
-	command.Stderr = io.Discard
-	if err := command.Run(); err != nil {
+	if err := run(commandCtx, args); err != nil {
 		return ErrInvalidSession
 	}
 	return nil
+}
+
+func runInputCommand(ctx context.Context, args []string) error {
+	command := exec.CommandContext(ctx, "/usr/bin/xdotool", args...)
+	command.Stdout = io.Discard
+	command.Stderr = io.Discard
+	return command.Run()
 }
 
 func min(left, right int) int {

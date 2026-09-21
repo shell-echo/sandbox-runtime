@@ -1,8 +1,11 @@
 package desktopbroker
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -103,5 +106,79 @@ func TestSessionCommandRequiresStrictMonotonicSequence(t *testing.T) {
 	command.Sequence = 3
 	if err := command.Validate(policy, 2); err != nil {
 		t.Fatalf("controller event sequence must remain independent across executor reconnects: %v", err)
+	}
+}
+
+func TestPointerMovesUseFixedArgumentsAndAllowRepeatedCoordinates(t *testing.T) {
+	policy := validSessionOpen().MediaPolicy
+	inputs := []desktopmedia.Input{
+		{Sequence: 1, Kind: "pointer", Event: "move", X: 123, Y: 234, ControlLeaseID: "lease-1", ControlFence: 1},
+		{Sequence: 2, Kind: "pointer", Event: "move", X: 123, Y: 234, ControlLeaseID: "lease-1", ControlFence: 2},
+		{Sequence: 3, Kind: "pointer", Event: "move", X: 456, Y: 345, ControlLeaseID: "lease-1", ControlFence: 3},
+		{Sequence: 4, Kind: "pointer", Event: "move", X: 0, Y: 0, ControlLeaseID: "lease-1", ControlFence: 4},
+		{Sequence: 5, Kind: "pointer", Event: "move", X: policy.Width - 1, Y: policy.Height - 1, ControlLeaseID: "lease-1", ControlFence: 5},
+	}
+	want := [][]string{
+		{"mousemove", "123", "234"},
+		{"mousemove", "123", "234"},
+		{"mousemove", "456", "345"},
+		{"mousemove", "0", "0"},
+		{"mousemove", "1279", "719"},
+	}
+	calls := make(chan []string, len(inputs))
+	run := func(_ context.Context, args []string) error {
+		calls <- append([]string(nil), args...)
+		return nil
+	}
+	for index, input := range inputs {
+		if err := executeInputWithRunner(context.Background(), input, policy, run); err != nil {
+			t.Fatalf("pointer move %d: %v", index, err)
+		}
+	}
+	close(calls)
+	index := 0
+	for args := range calls {
+		if !reflect.DeepEqual(args, want[index]) {
+			t.Fatalf("pointer arguments %d = %#v, want %#v", index, args, want[index])
+		}
+		index++
+	}
+}
+
+func TestInputRunnerCancellationIsBounded(t *testing.T) {
+	policy := validSessionOpen().MediaPolicy
+	input := desktopmedia.Input{Sequence: 1, Kind: "pointer", Event: "move", X: 1, Y: 2, ControlLeaseID: "lease-1", ControlFence: 1}
+	started := make(chan struct{})
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		done <- executeInputWithRunner(ctx, input, policy, func(commandContext context.Context, _ []string) error {
+			close(started)
+			<-commandContext.Done()
+			return commandContext.Err()
+		})
+	}()
+	<-started
+	cancel()
+	if err := <-done; !errors.Is(err, ErrInvalidSession) {
+		t.Fatalf("cancelled input = %v", err)
+	}
+}
+
+func TestInputRunnerTimeoutAndNonzeroExitFailClosed(t *testing.T) {
+	policy := validSessionOpen().MediaPolicy
+	input := desktopmedia.Input{Sequence: 1, Kind: "pointer", Event: "move", X: 1, Y: 2, ControlLeaseID: "lease-1", ControlFence: 1}
+	expired, cancel := context.WithDeadline(context.Background(), time.Unix(1, 0))
+	defer cancel()
+	if err := executeInputWithRunner(expired, input, policy, func(commandContext context.Context, _ []string) error {
+		<-commandContext.Done()
+		return commandContext.Err()
+	}); !errors.Is(err, ErrInvalidSession) {
+		t.Fatalf("timed out input = %v", err)
+	}
+	if err := executeInputWithRunner(context.Background(), input, policy, func(context.Context, []string) error {
+		return errors.New("fixed runner exit")
+	}); !errors.Is(err, ErrInvalidSession) {
+		t.Fatalf("nonzero input command = %v", err)
 	}
 }

@@ -47,3 +47,11 @@ Accepted v2 statements are committed to the bounded broker-local replay ledger
 before a session starts. The ledger is private, canonical, atomically replaced,
 survives broker process restart, and fails closed on corruption, persistence
 failure, expiry, or capacity exhaustion.
+
+An `ok` input result is an injection-layer acknowledgement only: the broker
+validated the policy-bound input and the fixed-argument `xdotool` process
+completed within its one-second deadline. It does not claim that a visual
+change was observed or that an application consumed the event. Repeating a
+pointer move at the current coordinates is valid and must complete without
+waiting for another pointer movement; cancellation, deadline expiry, or a
+nonzero tool exit remains the fixed `input_rejected` result.
