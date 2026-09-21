@@ -543,6 +543,61 @@ func TestDesktopLiveClosesOnInputBackpressureAndMediaSlowConsumer(t *testing.T) 
 	}
 }
 
+func TestDesktopLiveMediaWaitsForConnectedTransportBeforeReading(t *testing.T) {
+	binding := testDesktopLiveBinding(product.GrantAccessView)
+	media := newDesktopLiveMediaSessionSpy()
+	peer, err := webrtc.NewPeerConnection(webrtc.Configuration{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer peer.Close()
+	handler := &DesktopLiveHandler{grants: &grantStoreSpy{binding: binding, active: true}, audit: &auditStoreSpy{}, maxVideoQueue: 1, sessions: map[string]int{binding.SessionID: 1}, peers: 1}
+	state := newDesktopLivePeer(handler, peer, media, nil, binding, testDesktopLiveMediaPolicy(false), testDesktopPolicy())
+	packet := desktopRTPPacket(t, 96, 1, 1, 1, []byte{0x01})
+	media.video <- packet
+	go state.startStreamLoop("video.rtp", media.ReadVideoRTP, desktopRTPWriterSpy{}, 1, maxDesktopVideoRTPPacketBytes, 8000)
+	select {
+	case <-media.readStarted:
+		t.Fatal("Desktop media was read before the transport became connected")
+	case <-time.After(50 * time.Millisecond):
+	}
+	state.connectedOnce.Do(func() { close(state.connected) })
+	select {
+	case <-media.readStarted:
+	case <-time.After(time.Second):
+		t.Fatal("Desktop media did not start after transport readiness")
+	}
+	state.stop()
+}
+
+func TestDesktopLiveClosesWhenFirstFrameDeadlineExpires(t *testing.T) {
+	binding := testDesktopLiveBinding(product.GrantAccessView)
+	media := newDesktopLiveMediaSessionSpy()
+	peer, err := webrtc.NewPeerConnection(webrtc.Configuration{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer peer.Close()
+	handler := &DesktopLiveHandler{
+		grants: &grantStoreSpy{binding: binding, active: true}, policy: &desktopPolicySourceSpy{policy: testDesktopPolicy()}, audit: &auditStoreSpy{},
+		maxVideoQueue: 1, maxAudioQueue: 1, maxInputQueue: 1, maxPeers: 1, maxPeersPerSession: 1,
+		pollInterval: time.Second, connectionTimeout: time.Second, firstFrameTimeout: 100 * time.Millisecond,
+		sessions: map[string]int{binding.SessionID: 1}, peers: 1,
+	}
+	state := newDesktopLivePeer(handler, peer, media, nil, binding, testDesktopLiveMediaPolicy(false), testDesktopPolicy())
+	video, err := webrtc.NewTrackLocalStaticRTP(webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeVP8, ClockRate: 90000}, "video", "desktop")
+	if err != nil {
+		t.Fatal(err)
+	}
+	state.start(video, nil)
+	state.connectedOnce.Do(func() { close(state.connected) })
+	select {
+	case <-state.ctx.Done():
+	case <-time.After(time.Second):
+		t.Fatal("Desktop peer remained open after bounded first-frame deadline")
+	}
+}
+
 func TestDesktopLiveRequiredRecordingFailsClosedBeforeMediaOpen(t *testing.T) {
 	for _, test := range []struct {
 		name     string
@@ -599,7 +654,11 @@ func TestDesktopLiveRequiredRecordingReportsModeAndVisibleConsent(t *testing.T) 
 	handler, err := NewDesktopLiveHandler(DesktopLiveOptions{
 		Grants: store, Media: source, Policy: &desktopPolicySourceSpy{policy: testDesktopPolicy()}, Transfers: denyDesktopTransferAuthority{},
 		Audit: &auditStoreSpy{}, Recorder: recorder, AllowedOrigins: []string{"https://app.example"}, AllowHostCandidatesForTests: true,
-		AuthorityPollInterval: 10 * time.Millisecond, ConnectionTimeout: 2 * time.Second, DisconnectGrace: 100 * time.Millisecond,
+		// The race-enabled full suite can delay local ICE checks beyond two
+		// seconds while many packages contend for CPU. Keep the production
+		// timeout semantics covered elsewhere and give this recording assertion
+		// enough admission budget to avoid closing an otherwise healthy peer.
+		AuthorityPollInterval: 10 * time.Millisecond, ConnectionTimeout: 10 * time.Second, DisconnectGrace: 100 * time.Millisecond,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -858,14 +917,16 @@ func (s *desktopLiveMediaSourceSpy) Open(_ context.Context, binding product.Gate
 }
 
 type desktopLiveMediaSessionSpy struct {
-	video     chan []byte
-	audio     chan []byte
-	inputs    chan DesktopLiveInput
-	updates   chan desktopLiveStreamUpdate
-	closed    chan struct{}
-	closeOnce sync.Once
-	keyframes atomic.Int32
-	resyncs   atomic.Int32
+	video       chan []byte
+	audio       chan []byte
+	readStarted chan struct{}
+	readOnce    sync.Once
+	inputs      chan DesktopLiveInput
+	updates     chan desktopLiveStreamUpdate
+	closed      chan struct{}
+	closeOnce   sync.Once
+	keyframes   atomic.Int32
+	resyncs     atomic.Int32
 }
 
 type desktopLiveStreamUpdate struct {
@@ -874,7 +935,7 @@ type desktopLiveStreamUpdate struct {
 }
 
 func newDesktopLiveMediaSessionSpy() *desktopLiveMediaSessionSpy {
-	return &desktopLiveMediaSessionSpy{video: make(chan []byte, 16), audio: make(chan []byte, 16), inputs: make(chan DesktopLiveInput, 4), updates: make(chan desktopLiveStreamUpdate, 4), closed: make(chan struct{})}
+	return &desktopLiveMediaSessionSpy{video: make(chan []byte, 16), audio: make(chan []byte, 16), readStarted: make(chan struct{}), inputs: make(chan DesktopLiveInput, 4), updates: make(chan desktopLiveStreamUpdate, 4), closed: make(chan struct{})}
 }
 
 func (s *desktopLiveMediaSessionSpy) ReadVideoRTP(ctx context.Context) ([]byte, error) {
@@ -886,6 +947,7 @@ func (s *desktopLiveMediaSessionSpy) ReadAudioRTP(ctx context.Context) ([]byte, 
 }
 
 func (s *desktopLiveMediaSessionSpy) read(ctx context.Context, stream <-chan []byte) ([]byte, error) {
+	s.readOnce.Do(func() { close(s.readStarted) })
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
@@ -934,6 +996,10 @@ type desktopBlockingRTPWriter struct {
 	once    sync.Once
 	release chan struct{}
 }
+
+type desktopRTPWriterSpy struct{}
+
+func (desktopRTPWriterSpy) WriteRTP(*rtp.Packet) error { return nil }
 
 type desktopLiveRecorderSpy struct {
 	session DesktopLiveRecordingSession

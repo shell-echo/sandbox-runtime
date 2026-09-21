@@ -3,11 +3,13 @@ package desktopbroker
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
 	"encoding/json"
 	"errors"
 	"io"
 	"net"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -52,10 +54,11 @@ func TestProtocolProbeDescribeAndStrictBounds(t *testing.T) {
 	}
 
 	tests := map[string]string{
-		"unknown":  `{"protocol":"sandbox.runtime/desktop-broker/v1","request_id":"bad-1","method":"probe","unknown":true}`,
-		"method":   `{"protocol":"sandbox.runtime/desktop-broker/v1","request_id":"bad-2","method":"exec"}`,
-		"protocol": `{"protocol":"other","request_id":"bad-3","method":"probe"}`,
-		"trailing": `{"protocol":"sandbox.runtime/desktop-broker/v1","request_id":"bad-4","method":"probe"}{}`,
+		"unknown":              `{"protocol":"sandbox.runtime/desktop-broker/v1","request_id":"bad-1","method":"probe","unknown":true}`,
+		"method":               `{"protocol":"sandbox.runtime/desktop-broker/v1","request_id":"bad-2","method":"exec"}`,
+		"protocol":             `{"protocol":"other","request_id":"bad-3","method":"probe"}`,
+		"v2 probe unavailable": `{"protocol":"sandbox.runtime/desktop-broker/v1","request_id":"bad-v2","method":"probe.v2"}`,
+		"trailing":             `{"protocol":"sandbox.runtime/desktop-broker/v1","request_id":"bad-4","method":"probe"}{}`,
 	}
 	for name, document := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -80,6 +83,36 @@ func TestProtocolProbeDescribeAndStrictBounds(t *testing.T) {
 		t.Fatalf("oversized request received response %q", data)
 	}
 
+	cancel()
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("server error = %v", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("server did not stop")
+	}
+}
+
+func TestBridgeProbeRequiresConfiguredV2Authority(t *testing.T) {
+	directory := t.TempDir()
+	if err := os.Chmod(directory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	socketPath := "/tmp/sandbox-runtime-desktop-abcdefabcdefabcdefabcdefabcdefab.sock"
+	_ = os.Remove(socketPath)
+	t.Cleanup(func() { _ = os.Remove(socketPath) })
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	keys := map[string]ed25519.PublicKey{"provider-desktop-v2": make([]byte, ed25519.PublicKeySize)}
+	go func() {
+		done <- serveProtocolWithBridgeLedger(ctx, socketPath, ReadyDescriptor(), make(chan error), keys, filepath.Join(directory, "replay.json"))
+	}()
+	waitForSocket(t, socketPath)
+	response := rawRequest(t, socketPath, `{"protocol":"sandbox.runtime/desktop-broker/v1","request_id":"probe-v2","method":"probe.v2"}`)
+	if response.Status != "ok" || response.Descriptor == nil {
+		t.Fatalf("v2 bridge probe response = %#v", response)
+	}
 	cancel()
 	select {
 	case err := <-done:

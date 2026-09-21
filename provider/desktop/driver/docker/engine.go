@@ -5,7 +5,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/netip"
+	"sync"
 
 	cerrdefs "github.com/containerd/errdefs"
 	"github.com/moby/moby/api/pkg/stdcopy"
@@ -23,6 +25,12 @@ type engine interface {
 	remove(context.Context, string) error
 	describe(context.Context, string) ([]byte, error)
 	close() error
+}
+
+// sessionEngine is optional so lifecycle-only test engines do not acquire a
+// media capability they cannot implement.
+type sessionEngine interface {
+	openSession(context.Context, string) (io.ReadWriteCloser, error)
 }
 
 type imageInfo struct {
@@ -57,6 +65,7 @@ type createRequest struct {
 	stopTimeout      int
 	networkName      string
 	dnsResolver      string
+	environment      []string
 }
 
 type containerInfo struct {
@@ -188,7 +197,7 @@ func (e *mobyEngine) create(ctx context.Context, request createRequest) (string,
 		Name: request.name,
 		Config: &container.Config{
 			Image: request.image, User: request.user, WorkingDir: request.workingDirectory,
-			Labels: cloneStrings(request.labels), StopTimeout: &request.stopTimeout,
+			Labels: cloneStrings(request.labels), StopTimeout: &request.stopTimeout, Env: append([]string(nil), request.environment...),
 		},
 		HostConfig: &container.HostConfig{
 			NetworkMode:  container.NetworkMode(request.networkName),
@@ -297,6 +306,52 @@ func (e *mobyEngine) describe(ctx context.Context, containerID string) ([]byte, 
 		return nil, errors.New("desktop broker describe failed")
 	}
 	return append([]byte(nil), stdout.Bytes()...), nil
+}
+
+func (e *mobyEngine) openSession(ctx context.Context, containerID string) (io.ReadWriteCloser, error) {
+	created, err := e.client.ExecCreate(ctx, containerID, client.ExecCreateOptions{
+		User: DesktopUser, Privileged: false, TTY: false,
+		AttachStdin: true, AttachStdout: true, AttachStderr: true,
+		WorkingDir: "/workspace",
+		Cmd:        []string{desktopBrokerPath, "session", "--socket", desktopBrokerSocket},
+	})
+	if err != nil {
+		return nil, err
+	}
+	response, err := e.client.ExecAttach(ctx, created.ID, client.ExecAttachOptions{})
+	if err != nil {
+		return nil, err
+	}
+	reader, writer := io.Pipe()
+	stream := &execSession{response: response, reader: reader, writer: writer}
+	go stream.copyOutput()
+	return stream, nil
+}
+
+type execSession struct {
+	response  client.ExecAttachResult
+	reader    *io.PipeReader
+	writer    *io.PipeWriter
+	closeOnce sync.Once
+}
+
+func (s *execSession) Read(value []byte) (int, error)  { return s.reader.Read(value) }
+func (s *execSession) Write(value []byte) (int, error) { return s.response.Conn.Write(value) }
+func (s *execSession) Close() error {
+	s.closeOnce.Do(func() {
+		_ = s.writer.Close()
+		_ = s.reader.Close()
+		s.response.Close()
+	})
+	return nil
+}
+func (s *execSession) copyOutput() {
+	stderr := &limitedBuffer{limit: maxBrokerExecBytes}
+	_, err := stdcopy.StdCopy(s.writer, stderr, s.response.Reader)
+	if err == nil && stderr.Len() != 0 {
+		err = errors.New("desktop broker session wrote diagnostics")
+	}
+	_ = s.writer.CloseWithError(err)
 }
 
 func (e *mobyEngine) close() error { return e.client.Close() }

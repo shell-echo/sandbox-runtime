@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"regexp"
 	"time"
+
+	"github.com/shell-echo/sandbox-runtime/internal/desktopmedia"
 )
 
 var (
@@ -110,6 +112,43 @@ type Attacher interface {
 	// Attach creates a fresh Provider-private observation after the caller has
 	// revalidated the durable opaque handoff authority.
 	Attach(context.Context, AllocationReceipt) (Attachment, error)
+}
+
+// MediaAuthority is the exact opaque authority for one Provider-private
+// Desktop media/input session. It contains no backend coordinate.
+type MediaAuthority struct {
+	TenantBindingDigest    string
+	ProviderRevisionID     string
+	SandboxID              string
+	DesktopSessionID       string
+	HandoffReference       string
+	HandoffReferenceDigest string
+	AllocationReference    string
+	ConnectionGeneration   int64
+	ConnectionEpoch        string
+	ControllerFence        string
+	MediaProfileID         string
+	ControlProfileID       string
+	AuthorityDigest        string
+	RequestDigest          string
+	AuthorityExpiresAt     time.Time
+	HandoffExpiresAt       time.Time
+}
+
+type MediaSession interface {
+	ReadVideoRTP(context.Context) ([]byte, error)
+	ReadAudioRTP(context.Context) ([]byte, error)
+	HandleInput(context.Context, desktopmedia.Input) (desktopmedia.InputResult, error)
+	UpdateStream(context.Context, desktopmedia.DisplayPolicy, string) error
+	Resynchronize(context.Context) error
+	RequestKeyframe(context.Context) error
+	Close() error
+}
+
+// MediaRuntime is optional and deliberately separate from Runtime so drivers
+// without a real broker session cannot claim Desktop media support.
+type MediaRuntime interface {
+	OpenMedia(context.Context, MediaAuthority, Attachment, desktopmedia.MediaPolicy) (MediaSession, error)
 }
 
 type Runtime interface {

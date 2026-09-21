@@ -12,7 +12,7 @@ func validOpen(now time.Time) OpenRequest {
 		TenantID: "tenant-1", SandboxID: "sandbox-1", RuntimeSessionID: "session-1",
 		CapabilityProfileID: "terminal-v1", HandoffReference: "ref:session:opaque",
 		ConnectionGeneration: 3, ExpiresAt: now.Add(time.Minute).Format(time.RFC3339Nano),
-		Fence: strings.Repeat("a", MinFenceBytes),
+		Fence: strings.Repeat("a", MinFenceBytes), TenantBindingDigest: TenantBindingDigestPrefix + strings.Repeat("b", 64),
 	}
 }
 

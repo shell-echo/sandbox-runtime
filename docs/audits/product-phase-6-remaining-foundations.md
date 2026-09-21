@@ -3,14 +3,25 @@
 Date: 2026-09-20
 
 This record separates repository-owned implementation foundations from the
-external evidence still required by Slices 4–15. It does not advance the
-Phase 6 completion counter.
+external evidence still required after Slice 4. Foundation packages alone do
+not advance the Phase 6 completion counter.
 
 ## Repository-owned foundations added in this continuation
 
 - Slice 4: separate Gateway/Guest/Browser/Desktop production commands,
   role-specific configuration, public/private TLS constraints, outbound-only
-  Guest validation, loopback-only probes, and mixed-authority rejection.
+  Guest validation, loopback-only probes, mixed-authority rejection, and the
+  versioned opaque-only Provider-to-executor Browser/Desktop relay graph. The
+  Provider remains the sole handoff/runtime authority; the independent roles
+  do not own Provider state or Docker control.
+- Slice 4 Browser runtime: an operator-owned mTLS CDP relay is available as
+  `cmd/browser-executor-backend`; its tagged integration test has completed a
+  real `Browser.getVersion` exchange against the locked Chromium image.
+- Slice 4 Desktop runtime: `executor.v2`, the signed `desktop-bridge.v2`
+  capability, Provider-owned Unix broker mux, replay ledger, Desktop-specific
+  sealed restricted-egress identity and local candidate path pass the strict
+  six-role/twelve-scenario gate. Slice 4 is complete only for that bounded
+  local independent-process scope.
 - Slice 5: `internal/secretref` reference parsing, bounded file resolution,
   versioned key material, rotation windows, expiry, and revocation.
 - Slice 6: `internal/netpolicy` exact-host/port egress policy with DNS
@@ -30,17 +41,18 @@ Phase 6 completion counter.
 
 The role probe validates its three private authority files, recording-key
 reference, optional release profile, and typed Phase 6 dependency
-configuration. It still returns not-ready until the owning
-Gateway/Guest/Browser/Desktop application graph is composed; binding a
-listener is not treated as capability readiness.
+configuration. Browser/Desktop readiness additionally probes the configured
+executor backend through the private mTLS relay; binding a listener is not
+treated as capability readiness.
 
 ## Gates that remain open
 
-These foundations do not establish real KMS/HSM behavior, certificate
+The remaining foundations do not establish real KMS/HSM behavior, certificate
 issuance/rotation, Valkey/object-store independent failure domains, signed
 multi-platform application publication, backup/PITR RPO/RTO, dashboards or an
 SLO measurement window, Kubernetes/Apple Container role deployment, version
 skew/canary/rollback, hostile multi-tenant isolation, or an independently
-administered release candidate. Slice 4 still needs its complete application
-graph behind the role transports. Slices 14 and 15 cannot be marked complete
-without externally observed topology and operator acceptance evidence.
+administered release candidate. Slice 4's local six-process evidence does not
+establish complete public Product E2E or widen its explicit non-claims. Slices
+5-15 retain their own gates, and Slices 14-15 cannot be marked complete without
+externally observed topology and operator acceptance evidence.

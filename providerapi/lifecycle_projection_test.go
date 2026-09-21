@@ -268,6 +268,27 @@ func TestDecodeCreateRequestBindsBrowserRestrictedNetworkPolicy(t *testing.T) {
 	}
 }
 
+func TestProjectCreateNetworkPolicyBindsDesktopRestrictedNetwork(t *testing.T) {
+	required := true
+	policy, err := projectCreateNetworkPolicy(providerv1.SandboxSpec{
+		RuntimeProfile: lifecycle.DesktopRuntimeProfile,
+		Network: providerv1.NetworkPolicy{
+			Mode: providerv1.NetworkRestricted, PolicyReference: "desktop-egress-policy-1",
+			EgressGatewayRequired: &required,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := lifecycle.NetworkPolicy{Mode: lifecycle.NetworkRestricted, PolicyReference: "desktop-egress-policy-1", EgressGatewayRequired: true}
+	if policy != want {
+		t.Fatalf("Desktop network policy = %#v", policy)
+	}
+	if _, err := projectCreateNetworkPolicy(providerv1.SandboxSpec{RuntimeProfile: lifecycle.DesktopRuntimeProfile, Network: providerv1.NetworkPolicy{Mode: providerv1.NetworkNone}}); err == nil {
+		t.Fatal("Desktop network-none downgrade was accepted")
+	}
+}
+
 func TestProjectCreateNetworkPolicyRejectsBrowserDowngrade(t *testing.T) {
 	required, notRequired := true, false
 	valid := providerv1.SandboxSpec{

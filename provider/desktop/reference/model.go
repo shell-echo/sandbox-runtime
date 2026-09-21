@@ -7,6 +7,8 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/shell-echo/sandbox-runtime/internal/desktophandoff"
+	"github.com/shell-echo/sandbox-runtime/internal/handoff"
 	"github.com/shell-echo/sandbox-runtime/provider/desktop"
 )
 
@@ -37,9 +39,11 @@ type Record struct {
 	CapabilityProfileID  string                    `json:"capability_profile_id"`
 	ConnectionGeneration int64                     `json:"connection_generation"`
 	ExpiresAt            time.Time                 `json:"expires_at"`
+	TenantBindingDigest  string                    `json:"tenant_binding_digest,omitempty"`
 	Receipt              desktop.AllocationReceipt `json:"receipt"`
 	CreatedAt            time.Time                 `json:"created_at"`
 	RevokedAt            *time.Time                `json:"revoked_at,omitempty"`
+	Binding              *desktophandoff.Binding   `json:"binding,omitempty"`
 }
 
 func NewRecord(reference string, source desktop.Record, createdAt time.Time) (Record, error) {
@@ -66,6 +70,10 @@ func (r Record) Clone() Record {
 		value := r.RevokedAt.UTC()
 		clone.RevokedAt = &value
 	}
+	if r.Binding != nil {
+		binding := *r.Binding
+		clone.Binding = &binding
+	}
 	return clone
 }
 
@@ -87,7 +95,32 @@ func (r Record) Validate() error {
 	if r.RevokedAt != nil && (r.RevokedAt.IsZero() || r.RevokedAt.Before(r.CreatedAt)) {
 		return ErrInvalidRecord
 	}
+	if r.TenantBindingDigest != "" && handoff.ValidateTenantBindingDigest(r.TenantBindingDigest) != nil {
+		return ErrInvalidRecord
+	}
+	if r.Binding != nil {
+		if err := r.Binding.Validate(r.CreatedAt); err != nil || r.Binding.HandoffReference != r.Reference || r.Binding.ProviderRevisionID != r.ProviderRevisionID ||
+			r.Binding.SandboxID != r.SandboxID || r.Binding.DesktopSessionID != r.DesktopSessionID || r.Binding.ConnectionGeneration != r.ConnectionGeneration ||
+			!r.Binding.HandoffExpiresAt.Equal(r.ExpiresAt) || r.Binding.TenantBindingDigest != r.TenantBindingDigest {
+			return ErrInvalidRecord
+		}
+	}
 	return nil
+}
+
+func NewRecordWithTenantBinding(reference string, source desktop.Record, tenantBindingDigest string, createdAt time.Time) (Record, error) {
+	if handoff.ValidateTenantBindingDigest(tenantBindingDigest) != nil {
+		return Record{}, ErrInvalidRecord
+	}
+	record, err := NewRecord(reference, source, createdAt)
+	if err != nil {
+		return Record{}, err
+	}
+	record.TenantBindingDigest = tenantBindingDigest
+	if err := record.Validate(); err != nil {
+		return Record{}, err
+	}
+	return record, nil
 }
 
 func (r Record) Evidence() desktop.EndpointEvidence {

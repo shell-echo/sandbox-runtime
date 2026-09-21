@@ -2,12 +2,25 @@ package roleprocess
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/shell-echo/sandbox-runtime/config"
 )
+
+func TestPrivateRoleShutdownNormalizesClosedListener(t *testing.T) {
+	if err := normalizeRoleShutdownError(fmt.Errorf("listener: %w", net.ErrClosed)); err != nil {
+		t.Fatalf("closed listener shutdown = %v", err)
+	}
+	original := errors.New("shutdown failed")
+	if err := normalizeRoleShutdownError(original); !errors.Is(err, original) {
+		t.Fatalf("shutdown error = %v, want original", err)
+	}
+}
 
 func TestGuestRoleHasProbeOnlyComposition(t *testing.T) {
 	directory := t.TempDir()

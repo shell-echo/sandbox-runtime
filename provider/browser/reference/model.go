@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/shell-echo/sandbox-runtime/internal/handoff"
 	"github.com/shell-echo/sandbox-runtime/provider/browser"
 )
 
@@ -37,6 +38,7 @@ type Record struct {
 	CapabilityProfileID  string                    `json:"capability_profile_id"`
 	ConnectionGeneration int64                     `json:"connection_generation"`
 	ExpiresAt            time.Time                 `json:"expires_at"`
+	TenantBindingDigest  string                    `json:"tenant_binding_digest,omitempty"`
 	Receipt              browser.AllocationReceipt `json:"receipt"`
 	CreatedAt            time.Time                 `json:"created_at"`
 	RevokedAt            *time.Time                `json:"revoked_at,omitempty"`
@@ -54,6 +56,21 @@ func NewRecord(reference string, source browser.Record, createdAt time.Time) (Re
 		return Record{}, ErrExpired
 	}
 	record := Record{Reference: reference, OperationID: source.Request.OperationID, AttemptID: source.Request.AttemptID, FencingToken: source.Request.FencingToken, SandboxID: source.Request.SandboxID, ProviderRevisionID: source.Request.ProviderRevisionID, BrowserSessionID: source.Request.BrowserSessionID, CapabilityProfileID: source.Request.CapabilityProfileID, ConnectionGeneration: source.Allocation.Receipt.ConnectionGeneration, ExpiresAt: source.Request.ExpiresAt.UTC(), Receipt: source.Allocation.Receipt, CreatedAt: createdAt}
+	if err := record.Validate(); err != nil {
+		return Record{}, err
+	}
+	return record, nil
+}
+
+func NewRecordWithTenantBinding(reference string, source browser.Record, tenantBindingDigest string, createdAt time.Time) (Record, error) {
+	if handoff.ValidateTenantBindingDigest(tenantBindingDigest) != nil {
+		return Record{}, ErrInvalidRecord
+	}
+	record, err := NewRecord(reference, source, createdAt)
+	if err != nil {
+		return Record{}, err
+	}
+	record.TenantBindingDigest = tenantBindingDigest
 	if err := record.Validate(); err != nil {
 		return Record{}, err
 	}
@@ -85,6 +102,9 @@ func (r Record) Validate() error {
 		return ErrInvalidRecord
 	}
 	if r.RevokedAt != nil && (r.RevokedAt.IsZero() || r.RevokedAt.Before(r.CreatedAt)) {
+		return ErrInvalidRecord
+	}
+	if r.TenantBindingDigest != "" && handoff.ValidateTenantBindingDigest(r.TenantBindingDigest) != nil {
 		return ErrInvalidRecord
 	}
 	return nil

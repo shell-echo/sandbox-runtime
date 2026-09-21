@@ -15,6 +15,7 @@ import (
 	cerrdefs "github.com/containerd/errdefs"
 
 	"github.com/shell-echo/sandbox-runtime/internal/desktopbroker"
+	"github.com/shell-echo/sandbox-runtime/internal/desktopcandidate"
 	desktopimage "github.com/shell-echo/sandbox-runtime/profiles/desktop/image"
 	providerdesktop "github.com/shell-echo/sandbox-runtime/provider/desktop"
 )
@@ -61,7 +62,8 @@ func newFakeNetwork() *fakeNetwork {
 	return &fakeNetwork{attachment: NetworkAttachment{
 		DockerName: "desktop-egress-network-1", GatewayContainer: "desktop-egress-gateway-1", GatewayAddress: "10.88.0.2",
 		LeaseID: "desktop-network-lease-1", PolicyReference: "desktop-egress-policy-1",
-		PolicyDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", EgressGateway: true,
+		PolicyDigest:           "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		WorkloadIdentityDigest: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", EgressGateway: true,
 	}}
 }
 func (n *fakeNetwork) Ready(_ context.Context, policy string) error {
@@ -146,7 +148,7 @@ func (e *fakeEngine) create(_ context.Context, request createRequest) (string, e
 		id: fakeContainerID, imageID: e.image.id, imageReference: request.image,
 		labels: cloneStrings(request.labels), user: request.user, workingDirectory: request.workingDirectory,
 		entrypoint: append([]string(nil), e.image.entrypoint...), command: append([]string(nil), e.image.command...),
-		environment: append([]string(nil), e.image.environment...), stopTimeout: request.stopTimeout, status: "created",
+		environment: append([]string(nil), request.environment...), stopTimeout: request.stopTimeout, status: "created",
 		readOnlyRoot: true, tmpfs: map[string]string{
 			"/inputs":    fmt.Sprintf("ro,noexec,nosuid,nodev,size=%d,mode=0555", request.inputsBytes),
 			"/tmp":       fmt.Sprintf("rw,noexec,nosuid,nodev,size=%d,mode=1777", request.tmpfsBytes),
@@ -266,6 +268,7 @@ func validImageInfo(t *testing.T) imageInfo {
 			"io.github.shell-echo.sandbox-runtime.desktop-broker-protocol":    desktopimage.BrokerProtocol,
 			"io.github.shell-echo.sandbox-runtime.desktop-broker-path":        desktopimage.BrokerPath,
 			"io.github.shell-echo.sandbox-runtime.package-archive-set-digest": manifest.Source.Manifests["linux/amd64"].PackageArchiveSetDigest,
+			"io.github.shell-echo.sandbox-runtime.installed-set-digest":       manifest.Source.Manifests["linux/amd64"].InstalledSetDigest,
 			"io.github.shell-echo.sandbox-runtime.provenance.source-digest":   manifest.Source.Manifests["linux/amd64"].Digest,
 			"org.opencontainers.image.base.digest":                            manifest.Source.Manifests["linux/amd64"].Digest,
 			"org.opencontainers.image.base.name":                              desktopimage.SourceRepository,
@@ -333,6 +336,46 @@ func testDriver(t *testing.T, backend *fakeEngine, network *fakeNetwork, options
 		t.Fatal(err)
 	}
 	return driver
+}
+
+func TestLocalCandidateDriverIsDigestOnlyAndSeparateFromPublication(t *testing.T) {
+	sourceRoot, err := filepath.Abs("../../../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest := "sha256:" + strings.Repeat("9", 64)
+	candidate, err := desktopcandidate.New(sourceRoot, "linux/amd64", digest, digest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	clock := &fakeClock{now: desktopDriverTestTime}
+	options := validOptions(t, t.TempDir(), clock)
+	options.Image = digest
+	options.PullPolicy = PullNever
+	backend := &fakeEngine{image: validImageInfo(t)}
+	backend.image.id = digest
+	backend.image.repositoryDigests = nil
+	backend.image.descriptorDigest = ""
+	backend.image.labels["org.opencontainers.image.revision"] = candidate.SourceRevision
+	driver, err := newCandidateDriver(context.Background(), backend, options, candidate, newFakeNetwork())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if driver.candidate == nil || driver.provenance != nil || driver.publication.Digest != "" || len(driver.publication.Platforms) != 0 {
+		t.Fatal("local candidate was mixed with production publication authority")
+	}
+	if err := driver.Ready(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	options.PullPolicy = PullIfNotPresent
+	if _, err := newCandidateDriver(context.Background(), backend, options, candidate, newFakeNetwork()); !errors.Is(err, ErrInvalidDriver) {
+		t.Fatalf("mutable local candidate policy error = %v", err)
+	}
+	options.PullPolicy = PullNever
+	options.Image = desktopimage.LockedPublication().Image()
+	if _, err := newCandidateDriver(context.Background(), backend, options, candidate, newFakeNetwork()); !errors.Is(err, ErrInvalidDriver) {
+		t.Fatalf("published image was accepted as local candidate: %v", err)
+	}
 }
 
 func TestOptionsFailClosed(t *testing.T) {

@@ -71,6 +71,16 @@ func NewRegistrar(store Store, clock Clock, generator Generator) (*Registrar, er
 }
 
 func (r *Registrar) Register(ctx context.Context, source session.Record) (Registration, error) {
+	return r.register(ctx, source, "")
+}
+
+// RegisterWithTenantBinding persists a caller-owned opaque tenant binding
+// digest alongside the handoff. It does not grant or evaluate tenant access.
+func (r *Registrar) RegisterWithTenantBinding(ctx context.Context, source session.Record, tenantBindingDigest string) (Registration, error) {
+	return r.register(ctx, source, tenantBindingDigest)
+}
+
+func (r *Registrar) register(ctx context.Context, source session.Record, tenantBindingDigest string) (Registration, error) {
 	if r == nil || r.store == nil || r.clock == nil || r.generator == nil {
 		return Registration{}, ErrUnavailable
 	}
@@ -80,7 +90,7 @@ func (r *Registrar) Register(ctx context.Context, source session.Record) (Regist
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if existing, err := r.store.FindRunning(ctx, source); err == nil {
-		if existing.RevokedAt != nil {
+		if existing.RevokedAt != nil || (tenantBindingDigest != "" && existing.TenantBindingDigest != tenantBindingDigest) {
 			return Registration{}, ErrUnavailable
 		}
 		return Registration{Record: existing.Clone(), Evidence: existing.Evidence()}, nil
@@ -96,7 +106,12 @@ func (r *Registrar) Register(ctx context.Context, source session.Record) (Regist
 		if err != nil {
 			return Registration{}, err
 		}
-		record, err := NewRecord(reference, source, now)
+		var record Record
+		if tenantBindingDigest == "" {
+			record, err = NewRecord(reference, source, now)
+		} else {
+			record, err = NewRecordWithTenantBinding(reference, source, tenantBindingDigest, now)
+		}
 		if err != nil {
 			return Registration{}, err
 		}
@@ -120,6 +135,7 @@ type Endpoint struct {
 	CapabilityProfileID  string
 	ConnectionGeneration int64
 	ExpiresAt            time.Time
+	TenantBindingDigest  string
 	Dial                 func(context.Context) (terminal.Stream, error)
 }
 
@@ -148,6 +164,7 @@ func (r *Resolver) Resolve(ctx context.Context, reference string) (Endpoint, err
 		Reference: record.Reference, SandboxID: record.SandboxID,
 		RuntimeSessionID: record.RuntimeSessionID, CapabilityProfileID: record.CapabilityProfileID,
 		ConnectionGeneration: record.ConnectionGeneration, ExpiresAt: record.ExpiresAt.UTC(),
+		TenantBindingDigest: record.TenantBindingDigest,
 	}
 	endpoint.Dial = func(dialCtx context.Context) (terminal.Stream, error) {
 		fresh, err := r.lookup(dialCtx, reference)

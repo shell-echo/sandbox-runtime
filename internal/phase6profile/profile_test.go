@@ -17,13 +17,19 @@ func validProfile() Profile {
 	role := func(name, account string, public, outbound bool) Role {
 		return Role{Name: name, ServiceAccount: account, Artifact: validArtifact(), LivenessPath: "/livez", ReadinessPath: "/readyz", PublicIngress: public, OutboundOnly: outbound}
 	}
-	return Profile{Version: 1, Revision: "phase6-revision", Configuration: "sha256:" + strings.Repeat("b", 64), Roles: []Role{role("gateway", "gateway", true, false), role("guest", "guest", false, true), role("browser", "browser", false, false), role("desktop", "desktop", false, false)}}
+	profile := Profile{Version: 1, Revision: "phase6-revision", SourceDigest: "sha256:" + strings.Repeat("c", 64), Configuration: "sha256:" + strings.Repeat("b", 64), Roles: []Role{role("gateway", "gateway", true, false), role("guest", "guest", false, true), role("browser", "browser", false, false), role("desktop", "desktop", false, false)}}
+	profile.ProfileDigest = profile.CanonicalDigest()
+	return profile
 }
 
 func TestProfileValidatesRoleBoundariesAndImmutableArtifacts(t *testing.T) {
 	profile := validProfile()
 	if err := profile.Validate(); err != nil {
 		t.Fatal(err)
+	}
+	profile.ProfileDigest = "sha256:" + strings.Repeat("d", 64)
+	if err := profile.Validate(); err == nil {
+		t.Fatal("profile content digest mismatch was accepted")
 	}
 	profile.Roles[0].Artifact.ImageReference = "registry.example.test/sandbox-runtime:latest"
 	if err := profile.Validate(); err == nil {

@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/shell-echo/sandbox-runtime/internal/desktophandoff"
 	"github.com/shell-echo/sandbox-runtime/provider/desktop"
 	"github.com/shell-echo/sandbox-runtime/provider/desktop/reference"
 	"github.com/shell-echo/sandbox-runtime/provider/desktop/reference/repository"
@@ -73,6 +74,9 @@ func (r *Registry) FindRunning(ctx context.Context, source desktop.Record) (refe
 }
 func (r *Registry) Revoke(ctx context.Context, value string, revokedAt time.Time) error {
 	return r.mutate(ctx, func() error { return r.state.Revoke(value, revokedAt) })
+}
+func (r *Registry) Bind(ctx context.Context, value string, binding desktophandoff.Binding) error {
+	return r.mutate(ctx, func() error { return r.state.Bind(value, binding) })
 }
 func (r *Registry) Close() error {
 	r.mu.Lock()

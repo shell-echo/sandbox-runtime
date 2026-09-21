@@ -57,10 +57,13 @@ func runDataPlaneServe(ctx context.Context, role config.DataPlaneRole, section s
 		graph, err = roleprocess.NewGatewayApplicationGraph(ctx, cfg)
 	case config.DataPlaneGuest:
 		graph, err = roleprocess.NewGuestApplicationGraph(ctx, cfg)
+	case config.DataPlaneBrowser, config.DataPlaneDesktop:
+		// Provider remains the sole handoff/runtime authority. These role
+		// processes are restricted opaque executor relays and do not own
+		// Provider state or Docker control.
+		graph, err = roleprocess.NewExecutorApplicationGraph(ctx, cfg)
 	default:
-		// Browser and Desktop remain explicitly unavailable until their
-		// private role graphs have a typed Provider handoff/media authority.
-		graph, err = roleprocess.ApplicationGraph{}, errors.New(string(role)+" application graph is not composed")
+		graph, err = roleprocess.ApplicationGraph{}, errors.New("unsupported data-plane role")
 	}
 	if err != nil {
 		return err

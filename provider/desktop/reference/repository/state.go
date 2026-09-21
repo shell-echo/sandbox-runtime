@@ -7,6 +7,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/shell-echo/sandbox-runtime/internal/desktophandoff"
 	"github.com/shell-echo/sandbox-runtime/provider/desktop"
 	"github.com/shell-echo/sandbox-runtime/provider/desktop/reference"
 )
@@ -85,6 +86,35 @@ func (s *State) Revoke(value string, revokedAt time.Time) error {
 		return reference.ErrInvalidRecord
 	}
 	record.RevokedAt = &revokedAt
+	if err := record.Validate(); err != nil {
+		return err
+	}
+	s.References[value] = record.Clone()
+	return nil
+}
+
+func (s *State) Bind(value string, binding desktophandoff.Binding) error {
+	s.ensureMap()
+	record, ok := s.References[value]
+	if !ok {
+		return reference.ErrNotFound
+	}
+	if err := binding.Validate(record.CreatedAt); err != nil || binding.HandoffReference != record.Reference || binding.ProviderRevisionID != record.ProviderRevisionID ||
+		binding.SandboxID != record.SandboxID || binding.DesktopSessionID != record.DesktopSessionID || binding.ConnectionGeneration != record.ConnectionGeneration ||
+		!binding.HandoffExpiresAt.Equal(record.ExpiresAt) {
+		return reference.ErrInvalidRecord
+	}
+	if record.RevokedAt != nil {
+		return reference.ErrRevoked
+	}
+	if record.Binding != nil {
+		if *record.Binding != binding {
+			return reference.ErrConflict
+		}
+		return nil
+	}
+	record.Binding = &binding
+	record.TenantBindingDigest = binding.TenantBindingDigest
 	if err := record.Validate(); err != nil {
 		return err
 	}

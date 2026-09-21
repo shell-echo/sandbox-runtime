@@ -29,8 +29,8 @@ const (
 	Entrypoint              = "/usr/local/bin/desktop-runtime"
 	BrokerSocket            = "/tmp/sandbox-runtime-desktop-broker.sock"
 	BrokerProtocol          = "sandbox.runtime/desktop-broker/v1"
+	SessionBrokerProtocol   = "sandbox.runtime/desktop-session/v1"
 	DisplayReference        = "ref:desktop-display:primary"
-	InstalledSetDigest      = "sha256:6b5fc1ece685456ed20f474c9af9547c597210f9105f7f12e9cf21d8377db4b5"
 	RequiredUID             = 1000
 	RequiredGID             = 1000
 	MaxManifestBytes        = 64 << 10
@@ -68,6 +68,7 @@ type Platform struct {
 	Architecture            string `json:"architecture"`
 	Variant                 string `json:"variant,omitempty"`
 	PackageArchiveSetDigest string `json:"package_archive_set_digest"`
+	InstalledSetDigest      string `json:"installed_set_digest"`
 }
 
 type Package struct {
@@ -76,19 +77,23 @@ type Package struct {
 }
 
 type Packages struct {
-	Repositories       []string  `json:"repositories"`
-	Required           []Package `json:"required"`
-	InstalledSetDigest string    `json:"installed_set_digest"`
+	Repositories []string  `json:"repositories"`
+	Required     []Package `json:"required"`
 }
 
 type Broker struct {
-	Path           string   `json:"path"`
-	Socket         string   `json:"socket"`
-	Protocol       string   `json:"protocol"`
-	Methods        []string `json:"methods"`
-	MaxRequest     int      `json:"max_request_bytes"`
-	MaxResponse    int      `json:"max_response_bytes"`
-	MaxConnections int      `json:"max_connections"`
+	Path               string   `json:"path"`
+	Socket             string   `json:"socket"`
+	Protocol           string   `json:"protocol"`
+	Methods            []string `json:"methods"`
+	SessionProtocol    string   `json:"session_protocol"`
+	SessionMethods     []string `json:"session_methods"`
+	MaxRequest         int      `json:"max_request_bytes"`
+	MaxResponse        int      `json:"max_response_bytes"`
+	MaxConnections     int      `json:"max_connections"`
+	SessionMaxDocument int      `json:"session_max_document_bytes"`
+	SessionMaxFrame    int      `json:"session_max_frame_bytes"`
+	SessionMaxQueue    int      `json:"session_max_queue"`
 }
 
 type Display struct {
@@ -194,12 +199,14 @@ func (m Manifest) Validate() error {
 		"linux/amd64": {
 			Digest:                  "sha256:1beb0dc0a51de7ff38e3b5274078a2e0b81113ba5c7535e1a03d5913a5edbda3",
 			Architecture:            "amd64",
-			PackageArchiveSetDigest: "sha256:591fef77f3bdbac861ef71ad7cfca7ef6e86a0ac092a7c10084118af10f40097",
+			PackageArchiveSetDigest: "sha256:872446c241d2c85db9995b1e12ca4246954f76883108f1e16415d8a0e711c4a6",
+			InstalledSetDigest:      "sha256:ea4e22c1f7011c6cfc975d64c5f2d110b3432bc5ae78064b94f7afa752e0a588",
 		},
 		"linux/arm64/v8": {
 			Digest:       "sha256:d858bb5442632a31bd4bca6c5e601dbe6b536fd7942092ea6a08a0a95805693c",
 			Architecture: "arm64", Variant: "v8",
-			PackageArchiveSetDigest: "sha256:28468a7b60dc3228ae95f738e7083f6c41b02d381aa1ae6f42afe8424e9a4727",
+			PackageArchiveSetDigest: "sha256:f6a17c5b4031b4068ae345333cdfc3d09a3ef30dfe77a461f13306d3cf5ac656",
+			InstalledSetDigest:      "sha256:25e5d714836bacf2e421a1d586d7c8d64a65887036989cc08810697a6dd8ec31",
 		},
 	}
 	if len(m.Source.Manifests) != len(wantPlatforms) {
@@ -221,14 +228,16 @@ func (m Manifest) Validate() error {
 		{Name: "xset", Version: "1.2.5-r1"},
 		{Name: "xwd", Version: "1.0.9-r2"},
 		{Name: "font-dejavu", Version: "2.37-r6"},
+		{Name: "ffmpeg", Version: "8.0.1-r1"},
 	}
-	if !equal(m.Packages.Repositories, wantRepositories) || !equal(m.Packages.Required, wantPackages) || m.Packages.InstalledSetDigest != InstalledSetDigest {
+	if !equal(m.Packages.Repositories, wantRepositories) || !equal(m.Packages.Required, wantPackages) {
 		return invalid("package authority is invalid")
 	}
-	wantBroker := Broker{Path: BrokerPath, Socket: BrokerSocket, Protocol: BrokerProtocol, Methods: []string{"probe", "describe"}, MaxRequest: 4096, MaxResponse: 8192, MaxConnections: 16}
+	wantBroker := Broker{Path: BrokerPath, Socket: BrokerSocket, Protocol: BrokerProtocol, Methods: []string{"probe", "describe"}, SessionProtocol: SessionBrokerProtocol, SessionMethods: []string{"open", "video.rtp", "input", "stream.configure", "stream.resync", "keyframe", "close"}, MaxRequest: 4096, MaxResponse: 8192, MaxConnections: 16, SessionMaxDocument: 64 << 10, SessionMaxFrame: 16 << 10, SessionMaxQueue: 32}
 	if m.Broker.Path != wantBroker.Path || m.Broker.Socket != wantBroker.Socket || m.Broker.Protocol != wantBroker.Protocol ||
 		!equal(m.Broker.Methods, wantBroker.Methods) || m.Broker.MaxRequest != wantBroker.MaxRequest ||
-		m.Broker.MaxResponse != wantBroker.MaxResponse || m.Broker.MaxConnections != wantBroker.MaxConnections {
+		m.Broker.MaxResponse != wantBroker.MaxResponse || m.Broker.MaxConnections != wantBroker.MaxConnections || m.Broker.SessionProtocol != wantBroker.SessionProtocol ||
+		!equal(m.Broker.SessionMethods, wantBroker.SessionMethods) || m.Broker.SessionMaxDocument != wantBroker.SessionMaxDocument || m.Broker.SessionMaxFrame != wantBroker.SessionMaxFrame || m.Broker.SessionMaxQueue != wantBroker.SessionMaxQueue {
 		return invalid("broker protocol authority is invalid")
 	}
 	wantDisplay := Display{Server: "/usr/bin/Xvfb", WindowManager: "/usr/bin/openbox", Display: ":99", Reference: DisplayReference, Width: 1280, Height: 720, Depth: 24, TCPListen: false, AudioOutput: false, UserLaunchOverrides: "rejected"}

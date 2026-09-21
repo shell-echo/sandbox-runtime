@@ -4,7 +4,7 @@ ARG BASE_IMAGE_DIGEST=sha256:d858bb5442632a31bd4bca6c5e601dbe6b536fd7942092ea6a0
 FROM ${BASE_IMAGE}@${BASE_IMAGE_DIGEST} AS prepared
 
 ARG PACKAGE_ARCHIVE_SET_SHA256
-ARG INSTALLED_SET_SHA256=6b5fc1ece685456ed20f474c9af9547c597210f9105f7f12e9cf21d8377db4b5
+ARG INSTALLED_SET_SHA256
 
 RUN printf '%s\n' \
       'https://dl-cdn.alpinelinux.org/alpine/v3.23/main' \
@@ -20,7 +20,8 @@ RUN printf '%s\n' \
       xdpyinfo=1.4.0-r0 \
       xset=1.2.5-r1 \
       xwd=1.0.9-r2 \
-      font-dejavu=2.37-r6 >/dev/null && \
+      font-dejavu=2.37-r6 \
+      ffmpeg=8.0.1-r1 >/dev/null && \
     archive_digest="$(find /tmp/apks -type f -exec sha256sum {} \; | LC_ALL=C sort -k2 | sha256sum | cut -d' ' -f1)" && \
     test "${archive_digest}" = "${PACKAGE_ARCHIVE_SET_SHA256}" && \
     apk add --no-network /tmp/apks/*.apk >/dev/null && \
@@ -64,6 +65,7 @@ ARG SOURCE_DATE_EPOCH=0
 ARG BASE_IMAGE
 ARG BASE_IMAGE_DIGEST
 ARG PACKAGE_ARCHIVE_SET_SHA256
+ARG INSTALLED_SET_SHA256
 
 LABEL org.opencontainers.image.title="sandbox-runtime Desktop guest" \
       org.opencontainers.image.description="Provider-local Desktop guest; no public Gateway" \
@@ -77,6 +79,7 @@ LABEL org.opencontainers.image.title="sandbox-runtime Desktop guest" \
       io.github.shell-echo.sandbox-runtime.desktop-broker-protocol="sandbox.runtime/desktop-broker/v1" \
       io.github.shell-echo.sandbox-runtime.desktop-broker-path="/usr/local/libexec/sandbox-runtime/desktop-broker" \
       io.github.shell-echo.sandbox-runtime.package-archive-set-digest="sha256:${PACKAGE_ARCHIVE_SET_SHA256}" \
+      io.github.shell-echo.sandbox-runtime.installed-set-digest="sha256:${INSTALLED_SET_SHA256}" \
       io.github.shell-echo.sandbox-runtime.provenance.source-digest="${BASE_IMAGE_DIGEST}" \
       io.github.shell-echo.sandbox-runtime.provenance.source-date-epoch="${SOURCE_DATE_EPOCH}"
 

@@ -1,9 +1,9 @@
 # Product v1 Phase 6 Slice 4 — Data-Plane Role Boundaries
 
-Date: 2026-09-20
+Date: 2026-09-21
 
-Status: **boundary implementation in progress; not a completed Phase 6
-slice**.
+Status: **complete within the bounded local independent-process evidence
+boundary; Phase 6 is 4/15 complete**.
 
 ## Implemented repository scope
 
@@ -18,18 +18,73 @@ slice**.
 - Commands reject enabled Product/Provider or sibling-role authority in the
   same process. Private authority files are absolute, distinct, and bounded by
   configuration validation.
+- `cmd/browser-executor-backend` supplies an independently runnable,
+  operator-owned Browser CDP relay. It terminates private mTLS, validates the
+  complete executor authority before opening the upstream, bounds sessions,
+  rejects replay, and has no Provider database or Docker dependency.
+- `cmd/desktop-executor-backend` supplies the corresponding Desktop relay. It
+  accepts only `executor.v2`, requires a Provider-signed `desktop-bridge.v2`
+  statement, verifies executor identity binding, and bridges only to a
+  mode-0600 Unix Desktop broker socket. The broker's v2 session route is
+  isolated from the legacy `desktophandoff.v1` route and verifies its own
+  pinned Provider key, broker digest, expiry, fence, epoch, and replay ledger.
+- Provider's remote Desktop adapter now requires explicit Ed25519 bridge key
+  material and executor identity. The non-release local candidate runtime
+  injects only the corresponding public key and key ID into the broker process;
+  missing key material or an implicit session protocol fails closed.
+- The broker persists a bounded replay ledger using canonical closed JSON,
+  mode 0600, atomic replacement and directory synchronization. Concurrent or
+  post-restart reuse, expired claims, corrupt state and capacity exhaustion are
+  rejected. Desktop readiness performs `probe.v2`, rather than treating a
+  reachable legacy broker as ready.
+- `build-phase6-candidate.sh`, `internal/desktopcandidate`, and the Provider
+  local-candidate constructor keep Slice 4 integration identity separate from
+  the signed Phase 5 production lock. Production rejects `executor.v2` until
+  Slice 7 publishes the replacement runtime.
+- Browser and Desktop restricted egress share neutral Docker primitives but
+  use sealed role identities and distinct thin provisioners. Recovery requires
+  one exact role-owned workload name plus matching sandbox, session,
+  generation, fence, network and identity labels; cross-role substitution,
+  drift and extra workloads fail closed.
 
-## Remaining gate
+## Authority decision
 
-The role listener boundary is not the complete Slice 4 data plane. The
-Gateway authorization/relay/capacity/revocation/recording graph, Guest
-authenticated reconnect graph, and Browser/Desktop private application
-handlers still need to be composed into these commands and exercised through
-independent processes with dependency loss, bounded drain, least-authority
-credentials, and private-coordinate nondisclosure. No Slice 4 completion,
-deployment, HA, or production-readiness claim follows from this boundary
-implementation.
+ADR 0052 fixes the Browser/Desktop boundary: Provider remains the sole owner
+of private handoff, PostgreSQL session/reference truth, tenant binding,
+generation/fence/expiry/revocation/recovery, and Docker runtime attach. The
+independent Browser/Desktop processes are restricted media/input executors
+using a versioned opaque-only private mTLS protocol. They must not copy state,
+write Provider databases, or hold Docker control authority.
 
-The next code step is to compose the already-owned Gateway, Guest, Browser,
-and Desktop applications behind these role transports without importing
-Provider repositories or local-instance authority into the public roles.
+## Acceptance evidence
+
+The tagged Slice 4 gate starts Product, Gateway, Provider, Guest, Browser and
+Desktop as six independent OS processes, plus independently runnable Browser
+and Desktop executor backends. It uses fresh PostgreSQL containers, pinned real
+Chromium and a locally built digest-bound Desktop candidate. The strict
+manifest verifier accepts exactly six roles and twelve scenarios:
+
+- normal Desktop attach, real VP8 RTP and fenced pointer input;
+- replay, expired authority, capacity and generation/fence/epoch/policy drift
+  rejection;
+- authenticated Guest bounded reconnect and Provider dependency-loss
+  readiness closure/recovery;
+- broker-session, Desktop-role and Provider process restart;
+- bounded active Browser drain; and
+- Desktop close plus exact zero process, listener, socket, container, network
+  and temporary Gateway-image cleanup.
+
+The accepted local candidate is `linux/arm64/v8` image
+`sha256:ad7dc53bbd97f470be1c4824dce480e5556eb215b1ff9f7d0549bd9365d7b31e`.
+The gate writes evidence outside the source tree and immediately re-verifies it
+with `cmd/verify-product-phase6-evidence`; the manifest binds the then-current
+source tree and configuration, so later source changes require a fresh run.
+
+## Claim boundary
+
+This closes Slice 4 only. The Desktop image remains
+`local-candidate-non-release`: it is not published, signed or production
+qualified. The result proves role boundaries and internal executor data paths,
+not complete public Product-to-Gateway-to-Provider E2E, deployment, HA,
+hostile-multitenant isolation, SLO attainment or production readiness. Slice 5
+secret-reference/KMS/rotation work is next.

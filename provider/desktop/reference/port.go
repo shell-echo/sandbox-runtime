@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/shell-echo/sandbox-runtime/internal/desktophandoff"
 	"github.com/shell-echo/sandbox-runtime/provider/desktop"
 )
 
@@ -16,6 +17,13 @@ type Store interface {
 	Get(context.Context, string) (Record, error)
 	FindRunning(context.Context, desktop.Record) (Record, error)
 	Revoke(context.Context, string, time.Time) error
+}
+
+// BindingStore is an optional durable private registration extension. It is
+// deliberately separate from the public Provider Contract and binds Product
+// Gateway authority only after authenticated private admission.
+type BindingStore interface {
+	Bind(context.Context, string, desktophandoff.Binding) error
 }
 type SessionReader interface {
 	GetOpen(context.Context, string) (desktop.Record, error)
@@ -41,6 +49,20 @@ type Registrar struct {
 	mu        sync.Mutex
 }
 
+func (r *Registrar) BindHandoff(ctx context.Context, binding desktophandoff.Binding) error {
+	if r == nil || r.store == nil {
+		return ErrUnavailable
+	}
+	if err := binding.Validate(r.clock.Now().UTC()); err != nil {
+		return ErrInvalidRecord
+	}
+	store, ok := r.store.(BindingStore)
+	if !ok {
+		return ErrUnavailable
+	}
+	return store.Bind(ctx, binding.HandoffReference, binding)
+}
+
 func NewRegistrar(store Store, clock Clock, generator Generator) (*Registrar, error) {
 	if store == nil || clock == nil {
 		return nil, ErrUnavailable
@@ -51,6 +73,14 @@ func NewRegistrar(store Store, clock Clock, generator Generator) (*Registrar, er
 	return &Registrar{store: store, clock: clock, generator: generator}, nil
 }
 func (r *Registrar) Register(ctx context.Context, source desktop.Record) (Registration, error) {
+	return r.register(ctx, source, "")
+}
+
+func (r *Registrar) RegisterWithTenantBinding(ctx context.Context, source desktop.Record, tenantBindingDigest string) (Registration, error) {
+	return r.register(ctx, source, tenantBindingDigest)
+}
+
+func (r *Registrar) register(ctx context.Context, source desktop.Record, tenantBindingDigest string) (Registration, error) {
 	if r == nil || r.store == nil || r.clock == nil || r.generator == nil {
 		return Registration{}, ErrUnavailable
 	}
@@ -60,7 +90,7 @@ func (r *Registrar) Register(ctx context.Context, source desktop.Record) (Regist
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if existing, err := r.store.FindRunning(ctx, source); err == nil {
-		if existing.RevokedAt != nil {
+		if existing.RevokedAt != nil || (tenantBindingDigest != "" && existing.TenantBindingDigest != tenantBindingDigest) {
 			return Registration{}, ErrUnavailable
 		}
 		return Registration{Record: existing.Clone(), Evidence: existing.Evidence()}, nil
@@ -76,7 +106,12 @@ func (r *Registrar) Register(ctx context.Context, source desktop.Record) (Regist
 		if err != nil {
 			return Registration{}, err
 		}
-		record, err := NewRecord(value, source, now)
+		var record Record
+		if tenantBindingDigest == "" {
+			record, err = NewRecord(value, source, now)
+		} else {
+			record, err = NewRecordWithTenantBinding(value, source, tenantBindingDigest, now)
+		}
 		if err != nil {
 			return Registration{}, err
 		}
@@ -135,11 +170,15 @@ func (r *Registrar) ObserveHandoffRevoked(ctx context.Context, source desktop.Re
 
 type Endpoint struct {
 	Reference            string
+	ProviderRevisionID   string
 	SandboxID            string
 	DesktopSessionID     string
+	AllocationReference  string
 	CapabilityProfileID  string
 	ConnectionGeneration int64
 	ExpiresAt            time.Time
+	TenantBindingDigest  string
+	Binding              *desktophandoff.Binding
 	Attach               func(context.Context) (desktop.Attachment, error)
 }
 type Resolver struct {
@@ -160,7 +199,7 @@ func (r *Resolver) Resolve(ctx context.Context, value string) (Endpoint, error) 
 	if err != nil {
 		return Endpoint{}, err
 	}
-	endpoint := Endpoint{Reference: record.Reference, SandboxID: record.SandboxID, DesktopSessionID: record.DesktopSessionID, CapabilityProfileID: record.CapabilityProfileID, ConnectionGeneration: record.ConnectionGeneration, ExpiresAt: record.ExpiresAt.UTC()}
+	endpoint := Endpoint{Reference: record.Reference, ProviderRevisionID: record.ProviderRevisionID, SandboxID: record.SandboxID, DesktopSessionID: record.DesktopSessionID, AllocationReference: record.Receipt.Reference, CapabilityProfileID: record.CapabilityProfileID, ConnectionGeneration: record.ConnectionGeneration, ExpiresAt: record.ExpiresAt.UTC(), TenantBindingDigest: record.TenantBindingDigest, Binding: cloneBinding(record.Binding)}
 	endpoint.Attach = func(attachCtx context.Context) (desktop.Attachment, error) {
 		fresh, err := r.lookup(attachCtx, value)
 		if err != nil {
@@ -179,6 +218,14 @@ func (r *Resolver) Resolve(ctx context.Context, value string) (Endpoint, error) 
 		return attachment.Clone(), nil
 	}
 	return endpoint, nil
+}
+
+func cloneBinding(value *desktophandoff.Binding) *desktophandoff.Binding {
+	if value == nil {
+		return nil
+	}
+	clone := *value
+	return &clone
 }
 func (r *Resolver) lookup(ctx context.Context, value string) (Record, error) {
 	if r == nil || r.store == nil || r.sessions == nil || r.attacher == nil || r.clock == nil {

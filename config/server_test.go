@@ -1133,3 +1133,32 @@ func optionHTTP(host string, port int) option.HTTP {
 func serverInt64Pointer(value int64) *int64 {
 	return &value
 }
+
+func TestProviderPrivateTransportValidationIsClosedAndBounded(t *testing.T) {
+	valid := ProviderPrivateTransportConfig{
+		Enabled: true, Address: option.HTTP{Host: "127.0.0.1", Port: 9554},
+		ServerCertificateFile: "private.crt", ServerPrivateKeyFile: "private.key", ClientCABundleFile: "private-ca.pem",
+		AllowedClientURIIdentities: []string{"spiffe://sandbox.test/gateway"}, RoutePolicy: []string{ProviderPrivateRouteTerminal, ProviderPrivateRouteBrowser},
+		ReadHeaderTimeoutMillis: 5000, ReadTimeoutMillis: 30000, WriteTimeoutMillis: 30000, IdleTimeoutMillis: 60000,
+		MaxHeaderBytes: 32 << 10, MaxBodyBytes: 256 << 10,
+	}
+	if err := valid.Validate(); err != nil {
+		t.Fatalf("valid private transport rejected: %v", err)
+	}
+	for name, mutate := range map[string]func(*ProviderPrivateTransportConfig){
+		"unknown route": func(c *ProviderPrivateTransportConfig) { c.RoutePolicy = []string{"private-admin"} },
+		"duplicate route": func(c *ProviderPrivateTransportConfig) {
+			c.RoutePolicy = []string{ProviderPrivateRouteBrowser, ProviderPrivateRouteBrowser}
+		},
+		"oversized body":   func(c *ProviderPrivateTransportConfig) { c.MaxBodyBytes = 16<<20 + 1 },
+		"missing identity": func(c *ProviderPrivateTransportConfig) { c.AllowedClientURIIdentities = nil },
+	} {
+		t.Run(name, func(t *testing.T) {
+			candidate := valid
+			mutate(&candidate)
+			if err := candidate.Validate(); err == nil {
+				t.Fatal("invalid private transport accepted")
+			}
+		})
+	}
+}

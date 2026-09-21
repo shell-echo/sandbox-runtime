@@ -62,6 +62,59 @@ func TestProviderProcessValidatesExactDesktopProfile(t *testing.T) {
 	}
 }
 
+func TestProviderProcessSeparatesLocalDesktopCandidateFromProduction(t *testing.T) {
+	candidate := validProviderProcessConfig(t)
+	directory := t.TempDir()
+	path := func(name string) string { return filepath.Join(directory, name) }
+	candidate.DeploymentLevel = ProviderLocalCandidateLevel
+	candidate.Profile = ProviderProcessDesktopProfile
+	candidate.Coding.Lifecycle.Image = ""
+	candidate.Desktop.Architecture = "arm64"
+	candidate.Desktop.Docker.Image = "sha256:" + strings.Repeat("9", 64)
+	candidate.Desktop.Docker.PullPolicy = "never"
+	candidate.Desktop.Docker.DataRoot = path("desktop-runtime")
+	candidate.Desktop.Docker.ManifestPath = path("desktop-manifest.json")
+	candidate.Desktop.Docker.Namespace = "desktop-candidate"
+	candidate.Desktop.Docker.ControllerID = "desktop-controller-1"
+	candidate.Desktop.Docker.NetworkPolicyReference = "desktop-egress-policy-1"
+	candidate.Desktop.LocalCandidateManifestFile = path("local-candidate.json")
+	candidate.Desktop.ExecutorURL = "wss://127.0.0.1:9444/executor"
+	candidate.Desktop.BrokerMuxSocketPath = path("desktop-broker-11111111111111111111111111111111.sock")
+	candidate.Desktop.ExecutorCABundleFile = path("executor-ca.pem")
+	candidate.Desktop.ExecutorCertificateFile = path("executor.crt")
+	candidate.Desktop.ExecutorPrivateKeyFile = path("executor.key")
+	candidate.Desktop.ExecutorIdentity = "executor-desktop-1"
+	candidate.Desktop.ExecutorBridgeKeyID = "provider-desktop-v2"
+	candidate.Desktop.ExecutorBridgePrivateKeyFile = path("bridge.key")
+	candidate.Desktop.Provenance = ProviderBrowserProvenanceConfig{}
+	candidate.Desktop.RestrictedNetwork.GatewayImage = "sha256:" + strings.Repeat("d", 64)
+	candidate.Desktop.RestrictedNetwork.UplinkNetwork = "desktop-candidate-uplink"
+	candidate.Desktop.RestrictedNetwork.Namespace = candidate.Desktop.Docker.Namespace
+	candidate.Desktop.RestrictedNetwork.ControllerID = candidate.Desktop.Docker.ControllerID
+	candidate.Desktop.RestrictedNetwork.Policies = []ProviderBrowserNetworkPolicyConfig{{Reference: candidate.Desktop.Docker.NetworkPolicyReference, AllowedHosts: []string{"packages.example.test"}}}
+	if err := candidate.Validate(); err != nil {
+		t.Fatalf("valid local candidate: %v", err)
+	}
+
+	production := *candidate
+	production.DeploymentLevel = ProviderProductionLevel
+	production.Desktop = candidate.Desktop
+	production.Desktop.Docker.Image = desktopimage.LockedPublication().Image()
+	production.Desktop.Docker.PullPolicy = "if_not_present"
+	production.Desktop.LocalCandidateManifestFile = ""
+	production.Desktop.Provenance = ProviderBrowserProvenanceConfig{ExecutablePath: path("gh"), ExecutableDigest: "sha256:" + strings.Repeat("c", 64)}
+	if err := production.Validate(); err == nil {
+		t.Fatal("production accepted the unpublished Desktop v2 executor runtime")
+	}
+
+	missingExecutor := *candidate
+	missingExecutor.Desktop = candidate.Desktop
+	missingExecutor.Desktop.ExecutorURL = ""
+	if err := missingExecutor.Validate(); err == nil {
+		t.Fatal("local candidate without Desktop executor was accepted")
+	}
+}
+
 func TestProviderProcessValidatesExactCodingProfile(t *testing.T) {
 	candidate := validProviderProcessConfig(t)
 	if err := candidate.Validate(); err != nil {

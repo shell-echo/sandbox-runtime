@@ -366,12 +366,12 @@ func projectCreateNetworkPolicy(spec providerv1.SandboxSpec) (lifecycle.NetworkP
 	case providerv1.NetworkNone:
 		if spec.Network.PolicyReference != "" ||
 			(spec.Network.EgressGatewayRequired != nil && *spec.Network.EgressGatewayRequired) ||
-			spec.RuntimeProfile == lifecycle.BrowserRuntimeProfile {
+			spec.RuntimeProfile == lifecycle.BrowserRuntimeProfile || spec.RuntimeProfile == lifecycle.DesktopRuntimeProfile {
 			return lifecycle.NetworkPolicy{}, errors.New("Provider network-none policy is not supported for this runtime")
 		}
 		return lifecycle.NetworkPolicy{Mode: lifecycle.NetworkNone}, nil
 	case providerv1.NetworkRestricted:
-		if spec.RuntimeProfile != lifecycle.BrowserRuntimeProfile || spec.Network.PolicyReference == "" ||
+		if spec.RuntimeProfile != lifecycle.BrowserRuntimeProfile && spec.RuntimeProfile != lifecycle.DesktopRuntimeProfile || spec.Network.PolicyReference == "" ||
 			spec.Network.EgressGatewayRequired == nil || !*spec.Network.EgressGatewayRequired ||
 			lifecycle.ValidateIdentifier(spec.Network.PolicyReference) != nil {
 			return lifecycle.NetworkPolicy{}, errors.New("Provider restricted network policy is invalid")

@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/shell-echo/sandbox-runtime/internal/desktophandoff"
 	"github.com/shell-echo/sandbox-runtime/provider/desktop"
 	"github.com/shell-echo/sandbox-runtime/provider/desktop/reference"
 	"github.com/shell-echo/sandbox-runtime/provider/desktop/reference/repository"
@@ -60,6 +61,17 @@ func (r *Registry) Revoke(ctx context.Context, value string, revokedAt time.Time
 		return reference.ErrClosed
 	}
 	return r.state.Revoke(value, revokedAt)
+}
+func (r *Registry) Bind(ctx context.Context, value string, binding desktophandoff.Binding) error {
+	if err := contextError(ctx); err != nil {
+		return err
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.closed {
+		return reference.ErrClosed
+	}
+	return r.state.Bind(value, binding)
 }
 func (r *Registry) Close() error { r.mu.Lock(); defer r.mu.Unlock(); r.closed = true; return nil }
 func contextError(ctx context.Context) error {

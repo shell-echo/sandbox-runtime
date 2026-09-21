@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -20,8 +21,10 @@ import (
 	cerrdefs "github.com/containerd/errdefs"
 
 	"github.com/shell-echo/sandbox-runtime/internal/desktopbroker"
+	"github.com/shell-echo/sandbox-runtime/internal/desktopcandidate"
 	desktopimage "github.com/shell-echo/sandbox-runtime/profiles/desktop/image"
 	providerdesktop "github.com/shell-echo/sandbox-runtime/provider/desktop"
+	"github.com/shell-echo/sandbox-runtime/provider/network/restricted"
 )
 
 const (
@@ -52,6 +55,7 @@ type Driver struct {
 	dataRoot    string
 	manifest    desktopimage.Manifest
 	publication desktopimage.Publication
+	candidate   *desktopcandidate.Manifest
 	image       imageInfo
 	provenance  ProvenanceVerifier
 	network     RestrictedNetwork
@@ -67,6 +71,24 @@ func New(ctx context.Context, options Options, provenance ProvenanceVerifier, ne
 		return nil, ErrInvalidDriver
 	}
 	driver, err := newDriver(ctx, backend, options, provenance, network)
+	if err != nil {
+		_ = backend.close()
+		return nil, err
+	}
+	return driver, nil
+}
+
+// NewLocalCandidate constructs the non-release Slice 4 integration adapter.
+// The candidate digest is never promoted to the signed production lock.
+func NewLocalCandidate(ctx context.Context, options Options, candidate desktopcandidate.Manifest, network RestrictedNetwork) (*Driver, error) {
+	if err := contextError(ctx); err != nil {
+		return nil, err
+	}
+	backend, err := newMobyEngine(options.Host)
+	if err != nil {
+		return nil, ErrInvalidDriver
+	}
+	driver, err := newCandidateDriver(ctx, backend, options, candidate, network)
 	if err != nil {
 		_ = backend.close()
 		return nil, err
@@ -142,6 +164,53 @@ func newDriver(ctx context.Context, backend engine, options Options, provenance 
 	}, nil
 }
 
+func newCandidateDriver(ctx context.Context, backend engine, options Options, candidate desktopcandidate.Manifest, network RestrictedNetwork) (*Driver, error) {
+	if err := contextError(ctx); err != nil {
+		return nil, err
+	}
+	if backend == nil || network == nil || options.validateCandidate(candidate) != nil {
+		return nil, ErrInvalidDriver
+	}
+	manifest, err := desktopimage.Load(options.ManifestPath)
+	if err != nil || manifest.ProfileID != DesktopRuntimeProfile {
+		return nil, ErrInvalidOptions
+	}
+	root, err := prepareDataRoot(options.DataRoot)
+	if err != nil {
+		return nil, ErrInvalidOptions
+	}
+	pingCtx, pingCancel := context.WithTimeout(ctx, connectTimeout)
+	if err := backend.ping(pingCtx); err != nil {
+		result := safeContextError(ErrInvalidDriver, pingCtx, err)
+		pingCancel()
+		return nil, result
+	}
+	pingCancel()
+	networkCtx, networkCancel := context.WithTimeout(ctx, connectTimeout)
+	if err := network.Ready(networkCtx, options.NetworkPolicyReference); err != nil {
+		result := safeContextError(ErrNetworkUnavailable, networkCtx, err)
+		networkCancel()
+		return nil, result
+	}
+	networkCancel()
+	inspectCtx, inspectCancel := context.WithTimeout(ctx, time.Duration(options.OperationTimeoutSeconds)*time.Second)
+	image, err := backend.inspectImage(inspectCtx, options.Image)
+	if err != nil {
+		result := safeContextError(ErrInvalidRuntime, inspectCtx, err)
+		inspectCancel()
+		return nil, result
+	}
+	inspectCancel()
+	if validateCandidateImage(image, manifest, candidate) != nil {
+		return nil, ErrInvalidRuntime
+	}
+	copyCandidate := candidate
+	return &Driver{
+		engine: backend, options: options, dataRoot: root, manifest: manifest,
+		candidate: &copyCandidate, image: image, network: network,
+	}, nil
+}
+
 func validateImage(info imageInfo, manifest desktopimage.Manifest, publication desktopimage.Publication) error {
 	bound := info.descriptorDigest == publication.Digest
 	for _, repositoryDigest := range info.repositoryDigests {
@@ -170,10 +239,47 @@ func validateImage(info imageInfo, manifest desktopimage.Manifest, publication d
 		labels["io.github.shell-echo.sandbox-runtime.desktop-broker-protocol"] != desktopimage.BrokerProtocol ||
 		labels["io.github.shell-echo.sandbox-runtime.desktop-broker-path"] != desktopimage.BrokerPath ||
 		labels["io.github.shell-echo.sandbox-runtime.package-archive-set-digest"] != source.PackageArchiveSetDigest ||
+		labels["io.github.shell-echo.sandbox-runtime.installed-set-digest"] != source.InstalledSetDigest ||
 		labels["io.github.shell-echo.sandbox-runtime.provenance.source-digest"] != source.Digest ||
 		labels["org.opencontainers.image.base.digest"] != source.Digest ||
 		labels["org.opencontainers.image.base.name"] != desktopimage.SourceRepository ||
 		labels["org.opencontainers.image.revision"] != publication.SourceCommit ||
+		labels["org.opencontainers.image.source"] != "https://github.com/shell-echo/sandbox-runtime" ||
+		labels["org.opencontainers.image.version"] != desktopimage.ProfileID {
+		return ErrInvalidRuntime
+	}
+	return nil
+}
+
+func validateCandidateImage(info imageInfo, manifest desktopimage.Manifest, candidate desktopcandidate.Manifest) error {
+	if candidate.Validate() != nil || info.id != candidate.ImageDigest || candidate.ConfigDigest != candidate.ImageDigest ||
+		info.user != DesktopUser || info.workingDirectory != "/workspace" ||
+		strings.Join(info.entrypoint, "\x00") != "/usr/local/bin/desktop-runtime" || len(info.command) != 0 ||
+		info.operatingSystem != "linux" || info.exposedPorts != 0 {
+		return ErrInvalidRuntime
+	}
+	platform := "linux/" + info.architecture
+	if info.architecture == "arm64" {
+		if info.variant != "" && info.variant != "v8" {
+			return ErrInvalidRuntime
+		}
+		platform = "linux/arm64/v8"
+	} else if info.architecture != "amd64" || info.variant != "" {
+		return ErrInvalidRuntime
+	}
+	source, ok := manifest.Source.Manifests[platform]
+	labels := info.labels
+	if !ok || platform != candidate.Platform || source.Digest != candidate.BaseImageDigest ||
+		source.PackageArchiveSetDigest != candidate.PackageArchiveSetDigest || source.InstalledSetDigest != candidate.InstalledSetDigest ||
+		labels["io.github.shell-echo.sandbox-runtime.profile"] != candidate.ProfileID ||
+		labels["io.github.shell-echo.sandbox-runtime.desktop-broker-protocol"] != candidate.BrokerProtocol ||
+		labels["io.github.shell-echo.sandbox-runtime.desktop-broker-path"] != desktopimage.BrokerPath ||
+		labels["io.github.shell-echo.sandbox-runtime.package-archive-set-digest"] != candidate.PackageArchiveSetDigest ||
+		labels["io.github.shell-echo.sandbox-runtime.installed-set-digest"] != candidate.InstalledSetDigest ||
+		labels["io.github.shell-echo.sandbox-runtime.provenance.source-digest"] != candidate.BaseImageDigest ||
+		labels["org.opencontainers.image.base.digest"] != candidate.BaseImageDigest ||
+		labels["org.opencontainers.image.base.name"] != desktopimage.SourceRepository ||
+		labels["org.opencontainers.image.revision"] != candidate.SourceRevision ||
 		labels["org.opencontainers.image.source"] != "https://github.com/shell-echo/sandbox-runtime" ||
 		labels["org.opencontainers.image.version"] != desktopimage.ProfileID {
 		return ErrInvalidRuntime
@@ -187,7 +293,7 @@ func (d *Driver) Ready(ctx context.Context) error {
 	if err := contextError(ctx); err != nil {
 		return err
 	}
-	if d == nil || d.engine == nil || d.provenance == nil || d.network == nil {
+	if d == nil || d.engine == nil || d.network == nil || (d.provenance == nil && d.candidate == nil) {
 		return ErrInvalidDriver
 	}
 	networkCtx, networkCancel := context.WithTimeout(ctx, connectTimeout)
@@ -197,13 +303,15 @@ func (d *Driver) Ready(ctx context.Context) error {
 		return result
 	}
 	networkCancel()
-	provenanceCtx, provenanceCancel := context.WithTimeout(ctx, time.Duration(d.options.ProvenanceTimeoutSeconds)*time.Second)
-	if err := d.provenance.Verify(provenanceCtx, d.publication); err != nil {
-		result := safeContextError(ErrInvalidProvenance, provenanceCtx, err)
+	if d.candidate == nil {
+		provenanceCtx, provenanceCancel := context.WithTimeout(ctx, time.Duration(d.options.ProvenanceTimeoutSeconds)*time.Second)
+		if err := d.provenance.Verify(provenanceCtx, d.publication); err != nil {
+			result := safeContextError(ErrInvalidProvenance, provenanceCtx, err)
+			provenanceCancel()
+			return result
+		}
 		provenanceCancel()
-		return result
 	}
-	provenanceCancel()
 	inspectCtx, inspectCancel := context.WithTimeout(ctx, time.Duration(d.options.OperationTimeoutSeconds)*time.Second)
 	image, err := d.engine.inspectImage(inspectCtx, d.options.Image)
 	if err != nil {
@@ -212,7 +320,11 @@ func (d *Driver) Ready(ctx context.Context) error {
 		return result
 	}
 	inspectCancel()
-	if validateImage(image, d.manifest, d.publication) != nil {
+	if d.candidate != nil {
+		if validateCandidateImage(image, d.manifest, *d.candidate) != nil {
+			return ErrInvalidRuntime
+		}
+	} else if validateImage(image, d.manifest, d.publication) != nil {
 		return ErrInvalidRuntime
 	}
 	return nil
@@ -263,7 +375,8 @@ func (d *Driver) Allocate(ctx context.Context, allocation providerdesktop.Alloca
 	attachment, err := d.network.Acquire(operationCtx, NetworkRequest{
 		SandboxID: allocation.Request.SandboxID, DesktopSessionID: allocation.Request.DesktopSessionID,
 		Namespace: d.options.Namespace, ControllerID: d.options.ControllerID,
-		PolicyReference: allocation.Request.NetworkPolicyReference,
+		PolicyReference: allocation.Request.NetworkPolicyReference, Generation: allocation.Request.ExpectedGeneration,
+		FencingToken: allocation.Request.FencingToken,
 	})
 	if err != nil {
 		if contextErr := allocationContextError(operationCtx, err); contextErr != nil {
@@ -618,7 +731,7 @@ func validateContainerRuntime(info containerInfo, request createRequest, image i
 	if info.imageID != image.id || info.imageReference != request.image || info.user != request.user ||
 		info.workingDirectory != request.workingDirectory || strings.Join(info.entrypoint, "\x00") != strings.Join(image.entrypoint, "\x00") ||
 		strings.Join(info.command, "\x00") != strings.Join(image.command, "\x00") ||
-		strings.Join(info.environment, "\x00") != strings.Join(image.environment, "\x00") ||
+		strings.Join(info.environment, "\x00") != strings.Join(request.environment, "\x00") ||
 		info.stopTimeout != request.stopTimeout || info.exposedPorts != 0 || info.privileged || info.autoRemove ||
 		!info.readOnlyRoot || info.publishAllPorts || info.portBindings != 0 || info.binds != 0 || info.mounts != 0 ||
 		!stringMapEqual(info.tmpfs, expectedTmpfs) || resolverErr != nil || len(info.dns) != 1 || info.dns[0] != resolver ||
@@ -649,24 +762,36 @@ func stringMapEqual(left, right map[string]string) bool {
 }
 
 func (d *Driver) createRequest(state desktopState) createRequest {
+	environment := append([]string(nil), d.image.environment...)
+	sessionProtocol := desktopbroker.SessionProtocolID
+	if d.options.BridgeKeyID != "" {
+		sessionProtocol = desktopbroker.SessionProtocolV2ID
+		environment = append(environment,
+			"SANDBOX_RUNTIME_DESKTOP_BRIDGE_PUBLIC_KEY="+base64.RawStdEncoding.EncodeToString(d.options.BridgePublicKey),
+			"SANDBOX_RUNTIME_DESKTOP_BRIDGE_KEY_ID="+d.options.BridgeKeyID)
+	}
+	environment = append(environment, desktopbroker.SessionProtocolEnv+"="+sessionProtocol)
+	identity, _ := restricted.DesktopIdentity(d.options.Namespace, d.options.ControllerID, state.Request.SandboxID, state.Request.DesktopSessionID, state.Request.ExpectedGeneration, state.Request.FencingToken)
+	labels := identity.WorkloadLabels(state.Network.LeaseID)
+	labels[specDigestLabel] = state.SpecDigest
 	return createRequest{
-		name:  containerName(state.Request.SandboxID, state.Request.DesktopSessionID),
+		name:  identity.WorkloadName(),
 		image: d.options.Image, user: DesktopUser, workingDirectory: "/workspace",
 		memoryBytes: d.options.MemoryBytes, nanoCPUs: d.options.NanoCPUs, pidsLimit: d.options.PidsLimit,
 		inputsBytes: d.options.InputsBytes, tmpfsBytes: d.options.TmpfsBytes,
 		workspaceBytes: d.options.WorkspaceBytes, outputsBytes: d.options.OutputsBytes,
 		stopTimeout: d.options.StopTimeoutSeconds, networkName: state.Network.DockerName,
 		dnsResolver: state.Network.GatewayAddress,
-		labels: map[string]string{
-			managedLabel: "true", ownerLabel: providerOwner,
-			sandboxLabel: state.Request.SandboxID, desktopSessionLabel: state.Request.DesktopSessionID,
-			namespaceLabel: d.options.Namespace, controllerLabel: d.options.ControllerID,
-			runtimeProfileLabel: DesktopRuntimeProfile, specDigestLabel: state.SpecDigest,
-		},
+		labels:      labels,
+		environment: environment,
 	}
 }
 
 func (d *Driver) specDigest(allocation providerdesktop.Allocation) (string, error) {
+	runtimeAuthorityDigest := d.publication.Digest
+	if d.candidate != nil {
+		runtimeAuthorityDigest = d.candidate.ManifestDigest
+	}
 	value := struct {
 		Allocation       providerdesktop.Allocation
 		Image            string
@@ -681,9 +806,12 @@ func (d *Driver) specDigest(allocation providerdesktop.Allocation) (string, erro
 		StopTimeout      int
 		SeccompPolicy    string
 		NetworkPolicy    string
+		BridgeKeyID      string
+		BridgePublicKey  string
 		Namespace        string
 		ControllerID     string
 		RuntimeProfileID string
+		RuntimeAuthority string
 	}{
 		Allocation: allocation, Image: d.options.Image, User: DesktopUser,
 		MemoryBytes: d.options.MemoryBytes, NanoCPUs: d.options.NanoCPUs, PidsLimit: d.options.PidsLimit,
@@ -693,6 +821,8 @@ func (d *Driver) specDigest(allocation providerdesktop.Allocation) (string, erro
 		SeccompPolicy: d.manifest.Security.Seccomp,
 		NetworkPolicy: allocation.Request.NetworkPolicyReference, Namespace: d.options.Namespace,
 		ControllerID: d.options.ControllerID, RuntimeProfileID: DesktopRuntimeProfile,
+		RuntimeAuthority: runtimeAuthorityDigest,
+		BridgeKeyID:      d.options.BridgeKeyID, BridgePublicKey: base64.RawStdEncoding.EncodeToString(d.options.BridgePublicKey),
 	}
 	encoded, err := json.Marshal(value)
 	if err != nil {

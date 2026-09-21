@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/shell-echo/sandbox-runtime/internal/desktophandoff"
 	"github.com/shell-echo/sandbox-runtime/provider/desktop"
 	desktopreference "github.com/shell-echo/sandbox-runtime/provider/desktop/reference"
 	desktopreferencerepository "github.com/shell-echo/sandbox-runtime/provider/desktop/reference/repository"
@@ -103,6 +104,9 @@ func (r *DesktopReferenceStore) FindRunning(ctx context.Context, source desktop.
 }
 func (r *DesktopReferenceStore) Revoke(ctx context.Context, value string, at time.Time) error {
 	return r.mutate(ctx, func(state *desktopreferencerepository.State) error { return state.Revoke(value, at) })
+}
+func (r *DesktopReferenceStore) Bind(ctx context.Context, value string, binding desktophandoff.Binding) error {
+	return r.mutate(ctx, func(state *desktopreferencerepository.State) error { return state.Bind(value, binding) })
 }
 
 var _ sessionreference.Store = (*SessionReferenceStore)(nil)

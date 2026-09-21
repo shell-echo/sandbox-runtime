@@ -149,6 +149,7 @@ func TestBrowserRestrictedEgressIntegration(t *testing.T) {
 	if _, err := networkProvisioner.Acquire(ctx, browserdocker.NetworkRequest{
 		SandboxID: allocation.Request.SandboxID, BrowserSessionID: allocation.Request.BrowserSessionID,
 		Namespace: namespace, ControllerID: controllerID, PolicyReference: policyReference,
+		Generation: allocation.Request.ExpectedGeneration, FencingToken: allocation.Request.FencingToken,
 	}); err != nil {
 		t.Fatalf("restricted network acquisition failed: %v; %s", err, integrationDiagnostics(ctx, apiClient, namespace, controllerID))
 	}

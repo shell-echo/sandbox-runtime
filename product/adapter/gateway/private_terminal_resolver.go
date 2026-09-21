@@ -29,15 +29,19 @@ type PrivateTerminalResolver struct {
 	httpClient    *http.Client
 	maxBytes      int64
 	openTimeout   time.Duration
+	bindingDigest func(context.Context, gateway.Grant) (string, error)
 	allowInsecure bool
 }
 
 type PrivateTerminalResolverOptions struct {
-	Origin            string
-	HTTPClient        *http.Client
-	MaxMessageBytes   int64
-	OpenTimeout       time.Duration
-	AllowHTTPForTests bool
+	Origin          string
+	HTTPClient      *http.Client
+	MaxMessageBytes int64
+	OpenTimeout     time.Duration
+	// TenantBindingDigest is caller-owned Product/Gateway authority. The
+	// resolver never derives a digest from an untrusted client field.
+	TenantBindingDigest func(context.Context, gateway.Grant) (string, error)
+	AllowHTTPForTests   bool
 }
 
 func NewPrivateTerminalResolver(options PrivateTerminalResolverOptions) (*PrivateTerminalResolver, error) {
@@ -60,7 +64,7 @@ func NewPrivateTerminalResolver(options PrivateTerminalResolverOptions) (*Privat
 	}
 	client := *options.HTTPClient
 	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
-	return &PrivateTerminalResolver{origin: parsed.String(), httpClient: &client, maxBytes: limit, openTimeout: timeout, allowInsecure: options.AllowHTTPForTests}, nil
+	return &PrivateTerminalResolver{origin: parsed.String(), httpClient: &client, maxBytes: limit, openTimeout: timeout, bindingDigest: options.TenantBindingDigest, allowInsecure: options.AllowHTTPForTests}, nil
 }
 
 func (r *PrivateTerminalResolver) Resolve(ctx context.Context, reference string) (gateway.Endpoint, error) {
@@ -86,6 +90,14 @@ func (r *PrivateTerminalResolver) dial(ctx context.Context, grant gateway.Grant)
 	if ctx == nil || r == nil || r.httpClient == nil {
 		return nil, gateway.ErrDownstreamUnavailable
 	}
+	digest := ""
+	if r.bindingDigest != nil {
+		var err error
+		digest, err = r.bindingDigest(ctx, grant)
+		if err != nil || (digest != "" && handoff.ValidateTenantBindingDigest(digest) != nil) {
+			return nil, gateway.ErrDownstreamUnavailable
+		}
+	}
 	openCtx, cancel := context.WithTimeout(ctx, r.openTimeout)
 	defer cancel()
 	connection, _, err := websocket.Dial(openCtx, r.origin, &websocket.DialOptions{
@@ -109,7 +121,7 @@ func (r *PrivateTerminalResolver) dial(ctx context.Context, grant gateway.Grant)
 		Protocol: handoff.ProtocolID, RequestID: requestID, Resource: handoff.ResourceTerminal,
 		TenantID: grant.TenantID, SandboxID: grant.SandboxID, RuntimeSessionID: grant.RuntimeSessionID,
 		CapabilityProfileID: grant.CapabilityProfileID, HandoffReference: grant.HandoffReference,
-		ConnectionGeneration: grant.ConnectionGeneration, ExpiresAt: grant.ExpiresAt.UTC().Format(time.RFC3339Nano), Fence: fence,
+		ConnectionGeneration: grant.ConnectionGeneration, ExpiresAt: grant.ExpiresAt.UTC().Format(time.RFC3339Nano), Fence: fence, TenantBindingDigest: digest,
 	}
 	document, err := handoff.Encode(open)
 	if err != nil || connection.Write(openCtx, websocket.MessageText, document) != nil {

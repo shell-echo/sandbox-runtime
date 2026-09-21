@@ -20,6 +20,13 @@ type Store interface {
 type SessionReader interface {
 	GetOpen(context.Context, string) (browser.Record, error)
 }
+
+// BoundAttacher is an optional private executor adapter. It receives the
+// complete Provider-owned opaque reference record so the adapter can bind a
+// short-lived executor capability without copying or owning the record.
+type BoundAttacher interface {
+	AttachBound(context.Context, Record) (browser.Stream, error)
+}
 type Clock interface{ Now() time.Time }
 type ClockFunc func() time.Time
 
@@ -51,6 +58,14 @@ func NewRegistrar(store Store, clock Clock, generator Generator) (*Registrar, er
 	return &Registrar{store: store, clock: clock, generator: generator}, nil
 }
 func (r *Registrar) Register(ctx context.Context, source browser.Record) (Registration, error) {
+	return r.register(ctx, source, "")
+}
+
+func (r *Registrar) RegisterWithTenantBinding(ctx context.Context, source browser.Record, tenantBindingDigest string) (Registration, error) {
+	return r.register(ctx, source, tenantBindingDigest)
+}
+
+func (r *Registrar) register(ctx context.Context, source browser.Record, tenantBindingDigest string) (Registration, error) {
 	if r == nil || r.store == nil || r.clock == nil || r.generator == nil {
 		return Registration{}, ErrUnavailable
 	}
@@ -60,7 +75,7 @@ func (r *Registrar) Register(ctx context.Context, source browser.Record) (Regist
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if existing, err := r.store.FindRunning(ctx, source); err == nil {
-		if existing.RevokedAt != nil {
+		if existing.RevokedAt != nil || (tenantBindingDigest != "" && existing.TenantBindingDigest != tenantBindingDigest) {
 			return Registration{}, ErrUnavailable
 		}
 		return Registration{Record: existing.Clone(), Evidence: existing.Evidence()}, nil
@@ -76,7 +91,12 @@ func (r *Registrar) Register(ctx context.Context, source browser.Record) (Regist
 		if err != nil {
 			return Registration{}, err
 		}
-		record, err := NewRecord(value, source, now)
+		var record Record
+		if tenantBindingDigest == "" {
+			record, err = NewRecord(value, source, now)
+		} else {
+			record, err = NewRecordWithTenantBinding(value, source, tenantBindingDigest, now)
+		}
 		if err != nil {
 			return Registration{}, err
 		}
@@ -98,6 +118,7 @@ type Endpoint struct {
 	CapabilityProfileID  string
 	ConnectionGeneration int64
 	ExpiresAt            time.Time
+	TenantBindingDigest  string
 	Dial                 func(context.Context) (browser.Stream, error)
 }
 type Resolver struct {
@@ -118,13 +139,18 @@ func (r *Resolver) Resolve(ctx context.Context, value string) (Endpoint, error) 
 	if err != nil {
 		return Endpoint{}, err
 	}
-	endpoint := Endpoint{Reference: record.Reference, SandboxID: record.SandboxID, BrowserSessionID: record.BrowserSessionID, CapabilityProfileID: record.CapabilityProfileID, ConnectionGeneration: record.ConnectionGeneration, ExpiresAt: record.ExpiresAt.UTC()}
+	endpoint := Endpoint{Reference: record.Reference, SandboxID: record.SandboxID, BrowserSessionID: record.BrowserSessionID, CapabilityProfileID: record.CapabilityProfileID, ConnectionGeneration: record.ConnectionGeneration, ExpiresAt: record.ExpiresAt.UTC(), TenantBindingDigest: record.TenantBindingDigest}
 	endpoint.Dial = func(dialCtx context.Context) (browser.Stream, error) {
 		fresh, err := r.lookup(dialCtx, value)
 		if err != nil {
 			return nil, err
 		}
-		stream, err := r.attacher.Attach(dialCtx, fresh.Receipt)
+		var stream browser.Stream
+		if bound, ok := r.attacher.(BoundAttacher); ok {
+			stream, err = bound.AttachBound(dialCtx, fresh)
+		} else {
+			stream, err = r.attacher.Attach(dialCtx, fresh.Receipt)
+		}
 		if err != nil {
 			if contextErr := contextError(dialCtx); contextErr != nil {
 				return nil, contextErr

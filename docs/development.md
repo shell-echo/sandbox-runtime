@@ -843,6 +843,39 @@ does not qualify PostgreSQL HA/TLS, throughput, independent failure domains,
 deployment assets, public data planes, complete Product dispatch, SLOs,
 hostile-multitenant safety, or production readiness.
 
+Slice 4 uses separate Gateway, Guest, Browser and Desktop commands plus the
+operator-owned Browser/Desktop executor backends. Production Desktop accepts
+only `executor.v2`; Provider signs the short-lived broker statement and remains
+the only PostgreSQL, handoff and Docker authority. Build the local candidate
+only after the implementation worktree is clean and committed:
+
+```bash
+profiles/desktop/image/build-phase6-candidate.sh \
+  linux/arm64/v8 /absolute/private/path/desktop-phase6-candidate.json
+
+SANDBOX_RUNTIME_DESKTOP_MUX_INTEGRATION=1 \
+SANDBOX_RUNTIME_DESKTOP_CANDIDATE_MANIFEST=/absolute/private/path/desktop-phase6-candidate.json \
+  go test -tags=integration -count=1 \
+  -run '^TestDesktopMuxRealCandidateExecutorChain$' -v \
+  ./provider/desktop/driver/docker
+
+SANDBOX_RUNTIME_PHASE6_SLICE4_GATE=1 \
+SANDBOX_RUNTIME_DESKTOP_CANDIDATE_MANIFEST=/absolute/private/path/desktop-phase6-candidate.json \
+SANDBOX_RUNTIME_PHASE6_SLICE4_EVIDENCE=/absolute/private/path/product-phase6-slice4-evidence.json \
+  go test -tags=phase6slicegate -count=1 \
+  -run '^TestPhase6Slice4ReleaseGate$' -v ./productphase6gate
+
+go run ./cmd/verify-product-phase6-evidence \
+  -source-root "$PWD" \
+  -manifest /absolute/private/path/product-phase6-slice4-evidence.json
+```
+
+The final repository verifier requires the implementation revision to remain a
+current-history ancestor and permits only committed `README.md`/`docs/`
+evidence changes after it. The local candidate is neither a published/signed
+artifact nor production qualification; complete public Product E2E remains a
+non-claim.
+
 Phase 6 continuation foundations are covered by the focused packages
 `internal/secretref`, `internal/netpolicy`, `internal/artifactverify`,
 `internal/backup`, `internal/phase6profile`, and `internal/telemetry`. Their tests prove only bounded

@@ -11,9 +11,13 @@ import (
 )
 
 const (
-	Subprotocol = "sandbox-desktop-private-media.v1"
-	VideoPacket = byte(1)
-	AudioPacket = byte(2)
+	Subprotocol              = "sandbox-desktop-private-media.v1"
+	VideoPacket              = byte(1)
+	AudioPacket              = byte(2)
+	DefaultMaxQueuedFrames   = 32
+	DefaultMaxQueuedInputs   = 32
+	DefaultMaxInputBytes     = 64 << 10
+	DefaultMaxRecordingBytes = 16 << 20
 )
 
 var (
@@ -30,15 +34,33 @@ type MediaPolicy struct {
 	MaxVideoBitrateKbps int    `json:"max_video_bitrate_kbps"`
 	AudioCodec          string `json:"audio_codec,omitempty"`
 	MaxAudioBitrateKbps int    `json:"max_audio_bitrate_kbps,omitempty"`
+	MaxQueuedFrames     int    `json:"max_queued_frames"`
+	MaxQueuedInputs     int    `json:"max_queued_inputs"`
+	MaxInputBytes       int    `json:"max_input_bytes"`
+	RecordingMode       string `json:"recording_mode"`
+	MaxRecordingBytes   int64  `json:"max_recording_bytes"`
 }
 
 func (p MediaPolicy) Validate() bool {
 	if p.VideoCodec != "video/VP8" || p.Width < 320 || p.Width > 1280 || p.Height < 240 || p.Height > 720 ||
-		p.MaxFPS < 1 || p.MaxFPS > 60 || p.MaxVideoBitrateKbps < 128 || p.MaxVideoBitrateKbps > 8000 {
+		p.MaxFPS < 1 || p.MaxFPS > 60 || p.MaxVideoBitrateKbps < 128 || p.MaxVideoBitrateKbps > 8000 ||
+		p.MaxQueuedFrames < 1 || p.MaxQueuedFrames > 128 || p.MaxQueuedInputs < 1 || p.MaxQueuedInputs > 256 ||
+		p.MaxInputBytes < 1024 || p.MaxInputBytes > DefaultMaxInputBytes {
 		return false
 	}
-	return (p.AudioCodec == "" && p.MaxAudioBitrateKbps == 0) ||
+	audioValid := (p.AudioCodec == "" && p.MaxAudioBitrateKbps == 0) ||
 		(p.AudioCodec == "audio/opus" && p.MaxAudioBitrateKbps >= 16 && p.MaxAudioBitrateKbps <= 256)
+	if !audioValid {
+		return false
+	}
+	switch p.RecordingMode {
+	case "disabled", "metadata_only":
+		return p.MaxRecordingBytes == 0
+	case "required":
+		return p.MaxRecordingBytes >= 1024 && p.MaxRecordingBytes <= DefaultMaxRecordingBytes
+	default:
+		return false
+	}
 }
 
 type DisplayPolicy struct {

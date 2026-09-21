@@ -16,22 +16,24 @@ import (
 )
 
 const (
-	ProtocolID         = "sandbox-runtime.handoff.v1"
-	ResourceTerminal   = "terminal"
-	StatusAccepted     = "accepted"
-	StatusRejected     = "rejected"
-	MaxDocumentBytes   = 8 << 10
-	MaxFrameBytes      = 64 << 10
-	MaxReferenceBytes  = 512
-	MaxFenceBytes      = 512
-	MaxAuthorityWindow = 24 * time.Hour
-	MinFenceBytes      = 32
+	ProtocolID                = "sandbox-runtime.handoff.v1"
+	ResourceTerminal          = "terminal"
+	StatusAccepted            = "accepted"
+	StatusRejected            = "rejected"
+	MaxDocumentBytes          = 8 << 10
+	MaxFrameBytes             = 64 << 10
+	MaxReferenceBytes         = 512
+	MaxFenceBytes             = 512
+	MaxAuthorityWindow        = 24 * time.Hour
+	MinFenceBytes             = 32
+	TenantBindingDigestPrefix = "sha256:v1:"
 )
 
 var (
 	identifierPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$`)
 	requestPattern    = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$`)
 	fencePattern      = regexp.MustCompile(`^[A-Za-z0-9_-]{32,512}$`)
+	digestPattern     = regexp.MustCompile(`^sha256:v1:[0-9a-f]{64}$`)
 	ErrInvalid        = errors.New("invalid private handoff")
 	ErrExpired        = errors.New("private handoff authority expired")
 	ErrReplay         = errors.New("private handoff request replayed")
@@ -53,6 +55,7 @@ type OpenRequest struct {
 	ConnectionGeneration int64  `json:"connection_generation"`
 	ExpiresAt            string `json:"expires_at"`
 	Fence                string `json:"fence"`
+	TenantBindingDigest  string `json:"tenant_binding_digest"`
 }
 
 // OpenResponse is intentionally generic. It never includes resolver errors,
@@ -68,12 +71,20 @@ func (r OpenRequest) Validate(now time.Time) error {
 	if r.Protocol != ProtocolID || r.Resource != ResourceTerminal || !requestPattern.MatchString(r.RequestID) ||
 		!identifierPattern.MatchString(r.TenantID) || !identifierPattern.MatchString(r.SandboxID) ||
 		!identifierPattern.MatchString(r.RuntimeSessionID) || !identifierPattern.MatchString(r.CapabilityProfileID) ||
-		!opaqueReference(r.HandoffReference) || r.ConnectionGeneration < 1 || !fencePattern.MatchString(r.Fence) || len(r.Fence) < MinFenceBytes {
+		!opaqueReference(r.HandoffReference) || r.ConnectionGeneration < 1 || !fencePattern.MatchString(r.Fence) || len(r.Fence) < MinFenceBytes ||
+		(r.TenantBindingDigest != "" && !digestPattern.MatchString(r.TenantBindingDigest)) {
 		return ErrInvalid
 	}
 	expires, err := time.Parse(time.RFC3339Nano, r.ExpiresAt)
 	if err != nil || now.IsZero() || !expires.After(now) || expires.After(now.Add(MaxAuthorityWindow)) {
 		return ErrExpired
+	}
+	return nil
+}
+
+func ValidateTenantBindingDigest(value string) error {
+	if !digestPattern.MatchString(value) {
+		return ErrInvalid
 	}
 	return nil
 }
@@ -101,10 +112,77 @@ func Decode(document []byte, target any) error {
 	if len(document) == 0 || len(document) > MaxDocumentBytes || target == nil {
 		return ErrInvalid
 	}
+	if err := rejectDuplicateMembers(document); err != nil {
+		return ErrInvalid
+	}
 	decoder := json.NewDecoder(bytes.NewReader(document))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(target); err != nil {
 		return ErrInvalid
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		return ErrInvalid
+	}
+	return nil
+}
+
+// rejectDuplicateMembers closes a subtle gap in encoding/json: unknown-field
+// rejection does not reject a repeated known member. The private wire schema
+// is closed, so duplicate keys are invalid at every nesting level.
+func rejectDuplicateMembers(document []byte) error {
+	decoder := json.NewDecoder(bytes.NewReader(document))
+	var walk func() error
+	walk = func() error {
+		token, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		delimiter, isDelimiter := token.(json.Delim)
+		if !isDelimiter {
+			return nil
+		}
+		switch delimiter {
+		case '{':
+			seen := make(map[string]struct{})
+			for decoder.More() {
+				key, err := decoder.Token()
+				if err != nil {
+					return err
+				}
+				name, ok := key.(string)
+				if !ok {
+					return ErrInvalid
+				}
+				if _, exists := seen[name]; exists {
+					return ErrInvalid
+				}
+				seen[name] = struct{}{}
+				if err := walk(); err != nil {
+					return err
+				}
+			}
+			end, err := decoder.Token()
+			if err != nil || end != json.Delim('}') {
+				return ErrInvalid
+			}
+		case '[':
+			for decoder.More() {
+				if err := walk(); err != nil {
+					return err
+				}
+			}
+			end, err := decoder.Token()
+			if err != nil || end != json.Delim(']') {
+				return ErrInvalid
+			}
+		default:
+			return ErrInvalid
+		}
+		return nil
+	}
+	if err := walk(); err != nil {
+		return err
 	}
 	var trailing any
 	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {

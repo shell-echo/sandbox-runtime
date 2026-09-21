@@ -4,8 +4,10 @@
 package phase6profile
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"regexp"
 	"strings"
@@ -45,12 +47,14 @@ type Role struct {
 type Profile struct {
 	Version       int    `json:"version"`
 	Revision      string `json:"revision"`
+	SourceDigest  string `json:"source_digest"`
 	Configuration string `json:"configuration_digest"`
+	ProfileDigest string `json:"profile_digest"`
 	Roles         []Role `json:"roles"`
 }
 
 func (p Profile) Validate() error {
-	if p.Version != 1 || strings.TrimSpace(p.Revision) == "" || len(p.Revision) > 128 || !digestPattern.MatchString(p.Configuration) || len(p.Roles) != 4 {
+	if p.Version != 1 || strings.TrimSpace(p.Revision) == "" || len(p.Revision) > 128 || !digestPattern.MatchString(p.SourceDigest) || !digestPattern.MatchString(p.Configuration) || !digestPattern.MatchString(p.ProfileDigest) || len(p.Roles) != 4 {
 		return ErrInvalidProfile
 	}
 	seen := make(map[string]struct{}, len(p.Roles))
@@ -97,7 +101,27 @@ func (p Profile) Validate() error {
 			return ErrInvalidProfile
 		}
 	}
+	if p.ProfileDigest != p.CanonicalDigest() {
+		return ErrInvalidProfile
+	}
 	return nil
+}
+
+// CanonicalDigest binds the immutable release profile contents to its source
+// and configuration digests. ProfileDigest is excluded from the projection so
+// the document is not self-referential; callers compute this value after
+// assembling the source/configuration/role projections and before publication.
+func (p Profile) CanonicalDigest() string {
+	projection := struct {
+		Version       int    `json:"version"`
+		Revision      string `json:"revision"`
+		SourceDigest  string `json:"source_digest"`
+		Configuration string `json:"configuration_digest"`
+		Roles         []Role `json:"roles"`
+	}{p.Version, p.Revision, p.SourceDigest, p.Configuration, p.Roles}
+	document, _ := json.Marshal(projection)
+	digest := sha256.Sum256(append([]byte("sandbox-runtime/phase6-release-profile/v1\x00"), document...))
+	return fmt.Sprintf("sha256:%x", digest[:])
 }
 
 func (a Artifact) Validate() error {

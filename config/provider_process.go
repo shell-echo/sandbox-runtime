@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/url"
 	"path/filepath"
 	"strings"
 
@@ -24,6 +25,7 @@ type ProviderDeploymentLevel string
 
 const (
 	ProviderProductionLevel           ProviderDeploymentLevel = "production"
+	ProviderLocalCandidateLevel       ProviderDeploymentLevel = "local_candidate"
 	ProviderProcessCodingShellProfile ProviderProcessProfile  = "coding_shell"
 	ProviderProcessDesktopProfile     ProviderProcessProfile  = "desktop"
 )
@@ -76,12 +78,21 @@ type ProviderProcessCodingConfig struct {
 }
 
 type ProviderProcessDesktopConfig struct {
-	Architecture           string                          `mapstructure:"architecture"`
-	UsageRetentionSeconds  int                             `mapstructure:"usage_retention_seconds"`
-	ShutdownCleanupSeconds int                             `mapstructure:"shutdown_cleanup_seconds"`
-	Docker                 ProviderDesktopDockerConfig     `mapstructure:"docker"`
-	Provenance             ProviderBrowserProvenanceConfig `mapstructure:"provenance"`
-	RestrictedNetwork      ProviderBrowserNetworkConfig    `mapstructure:"restricted_network"`
+	Architecture                 string                          `mapstructure:"architecture"`
+	ExecutorURL                  string                          `mapstructure:"executor_url"`
+	BrokerMuxSocketPath          string                          `mapstructure:"broker_mux_socket_path"`
+	ExecutorCABundleFile         string                          `mapstructure:"executor_ca_bundle_file"`
+	ExecutorCertificateFile      string                          `mapstructure:"executor_certificate_file"`
+	ExecutorPrivateKeyFile       string                          `mapstructure:"executor_private_key_file"`
+	ExecutorIdentity             string                          `mapstructure:"executor_identity"`
+	ExecutorBridgeKeyID          string                          `mapstructure:"executor_bridge_key_id"`
+	ExecutorBridgePrivateKeyFile string                          `mapstructure:"executor_bridge_private_key_file"`
+	LocalCandidateManifestFile   string                          `mapstructure:"local_candidate_manifest_file"`
+	UsageRetentionSeconds        int                             `mapstructure:"usage_retention_seconds"`
+	ShutdownCleanupSeconds       int                             `mapstructure:"shutdown_cleanup_seconds"`
+	Docker                       ProviderDesktopDockerConfig     `mapstructure:"docker"`
+	Provenance                   ProviderBrowserProvenanceConfig `mapstructure:"provenance"`
+	RestrictedNetwork            ProviderBrowserNetworkConfig    `mapstructure:"restricted_network"`
 }
 
 type ProviderDesktopDockerConfig struct {
@@ -149,8 +160,8 @@ func (c *ProviderProcessConfig) Validate() error { //nolint:cyclop
 	if !c.Enabled {
 		return nil
 	}
-	if c.DeploymentLevel != ProviderProductionLevel {
-		return errors.New("provider_process requires deployment_level=production")
+	if c.DeploymentLevel != ProviderProductionLevel && c.DeploymentLevel != ProviderLocalCandidateLevel {
+		return errors.New("provider_process requires deployment_level=production or local_candidate")
 	}
 	if !c.Transport.Enabled {
 		return errors.New("provider_process transport must be enabled")
@@ -179,6 +190,9 @@ func (c *ProviderProcessConfig) Validate() error { //nolint:cyclop
 	}
 	switch c.Profile {
 	case ProviderProcessCodingShellProfile:
+		if c.DeploymentLevel != ProviderProductionLevel {
+			return errors.New("coding_shell Provider profile requires deployment_level=production")
+		}
 		if err := c.validateCoding(); err != nil {
 			return err
 		}
@@ -261,7 +275,11 @@ func (c *ProviderProcessConfig) validateDesktop() error {
 		return errors.New("provider_process Desktop architecture or duration is invalid")
 	}
 	o := d.Docker
-	if o.Image != desktopimage.LockedPublication().Image() || !providerPinnedImagePattern.MatchString(o.Image) || (o.PullPolicy != "never" && o.PullPolicy != "if_not_present" && o.PullPolicy != "always") || !filepath.IsAbs(o.DataRoot) || !filepath.IsAbs(o.ManifestPath) || !providerOwnershipPattern.MatchString(o.Namespace) || !providerOwnershipPattern.MatchString(o.ControllerID) || !providerProfileIDPattern.MatchString(o.NetworkPolicyReference) || o.MaxSessionsPerSandbox != 1 || o.MaxSessionsPerController < 1 || o.MaxSessionsPerController > 1000 {
+	validImage := c.DeploymentLevel == ProviderProductionLevel && o.Image == desktopimage.LockedPublication().Image() && providerPinnedImagePattern.MatchString(o.Image) && (o.PullPolicy == "never" || o.PullPolicy == "if_not_present" || o.PullPolicy == "always")
+	if c.DeploymentLevel == ProviderLocalCandidateLevel {
+		validImage = providerSHA256Pattern.MatchString(o.Image) && o.PullPolicy == "never" && filepath.IsAbs(d.LocalCandidateManifestFile)
+	}
+	if !validImage || !filepath.IsAbs(o.DataRoot) || !filepath.IsAbs(o.ManifestPath) || !providerOwnershipPattern.MatchString(o.Namespace) || !providerOwnershipPattern.MatchString(o.ControllerID) || !providerProfileIDPattern.MatchString(o.NetworkPolicyReference) || o.MaxSessionsPerSandbox != 1 || o.MaxSessionsPerController < 1 || o.MaxSessionsPerController > 1000 {
 		return errors.New("provider_process Desktop image, paths, ownership, policy, or capacity is invalid")
 	}
 	const maxBytes = int64(64 << 30)
@@ -273,14 +291,42 @@ func (c *ProviderProcessConfig) validateDesktop() error {
 	if o.NanoCPUs <= 0 || o.NanoCPUs > 64_000_000_000 || o.PidsLimit <= 0 || o.PidsLimit > 4096 || o.OperationTimeoutSeconds < 1 || o.OperationTimeoutSeconds > 600 || o.ProvenanceTimeoutSeconds < 1 || o.ProvenanceTimeoutSeconds > 600 || o.PullTimeoutSeconds < 1 || o.PullTimeoutSeconds > 600 || o.StopTimeoutSeconds < 0 || o.StopTimeoutSeconds > 600 {
 		return errors.New("provider_process Desktop resources or timeouts are invalid")
 	}
-	if !filepath.IsAbs(d.Provenance.ExecutablePath) || !providerSHA256Pattern.MatchString(d.Provenance.ExecutableDigest) {
-		return errors.New("provider_process Desktop provenance executable and digest are invalid")
+	if c.DeploymentLevel == ProviderProductionLevel {
+		if !filepath.IsAbs(d.Provenance.ExecutablePath) || !providerSHA256Pattern.MatchString(d.Provenance.ExecutableDigest) || d.LocalCandidateManifestFile != "" {
+			return errors.New("provider_process Desktop production provenance or candidate boundary is invalid")
+		}
+	} else if d.Provenance.ExecutablePath != "" || d.Provenance.ExecutableDigest != "" {
+		return errors.New("provider_process local candidate cannot claim production provenance")
 	}
 	if err := d.RestrictedNetwork.validate(o.NetworkPolicyReference); err != nil {
 		return fmt.Errorf("provider_process.desktop.restricted_network: %w", err)
 	}
 	if d.RestrictedNetwork.Namespace != o.Namespace || d.RestrictedNetwork.ControllerID != o.ControllerID || strings.TrimSpace(d.RestrictedNetwork.Host) != strings.TrimSpace(o.Host) {
 		return errors.New("provider_process Desktop runtime and restricted-network ownership must match")
+	}
+	if d.ExecutorURL != "" {
+		if c.DeploymentLevel == ProviderProductionLevel {
+			return errors.New("provider_process production Desktop executor requires the Slice 7 published v2 runtime")
+		}
+		parsed, err := url.Parse(d.ExecutorURL)
+		if err != nil || parsed.Scheme != "wss" || parsed.Host == "" || parsed.Path == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
+			return errors.New("provider_process Desktop executor_url is invalid")
+		}
+		if !providerProfileIDPattern.MatchString(d.ExecutorIdentity) || !providerProfileIDPattern.MatchString(d.ExecutorBridgeKeyID) {
+			return errors.New("provider_process Desktop executor identity or bridge key ID is invalid")
+		}
+		for name, path := range map[string]string{"executor CA": d.ExecutorCABundleFile, "executor certificate": d.ExecutorCertificateFile, "executor key": d.ExecutorPrivateKeyFile, "executor bridge key": d.ExecutorBridgePrivateKeyFile} {
+			if err := validateAbsoluteSecretPath("provider_process Desktop "+name, path); err != nil {
+				return err
+			}
+		}
+		if !filepath.IsAbs(d.BrokerMuxSocketPath) || filepath.Clean(d.BrokerMuxSocketPath) != d.BrokerMuxSocketPath || !providerDesktopBrokerMuxSocketPattern.MatchString(filepath.Base(d.BrokerMuxSocketPath)) {
+			return errors.New("provider_process Desktop broker mux socket path is invalid")
+		}
+	} else if c.DeploymentLevel == ProviderLocalCandidateLevel {
+		return errors.New("provider_process local candidate requires the Desktop executor")
+	} else if d.ExecutorCABundleFile != "" || d.ExecutorCertificateFile != "" || d.ExecutorPrivateKeyFile != "" || d.ExecutorIdentity != "" || d.ExecutorBridgeKeyID != "" || d.ExecutorBridgePrivateKeyFile != "" || d.BrokerMuxSocketPath != "" {
+		return errors.New("provider_process Desktop executor credentials require executor_url")
 	}
 	return nil
 }
@@ -289,6 +335,24 @@ func (c *ProviderProcessConfig) validateAuthorityPaths() error {
 	paths := []struct{ name, value string }{
 		{"transport certificate", c.Transport.ServerCertificateFile}, {"transport key", c.Transport.ServerPrivateKeyFile},
 		{"client CA", c.Transport.ClientCABundleFile}, {"migration DSN", c.Postgres.MigrationDSNFile}, {"runtime DSN", c.Postgres.RuntimeDSNFile},
+	}
+	if c.Transport.Private.Enabled {
+		paths = append(paths,
+			struct{ name, value string }{"private transport certificate", c.Transport.Private.ServerCertificateFile},
+			struct{ name, value string }{"private transport key", c.Transport.Private.ServerPrivateKeyFile},
+			struct{ name, value string }{"private client CA", c.Transport.Private.ClientCABundleFile},
+		)
+	}
+	if c.Desktop.ExecutorURL != "" {
+		paths = append(paths,
+			struct{ name, value string }{"Desktop executor CA", c.Desktop.ExecutorCABundleFile},
+			struct{ name, value string }{"Desktop executor certificate", c.Desktop.ExecutorCertificateFile},
+			struct{ name, value string }{"Desktop executor key", c.Desktop.ExecutorPrivateKeyFile},
+			struct{ name, value string }{"Desktop executor bridge key", c.Desktop.ExecutorBridgePrivateKeyFile},
+		)
+	}
+	if c.DeploymentLevel == ProviderLocalCandidateLevel {
+		paths = append(paths, struct{ name, value string }{"Desktop local candidate manifest", c.Desktop.LocalCandidateManifestFile})
 	}
 	for index, key := range c.ProtectedAdmission.TrustedVerificationKeys {
 		paths = append(paths, struct{ name, value string }{fmt.Sprintf("trusted verification key %d", index), key.PublicKeyFile})

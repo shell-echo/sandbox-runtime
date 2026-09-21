@@ -10,13 +10,15 @@
       "linux/amd64": {
         "digest": "sha256:1beb0dc0a51de7ff38e3b5274078a2e0b81113ba5c7535e1a03d5913a5edbda3",
         "architecture": "amd64",
-        "package_archive_set_digest": "sha256:591fef77f3bdbac861ef71ad7cfca7ef6e86a0ac092a7c10084118af10f40097"
+        "package_archive_set_digest": "sha256:872446c241d2c85db9995b1e12ca4246954f76883108f1e16415d8a0e711c4a6",
+        "installed_set_digest": "sha256:ea4e22c1f7011c6cfc975d64c5f2d110b3432bc5ae78064b94f7afa752e0a588"
       },
       "linux/arm64/v8": {
         "digest": "sha256:d858bb5442632a31bd4bca6c5e601dbe6b536fd7942092ea6a08a0a95805693c",
         "architecture": "arm64",
         "variant": "v8",
-        "package_archive_set_digest": "sha256:28468a7b60dc3228ae95f738e7083f6c41b02d381aa1ae6f42afe8424e9a4727"
+        "package_archive_set_digest": "sha256:f6a17c5b4031b4068ae345333cdfc3d09a3ef30dfe77a461f13306d3cf5ac656",
+        "installed_set_digest": "sha256:25e5d714836bacf2e421a1d586d7c8d64a65887036989cc08810697a6dd8ec31"
       }
     }
   },
@@ -33,18 +35,23 @@
       {"name": "xdpyinfo", "version": "1.4.0-r0"},
       {"name": "xset", "version": "1.2.5-r1"},
       {"name": "xwd", "version": "1.0.9-r2"},
-      {"name": "font-dejavu", "version": "2.37-r6"}
-    ],
-    "installed_set_digest": "sha256:6b5fc1ece685456ed20f474c9af9547c597210f9105f7f12e9cf21d8377db4b5"
+      {"name": "font-dejavu", "version": "2.37-r6"},
+      {"name": "ffmpeg", "version": "8.0.1-r1"}
+    ]
   },
   "broker": {
     "path": "/usr/local/libexec/sandbox-runtime/desktop-broker",
     "socket": "/tmp/sandbox-runtime-desktop-broker.sock",
     "protocol": "sandbox.runtime/desktop-broker/v1",
     "methods": ["probe", "describe"],
+    "session_protocol": "sandbox.runtime/desktop-session/v1",
+    "session_methods": ["open", "video.rtp", "input", "stream.configure", "stream.resync", "keyframe", "close"],
     "max_request_bytes": 4096,
     "max_response_bytes": 8192,
-    "max_connections": 16
+    "max_connections": 16,
+    "session_max_document_bytes": 65536,
+    "session_max_frame_bytes": 16384,
+    "session_max_queue": 32
   },
   "display": {
     "server": "/usr/bin/Xvfb",

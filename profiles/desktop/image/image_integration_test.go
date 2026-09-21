@@ -3,9 +3,15 @@
 package image
 
 import (
+	"bufio"
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,7 +20,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shell-echo/sandbox-runtime/internal/desktopbridge"
 	"github.com/shell-echo/sandbox-runtime/internal/desktopbroker"
+	"github.com/shell-echo/sandbox-runtime/internal/desktopmedia"
+	"github.com/shell-echo/sandbox-runtime/internal/executorprotocol"
+	"github.com/shell-echo/sandbox-runtime/internal/handoff"
 )
 
 const desktopImageIntegrationEnv = "SANDBOX_RUNTIME_DESKTOP_IMAGE_INTEGRATION"
@@ -35,6 +45,10 @@ func TestDesktopImageNativeIntegration(t *testing.T) {
 	imageOne := "sandbox-runtime-desktop:integration-a-" + suffix
 	imageTwo := "sandbox-runtime-desktop:integration-b-" + suffix
 	containerName := "sandbox-runtime-desktop-integration-" + suffix
+	bridgePublic, bridgePrivate, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
 	mountRoot, err := os.MkdirTemp(".", ".desktop-image-integration-")
 	if err != nil {
 		t.Fatal(err)
@@ -77,6 +91,9 @@ func TestDesktopImageNativeIntegration(t *testing.T) {
 	}
 
 	run(t, ctx, "docker", "run", "-d", "--name", containerName,
+		"-e", "SANDBOX_RUNTIME_DESKTOP_BRIDGE_PUBLIC_KEY="+base64.RawStdEncoding.EncodeToString(bridgePublic),
+		"-e", "SANDBOX_RUNTIME_DESKTOP_BRIDGE_KEY_ID=provider-desktop-v2",
+		"-e", desktopbroker.SessionProtocolEnv+"="+desktopbroker.SessionProtocolV2ID,
 		"--label", "io.github.shell-echo.sandbox-runtime.managed=true",
 		"--label", "io.github.shell-echo.sandbox-runtime.namespace=desktop-image-integration",
 		"--platform", platform,
@@ -107,7 +124,103 @@ func TestDesktopImageNativeIntegration(t *testing.T) {
 	if strings.Contains(processes, "root ") || !strings.Contains(processes, "Xvfb :99 -screen 0 1280x720x24 -nolisten tcp") || !strings.Contains(processes, "/usr/bin/openbox --sm-disable") {
 		t.Fatalf("unsafe Desktop process tree:\n%s", processes)
 	}
+	runV2Session(t, ctx, containerName, bridgePrivate)
 	inspectContainerPolicy(t, ctx, containerName)
+}
+
+func runV2Session(t *testing.T, ctx context.Context, containerName string, privateKey ed25519.PrivateKey) {
+	t.Helper()
+	command := exec.CommandContext(ctx, "docker", "exec", "-i", containerName, BrokerPath, "session", "--socket", BrokerSocket)
+	stdin, err := command.StdinPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stdout, err := command.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stderr, err := command.StderrPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = stdin.Close(); _ = command.Process.Kill(); _, _ = io.ReadAll(stderr) }()
+	now := time.Now().UTC()
+	policy := desktopmedia.MediaPolicy{VideoCodec: "video/VP8", Width: 1280, Height: 720, MaxFPS: 30, MaxVideoBitrateKbps: 2000, MaxQueuedFrames: desktopmedia.DefaultMaxQueuedFrames, MaxQueuedInputs: desktopmedia.DefaultMaxQueuedInputs, MaxInputBytes: desktopmedia.DefaultMaxInputBytes, RecordingMode: "metadata_only"}
+	open := desktopbroker.SessionOpen{BindingVersion: desktopbroker.SessionBindingV2, BindingIssuer: desktopbroker.SessionBindingIssuerV2, Protocol: desktopbroker.SessionProtocolV2ID, RequestID: "image-open-1", Method: desktopbroker.SessionMethod, TenantBindingDigest: handoff.TenantBindingDigestPrefix + strings.Repeat("a", 64), ProviderRevisionID: "provider-revision-1", SandboxID: "sandbox-1", DesktopSessionID: "desktop-session-1", CapabilityProfileID: "desktop-v1", MediaProfileID: "desktop-media-v1", ControlProfileID: "desktop-control-v1", HandoffReferenceDigest: executorprotocol.ReferenceDigest("ref:desktop-session:image"), AllocationReference: "ref:desktop/11111111111111111111111111111111", ConnectionGeneration: 1, ConnectionEpoch: "epoch-1", Fence: strings.Repeat("b", handoff.MinFenceBytes), AuthorityExpiresAt: now.Add(time.Minute).Format(time.RFC3339Nano), HandoffExpiresAt: now.Add(2 * time.Minute).Format(time.RFC3339Nano), AuthorityDigest: "sha256:" + strings.Repeat("c", 64), RequestDigest: "sha256:" + strings.Repeat("d", 64), HandoffReference: "ref:desktop-session:image", MediaPolicy: policy}
+	statement := desktopbridge.Statement{Protocol: desktopbridge.ProtocolID, Version: desktopbridge.Version, KeyID: "provider-desktop-v2", ExecutorRole: "desktop", ExecutorIdentity: "executor-desktop-1", ProviderRevisionID: open.ProviderRevisionID, TenantBindingDigest: open.TenantBindingDigest, SandboxID: open.SandboxID, RuntimeSessionID: open.DesktopSessionID, HandoffReferenceDigest: open.HandoffReferenceDigest, AllocationReference: open.AllocationReference, MediaPolicy: policy, ConnectionGeneration: open.ConnectionGeneration, ConnectionEpoch: open.ConnectionEpoch, Fence: open.Fence, AuthorityExpiresAt: open.AuthorityExpiresAt, HandoffExpiresAt: open.HandoffExpiresAt, NotBefore: now.Add(-time.Second).Format(time.RFC3339Nano), ExecutorAuthorityDigest: open.AuthorityDigest, ExecutorRequestDigest: open.RequestDigest, Nonce: "nonce-image-abcdefghijklmnopqrstuvwxyz123456"}
+	statement.BrokerRequestDigest = statement.CalculateBrokerRequestDigest()
+	bridge, err := desktopbridge.Sign(statement, privateKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	open.Bridge = &bridge
+	document, err := desktopbroker.EncodeSession(open)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := stdin.Write(document); err != nil {
+		t.Fatal(err)
+	}
+	reader := bufio.NewReaderSize(stdout, desktopbroker.SessionMaxDocument)
+	line, err := reader.ReadBytes('\n')
+	if err != nil {
+		t.Fatal(err)
+	}
+	var accepted desktopbroker.SessionMessage
+	if desktopbroker.DecodeSession(line, &accepted) != nil || accepted.ValidateFor(desktopbroker.SessionProtocolV2ID) != nil || accepted.Type != desktopbroker.SessionAcceptedType {
+		t.Fatalf("invalid v2 broker acceptance: %s", line)
+	}
+	deadline := time.Now().Add(30 * time.Second)
+	for {
+		if time.Now().After(deadline) {
+			t.Fatal("real Desktop broker did not produce v2 RTP")
+		}
+		line, err = reader.ReadBytes('\n')
+		if err != nil {
+			t.Fatalf("read real Desktop RTP: %v", err)
+		}
+		var frame desktopbroker.SessionMessage
+		if desktopbroker.DecodeSession(line, &frame) == nil && frame.ValidateFor(desktopbroker.SessionProtocolV2ID) == nil && frame.Type == desktopbroker.SessionFrameType {
+			payload, decodeErr := base64.StdEncoding.DecodeString(frame.Payload)
+			if decodeErr == nil && len(payload) >= 12 && payload[0]>>6 == 2 {
+				break
+			}
+		}
+	}
+	closeCommand, _ := desktopbroker.EncodeSession(desktopbroker.SessionCommand{Protocol: desktopbroker.SessionProtocolV2ID, Type: "close", RequestID: "close-1", Sequence: 1})
+	if _, err := stdin.Write(closeCommand); err != nil {
+		t.Fatal(err)
+	}
+	closeDeadline := time.Now().Add(10 * time.Second)
+	for {
+		if time.Now().After(closeDeadline) {
+			t.Fatal("real Desktop broker did not close v2 session")
+		}
+		line, err = reader.ReadBytes('\n')
+		if err != nil {
+			t.Fatal(err)
+		}
+		var closed desktopbroker.SessionMessage
+		if desktopbroker.DecodeSession(line, &closed) != nil || closed.ValidateFor(desktopbroker.SessionProtocolV2ID) != nil {
+			t.Fatalf("invalid real Desktop close message: %s", line)
+		}
+		if closed.Type == desktopbroker.SessionClosedType {
+			break
+		}
+		if closed.Type != desktopbroker.SessionFrameType {
+			t.Fatalf("unexpected real Desktop close ordering: %s", line)
+		}
+	}
+	_ = stdin.Close()
+	if err := command.Wait(); err != nil {
+		var exitError *exec.ExitError
+		if !errors.As(err, &exitError) {
+			t.Fatalf("desktop session helper exit: %v", err)
+		}
+	}
 }
 
 func nativePlatform(t *testing.T) string {

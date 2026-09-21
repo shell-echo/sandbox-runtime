@@ -113,7 +113,8 @@ func (h *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	expires, _ := handoff.AuthorityExpiry(open.ExpiresAt)
 	if err != nil || endpoint.Reference != open.HandoffReference || endpoint.SandboxID != open.SandboxID ||
 		endpoint.RuntimeSessionID != open.RuntimeSessionID || endpoint.CapabilityProfileID != open.CapabilityProfileID ||
-		endpoint.ConnectionGeneration != open.ConnectionGeneration || !endpoint.ExpiresAt.Equal(expires) || endpoint.Dial == nil {
+		endpoint.ConnectionGeneration != open.ConnectionGeneration || endpoint.TenantBindingDigest != open.TenantBindingDigest ||
+		!endpoint.ExpiresAt.Equal(expires) || endpoint.Dial == nil {
 		h.writeReject(connection, request.Context(), open.RequestID, "unavailable")
 		return
 	}

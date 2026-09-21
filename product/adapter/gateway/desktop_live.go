@@ -28,6 +28,7 @@ const (
 	defaultDesktopInputQueue        = 16
 	defaultDesktopAuthorityInterval = 250 * time.Millisecond
 	defaultDesktopDisconnectGrace   = 5 * time.Second
+	defaultDesktopFirstFrameTimeout = 10 * time.Second
 	defaultDesktopKeyframeInterval  = 250 * time.Millisecond
 	defaultDesktopResyncInterval    = 250 * time.Millisecond
 	maxDesktopVideoRTPPacketBytes   = 16 << 10
@@ -131,6 +132,7 @@ type DesktopLiveOptions struct {
 	MaxPeersPerSession          int
 	AuthorityPollInterval       time.Duration
 	ConnectionTimeout           time.Duration
+	FirstFrameTimeout           time.Duration
 	DisconnectGrace             time.Duration
 	MinKeyframeInterval         time.Duration
 	MinResyncInterval           time.Duration
@@ -155,6 +157,7 @@ type DesktopLiveHandler struct {
 	maxPeersPerSession   int
 	pollInterval         time.Duration
 	connectionTimeout    time.Duration
+	firstFrameTimeout    time.Duration
 	disconnectGrace      time.Duration
 	minKeyframeInterval  time.Duration
 	minResyncInterval    time.Duration
@@ -265,6 +268,10 @@ func NewDesktopLiveHandler(options DesktopLiveOptions) (*DesktopLiveHandler, err
 	if connectTimeout == 0 {
 		connectTimeout = 15 * time.Second
 	}
+	firstFrameTimeout := options.FirstFrameTimeout
+	if firstFrameTimeout == 0 {
+		firstFrameTimeout = defaultDesktopFirstFrameTimeout
+	}
 	disconnectGrace := options.DisconnectGrace
 	if disconnectGrace == 0 {
 		disconnectGrace = defaultDesktopDisconnectGrace
@@ -277,7 +284,7 @@ func NewDesktopLiveHandler(options DesktopLiveOptions) (*DesktopLiveHandler, err
 	if resyncInterval == 0 {
 		resyncInterval = defaultDesktopResyncInterval
 	}
-	if limit < 1024 || limit > 256<<10 || videoQueue < 1 || videoQueue > 256 || audioQueue < 1 || audioQueue > 512 || inputQueue < 1 || inputQueue > 64 || maxPeers < 1 || maxPeers > 10000 || maxPerSession < 1 || maxPerSession > 64 || poll < 10*time.Millisecond || poll > 5*time.Second || connectTimeout < time.Second || connectTimeout > time.Minute || disconnectGrace < 100*time.Millisecond || disconnectGrace > 30*time.Second || keyframeInterval < 50*time.Millisecond || keyframeInterval > 5*time.Second || resyncInterval < 50*time.Millisecond || resyncInterval > 5*time.Second {
+	if limit < 1024 || limit > 256<<10 || videoQueue < 1 || videoQueue > 256 || audioQueue < 1 || audioQueue > 512 || inputQueue < 1 || inputQueue > 64 || maxPeers < 1 || maxPeers > 10000 || maxPerSession < 1 || maxPerSession > 64 || poll < 10*time.Millisecond || poll > 5*time.Second || connectTimeout < time.Second || connectTimeout > time.Minute || firstFrameTimeout < 100*time.Millisecond || firstFrameTimeout > time.Minute || disconnectGrace < 100*time.Millisecond || disconnectGrace > 30*time.Second || keyframeInterval < 50*time.Millisecond || keyframeInterval > 5*time.Second || resyncInterval < 50*time.Millisecond || resyncInterval > 5*time.Second {
 		return nil, product.ErrInvalid
 	}
 	configuration := webrtc.Configuration{ICEServers: append([]webrtc.ICEServer(nil), options.ICEServers...)}
@@ -295,7 +302,7 @@ func NewDesktopLiveHandler(options DesktopLiveOptions) (*DesktopLiveHandler, err
 		origins:  origins, configuration: configuration, maxSignalingBytes: limit,
 		maxVideoQueue: videoQueue, maxAudioQueue: audioQueue, maxInputQueue: inputQueue,
 		maxPeers: maxPeers, maxPeersPerSession: maxPerSession, pollInterval: poll,
-		connectionTimeout: connectTimeout, disconnectGrace: disconnectGrace,
+		connectionTimeout: connectTimeout, firstFrameTimeout: firstFrameTimeout, disconnectGrace: disconnectGrace,
 		minKeyframeInterval: keyframeInterval, minResyncInterval: resyncInterval, allowInsecureForTest: options.AllowInsecureHTTPForTests,
 		sessions: make(map[string]int),
 	}, nil
@@ -467,14 +474,19 @@ func (h *DesktopLiveHandler) ServeHTTP(writer http.ResponseWriter, request *http
 		http.Error(writer, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
 		return
 	}
-	state.start(video, audio)
 	response := desktopLiveSignalResponse{
 		Answer: desktopLiveDescription{Type: "answer", SDP: local.SDP}, ConnectionID: binding.ConnectionID,
 		AccessMode: binding.AccessMode, Media: signal.Media, RecordingMode: binding.RecordingPolicy,
 	}
 	if err := json.NewEncoder(writer).Encode(response); err != nil {
 		state.stop()
+		return
 	}
+	// Start connection/media deadlines only after the answer is committed to
+	// the caller. Starting them before response publication made a bounded
+	// timeout consume its budget while the client was still unable to apply the
+	// answer, which caused avoidable connecting-state closures under load.
+	state.start(video, audio)
 }
 
 func (h *DesktopLiveHandler) originAllowed(values []string) bool {
@@ -615,6 +627,8 @@ type desktopLivePeer struct {
 	stopOnce        sync.Once
 	connected       chan struct{}
 	connectedOnce   sync.Once
+	firstFrame      chan struct{}
+	firstFrameOnce  sync.Once
 	inputs          chan desktopLiveQueuedInput
 	stateMu         sync.RWMutex
 	state           webrtc.PeerConnectionState
@@ -632,16 +646,17 @@ type desktopLivePeer struct {
 
 func newDesktopLivePeer(handler *DesktopLiveHandler, peer *webrtc.PeerConnection, media DesktopLiveMediaSession, recording DesktopLiveRecordingSession, binding product.GatewayBinding, mediaPolicy DesktopLiveMediaPolicy, desktopPolicy product.DesktopPolicy) *desktopLivePeer {
 	ctx, cancel := context.WithCancel(context.Background())
-	return &desktopLivePeer{handler: handler, peer: peer, media: media, recording: recording, binding: binding, mediaPolicy: mediaPolicy, desktopPolicy: desktopPolicy, ctx: ctx, cancel: cancel, connected: make(chan struct{}), inputs: make(chan desktopLiveQueuedInput, handler.maxInputQueue), state: webrtc.PeerConnectionStateNew}
+	return &desktopLivePeer{handler: handler, peer: peer, media: media, recording: recording, binding: binding, mediaPolicy: mediaPolicy, desktopPolicy: desktopPolicy, ctx: ctx, cancel: cancel, connected: make(chan struct{}), firstFrame: make(chan struct{}), inputs: make(chan desktopLiveQueuedInput, handler.maxInputQueue), state: webrtc.PeerConnectionStateNew}
 }
 
 func (p *desktopLivePeer) start(video, audio *webrtc.TrackLocalStaticRTP) {
-	go p.streamLoop("video.rtp", p.media.ReadVideoRTP, video, p.handler.maxVideoQueue, maxDesktopVideoRTPPacketBytes, p.mediaPolicy.MaxVideoBitrateKbps)
+	go p.startStreamLoop("video.rtp", p.media.ReadVideoRTP, video, p.handler.maxVideoQueue, maxDesktopVideoRTPPacketBytes, p.mediaPolicy.MaxVideoBitrateKbps)
 	if audio != nil {
-		go p.streamLoop("audio.rtp", p.media.ReadAudioRTP, audio, p.handler.maxAudioQueue, maxDesktopAudioRTPPacketBytes, p.mediaPolicy.MaxAudioBitrateKbps)
+		go p.startStreamLoop("audio.rtp", p.media.ReadAudioRTP, audio, p.handler.maxAudioQueue, maxDesktopAudioRTPPacketBytes, p.mediaPolicy.MaxAudioBitrateKbps)
 	}
 	go p.inputLoop()
 	go p.authorityLoop()
+	go p.firstFrameTimer()
 	go func() {
 		timer := time.NewTimer(p.handler.connectionTimeout)
 		defer timer.Stop()
@@ -652,6 +667,30 @@ func (p *desktopLivePeer) start(video, audio *webrtc.TrackLocalStaticRTP) {
 			p.stop()
 		}
 	}()
+}
+
+func (p *desktopLivePeer) firstFrameTimer() {
+	timer := time.NewTimer(p.handler.firstFrameTimeout)
+	defer timer.Stop()
+	select {
+	case <-p.firstFrame:
+	case <-p.ctx.Done():
+	case <-timer.C:
+		p.stop()
+	}
+}
+
+// startStreamLoop keeps the media source from being consumed before the
+// negotiated WebRTC transport has installed its sender bindings. Pion's local
+// RTP track intentionally returns nil when it has no bindings, which would
+// otherwise make an early first packet disappear without an error. The
+// connection timeout remains the bounded admission deadline for this barrier.
+func (p *desktopLivePeer) startStreamLoop(kind string, read func(context.Context) ([]byte, error), track desktopLiveRTPWriter, queueSize, maxPacketBytes, maxBitrateKbps int) {
+	select {
+	case <-p.connected:
+		p.streamLoop(kind, read, track, queueSize, maxPacketBytes, maxBitrateKbps)
+	case <-p.ctx.Done():
+	}
 }
 
 type desktopLiveRTPWriter interface {
@@ -700,6 +739,9 @@ func (p *desktopLivePeer) streamLoop(kind string, read func(context.Context) ([]
 		if err := parsed.Unmarshal(packet); err != nil || track.WriteRTP(&parsed) != nil {
 			p.stop()
 			return
+		}
+		if kind == "video.rtp" {
+			p.firstFrameOnce.Do(func() { close(p.firstFrame) })
 		}
 	}
 }

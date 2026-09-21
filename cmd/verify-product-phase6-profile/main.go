@@ -20,5 +20,5 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Phase 6 release profile rejected: %v\n", err)
 		os.Exit(1)
 	}
-	fmt.Printf("Phase 6 release profile passed: revision=%s roles=%d\n", profile.Revision, len(profile.Roles))
+	fmt.Printf("Phase 6 release profile passed: revision=%s profile_digest=%s roles=%d\n", profile.Revision, profile.ProfileDigest, len(profile.Roles))
 }

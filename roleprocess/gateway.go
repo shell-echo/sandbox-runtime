@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -23,9 +24,13 @@ import (
 )
 
 const (
-	gatewayAuthorityVersion = 1
+	gatewayAuthorityVersion = 2
 	maxGatewayAuthoritySize = 64 << 10
 	maxGatewayDSNSize       = 8 << 10
+
+	gatewayCapabilityEnabled              = "enabled"
+	gatewayCapabilityAuthorityUnavailable = "authority_unavailable"
+	gatewayDeferredAuthorityReason        = "phase6-slice5-6-authority-required"
 )
 
 // GatewayCredentialAuthority is the private role-owned input for the Product
@@ -53,8 +58,13 @@ type GatewayDependencyAuthority struct {
 }
 
 type GatewayPolicyAuthority struct {
-	Version int    `json:"version"`
-	Role    string `json:"role"`
+	Version                 int    `json:"version"`
+	Role                    string `json:"role"`
+	Terminal                string `json:"terminal"`
+	BrowserAutomation       string `json:"browser_automation"`
+	BrowserLive             string `json:"browser_live"`
+	DesktopLive             string `json:"desktop_live"`
+	DeferredAuthorityReason string `json:"deferred_authority_reason"`
 }
 
 type GatewayAuthority struct {
@@ -102,7 +112,10 @@ func LoadGatewayAuthority(cfg *config.DataPlaneProcessConfig) (GatewayAuthority,
 			return GatewayAuthority{}, errors.New("invalid Gateway origin policy")
 		}
 	}
-	if policy.Version != gatewayAuthorityVersion || policy.Role != string(config.DataPlaneGateway) {
+	if policy.Version != gatewayAuthorityVersion || policy.Role != string(config.DataPlaneGateway) ||
+		policy.Terminal != gatewayCapabilityEnabled || policy.BrowserAutomation != gatewayCapabilityAuthorityUnavailable ||
+		policy.BrowserLive != gatewayCapabilityAuthorityUnavailable || policy.DesktopLive != gatewayCapabilityAuthorityUnavailable ||
+		policy.DeferredAuthorityReason != gatewayDeferredAuthorityReason {
 		return GatewayAuthority{}, errors.New("invalid Gateway policy authority")
 	}
 	return GatewayAuthority{Credential: credential, Dependency: dependency, Policy: policy}, nil
@@ -169,7 +182,7 @@ func NewGatewayApplicationGraph(ctx context.Context, cfg *config.DataPlaneProces
 		closePool()
 		return ApplicationGraph{}, fmt.Errorf("construct Gateway Provider handoff adapter: %w", err)
 	}
-	handler, err := productgateway.NewHandler(productgateway.Options{
+	terminal, err := productgateway.NewHandler(productgateway.Options{
 		Grants: grantRepository, BoundResolver: resolver, Audit: audit,
 		OriginPatterns: authority.Dependency.OriginPatterns,
 		MaxConnections: authority.Dependency.MaxConnections, MaxConnectionsPerSession: authority.Dependency.MaxConnectionsPerSession,
@@ -178,16 +191,78 @@ func NewGatewayApplicationGraph(ctx context.Context, cfg *config.DataPlaneProces
 		closePool()
 		return ApplicationGraph{}, fmt.Errorf("construct Gateway public handler: %w", err)
 	}
+	handler := newGatewayPublicHandler(terminal, authority.Policy)
 	return ApplicationGraph{
 		Public: handler,
 		Ready: func(checkContext context.Context) error {
 			if checkContext == nil {
 				return errors.New("Gateway readiness context is required")
 			}
-			return pool.Ping(checkContext)
+			if err := pool.Ping(checkContext); err != nil {
+				return err
+			}
+			return gatewayProviderReachable(checkContext, providerClient, authority.Credential.ProviderOrigin)
 		},
 		Shutdown: func(context.Context) error { closePool(); return nil },
 	}, nil
+}
+
+type gatewayCapabilityProjection struct {
+	SchemaVersion     string `json:"schema_version"`
+	Terminal          string `json:"terminal"`
+	BrowserAutomation string `json:"browser_automation"`
+	BrowserLive       string `json:"browser_live"`
+	DesktopLive       string `json:"desktop_live"`
+	Reason            string `json:"reason"`
+}
+
+func newGatewayPublicHandler(terminal http.Handler, policy GatewayPolicyAuthority) http.Handler {
+	mux := http.NewServeMux()
+	mux.Handle("/terminal/connect", terminal)
+	unavailable := http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		writer.Header().Set("Cache-Control", "no-store")
+		writer.Header().Set("Content-Type", "application/problem+json")
+		writer.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = writer.Write([]byte(`{"code":"PRODUCT_CAPABILITY_UNAVAILABLE","message":"capability authority is unavailable"}`))
+	})
+	for _, path := range []string{"/browser/automation", "/browser/live", "/desktop/connect"} {
+		mux.Handle(path, unavailable)
+	}
+	mux.HandleFunc("/capabilities", func(writer http.ResponseWriter, request *http.Request) {
+		writer.Header().Set("Cache-Control", "no-store")
+		if request == nil || request.Method != http.MethodGet {
+			http.Error(writer, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+			return
+		}
+		writer.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(writer).Encode(gatewayCapabilityProjection{
+			SchemaVersion: "sandbox-runtime.gateway-capabilities.v1", Terminal: policy.Terminal,
+			BrowserAutomation: policy.BrowserAutomation, BrowserLive: policy.BrowserLive,
+			DesktopLive: policy.DesktopLive, Reason: policy.DeferredAuthorityReason,
+		})
+	})
+	return mux
+}
+
+func gatewayProviderReachable(ctx context.Context, client *http.Client, origin string) error {
+	parsed, err := url.Parse(origin)
+	if err != nil || parsed.Scheme != "wss" {
+		return errors.New("Gateway Provider dependency is invalid")
+	}
+	parsed.Scheme = "https"
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, parsed.String(), nil)
+	if err != nil {
+		return errors.New("Gateway Provider dependency is invalid")
+	}
+	response, err := client.Do(request)
+	if err != nil {
+		return errors.New("Gateway Provider dependency is unavailable")
+	}
+	defer response.Body.Close()
+	if response.StatusCode >= http.StatusInternalServerError {
+		return errors.New("Gateway Provider dependency is unavailable")
+	}
+	return nil
 }
 
 func readGatewayDSN(path string) (string, error) {

@@ -170,7 +170,7 @@ Current verified state:
   parent checks to evidence/CI baseline
   `59de37d5ee22776305dfaab866c25ea6bd5406bc`; full E2E race/shuffle, vet,
   and all eight clean-checkout checks pass; and
-- Product v1 Phase 6 production hardening is **3/15 complete** under ADR 0051
+- Product v1 Phase 6 production hardening is **4/15 complete** under ADR 0051
   and the fixed Phase 6 plan. The startup audit distinguishes existing
   components and same-repository gates from deployable/operable/production
   authority. Slice 1 adds `sandbox-runtime product serve`, strict
@@ -192,10 +192,13 @@ Current verified state:
   loopback probes, and exact single-profile coding-shell or Desktop
   advertisement. Real PostgreSQL concurrency/fault/restart, process restart,
   coding-shell Docker lifecycle, and signed Desktop broker gates pass locally.
-  Product dispatch and public data-plane application graphs remain uncomposed,
-  so `product.workspace` is still explicitly unavailable. Slice 4 now has
-  separate Gateway/Guest/Browser/Desktop role boundaries and probes, but its
-  complete independent-process gate is still open.
+  Product dispatch remains uncomposed, so `product.workspace` is still
+  explicitly unavailable. Slice 4 adds separate Gateway/Guest/Browser/Desktop
+  roles, restricted executor v2 backends, sealed Browser/Desktop egress
+  identity, a Provider-owned signed Desktop broker mux, and a passing local
+  six-role/twelve-scenario gate with exact cleanup. Its Desktop OCI remains a
+  non-release local candidate; public Product E2E, deployment and production
+  readiness remain open.
 
 The qualification applies only to Provider revision
 `170459266af5f4fad359ca8c63f2ae19741055c5`, external-caller revision
@@ -314,7 +317,7 @@ Three API surfaces must remain separate:
 | --- | --- | --- |
 | Local `/instances` API | Local instance management over fake or Docker drivers | Internal implementation; its DTOs and state are not Provider wire models |
 | Provider API v1 | mTLS/JWS-protected asynchronous Provider protocol | Repository Contract controls routes, documents, semantics, and projection |
-| Product API v1alpha1 | End-user Workspace control plane | Independent Product Contract; Phase 6 Slices 1-2 add development and production-kernel listeners with real PostgreSQL, TLS 1.3 signed identity, separated database authority, empty/unavailable capability projection, and fail-closed runtime mutation; Slice 3 adds a separate deployable Provider process but no Product dispatch or public data-plane composition yet |
+| Product API v1alpha1 | End-user Workspace control plane | Independent Product Contract; Phase 6 Slices 1-2 add development and production-kernel listeners with real PostgreSQL, TLS 1.3 signed identity, separated database authority, empty/unavailable capability projection, and fail-closed runtime mutation; Slice 3 adds a separate Provider process, while Slice 4 adds bounded independent data-plane roles without yet composing public Product dispatch |
 
 The calling service owns its business correlation records, desired business
 state, tenant/user authorization, ProviderRevision selection, Artifact

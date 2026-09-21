@@ -64,7 +64,8 @@ func newFakeNetwork() *fakeNetwork {
 	return &fakeNetwork{attachment: NetworkAttachment{
 		DockerName: "browser-egress-network-1", GatewayContainer: "browser-egress-gateway-1", GatewayAddress: "10.88.0.2",
 		LeaseID: "browser-network-lease-1", PolicyReference: "browser-egress-policy-1",
-		PolicyDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", EgressGateway: true,
+		PolicyDigest:           "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		WorkloadIdentityDigest: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", EgressGateway: true,
 	}}
 }
 func (n *fakeNetwork) Ready(_ context.Context, policy string) error {

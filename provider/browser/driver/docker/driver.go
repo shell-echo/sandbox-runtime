@@ -27,6 +27,7 @@ import (
 
 	browserimage "github.com/shell-echo/sandbox-runtime/profiles/browser/image"
 	providerbrowser "github.com/shell-echo/sandbox-runtime/provider/browser"
+	"github.com/shell-echo/sandbox-runtime/provider/network/restricted"
 )
 
 const (
@@ -277,7 +278,8 @@ func (d *Driver) Allocate(ctx context.Context, allocation providerbrowser.Alloca
 	attachment, err := d.network.Acquire(operationCtx, NetworkRequest{
 		SandboxID: allocation.Request.SandboxID, BrowserSessionID: allocation.Request.BrowserSessionID,
 		Namespace: d.options.Namespace, ControllerID: d.options.ControllerID,
-		PolicyReference: allocation.Request.NetworkPolicyReference,
+		PolicyReference: allocation.Request.NetworkPolicyReference, Generation: allocation.Request.ExpectedGeneration,
+		FencingToken: allocation.Request.FencingToken,
 	})
 	if err != nil {
 		if contextErr := allocationContextError(operationCtx, err); contextErr != nil {
@@ -637,20 +639,18 @@ func stringMapEqual(left, right map[string]string) bool {
 }
 
 func (d *Driver) createRequest(state browserState) createRequest {
+	identity, _ := restricted.BrowserIdentity(d.options.Namespace, d.options.ControllerID, state.Request.SandboxID, state.Request.BrowserSessionID, state.Request.ExpectedGeneration, state.Request.FencingToken)
+	labels := identity.WorkloadLabels(state.Network.LeaseID)
+	labels[specDigestLabel] = state.SpecDigest
 	return createRequest{
-		name:  containerName(state.Request.SandboxID, state.Request.BrowserSessionID),
+		name:  identity.WorkloadName(),
 		image: d.options.Image, user: BrowserUser, workingDirectory: "/workspace",
 		memoryBytes: d.options.MemoryBytes, nanoCPUs: d.options.NanoCPUs, pidsLimit: d.options.PidsLimit,
 		inputsBytes: d.options.InputsBytes, tmpfsBytes: d.options.TmpfsBytes,
 		workspaceBytes: d.options.WorkspaceBytes, outputsBytes: d.options.OutputsBytes,
 		stopTimeout: d.options.StopTimeoutSeconds, networkName: state.Network.DockerName,
 		dnsResolver: state.Network.GatewayAddress, seccompProfile: d.seccomp,
-		labels: map[string]string{
-			managedLabel: "true", ownerLabel: providerOwner,
-			sandboxLabel: state.Request.SandboxID, browserSessionLabel: state.Request.BrowserSessionID,
-			namespaceLabel: d.options.Namespace, controllerLabel: d.options.ControllerID,
-			runtimeProfileLabel: BrowserRuntimeProfile, specDigestLabel: state.SpecDigest,
-		},
+		labels: labels,
 	}
 }
 

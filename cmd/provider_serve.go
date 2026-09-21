@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"net/url"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/shell-echo/sandbox-runtime/config"
+	"github.com/shell-echo/sandbox-runtime/internal/handoff"
 	"github.com/shell-echo/sandbox-runtime/internal/secretfile"
 	"github.com/shell-echo/sandbox-runtime/provider"
 	providerpostgres "github.com/shell-echo/sandbox-runtime/provider/adapter/postgres"
@@ -25,6 +27,7 @@ import (
 	provideroperation "github.com/shell-echo/sandbox-runtime/provider/operation"
 	sessionapplication "github.com/shell-echo/sandbox-runtime/provider/session/application"
 	sessionreference "github.com/shell-echo/sandbox-runtime/provider/session/reference"
+	terminalgateway "github.com/shell-echo/sandbox-runtime/provider/terminal/gateway"
 	"github.com/shell-echo/sandbox-runtime/provider/usage"
 	usageapplication "github.com/shell-echo/sandbox-runtime/provider/usage/application"
 	"github.com/shell-echo/sandbox-runtime/providerapi"
@@ -89,15 +92,24 @@ func runProviderServe(cmd *cobra.Command, _ []string) (result error) {
 		return err
 	}
 	defer func() { result = errors.Join(result, composition.close()) }()
-	return server.RunE(map[string]server.Server{
+	servers := map[string]server.Server{
 		"provider":                composition.provider,
 		"provider-probe":          composition.probe,
 		"provider-reconciliation": composition.reconciler,
-	})
+	}
+	if composition.private != nil {
+		servers["provider-private"] = composition.private
+	}
+	if composition.brokerMux != nil {
+		servers["provider-desktop-broker-mux"] = composition.brokerMux
+	}
+	return server.RunE(servers)
 }
 
 type productionProviderComposition struct {
 	provider   server.Server
+	private    server.Server
+	brokerMux  server.Server
 	probe      server.Server
 	reconciler server.Server
 	close      func() error
@@ -219,6 +231,10 @@ func newProductionCodingProvider(ctx context.Context, cfg *config.ProviderProces
 	if err != nil {
 		return fail(err)
 	}
+	privateServer, err := newProductionProviderPrivateTerminalServer(ctx, cfg, terminalApp)
+	if err != nil {
+		return fail(err)
+	}
 	reconciler, err := providerprocess.NewReconciler(time.Duration(cfg.Reconciliation.IntervalSeconds)*time.Second, time.Duration(cfg.Reconciliation.TimeoutSeconds)*time.Second,
 		func(runCtx context.Context) error { return lifecycleApp.Recover(runCtx) },
 		func(runCtx context.Context) error { return execApp.Recover(runCtx) },
@@ -233,7 +249,59 @@ func newProductionCodingProvider(ctx context.Context, cfg *config.ProviderProces
 	if err != nil {
 		return fail(err)
 	}
-	return &productionProviderComposition{provider: providerServer, probe: probe, reconciler: reconciler, close: stack.close}, nil
+	return &productionProviderComposition{provider: providerServer, private: privateServer, probe: probe, reconciler: reconciler, close: stack.close}, nil
+}
+
+func newProductionProviderPrivateTerminalServer(ctx context.Context, cfg *config.ProviderProcessConfig, application *providerTerminalApplication) (server.Server, error) {
+	if cfg == nil || !cfg.Transport.Private.Enabled {
+		return nil, nil
+	}
+	if application == nil || application.resolver == nil {
+		return nil, errors.New("Provider private terminal listener requires a composed terminal resolver")
+	}
+	allowed := false
+	for _, route := range cfg.Transport.Private.RoutePolicy {
+		if route == config.ProviderPrivateRouteTerminal {
+			allowed = true
+		}
+	}
+	if !allowed {
+		return nil, errors.New("Provider private transport route policy does not authorize terminal")
+	}
+	handler, err := terminalgateway.New(terminalgateway.Options{
+		Resolver: application.resolver, PeerAuthorizer: providerPrivatePeerAuthorizer{},
+		TenantAuthorizer: providerPrivateBindingAuthorizer{}, MaxMessageBytes: cfg.Transport.Private.MaxBodyBytes,
+		OperationTimeout: time.Duration(cfg.Transport.Private.ReadTimeoutMillis) * time.Millisecond,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("construct Provider private terminal handler: %w", err)
+	}
+	private := cfg.Transport.Private
+	return providerapi.NewPrivateServer(ctx, providerapi.PrivateTransportOptions{
+		Address: private.Address, ServerCertificateFile: private.ServerCertificateFile, ServerPrivateKeyFile: private.ServerPrivateKeyFile,
+		ClientCABundleFile: private.ClientCABundleFile, AllowedClientURIIdentities: append([]string(nil), private.AllowedClientURIIdentities...), Handler: handler,
+		ReadHeaderTimeout: time.Duration(private.ReadHeaderTimeoutMillis) * time.Millisecond, ReadTimeout: time.Duration(private.ReadTimeoutMillis) * time.Millisecond,
+		WriteTimeout: time.Duration(private.WriteTimeoutMillis) * time.Millisecond, IdleTimeout: time.Duration(private.IdleTimeoutMillis) * time.Millisecond,
+		MaxHeaderBytes: private.MaxHeaderBytes, MaxBodyBytes: private.MaxBodyBytes,
+	})
+}
+
+type providerPrivatePeerAuthorizer struct{}
+
+func (providerPrivatePeerAuthorizer) AuthorizePeer(_ context.Context, state tls.ConnectionState) error {
+	if !state.HandshakeComplete || len(state.PeerCertificates) == 0 || len(state.VerifiedChains) == 0 {
+		return errors.New("private peer identity is unavailable")
+	}
+	return nil
+}
+
+type providerPrivateBindingAuthorizer struct{}
+
+func (providerPrivateBindingAuthorizer) AuthorizeHandoff(_ context.Context, request handoff.OpenRequest) error {
+	if handoff.ValidateTenantBindingDigest(request.TenantBindingDigest) != nil {
+		return errors.New("private tenant binding is unavailable")
+	}
+	return nil
 }
 
 func newProductionProviderTerminal(ctx context.Context, terminalConfig config.ProviderTerminalConfig, state *providerpostgres.Store, lifecycleApp *lifecycleapplication.Application, runtime *lifecycledocker.Driver) (*providerTerminalApplication, error) {

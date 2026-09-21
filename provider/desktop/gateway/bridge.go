@@ -19,13 +19,16 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/shell-echo/sandbox-runtime/internal/desktophandoff"
 	"github.com/shell-echo/sandbox-runtime/internal/desktopmedia"
+	"github.com/shell-echo/sandbox-runtime/internal/handoff"
 	providerdesktop "github.com/shell-echo/sandbox-runtime/provider/desktop"
 	desktopreference "github.com/shell-echo/sandbox-runtime/provider/desktop/reference"
 )
 
 const (
 	PrivateSubprotocol = desktopmedia.Subprotocol
+	ClosedSubprotocol  = desktophandoff.ProtocolID
 
 	referenceHeader  = "X-Sandbox-Desktop-Reference"
 	sandboxHeader    = "X-Sandbox-ID"
@@ -62,6 +65,11 @@ func (f PeerAuthorizerFunc) AuthorizePeer(ctx context.Context, state tls.Connect
 	return f(ctx, state)
 }
 
+type Clock interface{ Now() time.Time }
+type ClockFunc func() time.Time
+
+func (f ClockFunc) Now() time.Time { return f() }
+
 type MediaPolicy = desktopmedia.MediaPolicy
 type DisplayPolicy = desktopmedia.DisplayPolicy
 type TouchPoint = desktopmedia.TouchPoint
@@ -83,32 +91,50 @@ type MediaSource interface {
 	Open(context.Context, desktopreference.Endpoint, providerdesktop.Attachment, MediaPolicy) (Session, error)
 }
 
+type BoundMediaSource interface {
+	OpenBound(context.Context, desktophandoff.OpenRequest, desktopreference.Endpoint, providerdesktop.Attachment) (Session, error)
+}
+
+type BindingRegistrar interface {
+	BindHandoff(context.Context, desktophandoff.Binding) error
+}
+
 type Options struct {
 	Resolver                  Resolver
 	Media                     MediaSource
+	BoundMedia                BoundMediaSource
+	BindingRegistrar          BindingRegistrar
 	PeerAuthorizer            PeerAuthorizer
 	MaxMessageBytes           int64
 	MaxSessions               int
 	MaxSessionsPerDesktop     int
 	AuthorityPollInterval     time.Duration
 	OperationTimeout          time.Duration
+	Clock                     Clock
 	AllowInsecureHTTPForTests bool
 }
 
 type Handler struct {
 	resolver         Resolver
 	media            MediaSource
+	boundMedia       BoundMediaSource
+	bindingRegistrar BindingRegistrar
 	peerAuthorizer   PeerAuthorizer
 	maxMessageBytes  int64
 	maxSessions      int
 	maxPerDesktop    int
 	authorityPoll    time.Duration
 	operationTimeout time.Duration
+	clock            Clock
 	insecureTests    bool
 
 	mu       sync.Mutex
 	active   int
 	sessions map[string]int
+	replayMu sync.Mutex
+	replayed map[string]time.Time
+	clockMu  sync.Mutex
+	lastNow  time.Time
 }
 
 func New(options Options) (*Handler, error) {
@@ -132,28 +158,36 @@ func New(options Options) (*Handler, error) {
 	if operationTimeout == 0 {
 		operationTimeout = defaultOperationTimeout
 	}
-	if nilDependency(options.Resolver) || nilDependency(options.Media) ||
+	clock := options.Clock
+	if clock == nil {
+		clock = ClockFunc(func() time.Time { return time.Now().UTC() })
+	}
+	if nilDependency(options.Resolver) || (nilDependency(options.Media) && nilDependency(options.BoundMedia)) ||
 		(!options.AllowInsecureHTTPForTests && nilDependency(options.PeerAuthorizer)) ||
 		messageLimit < 1024 || messageLimit > maxMessageBytes || maxSessions < 1 || maxSessions > 10000 ||
 		maxPerDesktop < 1 || maxPerDesktop > 64 || poll < 10*time.Millisecond || poll > 5*time.Second ||
 		operationTimeout < 100*time.Millisecond || operationTimeout > 30*time.Second {
 		return nil, providerdesktop.ErrDesktopUnsupported
 	}
-	return &Handler{resolver: options.Resolver, media: options.Media, peerAuthorizer: options.PeerAuthorizer,
+	return &Handler{resolver: options.Resolver, media: options.Media, boundMedia: options.BoundMedia, bindingRegistrar: options.BindingRegistrar, peerAuthorizer: options.PeerAuthorizer, clock: clock,
 		maxMessageBytes: messageLimit, maxSessions: maxSessions, maxPerDesktop: maxPerDesktop,
 		authorityPoll: poll, operationTimeout: operationTimeout, insecureTests: options.AllowInsecureHTTPForTests,
-		sessions: make(map[string]int)}, nil
+		sessions: make(map[string]int), replayed: make(map[string]time.Time)}, nil
 }
 
 func (h *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Request) { //nolint:cyclop
 	writer.Header().Set("Cache-Control", "no-store")
 	if h == nil || request == nil || request.Method != http.MethodGet ||
-		(!h.insecureTests && request.TLS == nil) || request.Header.Get("Sec-WebSocket-Protocol") != PrivateSubprotocol {
+		(!h.insecureTests && request.TLS == nil) || (request.Header.Get("Sec-WebSocket-Protocol") != PrivateSubprotocol && request.Header.Get("Sec-WebSocket-Protocol") != ClosedSubprotocol) {
 		http.Error(writer, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return
 	}
 	if !h.insecureTests && (h.peerAuthorizer == nil || h.peerAuthorizer.AuthorizePeer(request.Context(), *request.TLS) != nil) {
 		http.Error(writer, http.StatusText(http.StatusForbidden), http.StatusForbidden)
+		return
+	}
+	if request.Header.Get("Sec-WebSocket-Protocol") == ClosedSubprotocol {
+		h.serveClosed(writer, request)
 		return
 	}
 	authority, ok := decodeAuthority(request)
@@ -196,11 +230,104 @@ func (h *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	_ = session.Close()
 }
 
+func (h *Handler) serveClosed(writer http.ResponseWriter, request *http.Request) {
+	if h.boundMedia == nil || h.bindingRegistrar == nil {
+		http.Error(writer, http.StatusText(http.StatusNotImplemented), http.StatusNotImplemented)
+		return
+	}
+	connection, err := websocket.Accept(writer, request, &websocket.AcceptOptions{Subprotocols: []string{ClosedSubprotocol}, CompressionMode: websocket.CompressionDisabled})
+	if err != nil {
+		return
+	}
+	defer connection.CloseNow()
+	connection.SetReadLimit(h.maxMessageBytes)
+	kind, document, err := connection.Read(request.Context())
+	if err != nil || kind != websocket.MessageText || int64(len(document)) > handoff.MaxDocumentBytes {
+		return
+	}
+	var open desktophandoff.OpenRequest
+	now, trusted := h.now()
+	if handoff.Decode(document, &open) != nil || !trusted || open.Validate(now) != nil {
+		return
+	}
+	if !h.claim(open.RequestID, now, mustExpiry(open.AuthorityExpiresAt)) {
+		response, _ := handoff.Encode(desktophandoff.RejectResponse(open.RequestID, "unavailable"))
+		_ = connection.Write(request.Context(), websocket.MessageText, response)
+		return
+	}
+	if err := h.bindingRegistrar.BindHandoff(request.Context(), open.Binding()); err != nil {
+		response, _ := handoff.Encode(desktophandoff.RejectResponse(open.RequestID, "unavailable"))
+		_ = connection.Write(request.Context(), websocket.MessageText, response)
+		return
+	}
+	resolveCtx, cancel := context.WithTimeout(request.Context(), h.operationTimeout)
+	endpoint, attachment, err := h.resolveClosed(resolveCtx, open)
+	cancel()
+	if err != nil {
+		response, _ := handoff.Encode(desktophandoff.RejectResponse(open.RequestID, "unavailable"))
+		_ = connection.Write(request.Context(), websocket.MessageText, response)
+		return
+	}
+	if !h.acquire(open.DesktopSessionID) {
+		response, _ := handoff.Encode(desktophandoff.RejectResponse(open.RequestID, "unavailable"))
+		_ = connection.Write(request.Context(), websocket.MessageText, response)
+		return
+	}
+	defer h.release(open.DesktopSessionID)
+	operationCtx, operationCancel := context.WithTimeout(request.Context(), h.operationTimeout)
+	session, err := h.boundMedia.OpenBound(operationCtx, open, endpoint, attachment)
+	operationCancel()
+	if err != nil || nilDependency(session) {
+		response, _ := handoff.Encode(desktophandoff.RejectResponse(open.RequestID, "unavailable"))
+		_ = connection.Write(request.Context(), websocket.MessageText, response)
+		return
+	}
+	defer session.Close()
+	response, _ := handoff.Encode(desktophandoff.AcceptedResponse(open.RequestID))
+	if err := connection.Write(request.Context(), websocket.MessageText, response); err != nil {
+		return
+	}
+	authorityExpiry, _ := time.Parse(time.RFC3339Nano, open.AuthorityExpiresAt)
+	ctx, cancelBridge := context.WithDeadline(request.Context(), authorityExpiry)
+	defer cancelBridge()
+	handoffExpiry, _ := time.Parse(time.RFC3339Nano, open.HandoffExpiresAt)
+	binding := open.Binding()
+	bridge := &connectionBridge{connection: connection, session: session, authority: requestAuthority{reference: open.HandoffReference, providerRevision: open.ProviderRevisionID, tenantDigest: open.TenantBindingDigest, allocationReference: endpoint.AllocationReference, sandboxID: open.SandboxID, sessionID: open.DesktopSessionID, profileID: open.CapabilityProfileID, generation: open.ConnectionGeneration, connectionEpoch: open.ConnectionEpoch, expiresAt: authorityExpiry, handoffExpiresAt: handoffExpiry, policy: open.MediaPolicy, binding: &binding}, handler: h}
+	bridge.run(ctx)
+	_ = session.Close()
+}
+
+func (h *Handler) resolveClosed(ctx context.Context, open desktophandoff.OpenRequest) (desktopreference.Endpoint, providerdesktop.Attachment, error) {
+	endpoint, err := h.resolver.Resolve(ctx, open.HandoffReference)
+	if err != nil {
+		return desktopreference.Endpoint{}, providerdesktop.Attachment{}, providerdesktop.ErrDesktopNotFound
+	}
+	handoffExpires, handoffErr := time.Parse(time.RFC3339Nano, open.HandoffExpiresAt)
+	if handoffErr != nil || endpoint.Binding == nil || *endpoint.Binding != open.Binding() || endpoint.Reference != open.HandoffReference || endpoint.ProviderRevisionID != open.ProviderRevisionID || endpoint.SandboxID != open.SandboxID || endpoint.DesktopSessionID != open.DesktopSessionID || endpoint.CapabilityProfileID != open.CapabilityProfileID || endpoint.ConnectionGeneration != open.ConnectionGeneration || endpoint.TenantBindingDigest != open.TenantBindingDigest || !endpoint.ExpiresAt.Equal(handoffExpires) || endpoint.AllocationReference == "" || endpoint.Attach == nil {
+		return desktopreference.Endpoint{}, providerdesktop.Attachment{}, providerdesktop.ErrDesktopNotFound
+	}
+	attachment, err := endpoint.Attach(ctx)
+	if err != nil {
+		return desktopreference.Endpoint{}, providerdesktop.Attachment{}, providerdesktop.ErrDesktopNotFound
+	}
+	if attachment.DesktopSessionID != open.DesktopSessionID || attachment.ConnectionGeneration != open.ConnectionGeneration {
+		return desktopreference.Endpoint{}, providerdesktop.Attachment{}, providerdesktop.ErrDesktopNotFound
+	}
+	return endpoint, attachment, nil
+}
+
+func mustExpiry(value string) time.Time {
+	parsed, _ := time.Parse(time.RFC3339Nano, value)
+	return parsed
+}
+
 type requestAuthority struct {
-	reference, sandboxID, sessionID, profileID string
-	generation                                 int64
-	expiresAt                                  time.Time
-	policy                                     MediaPolicy
+	reference, providerRevision, tenantDigest, allocationReference string
+	sandboxID, sessionID, profileID, connectionEpoch               string
+	generation                                                     int64
+	expiresAt, handoffExpiresAt                                    time.Time
+	policy                                                         MediaPolicy
+	binding                                                        *desktophandoff.Binding
 }
 
 func decodeAuthority(request *http.Request) (requestAuthority, bool) {
@@ -217,6 +344,9 @@ func decodeAuthority(request *http.Request) (requestAuthority, bool) {
 		return requestAuthority{}, false
 	}
 	expires, err := time.Parse(time.RFC3339Nano, values[expiryHeader])
+	// The caller must supply a strict closed authority; the legacy header path
+	// remains only for older component tests and is never used by production
+	// composition.
 	now := time.Now().UTC()
 	if err != nil || !expires.After(now) || expires.After(now.Add(24*time.Hour)) {
 		return requestAuthority{}, false
@@ -228,7 +358,7 @@ func decodeAuthority(request *http.Request) (requestAuthority, bool) {
 		return requestAuthority{}, false
 	}
 	authority := requestAuthority{reference: values[referenceHeader], sandboxID: values[sandboxHeader], sessionID: values[sessionHeader],
-		profileID: values[profileHeader], generation: generation, expiresAt: expires.UTC(), policy: policy}
+		profileID: values[profileHeader], generation: generation, expiresAt: expires.UTC(), handoffExpiresAt: expires.UTC(), policy: policy}
 	if !strings.HasPrefix(authority.reference, "ref:desktop-session:") || len(authority.reference) > 256 || strings.ContainsAny(authority.reference, " \r\n\t") ||
 		!identifierPattern.MatchString(authority.sandboxID) || !identifierPattern.MatchString(authority.sessionID) || authority.profileID != providerdesktop.CapabilityProfileID {
 		return requestAuthority{}, false
@@ -254,10 +384,49 @@ func (h *Handler) check(ctx context.Context, authority requestAuthority) error {
 	endpoint, err := h.resolver.Resolve(ctx, authority.reference)
 	if err != nil || endpoint.Reference != authority.reference || endpoint.SandboxID != authority.sandboxID ||
 		endpoint.DesktopSessionID != authority.sessionID || endpoint.CapabilityProfileID != authority.profileID ||
-		endpoint.ConnectionGeneration != authority.generation || !endpoint.ExpiresAt.Equal(authority.expiresAt) {
+		endpoint.ConnectionGeneration != authority.generation || !endpoint.ExpiresAt.Equal(authority.handoffExpiresAt) ||
+		(authority.providerRevision != "" && endpoint.ProviderRevisionID != authority.providerRevision) ||
+		(authority.tenantDigest != "" && endpoint.TenantBindingDigest != authority.tenantDigest) ||
+		(authority.allocationReference != "" && endpoint.AllocationReference != authority.allocationReference) ||
+		(authority.binding != nil && (endpoint.Binding == nil || *endpoint.Binding != *authority.binding)) {
 		return providerdesktop.ErrDesktopNotFound
 	}
 	return nil
+}
+
+func (h *Handler) now() (time.Time, bool) {
+	if h == nil || h.clock == nil {
+		return time.Time{}, false
+	}
+	now := h.clock.Now().UTC()
+	if now.IsZero() {
+		return time.Time{}, false
+	}
+	h.clockMu.Lock()
+	defer h.clockMu.Unlock()
+	if !h.lastNow.IsZero() && now.Before(h.lastNow) {
+		return time.Time{}, false
+	}
+	h.lastNow = now
+	return now, true
+}
+
+func (h *Handler) claim(requestID string, now, expires time.Time) bool {
+	if requestID == "" || now.IsZero() || expires.IsZero() || !expires.After(now) {
+		return false
+	}
+	h.replayMu.Lock()
+	defer h.replayMu.Unlock()
+	for id, until := range h.replayed {
+		if !until.After(now) {
+			delete(h.replayed, id)
+		}
+	}
+	if _, exists := h.replayed[requestID]; exists {
+		return false
+	}
+	h.replayed[requestID] = expires
+	return true
 }
 
 func (h *Handler) acquire(sessionID string) bool {

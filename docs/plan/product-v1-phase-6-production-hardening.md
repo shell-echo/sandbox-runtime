@@ -2,8 +2,8 @@
 
 Date: 2026-09-20
 
-Status: **3/15 complete**. Repository-side hardening foundations for Slices
-4-10 and release-profile checks for Slices 7/11/14 are present, but their
+Status: **4/15 complete**. Repository-side hardening foundations for Slices
+5-10 and release-profile checks for Slices 7/11/14 are present, but their
 deployment and independent-observation gates remain open. The order is fixed
 by ADR 0051.
 
@@ -94,11 +94,18 @@ authorization, relay, capacity, revocation, recording and shutdown graphs.
 Gate: independent process starts, dependency loss, reconnect, bounded drain,
 least-authority credentials and no private-coordinate projection.
 
-Status: boundary implementation in progress. Separate Gateway, Guest, Browser,
-and Desktop commands/configuration and loopback-only probes now exist, with
-public/private TLS role validation and mixed-authority rejection. The complete
-Gateway/Guest/Browser/Desktop application graph and independent-process gate
-remain open. See [`product-phase-6-slice-4.md`](../audits/product-phase-6-slice-4.md).
+Status: complete within the bounded local independent-process scope. Separate
+Gateway, Guest, Browser and Desktop commands enforce role-specific transport,
+authority and readiness. Under ADR 0052, Provider remains the sole
+Browser/Desktop handoff, PostgreSQL and Docker authority; independent
+Browser/Desktop processes use `executor.v2`, and Desktop reaches only the
+Provider-owned Unix broker mux using a signed short-lived capability. A strict
+six-role/twelve-scenario gate passes real Chromium, real Desktop VP8/input,
+dependency loss, reconnect, replay/capacity/drift denial, broker/executor/
+Provider restart, bounded drain and exact zero-resource cleanup. The Desktop
+OCI is a local non-release candidate, and public Product E2E, deployment and
+production readiness remain unproved.
+See [`product-phase-6-slice-4.md`](../audits/product-phase-6-slice-4.md).
 
 ### Slice 5 — secret references, KMS and rotation
 
@@ -214,7 +221,8 @@ an earlier claim.
 
 ## Current stop point
 
-Slices 1-3 are implemented. Slice 4, the deployable Gateway, Guest, Browser,
-and Desktop roles, is next. The Product and Provider results are local
-role-process/component evidence; no complete Phase 6 production topology, HA,
-hostile-multitenant, SLO-attainment, or deployment qualification is claimed.
+Slices 1-4 are implemented. Slice 5, production secret references, KMS and
+rotation, is next. The current result is bounded local independent-process
+evidence using a non-release Desktop candidate; no complete public Product
+E2E, published application supply chain, deployment, HA, hostile-multitenant,
+SLO-attainment, or production qualification is claimed.

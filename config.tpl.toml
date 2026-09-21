@@ -178,6 +178,20 @@ malware_command = []
 # runtime and restricted-egress ownership identities must match exactly.
 [provider_process.desktop]
 architecture = '' # amd64 | arm64
+# The executor fields are accepted only with
+# provider_process.deployment_level='local_candidate' until Slice 7 publishes
+# and locks a signed desktop-session.v2 runtime. Production fails closed.
+executor_url = ''
+# Provider-owned host mux in a pre-created private (0700) runtime directory.
+# The basename must be desktop-broker-<32 lowercase hex>.sock.
+broker_mux_socket_path = ''
+executor_ca_bundle_file = ''
+executor_certificate_file = ''
+executor_private_key_file = ''
+executor_identity = ''
+executor_bridge_key_id = ''
+executor_bridge_private_key_file = ''
+local_candidate_manifest_file = ''
 usage_retention_seconds = 3600
 shutdown_cleanup_seconds = 10
 

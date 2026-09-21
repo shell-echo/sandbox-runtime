@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -146,14 +147,18 @@ type ProviderUsageConfig struct {
 // authorization, revocation, audit, and the public Gateway remain outside this
 // configuration surface.
 type ProviderBrowserConfig struct {
-	Enabled                bool                            `mapstructure:"enabled"`
-	SessionRepositoryFile  string                          `mapstructure:"session_repository_file"`
-	ReferenceRegistryFile  string                          `mapstructure:"reference_registry_file"`
-	ShutdownCleanupSeconds int                             `mapstructure:"shutdown_cleanup_seconds"`
-	UsageRetentionSeconds  int                             `mapstructure:"usage_retention_seconds"`
-	Docker                 ProviderBrowserDockerConfig     `mapstructure:"docker"`
-	Provenance             ProviderBrowserProvenanceConfig `mapstructure:"provenance"`
-	RestrictedNetwork      ProviderBrowserNetworkConfig    `mapstructure:"restricted_network"`
+	Enabled                 bool                            `mapstructure:"enabled"`
+	ExecutorURL             string                          `mapstructure:"executor_url"`
+	ExecutorCABundleFile    string                          `mapstructure:"executor_ca_bundle_file"`
+	ExecutorCertificateFile string                          `mapstructure:"executor_certificate_file"`
+	ExecutorPrivateKeyFile  string                          `mapstructure:"executor_private_key_file"`
+	SessionRepositoryFile   string                          `mapstructure:"session_repository_file"`
+	ReferenceRegistryFile   string                          `mapstructure:"reference_registry_file"`
+	ShutdownCleanupSeconds  int                             `mapstructure:"shutdown_cleanup_seconds"`
+	UsageRetentionSeconds   int                             `mapstructure:"usage_retention_seconds"`
+	Docker                  ProviderBrowserDockerConfig     `mapstructure:"docker"`
+	Provenance              ProviderBrowserProvenanceConfig `mapstructure:"provenance"`
+	RestrictedNetwork       ProviderBrowserNetworkConfig    `mapstructure:"restricted_network"`
 }
 
 type ProviderBrowserDockerConfig struct {
@@ -215,7 +220,35 @@ type ProviderTransportConfig struct {
 	ServerPrivateKeyFile       string      `mapstructure:"server_private_key_file"`
 	ClientCABundleFile         string      `mapstructure:"client_ca_bundle_file"`
 	AllowedClientURIIdentities []string    `mapstructure:"allowed_client_uri_identities"`
+	// Private is a separate mTLS listener for role adapters. It is never
+	// mounted on the locked Provider Contract listener above.
+	Private ProviderPrivateTransportConfig `mapstructure:"private"`
 }
+
+// ProviderPrivateTransportConfig describes the Provider-local adapter
+// transport. Its trust domain, route policy, limits, and lifecycle are
+// independent from the public Provider Contract transport.
+type ProviderPrivateTransportConfig struct {
+	Enabled                    bool        `mapstructure:"enabled"`
+	Address                    option.HTTP `mapstructure:"address"`
+	ServerCertificateFile      string      `mapstructure:"server_certificate_file"`
+	ServerPrivateKeyFile       string      `mapstructure:"server_private_key_file"`
+	ClientCABundleFile         string      `mapstructure:"client_ca_bundle_file"`
+	AllowedClientURIIdentities []string    `mapstructure:"allowed_client_uri_identities"`
+	RoutePolicy                []string    `mapstructure:"route_policy"`
+	ReadHeaderTimeoutMillis    int         `mapstructure:"read_header_timeout_millis"`
+	ReadTimeoutMillis          int         `mapstructure:"read_timeout_millis"`
+	WriteTimeoutMillis         int         `mapstructure:"write_timeout_millis"`
+	IdleTimeoutMillis          int         `mapstructure:"idle_timeout_millis"`
+	MaxHeaderBytes             int         `mapstructure:"max_header_bytes"`
+	MaxBodyBytes               int64       `mapstructure:"max_body_bytes"`
+}
+
+const (
+	ProviderPrivateRouteTerminal = "terminal"
+	ProviderPrivateRouteBrowser  = "browser"
+	ProviderPrivateRouteDesktop  = "desktop"
+)
 
 // ProviderCapabilityConfig is the application-owned startup capability
 // configuration. Compatibility profiles are metadata only and do not
@@ -289,14 +322,15 @@ type ProviderCompatibilityProfile struct {
 }
 
 var (
-	providerSuiteVersionPattern   = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+$`)
-	providerSuiteDigestPattern    = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
-	providerPinnedImagePattern    = regexp.MustCompile(`^.+@sha256:[0-9a-f]{64}$`)
-	providerImmutableImagePattern = regexp.MustCompile(`^(?:sha256:[0-9a-f]{64}|.+@sha256:[0-9a-f]{64})$`)
-	providerOwnershipPattern      = regexp.MustCompile(`^[A-Za-z0-9._-]{1,63}$`)
-	providerProfileIDPattern      = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$`)
-	providerDockerNamePattern     = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$`)
-	providerSHA256Pattern         = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
+	providerSuiteVersionPattern           = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+$`)
+	providerSuiteDigestPattern            = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
+	providerPinnedImagePattern            = regexp.MustCompile(`^.+@sha256:[0-9a-f]{64}$`)
+	providerImmutableImagePattern         = regexp.MustCompile(`^(?:sha256:[0-9a-f]{64}|.+@sha256:[0-9a-f]{64})$`)
+	providerOwnershipPattern              = regexp.MustCompile(`^[A-Za-z0-9._-]{1,63}$`)
+	providerProfileIDPattern              = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$`)
+	providerDockerNamePattern             = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$`)
+	providerSHA256Pattern                 = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
+	providerDesktopBrokerMuxSocketPattern = regexp.MustCompile(`^desktop-broker-[0-9a-f]{32}\.sock$`)
 )
 
 // load registers the section's defaults and env bindings, unmarshals the merged
@@ -570,6 +604,18 @@ func (c *ProviderBrowserConfig) validateEnabled() error {
 	if strings.TrimSpace(c.Docker.Host) != strings.TrimSpace(c.RestrictedNetwork.Host) {
 		return errors.New("docker and restricted-network hosts must match")
 	}
+	if c.ExecutorURL != "" && !validExecutorURL(c.ExecutorURL) {
+		return errors.New("executor_url must be an opaque wss URL without credentials")
+	}
+	if c.ExecutorURL != "" {
+		for name, path := range map[string]string{"executor CA": c.ExecutorCABundleFile, "executor certificate": c.ExecutorCertificateFile, "executor key": c.ExecutorPrivateKeyFile} {
+			if err := validateAbsoluteSecretPath("Browser "+name, path); err != nil {
+				return err
+			}
+		}
+	} else if c.ExecutorCABundleFile != "" || c.ExecutorCertificateFile != "" || c.ExecutorPrivateKeyFile != "" {
+		return errors.New("Browser executor credentials require executor_url")
+	}
 	return nil
 }
 
@@ -652,6 +698,11 @@ func validProviderCommand(command []string) bool {
 		}
 	}
 	return true
+}
+
+func validExecutorURL(value string) bool {
+	parsed, err := url.Parse(value)
+	return err == nil && parsed.Scheme == "wss" && parsed.Host != "" && parsed.Path != "" && parsed.User == nil && parsed.RawQuery == "" && parsed.Fragment == "" && strings.TrimSpace(value) == value && !strings.ContainsAny(value, "\x00\r\n")
 }
 
 func validProviderGuestExecutable(value string) bool {
@@ -761,7 +812,67 @@ func (c *ProviderTransportConfig) validateEnabled() error {
 			return fmt.Errorf("%s must not be empty", path.name)
 		}
 	}
-	return provideridentity.ValidateAllowlist(c.AllowedClientURIIdentities)
+	if err := provideridentity.ValidateAllowlist(c.AllowedClientURIIdentities); err != nil {
+		return err
+	}
+	if c.Private.Enabled {
+		if err := c.Private.Validate(); err != nil {
+			return fmt.Errorf("private %w", err)
+		}
+		if c.Private.Address.Port == c.Address.Port {
+			return errors.New("private address must use a distinct port")
+		}
+	}
+	return nil
+}
+
+// Validate applies fail-closed limits to the private adapter listener. The
+// route policy is deliberately a closed allowlist so a newly added handler
+// cannot become reachable without an explicit configuration change.
+func (c ProviderPrivateTransportConfig) Validate() error {
+	if !c.Enabled {
+		return nil
+	}
+	if strings.TrimSpace(c.Address.Host) == "" {
+		return errors.New("address host must not be empty")
+	}
+	if err := c.Address.Validate(); err != nil {
+		return fmt.Errorf("address %w", err)
+	}
+	for name, value := range map[string]string{
+		"server certificate file": c.ServerCertificateFile,
+		"server private key file": c.ServerPrivateKeyFile,
+		"client CA bundle file":   c.ClientCABundleFile,
+	} {
+		if strings.TrimSpace(value) == "" {
+			return fmt.Errorf("%s must not be empty", name)
+		}
+	}
+	if err := provideridentity.ValidateAllowlist(c.AllowedClientURIIdentities); err != nil {
+		return fmt.Errorf("client URI identities: %w", err)
+	}
+	if len(c.RoutePolicy) < 1 || len(c.RoutePolicy) > 3 {
+		return errors.New("route policy must contain 1..3 routes")
+	}
+	seen := make(map[string]struct{}, len(c.RoutePolicy))
+	for _, route := range c.RoutePolicy {
+		if route != ProviderPrivateRouteTerminal && route != ProviderPrivateRouteBrowser && route != ProviderPrivateRouteDesktop {
+			return fmt.Errorf("route policy contains unsupported route %q", route)
+		}
+		if _, ok := seen[route]; ok {
+			return fmt.Errorf("route policy contains duplicate route %q", route)
+		}
+		seen[route] = struct{}{}
+	}
+	if c.ReadHeaderTimeoutMillis < 100 || c.ReadHeaderTimeoutMillis > 60_000 ||
+		c.ReadTimeoutMillis < 100 || c.ReadTimeoutMillis > 300_000 ||
+		c.WriteTimeoutMillis < 100 || c.WriteTimeoutMillis > 300_000 ||
+		c.IdleTimeoutMillis < 100 || c.IdleTimeoutMillis > 600_000 ||
+		c.MaxHeaderBytes < 1<<10 || c.MaxHeaderBytes > 1<<20 ||
+		c.MaxBodyBytes < 1<<10 || c.MaxBodyBytes > 16<<20 {
+		return errors.New("private transport limits are invalid")
+	}
+	return nil
 }
 
 func (c *ProviderCapabilityConfig) validateEnabled() error {

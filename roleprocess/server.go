@@ -285,5 +285,12 @@ func (s *privateTLSServer) Shutdown(ctx context.Context) error {
 	if s == nil || s.http == nil {
 		return nil
 	}
-	return s.http.Shutdown(ctx)
+	return normalizeRoleShutdownError(s.http.Shutdown(ctx))
+}
+
+func normalizeRoleShutdownError(err error) error {
+	if errors.Is(err, net.ErrClosed) || errors.Is(err, http.ErrServerClosed) {
+		return nil
+	}
+	return err
 }

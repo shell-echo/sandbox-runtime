@@ -6,6 +6,7 @@ WORKDIR /src
 COPY go.mod go.sum ./
 COPY cmd/browser-egress-gateway ./cmd/browser-egress-gateway
 COPY provider/browser/network/gateway ./provider/browser/network/gateway
+COPY provider/network/restricted ./provider/network/restricted
 
 RUN CGO_ENABLED=0 GOOS=linux go build \
 	-buildvcs=false \

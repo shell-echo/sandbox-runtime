@@ -4,8 +4,10 @@
 package desktopbroker
 
 import (
+	"bufio"
 	"bytes"
 	"context"
+	"crypto/ed25519"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -35,6 +37,8 @@ const (
 	MaxRequestBytes   = 4 << 10
 	MaxResponseBytes  = 8 << 10
 	MaxConnections    = 16
+	ReplayLedgerPath  = "/tmp/desktop-runtime/desktop-bridge-replay-v2.json"
+	BridgeProbeMethod = "probe.v2"
 
 	acceptPollInterval  = 200 * time.Millisecond
 	requestTimeout      = 2 * time.Second
@@ -64,7 +68,7 @@ func (r Request) Validate() error {
 		return ErrInvalidRequest
 	}
 	switch r.Method {
-	case "probe", "describe":
+	case "probe", "describe", BridgeProbeMethod:
 		return nil
 	default:
 		return ErrInvalidRequest
@@ -139,6 +143,38 @@ func (r Response) Validate() error {
 	}
 }
 
+func connectSession(ctx context.Context, socketPath string, input io.Reader, output io.Writer) error {
+	if ctx == nil || !socketPattern.MatchString(socketPath) || input == nil || output == nil {
+		return ErrInvalidArguments
+	}
+	connectionValue, err := (&net.Dialer{}).DialContext(ctx, "unix", socketPath)
+	if err != nil {
+		return ErrUnavailable
+	}
+	connection, ok := connectionValue.(*net.UnixConn)
+	if !ok {
+		_ = connectionValue.Close()
+		return ErrUnavailable
+	}
+	defer connection.Close()
+	result := make(chan error, 1)
+	go func() {
+		_, copyErr := io.Copy(connection, io.LimitReader(input, 1<<30))
+		_ = connection.CloseWrite()
+		_ = copyErr
+	}()
+	go func() {
+		_, copyErr := io.Copy(output, connection)
+		result <- copyErr
+	}()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case err := <-result:
+		return err
+	}
+}
+
 // Run executes one broker subcommand without accepting executable, display,
 // geometry, or workspace overrides.
 func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
@@ -171,6 +207,14 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 			return encoder.Encode(response)
 		}
 		return nil
+	case "session":
+		flags := flag.NewFlagSet(args[0], flag.ContinueOnError)
+		flags.SetOutput(stderr)
+		socketPath := flags.String("socket", DefaultSocketPath, "private broker socket")
+		if err := flags.Parse(args[1:]); err != nil || flags.NArg() != 0 {
+			return ErrInvalidArguments
+		}
+		return connectSession(ctx, *socketPath, os.Stdin, stdout)
 	default:
 		return ErrInvalidArguments
 	}
@@ -180,6 +224,20 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 // the fixed private Unix socket. Runtime cleanup terminates the container; the
 // broker protocol deliberately has no remote stop or arbitrary process method.
 func Serve(ctx context.Context, stderr io.Writer) error {
+	return serve(ctx, stderr, nil)
+}
+
+// ServeWithBridge starts the broker with pinned Provider bridge verification
+// keys. The legacy Serve path intentionally has no v2 authority and therefore
+// cannot admit executor.v2 sessions.
+func ServeWithBridge(ctx context.Context, stderr io.Writer, keys map[string]ed25519.PublicKey) error {
+	if len(keys) == 0 {
+		return ErrInvalidArguments
+	}
+	return serve(ctx, stderr, keys)
+}
+
+func serve(ctx context.Context, stderr io.Writer, keys map[string]ed25519.PublicKey) error {
 	if ctx == nil {
 		return context.Canceled
 	}
@@ -188,7 +246,7 @@ func Serve(ctx context.Context, stderr io.Writer) error {
 		return err
 	}
 	defer desktop.stop()
-	return serveProtocol(ctx, DefaultSocketPath, ReadyDescriptor(), desktop.critical)
+	return serveProtocolWithBridge(ctx, DefaultSocketPath, ReadyDescriptor(), desktop.critical, keys)
 }
 
 type desktopProcesses struct {
@@ -320,6 +378,14 @@ func (p *desktopProcesses) stop() {
 }
 
 func serveProtocol(ctx context.Context, socketPath string, descriptor Descriptor, critical <-chan error) error {
+	return serveProtocolWithBridge(ctx, socketPath, descriptor, critical, nil)
+}
+
+func serveProtocolWithBridge(ctx context.Context, socketPath string, descriptor Descriptor, critical <-chan error, keys map[string]ed25519.PublicKey) error {
+	return serveProtocolWithBridgeLedger(ctx, socketPath, descriptor, critical, keys, ReplayLedgerPath)
+}
+
+func serveProtocolWithBridgeLedger(ctx context.Context, socketPath string, descriptor Descriptor, critical <-chan error, keys map[string]ed25519.PublicKey, replayPath string) error {
 	if ctx == nil || !socketPattern.MatchString(socketPath) || descriptor.Validate() != nil {
 		return ErrInvalidArguments
 	}
@@ -333,6 +399,13 @@ func serveProtocol(ctx context.Context, socketPath string, descriptor Descriptor
 	}()
 
 	semaphore := make(chan struct{}, MaxConnections)
+	var replay *bridgeReplayLedger
+	if keys != nil {
+		replay, err = newBridgeReplayLedger(replayPath, time.Now().UTC())
+		if err != nil {
+			return fmt.Errorf("open Desktop bridge replay ledger: %w", err)
+		}
+	}
 	var clients sync.WaitGroup
 	defer clients.Wait()
 	for {
@@ -363,7 +436,7 @@ func serveProtocol(ctx context.Context, socketPath string, descriptor Descriptor
 			go func() {
 				defer clients.Done()
 				defer func() { <-semaphore }()
-				handle(connection, descriptor)
+				handle(ctx, connection, descriptor, keys, replay)
 			}()
 		default:
 			_ = connection.Close()
@@ -371,13 +444,40 @@ func serveProtocol(ctx context.Context, socketPath string, descriptor Descriptor
 	}
 }
 
-func handle(connection *net.UnixConn, descriptor Descriptor) {
+func handle(ctx context.Context, connection *net.UnixConn, descriptor Descriptor, keys map[string]ed25519.PublicKey, replay *bridgeReplayLedger) {
 	defer connection.Close()
 	_ = connection.SetDeadline(time.Now().Add(requestTimeout))
-	data, err := io.ReadAll(io.LimitReader(connection, MaxRequestBytes+1))
-	if err != nil || len(data) == 0 || len(data) > MaxRequestBytes {
+	reader := bufio.NewReaderSize(connection, SessionMaxDocument)
+	data, err := reader.ReadBytes('\n')
+	if errors.Is(err, io.EOF) && len(data) > 0 {
+		err = nil
+	}
+	if err != nil || len(data) == 0 || len(data) > SessionMaxDocument {
 		return
 	}
+	if !bytes.HasSuffix(data, []byte{'\n'}) && len(data) > MaxRequestBytes {
+		return
+	}
+	var sessionOpen SessionOpen
+	if decodeSession(data, &sessionOpen) == nil && sessionOpen.Method == SessionMethod && sessionOpen.Protocol == SessionProtocolID {
+		_ = connection.SetDeadline(time.Time{})
+		_ = serveSession(ctx, &bufferedConn{UnixConn: connection, reader: reader}, sessionOpen)
+		return
+	}
+	if decodeSession(data, &sessionOpen) == nil && sessionOpen.Method == SessionMethod && sessionOpen.Protocol == SessionProtocolV2ID && keys != nil && replay != nil {
+		if sessionOpen.ValidateV2(time.Now().UTC(), keys) != nil || !replay.claim(sessionOpen.Bridge) {
+			return
+		}
+		_ = connection.SetDeadline(time.Time{})
+		_ = serveSessionV2(ctx, &bufferedConn{UnixConn: connection, reader: reader}, sessionOpen)
+		return
+	}
+	// Probe/describe are still one-shot bounded requests. Reject any trailing
+	// bytes after the first object so the legacy protocol remains closed.
+	if reader.Buffered() != 0 {
+		return
+	}
+	data = bytes.TrimSpace(data)
 	requestValue, err := parseRequest(data)
 	if err != nil {
 		requestID := "invalid-request"
@@ -390,9 +490,21 @@ func handle(connection *net.UnixConn, descriptor Descriptor) {
 		_ = writeResponse(connection, Response{Protocol: ProtocolID, RequestID: requestID, Status: "error", ErrorCode: "invalid_request"})
 		return
 	}
+	if requestValue.Method == BridgeProbeMethod && len(keys) == 0 {
+		_ = writeResponse(connection, Response{Protocol: ProtocolID, RequestID: requestValue.RequestID, Status: "error", ErrorCode: "invalid_request"})
+		return
+	}
 	response := Response{Protocol: ProtocolID, RequestID: requestValue.RequestID, Status: "ok", Descriptor: &descriptor}
 	_ = writeResponse(connection, response)
 }
+
+// bufferedConn preserves bytes already read by the session discriminator.
+type bufferedConn struct {
+	*net.UnixConn
+	reader *bufio.Reader
+}
+
+func (c *bufferedConn) Read(value []byte) (int, error) { return c.reader.Read(value) }
 
 func parseRequest(data []byte) (Request, error) {
 	decoder := json.NewDecoder(bytes.NewReader(data))

@@ -12,6 +12,8 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/shell-echo/sandbox-runtime/gateway"
+	"github.com/shell-echo/sandbox-runtime/internal/browserhandoff"
+	"github.com/shell-echo/sandbox-runtime/internal/handoff"
 )
 
 const (
@@ -30,6 +32,9 @@ type PrivateBrowserResolverOptions struct {
 	HTTPClient                *http.Client
 	MaxMessageBytes           int64
 	AllowInsecureHTTPForTests bool
+	// TenantBindingDigest is caller-owned Product/Gateway authority. When
+	// present, the resolver uses the closed browser-handoff.v1 protocol.
+	TenantBindingDigest func(context.Context, gateway.DownstreamFenceSubject, gateway.DownstreamFence) (string, error)
 }
 
 // PrivateBrowserResolver carries only an opaque handoff and downstream fence
@@ -39,6 +44,7 @@ type PrivateBrowserResolver struct {
 	origin          string
 	httpClient      *http.Client
 	maxMessageBytes int64
+	bindingDigest   func(context.Context, gateway.DownstreamFenceSubject, gateway.DownstreamFence) (string, error)
 }
 
 func NewPrivateBrowserResolver(options PrivateBrowserResolverOptions) (*PrivateBrowserResolver, error) {
@@ -55,7 +61,7 @@ func NewPrivateBrowserResolver(options PrivateBrowserResolverOptions) (*PrivateB
 		parsed.Path == "" || options.HTTPClient == nil || limit < 1 || limit > maxAutomationMessageSize {
 		return nil, gateway.ErrDownstreamUnavailable
 	}
-	return &PrivateBrowserResolver{origin: parsed.String(), httpClient: options.HTTPClient, maxMessageBytes: limit}, nil
+	return &PrivateBrowserResolver{origin: parsed.String(), httpClient: options.HTTPClient, maxMessageBytes: limit, bindingDigest: options.TenantBindingDigest}, nil
 }
 
 func (r *PrivateBrowserResolver) ResolveFenced(_ context.Context, reference string, subject gateway.DownstreamFenceSubject, fence gateway.DownstreamFence) (gateway.Endpoint, error) {
@@ -68,6 +74,9 @@ func (r *PrivateBrowserResolver) ResolveFenced(_ context.Context, reference stri
 		CapabilityProfileID: subject.CapabilityProfileID, ConnectionGeneration: subject.ConnectionGeneration,
 		ExpiresAt: subject.ExpiresAt.UTC(),
 		Dial: func(ctx context.Context) (gateway.Stream, error) {
+			if r.bindingDigest != nil {
+				return r.dialClosed(ctx, reference, subject, fence)
+			}
 			headers := http.Header{}
 			headers.Set("Authorization", "Downstream "+fence.Opaque())
 			headers.Set(privateBrowserReferenceHeader, reference)
@@ -92,6 +101,40 @@ func (r *PrivateBrowserResolver) ResolveFenced(_ context.Context, reference stri
 			return &privateBrowserStream{connection: connection, maxMessageBytes: r.maxMessageBytes}, nil
 		},
 	}, nil
+}
+
+func (r *PrivateBrowserResolver) dialClosed(ctx context.Context, reference string, subject gateway.DownstreamFenceSubject, fence gateway.DownstreamFence) (gateway.Stream, error) {
+	digest, err := r.bindingDigest(ctx, subject, fence)
+	if err != nil || handoff.ValidateTenantBindingDigest(digest) != nil {
+		return nil, gateway.ErrDownstreamUnavailable
+	}
+	requestID, err := randomToken(16)
+	if err != nil {
+		return nil, gateway.ErrDownstreamUnavailable
+	}
+	connection, _, err := websocket.Dial(ctx, r.origin, &websocket.DialOptions{
+		HTTPClient: r.httpClient, Subprotocols: []string{browserhandoff.ProtocolID}, CompressionMode: websocket.CompressionDisabled,
+	})
+	if err != nil {
+		return nil, gateway.ErrDownstreamUnavailable
+	}
+	connection.SetReadLimit(r.maxMessageBytes)
+	open := browserhandoff.OpenRequest{Protocol: browserhandoff.ProtocolID, RequestID: requestID, Resource: browserhandoff.ResourceBrowser,
+		TenantBindingDigest: digest, SandboxID: subject.SandboxID, BrowserSessionID: subject.BrowserSessionID,
+		CapabilityProfileID: subject.CapabilityProfileID, HandoffReference: reference, ConnectionGeneration: subject.ConnectionGeneration,
+		ExpiresAt: subject.ExpiresAt.UTC().Format(time.RFC3339Nano), Fence: fence.Opaque()}
+	document, err := handoff.Encode(open)
+	if err != nil || connection.Write(ctx, websocket.MessageText, document) != nil {
+		_ = connection.CloseNow()
+		return nil, gateway.ErrDownstreamUnavailable
+	}
+	kind, responseDocument, err := connection.Read(ctx)
+	var response browserhandoff.OpenResponse
+	if err != nil || kind != websocket.MessageText || handoff.Decode(responseDocument, &response) != nil || response.Validate() != nil || response.RequestID != requestID || response.Status != browserhandoff.StatusAccepted {
+		_ = connection.CloseNow()
+		return nil, gateway.ErrDownstreamUnavailable
+	}
+	return &privateBrowserStream{connection: connection, maxMessageBytes: r.maxMessageBytes}, nil
 }
 
 type privateBrowserStream struct {

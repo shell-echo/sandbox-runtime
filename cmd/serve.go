@@ -30,6 +30,7 @@ import (
 	providerbrowser "github.com/shell-echo/sandbox-runtime/provider/browser"
 	browserapplication "github.com/shell-echo/sandbox-runtime/provider/browser/application"
 	browserdocker "github.com/shell-echo/sandbox-runtime/provider/browser/driver/docker"
+	browserremote "github.com/shell-echo/sandbox-runtime/provider/browser/driver/remote"
 	browserlifecycle "github.com/shell-echo/sandbox-runtime/provider/browser/lifecycle"
 	browsernetworkdocker "github.com/shell-echo/sandbox-runtime/provider/browser/network/docker"
 	browsernetworkgateway "github.com/shell-echo/sandbox-runtime/provider/browser/network/gateway"
@@ -581,7 +582,19 @@ func newProviderBrowserRuntime(ctx context.Context, browserConfig config.Provide
 	if err != nil {
 		return nil, errors.Join(fmt.Errorf("construct Provider Browser Docker runtime: %w", err), network.Close(), references.Close(), sessions.Close())
 	}
-	resolver, err := browserreference.NewResolver(references, sessions, runtime, systemAdmissionClock{})
+	var attacher providerbrowser.Attacher = runtime
+	if browserConfig.ExecutorURL != "" {
+		executorClient, clientErr := browserremote.NewHTTPClient(browserConfig.ExecutorURL, browserConfig.ExecutorCABundleFile, browserConfig.ExecutorCertificateFile, browserConfig.ExecutorPrivateKeyFile)
+		if clientErr != nil {
+			return nil, errors.Join(fmt.Errorf("construct Provider Browser executor client: %w", clientErr), runtime.Close(), network.Close(), references.Close(), sessions.Close())
+		}
+		executorAttacher, remoteErr := browserremote.New(browserremote.Options{URL: browserConfig.ExecutorURL, HTTPClient: executorClient, OperationTimeout: time.Duration(browserConfig.Docker.OperationTimeoutSeconds) * time.Second})
+		if remoteErr != nil {
+			return nil, errors.Join(fmt.Errorf("construct Provider Browser executor adapter: %w", remoteErr), runtime.Close(), network.Close(), references.Close(), sessions.Close())
+		}
+		attacher = executorAttacher
+	}
+	resolver, err := browserreference.NewResolver(references, sessions, attacher, systemAdmissionClock{})
 	if err != nil {
 		return nil, errors.Join(fmt.Errorf("construct Provider Browser reference resolver: %w", err), runtime.Close(), network.Close(), references.Close(), sessions.Close())
 	}

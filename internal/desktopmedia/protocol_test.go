@@ -6,15 +6,15 @@ import (
 )
 
 func TestMediaPolicyAndInputProtocolAreClosedAndBounded(t *testing.T) {
-	policy := MediaPolicy{VideoCodec: "video/VP8", Width: 1280, Height: 720, MaxFPS: 30, MaxVideoBitrateKbps: 2000}
+	policy := MediaPolicy{VideoCodec: "video/VP8", Width: 1280, Height: 720, MaxFPS: 30, MaxVideoBitrateKbps: 2000, MaxQueuedFrames: DefaultMaxQueuedFrames, MaxQueuedInputs: DefaultMaxQueuedInputs, MaxInputBytes: DefaultMaxInputBytes, RecordingMode: "metadata_only"}
 	if !policy.Validate() {
 		t.Fatal("valid private Desktop media policy rejected")
 	}
 	for _, invalid := range []MediaPolicy{
 		{},
-		{VideoCodec: "video/H264", Width: 1280, Height: 720, MaxFPS: 30, MaxVideoBitrateKbps: 2000},
-		{VideoCodec: "video/VP8", Width: 1281, Height: 720, MaxFPS: 30, MaxVideoBitrateKbps: 2000},
-		{VideoCodec: "video/VP8", Width: 1280, Height: 720, MaxFPS: 30, MaxVideoBitrateKbps: 2000, AudioCodec: "audio/opus"},
+		{VideoCodec: "video/H264", Width: 1280, Height: 720, MaxFPS: 30, MaxVideoBitrateKbps: 2000, MaxQueuedFrames: DefaultMaxQueuedFrames, MaxQueuedInputs: DefaultMaxQueuedInputs, MaxInputBytes: DefaultMaxInputBytes, RecordingMode: "metadata_only"},
+		{VideoCodec: "video/VP8", Width: 1281, Height: 720, MaxFPS: 30, MaxVideoBitrateKbps: 2000, MaxQueuedFrames: DefaultMaxQueuedFrames, MaxQueuedInputs: DefaultMaxQueuedInputs, MaxInputBytes: DefaultMaxInputBytes, RecordingMode: "metadata_only"},
+		{VideoCodec: "video/VP8", Width: 1280, Height: 720, MaxFPS: 30, MaxVideoBitrateKbps: 2000, AudioCodec: "audio/opus", MaxQueuedFrames: DefaultMaxQueuedFrames, MaxQueuedInputs: DefaultMaxQueuedInputs, MaxInputBytes: DefaultMaxInputBytes, RecordingMode: "metadata_only"},
 	} {
 		if invalid.Validate() {
 			t.Fatalf("invalid policy accepted: %#v", invalid)

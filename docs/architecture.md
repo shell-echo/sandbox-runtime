@@ -180,7 +180,7 @@ uncomposed; deployment, HA, hostile multi-tenant, independently implemented
 caller, and production-readiness evidence remain absent.
 
 The [Product v1 Phase 6 production-hardening plan](plan/product-v1-phase-6-production-hardening.md)
-is now **3/15 complete**. ADR 0051 fixes a dependency order from deployable
+is now **4/15 complete**. ADR 0051 fixes a dependency order from deployable
 process boundaries through identity, storage, network, supply chain,
 observability, recovery, deployment, release candidate, and final release
 gates. Slice 1 adds only an independent development Product command, strict
@@ -215,6 +215,17 @@ recovery failure. Real PostgreSQL concurrency/restart/fault, real process, real
 coding-shell Docker, and signed Desktop broker gates pass locally. This does
 not yet compose Product dispatch, Gateway, Guest, Browser/Desktop public data
 planes, deployment, HA, or production release authority.
+
+Slice 4 adds separately configured Gateway, outbound Guest, Browser and
+Desktop processes. Browser/Desktop executors accept only closed `executor.v2`
+authority; Provider alone owns handoff truth, PostgreSQL and Docker. Desktop
+uses a signed short-lived capability through a Provider-owned Unix broker mux,
+while sealed role-specific restricted-egress identity prevents Browser/
+Desktop workload substitution. The bounded local six-role gate passes real
+Chromium and Desktop VP8/input paths, dependency faults, reconnect, replay,
+capacity, drift, restarts, drain and exact cleanup. Its Desktop OCI remains a
+non-release local candidate, so this is not public Product E2E, deployment or
+production-release evidence.
 
 ## Purpose
 

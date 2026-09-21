@@ -178,6 +178,9 @@ func (c *DataPlaneProcessConfig) Validate() error {
 			return fmt.Errorf("guest client TLS: %w", err)
 		}
 	case DataPlaneBrowser, DataPlaneDesktop:
+		if c.OutboundURL != "" {
+			return fmt.Errorf("%s outbound_url must remain disabled; executor backend belongs in private authority", c.Role)
+		}
 		if err := validateListener(c.Private, true); err != nil {
 			return fmt.Errorf("%s private listener: %w", c.Role, err)
 		}

@@ -56,7 +56,7 @@ type privateTerminalTestResolver struct {
 }
 
 func (r privateTerminalTestResolver) Resolve(_ context.Context, value string) (reference.Endpoint, error) {
-	return reference.Endpoint{Reference: value, SandboxID: "sandbox-1", RuntimeSessionID: "session-1", CapabilityProfileID: "terminal-v1", ConnectionGeneration: 3, ExpiresAt: r.expires, Dial: func(context.Context) (terminal.Stream, error) { return r.stream, nil }}, nil
+	return reference.Endpoint{Reference: value, SandboxID: "sandbox-1", RuntimeSessionID: "session-1", CapabilityProfileID: "terminal-v1", ConnectionGeneration: 3, ExpiresAt: r.expires, TenantBindingDigest: handoff.TenantBindingDigestPrefix + strings.Repeat("b", 64), Dial: func(context.Context) (terminal.Stream, error) { return r.stream, nil }}, nil
 }
 
 type privateTerminalTestTenant struct{}
@@ -77,7 +77,11 @@ func TestPrivateTerminalResolverRoundTripsOpaqueAttach(t *testing.T) {
 	}
 	server := httptest.NewServer(handler)
 	defer server.Close()
-	resolver, err := NewPrivateTerminalResolver(PrivateTerminalResolverOptions{Origin: strings.Replace(server.URL, "http://", "ws://", 1) + "/handoff", HTTPClient: server.Client(), AllowHTTPForTests: true})
+	resolver, err := NewPrivateTerminalResolver(PrivateTerminalResolverOptions{Origin: strings.Replace(server.URL, "http://", "ws://", 1) + "/handoff", HTTPClient: server.Client(), AllowHTTPForTests: true,
+		TenantBindingDigest: func(context.Context, gateway.Grant) (string, error) {
+			return handoff.TenantBindingDigestPrefix + strings.Repeat("b", 64), nil
+		},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
