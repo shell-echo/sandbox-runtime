@@ -142,6 +142,35 @@ func TestCleanupEvidenceDigestBindsBothCleanupBoundaries(t *testing.T) {
 	}
 }
 
+func TestVerifyRejectsIncompleteDualRevisionIdentity(t *testing.T) {
+	for name, mutate := range map[string]func(*Identity){
+		"same runtime and evidence revision": func(value *Identity) { value.EvidenceToolRevision = value.RuntimeImplementationRevision },
+		"runtime revision":                   func(value *Identity) { value.RuntimeImplementationRevision = "invalid" },
+		"evidence revision":                  func(value *Identity) { value.EvidenceToolRevision = "invalid" },
+		"runtime tree":                       func(value *Identity) { value.RuntimeImplementationTreeDigest = "" },
+		"evidence tree":                      func(value *Identity) { value.EvidenceToolTreeDigest = "" },
+		"configuration":                      func(value *Identity) { value.ConfigDigest = "" },
+		"candidate classification":           func(value *Identity) { value.CandidateClassification = "production" },
+		"candidate manifest":                 func(value *Identity) { value.DesktopCandidateManifestDigest = "" },
+		"candidate image":                    func(value *Identity) { value.DesktopCandidateImageDigest = "" },
+		"candidate platform":                 func(value *Identity) { value.DesktopCandidatePlatform = "linux/arm64" },
+		"observation time":                   func(value *Identity) { value.ObservedAt = "unknown" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			manifest := validManifest()
+			mutate(&manifest.Identity)
+			manifest.ManifestDigest = digestWithoutSelf(manifest)
+			document, err := json.Marshal(manifest)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := Verify(document); err == nil {
+				t.Fatal("incomplete dual-revision identity was accepted")
+			}
+		})
+	}
+}
+
 func TestVerifyRepositoryAllowsOnlyClosedEvidenceToolsAndThenDocumentation(t *testing.T) {
 	root := t.TempDir()
 	runGit(t, root, "init", "-q")
