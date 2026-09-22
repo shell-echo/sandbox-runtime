@@ -23,9 +23,11 @@ import (
 )
 
 const (
-	ManifestID      = "product-v1-phase-6-slice-4"
-	ManifestVersion = "2"
-	maxManifestSize = 1 << 20
+	ManifestID                   = "product-v1-phase-6-slice-4"
+	ManifestVersion              = "2"
+	SteadyStateGoroutineBoundary = "topology_alive_after_readiness_transport_close_to_topology_alive_after_desktop_join"
+	TopologyCleanupBoundary      = "after_role_stop_and_join_to_zero_run_owned_resources"
+	maxManifestSize              = 1 << 20
 )
 
 var (
@@ -37,6 +39,12 @@ var (
 		"drain_cancellation": {}, "authority_expiry": {}, "fence_generation_epoch_drift": {},
 		"replay_rejection": {}, "executor_capacity": {}, "provider_restart": {}, "executor_restart": {},
 		"broker_restart": {}, "close_cleanup": {},
+	}
+	cleanupResourceSet = map[string]struct{}{
+		"role_processes": {}, "executor_backend_processes": {},
+		"desktop_namespace_containers": {}, "desktop_namespace_networks": {},
+		"postgres_and_chromium_containers": {}, "desktop_broker_socket": {},
+		"browser_gateway_image": {}, "guest_fixture_listener": {},
 	}
 	evidenceToolFiles = map[string]struct{}{
 		"internal/productphase6evidence/verify.go":      {},
@@ -141,6 +149,7 @@ type DesktopMediaMeasurements struct {
 	BackpressureStage                string `json:"backpressure_stage"`
 	BackpressureCause                string `json:"backpressure_cause"`
 	Recovery                         bool   `json:"recovery"`
+	GoroutineBoundary                string `json:"goroutine_boundary"`
 	GoroutinesBaseline               int    `json:"goroutines_baseline"`
 	GoroutinesFinal                  int    `json:"goroutines_final"`
 	SessionExecRemaining             int    `json:"session_exec_remaining"`
@@ -152,6 +161,7 @@ type DesktopMediaMeasurements struct {
 
 type Cleanup struct {
 	ZeroResources  bool       `json:"zero_resources"`
+	Boundary       string     `json:"boundary"`
 	Teardown       []Resource `json:"teardown"`
 	EvidenceDigest string     `json:"evidence_digest"`
 }
@@ -389,7 +399,7 @@ func Verify(document []byte) (Manifest, error) { //nolint:gocyclo
 			scenarioRoles[role] = struct{}{}
 		}
 	}
-	if len(seenScenarios) != len(scenarioSet) || !manifest.Cleanup.ZeroResources || len(manifest.Cleanup.Teardown) == 0 || !hexDigestPattern.MatchString(manifest.Cleanup.EvidenceDigest) {
+	if len(seenScenarios) != len(scenarioSet) || !manifest.Cleanup.ZeroResources || manifest.Cleanup.Boundary != TopologyCleanupBoundary || len(manifest.Cleanup.Teardown) != 8 || manifest.Cleanup.EvidenceDigest != CleanupEvidenceDigest(manifest.Cleanup) {
 		return Manifest{}, errors.New("Phase 6 cleanup evidence is incomplete")
 	}
 	if !validStressMeasurements(manifest.Stress) {
@@ -400,13 +410,16 @@ func Verify(document []byte) (Manifest, error) { //nolint:gocyclo
 	}
 	seenResources := make(map[string]struct{}, len(manifest.Cleanup.Teardown))
 	for _, resource := range manifest.Cleanup.Teardown {
-		if strings.TrimSpace(resource.Name) == "" || resource.Count != 0 {
+		if _, required := cleanupResourceSet[resource.Name]; !required || resource.Count != 0 {
 			return Manifest{}, errors.New("Phase 6 cleanup resource is not empty")
 		}
 		if _, ok := seenResources[resource.Name]; ok {
 			return Manifest{}, errors.New("duplicate Phase 6 cleanup resource")
 		}
 		seenResources[resource.Name] = struct{}{}
+	}
+	if len(seenResources) != len(cleanupResourceSet) {
+		return Manifest{}, errors.New("Phase 6 cleanup resource set is incomplete")
 	}
 	if len(manifest.NonClaims) == 0 {
 		return Manifest{}, errors.New("Phase 6 non-claim boundary is required")
@@ -457,7 +470,7 @@ func validDesktopMediaMeasurements(value DesktopMediaMeasurements) bool {
 		value.ConcurrentInputs >= int64(value.Sessions*10+1) && value.MaxInputRoundtripMicroseconds > 0 &&
 		value.InputProcessDeadlineMilliseconds == 1_000 && value.MaxInputRoundtripMicroseconds <= inputLimitMicros &&
 		value.BackpressureStage == "media_reader" && value.BackpressureCause == "backpressure_limit" && value.Recovery &&
-		value.GoroutinesBaseline > 0 && value.GoroutinesBaseline == value.GoroutinesFinal && value.SessionExecRemaining == 0 &&
+		value.GoroutineBoundary == SteadyStateGoroutineBoundary && value.GoroutinesBaseline > 0 && value.GoroutinesBaseline == value.GoroutinesFinal && value.SessionExecRemaining == 0 &&
 		value.FFmpegRemaining == 0 && value.DynamicContainersRemaining == 0 &&
 		value.CommandDigest == DesktopMediaCommandDigest(value) && value.EvidenceDigest == DesktopMediaEvidenceDigest(value)
 }
@@ -493,6 +506,11 @@ func DesktopMediaCommandDigest(value DesktopMediaMeasurements) string {
 func DesktopMediaEvidenceDigest(value DesktopMediaMeasurements) string {
 	value.EvidenceDigest = ""
 	return measurementDigest("sandbox-runtime/phase6-slice4/media-evidence/v2", value)
+}
+
+func CleanupEvidenceDigest(value Cleanup) string {
+	value.EvidenceDigest = ""
+	return measurementDigest("sandbox-runtime/phase6-slice4/cleanup-evidence/v2", value)
 }
 
 func measurementDigest(domain string, value any) string {

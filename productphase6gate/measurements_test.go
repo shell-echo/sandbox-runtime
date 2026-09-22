@@ -200,7 +200,7 @@ func measureDesktopStress(t *testing.T, ctx context.Context, environment *gateEn
 
 func measureDesktopMedia(t *testing.T, ctx context.Context, environment *gateEnvironment, driver *desktopremote.Driver, httpClient interface{ CloseIdleConnections() }, authority providerdesktop.MediaAuthority, attachment providerdesktop.Attachment, policy desktopmedia.MediaPolicy, goroutinesBaseline int) productphase6evidence.DesktopMediaMeasurements {
 	t.Helper()
-	measurement := productphase6evidence.DesktopMediaMeasurements{Harness: "phase6-desktop-media-v2", Sessions: mediaMeasurementSessions, FirstFrameLimitMilliseconds: 30_000, WindowMilliseconds: mediaMeasurementWindow.Milliseconds(), FPSLimitMilli: int64(policy.MaxFPS * 1000), BitrateLimitBPS: int64(policy.MaxVideoBitrateKbps * 1000), InputProcessDeadlineMilliseconds: inputProcessDeadline.Milliseconds()}
+	measurement := productphase6evidence.DesktopMediaMeasurements{Harness: "phase6-desktop-media-v2", Sessions: mediaMeasurementSessions, FirstFrameLimitMilliseconds: 30_000, WindowMilliseconds: mediaMeasurementWindow.Milliseconds(), FPSLimitMilli: int64(policy.MaxFPS * 1000), BitrateLimitBPS: int64(policy.MaxVideoBitrateKbps * 1000), InputProcessDeadlineMilliseconds: inputProcessDeadline.Milliseconds(), GoroutineBoundary: productphase6evidence.SteadyStateGoroutineBoundary}
 	measurement.CommandDigest = productphase6evidence.DesktopMediaCommandDigest(measurement)
 	latencies := make([]time.Duration, 0, measurement.Sessions)
 	measurement.GoroutinesBaseline = goroutinesBaseline

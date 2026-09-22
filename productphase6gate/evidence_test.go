@@ -64,9 +64,9 @@ func writePhase6Evidence(t *testing.T, environment *gateEnvironment) {
 		Stress:       environment.stress,
 		DesktopMedia: environment.desktopMedia,
 		Cleanup: productphase6evidence.Cleanup{
-			ZeroResources:  true,
-			Teardown:       cleanup,
-			EvidenceDigest: evidenceDigest("sandbox-runtime/phase6-slice4/cleanup/v1", cleanup),
+			ZeroResources: true,
+			Boundary:      productphase6evidence.TopologyCleanupBoundary,
+			Teardown:      cleanup,
 		},
 		NonClaims: []string{
 			"local-candidate OCI is not a published or signed artifact",
@@ -78,6 +78,7 @@ func writePhase6Evidence(t *testing.T, environment *gateEnvironment) {
 			"thirty-second first-frame limit is a test safety bound, not a production SLO",
 		},
 	}
+	manifest.Cleanup.EvidenceDigest = productphase6evidence.CleanupEvidenceDigest(manifest.Cleanup)
 	sealed, err := productphase6evidence.Seal(manifest)
 	if err != nil {
 		t.Fatalf("seal observed Phase 6 evidence: %v", err)

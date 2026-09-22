@@ -18,7 +18,7 @@ func validManifest() Manifest {
 	stress := StressMeasurements{Harness: "phase6-desktop-mux-stress-v2", Runs50: 50, Runs100: 100, TotalRuns: 150, InputsPerRun: 5, TotalInputs: 750, TerminalCauses: []string{}}
 	stress.CommandDigest = StressCommandDigest(stress)
 	stress.EvidenceDigest = StressEvidenceDigest(stress)
-	media := DesktopMediaMeasurements{Harness: "phase6-desktop-media-v2", Sessions: 20, FirstFrameP95Microseconds: 150_000, FirstFrameMaxMicroseconds: 200_000, FirstFrameLimitMilliseconds: 30_000, WindowMilliseconds: 2_000, RTPPackets: 1_200, RTPMarkerFrames: 1_180, RTPBytes: 120_000, FPSLimitMilli: 30_000, MaxFPSMilli: 30_000, MaxBitrateBPS: 30_000, BitrateLimitBPS: 2_000_000, ConcurrentInputs: 201, MaxInputRoundtripMicroseconds: 5_000, InputProcessDeadlineMilliseconds: 1_000, BackpressureStage: "media_reader", BackpressureCause: "backpressure_limit", Recovery: true, GoroutinesBaseline: 2, GoroutinesFinal: 2}
+	media := DesktopMediaMeasurements{Harness: "phase6-desktop-media-v2", Sessions: 20, FirstFrameP95Microseconds: 150_000, FirstFrameMaxMicroseconds: 200_000, FirstFrameLimitMilliseconds: 30_000, WindowMilliseconds: 2_000, RTPPackets: 1_200, RTPMarkerFrames: 1_180, RTPBytes: 120_000, FPSLimitMilli: 30_000, MaxFPSMilli: 30_000, MaxBitrateBPS: 30_000, BitrateLimitBPS: 2_000_000, ConcurrentInputs: 201, MaxInputRoundtripMicroseconds: 5_000, InputProcessDeadlineMilliseconds: 1_000, BackpressureStage: "media_reader", BackpressureCause: "backpressure_limit", Recovery: true, GoroutineBoundary: SteadyStateGoroutineBoundary, GoroutinesBaseline: 2, GoroutinesFinal: 2}
 	media.CommandDigest = DesktopMediaCommandDigest(media)
 	media.EvidenceDigest = DesktopMediaEvidenceDigest(media)
 	manifest := Manifest{ID: ManifestID, Version: ManifestVersion, Identity: Identity{RuntimeImplementationRevision: strings.Repeat("a", 40), RuntimeImplementationTreeDigest: digest("runtime-tree"), EvidenceToolRevision: strings.Repeat("b", 40), EvidenceToolTreeDigest: digest("evidence-tree"), ConfigDigest: digest("config"), ObservedAt: now, CandidateClassification: "local-candidate-non-release", DesktopCandidateManifestDigest: digest("candidate-manifest"), DesktopCandidateImageDigest: digest("candidate-image"), DesktopCandidatePlatform: "linux/arm64/v8"}, Stress: stress, DesktopMedia: media, NonClaims: []string{"deployment", "production readiness", "hostile multi-tenant isolation", "local-candidate OCI is not a published or signed artifact", "local-candidate evidence is not production release qualification", "evidence proves role boundaries and internal executor data paths only", "complete Product-to-Gateway-to-Provider public E2E remains unproven", "production readiness remains unproven", "measured bitrate upper-bound does not prove visual quality", "thirty-second first-frame limit is a test safety bound, not a production SLO"}}
@@ -28,7 +28,8 @@ func validManifest() Manifest {
 	for _, name := range ScenarioNames() {
 		manifest.Scenarios = append(manifest.Scenarios, Scenario{Name: name, Outcome: "passed", Roles: []string{"provider", "desktop"}, EvidenceDigest: digest(name)})
 	}
-	manifest.Cleanup = Cleanup{ZeroResources: true, Teardown: []Resource{{Name: "postgres", Count: 0}, {Name: "desktop-runtime", Count: 0}}, EvidenceDigest: digest("cleanup")}
+	manifest.Cleanup = Cleanup{ZeroResources: true, Boundary: TopologyCleanupBoundary, Teardown: []Resource{{Name: "role_processes", Count: 0}, {Name: "executor_backend_processes", Count: 0}, {Name: "desktop_namespace_containers", Count: 0}, {Name: "desktop_namespace_networks", Count: 0}, {Name: "postgres_and_chromium_containers", Count: 0}, {Name: "desktop_broker_socket", Count: 0}, {Name: "browser_gateway_image", Count: 0}, {Name: "guest_fixture_listener", Count: 0}}}
+	manifest.Cleanup.EvidenceDigest = CleanupEvidenceDigest(manifest.Cleanup)
 	manifest.ManifestDigest = digestWithoutSelf(manifest)
 	return manifest
 }
@@ -50,11 +51,14 @@ func TestVerifyRejectsEvidenceDrift(t *testing.T) {
 		"unknown field":      func(value *Manifest) { value.NonClaims = append(value.NonClaims, "x") },
 		"role exit":          func(value *Manifest) { value.Roles[0].ExitCode = 1 },
 		"cleanup count":      func(value *Manifest) { value.Cleanup.Teardown[0].Count = 1 },
+		"cleanup resource":   func(value *Manifest) { value.Cleanup.Teardown[0].Name = "unknown" },
 		"scenario":           func(value *Manifest) { value.Scenarios[0].Outcome = "failed" },
 		"stress input":       func(value *Manifest) { value.Stress.InputTimeouts = 1 },
 		"media first frame":  func(value *Manifest) { value.DesktopMedia.FirstFrameMaxMicroseconds = 30_000_001 },
 		"media sequence gap": func(value *Manifest) { value.DesktopMedia.RTPSequenceGaps = 1 },
 		"media goroutine":    func(value *Manifest) { value.DesktopMedia.GoroutinesFinal++ },
+		"media boundary":     func(value *Manifest) { value.DesktopMedia.GoroutineBoundary = "ambiguous" },
+		"cleanup boundary":   func(value *Manifest) { value.Cleanup.Boundary = "ambiguous" },
 	} {
 		t.Run(name, func(t *testing.T) {
 			candidate := valid
