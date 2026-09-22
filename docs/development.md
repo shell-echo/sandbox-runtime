@@ -920,6 +920,29 @@ every removal path and prevent an in-flight resolution from repopulating after
 invalidation. Provider-specific endpoints, references and diagnostics stay out
 of stable APIs, logs, probes, audits and evidence.
 
+The Product recording KMS vertical uses `rkms1:` handles reconstructed against
+protected `EnvelopeBindingSet` configuration. It never treats a handle as KMS
+authority, never accepts legacy `rkey:` material in the production store, and
+never performs read-path migration. See
+`docs/migrations/product-phase-6-recording-key-handle-v1.md` before changing a
+recording store in an environment with durable data.
+
+Run the real Vault Transit component gate with the repository-pinned Vault
+2.1.1 manifest-list digest
+`sha256:47f14a6acb98f48d798a07df7c83f23a6e636e1cf724c5f8ff165cb32667a1e2`:
+
+```bash
+SANDBOX_RUNTIME_VAULT_TRANSIT_INTEGRATION=1 \
+go test -tags=integration -count=1 \
+  -run '^TestVaultTransitRecordingStoreIntegration$' -v \
+  ./product/adapter/recording/kms
+```
+
+The test starts Vault with TLS, creates a non-exportable Transit key and
+least-scope short-lived token, verifies rotation/restart/loss/cleanup, and
+removes the run-owned container. A pass is real-adapter component evidence;
+it is not the Slice 5 independent-process or deployment gate.
+
 For a leaf-only Slice 5 `internal/secretref` checkpoint, run:
 
 ```bash

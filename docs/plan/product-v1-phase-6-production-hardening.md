@@ -123,11 +123,14 @@ Gate: overlap rotation, stale-key rejection, KMS loss, cache expiry, restart,
 revocation and plaintext-exclusion evidence.
 
 Status: underway; not complete. ADR 0054 and the Slice 5 startup audit freeze
-the work order and add only the first component boundary: canonical scoped
-bindings, an exact adapter over the existing Provider port, a bounded
-fail-closed secret cache and an opaque envelope-key port. No production role
-composition or real KMS/recording/workload/break-glass gate has passed, so this
-does not advance the Phase 6 count.
+the work order. In addition to canonical scoped bindings, the bounded cache and
+opaque envelope-key port, Product now has a tenant-bound KMS recording adapter
+and a strict Vault Transit client. A digest-pinned Vault TLS integration proves
+recording round-trip, v1/v2 overlap rotation, restart reconstruction, KMS-loss
+closure and cleanup. This is real-adapter component evidence only: production
+role composition, short-lived credential issuance/renewal, the full rotation
+controller, break-glass workflow and independent-process gate remain open, so
+the Phase 6 count does not advance.
 
 ### Slice 6 — TLS, network policy and least privilege
 
@@ -235,7 +238,7 @@ an earlier claim.
 ## Current stop point
 
 Slices 1-4 are implemented. Slice 5, production secret references, KMS and
-rotation, is underway at its first component checkpoint. The current result is bounded local independent-process
+rotation, is underway at its recording/Vault real-adapter checkpoint. The current result is bounded local independent-process
 evidence using a non-release Desktop candidate; no complete public Product
 E2E, published application supply chain, deployment, HA, hostile-multitenant,
 SLO-attainment, or production qualification is claimed.

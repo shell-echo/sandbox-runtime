@@ -102,11 +102,11 @@ type CatalogStore interface {
 }
 
 type RecordingContentStore interface {
-	CreateKeyReference(context.Context, string) (string, error)
-	PutSegment(context.Context, string, string, int64, []byte) (string, error)
-	ReadSegment(context.Context, string, string, int64, string) ([]byte, error)
-	DeleteSegments(context.Context, []string) error
-	DeleteRecording(context.Context, string) error
+	CreateKeyReference(context.Context, string, string) (string, error)
+	PutSegment(context.Context, string, string, string, int64, []byte) (string, error)
+	ReadSegment(context.Context, string, string, string, int64, string) ([]byte, error)
+	DeleteSegments(context.Context, string, string, string, []string) error
+	DeleteRecording(context.Context, string, string, string) error
 }
 
 type Redactor interface {
@@ -195,7 +195,7 @@ func (s *RecordingService) Start(ctx context.Context, tenantID string, actor Act
 	if err != nil {
 		return Recording{}, ErrStoreUnavailable
 	}
-	keyReference, err := s.content.CreateKeyReference(ctx, recordingID)
+	keyReference, err := s.content.CreateKeyReference(ctx, tenantID, recordingID)
 	if err != nil {
 		return Recording{}, ErrStoreUnavailable
 	}
@@ -228,7 +228,7 @@ func (s *RecordingService) Append(ctx context.Context, tenantID string, actor Ac
 		previous = record.Segments[len(record.Segments)-1].Digest
 	}
 	digest := chainedRecordingDigest(previous, redacted)
-	reference, err := s.content.PutSegment(ctx, recordingID, record.KeyReference, sequence, redacted)
+	reference, err := s.content.PutSegment(ctx, tenantID, recordingID, record.KeyReference, sequence, redacted)
 	if err != nil {
 		return Recording{}, ErrStoreUnavailable
 	}
@@ -272,7 +272,7 @@ func (s *RecordingService) Replay(ctx context.Context, tenantID string, actor Ac
 	previous := ""
 	var total int64
 	for _, segment := range record.Segments {
-		payload, err := s.content.ReadSegment(ctx, recordingID, record.KeyReference, segment.Sequence, segment.ObjectReference)
+		payload, err := s.content.ReadSegment(ctx, tenantID, recordingID, record.KeyReference, segment.Sequence, segment.ObjectReference)
 		if err != nil || int64(len(payload)) != segment.SizeBytes || segment.PreviousDigest != previous || chainedRecordingDigest(previous, payload) != segment.Digest {
 			return nil, ErrStoreUnavailable
 		}
@@ -299,7 +299,7 @@ func (s *RecordingService) CleanupExpired(ctx context.Context, limit int) (int, 
 	}
 	cleaned := 0
 	for _, item := range items {
-		if err := s.content.DeleteRecording(ctx, item.RecordingID); err != nil {
+		if err := s.content.DeleteRecording(ctx, item.TenantID, item.RecordingID, item.KeyReference); err != nil {
 			return cleaned, ErrStoreUnavailable
 		}
 		if err := s.store.MarkRecordingDeleted(ctx, item.TenantID, item.RecordingID, s.clock().UTC()); err != nil && !errors.Is(err, ErrControlStale) {

@@ -64,6 +64,39 @@ types. They are not Provider API DTOs and must not expose secret references,
 KMS coordinates, credentials or provider diagnostics through stable APIs,
 logs, probes, audit payloads or release evidence.
 
+The first production-oriented vertical evolves the existing private
+`RecordingContentStore` port rather than adding a parallel store. Every
+operation carries the authenticated tenant and recording identity explicitly.
+Each recording receives a random 256-bit data-encryption key; the KMS wraps or
+unwraps that key through `EnvelopeKeyProvider`, while segment payloads use
+AES-256-GCM locally. Canonical associated data binds tenant, recording, logical
+object reference, sequence, complete binding digest, KMS key version, provider
+key ID, wrap algorithm and content algorithm.
+
+Persisted `rkms1:` handles are closed canonical documents. They contain only
+format/version metadata, the binding digest, opaque provider key ID/version,
+algorithms and the wrapped data key. A handle cannot introduce the full KMS
+reference, endpoint, credential, filesystem path or a new authority. Product
+reconstructs the complete binding from protected immutable configuration;
+active versions seal, active or grace versions open, and revoked or expired
+versions can only authenticate deletion. The development-only local store uses
+tenant/recording-bound `rkey2:` handles and rejects old `rkey:` handles.
+
+The initial real adapter is Vault Transit over HTTPS. It accepts exactly the
+configured origin, mount and `kms://<authority>/<mount>/<key-id>` reference,
+disables redirects and cookie storage, resolves a short-lived Product workload
+token through the scoped secret provider, uses Transit `associated_data`, and
+requests the exact key version. Vault response fields, sizes, content type,
+ciphertext version and duplicate JSON keys are checked strictly. The adapter
+does not export Transit key bytes or surface Vault diagnostics.
+
+There is no production read-path fallback from `rkms1:` to legacy `rkey:`
+material and no opportunistic rewrite. Enabling the KMS store therefore
+requires either proof that no production legacy recording corpus exists or a
+separately authorized offline migration with source/target counts, integrity
+verification, deletion policy and rollback limits. The migration contract is
+recorded in `docs/migrations/product-phase-6-recording-key-handle-v1.md`.
+
 ## Consequences
 
 - Existing reference parsing, file hardening, state/window types and local
@@ -73,9 +106,13 @@ logs, probes, audit payloads or release evidence.
   provider validity window.
 - A real KMS/HSM adapter can retain raw keys outside the role process and return
   only an opaque envelope.
-- This ADR is a component boundary, not Slice 5 completion. It does not yet
-  migrate role startup, integrate recording storage with a real KMS, issue
-  workload credentials, implement a rotation/revocation controller or record
-  break-glass approvals.
+- A real digest-pinned Vault Transit TLS integration now proves recording
+  round-trip, version rotation with grace reads, process/client reconstruction,
+  dependency loss, KMS-independent cleanup and exact container cleanup. This
+  remains real-adapter component evidence, not production deployment evidence.
+- This ADR is not Slice 5 completion. Production role startup has not migrated
+  all secret inputs, the short-lived credential issuer/renewal controller and
+  break-glass approval state machine remain open, and no full independent-role
+  Slice 5 gate or immutable evidence manifest exists.
 - Slice 5 remains open until the real-adapter and independent-process failure
   gates, plaintext-exclusion checks and immutable evidence all pass.
