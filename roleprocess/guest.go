@@ -20,23 +20,28 @@ import (
 	"github.com/shell-echo/sandbox-runtime/config"
 	"github.com/shell-echo/sandbox-runtime/guestagent"
 	guestdevelopment "github.com/shell-echo/sandbox-runtime/guestagent/development"
+	"github.com/shell-echo/sandbox-runtime/internal/rolematerials"
 	"github.com/shell-echo/sandbox-runtime/internal/secretfile"
+	"github.com/shell-echo/sandbox-runtime/internal/secretref"
+	"github.com/shell-echo/sandbox-runtime/internal/tlsmaterial"
 )
 
 const (
-	guestAuthorityVersion = 1
-	maxGuestAuthoritySize = 64 << 10
-	maxGuestKeySize       = ed25519.PrivateKeySize
+	guestAuthorityVersion   = 1
+	guestAuthorityVersionV2 = 2
+	maxGuestAuthoritySize   = 64 << 10
+	maxGuestKeySize         = ed25519.PrivateKeySize
 )
 
 // GuestCredentialAuthority is the versioned, role-specific identity input for
 // an outbound Guest. The private key remains in a separate mode-0600 file.
 type GuestCredentialAuthority struct {
-	Version           int    `json:"version"`
-	Role              string `json:"role"`
-	GuestID           string `json:"guest_id"`
-	BindingGeneration int64  `json:"binding_generation"`
-	PrivateKeyFile    string `json:"private_key_file"`
+	Version             int    `json:"version"`
+	Role                string `json:"role"`
+	GuestID             string `json:"guest_id"`
+	BindingGeneration   int64  `json:"binding_generation"`
+	PrivateKeyFile      string `json:"private_key_file"`
+	PrivateKeyBindingID string `json:"private_key_binding_id"`
 }
 
 // GuestDependencyAuthority contains only bounded local Guest runtime inputs.
@@ -68,13 +73,18 @@ type GuestAuthority struct {
 	Policy     GuestPolicyAuthority
 	PrivateKey ed25519.PrivateKey
 	HTTPClient *http.Client
+	Registry   *secretref.Registry
 }
 
 // LoadGuestAuthority reads and validates the three role-owned authority files
 // referenced by the process configuration. Unknown JSON fields, wrong roles,
 // path aliasing, broad permissions, and malformed keys are rejected.
 func LoadGuestAuthority(cfg *config.DataPlaneProcessConfig) (GuestAuthority, error) {
-	if cfg == nil || cfg.Role != config.DataPlaneGuest || !cfg.Enabled {
+	return loadGuestAuthority(context.Background(), cfg)
+}
+
+func loadGuestAuthority(ctx context.Context, cfg *config.DataPlaneProcessConfig) (GuestAuthority, error) {
+	if ctx == nil || cfg == nil || cfg.Role != config.DataPlaneGuest || !cfg.Enabled {
 		return GuestAuthority{}, errors.New("enabled Guest configuration is required")
 	}
 	if err := cfg.Validate(); err != nil {
@@ -92,7 +102,19 @@ func LoadGuestAuthority(cfg *config.DataPlaneProcessConfig) (GuestAuthority, err
 	if err := readAuthority(cfg.Authority.PolicyFile, &policy); err != nil {
 		return GuestAuthority{}, fmt.Errorf("load Guest policy authority: %w", err)
 	}
-	if credential.Version != guestAuthorityVersion || credential.Role != string(config.DataPlaneGuest) || credential.GuestID == "" || credential.BindingGeneration < 1 || !filepath.IsAbs(credential.PrivateKeyFile) {
+	production := cfg.SchemaVersion == config.DataPlaneProductionSchemaV2
+	expectedVersion := guestAuthorityVersion
+	if production {
+		expectedVersion = guestAuthorityVersionV2
+	}
+	if credential.Version != expectedVersion || credential.Role != string(config.DataPlaneGuest) || credential.GuestID == "" || credential.BindingGeneration < 1 {
+		return GuestAuthority{}, errors.New("invalid Guest credential authority")
+	}
+	if production {
+		if credential.PrivateKeyFile != "" || credential.PrivateKeyBindingID == "" {
+			return GuestAuthority{}, errors.New("invalid Guest credential authority")
+		}
+	} else if !filepath.IsAbs(credential.PrivateKeyFile) || credential.PrivateKeyBindingID != "" {
 		return GuestAuthority{}, errors.New("invalid Guest credential authority")
 	}
 	if dependency.Version != guestAuthorityVersion || dependency.Role != string(config.DataPlaneGuest) || !filepath.IsAbs(dependency.WorkspaceRoot) || !filepath.IsAbs(dependency.StateRoot) || filepath.Clean(dependency.WorkspaceRoot) == filepath.Clean(dependency.StateRoot) {
@@ -101,19 +123,61 @@ func LoadGuestAuthority(cfg *config.DataPlaneProcessConfig) (GuestAuthority, err
 	if policy.Version != guestAuthorityVersion || policy.Role != string(config.DataPlaneGuest) || policy.ReconnectBackoffMillis < 10 || policy.ReconnectBackoffMillis > 30_000 {
 		return GuestAuthority{}, errors.New("invalid Guest policy authority")
 	}
-	privateKey, err := secretfile.Read(credential.PrivateKeyFile, maxGuestKeySize)
-	if err != nil || len(privateKey) != ed25519.PrivateKeySize {
-		clear(privateKey)
-		return GuestAuthority{}, errors.New("invalid Guest private key")
+	var registry *secretref.Registry
+	var privateKey []byte
+	var client *http.Client
+	var err error
+	if production {
+		registry, err = rolematerials.New(cfg.Materials, secretref.RoleGuest, []secretref.Purpose{secretref.PurposeTLSCertificate, secretref.PurposeTLSPrivateKey, secretref.PurposeCABundle, secretref.PurposeGuestSigningKey}, true, time.Now)
+		if err != nil {
+			return GuestAuthority{}, errors.New("construct Guest material registry")
+		}
+		closeRegistry := true
+		defer func() {
+			if closeRegistry {
+				registry.Close()
+			}
+		}()
+		bindings, decodeErr := cfg.Materials.DecodeBindings(secretref.RoleGuest)
+		if decodeErr != nil || len(bindings) != 4 {
+			return GuestAuthority{}, errors.New("Guest material registry must contain exactly four bindings")
+		}
+		material, resolveErr := registry.Resolve(ctx, credential.PrivateKeyBindingID, secretref.PurposeGuestSigningKey, secretref.SystemTenant)
+		if resolveErr != nil {
+			material.Destroy()
+			return GuestAuthority{}, errors.New("Guest signing key material is unavailable")
+		}
+		privateKey = append([]byte(nil), material.Bytes...)
+		material.Destroy()
+		if len(privateKey) != ed25519.PrivateKeySize {
+			clear(privateKey)
+			return GuestAuthority{}, errors.New("invalid Guest private key")
+		}
+		parsed, _ := url.Parse(cfg.OutboundURL)
+		clientTLS, tlsErr := tlsmaterial.ResolveClient(ctx, registry,
+			cfg.TLS.ClientCABundleBindingID, cfg.TLS.ClientCertificateBindingID, cfg.TLS.ClientPrivateKeyBindingID,
+			parsed.Hostname(), time.Now)
+		if tlsErr != nil {
+			clear(privateKey)
+			return GuestAuthority{}, errors.New("load Guest TLS client material")
+		}
+		client = &http.Client{Transport: &http.Transport{TLSClientConfig: clientTLS}, Timeout: time.Duration(cfg.Drain.DependencyTimeouts) * time.Second}
+		closeRegistry = false
+	} else {
+		privateKey, err = secretfile.Read(credential.PrivateKeyFile, maxGuestKeySize)
+		if err != nil || len(privateKey) != ed25519.PrivateKeySize {
+			clear(privateKey)
+			return GuestAuthority{}, errors.New("invalid Guest private key")
+		}
+		client, err = guestHTTPClient(cfg)
+		if err != nil {
+			clear(privateKey)
+			return GuestAuthority{}, err
+		}
 	}
 	key := ed25519.PrivateKey(append([]byte(nil), privateKey...))
 	clear(privateKey)
-	client, err := guestHTTPClient(cfg)
-	if err != nil {
-		clear(key)
-		return GuestAuthority{}, err
-	}
-	return GuestAuthority{Credential: credential, Dependency: dependency, Policy: policy, PrivateKey: key, HTTPClient: client}, nil
+	return GuestAuthority{Credential: credential, Dependency: dependency, Policy: policy, PrivateKey: key, HTTPClient: client, Registry: registry}, nil
 }
 
 // NewGuestApplicationGraph constructs the actual outbound Guest application
@@ -123,7 +187,7 @@ func NewGuestApplicationGraph(ctx context.Context, cfg *config.DataPlaneProcessC
 	if ctx == nil {
 		return ApplicationGraph{}, errors.New("Guest construction context is required")
 	}
-	authority, err := LoadGuestAuthority(cfg)
+	authority, err := loadGuestAuthority(ctx, cfg)
 	if err != nil {
 		return ApplicationGraph{}, err
 	}
@@ -151,10 +215,45 @@ func NewGuestApplicationGraph(ctx context.Context, cfg *config.DataPlaneProcessC
 	// The development service owns no goroutine or external handle. Agent.Run
 	// owns the only independent lifecycle and is stopped by graph Shutdown.
 	return ApplicationGraph{
-		Ready:    func(checkContext context.Context) error { return agent.Ready(checkContext) },
-		Start:    func(startContext context.Context) error { return agent.Run(startContext) },
-		Shutdown: func(context.Context) error { return nil },
+		Ready: func(checkContext context.Context) error {
+			if authority.Registry != nil {
+				if err := verifyGuestMaterials(checkContext, authority.Registry, cfg, authority.Credential.PrivateKeyBindingID); err != nil {
+					return err
+				}
+			}
+			return agent.Ready(checkContext)
+		},
+		Start: func(startContext context.Context) error { return agent.Run(startContext) },
+		Shutdown: func(context.Context) error {
+			if authority.Registry != nil {
+				authority.Registry.Close()
+			}
+			return nil
+		},
 	}, nil
+}
+
+func verifyGuestMaterials(ctx context.Context, registry *secretref.Registry, cfg *config.DataPlaneProcessConfig, signingKeyID string) error {
+	checks := []struct {
+		id      string
+		purpose secretref.Purpose
+	}{
+		{cfg.TLS.ClientCABundleBindingID, secretref.PurposeCABundle},
+		{cfg.TLS.ClientCertificateBindingID, secretref.PurposeTLSCertificate},
+		{cfg.TLS.ClientPrivateKeyBindingID, secretref.PurposeTLSPrivateKey},
+		{signingKeyID, secretref.PurposeGuestSigningKey},
+	}
+	for _, check := range checks {
+		material, err := registry.Resolve(ctx, check.id, check.purpose, secretref.SystemTenant)
+		material.Destroy()
+		if err != nil {
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				return err
+			}
+			return errors.New("Guest material dependency is unavailable")
+		}
+	}
+	return nil
 }
 
 func readAuthority(path string, value any) error {

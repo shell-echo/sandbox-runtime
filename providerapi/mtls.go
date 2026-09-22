@@ -38,6 +38,14 @@ func LoadMTLSConfig(certPath, keyPath, clientCAPath string, allowedURIIdentities
 	return loadMTLSConfig(certPath, keyPath, clientCAPath, allowedURIIdentities)
 }
 
+// LoadMTLSConfigMaterial freezes the same mTLS policy from already-resolved,
+// role-scoped material. Callers retain ownership of the byte slices and must
+// clear them after this function returns.
+func LoadMTLSConfigMaterial(certificatePEM, privateKeyPEM, clientCAPEM []byte, allowedURIIdentities []string, now time.Time) (*tls.Config, error) {
+	tlsConfig, _, err := loadMTLSConfigMaterialWithIdentity(certificatePEM, privateKeyPEM, clientCAPEM, allowedURIIdentities, now)
+	return tlsConfig, err
+}
+
 func loadMTLSConfigWithIdentity(certPath, keyPath, clientCAPath string, allowedURIIdentities []string) (*tls.Config, *clientIdentityAdmission, error) {
 	if certPath == "" || keyPath == "" || clientCAPath == "" {
 		return nil, nil, errors.New("provider mTLS certificate, key, and client CA paths are required")
@@ -51,15 +59,26 @@ func loadMTLSConfigWithIdentity(certPath, keyPath, clientCAPath string, allowedU
 	if err != nil {
 		return nil, nil, fmt.Errorf("read provider mTLS server private key: %w", err)
 	}
+	clientCAPEM, err := readBoundedTLSMaterial(clientCAPath, maxClientCABundleBytes)
+	if err != nil {
+		return nil, nil, fmt.Errorf("read provider mTLS client CA bundle: %w", err)
+	}
+	return loadMTLSConfigMaterialWithIdentity(certificatePEM, privateKeyPEM, clientCAPEM, allowedURIIdentities, time.Now())
+}
+
+func loadMTLSConfigMaterialWithIdentity(certificatePEM, privateKeyPEM, clientCAPEM []byte, allowedURIIdentities []string, now time.Time) (*tls.Config, *clientIdentityAdmission, error) {
+	if len(certificatePEM) == 0 || len(privateKeyPEM) == 0 || len(clientCAPEM) == 0 || now.IsZero() {
+		return nil, nil, errors.New("provider mTLS certificate, key, and client CA material are required")
+	}
 	certificate, err := tls.X509KeyPair(certificatePEM, privateKeyPEM)
 	if err != nil {
 		return nil, nil, fmt.Errorf("load provider mTLS server key pair: %w", err)
 	}
-	if err := validateServerCertificate(certificate, time.Now()); err != nil {
+	if err := validateServerCertificate(certificate, now); err != nil {
 		return nil, nil, fmt.Errorf("validate provider mTLS server certificate: %w", err)
 	}
 
-	clientCAs, err := loadCertPool(clientCAPath)
+	clientCAs, err := loadCertPoolMaterial(clientCAPEM, now)
 	if err != nil {
 		return nil, nil, fmt.Errorf("load provider mTLS client CA bundle: %w", err)
 	}
@@ -121,6 +140,13 @@ func loadCertPool(path string) (*x509.CertPool, error) {
 	if err != nil {
 		return nil, err
 	}
+	return loadCertPoolMaterial(contents, time.Now())
+}
+
+func loadCertPoolMaterial(contents []byte, now time.Time) (*x509.CertPool, error) {
+	if len(contents) == 0 || len(contents) > maxClientCABundleBytes || now.IsZero() {
+		return nil, errors.New("client CA bundle is invalid")
+	}
 	if len(strings.TrimSpace(string(contents))) == 0 {
 		return nil, errors.New("client CA bundle is empty")
 	}
@@ -143,7 +169,6 @@ func loadCertPool(path string) (*x509.CertPool, error) {
 		if !certificate.BasicConstraintsValid || !certificate.IsCA || certificate.KeyUsage&x509.KeyUsageCertSign == 0 {
 			return nil, errors.New("client CA bundle contains a certificate that is not a certificate authority")
 		}
-		now := time.Now()
 		if now.Before(certificate.NotBefore) || now.After(certificate.NotAfter) {
 			return nil, errors.New("client CA bundle contains a certificate outside its validity period")
 		}

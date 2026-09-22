@@ -19,6 +19,7 @@ func snapshotGlobals(t *testing.T) {
 	productProcess := ProductProcess
 	productMigration := ProductMigration
 	providerProcess := ProviderProcess
+	providerMigration := ProviderMigration
 	runtimeConfig := Runtime
 	repository := Repository
 	loc := time.Local
@@ -29,6 +30,7 @@ func snapshotGlobals(t *testing.T) {
 		ProductProcess = productProcess
 		ProductMigration = productMigration
 		ProviderProcess = providerProcess
+		ProviderMigration = providerMigration
 		Runtime = runtimeConfig
 		Repository = repository
 		time.Local = loc

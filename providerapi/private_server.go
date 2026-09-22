@@ -2,6 +2,7 @@ package providerapi
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"net"
@@ -28,6 +29,7 @@ type PrivateTransportOptions struct {
 	ServerCertificateFile      string
 	ServerPrivateKeyFile       string
 	ClientCABundleFile         string
+	TLSConfig                  *tls.Config
 	AllowedClientURIIdentities []string
 	Handler                    http.Handler
 	ReadHeaderTimeout          time.Duration
@@ -58,7 +60,18 @@ func NewPrivateServer(ctx context.Context, options PrivateTransportOptions) (*Pr
 	if err := options.Address.Validate(); err != nil {
 		return nil, fmt.Errorf("validate Provider private server address: %w", err)
 	}
-	tlsConfig, err := loadMTLSConfig(options.ServerCertificateFile, options.ServerPrivateKeyFile, options.ClientCABundleFile, options.AllowedClientURIIdentities)
+	var tlsConfig *tls.Config
+	var err error
+	if options.TLSConfig != nil {
+		if options.ServerCertificateFile != "" || options.ServerPrivateKeyFile != "" || options.ClientCABundleFile != "" ||
+			options.TLSConfig.MinVersion != tls.VersionTLS13 || options.TLSConfig.MaxVersion != tls.VersionTLS13 ||
+			len(options.TLSConfig.Certificates) != 1 || options.TLSConfig.ClientAuth != tls.RequireAndVerifyClientCert || options.TLSConfig.ClientCAs == nil || options.TLSConfig.VerifyConnection == nil {
+			return nil, errors.New("Provider private server frozen TLS configuration is invalid")
+		}
+		tlsConfig = options.TLSConfig.Clone()
+	} else {
+		tlsConfig, err = loadMTLSConfig(options.ServerCertificateFile, options.ServerPrivateKeyFile, options.ClientCABundleFile, options.AllowedClientURIIdentities)
+	}
 	if err != nil {
 		return nil, err
 	}

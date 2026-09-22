@@ -12,7 +12,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/shell-echo/sandbox-runtime/config"
 	"github.com/shell-echo/sandbox-runtime/internal/handoff"
+	"github.com/shell-echo/sandbox-runtime/internal/rolematerials"
 	"github.com/shell-echo/sandbox-runtime/internal/secretfile"
+	"github.com/shell-echo/sandbox-runtime/internal/secretref"
+	"github.com/shell-echo/sandbox-runtime/internal/tlsmaterial"
 	"github.com/shell-echo/sandbox-runtime/provider"
 	providerpostgres "github.com/shell-echo/sandbox-runtime/provider/adapter/postgres"
 	"github.com/shell-echo/sandbox-runtime/provider/admission"
@@ -40,6 +43,7 @@ const maxProviderPostgresDSNBytes int64 = 8 << 10
 
 var providerCmd = &cobra.Command{Use: "provider", Short: "Operate the independent Provider process"}
 var providerServeCmd = &cobra.Command{Use: "serve", Short: "Start the independent Provider control plane", SilenceUsage: true, RunE: runProviderServe}
+var providerMigrateCmd = &cobra.Command{Use: "migrate", Short: "Run the one-shot Provider database migration process", SilenceUsage: true, RunE: runProviderMigrate}
 
 func runProviderServe(cmd *cobra.Command, _ []string) (result error) {
 	providerConfig := config.ProviderProcess
@@ -52,6 +56,12 @@ func runProviderServe(cmd *cobra.Command, _ []string) (result error) {
 	if config.ProductProcess != nil && config.ProductProcess.Enabled {
 		return errors.New("Product and Provider process authorities cannot share one command")
 	}
+	if config.ProviderMigration != nil && config.ProviderMigration.Enabled {
+		return errors.New("Provider runtime and migration authorities cannot share one command")
+	}
+	if providerConfig.SchemaVersion != config.ProviderProductionSchemaV2 {
+		return errors.New("provider serve requires the production v2 material schema")
+	}
 	if config.Server != nil && config.Server.Provider.Transport.Enabled {
 		return errors.New("server.provider belongs to root serve and must be disabled for provider serve")
 	}
@@ -60,15 +70,12 @@ func runProviderServe(cmd *cobra.Command, _ []string) (result error) {
 	}
 	startupContext, cancelStartup := context.WithTimeout(cmd.Context(), time.Duration(providerConfig.Postgres.StartupTimeoutSeconds)*time.Second)
 	defer cancelStartup()
-	migrationPool, err := openProviderPostgresFile(startupContext, providerConfig.Postgres.MigrationDSNFile, providerConfig.Postgres.MigrationMaxConnections, 0)
+	materialRegistry, err := newProviderRuntimeMaterialRegistry(providerConfig.Materials)
 	if err != nil {
-		return fmt.Errorf("open Provider migration database: %w", err)
+		return err
 	}
-	defer migrationPool.Close()
-	if err := providerpostgres.ApplyMigrations(startupContext, migrationPool); err != nil {
-		return fmt.Errorf("apply Provider database migrations: %w", err)
-	}
-	runtimePool, err := openProviderPostgresFile(startupContext, providerConfig.Postgres.RuntimeDSNFile, providerConfig.Postgres.MaxConnections, providerConfig.Postgres.MinConnections)
+	defer materialRegistry.Close()
+	runtimePool, err := openProviderPostgresRegistry(startupContext, materialRegistry, providerConfig.Postgres.RuntimeDSNBindingID, secretref.PurposePostgresRuntimeDSN, providerConfig.Postgres.MaxConnections, providerConfig.Postgres.MinConnections)
 	if err != nil {
 		return fmt.Errorf("open Provider runtime database: %w", err)
 	}
@@ -76,18 +83,17 @@ func runProviderServe(cmd *cobra.Command, _ []string) (result error) {
 	if err := runtimePool.Ping(startupContext); err != nil {
 		return errors.New("Provider runtime database is unavailable at startup")
 	}
-	if err := providerpostgres.VerifySeparatedRoles(startupContext, migrationPool, runtimePool, providerConfig.Postgres.MigrationRole, providerConfig.Postgres.RuntimeRole); err != nil {
+	if err := providerpostgres.VerifyRuntimeRole(startupContext, runtimePool, providerConfig.Postgres.RuntimeRole); err != nil {
 		return fmt.Errorf("verify Provider database authority: %w", err)
 	}
 	if err := providerpostgres.VerifySchemaCompatibility(startupContext, runtimePool); err != nil {
 		return fmt.Errorf("verify Provider database schema: %w", err)
 	}
-	migrationPool.Close()
 	state, err := providerpostgres.New(runtimePool, time.Duration(providerConfig.Postgres.OperationTimeoutSeconds)*time.Second)
 	if err != nil {
 		return errors.New("construct Provider transactional state")
 	}
-	composition, err := newProductionProvider(cmd.Context(), providerConfig, state, runtimePool)
+	composition, err := newProductionProvider(cmd.Context(), providerConfig, state, runtimePool, materialRegistry)
 	if err != nil {
 		return err
 	}
@@ -115,11 +121,11 @@ type productionProviderComposition struct {
 	close      func() error
 }
 
-func newProductionProvider(ctx context.Context, cfg *config.ProviderProcessConfig, state *providerpostgres.Store, pool *pgxpool.Pool) (*productionProviderComposition, error) {
+func newProductionProvider(ctx context.Context, cfg *config.ProviderProcessConfig, state *providerpostgres.Store, pool *pgxpool.Pool, registry *secretref.Registry) (*productionProviderComposition, error) {
 	if cfg.Profile == config.ProviderProcessDesktopProfile {
-		return newProductionDesktopProvider(ctx, cfg, state, pool)
+		return newProductionDesktopProvider(ctx, cfg, state, pool, registry)
 	}
-	return newProductionCodingProvider(ctx, cfg, state, pool)
+	return newProductionCodingProvider(ctx, cfg, state, pool, registry)
 }
 
 type providerCloseStack struct{ closers []func() error }
@@ -137,7 +143,7 @@ func (s *providerCloseStack) close() error {
 	return result
 }
 
-func newProductionCodingProvider(ctx context.Context, cfg *config.ProviderProcessConfig, state *providerpostgres.Store, pool *pgxpool.Pool) (*productionProviderComposition, error) { //nolint:cyclop
+func newProductionCodingProvider(ctx context.Context, cfg *config.ProviderProcessConfig, state *providerpostgres.Store, pool *pgxpool.Pool, registry *secretref.Registry) (*productionProviderComposition, error) { //nolint:cyclop
 	stack := &providerCloseStack{}
 	fail := func(err error) (*productionProviderComposition, error) { return nil, errors.Join(err, stack.close()) }
 	lifecycleRepo, err := providerpostgres.NewLifecycleRepository(state)
@@ -201,7 +207,7 @@ func newProductionCodingProvider(ctx context.Context, cfg *config.ProviderProces
 	if err != nil {
 		return fail(err)
 	}
-	protected, err := newProductionProviderAdmission(cfg, state)
+	protected, err := newProductionProviderAdmission(ctx, cfg, state, registry)
 	if err != nil {
 		return fail(err)
 	}
@@ -227,11 +233,11 @@ func newProductionCodingProvider(ctx context.Context, cfg *config.ProviderProces
 	if err != nil {
 		return fail(err)
 	}
-	providerServer, err := newProductionProviderTransport(ctx, cfg, protected, source)
+	providerServer, err := newProductionProviderTransport(ctx, cfg, protected, source, registry)
 	if err != nil {
 		return fail(err)
 	}
-	privateServer, err := newProductionProviderPrivateTerminalServer(ctx, cfg, terminalApp)
+	privateServer, err := newProductionProviderPrivateTerminalServer(ctx, cfg, terminalApp, registry)
 	if err != nil {
 		return fail(err)
 	}
@@ -244,7 +250,7 @@ func newProductionCodingProvider(ctx context.Context, cfg *config.ProviderProces
 	if err != nil {
 		return fail(err)
 	}
-	checker := providerReadinessChecker{state: state, pool: pool, reconciler: reconciler}
+	checker := providerReadinessChecker{state: state, pool: pool, reconciler: reconciler, registry: registry, config: cfg}
 	probe, err := providerprocess.NewServer(cfg.Probe, checker)
 	if err != nil {
 		return fail(err)
@@ -252,7 +258,7 @@ func newProductionCodingProvider(ctx context.Context, cfg *config.ProviderProces
 	return &productionProviderComposition{provider: providerServer, private: privateServer, probe: probe, reconciler: reconciler, close: stack.close}, nil
 }
 
-func newProductionProviderPrivateTerminalServer(ctx context.Context, cfg *config.ProviderProcessConfig, application *providerTerminalApplication) (server.Server, error) {
+func newProductionProviderPrivateTerminalServer(ctx context.Context, cfg *config.ProviderProcessConfig, application *providerTerminalApplication, registry *secretref.Registry) (server.Server, error) {
 	if cfg == nil || !cfg.Transport.Private.Enabled {
 		return nil, nil
 	}
@@ -277,9 +283,15 @@ func newProductionProviderPrivateTerminalServer(ctx context.Context, cfg *config
 		return nil, fmt.Errorf("construct Provider private terminal handler: %w", err)
 	}
 	private := cfg.Transport.Private
+	tlsConfig, err := tlsmaterial.ResolveMutualServer(ctx, registry,
+		private.ServerCertificateBindingID, private.ServerPrivateKeyBindingID, private.ClientCABundleBindingID,
+		private.ExpectedServerName, private.AllowedClientURIIdentities, time.Now)
+	if err != nil {
+		return nil, errors.New("load Provider private terminal TLS material")
+	}
 	return providerapi.NewPrivateServer(ctx, providerapi.PrivateTransportOptions{
-		Address: private.Address, ServerCertificateFile: private.ServerCertificateFile, ServerPrivateKeyFile: private.ServerPrivateKeyFile,
-		ClientCABundleFile: private.ClientCABundleFile, AllowedClientURIIdentities: append([]string(nil), private.AllowedClientURIIdentities...), Handler: handler,
+		Address: private.Address, TLSConfig: tlsConfig,
+		AllowedClientURIIdentities: append([]string(nil), private.AllowedClientURIIdentities...), Handler: handler,
 		ReadHeaderTimeout: time.Duration(private.ReadHeaderTimeoutMillis) * time.Millisecond, ReadTimeout: time.Duration(private.ReadTimeoutMillis) * time.Millisecond,
 		WriteTimeout: time.Duration(private.WriteTimeoutMillis) * time.Millisecond, IdleTimeout: time.Duration(private.IdleTimeoutMillis) * time.Millisecond,
 		MaxHeaderBytes: private.MaxHeaderBytes, MaxBodyBytes: private.MaxBodyBytes,
@@ -364,16 +376,28 @@ func newProductionProviderArtifact(ctx context.Context, artifactConfig config.Pr
 	return application, nil
 }
 
-func newProductionProviderAdmission(cfg *config.ProviderProcessConfig, state *providerpostgres.Store) (*providerapi.ProtectedTransportOptions, error) {
+func newProductionProviderAdmission(ctx context.Context, cfg *config.ProviderProcessConfig, state *providerpostgres.Store, registry *secretref.Registry) (*providerapi.ProtectedTransportOptions, error) {
 	authority, err := admission.NewAdmissionAuthority(cfg.ProtectedAdmission.Issuer, cfg.Capability.ProviderRevisionID, cfg.ProtectedAdmission.ProviderInstanceAudience)
 	if err != nil {
 		return nil, err
 	}
-	files := make([]admissionfile.TrustedKeyFile, len(cfg.ProtectedAdmission.TrustedVerificationKeys))
+	materials := make([]admissionfile.TrustedKeyMaterial, 0, len(cfg.ProtectedAdmission.TrustedVerificationKeys))
 	for index, key := range cfg.ProtectedAdmission.TrustedVerificationKeys {
-		files[index] = admissionfile.TrustedKeyFile{ID: admission.KeyID(key.ID), Algorithm: admission.Algorithm(key.Algorithm), Path: key.PublicKeyFile}
+		material, resolveErr := registry.Resolve(ctx, key.PublicKeyBindingID, secretref.PurposeAdmissionVerification, secretref.SystemTenant)
+		if resolveErr != nil {
+			material.Destroy()
+			for materialIndex := range materials {
+				clear(materials[materialIndex].PEM)
+			}
+			return nil, fmt.Errorf("load production Provider verification key %d", index)
+		}
+		materials = append(materials, admissionfile.TrustedKeyMaterial{ID: admission.KeyID(key.ID), Algorithm: admission.Algorithm(key.Algorithm), PEM: append([]byte(nil), material.Bytes...)})
+		material.Destroy()
 	}
-	keys, err := admissionfile.LoadTrustedKeySource(files)
+	keys, err := admissionfile.LoadTrustedKeySourceMaterial(materials)
+	for index := range materials {
+		clear(materials[index].PEM)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("load production Provider verification keys: %w", err)
 	}
@@ -392,15 +416,23 @@ func providerProcessCapability(cfg *config.ProviderProcessConfig, coding bool) c
 	return config.ProviderCapabilityConfig{CodingShellEnabled: coding, ProviderRevisionID: cfg.Capability.ProviderRevisionID, Limits: cfg.Capability.Limits, SnapshotRestoreProfiles: append([]config.ProviderCompatibilityProfile(nil), cfg.Capability.SnapshotRestoreProfiles...)}
 }
 
-func newProductionProviderTransport(ctx context.Context, cfg *config.ProviderProcessConfig, protected *providerapi.ProtectedTransportOptions, source provider.CapabilityReader) (*providerapi.Server, error) {
+func newProductionProviderTransport(ctx context.Context, cfg *config.ProviderProcessConfig, protected *providerapi.ProtectedTransportOptions, source provider.CapabilityReader, registry *secretref.Registry) (*providerapi.Server, error) {
 	transport := cfg.Transport
-	return providerapi.NewServer(ctx, providerapi.TransportOptions{Address: transport.Address, ServerCertificateFile: transport.ServerCertificateFile, ServerPrivateKeyFile: transport.ServerPrivateKeyFile, ClientCABundleFile: transport.ClientCABundleFile, AllowedClientURIIdentities: append([]string(nil), transport.AllowedClientURIIdentities...), Protected: protected}, source)
+	tlsConfig, err := tlsmaterial.ResolveMutualServer(ctx, registry,
+		transport.ServerCertificateBindingID, transport.ServerPrivateKeyBindingID, transport.ClientCABundleBindingID,
+		transport.ExpectedServerName, transport.AllowedClientURIIdentities, time.Now)
+	if err != nil {
+		return nil, errors.New("load Provider Contract TLS material")
+	}
+	return providerapi.NewServer(ctx, providerapi.TransportOptions{Address: transport.Address, TLSConfig: tlsConfig, AllowedClientURIIdentities: append([]string(nil), transport.AllowedClientURIIdentities...), Protected: protected}, source)
 }
 
 type providerReadinessChecker struct {
 	state      *providerpostgres.Store
 	pool       *pgxpool.Pool
 	reconciler interface{ Ready(context.Context) error }
+	registry   *secretref.Registry
+	config     *config.ProviderProcessConfig
 }
 
 func (c providerReadinessChecker) Ready(ctx context.Context) error {
@@ -413,7 +445,33 @@ func (c providerReadinessChecker) Ready(ctx context.Context) error {
 	if err := providerpostgres.VerifySchemaCompatibility(ctx, c.pool); err != nil {
 		return err
 	}
+	if c.config != nil && c.config.SchemaVersion == config.ProviderProductionSchemaV2 {
+		if err := verifyProviderMaterialDependencies(ctx, c.registry, c.config); err != nil {
+			return err
+		}
+	}
 	return c.reconciler.Ready(ctx)
+}
+
+func verifyProviderMaterialDependencies(ctx context.Context, registry *secretref.Registry, cfg *config.ProviderProcessConfig) error {
+	if registry == nil || cfg == nil {
+		return errors.New("Provider material dependencies are unavailable")
+	}
+	bindings, err := cfg.Materials.DecodeBindings(secretref.RoleProvider)
+	if err != nil {
+		return errors.New("Provider material dependencies are unavailable")
+	}
+	for id, binding := range bindings {
+		material, resolveErr := registry.Resolve(ctx, id, binding.Purpose, secretref.SystemTenant)
+		material.Destroy()
+		if resolveErr != nil {
+			if errors.Is(resolveErr, context.Canceled) || errors.Is(resolveErr, context.DeadlineExceeded) {
+				return resolveErr
+			}
+			return errors.New("Provider material dependency is unavailable")
+		}
+	}
+	return nil
 }
 
 func openProviderPostgresFile(ctx context.Context, path string, maxConnections, minConnections int32) (*pgxpool.Pool, error) {
@@ -422,6 +480,23 @@ func openProviderPostgresFile(ctx context.Context, path string, maxConnections, 
 		return nil, errors.New("load Provider PostgreSQL connection secret")
 	}
 	defer clear(raw)
+	return openProviderPostgresMaterial(ctx, raw, maxConnections, minConnections)
+}
+
+func openProviderPostgresRegistry(ctx context.Context, registry *secretref.Registry, bindingID string, purpose secretref.Purpose, maxConnections, minConnections int32) (*pgxpool.Pool, error) {
+	material, err := registry.Resolve(ctx, bindingID, purpose, secretref.SystemTenant)
+	if err != nil {
+		material.Destroy()
+		return nil, errors.New("load Provider PostgreSQL connection material")
+	}
+	defer material.Destroy()
+	return openProviderPostgresMaterial(ctx, material.Bytes, maxConnections, minConnections)
+}
+
+func openProviderPostgresMaterial(ctx context.Context, raw []byte, maxConnections, minConnections int32) (*pgxpool.Pool, error) {
+	if len(raw) == 0 || int64(len(raw)) > maxProviderPostgresDSNBytes {
+		return nil, errors.New("invalid Provider PostgreSQL connection secret")
+	}
 	dsn := strings.TrimSuffix(string(raw), "\n")
 	if dsn == "" || strings.TrimSpace(dsn) != dsn || strings.ContainsAny(dsn, "\x00\r\n") {
 		return nil, errors.New("invalid Provider PostgreSQL connection secret")
@@ -443,8 +518,60 @@ func openProviderPostgresFile(ctx context.Context, path string, maxConnections, 
 	return pool, nil
 }
 
+func newProviderRuntimeMaterialRegistry(materials config.RoleMaterialsConfig) (*secretref.Registry, error) {
+	return rolematerials.New(materials, secretref.RoleProvider, []secretref.Purpose{
+		secretref.PurposeTLSCertificate, secretref.PurposeTLSPrivateKey, secretref.PurposeCABundle,
+		secretref.PurposePostgresRuntimeDSN, secretref.PurposeAdmissionVerification,
+		secretref.PurposeExecutorClientKey, secretref.PurposeExecutorBridgeKey,
+	}, true, time.Now)
+}
+
+func newProviderMigrationMaterialRegistry(materials config.RoleMaterialsConfig) (*secretref.Registry, error) {
+	return rolematerials.New(materials, secretref.RoleProvider, []secretref.Purpose{secretref.PurposePostgresMigrationDSN}, false, time.Now)
+}
+
+func runProviderMigrate(cmd *cobra.Command, _ []string) error {
+	migrationConfig := config.ProviderMigration
+	if migrationConfig == nil || !migrationConfig.Enabled {
+		return errors.New("provider_migration.enabled must be true for provider migrate")
+	}
+	if config.ProviderProcess != nil && config.ProviderProcess.Enabled {
+		return errors.New("Provider migration and runtime authorities cannot share one command")
+	}
+	if config.ProductProcess != nil && config.ProductProcess.Enabled {
+		return errors.New("Provider migration and Product authorities cannot share one command")
+	}
+	if config.Application == nil || config.Application.Mode != config.ApplicationProductionMode {
+		return errors.New("Provider migration requires application.mode=production")
+	}
+	if err := migrationConfig.Validate(); err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(cmd.Context(), time.Duration(migrationConfig.Postgres.StartupTimeoutSeconds)*time.Second)
+	defer cancel()
+	registry, err := newProviderMigrationMaterialRegistry(migrationConfig.Materials)
+	if err != nil {
+		return errors.New("construct Provider migration material registry")
+	}
+	defer registry.Close()
+	pool, err := openProviderPostgresRegistry(ctx, registry, migrationConfig.Postgres.DSNBindingID, secretref.PurposePostgresMigrationDSN, migrationConfig.Postgres.MaxConnections, 0)
+	if err != nil {
+		return fmt.Errorf("open Provider migration database: %w", err)
+	}
+	defer pool.Close()
+	if err := providerpostgres.ApplyMigrations(ctx, pool); err != nil {
+		return fmt.Errorf("apply Provider database migrations: %w", err)
+	}
+	if err := providerpostgres.VerifyMigrationRole(ctx, pool, migrationConfig.Postgres.Role); err != nil {
+		return fmt.Errorf("verify Provider migration database authority: %w", err)
+	}
+	pool.Close()
+	registry.Close()
+	return nil
+}
+
 func init() {
-	providerCmd.AddCommand(providerServeCmd)
+	providerCmd.AddCommand(providerServeCmd, providerMigrateCmd)
 	rootCmd.AddCommand(providerCmd)
 }
 

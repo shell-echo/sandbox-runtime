@@ -55,7 +55,7 @@ func startGuestFixture(t *testing.T, ctx context.Context, environment *gateEnvir
 		t.Fatal(err)
 	}
 	fixture := &guestFixture{
-		guestID:    "guest-phase6-slice4",
+		guestID:    "guest-phase6-slice5",
 		privateKey: privateKey,
 		publicKey:  publicKey,
 		address:    listener.Addr().String(),

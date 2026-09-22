@@ -39,6 +39,7 @@ func (f ReadinessFunc) Ready(ctx context.Context) error { return f(ctx) }
 type ApplicationGraph struct {
 	Public   http.Handler
 	Private  http.Handler
+	TLS      *tls.Config
 	Ready    ReadinessFunc
 	Start    func(context.Context) error
 	Shutdown func(context.Context) error
@@ -54,7 +55,7 @@ func (g ApplicationGraph) validate(role config.DataPlaneRole) error {
 			return errors.New("Gateway application graph requires only a public handler")
 		}
 	case config.DataPlaneGuest:
-		if g.Public != nil || g.Private != nil || g.Start == nil {
+		if g.Public != nil || g.Private != nil || g.TLS != nil || g.Start == nil {
 			return errors.New("Guest application graph requires an outbound lifecycle")
 		}
 	case config.DataPlaneBrowser, config.DataPlaneDesktop:
@@ -90,13 +91,16 @@ func NewWithGraph(ctx context.Context, cfg *config.DataPlaneProcessConfig, graph
 	if ctx == nil || cfg == nil || !cfg.Enabled {
 		return nil, errors.New("enabled data-plane role configuration is required")
 	}
-	if graph.Public != nil || graph.Private != nil || graph.Ready != nil || graph.Start != nil || graph.Shutdown != nil {
+	if graph.Public != nil || graph.Private != nil || graph.TLS != nil || graph.Ready != nil || graph.Start != nil || graph.Shutdown != nil {
 		if err := graph.validate(cfg.Role); err != nil {
 			return nil, err
 		}
 	}
 	if err := cfg.Validate(); err != nil {
 		return nil, err
+	}
+	if cfg.SchemaVersion == config.DataPlaneProductionSchemaV2 && cfg.Role != config.DataPlaneGuest && graph.TLS == nil {
+		return nil, errors.New("production role transport TLS is not resolved")
 	}
 	frozen := *cfg
 	frozen.TLS.AllowedClientIdentity = append([]string(nil), cfg.TLS.AllowedClientIdentity...)
@@ -120,18 +124,29 @@ func NewWithGraph(ctx context.Context, cfg *config.DataPlaneProcessConfig, graph
 	}
 	switch cfg.Role {
 	case config.DataPlaneGateway:
-		public, publicErr := edge.NewTLSServer(edge.ServerOptions{
+		options := edge.ServerOptions{
 			Address: cfg.Public.Addr(), Handler: publicHandler,
-			ServerCertificateFile: cfg.TLS.CertificateFile, ServerPrivateKeyFile: cfg.TLS.PrivateKeyFile,
 			MaxConnections: 1000, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second,
 			WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 << 10,
-		})
+		}
+		if graph.TLS != nil {
+			options.TLSConfig = graph.TLS
+		} else {
+			options.ServerCertificateFile, options.ServerPrivateKeyFile = cfg.TLS.CertificateFile, cfg.TLS.PrivateKeyFile
+		}
+		public, publicErr := edge.NewTLSServer(options)
 		if publicErr != nil {
 			return nil, publicErr
 		}
 		composition.public = public
 	case config.DataPlaneBrowser, config.DataPlaneDesktop:
-		private, privateErr := newPrivateTLSServer(cfg.Private.Addr(), privateHandler, cfg.TLS)
+		var private *privateTLSServer
+		var privateErr error
+		if graph.TLS != nil {
+			private, privateErr = newPrivateTLSServerConfig(cfg.Private.Addr(), privateHandler, graph.TLS)
+		} else {
+			private, privateErr = newPrivateTLSServer(cfg.Private.Addr(), privateHandler, cfg.TLS)
+		}
 		if privateErr != nil {
 			return nil, privateErr
 		}
@@ -256,6 +271,14 @@ func newPrivateTLSServer(address string, handler http.Handler, tlsConfig config.
 	if err != nil {
 		return nil, err
 	}
+	return newPrivateTLSServerConfig(address, handler, transport)
+}
+
+func newPrivateTLSServerConfig(address string, handler http.Handler, transport *tls.Config) (*privateTLSServer, error) {
+	if transport == nil || transport.MinVersion != tls.VersionTLS13 || transport.MaxVersion != tls.VersionTLS13 || len(transport.Certificates) != 1 || transport.ClientAuth != tls.RequireAndVerifyClientCert || transport.ClientCAs == nil || transport.VerifyConnection == nil {
+		return nil, errors.New("private role TLS configuration is invalid")
+	}
+	transport = transport.Clone()
 	return &privateTLSServer{
 		http:   &http.Server{Addr: address, Handler: handler, TLSConfig: transport, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 << 10},
 		config: transport, listen: (&net.ListenConfig{}).Listen,

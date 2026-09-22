@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/shell-echo/sandbox-runtime/internal/secretref"
 	"github.com/shell-echo/sandbox-runtime/option"
 	"github.com/spf13/viper"
 )
@@ -17,6 +18,9 @@ import (
 type DataPlaneRole string
 
 const (
+	DataPlaneLegacyLocalCandidateSchema = "sandbox-runtime.data-plane-process.legacy-local-candidate.v1"
+	DataPlaneProductionSchemaV2         = "sandbox-runtime.data-plane-process.v2"
+
 	DataPlaneGateway DataPlaneRole = "gateway"
 	DataPlaneGuest   DataPlaneRole = "guest"
 	DataPlaneBrowser DataPlaneRole = "browser"
@@ -24,12 +28,18 @@ const (
 )
 
 type DataPlaneTLSConfig struct {
-	CertificateFile       string   `mapstructure:"certificate_file"`
-	PrivateKeyFile        string   `mapstructure:"private_key_file"`
-	ClientCABundleFile    string   `mapstructure:"client_ca_bundle_file"`
-	ClientCertificateFile string   `mapstructure:"client_certificate_file"`
-	ClientPrivateKeyFile  string   `mapstructure:"client_private_key_file"`
-	AllowedClientIdentity []string `mapstructure:"allowed_client_identities"`
+	CertificateFile            string   `mapstructure:"certificate_file"`
+	PrivateKeyFile             string   `mapstructure:"private_key_file"`
+	ClientCABundleFile         string   `mapstructure:"client_ca_bundle_file"`
+	ClientCertificateFile      string   `mapstructure:"client_certificate_file"`
+	ClientPrivateKeyFile       string   `mapstructure:"client_private_key_file"`
+	CertificateBindingID       string   `mapstructure:"certificate_binding_id"`
+	PrivateKeyBindingID        string   `mapstructure:"private_key_binding_id"`
+	ClientCABundleBindingID    string   `mapstructure:"client_ca_bundle_binding_id"`
+	ClientCertificateBindingID string   `mapstructure:"client_certificate_binding_id"`
+	ClientPrivateKeyBindingID  string   `mapstructure:"client_private_key_binding_id"`
+	ExpectedServerName         string   `mapstructure:"expected_server_name"`
+	AllowedClientIdentity      []string `mapstructure:"allowed_client_identities"`
 }
 
 type DataPlaneDrainConfig struct {
@@ -51,6 +61,7 @@ type DataPlaneAuthorityConfig struct {
 // supplied through role-specific private references and are not projected by
 // the process probe.
 type DataPlaneProcessConfig struct {
+	SchemaVersion   string                   `mapstructure:"schema_version"`
 	Enabled         bool                     `mapstructure:"enabled"`
 	DeploymentLevel ProviderDeploymentLevel  `mapstructure:"deployment_level"`
 	Public          option.HTTP              `mapstructure:"public"`
@@ -58,6 +69,7 @@ type DataPlaneProcessConfig struct {
 	Probe           option.HTTP              `mapstructure:"probe"`
 	TLS             DataPlaneTLSConfig       `mapstructure:"tls"`
 	Authority       DataPlaneAuthorityConfig `mapstructure:"authority"`
+	Materials       RoleMaterialsConfig      `mapstructure:"materials"`
 	Drain           DataPlaneDrainConfig     `mapstructure:"drain"`
 	OutboundURL     string                   `mapstructure:"outbound_url"`
 	Role            DataPlaneRole            `mapstructure:"-"`
@@ -86,7 +98,7 @@ func defaultDataPlaneProcess(role DataPlaneRole, port int) *DataPlaneProcessConf
 		probePort = defaultDesktopProbePort
 	}
 	return &DataPlaneProcessConfig{
-		Role: role, DeploymentLevel: ProviderProductionLevel,
+		SchemaVersion: DataPlaneLegacyLocalCandidateSchema, Role: role, DeploymentLevel: ProviderLocalCandidateLevel,
 		Public:  option.HTTP{Host: defaultDataPlaneHost, Port: port},
 		Private: option.HTTP{Host: defaultDataPlaneHost, Port: port},
 		Probe:   option.HTTP{Host: defaultDataPlaneHost, Port: probePort},
@@ -108,8 +120,10 @@ func (c *DataPlaneProcessConfig) Validate() error {
 	if !c.Enabled {
 		return nil
 	}
-	if c.DeploymentLevel != ProviderProductionLevel {
-		return fmt.Errorf("%s process requires deployment_level=production", c.Role)
+	production := c.SchemaVersion == DataPlaneProductionSchemaV2 && c.DeploymentLevel == ProviderProductionLevel
+	legacyCandidate := c.SchemaVersion == DataPlaneLegacyLocalCandidateSchema && c.DeploymentLevel == ProviderLocalCandidateLevel
+	if !production && !legacyCandidate {
+		return fmt.Errorf("%s process schema and deployment level are incompatible", c.Role)
 	}
 	if err := c.Probe.Validate(); err != nil || !exactLoopbackIP(c.Probe.Host) {
 		return fmt.Errorf("%s probe must use an explicit loopback address", c.Role)
@@ -141,9 +155,18 @@ func (c *DataPlaneProcessConfig) Validate() error {
 	if c.Authority.ReleaseProfile != "" {
 		paths = append(paths, filepath.Clean(c.Authority.ReleaseProfile))
 	}
-	for _, value := range []string{c.TLS.CertificateFile, c.TLS.PrivateKeyFile, c.TLS.ClientCABundleFile, c.TLS.ClientCertificateFile, c.TLS.ClientPrivateKeyFile} {
-		if value != "" {
-			paths = append(paths, filepath.Clean(value))
+	if production {
+		if c.TLS.CertificateFile != "" || c.TLS.PrivateKeyFile != "" || c.TLS.ClientCABundleFile != "" || c.TLS.ClientCertificateFile != "" || c.TLS.ClientPrivateKeyFile != "" {
+			return fmt.Errorf("%s production TLS configuration cannot contain raw paths", c.Role)
+		}
+	} else {
+		if !c.Materials.IsZero() || c.TLS.CertificateBindingID != "" || c.TLS.PrivateKeyBindingID != "" || c.TLS.ClientCABundleBindingID != "" || c.TLS.ClientCertificateBindingID != "" || c.TLS.ClientPrivateKeyBindingID != "" || c.TLS.ExpectedServerName != "" {
+			return fmt.Errorf("%s legacy local-candidate configuration cannot contain production material bindings", c.Role)
+		}
+		for _, value := range []string{c.TLS.CertificateFile, c.TLS.PrivateKeyFile, c.TLS.ClientCABundleFile, c.TLS.ClientCertificateFile, c.TLS.ClientPrivateKeyFile} {
+			if value != "" {
+				paths = append(paths, filepath.Clean(value))
+			}
 		}
 	}
 	for i := range paths {
@@ -161,7 +184,7 @@ func (c *DataPlaneProcessConfig) Validate() error {
 		if c.Private.Port != defaultGatewayPort || c.Private.Host != defaultDataPlaneHost {
 			return errors.New("gateway private listener must remain disabled")
 		}
-		if err := validateServerTLS(c.TLS, false); err != nil {
+		if err := c.validateServerTLS(production, false); err != nil {
 			return fmt.Errorf("gateway public TLS: %w", err)
 		}
 		if c.OutboundURL != "" {
@@ -174,7 +197,7 @@ func (c *DataPlaneProcessConfig) Validate() error {
 		if err := validateOutboundURL(c.OutboundURL); err != nil {
 			return fmt.Errorf("guest outbound_url: %w", err)
 		}
-		if err := validateClientTLS(c.TLS); err != nil {
+		if err := c.validateClientTLS(production); err != nil {
 			return fmt.Errorf("guest client TLS: %w", err)
 		}
 	case DataPlaneBrowser, DataPlaneDesktop:
@@ -187,11 +210,16 @@ func (c *DataPlaneProcessConfig) Validate() error {
 		if c.Public.Port != c.Private.Port || c.Public.Host != c.Private.Host {
 			return fmt.Errorf("%s public listener must remain disabled", c.Role)
 		}
-		if err := validateServerTLS(c.TLS, true); err != nil {
+		if err := c.validateServerTLS(production, true); err != nil {
 			return fmt.Errorf("%s private TLS: %w", c.Role, err)
 		}
 	default:
 		return fmt.Errorf("unknown data-plane role %q", c.Role)
+	}
+	if production {
+		if err := c.validateProductionMaterials(); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -209,7 +237,21 @@ func validateListener(value option.HTTP, required bool) error {
 	return nil
 }
 
-func validateServerTLS(value DataPlaneTLSConfig, requireClient bool) error {
+func (c *DataPlaneProcessConfig) validateServerTLS(production, requireClient bool) error {
+	value := c.TLS
+	if production {
+		if value.CertificateBindingID == "" || value.PrivateKeyBindingID == "" || value.ExpectedServerName == "" {
+			return errors.New("TLS server material bindings and expected name are required")
+		}
+		if requireClient {
+			if value.ClientCABundleBindingID == "" || value.ClientCertificateBindingID == "" || value.ClientPrivateKeyBindingID == "" || len(value.AllowedClientIdentity) == 0 || len(value.AllowedClientIdentity) > 32 {
+				return errors.New("mutual TLS material bindings and client identity allowlist are required")
+			}
+		} else if value.ClientCABundleBindingID != "" || value.ClientCertificateBindingID != "" || value.ClientPrivateKeyBindingID != "" || len(value.AllowedClientIdentity) != 0 {
+			return errors.New("public TLS cannot configure client identity authority")
+		}
+		return nil
+	}
 	for name, path := range map[string]string{"certificate": value.CertificateFile, "private key": value.PrivateKeyFile} {
 		if err := validateAbsoluteSecretPath("TLS "+name, path); err != nil {
 			return err
@@ -228,7 +270,14 @@ func validateServerTLS(value DataPlaneTLSConfig, requireClient bool) error {
 	return nil
 }
 
-func validateClientTLS(value DataPlaneTLSConfig) error {
+func (c *DataPlaneProcessConfig) validateClientTLS(production bool) error {
+	value := c.TLS
+	if production {
+		if value.CertificateBindingID != "" || value.PrivateKeyBindingID != "" || value.ClientCABundleBindingID == "" || value.ClientCertificateBindingID == "" || value.ClientPrivateKeyBindingID == "" || value.ExpectedServerName == "" || len(value.AllowedClientIdentity) != 0 {
+			return errors.New("guest requires client TLS material bindings and cannot configure a server identity")
+		}
+		return nil
+	}
 	if value.CertificateFile != "" || value.PrivateKeyFile != "" || value.ClientCABundleFile == "" || len(value.AllowedClientIdentity) != 0 {
 		return errors.New("guest requires a trust bundle and cannot configure a server certificate")
 	}
@@ -238,6 +287,67 @@ func validateClientTLS(value DataPlaneTLSConfig) error {
 		}
 	}
 	return nil
+}
+
+func (c *DataPlaneProcessConfig) validateProductionMaterials() error {
+	role, ok := dataPlaneSecretRole(c.Role)
+	if !ok {
+		return errors.New("data-plane material role is invalid")
+	}
+	bindings, err := c.Materials.DecodeBindings(role)
+	if err != nil || c.Materials.Provider.CacheSeconds < 1 {
+		return fmt.Errorf("%s production material registry is invalid", c.Role)
+	}
+	selections := []struct {
+		id      string
+		purpose secretref.Purpose
+	}{
+		{c.TLS.ClientCABundleBindingID, secretref.PurposeCABundle},
+		{c.TLS.ClientCertificateBindingID, secretref.PurposeTLSCertificate},
+		{c.TLS.ClientPrivateKeyBindingID, secretref.PurposeTLSPrivateKey},
+	}
+	if c.Role != DataPlaneGuest {
+		selections = append(selections,
+			struct {
+				id      string
+				purpose secretref.Purpose
+			}{c.TLS.CertificateBindingID, secretref.PurposeTLSCertificate},
+			struct {
+				id      string
+				purpose secretref.Purpose
+			}{c.TLS.PrivateKeyBindingID, secretref.PurposeTLSPrivateKey},
+		)
+	}
+	if c.Role == DataPlaneGateway {
+		selections = selections[3:]
+	}
+	selected := make(map[string]struct{}, len(selections))
+	for _, selection := range selections {
+		binding, exists := bindings[selection.id]
+		if selection.id == "" || !exists || binding.Purpose != selection.purpose || binding.TenantID != secretref.SystemTenant || binding.Role != role {
+			return fmt.Errorf("%s production TLS material selection is invalid", c.Role)
+		}
+		if _, duplicate := selected[selection.id]; duplicate {
+			return fmt.Errorf("%s production TLS material selections must be distinct", c.Role)
+		}
+		selected[selection.id] = struct{}{}
+	}
+	return nil
+}
+
+func dataPlaneSecretRole(role DataPlaneRole) (secretref.Role, bool) {
+	switch role {
+	case DataPlaneGateway:
+		return secretref.RoleGateway, true
+	case DataPlaneGuest:
+		return secretref.RoleGuest, true
+	case DataPlaneBrowser:
+		return secretref.RoleBrowser, true
+	case DataPlaneDesktop:
+		return secretref.RoleDesktop, true
+	default:
+		return "", false
+	}
 }
 
 func validateOutboundURL(value string) error {

@@ -982,6 +982,64 @@ candidates and run real KMS/database/Docker/independent-process gates whenever
 the change reaches their adapter, composition, configuration or image path.
 Never use component evidence as a substitute for those gates.
 
+The formal Slice 5 campaign uses one clean runtime commit and a separate
+evidence-tool commit. Build the Desktop candidate from the runtime commit,
+then make only the closed evidence-test change accepted by the Phase 6
+repository binder. Both real gates must bind those same two revisions:
+
+```bash
+profiles/desktop/image/build-phase6-candidate.sh \
+  linux/arm64/v8 /absolute/private/path/desktop-phase6-slice5-candidate.json
+
+SANDBOX_RUNTIME_VAULT_TRANSIT_INTEGRATION=1 \
+SANDBOX_RUNTIME_DESKTOP_CANDIDATE_MANIFEST=/absolute/private/path/desktop-phase6-slice5-candidate.json \
+SANDBOX_RUNTIME_PHASE6_SLICE5_TRANSIT_EVIDENCE=/absolute/private/path/product-phase6-slice5-transit.json \
+  go test -race -tags=integration -count=1 \
+  -run '^TestVaultTransitRecordingStoreIntegration$' -v \
+  ./product/adapter/recording/kms
+
+SANDBOX_RUNTIME_PHASE6_SLICE5_GATE=1 \
+SANDBOX_RUNTIME_DESKTOP_CANDIDATE_MANIFEST=/absolute/private/path/desktop-phase6-slice5-candidate.json \
+SANDBOX_RUNTIME_PHASE6_SLICE5_TRANSIT_EVIDENCE=/absolute/private/path/product-phase6-slice5-transit.json \
+SANDBOX_RUNTIME_PHASE6_SLICE5_EVIDENCE=/absolute/private/path/product-phase6-slice5-evidence.json \
+  go test -race -tags=phase6slicegate -count=1 \
+  -run '^TestPhase6Slice5ReleaseGate$' -v ./productphase6gate
+
+go run ./cmd/verify-product-phase6-slice5-evidence \
+  -source-root "$PWD" \
+  -manifest /absolute/private/path/product-phase6-slice5-evidence.json
+```
+
+Do not advance the slice counter from either sub-gate alone. After the strict
+aggregate verifier passes, archive the byte-identical manifest under
+`docs/audits/` in a documentation-only closure commit. From that clean commit,
+generate the closure record without editing source:
+
+```bash
+go run ./cmd/verify-product-phase6-slice5-evidence \
+  -mode closure \
+  -source-root "$PWD" \
+  -manifest "$PWD/docs/audits/product-phase-6-slice-5-evidence.json" \
+  -artifact-path docs/audits/product-phase-6-slice-5-evidence.json \
+  -closure-artifact-path docs/audits/product-phase-6-slice-5-closure.json \
+  > /absolute/private/path/product-phase6-slice5-closure.json
+```
+
+Add that exact closure record once in a second documentation-only commit.
+After later slice source work begins, verify the historical claim only with:
+
+```bash
+go run ./cmd/verify-product-phase6-slice5-evidence \
+  -mode retained \
+  -slice product-v1-phase-6-slice-5 \
+  -source-root "$PWD" \
+  -manifest "$PWD/docs/audits/product-phase-6-slice-5-evidence.json" \
+  -closure-record "$PWD/docs/audits/product-phase-6-slice-5-closure.json"
+```
+
+The retained result must state `current_head_covered=false`; it preserves the
+historical Slice 5 claim and never qualifies successor source.
+
 ## Go and API rules
 
 - accept `context.Context` on blocking or external operations and preserve

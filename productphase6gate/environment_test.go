@@ -6,9 +6,11 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
@@ -22,8 +24,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shell-echo/sandbox-runtime/config"
 	"github.com/shell-echo/sandbox-runtime/internal/desktopcandidate"
 	"github.com/shell-echo/sandbox-runtime/internal/productphase6evidence"
+	slice5evidence "github.com/shell-echo/sandbox-runtime/internal/productphase6slice5evidence"
+	"github.com/shell-echo/sandbox-runtime/internal/secretref"
 	desktopimage "github.com/shell-echo/sandbox-runtime/profiles/desktop/image"
 	"github.com/shell-echo/sandbox-runtime/provider/browser/network/docker"
 	"github.com/shell-echo/sandbox-runtime/roleprocess"
@@ -63,50 +68,77 @@ type gateTLSMaterial struct {
 }
 
 type gatePaths struct {
-	directory          string
-	binary             string
-	browserBackendBin  string
-	desktopBackendBin  string
-	productConfig      string
-	providerConfig     string
-	gatewayConfig      string
-	guestConfig        string
-	browserConfig      string
-	desktopConfig      string
-	browserBackendAuth string
-	desktopBackendAuth string
-	brokerDirectory    string
-	brokerSocket       string
-	productRuntimeDSN  string
-	providerRuntimeDSN string
-	bridgeKey          string
-	admissionKey       string
-	productIdentityKey string
+	directory                  string
+	binary                     string
+	browserBackendBin          string
+	desktopBackendBin          string
+	materialAgentBin           string
+	credentialControllerBin    string
+	breakGlassControllerBin    string
+	productConfig              string
+	productMigrationConfig     string
+	providerConfig             string
+	providerMigrationConfig    string
+	gatewayConfig              string
+	guestConfig                string
+	browserConfig              string
+	desktopConfig              string
+	browserBackendAuth         string
+	desktopBackendAuth         string
+	brokerDirectory            string
+	brokerSocket               string
+	productRuntimeDSN          string
+	providerRuntimeDSN         string
+	bridgeKey                  string
+	admissionKey               string
+	productIdentityKey         string
+	materialSockets            map[string]string
+	credentialSocket           string
+	credentialLedger           string
+	breakGlassControllerSocket string
+	breakGlassLedger           string
+	breakGlassAudit            string
+	breakGlassSockets          map[string]string
 }
 
 type gateEnvironment struct {
-	runID         string
-	root          string
-	paths         gatePaths
-	ports         rolePorts
-	tls           gateTLSMaterial
-	candidate     desktopcandidate.Manifest
-	productDB     *postgresAuthority
-	providerDB    *postgresAuthority
-	admissionKey  ed25519.PrivateKey
-	productToken  ed25519.PrivateKey
-	gatewayImage  string
-	uplinkNetwork string
-	chromiumName  string
-	chromiumURL   string
-	guest         *guestFixture
-	dependencies  []*gateProcess
-	roles         map[string]*gateProcess
-	roleHistory   map[string][]*gateProcess
-	scenarios     map[string]scenarioObservation
-	repository    productphase6evidence.RepositoryBinding
-	stress        productphase6evidence.StressMeasurements
-	desktopMedia  productphase6evidence.DesktopMediaMeasurements
+	runID                   string
+	root                    string
+	paths                   gatePaths
+	ports                   rolePorts
+	tls                     gateTLSMaterial
+	candidate               desktopcandidate.Manifest
+	productDB               *postgresAuthority
+	providerDB              *postgresAuthority
+	admissionKey            ed25519.PrivateKey
+	productToken            ed25519.PrivateKey
+	gatewayImage            string
+	uplinkNetwork           string
+	chromiumName            string
+	chromiumURL             string
+	guest                   *guestFixture
+	dependencies            []*gateProcess
+	materialAgents          map[string]*gateProcess
+	materialAgentHistory    []*gateProcess
+	credentialController    *gateProcess
+	breakGlassController    *gateProcess
+	roles                   map[string]*gateProcess
+	roleHistory             map[string][]*gateProcess
+	scenarios               map[string]scenarioObservation
+	repository              productphase6evidence.RepositoryBinding
+	recordingEvidence       slice5evidence.RecordingTransitEvidence
+	roleMaterialEvidence    slice5evidence.RoleMaterialAndCredentials
+	stress                  productphase6evidence.StressMeasurements
+	desktopMedia            productphase6evidence.DesktopMediaMeasurements
+	materials               map[string][]secretref.SecretMaterial
+	credentialBindings      map[string]secretref.Binding
+	credentialKeys          map[string]ed25519.PrivateKey
+	breakGlassKeys          map[string]ed25519.PrivateKey
+	breakGlassControllerKey ed25519.PrivateKey
+	vaultContainer          string
+	vaultEndpoint           string
+	vaultCA                 []byte
+	vaultRootToken          string
 }
 
 func prepareGateEnvironment(t *testing.T, ctx context.Context) *gateEnvironment { //nolint:maintidx
@@ -124,6 +156,16 @@ func prepareGateEnvironment(t *testing.T, ctx context.Context) *gateEnvironment 
 	if err != nil {
 		t.Fatalf("bind local Desktop candidate to evidence tools %q: %v", candidatePath, err)
 	}
+	recordingEvidence, err := slice5evidence.VerifyRecordingFile(os.Getenv(recordingEvidenceEnv))
+	if err != nil {
+		t.Fatalf("load real recording Transit evidence: %v", err)
+	}
+	if recordingEvidence.RuntimeImplementationRevision != repository.RuntimeImplementationRevision ||
+		recordingEvidence.RuntimeImplementationTreeDigest != repository.RuntimeImplementationTreeDigest ||
+		recordingEvidence.EvidenceToolRevision != repository.EvidenceToolRevision ||
+		recordingEvidence.EvidenceToolTreeDigest != repository.EvidenceToolTreeDigest {
+		t.Fatal("recording Transit evidence does not bind the current immutable runtime/evidence revisions")
+	}
 	runID := fmt.Sprintf("%d-%d", time.Now().UnixNano(), os.Getpid())
 	directory := t.TempDir()
 	brokerDirectory, err := os.MkdirTemp("/tmp", "sr-phase6-mux-")
@@ -135,8 +177,8 @@ func prepareGateEnvironment(t *testing.T, ctx context.Context) *gateEnvironment 
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(brokerDirectory) })
 	environment := &gateEnvironment{
-		runID: runID, root: root, candidate: candidate, repository: repository, roles: make(map[string]*gateProcess), roleHistory: make(map[string][]*gateProcess), scenarios: make(map[string]scenarioObservation),
-		paths: gatePaths{directory: directory, binary: filepath.Join(directory, "sandbox-runtime"), browserBackendBin: filepath.Join(directory, "browser-executor-backend"), desktopBackendBin: filepath.Join(directory, "desktop-executor-backend"), brokerDirectory: brokerDirectory, brokerSocket: filepath.Join(brokerDirectory, "desktop-broker-11111111111111111111111111111111.sock")},
+		runID: runID, root: root, candidate: candidate, repository: repository, recordingEvidence: recordingEvidence, roles: make(map[string]*gateProcess), roleHistory: make(map[string][]*gateProcess), scenarios: make(map[string]scenarioObservation), materialAgents: make(map[string]*gateProcess),
+		paths: gatePaths{directory: directory, binary: filepath.Join(directory, "sandbox-runtime"), browserBackendBin: filepath.Join(directory, "browser-executor-backend"), desktopBackendBin: filepath.Join(directory, "desktop-executor-backend"), materialAgentBin: filepath.Join(directory, "workload-material-agent"), credentialControllerBin: filepath.Join(directory, "workload-credential-controller"), breakGlassControllerBin: filepath.Join(directory, "break-glass-controller"), brokerDirectory: brokerDirectory, brokerSocket: filepath.Join(brokerDirectory, "desktop-broker-11111111111111111111111111111111.sock"), materialSockets: make(map[string]string), breakGlassSockets: make(map[string]string)},
 		ports: rolePorts{product: freePort(t), provider: freePort(t), providerPrivate: freePort(t), providerProbe: freePort(t), gateway: freePort(t), gatewayProbe: freePort(t), guestProbe: freePort(t), browser: freePort(t), browserProbe: freePort(t), browserBackend: freePort(t), desktop: freePort(t), desktopProbe: freePort(t), desktopBackend: freePort(t)},
 	}
 	buildGateBinaries(t, ctx, environment)
@@ -162,19 +204,22 @@ func prepareGateEnvironment(t *testing.T, ctx context.Context) *gateEnvironment 
 	environment.chromiumName, environment.chromiumURL = startChromium(t, ctx, runID)
 	environment.guest = startGuestFixture(t, ctx, environment)
 	writeGateAuthorities(t, environment)
+	prepareGateMaterials(t, environment, productMigrationDSN, providerMigrationDSN)
+	prepareGateVault(t, ctx, environment)
+	prepareGateBreakGlass(t, environment)
 	writeGateConfigs(t, environment, productMigrationDSN, providerMigrationDSN)
 	t.Cleanup(func() { bestEffortPhase6NamespaceCleanup() })
 	return environment
 }
 
 func bestEffortPhase6NamespaceCleanup() {
-	containerOutput, err := exec.Command("docker", "ps", "-aq", "--filter", "label=io.github.shell-echo.sandbox-runtime.namespace=phase6-slice4").Output()
+	containerOutput, err := exec.Command("docker", "ps", "-aq", "--filter", "label=io.github.shell-echo.sandbox-runtime.namespace=phase6-slice5").Output()
 	if err == nil {
 		for _, identifier := range strings.Fields(string(containerOutput)) {
 			_ = exec.Command("docker", "rm", "-f", identifier).Run()
 		}
 	}
-	networkOutput, err := exec.Command("docker", "network", "ls", "-q", "--filter", "label=io.github.shell-echo.sandbox-runtime.namespace=phase6-slice4").Output()
+	networkOutput, err := exec.Command("docker", "network", "ls", "-q", "--filter", "label=io.github.shell-echo.sandbox-runtime.namespace=phase6-slice5").Output()
 	if err == nil {
 		for _, identifier := range strings.Fields(string(networkOutput)) {
 			_ = exec.Command("docker", "network", "rm", identifier).Run()
@@ -188,6 +233,9 @@ func buildGateBinaries(t *testing.T, ctx context.Context, environment *gateEnvir
 		{environment.paths.binary, "."},
 		{environment.paths.browserBackendBin, "./cmd/browser-executor-backend"},
 		{environment.paths.desktopBackendBin, "./cmd/desktop-executor-backend"},
+		{environment.paths.materialAgentBin, "./cmd/workload-material-agent"},
+		{environment.paths.credentialControllerBin, "./cmd/workload-credential-controller"},
+		{environment.paths.breakGlassControllerBin, "./cmd/break-glass-controller"},
 	}
 	for _, build := range builds {
 		command := exec.CommandContext(ctx, "go", "build", "-trimpath", "-o", build.output, build.target)
@@ -239,6 +287,116 @@ func writeProductIdentity(t *testing.T, path string) ed25519.PrivateKey {
 	return privateKey
 }
 
+func prepareGateMaterials(t *testing.T, environment *gateEnvironment, productMigrationDSN, providerMigrationDSN string) {
+	t.Helper()
+	read := func(path string) []byte {
+		document, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return document
+	}
+	ca := read(environment.tls.ca.writeCA("phase6-role-material"))
+	environment.materials = map[string][]secretref.SecretMaterial{
+		"product-migration": {
+			gateMaterial(t, secretref.RoleProduct, "product-migration-dsn", secretref.PurposePostgresMigrationDSN, read(productMigrationDSN)),
+		},
+		"product-runtime": {
+			gateMaterial(t, secretref.RoleProduct, "product-tls-certificate", secretref.PurposeTLSCertificate, read(environment.tls.productCert)),
+			gateMaterial(t, secretref.RoleProduct, "product-tls-private-key", secretref.PurposeTLSPrivateKey, read(environment.tls.productKey)),
+			gateMaterial(t, secretref.RoleProduct, "product-runtime-dsn", secretref.PurposePostgresRuntimeDSN, read(environment.paths.productRuntimeDSN)),
+			gateMaterial(t, secretref.RoleProduct, "product-identity-key-ring", secretref.PurposeIdentityKeyRing, read(environment.paths.productIdentityKey)),
+		},
+		"provider-migration": {
+			gateMaterial(t, secretref.RoleProvider, "provider-migration-dsn", secretref.PurposePostgresMigrationDSN, read(providerMigrationDSN)),
+		},
+		"provider-runtime": {
+			gateMaterial(t, secretref.RoleProvider, "provider-contract-certificate", secretref.PurposeTLSCertificate, read(environment.tls.providerCert)),
+			gateMaterial(t, secretref.RoleProvider, "provider-contract-private-key", secretref.PurposeTLSPrivateKey, read(environment.tls.providerKey)),
+			gateMaterial(t, secretref.RoleProvider, "provider-controller-ca", secretref.PurposeCABundle, read(environment.tls.controllerCA)),
+			gateMaterial(t, secretref.RoleProvider, "provider-private-certificate", secretref.PurposeTLSCertificate, read(environment.tls.providerPrivateCert)),
+			gateMaterial(t, secretref.RoleProvider, "provider-private-key", secretref.PurposeTLSPrivateKey, read(environment.tls.providerPrivateKey)),
+			gateMaterial(t, secretref.RoleProvider, "provider-gateway-ca", secretref.PurposeCABundle, read(environment.tls.gatewayProviderCA)),
+			gateMaterial(t, secretref.RoleProvider, "provider-runtime-dsn", secretref.PurposePostgresRuntimeDSN, read(environment.paths.providerRuntimeDSN)),
+			gateMaterial(t, secretref.RoleProvider, "provider-admission-key", secretref.PurposeAdmissionVerification, read(environment.paths.admissionKey)),
+			gateMaterial(t, secretref.RoleProvider, "provider-executor-ca", secretref.PurposeCABundle, read(environment.tls.providerExecutorCA)),
+			gateMaterial(t, secretref.RoleProvider, "provider-executor-certificate", secretref.PurposeTLSCertificate, read(environment.tls.providerExecutorCert)),
+			gateMaterial(t, secretref.RoleProvider, "provider-executor-private-key", secretref.PurposeExecutorClientKey, read(environment.tls.providerExecutorKey)),
+			gateMaterial(t, secretref.RoleProvider, "provider-executor-bridge-key", secretref.PurposeExecutorBridgeKey, read(environment.paths.bridgeKey)),
+		},
+		"gateway": {
+			gateMaterial(t, secretref.RoleGateway, "gateway-server-certificate", secretref.PurposeTLSCertificate, read(environment.tls.gatewayCert)),
+			gateMaterial(t, secretref.RoleGateway, "gateway-server-private-key", secretref.PurposeTLSPrivateKey, read(environment.tls.gatewayKey)),
+			gateMaterial(t, secretref.RoleGateway, "gateway-product-runtime-dsn", secretref.PurposePostgresRuntimeDSN, read(environment.paths.productRuntimeDSN)),
+			gateMaterial(t, secretref.RoleGateway, "gateway-grant-key", secretref.PurposeGatewayGrantKey, randomBytes(t, 32)),
+			gateMaterial(t, secretref.RoleGateway, "gateway-provider-ca", secretref.PurposeCABundle, read(environment.tls.gatewayProviderCA)),
+			gateMaterial(t, secretref.RoleGateway, "gateway-provider-certificate", secretref.PurposeTLSCertificate, read(environment.tls.gatewayProviderCert)),
+			gateMaterial(t, secretref.RoleGateway, "gateway-provider-private-key", secretref.PurposeTLSPrivateKey, read(environment.tls.gatewayProviderKey)),
+		},
+		"guest": {
+			gateMaterial(t, secretref.RoleGuest, "guest-server-ca", secretref.PurposeCABundle, ca),
+			gateMaterial(t, secretref.RoleGuest, "guest-client-certificate", secretref.PurposeTLSCertificate, read(environment.tls.guestClientCert)),
+			gateMaterial(t, secretref.RoleGuest, "guest-client-private-key", secretref.PurposeTLSPrivateKey, read(environment.tls.guestClientKey)),
+			gateMaterial(t, secretref.RoleGuest, "guest-signing-key", secretref.PurposeGuestSigningKey, environment.guest.privateKey),
+		},
+		"browser": executorGateMaterials(t, secretref.RoleBrowser, "browser", ca, read(environment.tls.browserRoleCert), read(environment.tls.browserRoleKey), read(environment.tls.browserRoleClientCert), read(environment.tls.browserRoleClientKey)),
+		"desktop": executorGateMaterials(t, secretref.RoleDesktop, "desktop", ca, read(environment.tls.desktopRoleCert), read(environment.tls.desktopRoleKey), read(environment.tls.desktopRoleClientCert), read(environment.tls.desktopRoleClientKey)),
+	}
+	for name := range environment.materials {
+		directory, err := os.MkdirTemp("/tmp", "sr-p6-"+strings.ReplaceAll(name, "-", "")+"-")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chmod(directory, 0o700); err != nil || os.Chown(directory, os.Getuid(), os.Getgid()) != nil {
+			t.Fatal("prepare role material socket directory")
+		}
+		t.Cleanup(func() { _ = os.RemoveAll(directory) })
+		environment.paths.materialSockets[name] = filepath.Join(directory, "agent.sock")
+	}
+}
+
+func executorGateMaterials(t *testing.T, role secretref.Role, prefix string, ca, serverCertificate, serverKey, clientCertificate, clientKey []byte) []secretref.SecretMaterial {
+	return []secretref.SecretMaterial{
+		gateMaterial(t, role, prefix+"-server-certificate", secretref.PurposeTLSCertificate, serverCertificate),
+		gateMaterial(t, role, prefix+"-server-private-key", secretref.PurposeTLSPrivateKey, serverKey),
+		gateMaterial(t, role, prefix+"-ca", secretref.PurposeCABundle, ca),
+		gateMaterial(t, role, prefix+"-client-certificate", secretref.PurposeTLSCertificate, clientCertificate),
+		gateMaterial(t, role, prefix+"-client-private-key", secretref.PurposeTLSPrivateKey, clientKey),
+	}
+}
+
+func gateMaterial(t *testing.T, role secretref.Role, id string, purpose secretref.Purpose, value []byte) secretref.SecretMaterial {
+	t.Helper()
+	binding := secretref.Binding{Schema: secretref.BindingSchema, Kind: secretref.KindSecret,
+		Reference: secretref.Reference("secret://phase6/kv/" + id), Version: "v1", Purpose: purpose,
+		TenantID: secretref.SystemTenant, Role: role}
+	if err := binding.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	digest := sha256.Sum256(value)
+	now := time.Now().UTC()
+	return secretref.SecretMaterial{Binding: binding, Bytes: append([]byte(nil), value...), Digest: "sha256:" + hex.EncodeToString(digest[:]), Revision: "revision-1", Window: secretref.RotationWindow{NotBefore: now.Add(-time.Minute), NotAfter: now.Add(30 * time.Minute), State: secretref.KeyActive}}
+}
+
+func gateMaterialBindingsTOML(t *testing.T, section, provider string, materials []secretref.SecretMaterial) string {
+	t.Helper()
+	var builder strings.Builder
+	for _, material := range materials {
+		id := strings.TrimPrefix(material.Binding.Reference.String(), "secret://phase6/kv/")
+		document, err := json.Marshal(material.Binding)
+		if err != nil {
+			t.Fatal(err)
+		}
+		builder.WriteString("[[" + section + ".materials.bindings]]\n")
+		encodedID, _ := json.Marshal(id)
+		encodedProvider, _ := json.Marshal(provider)
+		builder.WriteString("id = " + string(encodedID) + "\nprovider = " + string(encodedProvider) + "\ndocument = '")
+		builder.Write(document)
+		builder.WriteString("'\n\n")
+	}
+	return builder.String()
+}
+
 func buildGatewayImage(t *testing.T, ctx context.Context, root, runID string) string {
 	t.Helper()
 	tag := "sandbox-runtime-phase6-gateway:" + strings.ReplaceAll(runID, ".", "-")
@@ -259,7 +417,7 @@ func createUplinkNetwork(t *testing.T, ctx context.Context, runID string) string
 	t.Helper()
 	runDigest := strings.TrimPrefix(sha256Digest([]byte(runID)), "sha256:")
 	name := "sr-phase6-uplink-" + runDigest[:12]
-	output, err := exec.CommandContext(ctx, "docker", "network", "create", "--driver", "bridge", "--label", "io.github.shell-echo.sandbox-runtime.managed=true", "--label", "io.github.shell-echo.sandbox-runtime.owner="+docker.UplinkRole, "--label", "io.github.shell-echo.sandbox-runtime.namespace=phase6-slice4", name).CombinedOutput()
+	output, err := exec.CommandContext(ctx, "docker", "network", "create", "--driver", "bridge", "--label", "io.github.shell-echo.sandbox-runtime.managed=true", "--label", "io.github.shell-echo.sandbox-runtime.owner="+docker.UplinkRole, "--label", "io.github.shell-echo.sandbox-runtime.namespace=phase6-slice5", name).CombinedOutput()
 	if err != nil {
 		t.Fatalf("create Desktop uplink: %v: %s", err, output)
 	}
@@ -318,26 +476,21 @@ func writeGateAuthorities(t *testing.T, environment *gateEnvironment) { //nolint
 	t.Helper()
 	directory := environment.paths.directory
 	authorityPath := func(role, kind string) string { return filepath.Join(directory, role+"-"+kind+".json") }
-	grantKey := filepath.Join(directory, "gateway-grant.key")
-	writePrivate(t, grantKey, randomBytes(t, 32))
 
-	gatewayCredential := roleprocess.GatewayCredentialAuthority{Version: 2, Role: "gateway", ProductRuntimeDSNFile: environment.paths.productRuntimeDSN, GrantKeyID: "phase6-gateway-grant-1", GrantKeyFile: grantKey, ProviderOrigin: fmt.Sprintf("wss://127.0.0.1:%d/desktop", environment.ports.providerPrivate), ProviderCABundleFile: environment.tls.gatewayProviderCA, ProviderClientCertificateFile: environment.tls.gatewayProviderCert, ProviderClientPrivateKeyFile: environment.tls.gatewayProviderKey}
+	gatewayCredential := roleprocess.GatewayCredentialAuthority{Version: 3, Role: "gateway", ProductRuntimeDSNBindingID: "gateway-product-runtime-dsn", GrantKeyID: "phase6-gateway-grant-1", GrantKeyBindingID: "gateway-grant-key", ProviderOrigin: fmt.Sprintf("wss://127.0.0.1:%d/desktop", environment.ports.providerPrivate), ProviderCABundleBindingID: "gateway-provider-ca", ProviderClientCertificateBindingID: "gateway-provider-certificate", ProviderClientPrivateKeyBindingID: "gateway-provider-private-key"}
 	gatewayDependency := roleprocess.GatewayDependencyAuthority{Version: 2, Role: "gateway", OperationTimeoutMillis: 5000, MaxConnections: 8, MaxConnectionsPerSession: 2, OriginPatterns: []string{"https://product.phase6.test"}}
 	gatewayPolicy := roleprocess.GatewayPolicyAuthority{Version: 2, Role: "gateway", Terminal: "enabled", BrowserAutomation: "authority_unavailable", BrowserLive: "authority_unavailable", DesktopLive: "authority_unavailable", DeferredAuthorityReason: "phase6-slice5-6-authority-required"}
 	writePrivateJSON(t, authorityPath("gateway", "credential"), gatewayCredential)
 	writePrivateJSON(t, authorityPath("gateway", "dependency"), gatewayDependency)
 	writePrivateJSON(t, authorityPath("gateway", "policy"), gatewayPolicy)
 
-	guestPrivateKey := environment.guest.privateKey
-	guestKeyPath := filepath.Join(directory, "guest-signing.key")
-	writePrivate(t, guestKeyPath, guestPrivateKey)
 	workspaceRoot, stateRoot := filepath.Join(directory, "guest-workspace"), filepath.Join(directory, "guest-state")
 	for _, path := range []string{workspaceRoot, stateRoot} {
 		if err := os.Mkdir(path, 0o700); err != nil {
 			t.Fatal(err)
 		}
 	}
-	writePrivateJSON(t, authorityPath("guest", "credential"), roleprocess.GuestCredentialAuthority{Version: 1, Role: "guest", GuestID: environment.guest.guestID, BindingGeneration: 1, PrivateKeyFile: guestKeyPath})
+	writePrivateJSON(t, authorityPath("guest", "credential"), roleprocess.GuestCredentialAuthority{Version: 2, Role: "guest", GuestID: environment.guest.guestID, BindingGeneration: 1, PrivateKeyBindingID: "guest-signing-key"})
 	writePrivateJSON(t, authorityPath("guest", "dependency"), roleprocess.GuestDependencyAuthority{Version: 1, Role: "guest", WorkspaceRoot: workspaceRoot, StateRoot: stateRoot, Mounts: environment.guest.mounts(), Toolchains: environment.guest.toolchains()})
 	writePrivateJSON(t, authorityPath("guest", "policy"), roleprocess.GuestPolicyAuthority{Version: 1, Role: "guest", ReconnectBackoffMillis: 100})
 
@@ -362,7 +515,7 @@ func writeGateAuthorities(t *testing.T, environment *gateEnvironment) { //nolint
 
 func writeGateConfigs(t *testing.T, environment *gateEnvironment, productMigrationDSN, providerMigrationDSN string) { //nolint:maintidx
 	t.Helper()
-	directory, ports, material := environment.paths.directory, environment.ports, environment.tls
+	directory, ports := environment.paths.directory, environment.ports
 	authorityPath := func(role, kind string) string { return filepath.Join(directory, role+"-"+kind+".json") }
 	write := func(name, document string) string {
 		path := filepath.Join(directory, name+".toml")
@@ -374,63 +527,99 @@ mode = "production"
 [logger]
 level = "error"
 [product_process]
+schema_version = %q
 enabled = true
 deployment_level = "production"
 [product_process.api]
 host = "127.0.0.1"
 port = %d
 [product_process.tls]
-certificate_file = %q
-private_key_file = %q
+certificate_binding_id = "product-tls-certificate"
+private_key_binding_id = "product-tls-private-key"
+expected_server_name = "product.phase6.test"
 [product_process.postgres]
-migration_dsn_file = %q
-runtime_dsn_file = %q
-migration_role = "product_migrator"
+runtime_dsn_binding_id = "product-runtime-dsn"
 runtime_role = "product_runtime"
 startup_timeout_seconds = 10
 operation_timeout_seconds = 2
-migration_max_connections = 1
 max_connections = 4
 min_connections = 1
 [product_process.identity]
 issuer = "https://identity.product.phase6.test"
 audience = "https://api.product.phase6.test"
-key_ring_file = %q
+key_ring_binding_id = "product-identity-key-ring"
 clock_skew_seconds = 30
 max_token_lifetime_seconds = 900
-`, ports.product, material.productCert, material.productKey, productMigrationDSN, environment.paths.productRuntimeDSN, environment.paths.productIdentityKey))
+[product_process.materials.provider]
+type = %q
+alias = "product-runtime-agent"
+socket_path = %q
+expected_uid = %d
+expected_gid = %d
+operation_timeout_seconds = 2
+cache_seconds = 1
 
-	environment.paths.providerConfig = write("provider", providerConfigDocument(environment, providerMigrationDSN))
-	environment.paths.gatewayConfig = write("gateway", gatewayConfigDocument(environment, authorityPath))
-	environment.paths.guestConfig = write("guest", guestConfigDocument(environment, authorityPath))
-	environment.paths.browserConfig = write("browser", executorRoleConfigDocument(environment, "browser", ports.browser, ports.browserProbe, material.browserRoleCert, material.browserRoleKey, material.browserRoleClientCert, material.browserRoleClientKey, "spiffe://phase6.example.test/provider-executor", authorityPath))
-	environment.paths.desktopConfig = write("desktop", executorRoleConfigDocument(environment, "desktop", ports.desktop, ports.desktopProbe, material.desktopRoleCert, material.desktopRoleKey, material.desktopRoleClientCert, material.desktopRoleClientKey, "spiffe://phase6.example.test/provider-executor", authorityPath))
+%s`, config.ProductProductionSchemaV2, ports.product, config.UnixWorkloadMaterialProviderV1, environment.paths.materialSockets["product-runtime"], os.Getuid(), os.Getgid(), gateMaterialBindingsTOML(t, "product_process", "product-runtime-agent", environment.materials["product-runtime"])))
+
+	environment.paths.productMigrationConfig = write("product-migration", fmt.Sprintf(`[application]
+mode = "production"
+[logger]
+level = "error"
+[product_migration]
+schema_version = %q
+enabled = true
+[product_migration.postgres]
+dsn_binding_id = "product-migration-dsn"
+role = "product_migrator"
+startup_timeout_seconds = 10
+max_connections = 1
+[product_migration.materials.provider]
+type = %q
+alias = "product-migration-agent"
+socket_path = %q
+expected_uid = %d
+expected_gid = %d
+operation_timeout_seconds = 2
+cache_seconds = 0
+
+%s`, config.ProductMigrationSchemaV1, config.UnixWorkloadMaterialProviderV1, environment.paths.materialSockets["product-migration"], os.Getuid(), os.Getgid(), gateMaterialBindingsTOML(t, "product_migration", "product-migration-agent", environment.materials["product-migration"])))
+
+	environment.paths.providerConfig = write("provider", providerConfigDocument(t, environment))
+	environment.paths.providerMigrationConfig = write("provider-migration", providerMigrationConfigDocument(t, environment))
+	environment.paths.gatewayConfig = write("gateway", gatewayConfigDocument(t, environment, authorityPath))
+	environment.paths.guestConfig = write("guest", guestConfigDocument(t, environment, authorityPath))
+	environment.paths.browserConfig = write("browser", executorRoleConfigDocument(t, environment, "browser", ports.browser, ports.browserProbe, "browser-role.phase6.test", "spiffe://phase6.example.test/provider-executor", authorityPath))
+	environment.paths.desktopConfig = write("desktop", executorRoleConfigDocument(t, environment, "desktop", ports.desktop, ports.desktopProbe, "desktop-role.phase6.test", "spiffe://phase6.example.test/provider-executor", authorityPath))
 }
 
-func providerConfigDocument(environment *gateEnvironment, providerMigrationDSN string) string { //nolint:maintidx
+func providerConfigDocument(t *testing.T, environment *gateEnvironment) string { //nolint:maintidx
+	t.Helper()
 	architecture := runtime.GOARCH
 	return fmt.Sprintf(`[application]
 mode = "production"
 [logger]
 level = "error"
 [provider_process]
+schema_version = %q
 enabled = true
 deployment_level = "local_candidate"
 profile = "desktop"
 [provider_process.transport]
 enabled = true
-server_certificate_file = %q
-server_private_key_file = %q
-client_ca_bundle_file = %q
+server_certificate_binding_id = "provider-contract-certificate"
+server_private_key_binding_id = "provider-contract-private-key"
+client_ca_bundle_binding_id = "provider-controller-ca"
+expected_server_name = "provider.phase6.test"
 allowed_client_uri_identities = [%q]
 [provider_process.transport.address]
 host = "127.0.0.1"
 port = %d
 [provider_process.transport.private]
 enabled = true
-server_certificate_file = %q
-server_private_key_file = %q
-client_ca_bundle_file = %q
+server_certificate_binding_id = "provider-private-certificate"
+server_private_key_binding_id = "provider-private-key"
+client_ca_bundle_binding_id = "provider-gateway-ca"
+expected_server_name = "provider-private.phase6.test"
 allowed_client_uri_identities = ["spiffe://phase6.example.test/gateway"]
 route_policy = ["desktop"]
 read_header_timeout_millis = 5000
@@ -465,15 +654,12 @@ provider_instance_audience = %q
 [[provider_process.protected_admission.trusted_verification_keys]]
 id = %q
 algorithm = "EdDSA"
-public_key_file = %q
+public_key_binding_id = "provider-admission-key"
 [provider_process.postgres]
-migration_dsn_file = %q
-runtime_dsn_file = %q
-migration_role = "provider_migrator"
+runtime_dsn_binding_id = "provider-runtime-dsn"
 runtime_role = "provider_runtime"
 startup_timeout_seconds = 10
 operation_timeout_seconds = 2
-migration_max_connections = 1
 max_connections = 8
 min_connections = 1
 [provider_process.reconciliation]
@@ -483,12 +669,12 @@ timeout_seconds = 2
 architecture = %q
 executor_url = "wss://127.0.0.1:%d/executor"
 broker_mux_socket_path = %q
-executor_ca_bundle_file = %q
-executor_certificate_file = %q
-executor_private_key_file = %q
+executor_ca_bundle_binding_id = "provider-executor-ca"
+executor_certificate_binding_id = "provider-executor-certificate"
+executor_private_key_binding_id = "provider-executor-private-key"
 executor_identity = "executor-desktop-1"
 executor_bridge_key_id = "provider-desktop-v2"
-executor_bridge_private_key_file = %q
+executor_bridge_private_key_binding_id = "provider-executor-bridge-key"
 local_candidate_manifest_file = %q
 usage_retention_seconds = 3600
 shutdown_cleanup_seconds = 15
@@ -508,7 +694,7 @@ pull_timeout_seconds = 30
 stop_timeout_seconds = 10
 data_root = %q
 local_candidate_image_manifest_path = %q
-namespace = "phase6-slice4"
+namespace = "phase6-slice5"
 controller_id = "phase6-controller-1"
 network_policy_reference = "desktop-egress-policy-1"
 max_sessions_per_sandbox = 1
@@ -516,7 +702,7 @@ max_sessions_per_controller = 4
 [provider_process.desktop.restricted_network]
 gateway_image = %q
 uplink_network = %q
-namespace = "phase6-slice4"
+namespace = "phase6-slice5"
 controller_id = "phase6-controller-1"
 memory_bytes = 134217728
 nano_cpus = 500000000
@@ -526,21 +712,59 @@ stop_timeout_seconds = 10
 [[provider_process.desktop.restricted_network.policies]]
 reference = "desktop-egress-policy-1"
 allowed_hosts = ["packages.example.test"]
-`, environment.tls.providerCert, environment.tls.providerKey, environment.tls.controllerCA, providerCaller, environment.ports.provider,
-		environment.tls.providerPrivateCert, environment.tls.providerPrivateKey, environment.tls.gatewayProviderCA, environment.ports.providerPrivate, environment.ports.providerProbe,
-		providerRevision, providerIssuer, providerAudience, providerKeyID, environment.paths.admissionKey,
-		providerMigrationDSN, environment.paths.providerRuntimeDSN, architecture, environment.ports.desktop, environment.paths.brokerSocket,
-		environment.tls.providerExecutorCA, environment.tls.providerExecutorCert, environment.tls.providerExecutorKey, environment.paths.bridgeKey,
+
+[provider_process.materials.provider]
+type = %q
+alias = "provider-runtime-agent"
+socket_path = %q
+expected_uid = %d
+expected_gid = %d
+operation_timeout_seconds = 2
+cache_seconds = 1
+
+%s`, config.ProviderProductionSchemaV2, providerCaller, environment.ports.provider,
+		environment.ports.providerPrivate, environment.ports.providerProbe,
+		providerRevision, providerIssuer, providerAudience, providerKeyID,
+		architecture, environment.ports.desktop, environment.paths.brokerSocket,
 		os.Getenv(candidateEnv), environment.candidate.ImageDigest, filepath.Join(environment.paths.directory, "desktop-runtime"), filepath.Join(environment.root, "profiles/desktop/image", desktopimage.LocalCandidateManifestPath),
-		environment.gatewayImage, environment.uplinkNetwork)
+		environment.gatewayImage, environment.uplinkNetwork,
+		config.UnixWorkloadMaterialProviderV1, environment.paths.materialSockets["provider-runtime"], os.Getuid(), os.Getgid(), gateMaterialBindingsTOML(t, "provider_process", "provider-runtime-agent", environment.materials["provider-runtime"]))
 }
 
-func gatewayConfigDocument(environment *gateEnvironment, authorityPath func(string, string) string) string {
+func providerMigrationConfigDocument(t *testing.T, environment *gateEnvironment) string {
+	t.Helper()
+	return fmt.Sprintf(`[application]
+mode = "production"
+[logger]
+level = "error"
+[provider_migration]
+schema_version = %q
+enabled = true
+[provider_migration.postgres]
+dsn_binding_id = "provider-migration-dsn"
+role = "provider_migrator"
+startup_timeout_seconds = 10
+max_connections = 1
+[provider_migration.materials.provider]
+type = %q
+alias = "provider-migration-agent"
+socket_path = %q
+expected_uid = %d
+expected_gid = %d
+operation_timeout_seconds = 2
+cache_seconds = 0
+
+%s`, config.ProviderMigrationSchemaV1, config.UnixWorkloadMaterialProviderV1, environment.paths.materialSockets["provider-migration"], os.Getuid(), os.Getgid(), gateMaterialBindingsTOML(t, "provider_migration", "provider-migration-agent", environment.materials["provider-migration"]))
+}
+
+func gatewayConfigDocument(t *testing.T, environment *gateEnvironment, authorityPath func(string, string) string) string {
+	t.Helper()
 	return fmt.Sprintf(`[application]
 mode = "production"
 [logger]
 level = "error"
 [gateway_process]
+schema_version = %q
 enabled = true
 deployment_level = "production"
 [gateway_process.public]
@@ -550,8 +774,9 @@ port = %d
 host = "127.0.0.1"
 port = %d
 [gateway_process.tls]
-certificate_file = %q
-private_key_file = %q
+certificate_binding_id = "gateway-server-certificate"
+private_key_binding_id = "gateway-server-private-key"
+expected_server_name = "gateway.phase6.test"
 [gateway_process.authority]
 credential_file = %q
 dependency_file = %q
@@ -561,16 +786,29 @@ recording_key_reference = "kms://phase6/gateway-recording"
 grace_seconds = 5
 reconnect_seconds = 5
 dependency_timeout_seconds = 3
-`, environment.ports.gateway, environment.ports.gatewayProbe, environment.tls.gatewayCert, environment.tls.gatewayKey,
-		authorityPath("gateway", "credential"), authorityPath("gateway", "dependency"), authorityPath("gateway", "policy"))
+
+[gateway_process.materials.provider]
+type = %q
+alias = "gateway-agent"
+socket_path = %q
+expected_uid = %d
+expected_gid = %d
+operation_timeout_seconds = 2
+cache_seconds = 1
+
+%s`, config.DataPlaneProductionSchemaV2, environment.ports.gateway, environment.ports.gatewayProbe,
+		authorityPath("gateway", "credential"), authorityPath("gateway", "dependency"), authorityPath("gateway", "policy"),
+		config.UnixWorkloadMaterialProviderV1, environment.paths.materialSockets["gateway"], os.Getuid(), os.Getgid(), gateMaterialBindingsTOML(t, "gateway_process", "gateway-agent", environment.materials["gateway"]))
 }
 
-func guestConfigDocument(environment *gateEnvironment, authorityPath func(string, string) string) string {
+func guestConfigDocument(t *testing.T, environment *gateEnvironment, authorityPath func(string, string) string) string {
+	t.Helper()
 	return fmt.Sprintf(`[application]
 mode = "production"
 [logger]
 level = "error"
 [guest_process]
+schema_version = %q
 enabled = true
 deployment_level = "production"
 outbound_url = %q
@@ -578,9 +816,10 @@ outbound_url = %q
 host = "127.0.0.1"
 port = %d
 [guest_process.tls]
-client_ca_bundle_file = %q
-client_certificate_file = %q
-client_private_key_file = %q
+client_ca_bundle_binding_id = "guest-server-ca"
+client_certificate_binding_id = "guest-client-certificate"
+client_private_key_binding_id = "guest-client-private-key"
+expected_server_name = "guest-agent.phase6.test"
 [guest_process.authority]
 credential_file = %q
 dependency_file = %q
@@ -590,16 +829,29 @@ recording_key_reference = "kms://phase6/guest-recording"
 grace_seconds = 5
 reconnect_seconds = 5
 dependency_timeout_seconds = 3
-`, environment.guest.url(), environment.ports.guestProbe, environment.tls.ca.writeCA("guest-client"), environment.tls.guestClientCert, environment.tls.guestClientKey,
-		authorityPath("guest", "credential"), authorityPath("guest", "dependency"), authorityPath("guest", "policy"))
+
+[guest_process.materials.provider]
+type = %q
+alias = "guest-agent"
+socket_path = %q
+expected_uid = %d
+expected_gid = %d
+operation_timeout_seconds = 2
+cache_seconds = 1
+
+%s`, config.DataPlaneProductionSchemaV2, environment.guest.url(), environment.ports.guestProbe,
+		authorityPath("guest", "credential"), authorityPath("guest", "dependency"), authorityPath("guest", "policy"),
+		config.UnixWorkloadMaterialProviderV1, environment.paths.materialSockets["guest"], os.Getuid(), os.Getgid(), gateMaterialBindingsTOML(t, "guest_process", "guest-agent", environment.materials["guest"]))
 }
 
-func executorRoleConfigDocument(environment *gateEnvironment, role string, listenerPort, probePort int, certificate, privateKey, clientCertificate, clientKey, allowedIdentity string, authorityPath func(string, string) string) string {
+func executorRoleConfigDocument(t *testing.T, environment *gateEnvironment, role string, listenerPort, probePort int, expectedServerName, allowedIdentity string, authorityPath func(string, string) string) string {
+	t.Helper()
 	return fmt.Sprintf(`[application]
 mode = "production"
 [logger]
 level = "error"
 [%s_process]
+schema_version = %q
 enabled = true
 deployment_level = "production"
 [%s_process.public]
@@ -612,11 +864,12 @@ port = %d
 host = "127.0.0.1"
 port = %d
 [%s_process.tls]
-certificate_file = %q
-private_key_file = %q
-client_ca_bundle_file = %q
-client_certificate_file = %q
-client_private_key_file = %q
+certificate_binding_id = %q
+private_key_binding_id = %q
+client_ca_bundle_binding_id = %q
+client_certificate_binding_id = %q
+client_private_key_binding_id = %q
+expected_server_name = %q
 allowed_client_identities = [%q]
 [%s_process.authority]
 credential_file = %q
@@ -627,8 +880,20 @@ recording_key_reference = "kms://phase6/%s-recording"
 grace_seconds = 5
 reconnect_seconds = 5
 dependency_timeout_seconds = 3
-`, role, role, listenerPort, role, listenerPort, role, probePort, role, certificate, privateKey, environment.tls.ca.writeCA(role+"-role"), clientCertificate, clientKey, allowedIdentity,
-		role, authorityPath(role, "credential"), authorityPath(role, "dependency"), authorityPath(role, "policy"), role, role)
+
+[%s_process.materials.provider]
+type = %q
+alias = %q
+socket_path = %q
+expected_uid = %d
+expected_gid = %d
+operation_timeout_seconds = 2
+cache_seconds = 1
+
+%s`, role, config.DataPlaneProductionSchemaV2, role, listenerPort, role, listenerPort, role, probePort, role,
+		role+"-server-certificate", role+"-server-private-key", role+"-ca", role+"-client-certificate", role+"-client-private-key", expectedServerName, allowedIdentity,
+		role, authorityPath(role, "credential"), authorityPath(role, "dependency"), authorityPath(role, "policy"), role, role,
+		role, config.UnixWorkloadMaterialProviderV1, role+"-agent", environment.paths.materialSockets[role], os.Getuid(), os.Getgid(), gateMaterialBindingsTOML(t, role+"_process", role+"-agent", environment.materials[role]))
 }
 
 func randomBytes(t *testing.T, count int) []byte {

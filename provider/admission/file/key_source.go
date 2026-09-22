@@ -23,6 +23,12 @@ type TrustedKeyFile struct {
 	Path      string
 }
 
+type TrustedKeyMaterial struct {
+	ID        admission.KeyID
+	Algorithm admission.Algorithm
+	PEM       []byte
+}
+
 // LoadTrustedKeySource reads a bounded, exact set of SPKI PEM public keys and
 // freezes them in the application-owned key source. It has no network fallback
 // or runtime refresh path. Configuration and listener composition remain
@@ -52,6 +58,30 @@ func LoadTrustedKeySource(files []TrustedKeyFile) (admission.TrustedKeySource, e
 		})
 	}
 
+	source, err := admission.NewStaticTrustedKeySource(keys)
+	if err != nil {
+		return nil, fmt.Errorf("construct trusted verification key source: %w", err)
+	}
+	return source, nil
+}
+
+// LoadTrustedKeySourceMaterial freezes already-resolved, role-scoped public
+// verification material. The caller owns and clears each PEM byte slice.
+func LoadTrustedKeySourceMaterial(materials []TrustedKeyMaterial) (admission.TrustedKeySource, error) {
+	if len(materials) == 0 || len(materials) > admission.MaxStaticTrustedKeys {
+		return nil, errors.New("trusted verification key material count is outside the allowed range")
+	}
+	keys := make([]admission.StaticTrustedKey, 0, len(materials))
+	for index, material := range materials {
+		if len(material.PEM) == 0 || len(material.PEM) > maxTrustedPublicKeyFileBytes {
+			return nil, fmt.Errorf("trusted verification key material %d size is invalid", index)
+		}
+		publicKey, err := parseTrustedPublicKeyPEM(material.PEM)
+		if err != nil {
+			return nil, fmt.Errorf("parse trusted verification key material %d: %w", index, err)
+		}
+		keys = append(keys, admission.StaticTrustedKey{ID: material.ID, Algorithm: material.Algorithm, PublicKey: publicKey})
+	}
 	source, err := admission.NewStaticTrustedKeySource(keys)
 	if err != nil {
 		return nil, fmt.Errorf("construct trusted verification key source: %w", err)

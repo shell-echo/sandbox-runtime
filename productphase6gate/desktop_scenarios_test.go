@@ -131,8 +131,8 @@ func createDesktopSandbox(t *testing.T, client *protectedClient, environment *ga
 		"idempotency_key": "phase6-create-desktop-1", "deadline_at": deadline.Format(time.RFC3339Nano), "protocol_version": "v1",
 		"spec": map[string]any{
 			"sandbox_id": gateSandboxID, "tenant_id": gateTenantID, "work_order_id": gateWorkOrderID,
-			"workspace_id": "workspace-phase6-slice4", "branch_id": "branch-phase6-slice4",
-			"provider_resolution_id": "provider-resolution-phase6-slice4", "provider_revision_id": providerRevision,
+			"workspace_id": "workspace-phase6-slice5", "branch_id": "branch-phase6-slice5",
+			"provider_resolution_id": "provider-resolution-phase6-slice5", "provider_revision_id": providerRevision,
 			"image":                 map[string]any{"reference": "local.phase6.invalid/desktop", "digest": environment.candidate.ImageDigest, "architecture": architecture},
 			"runtime_profile":       "sandbox-runtime-desktop-v1",
 			"resources":             map[string]any{"cpu_millis": int64(1000), "memory_bytes": int64(1 << 30), "ephemeral_storage_bytes": int64(1 << 30), "workspace_bytes": int64(256 << 20), "pids_limit": int64(256)},
@@ -262,7 +262,7 @@ func openDesktopMedia(t *testing.T, ctx context.Context, environment *gateEnviro
 }
 
 func desktopGateDiagnostics(environment *gateEnvironment) string {
-	containers, _ := exec.Command("docker", "ps", "--filter", "label=io.github.shell-echo.sandbox-runtime.namespace=phase6-slice4", "--format", "{{.ID}} {{.Names}} {{.Status}}").Output()
+	containers, _ := exec.Command("docker", "ps", "--filter", "label=io.github.shell-echo.sandbox-runtime.namespace=phase6-slice5", "--format", "{{.ID}} {{.Names}} {{.Status}}").Output()
 	logs := make([]string, 0)
 	for _, line := range strings.Split(strings.TrimSpace(string(containers)), "\n") {
 		fields := strings.Fields(line)
@@ -509,12 +509,12 @@ func waitForDesktopResources(t *testing.T, environment *gateEnvironment, wanted 
 }
 
 func managedResourceCount(environment *gateEnvironment) (int, error) {
-	containerOutput, err := exec.Command("docker", "ps", "-aq", "--filter", "label=io.github.shell-echo.sandbox-runtime.namespace=phase6-slice4").Output()
+	containerOutput, err := exec.Command("docker", "ps", "-aq", "--filter", "label=io.github.shell-echo.sandbox-runtime.namespace=phase6-slice5").Output()
 	if err != nil {
 		return 0, err
 	}
 	count := len(strings.Fields(string(containerOutput)))
-	networkOutput, err := exec.Command("docker", "network", "ls", "-q", "--filter", "label=io.github.shell-echo.sandbox-runtime.namespace=phase6-slice4").Output()
+	networkOutput, err := exec.Command("docker", "network", "ls", "-q", "--filter", "label=io.github.shell-echo.sandbox-runtime.namespace=phase6-slice5").Output()
 	if err != nil {
 		return 0, err
 	}

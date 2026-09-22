@@ -219,6 +219,10 @@ type ProviderTransportConfig struct {
 	ServerCertificateFile      string      `mapstructure:"server_certificate_file"`
 	ServerPrivateKeyFile       string      `mapstructure:"server_private_key_file"`
 	ClientCABundleFile         string      `mapstructure:"client_ca_bundle_file"`
+	ServerCertificateBindingID string      `mapstructure:"server_certificate_binding_id"`
+	ServerPrivateKeyBindingID  string      `mapstructure:"server_private_key_binding_id"`
+	ClientCABundleBindingID    string      `mapstructure:"client_ca_bundle_binding_id"`
+	ExpectedServerName         string      `mapstructure:"expected_server_name"`
 	AllowedClientURIIdentities []string    `mapstructure:"allowed_client_uri_identities"`
 	// Private is a separate mTLS listener for role adapters. It is never
 	// mounted on the locked Provider Contract listener above.
@@ -234,6 +238,10 @@ type ProviderPrivateTransportConfig struct {
 	ServerCertificateFile      string      `mapstructure:"server_certificate_file"`
 	ServerPrivateKeyFile       string      `mapstructure:"server_private_key_file"`
 	ClientCABundleFile         string      `mapstructure:"client_ca_bundle_file"`
+	ServerCertificateBindingID string      `mapstructure:"server_certificate_binding_id"`
+	ServerPrivateKeyBindingID  string      `mapstructure:"server_private_key_binding_id"`
+	ClientCABundleBindingID    string      `mapstructure:"client_ca_bundle_binding_id"`
+	ExpectedServerName         string      `mapstructure:"expected_server_name"`
 	AllowedClientURIIdentities []string    `mapstructure:"allowed_client_uri_identities"`
 	RoutePolicy                []string    `mapstructure:"route_policy"`
 	ReadHeaderTimeoutMillis    int         `mapstructure:"read_header_timeout_millis"`
@@ -295,9 +303,10 @@ type ProviderProtectedAdmissionConfig struct {
 // ProviderTrustedVerificationKeyConfig identifies one operator-managed SPKI
 // public-key file. It never accepts or configures private key material.
 type ProviderTrustedVerificationKeyConfig struct {
-	ID            string `mapstructure:"id"`
-	Algorithm     string `mapstructure:"algorithm"`
-	PublicKeyFile string `mapstructure:"public_key_file"`
+	ID                 string `mapstructure:"id"`
+	Algorithm          string `mapstructure:"algorithm"`
+	PublicKeyFile      string `mapstructure:"public_key_file"`
+	PublicKeyBindingID string `mapstructure:"public_key_binding_id"`
 }
 
 // ProviderLimitsConfig declares hard limits for the Provider revision.
@@ -826,6 +835,31 @@ func (c *ProviderTransportConfig) validateEnabled() error {
 	return nil
 }
 
+func (c *ProviderTransportConfig) validateMaterialEnabled() error {
+	if strings.TrimSpace(c.Address.Host) == "" {
+		return errors.New("address host must not be empty")
+	}
+	if err := c.Address.Validate(); err != nil {
+		return fmt.Errorf("address %w", err)
+	}
+	if c.ServerCertificateFile != "" || c.ServerPrivateKeyFile != "" || c.ClientCABundleFile != "" ||
+		c.ServerCertificateBindingID == "" || c.ServerPrivateKeyBindingID == "" || c.ClientCABundleBindingID == "" || c.ExpectedServerName == "" {
+		return errors.New("material-backed transport requires binding IDs and forbids raw TLS paths")
+	}
+	if err := provideridentity.ValidateAllowlist(c.AllowedClientURIIdentities); err != nil {
+		return err
+	}
+	if c.Private.Enabled {
+		if err := c.Private.validateMaterial(); err != nil {
+			return fmt.Errorf("private %w", err)
+		}
+		if c.Private.Address.Port == c.Address.Port {
+			return errors.New("private address must use a distinct port")
+		}
+	}
+	return nil
+}
+
 // Validate applies fail-closed limits to the private adapter listener. The
 // route policy is deliberately a closed allowlist so a newly added handler
 // cannot become reachable without an explicit configuration change.
@@ -871,6 +905,24 @@ func (c ProviderPrivateTransportConfig) Validate() error {
 		c.MaxHeaderBytes < 1<<10 || c.MaxHeaderBytes > 1<<20 ||
 		c.MaxBodyBytes < 1<<10 || c.MaxBodyBytes > 16<<20 {
 		return errors.New("private transport limits are invalid")
+	}
+	return nil
+}
+
+func (c ProviderPrivateTransportConfig) validateMaterial() error {
+	if !c.Enabled {
+		return nil
+	}
+	legacy := c
+	legacy.ServerCertificateFile = "placeholder"
+	legacy.ServerPrivateKeyFile = "placeholder"
+	legacy.ClientCABundleFile = "placeholder"
+	if err := legacy.Validate(); err != nil {
+		return err
+	}
+	if c.ServerCertificateFile != "" || c.ServerPrivateKeyFile != "" || c.ClientCABundleFile != "" ||
+		c.ServerCertificateBindingID == "" || c.ServerPrivateKeyBindingID == "" || c.ClientCABundleBindingID == "" || c.ExpectedServerName == "" {
+		return errors.New("material-backed private transport requires binding IDs and forbids raw TLS paths")
 	}
 	return nil
 }

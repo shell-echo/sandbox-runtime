@@ -2,6 +2,7 @@ package providerapi
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"net"
@@ -32,6 +33,7 @@ type TransportOptions struct {
 	ServerCertificateFile      string
 	ServerPrivateKeyFile       string
 	ClientCABundleFile         string
+	TLSConfig                  *tls.Config
 	AllowedClientURIIdentities []string
 	Protected                  *ProtectedTransportOptions
 }
@@ -67,12 +69,24 @@ func NewServer(ctx context.Context, options TransportOptions, source provider.Ca
 	if err != nil {
 		return nil, err
 	}
-	tlsConfig, identityAdmission, err := loadMTLSConfigWithIdentity(
-		options.ServerCertificateFile,
-		options.ServerPrivateKeyFile,
-		options.ClientCABundleFile,
-		options.AllowedClientURIIdentities,
-	)
+	var tlsConfig *tls.Config
+	var identityAdmission *clientIdentityAdmission
+	if options.TLSConfig != nil {
+		if options.ServerCertificateFile != "" || options.ServerPrivateKeyFile != "" || options.ClientCABundleFile != "" ||
+			options.TLSConfig.MinVersion != tls.VersionTLS13 || options.TLSConfig.MaxVersion != tls.VersionTLS13 ||
+			len(options.TLSConfig.Certificates) != 1 || options.TLSConfig.ClientAuth != tls.RequireAndVerifyClientCert || options.TLSConfig.ClientCAs == nil || options.TLSConfig.VerifyConnection == nil {
+			return nil, errors.New("Provider server frozen TLS configuration is invalid")
+		}
+		tlsConfig = options.TLSConfig.Clone()
+		identityAdmission, err = newClientIdentityAdmission(options.AllowedClientURIIdentities)
+	} else {
+		tlsConfig, identityAdmission, err = loadMTLSConfigWithIdentity(
+			options.ServerCertificateFile,
+			options.ServerPrivateKeyFile,
+			options.ClientCABundleFile,
+			options.AllowedClientURIIdentities,
+		)
+	}
 	if err != nil {
 		return nil, err
 	}

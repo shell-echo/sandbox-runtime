@@ -1,9 +1,12 @@
 package config
 
 import (
+	"encoding/json"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/shell-echo/sandbox-runtime/internal/secretref"
 )
 
 func TestDataPlaneProcessValidatesRoleSpecificAuthority(t *testing.T) {
@@ -56,6 +59,74 @@ func TestDataPlaneProcessValidatesRoleSpecificAuthority(t *testing.T) {
 				t.Fatal("unsafe data-plane configuration was accepted")
 			}
 		})
+	}
+}
+
+func TestDataPlaneProductionV2RequiresRoleScopedMaterialBindings(t *testing.T) {
+	directory := t.TempDir()
+	path := func(name string) string { return filepath.Join(directory, name) }
+	candidate := defaultDataPlaneProcess(DataPlaneBrowser, defaultBrowserPort)
+	candidate.SchemaVersion = DataPlaneProductionSchemaV2
+	candidate.DeploymentLevel = ProviderProductionLevel
+	candidate.Enabled = true
+	candidate.Authority = DataPlaneAuthorityConfig{
+		CredentialFile: path("credential.json"), DependencyFile: path("dependency.json"), PolicyFile: path("policy.json"),
+		RecordingKeyRef: "kms://recording/phase6/browser",
+	}
+	candidate.TLS = DataPlaneTLSConfig{
+		CertificateBindingID: "browser-server-certificate", PrivateKeyBindingID: "browser-server-key",
+		ClientCABundleBindingID: "browser-ca", ClientCertificateBindingID: "browser-client-certificate",
+		ClientPrivateKeyBindingID: "browser-client-key", ExpectedServerName: "browser.example.test",
+		AllowedClientIdentity: []string{"spiffe://sandbox-runtime/provider"},
+	}
+	candidate.Materials.Provider = RoleMaterialProviderConfig{
+		Type: UnixWorkloadMaterialProviderV1, Alias: "browser-material-agent", SocketPath: "/tmp/sandbox-runtime-browser-material-agent.sock",
+		ExpectedUID: 501, ExpectedGID: 20, OperationTimeoutSeconds: 3, CacheSeconds: 30,
+	}
+	bindings := []struct {
+		id      string
+		purpose secretref.Purpose
+	}{
+		{"browser-server-certificate", secretref.PurposeTLSCertificate},
+		{"browser-server-key", secretref.PurposeTLSPrivateKey},
+		{"browser-ca", secretref.PurposeCABundle},
+		{"browser-client-certificate", secretref.PurposeTLSCertificate},
+		{"browser-client-key", secretref.PurposeTLSPrivateKey},
+	}
+	for _, item := range bindings {
+		document, err := json.Marshal(secretref.Binding{
+			Schema: secretref.BindingSchema, Kind: secretref.KindSecret,
+			Reference: secretref.Reference("secret://vault/kv/" + item.id), Version: "v1", Purpose: item.purpose,
+			TenantID: secretref.SystemTenant, Role: secretref.RoleBrowser,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		candidate.Materials.Bindings = append(candidate.Materials.Bindings, RoleMaterialBindingConfig{ID: item.id, Provider: "browser-material-agent", Document: string(document)})
+	}
+	if err := candidate.Validate(); err != nil {
+		t.Fatalf("valid Browser production material configuration: %v", err)
+	}
+
+	unsafe := *candidate
+	unsafe.TLS = candidate.TLS
+	unsafe.TLS.PrivateKeyFile = path("raw.key")
+	if err := unsafe.Validate(); err == nil {
+		t.Fatal("production Browser accepted a raw TLS private-key path")
+	}
+
+	wrongRole := *candidate
+	wrongRole.Materials = candidate.Materials
+	wrongRole.Materials.Bindings = append([]RoleMaterialBindingConfig(nil), candidate.Materials.Bindings...)
+	var binding secretref.Binding
+	if err := json.Unmarshal([]byte(wrongRole.Materials.Bindings[0].Document), &binding); err != nil {
+		t.Fatal(err)
+	}
+	binding.Role = secretref.RoleDesktop
+	document, _ := json.Marshal(binding)
+	wrongRole.Materials.Bindings[0].Document = string(document)
+	if err := wrongRole.Validate(); err == nil {
+		t.Fatal("Browser accepted a Desktop-scoped material binding")
 	}
 }
 

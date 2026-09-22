@@ -137,11 +137,24 @@ cannot parse that authority. Its real PostgreSQL/TLS process gate proves
 pre-migration bind denial, cross-purpose agent denial, exact bootstrap cleanup,
 readiness closure on runtime-agent loss and recovery after agent restart. The
 local gate records `distinct_os_uid_established=false`, so production service-
-account isolation remains later deployment evidence. This remains a vertical
-checkpoint: the other five role migrations, production workload-credential
-issuer/renewal, the full rotation controller, break-glass workflow and the
-independent-process Slice 5 gate remain open, so the Phase 6 count does not
-advance.
+account isolation remains later deployment evidence. Provider, Gateway, Guest,
+Browser and Desktop now use separate role-owned registries and agents;
+Provider also has a separate one-shot migration process. An independent
+credential controller issues six renewable short-lived runtime leases and two
+non-renewable migration leases, while a separate persistent break-glass
+controller enforces two distinct approvals, online single consumption and a
+hash-chained metadata-only audit. Focused real-process gates pass, including
+controller restart, Vault/agent loss, revocation, expiry and exact cleanup.
+
+The completion gate is now the immutable dual-evidence campaign: the real
+six-role material/credential gate and the real Vault Transit plus PostgreSQL
+recording-lifecycle gate must bind the same runtime/evidence revisions and pass
+the new strict Slice 5 aggregate verifier. Until that formal campaign, root
+validation and retained Slice 4 verification pass, the Phase 6 count remains
+4/15. Product recording-content composition remains explicitly false; Slice 8
+must compose it with object storage, Slice 11 must reject premature deployment
+enablement, and Slice 14 must run published-artifact black-box encrypted
+recording E2E before RC eligibility.
 
 ### Slice 6 — TLS, network policy and least privilege
 

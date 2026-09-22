@@ -20,6 +20,10 @@ import (
 
 func startGateTopology(t *testing.T, ctx context.Context, environment *gateEnvironment) {
 	t.Helper()
+	startGateCredentialController(t, ctx, environment)
+	startGateBreakGlassController(t, ctx, environment)
+	runGateMigrations(t, ctx, environment)
+	startRuntimeMaterialAgents(t, ctx, environment)
 	startDependency := func(name, binary, authority string, port int) {
 		process := startGateProcess(t, ctx, name, binary, filepath.Join(environment.paths.directory, name+".log"), "serve", authority)
 		environment.dependencies = append(environment.dependencies, process)

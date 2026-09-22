@@ -19,7 +19,7 @@ const (
 	defaultProductProcessAPIPort   = 8082
 	ProductLegacyDevelopmentSchema = "sandbox-runtime.product-process.legacy-development.v1"
 	ProductProductionSchemaV2      = "sandbox-runtime.product-process.v2"
-	ProductUnixMaterialProviderV1  = "unix-workload-material.v1"
+	ProductUnixMaterialProviderV1  = UnixWorkloadMaterialProviderV1
 )
 
 // ProductDeploymentLevel is the assurance level requested for the Product
@@ -77,26 +77,9 @@ type ProductIdentityConfig struct {
 	MaxTokenLifetimeSeconds int    `mapstructure:"max_token_lifetime_seconds"`
 }
 
-type ProductMaterialsConfig struct {
-	Provider ProductMaterialProviderConfig  `mapstructure:"provider"`
-	Bindings []ProductMaterialBindingConfig `mapstructure:"bindings"`
-}
-
-type ProductMaterialProviderConfig struct {
-	Type                    string `mapstructure:"type"`
-	Alias                   string `mapstructure:"alias"`
-	SocketPath              string `mapstructure:"socket_path"`
-	ExpectedUID             int64  `mapstructure:"expected_uid"`
-	ExpectedGID             int64  `mapstructure:"expected_gid"`
-	OperationTimeoutSeconds int    `mapstructure:"operation_timeout_seconds"`
-	CacheSeconds            int    `mapstructure:"cache_seconds"`
-}
-
-type ProductMaterialBindingConfig struct {
-	ID       string `mapstructure:"id"`
-	Provider string `mapstructure:"provider"`
-	Document string `mapstructure:"document"`
-}
+type ProductMaterialsConfig = RoleMaterialsConfig
+type ProductMaterialProviderConfig = RoleMaterialProviderConfig
+type ProductMaterialBindingConfig = RoleMaterialBindingConfig
 
 func defaultProductProcessConfig() *ProductProcessConfig {
 	return &ProductProcessConfig{
@@ -173,7 +156,7 @@ func (c *ProductProcessConfig) validateDevelopment() error {
 		return errors.New("Product PostgreSQL and identity secrets must use different files")
 	}
 	if c.TLS != (ProductTLSConfig{}) || c.Postgres.RuntimeRole != "" || c.Identity.Issuer != "" ||
-		c.Identity.Audience != "" || c.Postgres.RuntimeDSNBindingID != "" || c.Identity.KeyRingBindingID != "" || !c.Materials.isZero() {
+		c.Identity.Audience != "" || c.Postgres.RuntimeDSNBindingID != "" || c.Identity.KeyRingBindingID != "" || !c.Materials.IsZero() {
 		return errors.New("production Product authority is not accepted in development mode")
 	}
 	return nil
@@ -188,7 +171,7 @@ func (c *ProductProcessConfig) validateProduction() error {
 	if c.Postgres.DSNFile != "" || c.Identity.BindingsFile != "" {
 		return errors.New("development Product identity or database authority is forbidden in production")
 	}
-	bindings, err := c.Materials.decode(secretref.RoleProduct)
+	bindings, err := c.Materials.DecodeBindings(secretref.RoleProduct)
 	if err != nil {
 		return err
 	}
@@ -237,47 +220,6 @@ func (c *ProductProcessConfig) validateProduction() error {
 		return errors.New("product_process.identity.max_token_lifetime_seconds must be between 60 and 3600")
 	}
 	return nil
-}
-
-var productMaterialIDPattern = regexp.MustCompile(`^[a-z][a-z0-9._-]{0,63}$`)
-
-func (c ProductMaterialsConfig) isZero() bool {
-	return c.Provider == (ProductMaterialProviderConfig{}) && len(c.Bindings) == 0
-}
-
-func (c ProductMaterialsConfig) DecodeBindings(role secretref.Role) (map[string]secretref.Binding, error) {
-	return c.decode(role)
-}
-
-func (c ProductMaterialsConfig) decode(role secretref.Role) (map[string]secretref.Binding, error) {
-	provider := c.Provider
-	if provider.Type != ProductUnixMaterialProviderV1 || !productMaterialIDPattern.MatchString(provider.Alias) ||
-		!filepath.IsAbs(provider.SocketPath) || filepath.Clean(provider.SocketPath) != provider.SocketPath || len(provider.SocketPath) > 100 ||
-		provider.ExpectedUID < 0 || provider.ExpectedUID > (1<<32)-1 || provider.ExpectedGID < 0 || provider.ExpectedGID > (1<<32)-1 ||
-		provider.OperationTimeoutSeconds < 1 || provider.OperationTimeoutSeconds > 60 || provider.CacheSeconds < 0 || provider.CacheSeconds > 60 ||
-		len(c.Bindings) < 1 || len(c.Bindings) > 32 {
-		return nil, errors.New("production Product material provider configuration is invalid")
-	}
-	decoded := make(map[string]secretref.Binding, len(c.Bindings))
-	references := make(map[string]struct{}, len(c.Bindings))
-	for _, item := range c.Bindings {
-		if !productMaterialIDPattern.MatchString(item.ID) || item.Provider != provider.Alias || len(item.Document) < 1 || len(item.Document) > 4<<10 {
-			return nil, errors.New("production Product material binding configuration is invalid")
-		}
-		if _, duplicate := decoded[item.ID]; duplicate {
-			return nil, errors.New("production Product material binding IDs must be unique")
-		}
-		binding, err := secretref.DecodeBinding([]byte(item.Document))
-		if err != nil || binding.Role != role || binding.Kind != secretref.KindSecret {
-			return nil, errors.New("production Product material binding is invalid")
-		}
-		if _, duplicate := references[binding.Reference.String()]; duplicate {
-			return nil, errors.New("production Product material references must be distinct")
-		}
-		references[binding.Reference.String()] = struct{}{}
-		decoded[item.ID] = binding
-	}
-	return decoded, nil
 }
 
 func validProductServerName(value string) bool {

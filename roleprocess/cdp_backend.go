@@ -35,6 +35,13 @@ func newCDPBackend(processConfig *config.DataPlaneProcessConfig, endpoint string
 	return &cdpBackend{url: endpoint, client: client, timeout: timeout}, nil
 }
 
+func newCDPBackendWithClient(endpoint string, timeout time.Duration, client *http.Client) (*cdpBackend, error) {
+	if !validBackendURL(endpoint) || timeout < 100*time.Millisecond || timeout > 30*time.Second || client == nil {
+		return nil, errors.New("invalid Browser executor configuration")
+	}
+	return &cdpBackend{url: endpoint, client: client, timeout: timeout}, nil
+}
+
 func (b *cdpBackend) Ready(ctx context.Context) error {
 	if b == nil || b.client == nil || ctx == nil {
 		return errors.New("Browser CDP backend is unavailable")

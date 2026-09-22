@@ -12,13 +12,14 @@ import (
 	"github.com/shell-echo/sandbox-runtime/internal/executorprotocol"
 )
 
-func TestPhase6Slice4ReleaseGate(t *testing.T) {
+func TestPhase6Slice5ReleaseGate(t *testing.T) {
 	if os.Getenv(gateEnabledEnv) != "1" {
-		t.Skip("set " + gateEnabledEnv + "=1 to run the six-process Phase 6 Slice 4 gate")
+		t.Skip("set " + gateEnabledEnv + "=1 to run the six-process Phase 6 Slice 5 gate")
 	}
 	for name, value := range map[string]string{
-		candidateEnv:    os.Getenv(candidateEnv),
-		evidencePathEnv: os.Getenv(evidencePathEnv),
+		candidateEnv:         os.Getenv(candidateEnv),
+		evidencePathEnv:      os.Getenv(evidencePathEnv),
+		recordingEvidenceEnv: os.Getenv(recordingEvidenceEnv),
 	} {
 		if value == "" || !filepath.IsAbs(value) {
 			t.Fatalf("%s must be an absolute path", name)
@@ -35,6 +36,20 @@ func TestPhase6Slice4ReleaseGate(t *testing.T) {
 	goroutinesBaseline := stableGoroutineCount()
 	assertProductBoundary(t, environment)
 	assertGatewayBoundary(t, environment)
+	breakGlassStarted := time.Now().UTC()
+	runBreakGlassScenarios(t, ctx, environment)
+	recordScenario(environment, "break_glass_dual_control", []string{"product", "gateway"}, breakGlassStarted, time.Now().UTC(), "The separate break-glass controller required two distinct approvals, delivered an exact capability only to the target workload agent, restarted from its persistent hash-chained authority, consumed it online once, and rejected cross-agent, replay, expiry, revocation and migration use.")
+	credentialStarted := time.Now().UTC()
+	runWorkloadCredentialScenarios(t, ctx, environment)
+	credentialFinished := time.Now().UTC()
+	for name, detail := range map[string]string{
+		"workload_credential_renewal": "All six runtime agents rotated short-lived Vault credentials through persistent CAS revisions while both migration agents remained non-renewable and revoked immediately after their one-shot operation.",
+		"workload_credential_restart": "The independent credential controller restarted from its persistent lease ledger and runtime agents resumed bounded renewal without receiving Vault management authority.",
+		"material_agent_loss":         "Gateway readiness closed after its role-specific material agent and bounded cache disappeared, then recovered only after a new agent process obtained a fresh scoped credential.",
+		"vault_loss_and_revocation":   "Gateway readiness closed during real Vault loss and recovered after return; explicit Browser credential revocation closed Browser readiness until its agent was replaced with a freshly issued lease.",
+	} {
+		recordScenario(environment, name, []string{"product", "gateway", "provider", "guest", "browser", "desktop"}, credentialStarted, credentialFinished, detail)
+	}
 	browserStarted := time.Now().UTC()
 	runBrowserExecutorScenarios(t, ctx, environment)
 	browserFinished := time.Now().UTC()
@@ -65,6 +80,7 @@ func TestPhase6Slice4ReleaseGate(t *testing.T) {
 		recordScenario(environment, name, []string{"provider", "desktop"}, desktopStarted, desktopFinished, detail)
 	}
 	runDesktopEvidenceMeasurements(t, ctx, environment, goroutinesBaseline)
+	observeRoleMaterialEvidence(t, environment)
 
 	drainOpen := newBrowserOpen(t, "drain", 4*time.Second)
 	drainConnection, drainResponse := dialBrowserExecutor(t, ctx, environment, drainOpen)

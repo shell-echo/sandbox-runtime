@@ -104,9 +104,29 @@ The initial secret backend is Vault KV v2 over TLS. The adapter pins the Vault
 origin, mount, reference authority, role and purposes; disables redirects and
 cookies; obtains its Vault token through a scoped provider; selects an exact KV
 version; and strictly validates content type, response shape, binding digest,
-material digest, revision and validity window. A fixture may accept a Vault
-token from an environment variable only inside the isolated integration gate;
-that mechanism is not a production configuration or evidence path.
+material digest, revision and validity window.
+
+Production workload agents obtain Vault tokens only from the independent
+operator-owned `sandbox-runtime.workload-credential.v1` controller. Each of the
+six runtime agents has a distinct Ed25519 identity and a renewable, short-lived
+policy bound to its exact role, purpose, binding digest and backend. Product and
+Provider migration agents have separate identities and one-shot,
+non-renewable policies. The controller persists CAS lease revisions, replay
+state, credential digests and opaque Vault accessors, but never credential
+bytes. Renewal verifies the replacement token before scheduling revocation of
+the previous accessor after a fixed overlap. The Vault management token enters
+only the controller over inherited FD 3. It is absent from config, arguments,
+environment variables, workload-agent protocols and evidence.
+
+Emergency access is a separate controller, key, ledger, audit file and Unix
+protocol. The requester, two distinct approvers, operator and target agent are
+different signed actors. A capability binds the exact target, role, purpose,
+tenant, binding and operation, has one use and at most a fifteen-minute TTL,
+and is useful only after the target agent atomically consumes it online. The
+audit is append-only, hash-chained and metadata-only; reason and ticket appear
+only as digests. Migration purposes are categorically ineligible for
+break-glass. A controller outage therefore fails closed rather than turning a
+signed capability into an offline bearer token.
 
 Product is the first production role migrated to this boundary, using two
 physically separate process lifecycles. The one-shot `product migrate` command
@@ -123,12 +143,17 @@ never reruns migration or requests migration authority. Readiness validates
 only the four runtime dependencies. The migration and runtime agents use
 different sockets, allowlists, registries, caches and nonce spaces.
 
+Provider, Gateway, Guest, Browser and Desktop use the same registry and agent
+implementation in separate role-owned instances. Provider has a separate
+one-shot migration command and runtime schema; no runtime process can parse a
+migration binding. Production schemas reject the legacy path fields rather
+than inferring or falling back to them.
+
 The single-host functional gate may run these processes under the same host
 UID, but must record `distinct_os_uid_established=false`. Production/deployment
 qualification requires distinct service accounts or platform-equivalent
-workload identities for the migration job, runtime Product and their agents;
-that isolation remains a Slice 6/11/14 gate. The other five roles remain later
-Slice 5 work.
+workload identities for both migration jobs, all six runtime roles and all
+agents; that isolation remains a Slice 6/11/14 gate.
 
 The first production-oriented vertical evolves the existing private
 `RecordingContentStore` port rather than adding a parallel store. Every
@@ -156,6 +181,26 @@ requests the exact key version. Vault response fields, sizes, content type,
 ciphertext version and duplicate JSON keys are checked strictly. The adapter
 does not export Transit key bytes or surface Vault diagnostics.
 
+Slice 5 qualifies this adapter through a separate real Vault Transit plus
+fresh PostgreSQL recording-lifecycle gate and binds it into the same aggregate
+manifest as the six-role credential gate. This is deliberately not a claim
+that `product serve` composes a `RecordingContentStore`: the current Product
+kernel has no public recording-content consumer. Production config has no
+recording-content enablement field and rejects an attempted unknown section;
+it cannot fall back to a local master key or legacy `rkey:` store. The aggregate
+evidence must state `recording_content_store_composed=false` and
+`recording_content_e2e=false`.
+
+The deferred composition is a fixed dependency, not an open-ended TODO. Slice
+8 must compose the KMS store into the real Product or recording worker when
+external object storage is composed and prove write/read, rotation, restart,
+loss, integrity and cleanup. Slice 11 must reject deployment configuration
+that advertises or enables any uncomposed content capability. Slice 14 must run
+black-box encrypted recording E2E from published artifacts; failure prevents
+release-candidate eligibility. Ticket/data envelope purposes remain typed,
+isolated and negatively tested, with `consumer_composed=false` until their
+first real consumer is added and requalified.
+
 There is no production read-path fallback from `rkms1:` to legacy `rkey:`
 material and no opportunistic rewrite. Enabling the KMS store therefore
 requires either proof that no production legacy recording corpus exists or a
@@ -172,15 +217,18 @@ recorded in `docs/migrations/product-phase-6-recording-key-handle-v1.md`.
   provider validity window.
 - A real KMS/HSM adapter can retain raw keys outside the role process and return
   only an opaque envelope.
-- A real digest-pinned Vault Transit TLS integration now proves recording
-  round-trip, version rotation with grace reads, process/client reconstruction,
-  dependency loss, KMS-independent cleanup and exact container cleanup. This
-  remains real-adapter component evidence, not production deployment evidence.
-- This ADR is not Slice 5 completion. Product has migrated its isolated
-  migration input and four runtime inputs, but Provider, Gateway, Guest,
-  Browser and Desktop have
-  not migrated all secret inputs; the short-lived credential issuer/renewal controller and
-  break-glass approval state machine remain open, and no full independent-role
-  Slice 5 gate or immutable evidence manifest exists.
-- Slice 5 remains open until the real-adapter and independent-process failure
-  gates, plaintext-exclusion checks and immutable evidence all pass.
+- The digest-pinned Vault Transit/PostgreSQL gate proves tenant-bound recording
+  lifecycle, v1/v2 overlap, stale/revoked rejection, restart reconstruction,
+  Vault loss, AAD/ciphertext substitution denial, scoped-token revocation and
+  exact cleanup. It is adapter qualification, not Product recording-content
+  E2E, HSM or deployment evidence.
+- The independent role gate composes two one-shot migration agents, six
+  renewable runtime agents, the credential controller and the break-glass
+  controller alongside the six Product/Gateway/Provider/Guest/Browser/Desktop
+  processes. It proves rotation, revocation, expiry, Vault and agent loss,
+  controller restart, dual approval, single consume, audit integrity,
+  plaintext exclusion and exact cleanup.
+- This ADR records the completed implementation boundary but does not itself
+  advance the Phase 6 counter. Slice 5 remains open until both real gates bind
+  the same immutable runtime/evidence revisions, the strict aggregate manifest
+  verifies, and the required repository-wide checks pass.

@@ -382,7 +382,7 @@ func waitForDesktopSessionProcesses(t *testing.T, environment *gateEnvironment, 
 }
 
 func desktopSessionProcessCounts(environment *gateEnvironment) (int, int) {
-	output, err := exec.Command("docker", "ps", "-q", "--filter", "label=io.github.shell-echo.sandbox-runtime.namespace=phase6-slice4").Output()
+	output, err := exec.Command("docker", "ps", "-q", "--filter", "label=io.github.shell-echo.sandbox-runtime.namespace=phase6-slice5").Output()
 	if err != nil {
 		return -1, -1
 	}

@@ -65,6 +65,9 @@ func TestLoadProductProcessStrictProductionConfiguration(t *testing.T) {
 	if ProductProcess.DeploymentLevel != ProductProductionLevel || ProductProcess.Postgres.RuntimeRole != "product_runtime" || ProductProcess.TLS.PrivateKeyBindingID != "product-tls-private-key" {
 		t.Fatalf("Product process = %#v", ProductProcess)
 	}
+	if err := Load(writeConfig(t, body+"[product_process.recording_content]\nenabled = true\nprovider = 'legacy-local-master-key'\n")); err == nil || !strings.Contains(err.Error(), "invalid keys") {
+		t.Fatalf("uncomposed recording-content production configuration error = %v", err)
+	}
 }
 
 func TestProductProcessRejectsUnsafeProductionAuthority(t *testing.T) {

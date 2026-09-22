@@ -7,6 +7,8 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/url"
 	"sync"
 	"time"
 
@@ -17,6 +19,8 @@ import (
 	"github.com/shell-echo/sandbox-runtime/internal/desktopcandidate"
 	"github.com/shell-echo/sandbox-runtime/internal/desktophandoff"
 	"github.com/shell-echo/sandbox-runtime/internal/secretfile"
+	"github.com/shell-echo/sandbox-runtime/internal/secretref"
+	"github.com/shell-echo/sandbox-runtime/internal/tlsmaterial"
 	desktopimage "github.com/shell-echo/sandbox-runtime/profiles/desktop/image"
 	"github.com/shell-echo/sandbox-runtime/provider"
 	providerpostgres "github.com/shell-echo/sandbox-runtime/provider/adapter/postgres"
@@ -40,7 +44,7 @@ import (
 	"github.com/shell-echo/sandbox-runtime/server"
 )
 
-func newProductionDesktopProvider(ctx context.Context, cfg *config.ProviderProcessConfig, state *providerpostgres.Store, pool *pgxpool.Pool) (*productionProviderComposition, error) { //nolint:cyclop
+func newProductionDesktopProvider(ctx context.Context, cfg *config.ProviderProcessConfig, state *providerpostgres.Store, pool *pgxpool.Pool, registry *secretref.Registry) (*productionProviderComposition, error) { //nolint:cyclop
 	stack := &providerCloseStack{}
 	fail := func(err error) (*productionProviderComposition, error) { return nil, errors.Join(err, stack.close()) }
 	desktopConfig := cfg.Desktop
@@ -64,7 +68,17 @@ func newProductionDesktopProvider(ctx context.Context, cfg *config.ProviderProce
 	var bridgePrivateKey ed25519.PrivateKey
 	var bridgePublicKey ed25519.PublicKey
 	if desktopConfig.ExecutorURL != "" {
-		bridgePrivateKey, err = loadDesktopBridgePrivateKey(desktopConfig.ExecutorBridgePrivateKeyFile)
+		if cfg.SchemaVersion == config.ProviderProductionSchemaV2 {
+			material, resolveErr := registry.Resolve(ctx, desktopConfig.ExecutorBridgePrivateKeyBindingID, secretref.PurposeExecutorBridgeKey, secretref.SystemTenant)
+			if resolveErr == nil {
+				bridgePrivateKey, err = parseDesktopBridgePrivateKey(material.Bytes)
+			} else {
+				err = resolveErr
+			}
+			material.Destroy()
+		} else {
+			bridgePrivateKey, err = loadDesktopBridgePrivateKey(desktopConfig.ExecutorBridgePrivateKeyFile)
+		}
 		if err != nil {
 			return fail(fmt.Errorf("load production Desktop bridge signing key: %w", err))
 		}
@@ -148,7 +162,7 @@ func newProductionDesktopProvider(ctx context.Context, cfg *config.ProviderProce
 	if err != nil {
 		return fail(err)
 	}
-	protected, err := newProductionProviderAdmission(cfg, state)
+	protected, err := newProductionProviderAdmission(ctx, cfg, state, registry)
 	if err != nil {
 		return fail(err)
 	}
@@ -172,13 +186,27 @@ func newProductionDesktopProvider(ctx context.Context, cfg *config.ProviderProce
 	if err != nil {
 		return fail(err)
 	}
-	providerServer, err := newProductionProviderTransport(ctx, cfg, protected, source)
+	providerServer, err := newProductionProviderTransport(ctx, cfg, protected, source, registry)
 	if err != nil {
 		return fail(err)
 	}
 	mediaRuntime := providerdesktop.MediaRuntime(desktopRuntime)
 	if desktopConfig.ExecutorURL != "" {
-		executorClient, clientErr := desktopremote.NewHTTPClient(desktopConfig.ExecutorURL, desktopConfig.ExecutorCABundleFile, desktopConfig.ExecutorCertificateFile, desktopConfig.ExecutorPrivateKeyFile)
+		var executorClient *http.Client
+		var clientErr error
+		if cfg.SchemaVersion == config.ProviderProductionSchemaV2 {
+			parsed, _ := url.Parse(desktopConfig.ExecutorURL)
+			clientTLS, tlsErr := tlsmaterial.ResolveClientWithKeyPurpose(ctx, registry,
+				desktopConfig.ExecutorCABundleBindingID, desktopConfig.ExecutorCertificateBindingID, desktopConfig.ExecutorPrivateKeyBindingID,
+				secretref.PurposeExecutorClientKey, parsed.Hostname(), time.Now)
+			if tlsErr != nil {
+				clientErr = tlsErr
+			} else {
+				executorClient = &http.Client{Transport: &http.Transport{TLSClientConfig: clientTLS}, Timeout: time.Duration(dockerConfig.OperationTimeoutSeconds) * time.Second}
+			}
+		} else {
+			executorClient, clientErr = desktopremote.NewHTTPClient(desktopConfig.ExecutorURL, desktopConfig.ExecutorCABundleFile, desktopConfig.ExecutorCertificateFile, desktopConfig.ExecutorPrivateKeyFile)
+		}
 		if clientErr != nil {
 			return fail(fmt.Errorf("construct production Desktop executor client: %w", clientErr))
 		}
@@ -188,7 +216,7 @@ func newProductionDesktopProvider(ctx context.Context, cfg *config.ProviderProce
 		}
 		mediaRuntime = executorRuntime
 	}
-	privateServer, err := newProductionProviderPrivateDesktopServer(ctx, cfg, resolver, registrar, mediaRuntime)
+	privateServer, err := newProductionProviderPrivateDesktopServer(ctx, cfg, resolver, registrar, mediaRuntime, registry)
 	if err != nil {
 		return fail(err)
 	}
@@ -207,7 +235,7 @@ func newProductionDesktopProvider(ctx context.Context, cfg *config.ProviderProce
 	if err != nil {
 		return fail(err)
 	}
-	probe, err := providerprocess.NewServer(cfg.Probe, providerReadinessChecker{state: state, pool: pool, reconciler: reconciler})
+	probe, err := providerprocess.NewServer(cfg.Probe, providerReadinessChecker{state: state, pool: pool, reconciler: reconciler, registry: registry, config: cfg})
 	if err != nil {
 		return fail(err)
 	}
@@ -292,9 +320,16 @@ func loadDesktopBridgePrivateKey(path string) (ed25519.PrivateKey, error) {
 	if err != nil || len(document) != ed25519.PrivateKeySize {
 		return nil, errors.New("invalid Desktop bridge signing key")
 	}
-	key := ed25519.PrivateKey(append([]byte(nil), document...))
+	key, err := parseDesktopBridgePrivateKey(document)
 	clear(document)
-	return key, nil
+	return key, err
+}
+
+func parseDesktopBridgePrivateKey(document []byte) (ed25519.PrivateKey, error) {
+	if len(document) != ed25519.PrivateKeySize {
+		return nil, errors.New("invalid Desktop bridge signing key")
+	}
+	return ed25519.PrivateKey(append([]byte(nil), document...)), nil
 }
 
 type productionDesktopMediaSource struct{ runtime providerdesktop.MediaRuntime }
@@ -322,7 +357,7 @@ func (s productionDesktopMediaSource) OpenBound(ctx context.Context, open deskto
 		AuthorityDigest: open.AuthorityDigest, RequestDigest: open.RequestDigest, AuthorityExpiresAt: authorityExpiry, HandoffExpiresAt: handoffExpiry}, attachment, open.MediaPolicy)
 }
 
-func newProductionProviderPrivateDesktopServer(ctx context.Context, cfg *config.ProviderProcessConfig, resolver desktopgateway.Resolver, registrar desktopgateway.BindingRegistrar, runtime providerdesktop.MediaRuntime) (server.Server, error) {
+func newProductionProviderPrivateDesktopServer(ctx context.Context, cfg *config.ProviderProcessConfig, resolver desktopgateway.Resolver, registrar desktopgateway.BindingRegistrar, runtime providerdesktop.MediaRuntime, registry *secretref.Registry) (server.Server, error) {
 	if cfg == nil || !cfg.Transport.Private.Enabled {
 		return nil, nil
 	}
@@ -340,7 +375,13 @@ func newProductionProviderPrivateDesktopServer(ctx context.Context, cfg *config.
 		return nil, fmt.Errorf("construct Provider private Desktop handler: %w", err)
 	}
 	private := cfg.Transport.Private
-	return providerapi.NewPrivateServer(ctx, providerapi.PrivateTransportOptions{Address: private.Address, ServerCertificateFile: private.ServerCertificateFile, ServerPrivateKeyFile: private.ServerPrivateKeyFile, ClientCABundleFile: private.ClientCABundleFile, AllowedClientURIIdentities: append([]string(nil), private.AllowedClientURIIdentities...), Handler: handler, ReadHeaderTimeout: time.Duration(private.ReadHeaderTimeoutMillis) * time.Millisecond, ReadTimeout: time.Duration(private.ReadTimeoutMillis) * time.Millisecond, WriteTimeout: time.Duration(private.WriteTimeoutMillis) * time.Millisecond, IdleTimeout: time.Duration(private.IdleTimeoutMillis) * time.Millisecond, MaxHeaderBytes: private.MaxHeaderBytes, MaxBodyBytes: private.MaxBodyBytes})
+	tlsConfig, err := tlsmaterial.ResolveMutualServer(ctx, registry,
+		private.ServerCertificateBindingID, private.ServerPrivateKeyBindingID, private.ClientCABundleBindingID,
+		private.ExpectedServerName, private.AllowedClientURIIdentities, time.Now)
+	if err != nil {
+		return nil, errors.New("load Provider private Desktop TLS material")
+	}
+	return providerapi.NewPrivateServer(ctx, providerapi.PrivateTransportOptions{Address: private.Address, TLSConfig: tlsConfig, AllowedClientURIIdentities: append([]string(nil), private.AllowedClientURIIdentities...), Handler: handler, ReadHeaderTimeout: time.Duration(private.ReadHeaderTimeoutMillis) * time.Millisecond, ReadTimeout: time.Duration(private.ReadTimeoutMillis) * time.Millisecond, WriteTimeout: time.Duration(private.WriteTimeoutMillis) * time.Millisecond, IdleTimeout: time.Duration(private.IdleTimeoutMillis) * time.Millisecond, MaxHeaderBytes: private.MaxHeaderBytes, MaxBodyBytes: private.MaxBodyBytes})
 }
 
 type productionDesktopApplication struct {

@@ -48,13 +48,14 @@ var (
 		"browser_gateway_image": {}, "guest_fixture_listener": {},
 	}
 	evidenceToolFiles = map[string]struct{}{
-		"internal/productphase6evidence/verify.go":      {},
-		"internal/productphase6evidence/verify_test.go": {},
-		"productphase6gate/common_test.go":              {},
-		"productphase6gate/evidence_test.go":            {},
-		"productphase6gate/environment_test.go":         {},
-		"productphase6gate/measurements_test.go":        {},
-		"productphase6gate/release_gate_test.go":        {},
+		"internal/productphase6evidence/verify.go":            {},
+		"internal/productphase6evidence/verify_test.go":       {},
+		"internal/productphase6slice5evidence/verify_test.go": {},
+		"productphase6gate/common_test.go":                    {},
+		"productphase6gate/evidence_test.go":                  {},
+		"productphase6gate/environment_test.go":               {},
+		"productphase6gate/measurements_test.go":              {},
+		"productphase6gate/release_gate_test.go":              {},
 	}
 )
 
@@ -229,16 +230,8 @@ func VerifyRepository(manifest Manifest, sourceRoot string) error {
 	if err != nil {
 		return err
 	}
-	if err := verifyEvidenceToolTransition(root, manifest.Identity.RuntimeImplementationRevision, manifest.Identity.EvidenceToolRevision); err != nil {
+	if err := verifyImmutableRepositoryBinding(manifest, root); err != nil {
 		return err
-	}
-	runtimeTree, err := desktopcandidate.SourceTreeDigestAtRevision(root, manifest.Identity.RuntimeImplementationRevision)
-	if err != nil || runtimeTree != manifest.Identity.RuntimeImplementationTreeDigest {
-		return errors.New("Phase 6 evidence runtime tree mismatch")
-	}
-	evidenceTree, err := desktopcandidate.SourceTreeDigestAtRevision(root, manifest.Identity.EvidenceToolRevision)
-	if err != nil || evidenceTree != manifest.Identity.EvidenceToolTreeDigest {
-		return errors.New("Phase 6 evidence tool tree mismatch")
 	}
 	status, commandErr := gitCommand(root, "status", "--porcelain", "--untracked-files=all")
 	if commandErr != nil || status != "" {
@@ -255,6 +248,33 @@ func VerifyRepository(manifest Manifest, sourceRoot string) error {
 		if !isPhase6DocumentationPath(name) {
 			return fmt.Errorf("Phase 6 post-evidence change is not documentation-only: %s", name)
 		}
+	}
+	return nil
+}
+
+// VerifyImmutableRepositoryBinding revalidates only the immutable runtime and
+// evidence-tool identity embedded by the Slice 4 gate. It intentionally makes
+// no claim about the current HEAD and is used by successor-slice retained
+// verification after that successor has an independently sealed closure.
+func VerifyImmutableRepositoryBinding(manifest Manifest, sourceRoot string) error {
+	root, err := verifiedRepositoryRoot(sourceRoot)
+	if err != nil {
+		return err
+	}
+	return verifyImmutableRepositoryBinding(manifest, root)
+}
+
+func verifyImmutableRepositoryBinding(manifest Manifest, root string) error {
+	if err := verifyEvidenceToolTransition(root, manifest.Identity.RuntimeImplementationRevision, manifest.Identity.EvidenceToolRevision); err != nil {
+		return err
+	}
+	runtimeTree, err := desktopcandidate.SourceTreeDigestAtRevision(root, manifest.Identity.RuntimeImplementationRevision)
+	if err != nil || runtimeTree != manifest.Identity.RuntimeImplementationTreeDigest {
+		return errors.New("Phase 6 evidence runtime tree mismatch")
+	}
+	evidenceTree, err := desktopcandidate.SourceTreeDigestAtRevision(root, manifest.Identity.EvidenceToolRevision)
+	if err != nil || evidenceTree != manifest.Identity.EvidenceToolTreeDigest {
+		return errors.New("Phase 6 evidence tool tree mismatch")
 	}
 	return nil
 }

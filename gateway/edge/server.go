@@ -36,6 +36,7 @@ type ServerOptions struct {
 	Handler               http.Handler
 	ServerCertificateFile string
 	ServerPrivateKeyFile  string
+	TLSConfig             *tls.Config
 	MaxConnections        int
 	ReadHeaderTimeout     time.Duration
 	ReadTimeout           time.Duration
@@ -56,9 +57,15 @@ func NewTLSServer(options ServerOptions) (*TLSServer, error) {
 	if err := validateServerOptions(options); err != nil {
 		return nil, err
 	}
-	tlsConfig, err := loadPublicTLSConfig(options.ServerCertificateFile, options.ServerPrivateKeyFile)
-	if err != nil {
-		return nil, fmt.Errorf("%w: TLS material: %w", ErrInvalidServerOptions, err)
+	var tlsConfig *tls.Config
+	var err error
+	if options.TLSConfig != nil {
+		tlsConfig = options.TLSConfig.Clone()
+	} else {
+		tlsConfig, err = loadPublicTLSConfig(options.ServerCertificateFile, options.ServerPrivateKeyFile)
+		if err != nil {
+			return nil, fmt.Errorf("%w: TLS material: %w", ErrInvalidServerOptions, err)
+		}
 	}
 	protocols := new(http.Protocols)
 	protocols.SetHTTP1(true)
@@ -111,7 +118,11 @@ func validateServerOptions(options ServerOptions) error {
 	if options.MaxHeaderBytes < MinHTTPHeaderBytes || options.MaxHeaderBytes > MaxHTTPHeaderBytes {
 		return fmt.Errorf("%w: HTTP header budget", ErrInvalidServerOptions)
 	}
-	if options.ServerCertificateFile == "" || options.ServerPrivateKeyFile == "" {
+	if options.TLSConfig != nil {
+		if options.ServerCertificateFile != "" || options.ServerPrivateKeyFile != "" || options.TLSConfig.MinVersion != tls.VersionTLS13 || options.TLSConfig.MaxVersion != tls.VersionTLS13 || len(options.TLSConfig.Certificates) != 1 || options.TLSConfig.ClientAuth != tls.NoClientCert {
+			return fmt.Errorf("%w: frozen TLS configuration", ErrInvalidServerOptions)
+		}
+	} else if options.ServerCertificateFile == "" || options.ServerPrivateKeyFile == "" {
 		return fmt.Errorf("%w: TLS certificate and private key paths", ErrInvalidServerOptions)
 	}
 	return nil

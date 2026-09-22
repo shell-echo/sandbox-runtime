@@ -18,8 +18,11 @@ import (
 	"github.com/coder/websocket"
 	"github.com/shell-echo/sandbox-runtime/config"
 	"github.com/shell-echo/sandbox-runtime/internal/executorprotocol"
+	"github.com/shell-echo/sandbox-runtime/internal/rolematerials"
 	"github.com/shell-echo/sandbox-runtime/internal/secretfile"
+	"github.com/shell-echo/sandbox-runtime/internal/secretref"
 	"github.com/shell-echo/sandbox-runtime/internal/sessiontermination"
+	"github.com/shell-echo/sandbox-runtime/internal/tlsmaterial"
 )
 
 const (
@@ -53,10 +56,12 @@ type ExecutorAuthority struct {
 	Dependency ExecutorDependencyAuthority
 	Policy     ExecutorPolicyAuthority
 	Backend    ExecutorBackend
+	TLS        *tls.Config
+	Registry   *secretref.Registry
 }
 
-func LoadExecutorAuthority(cfg *config.DataPlaneProcessConfig) (ExecutorAuthority, error) {
-	if cfg == nil || !cfg.Enabled || (cfg.Role != config.DataPlaneBrowser && cfg.Role != config.DataPlaneDesktop) {
+func LoadExecutorAuthority(ctx context.Context, cfg *config.DataPlaneProcessConfig) (ExecutorAuthority, error) {
+	if ctx == nil || cfg == nil || !cfg.Enabled || (cfg.Role != config.DataPlaneBrowser && cfg.Role != config.DataPlaneDesktop) {
 		return ExecutorAuthority{}, errors.New("enabled Browser or Desktop executor configuration is required")
 	}
 	if err := cfg.Validate(); err != nil {
@@ -85,23 +90,64 @@ func LoadExecutorAuthority(cfg *config.DataPlaneProcessConfig) (ExecutorAuthorit
 		return ExecutorAuthority{}, errors.New("invalid executor policy authority")
 	}
 	var backend ExecutorBackend
+	var transportTLS *tls.Config
+	var registry *secretref.Registry
 	var err error
-	if cfg.Role == config.DataPlaneBrowser {
-		backend, err = newCDPBackend(cfg, dependency.BackendURL, time.Duration(policy.OperationTimeoutMillis)*time.Millisecond)
+	timeout := time.Duration(policy.OperationTimeoutMillis) * time.Millisecond
+	if cfg.SchemaVersion == config.DataPlaneProductionSchemaV2 {
+		role := secretref.RoleBrowser
+		if cfg.Role == config.DataPlaneDesktop {
+			role = secretref.RoleDesktop
+		}
+		registry, err = rolematerials.New(cfg.Materials, role, []secretref.Purpose{secretref.PurposeTLSCertificate, secretref.PurposeTLSPrivateKey, secretref.PurposeCABundle}, true, time.Now)
+		if err != nil {
+			return ExecutorAuthority{}, errors.New("construct executor material registry")
+		}
+		closeRegistry := true
+		defer func() {
+			if closeRegistry {
+				registry.Close()
+			}
+		}()
+		if bindings, decodeErr := cfg.Materials.DecodeBindings(role); decodeErr != nil || len(bindings) != 5 {
+			return ExecutorAuthority{}, errors.New("executor material registry must contain exactly five bindings")
+		}
+		transportTLS, err = tlsmaterial.ResolveMutualServer(ctx, registry,
+			cfg.TLS.CertificateBindingID, cfg.TLS.PrivateKeyBindingID, cfg.TLS.ClientCABundleBindingID,
+			cfg.TLS.ExpectedServerName, cfg.TLS.AllowedClientIdentity, time.Now)
+		if err != nil {
+			return ExecutorAuthority{}, errors.New("load executor server TLS material")
+		}
+		parsed, _ := url.Parse(dependency.BackendURL)
+		clientTLS, tlsErr := tlsmaterial.ResolveClient(ctx, registry,
+			cfg.TLS.ClientCABundleBindingID, cfg.TLS.ClientCertificateBindingID, cfg.TLS.ClientPrivateKeyBindingID,
+			parsed.Hostname(), time.Now)
+		if tlsErr != nil {
+			return ExecutorAuthority{}, errors.New("load executor backend TLS material")
+		}
+		client := &http.Client{Transport: &http.Transport{TLSClientConfig: clientTLS}, Timeout: timeout}
+		if cfg.Role == config.DataPlaneBrowser {
+			backend, err = newCDPBackendWithClient(dependency.BackendURL, timeout, client)
+		} else {
+			backend, err = newWebsocketBackendWithClient(dependency.BackendURL, timeout, client)
+		}
+		closeRegistry = false
+	} else if cfg.Role == config.DataPlaneBrowser {
+		backend, err = newCDPBackend(cfg, dependency.BackendURL, timeout)
 	} else {
-		backend, err = newWebsocketBackend(cfg, dependency.BackendURL, time.Duration(policy.OperationTimeoutMillis)*time.Millisecond)
+		backend, err = newWebsocketBackend(cfg, dependency.BackendURL, timeout)
 	}
 	if err != nil {
 		return ExecutorAuthority{}, err
 	}
-	return ExecutorAuthority{Credential: credential, Dependency: dependency, Policy: policy, Backend: backend}, nil
+	return ExecutorAuthority{Credential: credential, Dependency: dependency, Policy: policy, Backend: backend, TLS: transportTLS, Registry: registry}, nil
 }
 
 func NewExecutorApplicationGraph(ctx context.Context, cfg *config.DataPlaneProcessConfig) (ApplicationGraph, error) {
 	if ctx == nil {
 		return ApplicationGraph{}, errors.New("executor construction context is required")
 	}
-	authority, err := LoadExecutorAuthority(cfg)
+	authority, err := LoadExecutorAuthority(ctx, cfg)
 	if err != nil {
 		return ApplicationGraph{}, err
 	}
@@ -111,8 +157,46 @@ func NewExecutorApplicationGraph(ctx context.Context, cfg *config.DataPlaneProce
 	}
 	return ApplicationGraph{
 		Private: handler,
-		Ready:   func(checkContext context.Context) error { return authority.Backend.Ready(checkContext) },
+		TLS:     authority.TLS,
+		Ready: func(checkContext context.Context) error {
+			if authority.Registry != nil {
+				if err := verifyExecutorMaterials(checkContext, authority.Registry, cfg.TLS); err != nil {
+					return err
+				}
+			}
+			return authority.Backend.Ready(checkContext)
+		},
+		Shutdown: func(context.Context) error {
+			if authority.Registry != nil {
+				authority.Registry.Close()
+			}
+			return nil
+		},
 	}, nil
+}
+
+func verifyExecutorMaterials(ctx context.Context, registry *secretref.Registry, tlsConfig config.DataPlaneTLSConfig) error {
+	checks := []struct {
+		id      string
+		purpose secretref.Purpose
+	}{
+		{tlsConfig.CertificateBindingID, secretref.PurposeTLSCertificate},
+		{tlsConfig.PrivateKeyBindingID, secretref.PurposeTLSPrivateKey},
+		{tlsConfig.ClientCABundleBindingID, secretref.PurposeCABundle},
+		{tlsConfig.ClientCertificateBindingID, secretref.PurposeTLSCertificate},
+		{tlsConfig.ClientPrivateKeyBindingID, secretref.PurposeTLSPrivateKey},
+	}
+	for _, check := range checks {
+		material, err := registry.Resolve(ctx, check.id, check.purpose, secretref.SystemTenant)
+		material.Destroy()
+		if err != nil {
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				return err
+			}
+			return errors.New("executor material dependency is unavailable")
+		}
+	}
+	return nil
 }
 
 type ExecutorSession interface {
@@ -288,6 +372,17 @@ func newWebsocketBackend(cfg *config.DataPlaneProcessConfig, endpoint string, ti
 	client, err := executorHTTPClient(cfg, endpoint)
 	if err != nil {
 		return nil, err
+	}
+	parsed, _ := url.Parse(endpoint)
+	parsed.Scheme = "https"
+	parsed.Path = "/readyz"
+	parsed.RawPath = ""
+	return &websocketBackend{url: endpoint, readyURL: parsed.String(), client: client, timeout: timeout}, nil
+}
+
+func newWebsocketBackendWithClient(endpoint string, timeout time.Duration, client *http.Client) (*websocketBackend, error) {
+	if !validBackendURL(endpoint) || timeout < 100*time.Millisecond || timeout > 30*time.Second || client == nil {
+		return nil, errors.New("invalid executor backend")
 	}
 	parsed, _ := url.Parse(endpoint)
 	parsed.Scheme = "https"

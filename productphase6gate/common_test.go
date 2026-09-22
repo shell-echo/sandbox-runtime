@@ -36,24 +36,23 @@ import (
 	"github.com/gowebpki/jcs"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/shell-echo/sandbox-runtime/internal/productphase5evidence"
-	productpostgres "github.com/shell-echo/sandbox-runtime/product/adapter/postgres"
-	providerpostgres "github.com/shell-echo/sandbox-runtime/provider/adapter/postgres"
 	"github.com/shell-echo/sandbox-runtime/provider/admission"
 )
 
 const (
-	gateEnabledEnv  = "SANDBOX_RUNTIME_PHASE6_SLICE4_GATE"
-	candidateEnv    = "SANDBOX_RUNTIME_DESKTOP_CANDIDATE_MANIFEST"
-	evidencePathEnv = "SANDBOX_RUNTIME_PHASE6_SLICE4_EVIDENCE"
+	gateEnabledEnv       = "SANDBOX_RUNTIME_PHASE6_SLICE5_GATE"
+	candidateEnv         = "SANDBOX_RUNTIME_DESKTOP_CANDIDATE_MANIFEST"
+	evidencePathEnv      = "SANDBOX_RUNTIME_PHASE6_SLICE5_EVIDENCE"
+	recordingEvidenceEnv = "SANDBOX_RUNTIME_PHASE6_SLICE5_TRANSIT_EVIDENCE"
 
-	providerRevision = "provider-phase6-slice4-revision-1"
-	providerAudience = "urn:shell-echo:sandbox-runtime:provider-instance:phase6-slice4"
+	providerRevision = "provider-phase6-slice5-revision-1"
+	providerAudience = "urn:shell-echo:sandbox-runtime:provider-instance:phase6-slice5"
 	providerIssuer   = "https://phase6-controller.example.test"
 	providerCaller   = "spiffe://phase6.example.test/provider-controller"
 	providerKeyID    = "phase6-controller-ed25519-1"
-	gateTenantID     = "tenant-phase6-slice4"
-	gateWorkOrderID  = "work-order-phase6-slice4"
-	gateSandboxID    = "sandbox-phase6-slice4"
+	gateTenantID     = "tenant-phase6-slice5"
+	gateWorkOrderID  = "work-order-phase6-slice5"
+	gateSandboxID    = "sandbox-phase6-slice5"
 )
 
 type gateProcess struct {
@@ -277,7 +276,7 @@ func newGateCA(t *testing.T, directory string) *gateCA {
 		t.Fatal(err)
 	}
 	now := time.Now().UTC()
-	template := &x509.Certificate{SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "phase6-slice4-ca"}, NotBefore: now.Add(-time.Minute), NotAfter: now.Add(2 * time.Hour), IsCA: true, BasicConstraintsValid: true, KeyUsage: x509.KeyUsageCertSign | x509.KeyUsageDigitalSignature}
+	template := &x509.Certificate{SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "phase6-slice5-ca"}, NotBefore: now.Add(-time.Minute), NotAfter: now.Add(2 * time.Hour), IsCA: true, BasicConstraintsValid: true, KeyUsage: x509.KeyUsageCertSign | x509.KeyUsageDigitalSignature}
 	der, err := x509.CreateCertificate(rand.Reader, template, template, publicKey, privateKey)
 	if err != nil {
 		t.Fatal(err)
@@ -415,10 +414,11 @@ type postgresAuthority struct {
 	runtimeDSN    string
 	migrationRole string
 	runtimeRole   string
+	runtimeGrants string
 	admin         *pgxpool.Pool
 }
 
-func startPostgresAuthority(t *testing.T, ctx context.Context, runID, database, migrationRole, runtimeRole string, migrate func(context.Context, *pgxpool.Pool) error, grants string) *postgresAuthority {
+func startPostgresAuthority(t *testing.T, ctx context.Context, runID, database, migrationRole, runtimeRole, grants string) *postgresAuthority {
 	t.Helper()
 	container := "sr-phase6-" + runID + "-postgres"
 	password := "phase6-" + runID
@@ -457,23 +457,11 @@ func startPostgresAuthority(t *testing.T, ctx context.Context, runID, database, 
 	}
 	migrationDSN := fmt.Sprintf("postgres://%s:%s@127.0.0.1:%s/%s?sslmode=disable", migrationRole, migrationPassword, port, database)
 	runtimeDSN := fmt.Sprintf("postgres://%s:%s@127.0.0.1:%s/%s?sslmode=disable", runtimeRole, runtimePassword, port, database)
-	migrationPool, err := pgxpool.New(ctx, migrationDSN)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := migrate(ctx, migrationPool); err != nil {
-		migrationPool.Close()
-		t.Fatal(err)
-	}
-	migrationPool.Close()
-	if _, err := admin.Exec(ctx, grants); err != nil {
-		t.Fatal(err)
-	}
-	return &postgresAuthority{container: container, adminDSN: adminDSN, migrationDSN: migrationDSN, runtimeDSN: runtimeDSN, migrationRole: migrationRole, runtimeRole: runtimeRole, admin: admin}
+	return &postgresAuthority{container: container, adminDSN: adminDSN, migrationDSN: migrationDSN, runtimeDSN: runtimeDSN, migrationRole: migrationRole, runtimeRole: runtimeRole, runtimeGrants: grants, admin: admin}
 }
 
 func startProductPostgres(t *testing.T, ctx context.Context, runID string) *postgresAuthority {
-	return startPostgresAuthority(t, ctx, runID, "product", "product_migrator", "product_runtime", productpostgres.ApplyMigrations, `GRANT USAGE ON SCHEMA sandbox_runtime_product TO product_runtime;
+	return startPostgresAuthority(t, ctx, runID, "product", "product_migrator", "product_runtime", `GRANT USAGE ON SCHEMA sandbox_runtime_product TO product_runtime;
 GRANT SELECT ON sandbox_runtime_product.schema_migrations TO product_runtime;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA sandbox_runtime_product TO product_runtime;
 REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON sandbox_runtime_product.schema_migrations FROM product_runtime;
@@ -481,10 +469,20 @@ ALTER DEFAULT PRIVILEGES FOR ROLE product_migrator IN SCHEMA sandbox_runtime_pro
 }
 
 func startProviderPostgres(t *testing.T, ctx context.Context, runID string) *postgresAuthority {
-	return startPostgresAuthority(t, ctx, runID, "provider", "provider_migrator", "provider_runtime", providerpostgres.ApplyMigrations, `GRANT USAGE ON SCHEMA sandbox_runtime_provider TO provider_runtime;
+	return startPostgresAuthority(t, ctx, runID, "provider", "provider_migrator", "provider_runtime", `GRANT USAGE ON SCHEMA sandbox_runtime_provider TO provider_runtime;
 GRANT SELECT ON sandbox_runtime_provider.schema_migrations TO provider_runtime;
 GRANT SELECT, UPDATE ON sandbox_runtime_provider.control_state TO provider_runtime;
 REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON sandbox_runtime_provider.schema_migrations FROM provider_runtime`)
+}
+
+func applyRuntimeGrants(t *testing.T, ctx context.Context, authority *postgresAuthority) {
+	t.Helper()
+	if authority == nil || authority.admin == nil || strings.TrimSpace(authority.runtimeGrants) == "" {
+		t.Fatal("PostgreSQL runtime grants are not configured")
+	}
+	if _, err := authority.admin.Exec(ctx, authority.runtimeGrants); err != nil {
+		t.Fatalf("apply %s runtime grants: %v", authority.runtimeRole, err)
+	}
 }
 
 func quoteSQLLiteral(value string) string { return "'" + strings.ReplaceAll(value, "'", "''") + "'" }
@@ -566,7 +564,7 @@ func (c *protectedClient) do(t *testing.T, request protectedRequest) (int, []byt
 	contextValue := admission.AdmissionContext{
 		ContextContractID: admission.AdmissionContextContractID, ContextDigestProfile: admission.AdmissionContextDigestProfile,
 		ControllerSubject: c.caller, ProviderRevisionID: c.revision, ProviderInstanceAudience: c.audience,
-		TenantID: c.tenantID, WorkOrderID: c.workOrder, PolicyDigest: sha256Digest([]byte("phase6-slice4-policy")),
+		TenantID: c.tenantID, WorkOrderID: c.workOrder, PolicyDigest: sha256Digest([]byte("phase6-slice5-policy")),
 		PolicyDecidedAt: now.Add(-10 * time.Second).Format(time.RFC3339Nano), Operation: request.Operation,
 		SandboxID: request.SandboxID, OperationID: request.OperationID, AttemptID: request.AttemptID, FencingToken: request.Fence,
 		DeadlineAt: request.Deadline.Format(time.RFC3339Nano), RequestContractID: contractID, RequestDigestProfile: profile,
@@ -579,7 +577,7 @@ func (c *protectedClient) do(t *testing.T, request protectedRequest) (int, []byt
 	contextValue.ContextDigest = contextDigest
 	c.sequence++
 	claims := admission.TokenClaims{
-		JTI: fmt.Sprintf("phase6-slice4-jti-%016d", c.sequence), Issuer: c.issuer, Subject: c.caller, Audience: c.audience,
+		JTI: fmt.Sprintf("phase6-slice5-jti-%016d", c.sequence), Issuer: c.issuer, Subject: c.caller, Audience: c.audience,
 		IssuedAt: now.Add(-2 * time.Second).Unix(), NotBefore: now.Add(-time.Second).Unix(), ExpiresAt: now.Add(2 * time.Minute).Unix(),
 		Operation: request.Operation, ProviderRevisionID: c.revision, SandboxID: request.SandboxID, OperationID: request.OperationID,
 		AttemptID: request.AttemptID, FencingToken: request.Fence, TenantID: c.tenantID, WorkOrderID: c.workOrder,

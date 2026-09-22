@@ -55,7 +55,7 @@ func (c *ProductMigrationConfig) Validate() error {
 	if c.Materials.Provider.CacheSeconds != 0 {
 		return errors.New("Product migration material caching is forbidden")
 	}
-	bindings, err := c.Materials.decode(secretref.RoleProduct)
+	bindings, err := c.Materials.DecodeBindings(secretref.RoleProduct)
 	if err != nil {
 		return err
 	}

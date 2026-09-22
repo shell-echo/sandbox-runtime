@@ -1,10 +1,12 @@
 package config
 
 import (
+	"encoding/json"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/shell-echo/sandbox-runtime/internal/secretref"
 	desktopimage "github.com/shell-echo/sandbox-runtime/profiles/desktop/image"
 )
 
@@ -12,6 +14,63 @@ func TestProviderProcessDisabledDefaultsAreInert(t *testing.T) {
 	candidate := defaultProviderProcessConfig()
 	if candidate.Enabled || candidate.Validate() != nil {
 		t.Fatalf("disabled Provider process defaults = %#v", candidate)
+	}
+}
+
+func TestProviderProcessProductionV2RejectsRuntimeMigrationAndRawAuthority(t *testing.T) {
+	candidate := validProviderProcessConfig(t)
+	candidate.SchemaVersion = ProviderProductionSchemaV2
+	candidate.Transport.ServerCertificateFile = ""
+	candidate.Transport.ServerPrivateKeyFile = ""
+	candidate.Transport.ClientCABundleFile = ""
+	candidate.Transport.ServerCertificateBindingID = "provider-server-certificate"
+	candidate.Transport.ServerPrivateKeyBindingID = "provider-server-key"
+	candidate.Transport.ClientCABundleBindingID = "provider-client-ca"
+	candidate.Transport.ExpectedServerName = "provider.example.test"
+	candidate.Postgres.MigrationDSNFile = ""
+	candidate.Postgres.RuntimeDSNFile = ""
+	candidate.Postgres.MigrationRole = ""
+	candidate.Postgres.MigrationMaxConnections = 0
+	candidate.Postgres.RuntimeDSNBindingID = "provider-runtime-dsn"
+	candidate.ProtectedAdmission.TrustedVerificationKeys[0].PublicKeyFile = ""
+	candidate.ProtectedAdmission.TrustedVerificationKeys[0].PublicKeyBindingID = "provider-admission-key"
+	candidate.Materials.Provider = RoleMaterialProviderConfig{
+		Type: UnixWorkloadMaterialProviderV1, Alias: "provider-agent", SocketPath: "/tmp/sandbox-runtime-provider-agent.sock",
+		ExpectedUID: 501, ExpectedGID: 20, OperationTimeoutSeconds: 3, CacheSeconds: 30,
+	}
+	for _, item := range []struct {
+		id      string
+		purpose secretref.Purpose
+	}{
+		{"provider-server-certificate", secretref.PurposeTLSCertificate},
+		{"provider-server-key", secretref.PurposeTLSPrivateKey},
+		{"provider-client-ca", secretref.PurposeCABundle},
+		{"provider-runtime-dsn", secretref.PurposePostgresRuntimeDSN},
+		{"provider-admission-key", secretref.PurposeAdmissionVerification},
+	} {
+		document, err := json.Marshal(secretref.Binding{Schema: secretref.BindingSchema, Kind: secretref.KindSecret,
+			Reference: secretref.Reference("secret://vault/kv/" + item.id), Version: "v1", Purpose: item.purpose,
+			TenantID: secretref.SystemTenant, Role: secretref.RoleProvider})
+		if err != nil {
+			t.Fatal(err)
+		}
+		candidate.Materials.Bindings = append(candidate.Materials.Bindings, RoleMaterialBindingConfig{ID: item.id, Provider: "provider-agent", Document: string(document)})
+	}
+	if err := candidate.Validate(); err != nil {
+		t.Fatalf("valid Provider production v2 configuration: %v", err)
+	}
+
+	unsafe := *candidate
+	unsafe.Postgres = candidate.Postgres
+	unsafe.Postgres.MigrationRole = "provider_migrator"
+	if err := unsafe.Validate(); err == nil {
+		t.Fatal("Provider runtime accepted migration authority")
+	}
+	unsafe = *candidate
+	unsafe.Transport = candidate.Transport
+	unsafe.Transport.ServerPrivateKeyFile = "/tmp/provider.key"
+	if err := unsafe.Validate(); err == nil {
+		t.Fatal("Provider production v2 accepted a raw private-key path")
 	}
 }
 

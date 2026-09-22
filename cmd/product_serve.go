@@ -10,9 +10,9 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/shell-echo/sandbox-runtime/config"
+	"github.com/shell-echo/sandbox-runtime/internal/rolematerials"
 	"github.com/shell-echo/sandbox-runtime/internal/secretfile"
 	"github.com/shell-echo/sandbox-runtime/internal/secretref"
-	"github.com/shell-echo/sandbox-runtime/internal/secretref/workloadagent"
 	"github.com/shell-echo/sandbox-runtime/product"
 	productpostgres "github.com/shell-echo/sandbox-runtime/product/adapter/postgres"
 	"github.com/shell-echo/sandbox-runtime/productapi"
@@ -292,47 +292,8 @@ func newProductMigrationMaterialRegistry(materials config.ProductMaterialsConfig
 }
 
 func newProductAgentRegistry(materials config.ProductMaterialsConfig, allowedPurposes []secretref.Purpose, cache bool) (*secretref.Registry, error) {
-	bindings, err := materials.DecodeBindings(secretref.RoleProduct)
-	if err != nil || materials.Provider.Type != config.ProductUnixMaterialProviderV1 {
-		return nil, errors.New("invalid Product material registry configuration")
-	}
-	provider, err := workloadagent.NewProduction(workloadagent.Config{
-		SocketPath:       materials.Provider.SocketPath,
-		ExpectedUID:      uint32(materials.Provider.ExpectedUID),
-		ExpectedGID:      uint32(materials.Provider.ExpectedGID),
-		Role:             secretref.RoleProduct,
-		OperationTimeout: time.Duration(materials.Provider.OperationTimeoutSeconds) * time.Second,
-		Now:              time.Now,
-	})
+	registry, err := rolematerials.New(materials, secretref.RoleProduct, allowedPurposes, cache, time.Now)
 	if err != nil {
-		return nil, errors.New("Product workload material agent is unavailable")
-	}
-	var registeredProvider secretref.SecretProvider = provider
-	var cached *secretref.CachedSecretProvider
-	if cache {
-		cached, err = secretref.NewCachedSecretProvider(provider, time.Duration(materials.Provider.CacheSeconds)*time.Second, len(bindings), time.Now)
-		if err != nil {
-			return nil, errors.New("construct Product material cache")
-		}
-		registeredProvider = cached
-	}
-	registrations := make([]secretref.BindingRegistration, 0, len(materials.Bindings))
-	for _, configured := range materials.Bindings {
-		binding, ok := bindings[configured.ID]
-		if !ok {
-			if cached != nil {
-				cached.Close()
-			}
-			return nil, errors.New("construct Product material registry")
-		}
-		registrations = append(registrations, secretref.BindingRegistration{ID: configured.ID, Provider: configured.Provider, Binding: binding})
-	}
-	registry, err := secretref.NewRegistry(secretref.RoleProduct, allowedPurposes,
-		[]secretref.ProviderRegistration{{Name: materials.Provider.Alias, Provider: registeredProvider}}, registrations, time.Now)
-	if err != nil {
-		if cached != nil {
-			cached.Close()
-		}
 		return nil, errors.New("construct Product material registry")
 	}
 	return registry, nil

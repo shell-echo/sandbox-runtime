@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/shell-echo/sandbox-runtime/internal/secretref"
 	"github.com/shell-echo/sandbox-runtime/option"
 	desktopimage "github.com/shell-echo/sandbox-runtime/profiles/desktop/image"
 	"github.com/shell-echo/sandbox-runtime/provider/admission"
@@ -15,8 +16,10 @@ import (
 )
 
 const (
-	defaultProviderProcessHost = "127.0.0.1"
-	defaultProviderProcessPort = 8444
+	defaultProviderProcessHost         = "127.0.0.1"
+	defaultProviderProcessPort         = 8444
+	ProviderLegacyLocalCandidateSchema = "sandbox-runtime.provider-process.legacy-local-candidate.v1"
+	ProviderProductionSchemaV2         = "sandbox-runtime.provider-process.v2"
 )
 
 type ProviderProcessProfile string
@@ -34,6 +37,7 @@ const (
 // no local /instances listener, local repository, Product identity, or public
 // Gateway configuration.
 type ProviderProcessConfig struct {
+	SchemaVersion      string                          `mapstructure:"schema_version"`
 	Enabled            bool                            `mapstructure:"enabled"`
 	DeploymentLevel    ProviderDeploymentLevel         `mapstructure:"deployment_level"`
 	Profile            ProviderProcessProfile          `mapstructure:"profile"`
@@ -45,6 +49,7 @@ type ProviderProcessConfig struct {
 	Coding             ProviderProcessCodingConfig     `mapstructure:"coding"`
 	Desktop            ProviderProcessDesktopConfig    `mapstructure:"desktop"`
 	Reconciliation     ProviderReconciliationConfig    `mapstructure:"reconciliation"`
+	Materials          RoleMaterialsConfig             `mapstructure:"materials"`
 }
 
 type ProviderProcessCapabilityConfig struct {
@@ -62,6 +67,7 @@ type ProviderProcessAdmissionConfig struct {
 type ProviderPostgresConfig struct {
 	MigrationDSNFile        string `mapstructure:"migration_dsn_file"`
 	RuntimeDSNFile          string `mapstructure:"runtime_dsn_file"`
+	RuntimeDSNBindingID     string `mapstructure:"runtime_dsn_binding_id"`
 	MigrationRole           string `mapstructure:"migration_role"`
 	RuntimeRole             string `mapstructure:"runtime_role"`
 	StartupTimeoutSeconds   int    `mapstructure:"startup_timeout_seconds"`
@@ -78,21 +84,25 @@ type ProviderProcessCodingConfig struct {
 }
 
 type ProviderProcessDesktopConfig struct {
-	Architecture                 string                          `mapstructure:"architecture"`
-	ExecutorURL                  string                          `mapstructure:"executor_url"`
-	BrokerMuxSocketPath          string                          `mapstructure:"broker_mux_socket_path"`
-	ExecutorCABundleFile         string                          `mapstructure:"executor_ca_bundle_file"`
-	ExecutorCertificateFile      string                          `mapstructure:"executor_certificate_file"`
-	ExecutorPrivateKeyFile       string                          `mapstructure:"executor_private_key_file"`
-	ExecutorIdentity             string                          `mapstructure:"executor_identity"`
-	ExecutorBridgeKeyID          string                          `mapstructure:"executor_bridge_key_id"`
-	ExecutorBridgePrivateKeyFile string                          `mapstructure:"executor_bridge_private_key_file"`
-	LocalCandidateManifestFile   string                          `mapstructure:"local_candidate_manifest_file"`
-	UsageRetentionSeconds        int                             `mapstructure:"usage_retention_seconds"`
-	ShutdownCleanupSeconds       int                             `mapstructure:"shutdown_cleanup_seconds"`
-	Docker                       ProviderDesktopDockerConfig     `mapstructure:"docker"`
-	Provenance                   ProviderBrowserProvenanceConfig `mapstructure:"provenance"`
-	RestrictedNetwork            ProviderBrowserNetworkConfig    `mapstructure:"restricted_network"`
+	Architecture                      string                          `mapstructure:"architecture"`
+	ExecutorURL                       string                          `mapstructure:"executor_url"`
+	BrokerMuxSocketPath               string                          `mapstructure:"broker_mux_socket_path"`
+	ExecutorCABundleFile              string                          `mapstructure:"executor_ca_bundle_file"`
+	ExecutorCertificateFile           string                          `mapstructure:"executor_certificate_file"`
+	ExecutorPrivateKeyFile            string                          `mapstructure:"executor_private_key_file"`
+	ExecutorIdentity                  string                          `mapstructure:"executor_identity"`
+	ExecutorBridgeKeyID               string                          `mapstructure:"executor_bridge_key_id"`
+	ExecutorBridgePrivateKeyFile      string                          `mapstructure:"executor_bridge_private_key_file"`
+	ExecutorCABundleBindingID         string                          `mapstructure:"executor_ca_bundle_binding_id"`
+	ExecutorCertificateBindingID      string                          `mapstructure:"executor_certificate_binding_id"`
+	ExecutorPrivateKeyBindingID       string                          `mapstructure:"executor_private_key_binding_id"`
+	ExecutorBridgePrivateKeyBindingID string                          `mapstructure:"executor_bridge_private_key_binding_id"`
+	LocalCandidateManifestFile        string                          `mapstructure:"local_candidate_manifest_file"`
+	UsageRetentionSeconds             int                             `mapstructure:"usage_retention_seconds"`
+	ShutdownCleanupSeconds            int                             `mapstructure:"shutdown_cleanup_seconds"`
+	Docker                            ProviderDesktopDockerConfig     `mapstructure:"docker"`
+	Provenance                        ProviderBrowserProvenanceConfig `mapstructure:"provenance"`
+	RestrictedNetwork                 ProviderBrowserNetworkConfig    `mapstructure:"restricted_network"`
 }
 
 type ProviderDesktopDockerConfig struct {
@@ -127,6 +137,7 @@ type ProviderReconciliationConfig struct {
 
 func defaultProviderProcessConfig() *ProviderProcessConfig {
 	return &ProviderProcessConfig{
+		SchemaVersion:   ProviderLegacyLocalCandidateSchema,
 		DeploymentLevel: ProviderProductionLevel,
 		Transport:       ProviderTransportConfig{Address: providerDefaultHTTP(defaultProviderProcessHost, defaultProviderProcessPort)},
 		Probe:           providerDefaultHTTP("127.0.0.1", 8084),
@@ -161,14 +172,24 @@ func (c *ProviderProcessConfig) Validate() error { //nolint:cyclop
 	if !c.Enabled {
 		return nil
 	}
+	materialSchema := c.SchemaVersion == ProviderProductionSchemaV2
+	if !materialSchema && c.SchemaVersion != ProviderLegacyLocalCandidateSchema {
+		return errors.New("provider_process schema_version is invalid")
+	}
 	if c.DeploymentLevel != ProviderProductionLevel && c.DeploymentLevel != ProviderLocalCandidateLevel {
 		return errors.New("provider_process requires deployment_level=production or local_candidate")
 	}
 	if !c.Transport.Enabled {
 		return errors.New("provider_process transport must be enabled")
 	}
-	if err := c.Transport.validateEnabled(); err != nil {
-		return fmt.Errorf("provider_process.transport: %w", err)
+	var transportErr error
+	if materialSchema {
+		transportErr = c.Transport.validateMaterialEnabled()
+	} else {
+		transportErr = c.Transport.validateEnabled()
+	}
+	if transportErr != nil {
+		return fmt.Errorf("provider_process.transport: %w", transportErr)
 	}
 	if net.ParseIP(c.Transport.Address.Host) == nil {
 		return errors.New("provider_process.transport.address.host must be an explicit IP address")
@@ -180,10 +201,10 @@ func (c *ProviderProcessConfig) Validate() error { //nolint:cyclop
 	if err := capability.validateEnabled(); err != nil {
 		return fmt.Errorf("provider_process.capability: %w", err)
 	}
-	if err := c.validateAdmission(); err != nil {
+	if err := c.validateAdmission(materialSchema); err != nil {
 		return err
 	}
-	if err := c.validatePostgres(); err != nil {
+	if err := c.validatePostgres(materialSchema); err != nil {
 		return err
 	}
 	if c.Reconciliation.IntervalSeconds < 1 || c.Reconciliation.IntervalSeconds > 60 || c.Reconciliation.TimeoutSeconds < 1 || c.Reconciliation.TimeoutSeconds > 30 || c.Reconciliation.TimeoutSeconds > c.Reconciliation.IntervalSeconds*5 {
@@ -201,7 +222,7 @@ func (c *ProviderProcessConfig) Validate() error { //nolint:cyclop
 			return errors.New("Desktop runtime authority is forbidden for the coding_shell Provider profile")
 		}
 	case ProviderProcessDesktopProfile:
-		if err := c.validateDesktop(); err != nil {
+		if err := c.validateDesktop(materialSchema); err != nil {
 			return err
 		}
 		if c.Coding.Lifecycle.Image != "" {
@@ -210,10 +231,13 @@ func (c *ProviderProcessConfig) Validate() error { //nolint:cyclop
 	default:
 		return fmt.Errorf("provider_process.profile %q is invalid", c.Profile)
 	}
+	if materialSchema {
+		return c.validateMaterialAuthority()
+	}
 	return c.validateAuthorityPaths()
 }
 
-func (c *ProviderProcessConfig) validateAdmission() error {
+func (c *ProviderProcessConfig) validateAdmission(materialSchema bool) error {
 	if _, err := admission.NewAdmissionAuthority(c.ProtectedAdmission.Issuer, c.Capability.ProviderRevisionID, c.ProtectedAdmission.ProviderInstanceAudience); err != nil {
 		return fmt.Errorf("provider_process.protected_admission: %w", err)
 	}
@@ -230,16 +254,32 @@ func (c *ProviderProcessConfig) validateAdmission() error {
 			return errors.New("provider_process trusted verification key IDs must be unique")
 		}
 		seen[key.ID] = struct{}{}
+		if materialSchema {
+			if key.PublicKeyFile != "" || key.PublicKeyBindingID == "" {
+				return errors.New("provider_process trusted verification key requires a material binding")
+			}
+		} else if key.PublicKeyBindingID != "" {
+			return errors.New("provider_process legacy verification key cannot contain a material binding")
+		}
 	}
 	return nil
 }
 
-func (c *ProviderProcessConfig) validatePostgres() error {
+func (c *ProviderProcessConfig) validatePostgres(materialSchema bool) error {
 	p := c.Postgres
-	if p.StartupTimeoutSeconds < 1 || p.StartupTimeoutSeconds > 60 || p.OperationTimeoutSeconds < 1 || p.OperationTimeoutSeconds > 30 || p.MigrationMaxConnections < 1 || p.MigrationMaxConnections > 4 || p.MaxConnections < 1 || p.MaxConnections > 64 || p.MinConnections < 0 || p.MinConnections > p.MaxConnections {
+	if p.StartupTimeoutSeconds < 1 || p.StartupTimeoutSeconds > 60 || p.OperationTimeoutSeconds < 1 || p.OperationTimeoutSeconds > 30 || p.MaxConnections < 1 || p.MaxConnections > 64 || p.MinConnections < 0 || p.MinConnections > p.MaxConnections {
 		return errors.New("provider_process PostgreSQL connection bounds are invalid")
 	}
-	if !postgresRolePattern.MatchString(p.MigrationRole) || !postgresRolePattern.MatchString(p.RuntimeRole) || p.MigrationRole == p.RuntimeRole {
+	if !postgresRolePattern.MatchString(p.RuntimeRole) {
+		return errors.New("provider_process runtime PostgreSQL role must be an explicit identifier")
+	}
+	if materialSchema {
+		if p.MigrationDSNFile != "" || p.RuntimeDSNFile != "" || p.MigrationRole != "" || p.MigrationMaxConnections != 0 || p.RuntimeDSNBindingID == "" {
+			return errors.New("provider_process runtime schema forbids migration and raw PostgreSQL authority")
+		}
+		return nil
+	}
+	if p.RuntimeDSNBindingID != "" || p.MigrationMaxConnections < 1 || p.MigrationMaxConnections > 4 || !postgresRolePattern.MatchString(p.MigrationRole) || p.MigrationRole == p.RuntimeRole {
 		return errors.New("provider_process migration and runtime PostgreSQL roles must be distinct explicit identifiers")
 	}
 	return nil
@@ -270,7 +310,7 @@ func (c *ProviderProcessConfig) validateCoding() error {
 	return nil
 }
 
-func (c *ProviderProcessConfig) validateDesktop() error {
+func (c *ProviderProcessConfig) validateDesktop(materialSchema bool) error {
 	d := c.Desktop
 	if d.Architecture != "amd64" && d.Architecture != "arm64" || d.UsageRetentionSeconds < 60 || d.UsageRetentionSeconds > 2_592_000 || d.ShutdownCleanupSeconds < 1 || d.ShutdownCleanupSeconds > 300 {
 		return errors.New("provider_process Desktop architecture or duration is invalid")
@@ -318,9 +358,16 @@ func (c *ProviderProcessConfig) validateDesktop() error {
 		if !providerProfileIDPattern.MatchString(d.ExecutorIdentity) || !providerProfileIDPattern.MatchString(d.ExecutorBridgeKeyID) {
 			return errors.New("provider_process Desktop executor identity or bridge key ID is invalid")
 		}
-		for name, path := range map[string]string{"executor CA": d.ExecutorCABundleFile, "executor certificate": d.ExecutorCertificateFile, "executor key": d.ExecutorPrivateKeyFile, "executor bridge key": d.ExecutorBridgePrivateKeyFile} {
-			if err := validateAbsoluteSecretPath("provider_process Desktop "+name, path); err != nil {
-				return err
+		if materialSchema {
+			if d.ExecutorCABundleFile != "" || d.ExecutorCertificateFile != "" || d.ExecutorPrivateKeyFile != "" || d.ExecutorBridgePrivateKeyFile != "" ||
+				d.ExecutorCABundleBindingID == "" || d.ExecutorCertificateBindingID == "" || d.ExecutorPrivateKeyBindingID == "" || d.ExecutorBridgePrivateKeyBindingID == "" {
+				return errors.New("provider_process Desktop executor requires material bindings and forbids raw credential paths")
+			}
+		} else {
+			for name, path := range map[string]string{"executor CA": d.ExecutorCABundleFile, "executor certificate": d.ExecutorCertificateFile, "executor key": d.ExecutorPrivateKeyFile, "executor bridge key": d.ExecutorBridgePrivateKeyFile} {
+				if err := validateAbsoluteSecretPath("provider_process Desktop "+name, path); err != nil {
+					return err
+				}
 			}
 		}
 		if !filepath.IsAbs(d.BrokerMuxSocketPath) || filepath.Clean(d.BrokerMuxSocketPath) != d.BrokerMuxSocketPath || !providerDesktopBrokerMuxSocketPattern.MatchString(filepath.Base(d.BrokerMuxSocketPath)) {
@@ -328,13 +375,18 @@ func (c *ProviderProcessConfig) validateDesktop() error {
 		}
 	} else if c.DeploymentLevel == ProviderLocalCandidateLevel {
 		return errors.New("provider_process local candidate requires the Desktop executor")
-	} else if d.ExecutorCABundleFile != "" || d.ExecutorCertificateFile != "" || d.ExecutorPrivateKeyFile != "" || d.ExecutorIdentity != "" || d.ExecutorBridgeKeyID != "" || d.ExecutorBridgePrivateKeyFile != "" || d.BrokerMuxSocketPath != "" {
+	} else if d.ExecutorCABundleFile != "" || d.ExecutorCertificateFile != "" || d.ExecutorPrivateKeyFile != "" || d.ExecutorIdentity != "" || d.ExecutorBridgeKeyID != "" || d.ExecutorBridgePrivateKeyFile != "" || d.BrokerMuxSocketPath != "" || d.ExecutorCABundleBindingID != "" || d.ExecutorCertificateBindingID != "" || d.ExecutorPrivateKeyBindingID != "" || d.ExecutorBridgePrivateKeyBindingID != "" {
 		return errors.New("provider_process Desktop executor credentials require executor_url")
 	}
 	return nil
 }
 
 func (c *ProviderProcessConfig) validateAuthorityPaths() error {
+	if !c.Materials.IsZero() || c.Transport.ServerCertificateBindingID != "" || c.Transport.ServerPrivateKeyBindingID != "" || c.Transport.ClientCABundleBindingID != "" || c.Transport.ExpectedServerName != "" ||
+		c.Transport.Private.ServerCertificateBindingID != "" || c.Transport.Private.ServerPrivateKeyBindingID != "" || c.Transport.Private.ClientCABundleBindingID != "" || c.Transport.Private.ExpectedServerName != "" ||
+		c.Postgres.RuntimeDSNBindingID != "" || c.Desktop.ExecutorCABundleBindingID != "" || c.Desktop.ExecutorCertificateBindingID != "" || c.Desktop.ExecutorPrivateKeyBindingID != "" || c.Desktop.ExecutorBridgePrivateKeyBindingID != "" {
+		return errors.New("provider_process legacy schema cannot contain production material bindings")
+	}
 	paths := []struct{ name, value string }{
 		{"transport certificate", c.Transport.ServerCertificateFile}, {"transport key", c.Transport.ServerPrivateKeyFile},
 		{"client CA", c.Transport.ClientCABundleFile}, {"migration DSN", c.Postgres.MigrationDSNFile}, {"runtime DSN", c.Postgres.RuntimeDSNFile},
@@ -370,6 +422,79 @@ func (c *ProviderProcessConfig) validateAuthorityPaths() error {
 			return errors.New("provider_process authority files must use distinct paths")
 		}
 		seen[clean] = struct{}{}
+	}
+	return nil
+}
+
+func (c *ProviderProcessConfig) validateMaterialAuthority() error {
+	bindings, err := c.Materials.DecodeBindings(secretref.RoleProvider)
+	if err != nil || c.Materials.Provider.CacheSeconds < 1 {
+		return errors.New("provider_process material registry is invalid")
+	}
+	selections := []struct {
+		id      string
+		purpose secretref.Purpose
+	}{
+		{c.Transport.ServerCertificateBindingID, secretref.PurposeTLSCertificate},
+		{c.Transport.ServerPrivateKeyBindingID, secretref.PurposeTLSPrivateKey},
+		{c.Transport.ClientCABundleBindingID, secretref.PurposeCABundle},
+		{c.Postgres.RuntimeDSNBindingID, secretref.PurposePostgresRuntimeDSN},
+	}
+	if c.Transport.Private.Enabled {
+		selections = append(selections,
+			struct {
+				id      string
+				purpose secretref.Purpose
+			}{c.Transport.Private.ServerCertificateBindingID, secretref.PurposeTLSCertificate},
+			struct {
+				id      string
+				purpose secretref.Purpose
+			}{c.Transport.Private.ServerPrivateKeyBindingID, secretref.PurposeTLSPrivateKey},
+			struct {
+				id      string
+				purpose secretref.Purpose
+			}{c.Transport.Private.ClientCABundleBindingID, secretref.PurposeCABundle},
+		)
+	}
+	for _, key := range c.ProtectedAdmission.TrustedVerificationKeys {
+		selections = append(selections, struct {
+			id      string
+			purpose secretref.Purpose
+		}{key.PublicKeyBindingID, secretref.PurposeAdmissionVerification})
+	}
+	if c.Desktop.ExecutorURL != "" {
+		selections = append(selections,
+			struct {
+				id      string
+				purpose secretref.Purpose
+			}{c.Desktop.ExecutorCABundleBindingID, secretref.PurposeCABundle},
+			struct {
+				id      string
+				purpose secretref.Purpose
+			}{c.Desktop.ExecutorCertificateBindingID, secretref.PurposeTLSCertificate},
+			struct {
+				id      string
+				purpose secretref.Purpose
+			}{c.Desktop.ExecutorPrivateKeyBindingID, secretref.PurposeExecutorClientKey},
+			struct {
+				id      string
+				purpose secretref.Purpose
+			}{c.Desktop.ExecutorBridgePrivateKeyBindingID, secretref.PurposeExecutorBridgeKey},
+		)
+	}
+	if len(bindings) != len(selections) {
+		return errors.New("provider_process material bindings must contain exactly the selected authorities")
+	}
+	selected := make(map[string]struct{}, len(selections))
+	for _, selection := range selections {
+		binding, ok := bindings[selection.id]
+		if selection.id == "" || !ok || binding.Purpose != selection.purpose || binding.TenantID != secretref.SystemTenant || binding.Role != secretref.RoleProvider {
+			return errors.New("provider_process material selection is invalid")
+		}
+		if _, duplicate := selected[selection.id]; duplicate {
+			return errors.New("provider_process material selections must be distinct")
+		}
+		selected[selection.id] = struct{}{}
 	}
 	return nil
 }

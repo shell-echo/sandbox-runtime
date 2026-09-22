@@ -3,6 +3,7 @@
 package productphase6gate
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -18,6 +19,7 @@ import (
 	"time"
 
 	"github.com/shell-echo/sandbox-runtime/internal/productphase6evidence"
+	slice5evidence "github.com/shell-echo/sandbox-runtime/internal/productphase6slice5evidence"
 )
 
 type scenarioObservation struct {
@@ -46,7 +48,7 @@ func writePhase6Evidence(t *testing.T, environment *gateEnvironment) {
 		roleDigests[role.Name] = role.EvidenceDigest
 	}
 	scenarios := observedScenarios(t, environment, roleDigests)
-	manifest := productphase6evidence.Manifest{
+	runtimeManifest := productphase6evidence.Manifest{
 		Identity: productphase6evidence.Identity{
 			RuntimeImplementationRevision:   environment.repository.RuntimeImplementationRevision,
 			RuntimeImplementationTreeDigest: environment.repository.RuntimeImplementationTreeDigest,
@@ -78,21 +80,51 @@ func writePhase6Evidence(t *testing.T, environment *gateEnvironment) {
 			"thirty-second first-frame limit is a test safety bound, not a production SLO",
 		},
 	}
-	manifest.Cleanup.EvidenceDigest = productphase6evidence.CleanupEvidenceDigest(manifest.Cleanup)
-	sealed, err := productphase6evidence.Seal(manifest)
+	runtimeManifest.Cleanup.EvidenceDigest = productphase6evidence.CleanupEvidenceDigest(runtimeManifest.Cleanup)
+	sealedRuntime, err := productphase6evidence.Seal(runtimeManifest)
 	if err != nil {
-		t.Fatalf("seal observed Phase 6 evidence: %v", err)
+		t.Fatalf("seal embedded Phase 6 runtime evidence: %v", err)
+	}
+	slice5Cleanup := observedSlice5Cleanup(t, environment)
+	manifest := slice5evidence.Manifest{
+		RuntimeGate: sealedRuntime, RoleMaterialAndCredentials: environment.roleMaterialEvidence,
+		RecordingTransitAdapter: environment.recordingEvidence,
+		CapabilityBoundary: slice5evidence.CapabilityBoundary{ProductKernelCapabilityReadiness: "unavailable",
+			RecordingContentStoreComposed: false, RecordingContentE2E: false, TicketEnvelopeConsumerComposed: false,
+			DataEnvelopeConsumerComposed: false, LegacyRecordingFallback: false, ProductionConfigEnablement: "schema_absent_and_unknown_fields_rejected"},
+		FutureGates: []slice5evidence.FutureGate{
+			{Slice: 8, Requirement: "compose KMS RecordingContentStore into the real Product or recording worker with write/read/rotation/restart/loss/integrity/cleanup evidence"},
+			{Slice: 11, Requirement: "verify deployment configuration cannot enable any uncomposed recording-content capability"},
+			{Slice: 14, Requirement: "run black-box encrypted recording E2E from published artifacts before release-candidate eligibility"},
+		},
+		Cleanup: slice5evidence.Cleanup{ZeroResources: true, Boundary: slice5evidence.CleanupBoundary, Resources: slice5Cleanup},
+		NonClaims: []string{
+			"Product OS process has not composed the KMS RecordingContentStore",
+			"public Product recording content E2E remains unproven",
+			"ticket and data envelope consumers are not composed",
+			"Vault software Transit evidence is not HSM evidence",
+			"distinct OS UIDs, service accounts and platform identity federation remain unproven",
+			"deployment, HA and production readiness remain unproven",
+			"metadata and catalog behavior is not encrypted content durability",
+			"the local Desktop candidate is not a published or signed artifact",
+		},
+	}
+	manifest.Cleanup.EvidenceDigest = slice5evidence.CleanupEvidenceDigest(manifest.Cleanup)
+	sealed, err := slice5evidence.Seal(manifest)
+	if err != nil {
+		t.Fatalf("seal observed Phase 6 Slice 5 evidence: %v", err)
 	}
 	document, err := json.Marshal(sealed)
 	if err != nil {
 		t.Fatal(err)
 	}
+	assertEvidenceExcludesManagedPlaintext(t, environment, document)
 	writeEvidenceFile(t, os.Getenv(evidencePathEnv), document)
-	verified, err := productphase6evidence.VerifyFile(os.Getenv(evidencePathEnv))
+	verified, err := slice5evidence.VerifyFile(os.Getenv(evidencePathEnv))
 	if err != nil || verified.ManifestDigest != sealed.ManifestDigest {
-		t.Fatalf("verify written Phase 6 evidence: manifest=%#v err=%v", verified, err)
+		t.Fatalf("verify written Phase 6 Slice 5 evidence: manifest=%#v err=%v", verified, err)
 	}
-	t.Logf("verified Phase 6 Slice 4 evidence %s at %s", sealed.ManifestDigest, os.Getenv(evidencePathEnv))
+	t.Logf("verified Phase 6 Slice 5 evidence %s at %s", sealed.ManifestDigest, os.Getenv(evidencePathEnv))
 }
 
 func observedRoles(t *testing.T, environment *gateEnvironment) []productphase6evidence.Role {
@@ -193,7 +225,7 @@ func cleanGateEnvironment(t *testing.T, environment *gateEnvironment) []productp
 	}
 	environment.productDB.admin.Close()
 	environment.providerDB.admin.Close()
-	for _, container := range []string{environment.productDB.container, environment.providerDB.container, environment.chromiumName} {
+	for _, container := range []string{environment.productDB.container, environment.providerDB.container, environment.chromiumName, environment.vaultContainer} {
 		runDockerCleanup(t, "rm", "-f", container)
 	}
 	waitFor(t, 15*time.Second, "zero Phase 6 namespace resources before uplink removal", func() bool {
@@ -207,20 +239,35 @@ func cleanGateEnvironment(t *testing.T, environment *gateEnvironment) []productp
 	}
 	waitFor(t, 10*time.Second, "exact Phase 6 teardown", func() bool {
 		return remainingProcessCount(environment) == 0 &&
-			dockerObjectCount("ps", "-aq", "--filter", "label=io.github.shell-echo.sandbox-runtime.namespace=phase6-slice4") == 0 &&
-			dockerObjectCount("network", "ls", "-q", "--filter", "label=io.github.shell-echo.sandbox-runtime.namespace=phase6-slice4") == 0 &&
-			dockerContainerCount(environment.productDB.container, environment.providerDB.container, environment.chromiumName) == 0 &&
+			dockerObjectCount("ps", "-aq", "--filter", "label=io.github.shell-echo.sandbox-runtime.namespace=phase6-slice5") == 0 &&
+			dockerObjectCount("network", "ls", "-q", "--filter", "label=io.github.shell-echo.sandbox-runtime.namespace=phase6-slice5") == 0 &&
+			dockerContainerCount(environment.productDB.container, environment.providerDB.container, environment.chromiumName, environment.vaultContainer) == 0 &&
 			dockerImageCount(environment.gatewayImage) == 0 &&
-			pathCount(environment.paths.brokerSocket) == 0 &&
+			pathCount(environment.paths.brokerSocket)+gateAuthoritySocketCount(environment) == 0 &&
 			listenerCount(environment.guest.address) == 0
 	})
+	authorityDirectories := map[string]struct{}{
+		filepath.Dir(environment.paths.credentialLedger): {},
+		filepath.Dir(environment.paths.breakGlassLedger): {},
+	}
+	for _, path := range environment.paths.materialSockets {
+		authorityDirectories[filepath.Dir(path)] = struct{}{}
+	}
+	for _, path := range environment.paths.breakGlassSockets {
+		authorityDirectories[filepath.Dir(path)] = struct{}{}
+	}
+	for directory := range authorityDirectories {
+		if err := os.RemoveAll(directory); err != nil {
+			t.Fatal(err)
+		}
+	}
 	resources := []productphase6evidence.Resource{
 		{Name: "role_processes", Count: remainingRoleProcessCount(environment)},
 		{Name: "executor_backend_processes", Count: remainingDependencyProcessCount(environment)},
-		{Name: "desktop_namespace_containers", Count: dockerObjectCount("ps", "-aq", "--filter", "label=io.github.shell-echo.sandbox-runtime.namespace=phase6-slice4")},
-		{Name: "desktop_namespace_networks", Count: dockerObjectCount("network", "ls", "-q", "--filter", "label=io.github.shell-echo.sandbox-runtime.namespace=phase6-slice4")},
-		{Name: "postgres_and_chromium_containers", Count: dockerContainerCount(environment.productDB.container, environment.providerDB.container, environment.chromiumName)},
-		{Name: "desktop_broker_socket", Count: pathCount(environment.paths.brokerSocket)},
+		{Name: "desktop_namespace_containers", Count: dockerObjectCount("ps", "-aq", "--filter", "label=io.github.shell-echo.sandbox-runtime.namespace=phase6-slice5")},
+		{Name: "desktop_namespace_networks", Count: dockerObjectCount("network", "ls", "-q", "--filter", "label=io.github.shell-echo.sandbox-runtime.namespace=phase6-slice5")},
+		{Name: "postgres_and_chromium_containers", Count: dockerContainerCount(environment.productDB.container, environment.providerDB.container, environment.chromiumName, environment.vaultContainer)},
+		{Name: "desktop_broker_socket", Count: pathCount(environment.paths.brokerSocket) + gateAuthoritySocketCount(environment)},
 		{Name: "browser_gateway_image", Count: dockerImageCount(environment.gatewayImage)},
 		{Name: "guest_fixture_listener", Count: listenerCount(environment.guest.address)},
 	}
@@ -230,6 +277,115 @@ func cleanGateEnvironment(t *testing.T, environment *gateEnvironment) []productp
 		}
 	}
 	return resources
+}
+
+func observedSlice5Cleanup(t *testing.T, environment *gateEnvironment) []slice5evidence.Resource {
+	t.Helper()
+	materialSockets, breakGlassSockets := 0, 0
+	for _, path := range environment.paths.materialSockets {
+		materialSockets += pathCount(path)
+	}
+	for _, path := range environment.paths.breakGlassSockets {
+		breakGlassSockets += pathCount(path)
+	}
+	resources := []slice5evidence.Resource{
+		{Name: "role_processes", Count: remainingRoleProcessCount(environment)},
+		{Name: "executor_backend_processes", Count: remainingNamedProcesses(environment.dependencies, "browser-backend", "desktop-backend")},
+		{Name: "workload_material_agent_processes", Count: remainingGateProcesses(environment.materialAgentHistory)},
+		{Name: "workload_credential_controller_processes", Count: remainingNamedProcesses(environment.dependencies, "workload-credential-controller")},
+		{Name: "break_glass_controller_processes", Count: remainingNamedProcesses(environment.dependencies, "break-glass-controller")},
+		{Name: "desktop_namespace_containers", Count: dockerObjectCount("ps", "-aq", "--filter", "label=io.github.shell-echo.sandbox-runtime.namespace=phase6-slice5")},
+		{Name: "desktop_namespace_networks", Count: dockerObjectCount("network", "ls", "-q", "--filter", "label=io.github.shell-echo.sandbox-runtime.namespace=phase6-slice5")},
+		{Name: "postgres_containers", Count: dockerContainerCount(environment.productDB.container, environment.providerDB.container)},
+		{Name: "chromium_containers", Count: dockerContainerCount(environment.chromiumName)},
+		{Name: "vault_containers", Count: dockerContainerCount(environment.vaultContainer)},
+		{Name: "browser_gateway_images", Count: dockerImageCount(environment.gatewayImage)},
+		{Name: "desktop_broker_sockets", Count: pathCount(environment.paths.brokerSocket)},
+		{Name: "material_agent_sockets", Count: materialSockets},
+		{Name: "credential_controller_sockets", Count: pathCount(environment.paths.credentialSocket)},
+		{Name: "break_glass_sockets", Count: pathCount(environment.paths.breakGlassControllerSocket) + breakGlassSockets},
+		{Name: "credential_state_files", Count: pathCount(environment.paths.credentialLedger)},
+		{Name: "break_glass_state_files", Count: pathCount(environment.paths.breakGlassLedger) + pathCount(environment.paths.breakGlassAudit)},
+		{Name: "guest_fixture_listeners", Count: listenerCount(environment.guest.address)},
+	}
+	for _, resource := range resources {
+		if resource.Count != 0 {
+			t.Fatalf("Phase 6 Slice 5 cleanup left %s=%d", resource.Name, resource.Count)
+		}
+	}
+	return resources
+}
+
+func remainingGateProcesses(processes []*gateProcess) int {
+	count := 0
+	seen := make(map[*gateProcess]struct{}, len(processes))
+	for _, process := range processes {
+		if process == nil {
+			continue
+		}
+		if _, duplicate := seen[process]; duplicate {
+			continue
+		}
+		seen[process] = struct{}{}
+		process.mu.Lock()
+		state := process.cmd.ProcessState
+		process.mu.Unlock()
+		if state == nil || !state.Exited() {
+			count++
+		}
+	}
+	return count
+}
+
+func remainingNamedProcesses(processes []*gateProcess, names ...string) int {
+	wanted := make(map[string]struct{}, len(names))
+	for _, name := range names {
+		wanted[name] = struct{}{}
+	}
+	selected := make([]*gateProcess, 0, len(processes))
+	for _, process := range processes {
+		if process != nil {
+			if _, ok := wanted[process.name]; ok {
+				selected = append(selected, process)
+			}
+		}
+	}
+	return remainingGateProcesses(selected)
+}
+
+func assertEvidenceExcludesManagedPlaintext(t *testing.T, environment *gateEnvironment, document []byte) {
+	t.Helper()
+	check := func(name string, value []byte) {
+		if len(value) >= 16 && bytes.Contains(document, value) {
+			t.Fatalf("Slice 5 evidence contains managed plaintext %s", name)
+		}
+	}
+	check("Vault management credential", []byte(environment.vaultRootToken))
+	check("Provider admission key", environment.admissionKey)
+	check("Product signing key", environment.productToken)
+	check("break-glass controller key", environment.breakGlassControllerKey)
+	for name, key := range environment.credentialKeys {
+		check(name+" credential identity", key)
+	}
+	for name, key := range environment.breakGlassKeys {
+		check(name+" break-glass identity", key)
+	}
+	for name, materials := range environment.materials {
+		for index, material := range materials {
+			check(fmt.Sprintf("%s material %d", name, index), material.Bytes)
+		}
+	}
+}
+
+func gateAuthoritySocketCount(environment *gateEnvironment) int {
+	count := pathCount(environment.paths.credentialSocket) + pathCount(environment.paths.breakGlassControllerSocket)
+	for _, path := range environment.paths.materialSockets {
+		count += pathCount(path)
+	}
+	for _, path := range environment.paths.breakGlassSockets {
+		count += pathCount(path)
+	}
+	return count
 }
 
 func runDockerCleanup(t *testing.T, arguments ...string) {
@@ -373,7 +529,7 @@ func writeEvidenceFile(t *testing.T, path string, document []byte) {
 	} else if !errors.Is(err, os.ErrNotExist) {
 		t.Fatal(err)
 	}
-	temporary, err := os.CreateTemp(filepath.Dir(path), ".phase6-slice4-evidence-*")
+	temporary, err := os.CreateTemp(filepath.Dir(path), ".phase6-slice5-evidence-*")
 	if err != nil {
 		t.Fatal(err)
 	}
