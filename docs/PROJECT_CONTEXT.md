@@ -205,7 +205,12 @@ Current verified state:
   `sha256:0592a69e8f85125360eb6805132b3654324ab9a56c0ea019ea3dc7aade103d4e`
   are fixed by the accepted evidence. The Desktop OCI remains a non-release
   local candidate; public Product E2E, publication, deployment and production
-  readiness remain open.
+  readiness remain open. Slice 5 is underway but does not advance the count:
+  ADR 0054 adds a repository-private canonical purpose/tenant/role/version
+  secret binding, an exact adapter over the existing secret provider, a
+  bounded invalidation-safe cache and an opaque envelope-key port. No
+  production role has migrated and no real KMS, rotation, workload-credential
+  or break-glass gate has passed.
 
 The qualification applies only to Provider revision
 `170459266af5f4fad359ca8c63f2ae19741055c5`, external-caller revision

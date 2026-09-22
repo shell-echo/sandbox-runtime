@@ -905,6 +905,40 @@ reference, policy, manifest, restore, and metric semantics. They do not replace
 real KMS/HSM, certificate issuance, independent coordination/object storage,
 published signed images, backup drills, deployment, SLO, or release gates.
 
+Slice 5 extends the existing `internal/secretref` boundary; do not add a second
+reference parser, file-secret reader, rotation state model or envelope cipher.
+Canonical scoped bindings contain the exact purpose, tenant, role, version and
+opaque reference. Production binding decode rejects inline/file values,
+unknown or duplicate fields, non-canonical JSON and unsafe URL forms. Reuse
+`internal/secretfile` for the remaining documented private-file inputs.
+
+External KMS/HSM adapters implement the opaque `EnvelopeKeyProvider`: role
+processes may submit bounded plaintext and mandatory associated data, but the
+adapter must not return raw KMS key bytes. Secret caches are bounded by both
+TTL and provider validity, preserve cancellation/deadlines, clear material on
+every removal path and prevent an in-flight resolution from repopulating after
+invalidation. Provider-specific endpoints, references and diagnostics stay out
+of stable APIs, logs, probes, audits and evidence.
+
+For a leaf-only Slice 5 `internal/secretref` checkpoint, run:
+
+```bash
+go test -race -shuffle=on -count=20 ./internal/secretref
+go vet ./internal/secretref
+go run ./cmd/verify-product-phase6-evidence \
+  -mode retained \
+  -slice product-v1-phase-6-slice-4 \
+  -source-root "$PWD" \
+  -manifest "$PWD/docs/audits/product-phase-6-slice-4-evidence.json" \
+  -closure-record "$PWD/docs/audits/product-phase-6-slice-4-closure.json"
+```
+
+This impact-scoped loop does not replace the root race/vet and Contract checks
+at a stable implementation checkpoint or final Slice 5 seal. Rebuild runtime
+candidates and run real KMS/database/Docker/independent-process gates whenever
+the change reaches their adapter, composition, configuration or image path.
+Never use component evidence as a substitute for those gates.
+
 ## Go and API rules
 
 - accept `context.Context` on blocking or external operations and preserve

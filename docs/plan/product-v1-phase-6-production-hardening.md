@@ -122,6 +122,13 @@ revocation and break-glass audit. No long-lived secret is accepted inline.
 Gate: overlap rotation, stale-key rejection, KMS loss, cache expiry, restart,
 revocation and plaintext-exclusion evidence.
 
+Status: underway; not complete. ADR 0054 and the Slice 5 startup audit freeze
+the work order and add only the first component boundary: canonical scoped
+bindings, an exact adapter over the existing Provider port, a bounded
+fail-closed secret cache and an opaque envelope-key port. No production role
+composition or real KMS/recording/workload/break-glass gate has passed, so this
+does not advance the Phase 6 count.
+
 ### Slice 6 — TLS, network policy and least privilege
 
 Close every service-to-service trust edge; automate certificate issuance and
@@ -228,7 +235,7 @@ an earlier claim.
 ## Current stop point
 
 Slices 1-4 are implemented. Slice 5, production secret references, KMS and
-rotation, is next. The current result is bounded local independent-process
+rotation, is underway at its first component checkpoint. The current result is bounded local independent-process
 evidence using a non-release Desktop candidate; no complete public Product
 E2E, published application supply chain, deployment, HA, hostile-multitenant,
 SLO-attainment, or production qualification is claimed.
