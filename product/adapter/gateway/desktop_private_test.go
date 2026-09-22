@@ -23,6 +23,11 @@ func TestPrivateDesktopMediaBridgeRoundTripAndContinuousRevocation(t *testing.T)
 	binding := privateDesktopTestBinding(now.Add(time.Minute))
 	resolver := &privateDesktopTestResolver{binding: binding}
 	media := newPrivateDesktopTestSource()
+	closeRelease := make(chan struct{})
+	media.closeGate = closeRelease
+	var releaseOnce sync.Once
+	releaseClose := func() { releaseOnce.Do(func() { close(closeRelease) }) }
+	defer releaseClose()
 	handler, err := desktopgateway.New(desktopgateway.Options{
 		Resolver: resolver, Media: media, MaxSessions: 2, MaxSessionsPerDesktop: 1,
 		AuthorityPollInterval: 10 * time.Millisecond, OperationTimeout: time.Second, AllowInsecureHTTPForTests: true,
@@ -64,10 +69,40 @@ func TestPrivateDesktopMediaBridgeRoundTripAndContinuousRevocation(t *testing.T)
 		t.Fatalf("private command count=%d", got)
 	}
 	resolver.revoked.Store(true)
-	readCtx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	if _, err := session.ReadVideoRTP(readCtx); !errors.Is(err, io.EOF) && !errors.Is(err, product.ErrStoreUnavailable) {
-		t.Fatalf("read after Provider revocation err=%v", err)
+	readDone := make(chan error, 1)
+	go func() {
+		readCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		_, readErr := session.ReadVideoRTP(readCtx)
+		readDone <- readErr
+	}()
+	select {
+	case <-opened.closeStarted:
+	case <-time.After(time.Second):
+		t.Fatal("Provider media close did not start after handoff revocation")
+	}
+	select {
+	case err := <-readDone:
+		t.Fatalf("bridge termination became observable before Provider close completed: %v", err)
+	default:
+	}
+	releaseClose()
+	var readErr error
+	select {
+	case readErr = <-readDone:
+	case <-time.After(time.Second):
+		t.Fatal("Desktop bridge did not terminate after Provider close completed")
+	}
+	if !errors.Is(readErr, io.EOF) && !errors.Is(readErr, product.ErrStoreUnavailable) {
+		t.Fatalf("read after Provider revocation err=%v", readErr)
+	}
+	select {
+	case <-opened.closeFinished:
+	case <-time.After(time.Second):
+		t.Fatal("Provider media close completion was not published")
+	}
+	if calls := opened.closeCalls.Load(); calls != 1 {
+		t.Fatalf("Provider media close calls=%d, want=1", calls)
 	}
 	if !opened.closed.Load() {
 		t.Fatal("Provider media session remained open after handoff revocation")
@@ -196,7 +231,8 @@ func (r *privateDesktopTestResolver) Resolve(_ context.Context, reference string
 }
 
 type privateDesktopTestSource struct {
-	opened chan *privateDesktopTestSession
+	opened    chan *privateDesktopTestSession
+	closeGate <-chan struct{}
 }
 
 func newPrivateDesktopTestSource() *privateDesktopTestSource {
@@ -204,17 +240,21 @@ func newPrivateDesktopTestSource() *privateDesktopTestSource {
 }
 
 func (s *privateDesktopTestSource) Open(_ context.Context, _ desktopreference.Endpoint, _ providerdesktop.Attachment, _ desktopgateway.MediaPolicy) (desktopgateway.Session, error) {
-	session := &privateDesktopTestSession{video: make(chan []byte, 8), audio: make(chan []byte, 8), stop: make(chan struct{})}
+	session := &privateDesktopTestSession{video: make(chan []byte, 8), audio: make(chan []byte, 8), stop: make(chan struct{}), closeStarted: make(chan struct{}), closeFinished: make(chan struct{}), closeGate: s.closeGate}
 	s.opened <- session
 	return session, nil
 }
 
 type privateDesktopTestSession struct {
-	video, audio chan []byte
-	stop         chan struct{}
-	closed       atomic.Bool
-	closeOnce    sync.Once
-	commandCount atomic.Int64
+	video, audio  chan []byte
+	stop          chan struct{}
+	closed        atomic.Bool
+	closeOnce     sync.Once
+	closeCalls    atomic.Int64
+	closeStarted  chan struct{}
+	closeFinished chan struct{}
+	closeGate     <-chan struct{}
+	commandCount  atomic.Int64
 }
 
 func (s *privateDesktopTestSession) ReadVideoRTP(ctx context.Context) ([]byte, error) {
@@ -257,9 +297,15 @@ func (s *privateDesktopTestSession) RequestKeyframe(context.Context) error {
 }
 
 func (s *privateDesktopTestSession) Close() error {
+	s.closeCalls.Add(1)
 	s.closeOnce.Do(func() {
+		close(s.closeStarted)
+		if s.closeGate != nil {
+			<-s.closeGate
+		}
 		s.closed.Store(true)
 		close(s.stop)
+		close(s.closeFinished)
 	})
 	return nil
 }

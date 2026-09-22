@@ -1,7 +1,9 @@
 package productgateway
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"errors"
 	"io"
 	"net/http/httptest"
@@ -116,5 +118,60 @@ func TestPrivateTerminalResolverRoundTripsOpaqueAttach(t *testing.T) {
 func TestPrivateTerminalHandlerRequiresTenantAuthority(t *testing.T) {
 	if _, err := terminalgateway.New(terminalgateway.Options{Resolver: privateTerminalTestResolver{stream: newPrivateTerminalTestStream()}, AllowInsecureHTTPForTests: true}); err == nil {
 		t.Fatal("private terminal handler accepted missing tenant authority")
+	}
+}
+
+func TestRandomTokenAlwaysSatisfiesPrivateHandoffGrammar(t *testing.T) {
+	now := time.Now().UTC()
+	for iteration := 0; iteration < 10_000; iteration++ {
+		requestID, err := randomRequestID()
+		if err != nil {
+			t.Fatal(err)
+		}
+		fence, err := randomToken(32)
+		if err != nil {
+			t.Fatal(err)
+		}
+		request := handoff.OpenRequest{
+			Protocol: handoff.ProtocolID, RequestID: requestID, Resource: handoff.ResourceTerminal,
+			TenantID: "tenant-1", SandboxID: "sandbox-1", RuntimeSessionID: "session-1",
+			CapabilityProfileID: "terminal-v1", HandoffReference: "ref:session:opaque",
+			ConnectionGeneration: 3, ExpiresAt: now.Add(time.Minute).Format(time.RFC3339Nano), Fence: fence,
+		}
+		if err := request.Validate(now); err != nil {
+			t.Fatalf("iteration %d request_id=%q fence=%q: %v", iteration, requestID, fence, err)
+		}
+	}
+}
+
+func TestRequestIDPrefixesBase64URLBoundaryBytesWithoutLosingEntropy(t *testing.T) {
+	now := time.Now().UTC()
+	for name, first := range map[string]byte{"dash": 0xf8, "underscore": 0xfc} {
+		t.Run(name, func(t *testing.T) {
+			random := make([]byte, 16)
+			random[0] = first
+			raw := base64.RawURLEncoding.EncodeToString(random)
+			if raw[0] != map[string]byte{"dash": '-', "underscore": '_'}[name] {
+				t.Fatalf("test vector encoded as %q", raw)
+			}
+			requestID := requestIDFromRandom(random)
+			if len(requestID) != 23 || requestID[0] != 'r' {
+				t.Fatalf("request ID=%q length=%d", requestID, len(requestID))
+			}
+			decoded, err := base64.RawURLEncoding.DecodeString(requestID[1:])
+			if err != nil || !bytes.Equal(decoded, random) {
+				t.Fatalf("request ID lost random bytes: decoded=%x err=%v", decoded, err)
+			}
+			request := handoff.OpenRequest{
+				Protocol: handoff.ProtocolID, RequestID: requestID, Resource: handoff.ResourceTerminal,
+				TenantID: "tenant-1", SandboxID: "sandbox-1", RuntimeSessionID: "session-1",
+				CapabilityProfileID: "terminal-v1", HandoffReference: "ref:session:opaque",
+				ConnectionGeneration: 3, ExpiresAt: now.Add(time.Minute).Format(time.RFC3339Nano),
+				Fence: strings.Repeat("a", handoff.MinFenceBytes),
+			}
+			if err := request.Validate(now); err != nil {
+				t.Fatal(err)
+			}
+		})
 	}
 }

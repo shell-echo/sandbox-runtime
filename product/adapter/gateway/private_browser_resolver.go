@@ -108,7 +108,7 @@ func (r *PrivateBrowserResolver) dialClosed(ctx context.Context, reference strin
 	if err != nil || handoff.ValidateTenantBindingDigest(digest) != nil {
 		return nil, gateway.ErrDownstreamUnavailable
 	}
-	requestID, err := randomToken(16)
+	requestID, err := randomRequestID()
 	if err != nil {
 		return nil, gateway.ErrDownstreamUnavailable
 	}

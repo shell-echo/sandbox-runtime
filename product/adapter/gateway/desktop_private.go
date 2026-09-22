@@ -143,7 +143,7 @@ func (s *PrivateDesktopMediaSource) openClosed(ctx context.Context, binding prod
 	if err != nil || len(fence) < handoff.MinFenceBytes || strings.ContainsAny(fence, "\r\n\x00") {
 		return nil, product.ErrForbidden
 	}
-	requestID, err := randomToken(16)
+	requestID, err := randomRequestID()
 	if err != nil {
 		return nil, product.ErrStoreUnavailable
 	}

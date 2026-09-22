@@ -23,6 +23,8 @@ func TestOpenRequestValidationBindsAllAuthorityFields(t *testing.T) {
 	}
 	tests := map[string]func(*OpenRequest){
 		"unknown protocol": func(r *OpenRequest) { r.Protocol = "other" },
+		"dash request ID":  func(r *OpenRequest) { r.RequestID = "-request" },
+		"underscore ID":    func(r *OpenRequest) { r.RequestID = "_request" },
 		"empty tenant":     func(r *OpenRequest) { r.TenantID = "" },
 		"raw endpoint":     func(r *OpenRequest) { r.HandoffReference = "wss://10.0.0.1" },
 		"zero generation":  func(r *OpenRequest) { r.ConnectionGeneration = 0 },

@@ -107,7 +107,7 @@ func (r *PrivateTerminalResolver) dial(ctx context.Context, grant gateway.Grant)
 		return nil, gateway.ErrDownstreamUnavailable
 	}
 	connection.SetReadLimit(r.maxBytes)
-	requestID, err := randomToken(16)
+	requestID, err := randomRequestID()
 	if err != nil {
 		_ = connection.CloseNow()
 		return nil, gateway.ErrDownstreamUnavailable
@@ -147,6 +147,21 @@ func randomToken(size int) (string, error) {
 		return "", err
 	}
 	return base64.RawURLEncoding.EncodeToString(value), nil
+}
+
+func randomRequestID() (string, error) {
+	value := make([]byte, 16)
+	if _, err := rand.Read(value); err != nil {
+		return "", err
+	}
+	return requestIDFromRandom(value), nil
+}
+
+func requestIDFromRandom(value []byte) string {
+	// Private handoff request identifiers require an alphanumeric first byte.
+	// Raw URL-safe base64 can begin with '-' or '_', so retain all 128 random
+	// bits behind a fixed legal prefix instead of relaxing the wire grammar.
+	return "r" + base64.RawURLEncoding.EncodeToString(value)
 }
 
 type privateTerminalStream struct {

@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/coder/websocket"
@@ -215,7 +216,8 @@ func (h *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 		http.Error(writer, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
 		return
 	}
-	defer session.Close()
+	sessionClose := newSessionClose(session)
+	defer func() { _ = sessionClose.closeAndWait(h.operationTimeout) }()
 	connection, err := websocket.Accept(writer, request, &websocket.AcceptOptions{Subprotocols: []string{PrivateSubprotocol}, CompressionMode: websocket.CompressionDisabled})
 	if err != nil {
 		return
@@ -224,12 +226,8 @@ func (h *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	defer connection.CloseNow()
 	ctx, cancel := context.WithCancel(request.Context())
 	defer cancel()
-	bridge := &connectionBridge{connection: connection, session: session, authority: authority, handler: h}
+	bridge := &connectionBridge{connection: connection, session: session, sessionClose: sessionClose, authority: authority, handler: h}
 	bridge.run(ctx)
-	// Close the Provider media session before ServeHTTP returns and its deferred
-	// WebSocket close becomes observable to the Product Gateway. Keeping the
-	// defer above still covers handshake failures after Media.Open.
-	_ = session.Close()
 }
 
 func (h *Handler) serveClosed(writer http.ResponseWriter, request *http.Request) {
@@ -284,7 +282,8 @@ func (h *Handler) serveClosed(writer http.ResponseWriter, request *http.Request)
 		_ = connection.Write(request.Context(), websocket.MessageText, response)
 		return
 	}
-	defer session.Close()
+	sessionClose := newSessionClose(session)
+	defer func() { _ = sessionClose.closeAndWait(h.operationTimeout) }()
 	response, _ := handoff.Encode(desktophandoff.AcceptedResponse(open.RequestID))
 	if err := connection.Write(request.Context(), websocket.MessageText, response); err != nil {
 		return
@@ -294,9 +293,8 @@ func (h *Handler) serveClosed(writer http.ResponseWriter, request *http.Request)
 	defer cancelBridge()
 	handoffExpiry, _ := time.Parse(time.RFC3339Nano, open.HandoffExpiresAt)
 	binding := open.Binding()
-	bridge := &connectionBridge{connection: connection, session: session, authority: requestAuthority{reference: open.HandoffReference, providerRevision: open.ProviderRevisionID, tenantDigest: open.TenantBindingDigest, allocationReference: endpoint.AllocationReference, sandboxID: open.SandboxID, sessionID: open.DesktopSessionID, profileID: open.CapabilityProfileID, generation: open.ConnectionGeneration, connectionEpoch: open.ConnectionEpoch, expiresAt: authorityExpiry, handoffExpiresAt: handoffExpiry, policy: open.MediaPolicy, binding: &binding}, handler: h}
+	bridge := &connectionBridge{connection: connection, session: session, sessionClose: sessionClose, authority: requestAuthority{reference: open.HandoffReference, providerRevision: open.ProviderRevisionID, tenantDigest: open.TenantBindingDigest, allocationReference: endpoint.AllocationReference, sandboxID: open.SandboxID, sessionID: open.DesktopSessionID, profileID: open.CapabilityProfileID, generation: open.ConnectionGeneration, connectionEpoch: open.ConnectionEpoch, expiresAt: authorityExpiry, handoffExpiresAt: handoffExpiry, policy: open.MediaPolicy, binding: &binding}, handler: h}
 	bridge.run(ctx)
-	_ = session.Close()
 }
 
 func (h *Handler) resolveClosed(ctx context.Context, open desktophandoff.OpenRequest) (desktopreference.Endpoint, providerdesktop.Attachment, error) {
@@ -473,12 +471,45 @@ type command = desktopmedia.Command
 type result = desktopmedia.Result
 
 type connectionBridge struct {
-	connection  *websocket.Conn
-	session     Session
-	authority   requestAuthority
-	handler     *Handler
-	writeMu     sync.Mutex
-	termination sessiontermination.First
+	connection   *websocket.Conn
+	session      Session
+	sessionClose *sessionClose
+	authority    requestAuthority
+	handler      *Handler
+	writeMu      sync.Mutex
+	termination  sessiontermination.First
+	stopping     atomic.Bool
+}
+
+type sessionClose struct {
+	session Session
+	once    sync.Once
+	done    chan struct{}
+	err     error
+}
+
+func newSessionClose(session Session) *sessionClose {
+	return &sessionClose{session: session, done: make(chan struct{})}
+}
+
+func (c *sessionClose) closeAndWait(timeout time.Duration) error {
+	if c == nil || c.session == nil || timeout <= 0 {
+		return context.Canceled
+	}
+	c.once.Do(func() {
+		go func() {
+			c.err = c.session.Close()
+			close(c.done)
+		}()
+	})
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	select {
+	case <-c.done:
+		return c.err
+	case <-timer.C:
+		return context.DeadlineExceeded
+	}
 }
 
 func (b *connectionBridge) run(ctx context.Context) {
@@ -494,6 +525,11 @@ func (b *connectionBridge) run(ctx context.Context) {
 	go func() { defer func() { done <- struct{}{} }(); b.readCommands(ctx) }()
 	go func() { defer func() { done <- struct{}{} }(); b.watchAuthority(ctx) }()
 	<-done
+	b.stopping.Store(true)
+	if err := b.sessionClose.closeAndWait(b.handler.operationTimeout); err != nil {
+		record := sessiontermination.FromError(err, sessiontermination.StageCloseOrdering, sessiontermination.CauseRuntimeFailure)
+		b.termination.Observe(record.Stage, record.Cause)
+	}
 	cancel()
 	for remaining := active - 1; remaining > 0; remaining-- {
 		<-done
@@ -522,6 +558,9 @@ func (b *connectionBridge) stream(ctx context.Context, packetType byte, read fun
 			b.termination.Observe(sessiontermination.StageMediaReader, sessiontermination.CauseProtocolViolation)
 			return
 		}
+		if b.stopping.Load() {
+			return
+		}
 		payload := make([]byte, len(packet)+1)
 		payload[0] = packetType
 		copy(payload[1:], packet)
@@ -542,6 +581,9 @@ func (b *connectionBridge) readCommands(ctx context.Context) {
 		}
 		if kind != websocket.MessageText || int64(len(payload)) > b.handler.maxMessageBytes {
 			b.termination.Observe(sessiontermination.StageInputWriter, sessiontermination.CauseProtocolViolation)
+			return
+		}
+		if b.stopping.Load() {
 			return
 		}
 		var command command
@@ -636,6 +678,9 @@ func (b *connectionBridge) writeJSON(ctx context.Context, value any) error {
 func (b *connectionBridge) write(ctx context.Context, kind websocket.MessageType, payload []byte) error {
 	b.writeMu.Lock()
 	defer b.writeMu.Unlock()
+	if b.stopping.Load() {
+		return context.Canceled
+	}
 	return b.connection.Write(ctx, kind, payload)
 }
 
