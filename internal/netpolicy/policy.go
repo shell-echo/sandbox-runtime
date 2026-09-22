@@ -22,16 +22,28 @@ var (
 var hostPattern = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9.-]{0,253}[a-z0-9])?$`)
 
 var blockedCIDRs = mustCIDRs([]string{
-	"0.0.0.0/8", "10.0.0.0/8", "100.64.0.0/10", "127.0.0.0/8", "169.254.0.0/16", "172.16.0.0/12", "192.0.0.0/24", "192.0.2.0/24", "192.168.0.0/16", "198.18.0.0/15", "198.51.100.0/24", "203.0.113.0/24", "224.0.0.0/4", "::/128", "::1/128", "fc00::/7", "fe80::/10", "ff00::/8",
+	"0.0.0.0/8", "10.0.0.0/8", "100.64.0.0/10", "127.0.0.0/8", "169.254.0.0/16", "172.16.0.0/12",
+	"192.0.0.0/24", "192.0.2.0/24", "192.31.196.0/24", "192.52.193.0/24", "192.88.99.0/24", "192.168.0.0/16",
+	"192.175.48.0/24", "198.18.0.0/15", "198.51.100.0/24", "203.0.113.0/24", "224.0.0.0/4", "240.0.0.0/4",
+	"::/128", "::1/128", "64:ff9b:1::/48", "100::/64", "2001::/23", "2001:db8::/32", "2002::/16", "3fff::/20",
+	"5f00::/16", "fc00::/7", "fe80::/10", "ff00::/8",
 })
 
 type Policy struct {
 	AllowedHosts []string
 	AllowedPorts map[int]struct{}
+	MaxAnswers   int
 }
 
 func New(allowedHosts []string, allowedPorts []int) (Policy, error) {
+	return NewBounded(allowedHosts, allowedPorts, 32)
+}
+
+func NewBounded(allowedHosts []string, allowedPorts []int, maxAnswers int) (Policy, error) {
 	if len(allowedHosts) == 0 || len(allowedHosts) > 256 || len(allowedPorts) == 0 || len(allowedPorts) > 64 {
+		return Policy{}, ErrInvalid
+	}
+	if maxAnswers < 1 || maxAnswers > 32 {
 		return Policy{}, ErrInvalid
 	}
 	hosts := make([]string, 0, len(allowedHosts))
@@ -52,16 +64,21 @@ func New(allowedHosts []string, allowedPorts []int) (Policy, error) {
 		if port < 1 || port > 65535 {
 			return Policy{}, ErrInvalid
 		}
+		if _, duplicate := ports[port]; duplicate {
+			return Policy{}, ErrInvalid
+		}
 		ports[port] = struct{}{}
 	}
-	return Policy{AllowedHosts: hosts, AllowedPorts: ports}, nil
+	return Policy{AllowedHosts: hosts, AllowedPorts: ports, MaxAnswers: maxAnswers}, nil
 }
 
 func (p Policy) Check(host string, port int, resolved []net.IP) error {
-	host = strings.ToLower(strings.TrimSpace(host))
-	if host == "" || host != strings.TrimSpace(host) || !hostPattern.MatchString(host) || net.ParseIP(host) != nil {
+	normalized := strings.ToLower(strings.TrimSpace(host))
+	if normalized == "" || normalized != host || !hostPattern.MatchString(normalized) || net.ParseIP(normalized) != nil ||
+		p.MaxAnswers < 1 || p.MaxAnswers > 32 || len(resolved) > p.MaxAnswers {
 		return ErrDenied
 	}
+	host = normalized
 	allowedHost := false
 	for _, candidate := range p.AllowedHosts {
 		if host == candidate {

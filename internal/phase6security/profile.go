@@ -19,6 +19,7 @@ import (
 	"strings"
 
 	"github.com/shell-echo/sandbox-runtime/internal/secretfile"
+	"github.com/shell-echo/sandbox-runtime/internal/securityprincipal"
 )
 
 const (
@@ -62,39 +63,80 @@ var requiredPrincipals = map[string]string{
 	"desktop-sandbox-runtime":        "sandbox",
 }
 
+type principalBinding struct {
+	kind securityprincipal.Kind
+	name string
+	role securityprincipal.Role
+}
+
+var requiredAuthorizationBindings = map[string]principalBinding{
+	"product-runtime":                {securityprincipal.KindRuntimeRole, "product", securityprincipal.RoleProduct},
+	"gateway-runtime":                {securityprincipal.KindRuntimeRole, "gateway", securityprincipal.RoleGateway},
+	"provider-runtime":               {securityprincipal.KindRuntimeRole, "provider", securityprincipal.RoleProvider},
+	"guest-runtime":                  {securityprincipal.KindRuntimeRole, "guest", securityprincipal.RoleGuest},
+	"browser-runtime-role":           {securityprincipal.KindRuntimeRole, "browser", securityprincipal.RoleBrowser},
+	"desktop-runtime-role":           {securityprincipal.KindRuntimeRole, "desktop", securityprincipal.RoleDesktop},
+	"browser-executor-backend":       {securityprincipal.KindExecutorBackend, "browser_executor", securityprincipal.RoleBrowser},
+	"desktop-executor-backend":       {securityprincipal.KindExecutorBackend, "desktop_executor", securityprincipal.RoleDesktop},
+	"product-runtime-agent":          {securityprincipal.KindMaterialAgent, "product_runtime_agent", securityprincipal.RoleProduct},
+	"provider-runtime-agent":         {securityprincipal.KindMaterialAgent, "provider_runtime_agent", securityprincipal.RoleProvider},
+	"gateway-agent":                  {securityprincipal.KindMaterialAgent, "gateway_agent", securityprincipal.RoleGateway},
+	"guest-agent":                    {securityprincipal.KindMaterialAgent, "guest_agent", securityprincipal.RoleGuest},
+	"browser-agent":                  {securityprincipal.KindMaterialAgent, "browser_agent", securityprincipal.RoleBrowser},
+	"desktop-agent":                  {securityprincipal.KindMaterialAgent, "desktop_agent", securityprincipal.RoleDesktop},
+	"product-migration-agent":        {securityprincipal.KindMaterialAgent, "product_migration_agent", securityprincipal.RoleProduct},
+	"provider-migration-agent":       {securityprincipal.KindMaterialAgent, "provider_migration_agent", securityprincipal.RoleProvider},
+	"workload-credential-controller": {securityprincipal.KindController, "credential_controller", ""},
+	"break-glass-controller":         {securityprincipal.KindController, "break_glass_controller", ""},
+	"certificate-controller":         {securityprincipal.KindController, "certificate_controller", ""},
+	"product-migration-job":          {securityprincipal.KindMigrationJob, "product_migration", securityprincipal.RoleProduct},
+	"provider-migration-job":         {securityprincipal.KindMigrationJob, "provider_migration", securityprincipal.RoleProvider},
+}
+
+var requiredResourceControllers = map[string]string{
+	"desktop-broker":          "desktop-executor-backend",
+	"browser-sandbox-runtime": "browser-executor-backend",
+	"desktop-sandbox-runtime": "desktop-executor-backend",
+}
+
 type Profile struct {
-	Protocol       string            `json:"protocol"`
-	Version        int               `json:"version"`
-	Revision       string            `json:"revision"`
-	ProfileDigest  string            `json:"profile_digest"`
-	Principals     []Principal       `json:"principals"`
-	External       []ExternalService `json:"external_services"`
-	TrustEdges     []TrustEdge       `json:"trust_edges"`
-	EgressPolicies []EgressPolicy    `json:"egress_policies"`
-	CleanupClasses []string          `json:"cleanup_classes"`
+	Protocol               string            `json:"protocol"`
+	Version                int               `json:"version"`
+	Revision               string            `json:"revision"`
+	ProfileDigest          string            `json:"profile_digest"`
+	EnvironmentDigest      string            `json:"environment_digest"`
+	PrincipalProfileDigest string            `json:"principal_profile_digest"`
+	Principals             []Principal       `json:"principals"`
+	External               []ExternalService `json:"external_services"`
+	TrustEdges             []TrustEdge       `json:"trust_edges"`
+	EgressPolicies         []EgressPolicy    `json:"egress_policies"`
+	CleanupClasses         []string          `json:"cleanup_classes"`
 }
 
 type Principal struct {
-	Name                   string      `json:"name"`
-	Kind                   string      `json:"kind"`
-	ImageReference         string      `json:"image_reference"`
-	ImageDigest            string      `json:"image_digest"`
-	UID                    uint32      `json:"uid"`
-	GID                    uint32      `json:"gid"`
-	ReadOnlyRootFilesystem bool        `json:"read_only_root_filesystem"`
-	NoNewPrivileges        bool        `json:"no_new_privileges"`
-	DroppedCapabilities    []string    `json:"dropped_capabilities"`
-	SeccompDigest          string      `json:"seccomp_digest"`
-	Resources              Resources   `json:"resources"`
-	Mounts                 []Mount     `json:"mounts"`
-	Networks               []string    `json:"networks"`
-	HostNetwork            bool        `json:"host_network"`
-	ExternalUplink         bool        `json:"external_uplink"`
-	DirectEgressBlocked    bool        `json:"direct_egress_blocked"`
-	DockerSocket           bool        `json:"docker_socket"`
-	HostDevices            bool        `json:"host_devices"`
-	Listeners              []Listener  `json:"listeners"`
-	TLS                    TLSIdentity `json:"tls"`
+	Name                       string                       `json:"name"`
+	Kind                       string                       `json:"kind"`
+	ImageReference             string                       `json:"image_reference"`
+	ImageDigest                string                       `json:"image_digest"`
+	UID                        uint32                       `json:"uid"`
+	GID                        uint32                       `json:"gid"`
+	ReadOnlyRootFilesystem     bool                         `json:"read_only_root_filesystem"`
+	NoNewPrivileges            bool                         `json:"no_new_privileges"`
+	DroppedCapabilities        []string                     `json:"dropped_capabilities"`
+	SeccompDigest              string                       `json:"seccomp_digest"`
+	Resources                  Resources                    `json:"resources"`
+	Mounts                     []Mount                      `json:"mounts"`
+	Networks                   []string                     `json:"networks"`
+	HostNetwork                bool                         `json:"host_network"`
+	ExternalUplink             bool                         `json:"external_uplink"`
+	DirectEgressBlocked        bool                         `json:"direct_egress_blocked"`
+	DockerSocket               bool                         `json:"docker_socket"`
+	HostDevices                bool                         `json:"host_devices"`
+	Listeners                  []Listener                   `json:"listeners"`
+	AuthorizationPrincipal     *securityprincipal.Principal `json:"authorization_principal"`
+	PrincipalDigest            string                       `json:"principal_digest"`
+	ControllingPrincipalDigest string                       `json:"controlling_principal_digest"`
+	TLS                        *TLSIdentity                 `json:"tls"`
 }
 
 type Resources struct {
@@ -118,6 +160,7 @@ type Listener struct {
 }
 
 type TLSIdentity struct {
+	PrincipalDigest               string   `json:"principal_digest"`
 	TrustDomain                   string   `json:"trust_domain"`
 	URI                           string   `json:"uri"`
 	DNSNames                      []string `json:"dns_names"`
@@ -134,20 +177,25 @@ type ExternalService struct {
 	ImageReference string   `json:"image_reference"`
 	ImageDigest    string   `json:"image_digest"`
 	URI            string   `json:"uri"`
+	IdentityDigest string   `json:"identity_digest"`
 	IngressEdges   []string `json:"ingress_edges"`
 }
 
 type TrustEdge struct {
-	ID                   string `json:"id"`
-	From                 string `json:"from"`
-	To                   string `json:"to"`
-	Protocol             string `json:"protocol"`
-	Port                 int    `json:"port"`
-	Authentication       string `json:"authentication"`
-	FromURI              string `json:"from_uri"`
-	ToURI                string `json:"to_uri"`
-	TenantScope          string `json:"tenant_scope"`
-	MaxConnectionSeconds int64  `json:"max_connection_seconds"`
+	ID                     string `json:"id"`
+	From                   string `json:"from"`
+	To                     string `json:"to"`
+	Protocol               string `json:"protocol"`
+	Port                   int    `json:"port"`
+	Authentication         string `json:"authentication"`
+	FromURI                string `json:"from_uri"`
+	ToURI                  string `json:"to_uri"`
+	FromPrincipalDigest    string `json:"from_principal_digest"`
+	ToPrincipalDigest      string `json:"to_principal_digest"`
+	ExternalIdentityDigest string `json:"external_identity_digest"`
+	CrossDomain            bool   `json:"cross_domain"`
+	TenantScope            string `json:"tenant_scope"`
+	MaxConnectionSeconds   int64  `json:"max_connection_seconds"`
 }
 
 type EgressPolicy struct {
@@ -155,6 +203,8 @@ type EgressPolicy struct {
 	Revision                  string         `json:"revision"`
 	Principal                 string         `json:"principal"`
 	Broker                    string         `json:"broker"`
+	PrincipalDigest           string         `json:"principal_digest"`
+	BrokerDigest              string         `json:"broker_digest"`
 	LeaseSeconds              int64          `json:"lease_seconds"`
 	DNSMaxAnswers             int            `json:"dns_max_answers"`
 	DenyRawIP                 bool           `json:"deny_raw_ip"`
@@ -207,16 +257,22 @@ func VerifyFile(filePath string) (Profile, error) {
 
 func (p Profile) Validate() error { //nolint:gocyclo
 	if p.Protocol != ProtocolID || p.Version != Version || !namePattern.MatchString(p.Revision) ||
-		!digestPattern.MatchString(p.ProfileDigest) || len(p.Principals) < len(requiredPrincipals) || len(p.Principals) > 128 ||
+		!digestPattern.MatchString(p.ProfileDigest) || !digestPattern.MatchString(p.EnvironmentDigest) ||
+		!digestPattern.MatchString(p.PrincipalProfileDigest) || len(p.Principals) < len(requiredPrincipals) || len(p.Principals) > 128 ||
 		len(p.External) != 3 || len(p.TrustEdges) < 1 || len(p.TrustEdges) > 512 || len(p.EgressPolicies) > 128 ||
 		!exactStrings(p.CleanupClasses, []string{"connections", "containers", "files", "networks", "processes", "sockets"}) {
 		return ErrInvalidProfile
 	}
+	registry, err := p.principalRegistry()
+	if err != nil {
+		return err
+	}
 	principals := make(map[string]Principal, len(p.Principals))
+	principalDeployments := make(map[string]string, len(p.Principals))
 	uids, gids, identities := map[uint32]struct{}{}, map[uint32]struct{}{}, map[string]struct{}{}
 	previous := ""
 	for _, principal := range p.Principals {
-		if principal.Name <= previous || validatePrincipal(principal) != nil {
+		if principal.Name <= previous || validatePrincipal(principal, registry) != nil {
 			return ErrInvalidProfile
 		}
 		previous = principal.Name
@@ -229,15 +285,37 @@ func (p Profile) Validate() error { //nolint:gocyclo
 		if _, exists := gids[principal.GID]; exists {
 			return ErrInvalidProfile
 		}
-		if _, exists := identities[principal.TLS.URI]; exists {
-			return ErrInvalidProfile
+		if principal.AuthorizationPrincipal != nil {
+			if _, exists := principalDeployments[principal.PrincipalDigest]; exists {
+				return ErrInvalidProfile
+			}
+			if _, exists := identities[principal.TLS.URI]; exists {
+				return ErrInvalidProfile
+			}
+			principalDeployments[principal.PrincipalDigest] = principal.Name
+			identities[principal.TLS.URI] = struct{}{}
 		}
-		uids[principal.UID], gids[principal.GID], identities[principal.TLS.URI] = struct{}{}, struct{}{}, struct{}{}
+		uids[principal.UID], gids[principal.GID] = struct{}{}, struct{}{}
 		principals[principal.Name] = principal
 	}
 	for name, kind := range requiredPrincipals {
 		if principal, ok := principals[name]; !ok || principal.Kind != kind {
 			return ErrInvalidProfile
+		}
+	}
+	for resource, controller := range requiredResourceControllers {
+		resourceRecord, resourceOK := principals[resource]
+		controllerRecord, controllerOK := principals[controller]
+		if !resourceOK || !controllerOK || controllerRecord.AuthorizationPrincipal == nil ||
+			resourceRecord.ControllingPrincipalDigest != controllerRecord.PrincipalDigest {
+			return ErrInvalidProfile
+		}
+	}
+	for _, principal := range principals {
+		if principal.AuthorizationPrincipal == nil {
+			if _, ok := principalDeployments[principal.ControllingPrincipalDigest]; !ok {
+				return ErrInvalidProfile
+			}
 		}
 	}
 	external, err := validateExternal(p.External)
@@ -271,7 +349,29 @@ func (p Profile) Digest() string {
 	return "sha256:" + hex.EncodeToString(digest[:])
 }
 
-func validatePrincipal(value Principal) error { //nolint:gocyclo
+func (p Profile) principalRegistry() (*securityprincipal.Registry, error) {
+	egressBrokers := make(map[string]securityprincipal.Role)
+	for _, principal := range p.Principals {
+		if principal.Kind != "egress_broker" || principal.AuthorizationPrincipal == nil {
+			continue
+		}
+		identity := principal.AuthorizationPrincipal
+		if identity.Kind != securityprincipal.KindEgressBroker {
+			return nil, ErrInvalidProfile
+		}
+		if _, duplicate := egressBrokers[identity.Name]; duplicate {
+			return nil, ErrInvalidProfile
+		}
+		egressBrokers[identity.Name] = identity.Role
+	}
+	registry, err := securityprincipal.NewRegistry(p.EnvironmentDigest, p.PrincipalProfileDigest, egressBrokers)
+	if err != nil {
+		return nil, ErrInvalidProfile
+	}
+	return registry, nil
+}
+
+func validatePrincipal(value Principal, registry *securityprincipal.Registry) error { //nolint:gocyclo
 	if !namePattern.MatchString(value.Name) || !validPrincipalKind(value.Kind) || !imagePattern.MatchString(value.ImageReference) ||
 		!digestPattern.MatchString(value.ImageDigest) || !strings.HasSuffix(value.ImageReference, "@"+value.ImageDigest) ||
 		value.UID < 10000 || value.UID > 60000 || value.GID < 10000 || value.GID > 60000 ||
@@ -279,11 +379,23 @@ func validatePrincipal(value Principal) error { //nolint:gocyclo
 		!digestPattern.MatchString(value.SeccompDigest) || value.Resources.MemoryBytes < 16<<20 || value.Resources.MemoryBytes > 64<<30 ||
 		value.Resources.CPUMillis < 10 || value.Resources.CPUMillis > 64000 || value.Resources.PIDs < 4 || value.Resources.PIDs > 4096 ||
 		value.HostNetwork || value.DockerSocket || value.HostDevices || len(value.Networks) < 1 || len(value.Networks) > 4 ||
-		len(value.Mounts) > 16 || len(value.Listeners) > 16 || validateTLS(value.TLS) != nil {
+		len(value.Mounts) > 16 || len(value.Listeners) > 16 {
+		return ErrInvalidProfile
+	}
+	if value.AuthorizationPrincipal != nil {
+		identity := *value.AuthorizationPrincipal
+		if registry == nil || registry.Validate(identity) != nil || value.PrincipalDigest != identity.Digest() ||
+			!digestPattern.MatchString(value.PrincipalDigest) || value.ControllingPrincipalDigest != "" || value.TLS == nil ||
+			value.TLS.PrincipalDigest != value.PrincipalDigest || validateTLS(*value.TLS) != nil ||
+			validateAuthorizationBinding(value.Name, value.Kind, identity) != nil {
+			return ErrInvalidProfile
+		}
+	} else if value.PrincipalDigest != "" || !digestPattern.MatchString(value.ControllingPrincipalDigest) || value.TLS != nil ||
+		(value.Kind != "broker" && value.Kind != "sandbox") {
 		return ErrInvalidProfile
 	}
 	if value.Kind == "egress_broker" {
-		if !value.ExternalUplink || value.DirectEgressBlocked || len(value.Networks) != 2 {
+		if value.AuthorizationPrincipal == nil || !value.ExternalUplink || value.DirectEgressBlocked || len(value.Networks) != 2 {
 			return ErrInvalidProfile
 		}
 	} else if value.ExternalUplink || !value.DirectEgressBlocked {
@@ -325,6 +437,39 @@ func validatePrincipal(value Principal) error { //nolint:gocyclo
 	return nil
 }
 
+func validateAuthorizationBinding(deploymentName, deploymentKind string, identity securityprincipal.Principal) error {
+	if expected, required := requiredAuthorizationBindings[deploymentName]; required {
+		if identity.Kind != expected.kind || identity.Name != expected.name || identity.Role != expected.role ||
+			deploymentKindForPrincipal(identity.Kind) != deploymentKind {
+			return ErrInvalidProfile
+		}
+		return nil
+	}
+	if deploymentKind != "egress_broker" || identity.Kind != securityprincipal.KindEgressBroker {
+		return ErrInvalidProfile
+	}
+	return nil
+}
+
+func deploymentKindForPrincipal(kind securityprincipal.Kind) string {
+	switch kind {
+	case securityprincipal.KindRuntimeRole:
+		return "runtime"
+	case securityprincipal.KindExecutorBackend:
+		return "executor"
+	case securityprincipal.KindMaterialAgent:
+		return "material_agent"
+	case securityprincipal.KindController:
+		return "controller"
+	case securityprincipal.KindMigrationJob:
+		return "migration_job"
+	case securityprincipal.KindEgressBroker:
+		return "egress_broker"
+	default:
+		return ""
+	}
+}
+
 func validateTLS(value TLSIdentity) error {
 	parsed, err := url.Parse(value.URI)
 	if err != nil || parsed.Scheme != "spiffe" || parsed.Host != value.TrustDomain || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || parsed.Path == "" ||
@@ -349,7 +494,9 @@ func validateExternal(values []ExternalService) (map[string]ExternalService, err
 	previous := ""
 	for _, value := range values {
 		if value.Name <= previous || !imagePattern.MatchString(value.ImageReference) || !digestPattern.MatchString(value.ImageDigest) ||
-			!strings.HasSuffix(value.ImageReference, "@"+value.ImageDigest) || !validSPIFFE(value.URI) || len(value.IngressEdges) < 1 || !sortedUniqueNames(value.IngressEdges) {
+			!strings.HasSuffix(value.ImageReference, "@"+value.ImageDigest) || !validSPIFFE(value.URI) ||
+			!digestPattern.MatchString(value.IdentityDigest) || value.IdentityDigest != value.Digest() ||
+			len(value.IngressEdges) < 1 || !sortedUniqueNames(value.IngressEdges) {
 			return nil, ErrInvalidProfile
 		}
 		previous = value.Name
@@ -363,6 +510,13 @@ func validateExternal(values []ExternalService) (map[string]ExternalService, err
 	return result, nil
 }
 
+func (e ExternalService) Digest() string {
+	e.IdentityDigest = ""
+	document, _ := json.Marshal(e)
+	digest := sha256.Sum256(append([]byte("sandbox-runtime/phase6-external-identity/v1\x00"), document...))
+	return "sha256:" + hex.EncodeToString(digest[:])
+}
+
 func validateEdges(values []TrustEdge, principals map[string]Principal, external map[string]ExternalService) (map[string]TrustEdge, error) {
 	result := make(map[string]TrustEdge, len(values))
 	previous := ""
@@ -370,8 +524,12 @@ func validateEdges(values []TrustEdge, principals map[string]Principal, external
 		from, fromOK := principals[value.From]
 		to, toOK := principals[value.To]
 		externalTo, externalOK := external[value.To]
-		if value.ID <= previous || !namePattern.MatchString(value.ID) || !fromOK || (!toOK && !externalOK) ||
-			value.FromURI != from.TLS.URI || (toOK && value.ToURI != to.TLS.URI) || (externalOK && value.ToURI != externalTo.URI) ||
+		if value.ID <= previous || !namePattern.MatchString(value.ID) || !fromOK || from.AuthorizationPrincipal == nil || (!toOK && !externalOK) ||
+			value.FromPrincipalDigest != from.PrincipalDigest || value.FromURI != from.TLS.URI ||
+			(toOK && (to.AuthorizationPrincipal == nil || value.ToURI != to.TLS.URI || value.ToPrincipalDigest != to.PrincipalDigest ||
+				value.ExternalIdentityDigest != "" || value.CrossDomain)) ||
+			(externalOK && (value.ToURI != externalTo.URI || value.ToPrincipalDigest != "" ||
+				value.ExternalIdentityDigest != externalTo.IdentityDigest || !value.CrossDomain)) ||
 			(value.TenantScope != "system" && value.TenantScope != "bound") || value.MaxConnectionSeconds < 1 || value.MaxConnectionSeconds > 3600 {
 			return nil, ErrInvalidProfile
 		}
@@ -403,6 +561,8 @@ func validateEgress(values []EgressPolicy, principals map[string]Principal) erro
 		broker, brokerOK := principals[value.Broker]
 		if value.ID <= previous || !namePattern.MatchString(value.ID) || !namePattern.MatchString(value.Revision) || !principalOK || !brokerOK ||
 			principal.Kind == "egress_broker" || broker.Kind != "egress_broker" || value.Principal == value.Broker ||
+			principal.AuthorizationPrincipal == nil || broker.AuthorizationPrincipal == nil ||
+			value.PrincipalDigest != principal.PrincipalDigest || value.BrokerDigest != broker.PrincipalDigest ||
 			value.LeaseSeconds < 1 || value.LeaseSeconds > 300 || value.DNSMaxAnswers < 1 || value.DNSMaxAnswers > 32 ||
 			!value.DenyRawIP || !value.DenyAlternateDNS || !value.DenyProxyEnvironment || !value.DenyRedirectAuthority || !value.DenyMetadataPrivateRanges ||
 			len(value.Targets) < 1 || len(value.Targets) > 64 {

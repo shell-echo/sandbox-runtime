@@ -16,13 +16,36 @@ func TestPolicyRejectsMetadataPrivateAndRebindingAddresses(t *testing.T) {
 	if err := policy.Check("packages.example.test", 443, []net.IP{public}); err != nil {
 		t.Fatal(err)
 	}
-	for _, address := range []string{"169.254.169.254", "127.0.0.1", "10.0.0.4", "::1"} {
+	for _, address := range []string{"169.254.169.254", "127.0.0.1", "10.0.0.4", "192.88.99.1", "240.0.0.1", "::1", "100::1", "2001:db8::1", "3fff::1", "5f00::1"} {
 		if err := policy.Check("packages.example.test", 443, []net.IP{public, net.ParseIP(address)}); !errors.Is(err, ErrDenied) {
 			t.Fatalf("address %s was accepted: %v", address, err)
 		}
 	}
 	if err := policy.Check("other.example.test", 443, []net.IP{public}); !errors.Is(err, ErrDenied) {
 		t.Fatalf("unlisted host = %v", err)
+	}
+	for _, host := range []string{"Packages.example.test", "packages.example.test ", "93.184.216.34"} {
+		if err := policy.Check(host, 443, []net.IP{public}); !errors.Is(err, ErrDenied) {
+			t.Fatalf("noncanonical host %q = %v", host, err)
+		}
+	}
+	bounded, err := NewBounded([]string{"packages.example.test"}, []int{443}, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := bounded.Check("packages.example.test", 443, []net.IP{public, public}); !errors.Is(err, ErrDenied) {
+		t.Fatalf("oversized DNS answer set = %v", err)
+	}
+}
+
+func TestPolicyRejectsDuplicatePortsAndInvalidAnswerBounds(t *testing.T) {
+	if _, err := New([]string{"packages.example.test"}, []int{443, 443}); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("duplicate port error = %v", err)
+	}
+	for _, maximum := range []int{0, 33} {
+		if _, err := NewBounded([]string{"packages.example.test"}, []int{443}, maximum); !errors.Is(err, ErrInvalid) {
+			t.Fatalf("maximum %d error = %v", maximum, err)
+		}
 	}
 }
 

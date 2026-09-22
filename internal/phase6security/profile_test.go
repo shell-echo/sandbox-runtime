@@ -1,6 +1,8 @@
 package phase6security
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"os"
@@ -8,10 +10,13 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/shell-echo/sandbox-runtime/internal/securityprincipal"
 )
 
 func validProfile() Profile {
 	digest := "sha256:" + strings.Repeat("a", 64)
+	environmentDigest, principalProfileDigest := testDigest("environment"), testDigest("principal-profile")
 	image := "registry.example.test/sandbox-runtime@" + digest
 	names := make([]string, 0, len(requiredPrincipals)+1)
 	for name := range requiredPrincipals {
@@ -19,6 +24,25 @@ func validProfile() Profile {
 	}
 	names = append(names, "egress-broker-product")
 	sort.Strings(names)
+	registry, err := securityprincipal.NewRegistry(environmentDigest, principalProfileDigest,
+		map[string]securityprincipal.Role{"product_egress_broker": securityprincipal.RoleProduct})
+	if err != nil {
+		panic(err)
+	}
+	identities := make(map[string]securityprincipal.Principal, len(requiredAuthorizationBindings)+1)
+	for deploymentName, binding := range requiredAuthorizationBindings {
+		identity, principalErr := registry.New(binding.kind, binding.name, binding.role, testDigest("instance/"+deploymentName))
+		if principalErr != nil {
+			panic(principalErr)
+		}
+		identities[deploymentName] = identity
+	}
+	egressIdentity, err := registry.New(securityprincipal.KindEgressBroker, "product_egress_broker", securityprincipal.RoleProduct,
+		testDigest("instance/egress-broker-product"))
+	if err != nil {
+		panic(err)
+	}
+	identities["egress-broker-product"] = egressIdentity
 	principals := make([]Principal, 0, len(names))
 	for index, name := range names {
 		kind := requiredPrincipals[name]
@@ -28,16 +52,24 @@ func validProfile() Profile {
 			kind = "egress_broker"
 			networks, external, blocked = []string{"external-uplink", "product-internal"}, true, false
 		}
-		principals = append(principals, Principal{
+		principal := Principal{
 			Name: name, Kind: kind, ImageReference: image, ImageDigest: digest,
 			UID: uint32(20000 + index), GID: uint32(30000 + index),
 			ReadOnlyRootFilesystem: true, NoNewPrivileges: true, DroppedCapabilities: []string{"ALL"}, SeccompDigest: digest,
 			Resources: Resources{MemoryBytes: 64 << 20, CPUMillis: 250, PIDs: 32}, Networks: networks,
 			ExternalUplink: external, DirectEgressBlocked: blocked,
-			TLS: TLSIdentity{TrustDomain: "sandbox-runtime.test", URI: "spiffe://sandbox-runtime.test/" + name,
-				Usages: []string{"client_auth"}, TTLSeconds: 900, RotateAfterSeconds: 500, OverlapSeconds: 30,
-				RevocationMaxStalenessSeconds: 30, ConnectionDrainSeconds: 10},
-		})
+		}
+		if identity, ok := identities[name]; ok {
+			principal.AuthorizationPrincipal = &identity
+			principal.PrincipalDigest = identity.Digest()
+			principal.TLS = &TLSIdentity{PrincipalDigest: identity.Digest(), TrustDomain: "sandbox-runtime.test",
+				URI: "spiffe://sandbox-runtime.test/" + name, Usages: []string{"client_auth"}, TTLSeconds: 900,
+				RotateAfterSeconds: 500, OverlapSeconds: 30, RevocationMaxStalenessSeconds: 30, ConnectionDrainSeconds: 10}
+		} else {
+			controller := requiredResourceControllers[name]
+			principal.ControllingPrincipalDigest = identities[controller].Digest()
+		}
+		principals = append(principals, principal)
 	}
 	uri := func(name string) string {
 		for _, principal := range principals {
@@ -52,18 +84,31 @@ func validProfile() Profile {
 		{Name: "postgres", ImageReference: "registry.example.test/postgres@" + digest, ImageDigest: digest, URI: "spiffe://sandbox-runtime.test/external/postgres", IngressEdges: []string{"product-postgres"}},
 		{Name: "vault", ImageReference: "registry.example.test/vault@" + digest, ImageDigest: digest, URI: "spiffe://sandbox-runtime.test/external/vault", IngressEdges: []string{"certificate-vault"}},
 	}
-	edges := []TrustEdge{
-		{ID: "certificate-vault", From: "certificate-controller", To: "vault", Protocol: "https", Port: 8200, Authentication: "mtls", FromURI: uri("certificate-controller"), ToURI: external[2].URI, TenantScope: "system", MaxConnectionSeconds: 60},
-		{ID: "egress-dns", From: "egress-broker-product", To: "dns", Protocol: "dns_tcp", Port: 853, Authentication: "mtls", FromURI: uri("egress-broker-product"), ToURI: external[0].URI, TenantScope: "system", MaxConnectionSeconds: 30},
-		{ID: "product-postgres", From: "product-runtime", To: "postgres", Protocol: "postgres", Port: 5432, Authentication: "mtls", FromURI: uri("product-runtime"), ToURI: external[1].URI, TenantScope: "bound", MaxConnectionSeconds: 300},
+	for index := range external {
+		external[index].IdentityDigest = external[index].Digest()
 	}
-	profile := Profile{Protocol: ProtocolID, Version: Version, Revision: "slice6-security-1", Principals: principals, External: external, TrustEdges: edges,
-		EgressPolicies: []EgressPolicy{{ID: "product-egress", Revision: "policy-1", Principal: "product-runtime", Broker: "egress-broker-product", LeaseSeconds: 60, DNSMaxAnswers: 8,
+	edges := []TrustEdge{
+		{ID: "certificate-vault", From: "certificate-controller", To: "vault", Protocol: "https", Port: 8200, Authentication: "mtls", FromURI: uri("certificate-controller"), ToURI: external[2].URI,
+			FromPrincipalDigest: identities["certificate-controller"].Digest(), ExternalIdentityDigest: external[2].IdentityDigest, CrossDomain: true, TenantScope: "system", MaxConnectionSeconds: 60},
+		{ID: "egress-dns", From: "egress-broker-product", To: "dns", Protocol: "dns_tcp", Port: 853, Authentication: "mtls", FromURI: uri("egress-broker-product"), ToURI: external[0].URI,
+			FromPrincipalDigest: identities["egress-broker-product"].Digest(), ExternalIdentityDigest: external[0].IdentityDigest, CrossDomain: true, TenantScope: "system", MaxConnectionSeconds: 30},
+		{ID: "product-postgres", From: "product-runtime", To: "postgres", Protocol: "postgres", Port: 5432, Authentication: "mtls", FromURI: uri("product-runtime"), ToURI: external[1].URI,
+			FromPrincipalDigest: identities["product-runtime"].Digest(), ExternalIdentityDigest: external[1].IdentityDigest, CrossDomain: true, TenantScope: "bound", MaxConnectionSeconds: 300},
+	}
+	profile := Profile{Protocol: ProtocolID, Version: Version, Revision: "slice6-security-1", EnvironmentDigest: environmentDigest,
+		PrincipalProfileDigest: principalProfileDigest, Principals: principals, External: external, TrustEdges: edges,
+		EgressPolicies: []EgressPolicy{{ID: "product-egress", Revision: "policy-1", Principal: "product-runtime", Broker: "egress-broker-product",
+			PrincipalDigest: identities["product-runtime"].Digest(), BrokerDigest: identities["egress-broker-product"].Digest(), LeaseSeconds: 60, DNSMaxAnswers: 8,
 			DenyRawIP: true, DenyAlternateDNS: true, DenyProxyEnvironment: true, DenyRedirectAuthority: true, DenyMetadataPrivateRanges: true,
 			Targets: []EgressTarget{{Alias: "example-api", Host: "api.example.test", Port: 443, Protocol: "https"}}}},
 		CleanupClasses: []string{"connections", "containers", "files", "networks", "processes", "sockets"}}
 	profile.ProfileDigest = profile.Digest()
 	return profile
+}
+
+func testDigest(value string) string {
+	digest := sha256.Sum256([]byte(value))
+	return "sha256:" + hex.EncodeToString(digest[:])
 }
 
 func TestProfileAcceptsClosedCompleteInventory(t *testing.T) {
@@ -97,6 +142,54 @@ func TestProfileRejectsAuthorityAndEnforcementDrift(t *testing.T) {
 		"wrong edge identity":     func(p *Profile) { p.TrustEdges[0].FromURI = p.TrustEdges[1].FromURI },
 		"missing metadata denial": func(p *Profile) { p.EgressPolicies[0].DenyMetadataPrivateRanges = false },
 		"extra cleanup class":     func(p *Profile) { p.CleanupClasses = append(p.CleanupClasses, "other") },
+		"principal digest tamper": func(p *Profile) { p.Principals[0].PrincipalDigest = testDigest("tampered") },
+		"TLS digest tamper":       func(p *Profile) { p.Principals[0].TLS.PrincipalDigest = testDigest("tampered") },
+		"edge digest tamper":      func(p *Profile) { p.TrustEdges[0].FromPrincipalDigest = testDigest("tampered") },
+		"external digest tamper":  func(p *Profile) { p.External[0].IdentityDigest = testDigest("tampered") },
+		"cross environment splice": func(p *Profile) {
+			p.EnvironmentDigest = testDigest("other-environment")
+		},
+		"dangling resource controller": func(p *Profile) {
+			for index := range p.Principals {
+				if p.Principals[index].Name == "desktop-broker" {
+					p.Principals[index].ControllingPrincipalDigest = testDigest("missing-controller")
+				}
+			}
+		},
+		"resource impersonates principal": func(p *Profile) {
+			var source *Principal
+			for index := range p.Principals {
+				if p.Principals[index].Name == "desktop-executor-backend" {
+					source = &p.Principals[index]
+				}
+			}
+			for index := range p.Principals {
+				if p.Principals[index].Name == "desktop-broker" {
+					identity := *source.AuthorizationPrincipal
+					p.Principals[index].AuthorizationPrincipal = &identity
+					p.Principals[index].PrincipalDigest = identity.Digest()
+					p.Principals[index].ControllingPrincipalDigest = ""
+					tlsIdentity := *source.TLS
+					p.Principals[index].TLS = &tlsIdentity
+				}
+			}
+		},
+		"wrong broker principal kind": func(p *Profile) {
+			var runtime Principal
+			for _, principal := range p.Principals {
+				if principal.Name == "product-runtime" {
+					runtime = principal
+				}
+			}
+			for index := range p.Principals {
+				if p.Principals[index].Name == "egress-broker-product" {
+					identity := *runtime.AuthorizationPrincipal
+					p.Principals[index].AuthorizationPrincipal = &identity
+					p.Principals[index].PrincipalDigest = identity.Digest()
+					p.Principals[index].TLS.PrincipalDigest = identity.Digest()
+				}
+			}
+		},
 	}
 	for name, mutate := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -107,6 +200,28 @@ func TestProfileRejectsAuthorityAndEnforcementDrift(t *testing.T) {
 				t.Fatal("drift was accepted")
 			}
 		})
+	}
+}
+
+func TestDeploymentRenameDoesNotChangeAuthorizationIdentity(t *testing.T) {
+	profile := validProfile()
+	for index := range profile.Principals {
+		if profile.Principals[index].Name == "egress-broker-product" {
+			profile.Principals[index].Name = "product-egress-service"
+		}
+	}
+	for index := range profile.EgressPolicies {
+		profile.EgressPolicies[index].Broker = "product-egress-service"
+	}
+	for index := range profile.TrustEdges {
+		if profile.TrustEdges[index].From == "egress-broker-product" {
+			profile.TrustEdges[index].From = "product-egress-service"
+		}
+	}
+	sort.Slice(profile.Principals, func(first, second int) bool { return profile.Principals[first].Name < profile.Principals[second].Name })
+	profile.ProfileDigest = profile.Digest()
+	if err := profile.Validate(); err != nil {
+		t.Fatalf("deployment-only rename changed authorization: %v", err)
 	}
 }
 
