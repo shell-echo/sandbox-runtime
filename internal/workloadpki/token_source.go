@@ -67,18 +67,26 @@ func (s *CredentialTokenSource) Token(ctx context.Context) (VaultToken, error) {
 	now := s.now().UTC()
 	if len(s.lease.Credential) == 0 {
 		lease, err := s.client.Issue(ctx, s.ttl)
-		if err != nil || validateCredentialLease(lease, now, s.ttl) != nil {
+		if err != nil {
 			lease.Destroy()
 			return VaultToken{}, normalizeCredentialError(err)
+		}
+		if validateCredentialLease(lease, s.now().UTC(), s.ttl) != nil {
+			lease.Destroy()
+			return VaultToken{}, ErrUnavailable
 		}
 		s.lease = lease
 	} else {
 		rotationDeadline := s.lease.IssuedAt.Add(s.lease.ExpiresAt.Sub(s.lease.IssuedAt) * 2 / 3)
 		if !now.Before(rotationDeadline) {
 			replacement, err := s.client.Renew(ctx, s.lease, s.ttl)
-			if err != nil || validateCredentialLease(replacement, now, s.ttl) != nil || replacement.Revision != s.lease.Revision+1 || replacement.ID != s.lease.ID {
+			if err != nil {
 				replacement.Destroy()
 				return VaultToken{}, normalizeCredentialError(err)
+			}
+			if validateCredentialLease(replacement, s.now().UTC(), s.ttl) != nil || replacement.Revision != s.lease.Revision+1 || replacement.ID != s.lease.ID {
+				replacement.Destroy()
+				return VaultToken{}, ErrUnavailable
 			}
 			s.lease.Destroy()
 			s.lease = replacement

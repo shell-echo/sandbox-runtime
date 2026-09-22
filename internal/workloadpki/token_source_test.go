@@ -14,11 +14,16 @@ type fakeCredentialClient struct {
 	renewCalls int
 	revokes    int
 	failRenew  bool
+	invalid    bool
 }
 
 func (f *fakeCredentialClient) Issue(context.Context, time.Duration) (CredentialLease, error) {
 	f.issueCalls++
 	f.revision = 1
+	if f.invalid {
+		return CredentialLease{ID: "lease_certificate_controller", Revision: f.revision, IssuedAt: *f.now,
+			ExpiresAt: f.now.Add(9 * time.Minute), Renewable: true}, nil
+	}
 	return CredentialLease{ID: "lease_certificate_controller", Revision: f.revision, IssuedAt: *f.now,
 		ExpiresAt: f.now.Add(9 * time.Minute), Renewable: true, Credential: []byte("vault-token-1")}, nil
 }
@@ -85,5 +90,17 @@ func TestCredentialTokenSourceFailsClosedAtRotationDeadline(t *testing.T) {
 	now = now.Add(6 * time.Minute)
 	if token, err := source.Token(context.Background()); !errors.Is(err, ErrUnavailable) || len(token.Value) != 0 {
 		t.Fatalf("rotation failure Token() = %#v, %v", token, err)
+	}
+}
+
+func TestCredentialTokenSourceRejectsStructurallyInvalidSuccessfulIssue(t *testing.T) {
+	now := time.Now().UTC()
+	source, err := NewCredentialTokenSource(CredentialTokenSourceConfig{Client: &fakeCredentialClient{now: &now, invalid: true},
+		TTL: 10 * time.Minute, Now: func() time.Time { return now }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if token, err := source.Token(context.Background()); !errors.Is(err, ErrUnavailable) || len(token.Value) != 0 {
+		t.Fatalf("Token() = %#v, %v", token, err)
 	}
 }

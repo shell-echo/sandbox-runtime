@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/shell-echo/sandbox-runtime/internal/credentialbackend"
 	"github.com/shell-echo/sandbox-runtime/internal/secretref"
 )
 
@@ -33,17 +34,7 @@ type Policy struct {
 	Migration     bool
 }
 
-type IssuedCredential struct {
-	Credential     []byte
-	BackendLeaseID string
-	ExpiresAt      time.Time
-}
-
-func (c *IssuedCredential) Destroy() {
-	if c != nil {
-		clear(c.Credential)
-	}
-}
+type IssuedCredential = credentialbackend.IssuedCredential
 
 type IssueSpec struct {
 	AgentID       string

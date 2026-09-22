@@ -11,6 +11,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/shell-echo/sandbox-runtime/internal/credentialbackend"
 )
 
 const (
@@ -76,6 +78,26 @@ func (v *VaultIssuer) Issue(ctx context.Context, spec IssueSpec) (IssuedCredenti
 	if !ok {
 		return IssuedCredential{}, ErrUnavailable
 	}
+	backendSpec := credentialbackend.IssueSpec{SubjectID: spec.AgentID, SubjectDigest: spec.BindingDigest, PolicyID: spec.PolicyID,
+		PolicyDigest: spec.BindingDigest, BindingDigest: spec.BindingDigest, BackendID: spec.BackendID, BackendPolicy: policy, LeaseID: spec.LeaseID, TTL: spec.TTL}
+	return v.issueWithMetadata(ctx, backendSpec, map[string]string{"agent_id": spec.AgentID, "policy_id": spec.PolicyID, "binding_digest": spec.BindingDigest})
+}
+
+func (v *VaultIssuer) IssueScoped(ctx context.Context, spec credentialbackend.IssueSpec) (credentialbackend.IssuedCredential, error) {
+	if v == nil || ctx == nil || spec.BackendID != v.backendID || !identifierPattern.MatchString(spec.SubjectID) || !validDigest(spec.SubjectDigest) ||
+		!identifierPattern.MatchString(spec.PolicyID) || !validDigest(spec.PolicyDigest) || !validDigest(spec.BindingDigest) ||
+		!identifierPattern.MatchString(spec.BackendPolicy) || !identifierPattern.MatchString(spec.LeaseID) || spec.TTL < time.Second || spec.TTL > 15*time.Minute {
+		return credentialbackend.IssuedCredential{}, ErrUnavailable
+	}
+	policy, ok := v.policies[spec.PolicyID]
+	if !ok || policy != spec.BackendPolicy {
+		return credentialbackend.IssuedCredential{}, ErrUnavailable
+	}
+	return v.issueWithMetadata(ctx, spec, map[string]string{"subject_id": spec.SubjectID, "subject_digest": spec.SubjectDigest,
+		"policy_id": spec.PolicyID, "policy_digest": spec.PolicyDigest, "binding_digest": spec.BindingDigest})
+}
+
+func (v *VaultIssuer) issueWithMetadata(ctx context.Context, spec credentialbackend.IssueSpec, metadata map[string]string) (credentialbackend.IssuedCredential, error) {
 	body, err := json.Marshal(struct {
 		Policies        []string          `json:"policies"`
 		TTL             string            `json:"ttl"`
@@ -83,8 +105,8 @@ func (v *VaultIssuer) Issue(ctx context.Context, spec IssueSpec) (IssuedCredenti
 		NoDefaultPolicy bool              `json:"no_default_policy"`
 		DisplayName     string            `json:"display_name"`
 		Metadata        map[string]string `json:"meta"`
-	}{Policies: []string{policy}, TTL: spec.TTL.String(), Renewable: false, NoDefaultPolicy: true, DisplayName: spec.LeaseID,
-		Metadata: map[string]string{"agent_id": spec.AgentID, "policy_id": spec.PolicyID, "binding_digest": spec.BindingDigest}})
+	}{Policies: []string{spec.BackendPolicy}, TTL: spec.TTL.String(), Renewable: false, NoDefaultPolicy: true, DisplayName: spec.LeaseID,
+		Metadata: metadata})
 	if err != nil {
 		return IssuedCredential{}, ErrUnavailable
 	}
@@ -120,7 +142,7 @@ func (v *VaultIssuer) Issue(ctx context.Context, spec IssueSpec) (IssuedCredenti
 	}
 	if decodeVaultResponse(document, &response) != nil || !validVaultToken([]byte(response.Auth.ClientToken)) ||
 		!backendLeasePattern.MatchString(response.Auth.Accessor) || response.Auth.Renewable || response.Auth.LeaseDuration < 1 ||
-		time.Duration(response.Auth.LeaseDuration)*time.Second > spec.TTL+time.Second || len(response.Auth.Policies) != 1 || response.Auth.Policies[0] != policy {
+		time.Duration(response.Auth.LeaseDuration)*time.Second > spec.TTL+time.Second || len(response.Auth.Policies) != 1 || response.Auth.Policies[0] != spec.BackendPolicy {
 		return IssuedCredential{}, ErrUnavailable
 	}
 	return IssuedCredential{Credential: []byte(response.Auth.ClientToken), BackendLeaseID: response.Auth.Accessor,
