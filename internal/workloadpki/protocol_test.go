@@ -16,6 +16,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/shell-echo/sandbox-runtime/internal/securityprincipal"
 )
 
 type protocolFixture struct {
@@ -48,7 +50,20 @@ func newProtocolFixture(t *testing.T) protocolFixture {
 		t.Fatal(err)
 	}
 	identity, _ := url.Parse("spiffe://sandbox-runtime.test/product-runtime")
-	policy := Policy{ID: "product-runtime-tls", AgentID: "product-runtime-agent", Principal: "product-runtime", TrustDomain: "sandbox-runtime.test", URI: identity.String(),
+	digest := func(value string) string { return "sha256:" + strings.Repeat(value, 64) }
+	registry, err := securityprincipal.NewRegistry(digest("a"), digest("b"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	requester, err := registry.New(securityprincipal.KindMaterialAgent, "product_runtime_agent", securityprincipal.RoleProduct, digest("c"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	subject, err := registry.New(securityprincipal.KindRuntimeRole, "product", securityprincipal.RoleProduct, digest("d"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	policy := Policy{ID: "product-runtime-tls", Registry: registry, Requester: requester, Subject: subject, TrustDomain: "sandbox-runtime.test", URI: identity.String(),
 		DNSNames: []string{"product.example.test"}, Usages: []string{"client_auth", "server_auth"}, VaultRole: "product-runtime", MaxTTLSeconds: 900,
 		ExpectedUID: 20001, ExpectedGID: 30001, PublicKey: agentPublic}
 	tlsKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -152,11 +167,13 @@ func TestProtocolRejectsSubstitutionAndNonCanonicalDocuments(t *testing.T) {
 		t.Fatal(err)
 	}
 	tests := map[string]func(*Request){
-		"agent":     func(value *Request) { value.AgentID = "provider-runtime-agent" },
-		"policy":    func(value *Request) { value.PolicyID = "provider-runtime-tls" },
-		"principal": func(value *Request) { value.Principal = "provider-runtime" },
-		"ttl":       func(value *Request) { value.RequestedTTLSeconds = fixture.policy.MaxTTLSeconds + 1 },
-		"digest":    func(value *Request) { value.RequestDigest = "sha256:" + strings.Repeat("0", 64) },
+		"agent":            func(value *Request) { value.AgentID = "provider_runtime_agent" },
+		"requester digest": func(value *Request) { value.RequesterDigest = "sha256:" + strings.Repeat("0", 64) },
+		"policy":           func(value *Request) { value.PolicyID = "provider-runtime-tls" },
+		"principal":        func(value *Request) { value.Principal = "provider" },
+		"subject digest":   func(value *Request) { value.SubjectDigest = "sha256:" + strings.Repeat("0", 64) },
+		"ttl":              func(value *Request) { value.RequestedTTLSeconds = fixture.policy.MaxTTLSeconds + 1 },
+		"digest":           func(value *Request) { value.RequestDigest = "sha256:" + strings.Repeat("0", 64) },
 		"signature": func(value *Request) {
 			value.Signature = base64.RawURLEncoding.EncodeToString(make([]byte, ed25519.SignatureSize))
 		},
@@ -189,6 +206,12 @@ func TestPolicyRejectsWildcardIdentityAndBroadTTL(t *testing.T) {
 		"uri":      func(policy *Policy) { policy.URI = "spiffe://other.test/product-runtime" },
 		"usage":    func(policy *Policy) { policy.Usages = []string{"any"} },
 		"key":      func(policy *Policy) { policy.PublicKey = nil },
+		"controller impersonation": func(policy *Policy) {
+			policy.Requester, _ = policy.Registry.New(securityprincipal.KindController, "certificate_controller", "", "sha256:"+strings.Repeat("e", 64))
+		},
+		"migration job requester": func(policy *Policy) {
+			policy.Requester, _ = policy.Registry.New(securityprincipal.KindMigrationJob, "product_migration", securityprincipal.RoleProduct, "sha256:"+strings.Repeat("e", 64))
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			policy := fixture.policy

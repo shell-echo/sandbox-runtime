@@ -21,6 +21,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/shell-echo/sandbox-runtime/internal/securityprincipal"
 )
 
 const (
@@ -59,8 +61,9 @@ var (
 
 type Policy struct {
 	ID            string
-	AgentID       string
-	Principal     string
+	Registry      *securityprincipal.Registry
+	Requester     securityprincipal.Principal
+	Subject       securityprincipal.Principal
 	TrustDomain   string
 	URI           string
 	DNSNames      []string
@@ -77,8 +80,10 @@ type Request struct {
 	Type                string `json:"type"`
 	RequestID           string `json:"request_id"`
 	AgentID             string `json:"agent_id"`
+	RequesterDigest     string `json:"requester_digest"`
 	PolicyID            string `json:"policy_id"`
 	Principal           string `json:"principal"`
+	SubjectDigest       string `json:"subject_digest"`
 	Nonce               string `json:"nonce"`
 	Deadline            string `json:"deadline"`
 	RequestedTTLSeconds int64  `json:"requested_ttl_seconds"`
@@ -114,7 +119,8 @@ type Response struct {
 
 func (p Policy) Validate() error {
 	parsed, err := url.Parse(p.URI)
-	if !namePattern.MatchString(p.ID) || !namePattern.MatchString(p.AgentID) || !namePattern.MatchString(p.Principal) ||
+	if !namePattern.MatchString(p.ID) || p.Registry == nil || p.Registry.Validate(p.Requester) != nil || p.Registry.Validate(p.Subject) != nil ||
+		!validPrincipalDelegation(p.Requester, p.Subject) ||
 		!namePattern.MatchString(p.VaultRole) || !validDNS(p.TrustDomain) || err != nil || parsed.Scheme != "spiffe" ||
 		parsed.Host != p.TrustDomain || parsed.Path == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" ||
 		len(p.PublicKey) != ed25519.PublicKeySize || p.MaxTTLSeconds < 60 || p.MaxTTLSeconds > 3600 ||
@@ -142,8 +148,8 @@ func NewRevokeRequest(policy Policy, requestID, nonce string, deadline time.Time
 }
 
 func newRequest(policy Policy, kind, requestID, nonce string, deadline time.Time) Request {
-	return Request{Protocol: ProtocolID, Type: kind, RequestID: requestID, AgentID: policy.AgentID, PolicyID: policy.ID,
-		Principal: policy.Principal, Nonce: nonce, Deadline: deadline.UTC().Format(time.RFC3339Nano)}
+	return Request{Protocol: ProtocolID, Type: kind, RequestID: requestID, AgentID: policy.Requester.Name, RequesterDigest: policy.Requester.Digest(),
+		PolicyID: policy.ID, Principal: policy.Subject.Name, SubjectDigest: policy.Subject.Digest(), Nonce: nonce, Deadline: deadline.UTC().Format(time.RFC3339Nano)}
 }
 
 func sealRequest(request Request, policy Policy, privateKey ed25519.PrivateKey, now time.Time) (Request, error) {
@@ -162,7 +168,8 @@ func sealRequest(request Request, policy Policy, privateKey ed25519.PrivateKey, 
 func (r Request) Validate(policy Policy, now time.Time) error {
 	deadline, err := parseTime(r.Deadline)
 	signature, signatureErr := base64.RawURLEncoding.DecodeString(r.Signature)
-	if policy.Validate() != nil || r.Protocol != ProtocolID || r.AgentID != policy.AgentID || r.PolicyID != policy.ID || r.Principal != policy.Principal ||
+	if policy.Validate() != nil || r.Protocol != ProtocolID || r.AgentID != policy.Requester.Name || r.RequesterDigest != policy.Requester.Digest() ||
+		r.PolicyID != policy.ID || r.Principal != policy.Subject.Name || r.SubjectDigest != policy.Subject.Digest() ||
 		!namePattern.MatchString(r.RequestID) || !validNonce(r.Nonce) || err != nil || now.IsZero() || !deadline.After(now) || deadline.After(now.Add(time.Minute)) ||
 		r.RequestDigest != requestDigest(r) || signatureErr != nil || len(signature) != ed25519.SignatureSize || !ed25519.Verify(policy.PublicKey, []byte(r.RequestDigest), signature) {
 		return ErrDenied
@@ -496,6 +503,25 @@ func equalStrings(left, right []string) bool {
 		}
 	}
 	return true
+}
+
+func validPrincipalDelegation(requester, subject securityprincipal.Principal) bool {
+	if requester.Digest() == subject.Digest() {
+		return requester.Kind != securityprincipal.KindMigrationJob
+	}
+	if requester.Kind != securityprincipal.KindMaterialAgent || requester.Role != subject.Role {
+		return false
+	}
+	allowed := map[string]map[securityprincipal.Kind]string{
+		"product_runtime_agent":  {securityprincipal.KindRuntimeRole: "product"},
+		"provider_runtime_agent": {securityprincipal.KindRuntimeRole: "provider"},
+		"gateway_agent":          {securityprincipal.KindRuntimeRole: "gateway"},
+		"guest_agent":            {securityprincipal.KindRuntimeRole: "guest"},
+		"browser_agent":          {securityprincipal.KindRuntimeRole: "browser", securityprincipal.KindExecutorBackend: "browser_executor"},
+		"desktop_agent":          {securityprincipal.KindRuntimeRole: "desktop", securityprincipal.KindExecutorBackend: "desktop_executor"},
+	}
+	byKind, ok := allowed[requester.Name]
+	return ok && byKind[subject.Kind] == subject.Name
 }
 
 func decodeCanonical(document []byte, maximum int, target any) error {
