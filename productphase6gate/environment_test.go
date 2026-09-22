@@ -289,6 +289,11 @@ func writeProductIdentity(t *testing.T, path string) ed25519.PrivateKey {
 
 func prepareGateMaterials(t *testing.T, environment *gateEnvironment, productMigrationDSN, providerMigrationDSN string) {
 	t.Helper()
+	// One provider revision is an atomic rotation snapshot. In particular, a
+	// certificate and its private key must carry the exact same validity window;
+	// independently sampling the clock for each fixture would model an invalid
+	// split rotation and must not be accepted by tlsmaterial.
+	materialInstant := time.Now().UTC()
 	read := func(path string) []byte {
 		document, err := os.ReadFile(path)
 		if err != nil {
@@ -341,6 +346,13 @@ func prepareGateMaterials(t *testing.T, environment *gateEnvironment, productMig
 		},
 		"browser": executorGateMaterials(t, secretref.RoleBrowser, "browser", ca, read(environment.tls.browserRoleCert), read(environment.tls.browserRoleKey), read(environment.tls.browserRoleClientCert), read(environment.tls.browserRoleClientKey)),
 		"desktop": executorGateMaterials(t, secretref.RoleDesktop, "desktop", ca, read(environment.tls.desktopRoleCert), read(environment.tls.desktopRoleKey), read(environment.tls.desktopRoleClientCert), read(environment.tls.desktopRoleClientKey)),
+	}
+	for name, materials := range environment.materials {
+		for index := range materials {
+			materials[index].Window.NotBefore = materialInstant.Add(-time.Minute)
+			materials[index].Window.NotAfter = materialInstant.Add(30 * time.Minute)
+		}
+		environment.materials[name] = materials
 	}
 	for name := range environment.materials {
 		directory, err := os.MkdirTemp("/tmp", "sr-p6-"+strings.ReplaceAll(name, "-", "")+"-")
