@@ -13,6 +13,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -251,11 +252,18 @@ func VerifyRepository(manifest Manifest, sourceRoot string) error {
 		return errors.New("inspect Phase 6 post-evidence changes")
 	}
 	for _, name := range strings.Fields(changed) {
-		if name != "README.md" && !strings.HasPrefix(name, "docs/") {
+		if !isPhase6DocumentationPath(name) {
 			return fmt.Errorf("Phase 6 post-evidence change is not documentation-only: %s", name)
 		}
 	}
 	return nil
+}
+
+func isPhase6DocumentationPath(name string) bool {
+	if name == "" || path.IsAbs(name) || path.Clean(name) != name {
+		return false
+	}
+	return name == "README.md" || name == "README.zh-CN.md" || strings.HasPrefix(name, "docs/")
 }
 
 func verifiedRepositoryRoot(sourceRoot string) (string, error) {

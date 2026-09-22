@@ -221,6 +221,26 @@ func TestVerifyRepositoryAllowsOnlyClosedEvidenceToolsAndThenDocumentation(t *te
 	}
 }
 
+func TestPhase6DocumentationPathClosedAllowlist(t *testing.T) {
+	for _, name := range []string{"README.md", "README.zh-CN.md", "docs/a.md"} {
+		if !isPhase6DocumentationPath(name) {
+			t.Errorf("documentation path %q was rejected", name)
+		}
+	}
+	for _, name := range []string{
+		"README.zh-CN.md.bak",
+		"README-ja.md",
+		"STATUS.md",
+		"implementation.go",
+		"config/product.toml",
+		"docs/../x",
+	} {
+		if isPhase6DocumentationPath(name) {
+			t.Errorf("non-documentation path %q was accepted", name)
+		}
+	}
+}
+
 func runGit(t *testing.T, root string, arguments ...string) string {
 	t.Helper()
 	command := exec.Command("git", arguments...)
