@@ -205,7 +205,14 @@ func prepareGateEnvironment(t *testing.T, ctx context.Context) *gateEnvironment 
 	environment.guest = startGuestFixture(t, ctx, environment)
 	writeGateAuthorities(t, environment)
 	prepareGateMaterials(t, environment, productMigrationDSN, providerMigrationDSN)
+	// The identity ring is a bootstrap seed for the real Vault KV fixture, not
+	// role configuration. Remove the source file after Vault ingestion so the
+	// plaintext-exclusion gate proves the seed is not
+	// retained beside role configs, logs, or control ledgers.
 	prepareGateVault(t, ctx, environment)
+	if err := os.Remove(environment.paths.productIdentityKey); err != nil {
+		t.Fatal("remove Product identity bootstrap material")
+	}
 	prepareGateBreakGlass(t, environment)
 	writeGateConfigs(t, environment, productMigrationDSN, providerMigrationDSN)
 	t.Cleanup(func() { bestEffortPhase6NamespaceCleanup() })
