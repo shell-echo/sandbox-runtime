@@ -41,7 +41,7 @@ type inputBatchResult struct {
 	err       error
 }
 
-func runDesktopEvidenceMeasurements(t *testing.T, ctx context.Context, environment *gateEnvironment) {
+func runDesktopEvidenceMeasurements(t *testing.T, ctx context.Context, environment *gateEnvironment, goroutinesBaseline int) {
 	t.Helper()
 	client := newGateProtectedClient(environment)
 	// The earlier Desktop scenario client owns the low JTI sequence range.
@@ -64,8 +64,6 @@ func runDesktopEvidenceMeasurements(t *testing.T, ctx context.Context, environme
 
 	driver, httpClient, authority, attachment, policy := measuredDesktopDriver(t, ctx, environment, state)
 	httpClient.CloseIdleConnections()
-	time.Sleep(250 * time.Millisecond)
-	goroutinesBaseline := stableGoroutineCount()
 	environment.stress = measureDesktopStress(t, ctx, environment, driver, authority, attachment, policy)
 	environment.desktopMedia = measureDesktopMedia(t, ctx, environment, driver, httpClient, authority, attachment, policy, goroutinesBaseline)
 

@@ -29,6 +29,10 @@ func TestPhase6Slice4ReleaseGate(t *testing.T) {
 
 	environment := prepareGateEnvironment(t, ctx)
 	startGateTopology(t, ctx, environment)
+	// Bound the leak check around the complete scenario and quantitative probe.
+	// A later baseline can count HTTP/WebSocket teardown that is still in flight
+	// from the preceding fault scenarios and therefore is not a stable boundary.
+	goroutinesBaseline := stableGoroutineCount()
 	assertProductBoundary(t, environment)
 	assertGatewayBoundary(t, environment)
 	browserStarted := time.Now().UTC()
@@ -60,7 +64,7 @@ func TestPhase6Slice4ReleaseGate(t *testing.T) {
 	} {
 		recordScenario(environment, name, []string{"provider", "desktop"}, desktopStarted, desktopFinished, detail)
 	}
-	runDesktopEvidenceMeasurements(t, ctx, environment)
+	runDesktopEvidenceMeasurements(t, ctx, environment, goroutinesBaseline)
 
 	drainOpen := newBrowserOpen(t, "drain", 4*time.Second)
 	drainConnection, drainResponse := dialBrowserExecutor(t, ctx, environment, drainOpen)
