@@ -158,6 +158,20 @@ func TestVerifyRejectsIndependentlyValidRecordingEvidenceFromAnotherRuntime(t *t
 	}
 }
 
+func TestVerifyRejectsIndependentlyValidRoleMaterialEvidenceFromAnotherConfig(t *testing.T) {
+	manifest := validManifest(t)
+	manifest.RoleMaterialAndCredentials.ConfigDigest = "sha256:" + strings.Repeat("c", 64)
+	manifest.RoleMaterialAndCredentials.EvidenceDigest = RoleMaterialEvidenceDigest(manifest.RoleMaterialAndCredentials)
+	manifest.ManifestDigest = manifestDigest(manifest)
+	document, err := json.Marshal(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Verify(document); err == nil {
+		t.Fatal("role-material evidence from a different configuration was accepted")
+	}
+}
+
 func TestVerifyRejectsUnknownDuplicateAndNonCanonicalJSON(t *testing.T) {
 	document, _ := json.Marshal(validManifest(t))
 	unknown := append(append([]byte(nil), document[:len(document)-1]...), []byte(`,"unknown":true}`)...)
