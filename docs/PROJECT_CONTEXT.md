@@ -1,6 +1,6 @@
 # Project Context
 
-Updated: 2026-09-20
+Updated: 2026-09-22
 
 This is the stable handoff index for a new developer, AI agent, development
 device, or implementation session. It summarizes the system, engineering
@@ -170,7 +170,7 @@ Current verified state:
   parent checks to evidence/CI baseline
   `59de37d5ee22776305dfaab866c25ea6bd5406bc`; full E2E race/shuffle, vet,
   and all eight clean-checkout checks pass; and
-- Product v1 Phase 6 production hardening remains **3/15 complete** under ADR 0051
+- Product v1 Phase 6 production hardening is **4/15 complete** under ADR 0051
   and the fixed Phase 6 plan. The startup audit distinguishes existing
   components and same-repository gates from deployable/operable/production
   authority. Slice 1 adds `sandbox-runtime product serve`, strict
@@ -196,10 +196,16 @@ Current verified state:
   explicitly unavailable. Slice 4 adds separate Gateway/Guest/Browser/Desktop
   roles, restricted executor v2 backends, sealed Browser/Desktop egress
   identity, and a Provider-owned signed Desktop broker mux. Its corrective
-  immutable candidate, six-role/twelve-scenario gate and strict evidence rerun
-  remain pending after a repeated-pointer injection race was found. The
-  Desktop OCI remains a non-release local candidate; public Product E2E,
-  deployment and production readiness remain open.
+  immutable candidate passes the six-role/twelve-scenario gate and strict
+  evidence verification. Runtime revision
+  `78f5987fda45873e497bce6d336e29dd4a61dc74`, evidence-tool revision
+  `e2f4abacf03418c7b18f179c3e7459292d8626df`, manifest digest
+  `sha256:d01b3c41a0094657f18b4014b0649a799ea7fcf0e4ccaf07aa82cdd2052cc0d2`,
+  and candidate image digest
+  `sha256:0592a69e8f85125360eb6805132b3654324ab9a56c0ea019ea3dc7aade103d4e`
+  are fixed by the accepted evidence. The Desktop OCI remains a non-release
+  local candidate; public Product E2E, publication, deployment and production
+  readiness remain open.
 
 The qualification applies only to Provider revision
 `170459266af5f4fad359ca8c63f2ae19741055c5`, external-caller revision
@@ -249,13 +255,16 @@ recorded in
 [`adr/0050-product-desktop-phase-5-boundary.md`](adr/0050-product-desktop-phase-5-boundary.md),
 and
 [`plan/product-v1-phase-5-desktop-development-unified-product.md`](plan/product-v1-phase-5-desktop-development-unified-product.md).
-Product Phase 6 authority, ordering, startup gaps, and the first three slices are in
+Product Phase 6 authority, ordering, startup gaps, and the first four slices are in
 [`adr/0051-product-phase-6-production-hardening-order.md`](adr/0051-product-phase-6-production-hardening-order.md),
 [`plan/product-v1-phase-6-production-hardening.md`](plan/product-v1-phase-6-production-hardening.md),
 [`audits/product-phase-6-production-startup.md`](audits/product-phase-6-production-startup.md),
 [`audits/product-phase-6-slice-1.md`](audits/product-phase-6-slice-1.md),
-[`audits/product-phase-6-slice-2.md`](audits/product-phase-6-slice-2.md), and
-[`audits/product-phase-6-slice-3.md`](audits/product-phase-6-slice-3.md).
+[`audits/product-phase-6-slice-2.md`](audits/product-phase-6-slice-2.md),
+[`audits/product-phase-6-slice-3.md`](audits/product-phase-6-slice-3.md),
+[`adr/0052-phase-6-executor-role-boundary.md`](adr/0052-phase-6-executor-role-boundary.md),
+[`audits/product-phase-6-slice-4.md`](audits/product-phase-6-slice-4.md), and the
+[`strict Slice 4 evidence manifest`](audits/product-phase-6-slice-4-evidence.json).
 
 See [`STATUS.md`](STATUS.md) for the complete evidence ledger and
 [`qualification/external-caller-coding-shell-v1.md`](qualification/external-caller-coding-shell-v1.md)

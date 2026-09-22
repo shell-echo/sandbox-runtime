@@ -180,7 +180,8 @@ uncomposed; deployment, HA, hostile multi-tenant, independently implemented
 caller, and production-readiness evidence remain absent.
 
 The [Product v1 Phase 6 production-hardening plan](plan/product-v1-phase-6-production-hardening.md)
-remains **3/15 complete** while Slice 4 corrective evidence is rebuilt. ADR 0051 fixes a dependency order from deployable
+is **4/15 complete** after Slice 4's corrective six-process evidence passed.
+ADR 0051 fixes a dependency order from deployable
 process boundaries through identity, storage, network, supply chain,
 observability, recovery, deployment, release candidate, and final release
 gates. Slice 1 adds only an independent development Product command, strict
@@ -225,7 +226,11 @@ Desktop workload substitution. The bounded local six-role gate passes real
 Chromium and Desktop VP8/input paths, dependency faults, reconnect, replay,
 capacity, drift, restarts, drain and exact cleanup. Its Desktop OCI remains a
 non-release local candidate, so this is not public Product E2E, deployment or
-production-release evidence.
+production-release evidence. The accepted
+[strict manifest](audits/product-phase-6-slice-4-evidence.json) binds runtime
+revision `78f5987fda45873e497bce6d336e29dd4a61dc74`, evidence-tool revision
+`e2f4abacf03418c7b18f179c3e7459292d8626df`, and manifest digest
+`sha256:d01b3c41a0094657f18b4014b0649a799ea7fcf0e4ccaf07aa82cdd2052cc0d2`.
 
 ## Purpose
 

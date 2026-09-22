@@ -1,10 +1,10 @@
 # Product v1 Phase 6 Production Hardening Plan
 
-Date: 2026-09-20
+Date: 2026-09-22
 
-Status: **3/15 complete**. Slice 4 implementation is present, but its
-corrective immutable candidate, six-process gate and strict evidence rerun are
-still required. Repository-side hardening foundations for Slices 5-10 and
+Status: **4/15 complete**. Slice 4 passed its corrective immutable candidate,
+six-process gate and strict evidence verification. Repository-side hardening
+foundations for Slices 5-10 and
 release-profile checks for Slices 7/11/14 are present, but their deployment and
 independent-observation gates remain open. The order is fixed by ADR 0051.
 
@@ -106,7 +106,12 @@ dependency loss, reconnect, replay/capacity/drift denial, broker/executor/
 Provider restart, bounded drain and exact zero-resource cleanup. The Desktop
 OCI is a local non-release candidate, and public Product E2E, deployment and
 production readiness remain unproved.
-See [`product-phase-6-slice-4.md`](../audits/product-phase-6-slice-4.md).
+The accepted manifest binds runtime revision `78f5987fda45873e497bce6d336e29dd4a61dc74`,
+evidence-tool revision `e2f4abacf03418c7b18f179c3e7459292d8626df`,
+and manifest digest
+`sha256:d01b3c41a0094657f18b4014b0649a799ea7fcf0e4ccaf07aa82cdd2052cc0d2`.
+See [`product-phase-6-slice-4.md`](../audits/product-phase-6-slice-4.md) and the
+[`strict evidence manifest`](../audits/product-phase-6-slice-4-evidence.json).
 
 ### Slice 5 — secret references, KMS and rotation
 

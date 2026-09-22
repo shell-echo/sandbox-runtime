@@ -1,9 +1,9 @@
 # Product v1 Phase 6 Slice 4 — Data-Plane Role Boundaries
 
-Date: 2026-09-21
+Date: 2026-09-22
 
-Status: **implementation present; corrective immutable candidate and final
-evidence rerun pending; Phase 6 remains 3/15 complete**.
+Status: **complete within the bounded local independent-process scope; Phase 6
+is 4/15 complete**.
 
 ## Implemented repository scope
 
@@ -71,13 +71,14 @@ independent Browser/Desktop processes are restricted media/input executors
 using a versioned opaque-only private mTLS protocol. They must not copy state,
 write Provider databases, or hold Docker control authority.
 
-## Pending acceptance evidence
+## Accepted evidence
 
-The tagged Slice 4 gate starts Product, Gateway, Provider, Guest, Browser and
+The tagged Slice 4 gate started Product, Gateway, Provider, Guest, Browser and
 Desktop as six independent OS processes, plus independently runnable Browser
-and Desktop executor backends. It uses fresh PostgreSQL containers, pinned real
+and Desktop executor backends. It used fresh PostgreSQL containers, pinned real
 Chromium and a locally built digest-bound Desktop candidate. The strict
-manifest verifier accepts exactly six roles and twelve scenarios:
+[evidence manifest](product-phase-6-slice-4-evidence.json) records exactly six
+roles and twelve passed scenarios:
 
 - normal Desktop attach, real VP8 RTP and fenced pointer input;
 - replay, expired authority, capacity and generation/fence/epoch/policy drift
@@ -89,23 +90,55 @@ manifest verifier accepts exactly six roles and twelve scenarios:
 - Desktop close plus exact zero process, listener, socket, container, network
   and temporary Gateway-image cleanup.
 
-Earlier local candidates are investigation inputs only and are not accepted
-evidence. The corrective gate must write evidence outside the source tree and
-immediately re-verify it with `cmd/verify-product-phase6-evidence`; the manifest
-must bind the final clean implementation revision, source tree and
+The accepted run observed the following immutable identities:
+
+- runtime implementation revision
+  `78f5987fda45873e497bce6d336e29dd4a61dc74`, with source-tree digest
+  `sha256:94e6d500778ad6e2d731f97d82f37f1b0d1f432baf9276b6b7c0d5b3dfa17124`;
+- evidence-tool revision `e2f4abacf03418c7b18f179c3e7459292d8626df`,
+  with tree digest
+  `sha256:1b2b45dbac9bc5f282c3129f499c90d6027c13964e9e95ba3a1a5ded6c4c81f6`;
+- configuration digest
+  `sha256:24c3575b54be47cc0d71ce17afe3ff2385dd39822f6a7880a6a94b6f0843c199`;
+- Desktop candidate manifest digest
+  `sha256:d9e062cc96be9f3428e220a0b7b96de3f3dbd90c47ae3e1504c54a7d1bd9d470`
+  and image digest
+  `sha256:0592a69e8f85125360eb6805132b3654324ab9a56c0ea019ea3dc7aade103d4e`
+  for `linux/arm64/v8`; and
+- sealed evidence-manifest digest
+  `sha256:d01b3c41a0094657f18b4014b0649a799ea7fcf0e4ccaf07aa82cdd2052cc0d2`.
+
+The gate ran 150 Desktop mux stress sessions and 750 inputs with zero
+first-frame, input, timeout or cleanup failures. Its 20-session media sample
+recorded a 153,540-microsecond first-frame p95, zero RTP sequence gaps, bounded
+frame rate and bitrate, 201 concurrent inputs, a 10,974-microsecond maximum
+input round trip, exact backpressure recovery, and a stable 23-to-23 goroutine
+boundary. After all roles joined, all eight named process, container, network,
+socket, image and listener resource classes were exactly zero.
+
+Earlier local candidates remain investigation inputs only. The accepted gate
+wrote evidence outside the source tree and immediately re-verified it with
+`cmd/verify-product-phase6-evidence`; the checked-in canonical manifest binds
+the clean implementation and evidence-tool revisions, source trees and
 configuration.
 
-The retained real Phase 5 adapter gate must also pass against the exact signed
-index and the restored production manifest. Its current native platform labels
-and both locked platform metadata entries must match. The Phase 6 v2 chain
-continues to use only the local candidate and may not satisfy that production
-gate.
+The retained real Phase 5 adapter gate also passed against the exact signed
+index and restored byte-exact production manifest. Both locked platform
+metadata entries and the exact historical custom-label set match. The
+historical image never contained an installed-set OCI label, so its strict
+legacy schema requires that label to be absent; its manifest's installed-set
+digest remains immutable build-input evidence, not a startup label attestation.
+The Phase 6 v2 chain continues to use only the local candidate, which requires
+its installed-set label and may not satisfy the production gate.
 
 ## Claim boundary
 
-This does not close Slice 4 yet. The Desktop image remains
-`local-candidate-non-release`: it is not published, signed or production
-qualified. The result proves role boundaries and internal executor data paths,
-not complete public Product-to-Gateway-to-Provider E2E, deployment, HA,
-hostile-multitenant isolation, SLO attainment or production readiness. Slice 5
-must not begin until the Slice 4 evidence gate closes.
+This closes Slice 4 only within its bounded local independent-process scope.
+The Desktop image remains `local-candidate-non-release`: it is not published,
+signed or production qualified. The result proves role boundaries and internal
+executor data paths, not complete public Product-to-Gateway-to-Provider E2E,
+deployment, HA, hostile-multitenant isolation, SLO attainment, visual quality
+or production readiness. The 30-second first-frame limit is a test safety bound,
+not a production SLO. Slice 5 production secret references, KMS/HSM envelope
+keys, scoped workload credentials, rotation, revocation and break-glass audit
+are next.

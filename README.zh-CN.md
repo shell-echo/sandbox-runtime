@@ -15,7 +15,7 @@
 | Product v1 第三阶段 | 在有边界的 standalone 拓扑内 **13/13 已完成** |
 | Product v1 第四阶段 Browser | 在有边界的同仓库独立进程拓扑内 **13/13 已完成** |
 | Product v1 第五阶段 Desktop | **15/15 已完成**（有边界的同仓库独立进程拓扑）；5 个角色、14 个严格场景及精确拓扑的依赖派生能力广告均通过 |
-| Product v1 第六阶段生产加固 | **3/15 已完成**；Product 与 Provider 已具备独立的生产模式进程、TLS 1.3、分离数据库角色、事务化 Provider 状态、有界协调恢复和精确单 Profile 能力广告；尚不代表完整拓扑、部署或生产就绪 |
+| Product v1 第六阶段生产加固 | **4/15 已完成**；切片 4 的 Product、Gateway、Provider、Guest、Browser 与 Desktop 独立进程已通过 12 场景严格本地门禁，覆盖真实 Chromium/Desktop 媒体和输入、重启/故障/排空及精确清理；公开 Product E2E、已发布的 Phase 6 制品、部署与生产就绪仍未证明 |
 | 编程/Shell 资格验证 | 对下述精确调用方、Provider 版本、拓扑、Profile 和场景结果为 **Qualified** |
 | 最新核心 CI | [已通过](https://github.com/shell-echo/sandbox-runtime/actions/runs/35204434771) |
 
@@ -38,7 +38,7 @@ Workspace/Slot 持久化、身份与 Agent 委托、Runtime Gateway 与录制，
 Guest Agent 或生产部署。
 
 [Product v1 第六阶段](docs/plan/product-v1-phase-6-production-hardening.md)
-当前完成 **3/15**。切片 1-2 提供独立的开发/生产内核 `product serve`，包括真实
+当前完成 **4/15**。切片 1-2 提供独立的开发/生产内核 `product serve`，包括真实
 PostgreSQL、TLS 1.3、签名身份、分离数据库角色、精确 Schema 检查及失败关闭的
 就绪状态。切片 3 提供生产专用的独立 `provider serve`：TLS 1.3 mTLS、精确 JWS
 准入、事务化 lifecycle/exec/Terminal/artifact/usage/Desktop 状态、有界协调恢复，
@@ -46,10 +46,19 @@ PostgreSQL、TLS 1.3、签名身份、分离数据库角色、精确 Schema 检�
 并发/故障/重启、真实进程重启、coding-shell Docker 生命周期和签名 Desktop broker
 门禁均已通过。Product dispatch、公开数据面、部署、HA 与生产发布仍属于后续切片。
 
-后续实现已补充 Slice 4 的独立 `gateway serve`、`guest serve`、`browser serve`
-和 `desktop serve` 角色边界，以及严格的秘密引用、出站策略、制品摘要/签名、
-隔离恢复顺序和低基数遥测基础。这些基础在真实角色图和独立进程门禁通过前，
-不会被计入已完成切片。
+切片 4 提供独立 `gateway serve`、`guest serve`、`browser serve` 和
+`desktop serve` 角色边界、Browser/Desktop executor v2、Provider 所有的签名
+Desktop broker mux 及密封的受限出站身份。六角色、十二场景门禁已通过真实
+Chromium/Desktop 媒体和输入、依赖丢失、有界重连、重放/容量/漂移拒绝、
+broker/executor/Provider 重启、有界排空及精确归零清理。其 Desktop OCI 仍为
+`local-candidate-non-release`，不构成公开 Product E2E、制品发布、部署或生产就绪
+证明。[切片 4 记录](docs/audits/product-phase-6-slice-4.md)及
+[严格证据清单](docs/audits/product-phase-6-slice-4-evidence.json)固定了运行时版本
+`78f5987fda45873e497bce6d336e29dd4a61dc74`、证据工具版本
+`e2f4abacf03418c7b18f179c3e7459292d8626df` 和清单摘要
+`sha256:d01b3c41a0094657f18b4014b0649a799ea7fcf0e4ccaf07aa82cdd2052cc0d2`。
+切片 5 的生产秘密引用、KMS/HSM 信封密钥、工作负载凭据、轮换/吊销与紧急访问
+审计是下一步。
 
 独立的 [Product v1 第二阶段 Provider 生命周期计划](docs/plan/product-v1-phase-2-provider-lifecycle.md)
 已经完成其固定九步范围，覆盖终止、暂停/恢复、租约过期、有限事件读取和终端

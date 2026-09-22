@@ -36,6 +36,18 @@ allows only `README.md` or `docs/` evidence/documentation changes afterward.
 Any post-evidence source, configuration, workflow or test change requires a
 new implementation commit, candidate build and six-process run.
 
+Slice 4's accepted canonical manifest is checked in at
+[`audits/product-phase-6-slice-4-evidence.json`](audits/product-phase-6-slice-4-evidence.json).
+It binds runtime revision `78f5987fda45873e497bce6d336e29dd4a61dc74`,
+evidence-tool revision `e2f4abacf03418c7b18f179c3e7459292d8626df`,
+the `linux/arm64/v8` candidate image digest
+`sha256:0592a69e8f85125360eb6805132b3654324ab9a56c0ea019ea3dc7aade103d4e`,
+and manifest digest
+`sha256:d01b3c41a0094657f18b4014b0649a799ea7fcf0e4ccaf07aa82cdd2052cc0d2`.
+This advances Phase 6 only to 4/15 within the bounded local
+independent-process scope; it is not the Slice 7 publication gate or a
+production-release claim.
+
 The profile is a mode-0600 JSON document. It binds one source revision,
 source-tree digest, and configuration digest to exactly four independent
 data-plane roles. `profile_digest` is the canonical SHA-256 summary of that

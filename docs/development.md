@@ -875,7 +875,10 @@ The final repository verifier requires the implementation revision to remain a
 current-history ancestor and permits only committed `README.md`/`docs/`
 evidence changes after it. The local candidate is neither a published/signed
 artifact nor production qualification; complete public Product E2E remains a
-non-claim.
+non-claim. The accepted canonical Slice 4 result is archived at
+[`audits/product-phase-6-slice-4-evidence.json`](audits/product-phase-6-slice-4-evidence.json)
+with manifest digest
+`sha256:d01b3c41a0094657f18b4014b0649a799ea7fcf0e4ccaf07aa82cdd2052cc0d2`.
 
 Phase 6 continuation foundations are covered by the focused packages
 `internal/secretref`, `internal/netpolicy`, `internal/artifactverify`,

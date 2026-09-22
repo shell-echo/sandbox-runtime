@@ -20,7 +20,7 @@ general production readiness.
 | Product v1 Phase 3 | **13/13 complete** for the bounded standalone topology |
 | Product v1 Phase 4 Browser | **13/13 complete** for the bounded same-repository separate-process topology |
 | Product v1 Phase 5 Desktop | **15/15 complete** for the bounded same-repository independent-process topology; 5 roles and 14 strict scenarios pass, with exact-topology dependency-derived advertisement |
-| Product v1 Phase 6 production hardening | **3/15 complete**; Slice 4 independent Product, Provider, Gateway, Guest, Browser and Desktop role boundaries are implemented, but the corrective immutable candidate, six-process gate and strict evidence rerun remain pending; public E2E, deployment and production readiness remain unproved |
+| Product v1 Phase 6 production hardening | **4/15 complete**; Slice 4's independent Product, Gateway, Provider, Guest, Browser and Desktop processes pass the strict 12-scenario local gate with real Chromium/Desktop media and input, restart/fault/drain coverage, and exact cleanup; public Product E2E, published Phase 6 artifacts, deployment and production readiness remain unproved |
 | Coding/shell qualification | **Qualified** for the exact caller, Provider revisions, topology, profile, and scenarios recorded below |
 | Latest core CI | [Passed](https://github.com/shell-echo/sandbox-runtime/actions/runs/35204434771) |
 
@@ -201,8 +201,8 @@ This does not compose the production command or establish deployment, HA,
 hostile multi-tenant, independently implemented caller, or production
 readiness.
 
-[Product v1 Phase 6](docs/plan/product-v1-phase-6-production-hardening.md) is
-remains **3/15 complete** while Slice 4 corrective evidence is rebuilt. Slice 1 adds the independently runnable
+[Product v1 Phase 6](docs/plan/product-v1-phase-6-production-hardening.md)
+is **4/15 complete**. Slice 1 adds the independently runnable
 `sandbox-runtime product serve` process with strict development-only
 configuration, private PostgreSQL/identity files, real Product migrations and
 store, separate liveness/readiness, empty capability advertisement, and
@@ -227,7 +227,13 @@ boundaries; sealed Browser/Desktop restricted-egress identities; and a strict
 six-role/twelve-scenario local gate with exact cleanup. The accepted Desktop
 image is explicitly `local-candidate-non-release`; this does not prove public
 Product E2E, artifact publication, deployment or production readiness. Slice 5
-secret-reference/KMS/rotation qualification is next.
+secret-reference/KMS/rotation qualification is next. The
+[Slice 4 record](docs/audits/product-phase-6-slice-4.md) and
+[strict evidence manifest](docs/audits/product-phase-6-slice-4-evidence.json)
+bind runtime revision `78f5987fda45873e497bce6d336e29dd4a61dc74`,
+evidence-tool revision `e2f4abacf03418c7b18f179c3e7459292d8626df`, and
+manifest digest
+`sha256:d01b3c41a0094657f18b4014b0649a799ea7fcf0e4ccaf07aa82cdd2052cc0d2`.
 
 ## What the project provides
 
