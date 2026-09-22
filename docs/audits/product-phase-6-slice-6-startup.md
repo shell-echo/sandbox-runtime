@@ -46,6 +46,35 @@ without first freezing the portable security contract.
 The order is fixed by ADR 0055. Focused component checks may establish a
 checkpoint but cannot advance the Phase 6 counter.
 
+## Implemented checkpoint: principal-bound PKI and local signers
+
+The repository now has the shared closed `securityprincipal.v1` registry, a
+separate `workload-credential.v2` lease/ledger protocol, the signed
+principal-bound certificate protocol and a real Vault PKI adapter. Version 2
+cannot reinterpret a Slice 5 v1 request or lease. Certificate-controller Vault
+credentials are exact-policy scoped; substitution, delegation, mixed-version,
+replay, restart, expiry and revocation tests fail closed.
+
+`workload-tls-agent` generates P-256 keys locally, obtains an exact CSR-bound
+certificate and exposes only a peer-credential-bound Unix snapshot/signing
+capability. Its rotation, overlap, CRL staleness, issuer outage, clock rollback,
+replay, capacity, cancellation and exact socket/key cleanup tests pass under
+the race detector. A real TLS 1.3 handshake succeeds through the remote signer
+without exporting a private key.
+
+The certificate controller now requires a private regular descriptor-5 key
+and strictly validates its operator bootstrap certificate before first Vault
+use. A tagged real integration starts the fixed-digest Vault image with TLS 1.3
+and mandatory client certificates, proves certificate-less denial, performs
+the initial PKI operation, closes the bootstrap transport, switches to the
+locally generated managed certificate, performs a post-switch CRL operation,
+revokes the managed certificate and observes its serial in the authoritative
+Vault CRL before exact container cleanup.
+
+This is only the certificate checkpoint. The alias-only egress broker,
+role-isolated Docker topology, full least-privilege inventory and immutable
+Slice 6 evidence gate remain open, so Phase 6 remains **5/15**.
+
 ## Exact final inventory
 
 The gate covers six runtime roles, two executor backends, eight material

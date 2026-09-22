@@ -61,6 +61,49 @@ credential controller, break-glass controller, certificate controller and
 migration job has a distinct URI SAN and exact server/client EKUs for its
 declared trust edges. Shared identities and wildcard SANs are forbidden.
 
+The private identity vocabulary is the closed, versioned
+`securityprincipal.v1` registry. Its kinds are `runtime_role`,
+`material_agent`, `migration_job`, `controller`, `executor_backend` and
+`egress_broker`; every name-to-kind-to-role mapping is explicit. The
+`workload-credential.v2` protocol binds the complete principal and its digest
+to a separate v2 lease namespace and ledger. Version 1 remains frozen as Slice
+5 evidence only: a production Slice 6 caller cannot downgrade to v1 or renew a
+v1 lease through v2. Certificate-controller credential issuance is separately
+allowlisted to exactly the `certificate-controller-pki` backend policy;
+migration credentials are nonrenewable, while runtime roles, migration jobs,
+executor backends, egress brokers and the credential controller are denied
+direct issuance by default.
+
+The certificate controller's own first Vault connection is the sole bounded
+bootstrap exception. An operator-provisioned client private key is inherited
+only through descriptor 5 as a private regular file; it is never present in
+JSON, environment, arguments, logs, evidence or the repository. The matching
+certificate must chain to the configured Vault client trust bundle and carry
+the exact certificate-controller URI/DNS identity, empty subject, P-256 key,
+digital-signature usage, client-auth EKU, valid time and at most one-hour
+lifetime. The scoped Vault token and mTLS identity are both required; static
+tokens, anonymous access, server-only TLS and a v1 credential fallback are
+forbidden.
+
+The bootstrap identity may perform only the first controlled issuance and CRL
+read. The controller then atomically selects its locally generated managed
+certificate, closes the old transport connections, destroys the bootstrap
+key, and uses the managed signer for subsequent Vault handshakes. Shutdown
+revokes overlap material before the current identity, destroys both keys and
+closes every connection. Missing, wrong, nonregular, public-permission,
+offset, oversized or mismatched descriptor material; wrong SAN/EKU/CA/time;
+token-policy mismatch; Vault denial; failed first switch; stale old
+connections; and leaked key material all fail closed.
+
+Every role material agent exposes only the closed
+`workload-tls-agent.v1` Unix signing protocol. It authenticates the role by
+socket UID/GID, bounds connections and global nonce replay state, and returns
+only the certificate chain, public key and generation-pinned ECDSA signature.
+The TLS private key remains inside the agent. Rotation preserves the previous
+generation only for the declared overlap, while CRL staleness, missed rotation,
+issuer outage, clock rollback or revocation closes signing at the earliest
+safety deadline.
+
 ### Enforced egress and ingress
 
 Use role-isolated Docker internal networks and independent egress-policy broker
@@ -139,6 +182,10 @@ media/broker timing changes.
 - Slice 6 proves local enforcement with real Vault PKI and Docker, not an HSM
   CA, cloud identity, published/signed application image, platform service
   account, deployment, HA or production readiness.
+- The descriptor-5 first-operation bootstrap is an operator runbook boundary,
+  not automatic HSM, cert-manager, cloud workload identity or platform
+  bootstrap. Slices 11 and 14 must replace or explicitly revalidate it in each
+  deployment and independently administered environment.
 - Slice 7 owns SBOM, signature, provenance and publication for all images.
 - Slice 11 translates this frozen contract into Docker, Apple Container and
   Kubernetes profiles and validates platform ServiceAccount, NetworkPolicy,
