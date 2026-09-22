@@ -245,8 +245,11 @@ func TestExpiryRevocationAndCapabilitySubstitutionFailClosed(t *testing.T) {
 		value := newFixture(t)
 		_, capability, _ := approvedCapability(t, value, time.Minute)
 		value.clock.Advance(time.Minute)
-		if err := value.controller.Consume(context.Background(), consume(t, value, capability)); !errors.Is(err, ErrDenied) && !errors.Is(err, ErrExpired) {
+		if err := value.controller.Consume(context.Background(), consume(t, value, capability)); !errors.Is(err, ErrExpired) {
 			t.Fatalf("expiry consume error=%v", err)
+		}
+		if got := value.controller.ledger.Requests[0]; got.State != StateExpired || got.Uses != 0 || got.Revision != 5 {
+			t.Fatalf("expired record=%#v", got)
 		}
 	})
 	t.Run("revocation", func(t *testing.T) {

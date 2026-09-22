@@ -555,7 +555,11 @@ func validateCapability(capability Capability, now time.Time, publicKey ed25519.
 
 func validateConsume(consume Consume, now time.Time, targetKey, controllerKey ed25519.PublicKey) error {
 	deadline, err := parseTime(consume.Deadline)
-	if consume.Protocol != ProtocolID || validateCapability(consume.Capability, now, controllerKey) != nil || consume.TargetAgentID != consume.Capability.TargetAgentID ||
+	// Expiry is persistent controller state, not an offline capability-parser
+	// decision. Verify the controller signature and closed capability shape here,
+	// then let Consume atomically transition the matching issued record to
+	// expired and append its audit entry below the controller lock.
+	if consume.Protocol != ProtocolID || validateCapability(consume.Capability, time.Time{}, controllerKey) != nil || consume.TargetAgentID != consume.Capability.TargetAgentID ||
 		err != nil || !deadline.After(now) || deadline.After(now.Add(time.Minute)) || !validJTI(consume.JTI) || consume.Digest != consumeDigest(consume) || !verifyDigest(targetKey, consume.Digest, consume.Signature) {
 		return ErrDenied
 	}

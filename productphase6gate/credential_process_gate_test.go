@@ -97,6 +97,7 @@ func TestPhase6CredentialAndBreakGlassProcessGate(t *testing.T) {
 		resolveGateMaterial(t, ctx, environment, name)
 	}
 	runBreakGlassScenarios(t, ctx, environment)
+	_ = observeBreakGlassEvidence(t, environment)
 	waitFor(t, 30*time.Second, "process-gate credential renewals", func() bool {
 		ledger, err := readGateCredentialLedger(environment.paths.credentialLedger)
 		if err != nil {
