@@ -122,6 +122,26 @@ func TestSealBindsAndVerifiesObservedManifest(t *testing.T) {
 	}
 }
 
+func TestCleanupEvidenceDigestBindsBothCleanupBoundaries(t *testing.T) {
+	baseline := validManifest().Cleanup
+	want := CleanupEvidenceDigest(baseline)
+	for name, mutate := range map[string]func(*Cleanup){
+		"topology boundary": func(value *Cleanup) { value.Boundary = "ambiguous" },
+		"resource identity": func(value *Cleanup) { value.Teardown[0].Name = "unknown" },
+		"resource count":    func(value *Cleanup) { value.Teardown[0].Count = 1 },
+		"zero claim":        func(value *Cleanup) { value.ZeroResources = false },
+	} {
+		t.Run(name, func(t *testing.T) {
+			candidate := baseline
+			candidate.Teardown = append([]Resource(nil), baseline.Teardown...)
+			mutate(&candidate)
+			if got := CleanupEvidenceDigest(candidate); got == want {
+				t.Fatalf("cleanup mutation retained digest %s", got)
+			}
+		})
+	}
+}
+
 func TestVerifyRepositoryAllowsOnlyClosedEvidenceToolsAndThenDocumentation(t *testing.T) {
 	root := t.TempDir()
 	runGit(t, root, "init", "-q")
