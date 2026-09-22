@@ -15,7 +15,7 @@ historical under ADR 0053 and does not cover this source.
 
 | Concern | Reused repository component | Open production gap |
 |---|---|---|
-| Opaque references | `internal/secretref.Reference` and `Provider` | Production commands still consume several raw secret file paths and do not resolve complete role/tenant/purpose/version bindings. |
+| Opaque references | `internal/secretref.Reference`, scoped bindings and the role-owned registry | Product resolves one isolated migration binding and four runtime bindings; the other five production roles still consume raw secret paths. |
 | Private files | `internal/secretfile` and `secretref.FileProvider` enforce absolute path, regular-file, no-symlink, mode-`0600` and size rules | File secrets are bootstrap/development inputs, not an external secret provider or rotation authority. |
 | Version/window state | `KeyProvider`, `KeyMaterial`, `KeyState`, `RotationWindow` and `RotatingKeySet` | There is no production provider event/revision controller spanning all six roles. |
 | Local encryption | Existing AES envelope helper and local recording store | Raw local master keys remain process-held; no KMS/HSM seal/open path is connected to recording, tickets or data. |
@@ -59,6 +59,41 @@ ADR 0054 adds:
 The checkpoint deliberately does not add another reference implementation,
 file reader, state enum, rotation ledger or local envelope cipher.
 
+## Product registry and workload-material agent checkpoint
+
+The shared registry implementation is instantiated separately by each role and
+stores only provider/binding authority, never resolved material. Product also
+splits bootstrap and runtime authority into distinct processes. The explicit
+`sandbox-runtime.product-migration.v1` profile selects only one migration DSN,
+forbids caching and uses a dedicated one-shot agent/socket. The long-running
+`sandbox-runtime.product-process.v2` profile selects exactly four system-tenant
+runtime bindings (TLS certificate/private key, runtime DSN and identity key
+ring), requires the TLS pair at one version and rejects every migration,
+legacy or mixed file/path field.
+
+The repository-private Unix workload-material protocol is length-prefixed,
+closed, canonical and bounded. Requests bind the complete authority, nonce,
+deadline and request digest. Both peers verify UID/GID; the agent rechecks the
+role, purpose and exact-binding allowlist, rejects replay/capacity overflow and
+removes its socket on drain. The strict Vault KV v2 adapter uses TLS, an exact
+mount/origin/reference/version and a separately scoped token provider. The
+fixture environment token exists only in the isolated real-Vault integration
+and is explicitly not a production bootstrap mechanism.
+
+The real Product process gate first proves runtime startup cannot bind before
+schema migration. A separate migration-agent OS process rejects runtime
+bindings, permits exactly one migration resolution, automatically removes its
+socket, and serves a separate `product migrate` OS process. Only after the
+migration process, agent, socket, cache and database connection are absent does
+the gate start a runtime agent; that agent rejects the migration binding. The
+Product runtime validates the atomic TLS pair and monitors only its four
+material dependencies. The gate observes readiness closure after bounded cache
+expiry when the runtime agent stops, recovery after agent restart, Product
+restart, PostgreSQL loss/recovery, TLS-only transport, database authority
+separation and nondisclosure. It records
+`distinct_os_uid_established=false`: same-host UID is functional evidence only,
+not production least-privilege evidence.
+
 ## Recording and real Vault Transit checkpoint
 
 The next vertical evolves the existing private `RecordingContentStore` port so
@@ -100,6 +135,7 @@ offline process in
 |---|---|---|---|
 | `internal/secretref/scoped.go`, `scoped_cache.go` and focused tests | Existing reference/provider, `internal/secretfile`, `KeyState`, `RotationWindow`, errors and local envelope separation | Focused race/shuffle repetition, package vet, cancellation/scope/version/digest/expiry/revocation/cache/clearing negatives, retained Slice 4 verification | No Desktop candidate rebuild, six-process replay, Docker media stress or Slice 4 evidence regeneration: this leaf package is not imported by the Slice 4 runtime graph and changes no runtime/config/image identity. |
 | `product/catalog.go`, recording stores, `internal/secretref/envelope_binding_set.go`, `internal/secretref/vaulttransit` | Existing Product catalog authority, private recording port, scoped binding and envelope provider | Focused race/shuffle, Product/PostgreSQL compile and persistence checks, real digest-pinned Vault TLS/rotation/loss/cleanup integration, package vet, root checkpoint, both Contract verifiers, retained Slice 4 verification | No Desktop candidate rebuild or media stress: the runtime candidate and Slice 4 evidence identities are unchanged. |
+| `internal/secretref/registry.go`, `vaultkv`, `workloadagent`, Product migration/runtime config/process and focused tests | Scoped binding authority, existing Product TLS/identity/PostgreSQL parsing | Focused race repetition, real Vault KV/TLS agent process gate, real one-shot migration then Product/PostgreSQL/TLS runtime agent-loss/restart gate, root checkpoint and retained Slice 4 verification | Same host UID only (`distinct_os_uid_established=false`); no claim for the remaining five roles, production credential issuance, deployment or complete Slice 5 evidence. |
 | ADR, plan, development and this audit | ADR 0051/0053 claim and evidence lifecycle | Documentation consistency and `git diff --check` | No runtime image build: documentation does not change candidate bytes. |
 
 The root race/vet and both Contract verifiers remain mandatory at the stable
@@ -138,17 +174,53 @@ go run ./cmd/verify-product-contract -source-root .
 The disposable Vault and PostgreSQL containers were removed and exact-name
 queries returned no run-owned containers. No secret, DSN, private coordinate,
 host path or provider diagnostic is recorded in this audit. These results do
-not replace the still-open production registry and independent-process gate.
+not replace the still-open all-role registry and independent-process gate.
+
+## Observed Product registry/migration checkpoint validation
+
+The Product vertical passed the focused repeated race/vet checks and both real
+process gates:
+
+```bash
+go test -race -shuffle=on -count=10 \
+  ./config ./internal/secretref ./internal/secretref/vaultkv \
+  ./internal/secretref/workloadagent ./productapi/process \
+  ./productapi/tokenidentity ./product/adapter/postgres ./cmd
+
+SANDBOX_RUNTIME_VAULT_AGENT_INTEGRATION=1 \
+  go test -race -tags=integration -count=1 \
+  -run '^TestVaultKVWorkloadAgentProductTLSIntegration$' -v \
+  ./internal/secretref/workloadagent
+
+SANDBOX_RUNTIME_PRODUCT_PROCESS_INTEGRATION=1 \
+  go test -race -tags=integration -count=1 \
+  -run '^TestProductProcess(Development|ProductionKernel)Integration$' -v ./cmd
+
+go test -race -shuffle=on -count=1 ./...
+go vet ./...
+go run ./cmd/verify-contract -source-root .
+go run ./cmd/verify-product-contract -source-root .
+```
+
+The production process test uses separate migration-agent, migration-job,
+runtime-agent and Product OS processes. It records
+`distinct_os_uid_established=false`, rejects cross-purpose bindings, proves the
+one-shot socket cannot reconnect, verifies zero migration-role connections
+before runtime bind, and leaves no run-owned container or socket. This is not
+the distinct-service-account deployment gate.
 
 ## Non-claims and next action
 
-No production command uses the new providers yet. The real Vault recording
-vertical described above has passed, including one rotation event, but there is
-no production credential issuer/renewal controller, all-role secret migration,
-independent-process Slice 5 campaign, break-glass decision, or Slice 5 evidence
-manifest. Phase 6 therefore remains 4/15.
+Product now uses an isolated one-shot provider for its migration DSN and a
+different runtime provider for its four long-lived selections. The real Vault
+recording and Vault KV/agent verticals have
+passed, including overlap and restart events, but Provider, Gateway, Guest,
+Browser and Desktop still require migration. There is no production credential
+issuer/renewal controller, all-role rotation controller, independent-process
+Slice 5 campaign, break-glass decision, or Slice 5 evidence manifest. Phase 6
+therefore remains 4/15.
 
-The next vertical step is production startup composition: replace raw
-long-lived file/path inputs with role-owned scoped providers and short-lived
-workload credentials without widening any stable API. Then add the controller
-and break-glass state machine before the complete independent-process gate.
+The next vertical step is reuse of the same closed role-owned registry for
+Provider, Gateway, Guest, Browser and Desktop without widening any stable API,
+followed by the short-lived workload credential controller and break-glass
+state machine before the complete independent-process gate.

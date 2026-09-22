@@ -7,10 +7,12 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
@@ -29,6 +31,9 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/shell-echo/sandbox-runtime/config"
+	"github.com/shell-echo/sandbox-runtime/internal/secretref"
+	"github.com/shell-echo/sandbox-runtime/internal/secretref/workloadagent"
 	productpostgres "github.com/shell-echo/sandbox-runtime/product/adapter/postgres"
 )
 
@@ -83,6 +88,7 @@ mode = "development"
 level = "error"
 
 [product_process]
+schema_version = "sandbox-runtime.product-process.legacy-development.v1"
 enabled = true
 deployment_level = "development"
 
@@ -208,15 +214,115 @@ func TestProductProcessProductionKernelIntegration(t *testing.T) { //nolint:main
 	}
 	migrationDSN := "postgres://product_migrator:migration-secret@127.0.0.1:" + postgresPort + "/phase6?sslmode=disable"
 	runtimeDSN := "postgres://product_runtime:runtime-secret@127.0.0.1:" + postgresPort + "/phase6?sslmode=disable"
-	migrationPool, err := pgxpool.New(ctx, migrationDSN)
-	if err != nil {
-		t.Fatal(err)
+
+	directory := t.TempDir()
+	configPath := filepath.Join(directory, "config.toml")
+	migrationConfigPath := filepath.Join(directory, "migration.toml")
+	logPath := filepath.Join(directory, "product.log")
+	migrationLogPath := filepath.Join(directory, "migration.log")
+	binaryPath := filepath.Join(directory, "sandbox-runtime")
+	fixturePath := filepath.Join(directory, "workload-material-agent-static-fixture")
+	if output, err := exec.CommandContext(ctx, "go", "build", "-o", binaryPath, "..").CombinedOutput(); err != nil {
+		t.Fatalf("build Product process: %v: %s", err, output)
 	}
-	if err := productpostgres.ApplyMigrations(ctx, migrationPool); err != nil {
-		migrationPool.Close()
-		t.Fatal(err)
+	if output, err := exec.CommandContext(ctx, "go", "build", "-o", fixturePath, "./workload-material-agent-static-fixture").CombinedOutput(); err != nil {
+		t.Fatalf("build workload material fixture: %v: %s", err, output)
 	}
-	migrationPool.Close()
+	rootPool, tokenPrivateKey, certificatePEM, privateKeyPEM, keyRing := productionIdentityMaterial(t)
+	allMaterials := productIntegrationMaterials(t, migrationDSN+"\n", runtimeDSN+"\n", certificatePEM, privateKeyPEM, keyRing)
+	migrationMaterials := selectProductIntegrationMaterials(t, allMaterials, secretref.PurposePostgresMigrationDSN)
+	runtimeMaterials := selectProductIntegrationMaterials(t, allMaterials, secretref.PurposeTLSCertificate, secretref.PurposeTLSPrivateKey, secretref.PurposePostgresRuntimeDSN, secretref.PurposeIdentityKeyRing)
+	migrationAgentDirectory := shortProductAgentDirectory(t)
+	runtimeAgentDirectory := shortProductAgentDirectory(t)
+	migrationAgentSocket := filepath.Join(migrationAgentDirectory, "migration.sock")
+	runtimeAgentSocket := filepath.Join(runtimeAgentDirectory, "runtime.sock")
+	productPort := reserveLoopbackPort(t)
+	configuration := fmt.Sprintf(`[application]
+mode = "production"
+
+[logger]
+level = "error"
+
+[product_process]
+schema_version = %q
+enabled = true
+deployment_level = "production"
+
+[product_process.api]
+host = "127.0.0.1"
+port = %d
+
+[product_process.tls]
+certificate_binding_id = "product-tls-certificate"
+private_key_binding_id = "product-tls-private-key"
+expected_server_name = "product.example.test"
+
+[product_process.postgres]
+runtime_dsn_binding_id = "product-runtime-dsn"
+runtime_role = "product_runtime"
+startup_timeout_seconds = 10
+operation_timeout_seconds = 2
+max_connections = 2
+min_connections = 1
+
+[product_process.identity]
+issuer = "https://identity.product.example.test"
+audience = "https://api.product.example.test"
+key_ring_binding_id = "product-identity-key-ring"
+clock_skew_seconds = 30
+max_token_lifetime_seconds = 900
+
+[product_process.materials.provider]
+type = %q
+alias = "product-material-agent"
+socket_path = %q
+expected_uid = %d
+expected_gid = %d
+operation_timeout_seconds = 2
+cache_seconds = 1
+
+%s`, config.ProductProductionSchemaV2, productPort, config.ProductUnixMaterialProviderV1, runtimeAgentSocket, os.Getuid(), os.Getgid(), productIntegrationBindingsTOML(t, "product_process", "product-material-agent", runtimeMaterials))
+	writePrivateIntegrationFile(t, configPath, configuration)
+	migrationConfiguration := fmt.Sprintf(`[application]
+mode = "production"
+
+[logger]
+level = "error"
+
+[product_migration]
+schema_version = %q
+enabled = true
+
+[product_migration.postgres]
+dsn_binding_id = "product-migration-dsn"
+role = "product_migrator"
+startup_timeout_seconds = 10
+max_connections = 1
+
+[product_migration.materials.provider]
+type = %q
+alias = "product-migration-agent"
+socket_path = %q
+expected_uid = %d
+expected_gid = %d
+operation_timeout_seconds = 2
+cache_seconds = 0
+
+%s`, config.ProductMigrationSchemaV1, config.ProductUnixMaterialProviderV1, migrationAgentSocket, os.Getuid(), os.Getgid(), productIntegrationBindingsTOML(t, "product_migration", "product-migration-agent", migrationMaterials))
+	writePrivateIntegrationFile(t, migrationConfigPath, migrationConfiguration)
+
+	preMigrationAgent := startStaticProductMaterialAgent(t, ctx, fixturePath, runtimeAgentSocket, runtimeMaterials, 0)
+	assertProductAgentRejectsBinding(t, runtimeAgentSocket, migrationMaterials[0].Binding)
+	assertProductServeFailsBeforeBind(t, ctx, binaryPath, configPath, productPort)
+	preMigrationAgent.stop(t)
+	migrationAgent := startStaticProductMaterialAgent(t, ctx, fixturePath, migrationAgentSocket, migrationMaterials, 1)
+	assertProductAgentRejectsBinding(t, migrationAgentSocket, runtimeMaterials[0].Binding)
+	runProductMigrationProcess(t, ctx, binaryPath, migrationConfigPath, migrationLogPath, migrationAgent)
+	migrationAgent.waitOneShot(t)
+	assertNoMigrationRoleConnection(t, ctx, adminPool)
+	if _, err := workloadagent.NewProduction(workloadagent.Config{SocketPath: migrationAgentSocket, ExpectedUID: uint32(os.Getuid()), ExpectedGID: uint32(os.Getgid()), Role: secretref.RoleProduct, OperationTimeout: time.Second, Now: time.Now}); !errors.Is(err, secretref.ErrUnavailable) {
+		t.Fatalf("migration agent reconnect error = %v", err)
+	}
 	if _, err := adminPool.Exec(ctx, `GRANT USAGE ON SCHEMA sandbox_runtime_product TO product_runtime;
 GRANT SELECT ON sandbox_runtime_product.schema_migrations TO product_runtime;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA sandbox_runtime_product TO product_runtime;
@@ -227,60 +333,8 @@ ALTER DEFAULT PRIVILEGES FOR ROLE product_migrator IN SCHEMA sandbox_runtime_pro
 	assertRuntimeRoleCannotMigrate(t, ctx, runtimeDSN)
 	assertRuntimePoolExhaustionIsBounded(t, ctx, runtimeDSN)
 	assertSchemaCompatibilityRejectsNewer(t, ctx, migrationDSN, runtimeDSN)
-
-	directory := t.TempDir()
-	migrationPath := filepath.Join(directory, "migration.dsn")
-	runtimePath := filepath.Join(directory, "runtime.dsn")
-	certificatePath := filepath.Join(directory, "product.crt")
-	privateKeyPath := filepath.Join(directory, "product.key")
-	keyRingPath := filepath.Join(directory, "identity-keys.json")
-	configPath := filepath.Join(directory, "config.toml")
-	logPath := filepath.Join(directory, "product.log")
-	binaryPath := filepath.Join(directory, "sandbox-runtime")
-	writePrivateIntegrationFile(t, migrationPath, migrationDSN+"\n")
-	writePrivateIntegrationFile(t, runtimePath, runtimeDSN+"\n")
-	rootPool, tokenPrivateKey := writeProductionIdentityMaterial(t, certificatePath, privateKeyPath, keyRingPath)
-	productPort := reserveLoopbackPort(t)
-	configuration := fmt.Sprintf(`[application]
-mode = "production"
-
-[logger]
-level = "error"
-
-[product_process]
-enabled = true
-deployment_level = "production"
-
-[product_process.api]
-host = "127.0.0.1"
-port = %d
-
-[product_process.tls]
-certificate_file = %q
-private_key_file = %q
-
-[product_process.postgres]
-migration_dsn_file = %q
-runtime_dsn_file = %q
-migration_role = "product_migrator"
-runtime_role = "product_runtime"
-startup_timeout_seconds = 10
-operation_timeout_seconds = 2
-migration_max_connections = 1
-max_connections = 2
-min_connections = 1
-
-[product_process.identity]
-issuer = "https://identity.product.example.test"
-audience = "https://api.product.example.test"
-key_ring_file = %q
-clock_skew_seconds = 30
-max_token_lifetime_seconds = 900
-`, productPort, certificatePath, privateKeyPath, migrationPath, runtimePath, keyRingPath)
-	writePrivateIntegrationFile(t, configPath, configuration)
-	if output, err := exec.CommandContext(ctx, "go", "build", "-o", binaryPath, "..").CombinedOutput(); err != nil {
-		t.Fatalf("build Product process: %v: %s", err, output)
-	}
+	agent := startStaticProductMaterialAgent(t, ctx, fixturePath, runtimeAgentSocket, runtimeMaterials, 0)
+	t.Cleanup(func() { agent.stop(t) })
 	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0o600)
 	if err != nil {
 		t.Fatal(err)
@@ -331,6 +385,10 @@ max_token_lifetime_seconds = 900
 		t.Fatalf("unpause PostgreSQL: %v: %s", err, output)
 	}
 	waitForHTTPStatusWithClient(t, processDone, client, baseURL+"/readyz", "", http.StatusOK)
+	agent.stop(t)
+	waitForHTTPStatusWithClient(t, processDone, client, baseURL+"/readyz", "", http.StatusServiceUnavailable)
+	agent = startStaticProductMaterialAgent(t, ctx, fixturePath, runtimeAgentSocket, runtimeMaterials, 0)
+	waitForHTTPStatusWithClient(t, processDone, client, baseURL+"/readyz", "", http.StatusOK)
 	if err := process.Process.Signal(syscall.SIGTERM); err != nil {
 		t.Fatal(err)
 	}
@@ -373,11 +431,13 @@ max_token_lifetime_seconds = 900
 		t.Fatal(err)
 	}
 	logDocument, _ := os.ReadFile(logPath)
+	migrationLogDocument, _ := os.ReadFile(migrationLogPath)
 	for _, forbidden := range []string{"phase6-production", "migration-secret", "runtime-secret", token, "PRIVATE KEY"} {
-		if bytes.Contains(logDocument, []byte(forbidden)) {
+		if bytes.Contains(logDocument, []byte(forbidden)) || bytes.Contains(migrationLogDocument, []byte(forbidden)) {
 			t.Fatalf("Product log disclosed protected material %q", forbidden)
 		}
 	}
+	agent.stop(t)
 	removeContainer()
 	output, err = exec.CommandContext(ctx, "docker", "ps", "-a", "--filter", "name=^/"+container+"$", "--format", "{{.Names}}").CombinedOutput()
 	if err != nil || strings.TrimSpace(string(output)) != "" {
@@ -512,6 +572,76 @@ func startProductIntegrationProcess(t *testing.T, ctx context.Context, binaryPat
 	return process, processDone
 }
 
+func runProductMigrationProcess(t *testing.T, ctx context.Context, binaryPath, configPath, logPath string, agent *runningStaticProductAgent) {
+	t.Helper()
+	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	process := exec.CommandContext(ctx, binaryPath, "product", "migrate", "-c", configPath)
+	process.Stdout = logFile
+	process.Stderr = logFile
+	if err := process.Start(); err != nil {
+		_ = logFile.Close()
+		t.Fatal(err)
+	}
+	if agent == nil || agent.command == nil || agent.command.Process == nil || process.Process.Pid == agent.command.Process.Pid {
+		_ = process.Process.Kill()
+		_ = logFile.Close()
+		t.Fatal("Product migration and migration agent are not distinct OS processes")
+	}
+	done := make(chan error, 1)
+	go func() { done <- process.Wait() }()
+	select {
+	case err := <-done:
+		if err != nil {
+			_ = logFile.Close()
+			t.Fatalf("Product migration process exit: %v; log=%s", err, readIntegrationLog(logPath))
+		}
+	case <-time.After(20 * time.Second):
+		_ = process.Process.Kill()
+		_ = logFile.Close()
+		t.Fatal("Product migration process did not stop")
+	}
+	if err := logFile.Close(); err != nil {
+		t.Fatal(err)
+	}
+	t.Log("migration agent and migration job used distinct OS processes; distinct_os_uid_established=false")
+}
+
+func assertProductServeFailsBeforeBind(t *testing.T, ctx context.Context, binaryPath, configPath string, port int) {
+	t.Helper()
+	command := exec.CommandContext(ctx, binaryPath, "product", "serve", "-c", configPath)
+	output, err := command.CombinedOutput()
+	if err == nil {
+		t.Fatal("Product runtime started before the explicit migration job")
+	}
+	for _, forbidden := range []string{"migration-secret", "runtime-secret", "PRIVATE KEY"} {
+		if bytes.Contains(output, []byte(forbidden)) {
+			t.Fatalf("failed Product startup disclosed protected material %q", forbidden)
+		}
+	}
+	connection, dialErr := net.DialTimeout("tcp", "127.0.0.1:"+strconv.Itoa(port), 200*time.Millisecond)
+	if dialErr == nil {
+		_ = connection.Close()
+		t.Fatal("Product listener bound before schema migration")
+	}
+}
+
+func assertProductAgentRejectsBinding(t *testing.T, socketPath string, binding secretref.Binding) {
+	t.Helper()
+	client, err := workloadagent.NewProduction(workloadagent.Config{
+		SocketPath: socketPath, ExpectedUID: uint32(os.Getuid()), ExpectedGID: uint32(os.Getgid()), Role: secretref.RoleProduct,
+		OperationTimeout: time.Second, Now: time.Now,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.ResolveSecret(context.Background(), binding); !errors.Is(err, secretref.ErrUnavailable) {
+		t.Fatalf("cross-purpose Product agent binding error = %v", err)
+	}
+}
+
 func waitForHTTPStatusWithClient(t *testing.T, processDone <-chan error, client *http.Client, endpoint, token string, want int) {
 	t.Helper()
 	deadline := time.Now().Add(25 * time.Second)
@@ -634,7 +764,7 @@ func assertNoMigrationRoleConnection(t *testing.T, ctx context.Context, adminPoo
 	}
 }
 
-func writeProductionIdentityMaterial(t *testing.T, certificatePath, privateKeyPath, keyRingPath string) (*x509.CertPool, ed25519.PrivateKey) {
+func productionIdentityMaterial(t *testing.T) (*x509.CertPool, ed25519.PrivateKey, []byte, []byte, []byte) {
 	t.Helper()
 	now := time.Now().UTC()
 	caPublic, caPrivate, err := ed25519.GenerateKey(rand.Reader)
@@ -668,8 +798,7 @@ func writeProductionIdentityMaterial(t *testing.T, certificatePath, privateKeyPa
 		t.Fatal(err)
 	}
 	certificatePEM := append(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: serverDER}), pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caDER})...)
-	writePrivateIntegrationFile(t, certificatePath, string(certificatePEM))
-	writePrivateIntegrationFile(t, privateKeyPath, string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: encodedPrivateKey})))
+	privateKeyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: encodedPrivateKey})
 	rootPool := x509.NewCertPool()
 	rootPool.AddCert(caCertificate)
 	tokenPublic, tokenPrivate, err := ed25519.GenerateKey(rand.Reader)
@@ -685,8 +814,246 @@ func writeProductionIdentityMaterial(t *testing.T, certificatePath, privateKeyPa
 	if err != nil {
 		t.Fatal(err)
 	}
-	writePrivateIntegrationFile(t, keyRingPath, string(keyRing))
-	return rootPool, tokenPrivate
+	return rootPool, tokenPrivate, certificatePEM, privateKeyPEM, keyRing
+}
+
+func productIntegrationMaterials(t *testing.T, migrationDSN, runtimeDSN string, certificatePEM, privateKeyPEM, keyRing []byte) []secretref.SecretMaterial {
+	t.Helper()
+	bindings := []secretref.Binding{
+		{Schema: secretref.BindingSchema, Kind: secretref.KindSecret, Reference: "secret://vault/kv/product-tls-certificate", Version: "v1", Purpose: secretref.PurposeTLSCertificate, TenantID: secretref.SystemTenant, Role: secretref.RoleProduct},
+		{Schema: secretref.BindingSchema, Kind: secretref.KindSecret, Reference: "secret://vault/kv/product-tls-private-key", Version: "v1", Purpose: secretref.PurposeTLSPrivateKey, TenantID: secretref.SystemTenant, Role: secretref.RoleProduct},
+		{Schema: secretref.BindingSchema, Kind: secretref.KindSecret, Reference: "secret://vault/kv/product-migration-dsn", Version: "v1", Purpose: secretref.PurposePostgresMigrationDSN, TenantID: secretref.SystemTenant, Role: secretref.RoleProduct},
+		{Schema: secretref.BindingSchema, Kind: secretref.KindSecret, Reference: "secret://vault/kv/product-runtime-dsn", Version: "v1", Purpose: secretref.PurposePostgresRuntimeDSN, TenantID: secretref.SystemTenant, Role: secretref.RoleProduct},
+		{Schema: secretref.BindingSchema, Kind: secretref.KindSecret, Reference: "secret://vault/kv/product-identity-key-ring", Version: "v1", Purpose: secretref.PurposeIdentityKeyRing, TenantID: secretref.SystemTenant, Role: secretref.RoleProduct},
+	}
+	values := [][]byte{certificatePEM, privateKeyPEM, []byte(migrationDSN), []byte(runtimeDSN), keyRing}
+	now := time.Now().UTC()
+	materials := make([]secretref.SecretMaterial, 0, len(bindings))
+	for index, binding := range bindings {
+		if err := binding.Validate(); err != nil {
+			t.Fatal(err)
+		}
+		digest := sha256.Sum256(values[index])
+		materials = append(materials, secretref.SecretMaterial{
+			Binding: binding, Bytes: append([]byte(nil), values[index]...), Digest: "sha256:" + hex.EncodeToString(digest[:]), Revision: "revision-1",
+			Window: secretref.RotationWindow{NotBefore: now.Add(-time.Minute), NotAfter: now.Add(time.Hour), State: secretref.KeyActive},
+		})
+	}
+	return materials
+}
+
+func selectProductIntegrationMaterials(t *testing.T, materials []secretref.SecretMaterial, purposes ...secretref.Purpose) []secretref.SecretMaterial {
+	t.Helper()
+	selected := make([]secretref.SecretMaterial, 0, len(purposes))
+	for _, purpose := range purposes {
+		found := false
+		for _, material := range materials {
+			if material.Binding.Purpose == purpose {
+				copy := material
+				copy.Bytes = append([]byte(nil), material.Bytes...)
+				selected = append(selected, copy)
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("missing Product integration material purpose %q", purpose)
+		}
+	}
+	return selected
+}
+
+func productIntegrationBindingsTOML(t *testing.T, section, provider string, materials []secretref.SecretMaterial) string {
+	t.Helper()
+	var builder strings.Builder
+	for _, material := range materials {
+		bindingID := productIntegrationBindingID(t, material.Binding.Purpose)
+		document, err := json.Marshal(material.Binding)
+		if err != nil {
+			t.Fatal(err)
+		}
+		builder.WriteString("[[")
+		builder.WriteString(section)
+		builder.WriteString(".materials.bindings]]\nid = ")
+		encodedID, _ := json.Marshal(bindingID)
+		builder.Write(encodedID)
+		builder.WriteString("\nprovider = ")
+		encodedProvider, _ := json.Marshal(provider)
+		builder.Write(encodedProvider)
+		builder.WriteString("\ndocument = '")
+		builder.Write(document)
+		builder.WriteString("'\n\n")
+	}
+	return builder.String()
+}
+
+func productIntegrationBindingID(t *testing.T, purpose secretref.Purpose) string {
+	t.Helper()
+	switch purpose {
+	case secretref.PurposeTLSCertificate:
+		return "product-tls-certificate"
+	case secretref.PurposeTLSPrivateKey:
+		return "product-tls-private-key"
+	case secretref.PurposePostgresMigrationDSN:
+		return "product-migration-dsn"
+	case secretref.PurposePostgresRuntimeDSN:
+		return "product-runtime-dsn"
+	case secretref.PurposeIdentityKeyRing:
+		return "product-identity-key-ring"
+	default:
+		t.Fatalf("unsupported Product integration material purpose %q", purpose)
+		return ""
+	}
+}
+
+type staticAgentInput struct {
+	Protocol          string                `json:"protocol"`
+	SocketPath        string                `json:"socket_path"`
+	ExpectedClientUID uint32                `json:"expected_client_uid"`
+	ExpectedClientGID uint32                `json:"expected_client_gid"`
+	Role              secretref.Role        `json:"role"`
+	MaxConnections    int                   `json:"max_connections"`
+	MaxResolutions    int                   `json:"max_resolutions"`
+	Materials         []staticAgentMaterial `json:"materials"`
+}
+
+type staticAgentMaterial struct {
+	Binding   secretref.Binding  `json:"binding"`
+	Revision  string             `json:"revision"`
+	Digest    string             `json:"digest"`
+	State     secretref.KeyState `json:"state"`
+	NotBefore string             `json:"not_before"`
+	NotAfter  string             `json:"not_after"`
+	Material  []byte             `json:"material"`
+}
+
+type runningStaticProductAgent struct {
+	command *exec.Cmd
+	done    chan error
+	stderr  *bytes.Buffer
+	socket  string
+	stopped bool
+}
+
+func startStaticProductMaterialAgent(t *testing.T, parent context.Context, binary, socketPath string, materials []secretref.SecretMaterial, maxResolutions int) *runningStaticProductAgent {
+	t.Helper()
+	input := staticAgentInput{
+		Protocol: "sandbox-runtime.workload-material-static-fixture.v1", SocketPath: socketPath,
+		ExpectedClientUID: uint32(os.Getuid()), ExpectedClientGID: uint32(os.Getgid()), Role: secretref.RoleProduct,
+		MaxConnections: 8, MaxResolutions: maxResolutions, Materials: make([]staticAgentMaterial, 0, len(materials)),
+	}
+	for _, material := range materials {
+		input.Materials = append(input.Materials, staticAgentMaterial{
+			Binding: material.Binding, Revision: material.Revision, Digest: material.Digest, State: material.Window.State,
+			NotBefore: material.Window.NotBefore.UTC().Format(time.RFC3339Nano), NotAfter: material.Window.NotAfter.UTC().Format(time.RFC3339Nano),
+			Material: append([]byte(nil), material.Bytes...),
+		})
+	}
+	document, err := json.Marshal(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for index := range input.Materials {
+		clear(input.Materials[index].Material)
+	}
+	command := exec.CommandContext(parent, binary)
+	stdin, err := command.StdinPipe()
+	if err != nil {
+		clear(document)
+		t.Fatal(err)
+	}
+	stderr := new(bytes.Buffer)
+	command.Stdout = io.Discard
+	command.Stderr = stderr
+	if err := command.Start(); err != nil {
+		clear(document)
+		t.Fatal(err)
+	}
+	if _, err := stdin.Write(document); err != nil {
+		clear(document)
+		_ = command.Process.Kill()
+		t.Fatal(err)
+	}
+	clear(document)
+	if err := stdin.Close(); err != nil {
+		_ = command.Process.Kill()
+		t.Fatal(err)
+	}
+	agent := &runningStaticProductAgent{command: command, done: make(chan error, 1), stderr: stderr, socket: socketPath}
+	go func() { agent.done <- command.Wait() }()
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		if info, statErr := os.Lstat(socketPath); statErr == nil && info.Mode()&os.ModeSocket != 0 {
+			return agent
+		}
+		select {
+		case processErr := <-agent.done:
+			agent.stopped = true
+			t.Fatalf("static Product material agent exited before ready: %v; stderr=%s", processErr, agent.stderr.String())
+		default:
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	_ = command.Process.Kill()
+	t.Fatal("static Product material agent did not create its socket")
+	return nil
+}
+
+func (a *runningStaticProductAgent) stop(t *testing.T) {
+	t.Helper()
+	if a == nil || a.stopped {
+		return
+	}
+	if err := a.command.Process.Signal(syscall.SIGTERM); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case err := <-a.done:
+		if err != nil {
+			t.Fatalf("Product material agent exit: %v; stderr=%s", err, a.stderr.String())
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Product material agent did not stop")
+	}
+	a.stopped = true
+	if _, err := os.Lstat(a.socket); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("Product material agent socket cleanup = %v", err)
+	}
+}
+
+func (a *runningStaticProductAgent) waitOneShot(t *testing.T) {
+	t.Helper()
+	if a == nil || a.stopped {
+		return
+	}
+	select {
+	case err := <-a.done:
+		if err != nil {
+			t.Fatalf("one-shot Product migration agent exit: %v; stderr=%s", err, a.stderr.String())
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("one-shot Product migration agent did not exit")
+	}
+	a.stopped = true
+	if _, err := os.Lstat(a.socket); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("one-shot Product migration socket cleanup = %v", err)
+	}
+}
+
+func shortProductAgentDirectory(t *testing.T) string {
+	t.Helper()
+	directory, err := os.MkdirTemp("/tmp", "sr-product-agent-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(directory) })
+	if err := os.Chmod(directory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chown(directory, os.Getuid(), os.Getgid()); err != nil {
+		t.Fatal(err)
+	}
+	return directory
 }
 
 func signProductionToken(t *testing.T, privateKey ed25519.PrivateKey, now time.Time) string {

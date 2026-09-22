@@ -33,6 +33,15 @@ func TestProductionIdentityAcceptsOverlappingActiveKeys(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
+	document, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	materialAuthenticator, err := loadMaterial(document, testIssuer, testAudience, 30*time.Second, 15*time.Minute, fixedClock{now})
+	clear(document)
+	if err != nil || materialAuthenticator == nil {
+		t.Fatalf("LoadMaterial: %v", err)
+	}
 	for keyID, privateKey := range map[string]ed25519.PrivateKey{"key-a": privateA, "key-b": privateB} {
 		principal, err := authenticator.Authenticate(context.Background(), signToken(t, keyID, privateKey, claimsAt(now)))
 		if err != nil {

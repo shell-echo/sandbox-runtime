@@ -1,9 +1,12 @@
 package config
 
 import (
+	"encoding/json"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/shell-echo/sandbox-runtime/internal/secretref"
 )
 
 func TestProductProcessDisabledDefaultsAreInert(t *testing.T) {
@@ -22,6 +25,7 @@ func TestLoadProductProcessStrictDevelopmentConfiguration(t *testing.T) {
 	dsn := filepath.Join(directory, "postgres.dsn")
 	identities := filepath.Join(directory, "identities.json")
 	body := "[product_process]\n" +
+		"schema_version = '" + ProductLegacyDevelopmentSchema + "'\n" +
 		"enabled = true\n" +
 		"deployment_level = 'development'\n" +
 		"[product_process.api]\nhost = '127.0.0.1'\nport = 18082\n" +
@@ -45,19 +49,20 @@ func TestLoadProductProcessRejectsUnknownField(t *testing.T) {
 
 func TestLoadProductProcessStrictProductionConfiguration(t *testing.T) {
 	snapshotGlobals(t)
-	directory := t.TempDir()
-	path := func(name string) string { return filepath.Join(directory, name) }
+	path := func(name string) string { return filepath.Join("/tmp", "sandbox-runtime-test-"+name) }
 	body := "[application]\nmode = 'production'\n" +
-		"[product_process]\nenabled = true\ndeployment_level = 'production'\n" +
+		"[product_process]\nschema_version = '" + ProductProductionSchemaV2 + "'\nenabled = true\ndeployment_level = 'production'\n" +
 		"[product_process.api]\nhost = '0.0.0.0'\nport = 8443\n" +
-		"[product_process.tls]\ncertificate_file = '" + path("tls.crt") + "'\nprivate_key_file = '" + path("tls.key") + "'\n" +
-		"[product_process.postgres]\nmigration_dsn_file = '" + path("migration.dsn") + "'\nruntime_dsn_file = '" + path("runtime.dsn") + "'\n" +
-		"migration_role = 'product_migrator'\nruntime_role = 'product_runtime'\nstartup_timeout_seconds = 12\noperation_timeout_seconds = 2\nmigration_max_connections = 1\nmax_connections = 12\nmin_connections = 2\n" +
-		"[product_process.identity]\nissuer = 'https://identity.product.example.test'\naudience = 'urn:shell-echo:sandbox-runtime:product-api:production'\nkey_ring_file = '" + path("keys.json") + "'\nclock_skew_seconds = 20\nmax_token_lifetime_seconds = 600\n"
+		"[product_process.tls]\ncertificate_binding_id = 'product-tls-certificate'\nprivate_key_binding_id = 'product-tls-private-key'\nexpected_server_name = 'product.example.test'\n" +
+		"[product_process.postgres]\nruntime_dsn_binding_id = 'product-runtime-dsn'\n" +
+		"runtime_role = 'product_runtime'\nstartup_timeout_seconds = 12\noperation_timeout_seconds = 2\nmax_connections = 12\nmin_connections = 2\n" +
+		"[product_process.identity]\nissuer = 'https://identity.product.example.test'\naudience = 'urn:shell-echo:sandbox-runtime:product-api:production'\nkey_ring_binding_id = 'product-identity-key-ring'\nclock_skew_seconds = 20\nmax_token_lifetime_seconds = 600\n" +
+		"[product_process.materials.provider]\ntype = '" + ProductUnixMaterialProviderV1 + "'\nalias = 'role-material-agent'\nsocket_path = '" + path("agent.sock") + "'\nexpected_uid = 501\nexpected_gid = 20\noperation_timeout_seconds = 3\ncache_seconds = 30\n" +
+		productMaterialBindingsTOML(t)
 	if err := Load(writeConfig(t, body)); err != nil {
 		t.Fatalf("Load Product production process: %v", err)
 	}
-	if ProductProcess.DeploymentLevel != ProductProductionLevel || ProductProcess.Postgres.MigrationRole != "product_migrator" || ProductProcess.TLS.PrivateKeyFile != path("tls.key") {
+	if ProductProcess.DeploymentLevel != ProductProductionLevel || ProductProcess.Postgres.RuntimeRole != "product_runtime" || ProductProcess.TLS.PrivateKeyBindingID != "product-tls-private-key" {
 		t.Fatalf("Product process = %#v", ProductProcess)
 	}
 }
@@ -65,25 +70,18 @@ func TestLoadProductProcessStrictProductionConfiguration(t *testing.T) {
 func TestProductProcessRejectsUnsafeProductionAuthority(t *testing.T) {
 	directory := t.TempDir()
 	path := func(name string) string { return filepath.Join(directory, name) }
-	valid := defaultProductProcessConfig()
-	valid.Enabled = true
-	valid.DeploymentLevel = ProductProductionLevel
-	valid.API.Host = "0.0.0.0"
-	valid.TLS = ProductTLSConfig{CertificateFile: path("tls.crt"), PrivateKeyFile: path("tls.key")}
-	valid.Postgres.MigrationDSNFile = path("migration.dsn")
-	valid.Postgres.RuntimeDSNFile = path("runtime.dsn")
-	valid.Postgres.MigrationRole = "product_migrator"
-	valid.Postgres.RuntimeRole = "product_runtime"
-	valid.Identity.Issuer = "https://identity.product.example.test"
-	valid.Identity.Audience = "urn:shell-echo:sandbox-runtime:product-api:production"
-	valid.Identity.KeyRingFile = path("keys.json")
+	valid := validProductionProductConfig(t, directory)
 	for name, mutate := range map[string]func(*ProductProcessConfig){
-		"static identity":  func(c *ProductProcessConfig) { c.Identity.BindingsFile = path("static.json") },
-		"single db role":   func(c *ProductProcessConfig) { c.Postgres.RuntimeRole = c.Postgres.MigrationRole },
-		"shared authority": func(c *ProductProcessConfig) { c.Identity.KeyRingFile = c.TLS.PrivateKeyFile },
-		"relative key":     func(c *ProductProcessConfig) { c.TLS.PrivateKeyFile = "tls.key" },
-		"bad issuer":       func(c *ProductProcessConfig) { c.Identity.Issuer = "identity" },
-		"excess pool":      func(c *ProductProcessConfig) { c.Postgres.MigrationMaxConnections = 5 },
+		"static identity": func(c *ProductProcessConfig) { c.Identity.BindingsFile = path("static.json") },
+		"missing runtime": func(c *ProductProcessConfig) { c.Postgres.RuntimeDSNBindingID = "product-tls-certificate" },
+		"relative socket": func(c *ProductProcessConfig) { c.Materials.Provider.SocketPath = "agent.sock" },
+		"bad issuer":      func(c *ProductProcessConfig) { c.Identity.Issuer = "identity" },
+		"excess cache":    func(c *ProductProcessConfig) { c.Materials.Provider.CacheSeconds = 61 },
+		"migration binding": func(c *ProductProcessConfig) {
+			binding := productMaterialBindings()["product-migration-dsn"]
+			document, _ := json.Marshal(binding)
+			c.Materials.Bindings = append(c.Materials.Bindings, ProductMaterialBindingConfig{ID: "product-migration-dsn", Provider: "role-material-agent", Document: string(document)})
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			candidate := *valid
@@ -93,6 +91,58 @@ func TestProductProcessRejectsUnsafeProductionAuthority(t *testing.T) {
 			}
 		})
 	}
+}
+
+func validProductionProductConfig(t *testing.T, _ string) *ProductProcessConfig {
+	t.Helper()
+	valid := defaultProductProcessConfig()
+	valid.SchemaVersion = ProductProductionSchemaV2
+	valid.Enabled = true
+	valid.DeploymentLevel = ProductProductionLevel
+	valid.API.Host = "0.0.0.0"
+	valid.TLS = ProductTLSConfig{CertificateBindingID: "product-tls-certificate", PrivateKeyBindingID: "product-tls-private-key", ExpectedServerName: "product.example.test"}
+	valid.Postgres.RuntimeDSNBindingID = "product-runtime-dsn"
+	valid.Postgres.RuntimeRole = "product_runtime"
+	valid.Identity.Issuer = "https://identity.product.example.test"
+	valid.Identity.Audience = "urn:shell-echo:sandbox-runtime:product-api:production"
+	valid.Identity.KeyRingBindingID = "product-identity-key-ring"
+	valid.Materials.Provider = ProductMaterialProviderConfig{Type: ProductUnixMaterialProviderV1, Alias: "role-material-agent", SocketPath: "/tmp/sandbox-runtime-product-agent.sock", ExpectedUID: 501, ExpectedGID: 20, OperationTimeoutSeconds: 3, CacheSeconds: 30}
+	for _, id := range []string{"product-tls-certificate", "product-tls-private-key", "product-runtime-dsn", "product-identity-key-ring"} {
+		binding := productMaterialBindings()[id]
+		document, err := json.Marshal(binding)
+		if err != nil {
+			t.Fatal(err)
+		}
+		valid.Materials.Bindings = append(valid.Materials.Bindings, ProductMaterialBindingConfig{ID: id, Provider: "role-material-agent", Document: string(document)})
+	}
+	return valid
+}
+
+func productMaterialBindings() map[string]secretref.Binding {
+	return map[string]secretref.Binding{
+		"product-tls-certificate":   {Schema: secretref.BindingSchema, Kind: secretref.KindSecret, Reference: "secret://vault/kv/product-tls-certificate", Version: "v1", Purpose: secretref.PurposeTLSCertificate, TenantID: secretref.SystemTenant, Role: secretref.RoleProduct},
+		"product-tls-private-key":   {Schema: secretref.BindingSchema, Kind: secretref.KindSecret, Reference: "secret://vault/kv/product-tls-private-key", Version: "v1", Purpose: secretref.PurposeTLSPrivateKey, TenantID: secretref.SystemTenant, Role: secretref.RoleProduct},
+		"product-migration-dsn":     {Schema: secretref.BindingSchema, Kind: secretref.KindSecret, Reference: "secret://vault/kv/product-migration-dsn", Version: "v1", Purpose: secretref.PurposePostgresMigrationDSN, TenantID: secretref.SystemTenant, Role: secretref.RoleProduct},
+		"product-runtime-dsn":       {Schema: secretref.BindingSchema, Kind: secretref.KindSecret, Reference: "secret://vault/kv/product-runtime-dsn", Version: "v1", Purpose: secretref.PurposePostgresRuntimeDSN, TenantID: secretref.SystemTenant, Role: secretref.RoleProduct},
+		"product-identity-key-ring": {Schema: secretref.BindingSchema, Kind: secretref.KindSecret, Reference: "secret://vault/kv/product-identity-key-ring", Version: "v1", Purpose: secretref.PurposeIdentityKeyRing, TenantID: secretref.SystemTenant, Role: secretref.RoleProduct},
+	}
+}
+
+func productMaterialBindingsTOML(t *testing.T) string {
+	t.Helper()
+	var builder strings.Builder
+	for _, id := range []string{"product-tls-certificate", "product-tls-private-key", "product-runtime-dsn", "product-identity-key-ring"} {
+		document, err := json.Marshal(productMaterialBindings()[id])
+		if err != nil {
+			t.Fatal(err)
+		}
+		builder.WriteString("[[product_process.materials.bindings]]\nid = '")
+		builder.WriteString(id)
+		builder.WriteString("'\nprovider = 'role-material-agent'\ndocument = '")
+		builder.Write(document)
+		builder.WriteString("'\n")
+	}
+	return builder.String()
 }
 
 func TestProductProcessRejectsBroaderOrUnsafeComposition(t *testing.T) {

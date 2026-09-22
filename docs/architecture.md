@@ -232,6 +232,28 @@ revision `78f5987fda45873e497bce6d336e29dd4a61dc74`, evidence-tool revision
 `e2f4abacf03418c7b18f179c3e7459292d8626df`, and manifest digest
 `sha256:d01b3c41a0094657f18b4014b0649a799ea7fcf0e4ccaf07aa82cdd2052cc0d2`.
 
+Slice 5 is underway and does not advance the Phase 6 count. Its secret boundary
+uses a shared implementation but a separate immutable typed registry inside
+each OS role. A registry admits only that role's exact secret purposes and
+tenant/version bindings; it is not a cross-role service, global cache or
+dynamic plugin host. Product's first production vertical separates the
+one-shot `product migrate` process, no-cache migration registry and one-use
+migration agent/socket from the long-running `product serve` process, runtime
+registry and runtime agent/socket. The runtime v2 schema contains only its TLS
+certificate/private key bundle, runtime PostgreSQL DSN and identity key ring;
+it cannot parse a migration binding or DDL credential and never runs
+migrations. It verifies TLS pair, SAN, usage and validity before constructing
+the TLS 1.3 listener, clears resolved bytes, and monitors only four runtime
+dependencies after a bounded cache lifetime. A strict Vault KV v2 adapter and
+separate-process gates prove overlap, migration/runtime cross-purpose denial,
+one-shot socket cleanup, restart, provider loss and recovery. The local gate
+records `distinct_os_uid_established=false`; deployment qualification must use
+distinct service accounts or an equivalent platform boundary. Provider,
+Gateway, Guest, Browser and Desktop migration plus the production credential
+issuer/renewal controller are still open. Legacy
+absolute-path inputs are reserved for explicit development/legacy profiles and
+cannot become a production fallback. ADR 0054 records the complete boundary.
+
 ## Purpose
 
 `sandbox-runtime` is a backend-independent sandbox provider. Its first useful

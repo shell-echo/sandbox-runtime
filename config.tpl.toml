@@ -24,13 +24,16 @@ compress = true         # gzip rotated files
 host = '127.0.0.1' # explicitly change only behind a trusted network boundary
 port = 8080
 
-# Phase 6 Slices 1-2 add independent development and production-kernel Product
-# modes. Start with `sandbox-runtime product serve -c /absolute/config.toml`.
-# Every populated authority path below must be absolute, distinct, mode-0600,
-# regular, non-symlink storage. Development uses dsn_file/bindings_file and is
-# loopback-only. Production leaves those two fields empty and requires TLS,
-# separate migration/runtime DSNs, exact role names and the signed key ring.
+# This checked-in template is the explicit development profile. Start it with
+# `sandbox-runtime product serve -c /absolute/config.toml`. Development uses
+# distinct absolute mode-0600 dsn_file/bindings_file paths and is loopback-only.
+# Production must replace this complete section with the closed
+# sandbox-runtime.product-process.v2 profile: it rejects every path below and
+# resolves TLS, the runtime DSN and identity key ring through a Product-owned
+# runtime Unix workload-material registry. Migration uses the separate one-shot
+# profile below and can never be added to `product serve` (ADR 0054).
 [product_process]
+schema_version = 'sandbox-runtime.product-process.legacy-development.v1'
 enabled = false
 deployment_level = 'development'
 
@@ -38,34 +41,28 @@ deployment_level = 'development'
 host = '127.0.0.1'
 port = 8082
 
-[product_process.tls]
-certificate_file = '' # production only; exact PEM certificate chain
-private_key_file = ''  # production only; exact PKCS#8 PRIVATE KEY PEM
-
 [product_process.postgres]
-dsn_file = ''           # development only
-migration_dsn_file = '' # production only
-runtime_dsn_file = ''   # production only
-migration_role = ''     # production exact current_user
-runtime_role = ''       # production exact current_user; must differ
+dsn_file = ''
 startup_timeout_seconds = 10
 operation_timeout_seconds = 3
-migration_max_connections = 1
 max_connections = 8
 min_connections = 1
 
 [product_process.identity]
 # Development-only strict sandbox-runtime-product-static-identities-v1 JSON.
 bindings_file = ''
-# Production-only closed signed identity policy. The key ring version is
-# sandbox-runtime-product-access-key-ring-v1 and contains 1..32 Ed25519 public
-# keys, explicit validity windows and revoked_key_ids. Rotation/revocation use
-# process replacement; no network discovery or fallback key exists.
-issuer = ''
-audience = ''
-key_ring_file = ''
 clock_skew_seconds = 30
 max_token_lifetime_seconds = 900
+
+# Production schema changes are a separate one-shot OS process:
+# `sandbox-runtime product migrate -c /absolute/migration.toml`.
+# The enabled profile accepts exactly one Product migration-DSN binding through
+# a dedicated no-cache, one-shot workload-material agent. It cannot contain
+# runtime TLS, runtime DSN or identity authority. The deployment must wait for
+# process/agent/socket/connection cleanup before starting `product serve`.
+[product_migration]
+schema_version = 'sandbox-runtime.product-migration.v1'
+enabled = false
 
 # Phase 6 Slice 3 independent Provider control plane. This command never starts
 # the local /instances API: `sandbox-runtime provider serve -c /absolute/config.toml`.

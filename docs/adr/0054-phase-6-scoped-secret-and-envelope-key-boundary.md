@@ -64,6 +64,72 @@ types. They are not Provider API DTOs and must not expose secret references,
 KMS coordinates, credentials or provider diagnostics through stable APIs,
 logs, probes, audit payloads or release evidence.
 
+Production startup uses one shared registry implementation but never a shared
+cross-role registry instance. Product, Provider, Gateway, Guest, Browser and
+Desktop each construct an immutable registry containing only closed provider
+types, allowed purposes and bindings for that exact role. Resolution requires
+the configured binding ID, purpose and tenant to match; the caller cannot
+substitute the reference, role, version or provider. Provider caches are also
+role-local.
+
+Production configuration moves to an explicit new schema containing typed
+binding IDs or closed binding documents. Legacy path fields are not inferred,
+auto-upgraded or used as fallback. They remain available only to an explicit
+development/test or legacy-development profile; a production command rejects
+legacy, raw, inline and mixed configuration. Non-secret policy/dependency
+documents remain strict private configuration artifacts rather than being
+misclassified as secrets, and their decoders reject embedded credentials.
+
+TLS certificate, private-key and CA material participates in the same version,
+scope, integrity and revocation lifecycle even though certificates and CAs are
+public. A certificate/private-key bundle resolves at one binding version,
+provider revision and validity window, then verifies the key pair, SAN,
+extended usage and expiry before listener construction. Raw resolved bytes are
+cleared. Automatic certificate issuance and service trust-edge rotation remain
+Slice 6 responsibilities.
+
+The bootstrap provider for production role registries is a restricted local
+Unix workload-material agent, not a direct production file provider. Each role
+owns a separate socket below a mode-`0700`, non-symlink directory; the socket
+is mode `0600`, and client and server both verify the expected peer UID/GID.
+The repository-private `sandbox-runtime.workload-material.v1` protocol uses a
+bounded length prefix and closed canonical JSON. Every request carries the
+complete binding, a fresh nonce, a bounded deadline and a domain-separated
+request digest. The agent independently enforces its role, purpose and exact
+binding allowlist, rejects replay and overload, and returns only a bounded
+material document. Socket paths and agent/provider diagnostics are not stable
+API data.
+
+The initial secret backend is Vault KV v2 over TLS. The adapter pins the Vault
+origin, mount, reference authority, role and purposes; disables redirects and
+cookies; obtains its Vault token through a scoped provider; selects an exact KV
+version; and strictly validates content type, response shape, binding digest,
+material digest, revision and validity window. A fixture may accept a Vault
+token from an environment variable only inside the isolated integration gate;
+that mechanism is not a production configuration or evidence path.
+
+Product is the first production role migrated to this boundary, using two
+physically separate process lifecycles. The one-shot `product migrate` command
+accepts only `sandbox-runtime.product-migration.v1`, one migration DSN binding,
+a no-cache registry and a dedicated one-shot agent socket. It applies and
+verifies the exact schema, closes the pool/registry, then exits; its agent
+permits one authorized resolution, closes its listener and removes its socket.
+The long-running `product serve` command accepts only
+`sandbox-runtime.product-process.v2` and exactly four runtime bindings: TLS
+certificate/private key, runtime DSN and identity key ring. Migration provider,
+binding and DDL credential fields are not part of that schema. Runtime startup
+only verifies its restricted database role and exact schema compatibility; it
+never reruns migration or requests migration authority. Readiness validates
+only the four runtime dependencies. The migration and runtime agents use
+different sockets, allowlists, registries, caches and nonce spaces.
+
+The single-host functional gate may run these processes under the same host
+UID, but must record `distinct_os_uid_established=false`. Production/deployment
+qualification requires distinct service accounts or platform-equivalent
+workload identities for the migration job, runtime Product and their agents;
+that isolation remains a Slice 6/11/14 gate. The other five roles remain later
+Slice 5 work.
+
 The first production-oriented vertical evolves the existing private
 `RecordingContentStore` port rather than adding a parallel store. Every
 operation carries the authenticated tenant and recording identity explicitly.
@@ -110,8 +176,10 @@ recorded in `docs/migrations/product-phase-6-recording-key-handle-v1.md`.
   round-trip, version rotation with grace reads, process/client reconstruction,
   dependency loss, KMS-independent cleanup and exact container cleanup. This
   remains real-adapter component evidence, not production deployment evidence.
-- This ADR is not Slice 5 completion. Production role startup has not migrated
-  all secret inputs, the short-lived credential issuer/renewal controller and
+- This ADR is not Slice 5 completion. Product has migrated its isolated
+  migration input and four runtime inputs, but Provider, Gateway, Guest,
+  Browser and Desktop have
+  not migrated all secret inputs; the short-lived credential issuer/renewal controller and
   break-glass approval state machine remain open, and no full independent-role
   Slice 5 gate or immutable evidence manifest exists.
 - Slice 5 remains open until the real-adapter and independent-process failure

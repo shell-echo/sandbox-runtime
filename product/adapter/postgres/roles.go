@@ -14,17 +14,39 @@ func VerifySeparatedRoles(ctx context.Context, migrationPool, runtimePool *pgxpo
 	if ctx == nil || migrationPool == nil || runtimePool == nil || migrationRole == "" || runtimeRole == "" || migrationRole == runtimeRole {
 		return errors.New("Product database role separation is invalid")
 	}
-	var actualMigrationRole, actualRuntimeRole string
+	if err := VerifyMigrationRole(ctx, migrationPool, migrationRole); err != nil {
+		return err
+	}
+	return VerifyRuntimeRole(ctx, runtimePool, runtimeRole)
+}
+
+// VerifyMigrationRole is used only by the one-shot Product migration process.
+func VerifyMigrationRole(ctx context.Context, migrationPool *pgxpool.Pool, migrationRole string) error {
+	if ctx == nil || migrationPool == nil || migrationRole == "" {
+		return errors.New("Product migration database role is invalid")
+	}
+	var actualMigrationRole string
 	if err := migrationPool.QueryRow(ctx, `SELECT current_user`).Scan(&actualMigrationRole); err != nil || actualMigrationRole != migrationRole {
 		return errors.New("Product migration database role does not match configuration")
 	}
-	if err := runtimePool.QueryRow(ctx, `SELECT current_user`).Scan(&actualRuntimeRole); err != nil || actualRuntimeRole != runtimeRole {
-		return errors.New("Product runtime database role does not match configuration")
-	}
-	var migrationCanCreate, runtimeCanUse, runtimeCanCreate bool
+	var migrationCanCreate bool
 	if err := migrationPool.QueryRow(ctx, `SELECT has_schema_privilege(current_user, 'sandbox_runtime_product', 'CREATE')`).Scan(&migrationCanCreate); err != nil || !migrationCanCreate {
 		return errors.New("Product migration database role lacks schema authority")
 	}
+	return nil
+}
+
+// VerifyRuntimeRole proves the long-running Product role has no schema or
+// migration-ledger write authority while retaining application DML.
+func VerifyRuntimeRole(ctx context.Context, runtimePool *pgxpool.Pool, runtimeRole string) error {
+	if ctx == nil || runtimePool == nil || runtimeRole == "" {
+		return errors.New("Product runtime database role is invalid")
+	}
+	var actualRuntimeRole string
+	if err := runtimePool.QueryRow(ctx, `SELECT current_user`).Scan(&actualRuntimeRole); err != nil || actualRuntimeRole != runtimeRole {
+		return errors.New("Product runtime database role does not match configuration")
+	}
+	var runtimeCanUse, runtimeCanCreate bool
 	if err := runtimePool.QueryRow(ctx, `SELECT has_schema_privilege(current_user, 'sandbox_runtime_product', 'USAGE'), has_schema_privilege(current_user, 'sandbox_runtime_product', 'CREATE')`).Scan(&runtimeCanUse, &runtimeCanCreate); err != nil || !runtimeCanUse || runtimeCanCreate {
 		return errors.New("Product runtime database schema privileges are unsafe")
 	}

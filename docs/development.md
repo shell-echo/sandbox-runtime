@@ -745,16 +745,26 @@ temporary-secret cleanup. That smoke remains local process/dependency evidence,
 not deployment or production qualification.
 
 Slice 2 production-kernel mode removes static identity from the production
-path. It requires a TLS 1.3 server key pair, the strict
-`sandbox-runtime-product-access-key-ring-v1` document, exact issuer/audience,
-and separate mode-`0600` migration/runtime DSN files. The key ring contains
-1..32 Ed25519 public keys with explicit UTC validity windows and an exact
-revoked-key list. Rotation uses an overlapping ring and process replacement;
-revocation requires a subsequent ring revision and process replacement.
+path. Its current Slice 5 hardening requires the explicit
+`sandbox-runtime.product-process.v2` schema and rejects the former TLS, key-ring
+and migration/runtime DSN path fields. Before runtime startup, execute the
+separate one-shot `sandbox-runtime product migrate` command with
+`sandbox-runtime.product-migration.v1`. That configuration admits only one
+migration DSN through a no-cache, one-resolution agent/socket; the agent,
+socket, registry, pool and migration process must all be gone before runtime.
+The long-running Product v2 profile admits only the TLS 1.3 certificate/private
+key, runtime DSN and strict `sandbox-runtime-product-access-key-ring-v1`
+document. Its different agent socket parent is mode `0700`, the socket is mode
+`0600`, both peers verify UID/GID, and readiness resolves only those four
+bindings after the bounded cache lifetime. Production does not fall back to
+files, inline values, migration authority or automatic migration. The key ring contains 1..32 Ed25519 public keys with
+explicit UTC validity windows and an exact revoked-key list. Rotation uses an
+overlapping ring and process replacement; revocation requires a subsequent
+ring revision and process replacement.
 
-The configured migration and runtime role names must be distinct and match
-`current_user`. The migration role applies the exact ledger and must own schema
-DDL. Before listener bind its pool closes. The runtime role must have schema
+The migration and runtime role names live in different configurations and each
+must match `current_user`. The migration role applies the exact ledger and must
+own schema DDL. The runtime role must have schema
 usage, read-only migration-ledger access, application-table DML, and no schema
 create authority. Runtime startup and the dependency worker perform the exact
 read-only 13-migration digest/version check. Missing, modified, or newer schema
@@ -777,14 +787,24 @@ SANDBOX_RUNTIME_PRODUCT_PROCESS_INTEGRATION=1 \
   -run '^TestProductProcess(Development|ProductionKernel)Integration$' -v ./cmd
 ```
 
-The production process gate uses a pinned disposable PostgreSQL 16 container
-and a real built binary. It proves key policy in focused tests plus auth
-precedence, exact schema compatibility, runtime DDL/ledger-write denial,
-bounded pool exhaustion, TLS downgrade denial, unavailable capability
-projection, pre-persistence mutation rejection, database loss/recovery,
-process restart, migration-connection release, nondisclosure, signal shutdown,
-and exact container cleanup. This remains local process/component evidence,
-not a role-specific deployment or production-readiness result.
+The production process gate uses a pinned disposable PostgreSQL 16 container,
+separate migration-agent, migration-job, runtime-agent and Product OS
+processes, and no production secret files. It proves pre-migration bind denial,
+cross-purpose binding denial, one-shot migration socket/process/connection
+cleanup, agent-loss readiness closure and agent-restart recovery. The local
+processes share the host UID and record `distinct_os_uid_established=false`;
+distinct production service accounts remain a Slice 6/11/14 deployment gate. The
+separate workload-agent gate uses pinned Vault 2.1.1 KV v2 over TLS and a
+least-scope fixture token to prove certificate overlap, agent restart, Vault
+loss and exact socket/container cleanup. The fixture token environment variable
+is integration-only and is not a supported production bootstrap mechanism.
+Together with a real built Product binary, the gate also proves auth precedence,
+exact schema compatibility, runtime DDL/ledger-write denial, bounded pool
+exhaustion, TLS downgrade denial, unavailable capability projection,
+pre-persistence mutation rejection, database loss/recovery, process restart,
+migration-connection release, nondisclosure, signal shutdown and exact
+container cleanup. This remains local process/component evidence, not a
+role-specific deployment or production-readiness result.
 
 Slice 3 `provider serve` is a separate production-only role. Never enable its
 `provider_process` section for root `serve` or `product serve`; all three

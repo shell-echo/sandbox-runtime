@@ -210,6 +210,21 @@ restart, bounded drain and exact cleanup. The Desktop OCI remains a
 non-release local candidate; public Product E2E, deployment and production
 readiness remain open.
 
+Slice 5 is underway and Phase 6 remains **4/15**. Product is the first
+production role moved to the scoped-secret boundary: an explicit v2 config
+rejects legacy/migration fields and selects four runtime bindings through a
+restricted role-specific Unix workload-material agent. A separate no-cache,
+one-shot migration command and agent/socket are the only path to the migration
+DSN. Strict Vault KV/TLS and real Product/PostgreSQL/TLS gates pass overlap,
+pre-migration bind and cross-purpose denial, exact bootstrap cleanup,
+agent/Vault loss, readiness closure/recovery, restart and nondisclosure. The
+local process gate records `distinct_os_uid_established=false`; production
+service-account isolation remains open. The KMS-backed recording
+vertical also passes real Vault Transit rotation/loss checks. Provider,
+Gateway, Guest, Browser and Desktop migration, the production credential
+issuer/renewal controller, all-role rotation/revocation, break-glass and the
+complete independent-process evidence gate remain open.
+
 Updated: 2026-09-22
 
 This document is the implementation ledger for the repository-owned MIT

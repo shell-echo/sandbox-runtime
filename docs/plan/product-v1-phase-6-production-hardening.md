@@ -127,10 +127,21 @@ the work order. In addition to canonical scoped bindings, the bounded cache and
 opaque envelope-key port, Product now has a tenant-bound KMS recording adapter
 and a strict Vault Transit client. A digest-pinned Vault TLS integration proves
 recording round-trip, v1/v2 overlap rotation, restart reconstruction, KMS-loss
-closure and cleanup. This is real-adapter component evidence only: production
-role composition, short-lived credential issuance/renewal, the full rotation
-controller, break-glass workflow and independent-process gate remain open, so
-the Phase 6 count does not advance.
+closure and cleanup. A second digest-pinned Vault KV/TLS gate proves the
+versioned workload-material agent, certificate overlap, agent restart, Vault
+loss and exact cleanup. Product production startup now uses an explicit v2
+runtime schema and a role-owned registry for its TLS pair, runtime PostgreSQL
+DSN and identity key ring. A separate no-cache `product migrate` process and
+one-shot agent/socket are the only holders of the migration DSN; runtime config
+cannot parse that authority. Its real PostgreSQL/TLS process gate proves
+pre-migration bind denial, cross-purpose agent denial, exact bootstrap cleanup,
+readiness closure on runtime-agent loss and recovery after agent restart. The
+local gate records `distinct_os_uid_established=false`, so production service-
+account isolation remains later deployment evidence. This remains a vertical
+checkpoint: the other five role migrations, production workload-credential
+issuer/renewal, the full rotation controller, break-glass workflow and the
+independent-process Slice 5 gate remain open, so the Phase 6 count does not
+advance.
 
 ### Slice 6 — TLS, network policy and least privilege
 

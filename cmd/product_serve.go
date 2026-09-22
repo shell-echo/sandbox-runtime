@@ -11,6 +11,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/shell-echo/sandbox-runtime/config"
 	"github.com/shell-echo/sandbox-runtime/internal/secretfile"
+	"github.com/shell-echo/sandbox-runtime/internal/secretref"
+	"github.com/shell-echo/sandbox-runtime/internal/secretref/workloadagent"
 	"github.com/shell-echo/sandbox-runtime/product"
 	productpostgres "github.com/shell-echo/sandbox-runtime/product/adapter/postgres"
 	"github.com/shell-echo/sandbox-runtime/productapi"
@@ -36,6 +38,13 @@ var productServeCmd = &cobra.Command{
 	RunE:         runProductServe,
 }
 
+var productMigrateCmd = &cobra.Command{
+	Use:          "migrate",
+	Short:        "Run the one-shot Product database migration process",
+	SilenceUsage: true,
+	RunE:         runProductMigrate,
+}
+
 func runProductServe(cmd *cobra.Command, _ []string) error {
 	productConfig := config.ProductProcess
 	if productConfig == nil || !productConfig.Enabled {
@@ -43,6 +52,9 @@ func runProductServe(cmd *cobra.Command, _ []string) error {
 	}
 	if config.ProviderProcess != nil && config.ProviderProcess.Enabled {
 		return errors.New("Product and Provider process authorities cannot share one command")
+	}
+	if config.ProductMigration != nil && config.ProductMigration.Enabled {
+		return errors.New("Product runtime and migration authorities cannot share one command")
 	}
 	if config.Application == nil {
 		return errors.New("application configuration is required")
@@ -113,15 +125,13 @@ func runDevelopmentProduct(ctx context.Context, productConfig *config.ProductPro
 func runProductionProduct(ctx context.Context, productConfig *config.ProductProcessConfig) error {
 	startupContext, cancelStartup := context.WithTimeout(ctx, time.Duration(productConfig.Postgres.StartupTimeoutSeconds)*time.Second)
 	defer cancelStartup()
-	migrationPool, err := openProductPostgresFile(startupContext, productConfig.Postgres.MigrationDSNFile, productConfig.Postgres.MigrationMaxConnections, 0)
+	materialRegistry, err := newProductRuntimeMaterialRegistry(productConfig.Materials)
 	if err != nil {
-		return fmt.Errorf("open Product migration database: %w", err)
+		return err
 	}
-	defer migrationPool.Close()
-	if err := productpostgres.ApplyMigrations(startupContext, migrationPool); err != nil {
-		return fmt.Errorf("apply Product database migrations: %w", err)
-	}
-	runtimePool, err := openProductPostgresFile(startupContext, productConfig.Postgres.RuntimeDSNFile, productConfig.Postgres.MaxConnections, productConfig.Postgres.MinConnections)
+	defer materialRegistry.Close()
+	runtimePool, err := openProductPostgresRegistry(startupContext, materialRegistry, productConfig.Postgres.RuntimeDSNBindingID,
+		secretref.PurposePostgresRuntimeDSN, productConfig.Postgres.MaxConnections, productConfig.Postgres.MinConnections)
 	if err != nil {
 		return fmt.Errorf("open Product runtime database: %w", err)
 	}
@@ -129,22 +139,25 @@ func runProductionProduct(ctx context.Context, productConfig *config.ProductProc
 	if err := runtimePool.Ping(startupContext); err != nil {
 		return errors.New("Product runtime database is unavailable at startup")
 	}
-	if err := productpostgres.VerifySeparatedRoles(startupContext, migrationPool, runtimePool, productConfig.Postgres.MigrationRole, productConfig.Postgres.RuntimeRole); err != nil {
-		return fmt.Errorf("verify Product database authority: %w", err)
+	if err := productpostgres.VerifyRuntimeRole(startupContext, runtimePool, productConfig.Postgres.RuntimeRole); err != nil {
+		return fmt.Errorf("verify Product runtime database authority: %w", err)
 	}
 	if err := productpostgres.VerifySchemaCompatibility(startupContext, runtimePool); err != nil {
 		return fmt.Errorf("verify Product database schema: %w", err)
 	}
-	// Migration authority is intentionally released before the network listener
-	// can accept traffic. No runtime path retains a DDL-capable connection.
-	migrationPool.Close()
-
-	authenticator, err := tokenidentity.Load(productConfig.Identity.KeyRingFile, productConfig.Identity.Issuer, productConfig.Identity.Audience,
+	keyRing, err := materialRegistry.Resolve(startupContext, productConfig.Identity.KeyRingBindingID, secretref.PurposeIdentityKeyRing, secretref.SystemTenant)
+	if err != nil {
+		keyRing.Destroy()
+		return productMaterialError(err, "load Product identity key-ring material")
+	}
+	authenticator, err := tokenidentity.LoadMaterial(keyRing.Bytes, productConfig.Identity.Issuer, productConfig.Identity.Audience,
 		time.Duration(productConfig.Identity.ClockSkewSeconds)*time.Second, time.Duration(productConfig.Identity.MaxTokenLifetimeSeconds)*time.Second)
+	keyRing.Destroy()
 	if err != nil {
 		return err
 	}
-	tlsConfig, err := productprocess.LoadTLSConfig(productConfig.TLS.CertificateFile, productConfig.TLS.PrivateKeyFile)
+	tlsConfig, err := productprocess.LoadTLSConfigFromRegistry(startupContext, materialRegistry, productConfig.TLS.CertificateBindingID,
+		productConfig.TLS.PrivateKeyBindingID, productConfig.TLS.ExpectedServerName, time.Now)
 	if err != nil {
 		return err
 	}
@@ -170,7 +183,10 @@ func runProductionProduct(ctx context.Context, productConfig *config.ProductProc
 		if err := runtimePool.Ping(checkContext); err != nil {
 			return err
 		}
-		return productpostgres.VerifySchemaCompatibility(checkContext, runtimePool)
+		if err := productpostgres.VerifySchemaCompatibility(checkContext, runtimePool); err != nil {
+			return err
+		}
+		return verifyProductMaterialDependencies(checkContext, materialRegistry, productConfig)
 	}, time.Second, monitorTimeout)
 	if err != nil {
 		return err
@@ -221,6 +237,23 @@ func openProductPostgresFile(ctx context.Context, path string, maxConnections, m
 		return nil, fmt.Errorf("load Product PostgreSQL connection secret: %w", err)
 	}
 	defer clear(raw)
+	return openProductPostgresMaterial(ctx, raw, maxConnections, minConnections)
+}
+
+func openProductPostgresRegistry(ctx context.Context, registry *secretref.Registry, bindingID string, purpose secretref.Purpose, maxConnections, minConnections int32) (*pgxpool.Pool, error) {
+	material, err := registry.Resolve(ctx, bindingID, purpose, secretref.SystemTenant)
+	if err != nil {
+		material.Destroy()
+		return nil, productMaterialError(err, "load Product PostgreSQL connection material")
+	}
+	defer material.Destroy()
+	return openProductPostgresMaterial(ctx, material.Bytes, maxConnections, minConnections)
+}
+
+func openProductPostgresMaterial(ctx context.Context, raw []byte, maxConnections, minConnections int32) (*pgxpool.Pool, error) {
+	if len(raw) < 1 || int64(len(raw)) > maxProductPostgresDSNBytes {
+		return nil, errors.New("invalid Product PostgreSQL connection secret")
+	}
 	dsn := strings.TrimSuffix(string(raw), "\n")
 	if dsn == "" || strings.TrimSpace(dsn) != dsn || strings.ContainsAny(dsn, "\x00\r\n") {
 		return nil, errors.New("invalid Product PostgreSQL connection secret")
@@ -245,7 +278,138 @@ func openProductPostgresFile(ctx context.Context, path string, maxConnections, m
 	return pool, nil
 }
 
+func newProductRuntimeMaterialRegistry(materials config.ProductMaterialsConfig) (*secretref.Registry, error) {
+	return newProductAgentRegistry(materials, []secretref.Purpose{
+		secretref.PurposeTLSCertificate,
+		secretref.PurposeTLSPrivateKey,
+		secretref.PurposePostgresRuntimeDSN,
+		secretref.PurposeIdentityKeyRing,
+	}, true)
+}
+
+func newProductMigrationMaterialRegistry(materials config.ProductMaterialsConfig) (*secretref.Registry, error) {
+	return newProductAgentRegistry(materials, []secretref.Purpose{secretref.PurposePostgresMigrationDSN}, false)
+}
+
+func newProductAgentRegistry(materials config.ProductMaterialsConfig, allowedPurposes []secretref.Purpose, cache bool) (*secretref.Registry, error) {
+	bindings, err := materials.DecodeBindings(secretref.RoleProduct)
+	if err != nil || materials.Provider.Type != config.ProductUnixMaterialProviderV1 {
+		return nil, errors.New("invalid Product material registry configuration")
+	}
+	provider, err := workloadagent.NewProduction(workloadagent.Config{
+		SocketPath:       materials.Provider.SocketPath,
+		ExpectedUID:      uint32(materials.Provider.ExpectedUID),
+		ExpectedGID:      uint32(materials.Provider.ExpectedGID),
+		Role:             secretref.RoleProduct,
+		OperationTimeout: time.Duration(materials.Provider.OperationTimeoutSeconds) * time.Second,
+		Now:              time.Now,
+	})
+	if err != nil {
+		return nil, errors.New("Product workload material agent is unavailable")
+	}
+	var registeredProvider secretref.SecretProvider = provider
+	var cached *secretref.CachedSecretProvider
+	if cache {
+		cached, err = secretref.NewCachedSecretProvider(provider, time.Duration(materials.Provider.CacheSeconds)*time.Second, len(bindings), time.Now)
+		if err != nil {
+			return nil, errors.New("construct Product material cache")
+		}
+		registeredProvider = cached
+	}
+	registrations := make([]secretref.BindingRegistration, 0, len(materials.Bindings))
+	for _, configured := range materials.Bindings {
+		binding, ok := bindings[configured.ID]
+		if !ok {
+			if cached != nil {
+				cached.Close()
+			}
+			return nil, errors.New("construct Product material registry")
+		}
+		registrations = append(registrations, secretref.BindingRegistration{ID: configured.ID, Provider: configured.Provider, Binding: binding})
+	}
+	registry, err := secretref.NewRegistry(secretref.RoleProduct, allowedPurposes,
+		[]secretref.ProviderRegistration{{Name: materials.Provider.Alias, Provider: registeredProvider}}, registrations, time.Now)
+	if err != nil {
+		if cached != nil {
+			cached.Close()
+		}
+		return nil, errors.New("construct Product material registry")
+	}
+	return registry, nil
+}
+
+func verifyProductMaterialDependencies(ctx context.Context, registry *secretref.Registry, productConfig *config.ProductProcessConfig) error {
+	checks := []struct {
+		bindingID string
+		purpose   secretref.Purpose
+	}{
+		{productConfig.TLS.CertificateBindingID, secretref.PurposeTLSCertificate},
+		{productConfig.TLS.PrivateKeyBindingID, secretref.PurposeTLSPrivateKey},
+		{productConfig.Postgres.RuntimeDSNBindingID, secretref.PurposePostgresRuntimeDSN},
+		{productConfig.Identity.KeyRingBindingID, secretref.PurposeIdentityKeyRing},
+	}
+	for _, check := range checks {
+		material, err := registry.Resolve(ctx, check.bindingID, check.purpose, secretref.SystemTenant)
+		material.Destroy()
+		if err != nil {
+			return productMaterialError(err, "Product material dependency is unavailable")
+		}
+	}
+	return nil
+}
+
+func runProductMigrate(cmd *cobra.Command, _ []string) error {
+	migrationConfig := config.ProductMigration
+	if migrationConfig == nil || !migrationConfig.Enabled {
+		return errors.New("product_migration.enabled must be true for product migrate")
+	}
+	if config.ProductProcess != nil && config.ProductProcess.Enabled {
+		return errors.New("Product migration and runtime authorities cannot share one command")
+	}
+	if config.ProviderProcess != nil && config.ProviderProcess.Enabled {
+		return errors.New("Product migration and Provider authorities cannot share one command")
+	}
+	if config.Application == nil || config.Application.Mode != config.ApplicationProductionMode {
+		return errors.New("Product migration requires application.mode=production")
+	}
+	if err := migrationConfig.Validate(); err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(cmd.Context(), time.Duration(migrationConfig.Postgres.StartupTimeoutSeconds)*time.Second)
+	defer cancel()
+	registry, err := newProductMigrationMaterialRegistry(migrationConfig.Materials)
+	if err != nil {
+		return err
+	}
+	defer registry.Close()
+	pool, err := openProductPostgresRegistry(ctx, registry, migrationConfig.Postgres.DSNBindingID,
+		secretref.PurposePostgresMigrationDSN, migrationConfig.Postgres.MaxConnections, 0)
+	if err != nil {
+		return fmt.Errorf("open Product migration database: %w", err)
+	}
+	defer pool.Close()
+	if err := productpostgres.ApplyMigrations(ctx, pool); err != nil {
+		return fmt.Errorf("apply Product database migrations: %w", err)
+	}
+	if err := productpostgres.VerifyMigrationRole(ctx, pool, migrationConfig.Postgres.Role); err != nil {
+		return fmt.Errorf("verify Product migration database authority: %w", err)
+	}
+	pool.Close()
+	registry.Close()
+	return nil
+}
+
+func productMaterialError(err error, message string) error {
+	if errors.Is(err, context.Canceled) {
+		return context.Canceled
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return context.DeadlineExceeded
+	}
+	return errors.New(message)
+}
+
 func init() {
-	productCmd.AddCommand(productServeCmd)
+	productCmd.AddCommand(productServeCmd, productMigrateCmd)
 	rootCmd.AddCommand(productCmd)
 }

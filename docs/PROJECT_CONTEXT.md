@@ -212,9 +212,16 @@ Current verified state:
   Product recording port now carries explicit tenant scope; a tenant-bound KMS
   store wraps one random DEK per recording and a strict Vault Transit adapter
   passes a digest-pinned TLS integration with overlap rotation, restart,
-  dependency loss and cleanup. This remains real-adapter component evidence:
-  no production role has migrated, and the credential issuer/renewal,
-  all-role rotation, break-glass and independent-process gates remain open.
+  dependency loss and cleanup. Product is the first migrated production role:
+  its no-cache one-shot migration command/agent is physically separate from
+  the v2 runtime registry for the TLS pair, runtime PostgreSQL DSN and identity
+  key ring. A real Vault KV/TLS gate and real Product/PostgreSQL process gate
+  prove pre-migration bind denial, cross-purpose denial, exact bootstrap
+  cleanup, agent restart/loss and readiness closure/recovery. The local gate
+  records `distinct_os_uid_established=false`. This remains a
+  vertical checkpoint: the other five role migrations, credential
+  issuer/renewal, all-role rotation, break-glass and independent-process gates
+  remain open.
 
 The qualification applies only to Provider revision
 `170459266af5f4fad359ca8c63f2ae19741055c5`, external-caller revision

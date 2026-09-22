@@ -95,16 +95,30 @@ func Load(path, issuer, audience string, clockSkew, maxLifetime time.Duration) (
 	return load(path, issuer, audience, clockSkew, maxLifetime, systemClock{})
 }
 
+// LoadMaterial freezes one caller-owned, bounded key-ring document resolved
+// through the production material registry. The caller remains responsible for
+// clearing the source bytes after this function returns.
+func LoadMaterial(document []byte, issuer, audience string, clockSkew, maxLifetime time.Duration) (*Authenticator, error) {
+	return loadMaterial(document, issuer, audience, clockSkew, maxLifetime, systemClock{})
+}
+
 func load(path, issuer, audience string, clockSkew, maxLifetime time.Duration, clock Clock) (*Authenticator, error) {
-	if !validIssuer(issuer) || !validAbsoluteURI(audience) || clock == nil || clockSkew < 0 || clockSkew > 2*time.Minute ||
-		maxLifetime < time.Minute || maxLifetime > time.Hour {
-		return nil, errors.New("invalid Product token identity policy")
-	}
 	raw, err := secretfile.Read(path, maxKeyRingBytes)
 	if err != nil {
 		return nil, errors.New("load Product token verification key ring")
 	}
 	defer clear(raw)
+	return loadMaterial(raw, issuer, audience, clockSkew, maxLifetime, clock)
+}
+
+func loadMaterial(raw []byte, issuer, audience string, clockSkew, maxLifetime time.Duration, clock Clock) (*Authenticator, error) {
+	if !validIssuer(issuer) || !validAbsoluteURI(audience) || clock == nil || clockSkew < 0 || clockSkew > 2*time.Minute ||
+		maxLifetime < time.Minute || maxLifetime > time.Hour {
+		return nil, errors.New("invalid Product token identity policy")
+	}
+	if len(raw) < 1 || len(raw) > maxKeyRingBytes {
+		return nil, errors.New("invalid Product token verification key ring")
+	}
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
 	var document keyRingDocument
