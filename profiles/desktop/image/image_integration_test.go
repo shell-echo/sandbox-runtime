@@ -33,7 +33,7 @@ func TestDesktopImageNativeIntegration(t *testing.T) {
 	if os.Getenv(desktopImageIntegrationEnv) != "1" {
 		t.Skip("set " + desktopImageIntegrationEnv + "=1 to build and test the Desktop image")
 	}
-	manifest, err := Load(ManifestPath)
+	manifest, err := Load(LocalCandidateManifestPath)
 	if err != nil {
 		t.Fatal(err)
 	}

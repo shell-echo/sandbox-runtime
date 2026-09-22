@@ -8,7 +8,7 @@ import (
 )
 
 func TestManifestIsStrictAndComplete(t *testing.T) {
-	manifest, err := Load(ManifestPath)
+	manifest, err := Load(LocalCandidateManifestPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -24,7 +24,7 @@ func TestManifestIsStrictAndComplete(t *testing.T) {
 }
 
 func TestManifestRejectsUnsafeChanges(t *testing.T) {
-	base, err := Load(ManifestPath)
+	base, err := Load(LocalCandidateManifestPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +71,7 @@ func TestManifestRejectsUnsafeChanges(t *testing.T) {
 }
 
 func TestBuildDefinitionKeepsDesktopBoundary(t *testing.T) {
-	manifest, err := Load(ManifestPath)
+	manifest, err := Load(LocalCandidateManifestPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,7 +134,7 @@ func TestBuildDefinitionKeepsDesktopBoundary(t *testing.T) {
 }
 
 func TestPublicationWorkflowIsManualNativeAndIndependentlyVerified(t *testing.T) {
-	manifest, err := Load(ManifestPath)
+	manifest, err := Load(LocalCandidateManifestPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -175,7 +175,7 @@ func TestPublicationWorkflowIsManualNativeAndIndependentlyVerified(t *testing.T)
 }
 
 func TestParseRejectsUnknownTrailingAndOversizedInput(t *testing.T) {
-	data, err := os.ReadFile(ManifestPath)
+	data, err := os.ReadFile(LocalCandidateManifestPath)
 	if err != nil {
 		t.Fatal(err)
 	}

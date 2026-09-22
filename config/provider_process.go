@@ -111,7 +111,8 @@ type ProviderDesktopDockerConfig struct {
 	PullTimeoutSeconds       int    `mapstructure:"pull_timeout_seconds"`
 	StopTimeoutSeconds       int    `mapstructure:"stop_timeout_seconds"`
 	DataRoot                 string `mapstructure:"data_root"`
-	ManifestPath             string `mapstructure:"manifest_path"`
+	ProductionManifestPath   string `mapstructure:"production_release_manifest_path"`
+	CandidateManifestPath    string `mapstructure:"local_candidate_image_manifest_path"`
 	Namespace                string `mapstructure:"namespace"`
 	ControllerID             string `mapstructure:"controller_id"`
 	NetworkPolicyReference   string `mapstructure:"network_policy_reference"`
@@ -276,10 +277,12 @@ func (c *ProviderProcessConfig) validateDesktop() error {
 	}
 	o := d.Docker
 	validImage := c.DeploymentLevel == ProviderProductionLevel && o.Image == desktopimage.LockedPublication().Image() && providerPinnedImagePattern.MatchString(o.Image) && (o.PullPolicy == "never" || o.PullPolicy == "if_not_present" || o.PullPolicy == "always")
+	validManifest := c.DeploymentLevel == ProviderProductionLevel && filepath.IsAbs(o.ProductionManifestPath) && o.CandidateManifestPath == ""
 	if c.DeploymentLevel == ProviderLocalCandidateLevel {
 		validImage = providerSHA256Pattern.MatchString(o.Image) && o.PullPolicy == "never" && filepath.IsAbs(d.LocalCandidateManifestFile)
+		validManifest = filepath.IsAbs(o.CandidateManifestPath) && o.ProductionManifestPath == ""
 	}
-	if !validImage || !filepath.IsAbs(o.DataRoot) || !filepath.IsAbs(o.ManifestPath) || !providerOwnershipPattern.MatchString(o.Namespace) || !providerOwnershipPattern.MatchString(o.ControllerID) || !providerProfileIDPattern.MatchString(o.NetworkPolicyReference) || o.MaxSessionsPerSandbox != 1 || o.MaxSessionsPerController < 1 || o.MaxSessionsPerController > 1000 {
+	if !validImage || !validManifest || !filepath.IsAbs(o.DataRoot) || !providerOwnershipPattern.MatchString(o.Namespace) || !providerOwnershipPattern.MatchString(o.ControllerID) || !providerProfileIDPattern.MatchString(o.NetworkPolicyReference) || o.MaxSessionsPerSandbox != 1 || o.MaxSessionsPerController < 1 || o.MaxSessionsPerController > 1000 {
 		return errors.New("provider_process Desktop image, paths, ownership, policy, or capacity is invalid")
 	}
 	const maxBytes = int64(64 << 30)

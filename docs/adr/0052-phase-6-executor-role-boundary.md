@@ -89,6 +89,38 @@ only the Phase 5 signed lock and rejects the v2 executor until Slice 7 publishes
 and verifies a new multi-platform runtime. Local candidate evidence is never a
 production artifact, signature, provenance, or release claim.
 
+The two Desktop image identities use separate closed types and paths. The
+Phase 5 production adapter accepts only
+`phase5-production-release-manifest.json`, whose original publication bytes
+are fixed at
+`sha256:a03c1426058ef6fe18a70329610d0495d267cd1aa9513e650367e3f9a8857887`
+from source `e4a940bda6c5172a78d0dbe40963ca1a99911976`, together with the existing
+signed index lock. The Phase 6 local candidate accepts only
+`phase6-local-candidate-manifest.json` plus its generated mode-0600 candidate
+identity. Production and local-candidate configuration select exactly one of
+these paths according to the closed deployment level; missing, unknown,
+crossed, label-drifted, or digest-drifted identities fail closed. Image labels
+never choose or downgrade the validation rule.
+
+During Slice 4 development the evolving candidate package manifest had
+temporarily replaced the production adapter's verification input. That was a
+repository identity-selection regression, not evidence that the signed Phase
+5 artifact was unavailable. Restoring the immutable Phase 5 manifest preserves
+that artifact's bounded production-adapter availability. Enabling executor v2
+in the production profile still requires the Slice 7 multi-platform
+publication, signature, provenance and lock update.
+
+The historical Phase 5 image verified its installed package set while building
+but did not emit an `installed-set-digest` OCI label. Its versioned production
+schema therefore requires that label to be absent and rejects unexpected
+presence, while requiring the exact historical custom-label set, package
+archive digest, signed index/platform lock, source revision and provenance.
+The top-level installed-set digest remains immutable build-input evidence; the
+runtime does not claim to re-attest it from an image label or infer it from any
+other label. The Phase 6 candidate schema separately requires its
+per-platform installed-set label. Slice 7 must publish the stronger Phase 6
+multi-platform supply-chain identity.
+
 Business tenant authorization remains caller-owned. Provider performs only the
 irreversible opaque binding-digest consistency checks defined by the private
 handoff contract.

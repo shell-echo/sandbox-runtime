@@ -4,6 +4,29 @@ This directory defines the Product Phase 5 Slice 4 Desktop image component.
 It is not a Provider adapter, private resolver, public Gateway, Product
 dispatcher, or capability advertisement.
 
+Two immutable-purpose manifests are intentionally separate:
+
+- `phase5-production-release-manifest.json` is the byte-exact build identity
+  for signed publication
+  `sha256:638e97c694ad4c9b9d750ae30dc6088ff5011af570ba1b12fdf3f0e35ffa0300`.
+  Its file digest is
+  `sha256:a03c1426058ef6fe18a70329610d0495d267cd1aa9513e650367e3f9a8857887`;
+  the production adapter accepts no other manifest for that lock.
+- `phase6-local-candidate-manifest.json` contains the newer session/media
+  inputs used to build the Phase 6 executor-v2 local candidate. It is not a
+  publication manifest and the production adapter rejects it.
+
+Neither path is auto-selected from image labels. The Provider deployment level
+chooses one closed constructor, and the constructor verifies the corresponding
+manifest, image digest and labels without fallback.
+
+The Phase 5 build checked
+`sha256:6b5fc1ece685456ed20f474c9af9547c597210f9105f7f12e9cf21d8377db4b5`
+as its installed-package-set input but did not publish that value as an OCI
+label. The Phase 5 runtime schema requires the label to be absent and does not
+claim startup-time installed-set attestation. The Phase 6 candidate schema is
+separate and requires its per-platform installed-set label.
+
 The image uses the same immutable Alpine 3.23 source index selected by the
 qualified coding/shell image, but Desktop has its own per-platform source
 manifest and package-archive locks. `build.sh` fetches exact package versions,

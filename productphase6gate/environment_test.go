@@ -24,6 +24,7 @@ import (
 
 	"github.com/shell-echo/sandbox-runtime/internal/desktopcandidate"
 	"github.com/shell-echo/sandbox-runtime/internal/productphase6evidence"
+	desktopimage "github.com/shell-echo/sandbox-runtime/profiles/desktop/image"
 	"github.com/shell-echo/sandbox-runtime/provider/browser/network/docker"
 	"github.com/shell-echo/sandbox-runtime/roleprocess"
 )
@@ -506,7 +507,7 @@ provenance_timeout_seconds = 30
 pull_timeout_seconds = 30
 stop_timeout_seconds = 10
 data_root = %q
-manifest_path = %q
+local_candidate_image_manifest_path = %q
 namespace = "phase6-slice4"
 controller_id = "phase6-controller-1"
 network_policy_reference = "desktop-egress-policy-1"
@@ -530,7 +531,7 @@ allowed_hosts = ["packages.example.test"]
 		providerRevision, providerIssuer, providerAudience, providerKeyID, environment.paths.admissionKey,
 		providerMigrationDSN, environment.paths.providerRuntimeDSN, architecture, environment.ports.desktop, environment.paths.brokerSocket,
 		environment.tls.providerExecutorCA, environment.tls.providerExecutorCert, environment.tls.providerExecutorKey, environment.paths.bridgeKey,
-		os.Getenv(candidateEnv), environment.candidate.ImageDigest, filepath.Join(environment.paths.directory, "desktop-runtime"), filepath.Join(environment.root, "profiles/desktop/image/manifest.json"),
+		os.Getenv(candidateEnv), environment.candidate.ImageDigest, filepath.Join(environment.paths.directory, "desktop-runtime"), filepath.Join(environment.root, "profiles/desktop/image", desktopimage.LocalCandidateManifestPath),
 		environment.gatewayImage, environment.uplinkNetwork)
 }
 

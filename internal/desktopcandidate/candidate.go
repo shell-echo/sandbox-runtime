@@ -75,7 +75,7 @@ func New(sourceRoot, platform, imageDigest, configDigest string) (Manifest, erro
 	if err != nil {
 		return Manifest{}, err
 	}
-	locked, err := desktopimage.Load(filepath.Join(root, "profiles", "desktop", "image", "manifest.json"))
+	locked, err := desktopimage.Load(filepath.Join(root, "profiles", "desktop", "image", desktopimage.LocalCandidateManifestPath))
 	if err != nil {
 		return Manifest{}, ErrInvalidCandidate
 	}
@@ -151,7 +151,7 @@ func (m Manifest) VerifySource(sourceRoot string) error {
 	if err != nil || tree != m.SourceTreeDigest {
 		return ErrInvalidCandidate
 	}
-	locked, err := desktopimage.Load(filepath.Join(root, "profiles", "desktop", "image", "manifest.json"))
+	locked, err := desktopimage.Load(filepath.Join(root, "profiles", "desktop", "image", desktopimage.LocalCandidateManifestPath))
 	source, ok := locked.Source.Manifests[m.Platform]
 	if err != nil || !ok || source.Digest != m.BaseImageDigest || source.PackageArchiveSetDigest != m.PackageArchiveSetDigest || source.InstalledSetDigest != m.InstalledSetDigest {
 		return ErrInvalidCandidate
@@ -246,6 +246,12 @@ func SourceTreeDigest(sourceRoot string) (string, error) {
 		}
 		absolute := filepath.Join(root, relative)
 		info, err := os.Lstat(absolute)
+		if errors.Is(err, os.ErrNotExist) {
+			// git ls-files includes tracked paths deleted by the working tree.
+			// The candidate binds the actual source tree, so an absent tracked
+			// path contributes no entry while its replacement untracked path does.
+			continue
+		}
 		if err != nil {
 			return "", ErrInvalidCandidate
 		}

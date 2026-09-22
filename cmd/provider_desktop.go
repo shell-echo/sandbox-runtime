@@ -76,7 +76,7 @@ func newProductionDesktopProvider(ctx context.Context, cfg *config.ProviderProce
 		InputsBytes: dockerConfig.InputsBytes, TmpfsBytes: dockerConfig.TmpfsBytes, WorkspaceBytes: dockerConfig.WorkspaceBytes, OutputsBytes: dockerConfig.OutputsBytes,
 		OperationTimeoutSeconds: dockerConfig.OperationTimeoutSeconds, ProvenanceTimeoutSeconds: dockerConfig.ProvenanceTimeoutSeconds,
 		PullTimeoutSeconds: dockerConfig.PullTimeoutSeconds, StopTimeoutSeconds: dockerConfig.StopTimeoutSeconds,
-		DataRoot: dockerConfig.DataRoot, ManifestPath: dockerConfig.ManifestPath, Namespace: dockerConfig.Namespace, ControllerID: dockerConfig.ControllerID,
+		DataRoot: dockerConfig.DataRoot, ProductionManifestPath: dockerConfig.ProductionManifestPath, CandidateManifestPath: dockerConfig.CandidateManifestPath, Namespace: dockerConfig.Namespace, ControllerID: dockerConfig.ControllerID,
 		NetworkPolicyReference: dockerConfig.NetworkPolicyReference, MaxSessionsPerSandbox: dockerConfig.MaxSessionsPerSandbox,
 		MaxSessionsPerController: dockerConfig.MaxSessionsPerController, Clock: systemAdmissionClock{}, BridgeKeyID: desktopConfig.ExecutorBridgeKeyID, BridgePublicKey: bridgePublicKey,
 	}

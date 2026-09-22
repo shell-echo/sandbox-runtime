@@ -41,6 +41,21 @@ evidence rerun pending; Phase 6 remains 3/15 complete**.
   local-candidate constructor keep Slice 4 integration identity separate from
   the signed Phase 5 production lock. Production rejects `executor.v2` until
   Slice 7 publishes the replacement runtime.
+- The signed Phase 5 runtime now has its own byte-exact
+  `phase5-production-release-manifest.json` and parser, while the evolving v2
+  image uses `phase6-local-candidate-manifest.json`. The configuration and
+  constructors select exactly one identity from `deployment_level`; both
+  cross-combinations fail closed. This corrects a Slice 4 development
+  regression where the candidate package manifest had overwritten the
+  production adapter's verification input. It does not change the historical
+  signed artifact or its evidence.
+- The historical signed image did not contain an installed-set OCI label. Its
+  production schema requires that label to remain absent and validates the
+  exact historical custom-label set. The immutable manifest retains the
+  installed-set digest as build-input evidence, but startup does not claim to
+  attest it from a label. The local Phase 6 candidate still requires its
+  per-platform installed-set label; Slice 7 owns the stronger published
+  Phase 6 supply-chain gate.
 - Browser and Desktop restricted egress share neutral Docker primitives but
   use sealed role identities and distinct thin provisioners. Recovery requires
   one exact role-owned workload name plus matching sandbox, session,
@@ -79,6 +94,12 @@ evidence. The corrective gate must write evidence outside the source tree and
 immediately re-verify it with `cmd/verify-product-phase6-evidence`; the manifest
 must bind the final clean implementation revision, source tree and
 configuration.
+
+The retained real Phase 5 adapter gate must also pass against the exact signed
+index and the restored production manifest. Its current native platform labels
+and both locked platform metadata entries must match. The Phase 6 v2 chain
+continues to use only the local candidate and may not satisfy that production
+gate.
 
 ## Claim boundary
 

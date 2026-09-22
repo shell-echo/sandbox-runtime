@@ -14,26 +14,26 @@ import (
 )
 
 const (
-	ManifestPath            = "manifest.json"
-	DockerfilePath          = "Dockerfile"
-	BuildScriptPath         = "build.sh"
-	EntrypointPath          = "entrypoint.sh"
-	PublicationWorkflowPath = "../../../.github/workflows/desktop-image.yml"
-	SchemaVersion           = "sandbox.runtime/desktop-image/v1"
-	ProfileID               = "sandbox-runtime-desktop-v1"
-	RuntimeClassName        = "sandbox-runtime-desktop"
-	SourceRepository        = "docker.io/library/alpine"
-	SourceRelease           = "3.23"
-	SourceIndexDigest       = "sha256:fd791d74b68913cbb027c6546007b3f0d3bc45125f797758156952bc2d6daf40"
-	BrokerPath              = "/usr/local/libexec/sandbox-runtime/desktop-broker"
-	Entrypoint              = "/usr/local/bin/desktop-runtime"
-	BrokerSocket            = "/tmp/sandbox-runtime-desktop-broker.sock"
-	BrokerProtocol          = "sandbox.runtime/desktop-broker/v1"
-	SessionBrokerProtocol   = "sandbox.runtime/desktop-session/v1"
-	DisplayReference        = "ref:desktop-display:primary"
-	RequiredUID             = 1000
-	RequiredGID             = 1000
-	MaxManifestBytes        = 64 << 10
+	LocalCandidateManifestPath = "phase6-local-candidate-manifest.json"
+	DockerfilePath             = "Dockerfile"
+	BuildScriptPath            = "build.sh"
+	EntrypointPath             = "entrypoint.sh"
+	PublicationWorkflowPath    = "../../../.github/workflows/desktop-image.yml"
+	SchemaVersion              = "sandbox.runtime/desktop-image/v1"
+	ProfileID                  = "sandbox-runtime-desktop-v1"
+	RuntimeClassName           = "sandbox-runtime-desktop"
+	SourceRepository           = "docker.io/library/alpine"
+	SourceRelease              = "3.23"
+	SourceIndexDigest          = "sha256:fd791d74b68913cbb027c6546007b3f0d3bc45125f797758156952bc2d6daf40"
+	BrokerPath                 = "/usr/local/libexec/sandbox-runtime/desktop-broker"
+	Entrypoint                 = "/usr/local/bin/desktop-runtime"
+	BrokerSocket               = "/tmp/sandbox-runtime-desktop-broker.sock"
+	BrokerProtocol             = "sandbox.runtime/desktop-broker/v1"
+	SessionBrokerProtocol      = "sandbox.runtime/desktop-session/v1"
+	DisplayReference           = "ref:desktop-display:primary"
+	RequiredUID                = 1000
+	RequiredGID                = 1000
+	MaxManifestBytes           = 64 << 10
 )
 
 var (

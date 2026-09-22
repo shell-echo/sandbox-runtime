@@ -6,7 +6,9 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -26,9 +28,18 @@ func TestDesktopBrokerTransportIntegration(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
-	manifest, err := desktopimage.Load("../../../../profiles/desktop/image/manifest.json")
+	manifest, err := desktopimage.LoadPhase5ProductionRelease("../../../../profiles/desktop/image/" + desktopimage.Phase5ProductionReleaseManifestPath)
 	if err != nil {
 		t.Fatal(err)
+	}
+	publication := desktopimage.LockedPublication()
+	if len(publication.Platforms) != len(manifest.Source.Manifests) {
+		t.Fatalf("publication/manifest platform counts differ: %d != %d", len(publication.Platforms), len(manifest.Source.Manifests))
+	}
+	for _, published := range publication.Platforms {
+		if _, ok := manifest.Source.Manifests[published.Platform]; !ok {
+			t.Fatalf("published platform %q is absent from the production manifest", published.Platform)
+		}
 	}
 	backend, err := newMobyEngine(os.Getenv("DOCKER_HOST"))
 	if err != nil {
@@ -38,12 +49,12 @@ func TestDesktopBrokerTransportIntegration(t *testing.T) {
 	if err := backend.ping(ctx); err != nil {
 		t.Fatal(err)
 	}
-	image := desktopimage.LockedPublication().Image()
+	image := publication.Image()
 	if err := backend.ensureImage(ctx, image, PullIfNotPresent); err != nil {
 		t.Fatal(err)
 	}
 	inspected, err := backend.inspectImage(ctx, image)
-	if err != nil || validateImage(inspected, manifest, desktopimage.LockedPublication()) != nil {
+	if err != nil || validateImage(inspected, manifest, publication) != nil {
 		t.Fatalf("locked image inspection failed: %v", err)
 	}
 	name := fmt.Sprintf("sandbox-runtime-desktop-broker-%d", time.Now().UnixNano())
@@ -64,6 +75,14 @@ func TestDesktopBrokerTransportIntegration(t *testing.T) {
 	})
 	if err := backend.start(ctx, id); err != nil {
 		t.Fatal(err)
+	}
+	installed, err := exec.CommandContext(ctx, "docker", "exec", id, "/bin/sh", "-c", "apk info -v | LC_ALL=C sort | sha256sum").Output()
+	if err != nil {
+		t.Fatalf("inspect installed package set: %v", err)
+	}
+	wantInstalled := strings.TrimPrefix(manifest.Packages.InstalledSetDigest, "sha256:") + "  -"
+	if got := strings.TrimSpace(string(installed)); got != wantInstalled {
+		t.Fatalf("installed package set digest = %q, want %q", got, wantInstalled)
 	}
 	inspection, err := backend.client.ContainerInspect(ctx, id, client.ContainerInspectOptions{})
 	if err != nil {

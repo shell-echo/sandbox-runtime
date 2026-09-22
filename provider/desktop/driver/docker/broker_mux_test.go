@@ -26,6 +26,7 @@ import (
 	"github.com/shell-echo/sandbox-runtime/internal/desktopmedia"
 	"github.com/shell-echo/sandbox-runtime/internal/handoff"
 	"github.com/shell-echo/sandbox-runtime/internal/sessiontermination"
+	desktopimage "github.com/shell-echo/sandbox-runtime/profiles/desktop/image"
 	providerdesktop "github.com/shell-echo/sandbox-runtime/provider/desktop"
 )
 
@@ -270,11 +271,9 @@ func newMuxFixture(t *testing.T) *muxFixture {
 	}
 	options.Image = digest
 	options.PullPolicy = PullNever
-	base := &fakeEngine{image: validImageInfo(t)}
-	base.image.id = digest
-	base.image.repositoryDigests = nil
-	base.image.descriptorDigest = ""
-	base.image.labels["org.opencontainers.image.revision"] = candidate.SourceRevision
+	options.ProductionManifestPath = ""
+	options.CandidateManifestPath = filepath.Join(sourceRoot, "profiles", "desktop", "image", desktopimage.LocalCandidateManifestPath)
+	base := &fakeEngine{image: validCandidateImageInfo(t, candidate)}
 	engine := &muxTestEngine{fakeEngine: base, publicKey: publicKey}
 	driver, err := newCandidateDriver(context.Background(), engine, options, candidate, newFakeNetwork())
 	if err != nil {

@@ -31,6 +31,7 @@ import (
 	"github.com/shell-echo/sandbox-runtime/internal/desktopmedia"
 	"github.com/shell-echo/sandbox-runtime/internal/executorbackend"
 	"github.com/shell-echo/sandbox-runtime/internal/handoff"
+	desktopimage "github.com/shell-echo/sandbox-runtime/profiles/desktop/image"
 	providerdesktop "github.com/shell-echo/sandbox-runtime/provider/desktop"
 	providerremote "github.com/shell-echo/sandbox-runtime/provider/desktop/driver/remote"
 )
@@ -128,7 +129,7 @@ func TestDesktopMuxRealCandidateExecutorChain(t *testing.T) { //nolint:cyclop
 	if err != nil {
 		t.Fatal(err)
 	}
-	options := Options{Image: candidate.ImageDigest, PullPolicy: PullNever, MemoryBytes: 1 << 30, NanoCPUs: 1_000_000_000, PidsLimit: 256, InputsBytes: 16 << 20, TmpfsBytes: 256 << 20, WorkspaceBytes: 256 << 20, OutputsBytes: 128 << 20, OperationTimeoutSeconds: 30, ProvenanceTimeoutSeconds: 30, PullTimeoutSeconds: 30, StopTimeoutSeconds: 10, DataRoot: stateRoot, ManifestPath: filepath.Join(imageRoot, "manifest.json"), Namespace: "desktop-mux-" + suffix, ControllerID: "controller-" + suffix, NetworkPolicyReference: "desktop-egress-policy-1", MaxSessionsPerSandbox: 1, MaxSessionsPerController: 4, Clock: ClockFunc(func() time.Time { return time.Now().UTC() }), BridgeKeyID: "provider-desktop-v2", BridgePublicKey: publicKey}
+	options := Options{Image: candidate.ImageDigest, PullPolicy: PullNever, MemoryBytes: 1 << 30, NanoCPUs: 1_000_000_000, PidsLimit: 256, InputsBytes: 16 << 20, TmpfsBytes: 256 << 20, WorkspaceBytes: 256 << 20, OutputsBytes: 128 << 20, OperationTimeoutSeconds: 30, ProvenanceTimeoutSeconds: 30, PullTimeoutSeconds: 30, StopTimeoutSeconds: 10, DataRoot: stateRoot, CandidateManifestPath: filepath.Join(imageRoot, desktopimage.LocalCandidateManifestPath), Namespace: "desktop-mux-" + suffix, ControllerID: "controller-" + suffix, NetworkPolicyReference: "desktop-egress-policy-1", MaxSessionsPerSandbox: 1, MaxSessionsPerController: 4, Clock: ClockFunc(func() time.Time { return time.Now().UTC() }), BridgeKeyID: "provider-desktop-v2", BridgePublicKey: publicKey}
 	driver, err := NewLocalCandidate(ctx, options, candidate, realMuxNetwork{name: networkName})
 	if err != nil {
 		t.Fatal(err)

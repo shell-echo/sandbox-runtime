@@ -71,7 +71,8 @@ type Options struct {
 	PullTimeoutSeconds       int
 	StopTimeoutSeconds       int
 	DataRoot                 string
-	ManifestPath             string
+	ProductionManifestPath   string
+	CandidateManifestPath    string
 	Namespace                string
 	ControllerID             string
 	NetworkPolicyReference   string
@@ -138,14 +139,15 @@ type RestrictedNetwork interface {
 
 func (o Options) validate() error {
 	publication := desktopimage.LockedPublication()
-	if o.Image != publication.Image() {
+	if o.Image != publication.Image() || !filepath.IsAbs(o.ProductionManifestPath) || o.CandidateManifestPath != "" {
 		return fmt.Errorf("%w: image does not match the locked publication", ErrInvalidOptions)
 	}
 	return o.validateCommon()
 }
 
 func (o Options) validateCandidate(candidate desktopcandidate.Manifest) error {
-	if candidate.Validate() != nil || o.Image != candidate.ImageDigest || o.PullPolicy != PullNever {
+	if candidate.Validate() != nil || o.Image != candidate.ImageDigest || o.PullPolicy != PullNever ||
+		!filepath.IsAbs(o.CandidateManifestPath) || o.ProductionManifestPath != "" {
 		return fmt.Errorf("%w: image does not match the local candidate", ErrInvalidOptions)
 	}
 	return o.validateCommon()
@@ -172,8 +174,8 @@ func (o Options) validateCommon() error {
 		o.StopTimeoutSeconds < 0 || o.StopTimeoutSeconds > maxTimeoutSeconds {
 		return fmt.Errorf("%w: invalid timeouts", ErrInvalidOptions)
 	}
-	if strings.TrimSpace(o.DataRoot) == "" || !filepath.IsAbs(o.ManifestPath) {
-		return fmt.Errorf("%w: absolute state and manifest paths are required", ErrInvalidOptions)
+	if strings.TrimSpace(o.DataRoot) == "" {
+		return fmt.Errorf("%w: state path is required", ErrInvalidOptions)
 	}
 	if !privateValuePattern.MatchString(o.Namespace) || !privateValuePattern.MatchString(o.ControllerID) || !privateValuePattern.MatchString(o.NetworkPolicyReference) {
 		return fmt.Errorf("%w: invalid ownership or network policy identity", ErrInvalidOptions)

@@ -24,7 +24,7 @@ func TestProviderProcessValidatesExactDesktopProfile(t *testing.T) {
 	candidate.Desktop.Architecture = "arm64"
 	candidate.Desktop.Docker.Image = desktopimage.LockedPublication().Image()
 	candidate.Desktop.Docker.DataRoot = path("desktop-runtime")
-	candidate.Desktop.Docker.ManifestPath = path("desktop-manifest.json")
+	candidate.Desktop.Docker.ProductionManifestPath = path("phase5-production-release-manifest.json")
 	candidate.Desktop.Docker.Namespace = "desktop-production"
 	candidate.Desktop.Docker.ControllerID = "desktop-controller-1"
 	candidate.Desktop.Docker.NetworkPolicyReference = "desktop-egress-policy-1"
@@ -48,6 +48,9 @@ func TestProviderProcessValidatesExactDesktopProfile(t *testing.T) {
 		},
 		"ownership drift": func(c *ProviderProcessConfig) {
 			c.Desktop.RestrictedNetwork.ControllerID = "different-controller"
+		},
+		"candidate manifest in production": func(c *ProviderProcessConfig) {
+			c.Desktop.Docker.CandidateManifestPath = path("phase6-local-candidate-manifest.json")
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -73,7 +76,7 @@ func TestProviderProcessSeparatesLocalDesktopCandidateFromProduction(t *testing.
 	candidate.Desktop.Docker.Image = "sha256:" + strings.Repeat("9", 64)
 	candidate.Desktop.Docker.PullPolicy = "never"
 	candidate.Desktop.Docker.DataRoot = path("desktop-runtime")
-	candidate.Desktop.Docker.ManifestPath = path("desktop-manifest.json")
+	candidate.Desktop.Docker.CandidateManifestPath = path("phase6-local-candidate-manifest.json")
 	candidate.Desktop.Docker.Namespace = "desktop-candidate"
 	candidate.Desktop.Docker.ControllerID = "desktop-controller-1"
 	candidate.Desktop.Docker.NetworkPolicyReference = "desktop-egress-policy-1"
@@ -101,6 +104,8 @@ func TestProviderProcessSeparatesLocalDesktopCandidateFromProduction(t *testing.
 	production.Desktop = candidate.Desktop
 	production.Desktop.Docker.Image = desktopimage.LockedPublication().Image()
 	production.Desktop.Docker.PullPolicy = "if_not_present"
+	production.Desktop.Docker.CandidateManifestPath = ""
+	production.Desktop.Docker.ProductionManifestPath = path("phase5-production-release-manifest.json")
 	production.Desktop.LocalCandidateManifestFile = ""
 	production.Desktop.Provenance = ProviderBrowserProvenanceConfig{ExecutablePath: path("gh"), ExecutableDigest: "sha256:" + strings.Repeat("c", 64)}
 	if err := production.Validate(); err == nil {

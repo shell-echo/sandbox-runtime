@@ -244,7 +244,7 @@ func validOptions(t *testing.T, root string, clock Clock) Options {
 		InputsBytes: 16 << 20, TmpfsBytes: 256 << 20, WorkspaceBytes: 256 << 20, OutputsBytes: 256 << 20,
 		OperationTimeoutSeconds: 5, ProvenanceTimeoutSeconds: 120,
 		PullTimeoutSeconds: 5, StopTimeoutSeconds: 10,
-		DataRoot: root, ManifestPath: filepath.Join(imageRoot, "manifest.json"),
+		DataRoot: root, ProductionManifestPath: filepath.Join(imageRoot, desktopimage.Phase5ProductionReleaseManifestPath),
 		Namespace: "desktop-test", ControllerID: "controller-1",
 		NetworkPolicyReference: "desktop-egress-policy-1",
 		MaxSessionsPerSandbox:  1, MaxSessionsPerController: 8, Clock: clock,
@@ -253,7 +253,7 @@ func validOptions(t *testing.T, root string, clock Clock) Options {
 
 func validImageInfo(t *testing.T) imageInfo {
 	t.Helper()
-	manifest, err := desktopimage.Load("../../../../profiles/desktop/image/manifest.json")
+	manifest, err := desktopimage.LoadPhase5ProductionRelease("../../../../profiles/desktop/image/" + desktopimage.Phase5ProductionReleaseManifestPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -264,17 +264,47 @@ func validImageInfo(t *testing.T) imageInfo {
 		user: DesktopUser, entrypoint: []string{"/usr/local/bin/desktop-runtime"}, workingDirectory: "/workspace",
 		architecture: "amd64", operatingSystem: "linux",
 		labels: map[string]string{
-			"io.github.shell-echo.sandbox-runtime.profile":                    desktopimage.ProfileID,
-			"io.github.shell-echo.sandbox-runtime.desktop-broker-protocol":    desktopimage.BrokerProtocol,
+			"io.github.shell-echo.sandbox-runtime.profile":                      desktopimage.ProfileID,
+			"io.github.shell-echo.sandbox-runtime.desktop-broker-protocol":      desktopimage.BrokerProtocol,
+			"io.github.shell-echo.sandbox-runtime.desktop-broker-path":          desktopimage.BrokerPath,
+			"io.github.shell-echo.sandbox-runtime.package-archive-set-digest":   manifest.Source.Manifests["linux/amd64"].PackageArchiveSetDigest,
+			"io.github.shell-echo.sandbox-runtime.provenance.source-digest":     manifest.Source.Manifests["linux/amd64"].Digest,
+			"io.github.shell-echo.sandbox-runtime.provenance.source-date-epoch": "0",
+			"org.opencontainers.image.base.digest":                              manifest.Source.Manifests["linux/amd64"].Digest,
+			"org.opencontainers.image.base.name":                                desktopimage.SourceRepository,
+			"org.opencontainers.image.revision":                                 publication.SourceCommit,
+			"org.opencontainers.image.source":                                   "https://github.com/shell-echo/sandbox-runtime",
+			"org.opencontainers.image.version":                                  desktopimage.ProfileID,
+		},
+	}
+}
+
+func validCandidateImageInfo(t *testing.T, candidate desktopcandidate.Manifest) imageInfo {
+	t.Helper()
+	manifest, err := desktopimage.Load("../../../../profiles/desktop/image/" + desktopimage.LocalCandidateManifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	platform, ok := manifest.Source.Manifests[candidate.Platform]
+	if !ok {
+		t.Fatalf("candidate platform %q is absent", candidate.Platform)
+	}
+	variant := platform.Variant
+	return imageInfo{
+		id: candidate.ImageDigest, user: DesktopUser, entrypoint: []string{"/usr/local/bin/desktop-runtime"}, workingDirectory: "/workspace",
+		architecture: platform.Architecture, variant: variant, operatingSystem: "linux",
+		labels: map[string]string{
+			"io.github.shell-echo.sandbox-runtime.profile":                    candidate.ProfileID,
+			"io.github.shell-echo.sandbox-runtime.desktop-broker-protocol":    candidate.BrokerProtocol,
 			"io.github.shell-echo.sandbox-runtime.desktop-broker-path":        desktopimage.BrokerPath,
-			"io.github.shell-echo.sandbox-runtime.package-archive-set-digest": manifest.Source.Manifests["linux/amd64"].PackageArchiveSetDigest,
-			"io.github.shell-echo.sandbox-runtime.installed-set-digest":       manifest.Source.Manifests["linux/amd64"].InstalledSetDigest,
-			"io.github.shell-echo.sandbox-runtime.provenance.source-digest":   manifest.Source.Manifests["linux/amd64"].Digest,
-			"org.opencontainers.image.base.digest":                            manifest.Source.Manifests["linux/amd64"].Digest,
+			"io.github.shell-echo.sandbox-runtime.package-archive-set-digest": candidate.PackageArchiveSetDigest,
+			"io.github.shell-echo.sandbox-runtime.installed-set-digest":       candidate.InstalledSetDigest,
+			"io.github.shell-echo.sandbox-runtime.provenance.source-digest":   candidate.BaseImageDigest,
+			"org.opencontainers.image.base.digest":                            candidate.BaseImageDigest,
 			"org.opencontainers.image.base.name":                              desktopimage.SourceRepository,
-			"org.opencontainers.image.revision":                               publication.SourceCommit,
+			"org.opencontainers.image.revision":                               candidate.SourceRevision,
 			"org.opencontainers.image.source":                                 "https://github.com/shell-echo/sandbox-runtime",
-			"org.opencontainers.image.version":                                desktopimage.ProfileID,
+			"org.opencontainers.image.version":                                candidate.ProfileID,
 		},
 	}
 }
@@ -352,11 +382,9 @@ func TestLocalCandidateDriverIsDigestOnlyAndSeparateFromPublication(t *testing.T
 	options := validOptions(t, t.TempDir(), clock)
 	options.Image = digest
 	options.PullPolicy = PullNever
-	backend := &fakeEngine{image: validImageInfo(t)}
-	backend.image.id = digest
-	backend.image.repositoryDigests = nil
-	backend.image.descriptorDigest = ""
-	backend.image.labels["org.opencontainers.image.revision"] = candidate.SourceRevision
+	options.CandidateManifestPath = filepath.Join(sourceRoot, "profiles", "desktop", "image", desktopimage.LocalCandidateManifestPath)
+	options.ProductionManifestPath = ""
+	backend := &fakeEngine{image: validCandidateImageInfo(t, candidate)}
 	driver, err := newCandidateDriver(context.Background(), backend, options, candidate, newFakeNetwork())
 	if err != nil {
 		t.Fatal(err)
@@ -378,27 +406,109 @@ func TestLocalCandidateDriverIsDigestOnlyAndSeparateFromPublication(t *testing.T
 	}
 }
 
+func TestProductionAndCandidateImagesRejectCrossUse(t *testing.T) {
+	sourceRoot, err := filepath.Abs("../../../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest := "sha256:" + strings.Repeat("8", 64)
+	candidate, err := desktopcandidate.New(sourceRoot, "linux/amd64", digest, digest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	productionManifest, err := desktopimage.LoadPhase5ProductionRelease(filepath.Join(sourceRoot, "profiles", "desktop", "image", desktopimage.Phase5ProductionReleaseManifestPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	candidateManifest, err := desktopimage.Load(filepath.Join(sourceRoot, "profiles", "desktop", "image", desktopimage.LocalCandidateManifestPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	productionImage := validImageInfo(t)
+	candidateImage := validCandidateImageInfo(t, candidate)
+	publication := desktopimage.LockedPublication()
+	if err := validateImage(productionImage, productionManifest, publication); err != nil {
+		t.Fatalf("Phase 5 image with Phase 5 manifest = %v", err)
+	}
+	if err := validateCandidateImage(candidateImage, candidateManifest, candidate); err != nil {
+		t.Fatalf("Phase 6 candidate with Phase 6 manifest = %v", err)
+	}
+	if err := validateImage(candidateImage, productionManifest, publication); !errors.Is(err, ErrInvalidRuntime) {
+		t.Fatalf("Phase 6 candidate accepted by Phase 5 manifest: %v", err)
+	}
+	if err := validateCandidateImage(productionImage, candidateManifest, candidate); !errors.Is(err, ErrInvalidRuntime) {
+		t.Fatalf("Phase 5 image accepted by Phase 6 manifest: %v", err)
+	}
+	for name, mutate := range map[string]func(*imageInfo){
+		"unexpected installed-set label": func(info *imageInfo) {
+			info.labels["io.github.shell-echo.sandbox-runtime.installed-set-digest"] = desktopimage.Phase5InstalledSetDigest
+		},
+		"missing historical custom label": func(info *imageInfo) {
+			delete(info.labels, "io.github.shell-echo.sandbox-runtime.provenance.source-date-epoch")
+		},
+		"unexpected custom label": func(info *imageInfo) {
+			info.labels["io.github.shell-echo.sandbox-runtime.future"] = "unsafe"
+		},
+		"archive drift": func(info *imageInfo) {
+			info.labels["io.github.shell-echo.sandbox-runtime.package-archive-set-digest"] = "sha256:" + strings.Repeat("0", 64)
+		},
+		"source drift": func(info *imageInfo) {
+			info.labels["io.github.shell-echo.sandbox-runtime.provenance.source-digest"] = "sha256:" + strings.Repeat("0", 64)
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			drifted := productionImage
+			drifted.labels = cloneStrings(productionImage.labels)
+			mutate(&drifted)
+			if err := validateImage(drifted, productionManifest, publication); !errors.Is(err, ErrInvalidRuntime) {
+				t.Fatalf("historical image label drift accepted: %v", err)
+			}
+		})
+	}
+	driftedPublication := publication
+	driftedPublication.Platforms = append([]desktopimage.PublishedPlatform(nil), publication.Platforms...)
+	driftedPublication.Platforms[0].Digest = "sha256:" + strings.Repeat("0", 64)
+	if err := validateImage(productionImage, productionManifest, driftedPublication); !errors.Is(err, ErrInvalidRuntime) {
+		t.Fatalf("publication platform digest drift accepted: %v", err)
+	}
+
+	clock := &fakeClock{now: desktopDriverTestTime}
+	productionOptions := validOptions(t, t.TempDir(), clock)
+	productionOptions.ProductionManifestPath = filepath.Join(sourceRoot, "profiles", "desktop", "image", desktopimage.LocalCandidateManifestPath)
+	if _, err := newDriver(context.Background(), &fakeEngine{image: productionImage}, productionOptions, &fakeProvenance{}, newFakeNetwork()); !errors.Is(err, ErrInvalidOptions) {
+		t.Fatalf("production constructor accepted candidate manifest: %v", err)
+	}
+	candidateOptions := validOptions(t, t.TempDir(), clock)
+	candidateOptions.Image = digest
+	candidateOptions.ProductionManifestPath = ""
+	candidateOptions.CandidateManifestPath = filepath.Join(sourceRoot, "profiles", "desktop", "image", desktopimage.Phase5ProductionReleaseManifestPath)
+	if _, err := newCandidateDriver(context.Background(), &fakeEngine{image: candidateImage}, candidateOptions, candidate, newFakeNetwork()); !errors.Is(err, ErrInvalidOptions) {
+		t.Fatalf("candidate constructor accepted production manifest: %v", err)
+	}
+}
+
 func TestOptionsFailClosed(t *testing.T) {
 	clock := &fakeClock{now: desktopDriverTestTime}
 	base := validOptions(t, t.TempDir(), clock)
 	tests := map[string]func(*Options){
-		"mutable image":       func(o *Options) { o.Image = desktopimage.PublishedRepository + ":latest" },
-		"unknown pull policy": func(o *Options) { o.PullPolicy = "sometimes" },
-		"memory":              func(o *Options) { o.MemoryBytes = 0 },
-		"cpu":                 func(o *Options) { o.NanoCPUs = 0 },
-		"pids":                func(o *Options) { o.PidsLimit = maxPIDs + 1 },
-		"inputs":              func(o *Options) { o.InputsBytes = 0 },
-		"tmpfs":               func(o *Options) { o.TmpfsBytes = o.MemoryBytes + 1 },
-		"workspace":           func(o *Options) { o.WorkspaceBytes = o.MemoryBytes + 1 },
-		"outputs":             func(o *Options) { o.OutputsBytes = 0 },
-		"timeout":             func(o *Options) { o.OperationTimeoutSeconds = 0 },
-		"provenance timeout":  func(o *Options) { o.ProvenanceTimeoutSeconds = 0 },
-		"relative manifest":   func(o *Options) { o.ManifestPath = "manifest.json" },
-		"namespace":           func(o *Options) { o.Namespace = "unsafe/name" },
-		"network policy":      func(o *Options) { o.NetworkPolicyReference = "" },
-		"sandbox concurrency": func(o *Options) { o.MaxSessionsPerSandbox = 2 },
-		"capacity":            func(o *Options) { o.MaxSessionsPerController = 0 },
-		"clock":               func(o *Options) { o.Clock = nil },
+		"mutable image":                func(o *Options) { o.Image = desktopimage.PublishedRepository + ":latest" },
+		"unknown pull policy":          func(o *Options) { o.PullPolicy = "sometimes" },
+		"memory":                       func(o *Options) { o.MemoryBytes = 0 },
+		"cpu":                          func(o *Options) { o.NanoCPUs = 0 },
+		"pids":                         func(o *Options) { o.PidsLimit = maxPIDs + 1 },
+		"inputs":                       func(o *Options) { o.InputsBytes = 0 },
+		"tmpfs":                        func(o *Options) { o.TmpfsBytes = o.MemoryBytes + 1 },
+		"workspace":                    func(o *Options) { o.WorkspaceBytes = o.MemoryBytes + 1 },
+		"outputs":                      func(o *Options) { o.OutputsBytes = 0 },
+		"timeout":                      func(o *Options) { o.OperationTimeoutSeconds = 0 },
+		"provenance timeout":           func(o *Options) { o.ProvenanceTimeoutSeconds = 0 },
+		"relative production manifest": func(o *Options) { o.ProductionManifestPath = "manifest.json" },
+		"candidate manifest":           func(o *Options) { o.CandidateManifestPath = filepath.Join(t.TempDir(), "candidate.json") },
+		"namespace":                    func(o *Options) { o.Namespace = "unsafe/name" },
+		"network policy":               func(o *Options) { o.NetworkPolicyReference = "" },
+		"sandbox concurrency":          func(o *Options) { o.MaxSessionsPerSandbox = 2 },
+		"capacity":                     func(o *Options) { o.MaxSessionsPerController = 0 },
+		"clock":                        func(o *Options) { o.Clock = nil },
 	}
 	for name, mutate := range tests {
 		t.Run(name, func(t *testing.T) {

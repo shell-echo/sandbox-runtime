@@ -47,19 +47,21 @@ const (
 	runtimeProfileLabel = "io.github.shell-echo.sandbox-runtime.runtime-profile"
 	specDigestLabel     = "io.github.shell-echo.sandbox-runtime.desktop-spec-digest"
 	providerOwner       = "provider-desktop-runtime"
+	imageIdentityPrefix = "io.github.shell-echo.sandbox-runtime."
 )
 
 type Driver struct {
-	engine      engine
-	options     Options
-	dataRoot    string
-	manifest    desktopimage.Manifest
-	publication desktopimage.Publication
-	candidate   *desktopcandidate.Manifest
-	image       imageInfo
-	provenance  ProvenanceVerifier
-	network     RestrictedNetwork
-	mu          sync.Mutex
+	engine             engine
+	options            Options
+	dataRoot           string
+	productionManifest *desktopimage.Phase5ProductionReleaseManifest
+	candidateManifest  *desktopimage.Manifest
+	publication        desktopimage.Publication
+	candidate          *desktopcandidate.Manifest
+	image              imageInfo
+	provenance         ProvenanceVerifier
+	network            RestrictedNetwork
+	mu                 sync.Mutex
 }
 
 func New(ctx context.Context, options Options, provenance ProvenanceVerifier, network RestrictedNetwork) (*Driver, error) {
@@ -106,7 +108,7 @@ func newDriver(ctx context.Context, backend engine, options Options, provenance 
 	if err := options.validate(); err != nil {
 		return nil, err
 	}
-	manifest, err := desktopimage.Load(options.ManifestPath)
+	manifest, err := desktopimage.LoadPhase5ProductionRelease(options.ProductionManifestPath)
 	if err != nil || manifest.ProfileID != DesktopRuntimeProfile {
 		return nil, ErrInvalidOptions
 	}
@@ -159,7 +161,7 @@ func newDriver(ctx context.Context, backend engine, options Options, provenance 
 		return nil, ErrInvalidRuntime
 	}
 	return &Driver{
-		engine: backend, options: options, dataRoot: root, manifest: manifest,
+		engine: backend, options: options, dataRoot: root, productionManifest: &manifest,
 		publication: publication, image: image, provenance: provenance, network: network,
 	}, nil
 }
@@ -171,7 +173,7 @@ func newCandidateDriver(ctx context.Context, backend engine, options Options, ca
 	if backend == nil || network == nil || options.validateCandidate(candidate) != nil {
 		return nil, ErrInvalidDriver
 	}
-	manifest, err := desktopimage.Load(options.ManifestPath)
+	manifest, err := desktopimage.Load(options.CandidateManifestPath)
 	if err != nil || manifest.ProfileID != DesktopRuntimeProfile {
 		return nil, ErrInvalidOptions
 	}
@@ -206,12 +208,15 @@ func newCandidateDriver(ctx context.Context, backend engine, options Options, ca
 	}
 	copyCandidate := candidate
 	return &Driver{
-		engine: backend, options: options, dataRoot: root, manifest: manifest,
+		engine: backend, options: options, dataRoot: root, candidateManifest: &manifest,
 		candidate: &copyCandidate, image: image, network: network,
 	}, nil
 }
 
-func validateImage(info imageInfo, manifest desktopimage.Manifest, publication desktopimage.Publication) error {
+func validateImage(info imageInfo, manifest desktopimage.Phase5ProductionReleaseManifest, publication desktopimage.Publication) error {
+	if publication.Validate() != nil || manifest.Validate() != nil {
+		return ErrInvalidRuntime
+	}
 	bound := info.descriptorDigest == publication.Digest
 	for _, repositoryDigest := range info.repositoryDigests {
 		if repositoryDigest == publication.Image() {
@@ -235,12 +240,15 @@ func validateImage(info imageInfo, manifest desktopimage.Manifest, publication d
 	}
 	source, ok := manifest.Source.Manifests[platform]
 	labels := info.labels
-	if !ok || labels["io.github.shell-echo.sandbox-runtime.profile"] != desktopimage.ProfileID ||
-		labels["io.github.shell-echo.sandbox-runtime.desktop-broker-protocol"] != desktopimage.BrokerProtocol ||
-		labels["io.github.shell-echo.sandbox-runtime.desktop-broker-path"] != desktopimage.BrokerPath ||
-		labels["io.github.shell-echo.sandbox-runtime.package-archive-set-digest"] != source.PackageArchiveSetDigest ||
-		labels["io.github.shell-echo.sandbox-runtime.installed-set-digest"] != source.InstalledSetDigest ||
-		labels["io.github.shell-echo.sandbox-runtime.provenance.source-digest"] != source.Digest ||
+	wantIdentityLabels := map[string]string{
+		"io.github.shell-echo.sandbox-runtime.profile":                      desktopimage.ProfileID,
+		"io.github.shell-echo.sandbox-runtime.desktop-broker-protocol":      desktopimage.BrokerProtocol,
+		"io.github.shell-echo.sandbox-runtime.desktop-broker-path":          desktopimage.BrokerPath,
+		"io.github.shell-echo.sandbox-runtime.package-archive-set-digest":   source.PackageArchiveSetDigest,
+		"io.github.shell-echo.sandbox-runtime.provenance.source-digest":     source.Digest,
+		"io.github.shell-echo.sandbox-runtime.provenance.source-date-epoch": "0",
+	}
+	if !ok || !exactIdentityLabels(labels, wantIdentityLabels) ||
 		labels["org.opencontainers.image.base.digest"] != source.Digest ||
 		labels["org.opencontainers.image.base.name"] != desktopimage.SourceRepository ||
 		labels["org.opencontainers.image.revision"] != publication.SourceCommit ||
@@ -249,6 +257,21 @@ func validateImage(info imageInfo, manifest desktopimage.Manifest, publication d
 		return ErrInvalidRuntime
 	}
 	return nil
+}
+
+func exactIdentityLabels(actual, expected map[string]string) bool {
+	seen := 0
+	for key, value := range actual {
+		if !strings.HasPrefix(key, imageIdentityPrefix) {
+			continue
+		}
+		want, ok := expected[key]
+		if !ok || value != want {
+			return false
+		}
+		seen++
+	}
+	return seen == len(expected)
 }
 
 func validateCandidateImage(info imageInfo, manifest desktopimage.Manifest, candidate desktopcandidate.Manifest) error {
@@ -321,10 +344,10 @@ func (d *Driver) Ready(ctx context.Context) error {
 	}
 	inspectCancel()
 	if d.candidate != nil {
-		if validateCandidateImage(image, d.manifest, *d.candidate) != nil {
+		if d.candidateManifest == nil || validateCandidateImage(image, *d.candidateManifest, *d.candidate) != nil {
 			return ErrInvalidRuntime
 		}
-	} else if validateImage(image, d.manifest, d.publication) != nil {
+	} else if d.productionManifest == nil || validateImage(image, *d.productionManifest, d.publication) != nil {
 		return ErrInvalidRuntime
 	}
 	return nil
@@ -818,7 +841,7 @@ func (d *Driver) specDigest(allocation providerdesktop.Allocation) (string, erro
 		InputsBytes: d.options.InputsBytes, TmpfsBytes: d.options.TmpfsBytes,
 		WorkspaceBytes: d.options.WorkspaceBytes, OutputsBytes: d.options.OutputsBytes,
 		StopTimeout:   d.options.StopTimeoutSeconds,
-		SeccompPolicy: d.manifest.Security.Seccomp,
+		SeccompPolicy: d.seccompPolicy(),
 		NetworkPolicy: allocation.Request.NetworkPolicyReference, Namespace: d.options.Namespace,
 		ControllerID: d.options.ControllerID, RuntimeProfileID: DesktopRuntimeProfile,
 		RuntimeAuthority: runtimeAuthorityDigest,
@@ -830,6 +853,16 @@ func (d *Driver) specDigest(allocation providerdesktop.Allocation) (string, erro
 	}
 	sum := sha256.Sum256(encoded)
 	return "sha256:" + hex.EncodeToString(sum[:]), nil
+}
+
+func (d *Driver) seccompPolicy() string {
+	if d.candidateManifest != nil {
+		return d.candidateManifest.Security.Seccomp
+	}
+	if d.productionManifest != nil {
+		return d.productionManifest.Security.Seccomp
+	}
+	return ""
 }
 
 func (d *Driver) stateLocation(sandboxID, desktopSessionID string) (string, string, error) {

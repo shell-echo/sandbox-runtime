@@ -443,7 +443,8 @@ checked-in workflow is not provenance evidence. Runtime adapters must select
 only this fail-closed publication authority; any replacement requires a new
 named publication and repository-authority update.
 
-For image/broker changes, keep `profiles/desktop/image/manifest.json`, its Go
+For Phase 6 local-candidate image/broker changes, keep
+`profiles/desktop/image/phase6-local-candidate-manifest.json`, its Go
 validator, the Dockerfile, build script, broker constants, integration policy,
 and publication matrix aligned. Run the focused race/shuffle tests plus the
 full repository gates. On each native architecture, run:
