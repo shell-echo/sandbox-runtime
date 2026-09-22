@@ -36,8 +36,30 @@ allows only `README.md` or `docs/` evidence/documentation changes afterward.
 Any post-evidence source, configuration, workflow or test change requires a
 new implementation commit, candidate build and six-process run.
 
+That default behavior is the `finalization` mode. After a slice is closed,
+[ADR 0053](adr/0053-phase-6-evidence-closure-lifecycle.md) permits only an
+explicit historical check:
+
+```bash
+go run ./cmd/verify-product-phase6-evidence \
+  -mode retained \
+  -slice product-v1-phase-6-slice-4 \
+  -source-root "$PWD" \
+  -manifest "$PWD/docs/audits/product-phase-6-slice-4-evidence.json" \
+  -closure-record "$PWD/docs/audits/product-phase-6-slice-4-closure.json"
+```
+
+Retained mode validates the immutable runtime, evidence-tool and closure
+ancestry, the original closed diffs, the byte-exact manifest, and the one-time
+closure record. Its machine-readable result always states
+`claim_scope=historical_retained` and `current_head_covered=false`. It does not
+verify later source, approve a successor slice, or replace that slice's current
+development/finalization gate. There is no automatic mode fallback.
+
 Slice 4's accepted canonical manifest is checked in at
 [`audits/product-phase-6-slice-4-evidence.json`](audits/product-phase-6-slice-4-evidence.json).
+Its immutable closure record is
+[`audits/product-phase-6-slice-4-closure.json`](audits/product-phase-6-slice-4-closure.json).
 It binds runtime revision `78f5987fda45873e497bce6d336e29dd4a61dc74`,
 evidence-tool revision `e2f4abacf03418c7b18f179c3e7459292d8626df`,
 the `linux/arm64/v8` candidate image digest

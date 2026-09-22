@@ -880,6 +880,24 @@ non-claim. The accepted canonical Slice 4 result is archived at
 with manifest digest
 `sha256:d01b3c41a0094657f18b4014b0649a799ea7fcf0e4ccaf07aa82cdd2052cc0d2`.
 
+Once later Phase 6 source work begins, the default finalization verifier must
+continue to fail because current HEAD is outside the Slice 4 claim. Preserve
+the historical result only through the explicit ADR 0053 retained command:
+
+```bash
+go run ./cmd/verify-product-phase6-evidence \
+  -mode retained \
+  -slice product-v1-phase-6-slice-4 \
+  -source-root "$PWD" \
+  -manifest "$PWD/docs/audits/product-phase-6-slice-4-evidence.json" \
+  -closure-record "$PWD/docs/audits/product-phase-6-slice-4-closure.json"
+```
+
+The successful JSON result is historical only and must say
+`current_head_covered=false`. Run it alongside, never instead of, the current
+slice's development or finalization gate. Do not edit, move, replace or delete
+the retained manifest or closure record.
+
 Phase 6 continuation foundations are covered by the focused packages
 `internal/secretref`, `internal/netpolicy`, `internal/artifactverify`,
 `internal/backup`, `internal/phase6profile`, and `internal/telemetry`. Their tests prove only bounded

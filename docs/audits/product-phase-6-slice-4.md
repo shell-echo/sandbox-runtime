@@ -108,6 +108,13 @@ The accepted run observed the following immutable identities:
 - sealed evidence-manifest digest
   `sha256:d01b3c41a0094657f18b4014b0649a799ea7fcf0e4ccaf07aa82cdd2052cc0d2`.
 
+The repository-owned
+[`closure record`](product-phase-6-slice-4-closure.json) binds those identities,
+the raw manifest SHA-256 and closure revision
+`9bb6a25860a038f1cc074dd0d3d6b6a5a4e9367b`. Under ADR 0053, later source is
+outside this claim and can retain it only through explicit historical
+verification with `current_head_covered=false`.
+
 The gate ran 150 Desktop mux stress sessions and 750 inputs with zero
 first-frame, input, timeout or cleanup failures. Its 20-session media sample
 recorded a 153,540-microsecond first-frame p95, zero RTP sequence gaps, bounded

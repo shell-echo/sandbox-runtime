@@ -265,6 +265,9 @@ Product Phase 6 authority, ordering, startup gaps, and the first four slices are
 [`adr/0052-phase-6-executor-role-boundary.md`](adr/0052-phase-6-executor-role-boundary.md),
 [`audits/product-phase-6-slice-4.md`](audits/product-phase-6-slice-4.md), and the
 [`strict Slice 4 evidence manifest`](audits/product-phase-6-slice-4-evidence.json).
+ADR 0053 defines default finalization versus explicit historical retained
+verification, with Slice 4's immutable
+[`closure record`](audits/product-phase-6-slice-4-closure.json).
 
 See [`STATUS.md`](STATUS.md) for the complete evidence ledger and
 [`qualification/external-caller-coding-shell-v1.md`](qualification/external-caller-coding-shell-v1.md)
