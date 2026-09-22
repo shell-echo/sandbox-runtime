@@ -322,7 +322,7 @@ func TestSplitArgs(t *testing.T) {
 // TestIsBenignSyncErr checks that Sync errors meaning "target cannot be synced"
 // are treated as benign while a genuine error is not.
 func TestIsBenignSyncErr(t *testing.T) {
-	for _, err := range []error{syscall.EINVAL, syscall.ENOTTY, syscall.ENOTSUP, os.ErrInvalid} {
+	for _, err := range []error{syscall.EINVAL, syscall.EBADF, syscall.ENOTTY, syscall.ENOTSUP, os.ErrInvalid} {
 		if !isBenignSyncErr(err) {
 			t.Errorf("%v should be benign", err)
 		}

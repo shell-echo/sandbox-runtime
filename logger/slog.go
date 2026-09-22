@@ -369,9 +369,12 @@ func fieldsToArgs(fields []Field) []any {
 
 // isBenignSyncErr reports whether a Sync error just means the target does not
 // support flushing (a terminal, pipe, /dev/null, or some virtual filesystems)
-// rather than a genuine failure to persist data.
+// or the inherited standard-error descriptor has already been closed by the
+// process supervisor. stderr is never a durable sink; configured log files are
+// closed separately and their errors remain fatal.
 func isBenignSyncErr(err error) bool {
 	return errors.Is(err, syscall.EINVAL) ||
+		errors.Is(err, syscall.EBADF) ||
 		errors.Is(err, syscall.ENOTTY) ||
 		errors.Is(err, syscall.ENOTSUP) ||
 		errors.Is(err, os.ErrInvalid)
