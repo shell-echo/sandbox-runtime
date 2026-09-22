@@ -21,6 +21,7 @@ import (
 	"math/big"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"os/exec"
@@ -208,6 +209,7 @@ func waitHTTPStatus(t *testing.T, process *gateProcess, client *http.Client, end
 		default:
 		}
 		request, _ := http.NewRequest(http.MethodGet, endpoint, nil)
+		request.Close = true
 		response, err := client.Do(request)
 		if err == nil {
 			_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 4096))
@@ -341,14 +343,69 @@ func (c *gateCA) client(serverName string, certificate tls.Certificate) *http.Cl
 	c.t.Helper()
 	pool := x509.NewCertPool()
 	pool.AddCert(c.certificate)
-	return &http.Client{Timeout: 5 * time.Second, Transport: &http.Transport{TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS13, RootCAs: pool, ServerName: serverName, Certificates: []tls.Certificate{certificate}}}}
+	return &http.Client{Timeout: 5 * time.Second, Transport: &http.Transport{DisableKeepAlives: true, TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS13, RootCAs: pool, ServerName: serverName, Certificates: []tls.Certificate{certificate}}}}
 }
 
 func (c *gateCA) publicClient(serverName string) *http.Client {
 	c.t.Helper()
 	pool := x509.NewCertPool()
 	pool.AddCert(c.certificate)
-	return &http.Client{Timeout: 5 * time.Second, Transport: &http.Transport{TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS13, RootCAs: pool, ServerName: serverName}}}
+	return &http.Client{Timeout: 5 * time.Second, Transport: &http.Transport{DisableKeepAlives: true, TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS13, RootCAs: pool, ServerName: serverName}}}
+}
+
+func TestOneShotTLSClientsLeaveNoIdleTransportConnections(t *testing.T) {
+	ca := newGateCA(t, t.TempDir())
+	_, _, serverCertificate := ca.issue("one-shot-server", nil, []net.IP{net.ParseIP("127.0.0.1")}, "", false, true)
+	_, _, clientCertificate := ca.issue("one-shot-client", nil, nil, "spiffe://phase6.example.test/one-shot", true, false)
+	for name, client := range map[string]*http.Client{
+		"public": ca.publicClient("127.0.0.1"),
+		"mtls":   ca.client("127.0.0.1", clientCertificate),
+	} {
+		transport, ok := client.Transport.(*http.Transport)
+		if !ok || !transport.DisableKeepAlives {
+			t.Fatalf("%s client is not one-shot: %#v", name, client.Transport)
+		}
+	}
+
+	var stateMu sync.Mutex
+	states := make(map[net.Conn]http.ConnState)
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(response, "ok")
+	}))
+	server.TLS = &tls.Config{MinVersion: tls.VersionTLS13, Certificates: []tls.Certificate{serverCertificate}}
+	server.Config.ConnState = func(connection net.Conn, state http.ConnState) {
+		stateMu.Lock()
+		states[connection] = state
+		stateMu.Unlock()
+	}
+	server.StartTLS()
+
+	client := ca.publicClient("127.0.0.1")
+	for requestIndex := 0; requestIndex < 20; requestIndex++ {
+		response, err := client.Get(server.URL)
+		if err != nil {
+			server.Close()
+			t.Fatal(err)
+		}
+		_, readErr := io.Copy(io.Discard, response.Body)
+		closeErr := response.Body.Close()
+		if readErr != nil || closeErr != nil {
+			server.Close()
+			t.Fatalf("request %d body read=%v close=%v", requestIndex, readErr, closeErr)
+		}
+	}
+	server.Close()
+
+	stateMu.Lock()
+	defer stateMu.Unlock()
+	if len(states) != 20 {
+		t.Fatalf("one-shot TLS connection count=%d, want=20", len(states))
+	}
+	for connection, state := range states {
+		if state != http.StateClosed {
+			t.Fatalf("one-shot TLS connection %v retained state %s", connection.RemoteAddr(), state)
+		}
+	}
 }
 
 type postgresAuthority struct {

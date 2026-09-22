@@ -41,6 +41,7 @@ var (
 	evidenceToolFiles = map[string]struct{}{
 		"internal/productphase6evidence/verify.go":      {},
 		"internal/productphase6evidence/verify_test.go": {},
+		"productphase6gate/common_test.go":              {},
 		"productphase6gate/evidence_test.go":            {},
 		"productphase6gate/environment_test.go":         {},
 		"productphase6gate/measurements_test.go":        {},

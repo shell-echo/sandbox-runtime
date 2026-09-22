@@ -289,7 +289,12 @@ func startChromium(t *testing.T, ctx context.Context, runID string) (string, str
 		WebSocketDebuggerURL string `json:"webSocketDebuggerUrl"`
 	}
 	waitFor(t, 30*time.Second, "real Chromium CDP", func() bool {
-		response, requestErr := (&http.Client{Timeout: time.Second}).Get("http://127.0.0.1:" + port + "/json/version")
+		request, requestErr := http.NewRequest(http.MethodGet, "http://127.0.0.1:"+port+"/json/version", nil)
+		if requestErr != nil {
+			return false
+		}
+		request.Close = true
+		response, requestErr := (&http.Client{Timeout: time.Second}).Do(request)
 		if requestErr != nil {
 			return false
 		}

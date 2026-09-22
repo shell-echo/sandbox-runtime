@@ -132,6 +132,7 @@ func TestVerifyRepositoryAllowsOnlyClosedEvidenceToolsAndThenDocumentation(t *te
 		t.Fatal(err)
 	}
 	writeRepositoryFile(t, root, "internal/productphase6evidence/verify.go", "package productphase6evidence\n")
+	writeRepositoryFile(t, root, "productphase6gate/common_test.go", "package productphase6gate\n")
 	runGit(t, root, "add", ".")
 	runGit(t, root, "commit", "-q", "-m", "evidence tools")
 	evidenceRevision := runGit(t, root, "rev-parse", "HEAD")
