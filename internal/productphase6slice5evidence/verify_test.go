@@ -172,6 +172,20 @@ func TestVerifyRejectsIndependentlyValidRoleMaterialEvidenceFromAnotherConfig(t 
 	}
 }
 
+func TestVerifyRejectsResealedRoleEvidenceWithUnresolvedBreakGlassExpiry(t *testing.T) {
+	manifest := validManifest(t)
+	manifest.RoleMaterialAndCredentials.BreakGlass.ExpiredRecords = 0
+	manifest.RoleMaterialAndCredentials.EvidenceDigest = RoleMaterialEvidenceDigest(manifest.RoleMaterialAndCredentials)
+	manifest.ManifestDigest = manifestDigest(manifest)
+	document, err := json.Marshal(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Verify(document); err == nil {
+		t.Fatal("role-material evidence with an unresolved break-glass expiry was accepted")
+	}
+}
+
 func TestVerifyRejectsUnknownDuplicateAndNonCanonicalJSON(t *testing.T) {
 	document, _ := json.Marshal(validManifest(t))
 	unknown := append(append([]byte(nil), document[:len(document)-1]...), []byte(`,"unknown":true}`)...)
