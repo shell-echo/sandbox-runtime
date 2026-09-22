@@ -144,6 +144,20 @@ func TestVerifyRejectsClaimAndSubEvidenceDrift(t *testing.T) {
 	}
 }
 
+func TestVerifyRejectsIndependentlyValidRecordingEvidenceFromAnotherRuntime(t *testing.T) {
+	manifest := validManifest(t)
+	manifest.RecordingTransitAdapter.RuntimeImplementationRevision = strings.Repeat("c", 40)
+	manifest.RecordingTransitAdapter.EvidenceDigest = RecordingEvidenceDigest(manifest.RecordingTransitAdapter)
+	manifest.ManifestDigest = manifestDigest(manifest)
+	document, err := json.Marshal(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Verify(document); err == nil {
+		t.Fatal("recording evidence from a different runtime revision was accepted")
+	}
+}
+
 func TestVerifyRejectsUnknownDuplicateAndNonCanonicalJSON(t *testing.T) {
 	document, _ := json.Marshal(validManifest(t))
 	unknown := append(append([]byte(nil), document[:len(document)-1]...), []byte(`,"unknown":true}`)...)
