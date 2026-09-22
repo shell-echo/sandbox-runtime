@@ -291,7 +291,11 @@ func measureDesktopMedia(t *testing.T, ctx context.Context, environment *gateEnv
 	// the media-policy authority binding before backpressure could be tested.
 	time.Sleep(2 * time.Second)
 	var terminal sessiontermination.Error
-	for attempts := 0; attempts < 4; attempts++ {
+	terminalObserved := false
+	// The reader may have filled the entire signed queue before it observed
+	// backpressure. Drain at most that exact bound, then require the already
+	// recorded first terminal cause.
+	for attempts := 0; attempts <= policy.MaxQueuedFrames; attempts++ {
 		readContext, cancelRead := context.WithTimeout(ctx, 2*time.Second)
 		_, readErr := backpressureSession.ReadVideoRTP(readContext)
 		cancelRead()
@@ -301,7 +305,11 @@ func measureDesktopMedia(t *testing.T, ctx context.Context, environment *gateEnv
 		if !errors.As(readErr, &terminal) {
 			t.Fatalf("Desktop unclassified backpressure: %v", readErr)
 		}
+		terminalObserved = true
 		break
+	}
+	if !terminalObserved {
+		t.Fatal("Desktop backpressure terminal cause was not observed after draining the bounded queue")
 	}
 	measurement.BackpressureStage = string(terminal.Record.Stage)
 	measurement.BackpressureCause = string(terminal.Record.Cause)
