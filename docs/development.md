@@ -1040,6 +1040,13 @@ go run ./cmd/verify-product-phase6-slice5-evidence \
 The retained result must state `current_head_covered=false`; it preserves the
 historical Slice 5 claim and never qualifies successor source.
 
+The accepted Slice 5 archive binds runtime revision
+`c189330c5ed0aa52c60b6b85c5cd9c6b59fbef10`, evidence-tool revision
+`39fd1025f6fa838325aced711d8a024a9ce5d1b6` and manifest digest
+`sha256:e6a6fdcc299c721e1fa2c48009d98a6ca4c52d59318c507af8b68fd8596e840c`.
+Only retained mode may be used after successor source work begins; it does not
+qualify the current `HEAD`.
+
 ## Go and API rules
 
 - accept `context.Context` on blocking or external operations and preserve

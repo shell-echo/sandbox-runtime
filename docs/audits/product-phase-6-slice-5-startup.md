@@ -2,14 +2,15 @@
 
 Date: 2026-09-22
 
-Status: implementation underway. Product Phase 6 remains **4/15**.
+Status: complete. Product Phase 6 is **5/15**.
 
 ## Claim boundary
 
-This audit freezes the Slice 5 work order and records bounded component and
-real-adapter checkpoints. It is not deployment, independent-process,
-break-glass or production evidence. The accepted Slice 4 result remains
-historical under ADR 0053 and does not cover this source.
+This audit freezes the Slice 5 work order and records the completed bounded
+component, real-adapter and local independent-process evidence. It is not HSM,
+distinct-service-account, deployment, HA or production evidence. The accepted
+Slice 4 result remains historical under ADR 0053 and does not cover this
+source.
 
 ## Existing components and gaps
 
@@ -18,7 +19,7 @@ historical under ADR 0053 and does not cover this source.
 | Opaque references | `internal/secretref.Reference`, scoped bindings and the role-owned registry | All six runtime roles now use isolated workload-material agents, while Product and Provider migrations use separate one-shot agents. Distinct service-account/OS-UID deployment identity remains unproven. |
 | Private files | `internal/secretfile` and `secretref.FileProvider` enforce absolute path, regular-file, no-symlink, mode-`0600` and size rules | File secrets are bootstrap/development inputs, not an external secret provider or rotation authority. |
 | Version/window state | `KeyProvider`, `KeyMaterial`, `KeyState`, `RotationWindow`, `RotatingKeySet` and the workload-credential controller | The repository gate proves bounded revision/renewal/revocation behavior, but platform-issued workload identity federation and HA deployment remain unproven. |
-| Local encryption | Existing AES envelope helper and local recording store | Raw local master keys remain process-held; no KMS/HSM seal/open path is connected to recording, tickets or data. |
+| Envelope encryption | Existing AES envelope helper, local recording store and the qualified Vault Transit recording adapter | Vault software Transit is real KMS-adapter evidence, not HSM evidence; Product recording-content and ticket/data consumers remain deliberately uncomposed. |
 | Dependency configuration | Phase 6 dependency references are strictly parsed | String validation does not resolve a secret, prove workload identity or enforce provider-side revocation. |
 | Emergency access | Persistent break-glass controller and metadata-only hash-chained audit | The repository gate proves dual approval, expiry, revocation and single online consumption; production operator identity, external audit export and deployment remain unproven. |
 
@@ -212,6 +213,39 @@ one-shot socket cannot reconnect, verifies zero migration-role connections
 before runtime bind, and leaves no run-owned container or socket. This is not
 the distinct-service-account deployment gate.
 
+## Formal immutable gate and closure
+
+The formal campaign passed with one immutable runtime/evidence pair:
+
+- runtime implementation revision:
+  `c189330c5ed0aa52c60b6b85c5cd9c6b59fbef10`;
+- evidence-tool revision:
+  `39fd1025f6fa838325aced711d8a024a9ce5d1b6`;
+- Desktop candidate image digest:
+  `sha256:669f3baff87ae5eda45e9957e6cf25804ad8ad95ef47bbe9b8f14a76e71fc5cb`;
+- Desktop candidate manifest digest:
+  `sha256:90c7a5a8890feb9e841561a498ebd1bec4b2bc1346cff2ee1b6a75bb79cb3fc6`;
+- aggregate manifest digest:
+  `sha256:e6a6fdcc299c721e1fa2c48009d98a6ca4c52d59318c507af8b68fd8596e840c`.
+
+The six-role gate ran 150 Desktop mux sessions and 750 inputs with zero
+first-frame, input, timeout and cleanup failures. Its 20-session media sample
+recorded a 163052 microsecond first-frame p95, zero RTP sequence gaps,
+backpressure at the bounded media-reader queue, recovery, and an unchanged
+41-to-41 goroutine boundary. Six renewable runtime agents and two
+non-renewable migration agents were observed; break-glass ended with one
+consumed, one revoked and one expired record, a valid 15-entry hash chain, and
+zero plaintext matches across the declared scan boundary. The independent
+Vault Transit/PostgreSQL gate passed all eight recording scenarios. Both gates
+ended with the exact declared run-owned resource counts at zero.
+
+The repository-wide race/shuffle suite, vet, both Contract verifiers, strict
+aggregate verifier and retained Slice 4 verifier passed after the formal gate.
+The byte-identical manifest is archived as
+`docs/audits/product-phase-6-slice-5-evidence.json`; its closure record binds
+the documentation-only archive revision and preserves this as a historical
+claim once Slice 6 changes begin.
+
 ## Non-claims and next action
 
 All six runtime roles now use separate instances of the closed role-owned
@@ -232,7 +266,8 @@ schema rejects attempted recording-content enablement. Composition is fixed to
 Slice 8, deployment rejection to Slice 11 and published-artifact black-box E2E
 to Slice 14.
 
-Phase 6 still remains 4/15 until a clean immutable runtime revision, a separate
-closed evidence-tool revision, both real gates, the aggregate Slice 5 manifest,
-root race/vet, both Contract verifiers and retained Slice 4 verification all
-pass. No placeholder manifest is accepted.
+Phase 6 advances to 5/15. The next work is Slice 6. This result does not compose
+Product recording content, qualify an HSM, establish distinct OS UIDs or
+service accounts, publish signed artifacts, validate a deployment, establish
+HA or claim production readiness. The fixed Slice 8/11/14 follow-on gates
+remain mandatory.

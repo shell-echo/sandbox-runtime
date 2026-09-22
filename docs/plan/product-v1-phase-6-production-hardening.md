@@ -2,11 +2,11 @@
 
 Date: 2026-09-22
 
-Status: **4/15 complete**. Slice 4 passed its corrective immutable candidate,
-six-process gate and strict evidence verification. Repository-side hardening
-foundations for Slices 5-10 and
-release-profile checks for Slices 7/11/14 are present, but their deployment and
-independent-observation gates remain open. The order is fixed by ADR 0051.
+Status: **5/15 complete**. Slices 4 and 5 passed their immutable real-process
+gates and strict evidence verification. Repository-side hardening foundations
+for Slices 6-10 and release-profile checks for Slices 7/11/14 are present, but
+their deployment and independent-observation gates remain open. The order is
+fixed by ADR 0051.
 
 ## Goal and claim boundary
 
@@ -122,8 +122,9 @@ revocation and break-glass audit. No long-lived secret is accepted inline.
 Gate: overlap rotation, stale-key rejection, KMS loss, cache expiry, restart,
 revocation and plaintext-exclusion evidence.
 
-Status: underway; not complete. ADR 0054 and the Slice 5 startup audit freeze
-the work order. In addition to canonical scoped bindings, the bounded cache and
+Status: complete within the bounded local independent-process and real-adapter
+scope. ADR 0054 and the Slice 5 audit freeze the work order. In addition to
+canonical scoped bindings, the bounded cache and
 opaque envelope-key port, Product now has a tenant-bound KMS recording adapter
 and a strict Vault Transit client. A digest-pinned Vault TLS integration proves
 recording round-trip, v1/v2 overlap rotation, restart reconstruction, KMS-loss
@@ -146,15 +147,21 @@ controller enforces two distinct approvals, online single consumption and a
 hash-chained metadata-only audit. Focused real-process gates pass, including
 controller restart, Vault/agent loss, revocation, expiry and exact cleanup.
 
-The completion gate is now the immutable dual-evidence campaign: the real
-six-role material/credential gate and the real Vault Transit plus PostgreSQL
-recording-lifecycle gate must bind the same runtime/evidence revisions and pass
-the new strict Slice 5 aggregate verifier. Until that formal campaign, root
-validation and retained Slice 4 verification pass, the Phase 6 count remains
-4/15. Product recording-content composition remains explicitly false; Slice 8
-must compose it with object storage, Slice 11 must reject premature deployment
-enablement, and Slice 14 must run published-artifact black-box encrypted
-recording E2E before RC eligibility.
+The immutable dual-evidence campaign passed. The real six-role
+material/credential gate and the real Vault Transit plus PostgreSQL
+recording-lifecycle gate bind runtime revision
+`c189330c5ed0aa52c60b6b85c5cd9c6b59fbef10`, evidence-tool revision
+`39fd1025f6fa838325aced711d8a024a9ce5d1b6`, Desktop candidate image digest
+`sha256:669f3baff87ae5eda45e9957e6cf25804ad8ad95ef47bbe9b8f14a76e71fc5cb`
+and manifest digest
+`sha256:e6a6fdcc299c721e1fa2c48009d98a6ca4c52d59318c507af8b68fd8596e840c`.
+Root race/vet, both Contract verifiers, retained Slice 4 verification and exact
+zero-resource cleanup also passed. Product recording-content composition
+remains explicitly false; Slice 8 must compose it with object storage, Slice 11
+must reject premature deployment enablement, and Slice 14 must run
+published-artifact black-box encrypted recording E2E before RC eligibility.
+See the
+[`strict Slice 5 evidence manifest`](../audits/product-phase-6-slice-5-evidence.json).
 
 ### Slice 6 — TLS, network policy and least privilege
 
@@ -261,8 +268,8 @@ an earlier claim.
 
 ## Current stop point
 
-Slices 1-4 are implemented. Slice 5, production secret references, KMS and
-rotation, is underway at its recording/Vault real-adapter checkpoint. The current result is bounded local independent-process
-evidence using a non-release Desktop candidate; no complete public Product
-E2E, published application supply chain, deployment, HA, hostile-multitenant,
-SLO-attainment, or production qualification is claimed.
+Slices 1-5 are implemented. Slice 6, TLS, network policy and least privilege,
+is next. The current result is bounded local independent-process evidence using
+a non-release Desktop candidate; no complete public Product recording-content
+E2E, HSM, published application supply chain, deployment, HA,
+hostile-multitenant, SLO-attainment or production qualification is claimed.

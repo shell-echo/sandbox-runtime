@@ -228,7 +228,10 @@ recorded in `docs/migrations/product-phase-6-recording-key-handle-v1.md`.
   processes. It proves rotation, revocation, expiry, Vault and agent loss,
   controller restart, dual approval, single consume, audit integrity,
   plaintext exclusion and exact cleanup.
-- This ADR records the completed implementation boundary but does not itself
-  advance the Phase 6 counter. Slice 5 remains open until both real gates bind
-  the same immutable runtime/evidence revisions, the strict aggregate manifest
-  verifies, and the required repository-wide checks pass.
+- This ADR records the completed implementation boundary. The two real gates
+  bind runtime revision `c189330c5ed0aa52c60b6b85c5cd9c6b59fbef10` and
+  evidence-tool revision `39fd1025f6fa838325aced711d8a024a9ce5d1b6` in the
+  accepted manifest digest
+  `sha256:e6a6fdcc299c721e1fa2c48009d98a6ca4c52d59318c507af8b68fd8596e840c`.
+  The strict aggregate verifier and required repository-wide checks passed, so
+  Slice 5 advances the Phase 6 counter to 5/15 without widening its non-claims.
