@@ -107,6 +107,7 @@ type Profile struct {
 	EnvironmentDigest      string            `json:"environment_digest"`
 	PrincipalProfileDigest string            `json:"principal_profile_digest"`
 	Principals             []Principal       `json:"principals"`
+	Networks               []Network         `json:"networks"`
 	External               []ExternalService `json:"external_services"`
 	TrustEdges             []TrustEdge       `json:"trust_edges"`
 	EgressPolicies         []EgressPolicy    `json:"egress_policies"`
@@ -143,6 +144,13 @@ type Resources struct {
 	MemoryBytes int64 `json:"memory_bytes"`
 	CPUMillis   int64 `json:"cpu_millis"`
 	PIDs        int64 `json:"pids"`
+}
+
+type Network struct {
+	Name       string   `json:"name"`
+	Kind       string   `json:"kind"`
+	Internal   bool     `json:"internal"`
+	Principals []string `json:"principals"`
 }
 
 type Mount struct {
@@ -259,7 +267,7 @@ func (p Profile) Validate() error { //nolint:gocyclo
 	if p.Protocol != ProtocolID || p.Version != Version || !namePattern.MatchString(p.Revision) ||
 		!digestPattern.MatchString(p.ProfileDigest) || !digestPattern.MatchString(p.EnvironmentDigest) ||
 		!digestPattern.MatchString(p.PrincipalProfileDigest) || len(p.Principals) < len(requiredPrincipals) || len(p.Principals) > 128 ||
-		len(p.External) != 3 || len(p.TrustEdges) < 1 || len(p.TrustEdges) > 512 || len(p.EgressPolicies) > 128 ||
+		len(p.Networks) < 1 || len(p.Networks) > 256 || len(p.External) != 3 || len(p.TrustEdges) < 1 || len(p.TrustEdges) > 512 || len(p.EgressPolicies) > 128 ||
 		!exactStrings(p.CleanupClasses, []string{"connections", "containers", "files", "networks", "processes", "sockets"}) {
 		return ErrInvalidProfile
 	}
@@ -269,7 +277,7 @@ func (p Profile) Validate() error { //nolint:gocyclo
 	}
 	principals := make(map[string]Principal, len(p.Principals))
 	principalDeployments := make(map[string]string, len(p.Principals))
-	uids, gids, identities := map[uint32]struct{}{}, map[uint32]struct{}{}, map[string]struct{}{}
+	uids, gids, identities, seccomp := map[uint32]struct{}{}, map[uint32]struct{}{}, map[string]struct{}{}, map[string]struct{}{}
 	previous := ""
 	for _, principal := range p.Principals {
 		if principal.Name <= previous || validatePrincipal(principal, registry) != nil {
@@ -285,6 +293,9 @@ func (p Profile) Validate() error { //nolint:gocyclo
 		if _, exists := gids[principal.GID]; exists {
 			return ErrInvalidProfile
 		}
+		if _, exists := seccomp[principal.SeccompDigest]; exists {
+			return ErrInvalidProfile
+		}
 		if principal.AuthorizationPrincipal != nil {
 			if _, exists := principalDeployments[principal.PrincipalDigest]; exists {
 				return ErrInvalidProfile
@@ -295,7 +306,7 @@ func (p Profile) Validate() error { //nolint:gocyclo
 			principalDeployments[principal.PrincipalDigest] = principal.Name
 			identities[principal.TLS.URI] = struct{}{}
 		}
-		uids[principal.UID], gids[principal.GID] = struct{}{}, struct{}{}
+		uids[principal.UID], gids[principal.GID], seccomp[principal.SeccompDigest] = struct{}{}, struct{}{}, struct{}{}
 		principals[principal.Name] = principal
 	}
 	for name, kind := range requiredPrincipals {
@@ -317,6 +328,9 @@ func (p Profile) Validate() error { //nolint:gocyclo
 				return ErrInvalidProfile
 			}
 		}
+	}
+	if err := validateNetworks(p.Networks, principals, p.EgressPolicies); err != nil {
+		return err
 	}
 	external, err := validateExternal(p.External)
 	if err != nil {
@@ -487,6 +501,87 @@ func validateTLS(value TLSIdentity) error {
 		previous = name
 	}
 	return nil
+}
+
+func validateNetworks(values []Network, principals map[string]Principal, egressPolicies []EgressPolicy) error { //nolint:gocyclo
+	networks := make(map[string]Network, len(values))
+	previous := ""
+	for _, network := range values {
+		if network.Name <= previous || !namePattern.MatchString(network.Name) || len(network.Principals) < 1 ||
+			!sortedUniqueNames(network.Principals) {
+			return ErrInvalidProfile
+		}
+		previous = network.Name
+		switch network.Kind {
+		case "role_internal", "trust_edge":
+			if !network.Internal {
+				return ErrInvalidProfile
+			}
+		case "external_uplink":
+			if network.Internal || len(network.Principals) != 1 {
+				return ErrInvalidProfile
+			}
+			principal, ok := principals[network.Principals[0]]
+			if !ok || principal.Kind != "egress_broker" {
+				return ErrInvalidProfile
+			}
+		default:
+			return ErrInvalidProfile
+		}
+		for _, name := range network.Principals {
+			principal, ok := principals[name]
+			if !ok || !slicesContains(principal.Networks, network.Name) {
+				return ErrInvalidProfile
+			}
+		}
+		networks[network.Name] = network
+	}
+	for name, principal := range principals {
+		externalCount := 0
+		for _, networkName := range principal.Networks {
+			network, ok := networks[networkName]
+			if !ok || !slicesContains(network.Principals, name) {
+				return ErrInvalidProfile
+			}
+			if network.Kind == "external_uplink" {
+				externalCount++
+			}
+		}
+		if principal.Kind == "egress_broker" {
+			if externalCount != 1 {
+				return ErrInvalidProfile
+			}
+		} else if externalCount != 0 {
+			return ErrInvalidProfile
+		}
+	}
+	for _, policy := range egressPolicies {
+		principal, principalOK := principals[policy.Principal]
+		broker, brokerOK := principals[policy.Broker]
+		if !principalOK || !brokerOK {
+			return ErrInvalidProfile
+		}
+		sharedInternal := 0
+		for _, networkName := range principal.Networks {
+			network := networks[networkName]
+			if network.Internal && slicesContains(broker.Networks, networkName) {
+				sharedInternal++
+			}
+		}
+		if sharedInternal != 1 {
+			return ErrInvalidProfile
+		}
+	}
+	return nil
+}
+
+func slicesContains(values []string, value string) bool {
+	for _, candidate := range values {
+		if candidate == value {
+			return true
+		}
+	}
+	return false
 }
 
 func validateExternal(values []ExternalService) (map[string]ExternalService, error) {

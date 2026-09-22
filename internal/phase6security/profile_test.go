@@ -46,8 +46,11 @@ func validProfile() Profile {
 	principals := make([]Principal, 0, len(names))
 	for index, name := range names {
 		kind := requiredPrincipals[name]
-		networks := []string{"role-internal"}
+		networks := []string{"network-" + name}
 		external, blocked := false, true
+		if name == "product-runtime" {
+			networks = []string{"product-internal"}
+		}
 		if name == "egress-broker-product" {
 			kind = "egress_broker"
 			networks, external, blocked = []string{"external-uplink", "product-internal"}, true, false
@@ -55,7 +58,7 @@ func validProfile() Profile {
 		principal := Principal{
 			Name: name, Kind: kind, ImageReference: image, ImageDigest: digest,
 			UID: uint32(20000 + index), GID: uint32(30000 + index),
-			ReadOnlyRootFilesystem: true, NoNewPrivileges: true, DroppedCapabilities: []string{"ALL"}, SeccompDigest: digest,
+			ReadOnlyRootFilesystem: true, NoNewPrivileges: true, DroppedCapabilities: []string{"ALL"}, SeccompDigest: testDigest("seccomp/" + name),
 			Resources: Resources{MemoryBytes: 64 << 20, CPUMillis: 250, PIDs: 32}, Networks: networks,
 			ExternalUplink: external, DirectEgressBlocked: blocked,
 		}
@@ -71,6 +74,18 @@ func validProfile() Profile {
 		}
 		principals = append(principals, principal)
 	}
+	networks := make([]Network, 0, len(principals)+1)
+	for _, principal := range principals {
+		if principal.Name == "egress-broker-product" || principal.Name == "product-runtime" {
+			continue
+		}
+		networks = append(networks, Network{Name: principal.Networks[0], Kind: "role_internal", Internal: true, Principals: []string{principal.Name}})
+	}
+	networks = append(networks,
+		Network{Name: "external-uplink", Kind: "external_uplink", Principals: []string{"egress-broker-product"}},
+		Network{Name: "product-internal", Kind: "role_internal", Internal: true, Principals: []string{"egress-broker-product", "product-runtime"}},
+	)
+	sort.Slice(networks, func(first, second int) bool { return networks[first].Name < networks[second].Name })
 	uri := func(name string) string {
 		for _, principal := range principals {
 			if principal.Name == name {
@@ -96,7 +111,7 @@ func validProfile() Profile {
 			FromPrincipalDigest: identities["product-runtime"].Digest(), ExternalIdentityDigest: external[1].IdentityDigest, CrossDomain: true, TenantScope: "bound", MaxConnectionSeconds: 300},
 	}
 	profile := Profile{Protocol: ProtocolID, Version: Version, Revision: "slice6-security-1", EnvironmentDigest: environmentDigest,
-		PrincipalProfileDigest: principalProfileDigest, Principals: principals, External: external, TrustEdges: edges,
+		PrincipalProfileDigest: principalProfileDigest, Principals: principals, Networks: networks, External: external, TrustEdges: edges,
 		EgressPolicies: []EgressPolicy{{ID: "product-egress", Revision: "policy-1", Principal: "product-runtime", Broker: "egress-broker-product",
 			PrincipalDigest: identities["product-runtime"].Digest(), BrokerDigest: identities["egress-broker-product"].Digest(), LeaseSeconds: 60, DNSMaxAnswers: 8,
 			DenyRawIP: true, DenyAlternateDNS: true, DenyProxyEnvironment: true, DenyRedirectAuthority: true, DenyMetadataPrivateRanges: true,
@@ -130,6 +145,7 @@ func TestProfileRejectsAuthorityAndEnforcementDrift(t *testing.T) {
 	tests := map[string]func(*Profile){
 		"missing principal": func(p *Profile) { p.Principals = p.Principals[1:] },
 		"shared uid":        func(p *Profile) { p.Principals[1].UID = p.Principals[0].UID },
+		"shared seccomp":    func(p *Profile) { p.Principals[1].SeccompDigest = p.Principals[0].SeccompDigest },
 		"mutable image":     func(p *Profile) { p.Principals[0].ImageReference = "registry.example.test/app:latest" },
 		"wildcard SAN":      func(p *Profile) { p.Principals[0].TLS.DNSNames = []string{"*.example.test"} },
 		"late rotation":     func(p *Profile) { p.Principals[0].TLS.RotateAfterSeconds = 700 },
@@ -148,6 +164,20 @@ func TestProfileRejectsAuthorityAndEnforcementDrift(t *testing.T) {
 		"external digest tamper":  func(p *Profile) { p.External[0].IdentityDigest = testDigest("tampered") },
 		"cross environment splice": func(p *Profile) {
 			p.EnvironmentDigest = testDigest("other-environment")
+		},
+		"external uplink on role": func(p *Profile) {
+			for index := range p.Networks {
+				if p.Networks[index].Name == "external-uplink" {
+					p.Networks[index].Principals = append(p.Networks[index].Principals, "product-runtime")
+				}
+			}
+		},
+		"network membership drift": func(p *Profile) {
+			for index := range p.Networks {
+				if p.Networks[index].Name == "product-internal" {
+					p.Networks[index].Principals = []string{"egress-broker-product"}
+				}
+			}
 		},
 		"dangling resource controller": func(p *Profile) {
 			for index := range p.Principals {
@@ -217,6 +247,14 @@ func TestDeploymentRenameDoesNotChangeAuthorizationIdentity(t *testing.T) {
 		if profile.TrustEdges[index].From == "egress-broker-product" {
 			profile.TrustEdges[index].From = "product-egress-service"
 		}
+	}
+	for networkIndex := range profile.Networks {
+		for principalIndex := range profile.Networks[networkIndex].Principals {
+			if profile.Networks[networkIndex].Principals[principalIndex] == "egress-broker-product" {
+				profile.Networks[networkIndex].Principals[principalIndex] = "product-egress-service"
+			}
+		}
+		sort.Strings(profile.Networks[networkIndex].Principals)
 	}
 	sort.Slice(profile.Principals, func(first, second int) bool { return profile.Principals[first].Name < profile.Principals[second].Name })
 	profile.ProfileDigest = profile.Digest()
