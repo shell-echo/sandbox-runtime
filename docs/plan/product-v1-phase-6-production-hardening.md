@@ -173,6 +173,12 @@ resource limits.
 Gate: identity substitution, downgrade, cross-role/cross-tenant traffic,
 metadata, DNS rebinding, policy outage and privilege-escalation denial.
 
+Status: underway. ADR 0055 and the Slice 6 startup audit freeze real Vault PKI,
+live TLS rotation/revocation, role-isolated internal networks with alias-only
+egress brokers, exact container least privilege and the complete privileged
+principal inventory. Library checks or configuration text do not advance the
+counter.
+
 ### Slice 7 — application supply chain
 
 Pin builder/runtime bases, produce reproducible multi-platform application

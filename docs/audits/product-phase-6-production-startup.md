@@ -3,8 +3,8 @@
 Date: 2026-09-20
 
 Status: startup authority and gap audit complete. This document records the
-Slice 1 baseline; current implementation progress is **2/15** after the
-separate Slice 2 production-kernel gate.
+Slice 1 baseline; current implementation progress is **5/15** after the
+immutable Slice 5 dual-gate closure.
 
 ## Question audited
 

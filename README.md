@@ -20,7 +20,7 @@ general production readiness.
 | Product v1 Phase 3 | **13/13 complete** for the bounded standalone topology |
 | Product v1 Phase 4 Browser | **13/13 complete** for the bounded same-repository separate-process topology |
 | Product v1 Phase 5 Desktop | **15/15 complete** for the bounded same-repository independent-process topology; 5 roles and 14 strict scenarios pass, with exact-topology dependency-derived advertisement |
-| Product v1 Phase 6 production hardening | **4/15 complete**; Slice 4's independent Product, Gateway, Provider, Guest, Browser and Desktop processes pass the strict 12-scenario local gate with real Chromium/Desktop media and input, restart/fault/drain coverage, and exact cleanup; public Product E2E, published Phase 6 artifacts, deployment and production readiness remain unproved |
+| Product v1 Phase 6 production hardening | **5/15 complete**; Slice 5's immutable six-role credential/break-glass and Vault Transit/PostgreSQL gates pass with strict retained evidence; Product recording-content composition, HSM, published Phase 6 artifacts, deployment and production readiness remain unproved |
 | Coding/shell qualification | **Qualified** for the exact caller, Provider revisions, topology, profile, and scenarios recorded below |
 | Latest core CI | [Passed](https://github.com/shell-echo/sandbox-runtime/actions/runs/35204434771) |
 
@@ -202,7 +202,7 @@ hostile multi-tenant, independently implemented caller, or production
 readiness.
 
 [Product v1 Phase 6](docs/plan/product-v1-phase-6-production-hardening.md)
-is **4/15 complete**. Slice 1 adds the independently runnable
+is **5/15 complete**. Slice 1 adds the independently runnable
 `sandbox-runtime product serve` process with strict development-only
 configuration, private PostgreSQL/identity files, real Product migrations and
 store, separate liveness/readiness, empty capability advertisement, and
@@ -226,14 +226,23 @@ Slice 4 adds separate `gateway serve`, `guest serve`, `browser serve`, and
 boundaries; sealed Browser/Desktop restricted-egress identities; and a strict
 six-role/twelve-scenario local gate with exact cleanup. The accepted Desktop
 image is explicitly `local-candidate-non-release`; this does not prove public
-Product E2E, artifact publication, deployment or production readiness. Slice 5
-secret-reference/KMS/rotation qualification is next. The
+Product E2E, artifact publication, deployment or production readiness. The
 [Slice 4 record](docs/audits/product-phase-6-slice-4.md) and
 [strict evidence manifest](docs/audits/product-phase-6-slice-4-evidence.json)
 bind runtime revision `78f5987fda45873e497bce6d336e29dd4a61dc74`,
 evidence-tool revision `e2f4abacf03418c7b18f179c3e7459292d8626df`, and
 manifest digest
 `sha256:d01b3c41a0094657f18b4014b0649a799ea7fcf0e4ccaf07aa82cdd2052cc0d2`.
+
+Slice 5 adds role-owned secret registries, six renewable runtime and two
+one-shot migration credentials, persistent dual-control break-glass authority,
+and real Vault Transit recording encryption with a fresh PostgreSQL lifecycle
+gate. Its immutable manifest binds runtime
+`c189330c5ed0aa52c60b6b85c5cd9c6b59fbef10`, evidence tool
+`39fd1025f6fa838325aced711d8a024a9ce5d1b6`, and digest
+`sha256:e6a6fdcc299c721e1fa2c48009d98a6ca4c52d59318c507af8b68fd8596e840c`.
+Product recording-content composition and HSM evidence remain false. Slice 6
+TLS/network/least-privilege implementation is underway under ADR 0055.
 
 ## What the project provides
 

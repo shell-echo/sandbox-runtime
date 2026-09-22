@@ -170,7 +170,7 @@ Current verified state:
   parent checks to evidence/CI baseline
   `59de37d5ee22776305dfaab866c25ea6bd5406bc`; full E2E race/shuffle, vet,
   and all eight clean-checkout checks pass; and
-- Product v1 Phase 6 production hardening is **4/15 complete** under ADR 0051
+- Product v1 Phase 6 production hardening is **5/15 complete** under ADR 0051
   and the fixed Phase 6 plan. The startup audit distinguishes existing
   components and same-repository gates from deployable/operable/production
   authority. Slice 1 adds `sandbox-runtime product serve`, strict
@@ -205,23 +205,32 @@ Current verified state:
   `sha256:0592a69e8f85125360eb6805132b3654324ab9a56c0ea019ea3dc7aade103d4e`
   are fixed by the accepted evidence. The Desktop OCI remains a non-release
   local candidate; public Product E2E, publication, deployment and production
-  readiness remain open. Slice 5 is underway but does not advance the count:
+  readiness remain open. Slice 5 is complete within its bounded local
+  independent-process and real-adapter evidence scope:
   ADR 0054 adds a repository-private canonical purpose/tenant/role/version
   secret binding, an exact adapter over the existing secret provider, a
   bounded invalidation-safe cache and an opaque envelope-key port. The existing
   Product recording port now carries explicit tenant scope; a tenant-bound KMS
   store wraps one random DEK per recording and a strict Vault Transit adapter
   passes a digest-pinned TLS integration with overlap rotation, restart,
-  dependency loss and cleanup. Product is the first migrated production role:
-  its no-cache one-shot migration command/agent is physically separate from
+  dependency loss and cleanup. Product's no-cache one-shot migration
+  command/agent is physically separate from
   the v2 runtime registry for the TLS pair, runtime PostgreSQL DSN and identity
   key ring. A real Vault KV/TLS gate and real Product/PostgreSQL process gate
   prove pre-migration bind denial, cross-purpose denial, exact bootstrap
-  cleanup, agent restart/loss and readiness closure/recovery. The local gate
-  records `distinct_os_uid_established=false`. This remains a
-  vertical checkpoint: the other five role migrations, credential
-  issuer/renewal, all-role rotation, break-glass and independent-process gates
-  remain open.
+  cleanup, agent restart/loss and readiness closure/recovery. All six runtime
+  roles use separate material agents; six renewable runtime and two one-shot
+  migration credentials, controller restart, Vault/agent loss, revocation,
+  expiry, dual-control break-glass, plaintext exclusion and exact cleanup pass
+  the immutable gate. Runtime revision
+  `c189330c5ed0aa52c60b6b85c5cd9c6b59fbef10`, evidence-tool revision
+  `39fd1025f6fa838325aced711d8a024a9ce5d1b6` and manifest digest
+  `sha256:e6a6fdcc299c721e1fa2c48009d98a6ca4c52d59318c507af8b68fd8596e840c`
+  are retained. The local gate records `distinct_os_uid_established=false`;
+  Product recording-content composition, HSM, deployment and production
+  readiness remain false. Slice 6 is underway under ADR 0055 with real Vault
+  PKI, live TLS rotation/revocation, role-isolated egress enforcement and exact
+  container least privilege as its frozen order.
 
 The qualification applies only to Provider revision
 `170459266af5f4fad359ca8c63f2ae19741055c5`, external-caller revision

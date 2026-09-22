@@ -3,8 +3,8 @@
 Date: 2026-09-20
 
 This record separates repository-owned implementation foundations from the
-external evidence still required after Slice 4. Foundation packages alone do
-not advance the Phase 6 completion counter.
+external evidence still required after Slice 4. Slice 5 subsequently closed at
+5/15; foundation packages alone do not advance the Phase 6 completion counter.
 
 ## Repository-owned foundations added in this continuation
 
@@ -47,12 +47,12 @@ treated as capability readiness.
 
 ## Gates that remain open
 
-The remaining foundations do not establish real KMS/HSM behavior, certificate
+The remaining foundations do not establish HSM behavior, certificate
 issuance/rotation, Valkey/object-store independent failure domains, signed
 multi-platform application publication, backup/PITR RPO/RTO, dashboards or an
 SLO measurement window, Kubernetes/Apple Container role deployment, version
 skew/canary/rollback, hostile multi-tenant isolation, or an independently
 administered release candidate. Slice 4's local six-process evidence does not
 establish complete public Product E2E or widen its explicit non-claims. Slices
-5-15 retain their own gates, and Slices 14-15 cannot be marked complete without
+6-15 retain their own gates, and Slices 14-15 cannot be marked complete without
 externally observed topology and operator acceptance evidence.
