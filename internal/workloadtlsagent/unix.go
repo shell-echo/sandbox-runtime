@@ -1,7 +1,6 @@
 package workloadtlsagent
 
 import (
-	"bufio"
 	"context"
 	"crypto"
 	"crypto/ecdsa"
@@ -31,6 +30,7 @@ type ServerConfig struct {
 	MaxConnections    int
 	ReplayCapacity    int
 	Now               func() time.Time
+	PeerCRLProvider   PeerCRLProvider
 }
 
 type Server struct {
@@ -38,6 +38,7 @@ type Server struct {
 	socketPath        string
 	socketInfo        os.FileInfo
 	manager           *Manager
+	peerCRLProvider   PeerCRLProvider
 	expectedClientUID uint32
 	expectedClientGID uint32
 	capacity          chan struct{}
@@ -64,7 +65,7 @@ func Listen(config ServerConfig, manager *Manager) (*Server, error) {
 		return nil, ErrUnavailable
 	}
 	return &Server{listener: listener, socketPath: config.SocketPath, socketInfo: socketInfo,
-		manager: manager, expectedClientUID: config.ExpectedClientUID,
+		manager: manager, peerCRLProvider: config.PeerCRLProvider, expectedClientUID: config.ExpectedClientUID,
 		expectedClientGID: config.ExpectedClientGID, capacity: make(chan struct{}, config.MaxConnections), now: config.Now,
 		replayCapacity: config.ReplayCapacity, replay: make(map[string]time.Time, config.ReplayCapacity),
 		tracker: restrictedunix.NewTracker()}, nil
@@ -145,6 +146,9 @@ func (s *Server) handle(parent context.Context, connection *net.UnixConn) {
 	now := s.now().UTC()
 	request, err := decodeRequest(document, now)
 	if err != nil {
+		if s.peerCRLProvider != nil {
+			s.handlePeerCRL(parent, connection, document, now)
+		}
 		return
 	}
 	deadline, _ := parseProtocolTime(request.Deadline)
@@ -400,9 +404,8 @@ func (s *RemoteSigner) Sign(_ io.Reader, digest []byte, opts crypto.SignerOpts) 
 }
 
 func readFrame(reader io.Reader, maximum int) ([]byte, error) {
-	buffered := bufio.NewReaderSize(reader, min(maximum+4, 64<<10))
 	var header [4]byte
-	if _, err := io.ReadFull(buffered, header[:]); err != nil {
+	if _, err := io.ReadFull(reader, header[:]); err != nil {
 		return nil, ErrUnavailable
 	}
 	length := int(binary.BigEndian.Uint32(header[:]))
@@ -410,7 +413,7 @@ func readFrame(reader io.Reader, maximum int) ([]byte, error) {
 		return nil, ErrUnavailable
 	}
 	document := make([]byte, length)
-	if _, err := io.ReadFull(buffered, document); err != nil {
+	if _, err := io.ReadFull(reader, document); err != nil {
 		clear(document)
 		return nil, ErrUnavailable
 	}

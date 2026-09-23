@@ -406,6 +406,14 @@ DER cannot select a source. It allows two directions to reference one actual
 issuer without implying separate CAs from differing anchor names. This
 document is not yet loaded by production controller/agent commands and does
 not establish source caching, least-privilege ACLs or full edge coverage.
+The existing restricted Unix signer socket can now accept the distinct v2
+peer-CRL request only when an explicit provider capability is configured;
+the v1 snapshot/sign decoder and client remain intact. A real Unix socket
+round trip verifies the returned issuer-bound signed CRL, while replay,
+capacity, wrong-edge, v1-only fallback, cancellation and upstream-cancel
+tests pass. This provider is still a test fixture, not the production
+controller-backed authorization path; the role commands do not require v2
+yet, and no live mTLS admission or existing-connection drain is proven.
 
 ## Exact final inventory
 

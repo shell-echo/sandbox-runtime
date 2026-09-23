@@ -29,6 +29,10 @@ type unixFixture struct {
 }
 
 func newUnixFixture(t *testing.T, maximumConnections int) *unixFixture {
+	return newUnixFixtureWithPeer(t, maximumConnections, nil)
+}
+
+func newUnixFixtureWithPeer(t *testing.T, maximumConnections int, peer PeerCRLProvider) *unixFixture {
 	t.Helper()
 	now := time.Now().UTC().Truncate(time.Second)
 	manager, issuer := testManager(t, &now)
@@ -53,7 +57,7 @@ func newUnixFixture(t *testing.T, maximumConnections int) *unixFixture {
 	}
 	server, err := Listen(ServerConfig{SocketPath: filepath.Join(dir, "agent.sock"), SocketUID: uid, SocketGID: gid, AgentGID: gid,
 		ExpectedClientUID: uid, ExpectedClientGID: gid, MaxConnections: maximumConnections, ReplayCapacity: 128,
-		Now: func() time.Time { return now }}, manager)
+		Now: func() time.Time { return now }, PeerCRLProvider: peer}, manager)
 	if err != nil {
 		t.Fatalf("Listen() = %v", err)
 	}
