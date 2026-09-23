@@ -42,11 +42,12 @@ type VaultTokenSource interface {
 }
 
 type VaultConfig struct {
-	Endpoint         string
-	Mount            string
-	AllowedPolicies  map[string]string
-	OperationTimeout time.Duration
-	Now              func() time.Time
+	Endpoint                    string
+	Mount                       string
+	AllowedPolicies             map[string]string
+	OperationTimeout            time.Duration
+	Now                         func() time.Time
+	RequireImmediateCompleteCRL bool
 }
 
 type IssuedCertificate struct {
@@ -85,13 +86,14 @@ func (s *RevocationSnapshot) Destroy() {
 }
 
 type VaultClient struct {
-	endpoint string
-	mount    string
-	policies map[string]string
-	client   *http.Client
-	tokens   VaultTokenSource
-	timeout  time.Duration
-	now      func() time.Time
+	endpoint                    string
+	mount                       string
+	policies                    map[string]string
+	client                      *http.Client
+	tokens                      VaultTokenSource
+	timeout                     time.Duration
+	now                         func() time.Time
+	requireImmediateCompleteCRL bool
 }
 
 func NewVaultClient(config VaultConfig, client *http.Client, tokens VaultTokenSource) (*VaultClient, error) {
@@ -113,7 +115,8 @@ func NewVaultClient(config VaultConfig, client *http.Client, tokens VaultTokenSo
 	clientCopy.Jar = nil
 	clientCopy.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	return &VaultClient{endpoint: strings.TrimSuffix(config.Endpoint, "/"), mount: config.Mount, policies: policies,
-		client: &clientCopy, tokens: tokens, timeout: config.OperationTimeout, now: config.Now}, nil
+		client: &clientCopy, tokens: tokens, timeout: config.OperationTimeout, now: config.Now,
+		requireImmediateCompleteCRL: config.RequireImmediateCompleteCRL}, nil
 }
 
 func (c *VaultClient) Issue(ctx context.Context, policy Policy, csrPEM []byte, ttl time.Duration) (IssuedCertificate, error) {
@@ -182,6 +185,11 @@ func (c *VaultClient) Revocations(ctx context.Context) (RevocationSnapshot, erro
 	if c == nil || ctx == nil {
 		return RevocationSnapshot{}, ErrUnavailable
 	}
+	if c.requireImmediateCompleteCRL {
+		if err := c.VerifyImmediateCompleteCRLConfig(ctx); err != nil {
+			return RevocationSnapshot{}, err
+		}
+	}
 	document, contentType, err := c.request(ctx, http.MethodGet, "/v1/"+c.mount+"/crl", nil, "application/pkix-crl")
 	if err != nil {
 		return RevocationSnapshot{}, err
@@ -198,6 +206,35 @@ func (c *VaultClient) Revocations(ctx context.Context) (RevocationSnapshot, erro
 	digest := sha256.Sum256(document)
 	return RevocationSnapshot{IssuerRevision: "vault-crl-" + hex.EncodeToString(digest[:8]), DER: document,
 		ThisUpdate: list.ThisUpdate.UTC(), NextUpdate: list.NextUpdate.UTC()}, nil
+}
+
+// VerifyImmediateCompleteCRLConfig reads the actual Vault PKI mount policy.
+// Vault's auto-rebuild mode does not publish every revoke into the complete
+// CRL immediately; callers that promise peer-revocation drain must opt in to
+// this check and grant only read access to config/crl, not rotate authority.
+func (c *VaultClient) VerifyImmediateCompleteCRLConfig(ctx context.Context) error {
+	if c == nil || ctx == nil {
+		return ErrUnavailable
+	}
+	document, contentType, err := c.request(ctx, http.MethodGet, "/v1/"+c.mount+"/config/crl", nil, "application/json")
+	if err != nil {
+		return err
+	}
+	defer clear(document)
+	if contentType != "application/json" {
+		return ErrUnavailable
+	}
+	var data map[string]json.RawMessage
+	if decodeVaultData(document, &data) != nil {
+		return ErrUnavailable
+	}
+	for _, key := range []string{"disable", "auto_rebuild", "enable_delta"} {
+		value, ok := data[key]
+		if !ok || !bytes.Equal(value, []byte("false")) {
+			return ErrUnavailable
+		}
+	}
+	return nil
 }
 
 func (c *VaultClient) Revoke(ctx context.Context, serial string) error {

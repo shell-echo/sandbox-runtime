@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -24,7 +25,7 @@ func (s staticVaultTokenSource) Token(context.Context) (VaultToken, error) {
 func TestVaultClientIssuesRevokesAndLoadsFreshCRL(t *testing.T) {
 	fixture := newProtocolFixture(t)
 	var mu sync.Mutex
-	issueCalls, crlCalls, revokeCalls := 0, 0, 0
+	issueCalls, crlCalls, crlConfigCalls, revokeCalls := 0, 0, 0, 0
 	server := httptest.NewTLSServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		mu.Lock()
 		defer mu.Unlock()
@@ -33,6 +34,14 @@ func TestVaultClientIssuesRevokesAndLoadsFreshCRL(t *testing.T) {
 			return
 		}
 		switch request.URL.Path {
+		case "/v1/pki/config/crl":
+			crlConfigCalls++
+			if request.Method != http.MethodGet || request.Header.Get("Accept") != "application/json" {
+				response.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			response.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(response).Encode(vaultData(map[string]any{"disable": false, "auto_rebuild": false, "enable_delta": false}))
 		case "/v1/pki/sign/product-runtime":
 			issueCalls++
 			if request.Method != http.MethodPost || request.Header.Get("Accept") != "application/json" || request.Header.Get("Content-Type") != "application/json" {
@@ -88,7 +97,7 @@ func TestVaultClientIssuesRevokesAndLoadsFreshCRL(t *testing.T) {
 	defer server.Close()
 
 	client, err := NewVaultClient(VaultConfig{Endpoint: server.URL, Mount: "pki", AllowedPolicies: map[string]string{fixture.policy.ID: fixture.policy.VaultRole},
-		OperationTimeout: 3 * time.Second, Now: func() time.Time { return fixture.now }}, server.Client(),
+		OperationTimeout: 3 * time.Second, Now: func() time.Time { return fixture.now }, RequireImmediateCompleteCRL: true}, server.Client(),
 		staticVaultTokenSource{token: VaultToken{Value: []byte("scoped-pki-token"), ExpiresAt: fixture.now.Add(time.Minute), Revision: "vault-token-1"}})
 	if err != nil {
 		t.Fatal(err)
@@ -108,8 +117,48 @@ func TestVaultClientIssuesRevokesAndLoadsFreshCRL(t *testing.T) {
 	}
 	mu.Lock()
 	defer mu.Unlock()
-	if issueCalls != 1 || crlCalls != 1 || revokeCalls != 1 {
-		t.Fatalf("Vault calls issue=%d crl=%d revoke=%d", issueCalls, crlCalls, revokeCalls)
+	if issueCalls != 1 || crlCalls != 1 || crlConfigCalls != 1 || revokeCalls != 1 {
+		t.Fatalf("Vault calls issue=%d crl=%d config=%d revoke=%d", issueCalls, crlCalls, crlConfigCalls, revokeCalls)
+	}
+}
+
+func TestVaultImmediateCompleteCRLConfigFailsClosed(t *testing.T) {
+	fixture := newProtocolFixture(t)
+	for name, payload := range map[string]string{
+		"disabled":      `{"disable":true,"auto_rebuild":false,"enable_delta":false}`,
+		"auto rebuild":  `{"disable":false,"auto_rebuild":true,"enable_delta":false}`,
+		"delta":         `{"disable":false,"auto_rebuild":false,"enable_delta":true}`,
+		"missing field": `{"disable":false,"auto_rebuild":false}`,
+		"wrong type":    `{"disable":false,"auto_rebuild":"false","enable_delta":false}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			var crlCalls atomic.Int32
+			server := httptest.NewTLSServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+				switch request.URL.Path {
+				case "/v1/pki/config/crl":
+					response.Header().Set("Content-Type", "application/json")
+					_, _ = response.Write([]byte(`{"data":` + payload + `}`))
+				case "/v1/pki/crl":
+					crlCalls.Add(1)
+					response.Header().Set("Content-Type", "application/pkix-crl")
+					_, _ = response.Write(fixture.crl)
+				default:
+					response.WriteHeader(http.StatusNotFound)
+				}
+			}))
+			defer server.Close()
+			client, err := NewVaultClient(VaultConfig{Endpoint: server.URL, Mount: "pki",
+				AllowedPolicies:  map[string]string{fixture.policy.ID: fixture.policy.VaultRole},
+				OperationTimeout: time.Second, Now: func() time.Time { return fixture.now }, RequireImmediateCompleteCRL: true},
+				server.Client(), staticVaultTokenSource{token: VaultToken{Value: []byte("scoped-pki-token"),
+					ExpiresAt: fixture.now.Add(time.Minute), Revision: "vault-token-1"}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := client.Revocations(context.Background()); err == nil || crlCalls.Load() != 0 {
+				t.Fatalf("unsafe Vault CRL policy admitted or CRL fetched: err=%v calls=%d", err, crlCalls.Load())
+			}
+		})
 	}
 }
 

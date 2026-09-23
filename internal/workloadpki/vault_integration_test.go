@@ -96,6 +96,7 @@ func TestVaultPKIIntegration(t *testing.T) {
 	policyDocument := `path "pki/sign/product-runtime" { capabilities = ["update"] }
 path "pki/cert/crl" { capabilities = ["read"] }
 path "pki/crl" { capabilities = ["read"] }
+path "pki/config/crl" { capabilities = ["read"] }
 path "pki/revoke" { capabilities = ["update"] }`
 	vaultPKIWrite(t, ctx, httpClient, endpoint+"/v1/sys/policies/acl/certificate-controller", rootToken, map[string]any{"policy": policyDocument}, nil)
 	var tokenResponse struct {
@@ -113,7 +114,7 @@ path "pki/revoke" { capabilities = ["update"] }`
 
 	fixture := newProtocolFixture(t)
 	client, err := NewVaultClient(VaultConfig{Endpoint: endpoint, Mount: "pki", AllowedPolicies: map[string]string{fixture.policy.ID: fixture.policy.VaultRole},
-		OperationTimeout: 5 * time.Second, Now: time.Now}, httpClient, staticVaultTokenSource{token: VaultToken{Value: []byte(tokenResponse.Auth.ClientToken),
+		OperationTimeout: 5 * time.Second, Now: time.Now, RequireImmediateCompleteCRL: true}, httpClient, staticVaultTokenSource{token: VaultToken{Value: []byte(tokenResponse.Auth.ClientToken),
 		ExpiresAt: time.Now().Add(time.Duration(tokenResponse.Auth.LeaseDuration) * time.Second), Revision: "vault-token-1"}})
 	if err != nil {
 		t.Fatal(err)

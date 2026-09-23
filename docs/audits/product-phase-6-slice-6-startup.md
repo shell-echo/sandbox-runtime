@@ -372,6 +372,13 @@ after a real revoke, the complete CRL number advanced and the CRL verified
 under the actual issuing CA. This establishes that fixture's publication
 behavior only, not a production Vault configuration or end-to-end latency
 bound.
+The Vault PKI client now has an explicit `RequireImmediateCompleteCRL` mode:
+before reading a CRL it uses the same scoped credential to read `config/crl`
+and rejects missing, disabled, auto-rebuild or delta policy. Unit negatives
+and the fixed-image integration pass with a read-only config ACL. Existing
+v1 controller composition does not silently enable this option; the future
+v2 peer-revocation path must opt in and bind the policy to its exact issuer
+source before it can claim enforcement.
 
 ## Exact final inventory
 
