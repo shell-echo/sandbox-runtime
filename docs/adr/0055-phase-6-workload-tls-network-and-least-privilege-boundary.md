@@ -87,6 +87,10 @@ the pinned DER and re-verifies every complete CRL's signature and scope;
 cache identity includes source, profile revision and issuer, while edge
 authorization remains separate. Issuer replacement requires a new explicit
 profile and controlled transition, not implicit rollover.
+The source/edge mapping may be a separate closed canonical operator document
+only when it is pinned to the exact security-profile digest and Vault
+external identity. Its source set and per-edge authorization set remain
+distinct; a source's presence never grants every role permission to read it.
 
 The single-cluster complete-CRL path requires an observed Vault PKI CRL
 configuration with building enabled, `auto_rebuild=false` and

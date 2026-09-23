@@ -398,6 +398,14 @@ binds those fields and a source ID, complete CRL bytes, digest, number and
 times. Decoding re-verifies the signed CRL against the caller's exact issuer
 DER and rejects a v1 fallback. This codec is not yet an agent socket service
 or controller authorization path, so no live handshake/drain claim follows.
+An additional closed canonical operator source document is bound to the
+existing security profile digest and Vault external identity. It maps fixed
+issuer sources separately from exact local-principal/edge/direction/peer-
+anchor authorizations; unknown edge, role, direction, anchor or actual issuer
+DER cannot select a source. It allows two directions to reference one actual
+issuer without implying separate CAs from differing anchor names. This
+document is not yet loaded by production controller/agent commands and does
+not establish source caching, least-privilege ACLs or full edge coverage.
 
 ## Exact final inventory
 
