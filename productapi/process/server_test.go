@@ -45,7 +45,7 @@ func TestNewServerRequiresDependencies(t *testing.T) {
 	}
 }
 
-func TestNewTLSServerRequiresTLS13Certificate(t *testing.T) {
+func TestNewTLSServerRequiresExactlyOneTLS13CertificateSource(t *testing.T) {
 	address := option.HTTP{Host: "127.0.0.1", Port: 8082}
 	ready := ReadinessFunc(func(context.Context) error { return nil })
 	if _, err := NewTLSServer(address, http.NotFoundHandler(), ready, nil); err == nil {
@@ -53,6 +53,18 @@ func TestNewTLSServerRequiresTLS13Certificate(t *testing.T) {
 	}
 	if _, err := NewTLSServer(address, http.NotFoundHandler(), ready, &tls.Config{MinVersion: tls.VersionTLS12, MaxVersion: tls.VersionTLS13, Certificates: []tls.Certificate{{}}}); err == nil {
 		t.Fatal("accepted TLS 1.2")
+	}
+	if _, err := NewTLSServer(address, http.NotFoundHandler(), ready, &tls.Config{MinVersion: tls.VersionTLS13, MaxVersion: tls.VersionTLS13}); err == nil {
+		t.Fatal("accepted absent certificate source")
+	}
+	callback := func(*tls.ClientHelloInfo) (*tls.Certificate, error) { return &tls.Certificate{}, nil }
+	if _, err := NewTLSServer(address, http.NotFoundHandler(), ready, &tls.Config{MinVersion: tls.VersionTLS13, MaxVersion: tls.VersionTLS13,
+		Certificates: []tls.Certificate{{}}, GetCertificate: callback}); err == nil {
+		t.Fatal("accepted mixed static and live certificate sources")
+	}
+	if _, err := NewTLSServer(address, http.NotFoundHandler(), ready, &tls.Config{MinVersion: tls.VersionTLS13, MaxVersion: tls.VersionTLS13,
+		GetCertificate: callback}); err != nil {
+		t.Fatalf("live TLS callback rejected: %v", err)
 	}
 	server, err := NewTLSServer(address, http.NotFoundHandler(), ready, &tls.Config{MinVersion: tls.VersionTLS13, MaxVersion: tls.VersionTLS13, Certificates: []tls.Certificate{{}}})
 	if err != nil {

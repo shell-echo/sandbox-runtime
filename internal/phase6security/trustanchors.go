@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-func validateTrustAnchors(anchors []TrustAnchor, edges []TrustEdge, controller CertificateControllerAuthority, principals map[string]Principal,
+func validateTrustAnchors(anchors []TrustAnchor, edges []TrustEdge, public []PublicListenerBinding, controller CertificateControllerAuthority, principals map[string]Principal,
 	external map[string]ExternalService) error {
 	byID := make(map[string]TrustAnchor, len(anchors))
 	storage, artifact, targets := map[string]bool{}, map[string]bool{}, map[string]TrustAnchor{}
@@ -77,6 +77,16 @@ func validateTrustAnchors(anchors []TrustAnchor, edges []TrustEdge, controller C
 		}
 		references[client.ID]++
 		markConsumer(client.ID, edge.To)
+	}
+	for _, listener := range public {
+		anchor, ok := byID[listener.IssuerAnchorID]
+		principal := principals[listener.DeploymentName]
+		if !ok || principal.TLS == nil || anchor.Purpose != "server_verification" ||
+			anchor.TrustDomain != principal.TLS.TrustDomain || !slices.Contains(anchor.Consumers, listener.DeploymentName) {
+			return ErrInvalidProfile
+		}
+		references[anchor.ID]++
+		markConsumer(anchor.ID, listener.DeploymentName)
 	}
 	bootstrap, ok := byID[controller.BootstrapClientAnchorID]
 	controllerPrincipal := principals[controller.DeploymentName]

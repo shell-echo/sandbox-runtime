@@ -3,6 +3,8 @@ package phase6security
 import (
 	"encoding/json"
 	"errors"
+	"net/netip"
+	"strconv"
 	"testing"
 )
 
@@ -10,7 +12,7 @@ func TestObserveDockerNetworkRejectsInspectDrift(t *testing.T) {
 	profile := validProfile()
 	var expected Network
 	for _, network := range profile.Networks {
-		if network.Kind == "role_internal" {
+		if network.Name == "ingress-gateway" {
 			expected = network
 			break
 		}
@@ -21,8 +23,13 @@ func TestObserveDockerNetworkRejectsInspectDrift(t *testing.T) {
 	}
 	valid := func() map[string]any {
 		members := map[string]any{}
-		for _, ID := range IDs {
-			members[ID] = map[string]any{"Name": "opaque"}
+		prefix := netip.MustParsePrefix(expected.IPv4Subnet)
+		for index, name := range expected.Principals {
+			address := prefix.Addr().Next().Next()
+			for extra := 0; extra < index; extra++ {
+				address = address.Next()
+			}
+			members[IDs[name]] = map[string]any{"Name": "opaque", "IPv4Address": address.String() + "/" + strconv.Itoa(prefix.Bits())}
 		}
 		return map[string]any{
 			"Name": expected.Name, "Id": testDigest("network/" + expected.Name)[7:], "Driver": "bridge",
@@ -30,7 +37,7 @@ func TestObserveDockerNetworkRejectsInspectDrift(t *testing.T) {
 			"EnableIPv4": true, "EnableIPv6": false,
 			"Options": map[string]string{"com.docker.network.bridge.gateway_mode_ipv4": "isolated",
 				"com.docker.network.enable_ipv4": "true", "com.docker.network.enable_ipv6": "false"},
-			"IPAM":       map[string]any{"Config": []map[string]string{{"Subnet": "172.20.0.0/24", "Gateway": ""}}},
+			"IPAM":       map[string]any{"Config": []map[string]string{{"Subnet": expected.IPv4Subnet, "Gateway": ""}}},
 			"Containers": members,
 		}
 	}
@@ -67,7 +74,18 @@ func TestObserveDockerNetworkRejectsInspectDrift(t *testing.T) {
 			}
 		},
 		"bad subnet": func(value map[string]any) {
-			value["IPAM"].(map[string]any)["Config"].([]map[string]string)[0]["Subnet"] = "172.20.0.1/24"
+			value["IPAM"].(map[string]any)["Config"].([]map[string]string)[0]["Subnet"] = "10.12.0.1/24"
+		},
+		"missing endpoint": func(value map[string]any) {
+			for _, member := range value["Containers"].(map[string]any) {
+				delete(member.(map[string]any), "IPv4Address")
+				break
+			}
+		},
+		"duplicate endpoint": func(value map[string]any) {
+			for _, member := range value["Containers"].(map[string]any) {
+				member.(map[string]any)["IPv4Address"] = "10.12.0.2/24"
+			}
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

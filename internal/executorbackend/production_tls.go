@@ -2,6 +2,7 @@ package executorbackend
 
 import (
 	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"net"
 	"os"
@@ -9,9 +10,9 @@ import (
 	"time"
 
 	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
+	"github.com/shell-echo/sandbox-runtime/internal/remotetls"
 	"github.com/shell-echo/sandbox-runtime/internal/trustanchor"
 	"github.com/shell-echo/sandbox-runtime/internal/workloadtlsagent"
-	"github.com/shell-echo/sandbox-runtime/providerapi"
 )
 
 type ProductionTLSAuthority struct {
@@ -69,15 +70,21 @@ func ProductionServerTLS(profile phase6security.Profile, authority ProductionTLS
 		return nil, errors.New("executor client CA unavailable")
 	}
 	defer clear(clientCA)
+	serverRoots := x509.NewCertPool()
+	clientRoots := x509.NewCertPool()
+	if !serverRoots.AppendCertsFromPEM(serverCA) || !clientRoots.AppendCertsFromPEM(clientCA) {
+		return nil, errors.New("executor trust anchor parse failed")
+	}
 	agentClient, err := workloadtlsagent.NewProductionClient(workloadtlsagent.ClientConfig{
 		SocketPath: authority.AgentSocket, ExpectedUID: authority.AgentUID, ExpectedGID: authority.AgentGID,
 		RoleGID: subject.GID, OperationTimeout: authority.OperationTimeout, Now: time.Now})
 	if err != nil {
 		return nil, errors.New("executor TLS agent unavailable")
 	}
-	return providerapi.LoadMTLSConfigRemote(serverCA, clientCA,
-		providerapi.RemoteClientIdentity{URI: caller.TLS.URI, DNSNames: caller.TLS.DNSNames},
-		providerapi.RemoteServerIdentity{URI: subject.TLS.URI,
-			DNSNames: subject.TLS.DNSNames, MaxTTL: time.Duration(subject.TLS.TTLSeconds) * time.Second},
-		agentClient.CertificateForHandshake, time.Now)
+	clientIdentity := remotetls.Identity{URI: caller.TLS.URI, DNSNames: caller.TLS.DNSNames,
+		Usages: caller.TLS.Usages, MaxTTL: time.Duration(caller.TLS.TTLSeconds) * time.Second}
+	return remotetls.NewServer(remotetls.ServerOptions{IssuerRoots: serverRoots, ClientRoots: clientRoots,
+		Identity: remotetls.Identity{URI: subject.TLS.URI, DNSNames: subject.TLS.DNSNames,
+			Usages: subject.TLS.Usages, MaxTTL: time.Duration(subject.TLS.TTLSeconds) * time.Second},
+		Client: &clientIdentity, Source: agentClient.CertificateForHandshake, Now: time.Now})
 }

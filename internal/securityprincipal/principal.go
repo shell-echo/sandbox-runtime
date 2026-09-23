@@ -25,6 +25,7 @@ const (
 	KindController      Kind = "controller"
 	KindExecutorBackend Kind = "executor_backend"
 	KindEgressBroker    Kind = "egress_broker"
+	KindIngressRelay    Kind = "ingress_relay"
 
 	RoleProduct  Role = "product"
 	RoleProvider Role = "provider"
@@ -88,6 +89,9 @@ var builtins = map[Kind]map[string]Role{
 	},
 	KindExecutorBackend: {
 		"browser_executor": RoleBrowser, "desktop_executor": RoleDesktop,
+	},
+	KindIngressRelay: {
+		"public_ingress_relay": "",
 	},
 }
 

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"net/url"
@@ -10,6 +11,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/shell-echo/sandbox-runtime/config"
+	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
+	"github.com/shell-echo/sandbox-runtime/internal/phase6tls"
 	"github.com/shell-echo/sandbox-runtime/internal/rolematerials"
 	"github.com/shell-echo/sandbox-runtime/internal/secretfile"
 	"github.com/shell-echo/sandbox-runtime/internal/secretref"
@@ -125,7 +128,7 @@ func runDevelopmentProduct(ctx context.Context, productConfig *config.ProductPro
 func runProductionProduct(ctx context.Context, productConfig *config.ProductProcessConfig) error {
 	startupContext, cancelStartup := context.WithTimeout(ctx, time.Duration(productConfig.Postgres.StartupTimeoutSeconds)*time.Second)
 	defer cancelStartup()
-	materialRegistry, err := newProductRuntimeMaterialRegistry(productConfig.Materials)
+	materialRegistry, err := newProductRuntimeMaterialRegistry(productConfig.Materials, productConfig.SchemaVersion)
 	if err != nil {
 		return err
 	}
@@ -156,8 +159,21 @@ func runProductionProduct(ctx context.Context, productConfig *config.ProductProc
 	if err != nil {
 		return err
 	}
-	tlsConfig, err := productprocess.LoadTLSConfigFromRegistry(startupContext, materialRegistry, productConfig.TLS.CertificateBindingID,
-		productConfig.TLS.PrivateKeyBindingID, productConfig.TLS.ExpectedServerName, time.Now)
+	var tlsConfig *tls.Config
+	var tlsProbe func(context.Context) error
+	if productConfig.SchemaVersion == config.ProductProductionSchemaV3 {
+		profile, profileErr := phase6security.VerifyFile(productConfig.TLS.SecurityProfilePath)
+		if profileErr != nil || profile.ProfileDigest != productConfig.TLS.SecurityProfileDigest {
+			return errors.New("Product security profile mismatch")
+		}
+		tlsConfig, tlsProbe, err = phase6tls.PublicServer(profile, phase6tls.PublicServerAuthority{
+			ListenerID: "product-public", Port: productConfig.API.Port,
+			AgentSocket: productConfig.TLS.AgentSocket, AgentUID: productConfig.TLS.AgentUID, AgentGID: productConfig.TLS.AgentGID,
+			OperationTimeout: time.Duration(productConfig.TLS.OperationTimeoutMillis) * time.Millisecond})
+	} else {
+		tlsConfig, err = productprocess.LoadTLSConfigFromRegistry(startupContext, materialRegistry, productConfig.TLS.CertificateBindingID,
+			productConfig.TLS.PrivateKeyBindingID, productConfig.TLS.ExpectedServerName, time.Now)
+	}
 	if err != nil {
 		return err
 	}
@@ -180,6 +196,11 @@ func runProductionProduct(ctx context.Context, productConfig *config.ProductProc
 		monitorTimeout = time.Second
 	}
 	monitor, err := productprocess.NewDependencyMonitor(func(checkContext context.Context) error {
+		if tlsProbe != nil {
+			if err := tlsProbe(checkContext); err != nil {
+				return errors.New("Product live TLS signer is unavailable")
+			}
+		}
 		if err := runtimePool.Ping(checkContext); err != nil {
 			return err
 		}
@@ -278,13 +299,12 @@ func openProductPostgresMaterial(ctx context.Context, raw []byte, maxConnections
 	return pool, nil
 }
 
-func newProductRuntimeMaterialRegistry(materials config.ProductMaterialsConfig) (*secretref.Registry, error) {
-	return newProductAgentRegistry(materials, []secretref.Purpose{
-		secretref.PurposeTLSCertificate,
-		secretref.PurposeTLSPrivateKey,
-		secretref.PurposePostgresRuntimeDSN,
-		secretref.PurposeIdentityKeyRing,
-	}, true)
+func newProductRuntimeMaterialRegistry(materials config.ProductMaterialsConfig, schema string) (*secretref.Registry, error) {
+	purposes := []secretref.Purpose{secretref.PurposePostgresRuntimeDSN, secretref.PurposeIdentityKeyRing}
+	if schema == config.ProductProductionSchemaV2 {
+		purposes = append(purposes, secretref.PurposeTLSCertificate, secretref.PurposeTLSPrivateKey)
+	}
+	return newProductAgentRegistry(materials, purposes, true)
 }
 
 func newProductMigrationMaterialRegistry(materials config.ProductMaterialsConfig) (*secretref.Registry, error) {
@@ -300,14 +320,18 @@ func newProductAgentRegistry(materials config.ProductMaterialsConfig, allowedPur
 }
 
 func verifyProductMaterialDependencies(ctx context.Context, registry *secretref.Registry, productConfig *config.ProductProcessConfig) error {
-	checks := []struct {
+	type materialCheck struct {
 		bindingID string
 		purpose   secretref.Purpose
-	}{
-		{productConfig.TLS.CertificateBindingID, secretref.PurposeTLSCertificate},
-		{productConfig.TLS.PrivateKeyBindingID, secretref.PurposeTLSPrivateKey},
+	}
+	checks := []materialCheck{
 		{productConfig.Postgres.RuntimeDSNBindingID, secretref.PurposePostgresRuntimeDSN},
 		{productConfig.Identity.KeyRingBindingID, secretref.PurposeIdentityKeyRing},
+	}
+	if productConfig.SchemaVersion == config.ProductProductionSchemaV2 {
+		checks = append(checks,
+			materialCheck{productConfig.TLS.CertificateBindingID, secretref.PurposeTLSCertificate},
+			materialCheck{productConfig.TLS.PrivateKeyBindingID, secretref.PurposeTLSPrivateKey})
 	}
 	for _, check := range checks {
 		material, err := registry.Resolve(ctx, check.bindingID, check.purpose, secretref.SystemTenant)

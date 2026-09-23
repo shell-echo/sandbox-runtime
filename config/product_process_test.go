@@ -79,6 +79,7 @@ func TestProductProcessRejectsUnsafeProductionAuthority(t *testing.T) {
 		"missing runtime": func(c *ProductProcessConfig) { c.Postgres.RuntimeDSNBindingID = "product-tls-certificate" },
 		"relative socket": func(c *ProductProcessConfig) { c.Materials.Provider.SocketPath = "agent.sock" },
 		"bad issuer":      func(c *ProductProcessConfig) { c.Identity.Issuer = "identity" },
+		"mixed v3 signer": func(c *ProductProcessConfig) { c.TLS.AgentSocket = "/run/tls/product-tls-agent/signer.sock" },
 		"excess cache":    func(c *ProductProcessConfig) { c.Materials.Provider.CacheSeconds = 61 },
 		"migration binding": func(c *ProductProcessConfig) {
 			binding := productMaterialBindings()["product-migration-dsn"]
@@ -119,6 +120,43 @@ func validProductionProductConfig(t *testing.T, _ string) *ProductProcessConfig 
 		valid.Materials.Bindings = append(valid.Materials.Bindings, ProductMaterialBindingConfig{ID: id, Provider: "role-material-agent", Document: string(document)})
 	}
 	return valid
+}
+
+func TestProductV3RequiresPinnedLiveSignerWithoutLocalTLSMaterial(t *testing.T) {
+	valid := validProductionProductConfig(t, "")
+	valid.SchemaVersion = ProductProductionSchemaV3
+	valid.TLS = ProductTLSConfig{
+		SecurityProfilePath:   "/run/security/profile.json",
+		SecurityProfileDigest: "sha256:" + strings.Repeat("a", 64),
+		AgentSocket:           "/run/tls/product-tls-agent/signer.sock", AgentUID: 20001, AgentGID: 30001,
+		OperationTimeoutMillis: 3000,
+	}
+	valid.Materials.Bindings = valid.Materials.Bindings[2:]
+	if err := valid.Validate(); err != nil {
+		t.Fatalf("valid Product v3: %v", err)
+	}
+	for name, mutate := range map[string]func(*ProductProcessConfig){
+		"v2 certificate": func(c *ProductProcessConfig) { c.TLS.CertificateBindingID = "product-tls-certificate" },
+		"v2 key":         func(c *ProductProcessConfig) { c.TLS.PrivateKeyBindingID = "product-tls-private-key" },
+		"extra TLS binding": func(c *ProductProcessConfig) {
+			c.Materials.Bindings = append(c.Materials.Bindings, validProductionProductConfig(t, "").Materials.Bindings[0])
+		},
+		"profile digest":   func(c *ProductProcessConfig) { c.TLS.SecurityProfileDigest = "sha256:bad" },
+		"relative profile": func(c *ProductProcessConfig) { c.TLS.SecurityProfilePath = "profile.json" },
+		"relative socket":  func(c *ProductProcessConfig) { c.TLS.AgentSocket = "signer.sock" },
+		"agent UID":        func(c *ProductProcessConfig) { c.TLS.AgentUID = 0 },
+		"agent GID":        func(c *ProductProcessConfig) { c.TLS.AgentGID = 0 },
+		"timeout":          func(c *ProductProcessConfig) { c.TLS.OperationTimeoutMillis = 0 },
+	} {
+		t.Run(name, func(t *testing.T) {
+			candidate := *valid
+			candidate.Materials.Bindings = append([]ProductMaterialBindingConfig(nil), valid.Materials.Bindings...)
+			mutate(&candidate)
+			if err := candidate.Validate(); err == nil {
+				t.Fatal("unsafe Product v3 configuration accepted")
+			}
+		})
+	}
 }
 
 func productMaterialBindings() map[string]secretref.Binding {

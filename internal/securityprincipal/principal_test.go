@@ -60,6 +60,8 @@ func TestRegistryRejectsCrossKindRoleAndProfileSubstitution(t *testing.T) {
 		"digest substitution":   func(p *Principal) { p.PrincipalDigest = "sha256:" + strings.Repeat("d", 64) },
 		"unknown kind":          func(p *Principal) { p.Kind = "unknown" },
 		"unregistered broker":   func(p *Principal) { p.Kind, p.Name, p.Role = KindEgressBroker, "other_egress_broker", RoleProduct },
+		"unregistered ingress":  func(p *Principal) { p.Kind, p.Name, p.Role = KindIngressRelay, "other_ingress_relay", "" },
+		"ingress role":          func(p *Principal) { p.Kind, p.Name, p.Role = KindIngressRelay, "public_ingress_relay", RoleProduct },
 	}
 	for name, mutate := range tests {
 		t.Run(name, func(t *testing.T) {

@@ -159,7 +159,8 @@ duplicates, cross-subject substitution, extra mounts/edges and sharing with
 the policy-authority socket. The production TLS-agent command checks its
 config against this profile; the egress broker checks its signer endpoint
 against its bound agent before connecting. These checks are configuration
-authority only: six runtime commands still need live signer migration, and
+authority only: Product now has an explicit v3 live-signer public listener;
+its private edges and the other five runtime commands still need migration, and
 a real broker/controller/Vault/DNS mTLS process gate is required before Slice
 6 can close.
 
@@ -180,6 +181,44 @@ require a new canonical profile and controlled process replacement, not a
 new CA rotation control plane. Executor, controller→Vault and broker→DNS/inbound
 commands consume this registry now; other production TLS commands and full
 trust-edge binding still need the same loader before release.
+
+The production runtime TLS configuration advances explicitly to v3. V3 uses
+only a profile-bound live signer and direction-specific pinned anchors; the
+v2 material-registry certificate/private-key path is retained solely for its
+historical candidate evidence and cannot be an automatic production fallback.
+New handshakes must fetch and verify a fresh certificate/signing capability,
+and TLS session resumption cannot bypass that check. Existing HTTP, WebSocket
+and media connections must separately drain within the profile's revocation
+bound. The live TLS 1.3 builder and Browser/Desktop backend hookup are
+component checkpoints, not that six-role command gate.
+
+The canonical profile declares only these runtime dialing authorities:
+Product→Provider locked Contract listener; Gateway→Provider separate private
+handoff/media listener; Provider→Browser and Provider→Desktop private executor
+listeners; Browser→its Browser backend; Desktop→its Desktop backend; and
+Guest→Product's separate private Guest-control listener. Each internal edge
+binds the exact listener and route, protocol, both deployment/principal
+digests, URI/DNS/EKU, distinct server/client CA anchors, connection lifetime
+and revocation drain. A response on an authorized connection does not grant a
+reverse dial. Browser/Desktop credential fields named `ProviderOrigin` are
+SPIFFE peer identities, not outbound Provider URLs; no such reverse edge is
+inferred. Gateway's committed Product database reads do not invent a
+Gateway→Product HTTP edge. Provider coding and Desktop instances cannot share
+one identity that masks their different capabilities.
+
+Only exact Product and Gateway public listener bindings use TLS 1.3
+server-authentication without a workload client certificate. Product user
+authentication and Gateway ticket/grant, Origin, session and fence checks
+remain required. These bindings do not create a wildcard external principal
+or grant the same optional-client-cert policy to a private listener. WebRTC
+media retains its authenticated signaling and DTLS/SRTP binding rather than
+being misclassified as a generic mTLS HTTP edge. The Guest remains outbound
+only; its private Product receiver must compose the existing Guest Hub,
+binding store, challenge authentication and Files/Development adapters under
+the Product identity. A fixture-only Guest peer is not production composition.
+Database, coordination, object storage, egress broker, agent/controller Unix,
+Vault and DNS dependencies each retain their own actual-consumer bindings and
+cannot be hidden under the runtime mTLS matrix.
 
 The certificate controller is one logical process, not one controller per
 agent. Its production command configuration is v3 and receives the same
@@ -234,6 +273,27 @@ live route/address probes verify no default route or IPv6 address. A failed
 network option, missing positive control or unexpected reachability fails the
 gate. [Docker documents why ordinary internal bridge gateways remain host-
 reachable and why `isolated` omits the bridge address](https://docs.docker.com/engine/network/port-publishing/#gateway-modes).
+
+Product and Gateway public TCP entry uses one operator-owned, fixed-target
+ingress relay process. It alone joins the `public_ingress` NAT network and
+two separate `isolated` trust-edge networks; Product and Gateway join only
+their respective isolated networks and have no host-published ports. The
+relay binds only one explicitly declared frontend IPv4 address and forwards
+two exact port mappings to profile-pinned numeric upstream addresses. TLS
+terminates in Product/Gateway, not the relay. The relay has its own UID/GID,
+image, seccomp and resource bounds, no TLS/material-agent identity, no
+business credential, no Docker socket, no HTTP parser, CONNECT/SOCKS,
+dynamic DNS/SNI upstream or proxy-header authority. The canonical profile
+binds its principal digest, exact frontend/target network membership,
+non-overlapping canonical IPv4 CIDRs, listener, host publication, endpoint,
+port, per-route limits and mapping
+digest. Unknown frontend listeners, role-owned ingress listeners and role
+host publication are rejected. The Docker gate must independently inspect
+the actual network IPs, port bindings, routes and disabled forwarding,
+exercise Product/Gateway TLS and application authorization through those
+published ports, test relay/target failure and drain, and prove exact
+cleanup. A raw TCP relay does not solve WebRTC ICE/UDP/media reachability;
+that remains a separate release gate, not an inferred consequence.
 
 A role can request only a closed target alias, port and protocol. The broker
 maps that alias to the immutable security profile, performs DNS itself, checks
@@ -311,6 +371,12 @@ capabilities are dropped,
 `no-new-privileges`, a role-specific seccomp policy, bounded PIDs/memory/CPU,
 no host devices, host mounts, daemon sockets or extra listeners. The gate
 rejects drift and exercises privilege escalation and resource exhaustion.
+Each principal binds its reviewed policy by exact digest and the gate checks
+that binding against the running container. Equivalent least-privilege
+syscall needs may share one policy artifact and digest; forcing unique bytes
+per principal is not an isolation control. UID/GID, credential, network and
+mount separation remains per principal, and a shared policy must not include
+the union of unrelated roles' extra syscalls merely for convenience.
 
 Evidence records the exact observed layer:
 
@@ -340,7 +406,8 @@ The final immutable gate covers:
 - six runtime plus Product/Provider migration material agents;
 - workload-credential, break-glass and certificate controllers;
 - Product and Provider one-shot migration jobs;
-- every egress broker and its one-to-one operator-owned policy-state authority; and
+- every egress broker and its one-to-one operator-owned policy-state authority;
+- the public ingress relay and its two exact published Product/Gateway paths; and
 - the existing Desktop broker and Browser runtime security assertions.
 
 External Vault, PostgreSQL and DNS remain outside the repository-owned role

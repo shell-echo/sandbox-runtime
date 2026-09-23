@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"net/netip"
 	"sort"
-	"strconv"
 	"testing"
 )
 
@@ -19,7 +19,16 @@ func validObservations(profile Profile) ObservationSet {
 			SeccompDigest: principal.SeccompDigest, Resources: principal.Resources, Networks: append([]string(nil), principal.Networks...),
 			Listeners: append([]Listener(nil), principal.Listeners...), RootWriteDenied: true, PrivilegeEscalationDenied: true,
 			PIDExhaustionDenied: true, MemoryExhaustionDenied: true, CPUQuotaObserved: true, NamespaceIsolated: true,
-			ExactCleanupObserved: true, DirectEgressDenied: principal.Kind != "egress_broker", ExternalUplinkObserved: principal.Kind == "egress_broker"}
+			ExactCleanupObserved: true, DirectEgressDenied: principal.Kind != "egress_broker" && principal.Kind != "ingress_relay",
+			ExternalUplinkObserved: principal.Kind == "egress_broker" || principal.Kind == "ingress_relay"}
+		if principal.Name == "public-ingress-relay" {
+			for _, binding := range profile.IngressBindings {
+				frontend := netip.MustParseAddrPort(binding.FrontendAddress)
+				host := netip.MustParseAddrPort(binding.HostBindAddress)
+				observation.PublishedPorts = append(observation.PublishedPorts, PublishedPortObservation{
+					Protocol: "tcp", ContainerPort: int(frontend.Port()), HostAddress: host.Addr().String(), HostPort: int(host.Port())})
+			}
+		}
 		for _, mount := range principal.Mounts {
 			observation.Mounts = append(observation.Mounts, ObservedMount{Target: mount.Target, Kind: mount.Kind,
 				ReadOnly: mount.ReadOnly, MaxBytes: mount.MaxBytes, StorageID: mount.StorageID})
@@ -31,18 +40,36 @@ func validObservations(profile Profile) ObservationSet {
 		containerIDs[observation.DeploymentName] = observation.ContainerID
 	}
 	networks := make([]NetworkObservation, 0, len(profile.Networks))
-	for index, network := range profile.Networks {
+	for _, network := range profile.Networks {
+		subnet := network.IPv4Subnet
+		prefix := netip.MustParsePrefix(subnet)
 		observation := NetworkObservation{Name: network.Name, NetworkID: testDigest("network/" + network.Name)[7:],
 			InspectDigest: testDigest("inspect/network/" + network.Name),
 			Driver:        "bridge", Internal: network.Internal, GatewayModeIPv4: network.GatewayModeIPv4,
-			Subnet: "172.20." + strconv.Itoa(index) + ".0/24"}
+			Subnet: subnet}
 		if !network.Internal {
-			observation.HostGateway = "172.20." + strconv.Itoa(index) + ".1"
+			observation.HostGateway = prefix.Addr().Next().String()
 		}
-		for _, name := range network.Principals {
+		for memberIndex, name := range network.Principals {
+			address := prefix.Addr().Next().Next()
+			for extra := 0; extra < memberIndex; extra++ {
+				address = address.Next()
+			}
+			if network.Name == "ingress-gateway" || network.Name == "ingress-product" {
+				if name == "public-ingress-relay" {
+					address = prefix.Addr().Next().Next()
+				} else {
+					address = prefix.Addr().Next().Next().Next()
+				}
+			}
+			observation.Endpoints = append(observation.Endpoints,
+				NetworkEndpointObservation{ContainerID: containerIDs[name], IPv4Address: address.String()})
 			observation.ContainerIDs = append(observation.ContainerIDs, containerIDs[name])
 		}
 		sort.Strings(observation.ContainerIDs)
+		sort.Slice(observation.Endpoints, func(i, j int) bool {
+			return observation.Endpoints[i].ContainerID < observation.Endpoints[j].ContainerID
+		})
 		networks = append(networks, observation)
 	}
 	return ObservationSet{ProfileDigest: profile.ProfileDigest, Containers: containers, Networks: networks,
@@ -93,6 +120,54 @@ func TestObservationsRequireExactMeasuredLeastPrivilege(t *testing.T) {
 		},
 		"IPv6 enabled":         func(o *ObservationSet) { o.Networks[0].IPv6Enabled = true },
 		"network member drift": func(o *ObservationSet) { o.Networks[0].ContainerIDs[0] = testDigest("other")[7:] },
+		"target host publication": func(o *ObservationSet) {
+			for index := range o.Containers {
+				if o.Containers[index].DeploymentName == "gateway-runtime" {
+					o.Containers[index].PublishedPorts = []PublishedPortObservation{{Protocol: "tcp", ContainerPort: 8445,
+						HostAddress: "127.0.0.1", HostPort: 18445}}
+				}
+			}
+		},
+		"relay extra publication": func(o *ObservationSet) {
+			for index := range o.Containers {
+				if o.Containers[index].DeploymentName == "public-ingress-relay" {
+					o.Containers[index].PublishedPorts = append(o.Containers[index].PublishedPorts,
+						PublishedPortObservation{Protocol: "tcp", ContainerPort: 1080, HostAddress: "127.0.0.1", HostPort: 11080})
+				}
+			}
+		},
+		"relay published host drift": func(o *ObservationSet) {
+			for index := range o.Containers {
+				if o.Containers[index].DeploymentName == "public-ingress-relay" {
+					o.Containers[index].PublishedPorts[0].HostAddress = "0.0.0.0"
+				}
+			}
+		},
+		"relay frontend IP drift": func(o *ObservationSet) {
+			for index := range o.Networks {
+				if o.Networks[index].Name == "public-ingress" {
+					o.Networks[index].Endpoints[0].IPv4Address = "10.11.0.4"
+				}
+			}
+		},
+		"target endpoint IP drift": func(o *ObservationSet) {
+			for index := range o.Networks {
+				if o.Networks[index].Name == "ingress-product" {
+					for member := range o.Networks[index].Endpoints {
+						if o.Networks[index].Endpoints[member].ContainerID == testDigest("container/product-runtime")[7:] {
+							o.Networks[index].Endpoints[member].IPv4Address = "10.13.0.4"
+						}
+					}
+				}
+			}
+		},
+		"duplicate endpoint IP": func(o *ObservationSet) {
+			for index := range o.Networks {
+				if o.Networks[index].Name == "ingress-gateway" {
+					o.Networks[index].Endpoints[1].IPv4Address = o.Networks[index].Endpoints[0].IPv4Address
+				}
+			}
+		},
 	}
 	for name, mutate := range tests {
 		t.Run(name, func(t *testing.T) {

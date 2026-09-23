@@ -19,6 +19,7 @@ const (
 	defaultProductProcessAPIPort   = 8082
 	ProductLegacyDevelopmentSchema = "sandbox-runtime.product-process.legacy-development.v1"
 	ProductProductionSchemaV2      = "sandbox-runtime.product-process.v2"
+	ProductProductionSchemaV3      = "sandbox-runtime.product-process.v3"
 	ProductUnixMaterialProviderV1  = UnixWorkloadMaterialProviderV1
 )
 
@@ -46,12 +47,18 @@ type ProductProcessConfig struct {
 	Materials       ProductMaterialsConfig `mapstructure:"materials"`
 }
 
-// ProductTLSConfig identifies the production listener's atomically versioned
-// certificate and private-key bindings. Development leaves this section empty.
+// ProductTLSConfig selects either explicit historical v2 material bindings or
+// the v3 profile-bound remote signer. Development leaves it empty.
 type ProductTLSConfig struct {
-	CertificateBindingID string `mapstructure:"certificate_binding_id"`
-	PrivateKeyBindingID  string `mapstructure:"private_key_binding_id"`
-	ExpectedServerName   string `mapstructure:"expected_server_name"`
+	CertificateBindingID   string `mapstructure:"certificate_binding_id"`
+	PrivateKeyBindingID    string `mapstructure:"private_key_binding_id"`
+	ExpectedServerName     string `mapstructure:"expected_server_name"`
+	SecurityProfilePath    string `mapstructure:"security_profile_path"`
+	SecurityProfileDigest  string `mapstructure:"security_profile_digest"`
+	AgentSocket            string `mapstructure:"agent_socket"`
+	AgentUID               uint32 `mapstructure:"agent_uid"`
+	AgentGID               uint32 `mapstructure:"agent_gid"`
+	OperationTimeoutMillis int    `mapstructure:"operation_timeout_millis"`
 }
 
 // ProductPostgresConfig contains non-secret connection policy plus either the
@@ -165,8 +172,8 @@ func (c *ProductProcessConfig) validateDevelopment() error {
 var postgresRolePattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,62}$`)
 
 func (c *ProductProcessConfig) validateProduction() error {
-	if c.SchemaVersion != ProductProductionSchemaV2 {
-		return errors.New("production Product configuration must use schema sandbox-runtime.product-process.v2")
+	if c.SchemaVersion != ProductProductionSchemaV2 && c.SchemaVersion != ProductProductionSchemaV3 {
+		return errors.New("production Product configuration must use an explicit supported schema")
 	}
 	if c.Postgres.DSNFile != "" || c.Identity.BindingsFile != "" {
 		return errors.New("development Product identity or database authority is forbidden in production")
@@ -175,14 +182,30 @@ func (c *ProductProcessConfig) validateProduction() error {
 	if err != nil {
 		return err
 	}
-	selections := []struct {
+	type materialSelection struct {
 		name, id string
 		purpose  secretref.Purpose
-	}{
-		{"TLS certificate", c.TLS.CertificateBindingID, secretref.PurposeTLSCertificate},
-		{"TLS private key", c.TLS.PrivateKeyBindingID, secretref.PurposeTLSPrivateKey},
+	}
+	selections := []materialSelection{
 		{"runtime DSN", c.Postgres.RuntimeDSNBindingID, secretref.PurposePostgresRuntimeDSN},
 		{"identity key ring", c.Identity.KeyRingBindingID, secretref.PurposeIdentityKeyRing},
+	}
+	if c.SchemaVersion == ProductProductionSchemaV2 {
+		if c.TLS.SecurityProfilePath != "" || c.TLS.SecurityProfileDigest != "" || c.TLS.AgentSocket != "" ||
+			c.TLS.AgentUID != 0 || c.TLS.AgentGID != 0 || c.TLS.OperationTimeoutMillis != 0 {
+			return errors.New("Product v2 TLS cannot select a live signer")
+		}
+		selections = append(selections,
+			materialSelection{"TLS certificate", c.TLS.CertificateBindingID, secretref.PurposeTLSCertificate},
+			materialSelection{"TLS private key", c.TLS.PrivateKeyBindingID, secretref.PurposeTLSPrivateKey})
+	} else {
+		if c.TLS.CertificateBindingID != "" || c.TLS.PrivateKeyBindingID != "" || c.TLS.ExpectedServerName != "" ||
+			validateAbsoluteSecretPath("Product security profile", c.TLS.SecurityProfilePath) != nil ||
+			validateAbsoluteSecretPath("Product TLS agent socket", c.TLS.AgentSocket) != nil ||
+			!providerSHA256Pattern.MatchString(c.TLS.SecurityProfileDigest) || c.TLS.AgentUID == 0 || c.TLS.AgentGID == 0 ||
+			c.TLS.OperationTimeoutMillis < 1000 || c.TLS.OperationTimeoutMillis > 30_000 {
+			return errors.New("Product v3 TLS must use only a pinned live signer")
+		}
 	}
 	if len(bindings) != len(selections) {
 		return errors.New("production Product material bindings must contain exactly the selected authorities")
@@ -198,11 +221,13 @@ func (c *ProductProcessConfig) validateProduction() error {
 		}
 		selected[selection.id] = struct{}{}
 	}
-	if bindings[c.TLS.CertificateBindingID].Version != bindings[c.TLS.PrivateKeyBindingID].Version {
-		return errors.New("production Product TLS bindings must select one version")
-	}
-	if !validProductServerName(c.TLS.ExpectedServerName) {
-		return errors.New("production Product TLS expected_server_name is invalid")
+	if c.SchemaVersion == ProductProductionSchemaV2 {
+		if bindings[c.TLS.CertificateBindingID].Version != bindings[c.TLS.PrivateKeyBindingID].Version {
+			return errors.New("production Product TLS bindings must select one version")
+		}
+		if !validProductServerName(c.TLS.ExpectedServerName) {
+			return errors.New("production Product TLS expected_server_name is invalid")
+		}
 	}
 	if !postgresRolePattern.MatchString(c.Postgres.RuntimeRole) {
 		return errors.New("production Product runtime database role must be an explicit identifier")

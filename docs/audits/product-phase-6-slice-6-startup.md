@@ -1,6 +1,6 @@
 # Product v1 Phase 6 Slice 6 Startup Audit
 
-Date: 2026-09-22
+Date: 2026-09-23
 
 Status: implementation underway. Product Phase 6 remains **5/15**.
 
@@ -255,6 +255,70 @@ the production certificate-controller command or Vault. The full
 broker→agent→controller→Vault→DNS/mTLS process graph is still outstanding, so
 this is not a Slice 6 release gate and the count remains **5/15**.
 
+The Browser/Desktop executor production TLS constructor now uses a neutral
+live TLS 1.3 signer builder instead of the Provider transport helper. It binds
+both directional CA pools to the same validated profile, checks the exact
+profile URI/DNS/EKU/TTL and P-256 signer proof for each new handshake, disables
+server session tickets, and refuses a missing or failed signer. Focused
+race-enabled handshakes prove generation swap, signer loss, issuer/identity/
+usage drift, extra peer SAN/EKU, expired leaf, and public versus mutual TLS
+semantics. These are component tests, not the production distinct-UID graph.
+Product now also has an explicit v3 public-listener command path: its material
+registry contains only runtime DSN and identity key ring, while the validated
+profile, exact public listener, pinned issuer anchor and separate agent
+provide TLS identity. The Product transport now accepts an exclusive live
+certificate callback instead of requiring a static certificate array; a
+mixed callback/static configuration is rejected. Its dependency monitor
+rechecks the signer. The v2 path
+remains explicit historical compatibility, not an automatic v3 fallback.
+Provider/Gateway/Guest/Browser/Desktop and Product's internal edges still
+need live-signer migration; all existing-connection revocation drain remains
+mandatory. No Slice 6 evidence manifest is issued.
+
+The canonical profile now has exactly two closed `public_listeners` bindings:
+Product API and Gateway signaling. Each binds the runtime principal digest,
+specific TCP listener/port, server issuer anchor and explicit `none` client
+certificate policy. The validator rejects a third public listener, an
+unbound listener, an optional-client-certificate mode, a client-verification
+anchor, or a role lacking server-auth usage. This is profile component
+evidence only; Product v3 command composition has not passed a real
+distinct-UID process gate, Gateway still lacks v3, and the public listener's
+user/grant authorization remains application-owned.
+
+The profile's earlier global `SeccompDigest` uniqueness check was not a
+least-privilege requirement: two separate TLS agents with the same reviewed
+syscall needs can use the same digest without sharing UID, GID, key, mount or
+network authority. The check was removed while each principal still binds an
+exact digest and runtime observation still rejects per-principal drift. A
+positive equal-policy regression and the retained seccomp-drift negative
+test cover the distinction. The final gate must still inspect actual policy
+bytes and denial behavior, not merely a digest-shaped string.
+
+Sandbox resolved the public ingress topology as one operator-owned fixed
+TCP relay: it alone joins `public_ingress` NAT and the two separate isolated
+Product/Gateway trust networks; the roles have no host publication. The
+relay owns no TLS signer, material agent or business secret and cannot select
+targets through HTTP, CONNECT, SOCKS, DNS or SNI. The canonical profile now
+requires its own principal/UID/GID/image/resource identity and two exact
+digest-bound mappings, including frontend and target IPs, networks, host
+bindings, ports and per-route limits. Non-relay `ingress_frontend` listeners,
+extra relay listeners, role host publication and endpoint drift are rejected.
+Every profile network now binds a canonical non-overlapping IPv4 CIDR;
+frontend and target IPs must belong to their declared networks, and Docker
+inspect must report that exact subnet. The Docker-network importer records
+exact member IPv4 addresses, and
+the observation validator binds the two relay publications and destination
+IPs to the profile. A tagged Docker checkpoint built and ran the actual
+`phase6-ingress-relay` command as a distinct non-root process; it exercised
+host-published routing through a NAT frontend to two `isolated` networks,
+inspected exact relay-only publication/network membership and UID/capability
+bounds, observed upstream loss and restart, and verified exact run-owned
+container/network/volume cleanup. The upstreams were fixed-response Alpine
+`nc` probes, not the Product/Gateway commands. This proves neither TLS/user
+or grant authorization through ingress nor WebRTC ICE/UDP/media delivery,
+disabled IP forwarding, all-principal seccomp/resource enforcement, or the
+final release graph. Phase 6 remains **5/15**.
+
 ## Exact final inventory
 
 The gate covers six runtime roles, two executor backends, their eight distinct
@@ -262,7 +326,8 @@ TLS agents, one TLS agent per egress broker, eight Vault material agents,
 workload-credential/break-glass/certificate controllers, two one-shot
 migration jobs, all egress brokers and their one-to-one policy-state
 authorities, and the existing Desktop broker/Browser
-runtime enforcement observations. Vault, PostgreSQL and DNS are external
+runtime enforcement observations, plus the public ingress relay and its two
+exact published paths. Vault, PostgreSQL and DNS are external
 dependencies whose digest, identity, ingress and authorized-client edges are
 bound; their deployment and HA remain non-claims.
 

@@ -13,6 +13,7 @@ import (
 	"errors"
 	"io"
 	"net"
+	"net/netip"
 	"net/url"
 	"path"
 	"regexp"
@@ -71,6 +72,7 @@ var requiredPrincipals = map[string]string{
 	"desktop-broker":                 "broker",
 	"browser-sandbox-runtime":        "sandbox",
 	"desktop-sandbox-runtime":        "sandbox",
+	"public-ingress-relay":           "ingress_relay",
 }
 
 type principalBinding struct {
@@ -109,6 +111,7 @@ var requiredAuthorizationBindings = map[string]principalBinding{
 	"certificate-controller":         {securityprincipal.KindController, "certificate_controller", ""},
 	"product-migration-job":          {securityprincipal.KindMigrationJob, "product_migration", securityprincipal.RoleProduct},
 	"provider-migration-job":         {securityprincipal.KindMigrationJob, "provider_migration", securityprincipal.RoleProvider},
+	"public-ingress-relay":           {securityprincipal.KindIngressRelay, "public_ingress_relay", ""},
 }
 
 var requiredResourceControllers = map[string]string{
@@ -140,6 +143,8 @@ type Profile struct {
 	External               []ExternalService              `json:"external_services"`
 	TrustEdges             []TrustEdge                    `json:"trust_edges"`
 	TrustAnchors           []TrustAnchor                  `json:"trust_anchors"`
+	PublicListeners        []PublicListenerBinding        `json:"public_listeners"`
+	IngressBindings        []IngressBinding               `json:"ingress_bindings"`
 	CertificateController  CertificateControllerAuthority `json:"certificate_controller"`
 	TLSAgentBindings       []TLSAgentBinding              `json:"tls_agent_bindings"`
 	EgressPolicies         []EgressPolicy                 `json:"egress_policies"`
@@ -184,6 +189,7 @@ type Network struct {
 	Internal        bool     `json:"internal"`
 	IPv6Enabled     bool     `json:"ipv6_enabled"`
 	GatewayModeIPv4 string   `json:"gateway_mode_ipv4"`
+	IPv4Subnet      string   `json:"ipv4_subnet"`
 	Principals      []string `json:"principals"`
 }
 
@@ -216,6 +222,41 @@ type Listener struct {
 	Protocol string `json:"protocol"`
 	Port     int    `json:"port"`
 	Exposure string `json:"exposure"`
+}
+
+// PublicListenerBinding is the only server-auth-only ingress exception. It
+// cannot be referenced by an internal mTLS edge or used as a client identity.
+type PublicListenerBinding struct {
+	ID                   string `json:"id"`
+	DeploymentName       string `json:"deployment_name"`
+	PrincipalDigest      string `json:"principal_digest"`
+	ListenerName         string `json:"listener_name"`
+	Port                 int    `json:"port"`
+	IssuerAnchorID       string `json:"issuer_anchor_id"`
+	ClientAuthentication string `json:"client_authentication"`
+}
+
+// IngressBinding pins one fixed L4 mapping from an operator relay frontend to
+// a single existing Product or Gateway public listener.
+type IngressBinding struct {
+	ID                    string `json:"id"`
+	Relay                 string `json:"relay"`
+	RelayPrincipalDigest  string `json:"relay_principal_digest"`
+	PublicListenerID      string `json:"public_listener_id"`
+	Target                string `json:"target"`
+	TargetPrincipalDigest string `json:"target_principal_digest"`
+	FrontendNetwork       string `json:"frontend_network"`
+	TrustNetwork          string `json:"trust_network"`
+	FrontendAddress       string `json:"frontend_address"`
+	UpstreamAddress       string `json:"upstream_address"`
+	HostBindAddress       string `json:"host_bind_address"`
+	MaxConnections        int    `json:"max_connections"`
+	DialTimeoutMillis     int    `json:"dial_timeout_millis"`
+	IdleTimeoutSeconds    int    `json:"idle_timeout_seconds"`
+	MaxLifetimeSeconds    int    `json:"max_lifetime_seconds"`
+	DrainTimeoutSeconds   int    `json:"drain_timeout_seconds"`
+	BufferBytes           int    `json:"buffer_bytes"`
+	ConfigurationDigest   string `json:"configuration_digest"`
 }
 
 type TLSIdentity struct {
@@ -423,7 +464,7 @@ func (p Profile) Validate() error { //nolint:gocyclo
 		!digestPattern.MatchString(p.ProfileDigest) || !digestPattern.MatchString(p.EnvironmentDigest) ||
 		!digestPattern.MatchString(p.PrincipalProfileDigest) || len(p.Principals) < len(requiredPrincipals) || len(p.Principals) > 128 ||
 		len(p.Networks) < 1 || len(p.Networks) > 256 || len(p.External) != 3 || len(p.TrustEdges) < 1 || len(p.TrustEdges) > 512 ||
-		len(p.TrustAnchors) < 1 || len(p.TrustAnchors) > 128 ||
+		len(p.TrustAnchors) < 1 || len(p.TrustAnchors) > 128 || len(p.PublicListeners) != 2 || len(p.IngressBindings) != 2 ||
 		len(p.TLSAgentBindings) < len(requiredTLSAgentSubjects) || len(p.TLSAgentBindings) > 136 || len(p.EgressPolicies) > 128 ||
 		!exactStrings(p.CleanupClasses, []string{"connections", "containers", "files", "networks", "processes", "sockets"}) {
 		return ErrInvalidProfile
@@ -434,7 +475,7 @@ func (p Profile) Validate() error { //nolint:gocyclo
 	}
 	principals := make(map[string]Principal, len(p.Principals))
 	principalDeployments := make(map[string]string, len(p.Principals))
-	uids, gids, identities, seccomp := map[uint32]struct{}{}, map[uint32]struct{}{}, map[string]struct{}{}, map[string]struct{}{}
+	uids, gids, identities := map[uint32]struct{}{}, map[uint32]struct{}{}, map[string]struct{}{}
 	previous := ""
 	authorityBindings := make(map[string]principalBinding, len(p.EgressPolicies))
 	dynamicTLSBindings := make(map[string]principalBinding, len(p.EgressPolicies))
@@ -473,20 +514,19 @@ func (p Profile) Validate() error { //nolint:gocyclo
 		if _, exists := gids[principal.GID]; exists {
 			return ErrInvalidProfile
 		}
-		if _, exists := seccomp[principal.SeccompDigest]; exists {
-			return ErrInvalidProfile
-		}
 		if principal.AuthorizationPrincipal != nil {
 			if _, exists := principalDeployments[principal.PrincipalDigest]; exists {
 				return ErrInvalidProfile
 			}
-			if _, exists := identities[principal.TLS.URI]; exists {
-				return ErrInvalidProfile
+			if principal.TLS != nil {
+				if _, exists := identities[principal.TLS.URI]; exists {
+					return ErrInvalidProfile
+				}
+				identities[principal.TLS.URI] = struct{}{}
 			}
 			principalDeployments[principal.PrincipalDigest] = principal.Name
-			identities[principal.TLS.URI] = struct{}{}
 		}
-		uids[principal.UID], gids[principal.GID], seccomp[principal.SeccompDigest] = struct{}{}, struct{}{}, struct{}{}
+		uids[principal.UID], gids[principal.GID] = struct{}{}, struct{}{}
 		principals[principal.Name] = principal
 	}
 	for name, kind := range requiredPrincipals {
@@ -520,7 +560,13 @@ func (p Profile) Validate() error { //nolint:gocyclo
 	if err != nil {
 		return err
 	}
-	if err := validateTrustAnchors(p.TrustAnchors, p.TrustEdges, p.CertificateController, principals, external); err != nil {
+	if err := validatePublicListeners(p.PublicListeners, principals); err != nil {
+		return err
+	}
+	if err := validateIngressBindings(p.IngressBindings, p.PublicListeners, principals, p.Networks); err != nil {
+		return err
+	}
+	if err := validateTrustAnchors(p.TrustAnchors, p.TrustEdges, p.PublicListeners, p.CertificateController, principals, external); err != nil {
 		return err
 	}
 	if err := validateEgress(p.EgressPolicies, principals, edges); err != nil {
@@ -682,8 +728,9 @@ func validatePrincipal(value Principal, registry *securityprincipal.Registry, au
 	if value.AuthorizationPrincipal != nil {
 		identity := *value.AuthorizationPrincipal
 		if registry == nil || registry.Validate(identity) != nil || value.PrincipalDigest != identity.Digest() ||
-			!digestPattern.MatchString(value.PrincipalDigest) || value.ControllingPrincipalDigest != "" || value.TLS == nil ||
-			value.TLS.PrincipalDigest != value.PrincipalDigest || validateTLS(*value.TLS) != nil ||
+			!digestPattern.MatchString(value.PrincipalDigest) || value.ControllingPrincipalDigest != "" ||
+			(value.Kind == "ingress_relay" && value.TLS != nil) || (value.Kind != "ingress_relay" && value.TLS == nil) ||
+			(value.TLS != nil && (value.TLS.PrincipalDigest != value.PrincipalDigest || validateTLS(*value.TLS) != nil)) ||
 			validateAuthorizationBinding(value.Name, value.Kind, identity, authorityBindings, dynamicTLSBindings) != nil {
 			return ErrInvalidProfile
 		}
@@ -693,6 +740,11 @@ func validatePrincipal(value Principal, registry *securityprincipal.Registry, au
 	}
 	if value.Kind == "egress_broker" {
 		if value.AuthorizationPrincipal == nil || !value.ExternalUplink || value.DirectEgressBlocked || len(value.Networks) != 2 {
+			return ErrInvalidProfile
+		}
+	} else if value.Kind == "ingress_relay" {
+		if value.AuthorizationPrincipal == nil || !value.ExternalUplink || value.DirectEgressBlocked ||
+			len(value.Networks) != 3 || len(value.Mounts) != 0 || len(value.Listeners) != 2 {
 			return ErrInvalidProfile
 		}
 	} else if value.ExternalUplink || !value.DirectEgressBlocked {
@@ -738,7 +790,9 @@ func validatePrincipal(value Principal, registry *securityprincipal.Registry, au
 	seenListeners := map[string]struct{}{}
 	for _, listener := range value.Listeners {
 		if !namePattern.MatchString(listener.Name) || (listener.Protocol != "tcp" && listener.Protocol != "udp" && listener.Protocol != "unix") ||
-			(listener.Exposure != "public" && listener.Exposure != "trust_edge" && listener.Exposure != "loopback" && listener.Exposure != "private_socket") ||
+			(listener.Exposure != "public" && listener.Exposure != "trust_edge" && listener.Exposure != "loopback" && listener.Exposure != "private_socket" && listener.Exposure != "ingress_frontend") ||
+			(listener.Exposure == "ingress_frontend" && (value.Kind != "ingress_relay" || listener.Protocol != "tcp")) ||
+			(value.Kind == "ingress_relay" && listener.Exposure != "ingress_frontend") ||
 			(listener.Protocol == "unix" && listener.Port != 0) || (listener.Protocol != "unix" && (listener.Port < 1 || listener.Port > 65535)) {
 			return ErrInvalidProfile
 		}
@@ -794,6 +848,8 @@ func deploymentKindForPrincipal(kind securityprincipal.Kind) string {
 		return "migration_job"
 	case securityprincipal.KindEgressBroker:
 		return "egress_broker"
+	case securityprincipal.KindIngressRelay:
+		return "ingress_relay"
 	default:
 		return ""
 	}
@@ -820,12 +876,21 @@ func validateTLS(value TLSIdentity) error {
 
 func validateNetworks(values []Network, principals map[string]Principal, egressPolicies []EgressPolicy) error { //nolint:gocyclo
 	networks := make(map[string]Network, len(values))
+	prefixes := make([]netip.Prefix, 0, len(values))
 	previous := ""
 	for _, network := range values {
+		prefix, prefixErr := netip.ParsePrefix(network.IPv4Subnet)
 		if network.Name <= previous || !namePattern.MatchString(network.Name) || len(network.Principals) < 1 ||
-			!sortedUniqueNames(network.Principals) || network.IPv6Enabled {
+			!sortedUniqueNames(network.Principals) || network.IPv6Enabled || prefixErr != nil ||
+			!validObservedSubnet(network.IPv4Subnet, "") || prefix.String() != network.IPv4Subnet {
 			return ErrInvalidProfile
 		}
+		for _, existing := range prefixes {
+			if existing.Contains(prefix.Addr()) || prefix.Contains(existing.Addr()) {
+				return ErrInvalidProfile
+			}
+		}
+		prefixes = append(prefixes, prefix)
 		previous = network.Name
 		switch network.Kind {
 		case "role_internal", "trust_edge":
@@ -838,6 +903,15 @@ func validateNetworks(values []Network, principals map[string]Principal, egressP
 			}
 			principal, ok := principals[network.Principals[0]]
 			if !ok || principal.Kind != "egress_broker" {
+				return ErrInvalidProfile
+			}
+		case "public_ingress":
+			if network.Internal || network.GatewayModeIPv4 != "nat" || len(network.Principals) != 1 ||
+				network.Principals[0] != "public-ingress-relay" {
+				return ErrInvalidProfile
+			}
+			principal, ok := principals[network.Principals[0]]
+			if !ok || principal.Kind != "ingress_relay" {
 				return ErrInvalidProfile
 			}
 		default:
@@ -853,6 +927,7 @@ func validateNetworks(values []Network, principals map[string]Principal, egressP
 	}
 	for name, principal := range principals {
 		externalCount := 0
+		ingressCount := 0
 		for _, networkName := range principal.Networks {
 			network, ok := networks[networkName]
 			if !ok || !slicesContains(network.Principals, name) {
@@ -861,12 +936,19 @@ func validateNetworks(values []Network, principals map[string]Principal, egressP
 			if network.Kind == "external_uplink" {
 				externalCount++
 			}
+			if network.Kind == "public_ingress" {
+				ingressCount++
+			}
 		}
 		if principal.Kind == "egress_broker" {
-			if externalCount != 1 {
+			if externalCount != 1 || ingressCount != 0 {
 				return ErrInvalidProfile
 			}
-		} else if externalCount != 0 {
+		} else if principal.Kind == "ingress_relay" {
+			if externalCount != 0 || ingressCount != 1 {
+				return ErrInvalidProfile
+			}
+		} else if externalCount != 0 || ingressCount != 0 {
 			return ErrInvalidProfile
 		}
 	}
@@ -1334,7 +1416,7 @@ func controllerStorageMember(bindings []TLSAgentBinding, principalName string, m
 
 func validPrincipalKind(value string) bool {
 	switch value {
-	case "runtime", "executor", "material_agent", "tls_agent", "controller", "migration_job", "broker", "sandbox", "egress_broker":
+	case "runtime", "executor", "material_agent", "tls_agent", "controller", "migration_job", "broker", "sandbox", "egress_broker", "ingress_relay":
 		return true
 	default:
 		return false

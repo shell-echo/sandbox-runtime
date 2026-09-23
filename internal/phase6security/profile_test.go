@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -56,6 +57,12 @@ func validProfile() Profile {
 		panic(err)
 	}
 	identities["egress-policy-authority-product"] = authorityIdentity
+	ingressIdentity, err := registry.New(securityprincipal.KindIngressRelay, "public_ingress_relay", "",
+		testDigest("instance/public-ingress-relay"))
+	if err != nil {
+		panic(err)
+	}
+	identities["public-ingress-relay"] = ingressIdentity
 	tlsSubjects := make(map[string]string, len(requiredTLSAgentSubjects)+1)
 	for agent, subject := range requiredTLSAgentSubjects {
 		tlsSubjects[agent] = subject
@@ -71,7 +78,10 @@ func validProfile() Profile {
 		networks := []string{"network-" + name}
 		external, blocked := false, true
 		if name == "product-runtime" {
-			networks = []string{"product-internal"}
+			networks = []string{"ingress-product", "product-internal"}
+		}
+		if name == "gateway-runtime" {
+			networks = []string{"ingress-gateway", "network-gateway-runtime"}
 		}
 		if name == "browser-runtime-role" || name == "browser-executor-backend" {
 			networks = []string{"executor-browser"}
@@ -85,6 +95,10 @@ func validProfile() Profile {
 		}
 		if name == "egress-policy-authority-product" {
 			kind = "controller"
+		}
+		if name == "public-ingress-relay" {
+			kind = "ingress_relay"
+			networks, external, blocked = []string{"ingress-gateway", "ingress-product", "public-ingress"}, true, false
 		}
 		if name == "egress-broker-product-tls-agent" {
 			kind = "tls_agent"
@@ -101,7 +115,19 @@ func validProfile() Profile {
 			principal.Mounts = append(principal.Mounts, Mount{Target: "/run/trust/internal-client-ca.pem", Kind: "trust_anchor",
 				ReadOnly: true, StorageID: "internal-client-ca-storage"})
 		}
-		if name == "browser-runtime-role" || name == "desktop-runtime-role" || name == "product-runtime" {
+		if name == "product-runtime" {
+			principal.Listeners = []Listener{{Name: "api", Protocol: "tcp", Port: 8444, Exposure: "public"}}
+		}
+		if name == "gateway-runtime" {
+			principal.Listeners = []Listener{{Name: "signaling", Protocol: "tcp", Port: 8445, Exposure: "public"}}
+		}
+		if name == "public-ingress-relay" {
+			principal.Listeners = []Listener{
+				{Name: "gateway-public", Protocol: "tcp", Port: 8445, Exposure: "ingress_frontend"},
+				{Name: "product-public", Protocol: "tcp", Port: 8444, Exposure: "ingress_frontend"},
+			}
+		}
+		if name == "browser-runtime-role" || name == "desktop-runtime-role" || name == "product-runtime" || name == "gateway-runtime" {
 			principal.Mounts = append(principal.Mounts, Mount{Target: "/run/trust/internal-server-ca.pem", Kind: "trust_anchor",
 				ReadOnly: true, StorageID: "internal-server-ca-storage"})
 		}
@@ -146,11 +172,21 @@ func validProfile() Profile {
 		if identity, ok := identities[name]; ok {
 			principal.AuthorizationPrincipal = &identity
 			principal.PrincipalDigest = identity.Digest()
-			principal.TLS = &TLSIdentity{PrincipalDigest: identity.Digest(), TrustDomain: "sandbox-runtime.test",
-				URI: "spiffe://sandbox-runtime.test/" + name, Usages: []string{"client_auth"}, TTLSeconds: 900,
-				RotateAfterSeconds: 500, OverlapSeconds: 30, RevocationMaxStalenessSeconds: 30, ConnectionDrainSeconds: 10}
+			if name != "public-ingress-relay" {
+				principal.TLS = &TLSIdentity{PrincipalDigest: identity.Digest(), TrustDomain: "sandbox-runtime.test",
+					URI: "spiffe://sandbox-runtime.test/" + name, Usages: []string{"client_auth"}, TTLSeconds: 900,
+					RotateAfterSeconds: 500, OverlapSeconds: 30, RevocationMaxStalenessSeconds: 30, ConnectionDrainSeconds: 10}
+			}
 			if name == "browser-executor-backend" || name == "desktop-executor-backend" {
 				principal.TLS.Usages = []string{"server_auth"}
+			}
+			if name == "product-runtime" {
+				principal.TLS.DNSNames = []string{"product.sandbox-runtime.test"}
+				principal.TLS.Usages = []string{"client_auth", "server_auth"}
+			}
+			if name == "gateway-runtime" {
+				principal.TLS.DNSNames = []string{"gateway.sandbox-runtime.test"}
+				principal.TLS.Usages = []string{"client_auth", "server_auth"}
 			}
 			if name == "egress-broker-product" {
 				principal.TLS.Usages = []string{"client_auth", "server_auth"}
@@ -164,6 +200,7 @@ func validProfile() Profile {
 	networks := make([]Network, 0, len(principals)+1)
 	for _, principal := range principals {
 		if principal.Name == "egress-broker-product" || principal.Name == "product-runtime" ||
+			principal.Name == "gateway-runtime" || principal.Name == "public-ingress-relay" ||
 			principal.Name == "browser-runtime-role" || principal.Name == "browser-executor-backend" ||
 			principal.Name == "desktop-runtime-role" || principal.Name == "desktop-executor-backend" {
 			continue
@@ -172,6 +209,14 @@ func validProfile() Profile {
 			GatewayModeIPv4: "isolated", Principals: []string{principal.Name}})
 	}
 	networks = append(networks,
+		Network{Name: "network-gateway-runtime", Kind: "role_internal", Internal: true, GatewayModeIPv4: "isolated",
+			Principals: []string{"gateway-runtime"}},
+		Network{Name: "ingress-gateway", Kind: "trust_edge", Internal: true, GatewayModeIPv4: "isolated",
+			Principals: []string{"gateway-runtime", "public-ingress-relay"}},
+		Network{Name: "ingress-product", Kind: "trust_edge", Internal: true, GatewayModeIPv4: "isolated",
+			Principals: []string{"product-runtime", "public-ingress-relay"}},
+		Network{Name: "public-ingress", Kind: "public_ingress", GatewayModeIPv4: "nat",
+			Principals: []string{"public-ingress-relay"}},
 		Network{Name: "executor-browser", Kind: "trust_edge", Internal: true, GatewayModeIPv4: "isolated",
 			Principals: []string{"browser-executor-backend", "browser-runtime-role"}},
 		Network{Name: "executor-desktop", Kind: "trust_edge", Internal: true, GatewayModeIPv4: "isolated",
@@ -180,6 +225,17 @@ func validProfile() Profile {
 		Network{Name: "product-internal", Kind: "role_internal", Internal: true, GatewayModeIPv4: "isolated", Principals: []string{"egress-broker-product", "product-runtime"}},
 	)
 	sort.Slice(networks, func(first, second int) bool { return networks[first].Name < networks[second].Name })
+	for index := range networks {
+		networks[index].IPv4Subnet = "172.20." + strconv.Itoa(index) + ".0/24"
+		switch networks[index].Name {
+		case "public-ingress":
+			networks[index].IPv4Subnet = "10.11.0.0/24"
+		case "ingress-gateway":
+			networks[index].IPv4Subnet = "10.12.0.0/24"
+		case "ingress-product":
+			networks[index].IPv4Subnet = "10.13.0.0/24"
+		}
+	}
 	uri := func(name string) string {
 		for _, principal := range principals {
 			if principal.Name == name {
@@ -273,13 +329,37 @@ func validProfile() Profile {
 			TargetPath: "/run/trust/internal-client-ca.pem", WriterAuthority: "operator", Consumers: []string{"browser-executor-backend", "desktop-executor-backend", "egress-broker-product"}},
 		{ID: "internal-server-ca", BundleDigest: testDigest("internal-server-ca"), Purpose: "server_verification",
 			TrustDomain: "sandbox-runtime.test", ArtifactID: "internal-server-ca-artifact", StorageID: "internal-server-ca-storage",
-			TargetPath: "/run/trust/internal-server-ca.pem", WriterAuthority: "operator", Consumers: []string{"browser-runtime-role", "desktop-runtime-role", "product-runtime"}},
+			TargetPath: "/run/trust/internal-server-ca.pem", WriterAuthority: "operator", Consumers: []string{"browser-runtime-role", "desktop-runtime-role", "gateway-runtime", "product-runtime"}},
 		{ID: "vault-client-ca", BundleDigest: testDigest("vault-client-ca"), Purpose: "client_verification",
 			TrustDomain: "sandbox-runtime.test", ArtifactID: "vault-client-ca-artifact", StorageID: "vault-client-ca-storage",
 			TargetPath: "/run/trust/vault-client-ca.pem", WriterAuthority: "operator", Consumers: []string{"certificate-controller"}},
 	}
+	ingressBindings := []IngressBinding{
+		{ID: "gateway-public", Relay: "public-ingress-relay", RelayPrincipalDigest: ingressIdentity.Digest(),
+			PublicListenerID: "gateway-public", Target: "gateway-runtime", TargetPrincipalDigest: identities["gateway-runtime"].Digest(),
+			FrontendNetwork: "public-ingress", TrustNetwork: "ingress-gateway", FrontendAddress: "10.11.0.2:8445",
+			UpstreamAddress: "10.12.0.3:8445", HostBindAddress: "127.0.0.1:18445",
+			MaxConnections: 16, DialTimeoutMillis: 1000, IdleTimeoutSeconds: 30, MaxLifetimeSeconds: 300,
+			DrainTimeoutSeconds: 10, BufferBytes: 4096},
+		{ID: "product-public", Relay: "public-ingress-relay", RelayPrincipalDigest: ingressIdentity.Digest(),
+			PublicListenerID: "product-public", Target: "product-runtime", TargetPrincipalDigest: identities["product-runtime"].Digest(),
+			FrontendNetwork: "public-ingress", TrustNetwork: "ingress-product", FrontendAddress: "10.11.0.2:8444",
+			UpstreamAddress: "10.13.0.3:8444", HostBindAddress: "127.0.0.1:18444",
+			MaxConnections: 16, DialTimeoutMillis: 1000, IdleTimeoutSeconds: 30, MaxLifetimeSeconds: 300,
+			DrainTimeoutSeconds: 10, BufferBytes: 4096},
+	}
+	for index := range ingressBindings {
+		ingressBindings[index].ConfigurationDigest = ingressBindings[index].Digest()
+	}
 	profile := Profile{Protocol: ProtocolID, Version: Version, Revision: "slice6-security-1", EnvironmentDigest: environmentDigest,
 		PrincipalProfileDigest: principalProfileDigest, Principals: principals, Networks: networks, External: external, TrustEdges: edges, TrustAnchors: anchors,
+		IngressBindings: ingressBindings,
+		PublicListeners: []PublicListenerBinding{
+			{ID: "gateway-public", DeploymentName: "gateway-runtime", PrincipalDigest: principalByName["gateway-runtime"].PrincipalDigest,
+				ListenerName: "signaling", Port: 8445, IssuerAnchorID: "internal-server-ca", ClientAuthentication: "none"},
+			{ID: "product-public", DeploymentName: "product-runtime", PrincipalDigest: principalByName["product-runtime"].PrincipalDigest,
+				ListenerName: "api", Port: 8444, IssuerAnchorID: "internal-server-ca", ClientAuthentication: "none"},
+		},
 		TLSAgentBindings: tlsBindings,
 		CertificateController: CertificateControllerAuthority{DeploymentName: "certificate-controller",
 			PrincipalDigest: controllerRecord.PrincipalDigest, UID: controllerRecord.UID, GID: controllerRecord.GID,
@@ -322,6 +402,26 @@ func TestProfileAcceptsClosedCompleteInventory(t *testing.T) {
 	decoded, err := Decode(document)
 	if err != nil || decoded.ProfileDigest != profile.ProfileDigest {
 		t.Fatalf("Decode() = %#v, %v", decoded, err)
+	}
+}
+
+func TestProfileAllowsReviewedEqualSeccompPolicyAcrossSeparateAgents(t *testing.T) {
+	profile := validProfile()
+	var first string
+	for index := range profile.Principals {
+		if profile.Principals[index].Kind != "tls_agent" {
+			continue
+		}
+		if first == "" {
+			first = profile.Principals[index].SeccompDigest
+			continue
+		}
+		profile.Principals[index].SeccompDigest = first
+		break
+	}
+	profile.ProfileDigest = profile.Digest()
+	if err := profile.Validate(); err != nil {
+		t.Fatalf("equal least-privilege seccomp policy must not require fabricated distinct bytes: %v", err)
 	}
 }
 
@@ -491,7 +591,6 @@ func TestProfileRejectsAuthorityAndEnforcementDrift(t *testing.T) {
 	tests := map[string]func(*Profile){
 		"missing principal": func(p *Profile) { p.Principals = p.Principals[1:] },
 		"shared uid":        func(p *Profile) { p.Principals[1].UID = p.Principals[0].UID },
-		"shared seccomp":    func(p *Profile) { p.Principals[1].SeccompDigest = p.Principals[0].SeccompDigest },
 		"mutable image":     func(p *Profile) { p.Principals[0].ImageReference = "registry.example.test/app:latest" },
 		"wildcard SAN":      func(p *Profile) { p.Principals[0].TLS.DNSNames = []string{"*.example.test"} },
 		"late rotation":     func(p *Profile) { p.Principals[0].TLS.RotateAfterSeconds = 700 },

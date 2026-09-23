@@ -169,7 +169,8 @@ func TestDockerIsolatedNetworkAndLeastPrivilegeTopology(t *testing.T) {
 		t.Fatal(err)
 	}
 	roleNetworkObservation, err := ObserveDockerNetwork([]byte(rawRoleNetwork), Network{Name: roleNetwork,
-		Kind: "role_internal", Internal: true, GatewayModeIPv4: "isolated", Principals: []string{broker, role}},
+		Kind: "role_internal", Internal: true, GatewayModeIPv4: "isolated", IPv4Subnet: roleNetworkInspect.IPAM.Config[0].Subnet,
+		Principals: []string{broker, role}},
 		map[string]string{broker: brokerInspect.ID, role: roleInspect.ID})
 	if err != nil || roleNetworkObservation.HostGateway != "" || len(roleNetworkObservation.ContainerIDs) != 2 {
 		t.Fatalf("closed Docker inspect projection rejected or drifted: %#v, %v", roleNetworkObservation, err)

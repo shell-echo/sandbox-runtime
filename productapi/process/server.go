@@ -44,9 +44,12 @@ func NewServer(address option.HTTP, api http.Handler, readiness Readiness) (*Ser
 }
 
 // NewTLSServer constructs the production Product transport. The supplied TLS
-// configuration is cloned and must already contain a validated certificate.
+// configuration is cloned and must select exactly one validated static
+// certificate or a live certificate callback, never both.
 func NewTLSServer(address option.HTTP, api http.Handler, readiness Readiness, tlsConfig *tls.Config) (*Server, error) {
-	if tlsConfig == nil || len(tlsConfig.Certificates) != 1 || tlsConfig.MinVersion != tls.VersionTLS13 || tlsConfig.MaxVersion != tls.VersionTLS13 {
+	if tlsConfig == nil || tlsConfig.MinVersion != tls.VersionTLS13 || tlsConfig.MaxVersion != tls.VersionTLS13 ||
+		!((len(tlsConfig.Certificates) == 1 && tlsConfig.GetCertificate == nil) ||
+			(len(tlsConfig.Certificates) == 0 && tlsConfig.GetCertificate != nil)) {
 		return nil, errors.New("Product TLS configuration is required")
 	}
 	return newServer(address, api, readiness, tlsConfig.Clone())
