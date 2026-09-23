@@ -22,7 +22,6 @@ const ledgerSchema = "sandbox-runtime.egress-policy-state-ledger.v1"
 type AuthorityConfig struct {
 	Binding         Binding
 	LedgerPath      string
-	SnapshotPath    string
 	PrivateKey      ed25519.PrivateKey
 	Now             func() time.Time
 	AllowInitialize bool
@@ -45,22 +44,54 @@ type Ledger struct {
 	LedgerDigest      string `json:"ledger_digest"`
 }
 
+// RevocationReceipt contains only public, profile-bound committed state.
+// The inspecting process must independently read the authority-private ledger.
+type RevocationReceipt struct {
+	Protocol          string `json:"protocol"`
+	EnvironmentDigest string `json:"environment_digest"`
+	ProfileDigest     string `json:"profile_digest"`
+	PolicyID          string `json:"policy_id"`
+	PolicyRevision    string `json:"policy_revision"`
+	PolicyDigest      string `json:"policy_digest"`
+	PrincipalDigest   string `json:"principal_digest"`
+	BrokerDigest      string `json:"broker_digest"`
+	Generation        uint64 `json:"generation"`
+	Status            string `json:"status"`
+	StateDigest       string `json:"state_digest"`
+	CommittedAt       string `json:"committed_at"`
+	LedgerDigest      string `json:"ledger_digest"`
+}
+
+func InspectRevoked(path string, binding Binding) (RevocationReceipt, error) {
+	if !validPrivatePath(path) {
+		return RevocationReceipt{}, ErrInvalid
+	}
+	ledger, err := loadAuthorityLedger(path, binding)
+	if err != nil || ledger.Status != "revoked" {
+		return RevocationReceipt{}, ErrInvalid
+	}
+	return RevocationReceipt{Protocol: "sandbox-runtime.egress-policy-revocation-receipt.v1",
+		EnvironmentDigest: ledger.EnvironmentDigest, ProfileDigest: ledger.ProfileDigest,
+		PolicyID: ledger.PolicyID, PolicyRevision: ledger.PolicyRevision, PolicyDigest: ledger.PolicyDigest,
+		PrincipalDigest: ledger.PrincipalDigest, BrokerDigest: ledger.BrokerDigest,
+		Generation: ledger.Generation, Status: ledger.Status, StateDigest: ledger.SnapshotDigest,
+		CommittedAt: ledger.CommittedAt, LedgerDigest: ledger.LedgerDigest}, nil
+}
+
 type Authority struct {
-	mu           sync.Mutex
-	binding      Binding
-	ledgerPath   string
-	snapshotPath string
-	privateKey   ed25519.PrivateKey
-	now          func() time.Time
-	lockFile     *os.File
-	current      Ledger
-	replays      map[string]time.Time
-	closed       bool
+	mu         sync.Mutex
+	binding    Binding
+	ledgerPath string
+	privateKey ed25519.PrivateKey
+	now        func() time.Time
+	lockFile   *os.File
+	current    Ledger
+	replays    map[string]time.Time
+	closed     bool
 }
 
 func OpenAuthority(config AuthorityConfig) (*Authority, error) {
-	if !validPrivatePath(config.LedgerPath) || !validPrivatePath(config.SnapshotPath) ||
-		config.LedgerPath == config.SnapshotPath || config.Now == nil || config.Now().IsZero() ||
+	if !validPrivatePath(config.LedgerPath) || config.Now == nil || config.Now().IsZero() ||
 		len(config.PrivateKey) != ed25519.PrivateKeySize ||
 		!config.PrivateKey.Public().(ed25519.PublicKey).Equal(config.Binding.operatorPublicKey) {
 		return nil, ErrInvalid
@@ -69,7 +100,7 @@ func OpenAuthority(config AuthorityConfig) (*Authority, error) {
 	if err != nil {
 		return nil, ErrInvalid
 	}
-	authority := &Authority{binding: config.Binding, ledgerPath: config.LedgerPath, snapshotPath: config.SnapshotPath,
+	authority := &Authority{binding: config.Binding, ledgerPath: config.LedgerPath,
 		privateKey: append(ed25519.PrivateKey(nil), config.PrivateKey...), now: config.Now, lockFile: lockFile,
 		replays: make(map[string]time.Time)}
 	ledger, err := loadAuthorityLedger(config.LedgerPath, config.Binding)
@@ -117,11 +148,7 @@ func (a *Authority) Commit(expectedGeneration uint64, status string, lifetime ti
 	if err != nil || atomicWritePrivate(a.ledgerPath, ledgerDocument) != nil {
 		return Snapshot{}, ErrInvalid
 	}
-	a.current = ledger // committed state wins even when snapshot publication fails
-	snapshotDocument, err := json.Marshal(snapshot)
-	if err != nil || atomicWritePrivate(a.snapshotPath, snapshotDocument) != nil {
-		return Snapshot{}, ErrInvalid
-	}
+	a.current = ledger
 	return snapshot, nil
 }
 
@@ -132,6 +159,11 @@ func (a *Authority) Current(request CurrentRequest, now time.Time) (CurrentRespo
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if a.closed || request.Verify(a.binding, now) != nil || a.current.Generation < 1 || a.checkDiskLocked() != nil {
+		return CurrentResponse{}, ErrInvalid
+	}
+	committedAt, err := canonicalTime(a.current.CommittedAt)
+	if err != nil || now.Before(committedAt) ||
+		(a.current.Status == "active" && now.Sub(committedAt) > a.binding.maxAge) {
 		return CurrentResponse{}, ErrInvalid
 	}
 	for nonce, expiry := range a.replays {
@@ -149,7 +181,7 @@ func (a *Authority) Current(request CurrentRequest, now time.Time) (CurrentRespo
 }
 
 // Committed returns only the locally locked, still-on-disk high-water record.
-// A caller must not infer live policy state from an unverified snapshot file.
+// A caller must not infer live policy state from an unrelated local file.
 func (a *Authority) Committed() (Ledger, error) {
 	if a == nil {
 		return Ledger{}, ErrInvalid
@@ -216,6 +248,14 @@ func (l Ledger) validate(binding Binding) error {
 }
 
 func loadAuthorityLedger(path string, binding Binding) (Ledger, error) {
+	if !validPrivatePath(path) {
+		return Ledger{}, ErrInvalid
+	}
+	info, statErr := os.Lstat(path)
+	owner, ownerOK := parentSyscallStat(info)
+	if statErr == nil && (!ownerOK || owner.Uid != uint32(os.Getuid())) {
+		return Ledger{}, ErrInvalid
+	}
 	document, err := secretfile.Read(path, MaxSnapshotBytes)
 	if err != nil {
 		if _, statErr := os.Lstat(path); errors.Is(statErr, os.ErrNotExist) {

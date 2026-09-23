@@ -56,8 +56,8 @@ func TestOnlinePolicyAuthorityRevocationDrainsLiveBrokerSession(t *testing.T) {
 	}
 	authority, err := egresspolicystate.OpenAuthority(egresspolicystate.AuthorityConfig{
 		Binding: binding, LedgerPath: filepath.Join(ledgerDirectory, "ledger.json"),
-		SnapshotPath: filepath.Join(ledgerDirectory, "current.json"), PrivateKey: privateKey,
-		Now: time.Now, AllowInitialize: true})
+		PrivateKey: privateKey,
+		Now:        time.Now, AllowInitialize: true})
 	if err != nil {
 		t.Fatal(err)
 	}

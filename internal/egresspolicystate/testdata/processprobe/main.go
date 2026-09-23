@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/ed25519"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/signal"
@@ -39,6 +40,16 @@ func main() {
 		runAuthority(binding, key)
 	case "client":
 		runClient(binding)
+	case "inspect":
+		receipt, inspectErr := egresspolicystate.InspectRevoked("/state/ledger/ledger.json", binding)
+		if inspectErr != nil {
+			fatal(inspectErr)
+		}
+		encoded, encodeErr := json.Marshal(receipt)
+		if encodeErr != nil {
+			fatal(encodeErr)
+		}
+		_, _ = fmt.Fprintln(os.Stdout, string(encoded))
 	default:
 		os.Exit(2)
 	}
@@ -46,20 +57,28 @@ func main() {
 
 func initialize(binding egresspolicystate.Binding, key ed25519.PrivateKey) {
 	authority, err := egresspolicystate.OpenAuthority(egresspolicystate.AuthorityConfig{
-		Binding: binding, LedgerPath: "/state/ledger/ledger.json", SnapshotPath: "/state/ledger/current.json",
+		Binding: binding, LedgerPath: "/state/ledger/ledger.json",
 		PrivateKey: key, Now: time.Now, AllowInitialize: true})
 	if err != nil {
 		fatal(err)
 	}
 	defer authority.Close()
-	if _, err := authority.Commit(0, "active", 10*time.Second); err != nil {
+	active, err := authority.Commit(0, "active", 10*time.Second)
+	if err != nil {
+		fatal(err)
+	}
+	legacy, err := json.Marshal(active)
+	if err != nil {
+		fatal(err)
+	}
+	if err := os.WriteFile("/state/ledger/legacy-active.json", legacy, 0o600); err != nil {
 		fatal(err)
 	}
 }
 
 func runAuthority(binding egresspolicystate.Binding, key ed25519.PrivateKey) {
 	authority, err := egresspolicystate.OpenAuthority(egresspolicystate.AuthorityConfig{
-		Binding: binding, LedgerPath: "/state/ledger/ledger.json", SnapshotPath: "/state/ledger/current.json",
+		Binding: binding, LedgerPath: "/state/ledger/ledger.json",
 		PrivateKey: key, Now: time.Now, AllowInitialize: false})
 	if err != nil {
 		fatal(err)

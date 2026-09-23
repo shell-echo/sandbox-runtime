@@ -21,9 +21,8 @@ func TestUnixCurrentAttestationChecksPeerChallengeAndCleanup(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(root) })
-	ledgerDirectory, snapshotDirectory, socketDirectory := filepath.Join(root, "ledger"),
-		filepath.Join(root, "snapshots"), filepath.Join(root, "sockets")
-	for _, path := range []string{ledgerDirectory, snapshotDirectory, socketDirectory} {
+	ledgerDirectory, socketDirectory := filepath.Join(root, "ledger"), filepath.Join(root, "sockets")
+	for _, path := range []string{ledgerDirectory, socketDirectory} {
 		if err := os.Mkdir(path, 0o700); err != nil {
 			t.Fatal(err)
 		}
@@ -35,7 +34,7 @@ func TestUnixCurrentAttestationChecksPeerChallengeAndCleanup(t *testing.T) {
 		t.Fatal(err)
 	}
 	authority, err := OpenAuthority(AuthorityConfig{Binding: binding,
-		LedgerPath: filepath.Join(ledgerDirectory, "ledger.json"), SnapshotPath: filepath.Join(snapshotDirectory, "current.json"),
+		LedgerPath: filepath.Join(ledgerDirectory, "ledger.json"),
 		PrivateKey: key, Now: time.Now, AllowInitialize: true})
 	if err != nil {
 		t.Fatal(err)

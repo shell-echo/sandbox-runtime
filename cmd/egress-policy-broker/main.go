@@ -18,6 +18,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -101,6 +102,9 @@ func run() error { //nolint:gocyclo
 	if uint32(os.Getuid()) != broker.UID || uint32(os.Getgid()) != broker.GID {
 		return stageError("broker-process-identity")
 	}
+	if !validateBrokerListenConfig(broker, config.ListenAddress) {
+		return stageError("broker-listener-binding")
+	}
 	registry, err := principalRegistry(profile)
 	if err != nil {
 		return stageError("principal-registry")
@@ -117,7 +121,7 @@ func run() error { //nolint:gocyclo
 	stateBinding, err := egresspolicystate.NewBinding(egresspolicystate.BindingConfig{
 		EnvironmentDigest: profile.EnvironmentDigest, ProfileDigest: profile.ProfileDigest, Policy: profilePolicy,
 		OperatorKeyID: config.PolicyStateKeyID, OperatorPublicKey: config.PolicyStatePublicKey,
-		MaxAge: egresspolicystate.MaxStateLifetime})
+		MaxAge: time.Duration(profilePolicy.Authority.StateMaxAgeSeconds) * time.Second})
 	if err != nil {
 		return stageError("policy-state-binding")
 	}
@@ -246,6 +250,17 @@ func validatePolicyAuthorityConfig(profile phase6security.Profile, policy phase6
 		config.PolicyBrokerGID == broker.GID &&
 		config.PolicyCurrentPollMillis == policy.Authority.PollMillis &&
 		config.PolicyAuthorityTimeoutMS == policy.Authority.CurrentTimeoutMS
+}
+
+func validateBrokerListenConfig(broker phase6security.Principal, address string) bool {
+	host, portText, err := net.SplitHostPort(address)
+	if err != nil || host != "0.0.0.0" || len(broker.Listeners) != 1 {
+		return false
+	}
+	port, err := strconv.Atoi(portText)
+	listener := broker.Listeners[0]
+	return err == nil && listener.Name == "egress" && listener.Protocol == "tcp" &&
+		listener.Exposure == "trust_edge" && listener.Port == port
 }
 
 func deploymentPrincipal(profile phase6security.Profile, name string) (phase6security.Principal, bool) {

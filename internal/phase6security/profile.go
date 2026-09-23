@@ -230,17 +230,18 @@ type EgressPolicy struct {
 }
 
 type PolicyAuthority struct {
-	DeploymentName    string `json:"deployment_name"`
-	AuthorizationName string `json:"authorization_name"`
-	PrincipalDigest   string `json:"principal_digest"`
-	KeyID             string `json:"key_id"`
-	PublicKeyDigest   string `json:"public_key_digest"`
-	SocketDirectory   string `json:"socket_directory"`
-	SocketStorageID   string `json:"socket_storage_id"`
-	LedgerMountTarget string `json:"ledger_mount_target"`
-	LedgerStorageID   string `json:"ledger_storage_id"`
-	PollMillis        int    `json:"poll_millis"`
-	CurrentTimeoutMS  int    `json:"current_timeout_ms"`
+	DeploymentName     string `json:"deployment_name"`
+	AuthorizationName  string `json:"authorization_name"`
+	PrincipalDigest    string `json:"principal_digest"`
+	KeyID              string `json:"key_id"`
+	PublicKeyDigest    string `json:"public_key_digest"`
+	SocketDirectory    string `json:"socket_directory"`
+	SocketStorageID    string `json:"socket_storage_id"`
+	LedgerMountTarget  string `json:"ledger_mount_target"`
+	LedgerStorageID    string `json:"ledger_storage_id"`
+	PollMillis         int    `json:"poll_millis"`
+	CurrentTimeoutMS   int    `json:"current_timeout_ms"`
+	StateMaxAgeSeconds int    `json:"state_max_age_seconds"`
 }
 
 func (p EgressPolicy) Digest() string {
@@ -751,9 +752,12 @@ func validateEgress(values []EgressPolicy, principals map[string]Principal, edge
 			value.Authority.PollMillis < 50 || value.Authority.PollMillis > 1000 ||
 			value.Authority.CurrentTimeoutMS < 100 || value.Authority.CurrentTimeoutMS > 5000 ||
 			value.Authority.PollMillis+value.Authority.CurrentTimeoutMS > 2000 ||
+			value.Authority.StateMaxAgeSeconds < 1 || value.Authority.StateMaxAgeSeconds > 30 ||
 			value.LeaseSeconds < 1 || value.LeaseSeconds > 300 || value.DNSMaxAnswers < 1 || value.DNSMaxAnswers > 32 ||
 			!value.DenyRawIP || !value.DenyAlternateDNS || !value.DenyProxyEnvironment || !value.DenyRedirectAuthority || !value.DenyMetadataPrivateRanges ||
-			len(value.Targets) < 1 || len(value.Targets) > 64 {
+			len(value.Targets) < 1 || len(value.Targets) > 64 || len(broker.Listeners) != 1 ||
+			broker.Listeners[0].Name != "egress" || broker.Listeners[0].Protocol != "tcp" ||
+			broker.Listeners[0].Exposure != "trust_edge" || broker.Listeners[0].Port < 1 {
 			return ErrInvalidProfile
 		}
 		previous = value.ID

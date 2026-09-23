@@ -4,6 +4,7 @@ package egresspolicystate
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -123,7 +124,7 @@ func TestDockerDistinctUIDPolicyAuthorityAndRevocation(t *testing.T) {
 	awaitStatus("active")
 	if _, err := dockerPolicy(ctx, "run", "--rm", "--network", "none", "--user", "20002:30000", "--read-only",
 		"--cap-drop", "ALL", "--mount", volumeMount+",readonly", image, "sh", "-c",
-		"test ! -r /state/ledger/ledger.json && test ! -r /state/ledger/current.json"); err != nil {
+		"test ! -r /state/ledger/ledger.json && test ! -r /state/ledger/legacy-active.json"); err != nil {
 		t.Fatalf("broker-side UID could read authority-private ledger: %v", err)
 	}
 	if _, err := dockerPolicy(ctx, "run", "--rm", "--network", "none", "--user", "20003:30000", "--read-only",
@@ -136,18 +137,32 @@ func TestDockerDistinctUIDPolicyAuthorityAndRevocation(t *testing.T) {
 	if status, err := client(); err == nil || status == "active" {
 		t.Fatalf("crashed authority accepted by broker-side client: status=%q err=%v", status, err)
 	}
+	inspect := func() (string, error) {
+		return dockerPolicy(ctx, "run", "--rm", "--network", "none", "--user", "20001:30001", "--read-only",
+			"--cap-drop", "ALL", "--mount", volumeMount+",readonly", image, "/state/probe", "inspect")
+	}
+	if _, err := inspect(); err == nil {
+		t.Fatal("crash without revocation produced durable revoked receipt")
+	}
 	if _, err := dockerPolicy(ctx, "rm", container); err != nil {
 		t.Fatal(err)
 	}
 	containerCreated = false
 	startAuthority()
 	awaitStatus("active") // safe stale-socket recovery after abrupt death
-	// Preserve the old audit snapshot, then commit revocation. It is never a
-	// broker authority even if an operator later restores it.
-	copyOld := "cp /state/ledger/current.json /state/ledger/old.json && chown 20001:30001 /state/ledger/old.json && chmod 0600 /state/ledger/old.json"
-	if _, err := dockerPolicy(ctx, "run", "--rm", "--network", "none", "-v", volume+":/state", image, "sh", "-c", copyOld); err != nil {
+	if _, err := dockerPolicy(ctx, "stop", "-t", "2", container); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := inspect(); err == nil {
+		t.Fatal("SIGTERM without revocation produced durable revoked receipt")
+	}
+	if _, err := dockerPolicy(ctx, "rm", container); err != nil {
+		t.Fatal(err)
+	}
+	containerCreated = false
+	startAuthority()
+	awaitStatus("active")
+	// The fixture's legacy signed active artifact is never broker authority.
 	if _, err := dockerPolicy(ctx, "kill", "--signal=USR1", container); err != nil {
 		t.Fatal(err)
 	}
@@ -155,11 +170,20 @@ func TestDockerDistinctUIDPolicyAuthorityAndRevocation(t *testing.T) {
 	if _, err := dockerPolicy(ctx, "stop", "-t", "2", container); err != nil {
 		t.Fatal(err)
 	}
+	receiptDocument, err := inspect()
+	if err != nil {
+		t.Fatalf("read-only revoked ledger inspection: %v", err)
+	}
+	var receipt RevocationReceipt
+	if err := json.Unmarshal([]byte(receiptDocument), &receipt); err != nil || receipt.Status != "revoked" ||
+		receipt.PolicyID != "product-egress" || receipt.Generation < 2 || receipt.LedgerDigest == "" {
+		t.Fatalf("invalid durable revocation receipt %#v: %v", receipt, err)
+	}
 	if _, err := dockerPolicy(ctx, "rm", container); err != nil {
 		t.Fatal(err)
 	}
 	containerCreated = false
-	restoreOld := "cp /state/ledger/old.json /state/ledger/current.json && chown 20001:30001 /state/ledger/current.json && chmod 0600 /state/ledger/current.json"
+	restoreOld := "cp /state/ledger/legacy-active.json /state/ledger/current.json && chown 20001:30001 /state/ledger/current.json && chmod 0600 /state/ledger/current.json"
 	if _, err := dockerPolicy(ctx, "run", "--rm", "--network", "none", "-v", volume+":/state", image, "sh", "-c", restoreOld); err != nil {
 		t.Fatal(err)
 	}
@@ -175,7 +199,7 @@ func TestDockerDistinctUIDPolicyAuthorityAndRevocation(t *testing.T) {
 		t.Fatal(err)
 	}
 	containerCreated = false
-	t.Log("distinct-UID Docker authority: active, crash/restart with stale socket, signed revoked, revoked restart despite old audit snapshot, outage denial, exact cleanup")
+	t.Log("distinct-UID Docker authority: active, SIGKILL/SIGTERM non-revocation, crash/restart with stale socket, signed revoked plus independent durable receipt, revoked restart despite old audit artifact, outage denial, exact cleanup")
 }
 
 func dockerPolicy(ctx context.Context, arguments ...string) (string, error) {

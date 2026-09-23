@@ -76,6 +76,7 @@ func validProfile() Profile {
 			principal.Mounts = []Mount{
 				{Target: "/run/egress-authority", Kind: "private_socket", ReadOnly: true, StorageID: "product-authority-socket"},
 			}
+			principal.Listeners = []Listener{{Name: "egress", Protocol: "tcp", Port: 8443, Exposure: "trust_edge"}}
 		}
 		if name == "egress-policy-authority-product" {
 			principal.Mounts = []Mount{
@@ -143,7 +144,8 @@ func validProfile() Profile {
 			Authority: PolicyAuthority{DeploymentName: "egress-policy-authority-product", AuthorizationName: "product_policy_authority",
 				PrincipalDigest: identities["egress-policy-authority-product"].Digest(), KeyID: "operator-product-1",
 				PublicKeyDigest: testDigest("operator-public-key"), SocketDirectory: "/run/egress-authority", SocketStorageID: "product-authority-socket",
-				LedgerMountTarget: "/var/lib/egress-authority", LedgerStorageID: "product-authority-ledger", PollMillis: 500, CurrentTimeoutMS: 1000},
+				LedgerMountTarget: "/var/lib/egress-authority", LedgerStorageID: "product-authority-ledger", PollMillis: 500,
+				CurrentTimeoutMS: 1000, StateMaxAgeSeconds: 5},
 			LeaseSeconds: 60, DNSMaxAnswers: 8,
 			DenyRawIP: true, DenyAlternateDNS: true, DenyProxyEnvironment: true, DenyRedirectAuthority: true, DenyMetadataPrivateRanges: true,
 			Targets: []EgressTarget{{Alias: "example-api", Host: "api.example.test", Port: 443, Protocol: "https"}}}},
@@ -214,8 +216,17 @@ func TestProfileRejectsAuthorityAndEnforcementDrift(t *testing.T) {
 		"authority principal swapped": func(p *Profile) { p.EgressPolicies[0].Authority.PrincipalDigest = testDigest("other-authority") },
 		"authority key omitted":       func(p *Profile) { p.EgressPolicies[0].Authority.PublicKeyDigest = "" },
 		"authority too slow":          func(p *Profile) { p.EgressPolicies[0].Authority.CurrentTimeoutMS = 2000 },
+		"authority stale budget":      func(p *Profile) { p.EgressPolicies[0].Authority.StateMaxAgeSeconds = 31 },
 		"authority socket exchanged":  func(p *Profile) { p.EgressPolicies[0].Authority.SocketStorageID = "other-socket" },
 		"authority ledger exchanged":  func(p *Profile) { p.EgressPolicies[0].Authority.LedgerStorageID = "other-ledger" },
+		"broker extra listener": func(p *Profile) {
+			for index := range p.Principals {
+				if p.Principals[index].Name == "egress-broker-product" {
+					p.Principals[index].Listeners = append(p.Principals[index].Listeners,
+						Listener{Name: "extra", Protocol: "tcp", Port: 9443, Exposure: "public"})
+				}
+			}
+		},
 		"authority socket made public": func(p *Profile) {
 			for index := range p.Principals {
 				if p.Principals[index].Name == "egress-broker-product" {

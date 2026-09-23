@@ -120,3 +120,20 @@ func TestBrokerPolicyAuthorityConfigMustMatchProfile(t *testing.T) {
 		})
 	}
 }
+
+func TestBrokerListenerMustMatchClosedProfile(t *testing.T) {
+	broker := phase6security.Principal{Listeners: []phase6security.Listener{
+		{Name: "egress", Protocol: "tcp", Port: 8443, Exposure: "trust_edge"}}}
+	if !validateBrokerListenConfig(broker, "0.0.0.0:8443") {
+		t.Fatal("bound egress listener rejected")
+	}
+	for _, address := range []string{"127.0.0.1:8443", "0.0.0.0:9443", "[::]:8443", "broker.test:8443", "0.0.0.0:0"} {
+		if validateBrokerListenConfig(broker, address) {
+			t.Fatalf("listener drift %q accepted", address)
+		}
+	}
+	broker.Listeners = append(broker.Listeners, phase6security.Listener{Name: "extra", Protocol: "tcp", Port: 9443, Exposure: "public"})
+	if validateBrokerListenConfig(broker, "0.0.0.0:8443") {
+		t.Fatal("extra listener accepted")
+	}
+}

@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
-	"github.com/shell-echo/sandbox-runtime/internal/secretfile"
 )
 
 const (
@@ -129,15 +128,6 @@ func Decode(document []byte, binding Binding, now time.Time) (Snapshot, error) {
 	return snapshot, nil
 }
 
-func ReadFile(path string, binding Binding, now time.Time) (Snapshot, error) {
-	document, err := secretfile.Read(path, MaxSnapshotBytes)
-	if err != nil {
-		return Snapshot{}, ErrInvalid
-	}
-	defer clear(document)
-	return Decode(document, binding, now)
-}
-
 func (s Snapshot) Verify(binding Binding, now time.Time) error {
 	issued, issueErr := canonicalTime(s.IssuedAt)
 	expires, expiryErr := canonicalTime(s.ExpiresAt)
@@ -172,53 +162,4 @@ func canonicalTime(value string) (time.Time, error) {
 		return time.Time{}, ErrInvalid
 	}
 	return parsed, nil
-}
-
-type Tracker struct {
-	binding        Binding
-	lastGeneration uint64
-	lastDigest     string
-	lastNow        time.Time
-	terminated     bool
-}
-
-func NewTracker(binding Binding) *Tracker { return &Tracker{binding: binding} }
-
-func (t *Tracker) Accept(document []byte, now time.Time) (Snapshot, error) {
-	if t == nil || t.terminated {
-		return Snapshot{}, ErrInvalid
-	}
-	if !t.lastNow.IsZero() && now.Before(t.lastNow) {
-		t.terminated = true
-		return Snapshot{}, ErrInvalid
-	}
-	snapshot, err := Decode(document, t.binding, now)
-	if err != nil || snapshot.Generation < t.lastGeneration ||
-		(snapshot.Generation == t.lastGeneration && snapshot.SnapshotDigest != t.lastDigest) {
-		t.terminated = true
-		return Snapshot{}, ErrInvalid
-	}
-	t.lastGeneration, t.lastDigest, t.lastNow = snapshot.Generation, snapshot.SnapshotDigest, now
-	if snapshot.Status == "revoked" {
-		t.terminated = true
-		return snapshot, ErrRevoked
-	}
-	return snapshot, nil
-}
-
-func (t *Tracker) ReadFile(path string, now time.Time) (Snapshot, error) {
-	document, err := secretfile.Read(path, MaxSnapshotBytes)
-	if err != nil {
-		// A same-directory atomic rename can race the file-identity check.
-		// Retry once immediately; a persistent loss remains terminal.
-		document, err = secretfile.Read(path, MaxSnapshotBytes)
-	}
-	if err != nil {
-		if t != nil {
-			t.terminated = true
-		}
-		return Snapshot{}, ErrInvalid
-	}
-	defer clear(document)
-	return t.Accept(document, now)
 }

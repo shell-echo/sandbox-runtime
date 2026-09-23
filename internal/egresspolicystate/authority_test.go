@@ -13,14 +13,14 @@ import (
 func TestAuthorityLedgerCommitRestartAndFreshCurrent(t *testing.T) {
 	binding, key, _ := stateFixture(t)
 	root := privateTempDir(t)
-	ledgerDirectory, snapshotDirectory := filepath.Join(root, "ledger"), filepath.Join(root, "snapshots")
-	for _, path := range []string{ledgerDirectory, snapshotDirectory} {
+	ledgerDirectory := filepath.Join(root, "ledger")
+	for _, path := range []string{ledgerDirectory} {
 		if err := os.Mkdir(path, 0o700); err != nil {
 			t.Fatal(err)
 		}
 	}
 	config := AuthorityConfig{Binding: binding, LedgerPath: filepath.Join(ledgerDirectory, "ledger.json"),
-		SnapshotPath: filepath.Join(snapshotDirectory, "current.json"), PrivateKey: key, Now: time.Now, AllowInitialize: true}
+		PrivateKey: key, Now: time.Now, AllowInitialize: true}
 	authority, err := OpenAuthority(config)
 	if err != nil {
 		t.Fatal(err)
@@ -77,17 +77,17 @@ func TestAuthorityLedgerCommitRestartAndFreshCurrent(t *testing.T) {
 	}
 }
 
-func TestAuthorityCommittedRevocationBeatsStaleSnapshot(t *testing.T) {
+func TestAuthorityCommittedRevocationIgnoresStaleAuditFile(t *testing.T) {
 	binding, key, _ := stateFixture(t)
 	root := privateTempDir(t)
-	ledgerDirectory, snapshotDirectory := filepath.Join(root, "ledger"), filepath.Join(root, "snapshots")
-	for _, path := range []string{ledgerDirectory, snapshotDirectory} {
+	ledgerDirectory := filepath.Join(root, "ledger")
+	for _, path := range []string{ledgerDirectory} {
 		if err := os.Mkdir(path, 0o700); err != nil {
 			t.Fatal(err)
 		}
 	}
 	config := AuthorityConfig{Binding: binding, LedgerPath: filepath.Join(ledgerDirectory, "ledger.json"),
-		SnapshotPath: filepath.Join(snapshotDirectory, "current.json"), PrivateKey: key, Now: time.Now, AllowInitialize: true}
+		PrivateKey: key, Now: time.Now, AllowInitialize: true}
 	authority, err := OpenAuthority(config)
 	if err != nil {
 		t.Fatal(err)
@@ -96,6 +96,17 @@ func TestAuthorityCommittedRevocationBeatsStaleSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	future := time.Now().UTC().Add(6 * time.Second)
+	staleRequest, err := NewCurrentRequest(binding, future)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := authority.Current(staleRequest, future); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("stale active ledger still signed Current: %v", err)
+	}
+	if _, err := InspectRevoked(config.LedgerPath, binding); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("active ledger produced revocation receipt: %v", err)
+	}
 	activeDocument, err := json.Marshal(active)
 	if err != nil {
 		t.Fatal(err)
@@ -103,11 +114,24 @@ func TestAuthorityCommittedRevocationBeatsStaleSnapshot(t *testing.T) {
 	if _, err := authority.Commit(1, "revoked", 10*time.Second); err != nil {
 		t.Fatal(err)
 	}
+	receipt, err := InspectRevoked(config.LedgerPath, binding)
+	if err != nil || receipt.Status != "revoked" || receipt.Generation != 2 ||
+		receipt.PolicyDigest != binding.policyDigest || receipt.LedgerDigest == "" {
+		t.Fatalf("durable revocation receipt = %#v, %v", receipt, err)
+	}
+	terminalRequest, err := NewCurrentRequest(binding, future)
+	if err != nil {
+		t.Fatal(err)
+	}
+	terminalResponse, err := authority.Current(terminalRequest, future)
+	if err != nil || terminalResponse.Status != "revoked" {
+		t.Fatalf("terminal revoked state lost after active freshness window: %#v, %v", terminalResponse, err)
+	}
 	if err := authority.Close(); err != nil {
 		t.Fatal(err)
 	}
-	// Model publication rollback after the ledger's durable revoked commit.
-	if err := os.WriteFile(config.SnapshotPath, activeDocument, 0o600); err != nil {
+	// A legacy signed active audit file is never an authorization source.
+	if err := os.WriteFile(filepath.Join(ledgerDirectory, "current.json"), activeDocument, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	config.AllowInitialize = false
@@ -130,7 +154,7 @@ func TestAuthorityMissingAndCorruptLedgerFailClosed(t *testing.T) {
 	binding, key, _ := stateFixture(t)
 	directory := privateTempDir(t)
 	config := AuthorityConfig{Binding: binding, LedgerPath: filepath.Join(directory, "ledger.json"),
-		SnapshotPath: filepath.Join(directory, "state.json"), PrivateKey: key, Now: time.Now}
+		PrivateKey: key, Now: time.Now}
 	if _, err := OpenAuthority(config); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("uninitialized authority accepted: %v", err)
 	}
@@ -154,11 +178,39 @@ func TestAuthorityMissingAndCorruptLedgerFailClosed(t *testing.T) {
 	}
 }
 
+func TestFailedRevocationCommitNeverYieldsReceipt(t *testing.T) {
+	binding, key, _ := stateFixture(t)
+	directory := privateTempDir(t)
+	ledgerPath := filepath.Join(directory, "ledger.json")
+	authority, err := OpenAuthority(AuthorityConfig{Binding: binding, LedgerPath: ledgerPath,
+		PrivateKey: key, Now: time.Now, AllowInitialize: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer authority.Close()
+	if _, err := authority.Commit(0, "active", 10*time.Second); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(directory, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := authority.Commit(1, "revoked", 10*time.Second); !errors.Is(err, ErrInvalid) {
+		_ = os.Chmod(directory, 0o700)
+		t.Fatalf("unwritable ledger accepted revocation: %v", err)
+	}
+	if err := os.Chmod(directory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := InspectRevoked(ledgerPath, binding); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("failed revocation produced receipt: %v", err)
+	}
+}
+
 func TestAuthorityCurrentLinearizesWithRevocationAndRejectsOtherPolicy(t *testing.T) {
 	binding, key, _ := stateFixture(t)
 	directory := privateTempDir(t)
 	authority, err := OpenAuthority(AuthorityConfig{Binding: binding,
-		LedgerPath: filepath.Join(directory, "ledger.json"), SnapshotPath: filepath.Join(directory, "current.json"),
+		LedgerPath: filepath.Join(directory, "ledger.json"),
 		PrivateKey: key, Now: time.Now, AllowInitialize: true})
 	if err != nil {
 		t.Fatal(err)

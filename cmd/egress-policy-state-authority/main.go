@@ -32,15 +32,13 @@ type configDocument struct {
 	SecurityProfilePath      string `json:"security_profile_path"`
 	PolicyID                 string `json:"policy_id"`
 	LedgerPath               string `json:"ledger_path"`
-	SnapshotPath             string `json:"snapshot_path"`
 	SocketPath               string `json:"socket_path"`
 	OperatorKeyID            string `json:"operator_key_id"`
 	OperatorPublicKey        []byte `json:"operator_public_key"`
 	ExpectedBrokerUID        uint32 `json:"expected_broker_uid"`
 	ExpectedBrokerGID        uint32 `json:"expected_broker_gid"`
 	MaxConnections           int    `json:"max_connections"`
-	SnapshotLifetimeSeconds  int    `json:"snapshot_lifetime_seconds"`
-	SnapshotRefreshMillis    int    `json:"snapshot_refresh_millis"`
+	StateRefreshMillis       int    `json:"state_refresh_millis"`
 	PolicyStateMaxAgeSeconds int    `json:"policy_state_max_age_seconds"`
 }
 
@@ -84,6 +82,21 @@ func run() error {
 	if err != nil {
 		return stageError("binding")
 	}
+	if config.Mode == "inspect" {
+		receipt, err := egresspolicystate.InspectRevoked(config.LedgerPath, binding)
+		if err != nil {
+			return stageError("inspect-revocation")
+		}
+		encoded, err := json.Marshal(receipt)
+		if err != nil {
+			return stageError("receipt-encode")
+		}
+		_, err = os.Stdout.Write(append(encoded, '\n'))
+		if err != nil {
+			return stageError("receipt-write")
+		}
+		return nil
+	}
 	privateKey, err := readSigningKey()
 	if err != nil {
 		return stageError("signing-key")
@@ -93,13 +106,13 @@ func run() error {
 		return stageError("signing-key-binding")
 	}
 	authority, err := egresspolicystate.OpenAuthority(egresspolicystate.AuthorityConfig{
-		Binding: binding, LedgerPath: config.LedgerPath, SnapshotPath: config.SnapshotPath,
+		Binding: binding, LedgerPath: config.LedgerPath,
 		PrivateKey: privateKey, Now: time.Now, AllowInitialize: config.Mode == "initialize"})
 	if err != nil {
 		return stageError("ledger")
 	}
 	defer authority.Close()
-	lifetime := time.Duration(config.SnapshotLifetimeSeconds) * time.Second
+	lifetime := time.Duration(config.PolicyStateMaxAgeSeconds) * time.Second
 	if config.Mode == "initialize" {
 		if _, err := authority.Commit(0, "active", lifetime); err != nil {
 			return stageError("initialize")
@@ -128,7 +141,7 @@ func run() error {
 	defer signal.Stop(revocations)
 	served := make(chan error, 1)
 	go func() { served <- server.Serve(ctx) }()
-	ticker := time.NewTicker(time.Duration(config.SnapshotRefreshMillis) * time.Millisecond)
+	ticker := time.NewTicker(time.Duration(config.StateRefreshMillis) * time.Millisecond)
 	defer ticker.Stop()
 	for {
 		select {
@@ -184,16 +197,14 @@ func decodeConfig(document []byte) (configDocument, error) {
 	}
 	canonical, err := json.Marshal(config)
 	if err != nil || !bytes.Equal(canonical, document) || config.Protocol != configProtocol ||
-		(config.Mode != "initialize" && config.Mode != "serve") || !validPath(config.SecurityProfilePath) ||
-		!validPath(config.LedgerPath) || !validPath(config.SnapshotPath) || !validPath(config.SocketPath) ||
-		config.LedgerPath == config.SnapshotPath || config.PolicyID == "" || config.OperatorKeyID == "" ||
+		(config.Mode != "initialize" && config.Mode != "serve" && config.Mode != "inspect") || !validPath(config.SecurityProfilePath) ||
+		!validPath(config.LedgerPath) || !validPath(config.SocketPath) ||
+		config.PolicyID == "" || config.OperatorKeyID == "" ||
 		len(config.OperatorPublicKey) != ed25519.PublicKeySize ||
 		config.MaxConnections < 1 || config.MaxConnections > 64 ||
-		config.SnapshotLifetimeSeconds < 2 || config.SnapshotLifetimeSeconds > 30 ||
 		config.PolicyStateMaxAgeSeconds < 1 || config.PolicyStateMaxAgeSeconds > 30 ||
-		config.SnapshotRefreshMillis < 50 || config.SnapshotRefreshMillis > 1000 ||
-		config.SnapshotRefreshMillis*2 > config.SnapshotLifetimeSeconds*1000 ||
-		config.SnapshotRefreshMillis*2 > config.PolicyStateMaxAgeSeconds*1000 {
+		config.StateRefreshMillis < 50 || config.StateRefreshMillis > 1000 ||
+		config.StateRefreshMillis*2 > config.PolicyStateMaxAgeSeconds*1000 {
 		clear(canonical)
 		return configDocument{}, stageError("config-validate")
 	}
@@ -221,8 +232,8 @@ func validateProfileBinding(profile phase6security.Profile, policy phase6securit
 		config.ExpectedBrokerUID == broker.UID && config.ExpectedBrokerGID == broker.GID &&
 		config.OperatorKeyID == policy.Authority.KeyID &&
 		phase6security.OperatorPublicKeyDigest(config.OperatorPublicKey) == policy.Authority.PublicKeyDigest &&
+		config.PolicyStateMaxAgeSeconds == policy.Authority.StateMaxAgeSeconds &&
 		config.LedgerPath == filepath.Join(policy.Authority.LedgerMountTarget, "ledger.json") &&
-		config.SnapshotPath == filepath.Join(policy.Authority.LedgerMountTarget, "current.json") &&
 		config.SocketPath == filepath.Join(policy.Authority.SocketDirectory, "current.sock")
 }
 

@@ -152,11 +152,12 @@ and restricted Unix socket; no process signs another policy. A one-time
 explicit initialization commits generation one. Later starts recover the
 ledger and cannot silently initialize a missing/corrupt record or reactivate
 a revoked policy. Every active refresh and revocation commits the atomic,
-fsynced ledger before publishing its authority-private signed snapshot.
-The file is for authority audit/recovery only, **not** a broker authorization
-source: distinct broker and authority UIDs cannot safely share a 0600 file,
-and file-plus-online comparison would still have only one underlying trust
-source while adding publication races.
+fsynced ledger; the authority signs Current from that ledger's in-memory
+state digest. It does **not** publish a separate state file: distinct broker
+and authority UIDs cannot safely share a 0600 file, and file-plus-online
+comparison would still have only one underlying trust source while adding
+publication races, write load and failure modes. A legacy file, if present,
+has no authorization effect.
 
 Before listening, and then at a profile-bound interval no longer than one
 second, the broker sends a new random challenge to the live authority over a
@@ -180,6 +181,15 @@ signing key never enters the broker or repository. Local gates do not prove
 independent production operator administration or trusted recovery from a
 privileged operator restoring both ledger and key; Slice 14 must explicitly
 state that boundary.
+
+An operator SIGUSR1 is only a revocation trigger, not proof of completion.
+The operator waits for a successful authority exit, then runs an independent
+read-only inspection of the exact private ledger. A successful canonical
+receipt must bind the expected environment, profile, policy, principal,
+broker, generation, committed time and ledger digest with `status=revoked`.
+SIGTERM, SIGKILL, signal delivery, transport loss and nonzero process exit
+must never be reported as permanent policy revocation; a visible receipt after
+a failed fsync/exit is escalated rather than treated as proven durable.
 
 Equivalent policies may share implementation but not a higher-authority
 global broker identity. Negative network-topology tests, rather than an

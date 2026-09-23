@@ -124,26 +124,32 @@ inventory and immutable Slice 6 evidence gate remain open, so Phase 6 remains
 The policy-revocation component now has a closed Ed25519 state protocol,
 operator-owned single-writer atomic/fsynced CAS ledger, independent authority
 command, challenge/response Unix Current protocol and production broker
-startup/continuous polling path. The broker does **not** read the authority's
-private snapshot file: it refuses to listen before a fresh signed online
+startup/continuous polling path. The broker does **not** read a state file:
+it refuses to listen before a fresh signed online
 Current, then polls at a profile-bound interval and revokes/drains on the
 first invalid, unavailable, rolled-back or revoked response. Each policy is
 bound to a distinct controller principal, key digest, socket and managed
 persistent ledger volume in the canonical security profile. Component tests
 cover replay, restart high-water, old active versus committed revoked state,
-peer credentials, healthy refresh, online revocation and live TLS tunnel
+peer credentials, stale active-ledger refusal, failed revocation commit without
+a receipt, healthy refresh, online revocation and live TLS tunnel
 drain. A tagged Docker checkpoint runs the authority protocol in a real
 container under UID/GID 20001:30001 and its client under 20002:30000 with
 only a read-only managed-volume view. It observes active Current, abrupt
-authority death, safe same-owner stale-socket recovery on restart, signed
+authority death, SIGTERM/SIGKILL without false permanent revocation,
+safe same-owner stale-socket recovery on restart, signed
 revocation, revoked restart despite restoration of an old audit snapshot,
 authority outage denial, wrong-UID peer rejection, broker denial on reading
-the private ledger and exact fixture container/volume cleanup. The fixture
+the private ledger and exact fixture container/volume cleanup. A separate
+read-only authority-UID process verifies the committed revoked generation,
+binding, timestamp and ledger digest; a crash with active ledger fails that
+inspection. The fixture
 embeds a deterministic test key in a shared test binary; it does **not** prove
 production signing-key isolation. It calls the protocol package directly and
 is **not** the production
-broker/authority pair or a full Slice 6 gate. The legacy file monitor remains
-only a component test, not production authorization evidence. The profile
+broker/authority pair or a full Slice 6 gate. The obsolete file monitor and
+snapshot-file publication path were removed; a legacy signed active file is
+ignored in the restart test. The profile
 exception for one authority-private
 managed persistent volume is explicit; broker and business roles have no
 ledger access or host-path bind mount.

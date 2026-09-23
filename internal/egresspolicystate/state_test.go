@@ -6,8 +6,6 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"errors"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -93,66 +91,5 @@ func TestSignedStateBindsExactPolicyAndCanonicalDocument(t *testing.T) {
 	}
 	if _, err := NewSigned(binding, 2, now, now.Add(MaxStateLifetime+time.Second), "active", key); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("unbounded signed state error = %v", err)
-	}
-}
-
-func TestStateTrackerRejectsRollbackMutationRevocationAndOutage(t *testing.T) {
-	binding, key, now := stateFixture(t)
-	first := signedDocument(t, binding, key, 1, now, "active")
-	second := signedDocument(t, binding, key, 2, now.Add(time.Second), "active")
-	tracker := NewTracker(binding)
-	for _, document := range [][]byte{first, first, second} {
-		if _, err := tracker.Accept(document, now.Add(2*time.Second)); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if _, err := tracker.Accept(first, now.Add(3*time.Second)); !errors.Is(err, ErrInvalid) {
-		t.Fatalf("rollback error = %v", err)
-	}
-	if _, err := tracker.Accept(second, now.Add(3*time.Second)); !errors.Is(err, ErrInvalid) {
-		t.Fatalf("terminal rollback revived = %v", err)
-	}
-	tracker = NewTracker(binding)
-	if _, err := tracker.Accept(first, now.Add(time.Second)); err != nil {
-		t.Fatal(err)
-	}
-	changed := signedDocument(t, binding, key, 1, now.Add(time.Second), "active")
-	if _, err := tracker.Accept(changed, now.Add(2*time.Second)); !errors.Is(err, ErrInvalid) {
-		t.Fatalf("same generation mutation error = %v", err)
-	}
-	tracker = NewTracker(binding)
-	if _, err := tracker.Accept(first, now.Add(time.Second)); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := tracker.Accept(second, now); !errors.Is(err, ErrInvalid) {
-		t.Fatalf("clock rollback error = %v", err)
-	}
-	tracker = NewTracker(binding)
-	if _, err := tracker.Accept(first, now.Add(time.Second)); err != nil {
-		t.Fatal(err)
-	}
-	revoked := signedDocument(t, binding, key, 2, now.Add(time.Second), "revoked")
-	if _, err := tracker.Accept(revoked, now.Add(2*time.Second)); !errors.Is(err, ErrRevoked) {
-		t.Fatalf("revocation error = %v", err)
-	}
-	if _, err := tracker.Accept(second, now.Add(2*time.Second)); !errors.Is(err, ErrInvalid) {
-		t.Fatalf("revoked tracker revived = %v", err)
-	}
-	path := filepath.Join(t.TempDir(), "operator-state.json")
-	if err := os.WriteFile(path, first, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	tracker = NewTracker(binding)
-	if _, err := tracker.ReadFile(path, now.Add(time.Second)); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Remove(path); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := tracker.ReadFile(path, now.Add(2*time.Second)); !errors.Is(err, ErrInvalid) {
-		t.Fatalf("operator state outage error = %v", err)
-	}
-	if _, err := tracker.Accept(first, now.Add(2*time.Second)); !errors.Is(err, ErrInvalid) {
-		t.Fatalf("outage tracker revived = %v", err)
 	}
 }

@@ -13,10 +13,10 @@ import (
 func testConfig() configDocument {
 	return configDocument{Protocol: configProtocol, Mode: "serve", SecurityProfilePath: "/private/profile.json",
 		PolicyID: "product-egress", LedgerPath: "/var/lib/egress-authority/ledger.json",
-		SnapshotPath: "/var/lib/egress-authority/current.json", SocketPath: "/run/egress-authority/current.sock",
+		SocketPath:    "/run/egress-authority/current.sock",
 		OperatorKeyID: "operator-product-1", OperatorPublicKey: make([]byte, ed25519.PublicKeySize),
 		ExpectedBrokerUID: 20000, ExpectedBrokerGID: 30000, MaxConnections: 4,
-		SnapshotLifetimeSeconds: 10, SnapshotRefreshMillis: 500, PolicyStateMaxAgeSeconds: 5}
+		StateRefreshMillis: 500, PolicyStateMaxAgeSeconds: 5}
 }
 
 func encodeConfig(t *testing.T, config configDocument) []byte {
@@ -32,13 +32,18 @@ func TestAuthorityConfigStrictAndBounded(t *testing.T) {
 	if _, err := decodeConfig(encodeConfig(t, testConfig())); err != nil {
 		t.Fatal(err)
 	}
+	inspect := testConfig()
+	inspect.Mode = "inspect"
+	if _, err := decodeConfig(encodeConfig(t, inspect)); err != nil {
+		t.Fatalf("read-only inspect mode rejected: %v", err)
+	}
 	for name, mutate := range map[string]func(*configDocument){
 		"unknown mode":          func(c *configDocument) { c.Mode = "resume-or-initialize" },
 		"relative ledger":       func(c *configDocument) { c.LedgerPath = "ledger.json" },
 		"missing key":           func(c *configDocument) { c.OperatorPublicKey = nil },
-		"slow refresh":          func(c *configDocument) { c.SnapshotRefreshMillis = 1001 },
-		"stale refresh":         func(c *configDocument) { c.PolicyStateMaxAgeSeconds = 1; c.SnapshotRefreshMillis = 501 },
-		"large lifetime":        func(c *configDocument) { c.SnapshotLifetimeSeconds = 31 },
+		"slow refresh":          func(c *configDocument) { c.StateRefreshMillis = 1001 },
+		"stale refresh":         func(c *configDocument) { c.PolicyStateMaxAgeSeconds = 1; c.StateRefreshMillis = 501 },
+		"large state age":       func(c *configDocument) { c.PolicyStateMaxAgeSeconds = 31 },
 		"unbounded connections": func(c *configDocument) { c.MaxConnections = 65 },
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -73,17 +78,17 @@ func TestAuthorityConfigBoundToExactProfilePolicyAndIdentity(t *testing.T) {
 	policy := phase6security.EgressPolicy{Broker: broker.Name, Authority: phase6security.PolicyAuthority{
 		DeploymentName: authority.Name, PrincipalDigest: authority.PrincipalDigest, KeyID: config.OperatorKeyID,
 		PublicKeyDigest:   phase6security.OperatorPublicKeyDigest(config.OperatorPublicKey),
-		LedgerMountTarget: "/var/lib/egress-authority",
-		SocketDirectory:   "/run/egress-authority"}}
+		LedgerMountTarget: "/var/lib/egress-authority", StateMaxAgeSeconds: config.PolicyStateMaxAgeSeconds,
+		SocketDirectory: "/run/egress-authority"}}
 	if !validateProfileBinding(profile, policy, config) {
 		t.Fatal("exact authority binding rejected")
 	}
 	for name, mutate := range map[string]func(*configDocument){
 		"swapped ledger":   func(c *configDocument) { c.LedgerPath = "/other/ledger.json" },
 		"swapped socket":   func(c *configDocument) { c.SocketPath = "/other/current.sock" },
-		"swapped snapshot": func(c *configDocument) { c.SnapshotPath = "/other/current.json" },
 		"swapped key":      func(c *configDocument) { c.OperatorPublicKey = bytes.Repeat([]byte{8}, ed25519.PublicKeySize) },
 		"wrong broker UID": func(c *configDocument) { c.ExpectedBrokerUID++ },
+		"stale state":      func(c *configDocument) { c.PolicyStateMaxAgeSeconds++ },
 	} {
 		t.Run(name, func(t *testing.T) {
 			candidate := config
