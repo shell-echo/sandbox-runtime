@@ -53,6 +53,21 @@ func TestBrowserLiveHandlerCarriesBoundedMediaAndFencedInput(t *testing.T) {
 				t.Fatal(err)
 			}
 			waitForPeerState(t, clientPeer, webrtc.PeerConnectionStateConnected)
+			// The client-side Connected transition can precede the server's
+			// Connected callback. Wait for the server's first keyframe request
+			// before publishing the only RTP packet in this test.
+			serverReadyDeadline := time.Now().Add(5 * time.Second)
+			for source.session.keyframes.Load() == 0 && time.Now().Before(serverReadyDeadline) {
+				select {
+				case <-source.session.closed:
+					t.Fatal("server media session closed before first RTP")
+				default:
+				}
+				time.Sleep(10 * time.Millisecond)
+			}
+			if source.session.keyframes.Load() == 0 {
+				t.Fatal("server did not request initial keyframe")
+			}
 
 			packet := &rtp.Packet{Header: rtp.Header{Version: 2, PayloadType: 96, SequenceNumber: 1, Timestamp: 3000, SSRC: 1234, Marker: true}, Payload: []byte{0x10, 0x00, 0x00, 0x00}}
 			encoded, err := packet.Marshal()

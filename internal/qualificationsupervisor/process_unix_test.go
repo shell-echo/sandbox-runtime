@@ -26,9 +26,10 @@ func buildSpawnProbe(t *testing.T, mode string) string {
 		t.Fatal(err)
 	}
 	path := filepath.Join(root, "probe")
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	// This nested fixture build runs during the package-wide race suite.
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "go", "build", "-ldflags=-X main.mode="+mode, "-o", path, "./testdata/spawnprobe")
+	cmd := exec.CommandContext(ctx, "go", "build", "-p=1", "-ldflags=-X main.mode="+mode, "-o", path, "./testdata/spawnprobe")
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("build local probe: %v\n%s", err, output)
 	}

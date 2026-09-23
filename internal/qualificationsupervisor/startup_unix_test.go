@@ -24,9 +24,11 @@ func buildStartupProbe(t *testing.T, mode string) string {
 		t.Fatal(err)
 	}
 	path := filepath.Join(root, "startup-probe")
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	// Nested builds run alongside the rest of the race suite. Keep their
+	// compiler concurrency bounded so fixture setup cannot starve the suite.
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "go", "build", "-ldflags=-X main.mode="+mode, "-o", path, "./testdata/startupprobe")
+	cmd := exec.CommandContext(ctx, "go", "build", "-p=1", "-ldflags=-X main.mode="+mode, "-o", path, "./testdata/startupprobe")
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("build startup probe: %v\n%s", err, output)
 	}
@@ -44,11 +46,16 @@ func startedStartupProbe(t *testing.T, mode string) (*FrozenPreflight, *StartedP
 
 func startedStartupProbeContext(t *testing.T, mode string, runContext context.Context) (*FrozenPreflight, *StartedProcess, *protocol.Codec) {
 	t.Helper()
+	return startedStartupProbePathContext(t, buildStartupProbe(t, mode), runContext)
+}
+
+func startedStartupProbePathContext(t *testing.T, path string, runContext context.Context) (*FrozenPreflight, *StartedProcess, *protocol.Codec) {
+	t.Helper()
 	codec, err := protocol.NewCodec(context.Background(), "../..")
 	if err != nil {
 		t.Fatal(err)
 	}
-	frozen, launch := preparedProbeContext(t, buildStartupProbe(t, mode), runContext)
+	frozen, launch := preparedProbeContext(t, path, runContext)
 	ctx, cancel := context.WithTimeout(context.Background(), realProcessTestLimit)
 	t.Cleanup(cancel)
 	process, err := StartProcess(ctx, launch)
@@ -125,9 +132,10 @@ func TestObserveStartupRejectsInvalidFirstRecordAndReaps(t *testing.T) {
 }
 
 func TestObserveStartupCancellationAndBadInputs(t *testing.T) {
+	path := buildStartupProbe(t, "delay")
 	for _, kind := range []string{"deadline", "canceled", "nil-context", "nil-codec", "closed", "copied-after-attempt"} {
 		t.Run(kind, func(t *testing.T) {
-			_, process, codec := startedStartupProbe(t, "delay")
+			_, process, codec := startedStartupProbePathContext(t, path, context.Background())
 			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 			defer cancel()
 			switch kind {
