@@ -158,6 +158,22 @@ func (a *Authority) Current(request CurrentRequest, now time.Time) (CurrentRespo
 	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	return a.currentLocked(request, now)
+}
+
+// currentLive samples the clock under the same lock as the committed ledger.
+// A revocation committed while a socket request waits for this lock must not
+// make a pre-commit timestamp look like a clock rollback.
+func (a *Authority) currentLive(request CurrentRequest) (CurrentResponse, error) {
+	if a == nil {
+		return CurrentResponse{}, ErrInvalid
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.currentLocked(request, a.now().UTC())
+}
+
+func (a *Authority) currentLocked(request CurrentRequest, now time.Time) (CurrentResponse, error) {
 	if a.closed || request.Verify(a.binding, now) != nil || a.current.Generation < 1 || a.checkDiskLocked() != nil {
 		return CurrentResponse{}, ErrInvalid
 	}

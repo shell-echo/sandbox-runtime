@@ -154,7 +154,7 @@ func TestUnixClientControllerRoundTripAndSocketCleanup(t *testing.T) {
 	}
 	defer controller.Close()
 	socket := filepath.Join(directory, "controller.sock")
-	server, err := Listen(ServerConfig{SocketPath: socket, SocketUID: uint32(os.Getuid()), SocketGID: uint32(os.Getgid()),
+	server, err := Listen(ServerConfig{SocketPath: socket, SocketUID: uint32(os.Getuid()), SocketGID: uint32(os.Getgid()), InternalSelf: true,
 		ExpectedClientUID: uint32(os.Getuid()), ExpectedClientGID: uint32(os.Getgid()), MaxConnections: 2, ReapInterval: time.Second}, controller)
 	if err != nil {
 		t.Fatal(err)
@@ -162,7 +162,8 @@ func TestUnixClientControllerRoundTripAndSocketCleanup(t *testing.T) {
 	serverContext, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() { done <- server.Serve(serverContext) }()
-	client, err := NewProductionClient(ClientConfig{SocketPath: socket, ExpectedUID: uint32(os.Getuid()), ExpectedGID: uint32(os.Getgid()), Policy: fixture.policy,
+	client, err := NewProductionClient(ClientConfig{SocketPath: socket, ExpectedUID: uint32(os.Getuid()), ExpectedGID: uint32(os.Getgid()),
+		DirectoryGID: uint32(os.Getgid()), InternalSelf: true, Policy: fixture.policy,
 		AgentPrivateKey: fixture.agentPrivate, ControllerKeyID: fixture.controllerID, ControllerPublic: fixture.controllerPub,
 		OperationTimeout: 3 * time.Second, Now: time.Now})
 	if err != nil {
@@ -197,6 +198,10 @@ func securePKIDirectory(t *testing.T) string {
 	if err != nil {
 		t.Fatal(err)
 	}
+	directory, err = filepath.EvalSymlinks(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
 	t.Cleanup(func() { _ = os.RemoveAll(directory) })
 	if os.Chmod(directory, 0o700) != nil || os.Chown(directory, os.Getuid(), os.Getgid()) != nil {
 		t.Fatal("prepare secure PKI directory")
@@ -219,7 +224,9 @@ func TestClientRejectsWrongControllerKey(t *testing.T) {
 	}
 	defer controller.Close()
 	socket := filepath.Join(directory, "controller.sock")
-	server, err := Listen(ServerConfig{SocketPath: socket, SocketUID: uint32(os.Getuid()), SocketGID: uint32(os.Getgid()), ExpectedClientUID: uint32(os.Getuid()), ExpectedClientGID: uint32(os.Getgid()), MaxConnections: 1, ReapInterval: time.Second}, controller)
+	server, err := Listen(ServerConfig{SocketPath: socket, SocketUID: uint32(os.Getuid()), SocketGID: uint32(os.Getgid()),
+		InternalSelf: true, ExpectedClientUID: uint32(os.Getuid()), ExpectedClientGID: uint32(os.Getgid()),
+		MaxConnections: 1, ReapInterval: time.Second}, controller)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -230,7 +237,8 @@ func TestClientRejectsWrongControllerKey(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	client, err := NewProductionClient(ClientConfig{SocketPath: socket, ExpectedUID: uint32(os.Getuid()), ExpectedGID: uint32(os.Getgid()), Policy: fixture.policy,
+	client, err := NewProductionClient(ClientConfig{SocketPath: socket, ExpectedUID: uint32(os.Getuid()), ExpectedGID: uint32(os.Getgid()),
+		DirectoryGID: uint32(os.Getgid()), InternalSelf: true, Policy: fixture.policy,
 		AgentPrivateKey: fixture.agentPrivate, ControllerKeyID: fixture.controllerID, ControllerPublic: wrongPublic, OperationTimeout: 3 * time.Second, Now: time.Now})
 	if err != nil {
 		t.Fatal(err)

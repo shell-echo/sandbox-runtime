@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/binary"
 	"errors"
 	"net"
 	"os"
@@ -34,7 +35,11 @@ func newUnixFixture(t *testing.T, maximumConnections int) *unixFixture {
 	if err := manager.Bootstrap(context.Background()); err != nil {
 		t.Fatalf("manager Bootstrap() = %v", err)
 	}
-	dir, err := os.MkdirTemp("/tmp", "wtlsa-")
+	temporaryRoot, err := filepath.EvalSymlinks(os.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir, err := os.MkdirTemp(temporaryRoot, "wtlsa-")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,10 +48,10 @@ func newUnixFixture(t *testing.T, maximumConnections int) *unixFixture {
 	if err := os.Chown(dir, int(uid), int(gid)); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Chmod(dir, 0o700); err != nil {
+	if err := os.Chmod(dir, 0o710); err != nil {
 		t.Fatal(err)
 	}
-	server, err := Listen(ServerConfig{SocketPath: filepath.Join(dir, "agent.sock"), SocketUID: uid, SocketGID: gid,
+	server, err := Listen(ServerConfig{SocketPath: filepath.Join(dir, "agent.sock"), SocketUID: uid, SocketGID: gid, AgentGID: gid,
 		ExpectedClientUID: uid, ExpectedClientGID: gid, MaxConnections: maximumConnections, ReplayCapacity: 128,
 		Now: func() time.Time { return now }}, manager)
 	if err != nil {
@@ -55,7 +60,7 @@ func newUnixFixture(t *testing.T, maximumConnections int) *unixFixture {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() { done <- server.Serve(ctx) }()
-	client, err := NewClient(ClientConfig{SocketPath: filepath.Join(dir, "agent.sock"), ExpectedUID: uid, ExpectedGID: gid,
+	client, err := NewClient(ClientConfig{SocketPath: filepath.Join(dir, "agent.sock"), ExpectedUID: uid, ExpectedGID: gid, RoleGID: gid,
 		OperationTimeout: 3 * time.Second, Now: func() time.Time { return now }, Random: rand.Reader})
 	if err != nil {
 		cancel()
@@ -142,7 +147,7 @@ func TestUnixServerRejectsReplayPeerMismatchCapacityAndCancellation(t *testing.T
 		t.Fatalf("canceled Snapshot() error = %v", err)
 	}
 	uid, gid := uint32(os.Getuid()), uint32(os.Getgid())
-	if _, err := NewClient(ClientConfig{SocketPath: filepath.Join(fixture.dir, "agent.sock"), ExpectedUID: uid + 1, ExpectedGID: gid,
+	if _, err := NewClient(ClientConfig{SocketPath: filepath.Join(fixture.dir, "agent.sock"), ExpectedUID: uid + 1, ExpectedGID: gid, RoleGID: gid,
 		OperationTimeout: time.Second, Now: time.Now, Random: rand.Reader}); !errors.Is(err, ErrUnavailable) {
 		t.Fatalf("peer mismatch NewClient() error = %v", err)
 	}
@@ -160,5 +165,168 @@ func TestUnixServerRejectsReplayPeerMismatchCapacityAndCancellation(t *testing.T
 	}
 	if _, err := fixture.client.Snapshot(context.Background()); !errors.Is(err, ErrUnavailable) {
 		t.Fatalf("capacity Snapshot() error = %v", err)
+	}
+}
+
+func TestUnixSocketLayoutRejectsPermissionDrift(t *testing.T) {
+	fixture := newUnixFixture(t, 2)
+	defer fixture.close(t)
+	path := filepath.Join(fixture.dir, "agent.sock")
+	if err := os.Chmod(fixture.dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fixture.client.Snapshot(context.Background()); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("private v1 directory accepted: %v", err)
+	}
+	if err := os.Chmod(fixture.dir, 0o710); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(path, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fixture.client.Snapshot(context.Background()); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("private v1 socket accepted: %v", err)
+	}
+	if err := os.Chmod(path, 0o666); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := NewClient(ClientConfig{SocketPath: path, ExpectedUID: uint32(os.Getuid()), ExpectedGID: uint32(os.Getgid()),
+		RoleGID: uint32(os.Getgid()) + 1, OperationTimeout: time.Second, Now: time.Now, Random: rand.Reader}); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("wrong role group accepted: %v", err)
+	}
+	alias := filepath.Join(filepath.Dir(fixture.dir), filepath.Base(fixture.dir)+"-alias")
+	if err := os.Symlink(fixture.dir, alias); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(alias)
+	if _, err := NewClient(ClientConfig{SocketPath: filepath.Join(alias, "agent.sock"), ExpectedUID: uint32(os.Getuid()),
+		ExpectedGID: uint32(os.Getgid()), RoleGID: uint32(os.Getgid()), OperationTimeout: time.Second,
+		Now: time.Now, Random: rand.Reader}); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("symlinked parent accepted: %v", err)
+	}
+	if _, err := fixture.client.Snapshot(context.Background()); err != nil {
+		t.Fatalf("restored v2 socket refused: %v", err)
+	}
+}
+
+func TestUnixServerSlowFrameTimesOutAndReleasesCapacity(t *testing.T) {
+	fixture := newUnixFixture(t, 1)
+	defer fixture.close(t)
+	connection, err := net.DialUnix("unix", nil, &net.UnixAddr{Name: filepath.Join(fixture.dir, "agent.sock"), Net: "unix"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer connection.Close()
+	var header [4]byte
+	binary.BigEndian.PutUint32(header[:], 100)
+	if _, err := connection.Write(append(header[:], '{')); err != nil {
+		t.Fatal(err)
+	}
+	occupied := time.Now().Add(time.Second)
+	for len(fixture.server.capacity) != 1 && time.Now().Before(occupied) {
+		time.Sleep(time.Millisecond)
+	}
+	if len(fixture.server.capacity) != 1 {
+		t.Fatal("half-frame did not reserve capacity")
+	}
+	deadline := time.Now().Add(initialFrameTimeout + time.Second)
+	for len(fixture.server.capacity) != 0 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if len(fixture.server.capacity) != 0 {
+		t.Fatal("half-frame held the only capacity slot past its deadline")
+	}
+	if _, err := fixture.client.Snapshot(context.Background()); err != nil {
+		t.Fatalf("capacity did not recover after slow frame: %v", err)
+	}
+}
+
+func TestUnixServerCloseInterruptsIdleAuthorizedPeer(t *testing.T) {
+	fixture := newUnixFixture(t, 1)
+	connection, err := net.DialUnix("unix", nil, &net.UnixAddr{Name: filepath.Join(fixture.dir, "agent.sock"), Net: "unix"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer connection.Close()
+	deadline := time.Now().Add(time.Second)
+	for len(fixture.server.capacity) != 1 && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if len(fixture.server.capacity) != 1 {
+		t.Fatal("idle peer did not reserve capacity")
+	}
+	fixture.cancel()
+	closed := make(chan error, 1)
+	go func() { closed <- fixture.server.Close() }()
+	select {
+	case err := <-closed:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Close blocked on idle authorized peer")
+	}
+	select {
+	case err := <-fixture.done:
+		if err != nil && !errors.Is(err, context.Canceled) {
+			t.Fatalf("Serve() = %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Serve blocked on idle authorized peer")
+	}
+	if _, err := os.Lstat(filepath.Join(fixture.dir, "agent.sock")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("socket remained after close: %v", err)
+	}
+	if err := fixture.manager.Close(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestUnixServerRecoversOnlySameOwnerStaleSocket(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+	manager, _ := testManager(t, &now)
+	if err := manager.Bootstrap(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	temporaryRoot, err := filepath.EvalSymlinks(os.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir, err := os.MkdirTemp(temporaryRoot, "wtlsa-stale-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+	defer manager.Close(context.Background())
+	if err := os.Chmod(dir, 0o710); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "agent.sock")
+	stale, err := net.ListenUnix("unix", &net.UnixAddr{Name: path, Net: "unix"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	stale.SetUnlinkOnClose(false)
+	if err := os.Chmod(path, 0o666); err != nil {
+		t.Fatal(err)
+	}
+	if err := stale.Close(); err != nil {
+		t.Fatal(err)
+	}
+	uid, gid := uint32(os.Getuid()), uint32(os.Getgid())
+	config := ServerConfig{SocketPath: path, SocketUID: uid, SocketGID: gid, AgentGID: gid,
+		ExpectedClientUID: uid, ExpectedClientGID: gid, MaxConnections: 2, ReplayCapacity: 128, Now: time.Now}
+	server, err := Listen(config, manager)
+	if err != nil {
+		t.Fatalf("same-owner stale socket not recovered: %v", err)
+	}
+	if _, err := Listen(config, manager); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("live listener replaced: %v", err)
+	}
+	if err := server.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(path); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("socket remained after close: %v", err)
 	}
 }

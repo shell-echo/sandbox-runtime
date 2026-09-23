@@ -698,6 +698,50 @@ claims.
 
 ## Product Phase 6 production-hardening discipline
 
+The Phase 6 workload TLS agent retains its `workload-tls-agent.v1` message
+protocol but its production command requires
+`sandbox-runtime.workload-tls-agent-config.v2`. Give each agent and role
+different UIDs/GIDs. The one shared signer directory is owned by the agent
+UID and role GID, mode 0710; the socket is owned by the agent UID, mode 0666.
+This process has the private `KindTLSAgent` identity, not the
+`KindMaterialAgent` identity of the independent Vault KV credential process;
+the TLS agent cannot receive a workload-credential.v2 Vault token. The PKI
+requester-to-subject relation is one-to-one, including separate executor and
+per-egress-broker agents.
+The certificate-controller command requires its v2 config and the same
+canonical profile-derived principal registry. Give every TLS agent its own
+controller endpoint: controller-UID owner, agent-GID 0710 directory, 0666
+socket, controller read-write and that agent read-only mounts. The one
+controller-internal managed Vault TLS self endpoint is the explicit 0700/0600
+same-UID exception. Controller response and agent CSR request public-key
+digests are bound separately; never substitute the Vault CA/trust bundle for
+either key. The controller must reject incomplete or extra listener/policy
+sets, not merely accept individually valid requests.
+The canonical Phase 6 security profile must contain a `tls_agent_bindings`
+entry for every such key owner. The production TLS-agent command requires
+its private profile file and exact profile digest, and checks the requester,
+subject, issuer policy/Vault role and socket against that entry; the egress
+broker checks its own subject-to-agent entry before connecting. Component
+tests of these checks are not a substitute for the real all-process mTLS gate.
+Do not grant socket access with supplementary groups or `CAP_CHOWN`, mount the
+directory into any third role, or copy the historical 0700/0600 same-UID
+layout into a production configuration. The agent validates exact peer
+credentials before reading a bounded frame; stalled and half-frame peers
+must not block shutdown. The tagged distinct-UID Docker checkpoint is:
+
+```bash
+SANDBOX_RUNTIME_PHASE6_TLS_SOCKET_DOCKER=1 \
+  go test -tags=integration -run '^TestDockerDistinctUIDTLSAgentSocket$' \
+  -count=1 -v ./internal/workloadtlsagent
+
+SANDBOX_RUNTIME_PHASE6_PKI_SOCKET_DOCKER=1 \
+  go test -tags=integration -run '^TestDockerDistinctUIDTwoAgentCertificateController$' \
+  -count=1 -v ./internal/workloadpki
+```
+
+It tests the socket/signing boundary with a fixture issuer, not the production
+broker, Vault PKI, complete agent inventory or Slice 6 release evidence.
+
 Follow the exact order in
 [`plan/product-v1-phase-6-production-hardening.md`](plan/product-v1-phase-6-production-hardening.md)
 and ADR 0051. Do not turn Phase 3-5 tagged role processes into operator

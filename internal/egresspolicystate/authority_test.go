@@ -77,6 +77,42 @@ func TestAuthorityLedgerCommitRestartAndFreshCurrent(t *testing.T) {
 	}
 }
 
+func TestLiveCurrentSamplesClockAfterConcurrentCommit(t *testing.T) {
+	binding, key, _ := stateFixture(t)
+	root := privateTempDir(t)
+	ledgerDirectory := filepath.Join(root, "ledger")
+	if err := os.Mkdir(ledgerDirectory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC().Truncate(time.Second)
+	authority, err := OpenAuthority(AuthorityConfig{Binding: binding,
+		LedgerPath: filepath.Join(ledgerDirectory, "ledger.json"), PrivateKey: key,
+		Now: func() time.Time { return now }, AllowInitialize: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer authority.Close()
+	if _, err := authority.Commit(0, "active", 10*time.Second); err != nil {
+		t.Fatal(err)
+	}
+	request, err := NewCurrentRequest(binding, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	beforeCommit := now
+	now = now.Add(time.Second)
+	if _, err := authority.Commit(1, "revoked", 10*time.Second); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := authority.Current(request, beforeCommit); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("stale pre-commit time was accepted: %v", err)
+	}
+	response, err := authority.currentLive(request)
+	if err != nil || response.Status != "revoked" || response.Generation != 2 || response.Verify(request, binding, now) != nil {
+		t.Fatalf("live post-lock Current = %#v, %v", response, err)
+	}
+}
+
 func TestAuthorityCommittedRevocationIgnoresStaleAuditFile(t *testing.T) {
 	binding, key, _ := stateFixture(t)
 	root := privateTempDir(t)

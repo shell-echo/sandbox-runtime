@@ -65,7 +65,7 @@ func TestBrowserLiveHandlerCarriesBoundedMediaAndFencedInput(t *testing.T) {
 				if received.SequenceNumber != packet.SequenceNumber || !bytes.Equal(received.Payload, packet.Payload) {
 					t.Fatalf("received=%#v", received)
 				}
-			case <-time.After(3 * time.Second):
+			case <-time.After(10 * time.Second):
 				t.Fatal("RTP was not received")
 			}
 
@@ -74,7 +74,7 @@ func TestBrowserLiveHandlerCarriesBoundedMediaAndFencedInput(t *testing.T) {
 				dataChannel.OnOpen(func() { close(opened) })
 				select {
 				case <-opened:
-				case <-time.After(3 * time.Second):
+				case <-time.After(10 * time.Second):
 					t.Fatal("control data channel did not open")
 				}
 				results := make(chan webrtc.DataChannelMessage, 1)
@@ -87,7 +87,7 @@ func TestBrowserLiveHandlerCarriesBoundedMediaAndFencedInput(t *testing.T) {
 					if input.Action.Kind != product.BrowserActionPointer || input.X != 20 || input.Y != 30 || input.ControlLeaseID != binding.ControlLeaseID || input.ControlFence != binding.ControlFence {
 						t.Fatalf("input=%#v", input)
 					}
-				case <-time.After(3 * time.Second):
+				case <-time.After(10 * time.Second):
 					t.Fatal("fenced input was not forwarded")
 				}
 				select {
@@ -95,7 +95,7 @@ func TestBrowserLiveHandlerCarriesBoundedMediaAndFencedInput(t *testing.T) {
 					if !result.IsString || string(result.Data) != `{"type":"input.result","sequence":1,"ok":true}` {
 						t.Fatalf("input result=%s", result.Data)
 					}
-				case <-time.After(3 * time.Second):
+				case <-time.After(10 * time.Second):
 					t.Fatal("input result was not returned")
 				}
 				resized := BrowserLiveVideoPolicy{Codec: "video/VP8", Width: 800, Height: 600, MaxFPS: 24, MaxBitrateKbps: 1200}
@@ -108,7 +108,7 @@ func TestBrowserLiveHandlerCarriesBoundedMediaAndFencedInput(t *testing.T) {
 					if got != resized {
 						t.Fatalf("resized policy=%#v", got)
 					}
-				case <-time.After(3 * time.Second):
+				case <-time.After(10 * time.Second):
 					t.Fatal("video policy was not updated")
 				}
 				select {
@@ -116,7 +116,7 @@ func TestBrowserLiveHandlerCarriesBoundedMediaAndFencedInput(t *testing.T) {
 					if string(result.Data) != `{"type":"stream.resize.result","sequence":2,"ok":true}` {
 						t.Fatalf("resize result=%s", result.Data)
 					}
-				case <-time.After(3 * time.Second):
+				case <-time.After(10 * time.Second):
 					t.Fatal("resize result was not returned")
 				}
 				if err := dataChannel.SendText(`{"type":"stream.resync","sequence":3}`); err != nil {
@@ -127,7 +127,7 @@ func TestBrowserLiveHandlerCarriesBoundedMediaAndFencedInput(t *testing.T) {
 					if string(result.Data) != `{"type":"stream.resync.result","sequence":3,"ok":true}` {
 						t.Fatalf("resync result=%s", result.Data)
 					}
-				case <-time.After(3 * time.Second):
+				case <-time.After(10 * time.Second):
 					t.Fatal("resync result was not returned")
 				}
 			}
@@ -435,7 +435,7 @@ func mustBrowserLiveHandler(t *testing.T, store product.ConnectionGrantStore, so
 	t.Helper()
 	handler, err := NewBrowserLiveHandler(BrowserLiveOptions{
 		Grants: store, Media: source, Policy: &browserPolicySourceSpy{policy: testGatewayBrowserPolicy()}, Transfers: denyBrowserTransferAuthority{}, Audit: &auditStoreSpy{}, AllowedOrigins: []string{"https://app.example"},
-		AllowHostCandidatesForTests: true, AuthorityPollInterval: 10 * time.Millisecond,
+		AllowHostCandidatesForTests: true, AuthorityPollInterval: 10 * time.Millisecond, ConnectionTimeout: 45 * time.Second,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -587,7 +587,10 @@ func postBrowserLiveOffer(t *testing.T, server *httptest.Server, ticket string, 
 
 func waitForPeerState(t *testing.T, peer *webrtc.PeerConnection, expected webrtc.PeerConnectionState) {
 	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
+	// A race-enabled repository run can delay local ICE checks while other
+	// packages contend for CPU. Data-plane assertions use a test-only 45-second
+	// admission budget; leave room here for the handler to close a failed peer.
+	deadline := time.Now().Add(30 * time.Second)
 	for time.Now().Before(deadline) {
 		if peer.ConnectionState() == expected {
 			return

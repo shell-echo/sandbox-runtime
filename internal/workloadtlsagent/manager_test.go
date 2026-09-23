@@ -122,7 +122,7 @@ func testManager(t *testing.T, now *time.Time) (*Manager, *fakeCertificateClient
 	if err != nil {
 		t.Fatal(err)
 	}
-	requester, _ := registry.New(securityprincipal.KindMaterialAgent, "product_runtime_agent", securityprincipal.RoleProduct, digest("c"))
+	requester, _ := registry.New(securityprincipal.KindTLSAgent, "product_tls_agent", securityprincipal.RoleProduct, digest("c"))
 	subject, _ := registry.New(securityprincipal.KindRuntimeRole, "product", securityprincipal.RoleProduct, digest("d"))
 	publicKey, _, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {

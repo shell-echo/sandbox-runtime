@@ -20,6 +20,7 @@ const (
 
 	KindRuntimeRole     Kind = "runtime_role"
 	KindMaterialAgent   Kind = "material_agent"
+	KindTLSAgent        Kind = "tls_agent"
 	KindMigrationJob    Kind = "migration_job"
 	KindController      Kind = "controller"
 	KindExecutorBackend Kind = "executor_backend"
@@ -73,6 +74,12 @@ var builtins = map[Kind]map[string]Role{
 		"guest_agent": RoleGuest, "browser_agent": RoleBrowser, "desktop_agent": RoleDesktop,
 		"product_migration_agent": RoleProduct, "provider_migration_agent": RoleProvider,
 	},
+	KindTLSAgent: {
+		"product_tls_agent": RoleProduct, "provider_tls_agent": RoleProvider,
+		"gateway_tls_agent": RoleGateway, "guest_tls_agent": RoleGuest,
+		"browser_tls_agent": RoleBrowser, "desktop_tls_agent": RoleDesktop,
+		"browser_executor_tls_agent": RoleBrowser, "desktop_executor_tls_agent": RoleDesktop,
+	},
 	KindMigrationJob: {
 		"product_migration": RoleProduct, "provider_migration": RoleProvider,
 	},
@@ -101,10 +108,12 @@ func NewRegistryWithPolicyAuthorities(environmentDigest, profileDigest string, e
 	}
 	registry.allowed[KindEgressBroker] = make(map[string]Role, len(egressBrokers))
 	for name, role := range egressBrokers {
-		if !egressNamePattern.MatchString(name) || !validRole(role) {
+		tlsAgentName := name + "_tls_agent"
+		if !egressNamePattern.MatchString(name) || !validRole(role) || len(tlsAgentName) > 64 {
 			return nil, ErrInvalid
 		}
 		registry.allowed[KindEgressBroker][name] = role
+		registry.allowed[KindTLSAgent][tlsAgentName] = role
 	}
 	if len(authorities) > 128 {
 		return nil, ErrInvalid

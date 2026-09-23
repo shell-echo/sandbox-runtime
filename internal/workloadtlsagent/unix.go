@@ -15,16 +15,17 @@ import (
 	"io"
 	"net"
 	"os"
-	"path/filepath"
 	"sync"
-	"syscall"
 	"time"
+
+	"github.com/shell-echo/sandbox-runtime/internal/restrictedunix"
 )
 
 type ServerConfig struct {
 	SocketPath        string
 	SocketUID         uint32
 	SocketGID         uint32
+	AgentGID          uint32
 	ExpectedClientUID uint32
 	ExpectedClientGID uint32
 	MaxConnections    int
@@ -34,6 +35,8 @@ type ServerConfig struct {
 
 type Server struct {
 	listener          *net.UnixListener
+	socketPath        string
+	socketInfo        os.FileInfo
 	manager           *Manager
 	expectedClientUID uint32
 	expectedClientGID uint32
@@ -42,44 +45,49 @@ type Server struct {
 	replayCapacity    int
 	replayMu          sync.Mutex
 	replay            map[string]time.Time
-	handlers          sync.WaitGroup
+	tracker           *restrictedunix.Tracker
+	stopOnce          sync.Once
 }
 
+const initialFrameTimeout = 2 * time.Second
+
 func Listen(config ServerConfig, manager *Manager) (*Server, error) {
-	if manager == nil || config.Now == nil || config.Now().IsZero() || !validSocketParent(config.SocketPath, config.SocketUID, config.SocketGID) ||
+	if manager == nil || config.Now == nil || config.Now().IsZero() ||
+		uint32(os.Getuid()) != config.SocketUID || uint32(os.Getgid()) != config.AgentGID ||
+		config.SocketGID != config.ExpectedClientGID ||
 		config.MaxConnections < 1 || config.MaxConnections > 256 || config.ReplayCapacity < 16 || config.ReplayCapacity > 65536 {
 		return nil, ErrUnavailable
 	}
-	if _, err := os.Lstat(config.SocketPath); !errors.Is(err, os.ErrNotExist) {
-		return nil, ErrUnavailable
-	}
-	listener, err := net.ListenUnix("unix", &net.UnixAddr{Name: config.SocketPath, Net: "unix"})
+	layout := restrictedunix.Layout{DirectoryMode: 0o710, SocketMode: 0o666, OwnerUID: config.SocketUID, DirectoryGID: config.SocketGID}
+	listener, socketInfo, err := restrictedunix.Listen(config.SocketPath, layout)
 	if err != nil {
 		return nil, ErrUnavailable
 	}
-	listener.SetUnlinkOnClose(true)
-	if os.Chmod(config.SocketPath, 0o600) != nil || os.Chown(config.SocketPath, int(config.SocketUID), int(config.SocketGID)) != nil ||
-		validateSocket(config.SocketPath, config.SocketUID, config.SocketGID) != nil {
-		_ = listener.Close()
-		return nil, ErrUnavailable
-	}
-	return &Server{listener: listener, manager: manager, expectedClientUID: config.ExpectedClientUID,
+	return &Server{listener: listener, socketPath: config.SocketPath, socketInfo: socketInfo,
+		manager: manager, expectedClientUID: config.ExpectedClientUID,
 		expectedClientGID: config.ExpectedClientGID, capacity: make(chan struct{}, config.MaxConnections), now: config.Now,
-		replayCapacity: config.ReplayCapacity, replay: make(map[string]time.Time, config.ReplayCapacity)}, nil
+		replayCapacity: config.ReplayCapacity, replay: make(map[string]time.Time, config.ReplayCapacity),
+		tracker: restrictedunix.NewTracker()}, nil
 }
 
 func (s *Server) Serve(ctx context.Context) error {
 	if s == nil || s.listener == nil || ctx == nil {
 		return ErrUnavailable
 	}
+	watchDone := make(chan struct{})
+	defer close(watchDone)
 	go func() {
-		<-ctx.Done()
-		_ = s.listener.Close()
+		select {
+		case <-ctx.Done():
+			s.stop()
+		case <-watchDone:
+		}
 	}()
 	for {
 		connection, err := s.listener.AcceptUnix()
 		if err != nil {
-			s.handlers.Wait()
+			s.stop()
+			s.tracker.Wait()
 			if ctx.Err() != nil || errors.Is(err, net.ErrClosed) {
 				return ctx.Err()
 			}
@@ -87,10 +95,14 @@ func (s *Server) Serve(ctx context.Context) error {
 		}
 		select {
 		case s.capacity <- struct{}{}:
-			s.handlers.Add(1)
+			if !s.tracker.Add(connection) {
+				<-s.capacity
+				_ = connection.Close()
+				continue
+			}
 			go func() {
-				defer s.handlers.Done()
 				defer func() { <-s.capacity }()
+				defer s.tracker.Done(connection)
 				s.handle(ctx, connection)
 			}()
 		default:
@@ -103,18 +115,26 @@ func (s *Server) Close() error {
 	if s == nil || s.listener == nil {
 		return nil
 	}
-	err := s.listener.Close()
-	s.handlers.Wait()
-	if errors.Is(err, net.ErrClosed) {
-		return nil
-	}
-	return err
+	s.stop()
+	s.tracker.Wait()
+	return nil
+}
+
+func (s *Server) stop() {
+	s.stopOnce.Do(func() {
+		_ = s.listener.Close()
+		restrictedunix.RemoveIfSame(s.socketPath, s.socketInfo)
+		s.tracker.Stop()
+	})
 }
 
 func (s *Server) handle(parent context.Context, connection *net.UnixConn) {
 	defer connection.Close()
 	identity, err := socketPeer(connection)
 	if err != nil || identity.uid != s.expectedClientUID || identity.gid != s.expectedClientGID {
+		return
+	}
+	if connection.SetReadDeadline(time.Now().Add(initialFrameTimeout)) != nil {
 		return
 	}
 	document, err := readFrame(connection, maxRequestBytes)
@@ -128,6 +148,9 @@ func (s *Server) handle(parent context.Context, connection *net.UnixConn) {
 		return
 	}
 	deadline, _ := parseProtocolTime(request.Deadline)
+	if connection.SetDeadline(deadline) != nil {
+		return
+	}
 	if !s.reserve(request.Nonce, deadline, now) {
 		s.writeResponse(connection, errorResponse(request), request, now)
 		return
@@ -190,6 +213,7 @@ type ClientConfig struct {
 	SocketPath       string
 	ExpectedUID      uint32
 	ExpectedGID      uint32
+	RoleGID          uint32
 	OperationTimeout time.Duration
 	Now              func() time.Time
 	Random           io.Reader
@@ -198,7 +222,8 @@ type ClientConfig struct {
 type Client struct{ config ClientConfig }
 
 func NewClient(config ClientConfig) (*Client, error) {
-	if validateSocket(config.SocketPath, config.ExpectedUID, config.ExpectedGID) != nil || config.OperationTimeout < time.Second ||
+	if validateSocket(config.SocketPath, config.ExpectedUID, config.RoleGID) != nil ||
+		config.RoleGID != uint32(os.Getgid()) || config.OperationTimeout < time.Second ||
 		config.OperationTimeout > time.Minute || config.Now == nil || config.Now().IsZero() || config.Random == nil {
 		return nil, ErrUnavailable
 	}
@@ -299,7 +324,7 @@ func (c *Client) execute(ctx context.Context, request Request) (Response, error)
 		return Response{}, err
 	}
 	defer clear(document)
-	if validateSocket(c.config.SocketPath, c.config.ExpectedUID, c.config.ExpectedGID) != nil {
+	if validateSocket(c.config.SocketPath, c.config.ExpectedUID, c.config.RoleGID) != nil {
 		return Response{}, ErrUnavailable
 	}
 	connectionValue, err := (&net.Dialer{}).DialContext(operationContext, "unix", c.config.SocketPath)
@@ -401,20 +426,8 @@ func clientError(err error) error {
 	return ErrUnavailable
 }
 
-func validSocketParent(path string, uid, gid uint32) bool {
-	if !filepath.IsAbs(path) || filepath.Clean(path) != path || len(path) > 100 {
-		return false
-	}
-	info, err := os.Lstat(filepath.Dir(path))
-	return err == nil && info.IsDir() && info.Mode()&os.ModeSymlink == 0 && info.Mode().Perm() == 0o700 && ownedBy(info, uid, gid)
-}
-
 func validateSocket(path string, uid, gid uint32) error {
-	if !validSocketParent(path, uid, gid) {
-		return ErrUnavailable
-	}
-	info, err := os.Lstat(path)
-	if err != nil || info.Mode()&os.ModeSymlink != 0 || info.Mode()&os.ModeSocket == 0 || info.Mode().Perm() != 0o600 || !ownedBy(info, uid, gid) {
+	if !restrictedunix.ValidateSocket(path, restrictedunix.Layout{DirectoryMode: 0o710, SocketMode: 0o666, OwnerUID: uid, DirectoryGID: gid}) {
 		return ErrUnavailable
 	}
 	return nil
@@ -423,11 +436,6 @@ func validateSocket(path string, uid, gid uint32) error {
 type peerIdentity struct{ uid, gid uint32 }
 
 func socketPeer(connection *net.UnixConn) (peerIdentity, error) { return peerCredentials(connection) }
-
-func ownedBy(info os.FileInfo, uid, gid uint32) bool {
-	stat, ok := info.Sys().(*syscall.Stat_t)
-	return ok && stat.Uid == uid && stat.Gid == gid
-}
 
 func publicKeysEqual(first, second any) bool {
 	firstKey, firstOK := first.(*ecdsa.PublicKey)

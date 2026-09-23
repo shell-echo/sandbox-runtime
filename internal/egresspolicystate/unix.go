@@ -181,7 +181,7 @@ func (s *AuthorityServer) handle(connection *net.UnixConn) {
 	if err != nil {
 		return
 	}
-	response, err := s.authority.Current(request, now)
+	response, err := s.authority.currentLive(request)
 	if err != nil {
 		return
 	}

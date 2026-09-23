@@ -509,8 +509,11 @@ func TestVerticalConcurrentCloseAndRecoverConvergeAfterAcceptedCAS(t *testing.T)
 			t.Fatalf("unexpected converged status %q", status)
 		}
 	}
-	if terminal != 1 {
-		t.Fatalf("terminal owners=%d statuses=%v", terminal, statuses)
+	// The CAS loser may re-read either Running or the winner's already
+	// committed terminal record. Effect counts, not returned projections,
+	// establish the single owner.
+	if terminal < 1 {
+		t.Fatalf("no terminal owner: statuses=%v", statuses)
 	}
 	_, observes, cleanups := runtime.counts()
 	if cleanups != 1 || runtime.cleanupEffectCount() != 1 || observes != 1 || revoker.revokes != 1 || revoker.effects != 1 {
@@ -642,8 +645,11 @@ func TestVerticalConcurrentCloseAndRecoverPreserveOutcomeUnknown(t *testing.T) {
 			t.Fatalf("unexpected unknown convergence status %q", status)
 		}
 	}
-	if unknown != 1 {
-		t.Fatalf("outcome-unknown owners=%d", unknown)
+	// The loser can observe the winner's durable OutcomeUnknown during its
+	// bounded CAS re-read. Both projections may therefore be unknown even
+	// though exactly one cleanup/revocation effect was dispatched.
+	if unknown < 1 {
+		t.Fatalf("no outcome-unknown projection: count=%d", unknown)
 	}
 	_, observes, cleanups := runtime.counts()
 	if cleanups != 1 || runtime.cleanupEffectCount() != 0 || observes != 0 || revoker.revokes != 1 || revoker.effects != 1 {

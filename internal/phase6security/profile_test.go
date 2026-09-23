@@ -22,7 +22,7 @@ func validProfile() Profile {
 	for name := range requiredPrincipals {
 		names = append(names, name)
 	}
-	names = append(names, "egress-broker-product", "egress-policy-authority-product")
+	names = append(names, "egress-broker-product", "egress-broker-product-tls-agent", "egress-policy-authority-product")
 	sort.Strings(names)
 	registry, err := securityprincipal.NewRegistryWithPolicyAuthorities(environmentDigest, principalProfileDigest,
 		map[string]securityprincipal.Role{"product_egress_broker": securityprincipal.RoleProduct},
@@ -44,12 +44,27 @@ func validProfile() Profile {
 		panic(err)
 	}
 	identities["egress-broker-product"] = egressIdentity
+	egressTLSIdentity, err := registry.New(securityprincipal.KindTLSAgent, "product_egress_broker_tls_agent", securityprincipal.RoleProduct,
+		testDigest("instance/egress-broker-product-tls-agent"))
+	if err != nil {
+		panic(err)
+	}
+	identities["egress-broker-product-tls-agent"] = egressTLSIdentity
 	authorityIdentity, err := registry.New(securityprincipal.KindController, "product_policy_authority", "",
 		testDigest("instance/egress-policy-authority-product"))
 	if err != nil {
 		panic(err)
 	}
 	identities["egress-policy-authority-product"] = authorityIdentity
+	tlsSubjects := make(map[string]string, len(requiredTLSAgentSubjects)+1)
+	for agent, subject := range requiredTLSAgentSubjects {
+		tlsSubjects[agent] = subject
+	}
+	tlsSubjects["egress-broker-product-tls-agent"] = "egress-broker-product"
+	tlsAgentForSubject := make(map[string]string, len(tlsSubjects))
+	for agent, subject := range tlsSubjects {
+		tlsAgentForSubject[subject] = agent
+	}
 	principals := make([]Principal, 0, len(names))
 	for index, name := range names {
 		kind := requiredPrincipals[name]
@@ -64,6 +79,9 @@ func validProfile() Profile {
 		}
 		if name == "egress-policy-authority-product" {
 			kind = "controller"
+		}
+		if name == "egress-broker-product-tls-agent" {
+			kind = "tls_agent"
 		}
 		principal := Principal{
 			Name: name, Kind: kind, ImageReference: image, ImageDigest: digest,
@@ -82,6 +100,22 @@ func validProfile() Profile {
 			principal.Mounts = []Mount{
 				{Target: "/run/egress-authority", Kind: "private_socket", StorageID: "product-authority-socket"},
 				{Target: "/var/lib/egress-authority", Kind: "persistent_ledger", MaxBytes: 1 << 20, StorageID: "product-authority-ledger"},
+			}
+		}
+		if _, tlsAgent := tlsSubjects[name]; tlsAgent {
+			principal.Mounts = append(principal.Mounts, Mount{Target: "/run/tls/" + name, Kind: "private_socket", StorageID: name + "-socket"})
+			principal.Mounts = append(principal.Mounts, Mount{Target: "/run/certificate-controller/" + name, Kind: "private_socket",
+				ReadOnly: true, StorageID: name + "-controller-socket"})
+		}
+		if agent, hasAgent := tlsAgentForSubject[name]; hasAgent {
+			principal.Mounts = append(principal.Mounts, Mount{Target: "/run/tls/" + agent, Kind: "private_socket", ReadOnly: true, StorageID: agent + "-socket"})
+		}
+		if name == "certificate-controller" {
+			principal.Mounts = append(principal.Mounts, Mount{Target: "/run/certificate-controller/self", Kind: "private_socket",
+				StorageID: "certificate-controller-self-socket"})
+			for agent := range tlsSubjects {
+				principal.Mounts = append(principal.Mounts, Mount{Target: "/run/certificate-controller/" + agent,
+					Kind: "private_socket", StorageID: agent + "-controller-socket"})
 			}
 		}
 		if identity, ok := identities[name]; ok {
@@ -117,6 +151,10 @@ func validProfile() Profile {
 		}
 		return ""
 	}
+	principalByName := make(map[string]Principal, len(principals))
+	for _, principal := range principals {
+		principalByName[principal.Name] = principal
+	}
 	external := []ExternalService{
 		{Name: "dns", ImageReference: "registry.example.test/dns@" + digest, ImageDigest: digest, URI: "spiffe://sandbox-runtime.test/external/dns", DNSNames: []string{"dns.sandbox-runtime.test"}, IngressEdges: []string{"egress-dns"}},
 		{Name: "postgres", ImageReference: "registry.example.test/postgres@" + digest, ImageDigest: digest, URI: "spiffe://sandbox-runtime.test/external/postgres", DNSNames: []string{"postgres.sandbox-runtime.test"}, IngressEdges: []string{"product-postgres"}},
@@ -137,8 +175,54 @@ func validProfile() Profile {
 		{ID: "product-postgres", From: "product-runtime", To: "postgres", Protocol: "postgres", Port: 5432, Authentication: "mtls", FromURI: uri("product-runtime"), ToURI: external[1].URI,
 			FromPrincipalDigest: identities["product-runtime"].Digest(), ExternalIdentityDigest: external[1].IdentityDigest, CrossDomain: true, TenantScope: "bound", MaxConnectionSeconds: 300},
 	}
+	controllerRecord := principalByName["certificate-controller"]
+	edges = append(edges, TrustEdge{ID: "certificate-controller-self", From: "certificate-controller", To: "certificate-controller",
+		Protocol: "unix", Authentication: "unix_peer_credentials", FromURI: uri("certificate-controller"),
+		ToURI: uri("certificate-controller"), FromPrincipalDigest: controllerRecord.PrincipalDigest,
+		ToPrincipalDigest: controllerRecord.PrincipalDigest, TenantScope: "system", MaxConnectionSeconds: 5})
+	tlsBindings := make([]TLSAgentBinding, 0, len(tlsSubjects))
+	for agent, subject := range tlsSubjects {
+		agentRecord, subjectRecord := principalByName[agent], principalByName[subject]
+		edgeID := "tls-agent-" + agent
+		directory := "/run/tls/" + agent
+		tlsBindings = append(tlsBindings, TLSAgentBinding{
+			AgentDeployment: agent, AgentPrincipalDigest: agentRecord.PrincipalDigest,
+			SubjectDeployment: subject, SubjectPrincipalDigest: subjectRecord.PrincipalDigest,
+			AgentUID: agentRecord.UID, AgentGID: agentRecord.GID, SubjectUID: subjectRecord.UID, SubjectGID: subjectRecord.GID,
+			SocketDirectory: directory, SocketStorageID: agent + "-socket", SocketPath: directory + "/signer.sock",
+			DirectoryMode: 0o710, SocketMode: 0o666, UnixEdgeID: edgeID, IssuerPolicyID: "issuer-" + agent,
+			IssuerVaultRole: "vault-" + agent, AgentRequestKeyID: "request-" + agent,
+			AgentRequestKeyDigest: testDigest("request-public-key/" + agent), ControllerDeployment: "certificate-controller",
+			ControllerUID: controllerRecord.UID, ControllerGID: controllerRecord.GID,
+			ControllerSocketDirectory: "/run/certificate-controller/" + agent,
+			ControllerSocketStorageID: agent + "-controller-socket",
+			ControllerSocketPath:      "/run/certificate-controller/" + agent + "/request.sock",
+			ControllerDirectoryMode:   0o710, ControllerSocketMode: 0o666,
+			ControllerUnixEdgeID: "certificate-agent-" + agent, CleanupClass: "sockets",
+		})
+		edges = append(edges, TrustEdge{ID: edgeID, From: subject, To: agent, Protocol: "unix", Authentication: "unix_peer_credentials",
+			FromURI: uri(subject), ToURI: uri(agent), FromPrincipalDigest: subjectRecord.PrincipalDigest,
+			ToPrincipalDigest: agentRecord.PrincipalDigest, TenantScope: "system", MaxConnectionSeconds: 5})
+		edges = append(edges, TrustEdge{ID: "certificate-agent-" + agent, From: agent, To: "certificate-controller",
+			Protocol: "unix", Authentication: "unix_peer_credentials", FromURI: uri(agent), ToURI: uri("certificate-controller"),
+			FromPrincipalDigest: agentRecord.PrincipalDigest, ToPrincipalDigest: controllerRecord.PrincipalDigest,
+			TenantScope: "system", MaxConnectionSeconds: 5})
+	}
+	sort.Slice(tlsBindings, func(first, second int) bool {
+		return tlsBindings[first].AgentDeployment < tlsBindings[second].AgentDeployment
+	})
+	sort.Slice(edges, func(first, second int) bool { return edges[first].ID < edges[second].ID })
 	profile := Profile{Protocol: ProtocolID, Version: Version, Revision: "slice6-security-1", EnvironmentDigest: environmentDigest,
 		PrincipalProfileDigest: principalProfileDigest, Principals: principals, Networks: networks, External: external, TrustEdges: edges,
+		TLSAgentBindings: tlsBindings,
+		CertificateController: CertificateControllerAuthority{DeploymentName: "certificate-controller",
+			PrincipalDigest: controllerRecord.PrincipalDigest, UID: controllerRecord.UID, GID: controllerRecord.GID,
+			ResponseKeyID: "certificate-controller-response", ResponsePublicKeyDigest: testDigest("certificate-controller-response-key"),
+			ManagedPolicyID: "issuer-certificate-controller-self", ManagedVaultRole: "vault-certificate-controller",
+			ManagedRequestKeyID: "request-certificate-controller-self", ManagedRequestKeyDigest: testDigest("managed-request-key"),
+			SelfSocketDirectory: "/run/certificate-controller/self", SelfSocketStorageID: "certificate-controller-self-socket",
+			SelfSocketPath: "/run/certificate-controller/self/managed.sock", SelfDirectoryMode: 0o700,
+			SelfSocketMode: 0o600, SelfUnixEdgeID: "certificate-controller-self"},
 		EgressPolicies: []EgressPolicy{{ID: "product-egress", Revision: "policy-1", Principal: "product-runtime", Broker: "egress-broker-product",
 			PrincipalDigest: identities["product-runtime"].Digest(), BrokerDigest: identities["egress-broker-product"].Digest(),
 			Authority: PolicyAuthority{DeploymentName: "egress-policy-authority-product", AuthorizationName: "product_policy_authority",
@@ -171,6 +255,109 @@ func TestProfileAcceptsClosedCompleteInventory(t *testing.T) {
 	decoded, err := Decode(document)
 	if err != nil || decoded.ProfileDigest != profile.ProfileDigest {
 		t.Fatalf("Decode() = %#v, %v", decoded, err)
+	}
+}
+
+func TestTLSAgentBindingsRejectDriftAndUndeclaredSharing(t *testing.T) {
+	tests := map[string]func(*Profile){
+		"binding omitted":       func(p *Profile) { p.TLSAgentBindings = p.TLSAgentBindings[1:] },
+		"agent digest":          func(p *Profile) { p.TLSAgentBindings[0].AgentPrincipalDigest = testDigest("other-agent") },
+		"subject digest":        func(p *Profile) { p.TLSAgentBindings[0].SubjectPrincipalDigest = testDigest("other-subject") },
+		"agent uid":             func(p *Profile) { p.TLSAgentBindings[0].AgentUID++ },
+		"subject gid":           func(p *Profile) { p.TLSAgentBindings[0].SubjectGID++ },
+		"directory mode":        func(p *Profile) { p.TLSAgentBindings[0].DirectoryMode = 0o750 },
+		"socket mode":           func(p *Profile) { p.TLSAgentBindings[0].SocketMode = 0o660 },
+		"socket path":           func(p *Profile) { p.TLSAgentBindings[0].SocketPath += "-other" },
+		"issuer policy missing": func(p *Profile) { p.TLSAgentBindings[0].IssuerPolicyID = "" },
+		"issuer role missing":   func(p *Profile) { p.TLSAgentBindings[0].IssuerVaultRole = "" },
+		"shared issuer role":    func(p *Profile) { p.TLSAgentBindings[1].IssuerVaultRole = p.TLSAgentBindings[0].IssuerVaultRole },
+		"request key shared": func(p *Profile) {
+			p.TLSAgentBindings[1].AgentRequestKeyDigest = p.TLSAgentBindings[0].AgentRequestKeyDigest
+		},
+		"controller authority drift": func(p *Profile) {
+			p.CertificateController.ResponsePublicKeyDigest = ""
+		},
+		"controller socket exchanged": func(p *Profile) { p.TLSAgentBindings[0].ControllerSocketPath += "-other" },
+		"controller peer uid":         func(p *Profile) { p.TLSAgentBindings[0].ControllerUID++ },
+		"controller storage shared": func(p *Profile) {
+			p.TLSAgentBindings[1].ControllerSocketStorageID = p.TLSAgentBindings[0].ControllerSocketStorageID
+		},
+		"controller endpoint mode": func(p *Profile) { p.TLSAgentBindings[0].ControllerDirectoryMode = 0o750 },
+		"controller edge exchanged": func(p *Profile) {
+			p.TLSAgentBindings[0].ControllerUnixEdgeID = p.TLSAgentBindings[1].ControllerUnixEdgeID
+		},
+		"wrong cleanup":   func(p *Profile) { p.TLSAgentBindings[0].CleanupClass = "files" },
+		"shared storage":  func(p *Profile) { p.TLSAgentBindings[1].SocketStorageID = p.TLSAgentBindings[0].SocketStorageID },
+		"same subject":    func(p *Profile) { p.TLSAgentBindings[1].SubjectDeployment = p.TLSAgentBindings[0].SubjectDeployment },
+		"undeclared edge": func(p *Profile) { p.TLSAgentBindings[0].UnixEdgeID = "egress-authority-product" },
+		"agent mount read only": func(p *Profile) {
+			for index := range p.Principals {
+				if p.Principals[index].Name == p.TLSAgentBindings[0].AgentDeployment {
+					p.Principals[index].Mounts[0].ReadOnly = true
+				}
+			}
+		},
+		"agent TCP listener": func(p *Profile) {
+			for index := range p.Principals {
+				if p.Principals[index].Name == p.TLSAgentBindings[0].AgentDeployment {
+					p.Principals[index].Listeners = []Listener{{Name: "extra", Protocol: "tcp", Port: 9443, Exposure: "trust_edge"}}
+				}
+			}
+		},
+		"subject mount writable": func(p *Profile) {
+			for index := range p.Principals {
+				if p.Principals[index].Name == p.TLSAgentBindings[0].SubjectDeployment {
+					p.Principals[index].Mounts[0].ReadOnly = false
+				}
+			}
+		},
+		"third party mount": func(p *Profile) {
+			for index := range p.Principals {
+				if p.Principals[index].Name == "certificate-controller" {
+					p.Principals[index].Mounts = append(p.Principals[index].Mounts, Mount{
+						Target: p.TLSAgentBindings[0].SocketDirectory, Kind: "private_socket", ReadOnly: true,
+						StorageID: p.TLSAgentBindings[0].SocketStorageID,
+					})
+				}
+			}
+		},
+		"controller endpoint third party": func(p *Profile) {
+			for index := range p.Principals {
+				if p.Principals[index].Name == "provider-runtime" {
+					p.Principals[index].Mounts = append(p.Principals[index].Mounts, Mount{
+						Target: p.TLSAgentBindings[0].ControllerSocketDirectory, Kind: "private_socket", ReadOnly: true,
+						StorageID: p.TLSAgentBindings[0].ControllerSocketStorageID,
+					})
+				}
+			}
+		},
+	}
+	for name, mutate := range tests {
+		t.Run(name, func(t *testing.T) {
+			profile := validProfile()
+			mutate(&profile)
+			profile.ProfileDigest = profile.Digest()
+			if err := profile.Validate(); err == nil {
+				t.Fatal("TLS agent authority drift was accepted")
+			}
+		})
+	}
+}
+
+func TestTLSAgentForSubjectUsesValidatedProfile(t *testing.T) {
+	profile := validProfile()
+	binding, agent, subject, err := profile.TLSAgentForSubject("egress-broker-product")
+	if err != nil || binding.AgentDeployment != "egress-broker-product-tls-agent" ||
+		agent.PrincipalDigest != binding.AgentPrincipalDigest || subject.PrincipalDigest != binding.SubjectPrincipalDigest {
+		t.Fatalf("TLSAgentForSubject() = %#v, %#v, %#v, %v", binding, agent, subject, err)
+	}
+	if _, _, _, err := profile.TLSAgentForSubject("certificate-controller"); err == nil {
+		t.Fatal("unbound principal received a TLS agent")
+	}
+	profile.TLSAgentBindings[0].SocketMode = 0o777
+	profile.ProfileDigest = profile.Digest()
+	if _, _, _, err := profile.TLSAgentForSubject("egress-broker-product"); err == nil {
+		t.Fatal("invalid profile produced a TLS agent binding")
 	}
 }
 
@@ -340,6 +527,11 @@ func TestDeploymentRenameDoesNotChangeAuthorizationIdentity(t *testing.T) {
 	}
 	for index := range profile.EgressPolicies {
 		profile.EgressPolicies[index].Broker = "product-egress-service"
+	}
+	for index := range profile.TLSAgentBindings {
+		if profile.TLSAgentBindings[index].SubjectDeployment == "egress-broker-product" {
+			profile.TLSAgentBindings[index].SubjectDeployment = "product-egress-service"
+		}
 	}
 	for index := range profile.TrustEdges {
 		if profile.TrustEdges[index].From == "egress-broker-product" {

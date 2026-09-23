@@ -35,12 +35,12 @@ least-scope, short-lived Vault credential through the Slice 5 workload-
 credential controller. It never exposes a Vault token, CA private key or
 arbitrary Vault PKI role to a workload.
 
-Each role-owned material agent generates its TLS private key locally and sends
+Each role-owned TLS agent generates its TLS private key locally and sends
 a closed, signed CSR request to the certificate controller. The controller
 maps the authenticated peer and agent identity to one exact trust domain,
 principal URI SAN, optional DNS SAN set, EKU set, Vault role and TTL ceiling.
 It rejects caller-selected SANs, wildcard identities, extra usages and an
-unconfigured role. The private key never leaves the material agent.
+unconfigured role. The private key never leaves that separate TLS-agent process.
 
 Certificates have a repository hard maximum lifetime of one hour. The closed
 security profile fixes a shorter or equal lifetime, a rotation window no later
@@ -63,7 +63,7 @@ declared trust edges. Shared identities and wildcard SANs are forbidden.
 
 The private identity vocabulary is the closed, versioned
 `securityprincipal.v1` registry. Its kinds are `runtime_role`,
-`material_agent`, `migration_job`, `controller`, `executor_backend` and
+`material_agent`, `tls_agent`, `migration_job`, `controller`, `executor_backend` and
 `egress_broker`; every name-to-kind-to-role mapping is explicit. The
 `workload-credential.v2` protocol binds the complete principal and its digest
 to a separate v2 lease namespace and ledger. Version 1 remains frozen as Slice
@@ -95,7 +95,7 @@ offset, oversized or mismatched descriptor material; wrong SAN/EKU/CA/time;
 token-policy mismatch; Vault denial; failed first switch; stale old
 connections; and leaked key material all fail closed.
 
-Every role material agent exposes only the closed
+Every role TLS agent exposes only the closed
 `workload-tls-agent.v1` Unix signing protocol. It authenticates the role by
 socket UID/GID, bounds connections and global nonce replay state, and returns
 only the certificate chain, public key and generation-pinned ECDSA signature.
@@ -103,6 +103,80 @@ The TLS private key remains inside the agent. Rotation preserves the previous
 generation only for the declared overlap, while CRL staleness, missed rotation,
 issuer outage, clock rollback or revocation closes signing at the earliest
 safety deadline.
+
+The wire protocol remains v1, but the production socket layout and command
+configuration are `workload-tls-agent-config.v2`. Version 1's agent-owned
+0700 parent and 0600 socket cannot be reached by a role with its required
+distinct UID. Each agent/role pair instead gets one private mount directory:
+agent UID owner, role GID group, mode 0710; its Unix socket is agent-UID-owned,
+mode 0666, with no socket `chown` or dependence on inode group inheritance.
+Directory group permits path traversal only, not writes. The agent and role
+verify the exact parent owner/group/mode, socket type/owner/mode, no symlinks,
+stable socket inode and exact peer UID/GID before any protocol frame. The
+agent rejects supplementary groups outside its own GID, and the deployment
+drops all capabilities including `CAP_CHOWN`. The role mounts only its own
+agent directory read-only; no other role mounts it. An authorized peer that
+sends no frame or only half a frame has a bounded initial read deadline;
+cancel/close actively closes accepted connections before waiting for handlers.
+The v2 layout does not change the v1 message schema or create another
+certificate/signing state machine. Production commands do not select the
+old layout. The complete profile-to-mount/edge binding and real broker mTLS
+gate remain mandatory before Slice 6 is counted.
+
+A TLS agent is a separate OS process and a distinct private
+`securityprincipal.KindTLSAgent` identity, not an alias of the existing
+`KindMaterialAgent` Vault KV/credential process. TLS agent identities are
+ineligible for `workload-credential.v2` token issuance even if an operator
+mistakenly configures a backend policy. The PKI delegation relation is one
+TLS agent to one exact subject (including separate Browser/Desktop executor
+agents and a distinct agent per registered egress broker); the old
+material-agent and shared Browser/Desktop role/executor delegation is not a
+production authorization path. The certificate controller's own managed
+Vault TLS key remains its explicitly audited internal-signer exception.
+The private principal vocabulary was extended before a Slice 6 lock or
+release evidence was created; Provider Contract is unchanged. The canonical
+profile and process gate must inventory every actual key owner and must not
+create empty agent principals for processes that do not use one.
+
+The still-unlocked `phase6-security-profile.v1` now binds all eight static
+runtime/executor TLS agents and exactly one additional agent per registered
+egress broker. Every canonical `tls_agent_bindings` entry fixes the agent and
+subject deployment/principal digests, distinct UID/GID pairs, one private
+socket storage ID and `/run/tls/<agent>/signer.sock` path, 0710 directory and
+0666 socket modes, the exact subject-to-agent Unix peer edge, issuer policy
+and Vault role, and socket cleanup class. The profile rejects omissions,
+duplicates, cross-subject substitution, extra mounts/edges and sharing with
+the policy-authority socket. The production TLS-agent command checks its
+config against this profile; the egress broker checks its signer endpoint
+against its bound agent before connecting. These checks are configuration
+authority only: runtime/executor commands still need live signer migration,
+and a real broker/controller/Vault/DNS mTLS process gate is required before
+Slice 6 can close.
+
+The certificate controller is one logical process, not one controller per
+agent. Its production command configuration is v2 and receives the same
+validated profile/registry as its TLS-agent clients, including registered
+broker agents; the old nil-broker registry is not a production fallback.
+The profile fixes the controller principal/UID/GID and its response-signing
+key ID/public-key digest separately from Vault CA and mTLS trust material.
+Each TLS agent gets a distinct controller Unix endpoint, storage ID, 0710
+controller-owned/agent-group directory, 0666 controller-owned socket, exact
+agent-to-controller peer edge, and CSR request key ID/digest. The controller
+owns each directory read-write and only its corresponding agent mounts it
+read-only. The controller command checks its complete listener and policy
+sets against the profile, including the managed Vault TLS self-policy. The
+agent checks its controller endpoint, peer UID/GID, response key, CSR key and
+issuer policy before opening the socket.
+
+The controller's own managed Vault TLS renewal uses a separately declared
+internal self endpoint with 0700 directory and 0600 socket; it is not an
+extra TLS agent and never shares an external agent endpoint. Both Unix paths
+use common no-symlink, stable-inode, owner/mode, stale-socket and active-
+connection cleanup checks. External agent endpoints never use `chown`,
+supplementary groups or CAP_CHOWN, and a half-sent first frame is bounded.
+A two-agent distinct-UID Docker test now proves this Unix/CSR component with a
+private test CA; full production broker/controller/Vault/DNS integration is
+still required before Slice 6 closure.
 
 ### Enforced egress and ingress
 

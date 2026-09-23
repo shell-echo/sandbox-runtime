@@ -46,6 +46,14 @@ var requiredPrincipals = map[string]string{
 	"desktop-runtime-role":           "runtime",
 	"browser-executor-backend":       "executor",
 	"desktop-executor-backend":       "executor",
+	"product-tls-agent":              "tls_agent",
+	"provider-tls-agent":             "tls_agent",
+	"gateway-tls-agent":              "tls_agent",
+	"guest-tls-agent":                "tls_agent",
+	"browser-tls-agent":              "tls_agent",
+	"desktop-tls-agent":              "tls_agent",
+	"browser-executor-tls-agent":     "tls_agent",
+	"desktop-executor-tls-agent":     "tls_agent",
 	"product-runtime-agent":          "material_agent",
 	"provider-runtime-agent":         "material_agent",
 	"gateway-agent":                  "material_agent",
@@ -79,6 +87,14 @@ var requiredAuthorizationBindings = map[string]principalBinding{
 	"desktop-runtime-role":           {securityprincipal.KindRuntimeRole, "desktop", securityprincipal.RoleDesktop},
 	"browser-executor-backend":       {securityprincipal.KindExecutorBackend, "browser_executor", securityprincipal.RoleBrowser},
 	"desktop-executor-backend":       {securityprincipal.KindExecutorBackend, "desktop_executor", securityprincipal.RoleDesktop},
+	"product-tls-agent":              {securityprincipal.KindTLSAgent, "product_tls_agent", securityprincipal.RoleProduct},
+	"provider-tls-agent":             {securityprincipal.KindTLSAgent, "provider_tls_agent", securityprincipal.RoleProvider},
+	"gateway-tls-agent":              {securityprincipal.KindTLSAgent, "gateway_tls_agent", securityprincipal.RoleGateway},
+	"guest-tls-agent":                {securityprincipal.KindTLSAgent, "guest_tls_agent", securityprincipal.RoleGuest},
+	"browser-tls-agent":              {securityprincipal.KindTLSAgent, "browser_tls_agent", securityprincipal.RoleBrowser},
+	"desktop-tls-agent":              {securityprincipal.KindTLSAgent, "desktop_tls_agent", securityprincipal.RoleDesktop},
+	"browser-executor-tls-agent":     {securityprincipal.KindTLSAgent, "browser_executor_tls_agent", securityprincipal.RoleBrowser},
+	"desktop-executor-tls-agent":     {securityprincipal.KindTLSAgent, "desktop_executor_tls_agent", securityprincipal.RoleDesktop},
 	"product-runtime-agent":          {securityprincipal.KindMaterialAgent, "product_runtime_agent", securityprincipal.RoleProduct},
 	"provider-runtime-agent":         {securityprincipal.KindMaterialAgent, "provider_runtime_agent", securityprincipal.RoleProvider},
 	"gateway-agent":                  {securityprincipal.KindMaterialAgent, "gateway_agent", securityprincipal.RoleGateway},
@@ -100,19 +116,32 @@ var requiredResourceControllers = map[string]string{
 	"desktop-sandbox-runtime": "desktop-executor-backend",
 }
 
+var requiredTLSAgentSubjects = map[string]string{
+	"product-tls-agent":          "product-runtime",
+	"provider-tls-agent":         "provider-runtime",
+	"gateway-tls-agent":          "gateway-runtime",
+	"guest-tls-agent":            "guest-runtime",
+	"browser-tls-agent":          "browser-runtime-role",
+	"desktop-tls-agent":          "desktop-runtime-role",
+	"browser-executor-tls-agent": "browser-executor-backend",
+	"desktop-executor-tls-agent": "desktop-executor-backend",
+}
+
 type Profile struct {
-	Protocol               string            `json:"protocol"`
-	Version                int               `json:"version"`
-	Revision               string            `json:"revision"`
-	ProfileDigest          string            `json:"profile_digest"`
-	EnvironmentDigest      string            `json:"environment_digest"`
-	PrincipalProfileDigest string            `json:"principal_profile_digest"`
-	Principals             []Principal       `json:"principals"`
-	Networks               []Network         `json:"networks"`
-	External               []ExternalService `json:"external_services"`
-	TrustEdges             []TrustEdge       `json:"trust_edges"`
-	EgressPolicies         []EgressPolicy    `json:"egress_policies"`
-	CleanupClasses         []string          `json:"cleanup_classes"`
+	Protocol               string                         `json:"protocol"`
+	Version                int                            `json:"version"`
+	Revision               string                         `json:"revision"`
+	ProfileDigest          string                         `json:"profile_digest"`
+	EnvironmentDigest      string                         `json:"environment_digest"`
+	PrincipalProfileDigest string                         `json:"principal_profile_digest"`
+	Principals             []Principal                    `json:"principals"`
+	Networks               []Network                      `json:"networks"`
+	External               []ExternalService              `json:"external_services"`
+	TrustEdges             []TrustEdge                    `json:"trust_edges"`
+	CertificateController  CertificateControllerAuthority `json:"certificate_controller"`
+	TLSAgentBindings       []TLSAgentBinding              `json:"tls_agent_bindings"`
+	EgressPolicies         []EgressPolicy                 `json:"egress_policies"`
+	CleanupClasses         []string                       `json:"cleanup_classes"`
 }
 
 type Principal struct {
@@ -244,6 +273,76 @@ type PolicyAuthority struct {
 	StateMaxAgeSeconds int    `json:"state_max_age_seconds"`
 }
 
+// TLSAgentBinding is the one-to-one deployment and signing authority for a
+// role-owned TLS key. The socket directory is shared only by this pair.
+type TLSAgentBinding struct {
+	AgentDeployment           string `json:"agent_deployment"`
+	AgentPrincipalDigest      string `json:"agent_principal_digest"`
+	SubjectDeployment         string `json:"subject_deployment"`
+	SubjectPrincipalDigest    string `json:"subject_principal_digest"`
+	AgentUID                  uint32 `json:"agent_uid"`
+	AgentGID                  uint32 `json:"agent_gid"`
+	SubjectUID                uint32 `json:"subject_uid"`
+	SubjectGID                uint32 `json:"subject_gid"`
+	SocketDirectory           string `json:"socket_directory"`
+	SocketStorageID           string `json:"socket_storage_id"`
+	SocketPath                string `json:"socket_path"`
+	DirectoryMode             uint32 `json:"directory_mode"`
+	SocketMode                uint32 `json:"socket_mode"`
+	UnixEdgeID                string `json:"unix_edge_id"`
+	IssuerPolicyID            string `json:"issuer_policy_id"`
+	IssuerVaultRole           string `json:"issuer_vault_role"`
+	AgentRequestKeyID         string `json:"agent_request_key_id"`
+	AgentRequestKeyDigest     string `json:"agent_request_key_digest"`
+	ControllerDeployment      string `json:"controller_deployment"`
+	ControllerUID             uint32 `json:"controller_uid"`
+	ControllerGID             uint32 `json:"controller_gid"`
+	ControllerSocketDirectory string `json:"controller_socket_directory"`
+	ControllerSocketStorageID string `json:"controller_socket_storage_id"`
+	ControllerSocketPath      string `json:"controller_socket_path"`
+	ControllerDirectoryMode   uint32 `json:"controller_directory_mode"`
+	ControllerSocketMode      uint32 `json:"controller_socket_mode"`
+	ControllerUnixEdgeID      string `json:"controller_unix_edge_id"`
+	CleanupClass              string `json:"cleanup_class"`
+}
+
+// CertificateControllerAuthority is one controller process with one private
+// listener per TLS agent and one distinct internal managed-TLS self listener.
+type CertificateControllerAuthority struct {
+	DeploymentName          string `json:"deployment_name"`
+	PrincipalDigest         string `json:"principal_digest"`
+	UID                     uint32 `json:"uid"`
+	GID                     uint32 `json:"gid"`
+	ResponseKeyID           string `json:"response_key_id"`
+	ResponsePublicKeyDigest string `json:"response_public_key_digest"`
+	ManagedPolicyID         string `json:"managed_policy_id"`
+	ManagedVaultRole        string `json:"managed_vault_role"`
+	ManagedRequestKeyID     string `json:"managed_request_key_id"`
+	ManagedRequestKeyDigest string `json:"managed_request_key_digest"`
+	SelfSocketDirectory     string `json:"self_socket_directory"`
+	SelfSocketStorageID     string `json:"self_socket_storage_id"`
+	SelfSocketPath          string `json:"self_socket_path"`
+	SelfDirectoryMode       uint32 `json:"self_directory_mode"`
+	SelfSocketMode          uint32 `json:"self_socket_mode"`
+	SelfUnixEdgeID          string `json:"self_unix_edge_id"`
+}
+
+func CertificateControllerPublicKeyDigest(publicKey []byte) string {
+	return principalKeyDigest("sandbox-runtime/phase6-certificate-controller-response-key/v1\x00", publicKey)
+}
+
+func TLSAgentRequestPublicKeyDigest(publicKey []byte) string {
+	return principalKeyDigest("sandbox-runtime/phase6-tls-agent-request-key/v1\x00", publicKey)
+}
+
+func principalKeyDigest(domain string, publicKey []byte) string {
+	if len(publicKey) != ed25519.PublicKeySize {
+		return ""
+	}
+	digest := sha256.Sum256(append([]byte(domain), publicKey...))
+	return "sha256:" + hex.EncodeToString(digest[:])
+}
+
 func (p EgressPolicy) Digest() string {
 	document, _ := json.Marshal(p)
 	digest := sha256.Sum256(append([]byte("sandbox-runtime/phase6-egress-policy/v1\x00"), document...))
@@ -302,7 +401,8 @@ func (p Profile) Validate() error { //nolint:gocyclo
 	if p.Protocol != ProtocolID || p.Version != Version || !namePattern.MatchString(p.Revision) ||
 		!digestPattern.MatchString(p.ProfileDigest) || !digestPattern.MatchString(p.EnvironmentDigest) ||
 		!digestPattern.MatchString(p.PrincipalProfileDigest) || len(p.Principals) < len(requiredPrincipals) || len(p.Principals) > 128 ||
-		len(p.Networks) < 1 || len(p.Networks) > 256 || len(p.External) != 3 || len(p.TrustEdges) < 1 || len(p.TrustEdges) > 512 || len(p.EgressPolicies) > 128 ||
+		len(p.Networks) < 1 || len(p.Networks) > 256 || len(p.External) != 3 || len(p.TrustEdges) < 1 || len(p.TrustEdges) > 512 ||
+		len(p.TLSAgentBindings) < len(requiredTLSAgentSubjects) || len(p.TLSAgentBindings) > 136 || len(p.EgressPolicies) > 128 ||
 		!exactStrings(p.CleanupClasses, []string{"connections", "containers", "files", "networks", "processes", "sockets"}) {
 		return ErrInvalidProfile
 	}
@@ -315,15 +415,30 @@ func (p Profile) Validate() error { //nolint:gocyclo
 	uids, gids, identities, seccomp := map[uint32]struct{}{}, map[uint32]struct{}{}, map[string]struct{}{}, map[string]struct{}{}
 	previous := ""
 	authorityBindings := make(map[string]principalBinding, len(p.EgressPolicies))
+	dynamicTLSBindings := make(map[string]principalBinding, len(p.EgressPolicies))
 	for _, policy := range p.EgressPolicies {
 		authority := policy.Authority
 		if _, duplicate := authorityBindings[authority.DeploymentName]; duplicate {
 			return ErrInvalidProfile
 		}
 		authorityBindings[authority.DeploymentName] = principalBinding{securityprincipal.KindController, authority.AuthorizationName, ""}
+		for _, binding := range p.TLSAgentBindings {
+			if binding.SubjectDeployment != policy.Broker {
+				continue
+			}
+			for _, principal := range p.Principals {
+				if principal.Name == policy.Broker && principal.AuthorizationPrincipal != nil {
+					identity := principal.AuthorizationPrincipal
+					dynamicTLSBindings[binding.AgentDeployment] = principalBinding{
+						securityprincipal.KindTLSAgent, identity.Name + "_tls_agent", identity.Role,
+					}
+					break
+				}
+			}
+		}
 	}
 	for _, principal := range p.Principals {
-		if principal.Name <= previous || validatePrincipal(principal, registry, authorityBindings) != nil {
+		if principal.Name <= previous || validatePrincipal(principal, registry, authorityBindings, dynamicTLSBindings) != nil {
 			return ErrInvalidProfile
 		}
 		previous = principal.Name
@@ -386,6 +501,12 @@ func (p Profile) Validate() error { //nolint:gocyclo
 	if err := validateEgress(p.EgressPolicies, principals, edges); err != nil {
 		return err
 	}
+	if err := validateCertificateControllerAuthority(p.CertificateController, principals, edges); err != nil {
+		return err
+	}
+	if err := validateTLSAgentBindings(p.TLSAgentBindings, p.EgressPolicies, p.CertificateController, principals, edges); err != nil {
+		return err
+	}
 	for name, service := range external {
 		for _, edge := range service.IngressEdges {
 			if bound, ok := edges[edge]; !ok || bound.To != name {
@@ -435,7 +556,38 @@ func (p Profile) principalRegistry() (*securityprincipal.Registry, error) {
 	return registry, nil
 }
 
-func validatePrincipal(value Principal, registry *securityprincipal.Registry, authorityBindings map[string]principalBinding) error { //nolint:gocyclo
+// PrincipalRegistry returns only the identities admitted by a valid profile.
+func (p Profile) PrincipalRegistry() (*securityprincipal.Registry, error) {
+	if err := p.Validate(); err != nil {
+		return nil, err
+	}
+	return p.principalRegistry()
+}
+
+// TLSAgentForSubject returns the sole agent binding and its two deployments.
+func (p Profile) TLSAgentForSubject(subjectName string) (TLSAgentBinding, Principal, Principal, error) {
+	if err := p.Validate(); err != nil {
+		return TLSAgentBinding{}, Principal{}, Principal{}, err
+	}
+	for _, binding := range p.TLSAgentBindings {
+		if binding.SubjectDeployment != subjectName {
+			continue
+		}
+		var agent, subject Principal
+		for _, principal := range p.Principals {
+			if principal.Name == binding.AgentDeployment {
+				agent = principal
+			}
+			if principal.Name == binding.SubjectDeployment {
+				subject = principal
+			}
+		}
+		return binding, agent, subject, nil
+	}
+	return TLSAgentBinding{}, Principal{}, Principal{}, ErrInvalidProfile
+}
+
+func validatePrincipal(value Principal, registry *securityprincipal.Registry, authorityBindings, dynamicTLSBindings map[string]principalBinding) error { //nolint:gocyclo
 	if !namePattern.MatchString(value.Name) || !validPrincipalKind(value.Kind) || !imagePattern.MatchString(value.ImageReference) ||
 		!digestPattern.MatchString(value.ImageDigest) || !strings.HasSuffix(value.ImageReference, "@"+value.ImageDigest) ||
 		value.UID < 10000 || value.UID > 60000 || value.GID < 10000 || value.GID > 60000 ||
@@ -443,7 +595,7 @@ func validatePrincipal(value Principal, registry *securityprincipal.Registry, au
 		!digestPattern.MatchString(value.SeccompDigest) || value.Resources.MemoryBytes < 16<<20 || value.Resources.MemoryBytes > 64<<30 ||
 		value.Resources.CPUMillis < 10 || value.Resources.CPUMillis > 64000 || value.Resources.PIDs < 4 || value.Resources.PIDs > 4096 ||
 		value.HostNetwork || value.DockerSocket || value.HostDevices || len(value.Networks) < 1 || len(value.Networks) > 4 ||
-		len(value.Mounts) > 16 || len(value.Listeners) > 16 {
+		len(value.Mounts) > 128 || (value.Kind != "controller" && len(value.Mounts) > 16) || len(value.Listeners) > 16 {
 		return ErrInvalidProfile
 	}
 	if value.AuthorizationPrincipal != nil {
@@ -451,7 +603,7 @@ func validatePrincipal(value Principal, registry *securityprincipal.Registry, au
 		if registry == nil || registry.Validate(identity) != nil || value.PrincipalDigest != identity.Digest() ||
 			!digestPattern.MatchString(value.PrincipalDigest) || value.ControllingPrincipalDigest != "" || value.TLS == nil ||
 			value.TLS.PrincipalDigest != value.PrincipalDigest || validateTLS(*value.TLS) != nil ||
-			validateAuthorizationBinding(value.Name, value.Kind, identity, authorityBindings) != nil {
+			validateAuthorizationBinding(value.Name, value.Kind, identity, authorityBindings, dynamicTLSBindings) != nil {
 			return ErrInvalidProfile
 		}
 	} else if value.PrincipalDigest != "" || !digestPattern.MatchString(value.ControllingPrincipalDigest) || value.TLS != nil ||
@@ -465,11 +617,13 @@ func validatePrincipal(value Principal, registry *securityprincipal.Registry, au
 	} else if value.ExternalUplink || !value.DirectEgressBlocked {
 		return ErrInvalidProfile
 	}
+	if value.Kind == "tls_agent" && len(value.Listeners) != 0 {
+		return ErrInvalidProfile
+	}
 	if !sortedUniqueNames(value.Networks) {
 		return ErrInvalidProfile
 	}
 	seenMounts := map[string]struct{}{}
-	_, policyAuthority := authorityBindings[value.Name]
 	for _, mount := range value.Mounts {
 		if !strings.HasPrefix(mount.Target, "/") || path.Clean(mount.Target) != mount.Target || mount.Target == "/" ||
 			(mount.Kind != "tmpfs" && mount.Kind != "private_socket" && mount.Kind != "persistent_ledger") {
@@ -485,10 +639,11 @@ func validatePrincipal(value Principal, registry *securityprincipal.Registry, au
 				return ErrInvalidProfile
 			}
 		case "private_socket":
-			if mount.MaxBytes != 0 || !namePattern.MatchString(mount.StorageID) || mount.ReadOnly == policyAuthority {
+			if mount.MaxBytes != 0 || !namePattern.MatchString(mount.StorageID) {
 				return ErrInvalidProfile
 			}
 		case "persistent_ledger":
+			_, policyAuthority := authorityBindings[value.Name]
 			if !policyAuthority || mount.ReadOnly || mount.MaxBytes < 4096 || mount.MaxBytes > 1<<30 ||
 				!namePattern.MatchString(mount.StorageID) {
 				return ErrInvalidProfile
@@ -511,7 +666,7 @@ func validatePrincipal(value Principal, registry *securityprincipal.Registry, au
 	return nil
 }
 
-func validateAuthorizationBinding(deploymentName, deploymentKind string, identity securityprincipal.Principal, authorityBindings map[string]principalBinding) error {
+func validateAuthorizationBinding(deploymentName, deploymentKind string, identity securityprincipal.Principal, authorityBindings, dynamicTLSBindings map[string]principalBinding) error {
 	if expected, required := requiredAuthorizationBindings[deploymentName]; required {
 		if identity.Kind != expected.kind || identity.Name != expected.name || identity.Role != expected.role ||
 			deploymentKindForPrincipal(identity.Kind) != deploymentKind {
@@ -522,6 +677,12 @@ func validateAuthorizationBinding(deploymentName, deploymentKind string, identit
 	if expected, authorized := authorityBindings[deploymentName]; authorized {
 		if identity.Kind != expected.kind || identity.Name != expected.name || identity.Role != expected.role ||
 			deploymentKind != "controller" {
+			return ErrInvalidProfile
+		}
+		return nil
+	}
+	if expected, authorized := dynamicTLSBindings[deploymentName]; authorized {
+		if identity.Kind != expected.kind || identity.Name != expected.name || identity.Role != expected.role || deploymentKind != "tls_agent" {
 			return ErrInvalidProfile
 		}
 		return nil
@@ -540,6 +701,8 @@ func deploymentKindForPrincipal(kind securityprincipal.Kind) string {
 		return "executor"
 	case securityprincipal.KindMaterialAgent:
 		return "material_agent"
+	case securityprincipal.KindTLSAgent:
+		return "tls_agent"
 	case securityprincipal.KindController:
 		return "controller"
 	case securityprincipal.KindMigrationJob:
@@ -864,9 +1027,229 @@ func policyStorageMember(policies []EgressPolicy, principalName string, mount Mo
 	return false
 }
 
+func validateCertificateControllerAuthority(value CertificateControllerAuthority, principals map[string]Principal, edges map[string]TrustEdge) error {
+	controller, found := principals[value.DeploymentName]
+	edge, edgeFound := edges[value.SelfUnixEdgeID]
+	if !found || !edgeFound || value.DeploymentName != "certificate-controller" || controller.Kind != "controller" ||
+		value.PrincipalDigest != controller.PrincipalDigest || value.UID != controller.UID || value.GID != controller.GID ||
+		!namePattern.MatchString(value.ResponseKeyID) || !digestPattern.MatchString(value.ResponsePublicKeyDigest) ||
+		!namePattern.MatchString(value.ManagedPolicyID) || !namePattern.MatchString(value.ManagedVaultRole) ||
+		!namePattern.MatchString(value.ManagedRequestKeyID) || !digestPattern.MatchString(value.ManagedRequestKeyDigest) ||
+		value.SelfSocketDirectory != "/run/certificate-controller/self" ||
+		value.SelfSocketPath != path.Join(value.SelfSocketDirectory, "managed.sock") ||
+		value.SelfDirectoryMode != 0o700 || value.SelfSocketMode != 0o600 ||
+		!namePattern.MatchString(value.SelfSocketStorageID) || !namePattern.MatchString(value.SelfUnixEdgeID) ||
+		!exactPolicyMount(controller, "private_socket", value.SelfSocketDirectory, value.SelfSocketStorageID, false) ||
+		edge.From != controller.Name || edge.To != controller.Name || edge.Protocol != "unix" ||
+		edge.Authentication != "unix_peer_credentials" || edge.TenantScope != "system" || edge.MaxConnectionSeconds > 30 ||
+		edge.FromPrincipalDigest != controller.PrincipalDigest || edge.ToPrincipalDigest != controller.PrincipalDigest ||
+		edge.FromURI != controller.TLS.URI || edge.ToURI != controller.TLS.URI {
+		return ErrInvalidProfile
+	}
+	for name, principal := range principals {
+		if name == controller.Name {
+			continue
+		}
+		for _, mount := range principal.Mounts {
+			if mount.Kind == "private_socket" && mount.StorageID == value.SelfSocketStorageID {
+				return ErrInvalidProfile
+			}
+		}
+	}
+	return nil
+}
+
+func validateTLSAgentBindings(values []TLSAgentBinding, policies []EgressPolicy, controllerAuthority CertificateControllerAuthority,
+	principals map[string]Principal, edges map[string]TrustEdge) error {
+	expected := make(map[string]string, len(requiredTLSAgentSubjects)+len(policies))
+	for agent, subject := range requiredTLSAgentSubjects {
+		expected[agent] = subject
+	}
+	policyStorage := map[string]struct{}{controllerAuthority.SelfSocketStorageID: {}}
+	brokerSubjects := map[string]struct{}{}
+	for _, policy := range policies {
+		brokerSubjects[policy.Broker] = struct{}{}
+		policyStorage[policy.Authority.SocketStorageID] = struct{}{}
+		policyStorage[policy.Authority.LedgerStorageID] = struct{}{}
+	}
+	if len(values) != len(expected)+len(policies) {
+		return ErrInvalidProfile
+	}
+	seenAgents, seenSubjects, seenStorage, seenControllerStorage, seenEdges, seenControllerEdges, seenPolicies, seenVaultRoles, seenRequestKeys, seenRequestKeyIDs :=
+		map[string]struct{}{}, map[string]struct{}{}, map[string]struct{}{}, map[string]struct{}{},
+		map[string]struct{}{}, map[string]struct{}{}, map[string]struct{}{}, map[string]struct{}{},
+		map[string]struct{}{}, map[string]struct{}{}
+	controller := principals[controllerAuthority.DeploymentName]
+	seenPolicies[controllerAuthority.ManagedPolicyID] = struct{}{}
+	seenVaultRoles[controllerAuthority.ManagedVaultRole] = struct{}{}
+	seenRequestKeys[controllerAuthority.ManagedRequestKeyDigest] = struct{}{}
+	seenRequestKeyIDs[controllerAuthority.ManagedRequestKeyID] = struct{}{}
+	previous := ""
+	for _, value := range values {
+		agent, agentOK := principals[value.AgentDeployment]
+		subject, subjectOK := principals[value.SubjectDeployment]
+		edge, edgeOK := edges[value.UnixEdgeID]
+		controllerEdge, controllerEdgeOK := edges[value.ControllerUnixEdgeID]
+		staticSubject, staticAgent := expected[value.AgentDeployment]
+		_, dynamicSubject := brokerSubjects[value.SubjectDeployment]
+		if value.AgentDeployment <= previous || !agentOK || !subjectOK || !edgeOK || !controllerEdgeOK ||
+			!(staticAgent && staticSubject == value.SubjectDeployment) && !(dynamicSubject && !staticAgent) || agent.Kind != "tls_agent" ||
+			(subject.Kind != "runtime" && subject.Kind != "executor" && subject.Kind != "egress_broker") ||
+			agent.AuthorizationPrincipal == nil || subject.AuthorizationPrincipal == nil ||
+			agent.AuthorizationPrincipal.Role != subject.AuthorizationPrincipal.Role ||
+			value.AgentPrincipalDigest != agent.PrincipalDigest || value.SubjectPrincipalDigest != subject.PrincipalDigest ||
+			value.AgentUID != agent.UID || value.AgentGID != agent.GID || value.SubjectUID != subject.UID || value.SubjectGID != subject.GID ||
+			value.AgentUID == value.SubjectUID || value.AgentGID == value.SubjectGID ||
+			value.SocketDirectory != path.Join("/run/tls", value.AgentDeployment) || value.SocketPath != path.Join(value.SocketDirectory, "signer.sock") ||
+			!namePattern.MatchString(value.SocketStorageID) || !namePattern.MatchString(value.UnixEdgeID) ||
+			!namePattern.MatchString(value.IssuerPolicyID) || !namePattern.MatchString(value.IssuerVaultRole) ||
+			!namePattern.MatchString(value.AgentRequestKeyID) || !digestPattern.MatchString(value.AgentRequestKeyDigest) ||
+			value.DirectoryMode != 0o710 || value.SocketMode != 0o666 ||
+			value.ControllerDeployment != controller.Name || value.ControllerUID != controller.UID || value.ControllerGID != controller.GID ||
+			value.ControllerSocketDirectory != path.Join("/run/certificate-controller", value.AgentDeployment) ||
+			value.ControllerSocketPath != path.Join(value.ControllerSocketDirectory, "request.sock") ||
+			!namePattern.MatchString(value.ControllerSocketStorageID) || !namePattern.MatchString(value.ControllerUnixEdgeID) ||
+			value.ControllerDirectoryMode != 0o710 || value.ControllerSocketMode != 0o666 ||
+			!exactPolicyMount(controller, "private_socket", value.ControllerSocketDirectory, value.ControllerSocketStorageID, false) ||
+			!exactPolicyMount(agent, "private_socket", value.ControllerSocketDirectory, value.ControllerSocketStorageID, true) ||
+			value.CleanupClass != "sockets" || !exactPolicyMount(agent, "private_socket", value.SocketDirectory, value.SocketStorageID, false) ||
+			!exactPolicyMount(subject, "private_socket", value.SocketDirectory, value.SocketStorageID, true) ||
+			edge.From != value.SubjectDeployment || edge.To != value.AgentDeployment || edge.Protocol != "unix" ||
+			edge.Authentication != "unix_peer_credentials" || edge.TenantScope != "system" || edge.MaxConnectionSeconds > 30 ||
+			edge.FromPrincipalDigest != subject.PrincipalDigest || edge.ToPrincipalDigest != agent.PrincipalDigest ||
+			edge.FromURI != subject.TLS.URI || edge.ToURI != agent.TLS.URI ||
+			controllerEdge.From != agent.Name || controllerEdge.To != controller.Name || controllerEdge.Protocol != "unix" ||
+			controllerEdge.Authentication != "unix_peer_credentials" || controllerEdge.TenantScope != "system" ||
+			controllerEdge.MaxConnectionSeconds > 30 || controllerEdge.FromPrincipalDigest != agent.PrincipalDigest ||
+			controllerEdge.ToPrincipalDigest != controller.PrincipalDigest || controllerEdge.FromURI != agent.TLS.URI ||
+			controllerEdge.ToURI != controller.TLS.URI {
+			return ErrInvalidProfile
+		}
+		previous = value.AgentDeployment
+		if _, exists := seenAgents[value.AgentDeployment]; exists {
+			return ErrInvalidProfile
+		}
+		if _, exists := seenSubjects[value.SubjectDeployment]; exists {
+			return ErrInvalidProfile
+		}
+		if _, exists := seenStorage[value.SocketStorageID]; exists {
+			return ErrInvalidProfile
+		}
+		if _, exists := seenControllerStorage[value.ControllerSocketStorageID]; exists {
+			return ErrInvalidProfile
+		}
+		if value.SocketStorageID == value.ControllerSocketStorageID {
+			return ErrInvalidProfile
+		}
+		if _, exists := policyStorage[value.SocketStorageID]; exists {
+			return ErrInvalidProfile
+		}
+		if _, exists := policyStorage[value.ControllerSocketStorageID]; exists {
+			return ErrInvalidProfile
+		}
+		if _, exists := seenEdges[value.UnixEdgeID]; exists {
+			return ErrInvalidProfile
+		}
+		if _, exists := seenPolicies[value.IssuerPolicyID]; exists {
+			return ErrInvalidProfile
+		}
+		if _, exists := seenControllerEdges[value.ControllerUnixEdgeID]; exists {
+			return ErrInvalidProfile
+		}
+		if _, exists := seenVaultRoles[value.IssuerVaultRole]; exists {
+			return ErrInvalidProfile
+		}
+		if _, exists := seenRequestKeys[value.AgentRequestKeyDigest]; exists {
+			return ErrInvalidProfile
+		}
+		if _, exists := seenRequestKeyIDs[value.AgentRequestKeyID]; exists {
+			return ErrInvalidProfile
+		}
+		seenAgents[value.AgentDeployment], seenSubjects[value.SubjectDeployment] = struct{}{}, struct{}{}
+		seenStorage[value.SocketStorageID], seenEdges[value.UnixEdgeID] = struct{}{}, struct{}{}
+		seenControllerStorage[value.ControllerSocketStorageID], seenControllerEdges[value.ControllerUnixEdgeID] = struct{}{}, struct{}{}
+		seenPolicies[value.IssuerPolicyID] = struct{}{}
+		seenVaultRoles[value.IssuerVaultRole] = struct{}{}
+		seenRequestKeys[value.AgentRequestKeyDigest], seenRequestKeyIDs[value.AgentRequestKeyID] = struct{}{}, struct{}{}
+	}
+	for storageID := range seenStorage {
+		if _, shared := seenControllerStorage[storageID]; shared {
+			return ErrInvalidProfile
+		}
+	}
+	for name, principal := range principals {
+		if principal.Kind == "tls_agent" {
+			if _, expectedAgent := seenAgents[name]; !expectedAgent {
+				return ErrInvalidProfile
+			}
+		}
+		for _, mount := range principal.Mounts {
+			if mount.Kind != "private_socket" {
+				continue
+			}
+			if _, tlsStorage := seenStorage[mount.StorageID]; tlsStorage {
+				if !tlsStorageMember(values, name, mount) {
+					return ErrInvalidProfile
+				}
+			} else if _, controllerStorage := seenControllerStorage[mount.StorageID]; controllerStorage {
+				if !controllerStorageMember(values, name, mount) {
+					return ErrInvalidProfile
+				}
+			} else if mount.StorageID == controllerAuthority.SelfSocketStorageID {
+				if name != controllerAuthority.DeploymentName || mount.Target != controllerAuthority.SelfSocketDirectory || mount.ReadOnly {
+					return ErrInvalidProfile
+				}
+			} else if !policyStorageMember(policies, name, mount) {
+				return ErrInvalidProfile
+			}
+		}
+	}
+	for broker := range brokerSubjects {
+		if _, hasAgent := seenSubjects[broker]; !hasAgent {
+			return ErrInvalidProfile
+		}
+	}
+	for _, edge := range edges {
+		to := principals[edge.To]
+		if to.Kind == "tls_agent" {
+			if _, declared := seenEdges[edge.ID]; !declared {
+				return ErrInvalidProfile
+			}
+		}
+		if to.Name == controller.Name && edge.Protocol == "unix" && edge.ID != controllerAuthority.SelfUnixEdgeID {
+			if _, declared := seenControllerEdges[edge.ID]; !declared {
+				return ErrInvalidProfile
+			}
+		}
+	}
+	return nil
+}
+
+func tlsStorageMember(bindings []TLSAgentBinding, principalName string, mount Mount) bool {
+	for _, binding := range bindings {
+		if mount.Kind == "private_socket" && mount.Target == binding.SocketDirectory && mount.StorageID == binding.SocketStorageID &&
+			((principalName == binding.AgentDeployment && !mount.ReadOnly) || (principalName == binding.SubjectDeployment && mount.ReadOnly)) {
+			return true
+		}
+	}
+	return false
+}
+
+func controllerStorageMember(bindings []TLSAgentBinding, principalName string, mount Mount) bool {
+	for _, binding := range bindings {
+		if mount.Kind == "private_socket" && mount.Target == binding.ControllerSocketDirectory &&
+			mount.StorageID == binding.ControllerSocketStorageID &&
+			((principalName == binding.ControllerDeployment && !mount.ReadOnly) ||
+				(principalName == binding.AgentDeployment && mount.ReadOnly)) {
+			return true
+		}
+	}
+	return false
+}
+
 func validPrincipalKind(value string) bool {
 	switch value {
-	case "runtime", "executor", "material_agent", "controller", "migration_job", "broker", "sandbox", "egress_broker":
+	case "runtime", "executor", "material_agent", "tls_agent", "controller", "migration_job", "broker", "sandbox", "egress_broker":
 		return true
 	default:
 		return false

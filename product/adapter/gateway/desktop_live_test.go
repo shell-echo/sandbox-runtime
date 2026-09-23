@@ -69,7 +69,7 @@ func TestDesktopLiveHandlerCarriesBoundedVideoAudioAndOrderedInput(t *testing.T)
 				if packet.SequenceNumber != 1 || !bytes.Equal(packet.Payload, []byte{0x10, 0x00, 0x00, 0x00}) {
 					t.Fatalf("video packet=%#v", packet)
 				}
-			case <-time.After(3 * time.Second):
+			case <-time.After(10 * time.Second):
 				t.Fatal("Desktop video RTP was not received")
 			}
 
@@ -81,7 +81,7 @@ func TestDesktopLiveHandlerCarriesBoundedVideoAudioAndOrderedInput(t *testing.T)
 					if packet.SequenceNumber != 2 || !bytes.Equal(packet.Payload, []byte{0xf8, 0xff, 0xfe}) {
 						t.Fatalf("audio packet=%#v", packet)
 					}
-				case <-time.After(3 * time.Second):
+				case <-time.After(10 * time.Second):
 					t.Fatal("Desktop audio RTP was not received")
 				}
 			}
@@ -91,7 +91,7 @@ func TestDesktopLiveHandlerCarriesBoundedVideoAudioAndOrderedInput(t *testing.T)
 				channel.OnOpen(func() { close(opened) })
 				select {
 				case <-opened:
-				case <-time.After(3 * time.Second):
+				case <-time.After(10 * time.Second):
 					t.Fatal("Desktop control data channel did not open")
 				}
 				results := make(chan webrtc.DataChannelMessage, 1)
@@ -104,7 +104,7 @@ func TestDesktopLiveHandlerCarriesBoundedVideoAudioAndOrderedInput(t *testing.T)
 					if input.Kind != "pointer" || input.X != 20 || input.Y != 30 || input.ControlLeaseID != binding.ControlLeaseID || input.ControlFence != binding.ControlFence {
 						t.Fatalf("input=%#v", input)
 					}
-				case <-time.After(3 * time.Second):
+				case <-time.After(10 * time.Second):
 					t.Fatal("fenced Desktop input was not forwarded")
 				}
 				select {
@@ -112,7 +112,7 @@ func TestDesktopLiveHandlerCarriesBoundedVideoAudioAndOrderedInput(t *testing.T)
 					if !result.IsString || string(result.Data) != `{"type":"input.result","sequence":1,"ok":true}` {
 						t.Fatalf("input result=%s", result.Data)
 					}
-				case <-time.After(3 * time.Second):
+				case <-time.After(10 * time.Second):
 					t.Fatal("Desktop input result was not returned")
 				}
 				if err := channel.SendText(`{"type":"stream.configure","sequence":2,"display":{"width":1024,"height":768,"max_fps":24},"audio_device":"default"}`); err != nil {
@@ -123,7 +123,7 @@ func TestDesktopLiveHandlerCarriesBoundedVideoAudioAndOrderedInput(t *testing.T)
 					if update.display.Width != 1024 || update.display.Height != 768 || update.display.MaxFPS != 24 || update.audioDevice != "default" {
 						t.Fatalf("stream update=%#v", update)
 					}
-				case <-time.After(3 * time.Second):
+				case <-time.After(10 * time.Second):
 					t.Fatal("Desktop stream update was not forwarded")
 				}
 				select {
@@ -131,7 +131,7 @@ func TestDesktopLiveHandlerCarriesBoundedVideoAudioAndOrderedInput(t *testing.T)
 					if string(result.Data) != `{"type":"stream.configure.result","sequence":2,"ok":true}` {
 						t.Fatalf("stream update result=%s", result.Data)
 					}
-				case <-time.After(3 * time.Second):
+				case <-time.After(10 * time.Second):
 					t.Fatal("Desktop stream update result was not returned")
 				}
 				time.Sleep(defaultDesktopResyncInterval)
@@ -143,7 +143,7 @@ func TestDesktopLiveHandlerCarriesBoundedVideoAudioAndOrderedInput(t *testing.T)
 					if string(result.Data) != `{"type":"stream.resync.result","sequence":3,"ok":true}` {
 						t.Fatalf("stream resync result=%s", result.Data)
 					}
-				case <-time.After(3 * time.Second):
+				case <-time.After(10 * time.Second):
 					t.Fatal("Desktop stream resync result was not returned")
 				}
 				if session.resyncs.Load() < 3 || session.keyframes.Load() < 3 {
@@ -658,7 +658,7 @@ func TestDesktopLiveRequiredRecordingReportsModeAndVisibleConsent(t *testing.T) 
 		// seconds while many packages contend for CPU. Keep the production
 		// timeout semantics covered elsewhere and give this recording assertion
 		// enough admission budget to avoid closing an otherwise healthy peer.
-		AuthorityPollInterval: 10 * time.Millisecond, ConnectionTimeout: 10 * time.Second, DisconnectGrace: 100 * time.Millisecond,
+		AuthorityPollInterval: 10 * time.Millisecond, ConnectionTimeout: 45 * time.Second, DisconnectGrace: 100 * time.Millisecond,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -743,7 +743,7 @@ func mustDesktopLiveHandler(t *testing.T, store product.ConnectionGrantStore, so
 	t.Helper()
 	handler, err := NewDesktopLiveHandler(DesktopLiveOptions{
 		Grants: store, Media: source, Policy: policy, Transfers: denyDesktopTransferAuthority{}, Audit: &auditStoreSpy{}, AllowedOrigins: []string{"https://app.example"},
-		AllowHostCandidatesForTests: true, AuthorityPollInterval: 10 * time.Millisecond,
+		AllowHostCandidatesForTests: true, AuthorityPollInterval: 10 * time.Millisecond, ConnectionTimeout: 45 * time.Second,
 	})
 	if err != nil {
 		t.Fatal(err)

@@ -11,12 +11,16 @@ import (
 	"net"
 	"os"
 	"time"
+
+	"github.com/shell-echo/sandbox-runtime/internal/restrictedunix"
 )
 
 type ClientConfig struct {
 	SocketPath       string
 	ExpectedUID      uint32
 	ExpectedGID      uint32
+	DirectoryGID     uint32
+	InternalSelf     bool
 	Policy           Policy
 	AgentPrivateKey  ed25519.PrivateKey
 	ControllerKeyID  string
@@ -31,7 +35,7 @@ type Client struct {
 }
 
 func NewClient(config ClientConfig) (*Client, error) {
-	if validateSocket(config.SocketPath, config.ExpectedUID, config.ExpectedGID) != nil || config.Policy.Validate() != nil ||
+	if !validClientSocket(config) || config.Policy.Validate() != nil ||
 		len(config.AgentPrivateKey) != ed25519.PrivateKeySize || !config.AgentPrivateKey.Public().(ed25519.PublicKey).Equal(config.Policy.PublicKey) ||
 		!namePattern.MatchString(config.ControllerKeyID) || len(config.ControllerPublic) != ed25519.PublicKeySize ||
 		config.OperationTimeout < time.Second || config.OperationTimeout > time.Minute || config.Now == nil || config.Now().IsZero() || config.Random == nil {
@@ -43,6 +47,25 @@ func NewClient(config ClientConfig) (*Client, error) {
 	config.Policy.DNSNames = append([]string(nil), config.Policy.DNSNames...)
 	config.Policy.Usages = append([]string(nil), config.Policy.Usages...)
 	return &Client{config: config}, nil
+}
+
+func validClientSocket(config ClientConfig) bool {
+	if config.DirectoryGID != uint32(os.Getgid()) {
+		return false
+	}
+	if config.InternalSelf {
+		if config.ExpectedUID != uint32(os.Getuid()) || config.ExpectedGID != config.DirectoryGID {
+			return false
+		}
+	} else if config.ExpectedUID == uint32(os.Getuid()) || config.ExpectedGID == config.DirectoryGID {
+		return false
+	}
+	layout := restrictedunix.Layout{DirectoryMode: 0o710, SocketMode: 0o666,
+		OwnerUID: config.ExpectedUID, DirectoryGID: config.DirectoryGID}
+	if config.InternalSelf {
+		layout.DirectoryMode, layout.SocketMode = 0o700, 0o600
+	}
+	return restrictedunix.ValidateSocket(config.SocketPath, layout)
 }
 
 func NewProductionClient(config ClientConfig) (*Client, error) {
@@ -141,7 +164,7 @@ func (c *Client) execute(ctx context.Context, request Request) (Response, error)
 		return Response{}, err
 	}
 	defer clear(document)
-	if validateSocket(c.config.SocketPath, c.config.ExpectedUID, c.config.ExpectedGID) != nil {
+	if !validClientSocket(c.config) {
 		return Response{}, ErrUnavailable
 	}
 	connectionValue, err := (&net.Dialer{}).DialContext(operationContext, "unix", c.config.SocketPath)

@@ -15,16 +15,19 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"slices"
 	"syscall"
 	"time"
 
+	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
 	"github.com/shell-echo/sandbox-runtime/internal/securityprincipal"
 	"github.com/shell-echo/sandbox-runtime/internal/workloadpki"
 	"github.com/shell-echo/sandbox-runtime/internal/workloadtlsagent"
 )
 
 const (
-	configProtocol    = "sandbox-runtime.workload-tls-agent-config.v1"
+	configProtocol    = "sandbox-runtime.workload-tls-agent-config.v2"
 	maxConfigBytes    = 256 << 10
 	requestSigningFD  = 3
 	maximumPolicyTTL  = 3600
@@ -33,6 +36,10 @@ const (
 
 type configDocument struct {
 	Protocol                      string                      `json:"protocol"`
+	SecurityProfilePath           string                      `json:"security_profile_path"`
+	SecurityProfileDigest         string                      `json:"security_profile_digest"`
+	AgentDeployment               string                      `json:"agent_deployment"`
+	SubjectDeployment             string                      `json:"subject_deployment"`
 	EnvironmentDigest             string                      `json:"environment_digest"`
 	ProfileDigest                 string                      `json:"profile_digest"`
 	Requester                     securityprincipal.Principal `json:"requester"`
@@ -50,6 +57,7 @@ type configDocument struct {
 	CertificateControllerKeyID    string                      `json:"certificate_controller_key_id"`
 	CertificateControllerPublic   string                      `json:"certificate_controller_public_key"`
 	AgentPublicKey                string                      `json:"agent_public_key"`
+	AgentRequestKeyID             string                      `json:"agent_request_key_id"`
 	AgentUID                      uint32                      `json:"agent_uid"`
 	AgentGID                      uint32                      `json:"agent_gid"`
 	SignerSocket                  string                      `json:"signer_socket"`
@@ -100,12 +108,32 @@ func run() error { //nolint:gocyclo
 		config.CheckIntervalMilliseconds > 60000 || config.RevocationPollIntervalSeconds < 1 ||
 		config.RevocationPollIntervalSeconds > 60 || config.RevocationMaxStalenessSeconds < 1 ||
 		config.RevocationMaxStalenessSeconds > 300 || config.OperationTimeoutSeconds < 1 || config.OperationTimeoutSeconds > 60 ||
-		config.MaxConnections < 1 || config.MaxConnections > maximumSocketLoad || config.ReplayCapacity < 16 || config.ReplayCapacity > 65536 {
+		config.MaxConnections < 1 || config.MaxConnections > maximumSocketLoad || config.ReplayCapacity < 16 || config.ReplayCapacity > 65536 ||
+		config.AgentUID == 0 || config.AgentGID == 0 || config.ExpectedRoleUID == 0 || config.ExpectedRoleGID == 0 ||
+		config.AgentUID == config.ExpectedRoleUID || config.AgentGID == config.ExpectedRoleGID ||
+		config.SignerSocketUID != config.AgentUID || config.SignerSocketGID != config.ExpectedRoleGID ||
+		config.AgentUID != uint32(os.Getuid()) || config.AgentGID != uint32(os.Getgid()) {
 		clear(canonical)
 		return stageError("config-validate")
 	}
 	clear(canonical)
-	registry, err := securityprincipal.NewRegistry(config.EnvironmentDigest, config.ProfileDigest, nil)
+	groups, err := os.Getgroups()
+	if err != nil {
+		return stageError("supplementary-groups")
+	}
+	for _, group := range groups {
+		if uint32(group) != config.AgentGID {
+			return stageError("supplementary-groups")
+		}
+	}
+	if !filepath.IsAbs(config.SecurityProfilePath) {
+		return stageError("security-profile-path")
+	}
+	profile, err := phase6security.VerifyFile(config.SecurityProfilePath)
+	if err != nil || !validateProfileBinding(profile, config) {
+		return stageError("security-profile-binding")
+	}
+	registry, err := profile.PrincipalRegistry()
 	if err != nil || registry.Validate(config.Requester) != nil || registry.Validate(config.Subject) != nil {
 		return stageError("principal-registry")
 	}
@@ -134,7 +162,8 @@ func run() error { //nolint:gocyclo
 		return stageError("certificate-policy")
 	}
 	client, err := workloadpki.NewProductionClient(workloadpki.ClientConfig{SocketPath: config.CertificateControllerSocket,
-		ExpectedUID: config.CertificateControllerUID, ExpectedGID: config.CertificateControllerGID, Policy: policy,
+		ExpectedUID: config.CertificateControllerUID, ExpectedGID: config.CertificateControllerGID,
+		DirectoryGID: config.AgentGID, Policy: policy,
 		AgentPrivateKey: ed25519.PrivateKey(requestPrivate), ControllerKeyID: config.CertificateControllerKeyID,
 		ControllerPublic: ed25519.PublicKey(controllerPublic), OperationTimeout: time.Duration(config.OperationTimeoutSeconds) * time.Second, Now: time.Now})
 	if err != nil {
@@ -156,8 +185,9 @@ func run() error { //nolint:gocyclo
 		return stageError("bootstrap")
 	}
 	bootstrapCancel()
+	syscall.Umask(0o077)
 	server, err := workloadtlsagent.Listen(workloadtlsagent.ServerConfig{SocketPath: config.SignerSocket,
-		SocketUID: config.SignerSocketUID, SocketGID: config.SignerSocketGID, ExpectedClientUID: config.ExpectedRoleUID,
+		SocketUID: config.SignerSocketUID, SocketGID: config.SignerSocketGID, AgentGID: config.AgentGID, ExpectedClientUID: config.ExpectedRoleUID,
 		ExpectedClientGID: config.ExpectedRoleGID, MaxConnections: config.MaxConnections, ReplayCapacity: config.ReplayCapacity, Now: time.Now}, manager)
 	if err != nil {
 		cleanupContext, cancel := context.WithTimeout(context.Background(), time.Duration(config.OperationTimeoutSeconds)*time.Second)
@@ -183,6 +213,49 @@ func run() error { //nolint:gocyclo
 		return nil
 	}
 	return stageError("serve")
+}
+
+func validateProfileBinding(profile phase6security.Profile, config configDocument) bool {
+	binding, agent, subject, err := profile.TLSAgentForSubject(config.SubjectDeployment)
+	return err == nil && matchesProfileBinding(profile, binding, agent, subject, config)
+}
+
+func matchesProfileBinding(profile phase6security.Profile, binding phase6security.TLSAgentBinding,
+	agent, subject phase6security.Principal, config configDocument) bool {
+	if config.SecurityProfileDigest != profile.ProfileDigest || config.EnvironmentDigest != profile.EnvironmentDigest ||
+		config.ProfileDigest != profile.PrincipalProfileDigest || config.AgentDeployment == "" || config.SubjectDeployment == "" {
+		return false
+	}
+	controllerPublic, controllerErr := base64.RawURLEncoding.DecodeString(config.CertificateControllerPublic)
+	requestPublic, requestErr := base64.RawURLEncoding.DecodeString(config.AgentPublicKey)
+	defer clear(controllerPublic)
+	defer clear(requestPublic)
+	if controllerErr != nil || requestErr != nil || binding.AgentDeployment != config.AgentDeployment || binding.SubjectDeployment != config.SubjectDeployment ||
+		agent.Name != binding.AgentDeployment || subject.Name != binding.SubjectDeployment ||
+		agent.PrincipalDigest != binding.AgentPrincipalDigest || subject.PrincipalDigest != binding.SubjectPrincipalDigest ||
+		binding.ControllerDeployment != profile.CertificateController.DeploymentName ||
+		config.CertificateControllerSocket != binding.ControllerSocketPath ||
+		config.CertificateControllerUID != binding.ControllerUID || config.CertificateControllerGID != binding.ControllerGID ||
+		config.CertificateControllerKeyID != profile.CertificateController.ResponseKeyID ||
+		phase6security.CertificateControllerPublicKeyDigest(controllerPublic) != profile.CertificateController.ResponsePublicKeyDigest ||
+		config.AgentRequestKeyID != binding.AgentRequestKeyID ||
+		phase6security.TLSAgentRequestPublicKeyDigest(requestPublic) != binding.AgentRequestKeyDigest ||
+		agent.AuthorizationPrincipal == nil ||
+		subject.AuthorizationPrincipal == nil || subject.TLS == nil ||
+		config.Requester != *agent.AuthorizationPrincipal || config.Subject != *subject.AuthorizationPrincipal ||
+		config.PolicyID != binding.IssuerPolicyID || config.VaultRole != binding.IssuerVaultRole ||
+		config.AgentUID != binding.AgentUID || config.AgentGID != binding.AgentGID ||
+		config.ExpectedRoleUID != binding.SubjectUID || config.ExpectedRoleGID != binding.SubjectGID ||
+		config.SignerSocket != binding.SocketPath || config.SignerSocketUID != binding.AgentUID ||
+		config.SignerSocketGID != binding.SubjectGID || config.TrustDomain != subject.TLS.TrustDomain ||
+		config.URI != subject.TLS.URI || !slices.Equal(config.DNSNames, subject.TLS.DNSNames) ||
+		!slices.Equal(config.Usages, subject.TLS.Usages) ||
+		config.MaxTTLSeconds != subject.TLS.TTLSeconds || int64(config.CertificateTTLSeconds) != subject.TLS.TTLSeconds ||
+		int64(config.RotateAfterSeconds) != subject.TLS.RotateAfterSeconds || int64(config.OverlapSeconds) != subject.TLS.OverlapSeconds ||
+		int64(config.RevocationMaxStalenessSeconds) != subject.TLS.RevocationMaxStalenessSeconds {
+		return false
+	}
+	return true
 }
 
 func readExactKey(fd uintptr, name string, size int) ([]byte, error) {

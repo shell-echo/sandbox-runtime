@@ -99,6 +99,9 @@ func run() error { //nolint:gocyclo
 	if !validatePolicyAuthorityConfig(profile, profilePolicy, broker, config) {
 		return stageError("policy-authority-binding")
 	}
+	if !validateTLSAgentConfig(profile, broker, config) {
+		return stageError("tls-agent-binding")
+	}
 	if uint32(os.Getuid()) != broker.UID || uint32(os.Getgid()) != broker.GID {
 		return stageError("broker-process-identity")
 	}
@@ -126,7 +129,7 @@ func run() error { //nolint:gocyclo
 		return stageError("policy-state-binding")
 	}
 	agentClient, err := workloadtlsagent.NewProductionClient(workloadtlsagent.ClientConfig{SocketPath: config.TLSAgentSocket,
-		ExpectedUID: config.TLSAgentExpectedUID, ExpectedGID: config.TLSAgentExpectedGID,
+		ExpectedUID: config.TLSAgentExpectedUID, ExpectedGID: config.TLSAgentExpectedGID, RoleGID: uint32(os.Getgid()),
 		OperationTimeout: time.Duration(config.OperationTimeoutSeconds) * time.Second, Now: time.Now})
 	if err != nil {
 		return stageError("tls-agent")
@@ -250,6 +253,21 @@ func validatePolicyAuthorityConfig(profile phase6security.Profile, policy phase6
 		config.PolicyBrokerGID == broker.GID &&
 		config.PolicyCurrentPollMillis == policy.Authority.PollMillis &&
 		config.PolicyAuthorityTimeoutMS == policy.Authority.CurrentTimeoutMS
+}
+
+func validateTLSAgentConfig(profile phase6security.Profile, broker phase6security.Principal, config configDocument) bool {
+	binding, agent, subject, err := profile.TLSAgentForSubject(broker.Name)
+	return err == nil && matchesTLSAgentConfig(binding, agent, subject, broker, config)
+}
+
+func matchesTLSAgentConfig(binding phase6security.TLSAgentBinding, agent, subject,
+	broker phase6security.Principal, config configDocument) bool {
+	return subject.PrincipalDigest == broker.PrincipalDigest && subject.Name == broker.Name && subject.GID == binding.SubjectGID &&
+		agent.Name == binding.AgentDeployment && agent.PrincipalDigest == binding.AgentPrincipalDigest &&
+		agent.UID == binding.AgentUID && agent.GID == binding.AgentGID &&
+		binding.SubjectDeployment == broker.Name && binding.SubjectPrincipalDigest == broker.PrincipalDigest && agent.Kind == "tls_agent" &&
+		config.TLSAgentSocket == binding.SocketPath && config.TLSAgentExpectedUID == binding.AgentUID &&
+		config.TLSAgentExpectedGID == binding.AgentGID && broker.GID == binding.SubjectGID
 }
 
 func validateBrokerListenConfig(broker phase6security.Principal, address string) bool {

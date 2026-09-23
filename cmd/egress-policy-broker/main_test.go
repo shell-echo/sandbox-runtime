@@ -121,6 +121,37 @@ func TestBrokerPolicyAuthorityConfigMustMatchProfile(t *testing.T) {
 	}
 }
 
+func TestBrokerTLSAgentConfigMustMatchProfile(t *testing.T) {
+	broker := phase6security.Principal{Name: "egress-broker-product", PrincipalDigest: "broker-digest", GID: 30001}
+	subject := broker
+	agent := phase6security.Principal{Name: "egress-broker-product-tls-agent", Kind: "tls_agent", PrincipalDigest: "agent-digest",
+		UID: 20001, GID: 30002}
+	binding := phase6security.TLSAgentBinding{AgentDeployment: agent.Name, AgentPrincipalDigest: agent.PrincipalDigest,
+		SubjectDeployment: broker.Name, SubjectPrincipalDigest: broker.PrincipalDigest,
+		AgentUID: 20001, AgentGID: 30002, SubjectGID: broker.GID, SocketPath: "/run/tls/egress-broker-product-tls-agent/signer.sock"}
+	config := configDocument{TLSAgentSocket: binding.SocketPath, TLSAgentExpectedUID: binding.AgentUID, TLSAgentExpectedGID: binding.AgentGID}
+	if !matchesTLSAgentConfig(binding, agent, subject, broker, config) {
+		t.Fatal("exact broker TLS-agent binding rejected")
+	}
+	for name, change := range map[string]func(*configDocument){
+		"socket":    func(c *configDocument) { c.TLSAgentSocket += "-other" },
+		"agent UID": func(c *configDocument) { c.TLSAgentExpectedUID++ },
+		"agent GID": func(c *configDocument) { c.TLSAgentExpectedGID++ },
+	} {
+		t.Run(name, func(t *testing.T) {
+			candidate := config
+			change(&candidate)
+			if matchesTLSAgentConfig(binding, agent, subject, broker, candidate) {
+				t.Fatal("broker TLS-agent drift accepted")
+			}
+		})
+	}
+	broker.GID++
+	if matchesTLSAgentConfig(binding, agent, subject, broker, config) {
+		t.Fatal("broker GID substitution accepted")
+	}
+}
+
 func TestBrokerListenerMustMatchClosedProfile(t *testing.T) {
 	broker := phase6security.Principal{Listeners: []phase6security.Listener{
 		{Name: "egress", Protocol: "tcp", Port: 8443, Exposure: "trust_edge"}}}

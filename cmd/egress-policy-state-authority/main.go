@@ -102,7 +102,7 @@ func run() error {
 		return stageError("signing-key")
 	}
 	defer clear(privateKey)
-	if !privateKey.Public().(ed25519.PublicKey).Equal(config.OperatorPublicKey) {
+	if !privateKey.Public().(ed25519.PublicKey).Equal(ed25519.PublicKey(config.OperatorPublicKey)) {
 		return stageError("signing-key-binding")
 	}
 	authority, err := egresspolicystate.OpenAuthority(egresspolicystate.AuthorityConfig{

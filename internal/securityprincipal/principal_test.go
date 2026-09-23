@@ -117,3 +117,27 @@ func TestPolicyAuthorityControllerRequiresExactRegistration(t *testing.T) {
 		}
 	}
 }
+
+func TestTLSAgentKindIsDistinctAndBrokerRegistrationIsExact(t *testing.T) {
+	registry := principalRegistry(t)
+	instance := "sha256:" + strings.Repeat("c", 64)
+	for _, item := range []struct {
+		name string
+		role Role
+	}{
+		{"product_tls_agent", RoleProduct},
+		{"browser_executor_tls_agent", RoleBrowser},
+		{"product_egress_broker_tls_agent", RoleProduct},
+	} {
+		principal, err := registry.New(KindTLSAgent, item.name, item.role, instance)
+		if err != nil || principal.Kind != KindTLSAgent {
+			t.Fatalf("TLS agent %q = %#v, %v", item.name, principal, err)
+		}
+		if _, err := registry.New(KindMaterialAgent, item.name, item.role, instance); !errors.Is(err, ErrInvalid) {
+			t.Fatalf("TLS agent %q gained material-agent identity: %v", item.name, err)
+		}
+	}
+	if _, err := registry.New(KindTLSAgent, "other_egress_broker_tls_agent", RoleProduct, instance); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("unregistered broker TLS agent accepted: %v", err)
+	}
+}

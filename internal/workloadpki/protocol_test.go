@@ -55,7 +55,7 @@ func newProtocolFixture(t *testing.T) protocolFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	requester, err := registry.New(securityprincipal.KindMaterialAgent, "product_runtime_agent", securityprincipal.RoleProduct, digest("c"))
+	requester, err := registry.New(securityprincipal.KindTLSAgent, "product_tls_agent", securityprincipal.RoleProduct, digest("c"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,6 +105,44 @@ func newProtocolFixture(t *testing.T) protocolFixture {
 	return protocolFixture{now: now, policy: policy, agentPrivate: agentPrivate, controllerID: "slice6-certificate-controller", controllerPriv: controllerPrivate, controllerPub: controllerPublic,
 		csr: csr, certificate: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certificateDER}), ca: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caDER}),
 		serial: serialString(serialNumber.Bytes()), notBefore: notBefore, notAfter: notAfter, crl: crl, crlThis: crlThis, crlNext: crlNext}
+}
+
+func TestPrincipalDelegationIsOneTLSAgentPerExactSubject(t *testing.T) {
+	digest := "sha256:" + strings.Repeat("a", 64)
+	registry, err := securityprincipal.NewRegistry(digest, digest,
+		map[string]securityprincipal.Role{"product_egress_broker": securityprincipal.RoleProduct})
+	if err != nil {
+		t.Fatal(err)
+	}
+	principal := func(kind securityprincipal.Kind, name string, role securityprincipal.Role) securityprincipal.Principal {
+		t.Helper()
+		value, err := registry.New(kind, name, role, digest)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return value
+	}
+	product := principal(securityprincipal.KindRuntimeRole, "product", securityprincipal.RoleProduct)
+	productTLS := principal(securityprincipal.KindTLSAgent, "product_tls_agent", securityprincipal.RoleProduct)
+	browser := principal(securityprincipal.KindRuntimeRole, "browser", securityprincipal.RoleBrowser)
+	browserExecutor := principal(securityprincipal.KindExecutorBackend, "browser_executor", securityprincipal.RoleBrowser)
+	browserTLS := principal(securityprincipal.KindTLSAgent, "browser_tls_agent", securityprincipal.RoleBrowser)
+	browserExecutorTLS := principal(securityprincipal.KindTLSAgent, "browser_executor_tls_agent", securityprincipal.RoleBrowser)
+	broker := principal(securityprincipal.KindEgressBroker, "product_egress_broker", securityprincipal.RoleProduct)
+	brokerTLS := principal(securityprincipal.KindTLSAgent, "product_egress_broker_tls_agent", securityprincipal.RoleProduct)
+	material := principal(securityprincipal.KindMaterialAgent, "product_runtime_agent", securityprincipal.RoleProduct)
+	if !validPrincipalDelegation(productTLS, product) || !validPrincipalDelegation(browserTLS, browser) ||
+		!validPrincipalDelegation(browserExecutorTLS, browserExecutor) || !validPrincipalDelegation(brokerTLS, broker) {
+		t.Fatal("exact TLS agent delegation rejected")
+	}
+	for _, pair := range [][2]securityprincipal.Principal{
+		{material, product}, {browserTLS, browserExecutor}, {browserExecutorTLS, browser},
+		{productTLS, broker}, {brokerTLS, product}, {productTLS, productTLS}, {product, product},
+	} {
+		if validPrincipalDelegation(pair[0], pair[1]) {
+			t.Fatalf("cross-scope delegation accepted: %s -> %s", pair[0].Name, pair[1].Name)
+		}
+	}
 }
 
 func TestIssueProtocolBindsSignedCSRAndCertificate(t *testing.T) {
@@ -167,7 +205,7 @@ func TestProtocolRejectsSubstitutionAndNonCanonicalDocuments(t *testing.T) {
 		t.Fatal(err)
 	}
 	tests := map[string]func(*Request){
-		"agent":            func(value *Request) { value.AgentID = "provider_runtime_agent" },
+		"agent":            func(value *Request) { value.AgentID = "provider_tls_agent" },
 		"requester digest": func(value *Request) { value.RequesterDigest = "sha256:" + strings.Repeat("0", 64) },
 		"policy":           func(value *Request) { value.PolicyID = "provider-runtime-tls" },
 		"principal":        func(value *Request) { value.Principal = "provider" },

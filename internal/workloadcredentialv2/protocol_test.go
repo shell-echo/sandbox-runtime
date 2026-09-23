@@ -116,6 +116,8 @@ func TestPolicyEnforcesClosedIssuanceMatrix(t *testing.T) {
 		{securityprincipal.KindMigrationJob, "product_migration", securityprincipal.RoleProduct},
 		{securityprincipal.KindExecutorBackend, "browser_executor", securityprincipal.RoleBrowser},
 		{securityprincipal.KindEgressBroker, "product_egress_broker", securityprincipal.RoleProduct},
+		{securityprincipal.KindTLSAgent, "product_tls_agent", securityprincipal.RoleProduct},
+		{securityprincipal.KindTLSAgent, "product_egress_broker_tls_agent", securityprincipal.RoleProduct},
 		{securityprincipal.KindController, "credential_controller", ""},
 	}
 	for _, test := range invalid {
@@ -132,6 +134,11 @@ func TestPolicyEnforcesClosedIssuanceMatrix(t *testing.T) {
 	controller.policy.BackendPolicy = "product-runtime-agent"
 	if controller.policy.Validate() == nil {
 		t.Fatal("certificate controller accepted a business policy")
+	}
+	tlsAgent := newProtocolFixture(t, securityprincipal.KindTLSAgent, "product_tls_agent", securityprincipal.RoleProduct, true)
+	tlsAgent.policy.BackendPolicy = "product-runtime-agent"
+	if tlsAgent.policy.Validate() == nil {
+		t.Fatal("TLS agent received Vault issuance despite configured backend policy")
 	}
 }
 

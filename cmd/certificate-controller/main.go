@@ -18,12 +18,14 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"slices"
 	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
 
+	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
 	"github.com/shell-echo/sandbox-runtime/internal/secretref"
 	"github.com/shell-echo/sandbox-runtime/internal/securityprincipal"
 	"github.com/shell-echo/sandbox-runtime/internal/workloadcredentialv2"
@@ -32,7 +34,7 @@ import (
 )
 
 const (
-	configProtocol      = "sandbox-runtime.certificate-controller-config.v1"
+	configProtocol      = "sandbox-runtime.certificate-controller-config.v2"
 	maxConfigBytes      = 2 << 20
 	credentialAgentFD   = 3
 	controllerSigningFD = 4
@@ -42,6 +44,8 @@ const (
 
 type configDocument struct {
 	Protocol                  string              `json:"protocol"`
+	SecurityProfilePath       string              `json:"security_profile_path"`
+	SecurityProfileDigest     string              `json:"security_profile_digest"`
 	EnvironmentDigest         string              `json:"environment_digest"`
 	ProfileDigest             string              `json:"profile_digest"`
 	LedgerPath                string              `json:"ledger_path"`
@@ -98,18 +102,19 @@ type listenerDocument struct {
 }
 
 type certificatePolicy struct {
-	ID             string                      `json:"id"`
-	Requester      securityprincipal.Principal `json:"requester"`
-	Subject        securityprincipal.Principal `json:"subject"`
-	TrustDomain    string                      `json:"trust_domain"`
-	URI            string                      `json:"uri"`
-	DNSNames       []string                    `json:"dns_names"`
-	Usages         []string                    `json:"usages"`
-	VaultRole      string                      `json:"vault_role"`
-	MaxTTLSeconds  int64                       `json:"max_ttl_seconds"`
-	ExpectedUID    uint32                      `json:"expected_uid"`
-	ExpectedGID    uint32                      `json:"expected_gid"`
-	AgentPublicKey string                      `json:"agent_public_key"`
+	ID                string                      `json:"id"`
+	AgentRequestKeyID string                      `json:"agent_request_key_id"`
+	Requester         securityprincipal.Principal `json:"requester"`
+	Subject           securityprincipal.Principal `json:"subject"`
+	TrustDomain       string                      `json:"trust_domain"`
+	URI               string                      `json:"uri"`
+	DNSNames          []string                    `json:"dns_names"`
+	Usages            []string                    `json:"usages"`
+	VaultRole         string                      `json:"vault_role"`
+	MaxTTLSeconds     int64                       `json:"max_ttl_seconds"`
+	ExpectedUID       uint32                      `json:"expected_uid"`
+	ExpectedGID       uint32                      `json:"expected_gid"`
+	AgentPublicKey    string                      `json:"agent_public_key"`
 }
 
 func main() {
@@ -146,14 +151,20 @@ func run() error { //nolint:gocyclo
 		config.ManagedVaultTLS.OverlapSeconds < 0 || config.ManagedVaultTLS.OverlapSeconds >= config.ManagedVaultTLS.RotateAfterSeconds ||
 		config.ManagedVaultTLS.CheckIntervalMilliseconds < 100 || config.ManagedVaultTLS.CheckIntervalMilliseconds > 60000 ||
 		config.ManagedVaultTLS.RevocationPollIntervalSeconds < 1 || config.ManagedVaultTLS.RevocationPollIntervalSeconds > 60 ||
-		config.ManagedVaultTLS.RevocationMaxStalenessSeconds < 1 || config.ManagedVaultTLS.RevocationMaxStalenessSeconds > 300 {
+		config.ManagedVaultTLS.RevocationMaxStalenessSeconds < 1 || config.ManagedVaultTLS.RevocationMaxStalenessSeconds > 300 ||
+		!filepath.IsAbs(config.SecurityProfilePath) {
 		clear(canonical)
 		return stageError("config-validate")
 	}
 	clear(canonical)
-	registry, err := securityprincipal.NewRegistry(config.EnvironmentDigest, config.ProfileDigest, nil)
+	profile, err := phase6security.VerifyFile(config.SecurityProfilePath)
+	if err != nil || profile.ProfileDigest != config.SecurityProfileDigest ||
+		profile.EnvironmentDigest != config.EnvironmentDigest || profile.PrincipalProfileDigest != config.ProfileDigest {
+		return stageError("security-profile")
+	}
+	registry, err := profile.PrincipalRegistry()
 	if err != nil {
-		return stageError("principal-registry")
+		return stageError("profile-principal-registry")
 	}
 
 	credentialPrivate, err := readExactKey(credentialAgentFD, "credential-agent-signing-key", ed25519.PrivateKeySize)
@@ -176,6 +187,11 @@ func run() error { //nolint:gocyclo
 		return stageError("vault-tls-request-key")
 	}
 	defer clear(vaultTLSRequestPrivate)
+	if !validateControllerProfileConfig(profile, config,
+		ed25519.PrivateKey(controllerPrivate).Public().(ed25519.PublicKey),
+		ed25519.PrivateKey(vaultTLSRequestPrivate).Public().(ed25519.PublicKey)) {
+		return stageError("security-profile-binding")
+	}
 
 	credentialPublic, err := base64.RawURLEncoding.DecodeString(config.Credential.PublicKey)
 	if err != nil || len(credentialPublic) != ed25519.PublicKeySize || !ed25519.PrivateKey(credentialPrivate).Public().(ed25519.PublicKey).Equal(ed25519.PublicKey(credentialPublic)) ||
@@ -282,7 +298,8 @@ func run() error { //nolint:gocyclo
 		}
 		listenerPairs[pair] = struct{}{}
 		server, listenErr := workloadpki.Listen(workloadpki.ServerConfig{SocketPath: listener.SocketPath, SocketUID: listener.SocketUID,
-			SocketGID: listener.SocketGID, ExpectedClientUID: listener.ExpectedClientUID, ExpectedClientGID: listener.ExpectedClientGID,
+			SocketGID: listener.SocketGID, InternalSelf: listener.SocketPath == config.ManagedVaultTLS.ControllerSocket,
+			ExpectedClientUID: listener.ExpectedClientUID, ExpectedClientGID: listener.ExpectedClientGID,
 			MaxConnections: listener.MaxConnections, ReapInterval: time.Duration(config.ReapIntervalSeconds) * time.Second}, controller)
 		if listenErr != nil {
 			for _, active := range servers {
@@ -318,7 +335,8 @@ func run() error { //nolint:gocyclo
 		}(server)
 	}
 	managedClient, err := workloadpki.NewProductionClient(workloadpki.ClientConfig{SocketPath: managedListener.SocketPath,
-		ExpectedUID: managedListener.SocketUID, ExpectedGID: managedListener.SocketGID, Policy: managedPolicy,
+		ExpectedUID: managedListener.SocketUID, ExpectedGID: managedListener.SocketGID,
+		DirectoryGID: managedListener.SocketGID, InternalSelf: true, Policy: managedPolicy,
 		AgentPrivateKey: ed25519.PrivateKey(vaultTLSRequestPrivate), ControllerKeyID: config.ControllerKeyID,
 		ControllerPublic: ed25519.PrivateKey(controllerPrivate).Public().(ed25519.PublicKey),
 		OperationTimeout: time.Duration(config.OperationTimeoutSeconds) * time.Second, Now: time.Now})
@@ -396,6 +414,98 @@ func run() error { //nolint:gocyclo
 		return nil
 	}
 	return stageError("serve")
+}
+
+func validateControllerProfileConfig(profile phase6security.Profile, config configDocument,
+	responsePublic, managedRequestPublic ed25519.PublicKey) bool {
+	authority := profile.CertificateController
+	var controller phase6security.Principal
+	for _, principal := range profile.Principals {
+		if principal.Name == authority.DeploymentName {
+			controller = principal
+			break
+		}
+	}
+	if controller.AuthorizationPrincipal == nil || controller.TLS == nil ||
+		uint32(os.Getuid()) != authority.UID || uint32(os.Getgid()) != authority.GID ||
+		config.ControllerKeyID != authority.ResponseKeyID ||
+		phase6security.CertificateControllerPublicKeyDigest(responsePublic) != authority.ResponsePublicKeyDigest ||
+		phase6security.TLSAgentRequestPublicKeyDigest(managedRequestPublic) != authority.ManagedRequestKeyDigest ||
+		config.Credential.Principal != *controller.AuthorizationPrincipal ||
+		config.ManagedVaultTLS.PolicyID != authority.ManagedPolicyID ||
+		config.ManagedVaultTLS.ControllerSocket != authority.SelfSocketPath ||
+		int64(config.ManagedVaultTLS.CertificateTTLSeconds) != controller.TLS.TTLSeconds ||
+		int64(config.ManagedVaultTLS.RotateAfterSeconds) != controller.TLS.RotateAfterSeconds ||
+		int64(config.ManagedVaultTLS.OverlapSeconds) != controller.TLS.OverlapSeconds ||
+		int64(config.ManagedVaultTLS.RevocationMaxStalenessSeconds) != controller.TLS.RevocationMaxStalenessSeconds ||
+		len(config.Policies) != len(profile.TLSAgentBindings)+1 || len(config.Listeners) != len(profile.TLSAgentBindings)+1 {
+		return false
+	}
+	expectedPolicies := make(map[string]certificatePolicy, len(profile.TLSAgentBindings)+1)
+	var managed certificatePolicy
+	for _, policy := range config.Policies {
+		if _, duplicate := expectedPolicies[policy.ID]; duplicate {
+			return false
+		}
+		expectedPolicies[policy.ID] = policy
+		if policy.ID == authority.ManagedPolicyID {
+			managed = policy
+		}
+	}
+	if !matchesControllerPolicy(managed, *controller.AuthorizationPrincipal, *controller.AuthorizationPrincipal,
+		*controller.TLS, authority.ManagedRequestKeyID, authority.ManagedRequestKeyDigest, authority.ManagedVaultRole,
+		authority.UID, authority.GID) {
+		return false
+	}
+	for _, binding := range profile.TLSAgentBindings {
+		var agent, subject phase6security.Principal
+		for _, principal := range profile.Principals {
+			if principal.Name == binding.AgentDeployment {
+				agent = principal
+			}
+			if principal.Name == binding.SubjectDeployment {
+				subject = principal
+			}
+		}
+		if agent.AuthorizationPrincipal == nil || subject.AuthorizationPrincipal == nil || subject.TLS == nil ||
+			!matchesControllerPolicy(expectedPolicies[binding.IssuerPolicyID], *agent.AuthorizationPrincipal,
+				*subject.AuthorizationPrincipal, *subject.TLS, binding.AgentRequestKeyID,
+				binding.AgentRequestKeyDigest, binding.IssuerVaultRole, binding.AgentUID, binding.AgentGID) {
+			return false
+		}
+	}
+	expectedListeners := make(map[string]listenerDocument, len(config.Listeners))
+	for _, listener := range config.Listeners {
+		if _, duplicate := expectedListeners[listener.SocketPath]; duplicate {
+			return false
+		}
+		expectedListeners[listener.SocketPath] = listener
+	}
+	self, hasSelf := expectedListeners[authority.SelfSocketPath]
+	if !hasSelf || self.SocketUID != authority.UID || self.SocketGID != authority.GID ||
+		self.ExpectedClientUID != authority.UID || self.ExpectedClientGID != authority.GID {
+		return false
+	}
+	for _, binding := range profile.TLSAgentBindings {
+		listener, found := expectedListeners[binding.ControllerSocketPath]
+		if !found || listener.SocketUID != authority.UID || listener.SocketGID != binding.AgentGID ||
+			listener.ExpectedClientUID != binding.AgentUID || listener.ExpectedClientGID != binding.AgentGID {
+			return false
+		}
+	}
+	return true
+}
+
+func matchesControllerPolicy(policy certificatePolicy, requester, subject securityprincipal.Principal,
+	identity phase6security.TLSIdentity, requestKeyID, requestKeyDigest, vaultRole string, uid, gid uint32) bool {
+	publicKey, err := base64.RawURLEncoding.DecodeString(policy.AgentPublicKey)
+	defer clear(publicKey)
+	return err == nil && policy.ID != "" && policy.Requester == requester && policy.Subject == subject &&
+		policy.AgentRequestKeyID == requestKeyID && phase6security.TLSAgentRequestPublicKeyDigest(publicKey) == requestKeyDigest &&
+		policy.TrustDomain == identity.TrustDomain && policy.URI == identity.URI &&
+		slices.Equal(policy.DNSNames, identity.DNSNames) && slices.Equal(policy.Usages, identity.Usages) &&
+		policy.VaultRole == vaultRole && policy.MaxTTLSeconds == identity.TTLSeconds &&
+		policy.ExpectedUID == uid && policy.ExpectedGID == gid
 }
 
 func readExactKey(fd uintptr, name string, size int) ([]byte, error) {

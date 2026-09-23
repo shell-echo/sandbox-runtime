@@ -56,3 +56,13 @@ rejection, crash/restart, persistent revoked receipt and exact fixture cleanup.
 It uses a deterministic fixture key and a protocol probe, not the production
 broker/authority pair, real DNS, all declared principals or retained Slice 6
 release evidence.
+
+The additional tagged Docker test
+`SANDBOX_RUNTIME_PHASE6_AUTHORITY_PROCESS_DOCKER=1 go test -tags=integration -run '^TestDockerProductionPolicyAuthorityAndRevocationReceipt$' -count=1 -v ./internal/phase6security`
+runs the production authority command with a fresh key and managed volumes.
+It covers explicit initialization, distinct-UID Current, wrong-UID and
+ledger-access denial, graceful/crash recovery, successful SIGUSR1 and
+independent read-only `inspect` receipt, revoked restart rejection and exact
+cleanup. Its Current client is still a protocol probe rather than the
+production egress broker; the full independent broker/DNS/TLS and Slice 6
+release gates remain open.

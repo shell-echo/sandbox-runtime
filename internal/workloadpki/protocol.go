@@ -507,21 +507,29 @@ func equalStrings(left, right []string) bool {
 
 func validPrincipalDelegation(requester, subject securityprincipal.Principal) bool {
 	if requester.Digest() == subject.Digest() {
-		return requester.Kind != securityprincipal.KindMigrationJob
+		return requester.Kind == securityprincipal.KindController && requester.Name == "certificate_controller"
 	}
-	if requester.Kind != securityprincipal.KindMaterialAgent || requester.Role != subject.Role {
+	if requester.Kind != securityprincipal.KindTLSAgent || requester.Role != subject.Role {
 		return false
 	}
-	allowed := map[string]map[securityprincipal.Kind]string{
-		"product_runtime_agent":  {securityprincipal.KindRuntimeRole: "product"},
-		"provider_runtime_agent": {securityprincipal.KindRuntimeRole: "provider"},
-		"gateway_agent":          {securityprincipal.KindRuntimeRole: "gateway"},
-		"guest_agent":            {securityprincipal.KindRuntimeRole: "guest"},
-		"browser_agent":          {securityprincipal.KindRuntimeRole: "browser", securityprincipal.KindExecutorBackend: "browser_executor"},
-		"desktop_agent":          {securityprincipal.KindRuntimeRole: "desktop", securityprincipal.KindExecutorBackend: "desktop_executor"},
+	allowed := map[string]struct {
+		kind securityprincipal.Kind
+		name string
+	}{
+		"product_tls_agent":          {securityprincipal.KindRuntimeRole, "product"},
+		"provider_tls_agent":         {securityprincipal.KindRuntimeRole, "provider"},
+		"gateway_tls_agent":          {securityprincipal.KindRuntimeRole, "gateway"},
+		"guest_tls_agent":            {securityprincipal.KindRuntimeRole, "guest"},
+		"browser_tls_agent":          {securityprincipal.KindRuntimeRole, "browser"},
+		"desktop_tls_agent":          {securityprincipal.KindRuntimeRole, "desktop"},
+		"browser_executor_tls_agent": {securityprincipal.KindExecutorBackend, "browser_executor"},
+		"desktop_executor_tls_agent": {securityprincipal.KindExecutorBackend, "desktop_executor"},
 	}
-	byKind, ok := allowed[requester.Name]
-	return ok && byKind[subject.Kind] == subject.Name
+	if subject.Kind == securityprincipal.KindEgressBroker {
+		return requester.Name == subject.Name+"_tls_agent"
+	}
+	bound, ok := allowed[requester.Name]
+	return ok && bound.kind == subject.Kind && bound.name == subject.Name
 }
 
 func decodeCanonical(document []byte, maximum int, target any) error {

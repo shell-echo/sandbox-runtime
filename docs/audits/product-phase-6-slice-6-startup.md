@@ -161,10 +161,105 @@ topology receipts, full DNS/egress negative matrix and strict Slice 6 evidence
 are outstanding. Privileged operator restoration of both key and ledger is
 outside this local trust claim. Phase 6 therefore remains **5/15**.
 
+A subsequent tagged Docker checkpoint builds and runs the actual
+`egress-policy-state-authority` command under its profile-bound UID/GID,
+with a private descriptor-3 signing key and managed ledger/socket volumes.
+It proves explicit initialization, fresh signed Current to a distinct-UID
+client, wrong-UID and private-ledger denial, SIGTERM and SIGKILL recovery
+without a false revocation receipt, safe stale-socket recovery, SIGUSR1
+successful exit, a separate read-only `inspect` receipt, revoked restart
+rejection and exact run-owned cleanup. This test exposed and fixed a
+production public-key type comparison that had rejected a valid signing key.
+The client is a Current-protocol probe, **not** the production broker; this
+checkpoint does not establish the full Slice 6 gate. The next production
+broker test exposed the role-local TLS agent's old 0700 parent and 0600
+socket permissions: distinct agent and broker UIDs could not traverse or
+connect. Sandbox ruled a closed v2 production layout.
+
+Sandbox retained `workload-tls-agent.v1` wire messages but mandated a closed
+production config/socket layout v2. The shared implementation now creates an
+agent-UID-owned, role-GID 0710 parent with an agent-UID-owned 0666 socket,
+checks exact ownership/modes and stable path inode, verifies peer UID/GID
+before reading, and actively closes accepted connections on cancellation.
+Half-frame read timeout, replay/capacity and permission-drift tests pass under
+the race detector. A tagged Docker test starts the real signing listener
+and client package code in separate agent/role processes with different
+UID/GID, verifies certificate snapshot and ECDSA remote signature, denies a
+wrong UID, wrong GID and extra role, then proves agent-loss denial and exact
+container/volume cleanup. Its issuer is a test fixture and its client is not
+the production egress broker. Profile-bound socket mounts/trust edges for
+every role and executor, full production broker TLS/DNS mTLS, and the Slice 6
+gate remain outstanding. Phase 6 remains **5/15**.
+
+The key-owner audit found a second independent gap: the existing eight
+`material_agent` identities are Vault KV/credential processes, not separate
+TLS-agent processes. The private principal registry now has a distinct
+`tls_agent` kind, and the certificate delegation matrix permits only one
+exact TLS agent per runtime/executor/registered broker subject plus the
+certificate controller's internal managed-signer exception. TLS agents are
+denied by the v2 Vault-credential issuance matrix even when a backend policy
+is configured. This is a registry/PKI component checkpoint, not a complete
+profile inventory or a migrated runtime TLS path. The detailed ownership
+inventory is in `product-phase-6-tls-key-ownership.md`.
+
+A full race/shuffle run also exposed a real authority timing race in the
+online revocation test: the socket handler sampled time before waiting for
+the ledger lock, then compared that old instant with a just-committed revoked
+record. The live Current path now samples its clock while holding the same
+lock as the ledger read; a deterministic pre/post-commit regression and 100
+repeated race-enabled broker revocation tests pass. Unbounded package
+parallelism on this host repeatedly delayed local WebRTC ICE/media assertions
+and exposed a separate Close/Recover test that incorrectly equated one CAS
+effect owner with one observer of the final durable state. The data-path
+tests now have test-only admission/event budgets; the CAS test checks exact
+effect counts and permits both callers to observe the committed outcome.
+The root `go test -race -shuffle=on -count=1 ./...` completed with exit 0
+under `GOFLAGS=-p=4`, without concurrent Docker tests. This is a reproducible
+host-concurrency condition, not a default-parallelism claim or the Slice 6
+release gate.
+
+The canonical security profile now requires eight static TLS-agent deployments
+and one additional agent for each registered egress broker. Each binding
+checks both principal digests, separate process UID/GID, the exclusive
+private socket storage and read-only subject mount, 0710/0666 socket layout,
+one subject-to-agent Unix edge, issuer policy/Vault role and cleanup class.
+Agent/subject substitution, mode/path drift, missing binding and third-party
+mount sharing fail closed in race-enabled profile tests. The production TLS
+agent now reads that profile before its signing key and rejects a self-
+submitted requester, subject, issuer or socket mapping; the egress broker
+checks the same subject binding before opening its TLS-agent client. This is
+configuration/component evidence only. Other runtime and executor commands
+still use local TLS key material, and there is not yet a real production
+broker→agent→controller→Vault→DNS/mTLS gate. Phase 6 remains **5/15**.
+
+Sandbox then identified the reverse trust edge that the first binding did
+not close: TLS-agent configs could independently select the certificate-
+controller endpoint, peer and response key. The profile now declares one
+controller authority and an exclusive agent→controller Unix endpoint per TLS
+agent, plus an explicitly separate managed-TLS self endpoint. It binds the
+controller response key and each agent's CSR request key by purpose-separated
+public-key digests. The TLS-agent command checks these fields before opening
+its client; the certificate-controller command uses the same validated
+profile-derived registry (including dynamic broker agents) and rejects a
+missing/extra/substituted listener or policy set. Its production config is
+v2, with no v1 production fallback. The shared Unix inode/ownership and
+connection tracker replaced the old PKI socket `chown` and unbounded first-
+frame/close behavior. Targeted race tests pass. A tagged Docker gate now runs
+one controller and two agents under three distinct UID/GID pairs, with
+separate controller-owned/agent-group 0710 directories and read-only agent
+mounts. Both agents issue and renew strict CSR certificates, revoke and read
+CRLs; cross-agent, wrong UID/GID and wrong controller-response key are denied;
+a half-frame peer times out; cancellation and exact run-owned container/volume
+cleanup are observed. This gate uses a repository-private test CA rather than
+the production certificate-controller command or Vault. The full
+broker→agent→controller→Vault→DNS/mTLS process graph is still outstanding, so
+this is not a Slice 6 release gate and the count remains **5/15**.
+
 ## Exact final inventory
 
-The gate covers six runtime roles, two executor backends, eight material
-agents, workload-credential/break-glass/certificate controllers, two one-shot
+The gate covers six runtime roles, two executor backends, their eight distinct
+TLS agents, one TLS agent per egress broker, eight Vault material agents,
+workload-credential/break-glass/certificate controllers, two one-shot
 migration jobs, all egress brokers and their one-to-one policy-state
 authorities, and the existing Desktop broker/Browser
 runtime enforcement observations. Vault, PostgreSQL and DNS are external

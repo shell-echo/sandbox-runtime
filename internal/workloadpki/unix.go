@@ -8,16 +8,17 @@ import (
 	"io"
 	"net"
 	"os"
-	"path/filepath"
 	"sync"
-	"syscall"
 	"time"
+
+	"github.com/shell-echo/sandbox-runtime/internal/restrictedunix"
 )
 
 type ServerConfig struct {
 	SocketPath        string
 	SocketUID         uint32
 	SocketGID         uint32
+	InternalSelf      bool
 	ExpectedClientUID uint32
 	ExpectedClientGID uint32
 	MaxConnections    int
@@ -26,44 +27,51 @@ type ServerConfig struct {
 
 type Server struct {
 	listener          *net.UnixListener
+	socketPath        string
+	socketInfo        os.FileInfo
 	controller        *Controller
 	expectedClientUID uint32
 	expectedClientGID uint32
 	capacity          chan struct{}
 	reapInterval      time.Duration
-	handlers          sync.WaitGroup
+	tracker           *restrictedunix.Tracker
 	stop              chan struct{}
 	stopOnce          sync.Once
 }
 
 func Listen(config ServerConfig, controller *Controller) (*Server, error) {
-	if controller == nil || !validSocketParent(config.SocketPath, config.SocketUID, config.SocketGID) ||
+	if controller == nil || uint32(os.Getuid()) != config.SocketUID ||
 		config.MaxConnections < 1 || config.MaxConnections > 256 || config.ReapInterval < time.Second || config.ReapInterval > time.Minute {
 		return nil, ErrUnavailable
 	}
-	if _, err := os.Lstat(config.SocketPath); !errors.Is(err, os.ErrNotExist) {
+	ownerGID := uint32(os.Getgid())
+	if config.InternalSelf {
+		if config.SocketGID != ownerGID || config.ExpectedClientUID != config.SocketUID || config.ExpectedClientGID != ownerGID {
+			return nil, ErrUnavailable
+		}
+	} else if config.SocketGID != config.ExpectedClientGID || config.ExpectedClientUID == config.SocketUID ||
+		config.ExpectedClientGID == ownerGID {
 		return nil, ErrUnavailable
 	}
-	listener, err := net.ListenUnix("unix", &net.UnixAddr{Name: config.SocketPath, Net: "unix"})
+	layout := restrictedunix.Layout{DirectoryMode: 0o710, SocketMode: 0o666, OwnerUID: config.SocketUID, DirectoryGID: config.SocketGID}
+	if config.InternalSelf {
+		layout.DirectoryMode, layout.SocketMode = 0o700, 0o600
+	}
+	listener, socketInfo, err := restrictedunix.Listen(config.SocketPath, layout)
 	if err != nil {
 		return nil, ErrUnavailable
 	}
-	listener.SetUnlinkOnClose(true)
-	if os.Chmod(config.SocketPath, 0o600) != nil || os.Chown(config.SocketPath, int(config.SocketUID), int(config.SocketGID)) != nil ||
-		validateSocket(config.SocketPath, config.SocketUID, config.SocketGID) != nil {
-		_ = listener.Close()
-		return nil, ErrUnavailable
-	}
-	return &Server{listener: listener, controller: controller, expectedClientUID: config.ExpectedClientUID,
+	return &Server{listener: listener, socketPath: config.SocketPath, socketInfo: socketInfo,
+		controller: controller, expectedClientUID: config.ExpectedClientUID,
 		expectedClientGID: config.ExpectedClientGID, capacity: make(chan struct{}, config.MaxConnections), reapInterval: config.ReapInterval,
-		stop: make(chan struct{})}, nil
+		tracker: restrictedunix.NewTracker(), stop: make(chan struct{})}, nil
 }
 
 func (s *Server) Serve(ctx context.Context) error {
 	if s == nil || s.listener == nil || ctx == nil {
 		return ErrUnavailable
 	}
-	defer s.stopOnce.Do(func() { close(s.stop) })
+	defer s.stopServer()
 	watcherDone := make(chan struct{})
 	go func() {
 		defer close(watcherDone)
@@ -72,7 +80,7 @@ func (s *Server) Serve(ctx context.Context) error {
 		for {
 			select {
 			case <-ctx.Done():
-				_ = s.listener.Close()
+				s.stopServer()
 				return
 			case <-s.stop:
 				return
@@ -85,7 +93,8 @@ func (s *Server) Serve(ctx context.Context) error {
 	for {
 		connection, err := s.listener.AcceptUnix()
 		if err != nil {
-			s.handlers.Wait()
+			s.stopServer()
+			s.tracker.Wait()
 			if ctx.Err() != nil || errors.Is(err, net.ErrClosed) {
 				return ctx.Err()
 			}
@@ -93,9 +102,13 @@ func (s *Server) Serve(ctx context.Context) error {
 		}
 		select {
 		case s.capacity <- struct{}{}:
-			s.handlers.Add(1)
+			if !s.tracker.Add(connection) {
+				<-s.capacity
+				_ = connection.Close()
+				continue
+			}
 			go func() {
-				defer s.handlers.Done()
+				defer s.tracker.Done(connection)
 				defer func() { <-s.capacity }()
 				s.handle(ctx, connection)
 			}()
@@ -109,19 +122,27 @@ func (s *Server) Close() error {
 	if s == nil || s.listener == nil {
 		return nil
 	}
-	s.stopOnce.Do(func() { close(s.stop) })
-	err := s.listener.Close()
-	s.handlers.Wait()
-	if errors.Is(err, net.ErrClosed) {
-		return nil
-	}
-	return err
+	s.stopServer()
+	s.tracker.Wait()
+	return nil
+}
+
+func (s *Server) stopServer() {
+	s.stopOnce.Do(func() {
+		close(s.stop)
+		_ = s.listener.Close()
+		restrictedunix.RemoveIfSame(s.socketPath, s.socketInfo)
+		s.tracker.Stop()
+	})
 }
 
 func (s *Server) handle(parent context.Context, connection *net.UnixConn) {
 	defer connection.Close()
 	identity, err := socketPeer(connection)
 	if err != nil || identity.uid != s.expectedClientUID || identity.gid != s.expectedClientGID {
+		return
+	}
+	if connection.SetReadDeadline(time.Now().Add(2*time.Second)) != nil {
 		return
 	}
 	document, err := readFrame(connection, maxRequestBytes)
@@ -143,6 +164,9 @@ func (s *Server) handle(parent context.Context, connection *net.UnixConn) {
 	}
 	deadline, err := parseTime(request.Deadline)
 	if err != nil {
+		return
+	}
+	if connection.SetDeadline(deadline) != nil {
 		return
 	}
 	operationContext, cancel := context.WithDeadline(parent, deadline)
@@ -192,7 +216,7 @@ func writeFrame(writer io.Writer, document []byte, maximum int) error {
 func writeBytes(writer io.Writer, value []byte) error {
 	for len(value) > 0 {
 		count, err := writer.Write(value)
-		if err != nil {
+		if err != nil || count < 1 {
 			return ErrUnavailable
 		}
 		value = value[count:]
@@ -204,28 +228,4 @@ type peerIdentity struct{ uid, gid uint32 }
 
 func socketPeer(connection *net.UnixConn) (peerIdentity, error) {
 	return peerCredentials(connection)
-}
-
-func validSocketParent(path string, uid, gid uint32) bool {
-	if !filepath.IsAbs(path) || filepath.Clean(path) != path || len(path) > 100 {
-		return false
-	}
-	info, err := os.Lstat(filepath.Dir(path))
-	return err == nil && info.IsDir() && info.Mode()&os.ModeSymlink == 0 && info.Mode().Perm() == 0o700 && ownedBy(info, uid, gid)
-}
-
-func validateSocket(path string, uid, gid uint32) error {
-	if !validSocketParent(path, uid, gid) {
-		return ErrUnavailable
-	}
-	info, err := os.Lstat(path)
-	if err != nil || info.Mode()&os.ModeSymlink != 0 || info.Mode()&os.ModeSocket == 0 || info.Mode().Perm() != 0o600 || !ownedBy(info, uid, gid) {
-		return ErrUnavailable
-	}
-	return nil
-}
-
-func ownedBy(info os.FileInfo, uid, gid uint32) bool {
-	stat, ok := info.Sys().(*syscall.Stat_t)
-	return ok && stat.Uid == uid && stat.Gid == gid
 }
