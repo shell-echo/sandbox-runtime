@@ -6,6 +6,7 @@ package phase6security
 
 import (
 	"bytes"
+	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -156,10 +157,11 @@ type Network struct {
 }
 
 type Mount struct {
-	Target   string `json:"target"`
-	Kind     string `json:"kind"`
-	ReadOnly bool   `json:"read_only"`
-	MaxBytes int64  `json:"max_bytes"`
+	Target    string `json:"target"`
+	Kind      string `json:"kind"`
+	ReadOnly  bool   `json:"read_only"`
+	MaxBytes  int64  `json:"max_bytes"`
+	StorageID string `json:"storage_id"`
 }
 
 type Listener struct {
@@ -210,20 +212,49 @@ type TrustEdge struct {
 }
 
 type EgressPolicy struct {
-	ID                        string         `json:"id"`
-	Revision                  string         `json:"revision"`
-	Principal                 string         `json:"principal"`
-	Broker                    string         `json:"broker"`
-	PrincipalDigest           string         `json:"principal_digest"`
-	BrokerDigest              string         `json:"broker_digest"`
-	LeaseSeconds              int64          `json:"lease_seconds"`
-	DNSMaxAnswers             int            `json:"dns_max_answers"`
-	DenyRawIP                 bool           `json:"deny_raw_ip"`
-	DenyAlternateDNS          bool           `json:"deny_alternate_dns"`
-	DenyProxyEnvironment      bool           `json:"deny_proxy_environment"`
-	DenyRedirectAuthority     bool           `json:"deny_redirect_authority"`
-	DenyMetadataPrivateRanges bool           `json:"deny_metadata_private_ranges"`
-	Targets                   []EgressTarget `json:"targets"`
+	ID                        string          `json:"id"`
+	Revision                  string          `json:"revision"`
+	Principal                 string          `json:"principal"`
+	Broker                    string          `json:"broker"`
+	PrincipalDigest           string          `json:"principal_digest"`
+	BrokerDigest              string          `json:"broker_digest"`
+	Authority                 PolicyAuthority `json:"authority"`
+	LeaseSeconds              int64           `json:"lease_seconds"`
+	DNSMaxAnswers             int             `json:"dns_max_answers"`
+	DenyRawIP                 bool            `json:"deny_raw_ip"`
+	DenyAlternateDNS          bool            `json:"deny_alternate_dns"`
+	DenyProxyEnvironment      bool            `json:"deny_proxy_environment"`
+	DenyRedirectAuthority     bool            `json:"deny_redirect_authority"`
+	DenyMetadataPrivateRanges bool            `json:"deny_metadata_private_ranges"`
+	Targets                   []EgressTarget  `json:"targets"`
+}
+
+type PolicyAuthority struct {
+	DeploymentName    string `json:"deployment_name"`
+	AuthorizationName string `json:"authorization_name"`
+	PrincipalDigest   string `json:"principal_digest"`
+	KeyID             string `json:"key_id"`
+	PublicKeyDigest   string `json:"public_key_digest"`
+	SocketDirectory   string `json:"socket_directory"`
+	SocketStorageID   string `json:"socket_storage_id"`
+	LedgerMountTarget string `json:"ledger_mount_target"`
+	LedgerStorageID   string `json:"ledger_storage_id"`
+	PollMillis        int    `json:"poll_millis"`
+	CurrentTimeoutMS  int    `json:"current_timeout_ms"`
+}
+
+func (p EgressPolicy) Digest() string {
+	document, _ := json.Marshal(p)
+	digest := sha256.Sum256(append([]byte("sandbox-runtime/phase6-egress-policy/v1\x00"), document...))
+	return "sha256:" + hex.EncodeToString(digest[:])
+}
+
+func OperatorPublicKeyDigest(publicKey []byte) string {
+	if len(publicKey) != ed25519.PublicKeySize {
+		return ""
+	}
+	digest := sha256.Sum256(append([]byte("sandbox-runtime/phase6-policy-authority-key/v1\x00"), publicKey...))
+	return "sha256:" + hex.EncodeToString(digest[:])
 }
 
 type EgressTarget struct {
@@ -282,8 +313,16 @@ func (p Profile) Validate() error { //nolint:gocyclo
 	principalDeployments := make(map[string]string, len(p.Principals))
 	uids, gids, identities, seccomp := map[uint32]struct{}{}, map[uint32]struct{}{}, map[string]struct{}{}, map[string]struct{}{}
 	previous := ""
+	authorityBindings := make(map[string]principalBinding, len(p.EgressPolicies))
+	for _, policy := range p.EgressPolicies {
+		authority := policy.Authority
+		if _, duplicate := authorityBindings[authority.DeploymentName]; duplicate {
+			return ErrInvalidProfile
+		}
+		authorityBindings[authority.DeploymentName] = principalBinding{securityprincipal.KindController, authority.AuthorizationName, ""}
+	}
 	for _, principal := range p.Principals {
-		if principal.Name <= previous || validatePrincipal(principal, registry) != nil {
+		if principal.Name <= previous || validatePrincipal(principal, registry, authorityBindings) != nil {
 			return ErrInvalidProfile
 		}
 		previous = principal.Name
@@ -343,7 +382,7 @@ func (p Profile) Validate() error { //nolint:gocyclo
 	if err != nil {
 		return err
 	}
-	if err := validateEgress(p.EgressPolicies, principals); err != nil {
+	if err := validateEgress(p.EgressPolicies, principals, edges); err != nil {
 		return err
 	}
 	for name, service := range external {
@@ -368,6 +407,13 @@ func (p Profile) Digest() string {
 
 func (p Profile) principalRegistry() (*securityprincipal.Registry, error) {
 	egressBrokers := make(map[string]securityprincipal.Role)
+	authorities := make(map[string]securityprincipal.Role)
+	for _, policy := range p.EgressPolicies {
+		if _, duplicate := authorities[policy.Authority.AuthorizationName]; duplicate {
+			return nil, ErrInvalidProfile
+		}
+		authorities[policy.Authority.AuthorizationName] = ""
+	}
 	for _, principal := range p.Principals {
 		if principal.Kind != "egress_broker" || principal.AuthorizationPrincipal == nil {
 			continue
@@ -381,14 +427,14 @@ func (p Profile) principalRegistry() (*securityprincipal.Registry, error) {
 		}
 		egressBrokers[identity.Name] = identity.Role
 	}
-	registry, err := securityprincipal.NewRegistry(p.EnvironmentDigest, p.PrincipalProfileDigest, egressBrokers)
+	registry, err := securityprincipal.NewRegistryWithPolicyAuthorities(p.EnvironmentDigest, p.PrincipalProfileDigest, egressBrokers, authorities)
 	if err != nil {
 		return nil, ErrInvalidProfile
 	}
 	return registry, nil
 }
 
-func validatePrincipal(value Principal, registry *securityprincipal.Registry) error { //nolint:gocyclo
+func validatePrincipal(value Principal, registry *securityprincipal.Registry, authorityBindings map[string]principalBinding) error { //nolint:gocyclo
 	if !namePattern.MatchString(value.Name) || !validPrincipalKind(value.Kind) || !imagePattern.MatchString(value.ImageReference) ||
 		!digestPattern.MatchString(value.ImageDigest) || !strings.HasSuffix(value.ImageReference, "@"+value.ImageDigest) ||
 		value.UID < 10000 || value.UID > 60000 || value.GID < 10000 || value.GID > 60000 ||
@@ -404,7 +450,7 @@ func validatePrincipal(value Principal, registry *securityprincipal.Registry) er
 		if registry == nil || registry.Validate(identity) != nil || value.PrincipalDigest != identity.Digest() ||
 			!digestPattern.MatchString(value.PrincipalDigest) || value.ControllingPrincipalDigest != "" || value.TLS == nil ||
 			value.TLS.PrincipalDigest != value.PrincipalDigest || validateTLS(*value.TLS) != nil ||
-			validateAuthorizationBinding(value.Name, value.Kind, identity) != nil {
+			validateAuthorizationBinding(value.Name, value.Kind, identity, authorityBindings) != nil {
 			return ErrInvalidProfile
 		}
 	} else if value.PrincipalDigest != "" || !digestPattern.MatchString(value.ControllingPrincipalDigest) || value.TLS != nil ||
@@ -422,20 +468,30 @@ func validatePrincipal(value Principal, registry *securityprincipal.Registry) er
 		return ErrInvalidProfile
 	}
 	seenMounts := map[string]struct{}{}
+	_, policyAuthority := authorityBindings[value.Name]
 	for _, mount := range value.Mounts {
 		if !strings.HasPrefix(mount.Target, "/") || path.Clean(mount.Target) != mount.Target || mount.Target == "/" ||
-			(mount.Kind != "tmpfs" && mount.Kind != "private_socket") {
+			(mount.Kind != "tmpfs" && mount.Kind != "private_socket" && mount.Kind != "persistent_ledger") {
 			return ErrInvalidProfile
 		}
 		if _, duplicate := seenMounts[mount.Target]; duplicate {
 			return ErrInvalidProfile
 		}
 		seenMounts[mount.Target] = struct{}{}
-		if mount.Kind == "tmpfs" && (mount.ReadOnly || mount.MaxBytes < 4096 || mount.MaxBytes > 1<<30) {
-			return ErrInvalidProfile
-		}
-		if mount.Kind == "private_socket" && (!mount.ReadOnly || mount.MaxBytes != 0) {
-			return ErrInvalidProfile
+		switch mount.Kind {
+		case "tmpfs":
+			if mount.ReadOnly || mount.MaxBytes < 4096 || mount.MaxBytes > 1<<30 || mount.StorageID != "" {
+				return ErrInvalidProfile
+			}
+		case "private_socket":
+			if mount.MaxBytes != 0 || !namePattern.MatchString(mount.StorageID) || mount.ReadOnly == policyAuthority {
+				return ErrInvalidProfile
+			}
+		case "persistent_ledger":
+			if !policyAuthority || mount.ReadOnly || mount.MaxBytes < 4096 || mount.MaxBytes > 1<<30 ||
+				!namePattern.MatchString(mount.StorageID) {
+				return ErrInvalidProfile
+			}
 		}
 	}
 	seenListeners := map[string]struct{}{}
@@ -454,10 +510,17 @@ func validatePrincipal(value Principal, registry *securityprincipal.Registry) er
 	return nil
 }
 
-func validateAuthorizationBinding(deploymentName, deploymentKind string, identity securityprincipal.Principal) error {
+func validateAuthorizationBinding(deploymentName, deploymentKind string, identity securityprincipal.Principal, authorityBindings map[string]principalBinding) error {
 	if expected, required := requiredAuthorizationBindings[deploymentName]; required {
 		if identity.Kind != expected.kind || identity.Name != expected.name || identity.Role != expected.role ||
 			deploymentKindForPrincipal(identity.Kind) != deploymentKind {
+			return ErrInvalidProfile
+		}
+		return nil
+	}
+	if expected, authorized := authorityBindings[deploymentName]; authorized {
+		if identity.Kind != expected.kind || identity.Name != expected.name || identity.Role != expected.role ||
+			deploymentKind != "controller" {
 			return ErrInvalidProfile
 		}
 		return nil
@@ -661,16 +724,33 @@ func validateEdges(values []TrustEdge, principals map[string]Principal, external
 	return result, nil
 }
 
-func validateEgress(values []EgressPolicy, principals map[string]Principal) error {
-	seenPolicies, seenPrincipals, seenBrokers := map[string]struct{}{}, map[string]struct{}{}, map[string]struct{}{}
+func validateEgress(values []EgressPolicy, principals map[string]Principal, edges map[string]TrustEdge) error {
+	seenPolicies, seenPrincipals, seenBrokers, seenAuthorities := map[string]struct{}{}, map[string]struct{}{}, map[string]struct{}{}, map[string]struct{}{}
+	seenStorage := map[string]struct{}{}
+	seenKeys := map[string]struct{}{}
+	seenKeyIDs := map[string]struct{}{}
 	previous := ""
 	for _, value := range values {
 		principal, principalOK := principals[value.Principal]
 		broker, brokerOK := principals[value.Broker]
+		authority, authorityOK := principals[value.Authority.DeploymentName]
 		if value.ID <= previous || !namePattern.MatchString(value.ID) || !namePattern.MatchString(value.Revision) || !principalOK || !brokerOK ||
 			principal.Kind == "egress_broker" || broker.Kind != "egress_broker" || value.Principal == value.Broker ||
 			principal.AuthorizationPrincipal == nil || broker.AuthorizationPrincipal == nil ||
 			value.PrincipalDigest != principal.PrincipalDigest || value.BrokerDigest != broker.PrincipalDigest ||
+			!authorityOK || authority.Kind != "controller" || authority.AuthorizationPrincipal == nil ||
+			value.Authority.PrincipalDigest != authority.PrincipalDigest ||
+			value.Authority.AuthorizationName != authority.AuthorizationPrincipal.Name ||
+			!namePattern.MatchString(value.Authority.KeyID) || !digestPattern.MatchString(value.Authority.PublicKeyDigest) ||
+			!validAuthorityDirectory(value.Authority.SocketDirectory) ||
+			!validAuthorityDirectory(value.Authority.LedgerMountTarget) ||
+			!separateMountTargets(value.Authority.SocketDirectory, value.Authority.LedgerMountTarget) ||
+			!namePattern.MatchString(value.Authority.SocketStorageID) ||
+			!namePattern.MatchString(value.Authority.LedgerStorageID) ||
+			value.Authority.SocketStorageID == value.Authority.LedgerStorageID ||
+			value.Authority.PollMillis < 50 || value.Authority.PollMillis > 1000 ||
+			value.Authority.CurrentTimeoutMS < 100 || value.Authority.CurrentTimeoutMS > 5000 ||
+			value.Authority.PollMillis+value.Authority.CurrentTimeoutMS > 2000 ||
 			value.LeaseSeconds < 1 || value.LeaseSeconds > 300 || value.DNSMaxAnswers < 1 || value.DNSMaxAnswers > 32 ||
 			!value.DenyRawIP || !value.DenyAlternateDNS || !value.DenyProxyEnvironment || !value.DenyRedirectAuthority || !value.DenyMetadataPrivateRanges ||
 			len(value.Targets) < 1 || len(value.Targets) > 64 {
@@ -686,7 +766,40 @@ func validateEgress(values []EgressPolicy, principals map[string]Principal) erro
 		if _, duplicate := seenBrokers[value.Broker]; duplicate {
 			return ErrInvalidProfile
 		}
-		seenPolicies[value.ID], seenPrincipals[value.Principal], seenBrokers[value.Broker] = struct{}{}, struct{}{}, struct{}{}
+		if _, duplicate := seenAuthorities[value.Authority.DeploymentName]; duplicate {
+			return ErrInvalidProfile
+		}
+		if _, duplicate := seenKeys[value.Authority.PublicKeyDigest]; duplicate {
+			return ErrInvalidProfile
+		}
+		if _, duplicate := seenKeyIDs[value.Authority.KeyID]; duplicate {
+			return ErrInvalidProfile
+		}
+		seenKeys[value.Authority.PublicKeyDigest] = struct{}{}
+		seenKeyIDs[value.Authority.KeyID] = struct{}{}
+		for _, storageID := range []string{value.Authority.SocketStorageID, value.Authority.LedgerStorageID} {
+			if _, duplicate := seenStorage[storageID]; duplicate {
+				return ErrInvalidProfile
+			}
+			seenStorage[storageID] = struct{}{}
+		}
+		if !exactPolicyMount(authority, "private_socket", value.Authority.SocketDirectory, value.Authority.SocketStorageID, false) ||
+			!exactPolicyMount(broker, "private_socket", value.Authority.SocketDirectory, value.Authority.SocketStorageID, true) ||
+			!exactPolicyMount(authority, "persistent_ledger", value.Authority.LedgerMountTarget, value.Authority.LedgerStorageID, false) {
+			return ErrInvalidProfile
+		}
+		unixEdge := false
+		for _, edge := range edges {
+			if edge.From == value.Broker && edge.To == value.Authority.DeploymentName &&
+				edge.Protocol == "unix" && edge.Authentication == "unix_peer_credentials" &&
+				edge.FromPrincipalDigest == broker.PrincipalDigest && edge.ToPrincipalDigest == authority.PrincipalDigest {
+				unixEdge = true
+			}
+		}
+		if !unixEdge {
+			return ErrInvalidProfile
+		}
+		seenPolicies[value.ID], seenPrincipals[value.Principal], seenBrokers[value.Broker], seenAuthorities[value.Authority.DeploymentName] = struct{}{}, struct{}{}, struct{}{}, struct{}{}
 		aliasPrevious := ""
 		for _, target := range value.Targets {
 			if target.Alias <= aliasPrevious || !namePattern.MatchString(target.Alias) || !validDNSName(target.Host) || net.ParseIP(target.Host) != nil ||
@@ -702,8 +815,49 @@ func validateEgress(values []EgressPolicy, principals map[string]Principal) erro
 				return ErrInvalidProfile
 			}
 		}
+		for _, mount := range principal.Mounts {
+			if mount.Kind == "persistent_ledger" || mount.Kind == "private_socket" {
+				if _, expected := seenStorage[mount.StorageID]; expected &&
+					!policyStorageMember(values, principal.Name, mount) {
+					return ErrInvalidProfile
+				}
+			}
+		}
 	}
 	return nil
+}
+
+func validAuthorityDirectory(directory string) bool {
+	return path.IsAbs(directory) && path.Clean(directory) == directory && directory != "/"
+}
+
+func separateMountTargets(first, second string) bool {
+	return first != second && !strings.HasPrefix(first, second+"/") && !strings.HasPrefix(second, first+"/")
+}
+
+func exactPolicyMount(principal Principal, kind, target, storageID string, readOnly bool) bool {
+	for _, mount := range principal.Mounts {
+		if mount.Kind == kind && mount.Target == target && mount.StorageID == storageID && mount.ReadOnly == readOnly {
+			return true
+		}
+	}
+	return false
+}
+
+func policyStorageMember(policies []EgressPolicy, principalName string, mount Mount) bool {
+	for _, policy := range policies {
+		authority := policy.Authority
+		if principalName == authority.DeploymentName &&
+			((mount.Kind == "private_socket" && mount.Target == authority.SocketDirectory && mount.StorageID == authority.SocketStorageID) ||
+				(mount.Kind == "persistent_ledger" && mount.Target == authority.LedgerMountTarget && mount.StorageID == authority.LedgerStorageID)) {
+			return true
+		}
+		if principalName == policy.Broker && mount.Kind == "private_socket" &&
+			mount.Target == authority.SocketDirectory && mount.StorageID == authority.SocketStorageID {
+			return true
+		}
+	}
+	return false
 }
 
 func validPrincipalKind(value string) bool {

@@ -146,19 +146,40 @@ DNS endpoint on the declared trust-edge port, never an operator-selected
 hostname that would invoke ambient DNS. DNS, policy or broker outage fails
 closed.
 
-An operator-owned authority publishes a canonical, Ed25519-signed,
-short-lived policy-state snapshot through a role-private read-only directory.
-The broker pins its verification key at startup and polls that directory at
-most once per second, validating the exact environment/profile/policy,
-principal and broker digests, monotonic generation, issuance/expiry and
-signature. The snapshot can affirm only the already-validated immutable
-policy or revoke it; it cannot add destinations or hot-reload broader policy.
-Missing, stale, malformed, unsigned, cross-boundary or rolled-back state
-revokes the current revision, drains sessions and stops new admission within
-the declared bound. A new policy revision starts in a separate broker process.
-An operator-controlled signing key never enters the broker or repository.
-The local gate may use a separate operator fixture but cannot claim that this
-proves independent production operator administration.
+Each egress policy has exactly one independent operator-owned authority
+process, controller principal, UID/GID, signing key, persistent CAS ledger
+and restricted Unix socket; no process signs another policy. A one-time
+explicit initialization commits generation one. Later starts recover the
+ledger and cannot silently initialize a missing/corrupt record or reactivate
+a revoked policy. Every active refresh and revocation commits the atomic,
+fsynced ledger before publishing its authority-private signed snapshot.
+The file is for authority audit/recovery only, **not** a broker authorization
+source: distinct broker and authority UIDs cannot safely share a 0600 file,
+and file-plus-online comparison would still have only one underlying trust
+source while adding publication races.
+
+Before listening, and then at a profile-bound interval no longer than one
+second, the broker sends a new random challenge to the live authority over a
+per-broker Unix socket. A canonical signed Current response binds that
+challenge, exact environment/profile/policy/principal/broker digests,
+generation, active/revoked status, committed state digest and short validity.
+The authority signs from a linearizable read of its durable ledger. Broker
+checks exact peer UID/GID, signature/key, nonce, freshness, monotonic
+generation and same-generation immutability. A missing/late/invalid response,
+clock rollback, authority loss or revoked status immediately revokes the
+broker revision, drains existing sessions and stops admission; it cannot
+continue on the previous active response until its nominal expiry. A new
+policy revision requires a separate broker and authority instance.
+
+The socket directory is authority-owned, broker-group, mode 0710 and mounted
+only into those two containers. On platforms where Unix socket inode group
+cannot reliably be assigned, its mode is 0666 **only inside that protected
+directory**; exact parent ownership/mode, no symlinks, broker/authority peer
+credentials and the signed policy binding remain mandatory. The authority
+signing key never enters the broker or repository. Local gates do not prove
+independent production operator administration or trusted recovery from a
+privileged operator restoring both ledger and key; Slice 14 must explicitly
+state that boundary.
 
 Equivalent policies may share implementation but not a higher-authority
 global broker identity. Negative network-topology tests, rather than an
@@ -170,7 +191,11 @@ profile but is not the cross-platform Slice 6 requirement.
 
 Every repository-owned container in the Slice 6 gate uses a unique numeric
 UID/GID, non-root execution, a read-only root filesystem, only declared tmpfs
-and role-private sockets, all Linux capabilities dropped,
+and role-private sockets, plus one narrowly scoped managed persistent ledger
+volume per policy-state authority. Its ledger volume is writable only by that
+authority, never by its broker or another role; arbitrary volumes, host-path
+bind mounts and shared business storage remain forbidden. All Linux
+capabilities are dropped,
 `no-new-privileges`, a role-specific seccomp policy, bounded PIDs/memory/CPU,
 no host devices, host mounts, daemon sockets or extra listeners. The gate
 rejects drift and exercises privilege escalation and resource exhaustion.
@@ -203,7 +228,7 @@ The final immutable gate covers:
 - six runtime plus Product/Provider migration material agents;
 - workload-credential, break-glass and certificate controllers;
 - Product and Provider one-shot migration jobs;
-- every egress broker; and
+- every egress broker and its one-to-one operator-owned policy-state authority; and
 - the existing Desktop broker and Browser runtime security assertions.
 
 External Vault, PostgreSQL and DNS remain outside the repository-owned role

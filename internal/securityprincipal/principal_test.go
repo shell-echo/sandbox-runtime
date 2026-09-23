@@ -96,3 +96,24 @@ func TestRegistryRejectsUnregisteredDynamicPrincipalNames(t *testing.T) {
 		t.Fatalf("NewRegistry() error = %v", err)
 	}
 }
+
+func TestPolicyAuthorityControllerRequiresExactRegistration(t *testing.T) {
+	digest := "sha256:" + strings.Repeat("a", 64)
+	registry, err := NewRegistryWithPolicyAuthorities(digest, digest, nil, map[string]Role{"product_policy_authority": ""})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := registry.New(KindController, "product_policy_authority", "", digest); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := registry.New(KindController, "other_policy_authority", "", digest); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("unregistered authority accepted: %v", err)
+	}
+	for _, candidate := range []map[string]Role{
+		{"product_policy_authority": RoleProduct}, {"product_controller": ""}, {"certificate_controller": ""},
+	} {
+		if _, err := NewRegistryWithPolicyAuthorities(digest, digest, nil, candidate); !errors.Is(err, ErrInvalid) {
+			t.Fatalf("invalid authority registry accepted: %v", candidate)
+		}
+	}
+}

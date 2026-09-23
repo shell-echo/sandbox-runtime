@@ -22,10 +22,11 @@ func validProfile() Profile {
 	for name := range requiredPrincipals {
 		names = append(names, name)
 	}
-	names = append(names, "egress-broker-product")
+	names = append(names, "egress-broker-product", "egress-policy-authority-product")
 	sort.Strings(names)
-	registry, err := securityprincipal.NewRegistry(environmentDigest, principalProfileDigest,
-		map[string]securityprincipal.Role{"product_egress_broker": securityprincipal.RoleProduct})
+	registry, err := securityprincipal.NewRegistryWithPolicyAuthorities(environmentDigest, principalProfileDigest,
+		map[string]securityprincipal.Role{"product_egress_broker": securityprincipal.RoleProduct},
+		map[string]securityprincipal.Role{"product_policy_authority": ""})
 	if err != nil {
 		panic(err)
 	}
@@ -43,6 +44,12 @@ func validProfile() Profile {
 		panic(err)
 	}
 	identities["egress-broker-product"] = egressIdentity
+	authorityIdentity, err := registry.New(securityprincipal.KindController, "product_policy_authority", "",
+		testDigest("instance/egress-policy-authority-product"))
+	if err != nil {
+		panic(err)
+	}
+	identities["egress-policy-authority-product"] = authorityIdentity
 	principals := make([]Principal, 0, len(names))
 	for index, name := range names {
 		kind := requiredPrincipals[name]
@@ -55,12 +62,26 @@ func validProfile() Profile {
 			kind = "egress_broker"
 			networks, external, blocked = []string{"external-uplink", "product-internal"}, true, false
 		}
+		if name == "egress-policy-authority-product" {
+			kind = "controller"
+		}
 		principal := Principal{
 			Name: name, Kind: kind, ImageReference: image, ImageDigest: digest,
 			UID: uint32(20000 + index), GID: uint32(30000 + index),
 			ReadOnlyRootFilesystem: true, NoNewPrivileges: true, DroppedCapabilities: []string{"ALL"}, SeccompDigest: testDigest("seccomp/" + name),
 			Resources: Resources{MemoryBytes: 64 << 20, CPUMillis: 250, PIDs: 32}, Networks: networks,
 			ExternalUplink: external, DirectEgressBlocked: blocked,
+		}
+		if name == "egress-broker-product" {
+			principal.Mounts = []Mount{
+				{Target: "/run/egress-authority", Kind: "private_socket", ReadOnly: true, StorageID: "product-authority-socket"},
+			}
+		}
+		if name == "egress-policy-authority-product" {
+			principal.Mounts = []Mount{
+				{Target: "/run/egress-authority", Kind: "private_socket", StorageID: "product-authority-socket"},
+				{Target: "/var/lib/egress-authority", Kind: "persistent_ledger", MaxBytes: 1 << 20, StorageID: "product-authority-ledger"},
+			}
 		}
 		if identity, ok := identities[name]; ok {
 			principal.AuthorizationPrincipal = &identity
@@ -106,6 +127,10 @@ func validProfile() Profile {
 	edges := []TrustEdge{
 		{ID: "certificate-vault", From: "certificate-controller", To: "vault", Protocol: "https", Port: 8200, Authentication: "mtls", FromURI: uri("certificate-controller"), ToURI: external[2].URI,
 			FromPrincipalDigest: identities["certificate-controller"].Digest(), ExternalIdentityDigest: external[2].IdentityDigest, CrossDomain: true, TenantScope: "system", MaxConnectionSeconds: 60},
+		{ID: "egress-authority-product", From: "egress-broker-product", To: "egress-policy-authority-product", Protocol: "unix", Authentication: "unix_peer_credentials",
+			FromURI: uri("egress-broker-product"), ToURI: uri("egress-policy-authority-product"),
+			FromPrincipalDigest: identities["egress-broker-product"].Digest(), ToPrincipalDigest: identities["egress-policy-authority-product"].Digest(),
+			TenantScope: "system", MaxConnectionSeconds: 5},
 		{ID: "egress-dns", From: "egress-broker-product", To: "dns", Protocol: "dns_tcp", Port: 853, Authentication: "mtls", FromURI: uri("egress-broker-product"), ToURI: external[0].URI,
 			FromPrincipalDigest: identities["egress-broker-product"].Digest(), ExternalIdentityDigest: external[0].IdentityDigest, CrossDomain: true, TenantScope: "system", MaxConnectionSeconds: 30},
 		{ID: "product-postgres", From: "product-runtime", To: "postgres", Protocol: "postgres", Port: 5432, Authentication: "mtls", FromURI: uri("product-runtime"), ToURI: external[1].URI,
@@ -114,7 +139,12 @@ func validProfile() Profile {
 	profile := Profile{Protocol: ProtocolID, Version: Version, Revision: "slice6-security-1", EnvironmentDigest: environmentDigest,
 		PrincipalProfileDigest: principalProfileDigest, Principals: principals, Networks: networks, External: external, TrustEdges: edges,
 		EgressPolicies: []EgressPolicy{{ID: "product-egress", Revision: "policy-1", Principal: "product-runtime", Broker: "egress-broker-product",
-			PrincipalDigest: identities["product-runtime"].Digest(), BrokerDigest: identities["egress-broker-product"].Digest(), LeaseSeconds: 60, DNSMaxAnswers: 8,
+			PrincipalDigest: identities["product-runtime"].Digest(), BrokerDigest: identities["egress-broker-product"].Digest(),
+			Authority: PolicyAuthority{DeploymentName: "egress-policy-authority-product", AuthorizationName: "product_policy_authority",
+				PrincipalDigest: identities["egress-policy-authority-product"].Digest(), KeyID: "operator-product-1",
+				PublicKeyDigest: testDigest("operator-public-key"), SocketDirectory: "/run/egress-authority", SocketStorageID: "product-authority-socket",
+				LedgerMountTarget: "/var/lib/egress-authority", LedgerStorageID: "product-authority-ledger", PollMillis: 500, CurrentTimeoutMS: 1000},
+			LeaseSeconds: 60, DNSMaxAnswers: 8,
 			DenyRawIP: true, DenyAlternateDNS: true, DenyProxyEnvironment: true, DenyRedirectAuthority: true, DenyMetadataPrivateRanges: true,
 			Targets: []EgressTarget{{Alias: "example-api", Host: "api.example.test", Port: 443, Protocol: "https"}}}},
 		CleanupClasses: []string{"connections", "containers", "files", "networks", "processes", "sockets"}}
@@ -142,6 +172,30 @@ func TestProfileAcceptsClosedCompleteInventory(t *testing.T) {
 	}
 }
 
+func TestEgressPolicyDigestBindsTargetAndPrincipals(t *testing.T) {
+	policy := validProfile().EgressPolicies[0]
+	original := policy.Digest()
+	if !digestPattern.MatchString(original) {
+		t.Fatal("egress policy digest is not canonical")
+	}
+	changed := policy
+	changed.Targets = append([]EgressTarget(nil), policy.Targets...)
+	changed.Targets[0].Host = "other.example.test"
+	if changed.Digest() == original {
+		t.Fatal("target substitution retained policy digest")
+	}
+	changed = policy
+	changed.PrincipalDigest = testDigest("other-principal")
+	if changed.Digest() == original {
+		t.Fatal("principal substitution retained policy digest")
+	}
+	changed = policy
+	changed.Authority.PublicKeyDigest = testDigest("other-key")
+	if changed.Digest() == original {
+		t.Fatal("authority key substitution retained policy digest")
+	}
+}
+
 func TestProfileRejectsAuthorityAndEnforcementDrift(t *testing.T) {
 	tests := map[string]func(*Profile){
 		"missing principal": func(p *Profile) { p.Principals = p.Principals[1:] },
@@ -156,14 +210,36 @@ func TestProfileRejectsAuthorityAndEnforcementDrift(t *testing.T) {
 			copy.ID, copy.Principal = "provider-egress", "provider-runtime"
 			p.EgressPolicies = append(p.EgressPolicies, copy)
 		},
-		"wrong edge identity":     func(p *Profile) { p.TrustEdges[0].FromURI = p.TrustEdges[1].FromURI },
-		"missing metadata denial": func(p *Profile) { p.EgressPolicies[0].DenyMetadataPrivateRanges = false },
-		"extra cleanup class":     func(p *Profile) { p.CleanupClasses = append(p.CleanupClasses, "other") },
-		"principal digest tamper": func(p *Profile) { p.Principals[0].PrincipalDigest = testDigest("tampered") },
-		"TLS digest tamper":       func(p *Profile) { p.Principals[0].TLS.PrincipalDigest = testDigest("tampered") },
-		"edge digest tamper":      func(p *Profile) { p.TrustEdges[0].FromPrincipalDigest = testDigest("tampered") },
-		"external digest tamper":  func(p *Profile) { p.External[0].IdentityDigest = testDigest("tampered") },
-		"external DNS omitted":    func(p *Profile) { p.External[0].DNSNames = nil },
+		"authority omitted":           func(p *Profile) { p.EgressPolicies[0].Authority = PolicyAuthority{} },
+		"authority principal swapped": func(p *Profile) { p.EgressPolicies[0].Authority.PrincipalDigest = testDigest("other-authority") },
+		"authority key omitted":       func(p *Profile) { p.EgressPolicies[0].Authority.PublicKeyDigest = "" },
+		"authority too slow":          func(p *Profile) { p.EgressPolicies[0].Authority.CurrentTimeoutMS = 2000 },
+		"authority socket exchanged":  func(p *Profile) { p.EgressPolicies[0].Authority.SocketStorageID = "other-socket" },
+		"authority ledger exchanged":  func(p *Profile) { p.EgressPolicies[0].Authority.LedgerStorageID = "other-ledger" },
+		"authority socket made public": func(p *Profile) {
+			for index := range p.Principals {
+				if p.Principals[index].Name == "egress-broker-product" {
+					p.Principals[index].Mounts[0].ReadOnly = false
+				}
+			}
+		},
+		"authority ledger shared": func(p *Profile) {
+			for index := range p.Principals {
+				if p.Principals[index].Name == "product-runtime" {
+					p.Principals[index].Mounts = append(p.Principals[index].Mounts,
+						Mount{Target: "/var/lib/egress-authority", Kind: "persistent_ledger", MaxBytes: 1 << 20, StorageID: "product-authority-ledger"})
+				}
+			}
+		},
+		"missing authority Unix edge": func(p *Profile) { p.TrustEdges = append(p.TrustEdges[:1], p.TrustEdges[2:]...) },
+		"wrong edge identity":         func(p *Profile) { p.TrustEdges[0].FromURI = p.TrustEdges[1].FromURI },
+		"missing metadata denial":     func(p *Profile) { p.EgressPolicies[0].DenyMetadataPrivateRanges = false },
+		"extra cleanup class":         func(p *Profile) { p.CleanupClasses = append(p.CleanupClasses, "other") },
+		"principal digest tamper":     func(p *Profile) { p.Principals[0].PrincipalDigest = testDigest("tampered") },
+		"TLS digest tamper":           func(p *Profile) { p.Principals[0].TLS.PrincipalDigest = testDigest("tampered") },
+		"edge digest tamper":          func(p *Profile) { p.TrustEdges[0].FromPrincipalDigest = testDigest("tampered") },
+		"external digest tamper":      func(p *Profile) { p.External[0].IdentityDigest = testDigest("tampered") },
+		"external DNS omitted":        func(p *Profile) { p.External[0].DNSNames = nil },
 		"cross environment splice": func(p *Profile) {
 			p.EnvironmentDigest = testDigest("other-environment")
 		},

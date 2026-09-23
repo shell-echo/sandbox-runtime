@@ -6,6 +6,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
@@ -21,6 +22,7 @@ import (
 	"time"
 
 	"github.com/shell-echo/sandbox-runtime/internal/egressbroker"
+	"github.com/shell-echo/sandbox-runtime/internal/egresspolicystate"
 	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
 	"github.com/shell-echo/sandbox-runtime/internal/securityprincipal"
 	"github.com/shell-echo/sandbox-runtime/internal/workloadtlsagent"
@@ -32,20 +34,28 @@ const (
 )
 
 type configDocument struct {
-	Protocol                string `json:"protocol"`
-	SecurityProfilePath     string `json:"security_profile_path"`
-	PolicyID                string `json:"policy_id"`
-	ListenAddress           string `json:"listen_address"`
-	ClientCABundle          []byte `json:"client_ca_bundle"`
-	TLSAgentSocket          string `json:"tls_agent_socket"`
-	TLSAgentExpectedUID     uint32 `json:"tls_agent_expected_uid"`
-	TLSAgentExpectedGID     uint32 `json:"tls_agent_expected_gid"`
-	DNSAddress              string `json:"dns_address"`
-	DNSServerName           string `json:"dns_server_name"`
-	DNSCABundle             []byte `json:"dns_ca_bundle"`
-	MaxConnections          int    `json:"max_connections"`
-	ReplayCapacity          int    `json:"replay_capacity"`
-	OperationTimeoutSeconds int    `json:"operation_timeout_seconds"`
+	Protocol                 string `json:"protocol"`
+	SecurityProfilePath      string `json:"security_profile_path"`
+	PolicyID                 string `json:"policy_id"`
+	ListenAddress            string `json:"listen_address"`
+	ClientCABundle           []byte `json:"client_ca_bundle"`
+	TLSAgentSocket           string `json:"tls_agent_socket"`
+	TLSAgentExpectedUID      uint32 `json:"tls_agent_expected_uid"`
+	TLSAgentExpectedGID      uint32 `json:"tls_agent_expected_gid"`
+	DNSAddress               string `json:"dns_address"`
+	DNSServerName            string `json:"dns_server_name"`
+	DNSCABundle              []byte `json:"dns_ca_bundle"`
+	MaxConnections           int    `json:"max_connections"`
+	ReplayCapacity           int    `json:"replay_capacity"`
+	OperationTimeoutSeconds  int    `json:"operation_timeout_seconds"`
+	PolicyStateKeyID         string `json:"policy_state_key_id"`
+	PolicyStatePublicKey     []byte `json:"policy_state_public_key"`
+	PolicyCurrentPollMillis  int    `json:"policy_current_poll_millis"`
+	PolicyAuthoritySocket    string `json:"policy_authority_socket"`
+	PolicyAuthorityUID       uint32 `json:"policy_authority_uid"`
+	PolicyAuthorityGID       uint32 `json:"policy_authority_gid"`
+	PolicyBrokerGID          uint32 `json:"policy_broker_gid"`
+	PolicyAuthorityTimeoutMS int    `json:"policy_authority_timeout_ms"`
 }
 
 func main() {
@@ -61,26 +71,10 @@ func run() error { //nolint:gocyclo
 		return egressbroker.ErrUnavailable
 	}
 	defer clear(document)
-	var config configDocument
-	decoder := json.NewDecoder(bytes.NewReader(document))
-	decoder.DisallowUnknownFields()
-	if decoder.Decode(&config) != nil {
-		return stageError("config-decode")
+	config, err := decodeConfig(document)
+	if err != nil {
+		return err
 	}
-	var trailing any
-	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
-		return stageError("config-trailing")
-	}
-	canonical, err := json.Marshal(config)
-	if err != nil || !bytes.Equal(canonical, document) || config.Protocol != configProtocol ||
-		!filepath.IsAbs(config.SecurityProfilePath) || config.PolicyID == "" || config.ListenAddress == "" ||
-		config.DNSAddress == "" || net.ParseIP(config.DNSServerName) != nil || config.DNSServerName == "" ||
-		config.MaxConnections < 1 || config.MaxConnections > 1024 || config.ReplayCapacity < 16 || config.ReplayCapacity > 65536 ||
-		config.OperationTimeoutSeconds < 1 || config.OperationTimeoutSeconds > 60 {
-		clear(canonical)
-		return stageError("config-validate")
-	}
-	clear(canonical)
 	profile, err := phase6security.VerifyFile(config.SecurityProfilePath)
 	if err != nil {
 		return stageError("security-profile")
@@ -101,6 +95,12 @@ func run() error { //nolint:gocyclo
 		principal.TLS == nil || broker.TLS == nil {
 		return stageError("policy-principal")
 	}
+	if !validatePolicyAuthorityConfig(profile, profilePolicy, broker, config) {
+		return stageError("policy-authority-binding")
+	}
+	if uint32(os.Getuid()) != broker.UID || uint32(os.Getgid()) != broker.GID {
+		return stageError("broker-process-identity")
+	}
 	registry, err := principalRegistry(profile)
 	if err != nil {
 		return stageError("principal-registry")
@@ -113,6 +113,13 @@ func run() error { //nolint:gocyclo
 		*broker.AuthorizationPrincipal, time.Duration(profilePolicy.LeaseSeconds)*time.Second, profilePolicy.DNSMaxAnswers, targets)
 	if err != nil {
 		return stageError("broker-policy")
+	}
+	stateBinding, err := egresspolicystate.NewBinding(egresspolicystate.BindingConfig{
+		EnvironmentDigest: profile.EnvironmentDigest, ProfileDigest: profile.ProfileDigest, Policy: profilePolicy,
+		OperatorKeyID: config.PolicyStateKeyID, OperatorPublicKey: config.PolicyStatePublicKey,
+		MaxAge: egresspolicystate.MaxStateLifetime})
+	if err != nil {
+		return stageError("policy-state-binding")
 	}
 	agentClient, err := workloadtlsagent.NewProductionClient(workloadtlsagent.ClientConfig{SocketPath: config.TLSAgentSocket,
 		ExpectedUID: config.TLSAgentExpectedUID, ExpectedGID: config.TLSAgentExpectedGID,
@@ -157,6 +164,18 @@ func run() error { //nolint:gocyclo
 		certificate, certificateErr := agentClient.Certificate(context.Background())
 		return &certificate, certificateErr
 	}
+	authorityClient, err := egresspolicystate.NewAuthorityClient(egresspolicystate.AuthorityClientConfig{
+		SocketPath: config.PolicyAuthoritySocket, ExpectedAuthorityUID: config.PolicyAuthorityUID,
+		ExpectedAuthorityGID: config.PolicyAuthorityGID, BrokerGID: config.PolicyBrokerGID,
+		Binding: stateBinding, Timeout: time.Duration(config.PolicyAuthorityTimeoutMS) * time.Millisecond, Now: time.Now})
+	if err != nil {
+		return stageError("policy-authority-client")
+	}
+	current, err := authorityClient.Current(context.Background())
+	currentTracker := new(egresspolicystate.CurrentTracker)
+	if err != nil || currentTracker.Accept(current, time.Now().UTC()) != nil {
+		return stageError("policy-authority-current")
+	}
 	server, err := egressbroker.Listen(egressbroker.ServerConfig{Address: config.ListenAddress, TLSConfig: serverTLS, Policy: policy,
 		PrincipalURI: principal.TLS.URI, PrincipalDNSNames: principal.TLS.DNSNames, PrincipalUsages: principal.TLS.Usages,
 		Resolver: dnsResolver, Dialer: &net.Dialer{}, MaxConnections: config.MaxConnections, ReplayCapacity: config.ReplayCapacity, Now: time.Now})
@@ -165,12 +184,68 @@ func run() error { //nolint:gocyclo
 	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
+	monitorDone := make(chan error, 1)
+	go func() {
+		monitorErr := egresspolicystate.PollCurrent(ctx, authorityClient, currentTracker,
+			time.Duration(config.PolicyCurrentPollMillis)*time.Millisecond, time.Now)
+		if monitorErr != nil && !errors.Is(monitorErr, context.Canceled) {
+			_ = server.RevokePolicy(policy.Revision)
+			cancel()
+		}
+		monitorDone <- monitorErr
+	}()
 	serveErr := server.Serve(ctx)
+	cancel()
+	monitorErr := <-monitorDone
 	_ = server.Close()
+	if monitorErr != nil && !errors.Is(monitorErr, context.Canceled) {
+		return stageError("policy-state")
+	}
 	if errors.Is(serveErr, context.Canceled) {
 		return nil
 	}
 	return stageError("serve")
+}
+
+func decodeConfig(document []byte) (configDocument, error) {
+	var config configDocument
+	decoder := json.NewDecoder(bytes.NewReader(document))
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(&config) != nil {
+		return configDocument{}, stageError("config-decode")
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		return configDocument{}, stageError("config-trailing")
+	}
+	canonical, err := json.Marshal(config)
+	if err != nil || !bytes.Equal(canonical, document) || config.Protocol != configProtocol ||
+		!filepath.IsAbs(config.SecurityProfilePath) || config.PolicyID == "" || config.ListenAddress == "" ||
+		config.DNSAddress == "" || net.ParseIP(config.DNSServerName) != nil || config.DNSServerName == "" ||
+		config.MaxConnections < 1 || config.MaxConnections > 1024 || config.ReplayCapacity < 16 || config.ReplayCapacity > 65536 ||
+		config.OperationTimeoutSeconds < 1 || config.OperationTimeoutSeconds > 60 ||
+		config.PolicyStateKeyID == "" || len(config.PolicyStatePublicKey) != ed25519.PublicKeySize ||
+		config.PolicyCurrentPollMillis < 50 || config.PolicyCurrentPollMillis > 1000 ||
+		!filepath.IsAbs(config.PolicyAuthoritySocket) || filepath.Clean(config.PolicyAuthoritySocket) != config.PolicyAuthoritySocket ||
+		config.PolicyAuthorityTimeoutMS < 100 || config.PolicyAuthorityTimeoutMS > 5000 {
+		clear(canonical)
+		return configDocument{}, stageError("config-validate")
+	}
+	clear(canonical)
+	return config, nil
+}
+
+func validatePolicyAuthorityConfig(profile phase6security.Profile, policy phase6security.EgressPolicy,
+	broker phase6security.Principal, config configDocument) bool {
+	authority, found := deploymentPrincipal(profile, policy.Authority.DeploymentName)
+	return found && authority.Kind == "controller" && authority.PrincipalDigest == policy.Authority.PrincipalDigest &&
+		config.PolicyAuthoritySocket == filepath.Join(policy.Authority.SocketDirectory, "current.sock") &&
+		config.PolicyStateKeyID == policy.Authority.KeyID &&
+		phase6security.OperatorPublicKeyDigest(config.PolicyStatePublicKey) == policy.Authority.PublicKeyDigest &&
+		config.PolicyAuthorityUID == authority.UID && config.PolicyAuthorityGID == authority.GID &&
+		config.PolicyBrokerGID == broker.GID &&
+		config.PolicyCurrentPollMillis == policy.Authority.PollMillis &&
+		config.PolicyAuthorityTimeoutMS == policy.Authority.CurrentTimeoutMS
 }
 
 func deploymentPrincipal(profile phase6security.Profile, name string) (phase6security.Principal, bool) {

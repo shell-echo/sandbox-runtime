@@ -73,10 +73,11 @@ type ContainerObservation struct {
 }
 
 type ObservedMount struct {
-	Target   string `json:"target"`
-	Kind     string `json:"kind"`
-	ReadOnly bool   `json:"read_only"`
-	MaxBytes int64  `json:"max_bytes"`
+	Target    string `json:"target"`
+	Kind      string `json:"kind"`
+	ReadOnly  bool   `json:"read_only"`
+	MaxBytes  int64  `json:"max_bytes"`
+	StorageID string `json:"storage_id"`
 }
 
 func DecodeObservations(document []byte, profile Profile) (ObservationSet, error) {
@@ -210,7 +211,7 @@ func equalObservedMounts(actual []ObservedMount, expected []Mount) bool {
 	}
 	for index := range expected {
 		if actual[index] != (ObservedMount{Target: expected[index].Target, Kind: expected[index].Kind,
-			ReadOnly: expected[index].ReadOnly, MaxBytes: expected[index].MaxBytes}) {
+			ReadOnly: expected[index].ReadOnly, MaxBytes: expected[index].MaxBytes, StorageID: expected[index].StorageID}) {
 			return false
 		}
 	}

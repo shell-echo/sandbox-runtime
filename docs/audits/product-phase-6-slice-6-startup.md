@@ -121,20 +121,46 @@ the full Docker collector or release evidence. The complete least-privilege
 inventory and immutable Slice 6 evidence gate remain open, so Phase 6 remains
 **5/15**.
 
-The production egress broker still lacks a policy-revocation event source:
-`Server.RevokePolicy` is implemented and component-tested, but the current
-command only reads its profile at startup and waits for termination. Sandbox
-ruled that an operator-signed, short-lived, generation-monotonic policy-state
-snapshot must be polled with a hard bound and that revocation, outage, expiry,
-bad signature or rollback must drain the old broker and stop new admission.
-That monitor and its real-process gate remain to be implemented; a manual
-SIGTERM is not accepted as the sole revocation mechanism.
+The policy-revocation component now has a closed Ed25519 state protocol,
+operator-owned single-writer atomic/fsynced CAS ledger, independent authority
+command, challenge/response Unix Current protocol and production broker
+startup/continuous polling path. The broker does **not** read the authority's
+private snapshot file: it refuses to listen before a fresh signed online
+Current, then polls at a profile-bound interval and revokes/drains on the
+first invalid, unavailable, rolled-back or revoked response. Each policy is
+bound to a distinct controller principal, key digest, socket and managed
+persistent ledger volume in the canonical security profile. Component tests
+cover replay, restart high-water, old active versus committed revoked state,
+peer credentials, healthy refresh, online revocation and live TLS tunnel
+drain. A tagged Docker checkpoint runs the authority protocol in a real
+container under UID/GID 20001:30001 and its client under 20002:30000 with
+only a read-only managed-volume view. It observes active Current, abrupt
+authority death, safe same-owner stale-socket recovery on restart, signed
+revocation, revoked restart despite restoration of an old audit snapshot,
+authority outage denial, wrong-UID peer rejection, broker denial on reading
+the private ledger and exact fixture container/volume cleanup. The fixture
+embeds a deterministic test key in a shared test binary; it does **not** prove
+production signing-key isolation. It calls the protocol package directly and
+is **not** the production
+broker/authority pair or a full Slice 6 gate. The legacy file monitor remains
+only a component test, not production authorization evidence. The profile
+exception for one authority-private
+managed persistent volume is explicit; broker and business roles have no
+ledger access or host-path bind mount.
+
+This is still **not** an independent authority/broker OS-process or Docker
+gate. Distinct UID/GID socket directory/mount behavior, real broker and
+authority restart/failure isolation, all-principal hardening, retained raw
+topology receipts, full DNS/egress negative matrix and strict Slice 6 evidence
+are outstanding. Privileged operator restoration of both key and ledger is
+outside this local trust claim. Phase 6 therefore remains **5/15**.
 
 ## Exact final inventory
 
 The gate covers six runtime roles, two executor backends, eight material
 agents, workload-credential/break-glass/certificate controllers, two one-shot
-migration jobs, all egress brokers, and the existing Desktop broker/Browser
+migration jobs, all egress brokers and their one-to-one policy-state
+authorities, and the existing Desktop broker/Browser
 runtime enforcement observations. Vault, PostgreSQL and DNS are external
 dependencies whose digest, identity, ingress and authorized-client edges are
 bound; their deployment and HA remain non-claims.

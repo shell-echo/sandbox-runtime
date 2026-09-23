@@ -36,9 +36,10 @@ const (
 )
 
 var (
-	ErrInvalid        = errors.New("invalid security principal")
-	digestPattern     = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
-	egressNamePattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,62}_egress_broker$`)
+	ErrInvalid           = errors.New("invalid security principal")
+	digestPattern        = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
+	egressNamePattern    = regexp.MustCompile(`^[a-z][a-z0-9_]{0,62}_egress_broker$`)
+	authorityNamePattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,60}_policy_authority$`)
 )
 
 type Kind string
@@ -84,6 +85,10 @@ var builtins = map[Kind]map[string]Role{
 }
 
 func NewRegistry(environmentDigest, profileDigest string, egressBrokers map[string]Role) (*Registry, error) {
+	return NewRegistryWithPolicyAuthorities(environmentDigest, profileDigest, egressBrokers, nil)
+}
+
+func NewRegistryWithPolicyAuthorities(environmentDigest, profileDigest string, egressBrokers map[string]Role, authorities map[string]Role) (*Registry, error) {
 	if !digestPattern.MatchString(environmentDigest) || !digestPattern.MatchString(profileDigest) || len(egressBrokers) > 128 {
 		return nil, ErrInvalid
 	}
@@ -100,6 +105,18 @@ func NewRegistry(environmentDigest, profileDigest string, egressBrokers map[stri
 			return nil, ErrInvalid
 		}
 		registry.allowed[KindEgressBroker][name] = role
+	}
+	if len(authorities) > 128 {
+		return nil, ErrInvalid
+	}
+	for name, role := range authorities {
+		if !authorityNamePattern.MatchString(name) || role != "" {
+			return nil, ErrInvalid
+		}
+		if _, exists := registry.allowed[KindController][name]; exists {
+			return nil, ErrInvalid
+		}
+		registry.allowed[KindController][name] = role
 	}
 	return registry, nil
 }
