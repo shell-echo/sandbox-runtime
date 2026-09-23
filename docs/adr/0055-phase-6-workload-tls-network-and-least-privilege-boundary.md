@@ -324,7 +324,7 @@ New handshakes must fetch and verify a fresh certificate/signing capability,
 and TLS session resumption cannot bypass that check. Existing HTTP, WebSocket
 and media connections must separately drain within the profile's revocation
 bound. The live TLS 1.3 builder and Browser/Desktop backend hookup are
-component checkpoints, not that six-role command gate.
+component checkpoints, not the complete multi-instance command gate.
 
 Provider Contract and private Terminal listeners track accepted sockets below
 `net/http`, enforce the exact trust edge's maximum connection lifetime, and
@@ -346,6 +346,24 @@ SPIFFE peer identities, not outbound Provider URLs; no such reverse edge is
 inferred. Gateway's committed Product database reads do not invent a
 Gateway→Product HTTP edge. Provider coding and Desktop instances cannot share
 one identity that masks their different capabilities.
+
+For the complete simultaneous Product target, Provider is one logical role
+implemented by three exact process profiles: coding-shell, Browser-only and
+Desktop-only. Each process has a distinct deployment, instance/principal
+digest, URI, UID/GID and TLS agent/socket. Product's Contract edge and
+Gateway's private handoff edge are instantiated separately for the matching
+Provider profile; only the Browser Provider may dial the Browser role and
+only the Desktop Provider may dial the Desktop role. The coding Provider
+cannot inherit either attach edge, and Browser/Desktop private routes cannot
+be relabeled as the Terminal private route. Guest-to-Product and each
+role-to-its-backend remain separate. The canonical full-inventory profile
+must require every actual process and the complete approved edge set, with no
+partial-profile production mode. A single-provider fixture can exercise a
+component but cannot be used as the simultaneous full-system topology or
+evidence. Provider Browser-only production composition, Desktop v3
+composition, Product's private Guest receiver and per-instance data/material
+privileges must be real before the release gate; profile declarations alone
+do not advertise those capabilities.
 
 Only exact Product and Gateway public listener bindings use TLS 1.3
 server-authentication without a workload client certificate. Product user

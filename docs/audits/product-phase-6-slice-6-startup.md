@@ -56,6 +56,25 @@ it refuses to overwrite an existing file. Its subprocess test validates the
 generated artifact and absence of Vault locators. This does not create a
 production deployment or an all-role configuration gate.
 
+The accepted runtime edge matrix exposed a second configuration omission:
+Guest-to-Product, Provider-to-Browser and Provider-to-Desktop were named in
+ADR 0055 but absent from the test profile and production v3 composition.
+Sandbox ruled that the simultaneous target needs three distinct Provider
+process profiles (coding-shell, Browser-only and Desktop-only), not one
+aggregate Provider identity. The canonical profile component validator now
+requires the separate Product/Gateway Contract/private edges for each exact
+Provider instance, the Browser/desktop attach directions only from their
+matching Provider instances, Guest-to-Product, and both role-to-backend
+edges. It checks the fixed listener, route, tenant scope, private target IP,
+isolated two-member network and two CA purposes, and rejects missing or
+aliased runtime edges. The test fixture gives each Provider instance a
+distinct principal/UID/GID, TLS agent and socket; race-enabled negatives
+reject coding-to-Browser attach, Browser-to-Desktop attach, route/target drift
+and duplicate aliases. This is still profile/component evidence. Browser-only
+Provider production composition, Desktop v3, Product's Guest receiver and
+per-instance database/material/admission/cleanup isolation are absent, so
+the full graph and Slice 6 evidence remain open at **5/15**.
+
 ## Corrected premises
 
 The repository does not already enforce Slice 6 merely because TLS 1.3,
@@ -270,7 +289,7 @@ under `GOFLAGS=-p=4`, without concurrent Docker tests. This is a reproducible
 host-concurrency condition, not a default-parallelism claim or the Slice 6
 release gate.
 
-The canonical security profile now requires eight static TLS-agent deployments
+The earlier single-Provider profile checkpoint required eight static TLS-agent deployments
 and one additional agent for each registered egress broker. Each binding
 checks both principal digests, separate process UID/GID, the exclusive
 private socket storage and read-only subject mount, 0710/0666 socket layout,
@@ -496,8 +515,10 @@ tuple before reading Vault; this is not yet wired.
 
 ## Exact final inventory
 
-The gate covers six runtime roles, two executor backends, their eight distinct
-TLS agents, one TLS agent per egress broker, eight Vault material agents,
+The gate covers six logical runtime roles instantiated as eight processes
+(including separate coding, Browser and Desktop Providers), two executor
+backends, their ten distinct TLS agents, one TLS agent per egress broker,
+ten declared Vault material agents,
 workload-credential/break-glass/certificate controllers, two one-shot
 migration jobs, all egress brokers and their one-to-one policy-state
 authorities, and the existing Desktop broker/Browser

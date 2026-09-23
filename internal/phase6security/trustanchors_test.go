@@ -19,8 +19,11 @@ func TestLocalMutualTLSRequiresBothRootsOnBothExactPeers(t *testing.T) {
 			t.Fatalf("%s lacks exact local/peer TLS roots", deployment)
 		}
 	}
-	if slices.Contains(server.Consumers, "guest-runtime") || slices.Contains(client.Consumers, "guest-runtime") {
-		t.Fatal("unrelated Guest gained trust-anchor authority")
+	if !slices.Contains(server.Consumers, "guest-runtime") || !slices.Contains(client.Consumers, "guest-runtime") {
+		t.Fatal("Guest→Product mTLS edge lacks its two exact trust-root mounts")
+	}
+	if slices.Contains(server.Consumers, "desktop-broker") || slices.Contains(client.Consumers, "desktop-broker") {
+		t.Fatal("unrelated Desktop broker gained trust-anchor authority")
 	}
 }
 

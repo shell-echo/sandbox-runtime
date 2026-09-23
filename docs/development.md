@@ -698,6 +698,16 @@ claims.
 
 ## Product Phase 6 production-hardening discipline
 
+The complete Slice 6 runtime inventory has one logical Provider role but
+three separate process profiles for coding-shell, Browser-only and
+Desktop-only. Each process requires its own deployment/principal digest,
+UID/GID, TLS agent/socket and exact Product/Gateway private edges; only its
+matching Browser or Desktop instance may dial that runtime role. The
+canonical profile's runtime-edge validator rejects omitted or aliased edges.
+This configuration checkpoint is not permission to launch one all-capability
+Provider or to advertise Browser/Desktop before the corresponding real
+production composition and all-principal gate pass.
+
 The Phase 6 workload TLS agent retains its frozen `workload-tls-agent.v1`
 certificate/signing message protocol. The peer-revocation capability is a
 separate `workload-tls-agent.v2` read-only CRL pull, enabled only by the

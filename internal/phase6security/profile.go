@@ -44,6 +44,8 @@ var requiredPrincipals = map[string]string{
 	"product-runtime":                "runtime",
 	"gateway-runtime":                "runtime",
 	"provider-runtime":               "runtime",
+	"provider-browser-runtime":       "runtime",
+	"provider-desktop-runtime":       "runtime",
 	"guest-runtime":                  "runtime",
 	"browser-runtime-role":           "runtime",
 	"desktop-runtime-role":           "runtime",
@@ -51,6 +53,8 @@ var requiredPrincipals = map[string]string{
 	"desktop-executor-backend":       "executor",
 	"product-tls-agent":              "tls_agent",
 	"provider-tls-agent":             "tls_agent",
+	"provider-browser-tls-agent":     "tls_agent",
+	"provider-desktop-tls-agent":     "tls_agent",
 	"gateway-tls-agent":              "tls_agent",
 	"guest-tls-agent":                "tls_agent",
 	"browser-tls-agent":              "tls_agent",
@@ -59,6 +63,8 @@ var requiredPrincipals = map[string]string{
 	"desktop-executor-tls-agent":     "tls_agent",
 	"product-runtime-agent":          "material_agent",
 	"provider-runtime-agent":         "material_agent",
+	"provider-browser-runtime-agent": "material_agent",
+	"provider-desktop-runtime-agent": "material_agent",
 	"gateway-agent":                  "material_agent",
 	"guest-agent":                    "material_agent",
 	"browser-agent":                  "material_agent",
@@ -86,6 +92,8 @@ var requiredAuthorizationBindings = map[string]principalBinding{
 	"product-runtime":                {securityprincipal.KindRuntimeRole, "product", securityprincipal.RoleProduct},
 	"gateway-runtime":                {securityprincipal.KindRuntimeRole, "gateway", securityprincipal.RoleGateway},
 	"provider-runtime":               {securityprincipal.KindRuntimeRole, "provider", securityprincipal.RoleProvider},
+	"provider-browser-runtime":       {securityprincipal.KindRuntimeRole, "provider", securityprincipal.RoleProvider},
+	"provider-desktop-runtime":       {securityprincipal.KindRuntimeRole, "provider", securityprincipal.RoleProvider},
 	"guest-runtime":                  {securityprincipal.KindRuntimeRole, "guest", securityprincipal.RoleGuest},
 	"browser-runtime-role":           {securityprincipal.KindRuntimeRole, "browser", securityprincipal.RoleBrowser},
 	"desktop-runtime-role":           {securityprincipal.KindRuntimeRole, "desktop", securityprincipal.RoleDesktop},
@@ -93,6 +101,8 @@ var requiredAuthorizationBindings = map[string]principalBinding{
 	"desktop-executor-backend":       {securityprincipal.KindExecutorBackend, "desktop_executor", securityprincipal.RoleDesktop},
 	"product-tls-agent":              {securityprincipal.KindTLSAgent, "product_tls_agent", securityprincipal.RoleProduct},
 	"provider-tls-agent":             {securityprincipal.KindTLSAgent, "provider_tls_agent", securityprincipal.RoleProvider},
+	"provider-browser-tls-agent":     {securityprincipal.KindTLSAgent, "provider_tls_agent", securityprincipal.RoleProvider},
+	"provider-desktop-tls-agent":     {securityprincipal.KindTLSAgent, "provider_tls_agent", securityprincipal.RoleProvider},
 	"gateway-tls-agent":              {securityprincipal.KindTLSAgent, "gateway_tls_agent", securityprincipal.RoleGateway},
 	"guest-tls-agent":                {securityprincipal.KindTLSAgent, "guest_tls_agent", securityprincipal.RoleGuest},
 	"browser-tls-agent":              {securityprincipal.KindTLSAgent, "browser_tls_agent", securityprincipal.RoleBrowser},
@@ -101,6 +111,8 @@ var requiredAuthorizationBindings = map[string]principalBinding{
 	"desktop-executor-tls-agent":     {securityprincipal.KindTLSAgent, "desktop_executor_tls_agent", securityprincipal.RoleDesktop},
 	"product-runtime-agent":          {securityprincipal.KindMaterialAgent, "product_runtime_agent", securityprincipal.RoleProduct},
 	"provider-runtime-agent":         {securityprincipal.KindMaterialAgent, "provider_runtime_agent", securityprincipal.RoleProvider},
+	"provider-browser-runtime-agent": {securityprincipal.KindMaterialAgent, "provider_runtime_agent", securityprincipal.RoleProvider},
+	"provider-desktop-runtime-agent": {securityprincipal.KindMaterialAgent, "provider_runtime_agent", securityprincipal.RoleProvider},
 	"gateway-agent":                  {securityprincipal.KindMaterialAgent, "gateway_agent", securityprincipal.RoleGateway},
 	"guest-agent":                    {securityprincipal.KindMaterialAgent, "guest_agent", securityprincipal.RoleGuest},
 	"browser-agent":                  {securityprincipal.KindMaterialAgent, "browser_agent", securityprincipal.RoleBrowser},
@@ -124,6 +136,8 @@ var requiredResourceControllers = map[string]string{
 var requiredTLSAgentSubjects = map[string]string{
 	"product-tls-agent":          "product-runtime",
 	"provider-tls-agent":         "provider-runtime",
+	"provider-browser-tls-agent": "provider-browser-runtime",
+	"provider-desktop-tls-agent": "provider-desktop-runtime",
 	"gateway-tls-agent":          "gateway-runtime",
 	"guest-tls-agent":            "guest-runtime",
 	"browser-tls-agent":          "browser-runtime-role",
@@ -563,6 +577,9 @@ func (p Profile) Validate() error { //nolint:gocyclo
 	if err != nil {
 		return err
 	}
+	if err := validateRuntimeEdges(edges, principals, p.Networks); err != nil {
+		return err
+	}
 	if err := validatePublicListeners(p.PublicListeners, principals); err != nil {
 		return err
 	}
@@ -724,7 +741,7 @@ func validatePrincipal(value Principal, registry *securityprincipal.Registry, au
 		!value.ReadOnlyRootFilesystem || !value.NoNewPrivileges || !exactStrings(value.DroppedCapabilities, []string{"ALL"}) ||
 		!digestPattern.MatchString(value.SeccompDigest) || value.Resources.MemoryBytes < 16<<20 || value.Resources.MemoryBytes > 64<<30 ||
 		value.Resources.CPUMillis < 10 || value.Resources.CPUMillis > 64000 || value.Resources.PIDs < 4 || value.Resources.PIDs > 4096 ||
-		value.HostNetwork || value.DockerSocket || value.HostDevices || len(value.Networks) < 1 || len(value.Networks) > 4 ||
+		value.HostNetwork || value.DockerSocket || value.HostDevices || len(value.Networks) < 1 || len(value.Networks) > 6 ||
 		len(value.Mounts) > 128 || (value.Kind != "controller" && len(value.Mounts) > 16) || len(value.Listeners) > 16 {
 		return ErrInvalidProfile
 	}
