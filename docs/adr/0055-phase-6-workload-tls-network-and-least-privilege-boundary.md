@@ -56,6 +56,36 @@ and connection registries drain existing connections within the profile's
 bound. Stale revocation state, controller or Vault outage, clock rollback and
 issuer restart fail closed. Waiting only for certificate expiry is forbidden.
 
+The runtime peer-revocation feed is a pull through the existing Vault PKI →
+certificate-controller → role-owned TLS agent path, never a controller push,
+new revocation authority, runtime Vault token or arbitrary AIA/CDP lookup.
+The agent's current v1 Unix snapshot/sign protocol stays frozen. A distinct
+`workload-tls-agent.v2` must bind a read-only complete CRL request/response to
+the profile, exact trust edge, local principal, direction, peer-verification
+anchor and full issuer certificate DER digest; production roles requiring
+peer revocation must reject v1/no-capability fallback. The agent validates
+the controller signature; the role validates the agent response binding,
+CRL signature, issuer/AKI, serial, sequence,
+time and source freshness against its own pinned peer CA before permitting a
+new handshake or retaining an existing connection. An actual TLS-verified
+peer leaf/issuer, not a header or claimed serial, keys the connection registry.
+The combined Vault publication, controller/agent collection, role polling and
+socket cleanup delay must fit the profile's end-to-end revocation bound;
+individual poll and staleness limits alone do not prove it. Missing issuer
+source, stale/rolled-back CRL, authority loss, or revoked-to-good resurrection
+of an unexpired observed peer fail closed. Same-issuer reads may be shared,
+but an agent cannot substitute its own issuer's CRL for a different peer CA.
+
+The single-cluster complete-CRL path requires an observed Vault PKI CRL
+configuration with building enabled, `auto_rebuild=false` and
+`enable_delta=false`, plus a bounded refresh before `NextUpdate`; a contrary
+configuration is unavailable, not a reason to poll faster or grant runtime
+rotate authority. HashiCorp documents that a successful revoke rotates the
+complete CRL unless `auto_rebuild=true`, and that expired complete CRLs may
+otherwise need operator rotation
+([PKI API: revoke/config/rotate](https://developer.hashicorp.com/vault/api-docs/secret/pki)).
+This does not claim multi-cluster/unified CRL or automatic CA rotation.
+
 Every runtime role, Browser/Desktop executor backend, material agent,
 credential controller, break-glass controller, certificate controller and
 migration job has a distinct URI SAN and exact server/client EKUs for its

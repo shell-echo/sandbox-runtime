@@ -356,6 +356,23 @@ the Contract test verifies an idle keep-alive socket is also drained. This
 does not yet wire authoritative revocation notifications or prove the
 profile's revocation drain bound during a live process gate.
 
+Sandbox selected a versioned read-only pull from the existing Vault PKI →
+certificate-controller → role TLS agent chain for peer revocation; v1 Unix
+snapshot/sign semantics remain closed. The first code prerequisite verifies a
+complete CRL against the exact CA DER identity, signature, issuer, AKI,
+number and validity window, then checks a peer leaf under that same issuer.
+Its test rejects a same-serial/different-issuer substitution. This helper is
+not yet wired to the v2 Unix protocol or live TLS admission. The remaining
+gate requires fixed-version Vault publication-policy observation, exact
+profile source mapping, freshness/rollback protections, budgeted polling,
+new-handshake denial and existing-connection drain across roles.
+The tagged PKI integration used the pinned Vault image (reporting v2.1.1)
+and observed `disable=false`, `auto_rebuild=false`, `enable_delta=false`;
+after a real revoke, the complete CRL number advanced and the CRL verified
+under the actual issuing CA. This establishes that fixture's publication
+behavior only, not a production Vault configuration or end-to-end latency
+bound.
+
 ## Exact final inventory
 
 The gate covers six runtime roles, two executor backends, their eight distinct

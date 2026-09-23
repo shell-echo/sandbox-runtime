@@ -8,6 +8,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"io"
 	"net/http"
 	"os"
@@ -61,6 +62,29 @@ func TestVaultPKIIntegration(t *testing.T) {
 		map[string]any{"type": "pki", "config": map[string]string{"default_lease_ttl": "1h", "max_lease_ttl": "1h"}}, nil)
 	vaultPKIWrite(t, ctx, httpClient, endpoint+"/v1/pki/root/generate/internal", rootToken,
 		map[string]any{"common_name": "sandbox-runtime.test", "ttl": "1h", "key_type": "ec", "key_bits": 256}, nil)
+	crlConfigRequest, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint+"/v1/pki/config/crl", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	crlConfigRequest.Header.Set("X-Vault-Token", rootToken)
+	crlConfigResponse, err := httpClient.Do(crlConfigRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var crlConfig struct {
+		Data struct {
+			Disable     *bool `json:"disable"`
+			AutoRebuild *bool `json:"auto_rebuild"`
+			EnableDelta *bool `json:"enable_delta"`
+		} `json:"data"`
+	}
+	decodeErr := json.NewDecoder(io.LimitReader(crlConfigResponse.Body, 64<<10)).Decode(&crlConfig)
+	_ = crlConfigResponse.Body.Close()
+	if crlConfigResponse.StatusCode != http.StatusOK || decodeErr != nil || crlConfig.Data.Disable == nil ||
+		crlConfig.Data.AutoRebuild == nil || crlConfig.Data.EnableDelta == nil || *crlConfig.Data.Disable ||
+		*crlConfig.Data.AutoRebuild || *crlConfig.Data.EnableDelta {
+		t.Fatalf("fixed-version Vault does not provide immediate complete CRL publication: status=%d decode=%v", crlConfigResponse.StatusCode, decodeErr)
+	}
 	vaultPKIWrite(t, ctx, httpClient, endpoint+"/v1/pki/roles/product-runtime", rootToken, map[string]any{
 		"allowed_domains": []string{"product.example.test"}, "allow_bare_domains": true, "allow_subdomains": false,
 		"allowed_uri_sans": []string{"spiffe://sandbox-runtime.test/product-runtime"}, "require_cn": false,
@@ -103,6 +127,10 @@ path "pki/revoke" { capabilities = ["update"] }`
 	if err != nil {
 		t.Fatal(err)
 	}
+	beforeList, err := x509.ParseRevocationList(before.DER)
+	if err != nil || beforeList.Number == nil {
+		t.Fatalf("initial Vault CRL number unavailable: %v", err)
+	}
 	before.Destroy()
 	if err := client.Revoke(ctx, issued.Serial); err != nil {
 		t.Fatal(err)
@@ -115,6 +143,17 @@ path "pki/revoke" { capabilities = ["update"] }`
 	list, err := x509.ParseRevocationList(after.DER)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if list.Number == nil || list.Number.Cmp(beforeList.Number) <= 0 {
+		t.Fatal("real Vault did not synchronously advance the complete CRL after revoke")
+	}
+	issuerBlock, remainder := pem.Decode(issued.IssuingCAPEM)
+	if issuerBlock == nil || issuerBlock.Type != "CERTIFICATE" || len(bytes.TrimSpace(remainder)) != 0 {
+		t.Fatal("real Vault issuer PEM is invalid")
+	}
+	verified, err := VerifyCRLForIssuer(after, issuerBlock.Bytes, time.Now())
+	if err != nil || verified.IssuerDigest() == "" {
+		t.Fatalf("real Vault complete CRL did not verify under issued CA: %v", err)
 	}
 	found := false
 	for _, entry := range list.RevokedCertificateEntries {
