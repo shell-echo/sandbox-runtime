@@ -128,13 +128,9 @@ func run() error { //nolint:gocyclo
 	if err != nil {
 		return stageError("dns-ca")
 	}
-	dnsService, dnsEdge, ok := dnsBinding(profile, profilePolicy.Broker)
+	dnsService, ok := validateDNSConfig(profile, profilePolicy.Broker, config.DNSServerName, config.DNSAddress)
 	if !ok {
 		return stageError("dns-binding")
-	}
-	_, dnsPort, err := net.SplitHostPort(config.DNSAddress)
-	if err != nil || dnsPort != fmt.Sprint(dnsEdge.Port) {
-		return stageError("dns-address")
 	}
 	dnsTLS := &tls.Config{MinVersion: tls.VersionTLS13, MaxVersion: tls.VersionTLS13, RootCAs: dnsRoots, ServerName: config.DNSServerName}
 	dnsTLS.GetClientCertificate = func(*tls.CertificateRequestInfo) (*tls.Certificate, error) {
@@ -210,6 +206,18 @@ func dnsBinding(profile phase6security.Profile, broker string) (phase6security.E
 		}
 	}
 	return phase6security.ExternalService{}, phase6security.TrustEdge{}, false
+}
+
+func validateDNSConfig(profile phase6security.Profile, broker, serverName, address string) (phase6security.ExternalService, bool) {
+	service, edge, ok := dnsBinding(profile, broker)
+	if !ok || len(service.DNSNames) != 1 || service.DNSNames[0] != serverName {
+		return phase6security.ExternalService{}, false
+	}
+	host, port, err := net.SplitHostPort(address)
+	if err != nil || net.ParseIP(host) == nil || port != fmt.Sprint(edge.Port) {
+		return phase6security.ExternalService{}, false
+	}
+	return service, true
 }
 
 func strictCertPool(document []byte) (*x509.CertPool, error) {

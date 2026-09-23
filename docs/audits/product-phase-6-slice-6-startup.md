@@ -71,9 +71,64 @@ locally generated managed certificate, performs a post-switch CRL operation,
 revokes the managed certificate and observes its serial in the authoritative
 Vault CRL before exact container cleanup.
 
-This is only the certificate checkpoint. The alias-only egress broker,
-role-isolated Docker topology, full least-privilege inventory and immutable
-Slice 6 evidence gate remain open, so Phase 6 remains **5/15**.
+The alias-only egress broker is now implemented as an independent principal-
+bound process with a closed target protocol, broker-side bounded DNS resolution,
+address validation, checked-IP dialing, replay/capacity limits and policy-
+revocation drain. Its focused tests use controlled resolvers and dialers; they
+do not establish the real topology gate.
+
+A tagged Docker topology checkpoint now starts two distinct-UID/GID Alpine
+probe containers on an actual `isolated` internal bridge network, adds the
+broker probe alone to a separate uplink and starts a fixture on that uplink.
+Docker inspect
+and in-container `/proc` probes verify read-only roots, zero effective
+capabilities, `no-new-privileges`, active seccomp, configured PID/memory/CPU
+bounds confirmed in the live cgroup, exact network membership and broker-only
+uplink. Direct connections from the protected probe to the fixture IP and a
+public IP fail, while the dual-homed probe reaches the fixture; exact run-owned
+containers and networks
+are removed and checked absent. The fixture and broker probe are **not** the
+real egress-broker binary or the complete role inventory. The test does not
+prove role-specific seccomp, resource exhaustion, DNS rebinding, authenticated
+broker transport or all-principal enforcement.
+
+An additional real negative probe exposed a host-gateway bypass:
+Docker 29.7.2 allowed a container attached **only** to a `--internal` bridge to
+connect to that bridge's gateway (`172.20.0.1`) where a disposable host-network
+fixture listened on port 18080. Thus the internal bridge alone does not enforce
+the ADR's no-direct-socket claim against host services. The exact probe
+containers and network were removed and checked absent. Sandbox ruled that
+every role/trust-edge network must use the Docker `isolated` IPv4 gateway mode,
+with IPv6 disabled until separately proven. The updated tagged test now
+reproduces the ordinary-bridge bypass with the same host fixture, then proves
+the fixture is reachable from the uplink but not from the isolated role via
+the former internal gateway, another bridge gateway, Docker host aliases,
+public IP or metadata IP. It also proves the role can reach its declared
+broker probe. Network inspect confirms `isolated`, no host gateway, exact
+members and disabled IPv6; live probes confirm no default route/IPv6 address.
+This remains a topology checkpoint using probe processes, **not** the real
+egress-broker binary or all-principal network-complete evidence.
+
+The closed observation validator rejects principal/image/UID/GID/seccomp,
+resource, network and cleanup drift, including resource-controller digest
+substitution and container-ID reuse. A bounded Docker-network-inspect importer
+now extracts exact driver, gateway mode, subnet, host-gateway absence, IPv6
+state and member container IDs and binds the raw inspect document by digest;
+the tagged topology checkpoint exercises that importer against the live
+daemon. Unit fixtures remain synthetic, and the active probes do not yet
+produce retained raw receipts tied to every repository principal. This is not
+the full Docker collector or release evidence. The complete least-privilege
+inventory and immutable Slice 6 evidence gate remain open, so Phase 6 remains
+**5/15**.
+
+The production egress broker still lacks a policy-revocation event source:
+`Server.RevokePolicy` is implemented and component-tested, but the current
+command only reads its profile at startup and waits for termination. Sandbox
+ruled that an operator-signed, short-lived, generation-monotonic policy-state
+snapshot must be polled with a hard bound and that revocation, outage, expiry,
+bad signature or rollback must drain the old broker and stop new admission.
+That monitor and its real-process gate remain to be implemented; a manual
+SIGTERM is not accepted as the sole revocation mechanism.
 
 ## Exact final inventory
 

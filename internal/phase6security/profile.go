@@ -147,10 +147,12 @@ type Resources struct {
 }
 
 type Network struct {
-	Name       string   `json:"name"`
-	Kind       string   `json:"kind"`
-	Internal   bool     `json:"internal"`
-	Principals []string `json:"principals"`
+	Name            string   `json:"name"`
+	Kind            string   `json:"kind"`
+	Internal        bool     `json:"internal"`
+	IPv6Enabled     bool     `json:"ipv6_enabled"`
+	GatewayModeIPv4 string   `json:"gateway_mode_ipv4"`
+	Principals      []string `json:"principals"`
 }
 
 type Mount struct {
@@ -185,6 +187,7 @@ type ExternalService struct {
 	ImageReference string   `json:"image_reference"`
 	ImageDigest    string   `json:"image_digest"`
 	URI            string   `json:"uri"`
+	DNSNames       []string `json:"dns_names"`
 	IdentityDigest string   `json:"identity_digest"`
 	IngressEdges   []string `json:"ingress_edges"`
 }
@@ -508,17 +511,17 @@ func validateNetworks(values []Network, principals map[string]Principal, egressP
 	previous := ""
 	for _, network := range values {
 		if network.Name <= previous || !namePattern.MatchString(network.Name) || len(network.Principals) < 1 ||
-			!sortedUniqueNames(network.Principals) {
+			!sortedUniqueNames(network.Principals) || network.IPv6Enabled {
 			return ErrInvalidProfile
 		}
 		previous = network.Name
 		switch network.Kind {
 		case "role_internal", "trust_edge":
-			if !network.Internal {
+			if !network.Internal || network.GatewayModeIPv4 != "isolated" {
 				return ErrInvalidProfile
 			}
 		case "external_uplink":
-			if network.Internal || len(network.Principals) != 1 {
+			if network.Internal || network.GatewayModeIPv4 != "nat" || len(network.Principals) != 1 {
 				return ErrInvalidProfile
 			}
 			principal, ok := principals[network.Principals[0]]
@@ -591,7 +594,17 @@ func validateExternal(values []ExternalService) (map[string]ExternalService, err
 		if value.Name <= previous || !imagePattern.MatchString(value.ImageReference) || !digestPattern.MatchString(value.ImageDigest) ||
 			!strings.HasSuffix(value.ImageReference, "@"+value.ImageDigest) || !validSPIFFE(value.URI) ||
 			!digestPattern.MatchString(value.IdentityDigest) || value.IdentityDigest != value.Digest() ||
-			len(value.IngressEdges) < 1 || !sortedUniqueNames(value.IngressEdges) {
+			len(value.DNSNames) < 1 || len(value.DNSNames) > 8 || len(value.IngressEdges) < 1 || !sortedUniqueNames(value.IngressEdges) {
+			return nil, ErrInvalidProfile
+		}
+		previousDNS := ""
+		for _, name := range value.DNSNames {
+			if name <= previousDNS || !validDNSName(name) || strings.Contains(name, "*") {
+				return nil, ErrInvalidProfile
+			}
+			previousDNS = name
+		}
+		if value.Name == "dns" && len(value.DNSNames) != 1 {
 			return nil, ErrInvalidProfile
 		}
 		previous = value.Name

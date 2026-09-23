@@ -106,12 +106,32 @@ safety deadline.
 
 ### Enforced egress and ingress
 
-Use role-isolated Docker internal networks and independent egress-policy broker
-identities for the portable Slice 6 local gate. A protected process has no host
-network, Docker socket or default external route. It joins only its own
-internal network and explicitly declared trust-edge networks. Its corresponding
-broker is the sole external uplink and holds no Product/Provider business
-secret, database authority or runtime-engine authority.
+Use role-isolated Docker internal networks in `isolated` IPv4 gateway mode and
+independent egress-policy broker identities for the portable Slice 6 local
+gate. Every protected role and trust-edge bridge must be created with
+`--internal --opt com.docker.network.bridge.gateway_mode_ipv4=isolated`.
+IPv6 is disabled and verified in this profile; a future IPv6-enabled profile
+must also use and prove `gateway_mode_ipv6=isolated`. A protected process has
+no host network, Docker socket, host bridge address, default external route or
+alternate Docker network. It joins only its own isolated network and explicitly
+declared isolated trust-edge networks. Its corresponding broker alone joins a
+separate external-uplink bridge and holds no Product/Provider business secret,
+database authority or runtime-engine authority.
+
+The stronger mode is mandatory, not an optimization. On Docker 29.7.2 a real
+`--internal`-only container reached a disposable host-network service through
+the bridge gateway, despite failing an external-network direct-socket probe.
+The same host fixture must be a positive control in the gate: ordinary
+`--internal` reproduces the bypass, while `isolated` denies that gateway,
+other Docker gateways, resolved `host.docker.internal` and
+`gateway.docker.internal` numeric addresses, public and metadata addresses.
+The protected role must still reach its declared broker and the broker must
+reach an allowed uplink fixture. Network inspect verifies exact members,
+`Internal`, `bridge`, `isolated`, disabled IPv6 and absent host gateway address;
+live route/address probes verify no default route or IPv6 address. A failed
+network option, missing positive control or unexpected reachability fails the
+gate. [Docker documents why ordinary internal bridge gateways remain host-
+reachable and why `isolated` omits the bridge address](https://docs.docker.com/engine/network/port-publishing/#gateway-modes).
 
 A role can request only a closed target alias, port and protocol. The broker
 maps that alias to the immutable security profile, performs DNS itself, checks
@@ -120,7 +140,25 @@ redirect-based authority changes, alternate DNS, proxy-environment bypasses,
 metadata, loopback, private, link-local, multicast and reserved addresses, and
 dials only a checked address. The policy revision and lease bind every
 connection; lifetime is bounded and policy revocation closes existing
-connections. DNS, policy or broker outage fails closed.
+connections. The external DNS service's exact certificate DNS SAN is part of
+the digest-bound profile; broker startup accepts only that SAN and a numeric
+DNS endpoint on the declared trust-edge port, never an operator-selected
+hostname that would invoke ambient DNS. DNS, policy or broker outage fails
+closed.
+
+An operator-owned authority publishes a canonical, Ed25519-signed,
+short-lived policy-state snapshot through a role-private read-only directory.
+The broker pins its verification key at startup and polls that directory at
+most once per second, validating the exact environment/profile/policy,
+principal and broker digests, monotonic generation, issuance/expiry and
+signature. The snapshot can affirm only the already-validated immutable
+policy or revoke it; it cannot add destinations or hot-reload broader policy.
+Missing, stale, malformed, unsigned, cross-boundary or rolled-back state
+revokes the current revision, drains sessions and stops new admission within
+the declared bound. A new policy revision starts in a separate broker process.
+An operator-controlled signing key never enters the broker or repository.
+The local gate may use a separate operator fixture but cannot claim that this
+proves independent production operator administration.
 
 Equivalent policies may share implementation but not a higher-authority
 global broker identity. Negative network-topology tests, rather than an

@@ -79,11 +79,12 @@ func validProfile() Profile {
 		if principal.Name == "egress-broker-product" || principal.Name == "product-runtime" {
 			continue
 		}
-		networks = append(networks, Network{Name: principal.Networks[0], Kind: "role_internal", Internal: true, Principals: []string{principal.Name}})
+		networks = append(networks, Network{Name: principal.Networks[0], Kind: "role_internal", Internal: true,
+			GatewayModeIPv4: "isolated", Principals: []string{principal.Name}})
 	}
 	networks = append(networks,
-		Network{Name: "external-uplink", Kind: "external_uplink", Principals: []string{"egress-broker-product"}},
-		Network{Name: "product-internal", Kind: "role_internal", Internal: true, Principals: []string{"egress-broker-product", "product-runtime"}},
+		Network{Name: "external-uplink", Kind: "external_uplink", GatewayModeIPv4: "nat", Principals: []string{"egress-broker-product"}},
+		Network{Name: "product-internal", Kind: "role_internal", Internal: true, GatewayModeIPv4: "isolated", Principals: []string{"egress-broker-product", "product-runtime"}},
 	)
 	sort.Slice(networks, func(first, second int) bool { return networks[first].Name < networks[second].Name })
 	uri := func(name string) string {
@@ -95,9 +96,9 @@ func validProfile() Profile {
 		return ""
 	}
 	external := []ExternalService{
-		{Name: "dns", ImageReference: "registry.example.test/dns@" + digest, ImageDigest: digest, URI: "spiffe://sandbox-runtime.test/external/dns", IngressEdges: []string{"egress-dns"}},
-		{Name: "postgres", ImageReference: "registry.example.test/postgres@" + digest, ImageDigest: digest, URI: "spiffe://sandbox-runtime.test/external/postgres", IngressEdges: []string{"product-postgres"}},
-		{Name: "vault", ImageReference: "registry.example.test/vault@" + digest, ImageDigest: digest, URI: "spiffe://sandbox-runtime.test/external/vault", IngressEdges: []string{"certificate-vault"}},
+		{Name: "dns", ImageReference: "registry.example.test/dns@" + digest, ImageDigest: digest, URI: "spiffe://sandbox-runtime.test/external/dns", DNSNames: []string{"dns.sandbox-runtime.test"}, IngressEdges: []string{"egress-dns"}},
+		{Name: "postgres", ImageReference: "registry.example.test/postgres@" + digest, ImageDigest: digest, URI: "spiffe://sandbox-runtime.test/external/postgres", DNSNames: []string{"postgres.sandbox-runtime.test"}, IngressEdges: []string{"product-postgres"}},
+		{Name: "vault", ImageReference: "registry.example.test/vault@" + digest, ImageDigest: digest, URI: "spiffe://sandbox-runtime.test/external/vault", DNSNames: []string{"vault.sandbox-runtime.test"}, IngressEdges: []string{"certificate-vault"}},
 	}
 	for index := range external {
 		external[index].IdentityDigest = external[index].Digest()
@@ -162,6 +163,7 @@ func TestProfileRejectsAuthorityAndEnforcementDrift(t *testing.T) {
 		"TLS digest tamper":       func(p *Profile) { p.Principals[0].TLS.PrincipalDigest = testDigest("tampered") },
 		"edge digest tamper":      func(p *Profile) { p.TrustEdges[0].FromPrincipalDigest = testDigest("tampered") },
 		"external digest tamper":  func(p *Profile) { p.External[0].IdentityDigest = testDigest("tampered") },
+		"external DNS omitted":    func(p *Profile) { p.External[0].DNSNames = nil },
 		"cross environment splice": func(p *Profile) {
 			p.EnvironmentDigest = testDigest("other-environment")
 		},
@@ -172,6 +174,15 @@ func TestProfileRejectsAuthorityAndEnforcementDrift(t *testing.T) {
 				}
 			}
 		},
+		"ordinary internal gateway": func(p *Profile) {
+			for index := range p.Networks {
+				if p.Networks[index].Kind == "role_internal" {
+					p.Networks[index].GatewayModeIPv4 = "nat"
+					break
+				}
+			}
+		},
+		"IPv6 unproven": func(p *Profile) { p.Networks[0].IPv6Enabled = true },
 		"network membership drift": func(p *Profile) {
 			for index := range p.Networks {
 				if p.Networks[index].Name == "product-internal" {
