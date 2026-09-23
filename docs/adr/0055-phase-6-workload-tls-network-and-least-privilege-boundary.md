@@ -75,6 +75,18 @@ individual poll and staleness limits alone do not prove it. Missing issuer
 source, stale/rolled-back CRL, authority loss, or revoked-to-good resurrection
 of an unexpired observed peer fail closed. Same-issuer reads may be shared,
 but an agent cannot substitute its own issuer's CRL for a different peer CA.
+Different server/client anchor IDs or purposes do not themselves prove
+different issuers: compare the actual issuing CA's full DER SHA-256 first.
+The canonical profile/operator source mapping fixes the existing Vault
+backend/endpoint, mount, immutable Vault issuer UUID and complete issuer DER
+digest for each actual peer CA, then authorizes that source only for the
+requesting agent's declared mTLS edges. A mutable `default` issuer alias,
+caller-supplied URL/path/issuer reference and `/pki/crl` fallback are
+forbidden. The controller verifies the selected issuer certificate against
+the pinned DER and re-verifies every complete CRL's signature and scope;
+cache identity includes source, profile revision and issuer, while edge
+authorization remains separate. Issuer replacement requires a new explicit
+profile and controlled transition, not implicit rollover.
 
 The single-cluster complete-CRL path requires an observed Vault PKI CRL
 configuration with building enabled, `auto_rebuild=false` and

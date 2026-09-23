@@ -5,8 +5,10 @@ package workloadpki
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"io"
@@ -62,6 +64,26 @@ func TestVaultPKIIntegration(t *testing.T) {
 		map[string]any{"type": "pki", "config": map[string]string{"default_lease_ttl": "1h", "max_lease_ttl": "1h"}}, nil)
 	vaultPKIWrite(t, ctx, httpClient, endpoint+"/v1/pki/root/generate/internal", rootToken,
 		map[string]any{"common_name": "sandbox-runtime.test", "ttl": "1h", "key_type": "ec", "key_bits": 256}, nil)
+	issuerRequest, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint+"/v1/pki/config/issuers", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	issuerRequest.Header.Set("X-Vault-Token", rootToken)
+	issuerResponse, err := httpClient.Do(issuerRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var issuerConfig struct {
+		Data struct {
+			Default string `json:"default"`
+		} `json:"data"`
+	}
+	issuerDecodeErr := json.NewDecoder(io.LimitReader(issuerResponse.Body, 64<<10)).Decode(&issuerConfig)
+	_ = issuerResponse.Body.Close()
+	if issuerResponse.StatusCode != http.StatusOK || issuerDecodeErr != nil || !vaultIssuerIDPattern.MatchString(issuerConfig.Data.Default) {
+		t.Fatalf("fixed-version Vault issuer ID unavailable: status=%d decode=%v", issuerResponse.StatusCode, issuerDecodeErr)
+	}
+	issuerID := issuerConfig.Data.Default
 	crlConfigRequest, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint+"/v1/pki/config/crl", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -97,6 +119,8 @@ func TestVaultPKIIntegration(t *testing.T) {
 path "pki/cert/crl" { capabilities = ["read"] }
 path "pki/crl" { capabilities = ["read"] }
 path "pki/config/crl" { capabilities = ["read"] }
+path "pki/issuer/` + issuerID + `/der" { capabilities = ["read"] }
+path "pki/issuer/` + issuerID + `/crl/der" { capabilities = ["read"] }
 path "pki/revoke" { capabilities = ["update"] }`
 	vaultPKIWrite(t, ctx, httpClient, endpoint+"/v1/sys/policies/acl/certificate-controller", rootToken, map[string]any{"policy": policyDocument}, nil)
 	var tokenResponse struct {
@@ -165,12 +189,40 @@ path "pki/revoke" { capabilities = ["update"] }`
 	if !found {
 		t.Fatal("revoked certificate serial missing from real Vault CRL")
 	}
+	issuerHash := sha256.Sum256(issuerBlock.Bytes)
+	peerClient, err := NewVaultClient(VaultConfig{Endpoint: endpoint, Mount: "pki", AllowedPolicies: map[string]string{fixture.policy.ID: fixture.policy.VaultRole},
+		OperationTimeout: 5 * time.Second, Now: time.Now, RequireImmediateCompleteCRL: true,
+		PeerIssuerSources: []VaultPeerIssuerSource{{SourceID: "product-peer-source", Mount: "pki", IssuerID: issuerID,
+			IssuerDigest: "sha256:" + hex.EncodeToString(issuerHash[:])}}}, httpClient,
+		staticVaultTokenSource{token: VaultToken{Value: []byte(tokenResponse.Auth.ClientToken),
+			ExpiresAt: time.Now().Add(time.Duration(tokenResponse.Auth.LeaseDuration) * time.Second), Revision: "vault-token-1"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	selected, err := peerClient.PeerRevocations(ctx, "product-peer-source", issuerBlock.Bytes)
+	if err != nil {
+		t.Fatalf("real fixed issuer CRL read failed: %v", err)
+	}
+	defer selected.Destroy()
+	selectedVerified, err := VerifyCRLForIssuer(selected, issuerBlock.Bytes, time.Now())
+	if err != nil || selectedVerified.CheckPeer(mustPEMCertificateDER(t, issued.CertificatePEM), issuerBlock.Bytes, time.Now()) != ErrPeerRevoked {
+		t.Fatalf("real fixed issuer CRL missed revoked leaf: %v", err)
+	}
 
 	runPKICommand(t, context.Background(), "docker", "rm", "-f", container)
 	cleaned = true
 	if retained := strings.TrimSpace(runPKICommand(t, context.Background(), "docker", "ps", "-aq", "--filter", "name=^/"+container+"$")); retained != "" {
 		t.Fatal("Vault PKI integration container retained")
 	}
+}
+
+func mustPEMCertificateDER(t *testing.T, document []byte) []byte {
+	t.Helper()
+	block, trailing := pem.Decode(document)
+	if block == nil || block.Type != "CERTIFICATE" || len(bytes.TrimSpace(trailing)) != 0 {
+		t.Fatal("issued leaf PEM invalid")
+	}
+	return block.Bytes
 }
 
 func runPKICommand(t *testing.T, ctx context.Context, command string, arguments ...string) string {

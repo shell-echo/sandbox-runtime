@@ -18,7 +18,7 @@ type crlTestMaterial struct {
 	snapshot  RevocationSnapshot
 }
 
-func newCRLTestMaterial(t *testing.T, now time.Time, serial int64, revoked bool) crlTestMaterial {
+func newCRLTestMaterial(t *testing.T, now time.Time, serial int64, revoked bool, extensions ...pkix.Extension) crlTestMaterial {
 	t.Helper()
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
@@ -47,7 +47,8 @@ func newCRLTestMaterial(t *testing.T, now time.Time, serial int64, revoked bool)
 	if err != nil {
 		t.Fatal(err)
 	}
-	list := &x509.RevocationList{Number: big.NewInt(7), ThisUpdate: now.Add(-time.Minute), NextUpdate: now.Add(5 * time.Minute)}
+	list := &x509.RevocationList{Number: big.NewInt(7), ThisUpdate: now.Add(-time.Minute), NextUpdate: now.Add(5 * time.Minute),
+		ExtraExtensions: extensions}
 	if revoked {
 		list.RevokedCertificateEntries = []x509.RevocationListEntry{{SerialNumber: big.NewInt(serial), RevocationTime: now.Add(-time.Second)}}
 	}
@@ -62,6 +63,22 @@ func newCRLTestMaterial(t *testing.T, now time.Time, serial int64, revoked bool)
 	return crlTestMaterial{issuerDER: issuerDER, leafDER: leafDER,
 		snapshot: RevocationSnapshot{IssuerRevision: "vault-crl-untrusted-label", DER: crlDER,
 			ThisUpdate: parsed.ThisUpdate, NextUpdate: parsed.NextUpdate}}
+}
+
+func TestVerifiedCRLRejectsIncompleteOrUninterpretedScope(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+	for name, extension := range map[string]pkix.Extension{
+		"delta":              {Id: deltaCRLIndicatorOID, Critical: true, Value: []byte{0x02, 0x01, 0x01}},
+		"distribution point": {Id: issuingDistributionPointOID, Critical: true, Value: []byte{0x30, 0x00}},
+		"unknown critical":   {Id: []int{1, 2, 3, 4, 5}, Critical: true, Value: []byte{0x05, 0x00}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			material := newCRLTestMaterial(t, now, 72, false, extension)
+			if _, err := VerifyCRLForIssuer(material.snapshot, material.issuerDER, now); err == nil {
+				t.Fatal("signed but incomplete or uninterpreted CRL admitted")
+			}
+		})
+	}
 }
 
 func TestVerifiedCRLBindsIssuerSignatureSerialAndValidity(t *testing.T) {

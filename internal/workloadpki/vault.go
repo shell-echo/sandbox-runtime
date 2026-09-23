@@ -13,6 +13,7 @@ import (
 	"mime"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -48,7 +49,20 @@ type VaultConfig struct {
 	OperationTimeout            time.Duration
 	Now                         func() time.Time
 	RequireImmediateCompleteCRL bool
+	PeerIssuerSources           []VaultPeerIssuerSource
 }
+
+// VaultPeerIssuerSource is an operator-selected, immutable lookup target.
+// An agent may ask for the SourceID only after a higher layer has authorized
+// its exact profile edge; it never supplies a Vault mount or issuer reference.
+type VaultPeerIssuerSource struct {
+	SourceID     string
+	Mount        string
+	IssuerID     string
+	IssuerDigest string
+}
+
+var vaultIssuerIDPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 
 type IssuedCertificate struct {
 	IssuerRevision string
@@ -94,6 +108,7 @@ type VaultClient struct {
 	timeout                     time.Duration
 	now                         func() time.Time
 	requireImmediateCompleteCRL bool
+	peerIssuerSources           map[string]VaultPeerIssuerSource
 }
 
 func NewVaultClient(config VaultConfig, client *http.Client, tokens VaultTokenSource) (*VaultClient, error) {
@@ -110,13 +125,27 @@ func NewVaultClient(config VaultConfig, client *http.Client, tokens VaultTokenSo
 		}
 		policies[policy] = vaultRole
 	}
+	if len(config.PeerIssuerSources) > 128 || (len(config.PeerIssuerSources) != 0 && !config.RequireImmediateCompleteCRL) {
+		return nil, ErrUnavailable
+	}
+	sources := make(map[string]VaultPeerIssuerSource, len(config.PeerIssuerSources))
+	for _, source := range config.PeerIssuerSources {
+		if !namePattern.MatchString(source.SourceID) || !namePattern.MatchString(source.Mount) ||
+			!vaultIssuerIDPattern.MatchString(source.IssuerID) || !digestPattern.MatchString(source.IssuerDigest) {
+			return nil, ErrUnavailable
+		}
+		if _, exists := sources[source.SourceID]; exists {
+			return nil, ErrUnavailable
+		}
+		sources[source.SourceID] = source
+	}
 	clientCopy := *client
 	clientCopy.Timeout = 0
 	clientCopy.Jar = nil
 	clientCopy.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	return &VaultClient{endpoint: strings.TrimSuffix(config.Endpoint, "/"), mount: config.Mount, policies: policies,
 		client: &clientCopy, tokens: tokens, timeout: config.OperationTimeout, now: config.Now,
-		requireImmediateCompleteCRL: config.RequireImmediateCompleteCRL}, nil
+		requireImmediateCompleteCRL: config.RequireImmediateCompleteCRL, peerIssuerSources: sources}, nil
 }
 
 func (c *VaultClient) Issue(ctx context.Context, policy Policy, csrPEM []byte, ttl time.Duration) (IssuedCertificate, error) {
@@ -213,10 +242,17 @@ func (c *VaultClient) Revocations(ctx context.Context) (RevocationSnapshot, erro
 // CRL immediately; callers that promise peer-revocation drain must opt in to
 // this check and grant only read access to config/crl, not rotate authority.
 func (c *VaultClient) VerifyImmediateCompleteCRLConfig(ctx context.Context) error {
+	if c == nil {
+		return ErrUnavailable
+	}
+	return c.verifyImmediateCompleteCRLConfig(ctx, c.mount)
+}
+
+func (c *VaultClient) verifyImmediateCompleteCRLConfig(ctx context.Context, mount string) error {
 	if c == nil || ctx == nil {
 		return ErrUnavailable
 	}
-	document, contentType, err := c.request(ctx, http.MethodGet, "/v1/"+c.mount+"/config/crl", nil, "application/json")
+	document, contentType, err := c.request(ctx, http.MethodGet, "/v1/"+mount+"/config/crl", nil, "application/json")
 	if err != nil {
 		return err
 	}
@@ -235,6 +271,57 @@ func (c *VaultClient) VerifyImmediateCompleteCRLConfig(ctx context.Context) erro
 		}
 	}
 	return nil
+}
+
+// PeerRevocations never consults the mutable default issuer. Its source ID
+// must be authorized against the caller's exact mTLS edge by the controller;
+// this client independently checks the fixed Vault issuer's full DER identity
+// and complete CRL under that issuer on every read.
+func (c *VaultClient) PeerRevocations(ctx context.Context, sourceID string, issuerDER []byte) (RevocationSnapshot, error) {
+	if c == nil || ctx == nil || !c.requireImmediateCompleteCRL {
+		return RevocationSnapshot{}, ErrUnavailable
+	}
+	source, known := c.peerIssuerSources[sourceID]
+	if !known || len(issuerDER) == 0 || len(issuerDER) > 64<<10 {
+		return RevocationSnapshot{}, ErrUnavailable
+	}
+	issuerHash := sha256.Sum256(issuerDER)
+	if "sha256:"+hex.EncodeToString(issuerHash[:]) != source.IssuerDigest ||
+		c.verifyImmediateCompleteCRLConfig(ctx, source.Mount) != nil {
+		return RevocationSnapshot{}, ErrUnavailable
+	}
+	base := "/v1/" + source.Mount + "/issuer/" + source.IssuerID
+	certificateDER, contentType, err := c.request(ctx, http.MethodGet, base+"/der", nil, "application/pkix-cert")
+	if err != nil {
+		return RevocationSnapshot{}, err
+	}
+	if (contentType != "application/pkix-cert" && contentType != "application/octet-stream") ||
+		len(certificateDER) > 64<<10 || !bytes.Equal(certificateDER, issuerDER) {
+		clear(certificateDER)
+		return RevocationSnapshot{}, ErrUnavailable
+	}
+	clear(certificateDER)
+	document, contentType, err := c.request(ctx, http.MethodGet, base+"/crl/der", nil, "application/pkix-crl")
+	if err != nil {
+		return RevocationSnapshot{}, err
+	}
+	if contentType != "application/pkix-crl" && contentType != "application/x-pkcs7-crl" && contentType != "application/octet-stream" {
+		clear(document)
+		return RevocationSnapshot{}, ErrUnavailable
+	}
+	list, err := x509.ParseRevocationList(document)
+	if err != nil {
+		clear(document)
+		return RevocationSnapshot{}, ErrUnavailable
+	}
+	crlHash := sha256.Sum256(document)
+	snapshot := RevocationSnapshot{IssuerRevision: "vault-crl-" + hex.EncodeToString(crlHash[:8]), DER: document,
+		ThisUpdate: list.ThisUpdate.UTC(), NextUpdate: list.NextUpdate.UTC()}
+	if _, err := VerifyCRLForIssuer(snapshot, issuerDER, c.now()); err != nil {
+		snapshot.Destroy()
+		return RevocationSnapshot{}, ErrUnavailable
+	}
+	return snapshot, nil
 }
 
 func (c *VaultClient) Revoke(ctx context.Context, serial string) error {

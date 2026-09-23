@@ -2,7 +2,9 @@ package workloadpki
 
 import (
 	"context"
+	"crypto/sha256"
 	"crypto/x509"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"net/http"
@@ -202,6 +204,103 @@ func TestVaultClientFailsClosedOnExpiredTokenRedirectAndMalformedResponse(t *tes
 				t.Fatal("unsafe Vault response was accepted")
 			}
 		})
+	}
+}
+
+func TestVaultPeerIssuerSourceIsFixedAndNeverFallsBackToDefault(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+	material := newCRLTestMaterial(t, now, 83, true)
+	other := newCRLTestMaterial(t, now, 83, false)
+	issuerHash := sha256.Sum256(material.issuerDER)
+	issuerDigest := "sha256:" + hex.EncodeToString(issuerHash[:])
+	const issuerID = "3d24b01e-81e2-42ac-a6d6-6203166d15ad"
+	var defaultCalls atomic.Int32
+	var wrongIssuer, wrongCRL, missingIssuer atomic.Bool
+	server := httptest.NewTLSServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/v1/pki/config/crl":
+			response.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(response).Encode(vaultData(map[string]any{"disable": false, "auto_rebuild": false, "enable_delta": false}))
+		case "/v1/pki/issuer/" + issuerID + "/der":
+			if missingIssuer.Load() {
+				response.WriteHeader(http.StatusNotFound)
+				return
+			}
+			response.Header().Set("Content-Type", "application/pkix-cert")
+			if wrongIssuer.Load() {
+				_, _ = response.Write(other.issuerDER)
+			} else {
+				_, _ = response.Write(material.issuerDER)
+			}
+		case "/v1/pki/issuer/" + issuerID + "/crl/der":
+			response.Header().Set("Content-Type", "application/pkix-crl")
+			if wrongCRL.Load() {
+				_, _ = response.Write(other.snapshot.DER)
+			} else {
+				_, _ = response.Write(material.snapshot.DER)
+			}
+		case "/v1/pki/crl":
+			defaultCalls.Add(1)
+			response.Header().Set("Content-Type", "application/pkix-crl")
+			_, _ = response.Write(other.snapshot.DER)
+		default:
+			response.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+	fixture := newProtocolFixture(t)
+	base := VaultConfig{Endpoint: server.URL, Mount: "pki", AllowedPolicies: map[string]string{fixture.policy.ID: fixture.policy.VaultRole},
+		OperationTimeout: time.Second, Now: func() time.Time { return now }, RequireImmediateCompleteCRL: true,
+		PeerIssuerSources: []VaultPeerIssuerSource{{SourceID: "peer-source", Mount: "pki", IssuerID: issuerID, IssuerDigest: issuerDigest}}}
+	token := staticVaultTokenSource{token: VaultToken{Value: []byte("scoped-pki-token"), ExpiresAt: now.Add(time.Minute), Revision: "vault-token-1"}}
+	client, err := NewVaultClient(base, server.Client(), token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := client.PeerRevocations(context.Background(), "peer-source", material.issuerDER)
+	if err != nil {
+		t.Fatalf("fixed issuer read failed: %v", err)
+	}
+	verified, err := VerifyCRLForIssuer(snapshot, material.issuerDER, now)
+	snapshot.Destroy()
+	if err != nil || verified.CheckPeer(material.leafDER, material.issuerDER, now) != ErrPeerRevoked {
+		t.Fatalf("fixed issuer revocation was not enforced: %v", err)
+	}
+	if _, err := client.PeerRevocations(context.Background(), "unknown", material.issuerDER); err == nil {
+		t.Fatal("unknown source accepted")
+	}
+	if _, err := client.PeerRevocations(context.Background(), "peer-source", other.issuerDER); err == nil {
+		t.Fatal("wrong issuer DER accepted")
+	}
+	if defaultCalls.Load() != 0 {
+		t.Fatal("peer source fell back to default CRL")
+	}
+	for name, flag := range map[string]*atomic.Bool{
+		"issuer mapping drift": &wrongIssuer, "wrong signed CRL": &wrongCRL, "source disappeared": &missingIssuer,
+	} {
+		t.Run(name, func(t *testing.T) {
+			flag.Store(true)
+			defer flag.Store(false)
+			if _, err := client.PeerRevocations(context.Background(), "peer-source", material.issuerDER); err == nil || defaultCalls.Load() != 0 {
+				t.Fatalf("unsafe source admitted or default fallback used: %v", err)
+			}
+		})
+	}
+	for name, invalidID := range map[string]string{
+		"default alias": "default", "path injection": "../crl", "encoded slash": "%2f", "query": issuerID + "?x=1",
+	} {
+		t.Run(name, func(t *testing.T) {
+			config := base
+			config.PeerIssuerSources = []VaultPeerIssuerSource{{SourceID: "peer-source", Mount: "pki", IssuerID: invalidID, IssuerDigest: issuerDigest}}
+			if _, err := NewVaultClient(config, server.Client(), token); err == nil {
+				t.Fatal("unsafe issuer reference accepted")
+			}
+		})
+	}
+	config := base
+	config.RequireImmediateCompleteCRL = false
+	if _, err := NewVaultClient(config, server.Client(), token); err == nil {
+		t.Fatal("peer source admitted without complete-CRL policy gate")
 	}
 }
 

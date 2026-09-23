@@ -379,6 +379,17 @@ and the fixed-image integration pass with a read-only config ACL. Existing
 v1 controller composition does not silently enable this option; the future
 v2 peer-revocation path must opt in and bind the policy to its exact issuer
 source before it can claim enforcement.
+The next component now rejects delta, distribution-point-scoped, indirect or
+unknown-critical CRL semantics even when a CRL signature is valid. A fixed
+Vault source lookup accepts only an operator-supplied immutable issuer UUID,
+mount and full issuer DER digest; it reads that issuer's CA and complete CRL,
+checks both against the pinned DER and never falls back to `/pki/crl`.
+Wrong/missing issuer, wrong signed CRL, alias/path injection and a disabled
+complete-CRL policy fail closed in unit tests. The pinned real Vault image
+also passed the exact issuer endpoint read after a real revoke. This is
+component evidence only: the mapping is not yet bound to the profile's edge
+authorization, controller/agent v2 wire path or live handshake/drain, and
+there is no current Slice 6 manifest.
 
 ## Exact final inventory
 

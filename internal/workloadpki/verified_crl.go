@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"crypto/x509"
+	"encoding/asn1"
 	"encoding/hex"
 	"errors"
 	"math/big"
@@ -11,6 +12,14 @@ import (
 )
 
 var ErrPeerRevoked = errors.New("workload peer certificate revoked")
+
+var (
+	deltaCRLIndicatorOID        = asn1.ObjectIdentifier{2, 5, 29, 27}
+	issuingDistributionPointOID = asn1.ObjectIdentifier{2, 5, 29, 28}
+	certificateIssuerOID        = asn1.ObjectIdentifier{2, 5, 29, 29}
+	authorityKeyIdentifierOID   = asn1.ObjectIdentifier{2, 5, 29, 35}
+	crlNumberOID                = asn1.ObjectIdentifier{2, 5, 29, 20}
+)
 
 // VerifiedCRL binds one complete, signed CRL to the full DER digest of its
 // issuing CA. An issuer-revision label from Vault is not an issuer identity.
@@ -42,10 +51,24 @@ func VerifyCRLForIssuer(snapshot RevocationSnapshot, issuerDER []byte, now time.
 		now.Before(list.ThisUpdate) || !now.Before(list.NextUpdate) || !list.NextUpdate.After(list.ThisUpdate) {
 		return VerifiedCRL{}, ErrUnavailable
 	}
+	// A valid signature alone is not enough to prove absence from a *complete*
+	// CRL. Delta, distribution-point-scoped and indirect CRLs can legitimately
+	// omit a revoked serial, so they must never satisfy peer admission.
+	for _, extension := range list.Extensions {
+		if extension.Id.Equal(deltaCRLIndicatorOID) || extension.Id.Equal(issuingDistributionPointOID) ||
+			(extension.Critical && !extension.Id.Equal(authorityKeyIdentifierOID) && !extension.Id.Equal(crlNumberOID)) {
+			return VerifiedCRL{}, ErrUnavailable
+		}
+	}
 	revoked := make(map[string]struct{}, len(list.RevokedCertificateEntries))
 	for _, entry := range list.RevokedCertificateEntries {
 		if entry.SerialNumber == nil || entry.SerialNumber.Sign() < 1 || entry.RevocationTime.After(now) {
 			return VerifiedCRL{}, ErrUnavailable
+		}
+		for _, extension := range entry.Extensions {
+			if extension.Id.Equal(certificateIssuerOID) || extension.Critical {
+				return VerifiedCRL{}, ErrUnavailable
+			}
 		}
 		serial := serialString(entry.SerialNumber.Bytes())
 		if _, duplicate := revoked[serial]; duplicate {
