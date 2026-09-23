@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/shell-echo/sandbox-runtime/internal/connectiondrain"
 	"github.com/shell-echo/sandbox-runtime/internal/desktopbroker"
 	"github.com/shell-echo/sandbox-runtime/internal/desktopmedia"
 	"github.com/shell-echo/sandbox-runtime/internal/executorprotocol"
@@ -44,20 +45,26 @@ type DesktopConfig struct {
 	ClientCABundleFile      string
 	AllowedClientIdentities []string
 	RemoteTLSConfig         *tls.Config
+	PeerRevocationMonitor   connectiondrain.PeerMonitor
+	SignerProbe             func(context.Context) error
+	ConnectionMaxAge        time.Duration
 	MaxSessions             int
 	OperationTimeout        time.Duration
 }
 
 // DesktopBackend terminates executor mTLS and relays one short-lived Desktop
-// session to the private Unix broker. It has no Provider or Docker access.
+// session to the private Unix broker. Its production path has no Provider or
+// Docker access; the historical static TLS helper still imports the Provider
+// transport loader.
 type DesktopBackend struct {
-	config   DesktopConfig
-	tls      *tls.Config
-	server   *http.Server
-	mu       sync.Mutex
-	active   int
-	replayMu sync.Mutex
-	replayed map[string]time.Time
+	config      DesktopConfig
+	tls         *tls.Config
+	server      *http.Server
+	connections *connectiondrain.Registry
+	mu          sync.Mutex
+	active      int
+	replayMu    sync.Mutex
+	replayed    map[string]time.Time
 }
 
 func NewDesktop(config DesktopConfig) (*DesktopBackend, error) {
@@ -75,10 +82,15 @@ func NewDesktop(config DesktopConfig) (*DesktopBackend, error) {
 	if err != nil {
 		return nil, err
 	}
+	connections, err := newExecutorPeerRegistry(config.RemoteTLSConfig, config.PeerRevocationMonitor,
+		config.SignerProbe, config.ConnectionMaxAge)
+	if err != nil {
+		return nil, err
+	}
 	return &DesktopBackend{
-		config: config,
-		tls:    tlsConfig,
+		config: config, tls: tlsConfig, connections: connections,
 		server: &http.Server{Addr: config.ListenAddress, Handler: nil, TLSConfig: tlsConfig,
+			ConnState:         connectiondrain.PeerConnState(config.PeerRevocationMonitor),
 			ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second,
 			WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 << 10},
 		replayed: make(map[string]time.Time),
@@ -91,6 +103,9 @@ func (b *DesktopBackend) Ready(ctx context.Context) error {
 	}
 	probeContext, cancel := context.WithTimeout(ctx, b.config.OperationTimeout)
 	defer cancel()
+	if err := executorPeerReady(probeContext, b.config.PeerRevocationMonitor, b.config.SignerProbe); err != nil {
+		return err
+	}
 	if err := validateDesktopBrokerSocket(b.config.BrokerSocketPath); err != nil {
 		return errors.New("Desktop broker is unavailable")
 	}
@@ -126,6 +141,18 @@ func (b *DesktopBackend) Serve(ctx context.Context) error {
 		return errors.New("bind Desktop executor backend")
 	}
 	defer listener.Close()
+	listener, err = wrapExecutorPeerListener(listener, b.connections)
+	if err != nil {
+		return errors.New("track Desktop executor connections")
+	}
+	if b.connections != nil {
+		defer b.connections.Drain()
+	}
+	if b.config.PeerRevocationMonitor != nil {
+		defer b.config.PeerRevocationMonitor.Close()
+	}
+	stopPeerPoll := connectiondrain.StartPeerPoll(ctx, b.config.PeerRevocationMonitor)
+	defer stopPeerPoll()
 	b.server.Handler = http.HandlerFunc(b.handle)
 	stop := context.AfterFunc(ctx, func() { _ = b.server.Shutdown(context.Background()) })
 	defer stop()
@@ -138,6 +165,12 @@ func (b *DesktopBackend) Serve(ctx context.Context) error {
 func (b *DesktopBackend) Close() error {
 	if b != nil && b.server != nil {
 		_ = b.server.Close()
+	}
+	if b != nil && b.connections != nil {
+		b.connections.Drain()
+	}
+	if b != nil && b.config.PeerRevocationMonitor != nil {
+		b.config.PeerRevocationMonitor.Close()
 	}
 	return nil
 }
@@ -155,6 +188,15 @@ func (b *DesktopBackend) handle(writer http.ResponseWriter, request *http.Reques
 	if request == nil || request.Method != http.MethodGet || request.URL.Path != "/executor" || request.TLS == nil || request.Header.Get("Sec-WebSocket-Protocol") != executorprotocol.ProtocolID {
 		http.Error(writer, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return
+	}
+	if b.config.PeerRevocationMonitor != nil {
+		probeContext, cancel := context.WithTimeout(request.Context(), b.config.OperationTimeout)
+		err := executorPeerReady(probeContext, b.config.PeerRevocationMonitor, b.config.SignerProbe)
+		cancel()
+		if err != nil {
+			http.Error(writer, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
+			return
+		}
 	}
 	connection, err := websocket.Accept(writer, request, &websocket.AcceptOptions{Subprotocols: []string{executorprotocol.ProtocolID}, CompressionMode: websocket.CompressionDisabled})
 	if err != nil {

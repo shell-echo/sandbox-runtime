@@ -1,7 +1,8 @@
 // Package executorbackend implements the operator-owned Browser executor
 // backend. It terminates private mTLS, validates the opaque authority, and
-// relays frames to an already-running CDP endpoint. It has no Provider or
-// Docker dependency.
+// relays frames to an already-running CDP endpoint. Its production path does
+// not access Provider state or Docker; the historical static TLS component
+// helper still imports the Provider transport loader.
 package executorbackend
 
 import (
@@ -15,6 +16,7 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/shell-echo/sandbox-runtime/internal/connectiondrain"
 	"github.com/shell-echo/sandbox-runtime/internal/executorprotocol"
 )
 
@@ -31,19 +33,23 @@ type Config struct {
 	ClientCABundleFile      string
 	AllowedClientIdentities []string
 	RemoteTLSConfig         *tls.Config
+	PeerRevocationMonitor   connectiondrain.PeerMonitor
+	SignerProbe             func(context.Context) error
+	ConnectionMaxAge        time.Duration
 	MaxSessions             int
 	OperationTimeout        time.Duration
 }
 
 type Backend struct {
-	config    Config
-	tls       *tls.Config
-	transport *http.Transport
-	server    *http.Server
-	mu        sync.Mutex
-	active    int
-	replayMu  sync.Mutex
-	replayed  map[string]time.Time
+	config      Config
+	tls         *tls.Config
+	transport   *http.Transport
+	server      *http.Server
+	connections *connectiondrain.Registry
+	mu          sync.Mutex
+	active      int
+	replayMu    sync.Mutex
+	replayed    map[string]time.Time
 }
 
 func New(config Config) (*Backend, error) {
@@ -61,10 +67,17 @@ func New(config Config) (*Backend, error) {
 	if err != nil {
 		return nil, err
 	}
+	connections, err := newExecutorPeerRegistry(config.RemoteTLSConfig, config.PeerRevocationMonitor,
+		config.SignerProbe, config.ConnectionMaxAge)
+	if err != nil {
+		return nil, err
+	}
 	transport := &http.Transport{TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS13}}
 	return &Backend{
-		config: config, tls: tlsConfig, transport: transport,
-		server:   &http.Server{Addr: config.ListenAddress, Handler: nil, TLSConfig: tlsConfig, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 << 10},
+		config: config, tls: tlsConfig, transport: transport, connections: connections,
+		server: &http.Server{Addr: config.ListenAddress, Handler: nil, TLSConfig: tlsConfig,
+			ConnState:         connectiondrain.PeerConnState(config.PeerRevocationMonitor),
+			ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 << 10},
 		replayed: make(map[string]time.Time),
 	}, nil
 }
@@ -75,6 +88,9 @@ func (b *Backend) Ready(ctx context.Context) error {
 	}
 	probeContext, cancel := context.WithTimeout(ctx, b.config.OperationTimeout)
 	defer cancel()
+	if err := executorPeerReady(probeContext, b.config.PeerRevocationMonitor, b.config.SignerProbe); err != nil {
+		return err
+	}
 	connection, _, err := b.dialUpstream(probeContext)
 	if err != nil {
 		return errors.New("Browser CDP upstream is unavailable")
@@ -91,6 +107,18 @@ func (b *Backend) Serve(ctx context.Context) error {
 		return errors.New("bind Browser executor backend")
 	}
 	defer listener.Close()
+	listener, err = wrapExecutorPeerListener(listener, b.connections)
+	if err != nil {
+		return errors.New("track Browser executor connections")
+	}
+	if b.connections != nil {
+		defer b.connections.Drain()
+	}
+	if b.config.PeerRevocationMonitor != nil {
+		defer b.config.PeerRevocationMonitor.Close()
+	}
+	stopPeerPoll := connectiondrain.StartPeerPoll(ctx, b.config.PeerRevocationMonitor)
+	defer stopPeerPoll()
 	b.server.Handler = http.HandlerFunc(b.handle)
 	stop := context.AfterFunc(ctx, func() { _ = b.server.Shutdown(context.Background()) })
 	defer stop()
@@ -107,6 +135,12 @@ func (b *Backend) Close() error {
 	if b.server != nil {
 		_ = b.server.Close()
 	}
+	if b.connections != nil {
+		b.connections.Drain()
+	}
+	if b.config.PeerRevocationMonitor != nil {
+		b.config.PeerRevocationMonitor.Close()
+	}
 	if b.transport != nil {
 		b.transport.CloseIdleConnections()
 	}
@@ -114,9 +148,27 @@ func (b *Backend) Close() error {
 }
 
 func (b *Backend) handle(writer http.ResponseWriter, request *http.Request) {
+	if request != nil && request.Method == http.MethodGet && request.URL.Path == "/readyz" && request.TLS != nil {
+		writer.Header().Set("Cache-Control", "no-store")
+		if err := b.Ready(request.Context()); err != nil {
+			http.Error(writer, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
+			return
+		}
+		writer.WriteHeader(http.StatusNoContent)
+		return
+	}
 	if request == nil || request.Method != http.MethodGet || request.URL.Path != "/executor" || request.TLS == nil || request.Header.Get("Sec-WebSocket-Protocol") != executorprotocol.ProtocolID {
 		http.Error(writer, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return
+	}
+	if b.config.PeerRevocationMonitor != nil {
+		probeContext, cancel := context.WithTimeout(request.Context(), b.config.OperationTimeout)
+		err := executorPeerReady(probeContext, b.config.PeerRevocationMonitor, b.config.SignerProbe)
+		cancel()
+		if err != nil {
+			http.Error(writer, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
+			return
+		}
 	}
 	connection, err := websocket.Accept(writer, request, &websocket.AcceptOptions{Subprotocols: []string{executorprotocol.ProtocolID}, CompressionMode: websocket.CompressionDisabled})
 	if err != nil {

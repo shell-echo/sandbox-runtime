@@ -163,6 +163,25 @@ compatibility paths; they are not a production fallback. Existing-connection
 revocation drain and the distinct-UID command-level graph remain named gates,
 not conclusions from these callbacks.
 
+The backend authority v2 was an unpublished Phase 6 draft. The same v2
+definition now requires the three explicit peer-CRL role file, role digest and
+source-mapping digest fields; old development snapshots fail closed and must
+be regenerated. There is no implicit v1 or no-CRL production mode. Each
+backend binds its own `executor-browser` or `executor-desktop` inbound edge to
+the derived role document, pulls the actual peer issuer's complete CRL before
+readiness, verifies the TLS peer's real chain on every handshake, and tracks
+accepted and hijacked sockets for bounded polling, revocation drain and exact
+close cleanup. Browser readiness additionally requires its CDP upstream;
+Desktop readiness requires the signed broker probe. A TLS signer, CRL source,
+CDP upstream or broker failure closes readiness, and CRL loss or revocation
+closes existing WebSocket sessions and their upstream/broker transport.
+The historical static-file component constructor still imports the Provider
+mTLS file loader at package level; the production remote-signer branch does
+not call it. Extracting that compatibility helper is a later behavior-neutral
+dependency cleanup, not evidence that the package currently has no Provider
+import. The complete separate-process principal and network graph remains a
+Slice 6 gate.
+
 The private identity vocabulary is the closed, versioned
 `securityprincipal.v1` registry. Its kinds are `runtime_role`,
 `material_agent`, `tls_agent`, `migration_job`, `controller`, `executor_backend` and

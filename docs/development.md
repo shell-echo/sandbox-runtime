@@ -712,6 +712,31 @@ draft tightened in place: all three peer-CRL binding fields are mandatory,
 and old development snapshots must be regenerated rather than silently
 defaulted or downgraded. The previous v2 command configuration remains a component
 compatibility path and does not enable production peer-revocation admission.
+The unpublished Browser and Desktop executor backend authority v2 likewise
+requires `peer_crl_role_file`, `peer_crl_role_digest` and
+`peer_crl_source_mapping_digest`. Both entrypoints verify the matching
+role-derived document and their own profile trust edge before serving; old
+authority snapshots are invalid, with no static-key or no-CRL production
+fallback. Backend `/readyz` checks live signer, a fresh peer-CRL pull and its
+CDP or Desktop broker dependency. The connection registry includes hijacked
+WebSockets so revocation or source loss closes the downstream and its upstream
+transport. The historical static-file component helper remains separate from
+this production path and does not establish production readiness.
+Generate each role's minimal canonical binding from the pinned operator inputs:
+
+```bash
+go run ./cmd/derive-phase6-peer-crl-role \
+  -profile /absolute/profile.json -profile-digest 'sha256:<64-lowercase-hex>' \
+  -sources /absolute/sources.json -sources-digest 'sha256:<64-lowercase-hex>' \
+  -principal-digest 'sha256:<64-lowercase-hex>' \
+  -output /absolute/private/role.json
+```
+
+The command creates mode-0600 output only if absent, prints only the
+role/mapping digests for configuration, and never copies Vault locators into
+the role file. The operator must provision that file for the intended role
+UID and mount it read-only; the generator does not change ownership or grant
+role access itself. The deployment gate must observe the final owner/mode.
 Give each agent and role
 different UIDs/GIDs. The one shared signer directory is owned by the agent
 UID and role GID, mode 0710; the socket is owned by the agent UID, mode 0666.

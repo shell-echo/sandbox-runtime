@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"testing"
@@ -132,4 +133,64 @@ func mustPeerRoleJSON(t *testing.T, value PeerCRLRoleDocument) []byte {
 		t.Fatal(err)
 	}
 	return document
+}
+
+func TestDerivePeerCRLRoleCommandWritesPrivateCanonicalArtifact(t *testing.T) {
+	profile := validProfile()
+	sources := completePeerCRLSources(t, profile)
+	var principal string
+	for _, binding := range profile.TLSAgentBindings {
+		if _, err := peerCRLRoleRequiredEdges(profile, binding.SubjectPrincipalDigest); err == nil {
+			principal = binding.SubjectPrincipalDigest
+			break
+		}
+	}
+	if principal == "" {
+		t.Fatal("fixture lacks a role with peer CRL edges")
+	}
+	directory := t.TempDir()
+	profilePath, sourcesPath, outputPath := filepath.Join(directory, "profile.json"),
+		filepath.Join(directory, "sources.json"), filepath.Join(directory, "role.json")
+	for path, value := range map[string]any{profilePath: profile, sourcesPath: sources} {
+		document, err := json.Marshal(value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, document, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	arguments := []string{"run", "../../cmd/derive-phase6-peer-crl-role", "-profile", profilePath,
+		"-profile-digest", profile.ProfileDigest, "-sources", sourcesPath,
+		"-sources-digest", sources.Digest(), "-principal-digest", principal, "-output", outputPath}
+	output, err := exec.Command("go", arguments...).CombinedOutput()
+	if err != nil {
+		t.Fatalf("derive command failed: %v: %s", err, output)
+	}
+	info, err := os.Lstat(outputPath)
+	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0o600 {
+		t.Fatalf("derived role file privacy: %v %v", info, err)
+	}
+	role, err := VerifyPeerCRLRoleFile(outputPath, profile, sources.Digest(),
+		deriveTestRoleDigest(t, profile, sources, principal))
+	if err != nil || !bytes.Contains(output, []byte(role.Digest())) {
+		t.Fatalf("derived canonical role binding invalid: %v: %s", err, output)
+	}
+	rawRole, err := os.ReadFile(outputPath)
+	if err != nil || bytes.Contains(rawRole, []byte(sources.Sources[0].Mount)) ||
+		bytes.Contains(rawRole, []byte(sources.Sources[0].IssuerID)) {
+		t.Fatal("derived role file contains a Vault locator")
+	}
+	if second, err := exec.Command("go", arguments...).CombinedOutput(); err == nil {
+		t.Fatalf("derive command overwrote existing role file: %s", second)
+	}
+}
+
+func deriveTestRoleDigest(t *testing.T, profile Profile, sources PeerCRLSources, principal string) string {
+	t.Helper()
+	role, err := DerivePeerCRLRoleDocument(profile, sources, principal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return role.Digest()
 }

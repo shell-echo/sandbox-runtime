@@ -50,6 +50,11 @@ This is component evidence only: full-role rollout, root-only/multi-CA anchor
 negatives, real restart/source-loss gate, all-principal network/privilege
 observations and the immutable Slice 6 manifest are still open. The counter
 remains **5/15**.
+An operator-only derivation command now writes the minimal role document as a
+new mode-0600 canonical file from independently pinned profile/source inputs;
+it refuses to overwrite an existing file. Its subprocess test validates the
+generated artifact and absence of Vault locators. This does not create a
+production deployment or an all-role configuration gate.
 
 ## Corrected premises
 
@@ -310,6 +315,28 @@ server session tickets, and refuses a missing or failed signer. Focused
 race-enabled handshakes prove generation swap, signer loss, issuer/identity/
 usage drift, extra peer SAN/EKU, expired leaf, and public versus mutual TLS
 semantics. These are component tests, not the production distinct-UID graph.
+The same unpublished backend authority v2 is now tightened with pinned
+peer-CRL role/source digests in both real command entrypoints. Each command
+verifies the derivative role document before constructing a live signer and
+inbound peer-CRL guard; remote-signer backend constructors reject a missing
+guard, signer probe or bounded connection lifetime. The shared connection
+registry retains hijacked WebSockets, polls revocation, drains them on source
+loss or revocation, and forgets the exact socket on close. Browser and Desktop
+component race tests observe that an accepted mTLS WebSocket closes and the
+CDP upstream or Unix broker session closes too, with zero tracked sockets.
+Each new `/executor` upgrade also performs a bounded fresh signer/CRL check,
+including when HTTP reuses a prior TLS connection; a cached handshake alone
+does not admit a new WebSocket after source loss.
+This checkpoint also reruns the real pinned Chromium `Browser.getVersion`
+integration and the native arm64 Desktop image/X11/RTP broker integration;
+both pass and their run-owned containers are removed. These exercise the
+backend compatibility path and the Desktop image respectively, not the
+unreleased production command/agent/CRL graph.
+The static constructor still imports the Provider mTLS file loader for
+historical component compatibility; the production remote branch never calls
+that loader. These tests do not substitute for the distinct-UID commands,
+real Vault CRL and full principal/network inventory gate; the counter remains
+**5/15**.
 Product now also has an explicit v3 public-listener command path: its material
 registry contains only runtime DSN and identity key ring, while the validated
 profile, exact public listener, pinned issuer anchor and separate agent
