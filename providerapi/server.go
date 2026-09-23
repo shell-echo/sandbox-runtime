@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/shell-echo/sandbox-runtime/internal/connectiondrain"
 	"github.com/shell-echo/sandbox-runtime/option"
 	"github.com/shell-echo/sandbox-runtime/provider"
 	"github.com/shell-echo/sandbox-runtime/provider/admission"
@@ -36,6 +37,7 @@ type TransportOptions struct {
 	TLSConfig                  *tls.Config
 	AllowedClientURIIdentities []string
 	Protected                  *ProtectedTransportOptions
+	ConnectionMaxAge           time.Duration
 }
 
 // Server is the dedicated mTLS-only Provider API server. Construction validates
@@ -45,6 +47,7 @@ type Server struct {
 	http              *http.Server
 	identityAdmission *clientIdentityAdmission
 	listen            func(context.Context, string, string) (net.Listener, error)
+	connections       *connectiondrain.Registry
 }
 
 // NewServer constructs the complete Provider transport boundary. It is the
@@ -75,6 +78,9 @@ func NewServer(ctx context.Context, options TransportOptions, source provider.Ca
 		if options.ServerCertificateFile != "" || options.ServerPrivateKeyFile != "" || options.ClientCABundleFile != "" {
 			return nil, errors.New("Provider server TLS configuration mixes static material")
 		}
+		if options.TLSConfig.GetCertificate != nil && options.ConnectionMaxAge == 0 {
+			return nil, errors.New("Provider live Contract TLS requires a bounded connection lifetime")
+		}
 		tlsConfig, err = cloneStrictProviderMTLS(options.TLSConfig)
 		if err != nil {
 			return nil, err
@@ -103,10 +109,18 @@ func NewServer(ctx context.Context, options TransportOptions, source provider.Ca
 		rootHandler = &providerHandler{capabilities: handler, protected: protected}
 		maxHeaderBytes = providerProtectedMaxHeaderBytes
 	}
+	var connections *connectiondrain.Registry
+	if options.ConnectionMaxAge != 0 {
+		connections, err = connectiondrain.New(options.ConnectionMaxAge)
+		if err != nil {
+			return nil, errors.New("Provider Contract connection lifetime is invalid")
+		}
+	}
 
 	listenConfig := &net.ListenConfig{}
 	return &Server{
 		identityAdmission: identityAdmission,
+		connections:       connections,
 		http: &http.Server{
 			Addr:              options.Address.Addr(),
 			Handler:           rootHandler,
@@ -144,6 +158,15 @@ func (s *Server) Startup(ctx context.Context) error {
 		}
 		return fmt.Errorf("bind Provider API server: %w", err)
 	}
+	if s.connections != nil {
+		tracked, trackErr := s.connections.Wrap(listener)
+		if trackErr != nil {
+			_ = listener.Close()
+			return errors.New("track Provider Contract connections")
+		}
+		listener = tracked
+		defer s.connections.Drain()
+	}
 	stopClosingListener := context.AfterFunc(ctx, func() { _ = listener.Close() })
 	defer stopClosingListener()
 
@@ -153,9 +176,12 @@ func (s *Server) Startup(ctx context.Context) error {
 	return nil
 }
 
-// Shutdown gracefully stops the Provider listener within the caller's
-// deadline.
+// Shutdown stops the Provider listener and closes tracked live connections,
+// including sockets no longer owned by net/http after a hijack.
 func (s *Server) Shutdown(ctx context.Context) error {
+	if s.connections != nil {
+		s.connections.Drain()
+	}
 	return normalizeProviderShutdownError(s.http.Shutdown(ctx))
 }
 

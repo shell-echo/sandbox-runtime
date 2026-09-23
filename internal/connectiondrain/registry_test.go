@@ -1,0 +1,136 @@
+package connectiondrain
+
+import (
+	"bufio"
+	"context"
+	"errors"
+	"io"
+	"net"
+	"net/http"
+	"strings"
+	"testing"
+	"time"
+)
+
+func TestDrainClosesHijackedHTTPConnection(t *testing.T) {
+	raw, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer raw.Close()
+	registry, err := New(time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	listener, err := registry.Wrap(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hijacked := make(chan struct{}, 1)
+	server := &http.Server{ReadHeaderTimeout: time.Second, Handler: http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		connection, buffered, hijackErr := writer.(http.Hijacker).Hijack()
+		if hijackErr != nil {
+			return
+		}
+		_, _ = buffered.WriteString("HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: test\r\n\r\n")
+		_ = buffered.Flush()
+		hijacked <- struct{}{}
+		// The upgraded protocol owns this connection. net/http.Shutdown does
+		// not close it; the registry must retain and drain it explicitly.
+		_ = connection
+	})}
+	serveDone := make(chan error, 1)
+	go func() { serveDone <- server.Serve(listener) }()
+	defer registry.Drain()
+	client, err := net.DialTimeout("tcp", raw.Addr().String(), time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	_ = client.SetDeadline(time.Now().Add(5 * time.Second))
+	if _, err := io.WriteString(client, "GET /upgrade HTTP/1.1\r\nHost: test\r\nConnection: Upgrade\r\nUpgrade: test\r\n\r\n"); err != nil {
+		t.Fatal(err)
+	}
+	reader := bufio.NewReader(client)
+	line, err := reader.ReadString('\n')
+	if err != nil || !strings.Contains(line, "101 Switching Protocols") {
+		t.Fatalf("hijack response = %q, %v", line, err)
+	}
+	select {
+	case <-hijacked:
+	case <-time.After(time.Second):
+		t.Fatal("HTTP connection was not hijacked")
+	}
+	shutdownContext, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := server.Shutdown(shutdownContext); err != nil {
+		t.Fatal(err)
+	}
+	if registry.Active() != 1 {
+		t.Fatal("net/http unexpectedly owned the hijacked connection")
+	}
+	if count := registry.Drain(); count != 1 || registry.Active() != 0 || registry.Drain() != 0 {
+		t.Fatalf("drain count=%d active=%d", count, registry.Active())
+	}
+	for {
+		if _, err := reader.ReadByte(); err != nil {
+			if !errors.Is(err, io.EOF) {
+				t.Fatalf("hijacked connection close = %v", err)
+			}
+			break
+		}
+	}
+	if err := <-serveDone; !errors.Is(err, http.ErrServerClosed) {
+		t.Fatalf("HTTP server exit = %v", err)
+	}
+}
+
+func TestConnectionLifetimeAndDrainRejectFutureAccept(t *testing.T) {
+	if _, err := New(0); err == nil {
+		t.Fatal("unbounded connection lifetime accepted")
+	}
+	raw, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer raw.Close()
+	registry, err := New(time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	listener, err := registry.Wrap(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	accepted := make(chan net.Conn, 1)
+	go func() {
+		connection, acceptErr := listener.Accept()
+		if acceptErr == nil {
+			accepted <- connection
+		}
+	}()
+	client, err := net.DialTimeout("tcp", raw.Addr().String(), time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	connection := <-accepted
+	defer connection.Close()
+	_ = client.SetReadDeadline(time.Now().Add(3 * time.Second))
+	buffer := make([]byte, 1)
+	if _, err := client.Read(buffer); !errors.Is(err, io.EOF) {
+		t.Fatalf("expired socket read = %v", err)
+	}
+	if registry.Active() != 0 {
+		t.Fatalf("expired connection remained registered: %d", registry.Active())
+	}
+	registry.Drain()
+	second, err := net.DialTimeout("tcp", raw.Addr().String(), time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer second.Close()
+	if _, err := listener.Accept(); !errors.Is(err, net.ErrClosed) {
+		t.Fatalf("accept after drain = %v", err)
+	}
+}

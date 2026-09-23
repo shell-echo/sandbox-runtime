@@ -346,6 +346,16 @@ verifiers pass for this code checkpoint. These are not the actual three-role
 command, cert-rotation, revocation-drain or full-inventory gates. No Slice 6
 manifest or count change follows.
 
+The next Provider transport checkpoint tracks accepted Contract and private
+Terminal sockets beneath `net/http`, including hijacked Terminal connections.
+V3 binds their maximum lifetime to each exact profile trust edge; shutdown
+drains accepted sockets rather than relying on `http.Server.Shutdown`, which
+does not own hijacked sessions. A real mTLS private-listener test upgrades a
+connection and verifies the socket is closed and the registry reaches zero;
+the Contract test verifies an idle keep-alive socket is also drained. This
+does not yet wire authoritative revocation notifications or prove the
+profile's revocation drain bound during a live process gate.
+
 ## Exact final inventory
 
 The gate covers six runtime roles, two executor backends, their eight distinct

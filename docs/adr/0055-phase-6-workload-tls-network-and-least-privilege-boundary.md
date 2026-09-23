@@ -213,6 +213,13 @@ and media connections must separately drain within the profile's revocation
 bound. The live TLS 1.3 builder and Browser/Desktop backend hookup are
 component checkpoints, not that six-role command gate.
 
+Provider Contract and private Terminal listeners track accepted sockets below
+`net/http`, enforce the exact trust edge's maximum connection lifetime, and
+close both keep-alive and hijacked sockets on shutdown. That transport
+registry is a prerequisite, not a revocation feed: the authoritative
+controller/agent revocation signal, live drain timing and corresponding
+cross-process failure gate remain required before a Slice 6 closure claim.
+
 The canonical profile declares only these runtime dialing authorities:
 Product→Provider locked Contract listener; Gateway→Provider separate private
 handoff/media listener; Provider→Browser and Provider→Desktop private executor

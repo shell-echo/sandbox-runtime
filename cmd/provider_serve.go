@@ -291,11 +291,17 @@ func newProductionProviderPrivateTerminalServer(ctx context.Context, cfg *config
 	private := cfg.Transport.Private
 	var tlsConfig *tls.Config
 	var tlsProbe func(context.Context) error
+	var connectionMaxAge time.Duration
 	if cfg.SchemaVersion == config.ProviderProductionSchemaV3 {
 		profile, profileErr := loadProviderSecurityProfile(cfg)
 		if profileErr != nil {
 			return nil, nil, profileErr
 		}
+		edge, _, _, _, _, boundaryErr := profile.GatewayProviderBoundary("wss://" + private.Address.Addr() + "/private/terminal")
+		if boundaryErr != nil {
+			return nil, nil, errors.New("Provider private connection boundary does not match profile")
+		}
+		connectionMaxAge = time.Duration(edge.MaxConnectionSeconds) * time.Second
 		var peerURI string
 		tlsConfig, tlsProbe, peerURI, err = phase6tls.ProviderServer(profile, phase6tls.ProviderServerAuthority{
 			EdgeID: phase6security.GatewayProviderPrivateEdgeID, ListenAddress: private.Address.Addr(),
@@ -323,7 +329,7 @@ func newProductionProviderPrivateTerminalServer(ctx context.Context, cfg *config
 		AllowedClientURIIdentities: append([]string(nil), private.AllowedClientURIIdentities...), Handler: privateHandler,
 		ReadHeaderTimeout: time.Duration(private.ReadHeaderTimeoutMillis) * time.Millisecond, ReadTimeout: time.Duration(private.ReadTimeoutMillis) * time.Millisecond,
 		WriteTimeout: time.Duration(private.WriteTimeoutMillis) * time.Millisecond, IdleTimeout: time.Duration(private.IdleTimeoutMillis) * time.Millisecond,
-		MaxHeaderBytes: private.MaxHeaderBytes, MaxBodyBytes: private.MaxBodyBytes,
+		MaxHeaderBytes: private.MaxHeaderBytes, MaxBodyBytes: private.MaxBodyBytes, ConnectionMaxAge: connectionMaxAge,
 	})
 	return result, tlsProbe, err
 }
@@ -461,12 +467,18 @@ func newProductionProviderTransport(ctx context.Context, cfg *config.ProviderPro
 	transport := cfg.Transport
 	var tlsConfig *tls.Config
 	var tlsProbe func(context.Context) error
+	var connectionMaxAge time.Duration
 	var err error
 	if cfg.SchemaVersion == config.ProviderProductionSchemaV3 {
 		profile, profileErr := loadProviderSecurityProfile(cfg)
 		if profileErr != nil {
 			return nil, nil, profileErr
 		}
+		edge, _, _, _, _, boundaryErr := profile.ProductProviderBoundary()
+		if boundaryErr != nil || edge.TargetAddress != transport.Address.Addr() {
+			return nil, nil, errors.New("Provider Contract connection boundary does not match profile")
+		}
+		connectionMaxAge = time.Duration(edge.MaxConnectionSeconds) * time.Second
 		var peerURI string
 		tlsConfig, tlsProbe, peerURI, err = phase6tls.ProviderServer(profile, phase6tls.ProviderServerAuthority{
 			EdgeID: phase6security.ProductProviderContractEdgeID, ListenAddress: transport.Address.Addr(),
@@ -485,7 +497,9 @@ func newProductionProviderTransport(ctx context.Context, cfg *config.ProviderPro
 	if err != nil {
 		return nil, nil, errors.New("load Provider Contract TLS material")
 	}
-	result, err := providerapi.NewServer(ctx, providerapi.TransportOptions{Address: transport.Address, TLSConfig: tlsConfig, AllowedClientURIIdentities: append([]string(nil), transport.AllowedClientURIIdentities...), Protected: protected}, source)
+	result, err := providerapi.NewServer(ctx, providerapi.TransportOptions{Address: transport.Address, TLSConfig: tlsConfig,
+		AllowedClientURIIdentities: append([]string(nil), transport.AllowedClientURIIdentities...), Protected: protected,
+		ConnectionMaxAge: connectionMaxAge}, source)
 	return result, tlsProbe, err
 }
 

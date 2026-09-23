@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/shell-echo/sandbox-runtime/option"
 )
@@ -21,20 +22,33 @@ func TestProviderTransportConstructorsAcceptOnlyExclusiveLiveMTLS(t *testing.T) 
 	construct := func(config *tls.Config) error {
 		_, err := NewServer(context.Background(), TransportOptions{
 			Address: option.HTTP{Host: "127.0.0.1", Port: 18444}, TLSConfig: config,
-			AllowedClientURIIdentities: []string{testAllowedIdentity},
+			AllowedClientURIIdentities: []string{testAllowedIdentity}, ConnectionMaxAge: time.Minute,
 		}, validCapabilitySource(t))
 		if err != nil {
 			return err
 		}
 		_, err = NewPrivateServer(context.Background(), PrivateTransportOptions{
 			Address: option.HTTP{Host: "127.0.0.1", Port: 18448}, TLSConfig: config,
-			AllowedClientURIIdentities: []string{testAllowedIdentity},
-			Handler:                    http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}),
+			AllowedClientURIIdentities: []string{testAllowedIdentity}, ConnectionMaxAge: time.Minute,
+			Handler: http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}),
 		})
 		return err
 	}
 	if err := construct(live); err != nil {
 		t.Fatalf("exclusive live Provider TLS rejected: %v", err)
+	}
+	if _, err := NewServer(context.Background(), TransportOptions{
+		Address: option.HTTP{Host: "127.0.0.1", Port: 18444}, TLSConfig: live,
+		AllowedClientURIIdentities: []string{testAllowedIdentity},
+	}, validCapabilitySource(t)); err == nil {
+		t.Fatal("live Contract TLS accepted an unbounded connection lifetime")
+	}
+	if _, err := NewPrivateServer(context.Background(), PrivateTransportOptions{
+		Address: option.HTTP{Host: "127.0.0.1", Port: 18448}, TLSConfig: live,
+		AllowedClientURIIdentities: []string{testAllowedIdentity},
+		Handler:                    http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}),
+	}); err == nil {
+		t.Fatal("live private TLS accepted an unbounded connection lifetime")
 	}
 	for name, mutate := range map[string]func(*tls.Config){
 		"static fallback":             func(value *tls.Config) { value.Certificates = []tls.Certificate{{}} },
@@ -69,15 +83,15 @@ func TestLiveProviderListenersEnforceTheirOwnClientURIAllowlist(t *testing.T) {
 	}
 	public, err := NewServer(context.Background(), TransportOptions{
 		Address: option.HTTP{Host: "127.0.0.1", Port: 18444}, TLSConfig: live,
-		AllowedClientURIIdentities: []string{testAllowedIdentity},
+		AllowedClientURIIdentities: []string{testAllowedIdentity}, ConnectionMaxAge: time.Minute,
 	}, validCapabilitySource(t))
 	if err != nil {
 		t.Fatal(err)
 	}
 	private, err := NewPrivateServer(context.Background(), PrivateTransportOptions{
 		Address: option.HTTP{Host: "127.0.0.1", Port: 18448}, TLSConfig: live,
-		AllowedClientURIIdentities: []string{testAllowedIdentity},
-		Handler:                    http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}),
+		AllowedClientURIIdentities: []string{testAllowedIdentity}, ConnectionMaxAge: time.Minute,
+		Handler: http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -98,7 +112,8 @@ func TestLiveProviderListenersEnforceTheirOwnClientURIAllowlist(t *testing.T) {
 	}
 	if _, err := NewPrivateServer(context.Background(), PrivateTransportOptions{
 		Address: option.HTTP{Host: "127.0.0.1", Port: 18448}, TLSConfig: live,
-		Handler: http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}),
+		ConnectionMaxAge: time.Minute,
+		Handler:          http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}),
 	}); err == nil {
 		t.Fatal("private live TLS accepted an absent peer allowlist")
 	}

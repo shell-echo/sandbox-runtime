@@ -81,6 +81,55 @@ func TestServerShutdownTreatsClosedListenerAsComplete(t *testing.T) {
 	}
 }
 
+func TestProviderContractShutdownDrainsKeepAliveSocket(t *testing.T) {
+	material := newTestMTLSMaterial(t, []string{testAllowedIdentity})
+	listener, port := reserveProviderListener(t)
+	options := validTransportOptions(material, port)
+	options.ConnectionMaxAge = time.Minute
+	srv, err := NewServer(context.Background(), options, validCapabilitySource(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv.listen = func(context.Context, string, string) (net.Listener, error) { return listener, nil }
+	startupContext, cancelStartup := context.WithCancel(context.Background())
+	defer cancelStartup()
+	startupResult := make(chan error, 1)
+	go func() { startupResult <- srv.Startup(startupContext) }()
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		_ = srv.Shutdown(ctx)
+	}()
+	transport := &http.Transport{TLSClientConfig: clientTLSConfig(material, &material.client)}
+	defer transport.CloseIdleConnections()
+	client := &http.Client{Transport: transport, Timeout: 5 * time.Second}
+	response, err := client.Get(fmt.Sprintf("https://127.0.0.1:%d%s", port, capabilitiesPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = io.Copy(io.Discard, response.Body)
+	_ = response.Body.Close()
+	if response.StatusCode != http.StatusOK || srv.connections.Active() != 1 {
+		t.Fatalf("Contract keep-alive status=%d active=%d", response.StatusCode, srv.connections.Active())
+	}
+	shutdownContext, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := srv.Shutdown(shutdownContext); err != nil {
+		t.Fatal(err)
+	}
+	if srv.connections.Active() != 0 {
+		t.Fatalf("Contract connection remained after shutdown: %d", srv.connections.Active())
+	}
+	select {
+	case err := <-startupResult:
+		if err != nil {
+			t.Fatalf("Contract startup = %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Contract server did not exit")
+	}
+}
+
 func TestServerServesCapabilitiesOnlyAfterMTLSAdmission(t *testing.T) {
 	material := newTestMTLSMaterial(t, []string{testAllowedIdentity})
 	listener, port := reserveProviderListener(t)

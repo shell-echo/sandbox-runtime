@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/shell-echo/sandbox-runtime/internal/connectiondrain"
 	"github.com/shell-echo/sandbox-runtime/option"
 )
 
@@ -38,13 +39,15 @@ type PrivateTransportOptions struct {
 	IdleTimeout                time.Duration
 	MaxHeaderBytes             int
 	MaxBodyBytes               int64
+	ConnectionMaxAge           time.Duration
 }
 
 // PrivateServer is an independent lifecycle and routing boundary. It cannot
 // be mounted on Server's public Contract listener by construction.
 type PrivateServer struct {
-	http   *http.Server
-	listen func(context.Context, string, string) (net.Listener, error)
+	http        *http.Server
+	listen      func(context.Context, string, string) (net.Listener, error)
+	connections *connectiondrain.Registry
 }
 
 func NewPrivateServer(ctx context.Context, options PrivateTransportOptions) (*PrivateServer, error) {
@@ -65,6 +68,9 @@ func NewPrivateServer(ctx context.Context, options PrivateTransportOptions) (*Pr
 	if options.TLSConfig != nil {
 		if options.ServerCertificateFile != "" || options.ServerPrivateKeyFile != "" || options.ClientCABundleFile != "" {
 			return nil, errors.New("Provider private server TLS configuration mixes static material")
+		}
+		if options.TLSConfig.GetCertificate != nil && options.ConnectionMaxAge == 0 {
+			return nil, errors.New("Provider live private TLS requires a bounded connection lifetime")
 		}
 		tlsConfig, err = cloneStrictProviderMTLS(options.TLSConfig)
 	} else {
@@ -105,11 +111,18 @@ func NewPrivateServer(ctx context.Context, options PrivateTransportOptions) (*Pr
 	if readHeader < 100*time.Millisecond || readHeader > 60*time.Second || read < 100*time.Millisecond || read > 5*time.Minute || write < 100*time.Millisecond || write > 5*time.Minute || idle < 100*time.Millisecond || idle > 10*time.Minute || maxHeader < 1024 || maxHeader > 1<<20 || maxBody < 1024 || maxBody > 16<<20 {
 		return nil, errors.New("Provider private server limits are invalid")
 	}
+	var connections *connectiondrain.Registry
+	if options.ConnectionMaxAge != 0 {
+		connections, err = connectiondrain.New(options.ConnectionMaxAge)
+		if err != nil {
+			return nil, errors.New("Provider private connection lifetime is invalid")
+		}
+	}
 	handler := boundedPrivateHandler(options.Handler, maxBody)
 	return &PrivateServer{
 		http: &http.Server{Addr: options.Address.Addr(), Handler: handler, TLSConfig: tlsConfig,
 			ReadHeaderTimeout: readHeader, ReadTimeout: read, WriteTimeout: write, IdleTimeout: idle, MaxHeaderBytes: maxHeader},
-		listen: (&net.ListenConfig{}).Listen,
+		listen: (&net.ListenConfig{}).Listen, connections: connections,
 	}, nil
 }
 
@@ -139,6 +152,15 @@ func (s *PrivateServer) Startup(ctx context.Context) error {
 		}
 		return fmt.Errorf("bind Provider private server: %w", err)
 	}
+	if s.connections != nil {
+		tracked, trackErr := s.connections.Wrap(listener)
+		if trackErr != nil {
+			_ = listener.Close()
+			return errors.New("track Provider private connections")
+		}
+		listener = tracked
+		defer s.connections.Drain()
+	}
 	stop := context.AfterFunc(ctx, func() { _ = listener.Close() })
 	defer stop()
 	if err := s.http.ServeTLS(listener, "", ""); err != nil && !errors.Is(err, http.ErrServerClosed) && !(ctx.Err() != nil && errors.Is(err, net.ErrClosed)) {
@@ -150,6 +172,9 @@ func (s *PrivateServer) Startup(ctx context.Context) error {
 func (s *PrivateServer) Shutdown(ctx context.Context) error {
 	if s == nil || s.http == nil {
 		return nil
+	}
+	if s.connections != nil {
+		s.connections.Drain()
 	}
 	return normalizeProviderShutdownError(s.http.Shutdown(ctx))
 }
