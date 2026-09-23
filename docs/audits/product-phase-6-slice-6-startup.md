@@ -414,6 +414,11 @@ capacity, wrong-edge, v1-only fallback, cancellation and upstream-cancel
 tests pass. This provider is still a test fixture, not the production
 controller-backed authorization path; the role commands do not require v2
 yet, and no live mTLS admission or existing-connection drain is proven.
+The operator binding now exposes an agent-facing authorization lookup that
+returns only a source ID for the exact role/edge/anchor/issuer digest; the
+full Vault mount and immutable issuer ID stay in the controller-side source
+record. The production controller must independently reauthorize the same
+tuple before reading Vault; this is not yet wired.
 
 ## Exact final inventory
 

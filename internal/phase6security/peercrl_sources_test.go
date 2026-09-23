@@ -66,6 +66,12 @@ func TestPeerCRLSourcesBindExactProfileEdgeAndIssuer(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, binding := range decoded.Edges {
+		issuerHash := sha256.Sum256(issuerDER)
+		sourceID, err := decoded.AuthorizedSourceID(profile, binding.EdgeID, binding.LocalPrincipalDigest,
+			binding.Direction, binding.PeerAnchorID, "sha256:"+hex.EncodeToString(issuerHash[:]))
+		if err != nil || sourceID != "provider-peer-ca" {
+			t.Fatalf("agent did not receive exact authorized source ID: %v", err)
+		}
 		source, err := decoded.Resolve(profile, binding.EdgeID, binding.LocalPrincipalDigest,
 			binding.Direction, binding.PeerAnchorID, issuerDER)
 		if err != nil || source.ID != "provider-peer-ca" {
@@ -74,6 +80,10 @@ func TestPeerCRLSourcesBindExactProfileEdgeAndIssuer(t *testing.T) {
 		if _, err := decoded.Resolve(profile, binding.EdgeID, binding.LocalPrincipalDigest,
 			binding.Direction, binding.PeerAnchorID, []byte("other issuer")); err == nil {
 			t.Fatal("wrong issuer DER selected source")
+		}
+		if _, err := decoded.AuthorizedSourceID(profile, binding.EdgeID, binding.LocalPrincipalDigest,
+			binding.Direction, binding.PeerAnchorID, testDigest("other issuer")); err == nil {
+			t.Fatal("wrong issuer digest selected source ID")
 		}
 	}
 	first := decoded.Edges[0]

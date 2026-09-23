@@ -157,11 +157,31 @@ func localAgentOwnsEdge(profile Profile, localName, principalDigest string) bool
 // issuer DER from the TLS-verified peer chain. SourceID is never caller input.
 func (p PeerCRLSources) Resolve(profile Profile, edgeID, localPrincipalDigest, direction, peerAnchorID string,
 	issuerDER []byte) (PeerCRLSource, error) {
-	if p.Validate(profile) != nil || len(issuerDER) == 0 || len(issuerDER) > 64<<10 {
+	if len(issuerDER) == 0 || len(issuerDER) > 64<<10 {
 		return PeerCRLSource{}, ErrInvalidProfile
 	}
 	issuerHash := sha256.Sum256(issuerDER)
 	issuerDigest := "sha256:" + hex.EncodeToString(issuerHash[:])
+	sourceID, err := p.AuthorizedSourceID(profile, edgeID, localPrincipalDigest, direction, peerAnchorID, issuerDigest)
+	if err != nil {
+		return PeerCRLSource{}, err
+	}
+	for _, source := range p.Sources {
+		if source.ID == sourceID {
+			return source, nil
+		}
+	}
+	return PeerCRLSource{}, ErrInvalidProfile
+}
+
+// AuthorizedSourceID is the only lookup the role-owned TLS agent needs.
+// It exposes neither Vault mount nor issuer reference; the certificate
+// controller independently resolves and reauthorizes that fixed source.
+func (p PeerCRLSources) AuthorizedSourceID(profile Profile, edgeID, localPrincipalDigest, direction, peerAnchorID,
+	issuerDigest string) (string, error) {
+	if p.Validate(profile) != nil || !digestPattern.MatchString(issuerDigest) {
+		return "", ErrInvalidProfile
+	}
 	for _, binding := range p.Edges {
 		if binding.EdgeID != edgeID || binding.LocalPrincipalDigest != localPrincipalDigest ||
 			binding.Direction != direction || binding.PeerAnchorID != peerAnchorID {
@@ -169,9 +189,9 @@ func (p PeerCRLSources) Resolve(profile Profile, edgeID, localPrincipalDigest, d
 		}
 		for _, source := range p.Sources {
 			if source.ID == binding.SourceID && source.IssuerDigest == issuerDigest {
-				return source, nil
+				return source.ID, nil
 			}
 		}
 	}
-	return PeerCRLSource{}, ErrInvalidProfile
+	return "", ErrInvalidProfile
 }
