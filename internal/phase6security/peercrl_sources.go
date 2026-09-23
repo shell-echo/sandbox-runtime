@@ -8,6 +8,8 @@ import (
 	"errors"
 	"io"
 	"regexp"
+
+	"github.com/shell-echo/sandbox-runtime/internal/secretfile"
 )
 
 const PeerCRLSourcesProtocolID = "sandbox-runtime.phase6-peer-crl-sources.v1"
@@ -38,6 +40,18 @@ type PeerCRLEdgeBinding struct {
 	Direction            string `json:"direction"`
 	PeerAnchorID         string `json:"peer_anchor_id"`
 	SourceID             string `json:"source_id"`
+}
+
+// VerifyPeerCRLSourcesFile reads the fixed operator mapping as a private,
+// bounded regular file. Both controller and role-owned agent must load the
+// same canonical document pinned to the security profile.
+func VerifyPeerCRLSourcesFile(path string, profile Profile) (PeerCRLSources, error) {
+	document, err := secretfile.Read(path, 128<<10)
+	if err != nil {
+		return PeerCRLSources{}, ErrInvalidProfile
+	}
+	defer clear(document)
+	return DecodePeerCRLSources(document, profile)
 }
 
 func DecodePeerCRLSources(document []byte, profile Profile) (PeerCRLSources, error) {

@@ -59,6 +59,17 @@ issuer restart fail closed. Waiting only for certificate expiry is forbidden.
 The runtime peer-revocation feed is a pull through the existing Vault PKI →
 certificate-controller → role-owned TLS agent path, never a controller push,
 new revocation authority, runtime Vault token or arbitrary AIA/CDP lookup.
+The certificate-controller's frozen v1 issue/revoke protocol is not extended:
+a separate signed `workload-certificate.v2` request/response carries only the
+read-only peer-CRL pull. The controller authenticates the agent's Unix peer and
+signature, binds its policy subject to the exact profile edge/anchor/issuer
+and independently matches the selected source to the operator document before
+persisting a replay nonce and reading Vault. It signs the complete issuer DER
+and CRL response; the agent verifies that signature and the CRL under the
+returned issuer. The v2 agent path is enabled only by explicit, private,
+canonical source documents in both independent processes. Legacy process
+configuration remains a compatibility path, not a peer-revocation production
+fallback.
 The agent's current v1 Unix snapshot/sign protocol stays frozen. A distinct
 `workload-tls-agent.v2` must bind a read-only complete CRL request/response to
 the profile, exact trust edge, local principal, direction, peer-verification
@@ -87,6 +98,17 @@ the pinned DER and re-verifies every complete CRL's signature and scope;
 cache identity includes source, profile revision and issuer, while edge
 authorization remains separate. Issuer replacement requires a new explicit
 profile and controlled transition, not implicit rollover.
+The role's CRL number, `ThisUpdate`, same-number content digest and observed
+unexpired revoked peer leaves are monotonic only within a live role process.
+On role restart the state is unknown, never inherited as good: first admission
+requires a fresh authenticated read from the fixed live Vault source through
+the controller and agent. Agent or controller restart does not erase a still-
+running role's watermark. Vault is the sole persistent revocation truth;
+there is no role/agent/controller peer-revocation observation ledger. This
+single-cluster contract does not claim detection if the trusted Vault itself
+is restored to a historical snapshot or silently replaced by a stale replica.
+That stronger anti-rollback property would require a separate recovery design
+and gate, not a local mode-0600 file mistaken for independent authority.
 The source/edge mapping may be a separate closed canonical operator document
 only when it is pinned to the exact security-profile digest and Vault
 external identity. Its source set and per-edge authorization set remain

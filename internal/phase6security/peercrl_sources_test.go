@@ -5,6 +5,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"slices"
 	"testing"
 )
@@ -115,6 +117,38 @@ func TestPeerCRLSourcesBindExactProfileEdgeAndIssuer(t *testing.T) {
 				t.Fatal("noncanonical or open source document admitted")
 			}
 		})
+	}
+}
+
+func TestPeerCRLSourcesFileRequiresPrivateCanonicalDocument(t *testing.T) {
+	profile := validProfile()
+	sources, _ := testPeerCRLSources(t, profile)
+	document, err := json.Marshal(sources)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "peer-crl-sources.json")
+	if err := os.WriteFile(path, document, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := VerifyPeerCRLSourcesFile(path, profile); err != nil || got.SecurityProfileDigest != profile.ProfileDigest {
+		t.Fatalf("private source document: %v", err)
+	}
+	if err := os.Chmod(path, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := VerifyPeerCRLSourcesFile(path, profile); err == nil {
+		t.Fatal("world-readable operator source mapping accepted")
+	}
+	if err := os.Chmod(path, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(filepath.Dir(path), "source-link.json")
+	if err := os.Symlink(path, link); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := VerifyPeerCRLSourcesFile(link, profile); err == nil {
+		t.Fatal("symlinked operator source mapping accepted")
 	}
 }
 

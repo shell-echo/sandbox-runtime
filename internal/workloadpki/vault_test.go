@@ -1,6 +1,7 @@
 package workloadpki
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"crypto/x509"
@@ -13,6 +14,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
 )
 
 type staticVaultTokenSource struct {
@@ -257,6 +260,19 @@ func TestVaultPeerIssuerSourceIsFixedAndNeverFallsBackToDefault(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := client.ValidatePeerSources([]phase6security.PeerCRLSource{{ID: "peer-source", Mount: "pki",
+		IssuerID: issuerID, IssuerDigest: issuerDigest}}); err != nil {
+		t.Fatalf("fixed source mapping rejected: %v", err)
+	}
+	if err := client.ValidatePeerSources([]phase6security.PeerCRLSource{{ID: "peer-source", Mount: "other",
+		IssuerID: issuerID, IssuerDigest: issuerDigest}}); err == nil {
+		t.Fatal("controller/Vault mount drift accepted")
+	}
+	issuerDER, err := client.PeerIssuerCertificate(context.Background(), "peer-source")
+	if err != nil || !bytes.Equal(issuerDER, material.issuerDER) {
+		t.Fatalf("fixed issuer certificate read = %v", err)
+	}
+	clear(issuerDER)
 	snapshot, err := client.PeerRevocations(context.Background(), "peer-source", material.issuerDER)
 	if err != nil {
 		t.Fatalf("fixed issuer read failed: %v", err)

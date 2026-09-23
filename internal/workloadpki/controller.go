@@ -3,9 +3,12 @@ package workloadpki
 import (
 	"context"
 	"crypto/ed25519"
+	"encoding/json"
 	"errors"
 	"sync"
 	"time"
+
+	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
 )
 
 const (
@@ -24,6 +27,14 @@ type CertificateAuthority interface {
 	Revoke(context.Context, string) error
 }
 
+// PeerIssuerAuthority is an optional, read-only capability. It must never
+// accept a caller-supplied Vault path, issuer reference, or token.
+type PeerIssuerAuthority interface {
+	ValidatePeerSources([]phase6security.PeerCRLSource) error
+	PeerIssuerCertificate(context.Context, string) ([]byte, error)
+	PeerRevocations(context.Context, string, []byte) (RevocationSnapshot, error)
+}
+
 type ControllerConfig struct {
 	LedgerPath       string
 	Policies         []Policy
@@ -33,6 +44,8 @@ type ControllerConfig struct {
 	Now              func() time.Time
 	MaximumActive    int
 	MaximumLedgerAge time.Duration
+	PeerCRLProfile   *phase6security.Profile
+	PeerCRLSources   *phase6security.PeerCRLSources
 }
 
 type Controller struct {
@@ -46,6 +59,8 @@ type Controller struct {
 	maximumActive    int
 	maximumLedgerAge time.Duration
 	ledger           Ledger
+	peerCRLProfile   *phase6security.Profile
+	peerCRLSources   *phase6security.PeerCRLSources
 }
 
 func NewController(config ControllerConfig) (*Controller, error) {
@@ -54,9 +69,46 @@ func NewController(config ControllerConfig) (*Controller, error) {
 		config.MaximumActive < 1 || config.MaximumActive > maxActiveCertificates || config.MaximumLedgerAge < time.Hour || config.MaximumLedgerAge > 7*24*time.Hour {
 		return nil, ErrUnavailable
 	}
+	if (config.PeerCRLProfile == nil) != (config.PeerCRLSources == nil) {
+		return nil, ErrUnavailable
+	}
+	if config.PeerCRLProfile != nil {
+		if config.PeerCRLSources.Validate(*config.PeerCRLProfile) != nil {
+			return nil, ErrUnavailable
+		}
+		authority, ok := config.Authority.(PeerIssuerAuthority)
+		if !ok || authority.ValidatePeerSources(config.PeerCRLSources.Sources) != nil {
+			return nil, ErrUnavailable
+		}
+	}
 	controller := &Controller{ledgerPath: config.LedgerPath, policies: make(map[string]Policy, len(config.Policies)), authority: config.Authority,
 		controllerKeyID: config.ControllerKeyID, controllerKey: append(ed25519.PrivateKey(nil), config.ControllerKey...), now: config.Now,
 		maximumActive: config.MaximumActive, maximumLedgerAge: config.MaximumLedgerAge}
+	if config.PeerCRLProfile != nil {
+		profileDocument, err := json.Marshal(config.PeerCRLProfile)
+		if err != nil {
+			controller.Close()
+			return nil, ErrUnavailable
+		}
+		profile, err := phase6security.Decode(profileDocument)
+		clear(profileDocument)
+		if err != nil {
+			controller.Close()
+			return nil, ErrUnavailable
+		}
+		sourcesDocument, err := json.Marshal(config.PeerCRLSources)
+		if err != nil {
+			controller.Close()
+			return nil, ErrUnavailable
+		}
+		sources, err := phase6security.DecodePeerCRLSources(sourcesDocument, profile)
+		clear(sourcesDocument)
+		if err != nil {
+			controller.Close()
+			return nil, ErrUnavailable
+		}
+		controller.peerCRLProfile, controller.peerCRLSources = &profile, &sources
+	}
 	for _, policy := range config.Policies {
 		if policy.Validate() != nil {
 			controller.Close()

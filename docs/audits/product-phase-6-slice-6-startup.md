@@ -4,6 +4,24 @@ Date: 2026-09-23
 
 Status: implementation underway. Product Phase 6 remains **5/15**.
 
+Checkpoint 2026-09-23: a distinct signed controller peer-CRL v2 protocol now
+binds policy identity, security profile, edge, local principal, direction,
+anchor, full issuer DER digest and operator-selected source. The controller
+re-authorizes that tuple and persists a shared replay nonce before Vault
+access; the agent's v2 adapter resolves only its role's source ID and checks
+the signed complete CRL. Both commands now have explicit peer-CRL configuration
+versions and private canonical source-file loading; old configurations cannot
+silently enable this capability. Canonical-wire, mutation, Unix signed
+round-trip and fixed-source Vault component tests pass. This is not yet a
+live role handshake/drain or full-inventory gate, so the counter does not move.
+Sandbox's follow-up ruling fixes restart semantics: live roles must detect
+CRL rollback and revoked-leaf resurrection in memory; a restarted role starts
+unknown and must make a fresh online read from the fixed Vault source before
+admission. Agent/controller restarts may not reset a still-running role's
+watermark. A historical rollback of trusted Vault itself is explicitly outside
+this single-cluster Slice 6 claim. No local peer-CRL observation ledger or
+extra role-writable volume is authorized.
+
 ## Corrected premises
 
 The repository does not already enforce Slice 6 merely because TLS 1.3,

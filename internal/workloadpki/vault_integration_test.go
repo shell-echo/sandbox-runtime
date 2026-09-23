@@ -199,6 +199,11 @@ path "pki/revoke" { capabilities = ["update"] }`
 	if err != nil {
 		t.Fatal(err)
 	}
+	selectedIssuer, err := peerClient.PeerIssuerCertificate(ctx, "product-peer-source")
+	if err != nil || !bytes.Equal(selectedIssuer, issuerBlock.Bytes) {
+		t.Fatalf("real fixed issuer certificate read failed: %v", err)
+	}
+	clear(selectedIssuer)
 	selected, err := peerClient.PeerRevocations(ctx, "product-peer-source", issuerBlock.Bytes)
 	if err != nil {
 		t.Fatalf("real fixed issuer CRL read failed: %v", err)

@@ -1,9 +1,9 @@
 package workloadpki
 
 import (
-	"bufio"
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"io"
 	"net"
@@ -150,6 +150,19 @@ func (s *Server) handle(parent context.Context, connection *net.UnixConn) {
 		return
 	}
 	defer clear(document)
+	var selector struct {
+		Protocol string `json:"protocol"`
+		PolicyID string `json:"policy_id"`
+	}
+	// This permissive peek only selects a decoder. The selected version must
+	// subsequently pass its own closed canonical decoder and signature check.
+	if json.Unmarshal(document, &selector) != nil {
+		return
+	}
+	if selector.Protocol == PeerCRLProtocolID {
+		s.handlePeerCRL(parent, connection, document, selector.PolicyID, identity.uid, identity.gid)
+		return
+	}
 	var envelope Request
 	if decodeCanonical(document, maxRequestBytes, &envelope) != nil {
 		return
@@ -184,9 +197,8 @@ func (s *Server) handle(parent context.Context, connection *net.UnixConn) {
 }
 
 func readFrame(reader io.Reader, maximum int) ([]byte, error) {
-	buffered := bufio.NewReaderSize(reader, min(maximum+4, 64<<10))
 	var header [4]byte
-	if _, err := io.ReadFull(buffered, header[:]); err != nil {
+	if _, err := io.ReadFull(reader, header[:]); err != nil {
 		return nil, ErrUnavailable
 	}
 	length := int(binary.BigEndian.Uint32(header[:]))
@@ -194,7 +206,7 @@ func readFrame(reader io.Reader, maximum int) ([]byte, error) {
 		return nil, ErrUnavailable
 	}
 	document := make([]byte, length)
-	if _, err := io.ReadFull(buffered, document); err != nil {
+	if _, err := io.ReadFull(reader, document); err != nil {
 		clear(document)
 		return nil, ErrUnavailable
 	}

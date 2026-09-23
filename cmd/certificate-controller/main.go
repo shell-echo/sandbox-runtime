@@ -37,18 +37,20 @@ import (
 )
 
 const (
-	configProtocol      = "sandbox-runtime.certificate-controller-config.v3"
-	maxConfigBytes      = 2 << 20
-	credentialAgentFD   = 3
-	controllerSigningFD = 4
-	vaultTLSKeyFD       = 5
-	vaultTLSRequestFD   = 6
+	configProtocol        = "sandbox-runtime.certificate-controller-config.v3"
+	peerCRLConfigProtocol = "sandbox-runtime.certificate-controller-config.v4"
+	maxConfigBytes        = 2 << 20
+	credentialAgentFD     = 3
+	controllerSigningFD   = 4
+	vaultTLSKeyFD         = 5
+	vaultTLSRequestFD     = 6
 )
 
 type configDocument struct {
 	Protocol                  string              `json:"protocol"`
 	SecurityProfilePath       string              `json:"security_profile_path"`
 	SecurityProfileDigest     string              `json:"security_profile_digest"`
+	PeerCRLSourcesPath        string              `json:"peer_crl_sources_path"`
 	EnvironmentDigest         string              `json:"environment_digest"`
 	ProfileDigest             string              `json:"profile_digest"`
 	LedgerPath                string              `json:"ledger_path"`
@@ -143,7 +145,10 @@ func run() error { //nolint:gocyclo
 		return stageError("config-trailing")
 	}
 	canonical, err := json.Marshal(config)
-	if err != nil || !bytes.Equal(canonical, document) || config.Protocol != configProtocol || len(config.Listeners) < 1 || len(config.Listeners) > 128 ||
+	if err != nil || !bytes.Equal(canonical, document) ||
+		!((config.Protocol == configProtocol && config.PeerCRLSourcesPath == "") ||
+			(config.Protocol == peerCRLConfigProtocol && filepath.IsAbs(config.PeerCRLSourcesPath))) ||
+		len(config.Listeners) < 1 || len(config.Listeners) > 128 ||
 		len(config.Policies) < 1 || len(config.Policies) > 128 || len(config.VaultClientCertificatePEM) < 1 ||
 		config.VaultServerName == "" || config.OperationTimeoutSeconds < 1 || config.OperationTimeoutSeconds > 60 ||
 		config.MaximumLedgerAgeSeconds < 3600 || config.MaximumLedgerAgeSeconds > 7*24*3600 || config.ReapIntervalSeconds < 1 || config.ReapIntervalSeconds > 60 ||
@@ -163,6 +168,21 @@ func run() error { //nolint:gocyclo
 	if err != nil || profile.ProfileDigest != config.SecurityProfileDigest ||
 		profile.EnvironmentDigest != config.EnvironmentDigest || profile.PrincipalProfileDigest != config.ProfileDigest {
 		return stageError("security-profile")
+	}
+	var peerSources *phase6security.PeerCRLSources
+	var peerProfile *phase6security.Profile
+	var vaultPeerSources []workloadpki.VaultPeerIssuerSource
+	if config.Protocol == peerCRLConfigProtocol {
+		mapping, mappingErr := phase6security.VerifyPeerCRLSourcesFile(config.PeerCRLSourcesPath, profile)
+		if mappingErr != nil {
+			return stageError("peer-crl-sources")
+		}
+		peerSources, peerProfile = &mapping, &profile
+		vaultPeerSources = make([]workloadpki.VaultPeerIssuerSource, 0, len(mapping.Sources))
+		for _, source := range mapping.Sources {
+			vaultPeerSources = append(vaultPeerSources, workloadpki.VaultPeerIssuerSource{
+				SourceID: source.ID, Mount: source.Mount, IssuerID: source.IssuerID, IssuerDigest: source.IssuerDigest})
+		}
 	}
 	registry, err := profile.PrincipalRegistry()
 	if err != nil {
@@ -307,13 +327,15 @@ func run() error { //nolint:gocyclo
 	transport := &http.Transport{TLSClientConfig: tlsConfig}
 	httpClient := &http.Client{Transport: transport}
 	client, err := workloadpki.NewVaultClient(workloadpki.VaultConfig{Endpoint: config.VaultEndpoint, Mount: config.VaultMount,
-		AllowedPolicies: vaultPolicies, OperationTimeout: time.Duration(config.OperationTimeoutSeconds) * time.Second, Now: time.Now}, httpClient, tokenSource)
+		AllowedPolicies: vaultPolicies, OperationTimeout: time.Duration(config.OperationTimeoutSeconds) * time.Second, Now: time.Now,
+		RequireImmediateCompleteCRL: peerSources != nil, PeerIssuerSources: vaultPeerSources}, httpClient, tokenSource)
 	if err != nil {
 		return stageError("vault-pki")
 	}
 	controller, err := workloadpki.NewController(workloadpki.ControllerConfig{LedgerPath: config.LedgerPath, Policies: policies, Authority: client,
 		ControllerKeyID: config.ControllerKeyID, ControllerKey: ed25519.PrivateKey(controllerPrivate), Now: time.Now,
-		MaximumActive: config.MaximumActiveCertificates, MaximumLedgerAge: time.Duration(config.MaximumLedgerAgeSeconds) * time.Second})
+		MaximumActive: config.MaximumActiveCertificates, MaximumLedgerAge: time.Duration(config.MaximumLedgerAgeSeconds) * time.Second,
+		PeerCRLProfile: peerProfile, PeerCRLSources: peerSources})
 	if err != nil {
 		return stageError("controller")
 	}

@@ -27,17 +27,19 @@ import (
 )
 
 const (
-	configProtocol    = "sandbox-runtime.workload-tls-agent-config.v2"
-	maxConfigBytes    = 256 << 10
-	requestSigningFD  = 3
-	maximumPolicyTTL  = 3600
-	maximumSocketLoad = 256
+	configProtocol        = "sandbox-runtime.workload-tls-agent-config.v2"
+	peerCRLConfigProtocol = "sandbox-runtime.workload-tls-agent-config.v3"
+	maxConfigBytes        = 256 << 10
+	requestSigningFD      = 3
+	maximumPolicyTTL      = 3600
+	maximumSocketLoad     = 256
 )
 
 type configDocument struct {
 	Protocol                      string                      `json:"protocol"`
 	SecurityProfilePath           string                      `json:"security_profile_path"`
 	SecurityProfileDigest         string                      `json:"security_profile_digest"`
+	PeerCRLSourcesPath            string                      `json:"peer_crl_sources_path"`
 	AgentDeployment               string                      `json:"agent_deployment"`
 	SubjectDeployment             string                      `json:"subject_deployment"`
 	EnvironmentDigest             string                      `json:"environment_digest"`
@@ -100,7 +102,9 @@ func run() error { //nolint:gocyclo
 		return stageError("config-trailing")
 	}
 	canonical, err := json.Marshal(config)
-	if err != nil || !bytes.Equal(canonical, document) || config.Protocol != configProtocol ||
+	if err != nil || !bytes.Equal(canonical, document) ||
+		!((config.Protocol == configProtocol && config.PeerCRLSourcesPath == "") ||
+			(config.Protocol == peerCRLConfigProtocol && filepath.IsAbs(config.PeerCRLSourcesPath))) ||
 		config.MaxTTLSeconds < 60 || config.MaxTTLSeconds > maximumPolicyTTL || config.CertificateTTLSeconds < 60 ||
 		int64(config.CertificateTTLSeconds) > config.MaxTTLSeconds || config.RotateAfterSeconds < 1 ||
 		config.RotateAfterSeconds > config.CertificateTTLSeconds*2/3 || config.OverlapSeconds < 0 ||
@@ -132,6 +136,14 @@ func run() error { //nolint:gocyclo
 	profile, err := phase6security.VerifyFile(config.SecurityProfilePath)
 	if err != nil || !validateProfileBinding(profile, config) {
 		return stageError("security-profile-binding")
+	}
+	var peerSources *phase6security.PeerCRLSources
+	if config.Protocol == peerCRLConfigProtocol {
+		mapping, mappingErr := phase6security.VerifyPeerCRLSourcesFile(config.PeerCRLSourcesPath, profile)
+		if mappingErr != nil {
+			return stageError("peer-crl-sources")
+		}
+		peerSources = &mapping
 	}
 	registry, err := profile.PrincipalRegistry()
 	if err != nil || registry.Validate(config.Requester) != nil || registry.Validate(config.Subject) != nil {
@@ -170,6 +182,14 @@ func run() error { //nolint:gocyclo
 		return stageError("certificate-client")
 	}
 	defer client.Close()
+	var peerProvider workloadtlsagent.PeerCRLProvider
+	if peerSources != nil {
+		peerProvider, err = workloadtlsagent.NewControllerPeerCRLProvider(profile, *peerSources,
+			config.Subject.Digest(), client, time.Now)
+		if err != nil {
+			return stageError("peer-crl-provider")
+		}
+	}
 	manager, err := workloadtlsagent.NewProduction(workloadtlsagent.Config{Policy: policy, Client: client,
 		TTL: time.Duration(config.CertificateTTLSeconds) * time.Second, RotateAfter: time.Duration(config.RotateAfterSeconds) * time.Second,
 		Overlap: time.Duration(config.OverlapSeconds) * time.Second, CheckInterval: time.Duration(config.CheckIntervalMilliseconds) * time.Millisecond,
@@ -188,7 +208,8 @@ func run() error { //nolint:gocyclo
 	syscall.Umask(0o077)
 	server, err := workloadtlsagent.Listen(workloadtlsagent.ServerConfig{SocketPath: config.SignerSocket,
 		SocketUID: config.SignerSocketUID, SocketGID: config.SignerSocketGID, AgentGID: config.AgentGID, ExpectedClientUID: config.ExpectedRoleUID,
-		ExpectedClientGID: config.ExpectedRoleGID, MaxConnections: config.MaxConnections, ReplayCapacity: config.ReplayCapacity, Now: time.Now}, manager)
+		ExpectedClientGID: config.ExpectedRoleGID, MaxConnections: config.MaxConnections, ReplayCapacity: config.ReplayCapacity, Now: time.Now,
+		PeerCRLProvider: peerProvider}, manager)
 	if err != nil {
 		cleanupContext, cancel := context.WithTimeout(context.Background(), time.Duration(config.OperationTimeoutSeconds)*time.Second)
 		defer cancel()

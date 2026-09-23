@@ -17,6 +17,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
 )
 
 const (
@@ -109,6 +111,23 @@ type VaultClient struct {
 	now                         func() time.Time
 	requireImmediateCompleteCRL bool
 	peerIssuerSources           map[string]VaultPeerIssuerSource
+}
+
+// ValidatePeerSources prevents the controller's authorized edge map from
+// pointing at a different Vault mount or immutable issuer UUID than the
+// authority it will actually read. It grants no new source at runtime.
+func (c *VaultClient) ValidatePeerSources(sources []phase6security.PeerCRLSource) error {
+	if c == nil || !c.requireImmediateCompleteCRL || len(sources) == 0 || len(sources) != len(c.peerIssuerSources) {
+		return ErrUnavailable
+	}
+	for _, source := range sources {
+		configured, known := c.peerIssuerSources[source.ID]
+		if !known || configured.Mount != source.Mount || configured.IssuerID != source.IssuerID ||
+			configured.IssuerDigest != source.IssuerDigest {
+			return ErrUnavailable
+		}
+	}
+	return nil
 }
 
 func NewVaultClient(config VaultConfig, client *http.Client, tokens VaultTokenSource) (*VaultClient, error) {
@@ -271,6 +290,38 @@ func (c *VaultClient) verifyImmediateCompleteCRLConfig(ctx context.Context, moun
 		}
 	}
 	return nil
+}
+
+// PeerIssuerCertificate returns only the operator-pinned issuer certificate.
+// The controller uses it to resolve the selected source independently of the
+// agent; the agent never supplies issuer DER or a Vault path to this method.
+func (c *VaultClient) PeerIssuerCertificate(ctx context.Context, sourceID string) ([]byte, error) {
+	if c == nil || ctx == nil || !c.requireImmediateCompleteCRL {
+		return nil, ErrUnavailable
+	}
+	source, known := c.peerIssuerSources[sourceID]
+	if !known {
+		return nil, ErrUnavailable
+	}
+	base := "/v1/" + source.Mount + "/issuer/" + source.IssuerID
+	document, contentType, err := c.request(ctx, http.MethodGet, base+"/der", nil, "application/pkix-cert")
+	if err != nil {
+		return nil, err
+	}
+	if (contentType != "application/pkix-cert" && contentType != "application/octet-stream") ||
+		len(document) < 1 || len(document) > 64<<10 {
+		clear(document)
+		return nil, ErrUnavailable
+	}
+	issuer, err := x509.ParseCertificate(document)
+	digest := sha256.Sum256(document)
+	if err != nil || !issuer.IsCA || issuer.KeyUsage&x509.KeyUsageCRLSign == 0 ||
+		"sha256:"+hex.EncodeToString(digest[:]) != source.IssuerDigest ||
+		c.now().Before(issuer.NotBefore) || !c.now().Before(issuer.NotAfter) {
+		clear(document)
+		return nil, ErrUnavailable
+	}
+	return document, nil
 }
 
 // PeerRevocations never consults the mutable default issuer. Its source ID
