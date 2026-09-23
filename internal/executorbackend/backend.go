@@ -16,7 +16,6 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/shell-echo/sandbox-runtime/internal/executorprotocol"
-	"github.com/shell-echo/sandbox-runtime/providerapi"
 )
 
 const (
@@ -31,6 +30,7 @@ type Config struct {
 	ServerPrivateKeyFile    string
 	ClientCABundleFile      string
 	AllowedClientIdentities []string
+	RemoteTLSConfig         *tls.Config
 	MaxSessions             int
 	OperationTimeout        time.Duration
 }
@@ -56,7 +56,8 @@ func New(config Config) (*Backend, error) {
 	if err != nil || (parsed.Scheme != "ws" && parsed.Scheme != "wss") || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || parsed.Path == "" {
 		return nil, errors.New("invalid Browser CDP upstream URL")
 	}
-	tlsConfig, err := providerapi.LoadMTLSConfig(config.ServerCertificateFile, config.ServerPrivateKeyFile, config.ClientCABundleFile, config.AllowedClientIdentities)
+	tlsConfig, err := executorServerTLS(config.RemoteTLSConfig, config.ServerCertificateFile,
+		config.ServerPrivateKeyFile, config.ClientCABundleFile, config.AllowedClientIdentities)
 	if err != nil {
 		return nil, err
 	}

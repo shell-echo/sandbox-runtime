@@ -64,6 +64,24 @@ func TestReadBoundedAcceptsOnlyPrivateRegularDescriptorAtStart(t *testing.T) {
 	_ = file.Close()
 }
 
+func TestVaultEndpointMustMatchDeclaredTrustEdge(t *testing.T) {
+	profile := phase6security.Profile{
+		External: []phase6security.ExternalService{{Name: "vault", URI: "spiffe://sandbox-runtime.test/external/vault",
+			DNSNames: []string{"vault.sandbox-runtime.test"}}},
+		TrustEdges: []phase6security.TrustEdge{{ID: "certificate-vault", From: "certificate-controller", To: "vault",
+			Protocol: "https", Authentication: "mtls", Port: 8200, ToURI: "spiffe://sandbox-runtime.test/external/vault"}},
+	}
+	if !vaultTrustEdgeMatches(profile, "https://vault.sandbox-runtime.test:8200", "vault.sandbox-runtime.test") {
+		t.Fatal("declared Vault endpoint rejected")
+	}
+	for _, endpoint := range []string{"https://other.test:8200", "https://vault.sandbox-runtime.test:8300",
+		"http://vault.sandbox-runtime.test:8200", "https://vault.sandbox-runtime.test:8200/other"} {
+		if vaultTrustEdgeMatches(profile, endpoint, "vault.sandbox-runtime.test") {
+			t.Fatalf("Vault endpoint drift accepted: %s", endpoint)
+		}
+	}
+}
+
 func TestControllerRequiresCompleteProfileBoundBrokerAgentInventory(t *testing.T) {
 	responsePublic := bytes.Repeat([]byte{3}, 32)
 	managedPublic := bytes.Repeat([]byte{4}, 32)

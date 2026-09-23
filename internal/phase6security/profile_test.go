@@ -73,6 +73,12 @@ func validProfile() Profile {
 		if name == "product-runtime" {
 			networks = []string{"product-internal"}
 		}
+		if name == "browser-runtime-role" || name == "browser-executor-backend" {
+			networks = []string{"executor-browser"}
+		}
+		if name == "desktop-runtime-role" || name == "desktop-executor-backend" {
+			networks = []string{"executor-desktop"}
+		}
 		if name == "egress-broker-product" {
 			kind = "egress_broker"
 			networks, external, blocked = []string{"external-uplink", "product-internal"}, true, false
@@ -90,9 +96,28 @@ func validProfile() Profile {
 			Resources: Resources{MemoryBytes: 64 << 20, CPUMillis: 250, PIDs: 32}, Networks: networks,
 			ExternalUplink: external, DirectEgressBlocked: blocked,
 		}
+		if name == "browser-executor-backend" || name == "desktop-executor-backend" {
+			principal.Listeners = []Listener{{Name: "executor", Protocol: "tcp", Port: 8443, Exposure: "trust_edge"}}
+			principal.Mounts = append(principal.Mounts, Mount{Target: "/run/trust/internal-client-ca.pem", Kind: "trust_anchor",
+				ReadOnly: true, StorageID: "internal-client-ca-storage"})
+		}
+		if name == "browser-runtime-role" || name == "desktop-runtime-role" || name == "product-runtime" {
+			principal.Mounts = append(principal.Mounts, Mount{Target: "/run/trust/internal-server-ca.pem", Kind: "trust_anchor",
+				ReadOnly: true, StorageID: "internal-server-ca-storage"})
+		}
+		if name == "certificate-controller" || name == "egress-broker-product" || name == "product-runtime" {
+			principal.Mounts = append(principal.Mounts, Mount{Target: "/run/trust/external-server-ca.pem", Kind: "trust_anchor",
+				ReadOnly: true, StorageID: "external-server-ca-storage"})
+		}
+		if name == "certificate-controller" {
+			principal.Mounts = append(principal.Mounts, Mount{Target: "/run/trust/vault-client-ca.pem", Kind: "trust_anchor",
+				ReadOnly: true, StorageID: "vault-client-ca-storage"})
+		}
 		if name == "egress-broker-product" {
 			principal.Mounts = []Mount{
 				{Target: "/run/egress-authority", Kind: "private_socket", ReadOnly: true, StorageID: "product-authority-socket"},
+				{Target: "/run/trust/external-server-ca.pem", Kind: "trust_anchor", ReadOnly: true, StorageID: "external-server-ca-storage"},
+				{Target: "/run/trust/internal-client-ca.pem", Kind: "trust_anchor", ReadOnly: true, StorageID: "internal-client-ca-storage"},
 			}
 			principal.Listeners = []Listener{{Name: "egress", Protocol: "tcp", Port: 8443, Exposure: "trust_edge"}}
 		}
@@ -124,6 +149,12 @@ func validProfile() Profile {
 			principal.TLS = &TLSIdentity{PrincipalDigest: identity.Digest(), TrustDomain: "sandbox-runtime.test",
 				URI: "spiffe://sandbox-runtime.test/" + name, Usages: []string{"client_auth"}, TTLSeconds: 900,
 				RotateAfterSeconds: 500, OverlapSeconds: 30, RevocationMaxStalenessSeconds: 30, ConnectionDrainSeconds: 10}
+			if name == "browser-executor-backend" || name == "desktop-executor-backend" {
+				principal.TLS.Usages = []string{"server_auth"}
+			}
+			if name == "egress-broker-product" {
+				principal.TLS.Usages = []string{"client_auth", "server_auth"}
+			}
 		} else {
 			controller := requiredResourceControllers[name]
 			principal.ControllingPrincipalDigest = identities[controller].Digest()
@@ -132,13 +163,19 @@ func validProfile() Profile {
 	}
 	networks := make([]Network, 0, len(principals)+1)
 	for _, principal := range principals {
-		if principal.Name == "egress-broker-product" || principal.Name == "product-runtime" {
+		if principal.Name == "egress-broker-product" || principal.Name == "product-runtime" ||
+			principal.Name == "browser-runtime-role" || principal.Name == "browser-executor-backend" ||
+			principal.Name == "desktop-runtime-role" || principal.Name == "desktop-executor-backend" {
 			continue
 		}
 		networks = append(networks, Network{Name: principal.Networks[0], Kind: "role_internal", Internal: true,
 			GatewayModeIPv4: "isolated", Principals: []string{principal.Name}})
 	}
 	networks = append(networks,
+		Network{Name: "executor-browser", Kind: "trust_edge", Internal: true, GatewayModeIPv4: "isolated",
+			Principals: []string{"browser-executor-backend", "browser-runtime-role"}},
+		Network{Name: "executor-desktop", Kind: "trust_edge", Internal: true, GatewayModeIPv4: "isolated",
+			Principals: []string{"desktop-executor-backend", "desktop-runtime-role"}},
 		Network{Name: "external-uplink", Kind: "external_uplink", GatewayModeIPv4: "nat", Principals: []string{"egress-broker-product"}},
 		Network{Name: "product-internal", Kind: "role_internal", Internal: true, GatewayModeIPv4: "isolated", Principals: []string{"egress-broker-product", "product-runtime"}},
 	)
@@ -164,15 +201,30 @@ func validProfile() Profile {
 		external[index].IdentityDigest = external[index].Digest()
 	}
 	edges := []TrustEdge{
-		{ID: "certificate-vault", From: "certificate-controller", To: "vault", Protocol: "https", Port: 8200, Authentication: "mtls", FromURI: uri("certificate-controller"), ToURI: external[2].URI,
+		{ID: "egress-role-product", From: "product-runtime", To: "egress-broker-product", Protocol: "tls", Port: 8443,
+			Authentication: "mtls", ServerAnchorID: "internal-server-ca", ClientAnchorID: "internal-client-ca",
+			FromURI: uri("product-runtime"), ToURI: uri("egress-broker-product"),
+			FromPrincipalDigest: identities["product-runtime"].Digest(), ToPrincipalDigest: identities["egress-broker-product"].Digest(),
+			TenantScope: "system", MaxConnectionSeconds: 300},
+		{ID: "executor-browser", From: "browser-runtime-role", To: "browser-executor-backend", Protocol: "wss", Port: 8443,
+			ServerAnchorID: "internal-server-ca", ClientAnchorID: "internal-client-ca",
+			Authentication: "mtls", FromURI: uri("browser-runtime-role"), ToURI: uri("browser-executor-backend"),
+			FromPrincipalDigest: identities["browser-runtime-role"].Digest(), ToPrincipalDigest: identities["browser-executor-backend"].Digest(),
+			TenantScope: "system", MaxConnectionSeconds: 300},
+		{ID: "executor-desktop", From: "desktop-runtime-role", To: "desktop-executor-backend", Protocol: "wss", Port: 8443,
+			ServerAnchorID: "internal-server-ca", ClientAnchorID: "internal-client-ca",
+			Authentication: "mtls", FromURI: uri("desktop-runtime-role"), ToURI: uri("desktop-executor-backend"),
+			FromPrincipalDigest: identities["desktop-runtime-role"].Digest(), ToPrincipalDigest: identities["desktop-executor-backend"].Digest(),
+			TenantScope: "system", MaxConnectionSeconds: 300},
+		{ID: "certificate-vault", From: "certificate-controller", To: "vault", Protocol: "https", Port: 8200, Authentication: "mtls", ServerAnchorID: "external-server-ca", FromURI: uri("certificate-controller"), ToURI: external[2].URI,
 			FromPrincipalDigest: identities["certificate-controller"].Digest(), ExternalIdentityDigest: external[2].IdentityDigest, CrossDomain: true, TenantScope: "system", MaxConnectionSeconds: 60},
 		{ID: "egress-authority-product", From: "egress-broker-product", To: "egress-policy-authority-product", Protocol: "unix", Authentication: "unix_peer_credentials",
 			FromURI: uri("egress-broker-product"), ToURI: uri("egress-policy-authority-product"),
 			FromPrincipalDigest: identities["egress-broker-product"].Digest(), ToPrincipalDigest: identities["egress-policy-authority-product"].Digest(),
 			TenantScope: "system", MaxConnectionSeconds: 5},
-		{ID: "egress-dns", From: "egress-broker-product", To: "dns", Protocol: "dns_tcp", Port: 853, Authentication: "mtls", FromURI: uri("egress-broker-product"), ToURI: external[0].URI,
+		{ID: "egress-dns", From: "egress-broker-product", To: "dns", Protocol: "dns_tcp", Port: 853, Authentication: "mtls", ServerAnchorID: "external-server-ca", FromURI: uri("egress-broker-product"), ToURI: external[0].URI,
 			FromPrincipalDigest: identities["egress-broker-product"].Digest(), ExternalIdentityDigest: external[0].IdentityDigest, CrossDomain: true, TenantScope: "system", MaxConnectionSeconds: 30},
-		{ID: "product-postgres", From: "product-runtime", To: "postgres", Protocol: "postgres", Port: 5432, Authentication: "mtls", FromURI: uri("product-runtime"), ToURI: external[1].URI,
+		{ID: "product-postgres", From: "product-runtime", To: "postgres", Protocol: "postgres", Port: 5432, Authentication: "mtls", ServerAnchorID: "external-server-ca", FromURI: uri("product-runtime"), ToURI: external[1].URI,
 			FromPrincipalDigest: identities["product-runtime"].Digest(), ExternalIdentityDigest: external[1].IdentityDigest, CrossDomain: true, TenantScope: "bound", MaxConnectionSeconds: 300},
 	}
 	controllerRecord := principalByName["certificate-controller"]
@@ -212,15 +264,30 @@ func validProfile() Profile {
 		return tlsBindings[first].AgentDeployment < tlsBindings[second].AgentDeployment
 	})
 	sort.Slice(edges, func(first, second int) bool { return edges[first].ID < edges[second].ID })
+	anchors := []TrustAnchor{
+		{ID: "external-server-ca", BundleDigest: testDigest("external-server-ca"), Purpose: "server_verification",
+			TrustDomain: "sandbox-runtime.test", ArtifactID: "external-server-ca-artifact", StorageID: "external-server-ca-storage",
+			TargetPath: "/run/trust/external-server-ca.pem", WriterAuthority: "operator", Consumers: []string{"certificate-controller", "egress-broker-product", "product-runtime"}},
+		{ID: "internal-client-ca", BundleDigest: testDigest("internal-client-ca"), Purpose: "client_verification",
+			TrustDomain: "sandbox-runtime.test", ArtifactID: "internal-client-ca-artifact", StorageID: "internal-client-ca-storage",
+			TargetPath: "/run/trust/internal-client-ca.pem", WriterAuthority: "operator", Consumers: []string{"browser-executor-backend", "desktop-executor-backend", "egress-broker-product"}},
+		{ID: "internal-server-ca", BundleDigest: testDigest("internal-server-ca"), Purpose: "server_verification",
+			TrustDomain: "sandbox-runtime.test", ArtifactID: "internal-server-ca-artifact", StorageID: "internal-server-ca-storage",
+			TargetPath: "/run/trust/internal-server-ca.pem", WriterAuthority: "operator", Consumers: []string{"browser-runtime-role", "desktop-runtime-role", "product-runtime"}},
+		{ID: "vault-client-ca", BundleDigest: testDigest("vault-client-ca"), Purpose: "client_verification",
+			TrustDomain: "sandbox-runtime.test", ArtifactID: "vault-client-ca-artifact", StorageID: "vault-client-ca-storage",
+			TargetPath: "/run/trust/vault-client-ca.pem", WriterAuthority: "operator", Consumers: []string{"certificate-controller"}},
+	}
 	profile := Profile{Protocol: ProtocolID, Version: Version, Revision: "slice6-security-1", EnvironmentDigest: environmentDigest,
-		PrincipalProfileDigest: principalProfileDigest, Principals: principals, Networks: networks, External: external, TrustEdges: edges,
+		PrincipalProfileDigest: principalProfileDigest, Principals: principals, Networks: networks, External: external, TrustEdges: edges, TrustAnchors: anchors,
 		TLSAgentBindings: tlsBindings,
 		CertificateController: CertificateControllerAuthority{DeploymentName: "certificate-controller",
 			PrincipalDigest: controllerRecord.PrincipalDigest, UID: controllerRecord.UID, GID: controllerRecord.GID,
 			ResponseKeyID: "certificate-controller-response", ResponsePublicKeyDigest: testDigest("certificate-controller-response-key"),
 			ManagedPolicyID: "issuer-certificate-controller-self", ManagedVaultRole: "vault-certificate-controller",
 			ManagedRequestKeyID: "request-certificate-controller-self", ManagedRequestKeyDigest: testDigest("managed-request-key"),
-			SelfSocketDirectory: "/run/certificate-controller/self", SelfSocketStorageID: "certificate-controller-self-socket",
+			BootstrapClientAnchorID: "vault-client-ca",
+			SelfSocketDirectory:     "/run/certificate-controller/self", SelfSocketStorageID: "certificate-controller-self-socket",
 			SelfSocketPath: "/run/certificate-controller/self/managed.sock", SelfDirectoryMode: 0o700,
 			SelfSocketMode: 0o600, SelfUnixEdgeID: "certificate-controller-self"},
 		EgressPolicies: []EgressPolicy{{ID: "product-egress", Revision: "policy-1", Principal: "product-runtime", Broker: "egress-broker-product",
@@ -358,6 +425,41 @@ func TestTLSAgentForSubjectUsesValidatedProfile(t *testing.T) {
 	profile.ProfileDigest = profile.Digest()
 	if _, _, _, err := profile.TLSAgentForSubject("egress-broker-product"); err == nil {
 		t.Fatal("invalid profile produced a TLS agent binding")
+	}
+}
+
+func TestExecutorTLSBoundaryRequiresExactRoleEdgeAndListener(t *testing.T) {
+	for _, subject := range []string{"browser-executor-backend", "desktop-executor-backend"} {
+		profile := validProfile()
+		binding, agent, backend, caller, err := profile.ExecutorTLSBoundary(subject, 8443)
+		if err != nil || binding.SubjectDeployment != subject || agent.Name != binding.AgentDeployment ||
+			backend.Name != subject || caller.TLS == nil {
+			t.Fatalf("%s boundary: %#v %#v %#v %#v %v", subject, binding, agent, backend, caller, err)
+		}
+		if _, _, _, _, err := profile.ExecutorTLSBoundary(subject, 8444); err == nil {
+			t.Fatal("wrong listener port accepted")
+		}
+		for index := range profile.TrustEdges {
+			if profile.TrustEdges[index].To == subject && profile.TrustEdges[index].Authentication == "mtls" {
+				profile.TrustEdges[index].Protocol = "https"
+				break
+			}
+		}
+		profile.ProfileDigest = profile.Digest()
+		if _, _, _, _, err := profile.ExecutorTLSBoundary(subject, 8443); err == nil {
+			t.Fatal("wrong role edge protocol accepted")
+		}
+		profile = validProfile()
+		for index := range profile.Networks {
+			if profile.Networks[index].Name == "executor-browser" && subject == "browser-executor-backend" ||
+				profile.Networks[index].Name == "executor-desktop" && subject == "desktop-executor-backend" {
+				profile.Networks[index].Kind = "role_internal"
+			}
+		}
+		profile.ProfileDigest = profile.Digest()
+		if _, _, _, _, err := profile.ExecutorTLSBoundary(subject, 8443); err == nil {
+			t.Fatal("non-trust-edge shared network accepted")
+		}
 	}
 }
 
@@ -537,6 +639,17 @@ func TestDeploymentRenameDoesNotChangeAuthorizationIdentity(t *testing.T) {
 		if profile.TrustEdges[index].From == "egress-broker-product" {
 			profile.TrustEdges[index].From = "product-egress-service"
 		}
+		if profile.TrustEdges[index].To == "egress-broker-product" {
+			profile.TrustEdges[index].To = "product-egress-service"
+		}
+	}
+	for index := range profile.TrustAnchors {
+		for consumer := range profile.TrustAnchors[index].Consumers {
+			if profile.TrustAnchors[index].Consumers[consumer] == "egress-broker-product" {
+				profile.TrustAnchors[index].Consumers[consumer] = "product-egress-service"
+			}
+		}
+		sort.Strings(profile.TrustAnchors[index].Consumers)
 	}
 	for networkIndex := range profile.Networks {
 		for principalIndex := range profile.Networks[networkIndex].Principals {

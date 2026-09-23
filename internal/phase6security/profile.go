@@ -16,6 +16,7 @@ import (
 	"net/url"
 	"path"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -138,6 +139,7 @@ type Profile struct {
 	Networks               []Network                      `json:"networks"`
 	External               []ExternalService              `json:"external_services"`
 	TrustEdges             []TrustEdge                    `json:"trust_edges"`
+	TrustAnchors           []TrustAnchor                  `json:"trust_anchors"`
 	CertificateController  CertificateControllerAuthority `json:"certificate_controller"`
 	TLSAgentBindings       []TLSAgentBinding              `json:"tls_agent_bindings"`
 	EgressPolicies         []EgressPolicy                 `json:"egress_policies"`
@@ -193,6 +195,22 @@ type Mount struct {
 	StorageID string `json:"storage_id"`
 }
 
+// TrustAnchor pins one read-only CA bundle artifact and its exact consumers.
+// BundleDigest covers the original bundle file bytes, not re-encoded PEM.
+type TrustAnchor struct {
+	ID              string   `json:"id"`
+	BundleDigest    string   `json:"bundle_digest"`
+	Purpose         string   `json:"purpose"`
+	TrustDomain     string   `json:"trust_domain"`
+	ArtifactID      string   `json:"artifact_id"`
+	StorageID       string   `json:"storage_id"`
+	TargetPath      string   `json:"target_path"`
+	WriterAuthority string   `json:"writer_authority"`
+	OwnerUID        uint32   `json:"owner_uid"`
+	OwnerGID        uint32   `json:"owner_gid"`
+	Consumers       []string `json:"consumers"`
+}
+
 type Listener struct {
 	Name     string `json:"name"`
 	Protocol string `json:"protocol"`
@@ -230,6 +248,8 @@ type TrustEdge struct {
 	Protocol               string `json:"protocol"`
 	Port                   int    `json:"port"`
 	Authentication         string `json:"authentication"`
+	ServerAnchorID         string `json:"server_anchor_id,omitempty"`
+	ClientAnchorID         string `json:"client_anchor_id,omitempty"`
 	FromURI                string `json:"from_uri"`
 	ToURI                  string `json:"to_uri"`
 	FromPrincipalDigest    string `json:"from_principal_digest"`
@@ -319,6 +339,7 @@ type CertificateControllerAuthority struct {
 	ManagedVaultRole        string `json:"managed_vault_role"`
 	ManagedRequestKeyID     string `json:"managed_request_key_id"`
 	ManagedRequestKeyDigest string `json:"managed_request_key_digest"`
+	BootstrapClientAnchorID string `json:"bootstrap_client_anchor_id"`
 	SelfSocketDirectory     string `json:"self_socket_directory"`
 	SelfSocketStorageID     string `json:"self_socket_storage_id"`
 	SelfSocketPath          string `json:"self_socket_path"`
@@ -402,6 +423,7 @@ func (p Profile) Validate() error { //nolint:gocyclo
 		!digestPattern.MatchString(p.ProfileDigest) || !digestPattern.MatchString(p.EnvironmentDigest) ||
 		!digestPattern.MatchString(p.PrincipalProfileDigest) || len(p.Principals) < len(requiredPrincipals) || len(p.Principals) > 128 ||
 		len(p.Networks) < 1 || len(p.Networks) > 256 || len(p.External) != 3 || len(p.TrustEdges) < 1 || len(p.TrustEdges) > 512 ||
+		len(p.TrustAnchors) < 1 || len(p.TrustAnchors) > 128 ||
 		len(p.TLSAgentBindings) < len(requiredTLSAgentSubjects) || len(p.TLSAgentBindings) > 136 || len(p.EgressPolicies) > 128 ||
 		!exactStrings(p.CleanupClasses, []string{"connections", "containers", "files", "networks", "processes", "sockets"}) {
 		return ErrInvalidProfile
@@ -498,6 +520,9 @@ func (p Profile) Validate() error { //nolint:gocyclo
 	if err != nil {
 		return err
 	}
+	if err := validateTrustAnchors(p.TrustAnchors, p.TrustEdges, p.CertificateController, principals, external); err != nil {
+		return err
+	}
 	if err := validateEgress(p.EgressPolicies, principals, edges); err != nil {
 		return err
 	}
@@ -587,6 +612,62 @@ func (p Profile) TLSAgentForSubject(subjectName string) (TLSAgentBinding, Princi
 	return TLSAgentBinding{}, Principal{}, Principal{}, ErrInvalidProfile
 }
 
+// ExecutorTLSBoundary resolves the sole declared role-to-executor mTLS edge.
+// A production executor may not invent an additional caller or listener.
+func (p Profile) ExecutorTLSBoundary(subjectName string, port int) (TLSAgentBinding, Principal, Principal, Principal, error) {
+	roleName, edgeID := "", ""
+	switch subjectName {
+	case "browser-executor-backend":
+		roleName, edgeID = "browser-runtime-role", "executor-browser"
+	case "desktop-executor-backend":
+		roleName, edgeID = "desktop-runtime-role", "executor-desktop"
+	default:
+		return TLSAgentBinding{}, Principal{}, Principal{}, Principal{}, ErrInvalidProfile
+	}
+	binding, agent, subject, err := p.TLSAgentForSubject(subjectName)
+	if err != nil || subject.TLS == nil || !slices.Equal(subject.TLS.Usages, []string{"server_auth"}) {
+		return TLSAgentBinding{}, Principal{}, Principal{}, Principal{}, ErrInvalidProfile
+	}
+	var caller Principal
+	for _, principal := range p.Principals {
+		if principal.Name == roleName {
+			caller = principal
+		}
+	}
+	if caller.TLS == nil || !slices.Contains(caller.TLS.Usages, "client_auth") || port < 1 || port > 65535 ||
+		len(subject.Listeners) != 1 || subject.Listeners[0].Protocol != "tcp" ||
+		subject.Listeners[0].Exposure != "trust_edge" || subject.Listeners[0].Port != port {
+		return TLSAgentBinding{}, Principal{}, Principal{}, Principal{}, ErrInvalidProfile
+	}
+	shared := 0
+	for _, network := range p.Networks {
+		if slices.Contains(caller.Networks, network.Name) && slices.Contains(subject.Networks, network.Name) {
+			if network.Kind != "trust_edge" || !network.Internal {
+				return TLSAgentBinding{}, Principal{}, Principal{}, Principal{}, ErrInvalidProfile
+			}
+			shared++
+		}
+	}
+	if shared != 1 {
+		return TLSAgentBinding{}, Principal{}, Principal{}, Principal{}, ErrInvalidProfile
+	}
+	count := 0
+	for _, edge := range p.TrustEdges {
+		if edge.To != subjectName || edge.Authentication != "mtls" {
+			continue
+		}
+		if edge.ID != edgeID || edge.From != roleName || edge.Protocol != "wss" || edge.Port != port ||
+			edge.FromURI != caller.TLS.URI || edge.ToURI != subject.TLS.URI {
+			return TLSAgentBinding{}, Principal{}, Principal{}, Principal{}, ErrInvalidProfile
+		}
+		count++
+	}
+	if count != 1 {
+		return TLSAgentBinding{}, Principal{}, Principal{}, Principal{}, ErrInvalidProfile
+	}
+	return binding, agent, subject, caller, nil
+}
+
 func validatePrincipal(value Principal, registry *securityprincipal.Registry, authorityBindings, dynamicTLSBindings map[string]principalBinding) error { //nolint:gocyclo
 	if !namePattern.MatchString(value.Name) || !validPrincipalKind(value.Kind) || !imagePattern.MatchString(value.ImageReference) ||
 		!digestPattern.MatchString(value.ImageDigest) || !strings.HasSuffix(value.ImageReference, "@"+value.ImageDigest) ||
@@ -626,7 +707,7 @@ func validatePrincipal(value Principal, registry *securityprincipal.Registry, au
 	seenMounts := map[string]struct{}{}
 	for _, mount := range value.Mounts {
 		if !strings.HasPrefix(mount.Target, "/") || path.Clean(mount.Target) != mount.Target || mount.Target == "/" ||
-			(mount.Kind != "tmpfs" && mount.Kind != "private_socket" && mount.Kind != "persistent_ledger") {
+			(mount.Kind != "tmpfs" && mount.Kind != "private_socket" && mount.Kind != "persistent_ledger" && mount.Kind != "trust_anchor") {
 			return ErrInvalidProfile
 		}
 		if _, duplicate := seenMounts[mount.Target]; duplicate {
@@ -646,6 +727,10 @@ func validatePrincipal(value Principal, registry *securityprincipal.Registry, au
 			_, policyAuthority := authorityBindings[value.Name]
 			if !policyAuthority || mount.ReadOnly || mount.MaxBytes < 4096 || mount.MaxBytes > 1<<30 ||
 				!namePattern.MatchString(mount.StorageID) {
+				return ErrInvalidProfile
+			}
+		case "trust_anchor":
+			if !mount.ReadOnly || mount.MaxBytes != 0 || !namePattern.MatchString(mount.StorageID) {
 				return ErrInvalidProfile
 			}
 		}

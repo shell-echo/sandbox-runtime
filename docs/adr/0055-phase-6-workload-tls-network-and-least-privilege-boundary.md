@@ -61,6 +61,16 @@ credential controller, break-glass controller, certificate controller and
 migration job has a distinct URI SAN and exact server/client EKUs for its
 declared trust edges. Shared identities and wildcard SANs are forbidden.
 
+The Browser and Desktop executor backend production commands use version-2
+authority files and the validated Phase 6 profile's sole role-to-executor
+`wss` trust edge. They reject version-1 local server-key authority. Each new
+handshake obtains a generation-bound certificate from its separate TLS agent
+and verifies the pinned issuer, exact URI/DNS/EKU, lifetime and public signer
+key before serving. Static-file backend constructors remain only component
+compatibility paths; they are not a production fallback. Existing-connection
+revocation drain and the distinct-UID command-level graph remain named gates,
+not conclusions from these callbacks.
+
 The private identity vocabulary is the closed, versioned
 `securityprincipal.v1` registry. Its kinds are `runtime_role`,
 `material_agent`, `tls_agent`, `migration_job`, `controller`, `executor_backend` and
@@ -149,12 +159,30 @@ duplicates, cross-subject substitution, extra mounts/edges and sharing with
 the policy-authority socket. The production TLS-agent command checks its
 config against this profile; the egress broker checks its signer endpoint
 against its bound agent before connecting. These checks are configuration
-authority only: runtime/executor commands still need live signer migration,
-and a real broker/controller/Vault/DNS mTLS process gate is required before
-Slice 6 can close.
+authority only: six runtime commands still need live signer migration, and
+a real broker/controller/Vault/DNS mTLS process gate is required before Slice
+6 can close.
+
+The same canonical profile, not a second signed document, owns the closed
+`trust_anchors` registry. Each anchor records its original bundle-byte SHA-256,
+server- or client-verification purpose, trust domain, artifact/storage ID,
+read-only target path, operator writer, owner UID/GID and exact consumers.
+An `mtls` trust edge references its server-verification anchor and, when the
+server is repository-owned, its client-verification anchor. Unix signing
+edges cannot cite CA anchors. A bundle can be read-only shared by declared
+consumers, but equal bytes do not merge distinct purposes or trust domains.
+The common loader verifies one stable opened file's owner, non-writable
+source, SHA-256 and strict CA-only PEM records before the bytes reach a TLS
+config. The controller bootstrap client certificate has a separate
+`client_verification` anchor; its local chain check must not reuse the Vault
+server-verification root. The CA revision remains frozen for that process; anchor changes
+require a new canonical profile and controlled process replacement, not a
+new CA rotation control plane. Executor, controller→Vault and broker→DNS/inbound
+commands consume this registry now; other production TLS commands and full
+trust-edge binding still need the same loader before release.
 
 The certificate controller is one logical process, not one controller per
-agent. Its production command configuration is v2 and receives the same
+agent. Its production command configuration is v3 and receives the same
 validated profile/registry as its TLS-agent clients, including registered
 broker agents; the old nil-broker registry is not a production fallback.
 The profile fixes the controller principal/UID/GID and its response-signing

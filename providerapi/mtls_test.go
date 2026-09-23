@@ -601,16 +601,17 @@ func issueTestCertificate(t *testing.T, ca testCA, options testCertificateOption
 		uris = append(uris, uri)
 	}
 	template := &x509.Certificate{
-		SerialNumber:   big.NewInt(time.Now().UnixNano()),
-		Subject:        pkix.Name{CommonName: options.commonName},
-		NotBefore:      options.notBefore,
-		NotAfter:       options.notAfter,
-		KeyUsage:       x509.KeyUsageDigitalSignature,
-		ExtKeyUsage:    options.extKeyUsage,
-		DNSNames:       append([]string(nil), options.dnsNames...),
-		EmailAddresses: append([]string(nil), options.emails...),
-		IPAddresses:    append([]net.IP(nil), options.ipAddresses...),
-		URIs:           uris,
+		SerialNumber:          big.NewInt(time.Now().UnixNano()),
+		Subject:               pkix.Name{CommonName: options.commonName},
+		BasicConstraintsValid: true,
+		NotBefore:             options.notBefore,
+		NotAfter:              options.notAfter,
+		KeyUsage:              x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           options.extKeyUsage,
+		DNSNames:              append([]string(nil), options.dnsNames...),
+		EmailAddresses:        append([]string(nil), options.emails...),
+		IPAddresses:           append([]net.IP(nil), options.ipAddresses...),
+		URIs:                  uris,
 	}
 	der, err := x509.CreateCertificate(rand.Reader, template, ca.certificate, &key.PublicKey, ca.key)
 	if err != nil {

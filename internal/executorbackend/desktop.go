@@ -26,7 +26,6 @@ import (
 	"github.com/shell-echo/sandbox-runtime/internal/desktopmedia"
 	"github.com/shell-echo/sandbox-runtime/internal/executorprotocol"
 	"github.com/shell-echo/sandbox-runtime/internal/sessiontermination"
-	"github.com/shell-echo/sandbox-runtime/providerapi"
 )
 
 const desktopMaxSessions = 256
@@ -44,6 +43,7 @@ type DesktopConfig struct {
 	ServerPrivateKeyFile    string
 	ClientCABundleFile      string
 	AllowedClientIdentities []string
+	RemoteTLSConfig         *tls.Config
 	MaxSessions             int
 	OperationTimeout        time.Duration
 }
@@ -70,7 +70,8 @@ func NewDesktop(config DesktopConfig) (*DesktopBackend, error) {
 	if err := validateDesktopBrokerSocket(config.BrokerSocketPath); err != nil {
 		return nil, err
 	}
-	tlsConfig, err := providerapi.LoadMTLSConfig(config.ServerCertificateFile, config.ServerPrivateKeyFile, config.ClientCABundleFile, config.AllowedClientIdentities)
+	tlsConfig, err := executorServerTLS(config.RemoteTLSConfig, config.ServerCertificateFile,
+		config.ServerPrivateKeyFile, config.ClientCABundleFile, config.AllowedClientIdentities)
 	if err != nil {
 		return nil, err
 	}

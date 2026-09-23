@@ -708,7 +708,7 @@ This process has the private `KindTLSAgent` identity, not the
 the TLS agent cannot receive a workload-credential.v2 Vault token. The PKI
 requester-to-subject relation is one-to-one, including separate executor and
 per-egress-broker agents.
-The certificate-controller command requires its v2 config and the same
+The certificate-controller command requires its v3 config and the same
 canonical profile-derived principal registry. Give every TLS agent its own
 controller endpoint: controller-UID owner, agent-GID 0710 directory, 0666
 socket, controller read-write and that agent read-only mounts. The one
@@ -717,6 +717,12 @@ same-UID exception. Controller response and agent CSR request public-key
 digests are bound separately; never substitute the Vault CA/trust bundle for
 either key. The controller must reject incomplete or extra listener/policy
 sets, not merely accept individually valid requests.
+The canonical profile also owns directional `trust_anchors`: bounded strict
+CA PEM is read once from a non-writable, profile-declared read-only artifact,
+checked against its original-byte SHA-256 and consumed without reopening the
+path. Executor, broker and controller commands must not accept arbitrary CA
+bundles in their production authority. Vault server verification and the
+controller's bootstrap client-chain validation use distinct anchor purposes.
 The canonical Phase 6 security profile must contain a `tls_agent_bindings`
 entry for every such key owner. The production TLS-agent command requires
 its private profile file and exact profile digest, and checks the requester,

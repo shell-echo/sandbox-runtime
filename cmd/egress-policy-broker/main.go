@@ -26,11 +26,12 @@ import (
 	"github.com/shell-echo/sandbox-runtime/internal/egresspolicystate"
 	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
 	"github.com/shell-echo/sandbox-runtime/internal/securityprincipal"
+	"github.com/shell-echo/sandbox-runtime/internal/trustanchor"
 	"github.com/shell-echo/sandbox-runtime/internal/workloadtlsagent"
 )
 
 const (
-	configProtocol = "sandbox-runtime.egress-policy-broker-config.v1"
+	configProtocol = "sandbox-runtime.egress-policy-broker-config.v2"
 	maxConfigBytes = 512 << 10
 )
 
@@ -39,13 +40,11 @@ type configDocument struct {
 	SecurityProfilePath      string `json:"security_profile_path"`
 	PolicyID                 string `json:"policy_id"`
 	ListenAddress            string `json:"listen_address"`
-	ClientCABundle           []byte `json:"client_ca_bundle"`
 	TLSAgentSocket           string `json:"tls_agent_socket"`
 	TLSAgentExpectedUID      uint32 `json:"tls_agent_expected_uid"`
 	TLSAgentExpectedGID      uint32 `json:"tls_agent_expected_gid"`
 	DNSAddress               string `json:"dns_address"`
 	DNSServerName            string `json:"dns_server_name"`
-	DNSCABundle              []byte `json:"dns_ca_bundle"`
 	MaxConnections           int    `json:"max_connections"`
 	ReplayCapacity           int    `json:"replay_capacity"`
 	OperationTimeoutSeconds  int    `json:"operation_timeout_seconds"`
@@ -134,17 +133,43 @@ func run() error { //nolint:gocyclo
 	if err != nil {
 		return stageError("tls-agent")
 	}
-	clientRoots, err := strictCertPool(config.ClientCABundle)
+	inboundEdge, ok := brokerInboundEdge(profile, profilePolicy.Principal, broker.Name, config.ListenAddress)
+	if !ok {
+		return stageError("broker-inbound-edge")
+	}
+	_, clientAnchor, err := profile.EdgeTrustAnchors(inboundEdge.ID)
+	if err != nil {
+		return stageError("broker-client-anchor")
+	}
+	clientBundle, err := trustanchor.Load(clientAnchor, time.Now())
+	if err != nil {
+		return stageError("broker-client-anchor")
+	}
+	clientRoots, err := strictCertPool(clientBundle)
+	clear(clientBundle)
 	if err != nil {
 		return stageError("client-ca")
-	}
-	dnsRoots, err := strictCertPool(config.DNSCABundle)
-	if err != nil {
-		return stageError("dns-ca")
 	}
 	dnsService, ok := validateDNSConfig(profile, profilePolicy.Broker, config.DNSServerName, config.DNSAddress)
 	if !ok {
 		return stageError("dns-binding")
+	}
+	_, dnsEdge, ok := dnsBinding(profile, broker.Name)
+	if !ok {
+		return stageError("dns-edge")
+	}
+	dnsAnchor, _, err := profile.EdgeTrustAnchors(dnsEdge.ID)
+	if err != nil {
+		return stageError("dns-anchor")
+	}
+	dnsBundle, err := trustanchor.Load(dnsAnchor, time.Now())
+	if err != nil {
+		return stageError("dns-anchor")
+	}
+	dnsRoots, err := strictCertPool(dnsBundle)
+	clear(dnsBundle)
+	if err != nil {
+		return stageError("dns-ca")
 	}
 	dnsTLS := &tls.Config{MinVersion: tls.VersionTLS13, MaxVersion: tls.VersionTLS13, RootCAs: dnsRoots, ServerName: config.DNSServerName}
 	dnsTLS.GetClientCertificate = func(*tls.CertificateRequestInfo) (*tls.Certificate, error) {
@@ -279,6 +304,28 @@ func validateBrokerListenConfig(broker phase6security.Principal, address string)
 	listener := broker.Listeners[0]
 	return err == nil && listener.Name == "egress" && listener.Protocol == "tcp" &&
 		listener.Exposure == "trust_edge" && listener.Port == port
+}
+
+func brokerInboundEdge(profile phase6security.Profile, principal, broker, address string) (phase6security.TrustEdge, bool) {
+	_, portText, err := net.SplitHostPort(address)
+	if err != nil {
+		return phase6security.TrustEdge{}, false
+	}
+	port, err := strconv.Atoi(portText)
+	if err != nil {
+		return phase6security.TrustEdge{}, false
+	}
+	var selected phase6security.TrustEdge
+	for _, edge := range profile.TrustEdges {
+		if edge.To != broker || edge.Authentication != "mtls" {
+			continue
+		}
+		if selected.ID != "" || edge.From != principal || edge.Protocol != "tls" || edge.Port != port {
+			return phase6security.TrustEdge{}, false
+		}
+		selected = edge
+	}
+	return selected, selected.ID != ""
 }
 
 func deploymentPrincipal(profile phase6security.Profile, name string) (phase6security.Principal, bool) {

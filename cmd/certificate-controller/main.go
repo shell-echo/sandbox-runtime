@@ -16,10 +16,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -28,13 +30,14 @@ import (
 	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
 	"github.com/shell-echo/sandbox-runtime/internal/secretref"
 	"github.com/shell-echo/sandbox-runtime/internal/securityprincipal"
+	"github.com/shell-echo/sandbox-runtime/internal/trustanchor"
 	"github.com/shell-echo/sandbox-runtime/internal/workloadcredentialv2"
 	"github.com/shell-echo/sandbox-runtime/internal/workloadpki"
 	"github.com/shell-echo/sandbox-runtime/internal/workloadtlsagent"
 )
 
 const (
-	configProtocol      = "sandbox-runtime.certificate-controller-config.v2"
+	configProtocol      = "sandbox-runtime.certificate-controller-config.v3"
 	maxConfigBytes      = 2 << 20
 	credentialAgentFD   = 3
 	controllerSigningFD = 4
@@ -54,7 +57,6 @@ type configDocument struct {
 	MaximumLedgerAgeSeconds   int                 `json:"maximum_ledger_age_seconds"`
 	ReapIntervalSeconds       int                 `json:"reap_interval_seconds"`
 	VaultEndpoint             string              `json:"vault_endpoint"`
-	VaultCABundle             []byte              `json:"vault_ca_bundle"`
 	VaultServerName           string              `json:"vault_server_name"`
 	VaultClientCertificatePEM []byte              `json:"vault_client_certificate_pem"`
 	VaultMount                string              `json:"vault_mount"`
@@ -142,7 +144,7 @@ func run() error { //nolint:gocyclo
 	}
 	canonical, err := json.Marshal(config)
 	if err != nil || !bytes.Equal(canonical, document) || config.Protocol != configProtocol || len(config.Listeners) < 1 || len(config.Listeners) > 128 ||
-		len(config.Policies) < 1 || len(config.Policies) > 128 || len(config.VaultCABundle) < 1 || len(config.VaultClientCertificatePEM) < 1 ||
+		len(config.Policies) < 1 || len(config.Policies) > 128 || len(config.VaultClientCertificatePEM) < 1 ||
 		config.VaultServerName == "" || config.OperationTimeoutSeconds < 1 || config.OperationTimeoutSeconds > 60 ||
 		config.MaximumLedgerAgeSeconds < 3600 || config.MaximumLedgerAgeSeconds > 7*24*3600 || config.ReapIntervalSeconds < 1 || config.ReapIntervalSeconds > 60 ||
 		config.ManagedVaultTLS.PolicyID == "" || config.ManagedVaultTLS.ControllerSocket == "" ||
@@ -219,10 +221,38 @@ func run() error { //nolint:gocyclo
 		return stageError("credential-token-source")
 	}
 
-	roots := x509.NewCertPool()
-	if !roots.AppendCertsFromPEM(config.VaultCABundle) {
+	if !vaultTrustEdgeMatches(profile, config.VaultEndpoint, config.VaultServerName) {
+		return stageError("vault-edge")
+	}
+	vaultAnchor, _, err := profile.EdgeTrustAnchors("certificate-vault")
+	if err != nil {
+		return stageError("vault-anchor")
+	}
+	vaultBundle, err := trustanchor.Load(vaultAnchor, time.Now())
+	if err != nil {
 		return stageError("vault-ca")
 	}
+	roots := x509.NewCertPool()
+	if !roots.AppendCertsFromPEM(vaultBundle) {
+		clear(vaultBundle)
+		return stageError("vault-ca")
+	}
+	clear(vaultBundle)
+	bootstrapAnchor, err := profile.ConsumerTrustAnchor(profile.CertificateController.BootstrapClientAnchorID,
+		"certificate-controller", "client_verification")
+	if err != nil {
+		return stageError("vault-bootstrap-anchor")
+	}
+	bootstrapBundle, err := trustanchor.Load(bootstrapAnchor, time.Now())
+	if err != nil {
+		return stageError("vault-bootstrap-ca")
+	}
+	bootstrapRoots := x509.NewCertPool()
+	if !bootstrapRoots.AppendCertsFromPEM(bootstrapBundle) {
+		clear(bootstrapBundle)
+		return stageError("vault-bootstrap-ca")
+	}
+	clear(bootstrapBundle)
 	policies := make([]workloadpki.Policy, 0, len(config.Policies))
 	vaultPolicies := make(map[string]string, len(config.Policies))
 	peerPairs := make(map[[2]uint32]struct{}, len(config.Policies))
@@ -257,7 +287,7 @@ func run() error { //nolint:gocyclo
 		int64(config.ManagedVaultTLS.CertificateTTLSeconds) > managedPolicy.MaxTTLSeconds {
 		return stageError("managed-vault-tls-policy")
 	}
-	vaultPair, err := workloadtlsagent.ValidateBootstrapCertificate(config.VaultClientCertificatePEM, vaultTLSKey, roots, managedPolicy, time.Now().UTC())
+	vaultPair, err := workloadtlsagent.ValidateBootstrapCertificate(config.VaultClientCertificatePEM, vaultTLSKey, bootstrapRoots, managedPolicy, time.Now().UTC())
 	if err != nil {
 		return stageError("vault-client-certificate")
 	}
@@ -494,6 +524,32 @@ func validateControllerProfileConfig(profile phase6security.Profile, config conf
 		}
 	}
 	return true
+}
+
+func vaultTrustEdgeMatches(profile phase6security.Profile, endpoint, serverName string) bool {
+	var service phase6security.ExternalService
+	for _, external := range profile.External {
+		if external.Name == "vault" {
+			service = external
+		}
+	}
+	if len(service.DNSNames) != 1 || service.DNSNames[0] != serverName {
+		return false
+	}
+	parsed, err := url.Parse(endpoint)
+	if err != nil || parsed.Scheme != "https" || parsed.User != nil || parsed.Hostname() != serverName ||
+		parsed.RawQuery != "" || parsed.ForceQuery || parsed.RawPath != "" || parsed.Fragment != "" ||
+		(parsed.Path != "" && parsed.Path != "/") {
+		return false
+	}
+	for _, edge := range profile.TrustEdges {
+		if edge.ID == "certificate-vault" && edge.From == "certificate-controller" && edge.To == "vault" &&
+			edge.Protocol == "https" && edge.Authentication == "mtls" && edge.ToURI == service.URI &&
+			parsed.Port() == strconv.Itoa(edge.Port) {
+			return true
+		}
+	}
+	return false
 }
 
 func matchesControllerPolicy(policy certificatePolicy, requester, subject securityprincipal.Principal,

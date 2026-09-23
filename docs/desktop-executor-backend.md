@@ -18,19 +18,29 @@ The authority file is a closed JSON document:
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "role": "desktop",
   "listen_address": "127.0.0.1:8447",
   "broker_socket_path": "/run/user/1000/sandbox-runtime/provider-a1b2/desktop-broker-11111111111111111111111111111111.sock",
   "executor_identity": "executor-desktop-1",
-  "server_certificate_file": "/run/private/desktop-backend.crt",
-  "server_private_key_file": "/run/private/desktop-backend.key",
-  "client_ca_bundle_file": "/run/private/executor-ca.pem",
-  "allowed_client_identities": ["spiffe://sandbox-runtime/provider"],
+  "security_profile_path": "/run/private/phase6-security-profile.json",
+  "security_profile_digest": "sha256:<64 lowercase hex digits>",
+  "tls_agent_socket": "/run/tls/desktop-executor-tls-agent/signer.sock",
+  "tls_agent_uid": 20002,
+  "tls_agent_gid": 30002,
   "max_sessions": 16,
   "operation_timeout_millis": 5000
 }
 ```
+
+The profile supplies the read-only server/client CA artifacts, exact SHA-256
+digests, mount identities and permitted consumers. The UID/GID and port are
+illustrative. The production command requires the
+verified profile's sole Desktop-role `wss` trust edge, exact executor listener
+and distinct-UID TLS-agent socket. It rejects v1 local-private-key authority;
+new handshakes fetch and validate a fresh agent certificate. A live
+agent/controller/Vault graph and existing-connection revocation drain are
+still required before release readiness.
 
 The candidate broker's pinned public key is supplied to the broker process through its
 operator-owned runtime authority (`SANDBOX_RUNTIME_DESKTOP_BRIDGE_PUBLIC_KEY`

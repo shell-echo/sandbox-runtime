@@ -7,7 +7,8 @@ Browser executor role.
 The backend owns only:
 
 - a pinned Chromium CDP WebSocket URL supplied by the operator;
-- its own server certificate, private key, client CA, and URI identity allowlist;
+- a profile-bound TLS-agent signer socket, pinned server/client CA bundles,
+  and the sole Browser-role client identity declared by the security profile;
 - a bounded concurrent-session policy.
 
 It does not read Provider state, write PostgreSQL, resolve handoff references,
@@ -19,14 +20,15 @@ The authority document is a mode-0600 private regular file. A minimal shape is:
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "role": "browser",
   "listen_address": "127.0.0.1:9443",
   "upstream_url": "ws://127.0.0.1:9222/devtools/browser/<opaque-id>",
-  "server_certificate_file": "/run/private/browser-executor/server.pem",
-  "server_private_key_file": "/run/private/browser-executor/server.key",
-  "client_ca_bundle_file": "/run/private/browser-executor/ca.pem",
-  "allowed_client_identities": ["spiffe://sandbox-runtime/browser-role"],
+  "security_profile_path": "/run/private/phase6-security-profile.json",
+  "security_profile_digest": "sha256:<64 lowercase hex digits>",
+  "tls_agent_socket": "/run/tls/browser-executor-tls-agent/signer.sock",
+  "tls_agent_uid": 20001,
+  "tls_agent_gid": 30001,
   "max_sessions": 32,
   "operation_timeout_millis": 5000
 }
@@ -37,6 +39,15 @@ Start it independently:
 ```bash
 go run ./cmd/browser-executor-backend serve /absolute/path/to/authority.json
 ```
+
+The profile supplies the read-only server/client CA artifacts, exact SHA-256
+digests, mount identities and permitted consumers. The UID/GID and port above
+are illustrative; production values must match the
+verified profile and the actual process identity. Version 1 local-key
+authority is not accepted by the production command. Every new TLS handshake
+obtains a validated certificate from the agent; signer loss denies new
+handshakes. Existing connection revocation/drain still requires its named
+gate.
 
 The `upstream_url` must identify the private CDP endpoint of the already
 started pinned Browser runtime. The relay does not start that runtime and does

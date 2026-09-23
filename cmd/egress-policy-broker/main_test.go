@@ -168,3 +168,19 @@ func TestBrokerListenerMustMatchClosedProfile(t *testing.T) {
 		t.Fatal("extra listener accepted")
 	}
 }
+
+func TestBrokerInboundEdgeIsUniqueAndPortBound(t *testing.T) {
+	profile := phase6security.Profile{TrustEdges: []phase6security.TrustEdge{{ID: "role-broker", From: "product-runtime",
+		To: "egress-broker-product", Protocol: "tls", Port: 8443, Authentication: "mtls"}}}
+	if _, ok := brokerInboundEdge(profile, "product-runtime", "egress-broker-product", "0.0.0.0:8443"); !ok {
+		t.Fatal("declared broker edge rejected")
+	}
+	if _, ok := brokerInboundEdge(profile, "product-runtime", "egress-broker-product", "0.0.0.0:9443"); ok {
+		t.Fatal("port drift accepted")
+	}
+	profile.TrustEdges = append(profile.TrustEdges, phase6security.TrustEdge{ID: "other", From: "guest-runtime",
+		To: "egress-broker-product", Protocol: "tls", Port: 8443, Authentication: "mtls"})
+	if _, ok := brokerInboundEdge(profile, "product-runtime", "egress-broker-product", "0.0.0.0:8443"); ok {
+		t.Fatal("extra inbound caller accepted")
+	}
+}

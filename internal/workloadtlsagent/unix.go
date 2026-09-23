@@ -289,6 +289,25 @@ func (c *Client) Certificate(ctx context.Context) (tls.Certificate, error) {
 		generation: snapshot.Generation, publicKey: publicKey}, Leaf: mustParseCertificate(snapshot.CertificateDER[0])}, nil
 }
 
+// CertificateForHandshake binds signing to the TLS handshake lifetime. The
+// crypto.Signer interface has no context parameter, so this explicitly keeps
+// cancellation from a client hello through the later CertificateVerify sign.
+func (c *Client) CertificateForHandshake(ctx context.Context) (tls.Certificate, error) {
+	if ctx == nil {
+		return tls.Certificate{}, ErrUnavailable
+	}
+	certificate, err := c.Certificate(ctx)
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+	signer, ok := certificate.PrivateKey.(*RemoteSigner)
+	if !ok {
+		return tls.Certificate{}, ErrUnavailable
+	}
+	signer.context = ctx
+	return certificate, nil
+}
+
 func (c *Client) newRequest(ctx context.Context, kind string, generation int64, digest []byte) (Request, error) {
 	if c == nil || ctx == nil {
 		return Request{}, ErrUnavailable
@@ -359,6 +378,7 @@ type RemoteSigner struct {
 	client     *Client
 	generation int64
 	publicKey  crypto.PublicKey
+	context    context.Context
 }
 
 func (s *RemoteSigner) Public() crypto.PublicKey {
@@ -372,7 +392,11 @@ func (s *RemoteSigner) Sign(_ io.Reader, digest []byte, opts crypto.SignerOpts) 
 	if s == nil || s.client == nil {
 		return nil, ErrUnavailable
 	}
-	return s.client.Sign(context.Background(), s.generation, digest, opts)
+	ctx := s.context
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return s.client.Sign(ctx, s.generation, digest, opts)
 }
 
 func readFrame(reader io.Reader, maximum int) ([]byte, error) {
