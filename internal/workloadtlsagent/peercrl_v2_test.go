@@ -27,7 +27,8 @@ func peerCRLTestRequest(t *testing.T, now time.Time, issuerDigest string) PeerCR
 	request, err := NewPeerCRLRequest(PeerCRLRequest{RequestID: "crl_" + strings.Repeat("a", 32),
 		Nonce:    base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{1}, 32)),
 		Deadline: now.Add(20 * time.Second).Format(time.RFC3339Nano), ProfileDigest: peerCRLTestDigest("profile"),
-		EdgeID: "product-provider-contract", LocalPrincipalDigest: peerCRLTestDigest("product"),
+		SourceMappingDigest: peerCRLTestDigest("mapping"),
+		EdgeID:              "product-provider-contract", LocalPrincipalDigest: peerCRLTestDigest("product"),
 		Direction: "outbound", PeerAnchorID: "internal-server-ca", IssuerDigest: issuerDigest}, now)
 	if err != nil {
 		t.Fatal(err)
@@ -88,6 +89,7 @@ func TestPeerCRLV2CanonicalRequestAndNoV1Fallback(t *testing.T) {
 		})
 	}
 	for name, mutate := range map[string]func(*PeerCRLRequest){
+		"wrong mapping":   func(value *PeerCRLRequest) { value.SourceMappingDigest = peerCRLTestDigest("other") },
 		"wrong edge":      func(value *PeerCRLRequest) { value.EdgeID = "gateway-provider-private" },
 		"wrong role":      func(value *PeerCRLRequest) { value.LocalPrincipalDigest = peerCRLTestDigest("gateway") },
 		"wrong direction": func(value *PeerCRLRequest) { value.Direction = "inbound" },
@@ -110,7 +112,7 @@ func TestPeerCRLV2ResponseBindsRequestSourceAndCompleteBytes(t *testing.T) {
 	issuerDER, crlDER := peerCRLTestDER(t, now)
 	issuerHash := sha256.Sum256(issuerDER)
 	request := peerCRLTestRequest(t, now, "sha256:"+hex.EncodeToString(issuerHash[:]))
-	response, err := NewPeerCRLResponse(request, "vault-peer-source", issuerDER, crlDER, now)
+	response, err := NewPeerCRLResponse(request, "vault-peer-source", issuerDER, crlDER, now, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,18 +124,24 @@ func TestPeerCRLV2ResponseBindsRequestSourceAndCompleteBytes(t *testing.T) {
 	if err != nil || !bytes.Equal(decoded.CRLDER, crlDER) || decoded.SourceID != "vault-peer-source" {
 		t.Fatalf("valid v2 response rejected: %v", err)
 	}
+	if bootstrap, err := DecodePeerCRLResponse(document, request, nil, now); err != nil || !bytes.Equal(bootstrap.IssuerDER, issuerDER) {
+		t.Fatalf("fixed-digest bootstrap issuer rejected: %v", err)
+	}
 	otherIssuerDER, _ := peerCRLTestDER(t, now)
 	if _, err := DecodePeerCRLResponse(document, request, otherIssuerDER, now); err == nil {
 		t.Fatal("signed CRL accepted under another peer issuer")
 	}
 	for name, mutate := range map[string]func(*PeerCRLResponse){
 		"wrong request":    func(value *PeerCRLResponse) { value.RequestDigest = peerCRLTestDigest("other") },
+		"wrong mapping":    func(value *PeerCRLResponse) { value.SourceMappingDigest = peerCRLTestDigest("other") },
 		"wrong edge":       func(value *PeerCRLResponse) { value.EdgeID = "gateway-provider-private" },
 		"wrong issuer":     func(value *PeerCRLResponse) { value.IssuerDigest = peerCRLTestDigest("other") },
 		"missing source":   func(value *PeerCRLResponse) { value.SourceID = "" },
 		"wrong CRL digest": func(value *PeerCRLResponse) { value.CRLDigest = peerCRLTestDigest("other") },
 		"wrong number":     func(value *PeerCRLResponse) { value.CRLNumber = "8" },
+		"wrong issuer DER": func(value *PeerCRLResponse) { value.IssuerDER = otherIssuerDER },
 		"stale":            func(value *PeerCRLResponse) { value.NextUpdate = now.Add(-time.Second).Format(time.RFC3339Nano) },
+		"old collection":   func(value *PeerCRLResponse) { value.CollectedAt = now.Add(-2 * time.Minute).Format(time.RFC3339Nano) },
 	} {
 		t.Run(name, func(t *testing.T) {
 			changed := response

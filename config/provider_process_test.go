@@ -17,6 +17,31 @@ func TestProviderProcessDisabledDefaultsAreInert(t *testing.T) {
 	}
 }
 
+func TestProviderLegacyRejectsUnreleasedPeerCRLBinding(t *testing.T) {
+	candidate := validProviderProcessConfig(t)
+	if err := candidate.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	for name, mutate := range map[string]func(*ProviderProcessConfig){
+		"role file": func(value *ProviderProcessConfig) { value.Transport.PeerCRLRoleFile = "/tmp/peer-role.json" },
+		"role digest": func(value *ProviderProcessConfig) {
+			value.Transport.PeerCRLRoleDigest = "sha256:" + strings.Repeat("a", 64)
+		},
+		"mapping digest": func(value *ProviderProcessConfig) {
+			value.Transport.PeerCRLSourceMappingDigest = "sha256:" + strings.Repeat("b", 64)
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			value := *candidate
+			value.Transport = candidate.Transport
+			mutate(&value)
+			if err := value.Validate(); err == nil {
+				t.Fatal("legacy Provider accepted peer CRL role binding")
+			}
+		})
+	}
+}
+
 func TestProviderProcessProductionV2RejectsRuntimeMigrationAndRawAuthority(t *testing.T) {
 	candidate := validProviderProcessConfig(t)
 	candidate.SchemaVersion = ProviderProductionSchemaV2
@@ -59,6 +84,24 @@ func TestProviderProcessProductionV2RejectsRuntimeMigrationAndRawAuthority(t *te
 	if err := candidate.Validate(); err != nil {
 		t.Fatalf("valid Provider production v2 configuration: %v", err)
 	}
+	for name, mutate := range map[string]func(*ProviderProcessConfig){
+		"role file": func(value *ProviderProcessConfig) { value.Transport.PeerCRLRoleFile = "/tmp/peer-role.json" },
+		"role digest": func(value *ProviderProcessConfig) {
+			value.Transport.PeerCRLRoleDigest = "sha256:" + strings.Repeat("a", 64)
+		},
+		"mapping digest": func(value *ProviderProcessConfig) {
+			value.Transport.PeerCRLSourceMappingDigest = "sha256:" + strings.Repeat("b", 64)
+		},
+	} {
+		t.Run("v2 rejects "+name, func(t *testing.T) {
+			value := *candidate
+			value.Transport = candidate.Transport
+			mutate(&value)
+			if err := value.Validate(); err == nil {
+				t.Fatal("v2 accepted peer CRL role binding")
+			}
+		})
+	}
 
 	unsafe := *candidate
 	unsafe.Postgres = candidate.Postgres
@@ -83,6 +126,9 @@ func TestProviderProcessV3RequiresTwoLiveListenersAndOnlyNonTLSMaterials(t *test
 	candidate.Transport.AllowedClientURIIdentities = []string{"spiffe://sandbox-runtime.test/product-runtime"}
 	candidate.Transport.SecurityProfilePath = filepath.Join(t.TempDir(), "profile.json")
 	candidate.Transport.SecurityProfileDigest = "sha256:" + strings.Repeat("a", 64)
+	candidate.Transport.PeerCRLRoleFile = filepath.Join(filepath.Dir(candidate.Transport.SecurityProfilePath), "peer-crl-role.json")
+	candidate.Transport.PeerCRLRoleDigest = "sha256:" + strings.Repeat("b", 64)
+	candidate.Transport.PeerCRLSourceMappingDigest = "sha256:" + strings.Repeat("c", 64)
 	candidate.Transport.AgentSocket = "/tmp/provider-tls-agent-test.sock"
 	candidate.Transport.AgentUID, candidate.Transport.AgentGID = 501, 20
 	candidate.Transport.OperationTimeoutMillis = 3000
@@ -123,6 +169,16 @@ func TestProviderProcessV3RequiresTwoLiveListenersAndOnlyNonTLSMaterials(t *test
 		t.Fatalf("valid coding-shell Provider v3: %v", err)
 	}
 	for name, mutate := range map[string]func(*ProviderProcessConfig){
+		"missing peer role":      func(value *ProviderProcessConfig) { value.Transport.PeerCRLRoleFile = "" },
+		"missing role digest":    func(value *ProviderProcessConfig) { value.Transport.PeerCRLRoleDigest = "" },
+		"missing mapping digest": func(value *ProviderProcessConfig) { value.Transport.PeerCRLSourceMappingDigest = "" },
+		"malformed role digest":  func(value *ProviderProcessConfig) { value.Transport.PeerCRLRoleDigest = "sha256:ABC" },
+		"malformed map digest":   func(value *ProviderProcessConfig) { value.Transport.PeerCRLSourceMappingDigest = "sha256:ABC" },
+		"old v3 all absent": func(value *ProviderProcessConfig) {
+			value.Transport.PeerCRLRoleFile = ""
+			value.Transport.PeerCRLRoleDigest = ""
+			value.Transport.PeerCRLSourceMappingDigest = ""
+		},
 		"raw certificate":        func(value *ProviderProcessConfig) { value.Transport.ServerCertificateFile = "/tmp/provider.pem" },
 		"static binding":         func(value *ProviderProcessConfig) { value.Transport.ServerPrivateKeyBindingID = "old-key" },
 		"private static binding": func(value *ProviderProcessConfig) { value.Transport.Private.ClientCABundleBindingID = "old-ca" },

@@ -226,6 +226,9 @@ type ProviderTransportConfig struct {
 	AllowedClientURIIdentities []string    `mapstructure:"allowed_client_uri_identities"`
 	SecurityProfilePath        string      `mapstructure:"security_profile_path"`
 	SecurityProfileDigest      string      `mapstructure:"security_profile_digest"`
+	PeerCRLRoleFile            string      `mapstructure:"peer_crl_role_file"`
+	PeerCRLRoleDigest          string      `mapstructure:"peer_crl_role_digest"`
+	PeerCRLSourceMappingDigest string      `mapstructure:"peer_crl_source_mapping_digest"`
 	AgentSocket                string      `mapstructure:"agent_socket"`
 	AgentUID                   uint32      `mapstructure:"agent_uid"`
 	AgentGID                   uint32      `mapstructure:"agent_gid"`

@@ -168,6 +168,7 @@ func NewGatewayApplicationGraph(ctx context.Context, cfg *config.DataPlaneProces
 	var registry *secretref.Registry
 	var transportTLS *tls.Config
 	var tlsProbe func(context.Context) error
+	var peerCRLGuard *phase6tls.PeerCRLGuard
 	var dsn string
 	var grantKey []byte
 	var providerClient *http.Client
@@ -196,10 +197,16 @@ func NewGatewayApplicationGraph(ctx context.Context, cfg *config.DataPlaneProces
 			return ApplicationGraph{}, errors.New("Gateway material registry has an unexpected authority set")
 		}
 		var securityProfile phase6security.Profile
+		var peerCRLRole phase6security.PeerCRLRoleDocument
 		if v3 {
 			securityProfile, err = phase6security.VerifyFile(cfg.TLS.SecurityProfilePath)
 			if err != nil || securityProfile.ProfileDigest != cfg.TLS.SecurityProfileDigest {
 				return ApplicationGraph{}, errors.New("Gateway security profile mismatch")
+			}
+			peerCRLRole, err = phase6security.VerifyPeerCRLRoleFile(cfg.TLS.PeerCRLRoleFile, securityProfile,
+				cfg.TLS.PeerCRLSourceMappingDigest, cfg.TLS.PeerCRLRoleDigest)
+			if err != nil {
+				return ApplicationGraph{}, errors.New("Gateway peer CRL role binding mismatch")
 			}
 			transportTLS, tlsProbe, err = phase6tls.PublicServer(securityProfile, phase6tls.PublicServerAuthority{
 				ListenerID: "gateway-public", ListenAddress: cfg.Public.Addr(), Port: cfg.Public.Port,
@@ -229,24 +236,29 @@ func NewGatewayApplicationGraph(ctx context.Context, cfg *config.DataPlaneProces
 		}
 		grantKey = append([]byte(nil), grantMaterial.Bytes...)
 		grantMaterial.Destroy()
-		var clientTLS *tls.Config
+		var clientTransport *http.Transport
 		var tlsErr error
 		if v3 {
-			clientTLS, tlsErr = phase6tls.GatewayProviderClient(securityProfile, phase6tls.GatewayProviderClientAuthority{
+			clientTransport, peerCRLGuard, tlsErr = phase6tls.GatewayProviderClient(securityProfile, phase6tls.GatewayProviderClientAuthority{
 				Origin: authority.Credential.ProviderOrigin, AgentSocket: cfg.TLS.AgentSocket,
-				AgentUID: cfg.TLS.AgentUID, AgentGID: cfg.TLS.AgentGID,
+				PeerCRLRole: peerCRLRole,
+				AgentUID:    cfg.TLS.AgentUID, AgentGID: cfg.TLS.AgentGID,
 				OperationTimeout: time.Duration(cfg.TLS.OperationTimeoutMillis) * time.Millisecond})
 		} else {
 			parsed, _ := url.Parse(authority.Credential.ProviderOrigin)
-			clientTLS, tlsErr = tlsmaterial.ResolveClient(ctx, registry,
+			clientTLS, resolveErr := tlsmaterial.ResolveClient(ctx, registry,
 				authority.Credential.ProviderCABundleBindingID, authority.Credential.ProviderClientCertificateBindingID,
 				authority.Credential.ProviderClientPrivateKeyBindingID, parsed.Hostname(), time.Now)
+			tlsErr = resolveErr
+			if tlsErr == nil {
+				clientTransport = &http.Transport{TLSClientConfig: clientTLS}
+			}
 		}
 		if tlsErr != nil {
 			clear(grantKey)
 			return ApplicationGraph{}, errors.New("load Gateway Provider TLS material")
 		}
-		providerClient = &http.Client{Transport: &http.Transport{TLSClientConfig: clientTLS, DisableKeepAlives: v3}, Timeout: time.Duration(cfg.Drain.DependencyTimeouts) * time.Second}
+		providerClient = &http.Client{Transport: clientTransport, Timeout: time.Duration(cfg.Drain.DependencyTimeouts) * time.Second}
 	} else {
 		dsn, err = readGatewayDSN(authority.Credential.ProductRuntimeDSNFile)
 		if err != nil {
@@ -316,6 +328,14 @@ func NewGatewayApplicationGraph(ctx context.Context, cfg *config.DataPlaneProces
 		return ApplicationGraph{}, fmt.Errorf("construct Gateway public handler: %w", err)
 	}
 	handler := newGatewayPublicHandler(terminal, authority.Policy)
+	stopPeerPoll := func() {}
+	if peerCRLGuard != nil {
+		stopPeerPoll, err = peerCRLGuard.StartPolling(ctx)
+		if err != nil {
+			closePool()
+			return ApplicationGraph{}, errors.New("start Gateway peer revocation monitor")
+		}
+	}
 	graphCreated = true
 	return ApplicationGraph{
 		Public: handler,
@@ -337,9 +357,21 @@ func NewGatewayApplicationGraph(ctx context.Context, cfg *config.DataPlaneProces
 					return err
 				}
 			}
+			if cfg.SchemaVersion == config.DataPlaneProductionSchemaV3 {
+				if peerCRLGuard == nil || peerCRLGuard.Bootstrap(checkContext) != nil || !peerCRLGuard.Ready() {
+					return phase6tls.ErrPeerCRLUnavailable
+				}
+			}
 			return gatewayProviderReachable(checkContext, providerClient, authority.Credential.ProviderOrigin)
 		},
 		Shutdown: func(context.Context) error {
+			stopPeerPoll()
+			if peerCRLGuard != nil {
+				peerCRLGuard.Close()
+			}
+			if providerClient != nil {
+				providerClient.CloseIdleConnections()
+			}
 			closePool()
 			if registry != nil {
 				registry.Close()

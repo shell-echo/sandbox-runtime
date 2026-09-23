@@ -40,14 +40,16 @@ type PrivateTransportOptions struct {
 	MaxHeaderBytes             int
 	MaxBodyBytes               int64
 	ConnectionMaxAge           time.Duration
+	PeerRevocationMonitor      PeerRevocationMonitor
 }
 
 // PrivateServer is an independent lifecycle and routing boundary. It cannot
 // be mounted on Server's public Contract listener by construction.
 type PrivateServer struct {
-	http        *http.Server
-	listen      func(context.Context, string, string) (net.Listener, error)
-	connections *connectiondrain.Registry
+	http           *http.Server
+	listen         func(context.Context, string, string) (net.Listener, error)
+	connections    *connectiondrain.Registry
+	peerRevocation PeerRevocationMonitor
 }
 
 func NewPrivateServer(ctx context.Context, options PrivateTransportOptions) (*PrivateServer, error) {
@@ -117,12 +119,20 @@ func NewPrivateServer(ctx context.Context, options PrivateTransportOptions) (*Pr
 		if err != nil {
 			return nil, errors.New("Provider private connection lifetime is invalid")
 		}
+		if options.PeerRevocationMonitor != nil && connections.OnClose(options.PeerRevocationMonitor.Forget) != nil {
+			return nil, errors.New("Provider private peer revocation cleanup is unavailable")
+		}
+	}
+	if options.PeerRevocationMonitor != nil && (options.TLSConfig == nil || connections == nil ||
+		options.PeerRevocationMonitor.PollInterval() < 100*time.Millisecond || options.PeerRevocationMonitor.PollInterval() > time.Minute) {
+		return nil, errors.New("Provider private peer revocation monitor requires bounded live TLS")
 	}
 	handler := boundedPrivateHandler(options.Handler, maxBody)
 	return &PrivateServer{
 		http: &http.Server{Addr: options.Address.Addr(), Handler: handler, TLSConfig: tlsConfig,
+			ConnState:         peerRevocationConnState(options.PeerRevocationMonitor),
 			ReadHeaderTimeout: readHeader, ReadTimeout: read, WriteTimeout: write, IdleTimeout: idle, MaxHeaderBytes: maxHeader},
-		listen: (&net.ListenConfig{}).Listen, connections: connections,
+		listen: (&net.ListenConfig{}).Listen, connections: connections, peerRevocation: options.PeerRevocationMonitor,
 	}, nil
 }
 
@@ -163,6 +173,11 @@ func (s *PrivateServer) Startup(ctx context.Context) error {
 	}
 	stop := context.AfterFunc(ctx, func() { _ = listener.Close() })
 	defer stop()
+	if s.peerRevocation != nil {
+		defer s.peerRevocation.Close()
+	}
+	stopPeerPoll := startPeerRevocationPoll(ctx, s.peerRevocation)
+	defer stopPeerPoll()
 	if err := s.http.ServeTLS(listener, "", ""); err != nil && !errors.Is(err, http.ErrServerClosed) && !(ctx.Err() != nil && errors.Is(err, net.ErrClosed)) {
 		return fmt.Errorf("start Provider private server: %w", err)
 	}
@@ -175,6 +190,9 @@ func (s *PrivateServer) Shutdown(ctx context.Context) error {
 	}
 	if s.connections != nil {
 		s.connections.Drain()
+	}
+	if s.peerRevocation != nil {
+		s.peerRevocation.Close()
 	}
 	return normalizeProviderShutdownError(s.http.Shutdown(ctx))
 }

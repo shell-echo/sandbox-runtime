@@ -14,6 +14,23 @@ type Registry struct {
 	active  map[*trackedConn]struct{}
 	maxAge  time.Duration
 	drained bool
+	onClose func(net.Conn)
+}
+
+// OnClose installs a cleanup hook before the listener is wrapped. The hook
+// runs once for each socket, including hijacked sockets closed by max age or
+// shutdown drain.
+func (r *Registry) OnClose(hook func(net.Conn)) error {
+	if r == nil || hook == nil {
+		return errors.New("connection close hook is required")
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.drained || len(r.active) != 0 || r.onClose != nil {
+		return errors.New("connection close hook must be installed before accepts")
+	}
+	r.onClose = hook
+	return nil
 }
 
 func New(maxAge time.Duration) (*Registry, error) {
@@ -98,7 +115,11 @@ func (c *trackedConn) Close() error {
 		c.registry.mu.Lock()
 		c.timer.Stop()
 		delete(c.registry.active, c)
+		hook := c.registry.onClose
 		c.registry.mu.Unlock()
+		if hook != nil {
+			hook(c)
+		}
 	})
 	return c.err
 }

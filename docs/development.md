@@ -698,9 +698,21 @@ claims.
 
 ## Product Phase 6 production-hardening discipline
 
-The Phase 6 workload TLS agent retains its `workload-tls-agent.v1` message
-protocol but its production command requires
-`sandbox-runtime.workload-tls-agent-config.v2`. Give each agent and role
+The Phase 6 workload TLS agent retains its frozen `workload-tls-agent.v1`
+certificate/signing message protocol. The peer-revocation capability is a
+separate `workload-tls-agent.v2` read-only CRL pull, enabled only by the
+explicit `workload-tls-agent-config.v3` and a private canonical operator
+source document whose full digest is pinned in the agent and controller
+configurations. Provider/Gateway live-signer configurations additionally
+require a private role-derived edge/issuer document, its digest and the full
+source-mapping digest. A fresh zero-peer CRL bootstrap is part of readiness;
+handshake and active-connection polling still use the actual TLS-verified
+issuer/leaf. Provider/Gateway live-signer role-config v3 is an unpublished
+draft tightened in place: all three peer-CRL binding fields are mandatory,
+and old development snapshots must be regenerated rather than silently
+defaulted or downgraded. The previous v2 command configuration remains a component
+compatibility path and does not enable production peer-revocation admission.
+Give each agent and role
 different UIDs/GIDs. The one shared signer directory is owned by the agent
 UID and role GID, mode 0710; the socket is owned by the agent UID, mode 0666.
 This process has the private `KindTLSAgent` identity, not the
@@ -708,7 +720,9 @@ This process has the private `KindTLSAgent` identity, not the
 the TLS agent cannot receive a workload-credential.v2 Vault token. The PKI
 requester-to-subject relation is one-to-one, including separate executor and
 per-egress-broker agents.
-The certificate-controller command requires its v3 config and the same
+The certificate-controller's read-only signed peer-CRL pull requires its
+explicit v4 command configuration and source document; v3 remains the
+historical issuance/revocation path. Both use the same
 canonical profile-derived principal registry. Give every TLS agent its own
 controller endpoint: controller-UID owner, agent-GID 0710 directory, 0666
 socket, controller read-write and that agent read-only mounts. The one

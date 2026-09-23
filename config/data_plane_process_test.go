@@ -25,6 +25,22 @@ func TestDataPlaneProcessValidatesRoleSpecificAuthority(t *testing.T) {
 	if err := gateway.Validate(); err != nil {
 		t.Fatalf("valid gateway role: %v", err)
 	}
+	for name, mutate := range map[string]func(*DataPlaneProcessConfig){
+		"role file":   func(value *DataPlaneProcessConfig) { value.TLS.PeerCRLRoleFile = path("peer-role.json") },
+		"role digest": func(value *DataPlaneProcessConfig) { value.TLS.PeerCRLRoleDigest = "sha256:" + strings.Repeat("a", 64) },
+		"mapping digest": func(value *DataPlaneProcessConfig) {
+			value.TLS.PeerCRLSourceMappingDigest = "sha256:" + strings.Repeat("b", 64)
+		},
+	} {
+		t.Run("legacy rejects "+name, func(t *testing.T) {
+			value := *gateway
+			value.TLS = gateway.TLS
+			mutate(&value)
+			if err := value.Validate(); err == nil {
+				t.Fatal("legacy accepted peer CRL role binding")
+			}
+		})
+	}
 
 	guest := base(DataPlaneGuest)
 	guest.Public.Port, guest.Private.Port = 0, 0
@@ -107,6 +123,22 @@ func TestDataPlaneProductionV2RequiresRoleScopedMaterialBindings(t *testing.T) {
 	if err := candidate.Validate(); err != nil {
 		t.Fatalf("valid Browser production material configuration: %v", err)
 	}
+	for name, mutate := range map[string]func(*DataPlaneProcessConfig){
+		"role file":   func(value *DataPlaneProcessConfig) { value.TLS.PeerCRLRoleFile = path("peer-role.json") },
+		"role digest": func(value *DataPlaneProcessConfig) { value.TLS.PeerCRLRoleDigest = "sha256:" + strings.Repeat("a", 64) },
+		"mapping digest": func(value *DataPlaneProcessConfig) {
+			value.TLS.PeerCRLSourceMappingDigest = "sha256:" + strings.Repeat("b", 64)
+		},
+	} {
+		t.Run("v2 rejects "+name, func(t *testing.T) {
+			value := *candidate
+			value.TLS = candidate.TLS
+			mutate(&value)
+			if err := value.Validate(); err == nil {
+				t.Fatal("v2 accepted peer CRL role binding")
+			}
+		})
+	}
 
 	unsafe := *candidate
 	unsafe.TLS = candidate.TLS
@@ -143,7 +175,9 @@ func TestGatewayProductionV3RequiresLiveTLSAndOnlyTwoMaterials(t *testing.T) {
 	}
 	candidate.TLS = DataPlaneTLSConfig{
 		SecurityProfilePath: path("security-profile.json"), SecurityProfileDigest: "sha256:" + strings.Repeat("a", 64),
-		AgentSocket: path("tls-agent.sock"), AgentUID: 501, AgentGID: 20, OperationTimeoutMillis: 3000,
+		PeerCRLRoleFile: path("peer-crl-role.json"), PeerCRLRoleDigest: "sha256:" + strings.Repeat("b", 64),
+		PeerCRLSourceMappingDigest: "sha256:" + strings.Repeat("c", 64),
+		AgentSocket:                path("tls-agent.sock"), AgentUID: 501, AgentGID: 20, OperationTimeoutMillis: 3000,
 	}
 	candidate.Materials.Provider = RoleMaterialProviderConfig{
 		Type: UnixWorkloadMaterialProviderV1, Alias: "gateway-material-agent", SocketPath: "/tmp/gateway-material-agent-test.sock",
@@ -170,6 +204,16 @@ func TestGatewayProductionV3RequiresLiveTLSAndOnlyTwoMaterials(t *testing.T) {
 		t.Fatalf("valid Gateway v3: %v", err)
 	}
 	for name, mutate := range map[string]func(*DataPlaneProcessConfig){
+		"missing peer role":      func(value *DataPlaneProcessConfig) { value.TLS.PeerCRLRoleFile = "" },
+		"missing role digest":    func(value *DataPlaneProcessConfig) { value.TLS.PeerCRLRoleDigest = "" },
+		"missing mapping digest": func(value *DataPlaneProcessConfig) { value.TLS.PeerCRLSourceMappingDigest = "" },
+		"malformed role digest":  func(value *DataPlaneProcessConfig) { value.TLS.PeerCRLRoleDigest = "sha256:ABC" },
+		"malformed map digest":   func(value *DataPlaneProcessConfig) { value.TLS.PeerCRLSourceMappingDigest = "sha256:ABC" },
+		"old v3 all absent": func(value *DataPlaneProcessConfig) {
+			value.TLS.PeerCRLRoleFile = ""
+			value.TLS.PeerCRLRoleDigest = ""
+			value.TLS.PeerCRLSourceMappingDigest = ""
+		},
 		"raw private key":      func(value *DataPlaneProcessConfig) { value.TLS.PrivateKeyFile = path("raw.key") },
 		"static key binding":   func(value *DataPlaneProcessConfig) { value.TLS.PrivateKeyBindingID = "old-key" },
 		"client CA binding":    func(value *DataPlaneProcessConfig) { value.TLS.ClientCABundleBindingID = "old-ca" },

@@ -38,6 +38,7 @@ type TransportOptions struct {
 	AllowedClientURIIdentities []string
 	Protected                  *ProtectedTransportOptions
 	ConnectionMaxAge           time.Duration
+	PeerRevocationMonitor      PeerRevocationMonitor
 }
 
 // Server is the dedicated mTLS-only Provider API server. Construction validates
@@ -48,6 +49,7 @@ type Server struct {
 	identityAdmission *clientIdentityAdmission
 	listen            func(context.Context, string, string) (net.Listener, error)
 	connections       *connectiondrain.Registry
+	peerRevocation    PeerRevocationMonitor
 }
 
 // NewServer constructs the complete Provider transport boundary. It is the
@@ -94,6 +96,11 @@ func NewServer(ctx context.Context, options TransportOptions, source provider.Ca
 			options.AllowedClientURIIdentities,
 		)
 	}
+	if options.PeerRevocationMonitor != nil && (options.TLSConfig == nil || options.ConnectionMaxAge == 0 ||
+		options.PeerRevocationMonitor.PollInterval() < 100*time.Millisecond ||
+		options.PeerRevocationMonitor.PollInterval() > time.Minute) {
+		return nil, errors.New("Provider peer revocation monitor requires bounded live TLS")
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -115,16 +122,21 @@ func NewServer(ctx context.Context, options TransportOptions, source provider.Ca
 		if err != nil {
 			return nil, errors.New("Provider Contract connection lifetime is invalid")
 		}
+		if options.PeerRevocationMonitor != nil && connections.OnClose(options.PeerRevocationMonitor.Forget) != nil {
+			return nil, errors.New("Provider peer revocation cleanup is unavailable")
+		}
 	}
 
 	listenConfig := &net.ListenConfig{}
 	return &Server{
 		identityAdmission: identityAdmission,
 		connections:       connections,
+		peerRevocation:    options.PeerRevocationMonitor,
 		http: &http.Server{
 			Addr:              options.Address.Addr(),
 			Handler:           rootHandler,
 			TLSConfig:         tlsConfig,
+			ConnState:         peerRevocationConnState(options.PeerRevocationMonitor),
 			ReadHeaderTimeout: providerReadHeaderTimeout,
 			ReadTimeout:       providerReadTimeout,
 			WriteTimeout:      providerWriteTimeout,
@@ -169,6 +181,11 @@ func (s *Server) Startup(ctx context.Context) error {
 	}
 	stopClosingListener := context.AfterFunc(ctx, func() { _ = listener.Close() })
 	defer stopClosingListener()
+	if s.peerRevocation != nil {
+		defer s.peerRevocation.Close()
+	}
+	stopPeerPoll := startPeerRevocationPoll(ctx, s.peerRevocation)
+	defer stopPeerPoll()
 
 	if err := s.http.ServeTLS(listener, "", ""); err != nil && !errors.Is(err, http.ErrServerClosed) && !(ctx.Err() != nil && errors.Is(err, net.ErrClosed)) {
 		return fmt.Errorf("start Provider API server: %w", err)
@@ -181,6 +198,9 @@ func (s *Server) Startup(ctx context.Context) error {
 func (s *Server) Shutdown(ctx context.Context) error {
 	if s.connections != nil {
 		s.connections.Drain()
+	}
+	if s.peerRevocation != nil {
+		s.peerRevocation.Close()
 	}
 	return normalizeProviderShutdownError(s.http.Shutdown(ctx))
 }

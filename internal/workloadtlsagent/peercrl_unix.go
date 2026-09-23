@@ -15,11 +15,12 @@ import (
 // caller. It must authorize the request's edge/local principal/direction and
 // choose a fixed source; the role never supplies a Vault path or issuer ID.
 type PeerCRLProvider interface {
-	ReadPeerCRL(context.Context, PeerCRLRequest) (sourceID string, issuerDER, crlDER []byte, err error)
+	ReadPeerCRL(context.Context, PeerCRLRequest) (sourceID string, issuerDER, crlDER []byte, collectedAt time.Time, err error)
 }
 
 type PeerCRLBinding struct {
 	ProfileDigest        string
+	SourceMappingDigest  string
 	EdgeID               string
 	LocalPrincipalDigest string
 	Direction            string
@@ -50,18 +51,19 @@ func (s *Server) handlePeerCRL(parent context.Context, connection *net.UnixConn,
 		_ = connection.SetReadDeadline(time.Now())
 		<-watchDone
 	}()
-	sourceID, issuerDER, crlDER, err := s.peerCRLProvider.ReadPeerCRL(operationContext, request)
+	sourceID, issuerDER, crlDER, collectedAt, err := s.peerCRLProvider.ReadPeerCRL(operationContext, request)
 	defer clear(issuerDER)
 	defer clear(crlDER)
 	if err != nil || operationContext.Err() != nil {
 		s.writePeerCRLError(connection, request)
 		return
 	}
-	response, err := NewPeerCRLResponse(request, sourceID, issuerDER, crlDER, s.now().UTC())
+	response, err := NewPeerCRLResponse(request, sourceID, issuerDER, crlDER, collectedAt, s.now().UTC())
 	if err != nil {
 		s.writePeerCRLError(connection, request)
 		return
 	}
+	defer clear(response.IssuerDER)
 	defer clear(response.CRLDER)
 	encoded, err := EncodePeerCRLResponse(response, request, issuerDER, s.now().UTC())
 	if err != nil {
@@ -74,7 +76,8 @@ func (s *Server) handlePeerCRL(parent context.Context, connection *net.UnixConn,
 func (s *Server) writePeerCRLError(connection *net.UnixConn, request PeerCRLRequest) {
 	response := PeerCRLResponse{Protocol: PeerCRLProtocolID, Type: PeerCRLErrorType,
 		RequestID: request.RequestID, RequestDigest: request.RequestDigest, ProfileDigest: request.ProfileDigest,
-		EdgeID: request.EdgeID, Direction: request.Direction, PeerAnchorID: request.PeerAnchorID,
+		SourceMappingDigest: request.SourceMappingDigest,
+		EdgeID:              request.EdgeID, Direction: request.Direction, PeerAnchorID: request.PeerAnchorID,
 		IssuerDigest: request.IssuerDigest}
 	encoded, err := EncodePeerCRLResponse(response, request, nil, s.now().UTC())
 	if err == nil {
@@ -87,6 +90,21 @@ func (c *Client) PeerCRL(ctx context.Context, binding PeerCRLBinding, issuerDER 
 	if c == nil || ctx == nil || len(issuerDER) == 0 || len(issuerDER) > 64<<10 {
 		return PeerCRLResponse{}, ErrUnavailable
 	}
+	issuerHash := sha256.Sum256(issuerDER)
+	return c.peerCRL(ctx, binding, "sha256:"+hex.EncodeToString(issuerHash[:]), issuerDER)
+}
+
+// BootstrapPeerCRL is used only with an operator-pinned expected issuer
+// digest, before a network peer exists. The response carries the complete
+// issuer DER; it does not establish a peer identity or add a trust root.
+func (c *Client) BootstrapPeerCRL(ctx context.Context, binding PeerCRLBinding, issuerDigest string) (PeerCRLResponse, error) {
+	if c == nil || ctx == nil || !peerCRLDigestPattern.MatchString(issuerDigest) {
+		return PeerCRLResponse{}, ErrUnavailable
+	}
+	return c.peerCRL(ctx, binding, issuerDigest, nil)
+}
+
+func (c *Client) peerCRL(ctx context.Context, binding PeerCRLBinding, issuerDigest string, issuerDER []byte) (PeerCRLResponse, error) {
 	if err := ctx.Err(); err != nil {
 		return PeerCRLResponse{}, err
 	}
@@ -102,12 +120,11 @@ func (c *Client) PeerCRL(ctx context.Context, binding PeerCRLBinding, issuerDER 
 		return PeerCRLResponse{}, ErrUnavailable
 	}
 	defer clear(requestID)
-	issuerHash := sha256.Sum256(issuerDER)
 	request, err := NewPeerCRLRequest(PeerCRLRequest{RequestID: "crl_" + hex.EncodeToString(requestID),
 		Nonce: base64.RawURLEncoding.EncodeToString(nonce), Deadline: deadline.UTC().Format(time.RFC3339Nano),
-		ProfileDigest: binding.ProfileDigest, EdgeID: binding.EdgeID,
+		ProfileDigest: binding.ProfileDigest, SourceMappingDigest: binding.SourceMappingDigest, EdgeID: binding.EdgeID,
 		LocalPrincipalDigest: binding.LocalPrincipalDigest, Direction: binding.Direction,
-		PeerAnchorID: binding.PeerAnchorID, IssuerDigest: "sha256:" + hex.EncodeToString(issuerHash[:])}, c.config.Now().UTC())
+		PeerAnchorID: binding.PeerAnchorID, IssuerDigest: issuerDigest}, c.config.Now().UTC())
 	if err != nil {
 		return PeerCRLResponse{}, err
 	}

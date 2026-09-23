@@ -199,6 +199,7 @@ func (c *ProviderProcessConfig) Validate() error { //nolint:cyclop
 		return fmt.Errorf("provider_process.transport: %w", transportErr)
 	}
 	if !liveSchema && (c.Transport.SecurityProfilePath != "" || c.Transport.SecurityProfileDigest != "" ||
+		c.Transport.PeerCRLRoleFile != "" || c.Transport.PeerCRLRoleDigest != "" || c.Transport.PeerCRLSourceMappingDigest != "" ||
 		c.Transport.AgentSocket != "" || c.Transport.AgentUID != 0 || c.Transport.AgentGID != 0 ||
 		c.Transport.OperationTimeoutMillis != 0) {
 		return errors.New("Provider legacy and v2 transports cannot select a live signer")
@@ -261,8 +262,12 @@ func (c *ProviderTransportConfig) validateLiveEnabled() error {
 	if !c.Private.Enabled || len(c.Private.RoutePolicy) != 1 || c.Private.RoutePolicy[0] != ProviderPrivateRouteTerminal ||
 		net.ParseIP(c.Private.Address.Host) == nil ||
 		validateAbsoluteSecretPath("Provider security profile", c.SecurityProfilePath) != nil ||
+		validateAbsoluteSecretPath("Provider peer CRL role", c.PeerCRLRoleFile) != nil ||
 		validateAbsoluteSecretPath("Provider TLS agent socket", c.AgentSocket) != nil ||
-		c.SecurityProfilePath == c.AgentSocket || !providerSHA256Pattern.MatchString(c.SecurityProfileDigest) ||
+		c.SecurityProfilePath == c.AgentSocket || c.PeerCRLRoleFile == c.SecurityProfilePath ||
+		c.PeerCRLRoleFile == c.AgentSocket || !providerSHA256Pattern.MatchString(c.SecurityProfileDigest) ||
+		!providerSHA256Pattern.MatchString(c.PeerCRLRoleDigest) ||
+		!providerSHA256Pattern.MatchString(c.PeerCRLSourceMappingDigest) ||
 		c.AgentUID == 0 || c.AgentGID == 0 || c.OperationTimeoutMillis < 1000 || c.OperationTimeoutMillis > 30_000 {
 		return errors.New("Provider v3 requires a pinned live signer and separate private Terminal listener")
 	}
@@ -277,6 +282,7 @@ func (c *ProviderTransportConfig) validateLiveEnabled() error {
 	}
 	probe := *c
 	probe.SecurityProfilePath, probe.SecurityProfileDigest, probe.AgentSocket = "", "", ""
+	probe.PeerCRLRoleFile, probe.PeerCRLRoleDigest, probe.PeerCRLSourceMappingDigest = "", "", ""
 	probe.AgentUID, probe.AgentGID, probe.OperationTimeoutMillis = 0, 0, 0
 	probe.ServerCertificateBindingID = "provider-contract-cert"
 	probe.ServerPrivateKeyBindingID = "provider-contract-key"

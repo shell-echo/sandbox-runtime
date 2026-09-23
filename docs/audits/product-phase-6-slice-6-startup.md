@@ -22,6 +22,35 @@ watermark. A historical rollback of trusted Vault itself is explicitly outside
 this single-cluster Slice 6 claim. No local peer-CRL observation ledger or
 extra role-writable volume is authorized.
 
+Checkpoint: signed controller and agent v2 snapshots now carry canonical
+collection time; role-side `PeerCRLGuard` checks the actual TLS-verified
+leaf/issuer, re-verifies the complete CRL, bounds source age, detects process-
+local CRL/source/clock rollback and revoked-to-good resurrection, and starts
+not-ready with no inherited good state. The Provider and Gateway private mTLS
+handshake callbacks now invoke it after identity verification. A real TLS 1.3
+handshake component test admits a good leaf and rejects a revoked leaf.
+At that checkpoint, per-connection poll/drain, pre-handshake readiness
+bootstrap, all-role wiring and distinct-process evidence remained open.
+
+Checkpoint: Sandbox required zero-peer readiness with an operator-pinned
+issuer, not first-peer discovery. The agent v2 snapshot now carries bounded
+full issuer DER and signed-source collection time. A private role derivative
+of the canonical source mapping binds each required mTLS edge to the complete
+issuer digest and the full mapping digest; production Provider/Gateway configs
+pin that document and digest. Agent/controller peer-CRL commands pin their
+full source-document digest, and agent v2 requests/responses bind it. The
+role guard bootstraps a complete signed CRL before any peer, then still checks
+the actual TLS-verified immediate issuer and leaf on every handshake.
+Provider Contract/private HTTP transports now track active and hijacked
+sockets, poll the source and drain on revocation/loss with an exact close
+hook; Gateway's outbound Provider transport uses a context-bound TLS dial
+and guarded active-connection registry. Readiness invokes an online bootstrap
+for both Provider edges and the Gateway outbound edge. Focused race tests pass.
+This is component evidence only: full-role rollout, root-only/multi-CA anchor
+negatives, real restart/source-loss gate, all-principal network/privilege
+observations and the immutable Slice 6 manifest are still open. The counter
+remains **5/15**.
+
 ## Corrected premises
 
 The repository does not already enforce Slice 6 merely because TLS 1.3,

@@ -56,6 +56,7 @@ type PeerCRLResponse struct {
 	CRLNumber       string `json:"crl_number"`
 	ThisUpdate      string `json:"this_update"`
 	NextUpdate      string `json:"next_update"`
+	CollectedAt     string `json:"collected_at"`
 	ControllerKeyID string `json:"controller_key_id"`
 	ResponseDigest  string `json:"response_digest"`
 	Signature       string `json:"signature"`
@@ -137,6 +138,7 @@ func NewPeerCRLResponse(request PeerCRLRequest, status string, issuerDER []byte,
 		r.IssuerDER, r.CRLDER = append([]byte(nil), issuerDER...), append([]byte(nil), snapshot.DER...)
 		r.CRLDigest, r.CRLNumber = verified.CRLDigest(), verified.Number().String()
 		r.ThisUpdate, r.NextUpdate = verified.ThisUpdate().UTC().Format(time.RFC3339Nano), verified.NextUpdate().UTC().Format(time.RFC3339Nano)
+		r.CollectedAt = now.UTC().Format(time.RFC3339Nano)
 	} else {
 		r.Type = ErrorType
 	}
@@ -179,7 +181,7 @@ func (r PeerCRLResponse) validateStructure(request PeerCRLRequest, now time.Time
 	if r.Status != StatusOK {
 		if r.Type != ErrorType || (r.Status != StatusDenied && r.Status != StatusUnavailable) ||
 			len(r.IssuerDER) != 0 || len(r.CRLDER) != 0 || r.CRLDigest != "" || r.CRLNumber != "" ||
-			r.ThisUpdate != "" || r.NextUpdate != "" {
+			r.ThisUpdate != "" || r.NextUpdate != "" || r.CollectedAt != "" {
 			return ErrInvalid
 		}
 		return nil
@@ -190,7 +192,9 @@ func (r PeerCRLResponse) validateStructure(request PeerCRLRequest, now time.Time
 	}
 	thisUpdate, err1 := parseTime(r.ThisUpdate)
 	nextUpdate, err2 := parseTime(r.NextUpdate)
-	if err1 != nil || err2 != nil {
+	collectedAt, err3 := parseTime(r.CollectedAt)
+	if err1 != nil || err2 != nil || err3 != nil || collectedAt.After(now.Add(5*time.Second)) ||
+		collectedAt.Before(now.Add(-time.Minute)) || collectedAt.Before(thisUpdate) || !collectedAt.Before(nextUpdate) {
 		return ErrInvalid
 	}
 	verified, err := VerifyCRLForIssuer(RevocationSnapshot{DER: r.CRLDER, ThisUpdate: thisUpdate,

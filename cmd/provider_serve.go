@@ -291,11 +291,17 @@ func newProductionProviderPrivateTerminalServer(ctx context.Context, cfg *config
 	private := cfg.Transport.Private
 	var tlsConfig *tls.Config
 	var tlsProbe func(context.Context) error
+	var peerMonitor *phase6tls.PeerCRLGuard
 	var connectionMaxAge time.Duration
 	if cfg.SchemaVersion == config.ProviderProductionSchemaV3 {
 		profile, profileErr := loadProviderSecurityProfile(cfg)
 		if profileErr != nil {
 			return nil, nil, profileErr
+		}
+		roleDocument, roleErr := phase6security.VerifyPeerCRLRoleFile(cfg.Transport.PeerCRLRoleFile, profile,
+			cfg.Transport.PeerCRLSourceMappingDigest, cfg.Transport.PeerCRLRoleDigest)
+		if roleErr != nil {
+			return nil, nil, errors.New("Provider peer CRL role binding mismatch")
 		}
 		edge, _, _, _, _, boundaryErr := profile.GatewayProviderBoundary("wss://" + private.Address.Addr() + "/private/terminal")
 		if boundaryErr != nil {
@@ -303,8 +309,9 @@ func newProductionProviderPrivateTerminalServer(ctx context.Context, cfg *config
 		}
 		connectionMaxAge = time.Duration(edge.MaxConnectionSeconds) * time.Second
 		var peerURI string
-		tlsConfig, tlsProbe, peerURI, err = phase6tls.ProviderServer(profile, phase6tls.ProviderServerAuthority{
+		tlsConfig, tlsProbe, peerURI, peerMonitor, err = phase6tls.ProviderServer(profile, phase6tls.ProviderServerAuthority{
 			EdgeID: phase6security.GatewayProviderPrivateEdgeID, ListenAddress: private.Address.Addr(),
+			PeerCRLRole: roleDocument,
 			AgentSocket: cfg.Transport.AgentSocket, AgentUID: cfg.Transport.AgentUID, AgentGID: cfg.Transport.AgentGID,
 			OperationTimeout: time.Duration(cfg.Transport.OperationTimeoutMillis) * time.Millisecond})
 		if err == nil && !slices.Equal(private.AllowedClientURIIdentities, []string{peerURI}) {
@@ -326,6 +333,7 @@ func newProductionProviderPrivateTerminalServer(ctx context.Context, cfg *config
 	}
 	result, err := providerapi.NewPrivateServer(ctx, providerapi.PrivateTransportOptions{
 		Address: private.Address, TLSConfig: tlsConfig,
+		PeerRevocationMonitor:      peerMonitor,
 		AllowedClientURIIdentities: append([]string(nil), private.AllowedClientURIIdentities...), Handler: privateHandler,
 		ReadHeaderTimeout: time.Duration(private.ReadHeaderTimeoutMillis) * time.Millisecond, ReadTimeout: time.Duration(private.ReadTimeoutMillis) * time.Millisecond,
 		WriteTimeout: time.Duration(private.WriteTimeoutMillis) * time.Millisecond, IdleTimeout: time.Duration(private.IdleTimeoutMillis) * time.Millisecond,
@@ -467,6 +475,7 @@ func newProductionProviderTransport(ctx context.Context, cfg *config.ProviderPro
 	transport := cfg.Transport
 	var tlsConfig *tls.Config
 	var tlsProbe func(context.Context) error
+	var peerMonitor *phase6tls.PeerCRLGuard
 	var connectionMaxAge time.Duration
 	var err error
 	if cfg.SchemaVersion == config.ProviderProductionSchemaV3 {
@@ -474,14 +483,20 @@ func newProductionProviderTransport(ctx context.Context, cfg *config.ProviderPro
 		if profileErr != nil {
 			return nil, nil, profileErr
 		}
+		roleDocument, roleErr := phase6security.VerifyPeerCRLRoleFile(transport.PeerCRLRoleFile, profile,
+			transport.PeerCRLSourceMappingDigest, transport.PeerCRLRoleDigest)
+		if roleErr != nil {
+			return nil, nil, errors.New("Provider peer CRL role binding mismatch")
+		}
 		edge, _, _, _, _, boundaryErr := profile.ProductProviderBoundary()
 		if boundaryErr != nil || edge.TargetAddress != transport.Address.Addr() {
 			return nil, nil, errors.New("Provider Contract connection boundary does not match profile")
 		}
 		connectionMaxAge = time.Duration(edge.MaxConnectionSeconds) * time.Second
 		var peerURI string
-		tlsConfig, tlsProbe, peerURI, err = phase6tls.ProviderServer(profile, phase6tls.ProviderServerAuthority{
+		tlsConfig, tlsProbe, peerURI, peerMonitor, err = phase6tls.ProviderServer(profile, phase6tls.ProviderServerAuthority{
 			EdgeID: phase6security.ProductProviderContractEdgeID, ListenAddress: transport.Address.Addr(),
+			PeerCRLRole: roleDocument,
 			AgentSocket: transport.AgentSocket, AgentUID: transport.AgentUID, AgentGID: transport.AgentGID,
 			OperationTimeout: time.Duration(transport.OperationTimeoutMillis) * time.Millisecond})
 		if err == nil && !slices.Equal(transport.AllowedClientURIIdentities, []string{peerURI}) {
@@ -498,6 +513,7 @@ func newProductionProviderTransport(ctx context.Context, cfg *config.ProviderPro
 		return nil, nil, errors.New("load Provider Contract TLS material")
 	}
 	result, err := providerapi.NewServer(ctx, providerapi.TransportOptions{Address: transport.Address, TLSConfig: tlsConfig,
+		PeerRevocationMonitor:      peerMonitor,
 		AllowedClientURIIdentities: append([]string(nil), transport.AllowedClientURIIdentities...), Protected: protected,
 		ConnectionMaxAge: connectionMaxAge}, source)
 	return result, tlsProbe, err

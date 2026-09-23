@@ -51,6 +51,7 @@ type configDocument struct {
 	SecurityProfilePath       string              `json:"security_profile_path"`
 	SecurityProfileDigest     string              `json:"security_profile_digest"`
 	PeerCRLSourcesPath        string              `json:"peer_crl_sources_path"`
+	PeerCRLSourcesDigest      string              `json:"peer_crl_sources_digest"`
 	EnvironmentDigest         string              `json:"environment_digest"`
 	ProfileDigest             string              `json:"profile_digest"`
 	LedgerPath                string              `json:"ledger_path"`
@@ -146,8 +147,8 @@ func run() error { //nolint:gocyclo
 	}
 	canonical, err := json.Marshal(config)
 	if err != nil || !bytes.Equal(canonical, document) ||
-		!((config.Protocol == configProtocol && config.PeerCRLSourcesPath == "") ||
-			(config.Protocol == peerCRLConfigProtocol && filepath.IsAbs(config.PeerCRLSourcesPath))) ||
+		!((config.Protocol == configProtocol && config.PeerCRLSourcesPath == "" && config.PeerCRLSourcesDigest == "") ||
+			(config.Protocol == peerCRLConfigProtocol && filepath.IsAbs(config.PeerCRLSourcesPath) && config.PeerCRLSourcesDigest != "")) ||
 		len(config.Listeners) < 1 || len(config.Listeners) > 128 ||
 		len(config.Policies) < 1 || len(config.Policies) > 128 || len(config.VaultClientCertificatePEM) < 1 ||
 		config.VaultServerName == "" || config.OperationTimeoutSeconds < 1 || config.OperationTimeoutSeconds > 60 ||
@@ -174,7 +175,7 @@ func run() error { //nolint:gocyclo
 	var vaultPeerSources []workloadpki.VaultPeerIssuerSource
 	if config.Protocol == peerCRLConfigProtocol {
 		mapping, mappingErr := phase6security.VerifyPeerCRLSourcesFile(config.PeerCRLSourcesPath, profile)
-		if mappingErr != nil {
+		if mappingErr != nil || mapping.Digest() != config.PeerCRLSourcesDigest {
 			return stageError("peer-crl-sources")
 		}
 		peerSources, peerProfile = &mapping, &profile

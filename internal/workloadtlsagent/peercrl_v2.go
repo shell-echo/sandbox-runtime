@@ -1,6 +1,7 @@
 package workloadtlsagent
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/hex"
@@ -41,6 +42,7 @@ type PeerCRLRequest struct {
 	Nonce                string `json:"nonce"`
 	Deadline             string `json:"deadline"`
 	ProfileDigest        string `json:"profile_digest"`
+	SourceMappingDigest  string `json:"source_mapping_digest"`
 	EdgeID               string `json:"edge_id"`
 	LocalPrincipalDigest string `json:"local_principal_digest"`
 	Direction            string `json:"direction"`
@@ -53,21 +55,24 @@ type PeerCRLRequest struct {
 // leaf is good. The role must re-check the signed CRL against its own pinned
 // issuer and the actual TLS-verified peer leaf before admission or retention.
 type PeerCRLResponse struct {
-	Protocol      string `json:"protocol"`
-	Type          string `json:"type"`
-	RequestID     string `json:"request_id"`
-	RequestDigest string `json:"request_digest"`
-	ProfileDigest string `json:"profile_digest"`
-	EdgeID        string `json:"edge_id"`
-	Direction     string `json:"direction"`
-	PeerAnchorID  string `json:"peer_anchor_id"`
-	IssuerDigest  string `json:"issuer_digest"`
-	SourceID      string `json:"source_id"`
-	CRLDER        []byte `json:"crl_der"`
-	CRLDigest     string `json:"crl_digest"`
-	CRLNumber     string `json:"crl_number"`
-	ThisUpdate    string `json:"this_update"`
-	NextUpdate    string `json:"next_update"`
+	Protocol            string `json:"protocol"`
+	Type                string `json:"type"`
+	RequestID           string `json:"request_id"`
+	RequestDigest       string `json:"request_digest"`
+	ProfileDigest       string `json:"profile_digest"`
+	SourceMappingDigest string `json:"source_mapping_digest"`
+	EdgeID              string `json:"edge_id"`
+	Direction           string `json:"direction"`
+	PeerAnchorID        string `json:"peer_anchor_id"`
+	IssuerDigest        string `json:"issuer_digest"`
+	SourceID            string `json:"source_id"`
+	IssuerDER           []byte `json:"issuer_der"`
+	CRLDER              []byte `json:"crl_der"`
+	CRLDigest           string `json:"crl_digest"`
+	CRLNumber           string `json:"crl_number"`
+	ThisUpdate          string `json:"this_update"`
+	NextUpdate          string `json:"next_update"`
+	CollectedAt         string `json:"collected_at"`
 }
 
 func (r PeerCRLRequest) Validate(now time.Time) error {
@@ -75,7 +80,8 @@ func (r PeerCRLRequest) Validate(now time.Time) error {
 	if now.IsZero() || r.Protocol != PeerCRLProtocolID || r.Type != PeerCRLRequestType ||
 		!peerCRLIDPattern.MatchString(r.RequestID) || !validNonce(r.Nonce) || err != nil ||
 		!deadline.After(now) || deadline.After(now.Add(time.Minute)) ||
-		!peerCRLDigestPattern.MatchString(r.ProfileDigest) || !peerCRLNamePattern.MatchString(r.EdgeID) ||
+		!peerCRLDigestPattern.MatchString(r.ProfileDigest) || !peerCRLDigestPattern.MatchString(r.SourceMappingDigest) ||
+		!peerCRLNamePattern.MatchString(r.EdgeID) ||
 		!peerCRLDigestPattern.MatchString(r.LocalPrincipalDigest) ||
 		(r.Direction != "inbound" && r.Direction != "outbound") ||
 		!peerCRLNamePattern.MatchString(r.PeerAnchorID) || !peerCRLDigestPattern.MatchString(r.IssuerDigest) ||
@@ -88,32 +94,39 @@ func (r PeerCRLRequest) Validate(now time.Time) error {
 func (r PeerCRLResponse) Validate(request PeerCRLRequest, now time.Time) error {
 	if request.Validate(now) != nil || r.Protocol != PeerCRLProtocolID || r.RequestID != request.RequestID ||
 		r.RequestDigest != request.RequestDigest || r.ProfileDigest != request.ProfileDigest ||
+		r.SourceMappingDigest != request.SourceMappingDigest ||
 		r.EdgeID != request.EdgeID || r.Direction != request.Direction || r.PeerAnchorID != request.PeerAnchorID ||
 		r.IssuerDigest != request.IssuerDigest {
 		return ErrUnavailable
 	}
 	if r.Type == PeerCRLErrorType {
-		if r.SourceID != "" || len(r.CRLDER) != 0 || r.CRLDigest != "" || r.CRLNumber != "" ||
-			r.ThisUpdate != "" || r.NextUpdate != "" {
+		if r.SourceID != "" || len(r.IssuerDER) != 0 || len(r.CRLDER) != 0 || r.CRLDigest != "" || r.CRLNumber != "" ||
+			r.ThisUpdate != "" || r.NextUpdate != "" || r.CollectedAt != "" {
 			return ErrUnavailable
 		}
 		return nil
 	}
 	if r.Type != PeerCRLSnapshotType || !peerCRLNamePattern.MatchString(r.SourceID) ||
+		len(r.IssuerDER) < 1 || len(r.IssuerDER) > 64<<10 ||
 		len(r.CRLDER) < 1 || len(r.CRLDER) > maxPeerCRLBytes || !peerCRLDigestPattern.MatchString(r.CRLDigest) ||
 		!peerCRLNumberPattern.MatchString(r.CRLNumber) {
 		return ErrUnavailable
 	}
 	thisUpdate, firstErr := parseProtocolTime(r.ThisUpdate)
 	nextUpdate, secondErr := parseProtocolTime(r.NextUpdate)
+	collectedAt, thirdErr := parseProtocolTime(r.CollectedAt)
 	list, listErr := x509.ParseRevocationList(r.CRLDER)
-	if firstErr != nil || secondErr != nil || listErr != nil || list.Number == nil || list.Number.Sign() < 1 ||
+	if firstErr != nil || secondErr != nil || thirdErr != nil || listErr != nil || list.Number == nil || list.Number.Sign() < 1 ||
 		list.Number.String() != r.CRLNumber || !list.ThisUpdate.Equal(thisUpdate) || !list.NextUpdate.Equal(nextUpdate) ||
-		now.Before(thisUpdate) || !now.Before(nextUpdate) || !nextUpdate.After(thisUpdate) {
+		now.Before(thisUpdate) || !now.Before(nextUpdate) || !nextUpdate.After(thisUpdate) ||
+		collectedAt.Before(thisUpdate) || !collectedAt.Before(nextUpdate) ||
+		collectedAt.Before(now.Add(-time.Minute)) || collectedAt.After(now.Add(5*time.Second)) {
 		return ErrUnavailable
 	}
 	digest := sha256.Sum256(r.CRLDER)
-	if r.CRLDigest != "sha256:"+hex.EncodeToString(digest[:]) {
+	issuerDigest := sha256.Sum256(r.IssuerDER)
+	if r.CRLDigest != "sha256:"+hex.EncodeToString(digest[:]) ||
+		r.IssuerDigest != "sha256:"+hex.EncodeToString(issuerDigest[:]) {
 		return ErrUnavailable
 	}
 	return nil
@@ -132,7 +145,7 @@ func NewPeerCRLRequest(request PeerCRLRequest, now time.Time) (PeerCRLRequest, e
 	return request, nil
 }
 
-func NewPeerCRLResponse(request PeerCRLRequest, sourceID string, issuerDER, crlDER []byte, now time.Time) (PeerCRLResponse, error) {
+func NewPeerCRLResponse(request PeerCRLRequest, sourceID string, issuerDER, crlDER []byte, collectedAt, now time.Time) (PeerCRLResponse, error) {
 	list, err := x509.ParseRevocationList(crlDER)
 	if err != nil || list.Number == nil {
 		return PeerCRLResponse{}, ErrUnavailable
@@ -140,11 +153,15 @@ func NewPeerCRLResponse(request PeerCRLRequest, sourceID string, issuerDER, crlD
 	digest := sha256.Sum256(crlDER)
 	response := PeerCRLResponse{Protocol: PeerCRLProtocolID, Type: PeerCRLSnapshotType,
 		RequestID: request.RequestID, RequestDigest: request.RequestDigest, ProfileDigest: request.ProfileDigest,
-		EdgeID: request.EdgeID, Direction: request.Direction, PeerAnchorID: request.PeerAnchorID,
-		IssuerDigest: request.IssuerDigest, SourceID: sourceID, CRLDER: append([]byte(nil), crlDER...),
+		SourceMappingDigest: request.SourceMappingDigest,
+		EdgeID:              request.EdgeID, Direction: request.Direction, PeerAnchorID: request.PeerAnchorID,
+		IssuerDigest: request.IssuerDigest, SourceID: sourceID, IssuerDER: append([]byte(nil), issuerDER...),
+		CRLDER:    append([]byte(nil), crlDER...),
 		CRLDigest: "sha256:" + hex.EncodeToString(digest[:]), CRLNumber: list.Number.String(),
-		ThisUpdate: list.ThisUpdate.UTC().Format(time.RFC3339Nano), NextUpdate: list.NextUpdate.UTC().Format(time.RFC3339Nano)}
+		ThisUpdate: list.ThisUpdate.UTC().Format(time.RFC3339Nano), NextUpdate: list.NextUpdate.UTC().Format(time.RFC3339Nano),
+		CollectedAt: collectedAt.UTC().Format(time.RFC3339Nano)}
 	if response.Validate(request, now) != nil || verifyPeerCRLResponseIssuer(response, request, issuerDER, now) != nil {
+		clear(response.IssuerDER)
 		clear(response.CRLDER)
 		return PeerCRLResponse{}, ErrUnavailable
 	}
@@ -178,6 +195,7 @@ func DecodePeerCRLResponse(document []byte, request PeerCRLRequest, issuerDER []
 	var response PeerCRLResponse
 	if decodeCanonical(document, maxPeerCRLFrame, &response) != nil || response.Validate(request, now) != nil ||
 		response.Type == PeerCRLErrorType || verifyPeerCRLResponseIssuer(response, request, issuerDER, now) != nil {
+		clear(response.IssuerDER)
 		clear(response.CRLDER)
 		return PeerCRLResponse{}, ErrUnavailable
 	}
@@ -185,10 +203,13 @@ func DecodePeerCRLResponse(document []byte, request PeerCRLRequest, issuerDER []
 }
 
 func verifyPeerCRLResponseIssuer(response PeerCRLResponse, request PeerCRLRequest, issuerDER []byte, now time.Time) error {
+	if len(issuerDER) != 0 && !bytes.Equal(response.IssuerDER, issuerDER) {
+		return ErrUnavailable
+	}
 	thisUpdate, _ := parseProtocolTime(response.ThisUpdate)
 	nextUpdate, _ := parseProtocolTime(response.NextUpdate)
 	verified, err := workloadpki.VerifyCRLForIssuer(workloadpki.RevocationSnapshot{DER: response.CRLDER,
-		ThisUpdate: thisUpdate, NextUpdate: nextUpdate}, issuerDER, now)
+		ThisUpdate: thisUpdate, NextUpdate: nextUpdate}, response.IssuerDER, now)
 	if err != nil || verified.IssuerDigest() != request.IssuerDigest {
 		return ErrUnavailable
 	}

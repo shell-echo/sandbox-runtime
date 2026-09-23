@@ -93,6 +93,17 @@ func (c VerifiedCRL) Number() *big.Int {
 func (c VerifiedCRL) ThisUpdate() time.Time { return c.thisUpdate }
 func (c VerifiedCRL) NextUpdate() time.Time { return c.nextUpdate }
 
+// RevokesSerial is used only to retain a role's bounded observation of an
+// unexpired revoked peer across later complete-CRL refreshes. It does not
+// authenticate a leaf; CheckPeer still requires the TLS-verified chain.
+func (c VerifiedCRL) RevokesSerial(serial *big.Int) bool {
+	if c.number == nil || serial == nil || serial.Sign() < 1 {
+		return false
+	}
+	_, revoked := c.revoked[serialString(serial.Bytes())]
+	return revoked
+}
+
 // CheckPeer is only valid after TLS has verified the leaf and issuer against
 // the profile's exact peer-verification root and identity policy.
 func (c VerifiedCRL) CheckPeer(leafDER, issuerDER []byte, now time.Time) error {

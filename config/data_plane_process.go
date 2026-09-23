@@ -43,6 +43,9 @@ type DataPlaneTLSConfig struct {
 	AllowedClientIdentity      []string `mapstructure:"allowed_client_identities"`
 	SecurityProfilePath        string   `mapstructure:"security_profile_path"`
 	SecurityProfileDigest      string   `mapstructure:"security_profile_digest"`
+	PeerCRLRoleFile            string   `mapstructure:"peer_crl_role_file"`
+	PeerCRLRoleDigest          string   `mapstructure:"peer_crl_role_digest"`
+	PeerCRLSourceMappingDigest string   `mapstructure:"peer_crl_source_mapping_digest"`
 	AgentSocket                string   `mapstructure:"agent_socket"`
 	AgentUID                   uint32   `mapstructure:"agent_uid"`
 	AgentGID                   uint32   `mapstructure:"agent_gid"`
@@ -172,13 +175,20 @@ func (c *DataPlaneProcessConfig) Validate() error {
 				c.TLS.ClientCertificateBindingID != "" || c.TLS.ClientPrivateKeyBindingID != "" || c.TLS.ExpectedServerName != "" ||
 				len(c.TLS.AllowedClientIdentity) != 0 ||
 				validateAbsoluteSecretPath("Gateway security profile", c.TLS.SecurityProfilePath) != nil ||
+				validateAbsoluteSecretPath("Gateway peer CRL role", c.TLS.PeerCRLRoleFile) != nil ||
 				validateAbsoluteSecretPath("Gateway TLS agent socket", c.TLS.AgentSocket) != nil ||
-				!providerSHA256Pattern.MatchString(c.TLS.SecurityProfileDigest) || c.TLS.AgentUID == 0 || c.TLS.AgentGID == 0 ||
+				!providerSHA256Pattern.MatchString(c.TLS.SecurityProfileDigest) ||
+				!providerSHA256Pattern.MatchString(c.TLS.PeerCRLRoleDigest) ||
+				!providerSHA256Pattern.MatchString(c.TLS.PeerCRLSourceMappingDigest) ||
+				c.TLS.PeerCRLRoleFile == c.TLS.SecurityProfilePath || c.TLS.PeerCRLRoleFile == c.TLS.AgentSocket ||
+				c.TLS.AgentUID == 0 || c.TLS.AgentGID == 0 ||
 				c.TLS.OperationTimeoutMillis < 1000 || c.TLS.OperationTimeoutMillis > 30_000 {
 				return errors.New("Gateway v3 TLS must use only a pinned live signer")
 			}
-			paths = append(paths, c.TLS.SecurityProfilePath, c.TLS.AgentSocket)
-		} else if c.TLS.SecurityProfilePath != "" || c.TLS.SecurityProfileDigest != "" || c.TLS.AgentSocket != "" ||
+			paths = append(paths, c.TLS.SecurityProfilePath, c.TLS.PeerCRLRoleFile, c.TLS.AgentSocket)
+		} else if c.TLS.SecurityProfilePath != "" || c.TLS.SecurityProfileDigest != "" ||
+			c.TLS.PeerCRLRoleFile != "" || c.TLS.PeerCRLRoleDigest != "" || c.TLS.PeerCRLSourceMappingDigest != "" ||
+			c.TLS.AgentSocket != "" ||
 			c.TLS.AgentUID != 0 || c.TLS.AgentGID != 0 || c.TLS.OperationTimeoutMillis != 0 {
 			return fmt.Errorf("%s v2 TLS cannot select a live signer", c.Role)
 		}
@@ -186,7 +196,9 @@ func (c *DataPlaneProcessConfig) Validate() error {
 		if !c.Materials.IsZero() || c.TLS.CertificateBindingID != "" || c.TLS.PrivateKeyBindingID != "" || c.TLS.ClientCABundleBindingID != "" || c.TLS.ClientCertificateBindingID != "" || c.TLS.ClientPrivateKeyBindingID != "" || c.TLS.ExpectedServerName != "" {
 			return fmt.Errorf("%s legacy local-candidate configuration cannot contain production material bindings", c.Role)
 		}
-		if c.TLS.SecurityProfilePath != "" || c.TLS.SecurityProfileDigest != "" || c.TLS.AgentSocket != "" ||
+		if c.TLS.SecurityProfilePath != "" || c.TLS.SecurityProfileDigest != "" ||
+			c.TLS.PeerCRLRoleFile != "" || c.TLS.PeerCRLRoleDigest != "" || c.TLS.PeerCRLSourceMappingDigest != "" ||
+			c.TLS.AgentSocket != "" ||
 			c.TLS.AgentUID != 0 || c.TLS.AgentGID != 0 || c.TLS.OperationTimeoutMillis != 0 {
 			return fmt.Errorf("%s legacy local-candidate cannot select a live signer", c.Role)
 		}

@@ -70,6 +70,19 @@ returned issuer. The v2 agent path is enabled only by explicit, private,
 canonical source documents in both independent processes. Legacy process
 configuration remains a compatibility path, not a peer-revocation production
 fallback.
+Both command configurations pin the canonical full source-document digest;
+the role receives only a private, canonical derivative with its exact mTLS
+edge/direction/anchor/full issuer digest plus that same source-mapping digest.
+The role configuration pins both derivative and full-mapping digests, and
+agent v2 requests/responses bind the latter. A changed controller/agent file
+or mismatched role document cannot silently select a different live source.
+The Provider/Gateway live-signer role-config v3 is still an unpublished,
+unfrozen Phase 6 draft. This slice tightens that single v3 definition by
+requiring `peer_crl_role_file`, `peer_crl_role_digest` and
+`peer_crl_source_mapping_digest` together. Older development snapshots must
+be regenerated; missing fields fail closed, with no default, implicit v2
+fallback or silent configuration conversion. This is not a compatibility
+claim for those old snapshots or a change to the locked Provider wire API.
 The agent's current v1 Unix snapshot/sign protocol stays frozen. A distinct
 `workload-tls-agent.v2` must bind a read-only complete CRL request/response to
 the profile, exact trust edge, local principal, direction, peer-verification
@@ -80,6 +93,17 @@ CRL signature, issuer/AKI, serial, sequence,
 time and source freshness against its own pinned peer CA before permitting a
 new handshake or retaining an existing connection. An actual TLS-verified
 peer leaf/issuer, not a header or claimed serial, keys the connection registry.
+Before any peer exists, readiness must bootstrap through the same fixed
+agent/controller read using the operator-pinned issuer digest. The bounded v2
+response carries the full issuer DER, which the role hashes and uses to verify
+the complete signed CRL; it neither guesses an issuer from a root bundle nor
+adds a trust root. Every subsequent TLS handshake still uses the immediate
+issuer and leaf from its actual verified chain. Provider and Gateway readiness
+must include this zero-peer online check; source loss makes readiness red.
+Active Provider sockets, including hijacked terminals, and Gateway outbound
+sockets remain in a bounded registry, are polled for new revocations and are
+closed on source loss or a newly revoked leaf. Exact close cleanup and polling
+cancellation are required; a successful handshake alone is not a drain gate.
 The combined Vault publication, controller/agent collection, role polling and
 socket cleanup delay must fit the profile's end-to-end revocation bound;
 individual poll and staleness limits alone do not prove it. Missing issuer
@@ -173,8 +197,9 @@ offset, oversized or mismatched descriptor material; wrong SAN/EKU/CA/time;
 token-policy mismatch; Vault denial; failed first switch; stale old
 connections; and leaked key material all fail closed.
 
-Every role TLS agent exposes only the closed
-`workload-tls-agent.v1` Unix signing protocol. It authenticates the role by
+Every role TLS agent exposes the closed `workload-tls-agent.v1` Unix signing
+protocol and, only under the explicit peer-CRL profile, the separate read-only
+`workload-tls-agent.v2` CRL pull. It authenticates the role by
 socket UID/GID, bounds connections and global nonce replay state, and returns
 only the certificate chain, public key and generation-pinned ECDSA signature.
 The TLS private key remains inside the agent. Rotation preserves the previous
@@ -182,8 +207,9 @@ generation only for the declared overlap, while CRL staleness, missed rotation,
 issuer outage, clock rollback or revocation closes signing at the earliest
 safety deadline.
 
-The wire protocol remains v1, but the production socket layout and command
-configuration are `workload-tls-agent-config.v2`. Version 1's agent-owned
+The signer wire protocol remains v1; peer CRL uses distinct v2. The restricted
+socket layout first introduced by `workload-tls-agent-config.v2` is retained in
+the peer-CRL v3 command configuration. Version 1's agent-owned
 0700 parent and 0600 socket cannot be reached by a role with its required
 distinct UID. Each agent/role pair instead gets one private mount directory:
 agent UID owner, role GID group, mode 0710; its Unix socket is agent-UID-owned,

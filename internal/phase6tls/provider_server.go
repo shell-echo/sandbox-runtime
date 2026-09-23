@@ -17,6 +17,7 @@ import (
 type ProviderServerAuthority struct {
 	EdgeID           string
 	ListenAddress    string
+	PeerCRLRole      phase6security.PeerCRLRoleDocument
 	AgentSocket      string
 	AgentUID         uint32
 	AgentGID         uint32
@@ -27,7 +28,7 @@ type ProviderServerAuthority struct {
 // The Contract edge admits only Product; the private handoff edge admits only
 // Gateway. Both verify the locally signed server leaf against the exact
 // server-verification root and the peer against a separate client root.
-func ProviderServer(profile phase6security.Profile, authority ProviderServerAuthority) (*tls.Config, func(context.Context) error, string, error) {
+func ProviderServer(profile phase6security.Profile, authority ProviderServerAuthority) (*tls.Config, func(context.Context) error, string, *PeerCRLGuard, error) {
 	var edge phase6security.TrustEdge
 	var caller, provider phase6security.Principal
 	var serverAnchor, clientAnchor phase6security.TrustAnchor
@@ -38,48 +39,48 @@ func ProviderServer(profile phase6security.Profile, authority ProviderServerAuth
 	case phase6security.GatewayProviderPrivateEdgeID:
 		edge, caller, provider, serverAnchor, clientAnchor, err = profile.GatewayProviderBoundary("wss://" + authority.ListenAddress + "/private/terminal")
 	default:
-		return nil, nil, "", errors.New("Provider TLS edge is not authorized")
+		return nil, nil, "", nil, errors.New("Provider TLS edge is not authorized")
 	}
 	if err != nil || edge.TargetAddress != authority.ListenAddress || provider.TLS == nil || caller.TLS == nil ||
 		uint32(os.Getuid()) != provider.UID || uint32(os.Getgid()) != provider.GID ||
 		authority.OperationTimeout < time.Second || authority.OperationTimeout > 30*time.Second {
-		return nil, nil, "", errors.New("Provider TLS listener does not match profile")
+		return nil, nil, "", nil, errors.New("Provider TLS listener does not match profile")
 	}
 	binding, agent, subject, err := profile.TLSAgentForSubject("provider-runtime")
 	if err != nil || subject.PrincipalDigest != provider.PrincipalDigest ||
 		authority.AgentSocket != binding.SocketPath || authority.AgentUID != binding.AgentUID ||
 		authority.AgentGID != binding.AgentGID || agent.UID != binding.AgentUID || agent.GID != binding.AgentGID {
-		return nil, nil, "", errors.New("Provider TLS signer does not match profile")
+		return nil, nil, "", nil, errors.New("Provider TLS signer does not match profile")
 	}
 	groups, err := os.Getgroups()
 	if err != nil {
-		return nil, nil, "", errors.New("Provider TLS supplementary groups unavailable")
+		return nil, nil, "", nil, errors.New("Provider TLS supplementary groups unavailable")
 	}
 	for _, group := range groups {
 		if uint32(group) != provider.GID {
-			return nil, nil, "", errors.New("Provider TLS role has supplementary group authority")
+			return nil, nil, "", nil, errors.New("Provider TLS role has supplementary group authority")
 		}
 	}
 	serverIssuerPEM, err := trustanchor.Load(serverAnchor, time.Now())
 	if err != nil {
-		return nil, nil, "", errors.New("Provider own-server issuer anchor unavailable")
+		return nil, nil, "", nil, errors.New("Provider own-server issuer anchor unavailable")
 	}
 	defer clear(serverIssuerPEM)
 	clientRootPEM, err := trustanchor.Load(clientAnchor, time.Now())
 	if err != nil {
-		return nil, nil, "", errors.New("Provider client-verification anchor unavailable")
+		return nil, nil, "", nil, errors.New("Provider client-verification anchor unavailable")
 	}
 	defer clear(clientRootPEM)
 	serverIssuerRoots := x509.NewCertPool()
 	clientRoots := x509.NewCertPool()
 	if !serverIssuerRoots.AppendCertsFromPEM(serverIssuerPEM) || !clientRoots.AppendCertsFromPEM(clientRootPEM) {
-		return nil, nil, "", errors.New("Provider TLS anchors are invalid")
+		return nil, nil, "", nil, errors.New("Provider TLS anchors are invalid")
 	}
 	agentClient, err := workloadtlsagent.NewProductionClient(workloadtlsagent.ClientConfig{
 		SocketPath: authority.AgentSocket, ExpectedUID: authority.AgentUID, ExpectedGID: authority.AgentGID,
 		RoleGID: provider.GID, OperationTimeout: authority.OperationTimeout, Now: time.Now})
 	if err != nil {
-		return nil, nil, "", errors.New("Provider TLS agent unavailable")
+		return nil, nil, "", nil, errors.New("Provider TLS agent unavailable")
 	}
 	config, probe, err := remotetls.NewServerWithProbe(remotetls.ServerOptions{
 		IssuerRoots: serverIssuerRoots, ClientRoots: clientRoots,
@@ -90,7 +91,28 @@ func ProviderServer(profile phase6security.Profile, authority ProviderServerAuth
 		Source: agentClient.CertificateForHandshake, Now: time.Now,
 	})
 	if err != nil {
-		return nil, nil, "", err
+		return nil, nil, "", nil, err
 	}
-	return config, probe, caller.TLS.URI, nil
+	guard, err := NewPeerCRLGuard(profile, authority.PeerCRLRole, edge.ID, provider.PrincipalDigest, "inbound", agentClient,
+		authority.OperationTimeout, time.Now)
+	if err != nil || config.VerifyConnection == nil {
+		return nil, nil, "", nil, errors.New("Provider peer revocation boundary is unavailable")
+	}
+	identityCheck := config.VerifyConnection
+	config.VerifyConnection = func(state tls.ConnectionState) error {
+		if err := identityCheck(state); err != nil {
+			return err
+		}
+		return guard.CheckHandshake(context.Background(), state)
+	}
+	readyProbe := func(ctx context.Context) error {
+		if err := probe(ctx); err != nil {
+			return err
+		}
+		if err := guard.Bootstrap(ctx); err != nil || !guard.Ready() {
+			return ErrPeerCRLUnavailable
+		}
+		return nil
+	}
+	return config, readyProbe, caller.TLS.URI, guard, nil
 }

@@ -103,6 +103,7 @@ func TestPeerCRLV2ResponseSignatureAndCompleteCRL(t *testing.T) {
 		},
 		"profile-switch": func(r *PeerCRLResponse) { r.ProfileDigest = "sha256:" + strings.Repeat("b", 64) },
 		"expired":        func(r *PeerCRLResponse) { r.NextUpdate = fixture.now.Add(-time.Second).Format(time.RFC3339Nano) },
+		"old collection": func(r *PeerCRLResponse) { r.CollectedAt = fixture.now.Add(-2 * time.Minute).Format(time.RFC3339Nano) },
 		"v1-downgrade":   func(r *PeerCRLResponse) { r.Protocol = ProtocolID },
 	} {
 		t.Run(name, func(t *testing.T) {

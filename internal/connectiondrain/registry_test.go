@@ -134,3 +134,52 @@ func TestConnectionLifetimeAndDrainRejectFutureAccept(t *testing.T) {
 		t.Fatalf("accept after drain = %v", err)
 	}
 }
+
+func TestCloseHookRunsExactlyOnceForDrainedSocket(t *testing.T) {
+	raw, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer raw.Close()
+	registry, err := New(time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	closed := make(chan net.Conn, 2)
+	if err := registry.OnClose(func(connection net.Conn) { closed <- connection }); err != nil {
+		t.Fatal(err)
+	}
+	listener, err := registry.Wrap(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client, err := net.DialTimeout("tcp", raw.Addr().String(), time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	server, err := listener.Accept()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := registry.OnClose(func(net.Conn) {}); err == nil {
+		t.Fatal("close hook changed after connection acceptance")
+	}
+	if registry.Drain() != 1 || registry.Drain() != 0 {
+		t.Fatal("drain was not exactly once")
+	}
+	_ = server.Close()
+	select {
+	case observed := <-closed:
+		if observed != server {
+			t.Fatal("close hook received a different socket")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("close hook was not called")
+	}
+	select {
+	case <-closed:
+		t.Fatal("close hook called twice")
+	default:
+	}
+}

@@ -112,10 +112,13 @@ func TestLoadGatewayV3AuthorityHasNoStaticTLSMaterials(t *testing.T) {
 	fixture.cfg.DeploymentLevel = config.ProviderProductionLevel
 	fixture.cfg.Private.Host, fixture.cfg.Private.Port = "127.0.0.1", 8445
 	fixture.cfg.TLS = config.DataPlaneTLSConfig{
-		SecurityProfilePath:   filepath.Join(filepath.Dir(fixture.cfg.Authority.CredentialFile), "profile.json"),
-		SecurityProfileDigest: "sha256:" + strings.Repeat("a", 64),
-		AgentSocket:           filepath.Join(filepath.Dir(fixture.cfg.Authority.CredentialFile), "tls-agent.sock"),
-		AgentUID:              501, AgentGID: 20, OperationTimeoutMillis: 3000,
+		SecurityProfilePath:        filepath.Join(filepath.Dir(fixture.cfg.Authority.CredentialFile), "profile.json"),
+		SecurityProfileDigest:      "sha256:" + strings.Repeat("a", 64),
+		PeerCRLRoleFile:            filepath.Join(filepath.Dir(fixture.cfg.Authority.CredentialFile), "peer-crl-role.json"),
+		PeerCRLRoleDigest:          "sha256:" + strings.Repeat("b", 64),
+		PeerCRLSourceMappingDigest: "sha256:" + strings.Repeat("c", 64),
+		AgentSocket:                filepath.Join(filepath.Dir(fixture.cfg.Authority.CredentialFile), "tls-agent.sock"),
+		AgentUID:                   501, AgentGID: 20, OperationTimeoutMillis: 3000,
 	}
 	fixture.cfg.Materials.Provider = config.RoleMaterialProviderConfig{
 		Type: config.UnixWorkloadMaterialProviderV1, Alias: "gateway-material-agent",

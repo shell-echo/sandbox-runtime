@@ -40,6 +40,7 @@ type configDocument struct {
 	SecurityProfilePath           string                      `json:"security_profile_path"`
 	SecurityProfileDigest         string                      `json:"security_profile_digest"`
 	PeerCRLSourcesPath            string                      `json:"peer_crl_sources_path"`
+	PeerCRLSourcesDigest          string                      `json:"peer_crl_sources_digest"`
 	AgentDeployment               string                      `json:"agent_deployment"`
 	SubjectDeployment             string                      `json:"subject_deployment"`
 	EnvironmentDigest             string                      `json:"environment_digest"`
@@ -103,8 +104,8 @@ func run() error { //nolint:gocyclo
 	}
 	canonical, err := json.Marshal(config)
 	if err != nil || !bytes.Equal(canonical, document) ||
-		!((config.Protocol == configProtocol && config.PeerCRLSourcesPath == "") ||
-			(config.Protocol == peerCRLConfigProtocol && filepath.IsAbs(config.PeerCRLSourcesPath))) ||
+		!((config.Protocol == configProtocol && config.PeerCRLSourcesPath == "" && config.PeerCRLSourcesDigest == "") ||
+			(config.Protocol == peerCRLConfigProtocol && filepath.IsAbs(config.PeerCRLSourcesPath) && config.PeerCRLSourcesDigest != "")) ||
 		config.MaxTTLSeconds < 60 || config.MaxTTLSeconds > maximumPolicyTTL || config.CertificateTTLSeconds < 60 ||
 		int64(config.CertificateTTLSeconds) > config.MaxTTLSeconds || config.RotateAfterSeconds < 1 ||
 		config.RotateAfterSeconds > config.CertificateTTLSeconds*2/3 || config.OverlapSeconds < 0 ||
@@ -140,7 +141,7 @@ func run() error { //nolint:gocyclo
 	var peerSources *phase6security.PeerCRLSources
 	if config.Protocol == peerCRLConfigProtocol {
 		mapping, mappingErr := phase6security.VerifyPeerCRLSourcesFile(config.PeerCRLSourcesPath, profile)
-		if mappingErr != nil {
+		if mappingErr != nil || mapping.Digest() != config.PeerCRLSourcesDigest {
 			return stageError("peer-crl-sources")
 		}
 		peerSources = &mapping
