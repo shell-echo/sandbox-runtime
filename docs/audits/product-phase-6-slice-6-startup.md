@@ -390,6 +390,14 @@ also passed the exact issuer endpoint read after a real revoke. This is
 component evidence only: the mapping is not yet bound to the profile's edge
 authorization, controller/agent v2 wire path or live handshake/drain, and
 there is no current Slice 6 manifest.
+A separate `workload-tls-agent.v2` peer-CRL wire codec is now drafted beside
+the frozen v1 snapshot/sign codec. Its canonical bounded request binds the
+profile digest, exact edge, local principal, direction, peer anchor and full
+issuer digest without accepting a caller-selected Vault path; its response
+binds those fields and a source ID, complete CRL bytes, digest, number and
+times. Decoding re-verifies the signed CRL against the caller's exact issuer
+DER and rejects a v1 fallback. This codec is not yet an agent socket service
+or controller authorization path, so no live handshake/drain claim follows.
 
 ## Exact final inventory
 
