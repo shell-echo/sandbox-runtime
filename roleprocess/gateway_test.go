@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/shell-echo/sandbox-runtime/config"
+	"github.com/shell-echo/sandbox-runtime/internal/secretref"
 )
 
 func TestLoadGatewayAuthorityRejectsUnknownAndBroadConfiguration(t *testing.T) {
@@ -102,6 +103,76 @@ func TestGatewayAuthorityJSONUsesClosedSchema(t *testing.T) {
 	}
 	if len(document) == 0 {
 		t.Fatal("empty Gateway authority document")
+	}
+}
+
+func TestLoadGatewayV3AuthorityHasNoStaticTLSMaterials(t *testing.T) {
+	fixture := gatewayAuthorityFixture(t)
+	fixture.cfg.SchemaVersion = config.DataPlaneProductionSchemaV3
+	fixture.cfg.DeploymentLevel = config.ProviderProductionLevel
+	fixture.cfg.Private.Host, fixture.cfg.Private.Port = "127.0.0.1", 8445
+	fixture.cfg.TLS = config.DataPlaneTLSConfig{
+		SecurityProfilePath:   filepath.Join(filepath.Dir(fixture.cfg.Authority.CredentialFile), "profile.json"),
+		SecurityProfileDigest: "sha256:" + strings.Repeat("a", 64),
+		AgentSocket:           filepath.Join(filepath.Dir(fixture.cfg.Authority.CredentialFile), "tls-agent.sock"),
+		AgentUID:              501, AgentGID: 20, OperationTimeoutMillis: 3000,
+	}
+	fixture.cfg.Materials.Provider = config.RoleMaterialProviderConfig{
+		Type: config.UnixWorkloadMaterialProviderV1, Alias: "gateway-material-agent",
+		SocketPath:  "/tmp/gateway-material-agent-test.sock",
+		ExpectedUID: 502, ExpectedGID: 20, OperationTimeoutSeconds: 3, CacheSeconds: 30,
+	}
+	for _, item := range []struct {
+		id      string
+		purpose secretref.Purpose
+	}{
+		{"gateway-dsn", secretref.PurposePostgresRuntimeDSN},
+		{"gateway-grant", secretref.PurposeGatewayGrantKey},
+	} {
+		document, err := json.Marshal(secretref.Binding{
+			Schema: secretref.BindingSchema, Kind: secretref.KindSecret,
+			Reference: secretref.Reference("secret://vault/kv/" + item.id), Version: "v1", Purpose: item.purpose,
+			TenantID: secretref.SystemTenant, Role: secretref.RoleGateway,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		fixture.cfg.Materials.Bindings = append(fixture.cfg.Materials.Bindings, config.RoleMaterialBindingConfig{
+			ID: item.id, Provider: "gateway-material-agent", Document: string(document),
+		})
+	}
+	fixture.credential.Version = gatewayAuthorityVersionV4
+	fixture.credential.ProductRuntimeDSNFile = ""
+	fixture.credential.GrantKeyFile = ""
+	fixture.credential.ProviderCABundleFile = ""
+	fixture.credential.ProviderClientCertificateFile = ""
+	fixture.credential.ProviderClientPrivateKeyFile = ""
+	fixture.credential.ProductRuntimeDSNBindingID = "gateway-dsn"
+	fixture.credential.GrantKeyBindingID = "gateway-grant"
+	write := func() {
+		writeJSON0600(t, fixture.cfg.Authority.CredentialFile, fixture.credential)
+		writeJSON0600(t, fixture.cfg.Authority.DependencyFile, fixture.dependency)
+		writeJSON0600(t, fixture.cfg.Authority.PolicyFile, fixture.policy)
+	}
+	write()
+	if _, err := LoadGatewayAuthority(fixture.cfg); err != nil {
+		t.Fatalf("valid live Gateway authority: %v", err)
+	}
+	for name, mutate := range map[string]func(*GatewayCredentialAuthority){
+		"old authority version": func(value *GatewayCredentialAuthority) { value.Version = gatewayAuthorityVersionV3 },
+		"static CA path":        func(value *GatewayCredentialAuthority) { value.ProviderCABundleFile = "/tmp/old-ca.pem" },
+		"static client key":     func(value *GatewayCredentialAuthority) { value.ProviderClientPrivateKeyBindingID = "old-key" },
+		"missing grant":         func(value *GatewayCredentialAuthority) { value.GrantKeyBindingID = "" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			candidate := fixture.credential
+			mutate(&candidate)
+			writeJSON0600(t, fixture.cfg.Authority.CredentialFile, candidate)
+			if _, err := LoadGatewayAuthority(fixture.cfg); err == nil {
+				t.Fatal("unsafe Gateway credential authority was accepted")
+			}
+			write()
+		})
 	}
 }
 

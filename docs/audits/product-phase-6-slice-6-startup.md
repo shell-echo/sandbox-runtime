@@ -271,8 +271,8 @@ certificate callback instead of requiring a static certificate array; a
 mixed callback/static configuration is rejected. Its dependency monitor
 rechecks the signer. The v2 path
 remains explicit historical compatibility, not an automatic v3 fallback.
-Provider/Gateway/Guest/Browser/Desktop and Product's internal edges still
-need live-signer migration; all existing-connection revocation drain remains
+At that checkpoint Provider/Gateway/Guest/Browser/Desktop and Product's
+internal edges still needed live-signer migration; all existing-connection revocation drain remains
 mandatory. No Slice 6 evidence manifest is issued.
 
 The canonical profile now has exactly two closed `public_listeners` bindings:
@@ -282,7 +282,7 @@ certificate policy. The validator rejects a third public listener, an
 unbound listener, an optional-client-certificate mode, a client-verification
 anchor, or a role lacking server-auth usage. This is profile component
 evidence only; Product v3 command composition has not passed a real
-distinct-UID process gate, Gateway still lacks v3, and the public listener's
+distinct-UID process gate, and the public listener's
 user/grant authorization remains application-owned.
 
 The profile's earlier global `SeccompDigest` uniqueness check was not a
@@ -316,8 +316,35 @@ bounds, observed upstream loss and restart, and verified exact run-owned
 container/network/volume cleanup. The upstreams were fixed-response Alpine
 `nc` probes, not the Product/Gateway commands. This proves neither TLS/user
 or grant authorization through ingress nor WebRTC ICE/UDP/media delivery,
-disabled IP forwarding, all-principal seccomp/resource enforcement, or the
-final release graph. Phase 6 remains **5/15**.
+all-principal seccomp/resource enforcement, or the final release graph.
+Phase 6 remains **5/15**.
+
+A further component checkpoint imports raw `docker inspect` port mappings and
+requires the relay to be the sole host-published principal, with exactly two
+configured and active TCP bindings; Product/Gateway probes must have none.
+The real relay Docker test now verifies this observation and disabled kernel
+forwarding as well as isolated networks, upstream restart and exact cleanup.
+The canonical local mTLS anchor rule now binds each caller and server to both
+read-only CA artifacts for distinct own-leaf and peer-verification purposes.
+A two-issuer handshake test rejects swapped roots and mismatched signers. The
+profile adds an isolated Product→Provider Contract edge and a separate
+Gateway→Provider private Terminal edge, each with a numeric target, canonical
+route, exact listener, identities and two CA purposes.
+
+Gateway v3 now uses an exclusive live public signer and a separate live
+private Provider client; its material registry contains only Product DSN and
+grant key. Provider coding-shell v3 now selects two distinct profile-bound
+live mTLS listeners: Contract admits Product, private Terminal admits Gateway
+and only the exact `/private/terminal` path. Provider v3 runtime material
+contains only DSN and admission verification keys; Desktop v3 is explicitly
+rejected. Provider transport constructors reject static/live mixing, TLS
+downgrade, optional client certificates, session-resumption bypass and
+client-hello configuration replacement. Real TLS handshake tests show that
+the listener-specific client URI allowlist rejects a wrong role even under a
+trusted client CA. Targeted race tests, root race/vet and both locked Contract
+verifiers pass for this code checkpoint. These are not the actual three-role
+command, cert-rotation, revocation-drain or full-inventory gates. No Slice 6
+manifest or count change follows.
 
 ## Exact final inventory
 

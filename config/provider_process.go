@@ -20,6 +20,7 @@ const (
 	defaultProviderProcessPort         = 8444
 	ProviderLegacyLocalCandidateSchema = "sandbox-runtime.provider-process.legacy-local-candidate.v1"
 	ProviderProductionSchemaV2         = "sandbox-runtime.provider-process.v2"
+	ProviderProductionSchemaV3         = "sandbox-runtime.provider-process.v3"
 )
 
 type ProviderProcessProfile string
@@ -172,9 +173,13 @@ func (c *ProviderProcessConfig) Validate() error { //nolint:cyclop
 	if !c.Enabled {
 		return nil
 	}
-	materialSchema := c.SchemaVersion == ProviderProductionSchemaV2
+	liveSchema := c.SchemaVersion == ProviderProductionSchemaV3
+	materialSchema := c.SchemaVersion == ProviderProductionSchemaV2 || liveSchema
 	if !materialSchema && c.SchemaVersion != ProviderLegacyLocalCandidateSchema {
 		return errors.New("provider_process schema_version is invalid")
+	}
+	if liveSchema && (c.DeploymentLevel != ProviderProductionLevel || c.Profile != ProviderProcessCodingShellProfile) {
+		return errors.New("Provider v3 is available only for the coding_shell production profile")
 	}
 	if c.DeploymentLevel != ProviderProductionLevel && c.DeploymentLevel != ProviderLocalCandidateLevel {
 		return errors.New("provider_process requires deployment_level=production or local_candidate")
@@ -183,7 +188,9 @@ func (c *ProviderProcessConfig) Validate() error { //nolint:cyclop
 		return errors.New("provider_process transport must be enabled")
 	}
 	var transportErr error
-	if materialSchema {
+	if liveSchema {
+		transportErr = c.Transport.validateLiveEnabled()
+	} else if materialSchema {
 		transportErr = c.Transport.validateMaterialEnabled()
 	} else {
 		transportErr = c.Transport.validateEnabled()
@@ -191,10 +198,16 @@ func (c *ProviderProcessConfig) Validate() error { //nolint:cyclop
 	if transportErr != nil {
 		return fmt.Errorf("provider_process.transport: %w", transportErr)
 	}
+	if !liveSchema && (c.Transport.SecurityProfilePath != "" || c.Transport.SecurityProfileDigest != "" ||
+		c.Transport.AgentSocket != "" || c.Transport.AgentUID != 0 || c.Transport.AgentGID != 0 ||
+		c.Transport.OperationTimeoutMillis != 0) {
+		return errors.New("Provider legacy and v2 transports cannot select a live signer")
+	}
 	if net.ParseIP(c.Transport.Address.Host) == nil {
 		return errors.New("provider_process.transport.address.host must be an explicit IP address")
 	}
-	if err := c.Probe.Validate(); err != nil || !exactLoopbackIP(c.Probe.Host) || c.Probe.Port == c.Transport.Address.Port {
+	if err := c.Probe.Validate(); err != nil || !exactLoopbackIP(c.Probe.Host) || c.Probe.Port == c.Transport.Address.Port ||
+		(c.Transport.Private.Enabled && c.Probe.Port == c.Transport.Private.Address.Port) {
 		return errors.New("provider_process.probe must use a distinct explicit loopback address")
 	}
 	capability := ProviderCapabilityConfig{ProviderRevisionID: c.Capability.ProviderRevisionID, Limits: c.Capability.Limits, SnapshotRestoreProfiles: c.Capability.SnapshotRestoreProfiles}
@@ -221,6 +234,13 @@ func (c *ProviderProcessConfig) Validate() error { //nolint:cyclop
 		if c.Desktop.Architecture != "" || c.Desktop.Docker.Image != "" {
 			return errors.New("Desktop runtime authority is forbidden for the coding_shell Provider profile")
 		}
+		if liveSchema && (c.Desktop.ExecutorURL != "" || c.Desktop.BrokerMuxSocketPath != "" ||
+			c.Desktop.ExecutorCABundleFile != "" || c.Desktop.ExecutorCertificateFile != "" ||
+			c.Desktop.ExecutorPrivateKeyFile != "" || c.Desktop.ExecutorBridgePrivateKeyFile != "" ||
+			c.Desktop.ExecutorCABundleBindingID != "" || c.Desktop.ExecutorCertificateBindingID != "" ||
+			c.Desktop.ExecutorPrivateKeyBindingID != "" || c.Desktop.ExecutorBridgePrivateKeyBindingID != "") {
+			return errors.New("Provider coding-shell v3 forbids Desktop executor authority")
+		}
 	case ProviderProcessDesktopProfile:
 		if err := c.validateDesktop(materialSchema); err != nil {
 			return err
@@ -235,6 +255,38 @@ func (c *ProviderProcessConfig) Validate() error { //nolint:cyclop
 		return c.validateMaterialAuthority()
 	}
 	return c.validateAuthorityPaths()
+}
+
+func (c *ProviderTransportConfig) validateLiveEnabled() error {
+	if !c.Private.Enabled || len(c.Private.RoutePolicy) != 1 || c.Private.RoutePolicy[0] != ProviderPrivateRouteTerminal ||
+		net.ParseIP(c.Private.Address.Host) == nil ||
+		validateAbsoluteSecretPath("Provider security profile", c.SecurityProfilePath) != nil ||
+		validateAbsoluteSecretPath("Provider TLS agent socket", c.AgentSocket) != nil ||
+		c.SecurityProfilePath == c.AgentSocket || !providerSHA256Pattern.MatchString(c.SecurityProfileDigest) ||
+		c.AgentUID == 0 || c.AgentGID == 0 || c.OperationTimeoutMillis < 1000 || c.OperationTimeoutMillis > 30_000 {
+		return errors.New("Provider v3 requires a pinned live signer and separate private Terminal listener")
+	}
+	if c.ServerCertificateFile != "" || c.ServerPrivateKeyFile != "" || c.ClientCABundleFile != "" ||
+		c.ServerCertificateBindingID != "" || c.ServerPrivateKeyBindingID != "" ||
+		c.ClientCABundleBindingID != "" || c.ExpectedServerName != "" ||
+		c.Private.ServerCertificateFile != "" || c.Private.ServerPrivateKeyFile != "" ||
+		c.Private.ClientCABundleFile != "" || c.Private.ServerCertificateBindingID != "" ||
+		c.Private.ServerPrivateKeyBindingID != "" || c.Private.ClientCABundleBindingID != "" ||
+		c.Private.ExpectedServerName != "" {
+		return errors.New("Provider v3 cannot contain frozen TLS material")
+	}
+	probe := *c
+	probe.SecurityProfilePath, probe.SecurityProfileDigest, probe.AgentSocket = "", "", ""
+	probe.AgentUID, probe.AgentGID, probe.OperationTimeoutMillis = 0, 0, 0
+	probe.ServerCertificateBindingID = "provider-contract-cert"
+	probe.ServerPrivateKeyBindingID = "provider-contract-key"
+	probe.ClientCABundleBindingID = "provider-contract-ca"
+	probe.ExpectedServerName = "provider.sandbox-runtime.test"
+	probe.Private.ServerCertificateBindingID = "provider-private-cert"
+	probe.Private.ServerPrivateKeyBindingID = "provider-private-key"
+	probe.Private.ClientCABundleBindingID = "provider-private-ca"
+	probe.Private.ExpectedServerName = "provider.sandbox-runtime.test"
+	return probe.validateMaterialEnabled()
 }
 
 func (c *ProviderProcessConfig) validateAdmission(materialSchema bool) error {
@@ -435,12 +487,25 @@ func (c *ProviderProcessConfig) validateMaterialAuthority() error {
 		id      string
 		purpose secretref.Purpose
 	}{
-		{c.Transport.ServerCertificateBindingID, secretref.PurposeTLSCertificate},
-		{c.Transport.ServerPrivateKeyBindingID, secretref.PurposeTLSPrivateKey},
-		{c.Transport.ClientCABundleBindingID, secretref.PurposeCABundle},
 		{c.Postgres.RuntimeDSNBindingID, secretref.PurposePostgresRuntimeDSN},
 	}
-	if c.Transport.Private.Enabled {
+	if c.SchemaVersion == ProviderProductionSchemaV2 {
+		selections = append(selections,
+			struct {
+				id      string
+				purpose secretref.Purpose
+			}{c.Transport.ServerCertificateBindingID, secretref.PurposeTLSCertificate},
+			struct {
+				id      string
+				purpose secretref.Purpose
+			}{c.Transport.ServerPrivateKeyBindingID, secretref.PurposeTLSPrivateKey},
+			struct {
+				id      string
+				purpose secretref.Purpose
+			}{c.Transport.ClientCABundleBindingID, secretref.PurposeCABundle},
+		)
+	}
+	if c.Transport.Private.Enabled && c.SchemaVersion == ProviderProductionSchemaV2 {
 		selections = append(selections,
 			struct {
 				id      string

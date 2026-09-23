@@ -174,6 +174,51 @@ func TestLiveMutualTLSRotatesAndFailsClosed(t *testing.T) {
 	}
 }
 
+func TestLiveMutualTLSKeepsOwnIssuerAndPeerRootsSeparate(t *testing.T) {
+	serverIssuer := newTestIssuer(t)
+	clientIssuer := newTestIssuer(t)
+	serverIdentity, clientIdentity := testIdentities()
+	serverLeaf := issueTestLeaf(t, serverIssuer, serverIdentity, 51)
+	clientLeaf := issueTestLeaf(t, clientIssuer, clientIdentity, 52)
+	serverTLS, err := NewServer(ServerOptions{IssuerRoots: serverIssuer.roots, ClientRoots: clientIssuer.roots,
+		Identity: serverIdentity, Client: &clientIdentity, Now: time.Now,
+		Source: func(context.Context) (tls.Certificate, error) { return serverLeaf, nil }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	clientOptions := ClientOptions{IssuerRoots: clientIssuer.roots, ServerRoots: serverIssuer.roots,
+		Identity: clientIdentity, Server: serverIdentity, ServerName: testServerDNS, Now: time.Now,
+		Source: func(context.Context) (tls.Certificate, error) { return clientLeaf, nil }}
+	clientTLS, err := NewClient(clientOptions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if serverError, clientError := testHandshake(serverTLS, clientTLS); serverError != nil || clientError != nil {
+		t.Fatalf("separate roots rejected: server=%v client=%v", serverError, clientError)
+	}
+	wrongOwnIssuer := clientOptions
+	wrongOwnIssuer.IssuerRoots = serverIssuer.roots
+	if _, err := NewClient(wrongOwnIssuer); err == nil {
+		t.Fatal("client accepted the server root as its own issuer")
+	}
+	wrongPeerRoot := clientOptions
+	wrongPeerRoot.ServerRoots = clientIssuer.roots
+	wrongPeerTLS, err := NewClient(wrongPeerRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if serverError, clientError := testHandshake(serverTLS, wrongPeerTLS); serverError == nil && clientError == nil {
+		t.Fatal("client accepted its own issuer as the remote server root")
+	}
+	wrongSigner := clientOptions
+	wrongClientLeaf := clientLeaf
+	wrongClientLeaf.PrivateKey = issueTestLeaf(t, clientIssuer, clientIdentity, 53).PrivateKey
+	wrongSigner.Source = func(context.Context) (tls.Certificate, error) { return wrongClientLeaf, nil }
+	if _, err := NewClient(wrongSigner); err == nil {
+		t.Fatal("client accepted a signer that did not match its issued leaf")
+	}
+}
+
 func TestLiveTLSRejectsLocalAuthorityDrift(t *testing.T) {
 	issuer := newTestIssuer(t)
 	other := newTestIssuer(t)

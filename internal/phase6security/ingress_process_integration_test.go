@@ -203,10 +203,15 @@ func TestDockerProductionIngressRelayTopology(t *testing.T) {
 		awaitIngressHTTP(t, ctx, containerNames[0], binding.HostBindAddress, body)
 	}
 	inspects := make(map[string]ingressContainerInspect, len(containerNames))
-	for _, name := range containerNames {
+	for index, name := range containerNames {
 		output, err := dockerTopology(ctx, "inspect", name)
 		if err != nil {
 			t.Fatal(err)
+		}
+		deployment := []string{"public-ingress-relay", "gateway-runtime", "product-runtime"}[index]
+		ports, err := ObserveDockerPorts([]byte(output), profile, deployment)
+		if err != nil || (index == 0 && len(ports.Ports) != 2) || (index != 0 && len(ports.Ports) != 0) {
+			t.Fatalf("raw Docker port observation for %s: %#v %v", deployment, ports, err)
 		}
 		var values []ingressContainerInspect
 		if err := json.Unmarshal([]byte(output), &values); err != nil || len(values) != 1 {

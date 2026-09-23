@@ -45,6 +45,9 @@ import (
 )
 
 func newProductionDesktopProvider(ctx context.Context, cfg *config.ProviderProcessConfig, state *providerpostgres.Store, pool *pgxpool.Pool, registry *secretref.Registry) (*productionProviderComposition, error) { //nolint:cyclop
+	if cfg == nil || cfg.SchemaVersion == config.ProviderProductionSchemaV3 {
+		return nil, errors.New("Desktop Provider v3 is not implemented")
+	}
 	stack := &providerCloseStack{}
 	fail := func(err error) (*productionProviderComposition, error) { return nil, errors.Join(err, stack.close()) }
 	desktopConfig := cfg.Desktop
@@ -76,8 +79,10 @@ func newProductionDesktopProvider(ctx context.Context, cfg *config.ProviderProce
 				err = resolveErr
 			}
 			material.Destroy()
-		} else {
+		} else if cfg.SchemaVersion == config.ProviderLegacyLocalCandidateSchema {
 			bridgePrivateKey, err = loadDesktopBridgePrivateKey(desktopConfig.ExecutorBridgePrivateKeyFile)
+		} else {
+			return fail(errors.New("unsupported Desktop Provider secret schema"))
 		}
 		if err != nil {
 			return fail(fmt.Errorf("load production Desktop bridge signing key: %w", err))
@@ -186,7 +191,7 @@ func newProductionDesktopProvider(ctx context.Context, cfg *config.ProviderProce
 	if err != nil {
 		return fail(err)
 	}
-	providerServer, err := newProductionProviderTransport(ctx, cfg, protected, source, registry)
+	providerServer, _, err := newProductionProviderTransport(ctx, cfg, protected, source, registry)
 	if err != nil {
 		return fail(err)
 	}
@@ -204,8 +209,10 @@ func newProductionDesktopProvider(ctx context.Context, cfg *config.ProviderProce
 			} else {
 				executorClient = &http.Client{Transport: &http.Transport{TLSClientConfig: clientTLS}, Timeout: time.Duration(dockerConfig.OperationTimeoutSeconds) * time.Second}
 			}
-		} else {
+		} else if cfg.SchemaVersion == config.ProviderLegacyLocalCandidateSchema {
 			executorClient, clientErr = desktopremote.NewHTTPClient(desktopConfig.ExecutorURL, desktopConfig.ExecutorCABundleFile, desktopConfig.ExecutorCertificateFile, desktopConfig.ExecutorPrivateKeyFile)
+		} else {
+			return fail(errors.New("unsupported Desktop Provider executor TLS schema"))
 		}
 		if clientErr != nil {
 			return fail(fmt.Errorf("construct production Desktop executor client: %w", clientErr))

@@ -224,6 +224,12 @@ type ProviderTransportConfig struct {
 	ClientCABundleBindingID    string      `mapstructure:"client_ca_bundle_binding_id"`
 	ExpectedServerName         string      `mapstructure:"expected_server_name"`
 	AllowedClientURIIdentities []string    `mapstructure:"allowed_client_uri_identities"`
+	SecurityProfilePath        string      `mapstructure:"security_profile_path"`
+	SecurityProfileDigest      string      `mapstructure:"security_profile_digest"`
+	AgentSocket                string      `mapstructure:"agent_socket"`
+	AgentUID                   uint32      `mapstructure:"agent_uid"`
+	AgentGID                   uint32      `mapstructure:"agent_gid"`
+	OperationTimeoutMillis     int         `mapstructure:"operation_timeout_millis"`
 	// Private is a separate mTLS listener for role adapters. It is never
 	// mounted on the locked Provider Contract listener above.
 	Private ProviderPrivateTransportConfig `mapstructure:"private"`
@@ -802,6 +808,9 @@ func (c ProviderLifecycleConfig) Validate() error {
 }
 
 func (c *ProviderTransportConfig) validateEnabled() error {
+	if c.hasLiveSignerFields() {
+		return errors.New("legacy Provider transport cannot select a live signer")
+	}
 	if strings.TrimSpace(c.Address.Host) == "" {
 		return errors.New("address host must not be empty")
 	}
@@ -836,6 +845,9 @@ func (c *ProviderTransportConfig) validateEnabled() error {
 }
 
 func (c *ProviderTransportConfig) validateMaterialEnabled() error {
+	if c.hasLiveSignerFields() {
+		return errors.New("material-backed Provider transport cannot select a live signer")
+	}
 	if strings.TrimSpace(c.Address.Host) == "" {
 		return errors.New("address host must not be empty")
 	}
@@ -858,6 +870,11 @@ func (c *ProviderTransportConfig) validateMaterialEnabled() error {
 		}
 	}
 	return nil
+}
+
+func (c *ProviderTransportConfig) hasLiveSignerFields() bool {
+	return c.SecurityProfilePath != "" || c.SecurityProfileDigest != "" || c.AgentSocket != "" ||
+		c.AgentUID != 0 || c.AgentGID != 0 || c.OperationTimeoutMillis != 0
 }
 
 // Validate applies fail-closed limits to the private adapter listener. The

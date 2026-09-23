@@ -119,7 +119,13 @@ func validateServerOptions(options ServerOptions) error {
 		return fmt.Errorf("%w: HTTP header budget", ErrInvalidServerOptions)
 	}
 	if options.TLSConfig != nil {
-		if options.ServerCertificateFile != "" || options.ServerPrivateKeyFile != "" || options.TLSConfig.MinVersion != tls.VersionTLS13 || options.TLSConfig.MaxVersion != tls.VersionTLS13 || len(options.TLSConfig.Certificates) != 1 || options.TLSConfig.ClientAuth != tls.NoClientCert {
+		staticIdentity := len(options.TLSConfig.Certificates) == 1 && options.TLSConfig.GetCertificate == nil
+		liveIdentity := len(options.TLSConfig.Certificates) == 0 && options.TLSConfig.GetCertificate != nil && options.TLSConfig.SessionTicketsDisabled
+		if options.ServerCertificateFile != "" || options.ServerPrivateKeyFile != "" || options.TLSConfig.MinVersion != tls.VersionTLS13 ||
+			options.TLSConfig.MaxVersion != tls.VersionTLS13 || (!staticIdentity && !liveIdentity) ||
+			options.TLSConfig.ClientAuth != tls.NoClientCert || options.TLSConfig.ClientCAs != nil ||
+			options.TLSConfig.GetConfigForClient != nil || options.TLSConfig.GetClientCertificate != nil ||
+			options.TLSConfig.VerifyConnection != nil || options.TLSConfig.VerifyPeerCertificate != nil {
 			return fmt.Errorf("%w: frozen TLS configuration", ErrInvalidServerOptions)
 		}
 	} else if options.ServerCertificateFile == "" || options.ServerPrivateKeyFile == "" {

@@ -38,9 +38,9 @@ type TransportOptions struct {
 	Protected                  *ProtectedTransportOptions
 }
 
-// Server is the dedicated mTLS-only Provider API server. Construction loads
-// and freezes both TLS material and the capability response before Startup can
-// accept traffic.
+// Server is the dedicated mTLS-only Provider API server. Construction validates
+// either an exclusive live signer or a historical frozen identity and freezes
+// the capability response before Startup can accept traffic.
 type Server struct {
 	http              *http.Server
 	identityAdmission *clientIdentityAdmission
@@ -72,13 +72,14 @@ func NewServer(ctx context.Context, options TransportOptions, source provider.Ca
 	var tlsConfig *tls.Config
 	var identityAdmission *clientIdentityAdmission
 	if options.TLSConfig != nil {
-		if options.ServerCertificateFile != "" || options.ServerPrivateKeyFile != "" || options.ClientCABundleFile != "" ||
-			options.TLSConfig.MinVersion != tls.VersionTLS13 || options.TLSConfig.MaxVersion != tls.VersionTLS13 ||
-			len(options.TLSConfig.Certificates) != 1 || options.TLSConfig.ClientAuth != tls.RequireAndVerifyClientCert || options.TLSConfig.ClientCAs == nil || options.TLSConfig.VerifyConnection == nil {
-			return nil, errors.New("Provider server frozen TLS configuration is invalid")
+		if options.ServerCertificateFile != "" || options.ServerPrivateKeyFile != "" || options.ClientCABundleFile != "" {
+			return nil, errors.New("Provider server TLS configuration mixes static material")
 		}
-		tlsConfig = options.TLSConfig.Clone()
-		identityAdmission, err = newClientIdentityAdmission(options.AllowedClientURIIdentities)
+		tlsConfig, err = cloneStrictProviderMTLS(options.TLSConfig)
+		if err != nil {
+			return nil, err
+		}
+		identityAdmission, err = bindProviderClientAdmission(tlsConfig, options.AllowedClientURIIdentities)
 	} else {
 		tlsConfig, identityAdmission, err = loadMTLSConfigWithIdentity(
 			options.ServerCertificateFile,
@@ -134,7 +135,7 @@ func (h *providerHandler) ServeHTTP(response http.ResponseWriter, request *http.
 }
 
 // Startup serves HTTPS until Shutdown completes. Empty certificate arguments
-// are intentional: the validated key pair is already frozen in TLSConfig.
+// are intentional: the TLS identity is supplied by the validated TLSConfig.
 func (s *Server) Startup(ctx context.Context) error {
 	listener, err := s.listen(ctx, "tcp", s.http.Addr)
 	if err != nil {

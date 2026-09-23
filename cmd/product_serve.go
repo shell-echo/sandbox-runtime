@@ -167,7 +167,7 @@ func runProductionProduct(ctx context.Context, productConfig *config.ProductProc
 			return errors.New("Product security profile mismatch")
 		}
 		tlsConfig, tlsProbe, err = phase6tls.PublicServer(profile, phase6tls.PublicServerAuthority{
-			ListenerID: "product-public", Port: productConfig.API.Port,
+			ListenerID: "product-public", ListenAddress: productConfig.API.Addr(), Port: productConfig.API.Port,
 			AgentSocket: productConfig.TLS.AgentSocket, AgentUID: productConfig.TLS.AgentUID, AgentGID: productConfig.TLS.AgentGID,
 			OperationTimeout: time.Duration(productConfig.TLS.OperationTimeoutMillis) * time.Millisecond})
 	} else {

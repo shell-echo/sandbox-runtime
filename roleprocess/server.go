@@ -99,7 +99,8 @@ func NewWithGraph(ctx context.Context, cfg *config.DataPlaneProcessConfig, graph
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
-	if cfg.SchemaVersion == config.DataPlaneProductionSchemaV2 && cfg.Role != config.DataPlaneGuest && graph.TLS == nil {
+	if (cfg.SchemaVersion == config.DataPlaneProductionSchemaV2 || cfg.SchemaVersion == config.DataPlaneProductionSchemaV3) &&
+		cfg.Role != config.DataPlaneGuest && graph.TLS == nil {
 		return nil, errors.New("production role transport TLS is not resolved")
 	}
 	frozen := *cfg

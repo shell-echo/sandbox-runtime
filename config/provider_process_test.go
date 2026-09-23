@@ -74,6 +74,85 @@ func TestProviderProcessProductionV2RejectsRuntimeMigrationAndRawAuthority(t *te
 	}
 }
 
+func TestProviderProcessV3RequiresTwoLiveListenersAndOnlyNonTLSMaterials(t *testing.T) {
+	candidate := validProviderProcessConfig(t)
+	candidate.SchemaVersion = ProviderProductionSchemaV3
+	candidate.Transport.ServerCertificateFile = ""
+	candidate.Transport.ServerPrivateKeyFile = ""
+	candidate.Transport.ClientCABundleFile = ""
+	candidate.Transport.AllowedClientURIIdentities = []string{"spiffe://sandbox-runtime.test/product-runtime"}
+	candidate.Transport.SecurityProfilePath = filepath.Join(t.TempDir(), "profile.json")
+	candidate.Transport.SecurityProfileDigest = "sha256:" + strings.Repeat("a", 64)
+	candidate.Transport.AgentSocket = "/tmp/provider-tls-agent-test.sock"
+	candidate.Transport.AgentUID, candidate.Transport.AgentGID = 501, 20
+	candidate.Transport.OperationTimeoutMillis = 3000
+	candidate.Transport.Private = ProviderPrivateTransportConfig{
+		Enabled: true, Address: providerDefaultHTTP("127.0.0.1", 8448),
+		AllowedClientURIIdentities: []string{"spiffe://sandbox-runtime.test/gateway-runtime"},
+		RoutePolicy:                []string{ProviderPrivateRouteTerminal}, ReadHeaderTimeoutMillis: 5000,
+		ReadTimeoutMillis: 30000, WriteTimeoutMillis: 30000, IdleTimeoutMillis: 60000,
+		MaxHeaderBytes: 32 << 10, MaxBodyBytes: 256 << 10,
+	}
+	candidate.Postgres.MigrationDSNFile = ""
+	candidate.Postgres.RuntimeDSNFile = ""
+	candidate.Postgres.MigrationRole = ""
+	candidate.Postgres.MigrationMaxConnections = 0
+	candidate.Postgres.RuntimeDSNBindingID = "provider-runtime-dsn"
+	candidate.ProtectedAdmission.TrustedVerificationKeys[0].PublicKeyFile = ""
+	candidate.ProtectedAdmission.TrustedVerificationKeys[0].PublicKeyBindingID = "provider-admission-key"
+	candidate.Materials.Provider = RoleMaterialProviderConfig{
+		Type: UnixWorkloadMaterialProviderV1, Alias: "provider-agent", SocketPath: "/tmp/provider-material-agent-test.sock",
+		ExpectedUID: 502, ExpectedGID: 20, OperationTimeoutSeconds: 3, CacheSeconds: 30,
+	}
+	for _, item := range []struct {
+		id      string
+		purpose secretref.Purpose
+	}{
+		{"provider-runtime-dsn", secretref.PurposePostgresRuntimeDSN},
+		{"provider-admission-key", secretref.PurposeAdmissionVerification},
+	} {
+		document, err := json.Marshal(secretref.Binding{Schema: secretref.BindingSchema, Kind: secretref.KindSecret,
+			Reference: secretref.Reference("secret://vault/kv/" + item.id), Version: "v1", Purpose: item.purpose,
+			TenantID: secretref.SystemTenant, Role: secretref.RoleProvider})
+		if err != nil {
+			t.Fatal(err)
+		}
+		candidate.Materials.Bindings = append(candidate.Materials.Bindings, RoleMaterialBindingConfig{ID: item.id, Provider: "provider-agent", Document: string(document)})
+	}
+	if err := candidate.Validate(); err != nil {
+		t.Fatalf("valid coding-shell Provider v3: %v", err)
+	}
+	for name, mutate := range map[string]func(*ProviderProcessConfig){
+		"raw certificate":        func(value *ProviderProcessConfig) { value.Transport.ServerCertificateFile = "/tmp/provider.pem" },
+		"static binding":         func(value *ProviderProcessConfig) { value.Transport.ServerPrivateKeyBindingID = "old-key" },
+		"private static binding": func(value *ProviderProcessConfig) { value.Transport.Private.ClientCABundleBindingID = "old-ca" },
+		"private disabled":       func(value *ProviderProcessConfig) { value.Transport.Private.Enabled = false },
+		"crossed identity":       func(value *ProviderProcessConfig) { value.Transport.Private.AllowedClientURIIdentities = nil },
+		"extra route": func(value *ProviderProcessConfig) {
+			value.Transport.Private.RoutePolicy = append(value.Transport.Private.RoutePolicy, ProviderPrivateRouteDesktop)
+		},
+		"wrong signer digest": func(value *ProviderProcessConfig) { value.Transport.SecurityProfileDigest = "sha256:abc" },
+		"extra material": func(value *ProviderProcessConfig) {
+			value.Materials.Bindings = append(value.Materials.Bindings, value.Materials.Bindings[0])
+		},
+		"Desktop executor authority": func(value *ProviderProcessConfig) { value.Desktop.ExecutorURL = "wss://desktop.example.test/executor" },
+		"Desktop v3":                 func(value *ProviderProcessConfig) { value.Profile = ProviderProcessDesktopProfile },
+	} {
+		t.Run(name, func(t *testing.T) {
+			value := *candidate
+			value.Transport = candidate.Transport
+			value.Transport.Private = candidate.Transport.Private
+			value.Transport.Private.RoutePolicy = append([]string(nil), candidate.Transport.Private.RoutePolicy...)
+			value.Materials = candidate.Materials
+			value.Materials.Bindings = append([]RoleMaterialBindingConfig(nil), candidate.Materials.Bindings...)
+			mutate(&value)
+			if err := value.Validate(); err == nil {
+				t.Fatal("unsafe Provider v3 configuration was accepted")
+			}
+		})
+	}
+}
+
 func TestProviderProcessValidatesExactDesktopProfile(t *testing.T) {
 	candidate := validProviderProcessConfig(t)
 	directory := t.TempDir()

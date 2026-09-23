@@ -17,6 +17,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/shell-echo/sandbox-runtime/config"
+	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
+	"github.com/shell-echo/sandbox-runtime/internal/phase6tls"
 	"github.com/shell-echo/sandbox-runtime/internal/rolematerials"
 	"github.com/shell-echo/sandbox-runtime/internal/secretfile"
 	"github.com/shell-echo/sandbox-runtime/internal/secretref"
@@ -29,6 +31,7 @@ import (
 const (
 	gatewayAuthorityVersion   = 2
 	gatewayAuthorityVersionV3 = 3
+	gatewayAuthorityVersionV4 = 4
 	maxGatewayAuthoritySize   = 64 << 10
 	maxGatewayDSNSize         = 8 << 10
 
@@ -104,15 +107,26 @@ func LoadGatewayAuthority(cfg *config.DataPlaneProcessConfig) (GatewayAuthority,
 	if err := readAuthority(cfg.Authority.PolicyFile, &policy); err != nil {
 		return GatewayAuthority{}, fmt.Errorf("load Gateway policy authority: %w", err)
 	}
-	production := cfg.SchemaVersion == config.DataPlaneProductionSchemaV2
+	productionV3 := cfg.SchemaVersion == config.DataPlaneProductionSchemaV3
+	production := cfg.SchemaVersion == config.DataPlaneProductionSchemaV2 || productionV3
 	expectedVersion := gatewayAuthorityVersion
-	if production {
+	if productionV3 {
+		expectedVersion = gatewayAuthorityVersionV4
+	} else if production {
 		expectedVersion = gatewayAuthorityVersionV3
 	}
 	if credential.Version != expectedVersion || credential.Role != string(config.DataPlaneGateway) || credential.GrantKeyID == "" || !validProviderOrigin(credential.ProviderOrigin) {
 		return GatewayAuthority{}, errors.New("invalid Gateway credential authority")
 	}
-	if production {
+	if productionV3 {
+		if credential.ProductRuntimeDSNFile != "" || credential.GrantKeyFile != "" || credential.ProviderCABundleFile != "" ||
+			credential.ProviderClientCertificateFile != "" || credential.ProviderClientPrivateKeyFile != "" ||
+			credential.ProductRuntimeDSNBindingID == "" || credential.GrantKeyBindingID == "" ||
+			credential.ProviderCABundleBindingID != "" || credential.ProviderClientCertificateBindingID != "" ||
+			credential.ProviderClientPrivateKeyBindingID != "" {
+			return GatewayAuthority{}, errors.New("invalid Gateway v3 credential authority")
+		}
+	} else if production {
 		if credential.ProductRuntimeDSNFile != "" || credential.GrantKeyFile != "" || credential.ProviderCABundleFile != "" || credential.ProviderClientCertificateFile != "" || credential.ProviderClientPrivateKeyFile != "" ||
 			credential.ProductRuntimeDSNBindingID == "" || credential.GrantKeyBindingID == "" || credential.ProviderCABundleBindingID == "" || credential.ProviderClientCertificateBindingID == "" || credential.ProviderClientPrivateKeyBindingID == "" {
 			return GatewayAuthority{}, errors.New("invalid Gateway credential authority")
@@ -153,6 +167,7 @@ func NewGatewayApplicationGraph(ctx context.Context, cfg *config.DataPlaneProces
 	}
 	var registry *secretref.Registry
 	var transportTLS *tls.Config
+	var tlsProbe func(context.Context) error
 	var dsn string
 	var grantKey []byte
 	var providerClient *http.Client
@@ -162,21 +177,40 @@ func NewGatewayApplicationGraph(ctx context.Context, cfg *config.DataPlaneProces
 			registry.Close()
 		}
 	}()
-	if cfg.SchemaVersion == config.DataPlaneProductionSchemaV2 {
-		registry, err = rolematerials.New(cfg.Materials, secretref.RoleGateway, []secretref.Purpose{
-			secretref.PurposeTLSCertificate, secretref.PurposeTLSPrivateKey, secretref.PurposeCABundle,
-			secretref.PurposePostgresRuntimeDSN, secretref.PurposeGatewayGrantKey,
-		}, true, time.Now)
+	if cfg.SchemaVersion == config.DataPlaneProductionSchemaV2 || cfg.SchemaVersion == config.DataPlaneProductionSchemaV3 {
+		v3 := cfg.SchemaVersion == config.DataPlaneProductionSchemaV3
+		purposes := []secretref.Purpose{secretref.PurposePostgresRuntimeDSN, secretref.PurposeGatewayGrantKey}
+		if !v3 {
+			purposes = append(purposes, secretref.PurposeTLSCertificate, secretref.PurposeTLSPrivateKey, secretref.PurposeCABundle)
+		}
+		registry, err = rolematerials.New(cfg.Materials, secretref.RoleGateway, purposes, true, time.Now)
 		if err != nil {
 			return ApplicationGraph{}, errors.New("construct Gateway material registry")
 		}
 		bindings, decodeErr := cfg.Materials.DecodeBindings(secretref.RoleGateway)
-		if decodeErr != nil || len(bindings) != 7 {
-			return ApplicationGraph{}, errors.New("Gateway material registry must contain exactly seven bindings")
+		expectedBindings := 7
+		if v3 {
+			expectedBindings = 2
 		}
-		transportTLS, err = tlsmaterial.ResolveServer(ctx, registry, cfg.TLS.CertificateBindingID, cfg.TLS.PrivateKeyBindingID, cfg.TLS.ExpectedServerName, time.Now)
+		if decodeErr != nil || len(bindings) != expectedBindings {
+			return ApplicationGraph{}, errors.New("Gateway material registry has an unexpected authority set")
+		}
+		var securityProfile phase6security.Profile
+		if v3 {
+			securityProfile, err = phase6security.VerifyFile(cfg.TLS.SecurityProfilePath)
+			if err != nil || securityProfile.ProfileDigest != cfg.TLS.SecurityProfileDigest {
+				return ApplicationGraph{}, errors.New("Gateway security profile mismatch")
+			}
+			transportTLS, tlsProbe, err = phase6tls.PublicServer(securityProfile, phase6tls.PublicServerAuthority{
+				ListenerID: "gateway-public", ListenAddress: cfg.Public.Addr(), Port: cfg.Public.Port,
+				AgentSocket: cfg.TLS.AgentSocket, AgentUID: cfg.TLS.AgentUID, AgentGID: cfg.TLS.AgentGID,
+				OperationTimeout: time.Duration(cfg.TLS.OperationTimeoutMillis) * time.Millisecond})
+		} else {
+			transportTLS, err = tlsmaterial.ResolveServer(ctx, registry, cfg.TLS.CertificateBindingID,
+				cfg.TLS.PrivateKeyBindingID, cfg.TLS.ExpectedServerName, time.Now)
+		}
 		if err != nil {
-			return ApplicationGraph{}, errors.New("load Gateway server TLS material")
+			return ApplicationGraph{}, errors.New("load Gateway public TLS identity")
 		}
 		dsnMaterial, resolveErr := registry.Resolve(ctx, authority.Credential.ProductRuntimeDSNBindingID, secretref.PurposePostgresRuntimeDSN, secretref.SystemTenant)
 		if resolveErr != nil {
@@ -195,15 +229,24 @@ func NewGatewayApplicationGraph(ctx context.Context, cfg *config.DataPlaneProces
 		}
 		grantKey = append([]byte(nil), grantMaterial.Bytes...)
 		grantMaterial.Destroy()
-		parsed, _ := url.Parse(authority.Credential.ProviderOrigin)
-		clientTLS, tlsErr := tlsmaterial.ResolveClient(ctx, registry,
-			authority.Credential.ProviderCABundleBindingID, authority.Credential.ProviderClientCertificateBindingID, authority.Credential.ProviderClientPrivateKeyBindingID,
-			parsed.Hostname(), time.Now)
+		var clientTLS *tls.Config
+		var tlsErr error
+		if v3 {
+			clientTLS, tlsErr = phase6tls.GatewayProviderClient(securityProfile, phase6tls.GatewayProviderClientAuthority{
+				Origin: authority.Credential.ProviderOrigin, AgentSocket: cfg.TLS.AgentSocket,
+				AgentUID: cfg.TLS.AgentUID, AgentGID: cfg.TLS.AgentGID,
+				OperationTimeout: time.Duration(cfg.TLS.OperationTimeoutMillis) * time.Millisecond})
+		} else {
+			parsed, _ := url.Parse(authority.Credential.ProviderOrigin)
+			clientTLS, tlsErr = tlsmaterial.ResolveClient(ctx, registry,
+				authority.Credential.ProviderCABundleBindingID, authority.Credential.ProviderClientCertificateBindingID,
+				authority.Credential.ProviderClientPrivateKeyBindingID, parsed.Hostname(), time.Now)
+		}
 		if tlsErr != nil {
 			clear(grantKey)
 			return ApplicationGraph{}, errors.New("load Gateway Provider TLS material")
 		}
-		providerClient = &http.Client{Transport: &http.Transport{TLSClientConfig: clientTLS}, Timeout: time.Duration(cfg.Drain.DependencyTimeouts) * time.Second}
+		providerClient = &http.Client{Transport: &http.Transport{TLSClientConfig: clientTLS, DisableKeepAlives: v3}, Timeout: time.Duration(cfg.Drain.DependencyTimeouts) * time.Second}
 	} else {
 		dsn, err = readGatewayDSN(authority.Credential.ProductRuntimeDSNFile)
 		if err != nil {
@@ -289,6 +332,11 @@ func NewGatewayApplicationGraph(ctx context.Context, cfg *config.DataPlaneProces
 					return err
 				}
 			}
+			if tlsProbe != nil {
+				if err := tlsProbe(checkContext); err != nil {
+					return err
+				}
+			}
 			return gatewayProviderReachable(checkContext, providerClient, authority.Credential.ProviderOrigin)
 		},
 		Shutdown: func(context.Context) error {
@@ -302,17 +350,21 @@ func NewGatewayApplicationGraph(ctx context.Context, cfg *config.DataPlaneProces
 }
 
 func verifyGatewayMaterials(ctx context.Context, registry *secretref.Registry, cfg *config.DataPlaneProcessConfig, credential GatewayCredentialAuthority) error {
-	checks := []struct {
+	type materialCheck struct {
 		id      string
 		purpose secretref.Purpose
-	}{
-		{cfg.TLS.CertificateBindingID, secretref.PurposeTLSCertificate},
-		{cfg.TLS.PrivateKeyBindingID, secretref.PurposeTLSPrivateKey},
+	}
+	checks := []materialCheck{
 		{credential.ProductRuntimeDSNBindingID, secretref.PurposePostgresRuntimeDSN},
 		{credential.GrantKeyBindingID, secretref.PurposeGatewayGrantKey},
-		{credential.ProviderCABundleBindingID, secretref.PurposeCABundle},
-		{credential.ProviderClientCertificateBindingID, secretref.PurposeTLSCertificate},
-		{credential.ProviderClientPrivateKeyBindingID, secretref.PurposeTLSPrivateKey},
+	}
+	if cfg.SchemaVersion == config.DataPlaneProductionSchemaV2 {
+		checks = append(checks,
+			materialCheck{cfg.TLS.CertificateBindingID, secretref.PurposeTLSCertificate},
+			materialCheck{cfg.TLS.PrivateKeyBindingID, secretref.PurposeTLSPrivateKey},
+			materialCheck{credential.ProviderCABundleBindingID, secretref.PurposeCABundle},
+			materialCheck{credential.ProviderClientCertificateBindingID, secretref.PurposeTLSCertificate},
+			materialCheck{credential.ProviderClientPrivateKeyBindingID, secretref.PurposeTLSPrivateKey})
 	}
 	for _, check := range checks {
 		material, err := registry.Resolve(ctx, check.id, check.purpose, secretref.SystemTenant)

@@ -20,6 +20,7 @@ type DataPlaneRole string
 const (
 	DataPlaneLegacyLocalCandidateSchema = "sandbox-runtime.data-plane-process.legacy-local-candidate.v1"
 	DataPlaneProductionSchemaV2         = "sandbox-runtime.data-plane-process.v2"
+	DataPlaneProductionSchemaV3         = "sandbox-runtime.data-plane-process.v3"
 
 	DataPlaneGateway DataPlaneRole = "gateway"
 	DataPlaneGuest   DataPlaneRole = "guest"
@@ -40,6 +41,12 @@ type DataPlaneTLSConfig struct {
 	ClientPrivateKeyBindingID  string   `mapstructure:"client_private_key_binding_id"`
 	ExpectedServerName         string   `mapstructure:"expected_server_name"`
 	AllowedClientIdentity      []string `mapstructure:"allowed_client_identities"`
+	SecurityProfilePath        string   `mapstructure:"security_profile_path"`
+	SecurityProfileDigest      string   `mapstructure:"security_profile_digest"`
+	AgentSocket                string   `mapstructure:"agent_socket"`
+	AgentUID                   uint32   `mapstructure:"agent_uid"`
+	AgentGID                   uint32   `mapstructure:"agent_gid"`
+	OperationTimeoutMillis     int      `mapstructure:"operation_timeout_millis"`
 }
 
 type DataPlaneDrainConfig struct {
@@ -120,7 +127,8 @@ func (c *DataPlaneProcessConfig) Validate() error {
 	if !c.Enabled {
 		return nil
 	}
-	production := c.SchemaVersion == DataPlaneProductionSchemaV2 && c.DeploymentLevel == ProviderProductionLevel
+	productionV3 := c.SchemaVersion == DataPlaneProductionSchemaV3 && c.DeploymentLevel == ProviderProductionLevel && c.Role == DataPlaneGateway
+	production := c.SchemaVersion == DataPlaneProductionSchemaV2 && c.DeploymentLevel == ProviderProductionLevel || productionV3
 	legacyCandidate := c.SchemaVersion == DataPlaneLegacyLocalCandidateSchema && c.DeploymentLevel == ProviderLocalCandidateLevel
 	if !production && !legacyCandidate {
 		return fmt.Errorf("%s process schema and deployment level are incompatible", c.Role)
@@ -159,9 +167,28 @@ func (c *DataPlaneProcessConfig) Validate() error {
 		if c.TLS.CertificateFile != "" || c.TLS.PrivateKeyFile != "" || c.TLS.ClientCABundleFile != "" || c.TLS.ClientCertificateFile != "" || c.TLS.ClientPrivateKeyFile != "" {
 			return fmt.Errorf("%s production TLS configuration cannot contain raw paths", c.Role)
 		}
+		if productionV3 {
+			if c.TLS.CertificateBindingID != "" || c.TLS.PrivateKeyBindingID != "" || c.TLS.ClientCABundleBindingID != "" ||
+				c.TLS.ClientCertificateBindingID != "" || c.TLS.ClientPrivateKeyBindingID != "" || c.TLS.ExpectedServerName != "" ||
+				len(c.TLS.AllowedClientIdentity) != 0 ||
+				validateAbsoluteSecretPath("Gateway security profile", c.TLS.SecurityProfilePath) != nil ||
+				validateAbsoluteSecretPath("Gateway TLS agent socket", c.TLS.AgentSocket) != nil ||
+				!providerSHA256Pattern.MatchString(c.TLS.SecurityProfileDigest) || c.TLS.AgentUID == 0 || c.TLS.AgentGID == 0 ||
+				c.TLS.OperationTimeoutMillis < 1000 || c.TLS.OperationTimeoutMillis > 30_000 {
+				return errors.New("Gateway v3 TLS must use only a pinned live signer")
+			}
+			paths = append(paths, c.TLS.SecurityProfilePath, c.TLS.AgentSocket)
+		} else if c.TLS.SecurityProfilePath != "" || c.TLS.SecurityProfileDigest != "" || c.TLS.AgentSocket != "" ||
+			c.TLS.AgentUID != 0 || c.TLS.AgentGID != 0 || c.TLS.OperationTimeoutMillis != 0 {
+			return fmt.Errorf("%s v2 TLS cannot select a live signer", c.Role)
+		}
 	} else {
 		if !c.Materials.IsZero() || c.TLS.CertificateBindingID != "" || c.TLS.PrivateKeyBindingID != "" || c.TLS.ClientCABundleBindingID != "" || c.TLS.ClientCertificateBindingID != "" || c.TLS.ClientPrivateKeyBindingID != "" || c.TLS.ExpectedServerName != "" {
 			return fmt.Errorf("%s legacy local-candidate configuration cannot contain production material bindings", c.Role)
+		}
+		if c.TLS.SecurityProfilePath != "" || c.TLS.SecurityProfileDigest != "" || c.TLS.AgentSocket != "" ||
+			c.TLS.AgentUID != 0 || c.TLS.AgentGID != 0 || c.TLS.OperationTimeoutMillis != 0 {
+			return fmt.Errorf("%s legacy local-candidate cannot select a live signer", c.Role)
 		}
 		for _, value := range []string{c.TLS.CertificateFile, c.TLS.PrivateKeyFile, c.TLS.ClientCABundleFile, c.TLS.ClientCertificateFile, c.TLS.ClientPrivateKeyFile} {
 			if value != "" {
@@ -239,6 +266,9 @@ func validateListener(value option.HTTP, required bool) error {
 
 func (c *DataPlaneProcessConfig) validateServerTLS(production, requireClient bool) error {
 	value := c.TLS
+	if c.SchemaVersion == DataPlaneProductionSchemaV3 && c.Role == DataPlaneGateway {
+		return nil
+	}
 	if production {
 		if value.CertificateBindingID == "" || value.PrivateKeyBindingID == "" || value.ExpectedServerName == "" {
 			return errors.New("TLS server material bindings and expected name are required")
@@ -297,6 +327,23 @@ func (c *DataPlaneProcessConfig) validateProductionMaterials() error {
 	bindings, err := c.Materials.DecodeBindings(role)
 	if err != nil || c.Materials.Provider.CacheSeconds < 1 {
 		return fmt.Errorf("%s production material registry is invalid", c.Role)
+	}
+	if c.SchemaVersion == DataPlaneProductionSchemaV3 && c.Role == DataPlaneGateway {
+		if len(bindings) != 2 {
+			return errors.New("Gateway v3 material registry must contain only database and grant authority")
+		}
+		seen := map[secretref.Purpose]bool{}
+		for _, binding := range bindings {
+			if binding.TenantID != secretref.SystemTenant || binding.Role != role || seen[binding.Purpose] ||
+				(binding.Purpose != secretref.PurposePostgresRuntimeDSN && binding.Purpose != secretref.PurposeGatewayGrantKey) {
+				return errors.New("Gateway v3 material registry contains an unauthorized purpose")
+			}
+			seen[binding.Purpose] = true
+		}
+		if !seen[secretref.PurposePostgresRuntimeDSN] || !seen[secretref.PurposeGatewayGrantKey] {
+			return errors.New("Gateway v3 material registry is incomplete")
+		}
+		return nil
 	}
 	selections := []struct {
 		id      string

@@ -7,9 +7,17 @@ This table follows the actual production command paths. A validated profile
 is configuration authority only; the final Docker gate must observe mounts,
 UID/GID, network membership, TLS handshakes, failure responses and cleanup.
 
+The canonical local mTLS edge now requires both exact endpoint principals to
+have read-only mounts for both direction-specific CA bundles. Each endpoint
+uses its own-certificate issuer root separately from its peer-verification
+root; neither root is a signing key or an inferred reverse edge. A two-issuer
+live TLS test passes with distinct roots and rejects swapped own/peer roots
+and a mismatched client signer. This is component evidence, not the Gateway→
+Provider v3 process gate.
+
 | Edge / key owner | Current production path | Profile binding and remaining gap |
 | --- | --- | --- |
-| Runtime role → its TLS agent | Product has an explicit v3 public-listener path that loads only its profile-bound live signer; Provider/Gateway/Guest/Browser/Desktop still use frozen v2 TLS material. | Eight static role/executor `TLSAgentBinding` records declare signer socket, subject, UID/GID, issuer and cleanup. Product v3 has component tests but no distinct-UID command gate; the other five runtime roles and Product's internal edges remain unmigrated. |
+| Runtime role → its TLS agent | Product and Gateway have explicit v3 public-listener paths; Gateway also has a private Provider client. Provider coding-shell v3 has separate profile-bound Contract and private Terminal listeners, both using its live signer. Guest/Browser/Desktop still use frozen v2 TLS material; Provider Desktop v3 is rejected. | Eight static role/executor `TLSAgentBinding` records declare signer socket, subject, UID/GID, issuer and cleanup. Product/Gateway/Provider v3 have component checks but no distinct-UID composed command gate, certificate-rotation or old-connection revocation-drain proof. |
 | Browser/Desktop executor backend → its TLS agent | Both production commands now require v2 profile-bound signer sockets; the backend listener uses a live certificate callback and rejects combined local-key fallback. CA bundles are loaded from profile-owned read-only trust-anchor artifacts, not arbitrary command paths. | Component tests prove issuer/URI/DNS/EKU/signer/peer mismatch, signer-loss denial for new handshakes, anchor digest/purpose/domain/source rejection. Distinct-UID production-command Docker handshakes, observed read-only mounts and existing-connection revocation drain are still missing. |
 | Egress broker → its TLS agent | `cmd/egress-policy-broker` calls `workloadtlsagent.NewProductionClient` and uses the returned signer for both listener and DNS client TLS. | The broker verifies its canonical signer path and agent UID/GID before connecting. A production broker/agent handshake and existing-connection revocation drain are not yet proven. |
 | TLS agent → certificate controller | `cmd/workload-tls-agent` uses the private `workloadpki` Unix client; one controller command owns multiple per-agent listeners. | The profile now fixes each exclusive controller socket/mount/peer edge, CSR request key, controller response key and issuer policy. Both commands verify the same profile and dynamic broker registry. A package-level Docker test proves two distinct-UID agents with a test CA; the actual commands and Vault are not yet in one graph. |
@@ -30,9 +38,9 @@ revocation drain. A bidirectional response does not authorize a reverse dial.
 | Direction | Listener and independent application authorization | Current state |
 | --- | --- | --- |
 | External client → Product | Relay-only host-published TCP to public API/Web TLS server-only; Product user authentication | Exact profile public-listener/relay binding and explicit Product v3 live-signer command path exist; real Product-through-relay distinct-UID TLS/auth gate and application composition remain. Legacy v2 still freezes material. |
-| External client → Gateway | Relay-only host-published TCP to public signaling TLS server-only; ticket/grant, Origin, session and fence; WebRTC DTLS/SRTP remains separate | Exact profile public-listener/relay binding exists; command still uses frozen v2 server material, not a live signer. No real Gateway-through-relay TLS/auth or UDP/media gate. |
-| Product → Provider | Locked Contract mTLS plus exact JWS caller admission | Product Phase 6 production graph is still a restricted kernel without Provider client composition. |
-| Gateway → Provider | Separate private handoff/media mTLS plus opaque handoff, tenant, generation, fence and expiry | Existing frozen client material and private adapter; profile edge/anchor binding remains. |
+| External client → Gateway | Relay-only host-published TCP to public signaling TLS server-only; ticket/grant, Origin, session and fence; WebRTC DTLS/SRTP remains separate | Gateway v3 now uses an exclusive profile-bound live signer and its two-material registry excludes static TLS keys. No real Gateway-through-relay TLS/auth or UDP/media gate. |
+| Product → Provider | Locked Contract mTLS plus exact JWS caller admission | Provider coding-shell v3 now has a separate Contract listener bound to the `product-provider-contract` edge and Product-only live TLS peer policy. Product Phase 6 production graph remains a restricted kernel without Provider client composition; no real process handoff gate has passed. |
+| Gateway → Provider | Separate private handoff/media mTLS plus opaque handoff, tenant, generation, fence and expiry | Gateway v3 profile binds numeric target, listener, route, identities and both CA purposes. Provider coding-shell v3 has a distinct private Terminal listener with Gateway-only live TLS peer policy. Composed live mTLS, revocation drain and handoff checks remain. |
 | Provider → Browser / Desktop | Separate private executor mTLS plus versioned executor capability/bridge binding | Desktop path exists; Browser production dial and both exact profile routes require verification. |
 | Browser → Browser backend / Desktop → Desktop backend | Matching private backend mTLS; cross-backend denied | Backend listeners use profile-bound live signers; runtime role clients remain frozen v2. |
 | Guest → Product | Separate private Guest-control mTLS plus Ed25519 challenge, GuestID and exact binding/capability | Current Phase 6 peer is a gate fixture. Product production command has not composed the real Guest Hub/listener. |
@@ -45,9 +53,11 @@ migrations, coordination/storage and each role's egress broker remain separate
 actual-consumer infrastructure edges. The canonical profile must include
 those bindings, not infer them from a six-role all-to-all mesh.
 
-The next implementation pass should follow this order: migrate Browser/Desktop
-executor listeners and the six runtime role TLS paths to the bound live
-signers; bind controller/credential/material/Vault edges without adding a
+The next implementation pass should follow this order: verify Provider v3
+against real Product/Gateway/Provider commands and live TLS agents, then migrate
+the remaining Guest/Browser/Desktop runtime role TLS paths to the bound live
+signers; bind controller/
+credential/material/Vault edges without adding a
 second authority; run the real broker→agent→controller→Vault→DNS mTLS graph;
 then run the full distinct-UID, isolated-network negative matrix and strict
 evidence verifier. A new authority, permission expansion or locked-protocol

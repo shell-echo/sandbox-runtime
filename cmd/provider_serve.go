@@ -5,13 +5,17 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/shell-echo/sandbox-runtime/config"
 	"github.com/shell-echo/sandbox-runtime/internal/handoff"
+	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
+	"github.com/shell-echo/sandbox-runtime/internal/phase6tls"
 	"github.com/shell-echo/sandbox-runtime/internal/rolematerials"
 	"github.com/shell-echo/sandbox-runtime/internal/secretfile"
 	"github.com/shell-echo/sandbox-runtime/internal/secretref"
@@ -59,8 +63,9 @@ func runProviderServe(cmd *cobra.Command, _ []string) (result error) {
 	if config.ProviderMigration != nil && config.ProviderMigration.Enabled {
 		return errors.New("Provider runtime and migration authorities cannot share one command")
 	}
-	if providerConfig.SchemaVersion != config.ProviderProductionSchemaV2 {
-		return errors.New("provider serve requires the production v2 material schema")
+	if providerConfig.SchemaVersion != config.ProviderProductionSchemaV2 &&
+		!(providerConfig.SchemaVersion == config.ProviderProductionSchemaV3 && providerConfig.Profile == config.ProviderProcessCodingShellProfile) {
+		return errors.New("provider serve requires an explicit supported production schema")
 	}
 	if config.Server != nil && config.Server.Provider.Transport.Enabled {
 		return errors.New("server.provider belongs to root serve and must be disabled for provider serve")
@@ -70,7 +75,7 @@ func runProviderServe(cmd *cobra.Command, _ []string) (result error) {
 	}
 	startupContext, cancelStartup := context.WithTimeout(cmd.Context(), time.Duration(providerConfig.Postgres.StartupTimeoutSeconds)*time.Second)
 	defer cancelStartup()
-	materialRegistry, err := newProviderRuntimeMaterialRegistry(providerConfig.Materials)
+	materialRegistry, err := newProviderRuntimeMaterialRegistry(providerConfig.Materials, providerConfig.SchemaVersion)
 	if err != nil {
 		return err
 	}
@@ -233,11 +238,11 @@ func newProductionCodingProvider(ctx context.Context, cfg *config.ProviderProces
 	if err != nil {
 		return fail(err)
 	}
-	providerServer, err := newProductionProviderTransport(ctx, cfg, protected, source, registry)
+	providerServer, contractTLSProbe, err := newProductionProviderTransport(ctx, cfg, protected, source, registry)
 	if err != nil {
 		return fail(err)
 	}
-	privateServer, err := newProductionProviderPrivateTerminalServer(ctx, cfg, terminalApp, registry)
+	privateServer, privateTLSProbe, err := newProductionProviderPrivateTerminalServer(ctx, cfg, terminalApp, registry)
 	if err != nil {
 		return fail(err)
 	}
@@ -250,7 +255,8 @@ func newProductionCodingProvider(ctx context.Context, cfg *config.ProviderProces
 	if err != nil {
 		return fail(err)
 	}
-	checker := providerReadinessChecker{state: state, pool: pool, reconciler: reconciler, registry: registry, config: cfg}
+	checker := providerReadinessChecker{state: state, pool: pool, reconciler: reconciler, registry: registry, config: cfg,
+		tlsProbes: []func(context.Context) error{contractTLSProbe, privateTLSProbe}}
 	probe, err := providerprocess.NewServer(cfg.Probe, checker)
 	if err != nil {
 		return fail(err)
@@ -258,12 +264,12 @@ func newProductionCodingProvider(ctx context.Context, cfg *config.ProviderProces
 	return &productionProviderComposition{provider: providerServer, private: privateServer, probe: probe, reconciler: reconciler, close: stack.close}, nil
 }
 
-func newProductionProviderPrivateTerminalServer(ctx context.Context, cfg *config.ProviderProcessConfig, application *providerTerminalApplication, registry *secretref.Registry) (server.Server, error) {
+func newProductionProviderPrivateTerminalServer(ctx context.Context, cfg *config.ProviderProcessConfig, application *providerTerminalApplication, registry *secretref.Registry) (server.Server, func(context.Context) error, error) {
 	if cfg == nil || !cfg.Transport.Private.Enabled {
-		return nil, nil
+		return nil, nil, nil
 	}
 	if application == nil || application.resolver == nil {
-		return nil, errors.New("Provider private terminal listener requires a composed terminal resolver")
+		return nil, nil, errors.New("Provider private terminal listener requires a composed terminal resolver")
 	}
 	allowed := false
 	for _, route := range cfg.Transport.Private.RoutePolicy {
@@ -272,7 +278,7 @@ func newProductionProviderPrivateTerminalServer(ctx context.Context, cfg *config
 		}
 	}
 	if !allowed {
-		return nil, errors.New("Provider private transport route policy does not authorize terminal")
+		return nil, nil, errors.New("Provider private transport route policy does not authorize terminal")
 	}
 	handler, err := terminalgateway.New(terminalgateway.Options{
 		Resolver: application.resolver, PeerAuthorizer: providerPrivatePeerAuthorizer{},
@@ -280,21 +286,56 @@ func newProductionProviderPrivateTerminalServer(ctx context.Context, cfg *config
 		OperationTimeout: time.Duration(cfg.Transport.Private.ReadTimeoutMillis) * time.Millisecond,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("construct Provider private terminal handler: %w", err)
+		return nil, nil, fmt.Errorf("construct Provider private terminal handler: %w", err)
 	}
 	private := cfg.Transport.Private
-	tlsConfig, err := tlsmaterial.ResolveMutualServer(ctx, registry,
-		private.ServerCertificateBindingID, private.ServerPrivateKeyBindingID, private.ClientCABundleBindingID,
-		private.ExpectedServerName, private.AllowedClientURIIdentities, time.Now)
-	if err != nil {
-		return nil, errors.New("load Provider private terminal TLS material")
+	var tlsConfig *tls.Config
+	var tlsProbe func(context.Context) error
+	if cfg.SchemaVersion == config.ProviderProductionSchemaV3 {
+		profile, profileErr := loadProviderSecurityProfile(cfg)
+		if profileErr != nil {
+			return nil, nil, profileErr
+		}
+		var peerURI string
+		tlsConfig, tlsProbe, peerURI, err = phase6tls.ProviderServer(profile, phase6tls.ProviderServerAuthority{
+			EdgeID: phase6security.GatewayProviderPrivateEdgeID, ListenAddress: private.Address.Addr(),
+			AgentSocket: cfg.Transport.AgentSocket, AgentUID: cfg.Transport.AgentUID, AgentGID: cfg.Transport.AgentGID,
+			OperationTimeout: time.Duration(cfg.Transport.OperationTimeoutMillis) * time.Millisecond})
+		if err == nil && !slices.Equal(private.AllowedClientURIIdentities, []string{peerURI}) {
+			err = errors.New("Provider private peer allowlist does not match profile")
+		}
+	} else if cfg.SchemaVersion == config.ProviderProductionSchemaV2 {
+		tlsConfig, err = tlsmaterial.ResolveMutualServer(ctx, registry,
+			private.ServerCertificateBindingID, private.ServerPrivateKeyBindingID, private.ClientCABundleBindingID,
+			private.ExpectedServerName, private.AllowedClientURIIdentities, time.Now)
+	} else {
+		return nil, nil, errors.New("unsupported Provider private TLS schema")
 	}
-	return providerapi.NewPrivateServer(ctx, providerapi.PrivateTransportOptions{
+	if err != nil {
+		return nil, nil, errors.New("load Provider private terminal TLS material")
+	}
+	var privateHandler http.Handler = handler
+	if cfg.SchemaVersion == config.ProviderProductionSchemaV3 {
+		privateHandler = exactProviderPrivateTerminalRoute(handler, "/private/terminal")
+	}
+	result, err := providerapi.NewPrivateServer(ctx, providerapi.PrivateTransportOptions{
 		Address: private.Address, TLSConfig: tlsConfig,
-		AllowedClientURIIdentities: append([]string(nil), private.AllowedClientURIIdentities...), Handler: handler,
+		AllowedClientURIIdentities: append([]string(nil), private.AllowedClientURIIdentities...), Handler: privateHandler,
 		ReadHeaderTimeout: time.Duration(private.ReadHeaderTimeoutMillis) * time.Millisecond, ReadTimeout: time.Duration(private.ReadTimeoutMillis) * time.Millisecond,
 		WriteTimeout: time.Duration(private.WriteTimeoutMillis) * time.Millisecond, IdleTimeout: time.Duration(private.IdleTimeoutMillis) * time.Millisecond,
 		MaxHeaderBytes: private.MaxHeaderBytes, MaxBodyBytes: private.MaxBodyBytes,
+	})
+	return result, tlsProbe, err
+}
+
+func exactProviderPrivateTerminalRoute(next http.Handler, route string) http.Handler {
+	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request == nil || request.URL == nil || request.URL.Path != route ||
+			request.URL.EscapedPath() != route || request.URL.RawQuery != "" {
+			http.NotFound(writer, request)
+			return
+		}
+		next.ServeHTTP(writer, request)
 	})
 }
 
@@ -416,15 +457,44 @@ func providerProcessCapability(cfg *config.ProviderProcessConfig, coding bool) c
 	return config.ProviderCapabilityConfig{CodingShellEnabled: coding, ProviderRevisionID: cfg.Capability.ProviderRevisionID, Limits: cfg.Capability.Limits, SnapshotRestoreProfiles: append([]config.ProviderCompatibilityProfile(nil), cfg.Capability.SnapshotRestoreProfiles...)}
 }
 
-func newProductionProviderTransport(ctx context.Context, cfg *config.ProviderProcessConfig, protected *providerapi.ProtectedTransportOptions, source provider.CapabilityReader, registry *secretref.Registry) (*providerapi.Server, error) {
+func newProductionProviderTransport(ctx context.Context, cfg *config.ProviderProcessConfig, protected *providerapi.ProtectedTransportOptions, source provider.CapabilityReader, registry *secretref.Registry) (*providerapi.Server, func(context.Context) error, error) {
 	transport := cfg.Transport
-	tlsConfig, err := tlsmaterial.ResolveMutualServer(ctx, registry,
-		transport.ServerCertificateBindingID, transport.ServerPrivateKeyBindingID, transport.ClientCABundleBindingID,
-		transport.ExpectedServerName, transport.AllowedClientURIIdentities, time.Now)
-	if err != nil {
-		return nil, errors.New("load Provider Contract TLS material")
+	var tlsConfig *tls.Config
+	var tlsProbe func(context.Context) error
+	var err error
+	if cfg.SchemaVersion == config.ProviderProductionSchemaV3 {
+		profile, profileErr := loadProviderSecurityProfile(cfg)
+		if profileErr != nil {
+			return nil, nil, profileErr
+		}
+		var peerURI string
+		tlsConfig, tlsProbe, peerURI, err = phase6tls.ProviderServer(profile, phase6tls.ProviderServerAuthority{
+			EdgeID: phase6security.ProductProviderContractEdgeID, ListenAddress: transport.Address.Addr(),
+			AgentSocket: transport.AgentSocket, AgentUID: transport.AgentUID, AgentGID: transport.AgentGID,
+			OperationTimeout: time.Duration(transport.OperationTimeoutMillis) * time.Millisecond})
+		if err == nil && !slices.Equal(transport.AllowedClientURIIdentities, []string{peerURI}) {
+			err = errors.New("Provider Contract peer allowlist does not match profile")
+		}
+	} else if cfg.SchemaVersion == config.ProviderProductionSchemaV2 {
+		tlsConfig, err = tlsmaterial.ResolveMutualServer(ctx, registry,
+			transport.ServerCertificateBindingID, transport.ServerPrivateKeyBindingID, transport.ClientCABundleBindingID,
+			transport.ExpectedServerName, transport.AllowedClientURIIdentities, time.Now)
+	} else {
+		return nil, nil, errors.New("unsupported Provider Contract TLS schema")
 	}
-	return providerapi.NewServer(ctx, providerapi.TransportOptions{Address: transport.Address, TLSConfig: tlsConfig, AllowedClientURIIdentities: append([]string(nil), transport.AllowedClientURIIdentities...), Protected: protected}, source)
+	if err != nil {
+		return nil, nil, errors.New("load Provider Contract TLS material")
+	}
+	result, err := providerapi.NewServer(ctx, providerapi.TransportOptions{Address: transport.Address, TLSConfig: tlsConfig, AllowedClientURIIdentities: append([]string(nil), transport.AllowedClientURIIdentities...), Protected: protected}, source)
+	return result, tlsProbe, err
+}
+
+func loadProviderSecurityProfile(cfg *config.ProviderProcessConfig) (phase6security.Profile, error) {
+	profile, err := phase6security.VerifyFile(cfg.Transport.SecurityProfilePath)
+	if err != nil || profile.ProfileDigest != cfg.Transport.SecurityProfileDigest {
+		return phase6security.Profile{}, errors.New("Provider security profile mismatch")
+	}
+	return profile, nil
 }
 
 type providerReadinessChecker struct {
@@ -433,6 +503,7 @@ type providerReadinessChecker struct {
 	reconciler interface{ Ready(context.Context) error }
 	registry   *secretref.Registry
 	config     *config.ProviderProcessConfig
+	tlsProbes  []func(context.Context) error
 }
 
 func (c providerReadinessChecker) Ready(ctx context.Context) error {
@@ -445,9 +516,19 @@ func (c providerReadinessChecker) Ready(ctx context.Context) error {
 	if err := providerpostgres.VerifySchemaCompatibility(ctx, c.pool); err != nil {
 		return err
 	}
-	if c.config != nil && c.config.SchemaVersion == config.ProviderProductionSchemaV2 {
+	if c.config != nil && (c.config.SchemaVersion == config.ProviderProductionSchemaV2 || c.config.SchemaVersion == config.ProviderProductionSchemaV3) {
 		if err := verifyProviderMaterialDependencies(ctx, c.registry, c.config); err != nil {
 			return err
+		}
+	}
+	if c.config != nil && c.config.SchemaVersion == config.ProviderProductionSchemaV3 {
+		if len(c.tlsProbes) != 2 || c.tlsProbes[0] == nil || c.tlsProbes[1] == nil {
+			return errors.New("Provider live TLS readiness is incomplete")
+		}
+		for _, probe := range c.tlsProbes {
+			if err := probe(ctx); err != nil {
+				return errors.New("Provider live TLS signer is unavailable")
+			}
 		}
 	}
 	return c.reconciler.Ready(ctx)
@@ -518,12 +599,18 @@ func openProviderPostgresMaterial(ctx context.Context, raw []byte, maxConnection
 	return pool, nil
 }
 
-func newProviderRuntimeMaterialRegistry(materials config.RoleMaterialsConfig) (*secretref.Registry, error) {
-	return rolematerials.New(materials, secretref.RoleProvider, []secretref.Purpose{
-		secretref.PurposeTLSCertificate, secretref.PurposeTLSPrivateKey, secretref.PurposeCABundle,
-		secretref.PurposePostgresRuntimeDSN, secretref.PurposeAdmissionVerification,
-		secretref.PurposeExecutorClientKey, secretref.PurposeExecutorBridgeKey,
-	}, true, time.Now)
+func newProviderRuntimeMaterialRegistry(materials config.RoleMaterialsConfig, schema string) (*secretref.Registry, error) {
+	allowed := []secretref.Purpose{secretref.PurposePostgresRuntimeDSN, secretref.PurposeAdmissionVerification}
+	switch schema {
+	case config.ProviderProductionSchemaV2:
+		allowed = append(allowed, secretref.PurposeTLSCertificate, secretref.PurposeTLSPrivateKey,
+			secretref.PurposeCABundle, secretref.PurposeExecutorClientKey, secretref.PurposeExecutorBridgeKey)
+	case config.ProviderProductionSchemaV3:
+		// Exact coding-shell v3 has no frozen TLS or Desktop executor key.
+	default:
+		return nil, errors.New("unsupported Provider runtime material schema")
+	}
+	return rolematerials.New(materials, secretref.RoleProvider, allowed, true, time.Now)
 }
 
 func newProviderMigrationMaterialRegistry(materials config.RoleMaterialsConfig) (*secretref.Registry, error) {

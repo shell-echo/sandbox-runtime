@@ -160,7 +160,20 @@ the policy-authority socket. The production TLS-agent command checks its
 config against this profile; the egress broker checks its signer endpoint
 against its bound agent before connecting. These checks are configuration
 authority only: Product now has an explicit v3 live-signer public listener;
-its private edges and the other five runtime commands still need migration, and
+Gateway has an explicit v3 live-signer public listener and a profile-bound
+Gateway→Provider private client with separate own-client and peer-server CA
+roots. Gateway v3 admits only Product database and grant-key material, not
+static TLS material. Its private route is a numeric address on the isolated
+Gateway/Provider trust network, bound to the Provider private listener and
+canonical path. Provider coding-shell now has an explicit v3 profile-bound
+Contract listener for Product and a separate private Terminal listener for
+Gateway, each with an exclusive live signer, direction-specific CA pools and
+distinct client allowlists; v3 Desktop is rejected. The two Provider listeners
+use the same role-owned signer but do not merge route or peer admission. This
+remains component evidence: no actual v3 Product/Gateway/Provider command
+graph, certificate-rotation, revocation-drain or cleanup gate has passed.
+Product's private edges and the other three runtime commands still need
+migration, and
 a real broker/controller/Vault/DNS mTLS process gate is required before Slice
 6 can close.
 
@@ -172,6 +185,14 @@ An `mtls` trust edge references its server-verification anchor and, when the
 server is repository-owned, its client-verification anchor. Unix signing
 edges cannot cite CA anchors. A bundle can be read-only shared by declared
 consumers, but equal bytes do not merge distinct purposes or trust domains.
+For a repository-owned internal mTLS edge, both exact endpoint principals
+consume both anchors read-only: the caller uses the client anchor to verify
+its own agent-issued client leaf and the server anchor to verify its peer;
+the server uses the server anchor to verify its own agent-issued server leaf
+and the client anchor to verify its peer. The two root pools remain separate;
+CA readability grants neither signing authority nor a reverse dial. This
+does not invent an external-service mount or change the public server-only
+listener into mTLS. Missing or extra consumers/mounts fail closed.
 The common loader verifies one stable opened file's owner, non-writable
 source, SHA-256 and strict CA-only PEM records before the bytes reach a TLS
 config. The controller bootstrap client certificate has a separate

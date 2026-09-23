@@ -35,8 +35,10 @@ func runDataPlaneServe(ctx context.Context, role config.DataPlaneRole, section s
 	if cfg.Role != role {
 		return errors.New("data-plane role configuration does not match command")
 	}
-	if cfg.SchemaVersion != config.DataPlaneProductionSchemaV2 || cfg.DeploymentLevel != config.ProviderProductionLevel {
-		return errors.New("data-plane role serve requires the production v2 material schema")
+	if cfg.DeploymentLevel != config.ProviderProductionLevel ||
+		(cfg.SchemaVersion != config.DataPlaneProductionSchemaV2 &&
+			!(role == config.DataPlaneGateway && cfg.SchemaVersion == config.DataPlaneProductionSchemaV3)) {
+		return errors.New("data-plane role serve requires an explicit supported production schema")
 	}
 	for name, enabled := range map[string]bool{
 		"product_process":  config.ProductProcess != nil && config.ProductProcess.Enabled,

@@ -69,14 +69,24 @@ func validateTrustAnchors(anchors []TrustAnchor, edges []TrustEdge, public []Pub
 		if to.TLS == nil {
 			return ErrInvalidProfile
 		}
+		// The caller verifies the remote server with this root. The local
+		// server also verifies its own agent-issued server leaf against it.
+		if !slices.Contains(server.Consumers, edge.To) {
+			return ErrInvalidProfile
+		}
+		markConsumer(server.ID, edge.To)
 		client, ok := byID[edge.ClientAnchorID]
 		clientURI, err := url.Parse(edge.FromURI)
 		if !ok || err != nil || client.Purpose != "client_verification" ||
-			client.TrustDomain != clientURI.Host || !slices.Contains(client.Consumers, edge.To) {
+			client.TrustDomain != clientURI.Host || !slices.Contains(client.Consumers, edge.To) ||
+			!slices.Contains(client.Consumers, edge.From) {
 			return ErrInvalidProfile
 		}
 		references[client.ID]++
 		markConsumer(client.ID, edge.To)
+		// The server verifies peers with this root. The caller uses the
+		// same exact root only to verify its own agent-issued client leaf.
+		markConsumer(client.ID, edge.From)
 	}
 	for _, listener := range public {
 		anchor, ok := byID[listener.IssuerAnchorID]

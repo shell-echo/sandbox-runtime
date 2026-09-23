@@ -18,6 +18,7 @@ import (
 
 type PublicServerAuthority struct {
 	ListenerID       string
+	ListenAddress    string
 	Port             int
 	AgentSocket      string
 	AgentUID         uint32
@@ -29,7 +30,14 @@ type PublicServerAuthority struct {
 // declared by the canonical profile. It does not weaken any private listener.
 func PublicServer(profile phase6security.Profile, authority PublicServerAuthority) (*tls.Config, func(context.Context) error, error) {
 	binding, agent, subject, anchor, err := profile.PublicTLSBoundary(authority.ListenerID, authority.Port)
+	addressBound := false
+	for _, ingress := range profile.IngressBindings {
+		if ingress.PublicListenerID == authority.ListenerID && ingress.UpstreamAddress == authority.ListenAddress {
+			addressBound = true
+		}
+	}
 	if err != nil || subject.TLS == nil || uint32(os.Getuid()) != subject.UID || uint32(os.Getgid()) != subject.GID ||
+		!addressBound ||
 		authority.AgentSocket != binding.SocketPath || authority.AgentUID != binding.AgentUID ||
 		authority.AgentGID != binding.AgentGID || agent.UID != binding.AgentUID || agent.GID != binding.AgentGID ||
 		authority.OperationTimeout < time.Second || authority.OperationTimeout > 30*time.Second {

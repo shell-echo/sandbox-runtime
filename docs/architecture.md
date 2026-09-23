@@ -180,7 +180,8 @@ uncomposed; deployment, HA, hostile multi-tenant, independently implemented
 caller, and production-readiness evidence remain absent.
 
 The [Product v1 Phase 6 production-hardening plan](plan/product-v1-phase-6-production-hardening.md)
-is **4/15 complete** after Slice 4's corrective six-process evidence passed.
+is **5/15 complete** after Slice 5's immutable credential and recording
+evidence passed.
 ADR 0051 fixes a dependency order from deployable
 process boundaries through identity, storage, network, supply chain,
 observability, recovery, deployment, release candidate, and final release
@@ -232,7 +233,7 @@ revision `78f5987fda45873e497bce6d336e29dd4a61dc74`, evidence-tool revision
 `e2f4abacf03418c7b18f179c3e7459292d8626df`, and manifest digest
 `sha256:d01b3c41a0094657f18b4014b0649a799ea7fcf0e4ccaf07aa82cdd2052cc0d2`.
 
-Slice 5 is underway and does not advance the Phase 6 count. Its secret boundary
+Slice 5 passed its bounded independent-process and real-adapter gates. Its secret boundary
 uses a shared implementation but a separate immutable typed registry inside
 each OS role. A registry admits only that role's exact secret purposes and
 tenant/version bindings; it is not a cross-role service, global cache or
@@ -249,8 +250,12 @@ separate-process gates prove overlap, migration/runtime cross-purpose denial,
 one-shot socket cleanup, restart, provider loss and recovery. The local gate
 records `distinct_os_uid_established=false`; deployment qualification must use
 distinct service accounts or an equivalent platform boundary. Provider,
-Gateway, Guest, Browser and Desktop migration plus the production credential
-issuer/renewal controller are still open. Legacy
+Gateway, Guest, Browser and Desktop now have separate role-owned material
+registries and agents; an independent credential controller issues six
+renewable runtime and two one-shot migration leases, while a separate
+break-glass controller enforces dual approval and metadata-only audit. The
+accepted immutable Slice 5 evidence binds these gates, not an HSM or Product
+recording-content composition. Legacy
 absolute-path inputs are reserved for explicit development/legacy profiles and
 cannot become a production fallback. ADR 0054 records the complete boundary.
 

@@ -130,6 +130,84 @@ func TestDataPlaneProductionV2RequiresRoleScopedMaterialBindings(t *testing.T) {
 	}
 }
 
+func TestGatewayProductionV3RequiresLiveTLSAndOnlyTwoMaterials(t *testing.T) {
+	directory := t.TempDir()
+	path := func(name string) string { return filepath.Join(directory, name) }
+	candidate := defaultDataPlaneProcess(DataPlaneGateway, defaultGatewayPort)
+	candidate.SchemaVersion = DataPlaneProductionSchemaV3
+	candidate.DeploymentLevel = ProviderProductionLevel
+	candidate.Enabled = true
+	candidate.Authority = DataPlaneAuthorityConfig{
+		CredentialFile: path("credential.json"), DependencyFile: path("dependency.json"), PolicyFile: path("policy.json"),
+		RecordingKeyRef: "kms://recording/phase6/gateway",
+	}
+	candidate.TLS = DataPlaneTLSConfig{
+		SecurityProfilePath: path("security-profile.json"), SecurityProfileDigest: "sha256:" + strings.Repeat("a", 64),
+		AgentSocket: path("tls-agent.sock"), AgentUID: 501, AgentGID: 20, OperationTimeoutMillis: 3000,
+	}
+	candidate.Materials.Provider = RoleMaterialProviderConfig{
+		Type: UnixWorkloadMaterialProviderV1, Alias: "gateway-material-agent", SocketPath: "/tmp/gateway-material-agent-test.sock",
+		ExpectedUID: 502, ExpectedGID: 20, OperationTimeoutSeconds: 3, CacheSeconds: 30,
+	}
+	for _, item := range []struct {
+		id      string
+		purpose secretref.Purpose
+	}{
+		{"gateway-dsn", secretref.PurposePostgresRuntimeDSN},
+		{"gateway-grant", secretref.PurposeGatewayGrantKey},
+	} {
+		document, err := json.Marshal(secretref.Binding{
+			Schema: secretref.BindingSchema, Kind: secretref.KindSecret,
+			Reference: secretref.Reference("secret://vault/kv/" + item.id), Version: "v1", Purpose: item.purpose,
+			TenantID: secretref.SystemTenant, Role: secretref.RoleGateway,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		candidate.Materials.Bindings = append(candidate.Materials.Bindings, RoleMaterialBindingConfig{ID: item.id, Provider: "gateway-material-agent", Document: string(document)})
+	}
+	if err := candidate.Validate(); err != nil {
+		t.Fatalf("valid Gateway v3: %v", err)
+	}
+	for name, mutate := range map[string]func(*DataPlaneProcessConfig){
+		"raw private key":      func(value *DataPlaneProcessConfig) { value.TLS.PrivateKeyFile = path("raw.key") },
+		"static key binding":   func(value *DataPlaneProcessConfig) { value.TLS.PrivateKeyBindingID = "old-key" },
+		"client CA binding":    func(value *DataPlaneProcessConfig) { value.TLS.ClientCABundleBindingID = "old-ca" },
+		"wrong profile digest": func(value *DataPlaneProcessConfig) { value.TLS.SecurityProfileDigest = "sha256:abc" },
+		"missing signer socket": func(value *DataPlaneProcessConfig) {
+			value.TLS.AgentSocket = ""
+		},
+		"missing signer identity": func(value *DataPlaneProcessConfig) { value.TLS.AgentUID = 0 },
+		"wrong role": func(value *DataPlaneProcessConfig) {
+			value.Role = DataPlaneBrowser
+			value.Public, value.Private = value.Private, value.Public
+		},
+		"extra material": func(value *DataPlaneProcessConfig) {
+			value.Materials.Bindings = append(value.Materials.Bindings, value.Materials.Bindings[0])
+		},
+		"wrong material purpose": func(value *DataPlaneProcessConfig) {
+			var binding secretref.Binding
+			if err := json.Unmarshal([]byte(value.Materials.Bindings[0].Document), &binding); err != nil {
+				t.Fatal(err)
+			}
+			binding.Purpose = secretref.PurposeTLSPrivateKey
+			document, _ := json.Marshal(binding)
+			value.Materials.Bindings[0].Document = string(document)
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			value := *candidate
+			value.TLS = candidate.TLS
+			value.Materials = candidate.Materials
+			value.Materials.Bindings = append([]RoleMaterialBindingConfig(nil), candidate.Materials.Bindings...)
+			mutate(&value)
+			if err := value.Validate(); err == nil {
+				t.Fatal("unsafe Gateway v3 configuration was accepted")
+			}
+		})
+	}
+}
+
 func TestDataPlaneRolesHaveDistinctDefaultProbePorts(t *testing.T) {
 	ports := map[DataPlaneRole]int{
 		DataPlaneGateway: defaultDataPlaneProcess(DataPlaneGateway, defaultGatewayPort).Probe.Port,

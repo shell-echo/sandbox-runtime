@@ -85,6 +85,50 @@ func TestNewTLSServerFreezesTLSAndHTTPPolicy(t *testing.T) {
 	}
 }
 
+func TestNewTLSServerAcceptsOnlyExclusiveLivePublicIdentity(t *testing.T) {
+	certificate, privateKey, _ := newPublicEdgeTLSMaterial(t, []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth})
+	options := validServerOptions(certificate, privateKey)
+	options.ServerCertificateFile, options.ServerPrivateKeyFile = "", ""
+	options.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS13, MaxVersion: tls.VersionTLS13,
+		SessionTicketsDisabled: true,
+		GetCertificate: func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
+			return nil, errors.New("test signer unavailable")
+		}}
+	server, err := NewTLSServer(options)
+	if err != nil || server.http.TLSConfig.GetCertificate == nil || len(server.http.TLSConfig.Certificates) != 0 {
+		t.Fatalf("exclusive live identity rejected: %v", err)
+	}
+	for name, mutate := range map[string]func(*ServerOptions){
+		"static key mixed": func(o *ServerOptions) { o.ServerPrivateKeyFile = privateKey },
+		"static cert mixed": func(o *ServerOptions) {
+			o.TLSConfig = o.TLSConfig.Clone()
+			o.TLSConfig.Certificates = []tls.Certificate{{}}
+		},
+		"session tickets": func(o *ServerOptions) {
+			o.TLSConfig = o.TLSConfig.Clone()
+			o.TLSConfig.SessionTicketsDisabled = false
+		},
+		"optional client certificate": func(o *ServerOptions) {
+			o.TLSConfig = o.TLSConfig.Clone()
+			o.TLSConfig.ClientAuth = tls.RequestClientCert
+		},
+		"alternate client hello configuration": func(o *ServerOptions) {
+			o.TLSConfig = o.TLSConfig.Clone()
+			o.TLSConfig.GetConfigForClient = func(*tls.ClientHelloInfo) (*tls.Config, error) {
+				return &tls.Config{MinVersion: tls.VersionTLS12}, nil
+			}
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			candidate := options
+			mutate(&candidate)
+			if _, err := NewTLSServer(candidate); !errors.Is(err, ErrInvalidServerOptions) {
+				t.Fatalf("mixed live identity accepted: %v", err)
+			}
+		})
+	}
+}
+
 func TestNewTLSServerRejectsUnsafeTLSMaterial(t *testing.T) {
 	t.Run("non regular certificate", func(t *testing.T) {
 		_, privateKey, _ := newPublicEdgeTLSMaterial(t, []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth})

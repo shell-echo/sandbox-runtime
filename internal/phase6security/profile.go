@@ -36,6 +36,7 @@ var (
 	digestPattern     = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 	imagePattern      = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:/-]{0,510}@sha256:[0-9a-f]{64}$`)
 	namePattern       = regexp.MustCompile(`^[a-z][a-z0-9-]{0,63}$`)
+	routePathPattern  = regexp.MustCompile(`^/[a-z][a-z0-9-]*(?:/[a-z][a-z0-9-]*){0,7}$`)
 	hostPattern       = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$`)
 )
 
@@ -288,6 +289,8 @@ type TrustEdge struct {
 	To                     string `json:"to"`
 	Protocol               string `json:"protocol"`
 	Port                   int    `json:"port"`
+	TargetAddress          string `json:"target_address,omitempty"`
+	RoutePath              string `json:"route_path,omitempty"`
 	Authentication         string `json:"authentication"`
 	ServerAnchorID         string `json:"server_anchor_id,omitempty"`
 	ClientAnchorID         string `json:"client_anchor_id,omitempty"`
@@ -1049,6 +1052,18 @@ func validateEdges(values []TrustEdge, principals map[string]Principal, external
 		}
 		if !validEdgeProtocol(value.Protocol) {
 			return nil, ErrInvalidProfile
+		}
+		if (value.TargetAddress == "") != (value.RoutePath == "") {
+			return nil, ErrInvalidProfile
+		}
+		if value.TargetAddress != "" {
+			target, err := netip.ParseAddrPort(value.TargetAddress)
+			if err != nil || !target.Addr().Is4() || !target.Addr().IsPrivate() ||
+				target.String() != value.TargetAddress || int(target.Port()) != value.Port ||
+				!toOK || value.Authentication != "mtls" || (value.Protocol != "wss" && value.Protocol != "https") ||
+				!routePathPattern.MatchString(value.RoutePath) || path.Clean(value.RoutePath) != value.RoutePath {
+				return nil, ErrInvalidProfile
+			}
 		}
 		result[value.ID] = value
 	}

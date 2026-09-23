@@ -1162,3 +1162,11 @@ func TestProviderPrivateTransportValidationIsClosedAndBounded(t *testing.T) {
 		})
 	}
 }
+
+func TestLegacyProviderTransportRejectsV3LiveSignerFields(t *testing.T) {
+	transport := validEnabledProviderConfig().Transport
+	transport.SecurityProfilePath = "/tmp/provider-security-profile.json"
+	if err := transport.validateEnabled(); err == nil {
+		t.Fatal("legacy Provider transport accepted a live signer field")
+	}
+}
