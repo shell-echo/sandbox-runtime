@@ -37,15 +37,16 @@ const (
 // configure the Provider, Gateway, Guest process, Browser, Desktop, or local
 // /instances listeners. Its Guest-control listener is Product-owned.
 type ProductProcessConfig struct {
-	SchemaVersion   string                 `mapstructure:"schema_version"`
-	Enabled         bool                   `mapstructure:"enabled"`
-	DeploymentLevel ProductDeploymentLevel `mapstructure:"deployment_level"`
-	API             option.HTTP            `mapstructure:"api"`
-	GuestControl    option.HTTP            `mapstructure:"guest_control"`
-	TLS             ProductTLSConfig       `mapstructure:"tls"`
-	Postgres        ProductPostgresConfig  `mapstructure:"postgres"`
-	Identity        ProductIdentityConfig  `mapstructure:"identity"`
-	Materials       ProductMaterialsConfig `mapstructure:"materials"`
+	SchemaVersion              string                 `mapstructure:"schema_version"`
+	Enabled                    bool                   `mapstructure:"enabled"`
+	DeploymentLevel            ProductDeploymentLevel `mapstructure:"deployment_level"`
+	API                        option.HTTP            `mapstructure:"api"`
+	GuestControl               option.HTTP            `mapstructure:"guest_control"`
+	GuestControlMaxConnections int                    `mapstructure:"guest_control_max_connections"`
+	TLS                        ProductTLSConfig       `mapstructure:"tls"`
+	Postgres                   ProductPostgresConfig  `mapstructure:"postgres"`
+	Identity                   ProductIdentityConfig  `mapstructure:"identity"`
+	Materials                  ProductMaterialsConfig `mapstructure:"materials"`
 }
 
 // ProductTLSConfig selects either explicit historical v2 material bindings or
@@ -167,7 +168,7 @@ func (c *ProductProcessConfig) validateDevelopment() error {
 	if filepath.Clean(c.Postgres.DSNFile) == filepath.Clean(c.Identity.BindingsFile) {
 		return errors.New("Product PostgreSQL and identity secrets must use different files")
 	}
-	if c.GuestControl != (option.HTTP{}) || c.TLS != (ProductTLSConfig{}) || c.Postgres.RuntimeRole != "" || c.Identity.Issuer != "" ||
+	if c.GuestControl != (option.HTTP{}) || c.GuestControlMaxConnections != 0 || c.TLS != (ProductTLSConfig{}) || c.Postgres.RuntimeRole != "" || c.Identity.Issuer != "" ||
 		c.Identity.Audience != "" || c.Postgres.RuntimeDSNBindingID != "" || c.Identity.KeyRingBindingID != "" || !c.Materials.IsZero() {
 		return errors.New("production Product authority is not accepted in development mode")
 	}
@@ -199,7 +200,7 @@ func (c *ProductProcessConfig) validateProduction() error {
 		if c.TLS.SecurityProfilePath != "" || c.TLS.SecurityProfileDigest != "" || c.TLS.AgentSocket != "" ||
 			c.TLS.AgentUID != 0 || c.TLS.AgentGID != 0 || c.TLS.OperationTimeoutMillis != 0 ||
 			c.TLS.PeerCRLRoleFile != "" || c.TLS.PeerCRLRoleDigest != "" || c.TLS.PeerCRLSourceMappingDigest != "" ||
-			c.GuestControl != (option.HTTP{}) {
+			c.GuestControl != (option.HTTP{}) || c.GuestControlMaxConnections != 0 {
 			return errors.New("Product v2 TLS cannot select a live signer")
 		}
 		selections = append(selections,
@@ -222,7 +223,7 @@ func (c *ProductProcessConfig) validateProduction() error {
 			return errors.New("Product v3 TLS must use only a pinned live signer")
 		}
 		if err := c.GuestControl.Validate(); err != nil || net.ParseIP(c.GuestControl.Host) == nil ||
-			c.GuestControl.Port == c.API.Port {
+			c.GuestControl.Port == c.API.Port || c.GuestControlMaxConnections < 1 || c.GuestControlMaxConnections > 4096 {
 			return errors.New("Product v3 requires a separate numeric private Guest-control listener")
 		}
 	}

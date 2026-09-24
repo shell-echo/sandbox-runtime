@@ -183,3 +183,72 @@ func TestCloseHookRunsExactlyOnceForDrainedSocket(t *testing.T) {
 	default:
 	}
 }
+
+func TestBoundedRegistryRejectsExcessBeforeAdmissionAndRecoversCapacity(t *testing.T) {
+	if _, err := NewBounded(time.Minute, 0); err == nil {
+		t.Fatal("zero connection capacity accepted")
+	}
+	raw, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer raw.Close()
+	registry, err := NewBounded(time.Minute, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer registry.Drain()
+	listener, err := registry.Wrap(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	accepted := make(chan net.Conn, 1)
+	go func() {
+		connection, acceptErr := listener.Accept()
+		if acceptErr == nil {
+			accepted <- connection
+		}
+	}()
+	firstClient, err := net.DialTimeout("tcp", raw.Addr().String(), time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer firstClient.Close()
+	firstServer := <-accepted
+	if registry.Active() != 1 {
+		t.Fatalf("first connection not registered: %d", registry.Active())
+	}
+	go func() {
+		connection, acceptErr := listener.Accept()
+		if acceptErr == nil {
+			accepted <- connection
+		}
+	}()
+	secondClient, err := net.DialTimeout("tcp", raw.Addr().String(), time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer secondClient.Close()
+	_ = secondClient.SetReadDeadline(time.Now().Add(2 * time.Second))
+	if _, err := secondClient.Read(make([]byte, 1)); !errors.Is(err, io.EOF) {
+		t.Fatalf("over-capacity socket was not closed before admission: %v", err)
+	}
+	if registry.Active() != 1 {
+		t.Fatalf("over-capacity socket entered registry: %d", registry.Active())
+	}
+	_ = firstServer.Close()
+	thirdClient, err := net.DialTimeout("tcp", raw.Addr().String(), time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer thirdClient.Close()
+	select {
+	case thirdServer := <-accepted:
+		defer thirdServer.Close()
+	case <-time.After(2 * time.Second):
+		t.Fatal("capacity did not recover after exact close")
+	}
+	if registry.Active() != 1 {
+		t.Fatalf("recovered capacity count = %d", registry.Active())
+	}
+}

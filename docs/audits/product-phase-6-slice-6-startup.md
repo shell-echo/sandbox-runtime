@@ -117,6 +117,9 @@ candidate command composes the existing `guestagent.Hub` with the real Product
 PostgreSQL Guest-binding authenticator; only `/agent` is mounted on the
 private listener. TLS admits the exact Guest client identity, pulls a fresh
 signed CRL, and tracks idle and upgraded sockets for revocation and shutdown.
+Its explicit `guest_control_max_connections` bounds accepted sockets before
+TLS/HTTP admission; excess connections close without consuming Hub authority,
+and exact close restores capacity.
 Focused real TLS 1.3/WebSocket tests cover route separation, revocation drain
 and exact connection cleanup. The Product public production handler still
 advertises `product.workspace` unavailable and has no Files/Development

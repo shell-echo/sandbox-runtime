@@ -219,7 +219,8 @@ func runProductionProduct(ctx context.Context, productConfig *config.ProductProc
 		if hubErr != nil {
 			return fmt.Errorf("construct Product Guest Hub: %w", hubErr)
 		}
-		privateGuest, err = productprocess.NewPrivateGuestServer(productConfig.GuestControl, hub, guestTLS, guard, maxAge)
+		privateGuest, err = productprocess.NewPrivateGuestServer(productConfig.GuestControl, hub, guestTLS, guard,
+			maxAge, productConfig.GuestControlMaxConnections)
 		if err != nil {
 			return err
 		}

@@ -165,7 +165,7 @@ func TestPrivateGuestServerOnlyAgentAndDrainsUpgradedPeer(t *testing.T) {
 		t.Fatal(err)
 	}
 	address := option.HTTP{Host: "127.0.0.1", Port: listener.Addr().(*net.TCPAddr).Port}
-	server, err := NewPrivateGuestServer(address, hub, transport, peer, time.Minute)
+	server, err := NewPrivateGuestServer(address, hub, transport, peer, time.Minute, 4)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -253,12 +253,91 @@ func TestPrivateGuestServerRejectsStaticOrUnboundedTLS(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			candidate := transport.Clone()
 			mutate(candidate)
-			if _, err := NewPrivateGuestServer(address, http.NotFoundHandler(), candidate, peer, time.Minute); err == nil {
+			if _, err := NewPrivateGuestServer(address, http.NotFoundHandler(), candidate, peer, time.Minute, 4); err == nil {
 				t.Fatal("unsafe Product Guest TLS accepted")
 			}
 		})
 	}
-	if _, err := NewPrivateGuestServer(address, http.NotFoundHandler(), transport, peer, 0); err == nil {
+	if _, err := NewPrivateGuestServer(address, http.NotFoundHandler(), transport, peer, 0, 4); err == nil {
 		t.Fatal("unbounded Product Guest connection accepted")
+	}
+	if _, err := NewPrivateGuestServer(address, http.NotFoundHandler(), transport, peer, time.Minute, 0); err == nil {
+		t.Fatal("unbounded Product Guest capacity accepted")
+	}
+}
+
+func TestPrivateGuestServerCapacityClosesExcessAndReopensAfterClose(t *testing.T) {
+	transport, client := privateGuestTestTLS(t)
+	peer := &guestTestPeer{active: make(map[net.Conn]struct{})}
+	started := make(chan struct{}, 2)
+	hub := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		connection, err := websocket.Accept(writer, request, nil)
+		if err != nil {
+			return
+		}
+		defer connection.CloseNow()
+		started <- struct{}{}
+		_, _, _ = connection.Read(request.Context())
+	})
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	address := option.HTTP{Host: "127.0.0.1", Port: listener.Addr().(*net.TCPAddr).Port}
+	server, err := NewPrivateGuestServer(address, hub, transport, peer, time.Minute, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	server.listen = func(context.Context, string, string) (net.Listener, error) { return listener, nil }
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- server.Startup(ctx) }()
+	first, _, err := websocket.Dial(ctx, "wss://"+address.Addr()+"/agent", &websocket.DialOptions{HTTPClient: client})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer first.CloseNow()
+	select {
+	case <-started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("first Guest connection did not upgrade")
+	}
+	secondContext, stopSecond := context.WithTimeout(ctx, time.Second)
+	defer stopSecond()
+	if second, _, err := websocket.Dial(secondContext, "wss://"+address.Addr()+"/agent",
+		&websocket.DialOptions{HTTPClient: client}); err == nil {
+		second.CloseNow()
+		t.Fatal("over-capacity Guest connection upgraded")
+	}
+	if server.connections.Active() != 1 {
+		t.Fatalf("over-capacity Guest socket entered registry: %d", server.connections.Active())
+	}
+	first.CloseNow()
+	deadline := time.Now().Add(2 * time.Second)
+	for server.connections.Active() != 0 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if server.connections.Active() != 0 {
+		t.Fatal("first Guest socket did not release capacity")
+	}
+	third, _, err := websocket.Dial(ctx, "wss://"+address.Addr()+"/agent", &websocket.DialOptions{HTTPClient: client})
+	if err != nil {
+		t.Fatalf("Guest capacity did not recover: %v", err)
+	}
+	third.CloseNow()
+	select {
+	case <-started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("recovered Guest connection did not reach Hub")
+	}
+	cancel()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Guest listener did not shut down")
 	}
 }

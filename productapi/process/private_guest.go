@@ -22,7 +22,7 @@ type PrivateGuestServer struct {
 }
 
 func NewPrivateGuestServer(address option.HTTP, hub http.Handler, transport *tls.Config,
-	peer connectiondrain.PeerMonitor, maxAge time.Duration) (*PrivateGuestServer, error) {
+	peer connectiondrain.PeerMonitor, maxAge time.Duration, maxConnections int) (*PrivateGuestServer, error) {
 	if address.Validate() != nil || net.ParseIP(address.Host) == nil || isNil(hub) ||
 		transport == nil || transport.MinVersion != tls.VersionTLS13 || transport.MaxVersion != tls.VersionTLS13 ||
 		transport.ClientAuth != tls.RequireAndVerifyClientCert || transport.ClientCAs == nil ||
@@ -31,7 +31,10 @@ func NewPrivateGuestServer(address option.HTTP, hub http.Handler, transport *tls
 		peer == nil || peer.PollInterval() < 100*time.Millisecond || peer.PollInterval() > time.Minute {
 		return nil, errors.New("Product private Guest transport is invalid")
 	}
-	connections, err := connectiondrain.New(maxAge)
+	if maxConnections < 1 || maxConnections > 4096 {
+		return nil, errors.New("Product private Guest capacity is invalid")
+	}
+	connections, err := connectiondrain.NewBounded(maxAge, maxConnections)
 	if err != nil || connections.OnClose(peer.Forget) != nil {
 		return nil, errors.New("Product private Guest connection drain is invalid")
 	}

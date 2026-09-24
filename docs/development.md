@@ -724,7 +724,8 @@ contains only the Guest business signing key; TLS keys are never resolved
 from that registry.
 The Product v3 candidate now requires a separate `guest_control` numeric
 listener and pinned `peer_crl_role_file`, `peer_crl_role_digest`, and
-`peer_crl_source_mapping_digest`. It mounts only `/agent`, composes the real
+`peer_crl_source_mapping_digest`, plus an explicit bounded
+`guest_control_max_connections`. It mounts only `/agent`, composes the real
 Hub and Product PostgreSQL Guest-binding authenticator, and drains upgraded
 sockets. This is not Files/Development production API composition or the
 full-process gate; keep their capability unavailable until actually wired.

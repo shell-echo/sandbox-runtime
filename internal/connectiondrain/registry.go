@@ -10,11 +10,12 @@ import (
 )
 
 type Registry struct {
-	mu      sync.Mutex
-	active  map[*trackedConn]struct{}
-	maxAge  time.Duration
-	drained bool
-	onClose func(net.Conn)
+	mu        sync.Mutex
+	active    map[*trackedConn]struct{}
+	maxAge    time.Duration
+	maxActive int
+	drained   bool
+	onClose   func(net.Conn)
 }
 
 // OnClose installs a cleanup hook before the listener is wrapped. The hook
@@ -34,10 +35,23 @@ func (r *Registry) OnClose(hook func(net.Conn)) error {
 }
 
 func New(maxAge time.Duration) (*Registry, error) {
+	return newRegistry(maxAge, 0)
+}
+
+// NewBounded adds an accept-time capacity limit. Excess raw sockets are
+// closed before TLS or HTTP admission and never enter the active registry.
+func NewBounded(maxAge time.Duration, maxActive int) (*Registry, error) {
+	if maxActive < 1 || maxActive > 100000 {
+		return nil, errors.New("connection capacity must be between 1 and 100000")
+	}
+	return newRegistry(maxAge, maxActive)
+}
+
+func newRegistry(maxAge time.Duration, maxActive int) (*Registry, error) {
 	if maxAge < time.Second || maxAge > time.Hour {
 		return nil, errors.New("connection lifetime must be between one second and one hour")
 	}
-	return &Registry{active: make(map[*trackedConn]struct{}), maxAge: maxAge}, nil
+	return &Registry{active: make(map[*trackedConn]struct{}), maxAge: maxAge, maxActive: maxActive}, nil
 }
 
 // Wrap registers each accepted socket before the TLS handshake. Closing the
@@ -83,22 +97,29 @@ type trackedListener struct {
 }
 
 func (l *trackedListener) Accept() (net.Conn, error) {
-	connection, err := l.Listener.Accept()
-	if err != nil {
-		return nil, err
-	}
-	r := l.registry
-	r.mu.Lock()
-	if r.drained {
+	for {
+		connection, err := l.Listener.Accept()
+		if err != nil {
+			return nil, err
+		}
+		r := l.registry
+		r.mu.Lock()
+		if r.drained {
+			r.mu.Unlock()
+			_ = connection.Close()
+			return nil, net.ErrClosed
+		}
+		if r.maxActive > 0 && len(r.active) >= r.maxActive {
+			r.mu.Unlock()
+			_ = connection.Close()
+			continue
+		}
+		tracked := &trackedConn{Conn: connection, registry: r}
+		r.active[tracked] = struct{}{}
+		tracked.timer = time.AfterFunc(r.maxAge, func() { _ = tracked.Close() })
 		r.mu.Unlock()
-		_ = connection.Close()
-		return nil, net.ErrClosed
+		return tracked, nil
 	}
-	tracked := &trackedConn{Conn: connection, registry: r}
-	r.active[tracked] = struct{}{}
-	tracked.timer = time.AfterFunc(r.maxAge, func() { _ = tracked.Close() })
-	r.mu.Unlock()
-	return tracked, nil
 }
 
 type trackedConn struct {
