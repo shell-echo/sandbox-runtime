@@ -49,14 +49,15 @@ func PeerConnState(monitor PeerMonitor) func(net.Conn, http.ConnState) {
 // StartPeerPoll runs bounded refreshes until the server context is canceled
 // or the returned stop function is called. Stop waits for an in-flight pull.
 func StartPeerPoll(parent context.Context, monitor PeerMonitor) func() {
-	if monitor == nil {
+	if parent == nil || monitor == nil || monitor.PollInterval() < 100*time.Millisecond {
 		return func() {}
 	}
+	interval := monitor.PollInterval()
 	ctx, cancel := context.WithCancel(parent)
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		ticker := time.NewTicker(monitor.PollInterval())
+		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {
 			select {

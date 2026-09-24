@@ -131,8 +131,10 @@ func newGuardFixture(t *testing.T) guardFixture {
 		LocalPrincipalDigest: "sha256:" + hex.EncodeToString(make([]byte, 32)), Direction: "inbound",
 		PeerAnchorID: "client-ca"}, expectedIssuerDigest: peerCRLIssuerDigest(issuer.Raw),
 		client: client, pullPermit: make(chan struct{}, 1), maxStaleness: 30 * time.Second,
-		timeout: time.Second, now: func() time.Time { return *clock },
+		timeout: time.Second, pollInterval: 2 * time.Second, closeBudget: time.Second,
+		now:             func() time.Time { return *clock },
 		observedRevoked: make(map[string]revokedPeerObservation), active: make(map[net.Conn]tls.ConnectionState)}
+	t.Cleanup(guard.Close)
 	return guardFixture{now: now, issuer: issuer, issuerKey: issuerKey, leaf: leaf, leafKey: leafKey,
 		state: tls.ConnectionState{Version: tls.VersionTLS13, PeerCertificates: []*x509.Certificate{leaf, issuer},
 			VerifiedChains: [][]*x509.Certificate{{leaf, issuer}}}, guard: guard, client: client, clock: clock}
@@ -434,5 +436,133 @@ func TestPeerCRLGuardPollDrainsRevokedAndUnavailableConnections(t *testing.T) {
 				t.Fatalf("tracked connections retained after drain: %d", active)
 			}
 		})
+	}
+}
+
+func TestPeerCRLBudgetRespectsDeclaredDrain(t *testing.T) {
+	budget, err := derivePeerCRLBudget(30*time.Second, 10*time.Second, 3*time.Second)
+	if err != nil || budget.timeout != 2*time.Second || budget.interval != 2*time.Second ||
+		budget.close != time.Second {
+		t.Fatalf("10s drain budget = %+v, %v", budget, err)
+	}
+	if 2*budget.timeout+budget.interval+budget.close+2*time.Second >= 10*time.Second {
+		t.Fatal("budget lacks strict 10s margin")
+	}
+	for _, candidate := range []struct{ stale, drain, timeout time.Duration }{
+		{30 * time.Second, 0, 3 * time.Second},
+		{30 * time.Second, 500 * time.Millisecond, 3 * time.Second},
+		{30 * time.Second, 10 * time.Second, 31 * time.Second},
+	} {
+		if _, err := derivePeerCRLBudget(candidate.stale, candidate.drain, candidate.timeout); err == nil {
+			t.Fatalf("unsafe drain budget accepted: %+v", candidate)
+		}
+	}
+}
+
+func TestPeerCRLGuardPermitWaitConsumesSinglePullDeadline(t *testing.T) {
+	f := newGuardFixture(t)
+	f.guard.timeout = 50 * time.Millisecond
+	f.guard.pullPermit <- struct{}{}
+	start := time.Now()
+	if err := f.guard.Bootstrap(t.Context()); !errors.Is(err, ErrPeerCRLUnavailable) {
+		t.Fatalf("occupied permit did not fail closed: %v", err)
+	}
+	if elapsed := time.Since(start); elapsed > 200*time.Millisecond {
+		t.Fatalf("permit wait reset pull deadline: %v", elapsed)
+	}
+	<-f.guard.pullPermit
+	if f.guard.Ready() {
+		t.Fatal("timed-out permit wait advertised readiness")
+	}
+}
+
+func TestPeerCRLGuardLateOldPullCannotResurrectAfterPermitTimeout(t *testing.T) {
+	f := newGuardFixture(t)
+	good := f.response(t, 1, false, "fixed-source")
+	f.guard.timeout = 500 * time.Millisecond
+	started, release := make(chan struct{}), make(chan struct{})
+	var releaseOnce sync.Once
+	defer releaseOnce.Do(func() { close(release) })
+	f.client.responseForCall = func(call int32) workloadtlsagent.PeerCRLResponse {
+		if call == 1 {
+			close(started)
+			<-release
+		}
+		return good
+	}
+	first := make(chan error, 1)
+	go func() { first <- f.guard.CheckHandshake(t.Context(), f.state) }()
+	<-started
+	f.guard.timeout = 50 * time.Millisecond
+	if err := f.guard.Poll(t.Context()); !errors.Is(err, ErrPeerCRLUnavailable) {
+		t.Fatalf("contended poll did not fail closed: %v", err)
+	}
+	releaseOnce.Do(func() { close(release) })
+	if err := <-first; !errors.Is(err, ErrPeerCRLUnavailable) {
+		t.Fatalf("old in-flight pull resurrected authority: %v", err)
+	}
+	if f.guard.Ready() {
+		t.Fatal("old response restored readiness after newer failure")
+	}
+	f.guard.timeout = time.Second
+	f.client.responseForCall = nil
+	f.client.response = good
+	if err := f.guard.Bootstrap(t.Context()); err != nil || !f.guard.Ready() {
+		t.Fatalf("fresh post-failure pull did not recover: %v", err)
+	}
+}
+
+func TestPeerCRLGuardEvidenceExpiryDrainsBeforeNextPoll(t *testing.T) {
+	now := time.Now()
+	first, second := net.Pipe()
+	defer second.Close()
+	guard := &PeerCRLGuard{maxStaleness: time.Second, pollInterval: 2 * time.Second,
+		collectedAt: now, nextUpdate: now.Add(40 * time.Millisecond),
+		active: map[net.Conn]tls.ConnectionState{first: {}}, now: time.Now}
+	guard.mu.Lock()
+	guard.scheduleEvidenceExpiryLocked(now)
+	guard.mu.Unlock()
+	defer guard.Close()
+	_ = second.SetReadDeadline(time.Now().Add(300 * time.Millisecond))
+	var one [1]byte
+	if _, err := second.Read(one[:]); err == nil {
+		t.Fatal("expired CRL retained active connection")
+	}
+	guard.mu.Lock()
+	active, unavailable := len(guard.active), guard.unavailable
+	guard.mu.Unlock()
+	if active != 0 || !unavailable {
+		t.Fatalf("expiry did not clear guard state: active=%d unavailable=%v", active, unavailable)
+	}
+}
+
+type blockingCloseConn struct {
+	net.Conn
+	release <-chan struct{}
+}
+
+func (c blockingCloseConn) Close() error {
+	<-c.release
+	return c.Conn.Close()
+}
+
+func TestPeerCRLCloseBudgetDoesNotSeriallyBlockOtherPeers(t *testing.T) {
+	blocked, blockedPeer := net.Pipe()
+	defer blockedPeer.Close()
+	other, otherPeer := net.Pipe()
+	defer otherPeer.Close()
+	release := make(chan struct{})
+	defer close(release)
+	start := time.Now()
+	if closeTrackedConnections([]net.Conn{blockingCloseConn{Conn: blocked, release: release}, other}, 50*time.Millisecond) {
+		t.Fatal("blocked collection reported within total close budget")
+	}
+	if elapsed := time.Since(start); elapsed > 250*time.Millisecond {
+		t.Fatalf("collection close waited beyond budget: %v", elapsed)
+	}
+	_ = otherPeer.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
+	var one [1]byte
+	if _, err := otherPeer.Read(one[:]); err == nil {
+		t.Fatal("one slow close blocked another peer")
 	}
 }

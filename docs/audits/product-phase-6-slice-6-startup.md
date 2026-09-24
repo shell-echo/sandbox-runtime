@@ -91,6 +91,26 @@ already binds issuance DNS to the profile. This remains code and component
 evidence; the complete distinct-process Vault/Docker gate and immutable Slice
 6 manifest are absent, so Phase 6 stays **5/15**.
 
+Checkpoint: the 10-second profile drain claim exposed a real scheduling
+contradiction: 30-second CRL staleness had produced a 15-second poll interval.
+The common guard now derives one total pull deadline and poll interval from
+the exact local principal's drain bound; the 10-second candidate caps them at
+2 seconds each and budgets the entire connection collection at 1 second.
+Provider/role server polling and outbound-client polling share that result.
+Permit waits consume the same pull deadline, and an independent expiry timer
+closes tracked sockets at the earlier of freshness or CRL validity loss.
+Fixed-width parallel closure prevents one slow `Close` from serially blocking
+all other sockets, while an over-budget close fails readiness. Component
+budget, timeout, early-expiry and slow-close tests pass. This is not measured
+Vault publication, scheduler jitter or full-capacity real-process drain
+evidence; 10 seconds remains an unproved candidate until the named gate passes.
+Guest v3 configuration now also rejects static TLS material and retains one
+role-owned Guest signing-key binding. Its candidate outbound client selects
+only the canonical Guest→Product `/agent` edge, live signer and peer-CRL
+source, with numeric dialing, pinned Product DNS/URI and a bounded WebSocket
+lifetime. This does not imply that Product's production private Guest Hub is
+composed; that receiver and the complete process graph remain open.
+
 ## Corrected premises
 
 The repository does not already enforce Slice 6 merely because TLS 1.3,

@@ -37,7 +37,7 @@ func runDataPlaneServe(ctx context.Context, role config.DataPlaneRole, section s
 	}
 	if cfg.DeploymentLevel != config.ProviderProductionLevel ||
 		(cfg.SchemaVersion != config.DataPlaneProductionSchemaV2 &&
-			!(role != config.DataPlaneGuest && cfg.SchemaVersion == config.DataPlaneProductionSchemaV3)) {
+			cfg.SchemaVersion != config.DataPlaneProductionSchemaV3) {
 		return errors.New("data-plane role serve requires an explicit supported production schema")
 	}
 	for name, enabled := range map[string]bool{

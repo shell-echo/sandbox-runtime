@@ -106,8 +106,31 @@ closed on source loss or a newly revoked leaf. Exact close cleanup and polling
 cancellation are required; a successful handshake alone is not a drain gate.
 The combined Vault publication, controller/agent collection, role polling and
 socket cleanup delay must fit the profile's end-to-end revocation bound;
-individual poll and staleness limits alone do not prove it. Missing issuer
-source, stale/rolled-back CRL, authority loss, or revoked-to-good resurrection
+individual poll and staleness limits alone do not prove it.
+
+For each exact local role, let D be its declared `connection_drain_seconds`,
+S its CRL evidence maximum age, T the total timeout for one guard pull
+including permit wait and every agent/controller/Vault hop, P the maximum
+wait after one check completes before the next attempt, C the total time to
+stop forwarding and force-close all sockets tracked by that guard, U the
+bound from authoritative revocation to the fixed CRL source becoming
+readable, and J the measured scheduling allowance. The strict budget is
+`U + 2*T + P + C + J < D`; two pulls cover a revocation racing with an
+in-flight old snapshot. The 10-second candidate derives `T <= 2s`,
+`P <= min(S/2, 2s)` and `C <= 1s`, reserves at most 2s for U+J and at least
+1s unallocated. An effective T is the smaller of the existing operation
+timeout and D/5; it constrains the full pull, not certificate issuance.
+The guard schedules evidence expiry at the earlier of `collected_at+S` and
+CRL `next_update`, even if no next poll arrives. An invalid minimum interval
+or insufficient budget rejects the profile-bound guard instead of extending
+D. The real Vault and distinct-process gate must measure U, J, active/idle/
+hijacked-socket drain and exact cleanup; these formulas alone do not prove
+the candidate meets 10 seconds. The measurement starts at successful
+revocation confirmation only if the fixed CRL source is already readable;
+otherwise publication delay counts as U. A user-request-start SLA must also
+include the revocation request itself.
+
+Missing issuer source, stale/rolled-back CRL, authority loss, or revoked-to-good resurrection
 of an unexpired observed peer fail closed. Same-issuer reads may be shared,
 but an agent cannot substitute its own issuer's CRL for a different peer CA.
 Different server/client anchor IDs or purposes do not themselves prove

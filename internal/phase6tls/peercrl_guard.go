@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/shell-echo/sandbox-runtime/internal/connectiondrain"
 	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
 	"github.com/shell-echo/sandbox-runtime/internal/workloadpki"
 	"github.com/shell-echo/sandbox-runtime/internal/workloadtlsagent"
@@ -34,11 +35,14 @@ type PeerCRLGuard struct {
 	pullPermit           chan struct{}
 	maxStaleness         time.Duration
 	timeout              time.Duration
+	pollInterval         time.Duration
+	closeBudget          time.Duration
 	now                  func() time.Time
 
 	mu              sync.Mutex
 	failed          bool
 	unavailable     bool
+	failureSequence uint64
 	lastNow         time.Time
 	sourceID        string
 	issuerDigest    string
@@ -50,6 +54,8 @@ type PeerCRLGuard struct {
 	current         workloadpki.VerifiedCRL
 	observedRevoked map[string]revokedPeerObservation
 	active          map[net.Conn]tls.ConnectionState
+	expiryTimer     *time.Timer
+	expirySequence  uint64
 }
 
 type revokedPeerObservation struct {
@@ -91,19 +97,49 @@ func NewPeerCRLGuard(profile phase6security.Profile, roleDocument phase6security
 				continue
 			}
 			staleness := time.Duration(principal.TLS.RevocationMaxStalenessSeconds) * time.Second
-			if staleness < time.Second || staleness > 5*time.Minute {
+			drain := time.Duration(principal.TLS.ConnectionDrainSeconds) * time.Second
+			budget, budgetErr := derivePeerCRLBudget(staleness, drain, timeout)
+			if budgetErr != nil {
 				return nil, ErrPeerCRLUnavailable
 			}
 			return &PeerCRLGuard{binding: workloadtlsagent.PeerCRLBinding{
 				ProfileDigest: profile.ProfileDigest, SourceMappingDigest: roleDocument.SourceMappingDigest,
 				EdgeID: edgeID, LocalPrincipalDigest: localPrincipalDigest,
 				Direction: direction, PeerAnchorID: anchorID}, expectedIssuerDigest: roleBinding.IssuerDigest,
-				client: client, pullPermit: make(chan struct{}, 1), timeout: timeout,
+				client: client, pullPermit: make(chan struct{}, 1), timeout: budget.timeout,
+				pollInterval: budget.interval, closeBudget: budget.close,
 				maxStaleness: staleness, now: now, observedRevoked: make(map[string]revokedPeerObservation),
 				active: make(map[net.Conn]tls.ConnectionState)}, nil
 		}
 	}
 	return nil, ErrPeerCRLUnavailable
+}
+
+type peerCRLBudget struct {
+	timeout  time.Duration
+	interval time.Duration
+	close    time.Duration
+}
+
+// D is the exact local role's declared drain bound, S is evidence freshness,
+// T includes permit queueing and the entire pull, P is poll wait, C is total
+// close time. The real gate must additionally verify U+J <= D/5 and leave
+// >=D/10 margin: U + 2*T + P + C + J < D. This configuration calculation is
+// not a substitute for measuring Vault publication and scheduler behavior.
+func derivePeerCRLBudget(staleness, drain, operationTimeout time.Duration) (peerCRLBudget, error) {
+	if staleness < time.Second || staleness > 5*time.Minute ||
+		drain < time.Second || drain > 5*time.Minute ||
+		operationTimeout < time.Second || operationTimeout > 30*time.Second {
+		return peerCRLBudget{}, ErrPeerCRLUnavailable
+	}
+	budget := peerCRLBudget{timeout: min(operationTimeout, drain/5),
+		interval: min(staleness/2, drain/5, 30*time.Second), close: drain / 10}
+	if budget.timeout < 100*time.Millisecond || budget.interval < 100*time.Millisecond ||
+		budget.close < 100*time.Millisecond ||
+		2*budget.timeout+budget.interval+budget.close+drain/5 > drain-drain/10 {
+		return peerCRLBudget{}, ErrPeerCRLUnavailable
+	}
+	return budget, nil
 }
 
 // CheckHandshake runs only after standard TLS chain and identity verification.
@@ -148,10 +184,18 @@ func (g *PeerCRLGuard) refresh(ctx context.Context, issuerDER, leafDER []byte, b
 	if !bootstrap && peerCRLIssuerDigest(issuerDER) != g.expectedIssuerDigest {
 		return ErrPeerCRLUnavailable
 	}
+	g.mu.Lock()
+	startedFailureSequence := g.failureSequence
+	g.mu.Unlock()
 	defer func() {
 		if result != nil && !errors.Is(result, workloadpki.ErrPeerRevoked) {
 			g.mu.Lock()
 			g.unavailable = true
+			g.failureSequence++
+			g.expirySequence++
+			if g.expiryTimer != nil {
+				g.expiryTimer.Stop()
+			}
 			g.mu.Unlock()
 			g.drainAll()
 		}
@@ -218,6 +262,9 @@ func (g *PeerCRLGuard) refresh(ctx context.Context, issuerDER, leafDER []byte, b
 		g.failed = true
 		return ErrPeerCRLUnavailable
 	}
+	if g.failureSequence != startedFailureSequence {
+		return ErrPeerCRLUnavailable
+	}
 	g.lastNow = observedAt
 	if collectedAt.Before(observedAt.Add(-g.maxStaleness)) || collectedAt.After(observedAt.Add(5*time.Second)) ||
 		observedAt.Before(verified.ThisUpdate()) || !observedAt.Before(verified.NextUpdate()) {
@@ -250,6 +297,7 @@ func (g *PeerCRLGuard) refresh(ctx context.Context, issuerDER, leafDER []byte, b
 	g.collectedAt, g.nextUpdate = collectedAt, verified.NextUpdate()
 	g.current = verified
 	g.unavailable = false
+	g.scheduleEvidenceExpiryLocked(observedAt)
 	if bootstrap {
 		return nil
 	}
@@ -267,6 +315,35 @@ func (g *PeerCRLGuard) refresh(ctx context.Context, issuerDER, leafDER []byte, b
 			serial: new(big.Int).Set(leaf.SerialNumber), notAfter: leaf.NotAfter}
 	}
 	return checkErr
+}
+
+// scheduleEvidenceExpiryLocked closes active sockets at the earlier of source
+// freshness expiry and CRL nextUpdate, even if the next poll has not run yet.
+// The sequence prevents an old timer from draining a newer valid snapshot.
+func (g *PeerCRLGuard) scheduleEvidenceExpiryLocked(observedAt time.Time) {
+	g.expirySequence++
+	sequence := g.expirySequence
+	if g.expiryTimer != nil {
+		g.expiryTimer.Stop()
+	}
+	deadline := g.collectedAt.Add(g.maxStaleness)
+	if g.nextUpdate.Before(deadline) {
+		deadline = g.nextUpdate
+	}
+	delay := deadline.Sub(observedAt)
+	if delay < 0 {
+		delay = 0
+	}
+	g.expiryTimer = time.AfterFunc(delay, func() {
+		g.mu.Lock()
+		if sequence != g.expirySequence || g.failed || g.unavailable {
+			g.mu.Unlock()
+			return
+		}
+		g.unavailable = true
+		g.mu.Unlock()
+		g.drainAll()
+	})
 }
 
 // Track adds a connection only after its actual TLS handshake passed the
@@ -350,11 +427,16 @@ func (g *PeerCRLGuard) Poll(ctx context.Context) error {
 	}
 	failed := g.failed
 	g.mu.Unlock()
-	for _, connection := range toClose {
-		_ = connection.Close()
+	if !closeTrackedConnections(toClose, g.closeBudget) {
+		g.mu.Lock()
+		g.failed = true
+		g.mu.Unlock()
 	}
 	if failed {
 		g.drainAll()
+		return ErrPeerCRLUnavailable
+	}
+	if !g.Ready() {
 		return ErrPeerCRLUnavailable
 	}
 	return nil
@@ -368,8 +450,47 @@ func (g *PeerCRLGuard) drainAll() {
 		delete(g.active, connection)
 	}
 	g.mu.Unlock()
+	if !closeTrackedConnections(connections, g.closeBudget) {
+		g.mu.Lock()
+		g.failed = true
+		g.mu.Unlock()
+	}
+}
+
+// A fixed worker set closes all underlying sockets without allowing one slow
+// Close to hold every other peer. This is a total collection budget, not a
+// per-connection timeout; a gate must fail if actual closure exceeds it.
+func closeTrackedConnections(connections []net.Conn, totalBudget time.Duration) bool {
+	if len(connections) == 0 {
+		return true
+	}
+	if totalBudget < 100*time.Millisecond {
+		totalBudget = 100 * time.Millisecond
+	}
+	jobs := make(chan net.Conn, len(connections))
 	for _, connection := range connections {
-		_ = connection.Close()
+		jobs <- connection
+	}
+	close(jobs)
+	var workers sync.WaitGroup
+	for range min(len(connections), 16) {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			for connection := range jobs {
+				_ = connection.Close()
+			}
+		}()
+	}
+	done := make(chan struct{})
+	go func() { workers.Wait(); close(done) }()
+	timer := time.NewTimer(totalBudget)
+	defer timer.Stop()
+	select {
+	case <-done:
+		return true
+	case <-timer.C:
+		return false
 	}
 }
 
@@ -379,6 +500,10 @@ func (g *PeerCRLGuard) Close() {
 	}
 	g.mu.Lock()
 	g.failed = true
+	g.expirySequence++
+	if g.expiryTimer != nil {
+		g.expiryTimer.Stop()
+	}
 	g.mu.Unlock()
 	g.drainAll()
 }
@@ -425,17 +550,10 @@ func (g *PeerCRLGuard) Ready() bool {
 }
 
 func (g *PeerCRLGuard) PollInterval() time.Duration {
-	if g == nil || g.maxStaleness < time.Second {
+	if g == nil {
 		return 0
 	}
-	interval := g.maxStaleness / 2
-	if interval > 30*time.Second {
-		interval = 30 * time.Second
-	}
-	if interval < 100*time.Millisecond {
-		interval = 100 * time.Millisecond
-	}
-	return interval
+	return g.pollInterval
 }
 
 // StartPolling keeps both zero-peer readiness and active connections bounded
@@ -445,20 +563,5 @@ func (g *PeerCRLGuard) StartPolling(parent context.Context) (func(), error) {
 	if g == nil || parent == nil || g.PollInterval() == 0 {
 		return nil, ErrPeerCRLUnavailable
 	}
-	ctx, cancel := context.WithCancel(parent)
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		ticker := time.NewTicker(g.PollInterval())
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				_ = g.Poll(ctx)
-			}
-		}
-	}()
-	return func() { cancel(); <-done }, nil
+	return connectiondrain.StartPeerPoll(parent, g), nil
 }

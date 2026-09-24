@@ -300,6 +300,54 @@ func TestPrivateExecutorProductionV3RequiresLiveTLSWithoutStaticMaterial(t *test
 	}
 }
 
+func TestGuestProductionV3RetainsOnlySigningKeyMaterial(t *testing.T) {
+	directory := t.TempDir()
+	path := func(name string) string { return filepath.Join(directory, name) }
+	value := defaultDataPlaneProcess(DataPlaneGuest, 0)
+	value.Enabled = true
+	value.SchemaVersion = DataPlaneProductionSchemaV3
+	value.DeploymentLevel = ProviderProductionLevel
+	value.OutboundURL = "wss://10.16.0.3:8449/agent"
+	value.Authority = DataPlaneAuthorityConfig{CredentialFile: path("credential"), DependencyFile: path("dependency"),
+		PolicyFile: path("policy"), RecordingKeyRef: "kms://recording/phase6/guest"}
+	value.TLS = DataPlaneTLSConfig{SecurityProfilePath: path("profile"), SecurityProfileDigest: "sha256:" + strings.Repeat("a", 64),
+		PeerCRLRoleFile: path("peer-role"), PeerCRLRoleDigest: "sha256:" + strings.Repeat("b", 64),
+		PeerCRLSourceMappingDigest: "sha256:" + strings.Repeat("c", 64),
+		AgentSocket:                path("agent.sock"), AgentUID: 501, AgentGID: 20, OperationTimeoutMillis: 3000}
+	value.Materials.Provider = RoleMaterialProviderConfig{Type: UnixWorkloadMaterialProviderV1,
+		Alias: "guest-material-agent", SocketPath: "/tmp/phase6-guest-material-test.sock", ExpectedUID: 502, ExpectedGID: 20,
+		OperationTimeoutSeconds: 3, CacheSeconds: 30}
+	document, err := json.Marshal(secretref.Binding{Schema: secretref.BindingSchema, Kind: secretref.KindSecret,
+		Reference: "secret://vault/kv/guest-signing-key", Version: "v1", Purpose: secretref.PurposeGuestSigningKey,
+		TenantID: secretref.SystemTenant, Role: secretref.RoleGuest})
+	if err != nil {
+		t.Fatal(err)
+	}
+	value.Materials.Bindings = []RoleMaterialBindingConfig{{ID: "guest-signing-key", Provider: "guest-material-agent", Document: string(document)}}
+	if err := value.Validate(); err != nil {
+		t.Fatalf("valid Guest v3: %v", err)
+	}
+	for name, mutate := range map[string]func(*DataPlaneProcessConfig){
+		"static TLS key": func(candidate *DataPlaneProcessConfig) { candidate.TLS.ClientPrivateKeyBindingID = "old-key" },
+		"raw TLS key":    func(candidate *DataPlaneProcessConfig) { candidate.TLS.ClientPrivateKeyFile = path("old.pem") },
+		"missing signing key": func(candidate *DataPlaneProcessConfig) {
+			candidate.Materials.Bindings = nil
+		},
+		"extra material": func(candidate *DataPlaneProcessConfig) {
+			candidate.Materials.Bindings = append(candidate.Materials.Bindings, RoleMaterialBindingConfig{ID: "extra"})
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			candidate := *value
+			candidate.Materials.Bindings = append([]RoleMaterialBindingConfig(nil), value.Materials.Bindings...)
+			mutate(&candidate)
+			if err := candidate.Validate(); err == nil {
+				t.Fatal("Guest v3 accepted invalid material or TLS authority")
+			}
+		})
+	}
+}
+
 func TestDataPlaneRolesHaveDistinctDefaultProbePorts(t *testing.T) {
 	ports := map[DataPlaneRole]int{
 		DataPlaneGateway: defaultDataPlaneProcess(DataPlaneGateway, defaultGatewayPort).Probe.Port,

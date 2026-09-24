@@ -718,6 +718,17 @@ operator-fixed DNS SAN in the canonical profile and signed certificate;
 their numeric target IP remains the dial address, while the pinned DNS name
 is used only for TLS ServerName/hostname verification. Agent/controller
 policy checks already require the configured DNS SAN to equal the profile.
+Guest v3 follows the distinct Guest→Product private `/agent` edge with its
+own live client signer and outbound peer-CRL guard. Its material registry
+contains only the Guest business signing key; TLS keys are never resolved
+from that registry. Product must still compose the real private Guest Hub
+receiver before the all-role gate can pass.
+For every live mTLS edge, the guard derives CRL timeout and polling interval
+from the exact local principal's drain bound. The 10-second candidate caps
+both at 2 seconds, reserves a 1-second total socket-close budget, and closes
+active sockets at the earlier of source freshness or CRL expiry. Do not cite
+the 30-second CRL age as a 30-second disconnection grace period. Actual Vault
+publication, scheduling and full-capacity close timing remain gate evidence.
 
 The Phase 6 workload TLS agent retains its frozen `workload-tls-agent.v1`
 certificate/signing message protocol. The peer-revocation capability is a

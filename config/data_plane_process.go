@@ -130,8 +130,7 @@ func (c *DataPlaneProcessConfig) Validate() error {
 	if !c.Enabled {
 		return nil
 	}
-	productionV3 := c.SchemaVersion == DataPlaneProductionSchemaV3 && c.DeploymentLevel == ProviderProductionLevel &&
-		(c.Role == DataPlaneGateway || c.Role == DataPlaneBrowser || c.Role == DataPlaneDesktop)
+	productionV3 := c.SchemaVersion == DataPlaneProductionSchemaV3 && c.DeploymentLevel == ProviderProductionLevel
 	production := c.SchemaVersion == DataPlaneProductionSchemaV2 && c.DeploymentLevel == ProviderProductionLevel || productionV3
 	legacyCandidate := c.SchemaVersion == DataPlaneLegacyLocalCandidateSchema && c.DeploymentLevel == ProviderLocalCandidateLevel
 	if !production && !legacyCandidate {
@@ -315,6 +314,9 @@ func (c *DataPlaneProcessConfig) validateServerTLS(production, requireClient boo
 
 func (c *DataPlaneProcessConfig) validateClientTLS(production bool) error {
 	value := c.TLS
+	if c.SchemaVersion == DataPlaneProductionSchemaV3 {
+		return nil
+	}
 	if production {
 		if value.CertificateBindingID != "" || value.PrivateKeyBindingID != "" || value.ClientCABundleBindingID == "" || value.ClientCertificateBindingID == "" || value.ClientPrivateKeyBindingID == "" || value.ExpectedServerName == "" || len(value.AllowedClientIdentity) != 0 {
 			return errors.New("guest requires client TLS material bindings and cannot configure a server identity")
@@ -362,6 +364,18 @@ func (c *DataPlaneProcessConfig) validateProductionMaterials() error {
 		}
 		if !seen[secretref.PurposePostgresRuntimeDSN] || !seen[secretref.PurposeGatewayGrantKey] {
 			return errors.New("Gateway v3 material registry is incomplete")
+		}
+		return nil
+	}
+	if c.SchemaVersion == DataPlaneProductionSchemaV3 && c.Role == DataPlaneGuest {
+		if len(bindings) != 1 {
+			return errors.New("Guest v3 material registry must contain only its signing key")
+		}
+		for _, binding := range bindings {
+			if binding.Purpose != secretref.PurposeGuestSigningKey || binding.Role != secretref.RoleGuest ||
+				binding.TenantID != secretref.SystemTenant {
+				return errors.New("Guest v3 material registry contains unauthorized authority")
+			}
 		}
 		return nil
 	}
