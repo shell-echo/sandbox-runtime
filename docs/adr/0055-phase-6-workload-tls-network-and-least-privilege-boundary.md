@@ -411,9 +411,21 @@ remain required. These bindings do not create a wildcard external principal
 or grant the same optional-client-cert policy to a private listener. WebRTC
 media retains its authenticated signaling and DTLS/SRTP binding rather than
 being misclassified as a generic mTLS HTTP edge. The Guest remains outbound
-only; its private Product receiver must compose the existing Guest Hub,
-binding store, challenge authentication and Files/Development adapters under
-the Product identity. A fixture-only Guest peer is not production composition.
+only. Slice 6 must compose its private Product receiver from the existing
+Guest Hub, Product PostgreSQL binding store, challenge authentication, live
+mTLS/CRL and drain under the Product identity. A fixture-only Guest peer is
+not security-edge evidence. That receiver is distinct from public
+Files/Development readiness: Slice 8 must wire the existing FileService,
+FileClient, DevelopmentService, DevelopmentClient and authenticated Web/BFF
+paths into the production application graph with real content/storage ports.
+Guest transport readiness or negotiated handlers alone cannot advertise
+`product.files` or development capability. Slices 11, 14 and 15 must reject a
+full-product claim until the formal public business path passes its named
+deployment and black-box gates.
+Private WebSocket clients must reject HTTP redirects. Their guarded transport
+must also deny plaintext dialing so a redirect cannot downgrade an approved
+`wss` edge into an unpinned `http` connection; a TLS connection to a different
+numeric target is independently rejected.
 Database, coordination, object storage, egress broker, agent/controller Unix,
 Vault and DNS dependencies each retain their own actual-consumer bindings and
 cannot be hidden under the runtime mTLS matrix.

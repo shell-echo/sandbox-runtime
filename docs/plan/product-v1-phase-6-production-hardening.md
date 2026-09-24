@@ -173,6 +173,19 @@ resource limits.
 Gate: identity substitution, downgrade, cross-role/cross-tenant traffic,
 metadata, DNS rebinding, policy outage and privilege-escalation denial.
 
+The Guest security-edge gate uses the actual independent Product and Guest
+production commands. Product must own the PostgreSQL Guest binding and the
+private `/agent` Hub; the wire must complete hello/challenge/signature/welcome
+with nonce/replay, GuestID, tenant/workspace/slot, generation, capability and
+expiry checks. Revoke the business binding, lose the database, revoke the TLS
+peer or lose its CRL source, restart/reconnect both roles, and verify upgraded
+WebSocket drain and exact cleanup. A run-owned fixture may prepare Product
+binding rows, but it does not establish a formal public creation flow. The
+Slice 6 manifest must distinguish `guest_security_edge_proven` from the
+absent Files/Development public composition using the existing evidence
+schema and non-claim mechanism. Hub/Guest-handler readiness never by itself
+advertises user Files/Development readiness.
+
 Status: underway. ADR 0055 and the Slice 6 startup audit freeze real Vault PKI,
 live TLS rotation/revocation, role-isolated internal networks with alias-only
 egress brokers, exact container least privilege and the complete privileged
@@ -194,8 +207,29 @@ Qualify role-separated PostgreSQL, Valkey-compatible coordination and external
 object storage with bounded clients, TLS identity, ACLs, quotas, retention,
 consistency semantics and distinct failure domains.
 
+This slice also completes the production business graph, not just storage
+connectors: wire the existing FileService/FileClient,
+DevelopmentService/DevelopmentClient, transfer/revision/template and recording
+services, actual Guest Files handlers, authenticated Product Web/BFF routes,
+content sources and the required PostgreSQL/object-store ports into the
+Product/Guest command lifecycles. Reuse existing `/web/data/.../files` and
+`/web/transfers/...` rather than introducing a duplicate `/api/v1/files`.
+Where a formal Development entry is missing, define the Product/data-plane
+DTO, authorization, idempotency and quota boundary and review any Contract
+impact before implementation; do not publish the Phase 5 test-only
+`/gate/development` route. Explicitly requested but uncomposed production
+capabilities fail startup; the default snapshot stays unavailable until all
+dependencies and formal user paths are live. A new storage/egress edge must
+update the same canonical security inventory and rerun affected Slice 6 gates.
+
 Gate: independent deployment/component tests, authorization denial, saturation,
 partitions, stale fencing, corruption and exact cleanup.
+The mandatory formal-entry scenarios additionally cover authentication and
+cross-tenant denial; Files list/stat/change authorization; transfer digest,
+size, offset, quota and cancellation; Development prepare/write/commit/
+finalize/rollback/restart; missing/tampered content and dependency loss; and
+dynamic capability closure/recovery. Direct service calls, local blob
+fixtures and test-only gate handlers cannot alone satisfy this entry gate.
 
 ### Slice 9 — backup, restore and data-integrity operations
 
@@ -225,6 +259,10 @@ Provider runtime backend remain independent.
 
 Gate: immutable-image Docker smoke, Apple Container scope gate, Kubernetes
 server-side validation and disposable-cluster role/dependency smoke.
+Every full-product profile must fail startup/admission when a declared
+Files/Development/transfer/recording business composition, dependency or
+capability is missing; a kernel-only Product or connected Guest is not a
+complete deployment.
 
 ### Slice 12 — upgrades, migrations, canary, rollback and disaster recovery
 
@@ -254,6 +292,10 @@ SLO collection and cleanup without repository test-process composition.
 
 Gate: strict signed evidence manifest binding artifacts, configuration digests,
 identities, topology, scenarios, observations and non-claims.
+From the published immutable artifacts and real public entry, run black-box
+Files, Development, transfer and encrypted-recording E2E. The absence of
+these scenarios blocks release-candidate acceptance, even if the Guest
+private security edge and older component tests pass.
 
 ### Slice 15 — final production release gate
 
@@ -264,6 +306,30 @@ weakening a gate.
 
 Gate: independent evidence verification, all mandatory CI/deployment/security
 checks, named operator acceptance and a precise supported-scope statement.
+The reviewer must explicitly verify the Slice 8 formal-entry and Slice 14
+published-artifact Files/Development/transfer/recording evidence. Permanent
+`unavailable` advertisement is not a way to satisfy the complete Product v1
+target.
+
+## Production composition inventory
+
+This inventory separates existing implementations from their current
+production command wiring. It assigns the promised public-entry-to-dependency
+closure once, so each new TLS edge does not reveal an unowned business gap.
+
+| Promised path | Existing code/authority | Current production-command gap and owner |
+| --- | --- | --- |
+| Workspace and Provider lifecycle | Product `Application`, Provider clients/dispatchers and locked Contract | Product kernel denies primary-slot mutation and has no Provider dispatch graph; complete Product-to-three-Provider production composition and dynamic readiness: Slice 8, then deployment/release gates 11/14/15. |
+| Terminal, Browser and Desktop public sessions | Product control/session/grant/slot services, Gateway public handlers, Provider private handoffs, role executors | Product production handler passes nil control/session/grant/slot ports; bind formal public entry, role workers, exact Provider profile and Gateway dependency: Slice 8; preserve security-edge proof in Slice 6 and full E2E in Slice 14. |
+| Guest private security edge | `guestagent.Hub`, Product PostgreSQL GuestBindingStore, Guest agent protocol | Separate Product `/agent` listener, live CRL, actual challenge/binding/revocation/reconnect and independent-process proof: Slice 6. This is not a user Files/Development route. |
+| Files and transfers | `productweb.Options.Files/Transfers`, `FileService`, `FileClient`, `TransferService`, PostgreSQL and blob ports | Product command does not construct the BFF, Files/transfer services, content store or Guest Files handlers; formal route-to-Guest/storage closure: Slice 8; deployment and published-artifact gates: 11/14/15. |
+| Development environments | `DevelopmentService`, `DevelopmentClient`, locked catalog, revision/content ports; Phase 5 `/gate/development` is test-only | Formal authenticated public entry/DTO is absent; define and implement it with real Guest materialization, persistence, content and restart/rollback under Slice 8, then 11/14/15. |
+| Recording and catalog | `RecordingService`, KMS envelope adapter, Browser/Desktop live recorders, catalog and Product Web | Content/object-store and service lifecycles are not composed in Product production command; bind encrypted content/retention and formal replay in Slice 8, reject missing deployment in 11 and prove black-box published-artifact E2E in 14/15. |
+
+The Product production `/readyz` signal reports dependencies of its actually
+declared composition, not completion of this table. No row becomes ready
+solely because a route binds, Guest transport connects, or a service unit
+test passes.
 
 ## Evidence ladder
 

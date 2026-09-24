@@ -111,6 +111,36 @@ source, with numeric dialing, pinned Product DNS/URI and a bounded WebSocket
 lifetime. This does not imply that Product's production private Guest Hub is
 composed; that receiver and the complete process graph remain open.
 
+Checkpoint: Product v3 now requires a separate numeric private Guest-control
+listener, the exact pinned peer-CRL role and its live Product signer. The
+candidate command composes the existing `guestagent.Hub` with the real Product
+PostgreSQL Guest-binding authenticator; only `/agent` is mounted on the
+private listener. TLS admits the exact Guest client identity, pulls a fresh
+signed CRL, and tracks idle and upgraded sockets for revocation and shutdown.
+Focused real TLS 1.3/WebSocket tests cover route separation, revocation drain
+and exact connection cleanup. The Product public production handler still
+advertises `product.workspace` unavailable and has no Files/Development
+service entry point; the Hub's presence alone does not establish those
+capabilities. The full Vault/Docker multi-process gate and immutable Slice 6
+manifest remain absent; Phase 6 stays **5/15**.
+Sandbox's scope ruling keeps this slice responsible for a real independent
+Product/Guest command gate with durable binding challenge, revocation,
+database/source loss, restart/reconnect and exact drain. The future manifest
+may assert `guest_security_edge_proven` only via observed scenario evidence
+after those checks; its existing non-claim mechanism must leave
+`files/development_public_composition` unclaimed. These labels do not add
+manifest fields or a parallel evidence system. The formal
+Files/Development/transfer/recording business
+graph is a mandatory Slice 8 delivery and Slices 11/14/15 release blocker,
+not an implicit consequence of Guest transport readiness. The fixed Phase 6
+plan now inventories every promised public entry, service and dependency.
+Review of the live private WebSocket clients exposed a redirect downgrade
+path in the shared HTTP transport. The candidate now rejects redirects at
+Guest, Gateway and Browser/Desktop backend clients, denies all plaintext
+`DialContext` calls in the guard and retains exact numeric-target TLS dialing.
+Component negatives cover policy and transport; the actual multi-role
+network-bypass campaign remains open.
+
 ## Corrected premises
 
 The repository does not already enforce Slice 6 merely because TLS 1.3,

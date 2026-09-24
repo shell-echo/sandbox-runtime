@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/shell-echo/sandbox-runtime/internal/secretref"
+	"github.com/shell-echo/sandbox-runtime/option"
 )
 
 func TestProductProcessDisabledDefaultsAreInert(t *testing.T) {
@@ -125,11 +126,15 @@ func validProductionProductConfig(t *testing.T, _ string) *ProductProcessConfig 
 func TestProductV3RequiresPinnedLiveSignerWithoutLocalTLSMaterial(t *testing.T) {
 	valid := validProductionProductConfig(t, "")
 	valid.SchemaVersion = ProductProductionSchemaV3
+	valid.GuestControl.Host, valid.GuestControl.Port = "10.16.0.3", 8449
 	valid.TLS = ProductTLSConfig{
 		SecurityProfilePath:   "/run/security/profile.json",
 		SecurityProfileDigest: "sha256:" + strings.Repeat("a", 64),
 		AgentSocket:           "/run/tls/product-tls-agent/signer.sock", AgentUID: 20001, AgentGID: 30001,
-		OperationTimeoutMillis: 3000,
+		OperationTimeoutMillis:     3000,
+		PeerCRLRoleFile:            "/run/security/product-peer-crl-role.json",
+		PeerCRLRoleDigest:          "sha256:" + strings.Repeat("b", 64),
+		PeerCRLSourceMappingDigest: "sha256:" + strings.Repeat("c", 64),
 	}
 	valid.Materials.Bindings = valid.Materials.Bindings[2:]
 	if err := valid.Validate(); err != nil {
@@ -141,12 +146,18 @@ func TestProductV3RequiresPinnedLiveSignerWithoutLocalTLSMaterial(t *testing.T) 
 		"extra TLS binding": func(c *ProductProcessConfig) {
 			c.Materials.Bindings = append(c.Materials.Bindings, validProductionProductConfig(t, "").Materials.Bindings[0])
 		},
-		"profile digest":   func(c *ProductProcessConfig) { c.TLS.SecurityProfileDigest = "sha256:bad" },
-		"relative profile": func(c *ProductProcessConfig) { c.TLS.SecurityProfilePath = "profile.json" },
-		"relative socket":  func(c *ProductProcessConfig) { c.TLS.AgentSocket = "signer.sock" },
-		"agent UID":        func(c *ProductProcessConfig) { c.TLS.AgentUID = 0 },
-		"agent GID":        func(c *ProductProcessConfig) { c.TLS.AgentGID = 0 },
-		"timeout":          func(c *ProductProcessConfig) { c.TLS.OperationTimeoutMillis = 0 },
+		"profile digest":          func(c *ProductProcessConfig) { c.TLS.SecurityProfileDigest = "sha256:bad" },
+		"relative profile":        func(c *ProductProcessConfig) { c.TLS.SecurityProfilePath = "profile.json" },
+		"relative socket":         func(c *ProductProcessConfig) { c.TLS.AgentSocket = "signer.sock" },
+		"material agent alias":    func(c *ProductProcessConfig) { c.TLS.AgentSocket = c.Materials.Provider.SocketPath },
+		"agent UID":               func(c *ProductProcessConfig) { c.TLS.AgentUID = 0 },
+		"agent GID":               func(c *ProductProcessConfig) { c.TLS.AgentGID = 0 },
+		"timeout":                 func(c *ProductProcessConfig) { c.TLS.OperationTimeoutMillis = 0 },
+		"missing guest listener":  func(c *ProductProcessConfig) { c.GuestControl = option.HTTP{} },
+		"public guest alias":      func(c *ProductProcessConfig) { c.GuestControl = c.API },
+		"public port alias":       func(c *ProductProcessConfig) { c.GuestControl.Port = c.API.Port },
+		"missing peer CRL role":   func(c *ProductProcessConfig) { c.TLS.PeerCRLRoleFile = "" },
+		"invalid peer CRL digest": func(c *ProductProcessConfig) { c.TLS.PeerCRLRoleDigest = "bad" },
 	} {
 		t.Run(name, func(t *testing.T) {
 			candidate := *valid

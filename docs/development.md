@@ -721,8 +721,13 @@ policy checks already require the configured DNS SAN to equal the profile.
 Guest v3 follows the distinct Guest→Product private `/agent` edge with its
 own live client signer and outbound peer-CRL guard. Its material registry
 contains only the Guest business signing key; TLS keys are never resolved
-from that registry. Product must still compose the real private Guest Hub
-receiver before the all-role gate can pass.
+from that registry.
+The Product v3 candidate now requires a separate `guest_control` numeric
+listener and pinned `peer_crl_role_file`, `peer_crl_role_digest`, and
+`peer_crl_source_mapping_digest`. It mounts only `/agent`, composes the real
+Hub and Product PostgreSQL Guest-binding authenticator, and drains upgraded
+sockets. This is not Files/Development production API composition or the
+full-process gate; keep their capability unavailable until actually wired.
 For every live mTLS edge, the guard derives CRL timeout and polling interval
 from the exact local principal's drain bound. The 10-second candidate caps
 both at 2 seconds, reserves a 1-second total socket-close budget, and closes

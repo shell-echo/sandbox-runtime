@@ -258,7 +258,8 @@ func NewGatewayApplicationGraph(ctx context.Context, cfg *config.DataPlaneProces
 			clear(grantKey)
 			return ApplicationGraph{}, errors.New("load Gateway Provider TLS material")
 		}
-		providerClient = &http.Client{Transport: clientTransport, Timeout: time.Duration(cfg.Drain.DependencyTimeouts) * time.Second}
+		providerClient = &http.Client{Transport: clientTransport, Timeout: time.Duration(cfg.Drain.DependencyTimeouts) * time.Second,
+			CheckRedirect: rejectPrivateRedirect}
 	} else {
 		dsn, err = readGatewayDSN(authority.Credential.ProductRuntimeDSNFile)
 		if err != nil {

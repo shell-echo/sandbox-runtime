@@ -11,12 +11,14 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/shell-echo/sandbox-runtime/config"
+	"github.com/shell-echo/sandbox-runtime/guestagent"
 	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
 	"github.com/shell-echo/sandbox-runtime/internal/phase6tls"
 	"github.com/shell-echo/sandbox-runtime/internal/rolematerials"
 	"github.com/shell-echo/sandbox-runtime/internal/secretfile"
 	"github.com/shell-echo/sandbox-runtime/internal/secretref"
 	"github.com/shell-echo/sandbox-runtime/product"
+	productguest "github.com/shell-echo/sandbox-runtime/product/adapter/guest"
 	productpostgres "github.com/shell-echo/sandbox-runtime/product/adapter/postgres"
 	"github.com/shell-echo/sandbox-runtime/productapi"
 	"github.com/shell-echo/sandbox-runtime/productapi/identityfile"
@@ -161,11 +163,13 @@ func runProductionProduct(ctx context.Context, productConfig *config.ProductProc
 	}
 	var tlsConfig *tls.Config
 	var tlsProbe func(context.Context) error
+	var securityProfile phase6security.Profile
 	if productConfig.SchemaVersion == config.ProductProductionSchemaV3 {
 		profile, profileErr := phase6security.VerifyFile(productConfig.TLS.SecurityProfilePath)
 		if profileErr != nil || profile.ProfileDigest != productConfig.TLS.SecurityProfileDigest {
 			return errors.New("Product security profile mismatch")
 		}
+		securityProfile = profile
 		tlsConfig, tlsProbe, err = phase6tls.PublicServer(profile, phase6tls.PublicServerAuthority{
 			ListenerID: "product-public", ListenAddress: productConfig.API.Addr(), Port: productConfig.API.Port,
 			AgentSocket: productConfig.TLS.AgentSocket, AgentUID: productConfig.TLS.AgentUID, AgentGID: productConfig.TLS.AgentGID,
@@ -190,6 +194,37 @@ func runProductionProduct(ctx context.Context, productConfig *config.ProductProc
 	if err != nil {
 		return fmt.Errorf("construct Product API: %w", err)
 	}
+	var privateGuest *productprocess.PrivateGuestServer
+	var privateGuestProbe func(context.Context) error
+	if productConfig.SchemaVersion == config.ProductProductionSchemaV3 {
+		roleDocument, roleErr := phase6security.VerifyPeerCRLRoleFile(productConfig.TLS.PeerCRLRoleFile,
+			securityProfile, productConfig.TLS.PeerCRLSourceMappingDigest, productConfig.TLS.PeerCRLRoleDigest)
+		if roleErr != nil {
+			return errors.New("Product Guest peer CRL role binding mismatch")
+		}
+		guestTLS, probe, guard, maxAge, guestTLSErr := phase6tls.ProductGuestServer(securityProfile,
+			phase6tls.ProductGuestServerAuthority{ListenAddress: productConfig.GuestControl.Addr(), PeerCRLRole: roleDocument,
+				AgentSocket: productConfig.TLS.AgentSocket, AgentUID: productConfig.TLS.AgentUID,
+				AgentGID:         productConfig.TLS.AgentGID,
+				OperationTimeout: time.Duration(productConfig.TLS.OperationTimeoutMillis) * time.Millisecond})
+		if guestTLSErr != nil {
+			return guestTLSErr
+		}
+		defer guard.Close()
+		guestAuthenticator, authErr := productguest.NewAuthenticator(store)
+		if authErr != nil {
+			return fmt.Errorf("construct Product Guest authenticator: %w", authErr)
+		}
+		hub, hubErr := guestagent.NewHub(guestagent.HubOptions{Authenticator: guestAuthenticator})
+		if hubErr != nil {
+			return fmt.Errorf("construct Product Guest Hub: %w", hubErr)
+		}
+		privateGuest, err = productprocess.NewPrivateGuestServer(productConfig.GuestControl, hub, guestTLS, guard, maxAge)
+		if err != nil {
+			return err
+		}
+		privateGuestProbe = probe
+	}
 	operationTimeout := time.Duration(productConfig.Postgres.OperationTimeoutSeconds) * time.Second
 	monitorTimeout := operationTimeout
 	if monitorTimeout > time.Second {
@@ -199,6 +234,11 @@ func runProductionProduct(ctx context.Context, productConfig *config.ProductProc
 		if tlsProbe != nil {
 			if err := tlsProbe(checkContext); err != nil {
 				return errors.New("Product live TLS signer is unavailable")
+			}
+		}
+		if privateGuestProbe != nil {
+			if err := privateGuestProbe(checkContext); err != nil {
+				return errors.New("Product private Guest TLS or peer source is unavailable")
 			}
 		}
 		if err := runtimePool.Ping(checkContext); err != nil {
@@ -216,7 +256,11 @@ func runProductionProduct(ctx context.Context, productConfig *config.ProductProc
 	if err != nil {
 		return err
 	}
-	return server.RunE(map[string]server.Server{"product": productServer, "product-dependencies": monitor})
+	components := map[string]server.Server{"product": productServer, "product-dependencies": monitor}
+	if privateGuest != nil {
+		components["product-guest"] = privateGuest
+	}
+	return server.RunE(components)
 }
 
 type productionKernelCapabilities struct{}

@@ -134,7 +134,7 @@ func LoadExecutorAuthority(ctx context.Context, cfg *config.DataPlaneProcessConf
 			inboundPeer.Close()
 			return ExecutorAuthority{}, errors.New("executor live backend TLS unavailable")
 		}
-		client := &http.Client{Transport: backendTransport, Timeout: timeout}
+		client := &http.Client{Transport: backendTransport, Timeout: timeout, CheckRedirect: rejectPrivateRedirect}
 		if cfg.Role == config.DataPlaneBrowser {
 			backend, err = newCDPBackendWithClient(dependency.BackendURL, timeout, client)
 		} else {

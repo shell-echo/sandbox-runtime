@@ -106,6 +106,11 @@ func GatewayProviderClient(profile phase6security.Profile, authority GatewayProv
 func guardedClientTransport(config *tls.Config, identityCheck func(tls.ConnectionState) error,
 	guard *PeerCRLGuard, expectedAddress string) *http.Transport {
 	transport := &http.Transport{TLSClientConfig: config, DisableKeepAlives: true}
+	// WebSocket clients can follow an HTTP redirect before the upgrade. A
+	// plaintext redirect must never fall through to net/http's default dialer.
+	transport.DialContext = func(context.Context, string, string) (net.Conn, error) {
+		return nil, ErrPeerCRLUnavailable
+	}
 	transport.DialTLSContext = func(ctx context.Context, network, address string) (net.Conn, error) {
 		if ctx == nil || network != "tcp" || address != expectedAddress {
 			return nil, ErrPeerCRLUnavailable

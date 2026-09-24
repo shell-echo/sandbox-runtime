@@ -277,6 +277,19 @@ func TestGuardedClientTransportDrainsRevokedRealHTTPSConnection(t *testing.T) {
 	}
 }
 
+func TestGuardedClientTransportNeverDialsPlaintext(t *testing.T) {
+	transport := guardedClientTransport(&tls.Config{MinVersion: tls.VersionTLS13},
+		func(tls.ConnectionState) error { return nil }, &PeerCRLGuard{}, "127.0.0.1:8448")
+	if transport.DialContext == nil {
+		t.Fatal("private transport has no plaintext-dial denial")
+	}
+	for _, address := range []string{"127.0.0.1:8448", "127.0.0.1:80", "example.test:80"} {
+		if connection, err := transport.DialContext(t.Context(), "tcp", address); !errors.Is(err, ErrPeerCRLUnavailable) || connection != nil {
+			t.Fatalf("plaintext dial %q = %v, %v", address, connection, err)
+		}
+	}
+}
+
 func TestPeerCRLGuardLatchesRollbackSourceAndClockDrift(t *testing.T) {
 	for name, change := range map[string]func(*guardFixture, *testing.T){
 		"CRL number rollback": func(f *guardFixture, t *testing.T) { f.client.response = f.response(t, 1, false, "fixed-source") },

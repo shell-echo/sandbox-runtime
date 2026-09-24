@@ -195,7 +195,8 @@ func loadGuestAuthority(ctx context.Context, cfg *config.DataPlaneProcessConfig)
 				return GuestAuthority{}, errors.New("Guest Product live TLS unavailable")
 			}
 			peer = guard
-			client = &http.Client{Transport: transport, Timeout: time.Duration(cfg.Drain.DependencyTimeouts) * time.Second}
+			client = &http.Client{Transport: transport, Timeout: time.Duration(cfg.Drain.DependencyTimeouts) * time.Second,
+				CheckRedirect: rejectPrivateRedirect}
 		} else {
 			parsed, _ := url.Parse(cfg.OutboundURL)
 			clientTLS, tlsErr := tlsmaterial.ResolveClient(ctx, registry,

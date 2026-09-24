@@ -34,13 +34,14 @@ const (
 )
 
 // ProductProcessConfig configures the independent Product process. It does not
-// configure the Provider, Gateway, Guest, Browser, Desktop, or local /instances
-// listeners.
+// configure the Provider, Gateway, Guest process, Browser, Desktop, or local
+// /instances listeners. Its Guest-control listener is Product-owned.
 type ProductProcessConfig struct {
 	SchemaVersion   string                 `mapstructure:"schema_version"`
 	Enabled         bool                   `mapstructure:"enabled"`
 	DeploymentLevel ProductDeploymentLevel `mapstructure:"deployment_level"`
 	API             option.HTTP            `mapstructure:"api"`
+	GuestControl    option.HTTP            `mapstructure:"guest_control"`
 	TLS             ProductTLSConfig       `mapstructure:"tls"`
 	Postgres        ProductPostgresConfig  `mapstructure:"postgres"`
 	Identity        ProductIdentityConfig  `mapstructure:"identity"`
@@ -48,17 +49,21 @@ type ProductProcessConfig struct {
 }
 
 // ProductTLSConfig selects either explicit historical v2 material bindings or
-// the v3 profile-bound remote signer. Development leaves it empty.
+// the v3 profile-bound remote signer and private Guest peer CRL. Development
+// leaves it empty.
 type ProductTLSConfig struct {
-	CertificateBindingID   string `mapstructure:"certificate_binding_id"`
-	PrivateKeyBindingID    string `mapstructure:"private_key_binding_id"`
-	ExpectedServerName     string `mapstructure:"expected_server_name"`
-	SecurityProfilePath    string `mapstructure:"security_profile_path"`
-	SecurityProfileDigest  string `mapstructure:"security_profile_digest"`
-	AgentSocket            string `mapstructure:"agent_socket"`
-	AgentUID               uint32 `mapstructure:"agent_uid"`
-	AgentGID               uint32 `mapstructure:"agent_gid"`
-	OperationTimeoutMillis int    `mapstructure:"operation_timeout_millis"`
+	CertificateBindingID       string `mapstructure:"certificate_binding_id"`
+	PrivateKeyBindingID        string `mapstructure:"private_key_binding_id"`
+	ExpectedServerName         string `mapstructure:"expected_server_name"`
+	SecurityProfilePath        string `mapstructure:"security_profile_path"`
+	SecurityProfileDigest      string `mapstructure:"security_profile_digest"`
+	AgentSocket                string `mapstructure:"agent_socket"`
+	AgentUID                   uint32 `mapstructure:"agent_uid"`
+	AgentGID                   uint32 `mapstructure:"agent_gid"`
+	OperationTimeoutMillis     int    `mapstructure:"operation_timeout_millis"`
+	PeerCRLRoleFile            string `mapstructure:"peer_crl_role_file"`
+	PeerCRLRoleDigest          string `mapstructure:"peer_crl_role_digest"`
+	PeerCRLSourceMappingDigest string `mapstructure:"peer_crl_source_mapping_digest"`
 }
 
 // ProductPostgresConfig contains non-secret connection policy plus either the
@@ -162,7 +167,7 @@ func (c *ProductProcessConfig) validateDevelopment() error {
 	if filepath.Clean(c.Postgres.DSNFile) == filepath.Clean(c.Identity.BindingsFile) {
 		return errors.New("Product PostgreSQL and identity secrets must use different files")
 	}
-	if c.TLS != (ProductTLSConfig{}) || c.Postgres.RuntimeRole != "" || c.Identity.Issuer != "" ||
+	if c.GuestControl != (option.HTTP{}) || c.TLS != (ProductTLSConfig{}) || c.Postgres.RuntimeRole != "" || c.Identity.Issuer != "" ||
 		c.Identity.Audience != "" || c.Postgres.RuntimeDSNBindingID != "" || c.Identity.KeyRingBindingID != "" || !c.Materials.IsZero() {
 		return errors.New("production Product authority is not accepted in development mode")
 	}
@@ -192,7 +197,9 @@ func (c *ProductProcessConfig) validateProduction() error {
 	}
 	if c.SchemaVersion == ProductProductionSchemaV2 {
 		if c.TLS.SecurityProfilePath != "" || c.TLS.SecurityProfileDigest != "" || c.TLS.AgentSocket != "" ||
-			c.TLS.AgentUID != 0 || c.TLS.AgentGID != 0 || c.TLS.OperationTimeoutMillis != 0 {
+			c.TLS.AgentUID != 0 || c.TLS.AgentGID != 0 || c.TLS.OperationTimeoutMillis != 0 ||
+			c.TLS.PeerCRLRoleFile != "" || c.TLS.PeerCRLRoleDigest != "" || c.TLS.PeerCRLSourceMappingDigest != "" ||
+			c.GuestControl != (option.HTTP{}) {
 			return errors.New("Product v2 TLS cannot select a live signer")
 		}
 		selections = append(selections,
@@ -202,9 +209,21 @@ func (c *ProductProcessConfig) validateProduction() error {
 		if c.TLS.CertificateBindingID != "" || c.TLS.PrivateKeyBindingID != "" || c.TLS.ExpectedServerName != "" ||
 			validateAbsoluteSecretPath("Product security profile", c.TLS.SecurityProfilePath) != nil ||
 			validateAbsoluteSecretPath("Product TLS agent socket", c.TLS.AgentSocket) != nil ||
+			validateAbsoluteSecretPath("Product peer CRL role", c.TLS.PeerCRLRoleFile) != nil ||
+			c.TLS.SecurityProfilePath == c.TLS.AgentSocket || c.TLS.SecurityProfilePath == c.TLS.PeerCRLRoleFile ||
+			c.TLS.AgentSocket == c.TLS.PeerCRLRoleFile ||
+			c.TLS.AgentSocket == c.Materials.Provider.SocketPath ||
+			c.TLS.PeerCRLRoleFile == c.Materials.Provider.SocketPath ||
+			c.TLS.SecurityProfilePath == c.Materials.Provider.SocketPath ||
 			!providerSHA256Pattern.MatchString(c.TLS.SecurityProfileDigest) || c.TLS.AgentUID == 0 || c.TLS.AgentGID == 0 ||
+			!providerSHA256Pattern.MatchString(c.TLS.PeerCRLRoleDigest) ||
+			!providerSHA256Pattern.MatchString(c.TLS.PeerCRLSourceMappingDigest) ||
 			c.TLS.OperationTimeoutMillis < 1000 || c.TLS.OperationTimeoutMillis > 30_000 {
 			return errors.New("Product v3 TLS must use only a pinned live signer")
+		}
+		if err := c.GuestControl.Validate(); err != nil || net.ParseIP(c.GuestControl.Host) == nil ||
+			c.GuestControl.Port == c.API.Port {
+			return errors.New("Product v3 requires a separate numeric private Guest-control listener")
 		}
 	}
 	if len(bindings) != len(selections) {
