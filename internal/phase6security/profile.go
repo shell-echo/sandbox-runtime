@@ -691,7 +691,8 @@ func (p Profile) ExecutorTLSBoundary(subjectName string, port int) (TLSAgentBind
 		return TLSAgentBinding{}, Principal{}, Principal{}, Principal{}, ErrInvalidProfile
 	}
 	binding, agent, subject, err := p.TLSAgentForSubject(subjectName)
-	if err != nil || subject.TLS == nil || !slices.Equal(subject.TLS.Usages, []string{"server_auth"}) {
+	if err != nil || subject.TLS == nil || !slices.Equal(subject.TLS.Usages, []string{"server_auth"}) ||
+		len(subject.TLS.DNSNames) != 1 || !validDNSName(subject.TLS.DNSNames[0]) {
 		return TLSAgentBinding{}, Principal{}, Principal{}, Principal{}, ErrInvalidProfile
 	}
 	var caller Principal
@@ -723,6 +724,7 @@ func (p Profile) ExecutorTLSBoundary(subjectName string, port int) (TLSAgentBind
 			continue
 		}
 		if edge.ID != edgeID || edge.From != roleName || edge.Protocol != "wss" || edge.Port != port ||
+			edge.RoutePath != "/executor" || edge.TargetAddress == "" ||
 			edge.FromURI != caller.TLS.URI || edge.ToURI != subject.TLS.URI {
 			return TLSAgentBinding{}, Principal{}, Principal{}, Principal{}, ErrInvalidProfile
 		}

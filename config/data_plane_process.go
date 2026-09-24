@@ -130,7 +130,8 @@ func (c *DataPlaneProcessConfig) Validate() error {
 	if !c.Enabled {
 		return nil
 	}
-	productionV3 := c.SchemaVersion == DataPlaneProductionSchemaV3 && c.DeploymentLevel == ProviderProductionLevel && c.Role == DataPlaneGateway
+	productionV3 := c.SchemaVersion == DataPlaneProductionSchemaV3 && c.DeploymentLevel == ProviderProductionLevel &&
+		(c.Role == DataPlaneGateway || c.Role == DataPlaneBrowser || c.Role == DataPlaneDesktop)
 	production := c.SchemaVersion == DataPlaneProductionSchemaV2 && c.DeploymentLevel == ProviderProductionLevel || productionV3
 	legacyCandidate := c.SchemaVersion == DataPlaneLegacyLocalCandidateSchema && c.DeploymentLevel == ProviderLocalCandidateLevel
 	if !production && !legacyCandidate {
@@ -174,16 +175,16 @@ func (c *DataPlaneProcessConfig) Validate() error {
 			if c.TLS.CertificateBindingID != "" || c.TLS.PrivateKeyBindingID != "" || c.TLS.ClientCABundleBindingID != "" ||
 				c.TLS.ClientCertificateBindingID != "" || c.TLS.ClientPrivateKeyBindingID != "" || c.TLS.ExpectedServerName != "" ||
 				len(c.TLS.AllowedClientIdentity) != 0 ||
-				validateAbsoluteSecretPath("Gateway security profile", c.TLS.SecurityProfilePath) != nil ||
-				validateAbsoluteSecretPath("Gateway peer CRL role", c.TLS.PeerCRLRoleFile) != nil ||
-				validateAbsoluteSecretPath("Gateway TLS agent socket", c.TLS.AgentSocket) != nil ||
+				validateAbsoluteSecretPath("role security profile", c.TLS.SecurityProfilePath) != nil ||
+				validateAbsoluteSecretPath("role peer CRL role", c.TLS.PeerCRLRoleFile) != nil ||
+				validateAbsoluteSecretPath("role TLS agent socket", c.TLS.AgentSocket) != nil ||
 				!providerSHA256Pattern.MatchString(c.TLS.SecurityProfileDigest) ||
 				!providerSHA256Pattern.MatchString(c.TLS.PeerCRLRoleDigest) ||
 				!providerSHA256Pattern.MatchString(c.TLS.PeerCRLSourceMappingDigest) ||
 				c.TLS.PeerCRLRoleFile == c.TLS.SecurityProfilePath || c.TLS.PeerCRLRoleFile == c.TLS.AgentSocket ||
 				c.TLS.AgentUID == 0 || c.TLS.AgentGID == 0 ||
 				c.TLS.OperationTimeoutMillis < 1000 || c.TLS.OperationTimeoutMillis > 30_000 {
-				return errors.New("Gateway v3 TLS must use only a pinned live signer")
+				return fmt.Errorf("%s v3 TLS must use only a pinned live signer", c.Role)
 			}
 			paths = append(paths, c.TLS.SecurityProfilePath, c.TLS.PeerCRLRoleFile, c.TLS.AgentSocket)
 		} else if c.TLS.SecurityProfilePath != "" || c.TLS.SecurityProfileDigest != "" ||
@@ -278,7 +279,7 @@ func validateListener(value option.HTTP, required bool) error {
 
 func (c *DataPlaneProcessConfig) validateServerTLS(production, requireClient bool) error {
 	value := c.TLS
-	if c.SchemaVersion == DataPlaneProductionSchemaV3 && c.Role == DataPlaneGateway {
+	if c.SchemaVersion == DataPlaneProductionSchemaV3 {
 		return nil
 	}
 	if production {
@@ -332,6 +333,13 @@ func (c *DataPlaneProcessConfig) validateClientTLS(production bool) error {
 }
 
 func (c *DataPlaneProcessConfig) validateProductionMaterials() error {
+	if c.SchemaVersion == DataPlaneProductionSchemaV3 &&
+		(c.Role == DataPlaneBrowser || c.Role == DataPlaneDesktop) {
+		if !c.Materials.IsZero() {
+			return fmt.Errorf("%s v3 cannot select a static TLS material registry", c.Role)
+		}
+		return nil
+	}
 	role, ok := dataPlaneSecretRole(c.Role)
 	if !ok {
 		return errors.New("data-plane material role is invalid")

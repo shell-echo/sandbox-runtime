@@ -314,6 +314,7 @@ func TestLiveTLSRejectsServerPeerDrift(t *testing.T) {
 		identity Identity
 	}{
 		{"extra DNS", Identity{URI: testServerURI, DNSNames: []string{testServerDNS, "extra.test"}, Usages: []string{"server_auth"}, MaxTTL: time.Hour}},
+		{"wrong DNS", Identity{URI: testServerURI, DNSNames: []string{"wrong.test"}, Usages: []string{"server_auth"}, MaxTTL: time.Hour}},
 		{"wrong URI", Identity{URI: "spiffe://sandbox-runtime.test/role/other", DNSNames: []string{testServerDNS}, Usages: []string{"server_auth"}, MaxTTL: time.Hour}},
 		{"extra EKU", Identity{URI: testServerURI, DNSNames: []string{testServerDNS}, Usages: []string{"client_auth", "server_auth"}, MaxTTL: time.Hour}},
 	} {
@@ -325,6 +326,48 @@ func TestLiveTLSRejectsServerPeerDrift(t *testing.T) {
 				t.Fatal("drifted server peer accepted")
 			}
 		})
+	}
+}
+
+func TestLiveTLSNumericDialUsesPinnedServerName(t *testing.T) {
+	issuer := newTestIssuer(t)
+	serverIdentity, clientIdentity := testIdentities()
+	serverCert := issueTestLeaf(t, issuer, serverIdentity, 91)
+	clientCert := issueTestLeaf(t, issuer, clientIdentity, 92)
+	serverTLS, err := NewServer(ServerOptions{IssuerRoots: issuer.roots, ClientRoots: issuer.roots,
+		Identity: serverIdentity, Client: &clientIdentity, Now: time.Now,
+		Source: func(context.Context) (tls.Certificate, error) { return serverCert, nil }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	clientTLS, err := NewClient(ClientOptions{IssuerRoots: issuer.roots, ServerRoots: issuer.roots,
+		Identity: clientIdentity, Server: serverIdentity, ServerName: testServerDNS, Now: time.Now,
+		Source: func(context.Context) (tls.Certificate, error) { return clientCert, nil }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	serverResult := make(chan error, 1)
+	go func() {
+		connection, acceptErr := listener.Accept()
+		if acceptErr != nil {
+			serverResult <- acceptErr
+			return
+		}
+		defer connection.Close()
+		serverResult <- tls.Server(connection, serverTLS).Handshake()
+	}()
+	connection, err := tls.DialWithDialer(&net.Dialer{Timeout: time.Second}, "tcp", listener.Addr().String(), clientTLS)
+	if err != nil {
+		t.Fatalf("numeric dial with pinned DNS identity: %v", err)
+	}
+	_ = connection.Close()
+	if err := <-serverResult; err != nil {
+		t.Fatal(err)
 	}
 }
 

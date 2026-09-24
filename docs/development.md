@@ -707,6 +707,17 @@ canonical profile's runtime-edge validator rejects omitted or aliased edges.
 This configuration checkpoint is not permission to launch one all-capability
 Provider or to advertise Browser/Desktop before the corresponding real
 production composition and all-principal gate pass.
+Browser/Desktop private role v3 configuration rejects every static TLS
+certificate/key path or binding and selects an exact profile-derived
+Provider-instance attach edge and separate role-to-backend edge. The attach
+listener and backend client each use a live role signer and their own
+directional peer-CRL guard; both upgraded WebSocket directions have bounded
+lifetimes and drain on revocation/shutdown. This code path is not full-graph
+evidence. The two backend server identities must each declare exactly one
+operator-fixed DNS SAN in the canonical profile and signed certificate;
+their numeric target IP remains the dial address, while the pinned DNS name
+is used only for TLS ServerName/hostname verification. Agent/controller
+policy checks already require the configured DNS SAN to equal the profile.
 
 The Phase 6 workload TLS agent retains its frozen `workload-tls-agent.v1`
 certificate/signing message protocol. The peer-revocation capability is a

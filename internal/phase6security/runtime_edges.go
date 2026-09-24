@@ -46,6 +46,11 @@ func validateRuntimeEdges(edges map[string]TrustEdge, principals map[string]Prin
 			len(network.Principals) != 2 || !slices.Contains(network.Principals, spec.from) || !slices.Contains(network.Principals, spec.to) {
 			return ErrInvalidProfile
 		}
+		if spec.listener == "executor" && (to.TLS == nil || !slices.Equal(to.TLS.Usages, []string{"server_auth"}) ||
+			len(to.TLS.DNSNames) != 1 || !validDNSName(to.TLS.DNSNames[0]) ||
+			edge.ToURI != to.TLS.URI || edge.ToPrincipalDigest != to.PrincipalDigest) {
+			return ErrInvalidProfile
+		}
 		shared := 0
 		for _, name := range from.Networks {
 			if slices.Contains(to.Networks, name) {

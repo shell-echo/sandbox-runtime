@@ -18,6 +18,8 @@ import (
 	"github.com/coder/websocket"
 	"github.com/shell-echo/sandbox-runtime/config"
 	"github.com/shell-echo/sandbox-runtime/internal/executorprotocol"
+	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
+	"github.com/shell-echo/sandbox-runtime/internal/phase6tls"
 	"github.com/shell-echo/sandbox-runtime/internal/rolematerials"
 	"github.com/shell-echo/sandbox-runtime/internal/secretfile"
 	"github.com/shell-echo/sandbox-runtime/internal/secretref"
@@ -26,9 +28,10 @@ import (
 )
 
 const (
-	executorAuthorityVersion = 1
-	maxExecutorAuthoritySize = 64 << 10
-	maxExecutorSessions      = 256
+	executorAuthorityVersion   = 1
+	executorAuthorityVersionV3 = 2
+	maxExecutorAuthoritySize   = 64 << 10
+	maxExecutorSessions        = 256
 )
 
 type ExecutorCredentialAuthority struct {
@@ -52,12 +55,16 @@ type ExecutorPolicyAuthority struct {
 }
 
 type ExecutorAuthority struct {
-	Credential ExecutorCredentialAuthority
-	Dependency ExecutorDependencyAuthority
-	Policy     ExecutorPolicyAuthority
-	Backend    ExecutorBackend
-	TLS        *tls.Config
-	Registry   *secretref.Registry
+	Credential       ExecutorCredentialAuthority
+	Dependency       ExecutorDependencyAuthority
+	Policy           ExecutorPolicyAuthority
+	Backend          ExecutorBackend
+	TLS              *tls.Config
+	Registry         *secretref.Registry
+	SignerProbe      func(context.Context) error
+	InboundPeer      *phase6tls.PeerCRLGuard
+	BackendPeer      *phase6tls.PeerCRLGuard
+	ConnectionMaxAge time.Duration
 }
 
 func LoadExecutorAuthority(ctx context.Context, cfg *config.DataPlaneProcessConfig) (ExecutorAuthority, error) {
@@ -80,13 +87,17 @@ func LoadExecutorAuthority(ctx context.Context, cfg *config.DataPlaneProcessConf
 		return ExecutorAuthority{}, fmt.Errorf("load executor policy authority: %w", err)
 	}
 	role := string(cfg.Role)
-	if credential.Version != executorAuthorityVersion || credential.Role != role || !validExecutorID(credential.ExecutorID) || !validPrivateOrigin(credential.ProviderOrigin) {
+	expectedVersion := executorAuthorityVersion
+	if cfg.SchemaVersion == config.DataPlaneProductionSchemaV3 {
+		expectedVersion = executorAuthorityVersionV3
+	}
+	if credential.Version != expectedVersion || credential.Role != role || !validExecutorID(credential.ExecutorID) || !validPrivateOrigin(credential.ProviderOrigin) {
 		return ExecutorAuthority{}, errors.New("invalid executor credential authority")
 	}
-	if dependency.Version != executorAuthorityVersion || dependency.Role != role || !validBackendURL(dependency.BackendURL) {
+	if dependency.Version != expectedVersion || dependency.Role != role || !validBackendURL(dependency.BackendURL) {
 		return ExecutorAuthority{}, errors.New("invalid executor dependency authority")
 	}
-	if policy.Version != executorAuthorityVersion || policy.Role != role || policy.OperationTimeoutMillis < 100 || policy.OperationTimeoutMillis > 30_000 || policy.MaxSessions < 1 || policy.MaxSessions > maxExecutorSessions {
+	if policy.Version != expectedVersion || policy.Role != role || policy.OperationTimeoutMillis < 100 || policy.OperationTimeoutMillis > 30_000 || policy.MaxSessions < 1 || policy.MaxSessions > maxExecutorSessions {
 		return ExecutorAuthority{}, errors.New("invalid executor policy authority")
 	}
 	var backend ExecutorBackend
@@ -94,7 +105,50 @@ func LoadExecutorAuthority(ctx context.Context, cfg *config.DataPlaneProcessConf
 	var registry *secretref.Registry
 	var err error
 	timeout := time.Duration(policy.OperationTimeoutMillis) * time.Millisecond
-	if cfg.SchemaVersion == config.DataPlaneProductionSchemaV2 {
+	if cfg.SchemaVersion == config.DataPlaneProductionSchemaV3 {
+		profile, profileErr := phase6security.VerifyFile(cfg.TLS.SecurityProfilePath)
+		if profileErr != nil || profile.ProfileDigest != cfg.TLS.SecurityProfileDigest {
+			return ExecutorAuthority{}, errors.New("executor security profile mismatch")
+		}
+		peerRole, roleErr := phase6security.VerifyPeerCRLRoleFile(cfg.TLS.PeerCRLRoleFile, profile,
+			cfg.TLS.PeerCRLSourceMappingDigest, cfg.TLS.PeerCRLRoleDigest)
+		if roleErr != nil {
+			return ExecutorAuthority{}, errors.New("executor peer CRL role binding mismatch")
+		}
+		edge, provider, _, _, _, edgeErr := profile.PrivateRoleAttachBoundary(role, cfg.Private.Addr())
+		if edgeErr != nil || edge.RoutePath != "/executor" || credential.ProviderOrigin != provider.TLS.URI {
+			return ExecutorAuthority{}, errors.New("executor Provider instance binding mismatch")
+		}
+		transportTLS, signerProbe, inboundPeer, maxAge, serverErr := phase6tls.PrivateRoleServer(profile,
+			phase6tls.PrivateRoleServerAuthority{Role: role, ListenAddress: cfg.Private.Addr(), PeerCRLRole: peerRole,
+				AgentSocket: cfg.TLS.AgentSocket, AgentUID: cfg.TLS.AgentUID, AgentGID: cfg.TLS.AgentGID,
+				OperationTimeout: time.Duration(cfg.TLS.OperationTimeoutMillis) * time.Millisecond})
+		if serverErr != nil {
+			return ExecutorAuthority{}, errors.New("executor live private TLS unavailable")
+		}
+		backendTransport, backendPeer, backendErr := phase6tls.PrivateRoleBackendClient(profile,
+			phase6tls.PrivateRoleBackendClientAuthority{Role: role, Origin: dependency.BackendURL, PeerCRLRole: peerRole,
+				AgentSocket: cfg.TLS.AgentSocket, AgentUID: cfg.TLS.AgentUID, AgentGID: cfg.TLS.AgentGID,
+				OperationTimeout: time.Duration(cfg.TLS.OperationTimeoutMillis) * time.Millisecond})
+		if backendErr != nil {
+			inboundPeer.Close()
+			return ExecutorAuthority{}, errors.New("executor live backend TLS unavailable")
+		}
+		client := &http.Client{Transport: backendTransport, Timeout: timeout}
+		if cfg.Role == config.DataPlaneBrowser {
+			backend, err = newCDPBackendWithClient(dependency.BackendURL, timeout, client)
+		} else {
+			backend, err = newWebsocketBackendWithClient(dependency.BackendURL, timeout, client)
+		}
+		if err != nil {
+			inboundPeer.Close()
+			backendPeer.Close()
+			return ExecutorAuthority{}, err
+		}
+		return ExecutorAuthority{Credential: credential, Dependency: dependency, Policy: policy, Backend: backend,
+			TLS: transportTLS, SignerProbe: signerProbe, InboundPeer: inboundPeer, BackendPeer: backendPeer,
+			ConnectionMaxAge: maxAge}, nil
+	} else if cfg.SchemaVersion == config.DataPlaneProductionSchemaV2 {
 		role := secretref.RoleBrowser
 		if cfg.Role == config.DataPlaneDesktop {
 			role = secretref.RoleDesktop
@@ -153,26 +207,73 @@ func NewExecutorApplicationGraph(ctx context.Context, cfg *config.DataPlaneProce
 	}
 	handler, err := NewExecutorHandler(ExecutorHandlerOptions{Role: string(cfg.Role), Backend: authority.Backend, OperationTimeout: time.Duration(authority.Policy.OperationTimeoutMillis) * time.Millisecond, MaxSessions: authority.Policy.MaxSessions})
 	if err != nil {
+		if authority.InboundPeer != nil {
+			authority.InboundPeer.Close()
+		}
+		if authority.BackendPeer != nil {
+			authority.BackendPeer.Close()
+		}
+		if authority.Registry != nil {
+			authority.Registry.Close()
+		}
 		return ApplicationGraph{}, err
 	}
-	return ApplicationGraph{
-		Private: handler,
-		TLS:     authority.TLS,
+	var privateHandler http.Handler = handler
+	if authority.InboundPeer != nil {
+		privateHandler = http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+			if request == nil || request.URL.Path != "/executor" || request.TLS == nil ||
+				authority.InboundPeer.Poll(request.Context()) != nil || !authority.InboundPeer.Ready() ||
+				authority.InboundPeer.CheckHandshake(request.Context(), *request.TLS) != nil {
+				http.Error(writer, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
+				return
+			}
+			handler.ServeHTTP(writer, request)
+		})
+	}
+	graph := ApplicationGraph{
+		Private:              privateHandler,
+		TLS:                  authority.TLS,
+		PrivatePeer:          authority.InboundPeer,
+		PrivateSignerProbe:   authority.SignerProbe,
+		PrivateConnectionAge: authority.ConnectionMaxAge,
 		Ready: func(checkContext context.Context) error {
 			if authority.Registry != nil {
 				if err := verifyExecutorMaterials(checkContext, authority.Registry, cfg.TLS); err != nil {
 					return err
 				}
 			}
+			if authority.BackendPeer != nil {
+				if err := authority.BackendPeer.Poll(checkContext); err != nil || !authority.BackendPeer.Ready() {
+					return errors.New("executor backend peer authority unavailable")
+				}
+			}
 			return authority.Backend.Ready(checkContext)
 		},
 		Shutdown: func(context.Context) error {
+			if authority.InboundPeer != nil {
+				authority.InboundPeer.Close()
+			}
+			if authority.BackendPeer != nil {
+				authority.BackendPeer.Close()
+			}
 			if authority.Registry != nil {
 				authority.Registry.Close()
 			}
 			return nil
 		},
-	}, nil
+	}
+	if authority.BackendPeer != nil {
+		graph.Start = func(startContext context.Context) error {
+			stop, err := authority.BackendPeer.StartPolling(startContext)
+			if err != nil {
+				return err
+			}
+			defer stop()
+			<-startContext.Done()
+			return nil
+		}
+	}
+	return graph, nil
 }
 
 func verifyExecutorMaterials(ctx context.Context, registry *secretref.Registry, tlsConfig config.DataPlaneTLSConfig) error {

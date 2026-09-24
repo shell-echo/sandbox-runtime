@@ -135,3 +135,18 @@ func TestApplicationGraphUsesExplicitReadiness(t *testing.T) {
 		t.Fatalf("readiness calls = %d; want 1", readyCalls)
 	}
 }
+
+func TestShutdownOnlyGraphParticipatesInLifecycle(t *testing.T) {
+	closed := false
+	graph := graphServer{shutdown: func(context.Context) error { closed = true; return nil }}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- graph.Startup(ctx) }()
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	if err := graph.Shutdown(context.Background()); err != nil || !closed {
+		t.Fatalf("shutdown-only graph cleanup: closed=%v err=%v", closed, err)
+	}
+}

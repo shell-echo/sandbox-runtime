@@ -75,6 +75,22 @@ Provider production composition, Desktop v3, Product's Guest receiver and
 per-instance database/material/admission/cleanup isolation are absent, so
 the full graph and Slice 6 evidence remain open at **5/15**.
 
+Checkpoint 2026-09-24: Browser/Desktop role v3 configuration now refuses raw
+TLS files and static material selections. Their candidate application graph
+resolves only the matching Provider-instance attach edge and the separate
+role-to-backend edge from the complete profile, requires a remote signer,
+fresh inbound/outbound peer-CRL guards and bounded WebSocket lifetimes, and
+tracks upgraded attach sockets through revocation/shutdown. A real TLS/WebSocket
+component test verifies hijacked-socket drain. Sandbox resolved a backend
+identity omission: each backend server now requires exactly one canonical
+profile DNS SAN in addition to the URI and `server_auth` EKU. Profile and
+edge-boundary negatives reject missing, multiple, wildcard and IP names;
+numeric dialing with pinned TLS ServerName and wrong DNS/URI negatives are
+covered by the shared live TLS tests. Agent/controller policy validation
+already binds issuance DNS to the profile. This remains code and component
+evidence; the complete distinct-process Vault/Docker gate and immutable Slice
+6 manifest are absent, so Phase 6 stays **5/15**.
+
 ## Corrected premises
 
 The repository does not already enforce Slice 6 merely because TLS 1.3,

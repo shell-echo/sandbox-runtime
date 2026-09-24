@@ -206,6 +206,7 @@ func validProfile() Profile {
 			}
 			if name == "browser-executor-backend" || name == "desktop-executor-backend" {
 				principal.TLS.Usages = []string{"server_auth"}
+				principal.TLS.DNSNames = []string{name + ".sandbox-runtime.test"}
 			}
 			if name == "browser-runtime-role" || name == "desktop-runtime-role" {
 				principal.TLS.DNSNames = []string{name + ".sandbox-runtime.test"}

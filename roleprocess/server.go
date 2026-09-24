@@ -13,6 +13,7 @@ import (
 
 	"github.com/shell-echo/sandbox-runtime/config"
 	"github.com/shell-echo/sandbox-runtime/gateway/edge"
+	"github.com/shell-echo/sandbox-runtime/internal/connectiondrain"
 	"github.com/shell-echo/sandbox-runtime/internal/phase6profile"
 	"github.com/shell-echo/sandbox-runtime/internal/secretfile"
 	"github.com/shell-echo/sandbox-runtime/internal/secretref"
@@ -33,34 +34,47 @@ func (f ReadinessFunc) Ready(ctx context.Context) error { return f(ctx) }
 // and (for outbound roles) a bounded lifecycle function.
 //
 // Public is valid only for Gateway, Private only for Browser/Desktop, and
-// Start is required for Guest. Shutdown is optional when Start owns no
-// independent resources, but must be supplied for resources that outlive a
-// single Start call.
+// Start is required for Guest and live private backend polling. A graph with
+// only Shutdown still participates in the lifecycle so role-owned material
+// registries cannot be skipped at process exit.
 type ApplicationGraph struct {
-	Public   http.Handler
-	Private  http.Handler
-	TLS      *tls.Config
-	Ready    ReadinessFunc
-	Start    func(context.Context) error
-	Shutdown func(context.Context) error
+	Public               http.Handler
+	Private              http.Handler
+	TLS                  *tls.Config
+	PrivatePeer          connectiondrain.PeerMonitor
+	PrivateSignerProbe   func(context.Context) error
+	PrivateConnectionAge time.Duration
+	Ready                ReadinessFunc
+	Start                func(context.Context) error
+	Shutdown             func(context.Context) error
 }
 
-func (g ApplicationGraph) validate(role config.DataPlaneRole) error {
+func (g ApplicationGraph) validate(role config.DataPlaneRole, schema string) error {
 	if g.Ready == nil {
 		return errors.New("application graph readiness is required")
 	}
 	switch role {
 	case config.DataPlaneGateway:
-		if g.Public == nil || g.Private != nil || g.Start != nil {
+		if g.Public == nil || g.Private != nil || g.Start != nil || g.PrivatePeer != nil ||
+			g.PrivateSignerProbe != nil || g.PrivateConnectionAge != 0 {
 			return errors.New("Gateway application graph requires only a public handler")
 		}
 	case config.DataPlaneGuest:
-		if g.Public != nil || g.Private != nil || g.TLS != nil || g.Start == nil {
+		if g.Public != nil || g.Private != nil || g.TLS != nil || g.Start == nil ||
+			g.PrivatePeer != nil || g.PrivateSignerProbe != nil || g.PrivateConnectionAge != 0 {
 			return errors.New("Guest application graph requires an outbound lifecycle")
 		}
 	case config.DataPlaneBrowser, config.DataPlaneDesktop:
-		if g.Private == nil || g.Public != nil || g.Start != nil {
+		if g.Private == nil || g.Public != nil {
 			return errors.New("private application graph requires only a private handler")
+		}
+		if schema == config.DataPlaneProductionSchemaV3 {
+			if g.TLS == nil || g.PrivatePeer == nil || g.PrivateSignerProbe == nil || g.Start == nil ||
+				g.PrivateConnectionAge < time.Second || g.PrivateConnectionAge > time.Hour {
+				return errors.New("v3 private application graph requires live signer, peer monitor, backend polling, and bounded connections")
+			}
+		} else if g.PrivatePeer != nil || g.PrivateSignerProbe != nil || g.PrivateConnectionAge != 0 || g.Start != nil {
+			return errors.New("pre-v3 private application graph cannot select live peer authority")
 		}
 	default:
 		return errors.New("unsupported data-plane role")
@@ -91,8 +105,10 @@ func NewWithGraph(ctx context.Context, cfg *config.DataPlaneProcessConfig, graph
 	if ctx == nil || cfg == nil || !cfg.Enabled {
 		return nil, errors.New("enabled data-plane role configuration is required")
 	}
-	if graph.Public != nil || graph.Private != nil || graph.TLS != nil || graph.Ready != nil || graph.Start != nil || graph.Shutdown != nil {
-		if err := graph.validate(cfg.Role); err != nil {
+	if graph.Public != nil || graph.Private != nil || graph.TLS != nil || graph.PrivatePeer != nil ||
+		graph.PrivateSignerProbe != nil || graph.PrivateConnectionAge != 0 || graph.Ready != nil ||
+		graph.Start != nil || graph.Shutdown != nil {
+		if err := graph.validate(cfg.Role, cfg.SchemaVersion); err != nil {
 			return nil, err
 		}
 	}
@@ -143,7 +159,10 @@ func NewWithGraph(ctx context.Context, cfg *config.DataPlaneProcessConfig, graph
 	case config.DataPlaneBrowser, config.DataPlaneDesktop:
 		var private *privateTLSServer
 		var privateErr error
-		if graph.TLS != nil {
+		if cfg.SchemaVersion == config.DataPlaneProductionSchemaV3 && graph.TLS != nil {
+			private, privateErr = newPrivateTLSServerLive(cfg.Private.Addr(), privateHandler, graph.TLS,
+				graph.PrivatePeer, graph.PrivateConnectionAge)
+		} else if graph.TLS != nil {
 			private, privateErr = newPrivateTLSServerConfig(cfg.Private.Addr(), privateHandler, graph.TLS)
 		} else {
 			private, privateErr = newPrivateTLSServer(cfg.Private.Addr(), privateHandler, cfg.TLS)
@@ -157,7 +176,7 @@ func NewWithGraph(ctx context.Context, cfg *config.DataPlaneProcessConfig, graph
 	default:
 		return nil, errors.New("unsupported data-plane role")
 	}
-	if graph.Start != nil {
+	if graph.Start != nil || graph.Shutdown != nil {
 		composition.graph = graphServer{start: graph.Start, shutdown: graph.Shutdown}
 	}
 	return composition, nil
@@ -209,6 +228,12 @@ func checkReadiness(ctx context.Context, cfg *config.DataPlaneProcessConfig, gra
 	if len(graph) != 1 || graph[0].Ready == nil {
 		return errors.New("role application graph is not composed")
 	}
+	if cfg.SchemaVersion == config.DataPlaneProductionSchemaV3 &&
+		(cfg.Role == config.DataPlaneBrowser || cfg.Role == config.DataPlaneDesktop) {
+		if err := privatePeerReady(ctx, graph[0].PrivatePeer, graph[0].PrivateSignerProbe); err != nil {
+			return err
+		}
+	}
 	return graph[0].Ready(ctx)
 }
 
@@ -249,7 +274,11 @@ type graphServer struct {
 
 func (s graphServer) Startup(ctx context.Context) error {
 	if s.start == nil {
-		return errors.New("application graph lifecycle is not configured")
+		if ctx == nil || s.shutdown == nil {
+			return errors.New("application graph lifecycle is not configured")
+		}
+		<-ctx.Done()
+		return nil
 	}
 	return s.start(ctx)
 }
@@ -262,9 +291,11 @@ func (s graphServer) Shutdown(ctx context.Context) error {
 }
 
 type privateTLSServer struct {
-	http   *http.Server
-	config *tls.Config
-	listen func(context.Context, string, string) (net.Listener, error)
+	http        *http.Server
+	config      *tls.Config
+	listen      func(context.Context, string, string) (net.Listener, error)
+	connections *connectiondrain.Registry
+	peer        connectiondrain.PeerMonitor
 }
 
 func newPrivateTLSServer(address string, handler http.Handler, tlsConfig config.DataPlaneTLSConfig) (*privateTLSServer, error) {
@@ -297,6 +328,19 @@ func (s *privateTLSServer) Startup(ctx context.Context) error {
 		}
 		return errors.New("bind private role server")
 	}
+	defer listener.Close()
+	if s.connections != nil {
+		listener, err = s.connections.Wrap(listener)
+		if err != nil {
+			return errors.New("track private role connections")
+		}
+		defer s.connections.Drain()
+	}
+	if s.peer != nil {
+		defer s.peer.Close()
+	}
+	stopPeerPoll := connectiondrain.StartPeerPoll(ctx, s.peer)
+	defer stopPeerPoll()
 	stop := context.AfterFunc(ctx, func() { _ = listener.Close() })
 	defer stop()
 	if err := s.http.ServeTLS(listener, "", ""); err != nil && !errors.Is(err, http.ErrServerClosed) && !(ctx.Err() != nil && errors.Is(err, net.ErrClosed)) {
@@ -309,7 +353,14 @@ func (s *privateTLSServer) Shutdown(ctx context.Context) error {
 	if s == nil || s.http == nil {
 		return nil
 	}
-	return normalizeRoleShutdownError(s.http.Shutdown(ctx))
+	err := normalizeRoleShutdownError(s.http.Shutdown(ctx))
+	if s.connections != nil {
+		s.connections.Drain()
+	}
+	if s.peer != nil {
+		s.peer.Close()
+	}
+	return err
 }
 
 func normalizeRoleShutdownError(err error) error {

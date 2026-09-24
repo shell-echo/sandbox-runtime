@@ -252,6 +252,54 @@ func TestGatewayProductionV3RequiresLiveTLSAndOnlyTwoMaterials(t *testing.T) {
 	}
 }
 
+func TestPrivateExecutorProductionV3RequiresLiveTLSWithoutStaticMaterial(t *testing.T) {
+	for _, role := range []DataPlaneRole{DataPlaneBrowser, DataPlaneDesktop} {
+		t.Run(string(role), func(t *testing.T) {
+			directory := t.TempDir()
+			path := func(name string) string { return filepath.Join(directory, name) }
+			port := defaultBrowserPort
+			if role == DataPlaneDesktop {
+				port = defaultDesktopPort
+			}
+			candidate := defaultDataPlaneProcess(role, port)
+			candidate.Enabled = true
+			candidate.SchemaVersion = DataPlaneProductionSchemaV3
+			candidate.DeploymentLevel = ProviderProductionLevel
+			candidate.Authority = DataPlaneAuthorityConfig{
+				CredentialFile: path("credential.json"), DependencyFile: path("dependency.json"),
+				PolicyFile: path("policy.json"), RecordingKeyRef: "kms://recording/phase6/" + string(role),
+			}
+			candidate.TLS = DataPlaneTLSConfig{
+				SecurityProfilePath: path("profile.json"), SecurityProfileDigest: "sha256:" + strings.Repeat("a", 64),
+				PeerCRLRoleFile: path("peer-role.json"), PeerCRLRoleDigest: "sha256:" + strings.Repeat("b", 64),
+				PeerCRLSourceMappingDigest: "sha256:" + strings.Repeat("c", 64),
+				AgentSocket:                path("agent.sock"), AgentUID: 501, AgentGID: 20, OperationTimeoutMillis: 3000,
+			}
+			if err := candidate.Validate(); err != nil {
+				t.Fatalf("valid private v3 process: %v", err)
+			}
+			for name, mutate := range map[string]func(*DataPlaneProcessConfig){
+				"static server key": func(value *DataPlaneProcessConfig) { value.TLS.PrivateKeyBindingID = "key" },
+				"static client key": func(value *DataPlaneProcessConfig) { value.TLS.ClientPrivateKeyBindingID = "key" },
+				"raw key":           func(value *DataPlaneProcessConfig) { value.TLS.PrivateKeyFile = path("key.pem") },
+				"missing peer role": func(value *DataPlaneProcessConfig) { value.TLS.PeerCRLRoleFile = "" },
+				"material provider": func(value *DataPlaneProcessConfig) { value.Materials.Provider.Alias = "old-agent" },
+				"material binding": func(value *DataPlaneProcessConfig) {
+					value.Materials.Bindings = []RoleMaterialBindingConfig{{ID: "old-key"}}
+				},
+			} {
+				t.Run(name, func(t *testing.T) {
+					value := *candidate
+					mutate(&value)
+					if err := value.Validate(); err == nil {
+						t.Fatal("private v3 accepted static or missing authority")
+					}
+				})
+			}
+		})
+	}
+}
+
 func TestDataPlaneRolesHaveDistinctDefaultProbePorts(t *testing.T) {
 	ports := map[DataPlaneRole]int{
 		DataPlaneGateway: defaultDataPlaneProcess(DataPlaneGateway, defaultGatewayPort).Probe.Port,

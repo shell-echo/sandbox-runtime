@@ -325,6 +325,15 @@ and TLS session resumption cannot bypass that check. Existing HTTP, WebSocket
 and media connections must separately drain within the profile's revocation
 bound. The live TLS 1.3 builder and Browser/Desktop backend hookup are
 component checkpoints, not the complete multi-instance command gate.
+The Browser/Desktop private role v3 candidate uses its own live signer and
+inbound peer-CRL guard for exactly one Provider-instance attach edge. Its
+separate outbound backend client uses the same role signer with a different
+root and CRL direction; an upgraded backend WebSocket has the edge's maximum
+connection lifetime, and an upgraded attach WebSocket is tracked below
+`net/http` for revocation and shutdown drain. V3 rejects static certificate
+paths/bindings and cannot fall back to the v2 material-registry transport.
+This is code/component evidence only until actual distinct-role processes and
+the complete profile are exercised together.
 
 Provider Contract and private Terminal listeners track accepted sockets below
 `net/http`, enforce the exact trust edge's maximum connection lifetime, and
@@ -346,6 +355,13 @@ SPIFFE peer identities, not outbound Provider URLs; no such reverse edge is
 inferred. Gateway's committed Product database reads do not invent a
 Gateway→Product HTTP edge. Provider coding and Desktop instances cannot share
 one identity that masks their different capabilities.
+Each Browser/Desktop backend server identity has exactly one operator-declared
+canonical DNS SAN as well as its exact URI and `server_auth` EKU. The backend
+target stays a numeric address; the separate pinned DNS name is TLS
+ServerName/SNI, not a DNS lookup or an inferred identity. TLS-agent and
+controller issuance policies must match this SAN exactly. Zero or multiple
+backend DNS SANs, wildcard/IP names, and a name absent from the issued leaf
+are invalid; URI-only or hostname-verification bypass is not a fallback.
 
 For the complete simultaneous Product target, Provider is one logical role
 implemented by three exact process profiles: coding-shell, Browser-only and
