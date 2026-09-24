@@ -997,8 +997,15 @@ only `executor.v2`; Provider signs the short-lived broker statement and remains
 the only PostgreSQL, handoff and Docker authority. Build the local candidate
 only after the implementation worktree is clean and committed:
 
+The Phase 6 candidate recipe requires Go 1.26.8 and a per-architecture closed
+APK lock. Run it under `mise exec go@1.26.8 --` (or an equivalent exact
+toolchain). An optional `SANDBOX_RUNTIME_DESKTOP_APK_CACHE` must point to an
+absolute directory containing precisely the verified lock archives; an invalid
+cache never falls back to live downloads. The historical Phase 5 `build.sh`
+and publication workflow are not substitutes.
+
 ```bash
-profiles/desktop/image/build-phase6-candidate.sh \
+mise exec go@1.26.8 -- profiles/desktop/image/build-phase6-candidate.sh \
   linux/arm64/v8 /absolute/private/path/desktop-phase6-candidate.json
 
 SANDBOX_RUNTIME_DESKTOP_MUX_INTEGRATION=1 \

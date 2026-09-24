@@ -208,6 +208,16 @@ digest-only deployment and verification before startup/admission.
 Gate: independent signature/provenance/SBOM verification on every supported
 architecture plus tamper and mutable-reference rejection.
 
+Before any external distribution, independently trace licenses for the actual
+image contents, including the base, recursive APKs, Go modules, fonts and
+codec libraries. Resolve `custom` and conflicting declarations from the exact
+upstream version and build recipe, collect applicable copyright/license texts
+and notices, and verify a concrete way to provide exact corresponding source,
+distribution patches and build information where required. A scanner license
+label, SBOM, signature or private registry alone does not satisfy this gate.
+Unresolved license terms or required notices/source block publication, not
+the bounded non-distributed Slice 6 local candidate.
+
 Slice 7 must publish and independently verify the new executor-v2 Desktop
 runtime, update its immutable lock and then enable exact Desktop v3 production
 artifact admission. It must rerun security/runtime gates affected by the

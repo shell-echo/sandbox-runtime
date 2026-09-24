@@ -15,11 +15,15 @@ esac
 
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 repository_root=$(CDPATH= cd -- "$script_dir/../../.." && pwd)
+if [ -n "$(git -C "$repository_root" status --porcelain --untracked-files=all)" ]; then
+    echo "Phase 6 candidate source tree must be clean and committed" >&2
+    exit 2
+fi
 source_revision=$(git -C "$repository_root" rev-parse HEAD)
 platform_token=$(printf '%s' "$platform" | tr '/:' '--')
 image_tag="sandbox-runtime-desktop-phase6-candidate:${source_revision}-${platform_token}"
 
-"$script_dir/build.sh" "$platform" "$image_tag" "$source_revision"
+"$script_dir/build-phase6-locked.sh" "$platform" "$image_tag" "$source_revision"
 
 (
     cd "$repository_root"

@@ -10,15 +10,15 @@
       "linux/amd64": {
         "digest": "sha256:1beb0dc0a51de7ff38e3b5274078a2e0b81113ba5c7535e1a03d5913a5edbda3",
         "architecture": "amd64",
-        "package_archive_set_digest": "sha256:872446c241d2c85db9995b1e12ca4246954f76883108f1e16415d8a0e711c4a6",
-        "installed_set_digest": "sha256:ea4e22c1f7011c6cfc975d64c5f2d110b3432bc5ae78064b94f7afa752e0a588"
+        "package_archive_set_digest": "sha256:c067649357db75300c5eaa2b12a3c3eb11dcc406b92bf67374d62ca17de5f3e5",
+        "installed_set_digest": "sha256:ddf5a3a93e3a97a50758ef1ba017c57143af22d537ec70755cfbb6b38583d601"
       },
       "linux/arm64/v8": {
         "digest": "sha256:d858bb5442632a31bd4bca6c5e601dbe6b536fd7942092ea6a08a0a95805693c",
         "architecture": "arm64",
         "variant": "v8",
-        "package_archive_set_digest": "sha256:f6a17c5b4031b4068ae345333cdfc3d09a3ef30dfe77a461f13306d3cf5ac656",
-        "installed_set_digest": "sha256:25e5d714836bacf2e421a1d586d7c8d64a65887036989cc08810697a6dd8ec31"
+        "package_archive_set_digest": "sha256:9384be286d35a86578e2f444acf636ff129c048e5c28d9760dd47187e2b7ba2c",
+        "installed_set_digest": "sha256:2290a8c1abee9457d1e47d4889e421538cb0f067eda2325c0e73d53d5c7f28fb"
       }
     }
   },
@@ -91,23 +91,14 @@
     "listening_tcp_ports": 0
   },
   "reproducible_outputs": {
-    "vcs_reference": "slice4-output",
-    "platforms": {
-      "linux/amd64": {
-        "image_digest": "sha256:47999b3fb061fee77a1d1ab53d8bc9045d5082dc00cc6e9626ff6e0e113721d6",
-        "evidence": "double_cross_build"
-      },
-      "linux/arm64/v8": {
-        "image_digest": "sha256:ec8da6b3e48d145a960d1faa3a5a7202c43221de0f3a7d73e6f62783cc92efe6",
-        "evidence": "native_build_after_double_build_and_smoke"
-      }
-    }
+    "vcs_reference": "pending-phase6-locked",
+    "platforms": {}
   },
   "provenance": {
     "upstream_source": "https://github.com/alpinelinux/docker-alpine",
     "upstream_index_digest": "sha256:fd791d74b68913cbb027c6546007b3f0d3bc45125f797758156952bc2d6daf40",
     "build_context": "profiles/desktop/image",
-    "go_version": "go1.26.5",
+    "go_version": "go1.26.8",
     "reproducible_inputs": true,
     "native_double_build_required": true,
     "signed_attestation_required_for_adapter": true,

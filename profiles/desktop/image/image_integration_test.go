@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -57,9 +58,6 @@ func TestDesktopImageNativeIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, image := range []string{imageOne, imageTwo} {
-		run(t, ctx, "./build.sh", platform, image, "integration-test")
-	}
 	t.Cleanup(func() {
 		cleanupContext, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cleanupCancel()
@@ -67,6 +65,9 @@ func TestDesktopImageNativeIntegration(t *testing.T) {
 		_ = exec.CommandContext(cleanupContext, "docker", "image", "rm", imageOne, imageTwo).Run()
 		_ = os.RemoveAll(mountRoot)
 	})
+	for _, image := range []string{imageOne, imageTwo} {
+		run(t, ctx, "./build-phase6-locked.sh", platform, image, "integration-test")
+	}
 
 	idOne := strings.TrimSpace(run(t, ctx, "docker", "image", "inspect", "--format", "{{.Id}}", imageOne))
 	idTwo := strings.TrimSpace(run(t, ctx, "docker", "image", "inspect", "--format", "{{.Id}}", imageTwo))
@@ -104,6 +105,14 @@ func TestDesktopImageNativeIntegration(t *testing.T) {
 		"--mount", "type=bind,src="+outputs+",dst=/outputs",
 		"--tmpfs", "/tmp:rw,nosuid,nodev,size=256m,mode=1777",
 		imageOne)
+	localBroker := filepath.Join(mountRoot, "desktop-broker")
+	run(t, ctx, "docker", "cp", containerName+":"+BrokerPath, localBroker)
+	buildMetadata := run(t, ctx, "go", "version", "-m", localBroker)
+	if !strings.Contains(buildMetadata, manifest.Provenance.GoVersion) ||
+		!strings.Contains(buildMetadata, "CGO_ENABLED=0") ||
+		!strings.Contains(buildMetadata, "GOARCH="+runtime.GOARCH) {
+		t.Fatalf("candidate broker build metadata mismatch: %s", buildMetadata)
+	}
 
 	waitForBroker(t, ctx, containerName)
 	describeText := run(t, ctx, "docker", "exec", containerName, BrokerPath, "describe", "--socket", BrokerSocket)
@@ -190,7 +199,38 @@ func runV2Session(t *testing.T, ctx context.Context, containerName string, priva
 			}
 		}
 	}
-	closeCommand, _ := desktopbroker.EncodeSession(desktopbroker.SessionCommand{Protocol: desktopbroker.SessionProtocolV2ID, Type: "close", RequestID: "close-1", Sequence: 1})
+	input := desktopmedia.Input{Sequence: 1, Kind: "pointer", Event: "move", X: 10, Y: 10, ControlLeaseID: "lease-image-1", ControlFence: 1}
+	inputCommand, err := desktopbroker.EncodeSession(desktopbroker.SessionCommand{Protocol: desktopbroker.SessionProtocolV2ID, Type: "input", RequestID: "input-1", Sequence: 1, Input: &input})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := stdin.Write(inputCommand); err != nil {
+		t.Fatal(err)
+	}
+	resultDeadline := time.Now().Add(10 * time.Second)
+	for {
+		if time.Now().After(resultDeadline) {
+			t.Fatal("real Desktop broker did not acknowledge input")
+		}
+		line, err = reader.ReadBytes('\n')
+		if err != nil {
+			t.Fatal(err)
+		}
+		var result desktopbroker.SessionMessage
+		if desktopbroker.DecodeSession(line, &result) != nil || result.ValidateFor(desktopbroker.SessionProtocolV2ID) != nil {
+			t.Fatalf("invalid real Desktop input response: %s", line)
+		}
+		if result.Type == desktopbroker.SessionResultType {
+			if !result.OK || result.RequestID != "input-1" || result.Sequence != 1 {
+				t.Fatalf("real Desktop input was rejected: %s", line)
+			}
+			break
+		}
+		if result.Type != desktopbroker.SessionFrameType {
+			t.Fatalf("unexpected real Desktop input ordering: %s", line)
+		}
+	}
+	closeCommand, _ := desktopbroker.EncodeSession(desktopbroker.SessionCommand{Protocol: desktopbroker.SessionProtocolV2ID, Type: "close", RequestID: "close-1", Sequence: 2})
 	if _, err := stdin.Write(closeCommand); err != nil {
 		t.Fatal(err)
 	}
@@ -278,12 +318,24 @@ func inspectImagePolicy(t *testing.T, ctx context.Context, imageReference string
 	}
 	config := inspected[0].Config
 	platform := manifest.Source.Manifests[nativePlatform(t)]
+	lockPath, err := APKLockPath(nativePlatform(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	lockBytes, err := os.ReadFile(lockPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lockDigest := sha256.Sum256(lockBytes)
 	if config.User != "1000:1000" || config.WorkingDir != "/workspace" || strings.Join(config.Entrypoint, "\x00") != Entrypoint || len(config.ExposedPorts) != 0 {
 		t.Fatalf("unsafe image identity: user=%q workdir=%q entrypoint=%v ports=%v", config.User, config.WorkingDir, config.Entrypoint, config.ExposedPorts)
 	}
 	if config.Labels["io.github.shell-echo.sandbox-runtime.profile"] != ProfileID ||
+		config.Labels["io.github.shell-echo.sandbox-runtime.candidate-classification"] != "local-candidate-non-release" ||
+		config.Labels["io.github.shell-echo.sandbox-runtime.candidate-apk-lock-digest"] != fmt.Sprintf("sha256:%x", lockDigest) ||
 		config.Labels["io.github.shell-echo.sandbox-runtime.provenance.source-digest"] != platform.Digest ||
-		config.Labels["io.github.shell-echo.sandbox-runtime.package-archive-set-digest"] != platform.PackageArchiveSetDigest {
+		config.Labels["io.github.shell-echo.sandbox-runtime.package-archive-set-digest"] != platform.PackageArchiveSetDigest ||
+		config.Labels["io.github.shell-echo.sandbox-runtime.installed-set-digest"] != platform.InstalledSetDigest {
 		t.Fatalf("image provenance labels do not match manifest: %v", config.Labels)
 	}
 }

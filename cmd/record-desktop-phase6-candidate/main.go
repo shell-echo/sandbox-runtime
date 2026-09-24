@@ -45,6 +45,12 @@ func main() {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
+	statusCommand := exec.CommandContext(ctx, "git", "status", "--porcelain", "--untracked-files=all")
+	statusCommand.Dir = root
+	status, err := statusCommand.Output()
+	if err != nil || len(status) != 0 {
+		fail(errors.New("Phase 6 candidate source tree must be clean and committed"))
+	}
 	command := exec.CommandContext(ctx, "docker", "image", "inspect", image)
 	document, err := command.Output()
 	if err != nil {
@@ -70,6 +76,8 @@ func main() {
 	}
 	labels := inspection.Config.Labels
 	if labels["io.github.shell-echo.sandbox-runtime.profile"] != candidate.ProfileID ||
+		labels["io.github.shell-echo.sandbox-runtime.candidate-classification"] != candidate.Classification ||
+		labels["io.github.shell-echo.sandbox-runtime.candidate-apk-lock-digest"] != candidate.APKLockDigest ||
 		labels["org.opencontainers.image.revision"] != candidate.SourceRevision ||
 		labels["org.opencontainers.image.base.digest"] != candidate.BaseImageDigest ||
 		labels["io.github.shell-echo.sandbox-runtime.package-archive-set-digest"] != candidate.PackageArchiveSetDigest ||

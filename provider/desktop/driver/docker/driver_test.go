@@ -294,17 +294,20 @@ func validCandidateImageInfo(t *testing.T, candidate desktopcandidate.Manifest) 
 		id: candidate.ImageDigest, user: DesktopUser, entrypoint: []string{"/usr/local/bin/desktop-runtime"}, workingDirectory: "/workspace",
 		architecture: platform.Architecture, variant: variant, operatingSystem: "linux",
 		labels: map[string]string{
-			"io.github.shell-echo.sandbox-runtime.profile":                    candidate.ProfileID,
-			"io.github.shell-echo.sandbox-runtime.desktop-broker-protocol":    candidate.BrokerProtocol,
-			"io.github.shell-echo.sandbox-runtime.desktop-broker-path":        desktopimage.BrokerPath,
-			"io.github.shell-echo.sandbox-runtime.package-archive-set-digest": candidate.PackageArchiveSetDigest,
-			"io.github.shell-echo.sandbox-runtime.installed-set-digest":       candidate.InstalledSetDigest,
-			"io.github.shell-echo.sandbox-runtime.provenance.source-digest":   candidate.BaseImageDigest,
-			"org.opencontainers.image.base.digest":                            candidate.BaseImageDigest,
-			"org.opencontainers.image.base.name":                              desktopimage.SourceRepository,
-			"org.opencontainers.image.revision":                               candidate.SourceRevision,
-			"org.opencontainers.image.source":                                 "https://github.com/shell-echo/sandbox-runtime",
-			"org.opencontainers.image.version":                                candidate.ProfileID,
+			"io.github.shell-echo.sandbox-runtime.profile":                      candidate.ProfileID,
+			"io.github.shell-echo.sandbox-runtime.candidate-classification":     desktopcandidate.Classification,
+			"io.github.shell-echo.sandbox-runtime.candidate-apk-lock-digest":    candidate.APKLockDigest,
+			"io.github.shell-echo.sandbox-runtime.desktop-broker-protocol":      candidate.BrokerProtocol,
+			"io.github.shell-echo.sandbox-runtime.desktop-broker-path":          desktopimage.BrokerPath,
+			"io.github.shell-echo.sandbox-runtime.package-archive-set-digest":   candidate.PackageArchiveSetDigest,
+			"io.github.shell-echo.sandbox-runtime.installed-set-digest":         candidate.InstalledSetDigest,
+			"io.github.shell-echo.sandbox-runtime.provenance.source-digest":     candidate.BaseImageDigest,
+			"io.github.shell-echo.sandbox-runtime.provenance.source-date-epoch": "0",
+			"org.opencontainers.image.base.digest":                              candidate.BaseImageDigest,
+			"org.opencontainers.image.base.name":                                desktopimage.SourceRepository,
+			"org.opencontainers.image.revision":                                 candidate.SourceRevision,
+			"org.opencontainers.image.source":                                   "https://github.com/shell-echo/sandbox-runtime",
+			"org.opencontainers.image.version":                                  candidate.ProfileID,
 		},
 	}
 }
@@ -432,6 +435,26 @@ func TestProductionAndCandidateImagesRejectCrossUse(t *testing.T) {
 	}
 	if err := validateCandidateImage(candidateImage, candidateManifest, candidate); err != nil {
 		t.Fatalf("Phase 6 candidate with Phase 6 manifest = %v", err)
+	}
+	for name, mutate := range map[string]func(*imageInfo){
+		"unexpected candidate identity": func(info *imageInfo) {
+			info.labels["io.github.shell-echo.sandbox-runtime.future"] = "unsafe"
+		},
+		"missing candidate lock": func(info *imageInfo) {
+			delete(info.labels, "io.github.shell-echo.sandbox-runtime.candidate-apk-lock-digest")
+		},
+		"wrong candidate lock": func(info *imageInfo) {
+			info.labels["io.github.shell-echo.sandbox-runtime.candidate-apk-lock-digest"] = "sha256:" + strings.Repeat("0", 64)
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			drifted := candidateImage
+			drifted.labels = cloneStrings(candidateImage.labels)
+			mutate(&drifted)
+			if err := validateCandidateImage(drifted, candidateManifest, candidate); !errors.Is(err, ErrInvalidRuntime) {
+				t.Fatalf("candidate identity label drift accepted: %v", err)
+			}
+		})
 	}
 	if err := validateImage(candidateImage, productionManifest, publication); !errors.Is(err, ErrInvalidRuntime) {
 		t.Fatalf("Phase 6 candidate accepted by Phase 5 manifest: %v", err)

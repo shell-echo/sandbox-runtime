@@ -1,0 +1,1643 @@
+{
+  "schema_version": "sandbox.runtime/desktop-phase6-apk-lock/v1",
+  "platform": "linux/amd64",
+  "base_image_digest": "sha256:1beb0dc0a51de7ff38e3b5274078a2e0b81113ba5c7535e1a03d5913a5edbda3",
+  "source_index_digest": "sha256:fd791d74b68913cbb027c6546007b3f0d3bc45125f797758156952bc2d6daf40",
+  "repository_base": "https://dl-cdn.alpinelinux.org/alpine/v3.23",
+  "required": [
+    {
+      "name": "xvfb",
+      "version": "21.1.23-r0"
+    },
+    {
+      "name": "openbox",
+      "version": "3.6.1-r8"
+    },
+    {
+      "name": "xterm",
+      "version": "403-r0"
+    },
+    {
+      "name": "xdotool",
+      "version": "4.20251130.1-r0"
+    },
+    {
+      "name": "xdpyinfo",
+      "version": "1.4.0-r0"
+    },
+    {
+      "name": "xset",
+      "version": "1.2.5-r1"
+    },
+    {
+      "name": "xwd",
+      "version": "1.0.9-r2"
+    },
+    {
+      "name": "font-dejavu",
+      "version": "2.37-r6"
+    },
+    {
+      "name": "ffmpeg",
+      "version": "8.0.1-r1"
+    }
+  ],
+  "package_count": 177,
+  "archive_set_digest": "sha256:c067649357db75300c5eaa2b12a3c3eb11dcc406b92bf67374d62ca17de5f3e5",
+  "installed_set_digest": "sha256:ddf5a3a93e3a97a50758ef1ba017c57143af22d537ec70755cfbb6b38583d601",
+  "packages": [
+    {
+      "name": "alsa-lib",
+      "version": "1.2.14-r2",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:f27ba453e88d62cb40240216490403ce7f6c00b705f006583d94fe691606ce21",
+      "size": 466931,
+      "license": "LGPL-2.1-or-later"
+    },
+    {
+      "name": "aom-libs",
+      "version": "3.14.1-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:45f4daa9624509fd2f94c2ca044870933bf0289d7e0417a5a3c07d8ca51d87cc",
+      "size": 3213944,
+      "license": "BSD-2-Clause AND custom"
+    },
+    {
+      "name": "brotli-libs",
+      "version": "1.2.0-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:09fbf1ddf0c71c6c4ab7bc12aef3452d8ace5adeab10c4c30214fc70f5e0e087",
+      "size": 429601,
+      "license": "MIT"
+    },
+    {
+      "name": "busybox",
+      "version": "1.37.0-r30",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:2fea8c73710994099eaec6832b69a0f70163e0d6ee13848af3a5270a16d15c5c",
+      "size": 504726,
+      "license": "GPL-2.0-only"
+    },
+    {
+      "name": "busybox-binsh",
+      "version": "1.37.0-r30",
+      "architecture": "noarch",
+      "repository": "main",
+      "sha256": "sha256:94f10cf3bb79f033d5ac86675312229e28a8a858fa7bfb5268675951b99466e7",
+      "size": 1565,
+      "license": "GPL-2.0-only"
+    },
+    {
+      "name": "cairo",
+      "version": "1.18.4-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:8960842220db0372986732e10018fc19f34780459c4420a4b149d5eb9981fe9a",
+      "size": 514703,
+      "license": "LGPL-2.1-or-later OR MPL-1.1"
+    },
+    {
+      "name": "cjson",
+      "version": "1.7.19-r1",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:db0af6e9ce56c48cd0f377a0d8830183864a60c46c6693567042731d1e077278",
+      "size": 12869,
+      "license": "MIT"
+    },
+    {
+      "name": "dbus-libs",
+      "version": "1.16.2-r1",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:03db1045a6983f8fa7638eed2327d3b149355aab1080875f230f2bd7e8f9596f",
+      "size": 130204,
+      "license": "AFL-2.1 OR GPL-2.0-or-later"
+    },
+    {
+      "name": "encodings",
+      "version": "1.1.0-r0",
+      "architecture": "noarch",
+      "repository": "main",
+      "sha256": "sha256:401e3b7eec9ffa0de8725cdbd4072b237f08a0d016e80b315dc65163a77093df",
+      "size": 588300,
+      "license": "Public Domain"
+    },
+    {
+      "name": "ffmpeg",
+      "version": "8.0.1-r1",
+      "architecture": "x86_64",
+      "repository": "community",
+      "sha256": "sha256:8d53f6915d1ed63657dee1baacc5e4224ec06b6adf71c987cdc23238e3940445",
+      "size": 268711,
+      "license": "GPL-2.0-or-later AND LGPL-2.1-or-later"
+    },
+    {
+      "name": "ffmpeg-libavcodec",
+      "version": "8.0.1-r1",
+      "architecture": "x86_64",
+      "repository": "community",
+      "sha256": "sha256:f42859652a7dafcc1ce9d83acbe1a263564fa181ddcbc457588d37d05da0e1e3",
+      "size": 8913934,
+      "license": "GPL-2.0-or-later AND LGPL-2.1-or-later"
+    },
+    {
+      "name": "ffmpeg-libavdevice",
+      "version": "8.0.1-r1",
+      "architecture": "x86_64",
+      "repository": "community",
+      "sha256": "sha256:14475295f5ac21b519385d0868730ea58c1a9a5a80bfdef65e39c9bb60a6e64e",
+      "size": 47178,
+      "license": "GPL-2.0-or-later AND LGPL-2.1-or-later"
+    },
+    {
+      "name": "ffmpeg-libavfilter",
+      "version": "8.0.1-r1",
+      "architecture": "x86_64",
+      "repository": "community",
+      "sha256": "sha256:50b5f9948a03f5046af82f10a3632415cefeb695a3ccb7839f957bc925f01832",
+      "size": 2604915,
+      "license": "GPL-2.0-or-later AND LGPL-2.1-or-later"
+    },
+    {
+      "name": "ffmpeg-libavformat",
+      "version": "8.0.1-r1",
+      "architecture": "x86_64",
+      "repository": "community",
+      "sha256": "sha256:36c1af09cbc8933396160ad85fa3bd80fe4b573eb71670c332cb20fafa08b7de",
+      "size": 1475552,
+      "license": "GPL-2.0-or-later AND LGPL-2.1-or-later"
+    },
+    {
+      "name": "ffmpeg-libavutil",
+      "version": "8.0.1-r1",
+      "architecture": "x86_64",
+      "repository": "community",
+      "sha256": "sha256:ef394e33927f6c4aa1d98668295b3df5050d1443fc1fafb88adaa4c8a08e37a4",
+      "size": 449657,
+      "license": "GPL-2.0-or-later AND LGPL-2.1-or-later"
+    },
+    {
+      "name": "ffmpeg-libswresample",
+      "version": "8.0.1-r1",
+      "architecture": "x86_64",
+      "repository": "community",
+      "sha256": "sha256:07095b89d399f4a4cd942817b25b0891abc943e7638c79c2c28e014a6d9ca5be",
+      "size": 66148,
+      "license": "GPL-2.0-or-later AND LGPL-2.1-or-later"
+    },
+    {
+      "name": "ffmpeg-libswscale",
+      "version": "8.0.1-r1",
+      "architecture": "x86_64",
+      "repository": "community",
+      "sha256": "sha256:dae43b8d23917649972c07024d19a400e25b4e013f88af1ae01ef18fd87f56db",
+      "size": 628122,
+      "license": "GPL-2.0-or-later AND LGPL-2.1-or-later"
+    },
+    {
+      "name": "font-alias",
+      "version": "1.0.5-r0",
+      "architecture": "noarch",
+      "repository": "main",
+      "sha256": "sha256:1d3f89255e8615ed99e3c7d65b4c1a688a968c54e1e3839dcac241bbe88f31ce",
+      "size": 3950,
+      "license": "custom"
+    },
+    {
+      "name": "font-cursor-misc",
+      "version": "1.0.4-r1",
+      "architecture": "noarch",
+      "repository": "main",
+      "sha256": "sha256:a95f65183c8cab817d27f2f6bae66bf37cdecedc07c8f1307b0f4569a242368e",
+      "size": 7013,
+      "license": "Public Domain"
+    },
+    {
+      "name": "font-dejavu",
+      "version": "2.37-r6",
+      "architecture": "noarch",
+      "repository": "main",
+      "sha256": "sha256:6bcc5d6c5ff903a220ba10218ceaf7df97609676c8b0362749e0937f59044f1c",
+      "size": 5394035,
+      "license": "Bitstream-Vera"
+    },
+    {
+      "name": "font-misc-misc",
+      "version": "1.1.3-r1",
+      "architecture": "noarch",
+      "repository": "main",
+      "sha256": "sha256:f4404e7df4a931f2b9f2631674142f29bc04930962643dcf8af9fc90cad0583e",
+      "size": 3688045,
+      "license": "Public Domain"
+    },
+    {
+      "name": "fontconfig",
+      "version": "2.17.1-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:f44cea53076f18428dad0c27c75ca717ebfc3d2f0f4c8d4428ce70b62e25adf1",
+      "size": 163063,
+      "license": "MIT"
+    },
+    {
+      "name": "freetype",
+      "version": "2.14.3-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:670c9922ab4eb9df65c0e4ad7839bbe3f486016fc1fb637c46d657b74d99a24f",
+      "size": 354363,
+      "license": "FTL OR GPL-2.0-or-later"
+    },
+    {
+      "name": "fribidi",
+      "version": "1.0.16-r2",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:e29ec555a07dc274d2fc93cb204f8fc0b65a0d6ce14d94a5e54dc59a1252e08e",
+      "size": 31218,
+      "license": "LGPL-2.1-or-later"
+    },
+    {
+      "name": "gdk-pixbuf",
+      "version": "2.44.4-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:29e9630f0827212567210fe94514b711ddf0d65275e2a355c16b371caa4ccf57",
+      "size": 147623,
+      "license": "LGPL-2.1-or-later"
+    },
+    {
+      "name": "giflib",
+      "version": "5.2.2-r2",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:ca4a84649331bf97de00810fe21ae9c17378744c48c3f7423cbab0a2838d05c0",
+      "size": 15595,
+      "license": "MIT"
+    },
+    {
+      "name": "glib",
+      "version": "2.86.3-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:d45402c45c44943840aaaacec4c836adf6bdde8a48aef1eeb867822ef959baf1",
+      "size": 2057083,
+      "license": "LGPL-2.1-or-later"
+    },
+    {
+      "name": "glslang-libs",
+      "version": "1.4.321.0-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:7330d2c10e5d4ab8ebbfbcd48973f259163a16095e048d14b35298a09a8a84c5",
+      "size": 805369,
+      "license": "BSD-3-Clause AND BSD-2-Clause AND MIT AND Apache-2.0 AND GPL-3.0-or-later"
+    },
+    {
+      "name": "gmp",
+      "version": "6.3.0-r4",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:5aa4a73a11126f2bc757ef1fee1eddb70105bd38f2659ae93aae1fafa02a0359",
+      "size": 220080,
+      "license": "LGPL-3.0-or-later OR GPL-2.0-or-later"
+    },
+    {
+      "name": "graphite2",
+      "version": "1.3.14-r6",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:026c5bc18bfa9d41155838b4f2b60c82553d65ad10af652ec5135818ba825c25",
+      "size": 64767,
+      "license": "LGPL-2.1-or-later OR MPL-1.1"
+    },
+    {
+      "name": "harfbuzz",
+      "version": "12.2.0-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:41cf5b63874df71de5434e11844ba59b9c2145c86d16788669f2c4d4822f2986",
+      "size": 642521,
+      "license": "MIT"
+    },
+    {
+      "name": "hwdata-pci",
+      "version": "0.401-r0",
+      "architecture": "noarch",
+      "repository": "main",
+      "sha256": "sha256:fe96c2e53bb36b39b3956fa57bccacd575316c7479815a3958a94b180ddd03e4",
+      "size": 355359,
+      "license": "GPL-2.0-or-later OR XFree86-1.1"
+    },
+    {
+      "name": "imlib2",
+      "version": "1.12.4-r1",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:86beb9067ea61834f0b7085d4e079a8595304952febd137589b6d2d64d82ce3a",
+      "size": 561718,
+      "license": "Imlib2"
+    },
+    {
+      "name": "json-c",
+      "version": "0.18-r1",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:b82b644f1a77d9d2699a8e17eccf779184e8db9075dd09f59a060731306c9a81",
+      "size": 27825,
+      "license": "MIT"
+    },
+    {
+      "name": "lame-libs",
+      "version": "3.100-r5",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:ce8d4d094bff06047b026df6d9774f14a6e53b40720f22e134b877d526dcb679",
+      "size": 124665,
+      "license": "LGPL-2.0-or-later"
+    },
+    {
+      "name": "lcms2",
+      "version": "2.19-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:30e81bbfe580677d9d8f56301dab0dcc64da5d91b71031d340fb72092f77699c",
+      "size": 153300,
+      "license": "MIT"
+    },
+    {
+      "name": "libSvtAv1Enc",
+      "version": "3.1.2-r0",
+      "architecture": "x86_64",
+      "repository": "community",
+      "sha256": "sha256:b1cc3f149a19e69aab72e865923c6554cd37250316d1026eb263649efcddd469",
+      "size": 3207214,
+      "license": "BSD-3-Clause-Clear"
+    },
+    {
+      "name": "libass",
+      "version": "0.17.4-r0",
+      "architecture": "x86_64",
+      "repository": "community",
+      "sha256": "sha256:ac484ea874599801972979a5ed693d4b3883001a90365e586db863304f66a473",
+      "size": 91669,
+      "license": "ISC"
+    },
+    {
+      "name": "libasyncns",
+      "version": "0.8-r4",
+      "architecture": "x86_64",
+      "repository": "community",
+      "sha256": "sha256:d03323a57ba9e69b7ff2382b5943c0f18101d64a8bd78edbf13576e4ee3ffd3a",
+      "size": 9858,
+      "license": "LGPL-2.0-or-later"
+    },
+    {
+      "name": "libblkid",
+      "version": "2.41.6-r1",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:e8c829016f4b82f34500b05023060d5f1eb8f06e5affadb0a4427cc26dbb58df",
+      "size": 95032,
+      "license": "LGPL-2.1-or-later"
+    },
+    {
+      "name": "libbluray",
+      "version": "1.4.0-r0",
+      "architecture": "x86_64",
+      "repository": "community",
+      "sha256": "sha256:05951f9f48b6e7b58044edf330be3be4374af225adaf88a69a7447475258b4e3",
+      "size": 111658,
+      "license": "LGPL-2.1-or-later"
+    },
+    {
+      "name": "libbsd",
+      "version": "0.12.2-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:1252092dea853063252bbdaf9fa604819055b004ba3114b88b842fbfe44659e9",
+      "size": 30410,
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "libbz2",
+      "version": "1.0.8-r6",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:9995840a76ac97ec006259391b7a81b73b73c5cf2f462bf12bb2250afbf665b9",
+      "size": 35471,
+      "license": "bzip2-1.0.6"
+    },
+    {
+      "name": "libcrypto3",
+      "version": "3.5.8-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:a5592b5cf276bc7a30ac7b161d46446085490b640faa1f839ea98eb15aacad31",
+      "size": 1978546,
+      "license": "Apache-2.0"
+    },
+    {
+      "name": "libdav1d",
+      "version": "1.5.2-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:b4cb4564cc13b2cf68a35d6f4bfe66848a675446438de6975d75354ca383f3aa",
+      "size": 727613,
+      "license": "BSD-2-Clause"
+    },
+    {
+      "name": "libde265",
+      "version": "1.0.16-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:965f518024255124b2357147a9ca0f57ef90a35d9731eb11679fccd5f09031a4",
+      "size": 225340,
+      "license": "LGPL-3.0-or-later"
+    },
+    {
+      "name": "libdovi",
+      "version": "3.3.2-r0",
+      "architecture": "x86_64",
+      "repository": "community",
+      "sha256": "sha256:1224a99bd69823a71f785dd77e82dcd04a6a007bc43388b6b690c1d04b7600d8",
+      "size": 220628,
+      "license": "MIT"
+    },
+    {
+      "name": "libdrm",
+      "version": "2.4.131-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:cbea643e98433761927a85854645eafb951c3d245dc0441d341566702a1daa73",
+      "size": 201094,
+      "license": "MIT"
+    },
+    {
+      "name": "libeconf",
+      "version": "0.8.3-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:9a6c216b9c2bf4077bfc1ffe6986e3e69df301594b23764ed55f8003b89d2784",
+      "size": 26053,
+      "license": "MIT"
+    },
+    {
+      "name": "libelf",
+      "version": "0.194-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:5dffa764cff5a2858ec3279174e467fba2b2011dc3550e934a15e72e5ee01d19",
+      "size": 43420,
+      "license": "GPL-3.0-or-later AND ( GPL-2.0-or-later OR LGPL-3.0-or-later )"
+    },
+    {
+      "name": "libexpat",
+      "version": "2.8.5-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:5216046085b92da88a6b107dbbb558f69d49c347a6335291fcf199ebd1670a8f",
+      "size": 61353,
+      "license": "MIT"
+    },
+    {
+      "name": "libffi",
+      "version": "3.5.2-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:0b3473a1468bed5fbb913a1ffa121e253080b21b013fe47e0300bd7e85224e76",
+      "size": 18342,
+      "license": "MIT"
+    },
+    {
+      "name": "libflac",
+      "version": "1.4.3-r2",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:352a9d4ee46becf7bdd382a49fdb75f415f62340e458771f0201fec0f7ff6e53",
+      "size": 205365,
+      "license": "BSD-3-Clause AND GPL-2.0-or-later"
+    },
+    {
+      "name": "libfontenc",
+      "version": "1.1.8-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:78dc950fc60d16a5aab5301cde120e53cb971c89882f24717ba6fb1d1ff4da08",
+      "size": 11598,
+      "license": "MIT"
+    },
+    {
+      "name": "libgcc",
+      "version": "15.2.0-r2",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:4279d14cbf43311312d3a7d43619f4c15ede2e46d5608ba421ed157ded57c700",
+      "size": 80358,
+      "license": "GPL-2.0-or-later AND LGPL-2.1-or-later"
+    },
+    {
+      "name": "libgomp",
+      "version": "15.2.0-r2",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:7eda0581da0d10365e9ebd62f9b4e3a973cd2b791d6a174d2f7a1150c2753d64",
+      "size": 153736,
+      "license": "GPL-2.0-or-later AND LGPL-2.1-or-later"
+    },
+    {
+      "name": "libheif",
+      "version": "1.23.0-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:779790dc7be978b3ba54c7af11d9db08224d0552437bc312cb75137a65a26423",
+      "size": 695654,
+      "license": "LGPL-3.0-or-later"
+    },
+    {
+      "name": "libhwy",
+      "version": "1.3.0-r0",
+      "architecture": "x86_64",
+      "repository": "community",
+      "sha256": "sha256:0dffa69b43908dd0cea3c89c8ff4036d34fd47c03d0eb0139f2122144fb5b574",
+      "size": 25653,
+      "license": "Apache-2.0"
+    },
+    {
+      "name": "libice",
+      "version": "1.1.2-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:75aa3f8eea355a39245e01162d5bb9e9d972b5e92c19864ee5b85c3c7887ad69",
+      "size": 39266,
+      "license": "X11"
+    },
+    {
+      "name": "libid3tag",
+      "version": "0.16.3-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:3a6d31175b66521911a420bde7a7fee8e97af3e000692a1475a25a27a33ca402",
+      "size": 28658,
+      "license": "GPL-2.0-or-later"
+    },
+    {
+      "name": "libintl",
+      "version": "0.24.1-r1",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:03ca057fee8d344f55ff739b9f12beef8986f84a6dae36c08d7789c4f3a3b3e2",
+      "size": 39495,
+      "license": "LGPL-2.1-or-later"
+    },
+    {
+      "name": "libjpeg-turbo",
+      "version": "3.1.2-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:7cd59be23cfb2400fd4d666cb4d3f70e3f7845caee3200565a403f9375ba6e88",
+      "size": 203545,
+      "license": "BSD-3-Clause AND IJG AND Zlib"
+    },
+    {
+      "name": "libjxl",
+      "version": "0.11.2-r0",
+      "architecture": "x86_64",
+      "repository": "community",
+      "sha256": "sha256:69c7637a43c42a720c6fc98a5051e21ba6348da154ad5fb30f196c0e85a6a908",
+      "size": 1624457,
+      "license": "Apache-2.0"
+    },
+    {
+      "name": "libltdl",
+      "version": "2.5.4-r2",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:703ee75c99f6848a04883692186e90334c16d56bf764157da0a969cd399d639a",
+      "size": 16498,
+      "license": "LGPL-2.0-or-later AND GPL-2.0-or-later"
+    },
+    {
+      "name": "libmd",
+      "version": "1.1.0-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:704446100fb39f2699d848d97f09463dd6fdd35f3a1acb038483712e1e37f766",
+      "size": 22963,
+      "license": "BSD-3-Clause AND BSD-2-Clause AND ISC AND Beerware AND Public Domain"
+    },
+    {
+      "name": "libmount",
+      "version": "2.41.6-r1",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:0f498b874fd1ce3a0a54c39829a4f33081358a7e6fed4c3710ebbcc4da0a5d62",
+      "size": 127345,
+      "license": "LGPL-2.1-or-later"
+    },
+    {
+      "name": "libncursesw",
+      "version": "6.5_p20251123-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:233f20a6d64d87afbc4b03ad3e7508f5d56af747508c395ba7a6c5f1033b15f0",
+      "size": 158748,
+      "license": "X11"
+    },
+    {
+      "name": "libogg",
+      "version": "1.3.6-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:e0d196fa09a289e2bd9b31a44bb40028d9217f3bff23dbfd04c5bfee188f1f9e",
+      "size": 20889,
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "libopenmpt",
+      "version": "0.8.6-r0",
+      "architecture": "x86_64",
+      "repository": "community",
+      "sha256": "sha256:56fb23c5e419c92d57bdc1eb4b6fc9486f1bc94b2f1d1af83afa635159017930",
+      "size": 658029,
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "libpciaccess",
+      "version": "0.18.1-r1",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:2a3c8bd394ed45bf0f54909be534f4a01a87c3d3892969e776368373543d1208",
+      "size": 14486,
+      "license": "X11"
+    },
+    {
+      "name": "libplacebo",
+      "version": "7.351.0-r0",
+      "architecture": "x86_64",
+      "repository": "community",
+      "sha256": "sha256:b1048a2f8d727e6f56726469c3109bd3fbdeb44ecd1ab2cba57b3f06580132d8",
+      "size": 452251,
+      "license": "LGPL-2.1-or-later"
+    },
+    {
+      "name": "libpng",
+      "version": "1.6.58-r1",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:9020e268d1b8b8a045b55a2ef260e60c295a1ba9ec711be71ac8afab8e4b761b",
+      "size": 95807,
+      "license": "Libpng"
+    },
+    {
+      "name": "libpulse",
+      "version": "17.0-r5",
+      "architecture": "x86_64",
+      "repository": "community",
+      "sha256": "sha256:bdcfc48227c7c733f1bbc2a16127ff830dc048b3f0d22f02ecb89d1bdceed6ad",
+      "size": 567619,
+      "license": "LGPL-2.1-or-later"
+    },
+    {
+      "name": "librist",
+      "version": "0.2.10-r1",
+      "architecture": "x86_64",
+      "repository": "community",
+      "sha256": "sha256:4efdf95a121b18ceb4ece118bff643c4fa3d8d93d03e438c86cb357d44845d7c",
+      "size": 67913,
+      "license": "BSD-2-Clause"
+    },
+    {
+      "name": "librsvg",
+      "version": "2.61.2-r0",
+      "architecture": "x86_64",
+      "repository": "community",
+      "sha256": "sha256:2bcc4d2d3e7f964cde0c560cb7982173e5d8093a3d1d589c492cc31559154d1d",
+      "size": 1767328,
+      "license": "LGPL-2.1-or-later"
+    },
+    {
+      "name": "libsharpyuv",
+      "version": "1.6.0-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:68b1787f41c36e7b6d9def855c5663f2f1ab62fbcc599d38ce3487e75fc883ec",
+      "size": 11999,
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "libsm",
+      "version": "1.2.6-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:03c1c774883b2521e97b9fb64ce9b418fb65f54556df5e343a5891aaef5ad64e",
+      "size": 14373,
+      "license": "MIT"
+    },
+    {
+      "name": "libsndfile",
+      "version": "1.2.2-r2",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:0d6d5bb88c6c0900ccbb2cbd346119bcae1586321bf69a500b30f93a7676cd70",
+      "size": 217711,
+      "license": "LGPL-2.1-or-later"
+    },
+    {
+      "name": "libsodium",
+      "version": "1.0.20-r1",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:3f8a2ce46418f0d498b3beffce8be6b5626fc80fb16317de0cfcedbe4db165d6",
+      "size": 168198,
+      "license": "ISC"
+    },
+    {
+      "name": "libsrt",
+      "version": "1.5.3-r1",
+      "architecture": "x86_64",
+      "repository": "community",
+      "sha256": "sha256:b9bcf0b27116778bc3453c3e9b6175170882cf014a8e683ef1203415f84fcb95",
+      "size": 416301,
+      "license": "MPL-2.0"
+    },
+    {
+      "name": "libssh",
+      "version": "0.11.4-r0",
+      "architecture": "x86_64",
+      "repository": "community",
+      "sha256": "sha256:0a3be8612d0e08324c39b80da7a96bd6fc2e9361f90054a0effc75c2e3a7bc1e",
+      "size": 185792,
+      "license": "LGPL-2.1-or-later BSD-2-Clause"
+    },
+    {
+      "name": "libssl3",
+      "version": "3.5.8-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:f80b76cb5e5a52cfc1ced08f8dc3022adc0ce0a3d6e7741976731b22c71fe310",
+      "size": 379263,
+      "license": "Apache-2.0"
+    },
+    {
+      "name": "libstdc++",
+      "version": "15.2.0-r2",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:d4be2967a06d78b499f5e136323f4ebe51ad367b381933b3369539499c4f5752",
+      "size": 961296,
+      "license": "GPL-2.0-or-later AND LGPL-2.1-or-later"
+    },
+    {
+      "name": "libtheora",
+      "version": "1.2.0-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:9fb060fa99080720f5996ff9af2a184fd6de2a2fc2fca6416207c6270fc7725b",
+      "size": 371060,
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "libudfread",
+      "version": "1.2.0-r0",
+      "architecture": "x86_64",
+      "repository": "community",
+      "sha256": "sha256:244ec3c8129a2a8ad9ad7fa086797db55ba6e59bc948e499761648a28a7e7b07",
+      "size": 13558,
+      "license": "LGPL-2.1-or-later"
+    },
+    {
+      "name": "libunibreak",
+      "version": "6.1-r0",
+      "architecture": "x86_64",
+      "repository": "community",
+      "sha256": "sha256:9ba4de1c5eff20e38e4008e3bb7f645fe8a53479385293bdfc7376997589f49e",
+      "size": 27985,
+      "license": "Zlib"
+    },
+    {
+      "name": "libuuid",
+      "version": "2.41.6-r1",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:e428f43397e863243f17aa85c5b1c3a99adfcb9277d2300b1df7759502db4b6c",
+      "size": 14259,
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "libva",
+      "version": "2.22.0-r1",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:4d5200777f65d547b4114d0f6ad8b76db6a027aa00e03e7b0e2d55f914acabfe",
+      "size": 80715,
+      "license": "MIT"
+    },
+    {
+      "name": "libvdpau",
+      "version": "1.5-r4",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:852ffc4e208b12cc54765b6ee4de0ecd3421de05a2839beb98cb532a65f6a06c",
+      "size": 25936,
+      "license": "MIT"
+    },
+    {
+      "name": "libvorbis",
+      "version": "1.3.7-r2",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:e5b4dfb974396d10b82e97dcfb941827fbe8752075d12350b9aea658ea48a46a",
+      "size": 183899,
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "libvpl",
+      "version": "2.15.0-r1",
+      "architecture": "x86_64",
+      "repository": "community",
+      "sha256": "sha256:c0bde5d3dc2a44bf33fa6ccfacb766956ce32f681a8e7c755ba6f846accfd893",
+      "size": 172957,
+      "license": "MIT"
+    },
+    {
+      "name": "libvpx",
+      "version": "1.15.2-r1",
+      "architecture": "x86_64",
+      "repository": "community",
+      "sha256": "sha256:2a3110cd646e9b3f236dcf857a5e648ebaf344e1e1ab744a341f5438df0d184e",
+      "size": 1332904,
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "libwebp",
+      "version": "1.6.0-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:4d5303958ee38a978501c330c23b62ef98993ae3c30afcd62444723f33da2477",
+      "size": 276584,
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "libwebpdemux",
+      "version": "1.6.0-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:260f497683c456d0739b0320dbcd5ea3fccc1839eb8b2a444a9a6925b76a5b6b",
+      "size": 9618,
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "libwebpmux",
+      "version": "1.6.0-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:ac19a7d33d4e7d4e14a6d6ca9481d3291eb7ef37759d9dc9226ccb47d3c752eb",
+      "size": 21182,
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "libx11",
+      "version": "1.8.12-r1",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:cbc478a642226812ab13688bfe9ec69c86cf0e8e037dba7cfd055e8d7741f30c",
+      "size": 867087,
+      "license": "X11"
+    },
+    {
+      "name": "libxau",
+      "version": "1.0.12-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:61ee983ec9d47821cae9b3e1c8245a5b0b228361839be9b596a42c817b691a9f",
+      "size": 5613,
+      "license": "MIT"
+    },
+    {
+      "name": "libxaw",
+      "version": "1.0.16-r1",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:7ef8276a9f844b8f083aa4326b722096ae49ef2ac05825172ab9e1be357a9dd1",
+      "size": 169852,
+      "license": "MIT"
+    },
+    {
+      "name": "libxcb",
+      "version": "1.17.0-r1",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:f73934506edfdcb6895f04e313481ca48592ac4cec59cdb8fc073a7681bfbd31",
+      "size": 236109,
+      "license": "MIT"
+    },
+    {
+      "name": "libxcursor",
+      "version": "1.2.3-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:9c27a96a5a919f636ecb184aedb8b256c1f2da26b900147b6a57b18a584bd85d",
+      "size": 18661,
+      "license": "MIT"
+    },
+    {
+      "name": "libxdmcp",
+      "version": "1.1.5-r1",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:f134d28babb070834066aa716c303768ed0ede32ac086f3dfbd8cbbac62380ee",
+      "size": 9364,
+      "license": "MIT"
+    },
+    {
+      "name": "libxext",
+      "version": "1.3.6-r2",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:404beb855daf09fdb8d15f177a3608da62825a44497a805675a186171c04eb6c",
+      "size": 25286,
+      "license": "MIT"
+    },
+    {
+      "name": "libxfixes",
+      "version": "6.0.2-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:e1ca88834295d32b1f108377c3bdc78fed924bd4e46d207369a08a245f2bb33f",
+      "size": 8577,
+      "license": "MIT"
+    },
+    {
+      "name": "libxfont2",
+      "version": "2.0.7-r0",
+      "architecture": "x86_64",
+      "repository": "community",
+      "sha256": "sha256:1b82d0e614e29e7cb295981985789e1409fd54f1a804e9c0f0a9913e907532de",
+      "size": 101905,
+      "license": "MIT"
+    },
+    {
+      "name": "libxft",
+      "version": "2.3.9-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:435fdc2934b9777fc7e5846fd8ea6da50d59dae358cca8306e691e9974963607",
+      "size": 38059,
+      "license": "MIT"
+    },
+    {
+      "name": "libxi",
+      "version": "1.8.2-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:9e9f1c6418837ba6aa137c3374a8d64eb9c2654cf6f6cf415afdd629cf3f78bb",
+      "size": 27283,
+      "license": "MIT AND X11"
+    },
+    {
+      "name": "libxinerama",
+      "version": "1.1.5-r4",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:bce660c0211758adc2d337540dd431e030d7b15b10990035ada7fbc34e40ffd0",
+      "size": 4544,
+      "license": "MIT"
+    },
+    {
+      "name": "libxkbcommon",
+      "version": "1.12.2-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:787a1f64c5c1337f3ec6320ef322f550c12566bf0c1ed8055c7acdcfba4a8eb2",
+      "size": 160518,
+      "license": "MIT AND MIT-open-group AND HPND AND HPND-sell-variant AND LicenseRef-digital-equipment-corporation"
+    },
+    {
+      "name": "libxkbfile",
+      "version": "1.1.3-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:c524fa3251f1478387fa1d990498fc6356a3461784ad7a240424ddb53c21e095",
+      "size": 58853,
+      "license": "MIT"
+    },
+    {
+      "name": "libxml2",
+      "version": "2.13.9-r1",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:1af363248efb54914993bbd516c89878c2b5b0c53be0c78bb43d5a3e9a8ceda6",
+      "size": 495335,
+      "license": "MIT"
+    },
+    {
+      "name": "libxmu",
+      "version": "1.2.1-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:775116647bff79a6ff855f20053374899ed3049a808a45758513bea78f019a84",
+      "size": 47330,
+      "license": "MIT"
+    },
+    {
+      "name": "libxpm",
+      "version": "3.5.19-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:687bfd9d2e98e5db1706d80429d6b8ae40734622edd26c9693f46f6882e88cae",
+      "size": 43422,
+      "license": "X11"
+    },
+    {
+      "name": "libxrandr",
+      "version": "1.5.4-r1",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:f4c460ed1515d4326cf2b22e2887e5fcdcf6c755d7925bc2a5d61a6581d06f7c",
+      "size": 16054,
+      "license": "MIT"
+    },
+    {
+      "name": "libxrender",
+      "version": "0.9.12-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:1db190111ef622222deec4d184a2607cefdd08f277960b6ff9f639534e671860",
+      "size": 16238,
+      "license": "MIT"
+    },
+    {
+      "name": "libxshmfence",
+      "version": "1.3.3-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:d34f962e03df0b8a5abb0d853a26ce83da6b8bac83a89bc5e84da9672453253e",
+      "size": 3896,
+      "license": "MIT"
+    },
+    {
+      "name": "libxt",
+      "version": "1.3.1-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:d069e485994b65b05550758c2c57fe4952140d4da4bc64368292509165e6cab2",
+      "size": 153504,
+      "license": "MIT"
+    },
+    {
+      "name": "libxtst",
+      "version": "1.2.5-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:aefecc111d66f1eeac7b5685260b22b339ff42b61965d0f9b98f1d23fd7ae491",
+      "size": 9795,
+      "license": "MIT"
+    },
+    {
+      "name": "libxxf86vm",
+      "version": "1.1.7-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:27f4ca91723d65fd3a0ac37e370d2e840f8251e84503a33ea597db5c3609cfe2",
+      "size": 7652,
+      "license": "MIT"
+    },
+    {
+      "name": "libzmq",
+      "version": "4.3.5-r2",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:4331b37df35395e1ee2f759e6f56f7e91f554833f0ca888051a8fc90c2d5bc13",
+      "size": 261410,
+      "license": "MPL-2.0"
+    },
+    {
+      "name": "lilv-libs",
+      "version": "0.24.26-r0",
+      "architecture": "x86_64",
+      "repository": "community",
+      "sha256": "sha256:388204ab6cfd16d7052114b911dbb78c54cc970304112007b2e13cb4360f20d8",
+      "size": 35857,
+      "license": "ISC"
+    },
+    {
+      "name": "llvm21-libs",
+      "version": "21.1.2-r1",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:a77fe85f4deb73621739a04918badeeee85b1b6e4963186a9bdacde4a46e7db8",
+      "size": 64546232,
+      "license": "Apache-2.0"
+    },
+    {
+      "name": "mbedtls",
+      "version": "3.6.7-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:f5fdffab99d2db6f2035df533614d0aabf3004615bf8397b4bb34fcaccf87aa8",
+      "size": 413082,
+      "license": "Apache-2.0 OR GPL-2.0-or-later"
+    },
+    {
+      "name": "mesa",
+      "version": "25.2.7-r1",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:4a69cfeaa15d9a2f7c4646a8dc4a9b0e6d6b72d87a4ab7fb5e41be51e6d71ed6",
+      "size": 13493228,
+      "license": "MIT AND SGI-B-2.0 AND BSL-1.0"
+    },
+    {
+      "name": "mesa-egl",
+      "version": "25.2.7-r1",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:5c3afa0c1ee03c53022160d39ec2c699070e8ff3685084eaba63ef250fbb267c",
+      "size": 118263,
+      "license": "MIT AND SGI-B-2.0 AND BSL-1.0"
+    },
+    {
+      "name": "mesa-gbm",
+      "version": "25.2.7-r1",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:4ab9115ea7d19cc4bc7fa4556533c8e52297731a1b4b2ddef9df080bd0ae60c5",
+      "size": 6904,
+      "license": "MIT AND SGI-B-2.0 AND BSL-1.0"
+    },
+    {
+      "name": "mesa-gl",
+      "version": "25.2.7-r1",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:5f4147c5077d681c836cb1607f78ac79aba841bc263dee45cfbfb4d72ec0a321",
+      "size": 179404,
+      "license": "MIT AND SGI-B-2.0 AND BSL-1.0"
+    },
+    {
+      "name": "mesa-gles",
+      "version": "25.2.7-r1",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:2a54c9c50997bf091d2b796b14b0b411ccdb24d686ecb9ea9457a32a982cc744",
+      "size": 21755,
+      "license": "MIT AND SGI-B-2.0 AND BSL-1.0"
+    },
+    {
+      "name": "mkfontscale",
+      "version": "1.2.3-r1",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:405cd1d6277fdfe62b57076d9c82e0e582732076bd54d59aa30e10112a4db5b9",
+      "size": 15421,
+      "license": "MIT"
+    },
+    {
+      "name": "mpg123-libs",
+      "version": "1.33.3-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:44115023fb233551b0e098e707142bf7cfe14ffd7110872e3d8111557e2c38fb",
+      "size": 171637,
+      "license": "LGPL-2.1-only"
+    },
+    {
+      "name": "musl",
+      "version": "1.2.5-r23",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:4f3c4a7bf9f51d2c91007e333b17459362ffd881b4a343e8da07b6c50c4f4a0d",
+      "size": 414071,
+      "license": "MIT"
+    },
+    {
+      "name": "ncurses-terminfo-base",
+      "version": "6.5_p20251123-r0",
+      "architecture": "noarch",
+      "repository": "main",
+      "sha256": "sha256:9392f4d87fd9446c7c35dd1a29abe8e3566174e03bd75c848028e46829403f1f",
+      "size": 21855,
+      "license": "X11"
+    },
+    {
+      "name": "nettle",
+      "version": "3.10.2-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:3fb159ab1ad9688f76519b913e93de8c73a00784a9a21d7c75e633c6854f67bd",
+      "size": 343066,
+      "license": "GPL-2.0-or-later OR LGPL-3.0-or-later"
+    },
+    {
+      "name": "numactl",
+      "version": "2.0.18-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:097079d7f1ff861c54ed230069e3f6537b09943fdfdaeabdf18014092e1e2eca",
+      "size": 19900,
+      "license": "LGPL-2.1-only"
+    },
+    {
+      "name": "openbox",
+      "version": "3.6.1-r8",
+      "architecture": "x86_64",
+      "repository": "community",
+      "sha256": "sha256:417d52475eedc22d684a5af90f63848456618c3b776ebc234a2e78ce1fa0c6e0",
+      "size": 184252,
+      "license": "GPL-2.0-or-later"
+    },
+    {
+      "name": "openbox-libs",
+      "version": "3.6.1-r8",
+      "architecture": "x86_64",
+      "repository": "community",
+      "sha256": "sha256:572eb42bee3859d4c54a6368152125c8173452c6c8b251e41966dbedb09e6837",
+      "size": 61732,
+      "license": "GPL-2.0-or-later"
+    },
+    {
+      "name": "opus",
+      "version": "1.5.2-r1",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:ff98e0f815f0f671a620c5601390516173af3c6b56ee11a0e800b3dfed139825",
+      "size": 260287,
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "orc",
+      "version": "0.4.41-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:971a9e9e31397a63c07686749d0d8f2fa17732299645e31f44a4bdbb35790155",
+      "size": 194884,
+      "license": "BSD-2-Clause"
+    },
+    {
+      "name": "pango",
+      "version": "1.56.4-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:9f68b81651661a921c6005ccd0babd85336aacc08f255bd0fed783edba0d3eb0",
+      "size": 260895,
+      "license": "LGPL-2.1-or-later"
+    },
+    {
+      "name": "pcre2",
+      "version": "10.48-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:2ad30ab5e606ac08158e405c29e1c18154c9df30ee3381db75096c023865d7b6",
+      "size": 322469,
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "pixman",
+      "version": "0.46.4-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:6108e456e5b7f7ca3f6eb528f9372de3c1ecbdff738282135ee2aa616b07d9ad",
+      "size": 240295,
+      "license": "MIT"
+    },
+    {
+      "name": "pkgconf",
+      "version": "2.5.1-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:01244a680c1db46539f7e6160ba56476a18f53aefb86cc18354c8d283b6dda71",
+      "size": 53899,
+      "license": "ISC"
+    },
+    {
+      "name": "rav1e-libs",
+      "version": "0.8.1-r0",
+      "architecture": "x86_64",
+      "repository": "community",
+      "sha256": "sha256:def38a5bcd9d41c76d8cb275bd14144e76b560b8e29c9a666c1b785f56644c28",
+      "size": 934138,
+      "license": "BSD-2-Clause custom"
+    },
+    {
+      "name": "serd-libs",
+      "version": "0.32.4-r0",
+      "architecture": "x86_64",
+      "repository": "community",
+      "sha256": "sha256:13d29347349c57e165b820c3fd4886ad982522365b13c0e4c7524e11411079ef",
+      "size": 29466,
+      "license": "ISC"
+    },
+    {
+      "name": "shaderc",
+      "version": "2025.3-r0",
+      "architecture": "x86_64",
+      "repository": "community",
+      "sha256": "sha256:22c0fcd166ec6c112e849144bcd0d4bfd41057c3082d3919148575ab919a0753",
+      "size": 90461,
+      "license": "Apache-2.0"
+    },
+    {
+      "name": "shared-mime-info",
+      "version": "2.4-r6",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:a138d764684eae1b342073c28b7379bfea88b892d505cfb1f032f1a00c0e722b",
+      "size": 370494,
+      "license": "GPL-2.0-or-later"
+    },
+    {
+      "name": "sord-libs",
+      "version": "0.16.18-r0",
+      "architecture": "x86_64",
+      "repository": "community",
+      "sha256": "sha256:5431391b048e268312d1bdced021abadfaf0d93dae3ab97f7af6a8ae213badd0",
+      "size": 11939,
+      "license": "ISC"
+    },
+    {
+      "name": "soxr",
+      "version": "0.1.3-r7",
+      "architecture": "x86_64",
+      "repository": "community",
+      "sha256": "sha256:b583188dec0c115e7a228ee13d67c2b5407513625950876320ce153a5d3c7f79",
+      "size": 74087,
+      "license": "LGPL-2.1-or-later"
+    },
+    {
+      "name": "speexdsp",
+      "version": "1.2.1-r2",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:841f9e2d16b2410624771790f304a8ee3cbb38608e37dd603b7b26bee50e982c",
+      "size": 34804,
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "spirv-tools",
+      "version": "1.4.321.0-r1",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:e94576860fe49a9f7b45d10e02885713dc7bafa958cdd24b462990e703c6b00b",
+      "size": 1736161,
+      "license": "Apache-2.0"
+    },
+    {
+      "name": "sratom",
+      "version": "0.6.18-r0",
+      "architecture": "x86_64",
+      "repository": "community",
+      "sha256": "sha256:9f02e3b6279fcf0596e686556e5c7528557316f4ec5791df3a00fdb8fb22e5f6",
+      "size": 11482,
+      "license": "ISC"
+    },
+    {
+      "name": "ssl_client",
+      "version": "1.37.0-r30",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:50a3c346ad8b095c901dc6ccd12ecce9f7031a740f451b31fbea7ee401eca382",
+      "size": 4681,
+      "license": "GPL-2.0-only"
+    },
+    {
+      "name": "startup-notification",
+      "version": "0.12-r8",
+      "architecture": "x86_64",
+      "repository": "community",
+      "sha256": "sha256:5b2bfb7a236bd171bd9555bb38e7a9fc5e55bbd3588308e599921a78e8121549",
+      "size": 15103,
+      "license": "LGPL-2.0-or-later"
+    },
+    {
+      "name": "tdb-libs",
+      "version": "1.4.14-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:1cfa65ced65857b09c5459a531a475a1806452e50238a75ffefb69bc67c53709",
+      "size": 41008,
+      "license": "LGPL-3.0-or-later"
+    },
+    {
+      "name": "tiff",
+      "version": "4.7.1-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:f98ea19adaa6402a619b07bddeab5d974caf2d1a3f4ecdca1baa02a24837f053",
+      "size": 166475,
+      "license": "libtiff"
+    },
+    {
+      "name": "util-macros",
+      "version": "1.20.2-r0",
+      "architecture": "noarch",
+      "repository": "main",
+      "sha256": "sha256:b28855b906d5a2f83eddd36ce9b01917d45486e1de88db2165b7e652f6004abe",
+      "size": 24902,
+      "license": "MIT"
+    },
+    {
+      "name": "v4l-utils-libs",
+      "version": "1.32.0-r0",
+      "architecture": "x86_64",
+      "repository": "community",
+      "sha256": "sha256:dfdadab664e16b91a34f6f37125741c07757dead78bb9aed0c931a18aa629bdb",
+      "size": 200101,
+      "license": "LGPL-2.0-or-later"
+    },
+    {
+      "name": "vidstab",
+      "version": "1.1.1-r0",
+      "architecture": "x86_64",
+      "repository": "community",
+      "sha256": "sha256:817da1709654705b5e73391b769490173ca2268d436a9a12271c3bbbee8e6be0",
+      "size": 33373,
+      "license": "GPL-2.0-or-later"
+    },
+    {
+      "name": "vulkan-loader",
+      "version": "1.4.321.0-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:2e8b4656df44062b61b890fdfdd49f86fb0f990306b486fa335ac3a874c30039",
+      "size": 173324,
+      "license": "Apache-2.0"
+    },
+    {
+      "name": "wayland-libs-client",
+      "version": "1.24.0-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:020313c601f85a9e91d1ae0d01e9f1e9905d1127b78dce9c278a75cfd52416d2",
+      "size": 22034,
+      "license": "MIT"
+    },
+    {
+      "name": "x264-libs",
+      "version": "0.164.3108-r1",
+      "architecture": "x86_64",
+      "repository": "community",
+      "sha256": "sha256:e34e8beb78e2785e5bf7e20e4ad293cbd6912c60da8ff9d2c5f05ada15ab59dc",
+      "size": 968169,
+      "license": "GPL-2.0-or-later"
+    },
+    {
+      "name": "x265-libs",
+      "version": "4.1-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:201effd22785e467f17a7cad11fa26d4018dae29aa9f4774dd58a3fcefc8badb",
+      "size": 4040605,
+      "license": "GPL-2.0-or-later"
+    },
+    {
+      "name": "xcb-util",
+      "version": "0.4.1-r3",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:778a60a1efa77ea8d949a5277824ea6228ee9303f8de7f24a928b5163a0c2880",
+      "size": 7368,
+      "license": "MIT"
+    },
+    {
+      "name": "xdotool",
+      "version": "4.20251130.1-r0",
+      "architecture": "x86_64",
+      "repository": "community",
+      "sha256": "sha256:9091d2278d769134e2e28bb68bce66b6b4e13acd4b1b9181e0da383c13a3fe9d",
+      "size": 46590,
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "xdpyinfo",
+      "version": "1.4.0-r0",
+      "architecture": "x86_64",
+      "repository": "community",
+      "sha256": "sha256:ef8011311c4fb3fe7f756c7e385b4c8892c07b05d7483b7c1b4292bac468683d",
+      "size": 10236,
+      "license": "custom"
+    },
+    {
+      "name": "xkbcomp",
+      "version": "1.5.0-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:f81cca4a8b37822be5bf52a4ad68a7324d3c90b04a5f8baa0977729e9cb72d7c",
+      "size": 80374,
+      "license": "MIT"
+    },
+    {
+      "name": "xkeyboard-config",
+      "version": "2.46-r0",
+      "architecture": "noarch",
+      "repository": "main",
+      "sha256": "sha256:f4a9c0c83826fa2019ab6c175a81c7276b474a2ef447d8c1fb0bf5a5bbc6bd81",
+      "size": 562906,
+      "license": "MIT"
+    },
+    {
+      "name": "xorg-server-common",
+      "version": "21.1.23-r0",
+      "architecture": "noarch",
+      "repository": "community",
+      "sha256": "sha256:48d06224891d2e078fa9d7da09b34ca8ef62e56bf14e895a95b8daddd3220d31",
+      "size": 8481,
+      "license": "MIT"
+    },
+    {
+      "name": "xset",
+      "version": "1.2.5-r1",
+      "architecture": "x86_64",
+      "repository": "community",
+      "sha256": "sha256:b4b8893ed8e60aa1c76b2e12c182d47a81c69bff03821a1af758dbbc725106a5",
+      "size": 12007,
+      "license": "MIT"
+    },
+    {
+      "name": "xterm",
+      "version": "403-r0",
+      "architecture": "x86_64",
+      "repository": "community",
+      "sha256": "sha256:790e204f358c24c39b4a5c296aaa047507932ffb5c4054ae71771cc7f6f04abb",
+      "size": 316649,
+      "license": "MIT"
+    },
+    {
+      "name": "xvfb",
+      "version": "21.1.23-r0",
+      "architecture": "x86_64",
+      "repository": "community",
+      "sha256": "sha256:5731fc7efea0c26d05b475322395c581a812a28e9509ea9f64bbb2c950e624e1",
+      "size": 707669,
+      "license": "MIT"
+    },
+    {
+      "name": "xvidcore",
+      "version": "1.3.7-r2",
+      "architecture": "x86_64",
+      "repository": "community",
+      "sha256": "sha256:b0512b5beae5afa7ad0669e30f264063100ebdcde75a9e85773c929a8c9a9600",
+      "size": 147711,
+      "license": "GPL-2.0-or-later"
+    },
+    {
+      "name": "xwd",
+      "version": "1.0.9-r2",
+      "architecture": "x86_64",
+      "repository": "community",
+      "sha256": "sha256:cc297aede2d9dc4ce88e6e654bc2b4bb5bd6b4e8f1cfcb58d38db817e18111a0",
+      "size": 13744,
+      "license": "custom"
+    },
+    {
+      "name": "xz-libs",
+      "version": "5.8.4-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:3c8cc415e88c2a097543d9ee828081ec1905e7d0f57a319c8896269b0e00a672",
+      "size": 118501,
+      "license": "GPL-2.0-or-later AND 0BSD AND Public-Domain AND LGPL-2.1-or-later"
+    },
+    {
+      "name": "zimg",
+      "version": "3.0.6-r0",
+      "architecture": "x86_64",
+      "repository": "community",
+      "sha256": "sha256:8c0c85f4421babc44b626fe316b6dadec9e9a8c0b929bcb3d9b4a972291bd52a",
+      "size": 225719,
+      "license": "WTFPL"
+    },
+    {
+      "name": "zix-libs",
+      "version": "0.6.2-r0",
+      "architecture": "x86_64",
+      "repository": "community",
+      "sha256": "sha256:716d89dd7c2b55768b4033ce0c4772ed12665eaf1e35a457ceb86342dc3a2cbb",
+      "size": 20893,
+      "license": "ISC"
+    },
+    {
+      "name": "zlib",
+      "version": "1.3.2-r0",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:f56dea63692059bd65854bb179b7551971a441000b0d98c5b031291ca0450b56",
+      "size": 56191,
+      "license": "Zlib"
+    },
+    {
+      "name": "zstd-libs",
+      "version": "1.5.7-r2",
+      "architecture": "x86_64",
+      "repository": "main",
+      "sha256": "sha256:d5fcc58f7f071a5658d97b09838668e4443203217631992915b8e60656904104",
+      "size": 373813,
+      "license": "BSD-3-Clause OR GPL-2.0-or-later"
+    }
+  ]
+}

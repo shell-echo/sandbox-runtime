@@ -140,6 +140,19 @@ other label. The Phase 6 candidate schema separately requires its
 per-platform installed-set label. Slice 7 must publish the stronger Phase 6
 multi-platform supply-chain identity.
 
+Slice 6 isolates the package drift discovered in the historical recursive
+fetch: only the candidate recipe has new closed per-architecture APK locks.
+The lock binds every archive's name, version, architecture, source repository,
+SHA-256, size and declared license; local staging verifies the entire set
+before a network-disabled Docker build, and the Dockerfile independently
+checks archive and installed-set digests. Candidate identity and OCI labels
+also bind the exact lock file digest. The old Phase 5 Dockerfile/build script,
+signed manifest and publication workflow are unchanged. The candidate broker
+is built with Go 1.26.8 after a Go 1.26.5 image scan reported eight high-
+severity standard-library findings; a new scan reported zero high/critical
+findings in the arm64 OS packages and broker. This scan is point-in-time
+component evidence, not a standing security or release guarantee.
+
 Business tenant authorization remains caller-owned. Provider performs only the
 irreversible opaque binding-digest consistency checks defined by the private
 handoff contract.

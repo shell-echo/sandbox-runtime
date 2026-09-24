@@ -121,6 +121,65 @@ and closed per-architecture APK lock. The Phase 5 signed artifact, historical
 recipe and publication lock remain untouched; neither the failed native gate
 nor the passing Go suites establishes Slice 6 readiness.
 
+Checkpoint 2026-09-24: separate candidate-only arm64/amd64 locks now enumerate
+176/177 recursive APKs with exact bytes, source repository and license fields.
+The new recipe verifies the staged set twice and installs offline; the local
+candidate identity binds the lock file and OCI labels, while the historical
+Phase 5 build/publication inputs remain unchanged. The arm64 native image
+integration now passes a deterministic double build, real X11 display,
+broker-v2 RTP, input/close, and exact test cleanup. A diagnostic Go 1.26.5
+image had eight high-severity broker findings; rebuilding with the candidate-
+only Go 1.26.8 pin yielded zero high/critical Alpine or broker findings in a
+point-in-time Trivy scan. This is component evidence only. An amd64 native
+runner, full three-Provider/Vault/Docker gate, signed multi-platform artifact,
+redistribution-license clearance and Slice 6 manifest are still open; the
+counter stays 5/15.
+
+The first scan (Go 1.26.5 broker) reported CVE-2026-33818,
+CVE-2026-39821, CVE-2026-46600, CVE-2026-56853, CVE-2026-56858,
+CVE-2026-56859, CVE-2026-56860 and CVE-2026-56862 as HIGH. The replacement
+toolchain's official macOS arm64 archive SHA-256 was verified against
+`https://go.dev/dl/` as
+`a012b25b571bd0138a03dcd25375ceba866fe5ca822f426d2c66a4de56fd3f4b`;
+its extracted `go/bin/go` SHA-256 matched the installed toolchain at
+`2ebc27dd4e38e9b86a9f41df0307785f4f7e2997e4be761a7b4af04b41a0de57`.
+The tagged native integration also inspected the actual image broker's
+`go version -m` metadata and candidate/lock/archive/installed-set labels.
+Trivy 0.74.0 with vulnerability DB v2 updated 2026-09-24 09:10:28 UTC
+reported zero HIGH/CRITICAL findings in both Alpine and Go broker for the
+repaired arm64 candidate at 2026-09-24 11:18:51 UTC and the cross-built amd64
+candidate at 11:23:18 UTC. The amd64 offline build repeated the same image ID
+`sha256:db076907ce82d27cd0def19de00c70abf498c72e9198af3e128327a410013d1f`,
+but no amd64 native runtime gate has run. These results are a dated scanner
+observation, not future vulnerability absence or license clearance.
+
+Targeted local-use license review followed the exact signed APKs' `.PKGINFO`
+`origin`/aports commit to their versioned APKBUILDs, then checked the upstream
+release's `COPYING`/`LICENSE`/`PATENTS` text. The five `custom`-tagged packages
+in the actual arm64 image are:
+
+| Package | Exact source and observed grant |
+| --- | --- |
+| `aom-libs` 3.14.1-r0 | [aports recipe](https://gitlab.alpinelinux.org/alpine/aports/-/blob/ab59db22db1f671fb8e69c79d4a10c273c862292/main/aom/APKBUILD) points to `libaom-3.14.1`; its release `LICENSE` permits use and redistribution subject to notices, and `PATENTS` has separate Alliance for Open Media Patent License 1.0 conditions. |
+| `rav1e-libs` 0.8.1-r0 | [aports recipe](https://gitlab.alpinelinux.org/alpine/aports/-/blob/0f7061c11f34e1653f80475dd8e8917016fe4634/community/rav1e/APKBUILD) points to [rav1e v0.8.1](https://github.com/xiph/rav1e/tree/v0.8.1); release `LICENSE` is BSD-2-Clause and `PATENTS` is Alliance for Open Media Patent License 1.0. |
+| `font-alias` 1.0.5-r0 | [aports recipe](https://gitlab.alpinelinux.org/alpine/aports/-/blob/ae9232982eb677d120e663a4ead0cabc81b244d8/main/font-alias/APKBUILD) points to X.Org 1.0.5; its `COPYING` permits use, modification and copies subject to retained copyright/terms. |
+| `xdpyinfo` 1.4.0-r0 | [aports recipe](https://gitlab.alpinelinux.org/alpine/aports/-/blob/743b0d2f60b7518aa3e531ea7d407667f96e2818/community/xdpyinfo/APKBUILD) points to X.Org 1.4.0; its `COPYING` permits use/copy/modification/distribution subject to copyright and permission notices. |
+| `xwd` 1.0.9-r2 | [aports recipe](https://gitlab.alpinelinux.org/alpine/aports/-/blob/9e2b12b780de7b2605b877273ec4f3179e619130/community/xwd/APKBUILD) points to X.Org 1.0.9; its `COPYING` has X.Org-style use/copy/modification terms and retained-notice conditions. |
+
+All five downloaded upstream archives matched the exact SHA-512 in their
+respective APKBUILDs. This resolves the `custom` label's local-use ambiguity,
+not its distribution obligations. `glslang-libs` and `libelf` carry GPL-3.0-
+or-later among their package-level declarations; no local-running conflict
+was identified, but their exact component/file licenses remain a Slice 7
+distribution review. The actual image's `ffmpeg -buildconf` reports
+`--enable-gpl`, `--enable-version3` and GPL-associated external libraries
+including x264/x265/xvid; it is not a blanket LGPL build. The candidate is
+kept local with `pull=never`, no registry push or third-party artifact upload.
+Neither the `custom` tag nor this bounded local-use inspection is a legal
+opinion or a release license clearance. Slice 7 must resolve actual linked
+components, notices, applicable corresponding source and build materials,
+and any specialist patent/commercial questions before external distribution.
+
 Checkpoint 2026-09-24: Browser/Desktop role v3 configuration now refuses raw
 TLS files and static material selections. Their candidate application graph
 resolves only the matching Provider-instance attach edge and the separate

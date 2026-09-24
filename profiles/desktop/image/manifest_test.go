@@ -18,8 +18,8 @@ func TestManifestIsStrictAndComplete(t *testing.T) {
 	if manifest.Source.Manifests["linux/amd64"].PackageArchiveSetDigest == manifest.Source.Manifests["linux/arm64/v8"].PackageArchiveSetDigest {
 		t.Fatal("architecture-specific package archive locks collapsed")
 	}
-	if manifest.Outputs.Platforms["linux/amd64"].ImageDigest == manifest.Outputs.Platforms["linux/arm64/v8"].ImageDigest {
-		t.Fatal("architecture-specific output locks collapsed")
+	if manifest.Outputs.VCSReference != "pending-phase6-locked" || len(manifest.Outputs.Platforms) != 0 {
+		t.Fatal("new candidate claimed old reproducible outputs")
 	}
 }
 
@@ -45,10 +45,8 @@ func TestManifestRejectsUnsafeChanges(t *testing.T) {
 		"raw display reference": func(m *Manifest) { m.Display.Reference = "/tmp/.X11-unix/X99" },
 		"arbitrary method":      func(m *Manifest) { m.Broker.Methods = append(m.Broker.Methods, "exec") },
 		"unbounded request":     func(m *Manifest) { m.Broker.MaxRequest = 0 },
-		"output drift": func(m *Manifest) {
-			output := m.Outputs.Platforms["linux/amd64"]
-			output.ImageDigest = "sha256:" + strings.Repeat("0", 64)
-			m.Outputs.Platforms["linux/amd64"] = output
+		"forged output": func(m *Manifest) {
+			m.Outputs.Platforms["linux/amd64"] = Output{ImageDigest: "sha256:" + strings.Repeat("0", 64), Evidence: "native"}
 		},
 		"missing attestation": func(m *Manifest) { m.Provenance.SignedAttestationRequiredForAdapter = false },
 	}
@@ -122,19 +120,54 @@ func TestBuildDefinitionKeepsDesktopBoundary(t *testing.T) {
 		"-trimpath -buildvcs=false -ldflags=-buildid=",
 		"--provenance=false",
 		"SOURCE_DATE_EPOCH=0",
-		manifest.Source.Manifests["linux/amd64"].Digest,
-		manifest.Source.Manifests["linux/arm64/v8"].Digest,
-		strings.TrimPrefix(manifest.Source.Manifests["linux/amd64"].PackageArchiveSetDigest, "sha256:"),
-		strings.TrimPrefix(manifest.Source.Manifests["linux/arm64/v8"].PackageArchiveSetDigest, "sha256:"),
 	} {
 		if !strings.Contains(buildText, required) {
 			t.Fatalf("build script missing %q", required)
 		}
 	}
+	candidateDockerfile, err := os.ReadFile("Dockerfile.phase6-candidate")
+	if err != nil {
+		t.Fatal(err)
+	}
+	candidateText := string(candidateDockerfile)
+	for _, required := range []string{"COPY --chmod=0644 apks/", "sha256sum -c /tmp/SHA256SUMS", "apk add --no-network", "candidate-classification=\"local-candidate-non-release\"", "candidate-apk-lock-digest=\"sha256:${APK_LOCK_SHA256}\""} {
+		if !strings.Contains(candidateText, required) {
+			t.Fatalf("Phase 6 candidate Dockerfile missing %q", required)
+		}
+	}
+	if strings.Contains(candidateText, "apk fetch --recursive") || strings.Contains(candidateText, "apk update") {
+		t.Fatal("Phase 6 candidate Dockerfile re-resolves live package dependencies")
+	}
+	candidateBuild, err := os.ReadFile("build-phase6-locked.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, required := range []string{"go1.26.8", "stage-desktop-phase6-apks", "--network none", "--no-cache", "APK_LOCK_SHA256"} {
+		if !strings.Contains(string(candidateBuild), required) {
+			t.Fatalf("Phase 6 candidate build missing %q", required)
+		}
+	}
+	candidateRecord, err := os.ReadFile("build-phase6-candidate.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(candidateRecord), "status --porcelain --untracked-files=all") {
+		t.Fatal("candidate recording does not reject a dirty source tree")
+	}
+	for platform, source := range manifest.Source.Manifests {
+		path, err := APKLockPath(platform)
+		if err != nil {
+			t.Fatal(err)
+		}
+		lock, err := LoadAPKLock(path)
+		if err != nil || lock.ArchiveDigest != source.PackageArchiveSetDigest || lock.InstalledDigest != source.InstalledSetDigest || lock.BaseImageDigest != source.Digest {
+			t.Fatalf("candidate manifest and %s lock drift: %v", platform, err)
+		}
+	}
 }
 
 func TestPublicationWorkflowIsManualNativeAndIndependentlyVerified(t *testing.T) {
-	manifest, err := Load(LocalCandidateManifestPath)
+	manifest, err := LoadPhase5ProductionRelease(Phase5ProductionReleaseManifestPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,8 +184,7 @@ func TestPublicationWorkflowIsManualNativeAndIndependentlyVerified(t *testing.T)
 		"go-version: 1.26.5",
 		manifest.Source.Manifests["linux/amd64"].Digest,
 		manifest.Source.Manifests["linux/arm64/v8"].Digest,
-		manifest.Source.Manifests["linux/amd64"].PackageArchiveSetDigest,
-		manifest.Source.Manifests["linux/arm64/v8"].PackageArchiveSetDigest,
+		"./profiles/desktop/image/build.sh",
 		"SANDBOX_RUNTIME_DESKTOP_IMAGE_INTEGRATION",
 		"actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a",
 		"independent-verify:",

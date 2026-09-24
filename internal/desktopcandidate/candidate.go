@@ -52,6 +52,7 @@ type Manifest struct {
 	BaseImageDigest         string `json:"base_image_digest"`
 	PackageArchiveSetDigest string `json:"package_archive_set_digest"`
 	InstalledSetDigest      string `json:"installed_set_digest"`
+	APKLockDigest           string `json:"apk_lock_digest"`
 	DockerfileDigest        string `json:"dockerfile_digest"`
 	EntrypointDigest        string `json:"entrypoint_digest"`
 	BuildScriptDigest       string `json:"build_script_digest"`
@@ -84,7 +85,20 @@ func New(sourceRoot, platform, imageDigest, configDigest string) (Manifest, erro
 		return Manifest{}, ErrInvalidCandidate
 	}
 	imageRoot := filepath.Join(root, "profiles", "desktop", "image")
-	dockerfileDigest, err := fileDigest(filepath.Join(imageRoot, "Dockerfile"))
+	lockPath, err := desktopimage.APKLockPath(platform)
+	if err != nil {
+		return Manifest{}, ErrInvalidCandidate
+	}
+	apkLock, err := desktopimage.LoadAPKLock(filepath.Join(imageRoot, lockPath))
+	if err != nil || apkLock.ArchiveDigest != source.PackageArchiveSetDigest ||
+		apkLock.InstalledDigest != source.InstalledSetDigest || apkLock.BaseImageDigest != source.Digest {
+		return Manifest{}, ErrInvalidCandidate
+	}
+	apkLockDigest, err := fileDigest(filepath.Join(imageRoot, lockPath))
+	if err != nil {
+		return Manifest{}, err
+	}
+	dockerfileDigest, err := fileDigest(filepath.Join(imageRoot, "Dockerfile.phase6-candidate"))
 	if err != nil {
 		return Manifest{}, err
 	}
@@ -92,7 +106,7 @@ func New(sourceRoot, platform, imageDigest, configDigest string) (Manifest, erro
 	if err != nil {
 		return Manifest{}, err
 	}
-	buildScriptDigest, err := fileDigest(filepath.Join(imageRoot, "build.sh"))
+	buildScriptDigest, err := fileDigest(filepath.Join(imageRoot, "build-phase6-locked.sh"))
 	if err != nil {
 		return Manifest{}, err
 	}
@@ -104,7 +118,7 @@ func New(sourceRoot, platform, imageDigest, configDigest string) (Manifest, erro
 		SchemaVersion: SchemaID, Version: Version, Classification: Classification,
 		SourceRevision: revision, SourceTreeDigest: treeDigest, GoVersion: runtime.Version(), Platform: platform,
 		ProfileID: desktopimage.ProfileID, BrokerProtocol: desktopimage.BrokerProtocol, SessionProtocol: desktopbroker.SessionProtocolV2ID,
-		BaseImageDigest: source.Digest, PackageArchiveSetDigest: source.PackageArchiveSetDigest,
+		BaseImageDigest: source.Digest, PackageArchiveSetDigest: source.PackageArchiveSetDigest, APKLockDigest: apkLockDigest,
 		InstalledSetDigest: source.InstalledSetDigest, DockerfileDigest: dockerfileDigest,
 		EntrypointDigest: entrypointDigest, BuildScriptDigest: buildScriptDigest, CandidateScriptDigest: candidateScriptDigest,
 		ImageDigest: imageDigest, ConfigDigest: configDigest,
@@ -119,12 +133,12 @@ func New(sourceRoot, platform, imageDigest, configDigest string) (Manifest, erro
 
 func (m Manifest) Validate() error {
 	if m.SchemaVersion != SchemaID || m.Version != Version || m.Classification != Classification ||
-		!revisionPattern.MatchString(m.SourceRevision) || m.GoVersion != "go1.26.5" ||
+		!revisionPattern.MatchString(m.SourceRevision) || m.GoVersion != "go1.26.8" ||
 		(m.Platform != "linux/amd64" && m.Platform != "linux/arm64/v8") || m.ProfileID != desktopimage.ProfileID ||
 		m.BrokerProtocol != desktopimage.BrokerProtocol || m.SessionProtocol != desktopbroker.SessionProtocolV2ID {
 		return ErrInvalidCandidate
 	}
-	for _, digest := range []string{m.SourceTreeDigest, m.BaseImageDigest, m.PackageArchiveSetDigest, m.InstalledSetDigest, m.DockerfileDigest, m.EntrypointDigest, m.BuildScriptDigest, m.CandidateScriptDigest, m.BuildArgumentsDigest, m.ImageDigest, m.ConfigDigest, m.ManifestDigest} {
+	for _, digest := range []string{m.SourceTreeDigest, m.BaseImageDigest, m.PackageArchiveSetDigest, m.InstalledSetDigest, m.APKLockDigest, m.DockerfileDigest, m.EntrypointDigest, m.BuildScriptDigest, m.CandidateScriptDigest, m.BuildArgumentsDigest, m.ImageDigest, m.ConfigDigest, m.ManifestDigest} {
 		if !digestPattern.MatchString(digest) {
 			return ErrInvalidCandidate
 		}
@@ -156,11 +170,22 @@ func (m Manifest) VerifySource(sourceRoot string) error {
 	if err != nil || !ok || source.Digest != m.BaseImageDigest || source.PackageArchiveSetDigest != m.PackageArchiveSetDigest || source.InstalledSetDigest != m.InstalledSetDigest {
 		return ErrInvalidCandidate
 	}
+	lockPath, err := desktopimage.APKLockPath(m.Platform)
+	if err != nil {
+		return ErrInvalidCandidate
+	}
+	lock, err := desktopimage.LoadAPKLock(filepath.Join(root, "profiles", "desktop", "image", lockPath))
+	lockDigest, digestErr := fileDigest(filepath.Join(root, "profiles", "desktop", "image", lockPath))
+	if err != nil || digestErr != nil || lockDigest != m.APKLockDigest ||
+		lock.ArchiveDigest != m.PackageArchiveSetDigest || lock.InstalledDigest != m.InstalledSetDigest ||
+		lock.BaseImageDigest != m.BaseImageDigest {
+		return ErrInvalidCandidate
+	}
 	for path, want := range map[string]string{
-		"profiles/desktop/image/Dockerfile":                m.DockerfileDigest,
-		"profiles/desktop/image/entrypoint.sh":             m.EntrypointDigest,
-		"profiles/desktop/image/build.sh":                  m.BuildScriptDigest,
-		"profiles/desktop/image/build-phase6-candidate.sh": m.CandidateScriptDigest,
+		"profiles/desktop/image/Dockerfile.phase6-candidate": m.DockerfileDigest,
+		"profiles/desktop/image/entrypoint.sh":               m.EntrypointDigest,
+		"profiles/desktop/image/build-phase6-locked.sh":      m.BuildScriptDigest,
+		"profiles/desktop/image/build-phase6-candidate.sh":   m.CandidateScriptDigest,
 	} {
 		got, digestErr := fileDigest(filepath.Join(root, filepath.FromSlash(path)))
 		if digestErr != nil || got != want {
@@ -352,8 +377,8 @@ func digestSourceEntries(entries []sourceEntry) string {
 
 func (m Manifest) calculateBuildArgumentsDigest() string {
 	value := struct {
-		Platform, SourceRevision, GoVersion, BaseImageDigest, PackageArchiveSetDigest, InstalledSetDigest, DockerfileDigest, EntrypointDigest, BuildScriptDigest, CandidateScriptDigest string
-	}{m.Platform, m.SourceRevision, m.GoVersion, m.BaseImageDigest, m.PackageArchiveSetDigest, m.InstalledSetDigest, m.DockerfileDigest, m.EntrypointDigest, m.BuildScriptDigest, m.CandidateScriptDigest}
+		Platform, SourceRevision, GoVersion, BaseImageDigest, PackageArchiveSetDigest, InstalledSetDigest, APKLockDigest, DockerfileDigest, EntrypointDigest, BuildScriptDigest, CandidateScriptDigest string
+	}{m.Platform, m.SourceRevision, m.GoVersion, m.BaseImageDigest, m.PackageArchiveSetDigest, m.InstalledSetDigest, m.APKLockDigest, m.DockerfileDigest, m.EntrypointDigest, m.BuildScriptDigest, m.CandidateScriptDigest}
 	return digestJSON(value)
 }
 

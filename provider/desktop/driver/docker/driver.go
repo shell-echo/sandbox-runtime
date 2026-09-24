@@ -292,14 +292,20 @@ func validateCandidateImage(info imageInfo, manifest desktopimage.Manifest, cand
 	}
 	source, ok := manifest.Source.Manifests[platform]
 	labels := info.labels
+	wantIdentityLabels := map[string]string{
+		"io.github.shell-echo.sandbox-runtime.profile":                      candidate.ProfileID,
+		"io.github.shell-echo.sandbox-runtime.candidate-classification":     desktopcandidate.Classification,
+		"io.github.shell-echo.sandbox-runtime.candidate-apk-lock-digest":    candidate.APKLockDigest,
+		"io.github.shell-echo.sandbox-runtime.desktop-broker-protocol":      candidate.BrokerProtocol,
+		"io.github.shell-echo.sandbox-runtime.desktop-broker-path":          desktopimage.BrokerPath,
+		"io.github.shell-echo.sandbox-runtime.package-archive-set-digest":   candidate.PackageArchiveSetDigest,
+		"io.github.shell-echo.sandbox-runtime.installed-set-digest":         candidate.InstalledSetDigest,
+		"io.github.shell-echo.sandbox-runtime.provenance.source-digest":     candidate.BaseImageDigest,
+		"io.github.shell-echo.sandbox-runtime.provenance.source-date-epoch": "0",
+	}
 	if !ok || platform != candidate.Platform || source.Digest != candidate.BaseImageDigest ||
 		source.PackageArchiveSetDigest != candidate.PackageArchiveSetDigest || source.InstalledSetDigest != candidate.InstalledSetDigest ||
-		labels["io.github.shell-echo.sandbox-runtime.profile"] != candidate.ProfileID ||
-		labels["io.github.shell-echo.sandbox-runtime.desktop-broker-protocol"] != candidate.BrokerProtocol ||
-		labels["io.github.shell-echo.sandbox-runtime.desktop-broker-path"] != desktopimage.BrokerPath ||
-		labels["io.github.shell-echo.sandbox-runtime.package-archive-set-digest"] != candidate.PackageArchiveSetDigest ||
-		labels["io.github.shell-echo.sandbox-runtime.installed-set-digest"] != candidate.InstalledSetDigest ||
-		labels["io.github.shell-echo.sandbox-runtime.provenance.source-digest"] != candidate.BaseImageDigest ||
+		!exactIdentityLabels(labels, wantIdentityLabels) ||
 		labels["org.opencontainers.image.base.digest"] != candidate.BaseImageDigest ||
 		labels["org.opencontainers.image.base.name"] != desktopimage.SourceRepository ||
 		labels["org.opencontainers.image.revision"] != candidate.SourceRevision ||

@@ -46,6 +46,36 @@ VCS stamping, and no build ID. The final scratch repack normalizes build-owned
 timestamps and contains no inherited port metadata. The runtime entrypoint
 rejects arguments and starts only the fixed Desktop broker.
 
+Phase 6 does **not** use that historical recipe or its signed Phase 5 output.
+The non-release candidate uses `Dockerfile.phase6-candidate`,
+`build-phase6-locked.sh`, and separate closed amd64/arm64 APK locks. Each lock
+records exact architecture, repository, package version, archive SHA-256, size,
+and declared license for every recursive dependency (177 amd64, 176 arm64).
+Staging verifies every byte and refuses missing, extra, symlinked, or modified
+archives; the Docker build runs with network disabled, checks `SHA256SUMS`,
+installs only the staged signed APKs, and verifies the complete installed set.
+The candidate uses Go 1.26.8, bound to its source manifest and build script.
+These inputs never update `build.sh`, the Phase 5 signed manifest, or the
+manual publication workflow.
+
+On a clean committed source tree, build and record a candidate identity
+outside the repository with the matching toolchain and an optional preverified
+cache:
+
+```bash
+SANDBOX_RUNTIME_DESKTOP_APK_CACHE=/absolute/private/apk-cache \
+  mise exec go@1.26.8 -- ./build-phase6-candidate.sh \
+  linux/arm64/v8 /absolute/private/desktop-phase6-candidate.json
+```
+
+Without the cache, staging fetches only the lock's fixed HTTPS URLs, with no
+redirect, proxy, mirror, or dependency re-resolution, and fails closed if an
+archive is unavailable or differs. The candidate image carries distinct
+classification, APK-lock, archive-set, and installed-set labels; Provider
+requires the matching mode-0600 candidate identity. It is neither a signed
+release nor multi-platform native qualification. The archived old
+`reproducible_outputs` values do not apply to this rebuilt candidate.
+
 The broker owns one `1280x720x24` Xvfb display and Openbox session. X11 TCP is
 disabled. Its `0600` Unix socket accepts only strict, single-object `probe` and
 `describe` messages under protocol `sandbox.runtime/desktop-broker/v1`.

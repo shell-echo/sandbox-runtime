@@ -199,14 +199,14 @@ func (m Manifest) Validate() error {
 		"linux/amd64": {
 			Digest:                  "sha256:1beb0dc0a51de7ff38e3b5274078a2e0b81113ba5c7535e1a03d5913a5edbda3",
 			Architecture:            "amd64",
-			PackageArchiveSetDigest: "sha256:872446c241d2c85db9995b1e12ca4246954f76883108f1e16415d8a0e711c4a6",
-			InstalledSetDigest:      "sha256:ea4e22c1f7011c6cfc975d64c5f2d110b3432bc5ae78064b94f7afa752e0a588",
+			PackageArchiveSetDigest: "sha256:c067649357db75300c5eaa2b12a3c3eb11dcc406b92bf67374d62ca17de5f3e5",
+			InstalledSetDigest:      "sha256:ddf5a3a93e3a97a50758ef1ba017c57143af22d537ec70755cfbb6b38583d601",
 		},
 		"linux/arm64/v8": {
 			Digest:       "sha256:d858bb5442632a31bd4bca6c5e601dbe6b536fd7942092ea6a08a0a95805693c",
 			Architecture: "arm64", Variant: "v8",
-			PackageArchiveSetDigest: "sha256:f6a17c5b4031b4068ae345333cdfc3d09a3ef30dfe77a461f13306d3cf5ac656",
-			InstalledSetDigest:      "sha256:25e5d714836bacf2e421a1d586d7c8d64a65887036989cc08810697a6dd8ec31",
+			PackageArchiveSetDigest: "sha256:9384be286d35a86578e2f444acf636ff129c048e5c28d9760dd47187e2b7ba2c",
+			InstalledSetDigest:      "sha256:2290a8c1abee9457d1e47d4889e421538cb0f067eda2325c0e73d53d5c7f28fb",
 		},
 	}
 	if len(m.Source.Manifests) != len(wantPlatforms) {
@@ -259,22 +259,12 @@ func (m Manifest) Validate() error {
 	if m.Network != (Network{Mode: "restricted", EgressGatewayRequired: true, BrokerUnixOnly: true, ListeningTCPPorts: 0}) {
 		return invalid("network authority is invalid")
 	}
-	wantOutputs := map[string]Output{
-		"linux/amd64":    {ImageDigest: "sha256:47999b3fb061fee77a1d1ab53d8bc9045d5082dc00cc6e9626ff6e0e113721d6", Evidence: "double_cross_build"},
-		"linux/arm64/v8": {ImageDigest: "sha256:ec8da6b3e48d145a960d1faa3a5a7202c43221de0f3a7d73e6f62783cc92efe6", Evidence: "native_build_after_double_build_and_smoke"},
-	}
-	if m.Outputs.VCSReference != "slice4-output" || len(m.Outputs.Platforms) != len(wantOutputs) {
-		return invalid("reproducible output authority is invalid")
-	}
-	for platform, want := range wantOutputs {
-		got, ok := m.Outputs.Platforms[platform]
-		if !ok || got != want || !digestPattern.MatchString(got.ImageDigest) {
-			return invalid("reproducible output %q is invalid", platform)
-		}
+	if m.Outputs.VCSReference != "pending-phase6-locked" || len(m.Outputs.Platforms) != 0 {
+		return invalid("unverified Phase 6 candidate output was claimed")
 	}
 	if m.Provenance.UpstreamSource != "https://github.com/alpinelinux/docker-alpine" ||
 		m.Provenance.UpstreamIndexDigest != m.Source.IndexDigest ||
-		m.Provenance.BuildContext != "profiles/desktop/image" || m.Provenance.GoVersion != "go1.26.5" ||
+		m.Provenance.BuildContext != "profiles/desktop/image" || m.Provenance.GoVersion != "go1.26.8" ||
 		!m.Provenance.ReproducibleInputs || !m.Provenance.NativeDoubleBuildRequired ||
 		!m.Provenance.SignedAttestationRequiredForAdapter ||
 		m.Provenance.IndependentVerificationWorkflowPath != "github.com/shell-echo/sandbox-runtime/.github/workflows/desktop-image.yml" {
