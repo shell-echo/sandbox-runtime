@@ -4,11 +4,13 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/tls"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 	"sync"
 	"time"
 
@@ -18,6 +20,8 @@ import (
 	"github.com/shell-echo/sandbox-runtime/internal/desktopbroker"
 	"github.com/shell-echo/sandbox-runtime/internal/desktopcandidate"
 	"github.com/shell-echo/sandbox-runtime/internal/desktophandoff"
+	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
+	"github.com/shell-echo/sandbox-runtime/internal/phase6tls"
 	"github.com/shell-echo/sandbox-runtime/internal/secretfile"
 	"github.com/shell-echo/sandbox-runtime/internal/secretref"
 	"github.com/shell-echo/sandbox-runtime/internal/tlsmaterial"
@@ -45,8 +49,8 @@ import (
 )
 
 func newProductionDesktopProvider(ctx context.Context, cfg *config.ProviderProcessConfig, state *providerpostgres.Store, pool *pgxpool.Pool, registry *secretref.Registry) (*productionProviderComposition, error) { //nolint:cyclop
-	if cfg == nil || cfg.SchemaVersion == config.ProviderProductionSchemaV3 {
-		return nil, errors.New("Desktop Provider v3 is not implemented")
+	if cfg == nil {
+		return nil, errors.New("Desktop Provider configuration is required")
 	}
 	stack := &providerCloseStack{}
 	fail := func(err error) (*productionProviderComposition, error) { return nil, errors.Join(err, stack.close()) }
@@ -71,7 +75,7 @@ func newProductionDesktopProvider(ctx context.Context, cfg *config.ProviderProce
 	var bridgePrivateKey ed25519.PrivateKey
 	var bridgePublicKey ed25519.PublicKey
 	if desktopConfig.ExecutorURL != "" {
-		if cfg.SchemaVersion == config.ProviderProductionSchemaV2 {
+		if cfg.SchemaVersion == config.ProviderProductionSchemaV2 || cfg.SchemaVersion == config.ProviderProductionSchemaV3 {
 			material, resolveErr := registry.Resolve(ctx, desktopConfig.ExecutorBridgePrivateKeyBindingID, secretref.PurposeExecutorBridgeKey, secretref.SystemTenant)
 			if resolveErr == nil {
 				bridgePrivateKey, err = parseDesktopBridgePrivateKey(material.Bytes)
@@ -104,6 +108,9 @@ func newProductionDesktopProvider(ctx context.Context, cfg *config.ProviderProce
 		candidate, candidateErr := desktopcandidate.Load(desktopConfig.LocalCandidateManifestFile)
 		if candidateErr != nil || candidate.ImageDigest != dockerConfig.Image || candidate.Platform != "linux/"+desktopConfig.Architecture && !(desktopConfig.Architecture == "arm64" && candidate.Platform == "linux/arm64/v8") {
 			return fail(errors.New("load Phase 6 local Desktop candidate authority"))
+		}
+		if cfg.SchemaVersion == config.ProviderProductionSchemaV3 && candidate.VerifySource(desktopConfig.LocalCandidateSourceRoot) != nil {
+			return fail(errors.New("Phase 6 local Desktop candidate source does not match the loaded identity"))
 		}
 		desktopRuntime, err = desktopdocker.NewLocalCandidate(ctx, runtimeOptions, candidate, network)
 	} else {
@@ -191,15 +198,50 @@ func newProductionDesktopProvider(ctx context.Context, cfg *config.ProviderProce
 	if err != nil {
 		return fail(err)
 	}
-	providerServer, _, err := newProductionProviderTransport(ctx, cfg, protected, source, registry)
+	providerServer, contractTLSProbe, err := newProductionProviderTransport(ctx, cfg, protected, source, registry)
 	if err != nil {
 		return fail(err)
 	}
 	mediaRuntime := providerdesktop.MediaRuntime(desktopRuntime)
+	var executorTLSProbe func(context.Context) error
 	if desktopConfig.ExecutorURL != "" {
+		executorTimeout := time.Duration(min(dockerConfig.OperationTimeoutSeconds, 30)) * time.Second
 		var executorClient *http.Client
 		var clientErr error
-		if cfg.SchemaVersion == config.ProviderProductionSchemaV2 {
+		if cfg.SchemaVersion == config.ProviderProductionSchemaV3 {
+			profile, profileErr := loadProviderSecurityProfile(cfg)
+			if profileErr != nil {
+				return fail(profileErr)
+			}
+			roleDocument, roleErr := phase6security.VerifyPeerCRLRoleFile(cfg.Transport.PeerCRLRoleFile, profile,
+				cfg.Transport.PeerCRLSourceMappingDigest, cfg.Transport.PeerCRLRoleDigest)
+			if roleErr != nil {
+				return fail(errors.New("Provider Desktop executor peer CRL role binding mismatch"))
+			}
+			clientTransport, guard, tlsErr := phase6tls.ProviderPrivateRoleClient(profile, phase6tls.ProviderPrivateRoleClientAuthority{
+				Role: "desktop", Origin: desktopConfig.ExecutorURL, PeerCRLRole: roleDocument,
+				AgentSocket: cfg.Transport.AgentSocket, AgentUID: cfg.Transport.AgentUID, AgentGID: cfg.Transport.AgentGID,
+				OperationTimeout: time.Duration(cfg.Transport.OperationTimeoutMillis) * time.Millisecond})
+			if tlsErr != nil {
+				return fail(errors.New("construct Provider Desktop executor live TLS client"))
+			}
+			if tlsErr = guard.Bootstrap(ctx); tlsErr != nil {
+				return fail(errors.New("bootstrap Provider Desktop executor peer revocation"))
+			}
+			stopPoll, pollErr := guard.StartPolling(ctx)
+			if pollErr != nil {
+				return fail(errors.New("start Provider Desktop executor peer revocation"))
+			}
+			stack.add(func() error { stopPoll(); return nil })
+			executorTLSProbe = func(probeCtx context.Context) error {
+				if err := guard.Bootstrap(probeCtx); err != nil || !guard.Ready() {
+					return phase6tls.ErrPeerCRLUnavailable
+				}
+				return nil
+			}
+			executorClient = &http.Client{Transport: clientTransport, Timeout: executorTimeout,
+				CheckRedirect: func(*http.Request, []*http.Request) error { return errors.New("Desktop executor redirect denied") }}
+		} else if cfg.SchemaVersion == config.ProviderProductionSchemaV2 {
 			parsed, _ := url.Parse(desktopConfig.ExecutorURL)
 			clientTLS, tlsErr := tlsmaterial.ResolveClientWithKeyPurpose(ctx, registry,
 				desktopConfig.ExecutorCABundleBindingID, desktopConfig.ExecutorCertificateBindingID, desktopConfig.ExecutorPrivateKeyBindingID,
@@ -207,7 +249,7 @@ func newProductionDesktopProvider(ctx context.Context, cfg *config.ProviderProce
 			if tlsErr != nil {
 				clientErr = tlsErr
 			} else {
-				executorClient = &http.Client{Transport: &http.Transport{TLSClientConfig: clientTLS}, Timeout: time.Duration(dockerConfig.OperationTimeoutSeconds) * time.Second}
+				executorClient = &http.Client{Transport: &http.Transport{TLSClientConfig: clientTLS}, Timeout: executorTimeout}
 			}
 		} else if cfg.SchemaVersion == config.ProviderLegacyLocalCandidateSchema {
 			executorClient, clientErr = desktopremote.NewHTTPClient(desktopConfig.ExecutorURL, desktopConfig.ExecutorCABundleFile, desktopConfig.ExecutorCertificateFile, desktopConfig.ExecutorPrivateKeyFile)
@@ -217,13 +259,13 @@ func newProductionDesktopProvider(ctx context.Context, cfg *config.ProviderProce
 		if clientErr != nil {
 			return fail(fmt.Errorf("construct production Desktop executor client: %w", clientErr))
 		}
-		executorRuntime, runtimeErr := desktopremote.New(desktopremote.Options{URL: desktopConfig.ExecutorURL, HTTPClient: executorClient, OperationTimeout: time.Duration(dockerConfig.OperationTimeoutSeconds) * time.Second, BridgeKeyID: desktopConfig.ExecutorBridgeKeyID, ExecutorIdentity: desktopConfig.ExecutorIdentity, BridgePrivateKey: bridgePrivateKey})
+		executorRuntime, runtimeErr := desktopremote.New(desktopremote.Options{URL: desktopConfig.ExecutorURL, HTTPClient: executorClient, OperationTimeout: executorTimeout, BridgeKeyID: desktopConfig.ExecutorBridgeKeyID, ExecutorIdentity: desktopConfig.ExecutorIdentity, BridgePrivateKey: bridgePrivateKey})
 		if runtimeErr != nil {
 			return fail(fmt.Errorf("construct production Desktop executor runtime: %w", runtimeErr))
 		}
 		mediaRuntime = executorRuntime
 	}
-	privateServer, err := newProductionProviderPrivateDesktopServer(ctx, cfg, resolver, registrar, mediaRuntime, registry)
+	privateServer, privateTLSProbe, err := newProductionProviderPrivateDesktopServer(ctx, cfg, resolver, registrar, mediaRuntime, registry)
 	if err != nil {
 		return fail(err)
 	}
@@ -242,7 +284,8 @@ func newProductionDesktopProvider(ctx context.Context, cfg *config.ProviderProce
 	if err != nil {
 		return fail(err)
 	}
-	probe, err := providerprocess.NewServer(cfg.Probe, providerReadinessChecker{state: state, pool: pool, reconciler: reconciler, registry: registry, config: cfg})
+	probe, err := providerprocess.NewServer(cfg.Probe, providerReadinessChecker{state: state, pool: pool, reconciler: reconciler, registry: registry, config: cfg,
+		tlsProbes: []func(context.Context) error{contractTLSProbe, privateTLSProbe, executorTLSProbe}})
 	if err != nil {
 		return fail(err)
 	}
@@ -364,9 +407,9 @@ func (s productionDesktopMediaSource) OpenBound(ctx context.Context, open deskto
 		AuthorityDigest: open.AuthorityDigest, RequestDigest: open.RequestDigest, AuthorityExpiresAt: authorityExpiry, HandoffExpiresAt: handoffExpiry}, attachment, open.MediaPolicy)
 }
 
-func newProductionProviderPrivateDesktopServer(ctx context.Context, cfg *config.ProviderProcessConfig, resolver desktopgateway.Resolver, registrar desktopgateway.BindingRegistrar, runtime providerdesktop.MediaRuntime, registry *secretref.Registry) (server.Server, error) {
+func newProductionProviderPrivateDesktopServer(ctx context.Context, cfg *config.ProviderProcessConfig, resolver desktopgateway.Resolver, registrar desktopgateway.BindingRegistrar, runtime providerdesktop.MediaRuntime, registry *secretref.Registry) (server.Server, func(context.Context) error, error) {
 	if cfg == nil || !cfg.Transport.Private.Enabled {
-		return nil, nil
+		return nil, nil, nil
 	}
 	allowed := false
 	for _, route := range cfg.Transport.Private.RoutePolicy {
@@ -375,20 +418,61 @@ func newProductionProviderPrivateDesktopServer(ctx context.Context, cfg *config.
 		}
 	}
 	if !allowed {
-		return nil, errors.New("Provider private transport route policy does not authorize Desktop")
+		return nil, nil, errors.New("Provider private transport route policy does not authorize Desktop")
 	}
 	handler, err := desktopgateway.New(desktopgateway.Options{Resolver: resolver, BoundMedia: productionDesktopMediaSource{runtime: runtime}, BindingRegistrar: registrar, PeerAuthorizer: providerPrivatePeerAuthorizer{}, MaxMessageBytes: cfg.Transport.Private.MaxBodyBytes, OperationTimeout: time.Duration(cfg.Transport.Private.ReadTimeoutMillis) * time.Millisecond})
 	if err != nil {
-		return nil, fmt.Errorf("construct Provider private Desktop handler: %w", err)
+		return nil, nil, fmt.Errorf("construct Provider private Desktop handler: %w", err)
 	}
 	private := cfg.Transport.Private
-	tlsConfig, err := tlsmaterial.ResolveMutualServer(ctx, registry,
-		private.ServerCertificateBindingID, private.ServerPrivateKeyBindingID, private.ClientCABundleBindingID,
-		private.ExpectedServerName, private.AllowedClientURIIdentities, time.Now)
-	if err != nil {
-		return nil, errors.New("load Provider private Desktop TLS material")
+	var tlsConfig *tls.Config
+	var tlsProbe func(context.Context) error
+	var peerMonitor *phase6tls.PeerCRLGuard
+	var connectionMaxAge time.Duration
+	if cfg.SchemaVersion == config.ProviderProductionSchemaV3 {
+		profile, profileErr := loadProviderSecurityProfile(cfg)
+		if profileErr != nil {
+			return nil, nil, profileErr
+		}
+		roleDocument, roleErr := phase6security.VerifyPeerCRLRoleFile(cfg.Transport.PeerCRLRoleFile, profile,
+			cfg.Transport.PeerCRLSourceMappingDigest, cfg.Transport.PeerCRLRoleDigest)
+		if roleErr != nil {
+			return nil, nil, errors.New("Provider Desktop peer CRL role binding mismatch")
+		}
+		edge, _, _, _, _, boundaryErr := profile.GatewayProviderInstanceBoundary("provider-desktop-runtime", "wss://"+private.Address.Addr()+"/desktop")
+		if boundaryErr != nil {
+			return nil, nil, errors.New("Provider private Desktop connection boundary does not match profile")
+		}
+		connectionMaxAge = time.Duration(edge.MaxConnectionSeconds) * time.Second
+		var peerURI string
+		tlsConfig, tlsProbe, peerURI, peerMonitor, err = phase6tls.ProviderServer(profile, phase6tls.ProviderServerAuthority{
+			EdgeID: phase6security.GatewayProviderDesktopPrivateEdgeID, ListenAddress: private.Address.Addr(), PeerCRLRole: roleDocument,
+			AgentSocket: cfg.Transport.AgentSocket, AgentUID: cfg.Transport.AgentUID, AgentGID: cfg.Transport.AgentGID,
+			OperationTimeout: time.Duration(cfg.Transport.OperationTimeoutMillis) * time.Millisecond})
+		if err == nil && !slices.Equal(private.AllowedClientURIIdentities, []string{peerURI}) {
+			err = errors.New("Provider private Desktop peer allowlist does not match profile")
+		}
+	} else if cfg.SchemaVersion == config.ProviderProductionSchemaV2 {
+		tlsConfig, err = tlsmaterial.ResolveMutualServer(ctx, registry,
+			private.ServerCertificateBindingID, private.ServerPrivateKeyBindingID, private.ClientCABundleBindingID,
+			private.ExpectedServerName, private.AllowedClientURIIdentities, time.Now)
+	} else {
+		return nil, nil, errors.New("unsupported Provider private Desktop TLS schema")
 	}
-	return providerapi.NewPrivateServer(ctx, providerapi.PrivateTransportOptions{Address: private.Address, TLSConfig: tlsConfig, AllowedClientURIIdentities: append([]string(nil), private.AllowedClientURIIdentities...), Handler: handler, ReadHeaderTimeout: time.Duration(private.ReadHeaderTimeoutMillis) * time.Millisecond, ReadTimeout: time.Duration(private.ReadTimeoutMillis) * time.Millisecond, WriteTimeout: time.Duration(private.WriteTimeoutMillis) * time.Millisecond, IdleTimeout: time.Duration(private.IdleTimeoutMillis) * time.Millisecond, MaxHeaderBytes: private.MaxHeaderBytes, MaxBodyBytes: private.MaxBodyBytes})
+	if err != nil {
+		return nil, nil, errors.New("load Provider private Desktop TLS material")
+	}
+	var privateHandler http.Handler = handler
+	if cfg.SchemaVersion == config.ProviderProductionSchemaV3 {
+		privateHandler = exactProviderPrivateTerminalRoute(handler, "/desktop")
+	}
+	result, err := providerapi.NewPrivateServer(ctx, providerapi.PrivateTransportOptions{Address: private.Address, TLSConfig: tlsConfig,
+		PeerRevocationMonitor: peerMonitor, ConnectionMaxAge: connectionMaxAge,
+		AllowedClientURIIdentities: append([]string(nil), private.AllowedClientURIIdentities...), Handler: privateHandler,
+		ReadHeaderTimeout: time.Duration(private.ReadHeaderTimeoutMillis) * time.Millisecond, ReadTimeout: time.Duration(private.ReadTimeoutMillis) * time.Millisecond,
+		WriteTimeout: time.Duration(private.WriteTimeoutMillis) * time.Millisecond, IdleTimeout: time.Duration(private.IdleTimeoutMillis) * time.Millisecond,
+		MaxHeaderBytes: private.MaxHeaderBytes, MaxBodyBytes: private.MaxBodyBytes})
+	return result, tlsProbe, err
 }
 
 type productionDesktopApplication struct {

@@ -312,6 +312,125 @@ func TestProviderProcessSeparatesLocalDesktopCandidateFromProduction(t *testing.
 	if err := missingExecutor.Validate(); err == nil {
 		t.Fatal("local candidate without Desktop executor was accepted")
 	}
+	ignoredSourceRoot := *candidate
+	ignoredSourceRoot.Desktop = candidate.Desktop
+	ignoredSourceRoot.Desktop.LocalCandidateSourceRoot = path("source")
+	if err := ignoredSourceRoot.Validate(); err == nil {
+		t.Fatal("legacy candidate accepted an ignored v3 source root")
+	}
+}
+
+func TestProviderProcessV3DesktopCandidateClosedMatrix(t *testing.T) {
+	candidate := validProviderProcessConfig(t)
+	directory := t.TempDir()
+	path := func(name string) string { return filepath.Join(directory, name) }
+	candidate.SchemaVersion = ProviderProductionSchemaV3
+	candidate.DeploymentLevel = ProviderLocalCandidateLevel
+	candidate.Profile = ProviderProcessDesktopProfile
+	candidate.Coding.Lifecycle.Image = ""
+	candidate.Transport.ServerCertificateFile = ""
+	candidate.Transport.ServerPrivateKeyFile = ""
+	candidate.Transport.ClientCABundleFile = ""
+	candidate.Transport.AllowedClientURIIdentities = []string{"spiffe://sandbox-runtime.test/product-runtime"}
+	candidate.Transport.SecurityProfilePath = path("security-profile.json")
+	candidate.Transport.SecurityProfileDigest = "sha256:" + strings.Repeat("a", 64)
+	candidate.Transport.PeerCRLRoleFile = path("peer-crl-role.json")
+	candidate.Transport.PeerCRLRoleDigest = "sha256:" + strings.Repeat("b", 64)
+	candidate.Transport.PeerCRLSourceMappingDigest = "sha256:" + strings.Repeat("c", 64)
+	candidate.Transport.AgentSocket = path("desktop-provider-tls-agent.sock")
+	candidate.Transport.AgentUID, candidate.Transport.AgentGID = 501, 20
+	candidate.Transport.OperationTimeoutMillis = 3000
+	candidate.Transport.Private = ProviderPrivateTransportConfig{
+		Enabled: true, Address: providerDefaultHTTP("127.0.0.1", 8448),
+		AllowedClientURIIdentities: []string{"spiffe://sandbox-runtime.test/gateway-runtime"},
+		RoutePolicy:                []string{ProviderPrivateRouteDesktop}, ReadHeaderTimeoutMillis: 5000,
+		ReadTimeoutMillis: 30000, WriteTimeoutMillis: 30000, IdleTimeoutMillis: 60000,
+		MaxHeaderBytes: 32 << 10, MaxBodyBytes: 256 << 10,
+	}
+	candidate.Postgres.MigrationDSNFile = ""
+	candidate.Postgres.RuntimeDSNFile = ""
+	candidate.Postgres.MigrationRole = ""
+	candidate.Postgres.MigrationMaxConnections = 0
+	candidate.Postgres.RuntimeDSNBindingID = "desktop-provider-runtime-dsn"
+	candidate.ProtectedAdmission.TrustedVerificationKeys[0].PublicKeyFile = ""
+	candidate.ProtectedAdmission.TrustedVerificationKeys[0].PublicKeyBindingID = "desktop-provider-admission-key"
+	candidate.Materials.Provider = RoleMaterialProviderConfig{
+		Type: UnixWorkloadMaterialProviderV1, Alias: "desktop-provider-agent", SocketPath: "/tmp/desktop-provider-material-agent-test.sock",
+		ExpectedUID: 502, ExpectedGID: 20, OperationTimeoutSeconds: 3, CacheSeconds: 30,
+	}
+	for _, item := range []struct {
+		id      string
+		purpose secretref.Purpose
+	}{
+		{"desktop-provider-runtime-dsn", secretref.PurposePostgresRuntimeDSN},
+		{"desktop-provider-admission-key", secretref.PurposeAdmissionVerification},
+		{"desktop-provider-bridge-key", secretref.PurposeExecutorBridgeKey},
+	} {
+		document, err := json.Marshal(secretref.Binding{Schema: secretref.BindingSchema, Kind: secretref.KindSecret,
+			Reference: secretref.Reference("secret://vault/kv/" + item.id), Version: "v1", Purpose: item.purpose,
+			TenantID: secretref.SystemTenant, Role: secretref.RoleProvider})
+		if err != nil {
+			t.Fatal(err)
+		}
+		candidate.Materials.Bindings = append(candidate.Materials.Bindings, RoleMaterialBindingConfig{ID: item.id, Provider: "desktop-provider-agent", Document: string(document)})
+	}
+	candidate.Desktop.Architecture = "arm64"
+	candidate.Desktop.Docker.Image = "sha256:" + strings.Repeat("9", 64)
+	candidate.Desktop.Docker.PullPolicy = "never"
+	candidate.Desktop.Docker.DataRoot = path("desktop-runtime")
+	candidate.Desktop.Docker.CandidateManifestPath = path("desktop-candidate-image-manifest.json")
+	candidate.Desktop.Docker.Namespace = "desktop-candidate"
+	candidate.Desktop.Docker.ControllerID = "desktop-controller-1"
+	candidate.Desktop.Docker.NetworkPolicyReference = "desktop-egress-policy-1"
+	candidate.Desktop.LocalCandidateManifestFile = path("desktop-candidate-source-manifest.json")
+	candidate.Desktop.LocalCandidateSourceRoot = path("source")
+	candidate.Desktop.ExecutorURL = "wss://127.0.0.1:9444/executor"
+	candidate.Desktop.BrokerMuxSocketPath = path("desktop-broker-11111111111111111111111111111111.sock")
+	candidate.Desktop.ExecutorIdentity = "executor-desktop-1"
+	candidate.Desktop.ExecutorBridgeKeyID = "provider-desktop-v2"
+	candidate.Desktop.ExecutorBridgePrivateKeyBindingID = "desktop-provider-bridge-key"
+	candidate.Desktop.RestrictedNetwork.GatewayImage = "sha256:" + strings.Repeat("d", 64)
+	candidate.Desktop.RestrictedNetwork.UplinkNetwork = "desktop-candidate-uplink"
+	candidate.Desktop.RestrictedNetwork.Namespace = candidate.Desktop.Docker.Namespace
+	candidate.Desktop.RestrictedNetwork.ControllerID = candidate.Desktop.Docker.ControllerID
+	candidate.Desktop.RestrictedNetwork.Policies = []ProviderBrowserNetworkPolicyConfig{{Reference: candidate.Desktop.Docker.NetworkPolicyReference, AllowedHosts: []string{"packages.example.test"}}}
+	if err := candidate.Validate(); err != nil {
+		t.Fatalf("valid Desktop v3 local candidate: %v", err)
+	}
+	for name, mutate := range map[string]func(*ProviderProcessConfig){
+		"missing candidate source":         func(value *ProviderProcessConfig) { value.Desktop.LocalCandidateManifestFile = "" },
+		"missing source root":              func(value *ProviderProcessConfig) { value.Desktop.LocalCandidateSourceRoot = "" },
+		"missing candidate image manifest": func(value *ProviderProcessConfig) { value.Desktop.Docker.CandidateManifestPath = "" },
+		"mutable image":                    func(value *ProviderProcessConfig) { value.Desktop.Docker.Image = "example.test/desktop:latest" },
+		"remote pull":                      func(value *ProviderProcessConfig) { value.Desktop.Docker.PullPolicy = "if_not_present" },
+		"crossed production manifest": func(value *ProviderProcessConfig) {
+			value.Desktop.Docker.ProductionManifestPath = path("production.json")
+		},
+		"production relabel":  func(value *ProviderProcessConfig) { value.DeploymentLevel = ProviderProductionLevel },
+		"raw executor key":    func(value *ProviderProcessConfig) { value.Desktop.ExecutorPrivateKeyFile = path("executor.key") },
+		"static executor key": func(value *ProviderProcessConfig) { value.Desktop.ExecutorPrivateKeyBindingID = "old-executor-key" },
+		"static private key": func(value *ProviderProcessConfig) {
+			value.Transport.Private.ServerPrivateKeyBindingID = "old-private-key"
+		},
+		"terminal route": func(value *ProviderProcessConfig) {
+			value.Transport.Private.RoutePolicy = []string{ProviderPrivateRouteTerminal}
+		},
+		"extra route": func(value *ProviderProcessConfig) {
+			value.Transport.Private.RoutePolicy = []string{ProviderPrivateRouteDesktop, ProviderPrivateRouteBrowser}
+		},
+		"attach route drift": func(value *ProviderProcessConfig) { value.Desktop.ExecutorURL = "wss://127.0.0.1:9444/private/browser" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			value := *candidate
+			value.Transport = candidate.Transport
+			value.Transport.Private = candidate.Transport.Private
+			value.Desktop = candidate.Desktop
+			mutate(&value)
+			if err := value.Validate(); err == nil {
+				t.Fatal("unsafe Desktop v3 candidate configuration was accepted")
+			}
+		})
+	}
 }
 
 func TestProviderProcessValidatesExactCodingProfile(t *testing.T) {

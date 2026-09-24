@@ -80,7 +80,8 @@ through the actual container broker before returning ready. A socket, legacy
 broker, or pre-allocation process alone is therefore insufficient for v2
 readiness.
 
-Slice 4 uses a separate `local-candidate-non-release` runtime identity. It
+Phase 6 local integration and Slice 6 security-enforcement gates use a separate
+`local-candidate-non-release` runtime identity. It
 binds the exact source tree, build scripts and arguments, base/package inputs,
 platform, OCI config digest, and locally loaded image digest. Provider may
 select it only with `deployment_level=local_candidate`, `pull_policy=never`,
@@ -88,6 +89,24 @@ and a strict candidate manifest. The production profile continues to select
 only the Phase 5 signed lock and rejects the v2 executor until Slice 7 publishes
 and verifies a new multi-platform runtime. Local candidate evidence is never a
 production artifact, signature, provenance, or release claim.
+
+The Slice 6 Desktop Provider uses the same independent command, PostgreSQL
+authority, material registry, broker and executor-v2 runtime composition with
+`provider-process.v3` live TLS/CRL wiring and
+`deployment_level=local_candidate`. In this exact combination, the Contract
+listener, private `/desktop` listener and outbound Desktop attach use three
+separate profile-bound edges and the Desktop Provider principal. The candidate
+manifest is checked against the configured local source tree at startup and
+the loaded image is inspected against its exact content identity. Candidate
+mode cannot select raw/static TLS keys or a production manifest. An
+`application.mode=production` command selects the protected process path; it
+does not certify that the candidate artifact is released. Desktop v3 with
+`deployment_level=production` remains rejected until Slice 7 publishes and
+independently verifies the matching executor-v2 native multi-platform image,
+SBOM, signature and provenance, then binds a new immutable lock. Phase 5's
+signed older runtime is not a substitute. The affected security and runtime
+gates must be repeated with the published artifact; Slice 6 local-candidate
+evidence does not upgrade automatically.
 
 The two Desktop image identities use separate closed types and paths. The
 Phase 5 production adapter accepts only

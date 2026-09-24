@@ -31,10 +31,18 @@ type GatewayProviderClientAuthority struct {
 // client. Its local client issuer and remote Provider server roots never share
 // a pool or fall back to the operating-system trust store.
 func GatewayProviderClient(profile phase6security.Profile, authority GatewayProviderClientAuthority) (*http.Transport, *PeerCRLGuard, error) {
-	edge, gateway, provider, serverAnchor, clientAnchor, err := profile.GatewayProviderBoundary(authority.Origin)
+	return GatewayProviderInstanceClient(profile, "provider-runtime", authority)
+}
+
+// GatewayProviderInstanceClient selects exactly one Provider instance's
+// private route. Callers must keep the three transports separate rather than
+// recycling a coding-shell mTLS authority for Browser/Desktop sessions.
+func GatewayProviderInstanceClient(profile phase6security.Profile, providerName string, authority GatewayProviderClientAuthority) (*http.Transport, *PeerCRLGuard, error) {
+	edge, gateway, provider, serverAnchor, clientAnchor, err := profile.GatewayProviderInstanceBoundary(providerName, authority.Origin)
 	if err != nil || gateway.TLS == nil || provider.TLS == nil ||
 		uint32(os.Getuid()) != gateway.UID || uint32(os.Getgid()) != gateway.GID ||
-		authority.OperationTimeout < time.Second || authority.OperationTimeout > 30*time.Second {
+		authority.OperationTimeout < time.Second || authority.OperationTimeout > 30*time.Second ||
+		edge.MaxConnectionSeconds < 1 || edge.MaxConnectionSeconds > 3600 {
 		return nil, nil, errors.New("Gateway Provider TLS authority does not match profile")
 	}
 	binding, agent, subject, err := profile.TLSAgentForSubject("gateway-runtime")
@@ -100,7 +108,16 @@ func GatewayProviderClient(profile phase6security.Profile, authority GatewayProv
 	if err != nil || origin.Scheme != "wss" || origin.Host == "" {
 		return nil, nil, errors.New("Gateway Provider origin is invalid")
 	}
-	return guardedClientTransport(config, identityCheck, guard, origin.Host), guard, nil
+	transport := guardedClientTransport(config, identityCheck, guard, origin.Host)
+	dial := transport.DialTLSContext
+	transport.DialTLSContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+		connection, err := dial(ctx, network, address)
+		if err != nil {
+			return nil, err
+		}
+		return newBoundedClientConn(connection, time.Duration(edge.MaxConnectionSeconds)*time.Second), nil
+	}
+	return transport, guard, nil
 }
 
 func guardedClientTransport(config *tls.Config, identityCheck func(tls.ConnectionState) error,

@@ -192,6 +192,13 @@ egress brokers, exact container least privilege and the complete privileged
 principal inventory. Library checks or configuration text do not advance the
 counter.
 
+The Desktop Provider's Slice 6 proof uses the strict Phase 6
+`local-candidate-non-release` executor-v2 image with a source-bound manifest,
+`provider-process.v3` live TLS/CRL and `deployment_level=local_candidate`.
+This is a local security-enforcement scope, not published-artifact or product
+production readiness. The same protected application command is used; Desktop
+v3 production artifact admission remains closed pending Slice 7 publication.
+
 ### Slice 7 — application supply chain
 
 Pin builder/runtime bases, produce reproducible multi-platform application
@@ -200,6 +207,11 @@ digest-only deployment and verification before startup/admission.
 
 Gate: independent signature/provenance/SBOM verification on every supported
 architecture plus tamper and mutable-reference rejection.
+
+Slice 7 must publish and independently verify the new executor-v2 Desktop
+runtime, update its immutable lock and then enable exact Desktop v3 production
+artifact admission. It must rerun security/runtime gates affected by the
+artifact change; Slice 6 candidate evidence does not grant deployment status.
 
 ### Slice 8 — production PostgreSQL, coordination and object storage adapters
 

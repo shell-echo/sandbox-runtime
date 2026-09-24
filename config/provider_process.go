@@ -99,6 +99,7 @@ type ProviderProcessDesktopConfig struct {
 	ExecutorPrivateKeyBindingID       string                          `mapstructure:"executor_private_key_binding_id"`
 	ExecutorBridgePrivateKeyBindingID string                          `mapstructure:"executor_bridge_private_key_binding_id"`
 	LocalCandidateManifestFile        string                          `mapstructure:"local_candidate_manifest_file"`
+	LocalCandidateSourceRoot          string                          `mapstructure:"local_candidate_source_root"`
 	UsageRetentionSeconds             int                             `mapstructure:"usage_retention_seconds"`
 	ShutdownCleanupSeconds            int                             `mapstructure:"shutdown_cleanup_seconds"`
 	Docker                            ProviderDesktopDockerConfig     `mapstructure:"docker"`
@@ -178,8 +179,9 @@ func (c *ProviderProcessConfig) Validate() error { //nolint:cyclop
 	if !materialSchema && c.SchemaVersion != ProviderLegacyLocalCandidateSchema {
 		return errors.New("provider_process schema_version is invalid")
 	}
-	if liveSchema && (c.DeploymentLevel != ProviderProductionLevel || c.Profile != ProviderProcessCodingShellProfile) {
-		return errors.New("Provider v3 is available only for the coding_shell production profile")
+	if liveSchema && !((c.DeploymentLevel == ProviderProductionLevel && c.Profile == ProviderProcessCodingShellProfile) ||
+		(c.DeploymentLevel == ProviderLocalCandidateLevel && c.Profile == ProviderProcessDesktopProfile)) {
+		return errors.New("Provider v3 requires coding_shell production or Desktop local_candidate")
 	}
 	if c.DeploymentLevel != ProviderProductionLevel && c.DeploymentLevel != ProviderLocalCandidateLevel {
 		return errors.New("provider_process requires deployment_level=production or local_candidate")
@@ -189,7 +191,11 @@ func (c *ProviderProcessConfig) Validate() error { //nolint:cyclop
 	}
 	var transportErr error
 	if liveSchema {
-		transportErr = c.Transport.validateLiveEnabled()
+		route := ProviderPrivateRouteTerminal
+		if c.Profile == ProviderProcessDesktopProfile {
+			route = ProviderPrivateRouteDesktop
+		}
+		transportErr = c.Transport.validateLiveEnabled(route)
 	} else if materialSchema {
 		transportErr = c.Transport.validateMaterialEnabled()
 	} else {
@@ -258,8 +264,9 @@ func (c *ProviderProcessConfig) Validate() error { //nolint:cyclop
 	return c.validateAuthorityPaths()
 }
 
-func (c *ProviderTransportConfig) validateLiveEnabled() error {
-	if !c.Private.Enabled || len(c.Private.RoutePolicy) != 1 || c.Private.RoutePolicy[0] != ProviderPrivateRouteTerminal ||
+func (c *ProviderTransportConfig) validateLiveEnabled(route string) error {
+	if (route != ProviderPrivateRouteTerminal && route != ProviderPrivateRouteDesktop) ||
+		!c.Private.Enabled || len(c.Private.RoutePolicy) != 1 || c.Private.RoutePolicy[0] != route ||
 		net.ParseIP(c.Private.Address.Host) == nil ||
 		validateAbsoluteSecretPath("Provider security profile", c.SecurityProfilePath) != nil ||
 		validateAbsoluteSecretPath("Provider peer CRL role", c.PeerCRLRoleFile) != nil ||
@@ -269,7 +276,7 @@ func (c *ProviderTransportConfig) validateLiveEnabled() error {
 		!providerSHA256Pattern.MatchString(c.PeerCRLRoleDigest) ||
 		!providerSHA256Pattern.MatchString(c.PeerCRLSourceMappingDigest) ||
 		c.AgentUID == 0 || c.AgentGID == 0 || c.OperationTimeoutMillis < 1000 || c.OperationTimeoutMillis > 30_000 {
-		return errors.New("Provider v3 requires a pinned live signer and separate private Terminal listener")
+		return errors.New("Provider v3 requires a pinned live signer and exact separate private listener")
 	}
 	if c.ServerCertificateFile != "" || c.ServerPrivateKeyFile != "" || c.ClientCABundleFile != "" ||
 		c.ServerCertificateBindingID != "" || c.ServerPrivateKeyBindingID != "" ||
@@ -373,6 +380,9 @@ func (c *ProviderProcessConfig) validateDesktop(materialSchema bool) error {
 	if d.Architecture != "amd64" && d.Architecture != "arm64" || d.UsageRetentionSeconds < 60 || d.UsageRetentionSeconds > 2_592_000 || d.ShutdownCleanupSeconds < 1 || d.ShutdownCleanupSeconds > 300 {
 		return errors.New("provider_process Desktop architecture or duration is invalid")
 	}
+	if c.SchemaVersion != ProviderProductionSchemaV3 && d.LocalCandidateSourceRoot != "" {
+		return errors.New("provider_process Desktop source root is only valid for v3 local candidate")
+	}
 	o := d.Docker
 	validImage := c.DeploymentLevel == ProviderProductionLevel && o.Image == desktopimage.LockedPublication().Image() && providerPinnedImagePattern.MatchString(o.Image) && (o.PullPolicy == "never" || o.PullPolicy == "if_not_present" || o.PullPolicy == "always")
 	validManifest := c.DeploymentLevel == ProviderProductionLevel && filepath.IsAbs(o.ProductionManifestPath) && o.CandidateManifestPath == ""
@@ -393,11 +403,14 @@ func (c *ProviderProcessConfig) validateDesktop(materialSchema bool) error {
 		return errors.New("provider_process Desktop resources or timeouts are invalid")
 	}
 	if c.DeploymentLevel == ProviderProductionLevel {
-		if !filepath.IsAbs(d.Provenance.ExecutablePath) || !providerSHA256Pattern.MatchString(d.Provenance.ExecutableDigest) || d.LocalCandidateManifestFile != "" {
+		if !filepath.IsAbs(d.Provenance.ExecutablePath) || !providerSHA256Pattern.MatchString(d.Provenance.ExecutableDigest) ||
+			d.LocalCandidateManifestFile != "" || d.LocalCandidateSourceRoot != "" {
 			return errors.New("provider_process Desktop production provenance or candidate boundary is invalid")
 		}
 	} else if d.Provenance.ExecutablePath != "" || d.Provenance.ExecutableDigest != "" {
 		return errors.New("provider_process local candidate cannot claim production provenance")
+	} else if c.SchemaVersion == ProviderProductionSchemaV3 && (!filepath.IsAbs(d.LocalCandidateSourceRoot) || filepath.Clean(d.LocalCandidateSourceRoot) != d.LocalCandidateSourceRoot) {
+		return errors.New("provider_process Desktop v3 local candidate requires an exact source root")
 	}
 	if err := d.RestrictedNetwork.validate(o.NetworkPolicyReference); err != nil {
 		return fmt.Errorf("provider_process.desktop.restricted_network: %w", err)
@@ -410,13 +423,20 @@ func (c *ProviderProcessConfig) validateDesktop(materialSchema bool) error {
 			return errors.New("provider_process production Desktop executor requires the Slice 7 published v2 runtime")
 		}
 		parsed, err := url.Parse(d.ExecutorURL)
-		if err != nil || parsed.Scheme != "wss" || parsed.Host == "" || parsed.Path == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
+		if err != nil || parsed.Scheme != "wss" || parsed.Host == "" || parsed.Path != "/executor" ||
+			parsed.EscapedPath() != "/executor" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" ||
+			net.ParseIP(parsed.Hostname()) == nil || parsed.Port() == "" || parsed.String() != d.ExecutorURL {
 			return errors.New("provider_process Desktop executor_url is invalid")
 		}
 		if !providerProfileIDPattern.MatchString(d.ExecutorIdentity) || !providerProfileIDPattern.MatchString(d.ExecutorBridgeKeyID) {
 			return errors.New("provider_process Desktop executor identity or bridge key ID is invalid")
 		}
-		if materialSchema {
+		if c.SchemaVersion == ProviderProductionSchemaV3 {
+			if d.ExecutorCABundleFile != "" || d.ExecutorCertificateFile != "" || d.ExecutorPrivateKeyFile != "" || d.ExecutorBridgePrivateKeyFile != "" ||
+				d.ExecutorCABundleBindingID != "" || d.ExecutorCertificateBindingID != "" || d.ExecutorPrivateKeyBindingID != "" || d.ExecutorBridgePrivateKeyBindingID == "" {
+				return errors.New("Provider Desktop v3 requires only a bridge key material binding and live executor TLS")
+			}
+		} else if materialSchema {
 			if d.ExecutorCABundleFile != "" || d.ExecutorCertificateFile != "" || d.ExecutorPrivateKeyFile != "" || d.ExecutorBridgePrivateKeyFile != "" ||
 				d.ExecutorCABundleBindingID == "" || d.ExecutorCertificateBindingID == "" || d.ExecutorPrivateKeyBindingID == "" || d.ExecutorBridgePrivateKeyBindingID == "" {
 				return errors.New("provider_process Desktop executor requires material bindings and forbids raw credential paths")
@@ -534,19 +554,23 @@ func (c *ProviderProcessConfig) validateMaterialAuthority() error {
 		}{key.PublicKeyBindingID, secretref.PurposeAdmissionVerification})
 	}
 	if c.Desktop.ExecutorURL != "" {
+		if c.SchemaVersion == ProviderProductionSchemaV2 {
+			selections = append(selections,
+				struct {
+					id      string
+					purpose secretref.Purpose
+				}{c.Desktop.ExecutorCABundleBindingID, secretref.PurposeCABundle},
+				struct {
+					id      string
+					purpose secretref.Purpose
+				}{c.Desktop.ExecutorCertificateBindingID, secretref.PurposeTLSCertificate},
+				struct {
+					id      string
+					purpose secretref.Purpose
+				}{c.Desktop.ExecutorPrivateKeyBindingID, secretref.PurposeExecutorClientKey},
+			)
+		}
 		selections = append(selections,
-			struct {
-				id      string
-				purpose secretref.Purpose
-			}{c.Desktop.ExecutorCABundleBindingID, secretref.PurposeCABundle},
-			struct {
-				id      string
-				purpose secretref.Purpose
-			}{c.Desktop.ExecutorCertificateBindingID, secretref.PurposeTLSCertificate},
-			struct {
-				id      string
-				purpose secretref.Purpose
-			}{c.Desktop.ExecutorPrivateKeyBindingID, secretref.PurposeExecutorClientKey},
 			struct {
 				id      string
 				purpose secretref.Purpose

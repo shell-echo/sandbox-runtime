@@ -80,7 +80,7 @@ func New(ctx context.Context, options Options, provenance ProvenanceVerifier, ne
 	return driver, nil
 }
 
-// NewLocalCandidate constructs the non-release Slice 4 integration adapter.
+// NewLocalCandidate constructs the non-release Phase 6 local-gate adapter.
 // The candidate digest is never promoted to the signed production lock.
 func NewLocalCandidate(ctx context.Context, options Options, candidate desktopcandidate.Manifest, network RestrictedNetwork) (*Driver, error) {
 	if err := contextError(ctx); err != nil {

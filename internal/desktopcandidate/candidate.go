@@ -1,5 +1,5 @@
 // Package desktopcandidate defines the non-release Desktop runtime identity
-// used only by the Phase 6 Slice 4 local integration gate.
+// used by Phase 6 local integration and security-enforcement gates.
 package desktopcandidate
 
 import (

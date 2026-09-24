@@ -64,7 +64,9 @@ func runProviderServe(cmd *cobra.Command, _ []string) (result error) {
 		return errors.New("Provider runtime and migration authorities cannot share one command")
 	}
 	if providerConfig.SchemaVersion != config.ProviderProductionSchemaV2 &&
-		!(providerConfig.SchemaVersion == config.ProviderProductionSchemaV3 && providerConfig.Profile == config.ProviderProcessCodingShellProfile) {
+		!(providerConfig.SchemaVersion == config.ProviderProductionSchemaV3 &&
+			((providerConfig.Profile == config.ProviderProcessCodingShellProfile && providerConfig.DeploymentLevel == config.ProviderProductionLevel) ||
+				(providerConfig.Profile == config.ProviderProcessDesktopProfile && providerConfig.DeploymentLevel == config.ProviderLocalCandidateLevel))) {
 		return errors.New("provider serve requires an explicit supported production schema")
 	}
 	if config.Server != nil && config.Server.Provider.Transport.Enabled {
@@ -488,14 +490,15 @@ func newProductionProviderTransport(ctx context.Context, cfg *config.ProviderPro
 		if roleErr != nil {
 			return nil, nil, errors.New("Provider peer CRL role binding mismatch")
 		}
-		edge, _, _, _, _, boundaryErr := profile.ProductProviderBoundary()
+		providerName, edgeID := providerContractSelection(cfg.Profile)
+		edge, _, _, _, _, boundaryErr := profile.ProductProviderInstanceBoundary(providerName)
 		if boundaryErr != nil || edge.TargetAddress != transport.Address.Addr() {
 			return nil, nil, errors.New("Provider Contract connection boundary does not match profile")
 		}
 		connectionMaxAge = time.Duration(edge.MaxConnectionSeconds) * time.Second
 		var peerURI string
 		tlsConfig, tlsProbe, peerURI, peerMonitor, err = phase6tls.ProviderServer(profile, phase6tls.ProviderServerAuthority{
-			EdgeID: phase6security.ProductProviderContractEdgeID, ListenAddress: transport.Address.Addr(),
+			EdgeID: edgeID, ListenAddress: transport.Address.Addr(),
 			PeerCRLRole: roleDocument,
 			AgentSocket: transport.AgentSocket, AgentUID: transport.AgentUID, AgentGID: transport.AgentGID,
 			OperationTimeout: time.Duration(transport.OperationTimeoutMillis) * time.Millisecond})
@@ -517,6 +520,17 @@ func newProductionProviderTransport(ctx context.Context, cfg *config.ProviderPro
 		AllowedClientURIIdentities: append([]string(nil), transport.AllowedClientURIIdentities...), Protected: protected,
 		ConnectionMaxAge: connectionMaxAge}, source)
 	return result, tlsProbe, err
+}
+
+func providerContractSelection(profile config.ProviderProcessProfile) (string, string) {
+	switch profile {
+	case config.ProviderProcessDesktopProfile:
+		return "provider-desktop-runtime", phase6security.ProductProviderDesktopContractEdgeID
+	case config.ProviderProcessCodingShellProfile:
+		return "provider-runtime", phase6security.ProductProviderContractEdgeID
+	default:
+		return "", ""
+	}
 }
 
 func loadProviderSecurityProfile(cfg *config.ProviderProcessConfig) (phase6security.Profile, error) {
@@ -552,11 +566,15 @@ func (c providerReadinessChecker) Ready(ctx context.Context) error {
 		}
 	}
 	if c.config != nil && c.config.SchemaVersion == config.ProviderProductionSchemaV3 {
-		if len(c.tlsProbes) != 2 || c.tlsProbes[0] == nil || c.tlsProbes[1] == nil {
+		expectedProbes := 2
+		if c.config.Profile == config.ProviderProcessDesktopProfile {
+			expectedProbes = 3
+		}
+		if len(c.tlsProbes) != expectedProbes {
 			return errors.New("Provider live TLS readiness is incomplete")
 		}
 		for _, probe := range c.tlsProbes {
-			if err := probe(ctx); err != nil {
+			if probe == nil || probe(ctx) != nil {
 				return errors.New("Provider live TLS signer is unavailable")
 			}
 		}

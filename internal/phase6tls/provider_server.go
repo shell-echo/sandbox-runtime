@@ -36,8 +36,16 @@ func ProviderServer(profile phase6security.Profile, authority ProviderServerAuth
 	switch authority.EdgeID {
 	case phase6security.ProductProviderContractEdgeID:
 		edge, caller, provider, serverAnchor, clientAnchor, err = profile.ProductProviderBoundary()
+	case phase6security.ProductProviderBrowserContractEdgeID:
+		edge, caller, provider, serverAnchor, clientAnchor, err = profile.ProductProviderInstanceBoundary("provider-browser-runtime")
+	case phase6security.ProductProviderDesktopContractEdgeID:
+		edge, caller, provider, serverAnchor, clientAnchor, err = profile.ProductProviderInstanceBoundary("provider-desktop-runtime")
 	case phase6security.GatewayProviderPrivateEdgeID:
 		edge, caller, provider, serverAnchor, clientAnchor, err = profile.GatewayProviderBoundary("wss://" + authority.ListenAddress + "/private/terminal")
+	case phase6security.GatewayProviderBrowserPrivateEdgeID:
+		edge, caller, provider, serverAnchor, clientAnchor, err = profile.GatewayProviderInstanceBoundary("provider-browser-runtime", "wss://"+authority.ListenAddress+"/private/browser")
+	case phase6security.GatewayProviderDesktopPrivateEdgeID:
+		edge, caller, provider, serverAnchor, clientAnchor, err = profile.GatewayProviderInstanceBoundary("provider-desktop-runtime", "wss://"+authority.ListenAddress+"/desktop")
 	default:
 		return nil, nil, "", nil, errors.New("Provider TLS edge is not authorized")
 	}
@@ -46,7 +54,7 @@ func ProviderServer(profile phase6security.Profile, authority ProviderServerAuth
 		authority.OperationTimeout < time.Second || authority.OperationTimeout > 30*time.Second {
 		return nil, nil, "", nil, errors.New("Provider TLS listener does not match profile")
 	}
-	binding, agent, subject, err := profile.TLSAgentForSubject("provider-runtime")
+	binding, agent, subject, err := profile.TLSAgentForSubject(provider.Name)
 	if err != nil || subject.PrincipalDigest != provider.PrincipalDigest ||
 		authority.AgentSocket != binding.SocketPath || authority.AgentUID != binding.AgentUID ||
 		authority.AgentGID != binding.AgentGID || agent.UID != binding.AgentUID || agent.GID != binding.AgentGID {

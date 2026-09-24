@@ -75,6 +75,52 @@ Provider production composition, Desktop v3, Product's Guest receiver and
 per-instance database/material/admission/cleanup isolation are absent, so
 the full graph and Slice 6 evidence remain open at **5/15**.
 
+Checkpoint: the three declared Product→Provider Contract and Gateway→Provider
+private edges now have exact per-instance TLS boundary selectors. The
+Provider server constructor can select six distinct inbound edge IDs and
+resolves the matching instance's TLS agent, UID/GID, peer identity, anchors
+and CRL binding; Gateway has a separate per-instance outbound constructor.
+Negative tests reject wrong private origins, route relabeling and unknown
+Provider instances. This removes an implementation alias but does not create
+Browser-only or Desktop-v3 Provider processes, isolated databases, actual
+network flows, or the full-inventory evidence gate.
+
+Checkpoint 2026-09-24: Sandbox resolved the Desktop v3/Slice 7 artifact-order
+conflict. Slice 6 may run the exact protected Desktop Provider command with
+`provider-process.v3` and `deployment_level=local_candidate`, but the image is
+explicitly `local-candidate-non-release`, never the Phase 5 signed image or a
+production readiness claim. The Desktop v3 command now selects its own Product
+Contract and Gateway private `/desktop` inbound mTLS/CRL edges and the
+Provider→Desktop `/executor` outbound mTLS/CRL edge, with independent signer,
+bootstrap, polling, bounded lifetime and readiness checks. Its candidate
+manifest must match the configured actual source tree at startup, and the
+runtime still validates the locally loaded image and fixed policy. Config
+negatives reject production relabeling, candidate/production manifest crossing,
+mutable image, pull downgrade, raw/static TLS keys and wrong routes. This is
+component composition only: a real distinct-UID three-Provider-process gate,
+real Browser-only Provider, Vault/Docker network/privilege measurements,
+media/input/restart/drain/cleanup observations and immutable Slice 6 evidence
+remain open. Phase 6 stays **5/15**. Slice 7 must publish and independently
+verify the matching executor-v2 runtime before enabling Desktop v3 production
+artifact admission; it must repeat artifact-affected security gates.
+
+Validation note: root `go test -race -shuffle=on -count=1 ./...`, `go vet
+./...`, both Contract lock verifiers, and tagged Docker lifecycle integration
+passed for this component checkpoint. A rerun of the native arm64 Desktop
+image tagged integration failed during the pinned APK archive-set check.
+An isolated reproduction using the same pinned Alpine base and exact top-level
+package versions downloaded archive set
+`sha256:84b1ca112e795f356957af456cf02bce5cd8072c689059222b2702aaca6242c0`,
+not the source-pinned
+`sha256:f6a17c5b4031b4068ae345333cdfc3d09a3ef30dfe77a461f13306d3cf5ac656`.
+This proves an archive-set mismatch under today's recursive repository
+resolution, not which individual package/version/bytes changed. The prior
+per-APK set has not yet been recovered, so a precise per-package cause is
+unproved. Sandbox ruled that Phase 6 needs a separate candidate-only recipe
+and closed per-architecture APK lock. The Phase 5 signed artifact, historical
+recipe and publication lock remain untouched; neither the failed native gate
+nor the passing Go suites establishes Slice 6 readiness.
+
 Checkpoint 2026-09-24: Browser/Desktop role v3 configuration now refuses raw
 TLS files and static material selections. Their candidate application graph
 resolves only the matching Provider-instance attach edge and the separate

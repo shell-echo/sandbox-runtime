@@ -1109,6 +1109,19 @@ candidates and run real KMS/database/Docker/independent-process gates whenever
 the change reaches their adapter, composition, configuration or image path.
 Never use component evidence as a substitute for those gates.
 
+For the Slice 6 Desktop security gate, configure the independent Desktop
+Provider with `provider-process.v3`, `deployment_level=local_candidate`, the
+same mode-0600 candidate manifest, and `desktop.local_candidate_source_root`
+pointing to the exact committed checkout used to build it. Startup checks the
+manifest against that source tree and the Docker adapter inspects the actual
+loaded image. The Contract, private `/desktop` and outbound `/executor`
+transports use the Desktop Provider's live TLS/CRL edges; raw or static TLS
+keys are not accepted. `application.mode=production` selects the protected
+command path, not an artifact release claim. Desktop v3
+`deployment_level=production` remains rejected until Slice 7 publishes and
+independently verifies the matching executor-v2 runtime and repeats affected
+security gates.
+
 The formal Slice 5 campaign uses one clean runtime commit and a separate
 evidence-tool commit. Build the Desktop candidate from the runtime commit,
 then make only the closed evidence-test change accepted by the Phase 6

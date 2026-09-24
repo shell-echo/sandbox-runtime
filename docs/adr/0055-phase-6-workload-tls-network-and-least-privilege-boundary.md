@@ -634,6 +634,13 @@ media/broker timing changes.
 - Slice 6 proves local enforcement with real Vault PKI and Docker, not an HSM
   CA, cloud identity, published/signed application image, platform service
   account, deployment, HA or production readiness.
+- The Desktop v3 Slice 6 gate uses the exact non-release local-candidate
+  image/source identity from ADR 0052. Its protected production-mode command
+  is not a production artifact claim. The Desktop Contract, private and attach
+  edges must still use the live Desktop Provider principal, mTLS, CRL bootstrap,
+  polling and bounded drain; static-key fallback and candidate relabeling are
+  forbidden. Slice 7 publishes the executor-v2 runtime and revalidates the
+  artifact-dependent security gates before Slice 11 or 14 may use it.
 - The descriptor-5 first-operation bootstrap is an operator runbook boundary,
   not automatic HSM, cert-manager, cloud workload identity or platform
   bootstrap. Slices 11 and 14 must replace or explicitly revalidate it in each

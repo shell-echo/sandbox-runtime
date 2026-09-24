@@ -7,10 +7,33 @@ import (
 
 const GatewayProviderPrivateEdgeID = "gateway-provider-private"
 
+const (
+	GatewayProviderBrowserPrivateEdgeID = "gateway-provider-browser-private"
+	GatewayProviderDesktopPrivateEdgeID = "gateway-provider-desktop-private"
+)
+
 // GatewayProviderBoundary resolves only the repository-owned private
 // Gateway→Provider handoff route. It is not a Provider Contract endpoint or
 // permission to dial any other Provider listener.
 func (p Profile) GatewayProviderBoundary(origin string) (TrustEdge, Principal, Principal, TrustAnchor, TrustAnchor, error) {
+	return p.GatewayProviderInstanceBoundary("provider-runtime", origin)
+}
+
+// GatewayProviderInstanceBoundary binds one Gateway private route to exactly
+// its matching Provider process and principal. A Browser/Desktop route cannot
+// be relabeled as the coding-shell Terminal route.
+func (p Profile) GatewayProviderInstanceBoundary(providerName, origin string) (TrustEdge, Principal, Principal, TrustAnchor, TrustAnchor, error) {
+	var edgeID, networkName, route string
+	switch providerName {
+	case "provider-runtime":
+		edgeID, networkName, route = GatewayProviderPrivateEdgeID, "gateway-provider", "/private/terminal"
+	case "provider-browser-runtime":
+		edgeID, networkName, route = GatewayProviderBrowserPrivateEdgeID, "gateway-provider-browser", "/private/browser"
+	case "provider-desktop-runtime":
+		edgeID, networkName, route = GatewayProviderDesktopPrivateEdgeID, "gateway-provider-desktop", "/desktop"
+	default:
+		return TrustEdge{}, Principal{}, Principal{}, TrustAnchor{}, TrustAnchor{}, ErrInvalidProfile
+	}
 	if p.Validate() != nil {
 		return TrustEdge{}, Principal{}, Principal{}, TrustAnchor{}, TrustAnchor{}, ErrInvalidProfile
 	}
@@ -18,7 +41,7 @@ func (p Profile) GatewayProviderBoundary(origin string) (TrustEdge, Principal, P
 	var gateway, provider Principal
 	var network Network
 	for _, candidate := range p.TrustEdges {
-		if candidate.ID == GatewayProviderPrivateEdgeID {
+		if candidate.ID == edgeID {
 			edge = candidate
 		}
 	}
@@ -26,25 +49,28 @@ func (p Profile) GatewayProviderBoundary(origin string) (TrustEdge, Principal, P
 		switch principal.Name {
 		case "gateway-runtime":
 			gateway = principal
-		case "provider-runtime":
+		case providerName:
 			provider = principal
 		}
 	}
 	for _, candidate := range p.Networks {
-		if candidate.Name == "gateway-provider" {
+		if candidate.Name == networkName {
 			network = candidate
 		}
 	}
 	target, targetErr := netip.ParseAddrPort(edge.TargetAddress)
 	subnet, subnetErr := netip.ParsePrefix(network.IPv4Subnet)
-	if edge.ID != GatewayProviderPrivateEdgeID || edge.From != gateway.Name || gateway.Name != "gateway-runtime" ||
-		edge.To != provider.Name || provider.Name != "provider-runtime" || edge.Protocol != "wss" ||
-		edge.Authentication != "mtls" || edge.TenantScope != "bound" || edge.RoutePath == "" ||
+	if edge.ID != edgeID || edge.From != gateway.Name || gateway.Name != "gateway-runtime" ||
+		edge.To != provider.Name || provider.Name != providerName || edge.Protocol != "wss" ||
+		edge.Authentication != "mtls" || edge.TenantScope != "bound" || edge.RoutePath != route ||
+		provider.TLS == nil || gateway.TLS == nil ||
+		edge.FromPrincipalDigest != gateway.PrincipalDigest || edge.ToPrincipalDigest != provider.PrincipalDigest ||
+		edge.FromURI != gateway.TLS.URI || edge.ToURI != provider.TLS.URI ||
 		origin != "wss://"+edge.TargetAddress+edge.RoutePath || targetErr != nil || subnetErr != nil ||
 		!subnet.Contains(target.Addr()) || network.Kind != "trust_edge" || !network.Internal ||
-		!slices.Equal(network.Principals, []string{"gateway-runtime", "provider-runtime"}) ||
+		!slices.Equal(network.Principals, []string{"gateway-runtime", providerName}) ||
 		!slices.Contains(gateway.Networks, network.Name) || !slices.Contains(provider.Networks, network.Name) ||
-		provider.TLS == nil || gateway.TLS == nil || !slices.Contains(provider.TLS.Usages, "server_auth") ||
+		!slices.Contains(provider.TLS.Usages, "server_auth") ||
 		!slices.Contains(gateway.TLS.Usages, "client_auth") || len(provider.TLS.DNSNames) != 1 {
 		return TrustEdge{}, Principal{}, Principal{}, TrustAnchor{}, TrustAnchor{}, ErrInvalidProfile
 	}
