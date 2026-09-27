@@ -134,38 +134,14 @@ func TestPhase6Slice6TopologyPreflight(t *testing.T) {
 			inspections[key] = output
 		}
 		if verifyLoadedSlice6Image(principal, output) != nil ||
-			(principal.ImageLocation == "local" &&
-				verifySlice6LocalRoleImageLabels(principal.Name, input.sourceRevision, output) != nil) {
+			(principal.ImageLocation == "local" && principal.Name != "desktop-sandbox-runtime" &&
+				phase6security.VerifySlice6LocalRoleImageInspect(principal, input.sourceRevision, output) != nil) {
 			t.Fatalf("Slice 6 exact role image identity is unavailable for %s", principal.Name)
 		}
 	}
 	if len(inspections) == 0 {
 		t.Fatal("Slice 6 profile has no local role candidates")
 	}
-}
-
-func verifySlice6LocalRoleImageLabels(deployment, sourceRevision string, document []byte) error {
-	target, err := phase6security.Slice6DesiredImageTarget(deployment)
-	if err != nil || target == phase6security.Slice6BrowserPublishedImage {
-		return errors.New("Slice 6 local role image target is invalid")
-	}
-	if target == phase6security.Slice6DesktopCandidateImage {
-		// The Desktop candidate has its separate source/build/archive manifest.
-		return nil
-	}
-	var images []struct {
-		Config struct {
-			Labels map[string]string `json:"Labels"`
-		} `json:"Config"`
-	}
-	if json.Unmarshal(document, &images) != nil || len(images) != 1 ||
-		images[0].Config.Labels["io.github.shell-echo.sandbox-runtime.phase6-candidate"] != "local-only-non-release" ||
-		images[0].Config.Labels["io.github.shell-echo.sandbox-runtime.source-revision"] != sourceRevision ||
-		images[0].Config.Labels["io.github.shell-echo.sandbox-runtime.role-target"] != target ||
-		images[0].Config.Labels["io.github.shell-echo.sandbox-runtime.go-version"] != "go1.26.8" {
-		return errors.New("Slice 6 local role image labels differ from source target")
-	}
-	return nil
 }
 
 // This checks only the loaded store object's exact identity, including the
@@ -313,37 +289,6 @@ func TestSlice6LoadedBrowserPublicationRejectsStoreSubstitution(t *testing.T) {
 		if err := verifyLoadedSlice6Image(principal, value); err == nil {
 			t.Errorf("%s admitted", name)
 		}
-	}
-}
-
-func TestSlice6LocalRoleImageLabelsBindBuildTargetAndSource(t *testing.T) {
-	revision := strings.Repeat("a", 40)
-	document := func(target, source string) []byte {
-		value, err := json.Marshal([]any{map[string]any{"Config": map[string]any{"Labels": map[string]string{
-			"io.github.shell-echo.sandbox-runtime.phase6-candidate": "local-only-non-release",
-			"io.github.shell-echo.sandbox-runtime.source-revision":  source,
-			"io.github.shell-echo.sandbox-runtime.role-target":      target,
-			"io.github.shell-echo.sandbox-runtime.go-version":       "go1.26.8",
-		}}}})
-		if err != nil {
-			t.Fatal(err)
-		}
-		return value
-	}
-	if err := verifySlice6LocalRoleImageLabels("product-runtime", revision, document("core", revision)); err != nil {
-		t.Fatalf("reviewed Product core candidate labels rejected: %v", err)
-	}
-	for name, candidate := range map[string][]byte{
-		"wrong target":   document("gateway", revision),
-		"wrong revision": document("core", strings.Repeat("b", 40)),
-		"missing labels": []byte(`[{}]`),
-	} {
-		if err := verifySlice6LocalRoleImageLabels("product-runtime", revision, candidate); err == nil {
-			t.Errorf("%s admitted", name)
-		}
-	}
-	if err := verifySlice6LocalRoleImageLabels("browser-sandbox-runtime", revision, document("core", revision)); err == nil {
-		t.Fatal("published Browser image was admitted as a local role candidate")
 	}
 }
 

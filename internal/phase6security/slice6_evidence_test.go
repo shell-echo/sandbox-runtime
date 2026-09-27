@@ -113,7 +113,7 @@ func validSlice6EvidenceFixture(t *testing.T) Slice6Evidence {
 		RuntimeTreeDigest: testDigest("runtime-tree"), EvidenceRevision: strings.Repeat("b", 40),
 		EvidenceTreeDigest: testDigest("evidence-tree"), ObservedAt: now, Profile: profile,
 		Observations: observations,
-		NonClaims:    []string{"independent_host_or_platform_enforcement", "published_or_signed_application_images", "production_readiness"}}
+		NonClaims:    []string{"independent_host_or_platform_enforcement", "complete_application_image_publication_and_signing", "production_readiness"}}
 	for index, principal := range profile.Principals {
 		evidence.Processes = append(evidence.Processes, Slice6ProcessEvidence{
 			DeploymentName: principal.Name, Sequence: 1, ContainerID: observations.Containers[index].ContainerID,
@@ -199,6 +199,7 @@ func TestSlice6EvidenceRequiresCompleteClosedInventory(t *testing.T) {
 		"missing cleanup":         func(e *Slice6Evidence) { e.Cleanup = e.Cleanup[1:] },
 		"resource remains":        func(e *Slice6Evidence) { e.Cleanup[0].Remaining = 1 },
 		"production overclaim":    func(e *Slice6Evidence) { e.NonClaims[2] = "production_ready" },
+		"obsolete image nonclaim": func(e *Slice6Evidence) { e.NonClaims[1] = "published_or_signed_application_images" },
 		"digest mismatch":         func(e *Slice6Evidence) { e.RuntimeTreeDigest = testDigest("other") },
 	} {
 		t.Run(name, func(t *testing.T) {

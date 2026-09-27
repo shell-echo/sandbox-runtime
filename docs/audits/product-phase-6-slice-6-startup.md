@@ -1962,3 +1962,14 @@ gh attestation verify \
   --source-digest 58ed0093816d3daa3000750013b8e5991ef4bcf7 \
   --deny-self-hosted-runners --format json
 ```
+
+The unpublished Slice 6 evidence v2 nonclaim now says
+`complete_application_image_publication_and_signing`: the complete topology
+has not passed publication/signing qualification. It no longer risks being
+read as denying the exact Browser sandbox publication above. The obsolete
+ambiguous value is rejected; historical Slice 4/5 evidence is unchanged.
+The local-role Docker-inspect preflight is now a reusable strict security
+check rather than a test-only label helper. It checks source/target/toolchain
+labels, exact descriptor and platform, fixed executable entrypoint and
+non-root default user, while retaining the separate raw OCI/runtime proof
+requirements. Neither change supplies missing live Slice 6 receipts.

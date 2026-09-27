@@ -269,7 +269,7 @@ func (e Slice6Evidence) Validate() error {
 		!validSlice6Scenarios(e.Profile, e.Scenarios) ||
 		!validSlice6Cleanup(e.Cleanup) ||
 		len(e.NonClaims) != 3 || e.NonClaims[0] != "independent_host_or_platform_enforcement" ||
-		e.NonClaims[1] != "published_or_signed_application_images" ||
+		e.NonClaims[1] != "complete_application_image_publication_and_signing" ||
 		e.NonClaims[2] != "production_readiness" ||
 		e.ManifestDigest != slice6EvidenceDigest(e) {
 		return ErrInvalidSlice6Evidence
