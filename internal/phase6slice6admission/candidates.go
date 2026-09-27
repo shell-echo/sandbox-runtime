@@ -11,7 +11,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
-	"runtime/debug"
 	"sort"
 	"strings"
 
@@ -48,31 +47,11 @@ func Verify(ctx context.Context, inputs CandidateInputs) (phase6security.Slice6E
 	if err != nil {
 		return phase6security.Slice6Evidence{}, ErrInvalidAdmission
 	}
-	if verifyExecutingEvidenceSource(evidence.EvidenceRevision) != nil {
-		return phase6security.Slice6Evidence{}, ErrInvalidAdmission
-	}
 	roles, desktop, err := verifyCandidateArtifacts(ctx, evidence, inputs)
 	if err != nil || verifyDescriptorChain(evidence, inputs, roles, desktop) != nil {
 		return phase6security.Slice6Evidence{}, ErrInvalidAdmission
 	}
 	return evidence, nil
-}
-
-// The verifier executable itself must be built from the clean E checkout.
-// A caller-supplied clean directory alone cannot relabel another binary.
-func verifyExecutingEvidenceSource(revision string) error {
-	info, ok := debug.ReadBuildInfo()
-	if !ok || info.GoVersion != "go1.26.8" {
-		return ErrInvalidAdmission
-	}
-	settings := make(map[string]string, len(info.Settings))
-	for _, setting := range info.Settings {
-		settings[setting.Key] = setting.Value
-	}
-	if settings["vcs"] != "git" || settings["vcs.revision"] != revision || settings["vcs.modified"] != "false" {
-		return ErrInvalidAdmission
-	}
-	return nil
 }
 
 // VerifyCandidateArtifacts reopens the exact private OCI archives and their

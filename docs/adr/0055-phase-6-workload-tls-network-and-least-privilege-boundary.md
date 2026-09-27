@@ -1262,6 +1262,13 @@ local candidates from the frozen R, even when only one target changed; a
 future proven target-equivalence path could narrow rebuilding to affected
 targets. Browser's
 historical signed publication remains independent of the local C=R rule.
+The final command also independently rebuilds its own executable from clean
+E with one fixed offline Go 1.26.8 recipe and compares the executing bytes;
+the current managed worktree's Go build did not emit VCS metadata even with
+`-buildvcs=true`. That local observation is not a general claim about Go's
+VCS stamping. Byte equivalence on the trusted host is not an independent
+signature, unique historical build provenance or a substitute for trusted
+gate execution.
 
 ### Local full-topology profile supply (2026-09-27)
 

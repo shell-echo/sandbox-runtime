@@ -197,9 +197,3 @@ func TestRuntimeAndEvidenceRevisionsAreIndependentlyVerified(t *testing.T) {
 		t.Fatal("dirty source view admitted")
 	}
 }
-
-func TestExecutingEvidenceSourceRejectsInventedRevision(t *testing.T) {
-	if verifyExecutingEvidenceSource(strings.Repeat("f", 40)) == nil {
-		t.Fatal("running verifier relabeled as an invented evidence revision")
-	}
-}

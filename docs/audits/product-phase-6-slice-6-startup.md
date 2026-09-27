@@ -2117,3 +2117,14 @@ R with only the affected target rebuilt: every local candidate must originate
 from the newly frozen R unless a separately reviewed target-specific
 byte-level equivalence path is implemented. No such cross-runtime reuse or
 full candidate admission is claimed by the clean-source unit test here.
+
+The first attempt to bind the executing verifier to E by Go VCS build info
+was fail-closed but unusable here: a clean local Go 1.26.8 build, including
+explicit `-buildvcs=true`, exposed no `vcs.*` settings in `go version -m`.
+Two clean fixed-recipe builds of the current verifier matched byte for byte
+(`sha256:6cacb8943eebccd1955bf4afd6d59a7ade70c8cf8562af63ffa4f9fd828d9374`
+with `CGO_ENABLED=0`). Final CLI admission therefore uses a separate bounded
+offline rebuild from E and compares its bytes to the actual executing file;
+VCS metadata is not the sole gate. This demonstrates local reproducibility,
+not a signed publication or unique origin. A positive real CLI/bundle gate
+is still pending.

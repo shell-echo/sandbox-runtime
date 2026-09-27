@@ -31,12 +31,17 @@ func run(arguments []string, output io.Writer) error {
 		*runtimeSourceRoot == "" || *evidenceSourceRoot == "" || *roleCandidateDir == "" || *desktopCandidate == "" {
 		return errors.New("Slice 6 admission requires manifest, bundle-root, runtime-source-root, evidence-source-root, role-candidate-dir and desktop-candidate")
 	}
-	evidence, err := phase6slice6admission.Verify(context.Background(), phase6slice6admission.CandidateInputs{
+	ctx := context.Background()
+	evidence, err := phase6slice6admission.Verify(ctx, phase6slice6admission.CandidateInputs{
 		RuntimeSourceRoot: *runtimeSourceRoot, EvidenceSourceRoot: *evidenceSourceRoot,
 		RoleCandidateDir:     *roleCandidateDir,
 		DesktopCandidatePath: *desktopCandidate, ManifestPath: *manifestPath, BundleRoot: *bundleRoot,
 	})
 	if err != nil {
+		return err
+	}
+	if err := phase6slice6admission.VerifyExecutable(ctx, *evidenceSourceRoot,
+		evidence.EvidenceRevision, evidence.EvidenceTreeDigest); err != nil {
 		return err
 	}
 	_, err = fmt.Fprintf(output, "verified Slice 6 artifact and receipt admission: run %s, %d scenarios, manifest %s; execution origin still requires the trusted gate\n",

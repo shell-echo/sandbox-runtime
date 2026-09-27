@@ -1322,9 +1322,20 @@ repository-role candidate manifest and OCI archive, the current Desktop
 candidate manifest and archive, original-byte descriptor payloads, and
 Docker container/image inspect receipts:
 
+From the clean E checkout on this macOS/arm64 host, build once with the
+fixed offline recipe into a mode-0700 private directory, then run that exact
+binary (not `go run`):
+
 ```bash
-mise exec go@1.26.8 -- env -u GOROOT go run \
-  ./cmd/verify-product-phase6-slice6-evidence \
+p6_go="$(mise where go@1.26.8)/bin/go"
+env -i HOME="$HOME" PATH=/usr/bin:/bin \
+  GOCACHE="$HOME/Library/Caches/go-build" GOMODCACHE="$HOME/go/pkg/mod" \
+  GOENV=off GOWORK=off GOFLAGS= GOEXPERIMENT= CGO_ENABLED=0 \
+  GOOS=darwin GOARCH=arm64 GOARM64=v8.0 \
+  GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off \
+  "$p6_go" build -mod=readonly -trimpath -buildvcs=false -ldflags=-buildid= \
+  -o /absolute/private/verifier ./cmd/verify-product-phase6-slice6-evidence
+/absolute/private/verifier \
   -manifest /absolute/private/bundle/manifest.json \
   -bundle-root /absolute/private/bundle \
   -runtime-source-root /absolute/clean/runtime-source \
@@ -1360,9 +1371,13 @@ unchanged. Each source root must be a clean checkout of its named revision.
 The clean-source unit test proves source identity separation only; real
 candidate/archive admission and actual gate execution from E remain separate
 checks.
-The final CLI also checks its own Go VCS build metadata: it must have been
-built with Go 1.26.8 from a clean E revision. Suppressing VCS metadata or
-pointing an unrelated executable at a clean E checkout fails admission.
+The final CLI independently rebuilds its own command from the clean E
+checkout with the same pinned Go 1.26.8/offline recipe and compares the
+actual executing file byte for byte; build VCS metadata is not relied upon
+on this host. This is same-host reproducibility, not a signature or proof of
+unique historical origin. Pointing an unrelated executable at a clean E
+checkout fails admission. A trusted gate remains responsible for command
+launch and all observations.
 
 Even a passing complete offline admission does not prove that a trusted harness
 executed the commands. Only the still-missing full live gate, its auditable
