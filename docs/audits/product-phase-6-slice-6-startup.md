@@ -1989,6 +1989,25 @@ clean-checkout inputs for current-source role builds: HEAD and byte-exact
 committed tree, Dockerfile, build script, `go.mod`/`go.sum`, fixed base digest,
 build parameters, Go 1.26.8 compiler/linker executables and standard-library
 source. `VerifySource` re-derives these from disk rather than trusting receipt
-strings. The build-context binary-to-image comparison, retained candidate
-record and full topology are not yet complete, so this remains a component
-boundary and Phase 6 remains **5/15**.
+strings. A retained candidate record and full topology are not yet complete,
+so this remains a component boundary and Phase 6 remains **5/15**.
+
+At clean source revision `b105a6c2eb63731e4feb75a4c2c4e2f3557821cb`,
+the opt-in native Docker core-candidate test rebuilt the current role image,
+saved its private OCI archive, verified
+the selected manifest/config/ordered layers, and independently ran the same
+fixed Go build from the clean source inputs. The rebuilt binary bytes matched
+the regular executable extracted from the verified image layer; the high-UID
+role entrypoint ran and the test-owned containers were removed. Negative unit
+cases reject a replaced layer path, whiteout, symlink, duplicate, wrong mode,
+and missing executable. The exact command was:
+
+```bash
+SANDBOX_RUNTIME_PHASE6_LOCAL_ROLE_INTEGRATION=1 \
+go test -tags=integration -race -count=1 \
+  -run '^TestLocalCoreCandidateRunsAsHighUID$' -v ./profiles/phase6/local-role
+```
+
+This is one current-source `core` image component, not a retained all-target
+candidate inventory, final running-container observation, complete profile,
+16-scenario run, or Slice 6 evidence bundle.
