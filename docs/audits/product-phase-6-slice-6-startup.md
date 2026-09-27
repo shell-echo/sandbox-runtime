@@ -28,6 +28,32 @@ clean checkout and reviewed deployment→target map, and rejects missing, extra,
 duplicate or cross-target reuse before side effects. Its tagged race tests
 pass; this is still input admission, not a real topology or scenario result.
 
+Checkpoint 2026-09-27 (measured single-target space and owned cleanup): at
+clean revision `a5f2bbd197e4bc589298e2761491fc55bddca760`, one
+`browser-action-ingress` local image build's largest observed free-space drop
+was 63,135,744 bytes; recording its exact 13,836,800-byte private OCI
+archive and manifest had a largest observed drop of 44,847,104 bytes. At clean
+revision `c9cb492db1f25f8efff06fe4dccdeb8c9740501a`, the core build
+had a largest observed drop of 116,137,984 bytes, and recording its exact
+22,594,560-byte archive had a largest observed drop of 61,546,496 bytes.
+Samples were polled every 0.5 seconds, so these are observed maxima, not a proven bound
+on sub-sample spikes or other targets. The host's free-space baseline moved
+from about 16 GiB to about 30 GiB during this work for a reason not
+established by this task; no general Docker cleanup was performed here.
+
+The Docker resource-ledger component now requires the current-source,
+independently reloadable `provider-runtime`/`core` manifest and image label.
+Its opt-in real-Docker race run passed on the c9cb492 candidate: a high-UID
+core process ran in an isolated network, returned container/network IDs were
+deliberately dropped, run-label rediscovery removed both exact resources, and
+post-run Docker listings showed no matching containers or networks. Its
+observed host-space peak was 10,391,552 bytes above the start sample; the
+ledger test does not exercise the complete service chain. These per-revision
+diagnostic candidates are not the final same-run Slice 6 evidence. Remaining
+budget gaps include other unique role targets and bounded live PostgreSQL,
+recording, logs, writable layers and cleanup headroom; 4 GiB is a
+conservative stop threshold, not a proven system minimum or a release gate.
+
 ## Fixed Slice 6 open-item ledger
 
 This table tracks the existing Slice 6 acceptance conditions; component
