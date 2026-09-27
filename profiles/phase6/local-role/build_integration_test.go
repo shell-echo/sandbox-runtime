@@ -67,18 +67,27 @@ func TestLocalCoreCandidateRunsAsHighUID(t *testing.T) {
 		t.Fatal(err)
 	}
 	container := "sr-p6-role-core-" + hex.EncodeToString(random)
+	identityProbe := container + "-identity"
 	t.Cleanup(func() {
 		cleanup, stop := context.WithTimeout(context.Background(), 20*time.Second)
 		defer stop()
-		_ = exec.CommandContext(cleanup, "docker", "rm", "-f", container).Run()
-		if err := exec.CommandContext(cleanup, "docker", "inspect", container).Run(); err == nil {
-			t.Errorf("test-owned local role container %s remains", container)
+		for _, name := range []string{container, identityProbe} {
+			_ = exec.CommandContext(cleanup, "docker", "rm", "-f", name).Run()
+			if err := exec.CommandContext(cleanup, "docker", "inspect", name).Run(); err == nil {
+				t.Errorf("test-owned local role container %s remains", name)
+			}
 		}
 	})
-	args := []string{"run", "--rm", "--pull=never", "--name", container,
-		"--network", "none", "--read-only", "--user", "21001:31001",
+	confined := []string{"run", "--rm", "--pull=never", "--network", "none", "--read-only", "--user", "21001:31001",
 		"--cap-drop", "ALL", "--security-opt", "no-new-privileges",
-		"--pids-limit", "32", "--memory", "128m", image, "--help"}
+		"--pids-limit", "32", "--memory", "128m"}
+	probeArgs := append(append([]string(nil), confined...), "--name", identityProbe, "--entrypoint", "/bin/sh", image,
+		"-c", "id -u; id -g")
+	output, err = exec.CommandContext(ctx, "docker", probeArgs...).CombinedOutput()
+	if err != nil || strings.TrimSpace(string(output)) != "21001\n31001" {
+		t.Fatalf("effective high-UID container identity: %v: %.512s", err, output)
+	}
+	args := append(append([]string(nil), confined...), "--name", container, image, "--help")
 	output, err = exec.CommandContext(ctx, "docker", args...).CombinedOutput()
 	if err != nil || !strings.Contains(string(output), "sandbox-runtime") {
 		t.Fatalf("real high-UID role command failed: %v: %.1024s", err, output)
