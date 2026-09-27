@@ -1247,6 +1247,21 @@ rotation and CRLs are later observations, not profile rewrites. Image
 descriptors derive only from locked external images or audited immutable local
 candidates, never an arbitrary image present on the host.
 
+For this reviewed same-host candidate inventory, all 58 deployment names map
+explicitly to their executable build targets. Static Product, Gateway,
+Provider, Guest, Browser/Desktop role processes, agents, controllers, brokers
+and relay use current-source local role candidates; Desktop sandbox uses its
+separate current-source local candidate. Browser **sandbox** alone reuses the
+already signed Phase 5 Browser publication, with its original source and
+provenance identity rather than a false current-HEAD label. Admission pins the
+full registry repository and index digest, platform and selected manifest
+from the repository-owned publication. This selection does not prohibit a
+later separately reviewed local Browser candidate under the broader rule
+above. Loaded-image
+inspection and source/target labels are preflight checks only: the full gate
+still independently verifies original OCI bytes, signature/provenance, the
+running container and process identity, effective UID/slot/CDP, and cleanup.
+
 The generator emits desired configuration and bootstrap records only. The
 observer separately reads live Docker inspect, effective process identity,
 certificate chains/handshakes, PostgreSQL HBA/roles/new connections and

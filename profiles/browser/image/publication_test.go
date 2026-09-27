@@ -10,6 +10,18 @@ func TestLockedPublication(t *testing.T) {
 	if publication.Image() != PublishedRepository+"@"+PublishedDigest {
 		t.Fatalf("published image = %q", publication.Image())
 	}
+	for platform, want := range map[string]string{
+		"linux/amd64":    PublishedAMD64Manifest,
+		"linux/arm64/v8": PublishedARM64Manifest,
+	} {
+		got, err := publication.SelectedManifest(platform)
+		if err != nil || got != want {
+			t.Fatalf("selected %s manifest = %q, %v", platform, got, err)
+		}
+	}
+	if _, err := publication.SelectedManifest("linux/arm64"); err == nil {
+		t.Fatal("unreviewed platform acquired a published manifest")
+	}
 }
 
 func TestPublicationRejectsDrift(t *testing.T) {

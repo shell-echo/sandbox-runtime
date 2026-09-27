@@ -5,6 +5,8 @@ import "errors"
 const (
 	PublishedRepository     = "ghcr.io/shell-echo/sandbox-runtime-browser"
 	PublishedDigest         = "sha256:87d3216c22ada0fea74b375a3ee5c2ddf021d3e1913569e2aeb4a316ed3b5c2f"
+	PublishedAMD64Manifest  = "sha256:5e68861696218355998a552800908fd9ef26698435010761f9f7265145a3c746"
+	PublishedARM64Manifest  = "sha256:93ddabde08132c50650d141cf47403263622fe72a5fad1ffaffbf69a94e35591"
 	PublishedSourceCommit   = "58ed0093816d3daa3000750013b8e5991ef4bcf7"
 	PublishedTag            = "sha-58ed0093816d3daa3000750013b8e5991ef4bcf7"
 	PublishedWorkflow       = "github.com/shell-echo/sandbox-runtime/.github/workflows/browser-image.yml"
@@ -46,6 +48,22 @@ func LockedPublication() Publication {
 }
 
 func (p Publication) Image() string { return p.Repository + "@" + p.Digest }
+
+// SelectedManifest is the content manifest of the signed publication's exact
+// runtime platform. It is not an independently replaceable image authority.
+func (p Publication) SelectedManifest(platform string) (string, error) {
+	if p.Validate() != nil {
+		return "", ErrInvalidPublication
+	}
+	switch platform {
+	case "linux/amd64":
+		return PublishedAMD64Manifest, nil
+	case "linux/arm64/v8":
+		return PublishedARM64Manifest, nil
+	default:
+		return "", ErrInvalidPublication
+	}
+}
 
 func (p Publication) Validate() error {
 	want := LockedPublication()

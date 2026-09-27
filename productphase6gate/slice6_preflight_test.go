@@ -17,6 +17,7 @@ import (
 
 	"github.com/shell-echo/sandbox-runtime/internal/desktopcandidate"
 	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
+	browserimage "github.com/shell-echo/sandbox-runtime/profiles/browser/image"
 )
 
 const slice6PreflightEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_PREFLIGHT"
@@ -52,6 +53,7 @@ func loadSlice6GateInput(ctx context.Context, profilePath, sourceRoot, sourceRev
 		phase6security.VerifySlice6DesiredEgressPolicies(profile) != nil ||
 		phase6security.VerifySlice6DesiredTrustAnchors(profile) != nil ||
 		phase6security.VerifySlice6DesiredTLSIdentities(profile) != nil ||
+		phase6security.VerifySlice6DesiredImageLocations(profile) != nil ||
 		phase6security.VerifySlice6DesiredIngress(profile) != nil {
 		return slice6GateInput{}, errors.New("Slice 6 complete security profile is unavailable")
 	}
@@ -116,33 +118,71 @@ func TestPhase6Slice6TopologyPreflight(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	seen := make(map[string]bool)
+	inspections := make(map[string][]byte)
 	for _, principal := range input.profile.Principals {
-		if principal.ImageLocation != "local" || seen[principal.ImageDigest+"/"+principal.ImagePlatform] {
+		if principal.ImageLocation != "local" && principal.Name != "browser-sandbox-runtime" {
 			continue
 		}
-		seen[principal.ImageDigest+"/"+principal.ImagePlatform] = true
-		output, err := exec.CommandContext(ctx, "docker", "image", "inspect", principal.ImageDigest).Output()
-		if err != nil || verifyLoadedSlice6Image(principal, output) != nil {
-			t.Fatalf("Slice 6 exact local role image identity is unavailable for %s", principal.Name)
+		key := principal.ImageReference + "/" + principal.ImagePlatform
+		output, found := inspections[key]
+		if !found {
+			var err error
+			output, err = exec.CommandContext(ctx, "docker", "image", "inspect", principal.ImageReference).Output()
+			if err != nil {
+				t.Fatalf("Slice 6 exact role image is unavailable for %s", principal.Name)
+			}
+			inspections[key] = output
+		}
+		if verifyLoadedSlice6Image(principal, output) != nil ||
+			(principal.ImageLocation == "local" &&
+				verifySlice6LocalRoleImageLabels(principal.Name, input.sourceRevision, output) != nil) {
+			t.Fatalf("Slice 6 exact role image identity is unavailable for %s", principal.Name)
 		}
 	}
-	if len(seen) == 0 {
+	if len(inspections) == 0 {
 		t.Fatal("Slice 6 profile has no local role candidates")
 	}
 }
 
-// This checks only the loaded store object's exact identity. A live gate must
-// additionally bind the container-selected manifest, raw OCI bytes and layers.
-func verifyLoadedSlice6Image(principal phase6security.Principal, document []byte) error {
-	if principal.ImageLocation != "local" || principal.ImageReference != principal.ImageDigest || len(document) == 0 || len(document) > 2<<20 {
-		return errors.New("Slice 6 local image identity is invalid")
+func verifySlice6LocalRoleImageLabels(deployment, sourceRevision string, document []byte) error {
+	target, err := phase6security.Slice6DesiredImageTarget(deployment)
+	if err != nil || target == phase6security.Slice6BrowserPublishedImage {
+		return errors.New("Slice 6 local role image target is invalid")
+	}
+	if target == phase6security.Slice6DesktopCandidateImage {
+		// The Desktop candidate has its separate source/build/archive manifest.
+		return nil
 	}
 	var images []struct {
-		ID           string `json:"Id"`
-		OS           string `json:"Os"`
-		Architecture string `json:"Architecture"`
-		Variant      string `json:"Variant"`
+		Config struct {
+			Labels map[string]string `json:"Labels"`
+		} `json:"Config"`
+	}
+	if json.Unmarshal(document, &images) != nil || len(images) != 1 ||
+		images[0].Config.Labels["io.github.shell-echo.sandbox-runtime.phase6-candidate"] != "local-only-non-release" ||
+		images[0].Config.Labels["io.github.shell-echo.sandbox-runtime.source-revision"] != sourceRevision ||
+		images[0].Config.Labels["io.github.shell-echo.sandbox-runtime.role-target"] != target ||
+		images[0].Config.Labels["io.github.shell-echo.sandbox-runtime.go-version"] != "go1.26.8" {
+		return errors.New("Slice 6 local role image labels differ from source target")
+	}
+	return nil
+}
+
+// This checks only the loaded store object's exact identity, including the
+// named registry reference when used. A live gate must additionally bind the
+// signed provenance, container-selected manifest, raw OCI bytes and layers.
+func verifyLoadedSlice6Image(principal phase6security.Principal, document []byte) error {
+	if (principal.ImageLocation != "local" && principal.ImageLocation != "registry") ||
+		(principal.ImageLocation == "local" && principal.ImageReference != principal.ImageDigest) ||
+		len(document) == 0 || len(document) > 2<<20 {
+		return errors.New("Slice 6 image identity is invalid")
+	}
+	var images []struct {
+		ID           string   `json:"Id"`
+		OS           string   `json:"Os"`
+		Architecture string   `json:"Architecture"`
+		Variant      string   `json:"Variant"`
+		RepoDigests  []string `json:"RepoDigests"`
 		Descriptor   *struct {
 			MediaType string `json:"mediaType"`
 			Digest    string `json:"digest"`
@@ -150,6 +190,9 @@ func verifyLoadedSlice6Image(principal phase6security.Principal, document []byte
 	}
 	if json.Unmarshal(document, &images) != nil || len(images) != 1 || images[0].ID != principal.ImageDigest || images[0].OS != "linux" {
 		return errors.New("Slice 6 Docker store identity differs from profile")
+	}
+	if principal.ImageLocation == "registry" && !slices.Contains(images[0].RepoDigests, principal.ImageReference) {
+		return errors.New("Slice 6 registry image reference is absent from Docker store")
 	}
 	platform := "linux/" + images[0].Architecture
 	if images[0].Variant != "" {
@@ -160,7 +203,7 @@ func verifyLoadedSlice6Image(principal phase6security.Principal, document []byte
 		return errors.New("Slice 6 Docker image platform differs from profile")
 	}
 	if principal.ImageIdentityKind == phase6security.ImageIdentityLocalConfig {
-		if images[0].Descriptor != nil {
+		if principal.ImageLocation != "local" || images[0].Descriptor != nil {
 			return errors.New("Slice 6 local config has a store descriptor")
 		}
 		return nil
@@ -235,6 +278,72 @@ func TestSlice6LoadedImagePreflightRejectsIdentityAndPlatformDrift(t *testing.T)
 	}
 	if err := verifyLoadedSlice6Image(config, []byte(`[{"Id":"`+digest+`","Os":"linux","Architecture":"arm64"}]`)); err != nil {
 		t.Fatalf("local config without descriptor rejected: %v", err)
+	}
+}
+
+func TestSlice6LoadedBrowserPublicationRejectsStoreSubstitution(t *testing.T) {
+	publication := browserimage.LockedPublication()
+	principal := phase6security.Principal{
+		Name: "browser-sandbox-runtime", ImageReference: publication.Image(),
+		ImageDigest: publication.Digest, ImageLocation: "registry",
+		ImageIdentityKind: phase6security.ImageIdentityOCIIndex,
+		ImagePlatform:     "linux/arm64/v8", ImageSelectedManifestDigest: browserimage.PublishedARM64Manifest,
+	}
+	document := func(id, reference, architecture, mediaType string) []byte {
+		value, err := json.Marshal([]any{map[string]any{
+			"Id": id, "Os": "linux", "Architecture": architecture,
+			"RepoDigests": []string{reference},
+			"Descriptor":  map[string]any{"mediaType": mediaType, "digest": publication.Digest},
+		}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return value
+	}
+	const indexType = "application/vnd.oci.image.index.v1+json"
+	if err := verifyLoadedSlice6Image(principal, document(publication.Digest, publication.Image(), "arm64", indexType)); err != nil {
+		t.Fatalf("locked Browser store index rejected: %v", err)
+	}
+	for name, value := range map[string][]byte{
+		"wrong store ID":   document("sha256:"+strings.Repeat("b", 64), publication.Image(), "arm64", indexType),
+		"wrong repository": document(publication.Digest, "ghcr.io/other/browser@"+publication.Digest, "arm64", indexType),
+		"wrong platform":   document(publication.Digest, publication.Image(), "amd64", indexType),
+		"wrong kind":       document(publication.Digest, publication.Image(), "arm64", "application/vnd.oci.image.manifest.v1+json"),
+	} {
+		if err := verifyLoadedSlice6Image(principal, value); err == nil {
+			t.Errorf("%s admitted", name)
+		}
+	}
+}
+
+func TestSlice6LocalRoleImageLabelsBindBuildTargetAndSource(t *testing.T) {
+	revision := strings.Repeat("a", 40)
+	document := func(target, source string) []byte {
+		value, err := json.Marshal([]any{map[string]any{"Config": map[string]any{"Labels": map[string]string{
+			"io.github.shell-echo.sandbox-runtime.phase6-candidate": "local-only-non-release",
+			"io.github.shell-echo.sandbox-runtime.source-revision":  source,
+			"io.github.shell-echo.sandbox-runtime.role-target":      target,
+			"io.github.shell-echo.sandbox-runtime.go-version":       "go1.26.8",
+		}}}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return value
+	}
+	if err := verifySlice6LocalRoleImageLabels("product-runtime", revision, document("core", revision)); err != nil {
+		t.Fatalf("reviewed Product core candidate labels rejected: %v", err)
+	}
+	for name, candidate := range map[string][]byte{
+		"wrong target":   document("gateway", revision),
+		"wrong revision": document("core", strings.Repeat("b", 40)),
+		"missing labels": []byte(`[{}]`),
+	} {
+		if err := verifySlice6LocalRoleImageLabels("product-runtime", revision, candidate); err == nil {
+			t.Errorf("%s admitted", name)
+		}
+	}
+	if err := verifySlice6LocalRoleImageLabels("browser-sandbox-runtime", revision, document("core", revision)); err == nil {
+		t.Fatal("published Browser image was admitted as a local role candidate")
 	}
 }
 

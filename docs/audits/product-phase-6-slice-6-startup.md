@@ -1924,3 +1924,19 @@ SPIFFE URI, permitted DNS SAN/EKU, certificate TTL, rotation overlap,
 revocation staleness and drain bound. A recomputed profile with a changed
 Product SAN or lifetime fails. It does not issue or observe a certificate;
 Phase 6 remains **5/15**.
+
+The reviewed image-source inventory now maps all 58 deployments to their
+corresponding executable build targets; an unreviewed principal cannot inherit
+`core`, and a static role cannot substitute a registry image for a current-
+source local candidate. Preflight inspects each local principal, even when
+several share one cached Docker image inspection, and rejects missing or
+incorrect source-revision/target/toolchain labels. Desktop retains its
+separate current-source candidate manifest. Per Sandbox confirmation, Browser
+**sandbox** reuses the exact previously signed GHCR publication and original
+source/provenance identity; the current Browser role, Provider and executor
+programs do not. Profile admission binds the complete Browser registry
+repository and index digest, platform and selected manifest; preflight refuses
+Docker store ID, repository, platform or descriptor substitution. This is an image
+input check, not a fresh signature verification, container/runtime observation
+or complete OCI archive chain. The full 58-deployment topology, 16 scenarios,
+same-run evidence and exact cleanup remain open. Phase 6 remains **5/15**.
