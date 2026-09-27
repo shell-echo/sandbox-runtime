@@ -1,10 +1,81 @@
 package phase6security
 
 import (
+	"archive/tar"
+	"bytes"
 	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 )
+
+func TestReadOCIArchiveDescriptorChainDiscoversOnlyPinnedConfig(t *testing.T) {
+	encode := func(value any) []byte {
+		t.Helper()
+		document, err := json.Marshal(value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return document
+	}
+	config := encode(map[string]any{"architecture": "arm64", "os": "linux", "rootfs": map[string]any{
+		"type": "layers", "diff_ids": []string{testDigest("uncompressed")}}})
+	configID := hashImageBytes(config)
+	manifest := encode(map[string]any{"schemaVersion": 2, "mediaType": "application/vnd.oci.image.manifest.v1+json",
+		"config": map[string]any{"mediaType": "application/vnd.oci.image.config.v1+json", "digest": configID, "size": len(config)},
+		"layers": []any{map[string]any{"mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+			"digest": testDigest("compressed"), "size": 17}}})
+	manifestID := hashImageBytes(manifest)
+	index := encode(map[string]any{"schemaVersion": 2, "mediaType": "application/vnd.oci.image.index.v1+json",
+		"manifests": []any{map[string]any{"mediaType": "application/vnd.oci.image.manifest.v1+json",
+			"digest": manifestID, "size": len(manifest), "platform": map[string]any{"os": "linux", "architecture": "arm64"}}}})
+	indexID := hashImageBytes(index)
+	archive := func(path string, includeConfig bool) {
+		t.Helper()
+		var buffer bytes.Buffer
+		writer := tar.NewWriter(&buffer)
+		for _, item := range []struct {
+			digest string
+			value  []byte
+		}{{indexID, index}, {manifestID, manifest}, {configID, config}} {
+			if item.digest == configID && !includeConfig {
+				continue
+			}
+			if err := writer.WriteHeader(&tar.Header{Name: "blobs/sha256/" + item.digest[7:],
+				Mode: 0o600, Size: int64(len(item.value)), Typeflag: tar.TypeReg}); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := writer.Write(item.value); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := writer.Close(); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, buffer.Bytes(), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	path := filepath.Join(t.TempDir(), "browser.oci.tar")
+	archive(path, true)
+	reference := "registry.example.test/browser@" + indexID
+	documents, proof, err := ReadOCIArchiveDescriptorChain(path, "registry", ImageIdentityOCIIndex,
+		reference, indexID, "linux/arm64/v8", manifestID)
+	if err != nil || proof.ConfigDigest != configID || !bytes.Equal(documents.Config, config) ||
+		!bytes.Equal(documents.Manifest, manifest) || !bytes.Equal(documents.Index, index) {
+		t.Fatalf("pinned raw descriptor chain rejected: %#v, %v", proof, err)
+	}
+	if _, _, err := ReadOCIArchiveDescriptorChain(path, "registry", ImageIdentityOCIIndex,
+		reference, indexID, "linux/arm64/v8", testDigest("wrong selected")); !errors.Is(err, ErrInvalidImageDescriptor) {
+		t.Fatal("wrong selected manifest admitted")
+	}
+	archive(path, false)
+	if _, _, err := ReadOCIArchiveDescriptorChain(path, "registry", ImageIdentityOCIIndex,
+		reference, indexID, "linux/arm64/v8", manifestID); !errors.Is(err, ErrInvalidImageDescriptor) {
+		t.Fatal("missing config blob admitted")
+	}
+}
 
 func TestVerifyImageDescriptorDocumentsRejectsDigestKindAndPlatformMixing(t *testing.T) {
 	encode := func(value any) []byte {

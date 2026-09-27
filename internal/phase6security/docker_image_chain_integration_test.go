@@ -15,7 +15,62 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	browserimage "github.com/shell-echo/sandbox-runtime/profiles/browser/image"
 )
+
+// This is a real pinned Browser publication archive component check. It
+// discovers the config from the selected manifest instead of accepting a
+// caller-supplied config digest; it is not a running role or Slice 6 gate.
+func TestDockerPinnedBrowserArchiveDescriptorChain(t *testing.T) {
+	if os.Getenv("SANDBOX_RUNTIME_PHASE6_BROWSER_DESCRIPTOR") != "1" {
+		t.Skip("set SANDBOX_RUNTIME_PHASE6_BROWSER_DESCRIPTOR=1 for cached pinned Browser archive")
+	}
+	publication := browserimage.LockedPublication()
+	image := publication.Image()
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Minute)
+	defer cancel()
+	output, err := dockerTopology(ctx, "image", "inspect", image)
+	var inspected []struct {
+		ID           string                `json:"Id"`
+		OS           string                `json:"Os"`
+		Architecture string                `json:"Architecture"`
+		Variant      string                `json:"Variant"`
+		RepoDigests  []string              `json:"RepoDigests"`
+		Descriptor   dockerImageDescriptor `json:"Descriptor"`
+	}
+	if err != nil || json.Unmarshal([]byte(output), &inspected) != nil || len(inspected) != 1 ||
+		inspected[0].ID != publication.Digest || inspected[0].Descriptor.Digest != publication.Digest {
+		t.Fatal("pinned Browser image is absent or Docker store descriptor differs")
+	}
+	platform := inspected[0].OS + "/" + inspected[0].Architecture
+	if inspected[0].Variant != "" {
+		platform += "/" + inspected[0].Variant
+	}
+	if platform == "linux/arm64" {
+		platform = "linux/arm64/v8"
+	}
+	selected, err := publication.SelectedManifest(platform)
+	if err != nil {
+		t.Fatal(err)
+	}
+	archive := filepath.Join(t.TempDir(), "published-browser.oci.tar")
+	command := exec.CommandContext(ctx, "docker", "image", "save", "-o", archive, image)
+	if result, saveErr := command.CombinedOutput(); saveErr != nil {
+		t.Fatalf("save exact published Browser image: %v: %.512s", saveErr, result)
+	}
+	if err := os.Chmod(archive, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	documents, proof, err := ReadOCIArchiveDescriptorChain(archive, "registry", ImageIdentityOCIIndex,
+		image, publication.Digest, platform, selected)
+	if err != nil || proof.ConfigDigest == publication.Digest ||
+		VerifyOCIArchiveLayers(archive, documents.Manifest, documents.Config) != nil {
+		t.Fatalf("real Browser OCI chain rejected: %#v, %v", proof, err)
+	}
+	t.Logf("pinned Browser index=%s selected=%s config=%s; private archive removed with test directory",
+		publication.Digest, selected, proof.ConfigDigest)
+}
 
 // This is a real Docker image-store component gate, not the full Slice 6
 // role/inventory gate. It asserts the selected platform manifest rather than

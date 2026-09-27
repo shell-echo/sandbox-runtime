@@ -2,12 +2,47 @@ package phase6security
 
 import (
 	"archive/tar"
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 )
+
+// ReadOCIArchiveDescriptorChain discovers the config digest from the pinned
+// selected manifest, then reopens the private archive and verifies every raw
+// descriptor byte. This lets a profile builder bind an independently pinned
+// registry image without inventing or trusting an operator-supplied config
+// digest. The caller still has to verify publication and Docker selection.
+func ReadOCIArchiveDescriptorChain(path, location, kind, reference, digest, platform, selectedManifest string) (ImageDescriptorDocuments, ImageDescriptorProof, error) {
+	selected := digest
+	if kind == ImageIdentityOCIIndex {
+		selected = selectedManifest
+	}
+	first, err := ReadOCIArchiveDocuments(path, kind, digest, selected, "")
+	if err != nil || len(first.Manifest) == 0 || rejectDuplicateMembers(first.Manifest) != nil {
+		return ImageDescriptorDocuments{}, ImageDescriptorProof{}, ErrInvalidImageDescriptor
+	}
+	var manifest struct {
+		Config struct {
+			Digest string `json:"digest"`
+		} `json:"config"`
+	}
+	if json.Unmarshal(first.Manifest, &manifest) != nil || !digestPattern.MatchString(manifest.Config.Digest) {
+		return ImageDescriptorDocuments{}, ImageDescriptorProof{}, ErrInvalidImageDescriptor
+	}
+	documents, err := ReadOCIArchiveDocuments(path, kind, digest, selected, manifest.Config.Digest)
+	if err != nil {
+		return ImageDescriptorDocuments{}, ImageDescriptorProof{}, ErrInvalidImageDescriptor
+	}
+	proof, err := VerifyImageDescriptorDocuments(location, kind, reference, digest, platform, selectedManifest,
+		manifest.Config.Digest, documents)
+	if err != nil {
+		return ImageDescriptorDocuments{}, ImageDescriptorProof{}, ErrInvalidImageDescriptor
+	}
+	return documents, proof, nil
+}
 
 // ReadOCIArchiveDocuments extracts the exact raw descriptor bytes from a
 // private docker-save OCI archive. It does not infer an image identity from

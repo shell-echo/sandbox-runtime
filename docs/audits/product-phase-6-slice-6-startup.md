@@ -2128,3 +2128,17 @@ offline rebuild from E and compares its bytes to the actual executing file;
 VCS metadata is not the sole gate. This demonstrates local reproducibility,
 not a signed publication or unique origin. A positive real CLI/bundle gate
 is still pending.
+
+Profile-supply increment after `e55004e`: the reviewed 58-deployment image
+target inventory now exposes copied deployment and 12 distinct local-command
+target lists. A new pre-profile loader requires exactly one private,
+source/archive-verified role candidate per target, with common R revision,
+tree and platform, plus the independently verified Desktop candidate. A
+separate raw OCI reader discovers the Browser config digest only from the
+locked selected manifest, then reopens and verifies the index/manifest/config
+and layer chain; an opt-in real Docker run passed on the cached pinned Browser
+publication. The gate-owned image-supply layer rejects missing/duplicate
+reviewed deployments and targets. It supplies expected image identities only:
+the remaining identity, trust, external-service and TLS builder, a complete
+frozen profile, all running deployments, 16 same-run assertions, exact cleanup
+and final evidence are still absent. No counter or publication claim follows.

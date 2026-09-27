@@ -16,12 +16,36 @@ import (
 	"time"
 
 	"github.com/shell-echo/sandbox-runtime/internal/desktopcandidate"
+	"github.com/shell-echo/sandbox-runtime/internal/phase6profilebuilder"
 	"github.com/shell-echo/sandbox-runtime/internal/phase6rolecandidate"
 	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
 	browserimage "github.com/shell-echo/sandbox-runtime/profiles/browser/image"
 )
 
 const slice6PreflightEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_PREFLIGHT"
+const slice6ImageSupplyEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_IMAGE_SUPPLY"
+
+// This pre-profile input check is independent of an operator-authored profile
+// document. It is a bootstrap component, not a completed canonical profile
+// or a live deployment observation.
+func TestPhase6Slice6ImageSupplyPreflight(t *testing.T) {
+	if os.Getenv(slice6ImageSupplyEnv) != "1" {
+		t.Skip("set " + slice6ImageSupplyEnv + "=1 for private image-supply preflight")
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 15*time.Minute)
+	defer cancel()
+	supply, err := phase6profilebuilder.LoadImageSupply(ctx,
+		os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_SOURCE_ROOT"),
+		os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_SOURCE_REVISION"),
+		os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_ROLE_CANDIDATES"),
+		os.Getenv("SANDBOX_RUNTIME_DESKTOP_CANDIDATE_MANIFEST"),
+		os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_BROWSER_ARCHIVE"))
+	if err != nil || len(supply.LocalRoleTargets) != len(phase6security.Slice6DesiredLocalRoleTargets()) {
+		t.Fatalf("complete source-bound image supply unavailable: %v", err)
+	}
+	t.Logf("verified %d local command targets, one Desktop candidate and locked Browser OCI chain; no profile or role launch",
+		len(supply.LocalRoleTargets))
+}
 
 type slice6GateInput struct {
 	profilePath           string

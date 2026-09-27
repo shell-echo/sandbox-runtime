@@ -1,6 +1,10 @@
 package phase6security
 
-import browserimage "github.com/shell-echo/sandbox-runtime/profiles/browser/image"
+import (
+	"sort"
+
+	browserimage "github.com/shell-echo/sandbox-runtime/profiles/browser/image"
+)
 
 // The local gate must not infer an executable from a principal's broad kind
 // or from whichever image happened to be loaded. Every approved deployment
@@ -63,6 +67,31 @@ var slice6DesiredImageTargets = map[string]string{
 	"public-ingress-relay":                           "phase6-ingress-relay",
 	"browser-sandbox-runtime":                        Slice6BrowserPublishedImage,
 	"desktop-sandbox-runtime":                        Slice6DesktopCandidateImage,
+}
+
+// Slice6DesiredDeploymentNames exposes a copy of the reviewed deployment
+// inventory for the gate-owned profile builder. It is desired configuration,
+// never a Docker observation or an operator-supplied expansion point.
+func Slice6DesiredDeploymentNames() []string {
+	return slice6ApprovedDeploymentNames()
+}
+
+// Slice6DesiredLocalRoleTargets is the exact set of repository command images
+// required before a complete local profile can be frozen. Browser and Desktop
+// have separately verified image authorities.
+func Slice6DesiredLocalRoleTargets() []string {
+	seen := make(map[string]bool)
+	for _, target := range slice6DesiredImageTargets {
+		if target != Slice6BrowserPublishedImage && target != Slice6DesktopCandidateImage {
+			seen[target] = true
+		}
+	}
+	targets := make([]string, 0, len(seen))
+	for target := range seen {
+		targets = append(targets, target)
+	}
+	sort.Strings(targets)
+	return targets
 }
 
 // Slice6DesiredImageTarget names the repository build target, or the exact

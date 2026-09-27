@@ -1243,6 +1243,18 @@ a local role build of the same clean HEAD and exercises one real high-UID role
 command on a run-labeled internal network, followed by exact container,
 network and volume label inventories:
 
+The newer pre-profile image-supply component uses
+`SANDBOX_RUNTIME_PHASE6_SLICE6_IMAGE_SUPPLY=1` with
+`SANDBOX_RUNTIME_PHASE6_SLICE6_SOURCE_ROOT`,
+`SANDBOX_RUNTIME_PHASE6_SLICE6_SOURCE_REVISION`,
+`SANDBOX_RUNTIME_PHASE6_SLICE6_ROLE_CANDIDATES`,
+`SANDBOX_RUNTIME_DESKTOP_CANDIDATE_MANIFEST`, and
+`SANDBOX_RUNTIME_PHASE6_SLICE6_BROWSER_ARCHIVE`. It reopens exactly one
+private source-bound candidate/archive for each of the 12 reviewed local
+command targets, the matching Desktop candidate, and the locked Browser OCI
+chain. It does not construct the remaining profile fields, launch a role, or
+count as a release scenario.
+
 ```bash
 SANDBOX_RUNTIME_PHASE6_SLICE6_RESOURCE_LEDGER=1 \
 SANDBOX_RUNTIME_PHASE6_LOCAL_ROLE_IMAGE=sha256:<exact-local-role-image> \
