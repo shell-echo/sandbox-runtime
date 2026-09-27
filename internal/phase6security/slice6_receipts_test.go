@@ -304,6 +304,24 @@ func TestSlice6DescriptorReceiptDigestIsNotSemanticProof(t *testing.T) {
 	}
 }
 
+func TestSlice6RawReceiptReaderRechecksEnvelopeAfterBundleVerification(t *testing.T) {
+	evidence, index, root, _ := validSlice6ReceiptBundleFixture(t)
+	key := "container/" + evidence.Profile.Principals[0].Name + "/descriptor"
+	for _, entry := range index.Entries {
+		if entry.Key != key {
+			continue
+		}
+		if err := os.WriteFile(filepath.Join(root, entry.EnvelopePath), []byte(`{}`), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := ReadSlice6RunReceipts(root, evidence, []string{key}); err == nil {
+			t.Fatal("changed envelope admitted after initial bundle verification")
+		}
+		return
+	}
+	t.Fatal("descriptor envelope fixture missing")
+}
+
 func validSlice6ReceiptBundleFixture(t *testing.T) (Slice6Evidence, Slice6ReceiptIndex, string, string) {
 	return validSlice6ReceiptBundleFixtureWithOverrides(t, nil, nil)
 }

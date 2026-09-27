@@ -192,6 +192,32 @@ func ReadSlice6RunReceipts(receiptRoot string, evidence Slice6Evidence, keys []s
 		if err != nil || digestSlice6Receipt(raw) != want {
 			return nil, ErrInvalidSlice6Evidence
 		}
+		envelopeDocument, err := readPrivateSlice6ReceiptFile(receiptRoot, entry.EnvelopePath, maxSlice6ReceiptSize)
+		if err != nil || digestSlice6Receipt(envelopeDocument) != entry.EnvelopeDigest {
+			return nil, ErrInvalidSlice6Evidence
+		}
+		var envelope Slice6RunReceipt
+		kind, subject, _ := strings.Cut(entry.Key, "/")
+		subject, _, _ = strings.Cut(subject, "/")
+		if decodeCanonicalSlice6Receipt(envelopeDocument, &envelope) != nil ||
+			envelope.Protocol != slice6ReceiptProtocol || envelope.Version != 1 ||
+			envelope.RunID != evidence.RunID || envelope.Key != entry.Key ||
+			envelope.Kind != kind || envelope.Subject != subject ||
+			envelope.ProfileDigest != evidence.Profile.ProfileDigest ||
+			envelope.ConfigDigest != slice6ReceiptConfigDigest(evidence, kind, subject) ||
+			envelope.SourceRevision != evidence.RuntimeRevision ||
+			envelope.SourceTreeDigest != evidence.RuntimeTreeDigest ||
+			envelope.RawDigest != want || !validSlice6Time(envelope.ObservedAt) ||
+			envelope.Outcome != slice6ReceiptOutcome(kind) ||
+			(kind == "cleanup" && envelope.OwnershipRunID != evidence.RunID) ||
+			(kind != "cleanup" && envelope.OwnershipRunID != "") {
+			return nil, ErrInvalidSlice6Evidence
+		}
+		receiptTime, _ := time.Parse(time.RFC3339Nano, envelope.ObservedAt)
+		manifestTime, _ := time.Parse(time.RFC3339Nano, evidence.ObservedAt)
+		if receiptTime.After(manifestTime) {
+			return nil, ErrInvalidSlice6Evidence
+		}
 		result[entry.Key] = raw
 	}
 	if len(result) != len(wanted) {

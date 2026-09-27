@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime/debug"
 	"sort"
 	"strings"
 
@@ -22,8 +23,14 @@ import (
 var ErrInvalidAdmission = errors.New("invalid Phase 6 Slice 6 artifact admission")
 
 // CandidateInputs are private operator-owned paths, never stable API fields.
+// This narrow admission path requires C=R for every local candidate: the
+// original build checkout is the declared runtime baseline. Evidence tooling
+// E may be a later clean revision. A candidate built from a different runtime
+// revision requires a separately proved target-equivalence path or rebuild;
+// this verifier deliberately does not infer compatibility from a source diff.
 type CandidateInputs struct {
-	SourceRoot           string
+	RuntimeSourceRoot    string
+	EvidenceSourceRoot   string
 	RoleCandidateDir     string
 	DesktopCandidatePath string
 	ManifestPath         string
@@ -41,11 +48,31 @@ func Verify(ctx context.Context, inputs CandidateInputs) (phase6security.Slice6E
 	if err != nil {
 		return phase6security.Slice6Evidence{}, ErrInvalidAdmission
 	}
+	if verifyExecutingEvidenceSource(evidence.EvidenceRevision) != nil {
+		return phase6security.Slice6Evidence{}, ErrInvalidAdmission
+	}
 	roles, desktop, err := verifyCandidateArtifacts(ctx, evidence, inputs)
 	if err != nil || verifyDescriptorChain(evidence, inputs, roles, desktop) != nil {
 		return phase6security.Slice6Evidence{}, ErrInvalidAdmission
 	}
 	return evidence, nil
+}
+
+// The verifier executable itself must be built from the clean E checkout.
+// A caller-supplied clean directory alone cannot relabel another binary.
+func verifyExecutingEvidenceSource(revision string) error {
+	info, ok := debug.ReadBuildInfo()
+	if !ok || info.GoVersion != "go1.26.8" {
+		return ErrInvalidAdmission
+	}
+	settings := make(map[string]string, len(info.Settings))
+	for _, setting := range info.Settings {
+		settings[setting.Key] = setting.Value
+	}
+	if settings["vcs"] != "git" || settings["vcs.revision"] != revision || settings["vcs.modified"] != "false" {
+		return ErrInvalidAdmission
+	}
+	return nil
 }
 
 // VerifyCandidateArtifacts reopens the exact private OCI archives and their
@@ -59,19 +86,21 @@ func VerifyCandidateArtifacts(ctx context.Context, evidence phase6security.Slice
 func verifyCandidateArtifacts(ctx context.Context, evidence phase6security.Slice6Evidence,
 	inputs CandidateInputs) ([]phase6rolecandidate.VerifiedArtifact, desktopcandidate.Manifest, error) {
 	if ctx == nil || ctx.Err() != nil || evidence.Validate() != nil ||
-		!absolutePath(inputs.SourceRoot) || !absolutePath(inputs.RoleCandidateDir) ||
+		!absolutePath(inputs.RuntimeSourceRoot) || !absolutePath(inputs.EvidenceSourceRoot) ||
+		!absolutePath(inputs.RoleCandidateDir) ||
 		!absolutePath(inputs.DesktopCandidatePath) ||
-		verifySource(ctx, inputs.SourceRoot, evidence.RuntimeRevision, evidence.RuntimeTreeDigest) != nil ||
+		verifySource(ctx, inputs.RuntimeSourceRoot, evidence.RuntimeRevision, evidence.RuntimeTreeDigest) != nil ||
+		verifySource(ctx, inputs.EvidenceSourceRoot, evidence.EvidenceRevision, evidence.EvidenceTreeDigest) != nil ||
 		verifyReviewedProfile(evidence.Profile) != nil {
 		return nil, desktopcandidate.Manifest{}, ErrInvalidAdmission
 	}
-	roles, err := phase6rolecandidate.VerifyDirectoryArtifacts(ctx, inputs.SourceRoot,
+	roles, err := phase6rolecandidate.VerifyDirectoryArtifacts(ctx, inputs.RuntimeSourceRoot,
 		inputs.RoleCandidateDir, evidence.Profile, evidence.RuntimeRevision)
 	if err != nil {
 		return nil, desktopcandidate.Manifest{}, ErrInvalidAdmission
 	}
 	desktop, err := desktopcandidate.LoadCurrent(inputs.DesktopCandidatePath)
-	if err != nil || desktop.VerifySource(inputs.SourceRoot) != nil ||
+	if err != nil || desktop.VerifySource(inputs.RuntimeSourceRoot) != nil ||
 		desktop.SourceRevision != evidence.RuntimeRevision ||
 		desktop.SourceTreeDigest != evidence.RuntimeTreeDigest {
 		return nil, desktopcandidate.Manifest{}, ErrInvalidAdmission

@@ -16,6 +16,7 @@ func TestSlice6BundleVerifierRejectsMissingAndUnsupportedArguments(t *testing.T)
 		{"-manifest", "/tmp/manifest.json", "-bundle-root", "/tmp/bundle", "-source-root", "/tmp/source"},
 		{"-manifest", "/tmp/manifest.json", "-bundle-root", "/tmp/bundle", "-source-root", "/tmp/source", "-role-candidate-dir", "/tmp/roles"},
 		{"-manifest", "/tmp/manifest.json", "-bundle-root", "/tmp/bundle", "-source-root", "/tmp/source", "-role-candidate-dir", "/tmp/roles", "-desktop-candidate", "/tmp/desktop.json"},
+		{"-manifest", "/tmp/manifest.json", "-bundle-root", "/tmp/bundle", "-runtime-source-root", "/tmp/runtime", "-evidence-source-root", "/tmp/evidence", "-role-candidate-dir", "/tmp/roles", "-desktop-candidate", "/tmp/desktop.json"},
 	} {
 		var output bytes.Buffer
 		if err := run(arguments, &output); err == nil || strings.Contains(output.String(), "verified") {

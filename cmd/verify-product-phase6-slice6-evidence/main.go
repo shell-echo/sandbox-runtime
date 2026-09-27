@@ -23,15 +23,17 @@ func run(arguments []string, output io.Writer) error {
 	flags.SetOutput(io.Discard)
 	manifestPath := flags.String("manifest", "", "absolute path to the private Slice 6 manifest.json")
 	bundleRoot := flags.String("bundle-root", "", "absolute path to the private receipt bundle")
-	sourceRoot := flags.String("source-root", "", "absolute path to the clean source checkout")
+	runtimeSourceRoot := flags.String("runtime-source-root", "", "absolute path to the clean local candidate/runtime baseline checkout")
+	evidenceSourceRoot := flags.String("evidence-source-root", "", "absolute path to the clean gate/recorder/verifier checkout")
 	roleCandidateDir := flags.String("role-candidate-dir", "", "absolute path to the private role candidate directory")
 	desktopCandidate := flags.String("desktop-candidate", "", "absolute path to the private current Desktop candidate manifest")
 	if err := flags.Parse(arguments); err != nil || flags.NArg() != 0 || *manifestPath == "" || *bundleRoot == "" ||
-		*sourceRoot == "" || *roleCandidateDir == "" || *desktopCandidate == "" {
-		return errors.New("Slice 6 admission requires manifest, bundle-root, source-root, role-candidate-dir and desktop-candidate")
+		*runtimeSourceRoot == "" || *evidenceSourceRoot == "" || *roleCandidateDir == "" || *desktopCandidate == "" {
+		return errors.New("Slice 6 admission requires manifest, bundle-root, runtime-source-root, evidence-source-root, role-candidate-dir and desktop-candidate")
 	}
 	evidence, err := phase6slice6admission.Verify(context.Background(), phase6slice6admission.CandidateInputs{
-		SourceRoot: *sourceRoot, RoleCandidateDir: *roleCandidateDir,
+		RuntimeSourceRoot: *runtimeSourceRoot, EvidenceSourceRoot: *evidenceSourceRoot,
+		RoleCandidateDir:     *roleCandidateDir,
 		DesktopCandidatePath: *desktopCandidate, ManifestPath: *manifestPath, BundleRoot: *bundleRoot,
 	})
 	if err != nil {

@@ -107,6 +107,8 @@ type Slice6Evidence struct {
 const (
 	Slice6CandidateRepositoryRole = "repository_role"
 	Slice6CandidateDesktop        = "desktop_candidate"
+	Slice6RoleManifestSchema      = "sandbox-runtime.phase6-local-role-candidate.v1"
+	Slice6DesktopManifestSchema   = "sandbox.runtime/desktop-phase6-local-candidate/v3"
 )
 
 // Candidate records only the artifact identity shared by both supported local
@@ -399,12 +401,12 @@ func validSlice6Candidates(profile Profile, observations ObservationSet, values 
 			return false
 		}
 		if value.Kind == Slice6CandidateRepositoryRole {
-			if value.Role == nil || value.Desktop != nil || value.Role.BuildTarget != authority.target ||
+			if value.ManifestSchema != Slice6RoleManifestSchema || value.Role == nil || value.Desktop != nil || value.Role.BuildTarget != authority.target ||
 				!authority.deployments[value.Role.SourceDeployment] {
 				return false
 			}
 		} else if value.Kind == Slice6CandidateDesktop {
-			if value.Desktop == nil || value.Role != nil || value.Desktop.ProfileID == "" ||
+			if value.ManifestSchema != Slice6DesktopManifestSchema || value.Desktop == nil || value.Role != nil || value.Desktop.ProfileID == "" ||
 				authority.target != Slice6DesktopCandidateImage {
 				return false
 			}

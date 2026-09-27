@@ -1249,6 +1249,20 @@ config, source, archive and semantic proof digests remain separate inputs.
 This corrects the unaccepted v2 draft without upgrading historical v1/v2
 diagnostics or changing the locked Provider Contract.
 
+Three source identities must not be collapsed: C is each candidate's
+original immutable build revision/tree; R is the declared runtime baseline;
+E is the gate/recorder/verifier implementation revision/tree. This initial
+admission path deliberately accepts local candidates only when C=R and
+re-verifies each against that exact clean checkout. Evidence tooling E may
+advance independently, but the verifier must reopen its exact clean source
+as well. A candidate with C≠R is not silently promoted by HEAD or a
+`compatible` assertion: it needs a separately reviewed byte-level
+target-equivalence proof. Without that path, this strict C=R gate needs all
+local candidates from the frozen R, even when only one target changed; a
+future proven target-equivalence path could narrow rebuilding to affected
+targets. Browser's
+historical signed publication remains independent of the local C=R rule.
+
 ### Local full-topology profile supply (2026-09-27)
 
 The Slice 6 local gate uses a repository-owned, versioned reviewed desired

@@ -1327,7 +1327,8 @@ mise exec go@1.26.8 -- env -u GOROOT go run \
   ./cmd/verify-product-phase6-slice6-evidence \
   -manifest /absolute/private/bundle/manifest.json \
   -bundle-root /absolute/private/bundle \
-  -source-root /absolute/clean/source \
+  -runtime-source-root /absolute/clean/runtime-source \
+  -evidence-source-root /absolute/clean/evidence-tool-source \
   -role-candidate-dir /absolute/private/role-candidates \
   -desktop-candidate /absolute/private/desktop-candidate.json
 ```
@@ -1347,11 +1348,43 @@ TLS/reachability/PostgreSQL probe, scenario result and cleanup inventory.
 Profile/config, source, candidate archive/manifest and semantic descriptor
 proof digests are pre-existing authorities or derived proofs, not raw receipt
 hashes. Older v1/v2 diagnostic formats are not upgraded by renaming them.
+The narrow current admission path requires each local candidate's original
+build revision C to equal the declared runtime baseline R; a different
+R requires all local candidates from that newly frozen R, unless a separately
+reviewed exact target-equivalence path is implemented. A
+`compatible=true` declaration alone is never proof. The gate/verifier
+source E is independently checked against `EvidenceRevision` and
+`EvidenceTreeDigest`, so a later documentation or evidence-tool commit does
+not relabel an old candidate or force a build when R and its inputs are
+unchanged. Each source root must be a clean checkout of its named revision.
+The clean-source unit test proves source identity separation only; real
+candidate/archive admission and actual gate execution from E remain separate
+checks.
+The final CLI also checks its own Go VCS build metadata: it must have been
+built with Go 1.26.8 from a clean E revision. Suppressing VCS metadata or
+pointing an unrelated executable at a clean E checkout fails admission.
 
 Even a passing complete offline admission does not prove that a trusted harness
 executed the commands. Only the still-missing full live gate, its auditable
 capture, and exact cleanup may admit Slice 6; never paste older component
 receipts into a new run.
+
+The `phase6slice6gate` capacity precheck is a stage-entry operating guard,
+not a storage quota or acceptance scenario. It separately measures the
+physical host volume and Docker backing filesystem; Docker Desktop's large
+virtual free count cannot replace the host reading. The current draft
+topology estimate reserves 1 GiB host-local peak, 1 GiB Docker peak,
+10 GiB bounded-duration runtime growth, 1 GiB stop-delay growth,
+0.5 GiB cleanup/evidence writing, 8 GiB shared-host spare and 4 GiB Docker
+spare. Thus it requires more than 21.5 GiB host and 16 GiB Docker free at
+entry, not merely a 4 GiB stop floor. Already-retained candidate files are
+inventory, not charged again against free bytes. Database WAL/temp/rewrites,
+Vault, Valkey, recording, writable layers and logs all contribute to the
+runtime estimate; only actual tmpfs/log-rotation settings are hard limits.
+The running gate must sample ahead of its next write burst, stop producers
+before the stop-delay reserve is consumed, then use a separate bounded
+context to clean only its run-labeled resources. A passing small capacity
+probe does not substitute for continuous monitoring or the full gate.
 
 The live harness must use the one-run receipt recorder, not hand-assemble a
 success JSON document. It creates a new mode-0700 bundle directory, writes

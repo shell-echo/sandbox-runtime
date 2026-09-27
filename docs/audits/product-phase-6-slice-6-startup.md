@@ -2087,7 +2087,33 @@ receipt-index entries were classified as raw run observations; source,
 profile, configuration, artifact and semantic proof digests do not enter
 the raw-content channel.
 
-Targeted race and full-root validation, real-archive producer-to-recorder
-component proof, and the complete live 58-deployment/16-scenario topology
-are still pending at this checkpoint. No accepted success bundle exists;
-Phase 6 remains **5/15**.
+Targeted and full-root race/shuffle, vet, both Contract verifiers, real-archive
+producer-to-recorder component proof and strict Slice 6 tagged preflight pass.
+The complete live 58-deployment/16-scenario topology is still pending. No
+accepted success bundle exists; Phase 6 remains **5/15**.
+
+The opt-in capacity precheck reads host physical and Docker backing free
+bytes separately, compares each against a finite draft topology write budget,
+and tests its early-stop threshold without filling a filesystem. On
+2026-09-27 the disposable pinned-Alpine probe observed 32,224,526,336 host
+bytes and 364,156,092,416 Docker backing bytes available; the draft required
+23,085,449,216 and 17,179,869,184 bytes respectively. The host, not the
+Docker VM's large virtual availability, is the limiting observation. The
+sample passed and its exact run-labeled probe was cleaned; the numbers are
+instantaneous, not a guarantee for the full topology. No user-owned Docker
+images, cache, volumes or archives were pruned. PostgreSQL/WAL, Vault,
+recording, logs and writable-layer growth still need live limits/monitoring
+and a separate stop-producers-before-cleanup path in the full gate.
+
+Source-identity review found that the existing local candidate verifiers
+require each original build revision C to match the declared runtime baseline
+R. The first final-admission path keeps that strict, auditable C=R condition
+rather than inventing a compatibility claim for older runtime binaries. It
+now independently checks the gate/recorder/verifier source E through the
+existing evidence revision/tree fields. A later evidence-tool or docs commit
+may therefore advance E without rewriting candidate provenance or rebuilding
+unchanged R artifacts. The current strict C=R path does not support a changed
+R with only the affected target rebuilt: every local candidate must originate
+from the newly frozen R unless a separately reviewed target-specific
+byte-level equivalence path is implemented. No such cross-runtime reuse or
+full candidate admission is claimed by the clean-source unit test here.

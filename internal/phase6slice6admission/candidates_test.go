@@ -2,10 +2,15 @@ package phase6slice6admission
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/shell-echo/sandbox-runtime/internal/desktopcandidate"
@@ -127,4 +132,74 @@ func TestTypedDesktopCandidateProjectionIsExact(t *testing.T) {
 func hashBytes(value []byte) string {
 	digest := sha256.Sum256(value)
 	return "sha256:" + hex.EncodeToString(digest[:])
+}
+
+func TestRuntimeAndEvidenceRevisionsAreIndependentlyVerified(t *testing.T) {
+	root := t.TempDir()
+	upstream := filepath.Join(root, "upstream")
+	if err := os.Mkdir(upstream, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	runGit := func(directory string, arguments ...string) string {
+		t.Helper()
+		command := exec.Command("git", append([]string{"-C", directory}, arguments...)...)
+		output, err := command.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v: %.512s", arguments, err, output)
+		}
+		return strings.TrimSpace(string(output))
+	}
+	runGit(upstream, "init", "-q")
+	if err := os.WriteFile(filepath.Join(upstream, "runtime.txt"), []byte("runtime-byte-v1\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	runGit(upstream, "add", "runtime.txt")
+	runGit(upstream, "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-qm", "runtime")
+	runtimeRevision := runGit(upstream, "rev-parse", "HEAD")
+	runtimeTree, err := desktopcandidate.SourceTreeDigest(upstream)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(upstream, "evidence.txt"), []byte("verifier-byte-v2\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	runGit(upstream, "add", "evidence.txt")
+	runGit(upstream, "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-qm", "evidence")
+	evidenceRevision := runGit(upstream, "rev-parse", "HEAD")
+	evidenceTree, err := desktopcandidate.SourceTreeDigest(upstream)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtimeRoot := filepath.Join(root, "runtime")
+	command := exec.Command("git", "clone", "-q", upstream, runtimeRoot)
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("clone exact runtime source: %v: %.512s", err, output)
+	}
+	runGit(runtimeRoot, "checkout", "-q", "--detach", runtimeRevision)
+	ctx := context.Background()
+	if verifySource(ctx, runtimeRoot, runtimeRevision, runtimeTree) != nil ||
+		verifySource(ctx, upstream, evidenceRevision, evidenceTree) != nil {
+		t.Fatal("clean R and advanced E source identities were not independently verified")
+	}
+	if verifySource(ctx, upstream, runtimeRevision, runtimeTree) == nil {
+		t.Fatal("evidence checkout was mislabeled as old runtime source")
+	}
+	if verifySource(ctx, runtimeRoot, evidenceRevision, evidenceTree) == nil {
+		t.Fatal("runtime checkout was mislabeled as newer evidence source")
+	}
+	if verifySource(ctx, runtimeRoot, runtimeRevision, hashBytes([]byte("forged-tree"))) == nil {
+		t.Fatal("forged runtime tree admitted")
+	}
+	if err := os.WriteFile(filepath.Join(runtimeRoot, "dirty.txt"), []byte("dirty"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if verifySource(ctx, runtimeRoot, runtimeRevision, runtimeTree) == nil {
+		t.Fatal("dirty source view admitted")
+	}
+}
+
+func TestExecutingEvidenceSourceRejectsInventedRevision(t *testing.T) {
+	if verifyExecutingEvidenceSource(strings.Repeat("f", 40)) == nil {
+		t.Fatal("running verifier relabeled as an invented evidence revision")
+	}
 }

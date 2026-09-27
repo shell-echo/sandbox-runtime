@@ -349,6 +349,7 @@ func TestSlice6EvidenceLocalCandidateRequiresTypedArtifactBinding(t *testing.T) 
 		"wrong source":           func(e *Slice6Evidence) { e.Candidates[0].SourceRevision = strings.Repeat("c", 40) },
 		"candidate omitted":      func(e *Slice6Evidence) { e.Candidates = nil },
 		"wrong candidate kind":   func(e *Slice6Evidence) { e.Candidates[0].Kind = Slice6CandidateDesktop },
+		"wrong manifest schema":  func(e *Slice6Evidence) { e.Candidates[0].ManifestSchema = "old" },
 		"wrong descriptor proof": func(e *Slice6Evidence) { e.Candidates[0].DescriptorProofDigest = testDigest("other-proof") },
 	} {
 		t.Run(name, func(t *testing.T) {
