@@ -176,8 +176,8 @@ func (e *fakeEngine) create(_ context.Context, request createRequest) (string, e
 		readOnlyRoot: true, tmpfs: map[string]string{
 			"/inputs":    fmt.Sprintf("ro,noexec,nosuid,nodev,size=%d,mode=0555", request.inputsBytes),
 			"/tmp":       fmt.Sprintf("rw,noexec,nosuid,nodev,size=%d,mode=1777", request.tmpfsBytes),
-			"/workspace": fmt.Sprintf("rw,noexec,nosuid,nodev,size=%d,mode=0700", request.workspaceBytes),
-			"/outputs":   fmt.Sprintf("rw,noexec,nosuid,nodev,size=%d,mode=0700", request.outputsBytes),
+			"/workspace": desktopWritableTmpfs(request.workspaceBytes, request.slot),
+			"/outputs":   desktopWritableTmpfs(request.outputsBytes, request.slot),
 		},
 		dns: []netip.Addr{resolver}, capDrop: []string{"ALL"},
 		securityOptions: []string{"no-new-privileges:true"},
@@ -763,6 +763,10 @@ func TestDesktopBoundCreatingCompletionIsExactAndReadOnly(t *testing.T) {
 	}
 	if backend.createRequests[0].user != desktopWorkloadUser(slot) {
 		t.Fatalf("slot user = %q", backend.createRequests[0].user)
+	}
+	if got := desktopWritableTmpfs(256<<20, backend.createRequests[0].slot); got !=
+		"rw,noexec,nosuid,nodev,size=268435456,mode=0700,uid=21000,gid=31000" {
+		t.Fatalf("bound writable tmpfs identity = %q", got)
 	}
 	completed, err := driver.CompletedBound(t.Context(), allocation, ticket)
 	if err != nil || !sameReceipt(completed, receipt) {

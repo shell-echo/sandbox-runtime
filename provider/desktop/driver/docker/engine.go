@@ -14,6 +14,7 @@ import (
 	"github.com/moby/moby/api/pkg/stdcopy"
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/client"
+	"github.com/shell-echo/sandbox-runtime/internal/sandboxidentity"
 	"github.com/shell-echo/sandbox-runtime/internal/sessiontermination"
 )
 
@@ -58,6 +59,7 @@ type createRequest struct {
 	image            string
 	labels           map[string]string
 	user             string
+	slot             sandboxidentity.Slot
 	workingDirectory string
 	memoryBytes      int64
 	nanoCPUs         int64
@@ -221,8 +223,8 @@ func (e *mobyEngine) create(ctx context.Context, request createRequest) (string,
 			Tmpfs: map[string]string{
 				"/inputs":    fmt.Sprintf("ro,noexec,nosuid,nodev,size=%d,mode=0555", request.inputsBytes),
 				"/tmp":       fmt.Sprintf("rw,noexec,nosuid,nodev,size=%d,mode=1777", request.tmpfsBytes),
-				"/workspace": fmt.Sprintf("rw,noexec,nosuid,nodev,size=%d,mode=0700", request.workspaceBytes),
-				"/outputs":   fmt.Sprintf("rw,noexec,nosuid,nodev,size=%d,mode=0700", request.outputsBytes),
+				"/workspace": desktopWritableTmpfs(request.workspaceBytes, request.slot),
+				"/outputs":   desktopWritableTmpfs(request.outputsBytes, request.slot),
 			},
 			LogConfig: container.LogConfig{Type: "local", Config: map[string]string{"max-size": "10m", "max-file": "3"}},
 			Resources: container.Resources{

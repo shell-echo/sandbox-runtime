@@ -9,6 +9,7 @@ import (
 
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/client"
+	"github.com/shell-echo/sandbox-runtime/internal/sandboxidentity"
 	"github.com/shell-echo/sandbox-runtime/internal/sessiontermination"
 )
 
@@ -76,6 +77,23 @@ func TestMobyEngineProjectsDesktopIsolation(t *testing.T) {
 	}
 	if host.LogConfig.Type != "local" || host.LogConfig.Config["max-size"] != "10m" || host.LogConfig.Config["max-file"] != "3" {
 		t.Fatalf("log bounds = %#v", host.LogConfig)
+	}
+	slot := sandboxidentity.Slot{ID: "desktop-0000", WorkloadUID: 42000, WorkloadGID: 52000,
+		GatewayUID: 44000, GatewayGID: 54000}
+	_, err = backend.create(context.Background(), createRequest{
+		name: "desktop-bound", image: "example.invalid/desktop@sha256:digest",
+		labels: map[string]string{managedLabel: "true"}, user: desktopWorkloadUser(slot), slot: slot,
+		workingDirectory: "/workspace", memoryBytes: 1 << 30, nanoCPUs: 1_000_000_000, pidsLimit: 256,
+		inputsBytes: 16 << 20, tmpfsBytes: 256 << 20, workspaceBytes: 512 << 20, outputsBytes: 128 << 20,
+		stopTimeout: 10, networkName: "desktop-egress-network-1", dnsResolver: "10.88.0.2",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if captured.Config.User != "42000:52000" ||
+		captured.HostConfig.Tmpfs["/workspace"] != "rw,noexec,nosuid,nodev,size=536870912,mode=0700,uid=42000,gid=52000" ||
+		captured.HostConfig.Tmpfs["/outputs"] != "rw,noexec,nosuid,nodev,size=134217728,mode=0700,uid=42000,gid=52000" {
+		t.Fatalf("bound Desktop account/mount ownership = %q, %#v", captured.Config.User, captured.HostConfig.Tmpfs)
 	}
 }
 

@@ -817,8 +817,8 @@ func validateContainerRuntime(info containerInfo, request createRequest, image i
 	expectedTmpfs := map[string]string{
 		"/inputs":    fmt.Sprintf("ro,noexec,nosuid,nodev,size=%d,mode=0555", request.inputsBytes),
 		"/tmp":       fmt.Sprintf("rw,noexec,nosuid,nodev,size=%d,mode=1777", request.tmpfsBytes),
-		"/workspace": fmt.Sprintf("rw,noexec,nosuid,nodev,size=%d,mode=0700", request.workspaceBytes),
-		"/outputs":   fmt.Sprintf("rw,noexec,nosuid,nodev,size=%d,mode=0700", request.outputsBytes),
+		"/workspace": desktopWritableTmpfs(request.workspaceBytes, request.slot),
+		"/outputs":   desktopWritableTmpfs(request.outputsBytes, request.slot),
 	}
 	resolver, resolverErr := netip.ParseAddr(request.dnsResolver)
 	address, attached := info.networks[request.networkName]
@@ -872,7 +872,7 @@ func (d *Driver) createRequest(state desktopState) createRequest {
 	labels[specDigestLabel] = state.SpecDigest
 	return createRequest{
 		name:  identity.WorkloadName(),
-		image: d.options.Image, user: desktopWorkloadUser(state.Network.Slot), workingDirectory: "/workspace",
+		image: d.options.Image, user: desktopWorkloadUser(state.Network.Slot), slot: state.Network.Slot, workingDirectory: "/workspace",
 		memoryBytes: d.options.MemoryBytes, nanoCPUs: d.options.NanoCPUs, pidsLimit: d.options.PidsLimit,
 		inputsBytes: d.options.InputsBytes, tmpfsBytes: d.options.TmpfsBytes,
 		workspaceBytes: d.options.WorkspaceBytes, outputsBytes: d.options.OutputsBytes,
@@ -937,6 +937,14 @@ func desktopWorkloadUser(slot sandboxidentity.Slot) string {
 		return DesktopUser
 	}
 	return fmt.Sprintf("%d:%d", slot.WorkloadUID, slot.WorkloadGID)
+}
+
+func desktopWritableTmpfs(size int64, slot sandboxidentity.Slot) string {
+	base := fmt.Sprintf("rw,noexec,nosuid,nodev,size=%d,mode=0700", size)
+	if slot == (sandboxidentity.Slot{}) {
+		return base
+	}
+	return fmt.Sprintf("%s,uid=%d,gid=%d", base, slot.WorkloadUID, slot.WorkloadGID)
 }
 
 func (d *Driver) seccompPolicy() string {
