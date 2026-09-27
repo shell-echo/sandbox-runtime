@@ -298,6 +298,13 @@ func TestDesktopBoundPostgresDockerIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	running, err := providerdesktop.Transition(reserved.Record, providerdesktop.StatusRunning, now.Add(time.Second), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := sessions.UpdateOpenAt(ctx, running, providerdesktop.StatusAccepted, running.ObservedAt); err != nil {
+		t.Fatal(err)
+	}
 	allocation := providerdesktop.Allocation{Request: providerdesktop.AllocationRequest{
 		SandboxID: open.SandboxID, DesktopSessionID: open.DesktopSessionID,
 		OperationID: open.OperationID, AttemptID: open.AttemptID,
