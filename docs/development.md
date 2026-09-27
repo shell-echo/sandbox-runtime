@@ -1278,6 +1278,15 @@ executed the commands. Only the still-missing full live gate, its auditable
 capture, and exact cleanup may admit Slice 6; never paste older component
 receipts into a new run.
 
+The live harness must use the one-run receipt recorder, not hand-assemble a
+success JSON document. It creates a new mode-0700 bundle directory, writes
+each bounded raw receipt and companion envelope once with mode 0600 and
+fsync, rejects duplicate/cross-run keys, and refuses finalization unless the
+manifest's complete runtime digest set is present. Finalization independently
+reopens the bundle before returning. The recorder is a capture aid; the
+caller still has to perform and observe every real probe and keep bootstrap
+secrets out of retained bytes.
+
 The following formal Slice 5 campaign is historical: reproduce it only from
 the two pinned original revisions and their original inputs. Do not run its
 v1 Desktop private request against the current v2-only candidate command,

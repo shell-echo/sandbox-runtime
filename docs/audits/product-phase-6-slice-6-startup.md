@@ -1815,3 +1815,12 @@ checkpoint, not an observed Slice 6 success bundle. It cannot independently
 prove command execution or resist rewriting by an actor who owns all files.
 The trusted full-topology harness, all 16 live scenarios, and complete exact
 cleanup are still absent. Phase 6 remains **5/15**.
+
+Next capture increment: the one-run recorder now creates only a fresh private
+bundle, durably writes each raw observation and companion envelope once,
+rejects cross-run and duplicate logical keys, and refuses to write a manifest
+until the complete run-generated digest set is recorded. Its finalization
+reopens the entire bundle through the independent verifier. A unit-only
+synthetic complete bundle proves writer/verifier agreement; an incomplete
+fixture proves no manifest is written. This does not create live execution
+provenance or close the missing full-topology gate. Phase 6 remains **5/15**.

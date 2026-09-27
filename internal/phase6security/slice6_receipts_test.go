@@ -1,13 +1,12 @@
 package phase6security
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestSlice6ReceiptBundleRejectsCrossRunAndTampering(t *testing.T) {
@@ -239,23 +238,56 @@ func TestSlice6RunIDIsCanonicalFreshRandom(t *testing.T) {
 	}
 }
 
+func TestSlice6RecorderRefusesDuplicateCrossRunAndIncompleteFinalization(t *testing.T) {
+	evidence := validSlice6EvidenceFixture(t)
+	root := filepath.Join(t.TempDir(), "private-bundle")
+	recorder, err := NewSlice6ReceiptRecorder(root, evidence)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := NewSlice6ReceiptRecorder(root, evidence); err == nil {
+		t.Fatal("existing private bundle root was overwritten")
+	}
+	key := "process/" + evidence.Processes[0].DeploymentName + "/command"
+	raw := []byte("unit-only process launch observation\n")
+	digest := digestSlice6Receipt(raw)
+	setSlice6RunReceiptTestDigest(t, &evidence, key, digest)
+	observedAt, err := time.Parse(time.RFC3339Nano, evidence.ObservedAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := recorder.Record(evidence, key, raw, observedAt); err != nil {
+		t.Fatalf("first exact receipt rejected: %v", err)
+	}
+	if _, err := recorder.Record(evidence, key, raw, observedAt); err == nil {
+		t.Fatal("duplicate logical receipt admitted")
+	}
+	other := evidence
+	other.RunID = strings.Repeat("d", 32)
+	if _, err := recorder.Record(other, "process/"+evidence.Processes[1].DeploymentName+"/command", raw, observedAt); err == nil {
+		t.Fatal("receipt from another run admitted")
+	}
+	if err := recorder.Finalize(&evidence); err == nil {
+		t.Fatal("incomplete run finalized")
+	}
+	if _, err := os.Lstat(filepath.Join(root, "manifest.json")); !os.IsNotExist(err) {
+		t.Fatal("incomplete run wrote a manifest")
+	}
+}
+
 func validSlice6ReceiptBundleFixture(t *testing.T) (Slice6Evidence, Slice6ReceiptIndex, string, string) {
 	t.Helper()
 	evidence := validSlice6EvidenceFixture(t)
-	root := t.TempDir()
-	for _, path := range []string{root, filepath.Join(root, "receipts"), filepath.Join(root, "receipts", "raw"), filepath.Join(root, "receipts", "envelopes")} {
-		if err := os.MkdirAll(path, 0o700); err != nil || os.Chmod(path, 0o700) != nil {
-			t.Fatal("create private receipt fixture directory")
-		}
+	root := filepath.Join(t.TempDir(), "bundle")
+	recorder, err := NewSlice6ReceiptRecorder(root, evidence)
+	if err != nil {
+		t.Fatalf("construct private receipt recorder: %v", err)
 	}
-	index := Slice6ReceiptIndex{Protocol: slice6ReceiptIndexProtocol, Version: 1,
-		RunID: evidence.RunID, ProfileDigest: evidence.Profile.ProfileDigest, SourceRevision: evidence.RuntimeRevision,
-		SourceTreeDigest: evidence.RuntimeTreeDigest}
+	observedAt, err := time.Parse(time.RFC3339Nano, evidence.ObservedAt)
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, key := range sortedSlice6RunReceiptKeys(evidence) {
-		hash := sha256.Sum256([]byte(key))
-		fileID := hex.EncodeToString(hash[:])
-		rawPath := "receipts/raw/" + fileID + ".json"
-		envelopePath := "receipts/envelopes/" + fileID + ".json"
 		kind, subject, _ := strings.Cut(key, "/")
 		subject, _, _ = strings.Cut(subject, "/")
 		raw := []byte("unit-only observation: " + key + "\n")
@@ -293,25 +325,21 @@ func validSlice6ReceiptBundleFixture(t *testing.T) (Slice6Evidence, Slice6Receip
 				t.Fatal(err)
 			}
 		}
-		if err := os.WriteFile(filepath.Join(root, rawPath), raw, 0o600); err != nil {
-			t.Fatal(err)
-		}
 		rawDigest := digestSlice6Receipt(raw)
 		setSlice6RunReceiptTestDigest(t, &evidence, key, rawDigest)
-		envelope := Slice6RunReceipt{Protocol: slice6ReceiptProtocol, Version: 1, RunID: evidence.RunID,
-			Key: key, Kind: kind, Subject: subject, ProfileDigest: evidence.Profile.ProfileDigest,
-			ConfigDigest: slice6ReceiptConfigDigest(evidence, kind, subject), SourceRevision: evidence.RuntimeRevision,
-			SourceTreeDigest: evidence.RuntimeTreeDigest,
-			ObservedAt:       evidence.ObservedAt, Outcome: slice6ReceiptOutcome(kind), RawDigest: rawDigest}
-		if kind == "cleanup" {
-			envelope.OwnershipRunID = evidence.RunID
+		if _, err := recorder.Record(evidence, key, raw, observedAt); err != nil {
+			t.Fatalf("record %s: %v", key, err)
 		}
-		writeSlice6ReceiptTestJSON(t, filepath.Join(root, envelopePath), envelope)
-		index.Entries = append(index.Entries, Slice6ReceiptIndexEntry{Key: key, RawPath: rawPath, RawDigest: rawDigest,
-			EnvelopePath: envelopePath, EnvelopeDigest: fileSlice6ReceiptTestDigest(t, filepath.Join(root, envelopePath))})
 	}
 	manifest := filepath.Join(root, "manifest.json")
-	writeSlice6ReceiptTestIndexAndManifest(t, root, manifest, &evidence, index)
+	if err := recorder.Finalize(&evidence); err != nil {
+		t.Fatalf("finalize complete unit fixture bundle: %v", err)
+	}
+	indexDocument, err := os.ReadFile(filepath.Join(root, "receipt-index.json"))
+	var index Slice6ReceiptIndex
+	if err != nil || json.Unmarshal(indexDocument, &index) != nil {
+		t.Fatal("read finalized receipt index")
+	}
 	return evidence, index, root, manifest
 }
 
