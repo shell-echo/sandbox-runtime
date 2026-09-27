@@ -146,7 +146,11 @@ func observeLocalRoleDescriptor(t *testing.T, ctx context.Context, image, platfo
 		images[0].Descriptor.MediaType == "application/vnd.docker.distribution.manifest.list.v2+json" {
 		kind = phase6security.ImageIdentityOCIIndex
 	}
-	manifestPath := filepath.Join(t.TempDir(), "candidate.json")
+	manifestDir := t.TempDir()
+	if err := os.Chmod(manifestDir, 0o700); err != nil {
+		t.Fatalf("secure private candidate directory: %v", err)
+	}
+	manifestPath := filepath.Join(manifestDir, "candidate.json")
 	archive := manifestPath + ".oci.tar"
 	if output, err := exec.CommandContext(ctx, "docker", "image", "save", "-o", archive, image).CombinedOutput(); err != nil {
 		t.Fatalf("save exact role candidate archive: %v: %.512s", err, output)
