@@ -130,3 +130,39 @@ func TestSlice6GateInputRejectsMissingAuthority(t *testing.T) {
 		t.Fatal("Slice 6 path or revision guard drifted")
 	}
 }
+
+func TestSlice6SourceCheckpointRejectsDirtyOrMismatchedRevision(t *testing.T) {
+	root := t.TempDir()
+	if output, err := exec.CommandContext(t.Context(), "git", "-C", root, "init", "-q").CombinedOutput(); err != nil {
+		t.Fatalf("initialize disposable source: %v: %.512s", err, output)
+	}
+	path := filepath.Join(root, "fixture.txt")
+	if err := os.WriteFile(path, []byte("clean\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, arguments := range [][]string{
+		{"-C", root, "add", "fixture.txt"},
+		{"-C", root, "-c", "user.name=Slice6 Test", "-c", "user.email=slice6@example.invalid", "commit", "-q", "-m", "fixture"},
+	} {
+		if output, err := exec.CommandContext(t.Context(), "git", arguments...).CombinedOutput(); err != nil {
+			t.Fatalf("commit disposable source: %v: %.512s", err, output)
+		}
+	}
+	head, err := exec.CommandContext(t.Context(), "git", "-C", root, "rev-parse", "HEAD").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	revision := strings.TrimSpace(string(head))
+	if err := verifyCleanSlice6Source(t.Context(), root, revision); err != nil {
+		t.Fatalf("clean source checkpoint rejected: %v", err)
+	}
+	if verifyCleanSlice6Source(t.Context(), root, strings.Repeat("0", 40)) == nil {
+		t.Fatal("mismatched source revision admitted")
+	}
+	if err := os.WriteFile(path, []byte("dirty\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if verifyCleanSlice6Source(t.Context(), root, revision) == nil {
+		t.Fatal("dirty source checkpoint admitted")
+	}
+}
