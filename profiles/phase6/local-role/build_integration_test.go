@@ -214,6 +214,22 @@ func observeLocalRoleDescriptor(t *testing.T, ctx context.Context, image, platfo
 	if _, err := phase6rolecandidate.LoadCurrent(ctx, sourceRoot, manifestPath); err == nil {
 		t.Fatal("public candidate archive admitted after manifest retention")
 	}
+	operatorDir := t.TempDir()
+	if err := os.Chmod(operatorDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	operatorPath := filepath.Join(operatorDir, "recorded.json")
+	recorded, err := phase6rolecandidate.Record(ctx, phase6rolecandidate.RecordInput{
+		SourceRoot: sourceRoot, Deployment: "product-runtime", Platform: platform,
+		ImageID: image, OutputPath: operatorPath,
+	})
+	if err != nil {
+		t.Fatalf("operator recorder failed on exact built candidate: %v", err)
+	}
+	reopened, err := phase6rolecandidate.LoadCurrent(ctx, sourceRoot, operatorPath)
+	if err != nil || reopened.ManifestDigest != recorded.ManifestDigest {
+		t.Fatalf("operator candidate archive/manifest did not reopen: %v", err)
+	}
 	if output, err := exec.CommandContext(ctx, "docker", "rm", "-f", containerID).CombinedOutput(); err != nil {
 		t.Fatalf("remove exact stopped role image observation: %v: %.512s", err, output)
 	}

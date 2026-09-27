@@ -168,6 +168,7 @@ func (m Manifest) WritePrivate(path string) error {
 	count, writeErr := file.Write(document)
 	closeErr := file.Close()
 	if writeErr != nil || closeErr != nil || count != len(document) {
+		_ = os.Remove(path) // Only the O_EXCL file created above.
 		return ErrInvalidManifest
 	}
 	return nil
