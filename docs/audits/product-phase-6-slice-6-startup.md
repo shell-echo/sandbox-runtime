@@ -1759,3 +1759,22 @@ base with Docker build networking disabled. Its first real high-UID command
 smoke is a component check; the final gate must still retain and independently
 verify each candidate's raw OCI archive/descriptor chain, then observe the
 running containers and complete all 16 scenarios in one run.
+
+Checkpoint `ef071f1` extends that component smoke: a clean, source-bound
+`core` role image actually runs the repository command under `21001:31001`,
+read-only root, no network, all capabilities dropped, no-new-privileges and
+bounded memory/PIDs. A separate same-policy container reports the effective
+UID/GID. The test independently saves the local OCI archive, reads raw
+store/selected-manifest/config bytes and every ordered layer/diff ID, and
+matches them to Docker's stopped-container selection before exact test
+container cleanup. The role image is local-only and not published. A separate
+Browser executor image was built from the same recipe; invoking it without
+its private authority correctly fails closed, so this is not an executor
+service-start or attach result. The Vault PostgreSQL-client-purpose test
+passed with wrong-CN/URI denials, and the controlled PostgreSQL HBA test
+passed exact CN/SCRAM/source grants and wrong-issuer, wrong-purpose,
+cross-owner/database, missing-cert and wrong-password denials. The real Vault
+workload TLS bootstrap/revocation component test also passed. These are
+different disposable component runs, not spliceable Slice 6 evidence. No
+complete real-command topology, retained raw same-run receipts or release
+manifest exists; Phase 6 remains **5/15**.

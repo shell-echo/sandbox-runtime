@@ -1223,6 +1223,25 @@ command path, not an artifact release claim. Desktop v3
 independently verifies the matching executor-v2 runtime and repeats affected
 security gates.
 
+Slice 6's new gate preparation is not a release test. On a clean committed
+checkout with Go 1.26.8, build a local-only real command candidate and run
+its opt-in high-UID/raw-OCI component smoke:
+
+```bash
+mise exec go@1.26.8 -- profiles/phase6/local-role/build.sh \
+  linux/arm64/v8 core
+SANDBOX_RUNTIME_PHASE6_LOCAL_ROLE_INTEGRATION=1 \
+  mise exec go@1.26.8 -- env -u GOROOT go test -race -tags=integration \
+    -count=1 -run '^TestLocalCoreCandidateRunsAsHighUID$' \
+    ./profiles/phase6/local-role
+```
+
+`phase6slice6gate` currently checks only the frozen 16-scenario routing plan
+and opt-in strict profile/source/candidate/image preflight. It has no Slice 6
+release runner or success manifest yet. Do not reinterpret a passing
+preflight, this role-image smoke or the historical `phase6slicegate` as a
+completed full-inventory security gate.
+
 The following formal Slice 5 campaign is historical: reproduce it only from
 the two pinned original revisions and their original inputs. Do not run its
 v1 Desktop private request against the current v2-only candidate command,
