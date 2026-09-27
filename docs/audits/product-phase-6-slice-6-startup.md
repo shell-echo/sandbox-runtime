@@ -1940,3 +1940,25 @@ Docker store ID, repository, platform or descriptor substitution. This is an ima
 input check, not a fresh signature verification, container/runtime observation
 or complete OCI archive chain. The full 58-deployment topology, 16 scenarios,
 same-run evidence and exact cleanup remain open. Phase 6 remains **5/15**.
+
+A separate read-only verification of that reused publication fetched the raw
+OCI index by its immutable GHCR reference. Its SHA-256 matched
+`87d3216c22ada0fea74b375a3ee5c2ddf021d3e1913569e2aeb4a316ed3b5c2f`,
+and it listed exactly the locked `linux/amd64` and `linux/arm64/v8` selected
+manifests. `gh attestation verify` accepted one SLSA provenance attestation
+with the exact repository, signer workflow, historical source commit and
+hosted-runner restriction; its subject digest matched the same index. This
+reconfirms the input publication only. No Slice 6 container selected-manifest,
+effective UID/CDP/slot, network, or cleanup observation was produced by it.
+The diagnostic used these exact read-only inputs:
+
+```bash
+docker buildx imagetools inspect --raw \
+  ghcr.io/shell-echo/sandbox-runtime-browser@sha256:87d3216c22ada0fea74b375a3ee5c2ddf021d3e1913569e2aeb4a316ed3b5c2f
+gh attestation verify \
+  oci://ghcr.io/shell-echo/sandbox-runtime-browser@sha256:87d3216c22ada0fea74b375a3ee5c2ddf021d3e1913569e2aeb4a316ed3b5c2f \
+  --repo shell-echo/sandbox-runtime \
+  --signer-workflow github.com/shell-echo/sandbox-runtime/.github/workflows/browser-image.yml \
+  --source-digest 58ed0093816d3daa3000750013b8e5991ef4bcf7 \
+  --deny-self-hosted-runners --format json
+```
