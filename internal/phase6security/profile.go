@@ -32,54 +32,59 @@ const (
 )
 
 var (
-	ErrInvalidProfile = errors.New("invalid Phase 6 security profile")
-	digestPattern     = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
-	imagePattern      = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:/-]{0,510}@sha256:[0-9a-f]{64}$`)
-	namePattern       = regexp.MustCompile(`^[a-z][a-z0-9-]{0,63}$`)
-	routePathPattern  = regexp.MustCompile(`^/[a-z][a-z0-9-]*(?:/[a-z][a-z0-9-]*){0,7}$`)
-	hostPattern       = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$`)
+	ErrInvalidProfile    = errors.New("invalid Phase 6 security profile")
+	digestPattern        = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
+	imagePattern         = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:/-]{0,510}@sha256:[0-9a-f]{64}$`)
+	imagePlatformPattern = regexp.MustCompile(`^linux/(?:amd64|arm64(?:/v8)?)$`)
+	namePattern          = regexp.MustCompile(`^[a-z][a-z0-9-]{0,63}$`)
+	routePathPattern     = regexp.MustCompile(`^/[a-z][a-z0-9-]*(?:/[a-z][a-z0-9-]*){0,7}$`)
+	hostPattern          = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$`)
 )
 
 var requiredPrincipals = map[string]string{
-	"product-runtime":                "runtime",
-	"gateway-runtime":                "runtime",
-	"provider-runtime":               "runtime",
-	"provider-browser-runtime":       "runtime",
-	"provider-desktop-runtime":       "runtime",
-	"guest-runtime":                  "runtime",
-	"browser-runtime-role":           "runtime",
-	"desktop-runtime-role":           "runtime",
-	"browser-executor-backend":       "executor",
-	"desktop-executor-backend":       "executor",
-	"product-tls-agent":              "tls_agent",
-	"provider-tls-agent":             "tls_agent",
-	"provider-browser-tls-agent":     "tls_agent",
-	"provider-desktop-tls-agent":     "tls_agent",
-	"gateway-tls-agent":              "tls_agent",
-	"guest-tls-agent":                "tls_agent",
-	"browser-tls-agent":              "tls_agent",
-	"desktop-tls-agent":              "tls_agent",
-	"browser-executor-tls-agent":     "tls_agent",
-	"desktop-executor-tls-agent":     "tls_agent",
-	"product-runtime-agent":          "material_agent",
-	"provider-runtime-agent":         "material_agent",
-	"provider-browser-runtime-agent": "material_agent",
-	"provider-desktop-runtime-agent": "material_agent",
-	"gateway-agent":                  "material_agent",
-	"guest-agent":                    "material_agent",
-	"browser-agent":                  "material_agent",
-	"desktop-agent":                  "material_agent",
-	"product-migration-agent":        "material_agent",
-	"provider-migration-agent":       "material_agent",
-	"workload-credential-controller": "controller",
-	"break-glass-controller":         "controller",
-	"certificate-controller":         "controller",
-	"product-migration-job":          "migration_job",
-	"provider-migration-job":         "migration_job",
-	"desktop-broker":                 "broker",
-	"browser-sandbox-runtime":        "sandbox",
-	"desktop-sandbox-runtime":        "sandbox",
-	"public-ingress-relay":           "ingress_relay",
+	"product-runtime":                     "runtime",
+	"gateway-runtime":                     "runtime",
+	"browser-action-ingress-runtime":      "runtime",
+	"provider-runtime":                    "runtime",
+	"provider-browser-runtime":            "runtime",
+	"provider-desktop-runtime":            "runtime",
+	"guest-runtime":                       "runtime",
+	"browser-runtime-role":                "runtime",
+	"desktop-runtime-role":                "runtime",
+	"browser-executor-backend":            "executor",
+	"desktop-executor-backend":            "executor",
+	"product-tls-agent":                   "tls_agent",
+	"provider-tls-agent":                  "tls_agent",
+	"provider-browser-tls-agent":          "tls_agent",
+	"provider-desktop-tls-agent":          "tls_agent",
+	"provider-browser-postgres-tls-agent": "tls_agent",
+	"provider-desktop-postgres-tls-agent": "tls_agent",
+	"gateway-tls-agent":                   "tls_agent",
+	"browser-action-ingress-tls-agent":    "tls_agent",
+	"guest-tls-agent":                     "tls_agent",
+	"browser-tls-agent":                   "tls_agent",
+	"desktop-tls-agent":                   "tls_agent",
+	"browser-executor-tls-agent":          "tls_agent",
+	"desktop-executor-tls-agent":          "tls_agent",
+	"product-runtime-agent":               "material_agent",
+	"provider-runtime-agent":              "material_agent",
+	"provider-browser-runtime-agent":      "material_agent",
+	"provider-desktop-runtime-agent":      "material_agent",
+	"gateway-agent":                       "material_agent",
+	"browser-action-ingress-agent":        "material_agent",
+	"guest-agent":                         "material_agent",
+	"browser-agent":                       "material_agent",
+	"desktop-agent":                       "material_agent",
+	"product-migration-agent":             "material_agent",
+	"provider-migration-agent":            "material_agent",
+	"workload-credential-controller":      "controller",
+	"break-glass-controller":              "controller",
+	"certificate-controller":              "controller",
+	"product-migration-job":               "migration_job",
+	"provider-migration-job":              "migration_job",
+	"browser-sandbox-runtime":             "sandbox",
+	"desktop-sandbox-runtime":             "sandbox",
+	"public-ingress-relay":                "ingress_relay",
 }
 
 type principalBinding struct {
@@ -89,61 +94,66 @@ type principalBinding struct {
 }
 
 var requiredAuthorizationBindings = map[string]principalBinding{
-	"product-runtime":                {securityprincipal.KindRuntimeRole, "product", securityprincipal.RoleProduct},
-	"gateway-runtime":                {securityprincipal.KindRuntimeRole, "gateway", securityprincipal.RoleGateway},
-	"provider-runtime":               {securityprincipal.KindRuntimeRole, "provider", securityprincipal.RoleProvider},
-	"provider-browser-runtime":       {securityprincipal.KindRuntimeRole, "provider", securityprincipal.RoleProvider},
-	"provider-desktop-runtime":       {securityprincipal.KindRuntimeRole, "provider", securityprincipal.RoleProvider},
-	"guest-runtime":                  {securityprincipal.KindRuntimeRole, "guest", securityprincipal.RoleGuest},
-	"browser-runtime-role":           {securityprincipal.KindRuntimeRole, "browser", securityprincipal.RoleBrowser},
-	"desktop-runtime-role":           {securityprincipal.KindRuntimeRole, "desktop", securityprincipal.RoleDesktop},
-	"browser-executor-backend":       {securityprincipal.KindExecutorBackend, "browser_executor", securityprincipal.RoleBrowser},
-	"desktop-executor-backend":       {securityprincipal.KindExecutorBackend, "desktop_executor", securityprincipal.RoleDesktop},
-	"product-tls-agent":              {securityprincipal.KindTLSAgent, "product_tls_agent", securityprincipal.RoleProduct},
-	"provider-tls-agent":             {securityprincipal.KindTLSAgent, "provider_tls_agent", securityprincipal.RoleProvider},
-	"provider-browser-tls-agent":     {securityprincipal.KindTLSAgent, "provider_tls_agent", securityprincipal.RoleProvider},
-	"provider-desktop-tls-agent":     {securityprincipal.KindTLSAgent, "provider_tls_agent", securityprincipal.RoleProvider},
-	"gateway-tls-agent":              {securityprincipal.KindTLSAgent, "gateway_tls_agent", securityprincipal.RoleGateway},
-	"guest-tls-agent":                {securityprincipal.KindTLSAgent, "guest_tls_agent", securityprincipal.RoleGuest},
-	"browser-tls-agent":              {securityprincipal.KindTLSAgent, "browser_tls_agent", securityprincipal.RoleBrowser},
-	"desktop-tls-agent":              {securityprincipal.KindTLSAgent, "desktop_tls_agent", securityprincipal.RoleDesktop},
-	"browser-executor-tls-agent":     {securityprincipal.KindTLSAgent, "browser_executor_tls_agent", securityprincipal.RoleBrowser},
-	"desktop-executor-tls-agent":     {securityprincipal.KindTLSAgent, "desktop_executor_tls_agent", securityprincipal.RoleDesktop},
-	"product-runtime-agent":          {securityprincipal.KindMaterialAgent, "product_runtime_agent", securityprincipal.RoleProduct},
-	"provider-runtime-agent":         {securityprincipal.KindMaterialAgent, "provider_runtime_agent", securityprincipal.RoleProvider},
-	"provider-browser-runtime-agent": {securityprincipal.KindMaterialAgent, "provider_runtime_agent", securityprincipal.RoleProvider},
-	"provider-desktop-runtime-agent": {securityprincipal.KindMaterialAgent, "provider_runtime_agent", securityprincipal.RoleProvider},
-	"gateway-agent":                  {securityprincipal.KindMaterialAgent, "gateway_agent", securityprincipal.RoleGateway},
-	"guest-agent":                    {securityprincipal.KindMaterialAgent, "guest_agent", securityprincipal.RoleGuest},
-	"browser-agent":                  {securityprincipal.KindMaterialAgent, "browser_agent", securityprincipal.RoleBrowser},
-	"desktop-agent":                  {securityprincipal.KindMaterialAgent, "desktop_agent", securityprincipal.RoleDesktop},
-	"product-migration-agent":        {securityprincipal.KindMaterialAgent, "product_migration_agent", securityprincipal.RoleProduct},
-	"provider-migration-agent":       {securityprincipal.KindMaterialAgent, "provider_migration_agent", securityprincipal.RoleProvider},
-	"workload-credential-controller": {securityprincipal.KindController, "credential_controller", ""},
-	"break-glass-controller":         {securityprincipal.KindController, "break_glass_controller", ""},
-	"certificate-controller":         {securityprincipal.KindController, "certificate_controller", ""},
-	"product-migration-job":          {securityprincipal.KindMigrationJob, "product_migration", securityprincipal.RoleProduct},
-	"provider-migration-job":         {securityprincipal.KindMigrationJob, "provider_migration", securityprincipal.RoleProvider},
-	"public-ingress-relay":           {securityprincipal.KindIngressRelay, "public_ingress_relay", ""},
+	"product-runtime":                     {securityprincipal.KindRuntimeRole, "product", securityprincipal.RoleProduct},
+	"gateway-runtime":                     {securityprincipal.KindRuntimeRole, "gateway", securityprincipal.RoleGateway},
+	"browser-action-ingress-runtime":      {securityprincipal.KindRuntimeRole, "browser_action_ingress", securityprincipal.RoleGateway},
+	"provider-runtime":                    {securityprincipal.KindRuntimeRole, "provider", securityprincipal.RoleProvider},
+	"provider-browser-runtime":            {securityprincipal.KindRuntimeRole, "provider", securityprincipal.RoleProvider},
+	"provider-desktop-runtime":            {securityprincipal.KindRuntimeRole, "provider", securityprincipal.RoleProvider},
+	"guest-runtime":                       {securityprincipal.KindRuntimeRole, "guest", securityprincipal.RoleGuest},
+	"browser-runtime-role":                {securityprincipal.KindRuntimeRole, "browser", securityprincipal.RoleBrowser},
+	"desktop-runtime-role":                {securityprincipal.KindRuntimeRole, "desktop", securityprincipal.RoleDesktop},
+	"browser-executor-backend":            {securityprincipal.KindExecutorBackend, "browser_executor", securityprincipal.RoleBrowser},
+	"desktop-executor-backend":            {securityprincipal.KindExecutorBackend, "desktop_executor", securityprincipal.RoleDesktop},
+	"product-tls-agent":                   {securityprincipal.KindTLSAgent, "product_tls_agent", securityprincipal.RoleProduct},
+	"provider-tls-agent":                  {securityprincipal.KindTLSAgent, "provider_tls_agent", securityprincipal.RoleProvider},
+	"provider-browser-tls-agent":          {securityprincipal.KindTLSAgent, "provider_tls_agent", securityprincipal.RoleProvider},
+	"provider-desktop-tls-agent":          {securityprincipal.KindTLSAgent, "provider_tls_agent", securityprincipal.RoleProvider},
+	"provider-browser-postgres-tls-agent": {securityprincipal.KindTLSAgent, "provider_tls_agent", securityprincipal.RoleProvider},
+	"provider-desktop-postgres-tls-agent": {securityprincipal.KindTLSAgent, "provider_tls_agent", securityprincipal.RoleProvider},
+	"gateway-tls-agent":                   {securityprincipal.KindTLSAgent, "gateway_tls_agent", securityprincipal.RoleGateway},
+	"browser-action-ingress-tls-agent":    {securityprincipal.KindTLSAgent, "browser_action_ingress_tls_agent", securityprincipal.RoleGateway},
+	"guest-tls-agent":                     {securityprincipal.KindTLSAgent, "guest_tls_agent", securityprincipal.RoleGuest},
+	"browser-tls-agent":                   {securityprincipal.KindTLSAgent, "browser_tls_agent", securityprincipal.RoleBrowser},
+	"desktop-tls-agent":                   {securityprincipal.KindTLSAgent, "desktop_tls_agent", securityprincipal.RoleDesktop},
+	"browser-executor-tls-agent":          {securityprincipal.KindTLSAgent, "browser_executor_tls_agent", securityprincipal.RoleBrowser},
+	"desktop-executor-tls-agent":          {securityprincipal.KindTLSAgent, "desktop_executor_tls_agent", securityprincipal.RoleDesktop},
+	"product-runtime-agent":               {securityprincipal.KindMaterialAgent, "product_runtime_agent", securityprincipal.RoleProduct},
+	"provider-runtime-agent":              {securityprincipal.KindMaterialAgent, "provider_runtime_agent", securityprincipal.RoleProvider},
+	"provider-browser-runtime-agent":      {securityprincipal.KindMaterialAgent, "provider_runtime_agent", securityprincipal.RoleProvider},
+	"provider-desktop-runtime-agent":      {securityprincipal.KindMaterialAgent, "provider_runtime_agent", securityprincipal.RoleProvider},
+	"gateway-agent":                       {securityprincipal.KindMaterialAgent, "gateway_agent", securityprincipal.RoleGateway},
+	"browser-action-ingress-agent":        {securityprincipal.KindMaterialAgent, "browser_action_ingress_agent", securityprincipal.RoleGateway},
+	"guest-agent":                         {securityprincipal.KindMaterialAgent, "guest_agent", securityprincipal.RoleGuest},
+	"browser-agent":                       {securityprincipal.KindMaterialAgent, "browser_agent", securityprincipal.RoleBrowser},
+	"desktop-agent":                       {securityprincipal.KindMaterialAgent, "desktop_agent", securityprincipal.RoleDesktop},
+	"product-migration-agent":             {securityprincipal.KindMaterialAgent, "product_migration_agent", securityprincipal.RoleProduct},
+	"provider-migration-agent":            {securityprincipal.KindMaterialAgent, "provider_migration_agent", securityprincipal.RoleProvider},
+	"workload-credential-controller":      {securityprincipal.KindController, "credential_controller", ""},
+	"break-glass-controller":              {securityprincipal.KindController, "break_glass_controller", ""},
+	"certificate-controller":              {securityprincipal.KindController, "certificate_controller", ""},
+	"product-migration-job":               {securityprincipal.KindMigrationJob, "product_migration", securityprincipal.RoleProduct},
+	"provider-migration-job":              {securityprincipal.KindMigrationJob, "provider_migration", securityprincipal.RoleProvider},
+	"public-ingress-relay":                {securityprincipal.KindIngressRelay, "public_ingress_relay", ""},
 }
 
 var requiredResourceControllers = map[string]string{
-	"desktop-broker":          "desktop-executor-backend",
-	"browser-sandbox-runtime": "browser-executor-backend",
-	"desktop-sandbox-runtime": "desktop-executor-backend",
+	"browser-sandbox-runtime": "provider-browser-runtime",
+	"desktop-sandbox-runtime": "provider-desktop-runtime",
 }
 
 var requiredTLSAgentSubjects = map[string]string{
-	"product-tls-agent":          "product-runtime",
-	"provider-tls-agent":         "provider-runtime",
-	"provider-browser-tls-agent": "provider-browser-runtime",
-	"provider-desktop-tls-agent": "provider-desktop-runtime",
-	"gateway-tls-agent":          "gateway-runtime",
-	"guest-tls-agent":            "guest-runtime",
-	"browser-tls-agent":          "browser-runtime-role",
-	"desktop-tls-agent":          "desktop-runtime-role",
-	"browser-executor-tls-agent": "browser-executor-backend",
-	"desktop-executor-tls-agent": "desktop-executor-backend",
+	"product-tls-agent":                "product-runtime",
+	"provider-tls-agent":               "provider-runtime",
+	"provider-browser-tls-agent":       "provider-browser-runtime",
+	"provider-desktop-tls-agent":       "provider-desktop-runtime",
+	"gateway-tls-agent":                "gateway-runtime",
+	"browser-action-ingress-tls-agent": "browser-action-ingress-runtime",
+	"guest-tls-agent":                  "guest-runtime",
+	"browser-tls-agent":                "browser-runtime-role",
+	"desktop-tls-agent":                "desktop-runtime-role",
+	"browser-executor-tls-agent":       "browser-executor-backend",
+	"desktop-executor-tls-agent":       "desktop-executor-backend",
 }
 
 type Profile struct {
@@ -154,6 +164,10 @@ type Profile struct {
 	EnvironmentDigest      string                         `json:"environment_digest"`
 	PrincipalProfileDigest string                         `json:"principal_profile_digest"`
 	Principals             []Principal                    `json:"principals"`
+	SandboxIdentitySlots   []SandboxIdentitySlot          `json:"sandbox_identity_slots"`
+	ProviderDatabases      []ProviderDatabaseBinding      `json:"provider_databases"`
+	PostgresServerAuth     PostgresServerAuthPolicy       `json:"postgres_server_auth"`
+	Components             []Component                    `json:"components"`
 	Networks               []Network                      `json:"networks"`
 	External               []ExternalService              `json:"external_services"`
 	TrustEdges             []TrustEdge                    `json:"trust_edges"`
@@ -162,34 +176,53 @@ type Profile struct {
 	IngressBindings        []IngressBinding               `json:"ingress_bindings"`
 	CertificateController  CertificateControllerAuthority `json:"certificate_controller"`
 	TLSAgentBindings       []TLSAgentBinding              `json:"tls_agent_bindings"`
+	PostgresClientAgents   []PostgresClientAgentBinding   `json:"postgres_client_agents"`
 	EgressPolicies         []EgressPolicy                 `json:"egress_policies"`
 	CleanupClasses         []string                       `json:"cleanup_classes"`
 }
 
 type Principal struct {
-	Name                       string                       `json:"name"`
-	Kind                       string                       `json:"kind"`
-	ImageReference             string                       `json:"image_reference"`
-	ImageDigest                string                       `json:"image_digest"`
-	UID                        uint32                       `json:"uid"`
-	GID                        uint32                       `json:"gid"`
-	ReadOnlyRootFilesystem     bool                         `json:"read_only_root_filesystem"`
-	NoNewPrivileges            bool                         `json:"no_new_privileges"`
-	DroppedCapabilities        []string                     `json:"dropped_capabilities"`
-	SeccompDigest              string                       `json:"seccomp_digest"`
-	Resources                  Resources                    `json:"resources"`
-	Mounts                     []Mount                      `json:"mounts"`
-	Networks                   []string                     `json:"networks"`
-	HostNetwork                bool                         `json:"host_network"`
-	ExternalUplink             bool                         `json:"external_uplink"`
-	DirectEgressBlocked        bool                         `json:"direct_egress_blocked"`
-	DockerSocket               bool                         `json:"docker_socket"`
-	HostDevices                bool                         `json:"host_devices"`
-	Listeners                  []Listener                   `json:"listeners"`
-	AuthorizationPrincipal     *securityprincipal.Principal `json:"authorization_principal"`
-	PrincipalDigest            string                       `json:"principal_digest"`
-	ControllingPrincipalDigest string                       `json:"controlling_principal_digest"`
-	TLS                        *TLSIdentity                 `json:"tls"`
+	Name                        string                       `json:"name"`
+	Kind                        string                       `json:"kind"`
+	ImageReference              string                       `json:"image_reference"`
+	ImageDigest                 string                       `json:"image_digest"`
+	ImageLocation               string                       `json:"image_location"`
+	ImageIdentityKind           string                       `json:"image_identity_kind"`
+	ImagePlatform               string                       `json:"image_platform"`
+	ImageSelectedManifestDigest string                       `json:"image_selected_manifest_digest"`
+	ImageConfigDigest           string                       `json:"image_config_digest"`
+	UID                         uint32                       `json:"uid"`
+	GID                         uint32                       `json:"gid"`
+	ReadOnlyRootFilesystem      bool                         `json:"read_only_root_filesystem"`
+	NoNewPrivileges             bool                         `json:"no_new_privileges"`
+	DroppedCapabilities         []string                     `json:"dropped_capabilities"`
+	SeccompDigest               string                       `json:"seccomp_digest"`
+	Resources                   Resources                    `json:"resources"`
+	Mounts                      []Mount                      `json:"mounts"`
+	Networks                    []string                     `json:"networks"`
+	HostNetwork                 bool                         `json:"host_network"`
+	ExternalUplink              bool                         `json:"external_uplink"`
+	DirectEgressBlocked         bool                         `json:"direct_egress_blocked"`
+	DockerSocket                bool                         `json:"docker_socket"`
+	HostDevices                 bool                         `json:"host_devices"`
+	Listeners                   []Listener                   `json:"listeners"`
+	AuthorizationPrincipal      *securityprincipal.Principal `json:"authorization_principal"`
+	PrincipalDigest             string                       `json:"principal_digest"`
+	ControllingPrincipalDigest  string                       `json:"controlling_principal_digest"`
+	TLS                         *TLSIdentity                 `json:"tls"`
+}
+
+// Component is a required process within a parent container, not a second
+// deployment principal or an independent UID/network/security boundary.
+type Component struct {
+	Name             string   `json:"name"`
+	ParentDeployment string   `json:"parent_deployment"`
+	Executable       string   `json:"executable"`
+	ExecutableDigest string   `json:"executable_digest"`
+	Argv             []string `json:"argv"`
+	Socket           string   `json:"socket"`
+	BrokerProtocol   string   `json:"broker_protocol"`
+	SessionProtocol  string   `json:"session_protocol"`
 }
 
 type Resources struct {
@@ -288,13 +321,18 @@ type TLSIdentity struct {
 }
 
 type ExternalService struct {
-	Name           string   `json:"name"`
-	ImageReference string   `json:"image_reference"`
-	ImageDigest    string   `json:"image_digest"`
-	URI            string   `json:"uri"`
-	DNSNames       []string `json:"dns_names"`
-	IdentityDigest string   `json:"identity_digest"`
-	IngressEdges   []string `json:"ingress_edges"`
+	Name                        string   `json:"name"`
+	ImageReference              string   `json:"image_reference"`
+	ImageDigest                 string   `json:"image_digest"`
+	ImageLocation               string   `json:"image_location"`
+	ImageIdentityKind           string   `json:"image_identity_kind"`
+	ImagePlatform               string   `json:"image_platform"`
+	ImageSelectedManifestDigest string   `json:"image_selected_manifest_digest"`
+	ImageConfigDigest           string   `json:"image_config_digest"`
+	URI                         string   `json:"uri"`
+	DNSNames                    []string `json:"dns_names"`
+	IdentityDigest              string   `json:"identity_digest"`
+	IngressEdges                []string `json:"ingress_edges"`
 }
 
 type TrustEdge struct {
@@ -382,6 +420,14 @@ type TLSAgentBinding struct {
 	ControllerSocketMode      uint32 `json:"controller_socket_mode"`
 	ControllerUnixEdgeID      string `json:"controller_unix_edge_id"`
 	CleanupClass              string `json:"cleanup_class"`
+}
+
+// PostgresClientAgentBinding is a second, purpose-specific agent for one
+// Provider database owner. It does not replace that owner's ordinary TLS agent.
+type PostgresClientAgentBinding struct {
+	TLSAgentBinding
+	CommonName     string `json:"common_name"`
+	IssuerAnchorID string `json:"issuer_anchor_id"`
 }
 
 // CertificateControllerAuthority is one controller process with one private
@@ -480,9 +526,12 @@ func (p Profile) Validate() error { //nolint:gocyclo
 	if p.Protocol != ProtocolID || p.Version != Version || !namePattern.MatchString(p.Revision) ||
 		!digestPattern.MatchString(p.ProfileDigest) || !digestPattern.MatchString(p.EnvironmentDigest) ||
 		!digestPattern.MatchString(p.PrincipalProfileDigest) || len(p.Principals) < len(requiredPrincipals) || len(p.Principals) > 128 ||
-		len(p.Networks) < 1 || len(p.Networks) > 256 || len(p.External) != 3 || len(p.TrustEdges) < 1 || len(p.TrustEdges) > 512 ||
+		len(p.Components) != 1 ||
+		len(p.Networks) < 1 || len(p.Networks) > 256 || len(p.External) != 5 || len(p.TrustEdges) < 1 || len(p.TrustEdges) > 512 ||
+		len(p.ProviderDatabases) != 2 ||
 		len(p.TrustAnchors) < 1 || len(p.TrustAnchors) > 128 || len(p.PublicListeners) != 2 || len(p.IngressBindings) != 2 ||
-		len(p.TLSAgentBindings) < len(requiredTLSAgentSubjects) || len(p.TLSAgentBindings) > 136 || len(p.EgressPolicies) > 128 ||
+		len(p.TLSAgentBindings) < len(requiredTLSAgentSubjects) || len(p.TLSAgentBindings) > 136 ||
+		len(p.PostgresClientAgents) != 2 || len(p.EgressPolicies) > 128 ||
 		!exactStrings(p.CleanupClasses, []string{"connections", "containers", "files", "networks", "processes", "sockets"}) {
 		return ErrInvalidProfile
 	}
@@ -559,12 +608,22 @@ func (p Profile) Validate() error { //nolint:gocyclo
 			return ErrInvalidProfile
 		}
 	}
+	if c := p.Components[0]; c.Name != "desktop-broker" || c.ParentDeployment != "desktop-sandbox-runtime" ||
+		c.Executable != "/usr/local/libexec/sandbox-runtime/desktop-broker" || !digestPattern.MatchString(c.ExecutableDigest) ||
+		!exactStrings(c.Argv, []string{c.Executable, "serve"}) || c.Socket != "/tmp/sandbox-runtime-desktop-broker.sock" ||
+		c.BrokerProtocol != "sandbox.runtime/desktop-broker/v1" || c.SessionProtocol != "sandbox.runtime/desktop-session.v2" ||
+		principals[c.ParentDeployment].Kind != "sandbox" {
+		return ErrInvalidProfile
+	}
 	for _, principal := range principals {
 		if principal.AuthorizationPrincipal == nil {
 			if _, ok := principalDeployments[principal.ControllingPrincipalDigest]; !ok {
 				return ErrInvalidProfile
 			}
 		}
+	}
+	if validateSandboxIdentitySlots(p.SandboxIdentitySlots, principals) != nil {
+		return ErrInvalidProfile
 	}
 	if err := validateNetworks(p.Networks, principals, p.EgressPolicies); err != nil {
 		return err
@@ -577,7 +636,16 @@ func (p Profile) Validate() error { //nolint:gocyclo
 	if err != nil {
 		return err
 	}
+	if err := validateProviderDatabases(p.ProviderDatabases, principals, external, edges, p.EgressPolicies); err != nil {
+		return err
+	}
+	if err := p.PostgresServerAuth.validate(p.ProviderDatabases, external, p.TrustAnchors); err != nil {
+		return err
+	}
 	if err := validateRuntimeEdges(edges, principals, p.Networks); err != nil {
+		return err
+	}
+	if err := validateBrowserMux(principals, edges); err != nil {
 		return err
 	}
 	if err := validatePublicListeners(p.PublicListeners, principals); err != nil {
@@ -586,16 +654,26 @@ func (p Profile) Validate() error { //nolint:gocyclo
 	if err := validateIngressBindings(p.IngressBindings, p.PublicListeners, principals, p.Networks); err != nil {
 		return err
 	}
-	if err := validateTrustAnchors(p.TrustAnchors, p.TrustEdges, p.PublicListeners, p.CertificateController, principals, external); err != nil {
+	if err := validateTrustAnchorsWithPostgres(p.TrustAnchors, p.TrustEdges, p.PublicListeners, p.CertificateController, p.PostgresClientAgents, principals, external); err != nil {
 		return err
 	}
 	if err := validateEgress(p.EgressPolicies, principals, edges); err != nil {
 		return err
 	}
+	if err := validateBrokerBoundaries(p.EgressPolicies, edges, principals, p.Networks); err != nil {
+		return err
+	}
+	if err := validateBrowserExternalAuthority(external, edges, p.EgressPolicies); err != nil {
+		return err
+	}
 	if err := validateCertificateControllerAuthority(p.CertificateController, principals, edges); err != nil {
 		return err
 	}
-	if err := validateTLSAgentBindings(p.TLSAgentBindings, p.EgressPolicies, p.CertificateController, principals, edges); err != nil {
+	if err := validatePostgresClientAgents(p.PostgresClientAgents, p.ProviderDatabases, p.TLSAgentBindings, p.EgressPolicies,
+		p.CertificateController, p.TrustAnchors, principals, edges); err != nil {
+		return err
+	}
+	if err := validateTLSAgentBindingsWithPostgres(p.TLSAgentBindings, p.PostgresClientAgents, p.EgressPolicies, p.CertificateController, principals, edges); err != nil {
 		return err
 	}
 	for name, service := range external {
@@ -605,7 +683,8 @@ func (p Profile) Validate() error { //nolint:gocyclo
 			}
 		}
 	}
-	if p.ProfileDigest != p.Digest() {
+	encoded, encodeErr := json.Marshal(p)
+	if encodeErr != nil || len(encoded) > maxBytes || p.ProfileDigest != p.Digest() {
 		return ErrInvalidProfile
 	}
 	return nil
@@ -737,14 +816,17 @@ func (p Profile) ExecutorTLSBoundary(subjectName string, port int) (TLSAgentBind
 }
 
 func validatePrincipal(value Principal, registry *securityprincipal.Registry, authorityBindings, dynamicTLSBindings map[string]principalBinding) error { //nolint:gocyclo
-	if !namePattern.MatchString(value.Name) || !validPrincipalKind(value.Kind) || !imagePattern.MatchString(value.ImageReference) ||
-		!digestPattern.MatchString(value.ImageDigest) || !strings.HasSuffix(value.ImageReference, "@"+value.ImageDigest) ||
+	if !namePattern.MatchString(value.Name) || !validPrincipalKind(value.Kind) || !validImageIdentity(value.ImageLocation, value.ImageIdentityKind,
+		value.ImageReference, value.ImageDigest, value.ImagePlatform, value.ImageSelectedManifestDigest, value.ImageConfigDigest) ||
 		value.UID < 10000 || value.UID > 60000 || value.GID < 10000 || value.GID > 60000 ||
 		!value.ReadOnlyRootFilesystem || !value.NoNewPrivileges || !exactStrings(value.DroppedCapabilities, []string{"ALL"}) ||
 		!digestPattern.MatchString(value.SeccompDigest) || value.Resources.MemoryBytes < 16<<20 || value.Resources.MemoryBytes > 64<<30 ||
 		value.Resources.CPUMillis < 10 || value.Resources.CPUMillis > 64000 || value.Resources.PIDs < 4 || value.Resources.PIDs > 4096 ||
 		value.HostNetwork || value.DockerSocket || value.HostDevices || len(value.Networks) < 1 || len(value.Networks) > 6 ||
 		len(value.Mounts) > 128 || (value.Kind != "controller" && len(value.Mounts) > 16) || len(value.Listeners) > 16 {
+		return ErrInvalidProfile
+	}
+	if value.Kind == "sandbox" && value.Name != "browser-sandbox-runtime" && value.Name != "desktop-sandbox-runtime" {
 		return ErrInvalidProfile
 	}
 	if value.AuthorizationPrincipal != nil {
@@ -757,7 +839,7 @@ func validatePrincipal(value Principal, registry *securityprincipal.Registry, au
 			return ErrInvalidProfile
 		}
 	} else if value.PrincipalDigest != "" || !digestPattern.MatchString(value.ControllingPrincipalDigest) || value.TLS != nil ||
-		(value.Kind != "broker" && value.Kind != "sandbox") {
+		value.Kind != "sandbox" {
 		return ErrInvalidProfile
 	}
 	if value.Kind == "egress_broker" {
@@ -1007,8 +1089,9 @@ func validateExternal(values []ExternalService) (map[string]ExternalService, err
 	result := make(map[string]ExternalService, len(values))
 	previous := ""
 	for _, value := range values {
-		if value.Name <= previous || !imagePattern.MatchString(value.ImageReference) || !digestPattern.MatchString(value.ImageDigest) ||
-			!strings.HasSuffix(value.ImageReference, "@"+value.ImageDigest) || !validSPIFFE(value.URI) ||
+		if value.Name <= previous || value.ImageLocation != "registry" ||
+			!validImageIdentity(value.ImageLocation, value.ImageIdentityKind, value.ImageReference, value.ImageDigest, value.ImagePlatform,
+				value.ImageSelectedManifestDigest, value.ImageConfigDigest) || !validSPIFFE(value.URI) ||
 			!digestPattern.MatchString(value.IdentityDigest) || value.IdentityDigest != value.Digest() ||
 			len(value.DNSNames) < 1 || len(value.DNSNames) > 8 || len(value.IngressEdges) < 1 || !sortedUniqueNames(value.IngressEdges) {
 			return nil, ErrInvalidProfile
@@ -1026,7 +1109,7 @@ func validateExternal(values []ExternalService) (map[string]ExternalService, err
 		previous = value.Name
 		result[value.Name] = value
 	}
-	for _, required := range []string{"dns", "postgres", "vault"} {
+	for _, required := range []string{"action-history-postgres", "capacity-valkey", "dns", "postgres", "vault"} {
 		if _, ok := result[required]; !ok {
 			return nil, ErrInvalidProfile
 		}
@@ -1072,14 +1155,21 @@ func validateEdges(values []TrustEdge, principals map[string]Principal, external
 		if !validEdgeProtocol(value.Protocol) {
 			return nil, ErrInvalidProfile
 		}
-		if (value.TargetAddress == "") != (value.RoutePath == "") {
+		if value.TargetAddress == "" && value.RoutePath != "" {
 			return nil, ErrInvalidProfile
 		}
 		if value.TargetAddress != "" {
 			target, err := netip.ParseAddrPort(value.TargetAddress)
 			if err != nil || !target.Addr().Is4() || !target.Addr().IsPrivate() ||
 				target.String() != value.TargetAddress || int(target.Port()) != value.Port ||
-				!toOK || value.Authentication != "mtls" || (value.Protocol != "wss" && value.Protocol != "https") ||
+				!toOK || value.Authentication != "mtls" {
+				return nil, ErrInvalidProfile
+			}
+			if value.Protocol == "tls" {
+				if to.Kind != "egress_broker" || value.RoutePath != "" || value.CrossDomain {
+					return nil, ErrInvalidProfile
+				}
+			} else if (value.Protocol != "wss" && value.Protocol != "https") ||
 				!routePathPattern.MatchString(value.RoutePath) || path.Clean(value.RoutePath) != value.RoutePath {
 				return nil, ErrInvalidProfile
 			}
@@ -1262,6 +1352,12 @@ func validateCertificateControllerAuthority(value CertificateControllerAuthority
 
 func validateTLSAgentBindings(values []TLSAgentBinding, policies []EgressPolicy, controllerAuthority CertificateControllerAuthority,
 	principals map[string]Principal, edges map[string]TrustEdge) error {
+	return validateTLSAgentBindingsWithPostgres(values, nil, policies, controllerAuthority, principals, edges)
+}
+
+func validateTLSAgentBindingsWithPostgres(values []TLSAgentBinding, postgres []PostgresClientAgentBinding,
+	policies []EgressPolicy, controllerAuthority CertificateControllerAuthority,
+	principals map[string]Principal, edges map[string]TrustEdge) error {
 	expected := make(map[string]string, len(requiredTLSAgentSubjects)+len(policies))
 	for agent, subject := range requiredTLSAgentSubjects {
 		expected[agent] = subject
@@ -1381,7 +1477,9 @@ func validateTLSAgentBindings(values []TLSAgentBinding, policies []EgressPolicy,
 	for name, principal := range principals {
 		if principal.Kind == "tls_agent" {
 			if _, expectedAgent := seenAgents[name]; !expectedAgent {
-				return ErrInvalidProfile
+				if !postgresAgentMember(postgres, name) {
+					return ErrInvalidProfile
+				}
 			}
 		}
 		for _, mount := range principal.Mounts {
@@ -1400,7 +1498,13 @@ func validateTLSAgentBindings(values []TLSAgentBinding, policies []EgressPolicy,
 				if name != controllerAuthority.DeploymentName || mount.Target != controllerAuthority.SelfSocketDirectory || mount.ReadOnly {
 					return ErrInvalidProfile
 				}
-			} else if !policyStorageMember(policies, name, mount) {
+			} else if mount.StorageID == BrowserMuxSocketStorageID {
+				if mount.Target != BrowserMuxSocketDirectory ||
+					!((name == "provider-browser-runtime" && !mount.ReadOnly) ||
+						(name == "browser-executor-backend" && mount.ReadOnly)) {
+					return ErrInvalidProfile
+				}
+			} else if !postgresSocketMember(postgres, name, mount) && !policyStorageMember(policies, name, mount) {
 				return ErrInvalidProfile
 			}
 		}
@@ -1414,12 +1518,16 @@ func validateTLSAgentBindings(values []TLSAgentBinding, policies []EgressPolicy,
 		to := principals[edge.To]
 		if to.Kind == "tls_agent" {
 			if _, declared := seenEdges[edge.ID]; !declared {
-				return ErrInvalidProfile
+				if !postgresAgentEdgeMember(postgres, edge.ID) {
+					return ErrInvalidProfile
+				}
 			}
 		}
 		if to.Name == controller.Name && edge.Protocol == "unix" && edge.ID != controllerAuthority.SelfUnixEdgeID {
 			if _, declared := seenControllerEdges[edge.ID]; !declared {
-				return ErrInvalidProfile
+				if !postgresControllerEdgeMember(postgres, edge.ID) {
+					return ErrInvalidProfile
+				}
 			}
 		}
 	}
@@ -1450,7 +1558,7 @@ func controllerStorageMember(bindings []TLSAgentBinding, principalName string, m
 
 func validPrincipalKind(value string) bool {
 	switch value {
-	case "runtime", "executor", "material_agent", "tls_agent", "controller", "migration_job", "broker", "sandbox", "egress_broker", "ingress_relay":
+	case "runtime", "executor", "material_agent", "tls_agent", "controller", "migration_job", "sandbox", "egress_broker", "ingress_relay":
 		return true
 	default:
 		return false

@@ -107,6 +107,52 @@ func TestBindingRejectsScopeAndReferenceSubstitution(t *testing.T) {
 	}
 }
 
+func TestBrowserTenantBindingKeyHasDedicatedCallerScope(t *testing.T) {
+	binding := Binding{Schema: BindingSchema, Kind: KindSecret,
+		Reference: "secret://vault/browser/tenant-binding", Version: "v2",
+		Purpose: PurposeBrowserTenantBindingKey, TenantID: SystemTenant, Role: RoleGateway}
+	if err := binding.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	product := binding
+	product.Role = RoleProduct
+	if err := product.Validate(); err != nil {
+		t.Fatalf("Product caller binding: %v", err)
+	}
+	for _, invalid := range []Binding{
+		func() Binding { value := binding; value.Role = RoleProvider; return value }(),
+		func() Binding { value := binding; value.Role = RoleBrowser; return value }(),
+		func() Binding { value := binding; value.TenantID = "tenant-a"; return value }(),
+	} {
+		if err := invalid.Validate(); !errors.Is(err, ErrInvalidReference) {
+			t.Fatalf("Browser tenant-binding key scope accepted: %#v, %v", invalid, err)
+		}
+	}
+}
+
+func TestGatewayExternalPurposesRequireSystemTenantAndGatewayRole(t *testing.T) {
+	for _, purpose := range []Purpose{PurposeActionHistoryWitnessDSN, PurposeCapacityValkeyCredentials} {
+		binding := Binding{Schema: BindingSchema, Kind: KindSecret,
+			Reference: "secret://vault/gateway/external", Version: "v1",
+			Purpose: purpose, TenantID: SystemTenant, Role: RoleGateway}
+		if err := binding.Validate(); err != nil {
+			t.Fatalf("%s binding: %v", purpose, err)
+		}
+		for _, role := range []Role{RoleProduct, RoleProvider, RoleGuest, RoleBrowser, RoleDesktop} {
+			candidate := binding
+			candidate.Role = role
+			if err := candidate.Validate(); !errors.Is(err, ErrInvalidReference) {
+				t.Fatalf("%s purpose accepted %s: %v", purpose, role, err)
+			}
+		}
+		candidate := binding
+		candidate.TenantID = "tenant-a"
+		if err := candidate.Validate(); !errors.Is(err, ErrInvalidReference) {
+			t.Fatalf("%s purpose accepted tenant scope: %v", purpose, err)
+		}
+	}
+}
+
 func TestBindingDigestCoversEveryAuthorityDimension(t *testing.T) {
 	base := testEnvelopeBinding()
 	baseDigest := base.Digest()

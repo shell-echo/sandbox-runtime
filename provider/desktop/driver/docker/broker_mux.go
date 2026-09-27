@@ -50,14 +50,22 @@ type brokerTerminalStream interface {
 // capability and a fixed Docker exec into the already-owned Desktop runtime.
 // It exposes neither a generic exec surface nor a backend/container ID.
 type BrokerMux struct {
-	driver    *Driver
-	options   BrokerMuxOptions
-	mu        sync.Mutex
-	listener  *net.UnixListener
-	clients   map[*net.UnixConn]struct{}
-	active    int
-	shutdown  bool
-	clientsWG sync.WaitGroup
+	driver     *Driver
+	options    BrokerMuxOptions
+	mu         sync.Mutex
+	listener   *net.UnixListener
+	clients    map[*net.UnixConn]struct{}
+	clientDone map[*net.UnixConn]chan struct{}
+	bindings   map[*net.UnixConn]muxAllocationKey
+	fenced     map[muxAllocationKey]struct{}
+	active     int
+	shutdown   bool
+	clientsWG  sync.WaitGroup
+}
+
+type muxAllocationKey struct {
+	sandboxID string
+	sessionID string
 }
 
 func NewBrokerMux(driver *Driver, options BrokerMuxOptions) (*BrokerMux, error) {
@@ -69,7 +77,19 @@ func NewBrokerMux(driver *Driver, options BrokerMuxOptions) (*BrokerMux, error) 
 	if err := validateBrokerMuxDirectory(filepath.Dir(options.SocketPath)); err != nil {
 		return nil, err
 	}
-	return &BrokerMux{driver: driver, options: options, clients: make(map[*net.UnixConn]struct{})}, nil
+	mux := &BrokerMux{driver: driver, options: options,
+		clients: make(map[*net.UnixConn]struct{}), clientDone: make(map[*net.UnixConn]chan struct{}),
+		bindings: make(map[*net.UnixConn]muxAllocationKey), fenced: make(map[muxAllocationKey]struct{})}
+	if driver.bound != nil {
+		driver.mu.Lock()
+		if driver.boundSessionDrainer != nil {
+			driver.mu.Unlock()
+			return nil, ErrInvalidOptions
+		}
+		driver.boundSessionDrainer = mux
+		driver.mu.Unlock()
+	}
+	return mux, nil
 }
 
 func (m *BrokerMux) Startup(ctx context.Context) error {
@@ -184,6 +204,9 @@ func (m *BrokerMux) serveOpen(parent, operationCtx context.Context, connection *
 	keys := map[string][]byte{m.driver.options.BridgeKeyID: m.driver.options.BridgePublicKey}
 	verificationKeys := makeBridgeVerificationKeys(keys)
 	if open.ValidateV2(now, verificationKeys) != nil || m.options.Authority.Authorize(operationCtx, open) != nil {
+		return
+	}
+	if !m.bindSession(connection, open.SandboxID, open.DesktopSessionID) {
 		return
 	}
 	stream, err := m.driver.openMuxSession(operationCtx, open)
@@ -443,6 +466,8 @@ func (d *Driver) openMuxSession(ctx context.Context, open desktopbroker.SessionO
 	state, err := loadDesktopState(statePath, d.options.NetworkPolicyReference)
 	handoffExpiry, expiryErr := time.Parse(time.RFC3339Nano, open.HandoffExpiresAt)
 	if err != nil || expiryErr != nil || !state.Ready || state.Receipt.Reference != open.AllocationReference ||
+		(d.bound != nil && (state.Version != desktopSlotStateVersion || state.CompletedBound == nil || state.CleanupPending ||
+			!d.boundSlot(state.Network.Slot) || state.CompletedBound.Ticket.PlanDigest != d.bound.PlanDigest)) ||
 		state.Receipt.ConnectionGeneration != open.ConnectionGeneration || !state.Receipt.ExpiresAt.Equal(handoffExpiry) ||
 		state.Request.SandboxID != open.SandboxID || state.Request.DesktopSessionID != open.DesktopSessionID {
 		return nil, ErrInvalidRuntime
@@ -455,7 +480,54 @@ func (d *Driver) openMuxSession(ctx context.Context, open desktopbroker.SessionO
 	if !ok {
 		return nil, ErrInvalidRuntime
 	}
-	return backend.openSession(ctx, info.id)
+	return backend.openSession(ctx, info.id, desktopWorkloadUser(state.Network.Slot))
+}
+
+// FenceAndDrain is an exact-session cleanup barrier. A fenced key cannot
+// admit a new broker connection even if an old signed capability is replayed.
+func (m *BrokerMux) FenceAndDrain(ctx context.Context, sandboxID, sessionID string) error {
+	if m == nil || ctx == nil || ctx.Err() != nil || sandboxID == "" || sessionID == "" {
+		return context.Canceled
+	}
+	key := muxAllocationKey{sandboxID: sandboxID, sessionID: sessionID}
+	type activeClient struct {
+		connection *net.UnixConn
+		done       <-chan struct{}
+	}
+	m.mu.Lock()
+	m.fenced[key] = struct{}{}
+	clients := make([]activeClient, 0)
+	for connection, binding := range m.bindings {
+		if binding == key {
+			clients = append(clients, activeClient{connection: connection, done: m.clientDone[connection]})
+		}
+	}
+	m.mu.Unlock()
+	for _, client := range clients {
+		_ = client.connection.Close()
+	}
+	for _, client := range clients {
+		select {
+		case <-client.done:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	return nil
+}
+
+func (m *BrokerMux) bindSession(connection *net.UnixConn, sandboxID, sessionID string) bool {
+	key := muxAllocationKey{sandboxID: sandboxID, sessionID: sessionID}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, fenced := m.fenced[key]; fenced {
+		return false
+	}
+	if _, active := m.clients[connection]; !active {
+		return false
+	}
+	m.bindings[connection] = key
+	return true
 }
 
 type muxDirectionResult struct {
@@ -574,12 +646,18 @@ func (m *BrokerMux) acquire(connection *net.UnixConn) bool {
 	}
 	m.active++
 	m.clients[connection] = struct{}{}
+	m.clientDone[connection] = make(chan struct{})
 	return true
 }
 
 func (m *BrokerMux) release(connection *net.UnixConn) {
 	m.mu.Lock()
 	delete(m.clients, connection)
+	delete(m.bindings, connection)
+	if done, exists := m.clientDone[connection]; exists {
+		delete(m.clientDone, connection)
+		close(done)
+	}
 	if m.active > 0 {
 		m.active--
 	}

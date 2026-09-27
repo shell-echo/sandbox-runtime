@@ -18,6 +18,65 @@ import (
 
 const browserImageIntegrationEnv = "SANDBOX_RUNTIME_BROWSER_IMAGE_INTEGRATION"
 
+// TestBrowserImageHighUID proves only that the locked Browser image can run
+// Chromium/CDP with one future Phase 6 workload slot. It does not authorize
+// that slot or substitute for a Provider reservation/allocation gate.
+func TestBrowserImageHighUID(t *testing.T) {
+	if os.Getenv("SANDBOX_RUNTIME_BROWSER_HIGH_UID_INTEGRATION") != "1" {
+		t.Skip("set SANDBOX_RUNTIME_BROWSER_HIGH_UID_INTEGRATION=1")
+	}
+	manifest, err := Load(ManifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seccompPath, err := filepath.Abs("chromium-seccomp.json")
+	if err != nil || VerifySeccompProfile(seccompPath, manifest.Security.SeccompProfile.Digest) != nil {
+		t.Fatal("locked Browser seccomp is unavailable")
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
+	defer cancel()
+	imageRef := LockedPublication().Image()
+	inspectImagePolicy(t, ctx, imageRef, manifest)
+	suffix := fmt.Sprintf("%s-%d", runtime.GOARCH, time.Now().UnixNano())
+	containerName := "sandbox-runtime-browser-high-uid-" + suffix
+	t.Cleanup(func() {
+		cleanup, stop := context.WithTimeout(context.Background(), 30*time.Second)
+		defer stop()
+		_ = exec.CommandContext(cleanup, "docker", "rm", "-f", containerName).Run()
+	})
+	runDocker(t, ctx, nil, "run", "-d", "--name", containerName,
+		"--label", "io.github.shell-echo.sandbox-runtime.managed=true",
+		"--label", "io.github.shell-echo.sandbox-runtime.namespace=browser-high-uid-integration",
+		"--user", "20000:30000", "--read-only", "--cap-drop=ALL",
+		"--security-opt", "no-new-privileges:true", "--security-opt", "seccomp="+seccompPath,
+		"--network", "none", "--memory", "1g", "--cpus", "1", "--pids-limit", "256",
+		"--tmpfs", "/tmp:rw,noexec,nosuid,size=256m",
+		"--tmpfs", "/workspace:rw,noexec,nosuid,size=1g", imageRef)
+	waitForDevTools(t, ctx, containerName)
+	response := runDocker(t, ctx, nil, "exec", "--user", "20000:30000", containerName,
+		"/usr/bin/bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9222; printf 'GET /json/version HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3; /usr/bin/timeout 5 cat <&3; status=$?; [ \"$status\" -eq 0 ] || [ \"$status\" -eq 124 ]")
+	if !strings.Contains(response, "HTTP/1.1 200") ||
+		!strings.Contains(response, `"Browser": "Chrome/`+strings.TrimPrefix(manifest.Browser.Version, "Chromium ")+`"`) {
+		t.Fatalf("high-UID private CDP response is invalid: %s", response)
+	}
+	processes := runDocker(t, ctx, nil, "top", containerName, "-eo", "uid,gid,pid,args")
+	lines := strings.Split(strings.TrimSpace(processes), "\n")
+	if len(lines) < 3 || !strings.Contains(processes, "--type=zygote --headless") || strings.Contains(processes, "--no-sandbox") {
+		t.Fatalf("high-UID Chromium sandbox process tree is invalid:\n%s", processes)
+	}
+	for _, line := range lines[1:] {
+		fields := strings.Fields(line)
+		if len(fields) < 4 || fields[0] != "20000" || fields[1] != "30000" {
+			t.Fatalf("Browser process UID/GID drift: %q", line)
+		}
+	}
+	runDocker(t, ctx, nil, "rm", "-f", containerName)
+	if output, err := exec.CommandContext(ctx, "docker", "container", "inspect", containerName).CombinedOutput(); err == nil || (!strings.Contains(string(output), "No such object") &&
+		!strings.Contains(string(output), "No such container: "+containerName)) {
+		t.Fatalf("high-UID Browser container absence is unproved: %v: %s", err, output)
+	}
+}
+
 func TestBrowserImageSandboxIntegration(t *testing.T) {
 	if os.Getenv(browserImageIntegrationEnv) != "1" {
 		t.Skip("set " + browserImageIntegrationEnv + "=1 to build and test the browser image")

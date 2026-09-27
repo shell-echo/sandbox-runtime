@@ -126,6 +126,30 @@ func NewClient(options ClientOptions) (*tls.Config, error) {
 		}}, nil
 }
 
+// NewClientCertificate validates a freshly obtained workload certificate at
+// construction and again for every TLS certificate request. This is for
+// external clients whose server identity is verified by a different, pinned
+// protocol boundary; it does not export or persist a private key.
+func NewClientCertificate(ctx context.Context, roots *x509.CertPool, identity Identity, source CertificateSource,
+	now func() time.Time) (func(*tls.CertificateRequestInfo) (*tls.Certificate, error), error) {
+	if ctx == nil || ctx.Err() != nil || roots == nil || source == nil || now == nil || now().IsZero() ||
+		validateIdentity(identity) != nil || !slices.Contains(identity.Usages, "client_auth") {
+		return nil, errors.New("invalid live TLS client certificate authority")
+	}
+	load := certificateLoader(source, roots.Clone(), cloneIdentity(identity), now)
+	bootstrap, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	if _, err := load(bootstrap); err != nil {
+		return nil, err
+	}
+	return func(request *tls.CertificateRequestInfo) (*tls.Certificate, error) {
+		if request == nil {
+			return nil, errors.New("missing TLS certificate request")
+		}
+		return load(request.Context())
+	}, nil
+}
+
 func certificateLoader(source CertificateSource, roots *x509.CertPool, identity Identity, now func() time.Time) func(context.Context) (*tls.Certificate, error) {
 	return func(ctx context.Context) (*tls.Certificate, error) {
 		if ctx == nil {

@@ -4,6 +4,74 @@ Date: 2026-09-23
 
 Status: implementation underway. Product Phase 6 remains **5/15**.
 
+## Fixed Slice 6 open-item ledger
+
+This table tracks the existing Slice 6 acceptance conditions; component
+checkpoints below do not add slices or imply their closure. “Safety hold” is
+not counted as recovered availability. The local candidate is not a release
+artifact.
+
+| Acceptance condition | Existing evidence | Remaining gap | Owner |
+| --- | --- | --- | --- |
+| Provider-bound Browser finite UID, exact create/recovery/cleanup | Real PostgreSQL plus high-UID Browser/gateway Docker integration; atomic Reserved retirement; finished-dispatch proof; live and terminal pre-commit recovery/cleanup; lost terminal-cleanup response finalization; focused in-flight barrier | Unknown Docker/network result with no finished proof remains Creating and consumes capacity. Need a gate-backed quiescence/terminal-result path where required, plus full process-crash coverage. | Provider Browser application, PG ledger and Docker adapter |
+| Three isolated Provider production processes and Desktop v3 | v3 config, profile/identity validators, candidate Desktop runtime component gates, and real-PostgreSQL Desktop Open/Close finite-slot transaction test | Browser/Desktop v3 startup still fail closed; bind distinct PG client certs, actual HBA/ident, Desktop bound Docker/media/broker path and restart/drain cleanup. | Provider commands and runtime adapters |
+| Complete mTLS/CRL and fixed external-service trust graph | Signed PKI/peer-CRL guard, broker profiles, isolated component handshakes and real Vault adapters | Independent live Product/Gateway/Guest/Browser/Desktop/three-Provider flows, action ingress, Redis/PostgreSQL external legs, expiry/revocation/restart observations and cross-role denial. | Role compositions and TLS/egress adapters |
+| Real network, UID/GID and host privilege enforcement | Pinned image descriptors, high-UID Browser/Desktop component gates, static policy validators | Same-host full-topology Docker network bypass/DNS/metadata denial, all role process credentials and container capability/seccomp/filesystem measurements, exact dependency-loss and cleanup observations. | Deployment gate and security evidence |
+| Immutable Slice 6 gate and handoff | Strict profile/evidence validator and partial real-component observations | Full-inventory, independent-process scenario manifest, clean resource inventory, root race/vet/contract verification, immutable source/evidence checkpoint and successful branch push. Do not advance 5/15 before all pass. | Phase 6 gate, audit and release owner |
+
+The undispatched `Reserved` path and known-finished `Creating` path are
+current safety requirements within the first row. A generic dispatch-owner
+lease service is *not* approved as a new step. Unknown side effects without
+quiescence proof remain a named availability limitation rather than an
+automatic recovery claim. Artifact publication, signed multi-platform images
+and redistribution/license clearance belong to later Slices 7/11, not a
+shortcut for this local Slice 6 gate.
+
+Checkpoint 2026-09-27 (Desktop finite identity wiring, not acceptance): the
+existing Desktop session authority and Provider-owned PostgreSQL slot document
+now transact the exact Open claim, Creating permit, Close source-Open
+retirement, independent absence callback, and Released proof. The Desktop
+candidate driver has a v3 local state with bound UID/GID, exact Creating
+completion ticket/receipt, read-only recovery, and a fsynced cleanup fence.
+Broker `describe` and session exec use that slot's UID/GID; a bound broker mux
+fences and drains exact admitted Unix clients before workload/network delete.
+The Provider application coordinator rejects Creating redispatch and uses the
+same original Open claim for authorized Close. v3 composition is present but
+the outer production startup gate is intentionally still closed. Focused race
+tests cover known-finished and unknown Creating, drifted proof, invalid slot,
+missing broker drain, ordered cleanup and mux replay. These are component
+checks only: no v3 high-UID Desktop candidate, real Desktop PG+Docker gate,
+full process topology or final evidence manifest has passed. Phase 6 stays
+**5/15**.
+
+Checkpoint 2026-09-27 (image identity and evidence admission): Sandbox
+resolved the Slice 6/7 artifact-order ambiguity. All repository-owned roles
+may run their real commands from source-bound, retained, local-only candidate
+images for the Slice 6 same-host gate; publication/signature/SBOM and final
+artifact qualification remain Slice 7. The internal profile now distinguishes
+local/registry location and `local_config`/`oci_manifest`/`oci_index` object
+kind, pins platform and config (plus selected manifest for an index), and
+requires distinct runtime store ID, container-selected manifest and OCI config
+observations. The original assumption that Docker inspect `.Id`/`.Image`
+always equals config digest was falsified by this host's containerd store;
+the schema and helper were corrected without switching Docker storage modes.
+Raw descriptor-byte verification rejects config/manifest/index
+substitution, platform drift and tag fallback. A closed Slice 6 evidence
+validator now requires the complete profile, container/network inventory,
+process, external-dependency, scenario and exact cleanup projections.
+An opt-in real Docker component test on the existing containerd store creates
+one exact pinned Alpine container with `--pull=never`, uses its actual
+`ImageManifestDescriptor`, re-reads the image descriptor, verifies the raw
+saved OCI index/selected-manifest/config blobs and every selected compressed
+layer against its ordered uncompressed config diff ID, and removes the exact
+test container/archive. Unit negatives reject wrong selected manifest,
+config, runtime store ID, rootfs diff ID, missing/tampered/duplicate layers,
+unsafe archive paths and tag fallback. This is an image-identity component
+check on Alpine, not a real repository-role process gate.
+Synthetic unit fixtures prove only rejection logic: no real full-inventory
+manifest has been written, and the existing Alpine-probe Docker checks are
+not promoted to the real-role gate. Phase 6 remains **5/15**.
+
 Checkpoint 2026-09-23: a distinct signed controller peer-CRL v2 protocol now
 binds policy identity, security profile, edge, local principal, direction,
 anchor, full issuer DER digest and operator-selected source. The controller
@@ -50,6 +118,30 @@ This is component evidence only: full-role rollout, root-only/multi-CA anchor
 negatives, real restart/source-loss gate, all-principal network/privilege
 observations and the immutable Slice 6 manifest are still open. The counter
 remains **5/15**.
+
+Checkpoint 2026-09-26 (Browser external-authority inventory): the closed
+Phase 6 profile now requires distinct `capacity-valkey` and
+`action-history-postgres` external identities, Gateway/ingress logical
+application edges, broker-to-external legs, one fixed-target egress policy
+and independent policy-state authority per caller. Target DNS, port,
+protocol, trust anchor and service ingress-edge sets are validated; missing,
+swapped, extra or bypass paths are rejected by component tests. This is not
+an ingress production command, real Redis/PostgreSQL witness wiring,
+independent storage/restore-domain proof or Docker network-enforcement gate.
+The Phase 6 count remains **5/15**.
+
+Checkpoint 2026-09-26 (broker DNS and fixed-alias clients): both new broker
+roles now declare the DNS mTLS edge required by the existing broker command.
+The `phase6egress` adapter binds action-history PostgreSQL and Valkey capacity
+to exact profile aliases, a profile-pinned external CA and a tracked broker
+TLS connection. pgx host resolution is pinned to the original hostname so
+only the broker resolves DNS; alternate host, plaintext/fallback and `PG*`
+environment defaults are rejected. The go-redis custom dialer performs the
+external TLS handshake itself and refuses a plaintext capacity tunnel.
+Focused race tests pass. The adapter is not yet wired into an independent
+production action-ingress command or a real Redis/PostgreSQL gate, so Phase 6
+remains **5/15**.
+
 An operator-only derivation command now writes the minimal role document as a
 new mode-0600 canonical file from independently pinned profile/source inputs;
 it refuses to overwrite an existing file. Its subprocess test validates the
@@ -248,6 +340,23 @@ Guest, Gateway and Browser/Desktop backend clients, denies all plaintext
 `DialContext` calls in the guard and retains exact numeric-target TLS dialing.
 Component negatives cover policy and transport; the actual multi-role
 network-bypass campaign remains open.
+
+Checkpoint 2026-09-24: Desktop private transport v2 now has a bounded
+prepare/start/started activation barrier. The Provider reserves capacity and
+rechecks the current handoff without opening the broker until an exact start;
+the Product side waits for connected WebRTC senders and ready media readers,
+while its original absolute connection and first-media deadlines continue to
+run. Race tests reject pre-start commands/media, bad started acknowledgements,
+allocation/generation/fence/epoch drift, replay and over-capacity admission;
+they also check timeout, cancellation, broker-open failure and exact local
+capacity/session cleanup. The current arm64 native Desktop image tagged test
+passes deterministic double build, real X11, broker-v2 input/close and a
+complete VP8 keyframe decoded to a 1280×720 RGB frame by ffmpeg inside the
+read-only container. The decoder receives IVF bytes over stdin; no writable
+root filesystem or image-policy exception was introduced. This is a real
+broker-to-decoder observation, not a client-decoded Product→Provider v2
+end-to-end process gate. The distinct Slice 6 multi-process gate and immutable
+evidence remain absent; Phase 6 stays **5/15**.
 
 ## Corrected premises
 
@@ -687,19 +796,373 @@ full Vault mount and immutable issuer ID stay in the controller-side source
 record. The production controller must independently reauthorize the same
 tuple before reading Vault; this is not yet wired.
 
+Checkpoint 2026-09-24: Browser session and handoff-reference state now have
+Provider-owned PostgreSQL adapters. A real PostgreSQL integration exercises
+two independent runtime connection pools, concurrent idempotent reservation,
+allocation/handoff persistence, one-winner competing tenant-digest binding,
+revocation, stale-fence rejection and restart retention. The private Browser
+handler now binds only after its authorizer, re-resolves the reference before
+dial, and polls the reference so revocation or authority loss cancels an
+active stream. The reference resolver also checks current Provider revision,
+generation, fence and lease when the session repository exposes that
+authority. These are component checks, not a Browser-only Provider v3 process
+or a caller-grant authorization proof. The Browser production backend command
+now rejects a fixed CDP `UpstreamURL` and requires a restricted Provider mux.
+That mux resolves each opaque Browser handoff to the current Provider-owned
+allocation before `Driver.Attach`, rechecks authority while streaming, bounds
+replay capacity, and cleans up its Unix socket by inode. A real pinned
+Chromium Docker test exercised the bounded RFC 6455/CDP translator; a two-
+target fake test exercised the mux selection and revoke drain. These are not
+the composed Provider v3 process or the full action-fencing gate. The Browser
+Provider now also records one-use executor request IDs/digests under the same
+transactional reference and current sandbox authority; local backend/mux
+replay caches are bounded rather than treated as restart evidence. The real
+PostgreSQL component gate checks the duplicate and changed-content request
+after reconstructing the mux authority. This does not yet bind the v2
+Gateway connection tuple or replace ADR 0033 action fencing. The Browser
+handoff v1 optional request digest and remote attach's fresh random fence /
+generation-derived epoch cannot be asserted as verified Gateway connection
+authority. The v1 Browser private handler now rejects non-test composition so
+it cannot accidentally serve as the v3 route while that protocol is unfinished.
+No complete Browser v3 attach or full-inventory evidence exists;
+Phase 6 remains **5/15**. This source-tree change invalidates the previously
+recorded Desktop local-candidate source digest, requiring a new exact
+candidate build and affected gate rerun before a Slice 6 manifest.
+
+Sandbox's follow-up ruling retains ADR 0033's unique action ingress outside
+the Gateway. The raw Redis capacity claim belongs only to the existing
+capacity authority, must travel through the protected ingress, and is
+validated for exact membership/high-water inside the same per-session gate
+as each complete CDP write. Product's one-use grant and control lease are
+separate caller-owned checks; Provider may verify exact delegated principal
+and opaque resource/connection tuple but does not become the grant authority.
+A new Product-signed grant attestation is not required for this threat model.
+The existing `cdpfence.NetworkHandler` now has an explicit fenced-resolver
+path that forwards the exact admitted subject and claim inside `Ingress.Open`;
+component tests cover that ordering. Browser v3 must compose that path as
+the unique ingress, add its exact principal/TLS/CRL/Redis/witness/network
+edges, use mandatory canonical `browser-handoff.v2`, and remove direct
+Gateway-to-Provider/raw-CDP bypass. The current inventory still declares a
+direct Gateway-to-Provider edge, so it cannot pass or be described as the
+completed topology. Phase 6 remains **5/15**.
+
+Checkpoint: Sandbox fixed the previously unspecified Browser tenant/resource
+digest as a new, caller-only HMAC-SHA-256 v2 derivation over the exact
+Provider handoff and nine ordered committed fields. The Product adapter now
+has an exact golden vector and drift tests; the Browser executor and durable
+Provider bind/claim paths reject historical v1 digests in production while
+retaining historical records for compatibility reads. A dedicated secret
+purpose is limited to Product/Gateway; a narrow keyring helper resolves only
+the caller-supplied committed version through that purpose, checks the
+material's exact version and active window, and wipes its copy. A separate closed canonical
+`browser-handoff.v2` message validates the Provider revision, reference,
+generation, connection epoch, control lease digest/fence, expiry and both
+authority/request digests. The executor v2 request digest now binds its
+one-use request ID, and the reference registrar accepts new v2 records
+without redefining historical v1 syntax. The real two-pool PostgreSQL
+integration still passes after the v2 format migration. This is a protocol,
+format and durable-reference component checkpoint, not a production Browser
+connection. At this earlier checkpoint Product had not yet persisted caller
+scope and key version atomically with the first binding or composed the
+keyring in its runtime;
+the v2 message is not yet wired through actual
+one-use grant consumption, unique ingress, Provider v3 handler, exact
+executor connection tuple or independent process gate. A lost active key
+must fail closed; no default-key or v1 fallback is allowed. Phase 6 remains
+**5/15**.
+
+Checkpoint: additive Product migration 14 stores a narrow immutable row per
+exact tenant/Product session/Provider audience/handoff, with a composite
+grant foreign key that is null only for historical paths. The new opt-in
+Product Store constructor prepares the caller-owned secret selection before
+opening the Provider-observation SQL transaction; on a successful Browser
+open, it verifies the exact observed handoff, current Provider binding and
+resource tuple, inserts/rechecks the immutable row, and commits the Product
+session's ready/current pointer in the same transaction. A mismatched
+selection rolls the complete observation back. The repository bounds retained
+rows and makes competing key versions one-winner/conflict rather than
+last-writer-wins. The targeted real PostgreSQL test uses two independent
+pools, verifies competition/idempotence, atomic mismatch rollback, and
+current-read denial for missing, wrong-audience and draining bindings.
+An opt-in Browser v2 GrantRepository now fixes that row's audience/reference
+on grant issuance, rejects historical/unbound ticket replay in v3, and
+checks the same row's digest/version and current Provider tuple on ticket
+consumption and continuing Gateway authority reads. The real PostgreSQL
+component gate rejects a stale ticket and active stream after a handoff
+switch, tampered key version, wrong audience and draining session. This is
+still not complete: the Product v3 runtime does not yet construct these
+opt-in repositories, the unique ingress and Provider v3 handler do not yet
+consume the closed v2 wire, and full concurrent switch/consume/forwarding
+linearization remains a gate. The legacy constructor stays historical;
+production v3 must not choose it. This schema/component result is not a
+Slice 6 release gate.
+
+Checkpoint 2026-09-24: Product migration 14 now persists the exact non-secret
+secret binding reference/purpose/role/version and canonical binding digest,
+and a PostgreSQL trigger rejects UPDATE of an established handoff row. The
+two-pool test checks exact readback and immutability; the focused tagged
+PostgreSQL integration passes. The Desktop composed PostgreSQL/WebRTC race
+test exposed a separate real timing defect: the historical v1 bridge starts
+private media before public WebRTC is connected, so its 32-frame bounded
+preconnection queue can fail closed on frame 33. Sandbox selected an explicit
+v2 prepare/start/started transport, not buffer inflation or frame dropping.
+The new closed canonical v2 protocol binds start to the exact session,
+generation, epoch, fence and authority/request/transport digests. Provider
+v2 prepare now reserves capacity and continuously checks authority without
+opening the executor reader; start rechecks current authority, opens once,
+sends started before media and closes on cancellation. Product v2 arms its
+WebRTC consumer and recording before activation and rejects pre-start
+commands. The production Desktop Provider private listener requires v2;
+historical v1 remains a separate test profile. The targeted prepare wait,
+replay/capacity, epoch/generation/fence/allocation drift, no-start timeout,
+pre-start command/media, bad acknowledgement, broker-open failure, cleanup
+and Product PostgreSQL/WebRTC race tests pass. The native arm64 image test
+also verifies a full broker VP8 keyframe is decodable, but the composed fake
+Product media test still sees only one synthetic RTP packet. Neither test is
+the Product→Provider v2 decoded-display or full-inventory process gate;
+Phase 6 remains **5/15**.
+The current v2 candidate does not rerun `TestPhase6Slice5ReleaseGate` with a
+v1 request against a v2-only listener. Slice 5's original runtime/evidence
+tool revisions and byte-identical archive remain verifiable only with the
+retained verifier (`current_head_covered=false`). A current-source v2 process
+gate needs a separate Slice 6 identity and evidence, reusing only neutral
+orchestration and cleanup code rather than relabeling old evidence.
+
+Checkpoint 2026-09-26: the Browser v2 Provider reference now retains one
+immutable ingress connection claim per exact epoch, a single reserved
+executor attempt, consumed replay evidence, and monotonic close status.
+The retained consumed bit is cross-checked against the replay entry even
+after close, so a damaged snapshot cannot silently discard one-use evidence.
+The state transition clones its maps before validation so failed conflicts
+cannot mutate in-memory authority. The executor fence derives from the
+complete private v2 authority digest, never Provider generation or a fresh
+random fence. A separate remote `AttachConnection` path reserves the exact
+attempt before send, copies the original absolute authority expiry, and
+closes the epoch after an ambiguous send failure without permitting a new
+request ID. The Provider mux resolves the persisted connection before and
+after Docker attach and consumes the exact reservation atomically. The
+two-pool real PostgreSQL integration now tests one active writer, close and
+replacement, old-epoch denial, replay and authority drift across pools and
+after mux reconstruction. Atomic bind also reports whether the caller created
+the claim: an idempotent duplicate cannot close another active stream, while
+the creator can close its own failed pre-attach path. A separate
+`browser-handoff.v2` private handler
+checks one exact route/host and a verified TLS 1.3 ingress URI, bounds
+concurrent sessions, validates canonical requests, attaches only through the
+connection-aware resolver, monitors current authority and closes its owned
+claim. Its WebSocket test injects a synthetic verified TLS state, so it is
+component evidence. A separate real TLS 1.3 mTLS component test issues a
+test CA and distinct SPIFFE client certificates: only the exact ingress
+principal can open the v2 route, and accepted close releases the claim.
+This is not a multi-process inventory or Product/Redis authorization gate.
+The Browser-only
+Provider v3 command, Product v3 one-use grant/lease composition, unique
+Redis-backed action ingress, real mTLS/process graph and two-session
+Chromium gate remain open. No Slice 6 release manifest exists; Phase 6
+remains **5/15**.
+
+Checkpoint 2026-09-26 (topology correction): the Sandbox architecture
+decision confirms a separate Browser action-ingress process, rather than
+the earlier direct Gateway→Browser Provider private edge. The canonical
+security profile now requires Gateway→action ingress `/browser/action` and
+action ingress→Browser Provider `/private/browser` as distinct isolated
+networks and principals. The Browser Provider config admits only the action
+ingress URI; a direct Gateway peer and an extra legacy edge are rejected in
+component tests. Its v3 configuration also has a closed Browser-only runtime
+matrix, while `provider serve` explicitly rejects Browser composition until
+the production graph exists; it cannot fall through to Coding. These are
+declarations and component checks, **not** evidence of a live ingress,
+Redis/witness gate, or complete deployment. The added process, TLS agent,
+material agent, CRL boundary, network edges and cleanup are additional Slice
+6 work, not a new slice. Phase 6 remains **5/15**.
+The revised profile also rejects an undeclared direct shared network, not
+just a second named trust edge. The private TLS client constructor now has
+separate Gateway→ingress and ingress→Browser Provider selectors with their
+own issuer, peer, signer and CRL guards; the old Gateway→Provider selector
+returns an error for Browser. Repository-wide race/shuffle tests and `go vet`
+pass at this checkpoint, as do both locked Contract verifiers. These are
+source-level checks only; no new immutable Slice 6 release evidence exists.
+
+Checkpoint 2026-09-26 (Browser Provider assembly): a separate, still
+startup-disabled Browser-only Provider constructor now composes PostgreSQL
+session/reference stores, the pinned Browser Docker image and restricted
+network, lifecycle/session recovery, protected Browser operation/usage
+projection, capability from the Docker-inspected image architecture, live
+Contract/private/executor TLS and CRL guards, v2 connection-aware remote
+attach and the Provider-owned allocation mux. It has no file registry or
+static executor key fallback. The canonical profile additionally fixes the
+Browser mux Unix edge, exclusive mounts and Provider/backend UID/GID; both
+Provider and backend command configs pin `/run/browser-mux`. Focused race
+tests cover profile drift, wrong socket owner, Browser-only advertisement and
+revoke-before-exact-cleanup. The tagged real Docker Browser relay test passes.
+This constructor is not yet selected by `provider serve`: no independent
+production action-ingress/Redis/PostgreSQL witness process graph or full gate
+has run. It is component assembly, not release evidence; Phase 6 remains
+**5/15**.
+
+Checkpoint 2026-09-26 (Browser v2 action transport): the closed Gateway→
+action-ingress Open now binds the consumed Product grant's current tenant
+digest, Provider audience/revision, reference/generation/expiry, control
+lease digest/fence and exact bearer-like capacity claim. Unknown, duplicate,
+omitted and noncanonical JSON are rejected. Product automation explicitly
+maps its public protocol to the locked Provider `browser-v1` capability; a
+separate grant-bound Gateway resolver sends the Open only to `/browser/action`.
+The ingress v2 handler derives a deterministic one-use Provider epoch only
+inside the existing Redis admission/per-session closure callback, then uses
+the distinct `/private/browser` Provider client. An exact attempt replay
+reuses its epoch; a newly authorized internal attempt receives a new epoch.
+The capacity claim, raw control lease and Product grant ID are excluded from
+the Provider Open. Gateway and ingress component tests cover wrong audience,
+denied admission, replay, reconnect, malformed projection and CDP transport.
+The v2 private stream tracks each CDP request ID until its exact response:
+an incomplete action on any close is terminal, while only a confirmed idle
+or answered normal close is reconnectable. Ingress emits distinct terminal
+fence-loss/witness-unavailable closes and bounds pending sockets before
+upgrade; targeted race tests cover unknown outcome and authority loss.
+The Product PostgreSQL Browser integration test also rejects runtime-session
+pointer drift at both grant-consumption and continuous-authority boundaries.
+These tests used a disposable real PostgreSQL container, subsequently
+removed. They do **not** establish separate OS processes, real Redis/witness
+admission, production mTLS, real Chromium, or a Slice 6 manifest; Phase 6
+remains **5/15**.
+
+Checkpoint 2026-09-26 (exact broker address): Sandbox selected the profile's
+single role→broker `tls` edge as the only numeric broker address authority.
+The closed profile now pins each policy's unique private IPv4 address inside
+its two-member isolated network; the broker command rejects an alternate or
+wildcard bind, and a shared `phase6egress` constructor derives the role's
+broker dial address from the same edge with its exact TLS/CRL identity. A
+tagged Docker topology probe assigned the profile IP to the broker interface,
+observed role→broker reachability, rejected broker loopback/uplink listening,
+and checked no host-port publication and exact cleanup. The closed network
+observation verifier now also rejects a broker target IP assigned to any
+different container ID. This Alpine network
+probe is not the production broker-command/mTLS/Vault/DNS gate. No Product,
+Gateway or action-ingress production client has yet completed the whole
+dependency graph, and there is no Slice 6 evidence manifest. Phase 6 remains
+**5/15**.
+
+Checkpoint 2026-09-26 (external credential ownership): Sandbox approved two
+Gateway-family `KindSecret`/`SystemTenant` purposes with deployment-level
+isolation: Browser action ingress alone may consume
+`action_history_witness_dsn`; ingress and Gateway may each consume
+`capacity_valkey_credentials` only through distinct bindings and Valkey ACL
+accounts. The existing material-agent/Vault mechanism is reused. Secret
+binding validation, role-aware Vault purpose checks, agent deployment
+allowlists and the deployment-bound registry reject cross-role and same-role
+cross-agent swaps in component tests. The witness URI parser rejects alternate
+targets, credentials, TLS downgrade and pgx fallback; the closed Valkey JSON
+cannot choose an endpoint, DB, namespace or TLS mode. Redis binding rejects
+preinstalled/dynamic credentials. Real Vault credential rotation/revocation,
+Valkey/PostgreSQL ACLs, independent service processes and end-to-end drain
+are still unproved. These source checks do not advance Phase 6 beyond
+**5/15**.
+
+Checkpoint 2026-09-26 (external credential lifetime): a new ingress-side
+credential guard resolves both purpose-bound secrets through the uncached
+role-owned material registry at bootstrap, pins their binding, digest,
+revision and rotation window, and re-resolves their identity before every
+fenced CDP action. An independent bounded poll catches idle-stream agent
+loss, expiry, revocation or rotation, latches failure and invokes one
+process-owned drain callback. Focused race tests cover version drift,
+agent loss, expiry and denied action forwarding. Full repository race/shuffle
+and vet pass. The existing tagged real Vault/material-agent integration also
+passes with an empty temporary Docker CLI config; the first attempt was
+blocked by a hanging local Docker credential helper before its assertions.
+The Browser external-client constructor now assembles only the profile's two
+fixed broker aliases, requires a separately pinned Valkey ACL user, creates
+bounded Redis and PostgreSQL pools, and calls the existing capacity/fencer
+`Verify` paths rather than `Provision`. It closes both pools on partial
+startup failure. This is source/component evidence, not yet the Browser
+action-ingress production command: no real pools or upgraded sockets have
+been shown to drain under Vault rotation. There is no Slice 6 evidence
+manifest, and the counter remains **5/15**.
+
+Checkpoint 2026-09-27 (independent action-ingress command):
+`browser-action-ingress serve` now reads a mode-0600 canonical private
+authority, checks its exact security-profile and CRL-role digests, agent
+principal/binding identities, numeric two-edge routes and bounded capacity
+settings, then composes the v2 Browser ingress over the distinct Gateway and
+Browser Provider mTLS edges. It bootstraps and polls the inbound, outbound and
+broker CRL guards; uses the profile-selected broker and the two external
+clients above; refuses redirects; checks uncached credential authority before
+each CDP write; and cancels its server on idle credential/CRL loss. The
+private server drains upgraded connections and closes pools on shutdown.
+Focused race tests reject duplicate/unknown/noncanonical configuration,
+wildcard/loopback/DNS binds, cached/slow material resolution, wrong agent,
+cross-purpose bindings and unbounded session/poll settings. A corrective
+bounded action budget separates two uncached credential reads plus fence and
+Provider work from each single-dependency timeout; the startup Redis/witness
+verification has a bounded multi-operation budget. The command has
+not yet passed a real multi-OS-process Vault/Valkey/witness/Provider/Chromium
+gate, and the newly written topology has no immutable Slice 6 manifest.
+Phase 6 remains **5/15**.
+
+Checkpoint 2026-09-27 (action-history witness privilege split): ADR 0055 now
+supersedes ADR 0035's earlier runtime `INSERT` recommendation. The migration
+owner retains schema and cleanup authority, a separate one-shot provisioning
+identity alone receives initial-row `INSERT`, and the action-ingress runtime
+receives only `CONNECT`, schema `USAGE`, table `SELECT` and column-scoped
+`UPDATE(sequence, token, updated_at)`. The operator upgrade instructions
+explicitly revoke old table/column and inherited `INSERT` grants; no real
+unreviewed database is automatically changed. Real disposable PostgreSQL and
+Valkey component integration used distinct admin, runtime and denied roles.
+The local images were `postgres@sha256:866efe7070b471f3a5397edac0e5edd65c23ff056587c6e47c07d008caaedd28`
+and `ghcr.io/valkey-io/valkey@sha256:ccfa19b0d743e48927e1c8c14e39e0acb97b5cea347fef0bfe340247fea920cd`;
+both were bound only to temporary loopback ports and removed after the run.
+It observed runtime `Provision`/valid `INSERT`, `DELETE`, `TRUNCATE`, identity
+column update, schema/table DDL, role/owner escalation and `SET ROLE` denial;
+normal two-pool CAS had exactly one winner, and read-only restore checks
+rejected an old Redis snapshot. After an admin removed a witness row, runtime
+verification/action rejected it without re-creating the row or changing the
+Redis checkpoint. An injected post-Redis/pre-witness interruption recovered
+exactly one step through runtime `Verify`, while strict restore verification
+remained read-only. PostgreSQL may return a successful `GRANT` with a warning
+when a role lacks grant option, so the test checks effective `INSERT` privilege
+after the attempt rather than treating command success as escalation. This is
+an isolated external-storage component gate, not the complete action-ingress
+multi-process/Vault/network gate or immutable Slice 6 evidence. The count
+remains **5/15**. The full `go test -race -shuffle=on -count=1 ./...`,
+`go vet ./...`, Product Contract lock verifier and `git diff --check` also
+passed after this component change.
+
+Checkpoint 2026-09-27 (live witness ACL admission): the candidate Browser
+action-ingress now refuses to create its external-client graph until the
+actual PostgreSQL role/database and effective required/forbidden grants pass
+a bounded live check. The same check runs on each new physical pool connection
+before it enters the pool. A separate process-level poll stores the last
+successful check's monotonic START time; each action checks only local
+freshness and terminal state before the unchanged Redis+witness fence. The
+profile must satisfy `P+T+C+1s<D` for poll, complete pool wait/query,
+actual close and scheduling allowance. Persistent overgrant/undergrant,
+timeout, starvation or stale evidence latches failure and invokes the existing
+cancel/drain path; later ACL repair does not unlock the process. Against a
+fresh disposable PostgreSQL instance, runtime inherited-provisioner drift
+was rejected; a live table-level `INSERT` grant caused a new physical
+connection to fail and the fully idle monitor to drain, and the exact grant
+revoke restored only a new connection, not the failed guard. Pool starvation
+closed within the bounded timeout. The real tagged PostgreSQL/Valkey packages
+passed with shuffle and race. This is not a full Browser OS-process/real Vault
+and egress-broker scenario or immutable Slice 6 manifest; brief grant/revoke
+between samples and malicious DBA action are outside this local ACL-monitor
+claim. Phase 6 remains **5/15**.
+After this ACL-monitor change, the full repository race/shuffle suite,
+`go vet ./...`, Product Contract lock verifier and `git diff --check` passed.
+
 ## Exact final inventory
 
-The gate covers six logical runtime roles instantiated as eight processes
-(including separate coding, Browser and Desktop Providers), two executor
-backends, their ten distinct TLS agents, one TLS agent per egress broker,
-ten declared Vault material agents,
+The gate covers Product, Gateway, Guest, Browser role, Desktop role, three
+separate Provider instances and the Browser action ingress as nine runtime
+processes, two executor backends, their eleven distinct TLS agents, one TLS
+agent per egress broker, eleven declared Vault material agents,
 workload-credential/break-glass/certificate controllers, two one-shot
 migration jobs, all egress brokers and their one-to-one policy-state
 authorities, and the existing Desktop broker/Browser
 runtime enforcement observations, plus the public ingress relay and its two
-exact published paths. Vault, PostgreSQL and DNS are external
-dependencies whose digest, identity, ingress and authorized-client edges are
-bound; their deployment and HA remain non-claims.
+exact published paths. Vault, Product PostgreSQL, independent
+action-history PostgreSQL, Valkey capacity and DNS are external dependencies
+whose digest, identity, ingress and authorized-client edges are bound; their
+deployment, storage-domain separation and HA remain non-claims.
 
 ## Required negative matrix
 
@@ -725,3 +1188,491 @@ published/signed application images, platform service accounts, Kubernetes or
 Apple Container deployment qualification, HA, independently administered
 failure domains, hostile-multitenant safety and production readiness remain
 later gates.
+
+### 2026-09-27 native Desktop v2 local-candidate checkpoint
+
+The Desktop candidate identity correction is implemented: current admission
+now requires v2 plus an exact raw OCI archive sidecar; historical v1 remains
+readable but cannot be admitted. Unit rejection tests cover a store manifest
+misrepresented as config, selected-manifest mismatch, v1 current admission and
+altered archive bytes. The real cached Desktop image was built from an older
+source revision and cannot be promoted by changing its record. Its cached
+`phase6-candidate` tag is not authority: image inspection also shows missing
+candidate-classification and candidate APK-lock labels, so current admission
+must reject it regardless of its valid raw OCI descriptor chain. The narrow
+baseline ARM64 comparison treats omitted variant and `v8` as the same
+canonical `linux/arm64/v8` platform while preserving the original raw digest
+bytes and rejecting ambiguous duplicate canonical platforms. A real Docker
+component check on this cached image now verifies the store manifest,
+container-selected manifest, config and ordered layers/diff IDs; it does not
+qualify the image as a current candidate.
+
+An isolated, clean, test-only Git checkpoint at
+`ade169ed0c2a6300923fe98f80466c86702a1785` captures the current source
+without changing the active branch/index or pushing a release. Its source-tree
+digest is
+`sha256:49367d73a1d58a053c6ce863650590a4428e9eb941d0f1ef9e8c5070b91741ea`.
+The native arm64 locked build generated a new candidate with store/selected
+manifest `sha256:352fbaef96b62e86464b0b5b6e7baf1a3d7d6a530d26aa9d86eedcc619a062fd`,
+distinct raw OCI config
+`sha256:0e230d8e7bbfa449cf5093c05f57edbef0e755cc0f8588b4c84abab1fccf05ef`,
+and private, re-importable 151323136-byte archive
+`sha256:32761bbf5cf232ce6b2d8ed6e885df4501fd5bd42f1164adef66515246f76747`.
+The canonical v2 candidate manifest digest is
+`sha256:4600d17cfe24caa29972433a3a8c70c0fae247ef64eecba0588d0833db7447d8`.
+The producer verified the actual stopped-container selected manifest, raw
+config and every ordered layer/diff ID, matched the source/build locks and
+required candidate labels, then removed its exact observation container. The
+real Docker broker-mux → executor → VP8/input integration and native two-build
+reproducibility/X11/media/input gate passed against this checkpoint; their
+test-owned containers, networks and temporary image tags were observed absent.
+This is still a local component checkpoint, not the full Slice 6 role graph,
+Vault/network/privilege matrix or an immutable Slice 6 release manifest.
+Phase 6 remains 5/15.
+
+### 2026-09-27 Desktop broker containment model correction
+
+The required inventory had classified `desktop-broker` as a separate container
+principal even though the executable actually runs inside
+`desktop-sandbox-runtime`. Sandbox ruled that this must be a required
+in-container process/component, not a dummy container or a second UID/network
+security boundary. The unpublished closed profile now requires the exact
+broker executable digest, argv, Unix socket and protocol under the Desktop
+sandbox parent. Observation/evidence validators require the parent's real
+container and image identity, broker effective UID/GID, PID/start ticks,
+executable, 0600 socket and session-association receipts. The Desktop sandbox
+controller is `provider-desktop-runtime`; executor backend does not acquire
+Provider Docker/allocation authority. Closed unit fixtures reject missing,
+mis-parented, substituted and fake-container broker records. These are
+validator tests, not a completed real full-inventory gate or immutable
+manifest. Phase 6 remains **5/15**.
+
+The identity conflict affects both runtime images: the current Browser and
+Desktop images and Provider Docker adapters pin `1000:1000`, while the Slice 6
+profile requires distinct non-root numeric UID/GID values in 10000..60000.
+Sandbox ruled for explicit, finite, profile-bound per-allocation identities,
+durable Provider ownership/spec binding and exact effective create/exec
+observation; neither a relaxed profile nor fixed replacement constant is
+accepted. An isolated local diagnostic ran the existing Desktop candidate at
+`20000:30000` with read-only root, dropped capabilities and owner-matched
+workspace/output tmpfs: Xvfb started but Openbox exited with signal 11, then
+the broker stopped. `getent passwd 20000` had no entry. A test-only derivative
+adding that exact passwd/group entry, with the same run flags, stayed running;
+the broker's signed-observation endpoint returned ready, PID 1 was the
+expected executable and argv, and its Unix socket was mode 0600 owned by
+`20000:30000`. This A/B result supports an NSS account dependency but is not
+yet a full v2 media/input gate. The test container and diagnostic image tags
+were removed. The candidate still cannot be admitted as a Phase 6 security
+profile artifact; Browser requires the same identity treatment and its own
+Chromium/CDP checks. Phase 6 remains **5/15**.
+
+The separately signed Browser image was also run unchanged with effective
+`21000:31000`, read-only root, dropped capabilities, no-new-privileges, its
+locked Chromium seccomp, no network, and owner-matched workspace/output
+tmpfs. Chromium stayed running as PID 1 and its loopback `/json/version`
+returned HTTP 200, Chrome 151 and CDP 1.3. This narrow start/CDP probe is
+evidence that the existing Browser image may support a high-UID runtime
+override without new image bytes; it is not proof of `Browser.getVersion`,
+Chromium sandbox integrity, restricted egress, session authority or the full
+identity/recovery/cleanup gate. The test container was removed. Phase 6
+remains **5/15**.
+
+The existing restricted-network provisioner was also found to create a
+separate egress gateway container for each Browser/Desktop allocation while
+pinning every gateway to `65532:65532`. This is not the broker-in-parent
+exception. Sandbox therefore approved a finite deployment-level slot model
+with two distinct container identities per allocation (sandbox and gateway),
+durable Provider reservation, and per-allocation container/network/process
+observations in addition to the fixed service-principal inventory. The
+static profile's `Principals` maximum of 128 and one-container-per-principal
+observer cannot stand in for up to 1000 dynamic allocation slots; neither
+1000-slot configuration expressibility nor 1000 live-container throughput is
+currently demonstrated. Browser sandbox control was corrected from executor
+backend to `provider-browser-runtime`; the dynamic slot/schema, driver
+reservation and full gate remain to implement. Phase 6 remains **5/15**.
+
+The closed profile now has an initial `sandbox_identity_slots` registry with
+exact Browser/Desktop Provider owner, template digest and two distinct
+workload/gateway UID/GID pairs per slot. It rejects missing/unknown templates,
+executor ownership, owner/template digest drift, duplicate/unsorted slots,
+root/out-of-range values, cross-slot and static-principal reuse, and an
+implicit capacity clamp. Race tests pass. A unit-only bound check serializes
+1000 Browser plus 1000 Desktop slots under the existing 2 MiB document cap;
+it does not claim those containers or concurrent sessions ran. This is an
+intermediate schema checkpoint: fixed sandbox records have not yet been
+reclassified as dynamic templates, gateway image/security templates and the
+durable reservation/observation chain remain absent. Phase 6 stays **5/15**.
+
+An earlier Provider-private same-host file-lock reservation prototype passed
+component tests, including two simultaneous test processes, but it is not
+the approved production authority: distinct Browser/Desktop Provider UIDs
+cannot share its owner-private directory. That prototype was retired rather
+than wired into either runtime driver. It supplies no Slice 6 release-gate
+evidence or claim that a real allocation used a slot. Phase 6 remains
+**5/15**.
+
+Sandbox subsequently ruled that the Desktop candidate must carry a canonical
+finite build-time allowlist of supported workload UID/GID accounts. A single
+candidate can cover multiple assigned slots; support in the image does not
+authorize a Provider allocation. A closed 1..1000-account parser, canonical
+private-file loader, allowlist digest and exact slot-pair matcher now pass
+targeted race tests. The candidate build now embeds deterministic non-login
+passwd/group fragments, verifies the canonical allowlist digest before final
+scratch repack, and binds the digest and full account list in a new v3 local
+candidate manifest. Historical Phase 5 source/image locks remain unchanged;
+the previous Phase 6 v2 candidate does not qualify as a current v3 artifact.
+The opt-in native arm64 Docker component test built twice without cache and
+reproduced the image ID, then ran a second real container as `20000:30000`
+with read-only root, dropped capabilities, NNP and owner-matched private
+tmpfs. It verified account entries, UID/GID, mode-0600 broker socket and the
+real v2 broker VP8 media/input path. This is a worktree component test, not a
+clean committed source/candidate OCI record, full Provider allocation/egress
+gate or immutable Slice 6 evidence manifest. Phase 6 remains **5/15**.
+
+Sandbox ruled for globally disjoint profile-owned pools with each Provider
+managing only its pool in its existing PostgreSQL transactional authority. A
+neutral finite state model and PostgreSQL adapter now implement explicit
+clean-authority initialization, atomic reservation before side effects,
+exact retry, capacity, creating/active/cleaning fences, and exact-ticket
+release. The adapter binds `current_database()` and `current_user` to its
+trusted owner plan. A tagged real PostgreSQL integration created two separate
+databases and runtime roles, revoked public database access, proved crossed
+connections fail, raced reservations through two Provider handles, retained
+unknown creation and failed cleanup, kept slow external checks outside the
+global `control_state` row lock, and retained both pools across PostgreSQL
+restart. These are component proofs; the integration's clean and absence
+callbacks are test fixtures, not Docker observations or production bootstrap
+authority. The production deployment's actual DB grants, driver wiring,
+exact Docker absence checks, high-UID allocations and full Slice 6 gate are
+still open. Phase 6 remains **5/15**.
+
+The complete security profile now additionally binds each Provider owner to
+its exact namespace/controller, PostgreSQL service identity and trust edge,
+database, runtime role and existing purpose-bound DSN material ID. Projection
+derives these values from the validated profile rather than accepting
+caller-chosen database or role parameters. Both Provider-to-PostgreSQL edges
+and their external CA mounts were added to the closed fixture; swapped owner,
+role, controller, material, edge, service and duplicate authority records
+fail targeted race tests. The PostgreSQL adapter also checks both
+`current_user` and `session_user`, and runtime-role verification rejects
+elevated role attributes and role memberships. This remains static/SQL
+component evidence; it does not prove a live Provider-to-broker-to-PostgreSQL
+deployment. Phase 6 remains **5/15**.
+
+Following Sandbox's fixed-egress ruling, the complete profile fixture now
+contains two distinct Provider-owned control-plane broker principals, each
+with its own TLS agent, policy authority, internal/uplink networks, CA
+consumers, role-to-broker mTLS edge and broker-to-PostgreSQL/DNS edges. Each
+policy has only the one `postgres` alias. The Provider database binding
+explicitly references that broker/policy/edge chain, and a neutral strict
+PostgreSQL DSN parser is shared with the existing action-history witness
+without enlarging the witness's 16-connection ceiling; Provider binding has
+its separate 64-connection bound. Static profile and alias negative tests
+pass. A not-yet-activated v3 Browser/Desktop Provider pool-construction helper derives its exact
+owner, database, role, DSN binding and finite capacity from the complete
+profile, constructs its own alias-only mTLS broker client and revocation
+monitor, requests a fresh profile-validated client certificate from its own
+workload TLS agent for each inner PostgreSQL TLS handshake, and replaces
+pgx's DNS/dial/fallback path before pool construction. Every new or
+reconnected PostgreSQL connection rechecks its actual database, session and
+current role, role attributes/membership and minimal schema/table grants; an
+existing pooled connection cannot be acquired when broker revocation
+readiness is lost.
+The helper additionally requires the owner-local ledger to have been
+explicitly initialized; it never repairs a missing ledger or falls back to
+the legacy direct-dial opener. Actual v3 Browser/Desktop startup refuses
+before any database dial while the dedicated PostgreSQL certificate purpose
+and Docker reservation chain are incomplete. Browser Provider's top-level
+production composition remains disabled. Real two-database PostgreSQL integration now also checks
+the non-elevated runtime-role query. This is code/component evidence only:
+the separate broker/agent processes, PostgreSQL server-side client-certificate
+requirement, exact client URI-to-SQL-role mapping, external certificate
+revocation and real high-UID allocation/cleanup are not yet proven by a live
+deployment gate. Phase 6 remains **5/15**.
+
+The Sandbox architecture review selected a distinct PostgreSQL-client
+certificate purpose and TLS-agent instance per Provider owner. PostgreSQL 16
+matches client certificate CN (or mapped DN), not URI SAN, while the existing
+workload certificate has an intentionally empty Subject. The inner TLS helper
+now rejects that ordinary certificate and requires the separate client
+purpose, exact runtime-role CN, owner URI SAN, client-auth-only EKU,
+profile-pinned PostgreSQL issuer CA, and a live P-256 signer challenge before
+pool construction and on each TLS handshake. Browser/Desktop v3 process
+configuration has a distinct PostgreSQL signer socket and UID/GID, and the
+pool helper checks it against the complete profile. Actual PostgreSQL
+`hostssl` evidence was still missing at this increment; the early startup
+refusal remains. No shared-purpose exception or authorization claim is made. Phase 6
+remains **5/15**.
+
+The repository-private certificate protocol now has a separate
+`postgres-client-certificate.v1` domain and a closed identity validator.
+It requires a CN exactly equal to the profile-bound unique SQL runtime role,
+exact owner URI SAN, P-256 key, client-auth EKU, digital-signature use, and no other Subject or
+SAN values. The ordinary v1 protocol still rejects nonempty Subject; signed
+request/response downgrade tests and an agent-generated PostgreSQL CSR/leaf
+test pass under the race detector. The certificate controller now validates
+the returned leaf against the signed request and closed policy before writing
+its ledger, revoking a wrong-purpose result; it no longer relies solely on
+the Vault adapter for this check. The complete profile now separately binds
+two PostgreSQL-only agents, their issuer policies and Vault roles, distinct
+keys and sockets, CNs and a dedicated client CA artifact mounted only to the
+two Provider owners. The TLS-agent and certificate-controller commands
+require purpose-specific configuration and an exact inventory of the two
+additional policies/listeners; omission and cross-purpose substitutions fail
+targeted tests. The tagged pinned Vault container test now proves a dedicated
+PostgreSQL client PKI mount and restricted issuance token can issue the exact
+role CN/owner URI/client-auth leaf, refuse alternate CN and URI CSRs, publish a
+revocation in its CRL, and clean up the container. Vault's real leaf omits a
+Basic Constraints extension; admission checks non-CA status and the pinned
+chain, not an extension-presence assumption. A real PostgreSQL 16.15 HBA
+test exposed an incompatible premise in the prior architecture ruling:
+`scram-sha-256 clientcert=verify-full map=...` is rejected at server startup
+because `map` is not an option for SCRAM authentication. Sandbox corrected
+the decision to require certificate CN exactly equal to the profile-bound
+unique runtime role, with SCRAM-SHA-256 and
+`clientcert=verify-full clientname=CN`, without a `pg_ident` map. The pinned
+PostgreSQL 16.15 Docker gate now derives the anticipated Docker bridge source
+before startup and starts with the profile-rendered restricted `/32` HBA. It
+rejects a mismatch between that approved CIDR and PostgreSQL's observed
+client address, and checks the raw HBA/client-CA bytes,
+read-only configuration volume and server file settings, compares the complete
+ordered `pg_hba_file_rules` projection to the controlled HBA document, and
+proves both Browser and Desktop certificate-plus-SCRAM
+logins. A second real Docker client with the same valid Browser certificate
+and SCRAM password, but an unapproved source address, is rejected by the
+final HBA catch-all; its container is removed and absence-checked. A
+successful same-target control precedes missing-certificate,
+wrong-CN, ordinary empty-Subject, wrong-issuer, wrong-purpose, cross-owner,
+cross-database and wrong-password refusals with checked failure reasons.
+`pg_hba_file_rules` describes the current disk file, not necessarily the last
+HBA loaded by PostgreSQL; successful reload and new positive/negative
+connections are separate observations. The test also substitutes a malformed
+on-disk HBA: the file view reports an error and `pg_reload_conf()` returns
+true, yet new connections still follow the previously loaded approved rule.
+After restoring and reloading the approved bytes, positive and
+unapproved-source negative connections pass again. This explicitly prevents
+treating a changed file view or reload signal as proof of active policy. No
+temporarily broad accepting HBA is used at startup.
+The real container is then restarted; the gate rechecks its read-only mount,
+actual HBA/CA raw bytes against the profile policy and dedicated CA digest,
+complete parsed file, both role logins and unapproved-source rejection. The
+raw-artifact validator independently rejects one-byte HBA or CA drift. Docker
+Desktop may briefly refuse the published TCP port after Unix-socket readiness;
+the test retries only that transport error for a finite window and fails
+immediately on authentication or HBA errors.
+PostgreSQL does not inspect the owner URI SAN; the local closed certificate
+validator separately rejects wrong-URI material. This is a component gate,
+not a deployed Provider-to-broker-to-PostgreSQL path. No actual combined
+certificate-controller/agent process, runtime rotation, revocation drain,
+broker transport or six-role gate has passed.
+The early v3 startup refusal remains. Phase 6 remains **5/15**.
+
+The repeatable component commands are:
+
+```bash
+SANDBOX_RUNTIME_POSTGRES_CLIENT_VAULT_INTEGRATION=1 mise exec go@1.26.8 -- env -u GOROOT go test -tags=integration -count=1 -run '^TestVaultPostgresClientPurposeIntegration$' -v ./internal/workloadpki
+SANDBOX_RUNTIME_POSTGRES_CLIENT_HBA_INTEGRATION=1 mise exec go@1.26.8 -- env -u GOROOT go test -tags=integration -count=1 -run '^TestRealPostgresRequiresExactClientCNAndScramRole$' -v ./internal/phase6egress
+```
+
+The complete security profile now has one Provider-database-only PostgreSQL
+server-authentication policy referenced by both Provider database bindings.
+It binds the exact PostgreSQL service identity, controlled HBA artifact ID and
+raw-byte digest, existing dedicated client-CA anchor, and a canonical
+approved ingress CIDR. The closed renderer emits one ordered HBA containing
+local operator peer access, both Provider-specific SCRAM + exact-CN client
+certificate rules, and IPv4/IPv6 rejecting catch-alls. Cross-reference,
+digest, service, CA, CIDR, database and role drift fail profile tests. The real
+PostgreSQL component test now uses that renderer for its final restricted HBA;
+it separately checks the actual read-only volume, raw HBA/CA bytes, server
+file settings, parsed file and new positive/negative connections. This
+provider-only scope does not authorize or prove Product or other PostgreSQL
+roles on a shared instance. The final deployment gate must either accurately
+expand the complete service rule inventory or use an explicitly separate
+PostgreSQL instance; it may not silently drop existing role access or add a
+broad fallback. There is still no full broker path or Slice 6 evidence.
+
+The existing Slice 6 evidence schema now requires its PostgreSQL external
+record to cross-bind the complete profile digest, the single HBA artifact and
+raw-byte digest, the existing client-CA artifact and bundle digest, and the
+approved ingress CIDR. It also requires digest references for raw receipts of
+the read-only mount, server file settings, ordered file parser result,
+controlled startup/reload, new connection outcomes and restart
+reconciliation; unrelated external services cannot carry this proof. The
+verifier checks exact profile agreement and refuses omitted or substituted
+receipts, but cannot manufacture or authenticate their observations. No
+Slice 6 manifest has been emitted.
+
+Current Desktop candidate admission now compares actual digest-verified OCI
+`/etc/passwd` and `/etc/group` against every allowlisted workload account,
+rejecting missing, duplicate and additional high identities even when the
+manifest and image label agree. The native arm64 tagged integration rebuilt a
+real candidate and confirmed one filesystem layer plus BuildKit's 32-byte
+empty layer; the verifier accepts only a bounded empty-layer extension, then
+passed actual NSS inspection. The test image and observation container were
+removed. This still is not a clean committed candidate record or a Provider
+high-UID allocation/cleanup gate. Phase 6 remains **5/15**.
+
+The restricted-network Docker core and both Browser/Desktop adapters now
+carry an optional private identity slot, selecting the slot's gateway UID/GID
+for Docker `Config.User` while keeping the signed gateway image's default
+`65532:65532` unchanged. The core labels all four workload/gateway numbers
+and slot ID, reconstructs them canonically during replay/inspect/release, and
+rejects malformed slots, changed slot, noncanonical labels and user drift.
+`TestGatewayReservedSlotDocker` built the gateway image from the pinned
+Dockerfile, used its actual immutable local image ID
+`sha256:4ad516aa5075855897ab937e448561d843eb3fcc5f6b7d2393139b324ccd558f`,
+started a real isolated Docker network and gateway, observed the live gateway
+process as UID/GID `20001:30001`, proved exact replay/cross-slot refusal, and checked
+container plus internal-network absence after release. The first attempted
+run mistakenly supplied BuildKit's config digest rather than Docker's actual
+image ID and failed closed at image admission; the corrected run passed with
+the final UID assertion. This is disposable local component evidence only:
+no Provider PostgreSQL reservation is consumed by this gateway-only test, no
+complete process graph or manifest exists. The v3
+Provider remains disabled and Phase 6 remains **5/15**.
+
+```bash
+SANDBOX_RUNTIME_GATEWAY_SLOT_INTEGRATION=1 \
+SANDBOX_RUNTIME_GATEWAY_SLOT_IMAGE=sha256:<actual-local-image-id> \
+mise exec go@1.26.8 -- env -u GOROOT go test -tags=integration -race -shuffle=on -count=1 \
+  -run '^TestGatewayReservedSlotDocker$' ./provider/network/restricted/docker
+```
+
+Sandbox then located the reservation CAS in a thin Provider application
+coordinator rather than the Docker adapter. The adapter is slot-aware but has
+no database authority; the coordinator must commit Reserve and win
+BeginCreate before calling it, preserve ambiguous Creating, reconcile from
+PostgreSQL first, and only release Cleaning after exact absence. This is an
+architecture ruling, not a claim that the coordinator exists yet.
+
+`TestBrowserImageHighUID` ran the locked published Browser image under
+`20000:30000`, original seccomp, read-only root and dropped capabilities;
+private CDP and the sandboxed zygote process tree were observed, with every
+process at the assigned UID/GID. The Browser Docker adapter now projects
+pure spec digests for every profile-projected slot, validates a Creating
+ticket's plan/slot/claim/spec before side effects, and uses its workload
+UID/GID for container creation and CDP relay exec. In bound mode bare legacy
+runtime methods are refused; Active-ticket Observe/Attach recheck exact local
+state. Fake-engine tests cover invalid ticket zero side effects and Creating
+replay refusal. `TestBrowserBoundSlotDockerIntegration` then ran a real
+Browser-plus-gateway topology with a fixture ticket: Browser process/relay
+at `20000:30000`, gateway at `20001:30001`, real CDP Browser.getVersion,
+Creating replay rejection, and exact test-owned container/network absence.
+The fixture ticket is not a PostgreSQL reservation; cleanup was done by the
+test harness because a production bound cleanup/absence checker and
+application coordinator are still missing. No Slice 6 manifest or readiness
+claim is emitted; Phase 6 remains **5/15**.
+
+```bash
+SANDBOX_RUNTIME_BROWSER_HIGH_UID_INTEGRATION=1 \
+mise exec go@1.26.8 -- env -u GOROOT go test -tags=integration -race -shuffle=on -count=1 \
+  -run '^TestBrowserImageHighUID$' ./profiles/browser/image
+SANDBOX_RUNTIME_BROWSER_BOUND_SLOT_INTEGRATION=1 \
+SANDBOX_RUNTIME_BROWSER_GATEWAY_IMAGE=sha256:<actual-local-image-id> \
+mise exec go@1.26.8 -- env -u GOROOT go test -tags=integration -race -shuffle=on -count=1 \
+  -run '^TestBrowserBoundSlotDockerIntegration$' ./provider/browser/driver/docker
+```
+
+The next combined real-PostgreSQL/real-Docker attempt initially failed on a
+newly observed post-cleanup replay: the old Browser Claim could Reserve the
+freed identity slot and even create a second container. The test-owned
+containers, networks and database were removed by their exact namespace
+cleanup, and Docker inventory was independently checked empty. This failure
+was not counted as a passing gate. Sandbox chose the existing Provider Browser
+session authority, not a second tombstone ledger, as the durable replay
+boundary. The Browser-bound repository now checks the exact session and
+sandbox fence atomically with Reserve and BeginCreate, writes a full-claim
+retirement into the existing Browser session state with BeginCleanup, and
+rechecks it with CompleteCleanup after external absence. The generic pool
+repository cannot satisfy the Browser production coordinator port.
+
+`TestBrowserBoundPostgresDockerIntegration` subsequently passed with two
+independent runtime PostgreSQL pools, a real persisted Browser open record,
+concurrent allocation from those pools with exactly one observed Docker
+`AllocateBound` dispatch,
+actual Browser `41000:51000` and gateway `43000:53000` process identities,
+CDP Browser.getVersion, read-only Active retry, coordinated exact cleanup,
+PostgreSQL restart with new mapped-port discovery and reconstructed Provider
+pool/network/Docker adapters, injected post-commit cleanup response loss followed by
+post-restart exact finalization from the existing Browser retirement record,
+replay rejection before any new Docker side effect, and a distinct authorized
+session reusing the released UID. Retrying the old cleanup after that reuse
+left the new Browser running. The first restart test incorrectly retained
+Docker's old mapped host port and was terminated after it could not reconnect;
+the exact disposable database/uplink were removed. The corrected fresh-pool
+restart test passed and its Docker inventory is empty. This is a local
+component-composition gate, not the complete role/broker/issuer deployment
+topology. Creating uncertainty, cancellation/drain races, Desktop integration
+and Slice 6 evidence remain open. Phase 6 remains **5/15**.
+
+The separate real-PostgreSQL finite-pool gate now also holds the external
+absence callback at a deterministic barrier: another runtime pool can read
+without a long Docker lock, but Reserve cannot reuse either the Cleaning or
+unresolved Creating slot and a stale BeginCreate cannot cross the Cleaning
+CAS. Only after CompleteCleanup does the exact UID become reusable. This is
+state-machine/transaction evidence with a test-only absence callback, not a
+second real-Docker cleanup or an authorization gate for the generic pool.
+
+Checkpoint 2026-09-27 (never-dispatched Browser reservation): a terminal
+Browser session with no allocation can now retire an exact still-`Reserved`
+UID ticket in the same PostgreSQL transaction as the existing Browser session
+authority. Because `BeginCreate` is the sole first-side-effect permit under
+that row lock, the transaction can release this UID without inventing a
+Docker receipt. It retains a full-claim, released, `never_dispatched`
+retirement in the existing session state, rejects old-claim replay, and does
+not retire `Creating`, `Active` or `Cleaning` on missing-receipt inference.
+`Cancel` and terminal `Recover` invoke the path; an unknown `Creating` result remains
+held for explicit quiescence reconciliation. The tagged real
+PostgreSQL-plus-Docker test now first reserves and retires such a terminal
+session, verifies zero Browser Docker dispatch, then reuses the exact UID
+for the normal high-UID Browser/gateway flow. Focused race tests and this
+tagged gate passed. This narrows a capacity leak; it is not the complete
+Slice 6 deployment/evidence gate. Phase 6 remains **5/15**.
+
+Checkpoint 2026-09-27 (known-finished Browser dispatch): the bound Browser
+driver now fsyncs a full claim/slot/plan/spec/receipt completion record only
+after its sole `AllocateBound` invocation has returned from all synchronous
+network, Docker and CDP readiness work. A `Ready` bit without this later
+record is explicitly insufficient. The Provider coordinator can read-only
+verify that exact completed dispatch and move its existing `Creating` CAS to
+`Active` after a pre-commit PostgreSQL failure, without dispatching again.
+For an already terminal Browser session with no attached receipt, the same
+completion proof allows the application to commit the known result and enter
+the ordinary fenced exact cleanup path; it does not restore end-user access.
+Focused race tests use an in-flight barrier to reject takeover; the real
+PostgreSQL-plus-Docker gate tests both live and terminal pre-commit failure
+and verifies no duplicate Docker dispatch. Unknown external outcomes without
+the fsynced completion proof remain `Creating`, not retried or released.
+The tagged gate also injects a lost cleanup-commit response for a terminal
+session, then uses only the existing PostgreSQL `Released` retirement to
+finalize its local tombstone and repeat the operation idempotently.
+This is not automatic recovery for that unknown case. Full process-crash,
+quiescence and Slice 6 deployment evidence remain open at **5/15**.
+
+Checkpoint 2026-09-27 (Desktop identity transaction foundation): following
+Sandbox's ruling, the existing Desktop session state now retains an exact
+source-Open identity retirement; a Close operation does not reserve a second
+UID. A Desktop-bound PostgreSQL adapter composes the current Desktop session,
+finite slot and initialized marker under one Provider row lock for Reserve,
+BeginCreate, known CompleteCreate, Close-authorized BeginCleanup and exact-
+absence CompleteCleanup. Unknown absence does not release the slot; released
+retirement rejects old Open claim replay. A real disposable PostgreSQL gate
+with separate Browser/Desktop databases and runtime roles verifies the
+source-Open Close linkage, CAS sequence, withheld absence, released proof and
+UID return. This gate's absence callback is test-only; no Desktop Docker or
+media/broker session was exercised by it. The Desktop bound driver,
+application, mux and distinct-process v3 graph remain unimplemented and
+startup remains closed. Phase 6 remains **5/15**.
+
+The Desktop candidate driver now also has a profile-bound constructor and
+pure per-slot spec projection. In bound mode its old bare `Allocate` rejects
+before any network/Docker call, and unit tests check distinct high-UID spec
+digests and zero side effects. No ticket-accepting Desktop dispatch method is
+yet exposed, so this is an admission guard, not the Desktop runtime gate.
+
+```bash
+SANDBOX_RUNTIME_BROWSER_BOUND_POSTGRES_INTEGRATION=1 \
+SANDBOX_RUNTIME_BROWSER_GATEWAY_IMAGE=sha256:<actual-local-image-id> \
+mise exec go@1.26.8 -- env -u GOROOT go test -tags=integration -race -shuffle=on -count=1 \
+  -run '^TestBrowserBoundPostgresDockerIntegration$' ./provider/browser/driver/docker
+```

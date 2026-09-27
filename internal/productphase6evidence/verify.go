@@ -191,7 +191,7 @@ func VerifyFile(path string) (Manifest, error) {
 // BindRuntimeCandidate verifies that the current commit differs from the
 // immutable candidate source only by the closed evidence-tool allowlist.
 func BindRuntimeCandidate(candidate desktopcandidate.Manifest, sourceRoot string) (RepositoryBinding, error) {
-	if candidate.Validate() != nil {
+	if candidate.ValidateCurrent() != nil {
 		return RepositoryBinding{}, errors.New("invalid Phase 6 runtime candidate")
 	}
 	root, err := verifiedRepositoryRoot(sourceRoot)

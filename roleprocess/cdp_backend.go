@@ -11,8 +11,8 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/shell-echo/sandbox-runtime/config"
+	"github.com/shell-echo/sandbox-runtime/internal/browserbinding"
 	"github.com/shell-echo/sandbox-runtime/internal/executorprotocol"
-	"github.com/shell-echo/sandbox-runtime/internal/handoff"
 )
 
 // cdpBackend is the Browser executor's only runtime dependency. It connects
@@ -106,7 +106,7 @@ func browserProbeOpen() (executorprotocol.Open, error) {
 	requestID := "probe-" + hex.EncodeToString(value)
 	open := executorprotocol.Open{
 		Protocol: executorprotocol.ProtocolID, Role: executorprotocol.RoleBrowser, RequestID: requestID,
-		TenantBindingDigest: handoff.TenantBindingDigestPrefix + strings.Repeat("0", 64),
+		TenantBindingDigest: browserbinding.Prefix + strings.Repeat("0", 64),
 		ProviderRevisionID:  "probe-provider", SandboxID: "probe-sandbox", RuntimeSessionID: "probe-session",
 		CapabilityProfileID: "browser-v1", MediaProfileID: "browser-cdp-v1", ControlProfileID: "browser-control-v1",
 		HandoffReference: "ref:browser-probe:" + hex.EncodeToString(value), ConnectionGeneration: 1, ConnectionEpoch: "probe-1",

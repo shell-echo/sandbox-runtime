@@ -14,28 +14,34 @@ import (
 
 	cerrdefs "github.com/containerd/errdefs"
 
+	"github.com/shell-echo/sandbox-runtime/internal/sandboxidentity"
 	"github.com/shell-echo/sandbox-runtime/provider/network/restricted"
 )
 
 const (
-	managedLabel        = restricted.ManagedLabel
-	ownerLabel          = restricted.OwnerLabel
-	componentLabel      = "io.github.shell-echo.sandbox-runtime.component"
-	namespaceLabel      = restricted.NamespaceLabel
-	controllerLabel     = restricted.ControllerLabel
-	sandboxLabel        = restricted.SandboxLabel
-	policyLabel         = "io.github.shell-echo.sandbox-runtime.network-policy"
-	policyDigestLabel   = "io.github.shell-echo.sandbox-runtime.network-policy-digest"
-	leaseLabel          = "io.github.shell-echo.sandbox-runtime.network-lease"
-	subnetLabel         = "io.github.shell-echo.sandbox-runtime.network-subnet"
-	gatewayAddressLabel = "io.github.shell-echo.sandbox-runtime.gateway-address"
-	gatewayNameLabel    = "io.github.shell-echo.sandbox-runtime.gateway-container"
-	workloadNameLabel   = "io.github.shell-echo.sandbox-runtime.workload-container"
-	workloadRoleLabel   = restricted.WorkloadRoleLabel
-	workloadIDLabel     = restricted.WorkloadIdentityLabel
-	workloadGenLabel    = restricted.WorkloadGenerationLabel
-	workloadFenceLabel  = restricted.WorkloadFenceLabel
-	gatewayImageLabel   = "io.github.shell-echo.sandbox-runtime.component"
+	managedLabel         = restricted.ManagedLabel
+	ownerLabel           = restricted.OwnerLabel
+	componentLabel       = "io.github.shell-echo.sandbox-runtime.component"
+	namespaceLabel       = restricted.NamespaceLabel
+	controllerLabel      = restricted.ControllerLabel
+	sandboxLabel         = restricted.SandboxLabel
+	policyLabel          = "io.github.shell-echo.sandbox-runtime.network-policy"
+	policyDigestLabel    = "io.github.shell-echo.sandbox-runtime.network-policy-digest"
+	leaseLabel           = "io.github.shell-echo.sandbox-runtime.network-lease"
+	subnetLabel          = "io.github.shell-echo.sandbox-runtime.network-subnet"
+	gatewayAddressLabel  = "io.github.shell-echo.sandbox-runtime.gateway-address"
+	gatewayNameLabel     = "io.github.shell-echo.sandbox-runtime.gateway-container"
+	workloadNameLabel    = "io.github.shell-echo.sandbox-runtime.workload-container"
+	workloadRoleLabel    = restricted.WorkloadRoleLabel
+	workloadIDLabel      = restricted.WorkloadIdentityLabel
+	workloadGenLabel     = restricted.WorkloadGenerationLabel
+	workloadFenceLabel   = restricted.WorkloadFenceLabel
+	slotIDLabel          = "io.github.shell-echo.sandbox-runtime.identity-slot"
+	slotWorkloadUIDLabel = "io.github.shell-echo.sandbox-runtime.workload-uid"
+	slotWorkloadGIDLabel = "io.github.shell-echo.sandbox-runtime.workload-gid"
+	slotGatewayUIDLabel  = "io.github.shell-echo.sandbox-runtime.gateway-uid"
+	slotGatewayGIDLabel  = "io.github.shell-echo.sandbox-runtime.gateway-gid"
+	gatewayImageLabel    = "io.github.shell-echo.sandbox-runtime.component"
 
 	probeInterval = 50 * time.Millisecond
 )
@@ -132,7 +138,8 @@ func (p *Provisioner) Acquire(ctx context.Context, request Request) (Attachment,
 	policy, ok := p.policies[request.PolicyReference]
 	if !ok || request.Namespace != p.options.Namespace || request.ControllerID != p.options.ControllerID ||
 		!privateValuePattern.MatchString(request.SandboxID) || !privateValuePattern.MatchString(request.SessionID) ||
-		request.Generation < 1 || request.Fence < 1 {
+		request.Generation < 1 || request.Fence < 1 ||
+		(request.Slot != (sandboxidentity.Slot{}) && request.Slot.Validate() != nil) {
 		return Attachment{}, ErrPolicyUnavailable
 	}
 	desired, networkRequest, containerRequest, err := p.desired(request, policy)
@@ -317,6 +324,56 @@ func (p *Provisioner) Release(ctx context.Context, attachment Attachment) error 
 	return p.releaseOwned(operationCtx, attachment)
 }
 
+// Absent independently observes the exact run-owned gateway and internal
+// network after Release. A deletion response, one 404, or a foreign resource
+// occupying either name is not sufficient to free an identity slot.
+func (p *Provisioner) Absent(ctx context.Context, attachment Attachment) error {
+	if err := contextError(ctx); err != nil {
+		return err
+	}
+	if p == nil || p.engine == nil || !attachment.EgressGateway || attachment.Public ||
+		!validDockerName(attachment.DockerName) || !validDockerName(attachment.GatewayContainer) ||
+		!privateValuePattern.MatchString(attachment.LeaseID) || !digestPattern.MatchString(attachment.PolicyDigest) ||
+		!digestPattern.MatchString(attachment.WorkloadIdentityDigest) ||
+		(attachment.Slot != (sandboxidentity.Slot{}) && attachment.Slot.Validate() != nil) {
+		return ErrOwnershipConflict
+	}
+	policy, exists := p.policies[attachment.PolicyReference]
+	digest, err := policy.Digest()
+	if !exists || err != nil || digest != attachment.PolicyDigest {
+		return ErrOwnershipConflict
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	operation, cancel := p.operationContext(ctx)
+	defer cancel()
+	network, err := p.engine.inspectNetwork(operation, attachment.DockerName)
+	if err == nil {
+		if network.labels[managedLabel] != "true" || network.labels[ownerLabel] != networkOwner(p.role) ||
+			network.labels[leaseLabel] != attachment.LeaseID || network.labels[namespaceLabel] != p.options.Namespace ||
+			network.labels[controllerLabel] != p.options.ControllerID {
+			return ErrOwnershipConflict
+		}
+		return ErrOutcomeUnknown
+	}
+	if !cerrdefs.IsNotFound(err) {
+		return classifyOperationError(operation, err)
+	}
+	container, err := p.engine.inspectContainer(operation, attachment.GatewayContainer)
+	if err == nil {
+		if container.labels[managedLabel] != "true" || container.labels[ownerLabel] != networkOwner(p.role) ||
+			container.labels[leaseLabel] != attachment.LeaseID || container.labels[namespaceLabel] != p.options.Namespace ||
+			container.labels[controllerLabel] != p.options.ControllerID {
+			return ErrOwnershipConflict
+		}
+		return ErrOutcomeUnknown
+	}
+	if !cerrdefs.IsNotFound(err) {
+		return classifyOperationError(operation, err)
+	}
+	return nil
+}
+
 func (p *Provisioner) Close() error {
 	if p == nil || p.engine == nil {
 		return nil
@@ -399,7 +456,7 @@ func (p *Provisioner) desired(request Request, policy restricted.Policy) (Attach
 	attachment := Attachment{
 		DockerName: networkName, GatewayContainer: gatewayName, GatewayAddress: gatewayAddress.String(),
 		LeaseID: lease, PolicyReference: policy.Reference, PolicyDigest: digest,
-		WorkloadIdentityDigest: identity.Digest(), EgressGateway: true, Public: false,
+		WorkloadIdentityDigest: identity.Digest(), EgressGateway: true, Public: false, Slot: request.Slot,
 	}
 	labels := map[string]string{
 		managedLabel: "true", ownerLabel: networkOwner(identity.Role()), componentLabel: GatewayComponent,
@@ -411,6 +468,15 @@ func (p *Provisioner) desired(request Request, policy restricted.Policy) (Attach
 		workloadRoleLabel: identity.Role(), workloadIDLabel: identity.Digest(),
 		workloadGenLabel: strconv.FormatInt(identity.Generation(), 10), workloadFenceLabel: strconv.FormatInt(identity.Fence(), 10),
 	}
+	user := GatewayUser
+	if request.Slot != (sandboxidentity.Slot{}) {
+		labels[slotIDLabel] = request.Slot.ID
+		labels[slotWorkloadUIDLabel] = strconv.FormatUint(uint64(request.Slot.WorkloadUID), 10)
+		labels[slotWorkloadGIDLabel] = strconv.FormatUint(uint64(request.Slot.WorkloadGID), 10)
+		labels[slotGatewayUIDLabel] = strconv.FormatUint(uint64(request.Slot.GatewayUID), 10)
+		labels[slotGatewayGIDLabel] = strconv.FormatUint(uint64(request.Slot.GatewayGID), 10)
+		user = strconv.FormatUint(uint64(request.Slot.GatewayUID), 10) + ":" + strconv.FormatUint(uint64(request.Slot.GatewayGID), 10)
+	}
 	encodedConfig, err := restricted.EncodeConfig(restricted.Config{GatewayAddress: gatewayAddress.String(), Policy: policy})
 	if err != nil {
 		return Attachment{}, networkRequest{}, containerRequest{}, err
@@ -418,7 +484,7 @@ func (p *Provisioner) desired(request Request, policy restricted.Policy) (Attach
 	return attachment,
 		networkRequest{name: networkName, subnet: subnet.String(), dockerGateway: dockerGateway.String(), labels: labels},
 		containerRequest{
-			name: gatewayName, image: p.options.GatewayImage, imageID: p.gatewayImageID, internalNetwork: networkName,
+			name: gatewayName, image: p.options.GatewayImage, imageID: p.gatewayImageID, user: user, internalNetwork: networkName,
 			internalAddress: gatewayAddress.String(), labels: labels,
 			environment: map[string]string{restricted.ConfigEnvironment: encodedConfig},
 			memoryBytes: p.options.MemoryBytes, nanoCPUs: p.options.NanoCPUs,
@@ -449,9 +515,10 @@ func (p *Provisioner) requestsFromNetwork(network networkInfo, attachment Attach
 	}
 	generation, generationErr := strconv.ParseInt(labels[workloadGenLabel], 10, 64)
 	fence, fenceErr := strconv.ParseInt(labels[workloadFenceLabel], 10, 64)
-	request := Request{SandboxID: labels[sandboxLabel], SessionID: labels[sessionLabel], Namespace: labels[namespaceLabel], ControllerID: labels[controllerLabel], PolicyReference: labels[policyLabel], Generation: generation, Fence: fence}
+	slot, slotErr := slotFromLabels(labels)
+	request := Request{SandboxID: labels[sandboxLabel], SessionID: labels[sessionLabel], Namespace: labels[namespaceLabel], ControllerID: labels[controllerLabel], PolicyReference: labels[policyLabel], Generation: generation, Fence: fence, Slot: slot}
 	identity, identityErr := p.identity(request)
-	if generationErr != nil || fenceErr != nil || identityErr != nil || identity.Role() != labels[workloadRoleLabel] || identity.Digest() != attachment.WorkloadIdentityDigest || identity.WorkloadName() != labels[workloadNameLabel] {
+	if generationErr != nil || fenceErr != nil || slotErr != nil || slot != attachment.Slot || identityErr != nil || identity.Role() != labels[workloadRoleLabel] || identity.Digest() != attachment.WorkloadIdentityDigest || identity.WorkloadName() != labels[workloadNameLabel] {
 		return networkRequest{}, containerRequest{}, ErrOwnershipConflict
 	}
 	subnet, err := netip.ParsePrefix(labels[subnetLabel])
@@ -481,12 +548,37 @@ func (p *Provisioner) requestsFromNetwork(network networkInfo, attachment Attach
 	}
 	return networkRequest{name: network.name, subnet: subnet.String(), dockerGateway: dockerGateway.String(), labels: labels},
 		containerRequest{
-			name: labels[gatewayNameLabel], image: p.options.GatewayImage, imageID: p.gatewayImageID, internalNetwork: network.name,
+			name: labels[gatewayNameLabel], image: p.options.GatewayImage, imageID: p.gatewayImageID, user: expectedContainer.user, internalNetwork: network.name,
 			internalAddress: labels[gatewayAddressLabel], labels: labels,
 			environment: map[string]string{restricted.ConfigEnvironment: encodedConfig},
 			memoryBytes: p.options.MemoryBytes, nanoCPUs: p.options.NanoCPUs, pidsLimit: p.options.PidsLimit,
 			stopTimeout: p.options.StopTimeoutSeconds,
 		}, nil
+}
+
+func slotFromLabels(labels map[string]string) (sandboxidentity.Slot, error) {
+	keys := []string{slotIDLabel, slotWorkloadUIDLabel, slotWorkloadGIDLabel, slotGatewayUIDLabel, slotGatewayGIDLabel}
+	if labels[slotIDLabel] == "" {
+		for _, key := range keys[1:] {
+			if labels[key] != "" {
+				return sandboxidentity.Slot{}, ErrOwnershipConflict
+			}
+		}
+		return sandboxidentity.Slot{}, nil
+	}
+	values := make([]uint32, 4)
+	for index, key := range keys[1:] {
+		value, err := strconv.ParseUint(labels[key], 10, 32)
+		if err != nil || strconv.FormatUint(value, 10) != labels[key] {
+			return sandboxidentity.Slot{}, ErrOwnershipConflict
+		}
+		values[index] = uint32(value)
+	}
+	slot := sandboxidentity.Slot{ID: labels[slotIDLabel], WorkloadUID: values[0], WorkloadGID: values[1], GatewayUID: values[2], GatewayGID: values[3]}
+	if slot.Validate() != nil {
+		return sandboxidentity.Slot{}, ErrOwnershipConflict
+	}
+	return slot, nil
 }
 
 func (p *Provisioner) identityFromLabels(labels map[string]string) (restricted.Identity, error) {
@@ -540,7 +632,7 @@ func validateGatewayContainer(info containerInfo, request containerRequest, upli
 	sort.Strings(actualEnvironment)
 	if strings.TrimPrefix(info.name, "/") != request.name || !labelsMatch(info.labels, request.labels) ||
 		info.imageID != request.imageID || info.image != request.image ||
-		info.user != GatewayUser || strings.Join(info.entrypoint, "\x00") != GatewayEntrypoint ||
+		info.user != request.user || strings.Join(info.entrypoint, "\x00") != GatewayEntrypoint ||
 		strings.Join(info.command, "\x00") != "serve" || info.workingDirectory != "/" ||
 		info.stopTimeout != request.stopTimeout ||
 		strings.Join(actualEnvironment, "\x00") != strings.Join(expectedEnvironment, "\x00") ||

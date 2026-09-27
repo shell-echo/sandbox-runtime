@@ -54,6 +54,9 @@ var productPhase5DesktopRecoveryMigration string
 //go:embed migrations/0013_product_phase5_development_environment.sql
 var productPhase5DevelopmentEnvironmentMigration string
 
+//go:embed migrations/0014_product_phase6_browser_handoff_binding.sql
+var productPhase6BrowserHandoffBindingMigration string
+
 type migration struct {
 	version int64
 	name    string
@@ -74,6 +77,7 @@ var productMigrations = []migration{
 	{version: 11, name: "phase 5 desktop policy", sql: productPhase5DesktopPolicyMigration},
 	{version: 12, name: "phase 5 desktop recovery", sql: productPhase5DesktopRecoveryMigration},
 	{version: 13, name: "phase 5 development environment", sql: productPhase5DevelopmentEnvironmentMigration},
+	{version: 14, name: "phase 6 Browser handoff binding", sql: productPhase6BrowserHandoffBindingMigration},
 }
 
 // CurrentSchemaVersion is the newest Product migration understood by this

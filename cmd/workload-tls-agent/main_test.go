@@ -7,6 +7,7 @@ import (
 
 	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
 	"github.com/shell-echo/sandbox-runtime/internal/securityprincipal"
+	"github.com/shell-echo/sandbox-runtime/internal/workloadpki"
 )
 
 func TestAgentStartupMatchesExactProfileBinding(t *testing.T) {
@@ -76,6 +77,73 @@ func TestAgentStartupMatchesExactProfileBinding(t *testing.T) {
 			change(&candidate)
 			if matchesProfileBinding(profile, binding, agent, subject, candidate) {
 				t.Fatal("drift accepted")
+			}
+		})
+	}
+}
+
+func TestPostgresAgentConfigMatchesOnlyDedicatedPurpose(t *testing.T) {
+	agentIdentity := securityprincipal.Principal{Name: "provider_tls_agent", PrincipalDigest: "agent-digest"}
+	ownerIdentity := securityprincipal.Principal{Name: "provider", PrincipalDigest: "owner-digest"}
+	requestPublic, controllerPublic := bytes.Repeat([]byte{7}, 32), bytes.Repeat([]byte{8}, 32)
+	profile := phase6security.Profile{ProfileDigest: "security-digest", EnvironmentDigest: "environment-digest",
+		PrincipalProfileDigest: "principal-profile-digest", CertificateController: phase6security.CertificateControllerAuthority{
+			DeploymentName: "certificate-controller", ResponseKeyID: "controller-response",
+			ResponsePublicKeyDigest: phase6security.CertificateControllerPublicKeyDigest(controllerPublic)}}
+	base := phase6security.TLSAgentBinding{AgentDeployment: "provider-browser-postgres-tls-agent", AgentPrincipalDigest: agentIdentity.Digest(),
+		SubjectDeployment: "provider-browser-runtime", SubjectPrincipalDigest: ownerIdentity.Digest(),
+		AgentUID: 20001, AgentGID: 30001, SubjectUID: 20002, SubjectGID: 30002,
+		SocketPath: "/run/tls/provider-browser-postgres-tls-agent/signer.sock", IssuerPolicyID: "issuer-postgres",
+		IssuerVaultRole: "vault-postgres", AgentRequestKeyID: "request-postgres",
+		AgentRequestKeyDigest: phase6security.TLSAgentRequestPublicKeyDigest(requestPublic),
+		ControllerDeployment:  "certificate-controller", ControllerUID: 20003, ControllerGID: 30003,
+		ControllerSocketPath: "/run/certificate-controller/provider-browser-postgres-tls-agent/request.sock"}
+	binding := phase6security.PostgresClientAgentBinding{TLSAgentBinding: base,
+		CommonName: workloadpki.PostgresClientCommonName("browser_provider_runtime"), IssuerAnchorID: "postgres-client-ca"}
+	database := phase6security.ProviderDatabaseBinding{OwnerDeployment: base.SubjectDeployment,
+		DatabaseName: "provider_browser", RuntimeRole: "browser_provider_runtime"}
+	agent := phase6security.Principal{Name: base.AgentDeployment, PrincipalDigest: agentIdentity.Digest(), AuthorizationPrincipal: &agentIdentity}
+	owner := phase6security.Principal{Name: base.SubjectDeployment, PrincipalDigest: ownerIdentity.Digest(),
+		AuthorizationPrincipal: &ownerIdentity, TLS: &phase6security.TLSIdentity{TrustDomain: "sandbox.test",
+			URI: "spiffe://sandbox.test/provider-browser-runtime", DNSNames: []string{"provider-browser.sandbox.test"},
+			Usages: []string{"client_auth", "server_auth"}, TTLSeconds: 600, RotateAfterSeconds: 300,
+			OverlapSeconds: 30, RevocationMaxStalenessSeconds: 10}}
+	config := configDocument{Protocol: postgresConfigProtocol, Purpose: workloadpki.PostgresClientPurpose,
+		Postgres: &postgresClientConfig{OwnerDeployment: base.SubjectDeployment, DatabaseName: database.DatabaseName,
+			RuntimeRole: database.RuntimeRole, CommonName: binding.CommonName, IssuerAnchorID: binding.IssuerAnchorID},
+		SecurityProfileDigest: profile.ProfileDigest, EnvironmentDigest: profile.EnvironmentDigest,
+		ProfileDigest: profile.PrincipalProfileDigest, AgentDeployment: base.AgentDeployment, SubjectDeployment: base.SubjectDeployment,
+		Requester: agentIdentity, Subject: ownerIdentity, PolicyID: base.IssuerPolicyID, VaultRole: base.IssuerVaultRole,
+		AgentRequestKeyID: base.AgentRequestKeyID, AgentPublicKey: base64.RawURLEncoding.EncodeToString(requestPublic),
+		CertificateControllerSocket: base.ControllerSocketPath, CertificateControllerUID: base.ControllerUID,
+		CertificateControllerGID: base.ControllerGID, CertificateControllerKeyID: profile.CertificateController.ResponseKeyID,
+		CertificateControllerPublic: base64.RawURLEncoding.EncodeToString(controllerPublic),
+		AgentUID:                    base.AgentUID, AgentGID: base.AgentGID, ExpectedRoleUID: base.SubjectUID, ExpectedRoleGID: base.SubjectGID,
+		SignerSocket: base.SocketPath, SignerSocketUID: base.AgentUID, SignerSocketGID: base.SubjectGID,
+		TrustDomain: owner.TLS.TrustDomain, URI: owner.TLS.URI, Usages: []string{"client_auth"},
+		MaxTTLSeconds: owner.TLS.TTLSeconds, CertificateTTLSeconds: int(owner.TLS.TTLSeconds),
+		RotateAfterSeconds: int(owner.TLS.RotateAfterSeconds), OverlapSeconds: int(owner.TLS.OverlapSeconds),
+		RevocationMaxStalenessSeconds: int(owner.TLS.RevocationMaxStalenessSeconds)}
+	if !matchesPostgresProfileBinding(profile, binding, database, agent, owner, config) {
+		t.Fatal("exact PostgreSQL certificate agent config rejected")
+	}
+	for name, change := range map[string]func(*configDocument){
+		"database":         func(c *configDocument) { c.Postgres.DatabaseName = "provider_desktop" },
+		"role":             func(c *configDocument) { c.Postgres.RuntimeRole = "desktop_provider_runtime" },
+		"owner":            func(c *configDocument) { c.Postgres.OwnerDeployment = "provider-desktop-runtime" },
+		"CN":               func(c *configDocument) { c.Postgres.CommonName = "other" },
+		"issuer":           func(c *configDocument) { c.Postgres.IssuerAnchorID = "internal-client-ca" },
+		"ordinary purpose": func(c *configDocument) { c.Purpose = "" },
+		"DNS SAN":          func(c *configDocument) { c.DNSNames = []string{"unexpected.sandbox.test"} },
+		"socket":           func(c *configDocument) { c.SignerSocket += "-other" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			candidate := config
+			postgres := *config.Postgres
+			candidate.Postgres = &postgres
+			change(&candidate)
+			if matchesPostgresProfileBinding(profile, binding, database, agent, owner, candidate) {
+				t.Fatal("PostgreSQL agent config drift accepted")
 			}
 		})
 	}

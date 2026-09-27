@@ -30,10 +30,18 @@ func main() {
 		fatal(err)
 	}
 	profile, err := phase6security.Decode(config.Profile)
-	if err != nil || len(profile.EgressPolicies) != 1 {
+	if err != nil {
 		fatal(egresspolicystate.ErrInvalid)
 	}
-	policy := profile.EgressPolicies[0]
+	var policy phase6security.EgressPolicy
+	for _, candidate := range profile.EgressPolicies {
+		if candidate.ID == "product-egress" {
+			policy = candidate
+		}
+	}
+	if policy.ID == "" {
+		fatal(egresspolicystate.ErrInvalid)
+	}
 	var authority, broker phase6security.Principal
 	for _, principal := range profile.Principals {
 		if principal.Name == policy.Authority.DeploymentName {

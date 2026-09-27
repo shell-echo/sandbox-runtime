@@ -34,57 +34,81 @@ func GatewayProviderClient(profile phase6security.Profile, authority GatewayProv
 	return GatewayProviderInstanceClient(profile, "provider-runtime", authority)
 }
 
-// GatewayProviderInstanceClient selects exactly one Provider instance's
-// private route. Callers must keep the three transports separate rather than
-// recycling a coding-shell mTLS authority for Browser/Desktop sessions.
+// GatewayProviderInstanceClient selects the Terminal or Desktop Provider
+// private route. Browser cannot use this path; it must traverse the distinct
+// action-ingress principal and two separately fenced TLS edges.
 func GatewayProviderInstanceClient(profile phase6security.Profile, providerName string, authority GatewayProviderClientAuthority) (*http.Transport, *PeerCRLGuard, error) {
-	edge, gateway, provider, serverAnchor, clientAnchor, err := profile.GatewayProviderInstanceBoundary(providerName, authority.Origin)
-	if err != nil || gateway.TLS == nil || provider.TLS == nil ||
-		uint32(os.Getuid()) != gateway.UID || uint32(os.Getgid()) != gateway.GID ||
-		authority.OperationTimeout < time.Second || authority.OperationTimeout > 30*time.Second ||
-		edge.MaxConnectionSeconds < 1 || edge.MaxConnectionSeconds > 3600 {
+	edge, caller, provider, serverAnchor, clientAnchor, err := profile.GatewayProviderInstanceBoundary(providerName, authority.Origin)
+	if err != nil {
 		return nil, nil, errors.New("Gateway Provider TLS authority does not match profile")
 	}
-	binding, agent, subject, err := profile.TLSAgentForSubject("gateway-runtime")
-	if err != nil || subject.PrincipalDigest != gateway.PrincipalDigest ||
+	return privateRuntimeClient(profile, authority, edge, caller, provider, serverAnchor, clientAnchor)
+}
+
+func GatewayBrowserActionIngressClient(profile phase6security.Profile, authority GatewayProviderClientAuthority) (*http.Transport, *PeerCRLGuard, error) {
+	edge, caller, ingress, serverAnchor, clientAnchor, err := profile.GatewayBrowserActionIngressBoundary(authority.Origin)
+	if err != nil {
+		return nil, nil, errors.New("Gateway Browser action ingress TLS authority does not match profile")
+	}
+	return privateRuntimeClient(profile, authority, edge, caller, ingress, serverAnchor, clientAnchor)
+}
+
+func BrowserActionIngressProviderClient(profile phase6security.Profile, authority GatewayProviderClientAuthority) (*http.Transport, *PeerCRLGuard, error) {
+	edge, ingress, provider, serverAnchor, clientAnchor, err := profile.BrowserActionIngressProviderBoundary(authority.Origin)
+	if err != nil {
+		return nil, nil, errors.New("Browser action ingress Provider TLS authority does not match profile")
+	}
+	return privateRuntimeClient(profile, authority, edge, ingress, provider, serverAnchor, clientAnchor)
+}
+
+func privateRuntimeClient(profile phase6security.Profile, authority GatewayProviderClientAuthority, edge phase6security.TrustEdge,
+	caller, provider phase6security.Principal, serverAnchor, clientAnchor phase6security.TrustAnchor) (*http.Transport, *PeerCRLGuard, error) {
+	if caller.TLS == nil || provider.TLS == nil || len(provider.TLS.DNSNames) != 1 ||
+		uint32(os.Getuid()) != caller.UID || uint32(os.Getgid()) != caller.GID ||
+		authority.OperationTimeout < time.Second || authority.OperationTimeout > 30*time.Second ||
+		edge.MaxConnectionSeconds < 1 || edge.MaxConnectionSeconds > 3600 {
+		return nil, nil, errors.New("private runtime TLS authority does not match profile")
+	}
+	binding, agent, subject, err := profile.TLSAgentForSubject(caller.Name)
+	if err != nil || subject.PrincipalDigest != caller.PrincipalDigest ||
 		authority.AgentSocket != binding.SocketPath || authority.AgentUID != binding.AgentUID ||
 		authority.AgentGID != binding.AgentGID || agent.UID != binding.AgentUID || agent.GID != binding.AgentGID {
-		return nil, nil, errors.New("Gateway Provider TLS signer does not match profile")
+		return nil, nil, errors.New("private runtime TLS signer does not match profile")
 	}
 	groups, err := os.Getgroups()
 	if err != nil {
-		return nil, nil, errors.New("Gateway TLS supplementary groups unavailable")
+		return nil, nil, errors.New("private runtime TLS supplementary groups unavailable")
 	}
 	for _, group := range groups {
-		if uint32(group) != gateway.GID {
-			return nil, nil, errors.New("Gateway TLS role has supplementary group authority")
+		if uint32(group) != caller.GID {
+			return nil, nil, errors.New("private runtime TLS role has supplementary group authority")
 		}
 	}
 	clientIssuerPEM, err := trustanchor.Load(clientAnchor, time.Now())
 	if err != nil {
-		return nil, nil, errors.New("Gateway own-client issuer anchor unavailable")
+		return nil, nil, errors.New("private runtime own-client issuer anchor unavailable")
 	}
 	defer clear(clientIssuerPEM)
 	serverRootPEM, err := trustanchor.Load(serverAnchor, time.Now())
 	if err != nil {
-		return nil, nil, errors.New("Gateway Provider server anchor unavailable")
+		return nil, nil, errors.New("private runtime server anchor unavailable")
 	}
 	defer clear(serverRootPEM)
 	clientIssuerRoots := x509.NewCertPool()
 	serverRoots := x509.NewCertPool()
 	if !clientIssuerRoots.AppendCertsFromPEM(clientIssuerPEM) || !serverRoots.AppendCertsFromPEM(serverRootPEM) {
-		return nil, nil, errors.New("Gateway Provider TLS anchors are invalid")
+		return nil, nil, errors.New("private runtime TLS anchors are invalid")
 	}
 	agentClient, err := workloadtlsagent.NewProductionClient(workloadtlsagent.ClientConfig{
 		SocketPath: authority.AgentSocket, ExpectedUID: authority.AgentUID, ExpectedGID: authority.AgentGID,
-		RoleGID: gateway.GID, OperationTimeout: authority.OperationTimeout, Now: time.Now})
+		RoleGID: caller.GID, OperationTimeout: authority.OperationTimeout, Now: time.Now})
 	if err != nil {
-		return nil, nil, errors.New("Gateway TLS agent unavailable")
+		return nil, nil, errors.New("private runtime TLS agent unavailable")
 	}
 	config, err := remotetls.NewClient(remotetls.ClientOptions{
 		IssuerRoots: clientIssuerRoots, ServerRoots: serverRoots, ServerName: provider.TLS.DNSNames[0],
-		Identity: remotetls.Identity{URI: gateway.TLS.URI, DNSNames: gateway.TLS.DNSNames,
-			Usages: gateway.TLS.Usages, MaxTTL: time.Duration(gateway.TLS.TTLSeconds) * time.Second},
+		Identity: remotetls.Identity{URI: caller.TLS.URI, DNSNames: caller.TLS.DNSNames,
+			Usages: caller.TLS.Usages, MaxTTL: time.Duration(caller.TLS.TTLSeconds) * time.Second},
 		Server: remotetls.Identity{URI: provider.TLS.URI, DNSNames: provider.TLS.DNSNames,
 			Usages: provider.TLS.Usages, MaxTTL: time.Duration(provider.TLS.TTLSeconds) * time.Second},
 		Source: agentClient.CertificateForHandshake, Now: time.Now,
@@ -92,10 +116,10 @@ func GatewayProviderInstanceClient(profile phase6security.Profile, providerName 
 	if err != nil {
 		return nil, nil, err
 	}
-	guard, err := NewPeerCRLGuard(profile, authority.PeerCRLRole, edge.ID, gateway.PrincipalDigest, "outbound", agentClient,
+	guard, err := NewPeerCRLGuard(profile, authority.PeerCRLRole, edge.ID, caller.PrincipalDigest, "outbound", agentClient,
 		authority.OperationTimeout, time.Now)
 	if err != nil || config.VerifyConnection == nil {
-		return nil, nil, errors.New("Gateway Provider peer revocation boundary is unavailable")
+		return nil, nil, errors.New("private runtime peer revocation boundary is unavailable")
 	}
 	identityCheck := config.VerifyConnection
 	config.VerifyConnection = func(state tls.ConnectionState) error {
@@ -106,7 +130,7 @@ func GatewayProviderInstanceClient(profile phase6security.Profile, providerName 
 	}
 	origin, err := url.Parse(authority.Origin)
 	if err != nil || origin.Scheme != "wss" || origin.Host == "" {
-		return nil, nil, errors.New("Gateway Provider origin is invalid")
+		return nil, nil, errors.New("private runtime origin is invalid")
 	}
 	transport := guardedClientTransport(config, identityCheck, guard, origin.Host)
 	dial := transport.DialTLSContext

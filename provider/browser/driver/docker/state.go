@@ -10,13 +10,15 @@ import (
 	"path/filepath"
 	"regexp"
 
+	"github.com/shell-echo/sandbox-runtime/internal/sandboxidentity"
 	providerbrowser "github.com/shell-echo/sandbox-runtime/provider/browser"
 )
 
 const (
-	browserStateVersion  = 2
-	maxBrowserStateBytes = 64 << 10
-	connectionGeneration = 1
+	browserStateVersion     = 2
+	browserSlotStateVersion = 3
+	maxBrowserStateBytes    = 64 << 10
+	connectionGeneration    = 1
 )
 
 var backendIDPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
@@ -29,12 +31,26 @@ type browserState struct {
 	Network            NetworkAttachment
 	SpecDigest         string
 	Ready              bool
+	CleanupPending     bool
+	// CompletedBound is written only after the unique bound AllocateBound
+	// dispatch has returned with a definite result and no future create/start
+	// side effects for this attempt. Ready alone is not that proof.
+	CompletedBound *boundCompletion
+}
+
+type boundCompletion struct {
+	Ticket  sandboxidentity.Reservation
+	Receipt providerbrowser.AllocationReceipt
 }
 
 func newBrowserState(allocation providerbrowser.Allocation, network NetworkAttachment, specDigest string) browserState {
 	token := allocationToken(allocation.Request.SandboxID, allocation.Request.BrowserSessionID)
+	version := browserStateVersion
+	if network.Slot.ID != "" {
+		version = browserSlotStateVersion
+	}
 	return browserState{
-		Version: browserStateVersion, Request: allocation.Request,
+		Version: version, Request: allocation.Request,
 		Receipt: providerbrowser.AllocationReceipt{
 			Reference: "ref:browser/" + token,
 			SandboxID: allocation.Request.SandboxID, BrowserSessionID: allocation.Request.BrowserSessionID,
@@ -49,13 +65,31 @@ func newBrowserState(allocation providerbrowser.Allocation, network NetworkAttac
 
 func (s browserState) validate(networkPolicy string) error {
 	token := allocationToken(s.Request.SandboxID, s.Request.BrowserSessionID)
-	if s.Version != browserStateVersion || s.Request.Validate(s.Receipt.AllocatedAt) != nil ||
+	if (s.Version != browserStateVersion && s.Version != browserSlotStateVersion) ||
+		(s.Version == browserStateVersion && s.Network.Slot != (sandboxidentity.Slot{})) ||
+		(s.Version == browserStateVersion && s.CleanupPending) ||
+		(s.Version == browserSlotStateVersion && s.Network.Slot.Validate() != nil) ||
+		s.Request.Validate(s.Receipt.AllocatedAt) != nil ||
 		s.Receipt.Validate() != nil || !s.Receipt.Matches(s.Request) ||
 		s.Receipt.Reference != "ref:browser/"+token || s.Receipt.ConnectionGeneration != connectionGeneration ||
 		s.Network.validate(networkPolicy) != nil || !digestPattern.MatchString(s.SpecDigest) ||
 		(s.BackendContainerID != "" && !backendIDPattern.MatchString(s.BackendContainerID)) ||
 		(s.Ready && s.BackendContainerID == "") {
 		return ErrInvalidRuntime
+	}
+	if s.CompletedBound != nil {
+		completion := s.CompletedBound
+		if s.Version != browserSlotStateVersion || !s.Ready ||
+			completion.Ticket.Status != sandboxidentity.Creating ||
+			completion.Ticket.Slot != s.Network.Slot ||
+			completion.Ticket.SpecDigest != s.SpecDigest ||
+			completion.Ticket.Claim.Validate() != nil ||
+			!digestPattern.MatchString(completion.Ticket.PlanDigest) ||
+			!claimMatchesAllocation(completion.Ticket.Claim,
+				providerbrowser.Allocation{Request: s.Request, AllocatedAt: s.Receipt.AllocatedAt}) ||
+			!sameReceipt(completion.Receipt, s.Receipt) {
+			return ErrInvalidRuntime
+		}
 	}
 	return nil
 }

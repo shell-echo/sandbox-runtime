@@ -148,7 +148,7 @@ func prepareGateEnvironment(t *testing.T, ctx context.Context) *gateEnvironment 
 		t.Fatal(err)
 	}
 	candidatePath := os.Getenv(candidateEnv)
-	candidate, err := desktopcandidate.Load(candidatePath)
+	candidate, err := desktopcandidate.LoadCurrent(candidatePath)
 	if err != nil {
 		t.Fatalf("load current local Desktop candidate %q: %v", candidatePath, err)
 	}

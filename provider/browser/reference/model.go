@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/shell-echo/sandbox-runtime/internal/browserbinding"
 	"github.com/shell-echo/sandbox-runtime/internal/handoff"
 	"github.com/shell-echo/sandbox-runtime/provider/browser"
 )
@@ -25,23 +26,36 @@ var (
 	ErrClosed           = errors.New("Provider browser handoff registry is closed")
 	referencePattern    = regexp.MustCompile(`^ref:browser-session:[0-9a-f]{32}$`)
 	identifierPattern   = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$`)
+	executorRequestID   = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$`)
+	executorDigest      = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 )
 
+const MaxExecutorReplayClaims = 4096
+
+// ExecutorReplayClaim is Provider-local one-use evidence. It deliberately
+// retains no raw capacity claim, backend coordinate or Gateway credential.
+type ExecutorReplayClaim struct {
+	RequestDigest string    `json:"request_digest"`
+	ExpiresAt     time.Time `json:"expires_at"`
+}
+
 type Record struct {
-	Reference            string                    `json:"reference"`
-	OperationID          string                    `json:"operation_id"`
-	AttemptID            string                    `json:"attempt_id"`
-	FencingToken         int64                     `json:"fencing_token"`
-	SandboxID            string                    `json:"sandbox_id"`
-	ProviderRevisionID   string                    `json:"provider_revision_id"`
-	BrowserSessionID     string                    `json:"browser_session_id"`
-	CapabilityProfileID  string                    `json:"capability_profile_id"`
-	ConnectionGeneration int64                     `json:"connection_generation"`
-	ExpiresAt            time.Time                 `json:"expires_at"`
-	TenantBindingDigest  string                    `json:"tenant_binding_digest,omitempty"`
-	Receipt              browser.AllocationReceipt `json:"receipt"`
-	CreatedAt            time.Time                 `json:"created_at"`
-	RevokedAt            *time.Time                `json:"revoked_at,omitempty"`
+	Reference            string                         `json:"reference"`
+	OperationID          string                         `json:"operation_id"`
+	AttemptID            string                         `json:"attempt_id"`
+	FencingToken         int64                          `json:"fencing_token"`
+	SandboxID            string                         `json:"sandbox_id"`
+	ProviderRevisionID   string                         `json:"provider_revision_id"`
+	BrowserSessionID     string                         `json:"browser_session_id"`
+	CapabilityProfileID  string                         `json:"capability_profile_id"`
+	ConnectionGeneration int64                          `json:"connection_generation"`
+	ExpiresAt            time.Time                      `json:"expires_at"`
+	TenantBindingDigest  string                         `json:"tenant_binding_digest,omitempty"`
+	ConnectionClaims     map[string]ConnectionClaim     `json:"connection_claims,omitempty"`
+	ExecutorReplayClaims map[string]ExecutorReplayClaim `json:"executor_replay_claims,omitempty"`
+	Receipt              browser.AllocationReceipt      `json:"receipt"`
+	CreatedAt            time.Time                      `json:"created_at"`
+	RevokedAt            *time.Time                     `json:"revoked_at,omitempty"`
 }
 
 func NewRecord(reference string, source browser.Record, createdAt time.Time) (Record, error) {
@@ -63,7 +77,7 @@ func NewRecord(reference string, source browser.Record, createdAt time.Time) (Re
 }
 
 func NewRecordWithTenantBinding(reference string, source browser.Record, tenantBindingDigest string, createdAt time.Time) (Record, error) {
-	if handoff.ValidateTenantBindingDigest(tenantBindingDigest) != nil {
+	if handoff.ValidateTenantBindingDigest(tenantBindingDigest) != nil && browserbinding.ValidateDigest(tenantBindingDigest) != nil {
 		return Record{}, ErrInvalidRecord
 	}
 	record, err := NewRecord(reference, source, createdAt)
@@ -79,6 +93,18 @@ func NewRecordWithTenantBinding(reference string, source browser.Record, tenantB
 
 func (r Record) Clone() Record {
 	clone := r
+	if r.ConnectionClaims != nil {
+		clone.ConnectionClaims = make(map[string]ConnectionClaim, len(r.ConnectionClaims))
+		for epoch, claim := range r.ConnectionClaims {
+			clone.ConnectionClaims[epoch] = claim
+		}
+	}
+	if r.ExecutorReplayClaims != nil {
+		clone.ExecutorReplayClaims = make(map[string]ExecutorReplayClaim, len(r.ExecutorReplayClaims))
+		for id, claim := range r.ExecutorReplayClaims {
+			clone.ExecutorReplayClaims[id] = claim
+		}
+	}
 	if r.RevokedAt != nil {
 		value := r.RevokedAt.UTC()
 		clone.RevokedAt = &value
@@ -104,8 +130,51 @@ func (r Record) Validate() error {
 	if r.RevokedAt != nil && (r.RevokedAt.IsZero() || r.RevokedAt.Before(r.CreatedAt)) {
 		return ErrInvalidRecord
 	}
-	if r.TenantBindingDigest != "" && handoff.ValidateTenantBindingDigest(r.TenantBindingDigest) != nil {
+	if r.TenantBindingDigest != "" && handoff.ValidateTenantBindingDigest(r.TenantBindingDigest) != nil &&
+		browserbinding.ValidateDigest(r.TenantBindingDigest) != nil {
 		return ErrInvalidRecord
+	}
+	if len(r.ConnectionClaims) > MaxConnectionClaims || connectionClaimsBytes(r.ConnectionClaims) > MaxConnectionClaimsBytes {
+		return ErrInvalidRecord
+	}
+	activeConnections := 0
+	privateRequests := make(map[string]struct{}, len(r.ConnectionClaims))
+	executorRequests := make(map[string]struct{}, len(r.ConnectionClaims))
+	for epoch, claim := range r.ConnectionClaims {
+		if claim.Validate(r, epoch) != nil {
+			return ErrInvalidRecord
+		}
+		if _, exists := privateRequests[claim.PrivateRequestID]; exists {
+			return ErrInvalidRecord
+		}
+		privateRequests[claim.PrivateRequestID] = struct{}{}
+		if claim.ExecutorAttempt.RequestID != "" {
+			if _, exists := executorRequests[claim.ExecutorAttempt.RequestID]; exists {
+				return ErrInvalidRecord
+			}
+			executorRequests[claim.ExecutorAttempt.RequestID] = struct{}{}
+			replay, replayed := r.ExecutorReplayClaims[claim.ExecutorAttempt.RequestID]
+			if claim.Consumed != replayed ||
+				replayed && (replay.RequestDigest != claim.ExecutorAttempt.RequestDigest ||
+					!replay.ExpiresAt.Equal(claim.AuthorityExpiresAt)) {
+				return ErrInvalidRecord
+			}
+		}
+		if claim.Status != ConnectionClosed {
+			activeConnections++
+		}
+	}
+	if activeConnections > 1 {
+		return ErrInvalidRecord
+	}
+	if len(r.ExecutorReplayClaims) > MaxExecutorReplayClaims {
+		return ErrInvalidRecord
+	}
+	for id, claim := range r.ExecutorReplayClaims {
+		if !executorRequestID.MatchString(id) || !executorDigest.MatchString(claim.RequestDigest) ||
+			claim.ExpiresAt.IsZero() || claim.ExpiresAt.After(r.ExpiresAt) || !claim.ExpiresAt.After(r.CreatedAt) {
+			return ErrInvalidRecord
+		}
 	}
 	return nil
 }

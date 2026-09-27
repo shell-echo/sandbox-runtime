@@ -18,6 +18,7 @@ import (
 	"net"
 	"net/url"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -26,7 +27,8 @@ import (
 )
 
 const (
-	ProtocolID = "sandbox-runtime.workload-certificate.v1"
+	ProtocolID               = "sandbox-runtime.workload-certificate.v1"
+	PostgresClientProtocolID = "sandbox-runtime.postgres-client-certificate.v1"
 
 	IssueType       = "issue"
 	RevocationsType = "revocations"
@@ -73,6 +75,8 @@ type Policy struct {
 	ExpectedUID   uint32
 	ExpectedGID   uint32
 	PublicKey     ed25519.PublicKey
+	Purpose       string
+	Postgres      PostgresClientIdentity
 }
 
 type Request struct {
@@ -127,7 +131,29 @@ func (p Policy) Validate() error {
 		len(p.DNSNames) > 8 || !sortedUnique(p.DNSNames, validDNS) || !validUsages(p.Usages) {
 		return ErrInvalid
 	}
+	switch p.Purpose {
+	case "":
+		if p.Postgres != (PostgresClientIdentity{}) {
+			return ErrInvalid
+		}
+	case PostgresClientPurpose:
+		if p.Postgres.Validate() != nil || p.URI != p.Postgres.URI ||
+			len(p.DNSNames) != 0 || !slices.Equal(p.Usages, []string{"client_auth"}) ||
+			p.Postgres.MaxTTL != time.Duration(p.MaxTTLSeconds)*time.Second ||
+			p.Subject.Role != securityprincipal.RoleProvider || p.Requester.Role != securityprincipal.RoleProvider {
+			return ErrInvalid
+		}
+	default:
+		return ErrInvalid
+	}
 	return nil
+}
+
+func protocolForPolicy(policy Policy) string {
+	if policy.Purpose == PostgresClientPurpose {
+		return PostgresClientProtocolID
+	}
+	return ProtocolID
 }
 
 func NewIssueRequest(policy Policy, requestID, nonce string, deadline time.Time, ttl time.Duration, csrPEM []byte, privateKey ed25519.PrivateKey) (Request, error) {
@@ -148,7 +174,7 @@ func NewRevokeRequest(policy Policy, requestID, nonce string, deadline time.Time
 }
 
 func newRequest(policy Policy, kind, requestID, nonce string, deadline time.Time) Request {
-	return Request{Protocol: ProtocolID, Type: kind, RequestID: requestID, AgentID: policy.Requester.Name, RequesterDigest: policy.Requester.Digest(),
+	return Request{Protocol: protocolForPolicy(policy), Type: kind, RequestID: requestID, AgentID: policy.Requester.Name, RequesterDigest: policy.Requester.Digest(),
 		PolicyID: policy.ID, Principal: policy.Subject.Name, SubjectDigest: policy.Subject.Digest(), Nonce: nonce, Deadline: deadline.UTC().Format(time.RFC3339Nano)}
 }
 
@@ -168,7 +194,7 @@ func sealRequest(request Request, policy Policy, privateKey ed25519.PrivateKey, 
 func (r Request) Validate(policy Policy, now time.Time) error {
 	deadline, err := parseTime(r.Deadline)
 	signature, signatureErr := base64.RawURLEncoding.DecodeString(r.Signature)
-	if policy.Validate() != nil || r.Protocol != ProtocolID || r.AgentID != policy.Requester.Name || r.RequesterDigest != policy.Requester.Digest() ||
+	if policy.Validate() != nil || r.Protocol != protocolForPolicy(policy) || r.AgentID != policy.Requester.Name || r.RequesterDigest != policy.Requester.Digest() ||
 		r.PolicyID != policy.ID || r.Principal != policy.Subject.Name || r.SubjectDigest != policy.Subject.Digest() ||
 		!namePattern.MatchString(r.RequestID) || !validNonce(r.Nonce) || err != nil || now.IsZero() || !deadline.After(now) || deadline.After(now.Add(time.Minute)) ||
 		r.RequestDigest != requestDigest(r) || signatureErr != nil || len(signature) != ed25519.SignatureSize || !ed25519.Verify(policy.PublicKey, []byte(r.RequestDigest), signature) {
@@ -197,7 +223,7 @@ func NewResponse(request Request, response Response, controllerKeyID string, pri
 	if !namePattern.MatchString(controllerKeyID) || len(privateKey) != ed25519.PrivateKeySize {
 		return Response{}, ErrInvalid
 	}
-	response.Protocol, response.RequestID, response.RequestDigest = ProtocolID, request.RequestID, request.RequestDigest
+	response.Protocol, response.RequestID, response.RequestDigest = request.Protocol, request.RequestID, request.RequestDigest
 	response.AgentID, response.PolicyID, response.ControllerKeyID = request.AgentID, request.PolicyID, controllerKeyID
 	response.ResponseDigest = responseDigest(response)
 	response.Signature = base64.RawURLEncoding.EncodeToString(ed25519.Sign(privateKey, []byte(response.ResponseDigest)))
@@ -211,7 +237,7 @@ func NewResponse(request Request, response Response, controllerKeyID string, pri
 func (r Response) Validate(request Request, policy Policy, controllerKeyID string, publicKey ed25519.PublicKey, now time.Time) error {
 	signature, err := base64.RawURLEncoding.DecodeString(r.Signature)
 	if policy.Validate() != nil || request.Validate(policy, now) != nil || len(publicKey) != ed25519.PublicKeySize || r.ControllerKeyID != controllerKeyID || !namePattern.MatchString(controllerKeyID) ||
-		r.Protocol != ProtocolID || r.RequestID != request.RequestID || r.RequestDigest != request.RequestDigest || r.AgentID != request.AgentID || r.PolicyID != request.PolicyID ||
+		r.Protocol != request.Protocol || r.RequestID != request.RequestID || r.RequestDigest != request.RequestDigest || r.AgentID != request.AgentID || r.PolicyID != request.PolicyID ||
 		r.ResponseDigest != responseDigest(r) || err != nil || len(signature) != ed25519.SignatureSize || !ed25519.Verify(publicKey, []byte(r.ResponseDigest), signature) ||
 		r.validateStructure(request) != nil {
 		return ErrUnavailable
@@ -326,18 +352,29 @@ func DecodeResponse(document []byte, request Request, policy Policy, controllerK
 func requestDigest(request Request) string {
 	request.RequestDigest, request.Signature = "", ""
 	document, _ := json.Marshal(request)
-	digest := sha256.Sum256(append([]byte("sandbox-runtime/workload-certificate/request/v1\x00"), document...))
+	domain := "sandbox-runtime/workload-certificate/request/v1\x00"
+	if request.Protocol == PostgresClientProtocolID {
+		domain = "sandbox-runtime/postgres-client-certificate/request/v1\x00"
+	}
+	digest := sha256.Sum256(append([]byte(domain), document...))
 	return "sha256:" + hex.EncodeToString(digest[:])
 }
 
 func responseDigest(response Response) string {
 	response.ResponseDigest, response.Signature = "", ""
 	document, _ := json.Marshal(response)
-	digest := sha256.Sum256(append([]byte("sandbox-runtime/workload-certificate/response/v1\x00"), document...))
+	domain := "sandbox-runtime/workload-certificate/response/v1\x00"
+	if response.Protocol == PostgresClientProtocolID {
+		domain = "sandbox-runtime/postgres-client-certificate/response/v1\x00"
+	}
+	digest := sha256.Sum256(append([]byte(domain), document...))
 	return "sha256:" + hex.EncodeToString(digest[:])
 }
 
 func validateCSR(document []byte, policy Policy) error {
+	if policy.Purpose == PostgresClientPurpose {
+		return ValidatePostgresClientCSR(document, policy.Postgres)
+	}
 	block, trailing := pem.Decode(document)
 	if block == nil || block.Type != "CERTIFICATE REQUEST" || len(block.Headers) != 0 || len(bytes.TrimSpace(trailing)) != 0 {
 		return ErrDenied
@@ -369,8 +406,9 @@ func validateIssuedCertificate(response Response, request Request, policy Policy
 	}
 	certificate, err := x509.ParseCertificate(certificateBlock.Bytes)
 	if err != nil || !publicKeysEqual(certificate.PublicKey, csr.PublicKey) || now.Before(certificate.NotBefore) || !now.Before(certificate.NotAfter) ||
-		certificate.Subject.String() != "" || len(certificate.EmailAddresses) != 0 || len(certificate.IPAddresses) != 0 || len(certificate.URIs) != 1 || certificate.URIs[0].String() != policy.URI ||
-		!equalStrings(certificate.DNSNames, policy.DNSNames) || !equalUsages(certificate.ExtKeyUsage, policy.Usages) || certificate.KeyUsage != x509.KeyUsageDigitalSignature ||
+		(policy.Purpose == PostgresClientPurpose && ValidatePostgresClientLeaf(certificate, policy.Postgres, now) != nil) ||
+		(policy.Purpose == "" && (certificate.Subject.String() != "" || len(certificate.EmailAddresses) != 0 || len(certificate.IPAddresses) != 0 || len(certificate.URIs) != 1 || certificate.URIs[0].String() != policy.URI ||
+			!equalStrings(certificate.DNSNames, policy.DNSNames) || !equalUsages(certificate.ExtKeyUsage, policy.Usages) || certificate.KeyUsage != x509.KeyUsageDigitalSignature)) ||
 		certificate.NotAfter.Sub(certificate.NotBefore) <= 0 || certificate.NotAfter.Sub(certificate.NotBefore) > time.Duration(request.RequestedTTLSeconds+120)*time.Second ||
 		response.Serial != serialString(certificate.SerialNumber.Bytes()) || response.NotBefore != certificate.NotBefore.UTC().Format(time.RFC3339Nano) || response.NotAfter != certificate.NotAfter.UTC().Format(time.RFC3339Nano) {
 		return ErrUnavailable

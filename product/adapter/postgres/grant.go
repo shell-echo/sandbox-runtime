@@ -12,13 +12,15 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/shell-echo/sandbox-runtime/internal/browserbinding"
 	"github.com/shell-echo/sandbox-runtime/product"
 )
 
 type GrantRepository struct {
-	store *Store
-	aead  cipher.AEAD
-	keyID string
+	store             *Store
+	aead              cipher.AEAD
+	keyID             string
+	browserV2Audience string
 }
 
 const desktopGatewayLease = 5 * time.Second
@@ -36,6 +38,20 @@ func NewGrantRepository(store *Store, keyID string, key []byte) (*GrantRepositor
 		return nil, product.ErrInvalid
 	}
 	return &GrantRepository{store: store, aead: aead, keyID: keyID}, nil
+}
+
+// NewBrowserV2GrantRepository opts Browser grants into exact immutable
+// handoff-row binding. It has no v1 grant fallback for Browser sessions.
+func NewBrowserV2GrantRepository(store *Store, keyID string, key []byte, providerAudience string) (*GrantRepository, error) {
+	if !browserBindingSessionID.MatchString(providerAudience) || store == nil || store.browserBindingPreparer == nil {
+		return nil, product.ErrInvalid
+	}
+	repository, err := NewGrantRepository(store, keyID, key)
+	if err != nil {
+		return nil, err
+	}
+	repository.browserV2Audience = providerAudience
+	return repository, nil
 }
 
 func (r *GrantRepository) MintConnectionGrant(ctx context.Context, command product.ConnectionGrantCommand) (product.ConnectionGrant, bool, error) {
@@ -159,12 +175,34 @@ WHERE g.tenant_id=$1 AND g.state='consumed' AND g.gateway_lease_expires_at<=$2
 	if !expires.After(now) {
 		return product.ConnectionGrant{}, false, product.ErrControlStale
 	}
+	browserBindingAudience, browserBindingReference := "", ""
+	if browser && r.browserV2Audience != "" {
+		var digest string
+		err := tx.QueryRow(opCtx, `SELECT m.tenant_binding_digest
+FROM sandbox_runtime_product.browser_handoff_binding_metadata m
+WHERE m.tenant_id=$1 AND m.product_session_id=$2 AND m.provider_instance_audience=$3
+ AND m.handoff_reference=$4 AND m.provider_revision_id=$5 AND m.sandbox_id=$6
+ AND m.browser_session_id=$2 AND m.connection_generation=$7
+ AND m.handoff_expires_at=$8 AND m.handoff_expires_at>$9`,
+			command.TenantID, command.SessionID, r.browserV2Audience, handoff,
+			providerRevision, sandboxID, connectionGeneration, handoffExpiry, now).Scan(&digest)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return product.ConnectionGrant{}, false, product.ErrControlStale
+		}
+		if err != nil {
+			return product.ConnectionGrant{}, false, storeError(ctx, opCtx, err, false)
+		}
+		if browserbinding.ValidateDigest(digest) != nil {
+			return product.ConnectionGrant{}, false, product.ErrControlStale
+		}
+		browserBindingAudience, browserBindingReference = r.browserV2Audience, handoff
+	}
 	digest := sha256.Sum256([]byte(command.Ticket))
 	ciphertext, err := r.encrypt(command.TenantID, command.ConnectionID, command.Ticket)
 	if err != nil {
 		return product.ConnectionGrant{}, false, product.ErrStoreUnavailable
 	}
-	if _, err := tx.Exec(opCtx, `INSERT INTO sandbox_runtime_product.connection_grants(tenant_id,connection_id,session_id,workspace_id,slot_key,slot_generation,actor_type,actor_id,protocol_profile,ticket_digest,ticket_ciphertext,ticket_key_id,control_lease_id,control_fence,state,issued_at,expires_at,access_mode)VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NULLIF($13,''),NULLIF($14,0),'issued',$15,$16,$17)`, command.TenantID, command.ConnectionID, command.SessionID, workspaceID, slotKey, slotGeneration, string(command.Actor.Type), command.Actor.ID, profile, digest[:], ciphertext, r.keyID, command.Request.ControlLeaseID, command.Request.ControlFence, now, expires, command.Request.AccessMode); err != nil {
+	if _, err := tx.Exec(opCtx, `INSERT INTO sandbox_runtime_product.connection_grants(tenant_id,connection_id,session_id,workspace_id,slot_key,slot_generation,actor_type,actor_id,protocol_profile,ticket_digest,ticket_ciphertext,ticket_key_id,control_lease_id,control_fence,state,issued_at,expires_at,access_mode,browser_binding_audience,browser_binding_reference)VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NULLIF($13,''),NULLIF($14,0),'issued',$15,$16,$17,NULLIF($18,''),NULLIF($19,''))`, command.TenantID, command.ConnectionID, command.SessionID, workspaceID, slotKey, slotGeneration, string(command.Actor.Type), command.Actor.ID, profile, digest[:], ciphertext, r.keyID, command.Request.ControlLeaseID, command.Request.ControlFence, now, expires, command.Request.AccessMode, browserBindingAudience, browserBindingReference); err != nil {
 		return product.ConnectionGrant{}, false, storeError(ctx, opCtx, err, false)
 	}
 	if err := insertAudit(opCtx, tx, command.AuditID, command.TenantID, command.Actor, "connection_grant.issue", "connection_grant", command.ConnectionID, "allowed", "authorized", now); err != nil {
@@ -192,8 +230,10 @@ func (r *GrantRepository) ConsumeConnectionGrant(ctx context.Context, ticket str
 	var actorType, state, grantState string
 	var controlLeaseID string
 	var controlFence int64
+	var grantBrowserAudience, grantBrowserReference string
+	var providerRuntimeSessionID string
 	var now time.Time
-	err = tx.QueryRow(opCtx, `SELECT g.connection_id,g.tenant_id,g.actor_type,g.actor_id,g.workspace_id,g.slot_key,g.slot_generation,g.session_id,g.protocol_profile,g.access_mode,g.expires_at,g.state,COALESCE(g.control_lease_id,''),COALESCE(g.control_fence,0),s.state,s.recording_policy,b.provider_revision_id,b.sandbox_id,COALESCE(s.provider_handoff_reference,''),COALESCE(s.provider_connection_generation,0),s.provider_handoff_expires_at,clock_timestamp() FROM sandbox_runtime_product.connection_grants g JOIN sandbox_runtime_product.runtime_sessions s ON s.tenant_id=g.tenant_id AND s.session_id=g.session_id JOIN sandbox_runtime_product.provider_bindings b ON b.tenant_id=g.tenant_id AND b.workspace_id=g.workspace_id AND b.slot_key=g.slot_key AND b.slot_generation=g.slot_generation AND b.current WHERE g.ticket_digest=$1 FOR UPDATE OF g`, digest[:]).Scan(&binding.ConnectionID, &binding.TenantID, &actorType, &binding.Actor.ID, &binding.WorkspaceID, &binding.SlotKey, &binding.SlotGeneration, &binding.SessionID, &binding.ProtocolProfile, &binding.AccessMode, &binding.ExpiresAt, &grantState, &controlLeaseID, &controlFence, &state, &binding.RecordingPolicy, &binding.ProviderRevisionID, &binding.SandboxID, &binding.HandoffReference, &binding.ConnectionGeneration, &binding.HandoffExpiresAt, &now)
+	err = tx.QueryRow(opCtx, `SELECT g.connection_id,g.tenant_id,g.actor_type,g.actor_id,g.workspace_id,g.slot_key,g.slot_generation,g.session_id,g.protocol_profile,g.access_mode,g.expires_at,g.state,COALESCE(g.control_lease_id,''),COALESCE(g.control_fence,0),s.state,s.recording_policy,b.provider_revision_id,b.sandbox_id,COALESCE(s.provider_handoff_reference,''),COALESCE(s.provider_connection_generation,0),s.provider_handoff_expires_at,COALESCE(g.browser_binding_audience,''),COALESCE(g.browser_binding_reference,''),COALESCE(s.provider_runtime_session_id,''),clock_timestamp() FROM sandbox_runtime_product.connection_grants g JOIN sandbox_runtime_product.runtime_sessions s ON s.tenant_id=g.tenant_id AND s.session_id=g.session_id JOIN sandbox_runtime_product.provider_bindings b ON b.tenant_id=g.tenant_id AND b.workspace_id=g.workspace_id AND b.slot_key=g.slot_key AND b.slot_generation=g.slot_generation AND b.current WHERE g.ticket_digest=$1 FOR UPDATE OF g`, digest[:]).Scan(&binding.ConnectionID, &binding.TenantID, &actorType, &binding.Actor.ID, &binding.WorkspaceID, &binding.SlotKey, &binding.SlotGeneration, &binding.SessionID, &binding.ProtocolProfile, &binding.AccessMode, &binding.ExpiresAt, &grantState, &controlLeaseID, &controlFence, &state, &binding.RecordingPolicy, &binding.ProviderRevisionID, &binding.SandboxID, &binding.HandoffReference, &binding.ConnectionGeneration, &binding.HandoffExpiresAt, &grantBrowserAudience, &grantBrowserReference, &providerRuntimeSessionID, &now)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return product.GatewayBinding{}, product.ErrNotFound
 	}
@@ -215,6 +255,24 @@ func (r *GrantRepository) ConsumeConnectionGrant(ctx context.Context, ticket str
 		return product.GatewayBinding{}, storeError(ctx, opCtx, err, false)
 	}
 	valid := grantState == "issued" && binding.ExpiresAt.After(now) && (state == "ready" || state == "active") && binding.HandoffReference != "" && binding.ConnectionGeneration >= 1 && binding.HandoffExpiresAt.After(now)
+	if valid && r.browserV2Audience != "" && (binding.ProtocolProfile == product.SessionProfileBrowserAutomation || binding.ProtocolProfile == product.SessionProfileBrowserLive) {
+		// The current Product session operation uses the same ID for the
+		// Provider Browser runtime session. Enforce that invariant at the
+		// consumed-grant boundary instead of assuming two identities match.
+		valid = providerRuntimeSessionID == binding.SessionID && grantBrowserAudience == r.browserV2Audience && grantBrowserReference == binding.HandoffReference
+		if valid {
+			err = tx.QueryRow(opCtx, `SELECT key_version,tenant_binding_digest
+FROM sandbox_runtime_product.browser_handoff_binding_metadata
+WHERE tenant_id=$1 AND product_session_id=$2 AND provider_instance_audience=$3 AND handoff_reference=$4
+ AND provider_revision_id=$5 AND sandbox_id=$6 AND browser_session_id=$2
+ AND connection_generation=$7 AND handoff_expires_at=$8`,
+				binding.TenantID, binding.SessionID, grantBrowserAudience, grantBrowserReference,
+				binding.ProviderRevisionID, binding.SandboxID, binding.ConnectionGeneration,
+				binding.HandoffExpiresAt).Scan(&binding.BrowserKeyVersion, &binding.BrowserTenantBindingDigest)
+			valid = err == nil && browserbinding.ValidateDigest(binding.BrowserTenantBindingDigest) == nil
+			binding.BrowserProviderAudience = grantBrowserAudience
+		}
+	}
 	if valid && binding.ControlLeaseID != "" {
 		var active bool
 		err = tx.QueryRow(opCtx, `SELECT EXISTS(SELECT 1 FROM sandbox_runtime_product.control_leases WHERE tenant_id=$1 AND lease_id=$2 AND state='active' AND fence=$3 AND controller_actor_type=$4 AND controller_actor_id=$5 AND expires_at>$6)`, binding.TenantID, binding.ControlLeaseID, binding.ControlFence, string(binding.Actor.Type), binding.Actor.ID, now).Scan(&active)
@@ -242,6 +300,12 @@ func (r *GrantRepository) CheckGatewayAuthority(ctx context.Context, binding pro
 		return product.ErrControlStale
 	}
 	leaseRequired := binding.ProtocolProfile == product.SessionProfileDesktop
+	browserV2 := r.browserV2Audience != "" && (binding.ProtocolProfile == product.SessionProfileBrowserAutomation || binding.ProtocolProfile == product.SessionProfileBrowserLive)
+	if browserV2 && (binding.BrowserProviderAudience != r.browserV2Audience ||
+		browserbinding.ValidateDigest(binding.BrowserTenantBindingDigest) != nil ||
+		!browserBindingKeyVersion.MatchString(binding.BrowserKeyVersion)) {
+		return product.ErrControlStale
+	}
 	var connectionID string
 	err := r.store.pool.QueryRow(opCtx, `UPDATE sandbox_runtime_product.connection_grants g
 SET gateway_lease_expires_at=CASE WHEN $18 THEN LEAST(g.expires_at,clock_timestamp()+$19::interval) ELSE g.gateway_lease_expires_at END
@@ -256,6 +320,16 @@ WHERE g.tenant_id=$1 AND g.connection_id=$2 AND g.actor_type=$3 AND g.actor_id=$
   AND b.slot_generation=g.slot_generation AND b.current AND b.provider_revision_id=$12 AND b.sandbox_id=$13
   AND g.access_mode=$14 AND COALESCE(g.control_lease_id,'')=$15 AND COALESCE(g.control_fence,0)=$16
   AND (NOT $18 OR g.gateway_lease_expires_at>clock_timestamp())
+  AND (NOT $20 OR (s.provider_runtime_session_id=s.session_id
+    AND g.browser_binding_audience=$21 AND g.browser_binding_reference=$11
+    AND EXISTS(SELECT 1 FROM sandbox_runtime_product.browser_handoff_binding_metadata m
+      WHERE m.tenant_id=g.tenant_id AND m.product_session_id=g.session_id
+        AND m.provider_instance_audience=g.browser_binding_audience
+        AND m.handoff_reference=g.browser_binding_reference
+        AND m.provider_revision_id=b.provider_revision_id AND m.sandbox_id=b.sandbox_id
+        AND m.browser_session_id=s.provider_runtime_session_id AND m.connection_generation=s.provider_connection_generation
+        AND m.handoff_expires_at=s.provider_handoff_expires_at
+        AND m.tenant_binding_digest=$22 AND m.key_version=$23)))
   AND (g.control_lease_id IS NULL OR EXISTS(
     SELECT 1 FROM sandbox_runtime_product.control_leases l
     WHERE l.tenant_id=g.tenant_id AND l.lease_id=g.control_lease_id AND l.state='active'
@@ -265,7 +339,8 @@ RETURNING g.connection_id`, binding.TenantID, binding.ConnectionID, string(bindi
 		binding.WorkspaceID, binding.SlotKey, binding.SlotGeneration, binding.SessionID, binding.ProtocolProfile,
 		binding.ConnectionGeneration, binding.HandoffReference, binding.ProviderRevisionID, binding.SandboxID,
 		binding.AccessMode, binding.ControlLeaseID, binding.ControlFence, binding.RecordingPolicy, leaseRequired,
-		desktopGatewayLease.String()).Scan(&connectionID)
+		desktopGatewayLease.String(), browserV2, binding.BrowserProviderAudience,
+		binding.BrowserTenantBindingDigest, binding.BrowserKeyVersion).Scan(&connectionID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return product.ErrControlStale
 	}
@@ -310,8 +385,27 @@ func (r *GrantRepository) loadRetainedGrant(ctx context.Context, tx pgx.Tx, comm
 	var grant product.ConnectionGrant
 	var ciphertext []byte
 	var keyID string
-	if err := tx.QueryRow(ctx, `SELECT connection_id,session_id,protocol_profile,access_mode,ticket_ciphertext,ticket_key_id,expires_at FROM sandbox_runtime_product.connection_grants WHERE tenant_id=$1 AND connection_id=$2`, command.TenantID, connectionID).Scan(&grant.ID, &grant.SessionID, &grant.ProtocolProfile, &grant.AccessMode, &ciphertext, &keyID, &grant.ExpiresAt); err != nil {
+	var browserAudience, browserReference string
+	if err := tx.QueryRow(ctx, `SELECT connection_id,session_id,protocol_profile,access_mode,ticket_ciphertext,ticket_key_id,expires_at,
+COALESCE(browser_binding_audience,''),COALESCE(browser_binding_reference,'')
+FROM sandbox_runtime_product.connection_grants WHERE tenant_id=$1 AND connection_id=$2`, command.TenantID, connectionID).Scan(&grant.ID, &grant.SessionID, &grant.ProtocolProfile, &grant.AccessMode, &ciphertext, &keyID, &grant.ExpiresAt, &browserAudience, &browserReference); err != nil {
 		return product.ConnectionGrant{}, product.ErrStoreUnavailable
+	}
+	if r.browserV2Audience != "" && (grant.ProtocolProfile == product.SessionProfileBrowserAutomation || grant.ProtocolProfile == product.SessionProfileBrowserLive) {
+		var current bool
+		if browserAudience != r.browserV2Audience || browserReference == "" ||
+			tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM sandbox_runtime_product.runtime_sessions s
+JOIN sandbox_runtime_product.provider_bindings b ON b.tenant_id=s.tenant_id AND b.workspace_id=s.workspace_id
+ AND b.slot_key=s.slot_key AND b.slot_generation=s.slot_generation AND b.current
+JOIN sandbox_runtime_product.browser_handoff_binding_metadata m ON m.tenant_id=s.tenant_id
+ AND m.product_session_id=s.session_id AND m.provider_instance_audience=$3
+ AND m.handoff_reference=$4 AND m.provider_revision_id=b.provider_revision_id AND m.sandbox_id=b.sandbox_id
+ AND m.connection_generation=s.provider_connection_generation AND m.handoff_expires_at=s.provider_handoff_expires_at
+WHERE s.tenant_id=$1 AND s.session_id=$2 AND s.provider_handoff_reference=$4
+ AND s.state IN('ready','active') AND s.provider_handoff_expires_at>clock_timestamp())`,
+				command.TenantID, grant.SessionID, browserAudience, browserReference).Scan(&current) != nil || !current {
+			return product.ConnectionGrant{}, product.ErrControlStale
+		}
 	}
 	if keyID != r.keyID {
 		return product.ConnectionGrant{}, product.ErrStoreUnavailable

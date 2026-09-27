@@ -100,6 +100,38 @@ func TestServerEnforcesBindingPeerAndExactCleanup(t *testing.T) {
 	}
 }
 
+func TestSameRoleGatewayAgentsCannotExchangeWitnessPurpose(t *testing.T) {
+	binding := secretref.Binding{Schema: secretref.BindingSchema, Kind: secretref.KindSecret,
+		Reference: "secret://vault/browser-action-ingress/witness", Version: "v1",
+		Purpose: secretref.PurposeActionHistoryWitnessDSN, TenantID: secretref.SystemTenant, Role: secretref.RoleGateway}
+	for _, deployment := range []string{"gateway-agent", "provider-agent", ""} {
+		path := filepath.Join(shortAgentDirectory(t), "agent.sock")
+		server, err := Listen(ServerConfig{DeploymentName: deployment, SocketPath: path,
+			SocketUID: uint32(os.Getuid()), SocketGID: uint32(os.Getgid()),
+			ExpectedClientUID: uint32(os.Getuid()), ExpectedClientGID: uint32(os.Getgid()), Role: secretref.RoleGateway,
+			AllowedPurposes: []secretref.Purpose{binding.Purpose}, Bindings: []secretref.Binding{binding},
+			MaxConnections: 1, Now: time.Now}, &agentMaterialProvider{binding: binding})
+		if err == nil || server != nil {
+			if server != nil {
+				_ = server.Close()
+			}
+			t.Fatalf("deployment %q accepted ingress witness", deployment)
+		}
+	}
+	path := filepath.Join(shortAgentDirectory(t), "agent.sock")
+	server, err := Listen(ServerConfig{DeploymentName: "browser-action-ingress-agent", SocketPath: path,
+		SocketUID: uint32(os.Getuid()), SocketGID: uint32(os.Getgid()),
+		ExpectedClientUID: uint32(os.Getuid()), ExpectedClientGID: uint32(os.Getgid()), Role: secretref.RoleGateway,
+		AllowedPurposes: []secretref.Purpose{binding.Purpose}, Bindings: []secretref.Binding{binding},
+		MaxConnections: 1, Now: time.Now}, &agentMaterialProvider{binding: binding})
+	if err != nil {
+		t.Fatalf("ingress agent rejected own witness: %v", err)
+	}
+	if err := server.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestServerRejectsClientPeerSubstitution(t *testing.T) {
 	binding := agentTestBinding(secretref.RoleProduct)
 	provider := &agentMaterialProvider{binding: binding}

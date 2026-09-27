@@ -28,6 +28,21 @@ func TestDockerIsolatedNetworkAndLeastPrivilegeTopology(t *testing.T) {
 	if _, err := dockerTopology(ctx, "image", "inspect", image); err != nil {
 		t.Fatalf("pinned probe image unavailable: %v", err)
 	}
+	brokerEdge, _, _, brokerNetwork, err := validProfile().BrokerBoundaryForPolicy("gateway-egress")
+	if err != nil {
+		t.Fatalf("profile broker boundary: %v", err)
+	}
+	brokerTarget, err := netip.ParseAddrPort(brokerEdge.TargetAddress)
+	if err != nil {
+		t.Fatalf("profile broker target: %v", err)
+	}
+	brokerPort := strconv.Itoa(int(brokerTarget.Port()))
+	brokerIP := brokerTarget.Addr().String()
+	internalPrefix, err := netip.ParsePrefix(brokerNetwork.IPv4Subnet)
+	if err != nil {
+		t.Fatalf("profile broker network: %v", err)
+	}
+	roleIP := internalPrefix.Masked().Addr().Next().Next().String()
 	suffix := strconv.FormatInt(time.Now().UnixNano(), 36)
 	hostFixturePort := strconv.Itoa(20000 + int(time.Now().UnixNano()%30000))
 	roleNetwork, uplinkNetwork, ordinaryNetwork := "p6-internal-net-"+suffix, "p6-uplink-net-"+suffix, "p6-ordinary-net-"+suffix
@@ -61,7 +76,7 @@ func TestDockerIsolatedNetworkAndLeastPrivilegeTopology(t *testing.T) {
 		}
 	})
 	if _, err := dockerTopology(ctx, "network", "create", "--driver", "bridge", "--internal", "--opt",
-		"com.docker.network.bridge.gateway_mode_ipv4=isolated", roleNetwork); err != nil {
+		"com.docker.network.bridge.gateway_mode_ipv4=isolated", "--subnet", brokerNetwork.IPv4Subnet, roleNetwork); err != nil {
 		t.Fatal(err)
 	}
 	createdNetworks = append(createdNetworks, roleNetwork)
@@ -91,16 +106,17 @@ func TestDockerIsolatedNetworkAndLeastPrivilegeTopology(t *testing.T) {
 	}
 	createdContainers = append(createdContainers, ordinaryProbe)
 	for _, item := range []struct {
-		name, network, user string
+		name, network, user, address string
 	}{
-		{role, roleNetwork, "21001:31001"},
-		{broker, roleNetwork, "21002:31002"},
+		{role, roleNetwork, "21001:31001", roleIP},
+		{broker, roleNetwork, "21002:31002", brokerIP},
 	} {
 		command := []string{"sleep", "120"}
 		if item.name == broker {
-			command = []string{"sh", "-c", "while :; do nc -l -p 8081 < /dev/null; done"}
+			command = []string{"sh", "-c", "while :; do nc -l -s " + brokerIP + " -p " + brokerPort + " < /dev/null; done"}
 		}
 		args := []string{"run", "-d", "--name", item.name, "--network", item.network,
+			"--ip", item.address,
 			"--user", item.user, "--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
 			"--pids-limit", "32", "--memory", "64m", "--memory-swap", "64m", "--cpus", "0.25",
 			"--tmpfs", "/tmp:rw,noexec,nosuid,nodev,size=4m", image}
@@ -139,11 +155,11 @@ func TestDockerIsolatedNetworkAndLeastPrivilegeTopology(t *testing.T) {
 	if roleNetworkInspect.IPAM.Config[0].Gateway != "" {
 		t.Fatal("isolated bridge unexpectedly has a host gateway address")
 	}
-	internalPrefix, err := netip.ParsePrefix(roleNetworkInspect.IPAM.Config[0].Subnet)
-	if err != nil || !internalPrefix.Addr().Is4() {
+	observedPrefix, err := netip.ParsePrefix(roleNetworkInspect.IPAM.Config[0].Subnet)
+	if err != nil || !observedPrefix.Addr().Is4() || observedPrefix != internalPrefix {
 		t.Fatal("isolated bridge has no bounded IPv4 subnet")
 	}
-	internalGatewayIP := internalPrefix.Masked().Addr().Next().String()
+	internalGatewayIP := observedPrefix.Masked().Addr().Next().String()
 	uplinkGatewayIP := uplinkNetworkInspect.IPAM.Config[0].Gateway
 	ordinaryGatewayIP := ordinaryNetworkInspect.IPAM.Config[0].Gateway
 	if net.ParseIP(internalGatewayIP) == nil || net.ParseIP(uplinkGatewayIP) == nil || net.ParseIP(ordinaryGatewayIP) == nil {
@@ -208,13 +224,21 @@ func TestDockerIsolatedNetworkAndLeastPrivilegeTopology(t *testing.T) {
 	if roleInspect.Config.User == brokerInspect.Config.User {
 		t.Fatal("role and broker share numeric UID/GID")
 	}
-	if len(roleInspect.NetworkSettings.Networks) != 1 || roleInspect.NetworkSettings.Networks[roleNetwork].IPAddress == "" ||
+	if len(roleInspect.NetworkSettings.Networks) != 1 || roleInspect.NetworkSettings.Networks[roleNetwork].IPAddress != roleIP ||
 		len(brokerInspect.NetworkSettings.Networks) != 2 || brokerInspect.NetworkSettings.Networks[uplinkNetwork].IPAddress == "" {
 		t.Fatal("network membership drift")
 	}
 	brokerInternalIP := brokerInspect.NetworkSettings.Networks[roleNetwork].IPAddress
-	if output, err := dockerTopology(ctx, "exec", role, "nc", "-z", "-w", "2", brokerInternalIP, "8081"); err != nil {
+	if brokerInternalIP != brokerIP || len(roleInspect.HostConfig.PortBindings) != 0 || len(brokerInspect.HostConfig.PortBindings) != 0 {
+		t.Fatal("broker address ownership or host-port publication drift")
+	}
+	if output, err := dockerTopology(ctx, "exec", role, "nc", "-z", "-w", "2", brokerInternalIP, brokerPort); err != nil {
 		t.Fatalf("protected role cannot reach declared broker positive control: %v: %s", err, output)
+	}
+	for _, alternate := range []string{"127.0.0.1", brokerInspect.NetworkSettings.Networks[uplinkNetwork].IPAddress} {
+		if output, err := dockerTopology(ctx, "exec", broker, "nc", "-z", "-w", "2", alternate, brokerPort); err == nil {
+			t.Fatalf("broker listener accepted non-profile local address %s: %s", alternate, output)
+		}
 	}
 	if output, err := dockerTopology(ctx, "exec", broker, "nc", "-z", "-w", "2", uplinkGatewayIP, hostFixturePort); err != nil {
 		t.Fatalf("host fixture not reachable from uplink positive control: %v: %s", err, output)
@@ -274,6 +298,7 @@ type topologyInspect struct {
 		Binds          []string
 		Tmpfs          map[string]string
 		Devices        []json.RawMessage
+		PortBindings   map[string][]json.RawMessage
 	} `json:"HostConfig"`
 	Mounts          []json.RawMessage `json:"Mounts"`
 	NetworkSettings struct {

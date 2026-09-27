@@ -73,6 +73,7 @@ func (p *Provisioner) Acquire(ctx context.Context, request browserdriver.Network
 		SandboxID: request.SandboxID, SessionID: request.BrowserSessionID, Namespace: request.Namespace,
 		ControllerID: request.ControllerID, PolicyReference: request.PolicyReference,
 		Generation: request.Generation, Fence: request.FencingToken,
+		Slot: request.Slot,
 	})
 	return browserAttachment(attachment), err
 }
@@ -91,6 +92,13 @@ func (p *Provisioner) Release(ctx context.Context, attachment browserdriver.Netw
 	return p.core.Release(ctx, coreAttachment(attachment))
 }
 
+func (p *Provisioner) Absent(ctx context.Context, attachment browserdriver.NetworkAttachment) error {
+	if p == nil || p.core == nil {
+		return ErrNetworkUnavailable
+	}
+	return p.core.Absent(ctx, coreAttachment(attachment))
+}
+
 func (p *Provisioner) Close() error {
 	if p == nil || p.core == nil {
 		return nil
@@ -103,6 +111,7 @@ func browserAttachment(value restricteddocker.Attachment) browserdriver.NetworkA
 		DockerName: value.DockerName, GatewayContainer: value.GatewayContainer, GatewayAddress: value.GatewayAddress,
 		LeaseID: value.LeaseID, PolicyReference: value.PolicyReference, PolicyDigest: value.PolicyDigest,
 		WorkloadIdentityDigest: value.WorkloadIdentityDigest, EgressGateway: value.EgressGateway, Public: value.Public,
+		Slot: value.Slot,
 	}
 }
 
@@ -111,6 +120,7 @@ func coreAttachment(value browserdriver.NetworkAttachment) restricteddocker.Atta
 		DockerName: value.DockerName, GatewayContainer: value.GatewayContainer, GatewayAddress: value.GatewayAddress,
 		LeaseID: value.LeaseID, PolicyReference: value.PolicyReference, PolicyDigest: value.PolicyDigest,
 		WorkloadIdentityDigest: value.WorkloadIdentityDigest, EgressGateway: value.EgressGateway, Public: value.Public,
+		Slot: value.Slot,
 	}
 }
 

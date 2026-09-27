@@ -3,6 +3,14 @@
 Date: 2026-09-23. Status: incomplete implementation inventory, not release
 evidence. Phase 6 remains **5/15**.
 
+2026-09-26 topology checkpoint: the Browser action ingress is a ninth
+distinct runtime process and requires its own TLS agent and Vault material
+agent. The canonical profile now declares eleven static TLS-agent bindings
+for the nine runtimes and two executors, and eleven material-agent identities
+for the nine runtimes and two migrations; the ingress command and observed signer/CRL graph do not yet
+exist. Counts in the original 2026-09-23 rows below describe that earlier
+inventory, not the revised deployment target.
+
 The `workload-material-agent` command is a Vault KV/credential process; its
 `KindMaterialAgent` principal is not the `workload-tls-agent` process. One
 principal cannot stand for both. This audit distinguishes the currently

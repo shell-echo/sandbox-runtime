@@ -15,10 +15,10 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/netip"
 	"os"
 	"os/signal"
 	"path/filepath"
-	"strconv"
 	"syscall"
 	"time"
 
@@ -133,8 +133,9 @@ func run() error { //nolint:gocyclo
 	if err != nil {
 		return stageError("tls-agent")
 	}
-	inboundEdge, ok := brokerInboundEdge(profile, profilePolicy.Principal, broker.Name, config.ListenAddress)
-	if !ok {
+	inboundEdge, boundCaller, boundBroker, _, err := profile.BrokerBoundaryForPolicy(profilePolicy.ID)
+	if err != nil || boundCaller.Name != principal.Name || boundBroker.Name != broker.Name ||
+		inboundEdge.TargetAddress != config.ListenAddress {
 		return stageError("broker-inbound-edge")
 	}
 	_, clientAnchor, err := profile.EdgeTrustAnchors(inboundEdge.ID)
@@ -296,36 +297,14 @@ func matchesTLSAgentConfig(binding phase6security.TLSAgentBinding, agent, subjec
 }
 
 func validateBrokerListenConfig(broker phase6security.Principal, address string) bool {
-	host, portText, err := net.SplitHostPort(address)
-	if err != nil || host != "0.0.0.0" || len(broker.Listeners) != 1 {
+	target, err := netip.ParseAddrPort(address)
+	if err != nil || !target.Addr().Is4() || !target.Addr().IsPrivate() || target.String() != address ||
+		len(broker.Listeners) != 1 {
 		return false
 	}
-	port, err := strconv.Atoi(portText)
 	listener := broker.Listeners[0]
-	return err == nil && listener.Name == "egress" && listener.Protocol == "tcp" &&
-		listener.Exposure == "trust_edge" && listener.Port == port
-}
-
-func brokerInboundEdge(profile phase6security.Profile, principal, broker, address string) (phase6security.TrustEdge, bool) {
-	_, portText, err := net.SplitHostPort(address)
-	if err != nil {
-		return phase6security.TrustEdge{}, false
-	}
-	port, err := strconv.Atoi(portText)
-	if err != nil {
-		return phase6security.TrustEdge{}, false
-	}
-	var selected phase6security.TrustEdge
-	for _, edge := range profile.TrustEdges {
-		if edge.To != broker || edge.Authentication != "mtls" {
-			continue
-		}
-		if selected.ID != "" || edge.From != principal || edge.Protocol != "tls" || edge.Port != port {
-			return phase6security.TrustEdge{}, false
-		}
-		selected = edge
-	}
-	return selected, selected.ID != ""
+	return listener.Name == "egress" && listener.Protocol == "tcp" &&
+		listener.Exposure == "trust_edge" && listener.Port == int(target.Port())
 }
 
 func deploymentPrincipal(profile phase6security.Profile, name string) (phase6security.Principal, bool) {

@@ -22,6 +22,7 @@ import (
 	"github.com/shell-echo/sandbox-runtime/internal/desktophandoff"
 	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
 	"github.com/shell-echo/sandbox-runtime/internal/phase6tls"
+	"github.com/shell-echo/sandbox-runtime/internal/sandboxidentity"
 	"github.com/shell-echo/sandbox-runtime/internal/secretfile"
 	"github.com/shell-echo/sandbox-runtime/internal/secretref"
 	"github.com/shell-echo/sandbox-runtime/internal/tlsmaterial"
@@ -104,15 +105,44 @@ func newProductionDesktopProvider(ctx context.Context, cfg *config.ProviderProce
 		MaxSessionsPerController: dockerConfig.MaxSessionsPerController, Clock: systemAdmissionClock{}, BridgeKeyID: desktopConfig.ExecutorBridgeKeyID, BridgePublicKey: bridgePublicKey,
 	}
 	var desktopRuntime *desktopdocker.Driver
+	var identityLedger *providerpostgres.DesktopBoundIdentityRepository
+	var runtimeAuthority sandboxidentity.RuntimeAuthority
+	if cfg.SchemaVersion == config.ProviderProductionSchemaV3 {
+		profile, profileErr := loadProviderSecurityProfile(cfg)
+		if profileErr != nil {
+			return fail(profileErr)
+		}
+		identityPlan, planErr := profile.ProjectSandboxIdentityPlan("desktop-sandbox-runtime", "provider-desktop-runtime",
+			dockerConfig.MaxSessionsPerController)
+		if planErr != nil {
+			return fail(errors.New("Desktop identity plan does not match the production profile"))
+		}
+		identityLedger, err = providerpostgres.NewDesktopBoundIdentityRepository(ctx, state, identityPlan)
+		if err != nil {
+			return fail(errors.New("Desktop identity ledger authority is unavailable"))
+		}
+		if _, err := identityLedger.Reservations(ctx); err != nil {
+			return fail(errors.New("Desktop identity ledger is uninitialized or unavailable"))
+		}
+		runtimeAuthority, err = identityPlan.ProjectRuntimeAuthority()
+		if err != nil {
+			return fail(errors.New("Desktop runtime identity projection is unavailable"))
+		}
+	}
 	if cfg.DeploymentLevel == config.ProviderLocalCandidateLevel {
-		candidate, candidateErr := desktopcandidate.Load(desktopConfig.LocalCandidateManifestFile)
+		candidate, candidateErr := desktopcandidate.LoadCurrent(desktopConfig.LocalCandidateManifestFile)
 		if candidateErr != nil || candidate.ImageDigest != dockerConfig.Image || candidate.Platform != "linux/"+desktopConfig.Architecture && !(desktopConfig.Architecture == "arm64" && candidate.Platform == "linux/arm64/v8") {
 			return fail(errors.New("load Phase 6 local Desktop candidate authority"))
 		}
 		if cfg.SchemaVersion == config.ProviderProductionSchemaV3 && candidate.VerifySource(desktopConfig.LocalCandidateSourceRoot) != nil {
 			return fail(errors.New("Phase 6 local Desktop candidate source does not match the loaded identity"))
 		}
-		desktopRuntime, err = desktopdocker.NewLocalCandidate(ctx, runtimeOptions, candidate, network)
+		if cfg.SchemaVersion == config.ProviderProductionSchemaV3 {
+			desktopRuntime, err = desktopdocker.NewLocalCandidateBound(ctx, runtimeOptions, candidate, network,
+				desktopConfig.LocalCandidateManifestFile, runtimeAuthority)
+		} else {
+			desktopRuntime, err = desktopdocker.NewLocalCandidate(ctx, runtimeOptions, candidate, network, desktopConfig.LocalCandidateManifestFile)
+		}
 	} else {
 		verifier, verifierErr := desktopprovenance.New(desktopprovenance.Options{ExecutablePath: desktopConfig.Provenance.ExecutablePath, ExecutableDigest: desktopConfig.Provenance.ExecutableDigest})
 		if verifierErr != nil {
@@ -124,7 +154,17 @@ func newProductionDesktopProvider(ctx context.Context, cfg *config.ProviderProce
 		return fail(fmt.Errorf("construct Desktop runtime: %w", err))
 	}
 	stack.add(desktopRuntime.Close)
-	lifecycleDriver, err := desktoplifecycle.New(desktopRuntime, dockerConfig.NetworkPolicyReference)
+	var sessionRuntime providerdesktop.Runtime = desktopRuntime
+	var attacher providerdesktop.Attacher = desktopRuntime
+	var readiness desktoplifecycle.RuntimeReadiness = desktopRuntime
+	if cfg.SchemaVersion == config.ProviderProductionSchemaV3 {
+		boundRuntime, runtimeErr := desktopapplication.NewDesktopIdentityRuntime(identityLedger, desktopRuntime, systemAdmissionClock{})
+		if runtimeErr != nil {
+			return fail(errors.New("Desktop identity runtime composition is unavailable"))
+		}
+		sessionRuntime, attacher, readiness = boundRuntime, boundRuntime, boundRuntime
+	}
+	lifecycleDriver, err := desktoplifecycle.New(readiness, dockerConfig.NetworkPolicyReference)
 	if err != nil {
 		return fail(err)
 	}
@@ -152,19 +192,18 @@ func newProductionDesktopProvider(ctx context.Context, cfg *config.ProviderProce
 	if err != nil {
 		return fail(err)
 	}
-	resolver, err := desktopreference.NewResolver(references, desktopRepo, desktopRuntime, systemAdmissionClock{})
+	resolver, err := desktopreference.NewResolver(references, desktopRepo, attacher, systemAdmissionClock{})
 	if err != nil {
 		return fail(err)
 	}
-	vertical, err := desktopapplication.NewVerticalWithHandoffLifecycle(desktopRepo, desktopRuntime, lifecycleApp,
+	vertical, err := desktopapplication.NewVerticalWithHandoffLifecycle(desktopRepo, sessionRuntime, lifecycleApp,
 		desktopapplication.DesktopProfile{RuntimeProfileID: lifecycle.DesktopRuntimeProfile, CapabilityProfileID: providerdesktop.CapabilityProfileID}, registrar, registrar, systemAdmissionClock{})
 	if err != nil {
 		return fail(err)
 	}
-	if _, err := vertical.Recover(ctx); err != nil {
-		return fail(fmt.Errorf("recover production Desktop sessions: %w", err))
-	}
-	desktopApp := &productionDesktopApplication{Vertical: vertical, authority: desktopRepo, runtime: desktopRuntime, references: references, cleanupTimeout: time.Duration(desktopConfig.ShutdownCleanupSeconds) * time.Second}
+	desktopApp := &productionDesktopApplication{Vertical: vertical, authority: desktopRepo, runtime: sessionRuntime,
+		references: references, cleanupTimeout: time.Duration(desktopConfig.ShutdownCleanupSeconds) * time.Second,
+		preserveBoundOnShutdown: cfg.SchemaVersion == config.ProviderProductionSchemaV3}
 	stack.add(desktopApp.Close)
 	usageRepo, err := providerpostgres.NewUsageRepository(state, systemAdmissionClock{})
 	if err != nil {
@@ -276,6 +315,9 @@ func newProductionDesktopProvider(ctx context.Context, cfg *config.ProviderProce
 		if err != nil {
 			return fail(fmt.Errorf("construct Provider Desktop broker mux: %w", err))
 		}
+	}
+	if _, err := vertical.Recover(ctx); err != nil {
+		return fail(fmt.Errorf("recover production Desktop sessions: %w", err))
 	}
 	reconciler, err := providerprocess.NewReconciler(time.Duration(cfg.Reconciliation.IntervalSeconds)*time.Second, time.Duration(cfg.Reconciliation.TimeoutSeconds)*time.Second,
 		func(runCtx context.Context) error { return lifecycleApp.Recover(runCtx) },
@@ -420,7 +462,7 @@ func newProductionProviderPrivateDesktopServer(ctx context.Context, cfg *config.
 	if !allowed {
 		return nil, nil, errors.New("Provider private transport route policy does not authorize Desktop")
 	}
-	handler, err := desktopgateway.New(desktopgateway.Options{Resolver: resolver, BoundMedia: productionDesktopMediaSource{runtime: runtime}, BindingRegistrar: registrar, PeerAuthorizer: providerPrivatePeerAuthorizer{}, MaxMessageBytes: cfg.Transport.Private.MaxBodyBytes, OperationTimeout: time.Duration(cfg.Transport.Private.ReadTimeoutMillis) * time.Millisecond})
+	handler, err := desktopgateway.New(desktopgateway.Options{Resolver: resolver, BoundMedia: productionDesktopMediaSource{runtime: runtime}, BindingRegistrar: registrar, PeerAuthorizer: providerPrivatePeerAuthorizer{}, MaxMessageBytes: cfg.Transport.Private.MaxBodyBytes, OperationTimeout: time.Duration(cfg.Transport.Private.ReadTimeoutMillis) * time.Millisecond, RequireActivationV2: true})
 	if err != nil {
 		return nil, nil, fmt.Errorf("construct Provider private Desktop handler: %w", err)
 	}
@@ -480,15 +522,21 @@ type productionDesktopApplication struct {
 	authority interface {
 		ListOpen(context.Context) ([]providerdesktop.Record, error)
 	}
-	runtime        providerdesktop.Runtime
-	references     desktopreference.Store
-	cleanupTimeout time.Duration
-	closeOnce      sync.Once
-	closeErr       error
+	runtime                 providerdesktop.Runtime
+	references              desktopreference.Store
+	cleanupTimeout          time.Duration
+	preserveBoundOnShutdown bool
+	closeOnce               sync.Once
+	closeErr                error
 }
 
 func (a *productionDesktopApplication) Close() error {
 	a.closeOnce.Do(func() {
+		if a.preserveBoundOnShutdown {
+			// Restart reconstruction owns these PG-bound claims. A process
+			// shutdown is not an authorized Close operation or UID release.
+			return
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), a.cleanupTimeout)
 		defer cancel()
 		records, err := a.authority.ListOpen(ctx)

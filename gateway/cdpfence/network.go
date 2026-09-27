@@ -27,8 +27,12 @@ const (
 )
 
 type NetworkOptions struct {
-	Ingress                   *Ingress
-	Resolver                  gateway.ReferenceResolver
+	Ingress  *Ingress
+	Resolver gateway.ReferenceResolver
+	// FencedResolver is the closed downstream path. It receives the exact
+	// ingress-validated subject and capacity claim only inside the ingress
+	// activation gate; a v3 composition must select it instead of Resolver.
+	FencedResolver            gateway.FencedReferenceResolver
 	PeerAuthorizer            PeerAuthorizer
 	MaxMessageBytes           int64
 	AllowInsecureHTTPForTests bool
@@ -51,6 +55,7 @@ func (f PeerAuthorizerFunc) AuthorizePeer(ctx context.Context, state tls.Connect
 type NetworkHandler struct {
 	ingress         *Ingress
 	resolver        gateway.ReferenceResolver
+	fencedResolver  gateway.FencedReferenceResolver
 	peerAuthorizer  PeerAuthorizer
 	maxMessageBytes int64
 	insecureTests   bool
@@ -66,10 +71,12 @@ func NewNetworkHandler(options NetworkOptions) (*NetworkHandler, error) {
 	if now == nil {
 		now = func() time.Time { return time.Now().UTC() }
 	}
-	if options.Ingress == nil || nilDependency(options.Resolver) || (!options.AllowInsecureHTTPForTests && nilDependency(options.PeerAuthorizer)) || limit < 1 || limit > maxNetworkMessageBytes {
+	if options.Ingress == nil || (nilDependency(options.Resolver) == nilDependency(options.FencedResolver)) ||
+		(!options.AllowInsecureHTTPForTests && nilDependency(options.PeerAuthorizer)) || limit < 1 || limit > maxNetworkMessageBytes {
 		return nil, gateway.ErrDownstreamUnavailable
 	}
-	return &NetworkHandler{ingress: options.Ingress, resolver: options.Resolver, peerAuthorizer: options.PeerAuthorizer, maxMessageBytes: limit, insecureTests: options.AllowInsecureHTTPForTests, now: now}, nil
+	return &NetworkHandler{ingress: options.Ingress, resolver: options.Resolver, fencedResolver: options.FencedResolver,
+		peerAuthorizer: options.PeerAuthorizer, maxMessageBytes: limit, insecureTests: options.AllowInsecureHTTPForTests, now: now}, nil
 }
 
 func (h *NetworkHandler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
@@ -96,7 +103,13 @@ func (h *NetworkHandler) ServeHTTP(writer http.ResponseWriter, request *http.Req
 		request.Header.Del(name)
 	}
 	downstream, err := h.ingress.Open(request.Context(), subject, fence, func(ctx context.Context) (gateway.Stream, error) {
-		endpoint, err := h.resolver.Resolve(ctx, reference)
+		var endpoint gateway.Endpoint
+		var err error
+		if h.fencedResolver != nil {
+			endpoint, err = h.fencedResolver.ResolveFenced(ctx, reference, subject, fence)
+		} else {
+			endpoint, err = h.resolver.Resolve(ctx, reference)
+		}
 		if err != nil || endpoint.Reference != reference || endpoint.SandboxID != subject.SandboxID || endpoint.RuntimeSessionID != "" ||
 			endpoint.BrowserSessionID != subject.BrowserSessionID || endpoint.CapabilityProfileID != subject.CapabilityProfileID ||
 			endpoint.ConnectionGeneration != subject.ConnectionGeneration || endpoint.ExpiresAt.Before(subject.ExpiresAt) || endpoint.Dial == nil {

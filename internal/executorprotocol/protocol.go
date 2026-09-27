@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/shell-echo/sandbox-runtime/internal/browserbinding"
 	"github.com/shell-echo/sandbox-runtime/internal/desktopbridge"
 	"github.com/shell-echo/sandbox-runtime/internal/desktopmedia"
 	"github.com/shell-echo/sandbox-runtime/internal/handoff"
@@ -80,7 +81,7 @@ type Response struct {
 
 func (o Open) Validate(now time.Time) error {
 	if o.Protocol != ProtocolID || (o.Role != RoleBrowser && o.Role != RoleDesktop) ||
-		!requestPattern.MatchString(o.RequestID) || handoff.ValidateTenantBindingDigest(o.TenantBindingDigest) != nil ||
+		!requestPattern.MatchString(o.RequestID) ||
 		!identifierPattern.MatchString(o.ProviderRevisionID) || !identifierPattern.MatchString(o.SandboxID) ||
 		!identifierPattern.MatchString(o.RuntimeSessionID) || !identifierPattern.MatchString(o.CapabilityProfileID) ||
 		!identifierPattern.MatchString(o.MediaProfileID) || !identifierPattern.MatchString(o.ControlProfileID) ||
@@ -91,11 +92,12 @@ func (o Open) Validate(now time.Time) error {
 		o.Codec == "" || len(o.Codec) > 128 {
 		return ErrInvalid
 	}
-	if o.Role == RoleBrowser && (o.CapabilityProfileID != "browser-v1" || o.MediaProfileID != "browser-cdp-v1" || o.ControlProfileID != "browser-control-v1" || o.AllocationReference != "" || o.MediaPolicy != nil || o.MediaPolicyDigest != "" || o.Bridge != nil) {
+	if o.Role == RoleBrowser && (browserbinding.ValidateDigest(o.TenantBindingDigest) != nil ||
+		o.CapabilityProfileID != "browser-v1" || o.MediaProfileID != "browser-cdp-v1" || o.ControlProfileID != "browser-control-v1" || o.AllocationReference != "" || o.MediaPolicy != nil || o.MediaPolicyDigest != "" || o.Bridge != nil) {
 		return ErrInvalid
 	}
 	if o.Role == RoleDesktop {
-		if !allocationReference(o.AllocationReference) || o.MediaPolicy == nil || !o.MediaPolicy.Validate() || o.MediaPolicyDigest != PolicyDigest(*o.MediaPolicy) || o.Codec != o.MediaPolicy.VideoCodec || o.Bridge == nil || o.Bridge.Validate(now) != nil || !bridgeMatchesOpen(*o.Bridge, o) {
+		if handoff.ValidateTenantBindingDigest(o.TenantBindingDigest) != nil || !allocationReference(o.AllocationReference) || o.MediaPolicy == nil || !o.MediaPolicy.Validate() || o.MediaPolicyDigest != PolicyDigest(*o.MediaPolicy) || o.Codec != o.MediaPolicy.VideoCodec || o.Bridge == nil || o.Bridge.Validate(now) != nil || !bridgeMatchesOpen(*o.Bridge, o) {
 			return ErrInvalid
 		}
 	}
@@ -138,8 +140,8 @@ func (o Open) CalculateAuthorityDigest() string {
 
 func (o Open) CalculateRequestDigest() string {
 	value := struct {
-		Domain, Authority, MediaProfile, ControlProfile, Codec, PolicyDigest string
-	}{"sandbox-runtime/executor-request/v2", o.AuthorityDigest, o.MediaProfileID, o.ControlProfileID, o.Codec, o.MediaPolicyDigest}
+		Domain, RequestID, Authority, MediaProfile, ControlProfile, Codec, PolicyDigest string
+	}{"sandbox-runtime/executor-request/v2", o.RequestID, o.AuthorityDigest, o.MediaProfileID, o.ControlProfileID, o.Codec, o.MediaPolicyDigest}
 	return digestDocument(value)
 }
 

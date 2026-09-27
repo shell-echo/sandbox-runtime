@@ -174,7 +174,7 @@ func (e *mobyEngine) createContainer(ctx context.Context, request containerReque
 	_, err = e.client.ContainerCreate(ctx, client.ContainerCreateOptions{
 		Name: request.name,
 		Config: &container.Config{
-			Image: request.image, Labels: cloneMap(request.labels), Env: environment, StopTimeout: &stopTimeout,
+			Image: request.image, User: request.user, Labels: cloneMap(request.labels), Env: environment, StopTimeout: &stopTimeout,
 		},
 		HostConfig: &container.HostConfig{
 			NetworkMode: container.NetworkMode(request.internalNetwork), CapDrop: []string{"ALL"},

@@ -22,6 +22,9 @@ import (
 var mediaReferencePattern = regexp.MustCompile(`^ref:desktop-session:[A-Za-z0-9][A-Za-z0-9._-]{0,199}$`)
 
 func (d *Driver) OpenMedia(ctx context.Context, authority providerdesktop.MediaAuthority, attachment providerdesktop.Attachment, policy desktopmedia.MediaPolicy) (providerdesktop.MediaSession, error) {
+	if d != nil && d.bound != nil {
+		return nil, providerdesktop.ErrDesktopUnsupported
+	}
 	if err := contextError(ctx); err != nil {
 		return nil, err
 	}
@@ -57,7 +60,7 @@ func (d *Driver) OpenMedia(ctx context.Context, authority providerdesktop.MediaA
 	if !ok {
 		return nil, providerdesktop.ErrDesktopUnsupported
 	}
-	stream, err := backend.openSession(operationCtx, info.id)
+	stream, err := backend.openSession(operationCtx, info.id, desktopWorkloadUser(state.Network.Slot))
 	if err != nil {
 		return nil, allocationUnknown(operationCtx, err)
 	}

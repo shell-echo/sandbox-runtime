@@ -91,6 +91,60 @@ func (s *State) Revoke(value string, revokedAt time.Time) error {
 	s.References[value] = record.Clone()
 	return nil
 }
+func (s *State) Bind(binding reference.Binding, source browser.Record, authority browser.SandboxAuthority, now time.Time) error {
+	s.ensureMap()
+	record, ok := s.References[binding.Reference]
+	if !ok {
+		return reference.ErrNotFound
+	}
+	if err := binding.Matches(record, source, authority, now); err != nil {
+		return err
+	}
+	if record.TenantBindingDigest == binding.TenantBindingDigest {
+		return nil
+	}
+	record.TenantBindingDigest = binding.TenantBindingDigest
+	if err := record.Validate(); err != nil {
+		return err
+	}
+	s.References[binding.Reference] = record.Clone()
+	return nil
+}
+
+// ClaimExecutor records a one-use executor request under the same durable
+// reference that owns the handoff. It rechecks the current sandbox authority
+// before the claim, so a delayed open cannot revive a stale allocation.
+func (s *State) ClaimExecutor(binding reference.Binding, requestID string, claim reference.ExecutorReplayClaim,
+	source browser.Record, authority browser.SandboxAuthority, now time.Time) error {
+	s.ensureMap()
+	record, ok := s.References[binding.Reference]
+	if !ok {
+		return reference.ErrNotFound
+	}
+	if record.TenantBindingDigest == "" || binding.Matches(record, source, authority, now) != nil ||
+		!claim.ExpiresAt.After(now) || claim.ExpiresAt.After(record.ExpiresAt) {
+		return reference.ErrStale
+	}
+	claims := make(map[string]reference.ExecutorReplayClaim, len(record.ExecutorReplayClaims)+1)
+	for id, previous := range record.ExecutorReplayClaims {
+		if previous.ExpiresAt.After(now) {
+			claims[id] = previous
+		}
+	}
+	if _, exists := claims[requestID]; exists {
+		return reference.ErrConflict
+	}
+	if len(claims) >= reference.MaxExecutorReplayClaims {
+		return reference.ErrUnavailable
+	}
+	claims[requestID] = claim
+	record.ExecutorReplayClaims = claims
+	if err := record.Validate(); err != nil {
+		return err
+	}
+	s.References[binding.Reference] = record.Clone()
+	return nil
+}
 func (s State) Export() PersistedState {
 	result := PersistedState{Version: snapshotVersion}
 	for _, record := range s.References {

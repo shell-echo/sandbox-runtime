@@ -20,8 +20,9 @@ const (
 )
 
 type Store struct {
-	pool             *pgxpool.Pool
-	operationTimeout time.Duration
+	pool                   *pgxpool.Pool
+	operationTimeout       time.Duration
+	browserBindingPreparer BrowserHandoffBindingPreparer
 }
 
 func New(pool *pgxpool.Pool, operationTimeout time.Duration) (*Store, error) {

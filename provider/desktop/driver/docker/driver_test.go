@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/netip"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/shell-echo/sandbox-runtime/internal/desktopbroker"
 	"github.com/shell-echo/sandbox-runtime/internal/desktopcandidate"
+	"github.com/shell-echo/sandbox-runtime/internal/sandboxidentity"
 	desktopimage "github.com/shell-echo/sandbox-runtime/profiles/desktop/image"
 	providerdesktop "github.com/shell-echo/sandbox-runtime/provider/desktop"
 )
@@ -82,6 +84,7 @@ func (n *fakeNetwork) Acquire(_ context.Context, request NetworkRequest) (Networ
 	if request.PolicyReference != n.attachment.PolicyReference || request.SandboxID == "" || request.DesktopSessionID == "" {
 		return NetworkAttachment{}, ErrNetworkUnavailable
 	}
+	n.attachment.Slot = request.Slot
 	return n.attachment, n.acquireErr
 }
 func (n *fakeNetwork) Inspect(_ context.Context, attachment NetworkAttachment) error {
@@ -101,6 +104,14 @@ func (n *fakeNetwork) Release(_ context.Context, attachment NetworkAttachment) e
 		return ErrNetworkUnavailable
 	}
 	return n.releaseErr
+}
+func (n *fakeNetwork) Absent(_ context.Context, attachment NetworkAttachment) error {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if attachment != n.attachment || n.releases == 0 {
+		return ErrNetworkUnavailable
+	}
+	return nil
 }
 func (n *fakeNetwork) counts() (int, int, int, int) {
 	n.mu.Lock()
@@ -124,6 +135,19 @@ type fakeEngine struct {
 	removeErr      error
 	describeErr    error
 	closed         bool
+}
+
+type fakeDesktopDrainer struct {
+	calls     int
+	sandboxID string
+	sessionID string
+	err       error
+}
+
+func (d *fakeDesktopDrainer) FenceAndDrain(_ context.Context, sandboxID, sessionID string) error {
+	d.calls++
+	d.sandboxID, d.sessionID = sandboxID, sessionID
+	return d.err
 }
 
 const fakeContainerID = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
@@ -209,7 +233,7 @@ func (e *fakeEngine) remove(context.Context, string) error {
 	e.container = nil
 	return nil
 }
-func (e *fakeEngine) describe(context.Context, string) ([]byte, error) {
+func (e *fakeEngine) describe(context.Context, string, string) ([]byte, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.describeCalls++
@@ -380,6 +404,9 @@ func TestLocalCandidateDriverIsDigestOnlyAndSeparateFromPublication(t *testing.T
 	candidate, err := desktopcandidate.New(sourceRoot, "linux/amd64", digest, digest)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if _, err := NewLocalCandidate(context.Background(), Options{}, candidate, newFakeNetwork(), filepath.Join(t.TempDir(), "legacy.json")); !errors.Is(err, ErrInvalidDriver) {
+		t.Fatalf("public current admission accepted historical v1 candidate: %v", err)
 	}
 	clock := &fakeClock{now: desktopDriverTestTime}
 	options := validOptions(t, t.TempDir(), clock)
@@ -653,6 +680,147 @@ func TestReadyRevalidatesRuntimeDependenciesAndHidesDetails(t *testing.T) {
 	}
 	if err := driver.Ready(nil); !errors.Is(err, context.Canceled) {
 		t.Fatalf("nil context readiness = %v", err)
+	}
+}
+
+func TestDesktopBoundAuthorityProjectsPureSlotSpecsAndClosesBareAllocate(t *testing.T) {
+	clock := &fakeClock{now: desktopDriverTestTime}
+	options := validOptions(t, t.TempDir(), clock)
+	options.MaxSessionsPerController = 2
+	backend := &fakeEngine{image: validImageInfo(t)}
+	network := newFakeNetwork()
+	driver, err := newDriver(context.Background(), backend, options, &fakeProvenance{}, network)
+	if err != nil {
+		t.Fatal(err)
+	}
+	authority := sandboxidentity.RuntimeAuthority{
+		PlanDigest: "sha256:" + strings.Repeat("a", 64), OwnerDeployment: "provider-desktop-runtime",
+		Template: "desktop-sandbox-runtime", Namespace: options.Namespace, ControllerID: options.ControllerID,
+		Capacity: 2, Slots: []sandboxidentity.Slot{
+			{ID: "desktop-0000", WorkloadUID: 21000, WorkloadGID: 31000, GatewayUID: 21001, GatewayGID: 31001},
+			{ID: "desktop-0001", WorkloadUID: 21002, WorkloadGID: 31002, GatewayUID: 21003, GatewayGID: 31003},
+		},
+	}
+	if err := validateDesktopBoundAuthority(options, authority); err != nil {
+		t.Fatal(err)
+	}
+	driver.bindDesktop(authority)
+	wantAuthority := driver.RuntimeAuthority()
+	wantAuthority.Slots[0].WorkloadUID++
+	if driver.RuntimeAuthority().Slots[0] != authority.Slots[0] {
+		t.Fatal("Desktop bound authority was mutable through accessor")
+	}
+	allocation := allocation(clock.Now())
+	specs, err := driver.DesiredSpecDigests(allocation)
+	if err != nil || len(specs) != 2 || specs[authority.Slots[0].ID] == specs[authority.Slots[1].ID] {
+		t.Fatalf("Desktop slot specs = %+v, %v", specs, err)
+	}
+	if _, err := driver.Allocate(t.Context(), allocation); !errors.Is(err, providerdesktop.ErrDesktopUnsupported) {
+		t.Fatalf("bare bound Desktop Allocate = %v", err)
+	}
+	_, acquired, _, _ := network.counts()
+	if acquired != 0 || len(backend.createRequests) != 0 {
+		t.Fatal("Desktop bound spec projection or bare Allocate caused side effects")
+	}
+}
+
+func TestDesktopBoundCreatingCompletionIsExactAndReadOnly(t *testing.T) {
+	clock := &fakeClock{now: desktopDriverTestTime}
+	backend := &fakeEngine{}
+	network := newFakeNetwork()
+	driver := testDriver(t, backend, network, validOptions(t, t.TempDir(), clock))
+	slot := sandboxidentity.Slot{ID: "desktop-0000", WorkloadUID: 21000, WorkloadGID: 31000, GatewayUID: 21001, GatewayGID: 31001}
+	authority := sandboxidentity.RuntimeAuthority{PlanDigest: "sha256:" + strings.Repeat("a", 64),
+		OwnerDeployment: "provider-desktop-runtime", Template: "desktop-sandbox-runtime",
+		Namespace: driver.options.Namespace, ControllerID: driver.options.ControllerID,
+		Capacity: 1, Slots: []sandboxidentity.Slot{slot}}
+	driver.bindDesktop(authority)
+	allocation := allocation(clock.Now())
+	specs, err := driver.DesiredSpecDigests(allocation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ticket := sandboxidentity.Reservation{PlanDigest: authority.PlanDigest, Slot: slot,
+		Claim: sandboxidentity.Claim{SandboxID: allocation.Request.SandboxID, SessionID: allocation.Request.DesktopSessionID,
+			OperationID: allocation.Request.OperationID, AttemptID: allocation.Request.AttemptID,
+			RequestDigest: allocation.Request.RequestDigest, Generation: allocation.Request.ExpectedGeneration,
+			Fence: allocation.Request.FencingToken},
+		SpecDigest: specs[slot.ID], Status: sandboxidentity.Creating}
+	if _, err := driver.CompletedBound(t.Context(), allocation, ticket); !errors.Is(err, providerdesktop.ErrAllocationUnknown) {
+		t.Fatalf("unstarted Creating proof = %v", err)
+	}
+	wrong := ticket
+	wrong.Slot.WorkloadUID++
+	if _, err := driver.AllocateBound(t.Context(), allocation, wrong); !errors.Is(err, providerdesktop.ErrDesktopUnsupported) {
+		t.Fatalf("wrong slot = %v", err)
+	}
+	if len(backend.createRequests) != 0 {
+		t.Fatal("rejected ticket dispatched Docker")
+	}
+	receipt, err := driver.AllocateBound(t.Context(), allocation, ticket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if backend.createRequests[0].user != desktopWorkloadUser(slot) {
+		t.Fatalf("slot user = %q", backend.createRequests[0].user)
+	}
+	completed, err := driver.CompletedBound(t.Context(), allocation, ticket)
+	if err != nil || !sameReceipt(completed, receipt) {
+		t.Fatalf("completed Creating proof = %+v, %v", completed, err)
+	}
+	_, path, err := driver.stateLocation(allocation.Request.SandboxID, allocation.Request.DesktopSessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err := loadDesktopState(path, driver.options.NetworkPolicyReference)
+	if err != nil || state.Version != desktopSlotStateVersion || state.CompletedBound == nil {
+		t.Fatalf("v3 state = %+v, %v", state, err)
+	}
+	state.CompletedBound.Ticket.SpecDigest = "sha256:" + strings.Repeat("b", 64)
+	if err := persistDesktopState(path, state, driver.options.NetworkPolicyReference); !errors.Is(err, ErrInvalidRuntime) {
+		t.Fatalf("drifted completion persisted: %v", err)
+	}
+	if _, err := driver.Allocate(t.Context(), allocation); !errors.Is(err, providerdesktop.ErrDesktopUnsupported) {
+		t.Fatalf("bare allocation after completed ticket = %v", err)
+	}
+	if len(backend.createRequests) != 1 {
+		t.Fatalf("Docker create calls = %d", len(backend.createRequests))
+	}
+	active := ticket
+	active.Status = sandboxidentity.Active
+	if _, err := driver.AttachBound(t.Context(), receipt, active); err != nil {
+		t.Fatalf("active attach = %v", err)
+	}
+	cleaning := ticket
+	cleaning.Status = sandboxidentity.Cleaning
+	if err := driver.CleanupBound(t.Context(), receipt, cleaning); !errors.Is(err, providerdesktop.ErrAllocationUnknown) {
+		t.Fatalf("cleanup without drainer = %v", err)
+	}
+	if backend.container == nil {
+		t.Fatal("cleanup removed Docker before broker drain")
+	}
+	if _, err := driver.AttachBound(t.Context(), receipt, active); !errors.Is(err, providerdesktop.ErrDesktopConflict) {
+		t.Fatalf("attach after durable fence = %v", err)
+	}
+	drainer := &fakeDesktopDrainer{}
+	driver.boundSessionDrainer = drainer
+	if err := driver.CleanupBound(t.Context(), receipt, cleaning); err != nil {
+		t.Fatalf("fenced cleanup = %v", err)
+	}
+	if drainer.calls != 1 || drainer.sandboxID != receipt.SandboxID || drainer.sessionID != receipt.DesktopSessionID {
+		t.Fatalf("drain identity = %+v", drainer)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("cleanup removed local tombstone before PG release: %v", err)
+	}
+	if err := driver.ConfirmAbsentBound(t.Context(), receipt, cleaning); err != nil {
+		t.Fatalf("independent absence = %v", err)
+	}
+	if err := driver.FinalizeCleanupBound(t.Context(), receipt, cleaning); err != nil {
+		t.Fatalf("local finalization = %v", err)
+	}
+	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("local tombstone remains: %v", err)
 	}
 }
 

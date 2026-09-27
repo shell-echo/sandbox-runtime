@@ -27,16 +27,19 @@ import (
 )
 
 const (
-	configProtocol        = "sandbox-runtime.workload-tls-agent-config.v2"
-	peerCRLConfigProtocol = "sandbox-runtime.workload-tls-agent-config.v3"
-	maxConfigBytes        = 256 << 10
-	requestSigningFD      = 3
-	maximumPolicyTTL      = 3600
-	maximumSocketLoad     = 256
+	configProtocol         = "sandbox-runtime.workload-tls-agent-config.v2"
+	peerCRLConfigProtocol  = "sandbox-runtime.workload-tls-agent-config.v3"
+	postgresConfigProtocol = "sandbox-runtime.workload-tls-agent-config.v4"
+	maxConfigBytes         = 256 << 10
+	requestSigningFD       = 3
+	maximumPolicyTTL       = 3600
+	maximumSocketLoad      = 256
 )
 
 type configDocument struct {
 	Protocol                      string                      `json:"protocol"`
+	Purpose                       string                      `json:"purpose,omitempty"`
+	Postgres                      *postgresClientConfig       `json:"postgres,omitempty"`
 	SecurityProfilePath           string                      `json:"security_profile_path"`
 	SecurityProfileDigest         string                      `json:"security_profile_digest"`
 	PeerCRLSourcesPath            string                      `json:"peer_crl_sources_path"`
@@ -79,6 +82,14 @@ type configDocument struct {
 	OperationTimeoutSeconds       int                         `json:"operation_timeout_seconds"`
 }
 
+type postgresClientConfig struct {
+	OwnerDeployment string `json:"owner_deployment"`
+	DatabaseName    string `json:"database_name"`
+	RuntimeRole     string `json:"runtime_role"`
+	CommonName      string `json:"common_name"`
+	IssuerAnchorID  string `json:"issuer_anchor_id"`
+}
+
 func main() {
 	if err := run(); err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "workload TLS agent failed: %v\n", err)
@@ -104,8 +115,9 @@ func run() error { //nolint:gocyclo
 	}
 	canonical, err := json.Marshal(config)
 	if err != nil || !bytes.Equal(canonical, document) ||
-		!((config.Protocol == configProtocol && config.PeerCRLSourcesPath == "" && config.PeerCRLSourcesDigest == "") ||
-			(config.Protocol == peerCRLConfigProtocol && filepath.IsAbs(config.PeerCRLSourcesPath) && config.PeerCRLSourcesDigest != "")) ||
+		!((config.Protocol == configProtocol && config.Purpose == "" && config.Postgres == nil && config.PeerCRLSourcesPath == "" && config.PeerCRLSourcesDigest == "") ||
+			(config.Protocol == peerCRLConfigProtocol && config.Purpose == "" && config.Postgres == nil && filepath.IsAbs(config.PeerCRLSourcesPath) && config.PeerCRLSourcesDigest != "") ||
+			(config.Protocol == postgresConfigProtocol && config.Purpose == workloadpki.PostgresClientPurpose && config.Postgres != nil && config.PeerCRLSourcesPath == "" && config.PeerCRLSourcesDigest == "")) ||
 		config.MaxTTLSeconds < 60 || config.MaxTTLSeconds > maximumPolicyTTL || config.CertificateTTLSeconds < 60 ||
 		int64(config.CertificateTTLSeconds) > config.MaxTTLSeconds || config.RotateAfterSeconds < 1 ||
 		config.RotateAfterSeconds > config.CertificateTTLSeconds*2/3 || config.OverlapSeconds < 0 ||
@@ -171,6 +183,13 @@ func run() error { //nolint:gocyclo
 	policy := workloadpki.Policy{ID: config.PolicyID, Registry: registry, Requester: config.Requester, Subject: config.Subject,
 		TrustDomain: config.TrustDomain, URI: config.URI, DNSNames: config.DNSNames, Usages: config.Usages, VaultRole: config.VaultRole,
 		MaxTTLSeconds: config.MaxTTLSeconds, ExpectedUID: config.AgentUID, ExpectedGID: config.AgentGID, PublicKey: ed25519.PublicKey(agentPublic)}
+	if config.Purpose == workloadpki.PostgresClientPurpose {
+		policy.Purpose = config.Purpose
+		policy.Postgres = workloadpki.PostgresClientIdentity{OwnerDeployment: config.Postgres.OwnerDeployment,
+			DatabaseName: config.Postgres.DatabaseName, RuntimeRole: config.Postgres.RuntimeRole,
+			ServiceName: "postgres", URI: config.URI, CommonName: config.Postgres.CommonName,
+			MaxTTL: time.Duration(config.MaxTTLSeconds) * time.Second}
+	}
 	if policy.Validate() != nil {
 		return stageError("certificate-policy")
 	}
@@ -238,8 +257,30 @@ func run() error { //nolint:gocyclo
 }
 
 func validateProfileBinding(profile phase6security.Profile, config configDocument) bool {
+	if config.Protocol == postgresConfigProtocol {
+		binding, database, agent, subject, _, err := profile.PostgresClientAgentForOwner(config.SubjectDeployment)
+		return err == nil && matchesPostgresProfileBinding(profile, binding, database, agent, subject, config)
+	}
+	if config.Purpose != "" || config.Postgres != nil {
+		return false
+	}
 	binding, agent, subject, err := profile.TLSAgentForSubject(config.SubjectDeployment)
 	return err == nil && matchesProfileBinding(profile, binding, agent, subject, config)
+}
+
+func matchesPostgresProfileBinding(profile phase6security.Profile, binding phase6security.PostgresClientAgentBinding,
+	database phase6security.ProviderDatabaseBinding, agent, subject phase6security.Principal, config configDocument) bool {
+	if config.Purpose != workloadpki.PostgresClientPurpose || config.Postgres == nil || subject.TLS == nil ||
+		config.Postgres.OwnerDeployment != database.OwnerDeployment ||
+		config.Postgres.DatabaseName != database.DatabaseName || config.Postgres.RuntimeRole != database.RuntimeRole ||
+		config.Postgres.CommonName != binding.CommonName || config.Postgres.IssuerAnchorID != binding.IssuerAnchorID {
+		return false
+	}
+	identity := *subject.TLS
+	identity.DNSNames = nil
+	identity.Usages = []string{"client_auth"}
+	subject.TLS = &identity
+	return matchesProfileBinding(profile, binding.TLSAgentBinding, agent, subject, config)
 }
 
 func matchesProfileBinding(profile phase6security.Profile, binding phase6security.TLSAgentBinding,

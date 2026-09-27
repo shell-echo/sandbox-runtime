@@ -62,6 +62,21 @@ go build -buildvcs=true -o "$runner_dir/run-conformance" ./cmd/run-conformance
 "$runner_dir/run-conformance" -source-root . -race -shuffle
 ```
 
+For the PostgreSQL witness integration, apply the schema with the migration
+owner first. The runtime URL must use a distinct role with only the grants in
+`gateway/capacity/redis/migrations/README.md`; it must not have direct or
+inherited `INSERT` or be able to assume the one-shot provisioning role. The
+admin URL is used only to provision and clean up exact test-owned rows, not
+as a runtime connection. Use a disposable database and a separate disposable
+Redis-compatible server for this tagged test.
+To exercise the test-owned runtime-role grant/revoke and inherited-membership
+drift cases, use only a disposable witness database with the separate one-shot
+`sandbox_witness_provisioner` role and set
+`SANDBOX_RUNTIME_ACTION_HISTORY_MUTABLE_ROLE_TEST=1`. With the same admin and
+runtime URLs, run `go test -tags=integration -race -shuffle=on -count=1
+./internal/phase6egress ./gateway/capacity/redis`. These tests restore the
+exact test-owned grants and must not be aimed at a shared operational role.
+
 Format changed Go files with `gofmt`. Do not weaken or skip a gate to make a
 change pass. Record an unavailable integration environment separately from a
 code failure.
@@ -319,6 +334,16 @@ This is real-adapter component evidence. It does not establish database image
 provenance, least-privilege deployment roles, backup/restore, HA, or production
 readiness.
 
+Phase 6 migration 14 adds immutable Product Browser v2 handoff-binding
+metadata and an optional exact-row foreign key on connection grants. It does
+not backfill historical v1 grants or authorize a missing row. The current
+Product session pointer remains the only active-handoff selector. The
+opt-in Store constructor prepares the secret selection before opening the
+observation transaction and commits the immutable row with the ready/current
+session pointer. The opt-in Browser v2 grant repository fixes that row on
+issue and checks it on consume/watch. Browser v3 startup must require both
+constructors; the historical grant repository is not a v3 fallback.
+
 ## Product package and import boundaries
 
 The accepted Product architecture is being implemented through the fixed Phase
@@ -448,6 +473,16 @@ For Phase 6 local-candidate image/broker changes, keep
 validator, the Dockerfile, build script, broker constants, integration policy,
 and publication matrix aligned. Run the focused race/shuffle tests plus the
 full repository gates. On each native architecture, run:
+
+The current Desktop local candidate uses `desktop-phase6-local-candidate/v2`.
+Its generated manifest is accompanied by a private `*.oci.tar` sidecar, which
+binds the Docker store descriptor, actual selected platform manifest, raw OCI
+config, ordered layers/diff IDs and exact source/build inputs. The historical
+v1 reader is not current admission. The recorder requires a clean committed
+source tree, refuses pre-existing output paths, and uses a stopped, exact
+digest container; a cached candidate from a different source revision cannot
+be relabeled as current evidence. These local records do not satisfy Slice 7
+publication or production provenance.
 
 ```bash
 SANDBOX_RUNTIME_DESKTOP_IMAGE_INTEGRATION=1 \
@@ -697,6 +732,54 @@ multi-tenant, independently implemented caller, or production-readiness
 claims.
 
 ## Product Phase 6 production-hardening discipline
+
+Browser action-ingress external credentials have two distinct Gateway-family
+secret purposes: `action_history_witness_dsn` and
+`capacity_valkey_credentials`. The witness binding belongs only to the
+action-ingress material agent and runtime. Gateway and action ingress may each
+hold capacity credentials, but must use separate bindings and ACL users;
+sharing logical `RoleGateway` does not authorize sharing a secret. The witness
+is an exact single-target `postgres://`/`postgresql://` URI with
+`sslmode=verify-full`; capacity is a canonical three-field versioned JSON
+without any endpoint or TLS setting. Use the deployment-bound registry and
+the fixed broker-alias adapters. Do not parse Redis credentials from a URI,
+accept pgx `BeforeConnect`, or log the secret document/DSN/driver auth error.
+This component rule does not replace the real credential-rotation, Redis ACL,
+PostgreSQL witness, broker and network Slice 6 gates.
+
+Browser v2 tenant binding is a new private HMAC definition, not the historical
+`sha256:v1:` format. Use `productgateway.DeriveBrowserTenantBinding` only with
+the dedicated 32-byte Product/Gateway material purpose
+`browser_tenant_binding_key`, the exact key version fixed in durable Product
+handoff metadata, its exact non-secret binding reference/purpose/role/digest,
+and the nine closed fields documented in ADR 0052. Migration 14 rejects
+updates to a selected row; key rotation creates a new exact handoff instead
+of rewriting an existing one. Do not include grant ID, Redis capacity claim,
+expiry, connection epoch or Product
+control lease in this stable digest. Reconnect to the same handoff must keep
+the same value; a new reference/revision/generation/audience must differ.
+`internal/browserhandoffv2.DecodeOpen` rejects unknown, duplicate, omitted,
+noncanonical and digest-drifted documents; the Provider must additionally
+verify exact delegated peer/route and current Provider-local authority before
+binding. The separate `cdpfence.Ingress` must remain the unique per-action
+execution path. A passing HMAC unit test, Docker CDP test or PostgreSQL replay
+test is not the Browser v3 process or Phase 6 full-system gate.
+
+The Desktop private `desktophandoffv2` package defines canonical prepared,
+start and started messages. The Provider v2 handler reserves capacity at
+prepare without opening the real media reader; the Product adapter waits for
+the public WebRTC sender/recording/demultiplexer readiness, then starts and
+revalidates authority before forwarding frames. Production Desktop Provider
+private ingress rejects the historical v1 streaming subprotocol.
+Keep the original absolute connection/first-media deadlines and fail-closed
+runtime queue behavior. Under race instrumentation the historical immediate
+v1 stream can fill its 32-frame preconnection buffer before WebRTC connects;
+do not treat a green non-race v1 integration or a fake single-RTP-packet v2
+test as the real decoded-frame/Docker gate. The arm64 native image tagged test
+now reassembles a complete broker VP8 keyframe and decodes it with ffmpeg in
+the read-only candidate container via stdin; this is broker-level evidence,
+not proof that a real Product WebRTC client displayed a v2 private-bridge
+frame.
 
 The complete Slice 6 runtime inventory has one logical Provider role but
 three separate process profiles for coding-shell, Browser-only and
@@ -1004,9 +1087,20 @@ absolute directory containing precisely the verified lock archives; an invalid
 cache never falls back to live downloads. The historical Phase 5 `build.sh`
 and publication workflow are not substitutes.
 
+The source-bound candidate unit tests also require Go 1.26.8. For the full
+repository suite, clear `GOROOT` after `mise exec`: the Conformance Runner
+intentionally rejects an externally supplied `GOROOT`, while the selected Go
+binary remains first on `PATH`:
+
+```bash
+mise exec go@1.26.8 -- env -u GOROOT go test -race -shuffle=on -count=1 ./...
+mise exec go@1.26.8 -- env -u GOROOT go vet ./...
+```
+
 ```bash
 mise exec go@1.26.8 -- profiles/desktop/image/build-phase6-candidate.sh \
-  linux/arm64/v8 /absolute/private/path/desktop-phase6-candidate.json
+  linux/arm64/v8 /absolute/private/path/desktop-phase6-candidate.json \
+  /absolute/private/path/workload-accounts.json
 
 SANDBOX_RUNTIME_DESKTOP_MUX_INTEGRATION=1 \
 SANDBOX_RUNTIME_DESKTOP_CANDIDATE_MANIFEST=/absolute/private/path/desktop-phase6-candidate.json \
@@ -1129,14 +1223,19 @@ command path, not an artifact release claim. Desktop v3
 independently verifies the matching executor-v2 runtime and repeats affected
 security gates.
 
-The formal Slice 5 campaign uses one clean runtime commit and a separate
-evidence-tool commit. Build the Desktop candidate from the runtime commit,
-then make only the closed evidence-test change accepted by the Phase 6
-repository binder. Both real gates must bind those same two revisions:
+The following formal Slice 5 campaign is historical: reproduce it only from
+the two pinned original revisions and their original inputs. Do not run its
+v1 Desktop private request against the current v2-only candidate command,
+rewrite its evidence, or present a current checkout's result as Slice 5
+requalification. The formal Slice 5 campaign uses one clean runtime commit
+and a separate evidence-tool commit. Build the Desktop candidate from the
+runtime commit, then make only the closed evidence-test change accepted by
+the Phase 6 repository binder. Both real gates must bind those same two revisions:
 
 ```bash
 profiles/desktop/image/build-phase6-candidate.sh \
-  linux/arm64/v8 /absolute/private/path/desktop-phase6-slice5-candidate.json
+  linux/arm64/v8 /absolute/private/path/desktop-phase6-slice5-candidate.json \
+  /absolute/private/path/workload-accounts.json
 
 SANDBOX_RUNTIME_VAULT_TRANSIT_INTEGRATION=1 \
 SANDBOX_RUNTIME_DESKTOP_CANDIDATE_MANIFEST=/absolute/private/path/desktop-phase6-slice5-candidate.json \
@@ -1186,6 +1285,44 @@ go run ./cmd/verify-product-phase6-slice5-evidence \
 
 The retained result must state `current_head_covered=false`; it preserves the
 historical Slice 5 claim and never qualifies successor source.
+
+For the current Desktop v2 checkpoint, run the new protocol/Provider tests
+and the composed Product PostgreSQL/WebRTC race test against a disposable
+PostgreSQL DSN. These are regression checks, not a Slice 6 evidence manifest:
+
+```bash
+go test -race -shuffle=on -count=1 \
+  ./internal/desktophandoffv2 ./provider/desktop/gateway ./product/adapter/gateway
+
+SANDBOX_RUNTIME_PRODUCT_POSTGRES_URL='postgres://.../postgres?sslmode=disable' \
+  go test -race -tags=integration -shuffle=on -count=1 \
+  -run '^TestIntegrationComposedDesktopProductFaultSecurityAndCleanup$' \
+  ./product/adapter/postgres
+```
+
+The current Slice 6 v2 process gate must have its own identity and evidence,
+reuse only neutral orchestration/cleanup utilities, and prove a client-decoded
+real Docker frame, media/input/recording, failure matrix and exact cleanup.
+
+For the Browser action-ingress v2 checkpoint, run the closed DTO, Gateway
+projection/resolver, ingress admission ordering and Provider client tests:
+
+```bash
+go test -race -shuffle=on -count=1 \
+  ./internal/browseringress ./internal/browserhandoffv2 \
+  ./gateway/cdpfence ./product/adapter/gateway ./provider/browser/gateway
+
+SANDBOX_RUNTIME_PRODUCT_POSTGRES_URL='postgres://.../postgres?sslmode=disable' \
+  go test -tags=integration -count=1 \
+  -run '^TestIntegrationBrowserSlotAndSessionDispatchIsolation$' \
+  ./product/adapter/postgres
+```
+
+The PostgreSQL test exercises the committed Browser binding and drift
+rejection. It does not provision Redis or prove the independent ingress
+process. The raw capacity claim in the Gateway→ingress Open must never be
+written to ordinary logs, errors or evidence; production uses separate live
+TLS/CRL clients and no direct Gateway→Browser Provider route.
 
 The accepted Slice 5 archive binds runtime revision
 `c189330c5ed0aa52c60b6b85c5cd9c6b59fbef10`, evidence-tool revision

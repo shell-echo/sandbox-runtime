@@ -175,7 +175,16 @@ func (a *Vertical) finishCancellation(ctx context.Context, record browser.Record
 	if err != nil {
 		return Operation{}, err
 	}
-	return operationProjection(cancelled)
+	operation, err := operationProjection(cancelled)
+	if err != nil {
+		return Operation{}, err
+	}
+	if cancelled.Allocation == nil {
+		if err := a.retireUnallocated(ctx, cancelled); err != nil {
+			return operation, err
+		}
+	}
+	return operation, nil
 }
 
 func (a *Vertical) GetOperation(ctx context.Context, operationID string) (Operation, error) {
@@ -363,7 +372,7 @@ func (a *Vertical) invalidate(ctx context.Context, record browser.Record, now ti
 }
 func (a *Vertical) cleanupTerminal(ctx context.Context, record browser.Record) (browser.Record, error) {
 	if record.Allocation == nil {
-		return record.Clone(), nil
+		return record.Clone(), a.retireUnallocated(ctx, record)
 	}
 	now := a.clock.Now().UTC()
 	if record.Status != browser.StatusFailed && record.Status != browser.StatusCancelled && record.Request.ExpiresAt.After(now) {
@@ -373,6 +382,20 @@ func (a *Vertical) cleanupTerminal(ctx context.Context, record browser.Record) (
 		return record.Clone(), err
 	}
 	return record.Clone(), nil
+}
+
+func (a *Vertical) retireUnallocated(ctx context.Context, record browser.Record) error {
+	if record.Status != browser.StatusFailed && record.Status != browser.StatusCancelled &&
+		record.Status != browser.StatusOutcomeUnknown {
+		return nil
+	}
+	retirement, ok := a.runtime.(interface {
+		RetireUnallocated(context.Context, browser.Record) error
+	})
+	if !ok {
+		return nil
+	}
+	return retirement.RetireUnallocated(ctx, record)
 }
 func (a *Vertical) persistStatus(ctx context.Context, record browser.Record, status browser.Status, observedAt time.Time) (browser.Record, error) {
 	if record.Status != browser.StatusAccepted && record.Status != browser.StatusRunning {

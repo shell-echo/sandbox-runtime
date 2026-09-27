@@ -20,6 +20,17 @@ type tokenProvider struct {
 	material secretref.SecretMaterial
 }
 
+func TestGatewayExternalPurposesDoNotInheritProductRole(t *testing.T) {
+	for _, purpose := range []secretref.Purpose{secretref.PurposeActionHistoryWitnessDSN, secretref.PurposeCapacityValkeyCredentials} {
+		if !validPurpose(secretref.RoleGateway, purpose) {
+			t.Fatalf("Gateway purpose %s rejected", purpose)
+		}
+		if validPurpose(secretref.RoleProduct, purpose) || validPurpose(secretref.RoleProvider, purpose) {
+			t.Fatalf("external purpose %s escaped Gateway role", purpose)
+		}
+	}
+}
+
 func (p tokenProvider) ResolveSecret(_ context.Context, binding secretref.Binding) (secretref.SecretMaterial, error) {
 	if p.material.Binding != binding {
 		return secretref.SecretMaterial{}, secretref.ErrUnavailable

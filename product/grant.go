@@ -22,18 +22,19 @@ type ConnectionGrant struct {
 	ExpiresAt                                                      time.Time
 }
 type GatewayBinding struct {
-	ConnectionID, TenantID                           string
-	Actor                                            ActorRef
-	WorkspaceID, SlotKey, SessionID, ProtocolProfile string
-	SlotGeneration                                   int64
-	ControlLeaseID                                   string
-	ControlFence                                     int64
-	AccessMode                                       string
-	RecordingPolicy                                  string
-	ExpiresAt                                        time.Time
-	ProviderRevisionID, SandboxID, HandoffReference  string
-	ConnectionGeneration                             int64
-	HandoffExpiresAt                                 time.Time
+	ConnectionID, TenantID                                                 string
+	Actor                                                                  ActorRef
+	WorkspaceID, SlotKey, SessionID, ProtocolProfile                       string
+	SlotGeneration                                                         int64
+	ControlLeaseID                                                         string
+	ControlFence                                                           int64
+	AccessMode                                                             string
+	RecordingPolicy                                                        string
+	ExpiresAt                                                              time.Time
+	ProviderRevisionID, SandboxID, HandoffReference                        string
+	ConnectionGeneration                                                   int64
+	HandoffExpiresAt                                                       time.Time
+	BrowserProviderAudience, BrowserTenantBindingDigest, BrowserKeyVersion string
 }
 type ConnectionGrantCommand struct {
 	TenantID                                                          string

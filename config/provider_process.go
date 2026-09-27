@@ -6,10 +6,14 @@ import (
 	"net"
 	"net/url"
 	"path/filepath"
+	"reflect"
+	"regexp"
 	"strings"
 
+	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
 	"github.com/shell-echo/sandbox-runtime/internal/secretref"
 	"github.com/shell-echo/sandbox-runtime/option"
+	browserimage "github.com/shell-echo/sandbox-runtime/profiles/browser/image"
 	desktopimage "github.com/shell-echo/sandbox-runtime/profiles/desktop/image"
 	"github.com/shell-echo/sandbox-runtime/provider/admission"
 	"github.com/spf13/viper"
@@ -31,6 +35,7 @@ const (
 	ProviderProductionLevel           ProviderDeploymentLevel = "production"
 	ProviderLocalCandidateLevel       ProviderDeploymentLevel = "local_candidate"
 	ProviderProcessCodingShellProfile ProviderProcessProfile  = "coding_shell"
+	ProviderProcessBrowserProfile     ProviderProcessProfile  = "browser"
 	ProviderProcessDesktopProfile     ProviderProcessProfile  = "desktop"
 )
 
@@ -48,6 +53,7 @@ type ProviderProcessConfig struct {
 	ProtectedAdmission ProviderProcessAdmissionConfig  `mapstructure:"protected_admission"`
 	Postgres           ProviderPostgresConfig          `mapstructure:"postgres"`
 	Coding             ProviderProcessCodingConfig     `mapstructure:"coding"`
+	Browser            ProviderProcessBrowserConfig    `mapstructure:"browser"`
 	Desktop            ProviderProcessDesktopConfig    `mapstructure:"desktop"`
 	Reconciliation     ProviderReconciliationConfig    `mapstructure:"reconciliation"`
 	Materials          RoleMaterialsConfig             `mapstructure:"materials"`
@@ -69,6 +75,9 @@ type ProviderPostgresConfig struct {
 	MigrationDSNFile        string `mapstructure:"migration_dsn_file"`
 	RuntimeDSNFile          string `mapstructure:"runtime_dsn_file"`
 	RuntimeDSNBindingID     string `mapstructure:"runtime_dsn_binding_id"`
+	ClientAgentSocket       string `mapstructure:"client_agent_socket"`
+	ClientAgentUID          uint32 `mapstructure:"client_agent_uid"`
+	ClientAgentGID          uint32 `mapstructure:"client_agent_gid"`
 	MigrationRole           string `mapstructure:"migration_role"`
 	RuntimeRole             string `mapstructure:"runtime_role"`
 	StartupTimeoutSeconds   int    `mapstructure:"startup_timeout_seconds"`
@@ -83,6 +92,21 @@ type ProviderProcessCodingConfig struct {
 	Terminal  ProviderTerminalConfig        `mapstructure:"terminal"`
 	Artifact  ProviderArtifactConfig        `mapstructure:"artifact"`
 }
+
+// Browser is a separate Provider instance, never an executor process or a
+// second owner of the Browser handoff. Static executor credentials and file
+// session registries are intentionally absent from this v3 authority.
+type ProviderProcessBrowserConfig struct {
+	ExecutorURL            string                          `mapstructure:"executor_url"`
+	MuxSocketPath          string                          `mapstructure:"mux_socket_path"`
+	UsageRetentionSeconds  int                             `mapstructure:"usage_retention_seconds"`
+	ShutdownCleanupSeconds int                             `mapstructure:"shutdown_cleanup_seconds"`
+	Docker                 ProviderBrowserDockerConfig     `mapstructure:"docker"`
+	Provenance             ProviderBrowserProvenanceConfig `mapstructure:"provenance"`
+	RestrictedNetwork      ProviderBrowserNetworkConfig    `mapstructure:"restricted_network"`
+}
+
+var browserMuxSocketPattern = regexp.MustCompile(`^browser-mux-[0-9a-f]{32}\.sock$`)
 
 type ProviderProcessDesktopConfig struct {
 	Architecture                      string                          `mapstructure:"architecture"`
@@ -179,9 +203,9 @@ func (c *ProviderProcessConfig) Validate() error { //nolint:cyclop
 	if !materialSchema && c.SchemaVersion != ProviderLegacyLocalCandidateSchema {
 		return errors.New("provider_process schema_version is invalid")
 	}
-	if liveSchema && !((c.DeploymentLevel == ProviderProductionLevel && c.Profile == ProviderProcessCodingShellProfile) ||
+	if liveSchema && !((c.DeploymentLevel == ProviderProductionLevel && (c.Profile == ProviderProcessCodingShellProfile || c.Profile == ProviderProcessBrowserProfile)) ||
 		(c.DeploymentLevel == ProviderLocalCandidateLevel && c.Profile == ProviderProcessDesktopProfile)) {
-		return errors.New("Provider v3 requires coding_shell production or Desktop local_candidate")
+		return errors.New("Provider v3 requires coding_shell/Browser production or Desktop local_candidate")
 	}
 	if c.DeploymentLevel != ProviderProductionLevel && c.DeploymentLevel != ProviderLocalCandidateLevel {
 		return errors.New("provider_process requires deployment_level=production or local_candidate")
@@ -192,7 +216,10 @@ func (c *ProviderProcessConfig) Validate() error { //nolint:cyclop
 	var transportErr error
 	if liveSchema {
 		route := ProviderPrivateRouteTerminal
-		if c.Profile == ProviderProcessDesktopProfile {
+		switch c.Profile {
+		case ProviderProcessBrowserProfile:
+			route = ProviderPrivateRouteBrowser
+		case ProviderProcessDesktopProfile:
 			route = ProviderPrivateRouteDesktop
 		}
 		transportErr = c.Transport.validateLiveEnabled(route)
@@ -232,6 +259,9 @@ func (c *ProviderProcessConfig) Validate() error { //nolint:cyclop
 	}
 	switch c.Profile {
 	case ProviderProcessCodingShellProfile:
+		if !reflect.DeepEqual(c.Browser, ProviderProcessBrowserConfig{}) {
+			return errors.New("Browser runtime authority is forbidden for the coding_shell Provider profile")
+		}
 		if c.DeploymentLevel != ProviderProductionLevel {
 			return errors.New("coding_shell Provider profile requires deployment_level=production")
 		}
@@ -249,11 +279,29 @@ func (c *ProviderProcessConfig) Validate() error { //nolint:cyclop
 			return errors.New("Provider coding-shell v3 forbids Desktop executor authority")
 		}
 	case ProviderProcessDesktopProfile:
+		if !reflect.DeepEqual(c.Browser, ProviderProcessBrowserConfig{}) {
+			return errors.New("Browser runtime authority is forbidden for the Desktop Provider profile")
+		}
 		if err := c.validateDesktop(materialSchema); err != nil {
 			return err
 		}
 		if c.Coding.Lifecycle.Image != "" {
 			return errors.New("coding runtime authority is forbidden for the desktop Provider profile")
+		}
+	case ProviderProcessBrowserProfile:
+		if !liveSchema || c.DeploymentLevel != ProviderProductionLevel {
+			return errors.New("Browser Provider profile requires v3 production authority")
+		}
+		if len(c.Transport.Private.AllowedClientURIIdentities) != 1 ||
+			c.Transport.Private.AllowedClientURIIdentities[0] != "spiffe://sandbox-runtime.test/browser-action-ingress-runtime" {
+			return errors.New("Browser Provider private listener requires only the action ingress identity")
+		}
+		if err := c.validateBrowser(); err != nil {
+			return err
+		}
+		defaults := defaultProviderProcessConfig()
+		if !reflect.DeepEqual(c.Coding, defaults.Coding) || !reflect.DeepEqual(c.Desktop, defaults.Desktop) {
+			return errors.New("coding/Desktop runtime authority is forbidden for the Browser Provider profile")
 		}
 	default:
 		return fmt.Errorf("provider_process.profile %q is invalid", c.Profile)
@@ -265,7 +313,7 @@ func (c *ProviderProcessConfig) Validate() error { //nolint:cyclop
 }
 
 func (c *ProviderTransportConfig) validateLiveEnabled(route string) error {
-	if (route != ProviderPrivateRouteTerminal && route != ProviderPrivateRouteDesktop) ||
+	if (route != ProviderPrivateRouteTerminal && route != ProviderPrivateRouteBrowser && route != ProviderPrivateRouteDesktop) ||
 		!c.Private.Enabled || len(c.Private.RoutePolicy) != 1 || c.Private.RoutePolicy[0] != route ||
 		net.ParseIP(c.Private.Address.Host) == nil ||
 		validateAbsoluteSecretPath("Provider security profile", c.SecurityProfilePath) != nil ||
@@ -332,6 +380,18 @@ func (c *ProviderProcessConfig) validateAdmission(materialSchema bool) error {
 
 func (c *ProviderProcessConfig) validatePostgres(materialSchema bool) error {
 	p := c.Postgres
+	separateClientAgent := c.SchemaVersion == ProviderProductionSchemaV3 &&
+		(c.Profile == ProviderProcessBrowserProfile || c.Profile == ProviderProcessDesktopProfile)
+	if separateClientAgent {
+		if validateAbsoluteSecretPath("Provider PostgreSQL client agent socket", p.ClientAgentSocket) != nil ||
+			p.ClientAgentSocket == c.Transport.AgentSocket || p.ClientAgentSocket == c.Transport.SecurityProfilePath ||
+			p.ClientAgentSocket == c.Transport.PeerCRLRoleFile || p.ClientAgentUID == 0 || p.ClientAgentGID == 0 ||
+			p.ClientAgentUID == c.Transport.AgentUID || p.ClientAgentGID == c.Transport.AgentGID {
+			return errors.New("Provider PostgreSQL requires a distinct purpose-bound client agent")
+		}
+	} else if p.ClientAgentSocket != "" || p.ClientAgentUID != 0 || p.ClientAgentGID != 0 {
+		return errors.New("Provider PostgreSQL client agent is only available to v3 Browser/Desktop")
+	}
 	if p.StartupTimeoutSeconds < 1 || p.StartupTimeoutSeconds > 60 || p.OperationTimeoutSeconds < 1 || p.OperationTimeoutSeconds > 30 || p.MaxConnections < 1 || p.MaxConnections > 64 || p.MinConnections < 0 || p.MinConnections > p.MaxConnections {
 		return errors.New("provider_process PostgreSQL connection bounds are invalid")
 	}
@@ -371,6 +431,37 @@ func (c *ProviderProcessConfig) validateCoding() error {
 	}
 	if !filepath.IsAbs(artifact.StagingRoot) {
 		return errors.New("provider_process.coding.artifact.staging_root must be absolute")
+	}
+	return nil
+}
+
+func (c *ProviderProcessConfig) validateBrowser() error {
+	b := c.Browser
+	if b.ExecutorURL == "" || b.MuxSocketPath == "" || b.UsageRetentionSeconds < 60 ||
+		b.UsageRetentionSeconds > 2_592_000 || b.ShutdownCleanupSeconds < 1 || b.ShutdownCleanupSeconds > 300 ||
+		b.Docker.validate() != nil || b.Docker.Image != browserimage.LockedPublication().Image() ||
+		!filepath.IsAbs(b.Docker.DataRoot) || filepath.Clean(b.Docker.DataRoot) != b.Docker.DataRoot ||
+		!filepath.IsAbs(b.Docker.ManifestPath) || filepath.Clean(b.Docker.ManifestPath) != b.Docker.ManifestPath ||
+		!filepath.IsAbs(b.Docker.SeccompPath) || filepath.Clean(b.Docker.SeccompPath) != b.Docker.SeccompPath ||
+		!filepath.IsAbs(b.MuxSocketPath) || filepath.Clean(b.MuxSocketPath) != b.MuxSocketPath ||
+		filepath.Dir(b.MuxSocketPath) != phase6security.BrowserMuxSocketDirectory ||
+		!browserMuxSocketPattern.MatchString(filepath.Base(b.MuxSocketPath)) ||
+		!filepath.IsAbs(b.Provenance.ExecutablePath) || filepath.Clean(b.Provenance.ExecutablePath) != b.Provenance.ExecutablePath ||
+		!providerSHA256Pattern.MatchString(b.Provenance.ExecutableDigest) {
+		return errors.New("Provider Browser runtime, paths, provenance, or bounds are invalid")
+	}
+	parsed, err := url.Parse(b.ExecutorURL)
+	if err != nil || parsed.Scheme != "wss" || parsed.Host == "" || parsed.Path != "/executor" ||
+		parsed.EscapedPath() != "/executor" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" ||
+		net.ParseIP(parsed.Hostname()) == nil || parsed.Port() == "" || parsed.String() != b.ExecutorURL {
+		return errors.New("Provider Browser executor URL must be an exact private numeric endpoint")
+	}
+	if err := b.RestrictedNetwork.validate(b.Docker.NetworkPolicyReference); err != nil {
+		return fmt.Errorf("provider_process.browser.restricted_network: %w", err)
+	}
+	if b.RestrictedNetwork.Namespace != b.Docker.Namespace || b.RestrictedNetwork.ControllerID != b.Docker.ControllerID ||
+		strings.TrimSpace(b.RestrictedNetwork.Host) != strings.TrimSpace(b.Docker.Host) {
+		return errors.New("Provider Browser runtime and network ownership must match")
 	}
 	return nil
 }

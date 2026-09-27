@@ -9,6 +9,12 @@ import (
 
 func validateTrustAnchors(anchors []TrustAnchor, edges []TrustEdge, public []PublicListenerBinding, controller CertificateControllerAuthority, principals map[string]Principal,
 	external map[string]ExternalService) error {
+	return validateTrustAnchorsWithPostgres(anchors, edges, public, controller, nil, principals, external)
+}
+
+func validateTrustAnchorsWithPostgres(anchors []TrustAnchor, edges []TrustEdge, public []PublicListenerBinding,
+	controller CertificateControllerAuthority, postgres []PostgresClientAgentBinding,
+	principals map[string]Principal, external map[string]ExternalService) error {
 	byID := make(map[string]TrustAnchor, len(anchors))
 	storage, artifact, targets := map[string]bool{}, map[string]bool{}, map[string]TrustAnchor{}
 	previous := ""
@@ -107,6 +113,14 @@ func validateTrustAnchors(anchors []TrustAnchor, edges []TrustEdge, public []Pub
 	}
 	references[bootstrap.ID]++
 	markConsumer(bootstrap.ID, controller.DeploymentName)
+	for _, binding := range postgres {
+		anchor, ok := byID[binding.IssuerAnchorID]
+		if !ok || anchor.Purpose != "client_verification" || !slices.Contains(anchor.Consumers, binding.SubjectDeployment) {
+			return ErrInvalidProfile
+		}
+		references[anchor.ID]++
+		markConsumer(anchor.ID, binding.SubjectDeployment)
+	}
 	for id, anchor := range byID {
 		if references[id] < 1 || len(requiredConsumers[id]) != len(anchor.Consumers) {
 			return ErrInvalidProfile

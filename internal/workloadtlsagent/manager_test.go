@@ -73,8 +73,17 @@ func (f *fakeCertificateClient) Issue(_ context.Context, csrPEM []byte, ttl time
 	serial := new(big.Int).SetInt64(f.serial)
 	notBefore, notAfter := f.now.Add(-time.Second), f.now.Add(ttl)
 	identity, _ := url.Parse(f.policy.URI)
+	subject := pkix.Name{}
+	usages := []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth}
+	if f.policy.Purpose == workloadpki.PostgresClientPurpose {
+		if workloadpki.ValidatePostgresClientCSR(csrPEM, f.policy.Postgres) != nil {
+			return workloadpki.IssuedCertificate{}, workloadpki.ErrDenied
+		}
+		subject.CommonName = f.policy.Postgres.CommonName
+		usages = []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}
+	}
 	template := &x509.Certificate{SerialNumber: serial, NotBefore: notBefore, NotAfter: notAfter, DNSNames: append([]string(nil), f.policy.DNSNames...),
-		URIs: []*url.URL{identity}, KeyUsage: x509.KeyUsageDigitalSignature, ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth}}
+		Subject: subject, BasicConstraintsValid: true, URIs: []*url.URL{identity}, KeyUsage: x509.KeyUsageDigitalSignature, ExtKeyUsage: usages}
 	certificateDER, err := x509.CreateCertificate(rand.Reader, template, f.ca, csr.PublicKey, f.caKey)
 	if err != nil {
 		return workloadpki.IssuedCertificate{}, err
@@ -139,6 +148,58 @@ func testManager(t *testing.T, now *time.Time) (*Manager, *fakeCertificateClient
 		t.Fatal(err)
 	}
 	return manager, client
+}
+
+func TestManagerUsesSeparatePostgresClientCSRAndSigner(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+	digest := "sha256:" + strings.Repeat("a", 64)
+	registry, err := securityprincipal.NewRegistry(digest, digest, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	requester, err := registry.New(securityprincipal.KindTLSAgent, "provider_tls_agent", securityprincipal.RoleProvider, digest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	subject, err := registry.New(securityprincipal.KindRuntimeRole, "provider", securityprincipal.RoleProvider, digest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	publicKey, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	postgres := workloadpki.PostgresClientIdentity{OwnerDeployment: "provider-browser-runtime",
+		DatabaseName: "provider_browser", RuntimeRole: "browser_provider_runtime", ServiceName: "postgres",
+		URI: "spiffe://sandbox-runtime.test/provider-browser-runtime", MaxTTL: 7 * time.Minute}
+	postgres.CommonName = workloadpki.PostgresClientCommonName(postgres.RuntimeRole)
+	policy := workloadpki.Policy{ID: "provider-browser-postgres-client", Registry: registry,
+		Requester: requester, Subject: subject, TrustDomain: "sandbox-runtime.test",
+		URI: postgres.URI, Usages: []string{"client_auth"}, VaultRole: "provider-browser-postgres-client",
+		MaxTTLSeconds: 420, PublicKey: publicKey, Purpose: workloadpki.PostgresClientPurpose, Postgres: postgres}
+	client := newFakeCertificateClient(t, &now, policy)
+	manager, err := New(Config{Policy: policy, Client: client, TTL: 6 * time.Minute,
+		RotateAfter: 2 * time.Minute, Overlap: 30 * time.Second, CheckInterval: time.Second,
+		RevocationPollInterval: 10 * time.Second, RevocationMaxStaleness: 30 * time.Second,
+		OperationTimeout: 3 * time.Second, Now: func() time.Time { return now }, Random: rand.Reader})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close(context.Background())
+	if err := manager.Bootstrap(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	certificate, err := manager.Certificate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	leaf, err := x509.ParseCertificate(certificate.Certificate[0])
+	if err != nil || workloadpki.ValidatePostgresClientLeaf(leaf, postgres, now) != nil {
+		t.Fatalf("dedicated PostgreSQL leaf = %v", err)
+	}
+	if leaf.Subject.CommonName != postgres.CommonName || len(leaf.DNSNames) != 0 {
+		t.Fatal("agent emitted ordinary or unbound PostgreSQL certificate")
+	}
 }
 
 func TestManagerGeneratesLocalKeySignsAndRotatesWithBoundedOverlap(t *testing.T) {

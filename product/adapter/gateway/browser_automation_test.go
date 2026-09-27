@@ -16,8 +16,51 @@ import (
 	"github.com/coder/websocket"
 	"github.com/shell-echo/sandbox-runtime/gateway"
 	"github.com/shell-echo/sandbox-runtime/gateway/cdpfence"
+	"github.com/shell-echo/sandbox-runtime/internal/browserhandoffv2"
 	"github.com/shell-echo/sandbox-runtime/product"
 )
+
+func TestBrowserAutomationSelectsResolverFromConsumedGrant(t *testing.T) {
+	binding := testBrowserAutomationBinding(time.Now().UTC())
+	store := &grantStoreSpy{ticket: strings.Repeat("z", 43), active: true, binding: binding}
+	resolver := &automationFencedResolver{}
+	selected := make(chan product.GatewayBinding, 1)
+	handler, err := NewBrowserAutomationHandler(BrowserAutomationOptions{
+		Grants: store, FencedResolverForBinding: func(value product.GatewayBinding) (gateway.FencedReferenceResolver, error) {
+			selected <- value
+			return resolver, nil
+		}, Audit: &auditStoreSpy{}, Capacity: newAutomationFencedCapacity(t, "v1."+strings.Repeat("z", 32)),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(handler)
+	defer server.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	connection, _, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(server.URL, "http"), &websocket.DialOptions{
+		HTTPHeader:   http.Header{"Authorization": []string{"Ticket " + store.ticket}},
+		Subprotocols: []string{BrowserAutomationSubprotocol},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer connection.CloseNow()
+	select {
+	case current := <-selected:
+		if current.ConnectionID != binding.ConnectionID || current.ControlLeaseID != binding.ControlLeaseID ||
+			current.HandoffReference != binding.HandoffReference {
+			t.Fatal("binding-specific private resolver did not receive consumed grant")
+		}
+	case <-ctx.Done():
+		t.Fatal("binding-specific resolver was not selected")
+	}
+	if _, err := NewBrowserAutomationHandler(BrowserAutomationOptions{Grants: store, FencedResolver: resolver,
+		FencedResolverForBinding: func(product.GatewayBinding) (gateway.FencedReferenceResolver, error) { return resolver, nil },
+		Audit:                    &auditStoreSpy{}, Capacity: newAutomationFencedCapacity(t, "v1."+strings.Repeat("y", 32))}); err == nil {
+		t.Fatal("parallel legacy and binding-specific Browser paths accepted")
+	}
+}
 
 func TestBrowserAutomationHandlerTranslatesClosedProtocolThroughFence(t *testing.T) {
 	now := time.Now().UTC()
@@ -387,7 +430,7 @@ func (r networkProviderResolver) Resolve(_ context.Context, reference string) (g
 	}
 	return gateway.Endpoint{
 		Reference: reference, SandboxID: "sandbox-browser", BrowserSessionID: "ses-browser",
-		CapabilityProfileID: BrowserAutomationSubprotocol, ConnectionGeneration: 3,
+		CapabilityProfileID: browserhandoffv2.CapabilityProfileID, ConnectionGeneration: 3,
 		ExpiresAt: time.Now().UTC().Add(time.Minute),
 		Dial: func(context.Context) (gateway.Stream, error) {
 			return newAutomationBackendStream(r.resolver), nil

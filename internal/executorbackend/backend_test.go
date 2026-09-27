@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/shell-echo/sandbox-runtime/internal/browserbinding"
 	"github.com/shell-echo/sandbox-runtime/internal/executorprotocol"
 	"github.com/shell-echo/sandbox-runtime/internal/handoff"
 )
@@ -165,7 +166,7 @@ func writeTLSMaterial(t *testing.T, directory string) tlsMaterial {
 
 func testOpen() executorprotocol.Open {
 	now := time.Now().UTC()
-	open := executorprotocol.Open{Protocol: executorprotocol.ProtocolID, Role: executorprotocol.RoleBrowser, RequestID: "request-browser-1", TenantBindingDigest: handoff.TenantBindingDigestPrefix + strings.Repeat("a", 64), ProviderRevisionID: "provider-revision-1", SandboxID: "sandbox-1", RuntimeSessionID: "browser-session-1", CapabilityProfileID: "browser-v1", MediaProfileID: "browser-cdp-v1", ControlProfileID: "browser-control-v1", HandoffReference: "ref:browser-session:opaque-1", ConnectionGeneration: 1, ConnectionEpoch: "epoch-1", Fence: strings.Repeat("b", handoff.MinFenceBytes), AuthorityExpiresAt: now.Add(time.Minute).Format(time.RFC3339Nano), HandoffExpiresAt: now.Add(2 * time.Minute).Format(time.RFC3339Nano), Codec: "application/json"}
+	open := executorprotocol.Open{Protocol: executorprotocol.ProtocolID, Role: executorprotocol.RoleBrowser, RequestID: "request-browser-1", TenantBindingDigest: browserbinding.Prefix + strings.Repeat("a", 64), ProviderRevisionID: "provider-revision-1", SandboxID: "sandbox-1", RuntimeSessionID: "browser-session-1", CapabilityProfileID: "browser-v1", MediaProfileID: "browser-cdp-v1", ControlProfileID: "browser-control-v1", HandoffReference: "ref:browser-session:opaque-1", ConnectionGeneration: 1, ConnectionEpoch: "epoch-1", Fence: strings.Repeat("b", handoff.MinFenceBytes), AuthorityExpiresAt: now.Add(time.Minute).Format(time.RFC3339Nano), HandoffExpiresAt: now.Add(2 * time.Minute).Format(time.RFC3339Nano), Codec: "application/json"}
 	open.HandoffDigest = executorprotocol.ReferenceDigest(open.HandoffReference)
 	open.AuthorityDigest = open.CalculateAuthorityDigest()
 	open.RequestDigest = open.CalculateRequestDigest()

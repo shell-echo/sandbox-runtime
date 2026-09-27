@@ -13,14 +13,17 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/shell-echo/sandbox-runtime/gateway"
 )
 
 const (
-	integrationPostgresAdminURLVariable   = "SANDBOX_RUNTIME_ACTION_HISTORY_POSTGRES_ADMIN_URL"
-	integrationPostgresRuntimeURLVariable = "SANDBOX_RUNTIME_ACTION_HISTORY_POSTGRES_URL"
-	integrationPostgresDeniedURLVariable  = "SANDBOX_RUNTIME_ACTION_HISTORY_POSTGRES_DENIED_URL"
+	integrationPostgresAdminURLVariable    = "SANDBOX_RUNTIME_ACTION_HISTORY_POSTGRES_ADMIN_URL"
+	integrationPostgresRuntimeURLVariable  = "SANDBOX_RUNTIME_ACTION_HISTORY_POSTGRES_URL"
+	integrationPostgresDeniedURLVariable   = "SANDBOX_RUNTIME_ACTION_HISTORY_POSTGRES_DENIED_URL"
+	integrationPostgresMutableRoleVariable = "SANDBOX_RUNTIME_ACTION_HISTORY_MUTABLE_ROLE_TEST"
 )
 
 func TestIntegrationPostgresActionHistoryWitnessConcurrentCASAndReconnect(t *testing.T) {
@@ -35,6 +38,7 @@ func TestIntegrationPostgresActionHistoryWitnessConcurrentCASAndReconnect(t *tes
 	}
 	first := integrationPostgresWitness(t, capacity, firstPool, 500*time.Millisecond)
 	second := integrationPostgresWitness(t, capacity, secondPool, 500*time.Millisecond)
+	provisioner := integrationPostgresWitness(t, capacity, admin, 500*time.Millisecond)
 	policy := strings.Repeat("a", 64)
 	cleanupIntegrationPostgresWitness(t, admin, first, policy)
 	initial := mustActionHistoryCheckpoint(t, 0, "b")
@@ -48,11 +52,7 @@ func TestIntegrationPostgresActionHistoryWitnessConcurrentCASAndReconnect(t *tes
 		go func(index int) {
 			defer wait.Done()
 			<-start
-			witness := first
-			if index%2 != 0 {
-				witness = second
-			}
-			provisionErrors <- witness.Provision(context.Background(), policy, initial)
+			provisionErrors <- provisioner.Provision(context.Background(), policy, initial)
 		}(index)
 	}
 	close(start)
@@ -135,23 +135,113 @@ func TestIntegrationPostgresActionHistoryWitnessSchemaAndRoleFailClosed(t *testi
 		t.Fatal(err)
 	}
 	witness := integrationPostgresWitness(t, capacity, runtime, 500*time.Millisecond)
+	provisioner := integrationPostgresWitness(t, capacity, admin, 500*time.Millisecond)
+	if err := VerifyPostgresActionHistoryRuntimeRole(context.Background(), runtime,
+		runtime.Config().ConnConfig.Database, runtime.Config().ConnConfig.User); err != nil {
+		t.Fatalf("least-privilege runtime role refused: %v", err)
+	}
+	for name, pool := range map[string]*pgxpool.Pool{"migration owner": admin, "denied role": denied} {
+		t.Run(name+" rejected for runtime", func(t *testing.T) {
+			if err := VerifyPostgresActionHistoryRuntimeRole(context.Background(), pool,
+				pool.Config().ConnConfig.Database, pool.Config().ConnConfig.User); !errors.Is(err, ErrActionHistoryUnavailable) {
+				t.Fatalf("unsafe runtime role accepted: %v", err)
+			}
+		})
+	}
+	if err := VerifyPostgresActionHistoryRuntimeRole(context.Background(), runtime,
+		"wrong_database", runtime.Config().ConnConfig.User); !errors.Is(err, ErrActionHistoryUnavailable) {
+		t.Fatalf("wrong database accepted: %v", err)
+	}
+	if err := VerifyPostgresActionHistoryRuntimeRole(context.Background(), runtime,
+		runtime.Config().ConnConfig.Database, "wrong_role"); !errors.Is(err, ErrActionHistoryUnavailable) {
+		t.Fatalf("wrong role accepted: %v", err)
+	}
 	policy := strings.Repeat("d", 64)
 	cleanupIntegrationPostgresWitness(t, admin, witness, policy)
 	initial := mustActionHistoryCheckpoint(t, 0, "e")
-	if err := witness.Provision(context.Background(), policy, initial); err != nil {
+	if err := provisioner.Provision(context.Background(), policy, initial); err != nil {
 		t.Fatal(err)
 	}
+	if err := witness.Provision(context.Background(), strings.Repeat("9", 64), initial); !errors.Is(err, ErrActionHistoryUnavailable) {
+		t.Fatalf("runtime Provision() unexpectedly succeeded: %v", err)
+	}
 
-	for _, statement := range []string{
-		"DELETE FROM sandbox_runtime.action_history_witnesses WHERE false",
-		"TRUNCATE TABLE sandbox_runtime.action_history_witnesses",
-		"UPDATE sandbox_runtime.action_history_witnesses SET policy_fingerprint = policy_fingerprint WHERE false",
-		"CREATE TABLE sandbox_runtime.runtime_must_not_create (value integer)",
-		"CREATE SCHEMA runtime_must_not_create",
+	namespaceBytes := witness.namespaceFingerprint
+	policyBytes, err := decodeActionHistoryFingerprint(policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	validToken := bytes.Repeat([]byte{0x7a}, 32)
+	deniedPolicy := bytes.Repeat([]byte{0x7b}, 32)
+	adminUser := admin.Config().ConnConfig.User
+	if adminUser == runtime.Config().ConnConfig.User {
+		t.Fatal("migration owner and runtime must be distinct roles")
+	}
+	for name, attempt := range map[string]func() error{
+		"insert": func() error {
+			_, err := runtime.Exec(context.Background(), `INSERT INTO sandbox_runtime.action_history_witnesses
+(namespace_fingerprint, policy_fingerprint, format_version, sequence, token) VALUES ($1,$2,1,0,$3)`,
+				namespaceBytes[:], deniedPolicy, validToken)
+			return err
+		},
+		"delete": func() error {
+			_, err := runtime.Exec(context.Background(), `DELETE FROM sandbox_runtime.action_history_witnesses
+WHERE namespace_fingerprint=$1 AND policy_fingerprint=$2`, namespaceBytes[:], policyBytes[:])
+			return err
+		},
+		"truncate": func() error {
+			_, err := runtime.Exec(context.Background(), `TRUNCATE TABLE sandbox_runtime.action_history_witnesses`)
+			return err
+		},
+		"identity update": func() error {
+			_, err := runtime.Exec(context.Background(), `UPDATE sandbox_runtime.action_history_witnesses
+SET policy_fingerprint=policy_fingerprint WHERE namespace_fingerprint=$1 AND policy_fingerprint=$2`,
+				namespaceBytes[:], policyBytes[:])
+			return err
+		},
+		"table DDL": func() error {
+			_, err := runtime.Exec(context.Background(), `CREATE TABLE sandbox_runtime.runtime_must_not_create (value integer)`)
+			return err
+		},
+		"schema DDL": func() error {
+			_, err := runtime.Exec(context.Background(), `CREATE SCHEMA runtime_must_not_create`)
+			return err
+		},
+		"role escalation": func() error {
+			_, err := runtime.Exec(context.Background(), `ALTER ROLE `+
+				pgx.Identifier{runtime.Config().ConnConfig.User}.Sanitize()+` CREATEROLE`)
+			return err
+		},
+		"owner escalation": func() error {
+			_, err := runtime.Exec(context.Background(), `ALTER TABLE sandbox_runtime.action_history_witnesses OWNER TO `+
+				pgx.Identifier{runtime.Config().ConnConfig.User}.Sanitize())
+			return err
+		},
+		"set admin role": func() error {
+			_, err := runtime.Exec(context.Background(), `SET ROLE `+pgx.Identifier{adminUser}.Sanitize())
+			return err
+		},
+		"set provisioner role": func() error {
+			_, err := runtime.Exec(context.Background(), `SET ROLE sandbox_witness_provisioner`)
+			return err
+		},
 	} {
-		if _, err := runtime.Exec(context.Background(), statement); err == nil {
-			t.Fatalf("runtime role executed forbidden statement %q", statement)
-		}
+		t.Run(name, func(t *testing.T) {
+			var pgErr *pgconn.PgError
+			if err := attempt(); !errors.As(err, &pgErr) || pgErr.Code != "42501" {
+				t.Fatalf("runtime privilege denial SQLSTATE = %v; want 42501", postgresSQLState(err))
+			}
+		})
+	}
+	// PostgreSQL can return a successful GRANT command with a warning when a
+	// non-owner has no grant option. Assert the effective privilege, not only
+	// the command result.
+	_, _ = runtime.Exec(context.Background(), `GRANT INSERT ON sandbox_runtime.action_history_witnesses TO `+
+		pgx.Identifier{runtime.Config().ConnConfig.User}.Sanitize())
+	var canInsert bool
+	if err := runtime.QueryRow(context.Background(), `SELECT has_table_privilege(current_user,
+'sandbox_runtime.action_history_witnesses', 'INSERT')`).Scan(&canInsert); err != nil || canInsert {
+		t.Fatalf("runtime acquired INSERT through GRANT: scan error=%v, privilege=%v", err, canInsert)
 	}
 
 	deniedWitness := integrationPostgresWitness(t, capacity, denied, 500*time.Millisecond)
@@ -183,6 +273,17 @@ func TestIntegrationPostgresActionHistoryWitnessSchemaAndRoleFailClosed(t *testi
 	}
 }
 
+func postgresSQLState(err error) string {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		return pgErr.Code
+	}
+	if err == nil {
+		return "<nil>"
+	}
+	return "<non-postgres-error>"
+}
+
 func TestIntegrationPostgresActionHistoryWitnessOperationTimeout(t *testing.T) {
 	pool := integrationPostgresPool(t, integrationPostgresRuntimeURLVariable, 1)
 	connection, err := pool.Acquire(context.Background())
@@ -207,6 +308,43 @@ func TestIntegrationPostgresActionHistoryWitnessOperationTimeout(t *testing.T) {
 	}
 }
 
+func TestIntegrationPostgresActionHistoryRuntimeRoleInheritedPrivilegeDrift(t *testing.T) {
+	if os.Getenv(integrationPostgresMutableRoleVariable) != "1" {
+		t.Skip("set SANDBOX_RUNTIME_ACTION_HISTORY_MUTABLE_ROLE_TEST=1 only for a disposable witness database")
+	}
+	admin := integrationPostgresPool(t, integrationPostgresAdminURLVariable, 2)
+	runtime := integrationPostgresPool(t, integrationPostgresRuntimeURLVariable, 2)
+	database, role := runtime.Config().ConnConfig.Database, runtime.Config().ConnConfig.User
+	if err := VerifyPostgresActionHistoryRuntimeRole(context.Background(), runtime, database, role); err != nil {
+		t.Fatalf("initial runtime role unsafe: %v", err)
+	}
+	roleName := pgx.Identifier{role}.Sanitize()
+	const provisioner = `sandbox_witness_provisioner`
+	if _, err := admin.Exec(context.Background(), `GRANT `+provisioner+` TO `+roleName); err != nil {
+		t.Fatal("grant test-only provisioner membership failed")
+	}
+	revoke := func() error {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		_, err := admin.Exec(ctx, `REVOKE `+provisioner+` FROM `+roleName)
+		return err
+	}
+	t.Cleanup(func() {
+		if err := revoke(); err != nil {
+			t.Error("test-only provisioner membership cleanup failed")
+		}
+	})
+	if err := VerifyPostgresActionHistoryRuntimeRole(context.Background(), runtime, database, role); !errors.Is(err, ErrActionHistoryUnavailable) {
+		t.Fatalf("inherited provisioner authority accepted: %v", err)
+	}
+	if err := revoke(); err != nil {
+		t.Fatal("revoke test-only provisioner membership failed")
+	}
+	if err := VerifyPostgresActionHistoryRuntimeRole(context.Background(), runtime, database, role); err != nil {
+		t.Fatalf("runtime role not restored after exact revoke: %v", err)
+	}
+}
+
 func TestIntegrationPostgresWitnessRejectsRestoredRedisSnapshot(t *testing.T) {
 	admin := integrationPostgresPool(t, integrationPostgresAdminURLVariable, 2)
 	runtime := integrationPostgresPool(t, integrationPostgresRuntimeURLVariable, 2)
@@ -219,7 +357,12 @@ func TestIntegrationPostgresWitnessRejectsRestoredRedisSnapshot(t *testing.T) {
 	}
 	cleanupIntegrationWitnessedActionState(t, shared, fencer)
 	cleanupIntegrationPostgresWitness(t, admin, witness, fencer.policyFingerprint())
-	provisionIntegrationWitnessedActionFencer(t, fencer)
+	provisioner := integrationPostgresWitness(t, shared.capacity, admin, 500*time.Millisecond)
+	provisioningFencer, err := NewWitnessedActionFencer(shared.capacity, provisioner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	provisionIntegrationWitnessedActionFencer(t, provisioningFencer)
 	if err := fencer.VerifyRestoredState(context.Background()); err != nil {
 		t.Fatalf("initial VerifyRestoredState() error = %v", err)
 	}
@@ -272,6 +415,113 @@ func TestIntegrationPostgresWitnessRejectsRestoredRedisSnapshot(t *testing.T) {
 	}
 	assertWitnessedActionUnavailable(t, reconstructed, actionSubject, integrationActionClaim(t, replacement))
 	releaseIntegrationLease(t, replacement)
+}
+
+func TestIntegrationPostgresWitnessMissingRowFailsClosed(t *testing.T) {
+	admin := integrationPostgresPool(t, integrationPostgresAdminURLVariable, 2)
+	runtime := integrationPostgresPool(t, integrationPostgresRuntimeURLVariable, 2)
+	shared := newIntegrationCapacity(t, integrationNamespace(t), 1, 1, 1)
+	provisionIntegrationCapacity(t, shared.capacity)
+	witness := integrationPostgresWitness(t, shared.capacity, runtime, 500*time.Millisecond)
+	fencer, err := NewWitnessedActionFencer(shared.capacity, witness)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cleanupIntegrationWitnessedActionState(t, shared, fencer)
+	cleanupIntegrationPostgresWitness(t, admin, witness, fencer.policyFingerprint())
+	provisioner := integrationPostgresWitness(t, shared.capacity, admin, 500*time.Millisecond)
+	provisioningFencer, err := NewWitnessedActionFencer(shared.capacity, provisioner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	provisionIntegrationWitnessedActionFencer(t, provisioningFencer)
+	before, err := shared.client.HGetAll(context.Background(), fencer.stateKey).Result()
+	if err != nil || len(before) == 0 {
+		t.Fatal("provisioned Redis checkpoint missing")
+	}
+	policy, err := decodeActionHistoryFingerprint(fencer.policyFingerprint())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := admin.Exec(context.Background(), `DELETE FROM sandbox_runtime.action_history_witnesses
+WHERE namespace_fingerprint=$1 AND policy_fingerprint=$2`, witness.namespaceFingerprint[:], policy[:]); err != nil {
+		t.Fatal("admin delete witness failed")
+	}
+	if err := fencer.VerifyRestoredState(context.Background()); err != gateway.ErrDownstreamUnavailable {
+		t.Fatalf("VerifyRestoredState() without witness = %v; want unavailable", err)
+	}
+	if err := fencer.Verify(context.Background()); err != gateway.ErrDownstreamUnavailable {
+		t.Fatalf("Verify() without witness = %v; want unavailable", err)
+	}
+	capacitySubject := integrationSubject("tenant-missing-row", "sandbox-missing-row", "browser-missing-row", time.Minute)
+	lease := acquireIntegrationLease(t, shared.capacity, capacitySubject).(*connectionLease)
+	actionSubject := integrationActionSubject(capacitySubject, 1)
+	assertWitnessedActionUnavailable(t, fencer, actionSubject, integrationActionClaim(t, lease))
+	releaseIntegrationLease(t, lease)
+	if _, err := witness.Load(context.Background(), fencer.policyFingerprint()); !errors.Is(err, ErrActionHistoryNotProvisioned) {
+		t.Fatalf("runtime recreated missing witness: %v", err)
+	}
+	after, err := shared.client.HGetAll(context.Background(), fencer.stateKey).Result()
+	if err != nil || len(after) != len(before) {
+		t.Fatal("runtime changed Redis checkpoint after missing witness")
+	}
+	for key, value := range before {
+		if after[key] != value {
+			t.Fatal("runtime changed Redis checkpoint after missing witness")
+		}
+	}
+}
+
+func TestIntegrationPostgresWitnessRecoversUnwitnessedCommit(t *testing.T) {
+	admin := integrationPostgresPool(t, integrationPostgresAdminURLVariable, 2)
+	runtime := integrationPostgresPool(t, integrationPostgresRuntimeURLVariable, 2)
+	shared := newIntegrationCapacity(t, integrationNamespace(t), 1, 1, 1)
+	provisionIntegrationCapacity(t, shared.capacity)
+	witness := integrationPostgresWitness(t, shared.capacity, runtime, 500*time.Millisecond)
+	failingWitness := &failBeforeAdvanceWitness{ActionHistoryWitness: witness, fail: true}
+	fencer, err := NewWitnessedActionFencer(shared.capacity, failingWitness)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cleanupIntegrationWitnessedActionState(t, shared, fencer)
+	cleanupIntegrationPostgresWitness(t, admin, witness, fencer.policyFingerprint())
+	provisioner := integrationPostgresWitness(t, shared.capacity, admin, 500*time.Millisecond)
+	provisioningFencer, err := NewWitnessedActionFencer(shared.capacity, provisioner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	provisionIntegrationWitnessedActionFencer(t, provisioningFencer)
+	capacitySubject := integrationSubject("tenant-pg-interrupt", "sandbox-pg-interrupt", "browser-pg-interrupt", time.Minute)
+	actionSubject := integrationActionSubject(capacitySubject, 1)
+	lease := acquireIntegrationLease(t, shared.capacity, capacitySubject).(*connectionLease)
+	claim := integrationActionClaim(t, lease)
+	decision, err := fencer.AuthorizeAction(context.Background(), actionSubject, claim, 50*time.Millisecond)
+	if decision.Activated || err != gateway.ErrDownstreamUnavailable {
+		t.Fatalf("interrupted AuthorizeAction() = %#v, %v; want unavailable", decision, err)
+	}
+	checkpoint, err := witness.Load(context.Background(), fencer.policyFingerprint())
+	if err != nil || checkpoint.sequence != 0 {
+		t.Fatalf("witness advanced during injected failure: %v, %v", checkpoint, err)
+	}
+	if err := fencer.VerifyRestoredState(context.Background()); err != gateway.ErrDownstreamUnavailable {
+		t.Fatalf("strict restore check with Redis ahead = %v; want unavailable", err)
+	}
+	checkpoint, err = witness.Load(context.Background(), fencer.policyFingerprint())
+	if err != nil || checkpoint.sequence != 0 {
+		t.Fatalf("strict restore check advanced witness: %v, %v", checkpoint, err)
+	}
+	if err := fencer.Verify(context.Background()); err != nil {
+		t.Fatalf("runtime Verify() failed one-step recovery: %v", err)
+	}
+	checkpoint, err = witness.Load(context.Background(), fencer.policyFingerprint())
+	if err != nil || checkpoint.sequence != 1 {
+		t.Fatalf("recovered witness checkpoint = %v, %v; want sequence 1", checkpoint, err)
+	}
+	if err := fencer.VerifyRestoredState(context.Background()); err != nil {
+		t.Fatalf("strict restore check after recovery = %v", err)
+	}
+	assertWitnessedActionCurrent(t, fencer, actionSubject, claim)
+	releaseIntegrationLease(t, lease)
 }
 
 func integrationPostgresPool(t *testing.T, variable string, maxConnections int32) *pgxpool.Pool {

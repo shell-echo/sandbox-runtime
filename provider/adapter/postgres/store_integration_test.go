@@ -17,8 +17,14 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/shell-echo/sandbox-runtime/internal/browserbinding"
+	"github.com/shell-echo/sandbox-runtime/internal/browserhandoffv2"
+	"github.com/shell-echo/sandbox-runtime/internal/executorprotocol"
 	"github.com/shell-echo/sandbox-runtime/provider/admission"
 	"github.com/shell-echo/sandbox-runtime/provider/artifact"
+	"github.com/shell-echo/sandbox-runtime/provider/browser"
+	browsermux "github.com/shell-echo/sandbox-runtime/provider/browser/mux"
+	"github.com/shell-echo/sandbox-runtime/provider/browser/reference"
 	"github.com/shell-echo/sandbox-runtime/provider/desktop"
 	desktoprepository "github.com/shell-echo/sandbox-runtime/provider/desktop/repository"
 	providerexec "github.com/shell-echo/sandbox-runtime/provider/exec"
@@ -207,6 +213,14 @@ REVOKE INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER ON sandbox_runtime_provi
 	if err := VerifySchemaCompatibility(ctx, restartedPool); err != nil {
 		t.Fatal(err)
 	}
+	restartedBrowser, _ := NewBrowserRepository(restartedStore)
+	if retained, err := restartedBrowser.GetOpenAt(ctx, "browser-operation-1", now.Add(2*time.Second)); err != nil || retained.Status != browser.StatusSucceeded {
+		t.Fatalf("post-restart Browser session = %#v, %v", retained, err)
+	}
+	restartedReference, _ := NewBrowserReferenceStore(restartedStore)
+	if retained, err := restartedReference.Get(ctx, "ref:browser-session:00000000000000000000000000000001"); err != nil || retained.RevokedAt == nil || retained.TenantBindingDigest == "" {
+		t.Fatalf("post-restart Browser revoked reference = %#v, %v", retained, err)
+	}
 	remove()
 	output, err = exec.CommandContext(ctx, "docker", "ps", "-a", "--filter", "name=^/"+container+"$", "--format", "{{.Names}}").CombinedOutput()
 	if err != nil || strings.TrimSpace(string(output)) != "" {
@@ -290,6 +304,245 @@ func exerciseProviderRepositories(t *testing.T, ctx context.Context, writer, rea
 	}
 	if retained, err := artifactReader.GetStage(ctx, artifactRequest.OperationID); err != nil || retained.Request.OperationID != artifactRequest.OperationID {
 		t.Fatalf("transactional artifact read = %#v, %v", retained, err)
+	}
+
+	browserWriter, _ := NewBrowserRepository(writer)
+	browserReader, _ := NewBrowserRepository(reader)
+	browserAuthority := browser.SandboxAuthority{
+		SandboxID: "sandbox-browser-1", ProviderRevisionID: create.Spec.ProviderRevisionID, Ready: true, Generation: 1,
+		LeaseExpiresAt: now.Add(time.Hour), FencingToken: 1, CapabilityProfileID: browser.CapabilityProfileID, NetworkPolicyReference: "browser-egress-policy-1",
+	}
+	if err := browserWriter.SynchronizeSandboxAuthority(ctx, browserAuthority); err != nil {
+		t.Fatalf("Browser authority: %v", err)
+	}
+	browserRequest := browser.OpenRequest{
+		SandboxID: browserAuthority.SandboxID, ProviderRevisionID: browserAuthority.ProviderRevisionID, OperationID: "browser-operation-1", AttemptID: "browser-attempt-1",
+		FencingToken: 1, IdempotencyKey: "browser-key-1", RequestDigest: "sha256:" + strings.Repeat("8", 64), Deadline: now.Add(time.Hour),
+		ExpectedGeneration: 1, BrowserSessionID: "browser-session-1", CapabilityProfileID: browser.CapabilityProfileID, ExpiresAt: now.Add(30 * time.Minute),
+	}
+	var browserAccepted, browserReplayed, browserFailed atomic.Int64
+	var browserWait sync.WaitGroup
+	for index := range 8 {
+		browserWait.Add(1)
+		go func() {
+			defer browserWait.Done()
+			repository := browserWriter
+			if index%2 == 1 {
+				repository = browserReader
+			}
+			reservation, reserveErr := repository.ReserveOpen(ctx, browserRequest, now)
+			switch {
+			case reserveErr != nil:
+				browserFailed.Add(1)
+			case reservation.Replayed:
+				browserReplayed.Add(1)
+			default:
+				browserAccepted.Add(1)
+			}
+		}()
+	}
+	browserWait.Wait()
+	if browserAccepted.Load() != 1 || browserReplayed.Load() != 7 || browserFailed.Load() != 0 {
+		t.Fatalf("concurrent Browser reserve accepted=%d replayed=%d failed=%d", browserAccepted.Load(), browserReplayed.Load(), browserFailed.Load())
+	}
+	if retained, err := browserReader.GetOpenAt(ctx, browserRequest.OperationID, now.Add(time.Second)); err != nil || retained.Request.BrowserSessionID != browserRequest.BrowserSessionID {
+		t.Fatalf("transactional Browser read = %#v, %v", retained, err)
+	}
+	if replay, err := browserReader.ReserveOpen(ctx, browserRequest, now); err != nil || !replay.Replayed {
+		t.Fatalf("transactional Browser replay = %#v, %v", replay, err)
+	}
+	browserReceipt := browser.AllocationReceipt{
+		Reference: "ref:browser/00000000000000000000000000000001", SandboxID: browserRequest.SandboxID,
+		BrowserSessionID: browserRequest.BrowserSessionID, OperationID: browserRequest.OperationID, AttemptID: browserRequest.AttemptID,
+		FencingToken: browserRequest.FencingToken, ExpectedGeneration: browserRequest.ExpectedGeneration, ConnectionGeneration: 1,
+		AllocatedAt: now.Add(time.Second), ExpiresAt: browserRequest.ExpiresAt,
+	}
+	browserAttached, err := browserWriter.AttachAllocation(ctx, browserReceipt)
+	if err != nil {
+		t.Fatalf("Browser allocation: %v", err)
+	}
+	browserRunning := browserAttached.Record
+	browserReferenceWriter, _ := NewBrowserReferenceStore(writer)
+	browserReferenceReader, _ := NewBrowserReferenceStore(reader)
+	browserReference, err := reference.NewRecord("ref:browser-session:00000000000000000000000000000001", browserRunning, now.Add(2*time.Second))
+	if err != nil {
+		t.Fatalf("Browser reference: %v", err)
+	}
+	if err := browserReferenceWriter.Create(ctx, browserReference); err != nil {
+		t.Fatalf("Browser reference persist: %v", err)
+	}
+	if retained, err := browserReferenceReader.FindRunning(ctx, browserRunning); err != nil || retained.Reference != browserReference.Reference {
+		t.Fatalf("transactional Browser reference read = %#v, %v", retained, err)
+	}
+	browserSucceeded, err := browser.Transition(browserRunning, browser.StatusSucceeded, now.Add(3*time.Second), &browser.EndpointEvidence{InternalEndpointReference: browserReference.Reference, ConnectionGeneration: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := browserWriter.UpdateOpenAt(ctx, browserSucceeded, browser.StatusRunning, now.Add(3*time.Second)); err != nil {
+		t.Fatalf("Browser succeeded transition: %v", err)
+	}
+	binding := reference.Binding{Version: 2, Reference: browserReference.Reference, TenantBindingDigest: browserbinding.Prefix + strings.Repeat("a", 64),
+		SandboxID: browserRequest.SandboxID, BrowserSessionID: browserRequest.BrowserSessionID, CapabilityProfileID: browser.CapabilityProfileID,
+		ConnectionGeneration: 1, ExpiresAt: browserRequest.ExpiresAt}
+	competing := binding
+	competing.TenantBindingDigest = browserbinding.Prefix + strings.Repeat("b", 64)
+	startBind := make(chan struct{})
+	bindErrors := make(chan error, 2)
+	go func() { <-startBind; bindErrors <- browserReferenceWriter.Bind(ctx, binding, now.Add(4*time.Second)) }()
+	go func() { <-startBind; bindErrors <- browserReferenceReader.Bind(ctx, competing, now.Add(4*time.Second)) }()
+	close(startBind)
+	bindWinners, bindConflicts := 0, 0
+	for range 2 {
+		switch bindErr := <-bindErrors; {
+		case bindErr == nil:
+			bindWinners++
+		case errors.Is(bindErr, reference.ErrConflict):
+			bindConflicts++
+		default:
+			t.Fatalf("concurrent Browser binding: %v", bindErr)
+		}
+	}
+	if bindWinners != 1 || bindConflicts != 1 {
+		t.Fatalf("concurrent Browser binding winners=%d conflicts=%d", bindWinners, bindConflicts)
+	}
+	bound, err := browserReferenceReader.Get(ctx, browserReference.Reference)
+	if err != nil || bound.TenantBindingDigest == "" {
+		t.Fatalf("Browser binding projection = %#v, %v", bound, err)
+	}
+	idempotent := binding
+	if bound.TenantBindingDigest == competing.TenantBindingDigest {
+		idempotent = competing
+	}
+	if err := browserReferenceWriter.Bind(ctx, idempotent, now.Add(4*time.Second)); err != nil {
+		t.Fatalf("idempotent Browser binding: %v", err)
+	}
+	private := browserhandoffv2.OpenRequest{BindingVersion: browserhandoffv2.BindingVersion,
+		BindingIssuer: browserhandoffv2.BindingIssuer, Protocol: browserhandoffv2.ProtocolID,
+		RequestID: "browser-private-open-1", Resource: browserhandoffv2.ResourceBrowser,
+		TenantBindingDigest: idempotent.TenantBindingDigest, ProviderRevisionID: browserRequest.ProviderRevisionID,
+		SandboxID: browserRequest.SandboxID, BrowserSessionID: browserRequest.BrowserSessionID,
+		CapabilityProfileID: browser.CapabilityProfileID, MediaProfileID: browserhandoffv2.MediaProfileID,
+		ControlProfileID: browserhandoffv2.ControlProfileID, HandoffReference: browserReference.Reference,
+		HandoffDigest: browserhandoffv2.ReferenceDigest(browserReference.Reference), ConnectionGeneration: 1,
+		ConnectionEpoch: "browser-connection-1", ControlLeaseDigest: "sha256:" + strings.Repeat("c", 64),
+		ControlFence: 1, AuthorityExpiresAt: now.Add(10 * time.Minute).Format(time.RFC3339Nano),
+		HandoffExpiresAt: browserRequest.ExpiresAt.Format(time.RFC3339Nano)}
+	private.AuthorityDigest = browserhandoffv2.AuthorityDigest(private)
+	private.RequestDigest = browserhandoffv2.RequestDigest(private)
+	created, err := browserReferenceWriter.BindConnectionWithOwnership(ctx, private, now.Add(4*time.Second))
+	if err != nil || !created {
+		t.Fatalf("Browser v2 connection projection ownership=%v err=%v", created, err)
+	}
+	created, err = browserReferenceReader.BindConnectionWithOwnership(ctx, private, now.Add(4*time.Second))
+	if err != nil || created {
+		t.Fatalf("Browser v2 duplicate across pools ownership=%v err=%v", created, err)
+	}
+	muxAuthority, err := browsermux.NewProviderAuthority(browserReader, browserReferenceReader, writer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	open := executorprotocol.Open{Protocol: executorprotocol.ProtocolID, Role: executorprotocol.RoleBrowser,
+		RequestID: "browser-mux-open-1", TenantBindingDigest: idempotent.TenantBindingDigest,
+		ProviderRevisionID: browserRequest.ProviderRevisionID, SandboxID: browserRequest.SandboxID, RuntimeSessionID: browserRequest.BrowserSessionID,
+		CapabilityProfileID: browser.CapabilityProfileID, MediaProfileID: "browser-cdp-v1", ControlProfileID: "browser-control-v1",
+		HandoffReference: browserReference.Reference, ConnectionGeneration: 1, ConnectionEpoch: private.ConnectionEpoch,
+		AuthorityExpiresAt: private.AuthorityExpiresAt, HandoffExpiresAt: browserRequest.ExpiresAt.Format(time.RFC3339Nano), Codec: "application/json"}
+	open.Fence, err = browserhandoffv2.ExecutorFence(private.AuthorityDigest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	open.HandoffDigest = executorprotocol.ReferenceDigest(open.HandoffReference)
+	open.AuthorityDigest = open.CalculateAuthorityDigest()
+	open.RequestDigest = open.CalculateRequestDigest()
+	if err := browserReferenceWriter.ReserveExecutor(ctx, open, now.Add(4*time.Second)); err != nil {
+		t.Fatalf("Browser v2 executor attempt reservation: %v", err)
+	}
+	if selected, err := muxAuthority.Resolve(ctx, open); err != nil || selected.Reference != browserReceipt.Reference {
+		t.Fatalf("Browser mux selected allocation = %#v, %v", selected, err)
+	}
+	if err := muxAuthority.Claim(ctx, open); err != nil {
+		t.Fatalf("Browser executor request claim: %v", err)
+	}
+	restartedMuxAuthority, err := browsermux.NewProviderAuthority(browserReader, browserReferenceWriter, writer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := restartedMuxAuthority.Claim(ctx, open); err == nil {
+		t.Fatal("Browser executor replay survived a Provider authority restart")
+	}
+	mutatedOpen := open
+	mutatedOpen.Codec = "application/cdp+json"
+	mutatedOpen.RequestDigest = mutatedOpen.CalculateRequestDigest()
+	if err := restartedMuxAuthority.Claim(ctx, mutatedOpen); err == nil {
+		t.Fatal("Browser executor request ID accepted with a different digest")
+	}
+	wrongTenant := open
+	wrongTenant.TenantBindingDigest = browserbinding.Prefix + strings.Repeat("d", 64)
+	wrongTenant.AuthorityDigest = wrongTenant.CalculateAuthorityDigest()
+	wrongTenant.RequestDigest = wrongTenant.CalculateRequestDigest()
+	if _, err := muxAuthority.Resolve(ctx, wrongTenant); err == nil {
+		t.Fatal("Browser mux selected a cross-tenant allocation")
+	}
+	parallel := private
+	parallel.ConnectionEpoch = "browser-connection-2"
+	parallel.RequestID = "browser-private-open-2"
+	parallel.AuthorityDigest = browserhandoffv2.AuthorityDigest(parallel)
+	parallel.RequestDigest = browserhandoffv2.RequestDigest(parallel)
+	if err := browserReferenceReader.BindConnection(ctx, parallel, now.Add(4*time.Second)); !errors.Is(err, reference.ErrConflict) {
+		t.Fatalf("parallel Browser writer admitted across pools: %v", err)
+	}
+	if err := browserReferenceReader.CloseConnection(ctx, private.HandoffReference, private.ConnectionEpoch, private.AuthorityDigest); err != nil {
+		t.Fatalf("Browser old connection close: %v", err)
+	}
+	if _, err := muxAuthority.Resolve(ctx, open); err == nil {
+		t.Fatal("closed Browser connection retained mux authority")
+	}
+	if err := browserReferenceWriter.BindConnection(ctx, parallel, now.Add(4*time.Second)); err != nil {
+		t.Fatalf("Browser exact replacement across pools: %v", err)
+	}
+	other := open
+	other.ConnectionEpoch = parallel.ConnectionEpoch
+	other.RequestID = "browser-mux-open-2"
+	other.AuthorityExpiresAt = parallel.AuthorityExpiresAt
+	other.Fence, err = browserhandoffv2.ExecutorFence(parallel.AuthorityDigest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	other.AuthorityDigest = other.CalculateAuthorityDigest()
+	other.RequestDigest = other.CalculateRequestDigest()
+	if err := browserReferenceReader.ReserveExecutor(ctx, other, now.Add(4*time.Second)); err != nil {
+		t.Fatalf("Browser replacement executor reserve: %v", err)
+	}
+	if err := restartedMuxAuthority.Claim(ctx, other); err != nil {
+		t.Fatalf("Browser replacement claim after mux restart: %v", err)
+	}
+	if err := restartedMuxAuthority.Claim(ctx, open); err == nil {
+		t.Fatal("old Browser epoch was revived after replacement")
+	}
+	browserAuthority.FencingToken = 2
+	if err := browserReader.SynchronizeSandboxAuthority(ctx, browserAuthority); err != nil {
+		t.Fatalf("Browser authority advance: %v", err)
+	}
+	if err := browserReferenceWriter.Bind(ctx, idempotent, now.Add(4*time.Second)); !errors.Is(err, reference.ErrStale) {
+		t.Fatalf("stale Browser authority rebound: %v", err)
+	}
+	if _, err := muxAuthority.Resolve(ctx, open); err == nil {
+		t.Fatal("Browser mux selected stale fenced allocation")
+	}
+	if err := browserReferenceReader.Revoke(ctx, browserReference.Reference, now.Add(4*time.Second)); err != nil {
+		t.Fatalf("Browser reference revoke: %v", err)
+	}
+	if err := browserReferenceWriter.Bind(ctx, idempotent, now.Add(5*time.Second)); !errors.Is(err, reference.ErrStale) {
+		t.Fatalf("revoked Browser reference rebound: %v", err)
+	}
+	if retained, err := browserReferenceWriter.Get(ctx, browserReference.Reference); err != nil || retained.RevokedAt == nil {
+		t.Fatalf("transactional Browser reference revocation = %#v, %v", retained, err)
+	}
+	staleRequest := browserRequest
+	staleRequest.OperationID = "browser-stale-operation-1"
+	staleRequest.IdempotencyKey = "browser-stale-key-1"
+	if _, err := browserWriter.ReserveOpen(ctx, staleRequest, now.Add(5*time.Second)); !errors.Is(err, browser.ErrStaleFencingToken) {
+		t.Fatalf("stale Browser fencing token accepted: %v", err)
 	}
 
 	desktopWriter, _ := NewDesktopRepository(writer)

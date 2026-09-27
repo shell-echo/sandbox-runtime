@@ -6,9 +6,138 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
 	"github.com/shell-echo/sandbox-runtime/internal/secretref"
+	browserimage "github.com/shell-echo/sandbox-runtime/profiles/browser/image"
 	desktopimage "github.com/shell-echo/sandbox-runtime/profiles/desktop/image"
 )
+
+func TestProviderProcessV3BrowserProductionClosedMatrix(t *testing.T) {
+	candidate := validProviderProcessConfig(t)
+	directory := t.TempDir()
+	path := func(name string) string { return filepath.Join(directory, name) }
+	defaults := defaultProviderProcessConfig()
+	candidate.SchemaVersion = ProviderProductionSchemaV3
+	candidate.DeploymentLevel = ProviderProductionLevel
+	candidate.Profile = ProviderProcessBrowserProfile
+	candidate.Coding = defaults.Coding
+	candidate.Desktop = defaults.Desktop
+	candidate.Transport.ServerCertificateFile = ""
+	candidate.Transport.ServerPrivateKeyFile = ""
+	candidate.Transport.ClientCABundleFile = ""
+	candidate.Transport.AllowedClientURIIdentities = []string{"spiffe://sandbox-runtime.test/product-runtime"}
+	candidate.Transport.SecurityProfilePath = path("security-profile.json")
+	candidate.Transport.SecurityProfileDigest = "sha256:" + strings.Repeat("a", 64)
+	candidate.Transport.PeerCRLRoleFile = path("peer-crl-role.json")
+	candidate.Transport.PeerCRLRoleDigest = "sha256:" + strings.Repeat("b", 64)
+	candidate.Transport.PeerCRLSourceMappingDigest = "sha256:" + strings.Repeat("c", 64)
+	candidate.Transport.AgentSocket = path("browser-provider-tls-agent.sock")
+	candidate.Transport.AgentUID, candidate.Transport.AgentGID = 501, 20
+	candidate.Transport.OperationTimeoutMillis = 3000
+	candidate.Transport.Private = ProviderPrivateTransportConfig{
+		Enabled: true, Address: providerDefaultHTTP("127.0.0.1", 8448),
+		AllowedClientURIIdentities: []string{"spiffe://sandbox-runtime.test/browser-action-ingress-runtime"},
+		RoutePolicy:                []string{ProviderPrivateRouteBrowser}, ReadHeaderTimeoutMillis: 5000,
+		ReadTimeoutMillis: 30000, WriteTimeoutMillis: 30000, IdleTimeoutMillis: 60000,
+		MaxHeaderBytes: 32 << 10, MaxBodyBytes: 256 << 10,
+	}
+	candidate.Postgres.MigrationDSNFile = ""
+	candidate.Postgres.RuntimeDSNFile = ""
+	candidate.Postgres.MigrationRole = ""
+	candidate.Postgres.MigrationMaxConnections = 0
+	candidate.Postgres.RuntimeDSNBindingID = "browser-provider-runtime-dsn"
+	candidate.Postgres.ClientAgentSocket = path("browser-provider-postgres-tls-agent.sock")
+	candidate.Postgres.ClientAgentUID, candidate.Postgres.ClientAgentGID = 503, 21
+	candidate.ProtectedAdmission.TrustedVerificationKeys[0].PublicKeyFile = ""
+	candidate.ProtectedAdmission.TrustedVerificationKeys[0].PublicKeyBindingID = "browser-provider-admission-key"
+	candidate.Materials.Provider = RoleMaterialProviderConfig{
+		Type: UnixWorkloadMaterialProviderV1, Alias: "browser-provider-agent", SocketPath: "/tmp/browser-provider-material-agent-test.sock",
+		ExpectedUID: 502, ExpectedGID: 20, OperationTimeoutSeconds: 3, CacheSeconds: 30,
+	}
+	for _, item := range []struct {
+		id      string
+		purpose secretref.Purpose
+	}{
+		{"browser-provider-runtime-dsn", secretref.PurposePostgresRuntimeDSN},
+		{"browser-provider-admission-key", secretref.PurposeAdmissionVerification},
+	} {
+		document, err := json.Marshal(secretref.Binding{Schema: secretref.BindingSchema, Kind: secretref.KindSecret,
+			Reference: secretref.Reference("secret://vault/kv/" + item.id), Version: "v1", Purpose: item.purpose,
+			TenantID: secretref.SystemTenant, Role: secretref.RoleProvider})
+		if err != nil {
+			t.Fatal(err)
+		}
+		candidate.Materials.Bindings = append(candidate.Materials.Bindings, RoleMaterialBindingConfig{ID: item.id, Provider: "browser-provider-agent", Document: string(document)})
+	}
+	candidate.Browser = ProviderProcessBrowserConfig{
+		ExecutorURL: "wss://127.0.0.1:9444/executor", MuxSocketPath: filepath.Join(phase6security.BrowserMuxSocketDirectory, "browser-mux-11111111111111111111111111111111.sock"),
+		UsageRetentionSeconds: 3600, ShutdownCleanupSeconds: 10,
+		Docker: ProviderBrowserDockerConfig{
+			Image: browserimage.LockedPublication().Image(), PullPolicy: "never", MemoryBytes: 1 << 30,
+			NanoCPUs: 1_000_000_000, PidsLimit: 256, InputsBytes: 16 << 20, TmpfsBytes: 256 << 20,
+			WorkspaceBytes: 256 << 20, OutputsBytes: 128 << 20, OperationTimeoutSeconds: 90,
+			ProvenanceTimeoutSeconds: 120, PullTimeoutSeconds: 120, StopTimeoutSeconds: 10,
+			DataRoot: path("browser-runtime"), ManifestPath: path("browser-image-manifest.json"),
+			SeccompPath: path("browser-seccomp.json"), Namespace: "browser-production",
+			ControllerID: "browser-provider-1", NetworkPolicyReference: "browser-egress-policy-1",
+			MaxSessionsPerSandbox: 1, MaxSessionsPerController: 16,
+		},
+		Provenance: ProviderBrowserProvenanceConfig{ExecutablePath: path("gh"), ExecutableDigest: "sha256:" + strings.Repeat("d", 64)},
+		RestrictedNetwork: ProviderBrowserNetworkConfig{
+			GatewayImage: "sha256:" + strings.Repeat("e", 64), UplinkNetwork: "browser-production-uplink",
+			Namespace: "browser-production", ControllerID: "browser-provider-1",
+			Policies:    []ProviderBrowserNetworkPolicyConfig{{Reference: "browser-egress-policy-1", AllowedHosts: []string{"packages.example.test"}}},
+			MemoryBytes: 128 << 20, NanoCPUs: 500_000_000, PidsLimit: 64,
+			OperationTimeoutSeconds: 90, StopTimeoutSeconds: 10,
+		},
+	}
+	if err := candidate.Validate(); err != nil {
+		t.Fatalf("valid Browser v3 production configuration: %v", err)
+	}
+	for name, mutate := range map[string]func(*ProviderProcessConfig){
+		"coding authority":  func(value *ProviderProcessConfig) { value.Coding.Lifecycle.Image = "other-image" },
+		"desktop authority": func(value *ProviderProcessConfig) { value.Desktop.ExecutorURL = "wss://127.0.0.1:9555/executor" },
+		"wrong route": func(value *ProviderProcessConfig) {
+			value.Transport.Private.RoutePolicy = []string{ProviderPrivateRouteTerminal}
+		},
+		"direct Gateway peer": func(value *ProviderProcessConfig) {
+			value.Transport.Private.AllowedClientURIIdentities = []string{"spiffe://sandbox-runtime.test/gateway-runtime"}
+		},
+		"extra route": func(value *ProviderProcessConfig) {
+			value.Transport.Private.RoutePolicy = []string{ProviderPrivateRouteBrowser, ProviderPrivateRouteDesktop}
+		},
+		"wrong image": func(value *ProviderProcessConfig) {
+			value.Browser.Docker.Image = "example.test/browser@sha256:" + strings.Repeat("a", 64)
+		},
+		"mutable image":       func(value *ProviderProcessConfig) { value.Browser.Docker.Image = "example.test/browser:latest" },
+		"raw executor":        func(value *ProviderProcessConfig) { value.Browser.ExecutorURL = "ws://127.0.0.1:9444/executor" },
+		"wrong executor path": func(value *ProviderProcessConfig) { value.Browser.ExecutorURL = "wss://127.0.0.1:9444/private/browser" },
+		"noncanonical socket": func(value *ProviderProcessConfig) { value.Browser.MuxSocketPath = path("browser-mux.sock") },
+		"wrong mux owner directory": func(value *ProviderProcessConfig) {
+			value.Browser.MuxSocketPath = path("browser-mux-11111111111111111111111111111111.sock")
+		},
+		"wrong network owner":       func(value *ProviderProcessConfig) { value.Browser.RestrictedNetwork.ControllerID = "other-controller" },
+		"candidate relabel":         func(value *ProviderProcessConfig) { value.DeploymentLevel = ProviderLocalCandidateLevel },
+		"legacy schema":             func(value *ProviderProcessConfig) { value.SchemaVersion = ProviderProductionSchemaV2 },
+		"missing PostgreSQL signer": func(value *ProviderProcessConfig) { value.Postgres.ClientAgentSocket = "" },
+		"ordinary signer reused":    func(value *ProviderProcessConfig) { value.Postgres.ClientAgentSocket = value.Transport.AgentSocket },
+		"ordinary UID reused":       func(value *ProviderProcessConfig) { value.Postgres.ClientAgentUID = value.Transport.AgentUID },
+		"ordinary GID reused":       func(value *ProviderProcessConfig) { value.Postgres.ClientAgentGID = value.Transport.AgentGID },
+	} {
+		t.Run(name, func(t *testing.T) {
+			value := *candidate
+			value.Coding = candidate.Coding
+			value.Desktop = candidate.Desktop
+			value.Browser = candidate.Browser
+			value.Transport = candidate.Transport
+			value.Transport.Private = candidate.Transport.Private
+			mutate(&value)
+			if err := value.Validate(); err == nil {
+				t.Fatal("unsafe Browser v3 production configuration was accepted")
+			}
+		})
+	}
+}
 
 func TestProviderProcessDisabledDefaultsAreInert(t *testing.T) {
 	candidate := defaultProviderProcessConfig()
@@ -352,6 +481,8 @@ func TestProviderProcessV3DesktopCandidateClosedMatrix(t *testing.T) {
 	candidate.Postgres.MigrationRole = ""
 	candidate.Postgres.MigrationMaxConnections = 0
 	candidate.Postgres.RuntimeDSNBindingID = "desktop-provider-runtime-dsn"
+	candidate.Postgres.ClientAgentSocket = path("desktop-provider-postgres-tls-agent.sock")
+	candidate.Postgres.ClientAgentUID, candidate.Postgres.ClientAgentGID = 503, 21
 	candidate.ProtectedAdmission.TrustedVerificationKeys[0].PublicKeyFile = ""
 	candidate.ProtectedAdmission.TrustedVerificationKeys[0].PublicKeyBindingID = "desktop-provider-admission-key"
 	candidate.Materials.Provider = RoleMaterialProviderConfig{
@@ -418,7 +549,9 @@ func TestProviderProcessV3DesktopCandidateClosedMatrix(t *testing.T) {
 		"extra route": func(value *ProviderProcessConfig) {
 			value.Transport.Private.RoutePolicy = []string{ProviderPrivateRouteDesktop, ProviderPrivateRouteBrowser}
 		},
-		"attach route drift": func(value *ProviderProcessConfig) { value.Desktop.ExecutorURL = "wss://127.0.0.1:9444/private/browser" },
+		"attach route drift":        func(value *ProviderProcessConfig) { value.Desktop.ExecutorURL = "wss://127.0.0.1:9444/private/browser" },
+		"missing PostgreSQL signer": func(value *ProviderProcessConfig) { value.Postgres.ClientAgentSocket = "" },
+		"ordinary signer reused":    func(value *ProviderProcessConfig) { value.Postgres.ClientAgentSocket = value.Transport.AgentSocket },
 	} {
 		t.Run(name, func(t *testing.T) {
 			value := *candidate

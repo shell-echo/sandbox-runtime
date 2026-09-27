@@ -121,3 +121,16 @@ routes or capability advertisement. Restricted egress policy, a private
 endpoint resolver, caller-owned Gateway authorization/revocation/audit/
 reconnect controls, browser external-caller E2E, and the later reliability,
 tenancy, deployment, and production gates remain independent.
+
+The opt-in Phase 6 component test additionally runs this same locked image
+with an effective high `20000:30000` container user, original seccomp,
+read-only root and dropped capabilities. It checks private CDP and observed
+Chromium/zygote UID/GID; the image's default USER and Phase 5 publication
+remain unchanged. This does not allocate or authorize a production identity
+slot:
+
+```bash
+SANDBOX_RUNTIME_BROWSER_HIGH_UID_INTEGRATION=1 \
+go test -tags=integration -race -count=1 \
+  -run '^TestBrowserImageHighUID$' ./profiles/browser/image
+```

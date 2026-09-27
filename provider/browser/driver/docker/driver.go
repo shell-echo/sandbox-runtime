@@ -19,12 +19,14 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	cerrdefs "github.com/containerd/errdefs"
 
+	"github.com/shell-echo/sandbox-runtime/internal/sandboxidentity"
 	browserimage "github.com/shell-echo/sandbox-runtime/profiles/browser/image"
 	providerbrowser "github.com/shell-echo/sandbox-runtime/provider/browser"
 	"github.com/shell-echo/sandbox-runtime/provider/network/restricted"
@@ -64,6 +66,7 @@ type Driver struct {
 	seccomp     string
 	provenance  ProvenanceVerifier
 	network     RestrictedNetwork
+	bound       *sandboxidentity.RuntimeAuthority
 	mu          sync.Mutex
 }
 
@@ -196,6 +199,19 @@ func validateImage(info imageInfo, manifest browserimage.Manifest, publication b
 	return nil
 }
 
+// ImageArchitecture reports only the architecture of the validated local
+// image selected by this Provider's Docker daemon. A remote daemon need not
+// match the host running the Provider process.
+func (d *Driver) ImageArchitecture() string {
+	if d == nil || d.image.operatingSystem != "linux" {
+		return ""
+	}
+	if d.image.architecture != "amd64" && d.image.architecture != "arm64" {
+		return ""
+	}
+	return d.image.architecture
+}
+
 // Ready revalidates the runtime dependencies used by the Browser lifecycle
 // readiness adapter. It performs no allocation and returns no backend detail.
 func (d *Driver) Ready(ctx context.Context) error {
@@ -234,6 +250,13 @@ func (d *Driver) Ready(ctx context.Context) error {
 }
 
 func (d *Driver) Allocate(ctx context.Context, allocation providerbrowser.Allocation) (providerbrowser.AllocationReceipt, error) {
+	if d != nil && d.bound != nil {
+		return providerbrowser.AllocationReceipt{}, providerbrowser.ErrBrowserUnsupported
+	}
+	return d.allocate(ctx, allocation, sandboxidentity.Slot{})
+}
+
+func (d *Driver) allocate(ctx context.Context, allocation providerbrowser.Allocation, slot sandboxidentity.Slot) (providerbrowser.AllocationReceipt, error) {
 	if err := contextError(ctx); err != nil {
 		return providerbrowser.AllocationReceipt{}, err
 	}
@@ -256,12 +279,17 @@ func (d *Driver) Allocate(ctx context.Context, allocation providerbrowser.Alloca
 	if err != nil {
 		return providerbrowser.AllocationReceipt{}, err
 	}
-	specDigest, err := d.specDigest(allocation)
+	specDigest, err := d.specDigest(allocation, slot)
 	if err != nil {
 		return providerbrowser.AllocationReceipt{}, err
 	}
 	state, err := loadBrowserState(statePath, d.options.NetworkPolicyReference)
 	if err == nil {
+		if slot != (sandboxidentity.Slot{}) {
+			// A Creating ticket is a single-executor permit, not a replay
+			// capability. Existing local evidence needs dedicated reconciliation.
+			return providerbrowser.AllocationReceipt{}, providerbrowser.ErrAllocationUnknown
+		}
 		if !state.matchesAllocation(allocation) || state.SpecDigest != specDigest {
 			return providerbrowser.AllocationReceipt{}, providerbrowser.ErrBrowserConflict
 		}
@@ -280,6 +308,7 @@ func (d *Driver) Allocate(ctx context.Context, allocation providerbrowser.Alloca
 		Namespace: d.options.Namespace, ControllerID: d.options.ControllerID,
 		PolicyReference: allocation.Request.NetworkPolicyReference, Generation: allocation.Request.ExpectedGeneration,
 		FencingToken: allocation.Request.FencingToken,
+		Slot:         slot,
 	})
 	if err != nil {
 		if contextErr := allocationContextError(operationCtx, err); contextErr != nil {
@@ -287,7 +316,7 @@ func (d *Driver) Allocate(ctx context.Context, allocation providerbrowser.Alloca
 		}
 		return providerbrowser.AllocationReceipt{}, providerbrowser.ErrBrowserUnsupported
 	}
-	if err := attachment.validate(d.options.NetworkPolicyReference); err != nil {
+	if err := attachment.validate(d.options.NetworkPolicyReference); err != nil || attachment.Slot != slot {
 		if releaseErr := d.network.Release(operationCtx, attachment); releaseErr != nil {
 			return providerbrowser.AllocationReceipt{}, providerbrowser.ErrAllocationUnknown
 		}
@@ -381,7 +410,7 @@ func (d *Driver) startAndProbe(ctx context.Context, statePath string, state brow
 		if !found || !confirmed.running || confirmed.status != "running" || confirmed.paused || confirmed.restarting || confirmed.dead {
 			return providerbrowser.AllocationReceipt{}, providerbrowser.ErrAllocationUnknown
 		}
-		if _, err := d.browserWebSocketPath(ctx, state.BackendContainerID); err == nil {
+		if _, err := d.browserWebSocketPath(ctx, state.BackendContainerID, workloadUser(state.Network.Slot)); err == nil {
 			if !state.Ready {
 				state.Ready = true
 				if err := persistBrowserState(statePath, state, d.options.NetworkPolicyReference); err != nil {
@@ -397,6 +426,13 @@ func (d *Driver) startAndProbe(ctx context.Context, statePath string, state brow
 }
 
 func (d *Driver) Observe(ctx context.Context, receipt providerbrowser.AllocationReceipt) (providerbrowser.AllocationObservation, error) {
+	if d != nil && d.bound != nil {
+		return providerbrowser.AllocationObservation{}, providerbrowser.ErrBrowserUnsupported
+	}
+	return d.observe(ctx, receipt)
+}
+
+func (d *Driver) observe(ctx context.Context, receipt providerbrowser.AllocationReceipt) (providerbrowser.AllocationObservation, error) {
 	if err := contextError(ctx); err != nil {
 		return providerbrowser.AllocationObservation{}, err
 	}
@@ -432,6 +468,10 @@ func (d *Driver) Observe(ctx context.Context, receipt providerbrowser.Allocation
 	if !state.matchesReceipt(receipt) {
 		return providerbrowser.AllocationObservation{}, providerbrowser.ErrBrowserConflict
 	}
+	if state.CleanupPending {
+		observation.State = providerbrowser.AllocationOutcomeUnknown
+		return observation, observation.Validate()
+	}
 	operationCtx, cancel := d.operationContext(ctx)
 	defer cancel()
 	info, found, err := d.inspectOwned(operationCtx, state)
@@ -460,7 +500,7 @@ func (d *Driver) Observe(ctx context.Context, receipt providerbrowser.Allocation
 		observation.State = providerbrowser.AllocationOutcomeUnknown
 		return observation, observation.Validate()
 	}
-	if _, err := d.browserWebSocketPath(operationCtx, state.BackendContainerID); err != nil {
+	if _, err := d.browserWebSocketPath(operationCtx, state.BackendContainerID, workloadUser(state.Network.Slot)); err != nil {
 		observation.State = providerbrowser.AllocationOutcomeUnknown
 	} else {
 		observation.State = providerbrowser.AllocationRunning
@@ -469,7 +509,14 @@ func (d *Driver) Observe(ctx context.Context, receipt providerbrowser.Allocation
 }
 
 func (d *Driver) Attach(ctx context.Context, receipt providerbrowser.AllocationReceipt) (providerbrowser.Stream, error) {
-	observation, err := d.Observe(ctx, receipt)
+	if d != nil && d.bound != nil {
+		return nil, providerbrowser.ErrBrowserUnsupported
+	}
+	return d.attach(ctx, receipt)
+}
+
+func (d *Driver) attach(ctx context.Context, receipt providerbrowser.AllocationReceipt) (providerbrowser.Stream, error) {
+	observation, err := d.observe(ctx, receipt)
 	if err != nil {
 		return nil, err
 	}
@@ -497,16 +544,17 @@ func (d *Driver) Attach(ctx context.Context, receipt providerbrowser.AllocationR
 	if err != nil {
 		return nil, err
 	}
-	if !state.matchesReceipt(receipt) {
+	if !state.matchesReceipt(receipt) || state.CleanupPending {
 		return nil, providerbrowser.ErrBrowserConflict
 	}
 	operationCtx, cancel := d.operationContext(ctx)
 	defer cancel()
-	path, err := d.browserWebSocketPath(operationCtx, state.BackendContainerID)
+	user := workloadUser(state.Network.Slot)
+	path, err := d.browserWebSocketPath(operationCtx, state.BackendContainerID, user)
 	if err != nil {
 		return nil, allocationUnknown(operationCtx, err)
 	}
-	connection, reader, err := d.attachWebSocket(operationCtx, state.BackendContainerID, path)
+	connection, reader, err := d.attachWebSocket(operationCtx, state.BackendContainerID, path, user)
 	if err != nil {
 		return nil, allocationUnknown(operationCtx, err)
 	}
@@ -514,6 +562,13 @@ func (d *Driver) Attach(ctx context.Context, receipt providerbrowser.AllocationR
 }
 
 func (d *Driver) Cleanup(ctx context.Context, receipt providerbrowser.AllocationReceipt) error {
+	if d != nil && d.bound != nil {
+		return providerbrowser.ErrBrowserUnsupported
+	}
+	return d.cleanup(ctx, receipt, false)
+}
+
+func (d *Driver) cleanup(ctx context.Context, receipt providerbrowser.AllocationReceipt, retainEvidence bool) error {
 	if err := contextError(ctx); err != nil {
 		return err
 	}
@@ -555,6 +610,9 @@ func (d *Driver) Cleanup(ctx context.Context, receipt providerbrowser.Allocation
 	}
 	if err := d.network.Release(operationCtx, state.Network); err != nil {
 		return allocationUnknown(operationCtx, err)
+	}
+	if retainEvidence {
+		return nil
 	}
 	if err := os.Remove(statePath); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
@@ -644,7 +702,7 @@ func (d *Driver) createRequest(state browserState) createRequest {
 	labels[specDigestLabel] = state.SpecDigest
 	return createRequest{
 		name:  identity.WorkloadName(),
-		image: d.options.Image, user: BrowserUser, workingDirectory: "/workspace",
+		image: d.options.Image, user: workloadUser(state.Network.Slot), workingDirectory: "/workspace",
 		memoryBytes: d.options.MemoryBytes, nanoCPUs: d.options.NanoCPUs, pidsLimit: d.options.PidsLimit,
 		inputsBytes: d.options.InputsBytes, tmpfsBytes: d.options.TmpfsBytes,
 		workspaceBytes: d.options.WorkspaceBytes, outputsBytes: d.options.OutputsBytes,
@@ -654,7 +712,14 @@ func (d *Driver) createRequest(state browserState) createRequest {
 	}
 }
 
-func (d *Driver) specDigest(allocation providerbrowser.Allocation) (string, error) {
+func (d *Driver) specDigest(allocation providerbrowser.Allocation, slot sandboxidentity.Slot) (string, error) {
+	var boundSlot *sandboxidentity.Slot
+	if slot != (sandboxidentity.Slot{}) {
+		if slot.Validate() != nil {
+			return "", ErrInvalidOptions
+		}
+		boundSlot = &slot
+	}
 	value := struct {
 		Allocation       providerbrowser.Allocation
 		Image            string
@@ -672,8 +737,9 @@ func (d *Driver) specDigest(allocation providerbrowser.Allocation) (string, erro
 		Namespace        string
 		ControllerID     string
 		RuntimeProfileID string
+		Slot             *sandboxidentity.Slot `json:"slot,omitempty"`
 	}{
-		Allocation: allocation, Image: d.options.Image, User: BrowserUser,
+		Allocation: allocation, Image: d.options.Image, User: workloadUser(slot), Slot: boundSlot,
 		MemoryBytes: d.options.MemoryBytes, NanoCPUs: d.options.NanoCPUs, PidsLimit: d.options.PidsLimit,
 		InputsBytes: d.options.InputsBytes, TmpfsBytes: d.options.TmpfsBytes,
 		WorkspaceBytes: d.options.WorkspaceBytes, OutputsBytes: d.options.OutputsBytes,
@@ -742,8 +808,15 @@ func (d *Driver) operationContext(parent context.Context) (context.Context, cont
 	return context.WithTimeout(parent, time.Duration(d.options.OperationTimeoutSeconds)*time.Second)
 }
 
-func (d *Driver) browserWebSocketPath(ctx context.Context, containerID string) (string, error) {
-	connection, err := d.engine.attachRelay(ctx, containerID)
+func workloadUser(slot sandboxidentity.Slot) string {
+	if slot == (sandboxidentity.Slot{}) {
+		return BrowserUser
+	}
+	return strconv.FormatUint(uint64(slot.WorkloadUID), 10) + ":" + strconv.FormatUint(uint64(slot.WorkloadGID), 10)
+}
+
+func (d *Driver) browserWebSocketPath(ctx context.Context, containerID, user string) (string, error) {
+	connection, err := d.engine.attachRelay(ctx, containerID, user)
 	if err != nil {
 		return "", err
 	}
@@ -781,8 +854,8 @@ func (d *Driver) browserWebSocketPath(ctx context.Context, containerID string) (
 	return endpoint.EscapedPath(), nil
 }
 
-func (d *Driver) attachWebSocket(ctx context.Context, containerID, path string) (relayConnection, *bufio.Reader, error) {
-	connection, err := d.engine.attachRelay(ctx, containerID)
+func (d *Driver) attachWebSocket(ctx context.Context, containerID, path, user string) (relayConnection, *bufio.Reader, error) {
+	connection, err := d.engine.attachRelay(ctx, containerID, user)
 	if err != nil {
 		return nil, nil, err
 	}

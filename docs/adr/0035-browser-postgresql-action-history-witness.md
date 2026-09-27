@@ -60,6 +60,13 @@ timestamp. It must not own the database, schema, or table and
 must not receive `CREATE`, `DELETE`, `TRUNCATE`, `REFERENCES`, `TRIGGER`, role
 management, or migration authority.
 
+Phase 6 follow-up (ADR 0055): the original runtime `INSERT` recommendation
+above is superseded for the production ingress. `Provision` remains a
+component/administrative operation but uses a separate one-shot provisioning
+identity; the ingress runtime receives no direct or inherited `INSERT` and
+cannot assume the provisioning or migration role. The historical component
+evidence and `0001` schema migration are unchanged.
+
 ### Monotonic operations
 
 `Load` selects one exact scope/policy row and distinguishes a missing row from

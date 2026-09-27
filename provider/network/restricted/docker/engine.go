@@ -68,6 +68,7 @@ type networkRequest struct {
 
 type containerRequest struct {
 	name, image, imageID, internalNetwork, internalAddress string
+	user                                                   string
 	labels, environment                                    map[string]string
 	memoryBytes, nanoCPUs, pidsLimit                       int64
 	stopTimeout                                            int

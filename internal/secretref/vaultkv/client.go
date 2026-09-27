@@ -63,7 +63,7 @@ func New(config Config, httpClient *http.Client, tokens secretref.SecretProvider
 	}
 	allowed := make(map[secretref.Purpose]struct{}, len(config.AllowedPurposes))
 	for _, purpose := range config.AllowedPurposes {
-		if !validPurpose(purpose) {
+		if !validPurpose(config.Role, purpose) {
 			return nil, secretref.ErrUnavailable
 		}
 		if _, duplicate := allowed[purpose]; duplicate {
@@ -206,8 +206,8 @@ func validRole(role secretref.Role) bool {
 	}
 }
 
-func validPurpose(purpose secretref.Purpose) bool {
-	probe := secretref.Binding{Schema: secretref.BindingSchema, Kind: secretref.KindSecret, Reference: "secret://probe/value", Version: "v1", Purpose: purpose, TenantID: secretref.SystemTenant, Role: secretref.RoleProduct}
+func validPurpose(role secretref.Role, purpose secretref.Purpose) bool {
+	probe := secretref.Binding{Schema: secretref.BindingSchema, Kind: secretref.KindSecret, Reference: "secret://probe/value", Version: "v1", Purpose: purpose, TenantID: secretref.SystemTenant, Role: role}
 	return probe.Validate() == nil
 }
 

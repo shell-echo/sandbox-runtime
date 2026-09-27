@@ -2,6 +2,7 @@ package phase6security
 
 import (
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -19,6 +20,35 @@ func TestCanonicalRuntimeEdgesAreCompleteAndExact(t *testing.T) {
 		})
 	}
 	for name, mutate := range map[string]func(*Profile){
+		"undeclared Browser bypass network": func(profile *Profile) {
+			const bypass = "gateway-provider-browser-bypass"
+			for index := range profile.Principals {
+				if profile.Principals[index].Name == "gateway-runtime" || profile.Principals[index].Name == "provider-browser-runtime" {
+					profile.Principals[index].Networks = append(profile.Principals[index].Networks, bypass)
+					slices.Sort(profile.Principals[index].Networks)
+				}
+			}
+			profile.Networks = append(profile.Networks, Network{Name: bypass, Kind: "trust_edge", Internal: true,
+				GatewayModeIPv4: "isolated", IPv4Subnet: "10.26.0.0/24", Principals: []string{"gateway-runtime", "provider-browser-runtime"}})
+			slices.SortFunc(profile.Networks, func(a, b Network) int { return strings.Compare(a.Name, b.Name) })
+		},
+		"legacy direct Gateway Browser bypass": func(profile *Profile) {
+			for _, edge := range profile.TrustEdges {
+				if edge.ID != BrowserActionIngressProviderPrivateEdgeID {
+					continue
+				}
+				edge.ID = "gateway-provider-browser-private"
+				edge.From = "gateway-runtime"
+				for _, principal := range profile.Principals {
+					if principal.Name == "gateway-runtime" {
+						edge.FromURI = principal.TLS.URI
+						edge.FromPrincipalDigest = principal.PrincipalDigest
+					}
+				}
+				profile.TrustEdges = append(profile.TrustEdges, edge)
+				return
+			}
+		},
 		"coding provider steals browser attach": func(profile *Profile) {
 			for index := range profile.TrustEdges {
 				if profile.TrustEdges[index].ID != "provider-browser-attach" {
@@ -87,8 +117,22 @@ func TestCanonicalRuntimeEdgesAreCompleteAndExact(t *testing.T) {
 		},
 		"browser private route conflation": func(profile *Profile) {
 			for index := range profile.TrustEdges {
-				if profile.TrustEdges[index].ID == "gateway-provider-browser-private" {
+				if profile.TrustEdges[index].ID == BrowserActionIngressProviderPrivateEdgeID {
 					profile.TrustEdges[index].RoutePath = "/private/terminal"
+				}
+			}
+		},
+		"action ingress private peer drift": func(profile *Profile) {
+			for index := range profile.TrustEdges {
+				if profile.TrustEdges[index].ID == BrowserActionIngressProviderPrivateEdgeID {
+					profile.TrustEdges[index].FromURI = "spiffe://sandbox-runtime.test/gateway-runtime"
+				}
+			}
+		},
+		"action ingress public route drift": func(profile *Profile) {
+			for index := range profile.TrustEdges {
+				if profile.TrustEdges[index].ID == GatewayBrowserActionIngressEdgeID {
+					profile.TrustEdges[index].RoutePath = "/private/browser"
 				}
 			}
 		},

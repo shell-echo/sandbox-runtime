@@ -8,8 +8,9 @@ import (
 const GatewayProviderPrivateEdgeID = "gateway-provider-private"
 
 const (
-	GatewayProviderBrowserPrivateEdgeID = "gateway-provider-browser-private"
-	GatewayProviderDesktopPrivateEdgeID = "gateway-provider-desktop-private"
+	GatewayProviderDesktopPrivateEdgeID       = "gateway-provider-desktop-private"
+	GatewayBrowserActionIngressEdgeID         = "gateway-browser-action-ingress"
+	BrowserActionIngressProviderPrivateEdgeID = "browser-action-ingress-provider-private"
 )
 
 // GatewayProviderBoundary resolves only the repository-owned private
@@ -19,26 +20,37 @@ func (p Profile) GatewayProviderBoundary(origin string) (TrustEdge, Principal, P
 	return p.GatewayProviderInstanceBoundary("provider-runtime", origin)
 }
 
-// GatewayProviderInstanceBoundary binds one Gateway private route to exactly
-// its matching Provider process and principal. A Browser/Desktop route cannot
-// be relabeled as the coding-shell Terminal route.
+// GatewayProviderInstanceBoundary binds Terminal and Desktop routes only.
+// Browser's action-fenced route must pass through its distinct ingress.
 func (p Profile) GatewayProviderInstanceBoundary(providerName, origin string) (TrustEdge, Principal, Principal, TrustAnchor, TrustAnchor, error) {
 	var edgeID, networkName, route string
 	switch providerName {
 	case "provider-runtime":
 		edgeID, networkName, route = GatewayProviderPrivateEdgeID, "gateway-provider", "/private/terminal"
-	case "provider-browser-runtime":
-		edgeID, networkName, route = GatewayProviderBrowserPrivateEdgeID, "gateway-provider-browser", "/private/browser"
 	case "provider-desktop-runtime":
 		edgeID, networkName, route = GatewayProviderDesktopPrivateEdgeID, "gateway-provider-desktop", "/desktop"
 	default:
 		return TrustEdge{}, Principal{}, Principal{}, TrustAnchor{}, TrustAnchor{}, ErrInvalidProfile
 	}
+	return p.privateRuntimeBoundary("gateway-runtime", providerName, edgeID, networkName, route, "private", origin)
+}
+
+func (p Profile) GatewayBrowserActionIngressBoundary(origin string) (TrustEdge, Principal, Principal, TrustAnchor, TrustAnchor, error) {
+	return p.privateRuntimeBoundary("gateway-runtime", "browser-action-ingress-runtime", GatewayBrowserActionIngressEdgeID,
+		"gateway-browser-action-ingress", "/browser/action", "action", origin)
+}
+
+func (p Profile) BrowserActionIngressProviderBoundary(origin string) (TrustEdge, Principal, Principal, TrustAnchor, TrustAnchor, error) {
+	return p.privateRuntimeBoundary("browser-action-ingress-runtime", "provider-browser-runtime", BrowserActionIngressProviderPrivateEdgeID,
+		"browser-action-ingress-provider", "/private/browser", "private", origin)
+}
+
+func (p Profile) privateRuntimeBoundary(callerName, providerName, edgeID, networkName, route, listenerName, origin string) (TrustEdge, Principal, Principal, TrustAnchor, TrustAnchor, error) {
 	if p.Validate() != nil {
 		return TrustEdge{}, Principal{}, Principal{}, TrustAnchor{}, TrustAnchor{}, ErrInvalidProfile
 	}
 	var edge TrustEdge
-	var gateway, provider Principal
+	var caller, provider Principal
 	var network Network
 	for _, candidate := range p.TrustEdges {
 		if candidate.ID == edgeID {
@@ -47,8 +59,8 @@ func (p Profile) GatewayProviderInstanceBoundary(providerName, origin string) (T
 	}
 	for _, principal := range p.Principals {
 		switch principal.Name {
-		case "gateway-runtime":
-			gateway = principal
+		case callerName:
+			caller = principal
 		case providerName:
 			provider = principal
 		}
@@ -60,23 +72,23 @@ func (p Profile) GatewayProviderInstanceBoundary(providerName, origin string) (T
 	}
 	target, targetErr := netip.ParseAddrPort(edge.TargetAddress)
 	subnet, subnetErr := netip.ParsePrefix(network.IPv4Subnet)
-	if edge.ID != edgeID || edge.From != gateway.Name || gateway.Name != "gateway-runtime" ||
+	if edge.ID != edgeID || edge.From != caller.Name || caller.Name != callerName ||
 		edge.To != provider.Name || provider.Name != providerName || edge.Protocol != "wss" ||
 		edge.Authentication != "mtls" || edge.TenantScope != "bound" || edge.RoutePath != route ||
-		provider.TLS == nil || gateway.TLS == nil ||
-		edge.FromPrincipalDigest != gateway.PrincipalDigest || edge.ToPrincipalDigest != provider.PrincipalDigest ||
-		edge.FromURI != gateway.TLS.URI || edge.ToURI != provider.TLS.URI ||
+		provider.TLS == nil || caller.TLS == nil ||
+		edge.FromPrincipalDigest != caller.PrincipalDigest || edge.ToPrincipalDigest != provider.PrincipalDigest ||
+		edge.FromURI != caller.TLS.URI || edge.ToURI != provider.TLS.URI ||
 		origin != "wss://"+edge.TargetAddress+edge.RoutePath || targetErr != nil || subnetErr != nil ||
 		!subnet.Contains(target.Addr()) || network.Kind != "trust_edge" || !network.Internal ||
-		!slices.Equal(network.Principals, []string{"gateway-runtime", providerName}) ||
-		!slices.Contains(gateway.Networks, network.Name) || !slices.Contains(provider.Networks, network.Name) ||
+		len(network.Principals) != 2 || !slices.Contains(network.Principals, callerName) || !slices.Contains(network.Principals, providerName) ||
+		!slices.Contains(caller.Networks, network.Name) || !slices.Contains(provider.Networks, network.Name) ||
 		!slices.Contains(provider.TLS.Usages, "server_auth") ||
-		!slices.Contains(gateway.TLS.Usages, "client_auth") || len(provider.TLS.DNSNames) != 1 {
+		!slices.Contains(caller.TLS.Usages, "client_auth") || len(provider.TLS.DNSNames) != 1 {
 		return TrustEdge{}, Principal{}, Principal{}, TrustAnchor{}, TrustAnchor{}, ErrInvalidProfile
 	}
 	listenerFound := false
 	for _, listener := range provider.Listeners {
-		if listener.Name == "private" && listener.Protocol == "tcp" && listener.Port == edge.Port &&
+		if listener.Name == listenerName && listener.Protocol == "tcp" && listener.Port == edge.Port &&
 			listener.Exposure == "trust_edge" {
 			listenerFound = true
 		}
@@ -88,5 +100,5 @@ func (p Profile) GatewayProviderInstanceBoundary(providerName, origin string) (T
 	if err != nil {
 		return TrustEdge{}, Principal{}, Principal{}, TrustAnchor{}, TrustAnchor{}, ErrInvalidProfile
 	}
-	return edge, gateway, provider, server, client, nil
+	return edge, caller, provider, server, client, nil
 }

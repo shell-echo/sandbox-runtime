@@ -72,6 +72,22 @@ the configured binding ID, purpose and tenant to match; the caller cannot
 substitute the reference, role, version or provider. Provider caches are also
 role-local.
 
+The Browser action-ingress witness and capacity credentials add two secret
+purposes without adding a seventh logical Role: `action_history_witness_dsn`
+and `capacity_valkey_credentials` are `KindSecret`, `_system`, Gateway-family
+bindings. The former is exclusive to the Browser action-ingress runtime and
+material agent; the latter may be consumed by ingress and Gateway only as
+different binding references, Vault paths and Valkey ACL accounts. The exact
+deployment/agent identity, Unix peer UID/GID and controller-scoped token bind
+the two same-RoleGateway processes independently. A Gateway material agent
+must reject the ingress witness binding even though its Role string matches.
+The witness secret is one strict PostgreSQL URI and the Valkey secret is a
+closed three-field protocol/username/password JSON, with no target selector.
+Existing version/window/revocation checks and material failure drain remain
+mandatory; the deployment-bound registry disallows local caching of these
+external credentials. These additions do not grant a shared secret cache or
+account.
+
 Production configuration moves to an explicit new schema containing typed
 binding IDs or closed binding documents. Legacy path fields are not inferred,
 auto-upgraded or used as fallback. They remain available only to an explicit

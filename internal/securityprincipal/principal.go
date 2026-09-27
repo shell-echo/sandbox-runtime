@@ -69,16 +69,19 @@ var builtins = map[Kind]map[string]Role{
 	KindRuntimeRole: {
 		"product": RoleProduct, "provider": RoleProvider, "gateway": RoleGateway,
 		"guest": RoleGuest, "browser": RoleBrowser, "desktop": RoleDesktop,
+		"browser_action_ingress": RoleGateway,
 	},
 	KindMaterialAgent: {
 		"product_runtime_agent": RoleProduct, "provider_runtime_agent": RoleProvider, "gateway_agent": RoleGateway,
-		"guest_agent": RoleGuest, "browser_agent": RoleBrowser, "desktop_agent": RoleDesktop,
+		"browser_action_ingress_agent": RoleGateway,
+		"guest_agent":                  RoleGuest, "browser_agent": RoleBrowser, "desktop_agent": RoleDesktop,
 		"product_migration_agent": RoleProduct, "provider_migration_agent": RoleProvider,
 	},
 	KindTLSAgent: {
 		"product_tls_agent": RoleProduct, "provider_tls_agent": RoleProvider,
 		"gateway_tls_agent": RoleGateway, "guest_tls_agent": RoleGuest,
-		"browser_tls_agent": RoleBrowser, "desktop_tls_agent": RoleDesktop,
+		"browser_action_ingress_tls_agent": RoleGateway,
+		"browser_tls_agent":                RoleBrowser, "desktop_tls_agent": RoleDesktop,
 		"browser_executor_tls_agent": RoleBrowser, "desktop_executor_tls_agent": RoleDesktop,
 	},
 	KindMigrationJob: {

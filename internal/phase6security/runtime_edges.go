@@ -16,7 +16,8 @@ var requiredRuntimeEdges = []struct {
 	{"gateway-provider-private", "gateway-runtime", "provider-runtime", "gateway-provider", "private", "wss", "/private/terminal", "bound"},
 	{"product-provider-browser-contract", "product-runtime", "provider-browser-runtime", "product-provider-browser", "contract", "https", "/v1", "bound"},
 	{"product-provider-desktop-contract", "product-runtime", "provider-desktop-runtime", "product-provider-desktop", "contract", "https", "/v1", "bound"},
-	{"gateway-provider-browser-private", "gateway-runtime", "provider-browser-runtime", "gateway-provider-browser", "private", "wss", "/private/browser", "bound"},
+	{"gateway-browser-action-ingress", "gateway-runtime", "browser-action-ingress-runtime", "gateway-browser-action-ingress", "action", "wss", "/browser/action", "bound"},
+	{"browser-action-ingress-provider-private", "browser-action-ingress-runtime", "provider-browser-runtime", "browser-action-ingress-provider", "private", "wss", "/private/browser", "bound"},
 	{"gateway-provider-desktop-private", "gateway-runtime", "provider-desktop-runtime", "gateway-provider-desktop", "private", "wss", "/desktop", "bound"},
 	{"guest-product", "guest-runtime", "product-runtime", "guest-product", "guest-control", "wss", "/agent", "bound"},
 	{"provider-browser-attach", "provider-browser-runtime", "browser-runtime-role", "provider-browser", "attach", "wss", "/executor", "bound"},
@@ -82,6 +83,29 @@ func validateRuntimeEdges(edges map[string]TrustEdge, principals map[string]Prin
 		to, toOK := principals[edge.To]
 		if fromOK && toOK && from.Kind == "runtime" && (to.Kind == "runtime" || to.Kind == "executor") {
 			if _, required := requiredIDs[edge.ID]; !required {
+				return ErrInvalidProfile
+			}
+		}
+	}
+	// There must be no routable direct Browser write path around the unique
+	// action ingress, even if an operator adds an otherwise well-formed network
+	// without declaring a second trust edge.
+	for _, pair := range [][2]string{
+		{"gateway-runtime", "provider-browser-runtime"},
+		{"gateway-runtime", "browser-runtime-role"},
+		{"gateway-runtime", "browser-executor-backend"},
+		{"gateway-runtime", "browser-sandbox-runtime"},
+		{"browser-action-ingress-runtime", "browser-runtime-role"},
+		{"browser-action-ingress-runtime", "browser-executor-backend"},
+		{"browser-action-ingress-runtime", "browser-sandbox-runtime"},
+	} {
+		left, leftOK := principals[pair[0]]
+		right, rightOK := principals[pair[1]]
+		if !leftOK || !rightOK {
+			return ErrInvalidProfile
+		}
+		for _, network := range left.Networks {
+			if slices.Contains(right.Networks, network) {
 				return ErrInvalidProfile
 			}
 		}

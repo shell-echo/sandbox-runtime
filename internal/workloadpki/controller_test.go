@@ -5,8 +5,12 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/base64"
+	"encoding/pem"
 	"errors"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sync"
@@ -115,6 +119,55 @@ func TestControllerPersistsReplayCertificateAndRevocationAcrossRestart(t *testin
 	}
 	if info, err := os.Lstat(ledgerPath); err != nil || info.Mode().Perm() != 0o600 {
 		t.Fatalf("ledger mode = %#v, %v", info, err)
+	}
+}
+
+func TestControllerRejectsWrongPurposeCertificateBeforeLedgerCommit(t *testing.T) {
+	fixture := newProtocolFixture(t)
+	policy, private := postgresPolicyFixture(t)
+	policy.ExpectedUID, policy.ExpectedGID = uint32(os.Getuid()), uint32(os.Getgid())
+	csr, key := testPostgresCSR(t, pkix.Name{CommonName: policy.Postgres.CommonName}, policy.URI, nil)
+	issuerBlock, _ := pem.Decode(fixture.ca)
+	issuer, err := x509.ParseCertificate(issuerBlock.Bytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldLeafBlock, _ := pem.Decode(fixture.certificate)
+	oldLeaf, err := x509.ParseCertificate(oldLeafBlock.Bytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	uri, _ := url.Parse(policy.URI)
+	wrongCN := &x509.Certificate{SerialNumber: oldLeaf.SerialNumber, Subject: pkix.Name{},
+		NotBefore: fixture.notBefore, NotAfter: fixture.notAfter, BasicConstraintsValid: true,
+		KeyUsage: x509.KeyUsageDigitalSignature, ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+		URIs: []*url.URL{uri}}
+	wrongDER, err := x509.CreateCertificate(rand.Reader, wrongCN, issuer, &key.PublicKey, fixture.caKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixture.certificate = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: wrongDER})
+	authority := &fakeCertificateAuthority{fixture: fixture} // Correct key/URI/issuer, but ordinary empty Subject.
+	controller, err := NewController(ControllerConfig{LedgerPath: filepath.Join(securePKIDirectory(t), "ledger.json"),
+		Policies: []Policy{policy}, Authority: authority, ControllerKeyID: fixture.controllerID,
+		ControllerKey: fixture.controllerPriv, Now: func() time.Time { return fixture.now },
+		MaximumActive: 2, MaximumLedgerAge: time.Hour})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer controller.Close()
+	request, err := NewIssueRequest(policy, "postgres-issue-1",
+		base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{9}, 32)), fixture.now.Add(30*time.Second),
+		10*time.Minute, csr, private)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err := controller.Handle(context.Background(), request, policy.ExpectedUID, policy.ExpectedGID)
+	if !errors.Is(err, ErrUnavailable) || response.Status != StatusUnavailable ||
+		len(controller.ledger.Certificates) != 0 || len(authority.revokeCalls) != 1 ||
+		authority.revokeCalls[0] != fixture.serial {
+		t.Fatalf("wrong-purpose certificate accepted: response=%+v err=%v ledger=%+v revokes=%+v",
+			response, err, controller.ledger.Certificates, authority.revokeCalls)
 	}
 }
 

@@ -21,6 +21,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v4"
+	"github.com/shell-echo/sandbox-runtime/internal/desktophandoff"
+	"github.com/shell-echo/sandbox-runtime/internal/handoff"
 	"github.com/shell-echo/sandbox-runtime/product"
 	productgateway "github.com/shell-echo/sandbox-runtime/product/adapter/gateway"
 	productrecordinglocal "github.com/shell-echo/sandbox-runtime/product/adapter/recording/local"
@@ -104,8 +106,10 @@ func TestIntegrationComposedDesktopProductFaultSecurityAndCleanup(t *testing.T) 
 	resolver := &composedDesktopResolver{binding: binding}
 	providerMedia := newComposedDesktopMedia()
 	privateHandler, err := desktopgateway.New(desktopgateway.Options{
-		Resolver: resolver, Media: providerMedia, MaxSessions: 1, MaxSessionsPerDesktop: 1,
-		AuthorityPollInterval: 10 * time.Millisecond, OperationTimeout: time.Second, AllowInsecureHTTPForTests: true,
+		Resolver: resolver, BoundMedia: providerMedia, BindingRegistrar: resolver,
+		MaxSessions: 1, MaxSessionsPerDesktop: 1,
+		AuthorityPollInterval: 10 * time.Millisecond, OperationTimeout: 5 * time.Second,
+		AllowInsecureHTTPForTests: true,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -114,7 +118,13 @@ func TestIntegrationComposedDesktopProductFaultSecurityAndCleanup(t *testing.T) 
 	defer privateServer.Close()
 	privateSource, err := productgateway.NewPrivateDesktopMediaSource(productgateway.PrivateDesktopMediaOptions{
 		Origin: strings.Replace(privateServer.URL, "http://", "ws://", 1), HTTPClient: privateServer.Client(),
-		AllowHTTPForTests: true, ExpectedProviderID: strings.Repeat("d", 40), OpenTimeout: time.Second,
+		AllowHTTPForTests: true, ExpectedProviderID: strings.Repeat("d", 40), OpenTimeout: 5 * time.Second,
+		TenantBindingDigest: func(context.Context, product.GatewayBinding) (string, error) {
+			return handoff.TenantBindingDigestPrefix + strings.Repeat("a", 64), nil
+		},
+		ControllerFence: func(context.Context, product.GatewayBinding) (string, error) {
+			return strings.Repeat("c", handoff.MinFenceBytes), nil
+		},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -157,16 +167,34 @@ func TestIntegrationComposedDesktopProductFaultSecurityAndCleanup(t *testing.T) 
 
 	peer, channel, offer := composedDesktopOffer(t)
 	defer peer.Close()
+	var peerStatesMu sync.Mutex
+	peerStates := []string{peer.ConnectionState().String()}
+	peer.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
+		peerStatesMu.Lock()
+		peerStates = append(peerStates, state.String())
+		peerStatesMu.Unlock()
+	})
+	states := func() []string {
+		peerStatesMu.Lock()
+		defer peerStatesMu.Unlock()
+		return append([]string(nil), peerStates...)
+	}
 	trackPackets := make(chan struct{}, 1)
 	peer.OnTrack(func(track *webrtc.TrackRemote, _ *webrtc.RTPReceiver) {
-		if _, _, err := track.ReadRTP(); err == nil {
-			trackPackets <- struct{}{}
+		first := true
+		for {
+			if _, _, err := track.ReadRTP(); err != nil {
+				return
+			}
+			if first {
+				first = false
+				trackPackets <- struct{}{}
+			}
 		}
 	})
 	inputResult := make(chan []byte, 1)
-	channel.OnOpen(func() {
-		_ = channel.SendText(`{"type":"input","sequence":1,"action":{"kind":"pointer","event":"move","x":100,"y":120,"button":0,"delta_x":0,"delta_y":0,"user_activation":true}}`)
-	})
+	channelOpen := make(chan struct{})
+	channel.OnOpen(func() { close(channelOpen) })
 	channel.OnMessage(func(message webrtc.DataChannelMessage) { inputResult <- append([]byte(nil), message.Data...) })
 	signal := composedDesktopSignal(t, publicServer, grant.Ticket, offer)
 	if signal.RecordingMode != "required" || signal.AccessMode != product.GrantAccessControl {
@@ -178,7 +206,19 @@ func TestIntegrationComposedDesktopProductFaultSecurityAndCleanup(t *testing.T) 
 	select {
 	case <-trackPackets:
 	case <-time.After(5 * time.Second):
-		t.Fatal("composed Desktop display packet timed out")
+		var grantState string
+		var leaseExpiry time.Time
+		queryErr := pool.QueryRow(ctx, `SELECT state,gateway_lease_expires_at FROM sandbox_runtime_product.connection_grants WHERE tenant_id=$1 AND connection_id=$2`, tenantID, grant.ID).Scan(&grantState, &leaseExpiry)
+		t.Fatalf("composed Desktop display packet timed out: peer=%s ice=%s signaling=%s peer_states=%v media_closed=%t closed_at=%s media_packets=%d grant=%s lease_expiry=%s query_err=%v",
+			peer.ConnectionState(), peer.ICEConnectionState(), peer.SignalingState(), states(), providerMedia.closed.Load(), time.Unix(0, providerMedia.closedAt.Load()).Format(time.RFC3339Nano), providerMedia.sequence.Load(), grantState, leaseExpiry.Format(time.RFC3339Nano), queryErr)
+	}
+	select {
+	case <-channelOpen:
+	case <-time.After(5 * time.Second):
+		t.Fatalf("composed Desktop control channel did not open: peer_states=%v media_closed=%t closed_at=%s media_packets=%d", states(), providerMedia.closed.Load(), time.Unix(0, providerMedia.closedAt.Load()).Format(time.RFC3339Nano), providerMedia.sequence.Load())
+	}
+	if err := channel.SendText(`{"type":"input","sequence":1,"action":{"kind":"pointer","event":"move","x":100,"y":120,"button":0,"delta_x":0,"delta_y":0,"user_activation":true}}`); err != nil {
+		t.Fatal(err)
 	}
 	select {
 	case response := <-inputResult:
@@ -186,7 +226,11 @@ func TestIntegrationComposedDesktopProductFaultSecurityAndCleanup(t *testing.T) 
 			t.Fatalf("input response=%s", response)
 		}
 	case <-time.After(5 * time.Second):
-		t.Fatal("composed Desktop input timed out")
+		var grantState string
+		var leaseExpiry time.Time
+		queryErr := pool.QueryRow(ctx, `SELECT state,gateway_lease_expires_at FROM sandbox_runtime_product.connection_grants WHERE tenant_id=$1 AND connection_id=$2`, tenantID, grant.ID).Scan(&grantState, &leaseExpiry)
+		t.Fatalf("composed Desktop input timed out: peer=%s data_channel=%s peer_states=%v media_closed=%t closed_at=%s media_packets=%d grant=%s lease_expiry=%s query_err=%v",
+			peer.ConnectionState(), channel.ReadyState(), states(), providerMedia.closed.Load(), time.Unix(0, providerMedia.closedAt.Load()).Format(time.RFC3339Nano), providerMedia.sequence.Load(), grantState, leaseExpiry.Format(time.RFC3339Nano), queryErr)
 	}
 	select {
 	case input := <-providerMedia.inputs:
@@ -336,13 +380,36 @@ func composedDesktopSignalBody(t *testing.T, offer webrtc.SessionDescription) []
 type composedDesktopResolver struct {
 	binding product.GatewayBinding
 	revoked atomic.Bool
+	mu      sync.RWMutex
+	bound   *desktophandoff.Binding
+}
+
+func (r *composedDesktopResolver) BindHandoff(_ context.Context, binding desktophandoff.Binding) error {
+	if binding.ProviderRevisionID != r.binding.ProviderRevisionID || binding.SandboxID != r.binding.SandboxID ||
+		binding.DesktopSessionID != r.binding.SessionID || binding.HandoffReference != r.binding.HandoffReference ||
+		binding.ConnectionGeneration != r.binding.ConnectionGeneration {
+		return desktopreference.ErrRevoked
+	}
+	r.mu.Lock()
+	r.bound = &binding
+	r.mu.Unlock()
+	return nil
 }
 
 func (r *composedDesktopResolver) Resolve(_ context.Context, reference string) (desktopreference.Endpoint, error) {
 	if r.revoked.Load() || reference != r.binding.HandoffReference {
 		return desktopreference.Endpoint{}, desktopreference.ErrRevoked
 	}
-	return desktopreference.Endpoint{Reference: reference, SandboxID: r.binding.SandboxID, DesktopSessionID: r.binding.SessionID,
+	r.mu.RLock()
+	bound := r.bound
+	r.mu.RUnlock()
+	if bound == nil {
+		return desktopreference.Endpoint{}, desktopreference.ErrRevoked
+	}
+	copyBinding := *bound
+	return desktopreference.Endpoint{Reference: reference, ProviderRevisionID: r.binding.ProviderRevisionID,
+		TenantBindingDigest: bound.TenantBindingDigest, AllocationReference: "ref:desktop/11111111111111111111111111111111",
+		Binding: &copyBinding, SandboxID: r.binding.SandboxID, DesktopSessionID: r.binding.SessionID,
 		CapabilityProfileID: product.DesktopCapabilityProfile, ConnectionGeneration: r.binding.ConnectionGeneration,
 		ExpiresAt: r.binding.HandoffExpiresAt,
 		Attach: func(context.Context) (providerdesktop.Attachment, error) {
@@ -356,6 +423,7 @@ func (r *composedDesktopResolver) Resolve(_ context.Context, reference string) (
 type composedDesktopMedia struct {
 	inputs    chan desktopgateway.Input
 	closed    atomic.Bool
+	closedAt  atomic.Int64
 	closeOnce sync.Once
 	stop      chan struct{}
 	sequence  atomic.Uint32
@@ -367,6 +435,10 @@ func newComposedDesktopMedia() *composedDesktopMedia {
 }
 
 func (m *composedDesktopMedia) Open(context.Context, desktopreference.Endpoint, providerdesktop.Attachment, desktopgateway.MediaPolicy) (desktopgateway.Session, error) {
+	return m, nil
+}
+
+func (m *composedDesktopMedia) OpenBound(_ context.Context, _ desktophandoff.OpenRequest, _ desktopreference.Endpoint, _ providerdesktop.Attachment) (desktopgateway.Session, error) {
 	return m, nil
 }
 
@@ -408,7 +480,7 @@ func (*composedDesktopMedia) UpdateStream(context.Context, desktopgateway.Displa
 func (*composedDesktopMedia) Resynchronize(context.Context) error   { return nil }
 func (*composedDesktopMedia) RequestKeyframe(context.Context) error { return nil }
 func (m *composedDesktopMedia) Close() error {
-	m.closeOnce.Do(func() { m.closed.Store(true); close(m.stop) })
+	m.closeOnce.Do(func() { m.closedAt.Store(time.Now().UnixNano()); m.closed.Store(true); close(m.stop) })
 	return nil
 }
 

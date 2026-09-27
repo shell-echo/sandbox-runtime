@@ -155,32 +155,16 @@ func TestBrokerTLSAgentConfigMustMatchProfile(t *testing.T) {
 func TestBrokerListenerMustMatchClosedProfile(t *testing.T) {
 	broker := phase6security.Principal{Listeners: []phase6security.Listener{
 		{Name: "egress", Protocol: "tcp", Port: 8443, Exposure: "trust_edge"}}}
-	if !validateBrokerListenConfig(broker, "0.0.0.0:8443") {
+	if !validateBrokerListenConfig(broker, "10.28.0.3:8443") {
 		t.Fatal("bound egress listener rejected")
 	}
-	for _, address := range []string{"127.0.0.1:8443", "0.0.0.0:9443", "[::]:8443", "broker.test:8443", "0.0.0.0:0"} {
+	for _, address := range []string{"127.0.0.1:8443", "0.0.0.0:8443", "10.28.0.3:9443", "[::]:8443", "broker.test:8443", "10.28.0.3:0"} {
 		if validateBrokerListenConfig(broker, address) {
 			t.Fatalf("listener drift %q accepted", address)
 		}
 	}
 	broker.Listeners = append(broker.Listeners, phase6security.Listener{Name: "extra", Protocol: "tcp", Port: 9443, Exposure: "public"})
-	if validateBrokerListenConfig(broker, "0.0.0.0:8443") {
+	if validateBrokerListenConfig(broker, "10.28.0.3:8443") {
 		t.Fatal("extra listener accepted")
-	}
-}
-
-func TestBrokerInboundEdgeIsUniqueAndPortBound(t *testing.T) {
-	profile := phase6security.Profile{TrustEdges: []phase6security.TrustEdge{{ID: "role-broker", From: "product-runtime",
-		To: "egress-broker-product", Protocol: "tls", Port: 8443, Authentication: "mtls"}}}
-	if _, ok := brokerInboundEdge(profile, "product-runtime", "egress-broker-product", "0.0.0.0:8443"); !ok {
-		t.Fatal("declared broker edge rejected")
-	}
-	if _, ok := brokerInboundEdge(profile, "product-runtime", "egress-broker-product", "0.0.0.0:9443"); ok {
-		t.Fatal("port drift accepted")
-	}
-	profile.TrustEdges = append(profile.TrustEdges, phase6security.TrustEdge{ID: "other", From: "guest-runtime",
-		To: "egress-broker-product", Protocol: "tls", Port: 8443, Authentication: "mtls"})
-	if _, ok := brokerInboundEdge(profile, "product-runtime", "egress-broker-product", "0.0.0.0:8443"); ok {
-		t.Fatal("extra inbound caller accepted")
 	}
 }

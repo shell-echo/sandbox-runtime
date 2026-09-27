@@ -18,6 +18,7 @@ import (
 
 	cerrdefs "github.com/containerd/errdefs"
 
+	"github.com/shell-echo/sandbox-runtime/internal/sandboxidentity"
 	browserimage "github.com/shell-echo/sandbox-runtime/profiles/browser/image"
 	providerbrowser "github.com/shell-echo/sandbox-runtime/provider/browser"
 )
@@ -57,7 +58,9 @@ type fakeNetwork struct {
 	inspects, releases     int
 	readyErr, acquireErr   error
 	inspectErr, releaseErr error
+	absentErr              error
 	attachment             NetworkAttachment
+	lastRequest            NetworkRequest
 }
 
 func newFakeNetwork() *fakeNetwork {
@@ -81,6 +84,7 @@ func (n *fakeNetwork) Acquire(_ context.Context, request NetworkRequest) (Networ
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	n.acquires++
+	n.lastRequest = request
 	if request.PolicyReference != n.attachment.PolicyReference || request.SandboxID == "" || request.BrowserSessionID == "" {
 		return NetworkAttachment{}, ErrNetworkUnavailable
 	}
@@ -104,6 +108,14 @@ func (n *fakeNetwork) Release(_ context.Context, attachment NetworkAttachment) e
 	}
 	return n.releaseErr
 }
+func (n *fakeNetwork) Absent(_ context.Context, attachment NetworkAttachment) error {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if attachment != n.attachment || n.releases == 0 {
+		return ErrNetworkUnavailable
+	}
+	return n.absentErr
+}
 func (n *fakeNetwork) counts() (int, int, int, int) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
@@ -116,6 +128,7 @@ type fakeEngine struct {
 	container      *containerInfo
 	createRequests []createRequest
 	attachRequests []*scriptedRelay
+	attachUsers    []string
 	pingErr        error
 	ensureErr      error
 	imageErr       error
@@ -210,9 +223,10 @@ func (e *fakeEngine) remove(context.Context, string) error {
 	e.container = nil
 	return nil
 }
-func (e *fakeEngine) attachRelay(context.Context, string) (relayConnection, error) {
+func (e *fakeEngine) attachRelay(_ context.Context, _, user string) (relayConnection, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	e.attachUsers = append(e.attachUsers, user)
 	if e.attachErr != nil {
 		return nil, e.attachErr
 	}
@@ -320,6 +334,20 @@ func validImageInfo(t *testing.T) imageInfo {
 	}
 }
 
+func TestImageArchitectureReflectsValidatedDockerImage(t *testing.T) {
+	if (*Driver)(nil).ImageArchitecture() != "" {
+		t.Fatal("nil Browser runtime advertised an architecture")
+	}
+	image := validImageInfo(t)
+	if got := (&Driver{image: image}).ImageArchitecture(); got != "amd64" {
+		t.Fatalf("validated image architecture = %q", got)
+	}
+	image.architecture = "other"
+	if got := (&Driver{image: image}).ImageArchitecture(); got != "" {
+		t.Fatalf("unknown image architecture = %q", got)
+	}
+}
+
 func TestRestartRejectsBrowserNetworkDNSAndDeviceDrift(t *testing.T) {
 	clock := &fakeClock{now: browserDriverTestTime}
 	root := t.TempDir()
@@ -377,6 +405,176 @@ func testDriver(t *testing.T, backend *fakeEngine, network *fakeNetwork, options
 		t.Fatal(err)
 	}
 	return driver
+}
+
+func TestBoundBrowserAllocationRequiresCreatingTicketAndPreservesSlot(t *testing.T) {
+	clock := &fakeClock{now: browserDriverTestTime}
+	options := validOptions(t, t.TempDir(), clock)
+	options.MaxSessionsPerController = 1
+	slot := sandboxidentity.Slot{ID: "browser-0000", WorkloadUID: 20000, WorkloadGID: 30000,
+		GatewayUID: 20001, GatewayGID: 30001}
+	authority := sandboxidentity.RuntimeAuthority{PlanDigest: "sha256:" + strings.Repeat("a", 64),
+		OwnerDeployment: providerOwner, Namespace: options.Namespace, ControllerID: options.ControllerID,
+		Template: "browser-sandbox-runtime", Capacity: 1, Slots: []sandboxidentity.Slot{slot}}
+	if validateBoundAuthority(options, authority) != nil {
+		t.Fatal("valid slot authority rejected")
+	}
+	backend := &fakeEngine{}
+	network := newFakeNetwork()
+	network.attachment.Slot = slot
+	driver := testDriver(t, backend, network, options)
+	driver.bind(authority)
+	allocation := allocation(clock.Now())
+	if _, err := driver.Allocate(t.Context(), allocation); !errors.Is(err, providerbrowser.ErrBrowserUnsupported) {
+		t.Fatalf("legacy Allocate on bound runtime = %v", err)
+	}
+	if _, err := driver.Observe(t.Context(), providerbrowser.AllocationReceipt{}); !errors.Is(err, providerbrowser.ErrBrowserUnsupported) {
+		t.Fatalf("bare Observe on bound runtime = %v", err)
+	}
+	if _, err := driver.Attach(t.Context(), providerbrowser.AllocationReceipt{}); !errors.Is(err, providerbrowser.ErrBrowserUnsupported) {
+		t.Fatalf("bare Attach on bound runtime = %v", err)
+	}
+	if err := driver.Cleanup(t.Context(), providerbrowser.AllocationReceipt{}); !errors.Is(err, providerbrowser.ErrBrowserUnsupported) {
+		t.Fatalf("bare Cleanup on bound runtime = %v", err)
+	}
+	specs, err := driver.DesiredSpecDigests(allocation)
+	if err != nil || len(specs) != 1 || specs[slot.ID] == "" || network.acquires != 0 || len(backend.createRequests) != 0 {
+		t.Fatalf("pure desired specs = %v, %v", specs, err)
+	}
+	claim := sandboxidentity.Claim{SandboxID: allocation.Request.SandboxID, SessionID: allocation.Request.BrowserSessionID,
+		OperationID: allocation.Request.OperationID, AttemptID: allocation.Request.AttemptID,
+		RequestDigest: allocation.Request.RequestDigest, Generation: allocation.Request.ExpectedGeneration,
+		Fence: allocation.Request.FencingToken}
+	ticket := sandboxidentity.Reservation{PlanDigest: authority.PlanDigest, Slot: slot, Claim: claim,
+		SpecDigest: specs[slot.ID], Status: sandboxidentity.Creating}
+	for name, change := range map[string]func(*sandboxidentity.Reservation){
+		"reserved, not creating": func(r *sandboxidentity.Reservation) { r.Status = sandboxidentity.Reserved },
+		"wrong plan":             func(r *sandboxidentity.Reservation) { r.PlanDigest = "sha256:" + strings.Repeat("b", 64) },
+		"wrong slot":             func(r *sandboxidentity.Reservation) { r.Slot.WorkloadUID++ },
+		"wrong claim":            func(r *sandboxidentity.Reservation) { r.Claim.Generation++ },
+		"wrong spec":             func(r *sandboxidentity.Reservation) { r.SpecDigest = "sha256:" + strings.Repeat("c", 64) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			invalid := ticket
+			change(&invalid)
+			if _, err := driver.AllocateBound(t.Context(), allocation, invalid); err == nil {
+				t.Fatal("invalid ticket triggered allocation")
+			}
+		})
+	}
+	if network.acquires != 0 || len(backend.createRequests) != 0 {
+		t.Fatal("invalid ticket caused Docker/network side effects")
+	}
+	receipt, err := driver.AllocateBound(t.Context(), allocation, ticket)
+	if err != nil || receipt.Validate() != nil {
+		t.Fatalf("bound allocation = %#v, %v", receipt, err)
+	}
+	if network.lastRequest.Slot != slot || len(backend.createRequests) != 1 ||
+		backend.createRequests[0].user != "20000:30000" || len(backend.attachUsers) == 0 {
+		t.Fatalf("bound Docker identity: network=%#v create=%#v relay=%v", network.lastRequest, backend.createRequests, backend.attachUsers)
+	}
+	for _, user := range backend.attachUsers {
+		if user != "20000:30000" {
+			t.Fatalf("relay exec user = %q", user)
+		}
+	}
+	if completed, err := driver.CompletedBound(t.Context(), allocation, ticket); err != nil || completed != receipt {
+		t.Fatalf("durable finished dispatch = %+v, %v", completed, err)
+	}
+	wrongCompletion := ticket
+	wrongCompletion.Claim.Fence++
+	if _, err := driver.CompletedBound(t.Context(), allocation, wrongCompletion); !errors.Is(err, providerbrowser.ErrAllocationUnknown) {
+		t.Fatalf("drifted completion accepted: %v", err)
+	}
+	_, statePath, err := driver.stateLocation(allocation.Request.SandboxID, allocation.Request.BrowserSessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	finishedState, err := loadBrowserState(statePath, options.NetworkPolicyReference)
+	if err != nil {
+		t.Fatal(err)
+	}
+	unfinishedState := finishedState
+	unfinishedState.CompletedBound = nil
+	if err := persistBrowserState(statePath, unfinishedState, options.NetworkPolicyReference); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := driver.CompletedBound(t.Context(), allocation, ticket); !errors.Is(err, providerbrowser.ErrAllocationUnknown) {
+		t.Fatalf("Ready without finished dispatch proof was accepted: %v", err)
+	}
+	if err := persistBrowserState(statePath, finishedState, options.NetworkPolicyReference); err != nil {
+		t.Fatal(err)
+	}
+	active := ticket
+	active.Status = sandboxidentity.Active
+	usersBeforeRecover := len(backend.attachUsers)
+	if recovered, err := driver.RecoverBound(t.Context(), allocation, active); err != nil || recovered != receipt {
+		t.Fatalf("read-only Active recovery = %#v, %v", recovered, err)
+	}
+	if len(backend.attachUsers) != usersBeforeRecover || len(backend.createRequests) != 1 || network.acquires != 1 {
+		t.Fatal("Active recovery caused create, network or relay exec side effect")
+	}
+	if _, err := driver.ObserveBound(t.Context(), receipt, ticket); !errors.Is(err, providerbrowser.ErrBrowserUnsupported) {
+		t.Fatalf("Creating ticket observed as Active = %v", err)
+	}
+	observation, err := driver.ObserveBound(t.Context(), receipt, active)
+	if err != nil || observation.State != providerbrowser.AllocationRunning {
+		t.Fatalf("bound observation = %#v, %v", observation, err)
+	}
+	if len(backend.attachUsers) != usersBeforeRecover {
+		t.Fatal("read-only bound observation executed a relay")
+	}
+	stream, err := driver.AttachBound(t.Context(), receipt, active)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := stream.Close(); err != nil {
+		t.Fatal(err)
+	}
+	active.Claim.Fence++
+	if _, err := driver.AttachBound(t.Context(), receipt, active); !errors.Is(err, providerbrowser.ErrBrowserConflict) {
+		t.Fatalf("drifted Active ticket attached = %v", err)
+	}
+	active.Claim.Fence--
+	if _, err := driver.AllocateBound(t.Context(), allocation, ticket); !errors.Is(err, providerbrowser.ErrAllocationUnknown) {
+		t.Fatalf("Creating replay = %v", err)
+	}
+	if network.acquires != 1 || len(backend.createRequests) != 1 {
+		t.Fatal("Creating replay reissued side effects")
+	}
+	cleaning := ticket
+	cleaning.Status = sandboxidentity.Cleaning
+	if err := driver.ConfirmAbsentBound(t.Context(), receipt, cleaning); !errors.Is(err, providerbrowser.ErrAllocationUnknown) {
+		t.Fatalf("live resources considered absent = %v", err)
+	}
+	if err := driver.CleanupBound(t.Context(), receipt, cleaning); err != nil {
+		t.Fatalf("bound cleanup = %v", err)
+	}
+	if _, err := driver.AttachBound(t.Context(), receipt, active); !errors.Is(err, providerbrowser.ErrBrowserConflict) {
+		t.Fatalf("late Active attach after Cleaning = %v", err)
+	}
+	if err := driver.ConfirmAbsentBound(t.Context(), receipt, cleaning); err != nil {
+		t.Fatalf("exact bound absence = %v", err)
+	}
+	if err := driver.FinalizeCleanupBound(t.Context(), receipt, cleaning); err != nil {
+		t.Fatalf("bound cleanup finalization = %v", err)
+	}
+	if _, err := driver.RecoverBound(t.Context(), allocation, active); !errors.Is(err, providerbrowser.ErrAllocationUnknown) {
+		t.Fatalf("cleaned allocation recovered = %v", err)
+	}
+	for name, mutate := range map[string]func(*sandboxidentity.RuntimeAuthority){
+		"wrong owner":     func(a *sandboxidentity.RuntimeAuthority) { a.OwnerDeployment = "provider-desktop-runtime" },
+		"wrong capacity":  func(a *sandboxidentity.RuntimeAuthority) { a.Capacity = 2 },
+		"wrong namespace": func(a *sandboxidentity.RuntimeAuthority) { a.Namespace = "other" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			invalid := authority
+			mutate(&invalid)
+			if validateBoundAuthority(options, invalid) == nil {
+				t.Fatal("invalid bound authority accepted")
+			}
+		})
+	}
 }
 
 func TestOptionsFailClosed(t *testing.T) {

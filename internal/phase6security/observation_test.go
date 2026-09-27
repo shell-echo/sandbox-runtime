@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/netip"
 	"sort"
+	"strings"
 	"testing"
 )
 
@@ -14,13 +15,24 @@ func validObservations(profile Profile) ObservationSet {
 	for _, principal := range profile.Principals {
 		observation := ContainerObservation{DeploymentName: principal.Name, ContainerID: testDigest("container/" + principal.Name)[7:],
 			PrincipalDigest: principal.PrincipalDigest, ControllingPrincipalDigest: principal.ControllingPrincipalDigest,
-			ImageReference: principal.ImageReference, ImageDigest: principal.ImageDigest, ProcessUID: principal.UID, ProcessGID: principal.GID,
+			ImageReference:             principal.ImageReference,
+			RuntimeStoreImageID:        principal.ImageDigest,
+			RuntimeStoreDescriptor:     ImageDescriptor{MediaType: "application/vnd.oci.image.manifest.v1+json", Digest: principal.ImageDigest, Size: 1234},
+			SelectedManifestDescriptor: ImageDescriptor{MediaType: "application/vnd.oci.image.manifest.v1+json", Digest: principal.ImageDigest, Size: 1234},
+			OCIConfigDigest:            principal.ImageConfigDigest,
+			RuntimePlatform:            principal.ImagePlatform,
+			ContainerInspectDigest:     testDigest("container-inspect/" + principal.Name),
+			ImageInspectDigest:         testDigest("image-inspect/" + principal.Name),
+			ProcessUID:                 principal.UID, ProcessGID: principal.GID,
 			ReadOnlyRootFilesystem: true, NoNewPrivileges: true, DroppedCapabilities: append([]string(nil), principal.DroppedCapabilities...),
 			SeccompDigest: principal.SeccompDigest, Resources: principal.Resources, Networks: append([]string(nil), principal.Networks...),
 			Listeners: append([]Listener(nil), principal.Listeners...), RootWriteDenied: true, PrivilegeEscalationDenied: true,
 			PIDExhaustionDenied: true, MemoryExhaustionDenied: true, CPUQuotaObserved: true, NamespaceIsolated: true,
 			ExactCleanupObserved: true, DirectEgressDenied: principal.Kind != "egress_broker" && principal.Kind != "ingress_relay",
 			ExternalUplinkObserved: principal.Kind == "egress_broker" || principal.Kind == "ingress_relay"}
+		if principal.ImageIdentityKind != ImageIdentityLocalConfig {
+			observation.ImageDescriptorProofDigest = testDigest("descriptor-proof/" + principal.Name)
+		}
 		if principal.Name == "public-ingress-relay" {
 			for _, binding := range profile.IngressBindings {
 				frontend := netip.MustParseAddrPort(binding.FrontendAddress)
@@ -36,8 +48,24 @@ func validObservations(profile Profile) ObservationSet {
 		containers = append(containers, observation)
 	}
 	containerIDs := make(map[string]string, len(containers))
+	containerByName := make(map[string]ContainerObservation, len(containers))
 	for _, observation := range containers {
 		containerIDs[observation.DeploymentName] = observation.ContainerID
+		containerByName[observation.DeploymentName] = observation
+	}
+	components := make([]ComponentObservation, 0, len(profile.Components))
+	for _, component := range profile.Components {
+		parent := containerByName[component.ParentDeployment]
+		components = append(components, ComponentObservation{
+			Name: component.Name, ParentDeployment: component.ParentDeployment, ParentContainerID: parent.ContainerID,
+			ParentRuntimeStoreImageID: parent.RuntimeStoreImageID, PID: 1, ProcessStartTicks: 12345,
+			ProcessUID: parent.ProcessUID, ProcessGID: parent.ProcessGID, Executable: component.Executable,
+			ExecutableDigest: component.ExecutableDigest, Argv: append([]string(nil), component.Argv...),
+			Socket: component.Socket, SocketMode: 0o600, BrokerProtocol: component.BrokerProtocol,
+			SessionProtocol: component.SessionProtocol, ProcessInspectDigest: testDigest("proc/" + component.Name),
+			SocketInspectDigest:      testDigest("socket/" + component.Name),
+			SessionAssociationDigest: testDigest("session/" + component.Name),
+		})
 	}
 	networks := make([]NetworkObservation, 0, len(profile.Networks))
 	for _, network := range profile.Networks {
@@ -54,6 +82,14 @@ func validObservations(profile Profile) ObservationSet {
 			address := prefix.Addr().Next().Next()
 			for extra := 0; extra < memberIndex; extra++ {
 				address = address.Next()
+			}
+			if network.Name == "gateway-internal" || network.Name == "product-internal" ||
+				network.Name == "provider-browser-internal" || network.Name == "provider-desktop-internal" {
+				if strings.HasPrefix(name, "egress-broker-") {
+					address = prefix.Addr().Next().Next().Next()
+				} else {
+					address = prefix.Addr().Next().Next()
+				}
 			}
 			if network.Name == "ingress-gateway" || network.Name == "ingress-product" {
 				if name == "public-ingress-relay" {
@@ -72,7 +108,7 @@ func validObservations(profile Profile) ObservationSet {
 		})
 		networks = append(networks, observation)
 	}
-	return ObservationSet{ProfileDigest: profile.ProfileDigest, Containers: containers, Networks: networks,
+	return ObservationSet{ProfileDigest: profile.ProfileDigest, Containers: containers, Components: components, Networks: networks,
 		DistinctContainerUIDGIDEstablished: true, ContainerNamespaceIsolationEstablished: true,
 		HostUserNamespaceMappingEstablished: false, PlatformServiceAccountEstablished: false, SameHostLocalContainerGate: true}
 }
@@ -84,24 +120,31 @@ func TestObservationsRequireExactMeasuredLeastPrivilege(t *testing.T) {
 		t.Fatal(err)
 	}
 	tests := map[string]func(*ObservationSet){
-		"profile mismatch":       func(o *ObservationSet) { o.ProfileDigest = testDigest("other") },
-		"missing container":      func(o *ObservationSet) { o.Containers = o.Containers[1:] },
-		"invalid container ID":   func(o *ObservationSet) { o.Containers[0].ContainerID = "container-name" },
-		"duplicate container ID": func(o *ObservationSet) { o.Containers[1].ContainerID = o.Containers[0].ContainerID },
-		"principal drift":        func(o *ObservationSet) { o.Containers[0].PrincipalDigest = testDigest("other") },
-		"root process":           func(o *ObservationSet) { o.Containers[0].ProcessUID = 0 },
-		"shared uid":             func(o *ObservationSet) { o.Containers[1].ProcessUID = o.Containers[0].ProcessUID },
-		"writable root":          func(o *ObservationSet) { o.Containers[0].ReadOnlyRootFilesystem = false },
-		"capability added":       func(o *ObservationSet) { o.Containers[0].AddedCapabilities = []string{"SYS_ADMIN"} },
-		"seccomp drift":          func(o *ObservationSet) { o.Containers[0].SeccompDigest = testDigest("other") },
-		"network drift":          func(o *ObservationSet) { o.Containers[0].Networks = append(o.Containers[0].Networks, "extra") },
-		"proxy environment":      func(o *ObservationSet) { o.Containers[0].ProxyEnvironmentPresent = true },
-		"privilege probe passed": func(o *ObservationSet) { o.Containers[0].PrivilegeEscalationDenied = false },
-		"resource probe passed":  func(o *ObservationSet) { o.Containers[0].MemoryExhaustionDenied = false },
-		"direct egress passed":   func(o *ObservationSet) { o.Containers[0].DirectEgressDenied = false },
-		"platform overclaim":     func(o *ObservationSet) { o.PlatformServiceAccountEstablished = true },
-		"host mapping overclaim": func(o *ObservationSet) { o.HostUserNamespaceMappingEstablished = true },
-		"missing cleanup":        func(o *ObservationSet) { o.Containers[0].ExactCleanupObserved = false },
+		"profile mismatch":        func(o *ObservationSet) { o.ProfileDigest = testDigest("other") },
+		"missing container":       func(o *ObservationSet) { o.Containers = o.Containers[1:] },
+		"missing broker process":  func(o *ObservationSet) { o.Components = nil },
+		"broker fake container":   func(o *ObservationSet) { o.Components[0].ParentContainerID = testDigest("fake-broker-container")[7:] },
+		"broker wrong uid":        func(o *ObservationSet) { o.Components[0].ProcessUID++ },
+		"broker pid reuse":        func(o *ObservationSet) { o.Components[0].ProcessStartTicks = 0 },
+		"broker executable drift": func(o *ObservationSet) { o.Components[0].ExecutableDigest = testDigest("other") },
+		"broker socket drift":     func(o *ObservationSet) { o.Components[0].SocketMode = 0o666 },
+		"broker session unbound":  func(o *ObservationSet) { o.Components[0].SessionAssociationDigest = "" },
+		"invalid container ID":    func(o *ObservationSet) { o.Containers[0].ContainerID = "container-name" },
+		"duplicate container ID":  func(o *ObservationSet) { o.Containers[1].ContainerID = o.Containers[0].ContainerID },
+		"principal drift":         func(o *ObservationSet) { o.Containers[0].PrincipalDigest = testDigest("other") },
+		"root process":            func(o *ObservationSet) { o.Containers[0].ProcessUID = 0 },
+		"shared uid":              func(o *ObservationSet) { o.Containers[1].ProcessUID = o.Containers[0].ProcessUID },
+		"writable root":           func(o *ObservationSet) { o.Containers[0].ReadOnlyRootFilesystem = false },
+		"capability added":        func(o *ObservationSet) { o.Containers[0].AddedCapabilities = []string{"SYS_ADMIN"} },
+		"seccomp drift":           func(o *ObservationSet) { o.Containers[0].SeccompDigest = testDigest("other") },
+		"network drift":           func(o *ObservationSet) { o.Containers[0].Networks = append(o.Containers[0].Networks, "extra") },
+		"proxy environment":       func(o *ObservationSet) { o.Containers[0].ProxyEnvironmentPresent = true },
+		"privilege probe passed":  func(o *ObservationSet) { o.Containers[0].PrivilegeEscalationDenied = false },
+		"resource probe passed":   func(o *ObservationSet) { o.Containers[0].MemoryExhaustionDenied = false },
+		"direct egress passed":    func(o *ObservationSet) { o.Containers[0].DirectEgressDenied = false },
+		"platform overclaim":      func(o *ObservationSet) { o.PlatformServiceAccountEstablished = true },
+		"host mapping overclaim":  func(o *ObservationSet) { o.HostUserNamespaceMappingEstablished = true },
+		"missing cleanup":         func(o *ObservationSet) { o.Containers[0].ExactCleanupObserved = false },
 		"ordinary gateway": func(o *ObservationSet) {
 			for index := range o.Networks {
 				if o.Networks[index].Internal {
@@ -156,6 +199,17 @@ func TestObservationsRequireExactMeasuredLeastPrivilege(t *testing.T) {
 					for member := range o.Networks[index].Endpoints {
 						if o.Networks[index].Endpoints[member].ContainerID == testDigest("container/product-runtime")[7:] {
 							o.Networks[index].Endpoints[member].IPv4Address = "10.13.0.4"
+						}
+					}
+				}
+			}
+		},
+		"broker target IP drift": func(o *ObservationSet) {
+			for index := range o.Networks {
+				if o.Networks[index].Name == "gateway-internal" {
+					for member := range o.Networks[index].Endpoints {
+						if o.Networks[index].Endpoints[member].ContainerID == testDigest("container/egress-broker-gateway")[7:] {
+							o.Networks[index].Endpoints[member].IPv4Address = "10.27.0.4"
 						}
 					}
 				}

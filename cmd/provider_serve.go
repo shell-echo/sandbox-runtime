@@ -75,6 +75,15 @@ func runProviderServe(cmd *cobra.Command, _ []string) (result error) {
 	if err := providerConfig.Validate(); err != nil {
 		return err
 	}
+	// PostgreSQL requires a separate, purpose-bound client certificate whose
+	// CN is mapped literally to the SQL role. The current role certificate has
+	// an empty Subject and must never be offered as database authority. Keep
+	// v3 Browser/Desktop closed before any dial until that independent agent,
+	// actual server HBA/ident proof and slot lifecycle are wired.
+	if providerConfig.SchemaVersion == config.ProviderProductionSchemaV3 &&
+		(providerConfig.Profile == config.ProviderProcessBrowserProfile || providerConfig.Profile == config.ProviderProcessDesktopProfile) {
+		return errors.New("Phase 6 Provider PostgreSQL client-certificate and sandbox slot gates are incomplete")
+	}
 	startupContext, cancelStartup := context.WithTimeout(cmd.Context(), time.Duration(providerConfig.Postgres.StartupTimeoutSeconds)*time.Second)
 	defer cancelStartup()
 	materialRegistry, err := newProviderRuntimeMaterialRegistry(providerConfig.Materials, providerConfig.SchemaVersion)
@@ -82,11 +91,22 @@ func runProviderServe(cmd *cobra.Command, _ []string) (result error) {
 		return err
 	}
 	defer materialRegistry.Close()
-	runtimePool, err := openProviderPostgresRegistry(startupContext, materialRegistry, providerConfig.Postgres.RuntimeDSNBindingID, secretref.PurposePostgresRuntimeDSN, providerConfig.Postgres.MaxConnections, providerConfig.Postgres.MinConnections)
+	var runtimePool *pgxpool.Pool
+	var poolClose func()
+	var databaseAuthority providerV3DatabaseAuthority
+	if providerConfig.SchemaVersion == config.ProviderProductionSchemaV3 &&
+		(providerConfig.Profile == config.ProviderProcessBrowserProfile || providerConfig.Profile == config.ProviderProcessDesktopProfile) {
+		runtimePool, poolClose, databaseAuthority, err = openProviderV3Postgres(startupContext, cmd.Context(), providerConfig, materialRegistry)
+	} else {
+		runtimePool, err = openProviderPostgresRegistry(startupContext, materialRegistry, providerConfig.Postgres.RuntimeDSNBindingID, secretref.PurposePostgresRuntimeDSN, providerConfig.Postgres.MaxConnections, providerConfig.Postgres.MinConnections)
+		if err == nil {
+			poolClose = runtimePool.Close
+		}
+	}
 	if err != nil {
 		return fmt.Errorf("open Provider runtime database: %w", err)
 	}
-	defer runtimePool.Close()
+	defer poolClose()
 	if err := runtimePool.Ping(startupContext); err != nil {
 		return errors.New("Provider runtime database is unavailable at startup")
 	}
@@ -99,6 +119,15 @@ func runProviderServe(cmd *cobra.Command, _ []string) (result error) {
 	state, err := providerpostgres.New(runtimePool, time.Duration(providerConfig.Postgres.OperationTimeoutSeconds)*time.Second)
 	if err != nil {
 		return errors.New("construct Provider transactional state")
+	}
+	if databaseAuthority.owner != "" {
+		if err := verifyProviderV3IdentityState(startupContext, state, databaseAuthority); err != nil {
+			return err
+		}
+		// The pool and ledger are now bound, but neither Docker driver yet
+		// reserves a finite slot before its first side effect. Do not expose
+		// a runnable Provider until that lifecycle chain is wired and gated.
+		return errors.New("Phase 6 Provider sandbox identity reservation is not wired into the runtime driver")
 	}
 	composition, err := newProductionProvider(cmd.Context(), providerConfig, state, runtimePool, materialRegistry)
 	if err != nil {
@@ -129,10 +158,16 @@ type productionProviderComposition struct {
 }
 
 func newProductionProvider(ctx context.Context, cfg *config.ProviderProcessConfig, state *providerpostgres.Store, pool *pgxpool.Pool, registry *secretref.Registry) (*productionProviderComposition, error) {
-	if cfg.Profile == config.ProviderProcessDesktopProfile {
+	switch cfg.Profile {
+	case config.ProviderProcessDesktopProfile:
 		return newProductionDesktopProvider(ctx, cfg, state, pool, registry)
+	case config.ProviderProcessCodingShellProfile:
+		return newProductionCodingProvider(ctx, cfg, state, pool, registry)
+	case config.ProviderProcessBrowserProfile:
+		return nil, errors.New("Browser Provider production composition is not yet available")
+	default:
+		return nil, errors.New("Provider profile is unsupported")
 	}
-	return newProductionCodingProvider(ctx, cfg, state, pool, registry)
 }
 
 type providerCloseStack struct{ closers []func() error }
@@ -524,6 +559,8 @@ func newProductionProviderTransport(ctx context.Context, cfg *config.ProviderPro
 
 func providerContractSelection(profile config.ProviderProcessProfile) (string, string) {
 	switch profile {
+	case config.ProviderProcessBrowserProfile:
+		return "provider-browser-runtime", phase6security.ProductProviderBrowserContractEdgeID
 	case config.ProviderProcessDesktopProfile:
 		return "provider-desktop-runtime", phase6security.ProductProviderDesktopContractEdgeID
 	case config.ProviderProcessCodingShellProfile:
@@ -542,12 +579,13 @@ func loadProviderSecurityProfile(cfg *config.ProviderProcessConfig) (phase6secur
 }
 
 type providerReadinessChecker struct {
-	state      *providerpostgres.Store
-	pool       *pgxpool.Pool
-	reconciler interface{ Ready(context.Context) error }
-	registry   *secretref.Registry
-	config     *config.ProviderProcessConfig
-	tlsProbes  []func(context.Context) error
+	state            *providerpostgres.Store
+	pool             *pgxpool.Pool
+	reconciler       interface{ Ready(context.Context) error }
+	registry         *secretref.Registry
+	config           *config.ProviderProcessConfig
+	tlsProbes        []func(context.Context) error
+	dependencyProbes []func(context.Context) error
 }
 
 func (c providerReadinessChecker) Ready(ctx context.Context) error {
@@ -567,7 +605,7 @@ func (c providerReadinessChecker) Ready(ctx context.Context) error {
 	}
 	if c.config != nil && c.config.SchemaVersion == config.ProviderProductionSchemaV3 {
 		expectedProbes := 2
-		if c.config.Profile == config.ProviderProcessDesktopProfile {
+		if c.config.Profile == config.ProviderProcessDesktopProfile || c.config.Profile == config.ProviderProcessBrowserProfile {
 			expectedProbes = 3
 		}
 		if len(c.tlsProbes) != expectedProbes {
@@ -577,6 +615,11 @@ func (c providerReadinessChecker) Ready(ctx context.Context) error {
 			if probe == nil || probe(ctx) != nil {
 				return errors.New("Provider live TLS signer is unavailable")
 			}
+		}
+	}
+	for _, probe := range c.dependencyProbes {
+		if probe == nil || probe(ctx) != nil {
+			return errors.New("Provider runtime dependency is unavailable")
 		}
 	}
 	return c.reconciler.Ready(ctx)

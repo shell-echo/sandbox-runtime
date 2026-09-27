@@ -30,6 +30,7 @@ type protocolFixture struct {
 	csr            []byte
 	certificate    []byte
 	ca             []byte
+	caKey          *ecdsa.PrivateKey
 	serial         string
 	notBefore      time.Time
 	notAfter       time.Time
@@ -103,7 +104,7 @@ func newProtocolFixture(t *testing.T) protocolFixture {
 		t.Fatal(err)
 	}
 	return protocolFixture{now: now, policy: policy, agentPrivate: agentPrivate, controllerID: "slice6-certificate-controller", controllerPriv: controllerPrivate, controllerPub: controllerPublic,
-		csr: csr, certificate: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certificateDER}), ca: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caDER}),
+		csr: csr, certificate: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certificateDER}), ca: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caDER}), caKey: caKey,
 		serial: serialString(serialNumber.Bytes()), notBefore: notBefore, notAfter: notAfter, crl: crl, crlThis: crlThis, crlNext: crlNext}
 }
 

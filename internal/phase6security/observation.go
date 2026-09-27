@@ -18,12 +18,37 @@ var containerIDPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
 type ObservationSet struct {
 	ProfileDigest                          string                 `json:"profile_digest"`
 	Containers                             []ContainerObservation `json:"containers"`
+	Components                             []ComponentObservation `json:"components"`
 	Networks                               []NetworkObservation   `json:"networks"`
 	DistinctContainerUIDGIDEstablished     bool                   `json:"distinct_container_uid_gid_established"`
 	ContainerNamespaceIsolationEstablished bool                   `json:"container_namespace_isolation_established"`
 	HostUserNamespaceMappingEstablished    bool                   `json:"host_user_namespace_mapping_established"`
 	PlatformServiceAccountEstablished      bool                   `json:"platform_service_account_established"`
 	SameHostLocalContainerGate             bool                   `json:"same_host_local_container_gate"`
+}
+
+// ComponentObservation binds a real process and Unix socket to its observed
+// parent container. The parent is the containment boundary; this record does
+// not claim a second namespace or a distinct UID/GID.
+type ComponentObservation struct {
+	Name                      string   `json:"name"`
+	ParentDeployment          string   `json:"parent_deployment"`
+	ParentContainerID         string   `json:"parent_container_id"`
+	ParentRuntimeStoreImageID string   `json:"parent_runtime_store_image_id"`
+	PID                       int      `json:"pid"`
+	ProcessStartTicks         uint64   `json:"process_start_ticks"`
+	ProcessUID                uint32   `json:"process_uid"`
+	ProcessGID                uint32   `json:"process_gid"`
+	Executable                string   `json:"executable"`
+	ExecutableDigest          string   `json:"executable_digest"`
+	Argv                      []string `json:"argv"`
+	Socket                    string   `json:"socket"`
+	SocketMode                uint32   `json:"socket_mode"`
+	BrokerProtocol            string   `json:"broker_protocol"`
+	SessionProtocol           string   `json:"session_protocol"`
+	ProcessInspectDigest      string   `json:"process_inspect_digest"`
+	SocketInspectDigest       string   `json:"socket_inspect_digest"`
+	SessionAssociationDigest  string   `json:"session_association_digest"`
 }
 
 type NetworkObservation struct {
@@ -58,7 +83,14 @@ type ContainerObservation struct {
 	ControllingPrincipalDigest string                     `json:"controlling_principal_digest"`
 	ContainerID                string                     `json:"container_id"`
 	ImageReference             string                     `json:"image_reference"`
-	ImageDigest                string                     `json:"image_digest"`
+	RuntimeStoreImageID        string                     `json:"runtime_store_image_id"`
+	RuntimeStoreDescriptor     ImageDescriptor            `json:"runtime_store_descriptor"`
+	SelectedManifestDescriptor ImageDescriptor            `json:"selected_manifest_descriptor"`
+	OCIConfigDigest            string                     `json:"oci_config_digest"`
+	RuntimePlatform            string                     `json:"runtime_platform"`
+	ImageDescriptorProofDigest string                     `json:"image_descriptor_proof_digest"`
+	ContainerInspectDigest     string                     `json:"container_inspect_digest"`
+	ImageInspectDigest         string                     `json:"image_inspect_digest"`
 	ProcessUID                 uint32                     `json:"process_uid"`
 	ProcessGID                 uint32                     `json:"process_gid"`
 	ReadOnlyRootFilesystem     bool                       `json:"read_only_root_filesystem"`
@@ -121,7 +153,8 @@ func ValidateObservations(profile Profile, observations ObservationSet) error { 
 		!observations.DistinctContainerUIDGIDEstablished || !observations.ContainerNamespaceIsolationEstablished ||
 		observations.HostUserNamespaceMappingEstablished || observations.PlatformServiceAccountEstablished ||
 		!observations.SameHostLocalContainerGate ||
-		len(observations.Containers) != len(profile.Principals) || len(observations.Networks) != len(profile.Networks) {
+		len(observations.Containers) != len(profile.Principals) || len(observations.Components) != len(profile.Components) ||
+		len(observations.Networks) != len(profile.Networks) {
 		return ErrInvalidObservation
 	}
 	profiles := make(map[string]Principal, len(profile.Principals))
@@ -155,6 +188,23 @@ func ValidateObservations(profile Profile, observations ObservationSet) error { 
 		containerByDeployment[observation.DeploymentName] = observation.ContainerID
 		uid[observation.ProcessUID], gid[observation.ProcessGID] = struct{}{}, struct{}{}
 	}
+	for index, component := range observations.Components {
+		expected := profile.Components[index]
+		parent, ok := profiles[expected.ParentDeployment]
+		parentObservation := findContainerObservation(observations.Containers, expected.ParentDeployment)
+		if !ok || component.Name != expected.Name || component.ParentDeployment != expected.ParentDeployment ||
+			component.ParentContainerID != containerByDeployment[expected.ParentDeployment] ||
+			component.ParentRuntimeStoreImageID != parentObservation.RuntimeStoreImageID ||
+			component.PID < 1 || component.ProcessStartTicks == 0 ||
+			component.ProcessUID != parent.UID || component.ProcessGID != parent.GID ||
+			component.Executable != expected.Executable || component.ExecutableDigest != expected.ExecutableDigest ||
+			!exactStrings(component.Argv, expected.Argv) || component.Socket != expected.Socket || component.SocketMode != 0o600 ||
+			component.BrokerProtocol != expected.BrokerProtocol || component.SessionProtocol != expected.SessionProtocol ||
+			!digestPattern.MatchString(component.ProcessInspectDigest) || !digestPattern.MatchString(component.SocketInspectDigest) ||
+			!digestPattern.MatchString(component.SessionAssociationDigest) {
+			return ErrInvalidObservation
+		}
+	}
 	networkIDs := make(map[string]struct{}, len(observations.Networks))
 	for index, observation := range observations.Networks {
 		expected := profile.Networks[index]
@@ -185,6 +235,37 @@ func ValidateObservations(profile Profile, observations ObservationSet) error { 
 	}
 	if validateIngressObservations(profile, observations, containerByDeployment) != nil {
 		return ErrInvalidObservation
+	}
+	if validateBrokerObservedAddresses(profile, observations, containerByDeployment) != nil {
+		return ErrInvalidObservation
+	}
+	return nil
+}
+
+func findContainerObservation(containers []ContainerObservation, deployment string) ContainerObservation {
+	for _, container := range containers {
+		if container.DeploymentName == deployment {
+			return container
+		}
+	}
+	return ContainerObservation{}
+}
+
+func validateBrokerObservedAddresses(profile Profile, observations ObservationSet, containerIDs map[string]string) error {
+	networks := make(map[string]NetworkObservation, len(observations.Networks))
+	for _, observed := range observations.Networks {
+		networks[observed.Name] = observed
+	}
+	for _, policy := range profile.EgressPolicies {
+		edge, caller, broker, network, err := profile.BrokerBoundaryForPolicy(policy.ID)
+		if err != nil {
+			return ErrInvalidObservation
+		}
+		target, err := netip.ParseAddrPort(edge.TargetAddress)
+		if err != nil || !networkHasEndpoint(networks[network.Name], containerIDs[broker.Name], target.Addr().String()) ||
+			networkHasEndpoint(networks[network.Name], containerIDs[caller.Name], target.Addr().String()) {
+			return ErrInvalidObservation
+		}
 	}
 	return nil
 }
@@ -284,7 +365,10 @@ func validObservedSubnet(subnet, gateway string) bool {
 func validateContainerObservation(expected Principal, actual ContainerObservation) error { //nolint:gocyclo
 	if !containerIDPattern.MatchString(actual.ContainerID) || actual.PrincipalDigest != expected.PrincipalDigest ||
 		actual.ControllingPrincipalDigest != expected.ControllingPrincipalDigest ||
-		actual.ImageReference != expected.ImageReference || actual.ImageDigest != expected.ImageDigest ||
+		actual.ImageReference != expected.ImageReference ||
+		!validObservedImageIdentity(expected, actual) ||
+		actual.RuntimePlatform != expected.ImagePlatform ||
+		!digestPattern.MatchString(actual.ContainerInspectDigest) || !digestPattern.MatchString(actual.ImageInspectDigest) ||
 		actual.ProcessUID != expected.UID || actual.ProcessGID != expected.GID || !actual.ReadOnlyRootFilesystem || !actual.NoNewPrivileges ||
 		!exactStrings(actual.DroppedCapabilities, expected.DroppedCapabilities) || len(actual.AddedCapabilities) != 0 ||
 		actual.SeccompDigest != expected.SeccompDigest || actual.Resources != expected.Resources ||
@@ -303,6 +387,28 @@ func validateContainerObservation(expected Principal, actual ContainerObservatio
 		return ErrInvalidObservation
 	}
 	return nil
+}
+
+func validObservedImageIdentity(expected Principal, actual ContainerObservation) bool {
+	if !digestPattern.MatchString(actual.RuntimeStoreImageID) ||
+		!digestPattern.MatchString(actual.OCIConfigDigest) {
+		return false
+	}
+	if expected.ImageIdentityKind == ImageIdentityLocalConfig {
+		return actual.RuntimeStoreImageID == expected.ImageDigest && actual.OCIConfigDigest == expected.ImageDigest &&
+			actual.RuntimeStoreDescriptor == (ImageDescriptor{}) && actual.SelectedManifestDescriptor == (ImageDescriptor{}) &&
+			actual.ImageDescriptorProofDigest == ""
+	}
+	selected := expected.ImageDigest
+	if expected.ImageIdentityKind == ImageIdentityOCIIndex {
+		selected = expected.ImageSelectedManifestDigest
+	}
+	return actual.RuntimeStoreImageID == expected.ImageDigest && actual.OCIConfigDigest == expected.ImageConfigDigest &&
+		actual.RuntimeStoreDescriptor.Digest == expected.ImageDigest && actual.RuntimeStoreDescriptor.Size > 0 &&
+		validStoreDescriptorMediaType(expected.ImageIdentityKind, actual.RuntimeStoreDescriptor.MediaType) &&
+		actual.SelectedManifestDescriptor.Digest == selected && actual.SelectedManifestDescriptor.Size > 0 &&
+		validStoreDescriptorMediaType(ImageIdentityOCIManifest, actual.SelectedManifestDescriptor.MediaType) &&
+		digestPattern.MatchString(actual.ImageDescriptorProofDigest)
 }
 
 func equalObservedMounts(actual []ObservedMount, expected []Mount) bool {

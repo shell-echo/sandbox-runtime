@@ -37,13 +37,14 @@ import (
 )
 
 const (
-	configProtocol        = "sandbox-runtime.certificate-controller-config.v3"
-	peerCRLConfigProtocol = "sandbox-runtime.certificate-controller-config.v4"
-	maxConfigBytes        = 2 << 20
-	credentialAgentFD     = 3
-	controllerSigningFD   = 4
-	vaultTLSKeyFD         = 5
-	vaultTLSRequestFD     = 6
+	configProtocol         = "sandbox-runtime.certificate-controller-config.v3"
+	postgresConfigProtocol = "sandbox-runtime.certificate-controller-config.v4"
+	peerCRLConfigProtocol  = "sandbox-runtime.certificate-controller-config.v4"
+	maxConfigBytes         = 2 << 20
+	credentialAgentFD      = 3
+	controllerSigningFD    = 4
+	vaultTLSKeyFD          = 5
+	vaultTLSRequestFD      = 6
 )
 
 type configDocument struct {
@@ -108,6 +109,8 @@ type listenerDocument struct {
 
 type certificatePolicy struct {
 	ID                string                      `json:"id"`
+	Purpose           string                      `json:"purpose,omitempty"`
+	Postgres          *postgresClientConfig       `json:"postgres,omitempty"`
 	AgentRequestKeyID string                      `json:"agent_request_key_id"`
 	Requester         securityprincipal.Principal `json:"requester"`
 	Subject           securityprincipal.Principal `json:"subject"`
@@ -120,6 +123,14 @@ type certificatePolicy struct {
 	ExpectedUID       uint32                      `json:"expected_uid"`
 	ExpectedGID       uint32                      `json:"expected_gid"`
 	AgentPublicKey    string                      `json:"agent_public_key"`
+}
+
+type postgresClientConfig struct {
+	OwnerDeployment string `json:"owner_deployment"`
+	DatabaseName    string `json:"database_name"`
+	RuntimeRole     string `json:"runtime_role"`
+	CommonName      string `json:"common_name"`
+	IssuerAnchorID  string `json:"issuer_anchor_id"`
 }
 
 func main() {
@@ -148,7 +159,8 @@ func run() error { //nolint:gocyclo
 	canonical, err := json.Marshal(config)
 	if err != nil || !bytes.Equal(canonical, document) ||
 		!((config.Protocol == configProtocol && config.PeerCRLSourcesPath == "" && config.PeerCRLSourcesDigest == "") ||
-			(config.Protocol == peerCRLConfigProtocol && filepath.IsAbs(config.PeerCRLSourcesPath) && config.PeerCRLSourcesDigest != "")) ||
+			(config.Protocol == peerCRLConfigProtocol && filepath.IsAbs(config.PeerCRLSourcesPath) && config.PeerCRLSourcesDigest != "") ||
+			(config.Protocol == postgresConfigProtocol && filepath.IsAbs(config.PeerCRLSourcesPath) && config.PeerCRLSourcesDigest != "")) ||
 		len(config.Listeners) < 1 || len(config.Listeners) > 128 ||
 		len(config.Policies) < 1 || len(config.Policies) > 128 || len(config.VaultClientCertificatePEM) < 1 ||
 		config.VaultServerName == "" || config.OperationTimeoutSeconds < 1 || config.OperationTimeoutSeconds > 60 ||
@@ -167,13 +179,14 @@ func run() error { //nolint:gocyclo
 	clear(canonical)
 	profile, err := phase6security.VerifyFile(config.SecurityProfilePath)
 	if err != nil || profile.ProfileDigest != config.SecurityProfileDigest ||
-		profile.EnvironmentDigest != config.EnvironmentDigest || profile.PrincipalProfileDigest != config.ProfileDigest {
+		profile.EnvironmentDigest != config.EnvironmentDigest || profile.PrincipalProfileDigest != config.ProfileDigest ||
+		(len(profile.PostgresClientAgents) != 0 && config.Protocol != postgresConfigProtocol) {
 		return stageError("security-profile")
 	}
 	var peerSources *phase6security.PeerCRLSources
 	var peerProfile *phase6security.Profile
 	var vaultPeerSources []workloadpki.VaultPeerIssuerSource
-	if config.Protocol == peerCRLConfigProtocol {
+	if config.Protocol == peerCRLConfigProtocol || config.Protocol == postgresConfigProtocol {
 		mapping, mappingErr := phase6security.VerifyPeerCRLSourcesFile(config.PeerCRLSourcesPath, profile)
 		if mappingErr != nil || mapping.Digest() != config.PeerCRLSourcesDigest {
 			return stageError("peer-crl-sources")
@@ -287,6 +300,13 @@ func run() error { //nolint:gocyclo
 		policy := workloadpki.Policy{ID: value.ID, Registry: registry, Requester: value.Requester, Subject: value.Subject,
 			TrustDomain: value.TrustDomain, URI: value.URI, DNSNames: value.DNSNames, Usages: value.Usages, VaultRole: value.VaultRole,
 			MaxTTLSeconds: value.MaxTTLSeconds, ExpectedUID: value.ExpectedUID, ExpectedGID: value.ExpectedGID, PublicKey: ed25519.PublicKey(publicKey)}
+		if value.Purpose == workloadpki.PostgresClientPurpose && value.Postgres != nil {
+			policy.Purpose = value.Purpose
+			policy.Postgres = workloadpki.PostgresClientIdentity{OwnerDeployment: value.Postgres.OwnerDeployment,
+				DatabaseName: value.Postgres.DatabaseName, RuntimeRole: value.Postgres.RuntimeRole,
+				ServiceName: "postgres", URI: value.URI, CommonName: value.Postgres.CommonName,
+				MaxTTL: time.Duration(value.MaxTTLSeconds) * time.Second}
+		}
 		if policy.Validate() != nil {
 			clear(publicKey)
 			return stageError("certificate-policy")
@@ -491,10 +511,11 @@ func validateControllerProfileConfig(profile phase6security.Profile, config conf
 		int64(config.ManagedVaultTLS.RotateAfterSeconds) != controller.TLS.RotateAfterSeconds ||
 		int64(config.ManagedVaultTLS.OverlapSeconds) != controller.TLS.OverlapSeconds ||
 		int64(config.ManagedVaultTLS.RevocationMaxStalenessSeconds) != controller.TLS.RevocationMaxStalenessSeconds ||
-		len(config.Policies) != len(profile.TLSAgentBindings)+1 || len(config.Listeners) != len(profile.TLSAgentBindings)+1 {
+		len(config.Policies) != len(profile.TLSAgentBindings)+len(profile.PostgresClientAgents)+1 ||
+		len(config.Listeners) != len(profile.TLSAgentBindings)+len(profile.PostgresClientAgents)+1 {
 		return false
 	}
-	expectedPolicies := make(map[string]certificatePolicy, len(profile.TLSAgentBindings)+1)
+	expectedPolicies := make(map[string]certificatePolicy, len(config.Policies))
 	var managed certificatePolicy
 	for _, policy := range config.Policies {
 		if _, duplicate := expectedPolicies[policy.ID]; duplicate {
@@ -505,9 +526,10 @@ func validateControllerProfileConfig(profile phase6security.Profile, config conf
 			managed = policy
 		}
 	}
-	if !matchesControllerPolicy(managed, *controller.AuthorizationPrincipal, *controller.AuthorizationPrincipal,
-		*controller.TLS, authority.ManagedRequestKeyID, authority.ManagedRequestKeyDigest, authority.ManagedVaultRole,
-		authority.UID, authority.GID) {
+	if managed.Purpose != "" || managed.Postgres != nil ||
+		!matchesControllerPolicy(managed, *controller.AuthorizationPrincipal, *controller.AuthorizationPrincipal,
+			*controller.TLS, authority.ManagedRequestKeyID, authority.ManagedRequestKeyDigest, authority.ManagedVaultRole,
+			authority.UID, authority.GID) {
 		return false
 	}
 	for _, binding := range profile.TLSAgentBindings {
@@ -521,9 +543,42 @@ func validateControllerProfileConfig(profile phase6security.Profile, config conf
 			}
 		}
 		if agent.AuthorizationPrincipal == nil || subject.AuthorizationPrincipal == nil || subject.TLS == nil ||
+			expectedPolicies[binding.IssuerPolicyID].Purpose != "" || expectedPolicies[binding.IssuerPolicyID].Postgres != nil ||
 			!matchesControllerPolicy(expectedPolicies[binding.IssuerPolicyID], *agent.AuthorizationPrincipal,
 				*subject.AuthorizationPrincipal, *subject.TLS, binding.AgentRequestKeyID,
 				binding.AgentRequestKeyDigest, binding.IssuerVaultRole, binding.AgentUID, binding.AgentGID) {
+			return false
+		}
+	}
+	for _, binding := range profile.PostgresClientAgents {
+		var agent, subject phase6security.Principal
+		var database phase6security.ProviderDatabaseBinding
+		for _, principal := range profile.Principals {
+			if principal.Name == binding.AgentDeployment {
+				agent = principal
+			}
+			if principal.Name == binding.SubjectDeployment {
+				subject = principal
+			}
+		}
+		for _, candidate := range profile.ProviderDatabases {
+			if candidate.OwnerDeployment == binding.SubjectDeployment {
+				database = candidate
+			}
+		}
+		policy := expectedPolicies[binding.IssuerPolicyID]
+		if agent.AuthorizationPrincipal == nil || subject.AuthorizationPrincipal == nil || subject.TLS == nil ||
+			policy.Purpose != workloadpki.PostgresClientPurpose || policy.Postgres == nil ||
+			policy.Postgres.OwnerDeployment != database.OwnerDeployment ||
+			policy.Postgres.DatabaseName != database.DatabaseName || policy.Postgres.RuntimeRole != database.RuntimeRole ||
+			policy.Postgres.CommonName != binding.CommonName || policy.Postgres.IssuerAnchorID != binding.IssuerAnchorID {
+			return false
+		}
+		identity := *subject.TLS
+		identity.DNSNames = nil
+		identity.Usages = []string{"client_auth"}
+		if !matchesControllerPolicy(policy, *agent.AuthorizationPrincipal, *subject.AuthorizationPrincipal, identity,
+			binding.AgentRequestKeyID, binding.AgentRequestKeyDigest, binding.IssuerVaultRole, binding.AgentUID, binding.AgentGID) {
 			return false
 		}
 	}
@@ -540,6 +595,13 @@ func validateControllerProfileConfig(profile phase6security.Profile, config conf
 		return false
 	}
 	for _, binding := range profile.TLSAgentBindings {
+		listener, found := expectedListeners[binding.ControllerSocketPath]
+		if !found || listener.SocketUID != authority.UID || listener.SocketGID != binding.AgentGID ||
+			listener.ExpectedClientUID != binding.AgentUID || listener.ExpectedClientGID != binding.AgentGID {
+			return false
+		}
+	}
+	for _, binding := range profile.PostgresClientAgents {
 		listener, found := expectedListeners[binding.ControllerSocketPath]
 		if !found || listener.SocketUID != authority.UID || listener.SocketGID != binding.AgentGID ||
 			listener.ExpectedClientUID != binding.AgentUID || listener.ExpectedClientGID != binding.AgentGID {

@@ -213,6 +213,14 @@ func (c *Controller) issue(ctx context.Context, request Request, policy Policy, 
 		return c.errorResponse(request, StatusUnavailable, normalizeAuthorityError(err))
 	}
 	defer issued.Destroy()
+	verifiedResponse := Response{Type: CertificateType, Status: StatusOK, IssuerRevision: issued.IssuerRevision,
+		CertificatePEM: issued.CertificatePEM, IssuingCAPEM: issued.IssuingCAPEM,
+		CAChainPEM: issued.CAChainPEM, Serial: issued.Serial,
+		NotBefore: issued.NotBefore.Format(time.RFC3339Nano), NotAfter: issued.NotAfter.Format(time.RFC3339Nano)}
+	if validateIssuedCertificate(verifiedResponse, request, policy, now) != nil {
+		_ = c.authority.Revoke(context.WithoutCancel(ctx), issued.Serial)
+		return c.errorResponse(request, StatusUnavailable, ErrUnavailable)
+	}
 	record := CertificateRecord{Serial: issued.Serial, AgentID: policy.Requester.Name, RequesterDigest: policy.Requester.Digest(), PolicyID: policy.ID,
 		Principal: policy.Subject.Name, SubjectDigest: policy.Subject.Digest(),
 		IssuerRevision: issued.IssuerRevision, CertificateDigest: certificateDigest(issued.CertificatePEM), NotBefore: issued.NotBefore,

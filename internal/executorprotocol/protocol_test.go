@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shell-echo/sandbox-runtime/internal/browserbinding"
 	"github.com/shell-echo/sandbox-runtime/internal/desktopbridge"
 	"github.com/shell-echo/sandbox-runtime/internal/desktopmedia"
 	"github.com/shell-echo/sandbox-runtime/internal/handoff"
@@ -78,5 +79,37 @@ func TestDecodeRejectsUnknownDuplicateAndTrailing(t *testing.T) {
 		if err := Decode([]byte(candidate), &decoded); err == nil {
 			t.Fatal("unsafe executor authority accepted")
 		}
+	}
+}
+
+func TestBrowserExecutorV2RejectsHistoricalTenantDigest(t *testing.T) {
+	now := time.Now().UTC()
+	reference := "ref:browser-session:" + strings.Repeat("a", 32)
+	open := Open{Protocol: ProtocolID, Role: RoleBrowser, RequestID: "browser-request-1",
+		TenantBindingDigest: browserbinding.Prefix + strings.Repeat("b", 64),
+		ProviderRevisionID:  "provider-revision-1", SandboxID: "sandbox-1", RuntimeSessionID: "browser-1",
+		CapabilityProfileID: "browser-v1", MediaProfileID: "browser-cdp-v1", ControlProfileID: "browser-control-v1",
+		HandoffReference: reference, HandoffDigest: ReferenceDigest(reference), ConnectionGeneration: 2,
+		ConnectionEpoch: "connection-1", Fence: strings.Repeat("c", 64),
+		AuthorityExpiresAt: now.Add(time.Minute).Format(time.RFC3339Nano),
+		HandoffExpiresAt:   now.Add(2 * time.Minute).Format(time.RFC3339Nano), Codec: "application/json"}
+	open.AuthorityDigest = open.CalculateAuthorityDigest()
+	open.RequestDigest = open.CalculateRequestDigest()
+	if err := open.Validate(now); err != nil {
+		t.Fatal(err)
+	}
+	otherAttempt := open
+	otherAttempt.RequestID = "browser-request-2"
+	if otherAttempt.CalculateRequestDigest() == open.RequestDigest {
+		t.Fatal("separate one-use Browser request reused the request digest")
+	}
+	if err := otherAttempt.Validate(now); err == nil {
+		t.Fatal("changed request ID accepted with the prior request digest")
+	}
+	open.TenantBindingDigest = handoff.TenantBindingDigestPrefix + strings.Repeat("b", 64)
+	open.AuthorityDigest = open.CalculateAuthorityDigest()
+	open.RequestDigest = open.CalculateRequestDigest()
+	if err := open.Validate(now); err == nil {
+		t.Fatal("Browser executor accepted the historical digest version")
 	}
 }

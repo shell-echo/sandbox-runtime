@@ -440,7 +440,7 @@ func writeRecordingTransitEvidence(t *testing.T, v1, v2 secretref.EnvelopeKeyVer
 	if err != nil {
 		t.Fatal(err)
 	}
-	candidate, err := desktopcandidate.Load(os.Getenv(desktopCandidateEnv))
+	candidate, err := desktopcandidate.LoadCurrent(os.Getenv(desktopCandidateEnv))
 	if err != nil {
 		t.Fatal(err)
 	}

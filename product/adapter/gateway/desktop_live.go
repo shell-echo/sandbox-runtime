@@ -97,6 +97,13 @@ type DesktopLiveMediaSession interface {
 	Close() error
 }
 
+// DesktopLiveMediaActivator is an optional private-transport capability. Its
+// media reader remains unopened until the public WebRTC sender and Product
+// consumer loops have been armed and current authority has been rechecked.
+type DesktopLiveMediaActivator interface {
+	Activate(context.Context) error
+}
+
 type DesktopLiveMediaSource interface {
 	Open(context.Context, product.GatewayBinding, DesktopLiveMediaPolicy) (DesktopLiveMediaSession, error)
 }
@@ -403,6 +410,7 @@ func (h *DesktopLiveHandler) ServeHTTP(writer http.ResponseWriter, request *http
 		http.Error(writer, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return
 	}
+	mediaPrepareAt := time.Now()
 	media, err := h.media.Open(request.Context(), binding, signal.Media)
 	if err != nil || nilInterface(media) {
 		closeDesktopLiveRecording(recording, true)
@@ -419,6 +427,9 @@ func (h *DesktopLiveHandler) ServeHTTP(writer http.ResponseWriter, request *http
 		return
 	}
 	state := newDesktopLivePeer(h, peer, media, recording, binding, signal.Media, policy)
+	if _, activated := media.(DesktopLiveMediaActivator); activated {
+		state.deadlineOrigin = mediaPrepareAt
+	}
 	if signal.ControlDataChannel {
 		state.installControlChannel()
 	} else {
@@ -629,6 +640,7 @@ type desktopLivePeer struct {
 	connectedOnce   sync.Once
 	firstFrame      chan struct{}
 	firstFrameOnce  sync.Once
+	deadlineOrigin  time.Time
 	inputs          chan desktopLiveQueuedInput
 	stateMu         sync.RWMutex
 	state           webrtc.PeerConnectionState
@@ -646,19 +658,31 @@ type desktopLivePeer struct {
 
 func newDesktopLivePeer(handler *DesktopLiveHandler, peer *webrtc.PeerConnection, media DesktopLiveMediaSession, recording DesktopLiveRecordingSession, binding product.GatewayBinding, mediaPolicy DesktopLiveMediaPolicy, desktopPolicy product.DesktopPolicy) *desktopLivePeer {
 	ctx, cancel := context.WithCancel(context.Background())
-	return &desktopLivePeer{handler: handler, peer: peer, media: media, recording: recording, binding: binding, mediaPolicy: mediaPolicy, desktopPolicy: desktopPolicy, ctx: ctx, cancel: cancel, connected: make(chan struct{}), firstFrame: make(chan struct{}), inputs: make(chan desktopLiveQueuedInput, handler.maxInputQueue), state: webrtc.PeerConnectionStateNew}
+	return &desktopLivePeer{handler: handler, peer: peer, media: media, recording: recording, binding: binding, mediaPolicy: mediaPolicy, desktopPolicy: desktopPolicy, ctx: ctx, cancel: cancel, connected: make(chan struct{}), firstFrame: make(chan struct{}), inputs: make(chan desktopLiveQueuedInput, handler.maxInputQueue), state: webrtc.PeerConnectionStateNew, deadlineOrigin: time.Now()}
 }
 
 func (p *desktopLivePeer) start(video, audio *webrtc.TrackLocalStaticRTP) {
-	go p.startStreamLoop("video.rtp", p.media.ReadVideoRTP, video, p.handler.maxVideoQueue, maxDesktopVideoRTPPacketBytes, p.mediaPolicy.MaxVideoBitrateKbps)
-	if audio != nil {
-		go p.startStreamLoop("audio.rtp", p.media.ReadAudioRTP, audio, p.handler.maxAudioQueue, maxDesktopAudioRTPPacketBytes, p.mediaPolicy.MaxAudioBitrateKbps)
+	if activator, activated := p.media.(DesktopLiveMediaActivator); activated {
+		videoReady := make(chan struct{})
+		ready := []<-chan struct{}{videoReady}
+		go p.startActivatedStreamLoop("video.rtp", p.media.ReadVideoRTP, video, p.handler.maxVideoQueue, maxDesktopVideoRTPPacketBytes, p.mediaPolicy.MaxVideoBitrateKbps, videoReady)
+		if audio != nil {
+			audioReady := make(chan struct{})
+			ready = append(ready, audioReady)
+			go p.startActivatedStreamLoop("audio.rtp", p.media.ReadAudioRTP, audio, p.handler.maxAudioQueue, maxDesktopAudioRTPPacketBytes, p.mediaPolicy.MaxAudioBitrateKbps, audioReady)
+		}
+		go p.activateMedia(activator, ready)
+	} else {
+		go p.startStreamLoop("video.rtp", p.media.ReadVideoRTP, video, p.handler.maxVideoQueue, maxDesktopVideoRTPPacketBytes, p.mediaPolicy.MaxVideoBitrateKbps)
+		if audio != nil {
+			go p.startStreamLoop("audio.rtp", p.media.ReadAudioRTP, audio, p.handler.maxAudioQueue, maxDesktopAudioRTPPacketBytes, p.mediaPolicy.MaxAudioBitrateKbps)
+		}
 	}
 	go p.inputLoop()
 	go p.authorityLoop()
 	go p.firstFrameTimer()
 	go func() {
-		timer := time.NewTimer(p.handler.connectionTimeout)
+		timer := time.NewTimer(time.Until(p.deadlineOrigin.Add(p.handler.connectionTimeout)))
 		defer timer.Stop()
 		select {
 		case <-p.ctx.Done():
@@ -669,8 +693,30 @@ func (p *desktopLivePeer) start(video, audio *webrtc.TrackLocalStaticRTP) {
 	}()
 }
 
+func (p *desktopLivePeer) startActivatedStreamLoop(kind string, read func(context.Context) ([]byte, error), track desktopLiveRTPWriter, queueSize, maxPacketBytes, maxBitrateKbps int, ready chan struct{}) {
+	select {
+	case <-p.connected:
+		p.streamLoopWithReady(kind, read, track, queueSize, maxPacketBytes, maxBitrateKbps, ready)
+	case <-p.ctx.Done():
+		return
+	}
+}
+
+func (p *desktopLivePeer) activateMedia(activator DesktopLiveMediaActivator, ready []<-chan struct{}) {
+	for _, armed := range ready {
+		select {
+		case <-armed:
+		case <-p.ctx.Done():
+			return
+		}
+	}
+	if p.handler.grants.CheckGatewayAuthority(p.ctx, p.binding) != nil || activator.Activate(p.ctx) != nil || !p.resynchronize(true) {
+		p.stop()
+	}
+}
+
 func (p *desktopLivePeer) firstFrameTimer() {
-	timer := time.NewTimer(p.handler.firstFrameTimeout)
+	timer := time.NewTimer(time.Until(p.deadlineOrigin.Add(p.handler.firstFrameTimeout)))
 	defer timer.Stop()
 	select {
 	case <-p.firstFrame:
@@ -698,9 +744,16 @@ type desktopLiveRTPWriter interface {
 }
 
 func (p *desktopLivePeer) streamLoop(kind string, read func(context.Context) ([]byte, error), track desktopLiveRTPWriter, queueSize, maxPacketBytes, maxBitrateKbps int) {
+	p.streamLoopWithReady(kind, read, track, queueSize, maxPacketBytes, maxBitrateKbps, nil)
+}
+
+func (p *desktopLivePeer) streamLoopWithReady(kind string, read func(context.Context) ([]byte, error), track desktopLiveRTPWriter, queueSize, maxPacketBytes, maxBitrateKbps int, ready chan struct{}) {
 	queue := make(chan []byte, queueSize)
 	go func() {
 		defer close(queue)
+		if ready != nil {
+			close(ready)
+		}
 		for {
 			packet, err := read(p.ctx)
 			if err != nil || len(packet) == 0 || len(packet) > maxPacketBytes {
@@ -944,17 +997,28 @@ func (p *desktopLivePeer) inputLoop() {
 
 func (p *desktopLivePeer) onConnectionState(state webrtc.PeerConnectionState) {
 	p.stateMu.Lock()
+	previous := p.state
 	p.state, p.stateEpoch = state, p.stateEpoch+1
 	epoch := p.stateEpoch
 	p.stateMu.Unlock()
 	switch state {
 	case webrtc.PeerConnectionStateConnected:
+		if _, activated := p.media.(DesktopLiveMediaActivator); activated && previous == webrtc.PeerConnectionStateDisconnected {
+			// A recovered transport needs a fresh Product grant and Provider
+			// epoch; a prior one-use start never silently resumes.
+			p.stop()
+			return
+		}
 		if p.handler.grants.CheckGatewayAuthority(p.ctx, p.binding) != nil {
 			p.stop()
 			return
 		}
+		if p.handler.recordAudit(p.ctx, p.binding, gateway.AuditConnected, "") != nil {
+			p.stop()
+			return
+		}
 		p.connectedOnce.Do(func() { close(p.connected) })
-		if p.handler.recordAudit(p.ctx, p.binding, gateway.AuditConnected, "") != nil || !p.resynchronize(true) {
+		if _, activated := p.media.(DesktopLiveMediaActivator); !activated && !p.resynchronize(true) {
 			p.stop()
 		}
 	case webrtc.PeerConnectionStateDisconnected:

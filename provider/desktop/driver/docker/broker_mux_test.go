@@ -56,7 +56,7 @@ type muxTestEngine struct {
 	serve     func(net.Conn) error
 }
 
-func (e *muxTestEngine) openSession(context.Context, string) (io.ReadWriteCloser, error) {
+func (e *muxTestEngine) openSession(context.Context, string, string) (io.ReadWriteCloser, error) {
 	e.mu.Lock()
 	e.opens++
 	serve := e.serve
@@ -149,6 +149,45 @@ func TestBrokerMuxForwardsOnlyAuthorizedOwnedCandidateSession(t *testing.T) {
 	}
 	if fixture.engine.openCount() != 1 {
 		t.Fatalf("broker exec opens = %d", fixture.engine.openCount())
+	}
+}
+
+func TestBrokerMuxFencesAndDrainsExactDesktopSession(t *testing.T) {
+	fixture := newMuxFixture(t)
+	fixture.engine.serve = serveMuxBroker(fixture.publicKey, true)
+	mux, socket, cancel, done := startMux(t, fixture.driver, fixture.authority, 2)
+	defer stopMux(t, socket, cancel, done)
+	connection := dialMux(t, socket)
+	defer connection.Close()
+	openDocument, _ := desktopbroker.EncodeSession(fixture.open)
+	if _, err := connection.Write(openDocument); err != nil {
+		t.Fatal(err)
+	}
+	reader := bufio.NewReaderSize(connection, desktopbroker.SessionMaxDocument)
+	if accepted := readMuxTestMessage(t, reader); accepted.Type != desktopbroker.SessionAcceptedType {
+		t.Fatalf("open was not accepted: %+v", accepted)
+	}
+	if err := mux.FenceAndDrain(t.Context(), fixture.open.SandboxID, fixture.open.DesktopSessionID); err != nil {
+		t.Fatalf("fence and drain: %v", err)
+	}
+	_ = connection.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+	for {
+		if _, err := reader.ReadByte(); err != nil {
+			break
+		}
+	}
+	before := fixture.engine.openCount()
+	replayed := dialMux(t, socket)
+	defer replayed.Close()
+	if _, err := replayed.Write(openDocument); err != nil {
+		t.Fatal(err)
+	}
+	_ = replayed.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+	if _, err := bufio.NewReader(replayed).ReadByte(); err == nil {
+		t.Fatal("fenced Desktop session reopened")
+	}
+	if got := fixture.engine.openCount(); got != before {
+		t.Fatalf("fenced replay reached Docker exec: %d -> %d", before, got)
 	}
 }
 

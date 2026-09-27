@@ -13,12 +13,37 @@ import (
 )
 
 func New(materials config.RoleMaterialsConfig, role secretref.Role, allowedPurposes []secretref.Purpose, cache bool, now func() time.Time) (*secretref.Registry, error) {
+	return NewForDeployment(materials, "", role, allowedPurposes, cache, now)
+}
+
+// NewForDeployment makes the Gateway-family external purpose allowlist an
+// explicit process identity check, not merely a shared logical Role check.
+func NewForDeployment(materials config.RoleMaterialsConfig, deployment string, role secretref.Role,
+	allowedPurposes []secretref.Purpose, cache bool, now func() time.Time) (*secretref.Registry, error) {
 	if now == nil || now().IsZero() {
 		return nil, errors.New("invalid role material clock")
+	}
+	for _, purpose := range allowedPurposes {
+		if !secretref.DeploymentPurposeAllowed(deployment, role, purpose) {
+			return nil, errors.New("role material purpose does not match deployment")
+		}
+		if cache && (purpose == secretref.PurposeActionHistoryWitnessDSN ||
+			purpose == secretref.PurposeCapacityValkeyCredentials) {
+			return nil, errors.New("external database credentials require uncached material resolution")
+		}
 	}
 	bindings, err := materials.DecodeBindings(role)
 	if err != nil || materials.Provider.Type != config.UnixWorkloadMaterialProviderV1 {
 		return nil, errors.New("invalid role material registry configuration")
+	}
+	for _, binding := range bindings {
+		if !secretref.DeploymentPurposeAllowed(deployment, role, binding.Purpose) {
+			return nil, errors.New("role material binding does not match deployment")
+		}
+		if cache && (binding.Purpose == secretref.PurposeActionHistoryWitnessDSN ||
+			binding.Purpose == secretref.PurposeCapacityValkeyCredentials) {
+			return nil, errors.New("external database credentials require uncached material resolution")
+		}
 	}
 	provider, err := workloadagent.NewProduction(workloadagent.Config{
 		SocketPath:       materials.Provider.SocketPath,

@@ -3,6 +3,34 @@
 Date: 2026-09-23. Status: implementation audit, not a deployment receipt or
 release evidence. Phase 6 remains **5/15**.
 
+2026-09-26 Browser topology correction: the canonical inventory now requires
+Gateway→Browser action ingress `/browser/action` and the distinct ingress→
+Browser Provider `/private/browser` edge. Direct Gateway→Browser Provider
+network membership, peer identity and edge are forbidden. The ingress has
+its own runtime, TLS-agent and material-agent principals. The Browser Provider
+command still rejects this profile because the action-ingress/Redis/witness
+production process graph has not been composed; this is not deployment proof.
+
+The profile now also declares distinct `capacity-valkey` and
+`action-history-postgres` external identities, the Gateway and ingress
+logical application edges, their broker-to-external legs, and a separate
+fixed-target egress broker/policy-state authority for each caller. Validation
+rejects omitted/swapped services, edges, ports and policy targets. These are
+configuration boundaries only: no production broker wiring, real Redis/PG
+witness process gate or independent storage/restore-domain observation exists.
+Each new broker also has its own exact DNS mTLS trust edge; without it the
+existing broker production command correctly refuses startup.
+The broker role edge now has one profile-owned private IPv4 bind/dial address;
+the tagged Docker network probe checks actual broker interface ownership,
+loopback/uplink non-listening and no host publication. It is not yet the
+production broker-command/mTLS gate. Browser action ingress also has two new
+deployment-restricted material purposes, witness DSN and capacity Valkey
+credentials. Gateway may hold only its separate capacity binding/account.
+The shared logical Gateway Role does not let its material agent serve ingress
+witness data; the agent and registry enforce exact deployment allowlists.
+Credential parsers and ACL declarations remain component boundaries until a
+real Vault/Valkey/PostgreSQL rotation, revocation and least-privilege gate.
+
 This table follows the actual production command paths. A validated profile
 is configuration authority only; the final Docker gate must observe mounts,
 UID/GID, network membership, TLS handshakes, failure responses and cleanup.
@@ -41,6 +69,7 @@ revocation drain. A bidirectional response does not authorize a reverse dial.
 | External client → Gateway | Relay-only host-published TCP to public signaling TLS server-only; ticket/grant, Origin, session and fence; WebRTC DTLS/SRTP remains separate | Gateway v3 now uses an exclusive profile-bound live signer and its two-material registry excludes static TLS keys. No real Gateway-through-relay TLS/auth or UDP/media gate. |
 | Product → Provider | Locked Contract mTLS plus exact JWS caller admission | Provider coding-shell v3 now has a separate Contract listener bound to the `product-provider-contract` edge and Product-only live TLS peer policy. Product Phase 6 production graph remains a restricted kernel without Provider client composition; no real process handoff gate has passed. |
 | Gateway → Provider | Separate private handoff/media mTLS plus opaque handoff, tenant, generation, fence and expiry | Gateway v3 profile binds numeric target, listener, route, identities and both CA purposes. Provider coding-shell v3 has a distinct private Terminal listener with Gateway-only live TLS peer policy. Composed live mTLS, revocation drain and handoff checks remain. |
+| Gateway → Browser action ingress → Browser Provider | Two separate mTLS edges; ingress owns the per-session CDP action gate and uses caller-owned Redis capacity plus independent PostgreSQL history witness | The canonical profile and Browser Provider config reject direct Gateway Browser private access, including an undeclared shared network. Closed Gateway grant projection and the two v2 private transport components now exist; their current tests use controlled peers. Explicit Redis/witness and broker inventory edges now validate, but no production ingress command, real external authority gate or full-process evidence exists yet. |
 | Provider → Browser / Desktop | Separate private executor mTLS plus versioned executor capability/bridge binding | Desktop path exists; Browser production dial and both exact profile routes require verification. |
 | Browser → Browser backend / Desktop → Desktop backend | Matching private backend mTLS; cross-backend denied | Backend listeners use profile-bound live signers; runtime role clients remain frozen v2. |
 | Guest → Product | Separate private Guest-control mTLS plus Ed25519 challenge, GuestID and exact binding/capability | Current Phase 6 peer is a gate fixture. Product production command has not composed the real Guest Hub/listener. |

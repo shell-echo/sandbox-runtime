@@ -45,27 +45,30 @@ const (
 type Purpose string
 
 const (
-	PurposeTLSCertificate        Purpose = "tls_certificate"
-	PurposeTLSPrivateKey         Purpose = "tls_private_key"
-	PurposeCABundle              Purpose = "ca_bundle"
-	PurposePostgresMigrationDSN  Purpose = "postgres_migration_dsn"
-	PurposePostgresRuntimeDSN    Purpose = "postgres_runtime_dsn"
-	PurposeIdentityKeyRing       Purpose = "identity_key_ring"
-	PurposeAdmissionVerification Purpose = "admission_verification_key"
-	PurposeCoordinationEndpoint  Purpose = "coordination_endpoint"
-	PurposeCoordinationIdentity  Purpose = "coordination_identity"
-	PurposeObjectStoreEndpoint   Purpose = "object_store_endpoint"
-	PurposeObjectStoreIdentity   Purpose = "object_store_identity"
-	PurposeKMSEndpoint           Purpose = "kms_endpoint"
-	PurposeKMSIdentity           Purpose = "kms_identity"
-	PurposeWorkloadCredential    Purpose = "workload_credential"
-	PurposeGatewayGrantKey       Purpose = "gateway_grant_key"
-	PurposeGuestSigningKey       Purpose = "guest_signing_key"
-	PurposeExecutorClientKey     Purpose = "executor_client_key"
-	PurposeExecutorBridgeKey     Purpose = "executor_bridge_signing_key"
-	PurposeRecordingEnvelopeKey  Purpose = "recording_envelope_key"
-	PurposeTicketEnvelopeKey     Purpose = "ticket_envelope_key"
-	PurposeDataEnvelopeKey       Purpose = "data_envelope_key"
+	PurposeTLSCertificate            Purpose = "tls_certificate"
+	PurposeTLSPrivateKey             Purpose = "tls_private_key"
+	PurposeCABundle                  Purpose = "ca_bundle"
+	PurposePostgresMigrationDSN      Purpose = "postgres_migration_dsn"
+	PurposePostgresRuntimeDSN        Purpose = "postgres_runtime_dsn"
+	PurposeActionHistoryWitnessDSN   Purpose = "action_history_witness_dsn"
+	PurposeCapacityValkeyCredentials Purpose = "capacity_valkey_credentials"
+	PurposeIdentityKeyRing           Purpose = "identity_key_ring"
+	PurposeAdmissionVerification     Purpose = "admission_verification_key"
+	PurposeCoordinationEndpoint      Purpose = "coordination_endpoint"
+	PurposeCoordinationIdentity      Purpose = "coordination_identity"
+	PurposeObjectStoreEndpoint       Purpose = "object_store_endpoint"
+	PurposeObjectStoreIdentity       Purpose = "object_store_identity"
+	PurposeKMSEndpoint               Purpose = "kms_endpoint"
+	PurposeKMSIdentity               Purpose = "kms_identity"
+	PurposeWorkloadCredential        Purpose = "workload_credential"
+	PurposeGatewayGrantKey           Purpose = "gateway_grant_key"
+	PurposeBrowserTenantBindingKey   Purpose = "browser_tenant_binding_key"
+	PurposeGuestSigningKey           Purpose = "guest_signing_key"
+	PurposeExecutorClientKey         Purpose = "executor_client_key"
+	PurposeExecutorBridgeKey         Purpose = "executor_bridge_signing_key"
+	PurposeRecordingEnvelopeKey      Purpose = "recording_envelope_key"
+	PurposeTicketEnvelopeKey         Purpose = "ticket_envelope_key"
+	PurposeDataEnvelopeKey           Purpose = "data_envelope_key"
 )
 
 var (
@@ -75,11 +78,13 @@ var (
 
 	secretPurposes = map[Purpose]struct{}{
 		PurposeTLSCertificate: {}, PurposeTLSPrivateKey: {}, PurposeCABundle: {},
-		PurposePostgresMigrationDSN: {}, PurposePostgresRuntimeDSN: {}, PurposeIdentityKeyRing: {},
+		PurposePostgresMigrationDSN: {}, PurposePostgresRuntimeDSN: {}, PurposeActionHistoryWitnessDSN: {},
+		PurposeCapacityValkeyCredentials: {}, PurposeIdentityKeyRing: {},
 		PurposeAdmissionVerification: {}, PurposeCoordinationEndpoint: {}, PurposeCoordinationIdentity: {},
 		PurposeObjectStoreEndpoint: {}, PurposeObjectStoreIdentity: {}, PurposeKMSEndpoint: {}, PurposeKMSIdentity: {},
 		PurposeWorkloadCredential: {}, PurposeGatewayGrantKey: {}, PurposeGuestSigningKey: {},
-		PurposeExecutorClientKey: {}, PurposeExecutorBridgeKey: {},
+		PurposeBrowserTenantBindingKey: {},
+		PurposeExecutorClientKey:       {}, PurposeExecutorBridgeKey: {},
 	}
 	envelopePurposes = map[Purpose]struct{}{
 		PurposeRecordingEnvelopeKey: {}, PurposeTicketEnvelopeKey: {}, PurposeDataEnvelopeKey: {},
@@ -137,6 +142,14 @@ func (b Binding) Validate() error {
 			return ErrInvalidReference
 		}
 		if _, ok := secretPurposes[b.Purpose]; !ok {
+			return ErrInvalidReference
+		}
+		if b.Purpose == PurposeBrowserTenantBindingKey && b.TenantID != SystemTenant ||
+			b.Purpose == PurposeBrowserTenantBindingKey && b.Role != RoleProduct && b.Role != RoleGateway {
+			return ErrInvalidReference
+		}
+		if (b.Purpose == PurposeActionHistoryWitnessDSN || b.Purpose == PurposeCapacityValkeyCredentials) &&
+			(b.TenantID != SystemTenant || b.Role != RoleGateway) {
 			return ErrInvalidReference
 		}
 	case KindEnvelopeKey:

@@ -21,14 +21,19 @@ import (
 	"syscall"
 
 	"github.com/shell-echo/sandbox-runtime/internal/desktopbroker"
+	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
 	desktopimage "github.com/shell-echo/sandbox-runtime/profiles/desktop/image"
 )
 
 const (
-	SchemaID       = "sandbox.runtime/desktop-phase6-local-candidate/v1"
-	Classification = "local-candidate-non-release"
-	Version        = 1
-	MaxDocument    = 64 << 10
+	SchemaID           = "sandbox.runtime/desktop-phase6-local-candidate/v1"
+	DescriptorSchemaID = "sandbox.runtime/desktop-phase6-local-candidate/v2"
+	CurrentSchemaID    = "sandbox.runtime/desktop-phase6-local-candidate/v3"
+	Classification     = "local-candidate-non-release"
+	Version            = 1
+	DescriptorVersion  = 2
+	CurrentVersion     = 3
+	MaxDocument        = 64 << 10
 )
 
 var (
@@ -39,28 +44,85 @@ var (
 var ErrInvalidCandidate = errors.New("invalid Desktop Phase 6 local candidate")
 
 type Manifest struct {
-	SchemaVersion           string `json:"schema_version"`
-	Version                 int    `json:"version"`
-	Classification          string `json:"classification"`
-	SourceRevision          string `json:"source_revision"`
-	SourceTreeDigest        string `json:"source_tree_digest"`
-	GoVersion               string `json:"go_version"`
-	Platform                string `json:"platform"`
-	ProfileID               string `json:"profile_id"`
-	BrokerProtocol          string `json:"broker_protocol"`
-	SessionProtocol         string `json:"session_protocol"`
-	BaseImageDigest         string `json:"base_image_digest"`
-	PackageArchiveSetDigest string `json:"package_archive_set_digest"`
-	InstalledSetDigest      string `json:"installed_set_digest"`
-	APKLockDigest           string `json:"apk_lock_digest"`
-	DockerfileDigest        string `json:"dockerfile_digest"`
-	EntrypointDigest        string `json:"entrypoint_digest"`
-	BuildScriptDigest       string `json:"build_script_digest"`
-	CandidateScriptDigest   string `json:"candidate_script_digest"`
-	BuildArgumentsDigest    string `json:"build_arguments_digest"`
-	ImageDigest             string `json:"image_digest"`
-	ConfigDigest            string `json:"config_digest"`
-	ManifestDigest          string `json:"manifest_digest"`
+	SchemaVersion             string `json:"schema_version"`
+	Version                   int    `json:"version"`
+	Classification            string `json:"classification"`
+	SourceRevision            string `json:"source_revision"`
+	SourceTreeDigest          string `json:"source_tree_digest"`
+	GoVersion                 string `json:"go_version"`
+	Platform                  string `json:"platform"`
+	ProfileID                 string `json:"profile_id"`
+	BrokerProtocol            string `json:"broker_protocol"`
+	SessionProtocol           string `json:"session_protocol"`
+	BaseImageDigest           string `json:"base_image_digest"`
+	PackageArchiveSetDigest   string `json:"package_archive_set_digest"`
+	InstalledSetDigest        string `json:"installed_set_digest"`
+	APKLockDigest             string `json:"apk_lock_digest"`
+	DockerfileDigest          string `json:"dockerfile_digest"`
+	EntrypointDigest          string `json:"entrypoint_digest"`
+	BuildScriptDigest         string `json:"build_script_digest"`
+	CandidateScriptDigest     string `json:"candidate_script_digest"`
+	BuildArgumentsDigest      string `json:"build_arguments_digest"`
+	ImageDigest               string `json:"image_digest"`
+	ConfigDigest              string `json:"config_digest"`
+	ImageIdentityKind         string `json:"image_identity_kind,omitempty"`
+	StoreDescriptorMediaType  string `json:"store_descriptor_media_type,omitempty"`
+	StoreDescriptorSize       int64  `json:"store_descriptor_size,omitempty"`
+	SelectedManifestDigest    string `json:"selected_manifest_digest,omitempty"`
+	SelectedManifestMediaType string `json:"selected_manifest_media_type,omitempty"`
+	SelectedManifestSize      int64  `json:"selected_manifest_size,omitempty"`
+	DescriptorProofDigest     string `json:"descriptor_proof_digest,omitempty"`
+	ArchiveDigest             string `json:"archive_digest,omitempty"`
+	ArchiveSize               int64  `json:"archive_size,omitempty"`
+	ManifestDigest            string `json:"manifest_digest"`
+	WorkloadAccounts          string `json:"workload_accounts,omitempty"`
+	WorkloadAccountDigest     string `json:"workload_account_digest,omitempty"`
+	WorkloadAccountCount      int    `json:"workload_account_count,omitempty"`
+}
+
+// CurrentIdentity is populated only from independently inspected Docker
+// runtime/store descriptors and raw, verified OCI archive bytes.
+type CurrentIdentity struct {
+	Accounts              AccountAllowlist
+	Kind                  string
+	Store                 phase6security.ImageDescriptor
+	Selected              phase6security.ImageDescriptor
+	ConfigDigest          string
+	DescriptorProofDigest string
+	ArchiveDigest         string
+	ArchiveSize           int64
+}
+
+func NewCurrent(sourceRoot, platform string, identity CurrentIdentity) (Manifest, error) {
+	if identity.Accounts.Validate() != nil {
+		return Manifest{}, ErrInvalidCandidate
+	}
+	accounts, err := json.Marshal(identity.Accounts)
+	if err != nil {
+		return Manifest{}, ErrInvalidCandidate
+	}
+	accountDigest, err := identity.Accounts.Digest()
+	if err != nil {
+		return Manifest{}, ErrInvalidCandidate
+	}
+	base, err := New(sourceRoot, platform, identity.Store.Digest, identity.Store.Digest)
+	if err != nil {
+		return Manifest{}, err
+	}
+	base.SchemaVersion, base.Version = CurrentSchemaID, CurrentVersion
+	base.WorkloadAccounts, base.WorkloadAccountDigest, base.WorkloadAccountCount = string(accounts), accountDigest, len(identity.Accounts.Accounts)
+	base.ConfigDigest = identity.ConfigDigest
+	base.ImageIdentityKind = identity.Kind
+	base.StoreDescriptorMediaType, base.StoreDescriptorSize = identity.Store.MediaType, identity.Store.Size
+	base.SelectedManifestDigest = identity.Selected.Digest
+	base.SelectedManifestMediaType, base.SelectedManifestSize = identity.Selected.MediaType, identity.Selected.Size
+	base.DescriptorProofDigest, base.ArchiveDigest, base.ArchiveSize = identity.DescriptorProofDigest, identity.ArchiveDigest, identity.ArchiveSize
+	base.BuildArgumentsDigest = base.calculateBuildArgumentsDigest()
+	base.ManifestDigest = base.calculateManifestDigest()
+	if base.ValidateCurrent() != nil {
+		return Manifest{}, ErrInvalidCandidate
+	}
+	return base, nil
 }
 
 func New(sourceRoot, platform, imageDigest, configDigest string) (Manifest, error) {
@@ -132,7 +194,10 @@ func New(sourceRoot, platform, imageDigest, configDigest string) (Manifest, erro
 }
 
 func (m Manifest) Validate() error {
-	if m.SchemaVersion != SchemaID || m.Version != Version || m.Classification != Classification ||
+	legacy := m.SchemaVersion == SchemaID && m.Version == Version
+	descriptor := m.SchemaVersion == DescriptorSchemaID && m.Version == DescriptorVersion
+	current := m.SchemaVersion == CurrentSchemaID && m.Version == CurrentVersion
+	if (!legacy && !descriptor && !current) || m.Classification != Classification ||
 		!revisionPattern.MatchString(m.SourceRevision) || m.GoVersion != "go1.26.8" ||
 		(m.Platform != "linux/amd64" && m.Platform != "linux/arm64/v8") || m.ProfileID != desktopimage.ProfileID ||
 		m.BrokerProtocol != desktopimage.BrokerProtocol || m.SessionProtocol != desktopbroker.SessionProtocolV2ID {
@@ -143,10 +208,145 @@ func (m Manifest) Validate() error {
 			return ErrInvalidCandidate
 		}
 	}
-	if m.ImageDigest != m.ConfigDigest || m.BuildArgumentsDigest != m.calculateBuildArgumentsDigest() || m.ManifestDigest != m.calculateManifestDigest() {
+	if m.BuildArgumentsDigest != m.calculateBuildArgumentsDigest() || m.ManifestDigest != m.calculateManifestDigest() {
+		return ErrInvalidCandidate
+	}
+	if legacy {
+		if m.WorkloadAccounts != "" || m.WorkloadAccountDigest != "" || m.WorkloadAccountCount != 0 {
+			return ErrInvalidCandidate
+		}
+		if m.ImageDigest != m.ConfigDigest || m.ImageIdentityKind != "" || m.StoreDescriptorMediaType != "" ||
+			m.StoreDescriptorSize != 0 || m.SelectedManifestDigest != "" || m.SelectedManifestMediaType != "" ||
+			m.SelectedManifestSize != 0 || m.DescriptorProofDigest != "" || m.ArchiveDigest != "" || m.ArchiveSize != 0 {
+			return ErrInvalidCandidate
+		}
+		return nil
+	}
+	if descriptor {
+		if m.WorkloadAccounts != "" || m.WorkloadAccountDigest != "" || m.WorkloadAccountCount != 0 {
+			return ErrInvalidCandidate
+		}
+	} else {
+		var accounts AccountAllowlist
+		if json.Unmarshal([]byte(m.WorkloadAccounts), &accounts) != nil || accounts.Validate() != nil ||
+			len(accounts.Accounts) != m.WorkloadAccountCount {
+			return ErrInvalidCandidate
+		}
+		canonical, _ := json.Marshal(accounts)
+		digest, _ := accounts.Digest()
+		if string(canonical) != m.WorkloadAccounts || digest != m.WorkloadAccountDigest {
+			return ErrInvalidCandidate
+		}
+	}
+	if !digestPattern.MatchString(m.SelectedManifestDigest) || !digestPattern.MatchString(m.DescriptorProofDigest) ||
+		!digestPattern.MatchString(m.ArchiveDigest) || m.ArchiveSize < 1 || m.ArchiveSize > 8<<30 ||
+		m.StoreDescriptorSize < 1 || m.SelectedManifestSize < 1 || m.ConfigDigest == m.ImageDigest ||
+		m.ImageIdentityKind != phase6security.ImageIdentityOCIIndex && m.ImageIdentityKind != phase6security.ImageIdentityOCIManifest {
+		return ErrInvalidCandidate
+	}
+	if m.ImageIdentityKind == phase6security.ImageIdentityOCIIndex {
+		if m.StoreDescriptorMediaType != "application/vnd.oci.image.index.v1+json" && m.StoreDescriptorMediaType != "application/vnd.docker.distribution.manifest.list.v2+json" ||
+			m.SelectedManifestDigest == m.ImageDigest {
+			return ErrInvalidCandidate
+		}
+	} else if m.SelectedManifestDigest != m.ImageDigest || m.StoreDescriptorMediaType != m.SelectedManifestMediaType || m.StoreDescriptorSize != m.SelectedManifestSize {
+		return ErrInvalidCandidate
+	}
+	if m.SelectedManifestMediaType != "application/vnd.oci.image.manifest.v1+json" &&
+		m.SelectedManifestMediaType != "application/vnd.docker.distribution.manifest.v2+json" {
 		return ErrInvalidCandidate
 	}
 	return nil
+}
+
+func (m Manifest) ValidateCurrent() error {
+	if m.SchemaVersion != CurrentSchemaID || m.Version != CurrentVersion {
+		return ErrInvalidCandidate
+	}
+	return m.Validate()
+}
+
+// VerifyArchive binds the sidecar archive to the manifest and rechecks raw
+// top/selected/config/layer bytes. The manifest path never becomes an API.
+func (m Manifest) VerifyArchive(archivePath string) error {
+	if m.ValidateCurrent() != nil || !filepath.IsAbs(archivePath) {
+		return ErrInvalidCandidate
+	}
+	info, err := os.Lstat(archivePath)
+	if err != nil || info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() ||
+		info.Mode().Perm() != 0o600 || !ownedByCurrentUser(info) || info.Size() != m.ArchiveSize {
+		return ErrInvalidCandidate
+	}
+	archive, err := os.Open(archivePath)
+	if err != nil {
+		return ErrInvalidCandidate
+	}
+	hash := sha256.New()
+	_, copyErr := io.Copy(hash, archive)
+	closeErr := archive.Close()
+	if copyErr != nil || closeErr != nil || "sha256:"+hex.EncodeToString(hash.Sum(nil)) != m.ArchiveDigest {
+		return ErrInvalidCandidate
+	}
+	documents, err := phase6security.ReadOCIArchiveDocuments(archivePath, m.ImageIdentityKind,
+		m.ImageDigest, m.SelectedManifestDigest, m.ConfigDigest)
+	if err != nil {
+		return ErrInvalidCandidate
+	}
+	proof, err := phase6security.VerifyImageDescriptorDocuments("local", m.ImageIdentityKind,
+		m.ImageDigest, m.ImageDigest, m.Platform, selectedDigestArgument(m), m.ConfigDigest, documents)
+	if err != nil || proof.ProofDigest != m.DescriptorProofDigest ||
+		int64(len(documents.Manifest)) != m.SelectedManifestSize ||
+		int64(len(documents.Config)) < 1 ||
+		phase6security.VerifyOCIArchiveLayers(archivePath, documents.Manifest, documents.Config) != nil {
+		return ErrInvalidCandidate
+	}
+	var config struct {
+		Config struct {
+			Labels map[string]string `json:"Labels"`
+		} `json:"config"`
+	}
+	if json.Unmarshal(documents.Config, &config) != nil ||
+		config.Config.Labels["io.github.shell-echo.sandbox-runtime.workload-account-digest"] != m.WorkloadAccountDigest {
+		return ErrInvalidCandidate
+	}
+	var accounts AccountAllowlist
+	if json.Unmarshal([]byte(m.WorkloadAccounts), &accounts) != nil ||
+		verifyArchiveAccounts(archivePath, documents.Manifest, accounts) != nil {
+		return ErrInvalidCandidate
+	}
+	var selected struct {
+		MediaType string `json:"mediaType"`
+	}
+	if json.Unmarshal(documents.Manifest, &selected) != nil || selected.MediaType != m.SelectedManifestMediaType {
+		return ErrInvalidCandidate
+	}
+	if m.ImageIdentityKind == phase6security.ImageIdentityOCIIndex && int64(len(documents.Index)) != m.StoreDescriptorSize {
+		return ErrInvalidCandidate
+	}
+	if m.ImageIdentityKind == phase6security.ImageIdentityOCIIndex {
+		var store struct {
+			MediaType string `json:"mediaType"`
+		}
+		if json.Unmarshal(documents.Index, &store) != nil || store.MediaType != m.StoreDescriptorMediaType {
+			return ErrInvalidCandidate
+		}
+	}
+	return nil
+}
+
+func selectedDigestArgument(m Manifest) string {
+	if m.ImageIdentityKind == phase6security.ImageIdentityOCIIndex {
+		return m.SelectedManifestDigest
+	}
+	return ""
+}
+
+func LoadCurrent(path string) (Manifest, error) {
+	value, err := Load(path)
+	if err != nil || value.ValidateCurrent() != nil || value.VerifyArchive(path+".oci.tar") != nil {
+		return Manifest{}, ErrInvalidCandidate
+	}
+	return value, nil
 }
 
 func (m Manifest) VerifySource(sourceRoot string) error {
@@ -379,6 +579,13 @@ func (m Manifest) calculateBuildArgumentsDigest() string {
 	value := struct {
 		Platform, SourceRevision, GoVersion, BaseImageDigest, PackageArchiveSetDigest, InstalledSetDigest, APKLockDigest, DockerfileDigest, EntrypointDigest, BuildScriptDigest, CandidateScriptDigest string
 	}{m.Platform, m.SourceRevision, m.GoVersion, m.BaseImageDigest, m.PackageArchiveSetDigest, m.InstalledSetDigest, m.APKLockDigest, m.DockerfileDigest, m.EntrypointDigest, m.BuildScriptDigest, m.CandidateScriptDigest}
+	if m.SchemaVersion == CurrentSchemaID {
+		return digestJSON(struct {
+			Base                  any
+			WorkloadAccountDigest string
+			WorkloadAccountCount  int
+		}{value, m.WorkloadAccountDigest, m.WorkloadAccountCount})
+	}
 	return digestJSON(value)
 }
 

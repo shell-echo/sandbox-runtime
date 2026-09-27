@@ -1,14 +1,15 @@
 #!/bin/sh
 set -eu
 
-if [ "$#" -ne 3 ]; then
-    echo "usage: $0 <linux/amd64|linux/arm64/v8> <image-tag> <source-revision>" >&2
+if [ "$#" -ne 4 ]; then
+    echo "usage: $0 <linux/amd64|linux/arm64/v8> <image-tag> <source-revision> <absolute-private-accounts-file>" >&2
     exit 2
 fi
 
 platform=$1
 image_tag=$2
 source_revision=$3
+accounts_file=$4
 case "$platform" in
     linux/amd64) goarch=amd64; lock=phase6-apk-lock-amd64.json ;;
     linux/arm64/v8) goarch=arm64; lock=phase6-apk-lock-arm64.json ;;
@@ -23,6 +24,7 @@ if [ "$go_version" != "go1.26.8" ]; then
     exit 2
 fi
 build_context=$(mktemp -d "${TMPDIR:-/tmp}/sandbox-runtime-desktop-phase6.XXXXXX")
+build_context=$(CDPATH= cd -- "$build_context" && pwd -P)
 cleanup() {
     rm -rf -- "$build_context"
 }
@@ -39,6 +41,18 @@ touch -t 197001010000 "$build_context/desktop-broker"
 cp "$script_dir/Dockerfile.phase6-candidate" "$build_context/Dockerfile"
 cp "$script_dir/entrypoint.sh" "$build_context/entrypoint.sh"
 touch -t 197001010000 "$build_context/Dockerfile" "$build_context/entrypoint.sh"
+
+accounts_output=$(
+    cd "$repository_root"
+    go run ./cmd/prepare-desktop-phase6-accounts \
+        -allowlist "$accounts_file" -output "$build_context"
+)
+account_digest=$(printf '%s\n' "$accounts_output" | sed -n 's/^workload_account_digest=//p')
+case "$account_digest" in
+    sha256:????????????????????????????????????????????????????????????????) ;;
+    *) echo "invalid workload account digest" >&2; exit 2 ;;
+esac
+touch -t 197001010000 "$build_context/workload-accounts.json" "$build_context/workload.passwd" "$build_context/workload.group"
 
 stage_output=$(
     cd "$repository_root"
@@ -68,6 +82,7 @@ docker build \
     --build-arg "PACKAGE_ARCHIVE_SET_SHA256=$archive_digest" \
     --build-arg "INSTALLED_SET_SHA256=$installed_digest" \
     --build-arg "APK_LOCK_SHA256=$lock_digest" \
+    --build-arg "WORKLOAD_ACCOUNT_DIGEST=$account_digest" \
     --build-arg SOURCE_DATE_EPOCH=0 \
     --build-arg "VCS_REF=$source_revision" \
     --tag "$image_tag" \

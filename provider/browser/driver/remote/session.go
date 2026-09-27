@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/shell-echo/sandbox-runtime/internal/browserhandoffv2"
 	"github.com/shell-echo/sandbox-runtime/internal/executorprotocol"
 	"github.com/shell-echo/sandbox-runtime/internal/secretfile"
 	providerbrowser "github.com/shell-echo/sandbox-runtime/provider/browser"
@@ -28,12 +29,22 @@ type Options struct {
 	URL              string
 	HTTPClient       *http.Client
 	OperationTimeout time.Duration
+	ConnectionStore  ConnectionStore
+}
+
+// ConnectionStore must reserve the exact executor attempt atomically with
+// current Provider session, sandbox authority, and connection-claim checks.
+// The reservation is intentionally not released after an uncertain send.
+type ConnectionStore interface {
+	ReserveExecutor(context.Context, executorprotocol.Open, time.Time) error
+	CloseConnection(context.Context, string, string, string) error
 }
 
 type Attacher struct {
 	url     string
 	client  *http.Client
 	timeout time.Duration
+	store   ConnectionStore
 }
 
 func NewHTTPClient(endpoint, caFile, certificateFile, privateKeyFile string) (*http.Client, error) {
@@ -87,7 +98,7 @@ func New(options Options) (*Attacher, error) {
 	if err != nil || parsed.Scheme != "wss" || parsed.Host == "" || parsed.Path == "" || parsed.User != nil || options.HTTPClient == nil || options.OperationTimeout < 100*time.Millisecond || options.OperationTimeout > 30*time.Second {
 		return nil, errors.New("invalid remote Browser executor options")
 	}
-	return &Attacher{url: options.URL, client: options.HTTPClient, timeout: options.OperationTimeout}, nil
+	return &Attacher{url: options.URL, client: options.HTTPClient, timeout: options.OperationTimeout, store: options.ConnectionStore}, nil
 }
 
 func (a *Attacher) Attach(context.Context, providerbrowser.AllocationReceipt) (providerbrowser.Stream, error) {
@@ -108,6 +119,57 @@ func (a *Attacher) AttachBound(ctx context.Context, record reference.Record) (pr
 	if err := open.Validate(time.Now().UTC()); err != nil {
 		return nil, providerbrowser.ErrBrowserUnsupported
 	}
+	return a.dialOpen(ctx, open)
+}
+
+// AttachConnection is the Browser v3-only path. It never fabricates an epoch,
+// extends an authority expiry, or retries a consumed/uncertain executor
+// attempt. The caller must first register an ingress-authorized v2 claim.
+func (a *Attacher) AttachConnection(ctx context.Context, record reference.Record, epoch string) (providerbrowser.Stream, error) {
+	if a == nil || a.store == nil || ctx == nil || record.Validate() != nil || record.RevokedAt != nil {
+		return nil, providerbrowser.ErrBrowserUnsupported
+	}
+	claim, ok := record.ConnectionClaims[epoch]
+	now := time.Now().UTC()
+	if !ok || claim.Status != reference.ConnectionPending || !claim.AuthorityExpiresAt.After(now) {
+		return nil, providerbrowser.ErrBrowserUnsupported
+	}
+	requestID, err := randomID()
+	if err != nil {
+		return nil, providerbrowser.ErrBrowserUnsupported
+	}
+	fence, err := browserhandoffv2.ExecutorFence(claim.AuthorityDigest)
+	if err != nil {
+		return nil, providerbrowser.ErrBrowserUnsupported
+	}
+	open := executorprotocol.Open{Protocol: executorprotocol.ProtocolID, Role: executorprotocol.RoleBrowser,
+		RequestID: requestID, TenantBindingDigest: record.TenantBindingDigest,
+		ProviderRevisionID: record.ProviderRevisionID, SandboxID: record.SandboxID,
+		RuntimeSessionID: record.BrowserSessionID, CapabilityProfileID: record.CapabilityProfileID,
+		MediaProfileID: browserhandoffv2.MediaProfileID, ControlProfileID: browserhandoffv2.ControlProfileID,
+		HandoffReference: record.Reference, HandoffDigest: executorprotocol.ReferenceDigest(record.Reference),
+		ConnectionGeneration: record.ConnectionGeneration, ConnectionEpoch: epoch, Fence: fence,
+		AuthorityExpiresAt: claim.AuthorityExpiresAt.UTC().Format(time.RFC3339Nano),
+		HandoffExpiresAt:   record.ExpiresAt.UTC().Format(time.RFC3339Nano), Codec: "application/json"}
+	open.AuthorityDigest = open.CalculateAuthorityDigest()
+	open.RequestDigest = open.CalculateRequestDigest()
+	if claim.MatchesExecutor(record, epoch, open, now) != nil || a.store.ReserveExecutor(ctx, open, now) != nil {
+		return nil, providerbrowser.ErrBrowserUnsupported
+	}
+	stream, err := a.dialOpen(ctx, open)
+	if err != nil {
+		// A successful reservation is never retried. The delegated ingress
+		// connection failed before acceptance, so close only that exact
+		// epoch; the consumed request remains in durable replay history.
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), a.timeout)
+		_ = a.store.CloseConnection(cleanupCtx, record.Reference, epoch, claim.AuthorityDigest)
+		cancel()
+		return nil, err
+	}
+	return stream, nil
+}
+
+func (a *Attacher) dialOpen(ctx context.Context, open executorprotocol.Open) (providerbrowser.Stream, error) {
 	operationContext, cancel := context.WithTimeout(ctx, a.timeout)
 	defer cancel()
 	connection, _, err := websocket.Dial(operationContext, a.url, &websocket.DialOptions{HTTPClient: a.client, Subprotocols: []string{executorprotocol.ProtocolID}})
@@ -121,7 +183,7 @@ func (a *Attacher) AttachBound(ctx context.Context, record reference.Record) (pr
 	}
 	kind, responseDocument, err := connection.Read(operationContext)
 	var response executorprotocol.Response
-	if err != nil || kind != websocket.MessageText || executorprotocol.Decode(responseDocument, &response) != nil || response.Validate() != nil || response.RequestID != requestID || response.Status != executorprotocol.StatusAccepted {
+	if err != nil || kind != websocket.MessageText || executorprotocol.Decode(responseDocument, &response) != nil || response.Validate() != nil || response.RequestID != open.RequestID || response.Status != executorprotocol.StatusAccepted {
 		connection.CloseNow()
 		return nil, providerbrowser.ErrBrowserUnsupported
 	}

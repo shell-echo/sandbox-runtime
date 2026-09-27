@@ -21,8 +21,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/shell-echo/sandbox-runtime/guestagent"
+	"github.com/shell-echo/sandbox-runtime/internal/secretref"
 	"github.com/shell-echo/sandbox-runtime/product"
 	productbloblocal "github.com/shell-echo/sandbox-runtime/product/adapter/blob/local"
 	productgateway "github.com/shell-echo/sandbox-runtime/product/adapter/gateway"
@@ -55,6 +57,12 @@ func (allowBrowserSession) AuthorizeSession(_ context.Context, kind, profile str
 type allowBrowserSlot struct{}
 
 func (allowBrowserSlot) AuthorizeSlot(context.Context, product.SlotSpec) error { return nil }
+
+type browserBindingPreparerFunc func(context.Context, product.ProviderObservationWork, product.ProviderOperationEvidence) (BrowserHandoffBindingSelection, error)
+
+func (f browserBindingPreparerFunc) PrepareBrowserHandoffBinding(ctx context.Context, work product.ProviderObservationWork, evidence product.ProviderOperationEvidence) (BrowserHandoffBindingSelection, error) {
+	return f(ctx, work, evidence)
+}
 
 func TestIntegrationBrowserSlotAuthorityReplayQuotaAndNondisclosure(t *testing.T) {
 	pool := integrationProductPool(t)
@@ -320,10 +328,59 @@ func TestIntegrationBrowserSlotAndSessionDispatchIsolation(t *testing.T) {
 		t.Fatalf("session observations=%#v err=%v", observations, err)
 	}
 	evidence.State = "succeeded"
-	evidence.HandoffReference = "ref:browser-session:opaque-integration-1"
+	evidence.HandoffReference = "ref:browser-session:" + strings.Repeat("1", 32)
 	evidence.ConnectionGeneration = 1
 	evidence.HandoffExpiresAt = browserSessions[0].ExpiresAt
-	if err := store.RecordProviderObservation(context.Background(), observations[0], evidence, "evt-browser-session-ready"); err != nil {
+	bindingInput := productgateway.BrowserTenantBindingInput{CallerAuthorityScope: "product-alpha",
+		ProviderInstanceAudience: "provider-browser-a", TenantID: tenantID, SandboxID: evidence.SandboxID,
+		BrowserSessionID: sessionOperation.SessionID, ProviderRevisionID: evidence.ProviderRevisionID,
+		CapabilityProfileID: "browser-v1", ConnectionGeneration: evidence.ConnectionGeneration,
+		HandoffReference: evidence.HandoffReference}
+	firstKey, secondKey := bytes.Repeat([]byte{0x11}, 32), bytes.Repeat([]byte{0x22}, 32)
+	firstDigest, err := productgateway.DeriveBrowserTenantBinding(firstKey, bindingInput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondDigest, err := productgateway.DeriveBrowserTenantBinding(secondKey, bindingInput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstKeyBinding := secretref.Binding{Schema: secretref.BindingSchema, Kind: secretref.KindSecret,
+		Reference: "secret://vault/browser/key-v1", Version: "v1", Purpose: secretref.PurposeBrowserTenantBindingKey,
+		TenantID: secretref.SystemTenant, Role: secretref.RoleProduct}
+	firstSelection := BrowserHandoffBindingSelection{ProductSessionID: sessionOperation.SessionID, Input: bindingInput,
+		KeyBindingID: "browser-key-v1", KeyVersion: "v1", TenantBindingDigest: firstDigest,
+		KeyBinding: firstKeyBinding, KeyBindingDigest: firstKeyBinding.Digest(),
+		HandoffExpiresAt: evidence.HandoffExpiresAt}
+	secondSelection := firstSelection
+	secondSelection.KeyBindingID, secondSelection.KeyVersion, secondSelection.TenantBindingDigest = "browser-key-v2", "v2", secondDigest
+	secondSelection.KeyBinding.Reference, secondSelection.KeyBinding.Version = "secret://vault/browser/key-v2", "v2"
+	secondSelection.KeyBindingDigest = secondSelection.KeyBinding.Digest()
+	badSelection := firstSelection
+	badSelection.Input.HandoffReference = "ref:browser-session:" + strings.Repeat("2", 32)
+	badStore, err := NewWithBrowserHandoffBinding(pool, 5*time.Second, browserBindingPreparerFunc(func(context.Context, product.ProviderObservationWork, product.ProviderOperationEvidence) (BrowserHandoffBindingSelection, error) {
+		return badSelection, nil
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := badStore.RecordProviderObservation(context.Background(), observations[0], evidence, "evt-browser-session-bad"); !errors.Is(err, product.ErrStoreUnavailable) {
+		t.Fatalf("mismatched Browser handoff selection = %v", err)
+	}
+	var preCommitState string
+	if err := pool.QueryRow(context.Background(), `SELECT state FROM sandbox_runtime_product.runtime_sessions WHERE tenant_id=$1 AND session_id=$2`, tenantID, sessionOperation.SessionID).Scan(&preCommitState); err != nil || preCommitState != "provisioning" {
+		t.Fatalf("mismatched selection changed session state: %q, %v", preCommitState, err)
+	}
+	v3Store, err := NewWithBrowserHandoffBinding(pool, 5*time.Second, browserBindingPreparerFunc(func(_ context.Context, work product.ProviderObservationWork, observed product.ProviderOperationEvidence) (BrowserHandoffBindingSelection, error) {
+		if work.SessionID != firstSelection.ProductSessionID || observed.HandoffReference != firstSelection.Input.HandoffReference {
+			return BrowserHandoffBindingSelection{}, product.ErrControlStale
+		}
+		return firstSelection, nil
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := v3Store.RecordProviderObservation(context.Background(), observations[0], evidence, "evt-browser-session-ready"); err != nil {
 		t.Fatal(err)
 	}
 	session, err := sessions.Get(context.Background(), tenantID, actor, sessionOperation.SessionID)
@@ -333,6 +390,141 @@ func TestIntegrationBrowserSlotAndSessionDispatchIsolation(t *testing.T) {
 	var storedReference string
 	if err := pool.QueryRow(context.Background(), `SELECT provider_handoff_reference FROM sandbox_runtime_product.runtime_sessions WHERE tenant_id=$1 AND session_id=$2`, tenantID, session.ID).Scan(&storedReference); err != nil || storedReference != evidence.HandoffReference {
 		t.Fatalf("stored handoff=%q err=%v", storedReference, err)
+	}
+	var metadataCount, joinedCount int
+	if err := pool.QueryRow(context.Background(), `SELECT count(*) FROM sandbox_runtime_product.browser_handoff_binding_metadata WHERE tenant_id=$1 AND product_session_id=$2`, tenantID, session.ID).Scan(&metadataCount); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(context.Background(), `SELECT count(*) FROM sandbox_runtime_product.runtime_sessions s JOIN sandbox_runtime_product.provider_bindings b ON b.tenant_id=s.tenant_id AND b.workspace_id=s.workspace_id AND b.slot_key=s.slot_key AND b.slot_generation=s.slot_generation AND b.current JOIN sandbox_runtime_product.browser_handoff_binding_metadata m ON m.tenant_id=s.tenant_id AND m.product_session_id=s.session_id AND m.provider_instance_audience=$3 AND m.handoff_reference=s.provider_handoff_reference AND m.connection_generation=s.provider_connection_generation AND m.handoff_expires_at=s.provider_handoff_expires_at AND m.provider_revision_id=b.provider_revision_id AND m.sandbox_id=b.sandbox_id AND m.browser_session_id=s.provider_runtime_session_id WHERE s.tenant_id=$1 AND s.session_id=$2`, tenantID, session.ID, bindingInput.ProviderInstanceAudience).Scan(&joinedCount); err != nil {
+		t.Fatal(err)
+	}
+	if metadataCount != 1 || joinedCount != 1 {
+		t.Fatalf("Browser metadata=%d joined=%d", metadataCount, joinedCount)
+	}
+	if selected, err := store.CurrentBrowserHandoffBinding(context.Background(), tenantID, session.ID, bindingInput.ProviderInstanceAudience); err != nil || selected.KeyVersion != firstSelection.KeyVersion || selected.TenantBindingDigest != firstSelection.TenantBindingDigest || selected.KeyBinding != firstSelection.KeyBinding || selected.KeyBindingDigest != firstSelection.KeyBindingDigest {
+		t.Fatalf("atomic observed Browser binding = %#v, %v", selected, err)
+	}
+	if _, err := pool.Exec(context.Background(), `UPDATE sandbox_runtime_product.browser_handoff_binding_metadata SET key_version='v2' WHERE tenant_id=$1 AND product_session_id=$2`, tenantID, session.ID); err == nil {
+		t.Fatal("immutable Browser handoff metadata accepted a key-version update")
+	}
+	otherPool := integrationProductPool(t)
+	otherStore, err := New(otherPool, 5*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bindingResults := make(chan error, 2)
+	var bindingRace sync.WaitGroup
+	for index, selection := range []BrowserHandoffBindingSelection{firstSelection, secondSelection} {
+		bindingRace.Add(1)
+		go func(index int, selected BrowserHandoffBindingSelection) {
+			defer bindingRace.Done()
+			writer := pool
+			if index == 1 {
+				writer = otherPool
+			}
+			bindingResults <- attemptBrowserBindingSelection(writer, selected)
+		}(index, selection)
+	}
+	bindingRace.Wait()
+	close(bindingResults)
+	var bindingWins, bindingConflicts int
+	for err := range bindingResults {
+		switch {
+		case err == nil:
+			bindingWins++
+		case errors.Is(err, product.ErrControlConflict):
+			bindingConflicts++
+		default:
+			t.Fatalf("competing Browser key selection: %v", err)
+		}
+	}
+	if bindingWins != 1 || bindingConflicts != 1 {
+		t.Fatalf("Browser key race wins=%d conflicts=%d", bindingWins, bindingConflicts)
+	}
+	var committedVersion string
+	if err := pool.QueryRow(context.Background(), `SELECT key_version FROM sandbox_runtime_product.browser_handoff_binding_metadata
+WHERE tenant_id=$1 AND product_session_id=$2 AND provider_instance_audience=$3 AND handoff_reference=$4`,
+		tenantID, session.ID, bindingInput.ProviderInstanceAudience, bindingInput.HandoffReference).Scan(&committedVersion); err != nil {
+		t.Fatal(err)
+	}
+	winner := firstSelection
+	if committedVersion != firstSelection.KeyVersion {
+		t.Fatalf("observed Browser key changed after atomic selection: %q", committedVersion)
+	}
+	if err := attemptBrowserBindingSelection(otherPool, winner); err != nil {
+		t.Fatalf("idempotent exact Browser binding: %v", err)
+	}
+	if selected, err := otherStore.CurrentBrowserHandoffBinding(context.Background(), tenantID, session.ID, bindingInput.ProviderInstanceAudience); err != nil || selected.KeyVersion != winner.KeyVersion || selected.TenantBindingDigest != winner.TenantBindingDigest {
+		t.Fatalf("current Browser binding = %#v, %v", selected, err)
+	}
+	if _, err := store.CurrentBrowserHandoffBinding(context.Background(), tenantID, session.ID, "provider-browser-b"); !errors.Is(err, product.ErrControlStale) {
+		t.Fatalf("other Provider audience admitted: %v", err)
+	}
+	v3GrantRepository, err := NewBrowserV2GrantRepository(v3Store, "browser-v2-grant-key", bytes.Repeat([]byte{0x7b}, 32), bindingInput.ProviderInstanceAudience)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v3Grants, err := product.NewGrantService(v3GrantRepository, product.CryptoIDGenerator{}, product.CryptoTicketGenerator{}, "wss://browser-gateway.example.test/connect", 30*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v3Viewer, _, err := v3Grants.Create(context.Background(), tenantID, actor, session.ID, "browser-v2-viewer", product.CreateConnectionRequest{ExpectedSessionVersion: session.Version, ProtocolProfile: session.ProtocolProfile, AccessMode: product.GrantAccessView})
+	if err != nil {
+		t.Fatal(err)
+	}
+	v3Binding, err := v3GrantRepository.ConsumeConnectionGrant(context.Background(), v3Viewer.Ticket)
+	if err != nil || v3Binding.BrowserProviderAudience != bindingInput.ProviderInstanceAudience ||
+		v3Binding.BrowserTenantBindingDigest != firstSelection.TenantBindingDigest || v3Binding.BrowserKeyVersion != "v1" {
+		t.Fatalf("v3 Browser grant binding = %#v, %v", v3Binding, err)
+	}
+	if err := v3GrantRepository.CheckGatewayAuthority(context.Background(), v3Binding); err != nil {
+		t.Fatalf("v3 Browser authority watch = %v", err)
+	}
+	if _, err := pool.Exec(context.Background(), `UPDATE sandbox_runtime_product.runtime_sessions SET provider_runtime_session_id=$1 WHERE tenant_id=$2 AND session_id=$3`,
+		"other-browser-runtime", tenantID, session.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := v3GrantRepository.CheckGatewayAuthority(context.Background(), v3Binding); !errors.Is(err, product.ErrControlStale) {
+		t.Fatalf("Browser runtime session drift retained a consumed grant: %v", err)
+	}
+	if _, err := v3Store.CurrentBrowserHandoffBinding(context.Background(), tenantID, session.ID, bindingInput.ProviderInstanceAudience); !errors.Is(err, product.ErrControlStale) {
+		t.Fatalf("Browser runtime session drift retained metadata selection: %v", err)
+	}
+	driftGrant, _, err := v3Grants.Create(context.Background(), tenantID, actor, session.ID, "browser-v2-runtime-drift", product.CreateConnectionRequest{
+		ExpectedSessionVersion: session.Version, ProtocolProfile: session.ProtocolProfile, AccessMode: product.GrantAccessView,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := v3GrantRepository.ConsumeConnectionGrant(context.Background(), driftGrant.Ticket); !errors.Is(err, product.ErrControlStale) {
+		t.Fatalf("Browser runtime session drift consumed a grant: %v", err)
+	}
+	if _, err := pool.Exec(context.Background(), `UPDATE sandbox_runtime_product.runtime_sessions SET provider_runtime_session_id=$1 WHERE tenant_id=$2 AND session_id=$3`,
+		session.ID, tenantID, session.ID); err != nil {
+		t.Fatal(err)
+	}
+	tamperedV3 := v3Binding
+	tamperedV3.BrowserKeyVersion = "v2"
+	if err := v3GrantRepository.CheckGatewayAuthority(context.Background(), tamperedV3); !errors.Is(err, product.ErrControlStale) {
+		t.Fatalf("tampered v3 Browser key version = %v", err)
+	}
+	staleViewer, _, err := v3Grants.Create(context.Background(), tenantID, actor, session.ID, "browser-v2-stale-viewer", product.CreateConnectionRequest{ExpectedSessionVersion: session.Version, ProtocolProfile: session.ProtocolProfile, AccessMode: product.GrantAccessView})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(context.Background(), `UPDATE sandbox_runtime_product.runtime_sessions SET provider_handoff_reference=$1 WHERE tenant_id=$2 AND session_id=$3`,
+		"ref:browser-session:"+strings.Repeat("2", 32), tenantID, session.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := v3GrantRepository.ConsumeConnectionGrant(context.Background(), staleViewer.Ticket); !errors.Is(err, product.ErrControlStale) {
+		t.Fatalf("old v3 grant followed a new handoff: %v", err)
+	}
+	if err := v3GrantRepository.CheckGatewayAuthority(context.Background(), v3Binding); !errors.Is(err, product.ErrControlStale) {
+		t.Fatalf("old v3 Browser stream survived handoff switch: %v", err)
+	}
+	if _, err := pool.Exec(context.Background(), `UPDATE sandbox_runtime_product.runtime_sessions SET provider_handoff_reference=$1 WHERE tenant_id=$2 AND session_id=$3`,
+		evidence.HandoffReference, tenantID, session.ID); err != nil {
+		t.Fatal(err)
 	}
 	grantRepository, err := NewGrantRepository(store, "browser-grant-key", bytes.Repeat([]byte{0x6b}, 32))
 	if err != nil {
@@ -457,6 +649,12 @@ func TestIntegrationBrowserSlotAndSessionDispatchIsolation(t *testing.T) {
 	closeOperation, _, err := sessions.Close(context.Background(), tenantID, actor, session.ID, "browser-dispatch-close", product.CloseSessionRequest{ExpectedVersion: session.Version, Reason: "owner_requested_close"})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if err := v3GrantRepository.CheckGatewayAuthority(context.Background(), v3Binding); !errors.Is(err, product.ErrControlStale) {
+		t.Fatalf("old v3 Browser grant survived close: %v", err)
+	}
+	if _, err := store.CurrentBrowserHandoffBinding(context.Background(), tenantID, session.ID, bindingInput.ProviderInstanceAudience); !errors.Is(err, product.ErrControlStale) {
+		t.Fatalf("draining Browser handoff remained current: %v", err)
 	}
 	closeWork, err := store.LeaseBrowserSessionWork(context.Background(), "browser-close-worker", 10*time.Second, 10)
 	if err != nil || len(closeWork) != 1 || closeWork[0].Action != "close" || closeWork[0].FencingToken != 2 || closeWork[0].ProviderGeneration != 1 {
@@ -1908,6 +2106,25 @@ func signedGuestAuth(t *testing.T, binding product.GuestBinding, privateKey ed25
 	return request
 }
 
+func attemptBrowserBindingSelection(pool *pgxpool.Pool, selection BrowserHandoffBindingSelection) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	tx, err := pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	var now time.Time
+	if err := tx.QueryRow(ctx, `SELECT clock_timestamp() FROM sandbox_runtime_product.runtime_sessions
+WHERE tenant_id=$1 AND session_id=$2 FOR UPDATE`, selection.Input.TenantID, selection.ProductSessionID).Scan(&now); err != nil {
+		return err
+	}
+	if err := insertBrowserHandoffMetadata(ctx, tx, selection, now); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
 func integrationProductPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	connectionString := os.Getenv(productPostgresURLVariable)
@@ -1965,6 +2182,7 @@ func cleanupProductTenant(t *testing.T, pool *pgxpool.Pool, tenantID string) {
 			`DELETE FROM sandbox_runtime_product.workspace_revisions WHERE tenant_id = $1`,
 			`DELETE FROM sandbox_runtime_product.guest_bindings WHERE tenant_id = $1`,
 			`DELETE FROM sandbox_runtime_product.connection_grants WHERE tenant_id = $1`,
+			`DELETE FROM sandbox_runtime_product.browser_handoff_binding_metadata WHERE tenant_id = $1`,
 			`DELETE FROM sandbox_runtime_product.control_leases WHERE tenant_id = $1`,
 			`DELETE FROM sandbox_runtime_product.control_lease_fences WHERE tenant_id = $1`,
 			`DELETE FROM sandbox_runtime_product.provider_bindings WHERE tenant_id = $1`,

@@ -1,13 +1,14 @@
 #!/bin/sh
 set -eu
 
-if [ "$#" -ne 2 ]; then
-    echo "usage: $0 <linux/amd64|linux/arm64/v8> <absolute-candidate-manifest-path>" >&2
+if [ "$#" -ne 3 ]; then
+    echo "usage: $0 <linux/amd64|linux/arm64/v8> <absolute-candidate-manifest-path> <absolute-private-accounts-file>" >&2
     exit 2
 fi
 
 platform=$1
 output=$2
+accounts_file=$3
 case "$output" in
     /*) ;;
     *) echo "candidate manifest path must be absolute" >&2; exit 2 ;;
@@ -23,7 +24,7 @@ source_revision=$(git -C "$repository_root" rev-parse HEAD)
 platform_token=$(printf '%s' "$platform" | tr '/:' '--')
 image_tag="sandbox-runtime-desktop-phase6-candidate:${source_revision}-${platform_token}"
 
-"$script_dir/build-phase6-locked.sh" "$platform" "$image_tag" "$source_revision"
+"$script_dir/build-phase6-locked.sh" "$platform" "$image_tag" "$source_revision" "$accounts_file"
 
 (
     cd "$repository_root"
@@ -31,5 +32,6 @@ image_tag="sandbox-runtime-desktop-phase6-candidate:${source_revision}-${platfor
         -source-root "$repository_root" \
         -platform "$platform" \
         -image "$image_tag" \
+        -accounts-file "$accounts_file" \
         -output "$output"
 )

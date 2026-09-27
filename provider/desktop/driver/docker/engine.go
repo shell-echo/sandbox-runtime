@@ -25,30 +25,32 @@ type engine interface {
 	inspect(context.Context, string) (containerInfo, error)
 	start(context.Context, string) error
 	remove(context.Context, string) error
-	describe(context.Context, string) ([]byte, error)
+	describe(context.Context, string, string) ([]byte, error)
 	close() error
 }
 
 // sessionEngine is optional so lifecycle-only test engines do not acquire a
 // media capability they cannot implement.
 type sessionEngine interface {
-	openSession(context.Context, string) (io.ReadWriteCloser, error)
+	openSession(context.Context, string, string) (io.ReadWriteCloser, error)
 }
 
 type imageInfo struct {
-	id                string
-	repositoryDigests []string
-	descriptorDigest  string
-	labels            map[string]string
-	user              string
-	entrypoint        []string
-	command           []string
-	workingDirectory  string
-	architecture      string
-	variant           string
-	operatingSystem   string
-	exposedPorts      int
-	environment       []string
+	id                  string
+	repositoryDigests   []string
+	descriptorDigest    string
+	descriptorMediaType string
+	descriptorSize      int64
+	labels              map[string]string
+	user                string
+	entrypoint          []string
+	command             []string
+	workingDirectory    string
+	architecture        string
+	variant             string
+	operatingSystem     string
+	exposedPorts        int
+	environment         []string
 }
 
 type createRequest struct {
@@ -72,6 +74,9 @@ type createRequest struct {
 
 type containerInfo struct {
 	id, imageID, imageReference string
+	selectedManifestDigest      string
+	selectedManifestMediaType   string
+	selectedManifestSize        int64
 	labels                      map[string]string
 	user, workingDirectory      string
 	entrypoint, command         []string
@@ -175,12 +180,17 @@ func (e *mobyEngine) inspectImage(ctx context.Context, image string) (imageInfo,
 		return imageInfo{}, errors.New("incomplete Desktop image inspection")
 	}
 	descriptorDigest := ""
+	descriptorMediaType := ""
+	var descriptorSize int64
 	if result.Descriptor != nil {
 		descriptorDigest = result.Descriptor.Digest.String()
+		descriptorMediaType = result.Descriptor.MediaType
+		descriptorSize = result.Descriptor.Size
 	}
 	return imageInfo{
 		id:                result.ID,
 		repositoryDigests: append([]string(nil), result.RepoDigests...), descriptorDigest: descriptorDigest,
+		descriptorMediaType: descriptorMediaType, descriptorSize: descriptorSize,
 		labels: cloneStrings(result.Config.Labels), user: result.Config.User,
 		entrypoint: append([]string(nil), result.Config.Entrypoint...), command: append([]string(nil), result.Config.Cmd...),
 		workingDirectory: result.Config.WorkingDir, architecture: result.Architecture,
@@ -259,6 +269,11 @@ func (e *mobyEngine) inspect(ctx context.Context, id string) (containerInfo, err
 		restartPolicy: string(response.HostConfig.RestartPolicy.Name), logType: response.HostConfig.LogConfig.Type,
 		logConfig: cloneStrings(response.HostConfig.LogConfig.Config), networks: make(map[string]netip.Addr, len(response.NetworkSettings.Networks)),
 	}
+	if response.ImageManifestDescriptor != nil {
+		info.selectedManifestDigest = response.ImageManifestDescriptor.Digest.String()
+		info.selectedManifestMediaType = response.ImageManifestDescriptor.MediaType
+		info.selectedManifestSize = response.ImageManifestDescriptor.Size
+	}
 	if response.Config.StopTimeout != nil {
 		info.stopTimeout = *response.Config.StopTimeout
 	}
@@ -283,9 +298,9 @@ func (e *mobyEngine) remove(ctx context.Context, id string) error {
 	return err
 }
 
-func (e *mobyEngine) describe(ctx context.Context, containerID string) ([]byte, error) {
+func (e *mobyEngine) describe(ctx context.Context, containerID, user string) ([]byte, error) {
 	created, err := e.client.ExecCreate(ctx, containerID, client.ExecCreateOptions{
-		User: DesktopUser, Privileged: false, TTY: false,
+		User: user, Privileged: false, TTY: false,
 		AttachStdin: false, AttachStdout: true, AttachStderr: true,
 		WorkingDir: "/workspace",
 		Cmd:        []string{desktopBrokerPath, "describe", "--socket", desktopBrokerSocket},
@@ -310,9 +325,9 @@ func (e *mobyEngine) describe(ctx context.Context, containerID string) ([]byte, 
 	return append([]byte(nil), stdout.Bytes()...), nil
 }
 
-func (e *mobyEngine) openSession(ctx context.Context, containerID string) (io.ReadWriteCloser, error) {
+func (e *mobyEngine) openSession(ctx context.Context, containerID, user string) (io.ReadWriteCloser, error) {
 	created, err := e.client.ExecCreate(ctx, containerID, client.ExecCreateOptions{
-		User: DesktopUser, Privileged: false, TTY: false,
+		User: user, Privileged: false, TTY: false,
 		AttachStdin: true, AttachStdout: true, AttachStderr: true,
 		WorkingDir: "/workspace",
 		Cmd:        []string{desktopBrokerPath, "session", "--socket", desktopBrokerSocket},

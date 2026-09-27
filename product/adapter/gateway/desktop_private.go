@@ -16,6 +16,7 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/shell-echo/sandbox-runtime/internal/desktophandoff"
+	"github.com/shell-echo/sandbox-runtime/internal/desktophandoffv2"
 	"github.com/shell-echo/sandbox-runtime/internal/desktopmedia"
 	"github.com/shell-echo/sandbox-runtime/internal/handoff"
 	"github.com/shell-echo/sandbox-runtime/product"
@@ -24,14 +25,15 @@ import (
 const defaultPrivateDesktopMessageBytes = int64(64 << 10)
 
 type PrivateDesktopMediaOptions struct {
-	Origin              string
-	HTTPClient          *http.Client
-	MaxMessageBytes     int64
-	OpenTimeout         time.Duration
-	AllowHTTPForTests   bool
-	ExpectedProviderID  string
-	TenantBindingDigest func(context.Context, product.GatewayBinding) (string, error)
-	ControllerFence     func(context.Context, product.GatewayBinding) (string, error)
+	Origin               string
+	HTTPClient           *http.Client
+	MaxMessageBytes      int64
+	OpenTimeout          time.Duration
+	AllowHTTPForTests    bool
+	ExpectedProviderID   string
+	TenantBindingDigest  func(context.Context, product.GatewayBinding) (string, error)
+	ControllerFence      func(context.Context, product.GatewayBinding) (string, error)
+	LegacyClosedForTests bool
 }
 
 // PrivateDesktopMediaSource adapts the Product Gateway media port to the
@@ -45,6 +47,7 @@ type PrivateDesktopMediaSource struct {
 	providerID      string
 	tenantDigest    func(context.Context, product.GatewayBinding) (string, error)
 	controllerFence func(context.Context, product.GatewayBinding) (string, error)
+	legacyClosed    bool
 }
 
 func NewPrivateDesktopMediaSource(options PrivateDesktopMediaOptions) (*PrivateDesktopMediaSource, error) {
@@ -61,12 +64,14 @@ func NewPrivateDesktopMediaSource(options PrivateDesktopMediaOptions) (*PrivateD
 	if !validScheme || origin.Host == "" || origin.User != nil || origin.RawQuery != "" || origin.Fragment != "" ||
 		(origin.Path != "" && origin.Path != "/") || options.HTTPClient == nil || limit < 1024 || limit > 256<<10 ||
 		openTimeout < time.Second || openTimeout > 30*time.Second || options.ExpectedProviderID == "" ||
-		strings.ContainsAny(options.ExpectedProviderID, " \r\n\t") {
+		strings.ContainsAny(options.ExpectedProviderID, " \r\n\t") ||
+		(options.LegacyClosedForTests && !options.AllowHTTPForTests) ||
+		(!options.AllowHTTPForTests && (options.TenantBindingDigest == nil || options.ControllerFence == nil)) {
 		return nil, product.ErrInvalid
 	}
 	copyClient := *options.HTTPClient
 	copyClient.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
-	return &PrivateDesktopMediaSource{origin: origin, httpClient: &copyClient, maxMessageBytes: limit, openTimeout: openTimeout, providerID: options.ExpectedProviderID, tenantDigest: options.TenantBindingDigest, controllerFence: options.ControllerFence}, nil
+	return &PrivateDesktopMediaSource{origin: origin, httpClient: &copyClient, maxMessageBytes: limit, openTimeout: openTimeout, providerID: options.ExpectedProviderID, tenantDigest: options.TenantBindingDigest, controllerFence: options.ControllerFence, legacyClosed: options.LegacyClosedForTests}, nil
 }
 
 func (s *PrivateDesktopMediaSource) Open(ctx context.Context, binding product.GatewayBinding, policy DesktopLiveMediaPolicy) (DesktopLiveMediaSession, error) {
@@ -94,6 +99,9 @@ func (s *PrivateDesktopMediaSource) Open(ctx context.Context, binding product.Ga
 	if s.tenantDigest != nil || s.controllerFence != nil {
 		if s.tenantDigest == nil || s.controllerFence == nil {
 			return nil, product.ErrForbidden
+		}
+		if !s.legacyClosed {
+			return s.openActivated(ctx, binding, privatePolicy)
 		}
 		return s.openClosed(ctx, binding, privatePolicy)
 	}
@@ -135,34 +143,9 @@ func (s *PrivateDesktopMediaSource) Open(ctx context.Context, binding product.Ga
 }
 
 func (s *PrivateDesktopMediaSource) openClosed(ctx context.Context, binding product.GatewayBinding, policy desktopmedia.MediaPolicy) (DesktopLiveMediaSession, error) {
-	digest, err := s.tenantDigest(ctx, binding)
-	if err != nil || handoff.ValidateTenantBindingDigest(digest) != nil {
-		return nil, product.ErrForbidden
-	}
-	fence, err := s.controllerFence(ctx, binding)
-	if err != nil || len(fence) < handoff.MinFenceBytes || strings.ContainsAny(fence, "\r\n\x00") {
-		return nil, product.ErrForbidden
-	}
-	requestID, err := randomRequestID()
+	open, err := s.closedOpenRequest(ctx, binding, policy)
 	if err != nil {
-		return nil, product.ErrStoreUnavailable
-	}
-	authorityExpires := binding.ExpiresAt.UTC()
-	if binding.HandoffExpiresAt.Before(authorityExpires) {
-		authorityExpires = binding.HandoffExpiresAt.UTC()
-	}
-	open := desktophandoff.OpenRequest{BindingVersion: desktophandoff.BindingVersion, BindingIssuer: desktophandoff.BindingIssuer, Protocol: desktophandoff.ProtocolID, RequestID: requestID, Resource: desktophandoff.ResourceDesktop,
-		TenantBindingDigest: digest, ProviderRevisionID: binding.ProviderRevisionID, SandboxID: binding.SandboxID,
-		DesktopSessionID: binding.SessionID, CapabilityProfileID: product.DesktopCapabilityProfile,
-		MediaProfileID: desktophandoff.MediaProfileID, ControlProfileID: desktophandoff.ControlProfileID,
-		HandoffReference: binding.HandoffReference, HandoffDigest: desktophandoff.ReferenceDigest(binding.HandoffReference),
-		ConnectionGeneration: binding.ConnectionGeneration, ConnectionEpoch: binding.ConnectionID,
-		AuthorityExpiresAt: authorityExpires.Format(time.RFC3339Nano), HandoffExpiresAt: binding.HandoffExpiresAt.UTC().Format(time.RFC3339Nano),
-		ControllerFence: fence, MediaPolicy: policy}
-	open.AuthorityDigest = desktophandoff.AuthorityDigest(open)
-	open.RequestDigest = desktophandoff.RequestDigest(open)
-	if open.Validate(time.Now().UTC()) != nil {
-		return nil, product.ErrForbidden
+		return nil, err
 	}
 	openCtx, cancel := context.WithTimeout(ctx, s.openTimeout)
 	defer cancel()
@@ -184,15 +167,94 @@ func (s *PrivateDesktopMediaSource) openClosed(ctx context.Context, binding prod
 	}
 	kind, responseDocument, err := connection.Read(openCtx)
 	var accepted desktophandoff.OpenResponse
-	if err != nil || kind != websocket.MessageText || handoff.Decode(responseDocument, &accepted) != nil || accepted.Validate() != nil || accepted.RequestID != requestID || accepted.Status != desktophandoff.StatusAccepted {
+	if err != nil || kind != websocket.MessageText || handoff.Decode(responseDocument, &accepted) != nil || accepted.Validate() != nil || accepted.RequestID != open.RequestID || accepted.Status != desktophandoff.StatusAccepted {
 		_ = connection.CloseNow()
 		return nil, product.ErrStoreUnavailable
 	}
 	return newPrivateDesktopMediaSession(connection, s.maxMessageBytes), nil
 }
 
+func (s *PrivateDesktopMediaSource) closedOpenRequest(ctx context.Context, binding product.GatewayBinding, policy desktopmedia.MediaPolicy) (desktophandoff.OpenRequest, error) {
+	digest, err := s.tenantDigest(ctx, binding)
+	if err != nil || handoff.ValidateTenantBindingDigest(digest) != nil {
+		return desktophandoff.OpenRequest{}, product.ErrForbidden
+	}
+	fence, err := s.controllerFence(ctx, binding)
+	if err != nil || len(fence) < handoff.MinFenceBytes || strings.ContainsAny(fence, "\r\n\x00") {
+		return desktophandoff.OpenRequest{}, product.ErrForbidden
+	}
+	requestID, err := randomRequestID()
+	if err != nil {
+		return desktophandoff.OpenRequest{}, product.ErrStoreUnavailable
+	}
+	authorityExpires := binding.ExpiresAt.UTC()
+	if binding.HandoffExpiresAt.Before(authorityExpires) {
+		authorityExpires = binding.HandoffExpiresAt.UTC()
+	}
+	open := desktophandoff.OpenRequest{BindingVersion: desktophandoff.BindingVersion, BindingIssuer: desktophandoff.BindingIssuer, Protocol: desktophandoff.ProtocolID, RequestID: requestID, Resource: desktophandoff.ResourceDesktop,
+		TenantBindingDigest: digest, ProviderRevisionID: binding.ProviderRevisionID, SandboxID: binding.SandboxID,
+		DesktopSessionID: binding.SessionID, CapabilityProfileID: product.DesktopCapabilityProfile,
+		MediaProfileID: desktophandoff.MediaProfileID, ControlProfileID: desktophandoff.ControlProfileID,
+		HandoffReference: binding.HandoffReference, HandoffDigest: desktophandoff.ReferenceDigest(binding.HandoffReference),
+		ConnectionGeneration: binding.ConnectionGeneration, ConnectionEpoch: binding.ConnectionID,
+		AuthorityExpiresAt: authorityExpires.Format(time.RFC3339Nano), HandoffExpiresAt: binding.HandoffExpiresAt.UTC().Format(time.RFC3339Nano),
+		ControllerFence: fence, MediaPolicy: policy}
+	open.AuthorityDigest = desktophandoff.AuthorityDigest(open)
+	open.RequestDigest = desktophandoff.RequestDigest(open)
+	if open.Validate(time.Now().UTC()) != nil {
+		return desktophandoff.OpenRequest{}, product.ErrForbidden
+	}
+	return open, nil
+}
+
+func (s *PrivateDesktopMediaSource) openActivated(ctx context.Context, binding product.GatewayBinding, policy desktopmedia.MediaPolicy) (DesktopLiveMediaSession, error) {
+	legacy, err := s.closedOpenRequest(ctx, binding, policy)
+	if err != nil {
+		return nil, err
+	}
+	legacy.Protocol = desktophandoffv2.ProtocolID
+	open := desktophandoffv2.OpenRequest{OpenRequest: legacy}
+	open.TransportDigest = desktophandoffv2.TransportDigest(open)
+	if open.Validate(time.Now().UTC()) != nil {
+		return nil, product.ErrForbidden
+	}
+	openCtx, cancel := context.WithTimeout(ctx, s.openTimeout)
+	defer cancel()
+	connection, response, err := websocket.Dial(openCtx, s.origin.String(), &websocket.DialOptions{
+		HTTPClient: s.httpClient, Subprotocols: []string{desktophandoffv2.ProtocolID},
+		CompressionMode: websocket.CompressionDisabled})
+	if response != nil && response.Body != nil {
+		_ = response.Body.Close()
+	}
+	if err != nil || connection.Subprotocol() != desktophandoffv2.ProtocolID {
+		if connection != nil {
+			_ = connection.CloseNow()
+		}
+		return nil, product.ErrStoreUnavailable
+	}
+	connection.SetReadLimit(s.maxMessageBytes)
+	document, err := handoff.Encode(open)
+	if err != nil || connection.Write(openCtx, websocket.MessageText, document) != nil {
+		_ = connection.CloseNow()
+		return nil, product.ErrStoreUnavailable
+	}
+	kind, responseDocument, err := connection.Read(openCtx)
+	var prepared desktophandoffv2.Prepared
+	if err != nil || kind != websocket.MessageText || desktophandoffv2.Decode(responseDocument, &prepared) != nil || prepared.Validate(open) != nil {
+		_ = connection.CloseNow()
+		return nil, product.ErrStoreUnavailable
+	}
+	activation := &desktopActivationState{start: desktophandoffv2.NewStart(open), ack: make(chan struct{}, 1)}
+	base := newPrivateDesktopMediaSessionWithActivation(connection, s.maxMessageBytes, activation)
+	return &activatedDesktopMediaSession{privateDesktopMediaSession: base}, nil
+}
+
 func newPrivateDesktopMediaSession(connection *websocket.Conn, maxMessageBytes int64) *privateDesktopMediaSession {
-	session := &privateDesktopMediaSession{connection: connection, maxMessageBytes: maxMessageBytes, video: make(chan []byte, 32), audio: make(chan []byte, 64), results: make(map[int64]chan desktopgatewayResult), done: make(chan struct{})}
+	return newPrivateDesktopMediaSessionWithActivation(connection, maxMessageBytes, nil)
+}
+
+func newPrivateDesktopMediaSessionWithActivation(connection *websocket.Conn, maxMessageBytes int64, activation *desktopActivationState) *privateDesktopMediaSession {
+	session := &privateDesktopMediaSession{connection: connection, maxMessageBytes: maxMessageBytes, video: make(chan []byte, 32), audio: make(chan []byte, 64), results: make(map[int64]chan desktopgatewayResult), done: make(chan struct{}), activation: activation}
 	go session.read()
 	return session
 }
@@ -211,6 +273,54 @@ type privateDesktopMediaSession struct {
 	resultMu        sync.Mutex
 	results         map[int64]chan desktopgatewayResult
 	nextRequest     atomic.Int64
+	activation      *desktopActivationState
+}
+
+type desktopActivationState struct {
+	start    desktophandoffv2.Start
+	ack      chan struct{}
+	sent     atomic.Bool
+	received atomic.Bool
+	ready    atomic.Bool
+	once     sync.Once
+	err      error
+}
+
+type activatedDesktopMediaSession struct{ *privateDesktopMediaSession }
+
+func (s *activatedDesktopMediaSession) Activate(ctx context.Context) error {
+	if s == nil || s.privateDesktopMediaSession == nil || s.activation == nil || ctx == nil {
+		return product.ErrInvalid
+	}
+	s.activation.once.Do(func() {
+		defer func() {
+			if s.activation.err != nil {
+				s.close()
+			}
+		}()
+		document, err := handoff.Encode(s.activation.start)
+		if err != nil {
+			s.activation.err = product.ErrStoreUnavailable
+			return
+		}
+		s.writeMu.Lock()
+		s.activation.sent.Store(true)
+		err = s.connection.Write(ctx, websocket.MessageText, document)
+		s.writeMu.Unlock()
+		if err != nil {
+			s.activation.err = product.ErrStoreUnavailable
+			return
+		}
+		select {
+		case <-s.activation.ack:
+			s.activation.ready.Store(true)
+		case <-s.done:
+			s.activation.err = product.ErrStoreUnavailable
+		case <-ctx.Done():
+			s.activation.err = ctx.Err()
+		}
+	})
+	return s.activation.err
 }
 
 func (s *privateDesktopMediaSession) ReadVideoRTP(ctx context.Context) ([]byte, error) {
@@ -271,6 +381,9 @@ func (s *privateDesktopMediaSession) command(ctx context.Context, command deskto
 	if s == nil || ctx == nil {
 		return desktopgatewayResult{}, product.ErrStoreUnavailable
 	}
+	if s.activation != nil && !s.activation.ready.Load() {
+		return desktopgatewayResult{}, product.ErrControlStale
+	}
 	command.RequestID = s.nextRequest.Add(1)
 	response := make(chan desktopgatewayResult, 1)
 	s.resultMu.Lock()
@@ -314,6 +427,9 @@ func (s *privateDesktopMediaSession) read() {
 		}
 		switch kind {
 		case websocket.MessageBinary:
+			if s.activation != nil && !s.activation.received.Load() {
+				return
+			}
 			if len(payload) < 2 {
 				return
 			}
@@ -333,6 +449,24 @@ func (s *privateDesktopMediaSession) read() {
 				return
 			}
 		case websocket.MessageText:
+			if s.activation != nil {
+				var started desktophandoffv2.Started
+				if desktophandoffv2.Decode(payload, &started) == nil {
+					if !s.activation.sent.Load() || started.Validate(s.activation.start) != nil ||
+						!s.activation.received.CompareAndSwap(false, true) {
+						return
+					}
+					select {
+					case s.activation.ack <- struct{}{}:
+						continue
+					default:
+						return
+					}
+				}
+				if !s.activation.received.Load() {
+					return
+				}
+			}
 			decoder := json.NewDecoder(bytes.NewReader(payload))
 			decoder.DisallowUnknownFields()
 			var result desktopgatewayResult

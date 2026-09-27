@@ -143,16 +143,43 @@ func VerifyRuntimeRole(ctx context.Context, runtimePool *pgxpool.Pool, runtimeRo
 	if ctx == nil || runtimePool == nil || runtimeRole == "" {
 		return errors.New("Provider runtime database role is invalid")
 	}
-	var actualRuntimeRole string
-	if err := runtimePool.QueryRow(ctx, `SELECT current_user`).Scan(&actualRuntimeRole); err != nil || actualRuntimeRole != runtimeRole {
-		return errors.New("Provider runtime database role does not match configuration")
+	return verifyRuntimeConnection(ctx, runtimePool, "", runtimeRole)
+}
+
+// VerifyBoundRuntimeConnection is run for every new v3 Browser/Desktop pool
+// connection, including reconnects. It binds the actual database and both
+// SQL identities to the complete profile, not just to the original DSN.
+func VerifyBoundRuntimeConnection(ctx context.Context, connection *pgx.Conn, database, runtimeRole string) error {
+	if ctx == nil || connection == nil || database == "" || runtimeRole == "" {
+		return errors.New("Provider runtime database authority is invalid")
+	}
+	return verifyRuntimeConnection(ctx, connection, database, runtimeRole)
+}
+
+type runtimeRoleQuery interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}
+
+func verifyRuntimeConnection(ctx context.Context, query runtimeRoleQuery, database, runtimeRole string) error {
+	var actualDatabase, actualRuntimeRole, sessionRole string
+	if err := query.QueryRow(ctx, `SELECT current_database(),current_user,session_user`).Scan(&actualDatabase, &actualRuntimeRole, &sessionRole); err != nil ||
+		(database != "" && actualDatabase != database) || actualDatabase == "" ||
+		actualRuntimeRole != runtimeRole || sessionRole != runtimeRole {
+		return errors.New("Provider runtime database or role does not match configuration")
+	}
+	var elevated, member bool
+	if err := query.QueryRow(ctx, `SELECT
+    rolsuper OR rolcreatedb OR rolcreaterole OR rolreplication OR rolbypassrls,
+    EXISTS (SELECT 1 FROM pg_catalog.pg_auth_members WHERE member=pg_catalog.pg_roles.oid)
+FROM pg_catalog.pg_roles WHERE rolname=current_user`).Scan(&elevated, &member); err != nil || elevated || member {
+		return errors.New("Provider runtime database role has escalation or membership authority")
 	}
 	var runtimeCanUse, runtimeCanCreate bool
-	if err := runtimePool.QueryRow(ctx, `SELECT has_schema_privilege(current_user,'sandbox_runtime_provider','USAGE'),has_schema_privilege(current_user,'sandbox_runtime_provider','CREATE')`).Scan(&runtimeCanUse, &runtimeCanCreate); err != nil || !runtimeCanUse || runtimeCanCreate {
+	if err := query.QueryRow(ctx, `SELECT has_schema_privilege(current_user,'sandbox_runtime_provider','USAGE'),has_schema_privilege(current_user,'sandbox_runtime_provider','CREATE')`).Scan(&runtimeCanUse, &runtimeCanCreate); err != nil || !runtimeCanUse || runtimeCanCreate {
 		return errors.New("Provider runtime database schema privileges are unsafe")
 	}
 	var ledgerRead, ledgerWrite, stateRead, stateUpdate, stateExtraWrite bool
-	if err := runtimePool.QueryRow(ctx, `SELECT
+	if err := query.QueryRow(ctx, `SELECT
 has_table_privilege(current_user,'sandbox_runtime_provider.schema_migrations','SELECT'),
 has_table_privilege(current_user,'sandbox_runtime_provider.schema_migrations','INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER'),
 has_table_privilege(current_user,'sandbox_runtime_provider.control_state','SELECT'),

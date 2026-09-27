@@ -9,6 +9,7 @@ import (
 
 	"github.com/shell-echo/sandbox-runtime/config"
 	"github.com/shell-echo/sandbox-runtime/provider"
+	providerbrowser "github.com/shell-echo/sandbox-runtime/provider/browser"
 	providerdesktop "github.com/shell-echo/sandbox-runtime/provider/desktop"
 	"github.com/shell-echo/sandbox-runtime/provider/lifecycle"
 	"github.com/spf13/cobra"
@@ -58,6 +59,20 @@ func TestProductionProviderCapabilityAdvertisementIsExact(t *testing.T) {
 	}
 	if !reflect.DeepEqual(desktopSnapshot.RuntimeProfiles[0].Architecture, []string{"arm64"}) {
 		t.Fatalf("Desktop architecture = %#v", desktopSnapshot.RuntimeProfiles[0].Architecture)
+	}
+	cfg.Profile = config.ProviderProcessBrowserProfile
+	browserSource, err := newBrowserCapabilitySource(cfg, "amd64")
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertProviderAdvertisement(t, browserSource, []string{"sandbox.browser"}, lifecycle.BrowserRuntimeProfile,
+		[]string{providerbrowser.CapabilityProfileID})
+	browserSnapshot, err := browserSource.CapabilitySnapshot(context.Background())
+	if err != nil || !reflect.DeepEqual(browserSnapshot.RuntimeProfiles[0].Architecture, []string{"amd64"}) {
+		t.Fatalf("Browser architecture = %#v, err=%v", browserSnapshot.RuntimeProfiles, err)
+	}
+	if _, err := newBrowserCapabilitySource(cfg, "unknown"); err == nil {
+		t.Fatal("Browser Provider advertised an unverified Docker architecture")
 	}
 }
 
@@ -110,5 +125,12 @@ func TestRoleCommandsRejectMixedProcessAuthority(t *testing.T) {
 	config.ProductProcess.Enabled = false
 	if err := runServe(command, nil); err == nil || !strings.Contains(err.Error(), "provider_process.enabled") {
 		t.Fatalf("root serve Provider boundary error = %v", err)
+	}
+}
+
+func TestBrowserProviderCannotFallThroughToCodingComposition(t *testing.T) {
+	composition, err := newProductionProvider(context.Background(), &config.ProviderProcessConfig{Profile: config.ProviderProcessBrowserProfile}, nil, nil, nil)
+	if err == nil || composition != nil || !strings.Contains(err.Error(), "Browser Provider production composition") {
+		t.Fatalf("unwired Browser Provider composition = %v, %v", composition, err)
 	}
 }

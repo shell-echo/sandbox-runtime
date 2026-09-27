@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/shell-echo/sandbox-runtime/internal/sandboxidentity"
 	"github.com/shell-echo/sandbox-runtime/provider/network/restricted"
 )
 
@@ -62,6 +63,9 @@ type Request struct {
 	PolicyReference string
 	Generation      int64
 	Fence           int64
+	// Slot is nonzero only for a Provider-reserved Phase 6 allocation. The
+	// caller must bind it to its durable owner-local reservation first.
+	Slot sandboxidentity.Slot
 }
 
 type Attachment struct {
@@ -74,6 +78,7 @@ type Attachment struct {
 	WorkloadIdentityDigest string
 	EgressGateway          bool
 	Public                 bool
+	Slot                   sandboxidentity.Slot
 }
 
 func (o Options) validate() (map[string]restricted.Policy, error) {

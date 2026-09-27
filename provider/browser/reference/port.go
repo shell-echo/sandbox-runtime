@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/shell-echo/sandbox-runtime/internal/browserhandoffv2"
 	"github.com/shell-echo/sandbox-runtime/provider/browser"
 )
 
@@ -26,6 +27,12 @@ type SessionReader interface {
 // short-lived executor capability without copying or owning the record.
 type BoundAttacher interface {
 	AttachBound(context.Context, Record) (browser.Stream, error)
+}
+
+// ConnectionAttacher is the only allowed v2 downstream path. The Provider
+// store reserves the exact executor attempt before this adapter sends it.
+type ConnectionAttacher interface {
+	AttachConnection(context.Context, Record, string) (browser.Stream, error)
 }
 type Clock interface{ Now() time.Time }
 type ClockFunc func() time.Time
@@ -164,6 +171,58 @@ func (r *Resolver) Resolve(ctx context.Context, value string) (Endpoint, error) 
 	}
 	return endpoint, nil
 }
+
+// ResolveConnection binds a private v2 request to a persisted exact epoch.
+// Both the initial lookup and the eventual Dial re-read current Provider
+// authority; callers can also use it for continuous close/drift monitoring.
+func (r *Resolver) ResolveConnection(ctx context.Context, open browserhandoffv2.OpenRequest) (Endpoint, error) {
+	if r == nil || r.clock == nil {
+		return Endpoint{}, ErrUnavailable
+	}
+	attacher, ok := r.attacher.(ConnectionAttacher)
+	if !ok {
+		return Endpoint{}, ErrUnavailable
+	}
+	record, err := r.lookup(ctx, open.HandoffReference)
+	if err != nil || matchConnectionOpen(record, open, r.clock.Now().UTC()) != nil {
+		return Endpoint{}, ErrUnavailable
+	}
+	endpoint := Endpoint{Reference: record.Reference, SandboxID: record.SandboxID, BrowserSessionID: record.BrowserSessionID,
+		CapabilityProfileID: record.CapabilityProfileID, ConnectionGeneration: record.ConnectionGeneration,
+		ExpiresAt: record.ExpiresAt.UTC(), TenantBindingDigest: record.TenantBindingDigest}
+	endpoint.Dial = func(dialCtx context.Context) (browser.Stream, error) {
+		fresh, err := r.lookup(dialCtx, open.HandoffReference)
+		if err != nil || matchConnectionOpen(fresh, open, r.clock.Now().UTC()) != nil {
+			return nil, ErrUnavailable
+		}
+		stream, err := attacher.AttachConnection(dialCtx, fresh, open.ConnectionEpoch)
+		if err != nil || stream == nil {
+			return nil, ErrUnavailable
+		}
+		return stream, nil
+	}
+	return endpoint, nil
+}
+
+func matchConnectionOpen(record Record, open browserhandoffv2.OpenRequest, now time.Time) error {
+	if record.Validate() != nil || open.Validate(now) != nil ||
+		record.Reference != open.HandoffReference || record.TenantBindingDigest != open.TenantBindingDigest ||
+		record.ProviderRevisionID != open.ProviderRevisionID || record.SandboxID != open.SandboxID ||
+		record.BrowserSessionID != open.BrowserSessionID || record.CapabilityProfileID != open.CapabilityProfileID ||
+		record.ConnectionGeneration != open.ConnectionGeneration ||
+		record.ExpiresAt.UTC().Format(time.RFC3339Nano) != open.HandoffExpiresAt {
+		return ErrStale
+	}
+	claim, ok := record.ConnectionClaims[open.ConnectionEpoch]
+	if !ok || claim.Status == ConnectionClosed || !claim.AuthorityExpiresAt.After(now) ||
+		claim.PrivateRequestID != open.RequestID || claim.PrivateRequestDigest != open.RequestDigest ||
+		claim.AuthorityDigest != open.AuthorityDigest || claim.ControlLeaseDigest != open.ControlLeaseDigest ||
+		claim.ControlFence != open.ControlFence ||
+		claim.AuthorityExpiresAt.UTC().Format(time.RFC3339Nano) != open.AuthorityExpiresAt {
+		return ErrStale
+	}
+	return nil
+}
 func (r *Resolver) lookup(ctx context.Context, value string) (Record, error) {
 	if r == nil || r.store == nil || r.sessions == nil || r.attacher == nil || r.clock == nil {
 		return Record{}, ErrUnavailable
@@ -197,6 +256,20 @@ func (r *Resolver) lookup(ctx context.Context, value string) (Record, error) {
 	}
 	if err := record.matchesSucceeded(source); err != nil {
 		return Record{}, ErrStale
+	}
+	if authorityReader, ok := r.sessions.(interface {
+		GetSandboxAuthority(context.Context, string) (browser.SandboxAuthority, error)
+	}); ok {
+		authority, authorityErr := authorityReader.GetSandboxAuthority(ctx, record.SandboxID)
+		if authorityErr != nil {
+			return Record{}, ErrUnavailable
+		}
+		if authority.Validate() != nil || !authority.Ready || authority.SandboxID != record.SandboxID ||
+			authority.ProviderRevisionID != record.ProviderRevisionID || authority.Generation != source.Request.ExpectedGeneration ||
+			authority.FencingToken != source.Request.FencingToken || !authority.LeaseExpiresAt.After(now) ||
+			record.ExpiresAt.After(authority.LeaseExpiresAt) {
+			return Record{}, ErrStale
+		}
 	}
 	return record.Clone(), nil
 }

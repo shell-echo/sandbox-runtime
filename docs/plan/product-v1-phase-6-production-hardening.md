@@ -199,6 +199,18 @@ This is a local security-enforcement scope, not published-artifact or product
 production readiness. The same protected application command is used; Desktop
 v3 production artifact admission remains closed pending Slice 7 publication.
 
+The same local-candidate-only exception applies to the other real
+repository-owned role images in the complete Slice 6 inventory. The closed
+security profile distinguishes local versus registry location from
+`oci_manifest`/`oci_index` object kind and reserves `local_config` for an
+actually proven config-addressable store. It pins platform and descriptor
+chain, then independently observes Docker's runtime store ID, its descriptor,
+the container's selected platform manifest and the separate OCI config. The
+gate retains exact source/build inputs and a re-importable digest-checked OCI
+archive, never pushes the candidate or substitutes Alpine/nc probes for real
+role commands. Dirty-tree experiments remain component diagnostics; final
+Slice 6 evidence needs an immutable source checkpoint and exact cleanup.
+
 ### Slice 7 — application supply chain
 
 Pin builder/runtime bases, produce reproducible multi-platform application
@@ -222,6 +234,11 @@ Slice 7 must publish and independently verify the new executor-v2 Desktop
 runtime, update its immutable lock and then enable exact Desktop v3 production
 artifact admission. It must rerun security/runtime gates affected by the
 artifact change; Slice 6 candidate evidence does not grant deployment status.
+The final artifact profile rejects local/non-release images, verifies
+index → platform manifest → config → running ImageID, and rechecks the full
+inventory. Byte-identical unaffected observations may be reused only with an
+explicit impact analysis; an altered image, entrypoint, base, dependency,
+identity, network or configuration requires the affected real-role gate again.
 
 ### Slice 8 — production PostgreSQL, coordination and object storage adapters
 

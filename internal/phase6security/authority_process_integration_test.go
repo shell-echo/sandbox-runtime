@@ -55,7 +55,11 @@ func TestDockerProductionPolicyAuthorityAndRevocationReceipt(t *testing.T) {
 			profile.TLSAgentBindings[index].SubjectGID = brokerGID
 		}
 	}
-	profile.EgressPolicies[0].Authority.PublicKeyDigest = OperatorPublicKeyDigest(publicKey)
+	for index := range profile.EgressPolicies {
+		if profile.EgressPolicies[index].ID == "product-egress" {
+			profile.EgressPolicies[index].Authority.PublicKeyDigest = OperatorPublicKeyDigest(publicKey)
+		}
+	}
 	profile.ProfileDigest = profile.Digest()
 	if err := profile.Validate(); err != nil {
 		t.Fatalf("process profile invalid: %v", err)

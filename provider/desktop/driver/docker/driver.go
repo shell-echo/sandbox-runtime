@@ -22,6 +22,7 @@ import (
 
 	"github.com/shell-echo/sandbox-runtime/internal/desktopbroker"
 	"github.com/shell-echo/sandbox-runtime/internal/desktopcandidate"
+	"github.com/shell-echo/sandbox-runtime/internal/sandboxidentity"
 	desktopimage "github.com/shell-echo/sandbox-runtime/profiles/desktop/image"
 	providerdesktop "github.com/shell-echo/sandbox-runtime/provider/desktop"
 	"github.com/shell-echo/sandbox-runtime/provider/network/restricted"
@@ -51,17 +52,25 @@ const (
 )
 
 type Driver struct {
-	engine             engine
-	options            Options
-	dataRoot           string
-	productionManifest *desktopimage.Phase5ProductionReleaseManifest
-	candidateManifest  *desktopimage.Manifest
-	publication        desktopimage.Publication
-	candidate          *desktopcandidate.Manifest
-	image              imageInfo
-	provenance         ProvenanceVerifier
-	network            RestrictedNetwork
-	mu                 sync.Mutex
+	engine              engine
+	options             Options
+	dataRoot            string
+	productionManifest  *desktopimage.Phase5ProductionReleaseManifest
+	candidateManifest   *desktopimage.Manifest
+	publication         desktopimage.Publication
+	candidate           *desktopcandidate.Manifest
+	image               imageInfo
+	provenance          ProvenanceVerifier
+	network             RestrictedNetwork
+	bound               *sandboxidentity.RuntimeAuthority
+	boundSessionDrainer boundSessionDrainer
+	mu                  sync.Mutex
+}
+
+// The only bound cleanup port: it fences the exact Desktop session and waits
+// for its already-admitted broker/media streams before Docker removal.
+type boundSessionDrainer interface {
+	FenceAndDrain(context.Context, string, string) error
 }
 
 func New(ctx context.Context, options Options, provenance ProvenanceVerifier, network RestrictedNetwork) (*Driver, error) {
@@ -82,9 +91,13 @@ func New(ctx context.Context, options Options, provenance ProvenanceVerifier, ne
 
 // NewLocalCandidate constructs the non-release Phase 6 local-gate adapter.
 // The candidate digest is never promoted to the signed production lock.
-func NewLocalCandidate(ctx context.Context, options Options, candidate desktopcandidate.Manifest, network RestrictedNetwork) (*Driver, error) {
+func NewLocalCandidate(ctx context.Context, options Options, candidate desktopcandidate.Manifest, network RestrictedNetwork, candidatePath string) (*Driver, error) {
 	if err := contextError(ctx); err != nil {
 		return nil, err
+	}
+	loaded, loadErr := desktopcandidate.LoadCurrent(candidatePath)
+	if loadErr != nil || loaded != candidate {
+		return nil, ErrInvalidDriver
 	}
 	backend, err := newMobyEngine(options.Host)
 	if err != nil {
@@ -275,10 +288,19 @@ func exactIdentityLabels(actual, expected map[string]string) bool {
 }
 
 func validateCandidateImage(info imageInfo, manifest desktopimage.Manifest, candidate desktopcandidate.Manifest) error {
-	if candidate.Validate() != nil || info.id != candidate.ImageDigest || candidate.ConfigDigest != candidate.ImageDigest ||
+	if candidate.Validate() != nil || info.id != candidate.ImageDigest ||
 		info.user != DesktopUser || info.workingDirectory != "/workspace" ||
 		strings.Join(info.entrypoint, "\x00") != "/usr/local/bin/desktop-runtime" || len(info.command) != 0 ||
 		info.operatingSystem != "linux" || info.exposedPorts != 0 {
+		return ErrInvalidRuntime
+	}
+	if candidate.Version == desktopcandidate.CurrentVersion {
+		if info.descriptorDigest != candidate.ImageDigest ||
+			info.descriptorMediaType != candidate.StoreDescriptorMediaType ||
+			info.descriptorSize != candidate.StoreDescriptorSize {
+			return ErrInvalidRuntime
+		}
+	} else if candidate.ConfigDigest != candidate.ImageDigest {
 		return ErrInvalidRuntime
 	}
 	platform := "linux/" + info.architecture
@@ -302,6 +324,9 @@ func validateCandidateImage(info imageInfo, manifest desktopimage.Manifest, cand
 		"io.github.shell-echo.sandbox-runtime.installed-set-digest":         candidate.InstalledSetDigest,
 		"io.github.shell-echo.sandbox-runtime.provenance.source-digest":     candidate.BaseImageDigest,
 		"io.github.shell-echo.sandbox-runtime.provenance.source-date-epoch": "0",
+	}
+	if candidate.Version == desktopcandidate.CurrentVersion {
+		wantIdentityLabels["io.github.shell-echo.sandbox-runtime.workload-account-digest"] = candidate.WorkloadAccountDigest
 	}
 	if !ok || platform != candidate.Platform || source.Digest != candidate.BaseImageDigest ||
 		source.PackageArchiveSetDigest != candidate.PackageArchiveSetDigest || source.InstalledSetDigest != candidate.InstalledSetDigest ||
@@ -360,6 +385,14 @@ func (d *Driver) Ready(ctx context.Context) error {
 }
 
 func (d *Driver) Allocate(ctx context.Context, allocation providerdesktop.Allocation) (providerdesktop.AllocationReceipt, error) {
+	if d != nil && d.bound != nil {
+		return providerdesktop.AllocationReceipt{}, providerdesktop.ErrDesktopUnsupported
+	}
+	return d.allocate(ctx, allocation, sandboxidentity.Slot{})
+}
+
+func (d *Driver) allocate(ctx context.Context, allocation providerdesktop.Allocation,
+	slot sandboxidentity.Slot) (providerdesktop.AllocationReceipt, error) {
 	if err := contextError(ctx); err != nil {
 		return providerdesktop.AllocationReceipt{}, err
 	}
@@ -382,7 +415,7 @@ func (d *Driver) Allocate(ctx context.Context, allocation providerdesktop.Alloca
 	if err != nil {
 		return providerdesktop.AllocationReceipt{}, err
 	}
-	specDigest, err := d.specDigest(allocation)
+	specDigest, err := d.specDigestForSlot(allocation, slot)
 	if err != nil {
 		return providerdesktop.AllocationReceipt{}, err
 	}
@@ -406,6 +439,7 @@ func (d *Driver) Allocate(ctx context.Context, allocation providerdesktop.Alloca
 		Namespace: d.options.Namespace, ControllerID: d.options.ControllerID,
 		PolicyReference: allocation.Request.NetworkPolicyReference, Generation: allocation.Request.ExpectedGeneration,
 		FencingToken: allocation.Request.FencingToken,
+		Slot:         slot,
 	})
 	if err != nil {
 		if contextErr := allocationContextError(operationCtx, err); contextErr != nil {
@@ -413,7 +447,7 @@ func (d *Driver) Allocate(ctx context.Context, allocation providerdesktop.Alloca
 		}
 		return providerdesktop.AllocationReceipt{}, providerdesktop.ErrDesktopUnsupported
 	}
-	if err := attachment.validate(d.options.NetworkPolicyReference); err != nil {
+	if err := attachment.validate(d.options.NetworkPolicyReference); err != nil || attachment.Slot != slot {
 		if releaseErr := d.network.Release(operationCtx, attachment); releaseErr != nil {
 			return providerdesktop.AllocationReceipt{}, providerdesktop.ErrAllocationUnknown
 		}
@@ -507,7 +541,7 @@ func (d *Driver) startAndProbe(ctx context.Context, statePath string, state desk
 		if !found || !confirmed.running || confirmed.status != "running" || confirmed.paused || confirmed.restarting || confirmed.dead {
 			return providerdesktop.AllocationReceipt{}, providerdesktop.ErrAllocationUnknown
 		}
-		if _, err := d.brokerDescriptor(ctx, state.BackendContainerID); err == nil {
+		if _, err := d.brokerDescriptor(ctx, state.BackendContainerID, state.Network.Slot); err == nil {
 			if !state.Ready {
 				state.Ready = true
 				if err := persistDesktopState(statePath, state, d.options.NetworkPolicyReference); err != nil {
@@ -523,6 +557,13 @@ func (d *Driver) startAndProbe(ctx context.Context, statePath string, state desk
 }
 
 func (d *Driver) Observe(ctx context.Context, allocation providerdesktop.Allocation) (providerdesktop.AllocationObservation, error) {
+	if d != nil && d.bound != nil {
+		return providerdesktop.AllocationObservation{}, providerdesktop.ErrDesktopUnsupported
+	}
+	return d.observe(ctx, allocation)
+}
+
+func (d *Driver) observe(ctx context.Context, allocation providerdesktop.Allocation) (providerdesktop.AllocationObservation, error) {
 	if err := contextError(ctx); err != nil {
 		return providerdesktop.AllocationObservation{}, err
 	}
@@ -586,7 +627,7 @@ func (d *Driver) Observe(ctx context.Context, allocation providerdesktop.Allocat
 		observation.State = providerdesktop.AllocationOutcomeUnknown
 		return observation, observation.Validate(allocation)
 	}
-	if _, err := d.brokerDescriptor(operationCtx, state.BackendContainerID); err != nil {
+	if _, err := d.brokerDescriptor(operationCtx, state.BackendContainerID, state.Network.Slot); err != nil {
 		observation.State = providerdesktop.AllocationOutcomeUnknown
 		return observation, observation.Validate(allocation)
 	}
@@ -597,6 +638,13 @@ func (d *Driver) Observe(ctx context.Context, allocation providerdesktop.Allocat
 }
 
 func (d *Driver) Attach(ctx context.Context, receipt providerdesktop.AllocationReceipt) (providerdesktop.Attachment, error) {
+	if d != nil && d.bound != nil {
+		return providerdesktop.Attachment{}, providerdesktop.ErrDesktopUnsupported
+	}
+	return d.attach(ctx, receipt)
+}
+
+func (d *Driver) attach(ctx context.Context, receipt providerdesktop.AllocationReceipt) (providerdesktop.Attachment, error) {
 	if err := contextError(ctx); err != nil {
 		return providerdesktop.Attachment{}, err
 	}
@@ -647,7 +695,7 @@ func (d *Driver) Attach(ctx context.Context, receipt providerdesktop.AllocationR
 	if !info.running || info.status != "running" || info.paused || info.restarting || info.dead {
 		return providerdesktop.Attachment{}, providerdesktop.ErrAllocationUnknown
 	}
-	descriptor, err := d.brokerDescriptor(operationCtx, state.BackendContainerID)
+	descriptor, err := d.brokerDescriptor(operationCtx, state.BackendContainerID, state.Network.Slot)
 	if err != nil {
 		return providerdesktop.Attachment{}, allocationUnknown(operationCtx, err)
 	}
@@ -666,6 +714,13 @@ func (d *Driver) Attach(ctx context.Context, receipt providerdesktop.AllocationR
 }
 
 func (d *Driver) Cleanup(ctx context.Context, receipt providerdesktop.AllocationReceipt) error {
+	if d != nil && d.bound != nil {
+		return providerdesktop.ErrDesktopUnsupported
+	}
+	return d.cleanup(ctx, receipt, false)
+}
+
+func (d *Driver) cleanup(ctx context.Context, receipt providerdesktop.AllocationReceipt, retainState bool) error {
 	if err := contextError(ctx); err != nil {
 		return err
 	}
@@ -691,6 +746,9 @@ func (d *Driver) Cleanup(ctx context.Context, receipt providerdesktop.Allocation
 	if !state.matchesReceipt(receipt) {
 		return providerdesktop.ErrDesktopConflict
 	}
+	if retainState && (!state.CleanupPending || state.CompletedBound == nil) {
+		return providerdesktop.ErrDesktopConflict
+	}
 	operationCtx, cancel := d.operationContext(ctx)
 	defer cancel()
 	info, found, err := d.inspectOwned(operationCtx, state)
@@ -707,6 +765,9 @@ func (d *Driver) Cleanup(ctx context.Context, receipt providerdesktop.Allocation
 	}
 	if err := d.network.Release(operationCtx, state.Network); err != nil {
 		return allocationUnknown(operationCtx, err)
+	}
+	if retainState {
+		return nil
 	}
 	if err := os.Remove(statePath); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
@@ -741,6 +802,12 @@ func (d *Driver) inspectOwned(ctx context.Context, state desktopState) (containe
 		return containerInfo{}, false, ErrOwnershipConflict
 	}
 	if validateContainerRuntime(info, d.createRequest(state), d.image) != nil {
+		return containerInfo{}, false, ErrOwnershipConflict
+	}
+	if d.candidate != nil && d.candidate.Version == desktopcandidate.CurrentVersion &&
+		(info.selectedManifestDigest != d.candidate.SelectedManifestDigest ||
+			info.selectedManifestMediaType != d.candidate.SelectedManifestMediaType ||
+			info.selectedManifestSize != d.candidate.SelectedManifestSize) {
 		return containerInfo{}, false, ErrOwnershipConflict
 	}
 	return info, true, nil
@@ -805,7 +872,7 @@ func (d *Driver) createRequest(state desktopState) createRequest {
 	labels[specDigestLabel] = state.SpecDigest
 	return createRequest{
 		name:  identity.WorkloadName(),
-		image: d.options.Image, user: DesktopUser, workingDirectory: "/workspace",
+		image: d.options.Image, user: desktopWorkloadUser(state.Network.Slot), workingDirectory: "/workspace",
 		memoryBytes: d.options.MemoryBytes, nanoCPUs: d.options.NanoCPUs, pidsLimit: d.options.PidsLimit,
 		inputsBytes: d.options.InputsBytes, tmpfsBytes: d.options.TmpfsBytes,
 		workspaceBytes: d.options.WorkspaceBytes, outputsBytes: d.options.OutputsBytes,
@@ -817,6 +884,10 @@ func (d *Driver) createRequest(state desktopState) createRequest {
 }
 
 func (d *Driver) specDigest(allocation providerdesktop.Allocation) (string, error) {
+	return d.specDigestForSlot(allocation, sandboxidentity.Slot{})
+}
+
+func (d *Driver) specDigestForSlot(allocation providerdesktop.Allocation, slot sandboxidentity.Slot) (string, error) {
 	runtimeAuthorityDigest := d.publication.Digest
 	if d.candidate != nil {
 		runtimeAuthorityDigest = d.candidate.ManifestDigest
@@ -842,7 +913,7 @@ func (d *Driver) specDigest(allocation providerdesktop.Allocation) (string, erro
 		RuntimeProfileID string
 		RuntimeAuthority string
 	}{
-		Allocation: allocation, Image: d.options.Image, User: DesktopUser,
+		Allocation: allocation, Image: d.options.Image, User: desktopWorkloadUser(slot),
 		MemoryBytes: d.options.MemoryBytes, NanoCPUs: d.options.NanoCPUs, PidsLimit: d.options.PidsLimit,
 		InputsBytes: d.options.InputsBytes, TmpfsBytes: d.options.TmpfsBytes,
 		WorkspaceBytes: d.options.WorkspaceBytes, OutputsBytes: d.options.OutputsBytes,
@@ -859,6 +930,13 @@ func (d *Driver) specDigest(allocation providerdesktop.Allocation) (string, erro
 	}
 	sum := sha256.Sum256(encoded)
 	return "sha256:" + hex.EncodeToString(sum[:]), nil
+}
+
+func desktopWorkloadUser(slot sandboxidentity.Slot) string {
+	if slot == (sandboxidentity.Slot{}) {
+		return DesktopUser
+	}
+	return fmt.Sprintf("%d:%d", slot.WorkloadUID, slot.WorkloadGID)
 }
 
 func (d *Driver) seccompPolicy() string {
@@ -923,8 +1001,8 @@ func (d *Driver) operationContext(parent context.Context) (context.Context, cont
 	return context.WithTimeout(parent, time.Duration(d.options.OperationTimeoutSeconds)*time.Second)
 }
 
-func (d *Driver) brokerDescriptor(ctx context.Context, containerID string) (desktopbroker.Descriptor, error) {
-	output, err := d.engine.describe(ctx, containerID)
+func (d *Driver) brokerDescriptor(ctx context.Context, containerID string, slot sandboxidentity.Slot) (desktopbroker.Descriptor, error) {
+	output, err := d.engine.describe(ctx, containerID, desktopWorkloadUser(slot))
 	if err != nil || len(output) == 0 || len(output) > maxBrokerExecBytes {
 		return desktopbroker.Descriptor{}, ErrInvalidRuntime
 	}

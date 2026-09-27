@@ -7,7 +7,7 @@ import (
 	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
 )
 
-func TestProviderContractSelectionDoesNotAliasDesktopToCodingShell(t *testing.T) {
+func TestProviderContractSelectionKeepsThreeInstancesDistinct(t *testing.T) {
 	for _, item := range []struct {
 		profile config.ProviderProcessProfile
 		name    string
@@ -15,7 +15,8 @@ func TestProviderContractSelectionDoesNotAliasDesktopToCodingShell(t *testing.T)
 	}{
 		{config.ProviderProcessCodingShellProfile, "provider-runtime", phase6security.ProductProviderContractEdgeID},
 		{config.ProviderProcessDesktopProfile, "provider-desktop-runtime", phase6security.ProductProviderDesktopContractEdgeID},
-		{"browser", "", ""},
+		{config.ProviderProcessBrowserProfile, "provider-browser-runtime", phase6security.ProductProviderBrowserContractEdgeID},
+		{"unknown", "", ""},
 	} {
 		name, edge := providerContractSelection(item.profile)
 		if name != item.name || edge != item.edge {

@@ -6,9 +6,13 @@ FROM ${BASE_IMAGE}@${BASE_IMAGE_DIGEST} AS prepared
 ARG PACKAGE_ARCHIVE_SET_SHA256
 ARG INSTALLED_SET_SHA256
 ARG APK_LOCK_SHA256
+ARG WORKLOAD_ACCOUNT_DIGEST
 
 COPY --chmod=0644 apks/ /tmp/apks/
 COPY --chmod=0644 SHA256SUMS /tmp/SHA256SUMS
+COPY --chmod=0644 workload-accounts.json /tmp/workload-accounts.json
+COPY --chmod=0644 workload.passwd /tmp/workload.passwd
+COPY --chmod=0644 workload.group /tmp/workload.group
 
 RUN cd /tmp/apks && \
     sha256sum -c /tmp/SHA256SUMS >/dev/null && \
@@ -25,6 +29,11 @@ COPY --chmod=0555 entrypoint.sh /usr/local/bin/desktop-runtime
 RUN mkdir -p /inputs /workspace /outputs /tmp && \
     addgroup -g 1000 -S desktop && \
     adduser -u 1000 -S -D -H -h /tmp/desktop-home -s /bin/sh -G desktop desktop && \
+    account_digest="$( (printf 'sandbox-runtime/desktop-workload-accounts/v1\000'; cat /tmp/workload-accounts.json) | sha256sum | cut -d' ' -f1)" && \
+    test "sha256:${account_digest}" = "${WORKLOAD_ACCOUNT_DIGEST}" && \
+    cat /tmp/workload.passwd >> /etc/passwd && \
+    cat /tmp/workload.group >> /etc/group && \
+    rm -f /tmp/workload-accounts.json /tmp/workload.passwd /tmp/workload.group && \
     chmod 0555 /inputs && \
     chmod 0770 /workspace /outputs && \
     chmod 1777 /tmp && \
@@ -56,6 +65,7 @@ ARG BASE_IMAGE_DIGEST
 ARG PACKAGE_ARCHIVE_SET_SHA256
 ARG INSTALLED_SET_SHA256
 ARG APK_LOCK_SHA256
+ARG WORKLOAD_ACCOUNT_DIGEST
 
 LABEL org.opencontainers.image.title="sandbox-runtime Desktop guest" \
       org.opencontainers.image.description="Provider-local Desktop guest; no public Gateway" \
@@ -68,6 +78,7 @@ LABEL org.opencontainers.image.title="sandbox-runtime Desktop guest" \
       io.github.shell-echo.sandbox-runtime.profile="sandbox-runtime-desktop-v1" \
       io.github.shell-echo.sandbox-runtime.candidate-classification="local-candidate-non-release" \
       io.github.shell-echo.sandbox-runtime.candidate-apk-lock-digest="sha256:${APK_LOCK_SHA256}" \
+      io.github.shell-echo.sandbox-runtime.workload-account-digest="${WORKLOAD_ACCOUNT_DIGEST}" \
       io.github.shell-echo.sandbox-runtime.desktop-broker-protocol="sandbox.runtime/desktop-broker/v1" \
       io.github.shell-echo.sandbox-runtime.desktop-broker-path="/usr/local/libexec/sandbox-runtime/desktop-broker" \
       io.github.shell-echo.sandbox-runtime.package-archive-set-digest="sha256:${PACKAGE_ARCHIVE_SET_SHA256}" \

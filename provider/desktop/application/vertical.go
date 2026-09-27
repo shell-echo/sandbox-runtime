@@ -166,6 +166,8 @@ func (a *Vertical) Recover(ctx context.Context) ([]Operation, error) {
 				if cleanupErr := a.runtime.Cleanup(ctx, record.Allocation.Receipt); cleanupErr != nil {
 					return result, cleanupErr
 				}
+			} else if err := a.retireUnallocated(ctx, record); err != nil {
+				return result, err
 			}
 			continue
 		}
@@ -224,6 +226,11 @@ func (a *Vertical) progressOpen(ctx context.Context, record desktop.Record, fres
 		return desktop.Record{}, desktop.ErrInvalidRequest
 	}
 	if record.Status == desktop.StatusSucceeded || record.Status == desktop.StatusFailed || record.Status == desktop.StatusCancelled {
+		if record.Allocation == nil && record.Status != desktop.StatusSucceeded {
+			if err := a.retireUnallocated(ctx, record); err != nil {
+				return desktop.Record{}, err
+			}
+		}
 		return record.Clone(), nil
 	}
 	if !record.Request.Deadline.After(now) || !record.Request.ExpiresAt.After(now) {
@@ -253,6 +260,10 @@ func (a *Vertical) progressOpen(ctx context.Context, record desktop.Record, fres
 	}
 	if record.Status == desktop.StatusRunning && record.Allocation != nil {
 		return record.Clone(), nil
+	}
+	if record.Allocation == nil && a.boundIdentityRuntime() &&
+		(record.Status == desktop.StatusRunning || record.Status == desktop.StatusOutcomeUnknown) {
+		return a.dispatchOpen(ctx, record)
 	}
 	if fresh && record.Status == desktop.StatusRunning {
 		return a.dispatchOpen(ctx, record)
@@ -393,8 +404,17 @@ func (a *Vertical) progressClose(ctx context.Context, record desktop.CloseRecord
 	if err := a.revoker.RevokeHandoff(ctx, source, a.monotonicNow(record.ObservedAt)); err != nil {
 		return a.finishClose(ctx, record, desktop.StatusOutcomeUnknown)
 	}
-	if err := a.runtime.Cleanup(ctx, record.Receipt); err != nil {
+	if err := a.cleanupClose(ctx, record); err != nil {
 		return a.finishClose(ctx, record, desktop.StatusOutcomeUnknown)
+	}
+	if checked, ok := a.runtime.(interface {
+		CompletedCloseRetirement(context.Context, desktop.CloseRecord) (bool, error)
+	}); ok {
+		completed, proofErr := checked.CompletedCloseRetirement(ctx, record)
+		if proofErr != nil || !completed {
+			return a.finishClose(ctx, record, desktop.StatusOutcomeUnknown)
+		}
+		return a.finishClose(ctx, record, desktop.StatusSucceeded)
 	}
 	allocation, err := a.allocationFor(ctx, source)
 	if err != nil {
@@ -417,6 +437,15 @@ func (a *Vertical) observeUnknownClose(ctx context.Context, record desktop.Close
 	allocation, allocationErr := a.allocationFor(ctx, source)
 	if revokeErr != nil || allocationErr != nil || !revoked {
 		return record.Clone(), nil
+	}
+	if checked, ok := a.runtime.(interface {
+		CompletedCloseRetirement(context.Context, desktop.CloseRecord) (bool, error)
+	}); ok {
+		completed, proofErr := checked.CompletedCloseRetirement(ctx, record)
+		if proofErr != nil || !completed {
+			return record.Clone(), nil
+		}
+		return a.finishClose(ctx, record, desktop.StatusSucceeded)
 	}
 	observation, observeErr := a.runtime.Observe(ctx, allocation)
 	if observeErr != nil || observation.Validate(allocation) != nil ||
@@ -575,7 +604,37 @@ func (a *Vertical) persistOpenStatus(ctx context.Context, record desktop.Record,
 	if err != nil {
 		return desktop.Record{}, err
 	}
+	if updated.Allocation == nil && (status == desktop.StatusFailed || status == desktop.StatusCancelled) {
+		if err := a.retireUnallocated(ctx, updated); err != nil {
+			return updated, err
+		}
+	}
 	return updated, nil
+}
+
+func (a *Vertical) boundIdentityRuntime() bool {
+	_, ok := a.runtime.(interface {
+		RetireUnallocated(context.Context, desktop.Record) error
+	})
+	return ok
+}
+
+func (a *Vertical) retireUnallocated(ctx context.Context, record desktop.Record) error {
+	if runtime, ok := a.runtime.(interface {
+		RetireUnallocated(context.Context, desktop.Record) error
+	}); ok {
+		return runtime.RetireUnallocated(ctx, record)
+	}
+	return nil
+}
+
+func (a *Vertical) cleanupClose(ctx context.Context, record desktop.CloseRecord) error {
+	if runtime, ok := a.runtime.(interface {
+		CleanupClose(context.Context, desktop.CloseRecord) error
+	}); ok {
+		return runtime.CleanupClose(ctx, record)
+	}
+	return a.runtime.Cleanup(ctx, record.Receipt)
 }
 
 func (a *Vertical) synchronizeAndReserve(ctx context.Context, request desktop.OpenRequest, now time.Time) (desktop.Reservation, error) {

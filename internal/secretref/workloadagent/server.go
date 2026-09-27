@@ -16,6 +16,7 @@ import (
 const maxAgentBindings = 512
 
 type ServerConfig struct {
+	DeploymentName    string
 	SocketPath        string
 	SocketUID         uint32
 	SocketGID         uint32
@@ -76,7 +77,8 @@ func Listen(config ServerConfig, provider secretref.SecretProvider) (*Server, er
 		}
 	}
 	for _, purpose := range config.AllowedPurposes {
-		if _, duplicate := server.allowed[purpose]; duplicate || !validPurpose(purpose) {
+		if _, duplicate := server.allowed[purpose]; duplicate || !validPurpose(purpose) ||
+			!secretref.DeploymentPurposeAllowed(config.DeploymentName, config.Role, purpose) {
 			return nil, secretref.ErrUnavailable
 		}
 		server.allowed[purpose] = struct{}{}
@@ -291,10 +293,13 @@ func statusForError(err error) string {
 func validPurpose(purpose secretref.Purpose) bool {
 	switch purpose {
 	case secretref.PurposeTLSCertificate, secretref.PurposeTLSPrivateKey, secretref.PurposeCABundle,
-		secretref.PurposePostgresMigrationDSN, secretref.PurposePostgresRuntimeDSN, secretref.PurposeIdentityKeyRing,
+		secretref.PurposePostgresMigrationDSN, secretref.PurposePostgresRuntimeDSN,
+		secretref.PurposeActionHistoryWitnessDSN, secretref.PurposeCapacityValkeyCredentials,
+		secretref.PurposeIdentityKeyRing,
 		secretref.PurposeAdmissionVerification, secretref.PurposeCoordinationEndpoint, secretref.PurposeCoordinationIdentity,
 		secretref.PurposeObjectStoreEndpoint, secretref.PurposeObjectStoreIdentity, secretref.PurposeKMSEndpoint,
 		secretref.PurposeKMSIdentity, secretref.PurposeWorkloadCredential, secretref.PurposeGatewayGrantKey,
+		secretref.PurposeBrowserTenantBindingKey,
 		secretref.PurposeGuestSigningKey, secretref.PurposeExecutorClientKey, secretref.PurposeExecutorBridgeKey:
 		return true
 	default:

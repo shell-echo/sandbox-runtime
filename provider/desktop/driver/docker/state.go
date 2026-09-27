@@ -10,13 +10,15 @@ import (
 	"path/filepath"
 	"regexp"
 
+	"github.com/shell-echo/sandbox-runtime/internal/sandboxidentity"
 	providerdesktop "github.com/shell-echo/sandbox-runtime/provider/desktop"
 )
 
 const (
-	desktopStateVersion  = 2
-	maxDesktopStateBytes = 64 << 10
-	connectionGeneration = 1
+	desktopStateVersion     = 2
+	desktopSlotStateVersion = 3
+	maxDesktopStateBytes    = 64 << 10
+	connectionGeneration    = 1
 )
 
 var backendIDPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
@@ -29,12 +31,23 @@ type desktopState struct {
 	Network            NetworkAttachment
 	SpecDigest         string
 	Ready              bool
+	CleanupPending     bool
+	CompletedBound     *desktopBoundCompletion
+}
+
+type desktopBoundCompletion struct {
+	Ticket  sandboxidentity.Reservation
+	Receipt providerdesktop.AllocationReceipt
 }
 
 func newDesktopState(allocation providerdesktop.Allocation, network NetworkAttachment, specDigest string) desktopState {
 	token := allocationToken(allocation.Request.SandboxID, allocation.Request.DesktopSessionID)
+	version := desktopStateVersion
+	if network.Slot.ID != "" {
+		version = desktopSlotStateVersion
+	}
 	return desktopState{
-		Version: desktopStateVersion, Request: allocation.Request,
+		Version: version, Request: allocation.Request,
 		Receipt: providerdesktop.AllocationReceipt{
 			Reference: "ref:desktop/" + token,
 			SandboxID: allocation.Request.SandboxID, DesktopSessionID: allocation.Request.DesktopSessionID,
@@ -49,13 +62,29 @@ func newDesktopState(allocation providerdesktop.Allocation, network NetworkAttac
 
 func (s desktopState) validate(networkPolicy string) error {
 	token := allocationToken(s.Request.SandboxID, s.Request.DesktopSessionID)
-	if s.Version != desktopStateVersion || s.Request.Validate(s.Receipt.AllocatedAt) != nil ||
+	if (s.Version != desktopStateVersion && s.Version != desktopSlotStateVersion) ||
+		(s.Version == desktopStateVersion && (s.Network.Slot != (sandboxidentity.Slot{}) || s.CleanupPending || s.CompletedBound != nil)) ||
+		(s.Version == desktopSlotStateVersion && s.Network.Slot.Validate() != nil) ||
+		s.Request.Validate(s.Receipt.AllocatedAt) != nil ||
 		s.Receipt.Validate() != nil || !s.Receipt.Matches(s.Request) ||
 		s.Receipt.Reference != "ref:desktop/"+token || s.Receipt.ConnectionGeneration != connectionGeneration ||
 		s.Network.validate(networkPolicy) != nil || !digestPattern.MatchString(s.SpecDigest) ||
 		(s.BackendContainerID != "" && !backendIDPattern.MatchString(s.BackendContainerID)) ||
 		(s.Ready && s.BackendContainerID == "") {
 		return ErrInvalidRuntime
+	}
+	if s.CompletedBound != nil {
+		completion := s.CompletedBound
+		if s.Version != desktopSlotStateVersion || !s.Ready ||
+			completion.Ticket.Status != sandboxidentity.Creating ||
+			completion.Ticket.Slot != s.Network.Slot || completion.Ticket.SpecDigest != s.SpecDigest ||
+			completion.Ticket.Claim.Validate() != nil ||
+			!digestPattern.MatchString(completion.Ticket.PlanDigest) ||
+			!desktopClaimMatchesAllocation(completion.Ticket.Claim,
+				providerdesktop.Allocation{Request: s.Request, AllocatedAt: s.Receipt.AllocatedAt}) ||
+			!sameReceipt(completion.Receipt, s.Receipt) {
+			return ErrInvalidRuntime
+		}
 	}
 	return nil
 }

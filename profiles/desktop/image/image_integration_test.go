@@ -4,11 +4,13 @@ package image
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -21,6 +23,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pion/rtp"
+	"github.com/pion/rtp/codecs"
 	"github.com/shell-echo/sandbox-runtime/internal/desktopbridge"
 	"github.com/shell-echo/sandbox-runtime/internal/desktopbroker"
 	"github.com/shell-echo/sandbox-runtime/internal/desktopmedia"
@@ -46,6 +50,7 @@ func TestDesktopImageNativeIntegration(t *testing.T) {
 	imageOne := "sandbox-runtime-desktop:integration-a-" + suffix
 	imageTwo := "sandbox-runtime-desktop:integration-b-" + suffix
 	containerName := "sandbox-runtime-desktop-integration-" + suffix
+	highUIDContainer := containerName + "-highuid"
 	bridgePublic, bridgePrivate, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatal(err)
@@ -58,15 +63,20 @@ func TestDesktopImageNativeIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	accountsPath := filepath.Join(mountRoot, "workload-accounts.json")
+	if err := os.WriteFile(accountsPath, []byte(`{"schema":"sandbox.runtime/desktop-phase6-workload-accounts/v1","accounts":[{"uid":20000,"gid":30000},{"uid":20001,"gid":30001}]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	t.Cleanup(func() {
 		cleanupContext, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cleanupCancel()
 		_ = exec.CommandContext(cleanupContext, "docker", "rm", "-f", containerName).Run()
+		_ = exec.CommandContext(cleanupContext, "docker", "rm", "-f", highUIDContainer).Run()
 		_ = exec.CommandContext(cleanupContext, "docker", "image", "rm", imageOne, imageTwo).Run()
 		_ = os.RemoveAll(mountRoot)
 	})
 	for _, image := range []string{imageOne, imageTwo} {
-		run(t, ctx, "./build-phase6-locked.sh", platform, image, "integration-test")
+		run(t, ctx, "./build-phase6-locked.sh", platform, image, "integration-test", accountsPath)
 	}
 
 	idOne := strings.TrimSpace(run(t, ctx, "docker", "image", "inspect", "--format", "{{.Id}}", imageOne))
@@ -135,6 +145,25 @@ func TestDesktopImageNativeIntegration(t *testing.T) {
 	}
 	runV2Session(t, ctx, containerName, bridgePrivate)
 	inspectContainerPolicy(t, ctx, containerName)
+
+	run(t, ctx, "docker", "run", "-d", "--name", highUIDContainer,
+		"--user", "20000:30000",
+		"-e", "SANDBOX_RUNTIME_DESKTOP_BRIDGE_PUBLIC_KEY="+base64.RawStdEncoding.EncodeToString(bridgePublic),
+		"-e", "SANDBOX_RUNTIME_DESKTOP_BRIDGE_KEY_ID=provider-desktop-v2",
+		"-e", desktopbroker.SessionProtocolEnv+"="+desktopbroker.SessionProtocolV2ID,
+		"--platform", platform, "--read-only", "--cap-drop=ALL", "--security-opt", "no-new-privileges:true",
+		"--network", "none", "--ipc", "private", "--memory", "512m", "--cpus", "1", "--pids-limit", "128",
+		"--tmpfs", "/tmp:rw,nosuid,nodev,size=256m,mode=1777,uid=20000,gid=30000",
+		"--tmpfs", "/workspace:rw,noexec,nosuid,nodev,size=256m,mode=0700,uid=20000,gid=30000",
+		"--tmpfs", "/outputs:rw,noexec,nosuid,nodev,size=128m,mode=0700,uid=20000,gid=30000",
+		imageOne)
+	waitForBroker(t, ctx, highUIDContainer)
+	identity := run(t, ctx, "docker", "exec", highUIDContainer, "/bin/sh", "-c",
+		"set -eu; test \"$(id -u)\" = 20000; test \"$(id -g)\" = 30000; grep -q '^desktop-slot-20000:x:20000:30000:' /etc/passwd; grep -q '^desktop-slot-30000:x:30000:' /etc/group; stat -c '%u:%g:%a' "+BrokerSocket)
+	if strings.TrimSpace(identity) != "20000:30000:600" {
+		t.Fatalf("high-UID broker socket identity = %q", identity)
+	}
+	runV2Session(t, ctx, highUIDContainer, bridgePrivate)
 }
 
 func runV2Session(t *testing.T, ctx context.Context, containerName string, privateKey ed25519.PrivateKey) {
@@ -183,9 +212,12 @@ func runV2Session(t *testing.T, ctx context.Context, containerName string, priva
 		t.Fatalf("invalid v2 broker acceptance: %s", line)
 	}
 	deadline := time.Now().Add(30 * time.Second)
+	var keyframe []byte
+	var frameTimestamp uint32
+	collecting := false
 	for {
 		if time.Now().After(deadline) {
-			t.Fatal("real Desktop broker did not produce v2 RTP")
+			t.Fatal("real Desktop broker did not produce a complete VP8 keyframe")
 		}
 		line, err = reader.ReadBytes('\n')
 		if err != nil {
@@ -194,11 +226,35 @@ func runV2Session(t *testing.T, ctx context.Context, containerName string, priva
 		var frame desktopbroker.SessionMessage
 		if desktopbroker.DecodeSession(line, &frame) == nil && frame.ValidateFor(desktopbroker.SessionProtocolV2ID) == nil && frame.Type == desktopbroker.SessionFrameType {
 			payload, decodeErr := base64.StdEncoding.DecodeString(frame.Payload)
-			if decodeErr == nil && len(payload) >= 12 && payload[0]>>6 == 2 {
-				break
+			if decodeErr != nil {
+				continue
+			}
+			var packet rtp.Packet
+			if packet.Unmarshal(payload) != nil {
+				continue
+			}
+			var vp8 codecs.VP8Packet
+			part, partErr := vp8.Unmarshal(packet.Payload)
+			if partErr != nil || len(part) == 0 {
+				continue
+			}
+			if vp8.S == 1 && vp8.PID == 0 {
+				collecting, frameTimestamp, keyframe = true, packet.Timestamp, keyframe[:0]
+			}
+			if !collecting || packet.Timestamp != frameTimestamp || len(keyframe)+len(part) > 8<<20 {
+				collecting = false
+				continue
+			}
+			keyframe = append(keyframe, part...)
+			if packet.Marker {
+				if len(keyframe) > 0 && keyframe[0]&1 == 0 {
+					break
+				}
+				collecting = false
 			}
 		}
 	}
+	decodeNativeVP8Keyframe(t, ctx, containerName, keyframe)
 	input := desktopmedia.Input{Sequence: 1, Kind: "pointer", Event: "move", X: 10, Y: 10, ControlLeaseID: "lease-image-1", ControlFence: 1}
 	inputCommand, err := desktopbroker.EncodeSession(desktopbroker.SessionCommand{Protocol: desktopbroker.SessionProtocolV2ID, Type: "input", RequestID: "input-1", Sequence: 1, Input: &input})
 	if err != nil {
@@ -260,6 +316,33 @@ func runV2Session(t *testing.T, ctx context.Context, containerName string, priva
 		if !errors.As(err, &exitError) {
 			t.Fatalf("desktop session helper exit: %v", err)
 		}
+	}
+}
+
+func decodeNativeVP8Keyframe(t *testing.T, ctx context.Context, containerName string, frame []byte) {
+	t.Helper()
+	if len(frame) == 0 || len(frame) > 8<<20 {
+		t.Fatal("invalid complete VP8 keyframe")
+	}
+	ivf := make([]byte, 32+12+len(frame))
+	copy(ivf[:4], "DKIF")
+	binary.LittleEndian.PutUint16(ivf[4:6], 0)
+	binary.LittleEndian.PutUint16(ivf[6:8], 32)
+	copy(ivf[8:12], "VP80")
+	binary.LittleEndian.PutUint16(ivf[12:14], 1280)
+	binary.LittleEndian.PutUint16(ivf[14:16], 720)
+	binary.LittleEndian.PutUint32(ivf[16:20], 30)
+	binary.LittleEndian.PutUint32(ivf[20:24], 1)
+	binary.LittleEndian.PutUint32(ivf[24:28], 1)
+	binary.LittleEndian.PutUint32(ivf[32:36], uint32(len(frame)))
+	copy(ivf[44:], frame)
+	command := exec.CommandContext(ctx, "docker", "exec", "-i", containerName, "/usr/bin/ffmpeg",
+		"-hide_banner", "-loglevel", "error", "-xerror", "-i", "pipe:0",
+		"-frames:v", "1", "-an", "-pix_fmt", "rgb24", "-f", "rawvideo", "-")
+	command.Stdin = bytes.NewReader(ivf)
+	decoded, err := command.Output()
+	if err != nil || len(decoded) != 1280*720*3 {
+		t.Fatalf("Desktop broker keyframe was not fully client-decodable: bytes=%d err=%v", len(decoded), err)
 	}
 }
 

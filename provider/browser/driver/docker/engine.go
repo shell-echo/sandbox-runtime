@@ -24,7 +24,7 @@ type engine interface {
 	inspect(context.Context, string) (containerInfo, error)
 	start(context.Context, string) error
 	remove(context.Context, string) error
-	attachRelay(context.Context, string) (relayConnection, error)
+	attachRelay(context.Context, string, string) (relayConnection, error)
 	close() error
 }
 
@@ -282,9 +282,9 @@ func (e *mobyEngine) remove(ctx context.Context, id string) error {
 	return err
 }
 
-func (e *mobyEngine) attachRelay(ctx context.Context, containerID string) (relayConnection, error) {
+func (e *mobyEngine) attachRelay(ctx context.Context, containerID, user string) (relayConnection, error) {
 	created, err := e.client.ExecCreate(ctx, containerID, client.ExecCreateOptions{
-		User: BrowserUser, Privileged: false, TTY: false,
+		User: user, Privileged: false, TTY: false,
 		AttachStdin: true, AttachStdout: true, AttachStderr: true,
 		WorkingDir: "/workspace",
 		Cmd:        []string{BrowserRelayPath, "STDIO", "TCP4:127.0.0.1:9222,connect-timeout=5"},

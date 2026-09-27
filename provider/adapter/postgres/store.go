@@ -144,6 +144,150 @@ WHERE singleton`, key, stored); err != nil {
 	return nil
 }
 
+// mutateStatePair locks the single Provider authority row while checking and
+// changing two documents. Browser handoff binding needs the current session
+// and sandbox fence to be checked in the same transaction as its reference
+// update; two separate repository calls would permit a stale bind race.
+func mutateStatePair[A, B any](ctx context.Context, store *Store,
+	firstKey, secondKey string, freshFirst func() A, importFirst func(*A, json.RawMessage) error, exportFirst func(A) any,
+	freshSecond func() B, importSecond func(*B, json.RawMessage) error, exportSecond func(B) any,
+	mutation func(*A, *B) error,
+) error {
+	if store == nil || store.pool == nil || ctx == nil || firstKey == "" || secondKey == "" || firstKey == secondKey || mutation == nil {
+		return ErrUnavailable
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	opCtx, cancel := context.WithTimeout(ctx, store.operationTimeout)
+	defer cancel()
+	tx, err := store.pool.BeginTx(opCtx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted, AccessMode: pgx.ReadWrite})
+	if err != nil {
+		return stateError(ctx, opCtx, err)
+	}
+	defer rollbackBounded(tx, store.operationTimeout)
+	var firstDocument, secondDocument []byte
+	if err := tx.QueryRow(opCtx, `SELECT documents->$1,documents->$2 FROM sandbox_runtime_provider.control_state WHERE singleton FOR UPDATE`, firstKey, secondKey).Scan(&firstDocument, &secondDocument); err != nil {
+		return stateError(ctx, opCtx, err)
+	}
+	first, second := freshFirst(), freshSecond()
+	firstDecoded, firstExists, err := decodeStoredDocument(firstDocument)
+	if err != nil {
+		return err
+	}
+	secondDecoded, secondExists, err := decodeStoredDocument(secondDocument)
+	if err != nil {
+		return err
+	}
+	if firstExists && importFirst(&first, firstDecoded) != nil || secondExists && importSecond(&second, secondDecoded) != nil {
+		return ErrCorrupt
+	}
+	if err := mutation(&first, &second); err != nil {
+		return err
+	}
+	firstStored, err := encodeStoredState(exportFirst(first))
+	if err != nil {
+		return err
+	}
+	secondStored, err := encodeStoredState(exportSecond(second))
+	if err != nil {
+		return err
+	}
+	if _, err := tx.Exec(opCtx, `UPDATE sandbox_runtime_provider.control_state
+SET documents=jsonb_set(jsonb_set(documents,ARRAY[$1]::text[],$3::jsonb,true),ARRAY[$2]::text[],$4::jsonb,true),revision=revision+1,updated_at=clock_timestamp()
+WHERE singleton`, firstKey, secondKey, firstStored, secondStored); err != nil {
+		return stateError(ctx, opCtx, err)
+	}
+	if err := tx.Commit(opCtx); err != nil {
+		return stateError(ctx, opCtx, err)
+	}
+	return nil
+}
+
+// mutateStateTriple composes the initialized identity marker, finite slot
+// state and Browser session authority under the same Provider row lock. No
+// runtime or Docker I/O is permitted inside this transaction.
+func mutateStateTriple[A, B, C any](ctx context.Context, store *Store,
+	firstKey, secondKey, thirdKey string,
+	freshFirst func() A, importFirst func(*A, json.RawMessage) error, exportFirst func(A) any,
+	freshSecond func() B, importSecond func(*B, json.RawMessage) error, exportSecond func(B) any,
+	freshThird func() C, importThird func(*C, json.RawMessage) error, exportThird func(C) any,
+	mutation func(*A, *B, *C) error,
+) error {
+	if store == nil || store.pool == nil || ctx == nil || firstKey == "" || secondKey == "" || thirdKey == "" ||
+		firstKey == secondKey || firstKey == thirdKey || secondKey == thirdKey || mutation == nil {
+		return ErrUnavailable
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	opCtx, cancel := context.WithTimeout(ctx, store.operationTimeout)
+	defer cancel()
+	tx, err := store.pool.BeginTx(opCtx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted, AccessMode: pgx.ReadWrite})
+	if err != nil {
+		return stateError(ctx, opCtx, err)
+	}
+	defer rollbackBounded(tx, store.operationTimeout)
+	var firstDocument, secondDocument, thirdDocument []byte
+	if err := tx.QueryRow(opCtx, `SELECT documents->$1,documents->$2,documents->$3 FROM sandbox_runtime_provider.control_state WHERE singleton FOR UPDATE`,
+		firstKey, secondKey, thirdKey).Scan(&firstDocument, &secondDocument, &thirdDocument); err != nil {
+		return stateError(ctx, opCtx, err)
+	}
+	first, second, third := freshFirst(), freshSecond(), freshThird()
+	for _, item := range []struct {
+		document []byte
+		imported func(json.RawMessage) error
+	}{
+		{firstDocument, func(value json.RawMessage) error { return importFirst(&first, value) }},
+		{secondDocument, func(value json.RawMessage) error { return importSecond(&second, value) }},
+		{thirdDocument, func(value json.RawMessage) error { return importThird(&third, value) }},
+	} {
+		decoded, exists, err := decodeStoredDocument(item.document)
+		if err != nil {
+			return err
+		}
+		if exists && item.imported(decoded) != nil {
+			return ErrCorrupt
+		}
+	}
+	if err := mutation(&first, &second, &third); err != nil {
+		return err
+	}
+	firstStored, err := encodeStoredState(exportFirst(first))
+	if err != nil {
+		return err
+	}
+	secondStored, err := encodeStoredState(exportSecond(second))
+	if err != nil {
+		return err
+	}
+	thirdStored, err := encodeStoredState(exportThird(third))
+	if err != nil {
+		return err
+	}
+	if _, err := tx.Exec(opCtx, `UPDATE sandbox_runtime_provider.control_state
+SET documents=jsonb_set(jsonb_set(jsonb_set(documents,ARRAY[$1]::text[],$4::jsonb,true),ARRAY[$2]::text[],$5::jsonb,true),ARRAY[$3]::text[],$6::jsonb,true),revision=revision+1,updated_at=clock_timestamp()
+WHERE singleton`, firstKey, secondKey, thirdKey, firstStored, secondStored, thirdStored); err != nil {
+		return stateError(ctx, opCtx, err)
+	}
+	if err := tx.Commit(opCtx); err != nil {
+		return stateError(ctx, opCtx, err)
+	}
+	return nil
+}
+
+func encodeStoredState(value any) ([]byte, error) {
+	encoded, err := json.Marshal(value)
+	if err != nil || len(encoded) > maxDocumentBytes {
+		return nil, ErrCorrupt
+	}
+	stored, err := json.Marshal(base64.StdEncoding.EncodeToString(encoded))
+	if err != nil || len(stored) > maxStoredDocumentBytes {
+		return nil, ErrCorrupt
+	}
+	return stored, nil
+}
+
 func decodeStoredDocument(document []byte) (json.RawMessage, bool, error) {
 	if len(document) == 0 || string(document) == "null" {
 		return nil, false, nil

@@ -60,18 +60,24 @@ manual publication workflow.
 
 On a clean committed source tree, build and record a candidate identity
 outside the repository with the matching toolchain and an optional preverified
-cache:
+cache. The third argument is a private mode-0600 canonical JSON file (one
+to 1000 strictly UID-sorted, distinct UID/GID pairs in 10000..60000); for
+example `{"schema":"sandbox.runtime/desktop-phase6-workload-accounts/v1","accounts":[{"uid":20000,"gid":30000}]}`.
+The list is an immutable image capability, not a Provider allocation grant:
 
 ```bash
 SANDBOX_RUNTIME_DESKTOP_APK_CACHE=/absolute/private/apk-cache \
   mise exec go@1.26.8 -- ./build-phase6-candidate.sh \
-  linux/arm64/v8 /absolute/private/desktop-phase6-candidate.json
+  linux/arm64/v8 /absolute/private/desktop-phase6-candidate.json \
+  /absolute/private/workload-accounts.json
 ```
 
 Without the cache, staging fetches only the lock's fixed HTTPS URLs, with no
 redirect, proxy, mirror, or dependency re-resolution, and fails closed if an
 archive is unavailable or differs. The candidate image carries distinct
-classification, APK-lock, archive-set, and installed-set labels; Provider
+classification, APK-lock, archive-set, installed-set, and workload-account
+digest labels; its v3 local manifest binds the canonical account list to the
+same source and OCI identity. Provider
 requires the matching mode-0600 candidate identity. It is neither a signed
 release nor multi-platform native qualification. The archived old
 `reproducible_outputs` values do not apply to this rebuilt candidate.
@@ -87,12 +93,14 @@ transport, public signaling, and end-user authorization are deliberately not
 part of this slice.
 
 The native smoke builds twice and requires identical image IDs. It runs the
-image as `1000:1000` with a read-only root filesystem, all capabilities
+historical-default image as `1000:1000` with a read-only root filesystem, all capabilities
 dropped, `no-new-privileges`, private IPC, no network, no device requests,
 finite CPU/memory/PID limits, exact mounts, and writable `/tmp` only. It probes
 the broker, validates its bounded descriptor, captures the native X root
 window with `xwd`, inspects the process and container policies, and removes all
-test resources:
+test resources. The Phase 6 candidate run additionally launches a second
+container as allowlisted `20000:30000` with owner-matched private tmpfs and
+checks effective identity, the broker socket, and real v2 VP8 media/input:
 
 ```bash
 SANDBOX_RUNTIME_DESKTOP_IMAGE_INTEGRATION=1 \

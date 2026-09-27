@@ -22,6 +22,7 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/shell-echo/sandbox-runtime/internal/desktophandoff"
+	"github.com/shell-echo/sandbox-runtime/internal/desktophandoffv2"
 	"github.com/shell-echo/sandbox-runtime/internal/desktopmedia"
 	"github.com/shell-echo/sandbox-runtime/internal/handoff"
 	"github.com/shell-echo/sandbox-runtime/internal/sessiontermination"
@@ -30,8 +31,9 @@ import (
 )
 
 const (
-	PrivateSubprotocol = desktopmedia.Subprotocol
-	ClosedSubprotocol  = desktophandoff.ProtocolID
+	PrivateSubprotocol    = desktopmedia.Subprotocol
+	ClosedSubprotocol     = desktophandoff.ProtocolID
+	ActivationSubprotocol = desktophandoffv2.ProtocolID
 
 	referenceHeader  = "X-Sandbox-Desktop-Reference"
 	sandboxHeader    = "X-Sandbox-ID"
@@ -115,21 +117,23 @@ type Options struct {
 	OperationTimeout          time.Duration
 	Clock                     Clock
 	AllowInsecureHTTPForTests bool
+	RequireActivationV2       bool
 }
 
 type Handler struct {
-	resolver         Resolver
-	media            MediaSource
-	boundMedia       BoundMediaSource
-	bindingRegistrar BindingRegistrar
-	peerAuthorizer   PeerAuthorizer
-	maxMessageBytes  int64
-	maxSessions      int
-	maxPerDesktop    int
-	authorityPoll    time.Duration
-	operationTimeout time.Duration
-	clock            Clock
-	insecureTests    bool
+	resolver          Resolver
+	media             MediaSource
+	boundMedia        BoundMediaSource
+	bindingRegistrar  BindingRegistrar
+	peerAuthorizer    PeerAuthorizer
+	maxMessageBytes   int64
+	maxSessions       int
+	maxPerDesktop     int
+	authorityPoll     time.Duration
+	operationTimeout  time.Duration
+	clock             Clock
+	insecureTests     bool
+	requireActivation bool
 
 	mu       sync.Mutex
 	active   int
@@ -169,19 +173,25 @@ func New(options Options) (*Handler, error) {
 		(!options.AllowInsecureHTTPForTests && nilDependency(options.PeerAuthorizer)) ||
 		messageLimit < 1024 || messageLimit > maxMessageBytes || maxSessions < 1 || maxSessions > 10000 ||
 		maxPerDesktop < 1 || maxPerDesktop > 64 || poll < 10*time.Millisecond || poll > 5*time.Second ||
-		operationTimeout < 100*time.Millisecond || operationTimeout > 30*time.Second {
+		operationTimeout < 100*time.Millisecond || operationTimeout > 30*time.Second ||
+		(options.RequireActivationV2 && (nilDependency(options.BoundMedia) || nilDependency(options.BindingRegistrar))) {
 		return nil, providerdesktop.ErrDesktopUnsupported
 	}
 	return &Handler{resolver: options.Resolver, media: options.Media, boundMedia: options.BoundMedia, bindingRegistrar: options.BindingRegistrar, peerAuthorizer: options.PeerAuthorizer, clock: clock,
 		maxMessageBytes: messageLimit, maxSessions: maxSessions, maxPerDesktop: maxPerDesktop,
 		authorityPoll: poll, operationTimeout: operationTimeout, insecureTests: options.AllowInsecureHTTPForTests,
-		sessions: make(map[string]int), replayed: make(map[string]time.Time)}, nil
+		requireActivation: options.RequireActivationV2,
+		sessions:          make(map[string]int), replayed: make(map[string]time.Time)}, nil
 }
 
 func (h *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Request) { //nolint:cyclop
 	writer.Header().Set("Cache-Control", "no-store")
 	if h == nil || request == nil || request.Method != http.MethodGet ||
-		(!h.insecureTests && request.TLS == nil) || (request.Header.Get("Sec-WebSocket-Protocol") != PrivateSubprotocol && request.Header.Get("Sec-WebSocket-Protocol") != ClosedSubprotocol) {
+		(!h.insecureTests && request.TLS == nil) || (request.Header.Get("Sec-WebSocket-Protocol") != PrivateSubprotocol && request.Header.Get("Sec-WebSocket-Protocol") != ClosedSubprotocol && request.Header.Get("Sec-WebSocket-Protocol") != ActivationSubprotocol) {
+		http.Error(writer, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		return
+	}
+	if h.requireActivation && request.Header.Get("Sec-WebSocket-Protocol") != ActivationSubprotocol {
 		http.Error(writer, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return
 	}
@@ -191,6 +201,10 @@ func (h *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	}
 	if request.Header.Get("Sec-WebSocket-Protocol") == ClosedSubprotocol {
 		h.serveClosed(writer, request)
+		return
+	}
+	if request.Header.Get("Sec-WebSocket-Protocol") == ActivationSubprotocol {
+		h.serveActivated(writer, request)
 		return
 	}
 	authority, ok := decodeAuthority(request)
@@ -298,13 +312,9 @@ func (h *Handler) serveClosed(writer http.ResponseWriter, request *http.Request)
 }
 
 func (h *Handler) resolveClosed(ctx context.Context, open desktophandoff.OpenRequest) (desktopreference.Endpoint, providerdesktop.Attachment, error) {
-	endpoint, err := h.resolver.Resolve(ctx, open.HandoffReference)
+	endpoint, err := h.resolveClosedEndpoint(ctx, open)
 	if err != nil {
-		return desktopreference.Endpoint{}, providerdesktop.Attachment{}, providerdesktop.ErrDesktopNotFound
-	}
-	handoffExpires, handoffErr := time.Parse(time.RFC3339Nano, open.HandoffExpiresAt)
-	if handoffErr != nil || endpoint.Binding == nil || *endpoint.Binding != open.Binding() || endpoint.Reference != open.HandoffReference || endpoint.ProviderRevisionID != open.ProviderRevisionID || endpoint.SandboxID != open.SandboxID || endpoint.DesktopSessionID != open.DesktopSessionID || endpoint.CapabilityProfileID != open.CapabilityProfileID || endpoint.ConnectionGeneration != open.ConnectionGeneration || endpoint.TenantBindingDigest != open.TenantBindingDigest || !endpoint.ExpiresAt.Equal(handoffExpires) || endpoint.AllocationReference == "" || endpoint.Attach == nil {
-		return desktopreference.Endpoint{}, providerdesktop.Attachment{}, providerdesktop.ErrDesktopNotFound
+		return desktopreference.Endpoint{}, providerdesktop.Attachment{}, err
 	}
 	attachment, err := endpoint.Attach(ctx)
 	if err != nil {
@@ -314,6 +324,18 @@ func (h *Handler) resolveClosed(ctx context.Context, open desktophandoff.OpenReq
 		return desktopreference.Endpoint{}, providerdesktop.Attachment{}, providerdesktop.ErrDesktopNotFound
 	}
 	return endpoint, attachment, nil
+}
+
+func (h *Handler) resolveClosedEndpoint(ctx context.Context, open desktophandoff.OpenRequest) (desktopreference.Endpoint, error) {
+	endpoint, err := h.resolver.Resolve(ctx, open.HandoffReference)
+	if err != nil {
+		return desktopreference.Endpoint{}, providerdesktop.ErrDesktopNotFound
+	}
+	handoffExpires, handoffErr := time.Parse(time.RFC3339Nano, open.HandoffExpiresAt)
+	if handoffErr != nil || endpoint.Binding == nil || *endpoint.Binding != open.Binding() || endpoint.Reference != open.HandoffReference || endpoint.ProviderRevisionID != open.ProviderRevisionID || endpoint.SandboxID != open.SandboxID || endpoint.DesktopSessionID != open.DesktopSessionID || endpoint.CapabilityProfileID != open.CapabilityProfileID || endpoint.ConnectionGeneration != open.ConnectionGeneration || endpoint.TenantBindingDigest != open.TenantBindingDigest || !endpoint.ExpiresAt.Equal(handoffExpires) || endpoint.AllocationReference == "" || endpoint.Attach == nil {
+		return desktopreference.Endpoint{}, providerdesktop.ErrDesktopNotFound
+	}
+	return endpoint, nil
 }
 
 func mustExpiry(value string) time.Time {

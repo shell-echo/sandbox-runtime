@@ -390,8 +390,9 @@ For the complete simultaneous Product target, Provider is one logical role
 implemented by three exact process profiles: coding-shell, Browser-only and
 Desktop-only. Each process has a distinct deployment, instance/principal
 digest, URI, UID/GID and TLS agent/socket. Product's Contract edge and
-Gateway's private handoff edge are instantiated separately for the matching
-Provider profile; only the Browser Provider may dial the Browser role and
+the matching private handoff path are instantiated separately for the matching
+Provider profile. Terminal and Desktop retain direct Gateway-to-Provider
+private edges; Browser does not. Only the Browser Provider may dial the Browser role and
 only the Desktop Provider may dial the Desktop role. The coding Provider
 cannot inherit either attach edge, and Browser/Desktop private routes cannot
 be relabeled as the Terminal private route. Guest-to-Product and each
@@ -403,6 +404,151 @@ evidence. Provider Browser-only production composition, Desktop v3
 composition, Product's private Guest receiver and per-instance data/material
 privileges must be real before the release gate; profile declarations alone
 do not advertise those capabilities.
+
+The Browser-only v3 composition must use its own PostgreSQL session/reference
+authority, Provider identity, admission audience and material permissions.
+The old Gateway-to-Browser-Provider `/private/browser` edge was an incomplete
+inventory entry, not a permissible bypass. Browser v3 replaces it with two
+mandatory, isolated trust edges: Gateway→`browser-action-ingress-runtime` at
+`/browser/action`, then that distinct principal→Browser Provider at
+`/private/browser`. The action ingress has its own UID/GID, URI identity, TLS
+agent, material permissions and lifecycle. It is the only Browser CDP write
+path, and the Browser Provider listener must reject the Gateway principal.
+The ingress uses caller-owned Redis/Valkey capacity authority and the
+independent PostgreSQL action-history witness, never Provider PostgreSQL or
+Docker. Its exact-member authority, CRL and network denial must be measured
+in the complete deployment before Browser v3 can start. On the authenticated private edge,
+an authorized request may establish an irreversible, transactionally checked
+tenant-digest binding on the current Browser handoff. Gateway mTLS alone does
+not authorize a tenant: the request must derive from the current caller-owned
+grant/session/fence, and Provider rechecks the current reference, allocation,
+generation, Provider revision, lease, revocation and expiry. Active streams
+must poll that authority and drain on loss. Browser executor admission must
+further bind its opaque capability to the actual Provider-selected CDP target;
+the legacy fixed `UpstreamURL` is not such a binding. These are named Slice 6
+gates, not consequences of the TLS profile's existence.
+The closed security profile declares `capacity-valkey` and
+`action-history-postgres` as distinct external identities from Product
+`postgres`. Gateway has only a capacity edge; action ingress has capacity
+and witness edges. Each also has its own one-to-one egress broker, policy-state
+authority, isolated internal network, fixed DNS/port/protocol target list,
+and external-uplink broker network. Direct role egress remains blocked.
+Each broker has its own DNS mTLS edge; the broker command refuses to start
+without that edge and its exact external DNS identity.
+The broker-to-external legs are explicit trust edges; a role-to-external edge
+records the logical application authorization, not a direct network path.
+The profile rejects missing, substituted or additional Browser external
+edges and target drift. Profile identities and separate DNS names do not
+prove independent storage, volume, backup or restore domains: the real gate
+must observe these and the witness's separate database role/schema, plus
+rollback detection and Redis/PostgreSQL outage cleanup. No runtime may gain
+DDL, truncate, delete, admin or witness auto-rebuild authority.
+This tightens ADR 0035's earlier runtime `INSERT` recommendation: Phase 6
+ingress receives only CONNECT, USAGE, SELECT and the exact
+`UPDATE(sequence, token, updated_at)` column grant. The one-shot provisioning
+identity alone receives initial-row INSERT; schema DDL remains with the
+migration owner. Existing runtime table/column grants and inherited role
+memberships must be explicitly revoked/audited on upgrade. The production
+runtime uses only `Verify`, while the library's `Provision` remains for the
+operator path and component tests. Column-scoped UPDATE plus adapter CAS
+conditions are not a claim that a compromised holder of the SQL credential
+cannot modify those granted columns.
+Before the Browser ingress becomes ready, its PostgreSQL pool must verify the
+actual current/session role, database, effective required grants, forbidden
+table/column/owner/DDL/role-membership privileges and escalation attributes.
+Each newly opened physical connection repeats that check in a pool
+`AfterConnect` hook before admission; the hook uses only that new connection,
+not a recursive pool acquire. An independent process-level monitor rechecks
+the live pool on one bounded interval. A failed, timed-out or stale result
+latches failure, stops new admission, cancels existing streams and closes the
+upstream/pools; revoking an unsafe grant cannot unlock a running process.
+Every Browser activation and CDP action checks the local observation's
+monotonic-time freshness before the unchanged Redis+witness authorization,
+without adding a PostgreSQL catalog query per CDP write. For poll interval P,
+one complete pool-wait/query timeout T, actual close budget C, fixed scheduling
+allowance J=1 second and profile drain bound D, admission requires
+`P+T+C+J < D`; local freshness expires after `P+T+J` from the last successful
+check's START time. There is no unbounded retry or last-good extension.
+This proves only bounded detection and drain for persistent ACL drift in a
+running local process, not an atomic lock against a grant/revoke between
+samples or a DBA mutation concurrent with an already authorized CDP write.
+The database owner/DBA remains an operator trust boundary; planned ACL changes
+require ingress isolation and drain first.
+The ingress's capacity and witness clients must use a fixed alias-only broker
+tunnel. The pgx resolver must return only the authorized hostname to its
+strict DialFunc, leaving DNS resolution to the broker; pgx fallback hosts,
+plaintext TLS modes and `PG*` environment defaults fail closed. Go-redis's
+custom Dialer does not add TLS itself, so its capacity adapter must perform
+the external TLS handshake over the broker tunnel and verify the profile-
+pinned external peer. These adapters are component code, not evidence that
+the production ingress command or container network uses them yet.
+Witness and capacity credentials reuse the existing secretref→role-owned
+material-agent→Vault KV lifecycle, but not a shared account. Two dedicated
+`KindSecret`/`SystemTenant` purposes are `action_history_witness_dsn` and
+`capacity_valkey_credentials`. Both belong to the existing logical Gateway
+role; the first is allowed only in the Browser action-ingress runtime/agent,
+while the second may be bound separately to action ingress and Gateway with
+different references, Valkey ACL users and passwords. Deployment, agent peer
+UID/GID, exact binding/version and Vault path ACL remain distinct authorities;
+the logical role alone never authorizes cross-agent reads. The witness secret
+is a strict single-target PostgreSQL URI, with actual host/port/database/user
+checked against the profile and separately reviewed least-privilege target.
+The Valkey secret is a closed, versioned JSON containing only protocol,
+username and password, never an endpoint, database, TLS mode or namespace.
+Neither source may install alternate host/fallback/dynamic credential hooks.
+Credential expiry, replacement, revocation or material-agent outage must
+fail closed and drain dependent pools; a one-time startup parse is not a
+lifetime authorization. Redis ACL and witness table privileges require a
+real external-service gate before any Slice 6 evidence claim.
+The ingress retains the ADR 0033 per-session execution gate: activation,
+old-stream close, exact-member/high-water check and each complete CDP write
+are serialized outside the Gateway. A Redis capacity claim, Product control
+fence, Provider generation and per-connection epoch have separate owners and
+must not be substituted for one another. Merely hashing the capacity claim
+into a Provider PostgreSQL connection record does not enforce action fencing.
+Gateway projects each consumed Product grant and committed Browser metadata
+into a closed, canonical `browser-action-ingress.v2` Open. That document
+contains the bearer-like capacity claim and is never logged or retained.
+Ingress checks its fixed Provider audience and exact subject, admits the claim
+through Redis plus the independent PostgreSQL witness, closes the previous
+actual upstream under the per-session gate, and only then derives the
+`browser-handoff.v2` Provider Open. The latter contains no raw claim, raw
+control lease or Product grant ID; exact mTLS identity plus existing authority
+and request digests suffice without a new application signing key. The
+Product public protocol `product-browser-automation.v1` maps explicitly to
+the Provider capability `browser-v1`; an unknown profile cannot inherit that
+mapping. The current Product operation uses the Product session ID as its
+Provider Browser runtime session ID, so grant consumption, ongoing authority
+and metadata selection reject drift rather than assuming the concepts are
+interchangeable. A still-live public connection may make bounded internal
+reconnect attempts, each with a distinct deterministic opaque Provider epoch
+derived from that attempt; an exact replay keeps its old epoch and cannot
+reopen a consumed executor reservation. Neither reconnect nor epoch issuance
+renews the grant, capacity claim, control lease, or absolute expiry.
+The private Gateway stream treats a CDP request without its exact response
+as an unknown write outcome on transport loss, including a nominally normal
+WebSocket close. That is terminal and cannot enter the ordinary reconnect
+branch. Only a confirmed idle or fully answered close may reconnect; explicit
+fence-loss and witness-unavailable close codes remain terminal. The ingress
+also bounds pending and active private sockets before WebSocket upgrade.
+The Browser tenant-binding HMAC key is a separate Product/Gateway-only
+`browser_tenant_binding_key` material purpose. No Provider, Browser role or
+executor principal may resolve it. Its exact version and stable caller scope
+must be fixed with the Product handoff metadata and survive Gateway restart;
+key rotation cannot silently change an already-bound reference. This secret
+does not authenticate a Product grant by itself and is never projected into a
+normal log, public evidence or Provider material registry.
+
+The Desktop private media bridge uses a distinct prepare/start transport v2
+for the v3 production candidate. Capacity and continuous authority checks
+begin at prepare, but no executor reader or encoder may start before Product
+has armed its WebRTC sender, recording sink and private demultiplexer. Start
+rechecks current Provider authority and binds the exact connection epoch,
+generation, fence and digests; its ACK precedes media forwarding. This fixes
+the observed 32-frame preconnection overflow without discarding frames,
+inflating buffers or weakening runtime fail-closed backpressure. Historical
+v1 streaming tests remain separately identified; a passing v1 test is not v2
+activation evidence.
 
 Only exact Product and Gateway public listener bindings use TLS 1.3
 server-authentication without a workload client certificate. Product user
@@ -518,6 +664,21 @@ DNS endpoint on the declared trust-edge port, never an operator-selected
 hostname that would invoke ambient DNS. DNS, policy or broker outage fails
 closed.
 
+The only internal `tls` trust edge permitted a numeric `TargetAddress` is the
+policy-selected role→dedicated egress broker edge. Its canonical private IPv4
+address and listener port must belong to the sole isolated role/broker shared
+network. The profile is the only address authority: the broker binds exactly
+that IP:port and the role dials exactly that IP:port. Wildcard, loopback,
+uplink, public, IPv6, network/broadcast, out-of-CIDR, extra shared-network or
+host-published listeners are forbidden. Numeric transport does not relax the
+TLS DNS SAN, SPIFFE URI, EKU, pinned anchors, peer CRL or principal checks.
+Product, Gateway and Browser action ingress use the same fixed-boundary
+client constructor. The Docker network probe checks actual interface ownership
+and non-listening loopback/uplink addresses; the strict network observation
+also binds the broker's declared target IP to its exact observed container ID.
+The real broker-command/mTLS gate
+must repeat these observations before Slice 6 evidence can be issued.
+
 Each egress policy has exactly one independent operator-owned authority
 process, controller principal, UID/GID, signing key, persistent CAS ledger
 and restricted Unix socket; no process signs another policy. A one-time
@@ -609,6 +770,44 @@ purpose, certificate timing/revocation policy and cleanup class. Missing,
 unknown or duplicate principals/edges, mutable images, extra ports, mounts,
 capabilities or networks fail validation.
 
+The Slice 6 internal image identity separates object kind from location;
+`ImageDigest` never silently changes meaning. `oci_manifest`/`oci_index`
+bind the raw descriptor bytes whether local or registry-hosted. A local
+candidate uses a full `sha256:<store descriptor>` launch reference with
+`--pull=never`; a registry image uses its real `repository@sha256:<descriptor>`
+reference. Both pin the selected platform and OCI config digest, and an index
+pins its selected platform-manifest digest. `local_config` is reserved for a
+separately proven classic-store config-addressable case, not the default
+candidate kind. Current Docker Desktop containerd inspection returns the
+top-level OCI index digest in both container `.Image` and image `.Id`, not the
+OCI config digest. Consequently the gate independently records runtime store
+ID, store descriptor, that container's `ImageManifestDescriptor`, OCI config
+digest, platform, and private raw-proof/archive digest; none is renamed into
+another. It verifies archive index → the container's actual selected platform
+manifest → config and layers using original bytes, cross-checks Docker image
+and container inspections including ordered rootfs diff IDs, and rejects
+missing selected-manifest evidence. OCI layout `index.json` can be a separate
+export wrapper; unknown/unknown attestation descriptors are retained but
+never selected as the running platform. Missing/unknown kinds, kind/reference
+confusion, wrong selected platform/config/layer, tag fallback and automatic
+`RepoDigests`-absence downgrade are denied.
+
+All repository-owned roles may use reviewed local-candidate images in the
+Slice 6 same-host gate, including Product, Gateway, all three Provider
+instances, Guest, Browser, Desktop, agents, controllers, brokers and relay.
+They must execute their real corresponding commands, not Alpine/nc probes.
+One byte-identical application image may serve multiple roles, but their
+containers, UID/GID, authority and config remain independent. Each candidate
+binds an immutable source commit/tree and exact build context, Dockerfile,
+toolchain, base, dependency lock, parameters, output store descriptor and
+separate OCI config digest. Retain
+a re-importable local image archive/OCI output with its digest and verify its
+config/rootfs input chain. Dirty-tree diagnostics are not immutable evidence.
+No candidate is pushed, published or labeled production; credentials and
+runtime configuration never enter it. An archive or candidate-document
+digest is not an OCI manifest digest. A native arm64 gate proves only arm64;
+a cross-build does not substitute for native runtime validation.
+
 The final immutable gate covers:
 
 - Product, Gateway, Provider, Guest, Browser and Desktop runtime roles;
@@ -646,6 +845,11 @@ media/broker timing changes.
   bootstrap. Slices 11 and 14 must replace or explicitly revalidate it in each
   deployment and independently administered environment.
 - Slice 7 owns SBOM, signature, provenance and publication for all images.
+  Its final production profile rejects `local_config` and non-release images.
+  It independently verifies the exact published artifacts, repeats every
+  security/behavior gate affected by image, entrypoint, base, dependency,
+  identity, network or config change, and checks the final complete inventory.
+  Candidate evidence is not made publishable by changing a digest label.
 - Slice 11 translates this frozen contract into Docker, Apple Container and
   Kubernetes profiles and validates platform ServiceAccount, NetworkPolicy,
   PodSecurity and user-namespace behavior. It may not weaken the contract.
@@ -653,3 +857,344 @@ media/broker timing changes.
   independently administered environment.
 - Slice 6 remains open and Phase 6 remains 5/15 until the real PKI, network,
   least-privilege, full-inventory and strict evidence gates all pass.
+### Desktop local candidate identity correction
+
+The historical Desktop Phase 6 candidate record v1 used Docker `image inspect`
+`.Id` for both `image_digest` and `config_digest`. On a containerd-backed Docker
+store `.Id` can identify an OCI index or manifest, not the OCI config. The v1
+record remains a historical reader/verifier only. Current local-candidate
+admission requires the closed v2 record plus its mode-0600 OCI archive sidecar.
+The producer observes a stopped, exact-digest container to bind the actual
+selected platform manifest, independently inspects the store descriptor, and
+verifies the raw index (when present), selected manifest, config and every
+selected layer/diff ID. The record keeps store descriptor kind/media type,
+selected manifest, true OCI config digest, source/build locks, archive digest
+and descriptor proof separate. The Provider current-candidate path rejects v1
+and rechecks the sidecar; container inspection rejects selected-manifest drift.
+No historical v1 evidence is rewritten or silently upgraded. The current
+candidate is not a published or signed release artifact, and affected real
+runtime/admission gates must be rerun before Slice 6 closure.
+For the locked `linux/arm64/v8` profile alone, an omitted ARM64 variant and
+explicit `v8` compare equal after parsing. This changes no raw descriptor
+bytes, digest or selected-manifest rule; duplicate canonical platform entries
+remain ambiguous and fail closed.
+
+### Desktop broker containment clarification (2026-09-27)
+
+The Desktop broker is the executable inside the real Desktop sandbox
+container, entered as `desktop-broker serve`; it is not another container,
+workload identity, UID/GID, network member, or independently isolated process.
+The previously drafted separate `desktop-broker` container principal is removed
+from the unpublished Slice 6 profile and evidence validators. A dummy broker
+container would be false evidence. The fixed required `desktop-broker` component
+instead names `desktop-sandbox-runtime` as parent and pins the executable
+digest, exact argv, Unix socket and broker/session protocols. The Desktop
+sandbox resource is controlled by `provider-desktop-runtime`, not the Desktop
+executor backend; Provider remains the allocation and Docker authority.
+
+The local gate must inspect the actual parent container and broker process:
+parent container/image identity, effective UID/GID, PID plus process start
+ticks to detect reuse, executable and argv, 0600 Unix socket, and a digest of
+the actual Provider-mux/session association. Its inherited read-only root,
+resources, network, seccomp, mounts and cleanup are validated through the
+parent. The broker may be PID 1; no separate broker PID or container is
+required. A same-container/same-UID replay file is not a defense against a
+compromised workload. No Provider private key, PostgreSQL/Vault credential or
+Docker socket may be transferred to this component. The complete gate must
+exercise Provider mux to the allocation-specific exec/session, broker,
+media/input, stop/replace/remove and exact cleanup. The component schema and
+unit fixtures are configuration validation only; they do not establish this
+runtime observation or close Slice 6. Phase 6 remains **5/15**.
+
+### Browser/Desktop candidate runtime identity dependency (2026-09-27)
+
+Both historical sandbox images and Docker adapters fixed `1000:1000`; this
+cannot substantiate the Slice 6 profile's distinct actual container UID/GID
+inventory. Higher numbers alone are not stronger isolation. For the Phase 6
+candidate/v3 path, the trusted security profile must bind a finite set of
+distinct numeric non-root identities to exact Browser/Desktop allocation
+slots and their Provider-owned durable state/spec digest. An allocation has
+one identity across create, broker exec/session, inspect, attach, restart and
+cleanup. Identity exhaustion, collision or missing restart binding fails
+closed. Public Provider DTOs, callers and sandbox requests cannot select it.
+The distinctness claim is only for the declared simultaneous local deployment
+set, not every UID on a host or a future cluster. The broker inherits the
+Desktop parent identity and does not consume a second slot.
+
+The Phase 5 signed images, locked `RequiredUID=1000` and historical Docker
+adapter paths remain unchanged. Phase 6 must explicitly separate image
+default USER from the effective runtime User, provide owner-matched private
+tmpfs and application directories without root startup, extra capabilities
+or writable business directories, and observe effective broker/Chromium
+process identities rather than trusting `Config.User` alone. Desktop X11,
+Openbox, VP8/input, replay ledger, and Browser Chromium/CDP/restricted egress
+must pass under the chosen identities. The current Desktop candidate at a
+high UID failed Openbox until a diagnostic passwd/group entry was added;
+therefore the existing candidate cannot be declared compatible by Docker
+User override alone. Any altered candidate image/build input needs new exact
+local evidence and affected gates. Slice 6 remains open at **5/15**.
+
+The static principal inventory is not a census of dynamic sandbox instances.
+Browser/Desktop sandboxes and their per-allocation restricted-egress gateways
+must be defined as closed workload/egress-gateway templates plus finite,
+deployment-owned `sandbox_identity_slots`: one distinct numeric UID/GID per
+actual independent container member and no more than one uncleared
+allocation per slot. Slots bind the exact Provider owner, template digest,
+controller, allocation/session, generation/fence and spec digest through a
+durable atomic reservation made before network or container creation. A
+matching retry recovers the same slot; uncertain creation or incomplete
+cleanup retains it. Configured controller capacity cannot exceed its assigned
+slots, with no silent clamp or reuse. The 1000 configured maximum is not a
+claim that 1000 containers were exercised. Static service principals retain
+their separate one-to-one observations; dynamic containers, network edges,
+effective identities and each Desktop broker process need per-allocation
+observations reconciled against both reservations and the run-owned Docker
+inventory. Browser sandbox allocation is controlled by
+`provider-browser-runtime`, not the Browser executor backend. The existing
+restricted-network provisioner creates one real gateway container per
+allocation; its historical shared `65532:65532` user is likewise not a
+Phase 6 isolation identity or an exception for a co-container process.
+
+The Phase 6 Desktop candidate image will use a canonical, bounded build-time
+allowlist of only the workload UID/GID accounts it supports. One immutable
+candidate may support several predeclared Desktop slots, including reuse by
+compatible deployment profiles, but an account in the image is not an
+allocation grant: the current trusted profile must authorize the exact pair
+and the Provider must reserve its slot. The allowlist digest precedes image
+construction; the image OCI identity and candidate evidence precede final
+profile binding, avoiding a profile/image digest cycle. No full UID-range
+account population, dynamic NSS, `LD_PRELOAD`, or mutable `/etc` is admitted.
+The standalone egress gateway has its own separate image/runtime identity.
+The passwd-entry diagnostic supports an account-lookup dependency, not a
+proven Openbox source-level root cause; full high-UID v2 media/input and
+cleanup evidence remains necessary.
+
+Browser and Desktop Provider are deliberately different fixed UID/GID
+principals. A single owner-private file-lock directory cannot be their shared
+production ledger, and the two processes must not receive cross-role writes
+or a new reservation broker merely to share slots. The trusted complete
+deployment plan statically proves that their finite owner pools (including
+both sandbox and gateway members) do not overlap. Each Provider receives only
+its exact owner/controller projection and transactionally manages that pool
+in its existing Provider PostgreSQL authority. Multiple processes of the
+same owner/controller share that authority. No hot slot transfer between
+owners or active profile revisions is supported. Initial ledger creation
+requires an explicit clean-authority/resource check; a later missing,
+corrupt or plan-drifted record is not an empty pool. Reserve commits before
+Docker side effects. Uncertain create/cleanup keeps the slot, and release
+requires a fenced cleanup state plus exact external absence observation
+before a final transaction frees it. Slow Docker calls must not hold the
+Provider-wide `control_state` row lock. The file-lock prototype was retired:
+its component test is not production cross-role evidence. The owner-local
+PostgreSQL adapter now binds the plan to the actual database and runtime role,
+requires an explicit new-authority initialization check, and retains unknown
+creates and incomplete cleanup transactionally. A disposable two-database,
+two-role PostgreSQL integration proves role isolation and restart retention,
+but its external-cleanliness callbacks are fixtures. No production driver yet
+consumes these reservations or proves exact Docker resource absence, and the
+real deployment's database grants and six-role gate remain unproved. Phase 6
+remains **5/15**.
+
+The owner-to-database/role/controller/material/target-edge binding belongs
+inside this same complete security profile, not an independent deployment
+authority. Browser and Desktop use distinct database names, runtime roles,
+material references and owner projections, even if the validated PostgreSQL
+physical service is shared. The profile binds the external service identity,
+Provider-to-PostgreSQL trust edge and external CA artifact; the connection
+must also prove that the resolved DSN and actual TLS server match them before
+pool creation, and that `current_database()`, `current_user` and
+`session_user` match after connection. A non-activated v3 Browser/Desktop pool helper selects
+its own profile-bound broker/agent and exact DSN, validates a fresh client
+certificate at each inner TLS handshake, and replaces pgx's dial, DNS and
+fallback paths before creating the pool. Each subsequent pool connection
+rechecks the actual database, current/session roles and minimal grants. The
+historical direct-dial opener
+remains for other schemas/profiles and is not a valid Browser/Desktop v3
+path. No other role's broker, exported private key or direct-dial fallback
+is authorized. Actual v3 startup refuses before any database dial until the
+separate PostgreSQL-client certificate purpose and slot driver are implemented.
+Server TLS validation alone is not mTLS, and native
+PostgreSQL `clientcert=verify-ca` plus SQL credentials is not by itself exact
+URI-SAN-to-SQL-role authorization. Those live connection/authentication gates
+remain open at **5/15**.
+
+The database-client authentication decision is a separate certificate purpose,
+not an exception to the existing role/broker workload certificate format.
+Each Browser/Desktop Provider receives a distinct PostgreSQL-only key and
+restricted TLS-agent instance using the existing Vault PKI, certificate
+controller, remote-signing, rotation and revocation machinery. The original
+role TLS agent and its empty-Subject URI-SAN certificate remain exclusive to
+Provider-to-broker and other established edges. The PostgreSQL certificate
+has a CN exactly equal to its profile-bound, globally unique SQL runtime role
+and an owner URI SAN, client-auth EKU and
+digital-signature use only; it has no other Subject fields or DNS/IP/email SAN.
+An explicit versioned private issuance purpose must independently validate
+CN, URI, owner, PostgreSQL service/database/role and issuer. Neither CSR
+caller nor DSN may select them, and ordinary workload certificates must never
+be accepted for database login. The agent keeps the private key; no PEM key,
+generic multi-certificate router or new long-running authentication proxy is
+authorized.
+
+The first implementation increment uses the separate private
+`sandbox-runtime.postgres-client-certificate.v1` signed request/response
+domain and a deterministic CN validator. The existing workload certificate
+v1 domain and empty-Subject rule remain unchanged. The controller also
+revalidates an issued certificate against the closed policy before recording
+it, revoking an invalid result. The still-unlocked complete security profile
+now has a separate `postgres_client_agents` inventory: two Provider-specific
+agent processes, issuer policies and Vault roles, keys, peer-bound Unix
+sockets, deterministic CNs and a dedicated client CA artifact. The ordinary
+`tls_agent_bindings` remain one-to-one and cannot be reused for this purpose.
+The certificate-controller command requires both extra policies/listeners,
+and each PostgreSQL agent command requires its versioned purpose and exact
+owner/database/role/CN/issuer binding. The Provider Browser/Desktop v3
+configuration and pool helper select the second signer, not the ordinary
+role signer; client certificate loading checks a fresh exact CN/URI/EKU,
+pinned issuer chain and live P-256 signing challenge at bootstrap and every
+handshake. These component checks do not constitute the required combined
+controller/agent/Vault/PostgreSQL HBA or rotation/revocation deployment gate; v3 startup
+remains closed before any database dial.
+
+The PostgreSQL server must use exact `hostssl` database/role/approved-ingress
+entries with SCRAM-SHA-256 plus `clientcert=verify-full clientname=CN`, a
+restricted PostgreSQL-client issuer and a final rejecting catch-all. The
+dedicated certificate CN must exactly equal the unique runtime SQL role;
+there is no `pg_ident` map. PostgreSQL 16 rejects `map` with SCRAM at HBA
+parse time, so the earlier mapped-CN proposal was infeasible and is superseded
+by this decision. The asserted chain is controller-enforced owner URI to
+dedicated role CN, then PostgreSQL CN and SCRAM credential to that same SQL
+role; PostgreSQL does not itself authorize the URI SAN. Wildcard accepting
+rules, `verify-ca` substitution and plaintext/no-certificate paths are
+prohibited. The complete profile must bind the PG agent, issuer, purpose,
+role CN and actual server-side HBA/CA artifacts, with real process evidence
+for issuance, rotation, revocation, cross-owner rejection and bounded existing
+connection drain. This decision does not change the locked Provider Contract
+or grant Slice 6 completion. Phase 6 remains **5/15**.
+
+The complete profile must carry one closed PostgreSQL service-level
+authentication policy referenced by both Provider database bindings. It binds
+the actual server identity, a controlled HBA artifact and raw-byte digest,
+the existing dedicated client-CA artifact/digest, all approved ordered rules,
+and the ingress CIDR PostgreSQL actually sees. There is one HBA per PostgreSQL
+instance, not one conflicting file per Provider owner. Other roles using that
+instance must be present in the complete rule inventory, or the narrower
+candidate gate scope must be explicit; `all`, `trust`, an undeclared include,
+an earlier permissive rule and an extra trusted client CA cannot silently
+extend authority. CIDR is a network restriction, not an owner identity:
+brokers may share a declared SNAT address, and their identity separation
+still depends on broker admission, certificate CN, SQL role/password and
+database grants.
+
+Existing Slice 6 observation/evidence must bind the actual PostgreSQL process
+and image, profile digest, read-only mounted HBA/CA raw bytes and their
+digests, complete ordered parsed rules, controlled startup or successful
+reload, and new positive/negative connections. `pg_hba_file_rules` reports the
+current file, not the HBA last loaded by PostgreSQL; its view is ordinarily
+superuser-only. Thus the view and `pg_reload_conf() = true` alone prove neither
+active rules nor successful enforcement. The controlled deployment gate, not
+the Provider runtime SQL role, performs this observation before v3 admission
+and again on controlled recovery. Provider keeps only its own profile, TLS,
+CRL, role and least-privilege checks; it gains no HBA-management or server-file
+read privilege. Even the component PostgreSQL gate starts with a restricted
+HBA whose source is independently checked against PostgreSQL's observed
+client address; no broad source-discovery HBA is part of the approved path.
+Continuous detection of
+subsequent privileged DBA or host mutation is not claimed without a separate
+mechanism. No additional signed deployment authority or long-running
+database-management process is introduced.
+
+The fixed Provider control-plane brokers are separate static deployments
+from the dynamic per-allocation restricted-egress gateways. Each Provider
+owner has exactly one dedicated broker, policy authority and `postgres`
+alias, with distinct UID/GID and role-internal network. The complete profile
+binds these identities and both the outer Provider-to-broker mTLS edge and
+the broker-to-PostgreSQL edge. The pool construction now statically enforces
+the alias-only path, but no live Provider/broker/PostgreSQL process gate has
+proved the deployed chain or server-side certificate requirement. Provider
+startup still fails closed after database/ledger checks because the Docker
+drivers do not yet consume reservations before their first side effect.
+
+The restricted-network Docker core now accepts an optional Provider-private
+slot on the Phase 6 candidate path. It uses the reserved gateway UID/GID as
+the actual container `User`, binds the complete slot in network/container
+ownership labels, reconstructs it only from canonical labels, and rejects
+missing/changed slot, legacy-user drift and mixed or noncanonical labels on
+inspect/replay. The historical zero-slot path remains unchanged. A real Docker
+component test observes the gateway process running at the assigned high
+UID/GID,
+exact replay, cross-slot denial and container/network absence after release.
+This does not yet authorize a slot by itself: the Provider runtime call chain
+must persist the trusted PostgreSQL reservation before calling the network
+core, and both Browser/Desktop workload and broker identities must follow it.
+Therefore this component does not lift the v3 startup refusal or Slice 6 gate.
+
+Sandbox's follow-up decision puts the reservation repository and state
+transitions in a thin Provider application coordinator, not in the Docker
+driver. The driver receives only the complete-plan digest, finite slot
+membership and exact allocation/claim/spec ticket; it never imports pgx or
+the PostgreSQL adapter. The coordinator commits Reserve, then only the unique
+winner of Reserved-to-Creating may issue the first network/container side
+effect. A saved Creating record is not a new execution permit. Unknown
+network, Docker or PostgreSQL CAS outcomes retain the slot and require
+dedicated reconciliation. Recovery enumerates PostgreSQL reservations first;
+local driver state is evidence, never a replacement empty-pool authority.
+Cleanup must enter Cleaning before stopping sessions, prove exact resource
+absence outside the row lock, then CAS CompleteCleanup; one 404 or deletion
+response is insufficient. Creating-to-Cleaning needs a separate proof that
+the former executor cannot still create late resources; it may not be
+inferred from elapsed time or one absence observation. Observe stays
+read-only, and all v3 attach/mux paths must use the same coordinator.
+
+The Browser Docker driver now has a private bound-mode constructor and pure
+per-slot spec digest projection. Its `AllocateBound` requires a matching
+Creating ticket before it can issue network/Docker work; stale local state
+rejects a replay rather than creating again. Bare legacy
+Allocate/Observe/Attach/Cleanup are closed on a bound driver, while
+ObserveBound/AttachBound require an exact Active ticket and recheck local
+state/spec/slot identity. The Browser workload container and CDP relay exec
+use the same high UID/GID, leaving the immutable image's default 1000:1000
+untouched. A real Docker component topology with a fixture ticket ran both
+Browser and egress gateway at disjoint high UID/GID pairs, attached CDP,
+rejected a Creating replay, and removed its exact resources. It did not use
+the PostgreSQL CAS or production cleanup coordinator, so v3 remains closed.
+
+The subsequent real PostgreSQL-to-Docker composition exposed a distinct
+post-cleanup replay gap: deleting the finite-slot reservation made the exact
+old claim eligible for a new Reserve, even though the Browser operation was
+retired. The correction does not create a parallel identity tombstone service
+or ban an entire sandbox generation. A production Browser-bound Provider
+repository atomically reads the existing Browser session authority, current
+sandbox fence and finite-slot state under the same PostgreSQL control row for
+Reserve and BeginCreate. It permits a first dispatch only for an exact,
+unallocated, non-cancelled Accepted operation; an already-Active retry is
+read-only and may recover a still-live Running or Succeeded session. During
+BeginCleanup it persists a monotonic full-claim retirement in that existing
+Browser session document before releasing the slot. CompleteCleanup rechecks
+that retirement and the exact Cleaning reservation in one transaction after
+independent Docker absence. Old claims cannot regain a UID after cleanup;
+another genuinely admitted session in the same sandbox/generation may.
+Missing or corrupt session evidence denies admission. The generic finite-slot
+repository remains an isolated state-machine component, not the production
+Browser admission port. The bound Docker driver still has no PostgreSQL
+authority.
+
+The same existing Browser retirement entry also records the exact Cleaning
+ticket and receipt and a monotonic `released` bit. CompleteCleanup sets that
+bit in the same transaction that removes the slot reservation, only after
+fresh exact Docker absence. A lost commit response or failed local tombstone
+finalization can therefore be distinguished from still-Cleaning and from an
+unproven missing reservation. A retry requires this exact released proof and
+finalizes only the old allocation's local binding; a new claim already using
+the UID is untouched. Missing proof or mismatched receipt remains Unknown.
+
+The tagged real PostgreSQL plus pinned Browser/gateway Docker component gate
+now crosses those atomic transitions, two independent PostgreSQL pools racing
+one exact allocation with only one Docker dispatch,
+actual high-UID Browser and gateway processes, CDP, exact cleanup, PostgreSQL
+restart with reconstructed Provider adapters, committed-cleanup response-loss
+recovery, retired claim rejection before Docker work, an old cleanup retry
+while a different authorized session uses the freed UID, and that new
+session's continued operation. It does not prove the
+complete v3 process graph, issuer/broker
+network path, Creating uncertainty recovery, all attach/drain races, or Slice
+6 readiness. Phase 6 remains **5/15**.

@@ -89,6 +89,25 @@ func (s *Store) RecordProviderObservation(ctx context.Context, work product.Prov
 	if s == nil || s.pool == nil || ctx == nil || eventID == "" {
 		return product.ErrInvalid
 	}
+	var browserSelection *BrowserHandoffBindingSelection
+	if s.browserBindingPreparer != nil && work.SessionID != "" &&
+		(work.SessionKind == product.SessionKindBrowserAutomation || work.SessionKind == product.SessionKindBrowserLive) &&
+		work.ProviderAction == "open_browser_session" && evidence.State == "succeeded" {
+		prepareCtx, stop := context.WithTimeout(ctx, s.operationTimeout)
+		selection, prepareErr := s.browserBindingPreparer.PrepareBrowserHandoffBinding(prepareCtx, work, evidence)
+		prepareContextErr := prepareCtx.Err()
+		stop()
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if prepareContextErr != nil {
+			return errors.Join(product.ErrStoreUnavailable, prepareContextErr)
+		}
+		if prepareErr != nil || selection.Validate() != nil {
+			return product.ErrStoreUnavailable
+		}
+		browserSelection = &selection
+	}
 	opCtx, cancel := context.WithTimeout(ctx, s.operationTimeout)
 	defer cancel()
 	tx, err := s.pool.BeginTx(opCtx, pgx.TxOptions{})
@@ -129,7 +148,7 @@ reconcile_lease_expires_at=NULL,updated_at=$5 WHERE tenant_id=$6 AND operation_i
 		return storeError(ctx, opCtx, err, false)
 	}
 	if work.SessionID != "" {
-		if err := recordSessionObservation(opCtx, tx, work, evidence, eventID, state, now); err != nil {
+		if err := recordSessionObservation(opCtx, tx, work, evidence, eventID, state, now, browserSelection); err != nil {
 			return storeError(ctx, opCtx, err, false)
 		}
 		if err := tx.Commit(opCtx); err != nil {
@@ -312,7 +331,7 @@ WHERE tenant_id=$2 AND workspace_id=$3 AND slot_key=$4
 	return err
 }
 
-func recordSessionObservation(ctx context.Context, tx pgx.Tx, work product.ProviderObservationWork, evidence product.ProviderOperationEvidence, eventID, state string, now time.Time) error {
+func recordSessionObservation(ctx context.Context, tx pgx.Tx, work product.ProviderObservationWork, evidence product.ProviderOperationEvidence, eventID, state string, now time.Time, browserSelection *BrowserHandoffBindingSelection) error {
 	productState, reconciliation := "running", "reconciling"
 	sessionState := "provisioning"
 	closingBrowser := work.ProviderAction == "terminate_browser_session"
@@ -348,8 +367,8 @@ func recordSessionObservation(ctx context.Context, tx pgx.Tx, work product.Provi
 	if current == "succeeded" || current == "failed" || current == "cancelled" {
 		return nil
 	}
-	var currentSessionState string
-	if err := tx.QueryRow(ctx, `SELECT state FROM sandbox_runtime_product.runtime_sessions WHERE tenant_id=$1 AND session_id=$2 FOR UPDATE`, work.TenantID, work.SessionID).Scan(&currentSessionState); err != nil {
+	var currentSessionState, previousHandoff string
+	if err := tx.QueryRow(ctx, `SELECT state,COALESCE(provider_handoff_reference,'') FROM sandbox_runtime_product.runtime_sessions WHERE tenant_id=$1 AND session_id=$2 FOR UPDATE`, work.TenantID, work.SessionID).Scan(&currentSessionState, &previousHandoff); err != nil {
 		return err
 	}
 	if work.OperationType == "create_session" && currentSessionState != "requested" && currentSessionState != "provisioning" {
@@ -371,6 +390,39 @@ func recordSessionObservation(ctx context.Context, tx pgx.Tx, work product.Provi
 	if state == "succeeded" && work.OperationType == "create_session" &&
 		(evidence.HandoffReference == "" || evidence.ConnectionGeneration < 1 || evidence.HandoffExpiresAt.IsZero()) {
 		return product.ErrStoreUnavailable
+	}
+	if browserSelection != nil {
+		selection := *browserSelection
+		if selection.Input.TenantID != work.TenantID || selection.ProductSessionID != work.SessionID ||
+			selection.Input.BrowserSessionID != work.SessionID ||
+			selection.Input.ProviderRevisionID != work.ProviderRevisionID ||
+			selection.Input.SandboxID != work.SandboxID ||
+			selection.Input.CapabilityProfileID != "browser-v1" ||
+			selection.Input.HandoffReference != evidence.HandoffReference ||
+			selection.Input.ConnectionGeneration != evidence.ConnectionGeneration ||
+			!selection.HandoffExpiresAt.Equal(evidence.HandoffExpiresAt) ||
+			!selection.HandoffExpiresAt.After(now) {
+			return product.ErrControlStale
+		}
+		var revision, sandbox string
+		if err := tx.QueryRow(ctx, `SELECT provider_revision_id,sandbox_id FROM sandbox_runtime_product.provider_bindings
+WHERE tenant_id=$1 AND workspace_id=$2 AND slot_key=$3 AND slot_generation=$4 AND current FOR UPDATE`,
+			work.TenantID, work.WorkspaceID, work.SlotKey, work.SlotGeneration).Scan(&revision, &sandbox); err != nil {
+			return err
+		}
+		if revision != selection.Input.ProviderRevisionID || sandbox != selection.Input.SandboxID {
+			return product.ErrControlStale
+		}
+		if err := insertBrowserHandoffMetadata(ctx, tx, selection, now); err != nil {
+			return err
+		}
+		if previousHandoff != "" && previousHandoff != evidence.HandoffReference {
+			if _, err := tx.Exec(ctx, `UPDATE sandbox_runtime_product.connection_grants
+SET state='revoked' WHERE tenant_id=$1 AND session_id=$2 AND state IN('issued','consumed')`,
+				work.TenantID, work.SessionID); err != nil {
+				return err
+			}
+		}
 	}
 	if _, err := tx.Exec(ctx, `UPDATE sandbox_runtime_product.runtime_sessions SET state=$1,version=version+1,
 provider_handoff_reference=CASE WHEN $2='' THEN provider_handoff_reference ELSE $2 END,

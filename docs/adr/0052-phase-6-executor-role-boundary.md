@@ -6,9 +6,12 @@
 ## Decision
 
 The Provider remains the sole owner of Browser and Desktop handoff authority.
-It owns the PostgreSQL session/reference truth, tenant binding digest,
-generation/fence/expiry/revocation/recovery state, and the concrete runtime
-resolver and attach/cleanup implementation. The public locked Provider
+It owns the PostgreSQL session/reference truth, the persisted opaque tenant
+binding and Provider-local generation/fence/expiry/revocation/recovery state,
+and the concrete runtime resolver and attach/cleanup implementation. Product
+retains business grant, control-lease fence, tenant and end-user authority;
+the Gateway capacity adapter retains its own action-fence claim and high-water
+authority. These values are not interchangeable. The public locked Provider
 Contract listener and the Provider-private handoff listener remain separate
 from the executor protocol.
 
@@ -25,6 +28,135 @@ expiry, media/codec profile, Provider revision, and connection epoch. Provider
 rechecks this authority on resolve, attach, reconnect, close, revoke,
 recovery, and cleanup. Executors cannot extend expiry, change tenant binding,
 or mutate session truth.
+
+The Browser-only Provider remains a separate production-v3 process from the
+coding and Desktop Providers. Its session and reference documents must use the
+Provider PostgreSQL authority; the older Browser file registries and static
+executor TLS are not a production fallback. On the authenticated independent
+action-ingress→Provider private edge, the Provider may atomically bind one previously unbound Browser
+handoff reference to a caller-derived tenant digest after exact resource,
+session, Provider revision, generation, fence and expiry checks. The same
+binding is idempotent, while another digest, stale authority, revocation or
+expiry is rejected. Binding is never a substitute for Gateway's actual
+tenant/grant authorization. The Browser role/backend may not read that
+PostgreSQL state or obtain Docker authority.
+
+Browser production uses an explicit closed `browser-handoff.v2`, not a silent
+extension or fallback to v1, a static CDP URL, or header-only attach. The
+authenticated private edge admits only the exact action-ingress principal,
+instance, audience, route and Browser Provider profile. Product/Gateway must
+atomically consume a one-use grant and verify the committed tenant, actor,
+session, slot/generation/profile, active control lease, revocation and expiry
+before deriving a scoped stable tenant/resource digest. A Redis capacity claim
+is not a grant or control lease; it remains opaque and is interpreted only by
+the caller-owned capacity authority. Connection epoch, authority expiry and
+request digest are separately bound and cannot be folded into the stable
+tenant digest. The Provider verifies the delegated caller and exact local
+resource/connection tuple, not the caller's end-user eligibility algorithm.
+This boundary does not claim resistance to a compromised authorized Gateway.
+
+`browser-handoff.v2` adds a new tenant/resource digest definition; v1 fixed
+only a `sha256:v1:` syntax and is not retroactively assigned this algorithm.
+The v2 value is `hmac-sha256:v2:` followed by lowercase HMAC-SHA-256 hex.
+The caller-only key is a dedicated, random 32-byte
+`browser_tenant_binding_key` secret, distinct from TLS, admission, tickets,
+recording and Desktop bridge keys. The HMAC input is the ASCII domain
+`sandbox-runtime/browser-handoff-tenant-binding/v2`, one NUL byte, then
+compact `encoding/json.Marshal` of a closed ordered struct containing exactly
+`caller_authority_scope`, `provider_instance_audience`, `tenant_id`,
+`sandbox_id`, `browser_session_id`, `provider_revision_id`,
+`capability_profile_id`, `connection_generation`, `handoff_reference`.
+Identifiers are validated as bounded ASCII without normalization; generation
+is a positive bounded integer. These fields come from committed Product
+binding and validated stable caller/Provider configuration, never an end-user
+supplied payload. One-use grant ID, raw/digested Redis claim, expiry,
+connection epoch and control lease/fence are excluded. Thus an exact handoff
+keeps its digest across reconnects, while a new reference, Provider revision,
+generation or audience has a new digest. The HMAC is privacy-preserving
+consistency evidence, not a Product grant attestation.
+
+Product binding metadata must atomically fix caller scope and key version at
+first selection. The role material registry resolves only that exact version;
+rotation affects new handoffs, not active bindings. Loss or revocation of an
+active key fails closed and requires affected handoffs to be revoked and
+recreated, never guessed with a new active key or downgraded to plain SHA-256.
+Provider and executors receive neither key nor tenant plaintext: they validate
+the v2 format and match the first durable reference binding. The locked
+Provider Contract is unchanged.
+
+The Product persistence shape is an additive, immutable row per exact
+`(tenant_id, product_session_id, provider_instance_audience,
+handoff_reference)`. It holds the nine-field derivation projection, exact
+secret binding ID, reference, purpose, role, version and canonical binding
+digest alongside the derived tenant digest, not key bytes, tickets or Redis
+claims. PostgreSQL rejects updates to an established metadata row; only a
+new exact handoff can select a new key. The existing `runtime_sessions`
+handoff pointer remains the sole current selector; an old metadata row is
+never itself an active authorization.
+The first selection and a newly observed handoff should commit in the same
+Product transaction under the existing session/slot/Provider binding locks.
+Independent Gateway replicas must agree on the entire immutable row or reject
+a conflict; they never overwrite it with their locally active key. A grant
+must retain this exact row identity when issued and refuse consumption after
+the current handoff changes. Historical grants without that binding are not
+silently upgraded in the v3 path. Cleanup may remove a row only after its
+handoff, grants, connections and replay window are all inactive; missing
+metadata for an established handoff is a failure, not permission to reselect
+a key. This is Product caller metadata, not a second Provider session truth.
+
+The Desktop private transport needs an explicit v2 prepare/start boundary.
+The v1 `accepted` response remains a historical streaming protocol, never a
+production v3 fallback. A v2 `prepared` response reserves capacity and
+validates the current authority without opening the executor media reader.
+Product sends one start bound to the exact handoff, generation, connection
+epoch, fence and authority/request digests only after the public WebRTC sender
+and private demultiplexer are armed, recording is ready, and authority remains
+valid. Provider rechecks the same authority before opening media, then sends
+`started` before forwarding packets. Prepare-to-start consumes the original
+connection and first-media deadlines; expiry, cancellation, missing start or
+broker loss close and release the reservation. Runtime queue overflow after
+activation remains fail-closed. The implemented v2 path remains a component
+candidate until a decodable first frame and failure matrix pass the real
+Product PostgreSQL/WebRTC and Docker gates. The current internal first-frame
+signal measures the first successful RTP write, not a client-decoded display
+frame; the latter requires separate real-media evidence.
+
+ADR 0033's unique, separately scheduled Browser CDP action ingress remains
+mandatory. The Gateway's raw capacity claim travels only on that protected
+private path. The ingress serializes activation, closure of a replaced old
+stream, exact-member/high-water verification and each *complete* CDP write
+under one execution gate. The Provider private attach and typed Docker mux are
+downstream of that ingress; they cannot be exposed as a Gateway-to-CDP bypass.
+Provider PostgreSQL connection evidence and periodic handoff re-resolution
+cannot replace per-action capacity verification or its restart-retained
+high-water witness. Product grant revocation/control-lease loss and capacity
+member/witness failure are separate fail-closed gates.
+
+A static CDP upstream is not an allocation binding. Browser production attach
+must select the current Provider-owned allocation behind one opaque reference,
+verify it against the durable handoff and Docker runtime state, and only then
+relay CDP frames. Different sessions or tenants must never share a fixed
+prestarted Chromium merely because the backend capacity is one. This requires
+a typed Provider-owned runtime bridge with bounded socket/cleanup semantics;
+it cannot expose arbitrary URL or command selection to the Browser backend.
+The previous static-upstream Browser backend is component compatibility
+evidence only, not a passing full-system gate.
+One-use Browser executor request IDs and request digests are committed to the
+Provider reference record under the same PostgreSQL sandbox-authority check
+before Docker attach. The local mux/backend caches are bounded defense in
+depth, not restart-retained authority. A successful claim is consumed even if
+the subsequent attach fails; retry requires a fresh, newly authorized request.
+This replay ledger never contains the caller's raw Redis capacity claim and
+does not replace the independent per-action ingress high-water check.
+The Browser allocation mux is a Provider-owned Unix socket under the exact
+`/run/browser-mux` directory. The canonical profile binds one Provider writer
+mount, one read-only Browser backend consumer mount, a distinct-UID Unix peer
+edge and the Provider's Unix listener; no Gateway or ingress process may mount
+it. Operator-provisioned mode 0710 directory ownership is Provider UID plus
+backend GID, and the mode 0666 socket is reachable only through that
+directory. The mux still validates the backend peer UID and one-use executor
+capability before resolving Docker state. Profile declarations alone do not
+prove the mount or filesystem policy was enforced in a process gate.
 
 Production Desktop uses `sandbox-runtime.executor.v2` only. The earlier v1
 executor path is retired from production and may remain only in compatibility
@@ -120,6 +252,16 @@ identity. Production and local-candidate configuration select exactly one of
 these paths according to the closed deployment level; missing, unknown,
 crossed, label-drifted, or digest-drifted identities fail closed. Image labels
 never choose or downgrade the validation rule.
+
+For current local-candidate admission the generated identity is v2, accompanied
+by a private, digest-bound OCI archive sidecar. It separates the Docker store
+descriptor, container-selected platform manifest and true OCI config digest;
+raw index/manifest/config/layer bytes and ordered diff IDs are verified. The
+historical v1 identity remains readable only for historical evidence and is
+not automatically admitted or upgraded. A local tag or Docker `.Id` is not a
+config digest or a substitute for the selected-manifest chain. Omitted ARM64
+variant is compared as baseline v8 only for this repository's locked
+`linux/arm64/v8` profile; descriptor bytes and hashes are never normalized.
 
 During Slice 4 development the evolving candidate package manifest had
 temporarily replaced the production adapter's verification input. That was a

@@ -107,6 +107,55 @@ func testHandshake(server, client *tls.Config) (error, error) {
 	return serverError, clientError
 }
 
+func TestClientCertificateValidatesFreshSignerForEveryRequest(t *testing.T) {
+	issuer := newTestIssuer(t)
+	_, identity := testIdentities()
+	valid := issueTestLeaf(t, issuer, identity, 601)
+	wrong := issueTestLeaf(t, issuer, Identity{URI: testServerURI,
+		Usages: []string{"client_auth"}, MaxTTL: time.Hour}, 602)
+	current := valid
+	loads := 0
+	certificate, err := NewClientCertificate(context.Background(), issuer.roots, identity,
+		func(context.Context) (tls.Certificate, error) { loads++; return current, nil }, time.Now)
+	if err != nil || loads != 1 {
+		t.Fatalf("bootstrap certificate = %v, loads=%d", err, loads)
+	}
+	if _, err := certificate(nil); err == nil {
+		t.Fatal("missing TLS request accepted")
+	}
+	serverIssuer := newTestIssuer(t)
+	serverIdentity, _ := testIdentities()
+	server := &tls.Config{MinVersion: tls.VersionTLS13, Certificates: []tls.Certificate{
+		issueTestLeaf(t, serverIssuer, serverIdentity, 603)},
+		ClientAuth: tls.RequireAndVerifyClientCert, ClientCAs: issuer.roots}
+	client := &tls.Config{MinVersion: tls.VersionTLS13, RootCAs: serverIssuer.roots,
+		ServerName: testServerDNS, GetClientCertificate: certificate}
+	serverErr, clientErr := testHandshake(server, client)
+	if serverErr != nil || clientErr != nil || loads != 2 {
+		t.Fatalf("fresh valid certificate = server=%v, client=%v, loads=%d", serverErr, clientErr, loads)
+	}
+	current = wrong
+	_, clientErr = testHandshake(server, client)
+	if clientErr == nil || loads != 3 {
+		t.Fatalf("drifted certificate accepted or not reloaded: %v, loads=%d", clientErr, loads)
+	}
+}
+
+func TestClientCertificateRespectsCanceledStartup(t *testing.T) {
+	issuer := newTestIssuer(t)
+	_, identity := testIdentities()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	called := false
+	if _, err := NewClientCertificate(ctx, issuer.roots, identity,
+		func(context.Context) (tls.Certificate, error) {
+			called = true
+			return tls.Certificate{}, nil
+		}, time.Now); err == nil || called {
+		t.Fatalf("canceled startup used signer: error=%v called=%t", err, called)
+	}
+}
+
 func TestLiveMutualTLSRotatesAndFailsClosed(t *testing.T) {
 	serverIssuer := newTestIssuer(t)
 	clientIssuer := newTestIssuer(t)

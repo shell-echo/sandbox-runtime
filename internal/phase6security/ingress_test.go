@@ -52,8 +52,8 @@ func TestIngressBoundaryAcceptsClosedProfile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("edges: %v", err)
 	}
-	if err := validateTrustAnchors(profile.TrustAnchors, profile.TrustEdges, profile.PublicListeners,
-		profile.CertificateController, principals, external); err != nil {
+	if err := validateTrustAnchorsWithPostgres(profile.TrustAnchors, profile.TrustEdges, profile.PublicListeners,
+		profile.CertificateController, profile.PostgresClientAgents, principals, external); err != nil {
 		t.Fatalf("anchors: %v", err)
 	}
 	if err := validateEgress(profile.EgressPolicies, principals, edges); err != nil {
@@ -62,7 +62,12 @@ func TestIngressBoundaryAcceptsClosedProfile(t *testing.T) {
 	if err := validateCertificateControllerAuthority(profile.CertificateController, principals, edges); err != nil {
 		t.Fatalf("controller: %v", err)
 	}
-	if err := validateTLSAgentBindings(profile.TLSAgentBindings, profile.EgressPolicies, profile.CertificateController, principals, edges); err != nil {
+	if err := validatePostgresClientAgents(profile.PostgresClientAgents, profile.ProviderDatabases, profile.TLSAgentBindings, profile.EgressPolicies,
+		profile.CertificateController, profile.TrustAnchors, principals, edges); err != nil {
+		t.Fatalf("PostgreSQL agents: %v", err)
+	}
+	if err := validateTLSAgentBindingsWithPostgres(profile.TLSAgentBindings, profile.PostgresClientAgents,
+		profile.EgressPolicies, profile.CertificateController, principals, edges); err != nil {
 		t.Fatalf("agents: %v", err)
 	}
 	if profile.ProfileDigest != profile.Digest() {

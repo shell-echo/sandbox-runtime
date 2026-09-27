@@ -15,6 +15,7 @@ import (
 
 	"github.com/moby/moby/client"
 
+	"github.com/shell-echo/sandbox-runtime/internal/browsercdp"
 	browserimage "github.com/shell-echo/sandbox-runtime/profiles/browser/image"
 )
 
@@ -81,7 +82,7 @@ func TestBrowserRelayTransportIntegration(t *testing.T) {
 	driver := &Driver{engine: backend}
 	var path string
 	for {
-		path, err = driver.browserWebSocketPath(ctx, id)
+		path, err = driver.browserWebSocketPath(ctx, id, BrowserUser)
 		if err == nil {
 			break
 		}
@@ -89,7 +90,7 @@ func TestBrowserRelayTransportIntegration(t *testing.T) {
 			t.Fatalf("private CDP did not become ready: %v", err)
 		}
 	}
-	connection, reader, err := driver.attachWebSocket(ctx, id, path)
+	connection, reader, err := driver.attachWebSocket(ctx, id, path, BrowserUser)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,6 +109,23 @@ func TestBrowserRelayTransportIntegration(t *testing.T) {
 	}
 	if err := json.Unmarshal(response, &message); err != nil || message.ID != 1 || message.Result.Product != "Chrome/151.0.7922.109" {
 		t.Fatalf("CDP response = %s, %v", response, err)
+	}
+	// The Provider mux uses this bounded translation over the same real
+	// Docker exec/WebSocket transport. Exercise it against the pinned image,
+	// not merely a synthetic RFC 6455 peer.
+	cdp, err := browsercdp.New(stream)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cdp.Write(ctx, []byte(`{"id":2,"method":"Browser.getVersion"}`)); err != nil {
+		t.Fatal(err)
+	}
+	translated, err := cdp.Read(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(translated, &message); err != nil || message.ID != 2 || message.Result.Product != "Chrome/151.0.7922.109" {
+		t.Fatalf("translated CDP response = %s, %v", translated, err)
 	}
 }
 

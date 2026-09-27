@@ -103,7 +103,7 @@ func TestDesktopMuxRealCandidateExecutorChain(t *testing.T) { //nolint:cyclop
 		t.Skip("set " + desktopMuxIntegrationEnv + "=1 to run the real Desktop mux chain")
 	}
 	candidatePath := os.Getenv(desktopMuxCandidateManifestEnv)
-	candidate, err := desktopcandidate.Load(candidatePath)
+	candidate, err := desktopcandidate.LoadCurrent(candidatePath)
 	if err != nil || candidate.VerifySource("../../../..") != nil {
 		t.Fatalf("load current Desktop candidate: %v", err)
 	}
@@ -130,7 +130,7 @@ func TestDesktopMuxRealCandidateExecutorChain(t *testing.T) { //nolint:cyclop
 		t.Fatal(err)
 	}
 	options := Options{Image: candidate.ImageDigest, PullPolicy: PullNever, MemoryBytes: 1 << 30, NanoCPUs: 1_000_000_000, PidsLimit: 256, InputsBytes: 16 << 20, TmpfsBytes: 256 << 20, WorkspaceBytes: 256 << 20, OutputsBytes: 128 << 20, OperationTimeoutSeconds: 30, ProvenanceTimeoutSeconds: 30, PullTimeoutSeconds: 30, StopTimeoutSeconds: 10, DataRoot: stateRoot, CandidateManifestPath: filepath.Join(imageRoot, desktopimage.LocalCandidateManifestPath), Namespace: "desktop-mux-" + suffix, ControllerID: "controller-" + suffix, NetworkPolicyReference: "desktop-egress-policy-1", MaxSessionsPerSandbox: 1, MaxSessionsPerController: 4, Clock: ClockFunc(func() time.Time { return time.Now().UTC() }), BridgeKeyID: "provider-desktop-v2", BridgePublicKey: publicKey}
-	driver, err := NewLocalCandidate(ctx, options, candidate, realMuxNetwork{name: networkName})
+	driver, err := NewLocalCandidate(ctx, options, candidate, realMuxNetwork{name: networkName}, candidatePath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -216,6 +216,8 @@ func TestDesktopMuxRealCandidateExecutorChain(t *testing.T) { //nolint:cyclop
 		}
 	}
 	_ = session.Close()
+	runRealPrivateV2Bridge(t, ctx, remote, mediaAuthority, attachment, receipt,
+		containerName(allocation.Request.SandboxID, allocation.Request.DesktopSessionID))
 	readyContext, cancelReady := context.WithTimeout(ctx, 30*time.Second)
 	if err := backend.Ready(readyContext); err != nil {
 		cancelReady()

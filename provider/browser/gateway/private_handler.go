@@ -36,8 +36,10 @@ type Options struct {
 	Resolver                  Resolver
 	PeerAuthorizer            PeerAuthorizer
 	BindingAuthorizer         BindingAuthorizer
+	BindingStore              reference.BindingStore
 	MaxMessageBytes           int64
 	OperationTimeout          time.Duration
+	AuthorityPollInterval     time.Duration
 	AllowInsecureHTTPForTests bool
 }
 
@@ -45,14 +47,22 @@ type Handler struct {
 	resolver      Resolver
 	peer          PeerAuthorizer
 	binding       BindingAuthorizer
+	bindingStore  reference.BindingStore
 	maxBytes      int64
 	operation     time.Duration
+	authorityPoll time.Duration
 	insecureTests bool
 	replayMu      sync.Mutex
 	replayed      map[string]time.Time
 }
 
 func New(options Options) (*Handler, error) {
+	// browser-handoff.v1 cannot bind a verified per-connection epoch, control
+	// fence or mandatory request digest. Keep it only for historical component
+	// tests; Browser Provider v3 must compose an explicit v2 handler.
+	if !options.AllowInsecureHTTPForTests {
+		return nil, ErrInvalidOptions
+	}
 	maxBytes := options.MaxMessageBytes
 	if maxBytes == 0 {
 		maxBytes = 64 << 10
@@ -61,13 +71,19 @@ func New(options Options) (*Handler, error) {
 	if operation == 0 {
 		operation = 5 * time.Second
 	}
+	poll := options.AuthorityPollInterval
+	if poll == 0 {
+		poll = time.Second
+	}
 	if options.Resolver == nil || options.BindingAuthorizer == nil ||
+		(!options.AllowInsecureHTTPForTests && options.BindingStore == nil) ||
 		(!options.AllowInsecureHTTPForTests && options.PeerAuthorizer == nil) ||
-		maxBytes < 1024 || maxBytes > 256<<10 || operation < 100*time.Millisecond || operation > 30*time.Second {
+		maxBytes < 1024 || maxBytes > 256<<10 || operation < 100*time.Millisecond || operation > 30*time.Second ||
+		poll < 10*time.Millisecond || poll > 5*time.Second {
 		return nil, ErrInvalidOptions
 	}
-	return &Handler{resolver: options.Resolver, peer: options.PeerAuthorizer, binding: options.BindingAuthorizer,
-		maxBytes: maxBytes, operation: operation, insecureTests: options.AllowInsecureHTTPForTests,
+	return &Handler{resolver: options.Resolver, peer: options.PeerAuthorizer, binding: options.BindingAuthorizer, bindingStore: options.BindingStore,
+		maxBytes: maxBytes, operation: operation, authorityPoll: poll, insecureTests: options.AllowInsecureHTTPForTests,
 		replayed: make(map[string]time.Time)}, nil
 }
 
@@ -101,6 +117,19 @@ func (h *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 		h.writeReject(connection, request.Context(), open.RequestID, "unauthorized")
 		return
 	}
+	if h.bindingStore != nil {
+		expires, _ := time.Parse(time.RFC3339Nano, open.ExpiresAt)
+		binding := reference.Binding{Version: 1, Reference: open.HandoffReference, TenantBindingDigest: open.TenantBindingDigest,
+			SandboxID: open.SandboxID, BrowserSessionID: open.BrowserSessionID, CapabilityProfileID: open.CapabilityProfileID,
+			ConnectionGeneration: open.ConnectionGeneration, ExpiresAt: expires}
+		bindContext, cancel := context.WithTimeout(request.Context(), h.operation)
+		err := h.bindingStore.Bind(bindContext, binding, time.Now().UTC())
+		cancel()
+		if err != nil {
+			h.writeReject(connection, request.Context(), open.RequestID, "unavailable")
+			return
+		}
+	}
 	resolveContext, cancel := context.WithTimeout(request.Context(), h.operation)
 	endpoint, err := h.resolver.Resolve(resolveContext, open.HandoffReference)
 	cancel()
@@ -126,6 +155,11 @@ func (h *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	}
 	bridgeCtx, cancelBridge := context.WithDeadline(request.Context(), expires)
 	defer cancelBridge()
+	monitorDone := make(chan struct{})
+	go func() {
+		defer close(monitorDone)
+		h.monitorAuthority(bridgeCtx, cancelBridge, endpoint)
+	}()
 	results := make(chan error, 2)
 	go func() { results <- copyWebSocketToBrowser(bridgeCtx, connection, stream, h.maxBytes) }()
 	go func() { results <- copyBrowserToWebSocket(bridgeCtx, stream, connection, h.maxBytes) }()
@@ -133,6 +167,29 @@ func (h *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	cancelBridge()
 	_ = stream.Close()
 	<-results
+	<-monitorDone
+}
+
+func (h *Handler) monitorAuthority(ctx context.Context, cancel context.CancelFunc, initial reference.Endpoint) {
+	ticker := time.NewTicker(h.authorityPoll)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			probeCtx, stop := context.WithTimeout(ctx, h.operation)
+			current, err := h.resolver.Resolve(probeCtx, initial.Reference)
+			stop()
+			if err != nil || current.Reference != initial.Reference || current.SandboxID != initial.SandboxID ||
+				current.BrowserSessionID != initial.BrowserSessionID || current.CapabilityProfileID != initial.CapabilityProfileID ||
+				current.ConnectionGeneration != initial.ConnectionGeneration || !current.ExpiresAt.Equal(initial.ExpiresAt) ||
+				current.TenantBindingDigest != initial.TenantBindingDigest {
+				cancel()
+				return
+			}
+		}
+	}
 }
 
 func (h *Handler) writeReject(connection *websocket.Conn, ctx context.Context, requestID, code string) {

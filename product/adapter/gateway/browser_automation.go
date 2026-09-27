@@ -8,6 +8,7 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/shell-echo/sandbox-runtime/gateway"
+	"github.com/shell-echo/sandbox-runtime/internal/browserhandoffv2"
 	"github.com/shell-echo/sandbox-runtime/product"
 )
 
@@ -25,6 +26,7 @@ const (
 type BrowserAutomationOptions struct {
 	Grants                   product.ConnectionGrantStore
 	FencedResolver           gateway.FencedReferenceResolver
+	FencedResolverForBinding func(product.GatewayBinding) (gateway.FencedReferenceResolver, error)
 	Audit                    AuditStore
 	OriginPatterns           []string
 	MaxMessageBytes          int64
@@ -44,6 +46,7 @@ type BrowserAutomationOptions struct {
 type BrowserAutomationHandler struct {
 	grants           product.ConnectionGrantStore
 	fencedResolver   gateway.FencedReferenceResolver
+	fencedForBinding func(product.GatewayBinding) (gateway.FencedReferenceResolver, error)
 	audit            AuditStore
 	originPatterns   []string
 	maxMessageBytes  int64
@@ -78,7 +81,8 @@ func NewBrowserAutomationHandler(options BrowserAutomationOptions) (*BrowserAuto
 	if maxPerSession == 0 {
 		maxPerSession = 1
 	}
-	if nilInterface(options.Grants) || nilInterface(options.FencedResolver) || nilInterface(options.Audit) || nilInterface(options.Capacity) ||
+	if nilInterface(options.Grants) || (nilInterface(options.FencedResolver) == (options.FencedResolverForBinding == nil)) ||
+		nilInterface(options.Audit) || nilInterface(options.Capacity) ||
 		messageLimit < 1 || messageLimit > maxAutomationMessageSize || pendingLimit < 1 || pendingLimit > maxPendingActions ||
 		poll < 10*time.Millisecond || poll > 5*time.Second || maxConnections < 1 || maxConnections > gateway.MaxConnectionCapacity ||
 		maxPerSession != 1 || len(options.OriginPatterns) > 32 {
@@ -90,7 +94,8 @@ func NewBrowserAutomationHandler(options BrowserAutomationOptions) (*BrowserAuto
 		}
 	}
 	return &BrowserAutomationHandler{
-		grants: options.Grants, fencedResolver: options.FencedResolver, audit: options.Audit,
+		grants: options.Grants, fencedResolver: options.FencedResolver,
+		fencedForBinding: options.FencedResolverForBinding, audit: options.Audit,
 		originPatterns: append([]string(nil), options.OriginPatterns...), maxMessageBytes: messageLimit,
 		maxPending: pendingLimit, pollInterval: poll, maxReconnects: options.MaxReconnects,
 		reconnectBackoff: options.ReconnectBackoff, capacity: options.Capacity,
@@ -123,6 +128,14 @@ func (h *BrowserAutomationHandler) ServeHTTP(writer http.ResponseWriter, request
 		http.Error(writer, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 		return
 	}
+	resolver := h.fencedResolver
+	if h.fencedForBinding != nil {
+		resolver, err = h.fencedForBinding(binding)
+		if err != nil || nilInterface(resolver) {
+			http.Error(writer, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
+			return
+		}
+	}
 
 	connection, err := websocket.Accept(writer, request, &websocket.AcceptOptions{
 		Subprotocols:    []string{BrowserAutomationSubprotocol},
@@ -141,7 +154,7 @@ func (h *BrowserAutomationHandler) ServeHTTP(writer http.ResponseWriter, request
 	requestBinding, grant := browserGatewayValues(binding)
 	proxy, err := gateway.New(gateway.Options{
 		Authorizer:               &oneShotAuthorizer{grant: grant},
-		FencedResolver:           h.fencedResolver,
+		FencedResolver:           resolver,
 		RequireDownstreamFencing: true,
 		Revocations:              &authoritySource{store: h.grants, binding: binding, pollInterval: h.pollInterval},
 		Recorder:                 &bindingRecorder{store: h.audit, binding: binding},
@@ -159,7 +172,7 @@ func browserGatewayValues(binding product.GatewayBinding) (gateway.ConnectReques
 	expires := minTime(binding.ExpiresAt, binding.HandoffExpiresAt)
 	request := gateway.ConnectRequest{
 		CallerID: binding.Actor.ID, TenantID: binding.TenantID, SandboxID: binding.SandboxID,
-		BrowserSessionID: binding.SessionID, CapabilityProfileID: binding.ProtocolProfile,
+		BrowserSessionID: binding.SessionID, CapabilityProfileID: browserhandoffv2.CapabilityProfileID,
 		HandoffReference: binding.HandoffReference,
 	}
 	grant := gateway.Grant{

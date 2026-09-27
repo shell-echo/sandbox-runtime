@@ -17,6 +17,7 @@ type State struct {
 	Idempotency      map[string]IdempotencyRecord
 	CloseIdempotency map[string]IdempotencyRecord
 	Authorities      map[string]desktop.SandboxAuthority
+	Retirements      map[string]IdentityRetirement
 }
 
 type IdempotencyRecord struct {
@@ -33,6 +34,7 @@ type PersistedState struct {
 	Idempotency      []IdempotencyRecord        `json:"idempotency"`
 	CloseIdempotency []IdempotencyRecord        `json:"close_idempotency,omitempty"`
 	Authorities      []desktop.SandboxAuthority `json:"authorities"`
+	Retirements      []IdentityRetirement       `json:"retirements,omitempty"`
 }
 
 func NewState() State {
@@ -40,6 +42,7 @@ func NewState() State {
 		Sessions: make(map[string]desktop.Record), Closes: make(map[string]desktop.CloseRecord),
 		Idempotency: make(map[string]IdempotencyRecord), CloseIdempotency: make(map[string]IdempotencyRecord),
 		Authorities: make(map[string]desktop.SandboxAuthority),
+		Retirements: make(map[string]IdentityRetirement),
 	}
 }
 
@@ -58,6 +61,9 @@ func (s *State) ensureMaps() {
 	}
 	if s.Authorities == nil {
 		s.Authorities = make(map[string]desktop.SandboxAuthority)
+	}
+	if s.Retirements == nil {
+		s.Retirements = make(map[string]IdentityRetirement)
 	}
 }
 
@@ -488,6 +494,9 @@ func (s State) Export() PersistedState {
 	for _, authority := range s.Authorities {
 		result.Authorities = append(result.Authorities, authority.Clone())
 	}
+	for _, retirement := range s.Retirements {
+		result.Retirements = append(result.Retirements, retirement)
+	}
 	sort.Slice(result.Sessions, func(i, j int) bool {
 		return result.Sessions[i].Request.OperationID < result.Sessions[j].Request.OperationID
 	})
@@ -497,6 +506,9 @@ func (s State) Export() PersistedState {
 	sort.Slice(result.Idempotency, func(i, j int) bool { return result.Idempotency[i].Scope < result.Idempotency[j].Scope })
 	sort.Slice(result.CloseIdempotency, func(i, j int) bool { return result.CloseIdempotency[i].Scope < result.CloseIdempotency[j].Scope })
 	sort.Slice(result.Authorities, func(i, j int) bool { return result.Authorities[i].SandboxID < result.Authorities[j].SandboxID })
+	sort.Slice(result.Retirements, func(i, j int) bool {
+		return result.Retirements[i].Ticket.Claim.OperationID < result.Retirements[j].Ticket.Claim.OperationID
+	})
 	return result
 }
 
@@ -580,6 +592,16 @@ func (s *State) Import(snapshot PersistedState) error {
 		if _, exists := loaded.CloseIdempotency[closeIdempotencyScope(record.Request)]; !exists {
 			return fmt.Errorf("%w: close missing idempotency record", ErrCorrupt)
 		}
+	}
+	for _, retirement := range snapshot.Retirements {
+		if err := loaded.validateIdentityRetirement(retirement); err != nil {
+			return fmt.Errorf("%w: invalid identity retirement: %v", ErrCorrupt, err)
+		}
+		claim := retirement.Ticket.Claim
+		if _, exists := loaded.Retirements[claim.OperationID]; exists {
+			return fmt.Errorf("%w: duplicate identity retirement", ErrCorrupt)
+		}
+		loaded.Retirements[claim.OperationID] = retirement
 	}
 	*s = loaded
 	return nil

@@ -318,7 +318,11 @@ func (m *Manager) rotate(ctx context.Context, initial bool) error {
 		destroyPrivateKey(privateKey)
 		return ErrUnavailable
 	}
-	csrDER, err := x509.CreateCertificateRequest(m.config.Random, &x509.CertificateRequest{Subject: pkix.Name{},
+	subject := pkix.Name{}
+	if m.config.Policy.Purpose == workloadpki.PostgresClientPurpose {
+		subject.CommonName = m.config.Policy.Postgres.CommonName
+	}
+	csrDER, err := x509.CreateCertificateRequest(m.config.Random, &x509.CertificateRequest{Subject: subject,
 		DNSNames: append([]string(nil), m.config.Policy.DNSNames...), URIs: []*url.URL{identity}}, privateKey)
 	if err != nil {
 		destroyPrivateKey(privateKey)

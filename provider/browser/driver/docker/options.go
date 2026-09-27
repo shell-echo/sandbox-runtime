@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/shell-echo/sandbox-runtime/internal/sandboxidentity"
 	browserimage "github.com/shell-echo/sandbox-runtime/profiles/browser/image"
 	providerbrowser "github.com/shell-echo/sandbox-runtime/provider/browser"
 )
@@ -97,6 +98,7 @@ type NetworkAttachment struct {
 	WorkloadIdentityDigest string
 	EgressGateway          bool
 	Public                 bool
+	Slot                   sandboxidentity.Slot
 }
 
 func (a NetworkAttachment) validate(expectedPolicy string) error {
@@ -104,7 +106,7 @@ func (a NetworkAttachment) validate(expectedPolicy string) error {
 	if !networkNamePattern.MatchString(a.DockerName) || !networkNamePattern.MatchString(a.GatewayContainer) ||
 		!privateValuePattern.MatchString(a.LeaseID) || a.PolicyReference != expectedPolicy ||
 		!digestPattern.MatchString(a.PolicyDigest) || !digestPattern.MatchString(a.WorkloadIdentityDigest) || resolverErr != nil || !resolver.Is4() || !resolver.IsPrivate() ||
-		!a.EgressGateway || a.Public {
+		!a.EgressGateway || a.Public || (a.Slot != (sandboxidentity.Slot{}) && a.Slot.Validate() != nil) {
 		return ErrNetworkUnavailable
 	}
 	switch a.DockerName {
@@ -122,6 +124,7 @@ type NetworkRequest struct {
 	PolicyReference  string
 	Generation       int64
 	FencingToken     int64
+	Slot             sandboxidentity.Slot
 }
 
 type RestrictedNetwork interface {

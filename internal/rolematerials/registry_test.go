@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -90,5 +91,31 @@ func TestNewBuildsOneExactRoleRegistry(t *testing.T) {
 	resolved.Destroy()
 	if _, err := New(materials, secretref.RoleDesktop, []secretref.Purpose{secretref.PurposeTLSPrivateKey}, true, time.Now); err == nil {
 		t.Fatal("Desktop registry accepted a Browser-scoped binding")
+	}
+}
+
+func TestGatewayDeploymentCannotRegisterIngressWitnessBinding(t *testing.T) {
+	binding := secretref.Binding{Schema: secretref.BindingSchema, Kind: secretref.KindSecret,
+		Reference: "secret://vault/browser-action-ingress/witness", Version: "v1",
+		Purpose: secretref.PurposeActionHistoryWitnessDSN, TenantID: secretref.SystemTenant, Role: secretref.RoleGateway}
+	document, err := json.Marshal(binding)
+	if err != nil {
+		t.Fatal(err)
+	}
+	materials := config.RoleMaterialsConfig{Provider: config.RoleMaterialProviderConfig{
+		Type: config.UnixWorkloadMaterialProviderV1, Alias: "gateway-agent", SocketPath: "/run/gateway-agent/material.sock",
+		ExpectedUID: 20001, ExpectedGID: 30001, OperationTimeoutSeconds: 2},
+		Bindings: []config.RoleMaterialBindingConfig{{ID: "witness", Provider: "gateway-agent", Document: string(document)}}}
+	_, err = NewForDeployment(materials, "gateway-runtime", secretref.RoleGateway,
+		[]secretref.Purpose{secretref.PurposeCapacityValkeyCredentials}, false, time.Now)
+	if err == nil || !strings.Contains(err.Error(), "binding does not match deployment") {
+		t.Fatalf("Gateway accepted same-role ingress witness binding: %v", err)
+	}
+	if _, err := New(materials, secretref.RoleGateway, []secretref.Purpose{binding.Purpose}, true, time.Now); err == nil {
+		t.Fatal("unscoped registry accepted ingress witness purpose")
+	}
+	if _, err := NewForDeployment(materials, "browser-action-ingress-runtime", secretref.RoleGateway,
+		[]secretref.Purpose{binding.Purpose}, true, time.Now); err == nil || !strings.Contains(err.Error(), "uncached") {
+		t.Fatalf("cached witness credential accepted: %v", err)
 	}
 }

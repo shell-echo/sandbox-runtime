@@ -198,6 +198,9 @@ func run() error { //nolint:maintidx
 		if binding.Validate() != nil || binding.Role != config.Role || binding.Kind != secretref.KindSecret || binding.Purpose == secretref.PurposeWorkloadCredential {
 			return stageError("material-binding")
 		}
+		if !secretref.DeploymentPurposeAllowed(config.CredentialAgentID, config.Role, binding.Purpose) {
+			return stageError("material-deployment")
+		}
 		if _, ok := seenPurposes[binding.Purpose]; !ok {
 			seenPurposes[binding.Purpose] = struct{}{}
 			purposes = append(purposes, binding.Purpose)
@@ -239,7 +242,8 @@ func run() error { //nolint:maintidx
 		breakGlassDone = make(chan error, 1)
 		go func() { breakGlassDone <- breakGlassServer.Serve(ctx) }()
 	}
-	server, err := workloadagent.Listen(workloadagent.ServerConfig{SocketPath: config.SocketPath, SocketUID: config.SocketUID, SocketGID: config.SocketGID,
+	server, err := workloadagent.Listen(workloadagent.ServerConfig{DeploymentName: config.CredentialAgentID,
+		SocketPath: config.SocketPath, SocketUID: config.SocketUID, SocketGID: config.SocketGID,
 		ExpectedClientUID: config.ExpectedClientUID, ExpectedClientGID: config.ExpectedClientGID, Role: config.Role,
 		AllowedPurposes: purposes, Bindings: config.Bindings, MaxConnections: config.MaxConnections,
 		MaxResolutions: config.MaxResolutions, Now: time.Now}, vault)

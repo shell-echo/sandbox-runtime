@@ -12,6 +12,7 @@ import (
 
 	cerrdefs "github.com/containerd/errdefs"
 
+	"github.com/shell-echo/sandbox-runtime/internal/sandboxidentity"
 	"github.com/shell-echo/sandbox-runtime/provider/network/restricted"
 )
 
@@ -115,7 +116,7 @@ func (e *fakeEngine) createContainer(_ context.Context, request containerRequest
 	e.containers[request.name] = containerInfo{
 		id: "container-id", name: "/" + request.name, labels: cloneMap(request.labels),
 		imageID: request.imageID, image: request.image,
-		user: GatewayUser, entrypoint: []string{GatewayEntrypoint}, command: []string{"serve"}, workingDirectory: "/",
+		user: request.user, entrypoint: []string{GatewayEntrypoint}, command: []string{"serve"}, workingDirectory: "/",
 		stopTimeout: request.stopTimeout,
 		environment: environment, readOnlyRoot: true, capDrop: []string{"ALL"},
 		securityOptions: []string{"no-new-privileges:true"},
@@ -242,6 +243,9 @@ func TestAcquireInspectReplayAndRelease(t *testing.T) {
 		t.Fatalf("attachment = %#v", attachment)
 	}
 	attachFakeWorkload(t, backend, provisioner, request, attachment)
+	if err := provisioner.Absent(t.Context(), attachment); !errors.Is(err, ErrOutcomeUnknown) {
+		t.Fatalf("live gateway reported absent: %v", err)
+	}
 	if err := provisioner.Inspect(t.Context(), attachment); err != nil {
 		t.Fatal(err)
 	}
@@ -267,8 +271,77 @@ func TestAcquireInspectReplayAndRelease(t *testing.T) {
 	if backend.containerRemoves != 1 || backend.networkRemoves != 1 {
 		t.Fatalf("remove counts = container %d network %d", backend.containerRemoves, backend.networkRemoves)
 	}
+	if err := provisioner.Absent(t.Context(), attachment); err != nil {
+		t.Fatalf("exact gateway absence = %v", err)
+	}
 	if err := provisioner.Release(t.Context(), attachment); err != nil {
 		t.Fatalf("idempotent release = %v", err)
+	}
+}
+
+func TestReservedSlotGatewayIdentityAndDrift(t *testing.T) {
+	options := validOptions()
+	backend := newFakeEngine(options)
+	provisioner, err := newBrowserTestProvisioner(t.Context(), backend, options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := validNetworkRequest(options)
+	request.Slot = sandboxidentity.Slot{ID: "slot-1", WorkloadUID: 20000, WorkloadGID: 30000, GatewayUID: 20001, GatewayGID: 30001}
+	attachment, err := provisioner.Acquire(t.Context(), request)
+	if err != nil || attachment.Slot != request.Slot {
+		t.Fatalf("reserved slot acquire = %#v, %v", attachment, err)
+	}
+	container := backend.containers[attachment.GatewayContainer]
+	if container.user != "20001:30001" {
+		t.Fatalf("effective gateway user = %q", container.user)
+	}
+	attachFakeWorkload(t, backend, provisioner, request, attachment)
+	if err := provisioner.Inspect(t.Context(), attachment); err != nil {
+		t.Fatal(err)
+	}
+	if replay, err := provisioner.Acquire(t.Context(), request); err != nil || replay != attachment {
+		t.Fatalf("exact replay = %#v, %v", replay, err)
+	}
+	changed := request
+	changed.Slot.GatewayUID++
+	if _, err := provisioner.Acquire(t.Context(), changed); !errors.Is(err, ErrOwnershipConflict) {
+		t.Fatalf("slot collision = %v", err)
+	}
+	invalid := request
+	invalid.Slot.GatewayUID = invalid.Slot.WorkloadUID
+	if _, err := provisioner.Acquire(t.Context(), invalid); !errors.Is(err, ErrPolicyUnavailable) {
+		t.Fatalf("colliding slot IDs = %v", err)
+	}
+	invalid = request
+	invalid.Slot.GatewayUID = 0
+	if _, err := provisioner.Acquire(t.Context(), invalid); !errors.Is(err, ErrPolicyUnavailable) {
+		t.Fatalf("zero gateway UID = %v", err)
+	}
+	network := backend.networks[attachment.DockerName]
+	network.labels[slotGatewayUIDLabel] = "020001"
+	backend.networks[attachment.DockerName] = network
+	if err := provisioner.Inspect(t.Context(), attachment); !errors.Is(err, ErrOwnershipConflict) {
+		t.Fatalf("noncanonical slot label = %v", err)
+	}
+	network.labels[slotGatewayUIDLabel] = "20001"
+	backend.networks[attachment.DockerName] = network
+	container.user = GatewayUser
+	backend.containers[attachment.GatewayContainer] = container
+	if err := provisioner.Inspect(t.Context(), attachment); !errors.Is(err, ErrOwnershipConflict) {
+		t.Fatalf("gateway user drift = %v", err)
+	}
+	container.user = "20001:30001"
+	backend.containers[attachment.GatewayContainer] = container
+	detachFakeWorkload(backend, provisioner, request, attachment)
+	if err := provisioner.Release(t.Context(), attachment); err != nil {
+		t.Fatal(err)
+	}
+	if backend.containerRemoves != 1 || backend.networkRemoves != 1 {
+		t.Fatalf("cleanup counts = %d containers, %d networks", backend.containerRemoves, backend.networkRemoves)
+	}
+	if err := provisioner.Absent(t.Context(), attachment); err != nil {
+		t.Fatalf("reserved gateway exact absence = %v", err)
 	}
 }
 

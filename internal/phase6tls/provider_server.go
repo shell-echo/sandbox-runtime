@@ -24,9 +24,20 @@ type ProviderServerAuthority struct {
 	OperationTimeout time.Duration
 }
 
-// ProviderServer constructs one of the two separate Provider mTLS listeners.
-// The Contract edge admits only Product; the private handoff edge admits only
-// Gateway. Both verify the locally signed server leaf against the exact
+// BrowserActionIngressServer selects only the Gateway→action-ingress edge.
+// The independent ingress process cannot accidentally serve a Provider edge.
+func BrowserActionIngressServer(profile phase6security.Profile, authority ProviderServerAuthority) (*tls.Config, func(context.Context) error, string, *PeerCRLGuard, error) {
+	if authority.EdgeID != phase6security.GatewayBrowserActionIngressEdgeID {
+		return nil, nil, "", nil, errors.New("Browser action ingress TLS edge is invalid")
+	}
+	return ProviderServer(profile, authority)
+}
+
+// ProviderServer constructs one inventory-bound private role listener.
+// Contract edges admit only Product; Provider private handoff edges admit
+// only Gateway for Terminal/Desktop or action ingress for Browser. The
+// Browser action-ingress listener independently admits only Gateway. All
+// verify the locally signed server leaf against the exact
 // server-verification root and the peer against a separate client root.
 func ProviderServer(profile phase6security.Profile, authority ProviderServerAuthority) (*tls.Config, func(context.Context) error, string, *PeerCRLGuard, error) {
 	var edge phase6security.TrustEdge
@@ -42,8 +53,10 @@ func ProviderServer(profile phase6security.Profile, authority ProviderServerAuth
 		edge, caller, provider, serverAnchor, clientAnchor, err = profile.ProductProviderInstanceBoundary("provider-desktop-runtime")
 	case phase6security.GatewayProviderPrivateEdgeID:
 		edge, caller, provider, serverAnchor, clientAnchor, err = profile.GatewayProviderBoundary("wss://" + authority.ListenAddress + "/private/terminal")
-	case phase6security.GatewayProviderBrowserPrivateEdgeID:
-		edge, caller, provider, serverAnchor, clientAnchor, err = profile.GatewayProviderInstanceBoundary("provider-browser-runtime", "wss://"+authority.ListenAddress+"/private/browser")
+	case phase6security.GatewayBrowserActionIngressEdgeID:
+		edge, caller, provider, serverAnchor, clientAnchor, err = profile.GatewayBrowserActionIngressBoundary("wss://" + authority.ListenAddress + "/browser/action")
+	case phase6security.BrowserActionIngressProviderPrivateEdgeID:
+		edge, caller, provider, serverAnchor, clientAnchor, err = profile.BrowserActionIngressProviderBoundary("wss://" + authority.ListenAddress + "/private/browser")
 	case phase6security.GatewayProviderDesktopPrivateEdgeID:
 		edge, caller, provider, serverAnchor, clientAnchor, err = profile.GatewayProviderInstanceBoundary("provider-desktop-runtime", "wss://"+authority.ListenAddress+"/desktop")
 	default:
