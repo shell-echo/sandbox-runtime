@@ -4,6 +4,25 @@ Date: 2026-09-23
 
 Status: implementation underway. Product Phase 6 remains **5/15**.
 
+Checkpoint 2026-09-27 (repository role source-to-image input): the reviewed
+58-deployment inventory now maps each local application role to an exact build
+target; Browser retains its separate historical signed publication and Desktop
+its separate candidate. A new operator-only local-role recorder accepts an
+immutable Docker store digest, creates a stopped networkless observation
+container, verifies its selected platform manifest and a private OCI archive,
+independently rebuilds the role binary and compares its bytes to the effective
+executable in the verified ordered layers, removes the observation container,
+and retains an exclusive mode-0600 manifest plus archive sidecar outside the
+checkout. The loader rederives clean source/toolchain/build inputs, archive
+bytes, descriptor/config/layers/rootfs and binary proof; it rejects
+tampering and public archive permissions. The real high-UID core-role Docker
+integration, full root race/shuffle, vet and Product Contract lock pass. See
+[`phase6-local-role-candidate.md`](../phase6-local-role-candidate.md).
+Only one core target has passed this retained-candidate integration; the other
+targets, the 58 running roles, network graph, 16-scenario same-run gate and
+immutable Slice 6 evidence remain open. No Slice 6 counter movement or
+production-artifact claim follows from this component checkpoint.
+
 ## Fixed Slice 6 open-item ledger
 
 This table tracks the existing Slice 6 acceptance conditions; component
