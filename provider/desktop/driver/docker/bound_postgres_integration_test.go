@@ -7,6 +7,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"net"
 	"os"
@@ -229,6 +230,19 @@ func TestDesktopBoundPostgresDockerIntegration(t *testing.T) {
 	authority, err := plan.ProjectRuntimeAuthority()
 	if err != nil {
 		t.Fatal(err)
+	}
+	var accounts desktopcandidate.AccountAllowlist
+	if err := json.Unmarshal([]byte(candidate.WorkloadAccounts), &accounts); err != nil {
+		t.Fatal(err)
+	}
+	if err := authority.Validate(); err != nil {
+		t.Fatalf("projected Desktop authority: %v", err)
+	}
+	if err := candidate.ValidateCurrent(); err != nil {
+		t.Fatalf("current Desktop candidate: %v", err)
+	}
+	if err := accounts.Validate(); err != nil || !accounts.Supports(42000, 52000) {
+		t.Fatalf("Desktop candidate workload accounts: %v", err)
 	}
 	options := desktopdocker.Options{Image: candidate.ImageDigest, PullPolicy: desktopdocker.PullNever,
 		MemoryBytes: 1 << 30, NanoCPUs: 1_000_000_000, PidsLimit: 256,
