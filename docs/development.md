@@ -1279,6 +1279,17 @@ host-published port, relay frontend IP, upstream IP or relay resource limit.
 `VerifySlice6DesiredEdgeAddresses` requires every local numeric mTLS target to
 equal the recipient's preplanned address, even if another address inside the
 same subnet would be accepted by the generic profile validator.
+`VerifySlice6DesiredExternalServices` freezes the five external names,
+SPIFFE URIs, DNS SANs and inbound edge IDs but does not attest their images
+or certificates.
+`VerifySlice6DesiredEgressPolicies` fixes the five local alias, broker and
+authority policies while leaving actual signing keys and live broker behavior
+to independent gate observation.
+Its Product positive-control alias is the existing public Docker Registry
+HTTPS API, not a run-owned image; DNS results in `198.18.0.0/15` remain
+forbidden, including if a local VPN or resolver maps that name there.
+`VerifySlice6DesiredTrustAnchors` fixes the five bundle roles and consumers
+without treating a fixture digest as observed CA material.
 
 The network component creates exact isolated/NAT Docker bridges, verifies
 their raw inspection, observes a disposable running member, rejects an extra

@@ -842,7 +842,7 @@ func validProfile() Profile {
 					CurrentTimeoutMS: 1000, StateMaxAgeSeconds: 5},
 				LeaseSeconds: 60, DNSMaxAnswers: 8,
 				DenyRawIP: true, DenyAlternateDNS: true, DenyProxyEnvironment: true, DenyRedirectAuthority: true, DenyMetadataPrivateRanges: true,
-				Targets: []EgressTarget{{Alias: "example-api", Host: "api.example.test", Port: 443, Protocol: "https"}}}},
+				Targets: []EgressTarget{{Alias: "registry-probe", Host: "registry-1.docker.io", Port: 443, Protocol: "https"}}}},
 		CleanupClasses: []string{"connections", "containers", "files", "networks", "processes", "sockets"}}
 	for _, role := range []string{"provider-browser", "provider-desktop"} {
 		provider, broker, authority := role+"-runtime", "egress-broker-"+role, "egress-policy-authority-"+role

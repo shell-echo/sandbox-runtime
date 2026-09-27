@@ -97,6 +97,15 @@ func TestSlice6DraftNetworkBindingRecomputesCanonicalAddresses(t *testing.T) {
 	if err := VerifySlice6DesiredTrustEdges(draft); err != nil {
 		t.Fatalf("reviewed trust graph and closed fixture diverged: %v", err)
 	}
+	if err := VerifySlice6DesiredExternalServices(draft); err != nil {
+		t.Fatalf("reviewed external services and closed fixture diverged: %v", err)
+	}
+	if err := VerifySlice6DesiredEgressPolicies(draft); err != nil {
+		t.Fatalf("reviewed egress policies and closed fixture diverged: %v", err)
+	}
+	if err := VerifySlice6DesiredTrustAnchors(draft); err != nil {
+		t.Fatalf("reviewed trust anchors and closed fixture diverged: %v", err)
+	}
 	if err := VerifySlice6DesiredIngressPolicy(draft); err != nil {
 		t.Fatalf("reviewed ingress policy and closed fixture diverged: %v", err)
 	}
@@ -226,5 +235,75 @@ func TestSlice6DraftNetworkBindingRecomputesCanonicalAddresses(t *testing.T) {
 	}
 	if err := VerifySlice6DesiredIngress(wrongFrontend); err == nil {
 		t.Fatal("changed frontend IP was admitted")
+	}
+}
+
+func TestSlice6ExternalIdentityCannotBeRewrittenWithMatchingDigests(t *testing.T) {
+	profile := validProfile()
+	profile.External = append([]ExternalService(nil), profile.External...)
+	profile.TrustEdges = append([]TrustEdge(nil), profile.TrustEdges...)
+	for index := range profile.External {
+		if profile.External[index].Name != "vault" {
+			continue
+		}
+		profile.External[index].URI = "spiffe://sandbox-runtime.test/external/alternate-vault"
+		profile.External[index].DNSNames = []string{"alternate-vault.sandbox-runtime.test"}
+		profile.External[index].IdentityDigest = profile.External[index].Digest()
+		for edgeIndex := range profile.TrustEdges {
+			if profile.TrustEdges[edgeIndex].To == "vault" {
+				profile.TrustEdges[edgeIndex].ToURI = profile.External[index].URI
+				profile.TrustEdges[edgeIndex].ExternalIdentityDigest = profile.External[index].IdentityDigest
+			}
+		}
+		break
+	}
+	profile.ProfileDigest = profile.Digest()
+	if err := profile.Validate(); err != nil {
+		t.Fatalf("rewritten external identity fixture is not internally valid: %v", err)
+	}
+	if err := VerifySlice6DesiredExternalServices(profile); err == nil {
+		t.Fatal("self-consistent substituted Vault identity and DNS SAN were admitted")
+	}
+}
+
+func TestSlice6EgressDestinationCannotBeBroadenedWithMatchingDigest(t *testing.T) {
+	profile := validProfile()
+	profile.EgressPolicies = append([]EgressPolicy(nil), profile.EgressPolicies...)
+	for index := range profile.EgressPolicies {
+		if profile.EgressPolicies[index].ID != "product-egress" {
+			continue
+		}
+		profile.EgressPolicies[index].Targets = []EgressTarget{{Alias: "registry-probe", Host: "unreviewed.example.test", Port: 443, Protocol: "https"}}
+		break
+	}
+	profile.ProfileDigest = profile.Digest()
+	if err := profile.Validate(); err != nil {
+		t.Fatalf("broadened egress fixture is not internally valid: %v", err)
+	}
+	if err := VerifySlice6DesiredEgressPolicies(profile); err == nil {
+		t.Fatal("self-consistent unreviewed egress destination was admitted")
+	}
+	profile = validProfile()
+	profile.EgressPolicies = append([]EgressPolicy(nil), profile.EgressPolicies...)
+	profile.EgressPolicies[0].LeaseSeconds = 61
+	profile.ProfileDigest = profile.Digest()
+	if err := profile.Validate(); err != nil {
+		t.Fatalf("extended lease fixture is not internally valid: %v", err)
+	}
+	if err := VerifySlice6DesiredEgressPolicies(profile); err == nil {
+		t.Fatal("self-consistent extended egress lease was admitted")
+	}
+}
+
+func TestSlice6TrustAnchorArtifactCannotBeSubstituted(t *testing.T) {
+	profile := validProfile()
+	profile.TrustAnchors = append([]TrustAnchor(nil), profile.TrustAnchors...)
+	profile.TrustAnchors[0].ArtifactID = "alternate-external-server-ca-artifact"
+	profile.ProfileDigest = profile.Digest()
+	if err := profile.Validate(); err != nil {
+		t.Fatalf("substituted trust anchor artifact fixture is not internally valid: %v", err)
+	}
+	if err := VerifySlice6DesiredTrustAnchors(profile); err == nil {
+		t.Fatal("self-consistent substituted CA artifact ID was admitted")
 	}
 }

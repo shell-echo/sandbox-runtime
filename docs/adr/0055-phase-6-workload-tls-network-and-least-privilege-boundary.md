@@ -1264,3 +1264,24 @@ live gate remain open. This is not an accepted Slice 6 result.
 The local gate's additional preflight comparison requires every numeric mTLS
 target to equal the preplanned recipient endpoint, not merely a valid IP in
 the right network; actual endpoint and handshake observation remains separate.
+The reviewed external-service boundary also fixes the five service names,
+SPIFFE URIs, DNS SANs and permitted inbound edge IDs independently of the
+profile digest. Their OCI descriptors and CA material remain separate real
+candidate/bootstrap inputs, not values copied from a test fixture.
+The five local egress policies additionally fix role/broker/authority ownership,
+key identifiers, private socket/ledger mount identities, refresh/lease bounds
+and exact alias/host/port/protocol targets. Real authority keys and active
+policy ledgers remain separately verified run inputs and observations.
+For the Product broker's read-only positive control, the reviewed alias is
+`registry-probe` to `registry-1.docker.io:443` over HTTPS; the future live
+probe must be bounded to unauthenticated `GET /v2/`, no request body,
+redirects, credential retry or repository/image/user operation. The gate
+must require a verified public DNS
+answer, strict TLS identity and the expected Registry API response, then test
+rebinding via its controlled DNS while preserving the same broker dial path.
+This existing third-party endpoint is not a run-owned deployment or an image
+whose provenance we can claim. A DNS answer in `198.18.0.0/15` (observed on
+this host) is blocked, not a reason to widen `netpolicy`; unavailable genuine
+public resolution leaves the positive gate open. The five trust-anchor names,
+uses, mount identities and consumers are also reviewed separately from actual
+CA bundle bytes and issuer observations.

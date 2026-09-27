@@ -1879,3 +1879,27 @@ an arbitrary address inside the correct /24. An internally valid profile with
 a changed Product→Provider target IP is rejected after its digest is
 recomputed. This remains desired-configuration enforcement; actual container
 IP and mTLS connection evidence must still come from the live run.
+
+The next preflight increment freezes the five external-service names, SPIFFE
+URIs, DNS SANs and permitted inbound trust-edge IDs. A profile with a rewritten
+Vault identity and SAN, including recomputed external/edge/profile digests,
+remains generically valid but fails this reviewed inventory check. This does
+not verify an OCI descriptor, run Vault or observe a certificate handshake;
+Phase 6 remains **5/15**.
+
+The five local egress policies are now checked against reviewed role/broker/
+authority ownership, exact alias destinations, socket/ledger mount identities
+and refresh/lease limits. A self-consistent new Product destination or longer
+lease is refused. Actual key material, DNS answers, broker reachability,
+revocation and ledger recovery still require the real gate.
+
+Sandbox ruled out provisioning a new public fixture as the default. The
+Product positive-control alias now names the existing public Docker Registry
+HTTPS API for a minimal unauthenticated `GET /v2/`; it is a third-party
+reference endpoint, not a run-owned image or server. One bounded local check
+with `dig @1.1.1.1` returned `198.18.0.32`; `netpolicy` explicitly blocks
+`198.18.0.0/15`. There is no valid public-address/TLS/broker observation yet,
+so the positive egress gate is still open rather than skipped or counted.
+The trust-anchor layout is now separately checked against five reviewed names,
+purposes, operator artifact IDs, mount locations and consumer sets. Real CA
+bytes and issuance remain unproved.
