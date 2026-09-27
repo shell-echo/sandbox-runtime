@@ -106,6 +106,7 @@ type Slice6Evidence struct {
 // Candidate records name local, re-importable build output separately from
 // registry descriptors and from the custom evidence document digest.
 type Slice6CandidateImage struct {
+	BuildTarget           string `json:"build_target"`
 	RuntimeStoreImageID   string `json:"runtime_store_image_id"`
 	OCIConfigDigest       string `json:"oci_config_digest"`
 	Platform              string `json:"platform"`
@@ -278,14 +279,26 @@ func (e Slice6Evidence) Validate() error {
 }
 
 func validSlice6Candidates(profile Profile, values []Slice6CandidateImage, revision, treeDigest string) bool {
-	expected := make(map[string]string)
+	type imageAuthority struct {
+		config string
+		target string
+	}
+	expected := make(map[string]imageAuthority)
 	for _, principal := range profile.Principals {
 		if principal.ImageLocation == "local" {
+			target, err := Slice6DesiredImageTarget(principal.Name)
+			if err != nil || target == Slice6BrowserPublishedImage {
+				return false
+			}
 			config := principal.ImageConfigDigest
 			if principal.ImageIdentityKind == ImageIdentityLocalConfig {
 				config = principal.ImageDigest
 			}
-			expected[principal.ImageDigest+"/"+principal.ImagePlatform] = config
+			key := principal.ImageDigest + "/" + principal.ImagePlatform
+			if existing, found := expected[key]; found && existing != (imageAuthority{config: config, target: target}) {
+				return false
+			}
+			expected[key] = imageAuthority{config: config, target: target}
 		}
 	}
 	if len(values) != len(expected) {
@@ -304,7 +317,8 @@ func validSlice6Candidates(profile Profile, values []Slice6CandidateImage, revis
 			!digestPattern.MatchString(value.ArchiveDigest) || !digestPattern.MatchString(value.RootFSChainDigest) {
 			return false
 		}
-		if config, ok := expected[key]; !ok || config != value.OCIConfigDigest {
+		if authority, ok := expected[key]; !ok || authority.config != value.OCIConfigDigest ||
+			authority.target != value.BuildTarget {
 			return false
 		}
 		previous = key

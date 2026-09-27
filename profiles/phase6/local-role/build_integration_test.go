@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shell-echo/sandbox-runtime/internal/phase6rolecandidate"
 	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
 )
 
@@ -48,6 +49,17 @@ func TestLocalCoreCandidateRunsAsHighUID(t *testing.T) {
 	}
 	if len(image) != 71 || len(source) != 40 {
 		t.Fatalf("candidate builder omitted immutable image digest: %.512s", output)
+	}
+	sourceRoot, err := filepath.Abs("../../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	inputs, err := phase6rolecandidate.CollectSourceInputs(ctx, sourceRoot, "product-runtime", platform)
+	if err != nil || inputs.SourceRevision != source || inputs.BuildTarget != "core" ||
+		!strings.HasPrefix(inputs.SourceTreeDigest, "sha256:") ||
+		!strings.HasPrefix(inputs.ToolchainDigest, "sha256:") ||
+		!strings.HasPrefix(inputs.DependencyLockDigest, "sha256:") {
+		t.Fatalf("source-bound role build inputs: %#v, %v", inputs, err)
 	}
 	inspect, err := exec.CommandContext(ctx, "docker", "image", "inspect", image).Output()
 	var images []struct {

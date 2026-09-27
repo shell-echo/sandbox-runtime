@@ -312,7 +312,11 @@ func TestSlice6EvidenceLocalCandidateRequiresRetainedBuildAndArchiveBinding(t *t
 	evidence.Observations.Containers[0].SelectedManifestDescriptor = ImageDescriptor{}
 	evidence.Observations.Containers[0].OCIConfigDigest = principal.ImageDigest
 	evidence.Observations.Containers[0].ImageDescriptorProofDigest = ""
-	evidence.Candidates = []Slice6CandidateImage{{RuntimeStoreImageID: principal.ImageDigest, OCIConfigDigest: principal.ImageDigest, Platform: principal.ImagePlatform,
+	target, err := Slice6DesiredImageTarget(principal.Name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	evidence.Candidates = []Slice6CandidateImage{{BuildTarget: target, RuntimeStoreImageID: principal.ImageDigest, OCIConfigDigest: principal.ImageDigest, Platform: principal.ImagePlatform,
 		SourceRevision: evidence.RuntimeRevision, SourceTreeDigest: evidence.RuntimeTreeDigest,
 		BuildContextDigest: testDigest("context"), DockerfileDigest: testDigest("dockerfile"),
 		ToolchainDigest: testDigest("toolchain"), BaseImageDigest: testDigest("base"),
@@ -327,10 +331,11 @@ func TestSlice6EvidenceLocalCandidateRequiresRetainedBuildAndArchiveBinding(t *t
 		t.Fatalf("complete local candidate fixture rejected: %v", err)
 	}
 	for name, mutate := range map[string]func(*Slice6Evidence){
-		"missing archive":   func(e *Slice6Evidence) { e.Candidates[0].ArchiveDigest = "" },
-		"wrong image ID":    func(e *Slice6Evidence) { e.Candidates[0].RuntimeStoreImageID = testDigest("other-image") },
-		"wrong source":      func(e *Slice6Evidence) { e.Candidates[0].SourceRevision = strings.Repeat("c", 40) },
-		"candidate omitted": func(e *Slice6Evidence) { e.Candidates = nil },
+		"wrong build target": func(e *Slice6Evidence) { e.Candidates[0].BuildTarget = "gateway" },
+		"missing archive":    func(e *Slice6Evidence) { e.Candidates[0].ArchiveDigest = "" },
+		"wrong image ID":     func(e *Slice6Evidence) { e.Candidates[0].RuntimeStoreImageID = testDigest("other-image") },
+		"wrong source":       func(e *Slice6Evidence) { e.Candidates[0].SourceRevision = strings.Repeat("c", 40) },
+		"candidate omitted":  func(e *Slice6Evidence) { e.Candidates = nil },
 	} {
 		t.Run(name, func(t *testing.T) {
 			var candidate Slice6Evidence

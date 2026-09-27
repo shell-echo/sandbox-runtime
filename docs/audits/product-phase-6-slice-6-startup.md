@@ -1979,5 +1979,16 @@ OCI archive reader, original-byte descriptor and layer checks, Docker's
 container-selected manifest and image inspection, and a separate full archive
 digest/rootfs-chain digest. The probe intentionally uses a stopped run-owned
 container before profile freeze; it cannot be reused as the final running
-role observation. Source/build-context/toolchain receipt binding and all
-actual-role observations still need the complete gate.
+role observation. Build-context-to-image binding and all actual-role
+observations still need the complete gate.
+
+The next source-input increment binds every local candidate evidence row to
+the reviewed executable `build_target`; a shared image digest cannot silently
+serve two different target binaries. It also adds independently recomputable
+clean-checkout inputs for current-source role builds: HEAD and byte-exact
+committed tree, Dockerfile, build script, `go.mod`/`go.sum`, fixed base digest,
+build parameters, Go 1.26.8 compiler/linker executables and standard-library
+source. `VerifySource` re-derives these from disk rather than trusting receipt
+strings. The build-context binary-to-image comparison, retained candidate
+record and full topology are not yet complete, so this remains a component
+boundary and Phase 6 remains **5/15**.
