@@ -258,8 +258,16 @@ func TestDesktopBoundPostgresDockerIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer driver.Close()
+	muxDirectory, err := os.MkdirTemp("/tmp", "sr-desktop-pg-mux-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(muxDirectory) })
+	if err := os.Chmod(muxDirectory, 0o700); err != nil {
+		t.Fatal(err)
+	}
 	mux, err := desktopdocker.NewBrokerMux(driver, desktopdocker.BrokerMuxOptions{
-		SocketPath:  filepath.Join(t.TempDir(), "desktop-broker-11111111111111111111111111111111.sock"),
+		SocketPath:  filepath.Join(muxDirectory, "desktop-broker-11111111111111111111111111111111.sock"),
 		MaxSessions: 1, OperationTimeout: 10 * time.Second, Authority: denyDesktopMuxAuthority{}})
 	if err != nil {
 		t.Fatal(err)
