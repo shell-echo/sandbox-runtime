@@ -1836,3 +1836,27 @@ Alpine processes do not execute repository role commands, and this does not
 prove protected-role direct-egress denial, the ingress relay, egress broker,
 Vault PKI, the complete inventory or any same-run scenario. No Slice 6
 manifest was emitted; Phase 6 remains **5/15**.
+
+Sandbox's profile-supply ruling selects a repository-owned reviewed desired
+inventory and a reproducible local generator, not an externally supplied
+complete profile. Controlled Vault/external/empty-network bootstrap and actual
+immutable image/issuer resolution precede canonical profile freeze; no
+application role starts under a permissive interim profile. The independent
+observer later reads actual Docker, process, TLS, PostgreSQL and request
+results. A changed expected rule ends that run and requires a new full run.
+The first inventory module fixes the exact approved deployment set, every
+reviewed shared/dedicated network edge and deterministic `172.31.0.0/16`
+allocation into /24 networks. It also fixes distinct non-root container
+UID/GID partitions by approved deployment name; dynamic sandbox account slots
+still require their separate image-account allowlist gate. Slice 6 preflight
+now rejects a profile that changes the network graph, CIDR plan or static
+UID/GID mapping even if its internal profile digest is updated. A deterministic
+endpoint planner assigns declared members addresses before launch; its
+comparison helper rejects a post-hoc observed IP, but the full-role runner
+still must actually start each role at that address and retain raw inspect.
+The source-bound core command's Docker ownership smoke now uses the reviewed
+Provider role network, its planned IP and its exact static UID/GID pair rather
+than an unrelated high-UID/random-network combination. It still invokes a
+short `--help` command, not an authenticated Provider service chain.
+The module does not yet generate the complete profile, start the role graph,
+or prove its live network paths; Phase 6 remains **5/15**.

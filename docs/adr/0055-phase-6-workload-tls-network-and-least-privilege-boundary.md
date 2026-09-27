@@ -1223,3 +1223,36 @@ the entire bundle. That origin remains the trusted gate's auditable live
 capture and exact cleanup. This adds neither a second security authority nor
 a Product/Provider Contract change. The complete live topology and all 16
 scenarios are still open; Phase 6 remains **5/15**.
+
+### Local full-topology profile supply (2026-09-27)
+
+The Slice 6 local gate uses a repository-owned, versioned reviewed desired
+inventory, not a manually supplied operator profile and not the synthetic
+`validProfile()` test fixture. Its fixed sequence is desired inventory and
+bounded run parameters; one fresh run ID; controlled operator-owned Vault,
+external-dependency and empty-network bootstrap; verification of immutable
+source/build candidates and actual issuer/CA artifacts; canonical profile and
+source-mapping freeze; strict preflight; real role launch and independent
+observations; all 16 scenarios; exact cleanup; then evidence-bundle validation.
+Application roles must not start with permissive temporary policy while this
+profile is assembled.
+
+Run IDs, private paths and resource names may be generated within reviewed
+patterns. The network CIDR/endpoint plan, UID/GID partitions and limited
+identity slots derive from reviewed ranges, not observed containers; a clash
+fails this run rather than widening policy. Vault may create an issuer during
+controlled bootstrap, but its actual constrained issuer UUID/DER and trust
+mapping freeze before any workload certificate admission. Leaf serials,
+rotation and CRLs are later observations, not profile rewrites. Image
+descriptors derive only from locked external images or audited immutable local
+candidates, never an arbitrary image present on the host.
+
+The generator emits desired configuration and bootstrap records only. The
+observer separately reads live Docker inspect, effective process identity,
+certificate chains/handshakes, PostgreSQL HBA/roles/new connections and
+positive/negative network requests. A profile-to-observation projection is
+not evidence. Changing an expected rule after launch requires terminating
+that candidate run and beginning a new full run; receipts are not spliced.
+The reviewed network inventory now fixes exact principals, isolated/NAT
+membership and a deterministic local /24 plan. It is only the first inventory
+module, not a complete generated profile or an accepted Slice 6 gate.

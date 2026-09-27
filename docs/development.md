@@ -1256,6 +1256,21 @@ SANDBOX_RUNTIME_PHASE6_SLICE6_NETWORK_GRAPH=1 \
     -run '^TestPhase6Slice6ProfileNetwork' ./productphase6gate
 ```
 
+The full gate's profile must come from the repository-owned reviewed desired
+inventory plus bounded run parameters and verified real bootstrap artifacts.
+Freeze its canonical digest before any application role starts; do not use the
+synthetic `validProfile()` fixture or let observed containers redefine expected
+identity, CIDR, UID/GID or trust edges. The reviewed network inventory is a
+first module only: `VerifySlice6DesiredNetworks` rejects an internally valid
+profile with an unreviewed network graph or different /24 allocation, and
+`VerifySlice6DesiredPrincipalIDs` freezes the distinct static container UID/GID
+mapping. Dynamic Desktop/Browser slot accounts still require their own
+candidate-image allowlist check. `Slice6DesiredEndpointAddress` plans each
+declared member IP before launch; actual raw Docker inspection must later be
+checked with `VerifySlice6DesiredEndpointObservation`. The source-bound core
+Docker ownership smoke uses the reviewed Provider UID/GID, role network and
+planned IP, but executes only `--help`, not a Provider listener.
+
 The network component creates exact isolated/NAT Docker bridges, verifies
 their raw inspection, observes a disposable running member, rejects an extra
 member and checks run-owned cleanup. It is not an authenticated service

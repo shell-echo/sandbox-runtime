@@ -158,15 +158,29 @@ func TestPhase6Slice6DockerResourceLedger(t *testing.T) {
 		images[0].Config.Labels["io.github.shell-echo.sandbox-runtime.source-revision"] != sourceRevision {
 		t.Fatal("local-only role image is not loaded by exact digest")
 	}
-	networkName := "sr-p6-s6-" + run.id
-	output, err := run.docker(ctx, "network", "create", "--driver", "bridge", "--internal", "--label", run.label(), networkName)
-	if err != nil || len(strings.TrimSpace(string(output))) != 64 || !lowerHexSlice6(strings.TrimSpace(string(output))) {
-		t.Fatalf("create exact run-owned internal network: %v: %.256s", err, output)
+	var network phase6security.Network
+	for _, candidate := range phase6security.Slice6DesiredNetworks() {
+		if candidate.Name == "network-provider-runtime" {
+			network = candidate
+		}
 	}
-	networkID := strings.TrimSpace(string(output))
+	if network.Name == "" {
+		t.Fatal("reviewed Provider role network is absent")
+	}
+	observedNetwork, err := createSlice6ProfileNetwork(ctx, run, network)
+	if err != nil {
+		t.Fatal(err)
+	}
+	networkID := observedNetwork.NetworkID
+	address, err := phase6security.Slice6DesiredEndpointAddress(network.Name, "provider-runtime")
+	if err != nil {
+		t.Fatal(err)
+	}
+	account := phase6security.Slice6DesiredUIDGID()["provider-runtime"]
 	containerName := "sr-p6-s6-role-" + run.id
-	output, err = run.docker(ctx, "create", "--pull=never", "--network", networkID,
-		"--label", run.label(), "--name", containerName, "--read-only", "--user", "21001:31001",
+	output, err := run.docker(ctx, "create", "--pull=never", "--network", networkID, "--ip", address,
+		"--label", run.label(), "--name", containerName, "--read-only",
+		"--user", fmt.Sprintf("%d:%d", account[0], account[1]),
 		"--cap-drop", "ALL", "--security-opt", "no-new-privileges", "--pids-limit", "32", "--memory", "128m",
 		image, "--help")
 	if err != nil || len(strings.TrimSpace(string(output))) != 64 || !lowerHexSlice6(strings.TrimSpace(string(output))) {
@@ -186,7 +200,7 @@ func TestPhase6Slice6DockerResourceLedger(t *testing.T) {
 	// Drop both returned IDs as if the create reply were lost after Docker had
 	// committed the side effect. Cleanup must use the run label, not only the
 	// IDs that the caller happened to retain in memory.
-	if _, err := run.docker(ctx, "network", "create", "--driver", "bridge", "--internal", "--label", run.label(), networkName+"-unack"); err != nil {
+	if _, err := run.docker(ctx, "network", "create", "--driver", "bridge", "--internal", "--label", run.label(), "sr-p6-s6-unack-"+run.id); err != nil {
 		t.Fatalf("create unacknowledged run-owned network: %v", err)
 	}
 	if _, err := run.docker(ctx, "create", "--pull=never", "--network", networkID,
