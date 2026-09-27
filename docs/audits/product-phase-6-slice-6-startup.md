@@ -2142,3 +2142,45 @@ reviewed deployments and targets. It supplies expected image identities only:
 the remaining identity, trust, external-service and TLS builder, a complete
 frozen profile, all running deployments, 16 same-run assertions, exact cleanup
 and final evidence are still absent. No counter or publication claim follows.
+
+The next builder increment derives each static container's reviewed UID/GID
+and exact network membership before Docker is created. For one fresh run ID,
+it derives all 56 non-template authorization identities (the two sandbox
+templates retain only their Provider controller binding) and fixed TLS leaf
+policy; no key or certificate is issued by this identity construction. Its
+principal skeleton is intentionally invalid as a deployable profile until
+image, listener, mount, seccomp/resource, trust-anchor, external-service and
+issuer/bootstrap fields have been bound and the full profile validated.
+The 77 desired local, external and Unix trust edges can now be constructed
+from that identity inventory and independently verified external identity
+inputs; local numeric targets are derived from reviewed IPAM, not observed
+Docker endpoints. No external image/certificate is attested by this pure
+construction step.
+
+A disposable real Docker route diagnostic of the reviewed
+`certificate-controller` isolated bridge observed only the directly connected
+`172.31.25.0/24` route and no default route; the run-labeled test container
+and network were removed and re-inventoried. This does not alone prove a
+Vault connection failure, because Vault was not deployed, but it exposes a
+physical-path question for the reviewed external HTTPS `certificate-vault`
+edge (and analogous external database edges). No undeclared NAT attachment or
+external service network member was added. Sandbox was asked to adjudicate
+the safe path before a full-topology launch.
+Sandbox resolved the physical-path question: 17 reviewed external logical
+and broker edges now have a finite 12-path logical-caller → actual-dialer →
+service → dedicated isolated-network mapping in source. Only the certificate
+controller/Vault and Product/PostgreSQL paths are direct; the other logical
+role edges retain their broker as the sole actual dialer. The transport-plan
+test rejects missing edges, direct-role substitutions and shared-network
+rewrites. The Network/ExternalService profile schema and actual service
+containers have not yet been extended to enforce this mapping, so the
+diagnostic is not a positive external-service gate.
+The 17/12 plan covers the current reviewed table, not all actual command
+dependencies: Sandbox confirmed that the coding Provider v3 startup still
+opens its own required PostgreSQL registry, which has no coding Provider
+external trust/network/client-signer purpose in this Slice 6 table. The
+approved next work is a dedicated coding Provider → PostgreSQL isolated
+direct path and purpose-specific DB identity/HBA, without borrowing the
+Browser/Desktop broker route or DB role. Before final R/build, the gate must
+inventory every real command/bootstrap/migration dependency and correct the
+counts; no success evidence can rely on the incomplete 17/12 mapping.

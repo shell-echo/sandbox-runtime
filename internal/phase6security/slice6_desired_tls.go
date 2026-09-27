@@ -23,6 +23,37 @@ var slice6DesiredServerDNSNames = map[string]string{
 	"egress-broker-provider-desktop":       "egress-broker-provider-desktop.sandbox-runtime.test",
 }
 
+// Slice6DesiredTLSIdentity constructs only expected leaf policy. It does not
+// issue a certificate or establish possession of the corresponding key.
+func Slice6DesiredTLSIdentity(deployment, principalDigest string) (*TLSIdentity, error) {
+	kind, err := Slice6DesiredDeploymentKind(deployment)
+	if err != nil {
+		return nil, errSlice6DesiredInventory
+	}
+	if kind == "sandbox" || kind == "ingress_relay" {
+		if kind == "sandbox" && principalDigest != "" ||
+			kind == "ingress_relay" && !digestPattern.MatchString(principalDigest) {
+			return nil, errSlice6DesiredInventory
+		}
+		return nil, nil
+	}
+	if !digestPattern.MatchString(principalDigest) {
+		return nil, errSlice6DesiredInventory
+	}
+	identity := &TLSIdentity{PrincipalDigest: principalDigest, TrustDomain: "sandbox-runtime.test",
+		URI: "spiffe://sandbox-runtime.test/" + deployment, Usages: []string{"client_auth"},
+		TTLSeconds: 900, RotateAfterSeconds: 500, OverlapSeconds: 30,
+		RevocationMaxStalenessSeconds: 30, ConnectionDrainSeconds: 10}
+	if name, server := slice6DesiredServerDNSNames[deployment]; server {
+		identity.DNSNames = []string{name}
+		identity.Usages = []string{"client_auth", "server_auth"}
+		if kind == "executor" {
+			identity.Usages = []string{"server_auth"}
+		}
+	}
+	return identity, nil
+}
+
 // VerifySlice6DesiredTLSIdentities freezes the desired SPIFFE names, SAN/EKU
 // allocation and rotation/drain bounds. It does not issue or observe a leaf,
 // prove its private-key owner, or replace live peer/CRL handshake checks.

@@ -19,7 +19,62 @@ import (
 )
 
 const slice6NetworkGraphEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_NETWORK_GRAPH"
+const slice6RouteDiagnosticEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_ROUTE_DIAGNOSTIC"
 const slice6NetworkProbeImageID = "sha256:85fe1e81d6758c208f3e1eed4338a1997e19d4be002d4dd32d3100c9a8c010a0"
+
+// This disposable route diagnostic probes the actual Docker Desktop/Linux
+// behavior of one reviewed isolated-only controller network. It is not a
+// certificate-controller deployment, Vault reachability proof or release
+// scenario. The result informs whether the reviewed external edge can be
+// physically realized without changing the network policy.
+func TestSlice6CertificateControllerIsolatedRouteDiagnostic(t *testing.T) {
+	if os.Getenv(slice6RouteDiagnosticEnv) != "1" {
+		t.Skip("set " + slice6RouteDiagnosticEnv + "=1 for isolated route diagnostic")
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
+	defer cancel()
+	run, err := newSlice6DockerRun()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		cleanup, stop := context.WithTimeout(context.Background(), 30*time.Second)
+		defer stop()
+		if err := run.cleanup(cleanup); err != nil {
+			t.Errorf("exact isolated route diagnostic cleanup: %v", err)
+		}
+	})
+	var controllerNetwork phase6security.Network
+	for _, desired := range phase6security.Slice6DesiredNetworks() {
+		if len(desired.Principals) == 1 && desired.Principals[0] == "certificate-controller" {
+			controllerNetwork = desired
+			break
+		}
+	}
+	if controllerNetwork.Name == "" || !controllerNetwork.Internal || controllerNetwork.GatewayModeIPv4 != "isolated" {
+		t.Fatal("reviewed certificate-controller isolated network is unavailable")
+	}
+	created, err := createSlice6ProfileNetwork(ctx, run, controllerNetwork)
+	if err != nil {
+		t.Fatal(err)
+	}
+	output, err := run.docker(ctx, "run", "--rm", "--pull=never", "--network", created.NetworkID,
+		"--label", run.label(), "--name", "sr-p6-route-"+run.id,
+		"--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
+		"--user", "20000:30000", "--memory", "64m", "--pids-limit", "16",
+		slice6NetworkProbeImageID, "ip", "route")
+	if err != nil {
+		t.Fatalf("disposable isolated route probe: %v: %.512s", err, output)
+	}
+	routes := strings.TrimSpace(string(output))
+	if routes == "" || strings.Contains(routes, "default ") {
+		t.Fatalf("unexpected external route on reviewed isolated network: %q", routes)
+	}
+	if err := run.cleanup(ctx); err != nil {
+		t.Fatalf("run-owned isolated route resources remain: %v", err)
+	}
+	t.Logf("reviewed isolated controller bridge has no default route: %q; external Vault path remains unproven", routes)
+}
 
 // createSlice6ProfileNetwork creates one exact profile network, refusing name
 // aliasing with any pre-existing Docker network. The run label lets the caller

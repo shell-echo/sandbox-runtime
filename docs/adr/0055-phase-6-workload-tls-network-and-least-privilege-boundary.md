@@ -1359,3 +1359,44 @@ CA bundle bytes and issuer observations.
 The reviewed TLS-identity inventory additionally fixes each deployment's
 SPIFFE URI, server SAN/EKU allocation and rotation/drain timing. Actual
 certificates, signer ownership, revocation and handshakes remain live proof.
+
+### External-service physical transport and resource-policy clarification (2026-09-27)
+
+The 17 existing external logical/egress trust edges map to 12 reviewed
+physical dial paths. A logical role-to-service edge does not grant that role
+an independent socket around its egress broker. Browser action ingress,
+Gateway and Browser/Desktop Providers use only their respective brokers for
+PostgreSQL, Valkey and DNS; Product's PostgreSQL and the certificate
+controller's Vault edge are the two direct paths. Each actual dialer and
+service are declared members of a dedicated internal/isolated service bridge;
+the Vault path uses the certificate controller's existing dedicated isolated
+bridge. No host gateway, new shared service mesh, undeclared Docker member,
+NAT attachment for an application role or new forwarding authority follows.
+The desired transport plan is now code-checked for exact edge coverage, but
+the external-service network membership and live endpoint observations are
+still implementation work. A disposable Docker diagnostic found no default
+route on the existing controller-only isolated bridge, so the old inventory
+alone cannot be cited as Vault reachability proof.
+These 17/12 numbers describe the current reviewed table, not a proven
+complete runtime-dependency inventory. The coding Provider command requires
+its own PostgreSQL runtime registry and currently has no corresponding
+external trust/network/PG client-purpose binding in that table. Slice 6 must
+add its dedicated, isolated direct PostgreSQL path with exact database role,
+server mTLS/HBA and client-signer purpose, then re-count and revalidate the
+complete inventory before freezing R or building all candidates. Browser and
+Desktop Providers remain brokered and cannot inherit the coding direct path.
+
+Every one of the 58 deployments must also bind a finite repository-owned
+resource/seccomp policy by actual duty, not simply by a shared binary target.
+Equivalent syscall needs may share audited bytes, but a Browser policy is not
+automatically a Go-service policy. Exact JSON, provenance/license, original
+content digest, architecture, runtime application and effective positive and
+negative probes are required. The Desktop local-candidate path currently
+declares Docker runtime-default seccomp without a corresponding pinned policy
+artifact or application proof; it must gain explicit proven policy binding
+before the full profile is accepted. Representative real loads calibrate
+bounded memory/CPU/PID classes with headroom; they do not establish universal
+minimums, and operator overrides cannot widen the frozen table. Current
+Docker Desktop resource settings must be respected without automatic host
+reconfiguration. This decision does not silently alter the historical Browser
+publication or public Provider Contract.
