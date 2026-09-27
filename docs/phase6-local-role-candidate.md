@@ -38,3 +38,10 @@ The complete Slice 6 gate must still inspect each final running role container,
 retain separate raw Docker receipts, exercise all reviewed topology/scenarios,
 and prove exact cleanup. Reusing one role image for multiple reviewed
 deployments does not collapse their independent runtime or security checks.
+The opt-in Slice 6 input preflight expects all such manifest/archive pairs in
+one otherwise empty private 0700 directory selected by
+`SANDBOX_RUNTIME_PHASE6_SLICE6_ROLE_CANDIDATES`. It reopens every pair from the
+clean checkout and requires exact coverage of the profile's distinct local
+role images; missing, extra, duplicate, cross-target and profile-drifted
+candidates stop before topology side effects. The Desktop candidate uses its
+separate manifest path and is not accepted as a role candidate.

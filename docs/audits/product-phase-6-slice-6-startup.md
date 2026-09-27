@@ -22,6 +22,11 @@ Only one core target has passed this retained-candidate integration; the other
 targets, the 58 running roles, network graph, 16-scenario same-run gate and
 immutable Slice 6 evidence remain open. No Slice 6 counter movement or
 production-artifact claim follows from this component checkpoint.
+The opt-in topology preflight now consumes exactly one private manifest/archive
+pair per distinct profile-selected local role image, verifies each against the
+clean checkout and reviewed deployment→target map, and rejects missing, extra,
+duplicate or cross-target reuse before side effects. Its tagged race tests
+pass; this is still input admission, not a real topology or scenario result.
 
 ## Fixed Slice 6 open-item ledger
 
