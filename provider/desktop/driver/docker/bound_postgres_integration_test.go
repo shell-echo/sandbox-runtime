@@ -24,6 +24,7 @@ import (
 	"github.com/shell-echo/sandbox-runtime/internal/desktopbroker"
 	"github.com/shell-echo/sandbox-runtime/internal/desktopcandidate"
 	"github.com/shell-echo/sandbox-runtime/internal/sandboxidentity"
+	desktopimage "github.com/shell-echo/sandbox-runtime/profiles/desktop/image"
 	providerpostgres "github.com/shell-echo/sandbox-runtime/provider/adapter/postgres"
 	providerdesktop "github.com/shell-echo/sandbox-runtime/provider/desktop"
 	desktopapplication "github.com/shell-echo/sandbox-runtime/provider/desktop/application"
@@ -248,7 +249,7 @@ func TestDesktopBoundPostgresDockerIntegration(t *testing.T) {
 		MemoryBytes: 1 << 30, NanoCPUs: 1_000_000_000, PidsLimit: 256,
 		InputsBytes: 16 << 20, TmpfsBytes: 256 << 20, WorkspaceBytes: 256 << 20, OutputsBytes: 128 << 20,
 		OperationTimeoutSeconds: 90, ProvenanceTimeoutSeconds: 90, PullTimeoutSeconds: 90, StopTimeoutSeconds: 10,
-		DataRoot: t.TempDir(), CandidateManifestPath: filepath.Join(root, "profiles/desktop/image/manifest.json"),
+		DataRoot: t.TempDir(), CandidateManifestPath: filepath.Join(root, "profiles/desktop/image", desktopimage.LocalCandidateManifestPath),
 		Namespace: namespace, ControllerID: controller, NetworkPolicyReference: policy,
 		MaxSessionsPerSandbox: 1, MaxSessionsPerController: 1, Clock: desktopdocker.ClockFunc(time.Now),
 		BridgeKeyID: "provider-desktop-v2", BridgePublicKey: publicKey}
