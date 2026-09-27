@@ -1795,3 +1795,23 @@ but not an actual network timeout. This still has no authenticated
 Product→Gateway→Provider chain,
 Vault-issued live topology, same-run 16-scenario observations, retained
 non-Docker cleanup receipts or success manifest. The phase stays **5/15**.
+
+Sandbox resolved the same-run evidence question: internal Slice 6 evidence
+version 2 now requires a 128-bit canonical `run_id` and a digest of a private
+receipt index. The bundle verifier reads every run-generated digest reference
+from the manifest, requires a unique matching index entry, opens bounded
+mode-0600 raw bytes and a companion canonical envelope, recalculates both
+digests and checks run/profile/config/source/type/subject identity. Cleanup
+receipts additionally carry the same ownership run ID and a zero remaining
+resource inventory. Scenario raw results must name the exact frozen assertion
+set and participants, not merely a generic `passed` flag. Tests reject
+cross-run substitution even after rewriting
+the envelope and index, wrong subject/config, raw tamper, duplicate/orphan
+reference, missing file, public mode, traversal, unreviewed assertions and
+wrong-run cleanup. Local
+candidate build/archive and source digests remain pre-existing immutable
+inputs; no new build is implied by a new run ID. This is a verifier/component
+checkpoint, not an observed Slice 6 success bundle. It cannot independently
+prove command execution or resist rewriting by an actor who owns all files.
+The trusted full-topology harness, all 16 live scenarios, and complete exact
+cleanup are still absent. Phase 6 remains **5/15**.

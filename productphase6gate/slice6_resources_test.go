@@ -5,8 +5,6 @@ package productphase6gate
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,6 +14,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
 )
 
 const (
@@ -32,11 +32,11 @@ type slice6DockerRun struct {
 }
 
 func newSlice6DockerRun() (slice6DockerRun, error) {
-	random := make([]byte, 16)
-	if _, err := rand.Read(random); err != nil {
+	id, err := phase6security.NewSlice6RunID()
+	if err != nil {
 		return slice6DockerRun{}, err
 	}
-	return slice6DockerRun{id: hex.EncodeToString(random)}, nil
+	return slice6DockerRun{id: id}, nil
 }
 
 func (run slice6DockerRun) label() string { return slice6RunLabel + "=" + run.id }

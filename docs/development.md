@@ -1256,6 +1256,28 @@ runner or success manifest yet. Do not reinterpret a passing preflight,
 resource-ledger component, role-image smoke or the historical
 `phase6slicegate` as a completed full-inventory security gate.
 
+The not-yet-accepted Slice 6 private evidence format is version 2. A final
+run must generate one fresh 128-bit lowercase-hex `run_id` and retain
+`manifest.json`, `receipt-index.json`, and each indexed mode-0600 raw
+observation and companion envelope under one private bundle root. The index
+must resolve every runtime process, container, network, component, external
+probe, scenario and cleanup digest in the manifest. Build/archive/source
+digests are immutable inputs and are not rewritten with each run ID. The
+standalone manifest validator checks structure only; the bundle command
+checks the actual private files and same-run internal consistency:
+
+```bash
+mise exec go@1.26.8 -- env -u GOROOT go run \
+  ./cmd/verify-product-phase6-slice6-evidence \
+  -manifest /absolute/private/bundle/manifest.json \
+  -bundle-root /absolute/private/bundle
+```
+
+Even a passing bundle verification does not prove that a trusted harness
+executed the commands. Only the still-missing full live gate, its auditable
+capture, and exact cleanup may admit Slice 6; never paste older component
+receipts into a new run.
+
 The following formal Slice 5 campaign is historical: reproduce it only from
 the two pinned original revisions and their original inputs. Do not run its
 v1 Desktop private request against the current v2-only candidate command,

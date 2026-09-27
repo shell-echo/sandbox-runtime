@@ -18,13 +18,14 @@ import (
 // that the named commands ran; the gate must retain its raw private receipts.
 const (
 	Slice6EvidenceID      = "product-v1-phase-6-slice-6"
-	Slice6EvidenceVersion = 1
+	Slice6EvidenceVersion = 2
 	maxSlice6EvidenceSize = 8 << 20
 )
 
 var (
 	ErrInvalidSlice6Evidence = errors.New("invalid Phase 6 Slice 6 evidence")
 	slice6RevisionPattern    = regexp.MustCompile(`^[0-9a-f]{40,64}$`)
+	slice6RunIDPattern       = regexp.MustCompile(`^[0-9a-f]{32}$`)
 	slice6ScenarioNames      = []string{
 		"browser_cdp_and_capacity_replay", "browser_external_witness_isolation",
 		"cross_role_and_tenant_denial", "desktop_media_input_and_cleanup",
@@ -53,6 +54,24 @@ var (
 		"role_and_controller_drain":               {"browser-runtime-role", "desktop-runtime-role", "certificate-controller"},
 		"vault_pki_rotation_and_loss":             {"certificate-controller", "vault"},
 	}
+	slice6RequiredAssertions = map[string][]string{
+		"browser_cdp_and_capacity_replay":         {"finite_capacity", "real_cdp_version", "same_authority_replay_denied"},
+		"browser_external_witness_isolation":      {"distinct_external_identities", "grant_isolation", "restore_domain_isolation"},
+		"cross_role_and_tenant_denial":            {"cross_tenant_denied", "wrong_peer_denied", "wrong_route_denied"},
+		"desktop_media_input_and_cleanup":         {"broker_in_parent_observed", "exact_dynamic_cleanup", "real_rtp_and_input"},
+		"direct_egress_and_metadata_denial":       {"alias_only_egress", "metadata_denied", "role_direct_ip_denied"},
+		"dns_rebinding_and_alternate_path_denial": {"alternate_path_denied", "dns_receipt_observed", "rebinding_denied"},
+		"external_dependency_loss":                {"bounded_recovery", "capacity_loss_closes_admission", "witness_loss_closes_admission"},
+		"guest_auth_and_reconnect":                {"binding_revoke_denied", "signed_challenge_welcome", "upgraded_socket_drain"},
+		"least_privilege_active_probes":           {"complete_container_inventory", "effective_uid_gid", "seccomp_capability_mount_limits"},
+		"mtls_identity_and_downgrade_denial":      {"legacy_downgrade_denied", "plaintext_denied", "wrong_certificate_denied"},
+		"policy_authority_loss_and_revocation":    {"authority_loss_closes_egress", "fresh_state_required", "revoked_policy_denied"},
+		"provider_and_executor_restart":           {"distinct_process_instances", "retained_authority", "stale_admission_denied"},
+		"resource_exhaustion_denial":              {"bounded_gateway_connections", "bounded_product_requests", "bounded_workers"},
+		"revoked_leaf_and_crl_rollback_denial":    {"active_socket_drain", "crl_rollback_denied", "vault_revoked_leaf_denied"},
+		"role_and_controller_drain":               {"active_socket_close", "bounded_sigterm", "exact_lease_socket_cleanup"},
+		"vault_pki_rotation_and_loss":             {"fresh_issue_and_overlap", "live_rotation", "loss_closes_admission"},
+	}
 	slice6CleanupNames = []string{
 		"agent_containers", "broker_containers", "controller_containers",
 		"credential_leases", "external_containers", "networks",
@@ -64,6 +83,8 @@ var (
 type Slice6Evidence struct {
 	ID                 string                    `json:"id"`
 	Version            int                       `json:"version"`
+	RunID              string                    `json:"run_id"`
+	ReceiptIndexDigest string                    `json:"receipt_index_digest"`
 	ManifestDigest     string                    `json:"manifest_digest"`
 	Scope              string                    `json:"scope"`
 	RuntimeRevision    string                    `json:"runtime_revision"`
@@ -171,6 +192,7 @@ type Slice6ScenarioEvidence struct {
 type Slice6ScenarioRequirement struct {
 	Name         string
 	Participants []string
+	Assertions   []string
 }
 
 func RequiredSlice6Scenarios() []Slice6ScenarioRequirement {
@@ -178,6 +200,7 @@ func RequiredSlice6Scenarios() []Slice6ScenarioRequirement {
 	for index, name := range slice6ScenarioNames {
 		result[index] = Slice6ScenarioRequirement{
 			Name: name, Participants: append([]string(nil), slice6RequiredParticipants[name]...),
+			Assertions: append([]string(nil), slice6RequiredAssertions[name]...),
 		}
 	}
 	return result
@@ -189,6 +212,9 @@ type Slice6ResourceEvidence struct {
 	InspectorDigest string `json:"inspector_digest"`
 }
 
+// VerifySlice6EvidenceFile checks only the closed manifest structure. It does
+// not read raw receipts or prove a same-run execution. Release admission must
+// additionally call VerifySlice6EvidenceBundle.
 func VerifySlice6EvidenceFile(path string) (Slice6Evidence, error) {
 	if path == "" {
 		return Slice6Evidence{}, ErrInvalidSlice6Evidence
@@ -228,6 +254,7 @@ func VerifySlice6Evidence(document []byte) (Slice6Evidence, error) {
 
 func (e Slice6Evidence) Validate() error {
 	if e.ID != Slice6EvidenceID || e.Version != Slice6EvidenceVersion ||
+		!slice6RunIDPattern.MatchString(e.RunID) || !digestPattern.MatchString(e.ReceiptIndexDigest) ||
 		e.Scope != "same_host_local_candidate_non_release" ||
 		!slice6RevisionPattern.MatchString(e.RuntimeRevision) ||
 		!slice6RevisionPattern.MatchString(e.EvidenceRevision) ||
@@ -291,7 +318,7 @@ func slice6EvidenceDigest(e Slice6Evidence) string {
 	if err != nil {
 		return ""
 	}
-	hash := sha256.Sum256(append([]byte("sandbox-runtime/phase6-slice6/evidence/v1\x00"), document...))
+	hash := sha256.Sum256(append([]byte("sandbox-runtime/phase6-slice6/evidence/v2\x00"), document...))
 	return "sha256:" + hex.EncodeToString(hash[:])
 }
 

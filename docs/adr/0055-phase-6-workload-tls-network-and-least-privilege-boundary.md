@@ -1198,3 +1198,28 @@ session's continued operation. It does not prove the
 complete v3 process graph, issuer/broker
 network path, Creating uncertainty recovery, all attach/drain races, or Slice
 6 readiness. Phase 6 remains **5/15**.
+
+### Single-run Slice 6 evidence identity (2026-09-27)
+
+The not-yet-accepted Slice 6 internal manifest is explicitly versioned to v2.
+One trusted full-topology harness generates one fresh 128-bit lowercase-hex
+`run_id` at run start, uses it for run-owned resources and runtime receipts,
+and binds a private canonical receipt-index digest in the manifest. Each
+referenced runtime receipt has independently hashed bounded raw bytes and a
+closed companion envelope binding the same run, logical kind/subject,
+profile/config/source revision and tree, observation time and result.
+Scenario raw results must match the frozen 16 names, participants and
+assertions; cleanup raw results must describe zero remaining resources owned
+by that run. The bundle verifier resolves all run-generated manifest digest
+references to actual private files and rejects missing, duplicate, orphan,
+cross-run and tampered entries. Manifest-only verification is structural and
+cannot close the slice.
+
+Pinned source and candidate build/archive/OCI receipts retain their original
+immutable identities; a new run does not relabel or rebuild the same image.
+Internal run-ID/digest consistency is not an independent attestation that the
+commands actually executed, nor protection against an actor able to rewrite
+the entire bundle. That origin remains the trusted gate's auditable live
+capture and exact cleanup. This adds neither a second security authority nor
+a Product/Provider Contract change. The complete live topology and all 16
+scenarios are still open; Phase 6 remains **5/15**.

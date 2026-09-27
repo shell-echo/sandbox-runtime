@@ -124,6 +124,9 @@ func validateSlice6ScenarioRoutes(profile phase6security.Profile, routes []slice
 		}
 		assertions := append([]string(nil), route.assertions...)
 		slices.Sort(assertions)
+		if !slices.Equal(assertions, required[index].Assertions) {
+			return errors.New("Slice 6 scenario assertions do not match frozen requirements")
+		}
 		if assertions[0] == "" || slices.ContainsFunc(assertions[1:], func(value string) bool { return value == "" }) {
 			return errors.New("Slice 6 scenario assertion is absent")
 		}

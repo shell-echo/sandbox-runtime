@@ -20,15 +20,18 @@ func TestSlice6ScenarioRequirementsAreFrozenCopies(t *testing.T) {
 	}
 	for index, item := range required {
 		if item.Name != slice6ScenarioNames[index] ||
-			!slices.Equal(item.Participants, slice6RequiredParticipants[item.Name]) {
+			!slices.Equal(item.Participants, slice6RequiredParticipants[item.Name]) ||
+			!slices.Equal(item.Assertions, slice6RequiredAssertions[item.Name]) {
 			t.Fatalf("Slice 6 frozen scenario %d drifted: %#v", index, item)
 		}
 	}
 	required[0].Name = "rewritten"
 	required[0].Participants[0] = "rewritten"
+	required[0].Assertions[0] = "rewritten"
 	again := RequiredSlice6Scenarios()
 	if again[0].Name != slice6ScenarioNames[0] ||
-		!slices.Equal(again[0].Participants, slice6RequiredParticipants[again[0].Name]) {
+		!slices.Equal(again[0].Participants, slice6RequiredParticipants[again[0].Name]) ||
+		!slices.Equal(again[0].Assertions, slice6RequiredAssertions[again[0].Name]) {
 		t.Fatal("caller mutated Slice 6 verifier requirements")
 	}
 }
@@ -105,6 +108,7 @@ func validSlice6EvidenceFixture(t *testing.T) Slice6Evidence {
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	later := time.Now().UTC().Add(time.Second).Format(time.RFC3339Nano)
 	evidence := Slice6Evidence{ID: Slice6EvidenceID, Version: Slice6EvidenceVersion,
+		RunID: strings.Repeat("c", 32), ReceiptIndexDigest: testDigest("receipt-index"),
 		Scope: "same_host_local_candidate_non_release", RuntimeRevision: strings.Repeat("a", 40),
 		RuntimeTreeDigest: testDigest("runtime-tree"), EvidenceRevision: strings.Repeat("b", 40),
 		EvidenceTreeDigest: testDigest("evidence-tree"), ObservedAt: now, Profile: profile,
@@ -179,6 +183,10 @@ func TestSlice6EvidenceRequiresCompleteClosedInventory(t *testing.T) {
 		t.Fatalf("closed unit fixture rejected: %v", err)
 	}
 	for name, mutate := range map[string]func(*Slice6Evidence){
+		"missing run ID":          func(e *Slice6Evidence) { e.RunID = "" },
+		"wrong run ID format":     func(e *Slice6Evidence) { e.RunID = strings.Repeat("C", 32) },
+		"missing receipt index":   func(e *Slice6Evidence) { e.ReceiptIndexDigest = "" },
+		"legacy evidence version": func(e *Slice6Evidence) { e.Version = 1 },
 		"missing process":         func(e *Slice6Evidence) { e.Processes = e.Processes[1:] },
 		"missing component":       func(e *Slice6Evidence) { e.Components = nil },
 		"component pid drift":     func(e *Slice6Evidence) { e.Components[0].PID++ },
@@ -261,7 +269,7 @@ func TestSlice6EvidenceRequiresCompleteClosedInventory(t *testing.T) {
 	for _, malformed := range [][]byte{
 		bytes.Replace(document, []byte(`"id":`), []byte(`"id":"duplicate","id":`), 1),
 		append(append([]byte(nil), document...), []byte(`{}`)...),
-		bytes.Replace(document, []byte(`"version":1`), []byte(`"version":1,"unknown":true`), 1),
+		bytes.Replace(document, []byte(`"version":2`), []byte(`"version":2,"unknown":true`), 1),
 	} {
 		if _, err := VerifySlice6Evidence(malformed); !errors.Is(err, ErrInvalidSlice6Evidence) {
 			t.Fatalf("invalid JSON accepted: %v", err)
