@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shell-echo/sandbox-runtime/internal/phase6rolecandidate"
 	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
 )
 
@@ -118,8 +119,12 @@ func TestPhase6Slice6DockerResourceLedger(t *testing.T) {
 		t.Skip("set " + slice6LedgerEnv + "=1 for the real Docker ownership component")
 	}
 	image := os.Getenv("SANDBOX_RUNTIME_PHASE6_LOCAL_ROLE_IMAGE")
+	manifestPath := os.Getenv("SANDBOX_RUNTIME_PHASE6_LOCAL_ROLE_MANIFEST")
 	if len(image) != 71 || !strings.HasPrefix(image, "sha256:") || !lowerHexSlice6(strings.TrimPrefix(image, "sha256:")) {
 		t.Fatal("exact local role image digest is required")
+	}
+	if !absoluteCleanSlice6Path(manifestPath) {
+		t.Fatal("absolute private local role candidate manifest is required")
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
@@ -134,6 +139,11 @@ func TestPhase6Slice6DockerResourceLedger(t *testing.T) {
 	sourceRevision := strings.TrimSpace(string(headDocument))
 	if err := verifyCleanSlice6Source(ctx, sourceRoot, sourceRevision); err != nil {
 		t.Fatal(err)
+	}
+	manifest, err := phase6rolecandidate.LoadCurrent(ctx, sourceRoot, manifestPath)
+	if err != nil || manifest.RuntimeStoreImageID != image || manifest.Source.Deployment != "provider-runtime" ||
+		manifest.Source.BuildTarget != "core" || manifest.Source.SourceRevision != sourceRevision {
+		t.Fatal("Provider resource-ledger image is not bound to the current core-role candidate")
 	}
 	run, err := newSlice6DockerRun()
 	if err != nil {
@@ -155,7 +165,8 @@ func TestPhase6Slice6DockerResourceLedger(t *testing.T) {
 	}
 	if err != nil || json.Unmarshal(inspect, &images) != nil || len(images) != 1 || images[0].ID != image ||
 		images[0].Config.Labels["io.github.shell-echo.sandbox-runtime.phase6-candidate"] != "local-only-non-release" ||
-		images[0].Config.Labels["io.github.shell-echo.sandbox-runtime.source-revision"] != sourceRevision {
+		images[0].Config.Labels["io.github.shell-echo.sandbox-runtime.source-revision"] != sourceRevision ||
+		images[0].Config.Labels["io.github.shell-echo.sandbox-runtime.role-target"] != "core" {
 		t.Fatal("local-only role image is not loaded by exact digest")
 	}
 	var network phase6security.Network
