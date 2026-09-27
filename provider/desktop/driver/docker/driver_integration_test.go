@@ -14,6 +14,7 @@ import (
 
 	"github.com/moby/moby/client"
 
+	"github.com/shell-echo/sandbox-runtime/internal/sandboxidentity"
 	desktopimage "github.com/shell-echo/sandbox-runtime/profiles/desktop/image"
 )
 
@@ -98,7 +99,7 @@ func TestDesktopBrokerTransportIntegration(t *testing.T) {
 	}
 	driver := &Driver{engine: backend}
 	for {
-		descriptor, describeErr := driver.brokerDescriptor(ctx, id)
+		descriptor, describeErr := driver.brokerDescriptor(ctx, id, sandboxidentity.Slot{})
 		if describeErr == nil {
 			if descriptor.Validate() != nil {
 				t.Fatalf("invalid broker descriptor = %#v", descriptor)
@@ -109,11 +110,11 @@ func TestDesktopBrokerTransportIntegration(t *testing.T) {
 			t.Fatalf("private Desktop broker did not become ready: %v", describeErr)
 		}
 	}
-	first, err := driver.brokerDescriptor(ctx, id)
+	first, err := driver.brokerDescriptor(ctx, id, sandboxidentity.Slot{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := driver.brokerDescriptor(ctx, id)
+	second, err := driver.brokerDescriptor(ctx, id, sandboxidentity.Slot{})
 	if err != nil || !reflect.DeepEqual(first, second) {
 		t.Fatalf("fresh reconnect descriptor = %#v, %v", second, err)
 	}
