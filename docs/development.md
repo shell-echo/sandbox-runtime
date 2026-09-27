@@ -1236,11 +1236,25 @@ SANDBOX_RUNTIME_PHASE6_LOCAL_ROLE_INTEGRATION=1 \
     ./profiles/phase6/local-role
 ```
 
-`phase6slice6gate` currently checks only the frozen 16-scenario routing plan
-and opt-in strict profile/source/candidate/image preflight. It has no Slice 6
-release runner or success manifest yet. Do not reinterpret a passing
-preflight, this role-image smoke or the historical `phase6slicegate` as a
-completed full-inventory security gate.
+`phase6slice6gate` currently checks the frozen 16-scenario routing plan and
+opt-in strict profile/source/candidate/loaded-image preflight. Its separate
+opt-in Docker ownership component accepts the exact `image=sha256:...` from
+a local role build of the same clean HEAD and exercises one real high-UID role
+command on a run-labeled internal network, followed by exact container,
+network and volume label inventories:
+
+```bash
+SANDBOX_RUNTIME_PHASE6_SLICE6_RESOURCE_LEDGER=1 \
+SANDBOX_RUNTIME_PHASE6_LOCAL_ROLE_IMAGE=sha256:<exact-local-role-image> \
+  mise exec go@1.26.8 -- env -u GOROOT go test -race \
+    -tags=phase6slice6gate -count=1 \
+    -run '^TestPhase6Slice6DockerResourceLedger$' ./productphase6gate
+```
+
+This is not an authenticated service chain. There is no Slice 6 release
+runner or success manifest yet. Do not reinterpret a passing preflight,
+resource-ledger component, role-image smoke or the historical
+`phase6slicegate` as a completed full-inventory security gate.
 
 The following formal Slice 5 campaign is historical: reproduce it only from
 the two pinned original revisions and their original inputs. Do not run its

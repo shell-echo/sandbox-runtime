@@ -1778,3 +1778,20 @@ workload TLS bootstrap/revocation component test also passed. These are
 different disposable component runs, not spliceable Slice 6 evidence. No
 complete real-command topology, retained raw same-run receipts or release
 manifest exists; Phase 6 remains **5/15**.
+
+Next gate-infrastructure increment (not acceptance): loaded local images in
+the opt-in preflight are now checked against the profile's exact Docker store
+ID, Linux platform and OCI descriptor kind/digest, instead of merely requiring
+that `docker image inspect` returns some ID. Negative tests reject a wrong
+store ID, descriptor, platform, object kind and ambiguous inspection. A
+separate opt-in real-Docker resource-ledger component uses a fresh random
+128-bit run label, runs a source-bound high-UID repository command on an
+internal network, and re-discovers then removes only exact run-labeled
+containers/networks/volumes. It checks the final three Docker classes are
+empty. The component deliberately discards the returned IDs of a second
+created network/container, then checks label re-discovery and cleanup; this
+simulates a lost create receipt after the daemon committed the side effect,
+but not an actual network timeout. This still has no authenticated
+Product→Gateway→Provider chain,
+Vault-issued live topology, same-run 16-scenario observations, retained
+non-Docker cleanup receipts or success manifest. The phase stays **5/15**.

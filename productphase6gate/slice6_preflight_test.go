@@ -4,11 +4,13 @@ package productphase6gate
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -108,17 +110,66 @@ func TestPhase6Slice6TopologyPreflight(t *testing.T) {
 	}
 	seen := make(map[string]bool)
 	for _, principal := range input.profile.Principals {
-		if principal.ImageLocation != "local" || seen[principal.ImageDigest] {
+		if principal.ImageLocation != "local" || seen[principal.ImageDigest+"/"+principal.ImagePlatform] {
 			continue
 		}
-		seen[principal.ImageDigest] = true
-		if output, err := exec.CommandContext(ctx, "docker", "image", "inspect", "--format", "{{.Id}}", principal.ImageDigest).CombinedOutput(); err != nil || len(strings.TrimSpace(string(output))) == 0 {
-			t.Fatalf("Slice 6 local role image is not loaded for %s", principal.Name)
+		seen[principal.ImageDigest+"/"+principal.ImagePlatform] = true
+		output, err := exec.CommandContext(ctx, "docker", "image", "inspect", principal.ImageDigest).Output()
+		if err != nil || verifyLoadedSlice6Image(principal, output) != nil {
+			t.Fatalf("Slice 6 exact local role image identity is unavailable for %s", principal.Name)
 		}
 	}
 	if len(seen) == 0 {
 		t.Fatal("Slice 6 profile has no local role candidates")
 	}
+}
+
+// This checks only the loaded store object's exact identity. A live gate must
+// additionally bind the container-selected manifest, raw OCI bytes and layers.
+func verifyLoadedSlice6Image(principal phase6security.Principal, document []byte) error {
+	if principal.ImageLocation != "local" || principal.ImageReference != principal.ImageDigest || len(document) == 0 || len(document) > 2<<20 {
+		return errors.New("Slice 6 local image identity is invalid")
+	}
+	var images []struct {
+		ID           string `json:"Id"`
+		OS           string `json:"Os"`
+		Architecture string `json:"Architecture"`
+		Variant      string `json:"Variant"`
+		Descriptor   *struct {
+			MediaType string `json:"mediaType"`
+			Digest    string `json:"digest"`
+		} `json:"Descriptor"`
+	}
+	if json.Unmarshal(document, &images) != nil || len(images) != 1 || images[0].ID != principal.ImageDigest || images[0].OS != "linux" {
+		return errors.New("Slice 6 Docker store identity differs from profile")
+	}
+	platform := "linux/" + images[0].Architecture
+	if images[0].Variant != "" {
+		platform += "/" + images[0].Variant
+	}
+	if platform != principal.ImagePlatform && !(platform == "linux/arm64" && principal.ImagePlatform == "linux/arm64/v8") &&
+		!(platform == "linux/arm64/v8" && principal.ImagePlatform == "linux/arm64") {
+		return errors.New("Slice 6 Docker image platform differs from profile")
+	}
+	if principal.ImageIdentityKind == phase6security.ImageIdentityLocalConfig {
+		if images[0].Descriptor != nil {
+			return errors.New("Slice 6 local config has a store descriptor")
+		}
+		return nil
+	}
+	if images[0].Descriptor == nil || images[0].Descriptor.Digest != principal.ImageDigest {
+		return errors.New("Slice 6 Docker descriptor differs from profile")
+	}
+	mediaTypes := []string{"application/vnd.oci.image.manifest.v1+json", "application/vnd.docker.distribution.manifest.v2+json"}
+	if principal.ImageIdentityKind == phase6security.ImageIdentityOCIIndex {
+		mediaTypes = []string{"application/vnd.oci.image.index.v1+json", "application/vnd.docker.distribution.manifest.list.v2+json"}
+	} else if principal.ImageIdentityKind != phase6security.ImageIdentityOCIManifest {
+		return errors.New("Slice 6 local image kind is invalid")
+	}
+	if !slices.Contains(mediaTypes, images[0].Descriptor.MediaType) {
+		return errors.New("Slice 6 Docker descriptor kind differs from profile")
+	}
+	return nil
 }
 
 func TestSlice6GateInputRejectsMissingAuthority(t *testing.T) {
@@ -128,6 +179,54 @@ func TestSlice6GateInputRejectsMissingAuthority(t *testing.T) {
 	if absoluteCleanSlice6Path("relative/profile.json") || absoluteCleanSlice6Path("/tmp/../tmp/profile.json") ||
 		lowerHexSlice6(strings.Repeat("g", 40)) || !lowerHexSlice6(strings.Repeat("a", 40)) {
 		t.Fatal("Slice 6 path or revision guard drifted")
+	}
+}
+
+func TestSlice6LoadedImagePreflightRejectsIdentityAndPlatformDrift(t *testing.T) {
+	digest := "sha256:" + strings.Repeat("a", 64)
+	principal := phase6security.Principal{ImageLocation: "local", ImageReference: digest, ImageDigest: digest,
+		ImageIdentityKind: phase6security.ImageIdentityOCIManifest, ImagePlatform: "linux/arm64/v8"}
+	document := func(id, osName, architecture, variant, mediaType, descriptorDigest string) []byte {
+		value := map[string]any{"Id": id, "Os": osName, "Architecture": architecture, "Variant": variant,
+			"Descriptor": map[string]any{"mediaType": mediaType, "digest": descriptorDigest}}
+		encoded, err := json.Marshal([]any{value})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return encoded
+	}
+	manifestMediaType := "application/vnd.oci.image.manifest.v1+json"
+	valid := document(digest, "linux", "arm64", "v8", manifestMediaType, digest)
+	if err := verifyLoadedSlice6Image(principal, valid); err != nil {
+		t.Fatalf("exact loaded image rejected: %v", err)
+	}
+	for name, candidate := range map[string][]byte{
+		"wrong store ID":         document("sha256:"+strings.Repeat("b", 64), "linux", "arm64", "v8", manifestMediaType, digest),
+		"wrong descriptor":       document(digest, "linux", "arm64", "v8", manifestMediaType, "sha256:"+strings.Repeat("b", 64)),
+		"wrong platform":         document(digest, "linux", "amd64", "", manifestMediaType, digest),
+		"wrong operating system": document(digest, "windows", "arm64", "v8", manifestMediaType, digest),
+		"wrong object kind":      document(digest, "linux", "arm64", "v8", "application/vnd.oci.image.index.v1+json", digest),
+		"ambiguous inspection":   append(append([]byte("["), valid[1:len(valid)-1]...), append([]byte(","), valid[1:]...)...),
+	} {
+		if err := verifyLoadedSlice6Image(principal, candidate); err == nil {
+			t.Errorf("%s admitted", name)
+		}
+	}
+	if err := verifyLoadedSlice6Image(principal, []byte("not json")); err == nil {
+		t.Fatal("invalid Docker inspection admitted")
+	}
+	index := principal
+	index.ImageIdentityKind = phase6security.ImageIdentityOCIIndex
+	if err := verifyLoadedSlice6Image(index, valid); err == nil {
+		t.Fatal("index profile admitted a manifest descriptor")
+	}
+	config := principal
+	config.ImageIdentityKind = phase6security.ImageIdentityLocalConfig
+	if err := verifyLoadedSlice6Image(config, valid); err == nil {
+		t.Fatal("local config profile admitted a descriptor")
+	}
+	if err := verifyLoadedSlice6Image(config, []byte(`[{"Id":"`+digest+`","Os":"linux","Architecture":"arm64"}]`)); err != nil {
+		t.Fatalf("local config without descriptor rejected: %v", err)
 	}
 }
 
