@@ -50,8 +50,17 @@ import (
 )
 
 func newProductionDesktopProvider(ctx context.Context, cfg *config.ProviderProcessConfig, state *providerpostgres.Store, pool *pgxpool.Pool, registry *secretref.Registry) (*productionProviderComposition, error) { //nolint:cyclop
-	if cfg == nil || cfg.Profile != config.ProviderProcessDesktopProfile || state == nil || pool == nil || registry == nil {
+	if cfg == nil || cfg.Profile != config.ProviderProcessDesktopProfile {
 		return nil, errors.New("Desktop Provider production dependencies are unavailable")
+	}
+	if cfg.SchemaVersion == config.ProviderProductionSchemaV3 && cfg.DeploymentLevel != config.ProviderLocalCandidateLevel {
+		return nil, errors.New("Desktop Provider v3 production artifact admission is unavailable")
+	}
+	if state == nil || pool == nil || registry == nil {
+		return nil, errors.New("Desktop Provider production dependencies are unavailable")
+	}
+	if err := cfg.Validate(); err != nil {
+		return nil, fmt.Errorf("validate Desktop Provider production authority: %w", err)
 	}
 	stack := &providerCloseStack{}
 	fail := func(err error) (*productionProviderComposition, error) { return nil, errors.Join(err, stack.close()) }

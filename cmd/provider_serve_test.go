@@ -141,9 +141,20 @@ func TestBrowserProviderCannotFallThroughToCodingComposition(t *testing.T) {
 	}
 	composition, err = newProductionProvider(context.Background(), &config.ProviderProcessConfig{
 		Profile: config.ProviderProcessDesktopProfile, SchemaVersion: config.ProviderProductionSchemaV3,
+		DeploymentLevel: config.ProviderLocalCandidateLevel,
 	}, nil, nil, nil)
 	if err == nil || composition != nil || !strings.Contains(err.Error(), "Desktop Provider production dependencies") {
 		t.Fatalf("Desktop route bypassed its real composition guard = %v, %v", composition, err)
+	}
+}
+
+func TestDesktopV3ProductionCannotBypassCommandMatrix(t *testing.T) {
+	composition, err := newProductionProvider(context.Background(), &config.ProviderProcessConfig{
+		Profile: config.ProviderProcessDesktopProfile, SchemaVersion: config.ProviderProductionSchemaV3,
+		DeploymentLevel: config.ProviderProductionLevel,
+	}, nil, nil, nil)
+	if err == nil || composition != nil || !strings.Contains(err.Error(), "production artifact admission is unavailable") {
+		t.Fatalf("Desktop v3 production reached composition = %v, %v", composition, err)
 	}
 }
 
