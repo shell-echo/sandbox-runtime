@@ -18,7 +18,7 @@ import (
 // that the named commands ran; the gate must retain its raw private receipts.
 const (
 	Slice6EvidenceID      = "product-v1-phase-6-slice-6"
-	Slice6EvidenceVersion = 2
+	Slice6EvidenceVersion = 3
 	maxSlice6EvidenceSize = 8 << 20
 )
 
@@ -95,6 +95,7 @@ type Slice6Evidence struct {
 	Profile            Profile                   `json:"profile"`
 	Observations       ObservationSet            `json:"observations"`
 	Candidates         []Slice6CandidateImage    `json:"candidates"`
+	DescriptorReceipts []Slice6DescriptorReceipt `json:"descriptor_receipts"`
 	Processes          []Slice6ProcessEvidence   `json:"processes"`
 	Components         []Slice6ComponentEvidence `json:"components"`
 	External           []Slice6ExternalEvidence  `json:"external"`
@@ -103,23 +104,48 @@ type Slice6Evidence struct {
 	NonClaims          []string                  `json:"non_claims"`
 }
 
-// Candidate records name local, re-importable build output separately from
-// registry descriptors and from the custom evidence document digest.
+const (
+	Slice6CandidateRepositoryRole = "repository_role"
+	Slice6CandidateDesktop        = "desktop_candidate"
+)
+
+// Candidate records only the artifact identity shared by both supported local
+// sources. Build-specific claims remain in each independently verified source
+// manifest; this neutral projection cannot manufacture their meanings.
 type Slice6CandidateImage struct {
-	BuildTarget           string `json:"build_target"`
-	RuntimeStoreImageID   string `json:"runtime_store_image_id"`
-	OCIConfigDigest       string `json:"oci_config_digest"`
-	Platform              string `json:"platform"`
-	SourceRevision        string `json:"source_revision"`
-	SourceTreeDigest      string `json:"source_tree_digest"`
-	BuildContextDigest    string `json:"build_context_digest"`
-	DockerfileDigest      string `json:"dockerfile_digest"`
-	ToolchainDigest       string `json:"toolchain_digest"`
-	BaseImageDigest       string `json:"base_image_digest"`
-	DependencyLockDigest  string `json:"dependency_lock_digest"`
-	BuildParametersDigest string `json:"build_parameters_digest"`
-	ArchiveDigest         string `json:"archive_digest"`
-	RootFSChainDigest     string `json:"rootfs_chain_digest"`
+	Kind                   string                     `json:"kind"`
+	ManifestSchema         string                     `json:"manifest_schema"`
+	ManifestDigest         string                     `json:"manifest_digest"`
+	RuntimeStoreImageID    string                     `json:"runtime_store_image_id"`
+	ImageIdentityKind      string                     `json:"image_identity_kind"`
+	SelectedManifestDigest string                     `json:"selected_manifest_digest"`
+	OCIConfigDigest        string                     `json:"oci_config_digest"`
+	DescriptorProofDigest  string                     `json:"descriptor_proof_digest"`
+	Platform               string                     `json:"platform"`
+	SourceRevision         string                     `json:"source_revision"`
+	SourceTreeDigest       string                     `json:"source_tree_digest"`
+	ArchiveDigest          string                     `json:"archive_digest"`
+	ArchiveSize            int64                      `json:"archive_size"`
+	Role                   *Slice6RoleCandidateRef    `json:"role,omitempty"`
+	Desktop                *Slice6DesktopCandidateRef `json:"desktop,omitempty"`
+}
+
+type Slice6RoleCandidateRef struct {
+	SourceDeployment string `json:"source_deployment"`
+	BuildTarget      string `json:"build_target"`
+}
+
+type Slice6DesktopCandidateRef struct {
+	ProfileID string `json:"profile_id"`
+}
+
+// ReceiptDigest is SHA256 over the exact retained descriptor payload file,
+// not the domain-separated semantic ImageDescriptorProofDigest and not the
+// run envelope's own SHA256. Only this digest enters the raw-receipt index.
+type Slice6DescriptorReceipt struct {
+	Kind          string `json:"kind"`
+	Subject       string `json:"subject"`
+	ReceiptDigest string `json:"receipt_digest"`
 }
 
 type Slice6ProcessEvidence struct {
@@ -148,18 +174,23 @@ type Slice6ComponentEvidence struct {
 }
 
 type Slice6ExternalEvidence struct {
-	Name                    string                            `json:"name"`
-	IdentityDigest          string                            `json:"identity_digest"`
-	ImageReference          string                            `json:"image_reference"`
-	RuntimeStoreImageID     string                            `json:"runtime_store_image_id"`
-	SelectedManifestDigest  string                            `json:"selected_manifest_digest"`
-	OCIConfigDigest         string                            `json:"oci_config_digest"`
-	RuntimePlatform         string                            `json:"runtime_platform"`
-	DescriptorProofDigest   string                            `json:"descriptor_proof_digest"`
-	TLSProbeDigest          string                            `json:"tls_probe_digest"`
-	ReachabilityProbeDigest string                            `json:"reachability_probe_digest"`
-	RestoreDomainSeparated  bool                              `json:"restore_domain_separated"`
-	PostgresServerAuth      *Slice6PostgresServerAuthEvidence `json:"postgres_server_auth,omitempty"`
+	Name                       string                            `json:"name"`
+	IdentityDigest             string                            `json:"identity_digest"`
+	ContainerID                string                            `json:"container_id"`
+	ImageReference             string                            `json:"image_reference"`
+	RuntimeStoreImageID        string                            `json:"runtime_store_image_id"`
+	RuntimeStoreDescriptor     ImageDescriptor                   `json:"runtime_store_descriptor"`
+	SelectedManifestDescriptor ImageDescriptor                   `json:"selected_manifest_descriptor"`
+	SelectedManifestDigest     string                            `json:"selected_manifest_digest"`
+	OCIConfigDigest            string                            `json:"oci_config_digest"`
+	RuntimePlatform            string                            `json:"runtime_platform"`
+	DescriptorProofDigest      string                            `json:"descriptor_proof_digest"`
+	ContainerInspectDigest     string                            `json:"container_inspect_digest"`
+	ImageInspectDigest         string                            `json:"image_inspect_digest"`
+	TLSProbeDigest             string                            `json:"tls_probe_digest"`
+	ReachabilityProbeDigest    string                            `json:"reachability_probe_digest"`
+	RestoreDomainSeparated     bool                              `json:"restore_domain_separated"`
+	PostgresServerAuth         *Slice6PostgresServerAuthEvidence `json:"postgres_server_auth,omitempty"`
 }
 
 // Slice6PostgresServerAuthEvidence names private raw receipts retained by the
@@ -263,7 +294,8 @@ func (e Slice6Evidence) Validate() error {
 		!digestPattern.MatchString(e.EvidenceTreeDigest) ||
 		!validSlice6Time(e.ObservedAt) || e.Profile.Validate() != nil ||
 		ValidateObservations(e.Profile, e.Observations) != nil ||
-		!validSlice6Candidates(e.Profile, e.Candidates, e.RuntimeRevision, e.RuntimeTreeDigest) ||
+		!validSlice6Candidates(e.Profile, e.Observations, e.Candidates, e.RuntimeRevision, e.RuntimeTreeDigest) ||
+		!validSlice6DescriptorReceipts(e.Profile, e.DescriptorReceipts) ||
 		!validSlice6Processes(e.Profile, e.Observations, e.Processes) ||
 		!validSlice6Components(e.Observations, e.Components) ||
 		!validSlice6External(e.Profile, e.External) ||
@@ -278,27 +310,72 @@ func (e Slice6Evidence) Validate() error {
 	return nil
 }
 
-func validSlice6Candidates(profile Profile, values []Slice6CandidateImage, revision, treeDigest string) bool {
+func validSlice6DescriptorReceipts(profile Profile, values []Slice6DescriptorReceipt) bool {
+	if len(values) != len(profile.Principals)+len(profile.External) {
+		return false
+	}
+	expected := make(map[string]bool, len(values))
+	for _, principal := range profile.Principals {
+		expected["container/"+principal.Name] = true
+	}
+	for _, external := range profile.External {
+		expected["external/"+external.Name] = true
+	}
+	previous := ""
+	for _, value := range values {
+		key := value.Kind + "/" + value.Subject
+		if key <= previous || !expected[key] || !digestPattern.MatchString(value.ReceiptDigest) {
+			return false
+		}
+		previous = key
+	}
+	return true
+}
+
+func validSlice6Candidates(profile Profile, observations ObservationSet, values []Slice6CandidateImage, revision, treeDigest string) bool {
 	type imageAuthority struct {
-		config string
-		target string
+		config, kind, selected, imageKind, proof, target string
+		deployments                                      map[string]bool
 	}
 	expected := make(map[string]imageAuthority)
+	observed := make(map[string]ContainerObservation, len(observations.Containers))
+	for _, container := range observations.Containers {
+		observed[container.DeploymentName] = container
+	}
 	for _, principal := range profile.Principals {
 		if principal.ImageLocation == "local" {
 			target, err := Slice6DesiredImageTarget(principal.Name)
 			if err != nil || target == Slice6BrowserPublishedImage {
 				return false
 			}
-			config := principal.ImageConfigDigest
-			if principal.ImageIdentityKind == ImageIdentityLocalConfig {
-				config = principal.ImageDigest
-			}
-			key := principal.ImageDigest + "/" + principal.ImagePlatform
-			if existing, found := expected[key]; found && existing != (imageAuthority{config: config, target: target}) {
+			if principal.ImageIdentityKind != ImageIdentityOCIManifest && principal.ImageIdentityKind != ImageIdentityOCIIndex {
 				return false
 			}
-			expected[key] = imageAuthority{config: config, target: target}
+			selected := principal.ImageDigest
+			if principal.ImageIdentityKind == ImageIdentityOCIIndex {
+				selected = principal.ImageSelectedManifestDigest
+			}
+			kind := Slice6CandidateRepositoryRole
+			if target == Slice6DesktopCandidateImage {
+				kind = Slice6CandidateDesktop
+			}
+			observation, ok := observed[principal.Name]
+			if !ok || !digestPattern.MatchString(observation.ImageDescriptorProofDigest) {
+				return false
+			}
+			key := principal.ImageDigest + "/" + principal.ImagePlatform
+			value, found := expected[key]
+			if !found {
+				value = imageAuthority{config: principal.ImageConfigDigest, kind: kind, selected: selected,
+					imageKind: principal.ImageIdentityKind, proof: observation.ImageDescriptorProofDigest,
+					target: target, deployments: make(map[string]bool)}
+			} else if value.config != principal.ImageConfigDigest || value.kind != kind || value.selected != selected ||
+				value.imageKind != principal.ImageIdentityKind || value.proof != observation.ImageDescriptorProofDigest ||
+				value.target != target {
+				return false
+			}
+			value.deployments[principal.Name] = true
+			expected[key] = value
 		}
 	}
 	if len(values) != len(expected) {
@@ -308,17 +385,30 @@ func validSlice6Candidates(profile Profile, values []Slice6CandidateImage, revis
 	for _, value := range values {
 		key := value.RuntimeStoreImageID + "/" + value.Platform
 		if key <= previous || !digestPattern.MatchString(value.RuntimeStoreImageID) ||
-			!digestPattern.MatchString(value.OCIConfigDigest) ||
-			!imagePlatformPattern.MatchString(value.Platform) || value.SourceRevision != revision ||
-			value.SourceTreeDigest != treeDigest ||
-			!digestPattern.MatchString(value.BuildContextDigest) || !digestPattern.MatchString(value.DockerfileDigest) ||
-			!digestPattern.MatchString(value.ToolchainDigest) || !digestPattern.MatchString(value.BaseImageDigest) ||
-			!digestPattern.MatchString(value.DependencyLockDigest) || !digestPattern.MatchString(value.BuildParametersDigest) ||
-			!digestPattern.MatchString(value.ArchiveDigest) || !digestPattern.MatchString(value.RootFSChainDigest) {
+			!digestPattern.MatchString(value.ManifestDigest) || len(value.ManifestSchema) < 1 || len(value.ManifestSchema) > 128 ||
+			!digestPattern.MatchString(value.OCIConfigDigest) || !digestPattern.MatchString(value.DescriptorProofDigest) ||
+			!digestPattern.MatchString(value.SelectedManifestDigest) || !imagePlatformPattern.MatchString(value.Platform) ||
+			value.SourceRevision != revision || value.SourceTreeDigest != treeDigest ||
+			!digestPattern.MatchString(value.ArchiveDigest) || value.ArchiveSize < 1 || value.ArchiveSize > 8<<30 {
 			return false
 		}
-		if authority, ok := expected[key]; !ok || authority.config != value.OCIConfigDigest ||
-			authority.target != value.BuildTarget {
+		authority, ok := expected[key]
+		if !ok || authority.config != value.OCIConfigDigest || authority.kind != value.Kind ||
+			authority.selected != value.SelectedManifestDigest || authority.imageKind != value.ImageIdentityKind ||
+			authority.proof != value.DescriptorProofDigest {
+			return false
+		}
+		if value.Kind == Slice6CandidateRepositoryRole {
+			if value.Role == nil || value.Desktop != nil || value.Role.BuildTarget != authority.target ||
+				!authority.deployments[value.Role.SourceDeployment] {
+				return false
+			}
+		} else if value.Kind == Slice6CandidateDesktop {
+			if value.Desktop == nil || value.Role != nil || value.Desktop.ProfileID == "" ||
+				authority.target != Slice6DesktopCandidateImage {
+				return false
+			}
+		} else {
 			return false
 		}
 		previous = key
@@ -332,7 +422,7 @@ func slice6EvidenceDigest(e Slice6Evidence) string {
 	if err != nil {
 		return ""
 	}
-	hash := sha256.Sum256(append([]byte("sandbox-runtime/phase6-slice6/evidence/v2\x00"), document...))
+	hash := sha256.Sum256(append([]byte("sandbox-runtime/phase6-slice6/evidence/v3\x00"), document...))
 	return "sha256:" + hex.EncodeToString(hash[:])
 }
 
@@ -419,9 +509,15 @@ func validSlice6External(profile Profile, values []Slice6ExternalEvidence) bool 
 			selected = expected.ImageSelectedManifestDigest
 		}
 		if value.Name != expected.Name || value.IdentityDigest != expected.IdentityDigest ||
+			!containerIDPattern.MatchString(value.ContainerID) ||
 			value.ImageReference != expected.ImageReference || value.RuntimeStoreImageID != expected.ImageDigest ||
+			value.RuntimeStoreDescriptor.Digest != expected.ImageDigest || value.RuntimeStoreDescriptor.Size < 1 ||
+			!validStoreDescriptorMediaType(expected.ImageIdentityKind, value.RuntimeStoreDescriptor.MediaType) ||
+			value.SelectedManifestDescriptor.Digest != selected || value.SelectedManifestDescriptor.Size < 1 ||
+			!validStoreDescriptorMediaType(ImageIdentityOCIManifest, value.SelectedManifestDescriptor.MediaType) ||
 			value.SelectedManifestDigest != selected || value.OCIConfigDigest != expected.ImageConfigDigest ||
 			value.RuntimePlatform != expected.ImagePlatform || !digestPattern.MatchString(value.DescriptorProofDigest) ||
+			!digestPattern.MatchString(value.ContainerInspectDigest) || !digestPattern.MatchString(value.ImageInspectDigest) ||
 			!digestPattern.MatchString(value.TLSProbeDigest) ||
 			!digestPattern.MatchString(value.ReachabilityProbeDigest) ||
 			value.RestoreDomainSeparated != separationRequired {

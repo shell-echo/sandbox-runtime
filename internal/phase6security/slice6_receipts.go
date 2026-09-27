@@ -149,6 +149,57 @@ func VerifySlice6EvidenceBundle(manifestPath, receiptRoot string) (Slice6Evidenc
 	return evidence, nil
 }
 
+// ReadSlice6RunReceipts reopens selected raw files from an already-verified
+// bundle. The caller must first call VerifySlice6EvidenceBundle; this reader
+// rechecks the index and content hashes against the immutable projection.
+func ReadSlice6RunReceipts(receiptRoot string, evidence Slice6Evidence, keys []string) (map[string][]byte, error) {
+	if evidence.Validate() != nil || !absoluteSlice6ReceiptRoot(receiptRoot) {
+		return nil, ErrInvalidSlice6Evidence
+	}
+	indexDocument, err := readPrivateSlice6ReceiptFile(receiptRoot, "receipt-index.json", maxSlice6ReceiptIndexSize)
+	if err != nil || digestSlice6Receipt(indexDocument) != evidence.ReceiptIndexDigest {
+		return nil, ErrInvalidSlice6Evidence
+	}
+	var index Slice6ReceiptIndex
+	if decodeCanonicalSlice6Receipt(indexDocument, &index) != nil ||
+		index.Protocol != slice6ReceiptIndexProtocol || index.Version != 1 ||
+		index.RunID != evidence.RunID || index.ProfileDigest != evidence.Profile.ProfileDigest ||
+		index.SourceRevision != evidence.RuntimeRevision || index.SourceTreeDigest != evidence.RuntimeTreeDigest {
+		return nil, ErrInvalidSlice6Evidence
+	}
+	all := expectedSlice6RunReceipts(evidence)
+	if len(keys) == 0 || len(keys) > len(all) {
+		return nil, ErrInvalidSlice6Evidence
+	}
+	wanted := make(map[string]string, len(keys))
+	for _, key := range keys {
+		digest, ok := all[key]
+		if !ok || wanted[key] != "" {
+			return nil, ErrInvalidSlice6Evidence
+		}
+		wanted[key] = digest
+	}
+	result := make(map[string][]byte, len(wanted))
+	for _, entry := range index.Entries {
+		want, ok := wanted[entry.Key]
+		if !ok {
+			continue
+		}
+		if _, duplicate := result[entry.Key]; duplicate || entry.RawDigest != want {
+			return nil, ErrInvalidSlice6Evidence
+		}
+		raw, err := readPrivateSlice6ReceiptFile(receiptRoot, entry.RawPath, maxSlice6ReceiptSize)
+		if err != nil || digestSlice6Receipt(raw) != want {
+			return nil, ErrInvalidSlice6Evidence
+		}
+		result[entry.Key] = raw
+	}
+	if len(result) != len(wanted) {
+		return nil, ErrInvalidSlice6Evidence
+	}
+	return result, nil
+}
+
 // This is the complete set of *run-generated* digests in the current closed
 // manifest. Profile, source and candidate-build digests are pre-existing
 // immutable inputs, not reissued under each run ID.
@@ -163,7 +214,9 @@ func expectedSlice6RunReceipts(e Slice6Evidence) map[string]string {
 		prefix := "container/" + value.DeploymentName + "/"
 		add(prefix+"inspect", value.ContainerInspectDigest)
 		add(prefix+"image_inspect", value.ImageInspectDigest)
-		add(prefix+"descriptor", value.ImageDescriptorProofDigest)
+	}
+	for _, value := range e.DescriptorReceipts {
+		add(value.Kind+"/"+value.Subject+"/descriptor", value.ReceiptDigest)
 	}
 	for _, value := range e.Observations.Networks {
 		add("network/"+value.Name+"/inspect", value.InspectDigest)
@@ -179,7 +232,8 @@ func expectedSlice6RunReceipts(e Slice6Evidence) map[string]string {
 	}
 	for _, value := range e.External {
 		prefix := "external/" + value.Name + "/"
-		add(prefix+"descriptor", value.DescriptorProofDigest)
+		add(prefix+"inspect", value.ContainerInspectDigest)
+		add(prefix+"image_inspect", value.ImageInspectDigest)
 		add(prefix+"tls", value.TLSProbeDigest)
 		add(prefix+"reachability", value.ReachabilityProbeDigest)
 		if value.PostgresServerAuth != nil {

@@ -1308,24 +1308,47 @@ success manifest yet. Do not reinterpret a passing preflight, network or
 resource-ledger component, role-image smoke or the historical
 `phase6slicegate` as a completed full-inventory security gate.
 
-The not-yet-accepted Slice 6 private evidence format is version 2. A final
+The not-yet-accepted Slice 6 private evidence format is version 3. A final
 run must generate one fresh 128-bit lowercase-hex `run_id` and retain
 `manifest.json`, `receipt-index.json`, and each indexed mode-0600 raw
 observation and companion envelope under one private bundle root. The index
 must resolve every runtime process, container, network, component, external
 probe, scenario and cleanup digest in the manifest. Build/archive/source
 digests are immutable inputs and are not rewritten with each run ID. The
-standalone manifest validator checks structure only; the bundle command
-checks the actual private files and same-run internal consistency:
+standalone manifest validator checks structure only. The neutral bundle
+verifier checks private files and same-run internal consistency. The final
+admission command additionally reopens the clean committed source, every
+repository-role candidate manifest and OCI archive, the current Desktop
+candidate manifest and archive, original-byte descriptor payloads, and
+Docker container/image inspect receipts:
 
 ```bash
 mise exec go@1.26.8 -- env -u GOROOT go run \
   ./cmd/verify-product-phase6-slice6-evidence \
   -manifest /absolute/private/bundle/manifest.json \
-  -bundle-root /absolute/private/bundle
+  -bundle-root /absolute/private/bundle \
+  -source-root /absolute/clean/source \
+  -role-candidate-dir /absolute/private/role-candidates \
+  -desktop-candidate /absolute/private/desktop-candidate.json
 ```
 
-Even a passing bundle verification does not prove that a trusted harness
+Version 3 accepts only finite typed `repository_role` and
+`desktop_candidate` artifact projections. Their distinct build inputs stay
+in their own checked manifests; a candidate digest string alone is not
+admission. Browser sandbox retains its exact historical signed publication
+and selected platform manifest, not a generic registry substitute. The
+descriptor proof is a domain-separated hash over original OCI documents;
+`descriptor_receipts[].receipt_digest` is instead SHA-256 of the exact
+retained canonical payload file. The run-envelope SHA-256 is separate again.
+The v3 receipt index uses only raw file content hashes for `RawDigest`:
+container/external inspect and descriptor payload, network inspect, process
+command observation, component process/socket/session observation, external
+TLS/reachability/PostgreSQL probe, scenario result and cleanup inventory.
+Profile/config, source, candidate archive/manifest and semantic descriptor
+proof digests are pre-existing authorities or derived proofs, not raw receipt
+hashes. Older v1/v2 diagnostic formats are not upgraded by renaming them.
+
+Even a passing complete offline admission does not prove that a trusted harness
 executed the commands. Only the still-missing full live gate, its auditable
 capture, and exact cleanup may admit Slice 6; never paste older component
 receipts into a new run.

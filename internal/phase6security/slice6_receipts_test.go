@@ -275,9 +275,45 @@ func TestSlice6RecorderRefusesDuplicateCrossRunAndIncompleteFinalization(t *test
 	}
 }
 
+func TestSlice6DescriptorReceiptDigestIsNotSemanticProof(t *testing.T) {
+	evidence, _, root, manifest := validSlice6ReceiptBundleFixture(t)
+	key := "container/" + evidence.Profile.Principals[0].Name + "/descriptor"
+	proof := evidence.Observations.Containers[0].ImageDescriptorProofDigest
+	content := evidence.DescriptorReceipts[0].ReceiptDigest
+	if proof == content {
+		t.Fatal("descriptor content digest was merged with semantic proof")
+	}
+	if _, err := ReadSlice6RunReceipts(root, evidence, []string{key, key}); err == nil {
+		t.Fatal("duplicate raw-receipt request admitted")
+	}
+	if _, err := ReadSlice6RunReceipts(root, evidence, []string{"container/unknown/descriptor"}); err == nil {
+		t.Fatal("unknown raw-receipt request admitted")
+	}
+	if raw, err := ReadSlice6RunReceipts(root, evidence, []string{key}); err != nil || digestSlice6Receipt(raw[key]) != content {
+		t.Fatalf("indexed descriptor content unavailable: %v", err)
+	}
+	evidence.DescriptorReceipts[0].ReceiptDigest = proof
+	evidence.ManifestDigest = slice6EvidenceDigest(evidence)
+	if _, err := VerifySlice6EvidenceBundle(manifest, root); err != nil {
+		// On-disk manifest is intentionally unchanged; the in-memory mutation
+		// must not rewrite the verified bundle. The next check is admission.
+		t.Fatal(err)
+	}
+	if _, err := ReadSlice6RunReceipts(root, evidence, []string{key}); err == nil {
+		t.Fatal("semantic proof substituted for raw-content digest")
+	}
+}
+
 func validSlice6ReceiptBundleFixture(t *testing.T) (Slice6Evidence, Slice6ReceiptIndex, string, string) {
+	return validSlice6ReceiptBundleFixtureWithOverrides(t, nil, nil)
+}
+
+func validSlice6ReceiptBundleFixtureWithOverrides(t *testing.T, customize func(*Slice6Evidence), overrides map[string][]byte) (Slice6Evidence, Slice6ReceiptIndex, string, string) {
 	t.Helper()
 	evidence := validSlice6EvidenceFixture(t)
+	if customize != nil {
+		customize(&evidence)
+	}
 	root := filepath.Join(t.TempDir(), "bundle")
 	recorder, err := NewSlice6ReceiptRecorder(root, evidence)
 	if err != nil {
@@ -291,6 +327,9 @@ func validSlice6ReceiptBundleFixture(t *testing.T) (Slice6Evidence, Slice6Receip
 		kind, subject, _ := strings.Cut(key, "/")
 		subject, _, _ = strings.Cut(subject, "/")
 		raw := []byte("unit-only observation: " + key + "\n")
+		if replacement, ok := overrides[key]; ok {
+			raw = replacement
+		}
 		if kind == "scenario" {
 			var participants []string
 			for _, scenario := range evidence.Scenarios {
@@ -351,6 +390,10 @@ func setSlice6RunReceiptTestDigest(t *testing.T, e *Slice6Evidence, key, digest 
 	}
 	switch parts[0] {
 	case "container":
+		if parts[2] == "descriptor" {
+			setSlice6DescriptorReceiptTestDigest(t, e, parts[0], parts[1], digest)
+			return
+		}
 		for index := range e.Observations.Containers {
 			value := &e.Observations.Containers[index]
 			if value.DeploymentName == parts[1] {
@@ -364,8 +407,6 @@ func setSlice6RunReceiptTestDigest(t *testing.T, e *Slice6Evidence, key, digest 
 					}
 				case "image_inspect":
 					value.ImageInspectDigest = digest
-				case "descriptor":
-					value.ImageDescriptorProofDigest = digest
 				default:
 					t.Fatalf("unknown container receipt %s", key)
 				}
@@ -410,14 +451,20 @@ func setSlice6RunReceiptTestDigest(t *testing.T, e *Slice6Evidence, key, digest 
 			}
 		}
 	case "external":
+		if parts[2] == "descriptor" {
+			setSlice6DescriptorReceiptTestDigest(t, e, parts[0], parts[1], digest)
+			return
+		}
 		for index := range e.External {
 			value := &e.External[index]
 			if value.Name != parts[1] {
 				continue
 			}
 			switch parts[2] {
-			case "descriptor":
-				value.DescriptorProofDigest = digest
+			case "inspect":
+				value.ContainerInspectDigest = digest
+			case "image_inspect":
+				value.ImageInspectDigest = digest
 			case "tls":
 				value.TLSProbeDigest = digest
 			case "reachability":
@@ -455,6 +502,18 @@ func setSlice6RunReceiptTestDigest(t *testing.T, e *Slice6Evidence, key, digest 
 		}
 	}
 	t.Fatalf("unknown manifest receipt reference %s", key)
+}
+
+func setSlice6DescriptorReceiptTestDigest(t *testing.T, e *Slice6Evidence, kind, subject, digest string) {
+	t.Helper()
+	for index := range e.DescriptorReceipts {
+		value := &e.DescriptorReceipts[index]
+		if value.Kind == kind && value.Subject == subject {
+			value.ReceiptDigest = digest
+			return
+		}
+	}
+	t.Fatalf("unknown descriptor receipt %s/%s", kind, subject)
 }
 
 func writeSlice6ReceiptTestJSON(t *testing.T, path string, value any) {

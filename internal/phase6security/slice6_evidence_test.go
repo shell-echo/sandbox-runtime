@@ -130,10 +130,15 @@ func validSlice6EvidenceFixture(t *testing.T) Slice6Evidence {
 	}
 	for _, external := range profile.External {
 		item := Slice6ExternalEvidence{Name: external.Name,
-			IdentityDigest: external.IdentityDigest, ImageReference: external.ImageReference,
+			IdentityDigest: external.IdentityDigest, ContainerID: testDigest("external-container/" + external.Name)[7:],
+			ImageReference:      external.ImageReference,
 			RuntimeStoreImageID: external.ImageDigest, SelectedManifestDigest: external.ImageDigest,
-			OCIConfigDigest: external.ImageConfigDigest, RuntimePlatform: external.ImagePlatform,
+			RuntimeStoreDescriptor:     ImageDescriptor{MediaType: "application/vnd.oci.image.manifest.v1+json", Digest: external.ImageDigest, Size: 1234},
+			SelectedManifestDescriptor: ImageDescriptor{MediaType: "application/vnd.oci.image.manifest.v1+json", Digest: external.ImageDigest, Size: 1234},
+			OCIConfigDigest:            external.ImageConfigDigest, RuntimePlatform: external.ImagePlatform,
 			DescriptorProofDigest:   testDigest("external-descriptor/" + external.Name),
+			ContainerInspectDigest:  testDigest("external-container-inspect/" + external.Name),
+			ImageInspectDigest:      testDigest("external-image-inspect/" + external.Name),
 			TLSProbeDigest:          testDigest("tls/" + external.Name),
 			ReachabilityProbeDigest: testDigest("reachability/" + external.Name),
 			RestoreDomainSeparated:  external.Name == "action-history-postgres" || external.Name == "capacity-valkey"}
@@ -157,6 +162,16 @@ func validSlice6EvidenceFixture(t *testing.T) Slice6Evidence {
 			}
 		}
 		evidence.External = append(evidence.External, item)
+	}
+	for _, principal := range profile.Principals {
+		evidence.DescriptorReceipts = append(evidence.DescriptorReceipts, Slice6DescriptorReceipt{
+			Kind: "container", Subject: principal.Name, ReceiptDigest: testDigest("descriptor-payload/" + principal.Name),
+		})
+	}
+	for _, external := range profile.External {
+		evidence.DescriptorReceipts = append(evidence.DescriptorReceipts, Slice6DescriptorReceipt{
+			Kind: "external", Subject: external.Name, ReceiptDigest: testDigest("descriptor-payload/" + external.Name),
+		})
 	}
 	for _, name := range slice6ScenarioNames {
 		participants := append([]string(nil), slice6RequiredParticipants[name]...)
@@ -183,24 +198,25 @@ func TestSlice6EvidenceRequiresCompleteClosedInventory(t *testing.T) {
 		t.Fatalf("closed unit fixture rejected: %v", err)
 	}
 	for name, mutate := range map[string]func(*Slice6Evidence){
-		"missing run ID":          func(e *Slice6Evidence) { e.RunID = "" },
-		"wrong run ID format":     func(e *Slice6Evidence) { e.RunID = strings.Repeat("C", 32) },
-		"missing receipt index":   func(e *Slice6Evidence) { e.ReceiptIndexDigest = "" },
-		"legacy evidence version": func(e *Slice6Evidence) { e.Version = 1 },
-		"missing process":         func(e *Slice6Evidence) { e.Processes = e.Processes[1:] },
-		"missing component":       func(e *Slice6Evidence) { e.Components = nil },
-		"component pid drift":     func(e *Slice6Evidence) { e.Components[0].PID++ },
-		"wrong process image":     func(e *Slice6Evidence) { e.Observations.Containers[0].RuntimeStoreImageID = testDigest("wrong") },
-		"missing external":        func(e *Slice6Evidence) { e.External = e.External[1:] },
-		"false restore isolation": func(e *Slice6Evidence) { e.External[0].RestoreDomainSeparated = false },
-		"missing scenario":        func(e *Slice6Evidence) { e.Scenarios = e.Scenarios[1:] },
-		"failed scenario":         func(e *Slice6Evidence) { e.Scenarios[0].Outcome = "passed_with_probe" },
-		"wrong participants":      func(e *Slice6Evidence) { e.Scenarios[0].Participants = []string{"gateway-runtime", "product-runtime"} },
-		"missing cleanup":         func(e *Slice6Evidence) { e.Cleanup = e.Cleanup[1:] },
-		"resource remains":        func(e *Slice6Evidence) { e.Cleanup[0].Remaining = 1 },
-		"production overclaim":    func(e *Slice6Evidence) { e.NonClaims[2] = "production_ready" },
-		"obsolete image nonclaim": func(e *Slice6Evidence) { e.NonClaims[1] = "published_or_signed_application_images" },
-		"digest mismatch":         func(e *Slice6Evidence) { e.RuntimeTreeDigest = testDigest("other") },
+		"missing run ID":             func(e *Slice6Evidence) { e.RunID = "" },
+		"wrong run ID format":        func(e *Slice6Evidence) { e.RunID = strings.Repeat("C", 32) },
+		"missing receipt index":      func(e *Slice6Evidence) { e.ReceiptIndexDigest = "" },
+		"legacy evidence version":    func(e *Slice6Evidence) { e.Version = 1 },
+		"missing process":            func(e *Slice6Evidence) { e.Processes = e.Processes[1:] },
+		"missing component":          func(e *Slice6Evidence) { e.Components = nil },
+		"component pid drift":        func(e *Slice6Evidence) { e.Components[0].PID++ },
+		"wrong process image":        func(e *Slice6Evidence) { e.Observations.Containers[0].RuntimeStoreImageID = testDigest("wrong") },
+		"missing external":           func(e *Slice6Evidence) { e.External = e.External[1:] },
+		"missing descriptor receipt": func(e *Slice6Evidence) { e.DescriptorReceipts = e.DescriptorReceipts[1:] },
+		"false restore isolation":    func(e *Slice6Evidence) { e.External[0].RestoreDomainSeparated = false },
+		"missing scenario":           func(e *Slice6Evidence) { e.Scenarios = e.Scenarios[1:] },
+		"failed scenario":            func(e *Slice6Evidence) { e.Scenarios[0].Outcome = "passed_with_probe" },
+		"wrong participants":         func(e *Slice6Evidence) { e.Scenarios[0].Participants = []string{"gateway-runtime", "product-runtime"} },
+		"missing cleanup":            func(e *Slice6Evidence) { e.Cleanup = e.Cleanup[1:] },
+		"resource remains":           func(e *Slice6Evidence) { e.Cleanup[0].Remaining = 1 },
+		"production overclaim":       func(e *Slice6Evidence) { e.NonClaims[2] = "production_ready" },
+		"obsolete image nonclaim":    func(e *Slice6Evidence) { e.NonClaims[1] = "published_or_signed_application_images" },
+		"digest mismatch":            func(e *Slice6Evidence) { e.RuntimeTreeDigest = testDigest("other") },
 	} {
 		t.Run(name, func(t *testing.T) {
 			var candidate Slice6Evidence
@@ -270,7 +286,7 @@ func TestSlice6EvidenceRequiresCompleteClosedInventory(t *testing.T) {
 	for _, malformed := range [][]byte{
 		bytes.Replace(document, []byte(`"id":`), []byte(`"id":"duplicate","id":`), 1),
 		append(append([]byte(nil), document...), []byte(`{}`)...),
-		bytes.Replace(document, []byte(`"version":2`), []byte(`"version":2,"unknown":true`), 1),
+		bytes.Replace(document, []byte(`"version":3`), []byte(`"version":3,"unknown":true`), 1),
 	} {
 		if _, err := VerifySlice6Evidence(malformed); !errors.Is(err, ErrInvalidSlice6Evidence) {
 			t.Fatalf("invalid JSON accepted: %v", err)
@@ -291,14 +307,11 @@ func TestSlice6EvidenceRequiresCompleteClosedInventory(t *testing.T) {
 	}
 }
 
-func TestSlice6EvidenceLocalCandidateRequiresRetainedBuildAndArchiveBinding(t *testing.T) {
+func TestSlice6EvidenceLocalCandidateRequiresTypedArtifactBinding(t *testing.T) {
 	evidence := validSlice6EvidenceFixture(t)
 	principal := &evidence.Profile.Principals[0]
 	principal.ImageLocation = "local"
-	principal.ImageIdentityKind = ImageIdentityLocalConfig
-	principal.ImageReference = principal.ImageConfigDigest
-	principal.ImageDigest = principal.ImageConfigDigest
-	principal.ImageConfigDigest = ""
+	principal.ImageReference = principal.ImageDigest
 	evidence.Profile.ProfileDigest = evidence.Profile.Digest()
 	evidence.Observations.ProfileDigest = evidence.Profile.ProfileDigest
 	for index := range evidence.External {
@@ -307,21 +320,20 @@ func TestSlice6EvidenceLocalCandidateRequiresRetainedBuildAndArchiveBinding(t *t
 		}
 	}
 	evidence.Observations.Containers[0].ImageReference = principal.ImageReference
-	evidence.Observations.Containers[0].RuntimeStoreImageID = principal.ImageDigest
-	evidence.Observations.Containers[0].RuntimeStoreDescriptor = ImageDescriptor{}
-	evidence.Observations.Containers[0].SelectedManifestDescriptor = ImageDescriptor{}
-	evidence.Observations.Containers[0].OCIConfigDigest = principal.ImageDigest
-	evidence.Observations.Containers[0].ImageDescriptorProofDigest = ""
 	target, err := Slice6DesiredImageTarget(principal.Name)
 	if err != nil {
 		t.Fatal(err)
 	}
-	evidence.Candidates = []Slice6CandidateImage{{BuildTarget: target, RuntimeStoreImageID: principal.ImageDigest, OCIConfigDigest: principal.ImageDigest, Platform: principal.ImagePlatform,
-		SourceRevision: evidence.RuntimeRevision, SourceTreeDigest: evidence.RuntimeTreeDigest,
-		BuildContextDigest: testDigest("context"), DockerfileDigest: testDigest("dockerfile"),
-		ToolchainDigest: testDigest("toolchain"), BaseImageDigest: testDigest("base"),
-		DependencyLockDigest: testDigest("lock"), BuildParametersDigest: testDigest("parameters"),
-		ArchiveDigest: testDigest("archive"), RootFSChainDigest: testDigest("rootfs")}}
+	evidence.Candidates = []Slice6CandidateImage{{
+		Kind: Slice6CandidateRepositoryRole, ManifestSchema: "sandbox-runtime.phase6-local-role-candidate.v1",
+		ManifestDigest: testDigest("manifest"), RuntimeStoreImageID: principal.ImageDigest,
+		ImageIdentityKind: principal.ImageIdentityKind, SelectedManifestDigest: principal.ImageDigest,
+		OCIConfigDigest:       principal.ImageConfigDigest,
+		DescriptorProofDigest: evidence.Observations.Containers[0].ImageDescriptorProofDigest,
+		Platform:              principal.ImagePlatform, SourceRevision: evidence.RuntimeRevision,
+		SourceTreeDigest: evidence.RuntimeTreeDigest, ArchiveDigest: testDigest("archive"), ArchiveSize: 1234,
+		Role: &Slice6RoleCandidateRef{SourceDeployment: principal.Name, BuildTarget: target},
+	}}
 	evidence.ManifestDigest = slice6EvidenceDigest(evidence)
 	document, err := json.Marshal(evidence)
 	if err != nil {
@@ -331,11 +343,13 @@ func TestSlice6EvidenceLocalCandidateRequiresRetainedBuildAndArchiveBinding(t *t
 		t.Fatalf("complete local candidate fixture rejected: %v", err)
 	}
 	for name, mutate := range map[string]func(*Slice6Evidence){
-		"wrong build target": func(e *Slice6Evidence) { e.Candidates[0].BuildTarget = "gateway" },
-		"missing archive":    func(e *Slice6Evidence) { e.Candidates[0].ArchiveDigest = "" },
-		"wrong image ID":     func(e *Slice6Evidence) { e.Candidates[0].RuntimeStoreImageID = testDigest("other-image") },
-		"wrong source":       func(e *Slice6Evidence) { e.Candidates[0].SourceRevision = strings.Repeat("c", 40) },
-		"candidate omitted":  func(e *Slice6Evidence) { e.Candidates = nil },
+		"wrong build target":     func(e *Slice6Evidence) { e.Candidates[0].Role.BuildTarget = "gateway" },
+		"missing archive":        func(e *Slice6Evidence) { e.Candidates[0].ArchiveDigest = "" },
+		"wrong image ID":         func(e *Slice6Evidence) { e.Candidates[0].RuntimeStoreImageID = testDigest("other-image") },
+		"wrong source":           func(e *Slice6Evidence) { e.Candidates[0].SourceRevision = strings.Repeat("c", 40) },
+		"candidate omitted":      func(e *Slice6Evidence) { e.Candidates = nil },
+		"wrong candidate kind":   func(e *Slice6Evidence) { e.Candidates[0].Kind = Slice6CandidateDesktop },
+		"wrong descriptor proof": func(e *Slice6Evidence) { e.Candidates[0].DescriptorProofDigest = testDigest("other-proof") },
 	} {
 		t.Run(name, func(t *testing.T) {
 			var candidate Slice6Evidence

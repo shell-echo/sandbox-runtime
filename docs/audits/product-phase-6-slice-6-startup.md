@@ -2061,3 +2061,33 @@ go test -tags=integration -race -count=1 \
 This is one current-source `core` image component, not a retained all-target
 candidate inventory, final running-container observation, complete profile,
 16-scenario run, or Slice 6 evidence bundle.
+
+### 2026-09-27 typed v3 artifact/descriptor admission checkpoint
+
+Sandbox ruled that the unaccepted Slice 6 evidence draft must have finite
+typed local candidate rows, not a generic role-build field set applied to
+Desktop. V3 now separates repository-role and Desktop projections; each
+points to its own source-bound private manifest and OCI archive. A reusable
+upper-layer admission verifier reopens the clean source, all role candidate
+pairs and the current Desktop candidate pair, and compares exact typed rows
+to the profile. Its final CLI requires these private inputs and refuses the
+old bundle-only argument set. The Browser sandbox remains pinned to its
+historical signed publication and selected platform manifest.
+
+An evidence-chain audit found that the v2 draft incorrectly placed the
+domain-separated OCI descriptor proof in a field whose verifier required
+SHA-256 of raw receipt bytes. A real receipt cannot naturally satisfy both.
+Sandbox approved a separate `descriptor_receipts[].receipt_digest` for the
+canonical raw payload file, retaining original OCI index/manifest/config
+bytes without rewriting them. The semantic proof and run-envelope hashes
+remain distinct. The candidate v3 admission recomputes the content and
+semantic hashes, compares local archive bytes, and reparses each role and
+external dependency's running Docker container/image inspect pair. Other
+receipt-index entries were classified as raw run observations; source,
+profile, configuration, artifact and semantic proof digests do not enter
+the raw-content channel.
+
+Targeted race and full-root validation, real-archive producer-to-recorder
+component proof, and the complete live 58-deployment/16-scenario topology
+are still pending at this checkpoint. No accepted success bundle exists;
+Phase 6 remains **5/15**.

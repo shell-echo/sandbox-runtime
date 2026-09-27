@@ -141,14 +141,25 @@ func (m Manifest) VerifyArchive(ctx context.Context, sourceRoot, archivePath str
 // caller must invoke VerifyArchive first and separately observe the final
 // running container and full same-run receipt bundle.
 func (m Manifest) CandidateEvidence() phase6security.Slice6CandidateImage {
-	return phase6security.Slice6CandidateImage{BuildTarget: m.Source.BuildTarget,
-		RuntimeStoreImageID: m.RuntimeStoreImageID, OCIConfigDigest: m.OCIConfigDigest,
-		Platform: m.Source.Platform, SourceRevision: m.Source.SourceRevision,
-		SourceTreeDigest: m.Source.SourceTreeDigest, BuildContextDigest: m.BuildContextDigest,
-		DockerfileDigest: m.Source.DockerfileDigest, ToolchainDigest: m.Source.ToolchainDigest,
-		BaseImageDigest: m.Source.BaseImageDigest, DependencyLockDigest: m.Source.DependencyLockDigest,
-		BuildParametersDigest: m.Source.BuildParametersDigest, ArchiveDigest: m.ArchiveDigest,
-		RootFSChainDigest: m.RootFSChainDigest}
+	return phase6security.Slice6CandidateImage{
+		Kind:                   phase6security.Slice6CandidateRepositoryRole,
+		ManifestSchema:         m.Schema,
+		ManifestDigest:         m.ManifestDigest,
+		RuntimeStoreImageID:    m.RuntimeStoreImageID,
+		ImageIdentityKind:      m.ImageIdentityKind,
+		SelectedManifestDigest: m.SelectedManifestDescriptor.Digest,
+		OCIConfigDigest:        m.OCIConfigDigest,
+		DescriptorProofDigest:  m.DescriptorProofDigest,
+		Platform:               m.Source.Platform,
+		SourceRevision:         m.Source.SourceRevision,
+		SourceTreeDigest:       m.Source.SourceTreeDigest,
+		ArchiveDigest:          m.ArchiveDigest,
+		ArchiveSize:            m.ArchiveSize,
+		Role: &phase6security.Slice6RoleCandidateRef{
+			SourceDeployment: m.Source.Deployment,
+			BuildTarget:      m.Source.BuildTarget,
+		},
+	}
 }
 
 // WritePrivate creates a new immutable-in-place manifest beside its archive.

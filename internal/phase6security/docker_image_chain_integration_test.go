@@ -108,7 +108,54 @@ func TestDockerRuntimeImageSelectedManifestAndOCIConfig(t *testing.T) {
 		!digestPattern.MatchString(observed.DescriptorProofDigest) {
 		t.Fatalf("real Docker index/selected manifest/config chain rejected: %#v, %v", observed, err)
 	}
+	// Carry the actual archive documents through v3's distinct raw-content
+	// and semantic-proof channels, then through a private run envelope/index.
+	subject := validProfile().Principals[0].Name
+	payload, err := NewSlice6DescriptorPayload("container", subject, documents)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payloadRaw, err := payload.Encode()
+	if err != nil || digestSlice6Receipt(payloadRaw) == observed.DescriptorProofDigest {
+		t.Fatal("real descriptor receipt content confused with semantic proof")
+	}
+	key := "container/" + subject + "/descriptor"
+	evidence, receiptIndex, bundleRoot, bundleManifest := validSlice6ReceiptBundleFixtureWithOverrides(t,
+		func(e *Slice6Evidence) {
+			e.Observations.Containers[0].ImageDescriptorProofDigest = observed.DescriptorProofDigest
+		},
+		map[string][]byte{key: payloadRaw})
+	if _, err := VerifySlice6EvidenceBundle(bundleManifest, bundleRoot); err != nil {
+		t.Fatalf("real OCI descriptor payload receipt bundle rejected: %v", err)
+	}
+	matched := false
+	for _, entry := range receiptIndex.Entries {
+		if entry.Key == key {
+			matched = entry.RawDigest == digestSlice6Receipt(payloadRaw) &&
+				evidence.DescriptorReceipts[0].ReceiptDigest == entry.RawDigest
+		}
+	}
+	if !matched {
+		t.Fatal("real OCI payload lost its indexed raw-content digest")
+	}
+	loaded, err := ReadSlice6RunReceipts(bundleRoot, evidence, []string{key})
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded, err := DecodeSlice6DescriptorPayload(loaded[key])
+	if err != nil || !sameDescriptorDocuments(decoded.Documents(), documents) {
+		t.Fatal("real OCI payload bytes changed across the private receipt chain")
+	}
+	recalculated, err := VerifyImageDescriptorDocuments("registry", ImageIdentityOCIIndex,
+		image, store.Digest, platform, selected.Digest, manifestDocument.Config.Digest, decoded.Documents())
+	if err != nil || recalculated.ProofDigest != observed.DescriptorProofDigest {
+		t.Fatal("real OCI receipt no longer proves the observed descriptor chain")
+	}
 	t.Logf("real Docker store index %s selected manifest %s OCI config %s; exact temporary container/archive cleanup", store.Digest, selected.Digest, observed.OCIConfigDigest)
+}
+
+func sameDescriptorDocuments(left, right ImageDescriptorDocuments) bool {
+	return string(left.Index) == string(right.Index) && string(left.Manifest) == string(right.Manifest) && string(left.Config) == string(right.Config)
 }
 
 // This checks the real cached Desktop candidate's current Docker store shape.

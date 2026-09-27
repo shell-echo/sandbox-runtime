@@ -1201,7 +1201,7 @@ network path, Creating uncertainty recovery, all attach/drain races, or Slice
 
 ### Single-run Slice 6 evidence identity (2026-09-27)
 
-The not-yet-accepted Slice 6 internal manifest is explicitly versioned to v2.
+The not-yet-accepted Slice 6 internal manifest is explicitly versioned to v3.
 One trusted full-topology harness generates one fresh 128-bit lowercase-hex
 `run_id` at run start, uses it for run-owned resources and runtime receipts,
 and binds a private canonical receipt-index digest in the manifest. Each
@@ -1223,6 +1223,31 @@ the entire bundle. That origin remains the trusted gate's auditable live
 capture and exact cleanup. This adds neither a second security authority nor
 a Product/Provider Contract change. The complete live topology and all 16
 scenarios are still open; Phase 6 remains **5/15**.
+
+The v3 artifact inventory has exactly two local candidate types:
+`repository_role` and `desktop_candidate`. A neutral evidence row carries
+only shared manifest/source/archive/OCI identity, while each type's own
+private manifest retains its non-interchangeable build inputs. The complete
+admission verifier reopens the clean committed source, exact role and Desktop
+manifests and archive bytes; it compares their typed projections to the
+same-run profile and observed selected manifest/config/proof. The Browser
+sandbox instead uses the exact historical locked signed publication and
+platform manifest, not a registry fallback. A manifest digest by itself is
+not a supply-chain or running-container proof.
+
+The descriptor `ProofDigest` remains the established domain-separated hash
+of original OCI index/manifest/config documents. It is not the SHA-256 of a
+receipt file. V3 therefore separately records `DescriptorReceiptDigest`,
+the SHA-256 of a bounded canonical payload file retaining those original
+bytes. A third digest belongs to the run envelope. The receipt index uses
+the content digest only; complete admission reopens that payload, recomputes
+the semantic proof, compares exact local archive bytes and reparses the
+running container/image inspect pair. External dependency images require
+the same payload and running inspect binding. Other indexed runtime digests
+name raw command/inspect/probe/result/inventory file contents; profile,
+config, source, archive and semantic proof digests remain separate inputs.
+This corrects the unaccepted v2 draft without upgrading historical v1/v2
+diagnostics or changing the locked Provider Contract.
 
 ### Local full-topology profile supply (2026-09-27)
 

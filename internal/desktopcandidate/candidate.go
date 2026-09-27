@@ -349,6 +349,22 @@ func LoadCurrent(path string) (Manifest, error) {
 	return value, nil
 }
 
+// CandidateEvidence is the common artifact-identity projection for the
+// unaccepted Slice 6 v3 bundle. Callers must first verify source and archive;
+// this projection alone cannot establish a running deployment.
+func (m Manifest) CandidateEvidence() phase6security.Slice6CandidateImage {
+	return phase6security.Slice6CandidateImage{
+		Kind: phase6security.Slice6CandidateDesktop, ManifestSchema: m.SchemaVersion,
+		ManifestDigest: m.ManifestDigest, RuntimeStoreImageID: m.ImageDigest,
+		ImageIdentityKind: m.ImageIdentityKind, SelectedManifestDigest: m.SelectedManifestDigest,
+		OCIConfigDigest: m.ConfigDigest, DescriptorProofDigest: m.DescriptorProofDigest,
+		Platform: m.Platform, SourceRevision: m.SourceRevision,
+		SourceTreeDigest: m.SourceTreeDigest, ArchiveDigest: m.ArchiveDigest,
+		ArchiveSize: m.ArchiveSize,
+		Desktop:     &phase6security.Slice6DesktopCandidateRef{ProfileID: m.ProfileID},
+	}
+}
+
 func (m Manifest) VerifySource(sourceRoot string) error {
 	if err := m.Validate(); err != nil {
 		return err

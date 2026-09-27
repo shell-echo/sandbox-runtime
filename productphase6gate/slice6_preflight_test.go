@@ -77,119 +77,13 @@ func loadSlice6GateInput(ctx context.Context, profilePath, sourceRoot, sourceRev
 	if !matched {
 		return slice6GateInput{}, errors.New("Slice 6 Desktop candidate does not match profile")
 	}
-	roleCandidates, err := loadSlice6RoleCandidateDir(ctx, sourceRoot, roleCandidateDir, profile, sourceRevision)
+	roleCandidates, err := phase6rolecandidate.VerifyDirectory(ctx, sourceRoot, roleCandidateDir, profile, sourceRevision)
 	if err != nil {
 		return slice6GateInput{}, err
 	}
 	return slice6GateInput{profilePath: profilePath, sourceRoot: sourceRoot, sourceRevision: sourceRevision,
 		desktopCandidatePath: candidatePath, profile: profile, desktopCandidateImage: candidate.ImageDigest,
 		roleCandidates: roleCandidates}, nil
-}
-
-// loadSlice6RoleCandidateDir admits exactly one retained source/archive pair
-// per unique local role image. The 58 deployments may share binaries, but
-// every deployment's selected image must have an exact reviewed target.
-func loadSlice6RoleCandidateDir(ctx context.Context, sourceRoot, directory string,
-	profile phase6security.Profile, sourceRevision string) ([]phase6rolecandidate.Manifest, error) {
-	info, err := os.Lstat(directory)
-	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 ||
-		info.Mode().Perm() != 0o700 || !isOutsideSlice6Source(sourceRoot, directory) {
-		return nil, errors.New("Slice 6 local role candidate directory is unavailable")
-	}
-	entries, err := os.ReadDir(directory)
-	if err != nil || len(entries) == 0 || len(entries) > 64 {
-		return nil, errors.New("Slice 6 local role candidate inventory is unavailable")
-	}
-	paths := make(map[string]bool, len(entries))
-	var manifests []phase6rolecandidate.Manifest
-	for _, entry := range entries {
-		if entry.IsDir() || entry.Name() == "" || paths[entry.Name()] {
-			return nil, errors.New("Slice 6 local role candidate directory is invalid")
-		}
-		paths[entry.Name()] = true
-		if strings.HasSuffix(entry.Name(), ".json") {
-			manifest, err := phase6rolecandidate.LoadCurrent(ctx, sourceRoot, filepath.Join(directory, entry.Name()))
-			if err != nil {
-				return nil, errors.New("Slice 6 local role candidate is not source/archive bound")
-			}
-			manifests = append(manifests, manifest)
-		}
-	}
-	if len(manifests) == 0 || len(entries) != len(manifests)*2 {
-		return nil, errors.New("Slice 6 local role candidate pairs are incomplete")
-	}
-	for _, entry := range entries {
-		if strings.HasSuffix(entry.Name(), ".json") {
-			if !paths[entry.Name()+".oci.tar"] {
-				return nil, errors.New("Slice 6 local role candidate archive is missing")
-			}
-		} else if !strings.HasSuffix(entry.Name(), ".json.oci.tar") ||
-			!paths[strings.TrimSuffix(entry.Name(), ".oci.tar")] {
-			return nil, errors.New("Slice 6 local role candidate directory has an unreviewed file")
-		}
-	}
-	if err := matchSlice6RoleCandidates(profile, manifests, sourceRevision); err != nil {
-		return nil, err
-	}
-	return manifests, nil
-}
-
-type slice6RoleImageKey struct{ digest, platform string }
-
-func matchSlice6RoleCandidates(profile phase6security.Profile, manifests []phase6rolecandidate.Manifest, revision string) error {
-	type expectedRoleImage struct {
-		kind, selected, config, target string
-		deployments                    map[string]bool
-	}
-	expected := make(map[slice6RoleImageKey]expectedRoleImage)
-	for _, principal := range profile.Principals {
-		if principal.ImageLocation != "local" || principal.Name == "desktop-sandbox-runtime" {
-			continue
-		}
-		target, err := phase6security.Slice6DesiredImageTarget(principal.Name)
-		if err != nil || target == phase6security.Slice6BrowserPublishedImage ||
-			target == phase6security.Slice6DesktopCandidateImage {
-			return errors.New("Slice 6 local role image target is invalid")
-		}
-		key := slice6RoleImageKey{principal.ImageDigest, principal.ImagePlatform}
-		value, found := expected[key]
-		if !found {
-			value = expectedRoleImage{kind: principal.ImageIdentityKind,
-				selected: principal.ImageSelectedManifestDigest, config: principal.ImageConfigDigest,
-				target: target, deployments: make(map[string]bool)}
-		} else if value.kind != principal.ImageIdentityKind || value.selected != principal.ImageSelectedManifestDigest ||
-			value.config != principal.ImageConfigDigest || value.target != target {
-			return errors.New("Slice 6 role deployments alias incompatible images")
-		}
-		value.deployments[principal.Name] = true
-		expected[key] = value
-	}
-	if len(expected) == 0 || len(expected) != len(manifests) {
-		return errors.New("Slice 6 local role image candidate coverage is incomplete")
-	}
-	seen := make(map[slice6RoleImageKey]bool, len(manifests))
-	for _, manifest := range manifests {
-		key := slice6RoleImageKey{manifest.RuntimeStoreImageID, manifest.Source.Platform}
-		value, found := expected[key]
-		selected := manifest.SelectedManifestDescriptor.Digest
-		if manifest.ImageIdentityKind == phase6security.ImageIdentityOCIManifest {
-			selected = ""
-		}
-		if !found || seen[key] || manifest.Source.SourceRevision != revision ||
-			!value.deployments[manifest.Source.Deployment] || manifest.Source.BuildTarget != value.target ||
-			manifest.ImageIdentityKind != value.kind || selected != value.selected ||
-			manifest.OCIConfigDigest != value.config ||
-			manifest.RuntimeStoreDescriptor.Digest != key.digest {
-			return errors.New("Slice 6 local role candidate differs from reviewed profile")
-		}
-		seen[key] = true
-	}
-	return nil
-}
-
-func isOutsideSlice6Source(root, path string) bool {
-	relative, err := filepath.Rel(root, path)
-	return err == nil && (relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)))
 }
 
 func verifyCleanSlice6Source(ctx context.Context, sourceRoot, revision string) error {
@@ -471,7 +365,7 @@ func TestSlice6RoleCandidateCoverageRejectsAliasAndTargetDrift(t *testing.T) {
 		manifest("product-runtime", "core", coreID, coreConfig),
 		manifest("browser-executor-backend", "browser-executor-backend", backendID, backendConfig),
 	}
-	if err := matchSlice6RoleCandidates(profile, values, revision); err != nil {
+	if err := phase6rolecandidate.MatchProfile(profile, values, revision); err != nil {
 		t.Fatalf("shared core candidate was rejected: %v", err)
 	}
 	for name, change := range map[string]func([]phase6rolecandidate.Manifest){
@@ -484,12 +378,12 @@ func TestSlice6RoleCandidateCoverageRejectsAliasAndTargetDrift(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			candidate := append([]phase6rolecandidate.Manifest(nil), values...)
 			change(candidate)
-			if matchSlice6RoleCandidates(profile, candidate, revision) == nil {
+			if phase6rolecandidate.MatchProfile(profile, candidate, revision) == nil {
 				t.Fatal("drifted candidate inventory admitted")
 			}
 		})
 	}
-	if matchSlice6RoleCandidates(profile, values[:1], revision) == nil {
+	if phase6rolecandidate.MatchProfile(profile, values[:1], revision) == nil {
 		t.Fatal("missing image candidate admitted")
 	}
 	crossTarget := profile
@@ -497,7 +391,7 @@ func TestSlice6RoleCandidateCoverageRejectsAliasAndTargetDrift(t *testing.T) {
 	crossTarget.Principals[2].ImageDigest = coreID
 	crossTarget.Principals[2].ImageReference = coreID
 	crossTarget.Principals[2].ImageConfigDigest = coreConfig
-	if matchSlice6RoleCandidates(crossTarget, values[:1], revision) == nil {
+	if phase6rolecandidate.MatchProfile(crossTarget, values[:1], revision) == nil {
 		t.Fatal("same image reused for conflicting role targets")
 	}
 }
