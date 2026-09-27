@@ -1249,10 +1249,18 @@ SANDBOX_RUNTIME_PHASE6_LOCAL_ROLE_IMAGE=sha256:<exact-local-role-image> \
   mise exec go@1.26.8 -- env -u GOROOT go test -race \
     -tags=phase6slice6gate -count=1 \
     -run '^TestPhase6Slice6DockerResourceLedger$' ./productphase6gate
+
+SANDBOX_RUNTIME_PHASE6_SLICE6_NETWORK_GRAPH=1 \
+  mise exec go@1.26.8 -- env -u GOROOT go test -race \
+    -tags=phase6slice6gate -count=1 \
+    -run '^TestPhase6Slice6ProfileNetwork' ./productphase6gate
 ```
 
-This is not an authenticated service chain. There is no Slice 6 release
-runner or success manifest yet. Do not reinterpret a passing preflight,
+The network component creates exact isolated/NAT Docker bridges, verifies
+their raw inspection, observes a disposable running member, rejects an extra
+member and checks run-owned cleanup. It is not an authenticated service
+chain or protected-role egress test. There is no Slice 6 release runner or
+success manifest yet. Do not reinterpret a passing preflight, network or
 resource-ledger component, role-image smoke or the historical
 `phase6slicegate` as a completed full-inventory security gate.
 

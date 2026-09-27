@@ -1824,3 +1824,15 @@ reopens the entire bundle through the independent verifier. A unit-only
 synthetic complete bundle proves writer/verifier agreement; an incomplete
 fixture proves no manifest is written. This does not create live execution
 provenance or close the missing full-topology gate. Phase 6 remains **5/15**.
+
+The next real-Docker network component creates an `isolated` internal bridge
+and a separate NAT uplink bridge with exact profile names, subnets and gateway
+modes. It re-reads raw Docker network inspection rather than inferring the
+result from create replies, then observes a running disposable container's
+actual endpoint and rejects an undeclared second member. A fresh random run
+label permits exact container/network cleanup even if returned IDs are lost;
+the component verifies no run-owned Docker resource remains. The disposable
+Alpine processes do not execute repository role commands, and this does not
+prove protected-role direct-egress denial, the ingress relay, egress broker,
+Vault PKI, the complete inventory or any same-run scenario. No Slice 6
+manifest was emitted; Phase 6 remains **5/15**.
