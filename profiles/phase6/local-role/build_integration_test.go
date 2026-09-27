@@ -108,7 +108,7 @@ func TestLocalCoreCandidateRunsAsHighUID(t *testing.T) {
 	if err != nil || strings.TrimSpace(string(output)) != "21001\n31001" {
 		t.Fatalf("effective high-UID container identity: %v: %.512s", err, output)
 	}
-	observeLocalRoleDescriptor(t, ctx, image, platform, source, descriptorProbe, inspect)
+	observeLocalRoleDescriptor(t, ctx, image, platform, sourceRoot, inputs, descriptorProbe, inspect)
 	args := append(append([]string(nil), confined...), "--name", container, image, "--help")
 	output, err = exec.CommandContext(ctx, "docker", args...).CombinedOutput()
 	if err != nil || !strings.Contains(string(output), "sandbox-runtime") {
@@ -116,7 +116,8 @@ func TestLocalCoreCandidateRunsAsHighUID(t *testing.T) {
 	}
 }
 
-func observeLocalRoleDescriptor(t *testing.T, ctx context.Context, image, platform, source, name string, imageInspect []byte) {
+func observeLocalRoleDescriptor(t *testing.T, ctx context.Context, image, platform, sourceRoot string,
+	inputs phase6rolecandidate.SourceInputs, name string, imageInspect []byte) {
 	t.Helper()
 	created, err := exec.CommandContext(ctx, "docker", "create", "--pull=never", "--network", "none", "--name", name, image).Output()
 	containerID := strings.TrimSpace(string(created))
@@ -171,13 +172,23 @@ func observeLocalRoleDescriptor(t *testing.T, ctx context.Context, image, platfo
 	if kind == phase6security.ImageIdentityOCIIndex {
 		principal.ImageSelectedManifestDigest = selected
 	}
-	probe, err := phase6security.VerifySlice6LocalRoleCandidateProbe(principal, source,
+	probe, err := phase6security.VerifySlice6LocalRoleCandidateProbe(principal, inputs.SourceRevision,
 		containerInspect, imageInspect, archive)
 	if err != nil || probe.Image.OCIConfigDigest != manifest.Config.Digest ||
 		probe.Image.SelectedManifestDescriptor.Digest != selected ||
 		probe.ArchiveSize < 1 || !strings.HasPrefix(probe.ArchiveDigest, "sha256:") ||
 		!strings.HasPrefix(probe.RootFSChainDigest, "sha256:") {
 		t.Fatalf("source-bound role archive probe: %#v, %v", probe, err)
+	}
+	documents, err = phase6security.ReadOCIArchiveDocuments(archive, kind, image, selected, manifest.Config.Digest)
+	if err != nil {
+		t.Fatalf("retain exact candidate manifest and config: %v", err)
+	}
+	buildProof, err := phase6rolecandidate.VerifyBuildContext(ctx, sourceRoot, inputs,
+		archive, documents.Manifest, documents.Config)
+	if err != nil || !strings.HasPrefix(buildProof.BinaryDigest, "sha256:") ||
+		!strings.HasPrefix(buildProof.BuildContextDigest, "sha256:") {
+		t.Fatalf("rebuilt executable differs from verified OCI layer: %#v, %v", buildProof, err)
 	}
 	if output, err := exec.CommandContext(ctx, "docker", "rm", "-f", containerID).CombinedOutput(); err != nil {
 		t.Fatalf("remove exact stopped role image observation: %v: %.512s", err, output)
