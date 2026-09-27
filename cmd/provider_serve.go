@@ -6,9 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -63,10 +65,7 @@ func runProviderServe(cmd *cobra.Command, _ []string) (result error) {
 	if config.ProviderMigration != nil && config.ProviderMigration.Enabled {
 		return errors.New("Provider runtime and migration authorities cannot share one command")
 	}
-	if providerConfig.SchemaVersion != config.ProviderProductionSchemaV2 &&
-		!(providerConfig.SchemaVersion == config.ProviderProductionSchemaV3 &&
-			((providerConfig.Profile == config.ProviderProcessCodingShellProfile && providerConfig.DeploymentLevel == config.ProviderProductionLevel) ||
-				(providerConfig.Profile == config.ProviderProcessDesktopProfile && providerConfig.DeploymentLevel == config.ProviderLocalCandidateLevel))) {
+	if !providerServeSchemaAllowed(providerConfig) {
 		return errors.New("provider serve requires an explicit supported production schema")
 	}
 	if config.Server != nil && config.Server.Provider.Transport.Enabled {
@@ -75,14 +74,11 @@ func runProviderServe(cmd *cobra.Command, _ []string) (result error) {
 	if err := providerConfig.Validate(); err != nil {
 		return err
 	}
-	// PostgreSQL requires a separate, purpose-bound client certificate whose
-	// CN is mapped literally to the SQL role. The current role certificate has
-	// an empty Subject and must never be offered as database authority. Keep
-	// v3 Browser/Desktop closed before any dial until that independent agent,
-	// actual server HBA/ident proof and slot lifecycle are wired.
 	if providerConfig.SchemaVersion == config.ProviderProductionSchemaV3 &&
 		(providerConfig.Profile == config.ProviderProcessBrowserProfile || providerConfig.Profile == config.ProviderProcessDesktopProfile) {
-		return errors.New("Phase 6 Provider PostgreSQL client-certificate and sandbox slot gates are incomplete")
+		if err := preflightProviderV3Serve(providerConfig); err != nil {
+			return err
+		}
 	}
 	startupContext, cancelStartup := context.WithTimeout(cmd.Context(), time.Duration(providerConfig.Postgres.StartupTimeoutSeconds)*time.Second)
 	defer cancelStartup()
@@ -124,10 +120,6 @@ func runProviderServe(cmd *cobra.Command, _ []string) (result error) {
 		if err := verifyProviderV3IdentityState(startupContext, state, databaseAuthority); err != nil {
 			return err
 		}
-		// The pool and ledger are now bound, but neither Docker driver yet
-		// reserves a finite slot before its first side effect. Do not expose
-		// a runnable Provider until that lifecycle chain is wired and gated.
-		return errors.New("Phase 6 Provider sandbox identity reservation is not wired into the runtime driver")
 	}
 	composition, err := newProductionProvider(cmd.Context(), providerConfig, state, runtimePool, materialRegistry)
 	if err != nil {
@@ -148,6 +140,19 @@ func runProviderServe(cmd *cobra.Command, _ []string) (result error) {
 	return server.RunE(servers)
 }
 
+func providerServeSchemaAllowed(cfg *config.ProviderProcessConfig) bool {
+	if cfg == nil {
+		return false
+	}
+	if cfg.SchemaVersion == config.ProviderProductionSchemaV2 {
+		return true
+	}
+	return cfg.SchemaVersion == config.ProviderProductionSchemaV3 &&
+		(((cfg.Profile == config.ProviderProcessCodingShellProfile || cfg.Profile == config.ProviderProcessBrowserProfile) &&
+			cfg.DeploymentLevel == config.ProviderProductionLevel) ||
+			(cfg.Profile == config.ProviderProcessDesktopProfile && cfg.DeploymentLevel == config.ProviderLocalCandidateLevel))
+}
+
 type productionProviderComposition struct {
 	provider   server.Server
 	private    server.Server
@@ -158,19 +163,30 @@ type productionProviderComposition struct {
 }
 
 func newProductionProvider(ctx context.Context, cfg *config.ProviderProcessConfig, state *providerpostgres.Store, pool *pgxpool.Pool, registry *secretref.Registry) (*productionProviderComposition, error) {
+	if cfg == nil {
+		return nil, errors.New("Provider profile is unavailable")
+	}
 	switch cfg.Profile {
 	case config.ProviderProcessDesktopProfile:
 		return newProductionDesktopProvider(ctx, cfg, state, pool, registry)
 	case config.ProviderProcessCodingShellProfile:
 		return newProductionCodingProvider(ctx, cfg, state, pool, registry)
 	case config.ProviderProcessBrowserProfile:
-		return nil, errors.New("Browser Provider production composition is not yet available")
+		return newProductionBrowserProvider(ctx, cfg, state, pool, registry)
 	default:
 		return nil, errors.New("Provider profile is unsupported")
 	}
 }
 
 type providerCloseStack struct{ closers []func() error }
+
+func closeComposedProviderServer(component server.Server) func() error {
+	return func() error {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		return component.Shutdown(ctx)
+	}
+}
 
 func (s *providerCloseStack) add(closer func() error) {
 	if closer != nil {
@@ -362,6 +378,9 @@ func newProductionProviderPrivateTerminalServer(ctx context.Context, cfg *config
 		return nil, nil, errors.New("unsupported Provider private TLS schema")
 	}
 	if err != nil {
+		if peerMonitor != nil {
+			peerMonitor.Close()
+		}
 		return nil, nil, errors.New("load Provider private terminal TLS material")
 	}
 	var privateHandler http.Handler = handler
@@ -376,6 +395,9 @@ func newProductionProviderPrivateTerminalServer(ctx context.Context, cfg *config
 		WriteTimeout: time.Duration(private.WriteTimeoutMillis) * time.Millisecond, IdleTimeout: time.Duration(private.IdleTimeoutMillis) * time.Millisecond,
 		MaxHeaderBytes: private.MaxHeaderBytes, MaxBodyBytes: private.MaxBodyBytes, ConnectionMaxAge: connectionMaxAge,
 	})
+	if err != nil && peerMonitor != nil {
+		peerMonitor.Close()
+	}
 	return result, tlsProbe, err
 }
 
@@ -548,12 +570,18 @@ func newProductionProviderTransport(ctx context.Context, cfg *config.ProviderPro
 		return nil, nil, errors.New("unsupported Provider Contract TLS schema")
 	}
 	if err != nil {
+		if peerMonitor != nil {
+			peerMonitor.Close()
+		}
 		return nil, nil, errors.New("load Provider Contract TLS material")
 	}
 	result, err := providerapi.NewServer(ctx, providerapi.TransportOptions{Address: transport.Address, TLSConfig: tlsConfig,
 		PeerRevocationMonitor:      peerMonitor,
 		AllowedClientURIIdentities: append([]string(nil), transport.AllowedClientURIIdentities...), Protected: protected,
 		ConnectionMaxAge: connectionMaxAge}, source)
+	if err != nil && peerMonitor != nil {
+		peerMonitor.Close()
+	}
 	return result, tlsProbe, err
 }
 
@@ -586,6 +614,39 @@ type providerReadinessChecker struct {
 	config           *config.ProviderProcessConfig
 	tlsProbes        []func(context.Context) error
 	dependencyProbes []func(context.Context) error
+}
+
+// A v3 protected listener can be constructed before its executor/mux server
+// starts, but no admitted request may cross that still-unbound dependency.
+type providerAdmissionReadiness struct {
+	mu    sync.RWMutex
+	check func(context.Context) error
+}
+
+func (r *providerAdmissionReadiness) Bind(check func(context.Context) error) error {
+	if r == nil || check == nil {
+		return errors.New("Provider admission readiness is unavailable")
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.check != nil {
+		return errors.New("Provider admission readiness was already bound")
+	}
+	r.check = check
+	return nil
+}
+
+func (r *providerAdmissionReadiness) Ready(ctx context.Context) error {
+	if r == nil || ctx == nil || ctx.Err() != nil {
+		return errors.New("Provider admission readiness is unavailable")
+	}
+	r.mu.RLock()
+	check := r.check
+	r.mu.RUnlock()
+	if check == nil {
+		return errors.New("Provider admission readiness is unavailable")
+	}
+	return check(ctx)
 }
 
 func (c providerReadinessChecker) Ready(ctx context.Context) error {
@@ -623,6 +684,38 @@ func (c providerReadinessChecker) Ready(ctx context.Context) error {
 		}
 	}
 	return c.reconciler.Ready(ctx)
+}
+
+func probeProviderExecutorBackend(ctx context.Context, client *http.Client, endpoint string, timeout time.Duration) error {
+	if ctx == nil || client == nil || timeout <= 0 {
+		return errors.New("Provider executor backend is unavailable")
+	}
+	parsed, err := url.Parse(endpoint)
+	if err != nil || parsed.Scheme != "wss" || parsed.Path != "/executor" || parsed.EscapedPath() != "/executor" ||
+		parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || parsed.String() != endpoint {
+		return errors.New("Provider executor backend is unavailable")
+	}
+	if _, err := netip.ParseAddrPort(parsed.Host); err != nil {
+		return errors.New("Provider executor backend is unavailable")
+	}
+	parsed.Scheme, parsed.Path, parsed.RawPath = "https", "/readyz", ""
+	probeContext, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	request, err := http.NewRequestWithContext(probeContext, http.MethodGet, parsed.String(), nil)
+	if err != nil {
+		return errors.New("Provider executor backend is unavailable")
+	}
+	response, err := client.Do(request)
+	if err != nil {
+		return errors.New("Provider executor backend is unavailable")
+	}
+	defer response.Body.Close()
+	if response.Request == nil || response.Request.URL == nil || response.Request.URL.String() != parsed.String() ||
+		response.StatusCode != http.StatusNoContent || response.TLS == nil || !response.TLS.HandshakeComplete ||
+		len(response.TLS.VerifiedChains) == 0 {
+		return errors.New("Provider executor backend is unavailable")
+	}
+	return nil
 }
 
 func verifyProviderMaterialDependencies(ctx context.Context, registry *secretref.Registry, cfg *config.ProviderProcessConfig) error {
@@ -697,7 +790,9 @@ func newProviderRuntimeMaterialRegistry(materials config.RoleMaterialsConfig, sc
 		allowed = append(allowed, secretref.PurposeTLSCertificate, secretref.PurposeTLSPrivateKey,
 			secretref.PurposeCABundle, secretref.PurposeExecutorClientKey, secretref.PurposeExecutorBridgeKey)
 	case config.ProviderProductionSchemaV3:
-		// Exact coding-shell v3 has no frozen TLS or Desktop executor key.
+		// Browser uses only runtime DSN/admission material; the Desktop
+		// candidate also needs its distinct broker statement signing key.
+		allowed = append(allowed, secretref.PurposeExecutorBridgeKey)
 	default:
 		return nil, errors.New("unsupported Provider runtime material schema")
 	}

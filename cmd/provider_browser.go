@@ -173,6 +173,8 @@ func newProductionBrowserProvider(ctx context.Context, cfg *config.ProviderProce
 	if err != nil {
 		return fail(err)
 	}
+	admissionReady := &providerAdmissionReadiness{}
+	protected.Ready = admissionReady.Ready
 	protected.Application = lifecycleApp
 	protected.BrowserApplication = application
 	protected.UsageEvidenceReader = usageReader
@@ -196,11 +198,16 @@ func newProductionBrowserProvider(ctx context.Context, cfg *config.ProviderProce
 	if err != nil {
 		return fail(err)
 	}
+	stack.add(closeComposedProviderServer(contractServer))
 	executorTransport, executorGuard, err := phase6tls.ProviderPrivateRoleClient(profile, phase6tls.ProviderPrivateRoleClientAuthority{
 		Role: "browser", Origin: browserConfig.ExecutorURL, PeerCRLRole: roleDocument,
 		AgentSocket: cfg.Transport.AgentSocket, AgentUID: cfg.Transport.AgentUID, AgentGID: cfg.Transport.AgentGID,
 		OperationTimeout: time.Duration(cfg.Transport.OperationTimeoutMillis) * time.Millisecond})
-	if err != nil || executorGuard.Bootstrap(ctx) != nil {
+	if err != nil {
+		return fail(errors.New("Browser executor TLS authority is unavailable"))
+	}
+	stack.add(func() error { executorGuard.Close(); return nil })
+	if executorGuard.Bootstrap(ctx) != nil {
 		return fail(errors.New("Browser executor TLS authority is unavailable"))
 	}
 	stopExecutorPoll, err := executorGuard.StartPolling(ctx)
@@ -223,6 +230,7 @@ func newProductionBrowserProvider(ctx context.Context, cfg *config.ProviderProce
 	if err != nil {
 		return fail(err)
 	}
+	stack.add(closeComposedProviderServer(privateServer))
 	muxAuthority, err := mux.NewProviderAuthority(sessions, references, state)
 	if err != nil {
 		return fail(err)
@@ -240,6 +248,7 @@ func newProductionBrowserProvider(ctx context.Context, cfg *config.ProviderProce
 	if err != nil {
 		return fail(fmt.Errorf("construct Browser allocation mux: %w", err))
 	}
+	stack.add(closeComposedProviderServer(allocationMux))
 	reconciler, err := providerprocess.NewReconciler(time.Duration(cfg.Reconciliation.IntervalSeconds)*time.Second,
 		time.Duration(cfg.Reconciliation.TimeoutSeconds)*time.Second,
 		func(runCtx context.Context) error { return lifecycleApp.Recover(runCtx) },
@@ -253,9 +262,17 @@ func newProductionBrowserProvider(ctx context.Context, cfg *config.ProviderProce
 		}
 		return nil
 	}
-	probe, err := providerprocess.NewServer(cfg.Probe, providerReadinessChecker{state: state, pool: pool, reconciler: reconciler,
+	checker := providerReadinessChecker{state: state, pool: pool, reconciler: reconciler,
 		registry: registry, config: cfg, tlsProbes: []func(context.Context) error{contractProbe, privateProbe, executorProbe},
-		dependencyProbes: []func(context.Context) error{runtime.Ready, allocationMux.Ready}})
+		dependencyProbes: []func(context.Context) error{identityRuntime.Ready, allocationMux.Ready,
+			func(probeCtx context.Context) error {
+				return probeProviderExecutorBackend(probeCtx, executorClient, browserConfig.ExecutorURL,
+					time.Duration(min(dockerConfig.OperationTimeoutSeconds, 30))*time.Second)
+			}}}
+	if err := admissionReady.Bind(checker.Ready); err != nil {
+		return fail(err)
+	}
+	probe, err := providerprocess.NewServer(cfg.Probe, checker)
 	if err != nil {
 		return fail(err)
 	}
@@ -343,6 +360,9 @@ func newProductionProviderPrivateBrowserServer(ctx context.Context, cfg *config.
 		AgentUID: cfg.Transport.AgentUID, AgentGID: cfg.Transport.AgentGID,
 		OperationTimeout: time.Duration(cfg.Transport.OperationTimeoutMillis) * time.Millisecond})
 	if err != nil || peerURI != ingress.TLS.URI {
+		if peerMonitor != nil {
+			peerMonitor.Close()
+		}
 		return nil, nil, errors.New("Browser Provider private TLS authority is unavailable")
 	}
 	result, err := providerapi.NewPrivateServer(ctx, providerapi.PrivateTransportOptions{Address: private.Address,
@@ -354,6 +374,9 @@ func newProductionProviderPrivateBrowserServer(ctx context.Context, cfg *config.
 		WriteTimeout:      time.Duration(private.WriteTimeoutMillis) * time.Millisecond,
 		IdleTimeout:       time.Duration(private.IdleTimeoutMillis) * time.Millisecond,
 		MaxHeaderBytes:    private.MaxHeaderBytes, MaxBodyBytes: private.MaxBodyBytes})
+	if err != nil && peerMonitor != nil {
+		peerMonitor.Close()
+	}
 	return result, tlsProbe, err
 }
 

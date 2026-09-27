@@ -169,6 +169,25 @@ func (m *BrokerMux) Shutdown(ctx context.Context) error {
 	}
 }
 
+// Ready is a zero-session check of the live private socket and bound runtime.
+// It does not fabricate a media authority merely to probe an empty mux.
+func (m *BrokerMux) Ready(ctx context.Context) error {
+	if m == nil || ctx == nil || ctx.Err() != nil {
+		return ErrInvalidRuntime
+	}
+	m.mu.Lock()
+	listening := m.listener != nil && !m.shutdown
+	m.mu.Unlock()
+	if !listening {
+		return ErrInvalidRuntime
+	}
+	info, err := os.Lstat(m.options.SocketPath)
+	if err != nil || info.Mode()&os.ModeSocket == 0 || info.Mode().Perm() != 0o600 || !ownedByCurrentProcess(info) {
+		return ErrInvalidRuntime
+	}
+	return m.driver.Ready(ctx)
+}
+
 func (m *BrokerMux) handle(parent context.Context, connection *net.UnixConn) {
 	defer connection.Close()
 	operationCtx, cancel := context.WithTimeout(parent, m.options.OperationTimeout)

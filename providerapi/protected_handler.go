@@ -42,6 +42,7 @@ var admissionTraceCounter atomic.Uint64
 // a nil value keeps the Provider listener discovery-only.
 type ProtectedTransportOptions struct {
 	Gate                *admission.ProtectedOperationGate
+	Ready               func(context.Context) error
 	Application         LifecycleApplication
 	SessionApplication  RuntimeSessionApplication
 	SessionConnector    RuntimeSessionConnector
@@ -127,6 +128,7 @@ type ExecApplication interface {
 type protectedHandler struct {
 	identity         *clientIdentityAdmission
 	gate             *admission.ProtectedOperationGate
+	ready            func(context.Context) error
 	application      LifecycleApplication
 	sessionApp       RuntimeSessionApplication
 	sessionConnector RuntimeSessionConnector
@@ -160,7 +162,7 @@ func newProtectedHandler(identity *clientIdentityAdmission, options ProtectedTra
 		now = func() time.Time { return time.Now().UTC() }
 	}
 	return &protectedHandler{
-		identity: identity, gate: options.Gate, application: options.Application,
+		identity: identity, gate: options.Gate, ready: options.Ready, application: options.Application,
 		sessionApp: options.SessionApplication, sessionConnector: options.SessionConnector, artifactApp: options.ArtifactApplication,
 		browserApp: options.BrowserApplication, desktopApp: options.DesktopApplication, execApp: options.ExecApplication,
 		usageReader: options.UsageEvidenceReader, operationReader: options.OperationReader,
@@ -185,6 +187,10 @@ func (h *protectedHandler) ServeHTTP(response http.ResponseWriter, request *http
 		} else {
 			writeAdmissionError(response, http.StatusServiceUnavailable, "SANDBOX_PROVIDER_UNAVAILABLE", true)
 		}
+		return
+	}
+	if h.ready != nil && h.ready(request.Context()) != nil {
+		writeAdmissionError(response, http.StatusServiceUnavailable, "SANDBOX_PROVIDER_UNAVAILABLE", true)
 		return
 	}
 	values := request.Header.Values(admission.AdmissionContextHeader)

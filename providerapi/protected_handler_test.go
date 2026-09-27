@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -54,6 +55,37 @@ func TestProtectedHandlerRejectsUnverifiedBearerBeforeContext(t *testing.T) {
 	if response.Code != http.StatusUnauthorized || guard.Calls() != 0 {
 		t.Fatalf("unverified bearer response=%d guard_calls=%d body=%s", response.Code, guard.Calls(), response.Body.String())
 	}
+}
+
+func TestProtectedHandlerClosesAdmissionWhenRuntimeIsNotReady(t *testing.T) {
+	material := newTestMTLSMaterial(t, []string{testAllowedIdentity})
+	identity, err := newClientIdentityAdmission([]string{testAllowedIdentity})
+	if err != nil {
+		t.Fatal(err)
+	}
+	guard := &testAdmissionGuard{}
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler, err := newProtectedHandler(identity, ProtectedTransportOptions{
+		Gate:  newTestProtectedGateWithPublicKey(t, publicKey, guard),
+		Ready: func(context.Context) error { return errors.New("runtime dependency unavailable") },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	contextValue := validProtectedContextForTest(t, admission.OperationExec, "/v1/sandboxes/sandbox-1/exec", "sandbox-1")
+	request := httptest.NewRequest(http.MethodPost, "https://provider.test/v1/sandboxes/sandbox-1/exec", strings.NewReader(`{}`))
+	state := verifiedState(t, material.client)
+	request.TLS = &state
+	request.Header.Set("Authorization", "Bearer "+signTestAdmissionToken(t, privateKey, admissionTokenClaimsForTest(contextValue)))
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusServiceUnavailable || guard.Calls() != 0 {
+		t.Fatalf("unready runtime admission = %d, guard calls %d", response.Code, guard.Calls())
+	}
+	assertAdmissionErrorHeaders(t, response, true)
 }
 
 func TestProtectedHandlerRejectsInactiveBearerBeforeContext(t *testing.T) {

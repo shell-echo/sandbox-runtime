@@ -50,8 +50,8 @@ import (
 )
 
 func newProductionDesktopProvider(ctx context.Context, cfg *config.ProviderProcessConfig, state *providerpostgres.Store, pool *pgxpool.Pool, registry *secretref.Registry) (*productionProviderComposition, error) { //nolint:cyclop
-	if cfg == nil {
-		return nil, errors.New("Desktop Provider configuration is required")
+	if cfg == nil || cfg.Profile != config.ProviderProcessDesktopProfile || state == nil || pool == nil || registry == nil {
+		return nil, errors.New("Desktop Provider production dependencies are unavailable")
 	}
 	stack := &providerCloseStack{}
 	fail := func(err error) (*productionProviderComposition, error) { return nil, errors.Join(err, stack.close()) }
@@ -157,8 +157,10 @@ func newProductionDesktopProvider(ctx context.Context, cfg *config.ProviderProce
 	var sessionRuntime providerdesktop.Runtime = desktopRuntime
 	var attacher providerdesktop.Attacher = desktopRuntime
 	var readiness desktoplifecycle.RuntimeReadiness = desktopRuntime
+	var boundRuntime *desktopapplication.DesktopIdentityRuntime
 	if cfg.SchemaVersion == config.ProviderProductionSchemaV3 {
-		boundRuntime, runtimeErr := desktopapplication.NewDesktopIdentityRuntime(identityLedger, desktopRuntime, systemAdmissionClock{})
+		var runtimeErr error
+		boundRuntime, runtimeErr = desktopapplication.NewDesktopIdentityRuntime(identityLedger, desktopRuntime, systemAdmissionClock{})
 		if runtimeErr != nil {
 			return fail(errors.New("Desktop identity runtime composition is unavailable"))
 		}
@@ -217,6 +219,11 @@ func newProductionDesktopProvider(ctx context.Context, cfg *config.ProviderProce
 	if err != nil {
 		return fail(err)
 	}
+	var admissionReady *providerAdmissionReadiness
+	if cfg.SchemaVersion == config.ProviderProductionSchemaV3 {
+		admissionReady = &providerAdmissionReadiness{}
+		protected.Ready = admissionReady.Ready
+	}
 	protected.Application = lifecycleApp
 	protected.DesktopApplication = desktopApp
 	protected.UsageEvidenceReader = usageReader
@@ -241,8 +248,10 @@ func newProductionDesktopProvider(ctx context.Context, cfg *config.ProviderProce
 	if err != nil {
 		return fail(err)
 	}
+	stack.add(closeComposedProviderServer(providerServer))
 	mediaRuntime := providerdesktop.MediaRuntime(desktopRuntime)
 	var executorTLSProbe func(context.Context) error
+	var executorBackendProbe func(context.Context) error
 	if desktopConfig.ExecutorURL != "" {
 		executorTimeout := time.Duration(min(dockerConfig.OperationTimeoutSeconds, 30)) * time.Second
 		var executorClient *http.Client
@@ -264,6 +273,7 @@ func newProductionDesktopProvider(ctx context.Context, cfg *config.ProviderProce
 			if tlsErr != nil {
 				return fail(errors.New("construct Provider Desktop executor live TLS client"))
 			}
+			stack.add(func() error { guard.Close(); return nil })
 			if tlsErr = guard.Bootstrap(ctx); tlsErr != nil {
 				return fail(errors.New("bootstrap Provider Desktop executor peer revocation"))
 			}
@@ -303,18 +313,28 @@ func newProductionDesktopProvider(ctx context.Context, cfg *config.ProviderProce
 			return fail(fmt.Errorf("construct production Desktop executor runtime: %w", runtimeErr))
 		}
 		mediaRuntime = executorRuntime
+		if cfg.SchemaVersion == config.ProviderProductionSchemaV3 {
+			executorBackendProbe = func(probeCtx context.Context) error {
+				return probeProviderExecutorBackend(probeCtx, executorClient, desktopConfig.ExecutorURL, executorTimeout)
+			}
+		}
 	}
 	privateServer, privateTLSProbe, err := newProductionProviderPrivateDesktopServer(ctx, cfg, resolver, registrar, mediaRuntime, registry)
 	if err != nil {
 		return fail(err)
 	}
+	stack.add(closeComposedProviderServer(privateServer))
 	var brokerMux server.Server
+	var brokerMuxProbe func(context.Context) error
 	if desktopConfig.ExecutorURL != "" {
 		muxAuthority := &productionDesktopBrokerAuthority{resolver: resolver, executorIdentity: desktopConfig.ExecutorIdentity, bridgeKeyID: desktopConfig.ExecutorBridgeKeyID, bridgePrivateKey: bridgePrivateKey}
-		brokerMux, err = desktopdocker.NewBrokerMux(desktopRuntime, desktopdocker.BrokerMuxOptions{SocketPath: desktopConfig.BrokerMuxSocketPath, MaxSessions: dockerConfig.MaxSessionsPerController, OperationTimeout: 10 * time.Second, Authority: muxAuthority})
+		mux, muxErr := desktopdocker.NewBrokerMux(desktopRuntime, desktopdocker.BrokerMuxOptions{SocketPath: desktopConfig.BrokerMuxSocketPath, MaxSessions: dockerConfig.MaxSessionsPerController, OperationTimeout: 10 * time.Second, Authority: muxAuthority})
+		brokerMux, err = mux, muxErr
 		if err != nil {
 			return fail(fmt.Errorf("construct Provider Desktop broker mux: %w", err))
 		}
+		stack.add(closeComposedProviderServer(mux))
+		brokerMuxProbe = mux.Ready
 	}
 	if _, err := vertical.Recover(ctx); err != nil {
 		return fail(fmt.Errorf("recover production Desktop sessions: %w", err))
@@ -326,8 +346,15 @@ func newProductionDesktopProvider(ctx context.Context, cfg *config.ProviderProce
 	if err != nil {
 		return fail(err)
 	}
-	probe, err := providerprocess.NewServer(cfg.Probe, providerReadinessChecker{state: state, pool: pool, reconciler: reconciler, registry: registry, config: cfg,
-		tlsProbes: []func(context.Context) error{contractTLSProbe, privateTLSProbe, executorTLSProbe}})
+	checker := providerReadinessChecker{state: state, pool: pool, reconciler: reconciler, registry: registry, config: cfg,
+		tlsProbes: []func(context.Context) error{contractTLSProbe, privateTLSProbe, executorTLSProbe}}
+	if cfg.SchemaVersion == config.ProviderProductionSchemaV3 {
+		checker.dependencyProbes = []func(context.Context) error{boundRuntime.Ready, brokerMuxProbe, executorBackendProbe}
+		if err := admissionReady.Bind(checker.Ready); err != nil {
+			return fail(err)
+		}
+	}
+	probe, err := providerprocess.NewServer(cfg.Probe, checker)
 	if err != nil {
 		return fail(err)
 	}
@@ -502,6 +529,9 @@ func newProductionProviderPrivateDesktopServer(ctx context.Context, cfg *config.
 		return nil, nil, errors.New("unsupported Provider private Desktop TLS schema")
 	}
 	if err != nil {
+		if peerMonitor != nil {
+			peerMonitor.Close()
+		}
 		return nil, nil, errors.New("load Provider private Desktop TLS material")
 	}
 	var privateHandler http.Handler = handler
@@ -514,6 +544,9 @@ func newProductionProviderPrivateDesktopServer(ctx context.Context, cfg *config.
 		ReadHeaderTimeout: time.Duration(private.ReadHeaderTimeoutMillis) * time.Millisecond, ReadTimeout: time.Duration(private.ReadTimeoutMillis) * time.Millisecond,
 		WriteTimeout: time.Duration(private.WriteTimeoutMillis) * time.Millisecond, IdleTimeout: time.Duration(private.IdleTimeoutMillis) * time.Millisecond,
 		MaxHeaderBytes: private.MaxHeaderBytes, MaxBodyBytes: private.MaxBodyBytes})
+	if err != nil && peerMonitor != nil {
+		peerMonitor.Close()
+	}
 	return result, tlsProbe, err
 }
 

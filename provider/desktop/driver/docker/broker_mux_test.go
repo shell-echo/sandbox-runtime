@@ -152,6 +152,22 @@ func TestBrokerMuxForwardsOnlyAuthorizedOwnedCandidateSession(t *testing.T) {
 	}
 }
 
+func TestBrokerMuxReadinessRequiresLiveOwnedSocket(t *testing.T) {
+	fixture := newMuxFixture(t)
+	mux, socket, cancel, done := startMux(t, fixture.driver, fixture.authority, 1)
+	deadline := time.Now().Add(2 * time.Second)
+	for mux.Ready(t.Context()) != nil && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if err := mux.Ready(t.Context()); err != nil {
+		t.Fatalf("live zero-session mux readiness: %v", err)
+	}
+	stopMux(t, socket, cancel, done)
+	if err := mux.Ready(t.Context()); err == nil {
+		t.Fatal("stopped broker mux remained ready")
+	}
+}
+
 func TestBrokerMuxFencesAndDrainsExactDesktopSession(t *testing.T) {
 	fixture := newMuxFixture(t)
 	fixture.engine.serve = serveMuxBroker(fixture.publicKey, true)

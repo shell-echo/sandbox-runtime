@@ -2,10 +2,14 @@ package cmd
 
 import (
 	"context"
+	"errors"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/shell-echo/sandbox-runtime/config"
 	"github.com/shell-echo/sandbox-runtime/provider"
@@ -129,8 +133,80 @@ func TestRoleCommandsRejectMixedProcessAuthority(t *testing.T) {
 }
 
 func TestBrowserProviderCannotFallThroughToCodingComposition(t *testing.T) {
-	composition, err := newProductionProvider(context.Background(), &config.ProviderProcessConfig{Profile: config.ProviderProcessBrowserProfile}, nil, nil, nil)
-	if err == nil || composition != nil || !strings.Contains(err.Error(), "Browser Provider production composition") {
-		t.Fatalf("unwired Browser Provider composition = %v, %v", composition, err)
+	composition, err := newProductionProvider(context.Background(), &config.ProviderProcessConfig{
+		Profile: config.ProviderProcessBrowserProfile, SchemaVersion: config.ProviderProductionSchemaV3,
+	}, nil, nil, nil)
+	if err == nil || composition != nil || !strings.Contains(err.Error(), "Browser Provider production dependencies") {
+		t.Fatalf("Browser route bypassed its real composition guard = %v, %v", composition, err)
+	}
+	composition, err = newProductionProvider(context.Background(), &config.ProviderProcessConfig{
+		Profile: config.ProviderProcessDesktopProfile, SchemaVersion: config.ProviderProductionSchemaV3,
+	}, nil, nil, nil)
+	if err == nil || composition != nil || !strings.Contains(err.Error(), "Desktop Provider production dependencies") {
+		t.Fatalf("Desktop route bypassed its real composition guard = %v, %v", composition, err)
+	}
+}
+
+func TestProviderServeSchemaMatrix(t *testing.T) {
+	for _, sample := range []struct {
+		schema  string
+		profile config.ProviderProcessProfile
+		level   config.ProviderDeploymentLevel
+		allowed bool
+	}{
+		{config.ProviderProductionSchemaV3, config.ProviderProcessCodingShellProfile, config.ProviderProductionLevel, true},
+		{config.ProviderProductionSchemaV3, config.ProviderProcessBrowserProfile, config.ProviderProductionLevel, true},
+		{config.ProviderProductionSchemaV3, config.ProviderProcessDesktopProfile, config.ProviderLocalCandidateLevel, true},
+		{config.ProviderProductionSchemaV3, config.ProviderProcessDesktopProfile, config.ProviderProductionLevel, false},
+		{config.ProviderProductionSchemaV3, config.ProviderProcessBrowserProfile, config.ProviderLocalCandidateLevel, false},
+		{config.ProviderProductionSchemaV3, config.ProviderProcessCodingShellProfile, config.ProviderLocalCandidateLevel, false},
+		{"sandbox-runtime.provider-process.v1", config.ProviderProcessDesktopProfile, config.ProviderLocalCandidateLevel, false},
+	} {
+		candidate := &config.ProviderProcessConfig{SchemaVersion: sample.schema, Profile: sample.profile, DeploymentLevel: sample.level}
+		if got := providerServeSchemaAllowed(candidate); got != sample.allowed {
+			t.Fatalf("Provider command schema/profile/level = %s/%s/%s: %v", sample.schema, sample.profile, sample.level, got)
+		}
+	}
+	if providerServeSchemaAllowed(nil) {
+		t.Fatal("nil Provider command configuration was admitted")
+	}
+}
+
+func TestProviderExecutorReadinessRequiresExactVerifiedEndpoint(t *testing.T) {
+	status := http.StatusNoContent
+	server := httptest.NewTLSServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/readyz" {
+			http.NotFound(writer, request)
+			return
+		}
+		writer.WriteHeader(status)
+	}))
+	defer server.Close()
+	endpoint := strings.Replace(server.URL, "https://", "wss://", 1) + "/executor"
+	if err := probeProviderExecutorBackend(t.Context(), server.Client(), endpoint, time.Second); err != nil {
+		t.Fatalf("verified backend ready: %v", err)
+	}
+	status = http.StatusServiceUnavailable
+	if err := probeProviderExecutorBackend(t.Context(), server.Client(), endpoint, time.Second); err == nil {
+		t.Fatal("unavailable backend became ready")
+	}
+	if err := probeProviderExecutorBackend(t.Context(), server.Client(), endpoint+"?fallback=1", time.Second); err == nil {
+		t.Fatal("backend readiness accepted a noncanonical endpoint")
+	}
+}
+
+func TestProviderAdmissionReadinessStaysClosedUntilBound(t *testing.T) {
+	gate := &providerAdmissionReadiness{}
+	if err := gate.Ready(t.Context()); err == nil {
+		t.Fatal("unbound Provider admission became ready")
+	}
+	if err := gate.Bind(func(context.Context) error { return errors.New("dependency down") }); err != nil {
+		t.Fatal(err)
+	}
+	if err := gate.Ready(t.Context()); err == nil {
+		t.Fatal("failed Provider dependency became ready")
+	}
+	if err := gate.Bind(func(context.Context) error { return nil }); err == nil {
+		t.Fatal("Provider admission readiness was rebound")
 	}
 }
