@@ -146,7 +146,8 @@ func observeLocalRoleDescriptor(t *testing.T, ctx context.Context, image, platfo
 		images[0].Descriptor.MediaType == "application/vnd.docker.distribution.manifest.list.v2+json" {
 		kind = phase6security.ImageIdentityOCIIndex
 	}
-	archive := filepath.Join(t.TempDir(), "candidate.oci.tar")
+	manifestPath := filepath.Join(t.TempDir(), "candidate.json")
+	archive := manifestPath + ".oci.tar"
 	if output, err := exec.CommandContext(ctx, "docker", "image", "save", "-o", archive, image).CombinedOutput(); err != nil {
 		t.Fatalf("save exact role candidate archive: %v: %.512s", err, output)
 	}
@@ -189,6 +190,25 @@ func observeLocalRoleDescriptor(t *testing.T, ctx context.Context, image, platfo
 	if err != nil || !strings.HasPrefix(buildProof.BinaryDigest, "sha256:") ||
 		!strings.HasPrefix(buildProof.BuildContextDigest, "sha256:") {
 		t.Fatalf("rebuilt executable differs from verified OCI layer: %#v, %v", buildProof, err)
+	}
+	candidate, err := phase6rolecandidate.NewManifest(ctx, sourceRoot, archive, inputs, principal, probe, buildProof)
+	if err != nil {
+		t.Fatalf("construct independently reverified candidate manifest: %v", err)
+	}
+	if err := candidate.WritePrivate(manifestPath); err != nil {
+		t.Fatalf("retain private candidate manifest: %v", err)
+	}
+	reloaded, err := phase6rolecandidate.LoadCurrent(ctx, sourceRoot, manifestPath)
+	if err != nil || reloaded.ManifestDigest != candidate.ManifestDigest ||
+		reloaded.CandidateEvidence().ArchiveDigest != probe.ArchiveDigest ||
+		reloaded.CandidateEvidence().BuildTarget != "core" {
+		t.Fatalf("reverify retained role candidate and evidence projection: %#v, %v", reloaded, err)
+	}
+	if err := os.Chmod(archive, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := phase6rolecandidate.LoadCurrent(ctx, sourceRoot, manifestPath); err == nil {
+		t.Fatal("public candidate archive admitted after manifest retention")
 	}
 	if output, err := exec.CommandContext(ctx, "docker", "rm", "-f", containerID).CombinedOutput(); err != nil {
 		t.Fatalf("remove exact stopped role image observation: %v: %.512s", err, output)
