@@ -1,0 +1,63 @@
+package phase6security
+
+// This reviewed Slice 6 local-gate inventory is deliberately independent of
+// requiredPrincipals in the general profile validator. Adding a permissible
+// profile principal must not automatically authorize a new gate deployment.
+var slice6ApprovedDeploymentKinds = map[string]string{
+	"product-runtime": "runtime", "gateway-runtime": "runtime",
+	"browser-action-ingress-runtime": "runtime", "provider-runtime": "runtime",
+	"provider-browser-runtime": "runtime", "provider-desktop-runtime": "runtime",
+	"guest-runtime": "runtime", "browser-runtime-role": "runtime", "desktop-runtime-role": "runtime",
+	"browser-executor-backend": "executor", "desktop-executor-backend": "executor",
+	"product-tls-agent": "tls_agent", "provider-tls-agent": "tls_agent",
+	"provider-browser-tls-agent": "tls_agent", "provider-desktop-tls-agent": "tls_agent",
+	"provider-browser-postgres-tls-agent": "tls_agent", "provider-desktop-postgres-tls-agent": "tls_agent",
+	"gateway-tls-agent": "tls_agent", "browser-action-ingress-tls-agent": "tls_agent",
+	"guest-tls-agent": "tls_agent", "browser-tls-agent": "tls_agent", "desktop-tls-agent": "tls_agent",
+	"browser-executor-tls-agent": "tls_agent", "desktop-executor-tls-agent": "tls_agent",
+	"product-runtime-agent": "material_agent", "provider-runtime-agent": "material_agent",
+	"provider-browser-runtime-agent": "material_agent", "provider-desktop-runtime-agent": "material_agent",
+	"gateway-agent": "material_agent", "browser-action-ingress-agent": "material_agent",
+	"guest-agent": "material_agent", "browser-agent": "material_agent", "desktop-agent": "material_agent",
+	"product-migration-agent": "material_agent", "provider-migration-agent": "material_agent",
+	"workload-credential-controller": "controller", "break-glass-controller": "controller",
+	"certificate-controller": "controller", "product-migration-job": "migration_job",
+	"provider-migration-job": "migration_job", "browser-sandbox-runtime": "sandbox",
+	"desktop-sandbox-runtime": "sandbox", "public-ingress-relay": "ingress_relay",
+	"egress-broker-product": "egress_broker", "egress-broker-product-tls-agent": "tls_agent",
+	"egress-policy-authority-product": "controller",
+	"egress-broker-gateway":           "egress_broker", "egress-broker-gateway-tls-agent": "tls_agent",
+	"egress-policy-authority-gateway":                "controller",
+	"egress-broker-browser-action-ingress":           "egress_broker",
+	"egress-broker-browser-action-ingress-tls-agent": "tls_agent",
+	"egress-policy-authority-browser-action-ingress": "controller",
+	"egress-broker-provider-browser":                 "egress_broker",
+	"egress-broker-provider-browser-tls-agent":       "tls_agent",
+	"egress-policy-authority-provider-browser":       "controller",
+	"egress-broker-provider-desktop":                 "egress_broker",
+	"egress-broker-provider-desktop-tls-agent":       "tls_agent",
+	"egress-policy-authority-provider-desktop":       "controller",
+}
+
+// A TLS-agent relationship is an explicit delegated key owner, never an
+// incidental consequence of a newly registered profile principal.
+var slice6ApprovedTLSAgentSubjects = map[string]string{
+	"product-tls-agent":                              "product-runtime",
+	"provider-tls-agent":                             "provider-runtime",
+	"provider-browser-tls-agent":                     "provider-browser-runtime",
+	"provider-desktop-tls-agent":                     "provider-desktop-runtime",
+	"provider-browser-postgres-tls-agent":            "provider-browser-runtime",
+	"provider-desktop-postgres-tls-agent":            "provider-desktop-runtime",
+	"gateway-tls-agent":                              "gateway-runtime",
+	"browser-action-ingress-tls-agent":               "browser-action-ingress-runtime",
+	"guest-tls-agent":                                "guest-runtime",
+	"browser-tls-agent":                              "browser-runtime-role",
+	"desktop-tls-agent":                              "desktop-runtime-role",
+	"browser-executor-tls-agent":                     "browser-executor-backend",
+	"desktop-executor-tls-agent":                     "desktop-executor-backend",
+	"egress-broker-product-tls-agent":                "egress-broker-product",
+	"egress-broker-gateway-tls-agent":                "egress-broker-gateway",
+	"egress-broker-browser-action-ingress-tls-agent": "egress-broker-browser-action-ingress",
+	"egress-broker-provider-browser-tls-agent":       "egress-broker-provider-browser",
+	"egress-broker-provider-desktop-tls-agent":       "egress-broker-provider-desktop",
+}

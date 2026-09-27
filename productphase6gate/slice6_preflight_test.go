@@ -46,7 +46,9 @@ func loadSlice6GateInput(ctx context.Context, profilePath, sourceRoot, sourceRev
 	profile, err := phase6security.VerifyFile(profilePath)
 	if err != nil || validateSlice6ScenarioRoutes(profile, slice6ScenarioRoutes) != nil ||
 		phase6security.VerifySlice6DesiredNetworks(profile) != nil ||
-		phase6security.VerifySlice6DesiredPrincipalIDs(profile) != nil {
+		phase6security.VerifySlice6DesiredPrincipalIDs(profile) != nil ||
+		phase6security.VerifySlice6DesiredEdgeAddresses(profile) != nil ||
+		phase6security.VerifySlice6DesiredIngress(profile) != nil {
 		return slice6GateInput{}, errors.New("Slice 6 complete security profile is unavailable")
 	}
 	if err := verifyCleanSlice6Source(ctx, sourceRoot, sourceRevision); err != nil {

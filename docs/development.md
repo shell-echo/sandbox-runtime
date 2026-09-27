@@ -1270,6 +1270,15 @@ declared member IP before launch; actual raw Docker inspection must later be
 checked with `VerifySlice6DesiredEndpointObservation`. The source-bound core
 Docker ownership smoke uses the reviewed Provider UID/GID, role network and
 planned IP, but executes only `--help`, not a Provider listener.
+`VerifySlice6DesiredTrustEdges` additionally freezes all 77 local, external
+and Unix trust edges; `BindSlice6DesiredNetworkPlan` readdresses an already
+valid draft to the reviewed IPAM plan and recomputes profile/ingress digests.
+This is a pre-freeze transformation, not an observer or complete profile
+generator. `VerifySlice6DesiredIngress` additionally rejects an unreviewed
+host-published port, relay frontend IP, upstream IP or relay resource limit.
+`VerifySlice6DesiredEdgeAddresses` requires every local numeric mTLS target to
+equal the recipient's preplanned address, even if another address inside the
+same subnet would be accepted by the generic profile validator.
 
 The network component creates exact isolated/NAT Docker bridges, verifies
 their raw inspection, observes a disposable running member, rejects an extra

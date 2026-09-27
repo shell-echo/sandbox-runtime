@@ -13,28 +13,16 @@ const Slice6DesiredNetworkInventoryVersion = 1
 
 var errSlice6DesiredInventory = errors.New("Slice 6 desired inventory mismatch")
 
-// These are the only additional static deployments beyond requiredPrincipals
-// in the Slice 6 local gate. A policy extension requires reviewing this list,
-// not discovering a new principal from the containers that happened to run.
-var slice6AdditionalDeployments = []string{
-	"egress-broker-browser-action-ingress", "egress-broker-browser-action-ingress-tls-agent", "egress-policy-authority-browser-action-ingress",
-	"egress-broker-gateway", "egress-broker-gateway-tls-agent", "egress-policy-authority-gateway",
-	"egress-broker-product", "egress-broker-product-tls-agent", "egress-policy-authority-product",
-	"egress-broker-provider-browser", "egress-broker-provider-browser-tls-agent", "egress-policy-authority-provider-browser",
-	"egress-broker-provider-desktop", "egress-broker-provider-desktop-tls-agent", "egress-policy-authority-provider-desktop",
-}
-
 type slice6DesiredNetwork struct {
 	name, kind string
 	principals []string
 }
 
 func slice6ApprovedDeploymentNames() []string {
-	all := make([]string, 0, len(requiredPrincipals)+len(slice6AdditionalDeployments))
-	for name := range requiredPrincipals {
+	all := make([]string, 0, len(slice6ApprovedDeploymentKinds))
+	for name := range slice6ApprovedDeploymentKinds {
 		all = append(all, name)
 	}
-	all = append(all, slice6AdditionalDeployments...)
 	sort.Strings(all)
 	return all
 }
@@ -116,12 +104,12 @@ func Slice6DesiredNetworks() []Network {
 // Profile.Validate: the latter enforces a closed safe shape, while this
 // function rejects a self-consistent but broadened expected graph.
 func VerifySlice6DesiredNetworkGraph(profile Profile) error {
-	if profile.Validate() != nil || len(profile.Principals) != len(requiredPrincipals)+len(slice6AdditionalDeployments) {
+	if profile.Validate() != nil || len(profile.Principals) != len(slice6ApprovedDeploymentKinds) {
 		return errSlice6DesiredInventory
 	}
 	names := make(map[string]bool, len(profile.Principals))
 	for _, principal := range profile.Principals {
-		if _, required := requiredPrincipals[principal.Name]; !required && !slices.Contains(slice6AdditionalDeployments, principal.Name) {
+		if slice6ApprovedDeploymentKinds[principal.Name] != principal.Kind {
 			return errSlice6DesiredInventory
 		}
 		names[principal.Name] = true

@@ -1858,5 +1858,24 @@ The source-bound core command's Docker ownership smoke now uses the reviewed
 Provider role network, its planned IP and its exact static UID/GID pair rather
 than an unrelated high-UID/random-network combination. It still invokes a
 short `--help` command, not an authenticated Provider service chain.
-The module does not yet generate the complete profile, start the role graph,
-or prove its live network paths; Phase 6 remains **5/15**.
+
+The next generator module freezes all 77 trust edges, including 17 local
+numeric mTLS targets, external destinations and Unix peers, by exact
+source/target, route, port, protocol, anchor, tenant scope and lifetime. The
+network binder deterministically assigns each target's planned IP, rebinds
+both ingress frontend/upstream addresses, recomputes ingress digests and
+revalidates the canonical profile without mutating its input. A changed
+network kind, local edge lifetime or external Vault edge lifetime is rejected
+even with a recomputed profile digest. The reviewed ingress rule also fixes
+loopback host ports and limits, rejecting a self-consistent changed host
+publication or relay frontend IP. The positive fixture still has synthetic
+identities and artifacts; this module does not author a real full profile,
+launch a listener or observe a handshake. External-service and Unix peer edges
+still require live capture. Phase 6 remains **5/15**.
+
+An additional preflight comparison now requires every one of the 17 local
+numeric targets to equal the preplanned IP of its declared recipient, not just
+an arbitrary address inside the correct /24. An internally valid profile with
+a changed Product→Provider target IP is rejected after its digest is
+recomputed. This remains desired-configuration enforcement; actual container
+IP and mTLS connection evidence must still come from the live run.

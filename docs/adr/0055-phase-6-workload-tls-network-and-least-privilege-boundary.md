@@ -1253,6 +1253,14 @@ certificate chains/handshakes, PostgreSQL HBA/roles/new connections and
 positive/negative network requests. A profile-to-observation projection is
 not evidence. Changing an expected rule after launch requires terminating
 that candidate run and beginning a new full run; receipts are not spliced.
-The reviewed network inventory now fixes exact principals, isolated/NAT
-membership and a deterministic local /24 plan. It is only the first inventory
-module, not a complete generated profile or an accepted Slice 6 gate.
+The reviewed inventory now fixes exact principals, isolated/NAT membership,
+a deterministic local /24/endpoint plan, static UID/GID partitions and all
+77 local, external and Unix trust boundaries. The pre-freeze binder derives
+target addresses from that plan and recomputes canonical profile/ingress digests;
+the reviewed ingress rule fixes loopback host publication and relay limits.
+It does not accept a post-hoc observed IP as desired. External and Unix peer
+edge behavior, real immutable artifacts, controlled bootstrap and the complete
+live gate remain open. This is not an accepted Slice 6 result.
+The local gate's additional preflight comparison requires every numeric mTLS
+target to equal the preplanned recipient endpoint, not merely a valid IP in
+the right network; actual endpoint and handshake observation remains separate.
