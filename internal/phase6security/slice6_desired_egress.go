@@ -6,6 +6,7 @@ type slice6EgressSpec struct {
 	id, principal, broker, authority, authorizationName string
 	keyID, socketDirectory, socketStorageID             string
 	ledgerTarget, ledgerStorageID                       string
+	dnsMaxAnswers                                       int
 	targets                                             []EgressTarget
 }
 
@@ -18,6 +19,7 @@ var slice6DesiredEgress = []slice6EgressSpec{
 		authorizationName: "browser_action_ingress_policy_authority", keyID: "operator-browser-action-ingress-1",
 		socketDirectory: "/run/egress-authority-browser-action-ingress", socketStorageID: "browser-action-ingress-authority-socket",
 		ledgerTarget: "/var/lib/egress-authority-browser-action-ingress", ledgerStorageID: "browser-action-ingress-authority-ledger",
+		dnsMaxAnswers: 8,
 		targets: []EgressTarget{{Alias: "action-history", Host: "action-history.sandbox-runtime.test", Port: 5432, Protocol: "postgres"},
 			{Alias: "capacity", Host: "capacity.sandbox-runtime.test", Port: 6379, Protocol: "tls"}},
 	},
@@ -26,28 +28,32 @@ var slice6DesiredEgress = []slice6EgressSpec{
 		authority: "egress-policy-authority-gateway", authorizationName: "gateway_policy_authority", keyID: "operator-gateway-1",
 		socketDirectory: "/run/egress-authority-gateway", socketStorageID: "gateway-authority-socket",
 		ledgerTarget: "/var/lib/egress-authority-gateway", ledgerStorageID: "gateway-authority-ledger",
-		targets: []EgressTarget{{Alias: "capacity", Host: "capacity.sandbox-runtime.test", Port: 6379, Protocol: "tls"}},
+		dnsMaxAnswers: 8,
+		targets:       []EgressTarget{{Alias: "capacity", Host: "capacity.sandbox-runtime.test", Port: 6379, Protocol: "tls"}},
 	},
 	{
 		id: "product-egress", principal: "product-runtime", broker: "egress-broker-product",
 		authority: "egress-policy-authority-product", authorizationName: "product_policy_authority", keyID: "operator-product-1",
 		socketDirectory: "/run/egress-authority", socketStorageID: "product-authority-socket",
 		ledgerTarget: "/var/lib/egress-authority", ledgerStorageID: "product-authority-ledger",
-		targets: []EgressTarget{{Alias: "registry-probe", Host: "registry-1.docker.io", Port: 443, Protocol: "https"}},
+		dnsMaxAnswers: 16,
+		targets:       []EgressTarget{{Alias: "registry-probe", Host: "registry-1.docker.io", Port: 443, Protocol: "https"}},
 	},
 	{
 		id: "provider-browser-egress", principal: "provider-browser-runtime", broker: "egress-broker-provider-browser",
 		authority: "egress-policy-authority-provider-browser", authorizationName: "provider_browser_policy_authority", keyID: "operator-provider-browser-1",
 		socketDirectory: "/run/egress-authority-provider-browser", socketStorageID: "provider-browser-authority-socket",
 		ledgerTarget: "/var/lib/egress-authority-provider-browser", ledgerStorageID: "provider-browser-authority-ledger",
-		targets: []EgressTarget{{Alias: "postgres", Host: "postgres.sandbox-runtime.test", Port: 5432, Protocol: "postgres"}},
+		dnsMaxAnswers: 8,
+		targets:       []EgressTarget{{Alias: "postgres", Host: "postgres.sandbox-runtime.test", Port: 5432, Protocol: "postgres"}},
 	},
 	{
 		id: "provider-desktop-egress", principal: "provider-desktop-runtime", broker: "egress-broker-provider-desktop",
 		authority: "egress-policy-authority-provider-desktop", authorizationName: "provider_desktop_policy_authority", keyID: "operator-provider-desktop-1",
 		socketDirectory: "/run/egress-authority-provider-desktop", socketStorageID: "provider-desktop-authority-socket",
 		ledgerTarget: "/var/lib/egress-authority-provider-desktop", ledgerStorageID: "provider-desktop-authority-ledger",
-		targets: []EgressTarget{{Alias: "postgres", Host: "postgres.sandbox-runtime.test", Port: 5432, Protocol: "postgres"}},
+		dnsMaxAnswers: 8,
+		targets:       []EgressTarget{{Alias: "postgres", Host: "postgres.sandbox-runtime.test", Port: 5432, Protocol: "postgres"}},
 	},
 }
 
@@ -68,7 +74,7 @@ func VerifySlice6DesiredEgressPolicies(profile Profile) error {
 			authority.SocketStorageID != expected.socketStorageID || authority.LedgerMountTarget != expected.ledgerTarget ||
 			authority.LedgerStorageID != expected.ledgerStorageID || authority.PollMillis != 500 ||
 			authority.CurrentTimeoutMS != 1000 || authority.StateMaxAgeSeconds != 5 ||
-			policy.LeaseSeconds != 60 || policy.DNSMaxAnswers != 8 || !slices.Equal(policy.Targets, expected.targets) {
+			policy.LeaseSeconds != 60 || policy.DNSMaxAnswers != expected.dnsMaxAnswers || !slices.Equal(policy.Targets, expected.targets) {
 			return errSlice6DesiredInventory
 		}
 	}

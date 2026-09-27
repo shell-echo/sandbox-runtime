@@ -106,6 +106,9 @@ func TestSlice6DraftNetworkBindingRecomputesCanonicalAddresses(t *testing.T) {
 	if err := VerifySlice6DesiredTrustAnchors(draft); err != nil {
 		t.Fatalf("reviewed trust anchors and closed fixture diverged: %v", err)
 	}
+	if err := VerifySlice6DesiredTLSIdentities(draft); err != nil {
+		t.Fatalf("reviewed TLS identities and closed fixture diverged: %v", err)
+	}
 	if err := VerifySlice6DesiredIngressPolicy(draft); err != nil {
 		t.Fatalf("reviewed ingress policy and closed fixture diverged: %v", err)
 	}
@@ -305,5 +308,37 @@ func TestSlice6TrustAnchorArtifactCannotBeSubstituted(t *testing.T) {
 	}
 	if err := VerifySlice6DesiredTrustAnchors(profile); err == nil {
 		t.Fatal("self-consistent substituted CA artifact ID was admitted")
+	}
+}
+
+func TestSlice6TLSIdentityCannotBeReissuedWithBroaderSANOrLifetime(t *testing.T) {
+	for name, mutate := range map[string]func(*TLSIdentity){
+		"server SAN": func(identity *TLSIdentity) {
+			identity.DNSNames = []string{"unreviewed.sandbox-runtime.test"}
+		},
+		"rotation lifetime": func(identity *TLSIdentity) {
+			identity.TTLSeconds = 901
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			profile := validProfile()
+			profile.Principals = append([]Principal(nil), profile.Principals...)
+			for index := range profile.Principals {
+				if profile.Principals[index].Name != "product-runtime" {
+					continue
+				}
+				copyIdentity := *profile.Principals[index].TLS
+				mutate(&copyIdentity)
+				profile.Principals[index].TLS = &copyIdentity
+				break
+			}
+			profile.ProfileDigest = profile.Digest()
+			if err := profile.Validate(); err != nil {
+				t.Fatalf("rewritten TLS identity fixture is not internally valid: %v", err)
+			}
+			if err := VerifySlice6DesiredTLSIdentities(profile); err == nil {
+				t.Fatal("self-consistent expanded TLS identity was admitted")
+			}
+		})
 	}
 }

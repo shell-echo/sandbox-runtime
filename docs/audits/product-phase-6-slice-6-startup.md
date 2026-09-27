@@ -1898,8 +1898,29 @@ Product positive-control alias now names the existing public Docker Registry
 HTTPS API for a minimal unauthenticated `GET /v2/`; it is a third-party
 reference endpoint, not a run-owned image or server. One bounded local check
 with `dig @1.1.1.1` returned `198.18.0.32`; `netpolicy` explicitly blocks
-`198.18.0.0/15`. There is no valid public-address/TLS/broker observation yet,
-so the positive egress gate is still open rather than skipped or counted.
+`198.18.0.0/15`. Sandbox then obtained genuine public A records through
+authenticated DoH and a strict TLS 1.3 `GET /v2/` response from the real
+Registry on the host; this disproves a blanket claim that the host has no
+safe public route, but is not Product→broker gate evidence. The first
+opt-in wireformat DoH bootstrap diagnostic fetched A and AAAA successfully,
+then correctly refused their combined 16-address answer against the reviewed
+`DNSMaxAnswers=8` limit (minimum TTL 33 seconds). Sandbox then reviewed and
+approved `DNSMaxAnswers=16` for the Product policy only; the other four remain
+at 8 and the general 32-answer ceiling is unchanged. Product has only one
+approved alias, `registry-probe`, so this policy-level change does not expand
+an additional Product destination. Netpolicy and real broker fixtures show 16
+public answers can proceed, 17 answers or a forbidden mixed final address
+cause zero numeric dials, and cancellation shares one deadline. The opt-in
+real DoH diagnostic then passed with 16 public answers and a minimum TTL of
+12 seconds, retaining both raw-response digests in its test log. No answer
+was truncated or reclassified, and this is not a Product→broker→Registry
+live scenario. The positive egress gate is still open, not skipped or counted.
 The trust-anchor layout is now separately checked against five reviewed names,
 purposes, operator artifact IDs, mount locations and consumer sets. Real CA
 bytes and issuance remain unproved.
+
+An additional reviewed TLS-identity verifier fixes each static deployment's
+SPIFFE URI, permitted DNS SAN/EKU, certificate TTL, rotation overlap,
+revocation staleness and drain bound. A recomputed profile with a changed
+Product SAN or lifetime fails. It does not issue or observe a certificate;
+Phase 6 remains **5/15**.

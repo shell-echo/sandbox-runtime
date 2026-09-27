@@ -1281,7 +1281,20 @@ answer, strict TLS identity and the expected Registry API response, then test
 rebinding via its controlled DNS while preserving the same broker dial path.
 This existing third-party endpoint is not a run-owned deployment or an image
 whose provenance we can claim. A DNS answer in `198.18.0.0/15` (observed on
-this host) is blocked, not a reason to widen `netpolicy`; unavailable genuine
-public resolution leaves the positive gate open. The five trust-anchor names,
+ordinary DNS paths on this host) is blocked, not a reason to widen
+`netpolicy`. Authenticated DoH to an explicitly pinned public resolver can
+supply fresh checked A/AAAA records to controlled bootstrap without becoming
+an application resolver or broker bypass. This run's complete 16-address
+A+AAAA answer led Sandbox to review Product's policy-level `DNSMaxAnswers=16`
+(formerly 8); the four other policies remain at 8. Product currently has only
+the `registry-probe` target. The broker still checks every answer before a
+numeric dial, uses its existing connection bound and one shared deadline;
+17 answers or any forbidden address in a 16-answer set fail before dialing.
+The general maximum of 32, lease and TTL handling are unchanged. Every
+answer must fit the reviewed count/freshness bounds; otherwise the positive
+gate stays open. The five trust-anchor names,
 uses, mount identities and consumers are also reviewed separately from actual
 CA bundle bytes and issuer observations.
+The reviewed TLS-identity inventory additionally fixes each deployment's
+SPIFFE URI, server SAN/EKU allocation and rotation/drain timing. Actual
+certificates, signer ownership, revocation and handshakes remain live proof.

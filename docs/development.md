@@ -1290,6 +1290,15 @@ HTTPS API, not a run-owned image; DNS results in `198.18.0.0/15` remain
 forbidden, including if a local VPN or resolver maps that name there.
 `VerifySlice6DesiredTrustAnchors` fixes the five bundle roles and consumers
 without treating a fixture digest as observed CA material.
+`VerifySlice6DesiredTLSIdentities` fixes the static SPIFFE/SAN/EKU/timing
+inventory without substituting for live signer/CRL/handshake evidence.
+`SANDBOX_RUNTIME_PHASE6_SLICE6_DOH_PREFLIGHT=1` runs a separate, bounded,
+TLS-verified wireformat bootstrap diagnostic to an explicit DoH endpoint;
+it does not exercise Product or the egress broker. A response exceeding the
+profile's `DNSMaxAnswers` must fail closed, not be truncated. The reviewed
+Product policy alone permits 16 complete A+AAAA answers for its sole
+`registry-probe` target; the four other policies retain 8. Tests exercise
+16/17-answer and poisoned-last-address rejection before numeric dialing.
 
 The network component creates exact isolated/NAT Docker bridges, verifies
 their raw inspection, observes a disposable running member, rejects an extra

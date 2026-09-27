@@ -67,6 +67,11 @@ type brokerFixture struct {
 func newBrokerFixture(t *testing.T, resolver staticResolver, maximumConnections int) *brokerFixture {
 	t.Helper()
 	policy := testPolicy(t)
+	return newBrokerFixtureWithPolicy(t, policy, resolver, maximumConnections)
+}
+
+func newBrokerFixtureWithPolicy(t *testing.T, policy Policy, resolver staticResolver, maximumConnections int) *brokerFixture {
+	t.Helper()
 	serverTLS, clientTLS := testTLS(t, policy.Principal.Digest(), policy.Broker.Digest(), policy.Principal.Name, policy.Broker.Name)
 	dialer := &pipeDialer{peers: make(chan net.Conn, 16)}
 	principalURI := "spiffe://sandbox-runtime.test/" + policy.Principal.Name
@@ -90,6 +95,55 @@ func newBrokerFixture(t *testing.T, resolver staticResolver, maximumConnections 
 	}
 	return &brokerFixture{policy: policy, server: server, client: client, serverTLS: serverTLS, clientTLS: clientTLS,
 		dialer: dialer, cancel: cancel, done: done, principalURI: principalURI, brokerURI: brokerURI}
+}
+
+func TestBrokerSixteenAnswerPolicyRejectsSeventeenthAndPoisonedLast(t *testing.T) {
+	policy := testPolicy(t)
+	var err error
+	policy, err = NewPolicy(policy.ID, policy.Revision, policy.Registry, policy.Principal, policy.Broker,
+		policy.Lease, 16, policy.Targets)
+	if err != nil {
+		t.Fatal(err)
+	}
+	answers := make([]net.IPAddr, 16)
+	for index := range answers {
+		answers[index] = net.IPAddr{IP: net.IPv4(34, 238, 55, byte(index+1))}
+	}
+	valid := newBrokerFixtureWithPolicy(t, policy, staticResolver{answers: answers}, 4)
+	connection, err := valid.client.Dial(context.Background(), "packages", time.Second)
+	if err != nil {
+		valid.close(t)
+		t.Fatalf("16 valid public answers could not reach broker numeric dial: %v", err)
+	}
+	peer := <-valid.dialer.peers
+	_ = connection.Close()
+	_ = peer.Close()
+	valid.dialer.mu.Lock()
+	count := len(valid.dialer.addresses)
+	valid.dialer.mu.Unlock()
+	if count != 1 {
+		t.Errorf("valid 16-answer broker connection used %d numeric dials", count)
+	}
+	valid.close(t)
+
+	for name, bad := range map[string][]net.IPAddr{
+		"seventeenth":   append(append([]net.IPAddr(nil), answers...), net.IPAddr{IP: net.IPv4(34, 238, 55, 17)}),
+		"poisoned last": append(append([]net.IPAddr(nil), answers[:15]...), net.IPAddr{IP: net.ParseIP("169.254.169.254")}),
+	} {
+		t.Run(name, func(t *testing.T) {
+			fixture := newBrokerFixtureWithPolicy(t, policy, staticResolver{answers: bad}, 4)
+			defer fixture.close(t)
+			if _, err := fixture.client.Dial(context.Background(), "packages", time.Second); !errors.Is(err, ErrDenied) {
+				t.Fatalf("broker accepted unreviewed DNS answer set: %v", err)
+			}
+			fixture.dialer.mu.Lock()
+			count := len(fixture.dialer.addresses)
+			fixture.dialer.mu.Unlock()
+			if count != 0 {
+				t.Fatalf("broker opened %d numeric sockets before rejecting DNS", count)
+			}
+		})
+	}
 }
 
 func (f *brokerFixture) close(t *testing.T) {

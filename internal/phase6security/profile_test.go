@@ -840,7 +840,7 @@ func validProfile() Profile {
 					PublicKeyDigest: testDigest("operator-public-key"), SocketDirectory: "/run/egress-authority", SocketStorageID: "product-authority-socket",
 					LedgerMountTarget: "/var/lib/egress-authority", LedgerStorageID: "product-authority-ledger", PollMillis: 500,
 					CurrentTimeoutMS: 1000, StateMaxAgeSeconds: 5},
-				LeaseSeconds: 60, DNSMaxAnswers: 8,
+				LeaseSeconds: 60, DNSMaxAnswers: 16,
 				DenyRawIP: true, DenyAlternateDNS: true, DenyProxyEnvironment: true, DenyRedirectAuthority: true, DenyMetadataPrivateRanges: true,
 				Targets: []EgressTarget{{Alias: "registry-probe", Host: "registry-1.docker.io", Port: 443, Protocol: "https"}}}},
 		CleanupClasses: []string{"connections", "containers", "files", "networks", "processes", "sockets"}}

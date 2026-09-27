@@ -51,6 +51,7 @@ func loadSlice6GateInput(ctx context.Context, profilePath, sourceRoot, sourceRev
 		phase6security.VerifySlice6DesiredExternalServices(profile) != nil ||
 		phase6security.VerifySlice6DesiredEgressPolicies(profile) != nil ||
 		phase6security.VerifySlice6DesiredTrustAnchors(profile) != nil ||
+		phase6security.VerifySlice6DesiredTLSIdentities(profile) != nil ||
 		phase6security.VerifySlice6DesiredIngress(profile) != nil {
 		return slice6GateInput{}, errors.New("Slice 6 complete security profile is unavailable")
 	}
