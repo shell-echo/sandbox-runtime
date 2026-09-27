@@ -1973,3 +1973,11 @@ check rather than a test-only label helper. It checks source/target/toolchain
 labels, exact descriptor and platform, fixed executable entrypoint and
 non-root default user, while retaining the separate raw OCI/runtime proof
 requirements. Neither change supplies missing live Slice 6 receipts.
+
+A reusable local-role candidate probe now composes the private re-importable
+OCI archive reader, original-byte descriptor and layer checks, Docker's
+container-selected manifest and image inspection, and a separate full archive
+digest/rootfs-chain digest. The probe intentionally uses a stopped run-owned
+container before profile freeze; it cannot be reused as the final running
+role observation. Source/build-context/toolchain receipt binding and all
+actual-role observations still need the complete gate.
