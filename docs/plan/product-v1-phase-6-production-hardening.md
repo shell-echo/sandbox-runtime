@@ -190,7 +190,9 @@ Status: underway. ADR 0055 and the Slice 6 startup audit freeze real Vault PKI,
 live TLS rotation/revocation, role-isolated internal networks with alias-only
 egress brokers, exact container least privilege and the complete privileged
 principal inventory. Library checks or configuration text do not advance the
-counter.
+counter. The separate Slice 6 harness is still under construction: its
+frozen 16-scenario routing plan and strict input preflight are not a successful
+full-topology run, and no Slice 6 manifest may be issued from them.
 
 The Desktop Provider's Slice 6 proof uses the strict Phase 6
 `local-candidate-non-release` executor-v2 image with a source-bound manifest,

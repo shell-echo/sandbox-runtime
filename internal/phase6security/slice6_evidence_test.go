@@ -6,11 +6,32 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
 	"time"
 )
+
+func TestSlice6ScenarioRequirementsAreFrozenCopies(t *testing.T) {
+	required := RequiredSlice6Scenarios()
+	if len(required) != 16 {
+		t.Fatalf("Slice 6 frozen scenario count = %d", len(required))
+	}
+	for index, item := range required {
+		if item.Name != slice6ScenarioNames[index] ||
+			!slices.Equal(item.Participants, slice6RequiredParticipants[item.Name]) {
+			t.Fatalf("Slice 6 frozen scenario %d drifted: %#v", index, item)
+		}
+	}
+	required[0].Name = "rewritten"
+	required[0].Participants[0] = "rewritten"
+	again := RequiredSlice6Scenarios()
+	if again[0].Name != slice6ScenarioNames[0] ||
+		!slices.Equal(again[0].Participants, slice6RequiredParticipants[again[0].Name]) {
+		t.Fatal("caller mutated Slice 6 verifier requirements")
+	}
+}
 
 func TestSlice6ImageIdentityKindsAndRuntimeObservation(t *testing.T) {
 	profile := validProfile()

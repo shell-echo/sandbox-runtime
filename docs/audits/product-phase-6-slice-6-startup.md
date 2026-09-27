@@ -14,10 +14,10 @@ artifact.
 | Acceptance condition | Existing evidence | Remaining gap | Owner |
 | --- | --- | --- | --- |
 | Provider-bound Browser finite UID, exact create/recovery/cleanup | Real PostgreSQL plus high-UID Browser/gateway Docker integration; atomic Reserved retirement; finished-dispatch proof; live and terminal pre-commit recovery/cleanup; lost terminal-cleanup response finalization; focused in-flight barrier | Unknown Docker/network result with no finished proof remains Creating and consumes capacity. Need a gate-backed quiescence/terminal-result path where required, plus full process-crash coverage. | Provider Browser application, PG ledger and Docker adapter |
-| Three isolated Provider production processes and Desktop v3 | v3 config, profile/identity validators, candidate Desktop runtime component gates, and real-PostgreSQL Desktop Open/Close finite-slot transaction test | Browser/Desktop v3 startup still fail closed; bind distinct PG client certs, actual HBA/ident, Desktop bound Docker/media/broker path and restart/drain cleanup. | Provider commands and runtime adapters |
+| Three isolated Provider production processes and Desktop v3 | v3 config, profile/identity validators, separate Browser/Desktop PostgreSQL client signers, real Browser/Desktop PostgreSQL+Docker finite-slot component gates, and real Desktop candidate broker/media/input gate; both v3 command compositions have static preflight and continuous admission dependencies | Prove the three distinct Provider commands in the same full topology with real Vault PKI, broker, server HBA/role/grants, restart/drain and exact cleanup. Desktop v3 remains local-candidate-only. | Provider commands and runtime adapters |
 | Complete mTLS/CRL and fixed external-service trust graph | Signed PKI/peer-CRL guard, broker profiles, isolated component handshakes and real Vault adapters | Independent live Product/Gateway/Guest/Browser/Desktop/three-Provider flows, action ingress, Redis/PostgreSQL external legs, expiry/revocation/restart observations and cross-role denial. | Role compositions and TLS/egress adapters |
 | Real network, UID/GID and host privilege enforcement | Pinned image descriptors, high-UID Browser/Desktop component gates, static policy validators | Same-host full-topology Docker network bypass/DNS/metadata denial, all role process credentials and container capability/seccomp/filesystem measurements, exact dependency-loss and cleanup observations. | Deployment gate and security evidence |
-| Immutable Slice 6 gate and handoff | Strict profile/evidence validator and partial real-component observations | Full-inventory, independent-process scenario manifest, clean resource inventory, root race/vet/contract verification, immutable source/evidence checkpoint and successful branch push. Do not advance 5/15 before all pass. | Phase 6 gate, audit and release owner |
+| Immutable Slice 6 gate and handoff | Strict profile/evidence validator and partial real-component observations; the implementation checkpoint passes root race/vet/Contract and affected real Browser/Desktop component gates | The independently runnable full-inventory Slice 6 harness itself is not yet complete. Build and run one same-runID topology with the frozen 16 scenarios, raw receipts, clean resource inventory, immutable source/evidence checkpoint and successful branch push. Do not advance 5/15 before all pass. | Phase 6 gate, audit and release owner |
 
 The undispatched `Reserved` path and known-finished `Creating` path are
 current safety requirements within the first row. A generic dispatch-owner
@@ -1676,3 +1676,86 @@ SANDBOX_RUNTIME_BROWSER_GATEWAY_IMAGE=sha256:<actual-local-image-id> \
 mise exec go@1.26.8 -- env -u GOROOT go test -tags=integration -race -shuffle=on -count=1 \
   -run '^TestBrowserBoundPostgresDockerIntegration$' ./provider/browser/driver/docker
 ```
+
+### 2026-09-27 Provider v3 composition checkpoint and remaining gate
+
+Implementation revision `11b424b054d1e8fd48be851fae4445519457e0ab`
+is a clean local checkpoint, not a Slice 6 release revision. The `provider
+serve` command now permits only Browser v3 `production` and Desktop v3
+`local_candidate` in addition to the existing coding-shell route. Before the
+first material-registry or database/broker dial, it checks the complete signed
+profile, peer-CRL role document, per-owner PostgreSQL signer/slot projection,
+Contract/private/attach edges, pinned Browser image, and Desktop candidate
+source, platform, archive and workload-account coverage. Browser and Desktop
+then use their real separate compositions; Browser/Desktop v3 use only the
+profile-bound PostgreSQL broker and independent client signer, never the
+historical direct-DSN fallback. Desktop v3 `production` is rejected at both
+command and composition boundaries. The v3 protected transport stays closed
+until its readiness checker is bound and thereafter requires live database,
+TLS/CRL, material, identity runtime, mux and executor-backend readiness.
+Constructor failure closes acquired monitors, transports and servers.
+
+The exact arm64/v8 Desktop local candidate built from that clean checkpoint
+has image digest
+`sha256:0afbca02f5be4990ab0c516b52aac47ddaa7a2ec7fb1e3a8b9494b24013b597f`
+and canonical candidate manifest digest
+`sha256:b3dc58de944cfed64e9f025eac120a6068770c7f629ccaa8ba6194fa7a00459d`.
+Root race/shuffle, vet and both Contract verifiers pass. The candidate's
+tagged, race-enabled real Desktop PostgreSQL + high-UID Docker/egress test
+and broker mux → executor → RTP/input/close tests pass. The real Browser
+PostgreSQL + high-UID Docker/egress test also passes as a separate component
+gate. These
+tests do not start the complete Provider/Gateway/Product/Guest/Browser/Desktop,
+action-ingress, controller/agent/broker, Vault and external-service graph
+under one security profile or exercise its 16 frozen fault scenarios. No
+Slice 6 success manifest exists, no remote push has occurred, and the phase
+remains **5/15**.
+
+The old “six-process” shorthand is insufficient for this gate. The complete
+profile's actual principal, process, in-container broker, dynamic sandbox,
+external-service and network inventories are the acceptance scope. Existing
+Slice 4/5 host-process/static-TLS or Guest-fixture tests cannot be relabeled
+as Slice 6 observations. The table below maps every frozen scenario in
+`internal/phase6security/slice6_evidence.go` to the real edge, reusable
+component starting point and still-missing same-run assertion. Reusable
+components are not substitute evidence; the new harness must execute its own
+one-run observations, fail on any missing row, and retain raw private receipts.
+
+| Frozen scenario | Real edge / principals | Existing starting point | Missing same-run assertion |
+| --- | --- | --- | --- |
+| `browser_cdp_and_capacity_replay` | Browser Provider → Browser role → executor backend → mux → high-UID Browser | Browser bound PG+Docker and executor-v2 component gates | Live v3 attach/CDP, capacity and exact replay rejection with one allocation ledger |
+| `browser_external_witness_isolation` | Gateway → action ingress → separate action-history PostgreSQL and capacity Valkey | Action-ingress command, fixed-alias clients and witness-role guard | Real external identities, isolated grants/restore domains, no bypass path |
+| `cross_role_and_tenant_denial` | Gateway and distinct coding/Browser/Desktop Provider private edges | Closed profile selectors and protected admission | Wrong role, route, client certificate and tenant rejected on live listeners |
+| `desktop_media_input_and_cleanup` | Desktop Provider → Desktop role → executor backend → mux → in-sandbox broker | Desktop bound PG+Docker and real RTP/input component gates | Same-run v3 open/media/input/close, broker process proof and exact zero dynamic resources |
+| `direct_egress_and_metadata_denial` | Product → its dedicated broker; all role-internal networks | Docker isolated-network probe and broker policy | Actual Product/container direct-IP, DNS and metadata bypass denial |
+| `dns_rebinding_and_alternate_path_denial` | Product broker → pinned external DNS/service edge | Fixed-alias and network-policy tests | Live rebinding/alternate endpoint denied with controlled DNS observations |
+| `external_dependency_loss` | Action ingress → Valkey and action-history PostgreSQL | Witness and broker client components | Loss closes ingress/action readiness; bounded recovery only after exact service return |
+| `guest_auth_and_reconnect` | Guest → Product private `/agent` Hub and Product PG binding | Product/Guest commands and Guest protocol components | Real hello/challenge/signature/welcome, business revoke, DB/CRL loss and upgraded drain |
+| `least_privilege_active_probes` | Product/Gateway plus every profile-owned role/container | OCI, Docker network/port and in-container observation validators | Actual UID/GID, seccomp, capabilities, mounts, writable paths and resource limits for full inventory |
+| `mtls_identity_and_downgrade_denial` | Gateway → coding Provider Contract/private edge | Live signer/peer-CRL transport components | Wrong identity, plaintext and legacy/static downgrade rejected on real edge |
+| `policy_authority_loss_and_revocation` | Product egress broker ↔ dedicated policy-state authority | Real authority-process Docker component gate | Real role traffic denied on authority loss/revocation, recovered only with fresh state |
+| `provider_and_executor_restart` | Three Providers and Browser/Desktop executor backends | Browser/Desktop bound recovery and Slice 5 process lifecycle patterns | New OS-process identities, retained authority, bounded reconnect and no stale admission |
+| `resource_exhaustion_denial` | Product/Gateway protected ingress and all bounded executors | Config/capacity unit and Slice 5 process patterns | Saturation denied within limits without unbounded worker/resource growth |
+| `revoked_leaf_and_crl_rollback_denial` | Gateway ↔ Provider live TLS/CRL; controller → agent source | Peer-CRL guard and handshake components | Real Vault revoke, active drain, stale/recovered source and rollback rejection |
+| `role_and_controller_drain` | Browser/Desktop roles and certificate controller | Executor drain and controller components | SIGTERM/cancel bound, active connection close and exact lease/socket cleanup |
+| `vault_pki_rotation_and_loss` | Vault PKI → credential/certificate controllers → role TLS agents | Vault PKI and live TLS component tests | Same-run issue/overlap/rotation/loss/restart with distinct owner certificates and no stale admission |
+
+The harness is still an implementation task, not merely a test invocation.
+Its first milestone is one profile/runID/source-bound disposable topology with
+real commands, constrained materials and basic authenticated traffic; then
+the full role/container/edge inventory and the 16 negative/fault assertions.
+Only a complete single run with independently observed zero-resource cleanup
+may produce and verify the strict Slice 6 manifest. Until then, do not push
+or count Slice 6 as closed.
+
+The first harness increment exposes the verifier's scenario/participant list
+as a copied, read-only API and checks an exact route/assertion plan under the
+separate `phase6slice6gate` tag. Its opt-in preflight requires a canonical
+private full profile, a clean exact source revision, the matching verified
+Desktop candidate/archive and all named local role images already loaded; it
+does not run a release scenario or write evidence. A candidate-only local
+role recipe builds actual repository commands from Go 1.26.8 and a pinned
+base with Docker build networking disabled. Its first real high-UID command
+smoke is a component check; the final gate must still retain and independently
+verify each candidate's raw OCI archive/descriptor chain, then observe the
+running containers and complete all 16 scenarios in one run.

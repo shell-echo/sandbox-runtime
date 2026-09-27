@@ -166,6 +166,23 @@ type Slice6ScenarioEvidence struct {
 	EvidenceDigest string   `json:"evidence_digest"`
 }
 
+// Slice6ScenarioRequirement exposes the verifier's frozen scenario inventory
+// to the independent gate without giving callers authority to change it.
+type Slice6ScenarioRequirement struct {
+	Name         string
+	Participants []string
+}
+
+func RequiredSlice6Scenarios() []Slice6ScenarioRequirement {
+	result := make([]Slice6ScenarioRequirement, len(slice6ScenarioNames))
+	for index, name := range slice6ScenarioNames {
+		result[index] = Slice6ScenarioRequirement{
+			Name: name, Participants: append([]string(nil), slice6RequiredParticipants[name]...),
+		}
+	}
+	return result
+}
+
 type Slice6ResourceEvidence struct {
 	Name            string `json:"name"`
 	Remaining       int    `json:"remaining"`
