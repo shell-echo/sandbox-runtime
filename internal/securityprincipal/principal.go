@@ -65,6 +65,9 @@ type Registry struct {
 	allowed           map[Kind]map[string]Role
 }
 
+// The registry vocabulary is only one authorization layer. A name added
+// here cannot become a deployment until the closed Phase 6 profile inventory,
+// UID/GID, signer/socket policy and executable gate all admit it explicitly.
 var builtins = map[Kind]map[string]Role{
 	KindRuntimeRole: {
 		"product": RoleProduct, "provider": RoleProvider, "gateway": RoleGateway,
@@ -76,6 +79,7 @@ var builtins = map[Kind]map[string]Role{
 		"browser_action_ingress_agent": RoleGateway,
 		"guest_agent":                  RoleGuest, "browser_agent": RoleBrowser, "desktop_agent": RoleDesktop,
 		"product_migration_agent": RoleProduct, "provider_migration_agent": RoleProvider,
+		"provider_browser_migration_agent": RoleProvider, "provider_desktop_migration_agent": RoleProvider,
 	},
 	KindTLSAgent: {
 		"product_tls_agent": RoleProduct, "provider_tls_agent": RoleProvider,
@@ -90,9 +94,18 @@ var builtins = map[Kind]map[string]Role{
 		"provider_browser_runtime_agent_tls_agent": RoleProvider,
 		"provider_desktop_runtime_agent_tls_agent": RoleProvider,
 		"provider_migration_agent_tls_agent":       RoleProvider, "provider_runtime_agent_tls_agent": RoleProvider,
+		"provider_browser_migration_agent_tls_agent": RoleProvider,
+		"provider_desktop_migration_agent_tls_agent": RoleProvider,
+		"product_postgres_tls_agent":                 RoleProduct, "gateway_postgres_tls_agent": RoleGateway,
+		"provider_postgres_tls_agent":                   RoleProvider,
+		"product_migration_postgres_tls_agent":          RoleProduct,
+		"provider_migration_postgres_tls_agent":         RoleProvider,
+		"provider_browser_migration_postgres_tls_agent": RoleProvider,
+		"provider_desktop_migration_postgres_tls_agent": RoleProvider,
 	},
 	KindMigrationJob: {
 		"product_migration": RoleProduct, "provider_migration": RoleProvider,
+		"provider_browser_migration": RoleProvider, "provider_desktop_migration": RoleProvider,
 	},
 	KindController: {
 		"credential_controller": "", "certificate_controller": "", "break_glass_controller": "",
