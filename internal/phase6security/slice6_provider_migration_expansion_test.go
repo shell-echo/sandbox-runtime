@@ -54,3 +54,40 @@ func TestSlice6FinalExternalAuditRejectsEarlierTwentyEightPathCandidate(t *testi
 		t.Fatalf("migration caller alias was not caught: %+v", got)
 	}
 }
+
+func TestSlice6FinalExternalGraphHasThirtyTwoDedicatedBridges(t *testing.T) {
+	paths, edges := Slice6DesiredFinalExternalTransports(), Slice6DesiredFinalExternalEdges()
+	if err := VerifySlice6DesiredFinalExternalGraph(paths, edges); err != nil {
+		t.Fatalf("final external target rejected: %v", err)
+	}
+	bridges := Slice6DesiredFinalServiceBridges()
+	if err := VerifySlice6DesiredFinalServiceBridges(bridges); err != nil {
+		t.Fatalf("final bridge target rejected: %v", err)
+	}
+	if err := VerifySlice6DesiredFinalNetworks(Slice6DesiredFinalNetworks()); err != nil {
+		t.Fatalf("final merged network target rejected: %v", err)
+	}
+	if len(Slice6DesiredFinalNetworks()) != len(Slice6DesiredNetworks())+31 {
+		t.Fatal("final role networks did not merge exactly 31 new service bridges")
+	}
+	for _, dependency := range Slice6ProviderMigrationExternalDependencies() {
+		dialer, err := Slice6DesiredFinalServiceEndpointAddress(dependency.Network, dependency.Dialer)
+		if err != nil || dialer == "" {
+			t.Fatalf("migration dialer has no exact .2 address: %+v", dependency)
+		}
+		service, err := Slice6DesiredFinalServiceEndpointAddress(dependency.Network, dependency.Service)
+		if err != nil || service == dialer {
+			t.Fatalf("migration service has no distinct .3 address: %+v", dependency)
+		}
+	}
+	wrong := Slice6DesiredFinalExternalTransports()
+	wrong[0].Network = "external-uplink"
+	if VerifySlice6DesiredFinalExternalGraph(wrong, edges) == nil {
+		t.Fatal("NAT migration target admitted")
+	}
+	wrongBridges := Slice6DesiredFinalServiceBridges()
+	wrongBridges[0].Principals = []string{"provider-migration-job"}
+	if VerifySlice6DesiredFinalServiceBridges(wrongBridges) == nil {
+		t.Fatal("shared or substituted bridge dialer admitted")
+	}
+}

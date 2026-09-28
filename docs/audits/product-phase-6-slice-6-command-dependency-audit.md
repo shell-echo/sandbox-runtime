@@ -135,9 +135,12 @@ migration job, rather than relying on their component fixtures' admin-driven
 signer, two PG-purpose signer, DB/SQL-role and four dedicated external-path
 tuples are now separately checked as an expansion target. They are **not yet**
 merged into the activated 69-deployment profile or the intermediate 33/28
-external graph; its current seven-owner HBA renderer is therefore incomplete
-for the final gate. After integration, the currently known physical external
-path/edge minimum becomes 32/37, subject to a fresh command audit. A single
+external graph. A separate final-target constructor now checks 32 distinct
+physical paths, 37 external edge IDs, 32 isolated service bridges with fixed
+`.2/.3` member addresses, nine PG-purpose signer owners and a nine-login
+raw HBA candidate. The older seven-login renderer remains an intermediate
+artifact and is insufficient for the final gate. These are desired tables,
+not installed DB configuration or running processes. A single
 Provider migration identity must never be reused as an all-database
 principal. The final positive gate must execute each real migration job as
 the actor applying schema, then prove expiry and exact cleanup; an already

@@ -1519,3 +1519,9 @@ are separately reviewed as a pending expansion target and must be folded
 into the full profile, HBA and evidence before R freezes. Admin-driven
 schema initialization in component tests does not substitute for a real job
 performing the first migration in the final gate.
+The updated final *desired* table now has 32 physical external paths, 37
+external edge IDs and nine pool-owner/PG-purpose signer/HBA tuples, including
+the Browser/Desktop migrations; the existing 28/33 and seven-tuple tables
+remain explicit intermediate artifacts. These counts attest only closed
+source-level targets, not principal activation, PostgreSQL loading, live
+connections or acceptance of Slice 6.
