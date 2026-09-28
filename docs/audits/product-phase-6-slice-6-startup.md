@@ -2308,6 +2308,22 @@ retained Provider authority, stale-admission denial, either executor restart
 or the final 16-scenario gate. The full runner still needs to feed real
 per-instance raw receipts and monotonic probe timing into the private bundle.
 
+Checkpoint 2026-09-28 (capacity admission and runtime interlock component,
+not Slice 6 acceptance): the real two-sided preflight measured
+29,149,560,832 host-available bytes against a strict 23,085,449,216-byte
+requirement and 360,560,373,760 Docker-backing-available bytes against a
+17,179,869,184-byte requirement. The previously insufficient host space had
+recovered for reasons outside this task; no cleanup is attributed to this
+gate, and capacity must be remeasured before each resource-heavy stage. A
+test-side runtime interlock now samples host `statfs` and the Docker backing
+filesystem through a known run-owned container. Initial admission requires
+both sides; a failed subsequent sample, parent cancellation or `stopEarly`
+threshold invokes the supplied producer-stop callback exactly once. Focused
+race tests and a real run-labeled Docker sampling/cleanup diagnostic pass.
+The full runner has not yet wired that callback to every writer, measured
+stop lag, or retained same-run capacity receipts. This is not a role-chain,
+scenario, immutable-evidence or release result; Phase 6 remains **5/15**.
+
 Remaining Slice 6 work stays within the original gate, in four deliverables:
 
 1. Build one executable controlled Vault/external-service bootstrap, freeze
