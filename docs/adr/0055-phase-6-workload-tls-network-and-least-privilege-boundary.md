@@ -1398,6 +1398,15 @@ database traffic and Browser action-ingress/Gateway capacity traffic remain
 broker-only. The command audit at
 `docs/audits/product-phase-6-slice-6-command-dependency-audit.md` is an
 independent completeness guard, not a successful runtime observation.
+The reviewed target inventory consequently has 28 physical paths and 33
+logical/egress edge IDs. This target count does not replace the still partial
+12/17 currently installed profile graph; those missing edges and network
+members remain implementation work before profile freeze.
+The 28 planned service bridges retain existing role CIDRs, reuse only the
+certificate controller's already isolated network, and allocate new bridges
+from a separate reviewed `172.31.128.0/24` range. Each has exactly one
+actual dialer and one external service member with fixed .2/.3 endpoints;
+this desired IPAM is not evidence of Docker assignment or reachability.
 
 The existing material-agent executable still uses workload-credential.v1,
 while the Slice 6 credential controller is v2; and its Vault client and the

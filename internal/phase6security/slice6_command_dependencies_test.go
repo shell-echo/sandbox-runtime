@@ -18,16 +18,17 @@ func TestSlice6CommandDependencyAuditDoesNotMistakeEdgeCoverageForCompleteTransp
 		t.Fatalf("missing command-level direct paths = %d, want 16", len(missing))
 	}
 	if !slices.Contains(missing, Slice6DirectExternalDependency{
-		Dialer: "provider-runtime", Service: "postgres", Network: "service-provider-runtime-postgres"}) ||
+		Dialer: "provider-runtime", Service: "postgres", Network: "service-provider-runtime-postgres", EdgeID: "provider-coding-postgres"}) ||
 		!slices.Contains(missing, Slice6DirectExternalDependency{
-			Dialer: "gateway-runtime", Service: "postgres", Network: "service-gateway-postgres"}) ||
+			Dialer: "gateway-runtime", Service: "postgres", Network: "service-gateway-postgres", EdgeID: "gateway-postgres"}) ||
 		!slices.Contains(missing, Slice6DirectExternalDependency{
-			Dialer: "workload-credential-controller", Service: "vault", Network: "service-workload-credential-controller-vault"}) {
+			Dialer: "workload-credential-controller", Service: "vault", Network: "service-workload-credential-controller-vault", EdgeID: "credential-controller-vault"}) {
 		t.Fatalf("critical required direct dials not reported: %v", missing)
 	}
 	for _, dependency := range Slice6RequiredDirectExternalDependencies() {
 		paths = append(paths, Slice6ExternalTransportPath{LogicalCaller: dependency.Dialer,
-			Dialer: dependency.Dialer, Service: dependency.Service, Network: dependency.Network})
+			Dialer: dependency.Dialer, Service: dependency.Service, Network: dependency.Network,
+			EdgeIDs: []string{dependency.EdgeID}})
 	}
 	if got := MissingSlice6DirectExternalDependencies(paths); len(got) != 0 {
 		t.Fatalf("complete direct dial inventory still has gaps: %v", got)
@@ -49,7 +50,7 @@ func TestSlice6DirectExternalDependencyAuditHasExactOwners(t *testing.T) {
 	seen := make(map[string]bool, len(wanted))
 	materialAgents := 0
 	for _, dependency := range wanted {
-		if seen[dependency.Dialer] || dependency.Dialer == "" || dependency.Service == "" || dependency.Network == "" {
+		if seen[dependency.Dialer] || dependency.Dialer == "" || dependency.Service == "" || dependency.Network == "" || dependency.EdgeID == "" {
 			t.Fatalf("duplicate or incomplete direct dial requirement: %+v", dependency)
 		}
 		seen[dependency.Dialer] = true
@@ -69,5 +70,42 @@ func TestSlice6DirectExternalDependencyAuditHasExactOwners(t *testing.T) {
 		if kind == "material_agent" && !seen[deployment] {
 			t.Fatalf("material agent %s has no Vault dial requirement", deployment)
 		}
+	}
+}
+
+func TestSlice6ExecutableExternalTransportPlanIsExactAndComplete(t *testing.T) {
+	plan := Slice6DesiredExecutableExternalTransports()
+	if err := VerifySlice6DesiredExecutableExternalTransports(plan); err != nil {
+		t.Fatalf("reviewed 28-path command transport plan rejected: %v", err)
+	}
+	if len(plan) != 28 {
+		t.Fatalf("physical path count = %d, want 28", len(plan))
+	}
+	seenNetworks := make(map[string]bool, len(plan))
+	seenEdges := make(map[string]bool, 33)
+	for _, path := range plan {
+		if seenNetworks[path.Network] {
+			t.Fatalf("two actual dialers share %s", path.Network)
+		}
+		seenNetworks[path.Network] = true
+		for _, edge := range path.EdgeIDs {
+			if seenEdges[edge] {
+				t.Fatalf("two physical paths claim %s", edge)
+			}
+			seenEdges[edge] = true
+		}
+	}
+	if len(seenEdges) != 33 {
+		t.Fatalf("reviewed external logical/egress edges = %d, want 33", len(seenEdges))
+	}
+	wrong := append([]Slice6ExternalTransportPath(nil), plan...)
+	wrong[0].Network = "external-uplink"
+	if VerifySlice6DesiredExecutableExternalTransports(wrong) == nil {
+		t.Fatal("host/NAT bypass plan admitted")
+	}
+	wrong = append([]Slice6ExternalTransportPath(nil), plan...)
+	wrong = wrong[1:]
+	if VerifySlice6DesiredExecutableExternalTransports(wrong) == nil {
+		t.Fatal("omitted actual dial path admitted")
 	}
 }

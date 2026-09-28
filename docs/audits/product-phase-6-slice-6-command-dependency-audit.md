@@ -26,6 +26,23 @@ physical transport table. The other 16 are reported by
 must not be read as an executable-dependency admission result. Any new command
 dependency must be audited before the final source checkpoint/profile freeze,
 not inferred from a successful unit test or retrospectively added to evidence.
+The reviewed *target* transport plan now enumerates 28 physical paths and 33
+logical/egress edge IDs, but only the old 12/17 subset is installed in the
+current desired profile graph. The target-plan verifier freezes exact dialer,
+service, dedicated bridge and edge-ID mapping; it does not make the commands
+use those paths or prove network enforcement.
+Its matching 28-bridge desired plan allocates one dialer and one external
+service per internal+isolated bridge, keeps the certificate controller's
+reviewed network/CIDR, and uses reserved `172.31.128.0/24` onward for the
+other bridges so pre-existing role CIDRs are not silently shifted. These
+addresses are planned inputs, not observed Docker endpoints. The full
+profile generator and live commands still need to consume the plan.
+An opt-in Docker diagnostic with the pinned Alpine probe image has exercised
+the coding Provider service-bridge subnet and raw Docker network observer:
+one isolated bridge, .2 dialer, .3 external member, no host gateway, no
+published ports, and exact removal passed locally. These are diagnostic
+containers, not the Provider or PostgreSQL service; no live TLS, SQL, or
+Slice 6 scenario claim follows from this check.
 
 This audit does not claim Product recording Transit is a Slice 6 runtime dial:
 the current production Product command does not compose recording content;

@@ -1,6 +1,9 @@
 package phase6security
 
-import "sort"
+import (
+	"slices"
+	"sort"
+)
 
 // Slice6DirectExternalDependency is a command-level dial requirement, kept
 // independent of the desired trust-edge table. A matching transport path is
@@ -11,27 +14,28 @@ type Slice6DirectExternalDependency struct {
 	Dialer  string
 	Service string
 	Network string
+	EdgeID  string
 }
 
 var slice6RequiredDirectExternalDependencies = []Slice6DirectExternalDependency{
-	{"browser-action-ingress-agent", "vault", "service-browser-action-ingress-agent-vault"},
-	{"browser-agent", "vault", "service-browser-agent-vault"},
-	{"certificate-controller", "vault", "network-certificate-controller"},
-	{"desktop-agent", "vault", "service-desktop-agent-vault"},
-	{"gateway-agent", "vault", "service-gateway-agent-vault"},
-	{"gateway-runtime", "postgres", "service-gateway-postgres"},
-	{"guest-agent", "vault", "service-guest-agent-vault"},
-	{"product-migration-agent", "vault", "service-product-migration-agent-vault"},
-	{"product-migration-job", "postgres", "service-product-migration-job-postgres"},
-	{"product-runtime", "postgres", "service-product-postgres"},
-	{"product-runtime-agent", "vault", "service-product-runtime-agent-vault"},
-	{"provider-browser-runtime-agent", "vault", "service-provider-browser-runtime-agent-vault"},
-	{"provider-desktop-runtime-agent", "vault", "service-provider-desktop-runtime-agent-vault"},
-	{"provider-migration-agent", "vault", "service-provider-migration-agent-vault"},
-	{"provider-migration-job", "postgres", "service-provider-migration-job-postgres"},
-	{"provider-runtime", "postgres", "service-provider-runtime-postgres"},
-	{"provider-runtime-agent", "vault", "service-provider-runtime-agent-vault"},
-	{"workload-credential-controller", "vault", "service-workload-credential-controller-vault"},
+	{"browser-action-ingress-agent", "vault", "service-browser-action-ingress-agent-vault", "browser-action-ingress-agent-vault"},
+	{"browser-agent", "vault", "service-browser-agent-vault", "browser-agent-vault"},
+	{"certificate-controller", "vault", "network-certificate-controller", "certificate-vault"},
+	{"desktop-agent", "vault", "service-desktop-agent-vault", "desktop-agent-vault"},
+	{"gateway-agent", "vault", "service-gateway-agent-vault", "gateway-agent-vault"},
+	{"gateway-runtime", "postgres", "service-gateway-postgres", "gateway-postgres"},
+	{"guest-agent", "vault", "service-guest-agent-vault", "guest-agent-vault"},
+	{"product-migration-agent", "vault", "service-product-migration-agent-vault", "product-migration-agent-vault"},
+	{"product-migration-job", "postgres", "service-product-migration-job-postgres", "product-migration-postgres"},
+	{"product-runtime", "postgres", "service-product-postgres", "product-postgres"},
+	{"product-runtime-agent", "vault", "service-product-runtime-agent-vault", "product-runtime-agent-vault"},
+	{"provider-browser-runtime-agent", "vault", "service-provider-browser-runtime-agent-vault", "provider-browser-runtime-agent-vault"},
+	{"provider-desktop-runtime-agent", "vault", "service-provider-desktop-runtime-agent-vault", "provider-desktop-runtime-agent-vault"},
+	{"provider-migration-agent", "vault", "service-provider-migration-agent-vault", "provider-migration-agent-vault"},
+	{"provider-migration-job", "postgres", "service-provider-migration-job-postgres", "provider-migration-postgres"},
+	{"provider-runtime", "postgres", "service-provider-runtime-postgres", "provider-coding-postgres"},
+	{"provider-runtime-agent", "vault", "service-provider-runtime-agent-vault", "provider-runtime-agent-vault"},
+	{"workload-credential-controller", "vault", "service-workload-credential-controller-vault", "credential-controller-vault"},
 }
 
 func Slice6RequiredDirectExternalDependencies() []Slice6DirectExternalDependency {
@@ -47,7 +51,8 @@ func MissingSlice6DirectExternalDependencies(paths []Slice6ExternalTransportPath
 		found := false
 		for _, path := range paths {
 			if path.LogicalCaller == required.Dialer && path.Dialer == required.Dialer &&
-				path.Service == required.Service && path.Network == required.Network {
+				path.Service == required.Service && path.Network == required.Network &&
+				slices.Equal(path.EdgeIDs, []string{required.EdgeID}) {
 				found = true
 				break
 			}
@@ -58,6 +63,42 @@ func MissingSlice6DirectExternalDependencies(paths []Slice6ExternalTransportPath
 	}
 	sort.Slice(missing, func(i, j int) bool { return missing[i].Dialer < missing[j].Dialer })
 	return missing
+}
+
+// Slice6DesiredExecutableExternalTransports is the approved 28-path target
+// inventory. It does not imply the 16 new edges, external network members or
+// actual command dialers have yet been installed in a runnable profile.
+func Slice6DesiredExecutableExternalTransports() []Slice6ExternalTransportPath {
+	paths := Slice6DesiredExternalTransports()
+	for _, dependency := range MissingSlice6DirectExternalDependencies(paths) {
+		paths = append(paths, Slice6ExternalTransportPath{LogicalCaller: dependency.Dialer,
+			Dialer: dependency.Dialer, Service: dependency.Service, Network: dependency.Network,
+			EdgeIDs: []string{dependency.EdgeID}})
+	}
+	sort.Slice(paths, func(i, j int) bool {
+		if paths[i].LogicalCaller != paths[j].LogicalCaller {
+			return paths[i].LogicalCaller < paths[j].LogicalCaller
+		}
+		if paths[i].Service != paths[j].Service {
+			return paths[i].Service < paths[j].Service
+		}
+		return paths[i].Network < paths[j].Network
+	})
+	return paths
+}
+
+// VerifySlice6DesiredExecutableExternalTransports rejects a self-consistent
+// partial plan before desired networks, edges or runtime configuration use it.
+func VerifySlice6DesiredExecutableExternalTransports(paths []Slice6ExternalTransportPath) error {
+	wanted := Slice6DesiredExecutableExternalTransports()
+	if len(paths) != 28 || !slices.EqualFunc(paths, wanted, func(left, right Slice6ExternalTransportPath) bool {
+		return left.LogicalCaller == right.LogicalCaller && left.Dialer == right.Dialer &&
+			left.Service == right.Service && left.Network == right.Network && slices.Equal(left.EdgeIDs, right.EdgeIDs)
+	}) || VerifySlice6DesiredExternalTransportCoverage(Slice6DesiredExternalTransports()) != nil ||
+		VerifySlice6ExecutableExternalDependencyCoverage(paths) != nil {
+		return errSlice6DesiredInventory
+	}
+	return nil
 }
 
 // VerifySlice6ExecutableExternalDependencyCoverage is the command-level
