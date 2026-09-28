@@ -65,6 +65,28 @@ func TestPostgresClientIdentityRejectsCrossOwnerAndCallerChosenName(t *testing.T
 	}
 }
 
+func TestPostgresClientIdentityRecognizesOnlyNineSharedPoolOwners(t *testing.T) {
+	for _, owner := range []string{
+		"product-runtime", "gateway-runtime", "provider-runtime",
+		"provider-browser-runtime", "provider-desktop-runtime",
+		"product-migration-job", "provider-migration-job",
+		"provider-browser-migration-job", "provider-desktop-migration-job",
+	} {
+		identity := postgresIdentityFixture()
+		identity.OwnerDeployment = owner
+		identity.URI = "spiffe://sandbox-runtime.test/" + owner
+		if err := identity.Validate(); err != nil {
+			t.Fatalf("reviewed pool owner %s denied: %v", owner, err)
+		}
+	}
+	identity := postgresIdentityFixture()
+	identity.OwnerDeployment = "other-migration-job"
+	identity.URI = "spiffe://sandbox-runtime.test/other-migration-job"
+	if identity.Validate() == nil {
+		t.Fatal("unreviewed PostgreSQL pool owner accepted")
+	}
+}
+
 func TestPostgresClientCSRHasOnlyBoundCNAndURISAN(t *testing.T) {
 	identity := postgresIdentityFixture()
 	valid, _ := testPostgresCSR(t, pkix.Name{CommonName: identity.CommonName}, identity.URI, nil)

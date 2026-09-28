@@ -95,9 +95,28 @@ func Slice6DesiredDeploymentKind(name string) (string, error) {
 	return kind, nil
 }
 
+// This second explicit partition preserves all prior 69 deployment IDs while
+// the two migration jobs, agents, Vault signers and seven PG-purpose signers
+// are integrated. The ordinal is frozen by name, not inferred from map order.
+var slice6AdditionalDeploymentOrdinals = map[string]int{
+	"gateway-postgres-tls-agent":                    0,
+	"product-migration-postgres-tls-agent":          1,
+	"product-postgres-tls-agent":                    2,
+	"provider-browser-migration-agent":              3,
+	"provider-browser-migration-agent-tls-agent":    4,
+	"provider-browser-migration-job":                5,
+	"provider-browser-migration-postgres-tls-agent": 6,
+	"provider-desktop-migration-agent":              7,
+	"provider-desktop-migration-agent-tls-agent":    8,
+	"provider-desktop-migration-job":                9,
+	"provider-desktop-migration-postgres-tls-agent": 10,
+	"provider-migration-postgres-tls-agent":         11,
+	"provider-postgres-tls-agent":                   12,
+}
+
 // Slice6DesiredUIDGID freezes each static container's non-root identity from
-// the reviewed 20000/30000 partitions and reserves 55000/57000 for the 11
-// newly reviewed material-agent signer deployments. Dynamic sandbox workload/gateway
+// the reviewed 20000/30000 partitions, 55000/57000 material-agent signer
+// partition and 56000/58000 added migration/PG-purpose partition. Dynamic sandbox workload/gateway
 // account slots are separately constrained by SandboxIdentitySlots and the
 // actual Desktop image account allowlist before launch.
 func Slice6DesiredUIDGID() map[string][2]uint32 {
@@ -105,6 +124,10 @@ func Slice6DesiredUIDGID() map[string][2]uint32 {
 	result := make(map[string][2]uint32, len(names))
 	baseIndex, signerIndex := 0, 0
 	for _, name := range names {
+		if ordinal, added := slice6AdditionalDeploymentOrdinals[name]; added {
+			result[name] = [2]uint32{uint32(56000 + ordinal), uint32(58000 + ordinal)}
+			continue
+		}
 		if subject := requiredTLSAgentSubjects[name]; requiredPrincipals[subject] == "material_agent" {
 			// New signer deployments do not shift already reviewed role IDs.
 			result[name] = [2]uint32{uint32(55000 + signerIndex), uint32(57000 + signerIndex)}

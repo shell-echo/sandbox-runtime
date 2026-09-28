@@ -41,7 +41,8 @@ func VerifySlice6DesiredIngressPolicy(profile Profile) error {
 // VerifySlice6DesiredIngress also requires exact preplanned relay and target
 // container IPs; profile-valid arbitrary addresses inside a /24 are denied.
 func VerifySlice6DesiredIngress(profile Profile) error {
-	if VerifySlice6DesiredIngressPolicy(profile) != nil || VerifySlice6DesiredNetworks(profile) != nil {
+	if VerifySlice6DesiredIngressPolicy(profile) != nil ||
+		(VerifySlice6DesiredNetworks(profile) != nil && VerifySlice6DesiredFinalNetworks(profile.Networks) != nil) {
 		return errSlice6DesiredInventory
 	}
 	for index, binding := range profile.IngressBindings {

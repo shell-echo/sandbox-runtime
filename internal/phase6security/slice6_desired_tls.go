@@ -58,7 +58,7 @@ func Slice6DesiredTLSIdentity(deployment, principalDigest string) (*TLSIdentity,
 // allocation and rotation/drain bounds. It does not issue or observe a leaf,
 // prove its private-key owner, or replace live peer/CRL handshake checks.
 func VerifySlice6DesiredTLSIdentities(profile Profile) error {
-	if VerifySlice6DesiredNetworkGraph(profile) != nil {
+	if VerifySlice6DesiredPrincipalIDs(profile) != nil {
 		return errSlice6DesiredInventory
 	}
 	for _, principal := range profile.Principals {

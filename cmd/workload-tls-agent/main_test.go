@@ -100,8 +100,8 @@ func TestPostgresAgentConfigMatchesOnlyDedicatedPurpose(t *testing.T) {
 		ControllerSocketPath: "/run/certificate-controller/provider-browser-postgres-tls-agent/request.sock"}
 	binding := phase6security.PostgresClientAgentBinding{TLSAgentBinding: base,
 		CommonName: workloadpki.PostgresClientCommonName("browser_provider_runtime"), IssuerAnchorID: "postgres-client-ca"}
-	database := phase6security.ProviderDatabaseBinding{OwnerDeployment: base.SubjectDeployment,
-		DatabaseName: "provider_browser", RuntimeRole: "browser_provider_runtime"}
+	target := phase6security.Slice6PostgresSignerTarget{SubjectDeployment: base.SubjectDeployment,
+		DatabaseName: "provider_browser", SQLRole: "browser_provider_runtime"}
 	agent := phase6security.Principal{Name: base.AgentDeployment, PrincipalDigest: agentIdentity.Digest(), AuthorizationPrincipal: &agentIdentity}
 	owner := phase6security.Principal{Name: base.SubjectDeployment, PrincipalDigest: ownerIdentity.Digest(),
 		AuthorizationPrincipal: &ownerIdentity, TLS: &phase6security.TLSIdentity{TrustDomain: "sandbox.test",
@@ -109,8 +109,8 @@ func TestPostgresAgentConfigMatchesOnlyDedicatedPurpose(t *testing.T) {
 			Usages: []string{"client_auth", "server_auth"}, TTLSeconds: 600, RotateAfterSeconds: 300,
 			OverlapSeconds: 30, RevocationMaxStalenessSeconds: 10}}
 	config := configDocument{Protocol: postgresConfigProtocol, Purpose: workloadpki.PostgresClientPurpose,
-		Postgres: &postgresClientConfig{OwnerDeployment: base.SubjectDeployment, DatabaseName: database.DatabaseName,
-			RuntimeRole: database.RuntimeRole, CommonName: binding.CommonName, IssuerAnchorID: binding.IssuerAnchorID},
+		Postgres: &postgresClientConfig{OwnerDeployment: base.SubjectDeployment, DatabaseName: target.DatabaseName,
+			RuntimeRole: target.SQLRole, CommonName: binding.CommonName, IssuerAnchorID: binding.IssuerAnchorID},
 		SecurityProfileDigest: profile.ProfileDigest, EnvironmentDigest: profile.EnvironmentDigest,
 		ProfileDigest: profile.PrincipalProfileDigest, AgentDeployment: base.AgentDeployment, SubjectDeployment: base.SubjectDeployment,
 		Requester: agentIdentity, Subject: ownerIdentity, PolicyID: base.IssuerPolicyID, VaultRole: base.IssuerVaultRole,
@@ -124,7 +124,7 @@ func TestPostgresAgentConfigMatchesOnlyDedicatedPurpose(t *testing.T) {
 		MaxTTLSeconds: owner.TLS.TTLSeconds, CertificateTTLSeconds: int(owner.TLS.TTLSeconds),
 		RotateAfterSeconds: int(owner.TLS.RotateAfterSeconds), OverlapSeconds: int(owner.TLS.OverlapSeconds),
 		RevocationMaxStalenessSeconds: int(owner.TLS.RevocationMaxStalenessSeconds)}
-	if !matchesPostgresProfileBinding(profile, binding, database, agent, owner, config) {
+	if !matchesPostgresProfileBinding(profile, binding, target, agent, owner, config) {
 		t.Fatal("exact PostgreSQL certificate agent config rejected")
 	}
 	for name, change := range map[string]func(*configDocument){
@@ -142,7 +142,7 @@ func TestPostgresAgentConfigMatchesOnlyDedicatedPurpose(t *testing.T) {
 			postgres := *config.Postgres
 			candidate.Postgres = &postgres
 			change(&candidate)
-			if matchesPostgresProfileBinding(profile, binding, database, agent, owner, candidate) {
+			if matchesPostgresProfileBinding(profile, binding, target, agent, owner, candidate) {
 				t.Fatal("PostgreSQL agent config drift accepted")
 			}
 		})

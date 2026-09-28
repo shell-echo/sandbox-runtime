@@ -78,6 +78,9 @@ func Slice6DesiredNetworks() []Network {
 	result := make([]Network, 0, len(all)+len(slice6SharedNetworks))
 	materialSigners := make([]string, 0, 11)
 	for _, name := range all {
+		if _, added := slice6AdditionalDeploymentOrdinals[name]; added {
+			continue
+		}
 		if subject := requiredTLSAgentSubjects[name]; requiredPrincipals[subject] == "material_agent" {
 			materialSigners = append(materialSigners, name)
 			continue
@@ -108,6 +111,11 @@ func Slice6DesiredNetworks() []Network {
 	for index, name := range materialSigners {
 		result = append(result, Network{Name: "network-" + name, Kind: "role_internal", Internal: true,
 			GatewayModeIPv4: "isolated", IPv4Subnet: "172.31." + strconv.Itoa(80+index) + ".0/24",
+			Principals: []string{name}})
+	}
+	for name, ordinal := range slice6AdditionalDeploymentOrdinals {
+		result = append(result, Network{Name: "network-" + name, Kind: "role_internal", Internal: true,
+			GatewayModeIPv4: "isolated", IPv4Subnet: "172.31." + strconv.Itoa(91+ordinal) + ".0/24",
 			Principals: []string{name}})
 	}
 	sort.Slice(result, func(i, j int) bool { return result[i].Name < result[j].Name })

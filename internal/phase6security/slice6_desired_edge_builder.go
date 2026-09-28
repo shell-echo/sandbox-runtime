@@ -1,6 +1,6 @@
 package phase6security
 
-// BuildSlice6DesiredTrustEdges binds the reviewed 99-edge policy to already
+// BuildSlice6DesiredTrustEdges binds the reviewed 117-edge policy to already
 // constructed principal and external-service identities. It derives numeric
 // local targets from the preapproved IPAM graph, never from a running Docker
 // endpoint. The caller must separately verify external image/identity inputs

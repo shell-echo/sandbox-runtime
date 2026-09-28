@@ -11,7 +11,7 @@ func TestPrincipalSkeletonBindsReviewedPerRunIdentities(t *testing.T) {
 	environment := "sha256:" + strings.Repeat("a", 64)
 	profile := "sha256:" + strings.Repeat("b", 64)
 	first, err := newPrincipalSkeleton(strings.Repeat("c", 32), environment, profile)
-	if err != nil || len(first) != 69 {
+	if err != nil || len(first) != 82 {
 		t.Fatalf("reviewed principal skeleton = %d, %v", len(first), err)
 	}
 	second, err := newPrincipalSkeleton(strings.Repeat("d", 32), environment, profile)

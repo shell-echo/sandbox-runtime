@@ -80,7 +80,8 @@ func TestRealPostgresRequiresExactClientCNAndScramRole(t *testing.T) {
 		t.Fatal("local PostgreSQL client admission failed to bind the URI that PostgreSQL itself cannot inspect")
 	}
 	approvedHBA := func(sourceCIDR string) []byte {
-		policy := phase6security.PostgresServerAuthPolicy{ID: "provider-postgres-auth", IngressCIDR: sourceCIDR}
+		policy := phase6security.PostgresServerAuthPolicy{ID: "provider-postgres-auth",
+			Scope: "provider_databases_only", IngressCIDR: sourceCIDR}
 		document, err := policy.RenderProviderHBA([]phase6security.ProviderDatabaseBinding{
 			{OwnerDeployment: "provider-browser-runtime", DatabaseName: "provider_browser",
 				RuntimeRole: "browser_provider_runtime", ServerAuthPolicyID: policy.ID},
@@ -231,7 +232,8 @@ func TestRealPostgresRequiresExactClientCNAndScramRole(t *testing.T) {
 	verifyRawArtifacts := func(stage string) {
 		hbaSum, caSum := sha256.Sum256(approvedHBABytes), sha256.Sum256(clientCABytes)
 		policy := phase6security.PostgresServerAuthPolicy{ID: "provider-postgres-auth",
-			IngressCIDR: approvedSourceCIDR, HBADigest: "sha256:" + hex.EncodeToString(hbaSum[:]),
+			Scope: "provider_databases_only", IngressCIDR: approvedSourceCIDR,
+			HBADigest: "sha256:" + hex.EncodeToString(hbaSum[:]),
 			ClientCAAnchorID: "postgres-client-ca"}
 		anchor := phase6security.TrustAnchor{ID: "postgres-client-ca", Purpose: "client_verification",
 			BundleDigest: "sha256:" + hex.EncodeToString(caSum[:])}

@@ -20,7 +20,18 @@ func TestPostgresClientAgentsAreSeparateClosedPurpose(t *testing.T) {
 		}
 	}
 	if _, _, _, _, _, err := profile.PostgresClientAgentForOwner("product-runtime"); err == nil {
-		t.Fatal("unbound PostgreSQL certificate owner accepted")
+		t.Fatal("non-Provider owner projected as Provider database")
+	}
+	for _, target := range Slice6DesiredFinalPostgresSignerTargets() {
+		binding, resolved, agent, subject, anchor, err := profile.PostgresClientSignerForOwner(target.SubjectDeployment)
+		if err != nil || resolved != target || binding.AgentDeployment != target.AgentDeployment ||
+			binding.CommonName != target.SQLRole || agent.Name != target.AgentDeployment ||
+			subject.Name != target.SubjectDeployment || anchor.ID != "postgres-client-ca" {
+			t.Fatalf("PostgreSQL signer %s mismatch: %+v %+v %v", target.SubjectDeployment, binding, resolved, err)
+		}
+	}
+	if _, _, _, _, _, err := profile.PostgresClientSignerForOwner("other-runtime"); err == nil {
+		t.Fatal("unreviewed PostgreSQL signer owner accepted")
 	}
 	for name, change := range map[string]func(*Profile){
 		"missing agent": func(p *Profile) { p.PostgresClientAgents = p.PostgresClientAgents[:1] },

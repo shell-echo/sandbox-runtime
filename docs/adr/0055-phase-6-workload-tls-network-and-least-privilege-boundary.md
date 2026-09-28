@@ -1525,3 +1525,15 @@ the Browser/Desktop migrations; the existing 28/33 and seven-tuple tables
 remain explicit intermediate artifacts. These counts attest only closed
 source-level targets, not principal activation, PostgreSQL loading, live
 connections or acceptance of Slice 6.
+
+The final source-level Profile candidate now includes the two extra Provider
+migration jobs, their material agents and Vault-client signers, all nine
+PG-purpose signers, 32 one-dialer/one-service bridges and 137 total trust
+edges. It selects `shared_nine_roles` with a single raw HBA digest over nine
+ordered, exact `/32` source/database/login rules and an explicit deny tail.
+`provider_databases_only` remains an intermediate component scope and cannot
+be substituted in that final candidate. This closes a *declared* policy
+graph only. Issuer policies, actual SQL grants, HBA installation and reload,
+new connection outcomes, 82 independent deployment processes, 16 scenarios
+and exact cleanup still require their own observed gate before Phase 6 can
+advance from 5/15.

@@ -14,6 +14,7 @@ import (
 const (
 	postgresServerAuthPolicyID = "provider-postgres-auth"
 	postgresServerAuthScope    = "provider_databases_only"
+	postgresSharedAuthScope    = "shared_nine_roles"
 )
 
 // PostgresServerAuthPolicy binds one PostgreSQL instance's controlled HBA
@@ -32,6 +33,34 @@ type PostgresServerAuthPolicy struct {
 	IngressCIDR           string `json:"ingress_cidr"`
 }
 
+// RenderApprovedHBA selects the one complete HBA for the declared service
+// scope. The legacy Provider-only artifact cannot authorize a shared
+// PostgreSQL instance with Product, Gateway and migration connections.
+func (p PostgresServerAuthPolicy) RenderApprovedHBA(databases []ProviderDatabaseBinding) ([]byte, error) {
+	switch p.Scope {
+	case postgresServerAuthScope:
+		return p.RenderProviderHBA(databases)
+	case postgresSharedAuthScope:
+		if p.IngressCIDR != "" || len(databases) != 2 ||
+			databases[0].OwnerDeployment != "provider-browser-runtime" ||
+			databases[1].OwnerDeployment != "provider-desktop-runtime" ||
+			databases[0].ServerAuthPolicyID != p.ID || databases[1].ServerAuthPolicyID != p.ID {
+			return nil, ErrInvalidProfile
+		}
+		for _, target := range Slice6DesiredFinalPostgresSignerTargets() {
+			for _, database := range databases {
+				if database.OwnerDeployment == target.SubjectDeployment &&
+					(database.DatabaseName != target.DatabaseName || database.RuntimeRole != target.SQLRole) {
+					return nil, ErrInvalidProfile
+				}
+			}
+		}
+		return RenderSlice6DesiredFinalSharedPostgresHBA()
+	default:
+		return nil, ErrInvalidProfile
+	}
+}
+
 // RenderProviderHBA returns the only raw HBA byte sequence approved for the
 // current Provider-only component scope. It includes both Provider database
 // roles in one file, then explicit IPv4 and IPv6 rejection. The production
@@ -39,7 +68,7 @@ type PostgresServerAuthPolicy struct {
 // prove newly opened connections use them; a parsed file view is insufficient.
 func (p PostgresServerAuthPolicy) RenderProviderHBA(databases []ProviderDatabaseBinding) ([]byte, error) {
 	prefix, err := netip.ParsePrefix(p.IngressCIDR)
-	if err != nil || prefix.String() != p.IngressCIDR || prefix.Masked().String() != p.IngressCIDR ||
+	if p.Scope != postgresServerAuthScope || err != nil || prefix.String() != p.IngressCIDR || prefix.Masked().String() != p.IngressCIDR ||
 		prefix.Addr().Is4In6() || prefix.Addr().Zone() != "" ||
 		prefix.Bits() < 1 || prefix.Addr().Is4() && prefix.Bits() < 24 ||
 		prefix.Addr().Is6() && prefix.Bits() < 64 || len(databases) != 2 ||
@@ -72,7 +101,8 @@ func (p PostgresServerAuthPolicy) RenderProviderHBA(databases []ProviderDatabase
 func (p PostgresServerAuthPolicy) validate(databases []ProviderDatabaseBinding,
 	external map[string]ExternalService, anchors []TrustAnchor) error {
 	service, known := external[p.ServiceName]
-	if p.ID != postgresServerAuthPolicyID || p.Scope != postgresServerAuthScope ||
+	if p.ID != postgresServerAuthPolicyID ||
+		(p.Scope != postgresServerAuthScope && p.Scope != postgresSharedAuthScope) ||
 		p.ServiceName != "postgres" || !known || p.ServiceIdentityDigest != service.IdentityDigest ||
 		!namePattern.MatchString(p.HBAArtifactID) || !digestPattern.MatchString(p.HBADigest) ||
 		p.ClientCAAnchorID != postgresClientIssuerAnchorID {
@@ -89,7 +119,7 @@ func (p PostgresServerAuthPolicy) validate(databases []ProviderDatabaseBinding,
 		!namePattern.MatchString(anchor.ArtifactID) || !digestPattern.MatchString(anchor.BundleDigest) {
 		return ErrInvalidProfile
 	}
-	document, err := p.RenderProviderHBA(databases)
+	document, err := p.RenderApprovedHBA(databases)
 	if err != nil {
 		return err
 	}
@@ -106,7 +136,7 @@ func (p PostgresServerAuthPolicy) validate(databases []ProviderDatabaseBinding,
 // identity and successful enforcement are separate live-gate requirements.
 func (p PostgresServerAuthPolicy) VerifyRawServerArtifacts(databases []ProviderDatabaseBinding,
 	anchor TrustAnchor, hbaBytes, clientCABytes []byte, now time.Time) error {
-	expectedHBA, err := p.RenderProviderHBA(databases)
+	expectedHBA, err := p.RenderApprovedHBA(databases)
 	if err != nil || now.IsZero() || len(hbaBytes) < 1 || len(hbaBytes) > 64<<10 ||
 		len(clientCABytes) < 1 || len(clientCABytes) > 256<<10 ||
 		!bytes.Equal(hbaBytes, expectedHBA) || anchor.ID != p.ClientCAAnchorID ||

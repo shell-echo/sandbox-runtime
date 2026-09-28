@@ -77,7 +77,7 @@ func TestSlice6MaterialAgentSignerInventoryHasElevenDistinctKeyOwners(t *testing
 func TestSlice6MaterialSignerIDsAndNetworksDoNotShiftOldAllocations(t *testing.T) {
 	pairs := Slice6DesiredUIDGID()
 	networks := Slice6DesiredNetworks()
-	newCount, oldCount := 0, 0
+	newCount, oldCount, addedCount := 0, 0, 0
 	usedSubnets := make(map[string]bool, len(networks))
 	baseNetworks := make([]string, 0, len(networks))
 	materialNetworks := make([]string, 0, 11)
@@ -89,6 +89,14 @@ func TestSlice6MaterialSignerIDsAndNetworksDoNotShiftOldAllocations(t *testing.T
 		name := ""
 		if len(network.Principals) == 1 {
 			name = network.Principals[0]
+		}
+		if ordinal, added := slice6AdditionalDeploymentOrdinals[name]; added {
+			addedCount++
+			if network.Name != "network-"+name || network.IPv4Subnet != "172.31."+strconv.Itoa(91+ordinal)+".0/24" ||
+				pairs[name] != [2]uint32{uint32(56000 + ordinal), uint32(58000 + ordinal)} {
+				t.Fatalf("additional deployment %s lost its reserved identity/network", name)
+			}
+			continue
 		}
 		if requiredPrincipals[requiredTLSAgentSubjects[name]] != "material_agent" {
 			baseNetworks = append(baseNetworks, network.Name)
@@ -103,6 +111,9 @@ func TestSlice6MaterialSignerIDsAndNetworksDoNotShiftOldAllocations(t *testing.T
 		}
 	}
 	for name, pair := range pairs {
+		if _, added := slice6AdditionalDeploymentOrdinals[name]; added {
+			continue
+		}
 		if requiredPrincipals[requiredTLSAgentSubjects[name]] == "material_agent" {
 			continue
 		}
@@ -111,8 +122,8 @@ func TestSlice6MaterialSignerIDsAndNetworksDoNotShiftOldAllocations(t *testing.T
 			t.Fatalf("old deployment %s moved out of its reviewed UID/GID partition", name)
 		}
 	}
-	if newCount != 11 || oldCount != 58 {
-		t.Fatalf("signer inventory = %d new and %d old", newCount, oldCount)
+	if newCount != 11 || oldCount != 58 || addedCount != 13 {
+		t.Fatalf("identity inventory = %d material signers, %d old, %d added", newCount, oldCount, addedCount)
 	}
 	if len(baseNetworks) >= 80 {
 		t.Fatal("reviewed base networks overlap the material signer reservation")

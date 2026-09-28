@@ -258,8 +258,8 @@ func run() error { //nolint:gocyclo
 
 func validateProfileBinding(profile phase6security.Profile, config configDocument) bool {
 	if config.Protocol == postgresConfigProtocol {
-		binding, database, agent, subject, _, err := profile.PostgresClientAgentForOwner(config.SubjectDeployment)
-		return err == nil && matchesPostgresProfileBinding(profile, binding, database, agent, subject, config)
+		binding, target, agent, subject, _, err := profile.PostgresClientSignerForOwner(config.SubjectDeployment)
+		return err == nil && matchesPostgresProfileBinding(profile, binding, target, agent, subject, config)
 	}
 	if config.Purpose != "" || config.Postgres != nil {
 		return false
@@ -269,10 +269,10 @@ func validateProfileBinding(profile phase6security.Profile, config configDocumen
 }
 
 func matchesPostgresProfileBinding(profile phase6security.Profile, binding phase6security.PostgresClientAgentBinding,
-	database phase6security.ProviderDatabaseBinding, agent, subject phase6security.Principal, config configDocument) bool {
+	target phase6security.Slice6PostgresSignerTarget, agent, subject phase6security.Principal, config configDocument) bool {
 	if config.Purpose != workloadpki.PostgresClientPurpose || config.Postgres == nil || subject.TLS == nil ||
-		config.Postgres.OwnerDeployment != database.OwnerDeployment ||
-		config.Postgres.DatabaseName != database.DatabaseName || config.Postgres.RuntimeRole != database.RuntimeRole ||
+		config.Postgres.OwnerDeployment != target.SubjectDeployment ||
+		config.Postgres.DatabaseName != target.DatabaseName || config.Postgres.RuntimeRole != target.SQLRole ||
 		config.Postgres.CommonName != binding.CommonName || config.Postgres.IssuerAnchorID != binding.IssuerAnchorID {
 		return false
 	}

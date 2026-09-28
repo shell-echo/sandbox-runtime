@@ -66,6 +66,19 @@ func TestSlice6DirectExternalDependencyAuditHasExactOwners(t *testing.T) {
 	if materialAgents != 11 {
 		t.Fatalf("material-agent direct Vault dials = %d, want 11", materialAgents)
 	}
+	finalMaterialAgents := materialAgents
+	for _, dependency := range Slice6ProviderMigrationExternalDependencies() {
+		if dependency.Service == "vault" {
+			if seen[dependency.Dialer] || slice6ApprovedDeploymentKinds[dependency.Dialer] != "material_agent" {
+				t.Fatalf("migration material agent has duplicate or unapproved Vault dial: %+v", dependency)
+			}
+			seen[dependency.Dialer] = true
+			finalMaterialAgents++
+		}
+	}
+	if finalMaterialAgents != 13 {
+		t.Fatalf("final material-agent Vault dials = %d, want 13", finalMaterialAgents)
+	}
 	for deployment, kind := range slice6ApprovedDeploymentKinds {
 		if kind == "material_agent" && !seen[deployment] {
 			t.Fatalf("material agent %s has no Vault dial requirement", deployment)

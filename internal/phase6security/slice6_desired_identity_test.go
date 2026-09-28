@@ -9,7 +9,7 @@ func TestSlice6DesiredAuthorizationPrincipalsBindExactFreshRun(t *testing.T) {
 	environment := testDigest("environment")
 	profile := testDigest("principal-profile")
 	first, err := Slice6DesiredAuthorizationPrincipals(strings.Repeat("a", 32), environment, profile)
-	if err != nil || len(first) != 67 {
+	if err != nil || len(first) != 80 {
 		t.Fatalf("reviewed run-bound identity inventory = %d, %v", len(first), err)
 	}
 	second, err := Slice6DesiredAuthorizationPrincipals(strings.Repeat("b", 32), environment, profile)

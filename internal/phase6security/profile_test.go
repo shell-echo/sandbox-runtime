@@ -105,9 +105,9 @@ func validProfile() Profile {
 	for agent, subject := range tlsSubjects {
 		tlsAgentForSubject[subject] = agent
 	}
-	postgresAgents := map[string]string{
-		"provider-browser-postgres-tls-agent": "provider-browser-runtime",
-		"provider-desktop-postgres-tls-agent": "provider-desktop-runtime",
+	postgresAgents := make(map[string]string)
+	for _, target := range Slice6DesiredFinalPostgresSignerTargets() {
+		postgresAgents[target.AgentDeployment] = target.SubjectDeployment
 	}
 	postgresAgentForSubject := map[string]string{}
 	for agent, subject := range postgresAgents {
@@ -685,9 +685,9 @@ func validProfile() Profile {
 	sort.Slice(tlsBindings, func(first, second int) bool {
 		return tlsBindings[first].AgentDeployment < tlsBindings[second].AgentDeployment
 	})
-	postgresBindings := make([]PostgresClientAgentBinding, 0, 2)
-	for _, owner := range []string{"provider-browser-runtime", "provider-desktop-runtime"} {
-		agent := postgresAgentForSubject[owner]
+	postgresBindings := make([]PostgresClientAgentBinding, 0, 9)
+	for _, target := range Slice6DesiredFinalPostgresSignerTargets() {
+		owner, agent := target.SubjectDeployment, target.AgentDeployment
 		agentRecord, ownerRecord := principalByName[agent], principalByName[owner]
 		base := TLSAgentBinding{AgentDeployment: agent, AgentPrincipalDigest: agentRecord.PrincipalDigest,
 			SubjectDeployment: owner, SubjectPrincipalDigest: ownerRecord.PrincipalDigest,
@@ -702,12 +702,8 @@ func validProfile() Profile {
 			ControllerSocketPath:      "/run/certificate-controller/" + agent + "/request.sock",
 			ControllerDirectoryMode:   0o710, ControllerSocketMode: 0o666,
 			ControllerUnixEdgeID: "certificate-agent-" + agent, CleanupClass: "sockets"}
-		role := "browser_provider_runtime"
-		if owner == "provider-desktop-runtime" {
-			role = "desktop_provider_runtime"
-		}
 		postgresBindings = append(postgresBindings, PostgresClientAgentBinding{TLSAgentBinding: base,
-			CommonName: postgresClientCommonName(role), IssuerAnchorID: postgresClientIssuerAnchorID})
+			CommonName: postgresClientCommonName(target.SQLRole), IssuerAnchorID: postgresClientIssuerAnchorID})
 		edges = append(edges,
 			TrustEdge{ID: base.UnixEdgeID, From: owner, To: agent, Protocol: "unix", Authentication: "unix_peer_credentials",
 				FromURI: uri(owner), ToURI: uri(agent), FromPrincipalDigest: ownerRecord.PrincipalDigest,
@@ -730,7 +726,7 @@ func validProfile() Profile {
 		{ID: "postgres-client-ca", BundleDigest: testDigest("postgres-client-ca"), Purpose: "client_verification",
 			TrustDomain: "sandbox-runtime.test", ArtifactID: "postgres-client-ca-artifact", StorageID: "postgres-client-ca-storage",
 			TargetPath: "/run/trust/postgres-client-ca.pem", WriterAuthority: "operator",
-			Consumers: []string{"provider-browser-runtime", "provider-desktop-runtime"}},
+			Consumers: []string{"gateway-runtime", "product-migration-job", "product-runtime", "provider-browser-migration-job", "provider-browser-runtime", "provider-desktop-migration-job", "provider-desktop-runtime", "provider-migration-job", "provider-runtime"}},
 		{ID: "vault-client-ca", BundleDigest: testDigest("vault-client-ca"), Purpose: "client_verification",
 			TrustDomain: "sandbox-runtime.test", ArtifactID: "vault-client-ca-artifact", StorageID: "vault-client-ca-storage",
 			TargetPath: "/run/trust/vault-client-ca.pem", WriterAuthority: "operator", Consumers: []string{"certificate-controller"}},

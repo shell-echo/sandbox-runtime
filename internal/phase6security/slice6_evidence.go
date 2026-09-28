@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"regexp"
+	"slices"
 	"sort"
 	"time"
 )
@@ -200,18 +201,19 @@ type Slice6ExternalEvidence struct {
 // the gate must record the actual PostgreSQL process, read-only mount, file
 // bytes, ordered disk parser output, reload/startup and new connections.
 type Slice6PostgresServerAuthEvidence struct {
-	ProfileDigest                string `json:"profile_digest"`
-	HBAArtifactID                string `json:"hba_artifact_id"`
-	HBADigest                    string `json:"hba_digest"`
-	ClientCAArtifactID           string `json:"client_ca_artifact_id"`
-	ClientCABundleDigest         string `json:"client_ca_bundle_digest"`
-	ApprovedIngressCIDR          string `json:"approved_ingress_cidr"`
-	ReadOnlyMountInspectDigest   string `json:"read_only_mount_inspect_digest"`
-	ServerSettingsProbeDigest    string `json:"server_settings_probe_digest"`
-	OrderedParsedRulesDigest     string `json:"ordered_parsed_rules_digest"`
-	StartupOrReloadResultDigest  string `json:"startup_or_reload_result_digest"`
-	NewConnectionResultsDigest   string `json:"new_connection_results_digest"`
-	RestartReconcileResultDigest string `json:"restart_reconcile_result_digest"`
+	ProfileDigest                string   `json:"profile_digest"`
+	HBAArtifactID                string   `json:"hba_artifact_id"`
+	HBADigest                    string   `json:"hba_digest"`
+	ClientCAArtifactID           string   `json:"client_ca_artifact_id"`
+	ClientCABundleDigest         string   `json:"client_ca_bundle_digest"`
+	ApprovedIngressCIDR          string   `json:"approved_ingress_cidr"`
+	ApprovedSourceCIDRs          []string `json:"approved_source_cidrs,omitempty"`
+	ReadOnlyMountInspectDigest   string   `json:"read_only_mount_inspect_digest"`
+	ServerSettingsProbeDigest    string   `json:"server_settings_probe_digest"`
+	OrderedParsedRulesDigest     string   `json:"ordered_parsed_rules_digest"`
+	StartupOrReloadResultDigest  string   `json:"startup_or_reload_result_digest"`
+	NewConnectionResultsDigest   string   `json:"new_connection_results_digest"`
+	RestartReconcileResultDigest string   `json:"restart_reconcile_result_digest"`
 }
 
 type Slice6ScenarioEvidence struct {
@@ -539,7 +541,7 @@ func validSlice6External(profile Profile, values []Slice6ExternalEvidence) bool 
 				proof.HBADigest != profile.PostgresServerAuth.HBADigest ||
 				proof.ClientCAArtifactID != clientCA.ArtifactID ||
 				proof.ClientCABundleDigest != clientCA.BundleDigest ||
-				proof.ApprovedIngressCIDR != profile.PostgresServerAuth.IngressCIDR ||
+				!validSlice6PostgresIngressProof(profile.PostgresServerAuth, proof) ||
 				!digestPattern.MatchString(proof.ReadOnlyMountInspectDigest) ||
 				!digestPattern.MatchString(proof.ServerSettingsProbeDigest) ||
 				!digestPattern.MatchString(proof.OrderedParsedRulesDigest) ||
@@ -553,6 +555,27 @@ func validSlice6External(profile Profile, values []Slice6ExternalEvidence) bool 
 		}
 	}
 	return true
+}
+
+func validSlice6PostgresIngressProof(policy PostgresServerAuthPolicy, proof *Slice6PostgresServerAuthEvidence) bool {
+	if proof == nil {
+		return false
+	}
+	if policy.Scope == postgresServerAuthScope {
+		return proof.ApprovedIngressCIDR == policy.IngressCIDR && len(proof.ApprovedSourceCIDRs) == 0
+	}
+	if policy.Scope != postgresSharedAuthScope || proof.ApprovedIngressCIDR != "" {
+		return false
+	}
+	rules, err := Slice6DesiredFinalSharedPostgresHBARules()
+	if err != nil {
+		return false
+	}
+	wanted := make([]string, len(rules))
+	for i, rule := range rules {
+		wanted[i] = rule.SourceCIDR
+	}
+	return slices.Equal(proof.ApprovedSourceCIDRs, wanted)
 }
 
 func validSlice6Scenarios(profile Profile, values []Slice6ScenarioEvidence) bool {

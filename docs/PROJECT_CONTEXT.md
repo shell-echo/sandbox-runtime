@@ -230,7 +230,15 @@ Current verified state:
   Product recording-content composition, HSM, deployment and production
   readiness remain false. Slice 6 is underway under ADR 0055 with real Vault
   PKI, live TLS rotation/revocation, role-isolated egress enforcement and exact
-  container least privilege as its frozen order.
+  container least privilege as its frozen order. Current source-level work
+  closes a candidate inventory of 82 deployments, 32 isolated external
+  paths, 37 external edge IDs, 9 PostgreSQL-purpose signers and one ordered
+  nine-role shared-service HBA. The added migration bridge has a real Docker
+  endpoint/cleanup diagnostic, and the historical Provider-only PostgreSQL
+  mTLS/SCRAM integration remains green. Neither diagnostic is the full
+  16-scenario Slice 6 gate: live issuance, SQL grants/HBA activation, all
+  independent processes, signed evidence and exact cleanup remain open, so
+  Phase 6 stays 5/15.
 
 The qualification applies only to Provider revision
 `170459266af5f4fad359ca8c63f2ae19741055c5`, external-caller revision

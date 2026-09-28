@@ -57,7 +57,8 @@ func postgresSocketMember(bindings []PostgresClientAgentBinding, name string, mo
 func validatePostgresClientAgents(bindings []PostgresClientAgentBinding, databases []ProviderDatabaseBinding,
 	ordinary []TLSAgentBinding, policies []EgressPolicy, controllerAuthority CertificateControllerAuthority,
 	anchors []TrustAnchor, principals map[string]Principal, edges map[string]TrustEdge) error {
-	if len(bindings) != 2 || len(databases) != 2 {
+	targets := Slice6DesiredFinalPostgresSignerTargets()
+	if len(bindings) != len(targets) || len(databases) != 2 || VerifySlice6DesiredFinalPostgresSignerTargets(targets) != nil {
 		return ErrInvalidProfile
 	}
 	controller := principals[controllerAuthority.DeploymentName]
@@ -87,23 +88,38 @@ func validatePostgresClientAgents(bindings []PostgresClientAgentBinding, databas
 			anchor = candidate
 		}
 	}
-	if anchor.ID == "" || anchor.Purpose != "client_verification" || len(anchor.Consumers) != 2 ||
-		anchor.Consumers[0] != "provider-browser-runtime" || anchor.Consumers[1] != "provider-desktop-runtime" {
+	if anchor.ID == "" || anchor.Purpose != "client_verification" || len(anchor.Consumers) != len(targets) {
 		return ErrInvalidProfile
+	}
+	for _, target := range targets {
+		found := false
+		for _, consumer := range anchor.Consumers {
+			found = found || consumer == target.SubjectDeployment
+		}
+		if !found {
+			return ErrInvalidProfile
+		}
 	}
 	for index, binding := range bindings {
 		value := binding.TLSAgentBinding
-		database := databases[index]
-		owner, ownerOK := principals[database.OwnerDeployment]
+		target := targets[index]
+		owner, ownerOK := principals[target.SubjectDeployment]
 		agent, agentOK := principals[value.AgentDeployment]
 		unixEdge, edgeOK := edges[value.UnixEdgeID]
 		controllerEdge, controllerEdgeOK := edges[value.ControllerUnixEdgeID]
-		expectedAgent := "provider-browser-postgres-tls-agent"
-		if index == 1 {
-			expectedAgent = "provider-desktop-postgres-tls-agent"
+		expectedAgent := target.AgentDeployment
+		if target.SubjectDeployment == "provider-browser-runtime" &&
+			(databases[0].OwnerDeployment != target.SubjectDeployment || databases[0].DatabaseName != target.DatabaseName ||
+				databases[0].RuntimeRole != target.SQLRole) {
+			return ErrInvalidProfile
+		}
+		if target.SubjectDeployment == "provider-desktop-runtime" &&
+			(databases[1].OwnerDeployment != target.SubjectDeployment || databases[1].DatabaseName != target.DatabaseName ||
+				databases[1].RuntimeRole != target.SQLRole) {
+			return ErrInvalidProfile
 		}
 		if !ownerOK || !agentOK || !edgeOK || !controllerEdgeOK || owner.TLS == nil || agent.TLS == nil || controller.TLS == nil ||
-			value.SubjectDeployment != database.OwnerDeployment || value.AgentDeployment != expectedAgent ||
+			value.SubjectDeployment != target.SubjectDeployment || value.AgentDeployment != expectedAgent ||
 			value.SubjectPrincipalDigest != owner.PrincipalDigest || value.AgentPrincipalDigest != agent.PrincipalDigest ||
 			agent.Kind != "tls_agent" || agent.AuthorizationPrincipal == nil || owner.AuthorizationPrincipal == nil ||
 			agent.AuthorizationPrincipal.Role != owner.AuthorizationPrincipal.Role ||
@@ -119,7 +135,7 @@ func validatePostgresClientAgents(bindings []PostgresClientAgentBinding, databas
 			value.ControllerSocketPath != path.Join(value.ControllerSocketDirectory, "request.sock") ||
 			!namePattern.MatchString(value.ControllerSocketStorageID) || !namePattern.MatchString(value.ControllerUnixEdgeID) ||
 			value.ControllerDirectoryMode != 0o710 || value.ControllerSocketMode != 0o666 || value.CleanupClass != "sockets" ||
-			binding.CommonName != postgresClientCommonName(database.RuntimeRole) || len(binding.CommonName) > 64 ||
+			binding.CommonName != postgresClientCommonName(target.SQLRole) || len(binding.CommonName) > 64 ||
 			binding.IssuerAnchorID != postgresClientIssuerAnchorID || anchor.TrustDomain != owner.TLS.TrustDomain ||
 			!exactPolicyMount(agent, "private_socket", value.SocketDirectory, value.SocketStorageID, false) ||
 			!exactPolicyMount(owner, "private_socket", value.SocketDirectory, value.SocketStorageID, true) ||
@@ -150,13 +166,23 @@ func validatePostgresClientAgents(bindings []PostgresClientAgentBinding, databas
 	return nil
 }
 
-// PostgresClientAgentForOwner resolves the separate certificate purpose and
-// immutable issuer artifact for exactly one Provider database owner.
-func (p Profile) PostgresClientAgentForOwner(owner string) (PostgresClientAgentBinding, ProviderDatabaseBinding, Principal, Principal, TrustAnchor, error) {
+// PostgresClientSignerForOwner resolves one of the nine finite pool-owner
+// tuples. Its target is an issuer policy input, not a live SQL-grant proof.
+func (p Profile) PostgresClientSignerForOwner(owner string) (PostgresClientAgentBinding, Slice6PostgresSignerTarget, Principal, Principal, TrustAnchor, error) {
 	if p.Validate() != nil {
-		return PostgresClientAgentBinding{}, ProviderDatabaseBinding{}, Principal{}, Principal{}, TrustAnchor{}, ErrInvalidProfile
+		return PostgresClientAgentBinding{}, Slice6PostgresSignerTarget{}, Principal{}, Principal{}, TrustAnchor{}, ErrInvalidProfile
 	}
-	for index, binding := range p.PostgresClientAgents {
+	var target Slice6PostgresSignerTarget
+	for _, candidate := range Slice6DesiredFinalPostgresSignerTargets() {
+		if candidate.SubjectDeployment == owner {
+			target = candidate
+			break
+		}
+	}
+	if target.SubjectDeployment == "" {
+		return PostgresClientAgentBinding{}, Slice6PostgresSignerTarget{}, Principal{}, Principal{}, TrustAnchor{}, ErrInvalidProfile
+	}
+	for _, binding := range p.PostgresClientAgents {
 		if binding.SubjectDeployment != owner {
 			continue
 		}
@@ -175,7 +201,27 @@ func (p Profile) PostgresClientAgentForOwner(owner string) (PostgresClientAgentB
 				anchor = item
 			}
 		}
-		return binding, p.ProviderDatabases[index], agent, subject, anchor, nil
+		if binding.AgentDeployment != target.AgentDeployment || binding.CommonName != target.SQLRole ||
+			agent.Name == "" || subject.Name == "" || anchor.ID == "" {
+			return PostgresClientAgentBinding{}, Slice6PostgresSignerTarget{}, Principal{}, Principal{}, TrustAnchor{}, ErrInvalidProfile
+		}
+		return binding, target, agent, subject, anchor, nil
+	}
+	return PostgresClientAgentBinding{}, Slice6PostgresSignerTarget{}, Principal{}, Principal{}, TrustAnchor{}, ErrInvalidProfile
+}
+
+// PostgresClientAgentForOwner preserves the narrower Browser/Desktop Provider
+// database projection for existing v3 Provider callers.
+func (p Profile) PostgresClientAgentForOwner(owner string) (PostgresClientAgentBinding, ProviderDatabaseBinding, Principal, Principal, TrustAnchor, error) {
+	binding, target, agent, subject, anchor, err := p.PostgresClientSignerForOwner(owner)
+	if err != nil {
+		return PostgresClientAgentBinding{}, ProviderDatabaseBinding{}, Principal{}, Principal{}, TrustAnchor{}, ErrInvalidProfile
+	}
+	for _, database := range p.ProviderDatabases {
+		if database.OwnerDeployment == owner && database.DatabaseName == target.DatabaseName &&
+			database.RuntimeRole == target.SQLRole {
+			return binding, database, agent, subject, anchor, nil
+		}
 	}
 	return PostgresClientAgentBinding{}, ProviderDatabaseBinding{}, Principal{}, Principal{}, TrustAnchor{}, ErrInvalidProfile
 }

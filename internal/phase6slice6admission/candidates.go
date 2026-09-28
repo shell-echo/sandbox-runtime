@@ -266,20 +266,9 @@ func verifySource(ctx context.Context, root, revision, tree string) error {
 }
 
 func verifyReviewedProfile(profile phase6security.Profile) error {
-	for _, verify := range []func(phase6security.Profile) error{
-		phase6security.VerifySlice6DesiredNetworks,
-		phase6security.VerifySlice6DesiredPrincipalIDs,
-		phase6security.VerifySlice6DesiredEdgeAddresses,
-		phase6security.VerifySlice6DesiredExternalServices,
-		phase6security.VerifySlice6DesiredEgressPolicies,
-		phase6security.VerifySlice6DesiredTrustAnchors,
-		phase6security.VerifySlice6DesiredTLSIdentities,
-		phase6security.VerifySlice6DesiredImageLocations,
-		phase6security.VerifySlice6DesiredIngress,
-	} {
-		if verify(profile) != nil {
-			return ErrInvalidAdmission
-		}
+	if phase6security.VerifySlice6DesiredFinalExternalProfile(profile) != nil ||
+		phase6security.VerifySlice6DesiredImageLocations(profile) != nil {
+		return ErrInvalidAdmission
 	}
 	return nil
 }

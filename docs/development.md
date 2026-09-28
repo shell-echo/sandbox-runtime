@@ -1282,8 +1282,10 @@ declared member IP before launch; actual raw Docker inspection must later be
 checked with `VerifySlice6DesiredEndpointObservation`. The source-bound core
 Docker ownership smoke uses the reviewed Provider UID/GID, role network and
 planned IP, but executes only `--help`, not a Provider listener.
-`VerifySlice6DesiredTrustEdges` additionally freezes all 77 local, external
-and Unix trust edges; `BindSlice6DesiredNetworkPlan` readdresses an already
+`VerifySlice6DesiredTrustEdges` freezes the 117-edge base inventory; the
+separate final external-target verifier requires 20 additional direct edges,
+32 isolated physical external paths and 9 PostgreSQL-purpose signers.
+`BindSlice6DesiredNetworkPlan` readdresses an already
 valid draft to the reviewed IPAM plan and recomputes profile/ingress digests.
 This is a pre-freeze transformation, not an observer or complete profile
 generator. `VerifySlice6DesiredIngress` additionally rejects an unreviewed
@@ -1319,6 +1321,20 @@ chain or protected-role egress test. There is no Slice 6 release runner or
 success manifest yet. Do not reinterpret a passing preflight, network or
 resource-ledger component, role-image smoke or the historical
 `phase6slicegate` as a completed full-inventory security gate.
+
+`BuildSlice6FinalExternalProfileTarget` is a source-level construction step
+over an already valid reviewed draft. It closes the 82-deployment inventory,
+32 external physical paths, 37 external edge IDs and 9 dedicated PostgreSQL
+client-signer bindings into one Profile. The shared PostgreSQL candidate
+selects one exact nine-rule `hostssl` HBA; the historical two-role Provider
+HBA is rejected in this final scope. This does not start the 82 processes,
+load HBA/CA files, issue certificates, prove SQL grants or produce Slice 6
+evidence. Those remain full-gate work, and Phase 6 remains 5/15.
+Final offline admission requires this full Profile and checked local image
+locations; a structurally valid intermediate 28-path profile cannot pass.
+For the shared PostgreSQL scope, the evidence must list all nine approved
+source `/32` CIDRs in HBA rule order rather than reuse the historical one-CIDR
+Provider-only proof field.
 
 The not-yet-accepted Slice 6 private evidence format is version 3. A final
 run must generate one fresh 128-bit lowercase-hex `run_id` and retain

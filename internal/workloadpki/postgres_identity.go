@@ -21,6 +21,20 @@ var postgresIdentifier = regexp.MustCompile(`^[a-z][a-z0-9_]{0,62}$`)
 var postgresClientSAN = asn1.ObjectIdentifier{2, 5, 29, 17}
 var certificateExtensionRequest = asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 9, 14}
 
+// The issuer's identity grammar admits only pool owners in the reviewed
+// shared PostgreSQL service. The security profile binds each owner to its
+// exact database, SQL role, signer, certificate policy and physical source.
+func approvedPostgresClientOwner(name string) bool {
+	switch name {
+	case "product-runtime", "gateway-runtime", "provider-runtime", "provider-browser-runtime",
+		"provider-desktop-runtime", "product-migration-job", "provider-migration-job",
+		"provider-browser-migration-job", "provider-desktop-migration-job":
+		return true
+	default:
+		return false
+	}
+}
+
 // PostgresClientIdentity is a separate, closed certificate purpose. Its CN is
 // exactly the profile-bound SQL runtime role, never a CSR input. PostgreSQL
 // checks that CN directly during SCRAM plus clientcert=verify-full; it cannot
@@ -40,8 +54,7 @@ func PostgresClientCommonName(runtimeRole string) string {
 }
 
 func (identity PostgresClientIdentity) Validate() error {
-	if identity.OwnerDeployment != "provider-browser-runtime" &&
-		identity.OwnerDeployment != "provider-desktop-runtime" {
+	if !approvedPostgresClientOwner(identity.OwnerDeployment) {
 		return ErrInvalid
 	}
 	parsed, err := url.Parse(identity.URI)

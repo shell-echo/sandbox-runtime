@@ -552,7 +552,7 @@ func validateControllerProfileConfig(profile phase6security.Profile, config conf
 	}
 	for _, binding := range profile.PostgresClientAgents {
 		var agent, subject phase6security.Principal
-		var database phase6security.ProviderDatabaseBinding
+		var target phase6security.Slice6PostgresSignerTarget
 		for _, principal := range profile.Principals {
 			if principal.Name == binding.AgentDeployment {
 				agent = principal
@@ -561,16 +561,16 @@ func validateControllerProfileConfig(profile phase6security.Profile, config conf
 				subject = principal
 			}
 		}
-		for _, candidate := range profile.ProviderDatabases {
-			if candidate.OwnerDeployment == binding.SubjectDeployment {
-				database = candidate
+		for _, candidate := range phase6security.Slice6DesiredFinalPostgresSignerTargets() {
+			if candidate.SubjectDeployment == binding.SubjectDeployment {
+				target = candidate
 			}
 		}
 		policy := expectedPolicies[binding.IssuerPolicyID]
-		if agent.AuthorizationPrincipal == nil || subject.AuthorizationPrincipal == nil || subject.TLS == nil ||
+		if target.SubjectDeployment == "" || agent.AuthorizationPrincipal == nil || subject.AuthorizationPrincipal == nil || subject.TLS == nil ||
 			policy.Purpose != workloadpki.PostgresClientPurpose || policy.Postgres == nil ||
-			policy.Postgres.OwnerDeployment != database.OwnerDeployment ||
-			policy.Postgres.DatabaseName != database.DatabaseName || policy.Postgres.RuntimeRole != database.RuntimeRole ||
+			policy.Postgres.OwnerDeployment != target.SubjectDeployment ||
+			policy.Postgres.DatabaseName != target.DatabaseName || policy.Postgres.RuntimeRole != target.SQLRole ||
 			policy.Postgres.CommonName != binding.CommonName || policy.Postgres.IssuerAnchorID != binding.IssuerAnchorID {
 			return false
 		}

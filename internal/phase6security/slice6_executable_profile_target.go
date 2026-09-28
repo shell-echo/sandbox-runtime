@@ -1,6 +1,8 @@
 package phase6security
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"slices"
 	"sort"
 )
@@ -11,12 +13,47 @@ import (
 // the additional two Provider migrations, real image, trust, credential,
 // resource and issuer inputs, then run all named live gates before acceptance.
 func BuildSlice6ExecutableProfileTarget(draft Profile) (Profile, error) {
-	bound, err := BindSlice6DesiredNetworkPlan(draft)
-	if err != nil || VerifySlice6DesiredExecutableExternalEdges(Slice6DesiredExecutableExternalEdges()) != nil ||
-		VerifySlice6DesiredCompleteNetworks(Slice6DesiredCompleteNetworks()) != nil {
+	return buildSlice6ExternalProfileTarget(draft, Slice6DesiredCompleteNetworks(),
+		Slice6DesiredExecutableExternalTransports(), Slice6DesiredExecutableExternalEdges(),
+		Slice6RequiredDirectExternalDependencies(), VerifySlice6DesiredCompleteNetworks,
+		VerifySlice6DesiredExecutableExternalProfile)
+}
+
+// BuildSlice6FinalExternalProfileTarget binds every reviewed physical external
+// dependency, including the Browser and Desktop Provider migration jobs. This
+// is still desired configuration, not an observed service or release gate.
+func BuildSlice6FinalExternalProfileTarget(draft Profile) (Profile, error) {
+	dependencies := append(Slice6RequiredDirectExternalDependencies(), Slice6ProviderMigrationExternalDependencies()...)
+	final, err := buildSlice6ExternalProfileTarget(draft, Slice6DesiredFinalNetworks(),
+		Slice6DesiredFinalExternalTransports(), Slice6DesiredFinalExternalEdges(), dependencies,
+		VerifySlice6DesiredFinalNetworks, VerifySlice6FinalExternalDependencyClosure)
+	if err != nil {
+		return Profile{}, err
+	}
+	final.PostgresServerAuth.Scope = postgresSharedAuthScope
+	final.PostgresServerAuth.HBAArtifactID = "shared-postgres-hba"
+	final.PostgresServerAuth.IngressCIDR = ""
+	hba, err := final.PostgresServerAuth.RenderApprovedHBA(final.ProviderDatabases)
+	if err != nil {
 		return Profile{}, errSlice6DesiredInventory
 	}
-	bound.Networks = Slice6DesiredCompleteNetworks()
+	sum := sha256.Sum256(hba)
+	final.PostgresServerAuth.HBADigest = "sha256:" + hex.EncodeToString(sum[:])
+	final.ProfileDigest = final.Digest()
+	if VerifySlice6DesiredFinalExternalProfile(final) != nil {
+		return Profile{}, errSlice6DesiredInventory
+	}
+	return final, nil
+}
+
+func buildSlice6ExternalProfileTarget(draft Profile, networks []Network, paths []Slice6ExternalTransportPath,
+	externalEdges []slice6ExternalEdge, dependencies []Slice6DirectExternalDependency,
+	verifyNetworks func([]Network) error, verifyProfile func(Profile) error) (Profile, error) {
+	bound, err := BindSlice6DesiredNetworkPlan(draft)
+	if err != nil || verifyNetworks(networks) != nil {
+		return Profile{}, errSlice6DesiredInventory
+	}
+	bound.Networks = networks
 	bound.Principals = append([]Principal(nil), bound.Principals...)
 	bound.External = append([]ExternalService(nil), bound.External...)
 	bound.TrustEdges = append([]TrustEdge(nil), bound.TrustEdges...)
@@ -35,7 +72,7 @@ func BuildSlice6ExecutableProfileTarget(draft Profile) (Profile, error) {
 		bound.External[index].IngressEdges = append([]string(nil), bound.External[index].IngressEdges...)
 		services[bound.External[index].Name] = index
 	}
-	for _, path := range Slice6DesiredExecutableExternalTransports() {
+	for _, path := range paths {
 		dialerIndex, dialerFound := principals[path.Dialer]
 		serviceIndex, serviceFound := services[path.Service]
 		if !dialerFound || !serviceFound {
@@ -66,12 +103,12 @@ func BuildSlice6ExecutableProfileTarget(draft Profile) (Profile, error) {
 			bound.TrustEdges[index].ExternalIdentityDigest = byService[bound.TrustEdges[index].To].IdentityDigest
 		}
 	}
-	for _, binding := range Slice6RequiredDirectExternalDependencies() {
+	for _, binding := range dependencies {
 		if slices.ContainsFunc(bound.TrustEdges, func(edge TrustEdge) bool { return edge.ID == binding.EdgeID }) {
 			continue
 		}
 		var spec slice6ExternalEdge
-		for _, target := range Slice6DesiredExecutableExternalEdges() {
+		for _, target := range externalEdges {
 			if target.id == binding.EdgeID {
 				spec = target
 				break
@@ -96,7 +133,7 @@ func BuildSlice6ExecutableProfileTarget(draft Profile) (Profile, error) {
 	for index := range bound.TrustAnchors {
 		anchor := &bound.TrustAnchors[index]
 		anchor.Consumers = append([]string(nil), anchor.Consumers...)
-		for _, dependency := range Slice6RequiredDirectExternalDependencies() {
+		for _, dependency := range dependencies {
 			if anchor.ID != "external-server-ca" && (anchor.ID != "vault-client-ca" || dependency.Service != "vault") {
 				continue
 			}
@@ -112,8 +149,7 @@ func BuildSlice6ExecutableProfileTarget(draft Profile) (Profile, error) {
 		sort.Strings(anchor.Consumers)
 	}
 	bound.ProfileDigest = bound.Digest()
-	if bound.Validate() != nil || VerifySlice6DesiredCompleteNetworks(bound.Networks) != nil ||
-		VerifySlice6DesiredExecutableExternalProfile(bound) != nil {
+	if bound.Validate() != nil || verifyNetworks(bound.Networks) != nil || verifyProfile(bound) != nil {
 		return Profile{}, errSlice6DesiredInventory
 	}
 	return bound, nil
@@ -123,8 +159,31 @@ func BuildSlice6ExecutableProfileTarget(draft Profile) (Profile, error) {
 // network and edge inventory only. It is separate from the historical 17/12
 // admission and cannot pass the final migration-complete dependency gate.
 func VerifySlice6DesiredExecutableExternalProfile(profile Profile) error {
-	if profile.Validate() != nil || VerifySlice6DesiredCompleteNetworks(profile.Networks) != nil ||
-		VerifySlice6DesiredPrincipalIDs(profile) != nil || len(profile.TrustEdges) != len(slice6DesiredTrustEdges())+16 ||
+	return verifySlice6ExternalProfile(profile, VerifySlice6DesiredCompleteNetworks,
+		Slice6DesiredExecutableExternalTransports(), Slice6DesiredExecutableExternalEdges(), 16)
+}
+
+// VerifySlice6DesiredFinalExternalProfile freezes the complete 32-path/37-edge
+// external candidate. It deliberately does not assert live SQL, PKI or HBA loading.
+func VerifySlice6DesiredFinalExternalProfile(profile Profile) error {
+	if VerifySlice6FinalExternalDependencyClosure(profile) != nil ||
+		profile.PostgresServerAuth.Scope != postgresSharedAuthScope ||
+		profile.PostgresServerAuth.IngressCIDR != "" ||
+		profile.PostgresServerAuth.HBAArtifactID != "shared-postgres-hba" ||
+		VerifySlice6DesiredFinalTrustAnchors(profile) != nil ||
+		VerifySlice6DesiredEgressPolicies(profile) != nil ||
+		VerifySlice6DesiredTLSIdentities(profile) != nil ||
+		VerifySlice6DesiredIngress(profile) != nil {
+		return errSlice6DesiredInventory
+	}
+	return verifySlice6ExternalProfile(profile, VerifySlice6DesiredFinalNetworks,
+		Slice6DesiredFinalExternalTransports(), Slice6DesiredFinalExternalEdges(), 20)
+}
+
+func verifySlice6ExternalProfile(profile Profile, verifyNetworks func([]Network) error,
+	paths []Slice6ExternalTransportPath, externalEdges []slice6ExternalEdge, additionalEdges int) error {
+	if profile.Validate() != nil || verifyNetworks(profile.Networks) != nil ||
+		VerifySlice6DesiredPrincipalIDs(profile) != nil || len(profile.TrustEdges) != len(slice6DesiredTrustEdges())+additionalEdges ||
 		len(profile.External) != len(slice6DesiredExternalServices) {
 		return errSlice6DesiredInventory
 	}
@@ -148,7 +207,7 @@ func VerifySlice6DesiredExecutableExternalProfile(profile Profile) error {
 			}
 		}
 	}
-	for _, desired := range Slice6DesiredExecutableExternalEdges() {
+	for _, desired := range externalEdges {
 		edge, found := actual[desired.id]
 		if !found || edge.From != desired.from || edge.To != desired.to || edge.Protocol != desired.protocol ||
 			edge.Port != desired.port || edge.TenantScope != desired.scope ||
@@ -165,12 +224,12 @@ func VerifySlice6DesiredExecutableExternalProfile(profile Profile) error {
 			return errSlice6DesiredInventory
 		}
 		var networks, ingress []string
-		for _, path := range Slice6DesiredExecutableExternalTransports() {
+		for _, path := range paths {
 			if path.Service == service.Name {
 				networks = append(networks, path.Network)
 			}
 		}
-		for _, edge := range Slice6DesiredExecutableExternalEdges() {
+		for _, edge := range externalEdges {
 			if edge.to == service.Name {
 				ingress = append(ingress, edge.id)
 			}
