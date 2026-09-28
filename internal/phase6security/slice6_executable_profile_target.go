@@ -6,10 +6,10 @@ import (
 )
 
 // BuildSlice6ExecutableProfileTarget upgrades a reviewed 17/12 draft to the
-// complete 33/28 command-level target. It is a profile construction step,
+// earlier 33/28 command-level candidate. It is a profile construction step,
 // not launch authorization or observed evidence. The caller must still bind
-// real image, trust, credential, resource and issuer inputs, then run all
-// named live gates before accepting the profile.
+// the additional two Provider migrations, real image, trust, credential,
+// resource and issuer inputs, then run all named live gates before acceptance.
 func BuildSlice6ExecutableProfileTarget(draft Profile) (Profile, error) {
 	bound, err := BindSlice6DesiredNetworkPlan(draft)
 	if err != nil || VerifySlice6DesiredExecutableExternalEdges(Slice6DesiredExecutableExternalEdges()) != nil ||
@@ -119,9 +119,9 @@ func BuildSlice6ExecutableProfileTarget(draft Profile) (Profile, error) {
 	return bound, nil
 }
 
-// VerifySlice6DesiredExecutableExternalProfile closes the new network and
-// edge inventory. It is separate from the historical 17/12 admission and
-// intentionally does not claim live service or credential observations.
+// VerifySlice6DesiredExecutableExternalProfile closes the intermediate
+// network and edge inventory only. It is separate from the historical 17/12
+// admission and cannot pass the final migration-complete dependency gate.
 func VerifySlice6DesiredExecutableExternalProfile(profile Profile) error {
 	if profile.Validate() != nil || VerifySlice6DesiredCompleteNetworks(profile.Networks) != nil ||
 		VerifySlice6DesiredPrincipalIDs(profile) != nil || len(profile.TrustEdges) != len(slice6DesiredTrustEdges())+16 ||

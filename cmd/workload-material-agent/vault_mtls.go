@@ -21,7 +21,7 @@ import (
 // a separately pinned external identity on one isolated service bridge.
 func newV2VaultHTTPClient(config configDocument, v2 configDocumentV2) (*http.Client, error) {
 	profile, err := phase6security.VerifyFile(v2.SecurityProfilePath)
-	if err != nil || phase6security.VerifySlice6DesiredExecutableExternalProfile(profile) != nil ||
+	if err != nil || phase6security.VerifySlice6FinalExternalDependencyClosure(profile) != nil ||
 		profile.ProfileDigest != v2.SecurityProfileDigest ||
 		config.Protocol != configProtocolV2 || len(config.VaultCABundle) != 0 ||
 		uint32(os.Getuid()) != config.SocketUID || uint32(os.Getgid()) != config.SocketGID {

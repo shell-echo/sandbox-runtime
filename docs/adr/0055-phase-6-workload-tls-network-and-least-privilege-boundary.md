@@ -1510,3 +1510,12 @@ and purpose. The current seven-pool-owner signer/HBA target table and exact
 `.2/32` bridge-source renderer are code-checked candidates only: actual
 deployment inventory, SQL grants, PKI roles and live authentication are
 still open, and Phase 6 remains 5/15.
+The Browser/Desktop Provider databases also require their own real one-shot
+migration jobs in the final gate. Each gains a separate job, material agent,
+Vault-client signer, PG-purpose signer, target DB/SQL role, service bridges
+and short nonrenewable credential scope; the current coding Provider
+migration job cannot migrate all three databases. The two additional tuples
+are separately reviewed as a pending expansion target and must be folded
+into the full profile, HBA and evidence before R freezes. Admin-driven
+schema initialization in component tests does not substitute for a real job
+performing the first migration in the final gate.

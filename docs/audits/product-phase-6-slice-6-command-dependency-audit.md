@@ -129,7 +129,23 @@ each reviewed physical service bridge and renders one deterministic HBA
 line per unique SQL role plus explicit IPv4/IPv6 deny. These are candidate
 bytes only: they are not mounted on PostgreSQL, and no positive/negative
 SQL, SCRAM, client-certificate or migration-expiry observation exists yet.
-If final deployment requires additional per-database Provider migration
-instances, the closed deployment/signer/HBA matrix must be expanded before
-R freeze; the current single Provider migration deployment cannot be
-silently reused as an all-database principal.
+Sandbox confirmed that Browser/Desktop Provider each require their own real
+migration job, rather than relying on their component fixtures' admin-driven
+`ApplyMigrations`. Their exact two job, two material-agent, two Vault-client
+signer, two PG-purpose signer, DB/SQL-role and four dedicated external-path
+tuples are now separately checked as an expansion target. They are **not yet**
+merged into the activated 69-deployment profile or the intermediate 33/28
+external graph; its current seven-owner HBA renderer is therefore incomplete
+for the final gate. After integration, the currently known physical external
+path/edge minimum becomes 32/37, subject to a fresh command audit. A single
+Provider migration identity must never be reused as an all-database
+principal. The final positive gate must execute each real migration job as
+the actor applying schema, then prove expiry and exact cleanup; an already
+initialized admin schema plus an empty job rerun is not first-migration
+evidence.
+The v2 material-agent Vault client now additionally checks a necessary
+32-path final external-dependency closure on its verified profile. It will
+therefore reject even the structurally valid 33/28 candidate until the new
+migration instances and paths are represented. That check is deliberately
+necessary, not sufficient: full PKI, SQL/HBA, image and live scenarios remain
+separate release gates.

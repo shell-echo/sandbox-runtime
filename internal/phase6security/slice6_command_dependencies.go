@@ -65,9 +65,10 @@ func MissingSlice6DirectExternalDependencies(paths []Slice6ExternalTransportPath
 	return missing
 }
 
-// Slice6DesiredExecutableExternalTransports is the approved 28-path target
-// inventory. It does not imply the 16 new edges, external network members or
-// actual command dialers have yet been installed in a runnable profile.
+// Slice6DesiredExecutableExternalTransports is the earlier approved 28-path
+// candidate. It does not include the subsequently required Browser/Desktop
+// Provider migration instances; MissingSlice6FinalExternalDependencies must
+// be empty before a final profile or evidence can be admitted.
 func Slice6DesiredExecutableExternalTransports() []Slice6ExternalTransportPath {
 	paths := Slice6DesiredExternalTransports()
 	for _, dependency := range MissingSlice6DirectExternalDependencies(paths) {
@@ -87,8 +88,8 @@ func Slice6DesiredExecutableExternalTransports() []Slice6ExternalTransportPath {
 	return paths
 }
 
-// VerifySlice6DesiredExecutableExternalTransports rejects a self-consistent
-// partial plan before desired networks, edges or runtime configuration use it.
+// VerifySlice6DesiredExecutableExternalTransports freezes that intermediate
+// 28-path candidate; it is not the final migration-complete admission gate.
 func VerifySlice6DesiredExecutableExternalTransports(paths []Slice6ExternalTransportPath) error {
 	wanted := Slice6DesiredExecutableExternalTransports()
 	if len(paths) != 28 || !slices.EqualFunc(paths, wanted, func(left, right Slice6ExternalTransportPath) bool {
@@ -111,8 +112,9 @@ func VerifySlice6ExecutableExternalDependencyCoverage(paths []Slice6ExternalTran
 	return nil
 }
 
-// Slice6DesiredExecutableExternalEdges is the complete command-level target,
-// not the currently activated 17-edge profile graph. Each extra direct dial
+// Slice6DesiredExecutableExternalEdges is the earlier 33-edge candidate,
+// not the currently activated 17-edge profile graph or final migration graph.
+// Each extra direct dial
 // has one independently named edge; a service bridge never confers authority
 // to another caller sharing the same external service process.
 func Slice6DesiredExecutableExternalEdges() []slice6ExternalEdge {
