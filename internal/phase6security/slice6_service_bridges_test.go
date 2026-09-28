@@ -75,3 +75,27 @@ func TestSlice6DesiredServiceBridgesHaveExactDedicatedMembersAndStableCIDRs(t *t
 		}
 	}
 }
+
+func TestSlice6CompleteNetworkTargetContainsEveryDedicatedServiceBridge(t *testing.T) {
+	networks := Slice6DesiredCompleteNetworks()
+	if err := VerifySlice6DesiredCompleteNetworks(networks); err != nil {
+		t.Fatalf("complete service network target rejected: %v", err)
+	}
+	if len(networks) != len(Slice6DesiredNetworks())+27 {
+		t.Fatalf("complete network count = %d; expected role networks plus 27 new bridges", len(networks))
+	}
+	wrong := append([]Network(nil), networks...)
+	for index := range wrong {
+		if wrong[index].Name == "service-provider-runtime-postgres" {
+			wrong[index].GatewayModeIPv4 = "nat"
+			break
+		}
+	}
+	if VerifySlice6DesiredCompleteNetworks(wrong) == nil {
+		t.Fatal("NAT-routed Provider Postgres bridge admitted")
+	}
+	wrong = append([]Network(nil), networks[1:]...)
+	if VerifySlice6DesiredCompleteNetworks(wrong) == nil {
+		t.Fatal("incomplete physical service network plan admitted")
+	}
+}

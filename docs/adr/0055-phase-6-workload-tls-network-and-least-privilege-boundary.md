@@ -1420,7 +1420,8 @@ Vault clients still provide server TLS only. Network permission alone cannot bri
 requires managed material-agent client signing. The v2 material-agent command
 now fails closed unless its separate signer, complete service bridge, exact
 Vault endpoint/identity and pinned client/server CA roots are present; the
-current partial profile lacks the necessary Vault edges and anchor consumers,
+current activated profile lacks the necessary Vault edges and anchor consumers
+(a separate synthetic 33/28 target profile now models them),
 so this has no positive production-startup or live mTLS evidence yet. The
 credential controller may use one
 short-lived, FD-only, exact-identity Vault TLS bootstrap before a managed
@@ -1460,7 +1461,7 @@ external-service record; a role-only network inspect is not sufficient. This
 is only a schema/verification primitive until the 16 missing bridges, exact
 paths and live observations are present in a complete candidate run.
 
-Every one of the 58 deployments must also bind a finite repository-owned
+Every deployment in the final closed inventory must also bind a finite repository-owned
 resource/seccomp policy by actual duty, not simply by a shared binary target.
 Equivalent syscall needs may share audited bytes, but a Browser policy is not
 automatically a Go-service policy. Exact JSON, provenance/license, original
@@ -1474,3 +1475,38 @@ minimums, and operator overrides cannot widen the frozen table. Current
 Docker Desktop resource settings must be respected without automatic host
 reconfiguration. This decision does not silently alter the historical Browser
 publication or public Provider Contract.
+
+### Shared PostgreSQL and purpose-specific signer adjudication (2026-09-28)
+
+Keep one shared main PostgreSQL service and one finite, deterministic,
+service-owned HBA/CA policy. Do not merge the separate action-history witness
+service into it. Product and Gateway share the same Product database/business
+state but have distinct SQL logins, DSN bindings, client keys and grants;
+Product migration targets that same database with its own short-lived role.
+Coding, Browser and Desktop Provider databases and runtime roles remain
+distinct. Each actual Provider migration job is bound only to its target
+database, role and lifetime; no wildcard migration login is authorized.
+
+The old `provider_databases_only` HBA is a historical component proof, not a
+complete shared-service policy. The complete policy enumerates exact actual
+dialer source hosts (a direct role or its raw-tunnel broker), database, SQL
+login, migration/runtime purpose, client CA and `hostssl` SCRAM plus
+`clientcert=verify-full clientname=CN`, followed by explicit IPv4/IPv6 deny.
+It must compare original raw HBA/CA bytes, read-only mount and effective new
+connections, then prove both permitted combinations and wrong source,
+database, role, CN, certificate, SCRAM credential and SQL DDL/privilege
+denials. A successful HBA reload or parsed rules view alone is insufficient.
+
+Product, Gateway and coding Provider each need a separate PostgreSQL-purpose
+TLS-agent. Product migration and every actual Provider migration job also
+need separate job-bound PG signers that are revoked and destroyed on exit or
+expiry. Existing Browser/Desktop PG-purpose signers retain their own keys.
+Ordinary role TLS signers cannot issue PG leaves, and Vault material-agent
+signers cannot be borrowed by migration jobs. The PostgreSQL client leaf's CN
+equals the SQL login while its URI/subject binds the actual pool-owning
+process. PostgreSQL's HBA checks the CN, not the URI; PKI issuance policy,
+signer/socket binding and application checks enforce that additional identity
+and purpose. The current seven-pool-owner signer/HBA target table and exact
+`.2/32` bridge-source renderer are code-checked candidates only: actual
+deployment inventory, SQL grants, PKI roles and live authentication are
+still open, and Phase 6 remains 5/15.

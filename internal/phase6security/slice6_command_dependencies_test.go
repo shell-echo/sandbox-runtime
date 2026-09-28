@@ -109,3 +109,40 @@ func TestSlice6ExecutableExternalTransportPlanIsExactAndComplete(t *testing.T) {
 		t.Fatal("omitted actual dial path admitted")
 	}
 }
+
+func TestSlice6ExecutableExternalEdgeTargetIsExactAndOwnerBound(t *testing.T) {
+	edges := Slice6DesiredExecutableExternalEdges()
+	if err := VerifySlice6DesiredExecutableExternalEdges(edges); err != nil {
+		t.Fatalf("complete 33-edge target rejected: %v", err)
+	}
+	if len(edges) != 33 {
+		t.Fatalf("external target edges = %d, want 33", len(edges))
+	}
+	byID := make(map[string]slice6ExternalEdge, len(edges))
+	for _, edge := range edges {
+		byID[edge.id] = edge
+	}
+	for _, dependency := range Slice6RequiredDirectExternalDependencies() {
+		edge, found := byID[dependency.EdgeID]
+		if !found || edge.from != dependency.Dialer || edge.to != dependency.Service {
+			t.Fatalf("direct dependency has no owner-bound target edge: %+v", dependency)
+		}
+		if dependency.Service == "vault" && (edge.protocol != "https" || edge.port != 8200 || edge.maxSeconds != 60) {
+			t.Fatalf("Vault edge not short-lived and TLS-bound: %+v", edge)
+		}
+		if dependency.Dialer == "product-migration-job" || dependency.Dialer == "provider-migration-job" {
+			if edge.maxSeconds != 60 || edge.scope != "system" {
+				t.Fatalf("migration edge inherited runtime authority: %+v", edge)
+			}
+		}
+	}
+	wrong := append([]slice6ExternalEdge(nil), edges...)
+	wrong[0].from = "egress-broker-product"
+	if VerifySlice6DesiredExecutableExternalEdges(wrong) == nil {
+		t.Fatal("substituted external caller admitted")
+	}
+	wrong = append([]slice6ExternalEdge(nil), edges[1:]...)
+	if VerifySlice6DesiredExecutableExternalEdges(wrong) == nil {
+		t.Fatal("missing external edge admitted")
+	}
+}

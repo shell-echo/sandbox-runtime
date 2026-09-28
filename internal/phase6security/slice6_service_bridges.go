@@ -1,6 +1,7 @@
 package phase6security
 
 import (
+	"cmp"
 	"net/netip"
 	"slices"
 	"sort"
@@ -71,6 +72,59 @@ func VerifySlice6DesiredServiceBridges(bridges []Network) error {
 			slices.Equal(left.ExternalServices, right.ExternalServices)
 	}) {
 		return errSlice6DesiredInventory
+	}
+	return nil
+}
+
+// Slice6DesiredCompleteNetworks merges the reviewed role graph with every
+// dedicated external service bridge. The certificate controller's existing
+// isolated network is the one intentional overlap, so it is replaced with
+// its external-service membership instead of being duplicated.
+func Slice6DesiredCompleteNetworks() []Network {
+	byName := make(map[string]Network)
+	for _, network := range Slice6DesiredNetworks() {
+		byName[network.Name] = network
+	}
+	for _, bridge := range Slice6DesiredServiceBridges() {
+		byName[bridge.Name] = bridge
+	}
+	result := make([]Network, 0, len(byName))
+	for _, network := range byName {
+		result = append(result, network)
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].Name < result[j].Name })
+	return result
+}
+
+// VerifySlice6DesiredCompleteNetworks freezes the pre-activation 28-bridge
+// target and rejects a missing, shared or NAT-routed physical dependency.
+func VerifySlice6DesiredCompleteNetworks(networks []Network) error {
+	wanted := Slice6DesiredCompleteNetworks()
+	if VerifySlice6DesiredServiceBridges(Slice6DesiredServiceBridges()) != nil ||
+		len(networks) != len(wanted) || !slices.EqualFunc(networks, wanted, func(left, right Network) bool {
+		return left.Name == right.Name && left.Kind == right.Kind && left.Internal == right.Internal &&
+			left.GatewayModeIPv4 == right.GatewayModeIPv4 && left.IPv4Subnet == right.IPv4Subnet &&
+			!left.IPv6Enabled && slices.Equal(left.Principals, right.Principals) &&
+			slices.Equal(left.ExternalServices, right.ExternalServices)
+	}) {
+		return errSlice6DesiredInventory
+	}
+	seenCIDRs := make(map[string]bool, len(wanted))
+	for _, network := range wanted {
+		if seenCIDRs[network.IPv4Subnet] {
+			return errSlice6DesiredInventory
+		}
+		seenCIDRs[network.IPv4Subnet] = true
+	}
+	for _, path := range Slice6DesiredExecutableExternalTransports() {
+		index, found := slices.BinarySearchFunc(wanted, path.Network, func(network Network, name string) int {
+			return cmp.Compare(network.Name, name)
+		})
+		if !found || !wanted[index].Internal || wanted[index].GatewayModeIPv4 != "isolated" ||
+			!slices.Equal(wanted[index].Principals, []string{path.Dialer}) ||
+			!slices.Equal(wanted[index].ExternalServices, []string{path.Service}) {
+			return errSlice6DesiredInventory
+		}
 	}
 	return nil
 }

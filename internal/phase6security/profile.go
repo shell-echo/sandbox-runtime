@@ -857,7 +857,7 @@ func validatePrincipal(value Principal, registry *securityprincipal.Registry, au
 		!value.ReadOnlyRootFilesystem || !value.NoNewPrivileges || !exactStrings(value.DroppedCapabilities, []string{"ALL"}) ||
 		!digestPattern.MatchString(value.SeccompDigest) || value.Resources.MemoryBytes < 16<<20 || value.Resources.MemoryBytes > 64<<30 ||
 		value.Resources.CPUMillis < 10 || value.Resources.CPUMillis > 64000 || value.Resources.PIDs < 4 || value.Resources.PIDs > 4096 ||
-		value.HostNetwork || value.DockerSocket || value.HostDevices || len(value.Networks) < 1 || len(value.Networks) > 6 ||
+		value.HostNetwork || value.DockerSocket || value.HostDevices || len(value.Networks) < 1 || len(value.Networks) > 32 ||
 		len(value.Mounts) > 128 || (value.Kind != "controller" && len(value.Mounts) > 16) || len(value.Listeners) > 16 {
 		return ErrInvalidProfile
 	}
@@ -878,7 +878,8 @@ func validatePrincipal(value Principal, registry *securityprincipal.Registry, au
 		return ErrInvalidProfile
 	}
 	if value.Kind == "egress_broker" {
-		if value.AuthorizationPrincipal == nil || !value.ExternalUplink || value.DirectEgressBlocked || len(value.Networks) != 2 {
+		if value.AuthorizationPrincipal == nil || !value.ExternalUplink || value.DirectEgressBlocked ||
+			len(value.Networks) < 2 || len(value.Networks) > 8 {
 			return ErrInvalidProfile
 		}
 	} else if value.Kind == "ingress_relay" {

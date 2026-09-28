@@ -110,3 +110,57 @@ func VerifySlice6ExecutableExternalDependencyCoverage(paths []Slice6ExternalTran
 	}
 	return nil
 }
+
+// Slice6DesiredExecutableExternalEdges is the complete command-level target,
+// not the currently activated 17-edge profile graph. Each extra direct dial
+// has one independently named edge; a service bridge never confers authority
+// to another caller sharing the same external service process.
+func Slice6DesiredExecutableExternalEdges() []slice6ExternalEdge {
+	edges := append([]slice6ExternalEdge(nil), slice6DesiredExternalEdges...)
+	for _, dependency := range MissingSlice6DirectExternalDependencies(Slice6DesiredExternalTransports()) {
+		edge := slice6ExternalEdge{id: dependency.EdgeID, from: dependency.Dialer, to: dependency.Service,
+			protocol: "https", scope: "system", port: 8200, maxSeconds: 60}
+		if dependency.Service == "postgres" {
+			edge.protocol, edge.scope, edge.port, edge.maxSeconds = "postgres", "bound", 5432, 300
+			if dependency.Dialer == "product-migration-job" || dependency.Dialer == "provider-migration-job" {
+				edge.scope, edge.maxSeconds = "system", 60
+			}
+		}
+		edges = append(edges, edge)
+	}
+	sort.Slice(edges, func(i, j int) bool { return edges[i].id < edges[j].id })
+	return edges
+}
+
+// VerifySlice6DesiredExecutableExternalEdges checks exact edge/path ownership
+// before the 33-edge target can replace the partial activated graph.
+func VerifySlice6DesiredExecutableExternalEdges(edges []slice6ExternalEdge) error {
+	wanted := Slice6DesiredExecutableExternalEdges()
+	if len(edges) != 33 || !slices.Equal(edges, wanted) ||
+		VerifySlice6DesiredExecutableExternalTransports(Slice6DesiredExecutableExternalTransports()) != nil {
+		return errSlice6DesiredInventory
+	}
+	byID := make(map[string]slice6ExternalEdge, len(edges))
+	for _, edge := range edges {
+		if edge.id == "" || byID[edge.id].id != "" || edge.from == "" || edge.to == "" ||
+			edge.port < 1 || edge.maxSeconds < 1 {
+			return errSlice6DesiredInventory
+		}
+		byID[edge.id] = edge
+	}
+	covered := make(map[string]bool, len(edges))
+	for _, path := range Slice6DesiredExecutableExternalTransports() {
+		for _, id := range path.EdgeIDs {
+			edge, ok := byID[id]
+			if !ok || covered[id] || edge.to != path.Service ||
+				(edge.from != path.LogicalCaller && edge.from != path.Dialer) {
+				return errSlice6DesiredInventory
+			}
+			covered[id] = true
+		}
+	}
+	if len(covered) != len(edges) {
+		return errSlice6DesiredInventory
+	}
+	return nil
+}

@@ -35,8 +35,11 @@ Its matching 28-bridge desired plan allocates one dialer and one external
 service per internal+isolated bridge, keeps the certificate controller's
 reviewed network/CIDR, and uses reserved `172.31.128.0/24` onward for the
 other bridges so pre-existing role CIDRs are not silently shifted. These
-addresses are planned inputs, not observed Docker endpoints. The full
-profile generator and live commands still need to consume the plan.
+addresses are planned inputs, not observed Docker endpoints. A new
+candidate-profile builder merges the 28 bridges and 33 edge IDs with the old
+draft, recalculates external identity and dependent database digests, and
+requires complete-graph structural verification. The live commands and
+physical services still need to consume this target.
 An opt-in Docker diagnostic with the pinned Alpine probe image has exercised
 the coding Provider service-bridge subnet and raw Docker network observer:
 one isolated bridge, .2 dialer, .3 external member, no host gateway, no
@@ -65,8 +68,9 @@ requires its profile-bound, separate TLS-agent signer, exact isolated service
 bridge, numeric endpoint, Vault URI/DNS identity and direction-specific CA
 bundles; it cannot select the v1 server-only TLS client. This is source-level
 fail-closed wiring, not an actual eleven-agent/controller process gate: the
-complete Vault edges/anchor consumers and live signer/controller chain are
-not yet present, so no v2 agent is claimed runnable. The v2 credential
+complete Vault edges and anchor consumers exist only in the synthetic target
+profile; the live signer/controller chain is not yet present, so no v2 agent
+is claimed runnable. The v2 credential
 controller still configures only Vault server TLS; a token plus server TLS is
 not mTLS. The approved Slice 6 path requires actual bounded client identity,
 with the credential controller's
@@ -86,7 +90,10 @@ network allocations are retained, with the new signers in separate reserved
 partitions. These are configuration and unit-test facts only. They are **not**
 eleven running signers, Vault mTLS, the final principal/edge counts or a
 complete external-service graph; the 16 missing direct external edges and
-actual command transport wiring remain open.
+actual command transport wiring remain open. The candidate profile does not
+resolve the shared PostgreSQL server-auth scope: the current raw HBA still
+covers only Browser/Desktop Provider and cannot authorize Product, Gateway,
+coding Provider or migrations as a full service gate.
 
 Open engineering work: expand
 trust edges, dedicated internal+isolated external-service membership, target
@@ -99,6 +106,30 @@ The profile/observer now has a closed representation for a service joining a
 dedicated isolated network: service and network membership must agree, and
 raw Docker inspect plus evidence validation bind the external container ID
 to the observed endpoint. This is a schema and verifier capability, not a
-launched service bridge. The desired network generator still lacks the 16
-new bridges, the external trust graph is still incomplete, and the Provider
-database/client-signer policy remains hard-coded for Browser/Desktop only.
+launched service bridge. The activated desired network/edge generator still
+lacks the 16 new bridges/edges; its separate candidate builder is not runtime
+evidence. The Provider database/client-signer policy remains hard-coded for
+Browser/Desktop only.
+
+Sandbox adjudicated the shared database boundary: keep one physical main
+PostgreSQL service and one explicit, finite HBA/CA policy. Product and Gateway
+must access the same Product database with distinct SQL logins, DSN bindings,
+certificates and grants; coding/Browser/Desktop Provider retain distinct
+databases/runtime roles. Migration roles are short-lived and scoped to their
+actual target database, not a cross-database wildcard. Action-history
+PostgreSQL remains a separate witness service. Product, Gateway, coding
+Provider and each actual migration job need separate PG-purpose TLS signers;
+ordinary role signers and Vault material-agent signers cannot be reused.
+This decision is authority for implementation, not a claim that the current
+Provider-only HBA has been widened safely or that SQL privileges are proved.
+The current code target enumerates seven pool owners (Product, Gateway,
+coding/Browser/Desktop Provider, Product migration and the currently
+declared Provider migration job). It derives an exact `.2/32` source from
+each reviewed physical service bridge and renders one deterministic HBA
+line per unique SQL role plus explicit IPv4/IPv6 deny. These are candidate
+bytes only: they are not mounted on PostgreSQL, and no positive/negative
+SQL, SCRAM, client-certificate or migration-expiry observation exists yet.
+If final deployment requires additional per-database Provider migration
+instances, the closed deployment/signer/HBA matrix must be expanded before
+R freeze; the current single Provider migration deployment cannot be
+silently reused as an all-database principal.

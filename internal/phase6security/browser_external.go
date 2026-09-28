@@ -79,6 +79,7 @@ func validateBrowserExternalAuthority(services map[string]ExternalService, edges
 			continue
 		}
 		if _, external := services[edge.To]; external && edge.ID != "gateway-capacity-valkey" &&
+			edge.ID != "gateway-postgres" &&
 			edge.ID != "browser-capacity-valkey" && edge.ID != "browser-action-history-postgres" {
 			return ErrInvalidProfile
 		}

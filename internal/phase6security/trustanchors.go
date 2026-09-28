@@ -70,6 +70,23 @@ func validateTrustAnchorsWithPostgres(anchors []TrustAnchor, edges []TrustEdge, 
 			if _, ok := external[edge.To]; !ok || edge.ClientAnchorID != "" {
 				return ErrInvalidProfile
 			}
+			// Vault verifies a managed client leaf for every material agent and
+			// for the credential controller. Those callers also consume the
+			// issuer root to check their own short-lived leaf before dialing.
+			// The certificate controller is handled by the bootstrap binding
+			// below, including its distinct first-issuance lifecycle.
+			if edge.To == "vault" && edge.From != controller.DeploymentName {
+				caller := principals[edge.From]
+				if caller.Kind == "material_agent" || edge.From == "workload-credential-controller" {
+					client, ok := byID["vault-client-ca"]
+					if !ok || client.Purpose != "client_verification" ||
+						client.TrustDomain != caller.TLS.TrustDomain || !slices.Contains(client.Consumers, edge.From) {
+						return ErrInvalidProfile
+					}
+					references[client.ID]++
+					markConsumer(client.ID, edge.From)
+				}
+			}
 			continue
 		}
 		if to.TLS == nil {
