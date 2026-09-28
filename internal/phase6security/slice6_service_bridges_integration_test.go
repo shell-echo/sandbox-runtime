@@ -13,6 +13,21 @@ import (
 // This disposable Alpine probe checks the Docker inspect/endpoint machinery.
 // It is not a real PostgreSQL, role-command, mTLS or full Slice 6 gate.
 func TestSlice6ServiceBridgeRawDockerObservationDiagnostic(t *testing.T) {
+	runSlice6ServiceBridgeDockerDiagnostic(t, "service-provider-runtime-postgres",
+		Slice6DesiredServiceBridges(), Slice6DesiredServiceEndpointAddress,
+		VerifySlice6DesiredServiceBridgeObservation)
+}
+
+func TestSlice6MigrationServiceBridgeRawDockerObservationDiagnostic(t *testing.T) {
+	runSlice6ServiceBridgeDockerDiagnostic(t, "service-provider-browser-migration-job-postgres",
+		Slice6DesiredFinalServiceBridges(), Slice6DesiredFinalServiceEndpointAddress,
+		VerifySlice6DesiredFinalServiceBridgeObservation)
+}
+
+func runSlice6ServiceBridgeDockerDiagnostic(t *testing.T, bridgeName string, approved []Network,
+	endpointAddress func(string, string) (string, error),
+	verifyObservation func(Network, NetworkObservation, string, string) error) {
+	t.Helper()
 	if os.Getenv("SANDBOX_RUNTIME_PHASE6_SERVICE_BRIDGE_INTEGRATION") != "1" {
 		t.Skip("set SANDBOX_RUNTIME_PHASE6_SERVICE_BRIDGE_INTEGRATION=1")
 	}
@@ -23,14 +38,14 @@ func TestSlice6ServiceBridgeRawDockerObservationDiagnostic(t *testing.T) {
 		t.Fatalf("pinned diagnostic image unavailable: %v", err)
 	}
 	var bridge Network
-	for _, candidate := range Slice6DesiredServiceBridges() {
-		if candidate.Name == "service-provider-runtime-postgres" {
+	for _, candidate := range approved {
+		if candidate.Name == bridgeName {
 			bridge = candidate
 			break
 		}
 	}
 	if bridge.Name == "" {
-		t.Fatal("reviewed coding Provider service bridge missing")
+		t.Fatal("reviewed service bridge missing")
 	}
 	if _, err := dockerTopology(ctx, "network", "inspect", bridge.Name); err == nil {
 		t.Skip("reviewed service network already exists; diagnostic will not touch it")
@@ -69,7 +84,7 @@ func TestSlice6ServiceBridgeRawDockerObservationDiagnostic(t *testing.T) {
 		{dialerName, bridge.Principals[0], "21001:31001"},
 		{serviceName, bridge.ExternalServices[0], "21002:31002"},
 	} {
-		address, err := Slice6DesiredServiceEndpointAddress(bridge.Name, item.member)
+		address, err := endpointAddress(bridge.Name, item.member)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -96,7 +111,7 @@ func TestSlice6ServiceBridgeRawDockerObservationDiagnostic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("real isolated service bridge observation rejected: %v", err)
 	}
-	if err := VerifySlice6DesiredServiceBridgeObservation(bridge, observed, dialer.ID, service.ID); err != nil {
+	if err := verifyObservation(bridge, observed, dialer.ID, service.ID); err != nil {
 		t.Fatalf("real isolated service bridge endpoint rejected: %v", err)
 	}
 	if _, err := ObserveDockerNetwork([]byte(raw), bridge, map[string]string{bridge.Principals[0]: dialer.ID}); err == nil {

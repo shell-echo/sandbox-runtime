@@ -134,8 +134,14 @@ func VerifySlice6DesiredCompleteNetworks(networks []Network) error {
 // addresses as the source of the desired .2/.3 allocation.
 func VerifySlice6DesiredServiceBridgeObservation(expected Network, observed NetworkObservation,
 	dialerContainerID, serviceContainerID string) error {
+	return verifySlice6ServiceBridgeObservation(Slice6DesiredServiceBridges(), expected, observed,
+		dialerContainerID, serviceContainerID, Slice6DesiredServiceEndpointAddress)
+}
+
+func verifySlice6ServiceBridgeObservation(approvedBridges []Network, expected Network, observed NetworkObservation,
+	dialerContainerID, serviceContainerID string, endpointAddress func(string, string) (string, error)) error {
 	approved := false
-	for _, bridge := range Slice6DesiredServiceBridges() {
+	for _, bridge := range approvedBridges {
 		if bridge.Name == expected.Name {
 			approved = bridge.Name == expected.Name && bridge.Kind == expected.Kind &&
 				bridge.Internal == expected.Internal && bridge.GatewayModeIPv4 == expected.GatewayModeIPv4 &&
@@ -156,8 +162,8 @@ func VerifySlice6DesiredServiceBridgeObservation(expected Network, observed Netw
 	if !slices.Equal(observed.ContainerIDs, wantedIDs) {
 		return errSlice6DesiredInventory
 	}
-	dialerAddress, dialerErr := Slice6DesiredServiceEndpointAddress(expected.Name, expected.Principals[0])
-	serviceAddress, serviceErr := Slice6DesiredServiceEndpointAddress(expected.Name, expected.ExternalServices[0])
+	dialerAddress, dialerErr := endpointAddress(expected.Name, expected.Principals[0])
+	serviceAddress, serviceErr := endpointAddress(expected.Name, expected.ExternalServices[0])
 	if dialerErr != nil || serviceErr != nil ||
 		!networkHasEndpoint(observed, dialerContainerID, dialerAddress) ||
 		!networkHasEndpoint(observed, serviceContainerID, serviceAddress) {

@@ -333,3 +333,12 @@ func VerifySlice6DesiredFinalNetworks(networks []Network) error {
 	}
 	return nil
 }
+
+// VerifySlice6DesiredFinalServiceBridgeObservation compares raw-inspect
+// output against the final 32-path plan, including migration-only bridges.
+// It does not claim that the real service or migration command ran.
+func VerifySlice6DesiredFinalServiceBridgeObservation(expected Network, observed NetworkObservation,
+	dialerContainerID, serviceContainerID string) error {
+	return verifySlice6ServiceBridgeObservation(Slice6DesiredFinalServiceBridges(), expected, observed,
+		dialerContainerID, serviceContainerID, Slice6DesiredFinalServiceEndpointAddress)
+}

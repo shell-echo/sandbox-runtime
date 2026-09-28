@@ -146,6 +146,12 @@ principal. The final positive gate must execute each real migration job as
 the actor applying schema, then prove expiry and exact cleanup; an already
 initialized admin schema plus an empty job rerun is not first-migration
 evidence.
+An additional opt-in Docker diagnostic now exercises the planned Browser
+Provider migration-job→PostgreSQL bridge with a disposable pinned Alpine
+dialer/service pair. It checks exact `.2/.3` endpoint membership, internal
+isolated mode, absence of host gateway/published ports and exact cleanup.
+The probe is not the migration executable, PostgreSQL, client TLS or SQL
+authentication; it cannot satisfy the final migration or HBA scenarios.
 The v2 material-agent Vault client now additionally checks a necessary
 32-path final external-dependency closure on its verified profile. It will
 therefore reject even the structurally valid 33/28 candidate until the new
