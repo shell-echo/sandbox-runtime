@@ -76,7 +76,8 @@ func (r *Slice6ReceiptRecorder) Record(e Slice6Evidence, key string, raw []byte,
 	subject, _, hasField := strings.Cut(subject, "/")
 	if !hasField || subject == "" ||
 		(kind == "scenario" && !validSlice6ScenarioReceipt(raw, e, subject)) ||
-		(kind == "cleanup" && !validSlice6CleanupReceipt(raw, e.RunID, subject)) {
+		(kind == "cleanup" && !validSlice6CleanupReceipt(raw, e.RunID, subject)) ||
+		(kind == "process" && strings.HasSuffix(key, "/inspect") && !validSlice6ProcessInspectRaw(raw, e, key)) {
 		return "", ErrInvalidSlice6Evidence
 	}
 	token := sha256.Sum256([]byte(key))
@@ -85,11 +86,24 @@ func (r *Slice6ReceiptRecorder) Record(e Slice6Evidence, key string, raw []byte,
 	envelopePath := "receipts/envelopes/" + name
 	envelope := Slice6RunReceipt{Protocol: slice6ReceiptProtocol, Version: 1, RunID: r.runID,
 		Key: key, Kind: kind, Subject: subject, ProfileDigest: r.profileDigest,
-		ConfigDigest: slice6ReceiptConfigDigest(e, kind, subject), SourceRevision: r.sourceRevision,
+		ConfigDigest: slice6ReceiptConfigDigest(e, kind, subject, key), SourceRevision: r.sourceRevision,
 		SourceTreeDigest: r.sourceTreeDigest, ObservedAt: observedAt.Format(time.RFC3339Nano),
 		Outcome: slice6ReceiptOutcome(kind), RawDigest: rawDigest}
 	if kind == "cleanup" {
 		envelope.OwnershipRunID = r.runID
+	}
+	if kind == "process" {
+		process, ok := slice6ProcessForReceipt(e, key)
+		if !ok {
+			return "", ErrInvalidSlice6Evidence
+		}
+		envelope.ProcessSequence = process.Sequence
+		envelope.ProcessContainer = process.ContainerID
+		envelope.ProcessStartedAt = process.StartedAt
+		envelope.ProcessFinishedAt = process.FinishedAt
+		if !validSlice6ReceiptProcessBinding(e, key, kind, envelope) {
+			return "", ErrInvalidSlice6Evidence
+		}
 	}
 	envelopeDocument, err := json.Marshal(envelope)
 	if err != nil || !validSlice6ReceiptPath(rawPath) || !validSlice6ReceiptPath(envelopePath) ||

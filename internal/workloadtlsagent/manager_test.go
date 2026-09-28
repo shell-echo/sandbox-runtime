@@ -31,6 +31,8 @@ type fakeCertificateClient struct {
 	ca               *x509.Certificate
 	caKey            *ecdsa.PrivateKey
 	serial           int64
+	crlNumber        int64
+	forceCRLNumber   int64
 	revoked          map[string]struct{}
 	issueErr         error
 	revocationErr    error
@@ -46,7 +48,8 @@ func newFakeCertificateClient(t *testing.T, now *time.Time, policy workloadpki.P
 	}
 	caTemplate := &x509.Certificate{SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "workload TLS test CA"},
 		NotBefore: now.Add(-time.Hour), NotAfter: now.Add(24 * time.Hour), IsCA: true, BasicConstraintsValid: true,
-		KeyUsage: x509.KeyUsageCertSign | x509.KeyUsageCRLSign | x509.KeyUsageDigitalSignature}
+		KeyUsage:     x509.KeyUsageCertSign | x509.KeyUsageCRLSign | x509.KeyUsageDigitalSignature,
+		SubjectKeyId: []byte{1, 2, 3, 4, 5}}
 	caDER, err := x509.CreateCertificate(rand.Reader, caTemplate, caTemplate, &caKey.PublicKey, caKey)
 	if err != nil {
 		t.Fatal(err)
@@ -108,7 +111,12 @@ func (f *fakeCertificateClient) Revocations(context.Context) (workloadpki.Revoca
 		entries = append(entries, x509.RevocationListEntry{SerialNumber: value, RevocationTime: *f.now})
 	}
 	thisUpdate, nextUpdate := f.now.Add(-time.Second), f.now.Add(10*time.Minute)
-	der, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{Number: big.NewInt(f.serial), ThisUpdate: thisUpdate,
+	f.crlNumber++
+	crlNumber := f.crlNumber
+	if f.forceCRLNumber > 0 {
+		crlNumber = f.forceCRLNumber
+	}
+	der, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{Number: big.NewInt(crlNumber), ThisUpdate: thisUpdate,
 		NextUpdate: nextUpdate, RevokedCertificateEntries: entries}, f.ca, f.caKey)
 	if err != nil {
 		return workloadpki.RevocationSnapshot{}, err
@@ -283,6 +291,65 @@ func TestManagerRejectsRevokedAndStaleCRLAndClockRollback(t *testing.T) {
 	now = now.Add(-time.Minute)
 	if _, err := manager.Snapshot(); !errors.Is(err, ErrUnavailable) {
 		t.Fatalf("clock rollback Snapshot() error = %v", err)
+	}
+}
+
+func TestManagerRejectsCRLRollbackAndOwnLeafResurrection(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+	manager, client := testManager(t, &now)
+	if err := manager.Bootstrap(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	first, err := manager.Snapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer first.Destroy()
+	client.mu.Lock()
+	client.forceCRLNumber = 1
+	client.mu.Unlock()
+	now = now.Add(10 * time.Second)
+	if err := manager.Tick(context.Background()); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("same-number changed CRL admitted: %v", err)
+	}
+	if _, err := manager.Snapshot(); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("same-number changed CRL left signer available: %v", err)
+	}
+	client.mu.Lock()
+	client.forceCRLNumber = 0
+	client.mu.Unlock()
+	if err := manager.Tick(context.Background()); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("fatal CRL equivocation recovered in the same process: %v", err)
+	}
+
+	now = time.Now().UTC().Truncate(time.Second)
+	manager, client = testManager(t, &now)
+	if err := manager.Bootstrap(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	current, err := manager.Snapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer current.Destroy()
+	client.mu.Lock()
+	client.revoked[current.Serial] = struct{}{}
+	client.mu.Unlock()
+	now = now.Add(10 * time.Second)
+	if err := manager.Tick(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.Snapshot(); !errors.Is(err, ErrRevoked) {
+		t.Fatalf("revoked own leaf admitted: %v", err)
+	}
+	client.mu.Lock()
+	delete(client.revoked, current.Serial)
+	client.mu.Unlock()
+	if err := manager.refreshRevocations(context.Background()); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("unexpired observed revocation disappeared without rejection: %v", err)
+	}
+	if _, err := manager.Snapshot(); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("resurrected own leaf left signer available: %v", err)
 	}
 }
 

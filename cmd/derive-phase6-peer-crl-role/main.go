@@ -22,6 +22,7 @@ type options struct {
 	sourcesPath   string
 	sourcesDigest string
 	principal     string
+	postgresOwner string
 	output        string
 }
 
@@ -44,6 +45,7 @@ func run(arguments []string, result io.Writer) error {
 	flags.StringVar(&value.sourcesPath, "sources", "", "private canonical peer-CRL source mapping")
 	flags.StringVar(&value.sourcesDigest, "sources-digest", "", "expected full source-mapping digest")
 	flags.StringVar(&value.principal, "principal-digest", "", "exact local principal digest")
+	flags.StringVar(&value.postgresOwner, "postgres-owner", "", "optional exact PostgreSQL-purpose owner")
 	flags.StringVar(&value.output, "output", "", "new private role-binding file")
 	if flags.Parse(arguments) != nil || len(flags.Args()) != 0 || !safePath(value.profilePath) ||
 		!safePath(value.sourcesPath) || !safePath(value.output) ||
@@ -59,7 +61,12 @@ func run(arguments []string, result io.Writer) error {
 	if err != nil || sources.Digest() != value.sourcesDigest {
 		return errors.New("peer CRL source mapping is unavailable or does not match digest")
 	}
-	role, err := phase6security.DerivePeerCRLRoleDocument(profile, sources, value.principal)
+	var role phase6security.PeerCRLRoleDocument
+	if value.postgresOwner == "" {
+		role, err = phase6security.DerivePeerCRLRoleDocument(profile, sources, value.principal)
+	} else {
+		role, err = phase6security.DerivePostgresPeerCRLRoleDocument(profile, sources, value.postgresOwner)
+	}
 	if err != nil || role.ValidateForPrincipal(profile, value.sourcesDigest, value.principal) != nil {
 		return errors.New("principal has no complete peer CRL role binding")
 	}

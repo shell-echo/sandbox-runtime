@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -40,6 +41,8 @@ const (
 	gatewayDeferredAuthorityReason        = "phase6-slice5-6-authority-required"
 )
 
+var gatewayDigestPattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
+
 // GatewayCredentialAuthority is the private role-owned input for the Product
 // grant repository and the Provider handoff client. It contains paths, never
 // inline secrets or Provider DTOs.
@@ -54,6 +57,14 @@ type GatewayCredentialAuthority struct {
 	ProviderClientCertificateFile      string `json:"provider_client_certificate_file"`
 	ProviderClientPrivateKeyFile       string `json:"provider_client_private_key_file"`
 	ProductRuntimeDSNBindingID         string `json:"product_runtime_dsn_binding_id"`
+	PostgresRuntimeRole                string `json:"postgres_runtime_role,omitempty"`
+	PostgresMaxConnections             int32  `json:"postgres_max_connections,omitempty"`
+	PostgresClientAgentSocket          string `json:"postgres_client_agent_socket,omitempty"`
+	PostgresClientAgentUID             uint32 `json:"postgres_client_agent_uid,omitempty"`
+	PostgresClientAgentGID             uint32 `json:"postgres_client_agent_gid,omitempty"`
+	PostgresPeerCRLRoleFile            string `json:"postgres_peer_crl_role_file,omitempty"`
+	PostgresPeerCRLRoleDigest          string `json:"postgres_peer_crl_role_digest,omitempty"`
+	PostgresPeerCRLSourceMappingDigest string `json:"postgres_peer_crl_source_mapping_digest,omitempty"`
 	GrantKeyBindingID                  string `json:"grant_key_binding_id"`
 	ProviderCABundleBindingID          string `json:"provider_ca_bundle_binding_id"`
 	ProviderClientCertificateBindingID string `json:"provider_client_certificate_binding_id"`
@@ -122,18 +133,38 @@ func LoadGatewayAuthority(cfg *config.DataPlaneProcessConfig) (GatewayAuthority,
 		if credential.ProductRuntimeDSNFile != "" || credential.GrantKeyFile != "" || credential.ProviderCABundleFile != "" ||
 			credential.ProviderClientCertificateFile != "" || credential.ProviderClientPrivateKeyFile != "" ||
 			credential.ProductRuntimeDSNBindingID == "" || credential.GrantKeyBindingID == "" ||
+			credential.PostgresRuntimeRole != "product_gateway" ||
+			credential.PostgresMaxConnections < 1 || credential.PostgresMaxConnections > 64 ||
+			!absoluteAuthorityPath(credential.PostgresClientAgentSocket) ||
+			credential.PostgresClientAgentUID == 0 || credential.PostgresClientAgentGID == 0 ||
+			!absoluteAuthorityPath(credential.PostgresPeerCRLRoleFile) ||
+			!gatewayDigestPattern.MatchString(credential.PostgresPeerCRLRoleDigest) ||
+			!gatewayDigestPattern.MatchString(credential.PostgresPeerCRLSourceMappingDigest) ||
+			credential.PostgresClientAgentSocket == cfg.TLS.AgentSocket ||
+			credential.PostgresClientAgentSocket == credential.PostgresPeerCRLRoleFile ||
+			credential.PostgresPeerCRLRoleFile == cfg.TLS.PeerCRLRoleFile ||
 			credential.ProviderCABundleBindingID != "" || credential.ProviderClientCertificateBindingID != "" ||
 			credential.ProviderClientPrivateKeyBindingID != "" {
 			return GatewayAuthority{}, errors.New("invalid Gateway v3 credential authority")
 		}
 	} else if production {
+		if credential.PostgresRuntimeRole != "" || credential.PostgresMaxConnections != 0 || credential.PostgresClientAgentSocket != "" ||
+			credential.PostgresClientAgentUID != 0 || credential.PostgresClientAgentGID != 0 ||
+			credential.PostgresPeerCRLRoleFile != "" || credential.PostgresPeerCRLRoleDigest != "" ||
+			credential.PostgresPeerCRLSourceMappingDigest != "" {
+			return GatewayAuthority{}, errors.New("Gateway v2 cannot select a PostgreSQL-purpose signer")
+		}
 		if credential.ProductRuntimeDSNFile != "" || credential.GrantKeyFile != "" || credential.ProviderCABundleFile != "" || credential.ProviderClientCertificateFile != "" || credential.ProviderClientPrivateKeyFile != "" ||
 			credential.ProductRuntimeDSNBindingID == "" || credential.GrantKeyBindingID == "" || credential.ProviderCABundleBindingID == "" || credential.ProviderClientCertificateBindingID == "" || credential.ProviderClientPrivateKeyBindingID == "" {
 			return GatewayAuthority{}, errors.New("invalid Gateway credential authority")
 		}
 	} else if !absoluteAuthorityPath(credential.ProductRuntimeDSNFile) || !absoluteAuthorityPath(credential.GrantKeyFile) ||
 		!absoluteAuthorityPath(credential.ProviderCABundleFile) || !absoluteAuthorityPath(credential.ProviderClientCertificateFile) || !absoluteAuthorityPath(credential.ProviderClientPrivateKeyFile) ||
-		credential.ProductRuntimeDSNBindingID != "" || credential.GrantKeyBindingID != "" || credential.ProviderCABundleBindingID != "" || credential.ProviderClientCertificateBindingID != "" || credential.ProviderClientPrivateKeyBindingID != "" {
+		credential.ProductRuntimeDSNBindingID != "" || credential.GrantKeyBindingID != "" || credential.ProviderCABundleBindingID != "" || credential.ProviderClientCertificateBindingID != "" || credential.ProviderClientPrivateKeyBindingID != "" ||
+		credential.PostgresRuntimeRole != "" || credential.PostgresMaxConnections != 0 || credential.PostgresClientAgentSocket != "" ||
+		credential.PostgresClientAgentUID != 0 || credential.PostgresClientAgentGID != 0 ||
+		credential.PostgresPeerCRLRoleFile != "" || credential.PostgresPeerCRLRoleDigest != "" ||
+		credential.PostgresPeerCRLSourceMappingDigest != "" {
 		return GatewayAuthority{}, errors.New("invalid Gateway credential authority")
 	}
 	if dependency.Version != gatewayAuthorityVersion || dependency.Role != string(config.DataPlaneGateway) ||
@@ -165,6 +196,13 @@ func NewGatewayApplicationGraph(ctx context.Context, cfg *config.DataPlaneProces
 	if err != nil {
 		return ApplicationGraph{}, err
 	}
+	var securityProfile phase6security.Profile
+	if cfg.SchemaVersion == config.DataPlaneProductionSchemaV3 {
+		securityProfile, err = preflightGatewayV3Postgres(cfg, authority.Credential)
+		if err != nil {
+			return ApplicationGraph{}, err
+		}
+	}
 	var registry *secretref.Registry
 	var transportTLS *tls.Config
 	var tlsProbe func(context.Context) error
@@ -174,8 +212,13 @@ func NewGatewayApplicationGraph(ctx context.Context, cfg *config.DataPlaneProces
 	var providerClient *http.Client
 	graphCreated := false
 	defer func() {
-		if !graphCreated && registry != nil {
-			registry.Close()
+		if !graphCreated {
+			if peerCRLGuard != nil {
+				peerCRLGuard.Close()
+			}
+			if registry != nil {
+				registry.Close()
+			}
 		}
 	}()
 	if cfg.SchemaVersion == config.DataPlaneProductionSchemaV2 || cfg.SchemaVersion == config.DataPlaneProductionSchemaV3 {
@@ -196,13 +239,8 @@ func NewGatewayApplicationGraph(ctx context.Context, cfg *config.DataPlaneProces
 		if decodeErr != nil || len(bindings) != expectedBindings {
 			return ApplicationGraph{}, errors.New("Gateway material registry has an unexpected authority set")
 		}
-		var securityProfile phase6security.Profile
 		var peerCRLRole phase6security.PeerCRLRoleDocument
 		if v3 {
-			securityProfile, err = phase6security.VerifyFile(cfg.TLS.SecurityProfilePath)
-			if err != nil || securityProfile.ProfileDigest != cfg.TLS.SecurityProfileDigest {
-				return ApplicationGraph{}, errors.New("Gateway security profile mismatch")
-			}
 			peerCRLRole, err = phase6security.VerifyPeerCRLRoleFile(cfg.TLS.PeerCRLRoleFile, securityProfile,
 				cfg.TLS.PeerCRLSourceMappingDigest, cfg.TLS.PeerCRLRoleDigest)
 			if err != nil {
@@ -219,15 +257,17 @@ func NewGatewayApplicationGraph(ctx context.Context, cfg *config.DataPlaneProces
 		if err != nil {
 			return ApplicationGraph{}, errors.New("load Gateway public TLS identity")
 		}
-		dsnMaterial, resolveErr := registry.Resolve(ctx, authority.Credential.ProductRuntimeDSNBindingID, secretref.PurposePostgresRuntimeDSN, secretref.SystemTenant)
-		if resolveErr != nil {
+		if !v3 {
+			dsnMaterial, resolveErr := registry.Resolve(ctx, authority.Credential.ProductRuntimeDSNBindingID, secretref.PurposePostgresRuntimeDSN, secretref.SystemTenant)
+			if resolveErr != nil {
+				dsnMaterial.Destroy()
+				return ApplicationGraph{}, errors.New("load Gateway Product database material")
+			}
+			dsn, err = parseGatewayDSN(dsnMaterial.Bytes)
 			dsnMaterial.Destroy()
-			return ApplicationGraph{}, errors.New("load Gateway Product database material")
-		}
-		dsn, err = parseGatewayDSN(dsnMaterial.Bytes)
-		dsnMaterial.Destroy()
-		if err != nil {
-			return ApplicationGraph{}, err
+			if err != nil {
+				return ApplicationGraph{}, err
+			}
 		}
 		grantMaterial, resolveErr := registry.Resolve(ctx, authority.Credential.GrantKeyBindingID, secretref.PurposeGatewayGrantKey, secretref.SystemTenant)
 		if resolveErr != nil {
@@ -276,22 +316,27 @@ func NewGatewayApplicationGraph(ctx context.Context, cfg *config.DataPlaneProces
 			return ApplicationGraph{}, err
 		}
 	}
-	poolConfig, err := pgxpool.ParseConfig(dsn)
-	if err != nil {
-		clear(grantKey)
-		return ApplicationGraph{}, errors.New("invalid Gateway Product database authority")
+	var pool *pgxpool.Pool
+	var closePool func()
+	if cfg.SchemaVersion == config.DataPlaneProductionSchemaV3 {
+		pool, closePool, err = openGatewayV3Postgres(ctx, cfg, authority.Credential, securityProfile, registry)
+	} else {
+		var poolConfig *pgxpool.Config
+		poolConfig, err = pgxpool.ParseConfig(dsn)
+		if err == nil {
+			poolConfig.MaxConns = int32(authority.Dependency.MaxConnections)
+			poolConfig.MinConns = 0
+			poolConfig.MaxConnLifetime = 30 * time.Minute
+			poolConfig.MaxConnIdleTime = 5 * time.Minute
+			pool, err = pgxpool.NewWithConfig(ctx, poolConfig)
+			if err == nil {
+				closePool = pool.Close
+			}
+		}
 	}
-	poolConfig.MaxConns = int32(authority.Dependency.MaxConnections)
-	poolConfig.MinConns = 0
-	poolConfig.MaxConnLifetime = 30 * time.Minute
-	poolConfig.MaxConnIdleTime = 5 * time.Minute
-	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
 	if err != nil {
 		clear(grantKey)
 		return ApplicationGraph{}, errors.New("open Gateway Product database")
-	}
-	closePool := func() {
-		pool.Close()
 	}
 	store, err := productpostgres.New(pool, time.Duration(authority.Dependency.OperationTimeoutMillis)*time.Millisecond)
 	if err != nil {

@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -18,6 +19,7 @@ import (
 const (
 	slice6ReceiptIndexProtocol = "sandbox-runtime.phase6-slice6-receipt-index.v1"
 	slice6ReceiptProtocol      = "sandbox-runtime.phase6-slice6-run-receipt.v1"
+	slice6DockerRunLabel       = "io.github.shell-echo.sandbox-runtime.phase6-slice6-run"
 	maxSlice6ReceiptIndexSize  = 2 << 20
 	maxSlice6ReceiptSize       = 2 << 20
 )
@@ -44,20 +46,24 @@ type Slice6ReceiptIndexEntry struct {
 // manifest reference. It never contains the final manifest digest, avoiding
 // a self-reference cycle. The harness, not this structure, establishes origin.
 type Slice6RunReceipt struct {
-	Protocol         string `json:"protocol"`
-	Version          int    `json:"version"`
-	RunID            string `json:"run_id"`
-	Key              string `json:"key"`
-	Kind             string `json:"kind"`
-	Subject          string `json:"subject"`
-	ProfileDigest    string `json:"profile_digest"`
-	ConfigDigest     string `json:"config_digest"`
-	SourceRevision   string `json:"source_revision"`
-	SourceTreeDigest string `json:"source_tree_digest"`
-	ObservedAt       string `json:"observed_at"`
-	Outcome          string `json:"outcome"`
-	RawDigest        string `json:"raw_digest"`
-	OwnershipRunID   string `json:"ownership_run_id"`
+	Protocol          string `json:"protocol"`
+	Version           int    `json:"version"`
+	RunID             string `json:"run_id"`
+	Key               string `json:"key"`
+	Kind              string `json:"kind"`
+	Subject           string `json:"subject"`
+	ProfileDigest     string `json:"profile_digest"`
+	ConfigDigest      string `json:"config_digest"`
+	SourceRevision    string `json:"source_revision"`
+	SourceTreeDigest  string `json:"source_tree_digest"`
+	ObservedAt        string `json:"observed_at"`
+	Outcome           string `json:"outcome"`
+	RawDigest         string `json:"raw_digest"`
+	OwnershipRunID    string `json:"ownership_run_id"`
+	ProcessSequence   int    `json:"process_sequence"`
+	ProcessContainer  string `json:"process_container"`
+	ProcessStartedAt  string `json:"process_started_at"`
+	ProcessFinishedAt string `json:"process_finished_at"`
 }
 
 // NewSlice6RunID creates one unpredictable identity for a complete live gate.
@@ -127,10 +133,11 @@ func VerifySlice6EvidenceBundle(manifestPath, receiptRoot string) (Slice6Evidenc
 			envelope.RunID != evidence.RunID || envelope.Key != entry.Key ||
 			envelope.Kind != kind || envelope.Subject != subject ||
 			envelope.ProfileDigest != evidence.Profile.ProfileDigest ||
-			envelope.ConfigDigest != slice6ReceiptConfigDigest(evidence, kind, subject) ||
+			envelope.ConfigDigest != slice6ReceiptConfigDigest(evidence, kind, subject, entry.Key) ||
 			envelope.SourceRevision != evidence.RuntimeRevision || envelope.SourceTreeDigest != evidence.RuntimeTreeDigest ||
 			!validSlice6Time(envelope.ObservedAt) || envelope.Outcome != slice6ReceiptOutcome(kind) ||
 			envelope.RawDigest != entry.RawDigest ||
+			!validSlice6ReceiptProcessBinding(evidence, entry.Key, kind, envelope) ||
 			(kind == "cleanup" && envelope.OwnershipRunID != evidence.RunID) ||
 			(kind != "cleanup" && envelope.OwnershipRunID != "") {
 			return Slice6Evidence{}, ErrInvalidSlice6Evidence
@@ -143,6 +150,10 @@ func VerifySlice6EvidenceBundle(manifestPath, receiptRoot string) (Slice6Evidenc
 			return Slice6Evidence{}, ErrInvalidSlice6Evidence
 		}
 		if kind == "scenario" && !validSlice6ScenarioReceipt(raw, evidence, subject) {
+			return Slice6Evidence{}, ErrInvalidSlice6Evidence
+		}
+		if kind == "process" && strings.HasSuffix(entry.Key, "/inspect") &&
+			!validSlice6ProcessInspectRaw(raw, evidence, entry.Key) {
 			return Slice6Evidence{}, ErrInvalidSlice6Evidence
 		}
 	}
@@ -192,6 +203,10 @@ func ReadSlice6RunReceipts(receiptRoot string, evidence Slice6Evidence, keys []s
 		if err != nil || digestSlice6Receipt(raw) != want {
 			return nil, ErrInvalidSlice6Evidence
 		}
+		if kind, _, _ := strings.Cut(entry.Key, "/"); kind == "process" &&
+			strings.HasSuffix(entry.Key, "/inspect") && !validSlice6ProcessInspectRaw(raw, evidence, entry.Key) {
+			return nil, ErrInvalidSlice6Evidence
+		}
 		envelopeDocument, err := readPrivateSlice6ReceiptFile(receiptRoot, entry.EnvelopePath, maxSlice6ReceiptSize)
 		if err != nil || digestSlice6Receipt(envelopeDocument) != entry.EnvelopeDigest {
 			return nil, ErrInvalidSlice6Evidence
@@ -204,10 +219,11 @@ func ReadSlice6RunReceipts(receiptRoot string, evidence Slice6Evidence, keys []s
 			envelope.RunID != evidence.RunID || envelope.Key != entry.Key ||
 			envelope.Kind != kind || envelope.Subject != subject ||
 			envelope.ProfileDigest != evidence.Profile.ProfileDigest ||
-			envelope.ConfigDigest != slice6ReceiptConfigDigest(evidence, kind, subject) ||
+			envelope.ConfigDigest != slice6ReceiptConfigDigest(evidence, kind, subject, entry.Key) ||
 			envelope.SourceRevision != evidence.RuntimeRevision ||
 			envelope.SourceTreeDigest != evidence.RuntimeTreeDigest ||
 			envelope.RawDigest != want || !validSlice6Time(envelope.ObservedAt) ||
+			!validSlice6ReceiptProcessBinding(evidence, entry.Key, kind, envelope) ||
 			envelope.Outcome != slice6ReceiptOutcome(kind) ||
 			(kind == "cleanup" && envelope.OwnershipRunID != evidence.RunID) ||
 			(kind != "cleanup" && envelope.OwnershipRunID != "") {
@@ -231,8 +247,13 @@ func ReadSlice6RunReceipts(receiptRoot string, evidence Slice6Evidence, keys []s
 // immutable inputs, not reissued under each run ID.
 func expectedSlice6RunReceipts(e Slice6Evidence) map[string]string {
 	result := make(map[string]string)
+	duplicate := false
 	add := func(key, digest string) {
 		if digest != "" {
+			if _, exists := result[key]; exists {
+				duplicate = true
+				return
+			}
 			result[key] = digest
 		}
 	}
@@ -248,7 +269,9 @@ func expectedSlice6RunReceipts(e Slice6Evidence) map[string]string {
 		add("network/"+value.Name+"/inspect", value.InspectDigest)
 	}
 	for _, value := range e.Processes {
-		add("process/"+value.DeploymentName+"/command", value.CommandDigest)
+		prefix := slice6ProcessReceiptPrefix(value.DeploymentName, value.Sequence)
+		add(prefix+"/command", value.CommandDigest)
+		add(prefix+"/inspect", value.InspectDigest)
 	}
 	for _, value := range e.Components {
 		prefix := "component/" + value.Name + "/"
@@ -278,22 +301,114 @@ func expectedSlice6RunReceipts(e Slice6Evidence) map[string]string {
 	for _, value := range e.Cleanup {
 		add("cleanup/"+value.Name+"/inventory", value.InspectorDigest)
 	}
+	if duplicate {
+		return nil
+	}
 	return result
 }
 
-func slice6ReceiptConfigDigest(e Slice6Evidence, kind, subject string) string {
-	deployment := subject
-	if kind == "component" {
-		for _, component := range e.Profile.Components {
-			if component.Name == subject {
-				deployment = component.ParentDeployment
+func slice6ProcessReceiptPrefix(deployment string, sequence int) string {
+	return "process/" + deployment + "/" + strconv.Itoa(sequence)
+}
+
+func slice6ProcessForReceipt(e Slice6Evidence, key string) (Slice6ProcessEvidence, bool) {
+	parts := strings.Split(key, "/")
+	if len(parts) != 4 || parts[0] != "process" || parts[1] == "" ||
+		(parts[3] != "command" && parts[3] != "inspect") {
+		return Slice6ProcessEvidence{}, false
+	}
+	sequence, err := strconv.Atoi(parts[2])
+	if err != nil || sequence < 1 || sequence > 8 || strconv.Itoa(sequence) != parts[2] {
+		return Slice6ProcessEvidence{}, false
+	}
+	for _, process := range e.Processes {
+		if process.DeploymentName == parts[1] && process.Sequence == sequence {
+			return process, true
+		}
+	}
+	return Slice6ProcessEvidence{}, false
+}
+
+func validSlice6ReceiptProcessBinding(e Slice6Evidence, key, kind string, envelope Slice6RunReceipt) bool {
+	if kind != "process" {
+		return envelope.ProcessSequence == 0 && envelope.ProcessContainer == "" &&
+			envelope.ProcessStartedAt == "" && envelope.ProcessFinishedAt == ""
+	}
+	process, ok := slice6ProcessForReceipt(e, key)
+	if !ok || envelope.ProcessSequence != process.Sequence ||
+		envelope.ProcessContainer != process.ContainerID ||
+		envelope.ProcessStartedAt != process.StartedAt ||
+		envelope.ProcessFinishedAt != process.FinishedAt {
+		return false
+	}
+	observed, err := time.Parse(time.RFC3339Nano, envelope.ObservedAt)
+	started, startErr := time.Parse(time.RFC3339Nano, process.StartedAt)
+	return err == nil && startErr == nil && !observed.Before(started)
+}
+
+// A historical inspect must identify the actual stopped container and its
+// run label. Final inspect may have been captured while the role was still
+// running; its later cleanup time remains in ProcessEvidence, not invented
+// into the earlier Docker response.
+func validSlice6ProcessInspectRaw(document []byte, e Slice6Evidence, key string) bool {
+	process, ok := slice6ProcessForReceipt(e, key)
+	if !ok || len(document) == 0 || len(document) > maxSlice6ReceiptSize || rejectDuplicateMembers(document) != nil {
+		return false
+	}
+	var values []struct {
+		ID     string `json:"Id"`
+		Config struct {
+			Labels map[string]string `json:"Labels"`
+		} `json:"Config"`
+		State struct {
+			Running    bool   `json:"Running"`
+			StartedAt  string `json:"StartedAt"`
+			FinishedAt string `json:"FinishedAt"`
+		} `json:"State"`
+	}
+	if json.Unmarshal(document, &values) != nil || len(values) != 1 || values[0].ID != process.ContainerID ||
+		values[0].Config.Labels[slice6DockerRunLabel] != e.RunID ||
+		values[0].State.StartedAt != process.StartedAt {
+		return false
+	}
+	if values[0].State.Running {
+		return process.Final
+	}
+	return values[0].State.FinishedAt == process.FinishedAt
+}
+
+func slice6ReceiptConfigDigest(e Slice6Evidence, kind, subject, key string) string {
+	if kind == "process" {
+		process, ok := slice6ProcessForReceipt(e, key)
+		if ok && process.DeploymentName == subject {
+			return process.ConfigDigest
+		}
+		return ""
+	}
+	instanceID := ""
+	if kind == "container" {
+		for _, container := range e.Observations.Containers {
+			if container.DeploymentName == subject {
+				instanceID = container.ContainerID
 				break
 			}
 		}
 	}
-	if kind == "container" || kind == "process" || kind == "component" {
+	if kind == "component" {
+		for _, component := range e.Profile.Components {
+			if component.Name == subject {
+				for _, observed := range e.Components {
+					if observed.Name == subject {
+						instanceID = observed.ParentContainerID
+					}
+				}
+				break
+			}
+		}
+	}
+	if kind == "container" || kind == "component" {
 		for _, process := range e.Processes {
-			if process.DeploymentName == deployment {
+			if process.ContainerID == instanceID && instanceID != "" {
 				return process.ConfigDigest
 			}
 		}
@@ -322,35 +437,6 @@ func validSlice6CleanupReceipt(document []byte, runID, name string) bool {
 	return decodeCanonicalSlice6Receipt(document, &value) == nil &&
 		value.RunID == runID && value.ResourceClass == name && value.Remaining == 0 &&
 		value.ResourceIDs != nil && len(value.ResourceIDs) == 0
-}
-
-func validSlice6ScenarioReceipt(document []byte, evidence Slice6Evidence, name string) bool {
-	var value struct {
-		RunID        string   `json:"run_id"`
-		Name         string   `json:"name"`
-		Outcome      string   `json:"outcome"`
-		Participants []string `json:"participants"`
-		Assertions   []string `json:"assertions"`
-	}
-	if decodeCanonicalSlice6Receipt(document, &value) != nil || value.RunID != evidence.RunID ||
-		value.Name != name || value.Outcome != "passed" || len(value.Assertions) == 0 ||
-		!sort.StringsAreSorted(value.Assertions) {
-		return false
-	}
-	previous := ""
-	for _, assertion := range value.Assertions {
-		if assertion <= previous {
-			return false
-		}
-		previous = assertion
-	}
-	for _, scenario := range evidence.Scenarios {
-		if scenario.Name == name {
-			return exactStrings(value.Participants, scenario.Participants) &&
-				exactStrings(value.Assertions, slice6RequiredAssertions[name])
-		}
-	}
-	return false
 }
 
 func digestSlice6Receipt(document []byte) string {

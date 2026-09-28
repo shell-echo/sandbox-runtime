@@ -77,7 +77,9 @@ func NewPeerCRLGuard(profile phase6security.Profile, roleDocument phase6security
 		return nil, ErrPeerCRLUnavailable
 	}
 	for _, edge := range profile.TrustEdges {
-		if edge.ID != edgeID || edge.Authentication != "mtls" || edge.ClientAnchorID == "" {
+		if edge.ID != edgeID || edge.Authentication != "mtls" ||
+			(edge.ClientAnchorID == "" && !(direction == "outbound" &&
+				profile.IsSlice6FinalPostgresPeerEdge(edgeID, localPrincipalDigest))) {
 			continue
 		}
 		localName, anchorID, principalDigest := "", "", ""

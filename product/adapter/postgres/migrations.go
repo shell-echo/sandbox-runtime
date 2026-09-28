@@ -85,6 +85,17 @@ var productMigrations = []migration{
 func CurrentSchemaVersion() int64 { return productMigrations[len(productMigrations)-1].version }
 
 func ApplyMigrations(ctx context.Context, pool *pgxpool.Pool) error {
+	return applyMigrations(ctx, pool, true)
+}
+
+// ApplyMigrationsPrecreatedSchema is the v2 least-privilege path. The
+// controlled PostgreSQL service operator, not this SQL login, owns and
+// pre-creates the schema and its ACL before this one-shot command starts.
+func ApplyMigrationsPrecreatedSchema(ctx context.Context, pool *pgxpool.Pool) error {
+	return applyMigrations(ctx, pool, false)
+}
+
+func applyMigrations(ctx context.Context, pool *pgxpool.Pool, createSchema bool) error {
 	if ctx == nil || pool == nil {
 		return errors.New("product PostgreSQL migration context and pool are required")
 	}
@@ -100,9 +111,13 @@ func ApplyMigrations(ctx context.Context, pool *pgxpool.Pool) error {
 	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, migrationLockID); err != nil {
 		return fmt.Errorf("lock product migration: %w", err)
 	}
-	if _, err := tx.Exec(ctx, `CREATE SCHEMA IF NOT EXISTS sandbox_runtime_product;
-REVOKE ALL ON SCHEMA sandbox_runtime_product FROM PUBLIC;
-CREATE TABLE IF NOT EXISTS sandbox_runtime_product.schema_migrations (
+	if createSchema {
+		if _, err := tx.Exec(ctx, `CREATE SCHEMA IF NOT EXISTS sandbox_runtime_product;
+REVOKE ALL ON SCHEMA sandbox_runtime_product FROM PUBLIC;`); err != nil {
+			return fmt.Errorf("prepare product migration schema: %w", err)
+		}
+	}
+	if _, err := tx.Exec(ctx, `CREATE TABLE IF NOT EXISTS sandbox_runtime_product.schema_migrations (
     version bigint PRIMARY KEY,
     digest text NOT NULL,
     applied_at timestamp with time zone NOT NULL DEFAULT clock_timestamp(),

@@ -8,7 +8,10 @@ import (
 	"github.com/spf13/viper"
 )
 
-const ProviderMigrationSchemaV1 = "sandbox-runtime.provider-migration.v1"
+const (
+	ProviderMigrationSchemaV1 = "sandbox-runtime.provider-migration.v1"
+	ProviderMigrationSchemaV2 = "sandbox-runtime.provider-migration.v2"
+)
 
 type ProviderMigrationConfig struct {
 	SchemaVersion string                          `mapstructure:"schema_version"`
@@ -18,10 +21,19 @@ type ProviderMigrationConfig struct {
 }
 
 type ProviderMigrationPostgresConfig struct {
-	DSNBindingID          string `mapstructure:"dsn_binding_id"`
-	Role                  string `mapstructure:"role"`
-	StartupTimeoutSeconds int    `mapstructure:"startup_timeout_seconds"`
-	MaxConnections        int32  `mapstructure:"max_connections"`
+	Job                        string `mapstructure:"job"`
+	DSNBindingID               string `mapstructure:"dsn_binding_id"`
+	Role                       string `mapstructure:"role"`
+	SecurityProfilePath        string `mapstructure:"security_profile_path"`
+	SecurityProfileDigest      string `mapstructure:"security_profile_digest"`
+	ClientAgentSocket          string `mapstructure:"client_agent_socket"`
+	ClientAgentUID             uint32 `mapstructure:"client_agent_uid"`
+	ClientAgentGID             uint32 `mapstructure:"client_agent_gid"`
+	PeerCRLRoleFile            string `mapstructure:"peer_crl_role_file"`
+	PeerCRLRoleDigest          string `mapstructure:"peer_crl_role_digest"`
+	PeerCRLSourceMappingDigest string `mapstructure:"peer_crl_source_mapping_digest"`
+	StartupTimeoutSeconds      int    `mapstructure:"startup_timeout_seconds"`
+	MaxConnections             int32  `mapstructure:"max_connections"`
 }
 
 func defaultProviderMigrationConfig() *ProviderMigrationConfig {
@@ -35,9 +47,35 @@ func (c *ProviderMigrationConfig) Validate() error {
 	if !c.Enabled {
 		return nil
 	}
-	if c.SchemaVersion != ProviderMigrationSchemaV1 || !postgresRolePattern.MatchString(c.Postgres.Role) ||
+	if (c.SchemaVersion != ProviderMigrationSchemaV1 && c.SchemaVersion != ProviderMigrationSchemaV2) ||
+		!postgresRolePattern.MatchString(c.Postgres.Role) ||
 		c.Postgres.StartupTimeoutSeconds < 1 || c.Postgres.StartupTimeoutSeconds > 60 || c.Postgres.MaxConnections < 1 || c.Postgres.MaxConnections > 4 {
 		return errors.New("Provider migration configuration is invalid")
+	}
+	if c.SchemaVersion == ProviderMigrationSchemaV1 {
+		if c.Postgres.Job != "" || c.Postgres.SecurityProfilePath != "" || c.Postgres.SecurityProfileDigest != "" ||
+			c.Postgres.ClientAgentSocket != "" || c.Postgres.ClientAgentUID != 0 || c.Postgres.ClientAgentGID != 0 ||
+			c.Postgres.PeerCRLRoleFile != "" || c.Postgres.PeerCRLRoleDigest != "" ||
+			c.Postgres.PeerCRLSourceMappingDigest != "" {
+			return errors.New("Provider migration v1 cannot select final-profile authority")
+		}
+	} else {
+		roles := map[string]string{"provider-migration-job": "provider_migrator",
+			"provider-browser-migration-job": "browser_provider_migrator",
+			"provider-desktop-migration-job": "desktop_provider_migrator"}
+		if roles[c.Postgres.Job] != c.Postgres.Role ||
+			validateAbsoluteSecretPath("Provider migration security profile", c.Postgres.SecurityProfilePath) != nil ||
+			validateAbsoluteSecretPath("Provider migration PostgreSQL signer", c.Postgres.ClientAgentSocket) != nil ||
+			validateAbsoluteSecretPath("Provider migration peer CRL role", c.Postgres.PeerCRLRoleFile) != nil ||
+			!providerSHA256Pattern.MatchString(c.Postgres.SecurityProfileDigest) ||
+			!providerSHA256Pattern.MatchString(c.Postgres.PeerCRLRoleDigest) ||
+			!providerSHA256Pattern.MatchString(c.Postgres.PeerCRLSourceMappingDigest) ||
+			c.Postgres.ClientAgentUID == 0 || c.Postgres.ClientAgentGID == 0 ||
+			c.Postgres.SecurityProfilePath == c.Postgres.PeerCRLRoleFile ||
+			c.Postgres.ClientAgentSocket == c.Postgres.PeerCRLRoleFile ||
+			c.Postgres.ClientAgentSocket == c.Materials.Provider.SocketPath {
+			return errors.New("Provider migration v2 requires one closed profile-bound job and signer")
+		}
 	}
 	if c.Materials.Provider.CacheSeconds != 0 {
 		return errors.New("Provider migration material caching is forbidden")

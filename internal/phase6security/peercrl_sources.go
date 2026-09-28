@@ -126,8 +126,10 @@ func (p PeerCRLSources) Validate(profile Profile) error {
 				break
 			}
 		}
-		if edge.ID == "" || edge.Authentication != "mtls" || edge.ClientAnchorID == "" ||
-			binding.SourceID != source.ID {
+		postgresPeer := edge.ClientAnchorID == "" && binding.Direction == "outbound" &&
+			profile.IsSlice6FinalPostgresPeerEdge(edge.ID, binding.LocalPrincipalDigest)
+		if edge.ID == "" || edge.Authentication != "mtls" ||
+			(edge.ClientAnchorID == "" && !postgresPeer) || binding.SourceID != source.ID {
 			return ErrInvalidProfile
 		}
 		localName, anchorID := "", ""
@@ -145,7 +147,9 @@ func (p PeerCRLSources) Validate(profile Profile) error {
 		default:
 			return ErrInvalidProfile
 		}
-		if binding.PeerAnchorID != anchorID || !localAgentOwnsEdge(profile, localName, binding.LocalPrincipalDigest) {
+		if binding.PeerAnchorID != anchorID ||
+			(!postgresPeer && !localAgentOwnsEdge(profile, localName, binding.LocalPrincipalDigest)) ||
+			(postgresPeer && edge.From != localName) {
 			return ErrInvalidProfile
 		}
 		used[source.ID] = true

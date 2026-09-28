@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -49,6 +50,44 @@ document = '%s'
 	}
 	if !ProductMigration.Enabled || ProductMigration.Postgres.Role != "product_migrator" || ProductMigration.Postgres.DSNBindingID != "product-migration-dsn" {
 		t.Fatalf("Product migration = %#v", ProductMigration)
+	}
+}
+
+func TestProductMigrationV2RequiresClosedPostgresSignerAndNoV1Fallback(t *testing.T) {
+	base := productMaterialBindings()["product-migration-dsn"]
+	document, err := json.Marshal(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := t.TempDir()
+	valid := &ProductMigrationConfig{SchemaVersion: ProductMigrationSchemaV2, Enabled: true,
+		Postgres: ProductMigrationPostgresConfig{DSNBindingID: "product-migration-dsn",
+			Role: "product_migrator", StartupTimeoutSeconds: 10, MaxConnections: 1,
+			SecurityProfilePath: filepath.Join(root, "profile.json"), SecurityProfileDigest: "sha256:" + strings.Repeat("a", 64),
+			ClientAgentSocket: filepath.Join(root, "postgres-agent.sock"), ClientAgentUID: 503, ClientAgentGID: 21,
+			PeerCRLRoleFile:            filepath.Join(root, "postgres-peer-role.json"),
+			PeerCRLRoleDigest:          "sha256:" + strings.Repeat("b", 64),
+			PeerCRLSourceMappingDigest: "sha256:" + strings.Repeat("c", 64)},
+		Materials: ProductMaterialsConfig{Provider: ProductMaterialProviderConfig{
+			Type: ProductUnixMaterialProviderV1, Alias: "migration-agent", SocketPath: "/tmp/p6-product-migration-material.sock",
+			ExpectedUID: 501, ExpectedGID: 20, OperationTimeoutSeconds: 2},
+			Bindings: []ProductMaterialBindingConfig{{ID: "product-migration-dsn", Provider: "migration-agent", Document: string(document)}}}}
+	if err := valid.Validate(); err != nil {
+		t.Fatalf("valid Product migration v2: %v", err)
+	}
+	for name, mutate := range map[string]func(*ProductMigrationConfig){
+		"missing signer": func(c *ProductMigrationConfig) { c.Postgres.ClientAgentSocket = "" },
+		"wrong role":     func(c *ProductMigrationConfig) { c.Postgres.Role = "product_runtime" },
+		"missing CRL":    func(c *ProductMigrationConfig) { c.Postgres.PeerCRLRoleFile = "" },
+		"v1 fallback":    func(c *ProductMigrationConfig) { c.SchemaVersion = ProductMigrationSchemaV1 },
+	} {
+		t.Run(name, func(t *testing.T) {
+			candidate := *valid
+			mutate(&candidate)
+			if candidate.Validate() == nil {
+				t.Fatal("unsafe Product migration version or signer admitted")
+			}
+		})
 	}
 }
 

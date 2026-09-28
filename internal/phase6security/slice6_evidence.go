@@ -303,7 +303,7 @@ func (e Slice6Evidence) Validate() error {
 		!slice6RevisionPattern.MatchString(e.EvidenceRevision) ||
 		!digestPattern.MatchString(e.RuntimeTreeDigest) ||
 		!digestPattern.MatchString(e.EvidenceTreeDigest) ||
-		!validSlice6Time(e.ObservedAt) || e.Profile.Validate() != nil ||
+		!validSlice6Time(e.ObservedAt) || VerifySlice6FinalGateProfile(e.Profile) != nil ||
 		ValidateObservationsWithExternal(e.Profile, e.Observations, externalIDs) != nil ||
 		!validSlice6Candidates(e.Profile, e.Observations, e.Candidates, e.RuntimeRevision, e.RuntimeTreeDigest) ||
 		!validSlice6DescriptorReceipts(e.Profile, e.DescriptorReceipts) ||
@@ -459,7 +459,7 @@ func validSlice6Processes(profile Profile, observations ObservationSet, values [
 			sequence++
 			started, startErr := time.Parse(time.RFC3339Nano, value.StartedAt)
 			finished, finishErr := time.Parse(time.RFC3339Nano, value.FinishedAt)
-			if value.Sequence != sequence || !containerIDPattern.MatchString(value.ContainerID) ||
+			if value.Sequence != sequence || sequence > 8 || !containerIDPattern.MatchString(value.ContainerID) ||
 				!digestPattern.MatchString(value.CommandDigest) || !digestPattern.MatchString(value.ConfigDigest) ||
 				!digestPattern.MatchString(value.InspectDigest) || !validSlice6Time(value.StartedAt) ||
 				!validSlice6Time(value.FinishedAt) || startErr != nil || finishErr != nil ||

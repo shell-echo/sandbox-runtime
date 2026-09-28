@@ -19,23 +19,45 @@ type PeerCRLControllerClient interface {
 // role-owned agent to the certificate controller. The role can name an edge,
 // never a Vault source; this adapter selects the source from a pinned profile.
 type ControllerPeerCRLProvider struct {
-	profile       phase6security.Profile
-	sources       phase6security.PeerCRLSources
-	subjectDigest string
-	client        PeerCRLControllerClient
-	now           func() time.Time
+	profile         phase6security.Profile
+	sources         phase6security.PeerCRLSources
+	subjectDigest   string
+	client          PeerCRLControllerClient
+	now             func() time.Time
+	postgresPurpose bool
 }
 
 func NewControllerPeerCRLProvider(profile phase6security.Profile, sources phase6security.PeerCRLSources,
 	subjectDigest string, client PeerCRLControllerClient, now func() time.Time) (*ControllerPeerCRLProvider, error) {
+	return newControllerPeerCRLProvider(profile, sources, subjectDigest, "", client, now)
+}
+
+// NewPostgresControllerPeerCRLProvider confines the PostgreSQL-purpose agent
+// to the owner's one external server edge. Ordinary role agents cannot read
+// that source even when the operator mapping contains it.
+func NewPostgresControllerPeerCRLProvider(profile phase6security.Profile, sources phase6security.PeerCRLSources,
+	owner, subjectDigest string, client PeerCRLControllerClient, now func() time.Time) (*ControllerPeerCRLProvider, error) {
+	return newControllerPeerCRLProvider(profile, sources, subjectDigest, owner, client, now)
+}
+
+func newControllerPeerCRLProvider(profile phase6security.Profile, sources phase6security.PeerCRLSources,
+	subjectDigest, postgresOwner string, client PeerCRLControllerClient, now func() time.Time) (*ControllerPeerCRLProvider, error) {
 	if client == nil || now == nil || now().IsZero() || sources.Validate(profile) != nil {
 		return nil, ErrUnavailable
 	}
 	found := false
-	for _, binding := range profile.TLSAgentBindings {
-		if binding.SubjectPrincipalDigest == subjectDigest {
-			found = true
-			break
+	if postgresOwner == "" {
+		for _, binding := range profile.TLSAgentBindings {
+			if binding.SubjectPrincipalDigest == subjectDigest {
+				found = true
+				break
+			}
+		}
+	} else {
+		binding, _, _, subject, _, err := profile.PostgresClientSignerForOwner(postgresOwner)
+		if err == nil && binding.SubjectPrincipalDigest == subjectDigest && subject.PrincipalDigest == subjectDigest {
+			_, err = profile.ResolveSlice6FinalPostgresAuthority(postgresOwner)
+			found = err == nil
 		}
 	}
 	if !found {
@@ -60,13 +82,14 @@ func NewControllerPeerCRLProvider(profile phase6security.Profile, sources phase6
 		return nil, ErrUnavailable
 	}
 	return &ControllerPeerCRLProvider{profile: copyProfile, sources: copySources,
-		subjectDigest: subjectDigest, client: client, now: now}, nil
+		subjectDigest: subjectDigest, client: client, now: now, postgresPurpose: postgresOwner != ""}, nil
 }
 
 func (p *ControllerPeerCRLProvider) ReadPeerCRL(ctx context.Context, request PeerCRLRequest) (string, []byte, []byte, time.Time, error) {
 	if p == nil || ctx == nil || ctx.Err() != nil || request.Validate(p.now().UTC()) != nil ||
 		request.ProfileDigest != p.profile.ProfileDigest || request.SourceMappingDigest != p.sources.Digest() ||
-		request.LocalPrincipalDigest != p.subjectDigest {
+		request.LocalPrincipalDigest != p.subjectDigest ||
+		p.profile.IsSlice6FinalPostgresPeerEdge(request.EdgeID, request.LocalPrincipalDigest) != p.postgresPurpose {
 		return "", nil, nil, time.Time{}, ErrUnavailable
 	}
 	sourceID, err := p.sources.AuthorizedSourceID(p.profile, request.EdgeID, request.LocalPrincipalDigest,

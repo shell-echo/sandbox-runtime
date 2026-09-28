@@ -266,8 +266,7 @@ func verifySource(ctx context.Context, root, revision, tree string) error {
 }
 
 func verifyReviewedProfile(profile phase6security.Profile) error {
-	if phase6security.VerifySlice6DesiredFinalExternalProfile(profile) != nil ||
-		phase6security.VerifySlice6DesiredImageLocations(profile) != nil {
+	if phase6security.VerifySlice6FinalGateProfile(profile) != nil {
 		return ErrInvalidAdmission
 	}
 	return nil

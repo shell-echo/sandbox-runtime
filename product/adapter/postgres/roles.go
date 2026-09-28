@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -42,23 +43,42 @@ func VerifyRuntimeRole(ctx context.Context, runtimePool *pgxpool.Pool, runtimeRo
 	if ctx == nil || runtimePool == nil || runtimeRole == "" {
 		return errors.New("Product runtime database role is invalid")
 	}
-	var actualRuntimeRole string
-	if err := runtimePool.QueryRow(ctx, `SELECT current_user`).Scan(&actualRuntimeRole); err != nil || actualRuntimeRole != runtimeRole {
+	return verifyBoundRuntimeRole(ctx, runtimePool, "", runtimeRole)
+}
+
+// VerifyBoundRuntimeConnection checks the actual database, login and grants
+// on every newly opened v3 Product pool connection, including reconnects.
+func VerifyBoundRuntimeConnection(ctx context.Context, connection *pgx.Conn, database, runtimeRole string) error {
+	if ctx == nil || connection == nil || database == "" || runtimeRole == "" {
+		return errors.New("Product runtime database authority is invalid")
+	}
+	return verifyBoundRuntimeRole(ctx, connection, database, runtimeRole)
+}
+
+type productRuntimeQuery interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}
+
+func verifyBoundRuntimeRole(ctx context.Context, query productRuntimeQuery, database, runtimeRole string) error {
+	var actualDatabase, actualRuntimeRole, sessionRole string
+	if err := query.QueryRow(ctx, `SELECT current_database(),current_user,session_user`).Scan(&actualDatabase, &actualRuntimeRole, &sessionRole); err != nil ||
+		(database != "" && actualDatabase != database) || actualDatabase == "" ||
+		actualRuntimeRole != runtimeRole || sessionRole != runtimeRole {
 		return errors.New("Product runtime database role does not match configuration")
 	}
 	var runtimeCanUse, runtimeCanCreate bool
-	if err := runtimePool.QueryRow(ctx, `SELECT has_schema_privilege(current_user, 'sandbox_runtime_product', 'USAGE'), has_schema_privilege(current_user, 'sandbox_runtime_product', 'CREATE')`).Scan(&runtimeCanUse, &runtimeCanCreate); err != nil || !runtimeCanUse || runtimeCanCreate {
+	if err := query.QueryRow(ctx, `SELECT has_schema_privilege(current_user, 'sandbox_runtime_product', 'USAGE'), has_schema_privilege(current_user, 'sandbox_runtime_product', 'CREATE')`).Scan(&runtimeCanUse, &runtimeCanCreate); err != nil || !runtimeCanUse || runtimeCanCreate {
 		return errors.New("Product runtime database schema privileges are unsafe")
 	}
 	var ledgerRead, ledgerWrite bool
-	if err := runtimePool.QueryRow(ctx, `SELECT
+	if err := query.QueryRow(ctx, `SELECT
 has_table_privilege(current_user, 'sandbox_runtime_product.schema_migrations', 'SELECT'),
 has_table_privilege(current_user, 'sandbox_runtime_product.schema_migrations', 'INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')`).Scan(&ledgerRead, &ledgerWrite); err != nil || !ledgerRead || ledgerWrite {
 		return errors.New("Product runtime migration-ledger privileges are unsafe")
 	}
 	var tableCount int
 	var allDML bool
-	if err := runtimePool.QueryRow(ctx, `SELECT count(*), COALESCE(bool_and(
+	if err := query.QueryRow(ctx, `SELECT count(*), COALESCE(bool_and(
 has_table_privilege(current_user, format('%I.%I', n.nspname, c.relname), 'SELECT') AND
 has_table_privilege(current_user, format('%I.%I', n.nspname, c.relname), 'INSERT') AND
 has_table_privilege(current_user, format('%I.%I', n.nspname, c.relname), 'UPDATE') AND
@@ -68,6 +88,31 @@ FROM pg_catalog.pg_class c
 JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace
 WHERE n.nspname='sandbox_runtime_product' AND c.relkind='r' AND c.relname <> 'schema_migrations'`).Scan(&tableCount, &allDML); err != nil || tableCount < 1 || !allDML {
 		return errors.New("Product runtime application-table privileges are incomplete")
+	}
+	return nil
+}
+
+// VerifyBoundGatewayConnection intentionally does not inherit Product's full
+// table-DML requirement. The Gateway's exact table grants are a separate SQL
+// gate; this per-connection check rejects database/login drift and elevation.
+func VerifyBoundGatewayConnection(ctx context.Context, connection *pgx.Conn, database, role string) error {
+	if ctx == nil || connection == nil || database == "" || role != "product_gateway" {
+		return errors.New("Gateway database authority is invalid")
+	}
+	var actualDatabase, actualRole, sessionRole string
+	if err := connection.QueryRow(ctx, `SELECT current_database(),current_user,session_user`).Scan(&actualDatabase, &actualRole, &sessionRole); err != nil ||
+		actualDatabase != database || actualRole != role || sessionRole != role {
+		return errors.New("Gateway database or role does not match profile")
+	}
+	var elevated, member, canUse, canCreate bool
+	if err := connection.QueryRow(ctx, `SELECT
+    rolsuper OR rolcreatedb OR rolcreaterole OR rolreplication OR rolbypassrls,
+    EXISTS (SELECT 1 FROM pg_catalog.pg_auth_members WHERE member=pg_catalog.pg_roles.oid),
+    has_schema_privilege(current_user,'sandbox_runtime_product','USAGE'),
+    has_schema_privilege(current_user,'sandbox_runtime_product','CREATE')
+FROM pg_catalog.pg_roles WHERE rolname=current_user`).Scan(&elevated, &member, &canUse, &canCreate); err != nil ||
+		elevated || member || !canUse || canCreate {
+		return errors.New("Gateway database role has unsafe privileges")
 	}
 	return nil
 }

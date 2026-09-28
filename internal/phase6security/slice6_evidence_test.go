@@ -103,22 +103,57 @@ func TestSlice6ImageIdentityKindsAndRuntimeObservation(t *testing.T) {
 
 func validSlice6EvidenceFixture(t *testing.T) Slice6Evidence {
 	t.Helper()
-	profile := validProfile()
-	observations := validObservations(profile)
-	now := time.Now().UTC().Format(time.RFC3339Nano)
-	later := time.Now().UTC().Add(time.Second).Format(time.RFC3339Nano)
+	draft := reviewedSlice6ImageFixture(t)
+	for index := range draft.Principals {
+		principal := &draft.Principals[index]
+		target, err := Slice6DesiredImageTarget(principal.Name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if target == Slice6BrowserPublishedImage {
+			continue
+		}
+		principal.ImageDigest = testDigest("fixture-image/" + target)
+		principal.ImageReference = principal.ImageDigest
+		principal.ImageConfigDigest = testDigest("fixture-config/" + target)
+		refreshSlice6ImageSlotDigest(&draft, *principal)
+	}
+	draft.ProfileDigest = draft.Digest()
+	profile, err := BuildSlice6FinalExternalProfileTarget(draft)
+	if err != nil || VerifySlice6FinalGateProfile(profile) != nil {
+		t.Fatalf("final-only synthetic evidence profile: %v", err)
+	}
+	observations := validFinalSlice6EvidenceObservations(t, profile)
+	baseTime := time.Now().UTC()
+	now := baseTime.Add(-10 * time.Second).Format(time.RFC3339Nano)
+	later := baseTime.Add(-9 * time.Second).Format(time.RFC3339Nano)
 	evidence := Slice6Evidence{ID: Slice6EvidenceID, Version: Slice6EvidenceVersion,
 		RunID: strings.Repeat("c", 32), ReceiptIndexDigest: testDigest("receipt-index"),
 		Scope: "same_host_local_candidate_non_release", RuntimeRevision: strings.Repeat("a", 40),
 		RuntimeTreeDigest: testDigest("runtime-tree"), EvidenceRevision: strings.Repeat("b", 40),
-		EvidenceTreeDigest: testDigest("evidence-tree"), ObservedAt: now, Profile: profile,
+		EvidenceTreeDigest: testDigest("evidence-tree"), ObservedAt: baseTime.Format(time.RFC3339Nano), Profile: profile,
 		Observations: observations,
 		NonClaims:    []string{"independent_host_or_platform_enforcement", "complete_application_image_publication_and_signing", "production_readiness"}}
 	for index, principal := range profile.Principals {
+		sequence := 1
+		if slices.Contains(slice6RestartSubjects, principal.Name) {
+			evidence.Processes = append(evidence.Processes, Slice6ProcessEvidence{
+				DeploymentName: principal.Name, Sequence: 1,
+				ContainerID:   testDigest("old-container/" + principal.Name)[7:],
+				CommandDigest: testDigest("command/" + principal.Name),
+				ConfigDigest:  testDigest("old-config/" + principal.Name),
+				InspectDigest: testDigest("old-inspect/" + principal.Name),
+				StartedAt:     now, FinishedAt: baseTime.Add(-8 * time.Second).Format(time.RFC3339Nano)})
+			sequence = 2
+		}
 		evidence.Processes = append(evidence.Processes, Slice6ProcessEvidence{
-			DeploymentName: principal.Name, Sequence: 1, ContainerID: observations.Containers[index].ContainerID,
+			DeploymentName: principal.Name, Sequence: sequence, ContainerID: observations.Containers[index].ContainerID,
 			CommandDigest: testDigest("command/" + principal.Name), ConfigDigest: testDigest("config/" + principal.Name),
 			InspectDigest: observations.Containers[index].ContainerInspectDigest, StartedAt: now, FinishedAt: later, Final: true})
+		if sequence == 2 {
+			evidence.Processes[len(evidence.Processes)-1].StartedAt = baseTime.Add(-7 * time.Second).Format(time.RFC3339Nano)
+			evidence.Processes[len(evidence.Processes)-1].FinishedAt = baseTime.Add(-6 * time.Second).Format(time.RFC3339Nano)
+		}
 	}
 	for _, component := range observations.Components {
 		evidence.Components = append(evidence.Components, Slice6ComponentEvidence{
@@ -160,6 +195,13 @@ func validSlice6EvidenceFixture(t *testing.T) Slice6Evidence {
 				NewConnectionResultsDigest:   testDigest("postgres/connections"),
 				RestartReconcileResultDigest: testDigest("postgres/restart"),
 			}
+			rules, err := Slice6DesiredFinalSharedPostgresHBARules()
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, rule := range rules {
+				item.PostgresServerAuth.ApprovedSourceCIDRs = append(item.PostgresServerAuth.ApprovedSourceCIDRs, rule.SourceCIDR)
+			}
 		}
 		evidence.External = append(evidence.External, item)
 	}
@@ -184,8 +226,95 @@ func validSlice6EvidenceFixture(t *testing.T) Slice6Evidence {
 		evidence.Cleanup = append(evidence.Cleanup, Slice6ResourceEvidence{Name: name,
 			InspectorDigest: testDigest("cleanup/" + name)})
 	}
+	seenCandidates := map[string]bool{}
+	for _, principal := range profile.Principals {
+		if principal.ImageLocation != "local" || seenCandidates[principal.ImageDigest] {
+			continue
+		}
+		seenCandidates[principal.ImageDigest] = true
+		target, err := Slice6DesiredImageTarget(principal.Name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var observation ContainerObservation
+		for _, item := range observations.Containers {
+			if item.DeploymentName == principal.Name {
+				observation = item
+				break
+			}
+		}
+		candidate := Slice6CandidateImage{Kind: Slice6CandidateRepositoryRole,
+			ManifestSchema: Slice6RoleManifestSchema, ManifestDigest: testDigest("fixture-manifest/" + target),
+			RuntimeStoreImageID: principal.ImageDigest, ImageIdentityKind: principal.ImageIdentityKind,
+			SelectedManifestDigest: principal.ImageDigest, OCIConfigDigest: principal.ImageConfigDigest,
+			DescriptorProofDigest: observation.ImageDescriptorProofDigest, Platform: principal.ImagePlatform,
+			SourceRevision: evidence.RuntimeRevision, SourceTreeDigest: evidence.RuntimeTreeDigest,
+			ArchiveDigest: testDigest("fixture-archive/" + target), ArchiveSize: 1234,
+			Role: &Slice6RoleCandidateRef{SourceDeployment: principal.Name, BuildTarget: target}}
+		if target == Slice6DesktopCandidateImage {
+			candidate.Kind = Slice6CandidateDesktop
+			candidate.ManifestSchema = Slice6DesktopManifestSchema
+			candidate.Role = nil
+			candidate.Desktop = &Slice6DesktopCandidateRef{ProfileID: "desktop-phase6-local"}
+		}
+		evidence.Candidates = append(evidence.Candidates, candidate)
+	}
+	sort.Slice(evidence.Candidates, func(i, j int) bool {
+		return evidence.Candidates[i].RuntimeStoreImageID < evidence.Candidates[j].RuntimeStoreImageID
+	})
 	evidence.ManifestDigest = slice6EvidenceDigest(evidence)
 	return evidence
+}
+
+func validFinalSlice6EvidenceObservations(t *testing.T, profile Profile) ObservationSet {
+	t.Helper()
+	observations := validObservations(profile)
+	for index := range observations.Containers {
+		value := &observations.Containers[index]
+		principal := profile.Principals[index]
+		target, err := Slice6DesiredImageTarget(principal.Name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		value.ImageDescriptorProofDigest = testDigest("fixture-descriptor/" + target)
+		if principal.ImageIdentityKind == ImageIdentityOCIIndex {
+			value.RuntimeStoreDescriptor.MediaType = "application/vnd.oci.image.index.v1+json"
+			value.SelectedManifestDescriptor.Digest = principal.ImageSelectedManifestDigest
+		}
+	}
+	for index, network := range profile.Networks {
+		observed := &observations.Networks[index]
+		observed.ContainerIDs = nil
+		observed.Endpoints = nil
+		for _, principal := range network.Principals {
+			address, err := Slice6DesiredEndpointAddress(network.Name, principal)
+			if err != nil {
+				address, err = Slice6DesiredFinalServiceEndpointAddress(network.Name, principal)
+			}
+			if err != nil {
+				t.Fatalf("planned fixture endpoint %s/%s: %v", network.Name, principal, err)
+			}
+			containerID := testDigest("container/" + principal)[7:]
+			observed.ContainerIDs = append(observed.ContainerIDs, containerID)
+			observed.Endpoints = append(observed.Endpoints, NetworkEndpointObservation{
+				ContainerID: containerID, IPv4Address: address})
+		}
+		for _, service := range network.ExternalServices {
+			address, err := Slice6DesiredFinalServiceEndpointAddress(network.Name, service)
+			if err != nil {
+				t.Fatal(err)
+			}
+			containerID := testDigest("external-container/" + service)[7:]
+			observed.ContainerIDs = append(observed.ContainerIDs, containerID)
+			observed.Endpoints = append(observed.Endpoints, NetworkEndpointObservation{
+				ContainerID: containerID, IPv4Address: address})
+		}
+		sort.Strings(observed.ContainerIDs)
+		sort.Slice(observed.Endpoints, func(i, j int) bool {
+			return observed.Endpoints[i].ContainerID < observed.Endpoints[j].ContainerID
+		})
+	}
+	return observations
 }
 
 func TestSlice6EvidenceRequiresCompleteClosedInventory(t *testing.T) {
@@ -307,34 +436,56 @@ func TestSlice6EvidenceRequiresCompleteClosedInventory(t *testing.T) {
 	}
 }
 
-func TestSlice6EvidenceLocalCandidateRequiresTypedArtifactBinding(t *testing.T) {
-	evidence := validSlice6EvidenceFixture(t)
-	principal := &evidence.Profile.Principals[0]
-	principal.ImageLocation = "local"
-	principal.ImageReference = principal.ImageDigest
-	evidence.Profile.ProfileDigest = evidence.Profile.Digest()
-	evidence.Observations.ProfileDigest = evidence.Profile.ProfileDigest
-	for index := range evidence.External {
-		if evidence.External[index].PostgresServerAuth != nil {
-			evidence.External[index].PostgresServerAuth.ProfileDigest = evidence.Profile.ProfileDigest
-		}
+func TestSlice6EvidenceEntryRejectsOldSelfConsistentProfileInventories(t *testing.T) {
+	finalEvidence := validSlice6EvidenceFixture(t)
+	if VerifySlice6FinalGateProfile(finalEvidence.Profile) != nil || finalEvidence.Validate() != nil {
+		t.Fatal("final-only synthetic fixture is invalid")
 	}
-	evidence.Observations.Containers[0].ImageReference = principal.ImageReference
-	target, err := Slice6DesiredImageTarget(principal.Name)
+	draft := reviewedSlice6ImageFixture(t)
+	intermediate, err := BuildSlice6ExecutableProfileTarget(draft)
 	if err != nil {
 		t.Fatal(err)
 	}
-	evidence.Candidates = []Slice6CandidateImage{{
-		Kind: Slice6CandidateRepositoryRole, ManifestSchema: "sandbox-runtime.phase6-local-role-candidate.v1",
-		ManifestDigest: testDigest("manifest"), RuntimeStoreImageID: principal.ImageDigest,
-		ImageIdentityKind: principal.ImageIdentityKind, SelectedManifestDigest: principal.ImageDigest,
-		OCIConfigDigest:       principal.ImageConfigDigest,
-		DescriptorProofDigest: evidence.Observations.Containers[0].ImageDescriptorProofDigest,
-		Platform:              principal.ImagePlatform, SourceRevision: evidence.RuntimeRevision,
-		SourceTreeDigest: evidence.RuntimeTreeDigest, ArchiveDigest: testDigest("archive"), ArchiveSize: 1234,
-		Role: &Slice6RoleCandidateRef{SourceDeployment: principal.Name, BuildTarget: target},
-	}}
-	evidence.ManifestDigest = slice6EvidenceDigest(evidence)
+	for name, profile := range map[string]Profile{"historical_17_12": draft, "intermediate_28_33": intermediate} {
+		t.Run(name, func(t *testing.T) {
+			if profile.Validate() != nil || VerifySlice6FinalGateProfile(profile) == nil {
+				t.Fatal("negative profile must be structurally valid but not final")
+			}
+			candidate := finalEvidence
+			candidate.Profile = profile
+			candidate.Observations.ProfileDigest = profile.ProfileDigest
+			candidate.External = append([]Slice6ExternalEvidence(nil), finalEvidence.External...)
+			for index := range candidate.External {
+				if candidate.External[index].PostgresServerAuth != nil {
+					proof := *candidate.External[index].PostgresServerAuth
+					proof.ProfileDigest = profile.ProfileDigest
+					candidate.External[index].PostgresServerAuth = &proof
+				}
+			}
+			candidate.ManifestDigest = slice6EvidenceDigest(candidate)
+			document, err := json.Marshal(candidate)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := VerifySlice6Evidence(document); !errors.Is(err, ErrInvalidSlice6Evidence) {
+				t.Fatal("older self-consistent profile admitted through evidence entry")
+			}
+		})
+	}
+}
+
+func TestSlice6EvidenceLocalCandidateRequiresTypedArtifactBinding(t *testing.T) {
+	evidence := validSlice6EvidenceFixture(t)
+	candidateIndex := -1
+	for index, candidate := range evidence.Candidates {
+		if candidate.Kind == Slice6CandidateRepositoryRole {
+			candidateIndex = index
+			break
+		}
+	}
+	if candidateIndex < 0 {
+		t.Fatal("final-only fixture lacks repository role candidates")
+	}
 	document, err := json.Marshal(evidence)
 	if err != nil {
 		t.Fatal(err)
@@ -343,14 +494,16 @@ func TestSlice6EvidenceLocalCandidateRequiresTypedArtifactBinding(t *testing.T) 
 		t.Fatalf("complete local candidate fixture rejected: %v", err)
 	}
 	for name, mutate := range map[string]func(*Slice6Evidence){
-		"wrong build target":     func(e *Slice6Evidence) { e.Candidates[0].Role.BuildTarget = "gateway" },
-		"missing archive":        func(e *Slice6Evidence) { e.Candidates[0].ArchiveDigest = "" },
-		"wrong image ID":         func(e *Slice6Evidence) { e.Candidates[0].RuntimeStoreImageID = testDigest("other-image") },
-		"wrong source":           func(e *Slice6Evidence) { e.Candidates[0].SourceRevision = strings.Repeat("c", 40) },
-		"candidate omitted":      func(e *Slice6Evidence) { e.Candidates = nil },
-		"wrong candidate kind":   func(e *Slice6Evidence) { e.Candidates[0].Kind = Slice6CandidateDesktop },
-		"wrong manifest schema":  func(e *Slice6Evidence) { e.Candidates[0].ManifestSchema = "old" },
-		"wrong descriptor proof": func(e *Slice6Evidence) { e.Candidates[0].DescriptorProofDigest = testDigest("other-proof") },
+		"wrong build target":    func(e *Slice6Evidence) { e.Candidates[candidateIndex].Role.BuildTarget = "gateway" },
+		"missing archive":       func(e *Slice6Evidence) { e.Candidates[candidateIndex].ArchiveDigest = "" },
+		"wrong image ID":        func(e *Slice6Evidence) { e.Candidates[candidateIndex].RuntimeStoreImageID = testDigest("other-image") },
+		"wrong source":          func(e *Slice6Evidence) { e.Candidates[candidateIndex].SourceRevision = strings.Repeat("c", 40) },
+		"candidate omitted":     func(e *Slice6Evidence) { e.Candidates = nil },
+		"wrong candidate kind":  func(e *Slice6Evidence) { e.Candidates[candidateIndex].Kind = Slice6CandidateDesktop },
+		"wrong manifest schema": func(e *Slice6Evidence) { e.Candidates[candidateIndex].ManifestSchema = "old" },
+		"wrong descriptor proof": func(e *Slice6Evidence) {
+			e.Candidates[candidateIndex].DescriptorProofDigest = testDigest("other-proof")
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			var candidate Slice6Evidence

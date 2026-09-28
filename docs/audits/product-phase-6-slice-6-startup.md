@@ -2198,3 +2198,141 @@ existing `workload-tls-agent` image target is reused. This is still source/
 profile validation, not live certificate issuance, Vault client mTLS, a full
 16-scenario run or Slice 6 evidence. The prior 58/56/77 figures above are
 historical checkpoint counts, not the current complete target.
+
+Checkpoint 2026-09-28 (PostgreSQL final-owner components, not Slice 6
+acceptance): the reviewed final profile candidate resolves nine distinct
+PostgreSQL runtime/migration owner, SQL role, signer, peer-CRL and source-path
+tuples. Explicit Product/Provider migration v2 paths use controlled precreated
+schemas and deny database-level CREATE. Against a disposable pinned PostgreSQL
+16 container, the full Product and three Provider migration sets completed
+under these limited roles; a separate test observed server-side
+`ssl_crl_file` rejecting a revoked client leaf while a healthy control
+connected. A real pgx pool using a per-connection selected client leaf closed
+its old connection on signer rotation, reconnected with the healthy leaf, and
+interrupted an observed active long query within the local two-second test
+bound without replay. These are test-local CA/role/component observations,
+not the nine-role Vault/topology gate. The local conservative policy sacrifices
+in-flight availability on normal certificate rotation; the actual
+Vault-publication → agent CRL poll → application snapshot poll → socket close
+elapsed time, including scheduling margin, has not been measured against the
+profile's ten-second drain bound. A TLS-agent rollback/non-resurrection
+hardening check and a pinned real Vault mTLS integration passed, but they do
+not substitute for that end-to-end clock.
+
+The frozen 16-scenario route plan and strict candidate/profile preflight
+remain non-executing inputs. A same-runID launcher for all 82 independent
+roles, controlled Vault and external services, scenario observers, raw
+receipts, exact resource cleanup and immutable manifest issuance is not yet
+implemented. Consequently Phase 6 remains 5/15; no local-only component
+diagnostic or present audit prose authorizes moving the counter or pushing a
+Slice 6 acceptance claim.
+
+Checkpoint 2026-09-28 (final-profile admission and network bootstrap only):
+the live-gate preflight had still called historical 17/12 network and external
+service validators, which would reject the final 82-deployment profile. It
+now admits only the reviewed final 32-path/37-edge graph, exact local image
+locations, nine PostgreSQL owner/signer resolutions and rendered HBA digest;
+tests reject the earlier 17/12 and 28/33 candidates. A real Docker diagnostic
+created and independently inspected all 127 final isolated/NAT bridges in one
+run, then rediscovered and removed the exact run-labeled inventory to zero.
+The first attempt caught an empty-network helper that expected an external
+service endpoint before its service container had joined; that bootstrap
+ordering bug was fixed. A separate controlled name-conflict run verified
+partial network rollback while preserving the unrelated conflicting bridge.
+The public Slice 6 evidence/bundle verification path now shares that exact
+final-profile predicate, rather than relying on callers to run preflight;
+synthetic final-inventory fixtures and old-candidate rejection tests cover
+the static admission boundary. An initial ninefold full-profile revalidation
+made the race suite time out; the corrected gate validates the profile once,
+then checks the fixed nine signer/HBA tuple set linearly. The focused security
+race package and the subsequent full repository race/shuffle suite pass after
+that correction. This checks consistency, not
+whether any process actually ran.
+These observations prove only final IPAM coexistence and fail-clean network
+creation, not the Vault/external-service bootstrap, any running role, a
+scenario, or release evidence. At this checkpoint the scenario receipt
+validator still accepted bare `passed`/assertion labels without a typed raw
+measurement link; Sandbox required that gap be closed before any final
+manifest could be issued.
+
+Checkpoint 2026-09-28 (private scenario receipt v2 and one Vault route
+diagnostic, not Slice 6 acceptance): private scenario raw receipts now reject
+the old claim-only shape. Each of the frozen 48 assertions must carry its
+reviewed probe family, source/target, same-run source/target instance IDs and
+existing inspect-receipt digests, start/end timestamps and elapsed time, plus
+a typed result. Denial/drain rows require a nearby accepted healthy control
+on the same inspected instances; active socket drain is limited to ten
+seconds. The closed criteria also cover zero/82 counts, nonzero observations,
+stable/distinct identity digests and effective UID/GID, with negative tests
+for missing measurement, wrong target/probe, cross-run instance, digest,
+control and timing. This is a stronger semantic admission schema, not an
+origin proof: the trusted same-run harness must still capture actual probe
+commands and outputs, close their references, and test application-specific
+semantics (for example, real CDP version and paired RTP/input), rather than
+populate a count from a claim.
+
+A separate opt-in Docker diagnostic booted the pinned Vault process on the
+reviewed isolated `network-certificate-controller` bridge. A second real OS
+container at the controller's planned address reached Vault over TLS with
+the generated CA; the network inspect showed Vault alone at its approved
+address after the probe exited, and run-labeled containers/networks/volumes
+were removed to zero. The probe was a Vault CLI, not the repository's actual
+certificate-controller, and the server used test-only dev TLS, not the final
+external identity or controlled PKI configuration. It narrows the physical
+bridge/TLS feasibility question but cannot count as any of the 16 scenarios.
+
+Checkpoint 2026-09-28 (restart history receipts and replacement diagnostic,
+not the Provider/executor scenario): Sandbox identified and approved a repair
+for a receipt-index collision: `process/<deployment>/command` silently
+overwrote the prior command digest on a second instance. Canonical process
+keys are now `process/<deployment>/<sequence>/command` and
+`process/<deployment>/<sequence>/inspect`; sequence is contiguous per
+deployment and capped at eight. Each process envelope binds the exact
+sequence, container, config and start/finish times, while a historical Docker
+inspect must carry the same run label, container ID and start time and be
+stopped at its recorded finish. The final instance remains separately bound
+to ContainerObservation. The three restart scenario measurements now require
+old/new references for Provider and both executor deployments, each to one
+actual same-deployment process pair; old command and inspect files can be
+independently reopened. Tests reject missing old raw, wrong sequence,
+container, config, run, historical inspect and cross-deployment pair after
+digest recomputation where applicable. This fixes structural closure, not
+trusted execution origin or probe semantics.
+
+An opt-in Docker diagnostic also stopped and removed one run-labeled Alpine
+container, started a different container with the same command at the same
+reviewed isolated Provider-network address, inspected both real process
+lifecycles and the sole final network member, then removed all run-owned
+resources. Alpine is not the Provider and this diagnostic does not prove
+retained Provider authority, stale-admission denial, either executor restart
+or the final 16-scenario gate. The full runner still needs to feed real
+per-instance raw receipts and monotonic probe timing into the private bundle.
+
+Remaining Slice 6 work stays within the original gate, in four deliverables:
+
+1. Build one executable controlled Vault/external-service bootstrap, freeze
+   the complete final profile from verified artifacts, and start the real
+   deployments and one-shot migrations in dependency order with failure
+   cleanup. The existing image/placement/skeleton builder is only a partial
+   input; start with one true vertical path, then cover the full inventory.
+2. Add the same-runID live observer and 16 scenario executor to that startup
+   chain. Retain raw process/container, handshake, denial, timing and cleanup
+   receipts; reject a failure run, missing observation or cross-run splice.
+3. Run the complete Vault and external-dependency topology, fix observed
+   failures, measure the client/server revocation budget end to end, and pass
+   all 16 scenarios plus exact zero run-owned resource cleanup and immutable
+   evidence verification. One-shot jobs belong to their real lifecycle, not
+   an artificial all-at-once count.
+4. Only after the full gate passes, update the status and cross-machine
+   handoff, commit and push the Phase 6 branch, compare complete remote/local
+   SHAs, and stop before Slice 7. Git-external candidate/evidence artifacts
+   need an explicit safe storage or deterministic rebuild procedure.
+
+The clean-source candidate build and preflight require a committed runtime
+revision R. A local-only checkpoint commit may therefore freeze R before the
+gate; it is a candidate source identity, not an acceptance claim and must not
+be pushed as one. If runtime code changes, create a new R and rebuild/retest
+its source-bound candidates. The final acceptance/handoff commit and remote
+push remain contingent on the complete gate and immutable evidence. Evidence
+tooling or documentation may advance separately as E without relabeling an
+older candidate as a new runtime revision.

@@ -96,6 +96,10 @@ type Manager struct {
 	lastRevocationSuccess time.Time
 	revocationNextUpdate  time.Time
 	revokedSerials        map[string]struct{}
+	revocationCRL         workloadpki.VerifiedCRL
+	observedRevoked       map[string]time.Time
+	revocationUnavailable bool
+	revocationFailed      bool
 	nextRevocationPoll    time.Time
 	closing               bool
 	closed                bool
@@ -109,7 +113,8 @@ func New(config Config) (*Manager, error) {
 		config.OperationTimeout < time.Second || config.OperationTimeout > time.Minute || config.Now == nil || config.Now().IsZero() || config.Random == nil {
 		return nil, ErrUnavailable
 	}
-	return &Manager{config: config, revokedSerials: make(map[string]struct{})}, nil
+	return &Manager{config: config, revokedSerials: make(map[string]struct{}),
+		observedRevoked: make(map[string]time.Time)}, nil
 }
 
 func NewProduction(config Config) (*Manager, error) {
@@ -187,7 +192,10 @@ func (m *Manager) Snapshot() (Snapshot, error) {
 	}
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	if m.closed || m.current == nil || m.current.revoked || now.Before(m.current.notBefore) || !now.Before(m.current.notAfter) {
+	if m.closed || m.revocationUnavailable || m.revocationFailed {
+		return Snapshot{}, ErrUnavailable
+	}
+	if m.current == nil || m.current.revoked || now.Before(m.current.notBefore) || !now.Before(m.current.notAfter) {
 		if m.current != nil && m.current.revoked {
 			return Snapshot{}, ErrRevoked
 		}
@@ -250,7 +258,7 @@ func (m *Manager) Sign(generation int64, digest []byte, opts crypto.SignerOpts) 
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if m.closed || !now.Before(m.safetyDeadlineLocked()) {
+	if m.closed || m.revocationUnavailable || m.revocationFailed || !now.Before(m.safetyDeadlineLocked()) {
 		return nil, ErrUnavailable
 	}
 	material := m.current
@@ -371,10 +379,18 @@ func (m *Manager) rotate(ctx context.Context, initial bool) error {
 	}
 	m.current = material
 	m.nextRevocationPoll = time.Time{}
+	m.revocationUnavailable = true
 	return nil
 }
 
-func (m *Manager) refreshRevocations(ctx context.Context) error {
+func (m *Manager) refreshRevocations(ctx context.Context) (result error) {
+	defer func() {
+		if result != nil {
+			m.mu.Lock()
+			m.revocationUnavailable = true
+			m.mu.Unlock()
+		}
+	}()
 	operationContext, cancel := context.WithTimeout(ctx, m.config.OperationTimeout)
 	defer cancel()
 	snapshot, err := m.config.Client.Revocations(operationContext)
@@ -382,23 +398,24 @@ func (m *Manager) refreshRevocations(ctx context.Context) error {
 		return normalizeClientError(err)
 	}
 	defer snapshot.Destroy()
-	list, err := x509.ParseRevocationList(snapshot.DER)
-	if err != nil || !list.ThisUpdate.Equal(snapshot.ThisUpdate) || !list.NextUpdate.Equal(snapshot.NextUpdate) {
-		return ErrUnavailable
-	}
 	m.mu.RLock()
 	var issuerDER []byte
 	if m.current != nil && len(m.current.certificateDER) > 1 {
 		issuerDER = append([]byte(nil), m.current.certificateDER[1]...)
 	}
 	m.mu.RUnlock()
-	issuer, issuerErr := x509.ParseCertificate(issuerDER)
-	clear(issuerDER)
-	if issuerErr != nil || !issuer.IsCA || list.CheckSignatureFrom(issuer) != nil {
+	now, err := m.observeTime()
+	if err != nil {
+		clear(issuerDER)
 		return ErrUnavailable
 	}
-	now, err := m.observeTime()
-	if err != nil || now.Before(snapshot.ThisUpdate) || !now.Before(snapshot.NextUpdate) {
+	verified, err := workloadpki.VerifyCRLForIssuer(snapshot, issuerDER, now)
+	clear(issuerDER)
+	if err != nil {
+		return ErrUnavailable
+	}
+	list, err := x509.ParseRevocationList(snapshot.DER)
+	if err != nil {
 		return ErrUnavailable
 	}
 	revoked := make(map[string]struct{}, len(list.RevokedCertificateEntries))
@@ -407,13 +424,58 @@ func (m *Manager) refreshRevocations(ctx context.Context) error {
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if m.closed || m.closing {
+	if m.closed || m.closing || m.revocationFailed {
 		return ErrUnavailable
 	}
+	if m.current == nil || len(m.current.certificateDER) < 2 ||
+		workloadpkiIssuerDigest(m.current.certificateDER[1]) != verified.IssuerDigest() {
+		return ErrUnavailable
+	}
+	if previous := m.revocationCRL; previous.Number() != nil {
+		if previous.IssuerDigest() == verified.IssuerDigest() {
+			comparison := verified.Number().Cmp(previous.Number())
+			if comparison < 0 || verified.ThisUpdate().Before(previous.ThisUpdate()) ||
+				(comparison == 0 && (verified.CRLDigest() != previous.CRLDigest() ||
+					!verified.ThisUpdate().Equal(previous.ThisUpdate()))) {
+				m.revocationFailed = true
+				return ErrUnavailable
+			}
+		} else if m.previous != nil && now.Before(m.previous.notAfter) {
+			// This agent cannot verify a still-signing prior issuer through the
+			// current issuer's CRL. A new process must rebind its authority.
+			m.revocationFailed = true
+			return ErrUnavailable
+		}
+	}
+	for serial, notAfter := range m.observedRevoked {
+		if !now.Before(notAfter) {
+			delete(m.observedRevoked, serial)
+			continue
+		}
+		parsed, ok := parseSerialString(serial)
+		if !ok || !verified.RevokesSerial(parsed) {
+			m.revocationFailed = true
+			return ErrUnavailable
+		}
+	}
+	for _, material := range []*keyMaterial{m.current, m.previous} {
+		if material == nil || !now.Before(material.notAfter) {
+			continue
+		}
+		if _, found := revoked[material.serial]; found {
+			if len(m.observedRevoked) >= 16 {
+				m.revocationFailed = true
+				return ErrUnavailable
+			}
+			m.observedRevoked[material.serial] = material.notAfter
+		}
+	}
 	m.revokedSerials = revoked
+	m.revocationCRL = verified
 	m.lastRevocationSuccess = now
 	m.revocationNextUpdate = snapshot.NextUpdate
 	m.nextRevocationPoll = now.Add(m.config.RevocationPollInterval)
+	m.revocationUnavailable = false
 	if m.current != nil {
 		_, m.current.revoked = revoked[m.current.serial]
 	}
@@ -421,6 +483,11 @@ func (m *Manager) refreshRevocations(ctx context.Context) error {
 		_, m.previous.revoked = revoked[m.previous.serial]
 	}
 	return nil
+}
+
+func workloadpkiIssuerDigest(issuerDER []byte) string {
+	sum := sha256.Sum256(issuerDER)
+	return "sha256:" + hex.EncodeToString(sum[:])
 }
 
 func (m *Manager) observeTime() (time.Time, error) {
@@ -569,6 +636,28 @@ func serialString(value *big.Int) string {
 		parts = append(parts, encoded...)
 	}
 	return string(parts)
+}
+
+func parseSerialString(value string) (*big.Int, bool) {
+	if len(value) < 2 || len(value) > 95 || (len(value)+1)%3 != 0 {
+		return nil, false
+	}
+	encoded := make([]byte, 0, (len(value)+1)/3*2)
+	for index := 0; index < len(value); index++ {
+		if index%3 == 2 {
+			if value[index] != ':' {
+				return nil, false
+			}
+			continue
+		}
+		encoded = append(encoded, value[index])
+	}
+	decoded, err := hex.DecodeString(string(encoded))
+	if err != nil {
+		return nil, false
+	}
+	serial := new(big.Int).SetBytes(decoded)
+	return serial, serial.Sign() > 0 && serialString(serial) == value
 }
 
 func normalizeClientError(err error) error {

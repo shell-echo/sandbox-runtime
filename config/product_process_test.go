@@ -126,6 +126,11 @@ func validProductionProductConfig(t *testing.T, _ string) *ProductProcessConfig 
 func TestProductV3RequiresPinnedLiveSignerWithoutLocalTLSMaterial(t *testing.T) {
 	valid := validProductionProductConfig(t, "")
 	valid.SchemaVersion = ProductProductionSchemaV3
+	valid.Postgres.ClientAgentSocket = "/run/tls/product-postgres-tls-agent/signer.sock"
+	valid.Postgres.ClientAgentUID, valid.Postgres.ClientAgentGID = 20002, 30002
+	valid.Postgres.PeerCRLRoleFile = "/run/security/product-postgres-peer-crl-role.json"
+	valid.Postgres.PeerCRLRoleDigest = "sha256:" + strings.Repeat("d", 64)
+	valid.Postgres.PeerCRLSourceMappingDigest = "sha256:" + strings.Repeat("e", 64)
 	valid.GuestControl.Host, valid.GuestControl.Port = "10.16.0.3", 8449
 	valid.GuestControlMaxConnections = 64
 	valid.TLS = ProductTLSConfig{
@@ -147,19 +152,23 @@ func TestProductV3RequiresPinnedLiveSignerWithoutLocalTLSMaterial(t *testing.T) 
 		"extra TLS binding": func(c *ProductProcessConfig) {
 			c.Materials.Bindings = append(c.Materials.Bindings, validProductionProductConfig(t, "").Materials.Bindings[0])
 		},
-		"profile digest":           func(c *ProductProcessConfig) { c.TLS.SecurityProfileDigest = "sha256:bad" },
-		"relative profile":         func(c *ProductProcessConfig) { c.TLS.SecurityProfilePath = "profile.json" },
-		"relative socket":          func(c *ProductProcessConfig) { c.TLS.AgentSocket = "signer.sock" },
-		"material agent alias":     func(c *ProductProcessConfig) { c.TLS.AgentSocket = c.Materials.Provider.SocketPath },
-		"agent UID":                func(c *ProductProcessConfig) { c.TLS.AgentUID = 0 },
-		"agent GID":                func(c *ProductProcessConfig) { c.TLS.AgentGID = 0 },
-		"timeout":                  func(c *ProductProcessConfig) { c.TLS.OperationTimeoutMillis = 0 },
-		"missing guest listener":   func(c *ProductProcessConfig) { c.GuestControl = option.HTTP{} },
-		"public guest alias":       func(c *ProductProcessConfig) { c.GuestControl = c.API },
-		"public port alias":        func(c *ProductProcessConfig) { c.GuestControl.Port = c.API.Port },
-		"unbounded guest capacity": func(c *ProductProcessConfig) { c.GuestControlMaxConnections = 0 },
-		"missing peer CRL role":    func(c *ProductProcessConfig) { c.TLS.PeerCRLRoleFile = "" },
-		"invalid peer CRL digest":  func(c *ProductProcessConfig) { c.TLS.PeerCRLRoleDigest = "bad" },
+		"profile digest":              func(c *ProductProcessConfig) { c.TLS.SecurityProfileDigest = "sha256:bad" },
+		"relative profile":            func(c *ProductProcessConfig) { c.TLS.SecurityProfilePath = "profile.json" },
+		"relative socket":             func(c *ProductProcessConfig) { c.TLS.AgentSocket = "signer.sock" },
+		"material agent alias":        func(c *ProductProcessConfig) { c.TLS.AgentSocket = c.Materials.Provider.SocketPath },
+		"agent UID":                   func(c *ProductProcessConfig) { c.TLS.AgentUID = 0 },
+		"agent GID":                   func(c *ProductProcessConfig) { c.TLS.AgentGID = 0 },
+		"timeout":                     func(c *ProductProcessConfig) { c.TLS.OperationTimeoutMillis = 0 },
+		"missing guest listener":      func(c *ProductProcessConfig) { c.GuestControl = option.HTTP{} },
+		"public guest alias":          func(c *ProductProcessConfig) { c.GuestControl = c.API },
+		"public port alias":           func(c *ProductProcessConfig) { c.GuestControl.Port = c.API.Port },
+		"unbounded guest capacity":    func(c *ProductProcessConfig) { c.GuestControlMaxConnections = 0 },
+		"missing peer CRL role":       func(c *ProductProcessConfig) { c.TLS.PeerCRLRoleFile = "" },
+		"invalid peer CRL digest":     func(c *ProductProcessConfig) { c.TLS.PeerCRLRoleDigest = "bad" },
+		"missing PostgreSQL signer":   func(c *ProductProcessConfig) { c.Postgres.ClientAgentSocket = "" },
+		"shared PostgreSQL signer":    func(c *ProductProcessConfig) { c.Postgres.ClientAgentSocket = c.TLS.AgentSocket },
+		"shared PostgreSQL UID":       func(c *ProductProcessConfig) { c.Postgres.ClientAgentUID = c.TLS.AgentUID },
+		"missing PostgreSQL peer CRL": func(c *ProductProcessConfig) { c.Postgres.PeerCRLRoleFile = "" },
 	} {
 		t.Run(name, func(t *testing.T) {
 			candidate := *valid

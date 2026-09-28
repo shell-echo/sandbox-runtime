@@ -233,7 +233,7 @@ func TestRealPostgresRequiresExactClientCNAndScramRole(t *testing.T) {
 		hbaSum, caSum := sha256.Sum256(approvedHBABytes), sha256.Sum256(clientCABytes)
 		policy := phase6security.PostgresServerAuthPolicy{ID: "provider-postgres-auth",
 			Scope: "provider_databases_only", IngressCIDR: approvedSourceCIDR,
-			HBADigest: "sha256:" + hex.EncodeToString(hbaSum[:]),
+			HBADigest:        "sha256:" + hex.EncodeToString(hbaSum[:]),
 			ClientCAAnchorID: "postgres-client-ca"}
 		anchor := phase6security.TrustAnchor{ID: "postgres-client-ca", Purpose: "client_verification",
 			BundleDigest: "sha256:" + hex.EncodeToString(caSum[:])}
@@ -446,9 +446,15 @@ func integrationCA(t *testing.T, now time.Time, commonName string) (*x509.Certif
 	if err != nil {
 		t.Fatal(err)
 	}
+	publicDER, err := x509.MarshalPKIXPublicKey(&key.PublicKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyID := sha256.Sum256(publicDER)
 	template := &x509.Certificate{SerialNumber: big.NewInt(now.UnixNano()), Subject: pkix.Name{CommonName: commonName},
 		NotBefore: now.Add(-time.Minute), NotAfter: now.Add(2 * time.Hour), IsCA: true,
-		BasicConstraintsValid: true, KeyUsage: x509.KeyUsageCertSign | x509.KeyUsageCRLSign}
+		BasicConstraintsValid: true, KeyUsage: x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+		SubjectKeyId: keyID[:20]}
 	der, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
 	if err != nil {
 		t.Fatal(err)

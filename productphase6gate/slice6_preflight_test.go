@@ -72,16 +72,8 @@ func loadSlice6GateInput(ctx context.Context, profilePath, sourceRoot, sourceRev
 		return slice6GateInput{}, errors.New("Slice 6 source checkout is unavailable")
 	}
 	profile, err := phase6security.VerifyFile(profilePath)
-	if err != nil || validateSlice6ScenarioRoutes(profile, slice6ScenarioRoutes) != nil ||
-		phase6security.VerifySlice6DesiredNetworks(profile) != nil ||
-		phase6security.VerifySlice6DesiredPrincipalIDs(profile) != nil ||
-		phase6security.VerifySlice6DesiredEdgeAddresses(profile) != nil ||
-		phase6security.VerifySlice6DesiredExternalServices(profile) != nil ||
-		phase6security.VerifySlice6DesiredEgressPolicies(profile) != nil ||
-		phase6security.VerifySlice6DesiredTrustAnchors(profile) != nil ||
-		phase6security.VerifySlice6DesiredTLSIdentities(profile) != nil ||
-		phase6security.VerifySlice6DesiredImageLocations(profile) != nil ||
-		phase6security.VerifySlice6DesiredIngress(profile) != nil {
+	if err != nil || phase6security.VerifySlice6FinalGateProfile(profile) != nil ||
+		validateSlice6ScenarioRoutes(profile, slice6ScenarioRoutes) != nil {
 		return slice6GateInput{}, errors.New("Slice 6 complete security profile is unavailable")
 	}
 	if err := verifyCleanSlice6Source(ctx, sourceRoot, sourceRevision); err != nil {

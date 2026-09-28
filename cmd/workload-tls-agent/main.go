@@ -117,7 +117,7 @@ func run() error { //nolint:gocyclo
 	if err != nil || !bytes.Equal(canonical, document) ||
 		!((config.Protocol == configProtocol && config.Purpose == "" && config.Postgres == nil && config.PeerCRLSourcesPath == "" && config.PeerCRLSourcesDigest == "") ||
 			(config.Protocol == peerCRLConfigProtocol && config.Purpose == "" && config.Postgres == nil && filepath.IsAbs(config.PeerCRLSourcesPath) && config.PeerCRLSourcesDigest != "") ||
-			(config.Protocol == postgresConfigProtocol && config.Purpose == workloadpki.PostgresClientPurpose && config.Postgres != nil && config.PeerCRLSourcesPath == "" && config.PeerCRLSourcesDigest == "")) ||
+			(config.Protocol == postgresConfigProtocol && config.Purpose == workloadpki.PostgresClientPurpose && config.Postgres != nil && filepath.IsAbs(config.PeerCRLSourcesPath) && config.PeerCRLSourcesDigest != "")) ||
 		config.MaxTTLSeconds < 60 || config.MaxTTLSeconds > maximumPolicyTTL || config.CertificateTTLSeconds < 60 ||
 		int64(config.CertificateTTLSeconds) > config.MaxTTLSeconds || config.RotateAfterSeconds < 1 ||
 		config.RotateAfterSeconds > config.CertificateTTLSeconds*2/3 || config.OverlapSeconds < 0 ||
@@ -151,7 +151,7 @@ func run() error { //nolint:gocyclo
 		return stageError("security-profile-binding")
 	}
 	var peerSources *phase6security.PeerCRLSources
-	if config.Protocol == peerCRLConfigProtocol {
+	if config.Protocol == peerCRLConfigProtocol || config.Protocol == postgresConfigProtocol {
 		mapping, mappingErr := phase6security.VerifyPeerCRLSourcesFile(config.PeerCRLSourcesPath, profile)
 		if mappingErr != nil || mapping.Digest() != config.PeerCRLSourcesDigest {
 			return stageError("peer-crl-sources")
@@ -204,8 +204,13 @@ func run() error { //nolint:gocyclo
 	defer client.Close()
 	var peerProvider workloadtlsagent.PeerCRLProvider
 	if peerSources != nil {
-		peerProvider, err = workloadtlsagent.NewControllerPeerCRLProvider(profile, *peerSources,
-			config.Subject.Digest(), client, time.Now)
+		if config.Protocol == postgresConfigProtocol {
+			peerProvider, err = workloadtlsagent.NewPostgresControllerPeerCRLProvider(profile, *peerSources,
+				config.SubjectDeployment, config.Subject.Digest(), client, time.Now)
+		} else {
+			peerProvider, err = workloadtlsagent.NewControllerPeerCRLProvider(profile, *peerSources,
+				config.Subject.Digest(), client, time.Now)
+		}
 		if err != nil {
 			return stageError("peer-crl-provider")
 		}

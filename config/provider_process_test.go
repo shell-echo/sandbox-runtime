@@ -48,6 +48,9 @@ func TestProviderProcessV3BrowserProductionClosedMatrix(t *testing.T) {
 	candidate.Postgres.RuntimeDSNBindingID = "browser-provider-runtime-dsn"
 	candidate.Postgres.ClientAgentSocket = path("browser-provider-postgres-tls-agent.sock")
 	candidate.Postgres.ClientAgentUID, candidate.Postgres.ClientAgentGID = 503, 21
+	candidate.Postgres.PeerCRLRoleFile = path("browser-provider-postgres-peer-crl-role.json")
+	candidate.Postgres.PeerCRLRoleDigest = "sha256:" + strings.Repeat("e", 64)
+	candidate.Postgres.PeerCRLSourceMappingDigest = "sha256:" + strings.Repeat("f", 64)
 	candidate.ProtectedAdmission.TrustedVerificationKeys[0].PublicKeyFile = ""
 	candidate.ProtectedAdmission.TrustedVerificationKeys[0].PublicKeyBindingID = "browser-provider-admission-key"
 	candidate.Materials.Provider = RoleMaterialProviderConfig{
@@ -274,6 +277,11 @@ func TestProviderProcessV3RequiresTwoLiveListenersAndOnlyNonTLSMaterials(t *test
 	candidate.Postgres.MigrationMaxConnections = 0
 	candidate.Postgres.RuntimeDSNBindingID = "provider-runtime-dsn"
 	candidate.ProtectedAdmission.TrustedVerificationKeys[0].PublicKeyFile = ""
+	candidate.Postgres.ClientAgentSocket = "/tmp/provider-postgres-tls-agent-test.sock"
+	candidate.Postgres.ClientAgentUID, candidate.Postgres.ClientAgentGID = 503, 21
+	candidate.Postgres.PeerCRLRoleFile = "/tmp/provider-postgres-peer-crl-role-test.json"
+	candidate.Postgres.PeerCRLRoleDigest = "sha256:" + strings.Repeat("e", 64)
+	candidate.Postgres.PeerCRLSourceMappingDigest = "sha256:" + strings.Repeat("f", 64)
 	candidate.ProtectedAdmission.TrustedVerificationKeys[0].PublicKeyBindingID = "provider-admission-key"
 	candidate.Materials.Provider = RoleMaterialProviderConfig{
 		Type: UnixWorkloadMaterialProviderV1, Alias: "provider-agent", SocketPath: "/tmp/provider-material-agent-test.sock",
@@ -298,11 +306,14 @@ func TestProviderProcessV3RequiresTwoLiveListenersAndOnlyNonTLSMaterials(t *test
 		t.Fatalf("valid coding-shell Provider v3: %v", err)
 	}
 	for name, mutate := range map[string]func(*ProviderProcessConfig){
-		"missing peer role":      func(value *ProviderProcessConfig) { value.Transport.PeerCRLRoleFile = "" },
-		"missing role digest":    func(value *ProviderProcessConfig) { value.Transport.PeerCRLRoleDigest = "" },
-		"missing mapping digest": func(value *ProviderProcessConfig) { value.Transport.PeerCRLSourceMappingDigest = "" },
-		"malformed role digest":  func(value *ProviderProcessConfig) { value.Transport.PeerCRLRoleDigest = "sha256:ABC" },
-		"malformed map digest":   func(value *ProviderProcessConfig) { value.Transport.PeerCRLSourceMappingDigest = "sha256:ABC" },
+		"missing peer role":           func(value *ProviderProcessConfig) { value.Transport.PeerCRLRoleFile = "" },
+		"missing role digest":         func(value *ProviderProcessConfig) { value.Transport.PeerCRLRoleDigest = "" },
+		"missing mapping digest":      func(value *ProviderProcessConfig) { value.Transport.PeerCRLSourceMappingDigest = "" },
+		"malformed role digest":       func(value *ProviderProcessConfig) { value.Transport.PeerCRLRoleDigest = "sha256:ABC" },
+		"malformed map digest":        func(value *ProviderProcessConfig) { value.Transport.PeerCRLSourceMappingDigest = "sha256:ABC" },
+		"missing PostgreSQL signer":   func(value *ProviderProcessConfig) { value.Postgres.ClientAgentSocket = "" },
+		"shared PostgreSQL signer":    func(value *ProviderProcessConfig) { value.Postgres.ClientAgentSocket = value.Transport.AgentSocket },
+		"missing PostgreSQL peer CRL": func(value *ProviderProcessConfig) { value.Postgres.PeerCRLRoleFile = "" },
 		"old v3 all absent": func(value *ProviderProcessConfig) {
 			value.Transport.PeerCRLRoleFile = ""
 			value.Transport.PeerCRLRoleDigest = ""
@@ -483,6 +494,9 @@ func TestProviderProcessV3DesktopCandidateClosedMatrix(t *testing.T) {
 	candidate.Postgres.RuntimeDSNBindingID = "desktop-provider-runtime-dsn"
 	candidate.Postgres.ClientAgentSocket = path("desktop-provider-postgres-tls-agent.sock")
 	candidate.Postgres.ClientAgentUID, candidate.Postgres.ClientAgentGID = 503, 21
+	candidate.Postgres.PeerCRLRoleFile = path("desktop-provider-postgres-peer-crl-role.json")
+	candidate.Postgres.PeerCRLRoleDigest = "sha256:" + strings.Repeat("e", 64)
+	candidate.Postgres.PeerCRLSourceMappingDigest = "sha256:" + strings.Repeat("f", 64)
 	candidate.ProtectedAdmission.TrustedVerificationKeys[0].PublicKeyFile = ""
 	candidate.ProtectedAdmission.TrustedVerificationKeys[0].PublicKeyBindingID = "desktop-provider-admission-key"
 	candidate.Materials.Provider = RoleMaterialProviderConfig{

@@ -70,13 +70,19 @@ type ProductTLSConfig struct {
 // ProductPostgresConfig contains non-secret connection policy plus either the
 // development DSN file or the production runtime-registry binding ID.
 type ProductPostgresConfig struct {
-	DSNFile                 string `mapstructure:"dsn_file"`
-	RuntimeDSNBindingID     string `mapstructure:"runtime_dsn_binding_id"`
-	RuntimeRole             string `mapstructure:"runtime_role"`
-	StartupTimeoutSeconds   int    `mapstructure:"startup_timeout_seconds"`
-	OperationTimeoutSeconds int    `mapstructure:"operation_timeout_seconds"`
-	MaxConnections          int32  `mapstructure:"max_connections"`
-	MinConnections          int32  `mapstructure:"min_connections"`
+	DSNFile                    string `mapstructure:"dsn_file"`
+	RuntimeDSNBindingID        string `mapstructure:"runtime_dsn_binding_id"`
+	RuntimeRole                string `mapstructure:"runtime_role"`
+	ClientAgentSocket          string `mapstructure:"client_agent_socket"`
+	ClientAgentUID             uint32 `mapstructure:"client_agent_uid"`
+	ClientAgentGID             uint32 `mapstructure:"client_agent_gid"`
+	PeerCRLRoleFile            string `mapstructure:"peer_crl_role_file"`
+	PeerCRLRoleDigest          string `mapstructure:"peer_crl_role_digest"`
+	PeerCRLSourceMappingDigest string `mapstructure:"peer_crl_source_mapping_digest"`
+	StartupTimeoutSeconds      int    `mapstructure:"startup_timeout_seconds"`
+	OperationTimeoutSeconds    int    `mapstructure:"operation_timeout_seconds"`
+	MaxConnections             int32  `mapstructure:"max_connections"`
+	MinConnections             int32  `mapstructure:"min_connections"`
 }
 
 // ProductIdentityConfig selects either the development-only frozen bearer
@@ -168,7 +174,9 @@ func (c *ProductProcessConfig) validateDevelopment() error {
 	if filepath.Clean(c.Postgres.DSNFile) == filepath.Clean(c.Identity.BindingsFile) {
 		return errors.New("Product PostgreSQL and identity secrets must use different files")
 	}
-	if c.GuestControl != (option.HTTP{}) || c.GuestControlMaxConnections != 0 || c.TLS != (ProductTLSConfig{}) || c.Postgres.RuntimeRole != "" || c.Identity.Issuer != "" ||
+	if c.GuestControl != (option.HTTP{}) || c.GuestControlMaxConnections != 0 || c.TLS != (ProductTLSConfig{}) || c.Postgres.RuntimeRole != "" ||
+		c.Postgres.ClientAgentSocket != "" || c.Postgres.ClientAgentUID != 0 || c.Postgres.ClientAgentGID != 0 || c.Identity.Issuer != "" ||
+		c.Postgres.PeerCRLRoleFile != "" || c.Postgres.PeerCRLRoleDigest != "" || c.Postgres.PeerCRLSourceMappingDigest != "" ||
 		c.Identity.Audience != "" || c.Postgres.RuntimeDSNBindingID != "" || c.Identity.KeyRingBindingID != "" || !c.Materials.IsZero() {
 		return errors.New("production Product authority is not accepted in development mode")
 	}
@@ -197,6 +205,10 @@ func (c *ProductProcessConfig) validateProduction() error {
 		{"identity key ring", c.Identity.KeyRingBindingID, secretref.PurposeIdentityKeyRing},
 	}
 	if c.SchemaVersion == ProductProductionSchemaV2 {
+		if c.Postgres.ClientAgentSocket != "" || c.Postgres.ClientAgentUID != 0 || c.Postgres.ClientAgentGID != 0 ||
+			c.Postgres.PeerCRLRoleFile != "" || c.Postgres.PeerCRLRoleDigest != "" || c.Postgres.PeerCRLSourceMappingDigest != "" {
+			return errors.New("Product v2 cannot select a PostgreSQL client signer")
+		}
 		if c.TLS.SecurityProfilePath != "" || c.TLS.SecurityProfileDigest != "" || c.TLS.AgentSocket != "" ||
 			c.TLS.AgentUID != 0 || c.TLS.AgentGID != 0 || c.TLS.OperationTimeoutMillis != 0 ||
 			c.TLS.PeerCRLRoleFile != "" || c.TLS.PeerCRLRoleDigest != "" || c.TLS.PeerCRLSourceMappingDigest != "" ||
@@ -207,6 +219,20 @@ func (c *ProductProcessConfig) validateProduction() error {
 			materialSelection{"TLS certificate", c.TLS.CertificateBindingID, secretref.PurposeTLSCertificate},
 			materialSelection{"TLS private key", c.TLS.PrivateKeyBindingID, secretref.PurposeTLSPrivateKey})
 	} else {
+		if validateAbsoluteSecretPath("Product PostgreSQL client agent socket", c.Postgres.ClientAgentSocket) != nil ||
+			validateAbsoluteSecretPath("Product PostgreSQL peer CRL role", c.Postgres.PeerCRLRoleFile) != nil ||
+			!providerSHA256Pattern.MatchString(c.Postgres.PeerCRLRoleDigest) ||
+			!providerSHA256Pattern.MatchString(c.Postgres.PeerCRLSourceMappingDigest) ||
+			c.Postgres.PeerCRLRoleFile == c.Postgres.ClientAgentSocket ||
+			c.Postgres.PeerCRLRoleFile == c.TLS.PeerCRLRoleFile ||
+			c.Postgres.PeerCRLRoleFile == c.TLS.SecurityProfilePath ||
+			c.Postgres.PeerCRLRoleFile == c.Materials.Provider.SocketPath ||
+			c.Postgres.ClientAgentSocket == c.TLS.AgentSocket || c.Postgres.ClientAgentSocket == c.TLS.SecurityProfilePath ||
+			c.Postgres.ClientAgentSocket == c.TLS.PeerCRLRoleFile || c.Postgres.ClientAgentSocket == c.Materials.Provider.SocketPath ||
+			c.Postgres.ClientAgentUID == 0 || c.Postgres.ClientAgentGID == 0 ||
+			c.Postgres.ClientAgentUID == c.TLS.AgentUID || c.Postgres.ClientAgentGID == c.TLS.AgentGID {
+			return errors.New("Product v3 requires a distinct purpose-bound PostgreSQL client signer")
+		}
 		if c.TLS.CertificateBindingID != "" || c.TLS.PrivateKeyBindingID != "" || c.TLS.ExpectedServerName != "" ||
 			validateAbsoluteSecretPath("Product security profile", c.TLS.SecurityProfilePath) != nil ||
 			validateAbsoluteSecretPath("Product TLS agent socket", c.TLS.AgentSocket) != nil ||

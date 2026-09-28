@@ -82,13 +82,61 @@ func DerivePeerCRLRoleDocument(profile Profile, sources PeerCRLSources, localPri
 	return document, nil
 }
 
+// DerivePostgresPeerCRLRoleDocument gives the separate PostgreSQL-purpose
+// signer only its owner's external server edge. It does not merge the role's
+// ordinary internal peer sources with this read-only purpose.
+func DerivePostgresPeerCRLRoleDocument(profile Profile, sources PeerCRLSources, owner string) (PeerCRLRoleDocument, error) {
+	if sources.Validate(profile) != nil {
+		return PeerCRLRoleDocument{}, ErrInvalidProfile
+	}
+	authority, err := profile.ResolveSlice6FinalPostgresAuthority(owner)
+	if err != nil {
+		return PeerCRLRoleDocument{}, ErrInvalidProfile
+	}
+	var principal Principal
+	for _, candidate := range profile.Principals {
+		if candidate.Name == owner {
+			principal = candidate
+		}
+	}
+	if principal.Name == "" {
+		return PeerCRLRoleDocument{}, ErrInvalidProfile
+	}
+	result := PeerCRLRoleDocument{Protocol: PeerCRLRoleProtocolID,
+		SecurityProfileDigest: profile.ProfileDigest, SourceMappingDigest: sources.Digest(),
+		LocalPrincipalDigest: principal.PrincipalDigest}
+	for _, bound := range sources.Edges {
+		if bound.EdgeID != authority.PeerEdgeID || bound.LocalPrincipalDigest != principal.PrincipalDigest ||
+			bound.Direction != "outbound" || bound.PeerAnchorID != authority.ServerAnchor.ID {
+			continue
+		}
+		for _, source := range sources.Sources {
+			if source.ID == bound.SourceID {
+				result.Edges = []PeerCRLRoleEdgeBinding{{EdgeID: bound.EdgeID, Direction: "outbound",
+					PeerAnchorID: bound.PeerAnchorID, IssuerDigest: source.IssuerDigest}}
+			}
+		}
+	}
+	if result.Validate(profile, sources.Digest()) != nil {
+		return PeerCRLRoleDocument{}, ErrInvalidProfile
+	}
+	return result, nil
+}
+
 func (d PeerCRLRoleDocument) Validate(profile Profile, expectedMappingDigest string) error {
 	if profile.Validate() != nil || d.Protocol != PeerCRLRoleProtocolID ||
 		d.SecurityProfileDigest != profile.ProfileDigest || !digestPattern.MatchString(expectedMappingDigest) ||
 		d.SourceMappingDigest != expectedMappingDigest || len(d.Edges) < 1 || len(d.Edges) > 512 {
 		return ErrInvalidProfile
 	}
-	required, err := peerCRLRoleRequiredEdges(profile, d.LocalPrincipalDigest)
+	var required []PeerCRLRoleEdgeBinding
+	var err error
+	if len(d.Edges) > 0 && profile.IsSlice6FinalPostgresPeerEdge(d.Edges[0].EdgeID, d.LocalPrincipalDigest) {
+		required = []PeerCRLRoleEdgeBinding{{EdgeID: d.Edges[0].EdgeID,
+			Direction: "outbound", PeerAnchorID: "external-server-ca"}}
+	} else {
+		required, err = peerCRLRoleRequiredEdges(profile, d.LocalPrincipalDigest)
+	}
 	if err != nil || len(required) != len(d.Edges) {
 		return ErrInvalidProfile
 	}

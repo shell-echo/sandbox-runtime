@@ -10,6 +10,7 @@ import (
 	"errors"
 	"net/netip"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -119,6 +120,7 @@ func createSlice6ProfileNetwork(ctx context.Context, run slice6DockerRun, expect
 	}
 	empty := expected
 	empty.Principals = nil
+	empty.ExternalServices = nil
 	observed, err := observeSlice6ProfileNetwork(ctx, run, id, empty, map[string]string{})
 	if err != nil || observed.NetworkID != id {
 		return phase6security.NetworkObservation{}, errors.New("Docker network differs from Slice 6 profile")
@@ -154,6 +156,36 @@ func captureSlice6ProfileNetwork(ctx context.Context, run slice6DockerRun, id st
 		return slice6NetworkCapture{}, errors.New("Docker network differs from Slice 6 profile")
 	}
 	return slice6NetworkCapture{observation: observed, raw: raw}, nil
+}
+
+// createSlice6FinalNetworkInventory is the first Docker side effect of the
+// eventual full run. All bridges are created before any role is admitted;
+// partial creation and lost create replies are recovered by the run label.
+// These empty-network observations are bootstrap checks, not final receipts.
+func createSlice6FinalNetworkInventory(ctx context.Context, run slice6DockerRun) ([]phase6security.NetworkObservation, error) {
+	desired := phase6security.Slice6DesiredFinalNetworks()
+	if ctx == nil || ctx.Err() != nil || phase6security.VerifySlice6DesiredFinalNetworks(desired) != nil {
+		return nil, errors.New("final Slice 6 network plan is unavailable")
+	}
+	observed := make([]phase6security.NetworkObservation, 0, len(desired))
+	for _, network := range desired {
+		entry, err := createSlice6ProfileNetwork(ctx, run, network)
+		if err != nil {
+			return nil, cleanupFailedSlice6NetworkBootstrap(run, err)
+		}
+		observed = append(observed, entry)
+	}
+	ids, err := run.labeledIDs(ctx, "network")
+	if err != nil || len(ids) != len(desired) {
+		return nil, cleanupFailedSlice6NetworkBootstrap(run, errors.New("incomplete run-owned Slice 6 network inventory"))
+	}
+	return observed, nil
+}
+
+func cleanupFailedSlice6NetworkBootstrap(run slice6DockerRun, cause error) error {
+	cleanupContext, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	return errors.Join(cause, run.cleanup(cleanupContext))
 }
 
 // This creates real Docker bridges from the same exact allocator intended for
@@ -220,14 +252,14 @@ func TestPhase6Slice6DesiredNetworkInventoryCreation(t *testing.T) {
 			t.Errorf("exact reviewed Slice 6 network inventory cleanup: %v", err)
 		}
 	})
-	desired := phase6security.Slice6DesiredNetworks()
-	if len(desired) < 50 {
-		t.Fatal("reviewed network inventory is incomplete")
+	desired := phase6security.Slice6DesiredFinalNetworks()
+	observations, err := createSlice6FinalNetworkInventory(ctx, run)
+	if err != nil || len(observations) != len(desired) {
+		t.Fatalf("final Docker networks could not coexist: %d/%d: %v", len(observations), len(desired), err)
 	}
-	for _, network := range desired {
-		observed, err := createSlice6ProfileNetwork(ctx, run, network)
-		if err != nil || observed.Name != network.Name || observed.Subnet != network.IPv4Subnet {
-			t.Fatalf("reviewed Docker network %s could not coexist: %#v, %v", network.Name, observed, err)
+	for index, observed := range observations {
+		if observed.Name != desired[index].Name || observed.Subnet != desired[index].IPv4Subnet {
+			t.Fatalf("final Docker network %s differs from the frozen plan", desired[index].Name)
 		}
 	}
 	ids, err := run.labeledIDs(ctx, "network")
@@ -237,7 +269,68 @@ func TestPhase6Slice6DesiredNetworkInventoryCreation(t *testing.T) {
 	if err := run.cleanup(ctx); err != nil {
 		t.Fatalf("reviewed Docker network inventory remains: %v", err)
 	}
-	t.Logf("%d reviewed isolated/NAT Docker networks coexisted and were removed; no role-chain claim", len(desired))
+	t.Logf("%d final isolated/NAT Docker networks coexisted and were removed; no role-chain claim", len(desired))
+}
+
+// A pre-existing name conflict after the first bridge must not leave a
+// partial run or delete the unrelated bridge that caused the refusal.
+func TestPhase6Slice6NetworkBootstrapConflictCleanup(t *testing.T) {
+	if os.Getenv(slice6NetworkGraphEnv) != "1" {
+		t.Skip("set " + slice6NetworkGraphEnv + "=1 for real Docker network rollback")
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
+	defer cancel()
+	run, err := newSlice6DockerRun()
+	if err != nil {
+		t.Fatal(err)
+	}
+	desired := phase6security.Slice6DesiredFinalNetworks()
+	if len(desired) < 2 {
+		t.Fatal("final Slice 6 network inventory is incomplete")
+	}
+	blockerName := desired[1].Name
+	listed, err := run.docker(ctx, "network", "ls", "--format", "{{.Name}}")
+	if err != nil || slices.Contains(strings.Fields(string(listed)), blockerName) {
+		t.Fatal("conflicting Docker network name is already occupied")
+	}
+	blockerLabel := "io.github.shell-echo.sandbox-runtime.phase6-slice6-conflict=" + run.id
+	t.Cleanup(func() {
+		cleanup, stop := context.WithTimeout(context.Background(), 30*time.Second)
+		defer stop()
+		found, err := run.docker(cleanup, "network", "ls", "-q", "--no-trunc", "--filter", "label="+blockerLabel)
+		if err != nil {
+			t.Errorf("discover exact controlled conflict bridge: %v", err)
+		} else {
+			for _, id := range strings.Fields(string(found)) {
+				if len(id) != 64 || !lowerHexSlice6(id) {
+					t.Errorf("invalid controlled conflict bridge identity")
+					continue
+				}
+				if _, err := run.docker(cleanup, "network", "rm", id); err != nil {
+					t.Errorf("exact controlled conflict bridge cleanup: %v", err)
+				}
+			}
+		}
+		if err := run.cleanup(cleanup); err != nil {
+			t.Errorf("exact partial Slice 6 network cleanup: %v", err)
+		}
+	})
+	created, err := run.docker(ctx, "network", "create", "--driver", "bridge",
+		"--label", blockerLabel, blockerName)
+	blockerID := strings.TrimSpace(string(created))
+	if err != nil || len(blockerID) != 64 || !lowerHexSlice6(blockerID) {
+		t.Fatal("controlled conflict bridge could not be created")
+	}
+	if _, err := createSlice6FinalNetworkInventory(ctx, run); err == nil {
+		t.Fatal("pre-existing Docker name conflict was admitted")
+	}
+	ids, err := run.labeledIDs(ctx, "network")
+	if err != nil || len(ids) != 0 {
+		t.Fatalf("partial run-owned network survived conflict: %v, %v", ids, err)
+	}
+	if _, err := run.docker(ctx, "network", "inspect", blockerID); err != nil {
+		t.Fatal("unrelated conflicting network was deleted")
+	}
 }
 
 // This opt-in component exercises actual Docker membership and an undeclared

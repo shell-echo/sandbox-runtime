@@ -151,6 +151,13 @@ func TestLoadGatewayV3AuthorityHasNoStaticTLSMaterials(t *testing.T) {
 	fixture.credential.ProviderClientCertificateFile = ""
 	fixture.credential.ProviderClientPrivateKeyFile = ""
 	fixture.credential.ProductRuntimeDSNBindingID = "gateway-dsn"
+	fixture.credential.PostgresRuntimeRole = "product_gateway"
+	fixture.credential.PostgresMaxConnections = 16
+	fixture.credential.PostgresClientAgentSocket = filepath.Join(filepath.Dir(fixture.cfg.Authority.CredentialFile), "gateway-postgres-tls-agent.sock")
+	fixture.credential.PostgresClientAgentUID, fixture.credential.PostgresClientAgentGID = 503, 21
+	fixture.credential.PostgresPeerCRLRoleFile = filepath.Join(filepath.Dir(fixture.cfg.Authority.CredentialFile), "gateway-postgres-peer-crl-role.json")
+	fixture.credential.PostgresPeerCRLRoleDigest = "sha256:" + strings.Repeat("d", 64)
+	fixture.credential.PostgresPeerCRLSourceMappingDigest = "sha256:" + strings.Repeat("e", 64)
 	fixture.credential.GrantKeyBindingID = "gateway-grant"
 	write := func() {
 		writeJSON0600(t, fixture.cfg.Authority.CredentialFile, fixture.credential)
@@ -162,10 +169,11 @@ func TestLoadGatewayV3AuthorityHasNoStaticTLSMaterials(t *testing.T) {
 		t.Fatalf("valid live Gateway authority: %v", err)
 	}
 	for name, mutate := range map[string]func(*GatewayCredentialAuthority){
-		"old authority version": func(value *GatewayCredentialAuthority) { value.Version = gatewayAuthorityVersionV3 },
-		"static CA path":        func(value *GatewayCredentialAuthority) { value.ProviderCABundleFile = "/tmp/old-ca.pem" },
-		"static client key":     func(value *GatewayCredentialAuthority) { value.ProviderClientPrivateKeyBindingID = "old-key" },
-		"missing grant":         func(value *GatewayCredentialAuthority) { value.GrantKeyBindingID = "" },
+		"old authority version":     func(value *GatewayCredentialAuthority) { value.Version = gatewayAuthorityVersionV3 },
+		"static CA path":            func(value *GatewayCredentialAuthority) { value.ProviderCABundleFile = "/tmp/old-ca.pem" },
+		"static client key":         func(value *GatewayCredentialAuthority) { value.ProviderClientPrivateKeyBindingID = "old-key" },
+		"missing grant":             func(value *GatewayCredentialAuthority) { value.GrantKeyBindingID = "" },
+		"missing PostgreSQL signer": func(value *GatewayCredentialAuthority) { value.PostgresClientAgentSocket = "" },
 	} {
 		t.Run(name, func(t *testing.T) {
 			candidate := fixture.credential

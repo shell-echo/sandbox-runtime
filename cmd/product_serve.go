@@ -128,6 +128,14 @@ func runDevelopmentProduct(ctx context.Context, productConfig *config.ProductPro
 }
 
 func runProductionProduct(ctx context.Context, productConfig *config.ProductProcessConfig) error {
+	var securityProfile phase6security.Profile
+	var err error
+	if productConfig.SchemaVersion == config.ProductProductionSchemaV3 {
+		securityProfile, err = preflightProductV3Postgres(productConfig)
+		if err != nil {
+			return err
+		}
+	}
 	startupContext, cancelStartup := context.WithTimeout(ctx, time.Duration(productConfig.Postgres.StartupTimeoutSeconds)*time.Second)
 	defer cancelStartup()
 	materialRegistry, err := newProductRuntimeMaterialRegistry(productConfig.Materials, productConfig.SchemaVersion)
@@ -135,12 +143,21 @@ func runProductionProduct(ctx context.Context, productConfig *config.ProductProc
 		return err
 	}
 	defer materialRegistry.Close()
-	runtimePool, err := openProductPostgresRegistry(startupContext, materialRegistry, productConfig.Postgres.RuntimeDSNBindingID,
-		secretref.PurposePostgresRuntimeDSN, productConfig.Postgres.MaxConnections, productConfig.Postgres.MinConnections)
+	var runtimePool *pgxpool.Pool
+	var closePool func()
+	if productConfig.SchemaVersion == config.ProductProductionSchemaV3 {
+		runtimePool, closePool, err = openProductV3Postgres(startupContext, ctx, productConfig, securityProfile, materialRegistry)
+	} else {
+		runtimePool, err = openProductPostgresRegistry(startupContext, materialRegistry, productConfig.Postgres.RuntimeDSNBindingID,
+			secretref.PurposePostgresRuntimeDSN, productConfig.Postgres.MaxConnections, productConfig.Postgres.MinConnections)
+		if err == nil {
+			closePool = runtimePool.Close
+		}
+	}
 	if err != nil {
 		return fmt.Errorf("open Product runtime database: %w", err)
 	}
-	defer runtimePool.Close()
+	defer closePool()
 	if err := runtimePool.Ping(startupContext); err != nil {
 		return errors.New("Product runtime database is unavailable at startup")
 	}
@@ -163,14 +180,8 @@ func runProductionProduct(ctx context.Context, productConfig *config.ProductProc
 	}
 	var tlsConfig *tls.Config
 	var tlsProbe func(context.Context) error
-	var securityProfile phase6security.Profile
 	if productConfig.SchemaVersion == config.ProductProductionSchemaV3 {
-		profile, profileErr := phase6security.VerifyFile(productConfig.TLS.SecurityProfilePath)
-		if profileErr != nil || profile.ProfileDigest != productConfig.TLS.SecurityProfileDigest {
-			return errors.New("Product security profile mismatch")
-		}
-		securityProfile = profile
-		tlsConfig, tlsProbe, err = phase6tls.PublicServer(profile, phase6tls.PublicServerAuthority{
+		tlsConfig, tlsProbe, err = phase6tls.PublicServer(securityProfile, phase6tls.PublicServerAuthority{
 			ListenerID: "product-public", ListenAddress: productConfig.API.Addr(), Port: productConfig.API.Port,
 			AgentSocket: productConfig.TLS.AgentSocket, AgentUID: productConfig.TLS.AgentUID, AgentGID: productConfig.TLS.AgentGID,
 			OperationTimeout: time.Duration(productConfig.TLS.OperationTimeoutMillis) * time.Millisecond})
@@ -404,6 +415,9 @@ func runProductMigrate(cmd *cobra.Command, _ []string) error {
 	}
 	if err := migrationConfig.Validate(); err != nil {
 		return err
+	}
+	if migrationConfig.SchemaVersion == config.ProductMigrationSchemaV2 {
+		return runProductMigrationV2(cmd.Context(), migrationConfig)
 	}
 	ctx, cancel := context.WithTimeout(cmd.Context(), time.Duration(migrationConfig.Postgres.StartupTimeoutSeconds)*time.Second)
 	defer cancel()

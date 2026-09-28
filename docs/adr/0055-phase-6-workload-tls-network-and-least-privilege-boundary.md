@@ -1567,3 +1567,40 @@ current user and bounded DDL privilege before executing its migration. The
 final Slice 6 gate rejects old direct-DSN paths and v1 migration selection;
 there is no default or runtime fallback. This version disposition does not
 alter the accepted Slice 4/5 manifests or the locked public Provider Contract.
+
+### PostgreSQL revocation responsibility (2026-09-28)
+
+The nine client owners share one parameterized implementation, but two
+different certificate directions must be proven. A pinned CA and finite
+certificate lifetime alone do not satisfy this gate.
+
+| Boundary | Source and enforcer | Required observed result |
+| --- | --- | --- |
+| Client observes PostgreSQL server leaf | Fixed Vault issuer/source, PostgreSQL-purpose role agent, peer CRL guard on the logical caller's external edge; the physical Browser/Desktop broker remains a separate outer guard | Revoked server leaf rejects new handshakes; source loss, expiry, rollback or revocation drains existing tracked connections within the declared budget |
+| PostgreSQL observes client leaf | Original PostgreSQL-client issuer's complete CRL, installed by the controlled external-service operator through `ssl_crl_file` or `ssl_crl_dir`; runtime/migration SQL roles cannot administer it | A revoked client leaf fails a newly opened TLS connection while a non-revoked control succeeds; file presence or `reload=true` alone is not evidence |
+| Client observes its own issued leaf | Dedicated PostgreSQL-purpose signer and revocation status for the exact leaf used by each connection | Rotation, client revocation and signer/controller loss close active and idle pooled connections within the bound; old connection serials are not replaced by the new signer serial |
+| Connection cancellation | Runtime pool/connection registry and one-shot migration executor | Long query or migration is interrupted, readiness/new connections fail closed, no unknown-result transaction is replayed, and close/cleanup is exact |
+
+This is a responsibility matrix, not evidence of an activated CRL or a
+completed drain. The controlled PostgreSQL process needs a real, fixed Vault
+issuer source; the disposable test-local CA diagnostic above is insufficient.
+No generic external PKI service or unreviewed fallback is authorized.
+
+For the nine client owners, the local Slice 6 connection-lifecycle policy is
+conservative: each PostgreSQL TLS handshake records the actual client leaf
+DER/issuer/serial, and a different live signer leaf closes the old connection
+before the new leaf becomes ready. Normal rotation therefore interrupts old
+connections and potentially in-flight transactions; no write or migration DDL
+is automatically replayed after an unknown result. The role also closes old
+connections when signer snapshot authority or its CRL-safe deadline is lost.
+This is not zero-interruption rotation and cannot revoke a non-cooperating
+client's PostgreSQL session; the service-side CRL gate independently rejects
+new handshakes. The existing TLS-agent's own CRL path now rejects incomplete
+CRLs, number/content rollback and disappearance of an observed unexpired
+revocation. A full bounded Vault-publication-to-drain measurement remains
+required before the Slice 6 gate can be accepted.
+
+The PostgreSQL transport must explicitly complete the pgx TLS handshake with
+the connection's cancellation context before tracking or sending its startup
+packet. Component observations and remaining gate gaps are recorded in the
+Slice 6 startup audit; they are not final Vault/topology evidence.

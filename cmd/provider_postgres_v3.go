@@ -13,6 +13,7 @@ import (
 	"github.com/shell-echo/sandbox-runtime/internal/desktopcandidate"
 	"github.com/shell-echo/sandbox-runtime/internal/phase6egress"
 	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
+	"github.com/shell-echo/sandbox-runtime/internal/phase6tls"
 	"github.com/shell-echo/sandbox-runtime/internal/secretref"
 	"github.com/shell-echo/sandbox-runtime/internal/workloadtlsagent"
 	browserimage "github.com/shell-echo/sandbox-runtime/profiles/browser/image"
@@ -136,6 +137,17 @@ func providerV3DatabaseBinding(cfg *config.ProviderProcessConfig, profile phase6
 		clientBinding.SocketPath == cfg.Transport.AgentSocket {
 		return providerV3DatabaseAuthority{}, errors.New("Provider v3 PostgreSQL client signer does not match profile")
 	}
+	postgresAuthority, err := profile.ResolveSlice6FinalPostgresAuthority(owner)
+	if err != nil || !postgresAuthority.BrokerOnly || postgresAuthority.SQLRole != cfg.Postgres.RuntimeRole ||
+		postgresAuthority.Signer.SocketPath != cfg.Postgres.ClientAgentSocket {
+		return providerV3DatabaseAuthority{}, errors.New("Provider v3 final PostgreSQL boundary does not match profile")
+	}
+	postgresRole, err := phase6security.VerifyPeerCRLRoleFile(cfg.Postgres.PeerCRLRoleFile, profile,
+		cfg.Postgres.PeerCRLSourceMappingDigest, cfg.Postgres.PeerCRLRoleDigest)
+	if err != nil || len(postgresRole.Edges) != 1 || postgresRole.Edges[0].EdgeID != postgresAuthority.PeerEdgeID ||
+		postgresRole.Edges[0].Direction != "outbound" || postgresRole.Edges[0].PeerAnchorID != postgresAuthority.ServerAnchor.ID {
+		return providerV3DatabaseAuthority{}, errors.New("Provider v3 PostgreSQL peer CRL role does not match profile")
+	}
 	if _, err := profile.ProjectSandboxIdentityPlan(template, owner, capacity); err != nil {
 		return providerV3DatabaseAuthority{}, errors.New("Provider v3 identity capacity does not match profile")
 	}
@@ -162,6 +174,12 @@ func openProviderV3Postgres(ctx context.Context, lifetime context.Context, cfg *
 	if err != nil || len(service.DNSNames) != 1 {
 		return nil, nil, providerV3DatabaseAuthority{}, errors.New("Provider v3 database target is unavailable")
 	}
+	postgresAuthority, err := profile.ResolveSlice6FinalPostgresAuthority(authority.owner)
+	if err != nil || !postgresAuthority.BrokerOnly || postgresAuthority.Database != binding.DatabaseName ||
+		postgresAuthority.SQLRole != binding.RuntimeRole || postgresAuthority.ServerHost != service.DNSNames[0] ||
+		postgresAuthority.ServerPort != edge.Port {
+		return nil, nil, providerV3DatabaseAuthority{}, errors.New("Provider v3 final database target is unavailable")
+	}
 	role, err := phase6security.VerifyPeerCRLRoleFile(cfg.Transport.PeerCRLRoleFile, profile,
 		cfg.Transport.PeerCRLSourceMappingDigest, cfg.Transport.PeerCRLRoleDigest)
 	if err != nil {
@@ -175,7 +193,17 @@ func openProviderV3Postgres(ctx context.Context, lifetime context.Context, cfg *
 	if err != nil {
 		return nil, nil, providerV3DatabaseAuthority{}, errors.New("Provider v3 database broker is unavailable")
 	}
-	cleanupGuard := func() { guard.Close() }
+	var postgresGuard *phase6tls.PeerCRLGuard
+	var ownGuard *phase6egress.PostgresOwnGuard
+	cleanupGuard := func() {
+		if ownGuard != nil {
+			ownGuard.Close()
+		}
+		if postgresGuard != nil {
+			postgresGuard.Close()
+		}
+		guard.Close()
+	}
 	if err := guard.Bootstrap(ctx); err != nil {
 		cleanupGuard()
 		return nil, nil, providerV3DatabaseAuthority{}, errors.New("Provider v3 database broker revocation evidence is unavailable")
@@ -200,6 +228,20 @@ func openProviderV3Postgres(ctx context.Context, lifetime context.Context, cfg *
 	if err != nil {
 		cleanupGuard()
 		return nil, nil, providerV3DatabaseAuthority{}, errors.New("Provider v3 database signer is unavailable")
+	}
+	postgresRole, err := phase6security.VerifyPeerCRLRoleFile(cfg.Postgres.PeerCRLRoleFile, profile,
+		cfg.Postgres.PeerCRLSourceMappingDigest, cfg.Postgres.PeerCRLRoleDigest)
+	if err != nil {
+		cleanupGuard()
+		return nil, nil, providerV3DatabaseAuthority{}, errors.New("Provider v3 PostgreSQL peer CRL role is unavailable")
+	}
+	postgresGuard, err = phase6tls.PostgresPeerGuard(profile, phase6tls.PostgresPeerAuthority{
+		Owner: authority.owner, PeerCRLRole: postgresRole,
+		AgentSocket: cfg.Postgres.ClientAgentSocket, AgentUID: cfg.Postgres.ClientAgentUID,
+		AgentGID: cfg.Postgres.ClientAgentGID, OperationTimeout: operationTimeout})
+	if err != nil || postgresGuard.Bootstrap(ctx) != nil {
+		cleanupGuard()
+		return nil, nil, providerV3DatabaseAuthority{}, errors.New("Provider v3 PostgreSQL peer revocation evidence is unavailable")
 	}
 	alias, err := phase6egress.NewProviderPostgresAlias(ctx, profile, authority.owner, broker, guard,
 		signer.CertificateForHandshake)
@@ -228,14 +270,25 @@ func openProviderV3Postgres(ctx context.Context, lifetime context.Context, cfg *
 		cleanupGuard()
 		return nil, nil, providerV3DatabaseAuthority{}, errors.New("Provider v3 database tunnel is unavailable")
 	}
+	if err := phase6egress.BindPostgresPeerGuard(poolConfig, postgresAuthority, postgresGuard); err != nil {
+		cleanupGuard()
+		return nil, nil, providerV3DatabaseAuthority{}, errors.New("Provider v3 PostgreSQL peer revocation tunnel is unavailable")
+	}
+	ownGuard, err = phase6egress.NewPostgresOwnGuard(profile, authority.owner, signer, operationTimeout, time.Now)
+	if err != nil || ownGuard.Refresh(ctx) != nil ||
+		phase6egress.BindPostgresOwnGuard(poolConfig, ownGuard) != nil {
+		cleanupGuard()
+		return nil, nil, providerV3DatabaseAuthority{}, errors.New("Provider v3 PostgreSQL client revocation guard is unavailable")
+	}
 	poolConfig.AfterConnect = func(connectContext context.Context, connection *pgx.Conn) error {
 		return providerpostgres.VerifyBoundRuntimeConnection(connectContext, connection,
 			binding.DatabaseName, binding.RuntimeRole)
 	}
 	// A pooled connection cannot outlive the broker revocation guard's
 	// readiness simply because its PostgreSQL handshake happened earlier.
-	poolConfig.BeforeAcquire = func(acquireContext context.Context, _ *pgx.Conn) bool {
-		return acquireContext != nil && acquireContext.Err() == nil && guard.Ready()
+	innerBeforeAcquire := poolConfig.BeforeAcquire
+	poolConfig.BeforeAcquire = func(acquireContext context.Context, connection *pgx.Conn) bool {
+		return innerBeforeAcquire(acquireContext, connection) && guard.Ready()
 	}
 	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
 	if err != nil {
@@ -244,11 +297,26 @@ func openProviderV3Postgres(ctx context.Context, lifetime context.Context, cfg *
 	}
 	stopPolling, err := guard.StartPolling(lifetime)
 	if err != nil {
-		pool.Close()
 		cleanupGuard()
+		pool.Close()
 		return nil, nil, providerV3DatabaseAuthority{}, errors.New("Provider v3 database revocation monitor is unavailable")
 	}
-	close := func() { stopPolling(); pool.Close(); guard.Close() }
+	stopPostgresPolling, err := postgresGuard.StartPolling(lifetime)
+	if err != nil {
+		stopPolling()
+		cleanupGuard()
+		pool.Close()
+		return nil, nil, providerV3DatabaseAuthority{}, errors.New("Provider v3 PostgreSQL peer revocation monitor is unavailable")
+	}
+	stopOwnPolling, err := ownGuard.StartPolling(lifetime)
+	if err != nil {
+		stopPostgresPolling()
+		stopPolling()
+		cleanupGuard()
+		pool.Close()
+		return nil, nil, providerV3DatabaseAuthority{}, errors.New("Provider v3 PostgreSQL client revocation monitor is unavailable")
+	}
+	close := func() { stopOwnPolling(); stopPostgresPolling(); stopPolling(); cleanupGuard(); pool.Close() }
 	return pool, close, authority, nil
 }
 

@@ -72,19 +72,22 @@ type ProviderProcessAdmissionConfig struct {
 }
 
 type ProviderPostgresConfig struct {
-	MigrationDSNFile        string `mapstructure:"migration_dsn_file"`
-	RuntimeDSNFile          string `mapstructure:"runtime_dsn_file"`
-	RuntimeDSNBindingID     string `mapstructure:"runtime_dsn_binding_id"`
-	ClientAgentSocket       string `mapstructure:"client_agent_socket"`
-	ClientAgentUID          uint32 `mapstructure:"client_agent_uid"`
-	ClientAgentGID          uint32 `mapstructure:"client_agent_gid"`
-	MigrationRole           string `mapstructure:"migration_role"`
-	RuntimeRole             string `mapstructure:"runtime_role"`
-	StartupTimeoutSeconds   int    `mapstructure:"startup_timeout_seconds"`
-	OperationTimeoutSeconds int    `mapstructure:"operation_timeout_seconds"`
-	MigrationMaxConnections int32  `mapstructure:"migration_max_connections"`
-	MaxConnections          int32  `mapstructure:"max_connections"`
-	MinConnections          int32  `mapstructure:"min_connections"`
+	MigrationDSNFile           string `mapstructure:"migration_dsn_file"`
+	RuntimeDSNFile             string `mapstructure:"runtime_dsn_file"`
+	RuntimeDSNBindingID        string `mapstructure:"runtime_dsn_binding_id"`
+	ClientAgentSocket          string `mapstructure:"client_agent_socket"`
+	ClientAgentUID             uint32 `mapstructure:"client_agent_uid"`
+	ClientAgentGID             uint32 `mapstructure:"client_agent_gid"`
+	PeerCRLRoleFile            string `mapstructure:"peer_crl_role_file"`
+	PeerCRLRoleDigest          string `mapstructure:"peer_crl_role_digest"`
+	PeerCRLSourceMappingDigest string `mapstructure:"peer_crl_source_mapping_digest"`
+	MigrationRole              string `mapstructure:"migration_role"`
+	RuntimeRole                string `mapstructure:"runtime_role"`
+	StartupTimeoutSeconds      int    `mapstructure:"startup_timeout_seconds"`
+	OperationTimeoutSeconds    int    `mapstructure:"operation_timeout_seconds"`
+	MigrationMaxConnections    int32  `mapstructure:"migration_max_connections"`
+	MaxConnections             int32  `mapstructure:"max_connections"`
+	MinConnections             int32  `mapstructure:"min_connections"`
 }
 
 type ProviderProcessCodingConfig struct {
@@ -380,17 +383,22 @@ func (c *ProviderProcessConfig) validateAdmission(materialSchema bool) error {
 
 func (c *ProviderProcessConfig) validatePostgres(materialSchema bool) error {
 	p := c.Postgres
-	separateClientAgent := c.SchemaVersion == ProviderProductionSchemaV3 &&
-		(c.Profile == ProviderProcessBrowserProfile || c.Profile == ProviderProcessDesktopProfile)
+	separateClientAgent := c.SchemaVersion == ProviderProductionSchemaV3
 	if separateClientAgent {
 		if validateAbsoluteSecretPath("Provider PostgreSQL client agent socket", p.ClientAgentSocket) != nil ||
 			p.ClientAgentSocket == c.Transport.AgentSocket || p.ClientAgentSocket == c.Transport.SecurityProfilePath ||
 			p.ClientAgentSocket == c.Transport.PeerCRLRoleFile || p.ClientAgentUID == 0 || p.ClientAgentGID == 0 ||
+			validateAbsoluteSecretPath("Provider PostgreSQL peer CRL role", p.PeerCRLRoleFile) != nil ||
+			p.PeerCRLRoleFile == c.Transport.PeerCRLRoleFile || p.PeerCRLRoleFile == p.ClientAgentSocket ||
+			p.PeerCRLRoleFile == c.Transport.SecurityProfilePath || p.PeerCRLRoleFile == c.Materials.Provider.SocketPath ||
+			!providerSHA256Pattern.MatchString(p.PeerCRLRoleDigest) ||
+			!providerSHA256Pattern.MatchString(p.PeerCRLSourceMappingDigest) ||
 			p.ClientAgentUID == c.Transport.AgentUID || p.ClientAgentGID == c.Transport.AgentGID {
 			return errors.New("Provider PostgreSQL requires a distinct purpose-bound client agent")
 		}
-	} else if p.ClientAgentSocket != "" || p.ClientAgentUID != 0 || p.ClientAgentGID != 0 {
-		return errors.New("Provider PostgreSQL client agent is only available to v3 Browser/Desktop")
+	} else if p.ClientAgentSocket != "" || p.ClientAgentUID != 0 || p.ClientAgentGID != 0 ||
+		p.PeerCRLRoleFile != "" || p.PeerCRLRoleDigest != "" || p.PeerCRLSourceMappingDigest != "" {
+		return errors.New("Provider PostgreSQL client agent is only available to v3")
 	}
 	if p.StartupTimeoutSeconds < 1 || p.StartupTimeoutSeconds > 60 || p.OperationTimeoutSeconds < 1 || p.OperationTimeoutSeconds > 30 || p.MaxConnections < 1 || p.MaxConnections > 64 || p.MinConnections < 0 || p.MinConnections > p.MaxConnections {
 		return errors.New("provider_process PostgreSQL connection bounds are invalid")

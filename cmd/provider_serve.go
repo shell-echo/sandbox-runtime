@@ -74,9 +74,17 @@ func runProviderServe(cmd *cobra.Command, _ []string) (result error) {
 	if err := providerConfig.Validate(); err != nil {
 		return err
 	}
+	var codingProfile phase6security.Profile
 	if providerConfig.SchemaVersion == config.ProviderProductionSchemaV3 &&
 		(providerConfig.Profile == config.ProviderProcessBrowserProfile || providerConfig.Profile == config.ProviderProcessDesktopProfile) {
 		if err := preflightProviderV3Serve(providerConfig); err != nil {
+			return err
+		}
+	} else if providerConfig.SchemaVersion == config.ProviderProductionSchemaV3 &&
+		providerConfig.Profile == config.ProviderProcessCodingShellProfile {
+		var err error
+		codingProfile, err = preflightProviderCodingV3Postgres(providerConfig)
+		if err != nil {
 			return err
 		}
 	}
@@ -93,6 +101,9 @@ func runProviderServe(cmd *cobra.Command, _ []string) (result error) {
 	if providerConfig.SchemaVersion == config.ProviderProductionSchemaV3 &&
 		(providerConfig.Profile == config.ProviderProcessBrowserProfile || providerConfig.Profile == config.ProviderProcessDesktopProfile) {
 		runtimePool, poolClose, databaseAuthority, err = openProviderV3Postgres(startupContext, cmd.Context(), providerConfig, materialRegistry)
+	} else if providerConfig.SchemaVersion == config.ProviderProductionSchemaV3 &&
+		providerConfig.Profile == config.ProviderProcessCodingShellProfile {
+		runtimePool, poolClose, err = openProviderCodingV3Postgres(startupContext, cmd.Context(), providerConfig, codingProfile, materialRegistry)
 	} else {
 		runtimePool, err = openProviderPostgresRegistry(startupContext, materialRegistry, providerConfig.Postgres.RuntimeDSNBindingID, secretref.PurposePostgresRuntimeDSN, providerConfig.Postgres.MaxConnections, providerConfig.Postgres.MinConnections)
 		if err == nil {
@@ -819,6 +830,9 @@ func runProviderMigrate(cmd *cobra.Command, _ []string) error {
 	}
 	if err := migrationConfig.Validate(); err != nil {
 		return err
+	}
+	if migrationConfig.SchemaVersion == config.ProviderMigrationSchemaV2 {
+		return runProviderMigrationV2(cmd.Context(), migrationConfig)
 	}
 	ctx, cancel := context.WithTimeout(cmd.Context(), time.Duration(migrationConfig.Postgres.StartupTimeoutSeconds)*time.Second)
 	defer cancel()

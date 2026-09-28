@@ -31,6 +31,17 @@ var providerMigrations = []migration{{version: 1, name: "provider control state"
 func CurrentSchemaVersion() int64 { return providerMigrations[len(providerMigrations)-1].version }
 
 func ApplyMigrations(ctx context.Context, pool *pgxpool.Pool) error {
+	return applyMigrations(ctx, pool, true)
+}
+
+// ApplyMigrationsPrecreatedSchema is the v2 bounded-DDL path. The database
+// service operator pre-creates/locks the schema; this role can create only
+// objects inside it and cannot create arbitrary database schemas.
+func ApplyMigrationsPrecreatedSchema(ctx context.Context, pool *pgxpool.Pool) error {
+	return applyMigrations(ctx, pool, false)
+}
+
+func applyMigrations(ctx context.Context, pool *pgxpool.Pool, createSchema bool) error {
 	if ctx == nil || pool == nil {
 		return errors.New("Provider PostgreSQL migration context and pool are required")
 	}
@@ -42,9 +53,13 @@ func ApplyMigrations(ctx context.Context, pool *pgxpool.Pool) error {
 	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, migrationLockID); err != nil {
 		return errors.New("lock Provider migration")
 	}
-	if _, err := tx.Exec(ctx, `CREATE SCHEMA IF NOT EXISTS sandbox_runtime_provider;
-REVOKE ALL ON SCHEMA sandbox_runtime_provider FROM PUBLIC;
-CREATE TABLE IF NOT EXISTS sandbox_runtime_provider.schema_migrations (
+	if createSchema {
+		if _, err := tx.Exec(ctx, `CREATE SCHEMA IF NOT EXISTS sandbox_runtime_provider;
+REVOKE ALL ON SCHEMA sandbox_runtime_provider FROM PUBLIC;`); err != nil {
+			return errors.New("prepare Provider migration schema")
+		}
+	}
+	if _, err := tx.Exec(ctx, `CREATE TABLE IF NOT EXISTS sandbox_runtime_provider.schema_migrations (
     version bigint PRIMARY KEY,
     digest text NOT NULL,
     applied_at timestamp with time zone NOT NULL DEFAULT clock_timestamp(),
