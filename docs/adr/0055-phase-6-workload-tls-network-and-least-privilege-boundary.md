@@ -1408,12 +1408,16 @@ from a separate reviewed `172.31.128.0/24` range. Each has exactly one
 actual dialer and one external service member with fixed .2/.3 endpoints;
 this desired IPAM is not evidence of Docker assignment or reachability.
 
-The existing material-agent executable still uses workload-credential.v1,
-while the Slice 6 credential controller is v2; and its Vault client and the
-v2 controller's Vault client currently provide server TLS only. Network
-permission alone cannot bridge these protocol and mTLS gaps. Slice 6 permits
-an explicit v2 material-agent configuration/client with full Principal
-binding and managed client signing. The credential controller may use one
+The material-agent executable now offers an explicit canonical v2 command
+configuration and Principal-bound workload-credential.v2 client. The v2 path
+pins the verified security profile, deployment identity and controller UID/GID;
+it never falls back to v1. The frozen v1 command path remains historical
+Slice 5 compatibility; the complete production profile/admission gate still
+has to reject that v1 configuration as a selection. This is only component
+evidence until the eleven real agents and controller complete their process
+gate. The material agent and the v2 controller's Vault clients still provide
+server TLS only. Network permission alone cannot bridge that mTLS gap. Slice 6
+requires managed material-agent client signing. The credential controller may use one
 short-lived, FD-only, exact-identity Vault TLS bootstrap before a managed
 identity switch, following the certificate controller's audited pattern;
 there is no general static client-key or v1 fallback. Thus the earlier

@@ -56,15 +56,22 @@ client for the credential controller; and bootstrap-only migration roles.
 This is authority to implement and test, not evidence that the current
 commands or containers satisfy those constraints.
 
-Two additional command-level blockers remain: `workload-material-agent`
-constructs the frozen `workload-credential.v1` client, which cannot speak to
-the Slice 6 v2 controller, and both that agent and the v2 credential
-controller currently configure only Vault server TLS, not a client
+The material-agent command now has an explicit canonical v2 configuration
+branch and a Principal-bound `workload-credential.v2` client. It pins the full
+security-profile digest, material-agent deployment/UID/GID and controller
+UID/GID, and rejects v2-to-v1 fallback; the v1 branch remains for
+retained Slice 5 evidence only. This is source/component evidence, not an
+actual eleven-agent/controller process gate. Both the agent and v2 credential
+controller still configure only Vault server TLS, not a client
 certificate. A token plus server TLS is not mTLS. The approved Slice 6 path
-requires an explicit v2 agent configuration/client and actual bounded client
-identity, with the credential controller's narrow bootstrap exception followed
+requires actual bounded client identity, with the credential controller's
+narrow bootstrap exception followed
 by managed identity switch and key destruction. Historical v1 semantics must
-remain separate and cannot be a production fallback.
+remain separate and cannot be a production fallback. The complete production
+profile/admission gate must also reject v1 command configuration explicitly;
+the command's retained compatibility branch alone does not establish that.
+The controller socket path and exact Vault KV binding/policy are not yet
+cross-bound to the complete profile.
 
 Open engineering work: expand
 trust edges, dedicated internal+isolated external-service membership, target

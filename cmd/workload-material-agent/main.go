@@ -4,7 +4,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"crypto/ed25519"
 	"crypto/sha256"
@@ -26,13 +25,13 @@ import (
 	"github.com/shell-echo/sandbox-runtime/internal/secretref"
 	"github.com/shell-echo/sandbox-runtime/internal/secretref/vaultkv"
 	"github.com/shell-echo/sandbox-runtime/internal/secretref/workloadagent"
-	"github.com/shell-echo/sandbox-runtime/internal/workloadcredential"
 )
 
 const (
-	configProtocol = "sandbox-runtime.workload-material-agent-config.v1"
-	maxConfigBytes = 2 << 20
-	identityFD     = 3
+	configProtocol   = "sandbox-runtime.workload-material-agent-config.v1"
+	configProtocolV2 = "sandbox-runtime.workload-material-agent-config.v2"
+	maxConfigBytes   = 2 << 20
+	identityFD       = 3
 )
 
 type configDocument struct {
@@ -69,10 +68,44 @@ type configDocument struct {
 	ExpectedOperatorGID        uint32              `json:"expected_operator_gid"`
 }
 
+// V2 is an explicit Phase 6 command protocol. The embedded v1 fields keep the
+// material socket and Vault KV policy shape stable, but credential issuance
+// cannot silently fall back to the historical v1 wire protocol.
+type configDocumentV2 struct {
+	configDocument
+	SecurityProfilePath     string `json:"security_profile_path"`
+	SecurityProfileDigest   string `json:"security_profile_digest"`
+	CredentialBackendPolicy string `json:"credential_backend_policy"`
+	CredentialMaxTTLSeconds int    `json:"credential_max_ttl_seconds"`
+}
+
+type credentialLease struct {
+	ID         string
+	Revision   int64
+	IssuedAt   time.Time
+	ExpiresAt  time.Time
+	Renewable  bool
+	Credential []byte
+}
+
+func (l *credentialLease) Destroy() {
+	if l != nil {
+		clear(l.Credential)
+		l.Credential = nil
+	}
+}
+
+type credentialIssuer interface {
+	Issue(context.Context, time.Duration) (credentialLease, error)
+	Renew(context.Context, credentialLease, time.Duration) (credentialLease, error)
+	Revoke(context.Context, credentialLease) error
+	Close()
+}
+
 type leaseTokenProvider struct {
 	mu      sync.Mutex
 	binding secretref.Binding
-	lease   workloadcredential.Lease
+	lease   credentialLease
 }
 
 func (p *leaseTokenProvider) ResolveSecret(ctx context.Context, binding secretref.Binding) (secretref.SecretMaterial, error) {
@@ -92,7 +125,7 @@ func (p *leaseTokenProvider) ResolveSecret(ctx context.Context, binding secretre
 		Revision: fmt.Sprintf("credential-%d", p.lease.Revision)}, nil
 }
 
-func (p *leaseTokenProvider) replace(lease workloadcredential.Lease) {
+func (p *leaseTokenProvider) replace(lease credentialLease) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.lease.Destroy()
@@ -123,26 +156,30 @@ func run() error { //nolint:maintidx
 		return secretref.ErrUnavailable
 	}
 	defer clear(document)
+	var selector struct {
+		Protocol string `json:"protocol"`
+	}
+	if json.Unmarshal(document, &selector) != nil || (selector.Protocol != configProtocol && selector.Protocol != configProtocolV2) {
+		return stageError("config-protocol")
+	}
 	var config configDocument
-	decoder := json.NewDecoder(bytes.NewReader(document))
-	decoder.DisallowUnknownFields()
-	if decoder.Decode(&config) != nil {
+	var v2 *configDocumentV2
+	if selector.Protocol == configProtocolV2 {
+		v2 = new(configDocumentV2)
+		if decodeCanonicalConfig(document, v2) != nil {
+			return stageError("config-decode")
+		}
+		config = v2.configDocument
+	} else if decodeCanonicalConfig(document, &config) != nil {
 		return stageError("config-decode")
 	}
-	var trailing any
-	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
-		return secretref.ErrUnavailable
-	}
-	canonical, err := json.Marshal(config)
-	if err != nil || !bytes.Equal(canonical, document) || config.Protocol != configProtocol || len(config.Bindings) < 1 || len(config.Bindings) > 32 ||
+	if len(config.Bindings) < 1 || len(config.Bindings) > 32 ||
 		len(config.VaultCABundle) < 1 || config.VaultServerName == "" || config.CredentialTTLSeconds < 5 || config.CredentialTTLSeconds > 900 ||
 		config.OperationTimeoutSeconds < 1 || config.OperationTimeoutSeconds > 60 || (config.Migration && config.MaxResolutions != 1) ||
 		(!config.Migration && config.MaxResolutions != 0) || (config.Migration && (config.BreakGlassSocket != "" || config.BreakGlassControllerSocket != "")) ||
 		(!config.Migration && (config.BreakGlassSocket == "" || config.BreakGlassControllerSocket == "")) {
-		clear(canonical)
 		return stageError("config-validate")
 	}
-	clear(canonical)
 	if config.CredentialBinding.Validate() != nil || config.CredentialBinding.Kind != secretref.KindSecret ||
 		config.CredentialBinding.Role != config.Role || config.CredentialBinding.Purpose != secretref.PurposeWorkloadCredential ||
 		config.CredentialBinding.TenantID != secretref.SystemTenant {
@@ -160,12 +197,7 @@ func run() error { //nolint:maintidx
 		return stageError("identity-read")
 	}
 	defer clear(privateKey)
-	credentialClient, err := workloadcredential.NewProductionClient(workloadcredential.ClientConfig{
-		SocketPath: config.CredentialControllerSocket, ExpectedUID: config.CredentialControllerUID, ExpectedGID: config.CredentialControllerGID,
-		AgentID: config.CredentialAgentID, Role: config.Role, Purpose: secretref.PurposeWorkloadCredential,
-		PolicyID: config.CredentialPolicyID, BindingDigest: config.CredentialBinding.Digest(), BackendID: config.CredentialBackendID,
-		PrivateKey: ed25519.PrivateKey(privateKey), OperationTimeout: time.Duration(config.OperationTimeoutSeconds) * time.Second, Now: time.Now,
-	})
+	credentialClient, err := newCredentialIssuer(config, v2, ed25519.PrivateKey(privateKey))
 	if err != nil {
 		return stageError("credential-client")
 	}
