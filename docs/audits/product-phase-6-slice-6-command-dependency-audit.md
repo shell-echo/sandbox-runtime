@@ -60,18 +60,33 @@ The material-agent command now has an explicit canonical v2 configuration
 branch and a Principal-bound `workload-credential.v2` client. It pins the full
 security-profile digest, material-agent deployment/UID/GID and controller
 UID/GID, and rejects v2-to-v1 fallback; the v1 branch remains for
-retained Slice 5 evidence only. This is source/component evidence, not an
-actual eleven-agent/controller process gate. Both the agent and v2 credential
-controller still configure only Vault server TLS, not a client
-certificate. A token plus server TLS is not mTLS. The approved Slice 6 path
-requires actual bounded client identity, with the credential controller's
+retained Slice 5 evidence only. The v2 material-agent Vault transport now
+requires its profile-bound, separate TLS-agent signer, exact isolated service
+bridge, numeric endpoint, Vault URI/DNS identity and direction-specific CA
+bundles; it cannot select the v1 server-only TLS client. This is source-level
+fail-closed wiring, not an actual eleven-agent/controller process gate: the
+complete Vault edges/anchor consumers and live signer/controller chain are
+not yet present, so no v2 agent is claimed runnable. The v2 credential
+controller still configures only Vault server TLS; a token plus server TLS is
+not mTLS. The approved Slice 6 path requires actual bounded client identity,
+with the credential controller's
 narrow bootstrap exception followed
 by managed identity switch and key destruction. Historical v1 semantics must
 remain separate and cannot be a production fallback. The complete production
 profile/admission gate must also reject v1 command configuration explicitly;
 the command's retained compatibility branch alone does not establish that.
-The controller socket path and exact Vault KV binding/policy are not yet
-cross-bound to the complete profile.
+The credential-controller socket path and exact Vault KV binding/policy are
+not yet cross-bound to the complete profile.
+
+The approved eleven material-agent Vault-client key owners now have eleven
+separate TLS-agent deployment/principal/UID/GID/Unix-binding entries in the
+closed profile inventory. The current intermediate shape is 69 deployments,
+29 TLS-agent bindings and 99 reviewed trust edges; its old 58 UID/GID and role
+network allocations are retained, with the new signers in separate reserved
+partitions. These are configuration and unit-test facts only. They are **not**
+eleven running signers, Vault mTLS, the final principal/edge counts or a
+complete external-service graph; the 16 missing direct external edges and
+actual command transport wiring remain open.
 
 Open engineering work: expand
 trust edges, dedicated internal+isolated external-service membership, target

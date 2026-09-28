@@ -96,14 +96,23 @@ func Slice6DesiredDeploymentKind(name string) (string, error) {
 }
 
 // Slice6DesiredUIDGID freezes each static container's non-root identity from
-// the reviewed 20000/30000 partitions. Dynamic sandbox workload/gateway
+// the reviewed 20000/30000 partitions and reserves 55000/57000 for the 11
+// newly reviewed material-agent signer deployments. Dynamic sandbox workload/gateway
 // account slots are separately constrained by SandboxIdentitySlots and the
 // actual Desktop image account allowlist before launch.
 func Slice6DesiredUIDGID() map[string][2]uint32 {
 	names := slice6ApprovedDeploymentNames()
 	result := make(map[string][2]uint32, len(names))
-	for index, name := range names {
-		result[name] = [2]uint32{uint32(20000 + index), uint32(30000 + index)}
+	baseIndex, signerIndex := 0, 0
+	for _, name := range names {
+		if subject := requiredTLSAgentSubjects[name]; requiredPrincipals[subject] == "material_agent" {
+			// New signer deployments do not shift already reviewed role IDs.
+			result[name] = [2]uint32{uint32(55000 + signerIndex), uint32(57000 + signerIndex)}
+			signerIndex++
+			continue
+		}
+		result[name] = [2]uint32{uint32(20000 + baseIndex), uint32(30000 + baseIndex)}
+		baseIndex++
 	}
 	return result
 }

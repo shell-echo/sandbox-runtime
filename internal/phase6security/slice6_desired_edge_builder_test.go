@@ -5,7 +5,7 @@ import "testing"
 func TestBuildSlice6DesiredTrustEdgesUsesOnlyReviewedIPAMAndIdentity(t *testing.T) {
 	fixture := validProfile() // Structural unit input only; not a deployable profile.
 	edges, err := BuildSlice6DesiredTrustEdges(fixture.Principals, fixture.External)
-	if err != nil || len(edges) != 77 {
+	if err != nil || len(edges) != 99 {
 		t.Fatalf("reviewed edge construction = %d, %v", len(edges), err)
 	}
 	foundLocal, foundExternal, foundUnix := false, false, false

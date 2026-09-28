@@ -17,14 +17,17 @@ func TestV2ConfigIsCanonicalAndDoesNotAliasV1(t *testing.T) {
 	value := configDocumentV2{configDocument: configDocument{Protocol: configProtocolV2,
 		CredentialAgentID: "gateway-agent", CredentialPolicyID: "gateway-agent-kv"},
 		SecurityProfilePath: "/run/profile.json", SecurityProfileDigest: "sha256:" + strings.Repeat("a", 64),
-		CredentialBackendPolicy: "gateway-agent-kv", CredentialMaxTTLSeconds: 300}
+		CredentialBackendPolicy: "gateway-agent-kv", CredentialMaxTTLSeconds: 300,
+		VaultTLSAgentSocket: "/run/tls/gateway-agent-tls-agent/signer.sock",
+		VaultTLSAgentUID:    55000, VaultTLSAgentGID: 57000}
 	document, err := json.Marshal(value)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var decoded configDocumentV2
 	if err := decodeCanonicalConfig(document, &decoded); err != nil || decoded.Protocol != configProtocolV2 ||
-		decoded.CredentialAgentID != value.CredentialAgentID || decoded.CredentialBackendPolicy != value.CredentialBackendPolicy {
+		decoded.CredentialAgentID != value.CredentialAgentID || decoded.CredentialBackendPolicy != value.CredentialBackendPolicy ||
+		decoded.VaultTLSAgentSocket != value.VaultTLSAgentSocket {
 		t.Fatalf("v2 promoted fields were not decoded canonically: %v", err)
 	}
 	var legacy configDocument
@@ -92,5 +95,9 @@ func TestV2IssuerCannotDowngradeWithoutProfile(t *testing.T) {
 		SecurityProfilePath: "/missing/security-profile.json", CredentialMaxTTLSeconds: 60}, privateKey)
 	if err == nil {
 		t.Fatal("v2 issuer downgraded to the historical v1 client when its profile was absent")
+	}
+	if _, err := newV2VaultHTTPClient(base, configDocumentV2{configDocument: base,
+		SecurityProfilePath: "/missing/security-profile.json"}); err == nil {
+		t.Fatal("v2 Vault transport fell back to server-only TLS without a profile and signer")
 	}
 }

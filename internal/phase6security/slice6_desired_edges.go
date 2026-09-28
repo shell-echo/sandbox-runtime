@@ -68,7 +68,7 @@ type slice6EdgeSpec struct {
 }
 
 func slice6DesiredTrustEdges() []slice6EdgeSpec {
-	result := make([]slice6EdgeSpec, 0, 77)
+	result := make([]slice6EdgeSpec, 0, 99)
 	for _, edge := range slice6DesiredLocalEdges {
 		result = append(result, slice6EdgeSpec{id: edge.id, from: edge.from, to: edge.to,
 			protocol: edge.protocol, port: edge.port, route: edge.route, authentication: "mtls", scope: edge.scope,
@@ -97,7 +97,7 @@ func slice6DesiredTrustEdges() []slice6EdgeSpec {
 	return result
 }
 
-// VerifySlice6DesiredTrustEdges freezes the entire 77-edge local-gate graph,
+// VerifySlice6DesiredTrustEdges freezes the current 99-edge local-gate graph,
 // including external destinations and Unix peers. A rewritten profile digest
 // cannot authorize a new edge, downgrade its authentication or extend its
 // lifetime. Live transport and endpoint proof remains a separate gate.

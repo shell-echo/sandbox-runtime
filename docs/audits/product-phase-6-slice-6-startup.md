@@ -2184,3 +2184,17 @@ direct path and purpose-specific DB identity/HBA, without borrowing the
 Browser/Desktop broker route or DB role. Before final R/build, the gate must
 inventory every real command/bootstrap/migration dependency and correct the
 counts; no success evidence can rely on the incomplete 17/12 mapping.
+
+Later command-level audit and Sandbox review approved 18 direct external
+dependencies and a 28-path target service-bridge plan; these have not yet
+replaced the partial 17/12 installed profile graph. The approved material
+agent mTLS topology adds 11 distinct TLS-agent key-owner deployments for the
+11 actual Vault KV clients. The intermediate profile inventory is now 69
+deployments, 67 non-template authorization identities, 29 TLS-agent bindings
+and 99 trust edges. The first 58 UID/GID assignments and isolated role CIDRs
+remain stable; new signers use separate reserved ranges, outside the dynamic
+Desktop sandbox UID/GID slots and the external-service bridge subnets. The
+existing `workload-tls-agent` image target is reused. This is still source/
+profile validation, not live certificate issuance, Vault client mTLS, a full
+16-scenario run or Slice 6 evidence. The prior 58/56/77 figures above are
+historical checkpoint counts, not the current complete target.

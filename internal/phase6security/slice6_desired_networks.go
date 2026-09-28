@@ -9,7 +9,7 @@ import (
 
 // Slice6DesiredNetworkInventoryVersion identifies the reviewed local-gate
 // graph. It is desired configuration, never an observation of Docker state.
-const Slice6DesiredNetworkInventoryVersion = 1
+const Slice6DesiredNetworkInventoryVersion = 2
 
 var errSlice6DesiredInventory = errors.New("Slice 6 desired inventory mismatch")
 
@@ -76,7 +76,12 @@ func Slice6DesiredNetworks() []Network {
 	}
 	all := slice6ApprovedDeploymentNames()
 	result := make([]Network, 0, len(all)+len(slice6SharedNetworks))
+	materialSigners := make([]string, 0, 11)
 	for _, name := range all {
+		if subject := requiredTLSAgentSubjects[name]; requiredPrincipals[subject] == "material_agent" {
+			materialSigners = append(materialSigners, name)
+			continue
+		}
 		if !excluded[name] {
 			result = append(result, Network{Name: "network-" + name, Kind: "role_internal", Internal: true,
 				GatewayModeIPv4: "isolated", Principals: []string{name}})
@@ -97,6 +102,15 @@ func Slice6DesiredNetworks() []Network {
 	for index := range result {
 		result[index].IPv4Subnet = "172.31." + strconv.Itoa(index+1) + ".0/24"
 	}
+	// Material-agent signer principals were added after the first reviewed
+	// role IPAM. Keep every old subnet unchanged and reserve 80-90 for their
+	// dedicated isolated networks; service bridges start separately at 128.
+	for index, name := range materialSigners {
+		result = append(result, Network{Name: "network-" + name, Kind: "role_internal", Internal: true,
+			GatewayModeIPv4: "isolated", IPv4Subnet: "172.31." + strconv.Itoa(80+index) + ".0/24",
+			Principals: []string{name}})
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].Name < result[j].Name })
 	return result
 }
 

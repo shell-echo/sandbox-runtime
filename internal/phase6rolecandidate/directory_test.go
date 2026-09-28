@@ -10,7 +10,7 @@ import (
 func TestTargetInventoryRequiresOneSourceBoundImagePerReviewedCommand(t *testing.T) {
 	names := phase6security.Slice6DesiredDeploymentNames()
 	targets := phase6security.Slice6DesiredLocalRoleTargets()
-	if len(names) != 58 || len(targets) != 12 {
+	if len(names) != 69 || len(targets) != 12 {
 		t.Fatalf("reviewed deployment/target inventory drifted: %d/%d", len(names), len(targets))
 	}
 	revision := strings.Repeat("a", 40)

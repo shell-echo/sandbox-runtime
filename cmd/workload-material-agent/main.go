@@ -77,6 +77,9 @@ type configDocumentV2 struct {
 	SecurityProfileDigest   string `json:"security_profile_digest"`
 	CredentialBackendPolicy string `json:"credential_backend_policy"`
 	CredentialMaxTTLSeconds int    `json:"credential_max_ttl_seconds"`
+	VaultTLSAgentSocket     string `json:"vault_tls_agent_socket"`
+	VaultTLSAgentUID        uint32 `json:"vault_tls_agent_uid"`
+	VaultTLSAgentGID        uint32 `json:"vault_tls_agent_gid"`
 }
 
 type credentialLease struct {
@@ -174,7 +177,8 @@ func run() error { //nolint:maintidx
 		return stageError("config-decode")
 	}
 	if len(config.Bindings) < 1 || len(config.Bindings) > 32 ||
-		len(config.VaultCABundle) < 1 || config.VaultServerName == "" || config.CredentialTTLSeconds < 5 || config.CredentialTTLSeconds > 900 ||
+		(v2 == nil && len(config.VaultCABundle) < 1) || (v2 != nil && len(config.VaultCABundle) != 0) ||
+		config.VaultServerName == "" || config.CredentialTTLSeconds < 5 || config.CredentialTTLSeconds > 900 ||
 		config.OperationTimeoutSeconds < 1 || config.OperationTimeoutSeconds > 60 || (config.Migration && config.MaxResolutions != 1) ||
 		(!config.Migration && config.MaxResolutions != 0) || (config.Migration && (config.BreakGlassSocket != "" || config.BreakGlassControllerSocket != "")) ||
 		(!config.Migration && (config.BreakGlassSocket == "" || config.BreakGlassControllerSocket == "")) {
@@ -219,11 +223,20 @@ func run() error { //nolint:maintidx
 	tokenProvider := &leaseTokenProvider{binding: config.CredentialBinding, lease: lease}
 	defer tokenProvider.destroy()
 
-	roots := x509.NewCertPool()
-	if !roots.AppendCertsFromPEM(config.VaultCABundle) {
-		return stageError("vault-ca")
+	var httpClient *http.Client
+	if v2 != nil {
+		httpClient, err = newV2VaultHTTPClient(config, *v2)
+		if err != nil {
+			return stageError("vault-mtls")
+		}
+	} else {
+		roots := x509.NewCertPool()
+		if !roots.AppendCertsFromPEM(config.VaultCABundle) {
+			return stageError("vault-ca")
+		}
+		httpClient = &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS13, RootCAs: roots, ServerName: config.VaultServerName}}}
 	}
-	httpClient := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS13, RootCAs: roots, ServerName: config.VaultServerName}}}
+	defer httpClient.CloseIdleConnections()
 	purposes := make([]secretref.Purpose, 0, len(config.Bindings))
 	seenPurposes := make(map[secretref.Purpose]struct{})
 	for _, binding := range config.Bindings {

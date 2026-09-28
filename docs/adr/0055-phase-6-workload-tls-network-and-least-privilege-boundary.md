@@ -1415,15 +1415,42 @@ it never falls back to v1. The frozen v1 command path remains historical
 Slice 5 compatibility; the complete production profile/admission gate still
 has to reject that v1 configuration as a selection. This is only component
 evidence until the eleven real agents and controller complete their process
-gate. The material agent and the v2 controller's Vault clients still provide
-server TLS only. Network permission alone cannot bridge that mTLS gap. Slice 6
-requires managed material-agent client signing. The credential controller may use one
+gate. The historical v1 material-agent path and the v2 credential controller's
+Vault clients still provide server TLS only. Network permission alone cannot bridge that mTLS gap. Slice 6
+requires managed material-agent client signing. The v2 material-agent command
+now fails closed unless its separate signer, complete service bridge, exact
+Vault endpoint/identity and pinned client/server CA roots are present; the
+current partial profile lacks the necessary Vault edges and anchor consumers,
+so this has no positive production-startup or live mTLS evidence yet. The
+credential controller may use one
 short-lived, FD-only, exact-identity Vault TLS bootstrap before a managed
 identity switch, following the certificate controller's audited pattern;
 there is no general static client-key or v1 fallback. Thus the earlier
 "sole bootstrap exception" covers the certificate controller's original
 exception; this narrowly reviewed credential-controller exception is an
 additional, separately gated case, not permission for every agent.
+The eleven actual material-agent deployments each now have one distinct
+TLS-agent deployment in the intermediate closed inventory. The signer is a
+separate private key owner; the issued Vault client leaf's subject is the
+material agent, not the TLS agent. The current intermediate inventory is 69
+deployments, 29 TLS-agent bindings and 99 trust edges, with existing role
+UID/GID and CIDR assignments held stable. These counts are not the final
+R checkpoint: the direct external edges, client roots, exact Vault policies,
+controller internal managed key owner and other PostgreSQL signers still have
+to be represented and tested. The 11 signers reuse the single
+`workload-tls-agent` build target, not 11 new image recipes.
+The TLS agents have only their declared Unix/controller edges: they receive
+no Vault network membership, KV token or secret path. Each material agent
+holds its own narrow Vault token and direct isolated bridge, so a valid TLS
+leaf alone never grants KV access. The credential controller's future managed
+Vault TLS key is an explicitly owned component of that existing controller,
+not a phantom TLS-agent principal or a second CA. Its startup chain is the
+bounded Vault bootstrap, restricted credential issuance, certificate
+controller readiness, managed-key issuance/switch and only then the other
+agents; a cyclic wait or static-key fallback is invalid. Migration Vault
+credentials and job authorization are short-lived and nonrenewable even if a
+TLS certificate is rotated: task completion, revocation or expiry must close
+connections and destroy the corresponding key without reopening authority.
 The profile and raw-network observer now have a closed, bidirectional
 service-bridge member shape: an external service's declared networks must
 name the same sole-service isolated network that declares it, with one actual

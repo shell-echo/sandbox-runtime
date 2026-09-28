@@ -114,7 +114,8 @@ func validProfile() Profile {
 		postgresAgentForSubject[subject] = agent
 	}
 	principals := make([]Principal, 0, len(names))
-	for index, name := range names {
+	uidGID := Slice6DesiredUIDGID()
+	for _, name := range names {
 		kind := requiredPrincipals[name]
 		networks := []string{"network-" + name}
 		external, blocked := false, true
@@ -182,7 +183,7 @@ func validProfile() Profile {
 			Name: name, Kind: kind, ImageReference: image, ImageDigest: digest,
 			ImageLocation: "registry", ImageIdentityKind: ImageIdentityOCIManifest, ImagePlatform: "linux/arm64/v8",
 			ImageConfigDigest: testDigest("image-config/" + name),
-			UID:               uint32(20000 + index), GID: uint32(30000 + index),
+			UID:               uidGID[name][0], GID: uidGID[name][1],
 			ReadOnlyRootFilesystem: true, NoNewPrivileges: true, DroppedCapabilities: []string{"ALL"}, SeccompDigest: testDigest("seccomp/" + name),
 			Resources: Resources{MemoryBytes: 64 << 20, CPUMillis: 250, PIDs: 32}, Networks: networks,
 			ExternalUplink: external, DirectEgressBlocked: blocked,
