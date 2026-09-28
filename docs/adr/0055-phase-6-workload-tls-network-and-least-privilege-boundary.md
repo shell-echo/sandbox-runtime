@@ -1537,3 +1537,33 @@ graph only. Issuer policies, actual SQL grants, HBA installation and reload,
 new connection outcomes, 82 independent deployment processes, 16 scenarios
 and exact cleanup still require their own observed gate before Phase 6 can
 advance from 5/15.
+An opt-in disposable PostgreSQL 16 diagnostic now loads those same raw nine
+rules into one real service on nine isolated bridges. It observes exact
+`.2/.3` endpoints and absent host gateways, all nine accepted source/login
+combinations, wrong role/database/CN/SCRAM and missing-certificate denials,
+read-only HBA/CA bytes, restart and exact run-owned cleanup. Test-local CA,
+client credentials and SQL setup mean this is HBA/transport component proof,
+not Vault-issued identity or least-privilege migration/application evidence.
+
+### PostgreSQL command-version disposition (2026-09-28)
+
+The Product, Gateway and Provider live-signer v3 configurations remain
+unpublished Phase 6 drafts and are tightened explicitly, not mechanically
+renamed v4. Each production PostgreSQL path must require its owner-specific
+PG-purpose signer, exact profile/source path, SQL login and database, and
+reject any old v3 snapshot lacking those fields. Product/Gateway/coding
+Provider are direct isolated bridge clients; Browser/Desktop Provider retain
+their broker-only path and may not fall back to direct dialing. Before any
+database connection, listener or DDL, the command validates its profile,
+static authority, exact owner and path; after secret resolution but before
+dialing it checks the complete DSN target and TLS policy against that profile.
+
+The accepted Product/Provider migration v1 commands keep their historical
+semantics. Slice 6 adds explicit Product migration v2 and one Provider
+migration v2 implementation specialized by the closed coding/Browser/Desktop
+job/database/role tuple. Gateway shares Product's database and has no
+Gateway migration job. V2 migration verifies the server, current database,
+current user and bounded DDL privilege before executing its migration. The
+final Slice 6 gate rejects old direct-DSN paths and v1 migration selection;
+there is no default or runtime fallback. This version disposition does not
+alter the accepted Slice 4/5 manifests or the locked public Provider Contract.

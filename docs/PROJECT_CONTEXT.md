@@ -234,8 +234,11 @@ Current verified state:
   closes a candidate inventory of 82 deployments, 32 isolated external
   paths, 37 external edge IDs, 9 PostgreSQL-purpose signers and one ordered
   nine-role shared-service HBA. The added migration bridge has a real Docker
-  endpoint/cleanup diagnostic, and the historical Provider-only PostgreSQL
-  mTLS/SCRAM integration remains green. Neither diagnostic is the full
+  endpoint/cleanup diagnostic, and one real PostgreSQL 16 process on nine
+  isolated bridges passes all nine exact HBA source/login checks, denials,
+  restart and cleanup with test-local certificates; the historical
+  Provider-only PostgreSQL mTLS/SCRAM integration remains green. These
+  diagnostics are not the full
   16-scenario Slice 6 gate: live issuance, SQL grants/HBA activation, all
   independent processes, signed evidence and exact cleanup remain open, so
   Phase 6 stays 5/15.

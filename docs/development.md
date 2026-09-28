@@ -1335,6 +1335,22 @@ locations; a structurally valid intermediate 28-path profile cannot pass.
 For the shared PostgreSQL scope, the evidence must list all nine approved
 source `/32` CIDRs in HBA rule order rather than reuse the historical one-CIDR
 Provider-only proof field.
+The opt-in shared-HBA component diagnostic uses the pinned PostgreSQL 16
+image, one actual server attached to all nine dedicated isolated Docker
+bridges, one client per bridge and exact `.2/.3` endpoints:
+
+```bash
+SANDBOX_RUNTIME_SHARED_POSTGRES_HBA_INTEGRATION=1 \
+  mise exec go@1.26.8 -- env -u GOROOT go test -tags=integration \
+    -count=1 -run '^TestRealSharedPostgresNineSourceHBA$' \
+    ./internal/phase6egress
+```
+
+It checks raw network inspection, the read-only HBA/CA mount, PostgreSQL's
+parsed 12-rule file, all nine exact source/database/CN/SCRAM logins, mismatch
+denials, server restart and run-owned cleanup. Its test-local CA and SQL
+setup are deliberately diagnostic: it does not prove Vault PKI issuance,
+real command/agent binding, migration DDL grants or the 16-scenario gate.
 
 The not-yet-accepted Slice 6 private evidence format is version 3. A final
 run must generate one fresh 128-bit lowercase-hex `run_id` and retain
