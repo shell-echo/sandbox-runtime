@@ -55,3 +55,11 @@ IP/port and observed Docker endpoints; bind distinct DB/DSN/CA/HBA/client
 signer purposes; ensure actual commands use the closed paths; then run the
 full 16-scenario independent gate and exact cleanup. No evidence manifest is
 authorized by this audit. Phase 6 remains 5/15.
+
+The profile/observer now has a closed representation for a service joining a
+dedicated isolated network: service and network membership must agree, and
+raw Docker inspect plus evidence validation bind the external container ID
+to the observed endpoint. This is a schema and verifier capability, not a
+launched service bridge. The desired network generator still lacks the 16
+new bridges, the external trust graph is still incomplete, and the Provider
+database/client-signer policy remains hard-coded for Browser/Desktop only.

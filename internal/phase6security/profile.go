@@ -232,13 +232,14 @@ type Resources struct {
 }
 
 type Network struct {
-	Name            string   `json:"name"`
-	Kind            string   `json:"kind"`
-	Internal        bool     `json:"internal"`
-	IPv6Enabled     bool     `json:"ipv6_enabled"`
-	GatewayModeIPv4 string   `json:"gateway_mode_ipv4"`
-	IPv4Subnet      string   `json:"ipv4_subnet"`
-	Principals      []string `json:"principals"`
+	Name             string   `json:"name"`
+	Kind             string   `json:"kind"`
+	Internal         bool     `json:"internal"`
+	IPv6Enabled      bool     `json:"ipv6_enabled"`
+	GatewayModeIPv4  string   `json:"gateway_mode_ipv4"`
+	IPv4Subnet       string   `json:"ipv4_subnet"`
+	Principals       []string `json:"principals"`
+	ExternalServices []string `json:"external_services,omitempty"`
 }
 
 type Mount struct {
@@ -333,6 +334,7 @@ type ExternalService struct {
 	DNSNames                    []string `json:"dns_names"`
 	IdentityDigest              string   `json:"identity_digest"`
 	IngressEdges                []string `json:"ingress_edges"`
+	Networks                    []string `json:"networks,omitempty"`
 }
 
 type TrustEdge struct {
@@ -625,11 +627,11 @@ func (p Profile) Validate() error { //nolint:gocyclo
 	if validateSandboxIdentitySlots(p.SandboxIdentitySlots, principals) != nil {
 		return ErrInvalidProfile
 	}
-	if err := validateNetworks(p.Networks, principals, p.EgressPolicies); err != nil {
-		return err
-	}
 	external, err := validateExternal(p.External)
 	if err != nil {
+		return err
+	}
+	if err := validateNetworks(p.Networks, principals, external, p.EgressPolicies); err != nil {
 		return err
 	}
 	edges, err := validateEdges(p.TrustEdges, principals, external)
@@ -978,14 +980,15 @@ func validateTLS(value TLSIdentity) error {
 	return nil
 }
 
-func validateNetworks(values []Network, principals map[string]Principal, egressPolicies []EgressPolicy) error { //nolint:gocyclo
+func validateNetworks(values []Network, principals map[string]Principal, external map[string]ExternalService, egressPolicies []EgressPolicy) error { //nolint:gocyclo
 	networks := make(map[string]Network, len(values))
 	prefixes := make([]netip.Prefix, 0, len(values))
 	previous := ""
 	for _, network := range values {
 		prefix, prefixErr := netip.ParsePrefix(network.IPv4Subnet)
 		if network.Name <= previous || !namePattern.MatchString(network.Name) || len(network.Principals) < 1 ||
-			!sortedUniqueNames(network.Principals) || network.IPv6Enabled || prefixErr != nil ||
+			!sortedUniqueNames(network.Principals) || !sortedUniqueNames(network.ExternalServices) ||
+			len(network.ExternalServices) > 1 || network.IPv6Enabled || prefixErr != nil ||
 			!validObservedSubnet(network.IPv4Subnet, "") || prefix.String() != network.IPv4Subnet {
 			return ErrInvalidProfile
 		}
@@ -1021,6 +1024,17 @@ func validateNetworks(values []Network, principals map[string]Principal, egressP
 		default:
 			return ErrInvalidProfile
 		}
+		if len(network.ExternalServices) != 0 {
+			if !network.Internal || network.GatewayModeIPv4 != "isolated" ||
+				len(network.Principals) != 1 ||
+				(network.Kind != "role_internal" && network.Kind != "trust_edge") {
+				return ErrInvalidProfile
+			}
+			service, ok := external[network.ExternalServices[0]]
+			if !ok || !slicesContains(service.Networks, network.Name) {
+				return ErrInvalidProfile
+			}
+		}
 		for _, name := range network.Principals {
 			principal, ok := principals[name]
 			if !ok || !slicesContains(principal.Networks, network.Name) {
@@ -1028,6 +1042,14 @@ func validateNetworks(values []Network, principals map[string]Principal, egressP
 			}
 		}
 		networks[network.Name] = network
+	}
+	for name, service := range external {
+		for _, networkName := range service.Networks {
+			network, ok := networks[networkName]
+			if !ok || !slicesContains(network.ExternalServices, name) {
+				return ErrInvalidProfile
+			}
+		}
 	}
 	for name, principal := range principals {
 		externalCount := 0
@@ -1093,7 +1115,8 @@ func validateExternal(values []ExternalService) (map[string]ExternalService, err
 			!validImageIdentity(value.ImageLocation, value.ImageIdentityKind, value.ImageReference, value.ImageDigest, value.ImagePlatform,
 				value.ImageSelectedManifestDigest, value.ImageConfigDigest) || !validSPIFFE(value.URI) ||
 			!digestPattern.MatchString(value.IdentityDigest) || value.IdentityDigest != value.Digest() ||
-			len(value.DNSNames) < 1 || len(value.DNSNames) > 8 || len(value.IngressEdges) < 1 || !sortedUniqueNames(value.IngressEdges) {
+			len(value.DNSNames) < 1 || len(value.DNSNames) > 8 || len(value.IngressEdges) < 1 ||
+			!sortedUniqueNames(value.IngressEdges) || !sortedUniqueNames(value.Networks) {
 			return nil, ErrInvalidProfile
 		}
 		previousDNS := ""

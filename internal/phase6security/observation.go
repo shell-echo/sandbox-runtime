@@ -128,6 +128,11 @@ type ObservedMount struct {
 }
 
 func DecodeObservations(document []byte, profile Profile) (ObservationSet, error) {
+	return DecodeObservationsWithExternal(document, profile, nil)
+}
+
+func DecodeObservationsWithExternal(document []byte, profile Profile,
+	externalContainerIDs map[string]string) (ObservationSet, error) {
 	if len(document) < 1 || len(document) > maxBytes || rejectDuplicateMembers(document) != nil {
 		return ObservationSet{}, ErrInvalidObservation
 	}
@@ -142,13 +147,21 @@ func DecodeObservations(document []byte, profile Profile) (ObservationSet, error
 		return ObservationSet{}, ErrInvalidObservation
 	}
 	canonical, err := json.Marshal(observations)
-	if err != nil || !bytes.Equal(canonical, document) || ValidateObservations(profile, observations) != nil {
+	if err != nil || !bytes.Equal(canonical, document) ||
+		ValidateObservationsWithExternal(profile, observations, externalContainerIDs) != nil {
 		return ObservationSet{}, ErrInvalidObservation
 	}
 	return observations, nil
 }
 
 func ValidateObservations(profile Profile, observations ObservationSet) error { //nolint:gocyclo
+	return ValidateObservationsWithExternal(profile, observations, nil)
+}
+
+// ValidateObservationsWithExternal binds independently inspected external
+// container IDs to every declared isolated service-bridge endpoint.
+func ValidateObservationsWithExternal(profile Profile, observations ObservationSet,
+	externalContainerIDs map[string]string) error { //nolint:gocyclo
 	if profile.Validate() != nil || observations.ProfileDigest != profile.ProfileDigest ||
 		!observations.DistinctContainerUIDGIDEstablished || !observations.ContainerNamespaceIsolationEstablished ||
 		observations.HostUserNamespaceMappingEstablished || observations.PlatformServiceAccountEstablished ||
@@ -156,6 +169,17 @@ func ValidateObservations(profile Profile, observations ObservationSet) error { 
 		len(observations.Containers) != len(profile.Principals) || len(observations.Components) != len(profile.Components) ||
 		len(observations.Networks) != len(profile.Networks) {
 		return ErrInvalidObservation
+	}
+	knownExternal := make(map[string]bool, len(profile.External))
+	for _, service := range profile.External {
+		knownExternal[service.Name] = true
+	}
+	seenExternalIDs := make(map[string]bool, len(externalContainerIDs))
+	for name, ID := range externalContainerIDs {
+		if !knownExternal[name] || !containerIDPattern.MatchString(ID) || seenExternalIDs[ID] {
+			return ErrInvalidObservation
+		}
+		seenExternalIDs[ID] = true
 	}
 	profiles := make(map[string]Principal, len(profile.Principals))
 	for _, principal := range profile.Principals {
@@ -213,16 +237,23 @@ func ValidateObservations(profile Profile, observations ObservationSet) error { 
 			observation.Driver != "bridge" || observation.Internal != expected.Internal ||
 			observation.IPv6Enabled || observation.GatewayModeIPv4 != expected.GatewayModeIPv4 ||
 			observation.Subnet != expected.IPv4Subnet ||
-			len(observation.ContainerIDs) != len(expected.Principals) {
+			len(observation.ContainerIDs) != len(expected.Principals)+len(expected.ExternalServices) {
 			return ErrInvalidObservation
 		}
 		if _, duplicate := networkIDs[observation.NetworkID]; duplicate {
 			return ErrInvalidObservation
 		}
 		networkIDs[observation.NetworkID] = struct{}{}
-		expectedIDs := make([]string, len(expected.Principals))
-		for memberIndex, name := range expected.Principals {
-			expectedIDs[memberIndex] = containerByDeployment[name]
+		expectedIDs := make([]string, 0, len(expected.Principals)+len(expected.ExternalServices))
+		for _, name := range expected.Principals {
+			expectedIDs = append(expectedIDs, containerByDeployment[name])
+		}
+		for _, name := range expected.ExternalServices {
+			ID := externalContainerIDs[name]
+			if !containerIDPattern.MatchString(ID) {
+				return ErrInvalidObservation
+			}
+			expectedIDs = append(expectedIDs, ID)
 		}
 		sort.Strings(expectedIDs)
 		if !exactStrings(observation.ContainerIDs, expectedIDs) ||
@@ -279,6 +310,9 @@ func validNetworkEndpoints(endpoints []NetworkEndpointObservation, ids []string,
 		return false
 	}
 	for index, endpoint := range endpoints {
+		if index > 0 && ids[index] <= ids[index-1] {
+			return false
+		}
 		address, err := netip.ParseAddr(endpoint.IPv4Address)
 		if endpoint.ContainerID != ids[index] || err != nil || !address.Is4() ||
 			address.String() != endpoint.IPv4Address || !prefix.Contains(address) ||

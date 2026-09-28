@@ -1411,6 +1411,14 @@ there is no general static client-key or v1 fallback. Thus the earlier
 "sole bootstrap exception" covers the certificate controller's original
 exception; this narrowly reviewed credential-controller exception is an
 additional, separately gated case, not permission for every agent.
+The profile and raw-network observer now have a closed, bidirectional
+service-bridge member shape: an external service's declared networks must
+name the same sole-service isolated network that declares it, with one actual
+dialer principal and an independently inspected external container endpoint.
+The evidence validator consumes the external container ID from the separate
+external-service record; a role-only network inspect is not sufficient. This
+is only a schema/verification primitive until the 16 missing bridges, exact
+paths and live observations are present in a complete candidate run.
 
 Every one of the 58 deployments must also bind a finite repository-owned
 resource/seccomp policy by actual duty, not simply by a shared binary target.

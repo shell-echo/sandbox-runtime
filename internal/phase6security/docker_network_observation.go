@@ -15,8 +15,16 @@ import (
 // `docker network inspect` response. The caller retains the raw bytes under
 // InspectDigest; this projection alone is not proof of active socket denial.
 func ObserveDockerNetwork(document []byte, expected Network, containerIDs map[string]string) (NetworkObservation, error) {
+	return ObserveDockerNetworkWithExternal(document, expected, containerIDs, nil)
+}
+
+// ObserveDockerNetworkWithExternal binds an external service's independently
+// inspected container ID to the same raw network inspect as its sole dialer.
+// The ordinary observer cannot silently omit a declared external member.
+func ObserveDockerNetworkWithExternal(document []byte, expected Network, containerIDs,
+	externalContainerIDs map[string]string) (NetworkObservation, error) {
 	if len(document) < 1 || len(document) > maxBytes || rejectDuplicateMembers(document) != nil ||
-		len(containerIDs) != len(expected.Principals) ||
+		len(containerIDs) != len(expected.Principals) || len(externalContainerIDs) != len(expected.ExternalServices) ||
 		(expected.GatewayModeIPv4 != "isolated" && expected.GatewayModeIPv4 != "nat") {
 		return NetworkObservation{}, ErrInvalidObservation
 	}
@@ -51,7 +59,7 @@ func ObserveDockerNetwork(document []byte, expected Network, containerIDs map[st
 		value.Scope != "local" || value.Internal != expected.Internal || value.Attachable || value.Ingress ||
 		!value.EnableIPv4 || value.EnableIPv6 || len(value.IPAM.Config) != 1 ||
 		value.Options["com.docker.network.bridge.gateway_mode_ipv4"] != expected.GatewayModeIPv4 ||
-		len(value.Containers) != len(expected.Principals) ||
+		len(value.Containers) != len(expected.Principals)+len(expected.ExternalServices) ||
 		!validObservedSubnet(value.IPAM.Config[0].Subnet, value.IPAM.Config[0].Gateway) ||
 		value.IPAM.Config[0].Subnet != expected.IPv4Subnet ||
 		(expected.GatewayModeIPv4 == "isolated" && value.IPAM.Config[0].Gateway != "") ||
@@ -76,15 +84,26 @@ func ObserveDockerNetwork(document []byte, expected Network, containerIDs map[st
 			return NetworkObservation{}, ErrInvalidObservation
 		}
 	}
-	memberIDs := make([]string, 0, len(containerIDs))
-	endpoints := make([]NetworkEndpointObservation, 0, len(containerIDs))
+	memberIDs := make([]string, 0, len(containerIDs)+len(externalContainerIDs))
+	endpoints := make([]NetworkEndpointObservation, 0, len(containerIDs)+len(externalContainerIDs))
 	subnet, err := netip.ParsePrefix(value.IPAM.Config[0].Subnet)
 	if err != nil {
 		return NetworkObservation{}, ErrInvalidObservation
 	}
+	members := make(map[string]string, len(containerIDs)+len(externalContainerIDs))
 	for _, name := range expected.Principals {
-		ID, ok := containerIDs[name]
-		if !ok || !containerIDPattern.MatchString(ID) {
+		members[name] = containerIDs[name]
+	}
+	for _, name := range expected.ExternalServices {
+		members[name] = externalContainerIDs[name]
+	}
+	for name, ID := range members {
+		_, role := containerIDs[name]
+		_, service := externalContainerIDs[name]
+		if role == service {
+			return NetworkObservation{}, ErrInvalidObservation
+		}
+		if !containerIDPattern.MatchString(ID) {
 			return NetworkObservation{}, ErrInvalidObservation
 		}
 		member, exists := value.Containers[ID]

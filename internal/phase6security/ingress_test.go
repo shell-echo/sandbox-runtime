@@ -35,7 +35,11 @@ func TestIngressBoundaryAcceptsClosedProfile(t *testing.T) {
 	if err := validatePrincipal(principals["public-ingress-relay"], registry, nil, nil); err != nil {
 		t.Fatalf("ingress principal: %v", err)
 	}
-	if err := validateNetworks(profile.Networks, principals, profile.EgressPolicies); err != nil {
+	external, err := validateExternal(profile.External)
+	if err != nil {
+		t.Fatalf("external: %v", err)
+	}
+	if err := validateNetworks(profile.Networks, principals, external, profile.EgressPolicies); err != nil {
 		t.Fatalf("ingress networks: %v", err)
 	}
 	if err := validatePublicListeners(profile.PublicListeners, principals); err != nil {
@@ -43,10 +47,6 @@ func TestIngressBoundaryAcceptsClosedProfile(t *testing.T) {
 	}
 	if err := validateIngressBindings(profile.IngressBindings, profile.PublicListeners, principals, profile.Networks); err != nil {
 		t.Fatalf("ingress bindings: %v", err)
-	}
-	external, err := validateExternal(profile.External)
-	if err != nil {
-		t.Fatalf("external: %v", err)
 	}
 	edges, err := validateEdges(profile.TrustEdges, principals, external)
 	if err != nil {
