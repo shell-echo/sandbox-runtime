@@ -1386,6 +1386,32 @@ server mTLS/HBA and client-signer purpose, then re-count and revalidate the
 complete inventory before freezing R or building all candidates. Browser and
 Desktop Providers remain brokered and cannot inherit the coding direct path.
 
+The subsequent command audit identifies 18 actual direct external dials,
+of which the current table includes only Product→PostgreSQL and certificate-
+controller→Vault. The other 16 comprise Gateway→Product PostgreSQL, coding
+Provider→its own PostgreSQL, Product/Provider one-shot migration jobs→their
+own PostgreSQL roles, eleven material-agent deployments→their own Vault KV
+scopes, and workload-credential-controller→its restricted Vault issuer. These
+are approved only as separate internal+isolated dialer/service bridges with
+exact credential, signer, ACL and cleanup authority. Browser/Desktop Provider
+database traffic and Browser action-ingress/Gateway capacity traffic remain
+broker-only. The command audit at
+`docs/audits/product-phase-6-slice-6-command-dependency-audit.md` is an
+independent completeness guard, not a successful runtime observation.
+
+The existing material-agent executable still uses workload-credential.v1,
+while the Slice 6 credential controller is v2; and its Vault client and the
+v2 controller's Vault client currently provide server TLS only. Network
+permission alone cannot bridge these protocol and mTLS gaps. Slice 6 permits
+an explicit v2 material-agent configuration/client with full Principal
+binding and managed client signing. The credential controller may use one
+short-lived, FD-only, exact-identity Vault TLS bootstrap before a managed
+identity switch, following the certificate controller's audited pattern;
+there is no general static client-key or v1 fallback. Thus the earlier
+"sole bootstrap exception" covers the certificate controller's original
+exception; this narrowly reviewed credential-controller exception is an
+additional, separately gated case, not permission for every agent.
+
 Every one of the 58 deployments must also bind a finite repository-owned
 resource/seccomp policy by actual duty, not simply by a shared binary target.
 Equivalent syscall needs may share audited bytes, but a Browser policy is not
