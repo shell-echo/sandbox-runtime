@@ -144,6 +144,7 @@ storage "inmem" {}
 	scopedVaultMust(t, ctx, httpClient, http.MethodPost, endpoint+"/v1/pki/root/generate/internal", initialized.RootToken,
 		map[string]any{"common_name": "sandbox-runtime.test", "ttl": "1h", "key_type": "ec", "key_bits": 256}, nil)
 	observedIssuer, err := phase6vaultbootstrap.ObserveIssuer(ctx, httpClient, endpoint, "127.0.0.1",
+		"spiffe://sandbox-runtime.test/external/vault",
 		[]byte(initialized.RootToken), time.Now().UTC())
 	if err != nil || observedIssuer.ID == "" || len(observedIssuer.DER) == 0 ||
 		observedIssuer.Digest != scopedVaultDigestDER(observedIssuer.DER) || observedIssuer.CRLNextUpdate.IsZero() {
@@ -364,6 +365,8 @@ func scopedVaultLeaf(t *testing.T, now time.Time, ca *x509.Certificate, caKey *e
 	} else {
 		template.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}
 		template.IPAddresses = []net.IP{net.ParseIP("127.0.0.1")}
+		identity, _ := url.Parse("spiffe://sandbox-runtime.test/external/vault")
+		template.URIs = []*url.URL{identity}
 	}
 	der, err := x509.CreateCertificate(rand.Reader, template, ca, &key.PublicKey, caKey)
 	if err != nil {

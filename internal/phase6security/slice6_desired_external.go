@@ -28,6 +28,26 @@ func Slice6DesiredExternalServiceNames() []string {
 	return names
 }
 
+// Slice6DesiredExternalServiceSkeletons returns the reviewed five identities
+// and original 17-edge ingress lists before any image or CA is bound. It is
+// deliberately non-launchable; verified OCI input and the later final-network
+// expansion must be applied before Profile.Validate can succeed.
+func Slice6DesiredExternalServiceSkeletons() []ExternalService {
+	result := make([]ExternalService, 0, len(slice6DesiredExternalServices))
+	for _, desired := range slice6DesiredExternalServices {
+		ingress := make([]string, 0)
+		for _, edge := range slice6DesiredExternalEdges {
+			if edge.to == desired.name {
+				ingress = append(ingress, edge.id)
+			}
+		}
+		sort.Strings(ingress)
+		result = append(result, ExternalService{Name: desired.name, URI: desired.uri,
+			DNSNames: []string{desired.dnsName}, IngressEdges: ingress})
+	}
+	return result
+}
+
 // VerifySlice6DesiredExternalServices rejects a self-consistent profile that
 // silently substitutes an external identity, name, SAN or allowed inbound edge.
 // It does not attest that the pinned image, certificate or server was observed.

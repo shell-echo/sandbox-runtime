@@ -2673,7 +2673,8 @@ deployment or Slice 6 acceptance.
 
 The next controlled-Vault input increment adds
 `internal/phase6vaultbootstrap.ObserveIssuer`. It accepts only a direct,
-bounded TLS 1.3 mTLS operator client with a verified exact server name and a
+bounded TLS 1.3 mTLS operator client with a verified exact server name,
+a single reviewed Vault URI SAN and server-only leaf purpose, plus a
 short-lived token; it refuses redirects, proxy-capable/custom-dial transport,
 duplicate or excessively nested JSON, an unstable mutable default alias,
 non-immediate complete-CRL configuration, invalid issuer DER, and an expired or
@@ -2692,3 +2693,44 @@ After this source change, the complete `go test -race -shuffle=on -count=1
 rejection test passed under targeted race/shuffle after that complete run;
 it does not alter runtime behavior or convert component evidence into the
 missing full-topology gate.
+
+Checkpoint 2026-09-29 (external-image input, not a live service gate): a
+separate `phase6profilebuilder` loader now pins the four official Vault,
+PostgreSQL, Valkey and CoreDNS registry indexes and the native arm64 platform
+manifests. It reopens private mode-0600 OCI archives outside the checkout,
+checks the raw index→selected-manifest→config chain and every compressed layer
+against the ordered config diff IDs, then binds the reviewed five external
+service names; the action-history and Product PostgreSQL identities share one
+image but remain separate service authorities. A symlink-resolved source-tree
+check rejects an apparent external archive actually under the checkout.
+The exact verified descriptor proof digests are, respectively,
+`sha256:2850f4fcd021dcb4e400511ab77800a2a18445267312b1aa2fc092dddc5f71ea`,
+`sha256:9b3a1bb275b6fa12bdb10b7ce1d86a57b111315270f7185cedce08ed407763b2`,
+`sha256:d17187a8936f85d5213ca83bfd7756f41be643e40e89a5b51520bedd5fd69487`,
+and `sha256:a5b3e5986897169bffbacc7a29ff39dc669379de26cac8087bd244cd2dd37059`.
+The corresponding complete private archive SHA-256 digests are
+`197d50221e900ccaef05db51982d3a3e225035c349631419cc5119cc0b5c62b6`,
+`4e66c369aa67aaabc489a8bce6b115b0ae110cdbc4cc36f8916ae599275750f4`,
+`442dbf4153726033650d96ad6abf04166a77399191d297c208687d5fd2a1030a`,
+and `7958948400a0036d2a262a92e4ba276475cc06e21fdaf47061c669d8101140b7`.
+Docker's Vault export contained the index and selected manifest but omitted
+the config and layers, so it was rejected. A bounded separate download of the
+same pinned Vault platform supplied the missing original content-addressed
+blobs; the combined private archive then passed the same independent verifier.
+The tagged four-archive/five-service input test passes. This establishes
+descriptor bytes, not registry publication authenticity, running Docker
+selection, service TLS/SQL/Redis/DNS behavior, final profile, privilege
+enforcement, the 16-scenario gate or immutable evidence. Phase 6 stays
+**5/15**.
+
+An additional opt-in real-Docker component check then created one stopped,
+networkless, `--pull=never` observation container from each exact pinned
+image. It compared Docker's runtime store descriptor, selected arm64 manifest,
+OCI config and ordered rootfs diff IDs with the independently verified archive
+bytes, then removed each exact container and its anonymous volumes. Vault,
+PostgreSQL, Valkey and CoreDNS all passed; a post-run exact-name listing was
+empty. This closes only the four image-selection input observations. The
+external services were not started, no TLS/SQL/Redis/DNS connection or network
+policy was exercised, and no full-inventory or Slice 6 acceptance is claimed.
+The private archive reconstruction and exact opt-in commands are recorded in
+[`phase6-external-image-input.md`](../phase6-external-image-input.md).

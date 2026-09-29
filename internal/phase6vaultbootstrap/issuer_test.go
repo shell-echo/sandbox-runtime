@@ -13,11 +13,13 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 	"time"
 )
 
 const testIssuerID = "01234567-89ab-cdef-0123-456789abcdef"
+const testVaultURI = "spiffe://sandbox-runtime.test/external/vault"
 
 func TestObserveIssuerRejectsBootstrapDrift(t *testing.T) {
 	client, server, issuerDER, crlDER := issuerFixture(t)
@@ -86,7 +88,7 @@ func TestObserveIssuerRejectsBootstrapDrift(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			mode, issuerReads = test.mode, 0
-			observed, err := ObserveIssuer(context.Background(), client, server.URL, serverName,
+			observed, err := ObserveIssuer(context.Background(), client, server.URL, serverName, testVaultURI,
 				[]byte("short-lived-operator-token"), now)
 			if (err == nil) != test.valid {
 				t.Fatalf("ObserveIssuer success = %v, want %v", err == nil, test.valid)
@@ -97,15 +99,19 @@ func TestObserveIssuerRejectsBootstrapDrift(t *testing.T) {
 			}
 		})
 	}
-	if _, err := ObserveIssuer(context.Background(), client, server.URL+"/", serverName, []byte("short-lived-operator-token"), now); err == nil {
+	if _, err := ObserveIssuer(context.Background(), client, server.URL+"/", serverName, testVaultURI, []byte("short-lived-operator-token"), now); err == nil {
 		t.Fatal("noncanonical endpoint accepted")
+	}
+	if _, err := ObserveIssuer(context.Background(), client, server.URL, serverName,
+		"spiffe://sandbox-runtime.test/external/other", []byte("short-lived-operator-token"), now); err == nil {
+		t.Fatal("substituted Vault URI accepted")
 	}
 	unsafe := *client
 	unsafeTransport := client.Transport.(*http.Transport).Clone()
 	unsafeTransport.TLSClientConfig = unsafeTransport.TLSClientConfig.Clone()
 	unsafeTransport.TLSClientConfig.InsecureSkipVerify = true //nolint:gosec -- rejection fixture
 	unsafe.Transport = unsafeTransport
-	if _, err := ObserveIssuer(context.Background(), &unsafe, server.URL, serverName, []byte("short-lived-operator-token"), now); err == nil {
+	if _, err := ObserveIssuer(context.Background(), &unsafe, server.URL, serverName, testVaultURI, []byte("short-lived-operator-token"), now); err == nil {
 		t.Fatal("unverified TLS client accepted")
 	}
 	wrongName := *client
@@ -113,18 +119,28 @@ func TestObserveIssuerRejectsBootstrapDrift(t *testing.T) {
 	wrongTransport.TLSClientConfig = wrongTransport.TLSClientConfig.Clone()
 	wrongTransport.TLSClientConfig.ServerName = "other.sandbox-runtime.test"
 	wrongName.Transport = wrongTransport
-	if _, err := ObserveIssuer(context.Background(), &wrongName, server.URL, serverName, []byte("short-lived-operator-token"), now); err == nil {
+	if _, err := ObserveIssuer(context.Background(), &wrongName, server.URL, serverName, testVaultURI, []byte("short-lived-operator-token"), now); err == nil {
 		t.Fatal("substituted server identity accepted")
 	}
 	proxied := *client
 	proxyTransport := client.Transport.(*http.Transport).Clone()
 	proxyTransport.Proxy = http.ProxyFromEnvironment
 	proxied.Transport = proxyTransport
-	if _, err := ObserveIssuer(context.Background(), &proxied, server.URL, serverName, []byte("short-lived-operator-token"), now); err == nil {
+	if _, err := ObserveIssuer(context.Background(), &proxied, server.URL, serverName, testVaultURI, []byte("short-lived-operator-token"), now); err == nil {
 		t.Fatal("proxy-capable bootstrap transport accepted")
 	}
 	if decodeVaultJSON([]byte(`{"data":`+nestedJSON(40)+`}`), new(any)) == nil {
 		t.Fatal("deep Vault JSON accepted")
+	}
+	serverLeaf, err := x509.ParseCertificate(server.TLS.Certificates[0].Certificate[0])
+	if err != nil || !exactVaultServerIdentity(serverLeaf, testVaultURI) {
+		t.Fatalf("fixture Vault server identity invalid: %v", err)
+	}
+	other := *serverLeaf
+	wrongURI, _ := url.Parse("spiffe://sandbox-runtime.test/external/other")
+	other.URIs = []*url.URL{wrongURI}
+	if exactVaultServerIdentity(&other, testVaultURI) {
+		t.Fatal("same-name wrong-URI Vault leaf accepted")
 	}
 }
 
@@ -191,6 +207,10 @@ func issuerLeaf(t *testing.T, ca *x509.Certificate, caKey *ecdsa.PrivateKey, cli
 		NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(time.Hour),
 		KeyUsage: x509.KeyUsageDigitalSignature, ExtKeyUsage: []x509.ExtKeyUsage{usage},
 		IPAddresses: []net.IP{net.ParseIP("127.0.0.1")}}
+	if !client {
+		identity, _ := url.Parse(testVaultURI)
+		template.URIs = []*url.URL{identity}
+	}
 	der, err := x509.CreateCertificate(rand.Reader, template, ca, &key.PublicKey, caKey)
 	if err != nil {
 		t.Fatal(err)

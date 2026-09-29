@@ -42,13 +42,13 @@ type Issuer struct {
 // immutable UUID's DER and complete CRL. It never returns or persists a token.
 // The caller must independently bind the returned DER to the intended trust
 // anchors and revoke its bootstrap authority before workload startup.
-func ObserveIssuer(ctx context.Context, client *http.Client, endpoint, serverName string, token []byte, now time.Time) (Issuer, error) {
+func ObserveIssuer(ctx context.Context, client *http.Client, endpoint, serverName, serverURI string, token []byte, now time.Time) (Issuer, error) {
 	if ctx == nil || ctx.Err() != nil || client == nil || len(token) < 8 || len(token) > 8192 ||
 		bytes.IndexAny(token, "\r\n\x00") >= 0 || now.IsZero() || !validEndpoint(endpoint) ||
-		serverName == "" || !validClient(client, serverName) {
+		serverName == "" || !validServerURI(serverURI) || !validClient(client, serverName) {
 		return Issuer{}, ErrInvalidIssuer
 	}
-	config, err := request(ctx, client, endpoint, serverName, token, "/v1/pki/config/issuers", "application/json")
+	config, err := request(ctx, client, endpoint, serverName, serverURI, token, "/v1/pki/config/issuers", "application/json")
 	if err != nil {
 		return Issuer{}, err
 	}
@@ -61,7 +61,7 @@ func ObserveIssuer(ctx context.Context, client *http.Client, endpoint, serverNam
 		return Issuer{}, ErrInvalidIssuer
 	}
 	id := issuerConfig.Data.Default
-	crlConfig, err := request(ctx, client, endpoint, serverName, token, "/v1/pki/config/crl", "application/json")
+	crlConfig, err := request(ctx, client, endpoint, serverName, serverURI, token, "/v1/pki/config/crl", "application/json")
 	if err != nil {
 		return Issuer{}, err
 	}
@@ -78,7 +78,7 @@ func ObserveIssuer(ctx context.Context, client *http.Client, endpoint, serverNam
 		return Issuer{}, ErrInvalidIssuer
 	}
 	base := "/v1/pki/issuer/" + id
-	der, err := request(ctx, client, endpoint, serverName, token, base+"/der", "application/pkix-cert", "application/octet-stream")
+	der, err := request(ctx, client, endpoint, serverName, serverURI, token, base+"/der", "application/pkix-cert", "application/octet-stream")
 	if err != nil {
 		return Issuer{}, err
 	}
@@ -88,7 +88,7 @@ func ObserveIssuer(ctx context.Context, client *http.Client, endpoint, serverNam
 		now.Before(certificate.NotBefore) || !now.Before(certificate.NotAfter) {
 		return Issuer{}, ErrInvalidIssuer
 	}
-	crlDER, err := request(ctx, client, endpoint, serverName, token, base+"/crl/der", "application/pkix-crl", "application/octet-stream")
+	crlDER, err := request(ctx, client, endpoint, serverName, serverURI, token, base+"/crl/der", "application/pkix-crl", "application/octet-stream")
 	if err != nil {
 		return Issuer{}, err
 	}
@@ -101,7 +101,7 @@ func ObserveIssuer(ctx context.Context, client *http.Client, endpoint, serverNam
 	}
 	// Detect a default-issuer change during bootstrap. No workload uses the
 	// mutable alias after this point; subsequent reads use only the fixed UUID.
-	confirm, err := request(ctx, client, endpoint, serverName, token, "/v1/pki/config/issuers", "application/json")
+	confirm, err := request(ctx, client, endpoint, serverName, serverURI, token, "/v1/pki/config/issuers", "application/json")
 	if err != nil || decodeVaultJSON(confirm, &issuerConfig) != nil || issuerConfig.Data.Default != id {
 		return Issuer{}, ErrInvalidIssuer
 	}
@@ -114,6 +114,13 @@ func validEndpoint(raw string) bool {
 	parsed, err := url.Parse(raw)
 	return err == nil && parsed.Scheme == "https" && parsed.Host != "" && parsed.User == nil &&
 		parsed.Path == "" && parsed.RawQuery == "" && parsed.Fragment == "" && !strings.HasSuffix(raw, "/")
+}
+
+func validServerURI(raw string) bool {
+	parsed, err := url.Parse(raw)
+	return err == nil && parsed.Scheme == "spiffe" && parsed.Host == "sandbox-runtime.test" &&
+		parsed.User == nil && parsed.Path == "/external/vault" && parsed.RawQuery == "" &&
+		parsed.Fragment == "" && parsed.String() == raw
 }
 
 func validClient(client *http.Client, serverName string) bool {
@@ -129,7 +136,7 @@ func validClient(client *http.Client, serverName string) bool {
 		(len(config.Certificates) == 1 || config.GetClientCertificate != nil)
 }
 
-func request(ctx context.Context, client *http.Client, endpoint, serverName string, token []byte, path string, contentTypes ...string) ([]byte, error) {
+func request(ctx context.Context, client *http.Client, endpoint, serverName, serverURI string, token []byte, path string, contentTypes ...string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint+path, nil)
 	if err != nil {
 		return nil, ErrInvalidIssuer
@@ -144,7 +151,8 @@ func request(ctx context.Context, client *http.Client, endpoint, serverName stri
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK || response.TLS == nil || response.TLS.Version != tls.VersionTLS13 ||
 		len(response.TLS.VerifiedChains) == 0 || len(response.TLS.PeerCertificates) == 0 ||
-		response.TLS.PeerCertificates[0].VerifyHostname(serverName) != nil {
+		response.TLS.PeerCertificates[0].VerifyHostname(serverName) != nil ||
+		!exactVaultServerIdentity(response.TLS.PeerCertificates[0], serverURI) {
 		return nil, ErrInvalidIssuer
 	}
 	contentType := strings.TrimSpace(strings.Split(response.Header.Get("Content-Type"), ";")[0])
@@ -162,6 +170,12 @@ func request(ctx context.Context, client *http.Client, endpoint, serverName stri
 		return nil, ErrInvalidIssuer
 	}
 	return document, nil
+}
+
+func exactVaultServerIdentity(leaf *x509.Certificate, serverURI string) bool {
+	return leaf != nil && len(leaf.URIs) == 1 && leaf.URIs[0].String() == serverURI &&
+		len(leaf.ExtKeyUsage) == 1 && leaf.ExtKeyUsage[0] == x509.ExtKeyUsageServerAuth &&
+		len(leaf.UnknownExtKeyUsage) == 0 && leaf.KeyUsage == x509.KeyUsageDigitalSignature
 }
 
 func decodeVaultJSON(document []byte, target any) error {
