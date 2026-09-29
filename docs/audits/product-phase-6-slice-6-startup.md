@@ -2768,6 +2768,10 @@ only a new run ID with re-frozen inputs may attempt full acceptance. The final
 run must cover the actual concurrent role set plus five external services,
 daemon/observer and cleanup reserve, all 16 scenarios and zero leftovers;
 unchanged inputs that pass all gates need no artificial rerun. See ADR 0055.
-These documentation changes move HEAD beyond R, so its retained image inputs
-are historical component diagnostics and must be rebuilt from the eventual
-final source revision. No candidate here is a Slice 6 acceptance manifest.
+These documentation-only E changes move this checkout's HEAD beyond R. They
+do not change R's runtime/build bytes or automatically invalidate its image
+identity; the present candidate loaders do, however, require a clean checkout
+at the exact R to reopen it. A separate clean R checkout may retain that
+component proof. A later actual resource-policy or runtime/build input change
+must freeze a new R and rebuild affected source-bound candidates before the
+final gate. No candidate here is a Slice 6 acceptance manifest.
