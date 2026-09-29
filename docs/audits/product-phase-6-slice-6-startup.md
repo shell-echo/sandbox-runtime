@@ -2670,3 +2670,25 @@ three isolated race/shuffle repetitions. A subsequent complete
 ./...`, Product Contract lock verification and `git diff --check` pass. This
 bounded test rerun is source validation, not the missing same-run Vault/DNS
 deployment or Slice 6 acceptance.
+
+The next controlled-Vault input increment adds
+`internal/phase6vaultbootstrap.ObserveIssuer`. It accepts only a direct,
+bounded TLS 1.3 mTLS operator client with a verified exact server name and a
+short-lived token; it refuses redirects, proxy-capable/custom-dial transport,
+duplicate or excessively nested JSON, an unstable mutable default alias,
+non-immediate complete-CRL configuration, invalid issuer DER, and an expired or
+mis-signed complete CRL. It returns the actual fixed issuer UUID, complete DER
+digest and CRL number/times, not a selected leaf or a workload credential.
+The pinned non-dev Vault scoped-role integration now mounts PKI, generates a
+real issuer, successfully observes it over mTLS before revoking the initial
+root token, then continues its fixed-role and cleanup checks. Targeted race
+tests and that tagged real-Vault component test pass. This is a verified
+bootstrap input boundary only: it has no isolated final service bridge,
+complete final profile, two-controller/agent OS-process chain, same-run CRL
+drain measurement or Slice 6 manifest. Phase 6 remains **5/15**.
+After this source change, the complete `go test -race -shuffle=on -count=1
+-p=2 ./...` run, `go vet ./...`, Product Contract lock verification and
+`git diff --check` passed under Go 1.26.8. The additional CRL-signature
+rejection test passed under targeted race/shuffle after that complete run;
+it does not alter runtime behavior or convert component evidence into the
+missing full-topology gate.

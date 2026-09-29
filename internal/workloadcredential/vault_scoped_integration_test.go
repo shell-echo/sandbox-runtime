@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/shell-echo/sandbox-runtime/internal/credentialbackend"
+	"github.com/shell-echo/sandbox-runtime/internal/phase6vaultbootstrap"
 )
 
 const scopedVaultIntegrationEnv = "SANDBOX_RUNTIME_WORKLOAD_CREDENTIAL_SCOPED_INTEGRATION"
@@ -135,6 +136,19 @@ storage "inmem" {}
 	scopedVaultMust(t, ctx, httpClient, http.MethodPost, endpoint+"/v1/sys/unseal", "",
 		map[string]string{"key": initialized.KeysBase64[0]}, nil)
 	initialized.KeysBase64 = nil
+	// This real, non-dev mTLS bootstrap freezes Vault's actual issuer UUID,
+	// full DER and complete-CRL source before the root token is revoked. It is
+	// source input only; no final security profile or workload is admitted here.
+	scopedVaultMust(t, ctx, httpClient, http.MethodPost, endpoint+"/v1/sys/mounts/pki", initialized.RootToken,
+		map[string]any{"type": "pki", "config": map[string]string{"default_lease_ttl": "1h", "max_lease_ttl": "1h"}}, nil)
+	scopedVaultMust(t, ctx, httpClient, http.MethodPost, endpoint+"/v1/pki/root/generate/internal", initialized.RootToken,
+		map[string]any{"common_name": "sandbox-runtime.test", "ttl": "1h", "key_type": "ec", "key_bits": 256}, nil)
+	observedIssuer, err := phase6vaultbootstrap.ObserveIssuer(ctx, httpClient, endpoint, "127.0.0.1",
+		[]byte(initialized.RootToken), time.Now().UTC())
+	if err != nil || observedIssuer.ID == "" || len(observedIssuer.DER) == 0 ||
+		observedIssuer.Digest != scopedVaultDigestDER(observedIssuer.DER) || observedIssuer.CRLNextUpdate.IsZero() {
+		t.Fatalf("real Vault fixed issuer bootstrap: %v", err)
+	}
 	policy := "certificate-controller-pki"
 	otherPolicy := "product-runtime-vault"
 	unrelatedPolicy := "unrelated-business-vault"
@@ -307,6 +321,11 @@ func scopedVaultMust(t *testing.T, ctx context.Context, client *http.Client, met
 
 func scopedVaultDigest(value string) string {
 	digest := sha256.Sum256([]byte(value))
+	return "sha256:" + hex.EncodeToString(digest[:])
+}
+
+func scopedVaultDigestDER(value []byte) string {
+	digest := sha256.Sum256(value)
 	return "sha256:" + hex.EncodeToString(digest[:])
 }
 
