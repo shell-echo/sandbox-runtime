@@ -28,6 +28,17 @@ type ServerConfig struct {
 	MaxConnections    int
 	ReplayCapacity    int
 	Now               func() time.Time
+	PeerRevocation    PeerRevocationMonitor
+}
+
+// PeerRevocationMonitor is owned by the caller's exact mTLS edge. A nil
+// monitor is retained only for component fixtures; the production broker
+// command supplies a profile-bound guard before accepting any request frame.
+type PeerRevocationMonitor interface {
+	Ready() bool
+	CheckHandshake(context.Context, tls.ConnectionState) error
+	Track(net.Conn, tls.ConnectionState) error
+	Forget(net.Conn)
 }
 
 type Server struct {
@@ -41,6 +52,7 @@ type Server struct {
 	capacity          chan struct{}
 	replayCapacity    int
 	now               func() time.Time
+	peerRevocation    PeerRevocationMonitor
 	replayMu          sync.Mutex
 	replay            map[string]time.Time
 	sessionsMu        sync.Mutex
@@ -71,7 +83,8 @@ func Listen(config ServerConfig) (*Server, error) {
 		principalDNSNames: append([]string(nil), config.PrincipalDNSNames...), principalUsages: principalUsages,
 		resolver: config.Resolver, dialer: config.Dialer,
 		capacity: make(chan struct{}, config.MaxConnections), replayCapacity: config.ReplayCapacity, now: config.Now,
-		replay: make(map[string]time.Time, config.ReplayCapacity), sessions: make(map[net.Conn]net.Conn),
+		peerRevocation: config.PeerRevocation,
+		replay:         make(map[string]time.Time, config.ReplayCapacity), sessions: make(map[net.Conn]net.Conn),
 		connections: make(map[net.Conn]struct{})}, nil
 }
 
@@ -167,6 +180,14 @@ func (s *Server) handle(parent context.Context, raw net.Conn) {
 	if err := connection.HandshakeContext(handshakeContext); err != nil || validatePeerIdentity(connection.ConnectionState(),
 		s.principalURI, s.principalDNSNames, s.principalUsages) != nil {
 		return
+	}
+	if monitor := s.peerRevocation; monitor != nil {
+		state := connection.ConnectionState()
+		if !monitor.Ready() || monitor.CheckHandshake(handshakeContext, state) != nil ||
+			monitor.Track(connection, state) != nil {
+			return
+		}
+		defer monitor.Forget(connection)
 	}
 	document, err := readFrame(connection, maxRequestBytes)
 	if err != nil {

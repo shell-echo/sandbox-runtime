@@ -3,24 +3,70 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"net"
 	"testing"
+	"time"
 
 	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
+	"github.com/shell-echo/sandbox-runtime/internal/phase6tls"
 )
 
+type recordingDNSDeadlineConn struct {
+	net.Conn
+	deadline, readDeadline, writeDeadline time.Time
+}
+
+func (c *recordingDNSDeadlineConn) SetDeadline(value time.Time) error {
+	c.deadline = value
+	return nil
+}
+
+func (c *recordingDNSDeadlineConn) SetReadDeadline(value time.Time) error {
+	c.readDeadline = value
+	return nil
+}
+
+func (c *recordingDNSDeadlineConn) SetWriteDeadline(value time.Time) error {
+	c.writeDeadline = value
+	return nil
+}
+
+func TestGuardedDNSConnectionNeverExtendsProfileLifetime(t *testing.T) {
+	left, right := net.Pipe()
+	defer right.Close()
+	recording := &recordingDNSDeadlineConn{Conn: left}
+	expires := time.Now().Add(time.Minute)
+	connection := &guardedDNSConn{Conn: recording, guard: new(phase6tls.PeerCRLGuard), expiresAt: expires}
+	later := expires.Add(time.Hour)
+	if connection.SetDeadline(later) != nil || connection.SetReadDeadline(later) != nil ||
+		connection.SetWriteDeadline(later) != nil || recording.deadline != expires ||
+		recording.readDeadline != expires || recording.writeDeadline != expires {
+		t.Fatal("resolver extended a profile-bounded DNS connection")
+	}
+	if err := connection.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestDNSConfigMustMatchExternalIdentityAndNumericEndpoint(t *testing.T) {
+	address, err := phase6security.Slice6DesiredServiceEndpointAddress("service-product-dns", "dns")
+	if err != nil {
+		t.Fatal(err)
+	}
+	address += ":853"
 	profile := phase6security.Profile{
 		External: []phase6security.ExternalService{{Name: "dns", URI: "spiffe://example.test/dns", DNSNames: []string{"dns.example.test"}, IdentityDigest: "identity-digest"}},
-		TrustEdges: []phase6security.TrustEdge{{From: "egress-broker-product", To: "dns", CrossDomain: true,
+		TrustEdges: []phase6security.TrustEdge{{ID: "egress-dns", From: "egress-broker-product", To: "dns", CrossDomain: true,
 			ExternalIdentityDigest: "identity-digest", Protocol: "dns_tcp", Authentication: "mtls", Port: 853}},
 	}
-	if _, ok := validateDNSConfig(profile, "egress-broker-product", "dns.example.test", "192.0.2.53:853"); !ok {
+	if _, ok := validateDNSConfig(profile, "egress-broker-product", "dns.example.test", address); !ok {
 		t.Fatal("exact DNS identity and numeric endpoint rejected")
 	}
 	for name, change := range map[string]func(*phase6security.Profile, *string, *string){
 		"wrong SAN":            func(_ *phase6security.Profile, serverName, _ *string) { *serverName = "attacker.example.test" },
 		"DNS bootstrap bypass": func(_ *phase6security.Profile, _, address *string) { *address = "dns.example.test:853" },
 		"wrong port":           func(_ *phase6security.Profile, _, address *string) { *address = "192.0.2.53:53" },
+		"other numeric IP":     func(_ *phase6security.Profile, _, address *string) { *address = "192.0.2.53:853" },
 		"edge identity drift":  func(p *phase6security.Profile, _, _ *string) { p.TrustEdges[0].ExternalIdentityDigest = "other" },
 		"extra SAN": func(p *phase6security.Profile, _, _ *string) {
 			p.External[0].DNSNames = append(p.External[0].DNSNames, "extra.example.test")
@@ -30,9 +76,9 @@ func TestDNSConfigMustMatchExternalIdentityAndNumericEndpoint(t *testing.T) {
 			candidate := profile
 			candidate.External = append([]phase6security.ExternalService(nil), profile.External...)
 			candidate.TrustEdges = append([]phase6security.TrustEdge(nil), profile.TrustEdges...)
-			serverName, address := "dns.example.test", "192.0.2.53:853"
-			change(&candidate, &serverName, &address)
-			if _, ok := validateDNSConfig(candidate, "egress-broker-product", serverName, address); ok {
+			serverName, candidateAddress := "dns.example.test", address
+			change(&candidate, &serverName, &candidateAddress)
+			if _, ok := validateDNSConfig(candidate, "egress-broker-product", serverName, candidateAddress); ok {
 				t.Fatal("DNS identity/endpoint drift accepted")
 			}
 		})
@@ -41,7 +87,9 @@ func TestDNSConfigMustMatchExternalIdentityAndNumericEndpoint(t *testing.T) {
 
 func TestConfigRequiresBoundedOperatorPolicyState(t *testing.T) {
 	valid := func() configDocument {
-		return configDocument{Protocol: configProtocol, SecurityProfilePath: "/private/profile.json", PolicyID: "product-egress",
+		return configDocument{Protocol: configProtocol, SecurityProfilePath: "/private/profile.json",
+			PeerCRLRoleFile: "/private/peer-crl-role.json", PeerCRLRoleDigest: "sha256:" + string(bytes.Repeat([]byte{'a'}, 64)),
+			PeerCRLSourceMappingDigest: "sha256:" + string(bytes.Repeat([]byte{'b'}, 64)), PolicyID: "product-egress",
 			ListenAddress: "127.0.0.1:8443", DNSAddress: "192.0.2.53:853", DNSServerName: "dns.example.test",
 			MaxConnections: 4, ReplayCapacity: 16, OperationTimeoutSeconds: 5,
 			PolicyStateKeyID: "operator-1", PolicyStatePublicKey: make([]byte, 32), PolicyCurrentPollMillis: 1000,
@@ -60,11 +108,15 @@ func TestConfigRequiresBoundedOperatorPolicyState(t *testing.T) {
 		t.Fatal(err)
 	}
 	for name, change := range map[string]func(*configDocument){
-		"wrong key":          func(c *configDocument) { c.PolicyStatePublicKey = nil },
-		"slow polling":       func(c *configDocument) { c.PolicyCurrentPollMillis = 1001 },
-		"missing authority":  func(c *configDocument) { c.PolicyAuthoritySocket = "" },
-		"relative authority": func(c *configDocument) { c.PolicyAuthoritySocket = "authority.sock" },
-		"slow attestation":   func(c *configDocument) { c.PolicyAuthorityTimeoutMS = 5001 },
+		"v2 downgrade":          func(c *configDocument) { c.Protocol = "sandbox-runtime.egress-policy-broker-config.v2" },
+		"missing peer role":     func(c *configDocument) { c.PeerCRLRoleFile = "" },
+		"wrong peer digest":     func(c *configDocument) { c.PeerCRLRoleDigest = "sha256:ABC" },
+		"same profile and role": func(c *configDocument) { c.PeerCRLRoleFile = c.SecurityProfilePath },
+		"wrong key":             func(c *configDocument) { c.PolicyStatePublicKey = nil },
+		"slow polling":          func(c *configDocument) { c.PolicyCurrentPollMillis = 1001 },
+		"missing authority":     func(c *configDocument) { c.PolicyAuthoritySocket = "" },
+		"relative authority":    func(c *configDocument) { c.PolicyAuthoritySocket = "authority.sock" },
+		"slow attestation":      func(c *configDocument) { c.PolicyAuthorityTimeoutMS = 5001 },
 	} {
 		t.Run(name, func(t *testing.T) {
 			candidate := valid()

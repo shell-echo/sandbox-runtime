@@ -71,6 +71,11 @@ func newBrokerFixture(t *testing.T, resolver staticResolver, maximumConnections 
 }
 
 func newBrokerFixtureWithPolicy(t *testing.T, policy Policy, resolver staticResolver, maximumConnections int) *brokerFixture {
+	return newBrokerFixtureWithMonitor(t, policy, resolver, maximumConnections, nil)
+}
+
+func newBrokerFixtureWithMonitor(t *testing.T, policy Policy, resolver staticResolver,
+	maximumConnections int, monitor PeerRevocationMonitor) *brokerFixture {
 	t.Helper()
 	serverTLS, clientTLS := testTLS(t, policy.Principal.Digest(), policy.Broker.Digest(), policy.Principal.Name, policy.Broker.Name)
 	dialer := &pipeDialer{peers: make(chan net.Conn, 16)}
@@ -78,7 +83,7 @@ func newBrokerFixtureWithPolicy(t *testing.T, policy Policy, resolver staticReso
 	brokerURI := "spiffe://sandbox-runtime.test/" + policy.Broker.Name
 	server, err := Listen(ServerConfig{Address: "127.0.0.1:0", TLSConfig: serverTLS, Policy: policy,
 		PrincipalURI: principalURI, PrincipalUsages: []string{"client_auth"}, Resolver: resolver, Dialer: dialer, MaxConnections: maximumConnections,
-		ReplayCapacity: 128, Now: time.Now})
+		ReplayCapacity: 128, Now: time.Now, PeerRevocation: monitor})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,6 +100,99 @@ func newBrokerFixtureWithPolicy(t *testing.T, policy Policy, resolver staticReso
 	}
 	return &brokerFixture{policy: policy, server: server, client: client, serverTLS: serverTLS, clientTLS: clientTLS,
 		dialer: dialer, cancel: cancel, done: done, principalURI: principalURI, brokerURI: brokerURI}
+}
+
+type testPeerRevocationMonitor struct {
+	mu      sync.Mutex
+	ready   bool
+	tracked map[net.Conn]struct{}
+	checks  int
+}
+
+func (m *testPeerRevocationMonitor) Ready() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.ready
+}
+
+func (m *testPeerRevocationMonitor) CheckHandshake(_ context.Context, state tls.ConnectionState) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.checks++
+	if !m.ready || state.Version != tls.VersionTLS13 || len(state.VerifiedChains) == 0 {
+		return ErrDenied
+	}
+	return nil
+}
+
+func (m *testPeerRevocationMonitor) Track(connection net.Conn, _ tls.ConnectionState) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if !m.ready {
+		return ErrDenied
+	}
+	m.tracked[connection] = struct{}{}
+	return nil
+}
+
+func (m *testPeerRevocationMonitor) Forget(connection net.Conn) {
+	m.mu.Lock()
+	delete(m.tracked, connection)
+	m.mu.Unlock()
+}
+
+func (m *testPeerRevocationMonitor) revoke() {
+	m.mu.Lock()
+	m.ready = false
+	for connection := range m.tracked {
+		_ = connection.Close()
+	}
+	m.mu.Unlock()
+}
+
+func TestInboundPeerRevocationRejectsBeforeRequestAndDrainsTunnel(t *testing.T) {
+	policy := testPolicy(t)
+	monitor := &testPeerRevocationMonitor{ready: true, tracked: make(map[net.Conn]struct{})}
+	fixture := newBrokerFixtureWithMonitor(t, policy,
+		staticResolver{answers: []net.IPAddr{{IP: net.ParseIP("93.184.216.34")}}}, 4, monitor)
+	defer fixture.close(t)
+	connection, err := fixture.client.Dial(t.Context(), "packages", time.Second)
+	if err != nil {
+		t.Fatalf("fresh TLS peer was not admitted: %v", err)
+	}
+	defer connection.Close()
+	upstream := <-fixture.dialer.peers
+	defer upstream.Close()
+	monitor.revoke()
+	_ = connection.SetReadDeadline(time.Now().Add(time.Second))
+	if _, err := connection.Read(make([]byte, 1)); err == nil {
+		t.Fatal("revoked inbound peer retained an established tunnel")
+	}
+	if _, err := fixture.client.Dial(t.Context(), "packages", time.Second); err == nil {
+		t.Fatal("revoked inbound peer opened a new tunnel")
+	}
+	deadline := time.Now().Add(time.Second)
+	for {
+		monitor.mu.Lock()
+		checks, remaining := monitor.checks, len(monitor.tracked)
+		monitor.mu.Unlock()
+		if checks < 1 {
+			t.Fatal("inbound peer guard did not check the verified TLS handshake")
+		}
+		if remaining == 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("peer guard retained %d closed TLS connections", remaining)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	fixture.dialer.mu.Lock()
+	dials := len(fixture.dialer.addresses)
+	fixture.dialer.mu.Unlock()
+	if dials != 1 {
+		t.Fatalf("revoked TLS peer reached external dial %d times", dials)
+	}
 }
 
 func TestBrokerSixteenAnswerPolicyRejectsSeventeenthAndPoisonedLast(t *testing.T) {

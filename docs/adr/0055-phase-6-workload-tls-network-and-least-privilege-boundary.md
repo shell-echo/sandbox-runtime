@@ -687,6 +687,22 @@ DNS endpoint on the declared trust-edge port, never an operator-selected
 hostname that would invoke ambient DNS. DNS, policy or broker outage fails
 closed.
 
+The controlled external DNS candidate has a narrower responsibility than a
+repository-owned mTLS role. The frozen gate keeps these claims separate:
+
+| Boundary | Required observation | Explicit non-claim |
+| --- | --- | --- |
+| Broker → DNS transport | The broker negotiates only TLS 1.3, authenticates the pinned DNS CA, exact server URI/DNS SAN/EKU, and cannot fall back to plaintext or an ambient resolver. | A successful broker connection does not show that the external DNS listener refuses TLS 1.2 to every other client. |
+| DNS client admission | The external DNS server requires and verifies a client certificate from a fixed, limited broker-client CA; only declared broker networks can reach its listener. The issuer's actual signable principal set and operator authority are audited. | CA verification and network admission are not a native per-broker URI allowlist or per-serial client CRL check. |
+| Broker local lifecycle | Its own identity, policy, agent and peer-revocation sources remain current; their loss/revocation stops new resolution and drains existing connections within the declared bound. | Broker fail-closure does not prove that the external DNS server independently rejects an arbitrary revoked raw client certificate. |
+
+The stock CoreDNS candidate's `tls` plugin supports `require_and_verify` but
+sets its server minimum to TLS 1.2 and exposes no native URI allowlist or CRL
+option ([CoreDNS tls plugin](https://coredns.io/plugins/tls/)). It may be used
+only with the measured broker-side TLS 1.3, limited client CA and isolated
+network above. Do not silently add a proxy or custom DNS binary, and do not
+describe this candidate as a TLS-1.3-only or URI/CRL-enforcing DNS server.
+
 The only internal `tls` trust edge permitted a numeric `TargetAddress` is the
 policy-selected role→dedicated egress broker edge. Its canonical private IPv4
 address and listener port must belong to the sole isolated role/broker shared

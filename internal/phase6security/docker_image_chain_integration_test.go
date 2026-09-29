@@ -72,6 +72,73 @@ func TestDockerPinnedBrowserArchiveDescriptorChain(t *testing.T) {
 		publication.Digest, selected, proof.ConfigDigest)
 }
 
+// The external DNS candidate is an independently pinned registry image, not
+// one of the source-bound role images. This checks its original OCI chain and
+// Docker's actual platform selection; it does not attest DNS TLS behavior or
+// an admitted Slice 6 deployment.
+func TestDockerPinnedCoreDNSCandidateDescriptorChain(t *testing.T) {
+	archive := os.Getenv("SANDBOX_RUNTIME_PHASE6_COREDNS_ARCHIVE")
+	if archive == "" {
+		t.Skip("set SANDBOX_RUNTIME_PHASE6_COREDNS_ARCHIVE to the private pinned OCI archive")
+	}
+	const index = "sha256:7efd3c635b03efd68c4e8398fc45f0d993d0e9ab016f72c1cefb0fd6d01aa286"
+	const selected = "sha256:9a631b1e34491f93a35334bc02d8ae190f16224be41689c7f42cc1711a95fe3a"
+	const config = "sha256:5d3b3e589fcf57f626c7967bff5171924cf9c55068911247a1f7bd2458e726c3"
+	const platform = "linux/arm64/v8"
+	const image = "docker.io/coredns/coredns@" + index
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Minute)
+	defer cancel()
+	imageRaw, err := dockerTopology(ctx, "image", "inspect", image)
+	if err != nil {
+		t.Fatalf("pinned CoreDNS image unavailable: %v", err)
+	}
+	var inspected []struct {
+		ID           string                `json:"Id"`
+		OS           string                `json:"Os"`
+		Architecture string                `json:"Architecture"`
+		Descriptor   dockerImageDescriptor `json:"Descriptor"`
+	}
+	if json.Unmarshal([]byte(imageRaw), &inspected) != nil || len(inspected) != 1 ||
+		inspected[0].ID != index || inspected[0].Descriptor.Digest != index ||
+		inspected[0].OS != "linux" || inspected[0].Architecture != "arm64" {
+		t.Fatal("CoreDNS Docker store identity/platform differs from pinned candidate")
+	}
+	documents, proof, err := ReadOCIArchiveDescriptorChain(archive, "registry", ImageIdentityOCIIndex,
+		image, index, platform, selected)
+	if err != nil || proof.ConfigDigest != config ||
+		VerifyOCIArchiveLayers(archive, documents.Manifest, documents.Config) != nil {
+		t.Fatalf("CoreDNS original OCI chain rejected: %#v, %v", proof, err)
+	}
+	name := fmt.Sprintf("p6-coredns-descriptor-%d", time.Now().UnixNano())
+	containerID, err := dockerTopology(ctx, "create", "--pull=never", "--name", name, "--network", "none", image)
+	if err != nil {
+		t.Fatal(err)
+	}
+	containerID = strings.TrimSpace(containerID)
+	t.Cleanup(func() {
+		cleanupCtx, stop := context.WithTimeout(context.Background(), 15*time.Second)
+		defer stop()
+		if _, removeErr := dockerTopology(cleanupCtx, "rm", "-f", containerID); removeErr != nil {
+			t.Errorf("remove exact CoreDNS descriptor container: %v", removeErr)
+		}
+		if _, inspectErr := dockerTopology(cleanupCtx, "inspect", containerID); inspectErr == nil {
+			t.Error("CoreDNS descriptor container remained after cleanup")
+		}
+	})
+	containerRaw, err := dockerTopology(ctx, "inspect", containerID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	observed, err := ObserveDockerRuntimeImage([]byte(containerRaw), []byte(imageRaw),
+		"registry", ImageIdentityOCIIndex, image, index, platform, selected, config, documents)
+	if err != nil || observed.SelectedManifestDescriptor.Digest != selected ||
+		observed.OCIConfigDigest != config || observed.RuntimeStoreImageID != index ||
+		observed.DescriptorProofDigest != proof.ProofDigest {
+		t.Fatalf("CoreDNS actual Docker selection differs from original OCI chain: %#v, %v", observed, err)
+	}
+	t.Logf("CoreDNS candidate index=%s selected=%s config=%s proof=%s", index, selected, config, proof.ProofDigest)
+}
+
 // This is a real Docker image-store component gate, not the full Slice 6
 // role/inventory gate. It asserts the selected platform manifest rather than
 // assuming Docker's .Image/.Id is the OCI config digest.

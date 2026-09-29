@@ -23,10 +23,11 @@ func TestVerifyOCIArchiveLayersRejectsTamperMissingAndWrongDiffID(t *testing.T) 
 	}
 	compressedDigest, diffID := hashImageBytes(compressed.Bytes()), hashImageBytes(raw)
 	encode := func(value any) []byte { document, _ := json.Marshal(value); return document }
-	manifest := func(layerDigest string) []byte {
+	manifest := func(layerDigest, mediaType string) []byte {
 		return encode(map[string]any{"layers": []any{map[string]any{
-			"mediaType": "application/vnd.oci.image.layer.v1.tar+gzip", "digest": layerDigest, "size": compressed.Len()}}})
+			"mediaType": mediaType, "digest": layerDigest, "size": compressed.Len()}}})
 	}
+	const ociGzip = "application/vnd.oci.image.layer.v1.tar+gzip"
 	config := func(rootDigest string) []byte {
 		return encode(map[string]any{"rootfs": map[string]any{"diff_ids": []string{rootDigest}}})
 	}
@@ -56,31 +57,41 @@ func TestVerifyOCIArchiveLayersRejectsTamperMissingAndWrongDiffID(t *testing.T) 
 	path := filepath.Join(t.TempDir(), "image.tar")
 	blobName := "blobs/sha256/" + compressedDigest[7:]
 	archive(path, blobName, compressed.Bytes(), false)
-	if err := VerifyOCIArchiveLayers(path, manifest(compressedDigest), config(diffID)); err != nil {
+	if err := VerifyOCIArchiveLayers(path, manifest(compressedDigest, ociGzip), config(diffID)); err != nil {
 		t.Fatalf("valid layer archive rejected: %v", err)
+	}
+	if err := VerifyOCIArchiveLayers(path, manifest(compressedDigest,
+		"application/vnd.docker.image.rootfs.diff.tar.gzip"), config(diffID)); err != nil {
+		t.Fatalf("valid Docker gzip layer archive rejected: %v", err)
 	}
 	for name, run := range map[string]func() error{
 		"wrong diffID": func() error {
-			return VerifyOCIArchiveLayers(path, manifest(compressedDigest), config(testDigest("wrong")))
+			return VerifyOCIArchiveLayers(path, manifest(compressedDigest, ociGzip), config(testDigest("wrong")))
 		},
-		"wrong layer digest": func() error { return VerifyOCIArchiveLayers(path, manifest(testDigest("wrong")), config(diffID)) },
+		"wrong layer digest": func() error {
+			return VerifyOCIArchiveLayers(path, manifest(testDigest("wrong"), ociGzip), config(diffID))
+		},
 		"missing blob": func() error {
 			archive(path, "blobs/sha256/"+testDigest("other")[7:], compressed.Bytes(), false)
-			return VerifyOCIArchiveLayers(path, manifest(compressedDigest), config(diffID))
+			return VerifyOCIArchiveLayers(path, manifest(compressedDigest, ociGzip), config(diffID))
 		},
 		"tampered bytes": func() error {
 			changed := append([]byte(nil), compressed.Bytes()...)
 			changed[len(changed)-1] ^= 1
 			archive(path, blobName, changed, false)
-			return VerifyOCIArchiveLayers(path, manifest(compressedDigest), config(diffID))
+			return VerifyOCIArchiveLayers(path, manifest(compressedDigest, ociGzip), config(diffID))
 		},
 		"duplicate blob": func() error {
 			archive(path, blobName, compressed.Bytes(), true)
-			return VerifyOCIArchiveLayers(path, manifest(compressedDigest), config(diffID))
+			return VerifyOCIArchiveLayers(path, manifest(compressedDigest, ociGzip), config(diffID))
 		},
 		"unsafe path": func() error {
 			archive(path, "../"+blobName, compressed.Bytes(), false)
-			return VerifyOCIArchiveLayers(path, manifest(compressedDigest), config(diffID))
+			return VerifyOCIArchiveLayers(path, manifest(compressedDigest, ociGzip), config(diffID))
+		},
+		"unsupported codec": func() error {
+			return VerifyOCIArchiveLayers(path, manifest(compressedDigest,
+				"application/vnd.docker.image.rootfs.diff.tar+gzip"), config(diffID))
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -94,7 +105,7 @@ func TestVerifyOCIArchiveLayersRejectsTamperMissingAndWrongDiffID(t *testing.T) 
 	if err := os.Chmod(path, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := VerifyOCIArchiveLayers(path, manifest(compressedDigest), config(diffID)); !errors.Is(err, ErrInvalidImageDescriptor) {
+	if err := VerifyOCIArchiveLayers(path, manifest(compressedDigest, ociGzip), config(diffID)); !errors.Is(err, ErrInvalidImageDescriptor) {
 		t.Fatal("public archive accepted")
 	}
 }

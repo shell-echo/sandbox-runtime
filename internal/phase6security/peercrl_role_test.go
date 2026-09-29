@@ -23,7 +23,8 @@ func completePeerCRLSources(t *testing.T, profile Profile) PeerCRLSources {
 		Sources: []PeerCRLSource{{ID: "fixed-peer-ca", Mount: "pki",
 			IssuerID: "3d24b01e-81e2-42ac-a6d6-6203166d15ad", IssuerDigest: testDigest("issuer")}}}
 	for _, edge := range profile.TrustEdges {
-		if edge.Authentication != "mtls" || edge.ClientAnchorID == "" {
+		if edge.Authentication != "mtls" || (edge.ClientAnchorID == "" &&
+			!profile.IsSlice6DNSPeerEdge(edge.ID, edge.FromPrincipalDigest, "outbound")) {
 			continue
 		}
 		if localAgentOwnsEdge(profile, edge.From, edge.FromPrincipalDigest) {
@@ -31,7 +32,7 @@ func completePeerCRLSources(t *testing.T, profile Profile) PeerCRLSources {
 				LocalPrincipalDigest: edge.FromPrincipalDigest, Direction: "outbound",
 				PeerAnchorID: edge.ServerAnchorID, SourceID: "fixed-peer-ca"})
 		}
-		if localAgentOwnsEdge(profile, edge.To, edge.ToPrincipalDigest) {
+		if edge.ClientAnchorID != "" && localAgentOwnsEdge(profile, edge.To, edge.ToPrincipalDigest) {
 			sources.Edges = append(sources.Edges, PeerCRLEdgeBinding{EdgeID: edge.ID,
 				LocalPrincipalDigest: edge.ToPrincipalDigest, Direction: "inbound",
 				PeerAnchorID: edge.ClientAnchorID, SourceID: "fixed-peer-ca"})

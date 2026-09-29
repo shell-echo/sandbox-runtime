@@ -128,8 +128,10 @@ func (p PeerCRLSources) Validate(profile Profile) error {
 		}
 		postgresPeer := edge.ClientAnchorID == "" && binding.Direction == "outbound" &&
 			profile.IsSlice6FinalPostgresPeerEdge(edge.ID, binding.LocalPrincipalDigest)
+		dnsPeer := edge.ClientAnchorID == "" &&
+			profile.IsSlice6DNSPeerEdge(edge.ID, binding.LocalPrincipalDigest, binding.Direction)
 		if edge.ID == "" || edge.Authentication != "mtls" ||
-			(edge.ClientAnchorID == "" && !postgresPeer) || binding.SourceID != source.ID {
+			(edge.ClientAnchorID == "" && !postgresPeer && !dnsPeer) || binding.SourceID != source.ID {
 			return ErrInvalidProfile
 		}
 		localName, anchorID := "", ""

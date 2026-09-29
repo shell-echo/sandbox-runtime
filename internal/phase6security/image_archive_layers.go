@@ -101,7 +101,8 @@ func VerifyOCIArchiveLayers(archivePath string, manifestDocument, configDocument
 func verifyOCIArchiveLayer(reader io.Reader, size int64, mediaType, compressedDigest, diffID string) error {
 	limited := &io.LimitedReader{R: reader, N: size}
 	compressedHash, uncompressedHash := sha256.New(), sha256.New()
-	if strings.HasSuffix(mediaType, "+gzip") {
+	if mediaType == "application/vnd.oci.image.layer.v1.tar+gzip" ||
+		mediaType == "application/vnd.docker.image.rootfs.diff.tar.gzip" {
 		decompressor, err := gzip.NewReader(io.TeeReader(limited, compressedHash))
 		if err != nil {
 			return ErrInvalidImageDescriptor

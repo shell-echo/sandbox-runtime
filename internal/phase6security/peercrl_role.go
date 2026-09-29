@@ -171,13 +171,14 @@ func peerCRLRoleRequiredEdges(profile Profile, localPrincipalDigest string) ([]P
 	}
 	result := make([]PeerCRLRoleEdgeBinding, 0)
 	for _, edge := range profile.TrustEdges {
-		if edge.Authentication != "mtls" || edge.ClientAnchorID == "" {
+		if edge.Authentication != "mtls" || (edge.ClientAnchorID == "" &&
+			!profile.IsSlice6DNSPeerEdge(edge.ID, localPrincipalDigest, "outbound")) {
 			continue
 		}
 		if edge.From == localName && edge.FromPrincipalDigest == localPrincipalDigest {
 			result = append(result, PeerCRLRoleEdgeBinding{EdgeID: edge.ID, Direction: "outbound", PeerAnchorID: edge.ServerAnchorID})
 		}
-		if edge.To == localName && edge.ToPrincipalDigest == localPrincipalDigest {
+		if edge.ClientAnchorID != "" && edge.To == localName && edge.ToPrincipalDigest == localPrincipalDigest {
 			result = append(result, PeerCRLRoleEdgeBinding{EdgeID: edge.ID, Direction: "inbound", PeerAnchorID: edge.ClientAnchorID})
 		}
 	}

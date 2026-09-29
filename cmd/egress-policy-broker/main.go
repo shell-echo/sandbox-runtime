@@ -19,43 +19,50 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
+	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
 	"github.com/shell-echo/sandbox-runtime/internal/egressbroker"
 	"github.com/shell-echo/sandbox-runtime/internal/egresspolicystate"
 	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
+	"github.com/shell-echo/sandbox-runtime/internal/phase6tls"
 	"github.com/shell-echo/sandbox-runtime/internal/securityprincipal"
 	"github.com/shell-echo/sandbox-runtime/internal/trustanchor"
 	"github.com/shell-echo/sandbox-runtime/internal/workloadtlsagent"
 )
 
 const (
-	configProtocol = "sandbox-runtime.egress-policy-broker-config.v2"
+	configProtocol = "sandbox-runtime.egress-policy-broker-config.v3"
 	maxConfigBytes = 512 << 10
 )
 
 type configDocument struct {
-	Protocol                 string `json:"protocol"`
-	SecurityProfilePath      string `json:"security_profile_path"`
-	PolicyID                 string `json:"policy_id"`
-	ListenAddress            string `json:"listen_address"`
-	TLSAgentSocket           string `json:"tls_agent_socket"`
-	TLSAgentExpectedUID      uint32 `json:"tls_agent_expected_uid"`
-	TLSAgentExpectedGID      uint32 `json:"tls_agent_expected_gid"`
-	DNSAddress               string `json:"dns_address"`
-	DNSServerName            string `json:"dns_server_name"`
-	MaxConnections           int    `json:"max_connections"`
-	ReplayCapacity           int    `json:"replay_capacity"`
-	OperationTimeoutSeconds  int    `json:"operation_timeout_seconds"`
-	PolicyStateKeyID         string `json:"policy_state_key_id"`
-	PolicyStatePublicKey     []byte `json:"policy_state_public_key"`
-	PolicyCurrentPollMillis  int    `json:"policy_current_poll_millis"`
-	PolicyAuthoritySocket    string `json:"policy_authority_socket"`
-	PolicyAuthorityUID       uint32 `json:"policy_authority_uid"`
-	PolicyAuthorityGID       uint32 `json:"policy_authority_gid"`
-	PolicyBrokerGID          uint32 `json:"policy_broker_gid"`
-	PolicyAuthorityTimeoutMS int    `json:"policy_authority_timeout_ms"`
+	Protocol                   string `json:"protocol"`
+	SecurityProfilePath        string `json:"security_profile_path"`
+	PeerCRLRoleFile            string `json:"peer_crl_role_file"`
+	PeerCRLRoleDigest          string `json:"peer_crl_role_digest"`
+	PeerCRLSourceMappingDigest string `json:"peer_crl_source_mapping_digest"`
+	PolicyID                   string `json:"policy_id"`
+	ListenAddress              string `json:"listen_address"`
+	TLSAgentSocket             string `json:"tls_agent_socket"`
+	TLSAgentExpectedUID        uint32 `json:"tls_agent_expected_uid"`
+	TLSAgentExpectedGID        uint32 `json:"tls_agent_expected_gid"`
+	DNSAddress                 string `json:"dns_address"`
+	DNSServerName              string `json:"dns_server_name"`
+	MaxConnections             int    `json:"max_connections"`
+	ReplayCapacity             int    `json:"replay_capacity"`
+	OperationTimeoutSeconds    int    `json:"operation_timeout_seconds"`
+	PolicyStateKeyID           string `json:"policy_state_key_id"`
+	PolicyStatePublicKey       []byte `json:"policy_state_public_key"`
+	PolicyCurrentPollMillis    int    `json:"policy_current_poll_millis"`
+	PolicyAuthoritySocket      string `json:"policy_authority_socket"`
+	PolicyAuthorityUID         uint32 `json:"policy_authority_uid"`
+	PolicyAuthorityGID         uint32 `json:"policy_authority_gid"`
+	PolicyBrokerGID            uint32 `json:"policy_broker_gid"`
+	PolicyAuthorityTimeoutMS   int    `json:"policy_authority_timeout_ms"`
 }
 
 func main() {
@@ -100,6 +107,11 @@ func run() error { //nolint:gocyclo
 	}
 	if !validateTLSAgentConfig(profile, broker, config) {
 		return stageError("tls-agent-binding")
+	}
+	roleDocument, err := phase6security.VerifyPeerCRLRoleFile(config.PeerCRLRoleFile, profile,
+		config.PeerCRLSourceMappingDigest, config.PeerCRLRoleDigest)
+	if err != nil || roleDocument.LocalPrincipalDigest != broker.PrincipalDigest {
+		return stageError("peer-crl-role")
 	}
 	if uint32(os.Getuid()) != broker.UID || uint32(os.Getgid()) != broker.GID {
 		return stageError("broker-process-identity")
@@ -172,29 +184,70 @@ func run() error { //nolint:gocyclo
 	if err != nil {
 		return stageError("dns-ca")
 	}
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+	inboundGuard, err := phase6tls.NewPeerCRLGuard(profile, roleDocument, inboundEdge.ID, broker.PrincipalDigest,
+		"inbound", agentClient, time.Duration(config.OperationTimeoutSeconds)*time.Second, time.Now)
+	if err != nil {
+		return stageError("inbound-peer-guard")
+	}
+	defer inboundGuard.Close()
+	dnsGuard, err := phase6tls.NewPeerCRLGuard(profile, roleDocument, dnsEdge.ID, broker.PrincipalDigest,
+		"outbound", agentClient, time.Duration(config.OperationTimeoutSeconds)*time.Second, time.Now)
+	if err != nil {
+		return stageError("dns-peer-guard")
+	}
+	defer dnsGuard.Close()
+	bootstrapCtx, stopBootstrap := context.WithTimeout(ctx, time.Duration(config.OperationTimeoutSeconds)*time.Second)
+	bootstrapErr := dnsGuard.Bootstrap(bootstrapCtx)
+	stopBootstrap()
+	if bootstrapErr != nil || !dnsGuard.Ready() {
+		return stageError("dns-peer-bootstrap")
+	}
+	bootstrapCtx, stopBootstrap = context.WithTimeout(ctx, time.Duration(config.OperationTimeoutSeconds)*time.Second)
+	bootstrapErr = inboundGuard.Bootstrap(bootstrapCtx)
+	stopBootstrap()
+	if bootstrapErr != nil || !inboundGuard.Ready() {
+		return stageError("inbound-peer-bootstrap")
+	}
 	dnsTLS := &tls.Config{MinVersion: tls.VersionTLS13, MaxVersion: tls.VersionTLS13, RootCAs: dnsRoots, ServerName: config.DNSServerName}
-	dnsTLS.GetClientCertificate = func(*tls.CertificateRequestInfo) (*tls.Certificate, error) {
-		certificate, certificateErr := agentClient.Certificate(context.Background())
+	dnsTLS.GetClientCertificate = func(info *tls.CertificateRequestInfo) (*tls.Certificate, error) {
+		certificate, certificateErr := agentClient.Certificate(info.Context())
 		return &certificate, certificateErr
 	}
 	dnsResolver := &net.Resolver{PreferGo: true, StrictErrors: true}
 	dnsResolver.Dial = func(ctx context.Context, _, _ string) (net.Conn, error) {
+		if ctx == nil || !dnsGuard.Ready() {
+			return nil, egressbroker.ErrUnavailable
+		}
 		connectionValue, dialErr := (&tls.Dialer{Config: dnsTLS}).DialContext(ctx, "tcp", config.DNSAddress)
 		if dialErr != nil {
 			return nil, egressbroker.ErrUnavailable
 		}
 		connection, tlsOK := connectionValue.(*tls.Conn)
-		if !tlsOK || egressbroker.ValidateTLSIdentity(connection.ConnectionState(), dnsService.URI,
-			[]string{config.DNSServerName}, []string{"server_auth"}) != nil {
+		if !tlsOK {
 			_ = connectionValue.Close()
 			return nil, egressbroker.ErrDenied
 		}
-		return connection, nil
+		state := connection.ConnectionState()
+		if egressbroker.ValidateTLSIdentity(state, dnsService.URI,
+			[]string{config.DNSServerName}, []string{"server_auth"}) != nil ||
+			dnsGuard.CheckHandshake(ctx, state) != nil || dnsGuard.Track(connection, state) != nil {
+			_ = connectionValue.Close()
+			return nil, egressbroker.ErrDenied
+		}
+		expiresAt := time.Now().Add(time.Duration(dnsEdge.MaxConnectionSeconds) * time.Second)
+		if connection.SetDeadline(expiresAt) != nil {
+			dnsGuard.Forget(connection)
+			_ = connection.Close()
+			return nil, egressbroker.ErrUnavailable
+		}
+		return &guardedDNSConn{Conn: connection, guard: dnsGuard, expiresAt: expiresAt}, nil
 	}
 	serverTLS := &tls.Config{MinVersion: tls.VersionTLS13, MaxVersion: tls.VersionTLS13, ClientAuth: tls.RequireAndVerifyClientCert,
 		ClientCAs: clientRoots, NextProtos: []string{egressbroker.ProtocolID}}
-	serverTLS.GetCertificate = func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
-		certificate, certificateErr := agentClient.Certificate(context.Background())
+	serverTLS.GetCertificate = func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
+		certificate, certificateErr := agentClient.Certificate(info.Context())
 		return &certificate, certificateErr
 	}
 	authorityClient, err := egresspolicystate.NewAuthorityClient(egresspolicystate.AuthorityClientConfig{
@@ -204,19 +257,50 @@ func run() error { //nolint:gocyclo
 	if err != nil {
 		return stageError("policy-authority-client")
 	}
-	current, err := authorityClient.Current(context.Background())
+	current, err := authorityClient.Current(ctx)
 	currentTracker := new(egresspolicystate.CurrentTracker)
 	if err != nil || currentTracker.Accept(current, time.Now().UTC()) != nil {
 		return stageError("policy-authority-current")
 	}
 	server, err := egressbroker.Listen(egressbroker.ServerConfig{Address: config.ListenAddress, TLSConfig: serverTLS, Policy: policy,
 		PrincipalURI: principal.TLS.URI, PrincipalDNSNames: principal.TLS.DNSNames, PrincipalUsages: principal.TLS.Usages,
-		Resolver: dnsResolver, Dialer: &net.Dialer{}, MaxConnections: config.MaxConnections, ReplayCapacity: config.ReplayCapacity, Now: time.Now})
+		Resolver: dnsResolver, Dialer: &net.Dialer{}, MaxConnections: config.MaxConnections, ReplayCapacity: config.ReplayCapacity,
+		Now: time.Now, PeerRevocation: inboundGuard})
 	if err != nil {
 		return stageError("listen")
 	}
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer cancel()
+	stopDNSPoll, err := dnsGuard.StartPolling(ctx)
+	if err != nil {
+		_ = server.Close()
+		return stageError("dns-peer-poll")
+	}
+	defer stopDNSPoll()
+	stopInboundPoll, err := inboundGuard.StartPolling(ctx)
+	if err != nil {
+		_ = server.Close()
+		return stageError("inbound-peer-poll")
+	}
+	defer stopInboundPoll()
+	var peerFailed atomic.Bool
+	dnsMonitorDone := make(chan struct{})
+	go func() {
+		defer close(dnsMonitorDone)
+		ticker := time.NewTicker(100 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if !dnsGuard.Ready() || !inboundGuard.Ready() {
+					peerFailed.Store(true)
+					_ = server.RevokePolicy(policy.Revision)
+					cancel()
+					return
+				}
+			}
+		}
+	}()
 	monitorDone := make(chan error, 1)
 	go func() {
 		monitorErr := egresspolicystate.PollCurrent(ctx, authorityClient, currentTracker,
@@ -229,8 +313,12 @@ func run() error { //nolint:gocyclo
 	}()
 	serveErr := server.Serve(ctx)
 	cancel()
+	<-dnsMonitorDone
 	monitorErr := <-monitorDone
 	_ = server.Close()
+	if peerFailed.Load() {
+		return stageError("peer-revocation")
+	}
 	if monitorErr != nil && !errors.Is(monitorErr, context.Canceled) {
 		return stageError("policy-state")
 	}
@@ -254,6 +342,9 @@ func decodeConfig(document []byte) (configDocument, error) {
 	canonical, err := json.Marshal(config)
 	if err != nil || !bytes.Equal(canonical, document) || config.Protocol != configProtocol ||
 		!filepath.IsAbs(config.SecurityProfilePath) || config.PolicyID == "" || config.ListenAddress == "" ||
+		!filepath.IsAbs(config.PeerCRLRoleFile) || filepath.Clean(config.PeerCRLRoleFile) != config.PeerCRLRoleFile ||
+		config.PeerCRLRoleFile == config.SecurityProfilePath ||
+		!validDigest(config.PeerCRLRoleDigest) || !validDigest(config.PeerCRLSourceMappingDigest) ||
 		config.DNSAddress == "" || net.ParseIP(config.DNSServerName) != nil || config.DNSServerName == "" ||
 		config.MaxConnections < 1 || config.MaxConnections > 1024 || config.ReplayCapacity < 16 || config.ReplayCapacity > 65536 ||
 		config.OperationTimeoutSeconds < 1 || config.OperationTimeoutSeconds > 60 ||
@@ -266,6 +357,56 @@ func decodeConfig(document []byte) (configDocument, error) {
 	}
 	clear(canonical)
 	return config, nil
+}
+
+func validDigest(value string) bool {
+	if len(value) != 71 || !strings.HasPrefix(value, "sha256:") {
+		return false
+	}
+	for _, digit := range value[len("sha256:"):] {
+		if digit < '0' || digit > '9' {
+			if digit < 'a' || digit > 'f' {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// Resolver closes this wrapper after each DNS exchange. The guard tracks the
+// underlying TLS connection so a CRL failure can close it immediately.
+type guardedDNSConn struct {
+	net.Conn
+	guard     *phase6tls.PeerCRLGuard
+	expiresAt time.Time
+	once      sync.Once
+}
+
+func (c *guardedDNSConn) Close() error {
+	err := c.Conn.Close()
+	c.once.Do(func() { c.guard.Forget(c.Conn) })
+	return err
+}
+
+func (c *guardedDNSConn) SetDeadline(deadline time.Time) error {
+	if deadline.IsZero() || deadline.After(c.expiresAt) {
+		deadline = c.expiresAt
+	}
+	return c.Conn.SetDeadline(deadline)
+}
+
+func (c *guardedDNSConn) SetReadDeadline(deadline time.Time) error {
+	if deadline.IsZero() || deadline.After(c.expiresAt) {
+		deadline = c.expiresAt
+	}
+	return c.Conn.SetReadDeadline(deadline)
+}
+
+func (c *guardedDNSConn) SetWriteDeadline(deadline time.Time) error {
+	if deadline.IsZero() || deadline.After(c.expiresAt) {
+		deadline = c.expiresAt
+	}
+	return c.Conn.SetWriteDeadline(deadline)
 }
 
 func validatePolicyAuthorityConfig(profile phase6security.Profile, policy phase6security.EgressPolicy,
@@ -349,6 +490,20 @@ func validateDNSConfig(profile phase6security.Profile, broker, serverName, addre
 	}
 	host, port, err := net.SplitHostPort(address)
 	if err != nil || net.ParseIP(host) == nil || port != fmt.Sprint(edge.Port) {
+		return phase6security.ExternalService{}, false
+	}
+	matched := false
+	for _, path := range phase6security.Slice6DesiredExternalTransports() {
+		if path.Dialer != broker || path.Service != "dns" || len(path.EdgeIDs) != 1 || path.EdgeIDs[0] != edge.ID {
+			continue
+		}
+		expected, endpointErr := phase6security.Slice6DesiredServiceEndpointAddress(path.Network, "dns")
+		if endpointErr != nil || host != expected || matched {
+			return phase6security.ExternalService{}, false
+		}
+		matched = true
+	}
+	if !matched {
 		return phase6security.ExternalService{}, false
 	}
 	return service, true

@@ -2612,3 +2612,61 @@ its source-bound candidates. The final acceptance/handoff commit and remote
 push remain contingent on the complete gate and immutable evidence. Evidence
 tooling or documentation may advance separately as E without relabeling an
 older candidate as a new runtime revision.
+
+External DNS candidate checkpoint 2026-09-29 (E-side diagnostic, not a
+deployment gate): official CoreDNS `v1.14.7` was selected by immutable index
+`sha256:7efd3c635b03efd68c4e8398fc45f0d993d0e9ab016f72c1cefb0fd6d01aa286`.
+The native arm64 selected manifest is
+`sha256:9a631b1e34491f93a35334bc02d8ae190f16224be41689c7f42cc1711a95fe3a`
+and OCI config is
+`sha256:5d3b3e589fcf57f626c7967bff5171924cf9c55068911247a1f7bd2458e726c3`.
+A private mode-0600 Docker OCI archive was independently reopened and its raw
+index→manifest→config, ordered compressed layers and diff IDs were verified;
+an unstarted `--pull=never` container selected the same manifest and was
+removed exactly. The semantic descriptor proof is
+`sha256:a5b3e5986897169bffbacc7a29ff39dc669379de26cac8087bd244cd2dd37059`.
+This uncovered and repaired a verifier omission for Docker's closed
+`application/vnd.docker.image.rootfs.diff.tar.gzip` media type; it did not
+relax unsupported codecs. The archive and its local receipt remain private,
+not published release evidence. CoreDNS was not yet launched with the final
+Corefile, CA, network or broker, and no TLS/DNS scenario passed. In particular,
+the stock server's TLS 1.2 minimum and lack of native broker-URI/CRL checks
+remain explicit non-claims; the distinct broker-side TLS 1.3, exact server
+identity/peer revocation, limited client CA and isolated network obligations
+are recorded in ADR 0055. The true Vault→credential controller→certificate
+controller→TLS/material-agent process chain and complete profile remain open.
+Phase 6 remains **5/15**.
+
+The subsequent E-side broker revision makes the existing broker→DNS
+peer-revocation requirement explicit in code, but remains unaccepted runtime
+work. Only the five frozen `dns_tcp` outbound broker edges may omit a client
+anchor while deriving a peer-CRL role; source selection still requires an
+operator-mapped exact issuer and anchor. The broker config is now v3 and
+requires that role derivative and its full source-mapping digest. Startup
+bootstraps fresh DNS server CRL evidence before listening; each TLS 1.3 DNS
+handshake verifies identity, checks and tracks the peer, and the polling path
+drains tracked sockets and revokes active broker sessions on authority loss.
+The same role derivative also binds the existing role→broker inbound edge:
+the broker now bootstraps its client-issuer CRL, checks/tracks the verified
+client certificate before reading a request frame, and closes established
+tunnels on revocation. A race-enabled component test observes rejection,
+active-tunnel drain and zero retained tracked connections; this is not a
+substitute for actual Vault CRL publication and two-process timing evidence.
+The actual DNS address must equal its preplanned isolated bridge endpoint.
+Source/unit checks and the immutable CoreDNS image check are green; no real
+Vault/controller/agent/CoreDNS same-run request or revocation timing has yet
+passed. This broker runtime change needs a later fresh source revision R and
+rebuilt source-bound role candidates before the final gate. The older R
+candidate receipts are retained as historical diagnostics only. Phase 6
+remains **5/15**.
+
+Validation at this checkpoint: targeted broker, DNS binding, peer-CRL and
+real pinned CoreDNS OCI tests pass; the existing tagged Docker isolated-network
+component test also passes. The unbounded package-parallel full race/shuffle
+run twice encountered timing failures in unrelated Gateway slow-header and
+qualification child-start tests under high host load; each failed test passed
+three isolated race/shuffle repetitions. A subsequent complete
+`go test -race -shuffle=on -count=1 -p=2 ./...` passed every package. `go vet
+./...`, Product Contract lock verification and `git diff --check` pass. This
+bounded test rerun is source validation, not the missing same-run Vault/DNS
+deployment or Slice 6 acceptance.
