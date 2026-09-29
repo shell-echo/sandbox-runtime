@@ -166,7 +166,7 @@ func TestMigrationAgentV2IsOneShotAndCannotRenew(t *testing.T) {
 	}
 }
 
-func TestV2UnixClientRoundTripAndExactCleanup(t *testing.T) {
+func TestV2UnixRejectsSamePrincipalListener(t *testing.T) {
 	now := time.Now().UTC()
 	uid, gid := uint32(os.Getuid()), uint32(os.Getgid())
 	policy, privateKey := controllerPolicy(t, controllerRegistry(t), securityprincipal.KindController, "certificate_controller", "", "c", true, uid, gid)
@@ -180,38 +180,22 @@ func TestV2UnixClientRoundTripAndExactCleanup(t *testing.T) {
 	socket := filepath.Join(directory, "controller.sock")
 	server, err := Listen(ServerConfig{SocketPath: socket, SocketUID: uid, SocketGID: gid, ExpectedClientUID: uid, ExpectedClientGID: gid,
 		MaxConnections: 2, ReapInterval: time.Second}, controller)
-	if err != nil {
-		t.Fatal(err)
-	}
-	serverContext, cancel := context.WithCancel(context.Background())
-	done := make(chan error, 1)
-	go func() { done <- server.Serve(serverContext) }()
-	client, err := NewProductionClient(ClientConfig{SocketPath: socket, ExpectedUID: uid, ExpectedGID: gid, Policy: policy, PrivateKey: privateKey,
-		OperationTimeout: 3 * time.Second, Now: func() time.Time { return now }})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer client.Close()
-	lease, err := client.Issue(context.Background(), 5*time.Minute)
-	if err != nil || lease.Revision != 1 || len(lease.Credential) == 0 {
-		t.Fatalf("Issue() = %#v, %v", lease, err)
-	}
-	renewed, err := client.Renew(context.Background(), lease, 5*time.Minute)
-	if err != nil || renewed.Revision != 2 || renewed.ID != lease.ID {
-		t.Fatalf("Renew() = %#v, %v", renewed, err)
-	}
-	if err := client.Status(context.Background(), renewed); err != nil {
-		t.Fatal(err)
-	}
-	if err := client.Revoke(context.Background(), renewed); err != nil {
-		t.Fatal(err)
-	}
-	cancel()
-	if err := <-done; !errors.Is(err, context.Canceled) {
-		t.Fatalf("server exit = %v", err)
+	if !errors.Is(err, ErrUnavailable) || server != nil {
+		t.Fatalf("same-principal listener = %v, %v", server, err)
 	}
 	if _, err := os.Lstat(socket); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("socket cleanup = %v", err)
+		t.Fatalf("socket unexpectedly created = %v", err)
+	}
+	_ = privateKey
+}
+
+type zeroCredentialWriter struct{}
+
+func (zeroCredentialWriter) Write([]byte) (int, error) { return 0, nil }
+
+func TestV2FrameWriterRejectsZeroProgress(t *testing.T) {
+	if err := writeFrame(zeroCredentialWriter{}, []byte("request"), MaxRequestBytes); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("zero-progress frame write = %v", err)
 	}
 }
 

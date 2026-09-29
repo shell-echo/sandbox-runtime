@@ -75,7 +75,8 @@ func TestVaultEndpointMustMatchDeclaredTrustEdge(t *testing.T) {
 		t.Fatal("declared Vault endpoint rejected")
 	}
 	for _, endpoint := range []string{"https://other.test:8200", "https://vault.sandbox-runtime.test:8300",
-		"http://vault.sandbox-runtime.test:8200", "https://vault.sandbox-runtime.test:8200/other"} {
+		"http://vault.sandbox-runtime.test:8200", "https://vault.sandbox-runtime.test:8200/other",
+		"https://vault.sandbox-runtime.test:8200?", "https://vault.sandbox-runtime.test:8200/%2f"} {
 		if vaultTrustEdgeMatches(profile, endpoint, "vault.sandbox-runtime.test") {
 			t.Fatalf("Vault endpoint drift accepted: %s", endpoint)
 		}
@@ -90,8 +91,10 @@ func TestControllerRequiresCompleteProfileBoundBrokerAgentInventory(t *testing.T
 	agentIdentity := securityprincipal.Principal{Name: "product_egress_broker_tls_agent", PrincipalDigest: "agent-digest"}
 	brokerIdentity := securityprincipal.Principal{Name: "product_egress_broker", PrincipalDigest: "broker-digest"}
 	postgresAgentIdentity := securityprincipal.Principal{Name: "provider_tls_agent", PrincipalDigest: "postgres-agent-digest"}
+	credentialIdentity := securityprincipal.Principal{Name: "credential_controller", PrincipalDigest: "credential-controller-digest"}
 	providerIdentity := securityprincipal.Principal{Name: "provider", PrincipalDigest: "provider-digest"}
 	postgresPublic := bytes.Repeat([]byte{6}, 32)
+	credentialPublic := bytes.Repeat([]byte{7}, 32)
 	controllerTLS := phase6security.TLSIdentity{TrustDomain: "sandbox.test", URI: "spiffe://sandbox.test/certificate-controller",
 		Usages: []string{"client_auth"}, TTLSeconds: 600, RotateAfterSeconds: 300, OverlapSeconds: 30,
 		RevocationMaxStalenessSeconds: 10}
@@ -109,11 +112,20 @@ func TestControllerRequiresCompleteProfileBoundBrokerAgentInventory(t *testing.T
 	provider := phase6security.Principal{Name: "provider-browser-runtime", AuthorizationPrincipal: &providerIdentity, TLS: &providerTLS}
 	postgresAgent := phase6security.Principal{Name: "provider-browser-postgres-tls-agent", UID: 20011, GID: 30011,
 		AuthorizationPrincipal: &postgresAgentIdentity}
+	credentialTLS := phase6security.TLSIdentity{TrustDomain: "sandbox.test", URI: "spiffe://sandbox.test/workload-credential-controller",
+		Usages: []string{"client_auth"}, TTLSeconds: 600, RotateAfterSeconds: 300, OverlapSeconds: 30,
+		RevocationMaxStalenessSeconds: 10}
+	credential := phase6security.Principal{Name: "workload-credential-controller", UID: 20021, GID: 30021,
+		AuthorizationPrincipal: &credentialIdentity, TLS: &credentialTLS}
 	authority := phase6security.CertificateControllerAuthority{DeploymentName: controller.Name, UID: controller.UID, GID: controller.GID,
 		ResponseKeyID: "controller-response", ResponsePublicKeyDigest: phase6security.CertificateControllerPublicKeyDigest(responsePublic),
 		ManagedPolicyID: "managed-policy", ManagedVaultRole: "managed-vault",
 		ManagedRequestKeyID: "managed-request", ManagedRequestKeyDigest: phase6security.TLSAgentRequestPublicKeyDigest(managedPublic),
-		SelfSocketPath: "/run/certificate-controller/self/managed.sock"}
+		SelfSocketPath: "/run/certificate-controller/self/managed.sock",
+		CredentialController: phase6security.CredentialControllerManagedAuthority{PolicyID: "credential-managed-policy",
+			VaultRole: "credential-managed-vault", RequestKeyID: "credential-managed-request",
+			RequestKeyDigest: phase6security.TLSAgentRequestPublicKeyDigest(credentialPublic),
+			SocketPath:       "/run/certificate-controller/workload-credential-controller/request.sock"}}
 	binding := phase6security.TLSAgentBinding{AgentDeployment: agent.Name, SubjectDeployment: broker.Name,
 		AgentUID: agent.UID, AgentGID: agent.GID, ControllerSocketPath: "/run/certificate-controller/egress-broker-product-tls-agent/request.sock",
 		IssuerPolicyID: "broker-policy", IssuerVaultRole: "broker-vault", AgentRequestKeyID: "broker-request",
@@ -126,10 +138,15 @@ func TestControllerRequiresCompleteProfileBoundBrokerAgentInventory(t *testing.T
 		AgentRequestKeyDigest: phase6security.TLSAgentRequestPublicKeyDigest(postgresPublic)},
 		CommonName: "browser_provider_runtime", IssuerAnchorID: "postgres-client-ca"}
 	profile := phase6security.Profile{CertificateController: authority, TLSAgentBindings: []phase6security.TLSAgentBinding{binding},
+		CredentialIssuerSockets: []phase6security.CredentialIssuerSocketBinding{{ClientDeployment: controller.Name,
+			SocketDirectory: "/run/workload-credential-controller/certificate-controller",
+			SocketStorageID: "credential-issuer-certificate-controller-socket",
+			SocketPath:      "/run/workload-credential-controller/certificate-controller/issuer.sock",
+			UnixEdgeID:      "credential-issuer-certificate-controller"}},
 		PostgresClientAgents: []phase6security.PostgresClientAgentBinding{postgresBinding},
 		ProviderDatabases: []phase6security.ProviderDatabaseBinding{{OwnerDeployment: provider.Name,
 			DatabaseName: "provider_browser", RuntimeRole: "browser_provider_runtime"}},
-		Principals: []phase6security.Principal{controller, agent, broker, postgresAgent, provider}}
+		Principals: []phase6security.Principal{controller, agent, broker, postgresAgent, provider, credential}}
 	policy := func(id, keyID, vaultRole string, requester, subject securityprincipal.Principal, identity phase6security.TLSIdentity,
 		uid, gid uint32, public []byte) certificatePolicy {
 		return certificatePolicy{ID: id, AgentRequestKeyID: keyID, Requester: requester, Subject: subject,
@@ -139,12 +156,18 @@ func TestControllerRequiresCompleteProfileBoundBrokerAgentInventory(t *testing.T
 	}
 	valid := func() configDocument {
 		return configDocument{ControllerKeyID: authority.ResponseKeyID,
-			Credential: credentialDocument{Principal: controllerIdentity},
+			Credential: credentialDocument{Principal: controllerIdentity,
+				SocketPath:  profile.CredentialIssuerSockets[0].SocketPath,
+				ExpectedUID: credential.UID, ExpectedGID: credential.GID,
+				ControllerUID: controller.UID, ControllerGID: controller.GID},
 			ManagedVaultTLS: managedTLSConfig{PolicyID: authority.ManagedPolicyID, ControllerSocket: authority.SelfSocketPath,
 				CertificateTTLSeconds: 600, RotateAfterSeconds: 300, OverlapSeconds: 30, RevocationMaxStalenessSeconds: 10},
 			Policies: []certificatePolicy{
 				policy(authority.ManagedPolicyID, authority.ManagedRequestKeyID, authority.ManagedVaultRole,
 					controllerIdentity, controllerIdentity, controllerTLS, controller.UID, controller.GID, managedPublic),
+				policy(authority.CredentialController.PolicyID, authority.CredentialController.RequestKeyID,
+					authority.CredentialController.VaultRole, credentialIdentity, credentialIdentity, credentialTLS,
+					credential.UID, credential.GID, credentialPublic),
 				policy(binding.IssuerPolicyID, binding.AgentRequestKeyID, binding.IssuerVaultRole,
 					agentIdentity, brokerIdentity, brokerTLS, agent.UID, agent.GID, agentPublic),
 				func() certificatePolicy {
@@ -163,6 +186,8 @@ func TestControllerRequiresCompleteProfileBoundBrokerAgentInventory(t *testing.T
 			Listeners: []listenerDocument{
 				{SocketPath: authority.SelfSocketPath, SocketUID: authority.UID, SocketGID: authority.GID,
 					ExpectedClientUID: authority.UID, ExpectedClientGID: authority.GID},
+				{SocketPath: authority.CredentialController.SocketPath, SocketUID: authority.UID, SocketGID: credential.GID,
+					ExpectedClientUID: credential.UID, ExpectedClientGID: credential.GID},
 				{SocketPath: binding.ControllerSocketPath, SocketUID: authority.UID, SocketGID: agent.GID,
 					ExpectedClientUID: agent.UID, ExpectedClientGID: agent.GID},
 				{SocketPath: postgresBinding.ControllerSocketPath, SocketUID: authority.UID, SocketGID: postgresAgent.GID,
@@ -173,26 +198,35 @@ func TestControllerRequiresCompleteProfileBoundBrokerAgentInventory(t *testing.T
 		t.Fatal("exact controller/agent inventory rejected")
 	}
 	for name, change := range map[string]func(*configDocument){
-		"missing broker policy": func(c *configDocument) { c.Policies = c.Policies[:1] },
-		"extra broker policy":   func(c *configDocument) { c.Policies = append(c.Policies, c.Policies[1]) },
-		"wrong requester":       func(c *configDocument) { c.Policies[1].Requester.Name = "other" },
+		"missing broker policy": func(c *configDocument) { c.Policies = c.Policies[:2] },
+		"extra broker policy":   func(c *configDocument) { c.Policies = append(c.Policies, c.Policies[2]) },
+		"wrong requester":       func(c *configDocument) { c.Policies[2].Requester.Name = "other" },
 		"wrong CSR key": func(c *configDocument) {
-			c.Policies[1].AgentPublicKey = base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{9}, 32))
+			c.Policies[2].AgentPublicKey = base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{9}, 32))
 		},
-		"wrong issuer":                 func(c *configDocument) { c.Policies[1].VaultRole = "other" },
+		"wrong issuer":                 func(c *configDocument) { c.Policies[2].VaultRole = "other" },
 		"missing listener":             func(c *configDocument) { c.Listeners = c.Listeners[:1] },
-		"extra listener":               func(c *configDocument) { c.Listeners = append(c.Listeners, c.Listeners[1]) },
-		"wrong peer":                   func(c *configDocument) { c.Listeners[1].ExpectedClientUID++ },
-		"swapped endpoint":             func(c *configDocument) { c.Listeners[1].SocketPath = "/run/certificate-controller/other/request.sock" },
+		"extra listener":               func(c *configDocument) { c.Listeners = append(c.Listeners, c.Listeners[2]) },
+		"wrong peer":                   func(c *configDocument) { c.Listeners[2].ExpectedClientUID++ },
+		"swapped endpoint":             func(c *configDocument) { c.Listeners[2].SocketPath = "/run/certificate-controller/other/request.sock" },
 		"wrong managed socket":         func(c *configDocument) { c.ManagedVaultTLS.ControllerSocket += "-other" },
-		"missing PostgreSQL policy":    func(c *configDocument) { c.Policies = c.Policies[:2] },
-		"missing PostgreSQL listener":  func(c *configDocument) { c.Listeners = c.Listeners[:2] },
-		"wrong PostgreSQL purpose":     func(c *configDocument) { c.Policies[2].Purpose = "" },
-		"wrong PostgreSQL database":    func(c *configDocument) { c.Policies[2].Postgres.DatabaseName = "provider_desktop" },
-		"wrong PostgreSQL role":        func(c *configDocument) { c.Policies[2].Postgres.RuntimeRole = "desktop_provider_runtime" },
-		"wrong PostgreSQL CN":          func(c *configDocument) { c.Policies[2].Postgres.CommonName = "other" },
-		"wrong PostgreSQL CA":          func(c *configDocument) { c.Policies[2].Postgres.IssuerAnchorID = "other" },
-		"wrong PostgreSQL socket peer": func(c *configDocument) { c.Listeners[2].ExpectedClientUID++ },
+		"credential issuer socket":     func(c *configDocument) { c.Credential.SocketPath += "-other" },
+		"credential server UID":        func(c *configDocument) { c.Credential.ExpectedUID++ },
+		"credential directory group":   func(c *configDocument) { c.Credential.ControllerGID++ },
+		"missing PostgreSQL policy":    func(c *configDocument) { c.Policies = c.Policies[:3] },
+		"missing PostgreSQL listener":  func(c *configDocument) { c.Listeners = c.Listeners[:3] },
+		"wrong PostgreSQL purpose":     func(c *configDocument) { c.Policies[3].Purpose = "" },
+		"wrong PostgreSQL database":    func(c *configDocument) { c.Policies[3].Postgres.DatabaseName = "provider_desktop" },
+		"wrong PostgreSQL role":        func(c *configDocument) { c.Policies[3].Postgres.RuntimeRole = "desktop_provider_runtime" },
+		"wrong PostgreSQL CN":          func(c *configDocument) { c.Policies[3].Postgres.CommonName = "other" },
+		"wrong PostgreSQL CA":          func(c *configDocument) { c.Policies[3].Postgres.IssuerAnchorID = "other" },
+		"wrong PostgreSQL socket peer": func(c *configDocument) { c.Listeners[3].ExpectedClientUID++ },
+		"missing credential policy":    func(c *configDocument) { c.Policies = append(c.Policies[:1], c.Policies[2:]...) },
+		"wrong credential subject":     func(c *configDocument) { c.Policies[1].Subject.Name = "other" },
+		"wrong credential key": func(c *configDocument) {
+			c.Policies[1].AgentPublicKey = base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{8}, 32))
+		},
+		"wrong credential socket peer": func(c *configDocument) { c.Listeners[1].ExpectedClientUID++ },
 	} {
 		t.Run(name, func(t *testing.T) {
 			candidate := valid()

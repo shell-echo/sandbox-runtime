@@ -67,7 +67,7 @@ func TestIngressBoundaryAcceptsClosedProfile(t *testing.T) {
 		t.Fatalf("PostgreSQL agents: %v", err)
 	}
 	if err := validateTLSAgentBindingsWithPostgres(profile.TLSAgentBindings, profile.PostgresClientAgents,
-		profile.EgressPolicies, profile.CertificateController, principals, edges); err != nil {
+		profile.EgressPolicies, profile.CertificateController, profile.CredentialIssuerSockets, principals, edges); err != nil {
 		t.Fatalf("agents: %v", err)
 	}
 	if profile.ProfileDigest != profile.Digest() {

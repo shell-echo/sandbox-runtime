@@ -9,8 +9,8 @@ import (
 	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"io"
 	"net/http"
 	"os"
@@ -27,7 +27,9 @@ import (
 	"github.com/shell-echo/sandbox-runtime/internal/workloadcredentialv2"
 )
 
-func TestCertificateControllerUsesOnlyV2PrincipalScopedVaultCredential(t *testing.T) {
+// This is a Vault-policy component gate. The credential.v2 Unix transport is
+// separately exercised with distinct Linux UIDs/GIDs in workloadcredentialv2.
+func TestV2PrincipalScopedVaultCredentialController(t *testing.T) {
 	if os.Getenv(vaultPKIIntegrationEnvironment) != "1" {
 		t.Skip("set " + vaultPKIIntegrationEnvironment + "=1")
 	}
@@ -113,22 +115,7 @@ path "pki/revoke" { capabilities = ["update"] }`
 	if err != nil {
 		t.Fatal(err)
 	}
-	socket := filepath.Join(directory, "credential-controller.sock")
-	server, err := workloadcredentialv2.Listen(workloadcredentialv2.ServerConfig{SocketPath: socket, SocketUID: uid, SocketGID: gid,
-		ExpectedClientUID: uid, ExpectedClientGID: gid, MaxConnections: 2, ReapInterval: time.Second}, credentialController)
-	if err != nil {
-		t.Fatal(err)
-	}
-	serverContext, stopServer := context.WithCancel(ctx)
-	serverDone := make(chan error, 1)
-	go func() { serverDone <- server.Serve(serverContext) }()
-	credentialClient, err := workloadcredentialv2.NewProductionClient(workloadcredentialv2.ClientConfig{SocketPath: socket,
-		ExpectedUID: uid, ExpectedGID: gid, Policy: credentialPolicy, PrivateKey: privateKey, OperationTimeout: 5 * time.Second, Now: time.Now})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer credentialClient.Close()
-	adapter := V2CredentialAdapter{Client: credentialClient}
+	adapter := directV2CredentialClient{controller: credentialController, policy: credentialPolicy, key: privateKey}
 	tokenSource, err := NewCredentialTokenSource(CredentialTokenSourceConfig{Client: adapter, TTL: 10 * time.Minute, Now: time.Now})
 	if err != nil {
 		t.Fatal(err)
@@ -172,15 +159,58 @@ path "pki/revoke" { capabilities = ["update"] }`
 	if err := tokenSource.Close(ctx); err != nil {
 		t.Fatal(err)
 	}
-	stopServer()
-	if err := <-serverDone; !errors.Is(err, context.Canceled) {
-		t.Fatalf("credential v2 server exit = %v", err)
-	}
-	if _, err := os.Lstat(socket); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("credential v2 socket cleanup = %v", err)
-	}
 	runPKICommand(t, context.Background(), "docker", "rm", "-f", container)
 	cleaned = true
+}
+
+type directV2CredentialClient struct {
+	controller *workloadcredentialv2.Controller
+	policy     workloadcredentialv2.Policy
+	key        ed25519.PrivateKey
+}
+
+func (c directV2CredentialClient) Issue(ctx context.Context, ttl time.Duration) (CredentialLease, error) {
+	return c.execute(ctx, workloadcredentialv2.IssueType, CredentialLease{}, ttl)
+}
+
+func (c directV2CredentialClient) Renew(ctx context.Context, lease CredentialLease, ttl time.Duration) (CredentialLease, error) {
+	return c.execute(ctx, workloadcredentialv2.RenewType, lease, ttl)
+}
+
+func (c directV2CredentialClient) Revoke(ctx context.Context, lease CredentialLease) error {
+	_, err := c.execute(ctx, workloadcredentialv2.RevokeType, lease, 0)
+	return err
+}
+
+func (c directV2CredentialClient) execute(ctx context.Context, operation string, lease CredentialLease, ttl time.Duration) (CredentialLease, error) {
+	nonce := make([]byte, 32)
+	if _, err := rand.Read(nonce); err != nil {
+		return CredentialLease{}, err
+	}
+	now := time.Now().UTC()
+	request, err := workloadcredentialv2.NewSignedRequest(c.policy, operation, lease.ID, lease.Revision, ttl,
+		now.Add(5*time.Second), base64.RawURLEncoding.EncodeToString(nonce), c.key, now)
+	clear(nonce)
+	if err != nil {
+		return CredentialLease{}, err
+	}
+	response, err := c.controller.Handle(ctx, request, c.policy.ExpectedUID, c.policy.ExpectedGID)
+	if err != nil || response.Status != workloadcredentialv2.StatusOK {
+		return CredentialLease{}, ErrUnavailable
+	}
+	if operation == workloadcredentialv2.RevokeType {
+		return CredentialLease{}, nil
+	}
+	issuedAt, err := time.Parse(time.RFC3339Nano, response.IssuedAt)
+	if err != nil {
+		return CredentialLease{}, err
+	}
+	expiresAt, err := time.Parse(time.RFC3339Nano, response.ExpiresAt)
+	if err != nil {
+		return CredentialLease{}, err
+	}
+	return CredentialLease{ID: response.LeaseID, Revision: response.Revision, IssuedAt: issuedAt, ExpiresAt: expiresAt,
+		Renewable: response.Renewable, Credential: append([]byte(nil), response.Credential...)}, nil
 }
 
 func assertVaultDenied(t *testing.T, ctx context.Context, client *http.Client, target string, token []byte) {

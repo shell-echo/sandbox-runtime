@@ -218,28 +218,29 @@ var requiredTLSAgentSubjects = map[string]string{
 }
 
 type Profile struct {
-	Protocol               string                         `json:"protocol"`
-	Version                int                            `json:"version"`
-	Revision               string                         `json:"revision"`
-	ProfileDigest          string                         `json:"profile_digest"`
-	EnvironmentDigest      string                         `json:"environment_digest"`
-	PrincipalProfileDigest string                         `json:"principal_profile_digest"`
-	Principals             []Principal                    `json:"principals"`
-	SandboxIdentitySlots   []SandboxIdentitySlot          `json:"sandbox_identity_slots"`
-	ProviderDatabases      []ProviderDatabaseBinding      `json:"provider_databases"`
-	PostgresServerAuth     PostgresServerAuthPolicy       `json:"postgres_server_auth"`
-	Components             []Component                    `json:"components"`
-	Networks               []Network                      `json:"networks"`
-	External               []ExternalService              `json:"external_services"`
-	TrustEdges             []TrustEdge                    `json:"trust_edges"`
-	TrustAnchors           []TrustAnchor                  `json:"trust_anchors"`
-	PublicListeners        []PublicListenerBinding        `json:"public_listeners"`
-	IngressBindings        []IngressBinding               `json:"ingress_bindings"`
-	CertificateController  CertificateControllerAuthority `json:"certificate_controller"`
-	TLSAgentBindings       []TLSAgentBinding              `json:"tls_agent_bindings"`
-	PostgresClientAgents   []PostgresClientAgentBinding   `json:"postgres_client_agents"`
-	EgressPolicies         []EgressPolicy                 `json:"egress_policies"`
-	CleanupClasses         []string                       `json:"cleanup_classes"`
+	Protocol                string                          `json:"protocol"`
+	Version                 int                             `json:"version"`
+	Revision                string                          `json:"revision"`
+	ProfileDigest           string                          `json:"profile_digest"`
+	EnvironmentDigest       string                          `json:"environment_digest"`
+	PrincipalProfileDigest  string                          `json:"principal_profile_digest"`
+	Principals              []Principal                     `json:"principals"`
+	SandboxIdentitySlots    []SandboxIdentitySlot           `json:"sandbox_identity_slots"`
+	ProviderDatabases       []ProviderDatabaseBinding       `json:"provider_databases"`
+	PostgresServerAuth      PostgresServerAuthPolicy        `json:"postgres_server_auth"`
+	Components              []Component                     `json:"components"`
+	Networks                []Network                       `json:"networks"`
+	External                []ExternalService               `json:"external_services"`
+	TrustEdges              []TrustEdge                     `json:"trust_edges"`
+	TrustAnchors            []TrustAnchor                   `json:"trust_anchors"`
+	PublicListeners         []PublicListenerBinding         `json:"public_listeners"`
+	IngressBindings         []IngressBinding                `json:"ingress_bindings"`
+	CertificateController   CertificateControllerAuthority  `json:"certificate_controller"`
+	CredentialIssuerSockets []CredentialIssuerSocketBinding `json:"credential_issuer_sockets"`
+	TLSAgentBindings        []TLSAgentBinding               `json:"tls_agent_bindings"`
+	PostgresClientAgents    []PostgresClientAgentBinding    `json:"postgres_client_agents"`
+	EgressPolicies          []EgressPolicy                  `json:"egress_policies"`
+	CleanupClasses          []string                        `json:"cleanup_classes"`
 }
 
 type Principal struct {
@@ -494,25 +495,42 @@ type PostgresClientAgentBinding struct {
 }
 
 // CertificateControllerAuthority is one controller process with one private
-// listener per TLS agent and one distinct internal managed-TLS self listener.
+// listener per TLS agent, one internal managed-TLS self listener and one
+// credential-controller managed-TLS listener.
 type CertificateControllerAuthority struct {
-	DeploymentName          string `json:"deployment_name"`
-	PrincipalDigest         string `json:"principal_digest"`
-	UID                     uint32 `json:"uid"`
-	GID                     uint32 `json:"gid"`
-	ResponseKeyID           string `json:"response_key_id"`
-	ResponsePublicKeyDigest string `json:"response_public_key_digest"`
-	ManagedPolicyID         string `json:"managed_policy_id"`
-	ManagedVaultRole        string `json:"managed_vault_role"`
-	ManagedRequestKeyID     string `json:"managed_request_key_id"`
-	ManagedRequestKeyDigest string `json:"managed_request_key_digest"`
-	BootstrapClientAnchorID string `json:"bootstrap_client_anchor_id"`
-	SelfSocketDirectory     string `json:"self_socket_directory"`
-	SelfSocketStorageID     string `json:"self_socket_storage_id"`
-	SelfSocketPath          string `json:"self_socket_path"`
-	SelfDirectoryMode       uint32 `json:"self_directory_mode"`
-	SelfSocketMode          uint32 `json:"self_socket_mode"`
-	SelfUnixEdgeID          string `json:"self_unix_edge_id"`
+	DeploymentName          string                               `json:"deployment_name"`
+	PrincipalDigest         string                               `json:"principal_digest"`
+	UID                     uint32                               `json:"uid"`
+	GID                     uint32                               `json:"gid"`
+	ResponseKeyID           string                               `json:"response_key_id"`
+	ResponsePublicKeyDigest string                               `json:"response_public_key_digest"`
+	ManagedPolicyID         string                               `json:"managed_policy_id"`
+	ManagedVaultRole        string                               `json:"managed_vault_role"`
+	ManagedRequestKeyID     string                               `json:"managed_request_key_id"`
+	ManagedRequestKeyDigest string                               `json:"managed_request_key_digest"`
+	BootstrapClientAnchorID string                               `json:"bootstrap_client_anchor_id"`
+	SelfSocketDirectory     string                               `json:"self_socket_directory"`
+	SelfSocketStorageID     string                               `json:"self_socket_storage_id"`
+	SelfSocketPath          string                               `json:"self_socket_path"`
+	SelfDirectoryMode       uint32                               `json:"self_directory_mode"`
+	SelfSocketMode          uint32                               `json:"self_socket_mode"`
+	SelfUnixEdgeID          string                               `json:"self_unix_edge_id"`
+	CredentialController    CredentialControllerManagedAuthority `json:"credential_controller"`
+}
+
+// CredentialControllerManagedAuthority is the one private CSR path by which
+// the credential controller replaces its operator-supplied bootstrap TLS leaf.
+type CredentialControllerManagedAuthority struct {
+	PolicyID         string `json:"policy_id"`
+	VaultRole        string `json:"vault_role"`
+	RequestKeyID     string `json:"request_key_id"`
+	RequestKeyDigest string `json:"request_key_digest"`
+	SocketDirectory  string `json:"socket_directory"`
+	SocketStorageID  string `json:"socket_storage_id"`
+	SocketPath       string `json:"socket_path"`
+	DirectoryMode    uint32 `json:"directory_mode"`
+	SocketMode       uint32 `json:"socket_mode"`
+	UnixEdgeID       string `json:"unix_edge_id"`
 }
 
 func CertificateControllerPublicKeyDigest(publicKey []byte) string {
@@ -732,11 +750,15 @@ func (p Profile) Validate() error { //nolint:gocyclo
 	if err := validateCertificateControllerAuthority(p.CertificateController, principals, edges); err != nil {
 		return err
 	}
+	if err := validateCredentialIssuerSockets(p.CredentialIssuerSockets, principals, edges); err != nil {
+		return err
+	}
 	if err := validatePostgresClientAgents(p.PostgresClientAgents, p.ProviderDatabases, p.TLSAgentBindings, p.EgressPolicies,
 		p.CertificateController, p.TrustAnchors, principals, edges); err != nil {
 		return err
 	}
-	if err := validateTLSAgentBindingsWithPostgres(p.TLSAgentBindings, p.PostgresClientAgents, p.EgressPolicies, p.CertificateController, principals, edges); err != nil {
+	if err := validateTLSAgentBindingsWithPostgres(p.TLSAgentBindings, p.PostgresClientAgents, p.EgressPolicies,
+		p.CertificateController, p.CredentialIssuerSockets, principals, edges); err != nil {
 		return err
 	}
 	for name, service := range external {
@@ -1406,6 +1428,9 @@ func policyStorageMember(policies []EgressPolicy, principalName string, mount Mo
 func validateCertificateControllerAuthority(value CertificateControllerAuthority, principals map[string]Principal, edges map[string]TrustEdge) error {
 	controller, found := principals[value.DeploymentName]
 	edge, edgeFound := edges[value.SelfUnixEdgeID]
+	credential, credentialFound := principals["workload-credential-controller"]
+	managed := value.CredentialController
+	managedEdge, managedEdgeFound := edges[managed.UnixEdgeID]
 	if !found || !edgeFound || value.DeploymentName != "certificate-controller" || controller.Kind != "controller" ||
 		value.PrincipalDigest != controller.PrincipalDigest || value.UID != controller.UID || value.GID != controller.GID ||
 		!namePattern.MatchString(value.ResponseKeyID) || !digestPattern.MatchString(value.ResponsePublicKeyDigest) ||
@@ -1419,7 +1444,24 @@ func validateCertificateControllerAuthority(value CertificateControllerAuthority
 		edge.From != controller.Name || edge.To != controller.Name || edge.Protocol != "unix" ||
 		edge.Authentication != "unix_peer_credentials" || edge.TenantScope != "system" || edge.MaxConnectionSeconds > 30 ||
 		edge.FromPrincipalDigest != controller.PrincipalDigest || edge.ToPrincipalDigest != controller.PrincipalDigest ||
-		edge.FromURI != controller.TLS.URI || edge.ToURI != controller.TLS.URI {
+		edge.FromURI != controller.TLS.URI || edge.ToURI != controller.TLS.URI ||
+		!credentialFound || credential.Kind != "controller" || credential.TLS == nil ||
+		!namePattern.MatchString(managed.PolicyID) || !namePattern.MatchString(managed.VaultRole) ||
+		!namePattern.MatchString(managed.RequestKeyID) || !digestPattern.MatchString(managed.RequestKeyDigest) ||
+		managed.PolicyID == value.ManagedPolicyID || managed.VaultRole == value.ManagedVaultRole ||
+		managed.RequestKeyID == value.ManagedRequestKeyID || managed.RequestKeyDigest == value.ManagedRequestKeyDigest ||
+		managed.SocketDirectory != "/run/certificate-controller/workload-credential-controller" ||
+		managed.SocketPath != path.Join(managed.SocketDirectory, "request.sock") ||
+		managed.DirectoryMode != 0o710 || managed.SocketMode != 0o666 ||
+		!namePattern.MatchString(managed.SocketStorageID) || managed.SocketStorageID == value.SelfSocketStorageID ||
+		!namePattern.MatchString(managed.UnixEdgeID) || managed.UnixEdgeID == value.SelfUnixEdgeID ||
+		!exactPolicyMount(controller, "private_socket", managed.SocketDirectory, managed.SocketStorageID, false) ||
+		!exactPolicyMount(credential, "private_socket", managed.SocketDirectory, managed.SocketStorageID, true) ||
+		!managedEdgeFound || managedEdge.From != credential.Name || managedEdge.To != controller.Name ||
+		managedEdge.Protocol != "unix" || managedEdge.Authentication != "unix_peer_credentials" ||
+		managedEdge.TenantScope != "system" || managedEdge.MaxConnectionSeconds > 30 ||
+		managedEdge.FromPrincipalDigest != credential.PrincipalDigest || managedEdge.ToPrincipalDigest != controller.PrincipalDigest ||
+		managedEdge.FromURI != credential.TLS.URI || managedEdge.ToURI != controller.TLS.URI {
 		return ErrInvalidProfile
 	}
 	for name, principal := range principals {
@@ -1427,7 +1469,8 @@ func validateCertificateControllerAuthority(value CertificateControllerAuthority
 			continue
 		}
 		for _, mount := range principal.Mounts {
-			if mount.Kind == "private_socket" && mount.StorageID == value.SelfSocketStorageID {
+			if mount.Kind == "private_socket" && (mount.StorageID == value.SelfSocketStorageID ||
+				mount.StorageID == managed.SocketStorageID && name != credential.Name) {
 				return ErrInvalidProfile
 			}
 		}
@@ -1437,17 +1480,21 @@ func validateCertificateControllerAuthority(value CertificateControllerAuthority
 
 func validateTLSAgentBindings(values []TLSAgentBinding, policies []EgressPolicy, controllerAuthority CertificateControllerAuthority,
 	principals map[string]Principal, edges map[string]TrustEdge) error {
-	return validateTLSAgentBindingsWithPostgres(values, nil, policies, controllerAuthority, principals, edges)
+	return validateTLSAgentBindingsWithPostgres(values, nil, policies, controllerAuthority, nil, principals, edges)
 }
 
 func validateTLSAgentBindingsWithPostgres(values []TLSAgentBinding, postgres []PostgresClientAgentBinding,
-	policies []EgressPolicy, controllerAuthority CertificateControllerAuthority,
+	policies []EgressPolicy, controllerAuthority CertificateControllerAuthority, credentialSockets []CredentialIssuerSocketBinding,
 	principals map[string]Principal, edges map[string]TrustEdge) error {
 	expected := make(map[string]string, len(requiredTLSAgentSubjects)+len(policies))
 	for agent, subject := range requiredTLSAgentSubjects {
 		expected[agent] = subject
 	}
-	policyStorage := map[string]struct{}{controllerAuthority.SelfSocketStorageID: {}}
+	policyStorage := map[string]struct{}{controllerAuthority.SelfSocketStorageID: {}, controllerAuthority.CredentialController.SocketStorageID: {}}
+	credentialStorage := make(map[string]struct{}, len(credentialSockets))
+	for _, binding := range credentialSockets {
+		credentialStorage[binding.SocketStorageID] = struct{}{}
+	}
 	brokerSubjects := map[string]struct{}{}
 	for _, policy := range policies {
 		brokerSubjects[policy.Broker] = struct{}{}
@@ -1463,9 +1510,13 @@ func validateTLSAgentBindingsWithPostgres(values []TLSAgentBinding, postgres []P
 		map[string]struct{}{}, map[string]struct{}{}
 	controller := principals[controllerAuthority.DeploymentName]
 	seenPolicies[controllerAuthority.ManagedPolicyID] = struct{}{}
+	seenPolicies[controllerAuthority.CredentialController.PolicyID] = struct{}{}
 	seenVaultRoles[controllerAuthority.ManagedVaultRole] = struct{}{}
+	seenVaultRoles[controllerAuthority.CredentialController.VaultRole] = struct{}{}
 	seenRequestKeys[controllerAuthority.ManagedRequestKeyDigest] = struct{}{}
+	seenRequestKeys[controllerAuthority.CredentialController.RequestKeyDigest] = struct{}{}
 	seenRequestKeyIDs[controllerAuthority.ManagedRequestKeyID] = struct{}{}
+	seenRequestKeyIDs[controllerAuthority.CredentialController.RequestKeyID] = struct{}{}
 	previous := ""
 	for _, value := range values {
 		agent, agentOK := principals[value.AgentDeployment]
@@ -1571,7 +1622,11 @@ func validateTLSAgentBindingsWithPostgres(values []TLSAgentBinding, postgres []P
 			if mount.Kind != "private_socket" {
 				continue
 			}
-			if _, tlsStorage := seenStorage[mount.StorageID]; tlsStorage {
+			if _, credentialSocket := credentialStorage[mount.StorageID]; credentialSocket {
+				if !credentialIssuerStorageMember(credentialSockets, name, mount) {
+					return ErrInvalidProfile
+				}
+			} else if _, tlsStorage := seenStorage[mount.StorageID]; tlsStorage {
 				if !tlsStorageMember(values, name, mount) {
 					return ErrInvalidProfile
 				}
@@ -1581,6 +1636,13 @@ func validateTLSAgentBindingsWithPostgres(values []TLSAgentBinding, postgres []P
 				}
 			} else if mount.StorageID == controllerAuthority.SelfSocketStorageID {
 				if name != controllerAuthority.DeploymentName || mount.Target != controllerAuthority.SelfSocketDirectory || mount.ReadOnly {
+					return ErrInvalidProfile
+				}
+			} else if mount.StorageID == controllerAuthority.CredentialController.SocketStorageID {
+				managed := controllerAuthority.CredentialController
+				if mount.Target != managed.SocketDirectory ||
+					!((name == controllerAuthority.DeploymentName && !mount.ReadOnly) ||
+						(name == "workload-credential-controller" && mount.ReadOnly)) {
 					return ErrInvalidProfile
 				}
 			} else if mount.StorageID == BrowserMuxSocketStorageID {
@@ -1608,7 +1670,8 @@ func validateTLSAgentBindingsWithPostgres(values []TLSAgentBinding, postgres []P
 				}
 			}
 		}
-		if to.Name == controller.Name && edge.Protocol == "unix" && edge.ID != controllerAuthority.SelfUnixEdgeID {
+		if to.Name == controller.Name && edge.Protocol == "unix" && edge.ID != controllerAuthority.SelfUnixEdgeID &&
+			edge.ID != controllerAuthority.CredentialController.UnixEdgeID {
 			if _, declared := seenControllerEdges[edge.ID]; !declared {
 				if !postgresControllerEdgeMember(postgres, edge.ID) {
 					return ErrInvalidProfile

@@ -122,7 +122,9 @@ storage "inmem" {}
 			_ = exec.Command("docker", "rm", "-f", container).Run()
 		}
 	})
-	runVaultMTLSCommand(t, ctx, "docker", "pull", vaultMTLSIntegrationImage)
+	if _, err := exec.CommandContext(ctx, "docker", "image", "inspect", vaultMTLSIntegrationImage).Output(); err != nil {
+		runVaultMTLSCommand(t, ctx, "docker", "pull", vaultMTLSIntegrationImage)
+	}
 	runVaultMTLSCommand(t, ctx, "docker", "run", "-d", "--name", container, "-p", "127.0.0.1::8200",
 		"--cap-drop=ALL", "--security-opt", "no-new-privileges:true", "-v", directory+":/vault/config:ro",
 		vaultMTLSIntegrationImage, "server")
@@ -164,8 +166,9 @@ storage "inmem" {}
 		}
 		return &bootstrapPair, nil
 	}
-	transport := &http.Transport{TLSClientConfig: tlsConfig}
-	httpClient := &http.Client{Transport: transport}
+	transport := &http.Transport{TLSClientConfig: tlsConfig, DisableKeepAlives: true, ForceAttemptHTTP2: false}
+	tracked := NewBootstrapTrackingTransport(transport)
+	httpClient := &http.Client{Transport: tracked}
 	waitForVaultMTLS(t, ctx, httpClient, endpoint, container)
 	withoutClientCertificate := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS13,
 		RootCAs: serverRoots, ServerName: "127.0.0.1"}}, Timeout: 3 * time.Second}
@@ -232,7 +235,11 @@ path "pki/revoke" { capabilities = ["update"] }`
 	managedSerial := snapshot.Serial
 	snapshot.Destroy()
 	managed.Store(manager)
+	tracked.Switch()
 	transport.CloseIdleConnections()
+	if err := tracked.WaitBootstrapDrain(ctx); err != nil {
+		t.Fatalf("bootstrap mTLS requests did not drain: %v", err)
+	}
 	DestroyTLSCertificate(&bootstrapPair)
 	revocations, err := vaultClient.Revocations(ctx)
 	if err != nil {

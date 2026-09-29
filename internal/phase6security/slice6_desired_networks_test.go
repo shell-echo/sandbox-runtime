@@ -10,7 +10,7 @@ import (
 func TestSlice6ReviewedNetworkGraphMatchesClosedProfileShape(t *testing.T) {
 	fixture := validProfile()
 	if len(slice6ApprovedDeploymentKinds) != 82 || len(slice6ApprovedTLSAgentSubjects) != 38 ||
-		len(slice6DesiredTrustEdges()) != 117 {
+		len(slice6DesiredTrustEdges()) != 118+len(approvedCredentialIssuerClients) {
 		t.Fatal("reviewed Slice 6 principal, key-owner or trust-edge count drifted")
 	}
 	if err := VerifySlice6DesiredPrincipalIDs(fixture); err != nil {

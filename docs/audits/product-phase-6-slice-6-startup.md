@@ -2324,6 +2324,266 @@ The full runner has not yet wired that callback to every writer, measured
 stop lag, or retained same-run capacity receipts. This is not a role-chain,
 scenario, immutable-evidence or release result; Phase 6 remains **5/15**.
 
+Checkpoint 2026-09-28 (credential-controller mTLS source correction, not
+acceptance): the complete candidate profile now declares one additional
+`workload-credential-controller` → `certificate-controller` Unix CSR edge,
+without adding a
+principal or network privilege. It binds a unique policy, Vault role,
+request-key digest, two exact socket mounts and distinct peer UID/GID. The
+certificate controller rejects omitted/substituted policy and listener
+entries. The v2 credential-controller command now verifies the complete
+profile and FD-only P-256 bootstrap client identity, serves only the
+certificate-controller credential listener while obtaining its own managed
+certificate; it waits only for the exact controller socket with a bounded,
+cancellable startup deadline, drains pre-switch HTTP responses, destroys the
+bootstrap key, then opens other listeners. The private PKI protocol now admits only this
+controller's self CSR in addition to the original certificate-controller
+self CSR; cross-subject and other-controller issuance stay denied. Focused
+race tests pass. No two-controller non-dev Vault bootstrap, real managed
+switch or final profile process gate has yet been observed. The earlier
+R-bound image candidates
+remain tied to their old source revision and cannot be relabeled; this
+runtime correction requires an R2 freeze and complete rebuild before the
+real Slice 6 gate. Phase 6 remains **5/15**.
+
+Checkpoint 2026-09-28 (real Vault token-role component, not Slice 6
+acceptance): Sandbox selected fixed operator-created Vault token roles for
+the v2 controller. The role name is derived from each exact backend policy;
+the v2 command requires a limited management token that can create only
+through those role paths, read those role configurations, and look up/revoke
+accessors. Before opening any listener it checks the real role configuration
+for one allowed policy, explicit default/root denial, no globs/aliases,
+non-orphan nonrenewable service children and the 15-minute ceiling. The
+controller checks the issued token and accessor lookup for complete binding,
+role, policy and TTL. Vault's accessor lookup omits the child token ID; this
+test does not claim to recompare those bytes. A pinned non-dev Vault
+component test on a
+disposable loopback test CA passes init/unseal, limited orphan management
+token creation, initial root revocation, generic-create/wrong-role-policy/
+business-read denials, fixed-role issue/verify/revoke and exact container
+removal. It also verifies the management token can look up and revoke an
+unrelated orphan token's accessor; the dedicated-domain requirement is a
+real observed blast-radius limit, not an accessor-owner isolation claim.
+This component run does not exercise the actual certificate
+controller, the managed mTLS switch, final bridge, or the 82-role/16-scenario
+same-run gate. Vault ACLs cannot restrict accessor lookup/revoke to only
+controller-owned accessors, so a compromised management token's broader
+blast radius requires a dedicated Vault security domain with no unrelated
+business tenants. Phase 6 remains **5/15**.
+
+Checkpoint 2026-09-28 (bootstrap mTLS drain component, not Slice 6
+acceptance): certificate-controller and credential-controller v2 now share a
+non-reusing transport that counts every pre-switch Vault request until its
+body completes. Both wait under a bound before destroying bootstrap keys;
+certificate-controller additionally waits for its managed-agent loop and
+closes its leased PKI token on early failure. The existing pinned non-dev
+Vault mTLS component test now uses that transport and passes the managed
+certificate switch and authoritative revocation check. It still runs in one
+test process with a loopback Vault port, not the two-controller process chain
+or final isolated network. Phase 6 remains **5/15**.
+
+Validation checkpoint 2026-09-28: focused race tests for workloadcredential,
+workloadtlsagent, certificate-controller and credential-controller v2 pass;
+the pinned non-dev Vault scoped-token and managed-mTLS component tests pass;
+`go vet ./...`, the Product Contract lock verifier and `git diff --check`
+pass. The required full `go test -race -shuffle=on -count=1 ./...` was run
+with the host's default Go 1.26.5 and exited nonzero in
+`internal/desktopcandidate`, `internal/phase6rolecandidate` and
+`provider/desktop/driver/docker`. The later locked-toolchain rerun below
+passed all packages, so the earlier "old R rejects the modified checkout"
+explanation was incorrect: these test failures were caused by selecting the
+wrong Go version. A clean source-bound R is still required for actual
+candidate build and Slice 6 admission, not to relabel this earlier test run.
+
+Checkpoint 2026-09-28 (credential.v2 cross-UID transport, not Slice 6
+acceptance): the previous 0700/0600 same-UID credential issuer socket was
+inconsistent with the profile's distinct controller/client UIDs and GIDs.
+The unpublished v2 path now uses the shared restricted-Unix 0710/0666
+layout, exact SO_PEERCRED identity, per-client profile-bound directory,
+storage and Unix edge, finite first-frame deadline, tracked accepted-socket
+closure before handler wait, and inode-safe cleanup. The production
+certificate-controller and material-agent clients bind their endpoint and
+peer identity to the same resolver; the credential-controller command rejects
+listener or policy coverage drift before startup. The desired edge inventory
+includes all approved issuer clients and is derived from the exact set,
+rather than preserving a prior manually stated edge count. A tagged pinned
+Alpine Linux gate passes real nonroot 20000:30000 server and 20001:30001
+client issue/renew/status/revoke, wrong UID/GID denial, no/half-frame bounds,
+stalled-peer close and substituted-inode cleanup. The separate pinned Vault
+PKI test remains only a direct-controller token-policy component gate, not
+Unix transport or the actual two-controller process chain. No new immutable
+Slice 6 manifest has been issued; Phase 6 remains **5/15**.
+
+The first non-launchable profile-builder layer now composes fresh per-run
+principals, reviewed UID/GID/network placement, and those exact per-client
+issuer mounts without copying a manually supplied path or identity. The
+profile verifier additionally rejects ancestor/descendant mount overlap,
+including an unrelated tmpfs mount, and tests that negative case. This draft
+still lacks the remaining image/resource/TLS/external-service bindings and
+cannot be used to start the 82-principal topology.
+Its separately verified image-supply mapper now also rejects a local
+candidate with a mutable reference, a Browser image relabeled as local, a
+wrong platform-selected Browser manifest, malformed OCI digests and missing
+or surplus reviewed build targets. This mapper is not yet a complete
+launchable profile or a live image-selection observation.
+The next non-launchable builder entry point opens only a clean-source role
+candidate directory, Desktop candidate and locked Browser OCI archive through
+the existing byte-verifying `LoadImageSupply`, then binds those image fields
+to a fresh 82-principal draft. It refuses prebound image fields instead of
+silently overwriting them; tests confirm UID/GID, networks and issuer mounts
+are unchanged. It still cannot launch a role or emit Slice 6 evidence.
+The exact Go 1.26.8 full `go test -race -shuffle=on -count=1 ./...`,
+`go vet ./...`, Product Contract lock verification and `git diff --check`
+pass after this builder change. No new candidate or final evidence was
+created by those source-level checks.
+
+Checkpoint 2026-09-29 (resource/seccomp input admission, not a deployed
+policy): the reviewed 82 deployment names now have an exact 23-duty-class
+mapping. A closed native-platform manifest loader requires all 23 classes,
+all 82 assignments and all five external-service resource entries. It binds
+finite limits and checked seccomp policy digests to an already image-bound
+draft, rejects missing/extra duty entries and prebound policy, and computes
+the six lifecycle budget envelopes. Original and applied JSON, license bytes,
+an immutable source revision and any derivation rationale are explicit inputs.
+The JSON parser rejects duplicate keys, unknown fields, absent target
+architecture, non-denying default and unsafe actions. Unit fixtures use
+synthetic tiny limits solely to exercise admission logic. **Neither native
+production manifest nor any reviewed duty-specific policy/limit set exists
+yet**; the source-bound builder therefore fails closed and cannot launch a
+topology. A source URL and local digest do not themselves verify upstream
+provenance, least privilege, runtime application or measured headroom. These
+remain live gate obligations. Sandbox accepted the 23-class mapping but
+requires identical policy bytes to be reused where actual syscall needs
+match, with distinct real scenario coverage for each binary. Phase 6 remains
+**5/15**.
+The loader retains checked policy bytes and returns a caller-isolated copy
+with its digest, never the mutable repository path. Tests replace the source
+file after load and mutate a returned copy without changing the snapshot.
+The future Docker launcher must use that snapshot and independently verify
+the actual applied policy and running-process seccomp state.
+The tagged Slice 6 preflight now compares every profile principal's platform,
+resource tuple and seccomp digest to that fixed manifest before candidate
+admission, retaining the same checked byte snapshot for a future launcher.
+It rejects duplicate/missing names or drift, including after the original
+source file changes. Focused race and tagged preflight tests pass. Because
+the reviewed production manifest is still absent, this is fail-closed input
+admission, not a launchable profile or a completed least-privilege gate.
+
+Desktop seccomp diagnostic checkpoint 2026-09-29: the exact Moby profiles
+`default.json` at commit `836ae4d37ef2ec995c77c99fc55f5b5f3af3a897`
+is retained with its Apache license and a source-only notice. Original JSON
+SHA-256 is
+`536529b665dd0972c37bfb569f5d4ac8a53592e7b00752bc39ff063ca9864c74`.
+The closed parser now retains and bounds `errnoRet`, including the source's
+`clone3` ENOSYS behavior; it does not silently discard that rule. Sandbox
+approved source retention for derivation and audit, **not** automatic reuse
+as any of the 23 applied duty policies.
+
+The first high-UID Desktop test runs were invalid: the retained candidate
+image `sha256:6d5e7a9f0088387423ffe8041f7f0d2407d34566cd192f44ea53f4b4fa51ea71`
+from source `4f50193d1ee9f254d1d91fb9dd982d8e4766b985` contains the workload
+account `42000:52000`, not the test's hard-coded `20000:30000`. With the
+nonexistent account, Openbox crashed before broker readiness under pinned
+Moby, explicit Docker builtin and implicit Docker default seccomp alike;
+this was not valid evidence of Moby-specific incompatibility. The opt-in
+diagnostic now checks the requested finite UID/GID against the image's
+`/etc/passwd` and `/etc/group` before launch. With the image's actual
+`42000:52000` account, implicit default, explicit builtin and exact pinned
+Moby each passed the real v2 broker media/input/close flow, cgroup sample
+and exact container cleanup. In the Moby run, Docker's inspected compact
+JSON SHA-256 was
+`afb4934b023cfceaaec1a9d752ca3f801aaa96eb2e59abe6e7ea16976948e080`;
+it differs from the original whitespace-preserving byte digest. These are
+single-candidate compatibility observations, not a reviewed Desktop duty
+policy, resource-tier/headroom decision, all-principal runtime check, or
+Slice 6 acceptance. No diagnostic container remains; Phase 6 stays **5/15**.
+The tagged full-gate input preflight now independently compares every
+profile-authorized Desktop workload UID/GID against the source-bound
+candidate's verified account allowlist before role launch. Its positive,
+missing and mismatched-slot tagged race tests pass. The retained diagnostic
+image with `42000:52000` cannot be substituted into a profile requiring
+another Desktop slot merely because the image digest and platform match.
+
+The unchanged Playwright original of the separately derived Browser seccomp
+JSON is now retained at its pinned upstream commit with SHA-256
+`cc3e61cabda6bbc1e53e54d27ba4d55a9d3be829b6dd1a596f4a7b31b1cc7849`;
+the existing derived Browser policy remains
+`3bdf2fd28636409951409621735f616997d0fd4851259851ac4c340dff90e05b`.
+Retaining those bytes makes the derivation reviewable; it does not approve
+their use for other duties or prove application in a running container.
+Sandbox accepted a bounded review of the existing Browser-only `chroot`
+exception. The opt-in real arm64 Docker A/B diagnostic reused the same
+published Browser image digest and changed only the external seccomp JSON:
+A used the locked policy and completed private CDP navigation plus a
+7,005-byte PNG capture with a sandbox zygote; B removed only the unconditional
+`chroot` name and exited 133 at Chromium's
+`sys_chroot("/proc/self/fdinfo/")` zygote check. Both launches used UID/GID
+20000:30000, `cap-drop ALL`, no-new-privileges, read-only root, network none
+and identical tmpfs/resource settings; Docker inspection matched each
+normalized policy's complete JSON. The source-file byte digest and Docker's
+compact JSON digest are recorded separately. A's initial process had zero
+effective/bounding capability masks, NNP=1 and seccomp mode 2; its direct
+`chroot /` probe was denied. The sampled Chromium zygote had the same UID/GID,
+zero effective capabilities, NNP=1 and seccomp mode 2, but a distinct child
+user namespace and the same container mount namespace; its bounding mask
+was nonzero and must not be mistaken for host capability. Docker reported no
+privileged mode, host bind, device, extra mount, or host PID/IPC/cgroup mode;
+`UsernsMode` was empty, which is not proof of initial user-namespace
+isolation. The daemon socket/undeclared `/host` path were absent. Both run-owned
+containers were verified absent after cleanup. These observations support
+only the existing exact Browser policy as a Browser-specific exception under
+the tested runtime constraints. They do not prove an independently isolated
+initial user namespace, generic `setns` safety, or the full Slice 6 gate; no
+historical Browser publication or locked digest changed. Phase 6 remains
+**5/15**.
+
+Capacity-planning checkpoint 2026-09-29 (not deployment evidence): the
+reviewed 82-name lifecycle inventory now yields one steady envelope, four
+separate migration envelopes and a Browser+Desktop-active envelope. Each
+migration envelope includes its job, material agent, material TLS agent and
+PostgreSQL TLS agent; the two dynamic sandbox templates are included only in
+the media/input envelope. All five external services are counted in each
+envelope. An exact-map calculator rejects omitted or surplus principals and
+services and computes finite memory, CPU and PID sums from supplied limits.
+Those limits have **not** yet been supplied by a measured, repository-owned
+duty-class policy; the calculator's synthetic unit test is not a release
+budget. The future startup coordinator must enforce the envelope sequencing,
+otherwise additional overlap must be measured and budgeted. Docker/kernel
+overhead, headroom, cgroup peaks and CPU throttling are not inferred from the
+sum. No host-admission or Slice 6 acceptance claim follows from this work.
+An initial full race run under the host default Go 1.26.5 failed the same
+three candidate-related packages. A complete rerun using
+`mise exec go@1.26.8 -- env -u GOROOT GOTOOLCHAIN=local` passed **all**
+packages, including those three. The earlier candidate-drift attribution was
+wrong; toolchain selection caused that test failure. This green source test
+does not supply the missing clean-R image candidates or live Slice 6 gate.
+`go vet ./...`, the Product Contract lock verifier and `git diff --check`
+also pass with the locked toolchain at this checkpoint.
+The pinned real arm64 Desktop-image integration was rerun with explicitly
+selected Go 1.26.8 and the previously retained, fully verified private APK
+cache. It passed native broker, complete VP8 RTP keyframe decode, pointer
+input acknowledgement and high-UID account checks. Its newly logged raw
+cgroup v2 samples (including docker-exec probe overhead) showed memory peaks
+of 124,551,168 and 116,006,912 bytes, PID peaks of 72 each, and zero OOM and
+OOM-kill events in both runs. Under the test's 1-CPU limit, CPU throttling was
+nonzero (3 of 9 periods / 77,183 microseconds, and 1 of 7 periods / 26,030
+microseconds). The test's 512 MiB / 128 PID limits were existing component
+fixtures, **not** a reviewed Slice 6 resource tier. This is two component
+samples from one test invocation, not repeated recording/load, the 82-role
+topology, a headroom study or a release-limit decision. The integration
+containers and named integration images were absent after test cleanup.
+The pinned published Browser image's separate real high-UID Chromium/CDP
+component gate also passed with UID/GID 20000:30000 and a locked seccomp
+profile. Its one cgroup v2 sample showed 64,462,848 bytes memory peak, 56 PID
+peak, zero OOM/OOM-kill and CPU throttling in 11 of 29 periods (1,034,940
+microseconds) under the fixture's 1-CPU limit. Its run-owned container was
+absent after cleanup. This short CDP startup/probe is not Browser action
+load, full session capacity, or a resource-tier/headroom decision.
+Both tagged Browser and Desktop gates were rerun after adding a bounded
+cgroup v2 parser with duplicate/missing/malformed/overflow checks and
+zero-OOM assertions; they passed. No release-tier values or policy bytes have
+been selected from these samples.
+
 Remaining Slice 6 work stays within the original gate, in four deliverables:
 
 1. Build one executable controlled Vault/external-service bootstrap, freeze

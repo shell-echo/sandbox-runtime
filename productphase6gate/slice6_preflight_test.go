@@ -55,6 +55,7 @@ type slice6GateInput struct {
 	profile               phase6security.Profile
 	desktopCandidateImage string
 	roleCandidates        []phase6rolecandidate.Manifest
+	resourceSupply        phase6profilebuilder.ResourceSeccompSupply
 }
 
 // loadSlice6GateInput performs only admission checks. It does not observe a
@@ -79,9 +80,19 @@ func loadSlice6GateInput(ctx context.Context, profilePath, sourceRoot, sourceRev
 	if err := verifyCleanSlice6Source(ctx, sourceRoot, sourceRevision); err != nil {
 		return slice6GateInput{}, err
 	}
+	if len(profile.Principals) == 0 {
+		return slice6GateInput{}, errors.New("Slice 6 resource policy principals are unavailable")
+	}
+	resourceSupply, err := phase6profilebuilder.LoadResourceSeccompSupply(sourceRoot, profile.Principals[0].ImagePlatform)
+	if err != nil || resourceSupply.VerifyProfilePolicies(profile) != nil {
+		return slice6GateInput{}, errors.New("Slice 6 source-bound resource/seccomp policy is unavailable")
+	}
 	candidate, err := desktopcandidate.LoadCurrent(candidatePath)
 	if err != nil || candidate.SourceRevision != sourceRevision || candidate.VerifySource(sourceRoot) != nil {
 		return slice6GateInput{}, errors.New("Slice 6 Desktop candidate is not bound to source")
+	}
+	if verifyDesktopCandidateSlots(candidate, profile) != nil {
+		return slice6GateInput{}, errors.New("Slice 6 Desktop candidate does not support the profile's workload identities")
 	}
 	matched := false
 	for _, principal := range profile.Principals {
@@ -99,7 +110,24 @@ func loadSlice6GateInput(ctx context.Context, profilePath, sourceRoot, sourceRev
 	}
 	return slice6GateInput{profilePath: profilePath, sourceRoot: sourceRoot, sourceRevision: sourceRevision,
 		desktopCandidatePath: candidatePath, profile: profile, desktopCandidateImage: candidate.ImageDigest,
-		roleCandidates: roleCandidates}, nil
+		roleCandidates: roleCandidates, resourceSupply: resourceSupply}, nil
+}
+
+func verifyDesktopCandidateSlots(candidate desktopcandidate.Manifest, profile phase6security.Profile) error {
+	var accounts desktopcandidate.AccountAllowlist
+	if json.Unmarshal([]byte(candidate.WorkloadAccounts), &accounts) != nil {
+		return errors.New("Desktop candidate workload accounts are invalid")
+	}
+	slots := make([]phase6security.SandboxIdentitySlot, 0)
+	for _, slot := range profile.SandboxIdentitySlots {
+		if slot.Template == "desktop-sandbox-runtime" {
+			slots = append(slots, slot)
+		}
+	}
+	if !accounts.SupportsSlots(slots) {
+		return errors.New("Desktop candidate does not support every authorized workload identity")
+	}
+	return nil
 }
 
 func verifyCleanSlice6Source(ctx context.Context, sourceRoot, revision string) error {
@@ -231,6 +259,41 @@ func TestSlice6GateInputRejectsMissingAuthority(t *testing.T) {
 	if absoluteCleanSlice6Path("relative/profile.json") || absoluteCleanSlice6Path("/tmp/../tmp/profile.json") ||
 		lowerHexSlice6(strings.Repeat("g", 40)) || !lowerHexSlice6(strings.Repeat("a", 40)) {
 		t.Fatal("Slice 6 path or revision guard drifted")
+	}
+}
+
+func TestSlice6DesktopCandidateSlotPreflightRejectsUnsupportedIdentity(t *testing.T) {
+	accounts := desktopcandidate.AccountAllowlist{Schema: desktopcandidate.AccountAllowlistSchema,
+		Accounts: []desktopcandidate.WorkloadAccount{{UID: 42000, GID: 52000}}}
+	encoded, err := json.Marshal(accounts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	candidate := desktopcandidate.Manifest{WorkloadAccounts: string(encoded)}
+	profile := phase6security.Profile{SandboxIdentitySlots: []phase6security.SandboxIdentitySlot{
+		{Template: "browser-sandbox-runtime", WorkloadUID: 21000, WorkloadGID: 31000},
+		{Template: "desktop-sandbox-runtime", WorkloadUID: 42000, WorkloadGID: 52000},
+	}}
+	if err := verifyDesktopCandidateSlots(candidate, profile); err != nil {
+		t.Fatalf("supported Desktop slot rejected: %v", err)
+	}
+	for _, slot := range []phase6security.SandboxIdentitySlot{
+		{Template: "desktop-sandbox-runtime", WorkloadUID: 20000, WorkloadGID: 30000},
+		{Template: "desktop-sandbox-runtime", WorkloadUID: 42000, WorkloadGID: 30000},
+	} {
+		wrong := profile
+		wrong.SandboxIdentitySlots = append([]phase6security.SandboxIdentitySlot(nil), profile.SandboxIdentitySlots...)
+		wrong.SandboxIdentitySlots[1] = slot
+		if verifyDesktopCandidateSlots(candidate, wrong) == nil {
+			t.Fatalf("unsupported Desktop slot admitted: %+v", slot)
+		}
+	}
+	if verifyDesktopCandidateSlots(candidate, phase6security.Profile{}) == nil {
+		t.Fatal("missing Desktop slot admitted")
+	}
+	candidate.WorkloadAccounts = `{"schema":"invalid","accounts":[]}`
+	if verifyDesktopCandidateSlots(candidate, profile) == nil {
+		t.Fatal("invalid Desktop account document admitted")
 	}
 }
 

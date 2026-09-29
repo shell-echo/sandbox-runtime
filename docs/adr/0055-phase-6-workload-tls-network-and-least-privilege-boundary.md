@@ -218,6 +218,29 @@ migration credentials are nonrenewable, while runtime roles, migration jobs,
 executor backends, egress brokers and the credential controller are denied
 direct issuance by default.
 
+The unpublished credential.v2 listener profile now has one exact issuer
+socket binding per approved certificate-controller or material-agent client.
+Each binding fixes only the client deployment, independent private directory,
+socket path, storage ID and Unix edge; server/client UID/GID and principal
+digests come from the existing principal registry. The credential controller
+owns each directory, whose group is that one client's independent GID, with
+mode 0710; its socket is server-UID-owned, mode 0666, without `chown` or a
+shared identity. The server gets a writable mount, and only that client gets
+a read-only mount. An omitted, duplicate, substituted or extra binding,
+reverse edge, cross-client mount, path/UID/GID drift or additional reader is
+invalid before startup. The reverse credential-controller CSR endpoint is a
+different authority and cannot be reused for token issuance. The credential
+controller opens only the certificate-controller bootstrap listener until its
+managed Vault mTLS identity is active; profile completeness does not authorize
+early exposure of the remaining listeners. Credential.v1 remains unchanged.
+
+Both credential.v2 peers verify the restricted directory, socket and Unix
+peer identity before sensitive frames. The server has a finite first-frame
+deadline and closes tracked accepted connections before waiting on shutdown;
+cleanup removes only its original inode. A real separate-UID/GID Linux
+container component gate proves the transport boundary, but the full
+two-controller, non-dev Vault, final-profile process gate remains required.
+
 The certificate controller's own first Vault connection is the sole bounded
 bootstrap exception. An operator-provisioned client private key is inherited
 only through descriptor 5 as a private regular file; it is never present in
@@ -1415,8 +1438,9 @@ it never falls back to v1. The frozen v1 command path remains historical
 Slice 5 compatibility; the complete production profile/admission gate still
 has to reject that v1 configuration as a selection. This is only component
 evidence until the eleven real agents and controller complete their process
-gate. The historical v1 material-agent path and the v2 credential controller's
-Vault clients still provide server TLS only. Network permission alone cannot bridge that mTLS gap. Slice 6
+gate. At this audit checkpoint, the historical v1 material-agent path and the
+v2 credential controller's Vault client provided server TLS only. Network
+permission alone cannot bridge that mTLS gap. Slice 6
 requires managed material-agent client signing. The v2 material-agent command
 now fails closed unless its separate signer, complete service bridge, exact
 Vault endpoint/identity and pinned client/server CA roots are present; the
@@ -1452,6 +1476,24 @@ agents; a cyclic wait or static-key fallback is invalid. Migration Vault
 credentials and job authorization are short-lived and nonrenewable even if a
 TLS certificate is rotated: task completion, revocation or expiry must close
 connections and destroy the corresponding key without reopening authority.
+The subsequently approved credential-controller path is a single additional
+Unix peer edge from the existing credential-controller principal to the
+certificate controller, with exactly two mounts, its own policy, Vault role,
+request-key digest, UID/GID and socket binding. It adds no deployment, Vault
+network privilege or generic certificate-issuance endpoint. The private PKI
+protocol accepts self-delegation only for the existing certificate controller
+and this named credential controller; all other controllers and cross-subject
+delegation remain denied. The private v2
+command now requires the complete verified profile, FD-only short-lived
+P-256 bootstrap client identity and an exact managed CSR key; it initially
+serves only the certificate-controller credential policy. After a managed
+controller socket becomes available under a bounded, cancellable wait and a
+managed certificate and CRL bootstrap complete, it selects the new TLS
+identity, drains every
+pre-switch HTTP response on a non-reusing transport, destroys the bootstrap
+key and only then opens other credential listeners. A failed switch or drain
+fails startup. This is source/component behavior, not a completed real Vault
+bootstrap, live handshakes or acceptance gate.
 The profile and raw-network observer now have a closed, bidirectional
 service-bridge member shape: an external service's declared networks must
 name the same sole-service isolated network that declares it, with one actual
@@ -1528,8 +1570,9 @@ connections or acceptance of Slice 6.
 
 The final source-level Profile candidate now includes the two extra Provider
 migration jobs, their material agents and Vault-client signers, all nine
-PG-purpose signers, 32 one-dialer/one-service bridges and 137 total trust
-edges. It selects `shared_nine_roles` with a single raw HBA digest over nine
+PG-purpose signers, 32 one-dialer/one-service bridges and the exact reviewed
+trust-edge inventory, including the credential issuer sockets. It selects
+`shared_nine_roles` with a single raw HBA digest over nine
 ordered, exact `/32` source/database/login rules and an explicit deny tail.
 `provider_databases_only` remains an intermediate component scope and cannot
 be substituted in that final candidate. This closes a *declared* policy
@@ -1604,3 +1647,61 @@ The PostgreSQL transport must explicitly complete the pgx TLS handshake with
 the connection's cancellation context before tracking or sending its startup
 packet. Component observations and remaining gate gaps are recorded in the
 Slice 6 startup audit; they are not final Vault/topology evidence.
+
+### Credential-controller Vault token-role authority (2026-09-28)
+
+The approved v2 controller uses operator-created, fixed named Vault token
+roles, one actual permission set per exact backend policy. Its role name is
+derived locally from the backend policy by a domain-separated digest; neither
+the requester nor controller JSON can select a Vault token-creation path. The
+controller's limited management token has update on only those named
+`auth/token/create/<role>` paths, read on the same `auth/token/roles/<role>`
+paths for startup preflight, and update on
+`auth/token/lookup-accessor`/`auth/token/revoke-accessor`. It has no generic
+`auth/token/create`, root/sudo, PKI/Transit/KV business path, or caller-selected
+policy authority. The initial Vault root token is revoked after issuing the
+limited orphan management token; it is not a runtime credential.
+
+Each named role must have exactly one `allowed_policies` value, no allowed or
+denied globs or entity aliases, `default` and `root` explicitly disallowed,
+`token_no_default_policy=true`, a fixed non-orphan, nonrenewable service child,
+no period or path suffix, and a 15-minute explicit token TTL ceiling. The v2
+controller reads and validates this exact role configuration before opening
+its first credential listener. It requests only the policy, bounded TTL and
+complete subject/policy/binding/purpose/lease metadata from that role, then
+checks the real issued token and later accessor lookup against the fixed role,
+single policy, metadata, expiry and non-orphan/nonrenewable service
+semantics. Vault intentionally omits the child token ID from accessor lookup;
+the controller does not pretend that lookup can recompare those bytes. V1's
+historical generic token-create path remains v1-only; the v2
+production command has no fallback to it. An operator role change after
+startup is still an external configuration event: the runtime's exact issue
+and lookup checks remain fail-closed for the token it observes, but the
+preflight is not a continuous Vault configuration attestation.
+
+Vault ACLs do not make accessor lookup/revocation ownership-specific. The v2
+controller's protected ledger limits normal application calls to its own
+leases, but compromise of its management token can inspect or revoke other
+accessors permitted by the same Vault security domain. It therefore requires
+a dedicated Vault security management domain without unrelated business
+tenants; this is not a claim of safe sharing with an arbitrary Vault
+namespace. The narrower role-specific create paths do not erase that
+lookup/revoke blast radius. A pinned, real non-dev Vault component test proves
+root revocation, limited role reads, generic-create and cross-role-policy
+denial, business-read denial, fixed-role issue/verify/revoke and container
+cleanup. It also observes that the same management token can look up and
+revoke an unrelated orphan token's accessor despite lacking its business
+policy, making the dedicated-domain requirement empirical rather than an ACL
+assumption. Its loopback publication and test CA do not prove the final isolated
+service bridge or two-controller startup chain.
+
+Both controller Vault clients use the same non-reusing HTTP bootstrap
+transport. A managed certificate is selected before the transport's switch
+barrier; every request that might have selected a bootstrap leaf is counted
+until its response body reaches EOF or closes. Destruction of either static
+bootstrap key waits for that count to reach zero under a startup deadline.
+The certificate controller also waits for its managed-agent loop to drain
+before revoking the managed leaf and closes its leased PKI token on early
+startup failures. The real Vault mTLS component test exercises this transport
+switch and managed-certificate revocation, but does not establish the actual
+two-controller process order or final network confinement.

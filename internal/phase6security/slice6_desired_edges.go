@@ -68,7 +68,7 @@ type slice6EdgeSpec struct {
 }
 
 func slice6DesiredTrustEdges() []slice6EdgeSpec {
-	result := make([]slice6EdgeSpec, 0, 117)
+	result := make([]slice6EdgeSpec, 0, 118+len(approvedCredentialIssuerClients))
 	for _, edge := range slice6DesiredLocalEdges {
 		result = append(result, slice6EdgeSpec{id: edge.id, from: edge.from, to: edge.to,
 			protocol: edge.protocol, port: edge.port, route: edge.route, authentication: "mtls", scope: edge.scope,
@@ -93,11 +93,15 @@ func slice6DesiredTrustEdges() []slice6EdgeSpec {
 	}
 	unix("browser-executor-provider-mux", "browser-executor-backend", "provider-browser-runtime", 10)
 	unix("certificate-controller-self", "certificate-controller", "certificate-controller", 5)
+	unix("certificate-credential-controller", "workload-credential-controller", "certificate-controller", 5)
+	for _, client := range approvedCredentialIssuerClients {
+		unix(credentialIssuerBinding(client).UnixEdgeID, client, "workload-credential-controller", 5)
+	}
 	sort.Slice(result, func(i, j int) bool { return result[i].id < result[j].id })
 	return result
 }
 
-// VerifySlice6DesiredTrustEdges freezes the current 117-edge local-gate graph,
+// VerifySlice6DesiredTrustEdges freezes the current exact local-gate graph,
 // including external destinations and Unix peers. A rewritten profile digest
 // cannot authorize a new edge, downgrade its authentication or extend its
 // lifetime. Live transport and endpoint proof remains a separate gate.

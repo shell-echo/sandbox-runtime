@@ -545,7 +545,8 @@ func equalStrings(left, right []string) bool {
 
 func validPrincipalDelegation(requester, subject securityprincipal.Principal) bool {
 	if requester.Digest() == subject.Digest() {
-		return requester.Kind == securityprincipal.KindController && requester.Name == "certificate_controller"
+		return requester.Kind == securityprincipal.KindController &&
+			(requester.Name == "certificate_controller" || requester.Name == "credential_controller")
 	}
 	if requester.Kind != securityprincipal.KindTLSAgent || requester.Role != subject.Role {
 		return false

@@ -1,0 +1,15 @@
+The adjacent Moby seccomp JSON and Apache-2.0 license are unchanged upstream
+bytes from moby/profiles commit 836ae4d37ef2ec995c77c99fc55f5b5f3af3a897
+(the commit selected by seccomp/v0.2.3):
+
+https://github.com/moby/profiles/blob/836ae4d37ef2ec995c77c99fc55f5b5f3af3a897/seccomp/default.json
+https://github.com/moby/profiles/blob/836ae4d37ef2ec995c77c99fc55f5b5f3af3a897/LICENSE
+
+Original JSON SHA-256: 536529b665dd0972c37bfb569f5d4ac8a53592e7b00752bc39ff063ca9864c74
+License SHA-256: cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30
+
+This retained source is an audit and derivation baseline only. It is not a
+Phase 6 duty-specific applied policy, an approval of every upstream syscall,
+or proof that the running Docker Engine uses identical built-in bytes. A
+selected applied policy must have its own exact digest, reviewed difference,
+native load/probe evidence and matching resource measurement.

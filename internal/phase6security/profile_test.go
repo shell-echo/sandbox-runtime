@@ -287,6 +287,8 @@ func validProfile() Profile {
 		if name == "certificate-controller" {
 			principal.Mounts = append(principal.Mounts, Mount{Target: "/run/certificate-controller/self", Kind: "private_socket",
 				StorageID: "certificate-controller-self-socket"})
+			principal.Mounts = append(principal.Mounts, Mount{Target: "/run/certificate-controller/workload-credential-controller",
+				Kind: "private_socket", StorageID: "certificate-credential-controller-socket"})
 			for agent := range tlsSubjects {
 				principal.Mounts = append(principal.Mounts, Mount{Target: "/run/certificate-controller/" + agent,
 					Kind: "private_socket", StorageID: agent + "-controller-socket"})
@@ -294,6 +296,22 @@ func validProfile() Profile {
 			for agent := range postgresAgents {
 				principal.Mounts = append(principal.Mounts, Mount{Target: "/run/certificate-controller/" + agent,
 					Kind: "private_socket", StorageID: agent + "-controller-socket"})
+			}
+		}
+		if name == "workload-credential-controller" {
+			principal.Mounts = append(principal.Mounts, Mount{Target: "/run/certificate-controller/workload-credential-controller",
+				Kind: "private_socket", ReadOnly: true, StorageID: "certificate-credential-controller-socket"})
+			for _, client := range approvedCredentialIssuerClients {
+				binding := credentialIssuerBinding(client)
+				principal.Mounts = append(principal.Mounts, Mount{Target: binding.SocketDirectory,
+					Kind: "private_socket", StorageID: binding.SocketStorageID})
+			}
+		}
+		for _, client := range approvedCredentialIssuerClients {
+			if name == client {
+				binding := credentialIssuerBinding(client)
+				principal.Mounts = append(principal.Mounts, Mount{Target: binding.SocketDirectory,
+					Kind: "private_socket", ReadOnly: true, StorageID: binding.SocketStorageID})
 			}
 		}
 		if identity, ok := identities[name]; ok {
@@ -654,6 +672,22 @@ func validProfile() Profile {
 		Protocol: "unix", Authentication: "unix_peer_credentials", FromURI: uri("certificate-controller"),
 		ToURI: uri("certificate-controller"), FromPrincipalDigest: controllerRecord.PrincipalDigest,
 		ToPrincipalDigest: controllerRecord.PrincipalDigest, TenantScope: "system", MaxConnectionSeconds: 5})
+	credentialRecord := principalByName["workload-credential-controller"]
+	credentialSockets, credentialSocketsErr := BuildCredentialIssuerSocketBindings(principals)
+	if credentialSocketsErr != nil {
+		panic(credentialSocketsErr)
+	}
+	for _, binding := range credentialSockets {
+		clientRecord := principalByName[binding.ClientDeployment]
+		edges = append(edges, TrustEdge{ID: binding.UnixEdgeID, From: clientRecord.Name, To: credentialRecord.Name,
+			Protocol: "unix", Authentication: "unix_peer_credentials", FromURI: uri(clientRecord.Name),
+			ToURI: uri(credentialRecord.Name), FromPrincipalDigest: clientRecord.PrincipalDigest,
+			ToPrincipalDigest: credentialRecord.PrincipalDigest, TenantScope: "system", MaxConnectionSeconds: 5})
+	}
+	edges = append(edges, TrustEdge{ID: "certificate-credential-controller", From: credentialRecord.Name, To: controllerRecord.Name,
+		Protocol: "unix", Authentication: "unix_peer_credentials", FromURI: uri(credentialRecord.Name),
+		ToURI: uri(controllerRecord.Name), FromPrincipalDigest: credentialRecord.PrincipalDigest,
+		ToPrincipalDigest: controllerRecord.PrincipalDigest, TenantScope: "system", MaxConnectionSeconds: 5})
 	tlsBindings := make([]TLSAgentBinding, 0, len(tlsSubjects))
 	for agent, subject := range tlsSubjects {
 		agentRecord, subjectRecord := principalByName[agent], principalByName[subject]
@@ -798,8 +832,9 @@ func validProfile() Profile {
 			{ID: "product-public", DeploymentName: "product-runtime", PrincipalDigest: principalByName["product-runtime"].PrincipalDigest,
 				ListenerName: "api", Port: 8444, IssuerAnchorID: "internal-server-ca", ClientAuthentication: "none"},
 		},
-		TLSAgentBindings:     tlsBindings,
-		PostgresClientAgents: postgresBindings,
+		TLSAgentBindings:        tlsBindings,
+		CredentialIssuerSockets: credentialSockets,
+		PostgresClientAgents:    postgresBindings,
 		CertificateController: CertificateControllerAuthority{DeploymentName: "certificate-controller",
 			PrincipalDigest: controllerRecord.PrincipalDigest, UID: controllerRecord.UID, GID: controllerRecord.GID,
 			ResponseKeyID: "certificate-controller-response", ResponsePublicKeyDigest: testDigest("certificate-controller-response-key"),
@@ -808,7 +843,14 @@ func validProfile() Profile {
 			BootstrapClientAnchorID: "vault-client-ca",
 			SelfSocketDirectory:     "/run/certificate-controller/self", SelfSocketStorageID: "certificate-controller-self-socket",
 			SelfSocketPath: "/run/certificate-controller/self/managed.sock", SelfDirectoryMode: 0o700,
-			SelfSocketMode: 0o600, SelfUnixEdgeID: "certificate-controller-self"},
+			SelfSocketMode: 0o600, SelfUnixEdgeID: "certificate-controller-self",
+			CredentialController: CredentialControllerManagedAuthority{PolicyID: "issuer-credential-controller-managed",
+				VaultRole: "vault-credential-controller", RequestKeyID: "request-credential-controller-managed",
+				RequestKeyDigest: testDigest("request-public-key/workload-credential-controller"),
+				SocketDirectory:  "/run/certificate-controller/workload-credential-controller",
+				SocketStorageID:  "certificate-credential-controller-socket",
+				SocketPath:       "/run/certificate-controller/workload-credential-controller/request.sock",
+				DirectoryMode:    0o710, SocketMode: 0o666, UnixEdgeID: "certificate-credential-controller"}},
 		EgressPolicies: []EgressPolicy{{ID: "browser-action-ingress-egress", Revision: "policy-1", Principal: "browser-action-ingress-runtime", Broker: "egress-broker-browser-action-ingress",
 			PrincipalDigest: identities["browser-action-ingress-runtime"].Digest(), BrokerDigest: identities["egress-broker-browser-action-ingress"].Digest(),
 			Authority: PolicyAuthority{DeploymentName: "egress-policy-authority-browser-action-ingress", AuthorizationName: "browser_action_ingress_policy_authority",
@@ -866,6 +908,47 @@ func validProfile() Profile {
 	profile.PostgresServerAuth.HBADigest = "sha256:" + hex.EncodeToString(hbaHash[:])
 	profile.ProfileDigest = profile.Digest()
 	return profile
+}
+
+func TestCredentialControllerManagedAuthorityIsExactAndSeparate(t *testing.T) {
+	for name, mutate := range map[string]func(*Profile){
+		"missing policy": func(p *Profile) { p.CertificateController.CredentialController.PolicyID = "" },
+		"shared self policy": func(p *Profile) {
+			p.CertificateController.CredentialController.PolicyID = p.CertificateController.ManagedPolicyID
+		},
+		"shared self key": func(p *Profile) {
+			p.CertificateController.CredentialController.RequestKeyDigest = p.CertificateController.ManagedRequestKeyDigest
+		},
+		"shared agent role": func(p *Profile) {
+			p.CertificateController.CredentialController.VaultRole = p.TLSAgentBindings[0].IssuerVaultRole
+		},
+		"socket path drift": func(p *Profile) {
+			p.CertificateController.CredentialController.SocketPath += "-other"
+		},
+		"edge alias": func(p *Profile) {
+			p.CertificateController.CredentialController.UnixEdgeID = p.CertificateController.SelfUnixEdgeID
+		},
+		"client mount writable": func(p *Profile) {
+			for i := range p.Principals {
+				if p.Principals[i].Name == "workload-credential-controller" {
+					for j := range p.Principals[i].Mounts {
+						if p.Principals[i].Mounts[j].StorageID == p.CertificateController.CredentialController.SocketStorageID {
+							p.Principals[i].Mounts[j].ReadOnly = false
+						}
+					}
+				}
+			}
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			profile := validProfile()
+			mutate(&profile)
+			profile.ProfileDigest = profile.Digest()
+			if profile.Validate() == nil {
+				t.Fatal("credential controller managed authority drift admitted")
+			}
+		})
+	}
 }
 
 func testDigest(value string) string {

@@ -1,0 +1,13 @@
+The adjacent JSON is the unchanged Microsoft Playwright
+utils/docker/seccomp_profile.json from commit
+ae935a43d9e376e4759548f6b3c6905c7b282333:
+https://github.com/microsoft/playwright/blob/ae935a43d9e376e4759548f6b3c6905c7b282333/utils/docker/seccomp_profile.json
+
+SHA-256: cc3e61cabda6bbc1e53e54d27ba4d55a9d3be829b6dd1a596f4a7b31b1cc7849
+License: Apache License, Version 2.0; the retained license is
+profiles/browser/image/LICENSE.chromium-seccomp.
+
+This file preserves the source bytes for review of the separately derived
+profiles/browser/image/chromium-seccomp.json. It is not an approved Phase 6
+duty policy, a resource-tier decision, or evidence that Docker applied a
+policy to any running container.

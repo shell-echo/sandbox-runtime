@@ -30,6 +30,7 @@ import (
 	"github.com/shell-echo/sandbox-runtime/internal/desktopmedia"
 	"github.com/shell-echo/sandbox-runtime/internal/executorprotocol"
 	"github.com/shell-echo/sandbox-runtime/internal/handoff"
+	"github.com/shell-echo/sandbox-runtime/internal/phase6capacity"
 )
 
 const desktopImageIntegrationEnv = "SANDBOX_RUNTIME_DESKTOP_IMAGE_INTEGRATION"
@@ -144,6 +145,7 @@ func TestDesktopImageNativeIntegration(t *testing.T) {
 		t.Fatalf("unsafe Desktop process tree:\n%s", processes)
 	}
 	runV2Session(t, ctx, containerName, bridgePrivate)
+	logDesktopCgroupV2Sample(t, ctx, containerName)
 	inspectContainerPolicy(t, ctx, containerName)
 
 	run(t, ctx, "docker", "run", "-d", "--name", highUIDContainer,
@@ -164,6 +166,27 @@ func TestDesktopImageNativeIntegration(t *testing.T) {
 		t.Fatalf("high-UID broker socket identity = %q", identity)
 	}
 	runV2Session(t, ctx, highUIDContainer, bridgePrivate)
+	logDesktopCgroupV2Sample(t, ctx, highUIDContainer)
+}
+
+// This raw component sample includes the docker-exec probe's own overhead.
+// A release-tier memory/CPU/PID limit needs repeated representative runs,
+// headroom and the complete same-run topology; this log is not that evidence.
+func logDesktopCgroupV2Sample(t *testing.T, ctx context.Context, containerName string) {
+	t.Helper()
+	var raw [4][]byte
+	for index, file := range []string{"memory.peak", "pids.peak", "cpu.stat", "memory.events"} {
+		output := run(t, ctx, "docker", "exec", containerName, "/bin/sh", "-c", "cat /sys/fs/cgroup/"+file)
+		if len(output) == 0 || len(output) > 4096 {
+			t.Fatalf("Desktop cgroup v2 %s sample is unavailable", file)
+		}
+		raw[index] = []byte(output)
+		t.Logf("Desktop cgroup v2 %s %s:\n%s", containerName, file, output)
+	}
+	sample, err := phase6capacity.ParseCgroupV2Sample(raw[0], raw[1], raw[2], raw[3])
+	if err != nil || sample.MemoryOOMEvents != 0 || sample.MemoryOOMKillEvents != 0 {
+		t.Fatalf("Desktop cgroup v2 sample is unsafe: %+v, %v", sample, err)
+	}
 }
 
 func runV2Session(t *testing.T, ctx context.Context, containerName string, privateKey ed25519.PrivateKey) {

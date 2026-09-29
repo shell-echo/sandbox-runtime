@@ -140,7 +140,7 @@ func main() {
 	}
 }
 
-func run() error { //nolint:gocyclo
+func run() (runErr error) { //nolint:gocyclo
 	document, err := io.ReadAll(io.LimitReader(os.Stdin, maxConfigBytes+1))
 	if err != nil || len(document) < 1 || len(document) > maxConfigBytes {
 		return workloadpki.ErrUnavailable
@@ -243,7 +243,8 @@ func run() error { //nolint:gocyclo
 		return stageError("credential-policy")
 	}
 	credentialClient, err := workloadcredentialv2.NewProductionClient(workloadcredentialv2.ClientConfig{SocketPath: config.Credential.SocketPath,
-		ExpectedUID: config.Credential.ExpectedUID, ExpectedGID: config.Credential.ExpectedGID, Policy: credentialPolicy,
+		ExpectedUID: config.Credential.ExpectedUID, ExpectedGID: config.Credential.ExpectedGID,
+		DirectoryGID: config.Credential.ControllerGID, Policy: credentialPolicy,
 		PrivateKey: ed25519.PrivateKey(credentialPrivate), OperationTimeout: time.Duration(config.OperationTimeoutSeconds) * time.Second, Now: time.Now})
 	if err != nil {
 		return stageError("credential-client")
@@ -254,6 +255,13 @@ func run() error { //nolint:gocyclo
 	if err != nil {
 		return stageError("credential-token-source")
 	}
+	defer func() {
+		cleanupContext, cleanupCancel := context.WithTimeout(context.Background(), time.Duration(config.OperationTimeoutSeconds)*time.Second)
+		if closeErr := tokenSource.Close(cleanupContext); closeErr != nil {
+			runErr = errors.Join(runErr, stageError("credential-revoke"))
+		}
+		cleanupCancel()
+	}()
 
 	if !vaultTrustEdgeMatches(profile, config.VaultEndpoint, config.VaultServerName) {
 		return stageError("vault-edge")
@@ -345,8 +353,9 @@ func run() error { //nolint:gocyclo
 		}
 		return &vaultPair, nil
 	}
-	transport := &http.Transport{TLSClientConfig: tlsConfig}
-	httpClient := &http.Client{Transport: transport}
+	transport := &http.Transport{TLSClientConfig: tlsConfig, DisableKeepAlives: true, ForceAttemptHTTP2: false}
+	tracked := workloadtlsagent.NewBootstrapTrackingTransport(transport)
+	httpClient := &http.Client{Transport: tracked}
 	client, err := workloadpki.NewVaultClient(workloadpki.VaultConfig{Endpoint: config.VaultEndpoint, Mount: config.VaultMount,
 		AllowedPolicies: vaultPolicies, OperationTimeout: time.Duration(config.OperationTimeoutSeconds) * time.Second, Now: time.Now,
 		RequireImmediateCompleteCRL: peerSources != nil, PeerIssuerSources: vaultPeerSources}, httpClient, tokenSource)
@@ -453,11 +462,30 @@ func run() error { //nolint:gocyclo
 		return stageError("managed-vault-tls-bootstrap")
 	}
 	managedCertificateAgent.Store(managedManager)
+	tracked.Switch()
 	transport.CloseIdleConnections()
+	drainContext, drainCancel := context.WithTimeout(signalContext, time.Duration(config.OperationTimeoutSeconds)*time.Second)
+	drainErr := tracked.WaitBootstrapDrain(drainContext)
+	drainCancel()
+	if drainErr != nil {
+		cleanupContext, cleanupCancel := context.WithTimeout(context.Background(), time.Duration(config.OperationTimeoutSeconds)*time.Second)
+		_ = managedManager.Close(cleanupContext)
+		cleanupCancel()
+		stopServers()
+		for _, server := range servers {
+			_ = server.Close()
+		}
+		wait.Wait()
+		return stageError("bootstrap-drain")
+	}
 	workloadtlsagent.DestroyTLSCertificate(&vaultPair)
 	managerContext, stopManager := context.WithCancel(context.Background())
 	defer stopManager()
-	go func() { errChannel <- managedManager.Run(managerContext) }()
+	managerDone := make(chan struct{})
+	go func() {
+		defer close(managerDone)
+		errChannel <- managedManager.Run(managerContext)
+	}()
 	var firstErr error
 	normalShutdown := false
 	select {
@@ -466,6 +494,12 @@ func run() error { //nolint:gocyclo
 	case firstErr = <-errChannel:
 	}
 	stopManager()
+	managerDrained := false
+	select {
+	case <-managerDone:
+		managerDrained = true
+	case <-time.After(time.Duration(config.OperationTimeoutSeconds) * time.Second):
+	}
 	cleanupContext, cleanupCancel := context.WithTimeout(context.Background(), time.Duration(config.OperationTimeoutSeconds)*time.Second)
 	if closeErr := managedManager.Close(cleanupContext); closeErr != nil && firstErr == nil {
 		firstErr = closeErr
@@ -483,6 +517,9 @@ func run() error { //nolint:gocyclo
 	if closeErr := tokenSource.Close(cleanupContext); closeErr != nil {
 		return stageError("credential-revoke")
 	}
+	if !managerDrained {
+		return stageError("managed-run-drain")
+	}
 	if normalShutdown && firstErr == nil || errors.Is(firstErr, context.Canceled) {
 		return nil
 	}
@@ -492,6 +529,12 @@ func run() error { //nolint:gocyclo
 func validateControllerProfileConfig(profile phase6security.Profile, config configDocument,
 	responsePublic, managedRequestPublic ed25519.PublicKey) bool {
 	authority := profile.CertificateController
+	issuerSocketBinding, credentialServer, credentialClient, credentialErr := profile.CredentialIssuerSocketForClient("certificate-controller")
+	if credentialErr != nil || config.Credential.SocketPath != issuerSocketBinding.SocketPath ||
+		config.Credential.ExpectedUID != credentialServer.UID || config.Credential.ExpectedGID != credentialServer.GID ||
+		config.Credential.ControllerUID != credentialClient.UID || config.Credential.ControllerGID != credentialClient.GID {
+		return false
+	}
 	var controller phase6security.Principal
 	for _, principal := range profile.Principals {
 		if principal.Name == authority.DeploymentName {
@@ -511,8 +554,8 @@ func validateControllerProfileConfig(profile phase6security.Profile, config conf
 		int64(config.ManagedVaultTLS.RotateAfterSeconds) != controller.TLS.RotateAfterSeconds ||
 		int64(config.ManagedVaultTLS.OverlapSeconds) != controller.TLS.OverlapSeconds ||
 		int64(config.ManagedVaultTLS.RevocationMaxStalenessSeconds) != controller.TLS.RevocationMaxStalenessSeconds ||
-		len(config.Policies) != len(profile.TLSAgentBindings)+len(profile.PostgresClientAgents)+1 ||
-		len(config.Listeners) != len(profile.TLSAgentBindings)+len(profile.PostgresClientAgents)+1 {
+		len(config.Policies) != len(profile.TLSAgentBindings)+len(profile.PostgresClientAgents)+2 ||
+		len(config.Listeners) != len(profile.TLSAgentBindings)+len(profile.PostgresClientAgents)+2 {
 		return false
 	}
 	expectedPolicies := make(map[string]certificatePolicy, len(config.Policies))
@@ -530,6 +573,23 @@ func validateControllerProfileConfig(profile phase6security.Profile, config conf
 		!matchesControllerPolicy(managed, *controller.AuthorizationPrincipal, *controller.AuthorizationPrincipal,
 			*controller.TLS, authority.ManagedRequestKeyID, authority.ManagedRequestKeyDigest, authority.ManagedVaultRole,
 			authority.UID, authority.GID) {
+		return false
+	}
+	var credentialController phase6security.Principal
+	for _, principal := range profile.Principals {
+		if principal.Name == "workload-credential-controller" {
+			credentialController = principal
+			break
+		}
+	}
+	credentialBinding := authority.CredentialController
+	credentialPolicy := expectedPolicies[credentialBinding.PolicyID]
+	if credentialController.AuthorizationPrincipal == nil || credentialController.TLS == nil ||
+		credentialPolicy.Purpose != "" || credentialPolicy.Postgres != nil ||
+		!matchesControllerPolicy(credentialPolicy, *credentialController.AuthorizationPrincipal,
+			*credentialController.AuthorizationPrincipal, *credentialController.TLS,
+			credentialBinding.RequestKeyID, credentialBinding.RequestKeyDigest, credentialBinding.VaultRole,
+			credentialController.UID, credentialController.GID) {
 		return false
 	}
 	for _, binding := range profile.TLSAgentBindings {
@@ -594,6 +654,13 @@ func validateControllerProfileConfig(profile phase6security.Profile, config conf
 		self.ExpectedClientUID != authority.UID || self.ExpectedClientGID != authority.GID {
 		return false
 	}
+	credentialListener, hasCredential := expectedListeners[credentialBinding.SocketPath]
+	if !hasCredential || credentialListener.SocketUID != authority.UID ||
+		credentialListener.SocketGID != credentialController.GID ||
+		credentialListener.ExpectedClientUID != credentialController.UID ||
+		credentialListener.ExpectedClientGID != credentialController.GID {
+		return false
+	}
 	for _, binding := range profile.TLSAgentBindings {
 		listener, found := expectedListeners[binding.ControllerSocketPath]
 		if !found || listener.SocketUID != authority.UID || listener.SocketGID != binding.AgentGID ||
@@ -624,7 +691,7 @@ func vaultTrustEdgeMatches(profile phase6security.Profile, endpoint, serverName 
 	parsed, err := url.Parse(endpoint)
 	if err != nil || parsed.Scheme != "https" || parsed.User != nil || parsed.Hostname() != serverName ||
 		parsed.RawQuery != "" || parsed.ForceQuery || parsed.RawPath != "" || parsed.Fragment != "" ||
-		(parsed.Path != "" && parsed.Path != "/") {
+		(parsed.Path != "" && parsed.Path != "/") || parsed.String() != endpoint {
 		return false
 	}
 	for _, edge := range profile.TrustEdges {

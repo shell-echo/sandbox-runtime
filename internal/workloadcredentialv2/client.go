@@ -10,12 +10,15 @@ import (
 	"net"
 	"os"
 	"time"
+
+	"github.com/shell-echo/sandbox-runtime/internal/restrictedunix"
 )
 
 type ClientConfig struct {
 	SocketPath       string
 	ExpectedUID      uint32
 	ExpectedGID      uint32
+	DirectoryGID     uint32
 	Policy           Policy
 	PrivateKey       ed25519.PrivateKey
 	OperationTimeout time.Duration
@@ -42,7 +45,10 @@ func (l *Lease) Destroy() {
 }
 
 func NewClient(config ClientConfig) (*Client, error) {
-	if validateSocket(config.SocketPath, config.ExpectedUID, config.ExpectedGID) != nil || config.Policy.Validate() != nil ||
+	if !validClientSocket(config) || config.Policy.Validate() != nil ||
+		config.Policy.ExpectedUID != uint32(os.Getuid()) || config.Policy.ExpectedGID != uint32(os.Getgid()) ||
+		config.DirectoryGID != uint32(os.Getgid()) || config.ExpectedUID == uint32(os.Getuid()) ||
+		config.ExpectedGID == uint32(os.Getgid()) ||
 		len(config.PrivateKey) != ed25519.PrivateKeySize || !config.PrivateKey.Public().(ed25519.PublicKey).Equal(config.Policy.PublicKey) ||
 		config.OperationTimeout < time.Second || config.OperationTimeout > time.Minute || config.Now == nil || config.Now().IsZero() || config.Random == nil {
 		return nil, ErrUnavailable
@@ -111,7 +117,11 @@ func (c *Client) execute(ctx context.Context, operation string, lease Lease, ttl
 		return Lease{}, err
 	}
 	defer clear(document)
-	if validateSocket(c.config.SocketPath, c.config.ExpectedUID, c.config.ExpectedGID) != nil {
+	if !validClientSocket(c.config) {
+		return Lease{}, ErrUnavailable
+	}
+	preDialSocket, err := os.Lstat(c.config.SocketPath)
+	if err != nil {
 		return Lease{}, ErrUnavailable
 	}
 	connectionValue, err := (&net.Dialer{}).DialContext(operationContext, "unix", c.config.SocketPath)
@@ -124,6 +134,8 @@ func (c *Client) execute(ctx context.Context, operation string, lease Lease, ttl
 		return Lease{}, ErrUnavailable
 	}
 	defer connection.Close()
+	stopCancel := context.AfterFunc(operationContext, func() { _ = connection.Close() })
+	defer stopCancel()
 	if connection.SetDeadline(deadline) != nil {
 		return Lease{}, ErrUnavailable
 	}
@@ -131,12 +143,16 @@ func (c *Client) execute(ctx context.Context, operation string, lease Lease, ttl
 	if err != nil || identity.uid != c.config.ExpectedUID || identity.gid != c.config.ExpectedGID {
 		return Lease{}, ErrUnavailable
 	}
-	if writeFrame(connection, document, MaxRequestBytes) != nil {
+	postDialSocket, err := os.Lstat(c.config.SocketPath)
+	if err != nil || !os.SameFile(preDialSocket, postDialSocket) || !validClientSocket(c.config) {
 		return Lease{}, ErrUnavailable
+	}
+	if writeFrame(connection, document, MaxRequestBytes) != nil {
+		return Lease{}, clientErrorWithContext(operationContext, ErrUnavailable)
 	}
 	responseDocument, err := readFrame(connection, MaxResponseBytes)
 	if err != nil {
-		return Lease{}, clientError(err)
+		return Lease{}, clientErrorWithContext(operationContext, err)
 	}
 	defer clear(responseDocument)
 	response, err := DecodeResponse(responseDocument, request, c.config.Now().UTC())
@@ -156,6 +172,12 @@ func (c *Client) execute(ctx context.Context, operation string, lease Lease, ttl
 		Renewable: response.Renewable, Credential: append([]byte(nil), response.Credential...)}, nil
 }
 
+func validClientSocket(config ClientConfig) bool {
+	return restrictedunix.ValidateSocket(config.SocketPath, restrictedunix.Layout{
+		DirectoryMode: 0o710, SocketMode: 0o666, OwnerUID: config.ExpectedUID, DirectoryGID: config.DirectoryGID,
+	})
+}
+
 func clientError(err error) error {
 	if errors.Is(err, context.Canceled) {
 		return context.Canceled
@@ -164,4 +186,11 @@ func clientError(err error) error {
 		return context.DeadlineExceeded
 	}
 	return ErrUnavailable
+}
+
+func clientErrorWithContext(ctx context.Context, err error) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	return clientError(err)
 }

@@ -83,8 +83,7 @@ func (s ImageSupply) bindPrincipalImages(principals []phase6security.Principal) 
 		default:
 			image = s.LocalRoleTargets[target]
 		}
-		if image.Platform != s.Platform || image.Digest == "" || image.Reference == "" ||
-			image.ConfigDigest == "" || image.Kind == "" || image.Location == "" {
+		if !validImageBinding(target, s.Platform, image) {
 			return nil, ErrInvalidImageSupply
 		}
 		principal.ImageReference = image.Reference
@@ -96,6 +95,31 @@ func (s ImageSupply) bindPrincipalImages(principals []phase6security.Principal) 
 		principal.ImageConfigDigest = image.ConfigDigest
 	}
 	return bound, nil
+}
+
+func validImageBinding(target, platform string, image ImageBinding) bool {
+	if image.Platform != platform || !validImageDigest(image.Digest) || !validImageDigest(image.ConfigDigest) {
+		return false
+	}
+	if image.Kind == phase6security.ImageIdentityOCIIndex {
+		if !validImageDigest(image.SelectedManifestDigest) {
+			return false
+		}
+	} else if image.Kind != phase6security.ImageIdentityOCIManifest || image.SelectedManifestDigest != "" {
+		return false
+	}
+	if target == phase6security.Slice6BrowserPublishedImage {
+		publication := browserimage.LockedPublication()
+		selected, err := publication.SelectedManifest(platform)
+		return err == nil && image.Location == "registry" && image.Kind == phase6security.ImageIdentityOCIIndex &&
+			image.Reference == publication.Image() && image.Digest == publication.Digest &&
+			image.SelectedManifestDigest == selected
+	}
+	return image.Location == "local" && image.Reference == image.Digest
+}
+
+func validImageDigest(value string) bool {
+	return len(value) == len("sha256:")+64 && strings.HasPrefix(value, "sha256:") && lowerHex(strings.TrimPrefix(value, "sha256:"))
 }
 
 // LoadImageSupply is intentionally independent of a Profile, so the gate can

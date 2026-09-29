@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
+	browserimage "github.com/shell-echo/sandbox-runtime/profiles/browser/image"
 )
 
 func TestBindPrincipalImagesUsesExactReviewedDeploymentAndTargetInventory(t *testing.T) {
@@ -17,7 +18,10 @@ func TestBindPrincipalImagesUsesExactReviewedDeploymentAndTargetInventory(t *tes
 			Kind: phase6security.ImageIdentityOCIManifest, Platform: platform, ConfigDigest: digest}
 	}
 	supply := ImageSupply{Platform: platform, LocalRoleTargets: make(map[string]ImageBinding),
-		Desktop: image("b"), Browser: image("c")}
+		Desktop: image("b"), Browser: ImageBinding{Reference: browserimage.LockedPublication().Image(),
+			Digest: browserimage.PublishedDigest, Location: "registry", Kind: phase6security.ImageIdentityOCIIndex,
+			Platform: platform, SelectedManifestDigest: browserimage.PublishedARM64Manifest,
+			ConfigDigest: "sha256:" + strings.Repeat("c", 64)}}
 	for _, target := range phase6security.Slice6DesiredLocalRoleTargets() {
 		supply.LocalRoleTargets[target] = image("a")
 	}
@@ -54,6 +58,21 @@ func TestBindPrincipalImagesUsesExactReviewedDeploymentAndTargetInventory(t *tes
 	delete(supply.LocalRoleTargets, phase6security.Slice6DesiredLocalRoleTargets()[0])
 	if _, err := supply.bindPrincipalImages(principals); !errors.Is(err, ErrInvalidImageSupply) {
 		t.Fatal("missing local target admitted")
+	}
+	supply.LocalRoleTargets[phase6security.Slice6DesiredLocalRoleTargets()[0]] = image("a")
+	supply.Browser.Location = "local"
+	if _, err := supply.bindPrincipalImages(principals); !errors.Is(err, ErrInvalidImageSupply) {
+		t.Fatal("published Browser was relabeled as a local image")
+	}
+	supply.Browser.Location = "registry"
+	supply.Browser.SelectedManifestDigest = "sha256:" + strings.Repeat("d", 64)
+	if _, err := supply.bindPrincipalImages(principals); !errors.Is(err, ErrInvalidImageSupply) {
+		t.Fatal("wrong platform-selected Browser manifest admitted")
+	}
+	supply.Browser.SelectedManifestDigest = browserimage.PublishedARM64Manifest
+	supply.Desktop.Reference = "mutable:latest"
+	if _, err := supply.bindPrincipalImages(principals); !errors.Is(err, ErrInvalidImageSupply) {
+		t.Fatal("mutable Desktop image reference admitted")
 	}
 }
 

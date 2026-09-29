@@ -3,6 +3,8 @@ package workloadcredential
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -21,22 +23,24 @@ const (
 )
 
 type VaultIssuerConfig struct {
-	Endpoint         string
-	BackendID        string
-	Policies         map[string]string
-	ManagementToken  []byte
-	OperationTimeout time.Duration
-	Now              func() time.Time
+	Endpoint                string
+	BackendID               string
+	Policies                map[string]string
+	ManagementToken         []byte
+	OperationTimeout        time.Duration
+	Now                     func() time.Time
+	RequireScopedTokenRoles bool
 }
 
 type VaultIssuer struct {
-	endpoint        string
-	backendID       string
-	policies        map[string]string
-	managementToken []byte
-	client          *http.Client
-	timeout         time.Duration
-	now             func() time.Time
+	endpoint         string
+	backendID        string
+	policies         map[string]string
+	managementToken  []byte
+	client           *http.Client
+	timeout          time.Duration
+	now              func() time.Time
+	scopedTokenRoles bool
 }
 
 func NewVaultIssuer(config VaultIssuerConfig, client *http.Client) (*VaultIssuer, error) {
@@ -60,13 +64,105 @@ func NewVaultIssuer(config VaultIssuerConfig, client *http.Client) (*VaultIssuer
 	clientCopy.Timeout = 0
 	clientCopy.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	return &VaultIssuer{endpoint: strings.TrimSuffix(config.Endpoint, "/"), backendID: config.BackendID, policies: policies,
-		managementToken: append([]byte(nil), config.ManagementToken...), client: &clientCopy, timeout: config.OperationTimeout, now: config.Now}, nil
+		managementToken: append([]byte(nil), config.ManagementToken...), client: &clientCopy, timeout: config.OperationTimeout,
+		now: config.Now, scopedTokenRoles: config.RequireScopedTokenRoles}, nil
+}
+
+// Phase6TokenRole derives one fixed Vault role for one exact backend policy.
+// Neither a workload request nor the controller JSON can select an API path.
+func Phase6TokenRole(backendPolicy string) string {
+	if !identifierPattern.MatchString(backendPolicy) {
+		return ""
+	}
+	digest := sha256.Sum256([]byte("sandbox-runtime/phase6-vault-token-role/v1\x00" + backendPolicy))
+	return "phase6-credential-" + hex.EncodeToString(digest[:20])
+}
+
+func equalVaultMetadata(actual, expected map[string]string) bool {
+	if len(actual) != len(expected) {
+		return false
+	}
+	for key, value := range expected {
+		if actual[key] != value {
+			return false
+		}
+	}
+	return true
+}
+
+func isNullVaultJSON(value json.RawMessage) bool {
+	return len(value) == 0 || bytes.Equal(value, []byte("null"))
 }
 
 func (v *VaultIssuer) Close() {
 	if v != nil {
 		clear(v.managementToken)
 	}
+}
+
+// ValidateScopedRoles fails closed unless Vault exposes the exact operator-
+// configured role restriction for every policy used by this v2 controller.
+// The management token needs read access only to those fixed role paths.
+func (v *VaultIssuer) ValidateScopedRoles(ctx context.Context) error {
+	if v == nil || ctx == nil || !v.scopedTokenRoles {
+		return ErrUnavailable
+	}
+	seen := make(map[string]struct{}, len(v.policies))
+	for _, policy := range v.policies {
+		if _, duplicate := seen[policy]; duplicate {
+			continue
+		}
+		seen[policy] = struct{}{}
+		role := Phase6TokenRole(policy)
+		if role == "" {
+			return ErrUnavailable
+		}
+		document, err := v.request(ctx, http.MethodGet, "/v1/auth/token/roles/"+role, v.managementToken, nil)
+		if err != nil {
+			return err
+		}
+		var response struct {
+			RequestID     string `json:"request_id"`
+			LeaseID       string `json:"lease_id"`
+			Renewable     bool   `json:"renewable"`
+			LeaseDuration int64  `json:"lease_duration"`
+			Data          struct {
+				AllowedEntityAliases   []string `json:"allowed_entity_aliases"`
+				AllowedPolicies        []string `json:"allowed_policies"`
+				AllowedPoliciesGlob    []string `json:"allowed_policies_glob"`
+				DisallowedPolicies     []string `json:"disallowed_policies"`
+				DisallowedPoliciesGlob []string `json:"disallowed_policies_glob"`
+				ExplicitMaxTTL         int64    `json:"explicit_max_ttl"`
+				Name                   string   `json:"name"`
+				Orphan                 bool     `json:"orphan"`
+				PathSuffix             string   `json:"path_suffix"`
+				Period                 int64    `json:"period"`
+				Renewable              bool     `json:"renewable"`
+				TokenExplicitMaxTTL    int64    `json:"token_explicit_max_ttl"`
+				TokenNoDefaultPolicy   bool     `json:"token_no_default_policy"`
+				TokenPeriod            int64    `json:"token_period"`
+				TokenType              string   `json:"token_type"`
+			} `json:"data"`
+			WrapInfo  json.RawMessage `json:"wrap_info"`
+			Warnings  json.RawMessage `json:"warnings"`
+			Auth      json.RawMessage `json:"auth"`
+			MountType string          `json:"mount_type"`
+		}
+		decodeErr := decodeVaultResponse(document, &response)
+		clear(document)
+		data := response.Data
+		if decodeErr != nil || data.Name != role || len(data.AllowedPolicies) != 1 || data.AllowedPolicies[0] != policy ||
+			len(data.AllowedPoliciesGlob) != 0 || len(data.DisallowedPolicies) != 2 ||
+			!((data.DisallowedPolicies[0] == "default" && data.DisallowedPolicies[1] == "root") ||
+				(data.DisallowedPolicies[0] == "root" && data.DisallowedPolicies[1] == "default")) ||
+			len(data.DisallowedPoliciesGlob) != 0 || len(data.AllowedEntityAliases) != 0 ||
+			!data.TokenNoDefaultPolicy || data.TokenType != "service" || data.Orphan || data.Renewable ||
+			data.TokenExplicitMaxTTL != int64((15*time.Minute)/time.Second) || data.ExplicitMaxTTL != 0 ||
+			data.Period != 0 || data.TokenPeriod != 0 || data.PathSuffix != "" || !isNullVaultJSON(response.Warnings) {
+			return ErrUnavailable
+		}
+	}
+	return nil
 }
 
 func (v *VaultIssuer) Issue(ctx context.Context, spec IssueSpec) (IssuedCredential, error) {
@@ -79,6 +175,7 @@ func (v *VaultIssuer) Issue(ctx context.Context, spec IssueSpec) (IssuedCredenti
 		return IssuedCredential{}, ErrUnavailable
 	}
 	backendSpec := credentialbackend.IssueSpec{SubjectID: spec.AgentID, SubjectDigest: spec.BindingDigest, PolicyID: spec.PolicyID,
+		Purpose:      string(spec.Purpose),
 		PolicyDigest: spec.BindingDigest, BindingDigest: spec.BindingDigest, BackendID: spec.BackendID, BackendPolicy: policy, LeaseID: spec.LeaseID, TTL: spec.TTL}
 	return v.issueWithMetadata(ctx, backendSpec, map[string]string{"agent_id": spec.AgentID, "policy_id": spec.PolicyID, "binding_digest": spec.BindingDigest})
 }
@@ -94,10 +191,22 @@ func (v *VaultIssuer) IssueScoped(ctx context.Context, spec credentialbackend.Is
 		return credentialbackend.IssuedCredential{}, ErrUnavailable
 	}
 	return v.issueWithMetadata(ctx, spec, map[string]string{"subject_id": spec.SubjectID, "subject_digest": spec.SubjectDigest,
-		"policy_id": spec.PolicyID, "policy_digest": spec.PolicyDigest, "binding_digest": spec.BindingDigest})
+		"policy_id": spec.PolicyID, "policy_digest": spec.PolicyDigest, "binding_digest": spec.BindingDigest,
+		"purpose": spec.Purpose, "lease_id": spec.LeaseID})
 }
 
 func (v *VaultIssuer) issueWithMetadata(ctx context.Context, spec credentialbackend.IssueSpec, metadata map[string]string) (credentialbackend.IssuedCredential, error) {
+	path, role := "/v1/auth/token/create", ""
+	if v.scopedTokenRoles {
+		role = Phase6TokenRole(spec.BackendPolicy)
+		if role == "" || spec.Purpose == "" || metadata["subject_id"] != spec.SubjectID || metadata["subject_digest"] != spec.SubjectDigest ||
+			metadata["policy_id"] != spec.PolicyID || metadata["policy_digest"] != spec.PolicyDigest ||
+			metadata["binding_digest"] != spec.BindingDigest || metadata["purpose"] != spec.Purpose ||
+			metadata["lease_id"] != spec.LeaseID || len(metadata) != 7 {
+			return credentialbackend.IssuedCredential{}, ErrUnavailable
+		}
+		path += "/" + role
+	}
 	body, err := json.Marshal(struct {
 		Policies        []string          `json:"policies"`
 		TTL             string            `json:"ttl"`
@@ -111,7 +220,7 @@ func (v *VaultIssuer) issueWithMetadata(ctx context.Context, spec credentialback
 		return IssuedCredential{}, ErrUnavailable
 	}
 	defer clear(body)
-	document, err := v.request(ctx, http.MethodPost, "/v1/auth/token/create", v.managementToken, body)
+	document, err := v.request(ctx, http.MethodPost, path, v.managementToken, body)
 	if err != nil {
 		return IssuedCredential{}, err
 	}
@@ -142,16 +251,39 @@ func (v *VaultIssuer) issueWithMetadata(ctx context.Context, spec credentialback
 	}
 	if decodeVaultResponse(document, &response) != nil || !validVaultToken([]byte(response.Auth.ClientToken)) ||
 		!backendLeasePattern.MatchString(response.Auth.Accessor) || response.Auth.Renewable || response.Auth.LeaseDuration < 1 ||
-		time.Duration(response.Auth.LeaseDuration)*time.Second > spec.TTL+time.Second || len(response.Auth.Policies) != 1 || response.Auth.Policies[0] != spec.BackendPolicy {
+		response.Auth.LeaseDuration > int64(spec.TTL/time.Second)+1 || len(response.Auth.Policies) != 1 || response.Auth.Policies[0] != spec.BackendPolicy {
 		return IssuedCredential{}, ErrUnavailable
 	}
+	if v.scopedTokenRoles {
+		var actualMetadata map[string]string
+		if json.Unmarshal(response.Auth.Metadata, &actualMetadata) != nil || !equalVaultMetadata(actualMetadata, metadata) ||
+			len(response.Auth.TokenPolicies) != 1 || response.Auth.TokenPolicies[0] != spec.BackendPolicy ||
+			response.Auth.Orphan || response.Auth.TokenType != "service" || response.Auth.NumUses != 0 ||
+			!isNullVaultJSON(response.Warnings) {
+			return IssuedCredential{}, ErrUnavailable
+		}
+	}
 	return IssuedCredential{Credential: []byte(response.Auth.ClientToken), BackendLeaseID: response.Auth.Accessor,
-		ExpiresAt: v.now().UTC().Add(time.Duration(response.Auth.LeaseDuration) * time.Second)}, nil
+		ExpiresAt: v.now().UTC().Add(time.Duration(response.Auth.LeaseDuration) * time.Second),
+		PolicyID:  spec.PolicyID, PolicyDigest: spec.PolicyDigest, SubjectID: spec.SubjectID,
+		SubjectDigest: spec.SubjectDigest, BindingDigest: spec.BindingDigest,
+		BackendPolicy: spec.BackendPolicy, TokenRole: role, RequestedTTL: spec.TTL,
+		Purpose: spec.Purpose, LeaseID: spec.LeaseID}, nil
 }
 
 func (v *VaultIssuer) Verify(ctx context.Context, issued IssuedCredential) error {
 	if v == nil || ctx == nil || !validVaultToken(issued.Credential) || !backendLeasePattern.MatchString(issued.BackendLeaseID) || !issued.ExpiresAt.After(v.now().UTC()) {
 		return ErrUnavailable
+	}
+	if v.scopedTokenRoles {
+		backendPolicy, allowed := v.policies[issued.PolicyID]
+		if !allowed || backendPolicy != issued.BackendPolicy || issued.TokenRole == "" ||
+			issued.TokenRole != Phase6TokenRole(backendPolicy) || !identifierPattern.MatchString(issued.LeaseID) ||
+			issued.Purpose == "" || issued.RequestedTTL < time.Second || issued.RequestedTTL > 15*time.Minute ||
+			!identifierPattern.MatchString(issued.SubjectID) || !validDigest(issued.PolicyDigest) ||
+			!validDigest(issued.SubjectDigest) || !validDigest(issued.BindingDigest) {
+			return ErrUnavailable
+		}
 	}
 	body, err := json.Marshal(struct {
 		Accessor string `json:"accessor"`
@@ -186,6 +318,7 @@ func (v *VaultIssuer) Verify(ctx context.Context, issued IssuedCredential) error
 			Path           string          `json:"path"`
 			Policies       []string        `json:"policies"`
 			Renewable      bool            `json:"renewable"`
+			Role           string          `json:"role"`
 			TTL            int64           `json:"ttl"`
 			Type           string          `json:"type"`
 		} `json:"data"`
@@ -196,6 +329,24 @@ func (v *VaultIssuer) Verify(ctx context.Context, issued IssuedCredential) error
 	}
 	if decodeVaultResponse(document, &response) != nil || response.Data.Accessor != issued.BackendLeaseID || response.Data.TTL < 1 {
 		return ErrUnavailable
+	}
+	if v.scopedTokenRoles {
+		expectedMetadata := map[string]string{"subject_id": issued.SubjectID, "subject_digest": issued.SubjectDigest,
+			"policy_id": issued.PolicyID, "policy_digest": issued.PolicyDigest,
+			"binding_digest": issued.BindingDigest, "purpose": issued.Purpose, "lease_id": issued.LeaseID}
+		var actualMetadata map[string]string
+		if json.Unmarshal(response.Data.Meta, &actualMetadata) != nil ||
+			!equalVaultMetadata(actualMetadata, expectedMetadata) ||
+			response.Data.Path != "auth/token/create/"+issued.TokenRole ||
+			response.Data.Role != issued.TokenRole ||
+			len(response.Data.Policies) != 1 || response.Data.Policies[0] != issued.BackendPolicy ||
+			response.Data.Orphan || response.Data.Renewable || response.Data.Type != "service" ||
+			response.Data.NumUses != 0 || response.Data.CreationTTL < 1 ||
+			response.Data.CreationTTL > int64(issued.RequestedTTL/time.Second)+1 ||
+			response.Data.TTL > int64(issued.RequestedTTL/time.Second)+1 ||
+			!isNullVaultJSON(response.Warnings) {
+			return ErrUnavailable
+		}
 	}
 	return nil
 }

@@ -8,5 +8,13 @@ Portions Copyright 2017 Google Inc.
 The derived file was changed for sandbox-runtime: unsupported architecture
 mappings and capability-gated rules were removed, and the explicit Chromium
 user-namespace sandbox rule was limited to chroot, clone, setns, and unshare.
+Unlike the pinned original, which gates chroot on CAP_SYS_CHROOT, this
+Browser-specific derived rule permits the chroot syscall without that
+seccomp capability condition. The executable Chromium sandbox uses it for
+sys_chroot("/proc/self/fdinfo/") during zygote setup. This is a deliberate
+seccomp difference, not proof that the initial non-root container process
+can chroot or that another workload may reuse the policy. The opt-in real
+Docker A/B diagnostic in chroot_ab_integration_test.go tests that boundary;
+the full Phase 6 topology and application gate are separate.
 The derived file is distributed under the Apache License, Version 2.0; see
 LICENSE.chromium-seccomp in this directory.

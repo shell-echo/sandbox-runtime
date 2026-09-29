@@ -11,6 +11,7 @@ import (
 type IssueSpec struct {
 	SubjectID     string
 	SubjectDigest string
+	Purpose       string
 	PolicyID      string
 	PolicyDigest  string
 	BindingDigest string
@@ -24,6 +25,18 @@ type IssuedCredential struct {
 	Credential     []byte
 	BackendLeaseID string
 	ExpiresAt      time.Time
+	// Scoped token-role expectations are ephemeral issuer-to-verifier data.
+	// They are never persisted in the controller ledger or exposed on the wire.
+	PolicyID      string
+	PolicyDigest  string
+	SubjectID     string
+	SubjectDigest string
+	BindingDigest string
+	BackendPolicy string
+	TokenRole     string
+	RequestedTTL  time.Duration
+	Purpose       string
+	LeaseID       string
 }
 
 func (c *IssuedCredential) Destroy() {

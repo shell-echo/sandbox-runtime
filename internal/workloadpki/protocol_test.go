@@ -132,13 +132,20 @@ func TestPrincipalDelegationIsOneTLSAgentPerExactSubject(t *testing.T) {
 	broker := principal(securityprincipal.KindEgressBroker, "product_egress_broker", securityprincipal.RoleProduct)
 	brokerTLS := principal(securityprincipal.KindTLSAgent, "product_egress_broker_tls_agent", securityprincipal.RoleProduct)
 	material := principal(securityprincipal.KindMaterialAgent, "product_runtime_agent", securityprincipal.RoleProduct)
+	credentialController := principal(securityprincipal.KindController, "credential_controller", "")
+	certificateController := principal(securityprincipal.KindController, "certificate_controller", "")
+	breakGlassController := principal(securityprincipal.KindController, "break_glass_controller", "")
 	if !validPrincipalDelegation(productTLS, product) || !validPrincipalDelegation(browserTLS, browser) ||
-		!validPrincipalDelegation(browserExecutorTLS, browserExecutor) || !validPrincipalDelegation(brokerTLS, broker) {
+		!validPrincipalDelegation(browserExecutorTLS, browserExecutor) || !validPrincipalDelegation(brokerTLS, broker) ||
+		!validPrincipalDelegation(certificateController, certificateController) ||
+		!validPrincipalDelegation(credentialController, credentialController) {
 		t.Fatal("exact TLS agent delegation rejected")
 	}
 	for _, pair := range [][2]securityprincipal.Principal{
 		{material, product}, {browserTLS, browserExecutor}, {browserExecutorTLS, browser},
 		{productTLS, broker}, {brokerTLS, product}, {productTLS, productTLS}, {product, product},
+		{credentialController, certificateController}, {certificateController, credentialController},
+		{breakGlassController, breakGlassController},
 	} {
 		if validPrincipalDelegation(pair[0], pair[1]) {
 			t.Fatalf("cross-scope delegation accepted: %s -> %s", pair[0].Name, pair[1].Name)
@@ -259,5 +266,36 @@ func TestPolicyRejectsWildcardIdentityAndBroadTTL(t *testing.T) {
 				t.Fatal("invalid policy was accepted")
 			}
 		})
+	}
+}
+
+func TestCredentialControllerMayRequestOnlyItsOwnManagedClientLeaf(t *testing.T) {
+	fixture := newProtocolFixture(t)
+	credential, err := fixture.policy.Registry.New(securityprincipal.KindController, "credential_controller", "",
+		"sha256:"+strings.Repeat("e", 64))
+	if err != nil {
+		t.Fatal(err)
+	}
+	policy := fixture.policy
+	policy.ID = "credential-controller-managed"
+	policy.Requester, policy.Subject = credential, credential
+	policy.URI = "spiffe://sandbox-runtime.test/workload-credential-controller"
+	policy.DNSNames = nil
+	policy.Usages = []string{"client_auth"}
+	policy.VaultRole = "credential-controller-client"
+	if err := policy.Validate(); err != nil {
+		t.Fatalf("exact self-client policy rejected: %v", err)
+	}
+	changed := policy
+	changed.Subject = fixture.policy.Subject
+	if changed.Validate() == nil {
+		t.Fatal("credential controller cross-subject issuance admitted")
+	}
+	changed = policy
+	changed.Requester, _ = fixture.policy.Registry.New(securityprincipal.KindController, "break_glass_controller", "",
+		"sha256:"+strings.Repeat("f", 64))
+	changed.Subject = changed.Requester
+	if changed.Validate() == nil {
+		t.Fatal("another controller self-issuance admitted")
 	}
 }

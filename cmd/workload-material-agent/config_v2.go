@@ -80,6 +80,12 @@ func newCredentialIssuer(config configDocument, v2 *configDocumentV2, privateKey
 		registry.Validate(*agent.AuthorizationPrincipal) != nil {
 		return nil, secretref.ErrUnavailable
 	}
+	binding, boundController, boundAgent, err := profile.CredentialIssuerSocketForClient(agent.Name)
+	if err != nil || binding.SocketPath != config.CredentialControllerSocket ||
+		boundController.UID != controller.UID || boundController.GID != controller.GID ||
+		boundAgent.UID != agent.UID || boundAgent.GID != agent.GID {
+		return nil, secretref.ErrUnavailable
+	}
 	policy := workloadcredentialv2.Policy{ID: config.CredentialPolicyID, Registry: registry,
 		Principal: *agent.AuthorizationPrincipal, Purpose: secretref.PurposeWorkloadCredential,
 		BackendID: config.CredentialBackendID, BackendPolicy: v2.CredentialBackendPolicy,
@@ -90,7 +96,8 @@ func newCredentialIssuer(config configDocument, v2 *configDocumentV2, privateKey
 	}
 	client, err := workloadcredentialv2.NewProductionClient(workloadcredentialv2.ClientConfig{
 		SocketPath: config.CredentialControllerSocket, ExpectedUID: config.CredentialControllerUID,
-		ExpectedGID: config.CredentialControllerGID, Policy: policy, PrivateKey: privateKey,
+		ExpectedGID: config.CredentialControllerGID, DirectoryGID: agent.GID,
+		Policy: policy, PrivateKey: privateKey,
 		OperationTimeout: time.Duration(config.OperationTimeoutSeconds) * time.Second, Now: time.Now,
 	})
 	if err != nil {

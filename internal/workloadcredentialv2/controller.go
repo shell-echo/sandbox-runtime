@@ -287,6 +287,7 @@ func (c *Controller) newLeaseID() (string, error) {
 
 func issueSpec(policy Policy, leaseID string, ttl time.Duration) credentialbackend.IssueSpec {
 	return credentialbackend.IssueSpec{SubjectID: policy.Principal.Name, SubjectDigest: policy.Principal.Digest(), PolicyID: policy.ID,
+		Purpose:      string(policy.Purpose),
 		PolicyDigest: policy.Digest(), BindingDigest: backendBindingDigest(policy), BackendID: policy.BackendID,
 		BackendPolicy: policy.BackendPolicy, LeaseID: leaseID, TTL: ttl}
 }

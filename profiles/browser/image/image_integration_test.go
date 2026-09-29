@@ -14,6 +14,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/shell-echo/sandbox-runtime/internal/phase6capacity"
 )
 
 const browserImageIntegrationEnv = "SANDBOX_RUNTIME_BROWSER_IMAGE_INTEGRATION"
@@ -70,10 +72,30 @@ func TestBrowserImageHighUID(t *testing.T) {
 			t.Fatalf("Browser process UID/GID drift: %q", line)
 		}
 	}
+	logBrowserCgroupV2Sample(t, ctx, containerName)
 	runDocker(t, ctx, nil, "rm", "-f", containerName)
 	if output, err := exec.CommandContext(ctx, "docker", "container", "inspect", containerName).CombinedOutput(); err == nil || (!strings.Contains(string(output), "No such object") &&
 		!strings.Contains(string(output), "No such container: "+containerName)) {
 		t.Fatalf("high-UID Browser container absence is unproved: %v: %s", err, output)
+	}
+}
+
+// This raw component sample includes the docker-exec probe's own overhead.
+// It is not a measured tier or complete same-run Slice 6 topology evidence.
+func logBrowserCgroupV2Sample(t *testing.T, ctx context.Context, containerName string) {
+	t.Helper()
+	var raw [4][]byte
+	for index, file := range []string{"memory.peak", "pids.peak", "cpu.stat", "memory.events"} {
+		output := runDocker(t, ctx, nil, "exec", containerName, "/bin/sh", "-c", "cat /sys/fs/cgroup/"+file)
+		if len(output) == 0 || len(output) > 4096 {
+			t.Fatalf("Browser cgroup v2 %s sample is unavailable", file)
+		}
+		raw[index] = []byte(output)
+		t.Logf("Browser cgroup v2 %s %s:\n%s", containerName, file, output)
+	}
+	sample, err := phase6capacity.ParseCgroupV2Sample(raw[0], raw[1], raw[2], raw[3])
+	if err != nil || sample.MemoryOOMEvents != 0 || sample.MemoryOOMKillEvents != 0 {
+		t.Fatalf("Browser cgroup v2 sample is unsafe: %+v, %v", sample, err)
 	}
 }
 

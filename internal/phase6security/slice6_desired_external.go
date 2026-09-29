@@ -18,6 +18,16 @@ var slice6DesiredExternalServices = []struct {
 	{"vault", "spiffe://sandbox-runtime.test/external/vault", "vault.sandbox-runtime.test"},
 }
 
+// Slice6DesiredExternalServiceNames returns the reviewed five-service set for
+// exact resource-budget binding. It grants no service identity or network edge.
+func Slice6DesiredExternalServiceNames() []string {
+	names := make([]string, 0, len(slice6DesiredExternalServices))
+	for _, service := range slice6DesiredExternalServices {
+		names = append(names, service.name)
+	}
+	return names
+}
+
 // VerifySlice6DesiredExternalServices rejects a self-consistent profile that
 // silently substitutes an external identity, name, SAN or allowed inbound edge.
 // It does not attest that the pinned image, certificate or server was observed.

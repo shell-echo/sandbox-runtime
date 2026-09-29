@@ -72,6 +72,7 @@ func validatePostgresClientAgents(bindings []PostgresClientAgentBinding, databas
 		usedKeys[ordinaryBinding.AgentRequestKeyDigest], usedKeyIDs[ordinaryBinding.AgentRequestKeyID] = true, true
 	}
 	usedStorage[controllerAuthority.SelfSocketStorageID] = true
+	usedStorage[controllerAuthority.CredentialController.SocketStorageID] = true
 	usedStorage[BrowserMuxSocketStorageID] = true
 	for _, policy := range policies {
 		usedStorage[policy.Authority.SocketStorageID] = true
@@ -81,7 +82,9 @@ func validatePostgresClientAgents(bindings []PostgresClientAgentBinding, databas
 		usedStorage[anchor.StorageID] = true
 	}
 	usedPolicies[controllerAuthority.ManagedPolicyID], usedRoles[controllerAuthority.ManagedVaultRole] = true, true
+	usedPolicies[controllerAuthority.CredentialController.PolicyID], usedRoles[controllerAuthority.CredentialController.VaultRole] = true, true
 	usedKeys[controllerAuthority.ManagedRequestKeyDigest], usedKeyIDs[controllerAuthority.ManagedRequestKeyID] = true, true
+	usedKeys[controllerAuthority.CredentialController.RequestKeyDigest], usedKeyIDs[controllerAuthority.CredentialController.RequestKeyID] = true, true
 	var anchor TrustAnchor
 	for _, candidate := range anchors {
 		if candidate.ID == postgresClientIssuerAnchorID {
