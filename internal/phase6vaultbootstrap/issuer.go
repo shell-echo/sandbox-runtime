@@ -119,7 +119,8 @@ func validEndpoint(raw string) bool {
 func validClient(client *http.Client, serverName string) bool {
 	transport, ok := client.Transport.(*http.Transport)
 	if !ok || transport.TLSClientConfig == nil || client.Timeout <= 0 || client.Timeout > 30*time.Second ||
-		transport.Proxy != nil || transport.DialContext != nil || transport.DialTLSContext != nil {
+		transport.Proxy != nil || transport.DialContext != nil || transport.DialTLSContext != nil ||
+		transport.DialTLS != nil || transport.TLSNextProto != nil {
 		return false
 	}
 	config := transport.TLSClientConfig
