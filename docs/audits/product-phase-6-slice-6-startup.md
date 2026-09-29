@@ -2734,3 +2734,40 @@ external services were not started, no TLS/SQL/Redis/DNS connection or network
 policy was exercised, and no full-inventory or Slice 6 acceptance is claimed.
 The private archive reconstruction and exact opt-in commands are recorded in
 [`phase6-external-image-input.md`](../phase6-external-image-input.md).
+
+Checkpoint 2026-09-29 (complete image inputs, still no topology): at clean
+source R `b3f02f0e8f48f413d144bf80be3cb308070d4906`, all 12 distinct
+repository-owned command targets were built as local-only arm64 images,
+independently rebuilt/byte-compared and retained as 12 private mode-0600
+manifest/archive pairs. The same R produced a new non-release Desktop
+candidate from the preverified closed APK cache. The opt-in image-supply
+preflight reopened those 12 pairs, the Desktop candidate and the historical
+locked Browser publication archive and passed exact coverage; no profile or
+role was launched by that preflight. A real Desktop candidate mux/executor
+component check passed RTP frame, pointer input and cleanup. A separate
+high-UID (42000:52000) explicit pinned-Moby seccomp diagnostic passed real
+media/input; one cgroup v2 sample reported memory peak 117,751,808 bytes,
+PID peak 74, CPU throttling 6/9 periods (503,093 microseconds), and zero OOM
+and OOM kills. That Moby byte set and 512 MiB/128 PID/1 CPU diagnostic fixture
+are **not** a reviewed Desktop duty policy or final resource tier. The image
+receipts remain private local candidates, not published artifacts. This
+source checkpoint did not bind resource/seccomp, full profile, live Vault or
+the final 16 scenarios; Phase 6 remains **5/15**.
+
+Sandbox's resource-policy clarification permits a fully reviewed, finite
+arm64 *candidate* table before separate per-duty benchmarks, then requires
+representative real startup/migration, credential rotation/revocation,
+Browser/Desktop media/input, fault and pressure calibration under the frozen
+candidate. Each deployment still needs its actual UID/GID, applied policy,
+mount, network and cgroup observation; a shared binary is not a shared duty
+proof. Source/license/original/applied digests, duty rationale, sample basis,
+unmeasured assumptions and headroom must be recorded. No synthetic limit,
+unconfined/default seccomp, empty placeholder or production validation skip
+may stand in for a candidate. A policy/limit change ends and cleans that run;
+only a new run ID with re-frozen inputs may attempt full acceptance. The final
+run must cover the actual concurrent role set plus five external services,
+daemon/observer and cleanup reserve, all 16 scenarios and zero leftovers;
+unchanged inputs that pass all gates need no artificial rerun. See ADR 0055.
+These documentation changes move HEAD beyond R, so its retained image inputs
+are historical component diagnostics and must be rebuilt from the eventual
+final source revision. No candidate here is a Slice 6 acceptance manifest.

@@ -1534,6 +1534,33 @@ Docker Desktop resource settings must be respected without automatic host
 reconfiguration. This decision does not silently alter the historical Browser
 publication or public Provider Contract.
 
+The Slice 6 implementation order permits a complete, reviewed, finite arm64
+*candidate* resource/seccomp table before every duty has a separate live
+benchmark. The candidate must cite the original and applied policy bytes,
+license, duty-specific syscall rationale, existing samples, unmeasured
+assumptions and headroom; equal syscall needs may share bytes, but binary
+reuse alone does not prove equal duty. Synthetic fixtures, implicit Docker
+defaults, `unconfined`, broad permissions and placeholder limits are not
+admissible. Once frozen, representative real commands and dependency loads
+must calibrate startup/migration, PKI/credential rotation and revocation,
+Browser/Desktop media/input, fault and pressure behavior. Record memory/PID
+peaks, CPU throttling, OOM/kill, load and duration, deadline/revocation
+budgets, and positive *and* negative applied-policy probes; EPERM alone is
+not seccomp proof. Every actual deployment still needs individual UID/GID,
+mount, network, applied-policy and cgroup observations. The host admission
+budget covers the real concurrent role set, all five external services,
+daemon/observer overhead and cleanup reserve; migration jobs leave after
+their actual lifecycle, while simultaneously needed steady-state roles may
+not be serialized to hide insufficient capacity.
+
+One run fixes its profile, policy and limits before any role starts. A
+calibration change ends and exactly cleans that run; a new run ID and frozen
+inputs must pass the entire final 16-scenario gate. Different configurations
+or runs cannot be spliced into acceptance. An unchanged candidate that passes
+the complete live gate may be accepted without a ceremonial rerun. This
+remains bounded arm64/topology/load evidence, not general capacity, SLO,
+publication or production readiness.
+
 ### Shared PostgreSQL and purpose-specific signer adjudication (2026-09-28)
 
 Keep one shared main PostgreSQL service and one finite, deterministic,
