@@ -47,19 +47,10 @@ func Launch() error {
 	defer stop()
 	ctx, cancel := context.WithTimeout(signalContext, startupDeadline)
 	defer cancel()
-	readFinished := make(chan struct{})
-	readWatcherDone := make(chan struct{})
-	go func() {
-		defer close(readWatcherDone)
-		select {
-		case <-ctx.Done():
-			_ = os.Stdin.Close()
-		case <-readFinished:
-		}
-	}()
-	value, err := Decode(os.Stdin, expected)
-	close(readFinished)
-	<-readWatcherDone
+	if err := unix.SetNonblock(0, true); err != nil {
+		return ErrStartupInput
+	}
+	value, err := Decode(deadlineInput{ctx: ctx, fd: 0}, expected)
 	if err != nil || ctx.Err() != nil {
 		value.Destroy()
 		return ErrStartupInput
@@ -69,6 +60,51 @@ func Launch() error {
 		return err
 	}
 	return nil // syscall.Exec cannot return on success.
+}
+
+// Closing a descriptor from another goroutine does not reliably interrupt a
+// blocked Linux read. Poll a nonblocking stdin instead, so both TERM and the
+// startup deadline bound an operator that leaves the Docker stream open.
+type deadlineInput struct {
+	ctx context.Context
+	fd  int
+}
+
+func (input deadlineInput) Read(buffer []byte) (int, error) {
+	if len(buffer) == 0 {
+		return 0, nil
+	}
+	for {
+		if err := input.ctx.Err(); err != nil {
+			return 0, err
+		}
+		wait := 250 * time.Millisecond
+		if deadline, ok := input.ctx.Deadline(); ok && time.Until(deadline) < wait {
+			wait = time.Until(deadline)
+		}
+		if wait <= 0 {
+			return 0, context.DeadlineExceeded
+		}
+		fds := []unix.PollFd{{Fd: int32(input.fd), Events: unix.POLLIN | unix.POLLHUP | unix.POLLERR}}
+		ready, err := unix.Poll(fds, int((wait+time.Millisecond-1)/time.Millisecond))
+		if err == unix.EINTR || ready == 0 {
+			continue
+		}
+		if err != nil || fds[0].Revents&(unix.POLLNVAL|unix.POLLERR) != 0 {
+			return 0, ErrStartupInput
+		}
+		count, err := unix.Read(input.fd, buffer)
+		if err == unix.EINTR || err == unix.EAGAIN {
+			continue
+		}
+		if err != nil {
+			return 0, ErrStartupInput
+		}
+		if count == 0 {
+			return 0, io.EOF
+		}
+		return count, nil
+	}
 }
 
 type sealedFD struct {

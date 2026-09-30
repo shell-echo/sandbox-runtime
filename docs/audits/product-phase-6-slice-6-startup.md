@@ -4,6 +4,22 @@ Date: 2026-09-23
 
 Status: implementation underway. Product Phase 6 remains **5/15**.
 
+Checkpoint 2026-09-30 (FD startup deadline, component evidence only): the
+six-target one-shot loader now reads Docker's non-TTY stdin through a
+nonblocking, polled descriptor under one absolute 30-second startup deadline.
+It requires actual EOF before canonical envelope validation; a held-open
+stream cannot become an unbounded pre-exec container. Focused race tests cover
+an empty open stream, a partial prefix, continuous slow input, pending final
+bytes with HUP, legitimate/truncated/oversized EOF and cancellation. A real
+restricted Docker run additionally observed the held-open container exit by
+`State.Running=false` within the bounded window without an automatic restart,
+then closed the test-side input pipe and collected the stage-code failure.
+The earlier test's `exec.Cmd.Wait` timeout alone was ambiguous because Go may
+wait for its own stdin-copy goroutine after the container has exited; it was
+not proof that the previous loader stayed alive. PID1 sealed-FD fixture and
+other negative cases still pass, with exact run-label cleanup. This does not
+launch the actual certificate-controller or establish the 82-principal gate.
+
 Checkpoint 2026-09-30 (isolated non-dev Vault bridge component, not the
 managed controller chain): the opt-in `phase6slice6gate` Docker test now runs
 the pinned non-dev Vault image with in-memory storage and two distinct

@@ -211,8 +211,69 @@ func TestPhase6Slice6FDLoaderRestrictedDocker(t *testing.T) {
 	if err != nil || strings.TrimSpace(string(termState)) != "false|0" {
 		t.Fatal("FD-loader TERM probe left a running or automatically restarted container")
 	}
+	timeoutID := create("timeout", true)
+	timeoutCommand := exec.CommandContext(ctx, "docker", "start", "-a", "-i", timeoutID)
+	timeoutReader, timeoutWriter := io.Pipe()
+	timeoutCommand.Stdin = timeoutReader
+	var timeoutOutput bytes.Buffer
+	timeoutCommand.Stdout, timeoutCommand.Stderr = &timeoutOutput, &timeoutOutput
+	if err := timeoutCommand.Start(); err != nil {
+		t.Fatal("start attached FD-loader held-open input probe")
+	}
+	defer timeoutWriter.Close()
+	started := time.Now()
+	running := false
+	for deadline := time.Now().Add(10 * time.Second); time.Now().Before(deadline); {
+		state, inspectErr := run.docker(ctx, "inspect", "--format", "{{.State.Running}}", timeoutID)
+		if inspectErr == nil && strings.TrimSpace(string(state)) == "true" {
+			running = true
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	if !running {
+		_ = timeoutWriter.Close()
+		_ = timeoutCommand.Wait()
+		t.Fatal("FD-loader held-open input probe never entered the running state")
+	}
+	exited := false
+	for deadline := started.Add(38 * time.Second); time.Now().Before(deadline); {
+		state, inspectErr := run.docker(ctx, "inspect", "--format", "{{.State.Running}}|{{.RestartCount}}", timeoutID)
+		if inspectErr == nil && strings.TrimSpace(string(state)) == "false|0" {
+			exited = true
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	if !exited {
+		_, _ = run.docker(ctx, "stop", "-t", "2", timeoutID)
+		_ = timeoutWriter.Close()
+		_ = timeoutCommand.Wait()
+		t.Fatal("FD-loader remained live past the 30-second startup deadline")
+	}
+	if elapsed := time.Since(started); elapsed < 25*time.Second || elapsed > 38*time.Second {
+		t.Fatalf("FD-loader startup deadline elapsed outside bounded window: %v", elapsed)
+	}
+	if err := timeoutWriter.Close(); err != nil {
+		t.Fatal("close held-open Docker input after container exit")
+	}
+	timeoutResult := make(chan error, 1)
+	go func() { timeoutResult <- timeoutCommand.Wait() }()
+	select {
+	case err := <-timeoutResult:
+		if err == nil || !strings.Contains(timeoutOutput.String(), "phase6-fd-loader: input") ||
+			strings.Contains(timeoutOutput.String(), "fd-fixture: ok") {
+			t.Fatalf("held-open startup input was not rejected: %v: %.512s", err, timeoutOutput.String())
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Docker attach did not finish after closing the test input")
+	}
+	timeoutState, err := run.docker(ctx, "inspect", "--format", "{{.State.Running}}|{{.RestartCount}}", timeoutID)
+	if err != nil || strings.TrimSpace(string(timeoutState)) != "false|0" {
+		t.Fatal("FD-loader timeout left a running or automatically restarted container")
+	}
 	if err := run.cleanup(ctx); err != nil {
 		t.Fatalf("exact FD-loader Docker cleanup: %v", err)
 	}
-	t.Log("restricted Docker fixture confirmed PID1 exec, 0600 sealed seekable FD0/FD3..6, stale/truncated, reservation/environment and exec-failure denials, plus pre-exec TERM with exact cleanup; real controller launch remains open")
+	t.Log("restricted Docker fixture confirmed PID1 exec, 0600 sealed seekable FD0/FD3..6, stale/truncated, reservation/environment and exec-failure denials, pre-exec TERM and held-open-input timeout with exact cleanup; real controller launch remains open")
 }
