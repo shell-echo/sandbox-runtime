@@ -3135,6 +3135,12 @@ Vault server and controller-client leaves from the general issuer, inspected
 each issuer's signed complete CRL, stopped and restarted the same server on
 the same storage with final TLS 1.3 mTLS trust, then securely unsealed without
 key argv. Both issuer DERs survived and neither complete CRL number regressed.
+A separate non-root observer container at the exact controller bridge address
+now invokes the repository's strict fixed-issuer HTTP observer both before
+and after the restart. It verifies the real TLS 1.3 peer URI/name/EKU, mTLS
+client, both issuer UUIDs/DER digests and complete signed CRL metadata across
+the trust switch; it emits only public issuer/CRL metadata and is exactly
+removed after each read.
 A separate client at the reviewed controller address succeeded under final
 trust, both temporary client-CA and temporary server-CA directions were
 rejected, and a second final-trust positive probe followed the denials.

@@ -8,7 +8,9 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/x509"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
@@ -16,6 +18,7 @@ import (
 	"math/big"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strconv"
@@ -95,6 +98,17 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 	}
 	writeSlice6VaultBridgeTLS(t, configDir, vaultIP)
 	writeSlice6VaultPrivateFile(t, configDir, "vault.hcl", slice6VaultFileConfig())
+	observerPath := filepath.Join(root, "vault-issuer-observer")
+	observerBuild := exec.CommandContext(ctx, "go", "build", "-mod=readonly", "-trimpath", "-buildvcs=false",
+		"-ldflags=-buildid=", "-o", observerPath, "./internal/phase6vaultbootstrap/testdata/observer")
+	observerBuild.Dir, err = filepath.Abs("..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	observerBuild.Env = append(os.Environ(), "CGO_ENABLED=0", "GOOS=linux", "GOARCH=arm64", "GOTOOLCHAIN=local", "GOFLAGS=")
+	if _, err := observerBuild.CombinedOutput(); err != nil {
+		t.Fatal("build fixed independent Vault issuer observer")
+	}
 	created, err := createSlice6ProfileNetwork(ctx, run, network)
 	if err != nil {
 		t.Fatal(err)
@@ -154,6 +168,8 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 	slice6VaultAssertRoleIssuer(t, ctx, run, serverID, "final-controller-client", general.ID)
 	beforeGeneralCRL := slice6VaultReadCRL(t, ctx, run, serverID, general)
 	beforeBrokerCRL := slice6VaultReadCRL(t, ctx, run, serverID, broker)
+	beforeNetwork := slice6VaultNetworkObserve(t, ctx, run, created.NetworkID, controllerIP, vaultIP, user,
+		configDir, observerPath, "before", general, broker)
 	for old, preserved := range map[string]string{
 		"server-ca.pem":  "bootstrap-server-ca.pem",
 		"client.pem":     "bootstrap-client.pem",
@@ -201,6 +217,17 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 	if afterGeneralCRL.Cmp(beforeGeneralCRL) < 0 || afterBrokerCRL.Cmp(beforeBrokerCRL) < 0 {
 		t.Fatal("a complete issuer CRL number regressed across the trust restart")
 	}
+	afterNetwork := slice6VaultNetworkObserve(t, ctx, run, created.NetworkID, controllerIP, vaultIP, user,
+		configDir, observerPath, "after", general, broker)
+	for index := range beforeNetwork {
+		beforeNumber, beforeOK := new(big.Int).SetString(beforeNetwork[index].CRLNumber, 10)
+		afterNumber, afterOK := new(big.Int).SetString(afterNetwork[index].CRLNumber, 10)
+		if !beforeOK || !afterOK || afterNumber.Cmp(beforeNumber) < 0 ||
+			beforeNetwork[index].IssuerID != afterNetwork[index].IssuerID ||
+			beforeNetwork[index].IssuerDigest != afterNetwork[index].IssuerDigest {
+			t.Fatal("network-observed fixed issuer or complete CRL regressed at trust cutover")
+		}
+	}
 	slice6VaultProbe(t, ctx, run, created.NetworkID, controllerIP, vaultIP, user, configDir,
 		"final-positive", "server-ca.pem", "client.pem", "client-key.pem", true)
 	slice6VaultProbe(t, ctx, run, created.NetworkID, controllerIP, vaultIP, user, configDir,
@@ -220,7 +247,7 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 	if err := run.cleanup(ctx); err != nil {
 		t.Fatalf("exact persistent Vault Docker cleanup: %v", err)
 	}
-	t.Log("real file-backed non-dev Vault retained two issuers through a final mTLS trust restart; both temporary trust directions were rejected and exact Docker cleanup passed; managed PKI remains absent")
+	t.Log("real file-backed non-dev Vault retained two fixed issuers and complete CRLs across final mTLS trust restart as independently observed at the controller address; both temporary trust directions were rejected and exact Docker cleanup passed; managed PKI remains absent")
 }
 
 func slice6VaultFileConfig() []byte {
@@ -433,6 +460,53 @@ func slice6VaultReadCRL(t *testing.T, ctx context.Context, run slice6DockerRun, 
 		t.Fatal("complete Vault issuer CRL validity does not cover the trust cutover")
 	}
 	return new(big.Int).Set(list.Number)
+}
+
+type slice6NetworkIssuerObservation struct {
+	IssuerID      string `json:"issuer_id"`
+	IssuerDigest  string `json:"issuer_digest"`
+	CRLNumber     string `json:"crl_number"`
+	CRLThisUpdate string `json:"crl_this_update"`
+	CRLNextUpdate string `json:"crl_next_update"`
+}
+
+func slice6VaultNetworkObserve(t *testing.T, ctx context.Context, run slice6DockerRun, networkID, controllerIP, vaultIP,
+	user, directory, observerPath, phase string, general, broker slice6VaultRoot) []slice6NetworkIssuerObservation {
+	t.Helper()
+	created, err := run.docker(ctx, "create", "--pull=never", "--name", "sr-p6-vault-issuer-"+phase+"-"+run.id,
+		"--label", run.label(), "--network", networkID, "--ip", controllerIP, "--user", user,
+		"--cap-drop=ALL", "--security-opt", "no-new-privileges:true", "--read-only",
+		"--memory=96m", "--cpus=0.5", "--pids-limit=16",
+		"--mount", "type=bind,source="+directory+",target=/probe,readonly",
+		"--mount", "type=bind,source="+observerPath+",target=/issuer-observer,readonly",
+		"--entrypoint", "/issuer-observer",
+		"docker.io/library/alpine@sha256:d858bb5442632a31bd4bca6c5e601dbe6b536fd7942092ea6a08a0a95805693c",
+		"https://"+vaultIP+":8200", general.ID, broker.ID)
+	id := strings.TrimSpace(string(created))
+	if err != nil || len(id) != 64 || !lowerHexSlice6(id) {
+		t.Fatal("independent fixed-issuer observer container was not created")
+	}
+	response, err := run.docker(ctx, "start", "-a", id)
+	var observed []slice6NetworkIssuerObservation
+	if err != nil || json.Unmarshal(response, &observed) != nil || len(observed) != 2 {
+		t.Fatalf("independent fixed-issuer observer failed: %v: %.512s", err, response)
+	}
+	for index, root := range []slice6VaultRoot{general, broker} {
+		digest := sha256.Sum256(root.Certificate.Raw)
+		if observed[index].IssuerID != root.ID || observed[index].IssuerDigest != "sha256:"+hex.EncodeToString(digest[:]) ||
+			observed[index].CRLNumber == "" {
+			t.Fatal("independent issuer observation differs from Vault internal root material")
+		}
+		thisUpdate, thisErr := time.Parse(time.RFC3339Nano, observed[index].CRLThisUpdate)
+		nextUpdate, nextErr := time.Parse(time.RFC3339Nano, observed[index].CRLNextUpdate)
+		if thisErr != nil || nextErr != nil || thisUpdate.After(time.Now()) || !nextUpdate.After(time.Now()) {
+			t.Fatal("independent complete CRL validity does not cover trust cutover")
+		}
+	}
+	if _, err := run.docker(ctx, "rm", id); err != nil {
+		t.Fatal("remove exact fixed-issuer observer container")
+	}
+	return observed
 }
 
 func slice6VaultStartedAt(t *testing.T, ctx context.Context, run slice6DockerRun, serverID string) string {
