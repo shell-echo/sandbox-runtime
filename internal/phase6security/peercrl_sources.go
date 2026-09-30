@@ -16,6 +16,11 @@ const PeerCRLSourcesProtocolID = "sandbox-runtime.phase6-peer-crl-sources.v1"
 
 var peerCRLIssuerIDPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 
+// ValidSlice6IssuerID accepts only an immutable, canonical Vault issuer UUID.
+func ValidSlice6IssuerID(value string) bool {
+	return peerCRLIssuerIDPattern.MatchString(value)
+}
+
 // PeerCRLSources is a closed operator document bound to one canonical
 // security-profile revision. It does not grant an agent a Vault URL or token.
 // The existing certificate controller owns all fixed issuer-source reads.

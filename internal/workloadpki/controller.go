@@ -27,6 +27,14 @@ type CertificateAuthority interface {
 	Revoke(context.Context, string) error
 }
 
+// PolicyIssuerAuthority is the production multi-issuer capability. The v1
+// request already authenticates PolicyID; no caller-selected Vault path or
+// issuer is added to the wire protocol.
+type PolicyIssuerAuthority interface {
+	ValidatePolicyIssuers([]Policy) error
+	PolicyRevocations(context.Context, Policy) (RevocationSnapshot, error)
+}
+
 // PeerIssuerAuthority is an optional, read-only capability. It must never
 // accept a caller-supplied Vault path, issuer reference, or token.
 type PeerIssuerAuthority interface {
@@ -78,6 +86,10 @@ func NewController(config ControllerConfig) (*Controller, error) {
 		}
 		authority, ok := config.Authority.(PeerIssuerAuthority)
 		if !ok || authority.ValidatePeerSources(config.PeerCRLSources.Sources) != nil {
+			return nil, ErrUnavailable
+		}
+		policyAuthority, ok := config.Authority.(PolicyIssuerAuthority)
+		if !ok || policyAuthority.ValidatePolicyIssuers(config.Policies) != nil {
 			return nil, ErrUnavailable
 		}
 	}
@@ -184,7 +196,7 @@ func (c *Controller) Handle(ctx context.Context, request Request, peerUID, peerG
 	case IssueType:
 		return c.issue(operationContext, request, policy, now)
 	case RevocationsType:
-		return c.revocations(operationContext, request)
+		return c.revocations(operationContext, request, policy)
 	case RevokeType:
 		return c.revoke(operationContext, request, policy, now)
 	default:
@@ -242,8 +254,14 @@ func (c *Controller) issue(ctx context.Context, request Request, policy Policy, 
 		NotAfter: issued.NotAfter.Format(time.RFC3339Nano)})
 }
 
-func (c *Controller) revocations(ctx context.Context, request Request) (Response, error) {
-	snapshot, err := c.authority.Revocations(ctx)
+func (c *Controller) revocations(ctx context.Context, request Request, policy Policy) (Response, error) {
+	var snapshot RevocationSnapshot
+	var err error
+	if c.peerCRLProfile != nil {
+		snapshot, err = c.authority.(PolicyIssuerAuthority).PolicyRevocations(ctx, policy)
+	} else {
+		snapshot, err = c.authority.Revocations(ctx)
+	}
 	if err != nil || len(snapshot.DER) < 1 || snapshot.ThisUpdate.IsZero() || snapshot.NextUpdate.IsZero() || !snapshot.NextUpdate.After(snapshot.ThisUpdate) {
 		snapshot.Destroy()
 		return c.errorResponse(request, StatusUnavailable, normalizeAuthorityError(err))

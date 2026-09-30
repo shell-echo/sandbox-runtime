@@ -62,21 +62,24 @@ var (
 )
 
 type Policy struct {
-	ID            string
-	Registry      *securityprincipal.Registry
-	Requester     securityprincipal.Principal
-	Subject       securityprincipal.Principal
-	TrustDomain   string
-	URI           string
-	DNSNames      []string
-	Usages        []string
-	VaultRole     string
-	MaxTTLSeconds int64
-	ExpectedUID   uint32
-	ExpectedGID   uint32
-	PublicKey     ed25519.PublicKey
-	Purpose       string
-	Postgres      PostgresClientIdentity
+	ID          string
+	Registry    *securityprincipal.Registry
+	Requester   securityprincipal.Principal
+	Subject     securityprincipal.Principal
+	TrustDomain string
+	URI         string
+	DNSNames    []string
+	Usages      []string
+	VaultRole   string
+	// IssuerSourceID is operator-pinned configuration, never a wire request
+	// field. Production CRL reads and issuance must select this exact issuer.
+	IssuerSourceID string
+	MaxTTLSeconds  int64
+	ExpectedUID    uint32
+	ExpectedGID    uint32
+	PublicKey      ed25519.PublicKey
+	Purpose        string
+	Postgres       PostgresClientIdentity
 }
 
 type Request struct {
@@ -125,7 +128,9 @@ func (p Policy) Validate() error {
 	parsed, err := url.Parse(p.URI)
 	if !namePattern.MatchString(p.ID) || p.Registry == nil || p.Registry.Validate(p.Requester) != nil || p.Registry.Validate(p.Subject) != nil ||
 		!validPrincipalDelegation(p.Requester, p.Subject) ||
-		!namePattern.MatchString(p.VaultRole) || !validDNS(p.TrustDomain) || err != nil || parsed.Scheme != "spiffe" ||
+		!namePattern.MatchString(p.VaultRole) ||
+		(p.IssuerSourceID != "" && !namePattern.MatchString(p.IssuerSourceID)) ||
+		!validDNS(p.TrustDomain) || err != nil || parsed.Scheme != "spiffe" ||
 		parsed.Host != p.TrustDomain || parsed.Path == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" ||
 		len(p.PublicKey) != ed25519.PublicKeySize || p.MaxTTLSeconds < 60 || p.MaxTTLSeconds > 3600 ||
 		len(p.DNSNames) > 8 || !sortedUnique(p.DNSNames, validDNS) || !validUsages(p.Usages) {

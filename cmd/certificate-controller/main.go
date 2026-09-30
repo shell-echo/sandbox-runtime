@@ -119,6 +119,7 @@ type certificatePolicy struct {
 	DNSNames          []string                    `json:"dns_names"`
 	Usages            []string                    `json:"usages"`
 	VaultRole         string                      `json:"vault_role"`
+	IssuerSourceID    string                      `json:"issuer_source_id,omitempty"`
 	MaxTTLSeconds     int64                       `json:"max_ttl_seconds"`
 	ExpectedUID       uint32                      `json:"expected_uid"`
 	ExpectedGID       uint32                      `json:"expected_gid"`
@@ -307,7 +308,8 @@ func run() (runErr error) { //nolint:gocyclo
 		}
 		policy := workloadpki.Policy{ID: value.ID, Registry: registry, Requester: value.Requester, Subject: value.Subject,
 			TrustDomain: value.TrustDomain, URI: value.URI, DNSNames: value.DNSNames, Usages: value.Usages, VaultRole: value.VaultRole,
-			MaxTTLSeconds: value.MaxTTLSeconds, ExpectedUID: value.ExpectedUID, ExpectedGID: value.ExpectedGID, PublicKey: ed25519.PublicKey(publicKey)}
+			IssuerSourceID: value.IssuerSourceID,
+			MaxTTLSeconds:  value.MaxTTLSeconds, ExpectedUID: value.ExpectedUID, ExpectedGID: value.ExpectedGID, PublicKey: ed25519.PublicKey(publicKey)}
 		if value.Purpose == workloadpki.PostgresClientPurpose && value.Postgres != nil {
 			policy.Purpose = value.Purpose
 			policy.Postgres = workloadpki.PostgresClientIdentity{OwnerDeployment: value.Postgres.OwnerDeployment,
@@ -319,6 +321,10 @@ func run() (runErr error) { //nolint:gocyclo
 			clear(publicKey)
 			return stageError("certificate-policy")
 		}
+		if peerSources == nil && policy.IssuerSourceID != "" || peerSources != nil && policy.IssuerSourceID == "" {
+			clear(publicKey)
+			return stageError("certificate-policy-issuer")
+		}
 		if _, duplicate := vaultPolicies[policy.ID]; duplicate {
 			return stageError("certificate-policy-duplicate")
 		}
@@ -328,6 +334,9 @@ func run() (runErr error) { //nolint:gocyclo
 		if policy.ID == config.ManagedVaultTLS.PolicyID {
 			managedPolicy = policy
 		}
+	}
+	if peerSources != nil && validateFiniteIssuerPolicyGroups(profile, *peerSources, policies) != nil {
+		return stageError("certificate-policy-issuer-groups")
 	}
 	if managedPolicy.ID == "" || managedPolicy.Requester.Kind != securityprincipal.KindController ||
 		managedPolicy.Requester.Name != "certificate_controller" || managedPolicy.Subject != managedPolicy.Requester ||

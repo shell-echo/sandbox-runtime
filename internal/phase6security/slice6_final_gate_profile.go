@@ -10,6 +10,8 @@ import (
 // Earlier 17/12 and 28/33 profiles must never reach Docker side effects.
 func VerifySlice6FinalGateProfile(profile Profile) error {
 	if VerifySlice6DesiredFinalExternalProfile(profile) != nil ||
+		VerifySlice6DNSClientCA(profile) != nil ||
+		VerifySlice6DNSRuntimePolicy(profile) != nil ||
 		VerifySlice6DesiredImageLocations(profile) != nil ||
 		len(profile.Principals) != len(Slice6DesiredDeploymentNames()) ||
 		len(profile.Networks) != len(Slice6DesiredFinalNetworks()) {

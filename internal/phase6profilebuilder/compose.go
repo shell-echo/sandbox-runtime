@@ -16,6 +16,7 @@ type CompositionInputs struct {
 	Images          ImageDraftInputs
 	TrustAnchors    map[string]string
 	ExternalImages  ExternalImageInputs
+	DNSClientCA     DNSClientCAInput
 	EgressKeys      map[string]string
 	CertificateKeys map[string]string
 }
@@ -45,7 +46,11 @@ func ComposeSlice6CandidateProfile(ctx context.Context, input CompositionInputs,
 	if err != nil {
 		return CandidateProfile{}, compositionError("external image archives")
 	}
-	topology, err := BindSlice6FinalTopologyDraft(ctx, trusted, external, now)
+	dns, err := LoadSlice6DNSClientCASupply(input.DNSClientCA, now)
+	if err != nil {
+		return CandidateProfile{}, compositionError("DNS broker-client CA")
+	}
+	topology, err := BindSlice6FinalTopologyDraftWithDNSClientCA(ctx, trusted, external, dns, now)
 	if err != nil {
 		return CandidateProfile{}, compositionError("reviewed topology")
 	}

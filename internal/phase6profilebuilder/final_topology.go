@@ -22,6 +22,7 @@ type FinalTopologyDraft struct {
 	External       []phase6security.ExternalService
 	TrustEdges     []phase6security.TrustEdge
 	ExternalSupply ExternalImageSupply
+	DNSClientCA    DNSClientCASupply
 }
 
 // VerifySources is the all-input pre-freeze recheck for this incomplete
@@ -31,8 +32,39 @@ type FinalTopologyDraft struct {
 func (d FinalTopologyDraft) VerifySources(ctx context.Context, now time.Time) error {
 	if ctx == nil || ctx.Err() != nil || d.ImageSupply.VerifySources(ctx) != nil ||
 		d.Supply.VerifySources() != nil || d.AnchorSupply.VerifySources(now) != nil ||
-		d.ExternalSupply.VerifySources(ctx) != nil {
+		d.ExternalSupply.VerifySources(ctx) != nil ||
+		(d.DNSClientCA.path != "" && d.DNSClientCA.VerifySources(now) != nil) {
 		return ErrInvalidFinalTopologyDraft
+	}
+	if d.DNSClientCA.path != "" {
+		ca, err := d.DNSClientCA.Binding()
+		if err != nil {
+			return ErrInvalidFinalTopologyDraft
+		}
+		count := 0
+		for _, service := range d.External {
+			if service.Name != "dns" {
+				if service.DNSClientCA != nil {
+					return ErrInvalidFinalTopologyDraft
+				}
+				continue
+			}
+			count++
+			if service.DNSClientCA == nil || !reflect.DeepEqual(*service.DNSClientCA, ca) ||
+				service.DNSRuntime == nil || !reflect.DeepEqual(*service.DNSRuntime,
+				phase6security.Slice6DNSRuntimePolicy(d.Supply.external["dns"])) ||
+				service.IdentityDigest != service.Digest() {
+				return ErrInvalidFinalTopologyDraft
+			}
+			for _, edge := range d.TrustEdges {
+				if edge.To == "dns" && edge.ExternalIdentityDigest != service.IdentityDigest {
+					return ErrInvalidFinalTopologyDraft
+				}
+			}
+		}
+		if count != 1 {
+			return ErrInvalidFinalTopologyDraft
+		}
 	}
 	return nil
 }
@@ -47,6 +79,40 @@ func BindSlice6FinalTopologyDraft(ctx context.Context, draft TrustDraft,
 		return FinalTopologyDraft{}, ErrInvalidFinalTopologyDraft
 	}
 	return bindSlice6FinalTopologyDraft(draft, external)
+}
+
+// BindSlice6FinalTopologyDraftWithDNSClientCA additionally binds the exact
+// broker-only public CA source required by the production candidate freeze.
+func BindSlice6FinalTopologyDraftWithDNSClientCA(ctx context.Context, draft TrustDraft,
+	external ExternalImageSupply, dns DNSClientCASupply, now time.Time) (FinalTopologyDraft, error) {
+	if ctx == nil || ctx.Err() != nil || draft.AnchorSupply.VerifySources(now) != nil ||
+		external.VerifySources(ctx) != nil || dns.VerifySources(now) != nil {
+		return FinalTopologyDraft{}, ErrInvalidFinalTopologyDraft
+	}
+	bound, err := bindSlice6FinalTopologyDraft(draft, external)
+	if err != nil {
+		return FinalTopologyDraft{}, err
+	}
+	ca, err := dns.Binding()
+	if err != nil {
+		return FinalTopologyDraft{}, ErrInvalidFinalTopologyDraft
+	}
+	for index := range bound.External {
+		if bound.External[index].Name != "dns" {
+			continue
+		}
+		bound.External[index].DNSClientCA = &ca
+		runtime := phase6security.Slice6DNSRuntimePolicy(bound.Supply.external["dns"])
+		bound.External[index].DNSRuntime = &runtime
+		bound.External[index].IdentityDigest = bound.External[index].Digest()
+		bound.DNSClientCA = dns
+		bound.TrustEdges, err = phase6security.BuildSlice6DesiredFinalTrustEdges(bound.Principals, bound.External)
+		if err != nil {
+			return FinalTopologyDraft{}, ErrInvalidFinalTopologyDraft
+		}
+		return bound, nil
+	}
+	return FinalTopologyDraft{}, ErrInvalidFinalTopologyDraft
 }
 
 func bindSlice6FinalTopologyDraft(draft TrustDraft, external ExternalImageSupply) (FinalTopologyDraft, error) {

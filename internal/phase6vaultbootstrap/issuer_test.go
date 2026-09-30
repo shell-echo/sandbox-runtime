@@ -14,12 +14,66 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"sync/atomic"
 	"testing"
 	"time"
 )
 
 const testIssuerID = "01234567-89ab-cdef-0123-456789abcdef"
+const testBrokerIssuerID = "fedcba98-7654-3210-fedc-ba9876543210"
 const testVaultURI = "spiffe://sandbox-runtime.test/external/vault"
+
+func TestObserveTwoFixedIssuersRejectsMutableAliasAndCrossIssuerCRL(t *testing.T) {
+	client, server, generalDER, generalCRL := issuerFixture(t)
+	_, _, brokerDER, brokerCRL := issuerFixture(t)
+	var wrongBrokerCRL atomic.Bool
+	server.Config.Handler = http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.Header.Get("X-Vault-Token") != "short-lived-operator-token" {
+			writer.WriteHeader(http.StatusForbidden)
+			return
+		}
+		switch request.URL.Path {
+		case "/v1/pki/config/crl":
+			writer.Header().Set("Content-Type", "application/json")
+			_, _ = writer.Write([]byte(`{"data":{"disable":false,"auto_rebuild":false,"enable_delta":false}}`))
+		case "/v1/pki/issuer/" + testIssuerID + "/der":
+			writer.Header().Set("Content-Type", "application/pkix-cert")
+			_, _ = writer.Write(generalDER)
+		case "/v1/pki/issuer/" + testBrokerIssuerID + "/der":
+			writer.Header().Set("Content-Type", "application/pkix-cert")
+			_, _ = writer.Write(brokerDER)
+		case "/v1/pki/issuer/" + testIssuerID + "/crl/der":
+			writer.Header().Set("Content-Type", "application/pkix-crl")
+			_, _ = writer.Write(generalCRL)
+		case "/v1/pki/issuer/" + testBrokerIssuerID + "/crl/der":
+			writer.Header().Set("Content-Type", "application/pkix-crl")
+			if wrongBrokerCRL.Load() {
+				_, _ = writer.Write(generalCRL)
+			} else {
+				_, _ = writer.Write(brokerCRL)
+			}
+		default:
+			writer.WriteHeader(http.StatusNotFound)
+		}
+	})
+	now := time.Now().UTC()
+	token := []byte("short-lived-operator-token")
+	general, err := ObserveFixedIssuer(context.Background(), client, server.URL, "127.0.0.1", testVaultURI, token, testIssuerID, now)
+	if err != nil || general.ID != testIssuerID || general.CRLNumber != "1" {
+		t.Fatalf("general fixed issuer: %v", err)
+	}
+	broker, err := ObserveFixedIssuer(context.Background(), client, server.URL, "127.0.0.1", testVaultURI, token, testBrokerIssuerID, now)
+	if err != nil || broker.ID != testBrokerIssuerID || broker.CRLNumber != "1" || broker.Digest == general.Digest {
+		t.Fatalf("distinct broker fixed issuer: %v", err)
+	}
+	if _, err := ObserveFixedIssuer(context.Background(), client, server.URL, "127.0.0.1", testVaultURI, token, "default", now); err == nil {
+		t.Fatal("mutable default issuer alias admitted")
+	}
+	wrongBrokerCRL.Store(true)
+	if _, err := ObserveFixedIssuer(context.Background(), client, server.URL, "127.0.0.1", testVaultURI, token, testBrokerIssuerID, now); err == nil {
+		t.Fatal("cross-issuer complete CRL admitted")
+	}
+}
 
 func TestObserveIssuerRejectsBootstrapDrift(t *testing.T) {
 	client, server, issuerDER, crlDER := issuerFixture(t)

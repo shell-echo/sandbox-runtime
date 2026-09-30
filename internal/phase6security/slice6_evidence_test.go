@@ -120,6 +120,9 @@ func validSlice6EvidenceFixture(t *testing.T) Slice6Evidence {
 	}
 	draft.ProfileDigest = draft.Digest()
 	profile, err := BuildSlice6FinalExternalProfileTarget(draft)
+	if err == nil {
+		profile = bindSyntheticSlice6DNSClientCA(t, profile)
+	}
 	if err != nil || VerifySlice6FinalGateProfile(profile) != nil {
 		t.Fatalf("final-only synthetic evidence profile: %v", err)
 	}
@@ -164,12 +167,18 @@ func validSlice6EvidenceFixture(t *testing.T) Slice6Evidence {
 		})
 	}
 	for _, external := range profile.External {
+		selected := external.ImageDigest
+		storeMediaType := "application/vnd.oci.image.manifest.v1+json"
+		if external.ImageIdentityKind == ImageIdentityOCIIndex {
+			selected = external.ImageSelectedManifestDigest
+			storeMediaType = "application/vnd.oci.image.index.v1+json"
+		}
 		item := Slice6ExternalEvidence{Name: external.Name,
 			IdentityDigest: external.IdentityDigest, ContainerID: testDigest("external-container/" + external.Name)[7:],
 			ImageReference:      external.ImageReference,
-			RuntimeStoreImageID: external.ImageDigest, SelectedManifestDigest: external.ImageDigest,
-			RuntimeStoreDescriptor:     ImageDescriptor{MediaType: "application/vnd.oci.image.manifest.v1+json", Digest: external.ImageDigest, Size: 1234},
-			SelectedManifestDescriptor: ImageDescriptor{MediaType: "application/vnd.oci.image.manifest.v1+json", Digest: external.ImageDigest, Size: 1234},
+			RuntimeStoreImageID: external.ImageDigest, SelectedManifestDigest: selected,
+			RuntimeStoreDescriptor:     ImageDescriptor{MediaType: storeMediaType, Digest: external.ImageDigest, Size: 1234},
+			SelectedManifestDescriptor: ImageDescriptor{MediaType: "application/vnd.oci.image.manifest.v1+json", Digest: selected, Size: 1234},
 			OCIConfigDigest:            external.ImageConfigDigest, RuntimePlatform: external.ImagePlatform,
 			DescriptorProofDigest:   testDigest("external-descriptor/" + external.Name),
 			ContainerInspectDigest:  testDigest("external-container-inspect/" + external.Name),
@@ -201,6 +210,35 @@ func validSlice6EvidenceFixture(t *testing.T) Slice6Evidence {
 			}
 			for _, rule := range rules {
 				item.PostgresServerAuth.ApprovedSourceCIDRs = append(item.PostgresServerAuth.ApprovedSourceCIDRs, rule.SourceCIDR)
+			}
+		}
+		if external.Name == "dns" {
+			ca := external.DNSClientCA
+			item.DNSClientCA = &Slice6DNSClientCAEvidence{
+				ProfileDigest: profile.ProfileDigest, ArtifactID: ca.ArtifactID,
+				BundleDigest: ca.BundleDigest, IssuerID: ca.IssuerID,
+				IssuerDigest: ca.IssuerDigest, AllowedSubjects: slices.Clone(ca.AllowedSubjects),
+				ObservedMountedBundleDigest: ca.BundleDigest,
+				ReadOnlyMountInspectDigest:  testDigest("dns/client-ca-mount"),
+				VaultIssuerInspectDigest:    testDigest("dns/vault-issuer"),
+				BrokerHandshakeProbeDigest:  testDigest("dns/broker-handshake"),
+				GeneralRejectionProbeDigest: testDigest("dns/general-rejection"),
+			}
+			runtime := external.DNSRuntime
+			item.DNSRuntime = &Slice6DNSRuntimeEvidence{
+				ProfileDigest: profile.ProfileDigest, UID: runtime.UID, GID: runtime.GID,
+				DroppedCapabilities: slices.Clone(runtime.DroppedCapabilities),
+				AddedCapabilities:   slices.Clone(runtime.AddedCapabilities),
+				NoNewPrivileges:     runtime.NoNewPrivileges, ReadOnlyRootFilesystem: runtime.ReadOnlyRootFilesystem,
+				SeccompMode: runtime.SeccompMode, Resources: runtime.Resources,
+				CapInh: "0000000000000000", CapPrm: "0000000000000400", CapEff: "0000000000000400",
+				CapBnd: "0000000000000400", CapAmb: "0000000000000000",
+				InspectorTarget: runtime.InspectorTarget, InspectorReadOnly: runtime.InspectorReadOnly,
+				InspectorBinaryDigest:       testDigest("dns/inspector-binary"),
+				InspectorBuildReceiptDigest: testDigest("dns/inspector-build"),
+				InspectorMountInspectDigest: testDigest("dns/inspector-mount"),
+				InspectorExecInspectDigest:  testDigest("dns/inspector-exec"),
+				ProcessStatusInspectDigest:  testDigest("dns/process-status"),
 			}
 		}
 		evidence.External = append(evidence.External, item)
@@ -412,10 +450,66 @@ func TestSlice6EvidenceRequiresCompleteClosedInventory(t *testing.T) {
 			}
 		})
 	}
+	dnsIndex := -1
+	for index := range evidence.External {
+		if evidence.External[index].Name == "dns" {
+			dnsIndex = index
+		}
+	}
+	if dnsIndex < 0 {
+		t.Fatal("synthetic DNS external missing")
+	}
+	for name, mutate := range map[string]func(*Slice6Evidence){
+		"missing DNS CA proof": func(e *Slice6Evidence) { e.External[dnsIndex].DNSClientCA = nil },
+		"different mounted CA": func(e *Slice6Evidence) {
+			e.External[dnsIndex].DNSClientCA.ObservedMountedBundleDigest = testDigest("other-ca")
+		},
+		"different issuer": func(e *Slice6Evidence) {
+			e.External[dnsIndex].DNSClientCA.IssuerID = "22222222-2222-4222-8222-222222222222"
+		},
+		"missing general rejection": func(e *Slice6Evidence) {
+			e.External[dnsIndex].DNSClientCA.GeneralRejectionProbeDigest = ""
+		},
+		"wrong broker set": func(e *Slice6Evidence) {
+			e.External[dnsIndex].DNSClientCA.AllowedSubjects[0] = "product-runtime"
+		},
+		"DNS proof on another service": func(e *Slice6Evidence) {
+			copy := *e.External[dnsIndex].DNSClientCA
+			e.External[otherIndex].DNSClientCA = &copy
+		},
+		"missing DNS runtime": func(e *Slice6Evidence) { e.External[dnsIndex].DNSRuntime = nil },
+		"extra DNS capability": func(e *Slice6Evidence) {
+			e.External[dnsIndex].DNSRuntime.AddedCapabilities = []string{"CAP_NET_BIND_SERVICE", "CAP_NET_RAW"}
+		},
+		"effective capability drift": func(e *Slice6Evidence) {
+			e.External[dnsIndex].DNSRuntime.CapEff = "0000000000001400"
+		},
+		"DNS uid drift":    func(e *Slice6Evidence) { e.External[dnsIndex].DNSRuntime.UID = 20000 },
+		"DNS host publish": func(e *Slice6Evidence) { e.External[dnsIndex].DNSRuntime.HostPublish = true },
+		"missing DNS process status": func(e *Slice6Evidence) {
+			e.External[dnsIndex].DNSRuntime.ProcessStatusInspectDigest = ""
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var candidate Slice6Evidence
+			if err := json.Unmarshal(document, &candidate); err != nil {
+				t.Fatal(err)
+			}
+			mutate(&candidate)
+			candidate.ManifestDigest = slice6EvidenceDigest(candidate)
+			encoded, err := json.Marshal(candidate)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := VerifySlice6Evidence(encoded); !errors.Is(err, ErrInvalidSlice6Evidence) {
+				t.Fatalf("invalid DNS gate observation accepted: %v", err)
+			}
+		})
+	}
 	for _, malformed := range [][]byte{
 		bytes.Replace(document, []byte(`"id":`), []byte(`"id":"duplicate","id":`), 1),
 		append(append([]byte(nil), document...), []byte(`{}`)...),
-		bytes.Replace(document, []byte(`"version":3`), []byte(`"version":3,"unknown":true`), 1),
+		bytes.Replace(document, []byte(`"version":4`), []byte(`"version":4,"unknown":true`), 1),
 	} {
 		if _, err := VerifySlice6Evidence(malformed); !errors.Is(err, ErrInvalidSlice6Evidence) {
 			t.Fatalf("invalid JSON accepted: %v", err)

@@ -43,9 +43,7 @@ type Issuer struct {
 // The caller must independently bind the returned DER to the intended trust
 // anchors and revoke its bootstrap authority before workload startup.
 func ObserveIssuer(ctx context.Context, client *http.Client, endpoint, serverName, serverURI string, token []byte, now time.Time) (Issuer, error) {
-	if ctx == nil || ctx.Err() != nil || client == nil || len(token) < 8 || len(token) > 8192 ||
-		bytes.IndexAny(token, "\r\n\x00") >= 0 || now.IsZero() || !validEndpoint(endpoint) ||
-		serverName == "" || !validServerURI(serverURI) || !validClient(client, serverName) {
+	if !validIssuerObservationInput(ctx, client, endpoint, serverName, serverURI, token, now) {
 		return Issuer{}, ErrInvalidIssuer
 	}
 	config, err := request(ctx, client, endpoint, serverName, serverURI, token, "/v1/pki/config/issuers", "application/json")
@@ -61,6 +59,40 @@ func ObserveIssuer(ctx context.Context, client *http.Client, endpoint, serverNam
 		return Issuer{}, ErrInvalidIssuer
 	}
 	id := issuerConfig.Data.Default
+	observed, err := observeFixedIssuer(ctx, client, endpoint, serverName, serverURI, token, id, now)
+	if err != nil {
+		return Issuer{}, err
+	}
+	// Detect a default-issuer change during bootstrap. No workload uses the
+	// mutable alias after this point; subsequent reads use only the fixed UUID.
+	confirm, err := request(ctx, client, endpoint, serverName, serverURI, token, "/v1/pki/config/issuers", "application/json")
+	if err != nil || decodeVaultJSON(confirm, &issuerConfig) != nil || issuerConfig.Data.Default != id {
+		return Issuer{}, ErrInvalidIssuer
+	}
+	return observed, nil
+}
+
+// ObserveFixedIssuer reads a caller-selected immutable UUID. This is an
+// operator bootstrap read, not workload authority or a mutable Vault alias.
+// It permits observing both distinct issuers in the same PKI mount.
+func ObserveFixedIssuer(ctx context.Context, client *http.Client, endpoint, serverName, serverURI string,
+	token []byte, issuerID string, now time.Time) (Issuer, error) {
+	if !validIssuerObservationInput(ctx, client, endpoint, serverName, serverURI, token, now) ||
+		!issuerIDPattern.MatchString(issuerID) {
+		return Issuer{}, ErrInvalidIssuer
+	}
+	return observeFixedIssuer(ctx, client, endpoint, serverName, serverURI, token, issuerID, now)
+}
+
+func validIssuerObservationInput(ctx context.Context, client *http.Client, endpoint, serverName, serverURI string,
+	token []byte, now time.Time) bool {
+	return ctx != nil && ctx.Err() == nil && client != nil && len(token) >= 8 && len(token) <= 8192 &&
+		bytes.IndexAny(token, "\r\n\x00") < 0 && !now.IsZero() && validEndpoint(endpoint) &&
+		serverName != "" && validServerURI(serverURI) && validClient(client, serverName)
+}
+
+func observeFixedIssuer(ctx context.Context, client *http.Client, endpoint, serverName, serverURI string,
+	token []byte, id string, now time.Time) (Issuer, error) {
 	crlConfig, err := request(ctx, client, endpoint, serverName, serverURI, token, "/v1/pki/config/crl", "application/json")
 	if err != nil {
 		return Issuer{}, err
@@ -97,12 +129,6 @@ func ObserveIssuer(ctx context.Context, client *http.Client, endpoint, serverNam
 		list.NextUpdate.IsZero() || now.Before(list.ThisUpdate) || !now.Before(list.NextUpdate) ||
 		list.CheckSignatureFrom(certificate) != nil ||
 		(len(certificate.SubjectKeyId) != 0 && !bytes.Equal(list.AuthorityKeyId, certificate.SubjectKeyId)) {
-		return Issuer{}, ErrInvalidIssuer
-	}
-	// Detect a default-issuer change during bootstrap. No workload uses the
-	// mutable alias after this point; subsequent reads use only the fixed UUID.
-	confirm, err := request(ctx, client, endpoint, serverName, serverURI, token, "/v1/pki/config/issuers", "application/json")
-	if err != nil || decodeVaultJSON(confirm, &issuerConfig) != nil || issuerConfig.Data.Default != id {
 		return Issuer{}, ErrInvalidIssuer
 	}
 	sum := sha256.Sum256(der)

@@ -130,6 +130,27 @@ func (c *VaultClient) ValidatePeerSources(sources []phase6security.PeerCRLSource
 	return nil
 }
 
+// ValidatePolicyIssuers closes the production v1 request path over the same
+// immutable issuer sources used by peer-CRL v2. A policy cannot inherit the
+// mount's mutable default issuer or another policy's CRL.
+func (c *VaultClient) ValidatePolicyIssuers(policies []Policy) error {
+	if c == nil || !c.requireImmediateCompleteCRL || len(c.peerIssuerSources) == 0 ||
+		len(policies) == 0 || len(policies) != len(c.policies) {
+		return ErrUnavailable
+	}
+	seen := make(map[string]bool, len(policies))
+	for _, policy := range policies {
+		source, found := c.peerIssuerSources[policy.IssuerSourceID]
+		role, roleFound := c.policies[policy.ID]
+		if policy.Validate() != nil || policy.IssuerSourceID == "" || !found || source.Mount != c.mount ||
+			!roleFound || role != policy.VaultRole || seen[policy.ID] {
+			return ErrUnavailable
+		}
+		seen[policy.ID] = true
+	}
+	return nil
+}
+
 func NewVaultClient(config VaultConfig, client *http.Client, tokens VaultTokenSource) (*VaultClient, error) {
 	parsed, err := url.Parse(config.Endpoint)
 	if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil || (parsed.Path != "" && parsed.Path != "/") || parsed.RawPath != "" || parsed.RawQuery != "" || parsed.Fragment != "" || parsed.String() != config.Endpoint ||
@@ -175,6 +196,20 @@ func (c *VaultClient) Issue(ctx context.Context, policy Policy, csrPEM []byte, t
 	if !ok || vaultRole != policy.VaultRole {
 		return IssuedCertificate{}, ErrDenied
 	}
+	var pinnedIssuerDER []byte
+	if len(c.peerIssuerSources) != 0 {
+		source, found := c.peerIssuerSources[policy.IssuerSourceID]
+		if !found || source.Mount != c.mount || c.verifyImmediateCompleteCRLConfig(ctx, source.Mount) != nil ||
+			c.verifyRoleIssuer(ctx, vaultRole, source.IssuerID) != nil {
+			return IssuedCertificate{}, ErrUnavailable
+		}
+		var err error
+		pinnedIssuerDER, err = c.PeerIssuerCertificate(ctx, policy.IssuerSourceID)
+		if err != nil {
+			return IssuedCertificate{}, ErrUnavailable
+		}
+		defer clear(pinnedIssuerDER)
+	}
 	body, err := json.Marshal(struct {
 		CSR                  string `json:"csr"`
 		TTL                  string `json:"ttl"`
@@ -206,6 +241,14 @@ func (c *VaultClient) Issue(ctx context.Context, policy Policy, csrPEM []byte, t
 	}
 	chain := []byte(strings.Join(data.CAChain, ""))
 	issued := IssuedCertificate{CertificatePEM: []byte(data.Certificate), IssuingCAPEM: []byte(data.IssuingCA), CAChainPEM: chain, Serial: data.SerialNumber}
+	if len(pinnedIssuerDER) != 0 {
+		issuerBlock, rest := pem.Decode(issued.IssuingCAPEM)
+		if issuerBlock == nil || issuerBlock.Type != "CERTIFICATE" || len(issuerBlock.Headers) != 0 ||
+			len(bytes.TrimSpace(rest)) != 0 || !bytes.Equal(issuerBlock.Bytes, pinnedIssuerDER) {
+			issued.Destroy()
+			return IssuedCertificate{}, ErrUnavailable
+		}
+	}
 	certificateBlock, trailing := pem.Decode(issued.CertificatePEM)
 	if certificateBlock == nil || certificateBlock.Type != "CERTIFICATE" || len(certificateBlock.Headers) != 0 || len(bytes.TrimSpace(trailing)) != 0 {
 		issued.Destroy()
@@ -233,6 +276,9 @@ func (c *VaultClient) Revocations(ctx context.Context) (RevocationSnapshot, erro
 	if c == nil || ctx == nil {
 		return RevocationSnapshot{}, ErrUnavailable
 	}
+	if len(c.peerIssuerSources) != 0 {
+		return RevocationSnapshot{}, ErrUnavailable
+	}
 	if c.requireImmediateCompleteCRL {
 		if err := c.VerifyImmediateCompleteCRLConfig(ctx); err != nil {
 			return RevocationSnapshot{}, err
@@ -254,6 +300,46 @@ func (c *VaultClient) Revocations(ctx context.Context) (RevocationSnapshot, erro
 	digest := sha256.Sum256(document)
 	return RevocationSnapshot{IssuerRevision: "vault-crl-" + hex.EncodeToString(digest[:8]), DER: document,
 		ThisUpdate: list.ThisUpdate.UTC(), NextUpdate: list.NextUpdate.UTC()}, nil
+}
+
+// PolicyRevocations is the only production v1 CRL path. It returns the fixed
+// issuer's complete CRL, not the mount default or another policy's CRL.
+func (c *VaultClient) PolicyRevocations(ctx context.Context, policy Policy) (RevocationSnapshot, error) {
+	if c == nil || ctx == nil || policy.Validate() != nil ||
+		c.policies[policy.ID] != policy.VaultRole {
+		return RevocationSnapshot{}, ErrUnavailable
+	}
+	source, known := c.peerIssuerSources[policy.IssuerSourceID]
+	if !known || source.Mount != c.mount {
+		return RevocationSnapshot{}, ErrUnavailable
+	}
+	issuerDER, err := c.PeerIssuerCertificate(ctx, policy.IssuerSourceID)
+	if err != nil {
+		return RevocationSnapshot{}, ErrUnavailable
+	}
+	defer clear(issuerDER)
+	return c.PeerRevocations(ctx, policy.IssuerSourceID, issuerDER)
+}
+
+func (c *VaultClient) verifyRoleIssuer(ctx context.Context, role, issuerID string) error {
+	document, contentType, err := c.request(ctx, http.MethodGet, "/v1/"+c.mount+"/roles/"+role, nil, "application/json")
+	if err != nil {
+		return err
+	}
+	defer clear(document)
+	if contentType != "application/json" {
+		return ErrUnavailable
+	}
+	var data map[string]json.RawMessage
+	if decodeVaultData(document, &data) != nil {
+		return ErrUnavailable
+	}
+	var configured string
+	if json.Unmarshal(data["issuer_ref"], &configured) != nil || configured != issuerID ||
+		!vaultIssuerIDPattern.MatchString(configured) {
+		return ErrUnavailable
+	}
+	return nil
 }
 
 // VerifyImmediateCompleteCRLConfig reads the actual Vault PKI mount policy.

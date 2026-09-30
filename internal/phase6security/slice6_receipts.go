@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -156,6 +157,9 @@ func VerifySlice6EvidenceBundle(manifestPath, receiptRoot string) (Slice6Evidenc
 			!validSlice6ProcessInspectRaw(raw, evidence, entry.Key) {
 			return Slice6Evidence{}, ErrInvalidSlice6Evidence
 		}
+		if entry.Key == "external/dns/dns_process_status" && !validSlice6DNSProcessStatusRaw(raw, evidence) {
+			return Slice6Evidence{}, ErrInvalidSlice6Evidence
+		}
 	}
 	return evidence, nil
 }
@@ -205,6 +209,9 @@ func ReadSlice6RunReceipts(receiptRoot string, evidence Slice6Evidence, keys []s
 		}
 		if kind, _, _ := strings.Cut(entry.Key, "/"); kind == "process" &&
 			strings.HasSuffix(entry.Key, "/inspect") && !validSlice6ProcessInspectRaw(raw, evidence, entry.Key) {
+			return nil, ErrInvalidSlice6Evidence
+		}
+		if entry.Key == "external/dns/dns_process_status" && !validSlice6DNSProcessStatusRaw(raw, evidence) {
 			return nil, ErrInvalidSlice6Evidence
 		}
 		envelopeDocument, err := readPrivateSlice6ReceiptFile(receiptRoot, entry.EnvelopePath, maxSlice6ReceiptSize)
@@ -294,6 +301,20 @@ func expectedSlice6RunReceipts(e Slice6Evidence) map[string]string {
 			add(prefix+"postgres_connections", proof.NewConnectionResultsDigest)
 			add(prefix+"postgres_restart", proof.RestartReconcileResultDigest)
 		}
+		if value.DNSClientCA != nil {
+			proof := value.DNSClientCA
+			add(prefix+"dns_client_ca_mount", proof.ReadOnlyMountInspectDigest)
+			add(prefix+"dns_vault_issuer", proof.VaultIssuerInspectDigest)
+			add(prefix+"dns_broker_handshake", proof.BrokerHandshakeProbeDigest)
+			add(prefix+"dns_general_rejection", proof.GeneralRejectionProbeDigest)
+		}
+		if value.DNSRuntime != nil {
+			proof := value.DNSRuntime
+			add(prefix+"dns_inspector_build", proof.InspectorBuildReceiptDigest)
+			add(prefix+"dns_inspector_mount", proof.InspectorMountInspectDigest)
+			add(prefix+"dns_inspector_exec", proof.InspectorExecInspectDigest)
+			add(prefix+"dns_process_status", proof.ProcessStatusInspectDigest)
+		}
 	}
 	for _, value := range e.Scenarios {
 		add("scenario/"+value.Name+"/observation", value.EvidenceDigest)
@@ -375,6 +396,51 @@ func validSlice6ProcessInspectRaw(document []byte, e Slice6Evidence, key string)
 		return process.Final
 	}
 	return values[0].State.FinishedAt == process.FinishedAt
+}
+
+func validSlice6DNSProcessStatusRaw(document []byte, e Slice6Evidence) bool {
+	var receipt struct {
+		ContainerID string `json:"container_id"`
+		Status      string `json:"status"`
+	}
+	if decodeCanonicalSlice6Receipt(document, &receipt) != nil ||
+		len(receipt.Status) < 1 || len(receipt.Status) > 64<<10 {
+		return false
+	}
+	var observed *Slice6DNSRuntimeEvidence
+	containerID := ""
+	for index := range e.External {
+		if e.External[index].Name == "dns" {
+			observed = e.External[index].DNSRuntime
+			containerID = e.External[index].ContainerID
+		}
+	}
+	if observed == nil || receipt.ContainerID != containerID {
+		return false
+	}
+	wanted := map[string]string{
+		"Name": "coredns", "Pid": "1",
+		"Uid":    fmt.Sprintf("%d %d %d %d", observed.UID, observed.UID, observed.UID, observed.UID),
+		"Gid":    fmt.Sprintf("%d %d %d %d", observed.GID, observed.GID, observed.GID, observed.GID),
+		"CapInh": observed.CapInh, "CapPrm": observed.CapPrm, "CapEff": observed.CapEff,
+		"CapBnd": observed.CapBnd, "CapAmb": observed.CapAmb, "NoNewPrivs": "1", "Seccomp": "2",
+	}
+	seen := make(map[string]bool, len(wanted))
+	for _, line := range strings.Split(receipt.Status, "\n") {
+		key, value, found := strings.Cut(line, ":")
+		if !found {
+			continue
+		}
+		expected, required := wanted[key]
+		if !required {
+			continue
+		}
+		if seen[key] || strings.Join(strings.Fields(value), " ") != expected {
+			return false
+		}
+		seen[key] = true
+	}
+	return len(seen) == len(wanted)
 }
 
 func slice6ReceiptConfigDigest(e Slice6Evidence, kind, subject, key string) string {

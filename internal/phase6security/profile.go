@@ -384,19 +384,49 @@ type TLSIdentity struct {
 }
 
 type ExternalService struct {
-	Name                        string   `json:"name"`
-	ImageReference              string   `json:"image_reference"`
-	ImageDigest                 string   `json:"image_digest"`
-	ImageLocation               string   `json:"image_location"`
-	ImageIdentityKind           string   `json:"image_identity_kind"`
-	ImagePlatform               string   `json:"image_platform"`
-	ImageSelectedManifestDigest string   `json:"image_selected_manifest_digest"`
-	ImageConfigDigest           string   `json:"image_config_digest"`
-	URI                         string   `json:"uri"`
-	DNSNames                    []string `json:"dns_names"`
-	IdentityDigest              string   `json:"identity_digest"`
-	IngressEdges                []string `json:"ingress_edges"`
-	Networks                    []string `json:"networks,omitempty"`
+	Name                        string            `json:"name"`
+	ImageReference              string            `json:"image_reference"`
+	ImageDigest                 string            `json:"image_digest"`
+	ImageLocation               string            `json:"image_location"`
+	ImageIdentityKind           string            `json:"image_identity_kind"`
+	ImagePlatform               string            `json:"image_platform"`
+	ImageSelectedManifestDigest string            `json:"image_selected_manifest_digest"`
+	ImageConfigDigest           string            `json:"image_config_digest"`
+	URI                         string            `json:"uri"`
+	DNSNames                    []string          `json:"dns_names"`
+	IdentityDigest              string            `json:"identity_digest"`
+	IngressEdges                []string          `json:"ingress_edges"`
+	Networks                    []string          `json:"networks,omitempty"`
+	DNSClientCA                 *DNSClientCA      `json:"dns_client_ca,omitempty"`
+	DNSRuntime                  *DNSRuntimePolicy `json:"dns_runtime,omitempty"`
+}
+
+// DNSRuntimePolicy is the sole reviewed external file-capability exception.
+// Repository-owned Principal containers retain their zero-CapAdd rule.
+type DNSRuntimePolicy struct {
+	UID                    uint32    `json:"uid"`
+	GID                    uint32    `json:"gid"`
+	DroppedCapabilities    []string  `json:"dropped_capabilities"`
+	AddedCapabilities      []string  `json:"added_capabilities"`
+	NoNewPrivileges        bool      `json:"no_new_privileges"`
+	ReadOnlyRootFilesystem bool      `json:"read_only_root_filesystem"`
+	SeccompMode            int       `json:"seccomp_mode"`
+	Resources              Resources `json:"resources"`
+	HostNetwork            bool      `json:"host_network"`
+	HostPublish            bool      `json:"host_publish"`
+	InspectorTarget        string    `json:"inspector_target"`
+	InspectorReadOnly      bool      `json:"inspector_read_only"`
+}
+
+// DNSClientCA is the external CoreDNS listener's broker-only client trust,
+// not a general role trust anchor. Its bundle bytes and issuer must be
+// independently observed at the mounted listener before acceptance.
+type DNSClientCA struct {
+	ArtifactID      string   `json:"artifact_id"`
+	BundleDigest    string   `json:"bundle_digest"`
+	IssuerID        string   `json:"issuer_id"`
+	IssuerDigest    string   `json:"issuer_digest"`
+	AllowedSubjects []string `json:"allowed_subjects"`
 }
 
 type TrustEdge struct {
@@ -1195,6 +1225,20 @@ func validateExternal(values []ExternalService) (map[string]ExternalService, err
 	result := make(map[string]ExternalService, len(values))
 	previous := ""
 	for _, value := range values {
+		if value.DNSRuntime != nil && (value.Name != "dns" ||
+			!validSlice6CapacityLimit(value.DNSRuntime.Resources)) {
+			return nil, ErrInvalidProfile
+		}
+		if value.DNSClientCA != nil {
+			ca := value.DNSClientCA
+			if value.Name != "dns" || !namePattern.MatchString(ca.ArtifactID) ||
+				!digestPattern.MatchString(ca.BundleDigest) ||
+				!peerCRLIssuerIDPattern.MatchString(ca.IssuerID) ||
+				!digestPattern.MatchString(ca.IssuerDigest) ||
+				!sortedUniqueNames(ca.AllowedSubjects) || len(ca.AllowedSubjects) != 5 {
+				return nil, ErrInvalidProfile
+			}
+		}
 		if value.Name <= previous || value.ImageLocation != "registry" ||
 			!validImageIdentity(value.ImageLocation, value.ImageIdentityKind, value.ImageReference, value.ImageDigest, value.ImagePlatform,
 				value.ImageSelectedManifestDigest, value.ImageConfigDigest) || !validSPIFFE(value.URI) ||

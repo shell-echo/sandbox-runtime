@@ -1240,7 +1240,9 @@ network path, Creating uncertainty recovery, all attach/drain races, or Slice
 
 ### Single-run Slice 6 evidence identity (2026-09-27)
 
-The not-yet-accepted Slice 6 internal manifest is explicitly versioned to v3.
+The not-yet-accepted Slice 6 internal manifest is explicitly versioned to v4
+after adding source-bound DNS broker-client CA and two-issuer evidence; v3 is
+not accepted by the current verifier.
 One trusted full-topology harness generates one fresh 128-bit lowercase-hex
 `run_id` at run start, uses it for run-owned resources and runtime receipts,
 and binds a private canonical receipt-index digest in the manifest. Each
@@ -1347,6 +1349,79 @@ parallel local signing authority, broaden trust bundles, import system roots,
 weaken TLS verification or substitute generated PEM files for real Vault
 issuer/leaf/CRL observations. A lost or rebuilt issuer invalidates that run's
 candidate rather than preserving its old digest.
+
+### Two immutable Vault issuer groups and DNS client admission (2026-09-30)
+
+Stock CoreDNS has a fixed client-CA admission path; it cannot authorize an
+individual egress-broker SPIFFE URI after a leaf chains to that CA. Therefore
+the isolated non-dev Vault `/pki` mount must create two distinct real issuer
+UUIDs and DER certificates. One broker-only issuer signs exactly the five
+reviewed egress-broker deployments; the other issuer signs ordinary role and
+external-service leaves. The five existing trust-anchor names are purposes,
+not five roots. Internal and external bundles contain only the issuers needed
+on their actual edges. The DNS client-CA mount contains **only** the broker
+issuer, never a general, parent or backup root. An ordinary client leaf with
+otherwise valid client authentication must be rejected by the reachable DNS
+listener at certificate validation, while a broker leaf succeeds.
+
+Controller policy configuration pins each Vault role to one fixed issuer
+source ID; each Vault role's `issuer_ref` must equal that source's immutable
+issuer UUID. Issuance verifies the returned immediate issuer DER, and v1
+revocation requests use the authenticated policy's complete fixed-issuer CRL.
+The mount-default CRL, per-issuer override signing paths, controller writes to
+roles/issuers, and workload-selected issuer references are not production
+authority. The finite two-group policy and peer-edge mapping fails closed if
+a non-broker gets the broker issuer or the DNS bundle issuer differs from the
+broker source. Actual Vault role ACLs and a wrong-subject issuance denial
+remain required live observations.
+
+The source-bound candidate composition input is v2 and requires the original
+single-certificate broker-client CA file plus its issuer UUID. The final
+Profile binds the exact PEM bundle digest, issuer DER digest, issuer UUID and
+five broker subjects into the DNS external identity. Slice 6 evidence is v4
+and additionally requires private same-run receipts for the actual mounted
+read-only bytes, Vault issuer inspection, successful broker handshake, and
+rejected general-client handshake through a controlled reachable ingress.
+Synthetic unit receipts establish only verifier behavior; no real two-issuer
+Vault/DNS gate or Phase 6 acceptance has yet been claimed.
+
+The locked external **stock CoreDNS** image alone has a fixed privilege
+exception: index `sha256:7efd3c635b03efd68c4e8398fc45f0d993d0e9ab016f72c1cefb0fd6d01aa286`,
+selected arm64 manifest `sha256:9a631b1e34491f93a35334bc02d8ae190f16224be41689c7f42cc1711a95fe3a`,
+UID/GID 65532:65532, `CapDrop=ALL`, `CapAdd=NET_BIND_SERVICE` only. Keep
+no-new-privileges, read-only root, seccomp, finite resource limits and private
+network with no host-published port; no repository-owned Principal acquires
+an added capability. The upstream 1.14.7 image build sets the executable's
+`cap_net_bind_service` file capability. On this host, dropping all bounding
+capabilities caused `exec /coredns: operation not permitted`; re-adding only
+`NET_BIND_SERVICE` allowed the same pinned image to execute. Port 853 is
+below 1024, though the network namespace's `ip_unprivileged_port_start`
+also controls bind privilege. This one capability can affect other low ports
+in that namespace, so the final gate must inspect the actual listener and
+network set as well as all process `CapInh/Prm/Eff/Bnd/Amb` values; each set
+may contain no capability bit beyond `0x400`. The Profile and same-run
+evidence reject missing/extra CapAdd, image/UID drift and host publication.
+This does not create a generic external capability escape hatch.
+The candidate preflight also reopens the selected original OCI layers and
+requires the effective `/coredns` file's Linux `security.capability` xattr to
+grant only effective/permitted `NET_BIND_SERVICE`, with no inheritable or
+high capability bits. A changed or absent xattr rejects the external DNS
+image supply before profile freeze; this is image-byte evidence, separate from
+the live process capability observation.
+
+The final local gate may inspect stock CoreDNS PID 1 with one fixed-purpose,
+statically built read-only status inspector mounted as a single file at
+`/phase6-dns-status-inspector`. The inspector accepts no path or command
+arguments, reads only `/proc/1/status`, and emits at most 64 KiB. Docker exec
+runs it as UID/GID 65532:65532 with a short deadline; it does not obtain a
+new capability, network endpoint, writable mount, host PID namespace or
+sidecar. Before and after that exec, the observer compares the same container
+ID, image/entrypoint, host PID, start time and restart count. The gate retains
+the inspector source/build/binary digest, mounted-file/exec inspection and
+actual process-status receipts. The mount remains until exact container
+cleanup; there is no hot unmount or production-service instrumentation claim.
+This is a gate-only observation method, not a substitute for the complete
+CoreDNS listener, TLS and 82-principal deployment checks.
 
 For this reviewed same-host candidate inventory, all 58 deployment names map
 explicitly to their executable build targets. Static Product, Gateway,

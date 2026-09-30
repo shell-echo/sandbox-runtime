@@ -109,6 +109,9 @@ func TestDockerPinnedCoreDNSCandidateDescriptorChain(t *testing.T) {
 		VerifyOCIArchiveLayers(archive, documents.Manifest, documents.Config) != nil {
 		t.Fatalf("CoreDNS original OCI chain rejected: %#v, %v", proof, err)
 	}
+	if err := VerifyOCIArchiveCoreDNSCapability(archive, documents.Manifest, documents.Config); err != nil {
+		t.Fatalf("CoreDNS original file capability rejected: %v", err)
+	}
 	name := fmt.Sprintf("p6-coredns-descriptor-%d", time.Now().UnixNano())
 	containerID, err := dockerTopology(ctx, "create", "--pull=never", "--name", name, "--network", "none", image)
 	if err != nil {

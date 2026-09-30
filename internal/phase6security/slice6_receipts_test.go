@@ -1,7 +1,9 @@
 package phase6security
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -592,6 +594,9 @@ func validSlice6ReceiptBundleFixtureWithOverrides(t *testing.T, customize func(*
 			}
 			raw = syntheticSlice6ProcessInspect(t, evidence.RunID, process)
 		}
+		if key == "external/dns/dns_process_status" {
+			raw = syntheticSlice6DNSStatusRaw(t, evidence)
+		}
 		if replacement, ok := overrides[key]; ok {
 			raw = replacement
 		}
@@ -631,6 +636,53 @@ func validSlice6ReceiptBundleFixtureWithOverrides(t *testing.T, customize func(*
 		t.Fatal("read finalized receipt index")
 	}
 	return evidence, index, root, manifest
+}
+
+func syntheticSlice6DNSStatusRaw(t *testing.T, evidence Slice6Evidence) []byte {
+	t.Helper()
+	for _, external := range evidence.External {
+		if external.Name != "dns" || external.DNSRuntime == nil {
+			continue
+		}
+		proof := external.DNSRuntime
+		status := fmt.Sprintf("Name:\tcoredns\nPid:\t1\nUid:\t%d\t%d\t%d\t%d\nGid:\t%d\t%d\t%d\t%d\nCapInh:\t%s\nCapPrm:\t%s\nCapEff:\t%s\nCapBnd:\t%s\nCapAmb:\t%s\nNoNewPrivs:\t1\nSeccomp:\t2\n",
+			proof.UID, proof.UID, proof.UID, proof.UID,
+			proof.GID, proof.GID, proof.GID, proof.GID,
+			proof.CapInh, proof.CapPrm, proof.CapEff, proof.CapBnd, proof.CapAmb)
+		value := struct {
+			ContainerID string `json:"container_id"`
+			Status      string `json:"status"`
+		}{ContainerID: external.ContainerID, Status: status}
+		document, err := json.Marshal(value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return document
+	}
+	t.Fatal("synthetic DNS process status missing")
+	return nil
+}
+
+func TestSlice6DNSProcessStatusReceiptRejectsCapabilityAndIdentityDrift(t *testing.T) {
+	evidence := validSlice6EvidenceFixture(t)
+	raw := syntheticSlice6DNSStatusRaw(t, evidence)
+	if !validSlice6DNSProcessStatusRaw(raw, evidence) {
+		t.Fatal("unit DNS process status rejected")
+	}
+	for name, altered := range map[string][]byte{
+		"extra cap":       bytes.Replace(raw, []byte("0000000000000400"), []byte("0000000000001400"), 1),
+		"wrong process":   bytes.Replace(raw, []byte("Name:\\tcoredns"), []byte("Name:\\tsh"), 1),
+		"wrong pid":       bytes.Replace(raw, []byte("Pid:\\t1"), []byte("Pid:\\t2"), 1),
+		"wrong uid":       bytes.Replace(raw, []byte("65532\\t65532"), []byte("65533\\t65533"), 1),
+		"missing nnp":     bytes.Replace(raw, []byte("NoNewPrivs:\\t1"), []byte("NoNewPrivs:\\t0"), 1),
+		"wrong container": bytes.Replace(raw, []byte(`"container_id":"`), []byte(`"container_id":"wrong-`), 1),
+	} {
+		t.Run(name, func(t *testing.T) {
+			if bytes.Equal(raw, altered) || validSlice6DNSProcessStatusRaw(altered, evidence) {
+				t.Fatal("drifted DNS process status admitted")
+			}
+		})
+	}
 }
 
 func syntheticSlice6ProcessInspect(t *testing.T, runID string, process Slice6ProcessEvidence) []byte {
@@ -873,6 +925,22 @@ func setSlice6RunReceiptTestDigest(t *testing.T, e *Slice6Evidence, key, digest 
 				value.PostgresServerAuth.NewConnectionResultsDigest = digest
 			case "postgres_restart":
 				value.PostgresServerAuth.RestartReconcileResultDigest = digest
+			case "dns_client_ca_mount":
+				value.DNSClientCA.ReadOnlyMountInspectDigest = digest
+			case "dns_vault_issuer":
+				value.DNSClientCA.VaultIssuerInspectDigest = digest
+			case "dns_broker_handshake":
+				value.DNSClientCA.BrokerHandshakeProbeDigest = digest
+			case "dns_general_rejection":
+				value.DNSClientCA.GeneralRejectionProbeDigest = digest
+			case "dns_process_status":
+				value.DNSRuntime.ProcessStatusInspectDigest = digest
+			case "dns_inspector_build":
+				value.DNSRuntime.InspectorBuildReceiptDigest = digest
+			case "dns_inspector_mount":
+				value.DNSRuntime.InspectorMountInspectDigest = digest
+			case "dns_inspector_exec":
+				value.DNSRuntime.InspectorExecInspectDigest = digest
 			default:
 				t.Fatalf("unknown external receipt %s", key)
 			}

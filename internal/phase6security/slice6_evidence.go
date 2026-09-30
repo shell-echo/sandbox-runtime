@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"slices"
 	"sort"
+	"strconv"
 	"time"
 )
 
@@ -19,7 +20,7 @@ import (
 // that the named commands ran; the gate must retain its raw private receipts.
 const (
 	Slice6EvidenceID      = "product-v1-phase-6-slice-6"
-	Slice6EvidenceVersion = 3
+	Slice6EvidenceVersion = 4
 	maxSlice6EvidenceSize = 8 << 20
 )
 
@@ -194,6 +195,54 @@ type Slice6ExternalEvidence struct {
 	ReachabilityProbeDigest    string                            `json:"reachability_probe_digest"`
 	RestoreDomainSeparated     bool                              `json:"restore_domain_separated"`
 	PostgresServerAuth         *Slice6PostgresServerAuthEvidence `json:"postgres_server_auth,omitempty"`
+	DNSClientCA                *Slice6DNSClientCAEvidence        `json:"dns_client_ca,omitempty"`
+	DNSRuntime                 *Slice6DNSRuntimeEvidence         `json:"dns_runtime,omitempty"`
+}
+
+// Slice6DNSRuntimeEvidence records the effective DNS process credentials and
+// all five Linux capability sets, in addition to the exact Docker config.
+// Actual /proc and Docker inspection remain the live gate's responsibility.
+type Slice6DNSRuntimeEvidence struct {
+	ProfileDigest               string    `json:"profile_digest"`
+	UID                         uint32    `json:"uid"`
+	GID                         uint32    `json:"gid"`
+	DroppedCapabilities         []string  `json:"dropped_capabilities"`
+	AddedCapabilities           []string  `json:"added_capabilities"`
+	NoNewPrivileges             bool      `json:"no_new_privileges"`
+	ReadOnlyRootFilesystem      bool      `json:"read_only_root_filesystem"`
+	SeccompMode                 int       `json:"seccomp_mode"`
+	Resources                   Resources `json:"resources"`
+	HostNetwork                 bool      `json:"host_network"`
+	HostPublish                 bool      `json:"host_publish"`
+	CapInh                      string    `json:"cap_inh"`
+	CapPrm                      string    `json:"cap_prm"`
+	CapEff                      string    `json:"cap_eff"`
+	CapBnd                      string    `json:"cap_bnd"`
+	CapAmb                      string    `json:"cap_amb"`
+	InspectorTarget             string    `json:"inspector_target"`
+	InspectorReadOnly           bool      `json:"inspector_read_only"`
+	InspectorBinaryDigest       string    `json:"inspector_binary_digest"`
+	InspectorBuildReceiptDigest string    `json:"inspector_build_receipt_digest"`
+	InspectorMountInspectDigest string    `json:"inspector_mount_inspect_digest"`
+	InspectorExecInspectDigest  string    `json:"inspector_exec_inspect_digest"`
+	ProcessStatusInspectDigest  string    `json:"process_status_inspect_digest"`
+}
+
+// Slice6DNSClientCAEvidence binds independently retained Vault issuer,
+// CoreDNS mount/content, and positive/negative TLS handshake receipts. The
+// digest fields alone cannot prove that those operations actually ran.
+type Slice6DNSClientCAEvidence struct {
+	ProfileDigest               string   `json:"profile_digest"`
+	ArtifactID                  string   `json:"artifact_id"`
+	BundleDigest                string   `json:"bundle_digest"`
+	IssuerID                    string   `json:"issuer_id"`
+	IssuerDigest                string   `json:"issuer_digest"`
+	AllowedSubjects             []string `json:"allowed_subjects"`
+	ObservedMountedBundleDigest string   `json:"observed_mounted_bundle_digest"`
+	ReadOnlyMountInspectDigest  string   `json:"read_only_mount_inspect_digest"`
+	VaultIssuerInspectDigest    string   `json:"vault_issuer_inspect_digest"`
+	BrokerHandshakeProbeDigest  string   `json:"broker_handshake_probe_digest"`
+	GeneralRejectionProbeDigest string   `json:"general_rejection_probe_digest"`
 }
 
 // Slice6PostgresServerAuthEvidence names private raw receipts retained by the
@@ -433,7 +482,7 @@ func slice6EvidenceDigest(e Slice6Evidence) string {
 	if err != nil {
 		return ""
 	}
-	hash := sha256.Sum256(append([]byte("sandbox-runtime/phase6-slice6/evidence/v3\x00"), document...))
+	hash := sha256.Sum256(append([]byte("sandbox-runtime/phase6-slice6/evidence/v4\x00"), document...))
 	return "sha256:" + hex.EncodeToString(hash[:])
 }
 
@@ -553,8 +602,60 @@ func validSlice6External(profile Profile, values []Slice6ExternalEvidence) bool 
 		} else if value.PostgresServerAuth != nil {
 			return false
 		}
+		if expected.Name == "dns" {
+			ca, proof := expected.DNSClientCA, value.DNSClientCA
+			if ca == nil || proof == nil || proof.ProfileDigest != profile.ProfileDigest ||
+				proof.ArtifactID != ca.ArtifactID || proof.BundleDigest != ca.BundleDigest ||
+				proof.IssuerID != ca.IssuerID || proof.IssuerDigest != ca.IssuerDigest ||
+				!slices.Equal(proof.AllowedSubjects, ca.AllowedSubjects) ||
+				proof.ObservedMountedBundleDigest != ca.BundleDigest ||
+				!digestPattern.MatchString(proof.ReadOnlyMountInspectDigest) ||
+				!digestPattern.MatchString(proof.VaultIssuerInspectDigest) ||
+				!digestPattern.MatchString(proof.BrokerHandshakeProbeDigest) ||
+				!digestPattern.MatchString(proof.GeneralRejectionProbeDigest) {
+				return false
+			}
+		} else if value.DNSClientCA != nil {
+			return false
+		}
+		if expected.Name == "dns" {
+			policy, proof := expected.DNSRuntime, value.DNSRuntime
+			if policy == nil || proof == nil || proof.ProfileDigest != profile.ProfileDigest ||
+				proof.UID != policy.UID || proof.GID != policy.GID ||
+				!slices.Equal(proof.DroppedCapabilities, policy.DroppedCapabilities) ||
+				!slices.Equal(proof.AddedCapabilities, policy.AddedCapabilities) ||
+				proof.NoNewPrivileges != policy.NoNewPrivileges ||
+				proof.ReadOnlyRootFilesystem != policy.ReadOnlyRootFilesystem ||
+				proof.SeccompMode != policy.SeccompMode || proof.Resources != policy.Resources ||
+				proof.HostNetwork || proof.HostPublish || !validDNSCapSet(proof.CapInh, false) ||
+				!validDNSCapSet(proof.CapPrm, false) || !validDNSCapSet(proof.CapEff, false) ||
+				!validDNSCapSet(proof.CapBnd, true) || !validDNSCapSet(proof.CapAmb, false) ||
+				proof.InspectorTarget != policy.InspectorTarget || !proof.InspectorReadOnly ||
+				!digestPattern.MatchString(proof.InspectorBinaryDigest) ||
+				!digestPattern.MatchString(proof.InspectorBuildReceiptDigest) ||
+				!digestPattern.MatchString(proof.InspectorMountInspectDigest) ||
+				!digestPattern.MatchString(proof.InspectorExecInspectDigest) ||
+				!digestPattern.MatchString(proof.ProcessStatusInspectDigest) {
+				return false
+			}
+		} else if value.DNSRuntime != nil {
+			return false
+		}
 	}
 	return true
+}
+
+var dnsCapSetPattern = regexp.MustCompile(`^[0-9a-f]{16}$`)
+
+func validDNSCapSet(value string, bounding bool) bool {
+	if !dnsCapSetPattern.MatchString(value) {
+		return false
+	}
+	bits, err := strconv.ParseUint(value, 16, 64)
+	if err != nil || bits&^uint64(0x400) != 0 {
+		return false
+	}
+	return !bounding || bits == 0x400
 }
 
 func validSlice6PostgresIngressProof(policy PostgresServerAuthPolicy, proof *Slice6PostgresServerAuthEvidence) bool {

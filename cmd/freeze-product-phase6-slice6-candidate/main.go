@@ -20,7 +20,7 @@ import (
 	"github.com/shell-echo/sandbox-runtime/internal/secretfile"
 )
 
-const inputSchema = "sandbox-runtime.phase6-slice6-composition.v1"
+const inputSchema = "sandbox-runtime.phase6-slice6-composition.v2"
 
 var errInvalidInput = errors.New("invalid Phase 6 Slice 6 candidate input")
 
@@ -29,6 +29,7 @@ type compositionFile struct {
 	Images          phase6profilebuilder.ImageDraftInputs    `json:"images"`
 	TrustAnchors    map[string]string                        `json:"trust_anchors"`
 	ExternalImages  phase6profilebuilder.ExternalImageInputs `json:"external_images"`
+	DNSClientCA     phase6profilebuilder.DNSClientCAInput    `json:"dns_client_ca"`
 	EgressKeys      map[string]string                        `json:"egress_keys"`
 	CertificateKeys map[string]string                        `json:"certificate_keys"`
 }
@@ -65,7 +66,7 @@ func run(ctx context.Context, inputPath, outputPath string, now time.Time) error
 	}
 	candidate, err := phase6profilebuilder.ComposeSlice6CandidateProfile(ctx,
 		phase6profilebuilder.CompositionInputs{Images: input.Images, TrustAnchors: input.TrustAnchors,
-			ExternalImages: input.ExternalImages, EgressKeys: input.EgressKeys,
+			ExternalImages: input.ExternalImages, DNSClientCA: input.DNSClientCA, EgressKeys: input.EgressKeys,
 			CertificateKeys: input.CertificateKeys}, now)
 	if err != nil {
 		return err

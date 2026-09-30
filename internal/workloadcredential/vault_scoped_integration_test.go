@@ -150,6 +150,31 @@ storage "inmem" {}
 		observedIssuer.Digest != scopedVaultDigestDER(observedIssuer.DER) || observedIssuer.CRLNextUpdate.IsZero() {
 		t.Fatalf("real Vault fixed issuer bootstrap: %v", err)
 	}
+	var brokerRoot struct {
+		Data struct {
+			IssuerID string `json:"issuer_id"`
+		} `json:"data"`
+	}
+	scopedVaultMust(t, ctx, httpClient, http.MethodPost, endpoint+"/v1/pki/issuers/generate/root/internal", initialized.RootToken,
+		map[string]any{"common_name": "sandbox-runtime broker-only test issuer", "issuer_name": "broker-only",
+			"ttl": "1h", "key_type": "ec", "key_bits": 256}, &brokerRoot)
+	if brokerRoot.Data.IssuerID == "" || brokerRoot.Data.IssuerID == observedIssuer.ID {
+		t.Fatal("second Vault issuer was missing or reused the first UUID")
+	}
+	brokerIssuer, err := phase6vaultbootstrap.ObserveFixedIssuer(ctx, httpClient, endpoint, "127.0.0.1",
+		"spiffe://sandbox-runtime.test/external/vault", []byte(initialized.RootToken),
+		brokerRoot.Data.IssuerID, time.Now().UTC())
+	if err != nil || brokerIssuer.ID != brokerRoot.Data.IssuerID || brokerIssuer.Digest == observedIssuer.Digest ||
+		brokerIssuer.Digest != scopedVaultDigestDER(brokerIssuer.DER) || brokerIssuer.CRLNextUpdate.IsZero() {
+		t.Fatalf("real Vault second fixed issuer bootstrap: %v", err)
+	}
+	stillDefault, err := phase6vaultbootstrap.ObserveIssuer(ctx, httpClient, endpoint, "127.0.0.1",
+		"spiffe://sandbox-runtime.test/external/vault", []byte(initialized.RootToken), time.Now().UTC())
+	if err != nil || stillDefault.ID != observedIssuer.ID {
+		t.Fatalf("second issuer unexpectedly changed the mount default: %v", err)
+	}
+	runVaultDNSIssuerSeparationComponent(t, ctx, httpClient, endpoint, initialized.RootToken,
+		observedIssuer, brokerIssuer, directory)
 	policy := "certificate-controller-pki"
 	otherPolicy := "product-runtime-vault"
 	unrelatedPolicy := "unrelated-business-vault"

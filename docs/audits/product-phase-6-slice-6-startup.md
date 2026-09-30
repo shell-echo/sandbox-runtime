@@ -4,6 +4,66 @@ Date: 2026-09-23
 
 Status: implementation underway. Product Phase 6 remains **5/15**.
 
+Checkpoint 2026-09-30 (two-issuer/DNS client-CA boundary, component evidence
+only): the production certificate-controller draft now partitions the five
+egress-broker signer policies from all ordinary policies across two immutable
+Vault issuer UUID/DER sources; v1 revocation reads select the authenticated
+policy's fixed complete CRL, never the mutable mount default. Issuance checks
+the Vault role's actual `issuer_ref` and returned immediate issuer DER. The
+source-bound candidate input advances to composition v2 with a separate
+single-certificate DNS broker-client CA file; the final Profile binds its
+exact bytes, issuer and five intended subjects to DNS external identity.
+The unaccepted Slice 6 manifest advances to v4 and requires same-run DNS
+mount/issuer/positive-broker/negative-general raw receipts. Unit and targeted
+race/shuffle checks pass; no real manifest exists.
+
+A tagged real non-dev Vault plus stock CoreDNS component gate now generates
+two Vault-internal root issuers in one `/pki` mount, reads both fixed UUIDs,
+DER and complete CRLs, pins three restricted roles, verifies actual leaves,
+rejects a wrong broker URI and per-issuer signing override, and performs a
+real DNS-over-TLS query with the broker certificate. An otherwise valid
+ordinary client certificate, forced onto the wire despite CoreDNS advertising
+only the broker CA, receives the TLS `unknown certificate authority` alert;
+a second broker query confirms the listener remains reachable. Both Docker
+containers are removed exactly. This still uses loopback component ingress,
+not the 82-role isolated network or all 16 live scenarios. The locked stock
+CoreDNS image fails to execute with `--cap-drop=ALL` and succeeds with only
+`NET_BIND_SERVICE` added to the bounding set, consistent with the upstream
+image's file capability. Sandbox adjudicated the one-service exception: the
+final Profile now binds original index/selected arm64 manifest, 65532:65532,
+drop-all/add-only-`NET_BIND_SERVICE`, NNP, read-only root, seccomp mode and
+finite source-derived limits. The v4 evidence requires effective process
+UID/GID and all five capability sets, plus a private raw `/proc` status
+receipt. 853 is below 1024, and the capability also grants residual low-port
+authority in the namespace; actual listener and network inspection remain
+required. Repository-owned roles still have no CapAdd. All previously frozen
+image candidates are prior-revision inputs after these source changes. Phase 6
+remains **5/15**.
+
+The gate-only CoreDNS PID 1 inspector also passed a tagged real-Docker
+component test against that stock image. A freshly built static arm64 binary
+was mounted as exactly one read-only file, executed as 65532:65532 with a
+three-second deadline, and read only `/proc/1/status` (64 KiB maximum). Docker
+inspection before and after verified one unchanged container ID, image,
+`/coredns` entrypoint, host PID, start time and restart count. Observed PID 1
+had UID/GID 65532, NNP=1, seccomp=2, CapInh=0, CapPrm/CapEff/CapBnd=0x400 and
+CapAmb=0. The diagnostic container was removed exactly. This validates the
+observation method, not a same-run final DNS service or its complete listener
+and TLS edges. Inspector source/build/binary/mount/exec/status receipts must
+still be captured in the final gate; the mount lasts until container cleanup.
+The retained selected arm64 OCI archive was independently reopened to verify
+the effective `/coredns` layer's `security.capability` xattr: its effective and
+permitted bit is `NET_BIND_SERVICE` only, with no inheritable or high bits.
+The source-bound external-image loader now rejects an absent or changed DNS
+file capability. This strengthens candidate preflight but is not a live
+82-principal observation.
+The current component source passes the full repository race/shuffle suite
+with local package concurrency `-p=2`, `go vet ./...`, integration-tag vet for
+the touched packages, the Product Contract lock verifier, the tagged real
+Vault/CoreDNS two-issuer check, the pinned CoreDNS archive and inspector
+Docker checks, and the Slice 6 tagged plan tests. These checks do not admit
+the final same-run topology or advance the phase count.
+
 Checkpoint 2026-09-30 (candidate input composition, not admission): all 12
 distinct local-role targets were built and recorded from clean revision
 `19b1561a8f05de8ec76da810b139087789f2651d` as private arm64 OCI

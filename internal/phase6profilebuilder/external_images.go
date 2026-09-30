@@ -208,6 +208,10 @@ func verifyExternalArchive(archive ExternalArchive, reference, platform string) 
 		phase6security.VerifyOCIArchiveLayers(archive.Path, documents.Manifest, documents.Config) != nil {
 		return ImageBinding{}, "", ErrInvalidExternalImageSupply
 	}
+	if reference == slice6DNSImage &&
+		phase6security.VerifyOCIArchiveCoreDNSCapability(archive.Path, documents.Manifest, documents.Config) != nil {
+		return ImageBinding{}, "", ErrInvalidExternalImageSupply
+	}
 	return ImageBinding{Reference: reference, Digest: digest, Location: "registry",
 		Kind: phase6security.ImageIdentityOCIIndex, Platform: platform,
 		SelectedManifestDigest: archive.SelectedManifestDigest, ConfigDigest: proof.ConfigDigest}, proof.ProofDigest, nil

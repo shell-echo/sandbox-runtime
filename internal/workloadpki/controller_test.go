@@ -16,7 +16,53 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
 )
+
+type policyIssuerFixtureAuthority struct {
+	fakeCertificateAuthority
+	selectedID   string
+	defaultCalls int
+}
+
+func (f *policyIssuerFixtureAuthority) ValidatePolicyIssuers(policies []Policy) error {
+	if len(policies) != 1 || policies[0].IssuerSourceID == "" {
+		return ErrUnavailable
+	}
+	return nil
+}
+
+func (f *policyIssuerFixtureAuthority) PolicyRevocations(ctx context.Context, policy Policy) (RevocationSnapshot, error) {
+	f.selectedID = policy.IssuerSourceID
+	return f.fakeCertificateAuthority.Revocations(ctx)
+}
+
+func (f *policyIssuerFixtureAuthority) Revocations(context.Context) (RevocationSnapshot, error) {
+	f.defaultCalls++
+	return RevocationSnapshot{}, ErrUnavailable
+}
+
+func TestControllerProductionV1RevocationsSelectsAuthenticatedPolicyIssuer(t *testing.T) {
+	fixture := newProtocolFixture(t)
+	fixture.policy.IssuerSourceID = "broker-source"
+	authority := &policyIssuerFixtureAuthority{fakeCertificateAuthority: fakeCertificateAuthority{fixture: fixture}}
+	controller := &Controller{authority: authority, controllerKeyID: fixture.controllerID,
+		controllerKey: fixture.controllerPriv, now: func() time.Time { return fixture.now },
+		peerCRLProfile: &phase6security.Profile{}}
+	request, err := NewRevocationsRequest(fixture.policy, "request-crl-1",
+		base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{9}, 32)),
+		fixture.now.Add(30*time.Second), fixture.agentPrivate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err := controller.revocations(context.Background(), request, fixture.policy)
+	if err != nil || response.Validate(request, fixture.policy, fixture.controllerID, fixture.controllerPub, fixture.now) != nil ||
+		authority.selectedID != "broker-source" || authority.defaultCalls != 0 {
+		t.Fatalf("policy-selected CRL = %#v, %v; source=%s default=%d", response, err, authority.selectedID, authority.defaultCalls)
+	}
+	response.Destroy()
+}
 
 type fakeCertificateAuthority struct {
 	mu          sync.Mutex

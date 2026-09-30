@@ -6,9 +6,12 @@ preflight tool, not a launcher, live observation, evidence generator or release
 gate. A successful output does not move Phase 6 beyond **5/15**.
 
 The canonical, mode-0600 input JSON has schema version
-`sandbox-runtime.phase6-slice6-composition.v1` and exactly these top-level
+`sandbox-runtime.phase6-slice6-composition.v2` and exactly these top-level
 fields: `schema_version`, `images`, `trust_anchors`, `external_images`,
-`egress_keys`, `certificate_keys`. The `images` object names the clean source
+`dns_client_ca`, `egress_keys`, `certificate_keys`. `dns_client_ca` names the
+private, single-certificate broker-only public CA bundle and its immutable
+Vault issuer UUID; this is an additional original input, not a sixth general
+trust anchor. The `images` object names the clean source
 root/revision, run ID, environment and principal-profile digests, the complete
 12-target local-role manifest directory, matching Desktop candidate manifest,
 and locked Browser publication archive. `external_images` names the same
@@ -28,8 +31,12 @@ from missing input or use a synthetic fixture as a fallback.
 
 The five CA bundle files must correspond to actual constrained issuer and
 service trust relationships established in the isolated non-dev Vault
-bootstrap. Valid PEM bytes alone are insufficient. The full gate must later
+bootstrap. The separate `dns_client_ca` file must contain only the broker
+issuer CA, and its UUID/DER must match the five-broker-only Vault source and
+controller policy. Valid PEM bytes alone are insufficient. The full gate must later
 independently observe Vault issuer UUID/DER/CRL, live leaf chains and uses,
-running process and Docker policy, all 16 scenarios and exact cleanup. A
+the exact CoreDNS read-only mount, broker success and general-client rejection
+at a reachable DNS listener, running process and Docker policy, all 16
+scenarios and exact cleanup. A
 candidate from a previous source revision, changed issuer, or changed private
 artifact cannot be carried forward to a new run.
