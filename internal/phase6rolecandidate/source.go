@@ -86,7 +86,7 @@ func CollectSourceInputs(ctx context.Context, sourceRoot, deployment, platform s
 	dockerfilePath := filepath.Join(sourceRoot, "profiles", "phase6", "local-role", "Dockerfile")
 	buildScriptPath := filepath.Join(sourceRoot, "profiles", "phase6", "local-role", "build.sh")
 	dockerfile, err := privateSourceFile(dockerfilePath)
-	if err != nil || !strings.HasPrefix(string(dockerfile), "FROM alpine@"+baseImageDigest+"\n") {
+	if err != nil || !strings.HasPrefix(string(dockerfile), "FROM alpine@"+baseImageDigest+" AS role-base\n") {
 		return SourceInputs{}, ErrInvalidSourceInputs
 	}
 	script, err := privateSourceFile(buildScriptPath)

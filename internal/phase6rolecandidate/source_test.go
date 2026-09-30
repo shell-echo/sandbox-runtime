@@ -21,7 +21,7 @@ func TestCollectSourceInputsRequiresReviewedCleanBuild(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	write("profiles/phase6/local-role/Dockerfile", "FROM alpine@"+baseImageDigest+"\nUSER 65532:65532\n")
+	write("profiles/phase6/local-role/Dockerfile", "FROM alpine@"+baseImageDigest+" AS role-base\nUSER 65532:65532\n")
 	write("profiles/phase6/local-role/build.sh", "#!/bin/sh\nexit 0\n")
 	write("go.mod", "module example.test/phase6\n\ngo 1.26\n")
 	write("go.sum", "example.test/dependency v1.0.0 h1:fixture\n")
