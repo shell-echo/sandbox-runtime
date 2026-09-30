@@ -2811,9 +2811,51 @@ Docker inspection matched each policy's normalized source JSON, and both
 processes reported zero effective capabilities, NNP=1 and seccomp mode 2.
 Original Moby permitted six-byte `process_vm_readv` and `process_vm_writev`
 on self plus `PTRACE_TRACEME`; the derived controller/agent policy denied all
-three with EPERM. Both
-run-owned containers and the private probe directory were verified absent.
+three with EPERM. Both run-owned containers and the private probe directory
+were verified absent.
 This differential checks one concrete sensitive allowance; it is not a real
 Vault→credential controller→certificate controller→agent startup, a general
 syscall-minimality proof, or final resource/headroom evidence. Phase 6
 remains **5/15**.
+
+The existing opt-in credential-v2 cross-UID Docker gate was then run with
+the exact derived policy explicitly applied to its issuer and clients.
+Normal issue/renew/status/revoke, wrong identity/GID, incomplete input,
+cancellation and substituted socket passed at the candidate 128 MiB/200m/32
+issuer and 96 MiB/100m/32 client tiers. Docker's normalized applied-policy
+JSON matched the checked source; the issuer had high UID, zero effective
+capabilities, NNP=1, seccomp mode 2 and exact cgroup maxima. One issuer
+sample showed 13,012,992 bytes memory peak, 10 PIDs, zero OOM/OOM-kill and
+2/66 throttled CPU periods (45,736 microseconds). The two named test-owned
+containers, volume and build directory were checked absent; transient
+`--rm` clients were not separately inventoried. This uses a
+test binary and fake credential backend, **not** the Vault management token,
+production credential/certificate commands, managed TLS switch or the
+final same-run gate; it cannot validate the 50m/16-PID TLS-agent tier or
+revocation deadline. Phase 6 remains **5/15**.
+
+Validation reliability checkpoint 2026-09-30: on Go 1.26.8, one default
+`go test -race -shuffle=on -count=1 ./...` completed successfully before the
+integration-tag-only credential test changes. A later default run over the
+same default-tested behavior (plus integration-tag test and documentation
+edits) failed the **package-wide** ten-minute timeout in
+`internal/phase6security`, not a test assertion. Its shuffle seed was
+`1790731853139135000`; the timeout stack showed
+`TestSlice6FinalGateProfileRejectsEarlierCandidates` had run for about three
+seconds when the package budget expired, so that test is not shown to have
+hung for ten minutes. No contemporaneous host-load sample was retained;
+resource contention is suspected, **not proven**. A separate complete
+`internal/phase6security` race/shuffle run passed in 417.667 seconds; the
+failing seed also passed when the complete package was replayed alone.
+The heavier failing-seed tests included the nine-owner PostgreSQL/CRL
+binding (150.96 seconds), receipt tampering (41.35 seconds) and evidence
+inventory (35.39 seconds). A single complete
+`go test -race -shuffle=on -count=1 -p=2 ./...` then passed with the
+original ten-minute package timeout; its security package took 317.104
+seconds. `-p=2` limits package concurrency only. This is a locally
+resource-controlled repository validation, **not** a claim that default
+concurrency is reliably green or that unchanged remote CI passed. The
+targeted real Docker seccomp A/B and cross-UID credential gates, `go vet
+./...`, tagged package vet and Product Contract lock verifier passed.
+None of these source/component gates is the missing real 82-role/16-scenario
+Slice 6 evidence. Phase 6 remains **5/15**.

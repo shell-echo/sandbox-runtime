@@ -68,6 +68,22 @@ deadline/resource behavior. The tagged test is
 `TestPhase6ControllerAgentSeccompDeltaRealDocker` in
 [`resource_seccomp_integration_test.go`](../internal/phase6profilebuilder/resource_seccomp_integration_test.go).
 
+The existing opt-in
+[`TestCredentialV2CrossUIDDocker`](../internal/workloadcredentialv2/unix_docker_integration_test.go)
+also now applies these exact derived bytes to its separate high-UID issuer
+and client helpers. It passed normal issue/renew/status/revoke, wrong-peer,
+wrong-GID, missing/half-frame, cancel, substituted socket and close tests.
+The issuer ran under the candidate `credential_controller` 128 MiB/200m/32
+PIDs, and clients under `runtime_material_agent` 96 MiB/100m/32 PIDs. Its
+running issuer reported the expected cgroup maxima, seccomp mode 2, zero
+effective capabilities and NNP=1; a sample recorded 13,012,992-byte memory
+peak, 10 PID peak, zero OOM/OOM-kill and CPU throttling 2/66 periods
+(45,736 microseconds). The two named server/attack containers, volume and
+build directory were checked absent; transient `--rm` clients were not
+separately inventoried. This exercises real Unix transport code with a **fake
+credential backend** and test binary, not Vault, production controller
+startup, renewal pressure or ten-second revocation timing.
+
 ## Initial finite limits, not measured tiers
 
 The table gives memory MiB / CPU millicores / PIDs per *deployment* in each

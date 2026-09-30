@@ -1097,6 +1097,28 @@ mise exec go@1.26.8 -- env -u GOROOT go test -race -shuffle=on -count=1 ./...
 mise exec go@1.26.8 -- env -u GOROOT go vet ./...
 ```
 
+On this macOS Docker Desktop host, Phase 6's large security-profile negative
+suite can approach Go's default **per-package** ten-minute test timeout when
+all repository packages run at default package concurrency. An observed
+default full race run passed, but a later default run timed out in
+`internal/phase6security` at the package limit; the exact failing shuffle
+seed passed when the complete package was rerun alone. For a locally
+resource-constrained verification run, retain all packages, race, shuffle,
+count=1 and the original package timeout while limiting *package* concurrency:
+
+```bash
+mise exec go@1.26.8 -- env -u GOROOT GOTOOLCHAIN=local \
+  go test -race -shuffle=on -count=1 -p=2 ./...
+```
+
+Record the default-run failure separately; a passing `-p=2` run does not
+retroactively pass default concurrency. Do not reduce package-internal
+parallelism, business deadlines, security assertions or the test set. This
+local setting is not a CI result: `.github/workflows/ci.yml` retains its
+default test command and 15-minute job timeout. The current Phase 6 Slice 6
+record and exact non-claims are in the
+[startup audit](audits/product-phase-6-slice-6-startup.md).
+
 ```bash
 mise exec go@1.26.8 -- profiles/desktop/image/build-phase6-candidate.sh \
   linux/arm64/v8 /absolute/private/path/desktop-phase6-candidate.json \

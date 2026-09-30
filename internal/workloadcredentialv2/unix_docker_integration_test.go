@@ -6,13 +6,16 @@ import (
 	"bytes"
 	"context"
 	"crypto/ed25519"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -34,11 +37,24 @@ func TestCredentialV2CrossUIDDocker(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	policyPath := filepath.Join(workspace, "..", "..", "profiles", "phase6", "security", "go-controller-agent-seccomp-arm64.json")
+	policy, err := os.ReadFile(policyPath)
+	if err != nil || fmt.Sprintf("sha256:%x", sha256.Sum256(policy)) !=
+		"sha256:a7f79239f02d9326e74deb212d2022f4bb2db9e2316367e0d89c9e35f7893eaa" {
+		t.Fatalf("source-bound controller/agent seccomp candidate unavailable: %v", err)
+	}
 	temporary, err := os.MkdirTemp(workspace, ".credential-v2-docker-")
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = os.RemoveAll(temporary) })
+	t.Cleanup(func() {
+		if err := os.RemoveAll(temporary); err != nil {
+			t.Errorf("remove exact credential helper build directory: %v", err)
+		}
+		if _, err := os.Lstat(temporary); !os.IsNotExist(err) {
+			t.Errorf("credential helper build directory remains or cleanup is unverified: %v", err)
+		}
+	})
 	binary := filepath.Join(temporary, "helper.test")
 	build := exec.CommandContext(ctx, "go", "test", "-c", "-tags=integration", "-o", binary, ".")
 	build.Env = append(os.Environ(), "GOOS=linux", "GOARCH=arm64", "CGO_ENABLED=0")
@@ -50,8 +66,24 @@ func TestCredentialV2CrossUIDDocker(t *testing.T) {
 	attackName := volume + "-attack"
 	dockerV2(t, ctx, "volume", "create", volume)
 	t.Cleanup(func() {
-		_ = exec.Command("docker", "rm", "-f", serverName, attackName).Run()
-		_ = exec.Command("docker", "volume", "rm", volume).Run()
+		cleanup, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		for _, name := range []string{serverName, attackName} {
+			if _, err := exec.CommandContext(cleanup, "docker", "container", "inspect", name).CombinedOutput(); err == nil {
+				if output, removeErr := exec.CommandContext(cleanup, "docker", "rm", "-f", "-v", name).CombinedOutput(); removeErr != nil {
+					t.Errorf("remove exact credential helper %s: %v: %.512s", name, removeErr, output)
+				}
+			}
+			if output, err := exec.CommandContext(cleanup, "docker", "container", "inspect", name).CombinedOutput(); err == nil || !strings.Contains(strings.ToLower(string(output)), "no such") {
+				t.Errorf("credential helper %s remains or cleanup is unverified: %v: %.512s", name, err, output)
+			}
+		}
+		if output, err := exec.CommandContext(cleanup, "docker", "volume", "rm", volume).CombinedOutput(); err != nil {
+			t.Errorf("remove exact credential helper volume %s: %v: %.512s", volume, err, output)
+		}
+		if output, err := exec.CommandContext(cleanup, "docker", "volume", "inspect", volume).CombinedOutput(); err == nil || !strings.Contains(strings.ToLower(string(output)), "no such") {
+			t.Errorf("credential helper volume %s remains or cleanup is unverified: %v: %.512s", volume, err, output)
+		}
 	})
 	operator := func(script string) string {
 		return dockerV2(t, ctx, "run", "--rm", "--network", "none", "-v", volume+":/shared",
@@ -59,13 +91,42 @@ func TestCredentialV2CrossUIDDocker(t *testing.T) {
 	}
 	operator("mkdir -p /shared/socket /shared/ledger; chown 20000:30001 /shared/socket; chmod 0710 /shared/socket; chown 20000:30000 /shared/ledger; chmod 0700 /shared/ledger")
 	containerArgs := func(user, mode string) []string {
+		memory, cpu := "96m", "0.1" // runtime_material_agent candidate tier
+		if mode == "server" {
+			memory, cpu = "128m", "0.2" // credential_controller candidate tier
+		}
 		return []string{"--network", "none", "--user", user, "--read-only", "--cap-drop=ALL",
-			"--security-opt", "no-new-privileges:true", "-v", volume + ":/shared",
+			"--security-opt", "no-new-privileges:true", "--security-opt", "seccomp=" + policyPath,
+			"--memory", memory, "--memory-swap", memory, "--cpus", cpu, "--pids-limit", "32",
+			"-v", volume + ":/shared",
 			"-v", binary + ":/helper:ro", "-e", "SR_CREDENTIAL_V2_HELPER=" + mode,
 			credentialV2DockerImage, "/helper", "-test.run=^TestCredentialV2ContainerHelper$", "-test.v"}
 	}
 	serverArgs := append([]string{"run", "-d", "--name", serverName}, containerArgs("20000:30000", "server")...)
 	dockerV2(t, ctx, serverArgs...)
+	var options []string
+	if json.Unmarshal([]byte(dockerV2(t, ctx, "inspect", "--format", "{{json .HostConfig.SecurityOpt}}", serverName)), &options) != nil ||
+		len(options) != 2 || options[0] != "no-new-privileges:true" || !strings.HasPrefix(options[1], "seccomp=") {
+		t.Fatal("credential controller helper did not select explicit candidate seccomp")
+	}
+	var wanted, applied bytes.Buffer
+	if json.Compact(&wanted, policy) != nil ||
+		json.Compact(&applied, []byte(strings.TrimPrefix(options[1], "seccomp="))) != nil ||
+		!bytes.Equal(wanted.Bytes(), applied.Bytes()) {
+		t.Fatal("Docker did not retain exact normalized controller/agent candidate policy")
+	}
+	status := dockerV2(t, ctx, "exec", serverName, "cat", "/proc/1/status")
+	if !strings.Contains(status, "Uid:\t20000\t20000\t20000\t20000") ||
+		!strings.Contains(status, "Gid:\t30000\t30000\t30000\t30000") ||
+		!strings.Contains(status, "CapEff:\t0000000000000000") ||
+		!strings.Contains(status, "NoNewPrivs:\t1") || !strings.Contains(status, "Seccomp:\t2") {
+		t.Fatal("credential controller helper active security context drifted")
+	}
+	cgroup := dockerV2(t, ctx, "exec", serverName, "sh", "-c",
+		"cat /sys/fs/cgroup/memory.max /sys/fs/cgroup/pids.max /sys/fs/cgroup/cpu.max")
+	if strings.TrimSpace(cgroup) != "134217728\n32\n20000 100000" {
+		t.Fatalf("credential controller candidate cgroup limits drifted: %q", cgroup)
+	}
 	waitLogV2(t, ctx, serverName, "READY")
 	for _, scenario := range []struct{ user, mode string }{
 		{"20001:30001", "normal"},
@@ -88,6 +149,20 @@ func TestCredentialV2CrossUIDDocker(t *testing.T) {
 	operator("mv /shared/socket/issuer.sock /shared/socket/original.sock; : > /shared/socket/issuer.sock")
 	badSocketArgs := append([]string{"run", "--rm"}, containerArgs("20001:30001", "bad-layout")...)
 	dockerV2(t, ctx, badSocketArgs...)
+	metrics := dockerV2(t, ctx, "exec", serverName, "sh", "-c",
+		"cat /sys/fs/cgroup/memory.peak /sys/fs/cgroup/pids.peak /sys/fs/cgroup/memory.events /sys/fs/cgroup/cpu.stat")
+	lines := strings.Split(strings.TrimSpace(metrics), "\n")
+	if len(lines) < 9 || !strings.Contains("\n"+metrics, "\noom 0\n") ||
+		!strings.Contains("\n"+metrics, "\noom_kill 0\n") {
+		t.Fatalf("credential controller helper cgroup observation incomplete: %q", metrics)
+	}
+	memoryPeak, memoryErr := strconv.ParseInt(lines[0], 10, 64)
+	pidsPeak, pidsErr := strconv.ParseInt(lines[1], 10, 64)
+	if memoryErr != nil || pidsErr != nil || memoryPeak < 1 || memoryPeak > 128<<20 ||
+		pidsPeak < 1 || pidsPeak > 32 {
+		t.Fatalf("credential controller helper exceeded finite cgroup limits: %q", metrics)
+	}
+	t.Logf("credential controller cross-UID helper candidate cgroup sample (includes exec probes): %s", strings.TrimSpace(metrics))
 	operator("touch /shared/ledger/stop")
 	if code := strings.TrimSpace(dockerV2(t, ctx, "wait", serverName)); code != "0" {
 		t.Fatalf("server exit = %s", code)
