@@ -35,7 +35,8 @@ func writeSyntheticResourceSupply(t *testing.T) (string, resourceSeccompManifest
 	}
 	manifest := resourceSeccompManifest{SchemaVersion: resourceSeccompSchema, Platform: "linux/arm64/v8"}
 	// Identical tiny limits and policy bytes are parser fixtures only. The
-	// production manifest is absent and cannot be inferred from this test.
+	// actual arm64 candidate is separately checked below; no production
+	// admission or live seccomp application can be inferred from this test.
 	unit := phase6security.Resources{MemoryBytes: 16 << 20, CPUMillis: 10, PIDs: 4}
 	for _, duty := range classes {
 		manifest.Classes = append(manifest.Classes, dutyClassPolicy{ID: duty,
@@ -279,5 +280,68 @@ func TestSlice6SeccompParserAcceptsPinnedMobyOriginal(t *testing.T) {
 		if err := validateSlice6SeccompJSON(document, platform); err != nil {
 			t.Fatalf("pinned Moby original rejected on %s: %v", platform, err)
 		}
+	}
+}
+
+func TestSlice6RepositoryArm64CandidateResourceSupply(t *testing.T) {
+	root, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	supply, err := LoadResourceSeccompSupply(root, "linux/arm64/v8")
+	if err != nil {
+		t.Fatalf("reviewed arm64 candidate supply rejected: %v", err)
+	}
+	if len(supply.classes) != 23 || len(supply.assignments) != 82 || len(supply.external) != 5 {
+		t.Fatal("arm64 candidate does not cover the complete duty/deployment/service inventory")
+	}
+	if supply.classes["chromium_sandbox"].PolicyDigest !=
+		"sha256:3bdf2fd28636409951409621735f616997d0fd4851259851ac4c340dff90e05b" ||
+		supply.classes["desktop_x11_sandbox"].PolicyDigest !=
+			"sha256:536529b665dd0972c37bfb569f5d4ac8a53592e7b00752bc39ff063ca9864c74" {
+		t.Fatal("sandbox duties lost their independently sourced candidate policy bytes")
+	}
+	for _, duty := range []string{"break_glass_controller", "certificate_controller", "credential_controller",
+		"egress_policy_authority", "migration_material_agent", "runtime_material_agent", "tls_agent"} {
+		class := supply.classes[duty]
+		if class.PolicyDigest != "sha256:a7f79239f02d9326e74deb212d2022f4bb2db9e2316367e0d89c9e35f7893eaa" ||
+			class.PolicyDigest == class.OriginalDigest {
+			t.Fatalf("%s lacks the source-bound controller/agent policy derivation", duty)
+		}
+		var policy slice6SeccompDocument
+		if err := json.Unmarshal(supply.policyBytes[duty], &policy); err != nil {
+			t.Fatal(err)
+		}
+		clone3Fallback := false
+		for _, rule := range policy.Syscalls {
+			for _, name := range rule.Names {
+				if rule.Action == "SCMP_ACT_ALLOW" && slices.Contains([]string{
+					"ptrace", "process_vm_readv", "process_vm_writev", "kcmp", "pidfd_getfd", "process_madvise",
+				}, name) {
+					t.Fatalf("%s retains an allowed process-inspection syscall %s", duty, name)
+				}
+				if name == "clone3" && rule.Action == "SCMP_ACT_ERRNO" && rule.ErrnoRet != nil &&
+					*rule.ErrnoRet == 38 {
+					clone3Fallback = true
+				}
+			}
+		}
+		if !clone3Fallback {
+			t.Fatalf("%s lost the Go thread-creation fallback", duty)
+		}
+	}
+	limits := make(map[string]phase6security.Resources, len(supply.assignments))
+	for deployment, duty := range supply.assignments {
+		limits[deployment] = supply.classes[duty].Resources
+	}
+	budgets, err := phase6security.CalculateSlice6ResourceBudgets(limits, supply.external)
+	if err != nil || len(budgets) != 6 {
+		t.Fatalf("arm64 candidate lifecycle arithmetic rejected: %v", err)
+	}
+	if budgets[0].Envelope != "steady_without_sandboxes" ||
+		budgets[0].MemoryBytes != 7680<<20 || budgets[0].CPUMillis != 7750 || budgets[0].PIDs != 2096 ||
+		budgets[5].Envelope != "browser_desktop_active" ||
+		budgets[5].MemoryBytes != 9216<<20 || budgets[5].CPUMillis != 9750 || budgets[5].PIDs != 2480 {
+		t.Fatalf("arm64 candidate capacity arithmetic drifted: %#v", budgets)
 	}
 }

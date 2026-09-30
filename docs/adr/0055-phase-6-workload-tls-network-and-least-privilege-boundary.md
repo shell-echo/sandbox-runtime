@@ -1553,6 +1553,22 @@ daemon/observer overhead and cleanup reserve; migration jobs leave after
 their actual lifecycle, while simultaneously needed steady-state roles may
 not be serialized to hide insufficient capacity.
 
+Here “broad permissions” means an unreviewed, accessible sensitive capability
+or an unqualified generic baseline presented as duty-level least privilege;
+it is not a mechanical judgment from a policy file's name or syscall count.
+An explicit original Moby profile may be a bounded *component-calibration*
+candidate before all 23 duties are benchmarked, but source/digest/shape
+validation is not approval to run the final topology or accept a gate.
+Review actual behavior families and applied conditions: Moby's
+`minKernel=4.8` `ptrace`/`process_vm_*` allowance is not conditioned on
+`CAP_SYS_PTRACE`, so cap-drop alone does not remove it. A controller/agent
+without process-inspection purpose must use derived bytes excluding that
+allowance, retain necessary Go thread and `clone3` fallback behavior, and
+pass real positive/negative application probes. Other families may share
+audited bytes only when their actual needs and deployment observations
+support the sharing. No new approval subsystem or production bypass follows
+from admitting source-bound candidate inputs.
+
 One run fixes its profile, policy and limits before any role starts. A
 calibration change ends and exactly cleans that run; a new run ID and frozen
 inputs must pass the entire final 16-scenario gate. Different configurations

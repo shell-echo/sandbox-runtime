@@ -2775,3 +2775,45 @@ at the exact R to reopen it. A separate clean R checkout may retain that
 component proof. A later actual resource-policy or runtime/build input change
 must freeze a new R and rebuild affected source-bound candidates before the
 final gate. No candidate here is a Slice 6 acceptance manifest.
+
+Checkpoint 2026-09-29–30 (arm64 resource/seccomp source candidate, **not** gate
+admission): [`policy-arm64.json`](../../profiles/phase6/security/policy-arm64.json)
+now supplies exact finite limits and policy provenance for all 23 duty classes,
+82 deployment assignments and five external services. The source-bound loader
+accepts its canonical bytes; a repository test checks complete coverage,
+the Browser-specific digest, the seven derived controller/agent duties and six
+capacity-envelope arithmetic outputs. For the initial controller/agent
+behavior family, the applied Moby derivative excludes the unconditional
+`ptrace`/`process_vm_*` rule and the `CAP_SYS_PTRACE` process-inspection branch,
+while preserving the `clone3` ENOSYS fallback. Fifteen other duty classes
+still use the original Moby profile as an **unreviewed calibration baseline**;
+the Chromium policy remains its distinct locked Browser exception. Neither
+the loader nor static syscall check proves running-container enforcement or
+least privilege. Sandbox clarified that a generic source baseline may be a
+controlled candidate, but accessible sensitive calls without business need
+cannot be excused by cap-drop or deferred into a final policy; behavior-family
+review and actual positive/negative probes remain required.
+
+The candidate arithmetic is 7,680 MiB / 7,750m / 2,096 PIDs for steady state
+and 9,216 MiB / 9,750m / 2,480 PIDs with both sandboxes active. The current
+Docker VM reports ten CPUs, leaving only 250m of nominal quota in that active
+envelope before daemon, observer and cleanup reserve. These initial limits
+therefore **do not establish host admission**; 50m/16-PID agent classes and
+the two media classes still need real startup/rotation/media/fault calibration.
+See the [candidate rationale](../phase6-resource-seccomp-candidate-arm64.md).
+The final full profile, actual 82-role/Vault service graph, 16 scenarios,
+same-run evidence and exact cleanup remain open. Phase 6 stays **5/15**.
+
+The opt-in arm64 Docker seccomp A/B component test then used the exact pinned
+Alpine fixture, a locally built self-process syscall probe and otherwise
+identical high-UID/cap-drop/NNP/read-only/networkless/finite-limit containers.
+Docker inspection matched each policy's normalized source JSON, and both
+processes reported zero effective capabilities, NNP=1 and seccomp mode 2.
+Original Moby permitted six-byte `process_vm_readv` and `process_vm_writev`
+on self plus `PTRACE_TRACEME`; the derived controller/agent policy denied all
+three with EPERM. Both
+run-owned containers and the private probe directory were verified absent.
+This differential checks one concrete sensitive allowance; it is not a real
+Vault→credential controller→certificate controller→agent startup, a general
+syscall-minimality proof, or final resource/headroom evidence. Phase 6
+remains **5/15**.

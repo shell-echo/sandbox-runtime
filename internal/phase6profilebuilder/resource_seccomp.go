@@ -76,8 +76,8 @@ type ResourceDraft struct {
 }
 
 // BuildSlice6ResourceDraft is the source-bound builder chain up through image,
-// duty-specific seccomp and finite resource policy. Until reviewed native
-// manifest bytes exist, it intentionally cannot produce a draft.
+// duty-specific seccomp and finite resource policy. A checked native manifest
+// is still candidate input, not runtime application or release acceptance.
 func BuildSlice6ResourceDraft(ctx context.Context, input ImageDraftInputs) (ResourceDraft, error) {
 	images, err := BuildSlice6ImageDraft(ctx, input)
 	if err != nil {
